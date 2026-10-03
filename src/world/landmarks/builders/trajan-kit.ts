@@ -41,6 +41,8 @@ export class LodChunks {
     readonly distance: number,
     /** Optional distance at which the far level disappears too (0 = never). */
     readonly hideBeyond = 0,
+    /** Interiors under a roof gain nothing from casting sun shadows: pass false to skip them. */
+    readonly castShadow = true,
   ) {}
 
   chunk(key: string, center: THREE.Vector3): Chunk {
@@ -65,6 +67,7 @@ export class LodChunks {
       if (!c.far.isEmpty) lod.addLevel(recentre(c.far.build(`${name}:${key}:far`), c.center), this.distance, 0.08);
       else lod.addLevel(new THREE.Group(), this.distance, 0.08);
       if (this.hideBeyond > 0) lod.addLevel(new THREE.Group(), this.hideBeyond, 0.05);
+      if (!this.castShadow) lod.traverse((o) => ((o as THREE.Mesh).isMesh ? ((o as THREE.Mesh).castShadow = false) : undefined));
       g.add(lod);
       for (const s of c.near.colliders) colliders.push(s);
     }
@@ -123,6 +126,31 @@ export function quad(b: MeshBuilder, mat: Mat, m: THREE.Matrix4, a: THREE.Vector
     b.add(g, mat, m, { castShadow });
   }
 }
+
+/**
+ * Convex polygon (fan from the first point) wound so its face normal points along `toward`
+ * (e.g. up for roofs, outward for gables). World-scale box UVs unless `uvs` are given.
+ */
+export function facing(b: MeshBuilder, mat: Mat, m: THREE.Matrix4, pts: THREE.Vector3[], toward: THREE.Vector3, opts: { castShadow?: boolean; uvs?: [number, number][] } = {}) {
+  const n = new THREE.Vector3().subVectors(pts[1], pts[0]).cross(new THREE.Vector3().subVectors(pts[2], pts[0]));
+  const flip = n.dot(toward) < 0;
+  const pos: number[] = [];
+  const uv: number[] = [];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const tri = flip ? [0, i + 1, i] : [0, i, i + 1];
+    for (const k of tri) {
+      pos.push(pts[k].x, pts[k].y, pts[k].z);
+      if (opts.uvs) uv.push(...opts.uvs[k]);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  if (opts.uvs) g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.computeVertexNormals();
+  b.add(g, mat, m, { uv: opts.uvs ? 'keep' : 'box', castShadow: opts.castShadow });
+}
+
+export const UP = new THREE.Vector3(0, 1, 0);
 
 /** Vertical arc band (annular sector wall) centred on (cx, cz), angles measured from +x towards +z. */
 export function arcWall(b: MeshBuilder, mat: Mat, m: THREE.Matrix4, cx: number, cz: number, r0: number, r1: number, a0: number, a1: number, y0: number, y1: number, segs: number) {
@@ -193,12 +221,13 @@ function midCapital(D: number, d: number, C: number): THREE.BufferGeometry[] {
   const rTop = 0.56 * D;
   const bellR = (y: number) => r1 + (rTop - r1) * Math.min(1, Math.max(0, y / bellH)) ** 1.8;
   const bell = new ProfileBuilder(r1 * 0.98, 0).to(bellR(0.5 * bellH), 0.5 * bellH).to(bellR(0.95 * bellH), 0.95 * bellH).out(0.025 * D).up(0.05 * bellH).in(0.025 * D + rTop * 0.4).build();
-  out.push(lathe(bell, { segments: 12 }));
+  out.push(lathe(bell, { segments: 10 }));
   // Leaves: individual tongues with a curled tip, 8 per row.
   const rows = [
     { h: bellH * 0.44, phase: Math.PI / 8, curl: 0.15 * D, t: 0.03 * D },
     { h: bellH * 0.74, phase: 0, curl: 0.17 * D, t: 0.02 * D },
   ];
+  // (Leaves are 12 + 4 triangles each: enough for the silhouette at portico distances.)
   const period = (Math.PI * 2) / 8;
   for (const row of rows) {
     for (let k = 0; k < 8; k++) {
@@ -222,8 +251,8 @@ function midCapital(D: number, d: number, C: number): THREE.BufferGeometry[] {
         r -= 0.5 * row.curl * 4 * s * s * t;
         return o.set(r * Math.sin(a), y, r * Math.cos(a));
       };
-      out.push(gridSurface([-0.5, 0, 0.5], [0, 0.35, 0.62, 0.82, 1], P));
-      out.push(gridSurface([-0.5, 0, 0.5], [0.62, 0.82, 1], P, { flip: true }));
+      out.push(gridSurface([-0.5, 0, 0.5], [0, 0.4, 0.75, 1], P));
+      out.push(gridSurface([-0.5, 0, 0.5], [0.75, 1], P, { flip: true }));
     }
   }
   // Corner volutes (stalk + one and a half turns) under the abacus horns.
@@ -232,12 +261,12 @@ function midCapital(D: number, d: number, C: number): THREE.BufferGeometry[] {
     const R = 0.085 * D;
     const centre = dir.clone().multiplyScalar(0.72 * D).add(new THREE.Vector3(0, bellH - 0.1 * D, 0));
     const path: THREE.Vector3[] = [dir.clone().multiplyScalar(bellR(bellH * 0.6)).add(new THREE.Vector3(0, bellH * 0.6, 0)), dir.clone().multiplyScalar(0.5 * D).add(new THREE.Vector3(0, bellH - 0.02 * D, 0))];
-    for (let i = 0; i <= 6; i++) {
-      const th = Math.PI / 2 - (i / 6) * Math.PI * 1.5;
-      const rr = R * (1 - i / 9);
+    for (let i = 0; i <= 4; i++) {
+      const th = Math.PI / 2 - (i / 4) * Math.PI * 1.5;
+      const rr = R * (1 - i / 7);
       path.push(centre.clone().addScaledVector(dir, Math.cos(th) * rr).add(new THREE.Vector3(0, Math.sin(th) * rr, 0)));
     }
-    out.push(tube(path, (i) => 0.042 * D * (1 - (0.5 * i) / path.length), 4, true));
+    out.push(tube(path, (i) => 0.042 * D * (1 - (0.5 * i) / path.length), 3, true));
   }
   // Concave abacus with cut corners, and a fleuron on each face.
   const w = 1.42 * D;
@@ -271,7 +300,7 @@ function midCapital(D: number, d: number, C: number): THREE.BufferGeometry[] {
   ab.translate(0, bellH + abH, 0);
   out.push(ab);
   for (const f of [0, Math.PI / 2, Math.PI, 1.5 * Math.PI]) {
-    const fl = new THREE.SphereGeometry(0.065 * D, 5, 3);
+    const fl = new THREE.SphereGeometry(0.065 * D, 4, 2);
     fl.scale(1, 1, 0.6);
     fl.translate(Math.sin(f) * 0.64 * D, bellH + abH * 0.5, Math.cos(f) * 0.64 * D);
     out.push(fl);
@@ -295,12 +324,12 @@ function midParts(order: Order, D: number, H: number, plinth: boolean): MidParts
   }
   // Attic base: torus, scotia, torus.
   const base = new ProfileBuilder(0.6 * D, plinthH).torus(0.11 * D, 0.08 * D, 3).in(0.04 * D).scotia(0.06 * D, 0.03 * D, 2).torus(0.075 * D, 0.06 * D, 3).to(0.5 * D, plinthH + 0.34 * D).build();
-  trim.push(lathe(base, { segments: 14 }));
+  trim.push(lathe(base, { segments: 10 }));
   const y0 = dims.base - 0.01 * D;
   const y1 = H - dims.capital;
   const sh = gridSurface(
-    linspace(0, Math.PI * 2, 14),
-    [0, 1 / 3, 0.66, 1],
+    linspace(0, Math.PI * 2, 12),
+    [0, 1 / 3, 1],
     (a, t, o) => {
       const r = entasisRadius(D, props.topRatio, t);
       return o.set(r * Math.sin(a), y0 + t * (y1 - 0.1 * D - y0), r * Math.cos(a));
@@ -310,7 +339,7 @@ function midParts(order: Order, D: number, H: number, plinth: boolean): MidParts
   shaft.push(sh);
   const rTopShaft = entasisRadius(D, props.topRatio, 1);
   const astr = new ProfileBuilder(rTopShaft, y1 - 0.1 * D).up(0.03 * D).torus(0.06 * D, 0.03 * D, 2).to(rTopShaft * 0.98, y1 + 0.002 * D).build();
-  trim.push(lathe(astr, { segments: 14 }));
+  trim.push(lathe(astr, { segments: 10 }));
   if (order === 'corinthian' || order === 'composite') {
     for (const g of midCapital(D, dims.d, dims.capital)) {
       g.translate(0, y1, 0);
@@ -361,6 +390,25 @@ export function colonnadeColumn(b: MeshBuilder, detail: ColumnDetail, spec: MidC
     },
     at,
   );
+}
+
+/**
+ * Distant column (≈ 40 triangles): octagonal tapered shaft, a square plinth and a flared block for
+ * the capital. For LOD levels seen from beyond ~60 m.
+ */
+export function farColumn(b: MeshBuilder, spec: { D: number; height: number; shaft: Mat; trim?: Mat }, at: THREE.Matrix4) {
+  const { D, height: H } = spec;
+  const capH = 1.1 * D;
+  const shaft = new THREE.CylinderGeometry(0.43 * D, 0.5 * D, H - capH - 0.4 * D, 8, 1, true);
+  shaft.translate(0, 0.4 * D + (H - capH - 0.4 * D) / 2, 0);
+  b.add(shaft, spec.shaft, at);
+  const plinth = new THREE.BoxGeometry(1.3 * D, 0.4 * D, 1.3 * D);
+  plinth.translate(0, 0.2 * D, 0);
+  b.add(plinth, spec.trim ?? 'marble', at);
+  const cap = new THREE.CylinderGeometry(0.72 * D, 0.45 * D, capH, 4, 1);
+  cap.rotateY(Math.PI / 4);
+  cap.translate(0, H - capH / 2, 0);
+  b.add(cap, spec.trim ?? 'marble', at);
 }
 
 /** Simple vertical cylinder between two heights (posts, poles), optional collider. */

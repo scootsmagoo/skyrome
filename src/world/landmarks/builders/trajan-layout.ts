@@ -12,7 +12,7 @@
  * (local x = u·S, local z = −v·S). `forumToLocal(lm)` maps that frame into any other landmark's
  * local frame, so a builder can place forum-frame geometry with `mul(F, T(x, y, z))`.
  *
- * Pure data and arithmetic (no scene objects); tested in tests/trajan.layout.test.ts.
+ * Pure data and arithmetic (no scene objects); tested in tests/trajan.test.ts.
  */
 import * as THREE from 'three';
 import { LANDMARK_BY_ID } from '../../../data/atlas';
@@ -175,6 +175,41 @@ export const TRAJAN_INSCRIPTIONS: Record<string, { latin: string[]; english: str
     latin: ['EX·MANVBIIS'],
     english: '"From the spoils of war": the legend on the gilded horses and standards along the roofs of the forum.',
     source: 'Aulus Gellius, Attic Nights 13.25.1',
+  },
+  'forum-statue-senecio': {
+    latin: ['Q·SOSIO·SENECIONI', 'COS·II', 'ORNAMENTIS·TRIVMPHALIBVS', 'BELLO·DACICO·DONATO', 'S·C'],
+    english: 'To Quintus Sosius Senecio, twice consul, granted the triumphal ornaments in the Dacian war. By decree of the Senate.',
+    source: 'Reconstruction: Dio 68.16.2 says Trajan honoured Senecio, Palma and Celsus with statues; text and placement are the game\'s',
+  },
+  'forum-statue-palma': {
+    latin: ['A·CORNELIO·PALMAE', 'FRONTONIANO·COS·II', 'ORNAMENTIS·TRIVMPHALIBVS', 'OB·ARABIAM·ADQVISITAM', 'S·C'],
+    english: 'To Aulus Cornelius Palma Frontonianus, twice consul, granted the triumphal ornaments for winning Arabia. By decree of the Senate.',
+    source: 'Reconstruction: Dio 68.16.2 (statues for Senecio, Palma and Celsus); Palma annexed Arabia in 106',
+  },
+  'markets-sign-wine': {
+    latin: ['VINA·FALERNA·SETINA', 'ASSE·BIBIS·DVPONDIO·MELIVS'],
+    english: '"Falernian and Setine wines. For one as you drink; for two, better." (A tavern sign in the style of the Pompeian dipinti.)',
+    source: 'Painted sign in the manner of CIL IV 1679 (Herculaneum/Pompeii price notices); the text is the game\'s',
+  },
+  'markets-mensa-ponderaria': {
+    latin: ['PONDERA·ET·MENSVRAE·EXAEQVATA', 'CVRA·AEDILIVM'],
+    english: 'Weights and measures checked against the standard, under the care of the aediles.',
+    source: 'After the mensae ponderariae of Roman markets (e.g. Pompeii, CIL X 793); this text is a reconstruction',
+  },
+  'library-east-label': {
+    latin: ['BIBLIOTHECA·GRAECA'],
+    english: 'The Greek Library.',
+    source: 'Which of the twin Ulpian libraries held the Greek books and which the Latin is unknown; the game puts the Greek ones in the NE hall',
+  },
+  'library-west-label': {
+    latin: ['BIBLIOTHECA·LATINA'],
+    english: 'The Latin Library. It also keeps the senate decrees and the praetors\' edicts (the "libri lintei" and edicts are attested in the Ulpian library).',
+    source: 'Gellius 11.17 (praetors\' edicts in the Bibliotheca Ulpia); which hall was Latin is unknown',
+  },
+  'basilica-frieze-legions': {
+    latin: ['LEG·I·ADIVTRIX·LEG·I·ITALICA·LEG·I·MINERVIA·LEG·II·ADIVTRIX·LEG·IIII·FLAVIA·LEG·V·MACEDONICA·LEG·XIII·GEMINA·LEG·XIIII·GEMINA'],
+    english: 'The legions of the Dacian wars: I Adiutrix, I Italica, I Minervia, II Adiutrix, IV Flavia, V Macedonica, XIII Gemina, XIV Gemina.',
+    source: 'Reconstruction: the porch frieze is said to have named the legions; the list follows the army of the Dacian wars',
   },
   'basilica-attic-inscription': {
     latin: ['IMP·CAESAR·DIVI·NERVAE·F·NERVA·TRAIANVS·AVG·GERM·DACICVS', 'EX·MANVBIIS'],

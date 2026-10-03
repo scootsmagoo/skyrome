@@ -19,6 +19,7 @@ import { cylinderBetween, extrudePolygon, gridSurface, linspace, mul, T, tube, t
 import type { MeshBuilder } from '../../../gfx/MeshBuilder';
 import type { MaterialId } from '../../../gfx/materialIds';
 import type { Mat } from './trajan-kit';
+import { pavonazzettoMaterial } from './trajan-materials';
 
 export type Detail = 'high' | 'low';
 
@@ -29,7 +30,7 @@ class Sculpt {
   readonly parts: THREE.BufferGeometry[] = [];
   constructor(readonly hi: boolean) {}
   blob(c: THREE.Vector3, rx: number, ry: number, rz: number, rot?: THREE.Euler) {
-    const g = new THREE.SphereGeometry(1, this.hi ? 10 : 6, this.hi ? 7 : 4);
+    const g = new THREE.SphereGeometry(1, this.hi ? 10 : 5, this.hi ? 7 : 3);
     g.scale(rx, ry, rz);
     if (rot) g.applyQuaternion(new THREE.Quaternion().setFromEuler(rot));
     g.translate(c.x, c.y, c.z);
@@ -40,7 +41,7 @@ class Sculpt {
   along(a: THREE.Vector3, b: THREE.Vector3, rx: number, rz: number) {
     const dir = b.clone().sub(a);
     const len = dir.length();
-    const g = new THREE.SphereGeometry(1, this.hi ? 10 : 6, this.hi ? 7 : 4);
+    const g = new THREE.SphereGeometry(1, this.hi ? 10 : 5, this.hi ? 7 : 3);
     g.scale(rx, len / 2, rz);
     g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), dir.normalize()));
     const m = a.clone().add(b).multiplyScalar(0.5);
@@ -50,7 +51,8 @@ class Sculpt {
   }
   limb(a: THREE.Vector3, b: THREE.Vector3, ra: number, rb: number, joints = true) {
     this.parts.push(cylinderBetween(a, b, ra, rb, this.hi ? 8 : 5, false));
-    if (joints) {
+    // Low detail drops the joint spheres (they are hidden by drapery at a distance).
+    if (joints && this.hi) {
       this.blob(a, ra, ra, ra);
       this.blob(b, rb, rb, rb);
     }
@@ -91,9 +93,9 @@ class Sculpt {
     this.parts.push(g);
     return this;
   }
-  emit(b: MeshBuilder, mat: Mat, at: THREE.Matrix4, scale = 1) {
+  emit(b: MeshBuilder, mat: Mat, at: THREE.Matrix4, scale = 1, castShadow = true) {
     const m = scale === 1 ? at : mul(at, new THREE.Matrix4().makeScale(scale, scale, scale));
-    for (const g of this.parts) b.add(g, mat, m);
+    for (const g of this.parts) b.add(g, mat, m, { castShadow });
   }
 }
 
@@ -107,6 +109,8 @@ export interface FigureOptions {
   fleshMaterial?: Mat;
   /** 0, 1, 2…: varies cap, cloak and stance. */
   variant?: number;
+  /** Cast sun shadows (default true; small figures high on attics can skip the shadow pass). */
+  castShadow?: boolean;
 }
 
 /** Standing Dacian prisoner, hands crossed at the wrists, head bowed (Forum of Trajan attics). */
@@ -184,8 +188,24 @@ export function dacianCaptive(b: MeshBuilder, at: THREE.Matrix4, o: FigureOption
     flesh.blob(c.clone().add(V(0, 0.13, -0.04)), 0.05, 0.05, 0.06, new THREE.Euler(0.6, 0, 0));
   }
   const sc = o.scale ?? 1;
-  body.emit(b, o.material ?? 'marble_pavonazzetto', at, sc);
-  flesh.emit(b, o.fleshMaterial ?? 'marble', at, sc);
+  body.emit(b, o.material ?? pavonazzettoMaterial(), at, sc, o.castShadow);
+  flesh.emit(b, o.fleshMaterial ?? 'marble', at, sc, o.castShadow);
+}
+
+/** Distant stand-in for a standing figure (≈ 70 triangles): legs, draped body and head. */
+export function figureBlock(b: MeshBuilder, at: THREE.Matrix4, o: { scale?: number; material?: Mat; fleshMaterial?: Mat } = {}) {
+  const sc = o.scale ?? 1;
+  const m = sc === 1 ? at : mul(at, new THREE.Matrix4().makeScale(sc, sc, sc));
+  const legs = new THREE.BoxGeometry(0.3, 0.6, 0.2);
+  legs.translate(0, 0.3, 0);
+  b.add(legs, o.material ?? pavonazzettoMaterial(), m);
+  const body = new THREE.CylinderGeometry(0.2, 0.27, 0.98, 6, 1);
+  body.scale(1.1, 1, 0.75);
+  body.translate(0, 1.07, 0);
+  b.add(body, o.material ?? pavonazzettoMaterial(), m);
+  const head = new THREE.SphereGeometry(0.11, 5, 3);
+  head.translate(0, 1.68, -0.04);
+  b.add(head, o.fleshMaterial ?? 'marble', m);
 }
 
 // ---------------------------------------------------------------- horses and chariots
@@ -227,7 +247,7 @@ export function horseFigure(s: Sculpt, o: THREE.Vector3, pose: HorsePose = 'walk
 export function horseStatue(b: MeshBuilder, at: THREE.Matrix4, o: FigureOptions & { pose?: HorsePose } = {}) {
   const s = new Sculpt((o.detail ?? 'high') === 'high');
   horseFigure(s, V(0, 0, 0), o.pose ?? 'walk');
-  s.emit(b, o.material ?? 'gilded_bronze', at, o.scale ?? 1);
+  s.emit(b, o.material ?? 'gilded_bronze', at, o.scale ?? 1, o.castShadow);
 }
 
 /** Team of `horses` abreast pulling a chariot with a cuirassed driver (biga, quadriga, seiugis). */
@@ -259,7 +279,7 @@ export function chariotTeam(b: MeshBuilder, at: THREE.Matrix4, o: FigureOptions 
   }
   s.limb(V(-0.8, 0.5, 1.15), V(0.8, 0.5, 1.15), 0.03, 0.03, false);
   const sc = o.scale ?? 1;
-  s.emit(b, o.material ?? 'gilded_bronze', at, sc);
+  s.emit(b, o.material ?? 'gilded_bronze', at, sc, o.castShadow);
   if (o.driver ?? true) {
     armoredEmperor(b, mul(at, new THREE.Matrix4().makeScale(sc, sc, sc).setPosition(new THREE.Vector3(0, 0.55 * sc, 1.05 * sc))), {
       material: o.driverMaterial ?? 'gilded_bronze',
@@ -327,7 +347,7 @@ export function victory(b: MeshBuilder, at: THREE.Matrix4, o: FigureOptions = {}
     g.translate(0.08 * sx, 1.18, 0.14);
     s.parts.push(g);
   }
-  s.emit(b, o.material ?? 'gilded_bronze', at, o.scale ?? 1);
+  s.emit(b, o.material ?? 'gilded_bronze', at, o.scale ?? 1, o.castShadow);
 }
 
 // ---------------------------------------------------------------- trophies, standards, eagles
@@ -362,7 +382,7 @@ export function tropaeum(b: MeshBuilder, at: THREE.Matrix4, o: FigureOptions = {
     s.parts.push(sh);
     s.limb(V(0.4 * sx, 0.2, 0.1), V(-0.2 * sx, 2.3, -0.1), 0.012, 0.012, false);
   }
-  s.emit(b, o.material ?? 'gilded_bronze', at, o.scale ?? 1);
+  s.emit(b, o.material ?? 'gilded_bronze', at, o.scale ?? 1, o.castShadow);
 }
 
 /** Legionary standard (signum): pole with phalerae discs, a crossbar with streamers, a hand or eagle on top. */
@@ -380,7 +400,7 @@ export function signum(b: MeshBuilder, at: THREE.Matrix4, o: FigureOptions & { e
   for (const sx of [-1, 1]) s.limb(V(0.22 * sx, 2.55, 0), V(0.22 * sx, 2.25, 0), 0.012, 0.02, false);
   if (o.eagle) aquilaInto(s, V(0, 2.9, 0), 0.35);
   else s.blob(V(0, 3.0, 0), 0.05, 0.1, 0.03);
-  s.emit(b, o.material ?? 'gilded_bronze', at, o.scale ?? 1);
+  s.emit(b, o.material ?? 'gilded_bronze', at, o.scale ?? 1, o.castShadow);
 }
 
 function aquilaInto(s: Sculpt, o: THREE.Vector3, k: number) {
@@ -413,26 +433,21 @@ export function aquila(b: MeshBuilder, at: THREE.Matrix4, o: FigureOptions = {})
 }
 
 /** Round shield portrait (imago clipeata): a framed disc with a bust, facing −z, centred on the origin. */
-export function clipeus(b: MeshBuilder, at: THREE.Matrix4, r: number, o: FigureOptions & { frameMaterial?: Mat } = {}) {
+export function clipeus(b: MeshBuilder, at: THREE.Matrix4, r: number, o: FigureOptions & { frameMaterial?: Mat; groundMaterial?: Mat } = {}) {
   const hi = (o.detail ?? 'high') === 'high';
   const disc = new THREE.CylinderGeometry(r, r, 0.08 * r, hi ? 18 : 10);
   disc.rotateX(Math.PI / 2);
-  b.add(disc, o.frameMaterial ?? 'marble', at);
+  b.add(disc, o.groundMaterial ?? 'marble_veined', at, { castShadow: o.castShadow });
   const rim = new THREE.TorusGeometry(r * 0.94, r * 0.07, 4, hi ? 18 : 10);
   rim.translate(0, 0, -0.05 * r);
-  b.add(rim, o.frameMaterial ?? 'marble', at);
-  if (!hi) return;
+  b.add(rim, o.frameMaterial ?? 'marble', at, { castShadow: o.castShadow });
+  // The portrait bust (kept at low detail too: it is what makes the shield read).
   const s = new Sculpt(false);
   s.blob(V(0, -0.35, -0.08), 0.42, 0.22, 0.12);
   s.limb(V(0, -0.2, -0.1), V(0, -0.05, -0.12), 0.09, 0.08, false);
   s.blob(V(0, 0.1, -0.14), 0.15, 0.19, 0.15);
-  s.emit(b, o.material ?? 'marble', at, r);
+  s.emit(b, o.material ?? 'marble', at, r, o.castShadow);
 }
 
-/** Bronze statue raised on a moulded pedestal is common enough to want a one-liner: see trajan-props. */
+/** The figure builder, for one-off sculpture elsewhere in the Trajanic builders. */
 export { Sculpt };
-
-/** Statue base offsets used by placement code (pedestal top for a plinth of height h). */
-export function standOn(at: THREE.Matrix4, h: number): THREE.Matrix4 {
-  return mul(at, T(0, h, 0));
-}

@@ -207,11 +207,10 @@ export function slabPavingMaterial(): THREE.MeshStandardMaterial {
       const id = hash2(((col % cols) + cols) % cols, row, 5);
       const joint = lu < 0.008 || lu > 0.992 || lv < 0.012 || lv > 0.988;
       const vn = vein(u, v);
-      const veins = smooth(0.6, 0.66, vn) * (1 - smooth(0.66, 0.74, vn));
+      const veins = smooth(0.62, 0.66, vn) * (1 - smooth(0.66, 0.7, vn));
       let rgb: RGB = scale([236, 234, 227], 0.95 + 0.07 * id + 0.03 * grain(u, v));
-      rgb = mix(rgb, [170, 172, 176], veins * 0.45);
-      // slight wear in the middle of each slab
-      if (joint) rgb = scale(rgb, 0.6);
+      rgb = mix(rgb, [176, 178, 182], veins * 0.25);
+      if (joint) rgb = scale(rgb, 0.72);
       return { rgb, h: joint ? -1 : grain(u, v) * 0.1, rough: joint ? 0.9 : 0.42 + 0.1 * id };
     },
     { normal: 0.9, macro: 0.05 },
@@ -310,6 +309,136 @@ export function dacianArmsMaterial(): THREE.MeshStandardMaterial {
   armsRelief = reliefMaterial(f, { ground: [214, 208, 196], relief: [242, 238, 230], noise: 0.06, strength: 4, roughness: 0.55 });
   armsRelief.name = 'trajan:dacian-arms';
   return armsRelief;
+}
+
+/**
+ * Coffered ceiling (lacunaria) for the porticoes: square coffers with stepped white frames, an
+ * Egyptian-blue ground and a gilded rosette in each, two coffers per `tile` metres.
+ */
+export function coffersMaterial(tile = 1.7): THREE.MeshStandardMaterial {
+  const fine = fbm2D(751, 32, 2);
+  return procMaterial(
+    `coffers${tile}`,
+    256,
+    tile,
+    (u, v) => {
+      const cu = (u * 2) % 1;
+      const cv = (v * 2) % 1;
+      const e = Math.min(cu, cv, 1 - cu, 1 - cv); // distance to the coffer edge
+      const dx = cu - 0.5;
+      const dy = cv - 0.5;
+      const r = Math.hypot(dx, dy);
+      const f = 0.95 + 0.08 * fine(u, v);
+      let rgb: RGB;
+      let h: number;
+      let rough = 0.7;
+      if (e < 0.08) {
+        rgb = scale([232, 226, 212], f);
+        h = 1;
+      } else if (e < 0.13) {
+        // egg-and-dart band picked out in red and gold
+        const k = Math.sin((cu + cv) * 60) > 0;
+        rgb = k ? [168, 52, 40] : [214, 176, 80];
+        h = 0.75;
+      } else if (e < 0.17) {
+        rgb = scale([226, 220, 206], f);
+        h = 0.5;
+      } else {
+        const petals = 0.13 + 0.035 * Math.cos(Math.atan2(dy, dx) * 8);
+        if (r < petals) {
+          rgb = [222, 180, 78];
+          h = 0.4 - r;
+          rough = 0.35;
+        } else {
+          rgb = scale([44, 78, 140], f);
+          h = 0;
+        }
+      }
+      return { rgb, h, rough };
+    },
+    { normal: 2.2, macro: 0 },
+  );
+}
+
+/**
+ * Gilded bronze roof tiles (Basilica Ulpia; Pausanias 5.12.6): flat tegulae with raised imbrices
+ * every 0.45 m running down the slope (texture v), metallic, with patches of brighter gilding.
+ */
+export function gildedTilesMaterial(): THREE.MeshStandardMaterial {
+  const patch = fbm2D(861, 3, 3);
+  const grain = fbm2D(862, 40, 2);
+  return procMaterial(
+    'gilded-tiles',
+    256,
+    [0.9, 1.2],
+    (u, v) => {
+      // two imbrex ridges per 0.9 m across, one course step per 0.6 m down the slope
+      const x = (u * 2) % 1;
+      const ridge = Math.max(0, 1 - Math.abs(x - 0.5) / 0.14);
+      const course = (v * 2) % 1;
+      const lip = course > 0.92 ? 0.6 : 0;
+      const p = patch(u, v);
+      const g = grain(u, v);
+      const k = 0.88 + 0.2 * p + 0.05 * g;
+      const rgb: RGB = scale([214, 170, 72], k * (1 - lip * 0.25));
+      return { rgb, h: Math.sqrt(ridge) * 1.2 - lip * 0.3, rough: 0.28 + 0.18 * (1 - p) + 0.08 * g };
+    },
+    { normal: 1.6, metalness: 0.75, macro: 0.02 },
+  );
+}
+
+/** Library floors: grey granite slabs framed by giallo antico bands (one panel per `tile` m). */
+export function libraryFloorMaterial(tile = 2.4): THREE.MeshStandardMaterial {
+  const fine = fbm2D(971, 40, 2);
+  const vein = fbm2D(972, 6, 4);
+  return procMaterial(
+    `libfloor${tile}`,
+    256,
+    tile,
+    (u, v, x, y) => {
+      const band = u < 0.07 || v < 0.07;
+      const joint = Math.abs(u - 0.07) < 0.006 || Math.abs(v - 0.07) < 0.006 || u < 0.006 || v < 0.006;
+      const f = fine(u, v);
+      let rgb: RGB;
+      if (band) {
+        rgb = scale([214, 170, 86], 0.92 + 0.16 * vein(u, v));
+      } else {
+        const r = hash2(x >> 1, y >> 1, 41);
+        rgb = scale([140, 139, 134], 0.92 + 0.14 * f);
+        if (r < 0.22) rgb = mix(rgb, [62, 61, 59], 0.8);
+        else if (r > 0.93) rgb = mix(rgb, [212, 209, 202], 0.7);
+      }
+      if (joint) rgb = scale(rgb, 0.6);
+      return { rgb, h: joint ? -1 : 0, rough: band ? 0.32 : 0.36 };
+    },
+    { normal: 0.8, macro: 0.03 },
+  );
+}
+
+/**
+ * Pavonazzetto for the Dacian statues: white Phrygian marble with strong violet-purple veins and
+ * breccia, so the captives read against the white attics.
+ */
+export function pavonazzettoMaterial(): THREE.MeshStandardMaterial {
+  const warp = fbm2D(1081, 3, 4);
+  const vein = fbm2D(1082, 7, 5);
+  const fine = fbm2D(1083, 30, 2);
+  return procMaterial(
+    'pavonazzetto',
+    256,
+    1.2,
+    (u, v) => {
+      const w = warp(u, v);
+      const n = vein(u + w * 0.3, v);
+      const veins = smooth(0.52, 0.58, n) * (1 - smooth(0.6, 0.7, n));
+      const clast = smooth(0.66, 0.72, n);
+      let rgb: RGB = scale([236, 228, 220], 0.96 + 0.06 * fine(u, v));
+      rgb = mix(rgb, [120, 70, 104], veins * 0.85);
+      rgb = mix(rgb, [176, 132, 150], clast * 0.5);
+      return { rgb, h: veins * 0.1, rough: 0.34 };
+    },
+    { normal: 0.4, macro: 0.03 },
+  );
 }
 
 /** Materials created here, for the dev scene and tests. */
