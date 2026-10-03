@@ -17,7 +17,7 @@ import { WORLD_SCALE } from '../coords';
 import type { Heightmap } from '../terrain/heightmap';
 import { chain, resolveQuays } from '../terrain/riverbanks';
 import { bodyAt, currentOf, makeWaterBodies, type BodyHit, type WaterBody } from './bodies';
-import { buildQuay } from './quays';
+import { buildIslandFacing, buildQuay } from './quays';
 import { placeReeds } from './reeds';
 import { buildWaterSurface } from './surfaceMesh';
 import { SwimSystem } from './swim';
@@ -143,6 +143,17 @@ export async function buildWater(game: Game, atlas: typeof Atlas, hm: Heightmap)
       else water.group.add(group);
       water.landings.push(...q.landings);
     }
+  }
+
+  // ---- Tiber Island's travertine "ship" facing (the carved prow itself is a landmark)
+  for (const isl of atlas.ISLANDS) {
+    const prow = atlas.LANDMARK_BY_ID['island-prow'];
+    const skip = prow ? [{ at: prow.center, r: 16 }] : [];
+    const b = buildIslandFacing(isl.outline, isl.elevation, atlas.RIVERS[0]?.waterLevel ?? 6, skip, S);
+    const group = b.build(`island-facing:${isl.id}`);
+    registerColliders(game, b.colliders, undefined, water);
+    if (game.world) game.world.add(`island-facing:${isl.id}`, group, { cullDistance: 1600, parent: water.group });
+    else water.group.add(group);
   }
 
   // ---- reeds on the natural banks

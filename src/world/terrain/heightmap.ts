@@ -383,12 +383,13 @@ export function makeNaturalElevation(src: TerrainSource, opts: { noise?: number;
       if (hh > h) h = hh;
       hillFactor = Math.max(hillFactor, 1 - smooth(0, slope, Math.max(0, sd)));
     }
-    // Islands rise out of the river.
+    // Islands rise out of the river. Tiber Island was faced in travertine like a ship (the water
+    // module builds the facing just outside the outline), so it stands on near-vertical sides.
     let islandH = -Infinity;
     for (const b of islands) {
       if (!inBox(b, x, z)) continue;
       const sd = signedDistance(x, z, b.item.outline);
-      if (sd < 12) islandH = Math.max(islandH, b.item.elevation - smooth(-6, 12, sd) * 6);
+      if (sd < 4.5) islandH = Math.max(islandH, b.item.elevation - smooth(1.2, 4.5, sd) * 9);
     }
     // 2. The channel itself always wins over hill slopes: where a hill reaches the river the
     //    water cuts a steep bank into it (the Aventine's river cliff). Then the stone quays.

@@ -147,7 +147,7 @@ const FRAGMENT_MAP = /* glsl */ `
   vec2 wR1 = wN( mat2( 0.8, - 0.6, 0.6, 0.8 ) * wP / 3.3 + vec2( uTime * 0.021, uTime * 0.013 ) );
   vec2 wR2 = wN( mat2( 0.28, 0.96, - 0.96, 0.28 ) * wP / 1.35 + vec2( - uTime * 0.033, uTime * 0.041 ) );
   float wStr = 1.0 - 0.75 * smoothstep( 25.0, 500.0, wDist );
-  vec2 wT = ( wFlowN * ( 0.55 + length( wFlow ) * 0.5 ) + wR1 * 0.32 + wR2 * 0.22 ) * wStr * 0.55;
+  vec2 wT = ( wFlowN * ( 0.55 + length( wFlow ) * 0.5 ) + wR1 * 0.32 + wR2 * 0.22 ) * wStr * 0.42;
   vec3 wNormal = normalize( vec3( wT.x, 1.0, wT.y ) );
   // Colour by depth: sandy shallows over the bed, olive-brown silt-laden body.
   float wD = smoothstep( 0.05, 2.2, wDepth );

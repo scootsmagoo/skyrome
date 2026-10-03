@@ -272,3 +272,59 @@ function geom(arr: number[]): THREE.BufferGeometry {
   g.computeVertexNormals();
   return g;
 }
+
+/**
+ * Tiber Island's travertine facing (the "stone ship", 1st c. BC): a wall all round the island
+ * outline from the river bed to just above the island's ground, with a coping course.
+ * `skip` points (real m) leave room for structures built elsewhere (the carved prow landmark).
+ */
+export function buildIslandFacing(
+  outline: readonly (readonly [number, number])[],
+  ground: number,
+  waterLevel: number,
+  skip: readonly { at: readonly [number, number]; r: number }[] = [],
+  S = WORLD_SCALE,
+): MeshBuilder {
+  const b = new MeshBuilder();
+  const n = outline.length;
+  let cx = 0, cz = 0;
+  for (const [x, z] of outline) {
+    cx += x / n;
+    cz += z / n;
+  }
+  const yBed = (waterLevel - 4.6) * S;
+  const yTop = ground * S + 0.25;
+  // The face stands 6 m (real) outside the outline; the wall reaches back to 1 m outside it, so
+  // its top covers the whole of the terrain's drop from the island ground to the river bed.
+  const out = 6;
+  const T = (out - 1) * S;
+  const skipped = (x: number, z: number) => skip.some((s) => Math.hypot(x - s.at[0], z - s.at[1]) < s.r);
+  for (let i = 0; i < n; i++) {
+    const a = outline[i], c = outline[(i + 1) % n];
+    const dx = c[0] - a[0], dz = c[1] - a[1];
+    const L = Math.hypot(dx, dz);
+    if (L < 0.5) continue;
+    // Edge normal, flipped to point away from the island's centroid.
+    let nx = dz / L, nz = -dx / L;
+    const mx = (a[0] + c[0]) / 2 - cx, mz = (a[1] + c[1]) / 2 - cz;
+    if (mx * nx + mz * nz < 0) {
+      nx = -nx;
+      nz = -nz;
+    }
+    const steps = Math.max(1, Math.round(L / 4));
+    q.setFromAxisAngle(yAxis, Math.atan2(-dz, dx));
+    for (let k = 0; k < steps; k++) {
+      const t = (k + 0.5) / steps;
+      const x = a[0] + dx * t + nx * out, z = a[1] + dz * t + nz * out;
+      if (skipped(x, z)) continue;
+      const len = (L / steps) * S + 0.3;
+      const centre = new THREE.Vector3(x * S - nx * (T / 2), (yBed + yTop) / 2, z * S - nz * (T / 2));
+      m4.compose(centre, q, new THREE.Vector3(1, 1, 1));
+      b.box('travertine', len, yTop - yBed, T, m4.clone(), { collide: true, castShadow: true });
+      // Coping, a little proud of the face.
+      m4.compose(new THREE.Vector3(x * S + nx * 0.08, yTop + 0.1, z * S + nz * 0.08), q, new THREE.Vector3(1, 1, 1));
+      b.box('travertine', len, 0.2, 0.9, m4.clone(), { castShadow: true });
+    }
+  }
+  return b;
+}

@@ -10,6 +10,8 @@ import { WORLD_SCALE } from '../coords';
 import type { Heightmap } from './heightmap';
 import { GROUND_PALETTE } from './groundTextures';
 import { chain, footOn, indexSegments, nearSegments } from './riverbanks';
+import { LAYER_COUNT, SPLAT_LAYERS, splatWeights } from './splat';
+import { MATERIAL_BASE } from '../../gfx/materialIds';
 
 export interface ApronOptions {
   /** How far (game m) the ring reaches beyond the grid. Default 4500. */
@@ -50,8 +52,9 @@ export function buildApron(hm: Heightmap, height: (x: number, z: number) => numb
   const nz = Math.ceil((hm.maxZ - hm.minZ + 2 * ext) / cell) + 1;
   const pos = new Float32Array(nx * nz * 3);
   const col = new Float32Array(nx * nz * 3);
-  const grass = new THREE.Color(GROUND_PALETTE.grass!), dry = new THREE.Color(GROUND_PALETTE.dry_grass!);
-  const dirt = new THREE.Color(GROUND_PALETTE.dirt!), mud = new THREE.Color(GROUND_PALETTE.mud!), rock = new THREE.Color(GROUND_PALETTE.rock!);
+  // Colours from the same splat rules as the textured terrain, in the palette colours.
+  const palette = SPLAT_LAYERS.map((id) => new THREE.Color(GROUND_PALETTE[id] ?? MATERIAL_BASE[id].color));
+  const w = new Float32Array(LAYER_COUNT);
   const c = new THREE.Color();
   const inside = (x: number, z: number, m = 0) => x > hm.minX + m && x < hm.maxX - m && z > hm.minZ + m && z < hm.maxZ - m;
   const H = new Float32Array(nx * nz);
@@ -91,16 +94,15 @@ export function buildApron(hm: Heightmap, height: (x: number, z: number) => numb
       pos[k] = x;
       pos[k + 1] = y;
       pos[k + 2] = z;
-      const slope = (Math.abs(at(i + 1, j) - at(i - 1, j)) + Math.abs(at(i, j + 1) - at(i, j - 1))) / (2 * cell);
-      const n = vnoise(x * 0.004, z * 0.004) * 0.65 + vnoise(x * 0.013 + 5, z * 0.013) * 0.35;
-      c.copy(grass).lerp(dry, Math.min(1, Math.max(0, (n - 0.3) * 1.6 + slope * 1.2)));
-      c.lerp(dirt, Math.max(0, vnoise(x * 0.02 + 9, z * 0.02) - 0.62) * 1.4);
-      if (slope > 0.5) c.lerp(rock, Math.min(1, (slope - 0.5) * 2));
-      if (y < waterY + 1.2) c.lerp(mud, Math.min(1, (waterY + 1.2 - y) / 1.2));
-      // Darker, slightly hazier-looking than the textured near terrain: the photos' mean albedo.
-      col[k] = c.r * 0.82;
-      col[k + 1] = c.g * 0.82;
-      col[k + 2] = c.b * 0.82;
+      const gx = (at(i + 1, j) - at(i - 1, j)) / (2 * cell), gz = (at(i, j + 1) - at(i, j - 1)) / (2 * cell);
+      const nl = Math.hypot(gx, 1, gz);
+      splatWeights({ x, z, ny: 1 / nl, nz: -gz / nl, hw: y - waterY, roadSd: 8, padSd: 8, padKind: 0, urban: 0, lush: 0, fine: 0 }, w);
+      c.setRGB(0, 0, 0);
+      for (let l = 0; l < LAYER_COUNT; l++) if (w[l] > 0) c.r += palette[l].r * w[l], c.g += palette[l].g * w[l], c.b += palette[l].b * w[l];
+      // A touch darker than the palette: the photos' shading and AO at a distance.
+      col[k] = c.r * 0.9;
+      col[k + 1] = c.g * 0.9;
+      col[k + 2] = c.b * 0.9;
     }
   }
   const idx: number[] = [];
