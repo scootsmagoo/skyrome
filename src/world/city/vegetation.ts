@@ -47,7 +47,7 @@ export function placeTrees(plan: CityPlan, area: { minX: number; minZ: number; m
       let p = 0;
       let mix: Mix | null = null;
       if (c === K.GARDEN) {
-        p = clump > 0.42 ? 0.75 : 0.12;
+        p = clump > 0.42 ? 0.55 : 0.1;
         mix = GARDEN;
       } else if (c === K.STEEP) {
         p = clump > 0.45 ? 0.5 : 0.15;

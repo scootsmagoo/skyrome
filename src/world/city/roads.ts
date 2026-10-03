@@ -18,6 +18,7 @@ import { buildPlaza, buildStairs, buildStreet, type StreetSpec } from '../../arc
 import { Draw } from '../../arch/fabric/draw';
 import { compitalShrine } from '../../arch/fabric/shrines';
 import { lacus } from '../../arch/fabric/fountain';
+import { velum } from '../../arch/fabric/awnings';
 import { placeProp } from '../../arch/props/props';
 import type { MeshBuilder } from '../../gfx/MeshBuilder';
 import type { Polygon, Vec2 } from '../../arch/fabric/types';
@@ -315,6 +316,109 @@ export function streetWork(plan: CityPlan, H: HeightFn, area: { minX: number; mi
     }
   }
 
+  // ---- markets: stalls along the edges of the Forum Boarium and the Forum Holitorium, with
+  // cattle pens on the Boarium, and baskets, crates and amphorae between the stalls
+  for (const pl of plan.plazas) {
+    if (pl.kind !== 'market') continue;
+    const rng = new Rng(`market:${pl.id}`);
+    const c = polyCenter(pl.polygon);
+    if (!inArea(c[0], c[1])) continue;
+    const g = plan.grid;
+    const bb = bounds(pl.polygon);
+    const stalls: { p: Vec2; facing: number; kind: string }[] = [];
+    for (let x = bb.minX + 3; x < bb.maxX; x += 4.6) {
+      for (let z = bb.minZ + 3; z < bb.maxZ; z += 4.6) {
+        const p: Vec2 = [x + rng.range(-0.8, 0.8), z + rng.range(-0.8, 0.8)];
+        if (!pointIn(p, pl.polygon) || edgeDist(p, pl.polygon) > 24 || edgeDist(p, pl.polygon) < 3) continue;
+        // Clear ground only: no landmark, road or street under the stall or right around it.
+        if ([[0, 0], [1.6, 0], [-1.6, 0], [0, 1.6], [0, -1.6]].some(([dx, dz]) => g.at(p[0] + dx, p[1] + dz) !== K.PLAZA)) continue;
+        if (!rng.chance(0.5)) continue;
+        stalls.push({ p, facing: Math.atan2(c[0] - p[0], c[1] - p[1]), kind: rng.pick(['stall_fruit', 'stall_fish', 'stall_pottery', 'stall_cloth']) });
+      }
+    }
+    stalls.forEach((st, k) => spots.push({ id: `${pl.id}:stall${k}`, kind: 'stall', position: new THREE.Vector3(st.p[0] + Math.sin(st.facing) * 1.2, H(st.p[0], st.p[1]), st.p[1] + Math.cos(st.facing) * 1.2), heading: st.facing, tag: st.kind }));
+    // Group stalls by work cell.
+    const byCell = new Map<string, typeof stalls>();
+    for (const st of stalls) {
+      const k = cellKey(st.p[0], st.p[1], size);
+      const l = byCell.get(k);
+      if (l) l.push(st);
+      else byCell.set(k, [st]);
+    }
+    for (const list of byCell.values()) {
+      add(list[0].p[0], list[0].p[1], (b) => {
+        const d = new Draw(b);
+        for (const st of list) {
+          const y = H(st.p[0], st.p[1]);
+          // Stall fronts (local −z) face the middle of the square.
+          placeProp(d, st.kind as 'stall_fruit', st.p[0], y, st.p[1], st.facing + Math.PI, { rng });
+          if (rng.chance(0.5)) placeProp(d, rng.pick(['basket', 'crate', 'amphora_stack', 'sack'] as const), st.p[0] + rng.range(-1.6, 1.6), y, st.p[1] + rng.range(-1.6, 1.6), rng.range(0, 6), { rng });
+        }
+      });
+    }
+    if (pl.id === 'forum-boarium') {
+      // Cattle pens: timber post-and-rail enclosures near the river side of the square.
+      let pens = 0;
+      for (let k = 0; k < 40 && pens < 3; k++) {
+        const p: Vec2 = [rng.range(bb.minX, bb.maxX), rng.range(bb.minZ, bb.maxZ)];
+        if (!pointIn(p, pl.polygon)) continue;
+        if ([[-4, -3], [4, -3], [4, 3], [-4, 3], [0, 0]].some(([dx, dz]) => g.at(p[0] + dx, p[1] + dz) !== K.PLAZA)) continue;
+        if (stalls.some((st) => Math.hypot(st.p[0] - p[0], st.p[1] - p[1]) < 7)) continue;
+        pens++;
+        const rot = rng.range(0, Math.PI);
+        add(p[0], p[1], (b) => cattlePen(new Draw(b).at(p[0], H(p[0], p[1]), p[1], rot), 8, 6, rng));
+      }
+    }
+  }
+
+  // ---- parked carts: wheeled traffic is banned by day, so carts wait at the edge of the city
+  // (where the roads leave the built-up area) until dusk
+  {
+    const rng = new Rng('carts');
+    for (const run of runs) {
+      if (run.ctx !== 'rural') continue;
+      const road = plan.roads[run.road];
+      for (const [s0, dir] of [[run.s0, 1], [run.s1, -1]] as const) {
+        const prev = runs.find((r) => r.road === run.road && r.ctx === 'urban' && Math.abs((dir > 0 ? r.s1 : r.s0) - s0) < 3);
+        if (!prev || !rng.chance(0.8)) continue;
+        const pts = sliceLine(road.points, Math.max(0, s0 + dir * 4), s0 + dir * 30);
+        if (pts.length < 2) continue;
+        const a = pts[0], z = pts[pts.length - 1];
+        const L = Math.hypot(z[0] - a[0], z[1] - a[1]) || 1;
+        const t: Vec2 = [(z[0] - a[0]) / L, (z[1] - a[1]) / L], n: Vec2 = [-t[1], t[0]];
+        const count = rng.int(2, 4);
+        add(a[0], a[1], (b) => {
+          const d = new Draw(b);
+          for (let k = 0; k < count; k++) {
+            const off = road.half + 1.8;
+            const x = a[0] + t[0] * (k * 5.5) + n[0] * off, zz = a[1] + t[1] * (k * 5.5) + n[1] * off;
+            placeProp(d, k % 2 ? 'handcart' : 'cart', x, H(x, zz), zz, Math.atan2(t[0], t[1]) + rng.range(-0.2, 0.2), { rng });
+          }
+        });
+      }
+    }
+  }
+
+  // ---- awnings stretched across the narrow lanes of the market quarters
+  {
+    const rng = new Rng('vela');
+    for (const st of plan.streets) {
+      if (st.kind === 'vicus' || st.density < 0.84 || st.steps.some(Boolean)) continue;
+      const L = lineLength(st.points);
+      for (let s = 8; s < L - 8; s += 24) {
+        if (!rng.chance(0.35)) continue;
+        const pts = sliceLine(st.points, s - 0.5, s + 0.5);
+        if (pts.length < 2) continue;
+        const a = pts[0], z = pts[pts.length - 1];
+        const ang = Math.atan2(z[0] - a[0], z[1] - a[1]);
+        const w = st.width + 0.3;
+        const mats = rng.pick([['fabric_white', 'fabric_red'], ['fabric_ochre', 'fabric_white'], ['fabric_white', 'fabric_blue']] as const);
+        // velum(): width along local x (across the lane), poles at local z = −depth.
+        add(a[0], a[1], (b) => velum(new Draw(b).at(a[0], H(a[0], a[1]) + LIFT.lane, a[1], ang + Math.PI / 2), w, 2.2, 3.7, [mats[0], mats[1]]));
+      }
+    }
+  }
+
   // ---- piazzas
   for (const pz of plan.piazzas) {
     if (!inArea(pz.center[0], pz.center[1])) continue;
@@ -401,29 +505,120 @@ function subtract(iv: [number, number], cuts: [number, number][]): [number, numb
 
 // ---------------------------------------------------------------- builders
 
+/** A cattle pen: timber posts and two rails round a w × d rectangle, a gate gap on one side. */
+function cattlePen(d: Draw, w: number, dd: number, rng: Rng) {
+  const posts: Vec2[] = [];
+  const n = Math.ceil(w / 2), m = Math.ceil(dd / 2);
+  for (let i = 0; i <= n; i++) posts.push([-w / 2 + (w * i) / n, -dd / 2], [-w / 2 + (w * i) / n, dd / 2]);
+  for (let j = 1; j < m; j++) posts.push([-w / 2, -dd / 2 + (dd * j) / m], [w / 2, -dd / 2 + (dd * j) / m]);
+  for (const [x, z] of posts) d.box('wood_dark', x, 0.6, z, 0.14, 1.2, 0.14);
+  for (const y of [0.55, 1.05]) {
+    d.box('wood', 0, y, -dd / 2, w, 0.08, 0.06);
+    d.box('wood', -w * 0.3, y, dd / 2, w * 0.4, 0.08, 0.06); // gate gap on the far side
+    d.box('wood', w * 0.3, y, dd / 2, w * 0.4, 0.08, 0.06);
+    d.box('wood', -w / 2, y, 0, 0.06, 0.08, dd);
+    d.box('wood', w / 2, y, 0, 0.06, 0.08, dd);
+  }
+  d.solid(-w / 2 - 0.07, 0, -dd / 2 - 0.07, w / 2 + 0.07, 1.2, -dd / 2 + 0.07);
+  d.solid(-w / 2 - 0.07, 0, -dd / 2, -w / 2 + 0.07, 1.2, dd / 2);
+  d.solid(w / 2 - 0.07, 0, -dd / 2, w / 2 + 0.07, 1.2, dd / 2);
+  // Straw and a trough inside.
+  d.box('dry_grass', 0, 0.02, 0, w - 0.6, 0.04, dd - 0.6, { shadow: false });
+  placeProp(d, 'trough', rng.range(-w / 4, w / 4), 0, -dd / 2 + 0.7, 0, { variant: 0 });
+}
+
+function polyCenter(poly: readonly Vec2[]): Vec2 {
+  let x = 0, z = 0;
+  for (const p of poly) { x += p[0]; z += p[1]; }
+  return [x / poly.length, z / poly.length];
+}
+
+function bounds(poly: readonly Vec2[]) {
+  let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
+  for (const [x, z] of poly) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); }
+  return { minX, minZ, maxX, maxZ };
+}
+
+function pointIn(p: Vec2, poly: readonly Vec2[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, zi] = poly[i], [xj, zj] = poly[j];
+    if (zi > p[1] !== zj > p[1] && p[0] < ((xj - xi) * (p[1] - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function edgeDist(p: Vec2, poly: readonly Vec2[]): number {
+  let d = Infinity;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[j], b = poly[i];
+    const dx = b[0] - a[0], dz = b[1] - a[1];
+    const l2 = dx * dx + dz * dz;
+    let t = l2 > 0 ? ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / l2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    d = Math.min(d, Math.hypot(a[0] + dx * t - p[0], a[1] + dz * t - p[1]));
+  }
+  return d;
+}
+
 const COVER = new Set<number>([K.STREET, K.PIAZZA, K.SCRAP, K.FREE, K.MARGIN, K.ROAD, K.AQUEDUCT, K.WALL]);
 
-/** Packed-earth quads over the covered raster classes of one cell (row runs, ≤ 4 m pieces). */
+/**
+ * Packed earth over the covered raster classes of one cell, as marching squares on the lattice
+ * of cell centres: interior squares merge into runs of up to ~6 m, the boundary squares get the
+ * smooth (45°) edge pieces, so the cover never shows the raster's staircase against the grass.
+ */
 function groundCover(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: number, size: number) {
   const g = plan.grid;
   const c = g.cell;
   const pos: number[] = [];
   const lift = 0.04;
-  const iz0 = Math.max(0, g.iz(z0)), iz1 = Math.min(g.nz - 1, g.iz(z0 + size - 1e-6));
-  const ix0 = Math.max(0, g.ix(x0)), ix1 = Math.min(g.nx - 1, g.ix(x0 + size - 1e-6));
+  const iz0 = Math.max(0, g.iz(z0) - 1), iz1 = Math.min(g.nz - 2, g.iz(z0 + size - 1e-6));
+  const ix0 = Math.max(0, g.ix(x0) - 1), ix1 = Math.min(g.nx - 2, g.ix(x0 + size - 1e-6));
+  const on = (ix: number, iz: number) => COVER.has(g.cls[iz * g.nx + ix]);
+  const X = (fx: number) => g.x0 + (fx + 0.5) * c, Z = (fz: number) => g.z0 + (fz + 0.5) * c;
+  const v = (fx: number, fz: number) => {
+    const x = X(fx), z = Z(fz);
+    return [x, H(x, z) + lift, z];
+  };
+  /** Polygon in lattice coords (fx, fz) listed a → d → c → b (+z south): an up-facing fan. */
+  const poly = (pts: [number, number][]) => {
+    const p0 = v(pts[0][0], pts[0][1]);
+    for (let k = 1; k + 1 < pts.length; k++) pos.push(...p0, ...v(pts[k][0], pts[k][1]), ...v(pts[k + 1][0], pts[k + 1][1]));
+  };
   const maxRun = Math.max(1, Math.round(6 / c));
-  for (let iz = iz0; iz <= iz1; iz++) {
-    const za = g.z0 + iz * c, zb = za + c;
-    let ix = ix0;
-    while (ix <= ix1) {
-      if (!COVER.has(g.cls[iz * g.nx + ix])) { ix++; continue; }
-      let jx = ix;
-      while (jx + 1 <= ix1 && jx + 1 - ix < maxRun && COVER.has(g.cls[iz * g.nx + jx + 1])) jx++;
-      const xa = g.x0 + ix * c, xb = g.x0 + (jx + 1) * c;
-      const a = [xa, H(xa, za) + lift, za], bb = [xb, H(xb, za) + lift, za], cc = [xb, H(xb, zb) + lift, zb], d = [xa, H(xa, zb) + lift, zb];
-      // Up-facing winding in (x, z) with +z south: a → d → c, a → c → b.
-      pos.push(...a, ...d, ...cc, ...a, ...cc, ...bb);
-      ix = jx + 1;
+  // Only squares whose top-left lattice point lies in this cell (each square is emitted once).
+  const sx0 = Math.max(ix0, g.ix(x0 + c / 2)), sz0 = Math.max(iz0, g.iz(z0 + c / 2));
+  const sx1 = Math.min(ix1, g.ix(x0 + size + c / 2) - 1), sz1 = Math.min(iz1, g.iz(z0 + size + c / 2) - 1);
+  for (let iz = sz0; iz <= sz1; iz++) {
+    let ix = sx0;
+    while (ix <= sx1) {
+      const a = on(ix, iz), bb = on(ix + 1, iz), cc = on(ix + 1, iz + 1), d = on(ix, iz + 1);
+      const code = (a ? 1 : 0) | (bb ? 2 : 0) | (cc ? 4 : 0) | (d ? 8 : 0);
+      if (code === 15) {
+        let jx = ix;
+        while (jx + 1 <= sx1 && jx + 1 - ix < maxRun && on(jx + 2, iz) && on(jx + 2, iz + 1)) jx++;
+        poly([[ix, iz], [ix, iz + 1], [jx + 1, iz + 1], [jx + 1, iz]]);
+        ix = jx + 1;
+        continue;
+      }
+      if (code) {
+        // Corners a (ix, iz), b (ix+1, iz), c (ix+1, iz+1), d (ix, iz+1) and edge midpoints.
+        const A: [number, number] = [ix, iz], B: [number, number] = [ix + 1, iz], C: [number, number] = [ix + 1, iz + 1], D: [number, number] = [ix, iz + 1];
+        const ab: [number, number] = [ix + 0.5, iz], bc: [number, number] = [ix + 1, iz + 0.5], cd: [number, number] = [ix + 0.5, iz + 1], da: [number, number] = [ix, iz + 0.5];
+        // Walk the square's boundary a → d → c → b (up-facing order) keeping covered corners and the crossings.
+        const ring: [number, number][] = [];
+        const corners: [[number, number], boolean, [number, number]][] = [[A, a, da], [D, d, cd], [C, cc, bc], [B, bb, ab]];
+        for (let k = 0; k < 4; k++) {
+          const [pt, inside, edgeToNext] = corners[k];
+          const nextInside = corners[(k + 1) % 4][1];
+          if (inside) ring.push(pt);
+          if (inside !== nextInside) ring.push(edgeToNext);
+        }
+        // Saddles (a & c or b & d only) come out as one hexagon, which is fine for ground.
+        if (ring.length >= 3) poly(ring);
+      }
+      ix++;
     }
   }
   if (!pos.length) return;
@@ -433,6 +628,7 @@ function groundCover(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0
   b.add(geo, 'dirt', undefined, { castShadow: false });
 }
 
+/** A cattle pen: timber posts and two rails round a w × d rectangle, a gate gap on one side. */
 function buildRoadPiece(b: MeshBuilder, road: PlanRoad, ctx: string, pts: Vec2[], H: HeightFn, capStart: boolean, capEnd: boolean) {
   if (road.style === 'stairs') {
     for (let k = 0; k + 1 < pts.length; k++) {

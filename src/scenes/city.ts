@@ -3,7 +3,7 @@
  * ordinary city.
  *
  *   ?scene=city&view=subura|argiletum|tuscus|velabrum|boarium|caelian|aventine|aerial|capitol|palatine|far|
- *              aqueduct|arcades|neroniani|wall|gate|agger
+ *              aqueduct|arcades|neroniani|wall|gate|agger|scalae|river
  *              [&hour=9.5][&extent=core|city][&walk=1]
  *
  * Street views put the player on the nearest street-graph node and look along the street at eye
@@ -36,7 +36,7 @@ const VIEWS: Record<string, View> = {
   argiletum: { at: [300, -140], look: [430, -180], h: 1.7, street: true },
   tuscus: { at: [-10, 240], look: [-50, 320], h: 1.7, street: true },
   velabrum: { at: [-90, 350], look: [-180, 380], h: 1.7, street: true },
-  boarium: { at: [-200, 380], look: [-300, 430], h: 1.7, street: true },
+  boarium: { at: [-230, 330], look: [-300, 450], h: 3 },
   caelian: { at: [760, 620], look: [900, 700], h: 1.7, street: true },
   aventine: { at: [-150, 900], look: [-250, 1000], h: 1.7, street: true },
   aerial: { at: [250, 1030], look: [250, 80], h: 330 },
@@ -49,11 +49,14 @@ const VIEWS: Record<string, View> = {
   wall: { at: [-480, 1180], look: [-560, 1060], h: 2 },
   gate: { at: [0, 1300], look: [-20, 1345], h: 2 },
   agger: { at: [1330, -960], look: [1470, -800], h: 4 },
+  scalae: { at: [-30, 470], look: [30, 380], h: 1.7 },
+  river: { at: [-370, 270], look: [-470, 220], h: 1.7, street: true },
 };
 
 declare global {
   interface Window {
-    cityView?: (name: string) => unknown;
+    /** Switch to a view; `turn` (radians) turns the player from the street direction (walk tests). */
+    cityView?: (name: string, turn?: number) => unknown;
   }
 }
 
@@ -77,15 +80,16 @@ const scene: SceneDef = {
     const walk = p.has('walk');
     // Survey views look from the player's eyes: hide the body.
     if (!walk) player.root.visible = false;
-    const apply = (v: View) => {
+    const apply = (v: View, turn = 0) => {
       const s = place(game, v);
-      player.position.copy(s.feet);
+      player.teleport(s.feet, s.heading + turn);
+      player.yaw = s.heading + turn + Math.PI;
       game.city?.prime(s.feet);
       if (!walk) devCamera(game).look(s.eye, new THREE.Vector3(s.target.x, H(s.target.x, s.target.z) + (v.street ? 1.6 : 0), s.target.z));
       game.world.refreshAll();
       return { feet: s.feet.toArray().map((x) => +x.toFixed(1)), heading: +s.heading.toFixed(2) };
     };
-    window.cityView = (n: string) => apply(VIEWS[n] ?? VIEWS.subura);
+    window.cityView = (n: string, turn = 0) => apply(VIEWS[n] ?? VIEWS.subura, turn);
     apply(first);
   },
 };

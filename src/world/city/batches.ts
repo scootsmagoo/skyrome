@@ -30,7 +30,7 @@ export class Batch {
   /** Geometry ids shared by many instances (props), keyed by the caller. */
   readonly shared = new Map<string, { geom: number; verts: number }>();
 
-  constructor(material: THREE.Material, castShadow: boolean, name: string, verts = 65536, instances = 256) {
+  constructor(material: THREE.Material, castShadow: boolean, name: string, verts = 8192, instances = 64) {
     this.vertCap = verts;
     this.mesh = new THREE.BatchedMesh(instances, verts, verts, material);
     this.mesh.name = name;
@@ -51,12 +51,13 @@ export class Batch {
   private ensure(n: number) {
     if (this.mesh.unusedVertexCount >= n) return;
     // Compact first if a lot of space is held by deleted geometry.
-    if (this.reserved - this.live > this.vertCap * 0.3) {
+    if (this.reserved - this.live > this.vertCap * 0.2) {
       this.mesh.optimize();
       this.reserved = this.live;
       if (this.mesh.unusedVertexCount >= n) return;
     }
-    const cap = Math.max(this.vertCap * 2, this.live + n * 2);
+    // Grow by half (memory matters more than the occasional copy: the arrays stay in JS for updates).
+    const cap = Math.ceil(Math.max(this.vertCap * 1.5, (this.live + n) * 1.25));
     this.mesh.optimize();
     this.reserved = this.live;
     this.mesh.setGeometrySize(cap, cap);
