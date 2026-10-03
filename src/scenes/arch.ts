@@ -10,7 +10,7 @@
  * (e.g. the temple stairs, used to verify that the player can climb them).
  */
 import * as THREE from 'three';
-import { cavea, ellipticalArcade } from '../arch/classical/amphitheatre';
+import { amphitheatre } from '../arch/classical/amphitheatre';
 import { arcade, colosseumStoreys, plainArch, triumphalArch } from '../arch/classical/arch';
 import { basilica } from '../arch/classical/basilica';
 import { column } from '../arch/classical/column';
@@ -247,23 +247,33 @@ function gallery(game: Game) {
     wall(b, { length: 9, height: 3.2, thickness: 0.7, material: 'stucco_painted', openings: [], detail: DET }, T(20, 0, 0));
     paintedSign(b, ['Pistor', 'Panis Venalis'], 2.2, 0.8, TRS(14.5, 4.1, -0.37, 0, 0, 0), { ground: '#efe4cc' });
   });
-  // 13. The Flavian Amphitheatre at WORLD_SCALE (188 × 156 m real), cavea fitted inside.
-  build(game, 'amphitheatre', { x: -10, y: 0, z: 150 }, 0, (b) => {
-    const f = ellipticalArcade(b, { rx: 94 * K, rz: 78 * K, bays: 80, storeys: colosseumStoreys(K), depth: 2.4 * K, corridor: 6 * K, material: 'travertine', detail: 'low', masts: true });
-    const arenaRx = 43 * K;
-    const c = cavea(b, {
-      arenaRx,
-      arenaRz: 27 * K,
-      podium: 4 * K,
-      tiers: [{ rows: 6, rise: 0.4, depth: 0.7 }, { rows: 9, rise: 0.4, depth: 0.7, wall: 1.0 }, { rows: 5, rise: 0.4, depth: 0.7, wall: 1.0 }],
-      segments: 96,
-      aisles: 20,
-      seatMaterial: 'marble',
-      riserMaterial: 'travertine',
-      topPortico: { order: 'corinthian', columnHeight: 7 },
-      detail: DET,
+  // 13. The Flavian Amphitheatre at WORLD_SCALE (188 × 156 m real): facade, ambulatory and cavea
+  //     with the four axial entrances, arena gates and vomitoria.
+  const amphAt = { x: -10, y: 0, z: 150 };
+  build(game, 'amphitheatre', amphAt, 0, (b) => {
+    const r = amphitheatre(b, {
+      facade: { rx: 94 * K, rz: 78 * K, bays: 80, storeys: colosseumStoreys(K), depth: 2.4 * K, corridor: 6 * K, material: 'travertine', detail: 'low', masts: true },
+      cavea: {
+        arenaRx: 43 * K,
+        arenaRz: 27 * K,
+        podium: 4 * K,
+        tiers: [{ rows: 6, rise: 0.4, depth: 0.7 }, { rows: 9, rise: 0.4, depth: 0.7, wall: 1.0 }, { rows: 5, rise: 0.4, depth: 0.7, wall: 1.0 }],
+        segments: 96,
+        aisles: 20,
+        seatMaterial: 'marble',
+        riserMaterial: 'travertine',
+        topPortico: { order: 'corinthian', columnHeight: 7 },
+        detail: DET,
+      },
     });
-    if (window.__arch) window.__arch.info.amphitheatre = { reach: c.reach, available: f.innerRx - arenaRx, caveaTop: c.height, facade: f.height };
+    // World-space entrances for scripted walks (shot steps): facade bay, passage axis and mouth.
+    if (window.__arch)
+      window.__arch.info.amphitheatre = {
+        reach: r.cavea.reach,
+        caveaTop: r.cavea.height,
+        facade: r.facade.height,
+        entrances: r.entrances.map((e) => ({ kind: e.kind, x: amphAt.x + e.x, z: amphAt.z + e.z, nx: e.nx, nz: e.nz, ax: amphAt.x + e.passage.x, az: amphAt.z + e.passage.z, dx: e.passage.dx, dz: e.passage.dz, mouth: e.passage.mouth, outer: e.passage.outer, floor: e.passage.floor })),
+      };
   });
 }
 

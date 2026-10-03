@@ -16,7 +16,6 @@ export const UV_METERS = 2;
 export type TextureSetId =
   | 'marble'
   | 'marble_veined'
-  | 'travertine'
   | 'tufa'
   | 'peperino'
   | 'basalt'
@@ -39,7 +38,7 @@ export type TextureSetId =
   | 'bark';
 
 /** Canvas generators in procedural.ts. */
-export type ProceduralId = 'fabric' | 'mosaic' | 'stucco' | 'gilded' | 'bronze' | 'metal' | 'porphyry' | 'reticulatum' | 'foliage';
+export type ProceduralId = 'fabric' | 'mosaic' | 'stucco' | 'gilded' | 'bronze' | 'metal' | 'porphyry' | 'reticulatum' | 'travertine' | 'foliage';
 
 export interface MaterialRecipe {
   set?: TextureSetId;
@@ -67,8 +66,9 @@ export const MATERIAL_RECIPES: Record<MaterialId, MaterialRecipe> = {
   marble_giallo: { set: 'marble', tile: 2.0, normal: 0.6, macro: 0.08 },
   marble_pavonazzetto: { set: 'marble_veined', tile: 2.0, normal: 0.6, macro: 0.05 },
   porphyry: { proc: 'porphyry', tile: 0.8, macro: 0.04 },
-  // Concrete003's aggregate stretched 2.6:1 reads as travertine's elongated, layered pores.
-  travertine: { set: 'travertine', tile: [2.6, 1.0], normal: 0.9, macro: 0.09 },
+  // Procedural ashlar travertine (laminae, voids along the bedding, hairline joints), drawn for a
+  // 2.4 × 1.2 m repeat: two 0.6 m courses, smooth as in AD 113 (the pockmarks are medieval).
+  travertine: { proc: 'travertine', tile: [2.4, 1.2], normal: 0.4, macro: 0.09 },
   tufa: { set: 'tufa', tile: 2.0, macro: 0.1 },
   peperino: { set: 'peperino', tile: 1.6, macro: 0.08 },
   basalt: { set: 'basalt', tile: 2.0, macro: 0.08 },

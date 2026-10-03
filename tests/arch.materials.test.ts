@@ -33,10 +33,11 @@ describe('material catalog', () => {
   });
 
   it('covers the required surfaces with photo textures', () => {
-    const required = ['marble', 'marble_veined', 'travertine', 'tufa', 'peperino', 'basalt', 'rock', 'brick', 'concrete', 'plaster_white', 'plaster_cream', 'plaster_ochre', 'plaster_red', 'plaster_dark', 'roof_tile', 'wood', 'wood_dark', 'paving_basalt', 'paving_travertine', 'cobbles', 'gravel', 'dirt', 'grass', 'dry_grass', 'sand', 'mud', 'bark'] as const;
+    const required = ['marble', 'marble_veined', 'tufa', 'peperino', 'basalt', 'rock', 'brick', 'concrete', 'plaster_white', 'plaster_cream', 'plaster_ochre', 'plaster_red', 'plaster_dark', 'roof_tile', 'wood', 'wood_dark', 'paving_basalt', 'paving_travertine', 'cobbles', 'gravel', 'dirt', 'grass', 'dry_grass', 'sand', 'mud', 'bark'] as const;
     for (const id of required) expect(MATERIAL_RECIPES[id].set, id).toBeTruthy();
-    // reticulatum is procedural (no CC0 photo exists), and so are fabrics, mosaic, painted stucco, metals
-    for (const id of ['reticulatum', 'fabric_red', 'mosaic', 'stucco_painted', 'gilded_bronze'] as const) expect(MATERIAL_RECIPES[id].proc, id).toBeTruthy();
+    // reticulatum and travertine are procedural (no CC0 scan shows Roman ashlar: the travertine
+    // scans are modern polished vein-cut tiles), and so are fabrics, mosaic, painted stucco, metals
+    for (const id of ['reticulatum', 'travertine', 'fabric_red', 'mosaic', 'stucco_painted', 'gilded_bronze'] as const) expect(MATERIAL_RECIPES[id].proc, id).toBeTruthy();
   });
 
   it('stays within the 18 MB texture budget', () => {
@@ -94,7 +95,7 @@ describe('procedural textures', () => {
   });
 
   it('every generator produces sane images', () => {
-    for (const id of ['fabric', 'mosaic', 'stucco', 'gilded', 'bronze', 'metal', 'porphyry', 'reticulatum', 'foliage'] as const) {
+    for (const id of ['fabric', 'mosaic', 'stucco', 'gilded', 'bronze', 'metal', 'porphyry', 'reticulatum', 'travertine', 'foliage'] as const) {
       const img = generateProcedural(id);
       expect(img.color.length).toBe(img.size * img.size * 4);
       for (const a of img.albedo) {

@@ -170,15 +170,6 @@
     ],
     "roughness": 0.9877
   },
-  "travertine": {
-    "source": "acg:Concrete003",
-    "albedo": [
-      0.2818,
-      0.2939,
-      0.3184
-    ],
-    "roughness": 0.506
-  },
   "tufa": {
     "source": "acg:Rock049",
     "albedo": [

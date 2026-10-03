@@ -12,6 +12,7 @@ import type { MeshBuilder } from '../../gfx/MeshBuilder';
 import type { MaterialId } from '../../gfx/materialIds';
 import { ProfileBuilder, T, TRS, extrudePolygon, mul, sweep, type V2 } from '../common/geom';
 import { inscriptionPanel } from '../common/inscription';
+import { windowVoidMaterial } from '../common/walls';
 import { column } from './column';
 import { corniceOnlyProfile, entablature } from './entablature';
 import { ORDER_PROPORTIONS, columnDims, diameterForHeight, entablatureDims, type Detail, type Order } from './orders';
@@ -454,7 +455,9 @@ export function arcadeBay(b: MeshBuilder, spec: ArcadeSpec, si: number, y0: numb
       b.box(mat, bay - cx - ww / 2 + ext, wallTop, depth, mul(m, T((bay + cx + ww / 2 + ext) / 2, y0 + wallTop / 2, 0)));
       b.box(mat, ww, wy, depth, mul(m, T(cx, y0 + wy / 2, 0)));
       b.box(mat, ww, wallTop - wy - wh, depth, mul(m, T(cx, y0 + (wy + wh + wallTop) / 2, 0)));
-      b.box('black', ww, wh, 0.05, mul(m, T(cx, y0 + wy + wh / 2, 0)), { castShadow: false });
+      // A real opening with reveals; a dark card at the back of the reveal reads as the unlit
+      // gallery behind it (the attic corridor has no interior to see).
+      b.box(windowVoidMaterial(), ww + 0.04, wh + 0.04, 0.02, mul(m, T(cx, y0 + wy + wh / 2, depth / 2 + 0.01)), { castShadow: false });
     } else {
       b.box(mat, bay + 2 * ext, wallTop, depth, mul(m, T(bay / 2, y0 + wallTop / 2, 0)));
     }

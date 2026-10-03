@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import type { MeshBuilder } from '../../gfx/MeshBuilder';
 import type { MaterialId } from '../../gfx/materialIds';
-import { ProfileBuilder, T, gridSurface, lathe, linspace, mul, sweep, type Profile, type V2 } from '../common/geom';
+import { ProfileBuilder, T, gridSurface, lathe, linspace, makeGeometry, mul, sweep, type Profile, type V2 } from '../common/geom';
 import { column } from './column';
 import { diameterForHeight, type Detail, type Order } from './orders';
 
@@ -117,6 +117,75 @@ export function dome(b: MeshBuilder, spec: DomeSpec, at?: THREE.Matrix4) {
   return { height: R * Math.sin(eTop) + t * 0.35 };
 }
 
+// ---------------------------------------------------------------- niches in curved walls
+
+export interface CurvedNiche {
+  /** Angle of the niche axis (lathe convention: (R sin a, y, R cos a)). */
+  a: number;
+  width: number;
+  height: number;
+  /** Sill height. */
+  y0: number;
+  /** Recess depth (default width / 2: a semicircular plan). */
+  depth?: number;
+}
+
+/**
+ * The inner face (radius R, y ∈ [0, H], facing the centre) of a curved wall between θ0 and θ1,
+ * with real recessed niches: each opening is cut out of the face, lined with a half-elliptical
+ * recess (semicircular plan by default), a floor and a flat soffit in `lining`. The recess runs
+ * from the chord between the opening's edges into the wall, so it needs depth < wall thickness.
+ */
+export function innerFaceWithNiches(b: MeshBuilder, R: number, H: number, theta0: number, theta1: number, niches: CurvedNiche[], segs: number, mat: MaterialId, lining: MaterialId, m: THREE.Matrix4, detail: Detail) {
+  const face = (a0: number, a1: number, y0: number, y1: number) => {
+    if (a1 - a0 < 1e-6 || y1 - y0 < 1e-6) return;
+    const n = Math.max(1, Math.ceil((segs * (a1 - a0)) / (Math.PI * 2)));
+    b.add(lathe(new ProfileBuilder(R, y1).to(R, y0).build(), { segments: n, theta0: a0, theta1: a1 }), mat, m);
+  };
+  const list = [...niches].sort((p, q) => p.a - q.a).map((nc) => ({ ...nc, da: Math.asin(Math.min(0.95, nc.width / 2 / R)) }));
+  let a = theta0;
+  for (const nc of list) {
+    face(a, nc.a - nc.da, 0, H);
+    face(nc.a - nc.da, nc.a + nc.da, 0, nc.y0);
+    face(nc.a - nc.da, nc.a + nc.da, nc.y0 + nc.height, H);
+    a = nc.a + nc.da;
+  }
+  face(a, theta1, 0, H);
+  const k = detail === 'high' ? 14 : 7;
+  for (const nc of list) {
+    const hw = nc.width / 2;
+    const dep = nc.depth ?? hw;
+    // Local frame: origin on the chord between the opening's edges, +z outward into the wall.
+    const local = mul(m, new THREE.Matrix4().makeRotationY(nc.a).setPosition(R * Math.cos(nc.da) * Math.sin(nc.a), 0, R * Math.cos(nc.da) * Math.cos(nc.a)));
+    const phis = linspace(-Math.PI / 2, Math.PI / 2, k);
+    b.add(gridSurface(phis, [nc.y0, nc.y0 + nc.height], (f, y, out) => out.set(hw * Math.sin(f), y, dep * Math.cos(f)), { flip: true }), lining, local);
+    // Floor and soffit: the lens between chord and wall face plus the recess's half-ellipse.
+    const outline: V2[] = [];
+    for (const t of linspace(nc.da, -nc.da, 4)) outline.push([R * Math.sin(t), R * Math.cos(t) - R * Math.cos(nc.da)]);
+    for (const f of linspace(-Math.PI / 2, Math.PI / 2, k).slice(1, -1)) outline.push([hw * Math.sin(f), dep * Math.cos(f)]);
+    b.add(flatPolygon(outline, nc.y0, true), lining, local);
+    b.add(flatPolygon(outline, nc.y0 + nc.height, false), lining, local);
+  }
+}
+
+/** A horizontal polygon given in (x, z), facing up or down. */
+function flatPolygon(pts: V2[], y: number, up: boolean): THREE.BufferGeometry {
+  const contour = pts.map(([x, z]) => new THREE.Vector2(x, z));
+  if (THREE.ShapeUtils.isClockWise(contour)) contour.reverse();
+  const tris = THREE.ShapeUtils.triangulateShape(contour, []);
+  const pos: number[] = [];
+  const nor: number[] = [];
+  for (const tri of tris) {
+    // A CCW (x, z) contour seen from above (+y) is clockwise, so "up" needs the reversed order.
+    const order = up ? [tri[0], tri[2], tri[1]] : tri;
+    for (const i of order) {
+      pos.push(contour[i].x, y, contour[i].y);
+      nor.push(0, up ? 1 : -1, 0);
+    }
+  }
+  return makeGeometry(pos, nor);
+}
+
 // ---------------------------------------------------------------- apse / exedra
 
 export interface ApseSpec {
@@ -131,6 +200,8 @@ export interface ApseSpec {
   semidome?: boolean;
   /** Statue niches round the curve (exedrae of the imperial fora). */
   niches?: number;
+  /** Niche lining (default marble). */
+  liningMaterial?: MaterialId;
   /** Columns across the open chord (screen colonnade). */
   colonnade?: { order: Order; count: number };
   detail?: Detail;
@@ -151,8 +222,8 @@ export function apse(b: MeshBuilder, spec: ApseSpec, at?: THREE.Matrix4) {
   const mat = spec.material ?? 'brick';
   // θ ∈ [−π/2, π/2] covers the +z half (x = r sin θ, z = r cos θ).
   const range = { theta0: -Math.PI / 2, theta1: Math.PI / 2 };
-  // Outer face (going up: normal outward) + top; inner face going down: normal inward.
-  const wall = new ProfileBuilder(R + t, 0).up(H).in(t).to(R, 0).build();
+  // Outer face (going up: normal outward) + top; the inner face (with niches) separately.
+  const wall = new ProfileBuilder(R + t, 0).up(H).in(t).build();
   b.add(lathe(wall, { segments: segs, ...range }), mat, m);
   // Wall ends at the chord.
   for (const sx of [-1, 1]) {
@@ -160,17 +231,17 @@ export function apse(b: MeshBuilder, spec: ApseSpec, at?: THREE.Matrix4) {
     end.translate(sx * (R + t / 2), H / 2, 0.01);
     b.add(end, mat, m);
   }
-  if (spec.niches && spec.niches > 0) {
-    const n = spec.niches;
-    const nh = Math.min(H * 0.55, 3.2);
-    const nw = Math.min((Math.PI * R) / (n + 1) * 0.55, nh * 0.5);
-    for (let i = 0; i < n; i++) {
-      const a = -Math.PI / 2 + (Math.PI * (i + 1)) / (n + 1);
-      // A shallow framed recess: a dark back panel set into the wall with a marble frame.
+  const niches: CurvedNiche[] = [];
+  const n = spec.niches ?? 0;
+  const nh = Math.min(H * 0.55, 3.2);
+  const nw = Math.min((Math.PI * R) / (n + 1) * 0.55, nh * 0.5);
+  for (let i = 0; i < n; i++) niches.push({ a: -Math.PI / 2 + (Math.PI * (i + 1)) / (n + 1), width: nw, height: nh, y0: H * 0.18, depth: Math.min(nw / 2, t - 0.15) });
+  // Inner face going down (normal inward), with real recessed statue niches.
+  innerFaceWithNiches(b, R, H, range.theta0, range.theta1, niches, segs * 2, mat, spec.liningMaterial ?? 'marble', m, detail);
+  if (n > 0) {
+    for (const { a } of niches) {
+      // Marble frame round each recess.
       const local = new THREE.Matrix4().makeRotationY(a).setPosition(R * Math.sin(a), 0, R * Math.cos(a));
-      const back = new THREE.BoxGeometry(nw, nh, 0.06);
-      back.translate(0, H * 0.18 + nh / 2, -0.04);
-      b.add(back, 'plaster_dark', mul(m, local), { castShadow: false });
       for (const sx of [-1, 1]) {
         const jamb = new THREE.BoxGeometry(0.12, nh + 0.12, 0.14);
         jamb.translate(sx * (nw / 2 + 0.06), H * 0.18 + nh / 2, -0.07);
@@ -297,6 +368,8 @@ export interface RotundaSpec {
   floorMaterial?: MaterialId;
   /** Niches round the interior (alternating rectangular/semicircular in reality). */
   niches?: number;
+  /** Niche lining (default: the interior material). */
+  liningMaterial?: MaterialId;
   doorWidth?: number;
   detail?: Detail;
 }
@@ -320,9 +393,13 @@ export function rotunda(b: MeshBuilder, spec: RotundaSpec, at?: THREE.Matrix4) {
   b.add(lathe(outer, { segments: segs, theta0: Math.PI + halfOut, theta1: Math.PI * 3 - halfOut }), mat, m);
   const top = new ProfileBuilder(R + t, H).to(R, H).build();
   b.add(lathe(top, { segments: segs }), mat, m);
-  // Inner face (traverse down so normals face the centre).
-  const inner = new ProfileBuilder(R, H).to(R, 0).build();
-  b.add(lathe(inner, { segments: segs, theta0: Math.PI + half, theta1: Math.PI * 3 - half }), imat, m);
+  // Inner face (traverse down so normals face the centre) with recessed niches.
+  const niches = spec.niches ?? 6;
+  const nw = Math.min(2.4, R * 0.28);
+  const nh = Math.min(H * 0.5, 4.2);
+  const nicheList: CurvedNiche[] = [];
+  for (let i = 0; i < niches; i++) nicheList.push({ a: Math.PI + ((i + 1) * Math.PI * 2) / (niches + 1), width: nw, height: nh, y0: H * 0.12, depth: Math.min(nw / 2, t - 0.25) });
+  innerFaceWithNiches(b, R, H, Math.PI + half, Math.PI * 3 - half, nicheList, segs, imat, spec.liningMaterial ?? imat, m, detail);
   // Lintel over the door through the wall thickness.
   const lin = new ProfileBuilder(R + t, doorH).up(H - doorH).build();
   b.add(lathe(lin, { segments: 4, theta0: Math.PI - halfOut, theta1: Math.PI + halfOut }), mat, m);
@@ -342,16 +419,9 @@ export function rotunda(b: MeshBuilder, spec: RotundaSpec, at?: THREE.Matrix4) {
   b.add(lathe(corn, { segments: segs }), 'marble', m);
   // Interior: floor, niches with frames, an attic cornice at the springing.
   b.add(lathe(new ProfileBuilder(R, 0.03).to(0, 0.03).build(), { segments: segs }), spec.floorMaterial ?? 'paving_travertine', m, { castShadow: false });
-  const niches = spec.niches ?? 6;
-  for (let i = 0; i < niches; i++) {
-    const a = Math.PI + ((i + 1) * Math.PI * 2) / (niches + 1);
-    const nw = Math.min(2.4, R * 0.28);
-    const nh = Math.min(H * 0.5, 4.2);
-    // local −z faces the centre of the room
+  for (const { a } of nicheList) {
+    // Giallo antico colonnettes and a marble cornice frame each recess; local −z faces the room.
     const local = new THREE.Matrix4().makeRotationY(a).setPosition(R * Math.sin(a), 0, R * Math.cos(a));
-    const back = new THREE.BoxGeometry(nw, nh, 0.05);
-    back.translate(0, H * 0.12 + nh / 2, -0.03);
-    b.add(back, 'plaster_dark', mul(m, local), { castShadow: false });
     for (const sx of [-1, 1]) {
       const col = new THREE.BoxGeometry(0.22, nh + 0.2, 0.25);
       col.translate(sx * (nw / 2 + 0.11), H * 0.12 + nh / 2, -0.06);
