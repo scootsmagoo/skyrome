@@ -136,8 +136,11 @@ export class Actor {
     this.grounded = controller.computedGrounded();
     // Bumped the ceiling while rising.
     if (wasRising && mv.y < desired.y * 0.5) v.y = 0;
-    // Hit a wall: bleed the blocked component so we don't keep accelerating into it.
-    if (dt > 0) {
+    // Hit a wall in the air: bleed the blocked component so we don't keep pushing into it.
+    // Not on the ground: while autostepping stairs or climbing a slope the KCC briefly returns
+    // much less horizontal movement, and bleeding then stalls the character at the first riser
+    // (tests/arch.stairs.test.ts). On the ground the KCC already stops us at real walls.
+    if (dt > 0 && !this.grounded) {
       const ax = mv.x / dt;
       const az = mv.z / dt;
       if (Math.abs(ax) < Math.abs(v.x) * 0.5) v.x = ax;

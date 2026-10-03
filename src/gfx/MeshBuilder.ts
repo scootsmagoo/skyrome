@@ -37,10 +37,15 @@ const tmpScale = new THREE.Vector3();
 export class MeshBuilder {
   private parts = new Map<string, THREE.BufferGeometry[]>();
   private shadow = new Map<string, boolean>();
+  /** One-off materials (inscriptions, painted signs) passed as THREE.Material, keyed '#uuid'. */
+  private custom = new Map<string, THREE.Material>();
   readonly colliders: ColliderSpec[] = [];
 
-  /** Add geometry (it is cloned and transformed; the input is not modified). */
-  add(geometry: THREE.BufferGeometry, material: MaterialId, matrix?: THREE.Matrix4, opts: AddOptions = {}): this {
+  /**
+   * Add geometry (it is cloned and transformed; the input is not modified). `material` is a
+   * shared library id or, for one-off textured surfaces, a THREE.Material (merged per instance).
+   */
+  add(geometry: THREE.BufferGeometry, material: MaterialId | THREE.Material, matrix?: THREE.Matrix4, opts: AddOptions = {}): this {
     let g = geometry.index ? geometry.toNonIndexed() : geometry.clone();
     if (matrix) g.applyMatrix4(matrix);
     if (!g.getAttribute('normal')) g.computeVertexNormals();
@@ -48,7 +53,7 @@ export class MeshBuilder {
     // Keep only the attributes every part shares so merging never fails.
     for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv') g.deleteAttribute(name);
     g.morphAttributes = {};
-    const key = `${material}|${opts.castShadow === false ? 0 : 1}`;
+    const key = `${this.materialKey(material)}|${opts.castShadow === false ? 0 : 1}`;
     const list = this.parts.get(key) ?? [];
     list.push(g);
     this.parts.set(key, list);
@@ -56,7 +61,7 @@ export class MeshBuilder {
   }
 
   /** Axis-aligned box (before `matrix`) with optional matching collider. */
-  box(material: MaterialId, w: number, h: number, d: number, matrix?: THREE.Matrix4, opts: AddOptions & { collide?: boolean } = {}): this {
+  box(material: MaterialId | THREE.Material, w: number, h: number, d: number, matrix?: THREE.Matrix4, opts: AddOptions & { collide?: boolean } = {}): this {
     this.add(new THREE.BoxGeometry(w, h, d), material, matrix, opts);
     if (opts.collide) {
       const m = matrix ?? new THREE.Matrix4();
@@ -86,8 +91,9 @@ export class MeshBuilder {
       if (!merged) continue;
       merged.computeBoundingSphere();
       merged.computeBoundingBox();
-      const mesh = new THREE.Mesh(merged, getMaterial(material as MaterialId));
-      mesh.name = `${name}:${material}`;
+      const mat = this.custom.get(material) ?? getMaterial(material as MaterialId);
+      const mesh = new THREE.Mesh(merged, mat);
+      mesh.name = `${name}:${mat.name || material}`;
       mesh.castShadow = shadow === '1';
       mesh.receiveShadow = true;
       group.add(mesh);
@@ -97,6 +103,7 @@ export class MeshBuilder {
 
   /** Merge another builder's parts and colliders into this one, transformed by `matrix`. */
   append(other: MeshBuilder, matrix?: THREE.Matrix4): this {
+    for (const [k, m] of other.custom) this.custom.set(k, m);
     for (const [key, geoms] of other.parts) {
       const list = this.parts.get(key) ?? [];
       for (const g of geoms) list.push(matrix ? g.clone().applyMatrix4(matrix) : g);
@@ -104,6 +111,13 @@ export class MeshBuilder {
     }
     for (const c of other.colliders) this.colliders.push(matrix ? transformCollider(c, matrix) : c);
     return this;
+  }
+
+  private materialKey(material: MaterialId | THREE.Material): string {
+    if (typeof material === 'string') return material;
+    const k = `#${material.uuid}`;
+    this.custom.set(k, material);
+    return k;
   }
 
   get isEmpty() {

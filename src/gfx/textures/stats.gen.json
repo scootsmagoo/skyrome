@@ -1,0 +1,209 @@
+{
+  "bark": {
+    "source": "ph:pine_bark",
+    "albedo": [
+      0.1385,
+      0.0889,
+      0.0542
+    ],
+    "roughness": 0.7066
+  },
+  "basalt": {
+    "source": "acg:Rock050",
+    "albedo": [
+      0.1072,
+      0.1054,
+      0.0986
+    ],
+    "roughness": 0.5652
+  },
+  "brick": {
+    "source": "acg:Bricks094",
+    "albedo": [
+      0.2555,
+      0.161,
+      0.0992
+    ],
+    "roughness": 0.5789
+  },
+  "cobbles": {
+    "source": "ph:cobblestone_floor_04",
+    "albedo": [
+      0.2813,
+      0.2295,
+      0.1509
+    ],
+    "roughness": 0.6267
+  },
+  "concrete": {
+    "source": "ph:stone_wall_03",
+    "albedo": [
+      0.382,
+      0.3043,
+      0.1712
+    ],
+    "roughness": 0.8715
+  },
+  "dirt": {
+    "source": "ph:dirt",
+    "albedo": [
+      0.1268,
+      0.0852,
+      0.0496
+    ],
+    "roughness": 0.9441
+  },
+  "dry_grass": {
+    "source": "ph:withered_grass",
+    "albedo": [
+      0.4266,
+      0.3039,
+      0.2031
+    ],
+    "roughness": 0.8083
+  },
+  "grass": {
+    "source": "ph:grass_ground",
+    "albedo": [
+      0.1577,
+      0.1188,
+      0.0495
+    ],
+    "roughness": 0.9367
+  },
+  "gravel": {
+    "source": "ph:gravel_floor",
+    "albedo": [
+      0.3821,
+      0.2561,
+      0.1471
+    ],
+    "roughness": 0.5065
+  },
+  "marble": {
+    "source": "acg:Marble001",
+    "albedo": [
+      0.7462,
+      0.7239,
+      0.6848
+    ],
+    "roughness": 0.1722
+  },
+  "marble_veined": {
+    "source": "acg:Marble012",
+    "albedo": [
+      0.4188,
+      0.4264,
+      0.4714
+    ],
+    "roughness": 0.0655
+  },
+  "mud": {
+    "source": "ph:brown_mud_02",
+    "albedo": [
+      0.0783,
+      0.0627,
+      0.0414
+    ],
+    "roughness": 0.9495
+  },
+  "paving_basalt": {
+    "source": "ph:grey_stone_path",
+    "albedo": [
+      0.1164,
+      0.0983,
+      0.077
+    ],
+    "roughness": 0.7546
+  },
+  "paving_travertine": {
+    "source": "acg:PavingStones126A",
+    "albedo": [
+      0.3575,
+      0.3305,
+      0.2727
+    ],
+    "roughness": 0.5877
+  },
+  "peperino": {
+    "source": "acg:Concrete025",
+    "albedo": [
+      0.4906,
+      0.4814,
+      0.4761
+    ],
+    "roughness": 0.5322
+  },
+  "plaster": {
+    "source": "acg:Plaster001",
+    "albedo": [
+      0.6822,
+      0.6524,
+      0.6283
+    ],
+    "roughness": 0.7898
+  },
+  "rock": {
+    "source": "ph:rock_face",
+    "albedo": [
+      0.1213,
+      0.0614,
+      0.0318
+    ],
+    "roughness": 0.8344
+  },
+  "roof_tile": {
+    "source": "acg:RoofingTiles006",
+    "albedo": [
+      0.1819,
+      0.0614,
+      0.0285
+    ],
+    "roughness": 0.7011
+  },
+  "sand": {
+    "source": "ph:sand_01",
+    "albedo": [
+      0.3805,
+      0.3067,
+      0.1619
+    ],
+    "roughness": 0.9877
+  },
+  "travertine": {
+    "source": "acg:Concrete003",
+    "albedo": [
+      0.2818,
+      0.2939,
+      0.3184
+    ],
+    "roughness": 0.506
+  },
+  "tufa": {
+    "source": "acg:Rock049",
+    "albedo": [
+      0.1404,
+      0.1213,
+      0.0743
+    ],
+    "roughness": 0.5337
+  },
+  "wood": {
+    "source": "ph:weathered_brown_planks",
+    "albedo": [
+      0.1214,
+      0.0747,
+      0.045
+    ],
+    "roughness": 0.654
+  },
+  "wood_dark": {
+    "source": "ph:old_wood_floor",
+    "albedo": [
+      0.0959,
+      0.0671,
+      0.0494
+    ],
+    "roughness": 0.8139
+  }
+}
