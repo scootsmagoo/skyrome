@@ -36,6 +36,13 @@ export class PlayerController implements System {
   canSprint: () => boolean = () => true;
   /** Optional hook (combat): multiplier on movement speed. */
   speedMultiplier: () => number = () => 1;
+  /** Optional hook (combat): false while Space dodges instead of jumping (in combat, weapon drawn). */
+  canJump: () => boolean = () => true;
+  /**
+   * Optional hook (combat): replaces this step's movement wish (m/s, world xz) during dodges,
+   * attack steps, staggers and the like; `accel` overrides the ground acceleration. null = normal.
+   */
+  motionOverride: (dt: number) => { x: number; z: number; accel?: number } | null = () => null;
   /** Sprint key: held (Mouse preset) or a toggle that lasts until you stop (Trackpad, Keyboard). */
   sprintMode: 'hold' | 'toggle' = 'hold';
   /** Sneak key: a toggle (default) or held. */
@@ -59,7 +66,7 @@ export class PlayerController implements System {
     p.pitch = clamp(p.pitch + look.pitch, -1.45, 1.35);
     this.noLookTime = input.lookActive ? 0 : this.noLookTime + dt;
     this.autoRecenter(dt);
-    if (input.pressed('jump')) this.jumpQueued = true;
+    if (input.pressed('jump') && this.canJump()) this.jumpQueued = true;
     if (input.pressed('walkToggle')) p.walkMode = !p.walkMode;
     if (this.sneakMode === 'hold') p.sneaking = input.down('sneak');
     else if (input.pressed('sneak')) p.sneaking = !p.sneaking;
@@ -96,7 +103,12 @@ export class PlayerController implements System {
       p.turnToward(headingFromDir(wish.x, wish.z), PLAYER_SPEEDS.turnRate, dt);
     }
 
-    p.locomote(wish, dt, { jump: this.jumpQueued ? PLAYER_SPEEDS.jump : 0 });
+    const override = this.motionOverride(dt);
+    if (override) {
+      wish.set(override.x, 0, override.z);
+      this.jumpQueued = false;
+    }
+    p.locomote(wish, dt, { jump: this.jumpQueued ? PLAYER_SPEEDS.jump : 0, accel: override?.accel });
     this.jumpQueued = false;
   }
 
