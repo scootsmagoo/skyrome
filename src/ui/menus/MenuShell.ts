@@ -30,6 +30,8 @@ export interface MenuTab {
   show(ui: UIManager): void;
   hide?(): void;
   onKey?(e: KeyboardEvent): boolean;
+  /** Key releases (tabs that track held keys, like the map's panning). */
+  onKeyUp?(e: KeyboardEvent): void;
   hints(): Hint[];
   /** Footer status line (denarii, weight). */
   status?(): Child;
@@ -170,6 +172,10 @@ export class MenuShell extends BaseModal {
       return true;
     }
     return this.getTab(this.current).onKey?.(e) ?? false;
+  }
+
+  onKeyUp(e: KeyboardEvent) {
+    this.tabs.get(this.current)?.onKeyUp?.(e);
   }
 
   onAction(action: Action): boolean {

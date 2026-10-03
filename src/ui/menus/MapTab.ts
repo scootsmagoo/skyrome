@@ -8,7 +8,7 @@ import type { UIManager } from '../UIManager';
 import { h, keycap, setChildren } from '../dom';
 import { LOCATION_ICONS, UI_ICONS, iconSvg } from '../icons';
 import { MapRenderer } from '../map/MapRenderer';
-import { panBy } from '../map/view';
+import { HeldPanKeys, panBy } from '../map/view';
 import type { MapDataSource, MapIconKind, MapLocation } from '../types';
 import { emptyState, type Hint, type MenuTab } from './MenuShell';
 
@@ -44,7 +44,9 @@ export class MapTab implements MenuTab {
   private legend = h('div', { class: 'map-legend sr-panel' });
   private legendOpen = true;
   private ro: ResizeObserver | null = null;
-  private keysHeld = new Set<string>();
+  private keysHeld = new HeldPanKeys();
+  /** Releases can be missed while the window is in the background: forget held keys then. */
+  private onBlur = () => this.keysHeld.clear();
   private locs: MapLocation[] = [];
   private drag: { id: number; x: number; y: number; moved: boolean } | null = null;
   private pinchBase = 1;
@@ -89,6 +91,8 @@ export class MapTab implements MenuTab {
     this.locs = this.data.locations().filter((l) => l.discovered).sort((a, b) => a.name.localeCompare(b.name));
     this.renderLegend();
     this.renderCard();
+    window.removeEventListener('blur', this.onBlur);
+    window.addEventListener('blur', this.onBlur);
     this.ro?.disconnect();
     this.ro = new ResizeObserver(() => this.fitStage(false));
     this.ro.observe(this.stage);
@@ -101,6 +105,7 @@ export class MapTab implements MenuTab {
     this.ro?.disconnect();
     this.ro = null;
     this.keysHeld.clear();
+    window.removeEventListener('blur', this.onBlur);
   }
 
   hints(): Hint[] {
@@ -232,11 +237,7 @@ export class MapTab implements MenuTab {
   onKey(e: KeyboardEvent): boolean {
     const r = this.renderer;
     if (!r) return false;
-    const panKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'];
-    if (panKeys.includes(e.code)) {
-      this.keysHeld.add(e.code);
-      return true;
-    }
+    if (this.keysHeld.down(e.code)) return true;
     if (e.repeat && !['Equal', 'Minus', 'NumpadAdd', 'NumpadSubtract'].includes(e.code)) return true;
     switch (e.code) {
       case 'Equal': case 'NumpadAdd': r.zoomBy(1.25); return true;
@@ -253,20 +254,14 @@ export class MapTab implements MenuTab {
   update(dt: number) {
     const r = this.renderer;
     if (!r || !this.keysHeld.size) return;
-    // Key-up events are delivered to the modal; held keys pan smoothly.
-    let dx = 0;
-    let dy = 0;
-    const k = this.keysHeld;
-    if (k.has('ArrowLeft') || k.has('KeyA')) dx += 1;
-    if (k.has('ArrowRight') || k.has('KeyD')) dx -= 1;
-    if (k.has('ArrowUp') || k.has('KeyW')) dy += 1;
-    if (k.has('ArrowDown') || k.has('KeyS')) dy -= 1;
+    // Held keys pan smoothly; MenuShell forwards the releases (onKeyUp below).
+    const { dx, dy } = this.keysHeld.direction();
     const speed = 520 * dt;
     if (dx || dy) r.setView(panBy(r.view, dx * speed, dy * speed));
   }
 
   onKeyUp(e: KeyboardEvent) {
-    this.keysHeld.delete(e.code);
+    this.keysHeld.up(e.code);
   }
 
   private bindPointer() {

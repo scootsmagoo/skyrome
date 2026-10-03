@@ -53,6 +53,7 @@ export class Hud {
   private hint: HTMLElement;
   private barWrap: Record<'health' | 'stamina' | 'pietas', HTMLElement>;
 
+  private visible = true;
   private markerTimer = 0;
   private items: CompassItem[] = [];
   private hintTime = 0;
@@ -89,9 +90,9 @@ export class Hud {
     this.el = h(
       'div',
       { class: 'sr-hud-root' },
-      h('div', { class: 'hud-top' }, this.compass.el, this.target.el),
+      // Top center stacks instead of overlapping: compass, enemy bar, then banners.
+      h('div', { class: 'hud-top' }, this.compass.el, this.target.el, this.banners.el),
       this.notes.el,
-      this.banners.el,
       this.hits.el,
       this.crosshair,
       this.sneak,
@@ -107,7 +108,14 @@ export class Hud {
   }
 
   setVisible(v: boolean) {
+    if (v === this.visible) return;
+    this.visible = v;
     setClass(this.el, 'is-hidden', !v);
+    // Messages that arrived or were showing under a menu get their full time once it closes.
+    if (v) {
+      this.notes.resume();
+      this.banners.resume();
+    }
   }
 
   /** Brief hint for mouse-look when the pointer isn't captured (trackpad players use arrows). */
@@ -194,11 +202,14 @@ export class Hud {
       setText(this.clockPlace, sources.currentLocation?.() ?? '');
     }
 
-    // ---- feed
-    this.notes.update(dt);
-    this.banners.update(dt);
-    this.subtitles.update(dt);
-    this.hits.update(dt, (x, z) => relativeBearing(heading, bearingTo(p.x, p.z, x, z)));
+    // ---- feed: frozen while a menu or conversation hides the HUD, so nothing that happens there
+    // (a quest started from dialogue, a skill raised by a book) expires unseen.
+    if (this.visible) {
+      this.notes.update(dt);
+      this.banners.update(dt);
+      this.subtitles.update(dt);
+      this.hits.update(dt, (x, z) => relativeBearing(heading, bearingTo(p.x, p.z, x, z)));
+    }
 
     if (this.hintTime > 0) {
       this.hintTime -= dt;

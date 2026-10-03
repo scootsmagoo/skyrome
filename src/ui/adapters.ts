@@ -52,9 +52,15 @@ export function characterViewFrom(sheet: CharacterSheet, o: CharacterViewOptions
 export interface InventoryViewOptions {
   /** Spawn a dropped item in the world (the inventory itself only removes it). */
   onDrop?: (itemId: string, count: number) => void;
-  /** Book text for the reader. */
+  /** Book text for the reader (default: the item's own `text`). */
   book?: (itemId: string) => BookView | null;
   armorRating?: () => number;
+}
+
+/** A reader view from a book item's own text. */
+export function bookFromDef(def: ItemDef): BookView | null {
+  if (def.type !== 'book' || !def.text) return null;
+  return { title: def.name, kind: def.tags?.includes('letter') ? 'letter' : def.tags?.includes('tablet') ? 'tablet' : 'book', text: def.text };
 }
 
 export function inventoryViewFrom(inv: Inventory, itemDef: (id: string) => ItemDef | undefined, o: InventoryViewOptions = {}): InventoryView {
@@ -73,12 +79,13 @@ export function inventoryViewFrom(inv: Inventory, itemDef: (id: string) => ItemD
       return out;
     },
     toggleEquip: (id) => {
-      const def = itemDef(id);
-      if (!def?.slot) return false;
-      if (inv.equipped(def.slot) === id) {
-        inv.unequip(def.slot);
+      // Worn anywhere (a pugio can sit in the off hand): take it off that slot.
+      const worn = Object.entries(inv.equipment).find(([, v]) => v === id);
+      if (worn) {
+        inv.unequip(worn[0] as EquipSlot);
         return true;
       }
+      // The inventory picks the slot itself (weapons, shields, armor and clothing without `slot`).
       return inv.equip(id);
     },
     use: (id) => inv.use(id),
@@ -87,7 +94,13 @@ export function inventoryViewFrom(inv: Inventory, itemDef: (id: string) => ItemD
       o.onDrop?.(id, count);
       return true;
     },
-    read: o.book,
+    read: (id) => {
+      const def = itemDef(id);
+      const book = o.book?.(id) ?? (def ? bookFromDef(def) : null);
+      // Reading goes through Inventory.use: it marks the book read and trains a skill book's skill.
+      if (book) inv.use(id);
+      return book;
+    },
     armorRating: o.armorRating,
     onChange: (fn) => inv.onChange(fn),
   };

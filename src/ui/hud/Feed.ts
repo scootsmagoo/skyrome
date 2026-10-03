@@ -33,6 +33,8 @@ const LABELS: Record<BannerKind, string> = {
 
 const MAX_NOTES = 5;
 const NOTE_TIME = 4.2;
+/** Seconds a note or banner stays up after a menu that covered it closes. */
+const RESUME_TIME = 2.2;
 
 export class Notifications {
   readonly el = h('div', { class: 'hud-notes' });
@@ -61,6 +63,18 @@ export class Notifications {
     for (const n of done) n.el.remove();
     if (done.length) this.live = this.live.filter((n) => n.t <= NOTE_TIME + 0.6);
   }
+
+  /** The HUD is visible again: notes that were on screen get at least a couple more seconds. */
+  resume() {
+    for (const n of this.live) {
+      n.t = Math.min(n.t, NOTE_TIME - RESUME_TIME);
+      n.el.classList.remove('is-leaving');
+    }
+  }
+}
+
+function bannerDuration(o: BannerOptions): number {
+  return o.duration ?? (o.kind === 'location' ? 4.2 : 3.6);
 }
 
 export class Banners {
@@ -95,13 +109,21 @@ export class Banners {
     if (this.current) {
       const c = this.current;
       c.t += dt;
-      const dur = c.opts.duration ?? (c.opts.kind === 'location' ? 4.2 : 3.6);
+      const dur = bannerDuration(c.opts);
       if (c.t > dur && !c.el.classList.contains('is-leaving')) c.el.classList.add('is-leaving');
       if (c.t > dur + 0.7) {
         c.el.remove();
         this.current = null;
       }
     }
+  }
+
+  /** The HUD is visible again: the banner on screen gets at least a couple more seconds. */
+  resume() {
+    const c = this.current;
+    if (!c) return;
+    c.t = Math.min(c.t, Math.max(0, bannerDuration(c.opts) - RESUME_TIME));
+    c.el.classList.remove('is-leaving');
   }
 }
 

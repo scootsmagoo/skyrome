@@ -326,11 +326,16 @@ export class MockInventory extends Emitter implements InventoryView {
     this.emit();
   }
 
+  /** Like the real Inventory: unequip from whatever slot holds it, else pick a slot from the def. */
   toggleEquip(itemId: string) {
-    const def = mockItem(itemId);
-    if (!def?.slot) return false;
-    if (this.eq[def.slot] === itemId) delete this.eq[def.slot];
-    else this.eq[def.slot] = itemId;
+    const worn = Object.entries(this.eq).find(([, v]) => v === itemId);
+    if (worn) delete this.eq[worn[0] as EquipSlot];
+    else {
+      const def = mockItem(itemId);
+      const slot = def?.slot ?? (def?.weapon ? 'mainHand' : def?.shield ? 'offHand' : def?.armor || def?.type === 'clothing' ? 'body' : null);
+      if (!slot) return false;
+      this.eq[slot] = itemId;
+    }
     this.emit();
     return true;
   }

@@ -26,9 +26,11 @@ export class PauseMenu extends BaseModal {
   override onOpen(ui: UIManager) {
     super.onOpen(ui);
     const saves = () => !!ui.sources.saves;
+    // GDD: save anywhere except in combat or a conversation (the pause menu can open over one).
+    const canSave = () => saves() && !ui.isOpen('dialogue') && !ui.sources.inCombat?.();
     this.items = [
       { label: 'Resume', latin: 'Perge', run: () => this.close() },
-      { label: 'Save', latin: 'Serva', run: () => ui.openSaves('save'), enabled: saves },
+      { label: 'Save', latin: 'Serva', run: () => ui.openSaves('save'), enabled: canSave },
       { label: 'Load', latin: 'Repete', run: () => ui.openSaves('load'), enabled: saves },
       { label: 'Settings', latin: 'Optiones', run: () => ui.openSettings() },
       { label: 'Controls', latin: 'Moderamina', run: () => ui.openControls() },

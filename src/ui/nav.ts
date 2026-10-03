@@ -1,9 +1,40 @@
 /**
  * Keyboard + pointer selection for a list of elements (menus can't rely on DOM focus because Tab
- * is a game key). Arrow keys move, Home/End jump, Enter/Space/E activate; hovering selects and
- * clicking activates, so every action works with a trackpad or keys alone.
+ * is a game key). Arrow keys move, Home/End jump, Enter/Space/E activate; moving the pointer over
+ * a row selects it and clicking activates, so every action works with a trackpad or keys alone.
+ *
+ * Hover only selects after the pointer really moves. Browsers fire pointer events at a resting
+ * cursor when the rows under it are rebuilt (sorting, buying, a re-render), and those must not
+ * steal the selection the player made with the keyboard.
  */
 import { firstEnabled, stepIndex } from './models';
+
+/**
+ * Tells real pointer movement from the synthetic events a browser fires when content changes under
+ * a resting cursor: those repeat the last position. `moves` counts real moves.
+ */
+export class PointerGate {
+  private x = NaN;
+  private y = NaN;
+  moves = 0;
+
+  /** Record a pointer position; returns true when it is a real move. */
+  move(x: number, y: number): boolean {
+    if (x === this.x && y === this.y) return false;
+    const first = Number.isNaN(this.x);
+    this.x = x;
+    this.y = y;
+    // The first event only tells us where the cursor rests.
+    if (!first) this.moves++;
+    return !first;
+  }
+}
+
+/** Shared by every list: one capture listener sees each move before any row handler does. */
+export const pointerGate = new PointerGate();
+if (typeof window !== 'undefined') {
+  window.addEventListener('pointermove', (e) => pointerGate.move(e.clientX, e.clientY), { capture: true, passive: true });
+}
 
 export interface NavListOptions {
   onSelect?(index: number): void;
@@ -17,12 +48,26 @@ export interface NavListOptions {
   activateKeys?: string[];
 }
 
-export class NavList {
-  items: HTMLElement[] = [];
-  index = -1;
-  constructor(private readonly opts: NavListOptions = {}) {}
+/** The element surface NavList needs (lets tests use plain objects). */
+export interface NavItem {
+  classList: { add(c: string): void; remove(c: string): void; contains(c: string): boolean };
+  hasAttribute(name: string): boolean;
+  scrollIntoView(opts?: ScrollIntoViewOptions): void;
+  onpointermove: ((e: PointerEvent) => void) | null;
+  onclick: ((e: PointerEvent) => void) | null;
+}
 
-  get selected(): HTMLElement | undefined {
+export class NavList<T extends NavItem = HTMLElement> {
+  items: T[] = [];
+  index = -1;
+  /** `pointerGate.moves` when the keyboard (or a rebuild) last placed the selection. */
+  private keyboardAt = -1;
+  constructor(
+    private readonly opts: NavListOptions = {},
+    private readonly gate: PointerGate = pointerGate,
+  ) {}
+
+  get selected(): T | undefined {
     return this.items[this.index];
   }
 
@@ -32,11 +77,14 @@ export class NavList {
   }
 
   /** Replace the items (re-binds pointer handlers) and keep the index if possible. */
-  set(items: HTMLElement[], keep = true) {
+  set(items: T[], keep = true) {
     this.items = items;
+    // Rows rebuilt under a resting cursor must not take the selection.
+    this.keyboardAt = this.gate.moves;
     items.forEach((el, i) => {
-      el.onpointerenter = () => {
-        if (this.opts.hoverSelects !== false && this.isEnabled(i)) this.select(i, false);
+      el.onpointermove = () => {
+        if (this.opts.hoverSelects === false || this.gate.moves === this.keyboardAt) return;
+        if (this.index !== i && this.isEnabled(i)) this.select(i, false);
       };
       el.onclick = (e) => {
         if (!this.isEnabled(i)) return;
@@ -62,6 +110,7 @@ export class NavList {
   }
 
   move(delta: number) {
+    this.keyboardAt = this.gate.moves;
     const i = stepIndex(this.index, delta, this.items.length, (k) => this.isEnabled(k), this.opts.wrap ?? false);
     if (i >= 0) this.select(i);
   }
@@ -76,6 +125,7 @@ export class NavList {
   }
 
   focus() {
+    this.keyboardAt = this.gate.moves;
     if (this.index >= 0) this.items[this.index]?.classList.add('is-selected');
     else this.set(this.items, false);
   }
@@ -94,6 +144,8 @@ export class NavList {
       case 'PageDown': this.move(8); return true;
     }
     if (keys.includes(e.code)) {
+      // Acting on the keyboard selection also makes it the keyboard's.
+      this.keyboardAt = this.gate.moves;
       if (!e.repeat) this.activate(e);
       return true;
     }

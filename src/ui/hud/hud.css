@@ -1,14 +1,18 @@
 /* ---------------------------------------------------------------- HUD root */
-.sr-hud-root { position: absolute; inset: 0; transition: opacity 0.25s; }
+.sr-hud-root {
+  position: absolute; inset: 0; transition: opacity 0.25s;
+  /* Compass width, and the room left beside it for the notes (left) and the clock (right). */
+  --cw: min(34rem, 40vw);
+  --side: calc(50vw - var(--cw) / 2 - 4.4rem);
+}
 .sr-hud-root.is-hidden { opacity: 0; }
-.sr-hud-root.is-hidden .hud-notes { opacity: 1; }
 
 /* ---------------------------------------------------------------- compass */
 .hud-top {
-  position: absolute; top: 1.3rem; left: 50%; transform: translateX(-50%);
+  position: absolute; top: 1.3rem; left: 0; right: 0;
   display: flex; flex-direction: column; align-items: center; gap: 0.7rem;
 }
-.hud-compass { position: relative; height: 2.45rem; }
+.hud-compass { position: relative; width: var(--cw); height: 2.45rem; }
 .hud-compass-band {
   position: absolute; inset: 0; overflow: hidden;
   background: linear-gradient(180deg, rgba(8, 6, 4, 0.66), rgba(22, 16, 11, 0.5));
@@ -85,13 +89,14 @@
 .hud-bar.is-low .track { animation: sr-low-pulse 1.1s ease-in-out infinite; }
 @keyframes sr-low-pulse { 50% { box-shadow: 0 0 14px rgba(227, 89, 75, 0.95), inset 0 1px 2px rgba(0, 0, 0, 0.8); } }
 
-.hud-res { position: absolute; bottom: 2.4rem; width: 15rem; opacity: 0; transition: opacity 0.6s; }
+.hud-res { position: absolute; bottom: 2.6rem; opacity: 0; transition: opacity 0.6s; }
 .hud-res.is-visible { opacity: 1; transition-duration: 0.18s; }
-.hud-res.health { left: 50%; width: 18rem; margin-left: -9rem; }
+.hud-res { width: min(15rem, 22vw); }
+.hud-res.health { left: 50%; width: min(18rem, 26vw); transform: translateX(-50%); }
 .hud-res.pietas { left: max(2.4rem, 9vw); }
 .hud-res.stamina { right: max(2.4rem, 9vw); }
 
-.hud-target { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; width: 19rem; opacity: 0; transition: opacity 0.4s; }
+.hud-target { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; width: min(19rem, 70vw); opacity: 0; transition: opacity 0.4s; }
 .hud-target.is-visible { opacity: 1; transition-duration: 0.12s; }
 .hud-target .label { display: flex; gap: 0.5rem; align-items: baseline; text-shadow: var(--sr-shadow-text); }
 .hud-target .name { font-family: var(--sr-display); font-weight: 600; font-size: 1rem; letter-spacing: 0.08em; }
@@ -99,13 +104,14 @@
 .hud-target .hud-bar { width: 100%; height: 0.55rem; }
 
 .hud-boss {
-  position: absolute; left: 50%; bottom: 5.4rem; width: 36rem; margin-left: -18rem;
+  position: absolute; left: 50%; bottom: 4.4rem; width: min(36rem, 60vw); transform: translateX(-50%);
   display: flex; flex-direction: column; gap: 0.4rem; opacity: 0; transition: opacity 0.5s;
 }
 .hud-boss.is-visible { opacity: 1; }
 .hud-boss .label { display: flex; align-items: baseline; justify-content: center; gap: 0.7rem; text-shadow: var(--sr-shadow-text); }
-.hud-boss .name { font-family: var(--sr-display); font-weight: 700; font-size: 1.3rem; letter-spacing: 0.12em; }
-.hud-boss .title { font-style: italic; color: var(--sr-gold); font-size: 1.05rem; }
+.hud-boss .label { flex-wrap: wrap; row-gap: 0; text-align: center; }
+.hud-boss .name { font-family: var(--sr-display); font-weight: 700; font-size: 1.3rem; letter-spacing: 0.12em; white-space: nowrap; }
+.hud-boss .title { font-style: italic; color: var(--sr-gold); font-size: 1.05rem; white-space: nowrap; }
 .hud-boss .hud-bar { height: 0.85rem; }
 
 /* ---------------------------------------------------------------- crosshair & prompt */
@@ -123,17 +129,18 @@
 .hud-crosshair.is-focus .ring { transform: scale(1); opacity: 1; }
 
 .hud-prompt {
-  position: absolute; left: calc(50% + 2.2rem); top: calc(50% + 1.4rem);
-  padding: 0.5rem 2.5rem 0.6rem 0.9rem; min-width: 14rem;
+  /* Right of the crosshair with the name level with it, clear of banners above and subtitles below. */
+  position: absolute; left: calc(50% + 2.2rem); top: calc(50% - 1.35rem); max-width: calc(50vw - 3.4rem);
+  padding: 0.45rem 2.5rem 0.5rem 0.9rem; min-width: 14rem;
   background: radial-gradient(ellipse at 20% 50%, rgba(0, 0, 0, 0.5), transparent 72%);
   text-shadow: var(--sr-shadow-text);
   opacity: 0; transform: translateX(-0.4rem); transition: opacity 0.14s, transform 0.14s var(--sr-ease);
 }
 .hud-prompt.is-visible { opacity: 1; transform: none; }
-.hud-prompt .name { font-size: 1.5rem; font-weight: 500; line-height: 1.15; margin-bottom: 0.3rem; }
+.hud-prompt .name { font-size: 1.42rem; font-weight: 500; line-height: 1.15; margin-bottom: 0.25rem; }
 .hud-prompt .action { display: flex; align-items: center; gap: 0.55rem; }
 .hud-prompt .verb { font-family: var(--sr-display); font-weight: 600; font-size: 1.02rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--sr-ink-2); }
-.hud-prompt .detail { margin-top: 0.25rem; font-style: italic; font-size: 1.05rem; color: var(--sr-ink-2); }
+.hud-prompt .detail { margin-top: 0.2rem; font-style: italic; font-size: 1rem; color: var(--sr-ink-2); }
 .hud-prompt .detail.is-empty { display: none; }
 .hud-prompt.is-illegal .verb, .hud-prompt.is-illegal .detail { color: var(--sr-bad); }
 .hud-prompt.is-illegal .sr-key { border-color: var(--sr-bad); color: var(--sr-bad); }
@@ -141,7 +148,8 @@
 /* ---------------------------------------------------------------- sneak eye */
 .hud-sneak {
   --det: 0;
-  position: absolute; left: 50%; top: calc(50% - 4rem); transform: translateX(-50%);
+  /* Left of the crosshair (the prompt is on the right), so banners above never cover it. */
+  position: absolute; right: calc(50% + 2rem); top: 50%; transform: translateY(-50%);
   display: flex; align-items: center; gap: 0.3rem; opacity: 0; transition: opacity 0.25s;
   color: color-mix(in srgb, #e2402f calc(var(--det) * 100%), var(--sr-ink));
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9));
@@ -157,18 +165,18 @@
 
 /* ---------------------------------------------------------------- clock */
 .hud-clock {
-  position: absolute; top: 1.3rem; right: 1.8rem; text-align: right; text-shadow: var(--sr-shadow-text);
-  opacity: 0; transition: opacity 0.2s;
+  position: absolute; top: 1.3rem; right: 1.8rem; max-width: var(--side); text-align: right; text-shadow: var(--sr-shadow-text);
+  opacity: 0; transition: opacity 0.2s; text-wrap: balance;
 }
 .hud-clock.is-visible { opacity: 1; }
-.hud-clock .hour { font-family: var(--sr-display); font-weight: 600; font-size: 1.05rem; letter-spacing: 0.08em; color: var(--sr-gold); }
-.hud-clock .date { font-style: italic; font-size: 1.1rem; color: var(--sr-ink); }
-.hud-clock .place { font-family: var(--sr-display); font-size: 0.78rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--sr-ink-2); }
+.hud-clock .hour { font-family: var(--sr-display); font-weight: 600; font-size: 1rem; letter-spacing: 0.07em; color: var(--sr-gold); }
+.hud-clock .date { font-style: italic; font-size: 1.05rem; color: var(--sr-ink); }
+.hud-clock .place { font-family: var(--sr-display); font-size: 0.76rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--sr-ink-2); }
 
 /* ---------------------------------------------------------------- notifications */
-.hud-notes { position: absolute; top: 1.4rem; left: 1.8rem; display: flex; flex-direction: column; gap: 0.25rem; max-width: 32rem; }
+.hud-notes { position: absolute; top: 1.4rem; left: 1.8rem; display: flex; flex-direction: column; gap: 0.3rem; max-width: min(32rem, var(--side)); }
 .hud-note {
-  display: flex; align-items: baseline; gap: 0.55rem; font-size: 1.2rem; line-height: 1.3; color: var(--sr-ink);
+  display: flex; align-items: baseline; gap: 0.55rem; font-size: 1.15rem; line-height: 1.25; color: var(--sr-ink);
   text-shadow: var(--sr-shadow-text);
   animation: sr-note-in 0.35s var(--sr-ease) both;
 }
@@ -187,32 +195,34 @@
 @keyframes sr-note-out { to { opacity: 0; } }
 
 /* ---------------------------------------------------------------- banners */
-.hud-banner { position: absolute; left: 0; right: 0; top: 13.5%; display: flex; justify-content: center; }
+.hud-banner { display: flex; justify-content: center; max-width: 100%; }
 .hud-banner-card {
-  text-align: center; padding: 1.4rem 6rem 1rem;
+  text-align: center; padding: 0.5rem 5rem 0.3rem; max-width: 100vw;
   background: radial-gradient(ellipse 50% 50% at 50% 50%, rgba(0, 0, 0, 0.5), transparent 100%);
   text-shadow: 0 2px 3px rgba(0, 0, 0, 0.95), 0 0 18px rgba(0, 0, 0, 0.7);
   animation: sr-banner-in 0.9s var(--sr-ease) both;
 }
 .hud-banner-card.is-leaving { animation: sr-banner-out 0.7s ease forwards; }
 .hud-banner-card .label {
-  font-family: var(--sr-display); font-weight: 600; font-size: 0.95rem; letter-spacing: 0.34em; text-transform: uppercase;
-  color: var(--sr-gold); margin-bottom: 0.25rem;
+  font-family: var(--sr-display); font-weight: 600; font-size: 0.9rem; letter-spacing: 0.34em; text-transform: uppercase;
+  color: var(--sr-gold); margin-bottom: 0.15rem;
 }
+/* The title stays within the compass column (plus a little), so it never runs into the notes. */
 .hud-banner-card .title {
-  font-family: var(--sr-display); font-weight: 600; font-size: 2.7rem; letter-spacing: 0.1em; line-height: 1.1; color: var(--sr-ink);
+  font-family: var(--sr-display); font-weight: 600; font-size: min(2.5rem, 3.5vw); letter-spacing: 0.1em; line-height: 1.1; color: var(--sr-ink);
+  max-width: calc(var(--cw) + 5rem); margin: 0 auto; text-wrap: balance;
 }
-.hud-banner-card.location .title { font-size: 3rem; letter-spacing: 0.14em; }
+.hud-banner-card.location .title { font-size: min(2.75rem, 3.8vw); letter-spacing: 0.14em; }
 .hud-banner-card.quest-fail .label { color: var(--sr-bad); }
-.hud-banner-card .subtitle { font-style: italic; font-size: 1.35rem; color: var(--sr-ink-2); margin-top: 0.2rem; }
-.hud-banner-card .rule { margin-top: 0.4rem; }
-.hud-banner-card .rule svg { display: block; width: 16rem; height: 1.85rem; margin: 0 auto; color: var(--sr-gold-2); filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9)); }
+.hud-banner-card .subtitle { font-style: italic; font-size: 1.22rem; color: var(--sr-ink-2); margin-top: 0.1rem; }
+.hud-banner-card .rule { margin-top: 0.25rem; }
+.hud-banner-card .rule svg { display: block; width: 13rem; height: 1.5rem; margin: 0 auto; color: var(--sr-gold-2); filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9)); }
 @keyframes sr-banner-in { from { opacity: 0; letter-spacing: 0.3em; filter: blur(3px); } to { opacity: 1; filter: none; } }
 @keyframes sr-banner-out { to { opacity: 0; transform: translateY(-0.4rem); } }
 
 /* ---------------------------------------------------------------- subtitles */
 .hud-subtitle {
-  position: absolute; left: 50%; bottom: 8.8rem; transform: translateX(-50%); max-width: min(48rem, 80vw);
+  position: absolute; left: 50%; bottom: 7.6rem; transform: translateX(-50%); width: max-content; max-width: min(48rem, 80vw);
   padding: 0.5rem 3.2rem; text-align: center; font-size: 1.32rem; line-height: 1.35;
   background: linear-gradient(90deg, transparent, rgba(8, 6, 4, 0.66) 14%, rgba(8, 6, 4, 0.66) 86%, transparent);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
@@ -231,9 +241,10 @@
 
 /* ---------------------------------------------------------------- look hint */
 .hud-hint {
-  position: absolute; left: 50%; bottom: 4.4rem; transform: translateX(-50%);
+  /* Under the resource bars, out of the way of the boss bar and subtitles. */
+  position: absolute; left: 50%; bottom: 0.35rem; transform: translateX(-50%);
   display: flex; align-items: center; gap: 0.45rem; white-space: nowrap;
-  padding: 0.45rem 1.2rem; font-size: 1.05rem; color: var(--sr-ink-2);
+  padding: 0.3rem 1.1rem; font-size: 0.95rem; color: var(--sr-ink-2);
   background: rgba(10, 7, 5, 0.6); border: 1px solid var(--sr-line);
   opacity: 0; transition: opacity 0.5s;
 }

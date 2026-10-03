@@ -1,6 +1,8 @@
 /**
  * Wait / rest (T). Choose 1–24 hours with ←→ or the slider; Enter waits. The screen dims while
- * time passes, then game.time advances (or `sources.wait` does it, e.g. to also heal or rest).
+ * time passes, then game.time advances (or `sources.wait` does it, e.g. to also heal or rest; it
+ * may refuse by returning a reason). Esc or closing during the dim cancels: no time passes.
+ * UIManager refuses to open it in combat.
  */
 import { BaseModal } from '../Modal';
 import type { UIManager } from '../UIManager';
@@ -16,6 +18,8 @@ export class WaitDialog extends BaseModal {
   private thumb = h('div', { class: 'thumb' });
   private slider = h('div', { class: 'sr-slider wt-slider' }, h('div', { class: 'track' }), this.fill, this.thumb);
   private busy = false;
+  private timer = 0;
+  private veil: HTMLElement | null = null;
 
   constructor() {
     super('wait-dialog');
@@ -71,17 +75,30 @@ export class WaitDialog extends BaseModal {
   private wait() {
     if (this.busy) return;
     this.busy = true;
-    const veil = h('div', { class: 'wt-veil' });
-    this.ui.overlayLayer.appendChild(veil);
-    setTimeout(() => {
-      const fn = this.ui.sources.wait;
-      if (fn) fn(this.hours);
-      else this.ui.game.time.advanceHours(this.hours);
+    this.veil = h('div', { class: 'wt-veil' });
+    this.ui.overlayLayer.appendChild(this.veil);
+    this.timer = window.setTimeout(() => {
+      this.timer = 0;
+      const { ui, hours } = this;
+      const fn = ui.sources.wait;
+      const result = fn ? fn(hours) : ui.game.time.advanceHours(hours);
       this.close();
+      if (typeof result === 'string' || result === false) ui.flash(typeof result === 'string' ? result : 'You cannot wait now.');
+      else ui.notify(`You waited ${hours} ${hours === 1 ? 'hour' : 'hours'}.`);
+    }, 650);
+  }
+
+  onClose() {
+    // Closed before the dim finished (Esc): cancel, so no time passes.
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = 0;
+    this.busy = false;
+    const veil = this.veil;
+    this.veil = null;
+    if (veil) {
       veil.classList.add('is-out');
       setTimeout(() => veil.remove(), 700);
-      this.ui.notify(`You waited ${this.hours} ${this.hours === 1 ? 'hour' : 'hours'}.`);
-    }, 650);
+    }
   }
 
   onKey(e: KeyboardEvent): boolean {

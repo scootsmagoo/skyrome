@@ -11,7 +11,7 @@ import { NavList } from '../nav';
 type Key = keyof SettingsData;
 
 type Row =
-  | { kind: 'slider'; key: Key; label: string; min: number; max: number; step: number; format: (v: number) => string; note?: string }
+  | { kind: 'slider'; key: Key; label: string; min: number; max: number; step: number; format: (v: number) => string; note?: string; live?: (ui: UIManager) => string }
   | { kind: 'toggle'; key: Key; label: string; note?: string; invert?: boolean }
   | { kind: 'choice'; key: Key; label: string; options: { value: unknown; label: string }[]; note?: string }
   | { kind: 'button'; label: string; note?: string; run: (ui: UIManager) => void };
@@ -58,7 +58,11 @@ const SECTIONS: { id: string; label: string; latin: string; rows: Row[] }[] = [
     label: 'Interface',
     latin: 'Facies',
     rows: [
-      { kind: 'slider', key: 'uiScale', label: 'Interface size', min: 0.8, max: 1.4, step: 0.05, format: pct },
+      {
+        kind: 'slider', key: 'uiScale', label: 'Interface size', min: 0.8, max: 1.4, step: 0.05, format: pct,
+        // The size is limited to what fits the window; say so instead of silently ignoring it.
+        live: (ui) => (ui.effectiveUiScale < ui.game.settings.data.uiScale - 0.005 ? `${pct(ui.effectiveUiScale)} fits this window; enlarge it for more` : ''),
+      },
       { kind: 'toggle', key: 'latinNames', label: 'Show Latin names' },
       { kind: 'toggle', key: 'compassLatin', label: 'Latin compass (SEP · ORI · MER · OCC)' },
       { kind: 'toggle', key: 'subtitles', label: 'Subtitles', invert: true },
@@ -143,7 +147,13 @@ export class SettingsScreen extends BaseModal {
   }
 
   private buildRow(r: Row): HTMLElement {
-    const label = h('div', { class: 'set-label' }, r.label, r.note ? h('span', { class: 'set-note' }, r.note) : null);
+    const label = h(
+      'div',
+      { class: 'set-label' },
+      r.label,
+      r.note ? h('span', { class: 'set-note' }, r.note) : null,
+      r.kind === 'slider' && r.live ? h('span', { class: 'set-note set-live' }) : null,
+    );
     let control: HTMLElement;
     if (r.kind === 'slider') {
       const fill = h('div', { class: 'fill' });
@@ -187,6 +197,8 @@ export class SettingsScreen extends BaseModal {
         (el.querySelector('.fill') as HTMLElement).style.width = `${(t * 100).toFixed(1)}%`;
         (el.querySelector('.thumb') as HTMLElement).style.left = `${(t * 100).toFixed(1)}%`;
         el.querySelector('.set-val')!.textContent = r.format(Math.round(v / r.step) * r.step);
+        const live = el.querySelector('.set-live');
+        if (live && r.live) live.textContent = r.live(this.ui);
       } else if (r.kind === 'toggle') {
         el.querySelector('.sr-toggle')!.classList.toggle('is-on', readToggle(data, r));
       } else if (r.kind === 'choice') {

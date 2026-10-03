@@ -1,6 +1,6 @@
 # UI module (`src/ui/`)
 
-The HUD, every menu, dialogue, barter, containers, the book reader, the map, and the title and loading screens. All of it is plain DOM and CSS over the canvas, with no framework, styled in Cinzel and EB Garamond on dark bronze and parchment. Everything works with the keyboard alone, and everything also works with a trackpad: nothing depends on hover, and every hit target is at least about 40 px.
+The HUD, every menu, dialogue, barter, containers, the book reader, the map, and the title and loading screens. All of it is plain DOM and CSS over the canvas, with no framework, styled in Cinzel and EB Garamond on dark bronze and parchment. Everything works with the keyboard alone, and everything also works with a trackpad: nothing depends on hover, and every hit target is at least about 40 px. Hovering a list row selects it only after the pointer really moves, so rows rebuilt under a resting cursor (sorting, buying) never steal the keyboard's selection.
 
 See it with `npm run dev`, then open `?scene=ui`. The [dev scene](#dev-scene) section lists the screenshot URLs.
 
@@ -15,7 +15,7 @@ ui.provide({                            // every source is optional
   character: () => characterViewFrom(game.player.sheet, { name, title, skills: SKILLS, perks: PERKS }),
   inventory: () => inventoryViewFrom(game.player.inventory, getItemDef, { onDrop: spawnDroppedItem, book: bookFor }),
   quests: () => questLogView,           // implements QuestLogView
-  map: () => mapSource,                 // implements MapDataSource (atlas + terrain adapter)
+  map: () => mapSource,                 // implements MapDataSource; return the SAME object every call (terrain is cached per source)
   saves: () => saveSlots,               // implements SaveSlotsView
   resolveTarget: (t) => ...,            // MarkerTarget → {x, z} (NPC position, location centre)
   itemName: (id) => getItemDef(id)?.name,
@@ -26,7 +26,7 @@ ui.provide({                            // every source is optional
   inCombat: () => combat.active,
   compassMarkers: () => combat.hostiles().map(...),
   fastTravel: (locationId) => travel.to(locationId),
-  wait: (hours) => rest.wait(hours),    // default: game.time.advanceHours
+  wait: (hours) => rest.wait(hours),    // default: game.time.advanceHours; return a reason string to refuse
   quitToTitle: () => ...,               // default: location.reload()
 });
 ```
@@ -35,7 +35,7 @@ The UI only reads through these small read models, defined in `src/ui/types.ts`.
 
 | Engine | What it provides | Adapter |
 | --- | --- | --- |
-| `src/rpg` (`CharacterSheet`, `Inventory`) | `CharacterView`, `InventoryView` | `characterViewFrom()`, `inventoryViewFrom()` |
+| `src/rpg` (`CharacterSheet`, `Inventory`) | `CharacterView`, `InventoryView` | `characterViewFrom()`, `inventoryViewFrom()`: Equip lets `Inventory.equip()` pick the slot and unequips from whichever slot holds the item; Read goes through `Inventory.use()` so skill books train and are marked read (text from the `book` option, else the item's own `text`) |
 | `src/dialogue` | implements `DialogueView` (`npcName`, `line`, `choices`, `choose()`, `advance()`, `end()`, `onChange()`) and calls `game.ui.openDialogue(view)` | `skillCheckTag()` gives `[Rhetoric 40]` with success odds per the `SkillCheck` rule; `bribeTag()` gives `[25 denarii]` |
 | `src/quests` | `QuestLogView` (quests with journal entries and objectives, `setTracked`, notes) | `questMarkersFrom(log, resolve)` for the map |
 | `src/save` | `SaveSlotsView` (`list` / `save` / `load` / `remove`) | none needed |
@@ -47,17 +47,20 @@ The UI only reads through these small read models, defined in `src/ui/types.ts`.
 ## Policies
 
 - **Modal stack.** `game.ui.open(modal)` / `close()` / `back()` / `closeAll()`. While any modal is open, `game.input.enabled = false` and pointer lock is released. `ui:modal` is emitted on every open and close.
-- **Pause.** Menus set `game.paused`. **Dialogue does not**: as in Skyrim, the world keeps moving while you talk. This is a per-modal flag (`Modal.pauses`).
+- **Pause.** Menus **and dialogue** set `game.paused`, so nobody can attack a player whose gameplay input is off. In a conversation Esc opens the pause menu over it (GDD §4.5: pause at any time, including in dialogue; Save is disabled there and in combat), and Tab, Backspace or the Goodbye choice leaves. Being hit (`ui:hit`) ends a conversation. This is a per-modal flag (`Modal.pauses`).
+- **Messages under modals.** While a modal (or the title/loading screen) hides the HUD, notifications, banners, subtitles and hit arcs are frozen, so a 'Quest started' raised by a dialogue choice plays when the conversation ends. Ones already on screen get at least another 2 s.
 - **Input hand-back.** When the last modal closes, input is re-enabled one frame later, and keys the UI consumed never reach core `Input` (`stopImmediatePropagation`). This way the E or Esc that closed a dialogue cannot also trigger a gameplay action.
-- **Pointer lock.** Losing pointer lock unexpectedly (Esc while mouse-looking, switching apps) opens the pause menu. Clicking the canvas re-locks the pointer through core `Input`. A one-line hint about mouse-look and the arrow keys appears twice per session.
+- **Pointer lock.** Losing pointer lock unexpectedly (Esc while mouse-looking, switching apps) opens the pause menu. Clicking the canvas re-locks the pointer, and the UI swallows that click (a capture listener ahead of core `Input`) so it never also attacks. A one-line hint about mouse-look and the arrow keys appears twice per session.
+- **Key releases** go to every open modal, not just the top one, so a key held on the map is released even if a confirm dialog opened over it.
+- **Wait** (T) is refused in combat (`sources.inCombat`); closing it during the dim cancels, and no time passes.
 - **Blockers.** `ui.block('loading' | 'title' | 'cutscene', on)` disables input and the hotkeys without a modal.
 
 ## Keys
 
 | Key | Action |
 | --- | --- |
-| Esc | Pause menu, or close / go back |
-| Tab | Character menu (Tab again closes) |
+| Esc | Pause menu, or close / go back (in a conversation: pause over it) |
+| Tab | Character menu (Tab again closes); leaves a conversation |
 | I / J / M / K | Inventory / Journal / Map / Skills (the same key again closes) |
 | [ ] | Previous or next tab |
 | T | Wait |
@@ -98,16 +101,16 @@ The title is a modal over the live scene: the world animates while the camera or
 
 ## Settings added (declaration merging, all optional)
 
-`compassLatin` (SEP · ORI · MER · OCC), `subtitles`, `hudBars` (`auto` | `always`), `crosshair`, `bindings`, `uiBindings`. The Settings screen applies every change live: `uiScale` sets the root font size, so the whole UI scales because all UI sizes are in rem. `lookSensitivity`, `invertY`, `renderScale` and `maxPixelRatio` go through `game.resize()`, `shadows` toggles shadow maps, `viewDistance` goes to `game.world.distanceScale`, and `showFps` toggles the debug overlay. Antialiasing needs a restart, and the screen says so.
+`compassLatin` (SEP · ORI · MER · OCC), `subtitles`, `hudBars` (`auto` | `always`), `crosshair`, `bindings`, `uiBindings`. The Settings screen applies every change live: `uiScale` sets the root font size, so the whole UI scales because all UI sizes are in rem. The size is limited to what fits the window (`uiFontPx()` in `settings.ts`: at least 60×34 rem, so 140% becomes about 132% on 1280×720) and the Settings row says so when it is limited. Layouts adapt with container queries on `.sr-ui` (`@container sr-ui (max-width: 70rem)` / `(max-height: 40rem)`); unlike media queries these measure in rem at the current interface size. The HUD's compass is `min(34rem, 40vw)` wide (`--cw`), the notes and clock wrap within the room beside it, and the top center stacks compass, enemy bar and banner instead of overlapping them. `lookSensitivity`, `invertY`, `renderScale` and `maxPixelRatio` go through `game.resize()`, `shadows` toggles shadow maps, `viewDistance` goes to `game.world.distanceScale`, and `showFps` toggles the debug overlay. Antialiasing needs a restart, and the screen says so.
 
 ## Look and files
 
 - Tokens are defined in `ui-base.css` (`--sr-*`): ivory ink, gold and bronze lines, oxblood selection, parchment for the journal, map and books. Fonts are self-hosted in `public/fonts/` and credited in `docs/credits/ui.md`.
 - Procedural art: icons (`icons.ts`, a 24-unit grid used both as inline SVG and as `Path2D` on the map canvas), laurel rules, wreath, SPQR crest and meander (`motifs.ts`), and parchment and grain textures (`textures.ts`).
-- The map (`map/MapRenderer.ts`) draws on Canvas 2D on demand. Hill shading lit from the north-west plus contours from `heightAt` (marching squares in `map/terrain.ts`), the Tiber, cased roads, the Servian wall, aqueducts, footprints and collision-aware labels (English with Latin). Pins and quest markers are obstacles that labels avoid. The scale bar is in *passus*, written in Roman numerals.
+- The map (`map/MapRenderer.ts`) draws on Canvas 2D on demand. Its terrain (about 160k height samples, ~200 ms) is built once per map source and cached, and is prebuilt behind the title or loading screen. Hill shading lit from the north-west plus contours from `heightAt` (marching squares in `map/terrain.ts`), the Tiber, cased roads, the Servian wall, aqueducts, footprints and collision-aware labels (English with Latin). Pins and quest markers are obstacles that labels avoid. The scale bar is in *passus*, written in Roman numerals.
 - To add a screen, extend `BaseModal`, build into `this.el`, and use `NavList` for keyboard and pointer selection. Then `game.ui.open(new MyScreen())`.
 
-Pure logic with unit tests: `format.ts`, `models.ts` (list navigation, inventory categories and sorting, barter deals), `hud/compassMath.ts`, `map/view.ts`, `map/terrain.ts`, the adapters and the mocks. The tests are in `tests/ui-*.test.ts`.
+Pure logic with unit tests: `format.ts`, `models.ts` (list navigation, inventory categories and sorting, barter deals), `nav.ts` (hover vs keyboard selection), `settings.ts` (interface scale limit), `hud/compassMath.ts`, `map/view.ts` (including held pan keys), `map/terrain.ts`, the adapters and the mocks. The tests are in `tests/ui-*.test.ts`.
 
 ## Dev scene
 

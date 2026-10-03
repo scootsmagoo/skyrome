@@ -53,26 +53,33 @@
 .title-veil.is-out { opacity: 0; }
 
 /* ================================================================ loading */
-.sr-loading { position: absolute; inset: 0; z-index: 50; pointer-events: auto; background: #0b0806; transition: opacity 0.6s; }
+.sr-loading {
+  position: absolute; inset: 0; z-index: 50; pointer-events: auto; background: #0b0806; transition: opacity 0.6s;
+  /* Crest and quote fill the space above the progress block, so the two can never overlap. */
+  display: flex; flex-direction: column; align-items: center;
+}
 .sr-loading.is-leaving { opacity: 0; }
 .ld-bg {
   position: absolute; inset: 0;
   background: var(--sr-tex-grain), radial-gradient(ellipse 70% 60% at 50% 38%, #2b1e14 0%, #160f0a 55%, #070504 100%);
 }
-.ld-center { position: absolute; left: 50%; top: 12%; transform: translateX(-50%); width: min(54rem, 90vw); text-align: center; }
-.ld-crest { width: 8.5rem; height: 8.5rem; margin: 0 auto; color: var(--sr-gold-2); filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.8)); }
+.ld-center {
+  position: relative; flex: 1; min-height: 0; width: min(54rem, 90vw); text-align: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1.5rem 0 1rem;
+}
+.ld-crest { width: min(8.5rem, 22vh); height: min(8.5rem, 22vh); flex: none; margin: 0 auto; color: var(--sr-gold-2); filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.8)); }
 .ld-crest svg { width: 100%; height: 100%; display: block; }
 .ld-logo {
   margin-top: 0.6rem; font-family: var(--sr-display); font-weight: 700; font-size: 1.9rem; letter-spacing: 0.42em; padding-left: 0.42em;
   background: linear-gradient(180deg, #f7e6b0, #d9ab4c 60%, #93692a); -webkit-background-clip: text; background-clip: text; color: transparent;
 }
-.ld-quote { margin-top: 3.2rem; opacity: 0; }
+.ld-quote { margin-top: min(3.2rem, 6vh); opacity: 0; }
 .ld-quote.is-in { animation: sr-quote-in 1.2s var(--sr-ease) forwards; }
 @keyframes sr-quote-in { from { opacity: 0; transform: translateY(0.5rem); } to { opacity: 1; transform: none; } }
 .ld-quote .la { font-style: italic; font-size: 2rem; line-height: 1.3; color: var(--sr-ink); }
 .ld-quote .en { font-size: 1.25rem; color: var(--sr-ink-2); margin-top: 0.5rem; }
 .ld-quote .src { font-family: var(--sr-display); font-size: 0.8rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--sr-ink-3); margin-top: 0.6rem; }
-.ld-bottom { position: absolute; left: 50%; bottom: 3rem; transform: translateX(-50%); width: min(46rem, 86vw); }
+.ld-bottom { position: relative; flex: none; width: min(46rem, 86vw); margin-bottom: min(3rem, 6vh); }
 .ld-band { height: 18px; background-repeat: repeat-x; background-position: center; opacity: 0.85; margin-bottom: 1.1rem; }
 .ld-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.4rem; }
 .ld-label { font-style: italic; font-size: 1.12rem; color: var(--sr-ink-2); }
@@ -85,3 +92,17 @@
 }
 .ld-tip { margin-top: 1.1rem; text-align: center; font-size: 1.12rem; color: var(--sr-ink-2); min-height: 1.5em; opacity: 0; }
 .ld-tip.is-in { animation: sr-quote-in 1s var(--sr-ease) 0.2s forwards; }
+
+/* Large interface on a short window: tighten the title so every menu item stays on screen. */
+@container sr-ui (max-height: 42rem) {
+  .title-col { top: 2.5%; }
+  .title-crest { width: 3.8rem; height: 3.8rem; margin-bottom: 0.3rem; }
+  .title-logo { font-size: clamp(3.4rem, 7vw, 5.4rem); }
+  .title-sub { margin-top: 0.6rem; font-size: 1.1rem; }
+  .title-rule svg { height: 1.6rem; margin-top: 0.4rem; }
+  .title-tag { margin-top: 0.3rem; font-size: 1.15rem; }
+  .title-tag .en { display: none; }
+  .title-items { margin-top: 1rem; gap: 0; }
+  .title-item { min-height: 2.45rem; padding-top: 0.2rem; padding-bottom: 0.2rem; }
+  .title-foot { bottom: 0.9rem; }
+}

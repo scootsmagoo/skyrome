@@ -29,6 +29,19 @@ declare module '../core/Settings' {
   }
 }
 
+/**
+ * The smallest window, in rem, the interface is laid out for (1280×720 at about 133%). Larger
+ * interface sizes on smaller windows are scaled down to this so nothing overlaps or overflows.
+ */
+export const UI_MIN_REM = { w: 60, h: 34 } as const;
+
+/** Root font size in px for an interface scale on a window of vw×vh CSS px. */
+export function uiFontPx(scale: number, vw: number, vh: number): number {
+  const s = Math.max(0.7, Math.min(1.6, scale || 1));
+  const fit = Math.min(vw / UI_MIN_REM.w, vh / UI_MIN_REM.h);
+  return Math.max(11, Math.min(16 * s, fit));
+}
+
 export function uiBindings(data: SettingsData): Record<UiAction, string[]> {
   return { ...DEFAULT_UI_BINDINGS, ...(data.uiBindings ?? {}) };
 }

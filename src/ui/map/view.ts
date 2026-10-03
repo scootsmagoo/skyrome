@@ -74,3 +74,45 @@ export function rotateLocal(lx: number, lz: number, bearingDeg: number): [number
   const s = Math.sin(t);
   return [lx * c - lz * s, lx * s + lz * c];
 }
+
+/** Keys that pan the map while held (arrows and WASD). */
+export const PAN_KEYS: readonly string[] = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'];
+
+/**
+ * Pan keys currently held. Each press must be matched by a release (or a blur/hide clearing all),
+ * otherwise the map keeps sliding.
+ */
+export class HeldPanKeys {
+  private held = new Set<string>();
+
+  /** Returns true when `code` is a pan key (now held). */
+  down(code: string): boolean {
+    if (!PAN_KEYS.includes(code)) return false;
+    this.held.add(code);
+    return true;
+  }
+
+  up(code: string) {
+    this.held.delete(code);
+  }
+
+  clear() {
+    this.held.clear();
+  }
+
+  get size() {
+    return this.held.size;
+  }
+
+  /** Screen-space pan direction: +x drags the map right (view moves west), +y down (view moves north). */
+  direction(): { dx: number; dy: number } {
+    const k = this.held;
+    let dx = 0;
+    let dy = 0;
+    if (k.has('ArrowLeft') || k.has('KeyA')) dx += 1;
+    if (k.has('ArrowRight') || k.has('KeyD')) dx -= 1;
+    if (k.has('ArrowUp') || k.has('KeyW')) dy += 1;
+    if (k.has('ArrowDown') || k.has('KeyS')) dy -= 1;
+    return { dx, dy };
+  }
+}

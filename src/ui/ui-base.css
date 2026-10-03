@@ -101,6 +101,8 @@
 .sr-ui {
   position: absolute;
   inset: 0;
+  /* Size queries in rem follow the interface scale: `@container sr-ui (max-width: 68rem)`. */
+  container: sr-ui / size;
   font-family: var(--sr-body);
   color: var(--sr-ink);
   -webkit-font-smoothing: antialiased;

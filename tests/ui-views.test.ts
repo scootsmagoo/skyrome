@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { bribeTag, characterViewFrom, inventoryViewFrom, questMarkersFrom, skillCheckTag } from '../src/ui/adapters';
 import { MockBarter, MockContainer, MockDialogue, MockInventory, MockQuestLog, MOCK_ITEMS, MOCK_PERKS, MOCK_SKILLS } from '../src/ui/mock';
 import { MockMap, mockElevation } from '../src/ui/mockMap';
-import type { CharacterSheet, EquipSlot, Inventory, ItemStack, Resource, Vitals } from '../src/rpg/types';
+import type { CharacterSheet, EquipSlot, Inventory, ItemDef, ItemStack, Resource, Vitals } from '../src/rpg/types';
 
 // ------------------------------------------------------------------ fakes of the engine contracts
 
@@ -30,12 +30,17 @@ function fakeSheet(): CharacterSheet & { taken: Set<string> } {
   };
 }
 
-function fakeInventory(): Inventory {
-  let stacks: ItemStack[] = [{ itemId: 'gladius', count: 1 }, { itemId: 'panis', count: 3 }, { itemId: 'tali', count: 1, stolenFrom: 'decimus' }];
-  const equipment: Partial<Record<EquipSlot, string>> = { mainHand: 'gladius' };
+function fakeInventory(): Inventory & { used: string[] } {
+  let stacks: ItemStack[] = [
+    { itemId: 'gladius', count: 1 }, { itemId: 'panis', count: 3 }, { itemId: 'tali', count: 1, stolenFrom: 'decimus' },
+    { itemId: 'pugio', count: 1 }, { itemId: 'sica', count: 1 }, { itemId: 'book-column', count: 1 }, { itemId: 'libellus', count: 1 },
+  ];
+  const equipment: Partial<Record<EquipSlot, string>> = { mainHand: 'gladius', offHand: 'pugio' };
   const fns = new Set<() => void>();
   const emit = () => fns.forEach((f) => f());
+  const used: string[] = [];
   return {
+    used,
     denarii: 10, get stacks() { return stacks; }, weight: 2, maxWeight: 100,
     add: () => {}, count: (id) => stacks.find((s) => s.itemId === id)?.count ?? 0,
     remove(id, n = 1) {
@@ -47,16 +52,29 @@ function fakeInventory(): Inventory {
       return true;
     },
     addDenarii: () => {}, spendDenarii: () => true,
-    equip(id) { equipment.mainHand = id; emit(); return true; },
+    // Like the real Inventory: it picks the slot itself and refuses what can't be worn.
+    equip(id) {
+      const def = itemDef(id);
+      const slot = def?.slot ?? (def?.weapon ? 'mainHand' : null);
+      if (!slot) return false;
+      equipment[slot] = id;
+      emit();
+      return true;
+    },
     unequip(slot) { delete equipment[slot]; emit(); },
     equipped: (slot) => equipment[slot],
     get equipment() { return equipment; },
-    use: () => true,
+    use(id) { used.push(id); return true; },
     onChange(fn) { fns.add(fn); return () => fns.delete(fn); },
   };
 }
 
-const itemDef = (id: string) => MOCK_ITEMS.find((i) => i.id === id);
+// The mock catalogue plus two contract edge cases: a weapon def without `slot` and a book with text.
+const EXTRA_ITEMS: ItemDef[] = [
+  { id: 'sica', name: 'Sica', type: 'weapon', weight: 1, value: 20, description: 'A curved Thracian blade.', weapon: { class: 'blade', damage: 7, speed: 1.1, reach: 0.9, stagger: 0.3, skill: 'blades' } },
+  { id: 'libellus', name: 'On Wrestling', type: 'book', weight: 0.3, value: 10, description: 'A small handbook.', text: 'Grip low.\n\nThrow high.', teaches: 'unarmed' },
+];
+const itemDef = (id: string) => MOCK_ITEMS.find((i) => i.id === id) ?? EXTRA_ITEMS.find((i) => i.id === id);
 
 // ------------------------------------------------------------------ adapters
 
@@ -87,10 +105,44 @@ describe('UI adapters', () => {
     expect(inv.equipped('mainHand')).toBeUndefined();
     expect(view.toggleEquip('gladius')).toBe(true); // equip again
     expect(inv.equipped('mainHand')).toBe('gladius');
-    expect(view.toggleEquip('panis')).toBe(false); // no slot
+    expect(view.toggleEquip('panis')).toBe(false); // the inventory refuses: not wearable
     expect(view.drop('panis', 2)).toBe(true);
     expect(dropped).toEqual(['panis×2']);
     expect(changes).toBe(3);
+  });
+
+  it('unequips an item from whatever slot holds it', () => {
+    const inv = fakeInventory();
+    const view = inventoryViewFrom(inv, itemDef);
+    // The pugio's def says mainHand, but it is worn in the off hand: toggling takes it off there.
+    expect(itemDef('pugio')?.slot).toBe('mainHand');
+    expect(view.toggleEquip('pugio')).toBe(true);
+    expect(inv.equipped('offHand')).toBeUndefined();
+    expect(inv.equipped('mainHand')).toBe('gladius');
+    expect(view.entries().find((e) => e.itemId === 'pugio')?.equipped).toBeUndefined();
+  });
+
+  it('lets the inventory pick the slot for wearables without one in their def', () => {
+    const inv = fakeInventory();
+    const view = inventoryViewFrom(inv, itemDef);
+    expect(itemDef('sica')?.slot).toBeUndefined();
+    expect(view.toggleEquip('sica')).toBe(true);
+    expect(inv.equipped('mainHand')).toBe('sica');
+    expect(view.toggleEquip('sica')).toBe(true); // and off again
+    expect(inv.equipped('mainHand')).toBeUndefined();
+  });
+
+  it('reads books through Inventory.use so skill books train and get marked read', () => {
+    const inv = fakeInventory();
+    const view = inventoryViewFrom(inv, itemDef, { book: (id) => (id === 'book-column' ? { title: 'On the New Column', kind: 'book', text: 'It rises.' } : null) });
+    expect(view.read?.('book-column')?.title).toBe('On the New Column');
+    // No reader text from the option: falls back to the item's own text.
+    const own = view.read?.('libellus');
+    expect(own?.text).toContain('Grip low');
+    expect(inv.used).toEqual(['book-column', 'libellus']);
+    // Not a book: nothing to read, nothing used.
+    expect(view.read?.('panis')).toBeNull();
+    expect(inv.used).toHaveLength(2);
   });
 
   it('makes dialogue tags with odds from the skill check rule', () => {

@@ -3,15 +3,20 @@
  *
  * Policy while any modal is open:
  * - gameplay input is disabled (`game.input.enabled = false`) and pointer lock is released;
- * - the simulation pauses for menus (`game.paused`), but NOT for dialogue: like Skyrim, the world
- *   keeps living while you talk (NPC idles, ambient life). Flip `Modal.pauses` to change that;
+ * - the simulation pauses (`game.paused`) for menus AND dialogue: nobody can attack a player who
+ *   is reading choices with gameplay input off. Esc in a conversation opens the pause menu over it
+ *   (GDD §4.5: pause at any time, including in dialogue); Tab or 'Goodbye' leaves. A modal can opt
+ *   out with `pauses = false`;
+ * - the HUD is hidden and its message feed frozen, so a banner or notification raised meanwhile
+ *   ('Quest started' from a dialogue choice) plays once the modal closes;
  * - 'ui:modal' is emitted on every open/close;
  * - Esc closes the topmost modal (or goes back one screen); Tab/I/J/M/K open or switch menus.
  * When the last modal closes, input is re-enabled one frame later so the key that closed the
  * modal (E in dialogue, Esc) can't also trigger a gameplay action.
  *
  * Losing pointer lock unexpectedly (Esc while mouse-looking, switching apps) opens the pause menu.
- * Clicking back into the canvas re-locks the pointer (handled by core Input).
+ * Clicking back into the canvas re-locks the pointer, and that click does nothing else (it is
+ * caught here before core Input would read it as an attack).
  */
 // Base tokens/components first so every component stylesheet (imported below) overrides them.
 import './ui-base.css';
@@ -24,10 +29,11 @@ import { h } from './dom';
 import { Hud } from './hud/Hud';
 import type { BannerOptions, NotifyKind } from './hud/Feed';
 import type { Modal } from './Modal';
-import { bindSettings, uiBindings, type UiAction } from './settings';
+import { bindSettings, uiBindings, uiFontPx, type UiAction } from './settings';
 import { installTextures } from './textures';
 import type { BarterView, BookView, ContainerView, DialogueView, UISources } from './types';
 import { MenuShell, type MenuTabId } from './menus/MenuShell';
+import { prewarmMapTerrain } from './map/MapRenderer';
 import { PauseMenu } from './menus/PauseMenu';
 import { SettingsScreen } from './menus/SettingsScreen';
 import { ControlsScreen } from './menus/ControlsScreen';
@@ -94,6 +100,8 @@ export class UIManager implements System {
   private shownObjectives = new Set<string>();
   private menuShell: MenuShell | null = null;
   private lookHints = 0;
+  private mapWarm = false;
+  private uiScale = 1;
 
   constructor(
     readonly game: Game,
@@ -114,13 +122,20 @@ export class UIManager implements System {
 
     const onKeyDown = (e: KeyboardEvent) => this.onKeyDown(e);
     const onKeyUp = (e: KeyboardEvent) => this.onKeyUp(e);
+    const onMouseDown = (e: MouseEvent) => this.onMouseDown(e);
     const onLock = () => this.onPointerLockChange();
+    const onResize = () => this.applyUiScale(this.uiScale);
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', onKeyUp, true);
+    // Capture phase on window runs before core Input's listener on the canvas itself.
+    window.addEventListener('mousedown', onMouseDown, true);
+    window.addEventListener('resize', onResize);
     document.addEventListener('pointerlockchange', onLock);
     this.offs.push(() => {
       window.removeEventListener('keydown', onKeyDown, true);
       window.removeEventListener('keyup', onKeyUp, true);
+      window.removeEventListener('mousedown', onMouseDown, true);
+      window.removeEventListener('resize', onResize);
       document.removeEventListener('pointerlockchange', onLock);
     });
     this.wireEvents();
@@ -275,8 +290,13 @@ export class UIManager implements System {
     this.open(new BookReader(book));
   }
 
+  /** Wait/rest (T). Refused in combat, like saving. */
   openWait() {
     if (this.isOpen('wait')) return;
+    if (this.sources.inCombat?.()) {
+      this.flash('You cannot wait with enemies nearby.');
+      return;
+    }
     this.open(new WaitDialog());
   }
 
@@ -296,6 +316,10 @@ export class UIManager implements System {
 
   hitFrom(x: number, z: number) {
     this.hud.hits.add(x, z);
+    // Being struck ends any conversation (normally impossible: dialogue pauses the world, but a
+    // dialogue outcome can start a fight before the engine ends the conversation).
+    const talk = this.stack.find((m) => m.id === 'dialogue');
+    if (talk) this.close(talk);
   }
 
   /** A short centered message over menus ('Game saved'). */
@@ -319,8 +343,24 @@ export class UIManager implements System {
       }
     }
     this.flushObjectives();
+    this.prewarmMap();
     this.hud.update(dt);
     this.top?.update?.(dt);
+  }
+
+  /**
+   * Build the map's terrain shading while the title or loading screen is up, so the first press of
+   * M doesn't stall the game (it samples ~160k terrain heights). Cached per map source after that.
+   */
+  private prewarmMap() {
+    if (this.mapWarm || !(this.isOpen('title') || this.blockers.has('title') || this.blockers.has('loading'))) return;
+    const data = this.sources.map?.();
+    if (!data) return;
+    this.mapWarm = true;
+    const run = () => prewarmMapTerrain(data);
+    const ric = (window as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    if (ric) ric(run, { timeout: 3000 });
+    else setTimeout(run, 200);
   }
 
   dispose() {
@@ -382,7 +422,19 @@ export class UIManager implements System {
 
   private onKeyUp(e: KeyboardEvent) {
     if (this.actionFor(e.code) === 'clock') this.hud.clockVisible = false;
-    this.top?.onKeyUp?.(e);
+    // Every open screen hears releases, not just the top one: a key held on the map must still be
+    // released if a confirm dialog opened over it in the meantime.
+    for (const m of [...this.stack]) m.onKeyUp?.(e);
+  }
+
+  /** A click on the 3D view without pointer lock only re-captures the mouse; it never attacks. */
+  private onMouseDown(e: MouseEvent) {
+    const { game } = this;
+    if (e.target !== game.canvas || game.input.pointerLocked) return;
+    if (this.stack.length > 0 || this.blockers.size > 0) return;
+    game.input.requestPointerLock();
+    e.preventDefault();
+    e.stopImmediatePropagation();
   }
 
   private onPointerLockChange() {
@@ -395,10 +447,20 @@ export class UIManager implements System {
     this.wasLocked = locked;
   }
 
+  /**
+   * The interface scale sets the root font size (everything is in rem), limited to what fits the
+   * window: see `uiFontPx`. `effectiveUiScale` is what the player actually gets.
+   */
   private applyUiScale(scale: number) {
-    const s = Math.max(0.7, Math.min(1.6, scale || 1));
-    document.documentElement.style.fontSize = `${16 * s}px`;
-    document.documentElement.style.setProperty('--sr-ui-scale', String(s));
+    this.uiScale = scale;
+    const px = uiFontPx(scale, window.innerWidth, window.innerHeight);
+    document.documentElement.style.fontSize = `${px.toFixed(2)}px`;
+    document.documentElement.style.setProperty('--sr-ui-scale', (px / 16).toFixed(3));
+  }
+
+  /** The interface scale in effect (the setting, limited by the window size). */
+  get effectiveUiScale(): number {
+    return uiFontPx(this.uiScale, window.innerWidth, window.innerHeight) / 16;
   }
 
   // ------------------------------------------------------------------ game events → HUD

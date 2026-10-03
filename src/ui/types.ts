@@ -448,6 +448,7 @@ export interface UISources {
   character?: () => CharacterView | null;
   inventory?: () => InventoryView | null;
   quests?: () => QuestLogView | null;
+  /** Return the same object on every call: the map caches its terrain shading per source. */
   map?: () => MapDataSource | null;
   saves?: () => SaveSlotsView | null;
   /** Extra compass markers (enemies in combat, companions). */
@@ -464,8 +465,11 @@ export interface UISources {
   currentLocation?: () => string | null;
   /** Enables the map's 'Fast travel' button on discovered locations. */
   fastTravel?: (locationId: string) => void;
-  /** Wait/rest; default advances game.time. */
-  wait?: (hours: number) => void;
+  /**
+   * Wait/rest; default advances game.time. Return a reason (or false) to refuse, e.g.
+   * 'You cannot rest while trespassing.' (Waiting in combat is already refused by the UI.)
+   */
+  wait?: (hours: number) => void | string | false;
   /** Pause menu → Quit to Title. */
   quitToTitle?: () => void;
 }

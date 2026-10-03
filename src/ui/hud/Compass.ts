@@ -1,15 +1,16 @@
 /**
- * Skyrim-style compass bar. The tick/letter strip is built once in rem units and slid with a
- * transform; markers come from a pooled set of elements positioned each frame.
+ * Skyrim-style compass bar. The tick/letter strip is built once and slid with a transform; markers
+ * come from a pooled set of elements positioned each frame. Everything is placed in fractions of
+ * the CSS variable `--cw` (the compass width, `min(34rem, 40vw)` in hud.css), so the bar scales
+ * with the interface size but never crowds a narrow window.
  */
 import { h, setClass } from '../dom';
 import { LOCATION_ICONS, UI_ICONS, iconSvg } from '../icons';
 import type { MapIconKind } from '../types';
 import { COMPASS_SPAN, bearingTo, cardinalLabels, compassPosition, edgeFade, relativeBearing } from './compassMath';
 
-/** Compass width in rem; the strip uses the same unit so it scales with the UI. */
-const WIDTH = 34;
-const REM_PER_DEG = WIDTH / COMPASS_SPAN;
+/** A length of `f` compass widths. */
+const cw = (f: number) => `calc(var(--cw) * ${f.toFixed(5)})`;
 
 export interface CompassItem {
   key: string;
@@ -34,7 +35,7 @@ export class Compass {
     // Markers live outside the band so its edge fade doesn't hide a quest marker pinned to the end.
     this.el = h(
       'div',
-      { class: 'hud-compass', style: `width:${WIDTH}rem` },
+      { class: 'hud-compass' },
       h('div', { class: 'hud-compass-cap left' }),
       h('div', { class: 'hud-compass-band' }, this.strip),
       this.markerLayer,
@@ -50,7 +51,7 @@ export class Compass {
     // −180..540 so any heading has strip on both sides.
     for (let deg = -180; deg <= 540; deg += 15) {
       const b = ((deg % 360) + 360) % 360;
-      const left = `${(deg + 180) * REM_PER_DEG}rem`;
+      const left = cw((deg + 180) / COMPASS_SPAN);
       const label = labels.find((l) => l.bearing === b);
       if (label) parts.push(h('span', { class: `hud-compass-letter${latin ? ' latin' : ''}`, style: `left:${left}` }, label.text));
       else parts.push(h('i', { class: b % 45 === 0 ? 'hud-tick major' : 'hud-tick', style: `left:${left}` }));
@@ -61,9 +62,8 @@ export class Compass {
   /** `heading` is the camera's compass bearing; `items` are already-resolved marker positions. */
   update(heading: number, px: number, pz: number, items: readonly CompassItem[], latin: boolean) {
     if (this.latin !== latin) this.buildStrip(latin);
-    // Strip position: bearing `heading` sits at the center (WIDTH/2).
-    const offset = WIDTH / 2 - (heading + 180) * REM_PER_DEG;
-    this.strip.style.transform = `translate3d(${offset.toFixed(3)}rem,0,0)`;
+    // Strip position: bearing `heading` sits at the center (half a compass width).
+    this.strip.style.transform = `translate3d(${cw(0.5 - (heading + 180) / COMPASS_SPAN)},0,0)`;
 
     const seen = new Set<string>();
     for (const it of items) {
@@ -80,8 +80,7 @@ export class Compass {
         this.markerLayer.appendChild(el);
       }
       setClass(el, 'is-undiscovered', it.kind === 'location' && !it.discovered);
-      const left = (pos * WIDTH) / 2;
-      el.style.transform = `translate3d(${left.toFixed(3)}rem,0,0)`;
+      el.style.transform = `translate3d(${cw(pos / 2)},0,0)`;
       el.style.opacity = String(it.kind === 'quest' ? 1 : edgeFade(pos));
     }
     for (const [key, el] of this.pool) {

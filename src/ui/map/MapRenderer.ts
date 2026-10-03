@@ -1,7 +1,8 @@
 /**
  * Parchment-style map renderer (Canvas 2D). Static terrain (hill shading, elevation tint,
- * contours) is computed once per data source; everything else is vector-drawn on each redraw, so
- * it stays crisp at any zoom. Rendering is on demand (`requestRender`), not per frame.
+ * contours) is computed once per data source and shared by every renderer (the map tab is rebuilt
+ * each time the menu opens); everything else is vector-drawn on each redraw, so it stays crisp at
+ * any zoom. Rendering is on demand (`requestRender`), not per frame.
  */
 import { toRoman } from '../../core/GameTime';
 import { drawIcon, LOCATION_ICONS, UI_ICONS } from '../icons';
@@ -29,6 +30,75 @@ interface TerrainCache {
   index: Path2D;
 }
 
+/** Terrain per map source: building it samples ~160k heights (a ~200 ms stall), so do it once. */
+const TERRAIN = new WeakMap<MapDataSource, TerrainCache | null>();
+
+function terrainFor(d: MapDataSource): TerrainCache | null {
+  let t = TERRAIN.get(d);
+  if (t === undefined) {
+    t = buildTerrain(d);
+    TERRAIN.set(d, t);
+  }
+  return t;
+}
+
+/** Build a source's terrain ahead of time (UIManager does it behind the title/loading screen). */
+export function prewarmMapTerrain(d: MapDataSource) {
+  terrainFor(d);
+}
+
+function buildTerrain(d: MapDataSource): TerrainCache | null {
+  if (!d.heightAt) return null;
+  const b = d.bounds;
+  const span = Math.max(b.maxX - b.minX, b.maxZ - b.minZ);
+  const cell = span / 420;
+  const gw = Math.ceil((b.maxX - b.minX) / cell) + 1;
+  const gh = Math.ceil((b.maxZ - b.minZ) / cell) + 1;
+  const grid = sampleHeights(d.heightAt.bind(d), b.minX, b.minZ, gw, gh, cell);
+  const [lo, hi] = heightRange(grid);
+  const shade = hillshade(grid, 315, 38, 2.4);
+  const flat = flatShade(38);
+
+  const shadeC = document.createElement('canvas');
+  shadeC.width = gw;
+  shadeC.height = gh;
+  const tintC = document.createElement('canvas');
+  tintC.width = gw;
+  tintC.height = gh;
+  const si = shadeC.getContext('2d')!.createImageData(gw, gh);
+  const ti = tintC.getContext('2d')!.createImageData(gw, gh);
+  for (let i = 0; i < gw * gh; i++) {
+    const s = shade[i] - flat;
+    const o = i * 4;
+    if (s < 0) {
+      si.data[o] = 74; si.data[o + 1] = 48; si.data[o + 2] = 24;
+      si.data[o + 3] = Math.min(150, -s * 420);
+    } else {
+      si.data[o] = 255; si.data[o + 1] = 250; si.data[o + 2] = 232;
+      si.data[o + 3] = Math.min(110, s * 300);
+    }
+    const t = hi > lo ? (grid.data[i] - lo) / (hi - lo) : 0;
+    ti.data[o] = 176; ti.data[o + 1] = 128; ti.data[o + 2] = 64;
+    ti.data[o + 3] = Math.max(0, t - 0.12) * 95;
+  }
+  shadeC.getContext('2d')!.putImageData(si, 0, 0);
+  tintC.getContext('2d')!.putImageData(ti, 0, 0);
+
+  const interval = d.contourInterval ?? 3;
+  const contours = new Path2D();
+  const index = new Path2D();
+  for (let lv = Math.ceil(lo / interval) * interval; lv < hi; lv += interval) {
+    const segs = contourSegments(grid, lv);
+    const isIndex = Math.round(lv / interval) % 5 === 0;
+    const p = isIndex ? index : contours;
+    for (let k = 0; k < segs.length; k += 4) {
+      p.moveTo(segs[k], segs[k + 1]);
+      p.lineTo(segs[k + 2], segs[k + 3]);
+    }
+  }
+  return { shade: shadeC, tint: tintC, x0: b.minX - cell / 2, z0: b.minZ - cell / 2, w: gw * cell, h: gh * cell, contours, index };
+}
+
 const STYLE: Record<MapLandmark['style'], { fill: string; stroke: string }> = {
   temple: { fill: 'rgba(146, 58, 38, 0.42)', stroke: 'rgba(94, 32, 18, 0.9)' },
   public: { fill: 'rgba(132, 96, 58, 0.34)', stroke: 'rgba(80, 56, 30, 0.85)' },
@@ -47,7 +117,6 @@ export class MapRenderer {
   vw = 800;
   vh = 600;
   private dpr = 1;
-  private terrain: TerrainCache | null = null;
   private pattern: CanvasPattern | null = null;
   private raf = 0;
   /** Selected location id (gold ring + label). */
@@ -68,7 +137,7 @@ export class MapRenderer {
   setData(d: MapDataSource) {
     if (d === this.data) return;
     this.data = d;
-    this.terrain = null;
+    this.requestRender();
   }
 
   resize(w: number, h: number, dpr = window.devicePixelRatio || 1) {
@@ -128,67 +197,11 @@ export class MapRenderer {
     return best;
   }
 
-  // ------------------------------------------------------------------ terrain cache
-
-  private buildTerrain(): TerrainCache | null {
-    const d = this.data;
-    if (!d.heightAt) return null;
-    const b = d.bounds;
-    const span = Math.max(b.maxX - b.minX, b.maxZ - b.minZ);
-    const cell = span / 420;
-    const gw = Math.ceil((b.maxX - b.minX) / cell) + 1;
-    const gh = Math.ceil((b.maxZ - b.minZ) / cell) + 1;
-    const grid = sampleHeights(d.heightAt.bind(d), b.minX, b.minZ, gw, gh, cell);
-    const [lo, hi] = heightRange(grid);
-    const shade = hillshade(grid, 315, 38, 2.4);
-    const flat = flatShade(38);
-
-    const shadeC = document.createElement('canvas');
-    shadeC.width = gw;
-    shadeC.height = gh;
-    const tintC = document.createElement('canvas');
-    tintC.width = gw;
-    tintC.height = gh;
-    const si = shadeC.getContext('2d')!.createImageData(gw, gh);
-    const ti = tintC.getContext('2d')!.createImageData(gw, gh);
-    for (let i = 0; i < gw * gh; i++) {
-      const s = shade[i] - flat;
-      const o = i * 4;
-      if (s < 0) {
-        si.data[o] = 74; si.data[o + 1] = 48; si.data[o + 2] = 24;
-        si.data[o + 3] = Math.min(150, -s * 420);
-      } else {
-        si.data[o] = 255; si.data[o + 1] = 250; si.data[o + 2] = 232;
-        si.data[o + 3] = Math.min(110, s * 300);
-      }
-      const t = hi > lo ? (grid.data[i] - lo) / (hi - lo) : 0;
-      ti.data[o] = 176; ti.data[o + 1] = 128; ti.data[o + 2] = 64;
-      ti.data[o + 3] = Math.max(0, t - 0.12) * 95;
-    }
-    shadeC.getContext('2d')!.putImageData(si, 0, 0);
-    tintC.getContext('2d')!.putImageData(ti, 0, 0);
-
-    const interval = d.contourInterval ?? 3;
-    const contours = new Path2D();
-    const index = new Path2D();
-    for (let lv = Math.ceil(lo / interval) * interval; lv < hi; lv += interval) {
-      const segs = contourSegments(grid, lv);
-      const isIndex = Math.round(lv / interval) % 5 === 0;
-      const p = isIndex ? index : contours;
-      for (let k = 0; k < segs.length; k += 4) {
-        p.moveTo(segs[k], segs[k + 1]);
-        p.lineTo(segs[k + 2], segs[k + 3]);
-      }
-    }
-    return { shade: shadeC, tint: tintC, x0: b.minX - cell / 2, z0: b.minZ - cell / 2, w: gw * cell, h: gh * cell, contours, index };
-  }
-
   // ------------------------------------------------------------------ drawing
 
   render() {
     const { ctx, view: v, dpr, data: d } = this;
     const s = v.scale;
-    this.terrain ??= this.buildTerrain();
     const world = () => ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (this.vw / 2 - v.cx * s), dpr * (this.vh / 2 - v.cz * s));
     const screen = () => ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const px = (n: number) => n / s; // screen px → world units
@@ -204,7 +217,7 @@ export class MapRenderer {
     ctx.fillRect(0, 0, this.vw, this.vh);
 
     world();
-    const t = this.terrain;
+    const t = terrainFor(d);
     if (t) {
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';

@@ -1,11 +1,12 @@
 /**
  * Conversation panel driven by a DialogueView. The NPC line reveals quickly (Space/Enter/click
  * completes it); choices are picked with 1–9, ↑↓ + Enter/E, or a click. Skill checks render as
- * '[Rhetoric 40]' tags colored by the odds, bribes as '[25 denarii]'. Esc says goodbye.
+ * '[Rhetoric 40]' tags colored by the odds, bribes as '[25 denarii]'.
  *
- * The world does NOT pause during dialogue (see UIManager), but gameplay input is off.
+ * The world pauses while you talk (see UIManager). Esc opens the pause menu over the conversation
+ * (GDD §4.5: pause at any time, including in dialogue); Tab or Backspace leaves, like 'Goodbye'.
  */
-import type { Action } from '../../core/Input';
+import { codeLabel, type Action } from '../../core/Input';
 import { BaseModal } from '../Modal';
 import type { UIManager } from '../UIManager';
 import { h, keycap, richText, setChildren, setText } from '../dom';
@@ -18,7 +19,6 @@ const REVEAL_CPS = 90; // characters per second
 
 export class DialoguePanel extends BaseModal {
   readonly id = 'dialogue';
-  override pauses = false;
   private off: (() => void) | null = null;
   private nameEl = h('div', { class: 'dlg-name' });
   private titleEl = h('div', { class: 'dlg-title' });
@@ -27,6 +27,7 @@ export class DialoguePanel extends BaseModal {
   private hiddenEl = h('span', { class: 'hidden' });
   private choicesEl = h('div', { class: 'dlg-choices' });
   private continueEl: HTMLElement;
+  private hintsEl = h('div', { class: 'dlg-hints sr-hints' });
   private nav = new NavList({ onActivate: (i) => this.choose(i) });
   private text = '';
   private shown = 0;
@@ -47,6 +48,7 @@ export class DialoguePanel extends BaseModal {
         this.lineEl,
         this.choicesEl,
         this.continueEl,
+        this.hintsEl,
       ),
     );
     // Clicking anywhere (outside a choice) completes the line / continues.
@@ -58,6 +60,12 @@ export class DialoguePanel extends BaseModal {
 
   override onOpen(ui: UIManager) {
     super.onOpen(ui);
+    const b = ui.game.input.bindings;
+    setChildren(
+      this.hintsEl,
+      h('span', { class: 'sr-hint', on: { click: (e: MouseEvent) => { e.stopPropagation(); this.leave(); } } }, keycap(codeLabel(b.menu[0] ?? 'Tab'), 'sr-key-sm'), 'Leave'),
+      h('span', { class: 'sr-hint', on: { click: (e: MouseEvent) => { e.stopPropagation(); ui.openPause(); } } }, keycap(codeLabel(b.pause[0] ?? 'Escape'), 'sr-key-sm'), 'Pause'),
+    );
     this.off = this.view.onChange(() => this.render());
     this.render();
   }
@@ -159,7 +167,20 @@ export class DialoguePanel extends BaseModal {
     this.view.choose(i);
   }
 
+  /** End the conversation (Tab, Backspace, the Leave hint). */
+  private leave() {
+    if (!this.view.ended) this.view.end();
+    if (!this.closing) {
+      this.closing = true;
+      this.close();
+    }
+  }
+
   onKey(e: KeyboardEvent): boolean {
+    if (e.code === 'Backspace') {
+      if (!e.repeat) this.leave();
+      return true;
+    }
     if (/^Digit[1-9]$/.test(e.code) || /^Numpad[1-9]$/.test(e.code)) {
       if (!e.repeat) this.choose(Number(e.code.slice(-1)) - 1);
       return true;
@@ -175,13 +196,16 @@ export class DialoguePanel extends BaseModal {
     return this.nav.handleKey(e);
   }
 
+  /** Esc pauses (the conversation stays open underneath). */
   onEscape() {
-    this.view.end();
-    return true;
+    this.ui.openPause();
+    return false;
   }
 
-  onAction(_a: Action) {
-    return true; // menus stay closed while talking
+  onAction(a: Action) {
+    // Tab (the 'menu' key) leaves, like Skyrim; the other menus stay closed while talking.
+    if (a === 'menu') this.leave();
+    return true;
   }
 }
 
