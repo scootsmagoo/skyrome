@@ -5,7 +5,8 @@
  */
 import * as THREE from 'three';
 import { Draw } from '../../../arch/fabric/draw';
-import { temple, type TempleLayout } from '../../../arch/classical/temple';
+import { temple, type TempleLayout, type TempleSpec } from '../../../arch/classical/temple';
+import { MeshBuilder } from '../../../gfx/MeshBuilder';
 import { quadriga, seatedDeity } from '../../../arch/classical/statues';
 import { inscriptionPanel, paintedSign } from '../../../arch/common/inscription';
 import { placeProp } from '../../../arch/props/props';
@@ -17,6 +18,18 @@ import { lion, mergeAll } from './palcirc/shapes';
 import { Spots, drawFor, gableRoof, groundRange, lowColumn, plantTrees, type TreeSpec } from './palcirc/util';
 import { requestLamps } from './palcirc/runtime';
 import { landmarkToWorld } from './palcirc/util';
+
+/** Near range (m) of the high-detail temples; beyond it their low-detail stand-in is shown. */
+const NEAR = 320;
+
+/** Low-detail copy of a kit temple (plus extras) as a far stand-in (no colliders). */
+export function templeFar(ctx: LandmarkContext, spec: TempleSpec, extra?: (b: MeshBuilder, d: Draw, L: TempleLayout) => void): THREE.Object3D {
+  const fb = new MeshBuilder();
+  const fd = new Draw(fb);
+  const L = temple(fb, { ...spec, detail: 'low', pedimentRelief: false }).layout;
+  extra?.(fb, fd, L);
+  return fb.build(`${ctx.lm.id}:far`);
+}
 
 const T4 = (x: number, y: number, z: number, ry = 0) => new THREE.Matrix4().makeTranslation(x, y, z).multiply(new THREE.Matrix4().makeRotationY(ry));
 
@@ -57,10 +70,13 @@ function apollo(ctx: LandmarkContext) {
   if (gT.min < -0.05) d.span('travertine', -tx, gT.min - 0.6, tz0, tx, -0.02, tz1, { collide: true });
   d.span('paving_travertine', -tx, -0.06, tz0, tx, 0.03, tz1, { collide: true });
   // The temple: Luna marble, Corinthian, hexastyle pseudoperipteral, high podium, ivory doors.
-  const L = temple(b, {
+  const spec: TempleSpec = {
     order: 'corinthian',
-    plan: 'pseudoperipteral',
+    // Prostyle with a deep porch (the triangle budget of a full pseudoperipteral order is ~2×).
+    plan: 'prostyle',
     front: 6,
+    sides: 8,
+    pronaos: 3,
     width: W,
     podiumHeight: 3.0,
     material: 'marble',
@@ -70,7 +86,8 @@ function apollo(ctx: LandmarkContext) {
     doorMaterial: 'marble',
     fluted: true,
     detail: ctx.detail,
-  }).layout;
+  };
+  const L = temple(b, spec).layout;
   // The gilded chariot of the Sun on the apex of the pediment.
   const apexZ = L.entablature.z0 + 0.6;
   quadriga(b, T4(0, L.totalHeight - 0.4, apexZ + 0.9), { material: 'gilded_bronze', driverMaterial: 'gilded_bronze', scale: 0.85, detail: hi ? 'low' : 'low' });
@@ -115,7 +132,12 @@ function apollo(ctx: LandmarkContext) {
   spots.add('apollo-vista-terrace', 'vista', 0, 0, tz0 + 0.8, Math.PI);
   spots.add('apollo-librarian', 'npc', sx(1) * (tx - 3.6), 0, 4, -Math.PI / 2);
   spots.add('apollo-portico-bench', 'sit', -(tx - 3.4), 0, -6, Math.PI / 2);
-  return { object: b.build(ctx.lm.id), colliders: b.colliders, spots: spots.list, cullDistance: 2000 };
+  // Far stand-in: the same temple at low detail with the chariot, on its terrace.
+  const far = templeFar(ctx, spec, (fb, fd, FL) => {
+    fd.span('paving_travertine', -tx, -0.06, tz0, tx, 0.03, tz1);
+    quadriga(fb, T4(0, FL.totalHeight - 0.4, FL.entablature.z0 + 1.5), { material: 'gilded_bronze', scale: 0.85, detail: 'low' });
+  });
+  return { object: b.build(ctx.lm.id), colliders: b.colliders, spots: spots.list, cullDistance: NEAR, far };
 }
 const sx = (s: number) => s;
 
@@ -203,7 +225,7 @@ function magnaMater(ctx: LandmarkContext) {
   const { b, d } = drawFor(ctx);
   const spots = new Spots();
   const hi = ctx.detail === 'high';
-  const L = temple(b, {
+  const spec: TempleSpec = {
     order: 'corinthian',
     plan: 'prostyle',
     front: 6,
@@ -215,7 +237,8 @@ function magnaMater(ctx: LandmarkContext) {
     roofMaterial: 'roof_tile',
     detail: ctx.detail,
     riser: 0.2,
-  }).layout;
+  };
+  const L = temple(b, spec).layout;
   templeFooting(ctx, d, L, 'tufa');
   // The great flight is the cavea of the Megalesian plays (the kit's frontal stair).
   const f = L.flights[0];
@@ -237,7 +260,7 @@ function magnaMater(ctx: LandmarkContext) {
   spots.add('magna-mater-gallus-a', 'npc', -2.2, L.podiumHeight, L.stylobate.z0 + 0.8, Math.PI);
   spots.add('magna-mater-gallus-b', 'npc', 2.2, L.podiumHeight, L.stylobate.z0 + 0.8, Math.PI);
   spots.add('magna-mater-steps', 'sit', -1.5, L.podiumHeight * 0.5, (f.z0 + f.z1) / 2, Math.PI);
-  return { object: b.build(ctx.lm.id), colliders: b.colliders, spots: spots.list, cullDistance: 1600 };
+  return { object: b.build(ctx.lm.id), colliders: b.colliders, spots: spots.list, cullDistance: NEAR, far: templeFar(ctx, spec) };
 }
 
 // ---------------------------------------------------------------- Temple of Victory
@@ -245,7 +268,7 @@ function magnaMater(ctx: LandmarkContext) {
 function victoria(ctx: LandmarkContext) {
   const { b, d } = drawFor(ctx);
   const spots = new Spots();
-  const L = temple(b, {
+  const spec: TempleSpec = {
     order: 'corinthian',
     plan: 'prostyle',
     front: 4,
@@ -257,7 +280,8 @@ function victoria(ctx: LandmarkContext) {
     roofMaterial: 'roof_tile',
     detail: ctx.detail,
     pedimentRelief: false,
-  }).layout;
+  };
+  const L = temple(b, spec).layout;
   templeFooting(ctx, d, L, 'tufa');
   const f = L.flights[0];
   const gfront = groundRange(ctx, f.x0, f.z0 - 3, f.x1, f.z0).min;
@@ -273,7 +297,7 @@ function victoria(ctx: LandmarkContext) {
   d.span('tufa', -0.8, Math.min(0, gfront), az - 0.6, 0.8, Math.min(0, gfront) + 1.0, az + 0.6, { collide: true });
   spots.add('victoria-altar', 'shrine', 0, Math.min(0, gfront), az - 1.2, 0);
   spots.add('victoria-door', 'door', 0, L.podiumHeight, L.cella.z0 - 0.8, Math.PI);
-  return { object: b.build(ctx.lm.id), colliders: b.colliders, spots: spots.list, cullDistance: 1400 };
+  return { object: b.build(ctx.lm.id), colliders: b.colliders, spots: spots.list, cullDistance: NEAR, far: templeFar(ctx, spec) };
 }
 
 // ---------------------------------------------------------------- Hut of Romulus

@@ -13,7 +13,8 @@ import { Draw } from '../../../arch/fabric/draw';
 import { column } from '../../../arch/classical/column';
 import { entablature, pediment } from '../../../arch/classical/entablature';
 import { obelisk } from '../../../arch/classical/monuments';
-import { seatedDeity } from '../../../arch/classical/statues';
+import { quadriga, seatedDeity } from '../../../arch/classical/statues';
+import { MeshBuilder } from '../../../gfx/MeshBuilder';
 import { temple } from '../../../arch/classical/temple';
 import { triumphalArch } from '../../../arch/classical/arch';
 import { inscriptionPanel, paintedSign } from '../../../arch/common/inscription';
@@ -193,25 +194,26 @@ function archTitusBuild(ctx: LandmarkContext) {
   const { b, d } = drawFor(ctx);
   const spots = new Spots();
   const W = (17 * ctx.S) / 3.96;
-  const res = triumphalArch(
-    b,
-    {
-      bays: 3,
-      span: W,
-      order: 'composite',
-      material: 'marble',
-      detail: ctx.detail,
-      inscription: ['Senatus Populusque Romanus', 'Imp Tito Caesari Divi Vespasiani F Vespasiano Aug', 'Pontif Max Trib Pot X Imp XVII Cos VIII P P Principi Suo', 'Quod Gentem Iudaeorum Domuit Et Urbem Hierusolymam Delevit'],
-      inscriptionStyle: 'bronze',
-      quadriga: true,
-      reliefs: true,
-    },
-  );
+  const spec = {
+    bays: 3 as const,
+    span: W,
+    order: 'composite' as const,
+    material: 'marble' as const,
+    inscription: ['Senatus Populusque Romanus', 'Imp Tito Caesari Divi Vespasiani F Vespasiano Aug', 'Pontif Max Trib Pot X Imp XVII Cos VIII P P Principi Suo', 'Quod Gentem Iudaeorum Domuit Et Urbem Hierusolymam Delevit'],
+    inscriptionStyle: 'bronze' as const,
+    reliefs: true,
+  };
+  // The arch in full detail, its bronze quadriga in low detail (it is seen from below, far off).
+  const res = triumphalArch(b, { ...spec, detail: ctx.detail, quadriga: false });
+  const sc = W / 3.2;
+  quadriga(b, new THREE.Matrix4().makeTranslation(0, res.height, 0.1), { material: 'bronze', driverMaterial: 'gilded_bronze', scale: sc, detail: 'low' });
   // Paving through the passages and a threshold on both sides.
   d.span('paving_travertine', -res.width / 2 - 0.4, -0.3, -res.depth / 2 - 2.0, res.width / 2 + 0.4, 0.04, res.depth / 2 + 2.0);
   spots.add('arch-titus-circus-inscription', 'inscription', 0, 0, -res.depth / 2 - 6, 0);
   spots.add('arch-titus-circus-gate', 'door', 0, 0, -res.depth / 2 - 1.2, 0);
-  return { object: b.build(ctx.lm.id), colliders: b.colliders, spots: spots.list, cullDistance: 1600 };
+  const fb = new MeshBuilder();
+  triumphalArch(fb, { ...spec, detail: 'low', quadriga: true, reliefs: false });
+  return { object: b.build(ctx.lm.id), colliders: b.colliders, spots: spots.list, cullDistance: 360, far: fb.build(`${ctx.lm.id}:far`) };
 }
 
 // ---------------------------------------------------------------- Temple of Sol (Aventine stands)
