@@ -41,7 +41,7 @@ function buildCastraPraetoria(ctx: LandmarkContext): LandmarkBuild {
     spot(`${lm.id}:spawn`, 'spawn', 0, ctx.groundAt(0, -dd / 2 - 10), -dd / 2 - 10, 0),
   );
   void plinth;
-  return finish(lm.id, d, spots, far, 2600);
+  return finish(lm.id, d, spots, far, 1000);
 }
 
 export const builders: LandmarkBuilder[] = [{ handles: ['castra-praetoria'], build: buildCastraPraetoria }];

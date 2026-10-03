@@ -19,7 +19,7 @@ import {
 } from './generic-common';
 import { quadriporticusGarden } from './generic-civic';
 import { liteArcade } from './generic-seating';
-import { arcadeStoreys, bowl, theatre } from './generic-venues';
+import { arcadeStoreys, bowl, curvedPlinth, theatre } from './generic-venues';
 
 // ---------------------------------------------------------------- Stadium of Domitian
 
@@ -31,12 +31,12 @@ function buildStadiumDomitian(ctx: LandmarkContext): LandmarkBuild {
   const spots: Spot[] = [];
   const S = ctx.S;
   const H = lm.height * S;
-  plinth(d, ctx, -w / 2, -dd / 2, w / 2, dd / 2, 0.02, 'travertine');
   const aw = 54 * S;
   const fd = 1.8, c = 2.6;
   const reach = (w - aw) / 2 - c - fd;
   const z0 = -dd / 2 + 7;
   const zs = dd / 2 - aw / 2 - reach - c - fd;
+  curvedPlinth(d, ctx, w / 2, -dd / 2, zs, w / 2, zs, 1);
   const res = bowl(d, ctx, { aw, z0, zs, H, storeys: 2, reach, gaps: [(z0 + zs) / 2], gapW: 6, bay: 4.2 }, spots, far);
   // The straight S end: an arcaded front of two storeys closing the bowl, a monumental central gate.
   const fz = z0 - 1.2;
@@ -57,7 +57,7 @@ function buildStadiumDomitian(ctx: LandmarkContext): LandmarkBuild {
     spot(`${lm.id}:runner`, 'npc', 3, 0.04, (z0 + zs) / 2, Math.PI),
   );
   far.span('travertine', -res.outer, 0, fz - fd, res.outer, H, fz);
-  return finish(lm.id, d, spots, far, 2400);
+  return finish(lm.id, d, spots, far, 1000);
 }
 
 // ---------------------------------------------------------------- Odeum of Domitian
@@ -70,14 +70,14 @@ function buildOdeumDomitian(ctx: LandmarkContext): LandmarkBuild {
   const spots: Spot[] = [];
   const S = ctx.S;
   const H = lm.height * S;
-  plinth(d, ctx, -w / 2, -dd / 2, w / 2, dd / 2, 0.02, 'travertine');
   // Orchestra ~(−890, −505): 10 m S of the footprint centre (local +z, the facade facing S).
   const zc = 10 * S;
   const Ro = Math.min(w / 2, zc + dd / 2);
+  curvedPlinth(d, ctx, w / 2, zc, dd / 2, Ro, zc, -1);
   theatre(d, ctx, { zc, Ro, r0: Ro * 0.3, H, storeys: 2, bays: 32, stageW: Ro * 1.25, stageD: 5, zBack: dd / 2, sceneW: w, roof: true, frons: 2, material: 'travertine' }, spots, far);
   inscription(d, ['IMP CAESAR NERVA TRAIANVS AVG GER DACICVS', 'ODEVM PERFECIT'], 0, H * 0.45, zc - Ro - 0.05, 10, 1.2);
   spots.push(spot(`${lm.id}:inscription`, 'inscription', 0, 0, zc - Ro - 3, 0), spot(`${lm.id}:citharode`, 'npc', 0, 1.2, zc + 3.4 + 2, Math.PI));
-  return finish(lm.id, d, spots, far, 2000);
+  return finish(lm.id, d, spots, far, 900);
 }
 
 // ---------------------------------------------------------------- Theatre and Crypta of Balbus
@@ -90,10 +90,10 @@ function buildTheatreBalbus(ctx: LandmarkContext): LandmarkBuild {
   const spots: Spot[] = [];
   const S = ctx.S;
   const H = lm.height * S;
-  plinth(d, ctx, -w / 2, -dd / 2, w / 2, dd / 2, 0.02, 'travertine');
   // Orchestra ~(−515, −180): ≈ 7 m behind the footprint centre (local +z).
   const zc = 7 * S;
   const Ro = Math.min(w / 2, zc + dd / 2);
+  curvedPlinth(d, ctx, w / 2, zc, dd / 2, Ro, zc, -1);
   const res = theatre(d, ctx, { zc, Ro, r0: Ro * 0.3, H, storeys: 3, bays: 36, stageW: Ro * 1.3, stageD: 4.6, zBack: dd / 2, sceneW: w, frons: 2, backDoors: true, masts: true }, spots, far);
   // The four little onyx columns before the royal door, famous in Rome.
   const colH = 3.2;
@@ -101,7 +101,7 @@ function buildTheatreBalbus(ctx: LandmarkContext): LandmarkBuild {
   d.span('marble_giallo', -3, 1.2 + colH, res.zf - 2.5, 3, 1.2 + colH + 0.35, res.zf - 1.6);
   inscription(d, ['L CORNELIVS P F BALBVS', 'PROCOS EX MANVBIIS'], 0, H * 0.4, zc - Ro - 0.05, 7, 1.1);
   spots.push(spot(`${lm.id}:onyx`, 'vista', 0, 1.2, res.zf - 4.5, 0), spot(`${lm.id}:inscription`, 'inscription', 0, 0, zc - Ro - 3, 0));
-  return finish(lm.id, d, spots, far, 2000);
+  return finish(lm.id, d, spots, far, 900);
 }
 
 function buildCryptaBalbi(ctx: LandmarkContext): LandmarkBuild {

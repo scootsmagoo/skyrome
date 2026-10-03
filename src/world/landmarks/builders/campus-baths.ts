@@ -83,7 +83,7 @@ function buildBathsAgrippa(ctx: LandmarkContext): LandmarkBuild {
   far.cyl('brick', rx, H * 0.31, rz, R, H * 0.62, 12);
   far.ellipsoid('lead', rx, H * 0.62, rz, R, R * 0.6, R, { seg: [10, 5] });
   far.span('brick', hx0, 0, hz0, hx1, Hh, hz1);
-  return finish(lm.id, d, spots, far, 2000);
+  return finish(lm.id, d, spots, far, 900);
 }
 
 // ---------------------------------------------------------------- Stagnum Agrippae
@@ -149,7 +149,7 @@ function buildStagnum(ctx: LandmarkContext): LandmarkBuild {
     spot(`${lm.id}:sluice`, 'container', ex + 1, y, 2.6, -Math.PI / 2),
     spot(`${lm.id}:shore`, 'sit', -w * 0.3, y + 0.4, -dd / 2 + 2.5, Math.PI),
   );
-  return finish(lm.id, d, spots, undefined, 1400);
+  return finish(lm.id, d, spots, undefined, 700);
 }
 
 // ---------------------------------------------------------------- Baths of Nero
@@ -164,7 +164,7 @@ function buildBathsNero(ctx: LandmarkContext): LandmarkBuild {
   const z = thermae(d, ctx, w, dd, H, spots, far, { rotunda: false, enterable: true, natatio: true, palaestrae: true, title: 'THERMAE NERONIANAE' });
   // Huge red granite basins in the palaestrae.
   for (const sx of [-1, 1]) roundBasin(d, sx * (z.fw / 2 + (w / 2 - z.fw / 2) / 2), 0.03, (z.zN1 + z.zT1) / 2, 2.4, 'porphyry', 1.0, detail);
-  return finish(lm.id, d, spots, far, 2000);
+  return finish(lm.id, d, spots, far, 900);
 }
 
 // ---------------------------------------------------------------- Baths of Sura

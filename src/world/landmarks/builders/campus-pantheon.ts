@@ -255,7 +255,7 @@ function buildPantheon(ctx: LandmarkContext): LandmarkBuild {
   far.geo(new THREE.CylinderGeometry(Rout, Rout, 3, 16, 1, true), 'brick', 0, 1.5, zc);
   far.rod('wood', V(-4.5, 0, zc - 2), V(-4.5, 13, zc - 5.5), 0.3, 4);
   far.rod('wood', V(7, 0, zc + 7), V(7, 11.5, zc + 10), 0.3, 4);
-  return finish(lm.id, d, spots, far, 2000);
+  return finish(lm.id, d, spots, far, 900);
 }
 
 /** Dolphin-and-trident frieze along a wall face (−z) from x0 to x1 at height y. */

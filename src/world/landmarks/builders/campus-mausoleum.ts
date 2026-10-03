@@ -88,10 +88,10 @@ export function processionField(w: number, h: number, seed = 9): HeightField {
 
 function reliefs() {
   if (!acanthusMat) {
-    acanthusMat = reliefMaterial(acanthusField(1024, 256), { ground: [214, 208, 196], relief: [246, 242, 232], noise: 0.05, strength: 5, roughness: 0.5, repeat: true });
+    acanthusMat = reliefMaterial(acanthusField(1024, 256), { ground: [168, 160, 146], relief: [248, 244, 234], noise: 0.05, strength: 7, roughness: 0.5, repeat: true });
     acanthusMat.name = 'ara-acanthus';
     // Painted ground behind the scrolls (subtle; the colours are conjectural).
-    processionMat = reliefMaterial(processionField(1024, 200), { ground: [178, 190, 196], relief: [244, 238, 226], noise: 0.04, strength: 5, roughness: 0.5, repeat: true });
+    processionMat = reliefMaterial(processionField(1024, 200), { ground: [92, 118, 150], relief: [246, 240, 228], noise: 0.04, strength: 7, roughness: 0.5, repeat: true });
     processionMat.name = 'ara-procession';
   }
   return { acanthus: acanthusMat!, procession: processionMat! };
@@ -101,8 +101,7 @@ function reliefs() {
 function reliefQuad(d: Draw, mat: THREE.Material, x0: number, x1: number, y0: number, y1: number, z: number, rep: number, flip = false) {
   const g = new THREE.PlaneGeometry(x1 - x0, y1 - y0);
   const uv = g.getAttribute('uv') as THREE.BufferAttribute;
-  // Height-field row 0 lands at the top of the texture: flip v so the figures stand upright.
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * ((x1 - x0) / rep), 1 - uv.getY(i));
+  for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * ((x1 - x0) / rep));
   if (!flip) g.rotateY(Math.PI);
   g.translate((x0 + x1) / 2, (y0 + y1) / 2, z);
   d.b.add(g, mat, d.m, { uv: 'keep', castShadow: false });
@@ -231,7 +230,7 @@ function buildMausoleum(ctx: LandmarkContext): LandmarkBuild {
   far.cyl('foliage_cypress', 0, (yMound + moundTop) / 2, 0, R - 1, moundTop - yMound, 16, { rTop: Rc + 2 });
   far.cyl('travertine', 0, (moundTop + yTop) / 2, 0, Rc, yTop - moundTop, 12);
   far.box('bronze', 0, yTop + 2.5, 0, 1.2, 5, 1.2);
-  return finish(lm.id, d, spots, far, 2400);
+  return finish(lm.id, d, spots, far, 1000);
 }
 
 // ---------------------------------------------------------------- Ara Pacis
@@ -359,7 +358,7 @@ function buildHorologium(ctx: LandmarkContext): LandmarkBuild {
   );
   far.box('travertine', 0, ped / 2, 0, shaft / 6, ped, shaft / 6);
   far.cyl('plaster_ochre', 0, ped + shaft / 2, 0, shaft / 18, shaft, 4, { rTop: shaft / 28 });
-  return finish(lm.id, d, spots, far, 1600);
+  return finish(lm.id, d, spots, far, 800);
 }
 
 export const builders: LandmarkBuilder[] = [

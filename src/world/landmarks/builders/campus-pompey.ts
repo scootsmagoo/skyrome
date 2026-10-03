@@ -25,7 +25,7 @@ import {
 import { liteColonnade } from './generic-civic-lib';
 import { curiaHall, gable, porch } from './generic-civic';
 import { aedicula, fittedTemple, fitTemple, templeMaterials } from './generic-sacred';
-import { halfCircle, localOf, profileHeightAt, theatre, theatreProfile } from './generic-venues';
+import { curvedPlinth, halfCircle, localOf, profileHeightAt, theatre, theatreProfile } from './generic-venues';
 import { temple } from '../../../arch/classical/temple';
 
 // ---------------------------------------------------------------- shared layout
@@ -50,7 +50,7 @@ function buildTheatrePompey(ctx: LandmarkContext): LandmarkBuild {
   const far = farDraw();
   const spots: Spot[] = [];
   const L = pompeyTheatre(ctx.S);
-  plinth(d, ctx, -L.w / 2, -L.dd / 2, L.w / 2, L.dd / 2, 0.02, 'travertine');
+  curvedPlinth(d, ctx, L.w / 2, L.zc, L.dd / 2, L.Ro, L.zc, -1);
   // Where the temple sits on the axis at the top of the cavea, no aisle is cut.
   const vv = LANDMARK_BY_ID['temple-venus-victrix'];
   const tp = vv ? localOf(ctx, vv) : { x: 0, z: -28 };
@@ -70,7 +70,7 @@ function buildTheatrePompey(ctx: LandmarkContext): LandmarkBuild {
   }
   inscription(d, ['CN POMPEIVS CN F MAGNVS COS III'], 0, L.H * 0.36, L.zc - L.Ro - 0.05, 9, 0.9);
   spots.push(spot(`${lm.id}:inscription`, 'inscription', 0, 0, L.zc - L.Ro - 3, 0));
-  return finish(lm.id, d, spots, far, 2400);
+  return finish(lm.id, d, spots, far, 1000);
 }
 
 // ---------------------------------------------------------------- temple of Venus Victrix
@@ -138,7 +138,7 @@ function buildVenusVictrix(ctx: LandmarkContext): LandmarkBuild {
   far.span('travertine', -w / 2, 0, zFront, w / 2, floorY, dd / 2);
   far.span('marble', -w * 0.4, floorY, -dd * 0.35, w * 0.4, floorY + Lt.H, dd * 0.45);
   tiledRoof(far, 'gable', 0, dd * 0.05, w * 0.8, dd * 0.8, floorY + Lt.H, 'low', { axis: 'z', pitchDeg: 14 });
-  return finish(lm.id, d, spots, far, 2400);
+  return finish(lm.id, d, spots, far, 1000);
 }
 
 // ---------------------------------------------------------------- porticus Pompeiana
@@ -223,7 +223,7 @@ function buildPorticusPompeiana(ctx: LandmarkContext): LandmarkBuild {
   far.span('plaster_cream', -w / 2, 0, -dd / 2, -w / 2 + 1, wallTop, dd / 2);
   far.span('plaster_cream', w / 2 - 1, 0, -dd / 2, w / 2, wallTop, dd / 2);
   for (const sx of [-1, 1]) far.ellipsoid('foliage_broad', sx * gx * 0.55, 8, 0, gx * 0.4, 4, gz * 0.8, { seg: [8, 4] });
-  return finish(lm.id, d, spots, far, 1600);
+  return finish(lm.id, d, spots, far, 800);
 }
 
 // ---------------------------------------------------------------- Curia Pompeia

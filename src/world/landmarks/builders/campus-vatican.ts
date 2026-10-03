@@ -21,7 +21,7 @@ import {
   T, V, broadTree, clearOf, cypress, dims, draw, farDraw, finish, groundRange, inscription, mul, obstacles, plinth, spot, wallRun, type Detail,
 } from './generic-common';
 import { liteArcade, ribbonSlab, seating } from './generic-seating';
-import { arcadeStoreys, bowl, carceres, cutPath, localOf, spina } from './generic-venues';
+import { arcadeStoreys, bowl, carceres, curvedPlinth, cutPath, localOf, spina } from './generic-venues';
 import { children, offsetLine, pathLength, type V3 } from './generic-common';
 
 // ---------------------------------------------------------------- Circus of Gaius and Nero
@@ -34,11 +34,11 @@ function buildCircusVaticanus(ctx: LandmarkContext): LandmarkBuild {
   const { w, d: dd } = dims(ctx);
   const spots: Spot[] = [];
   const H = lm.height * ctx.S;
-  plinth(d, ctx, -w / 2, -dd / 2, w / 2, dd / 2, 0.02, 'travertine');
   const reach = Math.min(12, w * 0.2);
   const aw = w - 2 * (reach + 4.4);
   const zs = dd / 2 - aw / 2 - reach - 4.4;
   const z0 = -dd / 2 + 9;
+  curvedPlinth(d, ctx, w / 2, -dd / 2, zs, w / 2, zs, 1);
   bowl(d, ctx, { aw, z0, zs, H, storeys: 2, reach, timberTop: true, gaps: [z0 + (zs - z0) * 0.55], bay: 4.6 }, spots, far);
   carceres(d, ctx, aw + 2 * reach, z0 - 2.5, Math.min(H * 0.7, 7), 12, spots);
   const gaps: [number, number][] = [];
@@ -55,7 +55,7 @@ function buildCircusVaticanus(ctx: LandmarkContext): LandmarkBuild {
   }
   for (let i = 0; i < 6; i++) d.box('wood_dark', aw / 2 + 3 + rng.range(0, reach - 4), 0.4 + rng.range(0, 0.5), zs - 30 + i * 2.2, rng.range(3, 5), 0.25, 0.3, { ry: rng.range(-0.6, 0.6), rz: rng.range(-0.3, 0.3) });
   spots.push(spot(`${lm.id}:torches`, 'vista', -aw / 2 + 3, 0.04, (z0 + zs) / 2, Math.PI / 2));
-  return finish(lm.id, d, spots, far, 2600);
+  return finish(lm.id, d, spots, far, 1000);
 }
 
 function buildVaticanObelisk(ctx: LandmarkContext): LandmarkBuild {
@@ -76,7 +76,7 @@ function buildVaticanObelisk(ctx: LandmarkContext): LandmarkBuild {
   inscriptionPanel(d.b, { lines: ['DIVO CAESARI DIVI IVLII F AVGVSTO', 'TI CAESARI DIVI AVGVSTI F AVGVSTO', 'SACRVM'], width: bw * 0.9, height: 1.3, style: 'carved', ground: '#b07466', ink: '#3a2420' }, mul(d.m, T(0, 1.1 + ped + 1.4, -bw / 2 - 0.02)), { depth: 0.02, bodyMaterial: 'plaster_ochre' });
   spots.push(spot(`${lm.id}:dedication`, 'inscription', 0, 0.04, -3.5, 0));
   far.cyl('plaster_ochre', 0, 1.1 + ped + shaft / 2, 0, bw * 0.6, shaft, 4, { rTop: bw * 0.4 });
-  return finish(lm.id, d, spots, far, 2400);
+  return finish(lm.id, d, spots, far, 1000);
 }
 
 // ---------------------------------------------------------------- Naumachiae
@@ -141,7 +141,7 @@ function buildNaumachiaTraiani(ctx: LandmarkContext): LandmarkBuild {
     spot(`${lm.id}:stands`, 'vista', r + 5, y0 + 4, 0, -Math.PI / 2),
   );
   far.span('brick', -w / 2, 0, -dd / 2, w / 2, H, dd / 2);
-  return finish(lm.id, d, spots, far, 2400);
+  return finish(lm.id, d, spots, far, 1000);
 }
 
 function buildNaumachiaAugusti(ctx: LandmarkContext): LandmarkBuild {
@@ -195,7 +195,7 @@ function buildNaumachiaAugusti(ctx: LandmarkContext): LandmarkBuild {
     else broadTree(d, x, g(x, z), z, rng.range(10, 14), 'low', i % 3 === 1 ? 'pine' : 'plane');
   }
   spots.push(spot(`${lm.id}:kerb`, 'vista', 0, g(0, -rz - 3), -rz - 3, 0), spot(`${lm.id}:grove`, 'shrine', rx + 7, g(rx + 7, 0), 0, -Math.PI / 2));
-  return finish(lm.id, d, spots, undefined, 1600);
+  return finish(lm.id, d, spots, undefined, 800);
 }
 
 export const builders: LandmarkBuilder[] = [

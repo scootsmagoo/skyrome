@@ -38,7 +38,7 @@ export interface FitOptions {
   stairs?: 'front' | 'sides' | 'none';
   /**
    * Above this many columns the temple is built at 'low' detail even when `detail` is 'high' (a
-   * fluted Corinthian column costs ~6k triangles at high detail). Default 8; heroes raise it.
+   * fluted Corinthian column costs ~6k triangles at high detail). Default 6; heroes raise it.
    */
   maxHighColumns?: number;
 }
@@ -68,7 +68,7 @@ export function fitTemple(w: number, d: number, o: FitOptions): { spec: TempleSp
       sides = Math.max(minSides, sides);
       const spec = { ...base, sides };
       let layout = templeLayout(spec);
-      if (spec.detail === 'high' && layout.columns.length > (o.maxHighColumns ?? 8)) {
+      if (spec.detail === 'high' && layout.columns.length > (o.maxHighColumns ?? 6)) {
         spec.detail = 'low';
         spec.fluted = false;
         layout = templeLayout(spec);
@@ -133,7 +133,8 @@ function buildTemple(ctx: LandmarkContext): LandmarkBuild {
   if (round) {
     const R = Math.min(w, dd) / 2;
     const steps = h.has('crepidoma', 'steps all round');
-    const res = tholos(d.b, { radius: R * 0.78, columns: R > 6 ? 20 : 16, order: h.order ?? 'corinthian', base: steps ? 'steps' : 'podium', material: mats.material, cellaMaterial: mats.cellaMaterial, podiumMaterial: mats.podiumMaterial, detail }, d.m);
+    // A ring of 16–20 fluted columns at high detail is ~150k triangles: keep the columns light.
+    const res = tholos(d.b, { radius: R * 0.78, columns: R > 6 ? 20 : 16, order: h.order ?? 'corinthian', base: steps ? 'steps' : 'podium', material: mats.material, cellaMaterial: mats.cellaMaterial, podiumMaterial: mats.podiumMaterial, detail: 'low' }, d.m);
     spots.push(spot(`${lm.id}:door`, 'door', 0, res.baseHeight, -R * 0.5, Math.PI));
     far.cyl(mats.material ?? 'marble', 0, res.height * 0.4, 0, R * 0.8, res.height * 0.8, 10);
     far.cyl('roof_tile', 0, res.height * 0.9, 0, R * 0.85, res.height * 0.2, 10, { rTop: 0.2 });
@@ -141,7 +142,7 @@ function buildTemple(ctx: LandmarkContext): LandmarkBuild {
   }
   if (precinct) return buildPrecinct(ctx, d, h, w, dd, mats, far);
   plinth(d, ctx, -w / 2, -dd / 2, w / 2, dd / 2, 0.02, mats.podiumMaterial ?? 'travertine');
-  const t = fittedTemple(d, w, dd, { ...mats, order: h.order ?? (h.republican ? 'ionic' : 'corinthian'), plan: h.plan, front: h.front, detail, maxHighColumns: lm.priority >= 3 ? 4 : 8 }, lm.id);
+  const t = fittedTemple(d, w, dd, { ...mats, order: h.order ?? (h.republican ? 'ionic' : 'corinthian'), plan: h.plan, front: h.front, detail, maxHighColumns: lm.priority >= 3 ? 4 : 6 }, lm.id);
   spots.push(...t.spots);
   // Far: podium + cella block + roof.
   const L = t.layout;

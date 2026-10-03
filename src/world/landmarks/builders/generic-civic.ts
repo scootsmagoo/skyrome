@@ -995,7 +995,7 @@ function buildCamp(ctx: LandmarkContext): LandmarkBuild {
     return finish(lm.id, d, spots, far);
   }
   fort(d, ctx, w, dd, spots, far, { wallH: clamp(H, 4, 8), corner: 8, wallCells: w > 120 });
-  return finish(lm.id, d, spots, far, 2400);
+  return finish(lm.id, d, spots, far, 1000);
 }
 
 // ---------------------------------------------------------------- harbours
@@ -1090,7 +1090,7 @@ function buildHarbor(ctx: LandmarkContext): LandmarkBuild {
   // Find how far the ground falls at the water edge to size the embankment.
   const edge = Math.min(ctx.groundAt(0, -dd / 2 - 3), ctx.groundAt(-w / 4, -dd / 2 - 3), ctx.groundAt(w / 4, -dd / 2 - 3));
   quay(d, ctx, w, dd, spots, far, { drop: clamp(-edge + 0.4, 1.8, 5) });
-  return finish(lm.id, d, spots, far, 1800);
+  return finish(lm.id, d, spots, far, 900);
 }
 
 // ---------------------------------------------------------------- gardens
@@ -1247,7 +1247,7 @@ function buildGarden(ctx: LandmarkContext): LandmarkBuild {
     return finish(lm.id, d, spots);
   }
   gardenLayout(d, ctx, w, dd, spots, { tower: h.has('tower', 'turris', 'watched rome burn'), nymphaeum: true });
-  return finish(lm.id, d, spots, undefined, 1200);
+  return finish(lm.id, d, spots, undefined, 700);
 }
 
 // ---------------------------------------------------------------- other

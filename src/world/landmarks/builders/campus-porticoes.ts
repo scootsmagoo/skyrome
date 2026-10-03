@@ -33,8 +33,11 @@ import { fittedTemple } from './generic-sacred';
 
 // ---------------------------------------------------------------- Saepta Julia
 
-/** A range of shops round the inside of a w × dd enclosure, `depth` deep, opening inward. */
-function shopRing(d: Draw, ctx: LandmarkContext, w: number, dd: number, depth: number, H: number, gate: number) {
+/**
+ * A range of shops round the inside of a w × dd enclosure, `depth` deep, opening inward, with a
+ * gateway through the middle of each side whose width is in `gates` [back, front, right, left].
+ */
+function shopRing(d: Draw, ctx: LandmarkContext, w: number, dd: number, depth: number, H: number, gates: [number, number, number, number]) {
   const sides: [number, number, number, number][] = [
     // frame origin (x, z), rotY, length — each frame faces inward (−z of the frame = into the court)
     [0, dd / 2 - depth, 0, w - 2 * depth],
@@ -44,15 +47,22 @@ function shopRing(d: Draw, ctx: LandmarkContext, w: number, dd: number, depth: n
   ];
   sides.forEach(([x, z, r, len], i) => {
     const f = d.at(x, 0, z, r);
-    if (i === 1 && gate > 0) {
+    const gate = gates[i];
+    if (gate > 0) {
       tabernae(f, -len / 2, -gate / 2, 0, depth, H, 'brick', ctx.detail, ctx.rng.fork(`s${i}a`));
       tabernae(f, gate / 2, len / 2, 0, depth, H, 'brick', ctx.detail, ctx.rng.fork(`s${i}b`));
       f.span('brick', -gate / 2, 5.2, 0, gate / 2, H, depth);
+      f.span('paving_travertine', -gate / 2, -0.2, 0, gate / 2, 0.05, depth);
     } else {
       tabernae(f, -len / 2, len / 2, 0, depth, H, 'brick', ctx.detail, ctx.rng.fork(`s${i}`));
     }
-    // Back (outer) wall with a few high windows, and a flat roof terrace over the shops.
-    f.span('brick', -len / 2, -0.4, depth - 0.6, len / 2, H + 0.6, depth, { collide: true });
+    // Back (outer) wall and a flat roof terrace over the shops; the gate stays open.
+    const back = (a: number, b: number) => f.span('brick', a, -0.4, depth - 0.6, b, H + 0.6, depth, { collide: true });
+    if (gate > 0) {
+      back(-len / 2, -gate / 2);
+      back(gate / 2, len / 2);
+      f.span('brick', -gate / 2, 5.2, depth - 0.6, gate / 2, H + 0.6, depth);
+    } else back(-len / 2, len / 2);
     f.span('concrete', -len / 2, H, 0, len / 2, H + 0.3, depth);
   });
 }
@@ -68,7 +78,9 @@ function buildSaepta(ctx: LandmarkContext): LandmarkBuild {
   const shopD = 5.5, porD = 6;
   const H = 9;
   const gate = 8;
-  shopRing(d, ctx, w, dd, shopD, H, gate);
+  // Gates: the main one on the south front (into the Diribitorium's hall), others mid-way along the
+  // long sides — towards the Pantheon (W) and the Iseum (E) — and at the north end.
+  shopRing(d, ctx, w, dd, shopD, H, [6, gate, 6, 6]);
   // Two-storey travertine porticoes in front of the shops, facing the court.
   const hw = w / 2 - shopD - porD, hd = dd / 2 - shopD - porD;
   liteColonnade(d, [V(-hw, 0, -hd), V(-hw, 0, hd), V(hw, 0, hd), V(hw, 0, -hd)], { columnHeight: 5.6, spacing: 3.4, depth: porD, back: 'none', closed: true, material: 'travertine', detail, order: 'tuscan' });
@@ -102,6 +114,8 @@ function buildSaepta(ctx: LandmarkContext): LandmarkBuild {
   inscription(d, ['SAEPTA IVLIA'], 0, 7.6, -dd / 2 - 0.42, 6, 1.0);
   spots.push(
     spot(`${lm.id}:gate`, 'door', 0, 0.04, -dd / 2 - 1.5, 0),
+    spot(`${lm.id}:gateW`, 'door', w / 2 + 1.5, 0.04, 0, -Math.PI / 2),
+    spot(`${lm.id}:gateE`, 'door', -w / 2 - 1.5, 0.04, 0, Math.PI / 2),
     spot(`${lm.id}:argonauts`, 'inscription', w / 2 - shopD - 2.5, 0.3, 0, -Math.PI / 2),
     spot(`${lm.id}:meleager`, 'inscription', -w / 2 + shopD + 2.5, 0.3, 0, Math.PI / 2),
     spot(`${lm.id}:slaver`, 'vendor', -hw - 2, 0.3, hd * 0.6, Math.PI / 2),
@@ -111,7 +125,7 @@ function buildSaepta(ctx: LandmarkContext): LandmarkBuild {
   far.span('brick', -w / 2, 0, dd / 2 - shopD, w / 2, H, dd / 2);
   far.span('brick', -w / 2, 0, -dd / 2, -w / 2 + shopD, H, dd / 2);
   far.span('brick', w / 2 - shopD, 0, -dd / 2, w / 2, H, dd / 2);
-  return finish(lm.id, d, spots, far, 2000);
+  return finish(lm.id, d, spots, far, 900);
 }
 
 // ---------------------------------------------------------------- Diribitorium
@@ -129,14 +143,17 @@ function buildDiribitorium(ctx: LandmarkContext): LandmarkBuild {
   const bays = Math.round(w / 6);
   const long = (len: number): WallOpening[] => Array.from({ length: bays }, (_, i) => ({ x: ((i + 0.5) * len) / bays, w: 2.6, h: i % 3 === 1 ? 5.6 : 4.2, sill: i % 3 === 1 ? 0 : 3.4, arched: true }));
   piercedWall(d, -w / 2, -dd / 2, w / 2, -dd / 2, 0, H, t, 'tufa', long(w));
-  piercedWall(d, w / 2, dd / 2, -w / 2, dd / 2, 0, H, t, 'tufa', long(w));
+  // The back (N) wall opens on the axis into the Saepta's south gate (the votes came through here).
+  piercedWall(d, w / 2, dd / 2, -w / 2, dd / 2, 0, H, t, 'tufa', [...long(w).filter((o) => Math.abs(o.x - w / 2) > 5), { x: w / 2, w: 6, h: 7, arched: true }]);
   piercedWall(d, w / 2, -dd / 2, w / 2, dd / 2, 0, H, t, 'tufa', [{ x: dd / 2, w: 4, h: 6, arched: true }]);
   piercedWall(d, -w / 2, dd / 2, -w / 2, -dd / 2, 0, H, t, 'tufa', [{ x: dd / 2, w: 4, h: 6, arched: true }]);
   // Travertine string courses and a ragged, fire-scarred top; no roof.
   cornice(d, -w / 2, -dd / 2, w / 2, dd / 2, H * 0.55, 0.4, 0.2, 'travertine');
-  for (let i = 0; i < 16; i++) {
-    const x = -w / 2 + rng.range(2, w - 2);
-    d.span('plaster_dark', x - rng.range(0.6, 2), H - rng.range(1.5, 4), -dd / 2 - 0.02, x + rng.range(0.6, 2), H, -dd / 2 - 0.01);
+  // Fire-scarred crown: a grey scorched band with a ragged top (the roof timbers burned in 80).
+  d.span('concrete', -w / 2, H - 1.4, -dd / 2 - 0.02, w / 2, H, -dd / 2 - 0.01);
+  for (let i = 0; i < 18; i++) {
+    const x = -w / 2 + rng.range(1, w - 1), wd = rng.range(1.5, 4);
+    d.span('tufa', x - wd / 2, H, -dd / 2, x + wd / 2, H + rng.range(0.4, 1.4), -dd / 2 + t);
   }
   // Inside: weeds, the stumps of the piers that carried the roof, and fallen larch beams.
   d.span('dry_grass', -w / 2 + t, -0.1, -dd / 2 + t, w / 2 - t, 0.05, dd / 2 - t);
@@ -156,7 +173,7 @@ function buildDiribitorium(ctx: LandmarkContext): LandmarkBuild {
   );
   far.span('tufa', -w / 2, 0, -dd / 2, w / 2, H, -dd / 2 + t);
   far.span('tufa', -w / 2, 0, dd / 2 - t, w / 2, H, dd / 2);
-  return finish(lm.id, d, spots, far, 2000);
+  return finish(lm.id, d, spots, far, 900);
 }
 
 // ---------------------------------------------------------------- Porticus Minucia Frumentaria
@@ -214,7 +231,7 @@ function buildMinucia(ctx: LandmarkContext): LandmarkBuild {
   inscription(d, ['PORTICVS MINVCIA FRVMENTARIA'], 0, 5.8, -dd / 2 - 0.05, 9, 0.8);
   spots.push(spot(`${lm.id}:mensa`, 'npc', mx, 0.03, mz - 1.4, 0), spot(`${lm.id}:tokens`, 'container', mx + 0.8, 0.95, mz, 0), spot(`${lm.id}:crowd`, 'spawn', 0, 0.03, -q.hd + 3, 0));
   ringRoof(far, 0, 0, w, dd, 2 * q.hw, 2 * q.hd, q.wallTop, 'low');
-  return finish(lm.id, d, spots, far, 1800);
+  return finish(lm.id, d, spots, far, 900);
 }
 
 // ---------------------------------------------------------------- Porticus Philippi
@@ -435,13 +452,14 @@ function pylon(d: Draw, w: number, H: number, depth: number, gate: number, detai
     d.span('plaster_white', cx - tw * 0.45, H, -depth * 0.42, cx + tw * 0.45, H + 0.9, depth * 0.42);
     d.span('fabric_blue', cx - tw * 0.43, H - 0.5, -depth * 0.4 - 0.01, cx + tw * 0.43, H - 0.1, -depth * 0.4);
     d.span('fabric_red', cx - tw * 0.43, H - 0.9, -depth * 0.4 - 0.01, cx + tw * 0.43, H - 0.5, -depth * 0.4);
-    if (detail === 'high') {
-      for (const px of [-tw * 0.25, tw * 0.25]) {
-        d.cyl('wood', cx + px, H + 3, -depth * 0.5 - 0.3, 0.12, H + 6, 6);
-        d.box('fabric_white', cx + px + 0.7, H + 5, -depth * 0.5 - 0.3, 1.2, 0.8, 0.02);
-      }
-      // A carved figure scene (pharaoh smiting) as a dark relief panel.
-      d.span('plaster_red', cx - tw * 0.3, H * 0.25, -depth * 0.5 - 0.06, cx + tw * 0.3, H * 0.75, -depth * 0.5 - 0.05);
+    // Painted relief fields (the pharaoh smiting, offering scenes) framed by torus mouldings.
+    const zf = -depth * 0.5 + (depth - depth * 0.8) * 0.25 - 0.04;
+    d.span('plaster_red', cx - tw * 0.32, H * 0.2, zf - 0.02, cx + tw * 0.32, H * 0.48, zf);
+    d.span('fabric_blue', cx - tw * 0.3, H * 0.52, zf - 0.02, cx + tw * 0.3, H * 0.78, zf);
+    for (const ex of [-1, 1]) d.cyl('plaster_white', cx + ex * tw * 0.45, H / 2, -depth * 0.42, 0.18, H, 6);
+    for (const px of [-tw * 0.25, tw * 0.25]) {
+      d.cyl('wood', cx + px, H + 3, -depth * 0.5 - 0.3, 0.12, H + 6, 6);
+      d.box(detail === 'high' ? 'fabric_white' : 'fabric_red', cx + px + 0.7, H + 5, -depth * 0.5 - 0.3, 1.2, 0.8, 0.02);
     }
   }
   // The gate between: lintel with the winged sun disc.
@@ -512,7 +530,7 @@ function buildIseum(ctx: LandmarkContext): LandmarkBuild {
   far.span('plaster_cream', -w / 2, 0, -dd / 2, -w / 2 + 1, 6.5, dd / 2);
   far.span('plaster_cream', w / 2 - 1, 0, -dd / 2, w / 2, 6.5, dd / 2);
   far.span('marble', -tw / 2, 0, tz0, tw / 2, 12, tz0 + td);
-  return finish(lm.id, d, spots, far, 2000);
+  return finish(lm.id, d, spots, far, 900);
 }
 
 export const builders: LandmarkBuilder[] = [

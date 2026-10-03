@@ -16,7 +16,7 @@ import type { MaterialId } from '../../../gfx/materialIds';
 import { LANDMARKS } from '../../../data/atlas';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import {
-  T, V, arc, children, crenellations, dims, draw, farDraw, finish, flight, flightLength, heightG, hintsOf, inscription, mul, offsetLine, pathLength,
+  T, V, arc, children, crenellations, dims, draw, farDraw, finish, flight, flightLength, groundRange, heightG, hintsOf, inscription, mul, offsetLine, pathLength,
   piercedWall, plinth, spot, statueOnPedestal, tiledRoof, type Detail, type V3,
 } from './generic-common';
 import { liteColonnade, liteColumnAt } from './generic-civic-lib';
@@ -67,6 +67,26 @@ export interface TheatreResult {
   /** z of the scaenae frons. */
   zf: number;
   reach: number;
+}
+
+/**
+ * Foundation that follows a curved plan: a rectangle from z0 to z1 (half-width hw) plus a half disc
+ * of radius r round (0, zc) on the `side` (−1: bulging to −z, theatres; +1: to +z, stadium ends).
+ * Replaces the rectangular plinth so no paving pokes out past a curved facade.
+ */
+export function curvedPlinth(d: Draw, ctx: LandmarkContext, hw: number, z0: number, z1: number, r: number, zc: number, side: -1 | 1) {
+  const zA = side < 0 ? zc - r : z0, zB = side < 0 ? z1 : zc + r;
+  const gr = groundRange(ctx, -Math.max(hw, r), zA, Math.max(hw, r), zB, 6);
+  const bottom = Math.min(-0.25, gr.min - 0.5);
+  const top = 0.02;
+  d.span('travertine', -hw, bottom, z0, hw, top, z1, { collide: true });
+  const g = new THREE.CylinderGeometry(r + 0.6, r + 0.6, top - bottom, 40, 1, false, side < 0 ? Math.PI / 2 : -Math.PI / 2, Math.PI);
+  d.geo(g, 'travertine', 0, (top + bottom) / 2, zc);
+  // Colliders for the half disc: three stacked boxes inside it.
+  for (const [fx, fz] of [[0.97, 0.45], [0.8, 0.75], [0.5, 0.95]]) {
+    const za = zc, zb = zc + side * r * fz;
+    d.solid(-r * fx, bottom, Math.min(za, zb), r * fx, top, Math.max(za, zb));
+  }
 }
 
 /** Pure: the cavea section `theatre()` sweeps (x = offset outward from the orchestra edge, y up). */
@@ -123,8 +143,8 @@ export function theatre(d: Draw, ctx: LandmarkContext, s: TheatreSpec, spots: Sp
   for (let k = 1; k < s.storeys; k++) ribbonSlab(d, fpath, -fd - c - 0.2, -fd, Math.min(k * storeyH, res.height), 0.4, 'concrete');
   ribbonSlab(d, fpath, -fd - c - 0.2, -fd, res.height, 0.5, 'concrete');
   ribbonSlab(d, fpath, -fd - c - 0.2, -fd, 0.03, 0.25, 'paving_travertine');
-  // Inner ring wall of the ambulatory (the back of the seating), so arches never show daylight.
-  ribbonWall(d, fpath, -fd - c - 0.6, -fd - c, 0, res.height, mat);
+  // Inner ring wall of the ambulatory (the back of the seating), dark so the arches read as voids.
+  ribbonWall(d, fpath, -fd - c - 0.6, -fd - c, 0, res.height, 'plaster_dark');
   // Porticus in summa cavea: where the facade rises above the last row, a colonnade on the top walk.
   const rTop = s.r0 + res.reach - 1.4;
   summaPorticus(d, halfCircle(rTop, zc, segs), res.height, s.H, s.Ro - fd - rTop, detail);
@@ -222,16 +242,16 @@ function buildTheatre(ctx: LandmarkContext): LandmarkBuild {
   const { w, d: dd } = dims(ctx);
   const H = heightG(ctx, 8);
   const spots: Spot[] = [];
-  plinth(d, ctx, -w / 2, -dd / 2, w / 2, dd / 2, 0.02, 'travertine');
   // Outer radius from the depth (curve to the front edge), capped by the width.
   const stageZone = Math.max(9, dd * 0.28);
   const Ro = Math.min(w / 2, dd - stageZone);
   const zc = -dd / 2 + Ro;
+  curvedPlinth(d, ctx, Math.min(w, 2 * Ro) / 2, zc, dd / 2, Ro, zc, -1);
   theatre(d, ctx, {
     zc, Ro, r0: Ro * 0.3, H, storeys: H > 14 ? 3 : 2, stageW: Ro * 1.3, stageD: Math.min(6, stageZone * 0.3),
     zBack: dd / 2, sceneW: Math.min(w, 2 * Ro), roof: lm.category === 'odeum', masts: H > 14,
   }, spots, far);
-  return finish(lm.id, d, spots, far, 2000);
+  return finish(lm.id, d, spots, far, 900);
 }
 
 // ---------------------------------------------------------------- stadium / circus bowl
@@ -353,7 +373,7 @@ export function bowl(d: Draw, ctx: LandmarkContext, s: BowlSpec, spots: Spot[], 
   for (let k = 1; k < s.storeys; k++) ribbonSlab(d, fpath, -fd - c - 0.2, -fd, Math.min((k * s.H) / s.storeys, seatTop), 0.4, 'concrete');
   ribbonSlab(d, fpath, -fd - c - 0.2, -fd, seatTop, 0.5, 'concrete');
   ribbonSlab(d, fpath, -fd - c - 0.2, -fd, 0.03, 0.25, 'paving_travertine');
-  ribbonWall(d, fpath, -fd - c - 0.6, -fd - c, 0, seatTop, mat);
+  ribbonWall(d, fpath, -fd - c - 0.6, -fd - c, 0, seatTop, 'plaster_dark');
   summaPorticus(d, offsetLine(path, seatReach - 1.4), seatTop, s.H, outerOff - fd - (seatReach - 1.4), detail);
   // Passages and tribunals at the gaps.
   for (const g of s.gaps ?? []) {
@@ -483,14 +503,14 @@ function buildStadium(ctx: LandmarkContext): LandmarkBuild {
   const { w, d: dd } = dims(ctx);
   const H = heightG(ctx, 6);
   const spots: Spot[] = [];
-  plinth(d, ctx, -w / 2, -dd / 2, w / 2, dd / 2, 0.02, 'travertine');
   const reach = clamp(w * 0.22, 6, 18);
   const aw = Math.max(10, w - 2 * (reach + 4.4));
   const zs = dd / 2 - aw / 2 - reach - 4.4;
   const z0 = -dd / 2 + 4;
+  curvedPlinth(d, ctx, w / 2, -dd / 2, zs, w / 2, zs, 1);
   bowl(d, ctx, { aw, z0, zs, H, storeys: H > 12 ? 2 : 1, reach, gaps: [(z0 + zs) / 2] }, spots, far);
   piercedWall(d, -w / 2, z0 - 1.5, w / 2, z0 - 1.5, 0, H * 0.6, 1.5, 'travertine', [{ x: w / 2, w: 5, h: 5.5, arched: true }]);
-  return finish(lm.id, d, spots, far, 2000);
+  return finish(lm.id, d, spots, far, 900);
 }
 
 /** Local game position of another landmark relative to `lm`. */
@@ -514,11 +534,11 @@ function buildCircus(ctx: LandmarkContext): LandmarkBuild {
     spina(d, ctx, -dd * 0.35, dd * 0.35, spots, [], false);
     return finish(lm.id, d, spots);
   }
-  plinth(d, ctx, -w / 2, -dd / 2, w / 2, dd / 2, 0.02, 'travertine');
   const reach = clamp(w * 0.2, 6, 26);
   const aw = Math.max(20, w - 2 * (reach + 4.4));
   const zs = dd / 2 - aw / 2 - reach - 4.4;
   const z0 = -dd / 2 + 8;
+  curvedPlinth(d, ctx, w / 2, -dd / 2, zs, w / 2, zs, 1);
   bowl(d, ctx, { aw, z0, zs, H, storeys: H > 14 ? 3 : 2, reach, timberTop: h.has('disused', 'wooden', 'timber'), gaps: [z0 + (zs - z0) * 0.55] }, spots, far);
   carceres(d, ctx, aw + 2 * reach, z0 - 2, Math.min(H * 0.6, 8), 12, spots);
   // Spina, leaving room for any obelisk or shrine standing on it (built as its own landmark).
@@ -528,7 +548,7 @@ function buildCircus(ctx: LandmarkContext): LandmarkBuild {
     if (Math.abs(p.x) < 8) gaps.push([p.z - 4, p.z + 4]);
   }
   spina(d, ctx, z0 + (zs - z0) * 0.12, zs - 4, spots, gaps, detail === 'high');
-  return finish(lm.id, d, spots, far, 2400);
+  return finish(lm.id, d, spots, far, 1000);
 }
 
 // ---------------------------------------------------------------- amphitheatre
@@ -549,7 +569,7 @@ function buildAmphitheatre(ctx: LandmarkContext): LandmarkBuild {
   cavea(d.b, { arenaRx: rx * 0.42, arenaRz: rz * 0.36, podium: 2.4, tiers: [{ rows: Math.max(4, Math.floor(arc.height * 0.35 / 0.38)) }, { rows: Math.max(4, Math.floor(arc.height * 0.3 / 0.38)), wall: 1.6 }], detail: 'low', aisles: 16, segments: 48 }, d.m);
   spots.push(spot(`${lm.id}:entrance`, 'door', 0, 0, -rz - 1, 0), spot(`${lm.id}:arena`, 'npc', 0, 0.04, 0, 0));
   far.geo(new THREE.CylinderGeometry(1, 1, arc.height, 24, 1, true), 'travertine', 0, arc.height / 2, 0, { sx: rx, sz: rz });
-  return finish(lm.id, d, spots, far, 2400);
+  return finish(lm.id, d, spots, far, 1000);
 }
 
 /** A free-standing obelisk on a moulded base at local (x, z) — for spinae and forecourts. */

@@ -69,7 +69,7 @@ function buildEmporium(ctx: LandmarkContext): LandmarkBuild {
     spot(`${lm.id}:statio`, 'npc', sx0 + 1.2, 0.02, -dd / 2 + dd * 0.4 - 4, Math.PI),
     spot(`${lm.id}:tariff`, 'inscription', sx0, 0.02, -dd / 2 + dd * 0.4 - 4.5, 0),
   );
-  return finish(lm.id, d, spots, far, 2400);
+  return finish(lm.id, d, spots, far, 1000);
 }
 
 // ---------------------------------------------------------------- Porticus Aemilia
@@ -137,7 +137,7 @@ function buildPorticusAemilia(ctx: LandmarkContext): LandmarkBuild {
     spot(`${lm.id}:inscription`, 'inscription', -w / 2 + aw * 2.5, floors[0], -dd / 2 - 3, 0),
   );
   void S;
-  return finish(lm.id, d, spots, far, 2400);
+  return finish(lm.id, d, spots, far, 1000);
 }
 
 // ---------------------------------------------------------------- Horrea Galbana / Lolliana
@@ -156,7 +156,7 @@ function horreaComplex(ctx: LandmarkContext, courts: number, title: string): Lan
   }
   inscription(d, [title], 0, 7.6, -dd / 2 - 0.05, Math.min(10, bw * 0.7), 0.7);
   spots.push(spot(`${lm.id}:inscription`, 'inscription', 0, 0.02, -dd / 2 - 3, 0));
-  return finish(lm.id, d, spots, far, 1800);
+  return finish(lm.id, d, spots, far, 900);
 }
 
 // ---------------------------------------------------------------- Monte Testaccio
@@ -231,7 +231,7 @@ function buildTestaccio(ctx: LandmarkContext): LandmarkBuild {
     spot(`${lm.id}:top`, 'vista', 0, top + 0.5, 0, 0),
     spot(`${lm.id}:sherds`, 'container', rx * 0.1, ctx.groundAt(rx * 0.1, fz - 1.5), fz - 1.5, 0),
   );
-  return finish(lm.id, d, spots, undefined, 1600);
+  return finish(lm.id, d, spots, undefined, 800);
 }
 
 // ---------------------------------------------------------------- Pyramid of Cestius
@@ -281,7 +281,7 @@ function buildCestius(ctx: LandmarkContext): LandmarkBuild {
   );
   pyramidTomb(far, side, H - y0, 'marble', y0);
   far.span('travertine', -w / 2, gr.min - 0.8, -dd / 2, w / 2, y0, dd / 2);
-  return finish(lm.id, d, spots, far, 2400);
+  return finish(lm.id, d, spots, far, 1000);
 }
 
 export const builders: LandmarkBuilder[] = [
