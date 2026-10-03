@@ -67,25 +67,63 @@ export class IdbSaveStorage implements SaveStorage {
 
   private db(): Promise<IDBDatabase> {
     if (!this.dbp) {
-      this.dbp = new Promise((resolve, reject) => {
+      const p = new Promise<IDBDatabase>((resolve, reject) => {
         if (!this.idb) return reject(new Error('IndexedDB unavailable'));
         const req = this.idb.open(this.dbName, 1);
         req.onupgradeneeded = () => req.result.createObjectStore(this.store);
-        req.onsuccess = () => resolve(req.result);
+        req.onsuccess = () => {
+          const db = req.result;
+          // A closed connection (another tab upgrading, the browser clearing storage) is reopened next time.
+          const forget = () => {
+            if (this.dbp === p) this.dbp = null;
+          };
+          db.onversionchange = () => {
+            db.close();
+            forget();
+          };
+          db.onclose = forget;
+          resolve(db);
+        };
         req.onerror = () => reject(req.error);
       });
-      this.dbp.catch(() => (this.dbp = null));
+      this.dbp = p;
+      p.catch(() => {
+        if (this.dbp === p) this.dbp = null;
+      });
     }
     return this.dbp;
   }
 
+  /**
+   * Run one request in its own transaction. It settles when the transaction does: a write that
+   * the browser aborts on commit (QuotaExceededError) rejects even though its request succeeded.
+   */
   private async tx<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
     const db = await this.db();
     return new Promise<T>((resolve, reject) => {
-      const t = db.transaction(this.store, mode);
-      const req = fn(t.objectStore(this.store));
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
+      let t: IDBTransaction;
+      let req: IDBRequest<T>;
+      try {
+        t = db.transaction(this.store, mode);
+        req = fn(t.objectStore(this.store));
+      } catch (err) {
+        this.dbp = null; // e.g. InvalidStateError on a closed connection
+        reject(err);
+        return;
+      }
+      const fail = () => {
+        let err: unknown = t.error;
+        try {
+          err ??= req.error; // throws while the request is still pending
+        } catch {
+          /* keep the transaction's error */
+        }
+        reject(err ?? new Error('IndexedDB transaction failed'));
+      };
+      req.onerror = fail;
+      t.oncomplete = () => resolve(req.result);
+      t.onabort = fail;
+      t.onerror = fail;
     });
   }
 
@@ -152,8 +190,10 @@ export class HybridStorage implements SaveStorage {
 }
 
 /**
- * Primary storage with a fallback: writes go to the primary and, if it throws, to the fallback;
- * reads try the primary first and the fallback when the primary fails or has nothing; keys merge.
+ * Primary storage with a fallback. Writes go to the primary and, if it throws, to the fallback.
+ * The fallback holds a key only while its copy is the newest one: a successful primary write
+ * removes the fallback's copy before it resolves, and a fallback write also tries to drop the
+ * primary's older copy. Reads therefore prefer the fallback's copy, then the primary's; keys merge.
  */
 export class FallbackStorage implements SaveStorage {
   constructor(
@@ -164,13 +204,13 @@ export class FallbackStorage implements SaveStorage {
   async read(key: string) {
     let v: string | null = null;
     try {
-      v = await this.primary.read(key);
+      v = await this.fallback.read(key);
     } catch {
       v = null;
     }
     if (v !== null) return v;
     try {
-      return await this.fallback.read(key);
+      return await this.primary.read(key);
     } catch {
       return null;
     }
@@ -179,10 +219,18 @@ export class FallbackStorage implements SaveStorage {
   async write(key: string, value: string) {
     try {
       await this.primary.write(key, value);
-      // An older copy may sit in the fallback from a time the primary failed.
-      this.fallback.remove(key).catch(() => {});
     } catch {
       await this.fallback.write(key, value);
+      // The primary's copy (if any) is now older; best effort, reads prefer the fallback anyway.
+      this.primary.remove(key).catch(() => {});
+      return;
+    }
+    // An older copy may sit in the fallback from a time the primary failed; it must not shadow this one.
+    try {
+      await this.fallback.remove(key);
+    } catch {
+      // Can't remove it: overwrite it with the new value instead (it then still reads the newest).
+      await this.fallback.write(key, value).catch(() => {});
     }
   }
 
