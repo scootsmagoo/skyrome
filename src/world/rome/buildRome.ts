@@ -43,6 +43,8 @@ export function landmarkPads(bounds: { minX: number; maxX: number; minZ: number;
   for (const lm of atlas.LANDMARKS) {
     if (!PAD_CATEGORIES.has(lm.category)) continue;
     if (lm.priority > 2) continue;
+    // Buried structures (the Domus Aurea under the Baths of Trajan) must not flatten the surface.
+    if (lm.siting === 'underground') continue;
     const [x, z] = lm.center;
     if (x < bounds.minX || x > bounds.maxX || z < bounds.minZ || z > bounds.maxZ) continue;
     // Very large complexes on slopes (e.g. terraced markets) keep their natural ground unless pinned.
