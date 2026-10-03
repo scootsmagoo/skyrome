@@ -1,0 +1,1320 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2520" height="2094" viewBox="0 0 2520 2094" font-family="Georgia, 'Times New Roman', serif">
+<title>SKYROME atlas: Rome c. AD 113 (city)</title>
+<rect x="0" y="0" width="2520" height="2094" fill="rgb(229,222,196)"/>
+<defs><clipPath id="mapclip"><rect x="0" y="0" width="2520" height="1974"/></clipPath></defs>
+<g clip-path="url(#mapclip)">
+<defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#6b8f4e" stroke-width="1.2" opacity="0.5"/></pattern></defs>
+<g id="lowlands" opacity="0.85">
+<polygon points="1276.8,898.8 1161.3,565.3 1050,189 961.8,147 903,231 974.4,399 924,529.2 667.8,600.6 598.5,718.2 667.8,848.4 885.4,1074.4 1071,1100.4 1197,1100.4 1205.4,987" fill="rgb(230,223,197)" stroke="none"><title>Campus Martius (general): 12.5 m</title></polygon>
+<polygon points="974.4,315 1113,306.6 1163.4,483 1171.8,609 1029,609 966,525 974.4,399" fill="rgb(232,225,201)" stroke="none"><title>Northern Campus Martius: 11 m</title></polygon>
+<polygon points="903,777 945,693 1092,693 1134,819 1071,911.4 945,882" fill="rgb(232,225,201)" stroke="none"><title>Central Campus depression (Palus Caprae): 11 m</title></polygon>
+<polygon points="861,756 835.8,697.2 777,672 718.2,697.2 693,756 718.2,814.8 777,840 835.8,814.8" fill="rgb(233,227,204)" stroke="none"><title>Tarentum: 10 m</title></polygon>
+<polygon points="885.4,1074.4 1100,1159.2 1157.5,1218.4 1115.9,1333.5 1049.2,1415 903,1554 777,1491 714,1281 726.6,1155 714,1029 667.8,848.4" fill="rgb(230,224,199)" stroke="none"><title>Transtiberim plain: 12 m</title></polygon>
+<polygon points="231,63 714,63 714,483 609,634.2 378,651 231,609" fill="rgb(231,225,200)" stroke="none"><title>Ager Vaticanus: 11.5 m</title></polygon>
+<polygon points="1049.2,1415 880.7,1572.9 822.4,1682.5 833.3,1806.8 890.4,1915.6 1080.2,1863.5 1197,1768.2 1134,1659 1071,1512" fill="rgb(235,228,207)" stroke="none"><title>Emporium / Testaccio plain: 9 m</title></polygon>
+<polygon points="1125.6,1054.2 1197,1054.2 1218,1104.6 1142.4,1113" fill="rgb(232,225,201)" stroke="none"><title>Forum Holitorium: 11 m</title></polygon>
+<polygon points="1142.4,1113 1213.8,1121.4 1260,1188.6 1251.6,1247.4 1184.4,1264.2 1146.6,1209.6 1138.2,1155" fill="rgb(234,228,206)" stroke="none"><title>Forum Boarium: 9.5 m</title></polygon>
+<polygon points="1268.4,1125.6 1314.6,1125.6 1339.8,1167.6 1310.4,1226.4 1260,1226.4 1239,1176" fill="rgb(230,224,199)" stroke="none"><title>Velabrum: 12 m</title></polygon>
+<polygon points="1230.6,1318 1268.4,1252.4 1495.2,1384.7 1457.4,1450.3" fill="rgb(230,224,199)" stroke="none"><title>Vallis Murcia (Circus Maximus valley): 12 m</title></polygon>
+<polygon points="1472.1,1365 1507.8,1218 1514.1,1205.4 1551.9,1215.9 1549.8,1226.4 1522.5,1373.4" fill="rgb(223,214,183)" stroke="none"><title>Valley between Palatine and Caelian: 17.5 m</title></polygon>
+<polygon points="1310.4,1012.2 1348.2,997.5 1386,1012.2 1428,1045.8 1461.6,1092 1428,1104.6 1386,1092 1348.2,1092 1323,1066.8 1306.2,1045.8" fill="rgb(229,222,196)" stroke="none"><title>Forum Romanum basin: 13 m</title></polygon>
+<polygon points="1352.4,1003.8 1365,1016.4 1398.6,995.4 1432.2,974.4 1415.4,953.4 1381.8,978.6" fill="rgb(226,219,190)" stroke="none"><title>Argiletum / Forum of Nerva: 15 m</title></polygon>
+<polygon points="1297.8,848.4 1360.8,831.6 1407,890.4 1386,932.4 1331.4,945 1289.4,907.2" fill="rgb(223,214,183)" stroke="none"><title>Forum of Trajan: 17.5 m</title></polygon>
+<polygon points="1407,945 1461.6,974.4 1541.4,945 1575,928.2 1558.2,852.6 1541.4,793.8 1482.6,827.4 1428,877.8" fill="rgb(219,208,172)" stroke="none"><title>Subura (lower): 21 m</title></polygon>
+<polygon points="1575,928.2 1617,919.8 1642.2,869.4 1701,768.6 1667.4,751.8 1591.8,840 1558.2,852.6" fill="rgb(210,193,151)" stroke="none"><title>Subura (upper valleys): 28 m</title></polygon>
+<polygon points="1507.8,1138.2 1512,1100.4 1558.2,1079.4 1642.2,1092 1680,1134 1659,1188.6 1575,1205.4 1524.6,1188.6" fill="rgb(221,211,178)" stroke="none"><title>Colosseum valley: 19 m</title></polygon>
+<polygon points="1434.3,1047.9 1461.6,1029 1499.4,1020.6 1541.4,1037.4 1520.4,1075.2 1474.2,1092 1449,1079.4" fill="rgb(220,210,175)" stroke="none"><title>Velia north slope (Horrea Piperataria): 20 m</title></polygon>
+<polygon points="1659,1104.6 1743,1117.2 1747.2,1213.8 1659,1197" fill="rgb(219,208,172)" stroke="none"><title>Labicana valley (west): 21 m</title></polygon>
+<polygon points="1743,1117.2 1848,1134 1852.2,1218 1747.2,1213.8" fill="rgb(213,198,157)" stroke="none"><title>Labicana valley (middle): 26 m</title></polygon>
+<polygon points="1848,1134 1974,1150.8 1978.2,1226.4 1852.2,1218" fill="rgb(204,185,139)" stroke="none"><title>Labicana valley (east): 32 m</title></polygon>
+<polygon points="1533,1428 1617,1449 1743,1512 1869,1558.2 1919.4,1667.4 1869,1785 1743,1659 1583.4,1520.4" fill="rgb(219,208,172)" stroke="none"><title>Via Appia valley (outside the Porta Capena): 21 m</title></polygon>
+<polygon points="1499.4,420 1583.4,399 1692.6,373.8 1713.6,273 1625.4,205.8 1541.4,231 1491,336" fill="rgb(197,174,126)" stroke="none"><title>Valley of the Horti Sallustiani: 37 m</title></polygon>
+<polygon points="1339.8,512.4 1428,499.8 1503.6,424.2 1491,373.8 1407,441 1323,483" fill="rgb(206,187,142)" stroke="none"><title>Lower Sallustian valley (toward the Campus): 31 m</title></polygon>
+<polygon points="163.8,562.8 420,562.8 420,638.4 163.8,638.4" fill="rgb(219,208,172)" stroke="none"><title>Terrace of the Vatican circus: 21 m</title></polygon>
+</g>
+<g id="hill-slopes">
+<polygon points="1449,1113 1470,1096.2 1520.4,1079.4 1558.2,1054.2 1579.2,1075.2 1545.6,1113 1499.4,1131.9 1461.6,1134" fill="none" stroke="rgb(219,209,174)" stroke-width="25.2" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="357,659.4 407.4,613.2 499.8,609 541.8,625.8 554.4,672 554.4,852.6 533.4,882 357,882" fill="none" stroke="rgb(218,207,171)" stroke-width="42.0" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1992.9,1482.6 1957.2,1535.1 1902.6,1554 2016,1688.4 2009.7,1709.4 1919.4,1707.3 1839.6,1749.3 1780.8,1722 1722,1738.8 1701,1766.1 1701,1902.6 1848,1900.5 1890,1873.2 1982.4,1953 2499,1953 2499,1449" fill="none" stroke="rgb(218,207,171)" stroke-width="58.8" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1285.2,1688.4 1293.6,1719.9 1339.8,1766.1 1522.5,1827 1537.2,1822.8 1577.1,1726.2 1558.2,1654.8 1526.7,1608.6 1520.4,1558.2 1482.6,1522.5 1428,1526.7 1383.9,1554 1354.5,1556.1 1297.8,1606.5 1316.7,1625.4" fill="none" stroke="rgb(216,204,166)" stroke-width="42.0" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1480.5,1247.4 1505.7,1203.3 1499.4,1136.1 1482.6,1129.8 1461.6,1129.8 1444.8,1117.2 1390.2,1110.9 1360.8,1125.6 1327.2,1159.2 1327.2,1184.4 1346.1,1226.4 1365,1243.2 1386,1251.6 1402.8,1266.3 1428,1268.4 1449,1266.3" fill="none" stroke="rgb(216,203,165)" stroke-width="14.7" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1272.6,1041.6 1260,1037.4 1249.5,1026.9 1232.7,1024 1231.4,1012.2 1239,995.4 1253.7,978.6 1268.4,970.2 1285.2,989.1 1289.4,991.2 1294.4,1003.8 1287.3,1020.6 1278.9,1034" fill="none" stroke="rgb(215,201,162)" stroke-width="23.1" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1092,1524.6 1125.6,1547.7 1203.3,1507.8 1211.7,1533 1239,1560.3 1251.6,1562.4 1325.1,1482.6 1335.6,1453.2 1333.5,1432.2 1318.8,1411.2 1251.6,1383.9 1224.3,1352.4 1201.2,1344 1159.2,1379.7 1087.8,1461.6" fill="none" stroke="rgb(215,201,162)" stroke-width="46.2" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1478.4,1707.3 1507.8,1717.8 1528.8,1753.5 1554,1738.8 1556.1,1696.8 1533,1671.6 1505.7,1558.2 1491,1541.4 1470,1535.1 1449,1539.3 1373.4,1604.4 1333.5,1654.8 1310.4,1705.2 1320.9,1730.4 1344,1753.5 1457.4,1766.1" fill="none" stroke="rgb(214,200,160)" stroke-width="29.4" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="2041.2,1478.4 2102.1,1570.8 2007.6,1596 2049.6,1621.2 2158.8,1614.9 2343.6,1518.3 2387.7,1537.2 2284.8,1843.8 1936.2,1753.5 1923.6,1814.4 1961.4,1877.4 2177.7,1953 2499,1953 2499,1449" fill="none" stroke="rgb(213,199,159)" stroke-width="58.8" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1218,1079.4 1222.2,1085.7 1230.6,1087.8 1247.4,1085.7 1255.8,1081.5 1270.5,1066.8 1274.7,1050 1272.6,1041.6 1260,1037.4 1249.5,1026.9 1232.7,1024 1220.1,1033.2 1217.2,1047.9" fill="none" stroke="rgb(212,197,156)" stroke-width="25.2" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1308.3,953.4 1297.8,938.7 1285.2,936.6 1272.6,942.9 1268.4,947.1 1264.2,961.8 1268.4,970.2 1285.2,989.1 1289.4,991.2 1297.8,984.9 1304.1,978.6" fill="none" stroke="rgb(212,197,156)" stroke-width="25.2" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1346.1,1142.4 1335.6,1176 1352.4,1222.2 1369.2,1234.8 1407,1241.1 1440.6,1255.8 1453.2,1255.8 1482.6,1234.8 1486.8,1205.4 1503.6,1169.7 1501.5,1146.6 1495.2,1142.4 1465.8,1138.2 1449,1129.8 1394.4,1117.2 1360.8,1129.8" fill="none" stroke="rgb(212,197,156)" stroke-width="29.4" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1591.8,1228.5 1587.6,1390.2 1705.2,1453.2 1934.1,1337.7 2093.7,1533 2232.3,1533 2305.8,1480.5 2457,1455.3 2457,1176 2163,1218 1986.6,1182.3 1946.7,1243.2 1810.2,1222.2 1703.1,1262.1 1629.6,1211.7" fill="none" stroke="rgb(212,197,156)" stroke-width="54.6" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="554.4,627.9 525,615.3 504,621.6 480.9,634.2 464.1,646.8 445.2,661.5 382.2,724.5 357,745.5 357,882 554.4,882" fill="none" stroke="rgb(212,197,156)" stroke-width="37.8" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="52.5,861 69.3,798 100.8,638.4 109.2,621.6 149.1,579.6 157.5,558.6 159.6,537.6 151.2,504 136.5,474.6 117.6,453.6 92.4,438.9 54.6,386.4 48.3,357 21,279.3 21,861" fill="none" stroke="rgb(212,197,156)" stroke-width="63.0" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="21,247.8 58.8,218.4 63,214.2 67.2,205.8 105,58.8 105,46.2 105,21 21,21" fill="none" stroke="rgb(212,197,156)" stroke-width="63.0" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1182.3,1499.4 1260,1493.1 1318.8,1459.5 1323,1440.6 1247.4,1411.2 1192.8,1371.3 1182.3,1373.4 1142.4,1419.6 1159.2,1440.6 1108.8,1470 1100.4,1495.2 1108.8,1520.4 1125.6,1528.8 1148.7,1516.2 1159.2,1491 1180.2,1486.8" fill="none" stroke="rgb(211,195,153)" stroke-width="21.0" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1963.5,1092 1959.3,1142.4 1974,1144.5 1990.8,1140.3 1997.1,1142.4 2001.3,1150.8 1999.2,1180.2 1982.4,1201.2 1978.2,1213.8 1969.8,1222.2 1965.6,1234.8 1967.7,1251.6 1978.2,1272.6 1978.2,1281 2499,1281 2499,1092" fill="none" stroke="rgb(211,195,153)" stroke-width="50.4" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1600.2,978.6 1606.5,1020.6 1633.8,1043.7 1654.8,1041.6 1696.8,1058.4 1701,1039.5 1711.5,1035.3 1743,1062.6 1780.8,1062.6 1778.7,1087.8 1869,1131.9 1869,890.4 1789.2,907.2 1734.6,953.4 1671.6,966 1625.4,963.9" fill="none" stroke="rgb(208,191,148)" stroke-width="54.6" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1407,848.4 1457.4,877.8 1488.9,869.4 1499.4,814.8 1518.3,781.2 1545.6,827.4 1623.3,846.3 1722,735 1932,651 1932,525 1827,462 1654.8,644.7 1612.8,672 1598.1,695.1 1583.4,690.9 1558.2,709.8" fill="none" stroke="rgb(208,191,148)" stroke-width="46.2" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1362.9,646.8 1396.5,693 1371.3,756 1407,848.4 1583.4,690.9 1612.8,623.7 1661.1,598.5 1659,638.4 1743,562.8 1827,462 1890,315 1785,231 1696.8,319.2 1675.8,441 1507.8,569.1 1373.4,611.1" fill="none" stroke="rgb(208,191,148)" stroke-width="50.4" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1050,-105 1058.4,12.6 1188.6,63 1127.7,142.8 1129.8,210 1331.4,470.4 1459.5,449.4 1558.2,195.3 1654.8,220.5 1696.8,319.2 1785,231 1785,-105 1398.6,-105 1329.3,-21" fill="none" stroke="rgb(208,191,148)" stroke-width="71.4" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="-231,646.8 -231,819 44.1,819 126,533.4 67.2,422.1 29.4,384.3 -2.1,270.9 6.3,243.6 65.1,189 -231,189 -231,556.5 -159.6,590.1 -142.8,619.5 -151.2,646.8 -182.7,669.9 -212.1,667.8" fill="none" stroke="rgb(208,191,148)" stroke-width="105.0" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="2381.4,525 2349.9,289.8 2349.9,277.2 2352,264.6 2396.1,113.4 2402.4,100.8 2415,90.3 2473.8,63 2494.8,50.4 2499,44.1 2499,21 1785,21 1785,231 1890,315 1827,462 1932,525" fill="none" stroke="rgb(208,191,148)" stroke-width="63.0" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="2499,1728.3 2427.6,1801.8 2400.3,1843.8 2396.1,1852.2 2394,1860.6 2398.2,1902.6 2402.4,1911 2406.6,1915.2 2436,1921.5 2444.4,1925.7 2480.1,1953 2499,1953" fill="none" stroke="rgb(208,191,148)" stroke-width="50.4" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1457.4,1211.7 1457.4,1190.7 1486.8,1180.2 1488.9,1155 1440.6,1150.8 1415.4,1134 1365,1134 1352.4,1142.4 1358.7,1176 1348.2,1201.2 1360.8,1218 1457.4,1239 1476.3,1230.6 1480.5,1218 1474.2,1209.6" fill="none" stroke="rgb(208,190,147)" stroke-width="16.8" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="2173.5,1218 2192.4,1293.6 2202.9,1323 2215.5,1344 2230.2,1358.7 2251.2,1375.5 2272.2,1386 2297.4,1394.4 2343.6,1400.7 2364.6,1398.6 2381.4,1394.4 2425.5,1365 2499,1299.9 2499,1176" fill="none" stroke="rgb(208,190,147)" stroke-width="33.6" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1759.8,1402.8 1831.2,1394.4 1856.4,1386 1898.4,1339.8 1911,1310.4 1906.8,1293.6 1852.2,1264.2 1827,1297.8 1776.6,1331.4 1747.2,1369.2 1690.5,1386 1690.5,1428 1701,1438.5 1717.8,1436.4" fill="none" stroke="rgb(208,190,147)" stroke-width="33.6" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="2007.6,1134 2125.2,1092 2156.7,1134 2478,1134 2410.8,1077.3 2385.6,924 2486.4,789.6 2499,703.5 2368.8,525 1932,525 1953,890.4 1869,890.4 1869,1123.5 1940.4,1125.6 1927.8,1005.9" fill="none" stroke="rgb(208,190,147)" stroke-width="67.2" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1707.3,882 1709.4,886.2 1717.8,890.4 1793.4,898.8 1803.9,903 1869,890.4 1953,890.4 1953,651 1932,651 1806,709.8 1753.5,726.6 1761.9,747.6 1761.9,760.2 1719.9,844.2" fill="none" stroke="rgb(206,188,144)" stroke-width="50.4" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1812.3,903 1810.2,928.2 1803.9,940.8 1764,972.3 1743,982.8 1717.8,991.2 1707.3,1003.8 1707.3,1012.2 1717.8,1029 1743,1054.2 1755.6,1056.3 1785,1052.1 1839.6,1012.2 1856.4,989.1 1869,978.6 1869,890.4" fill="none" stroke="rgb(206,187,142)" stroke-width="21.0" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1869,974.4 1940.4,963.9 1965.6,1037.4 1992.9,1058.4 2160.9,1033.2 2234.4,1134 2379.3,1134 2307.9,909.3 2331,735 2366.7,630 2328.9,573.3 2320.5,525 1932,525 1953,651 1953,890.4 1869,890.4" fill="none" stroke="rgb(205,186,141)" stroke-width="84.0" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="2398.2,1297.8 2417.1,1255.8 2419.2,1209.6 2412.9,1186.5 2232.3,1209.6 2228.1,1251.6 2234.4,1289.4 2247,1316.7 2268,1333.5 2284.8,1339.8 2301.6,1341.9 2318.4,1341.9 2339.4,1339.8 2375.1,1323 2385.6,1312.5" fill="none" stroke="rgb(205,186,141)" stroke-width="33.6" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1362.9,403.2 1461.6,302.4 1503.6,205.8 1503.6,102.9 1461.6,115.5 1377.6,69.3 1339.8,69.3 1293.6,21 1203.3,21 1295.7,92.4 1150.8,144.9 1155,222.6 1218,296.1 1266.3,310.8 1318.8,401.1" fill="none" stroke="rgb(204,184,138)" stroke-width="37.8" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1572.9,21 1581.3,37.8 1587.6,46.2 1625.4,67.2 1642.2,79.8 1650.6,88.2 1667.4,109.2 1680,128.1 1694.7,155.4 1717.8,186.9 1728.3,205.8 1740.9,235.2 1747.2,268.8 1785,231 1785,21" fill="none" stroke="rgb(204,184,138)" stroke-width="37.8" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1747.2,268.8 1770.3,470.4 1734.6,537.6 1646.4,571.2 1541.4,550.2 1512,600.6 1379.7,617.4 1409.1,827.4 1558.2,625.8 1650.6,583.8 1692.6,606.9 1827,462 1890,315 1785,231" fill="none" stroke="rgb(204,184,138)" stroke-width="25.2" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1692.6,606.9 1696.8,634.2 1698.9,667.8 1701,676.2 1707.3,684.6 1722,693 1747.2,699.3 1759.8,707.7 1776.6,714 1782.9,716.1 1806,709.8 1932,651 1932,525 1827,462 1743,562.8" fill="none" stroke="rgb(204,184,138)" stroke-width="25.2" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1671.6,774.9 1688.4,743.4 1692.6,726.6 1680,705.6 1650.6,688.8 1638,693 1600.2,741.3 1587.6,741.3 1568.7,764.4 1579.2,798 1587.6,804.3 1604.4,789.6 1617,800.1 1638,804.3" fill="none" stroke="rgb(204,184,138)" stroke-width="25.2" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1785,716.1 1795.5,739.2 1774.5,793.8 1740.9,827.4 1736.7,852.6 1745.1,869.4 1780.8,888.3 1797.6,890.4 1835.4,879.9 1837.5,890.4 1824.9,898.8 1869,890.4 1953,890.4 1953,651 1932,651" fill="none" stroke="rgb(203,182,136)" stroke-width="25.2" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="2268,945 2179.8,810.6 2148.3,688.8 2211.3,525 1932,525 1953,890.4 1869,890.4 1869,970.2 1953,940.8 2016,995.4 2079,1001.7 2188.2,957.6 2276.4,1018.5" fill="none" stroke="rgb(203,182,136)" stroke-width="50.4" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="2211.3,525 2209.2,474.6 2202.9,403.2 2207.1,378 2226,306.6 2226,285.6 2223.9,273 2215.5,256.2 2175.6,184.8 2053.8,75.6 1986.6,21 1785,21 1785,231 1890,315 1827,462 1932,525" fill="none" stroke="rgb(203,182,136)" stroke-width="50.4" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="-21,1432.2 16.8,1446.9 50.4,1438.5 102.9,1495.2 193.2,1344 172.2,1474.2 191.1,1528.8 193.2,1621.2 210,1654.8 210,917.7 184.8,997.5 10.5,957.6 -10.5,890.4 -2.1,819 -21,819" fill="none" stroke="rgb(201,180,133)" stroke-width="63.0" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="210,1953 96.6,1921.5 84,1913.1 96.6,1869 105,1858.5 189,1843.8 201.6,1835.4 176.4,1778.7 132.3,1743 123.9,1696.8 100.8,1659 79.8,1646.4 21,1663.2 -21,1638 -21,1953" fill="none" stroke="rgb(201,180,133)" stroke-width="63.0" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="21,774.9 33.6,751.8 46.2,714 75.6,600.6 81.9,571.2 84,550.2 81.9,529.2 77.7,508.2 67.2,478.8 56.7,453.6 52.5,445.2 46.2,438.9 21,422.1" fill="none" stroke="rgb(201,180,133)" stroke-width="50.4" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="21,182.7 42,170.1 46.2,168 50.4,159.6 54.6,147 69.3,92.4 71.4,75.6 71.4,67.2 67.2,46.2 67.2,21 21,21" fill="none" stroke="rgb(201,180,133)" stroke-width="50.4" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1381.8,327.6 1444.8,283.5 1472.1,184.8 1407,105 1369.2,96.6 1331.4,115.5 1264.2,121.8 1157.1,155.4 1161.3,210 1222.2,281.4 1268.4,287.7 1297.8,325.5 1323,333.9" fill="none" stroke="rgb(201,179,132)" stroke-width="37.8" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1692.6,21 1722,63 1740.9,96.6 1747.2,121.8 1753.5,159.6 1772.4,201.6 1780.8,235.2 1785,231 1785,21" fill="none" stroke="rgb(201,179,132)" stroke-width="37.8" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1449,787.5 1457.4,722.4 1512,680.4 1478.4,667.8 1524.6,655.2 1554,609 1390.2,609 1390.2,627.9 1436.4,613.2 1478.4,630 1470,646.8 1449,625.8 1390.2,642.6 1419.6,680.4 1394.4,739.2 1407,772.8" fill="none" stroke="rgb(201,179,132)" stroke-width="29.4" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1780.8,235.2 1785,260.4 1785,289.8 1785,331.8 1780.8,394.8 1776.6,420 1766.1,449.4 1770.3,453.6 1776.6,457.8 1797.6,462 1824.9,466.2 1827,462 1890,315 1785,231" fill="none" stroke="rgb(201,179,132)" stroke-width="29.4" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="1997.1,499.8 2066.4,464.1 2076.9,449.4 2108.4,361.2 2106.3,285.6 2070.6,235.2 1869,86.1 1831.2,86.1 1787.1,126 1785,174.3 1803.9,245.7 1890,315 1827,459.9 1894.2,445.2 1946.7,525 1988.7,525" fill="none" stroke="rgb(199,177,129)" stroke-width="42.0" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="189,1016.4 199.5,1600.2 298.2,1623.3 323.4,1768.2 371.7,1745.1 413.7,1585.5 621.6,1617 646.8,1505.7 604.8,1339.8 678.3,1218 459.9,940.8 428.4,940.8 426.3,1014.3 386.4,1033.2 273,911.4 220.5,932.4" fill="none" stroke="rgb(198,175,127)" stroke-width="126.0" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="-21,1335.6 -8.4,1398.6 42,1392.3 92.4,1438.5 142.8,1386 210,1218 210,1165.5 174.3,1134 210,1110.9 210,1041.6 189,1066.8 84,1050 63,1037.4 132.3,1012.2 -21,970.2" fill="none" stroke="rgb(194,169,121)" stroke-width="50.4" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="-16.8,1944.6 46.2,1864.8 63,1833.3 119.7,1814.4 130.2,1806 121.8,1793.4 92.4,1787.1 79.8,1776.6 77.7,1755.6 84,1696.8 75.6,1677.9 48.3,1684.2 33.6,1705.2 16.8,1709.4 2.1,1701 -21,1665.3" fill="none" stroke="rgb(194,169,121)" stroke-width="50.4" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="21,688.8 37.8,651 50.4,611.1 58.8,575.4 63,550.2 63,537.6 58.8,520.8 44.1,483 37.8,470.4 33.6,466.2 21,457.8" fill="none" stroke="rgb(194,169,121)" stroke-width="42.0" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="21,1052.1 100.8,1398.6 243.6,1192.8 222.6,1434.3 346.5,1465.8 352.8,1648.5 430.5,1365 525,1566.6 541.8,1264.2 554.4,1560.3 617.4,1518.3 623.7,1209.6 478.8,989.1 415.8,1180.2 281.4,951.3 231,1171.8" fill="none" stroke="rgb(190,164,116)" stroke-width="37.8" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="306.6,1373.4 449.4,1297.8 525,1285.2 539.7,1205.4 546,1287.3 598.5,1247.4 579.6,1163.4 541.8,1119.3 537.6,1146.6 487.2,1022.7 485.1,1142.4 407.4,1243.2 323.4,1031.1 264.6,1085.7 264.6,1293.6" fill="none" stroke="rgb(183,155,107)" stroke-width="33.6" stroke-linejoin="round" opacity="0.55"/>
+<polygon points="111.3,1281 96.6,1209.6 100.8,1180.2 96.6,1159.2 46.2,1131.9 21,1134 21,1211.7 33.6,1234.8 27.3,1281 58.8,1295.7 96.6,1333.5 105,1335.6 115.5,1318.8" fill="none" stroke="rgb(183,155,107)" stroke-width="33.6" stroke-linejoin="round" opacity="0.55"/>
+</g>
+<g id="hills">
+<polygon points="1449,1113 1470,1096.2 1520.4,1079.4 1558.2,1054.2 1579.2,1075.2 1545.6,1113 1499.4,1131.9 1461.6,1134" fill="rgb(210,193,151)" stroke="#6e5a3c" stroke-width="0.8" stroke-opacity="0.6"><title>Velia: plateau 28 m, summit 30 m</title></polygon>
+<polygon points="357,659.4 407.4,613.2 499.8,609 541.8,625.8 554.4,672 554.4,852.6 533.4,882 357,882" fill="rgb(207,189,145)" stroke="#6e5a3c" stroke-width="0.8" stroke-opacity="0.6"><title>Janiculum north spur: plateau 30 m, summit 53.2 m</title></polygon>
+<polygon points="1992.9,1482.6 1957.2,1535.1 1902.6,1554 2016,1688.4 2009.7,1709.4 1919.4,1707.3 1839.6,1749.3 1780.8,1722 1722,1738.8 1701,1766.1 1701,1902.6 1848,1900.5 1890,1873.2 1982.4,1953 2499,1953 2499,1449" fill="rgb(207,189,145)" stroke="#6e5a3c" stroke-width="0.8" stroke-opacity="0.6"><title>Plateau of the Via Latina: plateau 30 m, summit 48 m</title></polygon>
+<polygon points="1285.2,1688.4 1293.6,1719.9 1339.8,1766.1 1522.5,1827 1537.2,1822.8 1577.1,1726.2 1558.2,1654.8 1526.7,1608.6 1520.4,1558.2 1482.6,1522.5 1428,1526.7 1383.9,1554 1354.5,1556.1 1297.8,1606.5 1316.7,1625.4" fill="rgb(203,182,136)" stroke="#6e5a3c" stroke-width="0.8" stroke-opacity="0.6"><title>Lesser Aventine: plateau 33 m, summit 40 m</title></polygon>
+<polygon points="1480.5,1247.4 1505.7,1203.3 1499.4,1136.1 1482.6,1129.8 1461.6,1129.8 1444.8,1117.2 1390.2,1110.9 1360.8,1125.6 1327.2,1159.2 1327.2,1184.4 1346.1,1226.4 1365,1243.2 1386,1251.6 1402.8,1266.3 1428,1268.4 1449,1266.3" fill="rgb(201,180,133)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Palatine Hill (34 m terrace): plateau 34 m, summit 51.5 m</title></polygon>
+<polygon points="1272.6,1041.6 1260,1037.4 1249.5,1026.9 1232.7,1024 1231.4,1012.2 1239,995.4 1253.7,978.6 1268.4,970.2 1285.2,989.1 1289.4,991.2 1294.4,1003.8 1287.3,1020.6 1278.9,1034" fill="rgb(198,176,128)" stroke="#6e5a3c" stroke-width="0.8" stroke-opacity="0.6"><title>Capitoline Hill: Asylum saddle: plateau 36 m, summit 38 m</title></polygon>
+<polygon points="1092,1524.6 1125.6,1547.7 1203.3,1507.8 1211.7,1533 1239,1560.3 1251.6,1562.4 1325.1,1482.6 1335.6,1453.2 1333.5,1432.2 1318.8,1411.2 1251.6,1383.9 1224.3,1352.4 1201.2,1344 1159.2,1379.7 1087.8,1461.6" fill="rgb(198,176,128)" stroke="#6e5a3c" stroke-width="0.8" stroke-opacity="0.6"><title>Aventine Hill: plateau 36 m, summit 46 m</title></polygon>
+<line x1="1087.8" y1="1461.6" x2="1159.2" y2="1379.7" stroke="#4a3520" stroke-width="2" stroke-dasharray="2,1.5"><title>River cliff below S. Sabina / Rocca Savella, 30-35 m</title></line>
+<line x1="1159.2" y1="1379.7" x2="1201.2" y2="1344" stroke="#4a3520" stroke-width="2" stroke-dasharray="2,1.5"><title>NW cliff over the Porta Trigemina and Forum Boarium, ~32 m</title></line>
+<polygon points="1478.4,1707.3 1507.8,1717.8 1528.8,1753.5 1554,1738.8 1556.1,1696.8 1533,1671.6 1505.7,1558.2 1491,1541.4 1470,1535.1 1449,1539.3 1373.4,1604.4 1333.5,1654.8 1310.4,1705.2 1320.9,1730.4 1344,1753.5 1457.4,1766.1" fill="rgb(197,174,126)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Lesser Aventine (37 m terrace): plateau 37 m, summit 41 m</title></polygon>
+<polygon points="2041.2,1478.4 2102.1,1570.8 2007.6,1596 2049.6,1621.2 2158.8,1614.9 2343.6,1518.3 2387.7,1537.2 2284.8,1843.8 1936.2,1753.5 1923.6,1814.4 1961.4,1877.4 2177.7,1953 2499,1953 2499,1449" fill="rgb(195,171,123)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Plateau of the Via Latina (38 m terrace): plateau 38 m, summit 48 m</title></polygon>
+<polygon points="1218,1079.4 1222.2,1085.7 1230.6,1087.8 1247.4,1085.7 1255.8,1081.5 1270.5,1066.8 1274.7,1050 1272.6,1041.6 1260,1037.4 1249.5,1026.9 1232.7,1024 1220.1,1033.2 1217.2,1047.9" fill="rgb(192,167,119)" stroke="#6e5a3c" stroke-width="0.8" stroke-opacity="0.6"><title>Capitoline Hill: Capitolium: plateau 40 m, summit 46 m</title></polygon>
+<line x1="1218" y1="1079.4" x2="1251.6" y2="1087.8" stroke="#4a3520" stroke-width="2" stroke-dasharray="2,1.5"><title>Tarpeian Rock: S/SW cliff over the Vicus Iugarius and Forum Holitorium, ~30 m drop</title></line>
+<line x1="1218" y1="1047.9" x2="1218" y2="1079.4" stroke="#4a3520" stroke-width="2" stroke-dasharray="2,1.5"><title>W face over the Theatre of Marcellus side, ~32 m</title></line>
+<line x1="1274.7" y1="1050" x2="1268.4" y2="1068.9" stroke="#4a3520" stroke-width="2" stroke-dasharray="2,1.5"><title>E face over the Forum (masked by temple podia), ~30 m</title></line>
+<polygon points="1308.3,953.4 1297.8,938.7 1285.2,936.6 1272.6,942.9 1268.4,947.1 1264.2,961.8 1268.4,970.2 1285.2,989.1 1289.4,991.2 1297.8,984.9 1304.1,978.6" fill="rgb(192,167,119)" stroke="#6e5a3c" stroke-width="0.8" stroke-opacity="0.6"><title>Capitoline Hill: Arx: plateau 40 m, summit 48 m</title></polygon>
+<line x1="1264.2" y1="961.8" x2="1297.8" y2="938.7" stroke="#4a3520" stroke-width="2" stroke-dasharray="2,1.5"><title>N face over the Clivus Argentarius / Via Lata head; the N spur was cut back for Trajan's Forum (107-112)</title></line>
+<line x1="1297.8" y1="984.9" x2="1304.1" y2="978.6" stroke="#4a3520" stroke-width="2" stroke-dasharray="2,1.5"><title>E face above the Carcer and Basilica Argentaria</title></line>
+<polygon points="1346.1,1142.4 1335.6,1176 1352.4,1222.2 1369.2,1234.8 1407,1241.1 1440.6,1255.8 1453.2,1255.8 1482.6,1234.8 1486.8,1205.4 1503.6,1169.7 1501.5,1146.6 1495.2,1142.4 1465.8,1138.2 1449,1129.8 1394.4,1117.2 1360.8,1129.8" fill="rgb(192,167,119)" stroke="#6e5a3c" stroke-width="0.8" stroke-opacity="0.6"><title>Palatine Hill: plateau 40 m, summit 51 m</title></polygon>
+<line x1="1335.6" y1="1176" x2="1352.4" y2="1222.2" stroke="#4a3520" stroke-width="2" stroke-dasharray="2,1.5"><title>SW corner (Lupercal, Scalae Caci) over the Velabrum and Circus carceres, ~30 m</title></line>
+<line x1="1369.2" y1="1234.8" x2="1453.2" y2="1255.8" stroke="#4a3520" stroke-width="2" stroke-dasharray="2,1.5"><title>S face: Domus Augustana facade over the Circus, 30-38 m</title></line>
+<line x1="1346.1" y1="1142.4" x2="1394.4" y2="1117.2" stroke="#4a3520" stroke-width="2" stroke-dasharray="2,1.5"><title>N face: Domus Tiberiana substructures over the Clivus Victoriae, ~25 m</title></line>
+<polygon points="1591.8,1228.5 1587.6,1390.2 1705.2,1453.2 1934.1,1337.7 2093.7,1533 2232.3,1533 2305.8,1480.5 2457,1455.3 2457,1176 2163,1218 1986.6,1182.3 1946.7,1243.2 1810.2,1222.2 1703.1,1262.1 1629.6,1211.7" fill="rgb(192,167,119)" stroke="#6e5a3c" stroke-width="0.8" stroke-opacity="0.6"><title>Caelian Hill: plateau 40 m, summit 49 m</title></polygon>
+<polygon points="554.4,627.9 525,615.3 504,621.6 480.9,634.2 464.1,646.8 445.2,661.5 382.2,724.5 357,745.5 357,882 554.4,882" fill="rgb(192,167,119)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Janiculum north spur (40 m terrace): plateau 40 m, summit 53.2 m</title></polygon>
+<polygon points="52.5,861 69.3,798 100.8,638.4 109.2,621.6 149.1,579.6 157.5,558.6 159.6,537.6 151.2,504 136.5,474.6 117.6,453.6 92.4,438.9 54.6,386.4 48.3,357 21,279.3 21,861" fill="rgb(192,167,119)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Vatican Hill (40 m terrace): plateau 40 m, summit 75 m</title></polygon>
+<polygon points="21,247.8 58.8,218.4 63,214.2 67.2,205.8 105,58.8 105,46.2 105,21 21,21" fill="rgb(192,167,119)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Vatican Hill (40 m terrace): plateau 40 m, summit 71.8 m</title></polygon>
+<polygon points="1182.3,1499.4 1260,1493.1 1318.8,1459.5 1323,1440.6 1247.4,1411.2 1192.8,1371.3 1182.3,1373.4 1142.4,1419.6 1159.2,1440.6 1108.8,1470 1100.4,1495.2 1108.8,1520.4 1125.6,1528.8 1148.7,1516.2 1159.2,1491 1180.2,1486.8" fill="rgb(189,163,115)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Aventine Hill (42 m terrace): plateau 42 m, summit 47 m</title></polygon>
+<polygon points="1963.5,1092 1959.3,1142.4 1974,1144.5 1990.8,1140.3 1997.1,1142.4 2001.3,1150.8 1999.2,1180.2 1982.4,1201.2 1978.2,1213.8 1969.8,1222.2 1965.6,1234.8 1967.7,1251.6 1978.2,1272.6 1978.2,1281 2499,1281 2499,1092" fill="rgb(189,163,115)" stroke="#6e5a3c" stroke-width="0.8" stroke-opacity="0.6"><title>Rise of Ad Spem Veterem: plateau 42 m, summit 52 m</title></polygon>
+<polygon points="1600.2,978.6 1606.5,1020.6 1633.8,1043.7 1654.8,1041.6 1696.8,1058.4 1701,1039.5 1711.5,1035.3 1743,1062.6 1780.8,1062.6 1778.7,1087.8 1869,1131.9 1869,890.4 1789.2,907.2 1734.6,953.4 1671.6,966 1625.4,963.9" fill="rgb(184,156,108)" stroke="#6e5a3c" stroke-width="0.8" stroke-opacity="0.6"><title>Esquiline: Oppian: plateau 45 m, summit 51 m</title></polygon>
+<polygon points="1407,848.4 1457.4,877.8 1488.9,869.4 1499.4,814.8 1518.3,781.2 1545.6,827.4 1623.3,846.3 1722,735 1932,651 1932,525 1827,462 1654.8,644.7 1612.8,672 1598.1,695.1 1583.4,690.9 1558.2,709.8" fill="rgb(184,156,108)" stroke="#6e5a3c" stroke-width="0.8" stroke-opacity="0.6"><title>Viminal Hill: plateau 45 m, summit 56 m</title></polygon>
+<polygon points="1362.9,646.8 1396.5,693 1371.3,756 1407,848.4 1583.4,690.9 1612.8,623.7 1661.1,598.5 1659,638.4 1743,562.8 1827,462 1890,315 1785,231 1696.8,319.2 1675.8,441 1507.8,569.1 1373.4,611.1" fill="rgb(184,156,108)" stroke="#6e5a3c" stroke-width="0.8" stroke-opacity="0.6"><title>Quirinal Hill: plateau 45 m, summit 58 m</title></polygon>
+<line x1="1362.9" y1="646.8" x2="1371.3" y2="756" stroke="#4a3520" stroke-width="2" stroke-dasharray="2,1.5"><title>W face over the Campus Martius (Trevi), ~35 m</title></line>
+<line x1="1371.3" y1="756" x2="1407" y2="848.4" stroke="#4a3520" stroke-width="2" stroke-dasharray="2,1.5"><title>Trajan's vertical cut behind the Markets (107-112), ~30 m</title></line>
+<polygon points="1050,-105 1058.4,12.6 1188.6,63 1127.7,142.8 1129.8,210 1331.4,470.4 1459.5,449.4 1558.2,195.3 1654.8,220.5 1696.8,319.2 1785,231 1785,-105 1398.6,-105 1329.3,-21" fill="rgb(184,156,108)" stroke="#6e5a3c" stroke-width="0.8" stroke-opacity="0.6"><title>Pincian Hill: plateau 45 m, summit 58 m</title></polygon>
+<line x1="1129.8" y1="210" x2="1331.4" y2="470.4" stroke="#4a3520" stroke-width="2" stroke-dasharray="2,1.5"><title>W escarpment, ~35 m, terraced garden walls (Horti Luculliani)</title></line>
+<polygon points="-231,646.8 -231,819 44.1,819 126,533.4 67.2,422.1 29.4,384.3 -2.1,270.9 6.3,243.6 65.1,189 -231,189 -231,556.5 -159.6,590.1 -142.8,619.5 -151.2,646.8 -182.7,669.9 -212.1,667.8" fill="rgb(184,156,108)" stroke="#6e5a3c" stroke-width="0.8" stroke-opacity="0.6"><title>Vatican Hill: plateau 45 m, summit 68 m</title></polygon>
+<polygon points="2381.4,525 2349.9,289.8 2349.9,277.2 2352,264.6 2396.1,113.4 2402.4,100.8 2415,90.3 2473.8,63 2494.8,50.4 2499,44.1 2499,21 1785,21 1785,231 1890,315 1827,462 1932,525" fill="rgb(184,156,108)" stroke="#6e5a3c" stroke-width="0.8" stroke-opacity="0.6"><title>Castra Praetoria plateau: plateau 45 m, summit 62 m</title></polygon>
+<polygon points="2499,1728.3 2427.6,1801.8 2400.3,1843.8 2396.1,1852.2 2394,1860.6 2398.2,1902.6 2402.4,1911 2406.6,1915.2 2436,1921.5 2444.4,1925.7 2480.1,1953 2499,1953" fill="rgb(184,156,108)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Plateau of the Via Latina (45 m terrace): plateau 45 m, summit 48 m</title></polygon>
+<polygon points="1457.4,1211.7 1457.4,1190.7 1486.8,1180.2 1488.9,1155 1440.6,1150.8 1415.4,1134 1365,1134 1352.4,1142.4 1358.7,1176 1348.2,1201.2 1360.8,1218 1457.4,1239 1476.3,1230.6 1480.5,1218 1474.2,1209.6" fill="rgb(182,154,106)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Palatine Hill (46 m terrace): plateau 46 m, summit 51.5 m</title></polygon>
+<polygon points="2173.5,1218 2192.4,1293.6 2202.9,1323 2215.5,1344 2230.2,1358.7 2251.2,1375.5 2272.2,1386 2297.4,1394.4 2343.6,1400.7 2364.6,1398.6 2381.4,1394.4 2425.5,1365 2499,1299.9 2499,1176" fill="rgb(182,154,106)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Caelian Hill (46 m terrace): plateau 46 m, summit 52.9 m</title></polygon>
+<polygon points="1759.8,1402.8 1831.2,1394.4 1856.4,1386 1898.4,1339.8 1911,1310.4 1906.8,1293.6 1852.2,1264.2 1827,1297.8 1776.6,1331.4 1747.2,1369.2 1690.5,1386 1690.5,1428 1701,1438.5 1717.8,1436.4" fill="rgb(182,154,106)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Caelian Hill (46 m terrace): plateau 46 m, summit 49.1 m</title></polygon>
+<polygon points="2007.6,1134 2125.2,1092 2156.7,1134 2478,1134 2410.8,1077.3 2385.6,924 2486.4,789.6 2499,703.5 2368.8,525 1932,525 1953,890.4 1869,890.4 1869,1123.5 1940.4,1125.6 1927.8,1005.9" fill="rgb(182,154,106)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Esquiline plateau (46 m terrace): plateau 46 m, summit 58 m</title></polygon>
+<polygon points="1707.3,882 1709.4,886.2 1717.8,890.4 1793.4,898.8 1803.9,903 1869,890.4 1953,890.4 1953,651 1932,651 1806,709.8 1753.5,726.6 1761.9,747.6 1761.9,760.2 1719.9,844.2" fill="rgb(179,150,103)" stroke="#6e5a3c" stroke-width="0.8" stroke-opacity="0.6"><title>Esquiline: Cispian: plateau 48 m, summit 56 m</title></polygon>
+<polygon points="1812.3,903 1810.2,928.2 1803.9,940.8 1764,972.3 1743,982.8 1717.8,991.2 1707.3,1003.8 1707.3,1012.2 1717.8,1029 1743,1054.2 1755.6,1056.3 1785,1052.1 1839.6,1012.2 1856.4,989.1 1869,978.6 1869,890.4" fill="rgb(177,148,102)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Esquiline: Oppian (49 m terrace): plateau 49 m, summit 52 m</title></polygon>
+<polygon points="1869,974.4 1940.4,963.9 1965.6,1037.4 1992.9,1058.4 2160.9,1033.2 2234.4,1134 2379.3,1134 2307.9,909.3 2331,735 2366.7,630 2328.9,573.3 2320.5,525 1932,525 1953,651 1953,890.4 1869,890.4" fill="rgb(175,146,100)" stroke="#6e5a3c" stroke-width="0.8" stroke-opacity="0.6"><title>Esquiline plateau: plateau 50 m, summit 57 m</title></polygon>
+<polygon points="2398.2,1297.8 2417.1,1255.8 2419.2,1209.6 2412.9,1186.5 2232.3,1209.6 2228.1,1251.6 2234.4,1289.4 2247,1316.7 2268,1333.5 2284.8,1339.8 2301.6,1341.9 2318.4,1341.9 2339.4,1339.8 2375.1,1323 2385.6,1312.5" fill="rgb(175,146,100)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Caelian Hill (50 m terrace): plateau 50 m, summit 52.9 m</title></polygon>
+<polygon points="1362.9,403.2 1461.6,302.4 1503.6,205.8 1503.6,102.9 1461.6,115.5 1377.6,69.3 1339.8,69.3 1293.6,21 1203.3,21 1295.7,92.4 1150.8,144.9 1155,222.6 1218,296.1 1266.3,310.8 1318.8,401.1" fill="rgb(171,142,97)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Pincian Hill (52 m terrace): plateau 52 m, summit 60 m</title></polygon>
+<polygon points="1572.9,21 1581.3,37.8 1587.6,46.2 1625.4,67.2 1642.2,79.8 1650.6,88.2 1667.4,109.2 1680,128.1 1694.7,155.4 1717.8,186.9 1728.3,205.8 1740.9,235.2 1747.2,268.8 1785,231 1785,21" fill="rgb(171,142,97)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Pincian Hill (52 m terrace): plateau 52 m, summit 59.6 m</title></polygon>
+<polygon points="1747.2,268.8 1770.3,470.4 1734.6,537.6 1646.4,571.2 1541.4,550.2 1512,600.6 1379.7,617.4 1409.1,827.4 1558.2,625.8 1650.6,583.8 1692.6,606.9 1827,462 1890,315 1785,231" fill="rgb(171,142,97)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Quirinal Hill (52 m terrace): plateau 52 m, summit 60 m</title></polygon>
+<polygon points="1692.6,606.9 1696.8,634.2 1698.9,667.8 1701,676.2 1707.3,684.6 1722,693 1747.2,699.3 1759.8,707.7 1776.6,714 1782.9,716.1 1806,709.8 1932,651 1932,525 1827,462 1743,562.8" fill="rgb(171,142,97)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Viminal Hill (52 m terrace): plateau 52 m, summit 57 m</title></polygon>
+<polygon points="1671.6,774.9 1688.4,743.4 1692.6,726.6 1680,705.6 1650.6,688.8 1638,693 1600.2,741.3 1587.6,741.3 1568.7,764.4 1579.2,798 1587.6,804.3 1604.4,789.6 1617,800.1 1638,804.3" fill="rgb(171,142,97)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Viminal Hill (52 m terrace): plateau 52 m, summit 57 m</title></polygon>
+<polygon points="1785,716.1 1795.5,739.2 1774.5,793.8 1740.9,827.4 1736.7,852.6 1745.1,869.4 1780.8,888.3 1797.6,890.4 1835.4,879.9 1837.5,890.4 1824.9,898.8 1869,890.4 1953,890.4 1953,651 1932,651" fill="rgb(170,140,95)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Esquiline: Cispian (53 m terrace): plateau 53 m, summit 56.8 m</title></polygon>
+<polygon points="2268,945 2179.8,810.6 2148.3,688.8 2211.3,525 1932,525 1953,890.4 1869,890.4 1869,970.2 1953,940.8 2016,995.4 2079,1001.7 2188.2,957.6 2276.4,1018.5" fill="rgb(170,140,95)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Esquiline plateau (53 m terrace): plateau 53 m, summit 58 m</title></polygon>
+<polygon points="2211.3,525 2209.2,474.6 2202.9,403.2 2207.1,378 2226,306.6 2226,285.6 2223.9,273 2215.5,256.2 2175.6,184.8 2053.8,75.6 1986.6,21 1785,21 1785,231 1890,315 1827,462 1932,525" fill="rgb(170,140,95)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Castra Praetoria plateau (53 m terrace): plateau 53 m, summit 62 m</title></polygon>
+<polygon points="-21,1432.2 16.8,1446.9 50.4,1438.5 102.9,1495.2 193.2,1344 172.2,1474.2 191.1,1528.8 193.2,1621.2 210,1654.8 210,917.7 184.8,997.5 10.5,957.6 -10.5,890.4 -2.1,819 -21,819" fill="rgb(166,136,92)" stroke="#6e5a3c" stroke-width="0.8" stroke-opacity="0.6"><title>Monteverde plateau: plateau 55 m, summit 80.5 m</title></polygon>
+<polygon points="210,1953 96.6,1921.5 84,1913.1 96.6,1869 105,1858.5 189,1843.8 201.6,1835.4 176.4,1778.7 132.3,1743 123.9,1696.8 100.8,1659 79.8,1646.4 21,1663.2 -21,1638 -21,1953" fill="rgb(166,136,92)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Monteverde plateau (55 m terrace): plateau 55 m, summit 71.1 m</title></polygon>
+<polygon points="21,774.9 33.6,751.8 46.2,714 75.6,600.6 81.9,571.2 84,550.2 81.9,529.2 77.7,508.2 67.2,478.8 56.7,453.6 52.5,445.2 46.2,438.9 21,422.1" fill="rgb(166,136,92)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Vatican Hill (55 m terrace): plateau 55 m, summit 75 m</title></polygon>
+<polygon points="21,182.7 42,170.1 46.2,168 50.4,159.6 54.6,147 69.3,92.4 71.4,75.6 71.4,67.2 67.2,46.2 67.2,21 21,21" fill="rgb(166,136,92)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Vatican Hill (55 m terrace): plateau 55 m, summit 71.8 m</title></polygon>
+<polygon points="1381.8,327.6 1444.8,283.5 1472.1,184.8 1407,105 1369.2,96.6 1331.4,115.5 1264.2,121.8 1157.1,155.4 1161.3,210 1222.2,281.4 1268.4,287.7 1297.8,325.5 1323,333.9" fill="rgb(165,135,91)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Pincian Hill (56 m terrace): plateau 56 m, summit 60 m</title></polygon>
+<polygon points="1692.6,21 1722,63 1740.9,96.6 1747.2,121.8 1753.5,159.6 1772.4,201.6 1780.8,235.2 1785,231 1785,21" fill="rgb(165,135,91)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Pincian Hill (56 m terrace): plateau 56 m, summit 59.6 m</title></polygon>
+<polygon points="1449,787.5 1457.4,722.4 1512,680.4 1478.4,667.8 1524.6,655.2 1554,609 1390.2,609 1390.2,627.9 1436.4,613.2 1478.4,630 1470,646.8 1449,625.8 1390.2,642.6 1419.6,680.4 1394.4,739.2 1407,772.8" fill="rgb(165,135,91)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Quirinal Hill (56 m terrace): plateau 56 m, summit 60 m</title></polygon>
+<polygon points="1780.8,235.2 1785,260.4 1785,289.8 1785,331.8 1780.8,394.8 1776.6,420 1766.1,449.4 1770.3,453.6 1776.6,457.8 1797.6,462 1824.9,466.2 1827,462 1890,315 1785,231" fill="rgb(165,135,91)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Quirinal Hill (56 m terrace): plateau 56 m, summit 60 m</title></polygon>
+<polygon points="1997.1,499.8 2066.4,464.1 2076.9,449.4 2108.4,361.2 2106.3,285.6 2070.6,235.2 1869,86.1 1831.2,86.1 1787.1,126 1785,174.3 1803.9,245.7 1890,315 1827,459.9 1894.2,445.2 1946.7,525 1988.7,525" fill="rgb(162,132,90)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Castra Praetoria plateau (58 m terrace): plateau 58 m, summit 62 m</title></polygon>
+<polygon points="189,1016.4 199.5,1600.2 298.2,1623.3 323.4,1768.2 371.7,1745.1 413.7,1585.5 621.6,1617 646.8,1505.7 604.8,1339.8 678.3,1218 459.9,940.8 428.4,940.8 426.3,1014.3 386.4,1033.2 273,911.4 220.5,932.4" fill="rgb(159,130,88)" stroke="#6e5a3c" stroke-width="0.8" stroke-opacity="0.6"><title>Janiculum: plateau 60 m, summit 82 m</title></polygon>
+<line x1="459.9" y1="940.8" x2="678.3" y2="1218" stroke="#4a3520" stroke-width="2" stroke-dasharray="2,1.5"><title>E escarpment, 50-60 m, wooded; the Via Aurelia climbs it in hairpins</title></line>
+<polygon points="-21,1335.6 -8.4,1398.6 42,1392.3 92.4,1438.5 142.8,1386 210,1218 210,1165.5 174.3,1134 210,1110.9 210,1041.6 189,1066.8 84,1050 63,1037.4 132.3,1012.2 -21,970.2" fill="rgb(153,124,84)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Monteverde plateau (65 m terrace): plateau 65 m, summit 80.5 m</title></polygon>
+<polygon points="-16.8,1944.6 46.2,1864.8 63,1833.3 119.7,1814.4 130.2,1806 121.8,1793.4 92.4,1787.1 79.8,1776.6 77.7,1755.6 84,1696.8 75.6,1677.9 48.3,1684.2 33.6,1705.2 16.8,1709.4 2.1,1701 -21,1665.3" fill="rgb(153,124,84)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Monteverde plateau (65 m terrace): plateau 65 m, summit 71.1 m</title></polygon>
+<polygon points="21,688.8 37.8,651 50.4,611.1 58.8,575.4 63,550.2 63,537.6 58.8,520.8 44.1,483 37.8,470.4 33.6,466.2 21,457.8" fill="rgb(153,124,84)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Vatican Hill (65 m terrace): plateau 65 m, summit 75 m</title></polygon>
+<polygon points="21,1052.1 100.8,1398.6 243.6,1192.8 222.6,1434.3 346.5,1465.8 352.8,1648.5 430.5,1365 525,1566.6 541.8,1264.2 554.4,1560.3 617.4,1518.3 623.7,1209.6 478.8,989.1 415.8,1180.2 281.4,951.3 231,1171.8" fill="rgb(146,118,80)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Janiculum (70 m terrace): plateau 70 m, summit 85 m</title></polygon>
+<polygon points="306.6,1373.4 449.4,1297.8 525,1285.2 539.7,1205.4 546,1287.3 598.5,1247.4 579.6,1163.4 541.8,1119.3 537.6,1146.6 487.2,1022.7 485.1,1142.4 407.4,1243.2 323.4,1031.1 264.6,1085.7 264.6,1293.6" fill="rgb(136,110,75)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Janiculum (78 m terrace): plateau 78 m, summit 85 m</title></polygon>
+<polygon points="111.3,1281 96.6,1209.6 100.8,1180.2 96.6,1159.2 46.2,1131.9 21,1134 21,1211.7 33.6,1234.8 27.3,1281 58.8,1295.7 96.6,1333.5 105,1335.6 115.5,1318.8" fill="rgb(136,110,75)" stroke="none" stroke-width="0" stroke-opacity="0.6"><title>Janiculum (78 m terrace): plateau 78 m, summit 80.5 m</title></polygon>
+</g>
+<g id="regions" fill="none" stroke="#7a2e2e" stroke-width="1" stroke-dasharray="6,4" opacity="0.55">
+<polygon points="1535.9,1430.1 1617,1449 1743,1512 1819,1504.9 1869,1617 1953,1774.5 1919.8,1915.6 1765.7,1926.5 1659,1743 1575,1596 1512,1491"><title>Regio I</title></polygon>
+<polygon points="1524.6,1264.2 1558.2,1197 1617,1167.6 1743,1176 1869,1205.4 1940.4,1184.4 2079,1146.6 2168.9,1349 2079,1386 1953,1407 1819,1504.9 1743,1512 1617,1449 1535.9,1430.1 1512,1365"><title>Regio II</title></polygon>
+<polygon points="1524.6,1087.8 1541.4,1041.6 1558.2,966 1591.8,890.4 1701,919.8 1785,907.2 1869,890.4 1890,1029 1944.6,1129.8 1940.4,1184.4 1869,1205.4 1743,1176 1617,1167.6 1558.2,1197 1524.6,1155"><title>Regio III</title></polygon>
+<polygon points="1461.6,1108.8 1428,1079.4 1398.6,1020.6 1411.2,974.4 1440.6,919.8 1407,848.4 1558.2,709.8 1659,638.4 1732.9,747.2 1623.3,917.3 1591.8,890.4 1558.2,966 1541.4,1041.6 1524.6,1087.8"><title>Regio IV</title></polygon>
+<polygon points="1732.9,747.2 1785,680.4 1927.8,613.2 2037,630 2224.3,801.8 2394.8,1081.9 2289,1176 2079,1146.6 1940.4,1184.4 1944.6,1129.8 1890,1029 1869,890.4 1785,907.2 1701,919.8 1623.3,917.3"><title>Regio V</title></polygon>
+<polygon points="1407,848.4 1365,756 1323,609 1344,525 1470,483 1617,315 1801.4,183.1 1940.4,241.1 2147,266.3 2213.4,436.4 2142,609 2037,630 1927.8,613.2 1785,680.4 1732.9,747.2 1659,638.4 1558.2,709.8"><title>Regio VI</title></polygon>
+<polygon points="1276.8,898.8 1161.3,565.3 1050,189 1037.4,151.2 1142.4,210 1239,357 1260,483 1344,525 1323,609 1365,756 1407,848.4 1310.4,852.6"><title>Regio VII</title></polygon>
+<polygon points="1197,1100.4 1205.4,987 1276.8,898.8 1310.4,852.6 1407,848.4 1440.6,919.8 1411.2,974.4 1398.6,1020.6 1428,1079.4 1461.6,1108.8 1386,1108.8 1323,1129.8 1272.6,1167.6 1226.4,1138.2"><title>Regio VIII</title></polygon>
+<polygon points="1276.8,898.8 1161.3,565.3 1050,189 961.8,147 903,231 974.4,399 924,529.2 667.8,600.6 598.5,718.2 667.8,848.4 885.4,1074.4 1071,1100.4 1146.6,1100.4 1197,1100.4 1205.4,987"><title>Regio IX</title></polygon>
+<polygon points="1272.6,1167.6 1323,1129.8 1386,1108.8 1461.6,1108.8 1507.8,1138.2 1524.6,1155 1524.6,1264.2 1512,1289.4 1470,1306.2 1386,1297.8 1310.4,1247.4"><title>Regio X</title></polygon>
+<polygon points="1146.6,1100.4 1197,1100.4 1226.4,1138.2 1272.6,1167.6 1310.4,1247.4 1386,1297.8 1470,1306.2 1512,1289.4 1524.6,1264.2 1512,1365 1535.9,1430.1 1491,1432.2 1365,1394.4 1260,1323 1188.6,1270.5 1155,1205.4"><title>Regio XI</title></polygon>
+<polygon points="1535.9,1430.1 1512,1491 1575,1596 1659,1743 1765.7,1926.5 1575,1869 1386,1797.6 1281,1701 1297.8,1596 1356.6,1491 1449,1428 1491,1432.2"><title>Regio XII</title></polygon>
+<polygon points="1188.6,1270.5 1260,1323 1365,1394.4 1491,1432.2 1449,1428 1356.6,1491 1297.8,1596 1281,1701 1386,1797.6 1220.5,1768.6 1080.2,1863.5 890.4,1915.6 833.3,1806.8 822.4,1682.5 880.7,1572.9 1049.2,1415 1115.9,1333.5 1149.5,1280.6"><title>Regio XIII</title></polygon>
+<polygon points="714,483 665.7,600.6 598.5,718.2 667.8,848.4 885.4,1074.4 1100,1159.2 1157.5,1218.4 1115.9,1333.5 1049.2,1415 880.7,1572.9 753.5,1736.7 609,1659 483,1365 441,1029 315,819 21,735 21,399 273,273"><title>Regio XIV</title></polygon>
+</g>
+<g id="water">
+<polygon points="728.8,-953.6 622.8,-888.5 565.3,-831.9 530.4,-783.5 487.4,-692.5 474.6,-594.6 499.4,-500.4 564.6,-424.1 594.2,-400.2 629.4,-385.6 771.2,-343.7 810.2,-314.2 835.8,-274.8 865.3,-191.4 857.6,-63.7 859.7,-44.1 861.2,-23.5 866.6,17.4 869.9,36.6 879.3,77.8 886.6,119.1 892,137 906.1,176.9 913.3,196.8 926.4,236.1 934.1,252.6 955,288.5 977.1,324.4 989.3,347.1 998.5,392.9 995.2,440.2 979.4,483.5 967.8,505 952.7,525.7 918.3,555.2 897.7,567.9 858.1,585.7 816.7,599.7 794.1,604.5 752.5,611 710.1,621.7 691.5,620.4 659.3,630.6 632.4,653.8 624.3,663.8 615.7,700.2 617.9,713.4 623,730.2 631.3,747.7 650.9,784.5 671,820.7 681.4,836 708.2,866.7 722.8,881.3 737.6,896.5 767,926.4 781.6,941.5 810.7,972.2 839.5,1002.8 853.8,1017.5 882.3,1046.4 896.5,1057.9 912.6,1067.5 929.1,1073.9 945.3,1076.7 1029.9,1075.9 1069.4,1068.7 1094.2,1078 1107.7,1089 1122.1,1097.1 1141.1,1112.8 1152.7,1130.7 1171.7,1161 1177.1,1216.3 1176.6,1239.8 1173.4,1263.7 1166.1,1288.1 1144.4,1326.6 1119.8,1362.8 1104.6,1380.4 1074.5,1409.9 1045.8,1440.4 1030.2,1454.6 1014.9,1470.8 997,1482.7 950.6,1524.4 921.6,1554.5 907.1,1569.4 894,1584.2 868.4,1615.3 848.4,1648.5 835.9,1685.6 831.2,1725 832.5,1742.9 840.6,1783.7 845.1,1803.9 855.7,1844.1 862.5,1863.2 877.5,1902.2 886.1,1922.1 898.6,1961.9 906.2,1981.1 954.3,2119.7 978.8,2174.3 1047.2,2253.4 1078.4,2311.6 1086.3,2378.4 1069.5,2422.3 1040.6,2455.4 1023.3,2440.1 1049.8,2410.2 1063.3,2376.9 1054.4,2319.3 1026.8,2268.3 958.2,2188.7 929,2129.8 876.3,1992.1 868.7,1971.8 856.9,1931.8 850.3,1912.2 836.8,1872.3 830.2,1851.1 820.6,1809.8 815.9,1788.9 807.2,1747.3 803.5,1724.1 808,1679.4 822.4,1636.7 844.3,1598.5 871.7,1565 887.2,1549.5 902.9,1535.8 932.6,1505.5 979.5,1462.3 996,1449.9 1008.5,1434.1 1023.2,1419 1050.7,1387.3 1080.3,1357.2 1092.8,1342.8 1116.1,1309.3 1134.7,1273.9 1139.1,1257.1 1140.1,1239.8 1135.4,1221.4 1127.4,1176.8 1112,1172.6 1097.5,1166.2 1088,1161.7 1068.8,1157.2 1055.3,1146.3 1046.6,1143 1026.4,1119.9 943,1116.5 918.1,1110.1 896,1101.4 875.1,1089.1 856.5,1074.6 825.4,1045.6 811.1,1029.1 782.8,998.4 753.9,967.8 739.9,952.7 710.6,923 695.9,907.9 680.3,892.3 651.6,859.9 638.6,840 617.5,803.1 596.8,765.9 586.6,745.6 577.4,723 574.6,694.2 588.7,650 602.4,625.5 637.6,594.1 681.9,576.6 705.3,577 746.1,572.5 787.6,566.4 806.2,562.9 844.6,550.8 881.4,534.2 896.9,526.7 927.2,500.7 936.5,486.2 944.2,469.9 954.4,432.5 956.2,395.9 948.6,359.3 941.5,344.2 921.6,307.9 900.5,270.7 890.5,249.4 877.5,208.9 870.5,189.4 856.9,148.6 850.5,127 842.7,85.2 833.6,44 830.2,21.3 828.9,-21.1 827.8,-42.5 828.3,-64.8 834,-188.3 808.9,-262.8 787.5,-292.3 759.3,-312.3 618.9,-353.6 577.6,-373.4 541.7,-402.5 471.6,-485.7 441,-592.3 455.1,-701.9 501.1,-799.9 540.1,-854 602,-914.9 704.2,-990.2" fill="#7fa7c9" stroke="#4d7aa3" stroke-width="0.8"><title>Tiber</title></polygon>
+<polygon points="986.4,850 902.3,820.5 797.2,761.7 713.1,711.2 650.2,673.5 623.2,665.2 624.2,662 651.8,670.5 714.9,708.4 798.8,758.7 903.7,817.5 987.6,846.8" fill="#7fa7c9" stroke="#4d7aa3" stroke-width="0.8"><title>Euripus of Agrippa</title></polygon>
+<polygon points="1039.1,1104.6 1047.9,1119.3 1076.9,1130.6 1078.1,1138.6 1080.7,1139 1086.1,1134.4 1111.3,1149.1 1118.9,1150.4 1138.2,1163.4 1140.7,1163.8 1142.8,1162.1 1142.8,1158.4 1128.5,1132.7 1117.2,1121 1084,1098.3 1065.1,1092 1047.5,1090.7" fill="#d8ccaa" stroke="#4d7aa3" stroke-width="1"><title>Tiber Island</title></polygon>
+</g>
+<g id="aqueducts" fill="none">
+<polyline points="2835,1407 2583,1239 2394.8,1081.9" stroke="#7a5c99" stroke-width="2.6"  opacity="0.85"><title>Aqua Claudia et Anio Novus (arcade) channel 66.8-66 m</title></polyline>
+<polyline points="2394.8,1081.9 2272.6,1166.3 2116.8,1253.3 1981.6,1275.1 1848,1323 1720.7,1373.8 1698.9,1352.8 1663.6,1323.4 1642.2,1307" stroke="#7a5c99" stroke-width="2.6"  opacity="0.85"><title>Arcus Neroniani (Aqua Claudia, Caelian branch) (arcade) channel 63.5-61 m</title></polyline>
+<polyline points="1642.2,1307 1612.8,1313.8 1591.8,1294.4 1541.4,1281 1502.8,1283.5 1461.6,1264.2" stroke="#7a5c99" stroke-width="2.6"  opacity="0.85"><title>Arcus Caelimontani (Palatine branch) (arcade) channel 61-55 m</title></polyline>
+<polyline points="2835,1281 2541,1167.6 2398.2,1087.8 2362.5,978.6 2289,869.4 2224.3,801.8 2121,726.6 1953,630" stroke="#7a5c99" stroke-width="2.6"  opacity="0.85"><title>Aqua Marcia, Tepula, Iulia (arcade) channel 64.6-62 m</title></polyline>
+<polyline points="2362.5,978.6 2247,911.4 2117.2,878.2 1989.5,891.2" stroke="#7a5c99" stroke-width="1.6" stroke-dasharray="8,3" opacity="0.85"><title>Aqua Iulia (ramus) (mixed) channel 63.4-62.2 m</title></polyline>
+<polyline points="2389.8,1096.2 2247,1205.4 2079,1297.8 1911,1356.6 1743,1407 1617,1428 1575,1415.4" stroke="#7a5c99" stroke-width="1.6" stroke-dasharray="8,3" opacity="0.85"><title>Rivus Herculaneus (Aqua Marcia) (mixed) channel 56-51 m</title></polyline>
+<polyline points="1617,-21 1449,168 1281,336 1299.5,561.1 1260,609 1198.3,707.7 1146.6,760.2 1087.8,810.6 1066,826.6" stroke="#7a5c99" stroke-width="1.6" stroke-dasharray="8,3" opacity="0.85"><title>Aqua Virgo (mixed) channel 22-19.2 m</title></polyline>
+<polyline points="-189,1155 105,1205.4 268.4,1208.3 362,1245.7 526.7,1220.9 613.2,1209.6" stroke="#7a5c99" stroke-width="1.6" stroke-dasharray="8,3" opacity="0.85"><title>Aqua Traiana (mixed) channel 74-72 m</title></polyline>
+<polyline points="613.2,1209.6 651,1215.9 684.6,1226.4 714,1239" stroke="#7a5c99" stroke-width="1.6" stroke-dasharray="8,3" opacity="0.85"><title>(Molae Ianiculenses) (mixed) channel 72-22 m</title></polyline>
+<polyline points="2352,1134 2079,1323 1827,1407 1535.9,1430.1 1449,1373.4 1323,1348.2 1239,1314.6 1188.6,1270.5" stroke="#7a5c99" stroke-width="1.6" stroke-dasharray="3,4" opacity="0.85"><title>Aqua Appia (underground) channel 21-15 m</title></polyline>
+<polyline points="2352,1092 2121,987 1912.7,880.3" stroke="#7a5c99" stroke-width="1.6" stroke-dasharray="3,4" opacity="0.85"><title>Anio Vetus (underground) channel 48.5-48 m</title></polyline>
+<polyline points="231,63 399,315 525,525 567,693 651,903 714,1071 756,1218 840,1302" stroke="#7a5c99" stroke-width="1.6" stroke-dasharray="3,4" opacity="0.85"><title>Aqua Alsietina (Augusta) (underground) channel 19-16.5 m</title></polyline>
+</g>
+<g id="roads" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<polyline points="1541.4,1150.8 1535.1,1142 1467.1,1116.8 1469.2,1108 1446.9,1084 1405.7,1063.4 1351.1,1027.3" stroke="#5a4630" stroke-width="2.9"  opacity="0.9"><title>Sacra Via Sacred Way (via, high)</title></polyline>
+<polyline points="1460.8,1123.9 1379.7,1088.6 1348.2,1119.3 1314.6,1134" stroke="#5a4630" stroke-width="1.9"  opacity="0.9"><title>Nova Via New Way (via, medium)</title></polyline>
+<polyline points="1325.5,1029.8 1322.6,1024.8 1314.6,1025.2 1299.5,1043.3 1282.3,1056.7 1264.2,1063.4 1248.2,1059.2" stroke="#6a5034" stroke-width="1.9"  opacity="0.9"><title>Clivus Capitolinus Capitoline Rise (clivus, high)</title></polyline>
+<polyline points="1467.1,1116.8 1452.4,1142.8 1444.8,1141.1 1444.4,1131.9 1413.3,1167.6" stroke="#6a5034" stroke-width="2.5"  opacity="0.9"><title>Clivus Palatinus Palatine Rise (clivus, high)</title></polyline>
+<polyline points="1318.8,1134 1352.4,1129 1373.4,1108.8 1392.3,1095.4 1411.6,1113 1422.1,1127.3" stroke="#6a5034" stroke-width="1.7"  opacity="0.9"><title>Clivus Victoriae Rise of Victory (clivus, medium)</title></polyline>
+<polyline points="1363.7,1055 1350.7,1084 1341.9,1087.8 1304.1,1159.6 1292.3,1218.8 1260,1264.2" stroke="#7a6040" stroke-width="2.1"  opacity="0.9"><title>Vicus Tuscus Etruscan Street (vicus, high)</title></polyline>
+<polyline points="1320.9,1036.6 1311.2,1050.4 1266.7,1085.7 1236.9,1099.1 1184.4,1108.8" stroke="#7a6040" stroke-width="2.1"  opacity="0.9"><title>Vicus Iugarius Yoke-makers' Street (vicus, high)</title></polyline>
+<polyline points="1352,1027.7 1367.9,1011.4 1396.1,998.3 1430.1,976.5 1496.9,956.3 1546.9,937" stroke="#8a7050" stroke-width="2.3"  opacity="0.9"><title>Argiletum Argiletum and Subura street (street, high)</title></polyline>
+<polyline points="1546.9,937.4 1611.1,921.9 1657.7,923.2 1661.9,930.7 1675,933.7 1720.7,933.7 1757.7,920.6 1785.8,902.6 1856.4,872.8 1913.9,880.3" stroke="#6a5034" stroke-width="2.3"  opacity="0.9"><title>Clivus Suburanus Suburan Rise (clivus, medium)</title></polyline>
+<polyline points="1414.6,839.2 1700.6,590.1 1747.2,562.8" stroke="#7a6040" stroke-width="2.1" stroke-dasharray="5,2.5" opacity="0.9"><title>Vicus Longus Long Street (vicus, low)</title></polyline>
+<polyline points="1623.3,917.3 1732.9,747.2 1785,680.4 1869,638.4 1927.8,613.2" stroke="#7a6040" stroke-width="2.3"  opacity="0.9"><title>Vicus Patricius Patrician Street (vicus, medium)</title></polyline>
+<polyline points="1406.6,849.7 1398.6,735 1465.8,665.7 1659,483 1770.7,383.9 1822,343.6" stroke="#8a7050" stroke-width="2.5"  opacity="0.9"><title>Alta Semita High Path (street, medium)</title></polyline>
+<polyline points="1329.3,1013 1324.3,1003 1304.1,982.8 1297.8,953.4 1289.4,924 1276.8,898.8" stroke="#6a5034" stroke-width="1.9"  opacity="0.9"><title>Clivus Argentarius (medieval name) Bankers' Rise (clivus, medium)</title></polyline>
+<polyline points="1276.8,898.8 1243.6,828.2 1200.4,680.8 1161.3,565.3 962.2,-79.4 919,-208.3 777,-674.5 765.7,-713.2 722.4,-945" stroke="#5a4630" stroke-width="4.2"  opacity="0.9"><title>Via Lata / Via Flaminia Broad Way / Flaminian Way (via, high)</title></polyline>
+<polyline points="642.6,661.5 693,660.2 740.9,659 909.3,664 992,659.4 1050.4,661.5 1163.4,659.4 1193.2,659.4" stroke="#5a4630" stroke-width="2.5"  opacity="0.9"><title>Via Recta Straight Street (via, medium)</title></polyline>
+<polyline points="1535.9,1430.1 1583.4,1495.2 1697.2,1600.6 1738.8,1640.1 1846.3,1755.2 1891.7,1832.5 1919.8,1915.6 1937.5,1979.5 1939.1,2083.2 1973.2,2219.3 2054.6,2281.4 2289.8,2557.8" stroke="#5a4630" stroke-width="3.4"  opacity="0.9"><title>Via Appia Appian Way (via, high)</title></polyline>
+<polyline points="1738.8,1640.1 1742.2,1644.7 1792.1,1670.8 1927,1760.2 1995,1797.6 2246.6,1897.1" stroke="#5a4630" stroke-width="2.9"  opacity="0.9"><title>Via Latina Latin Way (via, high)</title></polyline>
+<polyline points="1913.9,880.3 1995,911.4 2199.1,1000 2205,1002.5 2207.9,998.3 2354.9,1061.8 2394.8,1081.9" stroke="#5a4630" stroke-width="2.5" stroke-dasharray="5,2.5" opacity="0.9"><title>Via Labicana / Via Praenestina Labican and Praenestine Way (inner) (via, low)</title></polyline>
+<polyline points="1913.9,880.3 2142,810.6 2224.3,801.8 2331,777" stroke="#5a4630" stroke-width="2.5" stroke-dasharray="5,2.5" opacity="0.9"><title>Via Tiburtina Tiburtine Way (via, low)</title></polyline>
+<polyline points="1822,343.6 1912.3,252 2011.8,164.2 2018.1,162.5 2453.6,-233.5 2462.5,-244.4 2495.6,-310.8 2578.4,-407 2626.7,-469.6" stroke="#5a4630" stroke-width="2.5"  opacity="0.9"><title>Via Nomentana Nomentan Way (via, high)</title></polyline>
+<polyline points="1822,343.6 1825.3,333.1 1801.4,183.1 1806,63" stroke="#5a4630" stroke-width="2.5"  opacity="0.9"><title>Via Salaria Salt Way (via, medium)</title></polyline>
+<polyline points="1197,1241.1 1177.7,1245.3 1180.2,1264.2 1172.6,1289.4 1152.9,1318.8 1133.2,1351.1 1110.1,1381 1084.9,1406.2 1061.8,1432.2 1054.2,1474.2 1062.2,1530.1 1151.6,1702.3 1197.8,1748.9 1200.8,1756.4 1220.5,1768.6 1184.4,1869" stroke="#5a4630" stroke-width="2.5"  opacity="0.9"><title>Via Ostiensis Ostian Way (via, medium)</title></polyline>
+<polyline points="1248.7,1278.9 1250.8,1294.4 1273.9,1336 1268.4,1353.2 1254.5,1367.5 1274.7,1426.7" stroke="#6a5034" stroke-width="1.7"  opacity="0.9"><title>Clivus Publicius Publician Rise (clivus, medium)</title></polyline>
+<polyline points="1180.2,1412.5 1216.3,1376.3 1254.5,1367.5 1272.6,1428 1303.7,1503.2" stroke="#7a6040" stroke-width="1.7" stroke-dasharray="5,2.5" opacity="0.9"><title>Vicus Armilustri Street of the Armilustrium (vicus, low)</title></polyline>
+<polyline points="1510.3,1307 1541.8,1312.9 1572.1,1317.5 1601.9,1322.2 1646.8,1330.6 1672,1341.5 1698.9,1352.8" stroke="#6a5034" stroke-width="1.7"  opacity="0.9"><title>Clivus Scauri Rise of Scaurus (clivus, high)</title></polyline>
+<polyline points="1496.9,1368.8 1528.8,1221.8 1533.4,1210.4 1538,1167.6 1542.2,1150.8" stroke="#8a7050" stroke-width="3.4"  opacity="0.9"><title>(via triumphalis) Triumphal road (Porta Capena to the Colosseum) (street, medium)</title></polyline>
+<polyline points="1117.2,1184.4 1028.2,1180.6 968.9,1173.5 833.3,1168.9 756,1205.4 688,1257.9 609,1247.4 526.7,1220.9 420.8,1262.1 386.8,1271.8 359.1,1262.1 304.9,1216.3 239.8,1196.6 143.2,1202 49.1,1193.6 -209.6,1184 -292.3,1172.6 -357,1150.8" stroke="#5a4630" stroke-width="2.5"  opacity="0.9"><title>Via Aurelia (vetus) Aurelian Way (via, medium)</title></polyline>
+<polyline points="1117.2,1184.4 1054.2,1289.4 955.5,1439.8 826.1,1580.5 777.8,1667.4 753.5,1736.7" stroke="#5a4630" stroke-width="2.5" stroke-dasharray="5,2.5" opacity="0.9"><title>Via Portuensis (+ Via Campana) Portus Way (via, low)</title></polyline>
+<polyline points="739.2,1044.5 707.3,976.1 579.6,775.3 560.7,684.6 601,620.8" stroke="#8a7050" stroke-width="2.1" stroke-dasharray="5,2.5" opacity="0.9"><title> Riverside road to the Vatican (later Via della Lungara) (street, low)</title></polyline>
+<polyline points="601,620.8 525,546 420,399 273,105 99.5,-160.9" stroke="#5a4630" stroke-width="2.1" stroke-dasharray="5,2.5" opacity="0.9"><title>Via Triumphalis Triumphal Way (via, low)</title></polyline>
+<polyline points="601,620.8 483,594.3 399,583 294,581.7 168,577.5 -189,546" stroke="#5a4630" stroke-width="2.1" stroke-dasharray="5,2.5" opacity="0.9"><title>Via Cornelia Cornelian Way (via, low)</title></polyline>
+<polyline points="1698.9,1352.8 1714,1366.3 1740.9,1366.7 1759.8,1360.8 1805.2,1340.6 1842.5,1316.3 1894.2,1294 1946.3,1276.8 1981.6,1275.5" stroke="#5a4630" stroke-width="2.1"  opacity="0.9"><title>Via Caelimontana Caelian Way (via, medium)</title></polyline>
+<polyline points="1542.2,1150.8 1559,1133.2 1566.6,1108.8 1617,1098.7 1642.2,1113 1670.8,1123.1 1680.8,1122.7 1810.6,1157.9 1932.8,1186.5 1955.9,1185.2 1984.1,1175.2 2163,1113 2389.8,1079.4" stroke="#8a7050" stroke-width="2.5" stroke-dasharray="5,2.5" opacity="0.9"><title>(Via Labicana, urban stretch) Labican road through the valley (street, low)</title></polyline>
+<polyline points="1247.4,1196.2 1282.7,1226.8 1388.5,1304.9 1493.5,1381.8" stroke="#8a7050" stroke-width="2.1" stroke-dasharray="5,2.5" opacity="0.9"><title> Street below the Palatine (N side of the Circus) (street, low)</title></polyline>
+<polyline points="1260,1297.8 1293.6,1324.3 1322.6,1353.7 1373,1388.1 1423.4,1427.6 1461.6,1444.8" stroke="#8a7050" stroke-width="2.1" stroke-dasharray="5,2.5" opacity="0.9"><title> Street below the Aventine (S side of the Circus) (street, low)</title></polyline>
+<polyline points="1491,1409.1 1471.7,1420.4 1398.6,1495.2 1314.6,1585.5" stroke="#8a7050" stroke-width="2.1" stroke-dasharray="5,2.5" opacity="0.9"><title> Valley road to the Porta Raudusculana (street, low)</title></polyline>
+<polyline points="1314.6,1585.5 1348.6,1654.8 1337.3,1682.9 1360,1718.2" stroke="#7a6040" stroke-width="1.7" stroke-dasharray="5,2.5" opacity="0.9"><title>Vicus Piscinae Publicae Lesser Aventine street (Piscina Publica) (vicus, low)</title></polyline>
+<polyline points="1314.6,1600.2 1291.1,1601.9 1225.6,1593.9 1213.8,1585.1 1205.4,1558.2 1191.1,1541 1168.4,1525.4 1143.7,1521.7" stroke="#8a7050" stroke-width="1.7" stroke-dasharray="5,2.5" opacity="0.9"><title> Street along the Aventine wall (street, low)</title></polyline>
+<polyline points="1188.2,1291.1 1199.9,1311.2 1183.1,1349 1212.1,1380.1" stroke="#9a8060" stroke-width="1.3" stroke-dasharray="5,2.5" opacity="0.9"><title> Path up the Aventine river cliff (path, low)</title></polyline>
+<polyline points="1297.8,1188.6 1260,1183.6 1213.8,1181 1180.2,1176.8" stroke="#8a7050" stroke-width="2.1"  opacity="0.9"><title> Street from the Velabrum to the Pons Aemilius (street, medium)</title></polyline>
+<polyline points="1072.3,1162.6 1054.2,1173.9 1028.2,1180.6" stroke="#8a7050" stroke-width="1.7" stroke-dasharray="5,2.5" opacity="0.9"><title> Street from the Pons Cestius into Transtiberim (street, low)</title></polyline>
+<polyline points="1118.9,1088.2 1110.9,1066.8 1104.6,1041.6" stroke="#8a7050" stroke-width="1.7" stroke-dasharray="5,2.5" opacity="0.9"><title> Street from the Pons Fabricius to the Circus Flaminius (street, low)</title></polyline>
+<polyline points="817.7,978.2 863.1,947.1 909.3,933.2 949.2,940 1003.8,937.4 1050,934.5 1081.1,923.2" stroke="#8a7050" stroke-width="2.1" stroke-dasharray="5,2.5" opacity="0.9"><title> Street from the Pons Agrippae into the Campus (street, low)</title></polyline>
+<polyline points="1081.1,923.2 1175.2,918.5 1218,911.4" stroke="#8a7050" stroke-width="2.1" stroke-dasharray="5,2.5" opacity="0.9"><title> Campus street south of the Porticus Minucia (street, low)</title></polyline>
+<polyline points="1553.6,958.4 1505.7,790 1491.8,773.2" stroke="#7a6040" stroke-width="1.7" stroke-dasharray="5,2.5" opacity="0.9"><title> Subura cross street (later Via dei Serpenti) (vicus, low)</title></polyline>
+<polyline points="1491,1054.2 1524.6,1024.8 1575,991.2 1617,966" stroke="#7a6040" stroke-width="1.7" stroke-dasharray="5,2.5" opacity="0.9"><title>Vicus Cuprius Cyprian Street (vicus, low)</title></polyline>
+<polyline points="1362.9,875.7 1375.5,871.5 1390.2,874.4 1402.8,884.1 1409.1,896.7" stroke="#8a7050" stroke-width="1.7" stroke-dasharray="5,2.5" opacity="0.9"><title>(Via Biberatica, medieval name) Via Biberatica (Markets of Trajan) (street, low)</title></polyline>
+<polyline points="1297.8,680.4 1327.2,686.7 1352.4,693" stroke="#6a5034" stroke-width="1.7" stroke-dasharray="5,2.5" opacity="0.9"><title>Clivus Salutis Rise of Salus (clivus, low)</title></polyline>
+<polyline points="1822,343.6 1701,294 1575,252 1462.4,244.9 1407,147" stroke="#5a4630" stroke-width="2.1" stroke-dasharray="5,2.5" opacity="0.9"><title>Via Salaria Vetus Old Salt Way (via, low)</title></polyline>
+<polyline points="2394.8,1081.9 2488.1,1074.8 2710.7,1095.4 2790.5,1093.3" stroke="#5a4630" stroke-width="2.5"  opacity="0.9"><title>Via Praenestina Praenestine Way (via, medium)</title></polyline>
+<polyline points="2394.8,1081.9 2425.5,1108.8 2629.6,1241.1 2814,1306.6" stroke="#5a4630" stroke-width="2.5"  opacity="0.9"><title>Via Labicana Labican Way (via, medium)</title></polyline>
+<polyline points="1454.5,1587.6 1512,1701 1575,1827 1638,1953" stroke="#5a4630" stroke-width="2.1" stroke-dasharray="5,2.5" opacity="0.9"><title>Via Ardeatina Ardeatine Way (via, low)</title></polyline>
+<polyline points="1340.6,1185.2 1330.6,1199.1 1319.6,1213.8" stroke="#aa3020" stroke-width="1.3" stroke-dasharray="1.5,1.5" opacity="0.9"><title>Scalae Caci Stairs of Cacus (stairs, medium)</title></polyline>
+<polyline points="1264.2,1087.8 1257.9,1078.6 1251.6,1068.9" stroke="#aa3020" stroke-width="1.3" stroke-dasharray="1.5,1.5" opacity="0.9"><title>Centum Gradus Hundred Steps (stairs, low)</title></polyline>
+<polyline points="1323.8,995.4 1310.4,982.8 1295.7,972.3" stroke="#aa3020" stroke-width="1.3" stroke-dasharray="1.5,1.5" opacity="0.9"><title>Gradus Monetae Steps of Moneta (stairs, low)</title></polyline>
+<polyline points="1099.1,1110.9 1091.2,1118.9 1082.8,1130.2" stroke="#8a7050" stroke-width="1.7"  opacity="0.9"><title> Island street (Pons Fabricius to Pons Cestius) (street, medium)</title></polyline>
+<polyline points="787.1,1005.5 764.4,1024.8 739.2,1044.5" stroke="#8a7050" stroke-width="2.1" stroke-dasharray="5,2.5" opacity="0.9"><title> Street from the Pons Agrippae to the riverside road (street, low)</title></polyline>
+<polyline points="1134,1267.6 1083.2,1241.1" stroke="#8a7050" stroke-width="1.7" stroke-dasharray="5,2.5" opacity="0.9"><title> Street from the Pons Sublicius to the Via Portuensis (street, low)</title></polyline>
+</g>
+<g id="walls" fill="none" stroke-linejoin="round">
+<polyline points="1138.2,1102.5 1146.6,1096.2 1184.4,1100.4 1222.2,1098.3" stroke="#7b2d26" stroke-width="2.0" stroke-dasharray="2,4" opacity="0.8"><title>Servian Wall: river to Capitoline (built-over)</title></polyline>
+<polyline points="1222.2,1098.3 1211.7,1066.8 1207.5,1029 1224.3,995.4 1251.6,957.6 1270.5,921.9 1276.8,898.8" stroke="#7b2d26" stroke-width="2.0" stroke-dasharray="6,3" opacity="0.8"><title>Servian Wall: Capitoline flank (ruinous)</title></polyline>
+<polyline points="1276.8,898.8 1297.8,907.2 1323,886.2 1373.4,861 1406.6,849.7" stroke="#7b2d26" stroke-width="2.0" stroke-dasharray="2,4" opacity="0.8"><title>Servian Wall: lost Capitoline-Quirinal saddle (built-over)</title></polyline>
+<polyline points="1406.6,849.7 1386,793.8 1369.2,739.2 1352.4,693 1339.8,630 1327.2,540.5 1461.6,504 1554,483 1647.7,460.7 1669.5,393.5 1743,357 1822,343.6" stroke="#7b2d26" stroke-width="3.2"  opacity="0.8"><title>Servian Wall: Quirinal (partial)</title></polyline>
+<polyline points="1822,343.6 1852.2,420 1871.1,520.8 1902.6,562.8 1927.8,613.2 1940.4,693 1945.4,780.4 1923.6,852.6 1912.7,880.3" stroke="#7b2d26" stroke-width="7.0"  opacity="0.8"><title>Servian rampart (agger) (partial)</title></polyline>
+<polyline points="1912.7,880.3 1885,1020.6 1848,1113 1810.2,1184.4 1743,1264.2 1698.9,1352.8 1617,1407 1575,1428 1535.9,1430.1" stroke="#7b2d26" stroke-width="2.0" stroke-dasharray="2,4" opacity="0.8"><title>Servian Wall: Esquiline to Porta Capena (built-over)</title></polyline>
+<polyline points="1535.9,1430.1 1512,1491 1470,1562.4 1454.5,1587.6" stroke="#7b2d26" stroke-width="2.0" stroke-dasharray="2,4" opacity="0.8"><title>Servian Wall: Lesser Aventine (built-over)</title></polyline>
+<polyline points="1454.5,1587.6 1386,1596 1339.8,1596 1264.2,1598.9 1197,1591.8 1142.4,1566.6 1087.8,1512 1087.8,1449 1125.6,1398.6 1155,1339.8 1188.6,1270.5" stroke="#7b2d26" stroke-width="3.2"  opacity="0.8"><title>Servian Wall: Aventine (partial)</title></polyline>
+<polyline points="1188.6,1270.5 1178.5,1203.3 1176,1160.9 1160,1137.4 1138.2,1102.5" stroke="#7b2d26" stroke-width="2.0" stroke-dasharray="2,4" opacity="0.8"><title>Servian Wall: riverside (Porta Trigemina to Forum Holitorium) (built-over)</title></polyline>
+</g>
+<g id="bridges" stroke-linecap="butt">
+<line x1="728.7" y1="-931.1" x2="706" y2="-998.3" stroke="#3b3026" stroke-width="3.7"><title>Pons Mulvius: 109 BC (M. Aemilius Scaurus); earlier timber bridge</title></line>
+<line x1="642.6" y1="661.5" x2="601" y2="620.8" stroke="#3b3026" stroke-width="3.4"><title>Pons Neronianus (Triumphalis): Caligula or Nero (1st c. AD)</title></line>
+<line x1="817.7" y1="978.2" x2="787.1" y2="1005.5" stroke="#3b3026" stroke-width="3.4"><title>Pons Agrippae: Agrippa (late 1st c. BC), at the latest Claudius</title></line>
+<line x1="1118.9" y1="1088.2" x2="1099.1" y2="1110.9" stroke="#3b3026" stroke-width="2.3"><title>Pons Fabricius: 62 BC (L. Fabricius, curator viarum)</title></line>
+<line x1="1082.8" y1="1130.2" x2="1072.3" y2="1162.6" stroke="#3b3026" stroke-width="3.4"><title>Pons Cestius: c. 62-27 BC (prob. L. Cestius, c. 46 BC)</title></line>
+<line x1="1180.2" y1="1176.8" x2="1115.1" y2="1184.4" stroke="#3b3026" stroke-width="3.4"><title>Pons Aemilius: piers 179 BC; arches 142 BC; Augustan restoration</title></line>
+<line x1="1177.7" y1="1245.3" x2="1134" y2="1267.6" stroke="#8b5a2b" stroke-width="2.2"><title>Pons Sublicius: regal (Ancus Marcius); ritually rebuilt in timber</title></line>
+</g>
+<g id="gates">
+<g transform="translate(1146.6,1096.2) rotate(320)"><rect x="-4" y="-2.5" width="8" height="5" fill="#f3e9d2" stroke="#7b2d26" stroke-width="1.2"/><line x1="0" y1="-2.5" x2="0" y2="-7" stroke="#7b2d26" stroke-width="1"/><title>Porta Flumentana: site only; no standing structure (river frontage perhaps never walled)</title></g>
+<g transform="translate(1220.1,1097) rotate(340)"><rect x="-4" y="-2.5" width="8" height="5" fill="#f3e9d2" stroke="#7b2d26" stroke-width="1.2"/><line x1="0" y1="-2.5" x2="0" y2="-7" stroke="#7b2d26" stroke-width="1"/><title>Porta Carmentalis: standing double arch (obsolete); right passage shunned as the Porta Scelerata</title></g>
+<g transform="translate(1201.2,1102.5) rotate(320)"><rect x="-4" y="-2.5" width="8" height="5" fill="#f3e9d2" stroke="#7b2d26" stroke-width="1.2"/><line x1="0" y1="-2.5" x2="0" y2="-7" stroke="#7b2d26" stroke-width="1"/><title>Porta Triumphalis: debated ceremonial gate, opened only for triumphs (site D)</title></g>
+<g transform="translate(1276.8,898.8) rotate(330)"><rect x="-4" y="-2.5" width="8" height="5" fill="#f3e9d2" stroke="#7b2d26" stroke-width="1.2"/><line x1="0" y1="-2.5" x2="0" y2="-7" stroke="#7b2d26" stroke-width="1"/><title>Porta Fontinalis: site only; probably removed by Trajan's cutting of the saddle</title></g>
+<g transform="translate(1297.8,907.2) rotate(0)"><rect x="-4" y="-2.5" width="8" height="5" fill="#f3e9d2" stroke="#7b2d26" stroke-width="1.2"/><line x1="0" y1="-2.5" x2="0" y2="-7" stroke="#7b2d26" stroke-width="1"/><title>Porta Ratumena: vanished: its ground was cut away for Trajan's Forum (107-112)</title></g>
+<g transform="translate(1406.6,849.7) rotate(290)"><rect x="-4" y="-2.5" width="8" height="5" fill="#f3e9d2" stroke="#7b2d26" stroke-width="1.2"/><line x1="0" y1="-2.5" x2="0" y2="-7" stroke="#7b2d26" stroke-width="1"/><title>Porta Sanqualis: fragmentary arch in surviving wall (Largo Magnanapoli)</title></g>
+<g transform="translate(1352.4,693) rotate(270)"><rect x="-4" y="-2.5" width="8" height="5" fill="#f3e9d2" stroke="#7b2d26" stroke-width="1.2"/><line x1="0" y1="-2.5" x2="0" y2="-7" stroke="#7b2d26" stroke-width="1"/><title>Porta Salutaris: obsolete gate, standing (site D)</title></g>
+<g transform="translate(1461.6,504) rotate(350)"><rect x="-4" y="-2.5" width="8" height="5" fill="#f3e9d2" stroke="#7b2d26" stroke-width="1.2"/><line x1="0" y1="-2.5" x2="0" y2="-7" stroke="#7b2d26" stroke-width="1"/><title>Porta Quirinalis: obsolete gate (site D)</title></g>
+<g transform="translate(1822,343.6) rotate(40)"><rect x="-4" y="-2.5" width="8" height="5" fill="#f3e9d2" stroke="#7b2d26" stroke-width="1.2"/><line x1="0" y1="-2.5" x2="0" y2="-7" stroke="#7b2d26" stroke-width="1"/><title>Porta Collina: standing obsolete gate in the agger; Salaria and Nomentana leave here</title></g>
+<g transform="translate(1919.4,596.4) rotate(70)"><rect x="-4" y="-2.5" width="8" height="5" fill="#f3e9d2" stroke="#7b2d26" stroke-width="1.2"/><line x1="0" y1="-2.5" x2="0" y2="-7" stroke="#7b2d26" stroke-width="1"/><title>Porta Viminalis: standing obsolete gate in the agger</title></g>
+<g transform="translate(1913.9,880.3) rotate(88)"><rect x="-4" y="-2.5" width="8" height="5" fill="#f3e9d2" stroke="#7b2d26" stroke-width="1.2"/><line x1="0" y1="-2.5" x2="0" y2="-7" stroke="#7b2d26" stroke-width="1"/><title>Porta Esquilina: Augustan travertine triple arch, standing</title></g>
+<g transform="translate(1810.2,1184.4) rotate(120)"><rect x="-4" y="-2.5" width="8" height="5" fill="#f3e9d2" stroke="#7b2d26" stroke-width="1.2"/><line x1="0" y1="-2.5" x2="0" y2="-7" stroke="#7b2d26" stroke-width="1"/><title>Porta Querquetulana: obsolete gate (site D)</title></g>
+<g transform="translate(1698.9,1352.8) rotate(130)"><rect x="-4" y="-2.5" width="8" height="5" fill="#f3e9d2" stroke="#7b2d26" stroke-width="1.2"/><line x1="0" y1="-2.5" x2="0" y2="-7" stroke="#7b2d26" stroke-width="1"/><title>Porta Caelimontana: rebuilt as the Arch of Dolabella (AD 10), carrying the Arcus Neroniani</title></g>
+<g transform="translate(1535.9,1430.1) rotate(140)"><rect x="-4" y="-2.5" width="8" height="5" fill="#f3e9d2" stroke="#7b2d26" stroke-width="1.2"/><line x1="0" y1="-2.5" x2="0" y2="-7" stroke="#7b2d26" stroke-width="1"/><title>Porta Capena: standing obsolete gate dripping under aqueduct arches ("madida Capena")</title></g>
+<g transform="translate(1454.5,1587.6) rotate(180)"><rect x="-4" y="-2.5" width="8" height="5" fill="#f3e9d2" stroke="#7b2d26" stroke-width="1.2"/><line x1="0" y1="-2.5" x2="0" y2="-7" stroke="#7b2d26" stroke-width="1"/><title>Porta Naevia: obsolete gate (site D)</title></g>
+<g transform="translate(1314.6,1593.9) rotate(200)"><rect x="-4" y="-2.5" width="8" height="5" fill="#f3e9d2" stroke="#7b2d26" stroke-width="1.2"/><line x1="0" y1="-2.5" x2="0" y2="-7" stroke="#7b2d26" stroke-width="1"/><title>Porta Raudusculana: obsolete gate; wall remains nearby</title></g>
+<g transform="translate(1142.4,1566.6) rotate(220)"><rect x="-4" y="-2.5" width="8" height="5" fill="#f3e9d2" stroke="#7b2d26" stroke-width="1.2"/><line x1="0" y1="-2.5" x2="0" y2="-7" stroke="#7b2d26" stroke-width="1"/><title>Porta Lavernalis: obsolete gate (site C)</title></g>
+<g transform="translate(1173.9,1297.8) rotate(210)"><rect x="-4" y="-2.5" width="8" height="5" fill="#f3e9d2" stroke="#7b2d26" stroke-width="1.2"/><line x1="0" y1="-2.5" x2="0" y2="-7" stroke="#7b2d26" stroke-width="1"/><title>Porta Trigemina: standing obsolete gate between the Aventine and the river; Via Ostiensis starts here</title></g>
+<g transform="translate(1456.6,1133.2) rotate(60)"><rect x="-4" y="-2.5" width="8" height="5" fill="#f3e9d2" stroke="#7b2d26" stroke-width="1.2"/><line x1="0" y1="-2.5" x2="0" y2="-7" stroke="#7b2d26" stroke-width="1"/><title>Porta Mugonia: archaic gate of the Palatine settlement; a name and a spot, no structure</title></g>
+<g transform="translate(1333.5,1129) rotate(300)"><rect x="-4" y="-2.5" width="8" height="5" fill="#f3e9d2" stroke="#7b2d26" stroke-width="1.2"/><line x1="0" y1="-2.5" x2="0" y2="-7" stroke="#7b2d26" stroke-width="1"/><title>Porta Romanula: archaic gate of the Palatine settlement at the foot of the Clivus Victoriae; no structure</title></g>
+</g>
+<g id="landmarks">
+<polygon points="1407,945 1461.6,974.4 1541.4,945 1617,919.8 1642.2,869.4 1701,768.6 1667.4,751.8 1591.8,840 1541.4,793.8 1482.6,827.4 1428,877.8" fill="#b8a890" fill-opacity="0.25" stroke="#b8a890" stroke-width="0.8" stroke-dasharray="3,2"><title>The Subura (district anchor) (Subura) - other, complete, rot 0, P1, low</title></polygon>
+<polygon points="1182.3,1169.7 1228.5,1155 1253.7,1190.7 1241.1,1241.1 1197,1247.4 1180.2,1218" fill="#d9a066" fill-opacity="0.25" stroke="#d9a066" stroke-width="0.8" stroke-dasharray="3,2"><title>Cattle Market (Forum Boarium) - market, complete, rot 0, P1, medium</title></polygon>
+<g transform="translate(672,1575) rotate(0)">
+<rect x="-189.0" y="-84.0" width="378.0" height="168.0" fill="url(#hatch)" fill-opacity="1" stroke="#8fbf6f" stroke-width="0.8" stroke-dasharray="3,2"><title>Gardens of Caesar (Horti Caesaris) - garden, complete, rot 0, P3, low</title></rect>
+</g>
+<g transform="translate(357,672) rotate(0)">
+<rect x="-189.0" y="-79.8" width="378.0" height="159.6" fill="url(#hatch)" fill-opacity="1" stroke="#8fbf6f" stroke-width="0.8" stroke-dasharray="3,2"><title>Gardens of Agrippina (Horti Agrippinae) - garden, complete, rot 0, P3, low</title></rect>
+</g>
+<g transform="translate(852.6,1331.4) rotate(0)">
+<rect x="-112.6" y="-75.0" width="225.1" height="149.9" fill="#b8a890" fill-opacity="0.25" stroke="#b8a890" stroke-width="0.8" stroke-dasharray="3,2"><title>Naumachia of Augustus (site) (Naumachia Augusti) - other, ruin, rot 0, P3, low</title></rect>
+</g>
+<g transform="translate(2105,378.8) rotate(249)">
+<rect x="-91.3" y="-79.8" width="182.7" height="159.6" fill="#7b7d4a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Praetorian Camp (Castra Praetoria) - camp, complete, rot 249, P3, high</title></rect>
+<line x1="-91.3" y1="-79.8" x2="91.3" y2="-79.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1701,336) rotate(0)">
+<rect x="-115.5" y="-63.0" width="231.0" height="126.0" fill="url(#hatch)" fill-opacity="1" stroke="#8fbf6f" stroke-width="0.8" stroke-dasharray="3,2"><title>Gardens of Sallust (Horti Sallustiani) - garden, complete, rot 0, P3, low</title></rect>
+</g>
+<g transform="translate(945,1239) rotate(0)">
+<rect x="-84.0" y="-63.0" width="168.0" height="126.0" fill="#b8a890" fill-opacity="0.25" stroke="#b8a890" stroke-width="0.8" stroke-dasharray="3,2"><title>Jewish Quarter of Trastevere ((Transtiberim)) - other, complete, rot 0, P3, low</title></rect>
+</g>
+<g transform="translate(693,533.4) rotate(0)">
+<rect x="-73.5" y="-52.5" width="147.0" height="105.0" fill="url(#hatch)" fill-opacity="1" stroke="#8fbf6f" stroke-width="0.8" stroke-dasharray="3,2"><title>Gardens of Domitia (Horti Domitiae) - garden, complete, rot 0, P3, low</title></rect>
+</g>
+<g transform="translate(1369.2,1334.8) rotate(307)">
+<rect x="-29.4" y="-130.4" width="58.8" height="260.8" fill="#d2b48c" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Circus Maximus (Circus Maximus) - circus, remodeled, rot 307, P1, high</title></rect>
+<line x1="-29.4" y1="-130.4" x2="29.4" y2="-130.4" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1911,919.8) rotate(0)">
+<rect x="-63.0" y="-54.6" width="126.0" height="109.2" fill="url(#hatch)" fill-opacity="1" stroke="#8fbf6f" stroke-width="0.8" stroke-dasharray="3,2"><title>Gardens of Maecenas (Horti Maecenatiani) - garden, complete, rot 0, P2, low</title></rect>
+</g>
+<g transform="translate(1306.2,373.8) rotate(0)">
+<rect x="-63.0" y="-52.5" width="126.0" height="105.0" fill="url(#hatch)" fill-opacity="1" stroke="#8fbf6f" stroke-width="0.8" stroke-dasharray="3,2"><title>Gardens of Lucullus (Horti Luculliani) - garden, complete, rot 0, P3, low</title></rect>
+</g>
+<g transform="translate(1730.4,1031.9) rotate(32)">
+<rect x="-65.1" y="-46.2" width="130.2" height="92.4" fill="#5f9ea0" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Baths of Trajan (Thermae Traiani) - baths, new, rot 32, P1, medium</title></rect>
+<line x1="-65.1" y1="-46.2" x2="65.1" y2="-46.2" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(2037,966) rotate(0)">
+<rect x="-63.0" y="-42.0" width="126.0" height="84.0" fill="url(#hatch)" fill-opacity="1" stroke="#8fbf6f" stroke-width="0.8" stroke-dasharray="3,2"><title>Lamian Gardens (Horti Lamiani) - garden, complete, rot 0, P3, low</title></rect>
+</g>
+<g transform="translate(294,609) rotate(89)">
+<rect x="-21.0" y="-113.4" width="42.0" height="226.8" fill="#d2b48c" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Circus of Gaius and Nero (Circus Gai et Neronis) - circus, complete, rot 89, P3, medium</title></rect>
+<line x1="-21.0" y1="-113.4" x2="21.0" y2="-113.4" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1100.4,791.7) rotate(180)">
+<rect x="-25.2" y="-65.1" width="50.4" height="130.2" fill="#d8c8a0" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Saepta Julia (Saepta Iulia) - portico, complete, rot 180, P2, medium</title></rect>
+<line x1="-25.2" y1="-65.1" x2="25.2" y2="-65.1" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1627.5,1254.5) rotate(250)">
+<rect x="-42.0" y="-37.8" width="84.0" height="75.6" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Divus Claudius (Templum Divi Claudii (Claudianum)) - temple, complete, rot 250, P2, medium</title></rect>
+<line x1="-42.0" y1="-37.8" x2="42.0" y2="-37.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(539.7,401.9) rotate(0)">
+<rect x="-25.2" y="-63.0" width="50.4" height="126.0" fill="#b8a890" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Naumachia of Trajan (Naumachia Traiani) - other, new, rot 0, P3, low</title></rect>
+<line x1="-25.2" y1="-63.0" x2="25.2" y2="-63.0" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1047.9,1022.7) rotate(119)">
+<rect x="-18.9" y="-79.8" width="37.8" height="159.6" fill="#d2b48c" fill-opacity="0.25" stroke="#d2b48c" stroke-width="0.8" stroke-dasharray="3,2"><title>Circus Flaminius (Circus Flaminius) - circus, complete, rot 119, P1, low</title></rect>
+</g>
+<g transform="translate(949.2,1612.8) rotate(316)">
+<rect x="-102.3" y="-12.6" width="204.5" height="25.2" fill="#a08a6a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Porticus Aemilia (Porticus Aemilia) - warehouse, complete, rot 316, P2, medium</title></rect>
+<line x1="-102.3" y1="-12.6" x2="102.3" y2="-12.6" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(929.9,733.3) rotate(178)">
+<rect x="-22.3" y="-57.8" width="44.5" height="115.5" fill="#d2b48c" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Stadium of Domitian (Stadium Domitiani) - stadium, complete, rot 178, P2, high</title></rect>
+<line x1="-22.3" y1="-57.8" x2="22.3" y2="-57.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(254.1,567) rotate(180)">
+<rect x="-84.0" y="-14.7" width="168.0" height="29.4" fill="#888888" fill-opacity="0.25" stroke="#888888" stroke-width="0.8" stroke-dasharray="3,2"><title>Tombs of the Via Cornelia (Vatican) ((Vatican necropolis)) - tomb, complete, rot 180, P3, medium</title></rect>
+</g>
+<g transform="translate(1692.6,1087.8) rotate(180)">
+<rect x="-52.5" y="-21.0" width="105.0" height="42.0" fill="none" stroke="#444" stroke-width="0.9" stroke-dasharray="1.5,1.5"><title>Buried Golden House (Oppian wing) (Domus Aurea) - palace, ruin, rot 180, P1, high</title></rect>
+</g>
+<g transform="translate(990.4,1507.8) rotate(317)">
+<rect x="-105.0" y="-10.5" width="210.0" height="21.0" fill="#6f8fa8" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Emporium (River Docks) (Emporium) - harbor, complete, rot 317, P2, medium</title></rect>
+<line x1="-105.0" y1="-10.5" x2="105.0" y2="-10.5" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1012.2,1642.2) rotate(316)">
+<rect x="-34.6" y="-30.4" width="69.3" height="60.9" fill="#a08a6a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Warehouses of Galba (Horrea Galbana (Sulpicia)) - warehouse, complete, rot 316, P2, medium</title></rect>
+<line x1="-34.6" y1="-30.4" x2="34.6" y2="-30.4" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1600.2,1136.5) rotate(19)">
+<ellipse cx="0" cy="0" rx="39.5" ry="32.8" fill="#a0522d" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Flavian Amphitheatre (Colosseum) (Amphitheatrum Flavium) - amphitheatre, complete, rot 19, P1, high</title></ellipse>
+<line x1="-39.5" y1="0" x2="39.5" y2="0" stroke="#d01010" stroke-width="0.6" stroke-dasharray="2,2"/>
+</g>
+<g transform="translate(1012.2,726.6) rotate(0)">
+<rect x="-25.2" y="-39.9" width="50.4" height="79.8" fill="#5f9ea0" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Baths of Nero (Thermae Neronianae) - baths, complete, rot 0, P2, medium</title></rect>
+<line x1="-25.2" y1="-39.9" x2="25.2" y2="-39.9" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1008.8,902.2) rotate(90)">
+<rect x="-28.3" y="-34.6" width="56.7" height="69.3" fill="#8fbf6f" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Portico of Pompey (gardens) (Porticus Pompeiana) - garden, complete, rot 90, P2, medium</title></rect>
+<line x1="-28.3" y1="-34.6" x2="28.3" y2="-34.6" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1736.7,1390.2) rotate(0)">
+<rect x="-31.5" y="-25.2" width="63.0" height="50.4" fill="#7b7d4a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Camp of the Foreigners (Castra Peregrina) - camp, complete, rot 0, P2, medium</title></rect>
+<line x1="-31.5" y1="-25.2" x2="31.5" y2="-25.2" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(950,903) rotate(270)">
+<rect x="-32.8" y="-23.7" width="65.5" height="47.5" fill="#a0522d" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Theatre of Pompey (Theatrum Pompei) - theatre, complete, rot 270, P2, medium</title></rect>
+<line x1="-32.8" y1="-23.7" x2="32.8" y2="-23.7" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1478.4,1178.1) rotate(40)">
+<rect x="-31.5" y="-23.1" width="63.0" height="46.2" fill="url(#hatch)" fill-opacity="1" stroke="#8fbf6f" stroke-width="0.8" stroke-dasharray="3,2"><title>Gardens of Adonis (Adonaea (?)) - garden, complete, rot 40, P2, low</title></rect>
+</g>
+<g transform="translate(1134,1008) rotate(208)">
+<rect x="-25.0" y="-27.7" width="50.0" height="55.4" fill="#d8c8a0" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Portico of Octavia (Porticus Octaviae) - portico, complete, rot 208, P1, medium</title></rect>
+<line x1="-25.0" y1="-27.7" x2="25.0" y2="-27.7" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1386.8,1139) rotate(40)">
+<rect x="-23.1" y="-29.4" width="46.2" height="58.8" fill="#8b3a62" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Domus Tiberiana (Domus Tiberiana) - palace, complete, rot 40, P1, high</title></rect>
+<line x1="-23.1" y1="-29.4" x2="23.1" y2="-29.4" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1142.4,777) rotate(0)">
+<rect x="-14.7" y="-46.2" width="29.4" height="92.4" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Sanctuary of Isis and Serapis (Iseum et Serapeum Campense) - temple, complete, rot 0, P2, medium</title></rect>
+<line x1="-14.7" y1="-46.2" x2="14.7" y2="-46.2" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1400.7,1204.6) rotate(42)">
+<rect x="-21.0" y="-31.9" width="42.0" height="63.8" fill="#8b3a62" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Flavian Palace (state wing) (Domus Flavia) - palace, complete, rot 42, P1, high</title></rect>
+<line x1="-21.0" y1="-31.9" x2="21.0" y2="-31.9" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1355.8,921.5) rotate(140)">
+<rect x="-25.2" y="-26.3" width="50.4" height="52.5" fill="#e8dcc0" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Forum of Trajan (Forum Traiani (Area Fori)) - forum, new, rot 140, P1, high</title></rect>
+<line x1="-25.2" y1="-26.3" x2="25.2" y2="-26.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1431.4,1018.5) rotate(321)">
+<rect x="-23.1" y="-28.3" width="46.2" height="56.7" fill="#e8dcc0" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Peace (Templum Pacis) - forum, complete, rot 321, P1, medium</title></rect>
+<line x1="-23.1" y1="-28.3" x2="23.1" y2="-28.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1507.8,1108.8) rotate(290)">
+<rect x="-21.0" y="-30.4" width="42.0" height="60.9" fill="#d8c8a0" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Vestibule of the Golden House (Vestibulum Domus Aureae) - portico, remodeled, rot 290, P1, low</title></rect>
+<line x1="-21.0" y1="-30.4" x2="21.0" y2="-30.4" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1417.9,1239.8) rotate(222)">
+<rect x="-15.1" y="-42.0" width="30.2" height="84.0" fill="#8b3a62" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Domus Augustana (private palace) (Domus Augustana) - palace, complete, rot 222, P1, high</title></rect>
+<line x1="-15.1" y1="-42.0" x2="15.1" y2="-42.0" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1640.1,1071) rotate(0)">
+<rect x="-22.1" y="-25.2" width="44.1" height="50.4" fill="#5f9ea0" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Baths of Titus (Thermae Titi) - baths, complete, rot 0, P1, medium</title></rect>
+<line x1="-22.1" y1="-25.2" x2="22.1" y2="-25.2" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1352.4,977.8) rotate(131)">
+<rect x="-15.8" y="-33.6" width="31.5" height="67.2" fill="#e8dcc0" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Forum of Caesar (Forum Iulium) - forum, remodeled, rot 131, P1, high</title></rect>
+<line x1="-15.8" y1="-33.6" x2="15.8" y2="-33.6" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(999.6,827.4) rotate(0)">
+<rect x="-25.2" y="-21.0" width="50.4" height="42.0" fill="#b8a890" fill-opacity="0.25" stroke="#b8a890" stroke-width="0.8" stroke-dasharray="3,2"><title>Pool of Agrippa (Stagnum Agrippae) - other, complete, rot 0, P2, low</title></rect>
+</g>
+<g transform="translate(1399.4,958.4) rotate(230)">
+<rect x="-18.9" y="-26.3" width="37.8" height="52.5" fill="#e8dcc0" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Forum of Augustus (Forum Augusti) - forum, complete, rot 230, P1, high</title></rect>
+<line x1="-18.9" y1="-26.3" x2="18.9" y2="-26.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(2037,1209.6) rotate(0)">
+<rect x="-23.1" y="-21.0" width="46.2" height="42.0" fill="#7b7d4a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Old Camp of the Imperial Horse Guard (Castra Priora Equitum Singularium) - camp, new, rot 0, P3, low</title></rect>
+<line x1="-23.1" y1="-21.0" x2="23.1" y2="-21.0" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1163.4,867.3) rotate(0)">
+<rect x="-11.5" y="-42.0" width="23.1" height="84.0" fill="#d8c8a0" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Porticus of the Deified (Divorum (Porticus Divorum)) - portico, complete, rot 0, P2, low</title></rect>
+<line x1="-11.5" y1="-42.0" x2="11.5" y2="-42.0" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1147.9,1064.3) rotate(45)">
+<rect x="-24.4" y="-19.5" width="48.7" height="39.1" fill="#a0522d" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Theatre of Marcellus (Theatrum Marcelli) - theatre, complete, rot 45, P1, high</title></rect>
+<line x1="-24.4" y1="-19.5" x2="24.4" y2="-19.5" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1331.4,891.2) rotate(140)">
+<rect x="-35.7" y="-12.6" width="71.4" height="25.2" fill="#b08d57" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Basilica Ulpia (Basilica Ulpia) - basilica, new, rot 140, P1, high</title></rect>
+<line x1="-35.7" y1="-12.6" x2="35.7" y2="-12.6" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1055.5,831.6) rotate(0)">
+<rect x="-18.9" y="-23.1" width="37.8" height="46.2" fill="#5f9ea0" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Baths of Agrippa (Thermae Agrippae) - baths, complete, rot 0, P2, low</title></rect>
+<line x1="-18.9" y1="-23.1" x2="18.9" y2="-23.1" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1014.3,1793.4) rotate(0)">
+<ellipse cx="0" cy="0" rx="29.4" ry="18.9" fill="#b8a890" fill-opacity="0.25" stroke="#b8a890" stroke-width="0.8" stroke-dasharray="3,2"><title>Mound of Potsherds ((Mons Testaceus, medieval name)) - other, under-construction, rot 0, P3, low</title></ellipse>
+<line x1="-29.4" y1="0" x2="29.4" y2="0" stroke="#d01010" stroke-width="0.6" stroke-dasharray="2,2"/>
+</g>
+<g transform="translate(1608.6,1474.2) rotate(0)">
+<rect x="-25.2" y="-16.8" width="50.4" height="33.6" fill="url(#hatch)" fill-opacity="1" stroke="#8fbf6f" stroke-width="0.8" stroke-dasharray="3,2"><title>Grove and Spring of the Camenae (Lucus Camenarum) - garden, complete, rot 0, P3, low</title></rect>
+</g>
+<g transform="translate(1690.5,1148.7) rotate(289)">
+<rect x="-17.8" y="-23.1" width="35.7" height="46.2" fill="#7b7d4a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Great Gladiatorial School (Ludus Magnus) - camp, remodeled, rot 289, P1, high</title></rect>
+<line x1="-17.8" y1="-23.1" x2="17.8" y2="-23.1" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1121.4,895.4) rotate(270)">
+<rect x="-23.5" y="-16.8" width="47.0" height="33.6" fill="#d8c8a0" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Minucian Portico (Grain Dole Hall) (Porticus Minucia Frumentaria) - portico, complete, rot 270, P2, low</title></rect>
+<line x1="-23.5" y1="-16.8" x2="23.5" y2="-16.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1149.1,1130.2) rotate(240)">
+<rect x="-46.2" y="-8.4" width="92.4" height="16.8" fill="#6f8fa8" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>River Port (Portus Tiberinus) - harbor, complete, rot 240, P1, medium</title></rect>
+<line x1="-46.2" y1="-8.4" x2="46.2" y2="-8.4" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1761.9,943.7) rotate(340)">
+<rect x="-24.1" y="-15.8" width="48.3" height="31.5" fill="#d8c8a0" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Portico of Livia (Porticus Liviae) - portico, complete, rot 340, P2, low</title></rect>
+<line x1="-24.1" y1="-15.8" x2="24.1" y2="-15.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1389.4,890.4) rotate(240)">
+<rect x="-28.8" y="-12.6" width="57.5" height="25.2" fill="#d9a066" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Markets of Trajan ((Mercatus Traiani, modern name)) - market, new, rot 240, P1, high</title></rect>
+<line x1="-28.8" y1="-12.6" x2="28.8" y2="-12.6" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1433.5,1264.2) rotate(42)">
+<rect x="-10.5" y="-33.6" width="21.0" height="67.2" fill="#d2b48c" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Palatine Stadium (Garden Hippodrome) (Hippodromus Palatii) - stadium, complete, rot 42, P1, high</title></rect>
+<line x1="-10.5" y1="-33.6" x2="10.5" y2="-33.6" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1806,1138.2) rotate(0)">
+<rect x="-21.0" y="-16.8" width="42.0" height="33.6" fill="#7b7d4a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Camp of the Misenum Sailors (Castra Misenatium) - camp, complete, rot 0, P2, low</title></rect>
+<line x1="-21.0" y1="-16.8" x2="21.0" y2="-16.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(949.2,821.1) rotate(180)">
+<rect x="-21.0" y="-16.8" width="42.0" height="33.6" fill="#a0522d" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Odeum of Domitian (Odeum) - odeum, complete, rot 180, P2, medium</title></rect>
+<line x1="-21.0" y1="-16.8" x2="21.0" y2="-16.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1399.4,994.1) rotate(230)">
+<rect x="-9.4" y="-35.7" width="18.9" height="71.4" fill="#e8dcc0" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Forum of Nerva (Passageway Forum) (Forum Transitorium / Forum Nervae) - forum, complete, rot 230, P1, high</title></rect>
+<line x1="-9.4" y1="-35.7" x2="9.4" y2="-35.7" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1138.2,945) rotate(280)">
+<rect x="-18.9" y="-16.8" width="37.8" height="33.6" fill="#d8c8a0" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Crypta Balbi (Crypta Balbi) - portico, complete, rot 280, P2, medium</title></rect>
+<line x1="-18.9" y1="-16.8" x2="18.9" y2="-16.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1103.8,953) rotate(280)">
+<rect x="-18.9" y="-15.8" width="37.8" height="31.5" fill="#a0522d" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Theatre of Balbus (Theatrum Balbi) - theatre, complete, rot 280, P2, medium</title></rect>
+<line x1="-18.9" y1="-15.8" x2="18.9" y2="-15.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1793.4,1400.7) rotate(0)">
+<rect x="-16.8" y="-16.8" width="33.6" height="33.6" fill="#d9a066" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Great Market (Macellum Magnum) - market, complete, rot 0, P2, low</title></rect>
+<line x1="-16.8" y1="-16.8" x2="16.8" y2="-16.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1046.2,404.9) rotate(180)">
+<circle cx="0" cy="0" r="18.9" fill="#888888" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Mausoleum of Augustus (Mausoleum Augusti) - tomb, complete, rot 180, P2, high</title></circle>
+<line x1="0" y1="0" x2="0" y2="-21.4" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1189.4,1087.8) rotate(73)">
+<rect x="-21.0" y="-12.6" width="42.0" height="25.2" fill="#d9a066" fill-opacity="0.25" stroke="#d9a066" stroke-width="0.8" stroke-dasharray="3,2"><title>Vegetable Market (Forum Holitorium) - market, complete, rot 73, P1, low</title></rect>
+</g>
+<g transform="translate(1247.4,726.6) rotate(255)">
+<rect x="-21.0" y="-12.6" width="42.0" height="25.2" fill="#d8c8a0" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Portico of Vipsania (Agrippa's World Map) (Porticus Vipsania) - portico, complete, rot 255, P2, low</title></rect>
+<line x1="-21.0" y1="-12.6" x2="21.0" y2="-12.6" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(980.7,1549) rotate(316)">
+<rect x="-25.2" y="-10.5" width="50.4" height="21.0" fill="#a08a6a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Warehouses of Lollius (Horrea Lolliana) - warehouse, complete, rot 316, P2, low</title></rect>
+<line x1="-25.2" y1="-10.5" x2="25.2" y2="-10.5" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1406.6,1085.7) rotate(295)">
+<rect x="-10.9" y="-22.1" width="21.8" height="44.1" fill="#c08060" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>House of the Vestal Virgins (Atrium Vestae) - house, remodeled, rot 295, P1, high</title></rect>
+<line x1="-10.9" y1="-22.1" x2="10.9" y2="-22.1" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1337.3,1056.7) rotate(24)">
+<rect x="-21.2" y="-10.3" width="42.4" height="20.6" fill="#b08d57" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Basilica Julia (Basilica Iulia) - basilica, complete, rot 24, P1, high</title></rect>
+<line x1="-21.2" y1="-10.3" x2="21.2" y2="-10.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1060.1,748) rotate(356)">
+<rect x="-12.2" y="-17.6" width="24.4" height="35.3" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Pantheon of Agrippa (burned; rebuilding begins) (Pantheum) - temple, damaged, rot 356, P2, high</title></rect>
+<line x1="-12.2" y1="-17.6" x2="12.2" y2="-17.6" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1738.8,1163.4) rotate(0)">
+<rect x="-16.8" y="-12.6" width="33.6" height="25.2" fill="#7b7d4a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Dacian Gladiatorial School (Ludus Dacicus) - camp, complete, rot 0, P2, low</title></rect>
+<line x1="-16.8" y1="-12.6" x2="16.8" y2="-12.6" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1680,1194.9) rotate(0)">
+<rect x="-16.8" y="-12.6" width="33.6" height="25.2" fill="#7b7d4a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Morning School (beast fighters) (Ludus Matutinus) - camp, complete, rot 0, P2, low</title></rect>
+<line x1="-16.8" y1="-12.6" x2="16.8" y2="-12.6" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1062.6,902.6) rotate(90)">
+<rect x="-21.0" y="-10.1" width="42.0" height="20.2" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Sacred Area (Temples A-D) (Area Sacra (Porticus Minucia Vetus)) - temple, complete, rot 90, P2, high</title></rect>
+<line x1="-21.0" y1="-10.1" x2="21.0" y2="-10.1" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(666.5,1449) rotate(0)">
+<rect x="-16.8" y="-12.6" width="33.6" height="25.2" fill="#b5651d" fill-opacity="0.25" stroke="#b5651d" stroke-width="0.8" stroke-dasharray="3,2"><title>Grove of Furrina (Lucus Furrinae) - shrine, complete, rot 0, P3, low</title></rect>
+</g>
+<g transform="translate(1089.9,995.4) rotate(208)">
+<rect x="-19.3" y="-10.5" width="38.6" height="21.0" fill="#d8c8a0" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Portico of Philippus and Temple of Hercules of the Muses (Porticus Philippi / Aedes Herculis Musarum) - portico, complete, rot 208, P2, medium</title></rect>
+<line x1="-19.3" y1="-10.5" x2="19.3" y2="-10.5" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1270.5,1003.8) rotate(120)">
+<rect x="-14.7" y="-12.6" width="29.4" height="25.2" fill="#b5651d" fill-opacity="0.25" stroke="#b5651d" stroke-width="0.8" stroke-dasharray="3,2"><title>The Asylum (saddle between the summits) (Asylum / Inter duos lucos) - shrine, complete, rot 120, P1, medium</title></rect>
+</g>
+<g transform="translate(1100.4,864.4) rotate(180)">
+<rect x="-25.2" y="-7.1" width="50.4" height="14.3" fill="#b8a890" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Vote-Counting Hall (Diribitorium) - other, damaged, rot 180, P2, low</title></rect>
+<line x1="-25.2" y1="-7.1" x2="25.2" y2="-7.1" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1383.9,1026.5) rotate(213)">
+<rect x="-21.0" y="-7.6" width="42.0" height="15.1" fill="#b08d57" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Basilica Aemilia (Basilica Paulli) (Basilica Aemilia) - basilica, complete, rot 213, P1, high</title></rect>
+<line x1="-21.0" y1="-7.6" x2="21.0" y2="-7.6" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1715.7,1220.1) rotate(0)">
+<rect x="-14.7" y="-10.5" width="29.4" height="21.0" fill="#7b7d4a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Gallic Gladiatorial School (Ludus Gallicus) - camp, complete, rot 0, P3, low</title></rect>
+<line x1="-14.7" y1="-10.5" x2="14.7" y2="-10.5" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1442.7,1104.6) rotate(24)">
+<rect x="-13.9" y="-10.5" width="27.7" height="21.0" fill="#d9a066" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Pearl-Sellers' Arcade (Porticus Margaritaria (? = 'Horrea Vespasiani')) - market, complete, rot 24, P1, low</title></rect>
+<line x1="-13.9" y1="-10.5" x2="13.9" y2="-10.5" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1236.9,1041.6) rotate(158)">
+<rect x="-11.1" y="-13.0" width="22.3" height="26.0" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Jupiter Best and Greatest (Aedes Iovis Optimi Maximi Capitolini) - temple, complete, rot 158, P1, medium</title></rect>
+<line x1="-11.1" y1="-13.0" x2="11.1" y2="-13.0" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1457.4,1073.1) rotate(210)">
+<rect x="-16.8" y="-8.4" width="33.6" height="16.8" fill="#a08a6a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Spice Warehouses (Horrea Piperataria) - warehouse, complete, rot 210, P2, medium</title></rect>
+<line x1="-16.8" y1="-8.4" x2="16.8" y2="-8.4" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1346.1,1109.6) rotate(24)">
+<rect x="-10.5" y="-12.6" width="21.0" height="25.2" fill="#a08a6a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Warehouses of Agrippa (Horrea Agrippiana) - warehouse, complete, rot 24, P2, high</title></rect>
+<line x1="-10.5" y1="-12.6" x2="10.5" y2="-12.6" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1499.4,609) rotate(0)">
+<rect x="-8.4" y="-15.8" width="16.8" height="31.5" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Quirinus (Aedes Quirini) - temple, complete, rot 0, P3, low</title></rect>
+<line x1="-8.4" y1="-15.8" x2="8.4" y2="-15.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1293.6,1012.2) rotate(120)">
+<rect x="-15.1" y="-8.4" width="30.2" height="16.8" fill="#b8a890" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Tabularium (Record Office) (Tabularium) - other, complete, rot 120, P1, high</title></rect>
+<line x1="-15.1" y1="-8.4" x2="15.1" y2="-8.4" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1520.4,640.5) rotate(0)">
+<rect x="-10.5" y="-10.5" width="21.0" height="21.0" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of the Flavian Family (Templum Gentis Flaviae) - temple, complete, rot 0, P3, low</title></rect>
+<line x1="-10.5" y1="-10.5" x2="10.5" y2="-10.5" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1516.2,1172.6) rotate(40)">
+<rect x="-11.5" y="-9.4" width="23.1" height="18.9" fill="#b5651d" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Old Curiae (Curiae Veteres) - shrine, complete, rot 40, P2, medium</title></rect>
+<line x1="-11.5" y1="-9.4" x2="11.5" y2="-9.4" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1785,1173.9) rotate(0)">
+<rect x="-12.6" y="-8.4" width="25.2" height="16.8" fill="#b8a890" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Imperial Mint (Moneta (Caesaris)) - other, complete, rot 0, P2, low</title></rect>
+<line x1="-12.6" y1="-8.4" x2="12.6" y2="-8.4" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1846.7,1024.8) rotate(0)">
+<rect x="-8.4" y="-12.6" width="16.8" height="25.2" fill="#b8a890" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Seven Halls Cistern ((Sette Sale)) - other, new, rot 0, P2, high</title></rect>
+<line x1="-8.4" y1="-12.6" x2="8.4" y2="-12.6" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1921.5,1155) rotate(8)">
+<rect x="-8.4" y="-12.6" width="16.8" height="25.2" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Sanctuary of Isis and Serapis (Regio III) (Iseum et Serapeum (Regio III)) - temple, complete, rot 8, P2, low</title></rect>
+<line x1="-8.4" y1="-12.6" x2="8.4" y2="-12.6" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1864.8,357) rotate(0)">
+<rect x="-12.6" y="-8.4" width="25.2" height="16.8" fill="#b8a890" fill-opacity="0.25" stroke="#b8a890" stroke-width="0.8" stroke-dasharray="3,2"><title>Field of Wickedness (Campus Sceleratus) - other, complete, rot 0, P3, low</title></rect>
+</g>
+<g transform="translate(2368.8,1098.3) rotate(0)">
+<rect x="-12.6" y="-8.4" width="25.2" height="16.8" fill="#7a5c99" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Ad Spem Veterem (aqueduct junction) (Ad Spem Veterem) - aqueduct, complete, rot 0, P3, low</title></rect>
+<line x1="-12.6" y1="-8.4" x2="12.6" y2="-8.4" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1213.8,1115.1) rotate(170)">
+<rect x="-9.9" y="-9.9" width="19.7" height="19.7" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Twin Temples of Fortuna and Mater Matuta (Aedes Fortunae et Matris Matutae) - temple, complete, rot 170, P1, high</title></rect>
+<line x1="-9.9" y1="-9.9" x2="9.9" y2="-9.9" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1257.9,1482.6) rotate(315)">
+<rect x="-7.3" y="-12.6" width="14.7" height="25.2" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Diana (Aventine) (Aedes Dianae (Cornificiana)) - temple, complete, rot 315, P2, low</title></rect>
+<line x1="-7.3" y1="-12.6" x2="7.3" y2="-12.6" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1950.5,793.8) rotate(0)">
+<rect x="-16.8" y="-5.3" width="33.6" height="10.5" fill="#d9a066" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Market of Livia (Macellum Liviae) - market, complete, rot 0, P3, medium</title></rect>
+<line x1="-16.8" y1="-5.3" x2="16.8" y2="-5.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1316.3,1011.4) rotate(122)">
+<rect x="-9.4" y="-8.4" width="18.9" height="16.8" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Concord (Aedes Concordiae (Augustae)) - temple, complete, rot 122, P1, high</title></rect>
+<line x1="-9.4" y1="-8.4" x2="9.4" y2="-8.4" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1412.5,946.7) rotate(230)">
+<rect x="-7.6" y="-10.5" width="15.1" height="21.0" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Mars the Avenger (Aedes Martis Ultoris) - temple, complete, rot 230, P1, high</title></rect>
+<line x1="-7.6" y1="-10.5" x2="7.6" y2="-10.5" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1247.4,763.6) rotate(255)">
+<rect x="-10.5" y="-7.3" width="21.0" height="14.7" fill="#7b7d4a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Station of the 1st Watch Cohort (Statio Cohortis I Vigilum) - camp, complete, rot 255, P2, low</title></rect>
+<line x1="-10.5" y1="-7.3" x2="10.5" y2="-7.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1236.1,1488.5) rotate(0)">
+<rect x="-8.4" y="-8.4" width="16.8" height="16.8" fill="#c08060" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Trajan's Private House (Privata Traiani) - house, complete, rot 0, P2, low</title></rect>
+<line x1="-8.4" y1="-8.4" x2="8.4" y2="-8.4" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1184.4,1419.6) rotate(0)">
+<rect x="-8.4" y="-8.4" width="16.8" height="16.8" fill="#b5651d" fill-opacity="0.25" stroke="#b5651d" stroke-width="0.8" stroke-dasharray="3,2"><title>Armilustrium (Armilustrium) - shrine, complete, rot 0, P3, low</title></rect>
+</g>
+<g transform="translate(1366.7,1071) rotate(25)">
+<rect x="-6.7" y="-10.4" width="13.4" height="20.8" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Castor and Pollux (Aedes Castoris) - temple, complete, rot 25, P1, high</title></rect>
+<line x1="-6.7" y1="-10.4" x2="6.7" y2="-10.4" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1251.6,1077.3) rotate(160)">
+<rect x="-25.2" y="-2.5" width="50.4" height="5.0" fill="#b8a890" fill-opacity="0.25" stroke="#b8a890" stroke-width="0.8" stroke-dasharray="3,2"><title>Tarpeian Rock (Saxum Tarpeium) - other, complete, rot 160, P1, medium</title></rect>
+</g>
+<g transform="translate(1283.1,1476.3) rotate(0)">
+<rect x="-8.4" y="-7.3" width="16.8" height="14.7" fill="#5f9ea0" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Baths of Sura (Thermae Suranae) - baths, new, rot 0, P2, low</title></rect>
+<line x1="-8.4" y1="-7.3" x2="8.4" y2="-7.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1360,1257.5) rotate(222)">
+<rect x="-9.7" y="-6.3" width="19.3" height="12.6" fill="#b8a890" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>School of the Imperial Pages (Paedagogium) - other, complete, rot 222, P2, high</title></rect>
+<line x1="-9.7" y1="-6.3" x2="9.7" y2="-6.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1339,955.5) rotate(131)">
+<rect x="-6.3" y="-9.4" width="12.6" height="18.9" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Venus Genetrix (Aedes Veneris Genetricis) - temple, new, rot 131, P1, high</title></rect>
+<line x1="-6.3" y1="-9.4" x2="6.3" y2="-9.4" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1677.9,1377.6) rotate(0)">
+<rect x="-9.4" y="-6.3" width="18.9" height="12.6" fill="#7b7d4a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Station of the 5th Watch Cohort (Statio Cohortis V Vigilum) - camp, complete, rot 0, P2, low</title></rect>
+<line x1="-9.4" y1="-6.3" x2="9.4" y2="-6.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1248.2,957.2) rotate(270)">
+<rect x="-8.2" y="-6.7" width="16.4" height="13.4" fill="#c08060" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Insula of the Ara Coeli ((insula)) - house, new, rot 270, P2, high</title></rect>
+<line x1="-8.2" y1="-6.7" x2="8.2" y2="-6.7" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1806,872.8) rotate(180)">
+<rect x="-8.4" y="-6.3" width="16.8" height="12.6" fill="#c08060" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>House of Pliny the Younger (Domus C. Plinii Caecilii Secundi) - house, complete, rot 180, P3, low</title></rect>
+<line x1="-8.4" y1="-6.3" x2="8.4" y2="-6.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1356.6,1215.5) rotate(222)">
+<rect x="-8.0" y="-6.5" width="16.0" height="13.0" fill="#c08060" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>House of Augustus (Domus Augusti) - house, complete, rot 222, P1, high</title></rect>
+<line x1="-8.0" y1="-6.5" x2="8.0" y2="-6.5" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1328,958.4) rotate(41)">
+<rect x="-9.7" y="-4.8" width="19.3" height="9.7" fill="#b08d57" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Bankers' Hall (Basilica Argentaria) - basilica, new, rot 41, P1, high</title></rect>
+<line x1="-9.7" y1="-4.8" x2="9.7" y2="-4.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1239,1285.2) rotate(40)">
+<rect x="-6.3" y="-7.3" width="12.6" height="14.7" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Ceres, Liber and Libera (Aedes Cereris, Liberi Liberaeque) - temple, complete, rot 40, P2, low</title></rect>
+<line x1="-6.3" y1="-7.3" x2="6.3" y2="-7.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1328.9,1087.8) rotate(25)">
+<rect x="-5.3" y="-8.4" width="10.5" height="16.8" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Divus Augustus (Templum Divi Augusti) - temple, complete, rot 25, P1, low</title></rect>
+<line x1="-5.3" y1="-8.4" x2="5.3" y2="-8.4" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1066.8,979.4) rotate(208)">
+<rect x="-5.3" y="-8.4" width="10.5" height="16.8" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Neptune (Circus Flaminius) (Aedes Neptuni in Circo) - temple, complete, rot 208, P2, low</title></rect>
+<line x1="-5.3" y1="-8.4" x2="5.3" y2="-8.4" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1370.5,1185.7) rotate(312)">
+<rect x="-5.0" y="-8.4" width="10.1" height="16.8" fill="#c08060" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>House of Livia (Domus Liviae) - house, complete, rot 312, P1, high</title></rect>
+<line x1="-5.0" y1="-8.4" x2="5.0" y2="-8.4" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1312.1,1037.4) rotate(35)">
+<rect x="-4.7" y="-8.4" width="9.4" height="16.8" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Saturn (Aedes Saturni) - temple, complete, rot 35, P1, high</title></rect>
+<line x1="-4.7" y1="-8.4" x2="4.7" y2="-8.4" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(930.3,902.6) rotate(90)">
+<rect x="-6.3" y="-6.3" width="12.6" height="12.6" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Venus Victrix (Aedes Veneris Victricis) - temple, complete, rot 90, P2, low</title></rect>
+<line x1="-6.3" y1="-6.3" x2="6.3" y2="-6.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1087.8,436.8) rotate(0)">
+<rect x="-6.3" y="-6.3" width="12.6" height="12.6" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Imperial Crematorium (Ustrinum Augusti) - monument, complete, rot 0, P2, low</title></rect>
+<line x1="-6.3" y1="-6.3" x2="6.3" y2="-6.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1199.9,1778.7) rotate(294)">
+<rect x="-6.2" y="-6.2" width="12.4" height="12.4" fill="#888888" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Pyramid of Gaius Cestius (Sepulcrum C. Cestii) - tomb, complete, rot 294, P3, high</title></rect>
+<line x1="-6.2" y1="-6.2" x2="6.2" y2="-6.2" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1061.8,774.1) rotate(180)">
+<rect x="-9.4" y="-4.0" width="18.9" height="8.0" fill="#b08d57" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Basilica of Neptune (Basilica Neptuni) - basilica, damaged, rot 180, P2, high</title></rect>
+<line x1="-9.4" y1="-4.0" x2="9.4" y2="-4.0" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1381,1055) rotate(301)">
+<rect x="-5.7" y="-6.3" width="11.3" height="12.6" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Divus Julius (Aedes Divi Iulii) - temple, complete, rot 301, P1, high</title></rect>
+<line x1="-5.7" y1="-6.3" x2="5.7" y2="-6.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1362.9,1098.3) rotate(24)">
+<rect x="-6.7" y="-5.3" width="13.4" height="10.5" fill="#8b3a62" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Domitian's Palace Vestibule and Ramp (Aula / Rampa Domitianea) - palace, complete, rot 24, P1, high</title></rect>
+<line x1="-6.7" y1="-5.3" x2="6.7" y2="-5.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1885.8,1801.8) rotate(323)">
+<rect x="-8.4" y="-4.2" width="16.8" height="8.4" fill="#888888" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Tomb of the Scipios (Sepulcrum Scipionum) - tomb, complete, rot 323, P3, high</title></rect>
+<line x1="-8.4" y1="-4.2" x2="8.4" y2="-4.2" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(599.8,560.7) rotate(0)">
+<rect x="-5.9" y="-5.9" width="11.8" height="11.8" fill="#888888" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Vatican Pyramid (Meta Romuli (medieval name)) - tomb, complete, rot 0, P3, medium</title></rect>
+<line x1="-5.9" y1="-5.9" x2="5.9" y2="-5.9" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1154.6,1036.6) rotate(180)">
+<rect x="-4.4" y="-7.6" width="8.8" height="15.1" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Apollo Sosianus (Aedes Apollinis in Circo (Medici)) - temple, complete, rot 180, P1, high</title></rect>
+<line x1="-4.4" y1="-7.6" x2="4.4" y2="-7.6" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1394.4,1061.8) rotate(25)">
+<rect x="-6.3" y="-5.3" width="12.6" height="10.5" fill="#b8a890" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Regia (Regia) - other, complete, rot 25, P1, high</title></rect>
+<line x1="-6.3" y1="-5.3" x2="6.3" y2="-5.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(977.3,1198.7) rotate(0)">
+<rect x="-6.3" y="-5.3" width="12.6" height="10.5" fill="#7b7d4a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Post of the 7th Watch Cohort (Excubitorium Cohortis VII Vigilum) - camp, complete, rot 0, P3, low</title></rect>
+<line x1="-6.3" y1="-5.3" x2="6.3" y2="-5.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1369.2,1203.7) rotate(228)">
+<rect x="-4.0" y="-7.8" width="8.1" height="15.5" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Palatine Apollo (Aedes Apollinis Palatini) - temple, complete, rot 228, P1, high</title></rect>
+<line x1="-4.0" y1="-7.8" x2="4.0" y2="-7.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1420.4,977.8) rotate(230)">
+<rect x="-4.6" y="-6.7" width="9.2" height="13.4" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Minerva (Forum of Nerva) (Aedes Minervae) - temple, complete, rot 230, P1, high</title></rect>
+<line x1="-4.6" y1="-6.7" x2="4.6" y2="-6.7" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(962.2,985.7) rotate(208)">
+<rect x="-4.2" y="-7.3" width="8.4" height="14.7" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Mars (Circus Flaminius) (Aedes Martis in Circo) - temple, complete, rot 208, P2, low</title></rect>
+<line x1="-4.2" y1="-7.3" x2="4.2" y2="-7.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1232.7,1234.8) rotate(300)">
+<rect x="-4.4" y="-6.7" width="8.8" height="13.4" fill="#b5651d" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Great Altar of Hercules (Ara Maxima Herculis Invicti) - shrine, complete, rot 300, P1, low</title></rect>
+<line x1="-4.4" y1="-6.7" x2="4.4" y2="-6.7" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1307,1021.4) rotate(124)">
+<rect x="-4.6" y="-6.3" width="9.2" height="12.6" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Vespasian and Titus (Aedes Divi Vespasiani) - temple, complete, rot 124, P1, high</title></rect>
+<line x1="-4.6" y1="-6.3" x2="4.6" y2="-6.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1354.9,1189.4) rotate(225)">
+<rect x="-4.0" y="-6.9" width="8.0" height="13.9" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Victory (Palatine) (Aedes Victoriae) - temple, complete, rot 225, P2, medium</title></rect>
+<line x1="-4.0" y1="-6.9" x2="4.0" y2="-6.9" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1167.6,1038.2) rotate(185)">
+<rect x="-3.8" y="-7.1" width="7.6" height="14.3" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Bellona and the War Column (Aedes Bellonae / Columna Bellica) - temple, complete, rot 185, P1, high</title></rect>
+<line x1="-3.8" y1="-7.1" x2="3.8" y2="-7.1" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1281,966) rotate(180)">
+<rect x="-4.2" y="-6.3" width="8.4" height="12.6" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Juno Moneta (Aedes Iunonis Monetae) - temple, complete, rot 180, P1, medium</title></rect>
+<line x1="-4.2" y1="-6.3" x2="4.2" y2="-6.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1457.4,1126.4) rotate(300)">
+<rect x="-4.2" y="-6.3" width="8.4" height="12.6" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Jupiter the Stayer (Aedes Iovis Statoris (in Palatio)) - temple, complete, rot 300, P2, low</title></rect>
+<line x1="-4.2" y1="-6.3" x2="4.2" y2="-6.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1167.6,1398.6) rotate(45)">
+<rect x="-4.2" y="-6.3" width="8.4" height="12.6" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Juno Regina (Aedes Iunonis Reginae (in Aventino)) - temple, complete, rot 45, P3, low</title></rect>
+<line x1="-4.2" y1="-6.3" x2="4.2" y2="-6.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1344,1172.2) rotate(203)">
+<rect x="-3.6" y="-6.9" width="7.1" height="13.9" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of the Great Mother (Cybele) (Aedes Matris Magnae) - temple, complete, rot 203, P1, high</title></rect>
+<line x1="-3.6" y1="-6.9" x2="3.6" y2="-6.9" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1290.2,1018.5) rotate(216)">
+<rect x="-6.3" y="-3.8" width="12.6" height="7.6" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Veiovis (Aedes Veiovis) - temple, complete, rot 216, P2, high</title></rect>
+<line x1="-6.3" y1="-3.8" x2="6.3" y2="-3.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1327.2,873.2) rotate(230)">
+<rect x="-5.7" y="-4.2" width="11.3" height="8.4" fill="#9b7b4b" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Ulpian Library (NE) (Bibliotheca Ulpia) - library, new, rot 230, P1, medium</title></rect>
+<line x1="-5.7" y1="-4.2" x2="5.7" y2="-4.2" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1311.2,884.9) rotate(50)">
+<rect x="-5.7" y="-4.2" width="11.3" height="8.4" fill="#9b7b4b" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Ulpian Library (SW) (Bibliotheca Ulpia) - library, new, rot 50, P1, medium</title></rect>
+<line x1="-5.7" y1="-4.2" x2="5.7" y2="-4.2" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1579.2,1495.2) rotate(315)">
+<rect x="-3.8" y="-5.9" width="7.6" height="11.8" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Honour and Virtue (Aedes Honoris et Virtutis) - temple, complete, rot 315, P3, low</title></rect>
+<line x1="-3.8" y1="-5.9" x2="3.8" y2="-5.9" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1358.7,1010.9) rotate(230)">
+<rect x="-3.8" y="-5.7" width="7.6" height="11.3" fill="#b0703a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Senate House (Curia Iulia) - curia, complete, rot 230, P1, high</title></rect>
+<line x1="-3.8" y1="-5.7" x2="3.8" y2="-5.7" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1171,1092.8) rotate(73)">
+<rect x="-3.1" y="-6.3" width="6.3" height="12.6" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Juno Sospita (Aedes Iunonis Sospitae) - temple, complete, rot 73, P1, medium</title></rect>
+<line x1="-3.1" y1="-6.3" x2="3.1" y2="-6.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1047.9,900.9) rotate(270)">
+<rect x="-5.0" y="-3.8" width="10.1" height="7.6" fill="#b0703a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Curia of Pompey (Curia Pompeia) - curia, complete, rot 270, P2, medium</title></rect>
+<line x1="-5.0" y1="-3.8" x2="5.0" y2="-3.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1171.8,1085.7) rotate(73)">
+<rect x="-3.1" y="-5.5" width="6.3" height="10.9" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Janus (Forum Holitorium) (Aedes Iani (ad Theatrum Marcelli)) - temple, complete, rot 73, P1, medium</title></rect>
+<line x1="-3.1" y1="-5.5" x2="3.1" y2="-5.5" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1362.9,1298.6) rotate(216)">
+<rect x="-5.3" y="-3.1" width="10.5" height="6.3" fill="#b5651d" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Imperial Box and Shrine of the Circus (Pulvinar) - shrine, remodeled, rot 216, P1, low</title></rect>
+<line x1="-5.3" y1="-3.1" x2="5.3" y2="-3.1" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1098.3,1126.4) rotate(312)">
+<rect x="-3.1" y="-5.3" width="6.3" height="10.5" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Aesculapius (Aedes Aesculapii) - temple, complete, rot 312, P1, medium</title></rect>
+<line x1="-3.1" y1="-5.3" x2="3.1" y2="-5.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1260,1052.1) rotate(120)">
+<rect x="-3.1" y="-5.3" width="6.3" height="10.5" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Jupiter the Thunderer (Aedes Iovis Tonantis) - temple, complete, rot 120, P1, low</title></rect>
+<line x1="-3.1" y1="-5.3" x2="3.1" y2="-5.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1056.7,1035.7) rotate(28)">
+<rect x="-3.1" y="-5.3" width="6.3" height="10.5" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Castor and Pollux (Circus Flaminius) (Aedes Castoris in Circo Flaminio) - temple, complete, rot 28, P2, low</title></rect>
+<line x1="-3.1" y1="-5.3" x2="3.1" y2="-5.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(762.3,1709.4) rotate(90)">
+<rect x="-3.1" y="-5.3" width="6.3" height="10.5" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Fors Fortuna (Aedes Fortis Fortunae) - temple, complete, rot 90, P3, low</title></rect>
+<line x1="-3.1" y1="-5.3" x2="3.1" y2="-5.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1299.9,1031.1) rotate(110)">
+<rect x="-6.3" y="-2.5" width="12.6" height="5.0" fill="#d8c8a0" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Portico of the Twelve Gods (Porticus Deorum Consentium) - portico, complete, rot 110, P1, high</title></rect>
+<line x1="-6.3" y1="-2.5" x2="6.3" y2="-2.5" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1138.2,1162.6) rotate(118)">
+<rect x="-2.5" y="-6.3" width="5.0" height="12.6" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Prow of the Ship Island (Insula Tiberina (navis)) - monument, complete, rot 118, P1, medium</title></rect>
+<line x1="-2.5" y1="-6.3" x2="2.5" y2="-6.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1913.1,962.6) rotate(304)">
+<rect x="-2.2" y="-6.3" width="4.5" height="12.6" fill="#b8a890" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Auditorium of Maecenas ((Auditorium Maecenatis)) - other, complete, rot 304, P2, high</title></rect>
+<line x1="-2.2" y1="-6.3" x2="2.2" y2="-6.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(613.2,1209.6) rotate(90)">
+<rect x="-4.2" y="-3.1" width="8.4" height="6.3" fill="#7a5c99" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Aqua Traiana Terminal and Janiculum Mills (Aqua Traiana (castellum)) - aqueduct, new, rot 90, P3, low</title></rect>
+<line x1="-4.2" y1="-3.1" x2="4.2" y2="-3.1" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1332.2,1027.7) rotate(116)">
+<rect x="-5.0" y="-2.5" width="10.1" height="5.0" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Rostra (Speakers' Platform) (Rostra Augusti) - monument, complete, rot 116, P1, high</title></rect>
+<line x1="-5.0" y1="-2.5" x2="5.0" y2="-2.5" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1202,1183.6) rotate(343)">
+<rect x="-2.5" y="-4.8" width="5.0" height="9.7" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Portunus (Aedes Portuni) - temple, complete, rot 343, P1, high</title></rect>
+<line x1="-2.5" y1="-4.8" x2="2.5" y2="-4.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1170.1,1100) rotate(73)">
+<rect x="-2.3" y="-5.3" width="4.6" height="10.5" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Hope (Aedes Spei) - temple, complete, rot 73, P1, medium</title></rect>
+<line x1="-2.3" y1="-5.3" x2="2.3" y2="-5.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1460.8,1407) rotate(127)">
+<rect x="-3.6" y="-3.1" width="7.1" height="6.3" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Arch of Titus at the Circus Maximus (Arcus Titi (in Circo Maximo)) - arch, complete, rot 127, P1, high</title></rect>
+<line x1="-3.6" y1="-3.1" x2="3.6" y2="-3.1" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1497.3,1102.5) rotate(290)">
+<rect x="-3.1" y="-3.1" width="6.3" height="6.3" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Colossus of Sol (formerly Nero) (Colossus Solis / Neronis) - monument, complete, rot 290, P1, low</title></rect>
+<line x1="-3.1" y1="-3.1" x2="3.1" y2="-3.1" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1333.5,1340.6) rotate(37)">
+<rect x="-2.5" y="-3.8" width="5.0" height="7.6" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Sol in the Circus (Aedes Solis (in Circo)) - temple, complete, rot 37, P2, low</title></rect>
+<line x1="-2.5" y1="-3.8" x2="2.5" y2="-3.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1542.2,1144.9) rotate(0)">
+<circle cx="0" cy="0" r="3.4" fill="#4f8fbf" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Sweating Turning-Post Fountain (Meta Sudans) - fountain, complete, rot 0, P1, high</title></circle>
+<line x1="0" y1="0" x2="0" y2="-5.9" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(2389.8,1075.2) rotate(120)">
+<rect x="-6.7" y="-1.3" width="13.4" height="2.5" fill="#7a5c99" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Claudian Aqueduct Arches (later Porta Maggiore) (Arcus Claudii (Praenestina/Labicana)) - aqueduct, complete, rot 120, P3, high</title></rect>
+<line x1="-6.7" y1="-1.3" x2="6.7" y2="-1.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1201.2,697.2) rotate(163)">
+<rect x="-4.8" y="-1.7" width="9.7" height="3.4" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Arch of Claudius (Arcus Claudii) - arch, complete, rot 163, P2, low</title></rect>
+<line x1="-4.8" y1="-1.7" x2="4.8" y2="-1.7" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1371.7,942.1) rotate(140)">
+<rect x="-6.3" y="-1.3" width="12.6" height="2.5" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Gateway of Trajan's Forum ((Arcus Traiani?)) - arch, new, rot 140, P1, medium</title></rect>
+<line x1="-6.3" y1="-1.3" x2="6.3" y2="-1.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1386.8,1069.7) rotate(90)">
+<circle cx="0" cy="0" r="3.1" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Vesta (Aedes Vestae) - temple, complete, rot 90, P1, high</title></circle>
+<line x1="0" y1="0" x2="0" y2="-5.7" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1197.4,1207.1) rotate(90)">
+<circle cx="0" cy="0" r="3.1" fill="#c9a227" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Temple of Hercules Victor (Aedes Herculis Victoris (Olivarii)) - temple, complete, rot 90, P1, high</title></circle>
+<line x1="0" y1="0" x2="0" y2="-5.6" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(777,756) rotate(0)">
+<rect x="-2.5" y="-2.5" width="5.0" height="5.0" fill="none" stroke="#444" stroke-width="0.9" stroke-dasharray="1.5,1.5"><title>Altar of Dis and Proserpina (Tarentum) (Ara Ditis et Proserpinae (Tarentum)) - shrine, complete, rot 0, P3, low</title></rect>
+</g>
+<g transform="translate(1535.9,1430.1) rotate(140)">
+<rect x="-2.7" y="-2.3" width="5.5" height="4.6" fill="#6b4f2a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Capena Gate (Porta Capena) - gate, complete, rot 140, P2, medium</title></rect>
+<line x1="-2.7" y1="-2.3" x2="2.7" y2="-2.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1328,999.6) rotate(140)">
+<rect x="-2.5" y="-2.3" width="5.0" height="4.6" fill="#555555" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Prison and Tullianum (Carcer Tullianum) - prison, complete, rot 140, P1, high</title></rect>
+<line x1="-2.5" y1="-2.3" x2="2.5" y2="-2.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1140.3,537.6) rotate(270)">
+<rect x="-2.4" y="-2.2" width="4.9" height="4.5" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Altar of Augustan Peace (Ara Pacis Augustae) - monument, complete, rot 270, P2, medium</title></rect>
+<line x1="-2.4" y1="-2.2" x2="2.4" y2="-2.2" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1173.9,1297.8) rotate(210)">
+<rect x="-3.1" y="-1.7" width="6.3" height="3.4" fill="#6b4f2a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Triple Gate (Porta Trigemina) - gate, complete, rot 210, P2, low</title></rect>
+<line x1="-3.1" y1="-1.7" x2="3.1" y2="-1.7" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1495.2,661.5) rotate(0)">
+<rect x="-2.5" y="-1.9" width="5.0" height="3.8" fill="#b5651d" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Altar of Nero's Fire (Ara Incendii Neroniani) - shrine, complete, rot 0, P3, medium</title></rect>
+<line x1="-2.5" y1="-1.9" x2="2.5" y2="-1.9" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1297.8,951.7) rotate(180)">
+<rect x="-2.1" y="-2.1" width="4.2" height="4.2" fill="#b5651d" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Augurs' Observation Platform (Auguraculum) - shrine, complete, rot 180, P2, low</title></rect>
+<line x1="-2.1" y1="-2.1" x2="2.1" y2="-2.1" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1913.9,880.3) rotate(88)">
+<rect x="-4.0" y="-1.1" width="8.0" height="2.1" fill="#6b4f2a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Esquiline Gate (Porta Esquilina) - gate, complete, rot 88, P2, high</title></rect>
+<line x1="-4.0" y1="-1.1" x2="4.0" y2="-1.1" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(2400.3,1082.8) rotate(300)">
+<rect x="-2.1" y="-1.9" width="4.2" height="3.8" fill="#888888" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Tomb of Eurysaces the Baker (Sepulcrum M. Vergilii Eurysacis) - tomb, complete, rot 300, P3, high</title></rect>
+<line x1="-2.1" y1="-1.9" x2="2.1" y2="-1.9" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(2224.3,801.8) rotate(100)">
+<rect x="-3.1" y="-1.3" width="6.3" height="2.5" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Arch of Augustus (Via Tiburtina) (Arcus Augusti (Via Tiburtina)) - arch, complete, rot 100, P3, high</title></rect>
+<line x1="-3.1" y1="-1.3" x2="3.1" y2="-1.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1379.7,1063.9) rotate(301)">
+<rect x="-3.6" y="-1.1" width="7.1" height="2.1" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Arch of Augustus (Parthian Arch) (Arcus Augusti) - arch, complete, rot 301, P1, medium</title></rect>
+<line x1="-3.6" y1="-1.1" x2="3.6" y2="-1.1" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1347.4,1039.9) rotate(116)">
+<rect x="-1.9" y="-1.9" width="3.8" height="3.8" fill="#b5651d" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Lacus Curtius and the Sacred Trees (Lacus Curtius) - shrine, complete, rot 116, P1, high</title></rect>
+<line x1="-1.9" y1="-1.9" x2="1.9" y2="-1.9" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1323,1236.9) rotate(220)">
+<rect x="-1.7" y="-2.1" width="3.4" height="4.2" fill="#b5651d" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Lupercal Cave (Lupercal) - shrine, complete, rot 220, P1, low</title></rect>
+<line x1="-1.7" y1="-2.1" x2="1.7" y2="-2.1" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1919.4,596.4) rotate(70)">
+<rect x="-2.1" y="-1.7" width="4.2" height="3.4" fill="#6b4f2a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Viminal Gate (Porta Viminalis) - gate, complete, rot 70, P3, medium</title></rect>
+<line x1="-2.1" y1="-1.7" x2="2.1" y2="-1.7" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1822,343.6) rotate(40)">
+<rect x="-2.1" y="-1.7" width="4.2" height="3.4" fill="#6b4f2a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Colline Gate (and the Field of Wickedness) (Porta Collina / Campus Sceleratus) - gate, complete, rot 40, P3, medium</title></rect>
+<line x1="-2.1" y1="-1.7" x2="2.1" y2="-1.7" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1354.5,1041.6) rotate(116)">
+<rect x="-2.5" y="-1.3" width="5.0" height="2.5" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Site of Domitian's Colossal Horse (Equus Domitiani (removed)) - monument, ruin, rot 116, P1, medium</title></rect>
+<line x1="-2.5" y1="-1.3" x2="2.5" y2="-1.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1220.1,1097) rotate(340)">
+<rect x="-2.5" y="-1.3" width="5.0" height="2.5" fill="#6b4f2a" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Carmental Gate (Porta Carmentalis) - gate, complete, rot 340, P1, medium</title></rect>
+<line x1="-2.5" y1="-1.3" x2="2.5" y2="-1.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1469.6,1116.8) rotate(112)">
+<rect x="-2.8" y="-1.0" width="5.7" height="2.0" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Arch of Titus (Arcus Divi Titi) - arch, complete, rot 112, P1, high</title></rect>
+<line x1="-2.8" y1="-1.0" x2="2.8" y2="-1.0" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1782.9,899.6) rotate(180)">
+<rect x="-1.7" y="-1.3" width="3.4" height="2.5" fill="#4f8fbf" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Fountain of Orpheus (Lacus Orphei) - fountain, complete, rot 180, P3, low</title></rect>
+<line x1="-1.7" y1="-1.3" x2="1.7" y2="-1.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(987,1614.9) rotate(316)">
+<rect x="-1.7" y="-1.3" width="3.4" height="2.5" fill="#888888" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Tomb of Servius Sulpicius Galba (Sepulcrum Ser. Sulpicii Galbae) - tomb, complete, rot 316, P3, low</title></rect>
+<line x1="-1.7" y1="-1.3" x2="1.7" y2="-1.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1941.2,1780.8) rotate(0)">
+<rect x="-1.7" y="-1.3" width="3.4" height="2.5" fill="none" stroke="#444" stroke-width="0.9" stroke-dasharray="1.5,1.5"><title>Columbarium of Pomponius Hylas (Columbarium Pomponii Hylae) - tomb, complete, rot 0, P3, medium</title></rect>
+</g>
+<g transform="translate(1698.9,1352.8) rotate(130)">
+<rect x="-1.7" y="-1.1" width="3.4" height="2.1" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Arch of Dolabella and Silanus (Arcus Dolabellae et Silani) - arch, complete, rot 130, P2, high</title></rect>
+<line x1="-1.7" y1="-1.1" x2="1.7" y2="-1.1" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1319.2,879.1) rotate(140)">
+<rect x="-1.3" y="-1.3" width="2.6" height="2.6" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Trajan's Column (Columna Traiana) - column, new, rot 140, P1, high</title></rect>
+<line x1="-1.3" y1="-1.3" x2="1.3" y2="-1.3" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1318.4,1040.3) rotate(116)">
+<rect x="-1.7" y="-0.8" width="3.4" height="1.7" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Arch of Tiberius (Arcus Tiberii) - arch, complete, rot 116, P1, medium</title></rect>
+<line x1="-1.7" y1="-0.8" x2="1.7" y2="-0.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1405.3,1062.6) rotate(115)">
+<rect x="-1.7" y="-0.8" width="3.4" height="1.7" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Arch of Fabius (Fornix Fabianus) - arch, complete, rot 115, P2, low</title></rect>
+<line x1="-1.7" y1="-0.8" x2="1.7" y2="-0.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1344.8,1021.4) rotate(116)">
+<rect x="-1.3" y="-1.1" width="2.5" height="2.1" fill="#b5651d" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Comitium and the Black Stone (Comitium / Lapis Niger) - shrine, complete, rot 116, P1, high</title></rect>
+<line x1="-1.3" y1="-1.1" x2="1.3" y2="-1.1" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1281.8,905.5) rotate(213)">
+<rect x="-1.3" y="-1.1" width="2.5" height="2.1" fill="#888888" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Tomb of Gaius Publicius Bibulus (Sepulcrum C. Poplicii Bibuli) - tomb, complete, rot 213, P2, high</title></rect>
+<line x1="-1.3" y1="-1.1" x2="1.3" y2="-1.1" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1328,1020.6) rotate(116)">
+<rect x="-1.3" y="-1.1" width="2.5" height="2.1" fill="#b5651d" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Shrine of Vulcan (Volcanal (Area Volcani)) - shrine, complete, rot 116, P1, medium</title></rect>
+<line x1="-1.3" y1="-1.1" x2="1.3" y2="-1.1" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1360.8,1019.8) rotate(115)">
+<rect x="-0.8" y="-1.5" width="1.7" height="2.9" fill="#b5651d" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Shrine of Janus Geminus (Ianus Geminus) - shrine, complete, rot 115, P1, low</title></rect>
+<line x1="-0.8" y1="-1.5" x2="0.8" y2="-1.5" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1359.5,925.3) rotate(140)">
+<rect x="-1.5" y="-0.8" width="2.9" height="1.7" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Equestrian Statue of Trajan (Equus Traiani) - monument, new, rot 140, P1, high</title></rect>
+<line x1="-1.5" y1="-0.8" x2="1.5" y2="-0.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1375.5,1076) rotate(25)">
+<rect x="-1.1" y="-1.1" width="2.1" height="2.1" fill="#4f8fbf" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Spring of Juturna (Lacus Iuturnae) - fountain, complete, rot 25, P1, high</title></rect>
+<line x1="-1.1" y1="-1.1" x2="1.1" y2="-1.1" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1178.9,1202.9) rotate(250)">
+<rect x="-1.3" y="-0.8" width="2.5" height="1.7" fill="#b8a890" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Outfall of the Great Drain (Cloaca Maxima (ostium)) - other, complete, rot 250, P1, high</title></rect>
+<line x1="-1.3" y1="-0.8" x2="1.3" y2="-0.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1348.2,1320.9) rotate(307)">
+<rect x="-0.8" y="-0.8" width="1.7" height="1.7" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Obelisk of Ramesses II (Circus) (Obeliscus Augusti in Circo) - monument, complete, rot 307, P1, medium</title></rect>
+<line x1="-0.8" y1="-0.8" x2="0.8" y2="-0.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1102.5,556.5) rotate(180)">
+<rect x="-0.8" y="-0.8" width="1.7" height="1.7" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Sundial of Augustus (Horologium (Solarium) Augusti) - monument, complete, rot 180, P2, medium</title></rect>
+<line x1="-0.8" y1="-0.8" x2="0.8" y2="-0.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(272.6,613.2) rotate(89)">
+<rect x="-0.8" y="-0.8" width="1.7" height="1.7" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Vatican Obelisk (Obeliscus Vaticanus) - monument, complete, rot 89, P3, high</title></rect>
+<line x1="-0.8" y1="-0.8" x2="0.8" y2="-0.8" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1330.1,1021.9) rotate(0)">
+<circle cx="0" cy="0" r="1.2" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Navel of the City (Umbilicus Urbis Romae) - monument, complete, rot 0, P1, medium</title></circle>
+<line x1="0" y1="0" x2="0" y2="-3.7" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1339.8,1182.7) rotate(0)">
+<ellipse cx="0" cy="0" rx="1.0" ry="0.8" fill="#c08060" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Hut of Romulus and the Stairs of Cacus (Casa Romuli / Scalae Caci) - house, complete, rot 0, P1, medium</title></ellipse>
+<line x1="-1.0" y1="0" x2="1.0" y2="0" stroke="#d01010" stroke-width="0.6" stroke-dasharray="2,2"/>
+</g>
+<g transform="translate(1312.5,1053.4) rotate(24)">
+<rect x="-0.8" y="-0.6" width="1.7" height="1.3" fill="#4f8fbf" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Servilian Basin (Lacus Servilius) - fountain, complete, rot 24, P1, low</title></rect>
+<line x1="-0.8" y1="-0.6" x2="0.8" y2="-0.6" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1166.8,1047.9) rotate(185)">
+<rect x="-0.6" y="-0.6" width="1.3" height="1.3" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>War Column (Columna Bellica) - column, complete, rot 185, P1, low</title></rect>
+<line x1="-0.6" y1="-0.6" x2="0.6" y2="-0.6" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1094.1,1129) rotate(0)">
+<rect x="-0.6" y="-0.6" width="1.3" height="1.3" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Obelisk of the Island (the mast) (Obeliscus Insulae) - monument, complete, rot 0, P1, low</title></rect>
+<line x1="-0.6" y1="-0.6" x2="0.6" y2="-0.6" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1360.8,1029.8) rotate(213)">
+<circle cx="0" cy="0" r="1.2" fill="#b5651d" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Shrine of Venus Cloacina (Sacellum Cloacinae) - shrine, complete, rot 213, P1, medium</title></circle>
+<line x1="0" y1="0" x2="0" y2="-3.7" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1323,1029) rotate(0)">
+<circle cx="0" cy="0" r="1.2" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Golden Milestone (Miliarium Aureum) - monument, complete, rot 0, P1, high</title></circle>
+<line x1="0" y1="0" x2="0" y2="-3.7" stroke="#d01010" stroke-width="1"/>
+</g>
+<g transform="translate(1182.3,1096.2) rotate(73)">
+<rect x="-0.4" y="-0.4" width="0.8" height="0.8" fill="#8c6d46" fill-opacity="0.85" stroke="#2b2117" stroke-width="0.6"><title>Milk Column (Columna Lactaria) - column, complete, rot 73, P2, low</title></rect>
+<line x1="-0.4" y1="-0.4" x2="0.4" y2="-0.4" stroke="#d01010" stroke-width="1"/>
+</g>
+</g>
+<g id="region-labels" fill="#7a2e2e" opacity="0.7" text-anchor="middle" font-weight="bold">
+<text x="1751.9" y="1680.3" font-size="22">I</text>
+<text x="1814.4" y="1317.9" font-size="22">II</text>
+<text x="1729" y="1054.2" font-size="22">III</text>
+<text x="1548.6" y="865.4" font-size="22">IV</text>
+<text x="2033.4" y="906.2" font-size="22">V</text>
+<text x="1775.4" y="488.1" font-size="22">VI</text>
+<text x="1226.1" y="540.2" font-size="22">VII</text>
+<text x="1319.3" y="1006.3" font-size="22">VIII</text>
+<text x="970.6" y="727" font-size="22">IX</text>
+<text x="1413.8" y="1203.7" font-size="22">X</text>
+<text x="1326.2" y="1284.9" font-size="22">XI</text>
+<text x="1489.3" y="1680" font-size="22">XII</text>
+<text x="1105.5" y="1607.7" font-size="22">XIII</text>
+<text x="565.1" y="967.9" font-size="22">XIV</text>
+</g>
+<g id="labels" text-anchor="middle" fill="#1d1408" stroke="#f6f0e0" stroke-width="2.2" paint-order="stroke" stroke-linejoin="round">
+<text x="1543" y="875.1" font-size="7">The Subura (district anchor)</text>
+<text x="1215.1" y="1202.3" font-size="7">Cattle Market</text>
+<text x="1369.2" y="1337.3" font-size="7">Circus Maximus</text>
+<text x="1730.4" y="1034.4" font-size="7">Baths of Trajan</text>
+<text x="1047.9" y="1025.2" font-size="7">Circus Flaminius</text>
+<text x="1692.6" y="1090.3" font-size="7">Buried Golden House (Oppian wing)</text>
+<text x="1600.2" y="1139.0" font-size="7">Flavian Amphitheatre (Colosseum)</text>
+<text x="1134" y="1010.5" font-size="7">Portico of Octavia</text>
+<text x="1386.8" y="1141.5" font-size="7">Domus Tiberiana</text>
+<text x="1400.7" y="1207.0" font-size="7">Flavian Palace (state wing)</text>
+<text x="1355.8" y="924.0" font-size="7">Forum of Trajan</text>
+<text x="1431.4" y="1021.0" font-size="7">Temple of Peace</text>
+<text x="1507.8" y="1111.3" font-size="7">Vestibule of the Golden House</text>
+<text x="1417.9" y="1242.3" font-size="7">Domus Augustana (private palace)</text>
+<text x="1640.1" y="1073.5" font-size="7">Baths of Titus</text>
+<text x="1352.4" y="980.3" font-size="7">Forum of Caesar</text>
+<text x="1399.4" y="960.9" font-size="7">Forum of Augustus</text>
+<text x="1147.9" y="1066.8" font-size="7">Theatre of Marcellus</text>
+<text x="1331.4" y="893.7" font-size="7">Basilica Ulpia</text>
+<text x="1690.5" y="1151.2" font-size="7">Great Gladiatorial School</text>
+<text x="1149.1" y="1132.7" font-size="7">River Port</text>
+<text x="1389.4" y="892.9" font-size="7">Markets of Trajan</text>
+<text x="1433.5" y="1266.7" font-size="7">Palatine Stadium (Garden Hippodr…</text>
+<text x="1399.4" y="996.6" font-size="7">Forum of Nerva (Passageway Forum)</text>
+<text x="1189.4" y="1090.3" font-size="7">Vegetable Market</text>
+<text x="1406.6" y="1088.2" font-size="7">House of the Vestal Virgins</text>
+<text x="1337.3" y="1059.2" font-size="7">Basilica Julia</text>
+<text x="1270.5" y="1006.3" font-size="7">The Asylum (saddle between the s…</text>
+<text x="1383.9" y="1029.0" font-size="7">Basilica Aemilia (Basilica Paulli)</text>
+<text x="1442.7" y="1098.6" font-size="7">Pearl-Sellers' Arcade</text>
+<text x="1236.9" y="1044.0" font-size="7">Temple of Jupiter Best and Great…</text>
+<text x="1293.6" y="1014.7" font-size="7">Tabularium (Record Office)</text>
+<text x="1213.8" y="1117.5" font-size="7">Twin Temples of Fortuna and Mate…</text>
+<text x="1412.5" y="949.2" font-size="7">Temple of Mars the Avenger</text>
+<text x="1366.7" y="1073.5" font-size="7">Temple of Castor and Pollux</text>
+<text x="1251.6" y="1079.8" font-size="7">Tarpeian Rock</text>
+<text x="1339" y="941.2" font-size="7">Temple of Venus Genetrix</text>
+<text x="1356.6" y="1218.0" font-size="7">House of Augustus</text>
+<text x="1328" y="960.9" font-size="7">Bankers' Hall</text>
+<text x="1328.9" y="1098.7" font-size="7">Temple of Divus Augustus</text>
+<text x="1370.5" y="1188.2" font-size="7">House of Livia</text>
+<text x="1381" y="1049.0" font-size="7">Temple of Divus Julius</text>
+<text x="1362.9" y="1109.2" font-size="7">Domitian's Palace Vestibule and …</text>
+<text x="1154.6" y="1030.6" font-size="7">Temple of Apollo Sosianus</text>
+<text x="1394.4" y="1064.3" font-size="7">Regia</text>
+<text x="1369.2" y="1197.8" font-size="7">Temple of Palatine Apollo</text>
+<text x="1420.4" y="971.9" font-size="7">Temple of Minerva (Forum of Nerva)</text>
+<text x="1232.7" y="1237.3" font-size="7">Great Altar of Hercules</text>
+<text x="1167.6" y="1057.5" font-size="7">Temple of Bellona and the War Co…</text>
+<text x="1281" y="976.9" font-size="7">Temple of Juno Moneta</text>
+<text x="1344" y="1174.7" font-size="7">Temple of the Great Mother (Cybe…</text>
+<text x="1327.2" y="875.7" font-size="7">Ulpian Library (NE)</text>
+<text x="1311.2" y="904.1" font-size="7">Ulpian Library (SW)</text>
+<text x="1358.7" y="1005.0" font-size="7">Senate House</text>
+<text x="1171" y="1103.7" font-size="7">Temple of Juno Sospita</text>
+<text x="1362.9" y="1301.0" font-size="7">Imperial Box and Shrine of the C…</text>
+<text x="1098.3" y="1120.5" font-size="7">Temple of Aesculapius</text>
+<text x="1260" y="1071.3" font-size="7">Temple of Jupiter the Thunderer</text>
+<text x="1138.2" y="1165.0" font-size="7">Prow of the Ship Island</text>
+<text x="1202" y="1186.0" font-size="7">Temple of Portunus</text>
+<text x="1460.8" y="1409.5" font-size="7">Arch of Titus at the Circus Maxi…</text>
+<text x="1497.3" y="1121.8" font-size="7">Colossus of Sol (formerly Nero)</text>
+<text x="1542.2" y="1147.4" font-size="7">Sweating Turning-Post Fountain</text>
+<text x="1197.4" y="1218.0" font-size="7">Temple of Hercules Victor</text>
+<text x="1323" y="1239.4" font-size="7">Lupercal Cave</text>
+<text x="1469.6" y="1136.0" font-size="7">Arch of Titus</text>
+<text x="1319.2" y="864.8" font-size="7">Trajan's Column</text>
+<text x="1344.8" y="1040.7" font-size="7">Comitium and the Black Stone</text>
+<text x="1348.2" y="1323.4" font-size="7">Obelisk of Ramesses II (Circus)</text>
+<text x="1094.1" y="1148.3" font-size="7">Obelisk of the Island (the mast)</text>
+<text x="1911" y="922.1" font-size="6.5">Gardens of Maecenas</text>
+<text x="1100.4" y="794.0" font-size="6.5">Saepta Julia</text>
+<text x="1627.5" y="1256.8" font-size="6.5">Temple of Divus Claudius</text>
+<text x="949.2" y="1615.1" font-size="6.5">Porticus Aemilia</text>
+<text x="929.9" y="735.6" font-size="6.5">Stadium of Domitian</text>
+<text x="990.4" y="1510.1" font-size="6.5">Emporium (River Docks)</text>
+<text x="1012.2" y="1644.5" font-size="6.5">Warehouses of Galba</text>
+<text x="1012.2" y="728.9" font-size="6.5">Baths of Nero</text>
+<text x="1008.8" y="904.5" font-size="6.5">Portico of Pompey (gardens)</text>
+<text x="1736.7" y="1392.5" font-size="6.5">Camp of the Foreigners</text>
+<text x="950" y="913.1" font-size="6.5">Theatre of Pompey</text>
+<text x="1478.4" y="1180.4" font-size="6.5">Gardens of Adonis</text>
+<text x="1142.4" y="779.3" font-size="6.5">Sanctuary of Isis and Serapis</text>
+<text x="999.6" y="829.7" font-size="6.5">Pool of Agrippa</text>
+<text x="1163.4" y="869.6" font-size="6.5">Porticus of the Deified</text>
+<text x="1055.5" y="833.9" font-size="6.5">Baths of Agrippa</text>
+<text x="1121.4" y="897.7" font-size="6.5">Minucian Portico (Grain Dole Hall)</text>
+<text x="1761.9" y="946.0" font-size="6.5">Portico of Livia</text>
+<text x="1806" y="1140.5" font-size="6.5">Camp of the Misenum Sailors</text>
+<text x="949.2" y="815.6" font-size="6.5">Odeum of Domitian</text>
+<text x="1138.2" y="947.3" font-size="6.5">Crypta Balbi</text>
+<text x="1103.8" y="955.3" font-size="6.5">Theatre of Balbus</text>
+<text x="1793.4" y="1403.0" font-size="6.5">Great Market</text>
+<text x="1046.2" y="407.2" font-size="6.5">Mausoleum of Augustus</text>
+<text x="1247.4" y="728.9" font-size="6.5">Portico of Vipsania (Agrippa's W…</text>
+<text x="980.7" y="1551.3" font-size="6.5">Warehouses of Lollius</text>
+<text x="1060.1" y="750.3" font-size="6.5">Pantheon of Agrippa (burned; reb…</text>
+<text x="1738.8" y="1165.7" font-size="6.5">Dacian Gladiatorial School</text>
+<text x="1680" y="1197.2" font-size="6.5">Morning School (beast fighters)</text>
+<text x="1062.6" y="912.7" font-size="6.5">Sacred Area (Temples A-D)</text>
+<text x="1089.9" y="997.7" font-size="6.5">Portico of Philippus and Temple …</text>
+<text x="1100.4" y="858.9" font-size="6.5">Vote-Counting Hall</text>
+<text x="1457.4" y="1075.4" font-size="6.5">Spice Warehouses</text>
+<text x="1346.1" y="1119.7" font-size="6.5">Warehouses of Agrippa</text>
+<text x="1516.2" y="1167.1" font-size="6.5">Old Curiae</text>
+<text x="1785" y="1176.2" font-size="6.5">Imperial Mint</text>
+<text x="1846.7" y="1027.1" font-size="6.5">Seven Halls Cistern</text>
+<text x="1921.5" y="1157.3" font-size="6.5">Sanctuary of Isis and Serapis (R…</text>
+<text x="1257.9" y="1484.9" font-size="6.5">Temple of Diana (Aventine)</text>
+<text x="1247.4" y="765.9" font-size="6.5">Station of the 1st Watch Cohort</text>
+<text x="1236.1" y="1498.6" font-size="6.5">Trajan's Private House</text>
+<text x="1283.1" y="1470.8" font-size="6.5">Baths of Sura</text>
+<text x="1360" y="1252.0" font-size="6.5">School of the Imperial Pages</text>
+<text x="1677.9" y="1379.9" font-size="6.5">Station of the 5th Watch Cohort</text>
+<text x="1248.2" y="959.5" font-size="6.5">Insula of the Ara Coeli</text>
+<text x="1239" y="1287.5" font-size="6.5">Temple of Ceres, Liber and Libera</text>
+<text x="1066.8" y="981.7" font-size="6.5">Temple of Neptune (Circus Flamin…</text>
+<text x="930.3" y="897.1" font-size="6.5">Temple of Venus Victrix</text>
+<text x="1087.8" y="439.1" font-size="6.5">Imperial Crematorium</text>
+<text x="1061.8" y="776.4" font-size="6.5">Basilica of Neptune</text>
+<text x="962.2" y="995.8" font-size="6.5">Temple of Mars (Circus Flaminius)</text>
+<text x="1290.2" y="1028.6" font-size="6.5">Temple of Veiovis</text>
+<text x="1047.9" y="887.6" font-size="6.5">Curia of Pompey</text>
+<text x="1056.7" y="1038.0" font-size="6.5">Temple of Castor and Pollux (Cir…</text>
+<text x="1913.1" y="964.9" font-size="6.5">Auditorium of Maecenas</text>
+<text x="1333.5" y="1350.7" font-size="6.5">Temple of Sol in the Circus</text>
+<text x="1201.2" y="699.5" font-size="6.5">Arch of Claudius</text>
+<text x="1535.9" y="1432.4" font-size="6.5">Capena Gate</text>
+<text x="1140.3" y="539.9" font-size="6.5">Altar of Augustan Peace</text>
+<text x="1173.9" y="1300.1" font-size="6.5">Triple Gate</text>
+<text x="1913.9" y="882.6" font-size="6.5">Esquiline Gate</text>
+<text x="1698.9" y="1355.1" font-size="6.5">Arch of Dolabella and Silanus</text>
+<text x="1281.8" y="915.6" font-size="6.5">Tomb of Gaius Publicius Bibulus</text>
+<text x="1102.5" y="558.8" font-size="6.5">Sundial of Augustus</text>
+<text x="672" y="1577.1" font-size="6">Gardens of Caesar</text>
+<text x="357" y="674.1" font-size="6">Gardens of Agrippina</text>
+<text x="852.6" y="1333.5" font-size="6">Naumachia of Augustus (site)</text>
+<text x="2105" y="380.9" font-size="6">Praetorian Camp</text>
+<text x="1701" y="338.1" font-size="6">Gardens of Sallust</text>
+<text x="945" y="1241.1" font-size="6">Jewish Quarter of Trastevere</text>
+<text x="693" y="535.5" font-size="6">Gardens of Domitia</text>
+<text x="1306.2" y="375.9" font-size="6">Gardens of Lucullus</text>
+<text x="2037" y="968.1" font-size="6">Lamian Gardens</text>
+<text x="294" y="611.1" font-size="6">Circus of Gaius and Nero</text>
+<text x="539.7" y="404.0" font-size="6">Naumachia of Trajan</text>
+<text x="254.1" y="569.1" font-size="6">Tombs of the Via Cornelia (Vatic…</text>
+<text x="2037" y="1211.7" font-size="6">Old Camp of the Imperial Horse G…</text>
+<text x="1014.3" y="1795.5" font-size="6">Mound of Potsherds</text>
+<text x="1608.6" y="1476.3" font-size="6">Grove and Spring of the Camenae</text>
+<text x="666.5" y="1451.1" font-size="6">Grove of Furrina</text>
+<text x="1715.7" y="1222.2" font-size="6">Gallic Gladiatorial School</text>
+<text x="1499.4" y="611.1" font-size="6">Temple of Quirinus</text>
+<text x="1242.6" y="1056.5" font-size="11" font-style="italic" fill="#4a3520" opacity="0.75">Capitolium</text>
+<text x="1287.3" y="961.8" font-size="11" font-style="italic" fill="#4a3520" opacity="0.75">Arx</text>
+<text x="1263.7" y="1006.8" font-size="11" font-style="italic" fill="#4a3520" opacity="0.75">Asylum</text>
+<text x="1419.3" y="1184" font-size="11" font-style="italic" fill="#4a3520" opacity="0.75">Mons Palatinus</text>
+<text x="1515.2" y="1099.8" font-size="11" font-style="italic" fill="#4a3520" opacity="0.75">Velia</text>
+<text x="1210.2" y="1458.4" font-size="11" font-style="italic" fill="#4a3520" opacity="0.75">Aventinus</text>
+<text x="1437.1" y="1675" font-size="11" font-style="italic" fill="#4a3520" opacity="0.75">Aventinus</text>
+<text x="2076.6" y="1338.3" font-size="11" font-style="italic" fill="#4a3520" opacity="0.75">Mons Caelius</text>
+<text x="1769.8" y="1003.5" font-size="11" font-style="italic" fill="#4a3520" opacity="0.75">Oppius</text>
+<text x="1851.3" y="793.9" font-size="11" font-style="italic" fill="#4a3520" opacity="0.75">Cispius</text>
+<text x="2143.4" y="806.2" font-size="11" font-style="italic" fill="#4a3520" opacity="0.75">Esquiliae</text>
+<text x="1718.9" y="670.2" font-size="11" font-style="italic" fill="#4a3520" opacity="0.75">Collis Viminalis</text>
+<text x="1627.6" y="536.7" font-size="11" font-style="italic" fill="#4a3520" opacity="0.75">Collis Quirinalis</text>
+<text x="1441.4" y="127" font-size="11" font-style="italic" fill="#4a3520" opacity="0.75">Collis Hortulorum</text>
+<text x="401.6" y="1312.8" font-size="11" font-style="italic" fill="#4a3520" opacity="0.75">Ianiculum</text>
+<text x="2105.4" y="257.3" font-size="11" font-style="italic" fill="#4a3520" opacity="0.75">Campus Viminalis</text>
+<text x="456" y="750.5" font-size="11" font-style="italic" fill="#4a3520" opacity="0.75">Ianiculum</text>
+<text x="94.2" y="1214" font-size="11" font-style="italic" fill="#4a3520" opacity="0.75">(ager trans Tiberim)</text>
+<text x="2176" y="1724.5" font-size="11" font-style="italic" fill="#4a3520" opacity="0.75">(ager ad Viam Latinam)</text>
+<text x="2237.8" y="1186.4" font-size="11" font-style="italic" fill="#4a3520" opacity="0.75">Spes Vetus</text>
+<text x="840" y="966" font-size="12" font-style="italic" fill="#24507a">Tiberis</text>
+</g>
+<rect x="1020.6" y="827.4" width="705.6" height="613.2" fill="none" stroke="#b00000" stroke-width="2" stroke-dasharray="10,6"/>
+<text x="1024.6" y="822.4" font-size="11" fill="#b00000">CORE_BOUNDS (first playable)</text>
+<rect x="63" y="63" width="2394.0" height="1848.0" fill="none" stroke="#555" stroke-width="2" stroke-dasharray="4,4"/>
+<text x="67" y="58" font-size="11" fill="#555">CITY_BOUNDS</text>
+<circle cx="1323" cy="1029" r="3" fill="#d4a017" stroke="#000" stroke-width="0.8"><title>Miliarium Aureum (origin)</title></circle>
+</g>
+<g transform="translate(2480,40)"><polygon points="0,-22 8,8 0,2 -8,8" fill="#222"/><text x="0" y="24" font-size="14" text-anchor="middle">N</text></g>
+<g transform="translate(20,1992)"><rect x="0" y="0" width="420" height="6" fill="#222"/><rect x="0" y="0" width="210" height="6" fill="#fff" stroke="#222"/><text x="0" y="20" font-size="11">0</text><text x="420" y="20" font-size="11" text-anchor="middle">1000 m (real)</text></g>
+<rect x="480" y="1983" width="14" height="10" fill="#7fa7c9" stroke="#333" stroke-width="0.5"/><text x="500" y="1992" font-size="11">Tiber / water</text>
+<rect x="884" y="1983" width="14" height="10" fill="#7b2d26" stroke="#333" stroke-width="0.5"/><text x="904" y="1992" font-size="11">Servian Wall (dashed = built over)</text>
+<rect x="1288" y="1983" width="14" height="10" fill="#7a5c99" stroke="#333" stroke-width="0.5"/><text x="1308" y="1992" font-size="11">aqueduct (solid arcade, dashed underground)</text>
+<rect x="1692" y="1983" width="14" height="10" fill="#5a4630" stroke="#333" stroke-width="0.5"/><text x="1712" y="1992" font-size="11">roads (dashed = low confidence)</text>
+<rect x="2096" y="1983" width="14" height="10" fill="#d01010" stroke="#333" stroke-width="0.5"/><text x="2116" y="1992" font-size="11">red edge = main facade</text>
+<rect x="480" y="2005" width="14" height="10" fill="#c9a227" stroke="#333" stroke-width="0.5"/><text x="500" y="2014" font-size="11">temple</text>
+<rect x="884" y="2005" width="14" height="10" fill="#e8dcc0" stroke="#333" stroke-width="0.5"/><text x="904" y="2014" font-size="11">forum</text>
+<rect x="1288" y="2005" width="14" height="10" fill="#5f9ea0" stroke="#333" stroke-width="0.5"/><text x="1308" y="2014" font-size="11">baths</text>
+<rect x="1692" y="2005" width="14" height="10" fill="#8b3a62" stroke="#333" stroke-width="0.5"/><text x="1712" y="2014" font-size="11">palace</text>
+<rect x="2096" y="2005" width="14" height="10" fill="#8fbf6f" stroke="#333" stroke-width="0.5"/><text x="2116" y="2014" font-size="11">garden (hatched, open)</text>
+<text x="20" y="2064" font-size="12">SKYROME atlas - Rome c. AD 113 (city). Real metres, origin = Miliarium Aureum, +x east, +z south. Hills shaded by elevation (cream ~8 m to brown ~85 m). 208 landmarks, 58 roads.</text>
+<text x="20" y="2082" font-size="11" fill="#555">Generated by scripts/atlas/render-atlas.mjs from src/data/atlas.ts. Hover shapes for names (in a browser).</text>
+</svg>
