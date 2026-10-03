@@ -32,6 +32,8 @@ export class CameraRig implements System {
   private currentDist: number;
   /** Extra camera shake offset (combat module writes here). */
   readonly shake = new THREE.Vector3();
+  /** Lock-on framing (combat): the third-person camera pulls back to at least this distance (m); 0 = off. */
+  framingDistance = 0;
 
   constructor(
     private readonly game: Game,
@@ -83,7 +85,7 @@ export class CameraRig implements System {
       offset.set(Math.cos(p.yaw), 0, -Math.sin(p.yaw)).multiplyScalar(CAMERA.shoulder * this.blend);
       pivot.add(offset);
       dir.set(0, 0, 1).applyEuler(camera.rotation); // backwards from the camera's view
-      const wantDist = p.zoom * this.blend;
+      const wantDist = Math.max(p.zoom, this.framingDistance) * this.blend;
       // Collision: pull in if geometry is between pivot and camera.
       const hit = physics.raycast(pivot, dir, wantDist + CAMERA.collisionPadding, Layer.World | Layer.CameraBlock);
       let dist = wantDist;

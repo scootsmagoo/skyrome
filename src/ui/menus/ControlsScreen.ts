@@ -16,6 +16,7 @@ const LABELS: Record<AnyAction, string> = {
   forward: 'Move forward', back: 'Move back', left: 'Strafe left', right: 'Strafe right',
   jump: 'Jump', sprint: 'Sprint (hold)', walkToggle: 'Walk / run', sneak: 'Sneak',
   attack: 'Attack', block: 'Block', readyWeapon: 'Ready weapon', interact: 'Interact',
+  dodge: 'Dodge', parry: 'Parry (optional)', lockOn: 'Lock on (tap) · release (hold)', yield: 'Yield (hold)',
   toggleView: 'First / third person', lookLeft: 'Turn left', lookRight: 'Turn right', lookUp: 'Look up', lookDown: 'Look down',
   zoomIn: 'Camera closer', zoomOut: 'Camera farther', menu: 'Character menu', inventory: 'Inventory',
   journal: 'Journal', map: 'Map', skills: 'Skills', pause: 'Pause menu', quickSave: 'Quick save', quickLoad: 'Quick load',
@@ -24,7 +25,7 @@ const LABELS: Record<AnyAction, string> = {
 
 const GROUPS: { title: string; latin: string; actions: AnyAction[] }[] = [
   { title: 'Movement', latin: 'Iter', actions: ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'walkToggle', 'sneak'] },
-  { title: 'Combat', latin: 'Pugna', actions: ['attack', 'block', 'readyWeapon'] },
+  { title: 'Combat', latin: 'Pugna', actions: ['attack', 'block', 'dodge', 'parry', 'lockOn', 'readyWeapon', 'yield'] },
   { title: 'Camera', latin: 'Conspectus', actions: ['lookLeft', 'lookRight', 'lookUp', 'lookDown', 'zoomIn', 'zoomOut', 'toggleView'] },
   { title: 'Actions & menus', latin: 'Res', actions: ['interact', 'menu', 'inventory', 'journal', 'map', 'skills', 'wait', 'clock', 'quickSave', 'quickLoad', 'pause', 'debug'] },
 ];

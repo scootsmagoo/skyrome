@@ -19,6 +19,10 @@ export type Action =
   | 'sneak'
   | 'attack'
   | 'block'
+  | 'dodge'
+  | 'parry'
+  | 'lockOn'
+  | 'yield'
   | 'readyWeapon'
   | 'interact'
   | 'toggleView'
@@ -52,6 +56,12 @@ export const DEFAULT_BINDINGS: Bindings = {
   sneak: ['KeyC'],
   attack: ['Mouse0', 'KeyF'],
   block: ['Mouse2', 'KeyQ'],
+  // Combat (GDD §4.2): Option always dodges (Space dodges only in combat with a weapon drawn);
+  // a separate parry key is optional and unbound; X locks on; hold Y yields.
+  dodge: ['AltLeft'],
+  parry: [],
+  lockOn: ['KeyX'],
+  yield: ['KeyY'],
   readyWeapon: ['KeyR'],
   interact: ['KeyE'],
   toggleView: ['KeyV'],
