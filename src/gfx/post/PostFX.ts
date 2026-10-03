@@ -229,6 +229,10 @@ export class PostFX implements System {
     const t0 = performance.now();
     const info = renderer.info;
     info.autoReset = false; // keep the scene's draw-call stats and add ours
+    // Every post pass covers its whole target, so clears are wasted work, and the additive bloom
+    // upsamples MUST NOT clear: each one adds onto the level's own downsampled content.
+    const autoClear = renderer.autoClear;
+    renderer.autoClear = false;
     const exposure = renderer.toneMappingExposure;
 
     // 2. Bloom chain.
@@ -282,6 +286,7 @@ export class PostFX implements System {
       this.fxaaMat.uniforms.resolution.value.set(1 / w, 1 / h);
       this.pass(this.fxaaMat, null);
     }
+    renderer.autoClear = autoClear;
     info.autoReset = true;
     this.lastPostMs = performance.now() - t0;
   }

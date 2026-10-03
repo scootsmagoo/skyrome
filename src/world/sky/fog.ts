@@ -9,7 +9,8 @@
  *
  * Custom ShaderMaterials with `fog: true` keep working: if they were built from
  * `UniformsLib.fog` after installation they get the extra uniforms; otherwise those read as zero
- * and the fog degrades to plain exponential fog with the scene color.
+ * and the fog degrades to plain exponential fog with the scene color. The fog is applied before
+ * tone mapping whatever order a shader includes the chunks in (see FRAGMENT).
  */
 import * as THREE from 'three';
 
@@ -47,6 +48,7 @@ const VERTEX = /* glsl */ `
 
 const PARS_FRAGMENT = /* glsl */ `
 #ifdef USE_FOG
+  #define SKY_FOG_PARS
   uniform vec3 fogColor;
   varying float vFogDepth;
   varying vec3 vFogRay;
@@ -62,8 +64,22 @@ const PARS_FRAGMENT = /* glsl */ `
 #endif
 `;
 
+/**
+ * The fog mix, in scene-linear light (as the sky dome does it). three includes `<fog_fragment>`
+ * AFTER tone mapping and the output encode, and to match it uploads `fogColor` in the OUTPUT color
+ * space when drawing to the canvas. Into PostFX's linear HDR target that is all a no-op; with
+ * post-processing off it leaves the haze un-exposed and inconsistent with the dome. So:
+ *  - the same code is prepended to `<tonemapping_fragment>`: whichever chunk comes first applies
+ *    the fog, once (`SKY_FOG_APPLIED`), and that is before tone mapping in every three material;
+ *  - when the output is encoded (sRGB canvas) `fogColor` is decoded back to linear. The test
+ *    folds to a constant. (A Display-P3 canvas would be decoded without its gamut matrix.)
+ */
 const FRAGMENT = /* glsl */ `
-#ifdef USE_FOG
+#if defined( USE_FOG ) && defined( SKY_FOG_PARS ) && ! defined( SKY_FOG_APPLIED )
+#define SKY_FOG_APPLIED
+{
+  vec3 skyFogBase = fogColor;
+  if ( linearToOutputTexel( vec4( 0.25 ) ).r > 0.3 ) skyFogBase = sRGBTransferEOTF( vec4( fogColor, 1.0 ) ).rgb;
   #ifdef FOG_EXP2
     float skyFogDist = length( vFogRay );
     vec3 skyFogDir = vFogRay / max( skyFogDist, 1e-4 );
@@ -72,12 +88,13 @@ const FRAGMENT = /* glsl */ `
     float skyFogOD = fogDensity * exp( - skyFogK * ( cameraPosition.y - skyFogParams.x ) ) * skyFogDist
       * ( abs( skyFogDy ) > 1e-4 ? ( 1.0 - exp( - skyFogDy ) ) / skyFogDy : 1.0 );
     float fogFactor = ( 1.0 - exp( - skyFogOD ) ) * ( skyFogParams.y > 0.0 ? skyFogParams.y : 1.0 );
-    vec3 skyFogCol = fogColor + skyFogSunColor.rgb * pow( max( dot( skyFogDir, skyFogSun.xyz ), 0.0 ), max( skyFogSun.w, 1.0 ) );
+    vec3 skyFogCol = skyFogBase + skyFogSunColor.rgb * pow( max( dot( skyFogDir, skyFogSun.xyz ), 0.0 ), max( skyFogSun.w, 1.0 ) );
   #else
     float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
-    vec3 skyFogCol = fogColor;
+    vec3 skyFogCol = skyFogBase;
   #endif
   gl_FragColor.rgb = mix( gl_FragColor.rgb, skyFogCol, fogFactor );
+}
 #endif
 `;
 
@@ -92,6 +109,7 @@ export function installSkyFog() {
   chunks.fog_vertex = VERTEX;
   chunks.fog_pars_fragment = PARS_FRAGMENT;
   chunks.fog_fragment = FRAGMENT;
+  chunks.tonemapping_fragment = FRAGMENT + chunks.tonemapping_fragment;
   const add = (u: Record<string, THREE.IUniform>) => {
     if (!('fogColor' in u)) return;
     for (const [k, v] of Object.entries(skyFogUniforms)) u[k] = v;

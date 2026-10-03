@@ -25,6 +25,17 @@ export function lampLevel(lampFactor: number, seed: number): number {
   return t * t * (3 - 2 * t);
 }
 
+/**
+ * Real-light multiplier for an always-burning fire: 1 in the dark, `dayScale` in full daylight
+ * (0..1, from the sky; 0 at night). A brazier's light is lost in sunlight, so by default (0) it
+ * fades out completely and stops using a pool slot.
+ */
+export function dayLightScale(daylight: number, dayScale = 0): number {
+  const d = Math.min(1, Math.max(0, daylight));
+  const k = Math.min(1, Math.max(0, dayScale));
+  return 1 - (1 - k) * d;
+}
+
 export interface Candidate {
   /** Squared distance to the viewer. */
   d2: number;

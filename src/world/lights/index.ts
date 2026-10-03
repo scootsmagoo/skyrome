@@ -12,4 +12,4 @@ export function installLightPool(game: Game, opts: LightPoolOptions = {}): Light
 
 export { LightPool } from './LightPool';
 export type { LightHandle, LightPoolOptions, LightRequest } from './LightPool';
-export { flicker, lampLevel } from './logic';
+export { dayLightScale, flicker, lampLevel } from './logic';

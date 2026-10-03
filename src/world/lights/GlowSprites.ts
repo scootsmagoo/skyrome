@@ -47,6 +47,9 @@ void main() {
   float core = exp(-r2 * 28.0);
   float halo = exp(-r2 * 5.0) * 0.22 * (1.0 - r2);
   gl_FragColor = vec4(vColor * (core + halo), 1.0);
+  // No-ops into PostFX's linear HDR target; tone map + sRGB when post is off.
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
 }
 `;
 

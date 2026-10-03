@@ -182,6 +182,9 @@ void main() {
   float a = exp(-r2 * 3.5);
   if (a < 0.02) discard;
   gl_FragColor = vec4(vColor * a, 1.0);
+  // No-ops into PostFX's linear HDR target; tone map + sRGB when post is off.
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
 }
 `;
 

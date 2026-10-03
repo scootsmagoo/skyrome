@@ -9,12 +9,15 @@
  * PointLights (unused ones at intensity 0): adding or removing lamps never recompiles shaders.
  * The nearest / most important requests get the real lights (with hysteresis and short fades so
  * swaps don't pop); every request also gets an additive glow sprite (its visible flame halo).
- * `night: true` lamps follow the sky's lamp factor and are lit one by one at dusk.
+ * `night: true` lamps follow the sky's lamp factor and are lit one by one at dusk. Always-burning
+ * fires (no `night`) keep their flame glow by day but their real light fades out in daylight
+ * (a brazier does not light up sunlit marble), unless `dayScale` says otherwise or the player is
+ * indoors (`game.sky.indoor`).
  */
 import * as THREE from 'three';
 import type { Game, System } from '../../core/Game';
 import { GlowSprites } from './GlowSprites';
-import { flicker, lampLevel, seed01, selectLights, type Candidate } from './logic';
+import { dayLightScale, flicker, lampLevel, seed01, selectLights, type Candidate } from './logic';
 
 declare module '../../core/Game' {
   interface Game {
@@ -34,6 +37,13 @@ export interface LightRequest {
   flicker?: number | boolean;
   /** Only lit from dusk to dawn (street lamps, shop lamps). Default false. */
   night?: boolean;
+  /**
+   * For lights without `night`: fraction of the real light's intensity kept in full daylight
+   * (outdoors). Default 0, so an always-burning fire lights nothing by day and frees its pool slot;
+   * its glow sprite still shows the flame. Use ~1 for fires in dark interiors that are rendered
+   * while `game.sky.indoor` stays 0.
+   */
+  dayScale?: number;
   /** Importance; 2 ≈ competes as if twice as close. Default 1. */
   priority?: number;
   /** Glow sprite radius in metres; 0 = no sprite. Default 0.3. */
@@ -50,8 +60,11 @@ export interface LightHandle {
   setEnabled(on: boolean): void;
   setIntensity(i: number): void;
   setColor(c: THREE.ColorRepresentation): void;
-  /** Current brightness factor 0..1 (night fade × enabled), without flicker. */
+  /** Current brightness factor 0..1 (night fade × enabled), without flicker or daylight. */
   readonly level: number;
+  /** False once removed. Setters on a removed handle are ignored. */
+  readonly alive: boolean;
+  /** Stop the light (its pool slot fades out over ~0.17 s). Safe to call twice. */
   remove(): void;
 }
 
@@ -69,6 +82,9 @@ interface Entry {
   distance: number;
   flicker: number;
   night: boolean;
+  dayScale: number;
+  /** Daylight multiplier of the real light this frame (1 at night). */
+  dayL: number;
   priority: number;
   glow: number;
   glowIntensity: number;
@@ -84,11 +100,15 @@ interface Slot {
   entry: Entry | null;
   /** 0..1 fade for swaps. */
   fade: number;
+  /** Intensity at fade = 1 (kept after the entry is removed so the light fades out). */
+  base: number;
   /** Entry waiting for this slot once it has faded out. */
   next: Entry | null;
 }
 
 const DEFAULT_COLOR = new THREE.Color(0xff9a50);
+/** Real lights dimmer than this (level × daylight factor) leave the pool. */
+const MIN_ACTIVE_LEVEL = 0.05;
 const _cam = new THREE.Vector3();
 
 export class LightPool implements System {
@@ -118,7 +138,7 @@ export class LightPool implements System {
       light.castShadow = false;
       light.position.set(0, -1e4, 0);
       game.scene.add(light);
-      this.slots.push({ light, entry: null, fade: 0, next: null });
+      this.slots.push({ light, entry: null, fade: 0, base: 0, next: null });
     }
     game.scene.add(this.glows.mesh);
   }
@@ -143,6 +163,8 @@ export class LightPool implements System {
       distance: req.distance ?? 12,
       flicker: req.flicker === true ? 0.35 : typeof req.flicker === 'number' ? req.flicker : 0,
       night: req.night ?? false,
+      dayScale: THREE.MathUtils.clamp(req.dayScale ?? 0, 0, 1),
+      dayL: 1,
       priority: req.priority ?? 1,
       glow: req.glow ?? 0.3,
       glowIntensity: req.glowIntensity ?? 1,
@@ -157,25 +179,34 @@ export class LightPool implements System {
     this.writeStatic(e);
     this.selectTimer = Infinity;
     const pool = this;
+    // A removed entry has index -1; its handle must never touch the buffers again (the index it
+    // had now belongs to another light).
     return {
       id,
       setPosition(p) {
+        if (e.index < 0) return;
         e.position.set(p.x, p.y, p.z);
         pool.writeStatic(e);
       },
       setEnabled(on) {
+        if (e.index < 0) return;
         e.enabled = on;
       },
       setIntensity(i) {
+        if (e.index < 0) return;
         e.intensity = i;
         pool.writeStatic(e);
       },
       setColor(c) {
+        if (e.index < 0) return;
         e.color.set(c);
         pool.writeStatic(e);
       },
       get level() {
         return e.level;
+      },
+      get alive() {
+        return e.index >= 0;
       },
       remove() {
         pool.removeEntry(e);
@@ -184,13 +215,11 @@ export class LightPool implements System {
   }
 
   private removeEntry(e: Entry) {
-    const i = this.entries.indexOf(e);
-    if (i < 0) return;
+    const i = e.index;
+    if (i < 0 || this.entries[i] !== e) return;
     if (e.slot >= 0) {
-      const s = this.slots[e.slot];
-      s.entry = null;
-      s.fade = 0;
-      s.light.intensity = 0;
+      // Keep the light at its last position and let it fade out (lateUpdate), no pop.
+      this.slots[e.slot].entry = null;
     }
     for (const s of this.slots) if (s.next === e) s.next = null;
     // Swap-remove, keeping glow instance data aligned with the entry index.
@@ -200,6 +229,9 @@ export class LightPool implements System {
       last.index = i;
       this.writeStatic(last);
     }
+    e.index = -1;
+    e.slot = -1;
+    e.level = 0;
     this.selectTimer = Infinity;
   }
 
@@ -207,6 +239,7 @@ export class LightPool implements System {
   private writeStatic(e: Entry) {
     const g = this.glows;
     const i = e.index;
+    if (i < 0) return;
     g.pos.setXYZ(i, e.position.x, e.position.y, e.position.z);
     // Glow color: light color × a brightness that scales gently with the light's intensity.
     const k = e.glowIntensity * (0.5 + Math.sqrt(e.intensity) * 0.18) * 2.4;
@@ -220,7 +253,8 @@ export class LightPool implements System {
     const { game } = this;
     this.time += dt;
     const lamp = game.sky?.lampFactor ?? (game.time.isNight ? 1 : 0);
-    const daylight = game.sky?.daylight ?? (game.time.isNight ? 0 : 1);
+    // Daylight where the player is: indoors, fires matter again even at noon.
+    const daylight = (game.sky?.daylight ?? (game.time.isNight ? 0 : 1)) * (1 - (game.sky?.indoor ?? 0));
     game.camera.getWorldPosition(_cam);
 
     // Levels (night stagger) for every entry; glow level buffer.
@@ -230,7 +264,8 @@ export class LightPool implements System {
       const e = this.entries[i];
       const lvl = e.enabled ? (e.night ? lampLevel(lamp, e.seed) : 1) : 0;
       e.level = lvl;
-      // Fires that burn all day barely show against daylight.
+      // Fires that burn all day: the flame still shows, faintly, but sunlight drowns their light.
+      e.dayL = e.night ? 1 : dayLightScale(daylight, e.dayScale);
       const dayK = e.night ? 1 : this.dayGlow + (1 - this.dayGlow) * (1 - daylight);
       params.setX(i, lvl * dayK);
     }
@@ -249,27 +284,32 @@ export class LightPool implements System {
 
     // Drive the real lights: fades, flicker, distance fade.
     const fadeRate = 6;
-    for (const s of this.slots) {
-      if (s.next && (!s.entry || s.fade <= 0.001)) {
+    for (let k = 0; k < this.slots.length; k++) {
+      const s = this.slots[k];
+      // Swap once the outgoing light (live or removed) has faded out.
+      if (s.next && s.fade <= 0.001) {
         if (s.entry) s.entry.slot = -1;
         s.entry = s.next;
-        s.entry.slot = this.slots.indexOf(s);
+        s.entry.slot = k;
         s.next = null;
         s.fade = 0;
       }
       const e = s.entry;
       const target = e && !s.next ? 1 : 0;
       s.fade = THREE.MathUtils.clamp(s.fade + Math.sign(target - s.fade) * fadeRate * dt, 0, 1);
+      const l = s.light;
       if (!e) {
-        s.light.intensity = 0;
+        // Removed: the light stays where it was and fades out at its last brightness.
+        l.intensity = s.base * s.fade;
+        if (s.fade <= 0) s.base = 0;
         continue;
       }
-      const l = s.light;
       l.position.copy(e.position);
       l.color.copy(e.color);
       l.distance = e.distance;
       const f = flicker(this.time, e.seed * 100, e.flicker);
-      l.intensity = e.intensity * e.level * f * s.fade;
+      s.base = e.intensity * e.level * e.dayL * f;
+      l.intensity = s.base * s.fade;
     }
   }
 
@@ -285,7 +325,7 @@ export class LightPool implements System {
       c.d2 = d2;
       c.priority = e.priority;
       c.assigned = e.slot >= 0;
-      c.active = e.level > 0.01 && e.intensity > 0 && d2 < reach * reach * e.priority * e.priority;
+      c.active = e.level * e.dayL > MIN_ACTIVE_LEVEL && e.intensity > 0 && d2 < reach * reach * e.priority * e.priority;
     }
     const sel = selectLights(cands, this.slots.length, 0.75, this.selected);
     const want = new Set<Entry>();

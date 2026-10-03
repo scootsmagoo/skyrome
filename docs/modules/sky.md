@@ -123,8 +123,8 @@ to the renderer.
 
 ```ts
 const h = game.lights.request({ position, color?, intensity?: 12, distance?: 12, flicker?: true | 0..1,
-                                night?: boolean, priority?: 1, glow?: 0.3, glowIntensity?: 1 });
-h.setPosition(p); h.setEnabled(false); h.setIntensity(i); h.setColor(c); h.level; h.remove();
+                                night?: boolean, dayScale?: 0, priority?: 1, glow?: 0.3, glowIntensity?: 1 });
+h.setPosition(p); h.setEnabled(false); h.setIntensity(i); h.setColor(c); h.level; h.alive; h.remove();
 ```
 
 - Exactly `count` (8) PointLights live in the scene forever, at intensity 0 when unused. **Adding or
@@ -137,6 +137,15 @@ h.setPosition(p); h.setEnabled(false); h.setIntensity(i); h.setColor(c); h.level
 - `night: true` lamps follow `sky.lampFactor`, each with its own threshold, so they're lit one by one
   at dusk and go out one by one at dawn. Flicker uses three detuned sines (deterministic, shared by
   light and glow).
+- **Always-burning fires** (no `night`: temple braziers, forges, kitchens) keep their flame glow by
+  day (dimmed to `dayGlow` = 25 %), but their real light is scaled by `1 − (1 − dayScale)·daylight`.
+  `dayScale` defaults to 0: a brazier lights nothing in sunlight (a 40 cd brazier used to out-shine
+  the sun on marble 3 m away), and once it is below 5 % it gives up its pool slot. When the player
+  is indoors (`sky.indoor`), daylight counts as 0 and fires are at full strength. Use `dayScale ≈ 1`
+  for a fire in a dark interior that is rendered without `sky.indoor` being set.
+- `remove()` fades the light's slot out over ~0.17 s (no pop). A removed handle is dead (`alive`
+  false): its setters are ignored, so a carried torch whose updater runs once more can't move
+  another lamp's glow. `remove()` twice is harmless. Covered by `tests/sky-lightpool.test.ts`.
 - Measured: 382 requests (300 scattered lamps + scene lamps + a carried torch) take 0.62 ms/frame
   in total at 720p.
 
@@ -148,12 +157,23 @@ passes):
 1. Scene → half-float HDR target (4× MSAA when `settings.antialias`).
 2. Bloom: 5 × 13-tap downsamples (the first applies exposure, a soft threshold of 1.4 and Karis
    averaging, so the sun can't flicker) and 4 × 9-tap tent upsamples, all at half resolution and below.
+   The upsamples are additive, so the post passes run with `renderer.autoClear = false` (every
+   pass covers its whole target anyway): `mips[0]` = level 0 + up(level 1 + up(level 2 + …)), a
+   tight core around the flame or sun with a wide skirt. Bloom strength 0.075 (÷ 5 levels) was
+   re-checked against this chain at 0.04–0.1: around a brazier at night the bloom now carries ~3.5×
+   the energy of the earlier (accidentally cleared) chain, peaked within ~30 px of the flame
+   instead of a 1/32-resolution smear, which still reads as subtle, so it stays.
 3. One composite pass: tone mapping, color grade (saturation, gentle S-curve, **warm highlights, cool
    shadows**), vignette, sRGB, dither (no banding in sky gradients).
 4. FXAA only when MSAA is off (the composite then goes through an 8-bit target).
 
 Disable with `settings.postfx = false` (or `game.post.enabled = false`). The renderer then tone-maps
 directly with the same operator, and bloom/grade are skipped. `settings.bloom` toggles bloom alone.
+For that path to match, every custom `ShaderMaterial` ends its fragment shader with
+`#include <tonemapping_fragment>` and `#include <colorspace_fragment>` (no-ops into the HDR
+target), as the dome, rain, stars and light glows do. The fog is applied before tone mapping in
+both paths (`fog.ts`; three normally fogs after the sRGB encode, with an sRGB-encoded fog color),
+so the haze looks the same with post on or off.
 
 **Tone mapping: ACES** (default; `tonemap=agx|neutral` to compare). Compared in the dev scene at noon,
 golden hour, dawn and night: ACES gives the crispest Mediterranean noon (deep blue sky, white marble,
@@ -176,7 +196,10 @@ Synchronous render throughput (`__skyBench`, scene + post, ms/frame):
 | night, 8 point lights | 0.57 | 1.04 | 0.57 | 1.05 |
 | rain | 0.58 | 1.04 | 0.62 | 1.06 |
 
-So post costs ≈ 0.38 ms at 1080p (bloom ≈ 0.11 ms of that) and adds 10 draw calls. The real rAF loop
+So post costs ≈ 0.38 ms at 1080p (bloom ≈ 0.11 ms of that) and adds 10 draw calls. Re-measured
+after the bloom-chain fix (noon, shadows high; chromium / webkit): post on 0.54–0.62 / 0.54–0.58 ms
+at 720p and 0.99–1.07 / 0.98–1.02 ms at 1080p, bloom off 0.46 / 0.46 and 0.87 / 0.86, post off
+0.37 / 0.37 and 0.59 / 0.65, so unchanged within noise. The real rAF loop
 runs at a steady 60 fps (vsync) in both browsers at both sizes: p95 ≤ 18 ms, max ≤ 19 ms, including
 timelapse (LUT re-bake every frame, environment refreshed ~3×/s). CPU is 0.6–1.6 ms/frame including
 three's render submission; the CPU atmosphere is re-evaluated only when the sun moves ≥ 0.07° or the
@@ -189,7 +212,10 @@ weather changes (~0.3 ms each time).
 - Use `MeshStandardMaterial`/`MeshPhysicalMaterial` (shared via `gfx/materials`) to get IBL, fog and
   wetness. Custom `ShaderMaterial`s with `fog: true` should build their uniforms with
   `UniformsUtils.merge([UniformsLib.fog, …])` **after** `installSky`, which gives them the height/sun
-  fog too. Otherwise they fall back to plain exponential fog.
+  fog too. Otherwise they fall back to plain exponential fog. End every custom fragment shader
+  with `#include <tonemapping_fragment>` + `#include <colorspace_fragment>` (see Post-processing).
+- Fires in the light pool: `night: true` for street/shop lamps; leave it off for fires that burn
+  all day, which then light nothing in sunlight (see `dayScale`).
 - `Game.renderFrame` is the render hook (post-processing replaces it). `renderer.info` stats include
   the post passes.
 - Interiors: set `game.sky.indoor = 1` inside buildings (and back to 0 outside).
@@ -206,5 +232,11 @@ weather changes (~0.3 ms each time).
   cloud-shadow term in the key light would be cheap).
 - The light pool ranks lights in O(n·8) every 0.1 s. Fine for hundreds of lamps; for thousands,
   add a spatial grid.
+- With post-processing off, additive sprites (light glows, stars) are added after tone mapping, so
+  flame halos look a little larger and softer than with post on; the grade, vignette and bloom are
+  post-only by design. The fog decode assumes an sRGB canvas (a Display-P3 canvas would skip the
+  gamut matrix).
+- Daylight dimming of always-burning fires uses the player's `sky.indoor`, not the fire's own
+  location; a fire inside a building seen from outside at noon is dark unless it sets `dayScale`.
 - The physically based moonlit sky is shown at 0.5× and night exposure is capped for gameplay;
   `MOON_ILLUMINANCE`, `NIGHT_FILL` and `EXPOSURE` in `lighting.ts` are the knobs.
