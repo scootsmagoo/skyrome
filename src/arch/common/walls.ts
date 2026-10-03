@@ -69,7 +69,8 @@ export interface WallSpec {
   /** Ashlar course height: alternate courses step 1 cm proud so the joints read in light. */
   courses?: number;
   collide?: boolean;
-  detail?: 'high' | 'low';
+  /** 'far' builds like 'low' (no ashlar courses). */
+  detail?: 'high' | 'low' | 'far';
 }
 
 /** Ensure an XZ outline has positive signed area (x·z' − x'·z), the orientation sweep() expects. */
@@ -114,7 +115,7 @@ function solidPiece(b: MeshBuilder, spec: WallSpec, x0: number, x1: number, y0: 
   const t = spec.thickness;
   const mat = spec.material ?? 'travertine';
   const collide = spec.collide ?? true;
-  if (!spec.courses || spec.detail === 'low') {
+  if (!spec.courses || spec.detail === 'low' || spec.detail === 'far') {
     addBox(b, mat, x0, x1, y0, y1, -t / 2, t / 2, m, collide);
     return;
   }
@@ -158,7 +159,7 @@ function archHead(b: MeshBuilder, spec: WallSpec, cx: number, r: number, ys: num
 }
 
 /** Moulded frame (architrave) around an opening on the front face (z = −t/2). */
-function frame(b: MeshBuilder, mat: MaterialId, o: Opening, y0: number, y1: number, t: number, m: THREE.Matrix4, detail: 'high' | 'low') {
+function frame(b: MeshBuilder, mat: MaterialId, o: Opening, y0: number, y1: number, t: number, m: THREE.Matrix4, detail: 'high' | 'low' | 'far') {
   const fw = Math.min(0.35, Math.max(0.12, o.width * 0.14));
   const prof = new ProfileBuilder(0, 0).out(0.03).up(fw * 0.45).out(0.015).up(fw * 0.4).cymaReversa(0.025, fw * 0.15, detail === 'high' ? 3 : 1).in(0.07).build();
   // Profile x is outward (−z) from the wall face; y is the band width growing away from the opening.
@@ -196,7 +197,7 @@ const LEAF_SET = 0.25;
 const LEAF_T = 0.08;
 
 /** Panelled door leaves (bronze or wood) set in the opening; arched doors get a lunette panel. */
-function leaves(b: MeshBuilder, o: Opening, y0: number, y1: number, t: number, m: THREE.Matrix4, detail: 'high' | 'low') {
+function leaves(b: MeshBuilder, o: Opening, y0: number, y1: number, t: number, m: THREE.Matrix4, detail: 'high' | 'low' | 'far') {
   const mat = o.leafMaterial ?? 'bronze';
   const h = (o.arched ? y1 - o.width / 2 : y1) - y0;
   const lw = o.width / 2;
@@ -270,7 +271,7 @@ function openingOutline(o: Opening, y0: number, y1: number, inset: number, n: nu
 }
 
 /** Window fillings: dark back plane, iron grille or timber shutters. */
-function windowFill(b: MeshBuilder, o: Opening, y0: number, y1: number, t: number, m: THREE.Matrix4, detail: 'high' | 'low') {
+function windowFill(b: MeshBuilder, o: Opening, y0: number, y1: number, t: number, m: THREE.Matrix4, detail: 'high' | 'low' | 'far') {
   const fill = o.fill ?? 'open';
   if (fill === 'open') return;
   const n = detail === 'high' ? 12 : 6;
@@ -313,7 +314,7 @@ function windowFill(b: MeshBuilder, o: Opening, y0: number, y1: number, t: numbe
  * quarter-ellipsoid head, lining the hole that the piers, sill and arch head leave in the wall.
  * A plug fills the rest of the wall thickness behind it, so nothing can be seen through.
  */
-function niche(b: MeshBuilder, spec: WallSpec, o: Opening, y0: number, y1: number, m: THREE.Matrix4, detail: 'high' | 'low') {
+function niche(b: MeshBuilder, spec: WallSpec, o: Opening, y0: number, y1: number, m: THREE.Matrix4, detail: 'high' | 'low' | 'far') {
   const t = spec.thickness;
   const hw = o.width / 2;
   const depth = Math.min(o.depth ?? t * 0.6, t - 0.06);

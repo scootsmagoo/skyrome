@@ -29,7 +29,6 @@ Textures were downloaded at 1K and re-encoded (resized ARM maps, JPEG quality 80
 | --- | --- | --- |
 | marble (also marble_giallo) | Marble001 | https://ambientcg.com/view?id=Marble001 |
 | marble_veined (also marble_pavonazzetto) | Marble012 | https://ambientcg.com/view?id=Marble012 |
-| travertine | Concrete003 | https://ambientcg.com/view?id=Concrete003 |
 | tufa | Rock049 | https://ambientcg.com/view?id=Rock049 |
 | peperino | Concrete025 | https://ambientcg.com/view?id=Concrete025 |
 | basalt | Rock050 | https://ambientcg.com/view?id=Rock050 |
@@ -43,8 +42,10 @@ ambientCG assets are created by Lennart Demes and published at ambientcg.com.
 ## Procedural textures (made in code; no third-party content)
 
 Fabric, floor mosaic, painted stucco, gilded bronze, bronze, iron/lead, porphyry, opus
-reticulatum, foliage (`src/gfx/textures/procedural.ts`). Also the column frieze and the
-hieroglyphs (`src/arch/common/relief.ts`) and the inscriptions (`src/arch/common/inscription.ts`).
+reticulatum, ashlar travertine, foliage (`src/gfx/textures/procedural.ts`). Also the column
+frieze, the hieroglyphs and the obelisk's granite grain (`src/arch/common/relief.ts`), the
+inscriptions and sign atlas pages (`src/arch/common/inscription.ts`), and the amphitheatre's
+far-LOD facade, seat-row and colonnade textures (`src/arch/classical/amphitheatreFar.ts`).
 
 ## Font
 

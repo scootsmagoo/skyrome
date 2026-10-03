@@ -3,6 +3,7 @@
  * scale (buildings at WORLD_SCALE, people-sized details 1:1), plus a material swatch view.
  *
  *   ?scene=arch                  the gallery (spawn faces the temple, looking south)
+ *   ?scene=arch&detail=low|far   every exhibit at the low or far LOD (far: the amphitheatre shell)
  *   ?scene=arch&view=materials   every library material on a box and a sphere
  *
  * Debug helpers on window.__arch: look(eye…, target…, fov) detaches the camera for screenshots;
@@ -10,12 +11,13 @@
  * (e.g. the temple stairs, used to verify that the player can climb them).
  */
 import * as THREE from 'three';
-import { amphitheatre } from '../arch/classical/amphitheatre';
+import { amphitheatre, type AmphitheatreSpec } from '../arch/classical/amphitheatre';
+import { amphitheatreFar } from '../arch/classical/amphitheatreFar';
 import { arcade, colosseumStoreys, plainArch, triumphalArch } from '../arch/classical/arch';
 import { basilica } from '../arch/classical/basilica';
 import { column } from '../arch/classical/column';
 import { honorificColumn, obelisk } from '../arch/classical/monuments';
-import { ORDERS, diameterForHeight } from '../arch/classical/orders';
+import { ORDERS, diameterForHeight, type Detail } from '../arch/classical/orders';
 import { porticus, quadriporticus } from '../arch/classical/porticus';
 import { armoredEmperor, equestrian, quadriga, seatedDeity, togate } from '../arch/classical/statues';
 import { temple } from '../arch/classical/temple';
@@ -28,6 +30,7 @@ import type { Game } from '../core/Game';
 import { MeshBuilder, placeAndRegister } from '../gfx/MeshBuilder';
 import { MATERIAL_IDS } from '../gfx/materialIds';
 import { applyDefaultEnvironment, whenTexturesLoaded } from '../gfx/materials';
+import { WorldRegistry } from '../world/WorldRegistry';
 import { WORLD_SCALE } from '../world/coords';
 import { setupPlayer } from './common';
 import type { SceneDef } from './types';
@@ -48,7 +51,7 @@ declare global {
 
 const K = WORLD_SCALE;
 /** `?detail=low` builds every exhibit at low detail (the far-LOD versions). */
-let DET: 'high' | 'low' = 'high';
+let DET: Detail = 'high';
 
 /** When set (by `look`), the sun's shadow camera follows this point instead of the player. */
 let focus: THREE.Vector3 | null = null;
@@ -157,15 +160,26 @@ function record(name: string, g: THREE.Object3D, ms: number) {
   console.info(`[arch] ${name}: ${Math.round(tris)} tris, ${ms.toFixed(0)} ms`);
 }
 
-/** Build one exhibit with its own MeshBuilder, place it, register colliders and stats. */
-function build(game: Game, name: string, pos: THREE.Vector3Like, rotY: number, fn: (b: MeshBuilder) => void) {
+/**
+ * Build one exhibit with its own MeshBuilder, place it, register colliders and stats. With
+ * `far`, a far-LOD stand-in is built too and the registry swaps it in beyond `cullDistance`.
+ */
+function build(game: Game, name: string, pos: THREE.Vector3Like, rotY: number, fn: (b: MeshBuilder) => void, lod?: { far: (b: MeshBuilder) => void; cullDistance: number }) {
   const b = new MeshBuilder();
   const t0 = performance.now();
   fn(b);
   // Indexed (smooth lathes and sweeps share most vertices) and freed from the JS heap once on
   // the GPU: the gallery is static scenery and its colliders are separate.
   const g = b.build(name, { index: true, releaseCpu: true });
-  placeAndRegister(game, `arch:${name}`, g, b.colliders, pos, rotY);
+  let far: THREE.Group | undefined;
+  if (lod) {
+    const fb = new MeshBuilder();
+    const t1 = performance.now();
+    lod.far(fb);
+    far = fb.build(`${name}-far`, { index: true, releaseCpu: true });
+    record(`${name}-far`, far, performance.now() - t1);
+  }
+  placeAndRegister(game, `arch:${name}`, g, b.colliders, pos, rotY, { far, cullDistance: lod?.cullDistance, farDistance: 3000 });
   record(name, g, performance.now() - t0);
   return g;
 }
@@ -253,9 +267,11 @@ function gallery(game: Game) {
   // 7. A portico (Ionic, L-shaped) with painted notices on its wall.
   build(game, 'porticus', { x: -112, y: 0, z: -74 }, 0, (b) => {
     porticus(b, [new THREE.Vector3(0, 0, 30), new THREE.Vector3(0, 0, 0), new THREE.Vector3(34, 0, 0)], { order: 'ionic', columnHeight: 5.4, depth: 6, wallMaterial: 'plaster_red', material: 'marble', fluted: true, detail: DET });
-    // Dipinti on the back wall (an election notice, Pompeii style, and a tavern sign).
-    paintedSign(b, ['C Iulium Polybium', 'Aed O V F'], 3.2, 1.0, TRS(17, 2.6, 5.96, 0, Math.PI, 0), { ink: '#1d1a17', ground: '#efe6d2' });
-    paintedSign(b, ['Taberna Vinaria'], 2.6, 0.7, TRS(6, 3.1, 5.96, 0, Math.PI, 0));
+    // Dipinti on the back wall (an election notice, Pompeii style, and a tavern sign). The wall's
+    // inner face is at z = 6 and faces −z, like a panel's front: no rotation, the 4 cm board
+    // sunk 1 cm into the plaster.
+    paintedSign(b, ['C Iulium Polybium', 'Aed O V F'], 3.2, 1.0, T(17, 2.6, 5.97), { ink: '#1d1a17', ground: '#efe6d2' });
+    paintedSign(b, ['Taberna Vinaria'], 2.6, 0.7, T(6, 3.1, 5.97));
   });
   // 8. Colosseum facade section (four bays of the 80, all four storeys).
   build(game, 'arcade-section', { x: 44, y: 0, z: -30 }, 0, (b) =>
@@ -266,10 +282,14 @@ function gallery(game: Game) {
   build(game, 'barrel-vault', { x: 110, y: 0, z: -52 }, 0, (b) => barrelVault(b, { span: 6, length: 10, springing: 4, coffers: true, detail: DET }));
   build(game, 'exedra', { x: 110, y: 0, z: -20 }, 0, (b) => exedra(b, { radius: 6, height: 7, colonnade: { order: 'corinthian', count: 4 }, detail: DET }));
   // 10. An Ionic tetrastyle prostyle temple with a rostrum and lateral stairs (Castor type).
-  build(game, 'temple-ionic', { x: 22, y: 0, z: 48 }, 0, (b) => temple(b, { order: 'ionic', plan: 'prostyle', front: 4, D: 0.8, pronaos: 2, sides: 6, stairs: 'sides', podiumHeight: 2.2, detail: DET }));
+  build(game, 'temple-ionic', { x: 22, y: 0, z: 48 }, 0, (b) => {
+    const r = temple(b, { order: 'ionic', plan: 'prostyle', front: 4, D: 0.8, pronaos: 2, sides: 6, stairs: 'sides', podiumHeight: 2.2, detail: DET });
+    // the lateral flights in world space (foot centre, top), for scripted walks
+    if (window.__arch) window.__arch.info.ionicFlights = r.layout.flights.map((f) => ({ x: 22 + (f.x0 + f.x1) / 2, z0: 48 + f.z0, z1: 48 + f.z1, top: r.layout.podiumHeight }));
+  });
   // 11. A forum court: a Corinthian quadriporticus round an equestrian statue (Forum of Trajan).
   build(game, 'forum-court', { x: 78, y: 0, z: 84 }, 0, (b) => {
-    quadriporticus(b, 44, 32, { order: 'corinthian', columnHeight: 6.4, depth: 5.5, wallMaterial: 'plaster_cream', floorMaterial: 'paving_travertine', detail: DET, columnDetail: 'low' });
+    quadriporticus(b, 44, 32, { order: 'corinthian', columnHeight: 6.4, depth: 5.5, wallMaterial: 'plaster_cream', floorMaterial: 'paving_travertine', detail: DET, columnDetail: DET === 'far' ? 'far' : 'low' });
     b.box('marble', 3.6, 3.2, 5.4, T(0, 1.6, 0), { collide: true });
     inscriptionPanel(b, { lines: ['Imp Caesari Nervae Traiano', 'Senatus Populusque Romanus'], width: 3.0, height: 0.9, style: 'bronze' }, T(0, 1.8, -2.72), { depth: 0.05 });
     equestrian(b, T(0, 3.2, 0), { scale: 1.6, detail: DET });
@@ -284,24 +304,30 @@ function gallery(game: Game) {
     paintedSign(b, ['Pistor', 'Panis Venalis'], 2.2, 0.8, TRS(14.5, 4.1, -0.37, 0, 0, 0), { ground: '#efe4cc' });
   });
   // 13. The Flavian Amphitheatre at WORLD_SCALE (188 × 156 m real): facade, ambulatory and cavea
-  //     with the four axial entrances, arena gates and vomitoria.
+  //     with the four axial entrances, arena gates and vomitoria. Beyond ~180 m (from the
+  //     spawn, for one) the registry shows the ~5k-triangle far shell instead.
   const amphAt = { x: -10, y: 0, z: 150 };
-  build(game, 'amphitheatre', amphAt, 0, (b) => {
-    const r = amphitheatre(b, {
-      facade: { rx: 94 * K, rz: 78 * K, bays: 80, storeys: colosseumStoreys(K), depth: 2.4 * K, corridor: 6 * K, material: 'travertine', detail: 'low', masts: true },
-      cavea: {
-        arenaRx: 43 * K,
-        arenaRz: 27 * K,
-        podium: 4 * K,
-        tiers: [{ rows: 6, rise: 0.4, depth: 0.7 }, { rows: 9, rise: 0.4, depth: 0.7, wall: 1.0 }, { rows: 5, rise: 0.4, depth: 0.7, wall: 1.0 }],
-        segments: 96,
-        aisles: 20,
-        seatMaterial: 'marble',
-        riserMaterial: 'travertine',
-        topPortico: { order: 'corinthian', columnHeight: 7 },
-        detail: DET,
-      },
-    });
+  const amphSpec: AmphitheatreSpec = {
+    facade: { rx: 94 * K, rz: 78 * K, bays: 80, storeys: colosseumStoreys(K), depth: 2.4 * K, corridor: 6 * K, material: 'travertine', detail: DET === 'high' ? 'low' : DET, masts: true },
+    cavea: {
+      arenaRx: 43 * K,
+      arenaRz: 27 * K,
+      podium: 4 * K,
+      tiers: [{ rows: 6, rise: 0.4, depth: 0.7 }, { rows: 9, rise: 0.4, depth: 0.7, wall: 1.0 }, { rows: 5, rise: 0.4, depth: 0.7, wall: 1.0 }],
+      segments: 96,
+      aisles: 20,
+      seatMaterial: 'marble',
+      riserMaterial: 'marble_veined',
+      topPortico: { order: 'corinthian', columnHeight: 7 },
+      detail: DET,
+    },
+  };
+  if (DET === 'far') {
+    build(game, 'amphitheatre', amphAt, 0, (b) => amphitheatreFar(b, amphSpec));
+    return;
+  }
+  const amphitheatreNear = (b: MeshBuilder) => {
+    const r = amphitheatre(b, amphSpec);
     // World-space entrances for scripted walks (shot steps): facade bay, passage axis and mouth.
     if (window.__arch)
       window.__arch.info.amphitheatre = {
@@ -310,7 +336,8 @@ function gallery(game: Game) {
         facade: r.facade.height,
         entrances: r.entrances.map((e) => ({ kind: e.kind, x: amphAt.x + e.x, z: amphAt.z + e.z, nx: e.nx, nz: e.nz, ax: amphAt.x + e.passage.x, az: amphAt.z + e.passage.z, dx: e.passage.dx, dz: e.passage.dz, mouth: e.passage.mouth, outer: e.passage.outer, floor: e.passage.floor })),
       };
-  });
+  };
+  build(game, 'amphitheatre', amphAt, 0, amphitheatreNear, { far: (b) => amphitheatreFar(b, amphSpec), cullDistance: 180 });
 }
 
 const scene: SceneDef = {
@@ -319,8 +346,14 @@ const scene: SceneDef = {
   async setup(game) {
     const params = new URLSearchParams(location.search);
     const view = params.get('view') ?? 'gallery';
-    DET = params.get('detail') === 'low' ? 'low' : 'high';
+    const det = params.get('detail');
+    DET = det === 'low' || det === 'far' ? det : 'high';
     await loadInscriptionFont();
+    // Distance culling and far-LOD swaps (the world module owns this in the game proper).
+    if (!game.world) {
+      game.world = new WorldRegistry(game);
+      game.addSystem(game.world);
+    }
     plaza(game);
     // Spawn north of the exhibits, looking south (+z) along the axis towards the temple.
     const player = setupPlayer(game, new THREE.Vector3(0, 0.05, -128), 0);

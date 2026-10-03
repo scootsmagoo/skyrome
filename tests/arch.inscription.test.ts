@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { ATLAS_PAGE, atlasEntry, inscriptionPanel, latinize, layoutLines, paintedSign, shelfPack } from '../src/arch/common/inscription';
 import { MeshBuilder } from '../src/gfx/MeshBuilder';
-import { HeightField, friezeBand, hieroglyphFace } from '../src/arch/common/relief';
+import { HeightField, friezeBand, grainField, hieroglyphFace } from '../src/arch/common/relief';
 
 describe('inscriptions', () => {
   it('writes Latin in Roman capitals with interpuncts', () => {
@@ -93,5 +93,28 @@ describe('relief height fields', () => {
     const g = hieroglyphFace(64, 256, 3);
     expect(Math.min(...g.data)).toBeLessThan(-0.3);
     expect(Math.max(...g.data)).toBeLessThanOrEqual(0);
+  });
+});
+
+describe('granite grains', () => {
+  it('a crystal mosaic in the palette, close to the weights, deterministic', () => {
+    const g = { palette: [[200, 120, 100], [130, 120, 120], [40, 36, 36]] as [number, number, number][], weights: [0.6, 0.3, 0.1], cell: 3, mix: 1 };
+    const f = grainField(96, 96, g);
+    expect(grainField(96, 96, g)).toEqual(f);
+    const counts = [0, 0, 0];
+    let specks = 0;
+    for (let i = 0; i < 96 * 96; i++) {
+      const k = g.palette.findIndex((p) => p[0] === f[i * 3] && p[1] === f[i * 3 + 1]);
+      if (k >= 0) counts[k]++;
+      else specks++;
+    }
+    const total = 96 * 96;
+    expect(specks / total).toBeLessThan(0.06);
+    expect(counts[0] / total).toBeGreaterThan(0.4);
+    expect(counts[2] / total).toBeLessThan(0.25);
+    // crystals are several pixels across: most neighbours share a colour
+    let same = 0;
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 95; x++) if (f[(y * 96 + x) * 3] === f[(y * 96 + x + 1) * 3]) same++;
+    expect(same / (96 * 95)).toBeGreaterThan(0.55);
   });
 });

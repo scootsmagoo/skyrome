@@ -57,14 +57,17 @@ export interface MaterialRecipe {
   roughness?: number;
   /** Strength of the ARM map's ambient occlusion. Default 1. */
   ao?: number;
+  /** Albedo-map contrast around its mean (1 = as scanned). Photo sets only. */
+  contrast?: number;
 }
 
 export const MATERIAL_RECIPES: Record<MaterialId, MaterialRecipe> = {
   // stone
-  marble: { set: 'marble', tile: 2.4, normal: 0.6, macro: 0.05 },
-  marble_veined: { set: 'marble_veined', tile: 2.4, normal: 0.6, macro: 0.05 },
-  marble_giallo: { set: 'marble', tile: 2.0, normal: 0.6, macro: 0.08 },
-  marble_pavonazzetto: { set: 'marble_veined', tile: 2.0, normal: 0.6, macro: 0.05 },
+  // White marble's scanned veining is softened (contrast) so forms in shade read before the veins.
+  marble: { set: 'marble', tile: 2.4, normal: 0.6, macro: 0.05, contrast: 0.5 },
+  marble_veined: { set: 'marble_veined', tile: 2.4, normal: 0.6, macro: 0.05, contrast: 0.8 },
+  marble_giallo: { set: 'marble', tile: 2.0, normal: 0.6, macro: 0.08, contrast: 0.6 },
+  marble_pavonazzetto: { set: 'marble_veined', tile: 2.0, normal: 0.6, macro: 0.05, contrast: 0.9 },
   porphyry: { proc: 'porphyry', tile: 0.8, macro: 0.04 },
   // Procedural ashlar travertine (laminae, voids along the bedding, hairline joints), drawn for a
   // 2.4 × 1.2 m repeat: two 0.6 m courses, smooth as in AD 113 (the pockmarks are medieval).

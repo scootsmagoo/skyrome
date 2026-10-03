@@ -257,7 +257,11 @@ export function registerColliders(game: Game, specs: ColliderSpec[], matrix?: TH
   }
 }
 
-/** Position/rotate a built group in the world, register its colliders, and add it to the world registry. */
+/**
+ * Position/rotate a built group in the world, register its colliders, and add it to the world
+ * registry. `far` (a low-detail stand-in built in the same local frame) gets the same transform
+ * and is shown instead between cullDistance and farDistance.
+ */
 export function placeAndRegister(
   game: Game,
   id: string,
@@ -265,13 +269,15 @@ export function placeAndRegister(
   colliders: ColliderSpec[],
   position: THREE.Vector3Like,
   rotationY = 0,
-  opts: { cullDistance?: number; owner?: unknown } = {},
+  opts: { cullDistance?: number; owner?: unknown; far?: THREE.Object3D; farDistance?: number } = {},
 ) {
-  group.position.set(position.x, position.y, position.z);
-  group.rotation.y = rotationY;
-  group.updateMatrixWorld(true);
+  for (const o of opts.far ? [group, opts.far] : [group]) {
+    o.position.set(position.x, position.y, position.z);
+    o.rotation.y = rotationY;
+    o.updateMatrixWorld(true);
+  }
   registerColliders(game, colliders, group.matrixWorld, opts.owner);
-  if (game.world) game.world.add(id, group, { cullDistance: opts.cullDistance });
+  if (game.world) game.world.add(id, group, { cullDistance: opts.cullDistance, far: opts.far, farDistance: opts.farDistance });
   else game.scene.add(group);
   return group;
 }

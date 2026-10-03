@@ -4,7 +4,7 @@
  * obelisks. Each is turned into albedo + normal + roughness DataTextures in `reliefMaterial()`.
  */
 import * as THREE from 'three';
-import { fbm2D, heightToNormal, prng } from '../../gfx/textures/noise';
+import { fbm2D, hash2, heightToNormal, prng } from '../../gfx/textures/noise';
 
 /** A float height field with a few raster primitives. Rows run up (row 0 = v 0). */
 export class HeightField {
@@ -482,6 +482,56 @@ export interface ReliefLook {
   roughness?: number;
   /** Repeat the texture (frieze) or clamp (single face). */
   repeat?: boolean;
+  /**
+   * Crystalline stone (granite): a mosaic of mineral grains `cell` pixels across, each coloured
+   * from `palette` by weight, over the ground colour by `mix` (0..1). Carved areas darken.
+   */
+  grains?: { palette: [number, number, number][]; weights: number[]; cell: number; mix: number };
+}
+
+/**
+ * Grain colours for a w × h face: a jittered-cell (Worley) mosaic so each crystal is a small
+ * polygon of one mineral, plus fine dark specks. Pure; returns sRGB triples per pixel.
+ */
+export function grainField(w: number, h: number, g: NonNullable<ReliefLook['grains']>, seed = 11): Float32Array {
+  const out = new Float32Array(w * h * 3);
+  const total = g.weights.reduce((a, c) => a + c, 0);
+  const pick = (r: number) => {
+    let acc = 0;
+    for (let i = 0; i < g.weights.length; i++) {
+      acc += g.weights[i] / total;
+      if (r < acc) return g.palette[i];
+    }
+    return g.palette[g.palette.length - 1];
+  };
+  const c = g.cell;
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const gx = Math.floor(x / c);
+      const gy = Math.floor(y / c);
+      let best = Infinity;
+      let id = 0;
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++) {
+          const cx = gx + dx;
+          const cy = gy + dy;
+          const px = (cx + hash2(cx, cy, seed)) * c;
+          const py = (cy + hash2(cx, cy, seed + 1)) * c;
+          const d = (px - x - 0.5) ** 2 + (py - y - 0.5) ** 2;
+          if (d < best) {
+            best = d;
+            id = hash2(cx, cy, seed + 2);
+          }
+        }
+      let rgb = pick(id);
+      // Fine biotite specks between the big crystals.
+      if (hash2(x, y, seed + 3) < 0.035) rgb = [34, 30, 30];
+      const j = (y * w + x) * 3;
+      out[j] = rgb[0];
+      out[j + 1] = rgb[1];
+      out[j + 2] = rgb[2];
+    }
+  return out;
 }
 
 /** Turn a height field into a MeshStandardMaterial (albedo + normal + roughness/AO). */
@@ -491,13 +541,21 @@ export function reliefMaterial(f: HeightField, look: ReliefLook): THREE.MeshStan
   const arm = new Uint8ClampedArray(w * h * 4);
   const n = fbm2D(5, 12, 4);
   const amp = look.noise ?? 0.08;
+  const grains = look.grains ? grainField(w, h, look.grains) : null;
+  const gm = look.grains?.mix ?? 0;
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
       const v = Math.min(1, Math.abs(data[i]));
       const k = 1 + amp * (n(x / w, y / h) - 0.5) * 2;
       const j = i * 4;
-      for (let c = 0; c < 3; c++) color[j + c] = (look.ground[c] + (look.relief[c] - look.ground[c]) * v) * k;
+      for (let c = 0; c < 3; c++) {
+        const ground = grains ? look.ground[c] + (grains[i * 3 + c] - look.ground[c]) * gm : look.ground[c];
+        // Carved (or raised) areas: the relief colour, keeping a little of the grain so the
+        // signs read as cut into the same stone.
+        const relief = grains ? 0.35 * ground * (look.relief[c] / Math.max(1, look.ground[c])) + 0.65 * look.relief[c] : look.relief[c];
+        color[j + c] = (ground + (relief - ground) * v) * k;
+      }
       color[j + 3] = 255;
       arm[j] = 255 * (1 - 0.35 * v * (data[i] < 0 ? 1 : 0.4));
       arm[j + 1] = 255 * (look.roughness ?? 0.6);

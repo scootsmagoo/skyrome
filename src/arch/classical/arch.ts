@@ -328,15 +328,20 @@ export function triumphalArch(b: MeshBuilder, spec: TriumphalArchSpec = {}, at?:
       victory(b, mat, mul(m, TRS(-main.span / 2 - 0.05, main.spring + main.span * 0.36, z, 0, rot, 0)), vs, false);
       victory(b, mat, mul(m, TRS(main.span / 2 + 0.05, main.spring + main.span * 0.36, z, 0, rot, 0)), vs, true);
     }
-    // Processional reliefs on the passage walls (spoils and triumph).
-    const ph = main.spring * 0.45;
+    // Processional reliefs on the passage walls (spoils and triumph), as on the Arch of Titus:
+    // between the socle's crowning moulding and the impost, so no moulding crosses the figures.
+    const impostH = Math.max(0.12, main.span * 0.06);
+    const y0 = socle + 0.14;
+    const y1 = main.spring - impostH - 0.1;
+    const ph = y1 - y0 - 0.12;
     for (const sx of [-1, 1]) {
       const x = sx * (main.span / 2) - sx * 0.005;
-      const frameMat: MaterialId = mat;
-      const back = new THREE.BoxGeometry(0.04, ph + 0.2, depth * 0.78);
-      back.translate(x - sx * 0.02, main.spring * 0.48, 0);
+      // A greyer ground than the arch's marble so the figures read in the passage's shade.
+      const frameMat: MaterialId = mat === 'marble' ? 'marble_veined' : mat;
+      const back = new THREE.BoxGeometry(0.04, y1 - y0, depth * 0.78);
+      back.translate(x - sx * 0.02, (y0 + y1) / 2, 0);
       b.add(back, frameMat, m);
-      reliefProcession(b, mul(m, TRS(x - sx * 0.04, main.spring * 0.26, 0, 0, sx < 0 ? -Math.PI / 2 : Math.PI / 2, 0)), depth * 0.72, ph, { material: mat, depth: 0.1 });
+      reliefProcession(b, mul(m, TRS(x - sx * 0.04, y0 + 0.04, 0, 0, sx < 0 ? -Math.PI / 2 : Math.PI / 2, 0)), depth * 0.72, ph, { material: mat, depth: 0.16 });
     }
   }
   // Crowning group.

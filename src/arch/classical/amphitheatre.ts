@@ -321,6 +321,46 @@ export interface CaveaWall {
   y1: number;
 }
 
+/** Walkway width at the foot of a tier: room for the aisle flight that climbs its praecinctio wall. */
+function tierWalk(tier: CaveaTier, ti: number): number {
+  // In front of a praecinctio wall the walkway must hold the aisle flight that climbs it
+  // (0.2 m risers on 0.34 m treads).
+  const flight = tier.wall && tier.wall > 0 ? Math.ceil(tier.wall / 0.2 - 1e-9) * 0.34 + 0.15 : 0;
+  return Math.max(tier.walk ?? (ti === 0 ? 2.2 : 1.6), flight);
+}
+
+/**
+ * The cavea section for the far LOD: walkways and praecinctio walls as in caveaSection, each
+ * tier's rows replaced by one slope from the first riser's foot to the last tread's back.
+ * `slopes` marks the sloped segments (their index in the profile) with their row count. Pure.
+ */
+export function caveaFarProfile(spec: CaveaSpec): { profile: V2[]; slopes: { index: number; rows: number }[]; reach: number; height: number } {
+  const pts: V2[] = [[0, 0], [0, spec.podium]];
+  const slopes: { index: number; rows: number }[] = [];
+  let x = 0;
+  let y = spec.podium;
+  spec.tiers.forEach((tier, ti) => {
+    x += tierWalk(tier, ti);
+    pts.push([x, y]);
+    if (tier.wall && tier.wall > 0) {
+      y += tier.wall;
+      pts.push([x, y]);
+      x += 0.6;
+      pts.push([x, y]);
+    }
+    slopes.push({ index: pts.length - 1, rows: tier.rows });
+    x += tier.rows * (tier.depth ?? 0.72);
+    y += tier.rows * (tier.rise ?? 0.38);
+    pts.push([x, y]);
+  });
+  const top = spec.topWalk ?? (spec.topPortico ? 3.5 : 0);
+  if (top > 0) {
+    x += top;
+    pts.push([x, y]);
+  }
+  return { profile: pts, slopes, reach: x, height: y };
+}
+
 export function caveaSection(spec: CaveaSpec): { profile: V2[]; rows: { x0: number; x1: number; y: number; prevY?: number }[]; walls: CaveaWall[]; reach: number; height: number } {
   const pts: V2[] = [[0, 0], [0, spec.podium]];
   let x = 0;
@@ -328,10 +368,7 @@ export function caveaSection(spec: CaveaSpec): { profile: V2[]; rows: { x0: numb
   const rows: { x0: number; x1: number; y: number; prevY?: number }[] = [];
   const walls: CaveaWall[] = [];
   spec.tiers.forEach((tier, ti) => {
-    // In front of a praecinctio wall the walkway must hold the aisle flight that climbs it
-    // (0.2 m risers on 0.34 m treads).
-    const flight = tier.wall && tier.wall > 0 ? Math.ceil(tier.wall / 0.2 - 1e-9) * 0.34 + 0.15 : 0;
-    const walk = Math.max(tier.walk ?? (ti === 0 ? 2.2 : 1.6), flight);
+    const walk = tierWalk(tier, ti);
     pts.push([x + walk, y]);
     x += walk;
     if (tier.wall && tier.wall > 0) {

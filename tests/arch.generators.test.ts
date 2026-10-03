@@ -102,3 +102,21 @@ describe('generators build cleanly within budget', () => {
     });
   }
 });
+
+describe('vault coffers stay inside their open faces', () => {
+  const bounds = (fn: (b: MeshBuilder) => void) => {
+    const b = new MeshBuilder();
+    fn(b);
+    return new THREE.Box3().setFromObject(b.build('v'));
+  };
+  it('barrel vault: no rib ends past the end faces', () => {
+    const box = bounds((b) => barrelVault(b, { span: 6, length: 10, springing: 4, coffers: true }));
+    expect(box.min.z).toBeGreaterThan(-1e-3);
+    expect(box.max.z).toBeLessThan(10 + 1e-3);
+  });
+  it('apse / exedra semi-dome: nothing protrudes past the chord (coffers end in edge bands)', () => {
+    for (const fn of [(b: MeshBuilder) => apse(b, { radius: 6, height: 7 }), (b: MeshBuilder) => exedra(b, { radius: 6, height: 7 })]) {
+      expect(bounds(fn).min.z).toBeGreaterThan(-0.01);
+    }
+  });
+});

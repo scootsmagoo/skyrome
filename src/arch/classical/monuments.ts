@@ -37,10 +37,31 @@ export interface ObeliskSpec {
 
 let obeliskMaterial: THREE.MeshStandardMaterial | null = null;
 
-/** Red Aswan granite with carved hieroglyph columns. */
+/**
+ * Red Aswan granite (syenite) with carved hieroglyph columns: coarse pink and red feldspar, grey
+ * quartz and black biotite/hornblende crystals of 1–3 cm, polished.
+ */
 function graniteGlyphs(): THREE.MeshStandardMaterial {
   if (!obeliskMaterial) {
-    obeliskMaterial = reliefMaterial(hieroglyphFace(128, 1024, 30), { ground: [176, 112, 102], relief: [120, 76, 70], noise: 0.18, strength: 2.4, roughness: 0.55 });
+    obeliskMaterial = reliefMaterial(hieroglyphFace(192, 1536, 30), {
+      ground: [170, 104, 92],
+      relief: [104, 62, 56],
+      noise: 0.06,
+      strength: 2.4,
+      roughness: 0.42,
+      grains: {
+        palette: [
+          [196, 118, 100], // pink feldspar
+          [158, 80, 70], // red feldspar
+          [132, 122, 122], // grey quartz
+          [44, 38, 38], // biotite / hornblende
+          [214, 186, 174], // pale plagioclase
+        ],
+        weights: [0.38, 0.24, 0.18, 0.12, 0.08],
+        cell: 2.2,
+        mix: 0.55,
+      },
+    });
     obeliskMaterial.name = 'obelisk-granite';
   }
   return obeliskMaterial;

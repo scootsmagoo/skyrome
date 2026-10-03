@@ -67,6 +67,36 @@ describe('stairs are walkable (real Actor)', () => {
     }
   });
 
+  it('lateral flights (Castor type) end on a walled landing and lead onto the podium', () => {
+    const w = makeWorld();
+    const b = new MeshBuilder();
+    const { layout: L } = temple(b, { order: 'ionic', plan: 'prostyle', front: 4, D: 0.8, pronaos: 2, sides: 6, stairs: 'sides', podiumHeight: 2.2, detail: 'low' });
+    addColliders(w.physics, b);
+    expect(L.landings.length).toBe(2);
+    for (const [i, f] of L.flights.entries()) {
+      const cx = (f.x0 + f.x1) / 2;
+      const ld = L.landings[i];
+      // Straight up the flight and on: the end wall stops the walker on the landing (no drop).
+      const up = walk(w, { x: cx, y: 0.05, z: f.z0 - 2 }, [{ dir: [0, 1], seconds: 6 }]);
+      expect(up.y, `flight ${i}`).toBeCloseTo(L.podiumHeight, 1);
+      expect(up.z).toBeLessThan(ld.z1);
+      // Then turn inward onto the podium, between the flank columns.
+      const inward = i === 0 ? 1 : -1;
+      const on = walk(w, { x: cx, y: 0.05, z: f.z0 - 2 }, [
+        { to: [cx, (ld.z0 + ld.z1) / 2 + 0.3], seconds: 6 },
+        { dir: [inward, 0], seconds: 2 },
+      ]);
+      expect(on.y).toBeCloseTo(L.podiumHeight, 1);
+      expect(Math.abs(on.x)).toBeLessThan(Math.abs(cx) - 1);
+      // The parapet keeps the walker from stepping off the flight's outer side.
+      const side = walk(w, { x: cx, y: 0.05, z: f.z0 - 2 }, [
+        { to: [cx, (f.z0 + f.z1) / 2], seconds: 4 },
+        { dir: [-inward, 0], seconds: 2 },
+      ]);
+      expect(Math.abs(side.x)).toBeLessThan(Math.max(Math.abs(f.x0), Math.abs(f.x1)));
+    }
+  });
+
   it('climbs the Hercules Victor crepidoma', () => {
     const w = makeWorld();
     const b = new MeshBuilder();

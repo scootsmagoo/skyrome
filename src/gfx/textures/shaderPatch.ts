@@ -7,6 +7,10 @@
  * - SK_DETILE: natural ground (grass, dirt, sand…) also blends a second, rotated and rescaled
  *   sample of the albedo map by a low-frequency noise mask. One extra texture fetch.
  *
+ * - SK_CONTRAST: pulls the albedo map towards its own mean (`skContrast` 1 = unchanged). White
+ *   marble scans carry strong grey veining that, in shade with no AO, dominates the forms of
+ *   columns and mouldings; at 0.5–0.6 the veins stay visible but the shading reads first.
+ *
  * Every patched material shares the same shader source, so Three compiles one program per
  * define combination and only the uniform values differ per material.
  */
@@ -15,6 +19,8 @@ import type * as THREE from 'three';
 const NOISE = /* glsl */ `
 varying vec3 vSkWorld;
 uniform float skMacro;
+uniform float skContrast;
+uniform vec3 skMean;
 float skHash(vec3 p) {
   p = fract(p * 0.3183099 + 0.1);
   p *= 17.0;
@@ -55,6 +61,9 @@ const MAP_FRAGMENT = /* glsl */ `
     sampledDiffuseColor = mix( sampledDiffuseColor, texture2D( map, skUv ), skW );
   }
   #endif
+  #ifdef SK_CONTRAST
+    sampledDiffuseColor.rgb = mix( skMean, sampledDiffuseColor.rgb, skContrast );
+  #endif
   diffuseColor *= sampledDiffuseColor;
 #endif
 #ifdef SK_MACRO
@@ -67,17 +76,25 @@ const MAP_FRAGMENT = /* glsl */ `
 #endif
 `;
 
-/** Patch a MeshStandardMaterial in place. `macro` 0 disables the variation. */
-export function applyShaderPatch(material: THREE.MeshStandardMaterial, opts: { macro?: number; detile?: boolean }) {
+/**
+ * Patch a MeshStandardMaterial in place. `macro` 0 disables the variation; `contrast` < 1 (with
+ * `mean`, the map's average linear albedo) flattens the albedo map towards its mean.
+ */
+export function applyShaderPatch(material: THREE.MeshStandardMaterial, opts: { macro?: number; detile?: boolean; contrast?: number; mean?: readonly number[] }) {
   const macro = opts.macro ?? 0;
-  // SK_DETILE only acts inside USE_MAP, so it is safe to set before the map has loaded.
+  // SK_DETILE and SK_CONTRAST only act inside USE_MAP, so they are safe before the map loads.
   const detile = !!opts.detile;
-  if (macro <= 0 && !detile) return;
-  material.defines = { ...(material.defines ?? {}), ...(macro > 0 ? { SK_MACRO: '' } : {}), ...(detile ? { SK_DETILE: '' } : {}) };
+  const contrast = opts.contrast !== undefined && opts.contrast < 1 && opts.mean ? opts.contrast : 1;
+  if (macro <= 0 && !detile && contrast === 1) return;
+  material.defines = { ...(material.defines ?? {}), ...(macro > 0 ? { SK_MACRO: '' } : {}), ...(detile ? { SK_DETILE: '' } : {}), ...(contrast < 1 ? { SK_CONTRAST: '' } : {}) };
   const uniform = { value: macro };
+  const contrastU = { value: contrast };
+  const meanU = { value: { x: opts.mean?.[0] ?? 0.5, y: opts.mean?.[1] ?? 0.5, z: opts.mean?.[2] ?? 0.5 } };
   material.userData.skMacro = uniform;
   material.onBeforeCompile = (shader) => {
     shader.uniforms.skMacro = uniform;
+    shader.uniforms.skContrast = contrastU;
+    shader.uniforms.skMean = meanU;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\nvarying vec3 vSkWorld;`)
       .replace('#include <project_vertex>', VERTEX_WORLD);
