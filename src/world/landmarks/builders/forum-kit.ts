@@ -32,6 +32,7 @@ import type { TreeSpecies } from '../../../arch/vegetation/species';
 import { vegetation } from '../../../arch/vegetation/system';
 import { UV_METERS } from '../../../gfx/textures/catalog';
 import { MeshBuilder } from '../../../gfx/MeshBuilder';
+import { placeProp } from '../../../arch/props';
 import type { MaterialId } from '../../../gfx/materialIds';
 import { toGame } from '../../coords';
 import type { LandmarkBuild, LandmarkContext, Spot } from '../types';
@@ -213,6 +214,8 @@ export function plantTrees(p: Part, trees: { species: TreeSpecies; x: number; z:
 
 interface FireRequest {
   position: THREE.Vector3;
+  /** Lit at dusk and put out at dawn (lamps, braziers) instead of burning all day (altars, hearths). */
+  night?: boolean;
   intensity?: number;
   distance?: number;
   glow?: number;
@@ -246,7 +249,7 @@ function queueFire(game: Game, r: FireRequest) {
         const lights = (game as unknown as { lights?: { request(o: object): unknown } }).lights;
         if (lights) {
           for (const f of list) {
-            lights.request({ position: f.position, color: 0xff9a45, intensity: f.intensity ?? 10, distance: f.distance ?? 9, flicker: f.flicker ?? 0.45, glow: f.glow ?? 0.45, dayScale: f.dayScale ?? 0 });
+            lights.request({ position: f.position, color: 0xff9a45, intensity: f.intensity ?? 10, distance: f.distance ?? 9, flicker: f.flicker ?? 0.45, glow: f.glow ?? 0.45, dayScale: f.dayScale ?? 0, night: f.night });
           }
           game.removeSystem(sys);
         } else if (++tries > 6000) game.removeSystem(sys);
@@ -575,6 +578,14 @@ export function ring(r: number, n: number, phase = 0): V2[] {
     out.push([Math.sin(a) * r, -Math.cos(a) * r]);
   }
   return out;
+}
+
+/** A bronze tripod brazier on the ground at (x, y, z) of the Draw frame, lit at dusk. */
+export function brazier(p: Part, x: number, y: number, z: number) {
+  if (!p.hi) return;
+  placeProp(p.d, 'brazier', x, y, z, 0, { collide: true });
+  p.d.cyl('glow_fire', x, y + 0.86, z, 0.16, 0.22, 6, { rTop: 0.02 });
+  addFire(p, x, y + 1.0, z, { night: true, intensity: 9, distance: 10, glow: 0.5 });
 }
 
 /** Shorthand matrices. */
