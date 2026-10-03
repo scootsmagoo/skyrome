@@ -8,7 +8,17 @@ The game opens at dawn on 11 May 113 at the Porta Capena. Trajan's Forum and Col
 
 ![The architecture gallery: triumphal arches, the Column, a temple, the amphitheatre arcade, a domed hall and the classical orders](docs/images/architecture.jpg)
 
-> **Status: pre-alpha.** The engine and most core systems exist, and Rome's terrain and landmark layout are in place. The hand-built landmarks, the city fabric over the whole map, combat, NPC life, quests and the full game flow are in progress. There's nothing to "play through" yet. What you can do today is explore the test scenes listed below.
+> **Status: pre-alpha.** You can start a game and walk around Rome, but there's no story to play through yet.
+>
+> **Working now:**
+> - The boot flow: pick mouse, trackpad or keyboard; the title over the city; character creation; then you start at the Porta Capena before dawn on 11 May AD 113.
+> - The terrain of the hills and valleys, and the Tiber as real water you can swim in.
+> - The river district, fully built: the Forum Boarium, the Temples of Portunus and Hercules Victor, Tiber Island, the Theatre of Marcellus and every Tiber bridge.
+> - The HUD: discovery banners, a Skyrim-style compass, quicksave.
+>
+> **In progress:** the landmarks of the Forum, the Imperial Fora, Trajan's Forum and Column, the Colosseum valley, the Palatine and Circus Maximus, and the Campus Martius (still placeholder blocks for now); the city fabric between them; combat; NPC crowds; the first quests.
+>
+> [Where things stand](#where-things-stand) has the full list.
 
 ## Screenshots
 
@@ -18,6 +28,8 @@ The game opens at dawn on 11 May 113 at the Porta Capena. Trajan's Forum and Col
 | *Procedural Romans: togas, stolas, legionaries, a Vestal, gladiator kits* | *City fabric: insulae, tabernae, stalls, umbrella pines* |
 | ![Title screen](docs/images/title.jpg) | ![The in-game map of Rome](docs/images/map.jpg) |
 | *Title screen* | *The map, drawn from the historical atlas* |
+| ![The Forum Boarium with the Temple of Portunus and the round Temple of Hercules Victor](docs/images/forum-boarium.jpg) | ![Choosing mouse, trackpad or keyboard-only controls](docs/images/controls.jpg) |
+| *Walking into the Forum Boarium: discovery banner, compass, health bar* | *First launch: pick how you play (the trackpad preset is built for MacBooks)* |
 
 ## Try it locally
 
@@ -33,7 +45,7 @@ Then open one of these scenes. Click into the game to look around and press Esc 
 | Scene | URL | What it shows |
 |---|---|---|
 | The game | http://127.0.0.1:5173/ | Title over the city, character creation, and the start at the Porta Capena before dawn on 11 May AD 113. `&quick=1` skips the menus |
-| Rome (early) | http://127.0.0.1:5173/?scene=rome&at=meta-sudans | The real terrain of the seven hills and the Tiber, built from the atlas, with ~200 landmarks at their historical positions. Most are still placeholder massing while their builders are written. `at=` takes any landmark id, e.g. `circus-maximus`, `column-trajan`, `pantheon` |
+| The river district | http://127.0.0.1:5173/?scene=rome&at=temple-portunus | Drops you straight into Rome with no menus. The Forum Boarium, Tiber Island and the Theatre of Marcellus are fully built. `at=` takes any of the atlas's 208 landmark ids (e.g. `temple-aesculapius`, `theatre-marcellus`, `circus-maximus`, `column-trajan`, `pantheon`), but most landmarks outside the river district are still placeholder blocks |
 | Characters | http://127.0.0.1:5173/?scene=avatars | Procedural Romans and gladiators with code-authored animation. You're a legionary: R draws your sword, F attacks, Q blocks |
 | Architecture | http://127.0.0.1:5173/?scene=arch | The classical kit: orders, temples, arches, the amphitheatre arcade, the Column, domes, statues |
 | Street | http://127.0.0.1:5173/?scene=fabric | A neighbourhood of insulae, shops, stalls, fountains and trees |
@@ -75,7 +87,7 @@ The game is designed to be fully playable on a Mac trackpad, so every mouse acti
 | Physics | [Rapier](https://rapier.rs) 0.21 (WASM): kinematic character controller, heightfield terrain |
 | UI | DOM overlay (HTML and CSS), Cinzel and EB Garamond fonts |
 | Audio | Web Audio API: synthesized effects and generative music |
-| Tests | [Vitest](https://vitest.dev) (600+ tests) and Playwright (headless GPU screenshots in Chromium and WebKit) |
+| Tests | [Vitest](https://vitest.dev) (750+ tests) and Playwright (headless GPU screenshots in Chromium and WebKit) |
 | Targets | Desktop Chrome and Safari on Apple-silicon Macs first, at 60 fps |
 
 Why the browser and not Unreal or Bethesda's Creation Engine? Creation isn't licensable outside Skyrim mods. Unreal is editor-driven and built around binary assets, which AI agents can't easily work on. The browser lets agents build and test everything as code and lets anyone play from a link. The game data and rules are plain TypeScript and could be ported later. [`docs/research/tech.md`](docs/research/tech.md) has the full comparison.
@@ -100,6 +112,25 @@ docs/          GDD, atlas, architecture, module docs, research, credits
 scripts/       headless screenshot driver, atlas renderer
 ```
 
+## Where things stand
+
+| Area | Status |
+|---|---|
+| Engine: loop, input, physics, first/third-person camera | ✅ Done |
+| Historical atlas, game design document, content bible (NPCs, quests, items) | ✅ Done (the content bible is a first draft, still under review) |
+| Procedural characters and animation | ✅ Done |
+| Materials, the classical architecture kit, city fabric kit | ✅ Done |
+| Sky, day and night, weather | ✅ Done |
+| Audio and music | ✅ Done (not yet wired into Rome) |
+| RPG rules, quest, dialogue and save engines | ✅ Done |
+| HUD and menus | ✅ Done |
+| Terrain and the Tiber (with swimming) | ✅ Done |
+| River district and the Tiber bridges | ✅ Done |
+| Boot flow: control presets, title, character creation, spawn | ✅ Done |
+| Forum, Capitoline, Imperial Fora, Trajan's Forum, Colosseum valley, Palatine and Circus, Campus Martius | 🚧 In progress |
+| City fabric across Rome (streets, insulae, walls, aqueducts, trees) | 🚧 In progress |
+| Combat and enemy AI · NPC crowds and schedules · v0.1 quests | 🚧 In progress |
+
 ## Roadmap
 
 The full plan is in the [Game Design Document](docs/GDD.md) (§17–§18).
@@ -119,6 +150,7 @@ The full plan is in the [Game Design Document](docs/GDD.md) (§17–§18).
 ## Documentation
 
 - [`docs/GDD.md`](docs/GDD.md): the game design document: setting, systems, combat numbers, quests, world plan, acceptance criteria
+- [`docs/CONTENT.md`](docs/CONTENT.md): the content bible: NPCs, quests, items, enemies and in-world texts
 - [`docs/ATLAS.md`](docs/ATLAS.md) and [`docs/atlas.svg`](docs/atlas.svg): the historical map data and a rendered plan of it
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/modules/`](docs/modules/): code structure and per-module APIs
 - [`docs/research/`](docs/research/): research on topography, landmarks, architecture, Roman society, game design, tech and assets
