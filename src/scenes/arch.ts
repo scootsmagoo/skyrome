@@ -40,6 +40,8 @@ declare global {
       stats: Record<string, { triangles: number; vertices: number; ms: number }>;
       /** Placement info for scripted tests (e.g. the temple stairs). */
       info: Record<string, unknown>;
+      /** Geometry memory of the scene: unique geometries, vertices, vertex/index bytes on the GPU and still in the JS heap. */
+      memory(): { meshes: number; geometries: number; vertices: number; gpuMB: number; cpuMB: number; heapMB?: number };
     };
   }
 }
@@ -65,6 +67,30 @@ function installDebug(game: Game) {
         game.camera.updateProjectionMatrix();
       }
       focus = new THREE.Vector3(tx, 0, tz);
+    },
+    memory() {
+      const geos = new Set<THREE.BufferGeometry>();
+      let meshes = 0;
+      game.scene.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        meshes++;
+        geos.add(m.geometry);
+      });
+      let vertices = 0;
+      let gpu = 0;
+      let cpu = 0;
+      for (const g of geos) {
+        vertices += g.getAttribute('position').count;
+        for (const a of [...Object.values(g.attributes), ...(g.index ? [g.index] : [])] as THREE.BufferAttribute[]) {
+          const bytes = a.count * a.itemSize * (a.array ? a.array.BYTES_PER_ELEMENT : 4);
+          gpu += bytes;
+          if (a.array) cpu += bytes;
+        }
+      }
+      const mem = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
+      const mb = (n: number) => Math.round(n / 1e5) / 10;
+      return { meshes, geometries: geos.size, vertices, gpuMB: mb(gpu), cpuMB: mb(cpu), heapMB: mem ? mb(mem.usedJSHeapSize) : undefined };
     },
   };
 }
@@ -109,16 +135,24 @@ function lights(game: Game, follow: () => THREE.Vector3) {
   game.renderer.toneMappingExposure = 1.0;
 }
 
-function record(name: string, g: THREE.Object3D, ms: number) {
+/** Drawn triangles (instances counted per placement) and stored vertices (shared geometry once). */
+function meshStats(g: THREE.Object3D, seen = new Set<THREE.BufferGeometry>()) {
   let tris = 0;
   let verts = 0;
   g.traverse((o) => {
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
     const geo = m.geometry;
-    tris += (geo.index ? geo.index.count : geo.getAttribute('position').count) / 3;
-    verts += geo.getAttribute('position').count;
+    const inst = (m as THREE.InstancedMesh).isInstancedMesh ? (m as THREE.InstancedMesh).count : 1;
+    tris += ((geo.index ? geo.index.count : geo.getAttribute('position').count) / 3) * inst;
+    if (!seen.has(geo)) verts += geo.getAttribute('position').count;
+    seen.add(geo);
   });
+  return { tris, verts };
+}
+
+function record(name: string, g: THREE.Object3D, ms: number) {
+  const { tris, verts } = meshStats(g);
   if (window.__arch) window.__arch.stats[name] = { triangles: Math.round(tris), vertices: verts, ms: Math.round(ms) };
   console.info(`[arch] ${name}: ${Math.round(tris)} tris, ${ms.toFixed(0)} ms`);
 }
@@ -128,7 +162,9 @@ function build(game: Game, name: string, pos: THREE.Vector3Like, rotY: number, f
   const b = new MeshBuilder();
   const t0 = performance.now();
   fn(b);
-  const g = b.build(name);
+  // Indexed (smooth lathes and sweeps share most vertices) and freed from the JS heap once on
+  // the GPU: the gallery is static scenery and its colliders are separate.
+  const g = b.build(name, { index: true, releaseCpu: true });
   placeAndRegister(game, `arch:${name}`, g, b.colliders, pos, rotY);
   record(name, g, performance.now() - t0);
   return g;

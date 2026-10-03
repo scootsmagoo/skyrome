@@ -313,7 +313,7 @@ export function triumphalArch(b: MeshBuilder, spec: TriumphalArchSpec = {}, at?:
   for (const side of [-1, 1]) {
     inscriptionPanel(
       b,
-      { lines, width: panelW, height: panelH, style: spec.inscriptionStyle ?? 'carved', sizes: lines.map((_, i) => (i === 0 ? 1.05 : 0.8)), border: true },
+      { lines, width: panelW, height: panelH, style: spec.inscriptionStyle ?? 'carved', sizes: lines.map((_, i) => (i === 0 ? 1.05 : 0.8)), border: true, monumental: true },
       mul(m, TRS(0, yAttic + atticH * 0.48, side * (ad + 0.03), 0, side < 0 ? 0 : Math.PI, 0)),
       { depth: 0.06 },
     );

@@ -160,7 +160,7 @@ export function honorificColumn(b: MeshBuilder, spec: HonorificColumnSpec, at?: 
   const crown = new ProfileBuilder(-0.02, -0.45).to(0, -0.45).cymaReversa(0.08, 0.14, n).up(0.05).out(0.1).up(0.18).ovolo(0.08, 0.08, n).to(-0.02, 0).build();
   b.add(sweep(crown, sq(pw / 2, plinthH + ph), { closed: true }), mat, m);
   // Inscription tablet above the door.
-  inscriptionPanel(b, { lines: spec.inscription ?? TRAJAN, width: pw * 0.62, height: ph * 0.36, style: 'carved', sizes: [1, 0.82, 0.82, 0.82, 0.82, 0.82], border: true }, mul(m, T(0, plinthH + doorH + 0.35 + ph * 0.18 + 0.15, -pw / 2 - 0.03)), { depth: 0.08 });
+  inscriptionPanel(b, { lines: spec.inscription ?? TRAJAN, width: pw * 0.62, height: ph * 0.36, style: 'carved', sizes: [1, 0.82, 0.82, 0.82, 0.82, 0.82], border: true, monumental: true }, mul(m, T(0, plinthH + doorH + 0.35 + ph * 0.18 + 0.15, -pw / 2 - 0.03)), { depth: 0.08 });
   // Eagles at the corners of the pedestal top (stylised blocks).
   const y0 = plinthH + ph;
   if (hi) {

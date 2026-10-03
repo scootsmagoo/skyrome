@@ -25,7 +25,7 @@ function stats(b: MeshBuilder) {
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
     const p = m.geometry.getAttribute('position');
-    tris += p.count / 3;
+    tris += ((m.geometry.index?.count ?? p.count) / 3) * ((m as THREE.InstancedMesh).isInstancedMesh ? (m as THREE.InstancedMesh).count : 1);
     for (let i = 0; i < p.array.length; i++) if (!Number.isFinite(p.array[i])) finite = false;
     const n = m.geometry.getAttribute('normal');
     for (let i = 0; i < n.array.length; i++) if (!Number.isFinite(n.array[i])) finite = false;

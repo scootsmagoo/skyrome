@@ -4,7 +4,8 @@
  *
  * Local frame: origin on the ground at the column axis, y up. Engaged columns and pilasters
  * stand against a wall in the plane z = 0 and project towards −z (the facade side).
- * Geometry is cached per spec, so a colonnade of 30 columns builds one column and copies it.
+ * Geometry is cached per spec and drawn instanced (MeshBuilder.instance): a colonnade of 30
+ * columns holds one column's vertices and draws in one call per material.
  */
 import * as THREE from 'three';
 import type { MeshBuilder } from '../../gfx/MeshBuilder';
@@ -315,8 +316,10 @@ export function column(b: MeshBuilder, spec: ColumnSpec, at?: THREE.Matrix4): Co
   const mat = spec.material ?? 'marble';
   const trim = spec.trimMaterial ?? mat;
   const m = at ?? new THREE.Matrix4();
-  for (const p of parts.shaft) b.add(p.geometry, mat, m, { uv: p.uv });
-  for (const p of parts.trim) b.add(p.geometry, trim, m, { uv: p.uv });
+  // Instanced: one geometry per column spec and material for the whole program, however many
+  // columns stand in however many buildings.
+  const p0 = parts;
+  b.instance(`column|${key}|${mat}|${trim}`, () => [...p0.shaft.map((p) => ({ geometry: p.geometry, material: mat, uv: p.uv })), ...p0.trim.map((p) => ({ geometry: p.geometry, material: trim, uv: p.uv }))], m);
   if (spec.collide ?? kind === 'free') {
     const { dims } = parts;
     const c = new THREE.Vector3(0, dims.height / 2, 0).applyMatrix4(m);

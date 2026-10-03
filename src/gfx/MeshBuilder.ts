@@ -10,7 +10,7 @@
  *   placeAndRegister(game, group, b.colliders, position, rotationY);
  */
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Game } from '../core/Game';
 import { Layer } from '../core/Physics';
 import { getMaterial } from './materials';
@@ -30,6 +30,22 @@ export interface AddOptions {
   castShadow?: boolean;
 }
 
+/** One piece of a repeated object (see MeshBuilder.instance), in the object's own frame. */
+export interface InstancePart {
+  geometry: THREE.BufferGeometry;
+  material: MaterialId | THREE.Material;
+  uv?: 'box' | 'keep';
+  uvScale?: number;
+  castShadow?: boolean;
+}
+
+/**
+ * Prepared geometry for an instanced key: one indexed geometry per material (and shadow flag),
+ * shared by every builder and every build — a colonnade of 30 columns holds one column's
+ * vertices, and so does every temple with the same columns.
+ */
+const instanceGeometry = new Map<string, Map<string, { geometry: THREE.BufferGeometry; material: THREE.Material | MaterialId; castShadow: boolean }>>();
+
 const tmpPos = new THREE.Vector3();
 const tmpQuat = new THREE.Quaternion();
 const tmpScale = new THREE.Vector3();
@@ -39,6 +55,8 @@ export class MeshBuilder {
   private shadow = new Map<string, boolean>();
   /** One-off materials (inscriptions, painted signs) passed as THREE.Material, keyed '#uuid'. */
   private custom = new Map<string, THREE.Material>();
+  /** Instanced objects: key → placements (and how to make the parts, once). */
+  private instances = new Map<string, { make: () => InstancePart[]; matrices: THREE.Matrix4[] }>();
   readonly colliders: ColliderSpec[] = [];
 
   /**
@@ -76,19 +94,53 @@ export class MeshBuilder {
     return this;
   }
 
+  /**
+   * Place a repeated object (columns, statues): its parts are built once per `key` — by `make`,
+   * called at most once per key for the whole program — and drawn as one InstancedMesh per
+   * material at build(). Use the same key only for identical objects. UVs are projected in the
+   * object's own frame. Colliders are not handled here: add them with collider().
+   */
+  instance(key: string, make: () => InstancePart[], matrix: THREE.Matrix4): this {
+    let e = this.instances.get(key);
+    if (!e) this.instances.set(key, (e = { make, matrices: [] }));
+    e.matrices.push(matrix.clone());
+    return this;
+  }
+
   collider(spec: ColliderSpec): this {
     this.colliders.push(spec);
     return this;
   }
 
-  /** Merge into a Group with one Mesh per material. */
-  build(name = 'built'): THREE.Group {
+  /**
+   * Merge into a Group with one Mesh per material (plus one InstancedMesh per instanced key and
+   * material). Options: `index` welds identical vertices of the merged geometry (smooth lathes
+   * and sweeps share most of theirs); `releaseCpu` drops the vertex arrays from the JS heap once
+   * they are on the GPU (only for static scenery nobody raycasts: colliders are separate).
+   */
+  build(name = 'built', opts: { index?: boolean; releaseCpu?: boolean } = {}): THREE.Group {
     const group = new THREE.Group();
     group.name = name;
+    for (const [key, { make, matrices }] of this.instances) {
+      for (const [mk, part] of preparedInstance(key, make)) {
+        const mat = typeof part.material === 'string' ? getMaterial(part.material) : part.material;
+        const mesh = new THREE.InstancedMesh(part.geometry, mat, matrices.length);
+        matrices.forEach((mm, i) => mesh.setMatrixAt(i, mm));
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.computeBoundingSphere();
+        mesh.computeBoundingBox();
+        mesh.name = `${name}:${key}:${mk}`;
+        mesh.castShadow = part.castShadow;
+        mesh.receiveShadow = true;
+        group.add(mesh);
+      }
+    }
     for (const [key, geoms] of this.parts) {
       const [material, shadow] = key.split('|');
-      const merged = geoms.length === 1 ? geoms[0] : mergeGeometries(geoms, false);
+      let merged = geoms.length === 1 ? geoms[0] : mergeGeometries(geoms, false);
       if (!merged) continue;
+      if (opts.index) merged = mergeVertices(merged, 1e-4);
+      if (opts.releaseCpu) releaseAfterUpload(merged);
       merged.computeBoundingSphere();
       merged.computeBoundingBox();
       const mat = this.custom.get(material) ?? getMaterial(material as MaterialId);
@@ -104,6 +156,7 @@ export class MeshBuilder {
   /** Merge another builder's parts and colliders into this one, transformed by `matrix`. */
   append(other: MeshBuilder, matrix?: THREE.Matrix4): this {
     for (const [k, m] of other.custom) this.custom.set(k, m);
+    for (const [key, e] of other.instances) for (const mm of e.matrices) this.instance(key, e.make, matrix ? matrix.clone().multiply(mm) : mm);
     for (const [key, geoms] of other.parts) {
       const list = this.parts.get(key) ?? [];
       for (const g of geoms) list.push(matrix ? g.clone().applyMatrix4(matrix) : g);
@@ -121,8 +174,57 @@ export class MeshBuilder {
   }
 
   get isEmpty() {
-    return this.parts.size === 0;
+    return this.parts.size === 0 && this.instances.size === 0;
   }
+
+  /** Triangles that build() will draw (instances counted once per placement). */
+  get triangleCount(): number {
+    let n = 0;
+    for (const geoms of this.parts.values()) for (const g of geoms) n += g.getAttribute('position').count / 3;
+    for (const [key, e] of this.instances) for (const part of preparedInstance(key, e.make).values()) n += ((part.geometry.index?.count ?? part.geometry.getAttribute('position').count) / 3) * e.matrices.length;
+    return Math.round(n);
+  }
+}
+
+/** Build (once per key) the per-material indexed geometry of an instanced object. */
+function preparedInstance(key: string, make: () => InstancePart[]) {
+  let prepared = instanceGeometry.get(key);
+  if (prepared) return prepared;
+  const lists = new Map<string, { geoms: THREE.BufferGeometry[]; material: THREE.Material | MaterialId; castShadow: boolean }>();
+  for (const part of make()) {
+    let g = part.geometry.index ? part.geometry.toNonIndexed() : part.geometry.clone();
+    if (!g.getAttribute('normal')) g.computeVertexNormals();
+    if ((part.uv ?? 'box') === 'box' || !g.getAttribute('uv')) g = boxProjectUVs(g, part.uvScale ?? 2);
+    for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv') g.deleteAttribute(name);
+    g.morphAttributes = {};
+    const castShadow = part.castShadow !== false;
+    const mk = `${typeof part.material === 'string' ? part.material : `#${part.material.uuid}`}|${castShadow ? 1 : 0}`;
+    const l = lists.get(mk) ?? { geoms: [], material: part.material, castShadow };
+    l.geoms.push(g);
+    lists.set(mk, l);
+  }
+  prepared = new Map();
+  for (const [mk, l] of lists) {
+    const merged = l.geoms.length === 1 ? l.geoms[0] : mergeGeometries(l.geoms, false);
+    if (!merged) continue;
+    const geometry = mergeVertices(merged, 1e-4);
+    geometry.computeBoundingSphere();
+    geometry.computeBoundingBox();
+    prepared.set(mk, { geometry, material: l.material, castShadow: l.castShadow });
+  }
+  instanceGeometry.set(key, prepared);
+  return prepared;
+}
+
+/** Free a geometry's CPU-side vertex arrays once the renderer has uploaded them. */
+function releaseAfterUpload(g: THREE.BufferGeometry) {
+  g.computeBoundingSphere();
+  g.computeBoundingBox();
+  const free = function (this: THREE.BufferAttribute) {
+    (this as unknown as { array: ArrayLike<number> | null }).array = null;
+  };
+  for (const a of Object.values(g.attributes)) (a as THREE.BufferAttribute).onUpload(free);
+  g.index?.onUpload(free);
 }
 
 export function transformCollider(c: ColliderSpec, m: THREE.Matrix4): ColliderSpec {
