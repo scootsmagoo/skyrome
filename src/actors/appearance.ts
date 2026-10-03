@@ -33,7 +33,8 @@ export type GarmentKind =
   | 'sagum' // military cloak
   | 'subligaculum' // loincloth (gladiators, laborers)
   | 'apron'
-  | 'balteus'; // belt / baldric
+  | 'balteus' // belt / baldric
+  | 'braccae'; // trousers (Dacians, Germans, Gauls)
 
 export interface Garment {
   kind: GarmentKind;
@@ -42,6 +43,8 @@ export interface Garment {
   trim?: string;
   /** Vertical purple stripes on the tunic (clavi): 'wide' senators, 'narrow' equestrians. */
   clavi?: 'wide' | 'narrow';
+  /** Tunic sleeve length override (default by kind: short for men, elbow for long tunics). */
+  sleeves?: 'none' | 'short' | 'elbow' | 'long';
 }
 
 export type HelmetKind =
