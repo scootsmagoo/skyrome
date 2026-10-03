@@ -19,11 +19,13 @@ export class Sculpt {
   constructor(
     readonly hi: boolean,
     mat: MaterialId | THREE.Material = 'bronze',
+    /** Tessellation multiplier for colossal figures seen up close (the Colossus). */
+    readonly q = 1,
   ) {
     this.mat = mat;
   }
   get seg() {
-    return this.hi ? 10 : 5;
+    return Math.round((this.hi ? 10 : 5) * this.q);
   }
   private push(g: THREE.BufferGeometry, mat?: MaterialId | THREE.Material) {
     const k = mat ?? this.mat;
@@ -32,7 +34,7 @@ export class Sculpt {
     this.parts.set(k, l);
   }
   blob(c: THREE.Vector3, rx: number, ry: number, rz: number, rot?: THREE.Euler, mat?: MaterialId | THREE.Material) {
-    const g = new THREE.SphereGeometry(1, this.hi ? 12 : 6, this.hi ? 9 : 4);
+    const g = new THREE.SphereGeometry(1, Math.round((this.hi ? 12 : 6) * this.q), Math.round((this.hi ? 9 : 4) * this.q));
     g.scale(rx, ry, rz);
     if (rot) g.applyQuaternion(new THREE.Quaternion().setFromEuler(rot));
     g.translate(c.x, c.y, c.z);
@@ -58,10 +60,10 @@ export class Sculpt {
       }
       return profile[profile.length - 1][0];
     };
-    const ths = linspace(theta0, theta1, this.hi ? 32 : 12);
+    const ths = linspace(theta0, theta1, Math.round((this.hi ? 32 : 12) * this.q));
     const y0 = ys[0];
     const y1 = ys[ys.length - 1];
-    const rows = linspace(0, 1, this.hi ? Math.max(5, profile.length * 2) : profile.length);
+    const rows = linspace(0, 1, Math.round((this.hi ? Math.max(5, profile.length * 2) : profile.length) * this.q));
     const g = gridSurface(ths, rows, (a, t, out) => {
       const y = y0 + (y1 - y0) * t;
       const fold = this.hi ? amp * (1 - t * 0.6) * Math.sin(a * folds + Math.sin(t * 5) * 0.6) : 0;
@@ -488,9 +490,9 @@ export function horse(s: Sculpt, at: THREE.Vector3, lift = false) {
 
 // ---------------------------------------------------------------- convenience
 
-/** Build a figure function into `b` at `at` (scale), one sculpt per call. */
-export function figure(b: MeshBuilder, at: THREE.Matrix4, hi: boolean, mat: MaterialId | THREE.Material, scale: number, draw: (s: Sculpt) => void) {
-  const s = new Sculpt(hi, mat);
+/** Build a figure function into `b` at `at` (scale), one sculpt per call. `q` multiplies the tessellation. */
+export function figure(b: MeshBuilder, at: THREE.Matrix4, hi: boolean, mat: MaterialId | THREE.Material, scale: number, draw: (s: Sculpt) => void, q = 1) {
+  const s = new Sculpt(hi, mat, q);
   draw(s);
   s.emit(b, at, scale);
 }

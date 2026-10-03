@@ -91,6 +91,60 @@ export function plazaRoadGaps(): P2[][] {
   return out;
 }
 
+/**
+ * The parts of a polyline inside a polygon, as sub-polylines (sampled every `step` metres; the
+ * ends are cut where the polyline crosses the outline, to within `step`). Pure.
+ */
+export function clipPolyline(pts: readonly (readonly [number, number])[], poly: readonly P2[], step = 0.5): P2[][] {
+  const out: P2[][] = [];
+  let cur: P2[] = [];
+  const flush = () => {
+    if (cur.length >= 2) out.push(cur);
+    cur = [];
+  };
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [ax, az] = pts[i];
+    const [bx, bz] = pts[i + 1];
+    const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / step));
+    for (let k = i === 0 ? 0 : 1; k <= n; k++) {
+      const t = k / n;
+      const q: P2 = [ax + (bx - ax) * t, az + (bz - az) * t];
+      if (pointInPolygon(q[0], q[1], poly)) {
+        // keep only the polyline's own corners and the run ends (straight runs need no samples)
+        if (cur.length >= 2) {
+          const [px, pz] = cur[cur.length - 2];
+          const [mx, mz] = cur[cur.length - 1];
+          const cross = (mx - px) * (q[1] - pz) - (mz - pz) * (q[0] - px);
+          if (Math.abs(cross) < 1e-6) cur[cur.length - 1] = q;
+          else cur.push(q);
+        } else cur.push(q);
+      } else flush();
+    }
+  }
+  flush();
+  return out;
+}
+
+/** Basalt corridors of the streets crossing the plaza: each road clipped to the plaza and buffered (real metres). */
+export function plazaRoadStrips(plaza: readonly P2[] = FORUM_PLAZA): P2[][] {
+  const out: P2[][] = [];
+  for (const g of PLAZA_ROAD_GAPS) {
+    const r = ROADS.find((x) => x.id === g.id);
+    if (!r) continue;
+    for (const run of clipPolyline(r.points, plaza)) {
+      // extend each run end by half the road width so the strip meets the plaza edge square-on
+      const [a, b2] = [run[0], run[1]];
+      const [c, d] = [run[run.length - 2], run[run.length - 1]];
+      const la = Math.hypot(b2[0] - a[0], b2[1] - a[1]) || 1;
+      const ld = Math.hypot(d[0] - c[0], d[1] - c[1]) || 1;
+      const e = 0.5;
+      const ext: P2[] = [[a[0] - ((b2[0] - a[0]) / la) * e, a[1] - ((b2[1] - a[1]) / la) * e], ...run.slice(1, -1), [d[0] + ((d[0] - c[0]) / ld) * e, d[1] + ((d[1] - c[1]) / ld) * e]];
+      out.push(bufferPolyline(ext, r.width / 2 + g.margin));
+    }
+  }
+  return out;
+}
+
 /** Signed area (positive = counter-clockwise in x/z as listed). */
 export function polygonArea(p: readonly P2[]): number {
   let a = 0;

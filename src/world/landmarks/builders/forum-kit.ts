@@ -289,7 +289,8 @@ export const PAINT = {
 
 // ---------------------------------------------------------------- columns
 
-export type Tier = 'hero' | 'mid' | 'low';
+/** 'hero' kit column, 'mid' cheaper composition, 'low' kit far column, 'stub' a 6-sided prism for far stand-ins. */
+export type Tier = 'hero' | 'mid' | 'low' | 'stub';
 
 export interface ColSpec {
   order: Order;
@@ -389,6 +390,21 @@ export function col(b: MeshBuilder, s: ColSpec, at: THREE.Matrix4) {
   const mat = s.material ?? 'marble';
   const fluted = s.fluted ?? s.order !== 'tuscan';
   const kind = s.kind ?? 'free';
+  if (s.tier === 'stub') {
+    // far stand-in: a tapered hexagonal prism with a plinth and an abacus block
+    const half = kind === 'engaged';
+    const shaft = new THREE.CylinderGeometry(s.D * 0.43, s.D * 0.5, s.H * 0.9, 6, 1, half, half ? Math.PI / 2 : 0, half ? Math.PI : Math.PI * 2);
+    shaft.translate(0, s.H * 0.47, 0);
+    b.add(shaft, mat, at);
+    const cap = new THREE.BoxGeometry(s.D * 1.25, s.H * 0.08, half ? s.D * 0.62 : s.D * 1.25);
+    cap.translate(0, s.H * 0.96, half ? -s.D * 0.31 : 0);
+    b.add(cap, s.trim ?? mat, at);
+    if (s.collide ?? kind === 'free') {
+      const c = new THREE.Vector3(0, s.H / 2, 0).applyMatrix4(at);
+      b.collider({ kind: 'cylinder', center: c, halfHeight: s.H / 2, radius: s.D * 0.52 });
+    }
+    return;
+  }
   if (s.tier !== 'mid') {
     column(b, { order: s.order, D: s.D, height: s.H, fluted, material: mat, trimMaterial: s.trim ?? mat, detail: s.tier === 'hero' ? 'high' : 'low', kind, collide: s.collide ?? kind === 'free' }, at);
     return;
@@ -503,6 +519,52 @@ export function inscription(b: MeshBuilder, at: THREE.Matrix4, lines: string[], 
     at,
     { depth: o.depth ?? 0.04, bodyMaterial: o.body },
   );
+}
+
+/**
+ * A gaming board scratched into a marble step (tabula lusoria), lying flat at (x, y, z) in the Draw
+ * frame: 'mill' (three nested squares), 'rota' (a wheel of eight spokes) or 'scripta' (the three
+ * rows of twelve of duodecim scripta).
+ */
+export function gameBoard(d: Draw, x: number, y: number, z: number, kind: 'mill' | 'rota' | 'scripta') {
+  const f = d.at(x, y, z);
+  const t = 0.004;
+  const w = 0.018;
+  const mat: MaterialId = 'plaster_dark';
+  const line = (x0: number, z0: number, x1: number, z1: number) => {
+    const len = Math.hypot(x1 - x0, z1 - z0);
+    f.box(mat, (x0 + x1) / 2, t / 2, (z0 + z1) / 2, len + w, t, w, { ry: -Math.atan2(z1 - z0, x1 - x0) });
+  };
+  if (kind === 'mill') {
+    for (const r of [0.28, 0.19, 0.1]) {
+      line(-r, -r, r, -r);
+      line(r, -r, r, r);
+      line(r, r, -r, r);
+      line(-r, r, -r, -r);
+    }
+    line(-0.28, 0, -0.1, 0);
+    line(0.1, 0, 0.28, 0);
+    line(0, -0.28, 0, -0.1);
+    line(0, 0.1, 0, 0.28);
+  } else if (kind === 'rota') {
+    const r = 0.26;
+    const n = 16;
+    for (let i = 0; i < n; i++) {
+      const a0 = (i / n) * Math.PI * 2;
+      const a1 = ((i + 1) / n) * Math.PI * 2;
+      line(Math.cos(a0) * r, Math.sin(a0) * r, Math.cos(a1) * r, Math.sin(a1) * r);
+    }
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI;
+      line(-Math.cos(a) * r, -Math.sin(a) * r, Math.cos(a) * r, Math.sin(a) * r);
+    }
+  } else {
+    for (let row = 0; row < 3; row++)
+      for (let i = 0; i < 12; i++) {
+        const xx = -0.42 + i * 0.07 + (i >= 6 ? 0.06 : 0);
+        f.box(mat, xx, t / 2, -0.1 + row * 0.1, 0.04, t, 0.04);
+      }
+  }
 }
 
 /** Ring of `n` points (radius r) for round plans; angle 0 = −z (front). */
