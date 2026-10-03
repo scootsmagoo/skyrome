@@ -328,7 +328,14 @@ export function stancePose(stance: Stance, drawn: boolean, togate = false): Stan
 }
 
 /** Bones the stance's arms own while walking (the rest of the body follows the gait). */
-export function stanceArmMask(stance: Stance, drawn: boolean, torch: boolean, togate = false): { L: number; R: number; chest: number } {
+export interface ArmMask {
+  L: number;
+  R: number;
+  chest: number;
+}
+
+/** Writes into `out` (pass a reused object from per-frame code). */
+export function stanceArmMask(stance: Stance, drawn: boolean, torch: boolean, togate = false, out: ArmMask = { L: 0, R: 0, chest: 0 }): ArmMask {
   let L = 0;
   let R = 0;
   let chest = 0;
@@ -359,7 +366,10 @@ export function stanceArmMask(stance: Stance, drawn: boolean, torch: boolean, to
   } else if (stance === 'spear' || stance === 'spearShield') R = 1;
   if (togate && !drawn) L = 1;
   if (torch && !(drawn && hasShield(stance))) L = 1;
-  return { L, R, chest };
+  out.L = L;
+  out.R = R;
+  out.chest = chest;
+  return out;
 }
 
 // ---- first person ---------------------------------------------------------------

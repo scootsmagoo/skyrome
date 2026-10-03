@@ -207,6 +207,8 @@ const HAIR_THICK: Record<HairStyle, number> = {
 
 /** Row heights (fractions), aligned with features for crisp details. */
 const ROWS_HI = [0.0, 0.06, 0.13, 0.2, 0.245, 0.29, 0.34, 0.39, 0.45, 0.51, 0.555, 0.6, 0.635, 0.68, 0.74, 0.78, 0.86, 0.95];
+/** Under a helmet the bowl hides the crown: its rows are dropped (chords stay inside the bowl). */
+const ROWS_HI_HELMET = [0.0, 0.06, 0.13, 0.2, 0.245, 0.29, 0.34, 0.39, 0.45, 0.51, 0.555, 0.6, 0.635, 0.68, 0.95];
 const ROWS_LO = [0.0, 0.12, 0.26, 0.42, 0.555, 0.68, 0.82, 0.95];
 
 export function buildHead(ctx: Ctx, L: Levels): HeadFrame {
@@ -228,8 +230,12 @@ export function buildHead(ctx: Ctx, L: Levels): HeadFrame {
   const blushC = mixC(skin, srgb('#c86a55'), fem ? 0.12 : 0.08);
   const old = rig.age === 'old';
 
-  const cols = ctx.hi ? 24 : 10;
-  const rows = ctx.hi ? ROWS_HI : ROWS_LO;
+  // A closed gladiator's helmet hides the whole head: a coarse head and no face inside it.
+  const helmet = app.armor?.helmet?.kind;
+  const enclosed = !!helmet && ENCLOSING_HELMETS.has(helmet);
+  const fine = ctx.hi && !enclosed;
+  const cols = fine ? 24 : 10;
+  const rows = !fine ? ROWS_LO : Hf.hasHelmet ? ROWS_HI_HELMET : ROWS_HI;
   // Columns concentrated across the face (θ = 0 at the front).
   const thetaAt = (i: number) => {
     const t = i / cols;
@@ -261,13 +267,16 @@ export function buildHead(ctx: Ctx, L: Levels): HeadFrame {
         // Soft shadow in the sockets and under the brow; nose-base and under-lip shading.
         col.multiplyScalar(1 - 0.12 * gauss(Math.abs(u) - 0.44, 0.22) * gauss((yf - FEAT.eye - 0.02) / 0.04, 1) * fr);
         col.multiplyScalar(1 - 0.1 * gauss((yf - 0.19) / 0.02, 1) * gauss(u, 0.4) * fr);
+        // The line between the lips.
+        col.multiplyScalar(1 - 0.42 * gauss((yf - FEAT.mouth) / 0.006, 1) * gauss(u, 0.26) * fr);
         if (old) col.multiplyScalar(1 - 0.06 * gauss((yf - 0.33) / 0.04, 1) * gauss(Math.abs(u) - 0.45, 0.15));
       }
       // Under-jaw shadow.
       col.multiplyScalar(1 - 0.18 * smooth(0.12, 0.0, yf) * smooth(-0.2, 0.6, -co + 0.4));
       // Hair region.
       const hl = hairlineFor(paintStyle, th);
-      let hairK = style === 'bald' ? 0 : smooth(hl - 0.012, hl + 0.012, yf);
+      // A soft edge spanning about a row, so the hairline reads as a line, not as stair steps.
+      let hairK = style === 'bald' ? 0 : smooth(hl - 0.03, hl + 0.025, yf);
       let disp = 0;
       if (hairK > 0) {
         const n = Math.sin(th * 23 + yf * 40) * Math.sin(th * 9 - yf * 25);
@@ -325,10 +334,9 @@ export function buildHead(ctx: Ctx, L: Levels): HeadFrame {
   b.capAuto(g, cols, rows.length - 1, vtx(new THREE.Vector3(0, Hf.chin + Hf.H + (topH || veiled ? 0 : hairT), Hf.c.z - 0.004 * hs), topH ? skin : shade(hair, 0.95), HEAD_W, topH ? SURF.skin : SURF.hair), [0, 1, 0]);
   b.capAuto(g, cols, 0, vtx(new THREE.Vector3(0, Hf.chin - 0.002 * hs, Hf.c.z + 0.02 * hs), shade(skin, 0.75), HEAD_W, SURF.skin), [0, -1, 0]);
 
-  buildEyes(ctx, Hf);
-  buildNose(ctx, Hf);
-  const helmet = app.armor?.helmet?.kind;
-  if (ctx.hi && !(helmet && ENCLOSING_HELMETS.has(helmet))) buildEars(ctx, Hf);
+  buildEyes(ctx, Hf, !enclosed);
+  if (!enclosed) buildNose(ctx, Hf);
+  if (ctx.hi && !enclosed && !veiled) buildEars(ctx, Hf);
   if (!Hf.hasHelmet) buildHairExtras(ctx, Hf, L, style);
   if (male && beard === 'full' && !Hf.hasHelmet) buildMoustache(ctx, Hf);
   return Hf;
@@ -340,7 +348,15 @@ function vtx(p: THREE.Vector3, c: THREE.Color, w: Weights, s: Surf): V {
 
 // ------------------------------------------------------------------ eyes
 
-function buildEyes(ctx: Ctx, H: HeadFrame) {
+/**
+ * Eyeball latitudes from the front pole (rad): pupil, a crisp iris ring, then the white. Paired
+ * rings keep the color borders sharp with vertex colors.
+ */
+const EYE_LAT_HI = [0, 0.17, 0.21, 0.47, 0.53, 1.25, Math.PI];
+const EYE_LAT_LO = [0, 0.42, 0.56, Math.PI];
+
+/** Eyeballs with iris and pupil, and lids (high detail). With `geometry` false only H.eyes is set. */
+function buildEyes(ctx: Ctx, H: HeadFrame, geometry = true) {
   const { b, rig } = ctx;
   const hs = H.hs;
   const r = 0.0122 * hs;
@@ -348,10 +364,12 @@ function buildEyes(ctx: Ctx, H: HeadFrame) {
   const light = ctx.hair.getHSL(hsl).l > 0.3 && ctx.skin.getHSL(hsl).l > 0.55;
   const iris = srgb(light ? '#5d7280' : rig.age === 'old' ? '#4a3a2c' : '#3e2a1c');
   const sclera = mixC(srgb('#e2d9cc'), ctx.skin, 0.25);
+  const pupil = shade(iris, 0.22);
   const lid = shade(ctx.skin, 0.95);
   const lash = mixC(shade(ctx.skin, 0.6), srgb('#1d1410'), 0.55);
   const seg = ctx.hi ? 8 : 4;
-  const rows = ctx.hi ? 5 : 3;
+  const lat = ctx.hi ? EYE_LAT_HI : EYE_LAT_LO;
+  const rows = lat.length;
   const D = Math.PI / 180;
   for (const side of [1, -1]) {
     // Eye center: behind the (un-dented) face surface so the front of the eye sits flush.
@@ -360,6 +378,7 @@ function buildEyes(ctx: Ctx, H: HeadFrame) {
     const surf = H.at(FEAT.eye, th, new THREE.Vector3(), true);
     const center = new THREE.Vector3(ex, surf.y, surf.z - r * 1.05);
     H.eyes.push(center.clone());
+    if (!geometry) continue;
     // Eyes look straight ahead, toed out a touch.
     const yaw = side * 4 * D;
     const g = b.grid(
@@ -367,7 +386,7 @@ function buildEyes(ctx: Ctx, H: HeadFrame) {
       rows,
       true,
       (i, j, v) => {
-        const a = (j / (rows - 1)) * Math.PI; // 0 = front pole
+        const a = lat[j]; // 0 = front pole
         const t = (i / seg) * Math.PI * 2;
         let dx = Math.sin(a) * Math.cos(t);
         const dy = Math.sin(a) * Math.sin(t);
@@ -378,8 +397,8 @@ function buildEyes(ctx: Ctx, H: HeadFrame) {
         v.x = center.x + dx * r;
         v.y = center.y + dy * r;
         v.z = center.z + dz * r;
-        const k = a < 0.25 ? 0 : a < 0.62 ? 1 : 2;
-        const cc = k === 0 ? shade(iris, 0.3) : k === 1 ? iris : sclera;
+        const k = ctx.hi ? (a < 0.19 ? 0 : a < 0.5 ? 1 : 2) : a < 0.5 ? 1 : 2;
+        const cc = k === 0 ? pupil : k === 1 ? iris : sclera;
         v.r = cc.r;
         v.g = cc.g;
         v.b = cc.b;
@@ -389,7 +408,7 @@ function buildEyes(ctx: Ctx, H: HeadFrame) {
       'auto',
       () => [center.x, center.y, center.z],
     );
-    b.capAuto(g, seg, 0, vtx(center.clone().add(new THREE.Vector3(Math.sin(yaw) * r, 0, Math.cos(yaw) * r)), shade(iris, 0.25), HEAD_W, SURF.eye), [0, 0, 1]);
+    b.capAuto(g, seg, 0, vtx(center.clone().add(new THREE.Vector3(Math.sin(yaw) * r, 0, Math.cos(yaw) * r)), ctx.hi ? pupil : shade(iris, 0.5), HEAD_W, SURF.eye), [0, 0, 1]);
     if (!ctx.hi) continue;
     // Upper lid shell over the top of the eye; its edge is the dark lash line.
     const lidR = r * 1.12;
@@ -481,14 +500,15 @@ function buildNose(ctx: Ctx, H: HeadFrame) {
   };
   const root = add(top.clone().add(new THREE.Vector3(0, 0, -0.002 * k)), skin);
   const mid = add(surfAt(lerp(yTop, yTip, 0.5)).add(new THREE.Vector3(0, 0, proj * 0.5)), skin);
-  const tip = add(tipS.clone().add(new THREE.Vector3(0, -0.004 * k, proj)), skin);
+  const tip = add(tipS.clone().add(new THREE.Vector3(0, -0.003 * k, proj * 0.96)), skin);
   const colu = add(baseS.clone().add(new THREE.Vector3(0, 0.002 * k, proj * 0.45)), under);
   const midL = add(surfAt(lerp(yTop, yTip, 0.5), 0.009 * k).add(new THREE.Vector3(0.0, 0, -0.002 * k)), side);
   const midR = add(surfAt(lerp(yTop, yTip, 0.5), -0.009 * k).add(new THREE.Vector3(0.0, 0, -0.002 * k)), side);
   const alaL = add(surfAt(yBase + 0.014, 0.0165 * kw).add(new THREE.Vector3(0, 0, 0.007 * k)), side);
   const alaR = add(surfAt(yBase + 0.014, -0.0165 * kw).add(new THREE.Vector3(0, 0, 0.007 * k)), side);
-  const tipL = add(tipS.clone().add(new THREE.Vector3(0.0095 * kw, -0.003 * k, proj * 0.68)), skin);
-  const tipR = add(tipS.clone().add(new THREE.Vector3(-0.0095 * kw, -0.003 * k, proj * 0.68)), skin);
+  // A rounded tip: the wings of the tip stand nearly as far out as the tip itself.
+  const tipL = add(tipS.clone().add(new THREE.Vector3(0.0105 * kw, -0.0035 * k, proj * 0.8)), skin);
+  const tipR = add(tipS.clone().add(new THREE.Vector3(-0.0105 * kw, -0.0035 * k, proj * 0.8)), skin);
   const nosL = add(baseS.clone().add(new THREE.Vector3(0.008 * k, 0.003 * k, proj * 0.35)), under);
   const nosR = add(baseS.clone().add(new THREE.Vector3(-0.008 * k, 0.003 * k, proj * 0.35)), under);
   const ids = P.map((p, i) => b.vertex(vtx(p, C[i], HEAD_W, SURF.skin)));
@@ -643,8 +663,9 @@ function buildHairExtras(ctx: Ctx, H: HeadFrame, L: Levels, style: HairStyle) {
       break;
     }
     case 'long-tied': {
-      const top = outward(H.at(0.3, Math.PI), 0.004 * hs);
-      const bottom = new THREE.Vector3(0, L.armpit, top.z - 0.03 * hs);
+      // A tail gathered at the back of the head, hanging clear of the neck to the shoulder blades.
+      const top = outward(H.at(0.36, Math.PI), 0.012 * hs);
+      const bottom = new THREE.Vector3(0, lerp(L.shoulder, L.armpit, 0.5), top.z - 0.035 * hs);
       const seg = ctx.hi ? 8 : 5;
       const rows = 5;
       const g = b.grid(
@@ -655,7 +676,7 @@ function buildHairExtras(ctx: Ctx, H: HeadFrame, L: Levels, style: HairStyle) {
           const t = j / (rows - 1);
           const c = top.clone().lerp(bottom, t);
           c.z -= Math.sin(t * Math.PI) * 0.03 * hs;
-          const r = lerp(0.024, 0.013, t) * hs;
+          const r = lerp(0.03, 0.017, t) * hs * (1 + 0.15 * Math.sin(t * Math.PI));
           const th = (i / seg) * Math.PI * 2;
           v.x = c.x + Math.cos(th) * r;
           v.y = c.y;

@@ -134,7 +134,16 @@ height, sex, build and age, with slightly large heads for legibility.
 blend weights over a few centimeters, so elbows, knees, shoulders and hips bend without cracking.
 Only the outermost layer is built: garments recolor and inflate the body surface. Geometry that
 stands away from the body is extra: skirts (weighted hips → thighs, so legs move under them),
-belts, the toga's balteus, sinus and lacinia, capes, armor plates and helmets.
+belts, the toga's balteus, sinus and lacinia, capes, armor plates and helmets. Where a mail or
+scale skirt ends, a pair of skirt rows hugs the edge so it is a clean ring, and the hips and thigh
+tops under it are painted as mail too, so nothing of the tunic shows through.
+
+Faces are simple and stylized: eyeballs with a crisp iris and pupil (paired latitude rings) under
+the lids, a soft nose, a darker line between the lips, brows and cheekbones in the head loft, and a
+hairline blended over about a row so it reads as a line rather than steps. Hair styles add knots,
+crowns, curls and a gathered tail (`long-tied`); veils close over the crown and hide the ears.
+Gladiators' closed helmets (murmillo, thraex, hoplomachus with round grilled eye openings, the
+secutor's smooth egg with two small holes, the provocator) close over the back of the head.
 
 Each vertex carries `surf = [roughness, metalness, pattern, emissive]`. The shared material
 (`material.ts`) turns the pattern id into procedural micro-detail in the bind-pose space, fading with
@@ -165,13 +174,20 @@ distance: mail rings, scales, wool, linen, hair strands, leather and plate. Meta
 7. Actions with crossfades: `auto` actions are full-body when standing and upper-body while moving.
 8. Procedural: elderly stoop, banking, aim pitch, the first-person lift, head look-at.
 
-Two-handed weapons (hasta, pilum, trident, dolabra) get a post-pass (`anim/armIK.ts`). It runs
-forward kinematics on the blended pose, finds the shaft from the right-hand grip, and solves the left
-arm so the fist closes on the nearest reachable point of the shaft. A few forward-kinematics
-correction passes keep it within about a centimeter. Swords and spears sit diagonally in the fist
-(`WEAPON_INFO.gripTilt`), the way real grips do.
+Arm IK post-passes (`anim/armIK.ts`) run forward kinematics on the blended pose and solve an arm
+(two bones, the elbow toward a pole in the chest's frame, the forearm twisted so the fist's grip
+axis lines up with a direction); a few correction passes keep the grip within about a centimeter:
+
+- Two-handed weapons (hasta, pilum, trident, dolabra): the left fist closes on the nearest
+  reachable point of the shaft.
+- The bow hand at full draw hooks the string at the corner of the jaw (`fistTo` with `ARM_RIGHT`).
+- The first-person sword hand (see below).
+
+Swords and spears sit diagonally in the fist (`WEAPON_INFO.gripTilt`), the way real grips do.
 
 `onHit` fires at the impact time and `onEnd(interrupted)` fires on completion or replacement.
+Action clocks and their events run every frame (`AnimationController.advance`), also for distant
+avatars whose pose updates are throttled, so combat timing never depends on the camera.
 
 **State rules.**
 
@@ -188,8 +204,13 @@ correction passes keep it within about a centimeter. Swords and spears sit diago
 `attackPower` picks a directional variant from the movement at play time, as in the GDD: forward =
 lunge, sideways = sweep, back = step-back cut, standing = overhead. `drawWeapon` and `sheathWeapon`
 pick the variant for where the weapon lives (`hipR`, `hipL`, `back`, `fists`), and the weapon
-changes hands at the grab frame. Deaths drop the weapon and shield beside the body. A yielding
-gladiator drops his shield and raises a finger (*ad digitum*).
+changes hands at the grab frame. Deaths drop the weapon and shield beside the body, clear of it:
+the shield face up by the torso on the body's left, the weapon on its right (`DROP_SPOTS` in
+`Equipment.ts`, per fall: on the back, face down, kneeling). A dropped torch keeps burning upright.
+A yielding gladiator drops his shield and raises a finger (*ad digitum*).
+
+With a shield, the light slash's follow-through stops at the board's right edge while the shield
+arm opens a little, so the blade never sweeps through the scutum.
 
 **Carrying.** A shield not in use hangs on the back with its top edge at the shoulder blades,
 leaning slightly toward the left shoulder strap, so the head stays visible from the third-person
@@ -198,19 +219,24 @@ shield swings round onto the arm over 0.2 s (`Equipment` blends its transform be
 the reverse on sheathing. The bow rides on the back with its upper limb over the left shoulder; the
 bow hand reaches over the shoulder for it.
 
-**Bow.** The bow is held in the left hand (limbs vertical, string toward the archer). The string is
-a live mesh: during `bowDraw` it follows the right hand's hooked fingers to the cheek and an arrow is
-nocked on the left of the grip; on `bowRelease` the string snaps back and the arrow is gone (the
-combat module spawns the projectile at `onHit`).
+**Bow.** The bow is held in the left hand (limbs vertical, string toward the archer), the archer
+standing side-on with the head turned over the bow shoulder. The string is a live mesh: during
+`bowDraw` the right hand hooks it at the bow (0.2–0.32 s) and pulls it to the corner of the jaw
+(to 0.72 s; arm IK puts the hand exactly there, the drawing elbow high behind), and an arrow is
+nocked on the left of the grip; on `bowRelease` the hand leaves the jaw, the string snaps back and
+the arrow is gone (the combat module spawns the projectile at `onHit`).
 
 **First person.** The neck and head bones collapse (scale 0.001), hiding the neck, head, hair and
 helmet while the body stays visible when you look down. With a weapon drawn, the arms blend to view
-poses (`FP_ARMS` in `poses.ts`): the weapon low right with the blade angled into view, and a shield
-low left so only its edge shows (as in the GDD). The camera pitch turns only the presented arms at
-the shoulders (the camera pivots at the eyes, so bending the spine would push the shoulders into
-view); looking down, the upper body leans back a little so the collar stays out of the picture.
-Attacks keep their third-person choreography with a small lift so the swing crosses the screen.
-Blocking with a scutum raises it into view.
+poses (`FP_ARMS` in `poses.ts`), and a shield sits low left so only its edge shows (as in the GDD).
+A sword hand is placed by IK at a fixed spot in the camera's frame (`FP_SWORD` in `controller.ts`:
+the fist and forearm at about (0.6, −0.7) in screen space, the blade angled up toward the center),
+so it stays put at any pitch. Spears, two-handers, fists, the bow and a torch use their view poses,
+turned at the shoulders by the camera pitch (the camera pivots at the eyes, so bending the spine
+would push the shoulders into view); looking down, the upper body leans back a little so the collar
+stays out of the picture. Attacks keep their third-person choreography with a small lift so the
+swing crosses the screen. Blocking with a scutum raises it into view; the power-attack wind-up
+leaves the shield low (only the sword arm winds up).
 
 ## Placement conventions for idle loops
 
@@ -221,17 +247,23 @@ Positions are relative to the actor position (the avatar root):
 | `sit` | Seat surface 0.45 m high; pelvis about 0.3 m behind the root (put the actor ~0.35 m in front of the seat's center line). |
 | `sitGround` | Cross-legged on the ground at the root. |
 | `lean` | Back against a wall about 0.25 m behind the root. |
-| `sleep` | On the back, pelvis at the root, head toward −Z (behind). Raise the actor to the bed height. |
+| `sleep` | On the back, pelvis at the root, head toward −Z (behind), the left arm resting beside the body and the right hand on the belly. Raise the actor to the bed height. |
 | `work` | Hammering a block about 0.5 m in front, about 0.75 m high. |
 | `guard` | At attention; a carried spear stands upright in the right hand. |
 
 ## Performance (M4 Max, Chrome, `?scene=avatars&crowd=100`)
 
 121 animated humanoids (100 wandering citizens, the 20-figure lineup and the player) run at
-60 fps (vsync-capped) with about 260 draw calls including shadows and about 0.78M triangles
+60 fps (vsync-capped) with about 310 draw calls including shadows and about 0.95M triangles
 including the shadow pass. CPU time is about 5 ms per frame for everything (physics for 121
 kinematic capsules, animation, rendering). Geometry is cached per appearance, so identically
-kitted soldiers share one buffer.
+kitted soldiers share one buffer. Bodies stop casting shadows beyond 40 m (back on within 40 m,
+off again past 42 m), and the per-frame animation path allocates nothing.
+
+Triangle budgets (high / low): civilians 4.2–5.2k / 1.0–1.4k, gladiators 4.1–5.0k / 1.0–1.4k
+(a closed helmet hides a coarse head with no face inside), armored soldiers 5.8–6.3k / 1.5–1.6k
+(the lorica segmentata's hoop edges are real geometry). Helmeted heads drop the crown rows the
+bowl hides.
 
 ## Scene URL parameters (`?scene=avatars`)
 
@@ -249,6 +281,9 @@ kitted soldiers share one buffer.
 
 Player keys in the test bed: WASD move, Shift sprint, C sneak, V first/third person, R draw/sheath,
 F attack (tap repeatedly for the 3-hit combo, hold for a power attack), Q block, E interact.
+
+Name labels show for the nearer figures; a label that would overlap a nearer one is hidden. The
+demo scripts time things in game time.
 
 For screenshots, `window.__avatars` exposes:
 

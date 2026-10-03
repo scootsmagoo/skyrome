@@ -56,6 +56,8 @@ export type OffHand = 'torch' | 'net';
 
 /** Right-hand grip position in the hand bone frame (matches the gripR socket, reference meters). */
 const GRIP_R: [number, number, number] = [0.026, -0.08, 0.002];
+/** Two-handed weapons: where the left wrist goes along the shaft from the right grip (m). */
+const TWO_HAND_OFFSET: Partial<Record<WeaponModel, number>> = { hasta: 0.34, pilum: 0.32, trident: 0.32, axe: 0.26 };
 /** Seconds a shield or bow takes to swing between the back and the hand after the grab frame. */
 const SWING_TIME = 0.2;
 const UP = new THREE.Vector3(0, 1, 0);
@@ -65,6 +67,20 @@ const _v = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 const _e = new THREE.Euler();
 const _s = new THREE.Vector3();
+
+/** How a body lies after a fall, for placing dropped kit beside it (see Equipment.drop). */
+export type DropBody = 'back' | 'front' | 'kneel';
+
+/**
+ * Where dropped items land in the avatar's root space: [x, z, yaw on the ground]. +X is the body's
+ * left. On its back the body lies along -Z from the feet (head near z = -1.1), face down along +Z.
+ * The shield's x is its inner edge (its half width is added).
+ */
+const DROP_SPOTS: Record<DropBody, { shield: number[]; weapon: number[]; net: number[]; torch: number[] }> = {
+  back: { shield: [0.5, -0.6, 0.15], weapon: [-0.62, -0.5, 0.25], net: [-0.45, 0.35, 0], torch: [0.5, 0.25, -0.5] },
+  front: { shield: [0.5, 0.65, -0.15], weapon: [-0.62, 0.6, -0.2], net: [-0.45, -0.3, 0], torch: [0.5, -0.2, 0.5] },
+  kneel: { shield: [0.35, 0.1, 0.3], weapon: [-0.5, 0.35, 0.2], net: [-0.3, 0.6, 0], torch: [0.35, 0.6, -0.4] },
+};
 
 /** A carried item swinging from where it was to its new socket (local offset decaying to zero). */
 interface Swing {
@@ -187,12 +203,17 @@ export class Equipment {
 
   /** Grip for the left hand on two-handed weapons (null when one-handed or the off hand is busy). */
   twoHandGrip(): GripSpec | null {
-    const offsets: Partial<Record<WeaponModel, number>> = { hasta: 0.34, pilum: 0.32, trident: 0.32, axe: 0.26 };
-    const off = offsets[this.weapon];
+    const off = TWO_HAND_OFFSET[this.weapon];
     if (off === undefined || this.shield !== 'none' || this.netMesh || this.torchOn) return null;
+    // Called every frame: one reused spec per Equipment.
     const tilt = ((WEAPON_INFO[this.weapon].gripTilt ?? 0) * Math.PI) / 180;
-    return { gripPos: GRIP_R, gripDir: [0, -Math.sin(tilt), Math.cos(tilt)], offset: off };
+    const g = this.grip;
+    g.gripDir[1] = -Math.sin(tilt);
+    g.gripDir[2] = Math.cos(tilt);
+    g.offset = off;
+    return g;
   }
+  private readonly grip: GripSpec = { gripPos: GRIP_R, gripDir: [0, 0, 1], offset: 0 };
 
   sheathLocation(): SheathLocation {
     const info = WEAPON_INFO[this.weapon];
@@ -324,9 +345,11 @@ export class Equipment {
 
   /**
    * Let go of carried items (they lie on the ground beside the body) or pick them back up (null).
-   * Death drops everything; a yielding gladiator drops his shield.
+   * Death drops everything; a yielding gladiator drops his shield. `body` says how the body ends
+   * up, so the kit lands beside it rather than on it: on its back (lying along -Z behind the feet),
+   * face down (along +Z) or kneeling.
    */
-  drop(what: 'all' | 'shield' | null) {
+  drop(what: 'all' | 'shield' | null, body: DropBody = 'back') {
     this.dropped = what;
     this.swings.length = 0;
     const root = this.avatar.root;
@@ -348,12 +371,15 @@ export class Equipment {
       m.rotation.set(rx, 0, rz);
       m.visible = true;
     };
-    // Shield flat on its back to the left, face up; weapon on the ground to the right.
-    lay(this.shieldMesh, 0.55, 0.15, -Math.PI / 2, 0.3, 0.09);
+    // Shield flat, face up, clear of the body on its left; the weapon on the ground to its right.
+    const at = DROP_SPOTS[body];
+    const sh = shieldSize(this.shield);
+    lay(this.shieldMesh, at.shield[0] + sh.w, at.shield[1], -Math.PI / 2, at.shield[2], 0.02 + sh.h * 0.12);
     if (what === 'all') {
-      if (this.weaponMesh && this.weaponMesh.visible) lay(this.weaponMesh, -0.5, 0.35, Math.PI / 2, 0.2, 0.025);
-      lay(this.netMesh, -0.3, 0.6, Math.PI / 2, 0, 0.05);
-      lay(this.torchMesh, 0.35, 0.6, Math.PI / 2, -0.4, 0.03);
+      if (this.weaponMesh && this.weaponMesh.visible) lay(this.weaponMesh, at.weapon[0], at.weapon[1], Math.PI / 2, at.weapon[2], 0.025);
+      lay(this.netMesh, at.net[0], at.net[1], Math.PI / 2, at.net[2], 0.05);
+      // A dropped torch keeps burning where it fell (its flame is built upright in world space).
+      lay(this.torchMesh, at.torch[0], at.torch[1], Math.PI / 2, at.torch[2], 0.03);
       this.setBowDraw(0);
     }
   }
@@ -470,8 +496,8 @@ export class Equipment {
     const p = _v.setFromMatrixPosition(this.avatar.getSocket('gripR').matrixWorld);
     bow.worldToLocal(p);
     // The string can only come back toward the archer, near the bow's center line.
-    p.x = THREE.MathUtils.clamp(p.x, -0.06, 0.06);
-    p.y = THREE.MathUtils.clamp(p.y, -0.1, 0.1);
+    p.x = THREE.MathUtils.clamp(p.x, -0.2, 0.2);
+    p.y = THREE.MathUtils.clamp(p.y, -0.2, 0.2);
     p.z = THREE.MathUtils.clamp(p.z, -BOW.maxDraw, BOW.stringZ);
     this.nock.set(0, 0, BOW.stringZ).lerp(p, w);
     setBowString(this.bowString!.geometry, this.nock);

@@ -94,10 +94,12 @@ export function armorTorsoPaint(ctx: Ctx, L: Levels, x: number, y: number, z: nu
     }
     case 'lorica-hamata':
     case 'lorica-squamata': {
-      // Down to the hips (the skirt overlay continues it below the waist).
-      if (y < L.waist - 0.03 * s) return null;
+      // Down to the hips. Below the waist the skirt overlay shows the mail; the body under it is
+      // painted the same (thin), so wherever the hips press through the skirt it is still mail.
+      if (y < L.crotch - 0.02 * s) return null;
       const scale = body.kind === 'lorica-squamata';
       const c = scale ? shade(metal, 1.0) : shade(metal, 0.85);
+      if (y < L.waist - 0.03 * s) return { color: c, surf: scale ? SURF.scale : SURF.mail, t: 0.004 * s };
       // Shoulder doubling (humeralia): a heavier band over the shoulders and upper chest.
       const doubling = y > L.chest + 0.05 * s;
       if (doubling && Math.abs(y - (L.chest + 0.05 * s)) < 0.004 * s) return { color: IRON_DARK, surf: ms, t: 0.018 * s };
@@ -639,7 +641,9 @@ function buildHelmet(ctx: Ctx, H: HeadFrame, kind: HelmetKind, crestColor?: stri
     const right = V3(0, 0, 0).crossVectors(up, n);
     const at = (x: number, y: number, d: number) => center.clone().addScaledVector(right, x * hs).addScaledVector(up, y * hs).addScaledVector(n, d * hs);
     // Opening: a dark disc just proud of the plate.
-    plate(ctx, 12, 1, (u, v) => at(Math.cos(u * Math.PI * 2) * R * v, Math.sin(u * Math.PI * 2) * R * v, 0.0012), () => n.clone(), () => srgb('#120e0b'), SURF.leather, () => HEAD, 0.001 * hs);
+    plate(ctx, ctx.hi ? 12 : 8, 1, (u, v) => at(Math.cos(u * Math.PI * 2) * R * v, Math.sin(u * Math.PI * 2) * R * v, 0.0012), () => n.clone(), () => srgb('#120e0b'), SURF.leather, () => HEAD, 0.001 * hs);
+    // Far away a dark opening is all that reads.
+    if (!ctx.hi) return;
     // Raised bead around it.
     plate(
       ctx,
@@ -837,8 +841,34 @@ function buildHelmet(ctx: Ctx, H: HeadFrame, kind: HelmetKind, crestColor?: stri
     case 'vigiles-cap':
     case 'leather-cap': {
       const c = shade(LEATHER, kind === 'vigiles-cap' ? 1.05 : 0.95);
-      bowl(ctx, H, { rim: (th) => lerp(0.7, 0.55, smooth(0.3, 1, Math.abs(Math.sin(th / 2)))), gap: 0.012, color: c, surf: SURF.leather });
-      if (kind === 'vigiles-cap') brim(c, SURF.leather, 0.018, 0.006);
+      const parts: HelmetParts = { rim: (th) => lerp(0.7, 0.55, smooth(0.3, 1, Math.abs(Math.sin(th / 2)))), gap: 0.012, color: c, surf: SURF.leather };
+      bowl(ctx, H, parts);
+      if (kind === 'vigiles-cap') {
+        // A short leather peak turned down all round the rim (a flat disc would read as needles
+        // edge-on), thick enough to show its edge.
+        plate(
+          ctx,
+          ctx.hi ? 20 : 10,
+          2,
+          (u, v) => {
+            const th = u * Math.PI * 2;
+            const p = lipPoint(H, parts, th);
+            const n = V3(Math.sin(th), 0, Math.cos(th));
+            const w = 0.016 * (0.7 + 0.3 * Math.max(0, Math.cos(th)));
+            p.addScaledVector(n, w * v * hs);
+            p.y -= 0.012 * v * v * hs;
+            return p;
+          },
+          (u) => {
+            const th = u * Math.PI * 2;
+            return V3(Math.sin(th) * 0.6, 1, Math.cos(th) * 0.6).normalize();
+          },
+          (u, v) => (v > 0.7 ? shade(c, 0.78) : c),
+          SURF.leather,
+          () => HEAD,
+          0.004 * hs,
+        );
+      }
       break;
     }
     case 'pileus': {

@@ -213,6 +213,13 @@ export function paintLeg(ctx: Ctx, L: Levels, side: 'L' | 'R', y: number, th: nu
     return { color: ctx.skin, surf: SURF.skin, t: 0, edges: e };
   }
   if (armor && armor.t >= 0) return armor;
+  // Mail or scale over the hips: the thigh tops under it wear it too, so a leg pressing through the
+  // skirt still reads as armor (not as tunic cloth showing through).
+  const ov = o.tunic && !o.toga && !o.stola ? armorSkirtOverlay(ctx, L) : null;
+  if (ov && y > ov.bottom) {
+    const p = ov.paint(y, th);
+    return { color: p.color, surf: p.surf, t: 0.016 * s };
+  }
   // Under a skirt the leg takes the skirt's (shaded) color, so a bent knee pressing through reads as cloth.
   const under = skirtOver(o, L, y);
   if (under) return { color: under, surf: SURF.wool, t: 0.016 * s };
@@ -360,14 +367,25 @@ export function buildSkirt(ctx: Ctx, L: Levels, prof: TorsoProfile, sp: SkirtSpe
     }
     return c;
   };
-  // Outer skirt: rows go from the hem (j = 0) up to the waist.
+  // Outer skirt: rows go from the hem (j = 0) up to the waist. An armor overlay (mail to the hips)
+  // gets a pair of rows hugging its lower edge, so the edge is a clean ring, not a saw-tooth of
+  // vertex colors across the rows.
+  const ov = sp.overlay && sp.overlay.bottom > sp.hem + 0.02 * s && sp.overlay.bottom < sp.top - 0.02 * s ? sp.overlay.bottom : null;
+  const below = ov === null ? 0 : Math.max(2, Math.min(rowsN - 2, Math.round((rowsN * (ov - sp.hem)) / (sp.top - sp.hem))));
+  const edgeGap = 0.003 * s;
+  const rowT = (j: number, th: number) => {
+    if (ov === null) return 1 - j / (rowsN - 1);
+    const hem = hemAt(th);
+    const y = j < below ? lerp(hem, ov - edgeGap, j / (below - 1)) : lerp(ov + edgeGap, sp.top, (j - below) / (rowsN - 1 - below));
+    return Math.min(1, Math.max(0, (sp.top - y) / Math.max(1e-3, sp.top - hem)));
+  };
   b.grid(
     seg,
     rowsN,
     true,
     (i, j, v) => {
       const th = (i / seg) * Math.PI * 2;
-      const t = 1 - j / (rowsN - 1);
+      const t = rowT(j, th);
       const p = ringPoint(th, t, false);
       const c = colorAt(th, t, p.fold, p.y);
       const over = sp.overlay && p.y > sp.overlay.bottom;
@@ -382,7 +400,7 @@ export function buildSkirt(ctx: Ctx, L: Levels, prof: TorsoProfile, sp: SkirtSpe
     },
     'auto',
     (j) => {
-      const t = 1 - j / (rowsN - 1);
+      const t = rowT(j, 0);
       const y = lerp(sp.top, sp.hem, t);
       return [0, y, envelope(y).zc];
     },

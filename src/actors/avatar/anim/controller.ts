@@ -19,10 +19,11 @@ import { Pose, REF_LEG, bakeClip, blendMasked, blendPose, makeMask, sampleClip, 
 import { GAITS, type GaitName } from './gait';
 import { actionInfo, airClips, blockClip, gaitClip, idleLoopClip, stanceIdleClip, type ActionInfo } from './library';
 import { qAxis, qMul } from './quat';
-import { leftHandOnShaft } from './armIK';
-import { ARM_L_NET, ARM_L_TORCH, FP_ARMS, hasShield, stanceArmMask, stancePose, weaponClass } from './poses';
+import { ARM_LEFT, ARM_RIGHT, fistTo, fk, forwardKinematics, leftHandOnShaft } from './armIK';
+import { BOW } from '../../equipment/weapons';
+import { ARM_L_NET, ARM_L_TORCH, FP_ARMS, hasShield, stanceArmMask, stancePose, weaponClass, type ArmMask } from './poses';
 import type { HumanoidAvatar } from '../HumanoidAvatar';
-import type { OffHand } from '../../equipment/Equipment';
+import type { DropBody, OffHand } from '../../equipment/Equipment';
 
 interface Playing {
   name: string;
@@ -88,8 +89,25 @@ const ARM_R: BoneName[] = ['shoulderR', 'upperArmR', 'forearmR', 'handR', 'finge
 function drawDirection(name: string): -1 | 0 | 1 {
   return name.startsWith('drawWeapon') ? 1 : name.startsWith('sheathWeapon') ? -1 : 0;
 }
+/** How the body lies at the end of a clip that drops the kit. */
+const dropBody = (name: string): DropBody => (name === 'death:forward' ? 'front' : name === 'yield' ? 'kneel' : 'back');
 /** Clips that take the whole body down (they also move a busy off hand). */
 const isFall = (name: string) => name.startsWith('death') || name === 'knockdown' || name === 'yield';
+
+/** Elbow poles (chest frame) for the bow hand at full draw (back, out, a little up) and the first-person weapon arm (down and out). */
+const BOW_POLE: readonly [number, number, number] = [-1, 0.1, -0.15];
+const FP_POLE: readonly [number, number, number] = [-1, -0.35, 0];
+/** First person: the camera sits this far in front of the eyes' base point (CameraRig). */
+const FP_EYE_FORWARD = 0.12;
+/**
+ * First-person weapon hand: the fist in the camera frame (m: right, up, forward) and the direction
+ * of the fist's grip axis (left, up, forward; the weapon leans from it by its grip tilt).
+ */
+interface FpView {
+  fist: readonly [number, number, number];
+  dir: readonly [number, number, number];
+}
+const FP_SWORD: FpView = { fist: [0.3, -0.21, 0.42], dir: [0.5, 0.75, 0.45] };
 
 /** Speed ladder (reference body, m/s). Between `walkTop` and `runAt` walk blends into run, etc. */
 export const SPEEDS = { walkAt: 1.1, walkTop: 2.2, runAt: 3.2, runTop: 4.8, sprintAt: 6.4 };
@@ -186,6 +204,11 @@ export class AnimationController {
   private loco = new Pose();
   private stanceP = new Pose();
   private armMask: BoneMask = makeMask({});
+  private readonly armSides: ArmMask = { L: 0, R: 0, chest: 0 };
+  /** Locomotion cycles blended this update: gait, weight, stride length (reused, no per-frame arrays). */
+  private readonly gaitName: GaitName[] = ['walk', 'walk', 'walk', 'walk'];
+  private readonly gaitW = [0, 0, 0, 0];
+  private readonly gaitS = [0, 0, 0, 0];
   private autoMask: BoneMask = makeMask({});
   private keepMask: BoneMask = makeMask({});
   private legScale = 1;
@@ -292,7 +315,7 @@ export class AnimationController {
           a.hitFired = true;
           if (a.info.drop) {
             a.dropFired = true;
-            this.avatar.equipment.drop(a.info.drop.what);
+            this.avatar.equipment.drop(a.info.drop.what, dropBody(a.name));
           }
         }
       }
@@ -303,7 +326,8 @@ export class AnimationController {
   }
 
   private holdingDeath(): boolean {
-    return this.actions.some((a) => a.name.startsWith('death') && !a.fading);
+    for (const a of this.actions) if (!a.fading && a.name.startsWith('death')) return true;
+    return false;
   }
 
   private startDeath() {
@@ -505,28 +529,29 @@ export class AnimationController {
     // --- 2. locomotion
     const w = speedWeights(this.speedSm, this.sw);
     const moveW = 1 - w[0];
-    const gaits: [GaitName, number, number][] = [];
+    let nGaits = 0;
     if (w[1] > 0) {
-      if (this.sneakW < 0.99) gaits.push(['walk', w[1] * (1 - this.sneakW), GAITS.walk.speed * GAITS.walk.cycle]);
-      if (this.sneakW > 0.01) gaits.push(['sneak', w[1] * this.sneakW, GAITS.sneak.speed * GAITS.sneak.cycle]);
+      if (this.sneakW < 0.99) nGaits = this.addGait(nGaits, 'walk', w[1] * (1 - this.sneakW));
+      if (this.sneakW > 0.01) nGaits = this.addGait(nGaits, 'sneak', w[1] * this.sneakW);
     }
-    if (w[2] > 0) gaits.push(['run', w[2], GAITS.run.speed * GAITS.run.cycle]);
-    if (w[3] > 0) gaits.push(['sprint', w[3], GAITS.sprint.speed * GAITS.sprint.cycle]);
-    if (gaits.length) {
+    if (w[2] > 0) nGaits = this.addGait(nGaits, 'run', w[2]);
+    if (w[3] > 0) nGaits = this.addGait(nGaits, 'sprint', w[3]);
+    if (nGaits) {
       let sEff = 0;
-      for (const [, gw, S] of gaits) sEff += gw * S;
+      for (let i = 0; i < nGaits; i++) sEff += this.gaitW[i] * this.gaitS[i];
       const rate = sEff > 0.05 ? this.speedSm / sEff : 1 / GAITS.walk.cycle;
       this.phase = (this.phase + rate * dt) % 1;
       let total = 0;
-      for (const [g, gw] of gaits) {
-        this.sampleGait(g, this.tmpC);
+      for (let i = 0; i < nGaits; i++) {
+        const gw = this.gaitW[i];
+        this.sampleGait(this.gaitName[i], this.tmpC);
         total += gw;
         if (total === gw) this.loco.copy(this.tmpC);
         else blendPose(this.loco, this.loco, this.tmpC, gw / total);
       }
     }
     const base = this.out;
-    if (moveW > 0 && gaits.length) blendPose(base, this.stanceP, this.loco, moveW);
+    if (moveW > 0 && nGaits) blendPose(base, this.stanceP, this.loco, moveW);
     else base.copy(this.stanceP);
 
     // Turn in place: small steps while rotating without moving.
@@ -539,7 +564,7 @@ export class AnimationController {
     }
 
     // --- 3. stance arms while moving
-    const am = stanceArmMask(this.stance, this.drawn, offPose, this.togate);
+    const am = stanceArmMask(this.stance, this.drawn, offPose, this.togate, this.armSides);
     this.buildArmMask(am.L, am.R, am.chest);
     if (moveW > 0.01) blendMasked(base, base, this.stanceP, moveW, this.armMask);
 
@@ -578,28 +603,48 @@ export class AnimationController {
       sampleClip(blockClip(this.stance), 0, this.tmpA);
       blendMasked(base, base, this.tmpA, this.blockW, this.off ? UPPER_NOT_ARM_L : UPPER);
     }
-    const attackActive = this.actions.some((a) => !a.fading && a.info.windup !== undefined);
+    let attackActive = false;
+    for (const a of this.actions) if (!a.fading && a.info.windup !== undefined) attackActive = true;
     this.chargeW = approach(this.chargeW, attackActive ? 0 : Math.min(1, this.charge * 1.4), this.charge > 0 ? 7 : 12, dt);
     if (this.chargeW > 0.01) {
       const p = actionInfo(this.stance, 'attackPower');
       if (p && p.windup !== undefined) {
         sampleClip(p.clip, p.windup * this.chargeW, this.tmpA);
         this.buildAutoMask(moveW);
-        if (this.off) for (const n of ARM_L) this.autoMask[B[n]] = 0;
+        // A busy off hand keeps its pose; in first person a shield stays low at the edge of the view.
+        if (this.off || (this.firstPerson && hasShield(this.stance))) for (const n of ARM_L) this.autoMask[B[n]] = 0;
         blendMasked(base, base, this.tmpA, Math.min(1, this.chargeW * 1.5), this.autoMask);
       }
     }
 
-    // --- 7. actions
-    this.updateActions(dt, base, moveW);
+    // --- 7. actions (their clocks run in advance())
+    this.blendActions(base, moveW);
     // The bowstring follows the right hand once it has hooked the string.
     let bow = 0;
-    for (const a of this.actions) if (a.name === 'bowDraw' && !a.fading) bow = smooth(0.24, 0.36, a.t);
+    this.bowHookW = 0;
+    this.bowPull = 1;
+    for (const a of this.actions) {
+      if (a.name === 'bowDraw') {
+        // The hand hooks the string at the bow (0.2–0.32 s), then pulls it to the jaw.
+        if (!a.fading) bow = smooth(0.24, 0.36, a.t);
+        this.bowHookW = Math.max(this.bowHookW, smooth(0.2, 0.32, a.t) * smooth(0, 1, a.w));
+        this.bowPull = smooth(0.3, 0.72, a.t);
+      }
+      // Releasing: the hand leaves the jaw as the string slips (the clip then carries it back).
+      else if (a.name === 'bowRelease') this.bowHookW = Math.max(this.bowHookW, (1 - smooth(0.02, 0.12, a.t)) * smooth(0, 1, a.w));
+    }
     this.avatar.equipment.setBowDraw(bow);
 
     // --- 8. procedural
     this.procedural(dt, base, s);
     this.write(base);
+  }
+
+  private addGait(n: number, g: GaitName, gw: number): number {
+    this.gaitName[n] = g;
+    this.gaitW[n] = gw;
+    this.gaitS[n] = GAITS[g].speed * GAITS[g].cycle;
+    return n + 1;
   }
 
   private sampleGait(g: GaitName, out: Pose) {
@@ -632,7 +677,12 @@ export class AnimationController {
     for (let i = 0; i <= BONE_COUNT; i++) m[i] = FULL[i] + (UPPER[i] - FULL[i]) * moveW;
   }
 
-  private updateActions(dt: number, base: Pose, moveW: number) {
+  /**
+   * Advance the action clocks and fire their events (impact, grab, drop, end) and fades. The avatar
+   * calls this every frame, also when its pose updates are throttled by distance (lod.ts), so
+   * gameplay timing never depends on the camera.
+   */
+  advance(dt: number) {
     const list = this.actions;
     for (let i = 0; i < list.length; i++) {
       const a = list[i];
@@ -647,7 +697,7 @@ export class AnimationController {
       }
       if (a.info.drop && !a.dropFired && a.t >= a.info.drop.t && !a.fading) {
         a.dropFired = true;
-        this.avatar.equipment.drop(a.info.drop.what);
+        this.avatar.equipment.drop(a.info.drop.what, dropBody(a.name));
       }
       if (!a.grabFired && a.info.grab !== undefined && a.t >= a.info.grab) {
         a.grabFired = true;
@@ -657,7 +707,11 @@ export class AnimationController {
       a.w = a.fading ? Math.max(0, a.w - dt / a.fadeOut) : Math.min(1, a.w + dt / Math.max(0.01, a.fadeIn));
     }
     for (let i = list.length - 1; i >= 0; i--) if (list[i].fading && list[i].w <= 0) list.splice(i, 1);
-    for (const a of list) {
+  }
+
+  /** Blend the playing actions into the pose. */
+  private blendActions(base: Pose, moveW: number) {
+    for (const a of this.actions) {
       if (a.w <= 0) continue;
       sampleClip(a.info.clip, a.t, this.tmpA);
       const mode = this.dead ? 'full' : a.info.mask;
@@ -694,6 +748,16 @@ export class AnimationController {
   }
 
   private gripW = 0;
+  /** Bow at full draw: weight of the string hand hooked at the jaw (set each update). */
+  private bowHookW = 0;
+  /** How far the string hand has pulled from the bow toward the jaw (0..1). */
+  private bowPull = 1;
+  /** First person: weight of the weapon hand placed in view (smoothed on/off). */
+  private fpHandW = 0;
+  private readonly v0 = new Float32Array(3);
+  private readonly v1 = new Float32Array(3);
+  private readonly v2 = new Float32Array(3);
+  private readonly v3 = new Float32Array(3);
 
   private fullDeathW(): number {
     let w = 0;
@@ -723,7 +787,8 @@ export class AnimationController {
     this.addParent(p, B.spine, 2, bank * 0.2);
 
     // Aim pitch: first person (weapon drawn or a torch) and while holding a bow draw.
-    const bowAim = this.actions.some((a) => a.name === 'bowDraw' && !a.fading);
+    let bowAim = false;
+    for (const a of this.actions) if (a.name === 'bowDraw' && !a.fading) bowAim = true;
     const torch = this.off === 'torch';
     const aimOn = (this.firstPerson && (this.drawn || torch)) || bowAim ? 1 : 0;
     this.aimSm = approach(this.aimSm, aimOn * this.aimPitch, 14, dt);
@@ -761,6 +826,19 @@ export class AnimationController {
         if (!hasShield(this.stance) && weaponClass(this.stance) !== 'blade' && !this.off) this.add(p, B.upperArmL, 0, -14 * k);
       }
     }
+    // First person with a blade ready: the fist low right in view, the blade angled toward the
+    // center. Attacks, blocks and the power wind-up take the arm over. (Spears and two-handers keep
+    // their FP_ARMS view poses: their shafts run along the forearm, which a neutral-wrist fist
+    // placement cannot give.)
+    const fpReady = this.firstPerson && this.drawn && !this.dead && weaponClass(this.stance) === 'blade';
+    this.fpHandW = approach(this.fpHandW, fpReady ? 1 : 0, 10, dt);
+    if (this.fpHandW > 0.01) {
+      let act = 0;
+      for (const a of this.actions) act = Math.max(act, smooth(0, 1, a.w));
+      const k = this.fpHandW * this.fpW * (1 - act) * (1 - Math.min(1, this.chargeW * 1.5)) * (hasShield(this.stance) ? 1 : 1 - this.blockW);
+      if (k > 0.01) this.fpHand(p, k, FP_SWORD);
+    }
+
     // Two-handed weapons: the left hand rides the shaft (unless it carries a net/torch or gestures).
     const grip = this.avatar.equipment.twoHandGrip();
     let gw = grip && this.drawn && !this.off ? 1 - this.fullDeathW() : 0;
@@ -803,6 +881,52 @@ export class AnimationController {
       this.addParent(p, B.neck, 0, -this.lookPitch * 0.4);
       this.addParent(p, B.head, 0, -this.lookPitch * 0.6);
     }
+
+    // Bow at full draw: the string hand hooks the string at the corner of the jaw.
+    if (this.bowHookW > 0.01 && this.avatar.equipment.weapon === 'bow' && this.avatar.equipment.inHand) this.bowHand(p, this.bowHookW);
+
+  }
+
+  /**
+   * The bow hand at full draw: the fingers hooked round the string at the corner of the jaw (the
+   * string follows the hand, see Equipment), no further from the bow than a full draw.
+   */
+  private bowHand(p: Pose, w: number) {
+    const rig = this.avatar.rig;
+    const s = rig.s;
+    forwardKinematics(p, rig, this.legScale);
+    const g = ARM_LEFT.grip;
+    const o = fk.point(B.handL, g[0] * s, g[1] * s, g[2] * s, this.v0);
+    // The bow's +Z (toward the target) and +Y (the string's direction) are the left hand's -Y and +Z.
+    const d = fk.dir(B.handL, 0, -1, 0, this.v1);
+    const u = fk.dir(B.handL, 0, 0, 1, this.v2);
+    const a = fk.point(B.head, -0.035 * s, -0.012 * s, 0.07 * s, this.v3);
+    // From the braced string toward the anchor, no further than a full draw from the bow.
+    const pull = this.bowPull;
+    const rx = d[0] * BOW.stringZ, ry = d[1] * BOW.stringZ, rz = d[2] * BOW.stringZ;
+    let dx = rx + (a[0] - o[0] - rx) * pull;
+    let dy = ry + (a[1] - o[1] - ry) * pull;
+    let dz = rz + (a[2] - o[2] - rz) * pull;
+    const len = Math.hypot(dx, dy, dz);
+    if (len > BOW.maxDraw) {
+      dx *= BOW.maxDraw / len;
+      dy *= BOW.maxDraw / len;
+      dz *= BOW.maxDraw / len;
+    }
+    fistTo(p, rig, this.legScale, ARM_RIGHT, o[0] + dx, o[1] + dy, o[2] + dz, u[0], u[1], u[2], BOW_POLE, w, 70);
+  }
+
+  /** First-person weapon hand: a fixed spot in the camera's frame (the camera pitches about the eyes). */
+  private fpHand(p: Pose, w: number, view: FpView) {
+    const rig = this.avatar.rig;
+    const cp = Math.cos(this.aimSm);
+    const sp = Math.sin(this.aimSm);
+    // Camera frame in character space: forward (0, sp, cp), up (0, cp, -sp), right (-1, 0, 0).
+    const f = view.fist;
+    const d = view.dir;
+    const ty = this.avatar.eyeHeight + f[1] * cp + f[2] * sp;
+    const tz = FP_EYE_FORWARD - f[1] * sp + f[2] * cp;
+    fistTo(p, rig, this.legScale, ARM_RIGHT, -f[0], ty, tz, d[0], d[1] * cp + d[2] * sp, -d[1] * sp + d[2] * cp, FP_POLE, w, 85);
   }
 
   private write(p: Pose) {

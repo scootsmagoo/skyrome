@@ -32,6 +32,8 @@ export interface HumanoidOptions {
   shield?: ShieldModel;
 }
 
+/** Beyond this distance (m) the body stops casting shadows (a full shadow-pass mesh for a few pixels). */
+const SHADOW_FAR = 40;
 /** Lazy low-LOD builds are spread out: at most one per this many milliseconds (all avatars). */
 const LOD_BUILD_INTERVAL_MS = 6;
 let lastLodBuild = -Infinity;
@@ -58,6 +60,8 @@ export class HumanoidAvatar implements CombatAvatar {
   private firstPerson = false;
   private dead = false;
   private disposed = false;
+  /** Whether the body casts shadows at all (it stops beyond SHADOW_FAR). */
+  private readonly castsShadow: boolean;
 
   constructor(app: Appearance, opts: HumanoidOptions = {}) {
     this.app = app;
@@ -73,7 +77,8 @@ export class HumanoidAvatar implements CombatAvatar {
     this.mesh.updateMatrixWorld(true);
     this.skeleton = new THREE.Skeleton(this.bones, boneInverses(this.rig));
     this.mesh.bind(this.skeleton, new THREE.Matrix4());
-    this.mesh.castShadow = opts.castShadow ?? true;
+    this.castsShadow = opts.castShadow ?? true;
+    this.mesh.castShadow = this.castsShadow;
     this.mesh.receiveShadow = true;
     this.setBounds();
     this.root.add(this.mesh);
@@ -197,6 +202,8 @@ export class HumanoidAvatar implements CombatAvatar {
   update(dt: number, state: LocomotionState) {
     if (this.disposed) return;
     const step = avatarLod.step(this, dt);
+    // Action clocks and their events run every frame; only the pose sampling is throttled.
+    this.anim.advance(dt);
     if (step > 0) {
       this.anim.update(step, state);
       this.updateLod();
@@ -205,9 +212,10 @@ export class HumanoidAvatar implements CombatAvatar {
   }
 
   private updateLod() {
+    const d = avatarLod.distance(this);
+    if (this.castsShadow) this.mesh.castShadow = this.mesh.castShadow ? d < SHADOW_FAR + 2 : d < SHADOW_FAR;
     if (this.lodMode !== 'auto') return;
     // Switch beyond 36 m, back within 34 m (no flicker for someone loitering at the boundary).
-    const d = avatarLod.distance(this);
     const far = this.far ? d > 34 : d > 36;
     if (far && !this.geoLow) {
       // Build the far mesh on first need, spread over frames when a crowd crosses at once.
