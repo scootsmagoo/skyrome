@@ -16,6 +16,7 @@ export class ResourceBar {
   private trailHold = 0;
   private lastFrac = -1;
   private sinceChange = 99;
+  private flashT = 0;
 
   constructor(readonly kind: 'health' | 'stamina' | 'pietas' | 'enemy' | 'boss') {
     this.fill = h('i', { class: 'fill' });
@@ -42,6 +43,22 @@ export class ResourceBar {
     this.trail.style.transform = `scaleX(${this.trailValue.toFixed(4)})`;
     setClass(this.el, 'is-low', this.kind === 'health' && frac < 0.25);
     return this.sinceChange < SHOW_AFTER_CHANGE;
+  }
+
+  /** Flash the bar (a cost was refused, §15.1). Keeps it visible while flashing. */
+  flash() {
+    this.flashT = 0.7;
+    this.el.classList.remove('is-flash');
+    void this.el.offsetWidth; // restart the animation
+    this.el.classList.add('is-flash');
+  }
+
+  /** Seconds of flash left; ticks down. */
+  flashing(dt: number): boolean {
+    if (this.flashT <= 0) return false;
+    this.flashT -= dt;
+    if (this.flashT <= 0) this.el.classList.remove('is-flash');
+    return true;
   }
 
   reset(frac: number) {
@@ -90,10 +107,14 @@ export class BossBar {
   private title: HTMLElement;
   private bar = new ResourceBar('boss');
   private active = false;
+  private pips: HTMLElement;
+  private pipKey = '';
 
   constructor() {
     this.name = h('div', { class: 'name' });
     this.title = h('div', { class: 'title' });
+    this.pips = h('div', { class: 'pips' });
+    this.bar.el.appendChild(this.pips);
     this.el = h('div', { class: 'hud-boss' }, h('div', { class: 'label' }, this.name, this.title), this.bar.el);
   }
 
@@ -103,6 +124,17 @@ export class BossBar {
       setText(this.name, b.name);
       setText(this.title, b.title ?? '');
       this.bar.set(b.health, dt);
+      // Phase pips where the fight changes, dimmed once passed. The bar shrinks toward its centre,
+      // so a health fraction f sits at both edges of the fill: 50 % ± f/2.
+      const phases = b.phases ?? [];
+      const key = phases.join(',');
+      if (key !== this.pipKey) {
+        this.pipKey = key;
+        this.pips.replaceChildren(...phases.flatMap((f) => [50 - f * 50, 50 + f * 50].map((x) => h('i', { class: 'pip', style: `left:${x.toFixed(2)}%` }))));
+      }
+      phases.forEach((f, i) => {
+        for (const k of [0, 1]) setClass(this.pips.children[i * 2 + k] as HTMLElement, 'is-passed', b.health <= f);
+      });
     }
     this.active = !!b;
     setClass(this.el, 'is-visible', this.active);
