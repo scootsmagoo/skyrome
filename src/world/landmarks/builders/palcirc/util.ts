@@ -60,6 +60,11 @@ export function footing(d: Draw, mat: MaterialId, ctx: LandmarkContext, x0: numb
   return bottom;
 }
 
+/** Masonry footing (with collider) under a rectangle from the lowest ground up to y = 0, if the ground dips. */
+export function footingRect(ctx: LandmarkContext, d: Draw, x0: number, z0: number, x1: number, z1: number, mat: MaterialId = 'tufa'): number {
+  return footing(d, mat, ctx, Math.min(x0, x1), Math.min(z0, z1), Math.max(x0, x1), Math.max(z0, z1), 0.02);
+}
+
 /** Local → world transform of a landmark exactly as buildLandmarks places it. */
 export function landmarkToWorld(ctx: LandmarkContext): THREE.Matrix4 {
   return landmarkMatrix(ctx.lm, ctx.game.heightmap ? (x, z) => ctx.game.heightmap.heightAt(x, z) : () => 0);
@@ -143,7 +148,7 @@ export function halfColumn(d: Draw, mat: MaterialId, x: number, y0: number, D: n
     d.box(mat, x, y0 + H - D * 0.1, -r * 0.62, D * 1.32, D * 0.2, r * 1.25);
   } else if (cap === 'ionic') {
     d.box(mat, x, y0 + D * 0.5 + shaftH + D * 0.16, -r * 0.6, D * 1.35, D * 0.3, r * 1.2);
-    for (const s of [-1, 1]) d.cyl(mat, x + s * D * 0.55, y0 + D * 0.5 + shaftH + D * 0.16, -r * 1.0, D * 0.16, D * 0.3, 6, { rx: Math.PI / 2 });
+    for (const s of [-1, 1]) d.cyl(mat, x + s * D * 0.55, y0 + D * 0.5 + shaftH + D * 0.16, -r * 1.0, D * 0.16, D * 0.3, 5, { rx: Math.PI / 2, open: true });
   } else {
     d.box(mat, x, y0 + H - D * 0.22, -r * 0.6, D * 1.2, D * 0.44, r * 1.2);
   }
@@ -163,14 +168,19 @@ export function halfShaft(r0: number, r1: number, h: number): THREE.BufferGeomet
 }
 
 /** Full low-poly column (8-sided shaft with entasis-free taper, base and capital blocks). */
-export function lowColumn(d: Draw, mat: MaterialId, x: number, y0: number, z: number, D: number, H: number, opts: { cap?: 'tuscan' | 'ionic' | 'corinthian'; capMat?: MaterialId; collide?: boolean; seg?: number } = {}) {
+export function lowColumn(d: Draw, mat: MaterialId, x: number, y0: number, z: number, D: number, H: number, opts: { cap?: 'tuscan' | 'ionic' | 'corinthian'; capMat?: MaterialId; collide?: boolean; seg?: number; lite?: boolean } = {}) {
   const cap = opts.cap ?? 'tuscan';
   const capMat = opts.capMat ?? mat;
   const capH = cap === 'corinthian' ? D * 1.15 : D * 0.5;
   const baseH = D * 0.5;
   const shaftH = H - capH - baseH;
-  d.cyl(mat, x, y0 + baseH + shaftH / 2, z, D / 2, shaftH, opts.seg ?? 8, { rTop: D * 0.43 });
+  d.cyl(mat, x, y0 + baseH + shaftH / 2, z, D / 2, shaftH, opts.seg ?? 8, { rTop: D * 0.43, open: !!opts.lite });
   d.box(capMat, x, y0 + baseH * 0.35, z, D * 1.3, baseH * 0.7, D * 1.3);
+  if (opts.lite) {
+    d.box(capMat, x, y0 + H - capH * 0.3, z, D * 1.25, capH * 0.6, D * 1.25);
+    if (opts.collide) d.solid(x - D * 0.45, y0, z - D * 0.45, x + D * 0.45, y0 + H, z + D * 0.45);
+    return;
+  }
   d.cyl(capMat, x, y0 + baseH * 0.82, z, D * 0.6, baseH * 0.36, 8);
   if (cap === 'corinthian') {
     d.cyl(capMat, x, y0 + baseH + shaftH + capH * 0.42, z, D * 0.46, capH * 0.84, 8, { rTop: D * 0.62 });
