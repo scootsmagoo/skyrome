@@ -134,14 +134,20 @@ function buildPacis(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
     span(b, 'marble', x - t / 2, Y0 + 3.6, zH + (hz - zH) * 0.35, x + t / 2, hallTop, zH + (hz - zH) * 0.35 + 2.4, I);
   }
   // Floors and ceilings of the range.
+  // The side halls lie at the porticoes' level; the aedes two steps higher (its platform runs out
+  // under the six columns).
   span(b, 'travertine', -hx, Math.min(-0.3, gWide - 0.3), zH, hx, Y0 + 0.36, hz - t, I, true);
-  sectileFloor(b, -aw, aw, zH + 0.6, hz - t, Y0 + 0.36, 2.2, I, detail);
+  span(b, 'marble', -aw, Y0 + 0.36, zH, aw, Y0 + 0.76, hz - t, I, true);
+  sectileFloor(b, -aw, aw, zH + 0.6, hz - t, Y0 + 0.76, 2.2, I, detail);
   span(b, 'marble_giallo', -hx, Y0 + 0.36, zH, -aw - t, Y0 + 0.4, hz - t, I);
   span(b, 'marble_giallo', aw + t, Y0 + 0.36, zH, hx, Y0 + 0.4, hz - t, I);
-  coffers(b, -aw, aw, zH + 0.6, hz - t, hallTop - 0.6, 2.4, I, detail);
+  coffers(b, -aw, aw, zH + 0.6, hz - t, hallTop - 0.2, 2.4, I, detail);
   span(b, 'wood_dark', -hx, hallTop - 0.8, zH + 1.0, -aw - t, hallTop - 0.6, hz - t, I);
   span(b, 'wood_dark', aw + t, hallTop - 0.8, zH + 1.0, hx, hallTop - 0.6, hz - t, I);
-  leanTo(b, 'roof_tile', -hx - t - 0.4, hx + t + 0.4, zH - dep - 0.6, hallTop - 0.4, hz + 0.4, hallTop + 2.4, I);
+  // Lean-to roofs over the side halls (and the portico in front of them); the aedes rises above
+  // them under its own gable roof.
+  leanTo(b, 'roof_tile', -hx - t - 0.4, -aw + 0.2, zH - dep - 0.6, hallTop - 0.4, hz + 0.4, hallTop + 2.4, I);
+  leanTo(b, 'roof_tile', aw - 0.2, hx + t + 0.4, zH - dep - 0.6, hallTop - 0.4, hz + 0.4, hallTop + 2.4, I);
 
   // The side halls' fronts: the portico runs on in front of them (columns), with wide doors.
   for (const sx of [-1, 1]) {
@@ -176,14 +182,21 @@ function buildPacis(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
     const rise2 = (aw + 0.3) * Math.tan((13 * Math.PI) / 180);
     const yR = yE + ent.dims.total;
     for (const sx of [-1, 1]) {
-      const g2 = new THREE.BoxGeometry(Math.hypot(aw + 0.6, rise2), 0.2, hz - zc + 0.6);
+      const g2 = new THREE.BoxGeometry(Math.hypot(aw + 0.6, rise2), 0.2, hz - zc + 1.0);
       g2.rotateZ(sx * -Math.atan2(rise2, aw + 0.6));
-      g2.translate((sx * (aw + 0.6)) / 2, yR + rise2 / 2, (zc + hz) / 2);
+      g2.translate((sx * (aw + 0.6)) / 2, yR + rise2 / 2 + 0.1, (zc + hz) / 2 + 0.2);
       b.add(g2, 'roof_tile', I);
     }
-    // Hall walls from the column line up to the entablature (the hall is taller than the range).
-    for (const sx of [-1, 1]) span(b, 'marble', sx * aw - t / 2, yS, zH + 0.6, sx * aw + t / 2, yE + ent.dims.total, hz - t, I);
-    span(b, 'marble', -aw, yE - 0.2, hz - t - 0.5, aw, yE + ent.dims.total, hz - t, I);
+    // Hall walls from the column line up to the entablature (the hall is taller than the range),
+    // the back wall up to the roof, and the back gable.
+    for (const sx of [-1, 1]) span(b, 'marble', sx * aw - t / 2, yS, zH + 0.6, sx * aw + t / 2, yE + ent.dims.total, hz, I);
+    span(b, 'marble', -aw, yS, hz - t, aw, yE + ent.dims.total, hz, I);
+    {
+      const shape = new THREE.Shape([new THREE.Vector2(-aw - 0.3, 0), new THREE.Vector2(aw + 0.3, 0), new THREE.Vector2(0, (aw + 0.3) * Math.tan((13 * Math.PI) / 180))]);
+      const gg = new THREE.ExtrudeGeometry(shape, { depth: t, bevelEnabled: false });
+      gg.translate(0, yE + ent.dims.total, hz - t);
+      b.add(gg, 'marble', I);
+    }
     // Apse in the back wall with Peace enthroned, the menorah and the table of the showbread.
     const R = aw * 0.42;
     apse(b, { radius: R, height: H * 0.62, thickness: 0.6, material: 'marble', domeMaterial: 'plaster_white', detail, collide: false }, T(0, yS + 0.36, hz - t - R - 0.1));

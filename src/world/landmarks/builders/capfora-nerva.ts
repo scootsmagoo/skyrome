@@ -53,6 +53,8 @@ const NERVA = {
   swOpen: [2, 18.1] as [number, number],
   /** Horseshoe court. */
   horseshoe: { cx: -2.3, R: 15.2, t: 1.2 },
+  /** Where the floor steps up from the Argiletum's level to the forum's main floor (z, real). */
+  zStep: -36.5,
   colH: 10,
   colD: 1.0,
   axial: 5.8,
@@ -74,18 +76,30 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
   const swz = (x: number) => zSW(x / S) * S;
   const gWide = groundMin(g, xSE - 4, swz(xSE) - 4, xNW + 4, zNE + 4);
 
-  // ---- floor: white marble over a foundation, polygon with the oblique SW end
+  // ---- floor: white marble over a foundation, polygon with the oblique SW end. The SW part lies at
+  // the Argiletum's level (YL); a flight across the forum climbs to the main floor (Y0), which has
+  // to clear the Templum Pacis' pad rising along the SE wall further in.
+  const YL = 0.12;
+  const zStep = N.zStep * S;
   {
+    const { count, rise } = stepCount(Y0 - YL, 0.2);
+    const run = 0.36;
+    const zs0 = zStep - count * run;
     const steps = 6;
     for (let i = 0; i < steps; i++) {
       // The oblique SW end is approximated by slabs stepped across the width.
       const x0 = xSE + ((xNW - xSE) * i) / steps;
       const x1 = xSE + ((xNW - xSE) * (i + 1)) / steps;
       const z0 = Math.max(swz(x0), swz(x1));
-      span(b, 'travertine', x0, Math.min(-0.3, gWide - 0.3), z0, x1, Y0 - 0.04, zNE, I, true);
-      span(b, 'paving_travertine', x0, Y0 - 0.04, z0, x1, Y0, zNE, I);
+      span(b, 'travertine', x0, Math.min(-0.3, gWide - 0.3), z0, x1, YL - 0.04, zs0, I, true);
+      span(b, 'paving_travertine', x0, YL - 0.04, z0, x1, YL, zs0, I);
     }
+    span(b, 'travertine', xSE, Math.min(-0.3, gWide - 0.3), zStep, xNW, Y0 - 0.04, zNE, I, true);
+    span(b, 'paving_travertine', xSE, Y0 - 0.04, zStep, xNW, Y0, zNE, I);
+    stairs(b, { width: xNW - xSE, rise, run, count, material: 'marble' }, T((xSE + xNW) / 2, YL, zs0));
   }
+  /** Floor level at a z along the forum. */
+  const floorAt = (z: number) => (z < zStep ? YL : Y0);
 
   // ---- the Forum of Augustus next door: its SE exedra (bulging into this forum) and the door.
   const aug = relMatrix(ctx, 'forum-augustus');
@@ -112,7 +126,7 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
   ];
   for (const [a, c] of seSegs) {
     span(b, 'peperino', xSE - t, yb, a, xSE, wallTop, c, I, true);
-    span(b, 'marble_veined', xSE - 0.02, Y0, a, xSE + 0.03, wallTop - 0.3, c, I);
+    span(b, 'marble_veined', xSE - 0.02, YL, a, xSE + 0.03, wallTop - 0.3, c, I);
   }
   span(b, 'peperino', xSE - t, Y0 + 4.2, pacisDoorZ - 2.0, xSE, wallTop, pacisDoorZ + 2.0, I);
   for (const dz of [-1.45, 1.45]) span(b, 'travertine', xSE - 0.02, Y0, pacisDoorZ + dz - 0.12, xSE + 0.12, Y0 + 4.3, pacisDoorZ + dz + 0.12, I);
@@ -128,7 +142,7 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
   for (const [a, c] of nwSegs) {
     if (c - a < 0.2) continue;
     span(b, 'peperino', xNW, yb, a, xNW + t, wallTop, c, I, true);
-    span(b, 'marble_veined', xNW - 0.03, Y0, a, xNW + 0.02, wallTop - 0.3, c, I);
+    span(b, 'marble_veined', xNW - 0.03, YL, a, xNW + 0.02, wallTop - 0.3, c, I);
   }
   span(b, 'peperino', xNW, Y0 + 5.0, zc - 2.8, xNW + t, wallTop, zc + 2.8, I);
   spots.push(spotAt('door-caesar', 'door', xNW - 1.6, Y0, zc, xNW + 2, zc, { label: 'Steps up to the Forum of Caesar' }));
@@ -187,6 +201,11 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
     for (let k = 0; k <= n; k++) {
       const z = z0 + k * ax;
       if (r.skip.some(([a, c]) => z > a - 0.8 && z < c + 0.8)) continue;
+      const yf = floorAt(z);
+      if (yf < Y0 - 0.05) {
+        const pw = dims.plinth * 1.15;
+        span(b, 'marble', colX - pw / 2, yf, z - pw / 2, colX + pw / 2, Y0, z + pw / 2, I, true);
+      }
       column(b, { order: 'corinthian', D, height: H, fluted: true, material: 'marble', detail: 'low' }, T(colX, Y0, z));
       // Ressaut: a block of entablature breaking forward over the column, back to the wall.
       const w = dims.plinth * 1.05;
@@ -229,16 +248,16 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
     const m = mul(I, TRS((a.x + c.x) / 2, (yb + wallTop) / 2, (a.z + c.z) / 2, 0, ry, 0));
     b.box('peperino', len, wallTop - yb, t, m, { collide: true });
     // Steps down to the Argiletum outside the opening.
-    const gOut = Math.min(0, groundMin(g, xo0, swz(xNW) - 6, xNW, swz(xo0) - 2));
-    if (Y0 - gOut > 0.15) {
-      const { count, rise } = stepCount(Y0 - gOut, 0.19);
+    const gOut = Math.min(0, groundMin(g, xo0, swz(xNW) - 2.5, xNW, swz(xo0) - 1));
+    if (YL - gOut > 0.15) {
+      const { count, rise } = stepCount(YL - gOut, 0.19);
       const w = xNW - xo0 - 0.4;
       const zf = Math.min(swz(xo0), swz(xNW));
       stairs(b, { width: w, rise, run: 0.36, count, material: 'travertine' }, T((xo0 + xNW) / 2, gOut, zf - count * 0.36));
       footing(b, 'travertine', g, xo0, zf - count * 0.36, xNW, zf, gOut, I, false);
     }
-    spots.push(spotAt('entrance-argiletum', 'spawn', (xo0 + xNW) / 2, Y0, swz((xo0 + xNW) / 2) + 2, (xo0 + xNW) / 2, 20, { label: 'Forum Transitorium (from the Argiletum)' }));
-    spots.push(spotAt('bookseller', 'vendor', xNW - 1.5, Y0, swz(xNW) + 5, xNW - 6, swz(xNW) + 5, { label: 'Bookseller of the Argiletum (Martial in stock)' }));
+    spots.push(spotAt('entrance-argiletum', 'spawn', (xo0 + xNW) / 2, YL, swz((xo0 + xNW) / 2) + 2, (xo0 + xNW) / 2, 20, { label: 'Forum Transitorium (from the Argiletum)' }));
+    spots.push(spotAt('bookseller', 'vendor', xNW - 1.5, YL, swz(xNW) + 5, xNW - 6, swz(xNW) + 5, { label: 'Bookseller of the Argiletum (Martial in stock)' }));
   }
 
   // ---- NE end: chord wall behind the temple with passages either side, and the horseshoe court
@@ -273,7 +292,15 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
       gloss: "Women spin, weave and card wool under Minerva's eye; in one panel the goddess punishes Arachne, the Lydian weaver who dared to challenge her (Ovid, Met. 6). Domitian's favourite goddess presides over his forum, finished by Nerva.",
     }),
   );
-  spots.push(spotAt('passers-by', 'npc', 0, Y0, -20, 0, 20, { label: 'Traffic of the Argiletum crossing the forum' }));
+  spots.push(spotAt('passers-by', 'npc', 0, floorAt(-20), -20, 0, 20, { label: 'Traffic of the Argiletum crossing the forum' }));
+  // Steps outside the door to the Forum of Caesar, down to the lane between the two fora.
+  {
+    const gOut = Math.min(Y0 - 0.1, groundMin(g, xNW + t, zc - 1.5, xNW + t + 2.5, zc + 1.5));
+    if (Y0 - gOut > 0.15) {
+      const { count, rise } = stepCount(Y0 - gOut, 0.19);
+      stairs(b, { width: 3.0, rise, run: 0.34, count, material: 'travertine' }, TRS(xNW + t + count * 0.34, gOut, zc, 0, -Math.PI / 2, 0));
+    }
+  }
 }
 
 function splitRange(a: number, b: number, skip: [number, number][]): [number, number][] {
