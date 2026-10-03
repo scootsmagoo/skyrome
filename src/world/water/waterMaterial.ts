@@ -108,7 +108,10 @@ varying vec2 vFlow;
 varying vec3 vWWorld;
 
 float wGround( vec2 xz ) {
-  vec2 g = clamp( ( xz - uGrid.xy ) / uGrid.z, vec2( 0.0 ), uGridN - 1.0 );
+  vec2 g = ( xz - uGrid.xy ) / uGrid.z;
+  // Beyond the height grid (the far river): treat as deep.
+  if ( any( lessThan( g, vec2( 0.0 ) ) ) || any( greaterThan( g, uGridN - 1.0 ) ) ) return vWWorld.y - 2.5;
+  g = clamp( g, vec2( 0.0 ), uGridN - 1.0 );
   vec2 i = floor( g );
   vec2 f = g - i;
   ivec2 i0 = ivec2( i );

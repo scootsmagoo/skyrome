@@ -14,7 +14,10 @@
  */
 import * as THREE from 'three';
 import type { Game, System } from '../../core/Game';
-import type { Heightmap } from './heightmap';
+import * as atlas from '../../data/atlas';
+import { WORLD_SCALE } from '../coords';
+import { makeNaturalElevation, type Heightmap } from './heightmap';
+import { buildApron, farHeight, type ApronOptions } from './apron';
 import { flatGroundTextures, loadGroundTextures, type GroundTextures } from './groundTextures';
 import { PATCH_STRIDE, TerrainQuadtree, type QuadtreeOptions } from './quadtree';
 import { romeTerrainInputs } from './romeInputs';
@@ -43,6 +46,11 @@ export interface TerrainOptions {
   lod?: QuadtreeOptions;
   /** Don't load the photo textures (flat palette colours only). */
   flat?: boolean;
+  /**
+   * Coarse land beyond the grid, from the atlas landform (default: on for atlas-built heightmaps).
+   * false turns it off.
+   */
+  apron?: boolean | ApronOptions;
 }
 
 /**
@@ -105,6 +113,10 @@ export class Terrain implements System {
   /** Resolves when the photo textures are in use (or immediately when flat). */
   readonly ready: Promise<void>;
   readonly mesh: THREE.Mesh;
+  /** The land beyond the grid (null when off). */
+  readonly apron: THREE.Mesh | null = null;
+  /** Ground height anywhere (game m): the grid inside, the atlas landform outside. */
+  readonly farHeightAt: (x: number, z: number) => number;
   /** Last LOD selection: patches drawn and triangles. */
   readonly lodStats = { patches: 0, triangles: 0, perLevel: [] as number[] };
   private readonly patchAttr: THREE.InstancedBufferAttribute;
@@ -189,6 +201,26 @@ export class Terrain implements System {
     // The base geometry is a unit grid near the origin; it must never be ray-picked.
     this.mesh.raycast = () => {};
     this.group.add(this.mesh);
+
+    // ---- the land beyond the grid
+    this.farHeightAt = (x, z) => hm.heightAt(x, z);
+    if (opts.apron !== false && hm.features) {
+      const ext = (typeof opts.apron === 'object' ? opts.apron.extent : undefined) ?? 4500;
+      const natural = makeNaturalElevation(
+        {
+          BASE_ELEVATION: atlas.BASE_ELEVATION,
+          HILLS: atlas.HILLS,
+          LOWLANDS: atlas.LOWLANDS,
+          RIVERS: hm.features.rivers,
+          ISLANDS: hm.features.islands,
+          bounds: { minX: (hm.minX - ext) / WORLD_SCALE, maxX: (hm.maxX + ext) / WORLD_SCALE, minZ: (hm.minZ - ext) / WORLD_SCALE, maxZ: (hm.maxZ + ext) / WORLD_SCALE },
+        },
+        { quays: hm.features.quays, noise: 0, sdfCell: 25 },
+      );
+      this.farHeightAt = farHeight(hm, natural);
+      this.apron = buildApron(hm, this.farHeightAt, hm.waterLevelY, typeof opts.apron === 'object' ? opts.apron : {});
+      this.group.add(this.apron);
+    }
 
     // ---- physics: Rapier heightfields per chunk
     if (!opts.noColliders) this.addColliders(opts.chunkSamples ?? 65);

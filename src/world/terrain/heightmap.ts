@@ -296,13 +296,13 @@ export function quayProfile(r: { waterLevel: number }, d: number, half: number, 
 }
 
 /** The natural (pre-road, pre-pad) elevation function in real meters. */
-export function makeNaturalElevation(src: TerrainSource, opts: { noise?: number; seed?: number; quays?: readonly TerrainQuay[] } = {}) {
+export function makeNaturalElevation(src: TerrainSource, opts: { noise?: number; seed?: number; quays?: readonly TerrainQuay[]; sdfCell?: number } = {}) {
   const noiseAmp = opts.noise ?? 0.6;
   const seed = opts.seed ?? 113;
   const quays = opts.quays ?? TIBER_QUAYS;
   const lowlands = src.LOWLANDS.flatMap((l) => {
     const b = clipBox(bbox(l, l.polygon, 60), src.bounds);
-    return b ? [{ ...b, sdf: sdfGrid(l.polygon, b, SDF_CELL) }] : [];
+    return b ? [{ ...b, sdf: sdfGrid(l.polygon, b, opts.sdfCell ?? SDF_CELL) }] : [];
   });
   const hills = src.HILLS.flatMap((h) => {
     const b = clipBox(bbox(h, h.outline, h.slope + 10), src.bounds);
@@ -312,7 +312,7 @@ export function makeNaturalElevation(src: TerrainSource, opts: { noise?: number;
     const o = h.outline;
     for (let i = 0, j = o.length - 1; i < o.length; j = i++) area += (o[j][0] + o[i][0]) * (o[j][1] - o[i][1]);
     const rIn = Math.max(20, Math.sqrt(Math.abs(area / 2) / Math.PI));
-    return [{ ...b, rIn, sdf: sdfGrid(h.outline, b, SDF_CELL) }];
+    return [{ ...b, rIn, sdf: sdfGrid(h.outline, b, opts.sdfCell ?? SDF_CELL) }];
   });
   const islands = src.ISLANDS.map((i) => bbox(i, i.outline, 15));
   const rivers = src.RIVERS.map((r) => {

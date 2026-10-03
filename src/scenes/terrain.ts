@@ -4,7 +4,7 @@
  *
  *   ?scene=terrain[&cam=overview|river|palatine|capitol|island|aventine|cliffs|emporium|janiculum|player]
  *                 [&hour=9.5][&at=<landmark id>][&lm=1 core landmarks][&flat=1 no photo textures]
- *                 [&wire=1 LOD patch colours]
+ *                 [&wire=1 LOD patch colours][&grass=0 no grass tufts]
  *
  * With a `cam` preset the camera flies freely: WASD move, arrow keys turn, Space / C rise and sink,
  * Shift goes faster. `cam=player` (or V) walks the player instead.
@@ -21,6 +21,7 @@ import { landmarkPads, spawnAtLandmark } from '../world/rome/buildRome';
 import { installSky } from '../world/sky';
 import { buildHeightmap } from '../world/terrain/heightmap';
 import { Terrain } from '../world/terrain/Terrain';
+import { addTerrainGrass } from '../world/terrain/grass';
 import { buildWater } from '../world/water';
 import { setupPlayer } from './common';
 import type { SceneDef } from './types';
@@ -63,6 +64,7 @@ const scene: SceneDef = {
     game.heightmap = hm;
     game.terrain = new Terrain(game, hm, { flat: p.get('flat') === '1' });
     if (p.get('wire') === '1') game.terrain.uniforms.uDebugLod.value = 1;
+    if (p.get('grass') !== '0') addTerrainGrass(game, game.terrain);
     const t2 = performance.now();
     await buildWater(game, atlas, hm);
     const t3 = performance.now();
@@ -94,6 +96,21 @@ const scene: SceneDef = {
       game.addSystem(new FlyCamera(game));
     }
     game.world.refreshAll();
+
+    // `window.__terrainBench(frames)`: synchronous render timing (scene + post) for shot.mjs.
+    (window as unknown as { __terrainBench: (n?: number) => object }).__terrainBench = (frames = 120) => {
+      const gl = game.renderer.getContext();
+      const px = new Uint8Array(4);
+      game.renderFrame();
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      const t0 = performance.now();
+      for (let i = 0; i < frames; i++) game.renderFrame();
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      const ms = (performance.now() - t0) / frames;
+      game.renderFrame();
+      const info = game.renderer.info.render;
+      return { msPerFrame: +ms.toFixed(3), drawCalls: info.calls, triangles: info.triangles, terrain: game.terrain.lodStats };
+    };
   },
 };
 export default scene;

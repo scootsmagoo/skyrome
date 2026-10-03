@@ -9,9 +9,9 @@ import { footprintPolygon, type P2 } from './heightmap';
 import type { PadKind, TerrainDataInputs } from './terrainData';
 
 /** Landmark categories whose open ground is paved in travertine. */
-const TRAVERTINE = new Set(['forum', 'temple', 'basilica', 'arch', 'column', 'monument', 'curia', 'library', 'portico', 'fountain', 'shrine', 'palace', 'theatre', 'odeum', 'amphitheatre', 'gate', 'tomb']);
+const TRAVERTINE = new Set(['forum', 'market', 'temple', 'basilica', 'arch', 'column', 'monument', 'curia', 'library', 'portico', 'fountain', 'shrine', 'palace', 'theatre', 'odeum', 'amphitheatre', 'baths', 'gate', 'tomb']);
 /** Categories with gravel / sand yards. */
-const GRAVEL = new Set(['camp', 'circus', 'stadium', 'market', 'warehouse', 'harbor', 'baths']);
+const GRAVEL = new Set(['camp', 'circus', 'stadium', 'warehouse', 'harbor']);
 
 export function padKindFor(category: string): PadKind {
   if (TRAVERTINE.has(category)) return 'travertine';

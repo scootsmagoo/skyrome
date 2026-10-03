@@ -87,7 +87,10 @@ export async function buildWater(game: Game, atlas: typeof Atlas, hm: Heightmap)
   game.addSystem(water);
 
   // ---- surface
-  const data = buildWaterSurface(bodies, (x, z) => hm.heightAt(x, z), { minX: hm.minX, maxX: hm.maxX, minZ: hm.minZ, maxZ: hm.maxZ }, 4);
+  // Beyond the grid (where the terrain draws its coarse apron) the river continues too.
+  const far = game.terrain?.apron ? 3000 : 0;
+  const ground = game.terrain?.farHeightAt ?? ((x: number, z: number) => hm.heightAt(x, z));
+  const data = buildWaterSurface(bodies, ground, { minX: hm.minX - far, maxX: hm.maxX + far, minZ: hm.minZ - far, maxZ: hm.maxZ + far }, 4);
   let heightTex: THREE.Texture | null = game.terrain?.uniforms?.tHeight.value ?? null;
   if (!heightTex) {
     const t = new THREE.DataTexture(hm.heights, hm.nx, hm.nz, THREE.RedFormat, THREE.FloatType);
@@ -133,7 +136,7 @@ export async function buildWater(game: Game, atlas: typeof Atlas, hm: Heightmap)
     const rqs = resolveQuays(features?.quays ?? [], river.id, chain(river.centerline));
     for (const rq of rqs) {
       quaySkip.push({ body: river.id, side: rq.side, s0: rq.s0 * S, s1: rq.s1 * S });
-      const q = buildQuay(river, rq, (x, z) => hm.heightAt(x, z), S);
+      const q = buildQuay(river, rq, ground, S);
       const group = q.builder.build(rq.quay.id);
       registerColliders(game, q.colliders, undefined, water);
       if (game.world) game.world.add(`quay:${rq.quay.id}`, group, { cullDistance: 1600, parent: water.group });
