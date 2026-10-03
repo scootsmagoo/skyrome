@@ -10,7 +10,7 @@
  * Everything is weighted 100% to the head bone, so collapsing that bone hides it in first person.
  */
 import * as THREE from 'three';
-import type { HairStyle } from '../../appearance';
+import type { HairStyle, HelmetKind } from '../../appearance';
 import { B } from '../rig';
 import { SURF, type Surf, type V, type Weights } from '../SkinBuilder';
 import { MonotoneCurve } from '../anim/spline';
@@ -38,6 +38,11 @@ export interface HeadFrame {
 }
 
 const HEAD_W: Weights = [B.head, 1];
+const INFULA_RED = srgb('#a8352b');
+const INFULA_WHITE = srgb('#efe9dc');
+
+/** Helmets that close over the ears (no ears are built under them). */
+const ENCLOSING_HELMETS: ReadonlySet<HelmetKind> = new Set<HelmetKind>(['murmillo', 'thraex', 'hoplomachus', 'secutor', 'provocator']);
 
 /** Height fractions of key features (0 = chin, 1 = crown). */
 export const FEAT = { eye: 0.555, brow: 0.635, noseBase: 0.39, mouth: 0.245, chin: 0.06, hair: 0.78, ear: 0.47 };
@@ -210,7 +215,8 @@ export function buildHead(ctx: Ctx, L: Levels): HeadFrame {
   const hs = Hf.hs;
   // Under a helmet only cropped hair; under a veil the hair (a bun) still shows at the front.
   const style: HairStyle = Hf.hasHelmet ? 'cropped' : app.hair.style;
-  const paintStyle: HairStyle = style === 'veiled' || style === 'vestal' ? 'bun' : style;
+  const veiled = style === 'veiled' || style === 'vestal';
+  const paintStyle: HairStyle = veiled ? 'bun' : style;
   const hairT = HAIR_THICK[paintStyle] * hs;
   const skin = ctx.skin;
   const hair = ctx.hair;
@@ -262,14 +268,20 @@ export function buildHead(ctx: Ctx, L: Levels): HeadFrame {
       // Hair region.
       const hl = hairlineFor(paintStyle, th);
       let hairK = style === 'bald' ? 0 : smooth(hl - 0.012, hl + 0.012, yf);
-      // Keep the ears and sideburn area clear for long styles.
       let disp = 0;
       if (hairK > 0) {
         const n = Math.sin(th * 23 + yf * 40) * Math.sin(th * 9 - yf * 25);
         const curl = style === 'curly-short' ? 0.004 * hs * (0.5 + 0.5 * Math.sin(th * 31) * Math.sin(yf * 90)) : 0;
-        disp = hairK * (hairT + curl + 0.0012 * hs * n);
+        // Under a veil only the front shows: the rest lies flat beneath the cloth.
+        disp = veiled && underVeil(yf, th) ? 0 : hairK * (hairT + curl + 0.0012 * hs * n);
         col.lerp(shade(hair, 0.9 + 0.14 * n), hairK);
         if (hairK > 0.5) surf = SURF.hair;
+      }
+      // The Vestal's infula: twisted red and white woollen bands across the brow, under the veil's edge.
+      if (style === 'vestal' && yf > 0.7 && !underVeil(yf, th)) {
+        col.copy((i + j) % 2 ? INFULA_RED : INFULA_WHITE);
+        surf = SURF.wool;
+        disp = 0.008 * hs * smooth(0.69, 0.73, yf);
       }
       // Beard: jaw, chin, cheeks below the cheekbones and the upper lip.
       if (male && beard !== 'none' && !Hf.hasHelmet) {
@@ -310,12 +322,13 @@ export function buildHead(ctx: Ctx, L: Levels): HeadFrame {
     (j) => [0, Hf.chin + rows[j] * Hf.H, Hf.c.z],
   );
   const topH = style === 'bald';
-  b.capAuto(g, cols, rows.length - 1, vtx(new THREE.Vector3(0, Hf.chin + Hf.H + (topH ? 0 : hairT), Hf.c.z - 0.004 * hs), topH ? skin : shade(hair, 0.95), HEAD_W, topH ? SURF.skin : SURF.hair), [0, 1, 0]);
+  b.capAuto(g, cols, rows.length - 1, vtx(new THREE.Vector3(0, Hf.chin + Hf.H + (topH || veiled ? 0 : hairT), Hf.c.z - 0.004 * hs), topH ? skin : shade(hair, 0.95), HEAD_W, topH ? SURF.skin : SURF.hair), [0, 1, 0]);
   b.capAuto(g, cols, 0, vtx(new THREE.Vector3(0, Hf.chin - 0.002 * hs, Hf.c.z + 0.02 * hs), shade(skin, 0.75), HEAD_W, SURF.skin), [0, -1, 0]);
 
   buildEyes(ctx, Hf);
   buildNose(ctx, Hf);
-  if (ctx.hi) buildEars(ctx, Hf);
+  const helmet = app.armor?.helmet?.kind;
+  if (ctx.hi && !(helmet && ENCLOSING_HELMETS.has(helmet))) buildEars(ctx, Hf);
   if (!Hf.hasHelmet) buildHairExtras(ctx, Hf, L, style);
   if (male && beard === 'full' && !Hf.hasHelmet) buildMoustache(ctx, Hf);
   return Hf;
@@ -673,62 +686,98 @@ function buildHairExtras(ctx: Ctx, H: HeadFrame, L: Levels, style: HairStyle) {
   }
 }
 
-/** Palla (or toga) drawn over the head, or the Vestal's white suffibulum with the red-and-white infula. */
+/**
+ * Veil coverage: the cloth wraps the head from the back and is closed over the crown. Its front
+ * edge crosses the top of the forehead in a low arch, then runs down beside the face to the cheeks.
+ * VEIL_OPENING lists [height fraction, half-width of the face opening (rad)].
+ */
+const VEIL_OPENING: readonly (readonly [number, number])[] = [
+  [0.88, 0],
+  [0.84, 0.55],
+  [0.78, 0.8],
+  [0.68, 0.89],
+];
+/** Half-span of the cloth around the back of the head (π = all the way round) at height fraction yf. */
+function veilHalfSpan(yf: number): number {
+  const o = VEIL_OPENING;
+  if (yf >= o[0][0]) return Math.PI;
+  for (let k = 1; k < o.length; k++) {
+    if (yf >= o[k][0]) return Math.PI - lerp(o[k][1], o[k - 1][1], (yf - o[k][0]) / (o[k - 1][0] - o[k][0]));
+  }
+  return Math.PI - o[o.length - 1][1];
+}
+/** Is the head surface at (yf, th) under the veil? */
+function underVeil(yf: number, th: number): boolean {
+  const fromBack = Math.abs(Math.atan2(Math.sin(th - Math.PI), Math.cos(th - Math.PI)));
+  return fromBack <= veilHalfSpan(yf) - 0.04;
+}
+/** Veil rows over the head: the head's own rows (so both surfaces chord alike) from crown to cheek. */
+const VEIL_ROWS_HI = [1.0, 0.95, 0.88, 0.84, 0.78, 0.68, 0.6, 0.51, 0.39];
+const VEIL_ROWS_LO = [1.0, 0.94, 0.86, 0.78, 0.68, 0.555, 0.42];
+
+/** Palla (or toga) drawn over the head, or the Vestal's white suffibulum over the infula. */
 function buildVeil(ctx: Ctx, H: HeadFrame, L: Levels, style: HairStyle) {
   const { b, app } = ctx;
   const hs = H.hs;
   const cloth = app.garments.find((g) => g.kind === 'palla') ?? app.garments.find((g) => g.kind === 'toga');
   const color = style === 'vestal' ? srgb('#f0ece2') : srgb(cloth?.color ?? '#7d6a55');
-  const seg = ctx.hi ? 14 : 8;
-  const rows = ctx.hi ? 7 : 5;
-  const T = 0.012 * hs;
-  const vestal = style === 'vestal';
-  // Emitted twice: outside, then the inside (flipped) so the face opening never looks hollow.
+  const seg = ctx.hi ? 13 : 9;
+  const headRows = ctx.hi ? VEIL_ROWS_HI : VEIL_ROWS_LO;
+  const drapeRows = 2;
+  const rows = headRows.length + drapeRows;
+  // Clear of the scalp (the hair under the veil is not displaced) and of chord sag between rows.
+  const T = 0.011 * hs;
+  const bottom = headRows[headRows.length - 1];
+  // Emitted twice: outside, then the inside (flipped) where it can be seen: around the face opening
+  // and the hanging ends (over the crown the head fills it).
+  const insideFrom = headRows.findIndex((y) => y <= 0.78);
   for (let pass = 0; pass < 2; pass++) {
-  b.grid(
-    seg,
-    rows,
-    false,
-    (i, j, v) => {
-      // Azimuth sweeps around the back, leaving the face open.
-      const az = lerp(-2.25, 2.25, i / (seg - 1)) + Math.PI;
-      const t = j / (rows - 1);
-      let p: THREE.Vector3;
-      let w: Weights;
-      if (t < 0.6) {
-        // Near the face the veil's edge sits just behind the hairline.
-        const front = Math.max(0, Math.cos(az));
-        const yf = lerp(1.0 - front * 0.0, 0.36 + front * 0.36, t / 0.6);
-        p = H.at(yf, az);
-        const n = p.clone().sub(H.c);
-        n.y *= 0.4;
-        p.addScaledVector(n.normalize(), T + 0.004 * hs * Math.sin(az * 9) + (vestal && yf > 0.62 && yf < 0.76 ? 0.003 * hs : 0));
-        w = HEAD_W;
-      } else {
-        const k = (t - 0.6) / 0.4;
-        const edge = H.at(0.36, az);
-        const d = new THREE.Vector3(Math.sin(az), 0, Math.cos(az));
-        p = edge.clone().addScaledVector(d, T + 0.035 * k * hs);
-        p.y = lerp(edge.y, L.shoulder + 0.01 * L.s, k);
-        p.addScaledVector(d, Math.abs(Math.sin(az)) * 0.08 * k * L.s);
-        w = k < 0.5 ? [B.head, 0.5, B.neck, 0.5] : [B.neck, 0.4, B.chest, 0.6];
-      }
-      v.x = p.x;
-      v.y = p.y;
-      v.z = p.z;
-      let c = shade(color, 0.9 + 0.1 * Math.sin(az * 9 + t * 3));
-      if (i === 0 || i === seg - 1) c = shade(color, 0.82);
-      if (vestal && t > 0.1 && t < 0.24) c = Math.floor(az * 7) % 2 === 0 ? srgb('#b33a2e') : srgb('#f2eee6');
-      v.r = c.r;
-      v.g = c.g;
-      v.b = c.b;
-      v.w = w;
-      v.s = SURF.wool;
-    },
-    'auto',
-    (j) => [H.c.x, H.chin + H.H * lerp(0.7, 0.2, j / (rows - 1)), H.c.z],
-  );
-  if (pass === 1) b.flipTail((seg - 1) * (rows - 1) * 2);
+    const j0 = pass === 0 ? 0 : insideFrom;
+    b.grid(
+      seg,
+      rows - j0,
+      false,
+      (i, jj, v) => {
+        const j = jj + j0;
+        const head = j < headRows.length;
+        const yf = head ? headRows[j] : bottom;
+        const A = veilHalfSpan(yf);
+        const az = Math.PI + A * lerp(-1, 1, i / (seg - 1));
+        let p: THREE.Vector3;
+        let w: Weights;
+        if (head) {
+          p = H.at(yf, az);
+          const n = p.clone().sub(H.c);
+          n.y *= 0.4;
+          p.addScaledVector(n.normalize(), T + 0.003 * hs * Math.sin(az * 9) * smooth(0.95, 0.7, yf));
+          w = HEAD_W;
+        } else {
+          const k = (j - headRows.length + 1) / drapeRows;
+          const edge = H.at(bottom, az);
+          const d = new THREE.Vector3(Math.sin(az), 0, Math.cos(az));
+          p = edge.clone().addScaledVector(d, T + 0.035 * k * hs);
+          p.y = lerp(edge.y, L.shoulder + 0.01 * L.s, k);
+          p.addScaledVector(d, Math.abs(Math.sin(az)) * 0.08 * k * L.s);
+          w = k < 0.5 ? [B.head, 0.5, B.neck, 0.5] : [B.neck, 0.4, B.chest, 0.6];
+        }
+        v.x = p.x;
+        v.y = p.y;
+        v.z = p.z;
+        let c = shade(color, 0.9 + 0.1 * Math.sin(az * 9 + j * 0.4));
+        if (i === 0 || i === seg - 1) c = shade(color, 0.82);
+        v.r = c.r;
+        v.g = c.g;
+        v.b = c.b;
+        v.w = w;
+        v.s = SURF.wool;
+      },
+      'auto',
+      (jj) => {
+        const j = jj + j0;
+        return [H.c.x, H.chin + H.H * (j < headRows.length ? headRows[j] * 0.7 : 0.2), H.c.z];
+      },
+    );
+    if (pass === 1) b.flipTail((seg - 1) * (rows - j0 - 1) * 2);
   }
 }
 

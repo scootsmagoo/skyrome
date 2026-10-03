@@ -11,9 +11,9 @@
  */
 import * as THREE from 'three';
 import type { ActionClip, CombatAvatar, IdleLoop, LocomotionState, PlayOptions, Stance } from '../Actor';
-import type { Appearance, ShieldModel, WeaponModel } from '../appearance';
-import { B, type BoneName, type Rig } from './rig';
-import { buildAvatarGeometry, createBones, type AvatarGeometry } from './buildAvatar';
+import type { Appearance, ArmorLook, Garment, ShieldModel, WeaponModel } from '../appearance';
+import { B, BONES, localOffset, type BoneName, type Rig } from './rig';
+import { acquireAvatarGeometry, appearanceKey, boneInverses, createBones, releaseAvatarGeometry, type AvatarGeometry } from './buildAvatar';
 import { avatarMaterial } from './material';
 import { AnimationController } from './anim/controller';
 import { avatarLod } from './lod';
@@ -32,30 +32,37 @@ export interface HumanoidOptions {
   shield?: ShieldModel;
 }
 
+/** Lazy low-LOD builds are spread out: at most one per this many milliseconds (all avatars). */
+const LOD_BUILD_INTERVAL_MS = 6;
+let lastLodBuild = -Infinity;
+
 export class HumanoidAvatar implements CombatAvatar {
   readonly root = new THREE.Group();
   readonly mesh: THREE.SkinnedMesh;
   readonly bones: THREE.Bone[];
   readonly skeleton: THREE.Skeleton;
-  readonly rig: Rig;
-  readonly appearance: Appearance;
   readonly anim: AnimationController;
   readonly equipment: Equipment;
+  /** Body proportions (changes only through setAppearance). */
+  rig: Rig;
   eyeHeight: number;
+  private app: Appearance;
+  /** Geometry at the primary LOD ('high', or 'low' for lod: 'low'), held from the cache. */
   private geoHigh: AvatarGeometry;
+  /** Far geometry for lod: 'auto', built on the first switch. */
   private geoLow: AvatarGeometry | null = null;
+  private far = false;
   private lodMode: LOD | 'auto';
   private sockets = new Map<ExtraSocket, THREE.Object3D>();
+  private socketBase = new Map<ExtraSocket, readonly [number, number, number]>();
   private firstPerson = false;
   private dead = false;
   private disposed = false;
 
   constructor(app: Appearance, opts: HumanoidOptions = {}) {
-    this.appearance = app;
+    this.app = app;
     this.lodMode = opts.lod ?? 'high';
-    const initial: LOD = this.lodMode === 'low' ? 'low' : 'high';
-    this.geoHigh = buildAvatarGeometry(app, initial);
-    if (this.lodMode === 'auto') this.geoLow = buildAvatarGeometry(app, 'low');
+    this.geoHigh = acquireAvatarGeometry(app, this.lodMode === 'low' ? 'low' : 'high');
     this.rig = this.geoHigh.rig;
     this.eyeHeight = this.rig.eyeHeight;
     this.bones = createBones(this.rig);
@@ -64,13 +71,11 @@ export class HumanoidAvatar implements CombatAvatar {
     this.mesh.name = 'humanoid:body';
     this.mesh.add(this.bones[0]);
     this.mesh.updateMatrixWorld(true);
-    this.skeleton = new THREE.Skeleton(this.bones);
+    this.skeleton = new THREE.Skeleton(this.bones, boneInverses(this.rig));
     this.mesh.bind(this.skeleton, new THREE.Matrix4());
     this.mesh.castShadow = opts.castShadow ?? true;
     this.mesh.receiveShadow = true;
-    // Generous fixed bounds (covers lying down and reaching overhead) — cheaper than recomputing.
-    const h = this.rig.height;
-    this.mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, h * 0.5, 0), h * 1.15);
+    this.setBounds();
     this.root.add(this.mesh);
     this.createSockets();
     this.anim = new AnimationController(this);
@@ -84,6 +89,62 @@ export class HumanoidAvatar implements CombatAvatar {
     this.anim.setStance(this.equipment.defaultStance());
   }
 
+  /** The appearance this avatar was built from (see setAppearance). */
+  get appearance(): Appearance {
+    return this.app;
+  }
+
+  private setBounds() {
+    // Generous fixed bounds (covers lying down and reaching overhead) — cheaper than recomputing.
+    const h = this.rig.height;
+    this.mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, h * 0.5, 0), h * 1.15);
+  }
+
+  /**
+   * Rebuild the body for a new appearance (armor or clothes equipped, a disguise, aging...). The
+   * skeleton, animation state, equipment and first-person state carry over; if the proportions
+   * changed (height, build, sex, age) the joints move and the mesh is re-bound to them.
+   * The carried weapon and shield are not taken from the new appearance (use setWeapon/setShield).
+   */
+  setAppearance(app: Appearance) {
+    if (this.disposed || appearanceKey(app, 'high') === appearanceKey(this.app, 'high')) return;
+    const oldHigh = this.geoHigh;
+    const oldLow = this.geoLow;
+    this.app = app;
+    this.geoHigh = acquireAvatarGeometry(app, this.lodMode === 'low' ? 'low' : 'high');
+    this.geoLow = null;
+    releaseAvatarGeometry(oldHigh);
+    if (oldLow) releaseAvatarGeometry(oldLow);
+    const rig = this.geoHigh.rig;
+    const moved = rig.joints.some((v, i) => Math.abs(v - this.rig.joints[i]) > 1e-6);
+    this.rig = rig;
+    this.eyeHeight = rig.eyeHeight;
+    if (moved) {
+      BONES.forEach((n, i) => {
+        const [x, y, z] = localOffset(rig, n);
+        this.bones[i].position.set(x, y, z);
+      });
+      const inv = boneInverses(rig);
+      this.skeleton.boneInverses.forEach((m, i) => m.copy(inv[i]));
+      for (const [name, p] of this.socketBase) this.sockets.get(name)!.position.set(p[0] * rig.s, p[1] * rig.s, p[2] * rig.s);
+      this.setBounds();
+    }
+    this.mesh.geometry = this.geoHigh.geometry;
+    this.far = false;
+    this.anim.refreshAppearance();
+    this.equipment.refreshAppearance();
+  }
+
+  /** Change the armor look (helmet, body armor, manica, greaves); undefined removes it all. */
+  setArmor(armor: ArmorLook | undefined) {
+    this.setAppearance({ ...this.app, armor });
+  }
+
+  /** Change the clothes (and optionally the footwear). */
+  setGarments(garments: Garment[], footwear?: Appearance['footwear']) {
+    this.setAppearance({ ...this.app, garments, ...(footwear ? { footwear } : {}) });
+  }
+
   // ------------------------------------------------------------------ sockets
 
   private createSockets() {
@@ -95,6 +156,7 @@ export class HumanoidAvatar implements CombatAvatar {
       o.rotation.set(rot[0], rot[1], rot[2]);
       this.bones[B[bone]].add(o);
       this.sockets.set(name, o);
+      this.socketBase.set(name, pos);
       return o;
     };
     const D = Math.PI / 180;
@@ -110,8 +172,11 @@ export class HumanoidAvatar implements CombatAvatar {
     add('chest', 'chest', [0, 0.1, 0.09]);
     add('hips', 'hips', [0, 0, 0]);
     add('back', 'chest', [0, 0.08, -0.13]);
-    add('backShield', 'chest', [0, 0.02, -0.16], [0, Math.PI, 0]);
-    add('backWeapon', 'chest', [0.02, 0.1, -0.12], [0, 0, 40 * D]);
+    // Slung on the back: the shield's top edge at the shoulder blades (it hangs below this point,
+    // see Equipment), leaning a little toward the left shoulder strap, the bottom off the calves.
+    add('backShield', 'chest', [0, 0.18, -0.17], [5 * D, Math.PI, 9 * D]);
+    // Bow on the back, the upper limb over the left shoulder where the bow hand reaches for it.
+    add('backWeapon', 'chest', [-0.02, 0.1, -0.12], [0, 0, -40 * D]);
     // Scabbard mouths at the belt; items hang along -Y, the bottom swung slightly back.
     add('sheathR', 'hips', [-0.185, 0.07, 0.03], [14 * D, 0, -6 * D]);
     add('sheathL', 'hips', [0.185, 0.07, 0.03], [14 * D, 0, 6 * D]);
@@ -140,18 +205,29 @@ export class HumanoidAvatar implements CombatAvatar {
   }
 
   private updateLod() {
-    if (this.lodMode !== 'auto' || !this.geoLow) return;
-    const far = avatarLod.distance(this) > 35;
-    const g = far ? this.geoLow.geometry : this.geoHigh.geometry;
+    if (this.lodMode !== 'auto') return;
+    // Switch beyond 36 m, back within 34 m (no flicker for someone loitering at the boundary).
+    const d = avatarLod.distance(this);
+    const far = this.far ? d > 34 : d > 36;
+    if (far && !this.geoLow) {
+      // Build the far mesh on first need, spread over frames when a crowd crosses at once.
+      const now = performance.now();
+      if (now - lastLodBuild < LOD_BUILD_INTERVAL_MS) return;
+      lastLodBuild = now;
+      this.geoLow = acquireAvatarGeometry(this.app, 'low');
+    }
+    this.far = far;
+    const g = far ? this.geoLow!.geometry : this.geoHigh.geometry;
     if (this.mesh.geometry !== g) this.mesh.geometry = g;
   }
 
   setFirstPerson(on: boolean) {
     this.firstPerson = on;
     this.anim.firstPerson = on;
-    // The head bone collapses (head, hair, helmet vanish); the body stays for looking down.
-    const hb = this.bones[B.head];
-    hb.scale.setScalar(on ? 0.001 : 1);
+    // The neck and head bones collapse (neck, head, hair, helmet vanish into the base of the neck,
+    // below and behind the camera); the body stays for looking down.
+    this.bones[B.neck].scale.setScalar(on ? 0.001 : 1);
+    this.bones[B.head].scale.setScalar(on ? 0.001 : 1);
     this.equipment.setFirstPerson(on);
   }
 
@@ -218,7 +294,6 @@ export class HumanoidAvatar implements CombatAvatar {
   /** Carry a lit torch in the off hand. */
   setTorch(on: boolean) {
     this.equipment.setTorch(on);
-    this.anim.torch = on;
   }
 
   /** THREE.AnimationClip for a named clip, for use with THREE.AnimationMixer if preferred. */
@@ -231,11 +306,16 @@ export class HumanoidAvatar implements CombatAvatar {
   }
 
   dispose() {
+    if (this.disposed) return;
     this.disposed = true;
     this.equipment.dispose();
     this.root.removeFromParent();
-    // Geometry is cached/shared; materials are shared. Only the bone texture is ours.
+    // Materials are shared; geometry is cached per appearance and released here (the cache disposes
+    // it once nobody holds it and it ages out). The bone texture is ours.
     this.skeleton.dispose();
+    releaseAvatarGeometry(this.geoHigh);
+    if (this.geoLow) releaseAvatarGeometry(this.geoLow);
+    this.geoLow = null;
   }
 }
 

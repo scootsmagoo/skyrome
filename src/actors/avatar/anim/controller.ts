@@ -20,8 +20,9 @@ import { GAITS, type GaitName } from './gait';
 import { actionInfo, airClips, blockClip, gaitClip, idleLoopClip, stanceIdleClip, type ActionInfo } from './library';
 import { qAxis, qMul } from './quat';
 import { leftHandOnShaft } from './armIK';
-import { ARM_L_TORCH, FP_ARMS, hasShield, stanceArmMask, stancePose, weaponClass } from './poses';
+import { ARM_L_NET, ARM_L_TORCH, FP_ARMS, hasShield, stanceArmMask, stancePose, weaponClass } from './poses';
 import type { HumanoidAvatar } from '../HumanoidAvatar';
+import type { OffHand } from '../../equipment/Equipment';
 
 interface Playing {
   name: string;
@@ -46,26 +47,28 @@ const AIR = makeMask({ hips: 0.7, spine: 0.4, chest: 0.3, thighL: 1, shinL: 1, f
 
 const ARMS_MASK = makeMask({ shoulderL: 1, upperArmL: 1, forearmL: 1, handL: 1, fingersL: 1, indexL: 1, shoulderR: 1, upperArmR: 1, forearmR: 1, handR: 1, fingersR: 1, indexR: 1 });
 const ARM_L_MASK = makeMask({ shoulderL: 1, upperArmL: 1, forearmL: 1, handL: 1, fingersL: 1, indexL: 1 });
-let torchArm: CompiledClip | null = null;
-/** Static pose of the left arm holding a torch up. */
-function torchClip(): CompiledClip {
-  if (!torchArm) {
-    const pose = { ...stancePose('unarmed', false).pose, ...ARM_L_TORCH };
-    torchArm = bakeClip({ name: 'torch-arm', duration: 1, loop: true, base: pose, keys: [{ t: 0, pose }] });
+const offArmClips = new Map<OffHand, CompiledClip>();
+/** Static pose of the left arm holding a torch up, or a gathered net ready to cast. */
+function offArmClip(kind: OffHand): CompiledClip {
+  let c = offArmClips.get(kind);
+  if (!c) {
+    const pose = { ...stancePose('unarmed', false).pose, ...(kind === 'torch' ? ARM_L_TORCH : ARM_L_NET) };
+    c = bakeClip({ name: `offhand:${kind}`, duration: 1, loop: true, base: pose, keys: [{ t: 0, pose }] });
+    offArmClips.set(kind, c);
   }
-  return torchArm;
+  return c;
 }
 const fpCache = new Map<string, CompiledClip>();
-/** Static first-person arm pose for a stance (drawn) or a torch. */
-function fpClip(stance: Stance, drawn: boolean, torch: boolean): CompiledClip {
-  const key = `${stance}:${drawn}:${torch}`;
+/** Static first-person arm pose for a stance (drawn) and what the off hand holds. */
+function fpClip(stance: Stance, drawn: boolean, off: OffHand | null): CompiledClip {
+  const key = `${stance}:${drawn}:${off}`;
   let c = fpCache.get(key);
   if (!c) {
     const cls = weaponClass(stance);
     const pose = { ...stancePose(stance, drawn).pose };
     if (drawn) Object.assign(pose, FP_ARMS[cls]);
     if (drawn && hasShield(stance)) Object.assign(pose, FP_ARMS.shield);
-    if (torch && !(drawn && hasShield(stance))) Object.assign(pose, FP_ARMS.torch);
+    else if (off) Object.assign(pose, FP_ARMS[off]);
     c = bakeClip({ name: `fp:${key}`, duration: 1, loop: true, base: pose, keys: [{ t: 0, pose }] });
     fpCache.set(key, c);
   }
@@ -73,7 +76,20 @@ function fpClip(stance: Stance, drawn: boolean, torch: boolean): CompiledClip {
 }
 const ARM_L: BoneName[] = ['shoulderL', 'upperArmL', 'forearmL', 'handL', 'fingersL', 'indexL'];
 const NOT_ARM_L = makeMask({ hipsPos: 1, shoulderL: 0, upperArmL: 0, forearmL: 0, handL: 0, fingersL: 0, indexL: 0 }, 1);
+const UPPER_NOT_ARM_L = (() => {
+  const m = makeMask({});
+  m.set(UPPER);
+  for (const n of ARM_L) m[B[n]] = 0;
+  return m;
+})();
 const ARM_R: BoneName[] = ['shoulderR', 'upperArmR', 'forearmR', 'handR', 'fingersR', 'indexR'];
+
+/** +1 for a draw clip, -1 for a sheath clip, 0 otherwise. */
+function drawDirection(name: string): -1 | 0 | 1 {
+  return name.startsWith('drawWeapon') ? 1 : name.startsWith('sheathWeapon') ? -1 : 0;
+}
+/** Clips that take the whole body down (they also move a busy off hand). */
+const isFall = (name: string) => name.startsWith('death') || name === 'knockdown' || name === 'yield';
 
 /** Speed ladder (reference body, m/s). Between `walkTop` and `runAt` walk blends into run, etc. */
 export const SPEEDS = { walkAt: 1.1, walkTop: 2.2, runAt: 3.2, runTop: 4.8, sprintAt: 6.4 };
@@ -113,7 +129,6 @@ export class AnimationController {
   stance: Stance = 'unarmed';
   drawn = false;
   firstPerson = false;
-  torch = false;
   /** Camera pitch (rad, + up) — arms follow it in first person; archers aim with it. */
   aimPitch = 0;
 
@@ -145,12 +160,21 @@ export class AnimationController {
   private stanceFade = 1;
 
   private actions: Playing[] = [];
+  /** A corpse struck again jolts a little (1 → 0). */
+  private twitch = 0;
+  private twitchDir = 1;
+  /** What the left hand carries this update (torch or net), if anything. */
+  private off: OffHand | null = null;
+  private offKind: OffHand = 'torch';
+  private offW = 0;
   private lookTarget: THREE.Vector3 | null = null;
   private lookYaw = 0;
   private lookPitch = 0;
   private aimSm = 0;
+  /** First person: how far the upper body leans back while looking down (rad, smoothed). */
+  private fpLean = 0;
   private fpW = 0;
-  private stoopW: number;
+  private stoopW = 0;
   private rng = Math.random;
 
   // Pose buffers.
@@ -164,23 +188,34 @@ export class AnimationController {
   private armMask: BoneMask = makeMask({});
   private autoMask: BoneMask = makeMask({});
   private keepMask: BoneMask = makeMask({});
-  private readonly legScale: number;
+  private legScale = 1;
   private readonly restHips = new THREE.Vector3();
   private readonly dq = new Float32Array(4);
   private readonly sw = [1, 0, 0, 0];
   private readonly tmpV = new THREE.Vector3();
 
   /** Wears a toga or himation: the left forearm carries the drape when the hands are free. */
-  readonly togate: boolean;
+  togate = false;
 
   constructor(private readonly avatar: HumanoidAvatar) {
-    const rig = avatar.rig;
-    const g = avatar.appearance.garments;
-    this.togate = g.some((x) => x.kind === 'toga') || (avatar.appearance.sex === 'male' && g.some((x) => x.kind === 'palla'));
-    this.legScale = (rig.thigh + rig.shin) / REF_LEG;
-    this.restHips.copy(avatar.bones[B.hips].position);
-    this.stoopW = rig.stoop;
+    this.refreshAppearance(true);
     this.out.identity();
+  }
+
+  /** Re-read proportions and dress from the avatar (after HumanoidAvatar.setAppearance). */
+  refreshAppearance(initial = false) {
+    const rig = this.avatar.rig;
+    const app = this.avatar.appearance;
+    const g = app.garments;
+    const togate = g.some((x) => x.kind === 'toga') || (app.sex === 'male' && g.some((x) => x.kind === 'palla'));
+    if (!initial && togate !== this.togate) {
+      this.prevStanceClip = this.currentStanceClip();
+      this.stanceFade = 0;
+    }
+    this.togate = togate;
+    this.legScale = (rig.thigh + rig.shin) / REF_LEG;
+    this.restHips.set(rig.joints[B.hips * 3], rig.joints[B.hips * 3 + 1], rig.joints[B.hips * 3 + 2]);
+    this.stoopW = rig.stoop;
   }
 
   // ------------------------------------------------------------------ commands
@@ -192,14 +227,35 @@ export class AnimationController {
     this.stanceFade = 0;
   }
 
+  /**
+   * Logical drawn state. A running draw or sheath clip that goes the other way is cancelled (an AI
+   * changing its mind, dialogue starting); if the weapon already changed hands, the opposite clip
+   * puts it back. Otherwise, without a clip on the way, the weapon changes hands immediately.
+   */
   setDrawn(drawn: boolean) {
+    const dir = drawn ? 1 : -1;
+    let reverse = false;
+    for (const a of this.actions) {
+      if (a.fading || drawDirection(a.name) !== -dir) continue;
+      reverse ||= a.grabFired;
+      // Commit first: interrupting before the grab settles the weapon by the logical state.
+      this.commitDrawn(drawn);
+      this.endAction(a, true);
+    }
+    this.commitDrawn(drawn);
+    if (reverse && !this.dead) {
+      this.play(drawn ? 'drawWeapon' : 'sheathWeapon');
+      return;
+    }
+    const pending = this.actions.some((a) => !a.fading && drawDirection(a.name) === dir && !a.grabFired);
+    if (!pending) this.avatar.equipment.setVisualDrawn(drawn);
+  }
+
+  private commitDrawn(drawn: boolean) {
     if (drawn === this.drawn) return;
     this.prevStanceClip = this.currentStanceClip();
     this.drawn = drawn;
     this.stanceFade = 0;
-    // Without a draw/sheath clip running, the weapon changes hands immediately.
-    const drawing = this.actions.some((a) => !a.fading && (a.name.startsWith('drawWeapon') || a.name.startsWith('sheathWeapon')) && !a.grabFired);
-    if (!drawing) this.avatar.equipment.setVisualDrawn(drawn);
   }
 
   setBlocking(on: boolean) {
@@ -224,11 +280,11 @@ export class AnimationController {
   }
 
   setDead(dead: boolean) {
-    if (dead === this.dead) return;
+    if (dead === this.dead && (!dead || this.holdingDeath())) return;
     this.dead = dead;
     if (dead) {
-      if (!this.actions.some((a) => a.name.startsWith('death') && !a.fading)) {
-        this.play('death');
+      if (!this.holdingDeath()) {
+        this.startDeath();
         const a = this.actions[this.actions.length - 1];
         if (a) {
           a.t = a.info.clip.duration;
@@ -244,6 +300,16 @@ export class AnimationController {
       for (const a of this.actions) this.endAction(a, true);
       this.actions.length = 0;
     }
+  }
+
+  private holdingDeath(): boolean {
+    return this.actions.some((a) => a.name.startsWith('death') && !a.fading);
+  }
+
+  private startDeath() {
+    this.dead = false;
+    this.play('death');
+    this.dead = true;
   }
 
   lookAt(p: THREE.Vector3 | null) {
@@ -271,6 +337,15 @@ export class AnimationController {
   }
 
   play(clip: ActionClip, opts?: PlayOptions) {
+    // A corpse stays down: nothing replaces the held death pose (a blow only jolts the body).
+    if (this.dead && (this.holdingDeath() || clip !== 'death')) {
+      if (clip === 'hitFront' || clip === 'hitBack' || clip === 'stagger' || clip === 'knockdown' || clip === 'blockHit') {
+        this.twitch = 1;
+        this.twitchDir = clip === 'hitBack' ? -1 : 1;
+      }
+      opts?.onEnd?.(true);
+      return;
+    }
     const name = this.resolve(clip);
     const info = actionInfo(this.stance, name) ?? actionInfo(this.stance, clip);
     if (!info) {
@@ -301,6 +376,13 @@ export class AnimationController {
       ended: false,
     });
     if (info.prop) this.avatar.equipment.showProp(info.prop, true);
+    const dir = drawDirection(name);
+    if (dir !== 0) {
+      // Playing a draw (sheath) clip means drawn (sheathed). The clip owns the weapon until its grab
+      // frame, so it starts on the other side (a no-op unless setDrawn ran just before).
+      this.commitDrawn(dir > 0);
+      this.avatar.equipment.setVisualDrawn(dir < 0);
+    }
   }
 
   isBusy(): boolean {
@@ -400,17 +482,23 @@ export class AnimationController {
       blendPose(this.stanceP, this.tmpA, this.stanceP, smooth(0, 1, this.stanceFade));
     }
 
-    // A carried torch: the left arm holds it up and clear of the head (unless a shield is drawn).
-    this.torchW = approach(this.torchW, this.torch && !(this.drawn && hasShield(this.stance)) ? 1 : 0, 8, dt);
-    if (this.torchW > 0.01) {
-      sampleClip(torchClip(), 0, this.tmpA);
-      blendMasked(this.stanceP, this.stanceP, this.tmpA, this.torchW, ARM_L_MASK);
+    // A busy off hand: the left arm holds a torch up and clear of the head (unless a shield is
+    // drawn), or a retiarius holds his gathered net low and ready to cast.
+    const off = this.avatar.equipment.offHand();
+    this.off = off && !(off === 'torch' && this.drawn && hasShield(this.stance)) ? off : null;
+    if (this.off) this.offKind = this.off;
+    const offPose = this.off === 'torch' || (this.off === 'net' && this.drawn);
+    this.offW = approach(this.offW, offPose ? 1 : 0, 8, dt);
+    if (this.offW > 0.01) {
+      sampleClip(offArmClip(this.offKind), 0, this.tmpA);
+      blendMasked(this.stanceP, this.stanceP, this.tmpA, this.offW, ARM_L_MASK);
     }
 
     // First person: the stance arms become the view poses (weapon low-right in view, shield edge left).
-    this.fpW = approach(this.fpW, this.firstPerson && (this.drawn || this.torch) && !this.dead ? 1 : 0, 10, dt);
+    const torch = this.off === 'torch';
+    this.fpW = approach(this.fpW, this.firstPerson && (this.drawn || torch) && !this.dead ? 1 : 0, 10, dt);
     if (this.fpW > 0.01) {
-      sampleClip(fpClip(this.stance, this.drawn, this.torch), 0, this.tmpA);
+      sampleClip(fpClip(this.stance, this.drawn, this.off), 0, this.tmpA);
       blendMasked(this.stanceP, this.stanceP, this.tmpA, this.fpW, ARMS_MASK);
     }
 
@@ -451,7 +539,7 @@ export class AnimationController {
     }
 
     // --- 3. stance arms while moving
-    const am = stanceArmMask(this.stance, this.drawn, this.torch, this.togate);
+    const am = stanceArmMask(this.stance, this.drawn, offPose, this.togate);
     this.buildArmMask(am.L, am.R, am.chest);
     if (moveW > 0.01) blendMasked(base, base, this.stanceP, moveW, this.armMask);
 
@@ -488,7 +576,7 @@ export class AnimationController {
     this.blockW = approach(this.blockW, this.blocking && !this.dead ? 1 : 0, this.blocking ? 16 : 10, dt);
     if (this.blockW > 0.01) {
       sampleClip(blockClip(this.stance), 0, this.tmpA);
-      blendMasked(base, base, this.tmpA, this.blockW, UPPER);
+      blendMasked(base, base, this.tmpA, this.blockW, this.off ? UPPER_NOT_ARM_L : UPPER);
     }
     const attackActive = this.actions.some((a) => !a.fading && a.info.windup !== undefined);
     this.chargeW = approach(this.chargeW, attackActive ? 0 : Math.min(1, this.charge * 1.4), this.charge > 0 ? 7 : 12, dt);
@@ -496,14 +584,18 @@ export class AnimationController {
       const p = actionInfo(this.stance, 'attackPower');
       if (p && p.windup !== undefined) {
         sampleClip(p.clip, p.windup * this.chargeW, this.tmpA);
-        // Strain: a slight tremble at full charge.
         this.buildAutoMask(moveW);
+        if (this.off) for (const n of ARM_L) this.autoMask[B[n]] = 0;
         blendMasked(base, base, this.tmpA, Math.min(1, this.chargeW * 1.5), this.autoMask);
       }
     }
 
     // --- 7. actions
     this.updateActions(dt, base, moveW);
+    // The bowstring follows the right hand once it has hooked the string.
+    let bow = 0;
+    for (const a of this.actions) if (a.name === 'bowDraw' && !a.fading) bow = smooth(0.24, 0.36, a.t);
+    this.avatar.equipment.setBowDraw(bow);
 
     // --- 8. procedural
     this.procedural(dt, base, s);
@@ -559,13 +651,9 @@ export class AnimationController {
       }
       if (!a.grabFired && a.info.grab !== undefined && a.t >= a.info.grab) {
         a.grabFired = true;
-        this.avatar.equipment.setVisualDrawn(a.name.startsWith('drawWeapon'));
+        this.avatar.equipment.setVisualDrawn(a.name.startsWith('drawWeapon'), true);
       }
-      if (!a.fading && !a.info.hold && a.t >= clip.duration - a.fadeOut * 0.5) {
-        if (a.name.startsWith('drawWeapon') && !this.drawn) this.setDrawn(true);
-        if (a.name.startsWith('sheathWeapon') && this.drawn) this.setDrawn(false);
-        this.endAction(a, false);
-      }
+      if (!a.fading && !a.info.hold && a.t >= clip.duration - a.fadeOut * 0.5) this.endAction(a, false);
       a.w = a.fading ? Math.max(0, a.w - dt / a.fadeOut) : Math.min(1, a.w + dt / Math.max(0.01, a.fadeIn));
     }
     for (let i = list.length - 1; i >= 0; i--) if (list[i].fading && list[i].w <= 0) list.splice(i, 1);
@@ -580,8 +668,9 @@ export class AnimationController {
         this.buildAutoMask(moveW);
         mask = this.autoMask;
       }
-      if (a.info.keepShield && this.drawn && hasShield(this.stance)) {
-        // Gestures leave a drawn shield where the stance holds it.
+      // Gestures leave a drawn shield where the stance holds it; a torch or net in the off hand stays
+      // put through everything but a fall (one-handed swings with the weapon hand).
+      if ((a.info.keepShield && this.drawn && hasShield(this.stance)) || (this.off && !isFall(a.name))) {
         this.keepMask.set(mask);
         for (const n of ARM_L) this.keepMask[B[n]] = 0;
         mask = this.keepMask;
@@ -605,7 +694,6 @@ export class AnimationController {
   }
 
   private gripW = 0;
-  private torchW = 0;
 
   private fullDeathW(): number {
     let w = 0;
@@ -634,14 +722,33 @@ export class AnimationController {
     this.addParent(p, B.hips, 2, -bank * 0.5);
     this.addParent(p, B.spine, 2, bank * 0.2);
 
-    // Aim pitch: first person (weapon drawn) and while holding a bow draw.
+    // Aim pitch: first person (weapon drawn or a torch) and while holding a bow draw.
     const bowAim = this.actions.some((a) => a.name === 'bowDraw' && !a.fading);
-    const aimOn = (this.firstPerson && (this.drawn || this.torch)) || bowAim ? 1 : 0;
+    const torch = this.off === 'torch';
+    const aimOn = (this.firstPerson && (this.drawn || torch)) || bowAim ? 1 : 0;
     this.aimSm = approach(this.aimSm, aimOn * this.aimPitch, 14, dt);
-    if (Math.abs(this.aimSm) > 1e-3) {
+    // First person looking down: the camera stands in for the head, 0.12 m in front of the neck, so
+    // the shoulders and collar would sit right under it (where a real chin hides them). The upper
+    // body leans back out of the view instead; nobody else sees the player in first person.
+    const leanWant = this.firstPerson && !this.dead ? Math.max(0, -this.aimPitch - 0.3) * 0.75 : 0;
+    this.fpLean = approach(this.fpLean, leanWant, 14, dt);
+    const lean = (this.fpLean / DEG) * free;
+    if (lean > 0.01) {
+      this.addParent(p, B.spine, 0, -lean * 0.45);
+      this.addParent(p, B.chest, 0, -lean * 0.55);
+    }
+    if (Math.abs(this.aimSm) > 1e-3 || lean > 0.01) {
       const deg = -this.aimSm / DEG;
-      this.addParent(p, B.spine, 0, deg * 0.35 * free);
-      this.addParent(p, B.chest, 0, deg * 0.45 * free);
+      if (this.firstPerson) {
+        // The first-person camera pivots at the eyes over the feet, so bending the spine would push
+        // the shoulders (and the neck) into view. Only the presented arms follow the view (and
+        // make up for the lean).
+        if (this.drawn || torch) this.addParent(p, B.upperArmL, 0, (deg + lean) * free);
+        if (this.drawn) this.addParent(p, B.upperArmR, 0, (deg + lean) * free);
+      } else {
+        this.addParent(p, B.spine, 0, deg * 0.35 * free);
+        this.addParent(p, B.chest, 0, deg * 0.45 * free);
+      }
     }
     // First person during actions: lift the swing so strikes cross the view.
     if (this.fpW > 0.01) {
@@ -651,16 +758,27 @@ export class AnimationController {
       if (k > 0.01 && this.drawn) {
         this.addParent(p, B.shoulderR, 1, 6 * k);
         this.add(p, B.upperArmR, 0, -18 * k);
-        if (!hasShield(this.stance) && weaponClass(this.stance) !== 'blade') this.add(p, B.upperArmL, 0, -14 * k);
+        if (!hasShield(this.stance) && weaponClass(this.stance) !== 'blade' && !this.off) this.add(p, B.upperArmL, 0, -14 * k);
       }
     }
     // Two-handed weapons: the left hand rides the shaft (unless it carries a net/torch or gestures).
     const grip = this.avatar.equipment.twoHandGrip();
-    let gw = grip && this.drawn && !this.torch ? 1 - this.fullDeathW() : 0;
+    let gw = grip && this.drawn && !this.off ? 1 - this.fullDeathW() : 0;
     for (const a of this.actions) if (a.info.keepShield) gw *= 1 - a.w;
     gw *= 1 - this.blockW * 0.5;
     this.gripW = approach(this.gripW, gw, 12, dt);
     if (grip && this.gripW > 0.01) leftHandOnShaft(p, this.avatar.rig, this.legScale, grip, this.gripW);
+
+    // A corpse struck again: a short jolt through the torso.
+    if (this.twitch > 0) {
+      this.twitch = Math.max(0, this.twitch - dt / 0.35);
+      const k = Math.sin((1 - this.twitch) * Math.PI) * this.twitchDir;
+      this.add(p, B.spine, 0, 4 * k);
+      this.add(p, B.chest, 0, 5 * k);
+      this.add(p, B.head, 0, -6 * k);
+      this.add(p, B.upperArmL, 1, 5 * k);
+      this.add(p, B.upperArmR, 1, -5 * k);
+    }
 
     // Head look-at.
     let ty = 0;
