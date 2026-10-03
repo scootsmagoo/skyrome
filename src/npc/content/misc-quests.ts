@@ -1,0 +1,230 @@
+/**
+ * NPCs of the v0.1 misc quests: the Meta Sudans brawl (parmularii against scutarii, the fan
+ * factions of the small-shield and big-shield fighters, Suet. Dom. 10, Mart. 9.68 [A]), the black
+ * beans of the Lemuria, the leaning insula, and what Venus Cloacina hides.
+ */
+import { archetype } from '../../content/profiles';
+import type { NpcDef } from '../types';
+
+const npcs: NpcDef[] = [
+  // ---------------------------------------------------------------- misc-meta-sudans-rixa
+  {
+    id: 'npc-hilarus',
+    name: 'Hilarus',
+    title: 'A parmularius (fan of the thraeces)',
+    home: 'meta-sudans-ring',
+    schedule: [
+      { from: 0, at: 'popina-vicus-tuscus', activity: 'sleep' },
+      { from: 7, at: 'meta-sudans-ring', activity: 'talk' },
+      { from: 12, at: 'ludus-gate', activity: 'cheer' },
+      { from: 15, at: 'meta-sudans-ring', activity: 'talk' },
+      { from: 20, at: 'popina-vicus-tuscus', activity: 'drunk' },
+    ],
+    dialogue: 'npc-hilarus',
+    disposition: 'friendly',
+    appearance: {
+      sex: 'male', age: 'old', build: 'slight', height: 1.6, skin: '#cf9f78',
+      hair: { style: 'bald', color: '#a39e95' }, beard: 'stubble',
+      garments: [{ kind: 'tunica', color: '#c98b2e' }, { kind: 'lacerna', color: '#9a5a3a' }],
+      footwear: 'soleae',
+    },
+    barks: ['Callinicus! Callinicus for ever!', 'A parmula is worth ten of their barn doors!', 'Thirty years I’ve cheered the small shields.'],
+    tags: ['plebs', 'arena-fan'],
+  },
+  {
+    id: 'npc-crispus',
+    name: 'Crispus',
+    title: 'A scutarius (fan of the murmillones)',
+    dialogue: 'npc-crispus',
+    disposition: 'neutral',
+    appearance: {
+      sex: 'male', age: 'adult', build: 'heavy', height: 1.75, skin: '#bb8660',
+      hair: { style: 'cropped', color: '#2e2219' }, beard: 'stubble',
+      garments: [{ kind: 'tunica', color: '#3f5f8a' }],
+      footwear: 'soleae',
+    },
+    combat: archetype('ebrius-rixator', {}, { name: 'Scutarius', health: 55 }),
+    barks: ['Ferox will flatten your little Thracian!', 'Big shields, big men!'],
+    tags: ['plebs', 'arena-fan', 'rixa'],
+  },
+  {
+    id: 'npc-bucco',
+    name: 'Bucco',
+    title: 'A scutarius',
+    dialogue: 'npc-crispus',
+    disposition: 'neutral',
+    appearance: {
+      sex: 'male', age: 'young', build: 'stocky', height: 1.69, skin: '#d9ab84',
+      hair: { style: 'curly-short', color: '#4a3524' }, beard: 'none',
+      garments: [{ kind: 'tunica', color: '#5d6e80' }],
+      footwear: 'barefoot',
+    },
+    combat: archetype('ebrius-rixator'),
+    barks: ['Whose sour wine are you full of, eh?', 'Come on then!'],
+    tags: ['plebs', 'arena-fan', 'rixa'],
+  },
+  // ---------------------------------------------------------------- misc-lemuria-fabae
+  {
+    id: 'npc-fabius-gemellus',
+    name: 'Lucius Fabius Gemellus',
+    title: 'Paterfamilias of the Insula of the Fabii',
+    home: 'insula-fabaria',
+    schedule: [
+      { from: 0, at: 'insula-fabaria-atrium', activity: 'pray' },
+      { from: 1.5, at: 'insula-fabaria', activity: 'sleep' },
+      { from: 6, at: 'insula-fabaria', activity: 'sit' },
+      { from: 10, at: 'forum-boarium', activity: 'wander' },
+      { from: 14, at: 'insula-fabaria', activity: 'sit' },
+      { from: 23, at: 'insula-fabaria-atrium', activity: 'pray' },
+    ],
+    dialogue: 'npc-fabius-gemellus',
+    disposition: 'friendly',
+    // A retired fuller who owns the ground floor and lets the rest; old, careful, very pious.
+    appearance: {
+      sex: 'male', age: 'old', build: 'slight', height: 1.62, skin: '#d9ab84',
+      hair: { style: 'receding', color: '#cfccc5' }, beard: 'stubble',
+      garments: [{ kind: 'tunica', color: '#e0d8c6', sleeves: 'long' }, { kind: 'paenula', color: '#6b5137' }],
+      footwear: 'soleae',
+    },
+    barks: ['Nine times. Without looking back.', 'They took them again. They took them all again.'],
+    tags: ['plebs', 'pious', 'dignitas:civis'],
+  },
+  {
+    id: 'npc-chloe',
+    name: 'Chloe',
+    title: 'Slave of the household of Gemellus',
+    home: 'insula-fabaria',
+    schedule: [
+      { from: 0, at: 'insula-fabaria-scalae', activity: 'stand' },
+      { from: 2, at: 'insula-fabaria', activity: 'sleep' },
+      { from: 5, at: 'pistrinum-velabri', activity: 'stand' },
+      { from: 7, at: 'insula-fabaria', activity: 'sweep' },
+      { from: 12, at: 'forum-boarium', activity: 'wander' },
+      { from: 15, at: 'insula-fabaria', activity: 'work' },
+      { from: 22, at: 'insula-fabaria-atrium', activity: 'stand' },
+    ],
+    dialogue: 'npc-chloe',
+    disposition: 'friendly',
+    appearance: {
+      sex: 'female', age: 'young', build: 'slight', height: 1.53, skin: '#c99772',
+      hair: { style: 'bun', color: '#2a1f17' },
+      garments: [{ kind: 'tunica-long', color: '#8a6e50' }, { kind: 'apron', color: '#5e4a36' }],
+      footwear: 'barefoot',
+    },
+    barks: ['Yes, domine.', 'The water jar is full, domine.'],
+    tags: ['servus'],
+  },
+  {
+    id: 'npc-pomponia',
+    name: 'Pomponia',
+    title: 'An old widow under the stairs',
+    home: 'insula-fabaria-scalae',
+    schedule: [
+      { from: 0, at: 'insula-fabaria-scalae', activity: 'sitGround' },
+      { from: 8, at: 'capena-spring', activity: 'sitGround' },
+      { from: 16, at: 'insula-fabaria-scalae', activity: 'sitGround' },
+    ],
+    dialogue: 'npc-pomponia',
+    disposition: 'friendly',
+    appearance: {
+      sex: 'female', age: 'old', build: 'slight', height: 1.48, skin: '#c6936b',
+      hair: { style: 'veiled', color: '#cfccc5' },
+      garments: [{ kind: 'tunica-long', color: '#7a6a55' }, { kind: 'palla', color: '#4e4136' }],
+      footwear: 'barefoot',
+    },
+    barks: ['They come at night, the kind ones.', 'Bread? Bless you, child.'],
+    tags: ['plebs', 'mendicus', 'pious'],
+  },
+  // ---------------------------------------------------------------- misc-insula-nutans
+  {
+    id: 'npc-rufina',
+    name: 'Rufina',
+    title: 'Weaver, third floor',
+    home: 'insula-nutans',
+    schedule: [
+      { from: 0, at: 'insula-nutans', activity: 'sleep' },
+      { from: 6, at: 'insula-nutans', activity: 'work' },
+      { from: 11, at: 'popina-vicus-tuscus', activity: 'talk' },
+      { from: 13, at: 'insula-nutans', activity: 'work' },
+      { from: 21, at: 'insula-nutans', activity: 'sleep' },
+    ],
+    dialogue: 'npc-rufina',
+    disposition: 'friendly',
+    appearance: {
+      sex: 'female', age: 'adult', build: 'average', height: 1.55, skin: '#cf9f78',
+      hair: { style: 'braided-crown', color: '#7a3e22' },
+      garments: [{ kind: 'tunica-long', color: '#9a5a3a' }, { kind: 'palla', color: '#b08a4a' }],
+      footwear: 'soleae',
+    },
+    barks: ['Listen. Hear it creak? It never used to creak.', 'Third floor, the loom by the window. Mind the crack.'],
+    tags: ['plebs', 'dignitas:libertus'],
+  },
+  {
+    id: 'npc-saturninus',
+    name: 'Saturninus',
+    title: 'Agent of the owner of the Fulvian block',
+    home: 'insula-nutans-taberna',
+    schedule: [
+      { from: 0, at: 'velia-vestibule', activity: 'sleep' },
+      { from: 7, at: 'insula-nutans-taberna', activity: 'sit' },
+      { from: 11, at: 'basilica-aemilia-tabernae', activity: 'talk' },
+      { from: 14, at: 'insula-nutans-taberna', activity: 'sit' },
+      { from: 18, at: 'popina-vicus-tuscus', activity: 'sit' },
+      { from: 21, at: 'velia-vestibule', activity: 'sleep' },
+    ],
+    dialogue: 'npc-saturninus',
+    disposition: 'neutral',
+    // Juvenal 3.194–196: the agent patches the gaping crack and tells the tenants to sleep soundly.
+    appearance: {
+      sex: 'male', age: 'middle', build: 'heavy', height: 1.66, skin: '#d9ab84',
+      hair: { style: 'cropped', color: '#563d2a' }, beard: 'none',
+      garments: [{ kind: 'tunica', color: '#3f5f8a' }, { kind: 'lacerna', color: '#c98b2e' }],
+      footwear: 'calcei',
+    },
+    barks: ['Rent on the Kalends, not a day later.', 'Cracks? Every wall in Rome has cracks. It’s called character.'],
+    tags: ['dignitas:libertus'],
+  },
+  // ---------------------------------------------------------------- misc-venus-cloacina
+  {
+    id: 'npc-eros-nummularius',
+    name: 'Eros',
+    title: 'Money-changer',
+    home: 'basilica-aemilia-tabernae',
+    schedule: [
+      { from: 0, at: 'basilica-aemilia-tabernae', activity: 'sleep' },
+      { from: 6, at: 'basilica-aemilia-tabernae', activity: 'sit' },
+      { from: 19, at: 'shrine-venus-cloacina', activity: 'stand' },
+      { from: 20, at: 'basilica-aemilia-tabernae', activity: 'sleep' },
+    ],
+    dialogue: 'npc-eros-nummularius',
+    disposition: 'neutral',
+    services: ['banker'],
+    appearance: {
+      sex: 'male', age: 'adult', build: 'heavy', height: 1.65, skin: '#c08a63',
+      hair: { style: 'curly-short', color: '#2e2219' }, beard: 'short',
+      garments: [{ kind: 'tunica', color: '#d19a3a' }, { kind: 'lacerna', color: '#7d5a6a' }],
+      footwear: 'calcei',
+    },
+    barks: ['Honest weight! Look at the scales, not at me.', 'Sesterces for denarii, denarii for gold, gold for nobody.'],
+    tags: ['dignitas:libertus'],
+  },
+  {
+    id: 'npc-mus',
+    name: 'Mus',
+    title: 'A sewer-runner',
+    faction: 'latrones',
+    dialogue: 'npc-mus',
+    disposition: 'hostile',
+    appearance: {
+      sex: 'male', age: 'young', build: 'slight', height: 1.58, skin: '#a0744d',
+      hair: { style: 'cropped', color: '#1f1914' }, beard: 'stubble',
+      garments: [{ kind: 'tunica-short', color: '#5e4a36' }, { kind: 'subligaculum', color: '#6f5843' }],
+      footwear: 'barefoot', weapon: 'pugio',
+    },
+    combat: archetype('cloacarius', { tier: 'thug' }, { fleeAt: 0.4 }),
+    barks: ['Not for you!', 'The Rex will hear of this!'],
+    tags: ['underworld', 'cloacarius'],
+  },
+];
+
+export default npcs;

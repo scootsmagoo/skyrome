@@ -278,7 +278,8 @@ describe('slots and blockers', () => {
     w.pressed.add('quickSave');
     w.step(1);
     await w.rpg.save.idle();
-    expect((await w.rpg.save.list()).map((m) => m.slot)).toEqual(['quick']);
+    // (The new game's main quest may already have made an autosave.)
+    expect((await w.rpg.save.list()).map((m) => m.slot).filter((s) => !s.startsWith('auto'))).toEqual(['quick']);
     w.rpg.inventory.addDenarii(100);
     w.pressed.add('quickLoad');
     w.step(1);

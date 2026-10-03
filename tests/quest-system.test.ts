@@ -17,6 +17,8 @@ afterEach(() => vi.restoreAllMocks());
 function rpgGame() {
   const fg = fakeGame();
   const rpg = installRpg(fg.game, { examples: true, storage: new MemoryStorage() });
+  // The shipped content auto-starts the main quest at a new game; these tests drive the example alone.
+  rpg.quests.restore({});
   return { ...fg, rpg };
 }
 
