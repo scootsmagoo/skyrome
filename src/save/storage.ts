@@ -1,7 +1,7 @@
 /**
- * Save storage backends. The default is HybridStorage: localStorage for normal saves (fast,
- * synchronous under the hood) and IndexedDB for anything over the size guard or when
- * localStorage is full. A localStorage entry of '@idb' points at the IndexedDB copy.
+ * Save storage backends. The default (GDD §14.13) is IndexedDB, with every access in try/catch and
+ * localStorage as the fallback when IndexedDB is missing or fails (FallbackStorage), then memory.
+ * HybridStorage (localStorage first, IndexedDB for big saves) is kept for callers that want it.
  */
 import type { SaveStorage } from './types';
 
@@ -151,7 +151,54 @@ export class HybridStorage implements SaveStorage {
   }
 }
 
-/** The browser default: Hybrid(localStorage, IndexedDB), degrading to memory when storage is blocked. */
+/**
+ * Primary storage with a fallback: writes go to the primary and, if it throws, to the fallback;
+ * reads try the primary first and the fallback when the primary fails or has nothing; keys merge.
+ */
+export class FallbackStorage implements SaveStorage {
+  constructor(
+    readonly primary: SaveStorage,
+    readonly fallback: SaveStorage,
+  ) {}
+
+  async read(key: string) {
+    let v: string | null = null;
+    try {
+      v = await this.primary.read(key);
+    } catch {
+      v = null;
+    }
+    if (v !== null) return v;
+    try {
+      return await this.fallback.read(key);
+    } catch {
+      return null;
+    }
+  }
+
+  async write(key: string, value: string) {
+    try {
+      await this.primary.write(key, value);
+      // An older copy may sit in the fallback from a time the primary failed.
+      this.fallback.remove(key).catch(() => {});
+    } catch {
+      await this.fallback.write(key, value);
+    }
+  }
+
+  async remove(key: string) {
+    await this.primary.remove(key).catch(() => {});
+    await this.fallback.remove(key).catch(() => {});
+  }
+
+  async keys(prefix: string) {
+    const set = new Set<string>();
+    for (const s of [this.primary, this.fallback]) for (const k of await s.keys(prefix).catch(() => [] as string[])) set.add(k);
+    return [...set];
+  }
+}
+
+/** The browser default: IndexedDB, falling back to localStorage, then memory when storage is blocked. */
 export function createDefaultStorage(): SaveStorage {
   let ls: WebStorageLike | null = null;
   try {
@@ -160,7 +207,8 @@ export function createDefaultStorage(): SaveStorage {
   } catch {
     ls = null;
   }
-  const big = IdbSaveStorage.available() ? new IdbSaveStorage() : null;
-  if (!ls) return big ?? new MemoryStorage();
-  return new HybridStorage(new LocalSaveStorage(ls), big);
+  const idb = IdbSaveStorage.available() ? new IdbSaveStorage() : null;
+  const local = ls ? new LocalSaveStorage(ls) : null;
+  if (idb && local) return new FallbackStorage(idb, local);
+  return idb ?? local ?? new MemoryStorage();
 }

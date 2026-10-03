@@ -10,8 +10,9 @@
  *   game.quests, game.dialogue, game.save        engines
  *   game.rpg                                     all of the above in one object (debugging)
  *
- * Also adds the 'rpg' system (effects, regen, sprint stamina) and hooks the PlayerController's
- * canSprint/speedMultiplier (composing with any hooks already installed).
+ * Also adds the 'rpg' system (effects, regen, sprint stamina), hooks the PlayerController's
+ * canSprint/speedMultiplier (composing with any hooks already installed), and wires the hourly
+ * checks (lapsed bounties, overdue vows), vows to quest outcomes and cleanliness to its condition.
  */
 import type { Game, System } from '../core/Game';
 import { DialogueSystem, dialogueModules } from '../dialogue/DialogueSystem';
@@ -23,6 +24,7 @@ import { SaveSystem } from '../save/SaveSystem';
 import type { SaveStorage } from '../save/types';
 import { LocationRegistry } from '../world/locations';
 import { BarterSystem } from './barter';
+import { persuasionPoints } from './checks';
 import { CrimeSystem } from './crime';
 import { COMBAT, STAMINA_COSTS } from './data/balance';
 import { FACTIONS } from './data/factions';
@@ -107,9 +109,19 @@ export function installRpg(game: Game, opts: RpgOptions = {}): RpgServices {
   const standing = new Standing(events, () => game.time?.totalHours ?? 0);
   factions.skillLevel = (id) => sheet.baseSkillLevel(id);
   factions.isCitizen = () => standing.isCitizen;
-  const devotion = new Devotion({ sheet, inventory, events, day: () => game.time?.dayIndex ?? 0 });
-  const crime = new CrimeSystem({ events, inventory, sheet, factions, standing, time: game.time, rng: game.rng?.fork('crime') });
-  const barter = new BarterSystem({ items, inventory, sheet, npcs, factions, events, hours: () => game.time?.totalHours ?? 0 });
+  const devotion = new Devotion({ sheet, inventory, events, day: () => game.time?.dayIndex ?? 0, rng: game.rng?.fork('devotion') });
+  const crime = new CrimeSystem({
+    events,
+    inventory,
+    sheet,
+    factions,
+    standing,
+    time: game.time,
+    rng: game.rng?.fork('crime'),
+    // Talking a guard down: persuasion mods with a soldier (dress, Dignitas, cleanliness, Infamia).
+    persuasionPoints: () => persuasionPoints('soldier', { flags: sheet, infamia: standing.infamia, cleanliness: standing.cleanliness, dignitas: { mine: standing.rank, theirs: 2 } }),
+  });
+  const barter = new BarterSystem({ items, inventory, sheet, npcs, factions, events, hours: () => game.time?.totalHours ?? 0, rng: game.rng?.fork('barter') });
 
   game.items = items;
   game.npcs = npcs;
@@ -163,11 +175,30 @@ export function installRpg(game: Game, opts: RpgOptions = {}): RpgServices {
   game.addSystem(new RpgSystem(game, sheet));
   hookPlayerController(game, sheet, inventory);
   for (const e of ['item:equipped', 'item:unequipped', 'perk:taken'] as const) events.on(e, () => updateArmorPenalty(sheet, inventory));
+  // Hourly: city bounties under 40 lapse after 7 quiet days; unpaid vows break after 3 (§14.1, §14.6).
+  events.on('time:hour', () => {
+    crime.checkLapse();
+    devotion.checkVows();
+  });
+  // A vow lasts until its quest ends (§14.6).
+  events.on('quest:completed', (e) => devotion.resolveVow(e.questId, true));
+  events.on('quest:failed', (e) => devotion.resolveVow(e.questId, false));
+  // Cleanliness (§14.8) shows as a condition: lautus (+10% stamina regeneration) or sordidus.
+  events.on('standing:cleanliness', (e) => syncCleanliness(sheet, e.cleanliness));
+  // Disposition toward the player also counts in barter (origin traits, what happened in dialogue).
+  barter.extraDisposition = (npcId) => (dialogue.memoryOf(npcId)._disp as number | undefined) ?? 0;
 
   const services: RpgServices = { items, sheet, inventory, factions, standing, devotion, crime, barter, npcs, locations, quests, dialogue, save };
   game.rpg = services;
   if (opts.newGame !== false) startNewGame(services, { background: opts.background });
   return services;
+}
+
+/** Mirror Standing's cleanliness on the sheet as the lautus / sordidus condition. */
+function syncCleanliness(sheet: CharacterSheetImpl, c: 'lautus' | 'normal' | 'sordidus') {
+  sheet.cure('state:lautus');
+  sheet.cure('state:sordidus');
+  if (c !== 'normal') sheet.applyCondition(c);
 }
 
 function originDef(id: string | null | undefined): BackgroundDef | undefined {
@@ -233,7 +264,7 @@ export function startNewGame(s: RpgServices, opts: { background?: string } = {})
   s.quests.newGame();
 }
 
-/** Per-step RPG upkeep: timed effects, regeneration and sprint stamina. */
+/** Per-step RPG upkeep: timed effects, regeneration and sprint stamina (8/s, §6.6). */
 class RpgSystem implements System {
   readonly name = 'rpg';
   readonly priority = 5; // after PlayerController (-10) has set sprinting for this step
@@ -254,13 +285,13 @@ class RpgSystem implements System {
 function hookPlayerController(game: Game, sheet: CharacterSheetImpl, inv: InventoryImpl) {
   const pc = game.getSystem?.<PlayerController>('playerController');
   if (!pc) return;
-  // Once exhausted, sprinting waits until 15% stamina is back (no stutter at zero).
+  // §6.6: at 0 stamina you cannot sprint until 15 has regenerated (no stutter at zero).
   let winded = false;
   const prevSprint = pc.canSprint;
   pc.canSprint = () => {
     const st = sheet.vitals.stamina;
     if (st.current <= 0.5) winded = true;
-    else if (winded && st.current >= st.max * 0.15) winded = false;
+    else if (winded && st.current >= Math.min(st.max, STAMINA_COSTS.exhaustedUntil)) winded = false;
     return prevSprint() && !winded && !inv.overEncumbered;
   };
   const prevSpeed = pc.speedMultiplier;

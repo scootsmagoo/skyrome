@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus, type GameEvents } from '../src/core/Events';
 import { DEVOTION } from '../src/rpg/data/balance';
+import { blessingAt } from '../src/rpg/data/conditions';
+import { patronAt } from '../src/rpg/data/deities';
 import { ITEMS } from '../src/rpg/data/items';
 import { Devotion } from '../src/rpg/devotion';
 import { InventoryImpl } from '../src/rpg/inventory';
@@ -9,150 +11,269 @@ import { CharacterSheetImpl } from '../src/rpg/sheet';
 import { Standing } from '../src/rpg/standing';
 import { record } from './rpg-fakes';
 
-function setup() {
+function setup(rolls: number[] = []) {
   const events = new EventBus<GameEvents>();
   const sheet = new CharacterSheetImpl({ events });
   const inventory = new InventoryImpl(new ItemDb(ITEMS), { events, sheet });
   let day = 0;
-  const devotion = new Devotion({ sheet, inventory, events, day: () => day });
-  return { events, sheet, inventory, devotion, nextDay: () => day++ };
+  const queue = [...rolls];
+  const devotion = new Devotion({ sheet, inventory, events, day: () => day, rng: { next: () => queue.shift() ?? 0.9 } });
+  return { events, sheet, inventory, devotion, nextDay: (n = 1) => (day += n), pietas: () => sheet.vitals.pietas.current };
 }
 
-describe('patron deity', () => {
-  it('the first patron is free; changing costs an offering; the passive follows the patron', () => {
-    const { devotion, sheet, inventory, events } = setup();
+describe('patron deity (GDD §14.6)', () => {
+  it('the first patron is free; changing costs 100 den. and waits 7 days; the passive follows the patron', () => {
+    const { devotion, sheet, inventory, events, nextDay } = setup();
     const log = record(events, ['devotion:patron']);
     expect(devotion.all().length).toBe(12);
-    expect(devotion.choosePatron('mercurius')).toEqual({ ok: true, cost: 0 });
+    expect(devotion.all().every((d) => d.id.startsWith('patronus-'))).toBe(true);
+    expect(devotion.choosePatron('patronus-mercurius')).toEqual({ ok: true, cost: 0 });
     expect(sheet.modifier('price.buy')).toBeCloseTo(0.05);
-    expect(devotion.choosePatron('mercurius').reason).toBe('same');
-    expect(devotion.choosePatron('hercules')).toEqual({ ok: false, cost: DEVOTION.rechooseCost, reason: 'no-money' });
-    inventory.addDenarii(60);
-    expect(devotion.choosePatron('hercules').ok).toBe(true);
+    expect(devotion.choosePatron('patronus-mercurius').reason).toBe('same');
+    expect(devotion.choosePatron('patronus-hercules')).toEqual({ ok: false, cost: 100, reason: 'too-soon', waitDays: 7 });
+    nextDay(7);
+    expect(devotion.choosePatron('patronus-hercules')).toEqual({ ok: false, cost: 100, reason: 'no-money' });
+    inventory.addDenarii(110);
+    expect(devotion.choosePatron('patronus-hercules').ok).toBe(true);
     expect(inventory.denarii).toBe(10);
     expect(sheet.modifier('price.buy')).toBe(0);
     expect(sheet.modifier('carry.max')).toBe(15);
-    expect(devotion.choosePatron('iuppiter').reason).toBe('unknown');
+    expect(devotion.choosePatron('patronus-iuppiter').reason).toBe('unknown');
     expect(log.length).toBe(2);
+    expect(patronAt('temple-mars-ultor')!.id).toBe('patronus-mars');
   });
 
-  it('invocation spends pietas (half full at the start) and applies its effects (Labor: stagger immunity)', () => {
-    const { devotion, sheet } = setup();
+  it('invocations spend pietas (half full at the start): Labor costs 30 and makes you stagger-immune for 10 s', () => {
+    const { devotion, sheet, pietas } = setup();
     expect(devotion.invoke().reason).toBe('no-patron');
-    devotion.choosePatron('hercules');
-    expect(devotion.invocationCost()).toBe(25);
-    expect(sheet.vitals.pietas.current).toBe(25);
+    devotion.choosePatron('patronus-hercules');
+    expect(devotion.invocationCost()).toBe(30);
+    expect(pietas()).toBe(25);
+    expect(devotion.invoke().reason).toBe('no-pietas');
+    devotion.gainPietas(10);
     expect(devotion.invoke().ok).toBe(true);
     expect(sheet.hasFlag('stagger.immune')).toBe(true);
-    expect(sheet.vitals.pietas.current).toBe(0);
-    expect(devotion.invoke().reason).toBe('no-pietas');
+    expect(pietas()).toBe(5);
     sheet.tick(11);
     expect(sheet.hasFlag('stagger.immune')).toBe(false);
   });
 
-  it('Pax Deorum: +25 pietas and invocations cost 20% less', () => {
-    const { devotion, sheet } = setup();
-    devotion.choosePatron('mars');
+  it('Pax Deorum: +25 pietas and invocations 20% cheaper; Invictus (50) only once a day', () => {
+    const { devotion, sheet, pietas, nextDay } = setup();
+    devotion.choosePatron('patronus-mars');
     sheet.grantPerk('perk-religio-pax-deorum');
     expect(sheet.vitals.pietas.max).toBe(75);
-    expect(devotion.invocationCost()).toBe(20);
-    const before = sheet.vitals.pietas.current;
+    expect(devotion.invocationCost()).toBe(24);
     devotion.invoke();
-    expect(sheet.vitals.pietas.current).toBe(before - 20);
+    expect(pietas()).toBe(50 - 24);
     expect(sheet.hasFlag('power.free')).toBe(true);
+    const m = setup();
+    m.devotion.choosePatron('patronus-mithras');
+    m.devotion.gainPietas(50);
+    expect(m.devotion.invoke().ok).toBe(true);
+    expect(m.sheet.hasFlag('invictus')).toBe(true);
+    m.devotion.gainPietas(50);
+    expect(m.devotion.invoke().reason).toBe('used-today');
+    m.nextDay();
+    expect(m.devotion.invoke().ok).toBe(true);
+    expect(m.sheet.modifier('poise.max')).toBe(15);
+    void nextDay;
   });
 
-  it('Isis’s Salvation cures poison and bleeding; Minerva speeds Smithing; Venus’s Charis fortifies Rhetoric', () => {
+  it('Isis’ Salvation cures poison and bleeding; Minerva speeds Smithing; Venus’ Charis gives +25 persuasion', () => {
     const { devotion, sheet } = setup();
-    devotion.choosePatron('isis');
+    devotion.choosePatron('patronus-isis');
+    devotion.gainPietas(10);
     sheet.applyCondition('aconitum');
-    sheet.applyCondition('cruor');
-    devotion.invoke();
+    sheet.applyCondition('cruentus');
+    expect(devotion.invoke().ok).toBe(true);
     expect(sheet.activeEffects.length).toBe(0);
     const b = setup();
-    b.devotion.choosePatron('minerva');
+    b.devotion.choosePatron('patronus-minerva');
     b.sheet.useSkill('fabrica', 1);
     expect(b.sheet.skillXp('fabrica')).toBeCloseTo(1.1);
     const v = setup();
-    v.devotion.choosePatron('venus');
-    expect(v.sheet.modifier('persuade.chance')).toBeCloseTo(0.2);
+    v.devotion.choosePatron('patronus-venus');
+    expect(v.sheet.modifier('persuade.chance')).toBeCloseTo(0.05);
+    v.devotion.gainPietas(10);
     v.devotion.invoke();
-    expect(v.sheet.skillLevel('rhetoric')).toBe(35);
+    expect(v.sheet.modifier('persuade.chance')).toBeCloseTo(0.3);
   });
 });
 
-describe('devotion refills pietas', () => {
-  it('the daily prayer refills once per game day, blesses, and trains Rites (8 XP)', () => {
-    const { devotion, sheet, nextDay } = setup();
-    sheet.vitals.spend('pietas', 20);
-    const r = devotion.devote('dailyPrayer', { god: 'mars' });
-    expect(r.restored).toBe(45);
-    expect(r.blessed).toBe('mars');
-    expect(sheet.hasCondition('mars')).toBe(true);
+describe('pietas from devotion (GDD §14.6)', () => {
+  it('a compitum prayer: +5 once per shrine per day, the Lares favor every time, Rites XP 8', () => {
+    const { devotion, sheet, pietas, nextDay, events } = setup();
+    const log = record(events, ['rpg:notify']);
+    expect(devotion.prayAtCompitum('compitum-vicus-tuscus')).toMatchObject({ ok: true, pietas: 5, blessing: 'favor-larum' });
+    expect(log.map((l) => l.e)).toContainEqual({ text: '+5 Pietas', kind: 'effect' });
+    expect(pietas()).toBe(30);
+    expect(sheet.hasCondition('favor-larum')).toBe(true);
+    expect(sheet.modifier('stamina.regen')).toBeCloseTo(0.1);
     expect(sheet.skillXp('religio')).toBe(8);
-    sheet.vitals.spend('pietas', 40);
-    expect(devotion.canPrayToday()).toBe(false);
-    expect(devotion.devote('dailyPrayer', { god: 'venus' }).restored).toBe(0);
-    expect(sheet.hasCondition('venus')).toBe(true); // the blessing is still renewed
-    expect(sheet.skillXp('religio')).toBe(8);
+    expect(devotion.canPrayAt('compitum-vicus-tuscus')).toBe(false);
+    expect(devotion.prayAtCompitum('compitum-vicus-tuscus').pietas).toBe(0);
+    expect(devotion.prayAtCompitum('compitum-velabrum').pietas).toBe(5);
     nextDay();
-    expect(devotion.devote('dailyPrayer').restored).toBe(40);
+    expect(devotion.prayAtCompitum('compitum-vicus-tuscus').pietas).toBe(5);
   });
 
-  it('offerings consume incense, wine or food and train Rites by value; festivals refill fully', () => {
-    const { devotion, sheet, inventory } = setup();
-    sheet.vitals.spend('pietas', 25);
-    expect(devotion.offer('tus')).toBeNull();
-    inventory.add('tus');
+  it('a temple prayer needs an offering (a libum, incense, or 1 den.): +10 once a day and the temple’s blessing', () => {
+    const { devotion, sheet, inventory, pietas } = setup();
+    expect(devotion.prayAtTemple('temple-mars-ultor')).toMatchObject({ ok: false, reason: 'no-offering' });
     inventory.add('gladius');
-    expect(devotion.offer('gladius')).toBeNull();
-    expect(devotion.offer('tus', 'fortuna')!.restored).toBeCloseTo(50 * DEVOTION.restore.offering);
-    expect(inventory.count('tus')).toBe(0);
-    expect(sheet.hasCondition('fortuna')).toBe(true);
-    expect(sheet.skillXp('religio')).toBeCloseTo(5 + 1 / 16 / 2);
-    devotion.devote('offering', { offeringValue: 100 });
-    expect(sheet.skillXp('religio')).toBeCloseTo(5 + 1 / 32 + 30); // capped at 30
-    sheet.vitals.spend('pietas', sheet.vitals.pietas.current);
-    expect(devotion.devote('festival').restored).toBe(50);
+    expect(devotion.prayAtTemple('temple-mars-ultor', { itemId: 'gladius' }).ok).toBe(false);
+    expect(devotion.prayAtTemple('temple-mars-ultor', { itemId: 'libum' }).ok).toBe(false); // not owned
+    inventory.add('libum');
+    expect(devotion.prayAtTemple('temple-mars-ultor', { itemId: 'libum' })).toMatchObject({ ok: true, pietas: 10, blessing: 'benedictio-mars' });
+    expect(inventory.count('libum')).toBe(0);
+    expect(pietas()).toBe(35);
+    expect(sheet.skillXp('religio')).toBeCloseTo(5 + 1 / 32);
+    expect(devotion.prayAtTemple('temple-mars-ultor', { denarii: 1 }).ok).toBe(false); // no coin
+    inventory.addDenarii(3);
+    expect(devotion.prayAtTemple('temple-mars-ultor', { denarii: 1 })).toMatchObject({ ok: true, pietas: 0, blessing: 'benedictio-mars' });
+    expect(inventory.denarii).toBe(2);
+    // AC-18: an offering at the Temple of Castor gives a blessing; another temple's replaces it.
+    expect(devotion.prayAtTemple('temple-castor-pollux', { denarii: 1 }).blessing).toBe('benedictio-castores');
+    expect(sheet.hasCondition('benedictio-mars')).toBe(false);
+    expect(sheet.modifier('speed.move')).toBeCloseTo(0.05);
+    sheet.vitals.spend('pietas', 30);
+    expect(devotion.prayAtTemple('temple-concord', { denarii: 1 })).toMatchObject({ ok: true, pietas: 10, blessing: undefined });
+    expect(blessingAt('temple-hercules-victor')!.id).toBe('benedictio-hercules');
   });
 
-  it('the Lararium perk fully restores pietas at home once a day; Isis cures disease on prayer', () => {
-    const { devotion, sheet, nextDay } = setup();
+  it('the lararium: +15 once a day (a full refill with the perk); festivals +25; with Isis prayer cures ailments', () => {
+    const { devotion, sheet, pietas, nextDay } = setup();
     sheet.vitals.spend('pietas', 25);
-    expect(devotion.devote('lararium').restored).toBe(25);
-    sheet.grantPerk('perk-religio-lararium');
-    sheet.vitals.spend('pietas', sheet.vitals.pietas.current);
-    expect(devotion.devote('lararium').restored).toBe(50);
-    sheet.vitals.spend('pietas', 50);
-    expect(devotion.devote('lararium').restored).toBe(25);
+    expect(devotion.prayAtLararium().pietas).toBe(15);
+    expect(devotion.prayAtLararium().pietas).toBe(0);
     nextDay();
-    sheet.vitals.spend('pietas', sheet.vitals.pietas.current);
-    expect(devotion.devote('lararium').restored).toBe(50);
+    sheet.grantPerk('perk-religio-lararium');
+    expect(devotion.prayAtLararium().pietas).toBe(35);
+    expect(pietas()).toBe(50);
+    sheet.vitals.spend('pietas', 50);
+    expect(devotion.festivalRite('fest-lemuria').pietas).toBe(25);
+    expect(devotion.festivalRite('fest-lemuria').pietas).toBe(0);
+    expect(sheet.skillXp('religio')).toBeCloseTo(8 + 8 + 25);
     const b = setup();
-    b.devotion.choosePatron('isis');
+    b.devotion.choosePatron('patronus-isis');
     b.sheet.applyCondition('febris');
-    expect(b.devotion.devote('dailyPrayer').cured).toBe(1);
+    b.sheet.applyCondition('taxus');
+    expect(b.devotion.prayAtCompitum('compitum-x').cured).toBe(2);
     expect(b.sheet.hasCondition('febris')).toBe(false);
   });
 
-  it('impiety leaves you ill-omened until a piaculum; state round-trips', () => {
-    const { devotion, sheet, inventory } = setup();
-    devotion.impiety();
-    expect(sheet.hasCondition('infaustus')).toBe(true);
-    expect(devotion.expiate(10)).toBe(false);
-    inventory.addDenarii(10);
-    expect(devotion.expiate(10)).toBe(true);
+  it('impiety: killing a yielded foe −15; temple theft −25 and infaustus; sparing +5, burying +10', () => {
+    const { devotion, sheet, pietas } = setup();
+    devotion.impiety('killYielded');
+    expect(pietas()).toBe(10);
     expect(sheet.hasCondition('infaustus')).toBe(false);
-    expect(devotion.expiate(10)).toBe(false);
-    devotion.choosePatron('laverna');
-    devotion.devote('dailyPrayer');
+    devotion.sparedYielded();
+    devotion.buriedDead();
+    expect(pietas()).toBe(25);
+    devotion.impiety('templeTheft');
+    expect(pietas()).toBe(0);
+    expect(sheet.hasCondition('infaustus')).toBe(true);
+    expect(DEVOTION.loss.killInTemple.pietas).toBe(30);
+  });
+});
+
+describe('vows, omens and curses (GDD §14.6)', () => {
+  it('a vow gives votum until the quest ends; pay it within 3 days for pietas, Rites XP and a votive tablet', () => {
+    const { devotion, sheet, inventory, pietas } = setup();
+    expect(devotion.vow('q-test', 50)).toBe(true);
+    expect(devotion.vow('q-test', 50)).toBe(false);
+    expect(sheet.hasCondition('votum')).toBe(true);
+    expect(sheet.modifier('damage.taken')).toBeCloseTo(-0.1);
+    devotion.resolveVow('q-test', true);
+    expect(sheet.hasCondition('votum')).toBe(false);
+    expect(devotion.vows()).toEqual([{ questId: 'q-test', value: 50, state: 'owed', due: 3 }]);
+    expect(devotion.payVow('q-test')).toBe(false);
+    inventory.addDenarii(50);
+    expect(devotion.payVow('q-test')).toBe(true);
+    expect(pietas()).toBe(50); // +25 (20 + 50/10), capped at the max
+    expect(sheet.skillXp('religio')).toBe(40);
+    expect(inventory.count('tabella-votiva')).toBe(1);
+    expect(devotion.vows()).toEqual([]);
+  });
+
+  it('Votum makes vow buffs 50% stronger; failed quests release the vow; unpaid vows break (−30, infaustus; piaculum 2 × V)', () => {
+    const { devotion, sheet, inventory, nextDay } = setup();
+    sheet.grantPerk('perk-religio-votum');
+    devotion.vow('q-a', 30);
+    expect(sheet.modifier('damage.taken')).toBeCloseTo(-0.15);
+    devotion.vow('q-b', 5);
+    devotion.resolveVow('q-a', true);
+    expect(sheet.hasCondition('votum')).toBe(true); // q-b still running
+    devotion.resolveVow('q-b', false);
+    expect(sheet.hasCondition('votum')).toBe(false);
+    nextDay(3);
+    expect(devotion.checkVows()).toBe(0);
+    nextDay();
+    expect(devotion.checkVows()).toBe(1);
+    expect(sheet.hasCondition('infaustus')).toBe(true);
+    expect(sheet.vitals.pietas.current).toBe(0);
+    expect(devotion.piaculumCost()).toBe(60);
+    inventory.addDenarii(59);
+    expect(devotion.expiate()).toBe(false);
+    inventory.addDenarii(1);
+    expect(devotion.expiate()).toBe(true);
+    expect(sheet.hasCondition('infaustus')).toBe(false);
+    expect(devotion.piaculumCost()).toBe(DEVOTION.piaculumMin);
+  });
+
+  it('the daily omen: good waits to be accepted; bad takes hold unless refused or turned by an amulet; once a day', () => {
+    const { devotion, sheet, nextDay } = setup([0.1, 0.3, 0.3, 0.5]);
+    expect(devotion.rollOmen()).toEqual({ omen: 'good', options: ['good'] });
+    expect(devotion.rollOmen()).toBeNull();
+    expect(devotion.acceptOmen()).toBe(true);
+    expect(sheet.hasCondition('omen-faustum')).toBe(true);
+    expect(sheet.skillXp('religio')).toBe(10);
+    nextDay();
+    expect(devotion.rollOmen()!.omen).toBe('bad');
+    expect(sheet.hasCondition('omen-malum')).toBe(true);
+    expect(devotion.refuseOmen()).toBe(true);
+    expect(sheet.hasCondition('omen-malum')).toBe(false);
+    nextDay();
+    sheet.setFlagSource('equip:neck', ['amulet']);
+    expect(devotion.rollOmen()!.omen).toBe('bad');
+    expect(sheet.hasCondition('omen-malum')).toBe(false);
+    nextDay();
+    expect(devotion.rollOmen()!.omen).toBe('none');
+  });
+
+  it('Augur’s Eye offers a choice of two omens; curse tablets work only through belief (an amulet negates them)', () => {
+    const { devotion, sheet } = setup([0.3, 0.1]);
+    sheet.grantPerk('perk-religio-augur');
+    expect(devotion.rollOmen()).toEqual({ omen: 'bad', options: ['bad', 'good'] });
+    expect(sheet.hasCondition('omen-malum')).toBe(false);
+    expect(devotion.chooseOmen(1)).toBe('good');
+    expect(devotion.acceptOmen()).toBe(true);
+    expect(devotion.learnOfCurse()).toBe(true);
+    expect(sheet.hasCondition('defixus')).toBe(true);
+    expect(sheet.modifier('luck')).toBeCloseTo(-0.05);
+    const b = setup();
+    b.sheet.setFlagSource('equip:neck', ['amulet']);
+    expect(b.devotion.learnOfCurse()).toBe(false);
+  });
+
+  it('state round-trips', () => {
+    const { devotion, inventory, nextDay } = setup([0.1]);
+    devotion.choosePatron('patronus-laverna');
+    devotion.prayAtCompitum('compitum-a');
+    inventory.add('tus');
+    devotion.prayAtTemple('temple-portunus', { itemId: 'tus' });
+    devotion.vow('q-1', 12);
+    devotion.rollOmen();
+    nextDay(0);
     const saved = JSON.parse(JSON.stringify(devotion.serialize()));
     const b = setup();
     b.devotion.restore(saved);
-    expect(b.devotion.patron!.id).toBe('laverna');
-    expect(b.sheet.modifier('stealth.noise')).toBeCloseTo(0.15);
-    expect(b.devotion.canPrayToday()).toBe(false);
-    expect(b.devotion.patronCost('mars')).toBe(DEVOTION.rechooseCost);
+    expect(b.devotion.serialize()).toEqual(devotion.serialize());
+    expect(b.devotion.patron!.id).toBe('patronus-laverna');
+    expect(b.sheet.modifier('stealth.noise')).toBeCloseTo(0.2);
+    expect(b.devotion.canPrayAt('compitum-a')).toBe(false);
+    expect(b.devotion.patronWait()).toBe(7);
     b.devotion.restore(undefined);
     expect(b.devotion.patron).toBeUndefined();
     expect(b.sheet.modifier('stealth.noise')).toBe(0);

@@ -7,7 +7,7 @@
  * Lethality check (§6.2): an iron gladius at Blades 25 does 14.6 — 4 thrusts on a thug in a tunic,
  * 10 on an urban soldier in segmentata and helmet (AR 50). Pinned by tests/rpg-combat.test.ts.
  */
-import type { EnemyTierDef, WeaponStats } from '../types';
+import type { ArmorFamily, EnemyTierDef, WeaponStats } from '../types';
 
 export const ENEMY_TIERS: EnemyTierDef[] = [
   {
@@ -73,3 +73,75 @@ export const NATURAL_WEAPONS: Record<string, WeaponStats> = {
   'cornu-tauri': bite(25, 'thrust', 60, 1.4),
   'morsus-crocodili': bite(24, 'cut', 50, 1.2),
 };
+
+/** A kit an archetype carries: what it wields and wears (AR and family follow from `worn` unless given). */
+export interface ArchetypeKit {
+  weapon: string;
+  /** Off-hand: a shield, a torch, or a second blade. */
+  shield?: string;
+  /** Thrown or ranged backup (pila, a net, a sling's shot). */
+  ranged?: string;
+  /** Worn item ids (for the avatar, loot and AR). */
+  worn?: string[];
+  ar?: number;
+  family?: ArmorFamily;
+  /** Weapon coating (sicarii). */
+  poison?: string;
+  /** An animal companion's tier (the fugitivarius' hound, the venator's dogs). */
+  companion?: string;
+}
+
+/** An enemy archetype (§13.1): who it is, which tier(s) it fights as, and its kits. */
+export interface ArchetypeDef {
+  id: string;
+  name: string;
+  latin?: string;
+  /** Tier(s): several for gladiators (tiro = thug → veteran → champion). */
+  tier: string | string[];
+  band: number | [number, number];
+  kits: ArchetypeKit[];
+  behaviour: string;
+  where: string;
+  /** Version it first appears in. */
+  firstIn: string;
+  /** Law-keepers (arrest instead of murder). */
+  lawful?: boolean;
+  faction?: string;
+}
+
+const LEGIONARY = ['tunica', 'lorica-segmentata', 'galea-gallica', 'caligae'];
+const ARENA = 'The Ludus, the amphitheatre';
+const GLADIATOR: string[] = ['thug', 'veteran', 'champion'];
+
+/** GDD §13.1 roster. Villains are individuals and cells, never whole peoples or religions. */
+export const ARCHETYPES: ArchetypeDef[] = [
+  { id: 'grassator', name: 'Mugger', latin: 'grassator', tier: 'thug', band: 1, kits: [{ weapon: 'pugio', worn: ['tunica', 'cucullus'] }, { weapon: 'fustis', worn: ['tunica'] }], behaviour: 'Hunts in pairs at night; flees at low health.', where: 'Streets; the Velabrum by night', firstIn: 'v0.1', faction: 'grassatores' },
+  { id: 'ebrius-rixator', name: 'Drunk Tough', latin: 'ebrius rixator', tier: 'thug', band: 1, kits: [{ weapon: 'fists', worn: ['tunica'] }], behaviour: 'Starts brawls (“Whose sour wine are you full of?”). Non-lethal.', where: 'Popinae', firstIn: 'v0.1' },
+  { id: 'collegium-bruiser', name: 'Collegium Bruiser', tier: 'bruiser', band: [1, 2], kits: [{ weapon: 'caestus', worn: ['tunica-crassa', 'subarmalis'] }, { weapon: 'clava', worn: ['tunica-crassa', 'subarmalis'] }], behaviour: 'Grapples and knocks down.', where: 'The Subura, the Meta Sudans', firstIn: 'v0.1' },
+  { id: 'funditor', name: 'Slinger', latin: 'funditor', tier: 'skirmisher', band: [1, 2], kits: [{ weapon: 'funda', ranged: 'glans-plumbea', worn: ['tunica'] }], behaviour: 'Keeps its distance, staggers hard, uses ledges.', where: 'The Cloaca, rooftops', firstIn: 'v0.1 (should)' },
+  { id: 'cloacarius', name: 'Sewer Dweller', latin: 'cloacarius', tier: ['thug', 'bruiser'], band: 2, kits: [{ weapon: 'pugio', worn: ['tunica'] }, { weapon: 'pugio', ranged: 'rete', worn: ['tunica'] }, { weapon: 'fustis', shield: 'fax', worn: ['tunica'] }], behaviour: 'Ambushes from side channels with knives, nets and torches.', where: 'The Cloaca', firstIn: 'v0.1 (should)' },
+  { id: 'miles-urbanus', name: 'Urban Soldier', latin: 'miles urbanus', tier: 'miles', band: [2, 3], kits: [{ weapon: 'gladius', shield: 'scutum', ranged: 'pilum', worn: LEGIONARY, ar: 50, family: 'plate' }, { weapon: 'gladius', shield: 'scutum-ovale', ranged: 'pilum', worn: ['tunica', 'lorica-hamata', 'galea-italica', 'caligae'], ar: 45, family: 'mail' }], behaviour: 'Formation, a pilum volley, arrests.', where: 'Day patrols', firstIn: 'v0.1 (law)', lawful: true, faction: 'cohortes-urbanae' },
+  { id: 'vigil', name: 'Night Watchman', latin: 'vigil', tier: 'thug', band: [1, 2], kits: [{ weapon: 'dolabra', worn: ['tunica', 'paenula', 'caligae'] }, { weapon: 'fustis', worn: ['tunica', 'paenula', 'caligae'] }], behaviour: 'Prefers knockouts and arrests; calls the siphon crews.', where: 'Night patrols', firstIn: 'v0.1 (law)', lawful: true, faction: 'vigiles' },
+  { id: 'sicarius', name: 'Assassin', latin: 'sicarius', tier: 'veteran', band: [2, 3], kits: [{ weapon: 'sica', poison: 'aconitum', worn: ['tunica', 'paenula'], ar: 20, family: 'cloth' }], behaviour: 'Ambushes from crowds; feints.', where: 'Main-quest streets', firstIn: 'v0.2' },
+  { id: 'effractor', name: 'Burglar', latin: 'effractor', tier: 'thug', band: 2, kits: [{ weapon: 'pugio', worn: ['tunica', 'cucullus'] }], behaviour: 'Flees over the rooftops.', where: 'Rich quarters at night', firstIn: 'v0.3' },
+  { id: 'sagittarius', name: 'Archer', latin: 'sagittarius', tier: 'skirmisher', band: [2, 3], kits: [{ weapon: 'arcus', ranged: 'sagitta', worn: ['tunica-longa', 'thorax-coriaceus'] }], behaviour: 'Cover and high ground; a dagger at close range.', where: 'Main quest, the Circus', firstIn: 'v0.3' },
+  { id: 'praetorianus', name: 'Praetorian', latin: 'praetorianus', tier: 'elite', band: 4, kits: [{ weapon: 'gladius-noric', shield: 'scutum-ovale', worn: ['tunica', 'lorica-segmentata', 'galea-attica', 'caligae'], ar: 55, family: 'plate' }], behaviour: 'Coordinated; officers buff their men.', where: 'The Palatine, the Castra', firstIn: 'v0.3', lawful: true, faction: 'praetoriani' },
+  { id: 'fugitivarius', name: 'Bounty Hunter', latin: 'fugitivarius', tier: 'veteran', band: 3, kits: [{ weapon: 'spatha', worn: ['tunica', 'lorica-hamata', 'caligae'], ar: 35, family: 'mail', companion: 'canis-molossus' }], behaviour: 'Tracks high-bounty players (§14.1) with a Molossian hound.', where: 'Anywhere', firstIn: 'v0.3' },
+  // Gladiators fight to type (armaturae: society.md §10.2).
+  { id: 'murmillo', name: 'Murmillo', latin: 'murmillo', tier: GLADIATOR, band: [1, 4], kits: [{ weapon: 'gladius', shield: 'scutum', worn: ['galea-murmillonis', 'manica-linea', 'ocrea'], family: 'cloth' }], behaviour: 'Shield forward, short thrusts.', where: ARENA, firstIn: 'v0.4' },
+  { id: 'thraex', name: 'Thraex', latin: 'thraex', tier: GLADIATOR, band: [1, 4], kits: [{ weapon: 'sica', shield: 'parmula', worn: ['galea-thraecis', 'manica-linea', 'ocreae'], family: 'cloth' }], behaviour: 'Hooks round the shield with the sica.', where: ARENA, firstIn: 'v0.1' },
+  { id: 'hoplomachus', name: 'Hoplomachus', latin: 'hoplomachus', tier: GLADIATOR, band: [1, 4], kits: [{ weapon: 'hasta', shield: 'parma', worn: ['galea-hoplomachi', 'manica-linea', 'ocreae'], family: 'cloth' }], behaviour: 'Spear first, dagger when pressed.', where: ARENA, firstIn: 'v0.4' },
+  { id: 'secutor', name: 'Secutor', latin: 'secutor', tier: GLADIATOR, band: [1, 4], kits: [{ weapon: 'gladius', shield: 'scutum', worn: ['galea-secutoris', 'manica-linea', 'ocrea'], family: 'cloth' }], behaviour: 'Hunts by sound (flank him); no net can catch his helmet.', where: ARENA, firstIn: 'v0.4' },
+  { id: 'retiarius', name: 'Retiarius', latin: 'retiarius', tier: GLADIATOR, band: [1, 4], kits: [{ weapon: 'tridens', shield: 'galerus', ranged: 'rete', worn: ['manica-linea'], family: 'cloth' }], behaviour: 'Net, trident, distance.', where: ARENA, firstIn: 'v0.1' },
+  { id: 'provocator', name: 'Provocator', latin: 'provocator', tier: GLADIATOR, band: [1, 4], kits: [{ weapon: 'gladius', shield: 'scutum', worn: ['galea-provocatoris', 'cardiophylax', 'manica-linea', 'ocrea'] }], behaviour: 'Fights like a legionary.', where: ARENA, firstIn: 'v0.4' },
+  { id: 'eques', name: 'Eques (mounted gladiator)', latin: 'eques', tier: 'champion', band: 4, kits: [{ weapon: 'lancea', shield: 'parma', worn: ['tunica', 'galea-equitis', 'manica-linea'] }], behaviour: 'Lance, then sword.', where: 'The amphitheatre', firstIn: 'v1.2' },
+  { id: 'dimachaerus', name: 'Dimachaerus', latin: 'dimachaerus', tier: 'champion', band: 4, kits: [{ weapon: 'sica', shield: 'pugio', worn: ['manica-linea', 'ocreae'] }], behaviour: 'Two swords [U: use rarely].', where: 'The amphitheatre', firstIn: 'v0.4' },
+  { id: 'venator', name: 'Beast Hunter', latin: 'venator', tier: 'veteran', band: 3, kits: [{ weapon: 'venabulum', worn: ['tunica', 'fasciae', 'subarmalis'], companion: 'canis-molossus' }], behaviour: 'Hunts beasts with dogs; hostile only in quests.', where: 'The Ludus Matutinus', firstIn: 'v0.4' },
+  { id: 'contrabandista', name: 'Smuggler', tier: ['thug', 'miles'], band: 2, kits: [{ weapon: 'gladius', worn: ['tunica', 'thorax-coriaceus'] }], behaviour: 'Fights near the water; boats.', where: 'The Emporium', firstIn: 'v0.5', faction: 'latrones' },
+  { id: 'desertor', name: 'Deserter', latin: 'desertor', tier: 'miles', band: [2, 3], kits: [{ weapon: 'gladius', shield: 'scutum', worn: ['tunica', 'lorica-hamata', 'galea-gallica', 'caligae'], ar: 42, family: 'mail' }], behaviour: 'Desperate; may yield.', where: 'The Subura', firstIn: 'v0.5' },
+  { id: 'falcarius', name: 'Dacian Falx-man', latin: 'falcarius', tier: 'elite', band: 4, kits: [{ weapon: 'falx', worn: ['bracae', 'thorax-coriaceus', 'manica-ferrea'], ar: 55, family: 'padded' }], behaviour: 'Unblockable sweeps.', where: 'The Domus Aurea, the main quest', firstIn: 'v0.5', faction: 'coniuratio' },
+  { id: 'fanaticus', name: 'Cult Fanatic', latin: 'fanaticus', tier: 'bruiser', band: 3, kits: [{ weapon: 'pugio', shield: 'fax', worn: ['tunica', 'cucullus'] }], behaviour: 'Ambushes in the dark with a knife and a torch.', where: 'The Mithraic line', firstIn: 'v0.6' },
+  { id: 'agens-parthicus', name: 'Parthian Agent', tier: 'elite', band: 4, kits: [{ weapon: 'pugio-noric', ranged: 'arcus', worn: ['tunica-longa', 'lorica-squamata'], ar: 55, family: 'mail' }], behaviour: 'Kites with the bow, then closes in.', where: 'Main quest', firstIn: 'v0.6', faction: 'coniuratio' },
+  { id: 'veteranus-coniurationis', name: 'Cabal Veteran', tier: 'elite', band: 4, kits: [{ weapon: 'gladius-noric', shield: 'scutum', ranged: 'pilum', worn: LEGIONARY, ar: 55, family: 'plate' }], behaviour: 'Shield wall.', where: 'Act III', firstIn: 'v0.7', faction: 'coniuratio' },
+  { id: 'violator-sepulcri', name: 'Tomb Robber', latin: 'violator sepulcri', tier: ['thug', 'skirmisher'], band: 2, kits: [{ weapon: 'dolabra', worn: ['tunica'] }, { weapon: 'funda', ranged: 'lapis', worn: ['tunica'] }], behaviour: 'Traps and tunnels.', where: 'The Via Appia', firstIn: 'v0.7', faction: 'latrones' },
+];

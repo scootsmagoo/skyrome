@@ -125,7 +125,7 @@ describe('skills and levels', () => {
     expect(s.xp).toBe(11 + 12);
   });
 
-  it('loseProgress zeroes the skills with most progress (jail)', () => {
+  it('loseProgress zeroes progress (never levels): the most progress, or random skills with an rng (the Carcer)', () => {
     const { s } = sheet();
     s.useSkill('blades', 5);
     s.useSkill('stealth', 3);
@@ -133,6 +133,10 @@ describe('skills and levels', () => {
     expect(s.loseProgress(2)).toEqual(['blades', 'stealth']);
     expect(s.skillXp('blades')).toBe(0);
     expect(s.skillXp('spear')).toBeGreaterThan(0);
+    s.useSkill('blades', 5);
+    expect(s.loseProgress(1, { next: () => 0.99 })).toEqual(['spear']);
+    expect(s.skillLevel('spear')).toBe(10);
+    expect(s.loseProgress(5, { next: () => 0 })).toEqual(['blades']);
   });
 
   it('trainers: cost round(0.15 L² + 10), five lessons per level, caps 40/70/90 by grade', () => {
@@ -224,15 +228,29 @@ describe('timed effects and conditions', () => {
     expect(s.vitals.stamina.current).toBe(100);
   });
 
-  it('fortify on a skill raises it temporarily (Falernian +5 Rhetoric, Venus +5)', () => {
+  it('fortify on a skill raises it temporarily (Falernian +5 Rhetoric)', () => {
     const { s } = sheet();
     s.applyEffects('item:vinum-falernum', [{ kind: 'fortify', target: 'rhetoric', amount: 5, duration: 60 }]);
     expect(s.skillLevel('rhetoric')).toBe(15);
     expect(s.baseSkillLevel('rhetoric')).toBe(10);
-    s.applyCondition('venus');
-    expect(s.skillLevel('rhetoric')).toBe(20);
+    s.applyEffects('test:speech', [{ kind: 'fortify', target: 'rhetoric', amount: 10, duration: 120 }]);
+    expect(s.skillLevel('rhetoric')).toBe(25);
     s.tick(61);
-    expect(s.skillLevel('rhetoric')).toBe(15);
+    expect(s.skillLevel('rhetoric')).toBe(20);
+  });
+
+  it('percent effects scale with the pool: injured −20% max health for a game day; Salus heals 50% over 10 s', () => {
+    const { s } = sheet();
+    s.vitals.inCombat = true;
+    s.chooseLevelUp('health'); // no pending level: ignored
+    s.applyCondition('injured');
+    expect(s.vitals.health.max).toBeCloseTo(80);
+    s.cure('injury:injured');
+    expect(s.vitals.health.max).toBe(100);
+    s.vitals.damage(60);
+    s.applyEffects('invocation:patronus-aesculapius', [{ kind: 'regen', target: 'health', amount: 5, percent: true, duration: 10 }]);
+    s.tick(10);
+    expect(s.vitals.health.current).toBeCloseTo(90);
   });
 
   it('a condition effect applies a named condition (mulsum makes you tipsy)', () => {
@@ -268,22 +286,37 @@ describe('timed effects and conditions', () => {
     expect(r.applyCondition('taxus')).toBe(false);
   });
 
-  it('bleeding stacks up to three (2/s each) and a bandage stops all of it', () => {
+  it('bleeding (cruentus) stacks up to three (2/s each) and a bandage stops all of it', () => {
     const { s } = sheet();
     s.vitals.inCombat = true;
-    for (let i = 0; i < 4; i++) s.applyCondition('cruor');
-    expect(s.conditionStacks('cruor')).toBe(3);
+    for (let i = 0; i < 4; i++) s.applyCondition('cruentus');
+    expect(s.conditionStacks('cruentus')).toBe(3);
     s.tick(1);
     expect(s.vitals.health.current).toBeCloseTo(94);
-    expect(s.cure('injury')).toBe(3);
-    expect(s.hasCondition('cruor')).toBe(false);
+    expect(s.cure('injury:cruentus')).toBe(3);
+    expect(s.hasCondition('cruentus')).toBe(false);
+  });
+
+  it('any poison counts as veneno; Isis’ blessing resists poison by 25%', () => {
+    const { s } = sheet();
+    s.vitals.inCombat = true;
+    expect(s.hasCondition('veneno')).toBe(false);
+    s.applyCondition('aconitum');
+    s.applyCondition('cicuta');
+    expect(s.conditionStacks('veneno')).toBe(2);
+    s.cure('poison');
+    expect(s.hasCondition('veneno')).toBe(false);
+    s.applyCondition('benedictio-isis');
+    s.applyCondition('taxus');
+    s.tick(1);
+    expect(s.vitals.health.current).toBeCloseTo(98.5);
   });
 
   it('diseases last until cured, can be cured specifically, and immunity blocks them', () => {
     const { s } = sheet();
     expect(s.applyCondition('febris')).toBe(true);
     expect(s.hasCondition('febris')).toBe(true);
-    expect(s.vitals.health.max).toBe(85);
+    expect(s.vitals.stamina.max).toBeCloseTo(85); // −15% max stamina (§14.9)
     for (let i = 0; i < 100; i++) s.tick(10);
     expect(s.hasCondition('febris')).toBe(true);
     s.applyCondition('lippitudo');
@@ -292,25 +325,50 @@ describe('timed effects and conditions', () => {
     expect(s.hasCondition('febris')).toBe(true);
     s.cure('disease');
     expect(s.hasCondition('febris')).toBe(false);
-    expect(s.vitals.health.max).toBe(100);
+    expect(s.vitals.stamina.max).toBe(100);
     s.setFlagSource('patron', ['disease.immune']);
     expect(s.applyCondition('febris')).toBe(false);
   });
 
-  it('blessings last a game day, one at a time (two with religio.twoBlessings), longer with blessing.duration', () => {
+  it('two blessing slots (§14.6): one temple blessing for a game day, and the Lares favor for 2 game hours', () => {
     const { s } = sheet();
-    s.applyCondition('mars');
-    expect(s.activeEffects.find((a) => a.source === 'blessing:mars')!.remaining).toBe(DEVOTION.blessingSeconds);
-    s.applyCondition('venus');
-    expect(s.hasCondition('mars')).toBe(false);
-    expect(s.hasCondition('venus')).toBe(true);
+    s.applyCondition('benedictio-mars');
+    expect(s.activeEffects.find((a) => a.source === 'blessing:benedictio-mars')!.remaining).toBe(DEVOTION.blessingSeconds);
+    expect(s.modifier('damage.blades')).toBeCloseTo(0.1);
+    s.applyCondition('favor-larum');
+    expect(s.activeEffects.find((a) => a.source === 'blessing:favor-larum')!.remaining).toBe(DEVOTION.laresSeconds);
+    expect(s.hasCondition('benedictio-mars')).toBe(true);
+    s.applyCondition('benedictio-venus');
+    expect(s.hasCondition('benedictio-mars')).toBe(false);
+    expect(s.hasCondition('benedictio-venus')).toBe(true);
+    expect(s.hasCondition('favor-larum')).toBe(true);
+    expect(s.modifier('persuade.chance')).toBeCloseTo(0.1);
     s.setFlagSource('test', ['religio.twoBlessings']);
-    s.applyCondition('minerva');
-    expect(s.hasCondition('venus')).toBe(true);
-    expect(s.hasCondition('minerva')).toBe(true);
+    s.applyCondition('benedictio-minerva');
+    expect(s.hasCondition('benedictio-venus')).toBe(true);
+    expect(s.hasCondition('benedictio-minerva')).toBe(true);
     s.setModifierSource('test', { 'blessing.duration': 0.5 });
-    s.applyCondition('lares');
-    expect(s.activeEffects.find((a) => a.source === 'blessing:lares')!.remaining).toBeCloseTo(DEVOTION.blessingSeconds * 1.5);
+    s.applyCondition('benedictio-iuppiter');
+    expect(s.activeEffects.find((a) => a.source === 'blessing:benedictio-iuppiter')!.remaining).toBeCloseTo(DEVOTION.blessingSeconds * 1.5);
+    expect(s.modifier('damage.taken')).toBeCloseTo(-0.1);
+  });
+
+  it('per-skill XP modifiers (Minerva’s blessing +15% Smithing) and Mars’ combat-only stamina regeneration', () => {
+    const { s } = sheet();
+    s.applyCondition('benedictio-minerva');
+    s.useSkill('fabrica', 10);
+    expect(s.skillXp('fabrica')).toBeCloseTo(11.5);
+    s.useSkill('blades', 10);
+    expect(s.skillXp('blades')).toBeCloseTo(10);
+    const m = sheet().s;
+    m.setModifierSource('patron', { 'stamina.regenCombat': 0.1 });
+    m.vitals.drain('stamina', 50);
+    m.tick(0.8);
+    m.tick(1);
+    expect(m.vitals.stamina.current).toBeCloseTo(70);
+    m.vitals.inCombat = true;
+    m.tick(1);
+    expect(m.vitals.stamina.current).toBeCloseTo(92);
   });
 
   it('flag effects set sheet flags for their duration; consumeFlag uses one up', () => {
@@ -337,10 +395,11 @@ describe('timed effects and conditions', () => {
     expect(s.vitals.dead).toBe(true);
   });
 
-  it('impiety leaves you ill-omened until expiation', () => {
+  it('impiety leaves you ill-omened (−10% luck) until expiation', () => {
     const { s } = sheet();
     s.applyCondition('infaustus');
-    expect(s.modifier('persuade.chance')).toBeCloseTo(-0.1);
+    expect(s.modifier('luck')).toBeCloseTo(-0.1);
+    expect(s.hasFlag('infaustus')).toBe(true);
     for (let i = 0; i < 10; i++) s.tick(1000);
     expect(s.hasCondition('infaustus')).toBe(true);
     s.cure('omen');
@@ -355,21 +414,22 @@ describe('timed effects and conditions', () => {
     s.useSkill('stealth', 3);
     s.raiseSkill('blades', 5);
     s.applyCondition('febris');
-    s.applyCondition('mars');
-    s.applyCondition('cruor');
-    s.applyCondition('cruor');
+    s.applyCondition('benedictio-mars');
+    s.applyCondition('cruentus');
+    s.applyCondition('cruentus');
     s.vitals.damage(20);
     const json = JSON.parse(JSON.stringify(s.serialize()));
     const t = new CharacterSheetImpl();
     t.restore(json);
     expect(t.hasCondition('febris')).toBe(true);
     expect(t.activeEffects.find((a) => a.source === 'disease:febris')!.remaining).toBe(Infinity);
-    expect(t.hasCondition('mars')).toBe(true);
-    expect(t.conditionStacks('cruor')).toBe(2);
+    expect(t.hasCondition('benedictio-mars')).toBe(true);
+    expect(t.conditionStacks('cruentus')).toBe(2);
     expect(t.perks.has('perk-stealth-crowd-blend')).toBe(true);
     expect(t.perkPoints).toBe(1);
     expect(t.skillXp('stealth')).toBeCloseTo(s.skillXp('stealth'));
-    expect(t.vitals.health.max).toBeCloseTo(86); // 100 + 5 × 0.2 − 15
+    expect(t.vitals.health.max).toBeCloseTo(101); // 100 + 5 × 0.2
+    expect(t.vitals.stamina.max).toBeCloseTo(85); // fever
     expect(t.vitals.health.current).toBeCloseTo(s.vitals.health.current);
     expect(t.serialize()).toEqual(s.serialize());
   });

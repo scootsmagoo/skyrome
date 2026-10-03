@@ -23,13 +23,13 @@ function rpgGame() {
 describe('example quest: The Scribe’s Letter (driven by events)', () => {
   it('is discovered from the content folder only with examples', () => {
     const { rpg } = rpgGame();
-    expect(rpg.quests.get('ex_letter')?.title).toBe('The Scribe’s Letter');
-    expect(rpg.items.get('ex_letter')?.questItem).toBe(true);
-    expect(rpg.npcs.get('ex_pudens')?.name).toBe('Gaius Valerius Pudens');
-    expect(rpg.locations.get('ex_basilica')).toBeTruthy();
+    expect(rpg.quests.get('ex-letter')?.title).toBe('The Scribe’s Letter');
+    expect(rpg.items.get('ex-letter')?.questItem).toBe(true);
+    expect(rpg.npcs.get('ex-scriba')?.name).toBe('Gaius Valerius Eutychus');
+    expect(rpg.locations.get('ex-basilica')).toBeTruthy();
     const plain = installRpg(fakeGame().game, { storage: new MemoryStorage() });
-    expect(plain.quests.get('ex_letter')).toBeUndefined();
-    expect(plain.npcs.get('ex_pudens')).toBeUndefined();
+    expect(plain.quests.get('ex-letter')).toBeUndefined();
+    expect(plain.npcs.get('ex-scriba')).toBeUndefined();
   });
 
   it('runs start → objectives → stage change → completion with rewards', () => {
@@ -38,23 +38,23 @@ describe('example quest: The Scribe’s Letter (driven by events)', () => {
     const log = record(events, ['quest:started', 'quest:stage', 'quest:completed']);
     expect(inventory.denarii).toBe(10);
 
-    // Talk to Pudens and accept: the 'accept' node triggers the quest.
-    let v = dialogue.start('ex_pudens')!;
+    // Talk to Eutychus and accept: the 'accept' node triggers the quest.
+    let v = dialogue.start('ex-scriba')!;
     expect(v.nodeId).toBe('greet');
-    expect(v.speakerName).toBe('Gaius Valerius Pudens');
+    expect(v.speakerName).toBe('Gaius Valerius Eutychus');
     v = dialogue.choose(0)!;
     expect(v.nodeId).toBe('offer');
     v = dialogue.choose(0)!;
     expect(v.nodeId).toBe('accept');
     expect(v.willEnd).toBe(true);
     expect(dialogue.advance()).toBeNull();
-    expect(quests.status('ex_letter')).toMatchObject({ running: true, stage: 'start', done: false });
-    expect(quests.tracked).toBe('ex_letter');
-    expect(inventory.count('ex_letter')).toBe(1);
-    expect(quests.objectives('ex_letter').map((o) => o.id)).toEqual(['go', 'deliver']); // figs is hidden
+    expect(quests.status('ex-letter')).toMatchObject({ running: true, stage: 'start', done: false });
+    expect(quests.tracked).toBe('ex-letter');
+    expect(inventory.count('ex-letter')).toBe(1);
+    expect(quests.objectives('ex-letter').map((o) => o.id)).toEqual(['go', 'deliver']); // figs is hidden
 
     // Markers: location from the registry, NPC from a resolver registered by integration.
-    quests.registerResolver('npc', (t) => (t.kind === 'npc' && t.id === 'ex_sextus' ? new Vector3(16, 0, -18) : null));
+    quests.registerResolver('npc', (t) => (t.kind === 'npc' && t.id === 'ex-sextus' ? new Vector3(16, 0, -18) : null));
     const marks = quests.markers();
     expect(marks.map((m) => m.objectiveId)).toEqual(['go', 'deliver']);
     expect(marks[0].position.toArray()).toEqual([16, 0, -16]);
@@ -62,22 +62,22 @@ describe('example quest: The Scribe’s Letter (driven by events)', () => {
     // Walk into the Basilica: the location system fires 'location:entered'.
     (game.player.position as Vector3).set(16, 0, -14);
     step(20);
-    expect(quests.isObjectiveDone('ex_letter', 'go')).toBe(true);
-    expect(rpg.locations.isDiscovered('ex_basilica')).toBe(true);
+    expect(quests.isObjectiveDone('ex-letter', 'go')).toBe(true);
+    expect(rpg.locations.isDiscovered('ex-basilica')).toBe(true);
 
     // Ask about errands → hidden optional objective revealed; figs counted as they arrive.
-    v = dialogue.start('ex_pudens')!;
+    v = dialogue.start('ex-scriba')!;
     expect(v.nodeId).toBe('waiting');
     dialogue.choose(0);
     dialogue.advance();
-    expect(quests.objectives('ex_letter').find((o) => o.id === 'figs')).toMatchObject({ count: 0, needed: 3, optional: true });
+    expect(quests.objectives('ex-letter').find((o) => o.id === 'figs')).toMatchObject({ count: 0, needed: 3, optional: true });
     inventory.add('ficus', 2);
-    expect(quests.objectives('ex_letter').find((o) => o.id === 'figs')!.count).toBe(2);
+    expect(quests.objectives('ex-letter').find((o) => o.id === 'figs')!.count).toBe(2);
     inventory.add('ficus', 1);
-    expect(quests.isObjectiveDone('ex_letter', 'figs')).toBe(true);
+    expect(quests.isObjectiveDone('ex-letter', 'figs')).toBe(true);
 
     // Sextus: bribe for gossip (once), then deliver → stage 'reply'.
-    v = dialogue.start('ex_sextus')!;
+    v = dialogue.start('ex-sextus')!;
     expect(v.nodeId).toBe('letter');
     expect(v.choices.map((c) => c.tag)).toEqual([undefined, 'Bribe 5 d']);
     v = dialogue.choose(1)!;
@@ -87,14 +87,14 @@ describe('example quest: The Scribe’s Letter (driven by events)', () => {
     expect(v.nodeId).toBe('letter');
     expect(v.choices.length).toBe(1);
     dialogue.choose(0);
-    expect(quests.status('ex_letter')!.stage).toBe('reply');
-    expect(inventory.count('ex_letter')).toBe(0);
-    expect(inventory.count('ex_reply')).toBe(1);
-    expect(quests.markers().map((m) => m.objectiveId)).toEqual([]); // Pudens has no resolver yet
+    expect(quests.status('ex-letter')!.stage).toBe('reply');
+    expect(inventory.count('ex-letter')).toBe(0);
+    expect(inventory.count('ex-reply')).toBe(1);
+    expect(quests.markers().map((m) => m.objectiveId)).toEqual([]); // Eutychus has no resolver yet
     dialogue.end();
 
-    // Back to Pudens: figs first (bonus reward from a handler), then the reply → complete.
-    v = dialogue.start('ex_pudens')!;
+    // Back to Eutychus: figs first (bonus reward from a handler), then the reply → complete.
+    v = dialogue.start('ex-scriba')!;
     expect(v.nodeId).toBe('return');
     expect(v.choices.map((c) => c.text)).toEqual(['Here is his reply.', 'Here are your figs.', 'Not yet.']);
     v = dialogue.choose(1)!;
@@ -105,12 +105,11 @@ describe('example quest: The Scribe’s Letter (driven by events)', () => {
     v = dialogue.choose(0)!;
     expect(v.nodeId).toBe('thanks');
 
-    expect(quests.status('ex_letter')).toMatchObject({ running: false, done: true, completed: true, failed: false });
+    expect(quests.status('ex-letter')).toMatchObject({ running: false, done: true, completed: true, failed: false });
     expect(inventory.denarii).toBe(22);
-    expect(inventory.count('ex_reply')).toBe(0);
+    expect(inventory.count('ex-reply')).toBe(0);
     expect(sheet.skillXp('rhetoric')).toBeCloseTo(5);
-    expect(factions.reputation('mercatores')).toBe(10);
-    expect(factions.reputation('populus')).toBe(5);
+    expect(factions.reputation('plebs')).toBe(7); // figs +2, the quest +5
     expect(quests.tracked).toBeNull();
     expect(log.map((l) => `${l.type}:${(l.e as { stage?: string }).stage ?? ''}`)).toEqual([
       'quest:started:',
@@ -122,29 +121,29 @@ describe('example quest: The Scribe’s Letter (driven by events)', () => {
     const view = quests.list()[0];
     expect(view.status).toBe('completed');
     expect(view.journal.map((j) => j.stage)).toEqual(['start', 'reply', 'done']);
-    // A finished quest no longer listens: Pudens' later lines don't restart it.
-    expect(dialogue.start('ex_pudens')!.nodeId).toBe('after');
+    // A finished quest no longer listens: Eutychus' later lines don't restart it.
+    expect(dialogue.start('ex-scriba')!.nodeId).toBe('after');
   });
 
   it('fails when Sextus dies, and stays failed', () => {
     const { rpg, events } = rpgGame();
-    rpg.quests.start('ex_letter');
-    events.emit('actor:killed', { victimId: 'ex_sextus', killerId: 'player' });
-    expect(rpg.quests.status('ex_letter')).toMatchObject({ failed: true, done: true, running: false });
-    events.emit('dialogue:node', { npcId: 'ex_pudens', dialogueId: 'ex_pudens', nodeId: 'accept' });
-    expect(rpg.quests.status('ex_letter')!.failed).toBe(true);
+    rpg.quests.start('ex-letter');
+    events.emit('actor:killed', { victimId: 'ex-sextus', killerId: 'player' });
+    expect(rpg.quests.status('ex-letter')).toMatchObject({ failed: true, done: true, running: false });
+    events.emit('dialogue:node', { npcId: 'ex-scriba', dialogueId: 'ex-scriba', nodeId: 'accept' });
+    expect(rpg.quests.status('ex-letter')!.failed).toBe(true);
     expect(rpg.quests.list()[0].journal.at(-1)!.stage).toBe('sextusDead');
   });
 
   it('reading the letter breaks the seal and changes Sextus’s greeting', () => {
     const { rpg } = rpgGame();
-    rpg.quests.start('ex_letter');
-    rpg.inventory.use('ex_letter');
-    expect(rpg.quests.flags.get('ex_letter_opened')).toBe(true);
-    const v = rpg.dialogue.start('ex_sextus')!;
+    rpg.quests.start('ex-letter');
+    rpg.inventory.use('ex-letter');
+    expect(rpg.quests.flags.get('ex-letter-opened')).toBe(true);
+    const v = rpg.dialogue.start('ex-sextus')!;
     expect(v.text).toContain('seal has been broken');
-    // Rhetoric 15 against difficulty 35: (15 − 35 + 25) / 25 = 20%.
-    expect(v.choices[0]).toMatchObject({ kind: 'check', tag: 'Lie 20%' });
+    // GDD §14.5: Rhetoric 10 against DC 35 → 0.50 + (10 − 35) / 100 = 25%.
+    expect(v.choices[0]).toMatchObject({ kind: 'check', tag: 'Lie 25%' });
   });
 });
 

@@ -59,7 +59,7 @@ export const CARRY = {
   overSpeed: 1.9 / 4.4,
 };
 
-/** §6.1 Stamina costs. */
+/** §6.1 and §6.6 Stamina costs. */
 export const STAMINA_COSTS = {
   /** Light attack: 5 + 2 × weapon kg (gladius 7.4). */
   lightFlat: 5,
@@ -75,8 +75,18 @@ export const STAMINA_COSTS = {
   /** Holding a drawn bow drains 4/s after 1.5 s. */
   bowHold: 4,
   bowHoldAfter: 1.5,
-  /** Sprinting, per second [design; not in the GDD yet]. */
-  sprint: 10,
+  /** §6.6 Sprinting, per second (heavy armor +25% through the armor penalty). */
+  sprint: 8,
+  jump: 5,
+  mantle: 10,
+  /** Fast swimming, per second. */
+  swimFast: 6,
+  /** Holding a whirling sling, per second. */
+  slingWhirl: 3,
+  /** Throwing a pilum or javelin. */
+  throw: 12,
+  /** At 0 stamina you cannot attack, sprint or dodge until this much has regenerated. */
+  exhaustedUntil: 15,
 };
 
 /** §6.2–6.7 Combat. */
@@ -89,8 +99,8 @@ export const COMBAT = {
   directional: { forward: 2, sideways: 1.4, back: 1.3, none: 2 },
   /** Overhead power attack: +50% poise damage. */
   overheadPoise: 1.5,
-  /** 3% chance of ×1.5 on non-sneak hits; Fortuna adds 5 percentage points. */
-  crit: { chance: 0.03, mult: 1.5, fortunaBonus: 0.05 },
+  /** 3% chance of ×1.5 on non-sneak hits, shifted by the `luck` and `crit.chance` modifiers (Fortuna +5 points). */
+  crit: { chance: 0.03, mult: 1.5 },
   /** Ranged headshots. */
   headshot: { bare: 1.5, helmeted: 1.2 },
   /** Bleeding from cut hits with blades: 20% (35% on power), 2 HP/s for 6 s, stacks ×3, chance halved vs AR ≥ 30. */
@@ -149,16 +159,51 @@ export const DIFFICULTY = {
 } as const;
 export type Difficulty = keyof typeof DIFFICULTY;
 
-/** §14.6 Devotion (the GDD section is pending; numbers follow the research §B8.3). */
+/** §14.6 Pietas and the gods. Gains and losses are pietas points. */
 export const DEVOTION = {
-  /** Shrine blessings last one game day. */
+  /** Pietas gained by acts of devotion. */
+  gain: {
+    /** Daily prayer at a compitum shrine: once per shrine per day (also grants the Lares favor). */
+    compitum: 5,
+    /** Prayer at a temple with an offering (also grants the temple's blessing). */
+    temple: 10,
+    /** Home lararium prayer, once a day (full with perk-religio-lararium). */
+    lararium: 15,
+    festival: 25,
+    /** Fulfilling a vow: +20, rising to +50 for a rich offering (+1 per 10 den. vowed). */
+    vowMin: 20,
+    vowMax: 50,
+    vowPerDenarii: 10,
+    spareYielded: 5,
+    burial: 10,
+  },
+  /** Pietas lost by impious acts; `omen` acts also leave you infaustus. */
+  loss: {
+    killYielded: { pietas: 15, omen: false },
+    templeTheft: { pietas: 25, omen: true },
+    killInTemple: { pietas: 30, omen: true },
+    brokenVow: { pietas: 30, omen: true },
+    falseOath: { pietas: 10, omen: false },
+  },
+  /** A temple blessing lasts 24 game hours (real seconds at timeScale 20); the Lares favor 2 game hours. */
   blessingSeconds: 4320,
-  /** Pietas restored (fraction of max) by each act, before pietas.regen. */
-  restore: { dailyPrayer: 1, offering: 0.35, vow: 1, festival: 1, lararium: 0.5 },
-  /** Changing patron deity costs this many denarii in offerings. */
-  rechooseCost: 50,
+  laresSeconds: 360,
+  /** The least offering a temple blessing needs: a libum, a pinch of incense, or 1 den. */
+  minOffering: 1,
+  /** Changing patron deity costs 100 den. and waits 7 days after the last choice. */
+  rechooseCost: 100,
+  rechooseDays: 7,
   /** perk-religio-pax-deorum: invocations cost 20% less. */
   paxDeorumDiscount: 0.2,
+  /** perk-religio-votum: vow buffs +50%. */
+  votumPerk: 0.5,
+  /** Days to pay a vow after the quest succeeds. */
+  vowDays: 3,
+  /** Piaculum: 2 × the vow's value, or 20 den. */
+  piaculumMult: 2,
+  piaculumMin: 20,
+  /** Daily omen, the first time outdoors after dawn: good 20%, bad 20%, nothing 60%. */
+  omen: { good: 0.2, bad: 0.2 },
 };
 
 /** §7.4 Barter. */
@@ -187,26 +232,82 @@ export const BARTER = {
   round: 1 / 64,
 };
 
-/** §14.1 Crime (the GDD section is pending; Skyrim proportions, research §B9.7). */
+/** §14.1 Crime and bounty. */
 export const CRIME = {
   attackOnSight: 1000,
-  /** Fugitivarii hunt you at or above this total bounty. */
-  hunters: 1000,
+  /** Fugitivarii (3 hunters and a Molossian hound) come for you at or above this. */
+  hunters: 2000,
+  /** Carcer: ceil(bounty / 100) days, at most 10; citizens serve 25% less. */
   jailDenariiPerDay: 100,
-  bribeMult: 1.5,
-  bribeMax: 500,
-  persuadeMax: 40,
-  persuadeDifficulty: 50,
+  jailMaxDays: 10,
+  citizenJailMult: 0.75,
+  /** Each day in the Carcer loses the progress bar of one random skill. */
   jailProgressLossPerDay: 1,
-  /** A patron lowers a fine: fraction off per Clientela rank index + 1, capped. */
+  /** Pay: −10% per Clientela rank, at most 40%. */
   patronDiscountPerRank: 0.1,
   patronDiscountCap: 0.4,
+  /** Persuade: bounty < 200; DC = min(85, 10 + bounty / 20); success halves the bounty. */
+  persuadeMax: 200,
+  persuadeDcBase: 10,
+  persuadeDcDiv: 20,
+  persuadeDcMax: 85,
+  /** Bribe: bounty ≤ 200 and a corruptible guard; costs 1.5 × bounty. */
+  bribeMax: 200,
+  bribeMult: 1.5,
+  corruptible: { vigiles: 0.4, 'cohortes-urbanae': 0.25, praetoriani: 0.05 } as Record<string, number>,
+  /** Asylum at a statue or altar: guards hold off 1 game hour; non-violent crimes, bounty ≤ 1000, once a day. */
+  asylumHours: 1,
+  asylumMaxBounty: 1000,
+  /** Fleeing adds 10% to the bounty, resisting 50%. */
+  fleeMult: 0.1,
+  resistMult: 0.5,
+  /** Ad ludum: a murder conviction or a bounty ≥ 3000; win 3 bouts to go free (Infamia +30). */
+  adLudumMin: 3000,
+  adLudumBouts: 3,
+  adLudumInfamia: 30,
+  /** An eques pays twice the fine instead of going to the Carcer (not for maiestas). */
+  equesFineMult: 2,
+  /** A city bounty under 40 is forgotten after 7 elapsed days without a new crime. */
+  lapseBelow: 40,
+  lapseDays: 7,
+  /** Unidentified crimes raise the district's alert (0–3) for a game day. */
+  alertMax: 3,
+  alertHours: 24,
+  /** Hood up at night: witnesses identify you only half the time. */
+  hoodedIdentify: 0.5,
   /** Urban Cohorts members: new bounties reduced 25% "by your word" (§9.2). */
   cohortsBountyMult: 0.75,
-  adLudumMin: 1000,
-  /** Hours counted as night (Vigiles jurisdiction): 19:00 to 06:00. */
-  nightFrom: 19,
-  nightTo: 6,
+};
+
+/** §14.5 Persuasion and dialogue checks: p = clamp(0.05, 0.95, 0.50 + (skill + mods − DC) / 100). */
+export const PERSUASION = {
+  base: 0.5,
+  min: 0.05,
+  max: 0.95,
+  div: 100,
+  /** 5 × (your Dignitas step − theirs). */
+  dignitasStep: 5,
+  /** Intimidate: rhetoric + 2 × (your level − theirs) + 10 if armed and armored; −5 disposition afterwards. */
+  intimidate: { perLevel: 2, armed: 10, dispositionAfter: -5 },
+  /** Bribe: DC × 0.5 den. × status. */
+  bribe: { perDc: 0.5, status: { plebs: 1, soldier: 2, official: 5 } },
+  /** Invoke patron: Clientela rank ≥ amicus-minor (index 1); +15, +15 more with perk-rhetoric-clientela. */
+  patron: { bonus: 15, perk: 15, minRank: 1 },
+  /** perk-rhetoric-exordium: +10 to the first check with each person. */
+  exordium: 10,
+  /** A failed check can't be retried with the same NPC and approach for 24 game hours. */
+  retryHours: 24,
+  /** Disposition runs −20…+20. */
+  dispositionMax: 20,
+};
+
+/** §14.13 Saving. */
+export const SAVE = {
+  manualSlots: 10,
+  autosaveSlots: 3,
+  /** Quest-stage autosaves at most every 120 real seconds; a timed autosave every 10 real minutes. */
+  questAutosaveInterval: 120,
+  periodicAutosave: 600,
 };
 
 /** §5.4 XP per use [design]. Systems award these with sheet.useSkill(skill, xp). */
@@ -253,6 +354,8 @@ export const STANDING = {
   sordidusPersuasion: -10,
   lautusPersuasion: 10,
   lautusHours: 12,
+  /** §14.8 Lautus also gives +10% stamina regeneration. */
+  lautusStaminaRegen: 0.1,
 };
 
 /** §9.1 Default faction rank thresholds (Fama) when a faction doesn't state its own. */

@@ -1,20 +1,31 @@
 /**
- * Save games (game.save). Modules register Saveables under a key; a save file is
- *   { format: 'skyrome-save', version, meta, data: { [key]: saveable.save() } }
- * stored per slot. Slots: 'quick' (F5 / F9), 'auto1'..'auto3' (rotating), 'manual-N'.
- * An index of slot metadata makes the load menu cheap. Loading never throws: corrupt or
- * newer-version files are refused with an error, and a failing section is skipped with a warning.
+ * Save games (game.save) — docs/GDD.md §14.13. Modules register Saveables under a key; a file is
+ *   { format: 'skyrome-save', saveVersion, generatorVersion, worldSeed, gameTime, meta, data: { [key]: … } }
+ * stored per slot: 'quick' (F5 / F9), 'auto1'..'auto3' (rotating), 'manual-1'..'manual-10'.
  *
- * Built-in saveables: 'time' (GameTime) and 'player' (position, heading, camera, view mode).
+ *   - Saving is free except in combat, in dialogue or while falling (addBlocker() for more).
+ *   - Autosaves: on quest stages (at most every 120 s), every 10 real minutes, and when another
+ *     system asks with 'save:request' (sleep or wait, entering an interior). One that can't happen
+ *     right now (in dialogue) waits until it can.
+ *   - Storage: IndexedDB, with localStorage as the fallback and every access in try/catch; asks
+ *     for persistent storage; export/import of JSON files guards against Safari's 7-day eviction.
+ *   - Loading never throws: corrupt or newer files are refused, older ones are migrated by pure
+ *     functions, and a failing section is skipped with a warning.
+ *
+ * Built-in saveables: 'time' (GameTime), 'player' (position, heading, camera, view mode) and
+ * 'entityDeltas' (game.deltas: dead NPCs, looted containers…).
  */
 import type { Game, System } from '../core/Game';
 import '../rpg/events';
+import { SAVE } from '../rpg/data/balance';
+import { EntityDeltas } from './deltas';
 import { createDefaultStorage } from './storage';
 import type { LoadResult, Saveable, SaveFile, SaveKind, SaveMeta, SaveResult, SaveStorage } from './types';
 
 declare module '../core/Game' {
   interface Game {
     save: SaveSystem;
+    deltas: EntityDeltas;
   }
 }
 
@@ -23,29 +34,45 @@ declare module '../core/Events' {
     'save:saved': { slot: string; meta: SaveMeta };
     'save:loaded': { slot: string; meta: SaveMeta };
     'save:error': { slot: string; error: string };
+    /** Ask for an autosave: 'sleep' (sleep or wait), 'cell' (entered an interior), or anything else. */
+    'save:request': { reason: string };
   }
 }
 
 export const SAVE_FORMAT = 'skyrome-save';
-/** Bump when the shape of saved data changes, and register a migration from the old version. */
-export const SAVE_VERSION = 1;
-export const AUTOSAVE_SLOTS = 3;
+/** Bump when the shape of saved data changes, and add a migration from the old version. */
+export const SAVE_VERSION = 2;
+export const AUTOSAVE_SLOTS = SAVE.autosaveSlots;
+export const MANUAL_SLOTS = SAVE.manualSlots;
+/** Bump when procedural generators change what they produce (old deltas may then point at nothing). */
+export const GENERATOR_VERSION = 1;
 
 interface SaveIndex {
   slots: Record<string, SaveMeta>;
   autoCounter: number;
-  manualCounter: number;
 }
 
 export interface SaveSystemOptions {
   storage?: SaveStorage;
   /** Key prefix in storage. */
   prefix?: string;
-  /** Register the 'time' and 'player' saveables (default true). */
+  /** Register the 'time', 'player' and 'entityDeltas' saveables (default true). */
   builtins?: boolean;
 }
 
-type Migration = (file: SaveFile) => SaveFile;
+/** Upgrades a parsed file from one saveVersion to the next. Pure: no access to the game. */
+export type Migration = (file: Record<string, unknown>) => Record<string, unknown>;
+
+/** v1 → v2: GDD §14.13 header fields (saveVersion, generatorVersion, worldSeed, gameTime) and entity deltas. */
+export function migrateV1toV2(f: Record<string, unknown>): Record<string, unknown> {
+  const data = (f.data ?? {}) as Record<string, unknown>;
+  const t = data.time as { totalHours?: unknown } | undefined;
+  const hours = typeof t?.totalHours === 'number' && Number.isFinite(t.totalHours) ? t.totalHours : 0;
+  const { version: _old, ...rest } = f;
+  return { ...rest, saveVersion: 2, generatorVersion: 0, worldSeed: 0, gameTime: { totalHours: hours, elapsedDays: Math.floor(hours / 24), clamp: null }, data: { entityDeltas: {}, ...data } };
+}
+
+export const MIGRATIONS: Record<number, Migration> = { 1: migrateV1toV2 };
 
 export class SaveSystem implements System {
   readonly name = 'save';
@@ -54,18 +81,29 @@ export class SaveSystem implements System {
   readonly prefix: string;
   /** Real seconds played (not counting pauses). */
   playTime = 0;
-  /** Gate for saving (e.g. not in combat). Dialogue blocks saving by default. */
-  canSave: () => boolean = () => !this.game.dialogue?.active;
-  /** Minimum real seconds between autosaves. */
-  autosaveMinInterval = 60;
+  /** Gate for saving; by default whyNot() (combat, dialogue, falling, added blockers). */
+  canSave: () => boolean = () => this.whyNot() === null;
   /** Location name for metadata. */
   locationName: () => string | undefined = () => this.game.locations?.current()?.name;
   /** Character level for metadata. */
   levelOf: () => number | undefined = () => this.game.player?.sheet?.level;
+  /** The world seed recorded in files. */
+  worldSeed: () => number = () => (this.game as { worldSeed?: number }).worldSeed ?? 0;
+  /** The pridie clamp (calendar module), recorded in gameTime. */
+  calendarClamp: () => string | null = () => (this.game as { calendar?: { clamp?: string | null } }).calendar?.clamp ?? null;
+  /** Result of navigator.storage.persist() (undefined until known or when unsupported). */
+  persisted: boolean | undefined;
   private readonly saveables: { key: string; s: Saveable }[] = [];
-  private readonly migrations = new Map<number, Migration>();
-  private lastAutosave = -Infinity;
+  private readonly migrations = new Map<number, Migration>(Object.entries(MIGRATIONS).map(([k, m]) => [Number(k), m]));
+  private readonly blockers: (() => string | null)[] = [];
+  /** playTime of the last autosave of any kind (the 10-minute timer counts from here). */
+  private lastAutosave = 0;
+  /** playTime of the last quest-stage autosave (at most every 120 s). */
+  private lastQuestAutosave = -Infinity;
+  private pendingAutosave: string | null = null;
   private busy: Promise<unknown> = Promise.resolve();
+  /** The autosave in flight (idle() waits for it too). */
+  private autosaving: Promise<unknown> = Promise.resolve();
 
   constructor(
     private readonly game: Game,
@@ -74,6 +112,11 @@ export class SaveSystem implements System {
     this.storage = opts.storage ?? createDefaultStorage();
     this.prefix = opts.prefix ?? 'skyrome.save.';
     if (opts.builtins !== false) this.registerBuiltins();
+    // §14.13 autosave triggers.
+    game.events.on('quest:stage', () => this.requestAutosave('quest'));
+    game.events.on('quest:completed', () => this.requestAutosave('quest'));
+    game.events.on('save:request', (e) => this.requestAutosave(e.reason));
+    if (!opts.storage) this.requestPersistence();
   }
 
   // ---------------------------------------------------------------- registry
@@ -100,6 +143,30 @@ export class SaveSystem implements System {
     this.migrations.set(fromVersion, fn);
   }
 
+  /** Add a reason saving is blocked (return a message, or null when saving is fine). Returns a remover. */
+  addBlocker(fn: () => string | null): () => void {
+    this.blockers.push(fn);
+    return () => {
+      const i = this.blockers.indexOf(fn);
+      if (i >= 0) this.blockers.splice(i, 1);
+    };
+  }
+
+  /** Why saving is blocked right now, or null: combat, dialogue, a fall, or an added blocker. */
+  whyNot(): string | null {
+    const g = this.game;
+    if (g.dialogue?.active) return 'You cannot save during a conversation';
+    if (g.player?.sheet?.vitals.inCombat) return 'You cannot save in combat';
+    // A fall: airborne and dropping faster than a jump's descent.
+    const body = g.player as { grounded?: boolean; velocity?: { y: number } } | undefined;
+    if (body?.grounded === false && (body.velocity?.y ?? 0) < -4) return 'You cannot save while falling';
+    for (const b of this.blockers) {
+      const r = safeCall(b);
+      if (r) return r;
+    }
+    return null;
+  }
+
   // ---------------------------------------------------------------- snapshot / apply (sync)
 
   snapshot(meta: Partial<SaveMeta> = {}): SaveFile {
@@ -112,9 +179,13 @@ export class SaveSystem implements System {
       }
     }
     const t = this.game.time;
+    const hours = t?.totalHours ?? 0;
     return {
       format: SAVE_FORMAT,
-      version: SAVE_VERSION,
+      saveVersion: SAVE_VERSION,
+      generatorVersion: GENERATOR_VERSION,
+      worldSeed: this.worldSeed(),
+      gameTime: { totalHours: hours, elapsedDays: Math.floor(hours / 24), date: t?.date?.(), clamp: this.calendarClamp() },
       meta: {
         slot: meta.slot ?? 'snapshot',
         kind: meta.kind ?? 'manual',
@@ -131,7 +202,7 @@ export class SaveSystem implements System {
     };
   }
 
-  /** Parse and validate a save file's text. Never throws. */
+  /** Parse, validate and migrate a save file's text. Never throws. */
   parse(text: string | null): { file?: SaveFile; error?: string } {
     if (!text) return { error: 'empty save' };
     let raw: unknown;
@@ -140,20 +211,23 @@ export class SaveSystem implements System {
     } catch {
       return { error: 'corrupt save (not valid JSON)' };
     }
-    const f = raw as Partial<SaveFile>;
-    if (!f || typeof f !== 'object' || f.format !== SAVE_FORMAT || typeof f.version !== 'number' || !f.data || typeof f.data !== 'object') return { error: 'not a Skyrome save' };
-    if (f.version > SAVE_VERSION) return { error: `save is from a newer version (${f.version} > ${SAVE_VERSION})` };
-    let file = f as SaveFile;
+    if (!raw || typeof raw !== 'object') return { error: 'not a Skyrome save' };
+    let f = raw as Record<string, unknown>;
+    const version = typeof f.saveVersion === 'number' ? f.saveVersion : f.version;
+    if (f.format !== SAVE_FORMAT || typeof version !== 'number' || !f.data || typeof f.data !== 'object') return { error: 'not a Skyrome save' };
+    if (version > SAVE_VERSION) return { error: `save is from a newer version (${version} > ${SAVE_VERSION})` };
     try {
-      for (let v = file.version; v < SAVE_VERSION; v++) {
+      for (let v = version; v < SAVE_VERSION; v++) {
         const m = this.migrations.get(v);
-        if (m) file = m(file);
-        file = { ...file, version: v + 1 };
+        f = m ? m(f) : f;
+        f = { ...f, saveVersion: v + 1 };
+        delete f.version;
       }
     } catch (err) {
       return { error: `migration failed: ${String(err)}` };
     }
-    file.meta = { ...(file.meta ?? ({} as SaveMeta)), version: file.version };
+    const file = f as unknown as SaveFile;
+    file.meta = { ...(file.meta ?? ({} as SaveMeta)), version: file.saveVersion };
     return { file };
   }
 
@@ -179,6 +253,9 @@ export class SaveSystem implements System {
       }
     }
     if (typeof file.meta?.playTime === 'number') this.playTime = file.meta.playTime;
+    this.lastAutosave = this.playTime;
+    this.lastQuestAutosave = -Infinity;
+    this.pendingAutosave = null;
     return { warnings };
   }
 
@@ -186,7 +263,8 @@ export class SaveSystem implements System {
 
   async save(slot: string, opts: { name?: string; kind?: SaveKind; force?: boolean } = {}): Promise<SaveResult> {
     return this.serial(async () => {
-      if (!opts.force && !this.canSave()) return this.fail(slot, 'cannot save right now');
+      const why = opts.force ? null : this.canSave() ? null : (this.whyNot() ?? 'cannot save right now');
+      if (why) return this.fail(slot, why);
       const kind = opts.kind ?? kindOf(slot);
       const file = this.snapshot({ slot, kind, name: opts.name });
       let text: string;
@@ -236,32 +314,51 @@ export class SaveSystem implements System {
     return this.load('quick');
   }
 
-  /** Save to the next rotating autosave slot (rate-limited unless forced). */
-  async autosave(opts: { force?: boolean } = {}): Promise<SaveResult> {
-    if (!opts.force && this.playTime - this.lastAutosave < this.autosaveMinInterval) return { ok: false, error: 'too soon' };
-    const idx = await this.readIndex();
-    const slot = `auto${(idx.autoCounter % AUTOSAVE_SLOTS) + 1}`;
-    const r = await this.save(slot, { kind: 'auto' });
-    if (r.ok) {
-      this.lastAutosave = this.playTime;
-      const after = await this.readIndex();
-      after.autoCounter = idx.autoCounter + 1;
-      await this.writeIndex(after);
-    }
-    return r;
+  /**
+   * Save to the next rotating autosave slot. Quest-stage autosaves ('quest') come at most every
+   * 120 s; the others (sleep, interiors, the 10-minute timer) go now. `force` skips every check.
+   */
+  autosave(opts: { force?: boolean; reason?: string } = {}): Promise<SaveResult> {
+    const quest = opts.reason === 'quest';
+    if (!opts.force && quest && this.playTime - this.lastQuestAutosave < SAVE.questAutosaveInterval) return Promise.resolve({ ok: false, error: 'too soon' });
+    if (quest) this.lastQuestAutosave = this.playTime;
+    const run = this.autosaving.then(async (): Promise<SaveResult> => {
+      const idx = await this.readIndex();
+      const slot = `auto${(idx.autoCounter % AUTOSAVE_SLOTS) + 1}`;
+      const r = await this.save(slot, { kind: 'auto', force: opts.force });
+      if (r.ok) {
+        this.lastAutosave = this.playTime;
+        const after = await this.readIndex();
+        after.autoCounter = idx.autoCounter + 1;
+        await this.writeIndex(after);
+      }
+      return r;
+    });
+    this.autosaving = run.catch(() => {});
+    return run;
   }
 
-  /** New manual slot ('manual-1', 'manual-2', …). */
-  async saveNew(name?: string): Promise<SaveResult> {
+  /** Queue an autosave; it runs on the next frame when saving is allowed (e.g. after a conversation). */
+  requestAutosave(reason: string) {
+    if (reason === 'quest' && this.playTime - this.lastQuestAutosave < SAVE.questAutosaveInterval) return;
+    // A more specific reason wins over the timer.
+    if (!this.pendingAutosave || this.pendingAutosave === 'timer') this.pendingAutosave = reason;
+  }
+
+  /** The 10 manual slots, in order, with their metadata (null = empty). */
+  async manualSlots(): Promise<{ slot: string; meta: SaveMeta | null }[]> {
     const idx = await this.readIndex();
-    const slot = `manual-${idx.manualCounter + 1}`;
-    const r = await this.save(slot, { kind: 'manual', name });
-    if (r.ok) {
-      const after = await this.readIndex();
-      after.manualCounter = idx.manualCounter + 1;
-      await this.writeIndex(after);
-    }
-    return r;
+    return Array.from({ length: MANUAL_SLOTS }, (_, i) => {
+      const slot = `manual-${i + 1}`;
+      return { slot, meta: idx.slots[slot] ?? null };
+    });
+  }
+
+  /** Save into the first empty manual slot (fails when all 10 are used: overwrite one with save()). */
+  async saveNew(name?: string): Promise<SaveResult> {
+    const free = (await this.manualSlots()).find((s) => !s.meta);
+    if (!free) return this.fail('manual', `all ${MANUAL_SLOTS} manual slots are used — overwrite one`);
+    return this.save(free.slot, { kind: 'manual', name });
   }
 
   /** All saves, newest first. */
@@ -275,9 +372,10 @@ export class SaveSystem implements System {
     return (await this.list())[0] ?? null;
   }
 
-  /** Resolves once queued save/load operations (e.g. from F5/F9) have finished. */
-  idle(): Promise<void> {
-    return this.busy.then(() => {});
+  /** Resolves once queued save/load operations (F5/F9, autosaves) have finished. */
+  async idle(): Promise<void> {
+    await this.autosaving;
+    await this.busy;
   }
 
   async delete(slot: string) {
@@ -289,10 +387,80 @@ export class SaveSystem implements System {
     });
   }
 
+  // ---------------------------------------------------------------- export / import (§14.13)
+
+  /** A slot's save file as JSON text, or null if it is missing or unreadable. */
+  async exportSave(slot: string): Promise<string | null> {
+    let text: string | null = null;
+    try {
+      text = await this.storage.read(this.slotKey(slot));
+    } catch {
+      return null;
+    }
+    return text && this.parse(text).file ? text : null;
+  }
+
+  /** Validate (and migrate) a save file's text and store it in a manual slot (default: the first empty one). */
+  async importSave(text: string, slot?: string): Promise<SaveResult> {
+    const { file, error } = this.parse(text);
+    if (!file) return this.fail(slot ?? 'import', error ?? 'unreadable');
+    const target = slot ?? (await this.manualSlots()).find((s) => !s.meta)?.slot;
+    if (!target) return this.fail('import', `all ${MANUAL_SLOTS} manual slots are used — delete one first`);
+    return this.serial(async () => {
+      file.meta = { ...file.meta, slot: target, kind: 'manual', name: file.meta.name ?? 'Imported' };
+      const out = JSON.stringify(file);
+      file.meta.size = out.length;
+      try {
+        await this.storage.write(this.slotKey(target), out);
+        const idx = await this.readIndex();
+        idx.slots[target] = file.meta;
+        await this.writeIndex(idx);
+      } catch (err) {
+        return this.fail(target, `storage error: ${String((err as Error)?.message ?? err)}`);
+      }
+      this.game.events.emit('rpg:notify', { text: 'Save imported', kind: 'save' });
+      return { ok: true, meta: file.meta };
+    });
+  }
+
+  /** Browser: download a slot as `skyrome-<slot>.json`. Returns false if there is nothing to export. */
+  async downloadSave(slot: string): Promise<boolean> {
+    const text = await this.exportSave(slot);
+    if (!text || typeof document === 'undefined' || typeof URL?.createObjectURL !== 'function') return false;
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `skyrome-${slot}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return true;
+  }
+
+  /** Browser: import a save from a File (an <input type="file"> pick). */
+  async importFile(file: Blob, slot?: string): Promise<SaveResult> {
+    let text: string;
+    try {
+      text = await file.text();
+    } catch (err) {
+      return this.fail('import', `could not read the file: ${String(err)}`);
+    }
+    return this.importSave(text, slot);
+  }
+
   // ---------------------------------------------------------------- system
 
   lateUpdate(dt: number) {
     if (!this.game.paused) this.playTime += dt;
+    if (!this.pendingAutosave && this.playTime - this.lastAutosave >= SAVE.periodicAutosave) this.pendingAutosave = 'timer';
+    if (this.pendingAutosave && this.canSave()) {
+      const reason = this.pendingAutosave;
+      this.pendingAutosave = null;
+      // The timer restarts now, so a refused autosave doesn't retry every frame.
+      if (reason === 'timer') this.lastAutosave = this.playTime;
+      void this.autosave({ reason });
+    }
     const input = this.game.input;
     if (!input) return;
     if (input.pressed('quickSave')) void this.quicksave();
@@ -306,7 +474,7 @@ export class SaveSystem implements System {
   }
 
   private async readIndex(): Promise<SaveIndex> {
-    const blank: SaveIndex = { slots: {}, autoCounter: 0, manualCounter: 0 };
+    const blank: SaveIndex = { slots: {}, autoCounter: 0 };
     let text: string | null = null;
     try {
       text = await this.storage.read(`${this.prefix}index`);
@@ -340,8 +508,6 @@ export class SaveSystem implements System {
       } catch {
         /* skip unreadable */
       }
-      const m = /^manual-(\d+)$/.exec(slot);
-      if (m) idx.manualCounter = Math.max(idx.manualCounter, Number(m[1]));
     }
     return idx;
   }
@@ -362,6 +528,19 @@ export class SaveSystem implements System {
     const next = this.busy.then(fn, fn);
     this.busy = next.catch(() => {});
     return next;
+  }
+
+  /** Ask the browser not to evict our storage (Safari evicts after 7 days without a visit). */
+  private requestPersistence() {
+    try {
+      const st = (globalThis.navigator as Navigator | undefined)?.storage;
+      if (!st?.persist) return;
+      st.persist()
+        .then((v) => (this.persisted = v))
+        .catch(() => {});
+    } catch {
+      /* unsupported */
+    }
   }
 
   private registerBuiltins() {
@@ -393,6 +572,9 @@ export class SaveSystem implements System {
         game.world?.refreshAll?.();
       },
     });
+    const deltas = new EntityDeltas(game.events);
+    game.deltas = deltas;
+    this.register('entityDeltas', { save: () => deltas.serialize(), load: (d) => deltas.restore(d), reset: () => deltas.restore(undefined) });
   }
 }
 
@@ -404,4 +586,12 @@ function kindOf(slot: string): SaveKind {
 
 function finite(v: unknown): number | undefined {
   return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+}
+
+function safeCall(fn: () => string | null): string | null {
+  try {
+    return fn();
+  } catch {
+    return null;
+  }
 }

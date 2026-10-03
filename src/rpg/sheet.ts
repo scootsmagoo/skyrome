@@ -11,11 +11,12 @@
  *
  * A taken perk's id is a flag (hasFlag('perk-blades-punctim')). Effects of kind 'flag' set a flag
  * for their duration; 'fortify' on a skill id raises that skill; 'condition' applies a named
- * condition. Flags named 'xp.<skill>' give that skill +10% XP.
+ * condition; `percent` effects scale with the pool's max. Skill XP is multiplied by
+ * 1 + xp.mult + xp.<skill> (+10% with an 'xp.<skill>' flag).
  */
 import type { EventBus, GameEvents } from '../core/Events';
 import { CARRY, LEVEL_CURVE, REGEN, RESOURCES, SKILL_CURVE, TRAINING, XP } from './data/balance';
-import { CONDITIONS } from './data/conditions';
+import { CONDITIONS, POISONED } from './data/conditions';
 import { PERKS, SKILLS } from './data/skills';
 import type { CharacterSheet, ConditionDef, Effect, ModifierId, PerkDef, ResourceId, SkillDef, SkillId } from './types';
 import { RESOURCE_IDS, VitalsImpl } from './vitals';
@@ -44,8 +45,11 @@ const MODIFIER_IDS = new Set<string>([
   'block.mitigation', 'block.staminaCost', 'armor.light', 'armor.heavy', 'stamina.regen', 'stamina.attackCost',
   'stamina.sprintCost', 'health.regen', 'health.max', 'stamina.max', 'pietas.max', 'pietas.regen', 'carry.max',
   'speed.move', 'price.buy', 'price.sell', 'persuade.chance', 'stealth.noise', 'stealth.visibility', 'lockpick.ease',
-  'pickpocket.chance', 'potion.strength', 'blessing.duration', 'xp.mult',
+  'pickpocket.chance', 'potion.strength', 'blessing.duration', 'xp.mult', 'damage.taken', 'luck', 'crit.chance',
+  'stamina.regenCombat', 'poise.max', 'bandage.strength', 'food.strength', 'poison.resist', 'fire.resist', 'arena.favor',
+  'arena.missio',
 ]);
+const isModifier = (t: string) => MODIFIER_IDS.has(t) || t.startsWith('xp.');
 const isResource = (t: string): t is ResourceId => t === 'health' || t === 'stamina' || t === 'pietas';
 
 /** XP needed to raise a skill from `level` to `level + 1` (GDD §5.2). */
@@ -94,7 +98,9 @@ export class CharacterSheetImpl implements CharacterSheet {
       health: RESOURCES.base.health,
       stamina: RESOURCES.base.stamina,
       pietas: RESOURCES.base.pietas,
-      regenRate: (id, v) => REGEN[id] * (v.inCombat ? REGEN.combat[id] : 1) * Math.max(0, 1 + this.modifier(`${id}.regen` as ModifierId)),
+      // Mars: +10% stamina regeneration in combat (stamina.regenCombat).
+      regenRate: (id, v) =>
+        REGEN[id] * (v.inCombat ? REGEN.combat[id] : 1) * Math.max(0, 1 + this.modifier(`${id}.regen` as ModifierId) + (v.inCombat && id === 'stamina' ? this.modifier('stamina.regenCombat') : 0)),
     });
     this.vitals.set('pietas', RESOURCES.startCurrent.pietas);
     // Mithras's Invictus: once, a killing blow leaves you at 1 health.
@@ -197,7 +203,7 @@ export class CharacterSheetImpl implements CharacterSheet {
       if (s.level >= XP.dummyMaxLevel) return;
       amount *= XP.dummyMult;
     }
-    s.xp += amount * Math.max(0, 1 + this.modifier('xp.mult') + (this.hasFlag(`xp.${id}`) ? 0.1 : 0));
+    s.xp += amount * Math.max(0, 1 + this.modifier('xp.mult') + this.modifier(`xp.${id}`) + (this.hasFlag(`xp.${id}`) ? 0.1 : 0));
     const diff = this.skillDefs.get(id)?.difficulty;
     while (s.level < SKILL_CURVE.max && s.xp >= skillXpToNext(s.level, diff)) {
       s.xp -= skillXpToNext(s.level, diff);
@@ -226,13 +232,20 @@ export class CharacterSheetImpl implements CharacterSheet {
     s.xp = 0;
   }
 
-  /** Zero the in-progress XP of the `n` skills with the most progress (jail time). Returns their ids. */
-  loseProgress(n: number): SkillId[] {
-    const ranked = [...this.skills.entries()].filter(([, s]) => s.xp > 0).sort((a, b) => b[1].xp - a[1].xp);
-    return ranked.slice(0, Math.max(0, n)).map(([id, s]) => {
+  /**
+   * Zero the in-progress XP (never levels) of `n` skills: random ones with progress when `rng` is
+   * given (a day in the Carcer, §14.1), else those with the most progress. Returns their ids.
+   */
+  loseProgress(n: number, rng?: { next(): number }): SkillId[] {
+    const pool = [...this.skills.entries()].filter(([, s]) => s.xp > 0).sort((a, b) => b[1].xp - a[1].xp);
+    const out: SkillId[] = [];
+    for (let i = 0; i < n && pool.length; i++) {
+      const k = rng ? Math.min(pool.length - 1, Math.floor(rng.next() * pool.length)) : 0;
+      const [id, s] = pool.splice(k, 1)[0];
       s.xp = 0;
-      return id;
-    });
+      out.push(id);
+    }
+    return out;
   }
 
   private onSkillLevel(id: SkillId, level: number) {
@@ -352,7 +365,7 @@ export class CharacterSheetImpl implements CharacterSheet {
     for (const fl of this.flagSources.values()) for (const f of fl) flags.add(f);
     for (const a of this.effects) {
       const e = a.effect;
-      if ((e.kind === 'modifier' || e.kind === 'fortify') && MODIFIER_IDS.has(e.target)) add(e.target, e.amount);
+      if ((e.kind === 'modifier' || e.kind === 'fortify') && isModifier(e.target)) add(e.target, e.amount);
       else if (e.kind === 'fortify' && this.skillDefs.has(e.target)) skillBonus.set(e.target, (skillBonus.get(e.target) ?? 0) + e.amount);
       else if (e.kind === 'flag') flags.add(e.target);
     }
@@ -368,13 +381,24 @@ export class CharacterSheetImpl implements CharacterSheet {
     this.recomputeMaxes();
   }
 
-  /** Pool maxima: base + picks × 10 + skill growth + `<pool>.max` modifiers + fortify effects. */
+  /** Pool maxima: (base + picks × 10 + skill growth + `<pool>.max` modifiers + fortify effects) × (1 + percent fortifies). */
   recomputeMaxes() {
     for (const id of RESOURCE_IDS) {
       let max = RESOURCES.base[id] + this.picks[id] * RESOURCES.perLevelPick + this.growth[id] + this.modifier(`${id}.max` as ModifierId);
-      for (const a of this.effects) if (a.effect.kind === 'fortify' && a.effect.target === id) max += a.effect.amount;
+      let pct = 0;
+      for (const a of this.effects) {
+        if (a.effect.kind !== 'fortify' || a.effect.target !== id) continue;
+        if (a.effect.percent) pct += a.effect.amount;
+        else max += a.effect.amount;
+      }
+      max *= Math.max(0, 1 + pct / 100);
       if (Math.abs(this.vitals.get(id).max - max) > 1e-9) this.vitals.setMax(id, max);
     }
+  }
+
+  /** An effect's amount in pool points (percent effects scale with the pool's max). */
+  private points(e: Effect): number {
+    return e.percent && isResource(e.target) ? (e.amount * this.vitals.get(e.target).max) / 100 : e.amount;
   }
 
   /** Carry capacity in kg: 50 + 5 per stamina level-up + carry.max (Hercules, perks). */
@@ -389,7 +413,7 @@ export class CharacterSheetImpl implements CharacterSheet {
   }
 
   /**
-   * Apply effects from a source ('item:panis', 'blessing:mars', 'injury:cruor'…). Instant kinds
+   * Apply effects from a source ('item:panis', 'blessing:benedictio-mars', 'injury:cruentus'…). Instant kinds
    * (restore, cure, condition, damage without duration) act now; timed ones replace any earlier
    * effects from the same source. `magnitude` scales amounts (remedy strength), `durationMult` durations.
    */
@@ -408,8 +432,8 @@ export class CharacterSheetImpl implements CharacterSheet {
       }
       const e: Effect = { ...raw, amount: raw.amount * mag };
       if (e.duration === undefined || e.duration <= 0) {
-        if ((e.kind === 'restore' || e.kind === 'regen') && isResource(e.target)) this.vitals.restore(e.target, e.amount);
-        else if (e.kind === 'damage' && isResource(e.target)) this.vitals.drain(e.target, e.amount);
+        if ((e.kind === 'restore' || e.kind === 'regen') && isResource(e.target)) this.vitals.restore(e.target, this.points(e));
+        else if (e.kind === 'damage' && isResource(e.target)) this.vitals.drain(e.target, this.points(e));
         continue;
       }
       if (!timed) {
@@ -463,8 +487,9 @@ export class CharacterSheetImpl implements CharacterSheet {
     return this.conditionDefs.get(id);
   }
 
-  /** Active stacks of a condition (0 if absent). */
+  /** Active stacks of a condition (0 if absent). 'veneno' counts active poisons. */
   conditionStacks(id: string): number {
+    if (id === POISONED) return new Set(this.effects.filter((a) => a.source.startsWith('poison:')).map((a) => a.source)).size;
     const c = this.conditionDefs.get(id);
     if (!c) return 0;
     const base = `${c.kind}:${id}`;
@@ -477,9 +502,11 @@ export class CharacterSheetImpl implements CharacterSheet {
 
   /**
    * Catch a disease, take a poison or a wound, fall under an ill omen, change state, or receive a
-   * blessing. Diseases are blocked by 'disease.immune', poisons by 'poison.immune' and halved by
-   * 'poison.resist'; stackable conditions (bleeding ×3) add a stack or refresh the oldest; blessings
-   * last longer with 'blessing.duration' and replace the previous one (two with 'religio.twoBlessings').
+   * blessing. Diseases are blocked by 'disease.immune'; poisons by 'poison.immune', halved by the
+   * 'poison.resist' flag (theriac) and reduced by the poison.resist modifier (Isis); stackable
+   * conditions (bleeding ×3) add a stack or refresh the oldest. Blessings have two slots (§14.6):
+   * one temple blessing (two with 'religio.twoBlessings') and the Lares favor; a new one replaces
+   * the old in its slot, and 'blessing.duration' lengthens them.
    */
   applyCondition(id: string): boolean {
     const c = this.conditionDefs.get(id);
@@ -500,12 +527,17 @@ export class CharacterSheetImpl implements CharacterSheet {
       }
     }
     if (c.kind === 'blessing') {
-      const keep = this.hasFlag('religio.twoBlessings') ? 1 : 0;
-      const blessings = [...new Set(this.effects.filter((a) => a.source.startsWith('blessing:') && a.source !== source).map((a) => a.source))];
+      const slot = c.slot ?? 'temple';
+      const keep = slot === 'temple' && this.hasFlag('religio.twoBlessings') ? 1 : 0;
+      const sameSlot = (src: string) => src.startsWith('blessing:') && src !== source && (this.conditionDefs.get(src.slice(9))?.slot ?? 'temple') === slot;
+      const blessings = [...new Set(this.effects.filter((a) => sameSlot(a.source)).map((a) => a.source))];
       for (const s of blessings.slice(0, Math.max(0, blessings.length - keep))) this.effects = this.effects.filter((a) => a.source !== s);
       this.applyEffects(source, c.effects, { durationMult: 1 + this.modifier('blessing.duration') });
+    } else if (c.kind === 'poison') {
+      const resist = (this.hasFlag('poison.resist') ? 0.5 : 1) * Math.max(0, 1 - this.modifier('poison.resist'));
+      this.applyEffects(source, c.effects, { magnitude: resist });
     } else {
-      this.applyEffects(source, c.effects, { magnitude: c.kind === 'poison' && this.hasFlag('poison.resist') ? 0.5 : 1 });
+      this.applyEffects(source, c.effects);
     }
     if (c.kind !== 'state' && c.kind !== 'injury') this.notify(c.kind === 'disease' ? `You have contracted ${c.name}.` : c.kind === 'omen' ? `You are ${c.name.toLowerCase()}.` : c.name, 'effect');
     return true;
@@ -527,8 +559,8 @@ export class CharacterSheetImpl implements CharacterSheet {
         if (isResource(e.target)) {
           // Never tick past the end of the effect.
           const t = Math.min(dt, a.remaining);
-          if (e.kind === 'regen') this.vitals.restore(e.target, e.amount * t);
-          else if (e.kind === 'damage') this.vitals.drain(e.target, e.amount * t);
+          if (e.kind === 'regen') this.vitals.restore(e.target, this.points(e) * t);
+          else if (e.kind === 'damage') this.vitals.drain(e.target, this.points(e) * t);
         }
         a.remaining -= dt;
         if (a.remaining <= 0) (expired ??= []).push(a.source);

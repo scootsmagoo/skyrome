@@ -390,8 +390,11 @@ export class InventoryImpl implements Inventory {
     }
     if (def.type === 'consumable' && def.effects?.length) {
       if (sheet) {
+        // Remedies: potion.strength (Aesculapius' blessing); bandages: Celsus' Method ×1.5 and
+        // bandage.strength (Aesculapius as patron); food: food.strength (Ceres).
         let magnitude = def.tags?.includes('medicine') ? 1 + sheet.modifier('potion.strength') : 1;
-        if (def.tags?.includes('bandage') && sheet.hasFlag('perk-medicina-celsus')) magnitude *= 1.5;
+        if (def.tags?.includes('bandage')) magnitude *= (sheet.hasFlag('perk-medicina-celsus') ? 1.5 : 1) * (1 + sheet.modifier('bandage.strength'));
+        if (def.tags?.includes('food')) magnitude *= 1 + sheet.modifier('food.strength');
         sheet.applyEffects(`item:${itemId}`, def.effects, { magnitude });
         if (itemId === 'theriaca' && sheet.hasFlag('perk-medicina-theriaca')) sheet.applyEffects('item:theriaca-immunity', [{ kind: 'flag', target: 'poison.immune', amount: 1, duration: 180 }]);
       }

@@ -120,6 +120,7 @@ export class Standing {
   setCleanliness(c: Cleanliness) {
     this._cleanliness = c;
     if (c === 'lautus') this.lautusUntil = this.hours() + STANDING.lautusHours;
+    this.events?.emit('standing:cleanliness', { cleanliness: c });
   }
 
   private changed() {

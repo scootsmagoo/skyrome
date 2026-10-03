@@ -1,44 +1,41 @@
 /**
- * Crimes, bounties and jurisdictions. GDD §14.1 (law) is pending; ids follow the GDD's Latin
- * (furtum, caedes-supplicis, usurpatio-togae, falsum) and bounties keep Skyrim's proportions
- * (assault 40, murder 1000, theft = half the value). Jurisdiction is by authority (research
- * §B9.7, society §8.2): the Vigiles by night, the Urban Cohorts by day, the Praetorians at the palace.
+ * Crimes, bounties and ledgers — docs/GDD.md §14.1. Bounties go on the city ledger (`urbs`),
+ * enforced by the Urban Cohorts by day and the Vigiles by night, or on the Praetorians' separate
+ * Palatine ledger (`palatium`: the Palatine and treason).
  */
 import type { CrimeDef, CrimeId } from '../types';
 
 export const CRIMES: Record<CrimeId, CrimeDef> = {
-  violatio: { id: 'violatio', name: 'Trespassing', latin: 'violatio domus', bounty: 5 },
-  effractura: { id: 'effractura', name: 'Breaking a lock', latin: 'effractura', bounty: 5 },
-  furtum: { id: 'furtum', name: 'Theft', latin: 'furtum', bounty: 0, valueMult: 0.5 },
-  'furtum-zonae': { id: 'furtum-zonae', name: 'Pickpocketing', latin: 'furtum ex zona', bounty: 25, valueMult: 0.5 },
-  iniuria: { id: 'iniuria', name: 'Assault', latin: 'iniuria', bounty: 40 },
-  caedes: { id: 'caedes', name: 'Murder', latin: 'caedes', bounty: 1000 },
-  'caedes-supplicis': { id: 'caedes-supplicis', name: 'Killing one who yielded', latin: 'caedes supplicis', bounty: 1000 },
-  damnum: { id: 'damnum', name: 'Killing livestock', latin: 'damnum', bounty: 20 },
-  sacrilegium: { id: 'sacrilegium', name: 'Sacrilege', latin: 'sacrilegium', bounty: 200, valueMult: 1 },
-  incendium: { id: 'incendium', name: 'Arson', latin: 'incendium', bounty: 500 },
-  veneficium: { id: 'veneficium', name: 'Poisoning or sorcery', latin: 'veneficium', bounty: 500 },
-  falsum: { id: 'falsum', name: 'Forgery', latin: 'falsum', bounty: 1000 },
-  'usurpatio-togae': { id: 'usurpatio-togae', name: 'Wearing the toga without citizenship', latin: 'usurpatio togae', bounty: 500 },
-  'usurpatio-anuli': { id: 'usurpatio-anuli', name: 'Wearing the gold ring without rank', latin: 'usurpatio anuli', bounty: 250 },
-  fuga: { id: 'fuga', name: 'Escaping custody', latin: 'fuga e carcere', bounty: 100 },
-  resistentia: { id: 'resistentia', name: 'Resisting arrest', latin: 'resistentia', bounty: 50 },
+  trespass: { id: 'trespass', name: 'Trespassing', latin: 'violatio domus', bounty: 5 },
+  furtum: { id: 'furtum', name: 'Theft', latin: 'furtum', bounty: 0, valueMult: 2, min: 5 },
+  'furtum-personae': { id: 'furtum-personae', name: 'Pickpocketing', latin: 'furtum personae', bounty: 25, valueMult: 2 },
+  effractio: { id: 'effractio', name: 'Lockpicking', latin: 'effractio', bounty: 10 },
+  rixa: { id: 'rixa', name: 'Starting a brawl', latin: 'rixa', bounty: 10, violent: true },
+  vis: { id: 'vis', name: 'Assault', latin: 'vis', bounty: 40, violent: true },
+  sacrilegium: { id: 'sacrilegium', name: 'Sacrilege', latin: 'sacrilegium', bounty: 250 },
+  'violatio-sepulcri': { id: 'violatio-sepulcri', name: 'Tomb violation', latin: 'violatio sepulcri', bounty: 150 },
+  usurpatio: { id: 'usurpatio', name: 'Usurping a status', latin: 'usurpatio', bounty: 100 },
+  falsum: { id: 'falsum', name: 'Forgery', latin: 'falsum', bounty: 500 },
+  homicidium: { id: 'homicidium', name: 'Murder', latin: 'homicidium', bounty: 1000, violent: true, murder: true },
+  'caedes-supplicis': { id: 'caedes-supplicis', name: 'Killing one who yielded', latin: 'caedes supplicis', bounty: 1000, violent: true, murder: true },
+  incendium: { id: 'incendium', name: 'Arson', latin: 'incendium', bounty: 1500, violent: true },
+  maiestas: { id: 'maiestas', name: 'Treason', latin: 'maiestas', bounty: 5000, violent: true, ledger: 'palatium' },
+  fuga: { id: 'fuga', name: 'Escaping custody', latin: 'fuga', bounty: 100 },
 };
 
-export interface JurisdictionDef {
+/** Status crimes (§3.2, §8.2): the toga without citizenship 100, the gold ring without rank 200. */
+export const USURPATIO_BOUNTY = { toga: 100, anulus: 200 };
+
+export interface LedgerDef {
   id: string;
   name: string;
-  /** Faction whose guards enforce it. */
-  guards: string;
+  /** Who enforces it: by day / by night. */
+  guards: { day: string; night: string };
   /** Where the player is held. */
   jail: string;
 }
 
-export const JURISDICTIONS: JurisdictionDef[] = [
-  { id: 'cohortes-urbanae', name: 'Urban Cohorts (by day)', guards: 'cohortes-urbanae', jail: 'carcer-tullianum' },
-  { id: 'vigiles', name: 'Vigiles (by night)', guards: 'vigiles', jail: 'carcer-tullianum' },
-  { id: 'praetoriani', name: 'Praetorian Guard (the palace)', guards: 'praetoriani', jail: 'castra-praetoria' },
+export const LEDGERS: LedgerDef[] = [
+  { id: 'urbs', name: 'The City', guards: { day: 'cohortes-urbanae', night: 'vigiles' }, jail: 'carcer-tullianum' },
+  { id: 'palatium', name: 'The Palatine', guards: { day: 'praetoriani', night: 'praetoriani' }, jail: 'castra-praetoria' },
 ];
-
-/** Crimes the Vigiles take at any hour (fire and burglary are theirs). */
-export const VIGILES_CRIMES: readonly CrimeId[] = ['incendium', 'effractura'];

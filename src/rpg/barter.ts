@@ -14,7 +14,7 @@
 import type { EventBus, GameEvents } from '../core/Events';
 import { clamp } from '../core/math';
 import type { NpcDef } from '../npc/types';
-import { rollSkillCheck } from './checks';
+import { rollSkillCheck, traitDisposition } from './checks';
 import { BARTER, XP } from './data/balance';
 import type { FactionSystem } from './factions';
 import { isQuestItem, type InventoryImpl } from './inventory';
@@ -123,6 +123,8 @@ export interface TradeResult {
 
 export class BarterSystem {
   private readonly merchants = new Map<string, MerchantState>();
+  /** Extra disposition per NPC (install wires the dialogue memory: threats, gifts). */
+  extraDisposition?: (npcId: string) => number;
 
   constructor(private readonly deps: BarterDeps) {}
 
@@ -140,12 +142,16 @@ export class BarterSystem {
     return npc?.tags?.find((t) => t.startsWith('vendor:'))?.slice(7);
   }
 
-  /** −20…+20: Fama with the vendor's faction and district /10, origin trait, haggles and gifts. */
+  /**
+   * −20…+20: Fama with the vendor's faction and district /10, origin traits (street-wise +10 at
+   * plebeian vendors = −5% prices; Caesar's countryman, old wound…), haggles, gifts and threats.
+   */
   disposition(npcId: string): number {
     const npc = this.deps.npcs?.get(npcId);
     const fama = npc?.faction ? (this.deps.factions?.reputation(npc.faction) ?? 0) : 0;
     let d = fama / 10 + (this.deps.districtFama?.(npcId) ?? 0) / 10 + (this.merchants.get(npcId)?.dispositionDelta ?? 0);
     if (this.deps.sheet.hasFlag('trait-street-wise') && PLEBEIAN.has(this.vendorKind(npc) ?? '')) d += 10;
+    d += traitDisposition(this.deps.sheet, npc) + (this.extraDisposition?.(npcId) ?? 0);
     return clamp(d, -BARTER.dispositionMax, BARTER.dispositionMax);
   }
 

@@ -25,7 +25,7 @@ declare module '../core/Events' {
     'faction:rank': { factionId: string; rankId: string; title: string };
     'faction:reputation': { factionId: string; amount: number; delta: number };
     'crime:bounty': { jurisdiction: string; bounty: number };
-    'crime:cleared': { jurisdiction: string; how: 'paid' | 'jail' | 'bribe' | 'persuade' | 'pardon' };
+    'crime:cleared': { jurisdiction: string; how: 'paid' | 'jail' | 'bribe' | 'persuade' | 'pardon' | 'lapsed' | 'ludus' | 'fine' };
     'crime:jailed': { jurisdiction: string; days: number };
     'crime:resist': { jurisdiction: string };
     /** A severe sentence instead of jail: condemnation to the gladiator school (the arena line picks this up). */
@@ -35,6 +35,8 @@ declare module '../core/Events' {
     'devotion:invoked': { deityId: string; invocation: string };
     'devotion:act': { act: string; god?: string };
     'standing:changed': { dignitas: string; infamia: number; legal: string };
+    /** Washed at the baths, cleaned at a fountain, or dirtied by blood, sewers or rain (§14.8). */
+    'standing:cleanliness': { cleanliness: 'lautus' | 'normal' | 'sordidus' };
   }
 }
 

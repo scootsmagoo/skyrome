@@ -1,10 +1,11 @@
 /**
- * Enemy tiers → CombatProfile (docs/GDD.md §6.11). Stats are fixed per tier — the GDD has no level
- * scaling; areas pick tiers by danger band. A spawner chooses one of the tier's kits (weapon,
- * shield, AR, armor family); bosses override health and kit.
+ * Enemy tiers and archetypes → CombatProfile (docs/GDD.md §6.11, §13.1). Stats are fixed per tier —
+ * the GDD has no level scaling; areas pick tiers by danger band. A spawner chooses one of the tier's
+ * kits (weapon, shield, AR, armor family), or an archetype ('grassator', 'miles-urbanus', 'thraex'…)
+ * whose kit sets the weapon, worn pieces and AR; bosses override health and kit.
  */
-import { flatStats, FISTS, type CombatantStats } from './combat-math';
-import { ENEMY_TIERS, NATURAL_WEAPONS } from './data/enemies';
+import { armorFamilyOf, flatStats, FISTS, type CombatantStats } from './combat-math';
+import { ARCHETYPES, ENEMY_TIERS, NATURAL_WEAPONS, type ArchetypeDef } from './data/enemies';
 import type { ItemDb } from './items';
 import type { CombatProfile, EnemyTierDef, WeaponStats } from './types';
 
@@ -79,4 +80,50 @@ export function profileStats(p: CombatProfile): CombatantStats {
 export function profileWeapon(p: CombatProfile, items: ItemDb): WeaponStats {
   if (!p.weapon) return FISTS;
   return items.get(p.weapon)?.weapon ?? NATURAL_WEAPONS[p.weapon] ?? FISTS;
+}
+
+const archetypes = new Map<string, ArchetypeDef>(ARCHETYPES.map((a) => [a.id, a]));
+
+export function archetypeDef(id: string): ArchetypeDef | undefined {
+  return archetypes.get(id);
+}
+
+export function allArchetypes(): ArchetypeDef[] {
+  return [...archetypes.values()];
+}
+
+export interface ArchetypeOptions {
+  /** One of the archetype's tiers (gladiators: 'thug' for a tiro, 'veteran', 'champion'); default the first. */
+  tier?: string;
+  /** Kit index (default 0). */
+  kit?: number;
+  health?: number;
+}
+
+/**
+ * A CombatProfile for a §13.1 archetype: the tier's stats with the archetype's kit. Without an
+ * explicit AR the kit's AR is the sum of its worn pieces' ratings (body family sets the matrix).
+ */
+export function archetypeProfile(id: string, items: ItemDb, opts: ArchetypeOptions = {}): CombatProfile {
+  const a = archetypes.get(id);
+  if (!a) throw new Error(`[enemies] unknown archetype "${id}"`);
+  const tiersOf = Array.isArray(a.tier) ? a.tier : [a.tier];
+  const tier = opts.tier && tiersOf.includes(opts.tier) ? opts.tier : tiersOf[0];
+  const kit = a.kits[opts.kit ?? 0] ?? a.kits[0];
+  const worn = (kit.worn ?? []).map((w) => items.get(w)).filter((d): d is NonNullable<typeof d> => !!d);
+  const wornAr = worn.reduce((n, d) => n + (d.armor?.rating ?? 0), 0);
+  const base = combatProfileFor(tier, { health: opts.health, armor: kit.ar ?? wornAr });
+  return {
+    ...base,
+    name: a.name,
+    archetype: a.id,
+    band: Array.isArray(a.band) ? a.band[0] : a.band,
+    armorFamily: kit.family ?? (worn.length ? armorFamilyOf(worn) : base.armorFamily),
+    weapon: kit.weapon,
+    shield: kit.shield,
+    ranged: kit.ranged,
+    worn: kit.worn ? [...kit.worn] : undefined,
+    poison: kit.poison,
+    companion: kit.companion,
+  };
 }

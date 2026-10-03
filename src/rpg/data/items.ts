@@ -219,7 +219,7 @@ const FOOD: ItemDef[] = [
 ];
 
 const REMEDIES: ItemDef[] = [
-  remedy('fascia', 'Bandage', 'fascia', 0.05, 2 * AS, [hot(25, 5), { kind: 'cure', target: 'injury', amount: 1 }], 'A roll of clean linen: +25 health over 5 s; stops bleeding.', ['bandage']),
+  remedy('fascia', 'Bandage', 'fascia', 0.05, 2 * AS, [hot(25, 5), { kind: 'cure', target: 'injury:cruentus', amount: 1 }], 'A roll of clean linen: +25 health over 5 s; stops bleeding.', ['bandage']),
   remedy('emplastrum', 'Poultice', 'emplastrum', 0.1, 4 * AS, [hot(40, 10)], 'A plaster of herbs and honey: +40 health over 10 s.'),
   remedy('collyrium', 'Eye Salve', 'collyrium', 0.05, 4 * AS, [{ kind: 'cure', target: 'state:caecatus', amount: 1 }], 'A stick of eye salve stamped with the oculist’s name. Cures blindness from sand or smoke.'),
   remedy('theriaca', 'Theriac', 'theriaca', 0.15, 15, [{ kind: 'cure', target: 'poison', amount: 1 }, { kind: 'flag', target: 'poison.resist', amount: 1, duration: 180 }], 'Andromachus’ antidote of sixty-four ingredients (also sold as Mithridatium): cures poison and halves it for a game hour.'),
@@ -256,6 +256,7 @@ const TOOLS: ItemDef[] = [
   misc('cera-signatoria', 'Sealing Wax', 'cera signatoria', 0.05, 2 * AS, 'Red sealing wax, for resealing letters (Locks & Seals).'),
   misc('defixio', 'Curse Tablet', 'defixio', 0.2, 2 * AS, 'A blank lead sheet. Inscribe it, nail it and deposit it at a grave, well or spring. It harms only a target who learns of it.', { tags: ['curse'] }),
   misc('clavus', 'Nail', 'clavus', 0.02, AS, 'An iron nail, to pierce a curse tablet.', { tags: ['curse'] }),
+  misc('tabella-votiva', 'Votive Tablet', 'tabella votiva', 0.2, 0, 'A little bronze tablet for a temple wall: V·S·L·M, votum solvit libens merito, “paid the vow, willingly and deservedly”. Given when you pay a vow (§14.6).'),
   misc('tessera-frumentaria', 'Grain Token', 'tessera frumentaria', 0.01, 25, 'A lead token for the monthly grain dole at the Porticus Minucia. Worth 25 den. on the black market.'),
   misc('tessera-theatralis', 'Theatre Token', 'tessera theatralis', 0.01, AS, 'A bone token for a seat at the theatre.'),
   misc('tali', 'Knucklebones', 'tali', 0.05, 4 * AS, 'Four sheep’s knucklebones. Dice games are illegal outside the Saturnalia.'),

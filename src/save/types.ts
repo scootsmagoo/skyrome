@@ -30,14 +30,24 @@ export interface SaveMeta {
   level?: number;
   /** Real seconds played. */
   playTime: number;
+  /** The file's saveVersion. */
   version: number;
   /** Serialized size in characters. */
   size?: number;
 }
 
+/**
+ * A save file (GDD §14.13): `{ saveVersion, generatorVersion, worldSeed, gameTime, … }` with every
+ * saveable's section under `data` — the player (`sheet`, `inventory`, `player` position, `standing`,
+ * `devotion`), quest states (`quests`), faction states (`factions`) and entity deltas (`entityDeltas`).
+ */
 export interface SaveFile {
   format: 'skyrome-save';
-  version: number;
+  saveVersion: number;
+  /** Version of the procedural generators (entity deltas key on their output). */
+  generatorVersion: number;
+  worldSeed: number;
+  gameTime: { totalHours: number; elapsedDays: number; date?: { year: number; month: number; day: number; hour: number; minute: number }; clamp?: string | null };
   meta: SaveMeta;
   data: Record<string, unknown>;
 }

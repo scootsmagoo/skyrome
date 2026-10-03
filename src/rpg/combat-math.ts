@@ -200,7 +200,8 @@ export function computeAttack(stats: CombatantStats, weapon: WeaponStats | undef
   }
   raw *= sneakMult;
 
-  const critChance = COMBAT.crit.chance + (stats.hasFlag('luck.crit') ? COMBAT.crit.fortunaBonus : 0);
+  // 3% base; luck rolls (Fortuna +5%, infaustus −10%) and crit.chance (a good omen +5%) shift it.
+  const critChance = Math.max(0, COMBAT.crit.chance + stats.modifier('luck') + stats.modifier('crit.chance'));
   const crit = !opts.sneak && opts.critRoll !== undefined && opts.critRoll < critChance;
   if (crit) raw *= COMBAT.crit.mult;
   raw *= stats.damageMult ?? 1;
@@ -380,7 +381,8 @@ export function createPoise(max: number): PoiseState {
 
 /**
  * The player's poise (§6.5): 50, +12 in heavy body armor, +20 with a shield raised, +20 old wound,
- * +30 Segmentata Drill (heavy), +10 per enemy beyond the first for a Dacian survivor (max +30).
+ * +30 Segmentata Drill (heavy), +10 per enemy beyond the first for a Dacian survivor (max +30),
+ * plus poise.max (Mithras as patron +15).
  */
 export function playerPoise(stats: CombatantStats, o: { heavyBody?: boolean; shieldRaised?: boolean; enemies?: number } = {}): number {
   const P = COMBAT.poise;
@@ -389,8 +391,7 @@ export function playerPoise(stats: CombatantStats, o: { heavyBody?: boolean; shi
   if (o.shieldRaised) p += P.shieldRaised;
   if (stats.hasFlag('trait-old-wound')) p += 20;
   if (stats.hasFlag('trait-survivor')) p += Math.min(30, 10 * Math.max(0, (o.enemies ?? 1) - 1));
-  if (stats.hasFlag('patron.poise')) p += 15;
-  return p;
+  return p + stats.modifier('poise.max');
 }
 
 /**
@@ -457,6 +458,8 @@ export function resolveHit(h: HitInput): HitResult {
   let typed = raw * typeFactor(type, family);
   if (type === 'thrust' && (family === 'mail' || family === 'plate')) typed *= 1 + (h.attack.thrustVsMetal ?? 0);
   if (type === 'blunt' && h.defender?.hasFlag('perk-light-armor-padded')) typed *= 0.8;
+  // damage.taken: Jupiter's blessing and a vow −10% each.
+  if (h.defender) typed *= Math.max(0, 1 + h.defender.modifier('damage.taken'));
   let afterArmor = typed * (1 - armorReduction(h.armor));
   let poise = h.attack.poise;
   let blockStamina = 0;
@@ -481,6 +484,15 @@ export function difficultyMult(difficulty: Difficulty, attackerIsPlayer: boolean
   const d = DIFFICULTY[difficulty] ?? DIFFICULTY.normalis;
   if (attackerIsPlayer) return d.dealt;
   return defenderIsPlayer ? d.taken : 1;
+}
+
+/**
+ * Fall damage (§6.6): (h − 4) × 10 health for falls over 4 game metres (the Tarpeian Rock, 15–18 m,
+ * does 110–140). Roof-runner takes none below 6 m.
+ */
+export function fallDamage(height: number, stats?: Pick<CombatantStats, 'hasFlag'>): number {
+  if (stats?.hasFlag('perk-athletics-roof-runner') && height < 6) return 0;
+  return Math.max(0, (height - 4) * 10);
 }
 
 /** Balancing helper: swings to kill, and seconds when only `hitRate` of swings land unblocked. */

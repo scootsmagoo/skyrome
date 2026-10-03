@@ -79,7 +79,22 @@ export type ModifierId =
   | 'pickpocket.chance'
   | 'potion.strength'
   | 'blessing.duration'
-  | 'xp.mult';
+  | 'xp.mult'
+  // rpg extensions (GDD §14): damage taken (Jupiter, vows), luck rolls (crit, lifts, lock zones),
+  // combat-only stamina regeneration (Mars), extra poise (Mithras), bandage and food strength,
+  // poison and fire resistance, arena crowd favor and missio, per-skill XP (xp.<skill>).
+  | 'damage.taken'
+  | 'luck'
+  | 'crit.chance'
+  | 'stamina.regenCombat'
+  | 'poise.max'
+  | 'bandage.strength'
+  | 'food.strength'
+  | 'poison.resist'
+  | 'fire.resist'
+  | 'arena.favor'
+  | 'arena.missio'
+  | `xp.${string}`;
 
 // ------------------------------------------------------------------ items
 
@@ -161,6 +176,8 @@ export interface Effect {
   amount: number;
   /** Seconds (game-real seconds); omit for instant. */
   duration?: number;
+  /** rpg extension: `amount` is a percentage of the pool's max (restore, regen, damage, fortify on a pool). */
+  percent?: boolean;
 }
 
 export interface ItemDef {
@@ -277,6 +294,16 @@ export interface CombatProfile {
   reaction?: number;
   /** Beasts: never yield, use unblockable charges and grapples (rpg extension). */
   beast?: boolean;
+  /** §13.1 archetype id ('grassator', 'miles-urbanus'…) (rpg extension). */
+  archetype?: string;
+  /** Thrown or ranged backup: pilum, net, sling shot (rpg extension). */
+  ranged?: string;
+  /** Worn item ids for the avatar and loot (rpg extension). */
+  worn?: string[];
+  /** Weapon coating, a poison condition id (rpg extension). */
+  poison?: string;
+  /** An animal companion's tier (rpg extension). */
+  companion?: string;
 }
 
 // ------------------------------------------------------------------ runtime services (implemented by src/rpg)
@@ -384,6 +411,10 @@ export interface ConditionDef {
   contagion?: number;
   /** Several copies may run at once (bleeding stacks ×3). */
   maxStacks?: number;
+  /** rpg extension, blessings: 'temple' (one at a time, 24 game hours) or 'lares' (the compitum favor, 2 game hours). */
+  slot?: 'temple' | 'lares';
+  /** rpg extension, blessings: landmark id(s) of the temple that grants it. */
+  temple?: string | string[];
 }
 
 export interface LootEntry {
@@ -446,24 +477,23 @@ export interface EnemyTierDef {
   beast?: boolean;
 }
 
-/** Crime ids (Latin, after the GDD's furtum, caedes-supplicis, usurpatio-togae, falsum). */
+/** Crime ids (docs/GDD.md §14.1). Resisting arrest and fleeing are bounty multipliers, not crimes. */
 export type CrimeId =
-  | 'violatio' // trespass
-  | 'effractura' // breaking a lock
-  | 'furtum' // theft
-  | 'furtum-zonae' // pickpocketing
-  | 'iniuria' // assault
-  | 'caedes' // murder
-  | 'caedes-supplicis' // killing a foe who yielded (GDD §6.9)
-  | 'damnum' // killing livestock
-  | 'sacrilegium'
+  | 'trespass'
+  | 'furtum' // theft: 2 × value (min 5)
+  | 'furtum-personae' // caught pickpocketing: 25 + 2 × value
+  | 'effractio' // lockpicking seen
+  | 'rixa' // starting a brawl
+  | 'vis' // assault
+  | 'sacrilegium' // theft or desecration in a temple
+  | 'violatio-sepulcri' // tomb violation
+  | 'usurpatio' // the toga without citizenship (100) / the gold ring without rank (200)
+  | 'falsum' // forging seals, wills or coins
+  | 'homicidium' // murder
+  | 'caedes-supplicis' // killing a yielded foe
   | 'incendium' // arson
-  | 'veneficium' // poisoning or sorcery
-  | 'falsum' // forgery (lex Cornelia de falsis)
-  | 'usurpatio-togae' // the toga without citizenship
-  | 'usurpatio-anuli' // the gold ring without equestrian rank
-  | 'fuga' // escaping custody
-  | 'resistentia'; // resisting arrest
+  | 'maiestas' // treason (the Praetorian ledger)
+  | 'fuga'; // escaping custody
 
 export interface CrimeDef {
   id: CrimeId;
@@ -471,8 +501,16 @@ export interface CrimeDef {
   latin?: string;
   /** Flat bounty in denarii. */
   bounty: number;
-  /** Extra bounty as a fraction of stolen value (theft, pickpocket). */
+  /** Extra bounty per denarius of stolen value. */
   valueMult?: number;
+  /** rpg extension: the bounty is at least this. */
+  min?: number;
+  /** rpg extension: a violent crime (no asylum). */
+  violent?: boolean;
+  /** rpg extension: a murder conviction (sentence ad ludum). */
+  murder?: boolean;
+  /** rpg extension: always booked in this ledger ('palatium' for maiestas). */
+  ledger?: string;
 }
 
 /** A patron deity: a passive bonus while chosen and an invocation (Z) that spends pietas. */
@@ -483,7 +521,7 @@ export interface DeityDef {
   /** Where the player chooses this god. */
   temple: string;
   passive: { description: string; modifiers?: Partial<Record<ModifierId, number>>; flags?: string[] };
-  invocation: { name: string; description: string; cost: number; effects: Effect[] };
+  invocation: { name: string; description: string; cost: number; effects: Effect[]; /** rpg extension: usable once per game day (Invictus). */ oncePerDay?: boolean };
   /** The shrine blessing this god grants (ConditionDef id). */
   blessing?: string;
 }

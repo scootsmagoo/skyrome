@@ -2,25 +2,39 @@
  * Dialogue engine (game.dialogue). Picks the conversation for an NPC (specific dialogues by
  * priority, then '*' fallbacks), walks the node graph and exposes a UI-facing view:
  *
- *   const v = game.dialogue.start('ex_pudens');   // { npcId, speakerName, text, choices: [{ text, enabled, tag? }] }
+ *   const v = game.dialogue.start('ex-scriba');   // { npcId, speakerName, text, choices: [{ text, enabled, tag? }] }
  *   game.dialogue.choose(0);                      // pick a visible choice
  *   game.dialogue.advance();                      // continue a node without choices (or close an ending one)
  *   game.dialogue.end();
  *
- * Skill checks pass with chance clamp((skill − difficulty + 25) / 25, 0, 1), rolled on a seeded RNG.
- * Rhetoric checks add persuasion points for the audience (dress, Fama, Infamia, cleanliness),
- * Exordium (+10 on the first check with each person) and persuade.chance; Fortuna's "Fortune's
- * Turn" makes the next roll pass. A passed check trains 10 × its difficulty tier, a failed one 2.
- * Bribes cost denarii and always pass. `once` choices and
- * per-NPC memory are saved; global flags are shared with quests (game.quests.flags).
+ * Skill checks follow docs/GDD.md §14.5: p = clamp(0.05, 0.95, 0.50 + (skill + mods − DC) / 100),
+ * rolled on a seeded RNG. Rhetoric checks add the persuasion mods (disposition, Dignitas, dress,
+ * Fama, Infamia, cleanliness), Exordium (+10 on the first check with each person), the approach
+ * (intimidate, invoke patron) and persuade.chance; Fortuna's "Fortune's Turn" makes the next roll
+ * pass. A passed check trains 10 × its tier, a failed one 2, and a failure locks that approach with
+ * that NPC for 24 game hours. Bribes cost denarii and always pass (not with the incorruptible).
+ * `once` choices and per-NPC memory are saved; global flags are shared with quests (game.quests.flags).
  *
  * Choice resolution order: once-mark → bribe/check → effects → end/goto. A choice with no goto,
  * check or bribe ends the conversation.
  */
 import type { Game } from '../core/Game';
 import { Rng } from '../core/Rng';
-import { checkTier, persuasionPoints, rollSkillCheck, skillCheckChance } from '../rpg/checks';
-import { XP } from '../rpg/data/balance';
+import {
+  audienceOf,
+  bribeCost,
+  checkTier,
+  dignitasOf,
+  intimidationPoints,
+  intimidationPossible,
+  patronPoints,
+  persuasionPoints,
+  rollSkillCheck,
+  skillCheckChance,
+  traitDisposition,
+  type Audience,
+} from '../rpg/checks';
+import { PERSUASION, XP } from '../rpg/data/balance';
 import { formatDenarii } from '../rpg/money';
 import type { LocationDef, NpcDef } from '../npc/types';
 import { GlobalFlags, type FlagValue } from '../quests/flags';
@@ -48,7 +62,7 @@ declare module '../core/Events' {
 export interface DialogueChoiceView {
   text: string;
   enabled: boolean;
-  /** e.g. "Persuade 60%", "Bribe 5 d". */
+  /** e.g. "Persuade 60%", "Bribe 5 d", "Intimidate — failed, try tomorrow". */
   tag?: string;
   kind: 'normal' | 'check' | 'bribe';
 }
@@ -226,18 +240,23 @@ export class DialogueSystem {
 
     let goto = choice.goto;
     if (choice.bribe) {
-      if (!ctx.pay(choice.bribe.amount)) return s.view;
+      if (this.bribeRefused(npcId) || !ctx.pay(this.bribeAmount(choice.bribe, npcId))) return s.view;
       goto = choice.bribe.goto;
     } else if (choice.check) {
       const c = choice.check;
       const input = this.checkInputs(c, npcId);
       const r = rollSkillCheck(input.skill, c.difficulty, this.rng, input.bonus);
+      if (!input.possible) r.pass = false;
       s.checks++;
-      if (c.skill === 'rhetoric') this.memoryOf(npcId)._exordium = true;
+      const mem = this.memoryOf(npcId);
+      if (c.skill === 'rhetoric') mem._exordium = true;
       // Fortune's Turn: the next roll succeeds (consumed only when it changes the outcome).
-      if (!r.pass && this.game.player?.sheet?.consumeFlag('fortuna.nextRoll')) r.pass = true;
+      if (!r.pass && input.possible && this.game.player?.sheet?.consumeFlag('fortuna.nextRoll')) r.pass = true;
       // GDD §5.4: a passed check gives 10 × tier XP, a failed one 2.
       this.game.player?.sheet?.useSkill(c.skill, r.pass ? XP.rhetoric.perTier * checkTier(c.difficulty) : XP.rhetoric.fail);
+      // §14.5: intimidation sours the NPC either way; a failure locks the approach for a day.
+      if (approachOf(c) === 'intimidate') this.changeDisposition(npcId, PERSUASION.intimidate.dispositionAfter);
+      if (!r.pass) mem[failKey(c)] = this.hours();
       this.game.events.emit('dialogue:check', { npcId, dialogueId: def.id, nodeId: s.nodeId, skill: c.skill, chance: r.chance, pass: r.pass });
       goto = r.pass ? c.pass : c.fail;
     }
@@ -276,34 +295,94 @@ export class DialogueSystem {
     this.emitChange(null);
   }
 
-  /** Chance shown in a check's tag (0..1) when talking to `npcId`. */
+  /** Chance shown in a check's tag (0..1) when talking to `npcId` (0 when the approach is impossible). */
   checkChance(check: SkillCheck, npcId: string): number {
     const input = this.checkInputs(check, npcId);
-    return skillCheckChance(input.skill, check.difficulty, input.bonus);
+    return input.possible ? skillCheckChance(input.skill, check.difficulty, input.bonus) : 0;
+  }
+
+  /** The NPC's disposition toward the player: origin traits and omens plus what happened between you, −20…+20. */
+  disposition(npcId: string): number {
+    const sheet = this.game.player?.sheet;
+    const mem = this.memoryOf(npcId);
+    const delta = typeof mem._disp === 'number' ? mem._disp : 0;
+    const traits = sheet ? traitDisposition(sheet, this.game.npcs?.get(npcId)) : 0;
+    return Math.max(-PERSUASION.dispositionMax, Math.min(PERSUASION.dispositionMax, traits + delta));
+  }
+
+  /** Gifts, threats and slights: shift the remembered part of an NPC's disposition. */
+  changeDisposition(npcId: string, delta: number) {
+    const mem = this.memoryOf(npcId);
+    const cur = typeof mem._disp === 'number' ? mem._disp : 0;
+    mem._disp = Math.max(-2 * PERSUASION.dispositionMax, Math.min(2 * PERSUASION.dispositionMax, cur + delta));
+  }
+
+  /** Game hours until a failed approach can be tried again with this NPC (0 = now). */
+  retryIn(check: SkillCheck, npcId: string): number {
+    const t = this.memoryOf(npcId)[failKey(check)];
+    if (typeof t !== 'number') return 0;
+    return Math.max(0, t + PERSUASION.retryHours - this.hours());
   }
 
   /**
-   * Effective skill and bonus for a check: Rhetoric adds persuasion points for the audience (dress,
-   * Fama with the NPC's faction, Infamia, cleanliness), Exordium (+10 on the first check with each
-   * person), Clientela (+15 when invoking your patron) and persuade.chance.
+   * Effective skill, flat bonus and feasibility of a check (§14.5). Rhetoric checks add the persuasion
+   * mods for the audience (disposition, Dignitas steps, dress, Fama with the NPC's faction, Infamia,
+   * cleanliness), Exordium (+10 on the first check with each person), the approach (intimidation
+   * +2 per level and +10 armed and armored, impossible against elites; invoking the patron +15/+30,
+   * impossible without one) and persuade.chance.
    */
-  private checkInputs(c: SkillCheck, npcId: string): { skill: number; bonus: number } {
+  checkInputs(c: SkillCheck, npcId: string): { skill: number; bonus: number; possible: boolean; audience: Audience } {
     const sheet = this.game.player?.sheet;
+    const npc = this.game.npcs?.get(npcId);
+    const listener = { tags: npc?.tags, level: npc?.combat?.level };
+    const audience = c.audience ?? audienceOf(listener);
     let skill = sheet?.skillLevel(c.skill) ?? 0;
     let bonus = 0;
+    let possible = true;
+    const approach = approachOf(c);
     if (c.skill === 'rhetoric' && sheet) {
       bonus += sheet.modifier('persuade.chance');
-      if (sheet.hasFlag('perk-rhetoric-exordium') && !this.memoryOf(npcId)._exordium) skill += 10;
-      if (c.kind === 'invoke-patron' && sheet.hasFlag('perk-rhetoric-clientela')) skill += 15;
-      const faction = this.game.npcs?.get(npcId)?.faction;
-      skill += persuasionPoints(c.audience ?? 'any', {
+      if (sheet.hasFlag('perk-rhetoric-exordium') && !this.memoryOf(npcId)._exordium) skill += PERSUASION.exordium;
+      const faction = npc?.faction;
+      const theirs = dignitasOf(listener, audience);
+      skill += persuasionPoints(audience, {
         flags: sheet,
         fama: faction ? (this.game.factions?.reputation(faction) ?? 0) : 0,
         infamia: this.game.standing?.infamia,
         cleanliness: this.game.standing?.cleanliness,
+        disposition: this.disposition(npcId),
+        dignitas: this.game.standing ? { mine: this.game.standing.rank, theirs } : undefined,
       });
+      if (approach === 'intimidate') {
+        possible = intimidationPossible(audience);
+        const inv = this.game.player?.inventory;
+        const armed = !!inv?.equipped('mainHand');
+        const armored = !!inv?.worn().some((w) => w.slot === 'body' && (w.def.armor?.weightClass === 'light' || w.def.armor?.weightClass === 'heavy'));
+        skill += intimidationPoints({ playerLevel: sheet.level, targetLevel: listener.level, armedAndArmored: armed && armored });
+      } else if (approach === 'invoke-patron') {
+        const rank = this.game.factions?.rankIndex('clientela') ?? -1;
+        const pts = patronPoints({ clientelaRank: rank, perk: sheet.hasFlag('perk-rhetoric-clientela'), targetDignitas: theirs });
+        possible = rank >= PERSUASION.patron.minRank;
+        skill += pts;
+      }
     }
-    return { skill, bonus };
+    return { skill, bonus, possible, audience };
+  }
+
+  /** What a bribe choice costs with this NPC. */
+  bribeAmount(b: NonNullable<DialogueChoice['bribe']>, npcId: string): number {
+    if (b.amount !== undefined) return b.amount;
+    const npc = this.game.npcs?.get(npcId);
+    return bribeCost(b.dc ?? 25, audienceOf({ tags: npc?.tags }));
+  }
+
+  /** NPCs tagged 'incorruptible' refuse bribes. */
+  bribeRefused(npcId: string): boolean {
+    return !!this.game.npcs?.get(npcId)?.tags?.includes('incorruptible');
+  }
+
+  private hours(): number {
+    return this.game.time?.totalHours ?? 0;
   }
 
   private enter(nodeId: string): DialogueView | null {
@@ -366,12 +445,26 @@ export class DialogueSystem {
     let kind: DialogueChoiceView['kind'] = 'normal';
     if (c.bribe) {
       kind = 'bribe';
-      tag = `Bribe ${formatDenarii(c.bribe.amount)}`;
-      enabled &&= ctx.denarii() + 1e-9 >= c.bribe.amount;
+      if (this.bribeRefused(ctx.npcId)) {
+        tag = 'Bribe — refused';
+        enabled = false;
+      } else {
+        const amount = this.bribeAmount(c.bribe, ctx.npcId);
+        tag = `Bribe ${formatDenarii(amount)}`;
+        enabled &&= ctx.denarii() + 1e-9 >= amount;
+      }
     } else if (c.check) {
       kind = 'check';
-      const label = c.check.label ?? (c.check.skill === 'rhetoric' ? 'Persuade' : capital(c.check.skill));
-      tag = `${label} ${Math.round(this.checkChance(c.check, ctx.npcId) * 100)}%`;
+      const label = c.check.label ?? APPROACH_LABEL[approachOf(c.check)] ?? capital(c.check.skill);
+      const wait = this.retryIn(c.check, ctx.npcId);
+      const input = this.checkInputs(c.check, ctx.npcId);
+      if (wait > 0) {
+        tag = `${label} — failed; try again tomorrow`;
+        enabled = false;
+      } else if (!input.possible) {
+        tag = `${label} — ${approachOf(c.check) === 'invoke-patron' ? 'you have no patron' : 'impossible'}`;
+        enabled = false;
+      } else tag = `${label} ${Math.round(this.checkChance(c.check, ctx.npcId) * 100)}%`;
     }
     return { text: resolveText(c.text, ctx, dialogueId), enabled, tag, kind };
   }
@@ -409,6 +502,8 @@ export class DialogueSystem {
       denarii: () => inv()?.denarii ?? 0,
       pay: (amount) => inv()?.spendDenarii(amount) ?? false,
       receive: (amount) => inv()?.addDenarii(amount),
+      disposition: () => sys.disposition(npcId),
+      changeDisposition: (delta) => sys.changeDisposition(npcId, delta),
       attack: () => {
         game.events.emit('dialogue:attack', { npcId });
         sys.end();
@@ -435,6 +530,18 @@ export class DialogueSystem {
     }
     if (this.ownFlags) this.flags.restore(d.flags);
   }
+}
+
+const APPROACH_LABEL: Record<string, string> = { persuade: 'Persuade', intimidate: 'Intimidate', lie: 'Lie', 'invoke-patron': 'Invoke patron' };
+
+/** The approach of a check: its kind, or 'persuade' for Rhetoric and 'other' for other skills. */
+function approachOf(c: SkillCheck): string {
+  return c.kind ?? (c.skill === 'rhetoric' ? 'persuade' : 'other');
+}
+
+/** Memory key of the 24-hour lock after failing an approach (per NPC). */
+function failKey(c: SkillCheck): string {
+  return `_fail:${approachOf(c) === 'other' ? c.skill : approachOf(c)}`;
 }
 
 function onceKey(dialogueId: string, nodeId: string, idx: number) {

@@ -182,8 +182,8 @@ describe('weight and encumbrance (GDD §3.3)', () => {
     sheet.addXp(75);
     sheet.chooseLevelUp('stamina');
     expect(inv.maxWeight).toBe(55);
-    sheet.applyCondition('hercules');
-    expect(inv.maxWeight).toBe(70);
+    sheet.applyCondition('benedictio-hercules');
+    expect(inv.maxWeight).toBe(75);
     inv.add('malleus', 12); // 60 kg
     expect(inv.overEncumbered).toBe(true);
     expect(inv.speedMultiplier()).toBeCloseTo(1.9 / 4.4);
@@ -306,6 +306,17 @@ describe('condition (GDD §6.3)', () => {
 });
 
 describe('use and read', () => {
+  it('Ceres’ blessing makes food 50% stronger', () => {
+    const { inv, sheet } = setup();
+    sheet.vitals.inCombat = true;
+    sheet.vitals.damage(50);
+    sheet.applyCondition('benedictio-ceres');
+    inv.add('botulus');
+    inv.use('botulus');
+    sheet.tick(10);
+    expect(sheet.vitals.health.current).toBeCloseTo(50 + 22.5);
+  });
+
   it('food heals over time and is consumed; remedies scale with potion.strength', () => {
     const { inv, sheet, events } = setup();
     const log = record(events, ['item:used', 'item:removed']);
@@ -325,17 +336,26 @@ describe('use and read', () => {
     expect(inv.use('emplastrum')).toBe(false);
   });
 
-  it('a bandage stops bleeding, half again as strong with Celsus’ Method; theriac with the perk grants immunity', () => {
+  it('a bandage stops bleeding (not an injury), half again as strong with Celsus’ Method; theriac with the perk grants immunity', () => {
     const { inv, sheet } = setup();
     sheet.vitals.inCombat = true;
-    sheet.applyCondition('cruor');
-    sheet.vitals.damage(60);
+    sheet.applyCondition('cruentus');
+    sheet.applyCondition('injured');
+    sheet.vitals.damage(40);
     sheet.grantPerk('perk-medicina-celsus');
-    inv.add('fascia');
+    inv.add('fascia', 2);
     inv.use('fascia');
-    expect(sheet.hasCondition('cruor')).toBe(false);
+    expect(sheet.hasCondition('cruentus')).toBe(false);
+    expect(sheet.hasCondition('injured')).toBe(true);
     sheet.tick(5);
     expect(sheet.vitals.health.current).toBeCloseTo(40 + 37.5);
+    // Aesculapius as patron: +25% bandage healing on top.
+    sheet.setModifierSource('patron', { 'bandage.strength': 0.25 });
+    sheet.vitals.damage(50);
+    const before = sheet.vitals.health.current;
+    inv.use('fascia');
+    sheet.tick(5);
+    expect(sheet.vitals.health.current - before).toBeCloseTo(25 * 1.5 * 1.25);
     sheet.grantPerk('perk-medicina-theriaca');
     sheet.applyCondition('taxus');
     inv.add('theriaca');

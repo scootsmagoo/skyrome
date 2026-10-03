@@ -6,7 +6,9 @@ import type { NpcDef } from '../src/npc/types';
 import { ITEMS } from '../src/rpg/data/items';
 import { InventoryImpl } from '../src/rpg/inventory';
 import { ItemDb } from '../src/rpg/items';
+import { FactionSystem } from '../src/rpg/factions';
 import { CharacterSheetImpl } from '../src/rpg/sheet';
+import { Standing } from '../src/rpg/standing';
 import { fakeGame, record } from './rpg-fakes';
 
 beforeEach(() => {
@@ -28,6 +30,9 @@ function setup(defs: DialogueDef[], roll = 0.5) {
   fg.game.npcs = new NpcRegistry([
     { id: 'marcus', name: 'Marcus the Cobbler', appearance },
     { id: 'chosen', name: 'Chosen One', appearance, dialogue: 'special' },
+    { id: 'senator', name: 'Senator Bassus', appearance, tags: ['elite'], combat: { tier: 'civilian', health: 30, stamina: 50, armor: 0, aggression: 0, blockSkill: 0, skill: 5, level: 5 } },
+    { id: 'miles', name: 'A Soldier', appearance, tags: ['soldier', 'baetican'], combat: { tier: 'miles', health: 70, stamina: 100, armor: 50, aggression: 0.5, blockSkill: 0.5, skill: 35, level: 3 } },
+    { id: 'cato', name: 'Cato the Honest', appearance, tags: ['official', 'incorruptible'] },
   ]);
   const dialogue = new DialogueSystem(fg.game, { defs, rng: fixed(roll) });
   return { ...fg, sheet, inventory, dialogue };
@@ -91,7 +96,7 @@ describe('conversation flow', () => {
     expect(v).toMatchObject({ npcId: 'marcus', speakerName: 'Marcus the Cobbler', text: 'Salve! Shoes?', canContinue: false, willEnd: false });
     expect(v.choices.map((c) => [c.text, c.enabled, c.tag ?? ''])).toEqual([
       ['Tell me a story.', true, ''],
-      ['Lower your prices.', true, 'Persuade 40%'],
+      ['Lower your prices.', true, 'Persuade 30%'],
       ['Here is a coin for your trouble.', false, 'Bribe 3 d'],
       ['Pay the debt (10 d)', false, ''],
       ['Fight me!', true, ''],
@@ -121,28 +126,50 @@ describe('conversation flow', () => {
     expect(dialogue.choose(1)).toBeNull(); // no goto → ends
   });
 
-  it('skill checks roll on the seeded RNG; success trains the skill; persuade.chance helps', () => {
+  it('checks follow §14.5 — p = 0.50 + (skill + mods − DC) / 100, between 5% and 95% — on the seeded RNG; XP 10 × tier or 2', () => {
     const fail = setup([cobbler], 0.99);
     fail.dialogue.start('marcus');
     const checks = record(fail.events, ['dialogue:check']);
     expect(fail.dialogue.choose(1)).toMatchObject({ nodeId: 'no' });
-    expect(checks[0].e).toMatchObject({ skill: 'rhetoric', chance: 0.4, pass: false });
-    expect(fail.sheet.skillXp('rhetoric')).toBe(0);
+    expect(checks[0].e).toMatchObject({ skill: 'rhetoric', chance: 0.3, pass: false });
+    expect(fail.sheet.skillXp('rhetoric')).toBe(2);
 
-    const pass = setup([cobbler], 0.39);
+    const pass = setup([cobbler], 0.29);
     pass.dialogue.start('marcus');
     expect(pass.dialogue.choose(1)).toMatchObject({ nodeId: 'yes' });
-    expect(pass.sheet.skillXp('rhetoric')).toBeGreaterThan(0);
+    expect(pass.sheet.skillXp('rhetoric')).toBe(20); // DC 30 is tier 2 (Mediocris)
     expect(pass.dialogue.flags.get('discount')).toBe(true);
 
-    const charm = setup([cobbler], 0.99);
-    charm.sheet.setSkill('rhetoric', 30);
+    const charm = setup([cobbler], 0.94);
+    charm.sheet.setSkill('rhetoric', 80);
     charm.dialogue.start('marcus');
-    expect(charm.dialogue.view!.choices[1].tag).toBe('Persuade 100%');
+    expect(charm.dialogue.view!.choices[1].tag).toBe('Persuade 95%');
     expect(charm.dialogue.choose(1)!.nodeId).toBe('yes');
     const wine = setup([cobbler]);
     wine.sheet.setModifierSource('wine', { 'persuade.chance': 0.2 });
-    expect(wine.dialogue.start('marcus')!.choices[1].tag).toBe('Persuade 60%');
+    expect(wine.dialogue.start('marcus')!.choices[1].tag).toBe('Persuade 50%');
+    const lucky = setup([cobbler], 0.99);
+    lucky.sheet.applyEffects('invocation:patronus-fortuna', [{ kind: 'flag', target: 'fortuna.nextRoll', amount: 1, duration: 600 }]);
+    lucky.dialogue.start('marcus');
+    expect(lucky.dialogue.choose(1)!.nodeId).toBe('yes');
+    expect(lucky.sheet.hasFlag('fortuna.nextRoll')).toBe(false);
+  });
+
+  it('a failed approach is locked with that NPC for 24 game hours', () => {
+    const { dialogue, game } = setup([cobbler], 0.99);
+    dialogue.start('marcus');
+    dialogue.choose(1);
+    // Back to the hello node through the story loop.
+    expect(dialogue.start('marcus')!.nodeId).toBe('again');
+    dialogue.choose(0);
+    dialogue.advance();
+    const hello = dialogue.advance()!;
+    expect(hello.nodeId).toBe('hello');
+    expect(hello.choices.find((c) => c.text === 'Lower your prices.')).toMatchObject({ enabled: false, tag: 'Persuade — failed; try again tomorrow' });
+    expect(dialogue.retryIn(cobbler.nodes.hello.choices![1].check!, 'marcus')).toBe(24);
+    dialogue.end();
+    game.time.advanceHours(24);
+    expect(dialogue.retryIn(cobbler.nodes.hello.choices![1].check!, 'marcus')).toBe(0);
   });
 
   it('bribes pay and always pass; enabled() gates; flags reveal hidden choices', () => {
@@ -191,6 +218,88 @@ describe('conversation flow', () => {
     expect(v.choices.map((c) => c.text)).toEqual(['nowhere']);
     expect(dialogue.choose(0)).toBeNull();
     expect(dialogue.active).toBe(false);
+  });
+});
+
+const approaches = defineDialogue({
+  id: 'approaches',
+  npcs: ['senator', 'miles', 'cato', 'marcus'],
+  start: () => 'a',
+  nodes: {
+    a: {
+      text: 'Well?',
+      choices: [
+        { text: 'Persuade', check: { skill: 'rhetoric', difficulty: 40, pass: 'ok', fail: 'no' } },
+        { text: 'Intimidate', check: { skill: 'rhetoric', difficulty: 40, kind: 'intimidate', pass: 'ok', fail: 'no' } },
+        { text: 'Invoke my patron', check: { skill: 'rhetoric', difficulty: 40, kind: 'invoke-patron', pass: 'ok', fail: 'no' } },
+        { text: 'Bribe', bribe: { dc: 20, goto: 'ok' } },
+      ],
+    },
+    ok: { text: 'Very well.', end: true },
+    no: { text: 'No.', end: true },
+  },
+});
+
+describe('approaches and mods (GDD §14.5)', () => {
+  const tags = (v: { choices: { tag?: string; enabled: boolean }[] }) => v.choices.map((c) => [c.tag, c.enabled]);
+
+  it('Dignitas steps and dress count with elites; intimidation is impossible against them; officials take no bribes if incorruptible', () => {
+    const { dialogue, game, sheet } = setup([approaches]);
+    game.standing = new Standing(game.events);
+    // Senator (Dignitas 4) vs a citizen (2): −10.
+    expect(tags(dialogue.start('senator')!)).toEqual([
+      ['Persuade 10%', true], // 10 − 10 vs 40
+      ['Intimidate — impossible', false],
+      ['Invoke patron — you have no patron', false],
+      ['Bribe 50 d', false], // DC 20 × 0.5 × 5 (officials and elites)
+    ]);
+    dialogue.end();
+    sheet.setSkill('rhetoric', 50);
+    sheet.setFlagSource('equip:cloak', ['dress.toga']);
+    expect(dialogue.start('senator')!.choices[0].tag).toBe('Persuade 60%'); // 50 − 10 (Dignitas) + 10 (toga) vs 40
+    dialogue.end();
+    expect(tags(dialogue.start('cato')!)[3]).toEqual(['Bribe — refused', false]);
+  });
+
+  it('intimidation: +2 per level above the target, +10 armed and armored; it sours the NPC either way', () => {
+    const { dialogue, sheet, inventory, game } = setup([approaches], 0.99);
+    game.standing = new Standing(game.events);
+    sheet.setSkill('rhetoric', 40);
+    sheet.addXp(75 + 100 + 125 + 150); // level 5
+    expect(sheet.level).toBe(5);
+    // The soldier is level 3 (+4); unarmed: 40 + 4 − 40 → 54%; Baetican traits don't apply.
+    expect(dialogue.start('miles')!.choices[1].tag).toBe('Intimidate 54%');
+    dialogue.end();
+    inventory.add('gladius');
+    inventory.equip('gladius');
+    inventory.add('thorax-coriaceus');
+    inventory.equip('thorax-coriaceus');
+    expect(dialogue.start('miles')!.choices[1].tag).toBe('Intimidate 64%');
+    dialogue.choose(1);
+    expect(dialogue.disposition('miles')).toBe(-5);
+    expect(dialogue.start('miles')!.choices[0].tag).toBe('Persuade 45%'); // disposition −5
+    dialogue.end();
+    sheet.setFlagSource('origin', ['trait-caesars-countryman']);
+    expect(dialogue.disposition('miles')).toBe(5);
+  });
+
+  it('invoking a patron needs Clientela rank amicus-minor: +15, +15 more with the perk; bribes cost DC × 0.5 × status', () => {
+    const { dialogue, sheet, game, inventory } = setup([approaches]);
+    game.factions = new FactionSystem(undefined, game.events);
+    game.factions.join('clientela');
+    expect(dialogue.start('marcus')!.choices[2]).toMatchObject({ enabled: false, tag: 'Invoke patron — you have no patron' });
+    dialogue.end();
+    game.factions.addReputation('clientela', 10);
+    expect(dialogue.start('marcus')!.choices[2].tag).toBe('Invoke patron 35%'); // 10 + 15 vs 40
+    dialogue.end();
+    sheet.grantPerk('perk-rhetoric-clientela');
+    expect(dialogue.start('marcus')!.choices[2].tag).toBe('Invoke patron 50%');
+    expect(dialogue.view!.choices[3]).toMatchObject({ tag: 'Bribe 10 d', enabled: false });
+    dialogue.end();
+    inventory.addDenarii(20);
+    expect(dialogue.start('miles')!.choices[3]).toMatchObject({ tag: 'Bribe 20 d', enabled: true });
+    expect(dialogue.choose(3)!.nodeId).toBe('ok');
+    expect(inventory.denarii).toBe(0);
   });
 });
 

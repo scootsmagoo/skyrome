@@ -24,7 +24,8 @@ import {
   typeFactor,
 } from '../src/rpg/combat-math';
 import { COMBAT } from '../src/rpg/data/balance';
-import { combatProfileFor, profileStats, profileWeapon, tierDef, tiersInBand } from '../src/rpg/enemies';
+import { ARCHETYPES } from '../src/rpg/data/enemies';
+import { allArchetypes, archetypeProfile, combatProfileFor, profileStats, profileWeapon, tierDef, tiersInBand } from '../src/rpg/enemies';
 import { CharacterSheetImpl } from '../src/rpg/sheet';
 import { BUILDS, db, duel, ttkTable, TTK_ROWS } from './rpg-ttk';
 
@@ -108,13 +109,18 @@ describe('attack multipliers (§6.1–6.7)', () => {
     expect(computeAttack(p, gladius.weapon, { item: gladius, sneak: true }).takedown).toBe(false);
   });
 
-  it('crits: 3% chance of ×1.5 (Fortuna +5 points), never on sneak attacks', () => {
+  it('crits: 3% chance of ×1.5, shifted by luck (Fortuna +5, infaustus −10) and good omens; never on sneak attacks', () => {
     expect(computeAttack(p, gladius.weapon, { item: gladius, critRoll: 0.029 })).toMatchObject({ crit: true, damage: 13 * 1.5 });
     expect(computeAttack(p, gladius.weapon, { item: gladius, critRoll: 0.031 }).crit).toBe(false);
     expect(computeAttack(p, gladius.weapon, { item: gladius, sneak: true, critRoll: 0 }).crit).toBe(false);
     const lucky = stats({});
-    lucky.setFlagSource('patron', ['luck.crit']);
+    lucky.setModifierSource('patron', { luck: 0.05 });
     expect(computeAttack(lucky, gladius.weapon, { item: gladius, critRoll: 0.07 }).crit).toBe(true);
+    lucky.applyCondition('omen-faustum');
+    expect(computeAttack(lucky, gladius.weapon, { item: gladius, critRoll: 0.12 }).crit).toBe(true);
+    const cursed = stats({});
+    cursed.applyCondition('infaustus');
+    expect(computeAttack(cursed, gladius.weapon, { item: gladius, critRoll: 0 }).crit).toBe(false);
   });
 
   it('bleeding: cuts with blades 20% (power 35%), +15 points with Bilbilis Edge, halved against AR ≥ 30; not through a block', () => {
@@ -302,7 +308,17 @@ describe('blocking and parrying (§6.4)', () => {
 });
 
 describe('poise (§6.5)', () => {
-  it('player poise: 50, +12 heavy body, +20 shield raised, +20 old wound, +30 drill, survivor +10 per extra enemy', () => {
+  it('Jupiter’s blessing and a vow each cut damage taken by 10%', () => {
+    const d = stats({});
+    const a = computeAttack(flatStats(20), gladius.weapon);
+    const base = resolveHit({ attack: a, armor: 0, defender: d }).damage;
+    d.applyCondition('benedictio-iuppiter');
+    expect(resolveHit({ attack: a, armor: 0, defender: d }).damage / base).toBeCloseTo(0.9);
+    d.applyCondition('votum');
+    expect(resolveHit({ attack: a, armor: 0, defender: d }).damage / base).toBeCloseTo(0.8);
+  });
+
+  it('player poise: 50, +12 heavy body, +20 shield raised, +20 old wound, +30 drill, survivor +10 per extra enemy, Mithras +15', () => {
     const s = stats({});
     expect(playerPoise(s)).toBe(50);
     expect(playerPoise(s, { heavyBody: true, shieldRaised: true })).toBe(82);
@@ -313,6 +329,8 @@ describe('poise (§6.5)', () => {
     const d = stats({});
     d.setFlagSource('origin', ['trait-survivor']);
     expect(playerPoise(d, { enemies: 5 })).toBe(80);
+    d.setModifierSource('patron', { 'poise.max': 15 });
+    expect(playerPoise(d, { enemies: 1 })).toBe(65);
   });
 
   it('flinch only from hits ≥ 20% of max; breaks into stagger (0.8 s light, 1.5 s heavy); knockdown 2 s; regen 15/s after 1.5 s', () => {
@@ -353,6 +371,29 @@ describe('enemy tiers (§6.11)', () => {
     expect(tiersInBand(3).map((t) => t.tier)).toEqual(['miles', 'veteran', 'champion']);
     expect(tiersInBand(3, { beasts: true }).map((t) => t.tier)).toEqual(['pardus', 'leo', 'ursus', 'taurus']);
     expect(() => combatProfileFor('dragon')).toThrow();
+  });
+
+  it('§13.1 archetypes: tier stats with the archetype’s kit; AR from worn pieces unless given', () => {
+    const miles = archetypeProfile('miles-urbanus', db);
+    expect(miles).toMatchObject({ archetype: 'miles-urbanus', tier: 'miles', health: 70, armor: 50, armorFamily: 'plate', weapon: 'gladius', shield: 'scutum', ranged: 'pilum' });
+    const thraex = archetypeProfile('thraex', db, { tier: 'veteran' });
+    expect(thraex).toMatchObject({ tier: 'veteran', health: 95, weapon: 'sica', shield: 'parmula', armorFamily: 'cloth' });
+    expect(thraex.armor).toBe(13 + 4 + 6); // helmet, manica, greaves
+    expect(archetypeProfile('thraex', db).tier).toBe('thug'); // a tiro
+    expect(archetypeProfile('sicarius', db)).toMatchObject({ tier: 'veteran', poison: 'aconitum', armor: 20 });
+    expect(archetypeProfile('fugitivarius', db).companion).toBe('canis-molossus');
+    expect(archetypeProfile('grassator', db, { kit: 1 }).weapon).toBe('fustis');
+    expect(archetypeProfile('ebrius-rixator', db)).toMatchObject({ weapon: 'fists', armor: 0 });
+    expect(() => archetypeProfile('dragon', db)).toThrow();
+    // Every kit names real items or natural weapons, and every tier exists.
+    for (const a of allArchetypes()) {
+      for (const t of [a.tier].flat()) expect(tierDef(t), `${a.id}:${t}`).toBeTruthy();
+      for (const k of a.kits) {
+        for (const id of [k.weapon, k.shield, k.ranged, ...(k.worn ?? [])].filter(Boolean) as string[]) expect(db.has(id) || id === 'fists', `${a.id}:${id}`).toBe(true);
+        if (k.companion) expect(tierDef(k.companion), k.companion).toBeTruthy();
+      }
+    }
+    expect(ARCHETYPES.filter((a) => a.firstIn.startsWith('v0.1')).map((a) => a.id)).toEqual(['grassator', 'ebrius-rixator', 'collegium-bruiser', 'funditor', 'cloacarius', 'miles-urbanus', 'vigil', 'thraex', 'retiarius']);
   });
 
   it('beasts bite and claw with their own damage and never yield', () => {

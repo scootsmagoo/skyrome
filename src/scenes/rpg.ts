@@ -15,6 +15,7 @@ import { DEG } from '../core/math';
 import type { DialogueView } from '../dialogue/DialogueSystem';
 import { MeshBuilder, placeAndRegister } from '../gfx/MeshBuilder';
 import { Interactions, type Interactable } from '../interaction/Interactions';
+import { BACKGROUNDS } from '../rpg/data/skills';
 import { installRpg, type RpgServices } from '../rpg/install';
 import { formatDenarii } from '../rpg/money';
 import { basicLights, setupPlayer } from './common';
@@ -105,6 +106,15 @@ function buildForum(game: Game) {
   const fire = new THREE.PointLight(0xff9a3c, 6, 8, 2);
   fire.position.set(8, 1.8, 2);
   game.scene.add(fire);
+
+  // A crossroads shrine (compitum) of the Lares: a small painted aedicula on a plinth
+  const c = new MeshBuilder();
+  c.box('travertine', 1.1, 1.1, 0.6, T(0, 0.55, 0), { collide: true });
+  c.box('plaster_ochre', 0.9, 0.8, 0.45, T(0, 1.5, 0));
+  c.box('fabric_red', 0.7, 0.55, 0.05, T(0, 1.52, 0.24));
+  c.add(new THREE.ConeGeometry(0.62, 0.32, 4), 'terracotta', TR(0, 2.06, 0, 0, Math.PI / 4, 0));
+  c.add(new THREE.SphereGeometry(0.07, 8, 6), 'glow_fire', T(0, 1.18, 0.33), { castShadow: false });
+  placeAndRegister(game, 'rpg:compitum', c.build('compitum'), c.colliders, { x: -12, y: 0, z: 3 }, Math.PI / 2);
 }
 
 // ------------------------------------------------------------------ NPCs & interactables
@@ -155,15 +165,25 @@ function spawnNpcs(game: Game, rpg: RpgServices) {
       else game.events.emit('rpg:notify', { text: 'You cannot afford figs.', kind: 'warning' });
     },
   });
+  // A temple prayer needs an offering: a honey cake if you have one, else a denarius (§14.6).
   game.interactions.add({
     id: 'pray:mars',
     position: () => new THREE.Vector3(8, 1.2, 2),
     verb: () => 'Pray',
     label: () => 'Altar of Mars Ultor',
-    detail: () => (rpg.devotion.canPrayToday() ? 'Daily prayer: blessing and pietas' : 'Blessing (pietas already restored today)'),
+    detail: () => `Offer ${rpg.inventory.has('libum') ? 'a honey cake' : '1 denarius'}: Blessing of Mars (+10% melee), +10 pietas once a day`,
     interact: () => {
-      rpg.devotion.devote('dailyPrayer', { god: 'mars' });
+      const r = rpg.devotion.prayAtTemple('temple-mars-ultor', rpg.inventory.has('libum') ? { itemId: 'libum' } : { denarii: 1 });
+      if (!r.ok) game.events.emit('rpg:notify', { text: 'You have nothing to offer.', kind: 'warning' });
     },
+  });
+  game.interactions.add({
+    id: 'pray:compitum',
+    position: () => new THREE.Vector3(-12, 1.6, 3),
+    verb: () => 'Pray',
+    label: () => 'Shrine of the Lares Compitales',
+    detail: () => (rpg.devotion.canPrayAt('compitum-rpg') ? 'Favor of the Lares, +5 pietas' : 'Favor of the Lares (pietas already given today)'),
+    interact: () => void rpg.devotion.prayAtCompitum('compitum-rpg'),
   });
 }
 
@@ -287,12 +307,12 @@ function buildOverlay(game: Game, ui: HTMLElement, rpg: RpgServices, background:
   action('Pay the fine', () => (rpg.crime.payFine() ? undefined : push('Nothing to pay, or not enough coin.', 'warning')));
   action('Sextus is murdered', () => game.events.emit('actor:killed', { victimId: 'ex-sextus' }));
   action('Take Mars Ultor as patron', () => {
-    const r = rpg.devotion.choosePatron('mars');
+    const r = rpg.devotion.choosePatron('patronus-mars');
     if (!r.ok) push(r.reason === 'same' ? 'Mars is already your patron.' : `Cannot change patron (${r.reason}).`, 'warning');
   });
-  action('Invoke patron (Furor)', () => {
+  action('Invoke patron (Furor, 30 pietas)', () => {
     const r = rpg.devotion.invoke();
-    if (!r.ok) push(r.reason === 'no-patron' ? 'Choose a patron first.' : 'Not enough pietas — pray at the altar.', 'warning');
+    if (!r.ok) push(r.reason === 'no-patron' ? 'Choose a patron first.' : 'Not enough pietas — pray at the shrine or the altar.', 'warning');
   });
   action('Gain 200 Blades XP', () => rpg.sheet.useSkill('blades', 200));
 
@@ -488,7 +508,7 @@ const scene: SceneDef = {
     const rpg = installRpg(game, { examples: true, background: 'veteranus' });
     spawnNpcs(game, rpg);
     questBeacon(game, rpg);
-    buildOverlay(game, ui, rpg, 'Veteran of Dacia');
+    buildOverlay(game, ui, rpg, BACKGROUNDS.find((b) => b.id === rpg.standing.origin)?.name ?? 'Citizen');
     game.events.on('save:loaded', () => game.world?.refreshAll?.());
   },
 };

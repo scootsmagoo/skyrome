@@ -22,6 +22,9 @@ export interface DialogueContext {
   takeItem(id: string, count?: number): boolean;
   denarii(): number;
   pay(amount: number): boolean;
+  /** The NPC's disposition toward the player (−20…+20: origin traits and what happened between you). */
+  disposition(): number;
+  changeDisposition(delta: number): void;
   receive(amount: number): void;
   /** Make the NPC hostile / start combat. */
   attack(): void;
@@ -33,15 +36,20 @@ export type Text = string | ((c: DialogueContext) => string);
 
 export interface SkillCheck {
   skill: string;
-  /** Skill level needed for a guaranteed pass; below it, chance falls off linearly over 25 levels. */
+  /** The DC (GDD §14.5): Facilis 10 · Mediocris 25 · Difficilis 40 · Ardua 55 · Gravissima 70 · Herculea 85. */
   difficulty: number;
-  /** Shown to the player, e.g. "Persuade", "Intimidate", "Bribe". */
+  /** Shown to the player, e.g. "Persuade", "Intimidate", "Lie". */
   label?: string;
   pass: string;
   fail: string;
-  /** Who is being persuaded: dress, Fama, Infamia and cleanliness count differently (GDD §3.4, §8.2). */
+  /** Who is being persuaded (default: from the NPC's tags): dress, Fama, Infamia and cleanliness count differently. */
   audience?: import('../rpg/checks').Audience;
-  /** 'invoke-patron' gets +15 with the Clientela perk. */
+  /**
+   * The approach (§14.5): 'persuade' (default for Rhetoric), 'intimidate' (+2 per level above the
+   * target, +10 armed and armored; impossible against elites; −5 disposition afterwards),
+   * 'invoke-patron' (needs Clientela rank amicus-minor: +15, +15 with the perk). 'lie' is a
+   * persuasion with its own retry lock. A failed check locks that approach with this NPC for 24 game hours.
+   */
   kind?: 'persuade' | 'intimidate' | 'lie' | 'invoke-patron' | 'other';
 }
 
@@ -53,8 +61,11 @@ export interface DialogueChoice {
   enabled?: (c: DialogueContext) => boolean;
   goto?: string;
   check?: SkillCheck;
-  /** Bribe: costs denarii, always passes. */
-  bribe?: { amount: number; goto: string };
+  /**
+   * Bribe: costs denarii and always passes, unless the NPC is tagged 'incorruptible'. Without an
+   * `amount` it costs DC × 0.5 den. × status (plebs 1, soldiers 2, officials 5; `dc` default 25).
+   */
+  bribe?: { amount?: number; dc?: number; goto: string };
   effects?: (c: DialogueContext) => void;
   /** Remove after being chosen once (per NPC memory). */
   once?: boolean;
