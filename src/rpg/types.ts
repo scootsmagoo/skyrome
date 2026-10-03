@@ -27,7 +27,12 @@ export interface SkillDef {
   howToTrain: string;
   /** Multiplier on XP needed per level (default 1). */
   difficulty?: number;
+  /** Skills-screen grouping (rpg extension). */
+  category?: SkillCategory;
 }
+
+/** Skills-screen grouping: the three Skyrim constellations, Roman style. */
+export type SkillCategory = 'martial' | 'stealth' | 'civic';
 
 export interface PerkDef {
   id: string;
@@ -168,6 +173,8 @@ export interface ItemDef {
   visual?: { weapon?: import('../actors/appearance').WeaponModel; shield?: import('../actors/appearance').ShieldModel; armor?: import('../actors/appearance').ArmorLook; garment?: import('../actors/appearance').Garment };
   questItem?: boolean;
   tags?: string[];
+  /** Modifiers granted while this item is equipped (amulets, rings, fine clothing). rpg extension. */
+  equipModifiers?: Partial<Record<ModifierId, number>>;
 }
 
 export interface ItemStack {
@@ -221,6 +228,14 @@ export interface CombatProfile {
   skill: number;
   /** Loot table id. */
   loot?: string;
+  /** Actor level the profile was scaled to (rpg extension). */
+  level?: number;
+  /** Poise before a stagger (rpg extension; see combat-math.ts). */
+  poise?: number;
+  /** Display name for the tier ("Suburan Thug"). */
+  name?: string;
+  /** Multiplier on weapon damage (rpg extension; default 1). */
+  damageMult?: number;
 }
 
 // ------------------------------------------------------------------ runtime services (implemented by src/rpg)
@@ -283,4 +298,102 @@ export interface Inventory {
   /** Use a consumable/book; returns true if consumed/read. */
   use(itemId: string): boolean;
   onChange(fn: () => void): () => void;
+}
+
+// ------------------------------------------------------------------ rpg module extensions (data shapes)
+
+/** A starting background: skill bonuses and a starting kit. */
+export interface BackgroundDef {
+  id: string;
+  name: string;
+  latin?: string;
+  description: string;
+  /** Added to the starting skill level. */
+  skills: Partial<Record<SkillId, number>>;
+  kit: { id: string; count?: number; equip?: boolean }[];
+  denarii: number;
+}
+
+/** A named timed condition: disease, blessing or poison. Applied with sheet.applyEffects(`${kind}:${id}`, effects). */
+export interface ConditionDef {
+  id: string;
+  kind: 'disease' | 'blessing' | 'poison';
+  name: string;
+  latin?: string;
+  description: string;
+  effects: Effect[];
+  /** Blessings: the god and where they are granted. */
+  god?: string;
+  /** Diseases: chance per exposure (0..1) before resistances. */
+  contagion?: number;
+}
+
+export interface LootEntry {
+  /** Item id, or omit and give `table` to roll a nested table. */
+  item?: string;
+  table?: string;
+  weight: number;
+  /** Count range (inclusive). Default [1, 1]. */
+  count?: [number, number];
+  minLevel?: number;
+  maxLevel?: number;
+}
+
+export interface LootTableDef {
+  id: string;
+  /** Number of weighted picks (inclusive range). */
+  rolls: [number, number];
+  /** Chance that each roll yields nothing (0..1). */
+  chanceNone?: number;
+  entries: LootEntry[];
+  /** Coins: [min, max] at level 1, scaled by (1 + level * perLevel). */
+  denarii?: { range: [number, number]; perLevel?: number; chance?: number };
+  /** Always added (keys, quest items). */
+  always?: { item: string; count?: number }[];
+}
+
+/** Enemy tier preset (the GDD tier table). Values scale linearly with level between min and max. */
+export interface EnemyTierDef {
+  tier: string;
+  name: string;
+  minLevel: number;
+  maxLevel: number;
+  health: [base: number, perLevel: number];
+  stamina: [base: number, perLevel: number];
+  armor: [base: number, perLevel: number];
+  skill: [base: number, perLevel: number];
+  /** Damage multiplier (NPC stand-in for perks). Default [1, 0]. */
+  damage?: [base: number, perLevel: number];
+  poise: number;
+  /** Weapon/shield ids by level threshold: the last entry with minLevel <= level wins. */
+  weapons: { minLevel: number; weapon: string; shield?: string }[];
+  aggression: number;
+  blockSkill: number;
+  yieldAt?: number;
+  fleeAt?: number;
+  loot?: string;
+}
+
+export type CrimeId =
+  | 'trespass'
+  | 'lockpick'
+  | 'theft'
+  | 'pickpocket'
+  | 'assault'
+  | 'murder'
+  | 'animal'
+  | 'sacrilege'
+  | 'arson'
+  | 'veneficium'
+  | 'escape'
+  | 'resist';
+
+export interface CrimeDef {
+  id: CrimeId;
+  name: string;
+  latin?: string;
+  /** Flat bounty in denarii. */
+  bounty: number;
+  /** Extra bounty as a fraction of stolen value (theft, pickpocket). */
+  valueMult?: number;
 }

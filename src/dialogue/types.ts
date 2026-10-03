@@ -12,7 +12,8 @@ export interface DialogueContext {
   readonly memory: Record<string, number | string | boolean>;
   flag(name: string): number | string | boolean | undefined;
   setFlag(name: string, value: number | string | boolean): void;
-  quest(id: string): { stage: string; running: boolean; done: boolean; failed: boolean } | undefined;
+  /** `done` = finished (completed or failed); `completed` = finished successfully. */
+  quest(id: string): { stage: string; running: boolean; done: boolean; failed: boolean; completed?: boolean } | undefined;
   startQuest(id: string, stage?: string): void;
   setQuestStage(id: string, stage: string): void;
   skill(id: string): number;
