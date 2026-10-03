@@ -52,8 +52,9 @@
 .cc-chip .la { font-size: 0.78rem; color: var(--sr-ink-3); font-style: italic; }
 .cc-chip:hover { border-color: var(--sr-line-strong); }
 .cc-chip.is-on { border-color: var(--sr-gold); background: rgba(125, 31, 26, 0.55); }
-.cc-look { padding-left: 2.4rem; }
-.cc-look .sw { position: absolute; left: 0.55rem; top: 50%; width: 1.4rem; height: 1.4rem; margin-top: -0.7rem; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.5); }
+.cc-look { align-items: center; text-align: center; padding: 0.35rem 0.3rem 0.3rem; gap: 0.1rem; }
+.cc-look .sw { width: 1.2rem; height: 1.2rem; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.5); flex: none; }
+.cc-look .la { line-height: 1.1; }
 .cc-note { margin-top: 0.35rem; font-size: 0.86rem; color: var(--sr-ink-3); font-style: italic; }
 
 .cc-name { display: flex; gap: 0.45rem; align-items: stretch; }
@@ -65,7 +66,8 @@
 .cc-random { white-space: nowrap; }
 
 .cc-start-row { display: flex; justify-content: center; padding-top: 0.5rem; margin-top: auto; }
-.cc-start { font-size: 1.1rem; padding: 0.55rem 1.4rem; gap: 0.6rem; }
+.cc-start { width: 100%; justify-content: center; white-space: nowrap; font-size: 1.1rem; padding: 0.55rem 1rem; gap: 0.6rem; }
+.cc-start .sr-key { margin: 0 0.25rem 0 0; }
 .cc-start .la { font-style: italic; color: var(--sr-ink-3); font-size: 0.86rem; margin-left: 0.3rem; }
 .cc-start-row.is-selected .cc-start { border-color: var(--sr-gold); background: rgba(125, 31, 26, 0.7); }
 .cc-hints { margin-top: 0.5rem; justify-content: center; }

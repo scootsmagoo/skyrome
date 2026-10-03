@@ -21,8 +21,8 @@ import type { SceneDef } from './types';
 const CSS = `
 .il { position:absolute; inset:0; pointer-events:none; font:14px/1.35 'EB Garamond', Georgia, serif; color:#f4ebd8; }
 .il .col { position:absolute; top:12px; bottom:12px; overflow:hidden; background:rgba(12,9,6,.86); border:1px solid rgba(214,176,98,.35); border-radius:6px; padding:10px 12px; pointer-events:auto; }
-.il .left { left:12px; width:34%; }
-.il .right { right:12px; width:38%; }
+.il .left { left:12px; width:31%; }
+.il .right { right:12px; width:37%; }
 .il h2 { margin:0 0 6px; font:600 13px Cinzel, serif; letter-spacing:.14em; text-transform:uppercase; color:#e6c67e; }
 .il .log { font:12px/1.35 ui-monospace, Menlo, monospace; white-space:pre; color:#dacdb2; }
 .il .log .k { color:#e6c67e; } .il .log .w { color:#8cc1e6; } .il .log .m { color:#e3897b; } .il .log .g { color:#a7d48a; }
@@ -34,8 +34,8 @@ const CSS = `
 .il .presets { display:flex; gap:6px; margin:6px 0 10px; }
 .il .presets button { flex:1; min-height:36px; background:rgba(40,29,20,.9); color:#f4ebd8; border:1px solid rgba(214,176,98,.45); border-radius:4px; font:14px 'EB Garamond', serif; cursor:pointer; }
 .il .presets button.on { border-color:#e6c67e; background:#7d1f1a; }
-.il .center { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); text-align:center; color:#f4ebd8; text-shadow:0 1px 3px #000; pointer-events:none; }
-.il .center .big { font:600 22px Cinzel, serif; letter-spacing:.1em; color:#e6c67e; }
+.il .center { position:absolute; left:calc(31% + 24px); right:calc(37% + 24px); top:50%; transform:translateY(-50%); text-align:center; color:#f4ebd8; text-shadow:0 1px 3px #000; pointer-events:none; }
+.il .center .big { font:600 20px Cinzel, serif; letter-spacing:.08em; color:#e6c67e; }
 `;
 
 const ACTIONS = Object.keys(DEFAULT_BINDINGS) as Action[];
@@ -49,7 +49,10 @@ interface LabState {
   lastGesture: { events: number; steps: number; t: number };
   lockClickAttacked: boolean | null;
   lockedAt: number;
-  attacksWhileUnlocked: number;
+  /** Clicks made while the pointer was free, and how many of them attacked. */
+  freeClicks: number;
+  freeClickAt: number;
+  freeClickAttacks: number;
   presses: Partial<Record<Action, number>>;
   pageZoom: number;
 }
@@ -81,7 +84,8 @@ class InputLab implements System {
       if (input.pressed(a)) {
         this.flash.set(a, 0.35);
         this.s.presses[a] = (this.s.presses[a] ?? 0) + 1;
-        if (a === 'attack' && !input.pointerLocked) this.s.attacksWhileUnlocked++;
+        // An attack from a mouse button within a moment of a click made with the pointer free.
+        if (a === 'attack' && (input.isHeld('Mouse0') || input.isHeld('Mouse2')) && performance.now() - this.s.freeClickAt < 200) this.s.freeClickAttacks++;
         if (a === 'zoomIn') this.s.zoomSteps.in++;
         if (a === 'zoomOut') this.s.zoomSteps.out++;
         if (a === 'zoomIn' || a === 'zoomOut') this.s.lastGesture.steps++;
@@ -113,7 +117,8 @@ class InputLab implements System {
     const p = this.s.presses;
     this.els.checks.innerHTML = [
       yes(this.s.lockClickAttacked === null ? null : !this.s.lockClickAttacked, 'The click that captured the pointer did not attack', 'The capture click attacked!', 'Click the view to capture the pointer'),
-      yes(this.s.attacksWhileUnlocked === 0 ? (p.attack ? true : null) : false, 'No attack without pointer lock', `${this.s.attacksWhileUnlocked} attacks without lock`, 'Attack with F (or a click once captured)'),
+      yes(this.s.freeClickAttacks === 0 ? (this.s.freeClicks ? true : null) : false, `${this.s.freeClicks} click(s) with the pointer free: none attacked`, `${this.s.freeClickAttacks} free click(s) attacked!`, 'Click the view (pointer free)'),
+      yes(p.attack ? true : null, `Attack pressed ${p.attack} time(s)`, '', 'Attack with F (or a click once captured)'),
       yes(g.events ? g.steps <= 2 : null, `Last scroll: ${g.events} wheel events → ${g.steps} zoom step(s)`, `Last scroll: ${g.events} events → ${g.steps} steps (burst)`, 'Flick two fingers on the trackpad'),
       yes(this.s.pageZoom === 1 ? (this.s.gestureEvents || this.s.wheelEvents ? true : null) : false, `Page zoom stays 100% (${this.s.gestureEvents} gesture events)`, `Page zoomed to ${Math.round(this.s.pageZoom * 100)}%`, 'Pinch on the trackpad'),
       yes(p.quickSave ? true : null, `Quicksave pressed ${p.quickSave} time(s)`, '', 'Press P (or F5)'),
@@ -173,7 +178,7 @@ const scene: SceneDef = {
       </div>`;
     ui.appendChild(root);
     const q = (s: string) => root.querySelector(s) as HTMLElement;
-    const state: LabState = { lines: [], wheelEvents: 0, gestureEvents: 0, zoomSteps: { in: 0, out: 0 }, lastGesture: { events: 0, steps: 0, t: 0 }, lockClickAttacked: null, lockedAt: 0, attacksWhileUnlocked: 0, presses: {}, pageZoom: 1 };
+    const state: LabState = { lines: [], wheelEvents: 0, gestureEvents: 0, zoomSteps: { in: 0, out: 0 }, lastGesture: { events: 0, steps: 0, t: 0 }, lockClickAttacked: null, lockedAt: 0, freeClicks: 0, freeClickAt: 0, freeClickAttacks: 0, presses: {}, pageZoom: 1 };
     const els = { log: q('.log'), acts: q('.acts'), checks: q('.checks'), center: q('.center'), presets: q('.presets') };
     root.querySelectorAll('.presets button').forEach((btn) => btn.addEventListener('click', () => applyPreset(game, (btn as HTMLElement).dataset.p as ControlPreset)));
     applyPreset(game, game.settings.data.controlPreset ?? 'trackpad');
@@ -185,7 +190,14 @@ const scene: SceneDef = {
       if (/^Digit[123]$/.test(e.code) && !e.repeat) applyPreset(game, (['mouse', 'trackpad', 'keyboard'] as const)[Number(e.code.slice(5)) - 1]);
     }, true);
     window.addEventListener('keyup', (e) => log(state, 'k', `keyup   ${e.code}${caps(e)}`), true);
-    window.addEventListener('mousedown', (e) => log(state, 'm', `mousedown button ${e.button}${document.pointerLockElement ? '' : ' (pointer free)'}`), true);
+    window.addEventListener('mousedown', (e) => {
+      const free = !document.pointerLockElement;
+      if (free && e.target === game.canvas) {
+        state.freeClicks++;
+        state.freeClickAt = performance.now();
+      }
+      log(state, 'm', `mousedown button ${e.button}${free ? ' (pointer free)' : ''}`);
+    }, true);
     window.addEventListener('mouseup', (e) => log(state, 'm', `mouseup   button ${e.button}`), true);
     window.addEventListener('wheel', (e) => {
       state.wheelEvents++;

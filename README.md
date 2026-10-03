@@ -32,6 +32,7 @@ Then open one of these scenes. Click into the game to look around and press Esc 
 
 | Scene | URL | What it shows |
 |---|---|---|
+| The game | http://127.0.0.1:5173/ | Title over the city, character creation, and the start at the Porta Capena before dawn on 11 May AD 113. `&quick=1` skips the menus |
 | Rome (early) | http://127.0.0.1:5173/?scene=rome&at=meta-sudans | The real terrain of the seven hills and the Tiber, built from the atlas, with ~200 landmarks at their historical positions. Most are still placeholder massing while their builders are written. `at=` takes any landmark id, e.g. `circus-maximus`, `column-trajan`, `pantheon` |
 | Characters | http://127.0.0.1:5173/?scene=avatars | Procedural Romans and gladiators with code-authored animation. You're a legionary: R draws your sword, F attacks, Q blocks |
 | Architecture | http://127.0.0.1:5173/?scene=arch | The classical kit: orders, temples, arches, the amphitheatre arcade, the Column, domes, statues |
@@ -55,6 +56,9 @@ The game is designed to be fully playable on a Mac trackpad, so every mouse acti
 | Attack (hold for a power attack) · block | F or left click · Q or right click |
 | Draw or sheathe a weapon · interact · sneak | R · E · C |
 | Menus | Tab · I inventory · J journal · M map · K skills · Esc pause |
+| Walk · wait · swap camera shoulder | N · T · H |
+| Quicksave · quickload | P or F5 · L or F9 |
+| Check your trackpad and keys | `?scene=inputlab` |
 
 ## How it's made
 

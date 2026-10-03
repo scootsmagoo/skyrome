@@ -55,7 +55,8 @@ Systems are sorted by `priority`. Some fixed points:
 | `src/save/` | Save slots and the `Saveable` registry |
 | `src/ui/` | DOM HUD (compass, bars, prompts), menus, dialogue, map, title and loading screens |
 | `src/audio/` | Web Audio engine, procedural sound effects and ambience, generative music |
-| `src/scenes/` | `rome` (the game) plus dev test beds (`sandbox`, `avatars`, `arch`, `fabric`, `sky`, `ui`, `audio`) |
+| `src/game/` | Game flow and integration: boot, title, character creation, spawn, wiring services into the UI, saves, calendar, control presets (see `docs/modules/flow.md`) |
+| `src/scenes/` | `rome` (the game) plus dev test beds (`sandbox`, `avatars`, `arch`, `fabric`, `sky`, `ui`, `audio`, `inputlab`) |
 
 ## Coordinates
 Coordinates are in meters, with +x east, +y up and +z south. The atlas stores real meters with the Miliarium Aureum as the origin. The game multiplies those by `WORLD_SCALE = 0.6` horizontally and vertically, so the city is compressed but slopes keep their real angles. Human-scale details stay 1:1. Characters face +Z in local space. See `src/core/math.ts` for the details.

@@ -24,7 +24,7 @@ import { buildRome, type RomeExtent } from '../world/rome/buildRome';
 import { installSky } from '../world/sky';
 import { installGameAudio } from './audio';
 import { lookById, outfitAppearance, type CharacterSpec } from './character';
-import { GameFlow, TITLE_HOUR, type FlowOptions } from './GameFlow';
+import { GameFlow, START_DATE, START_HOUR, TITLE_HOUR, type FlowOptions } from './GameFlow';
 import { registerAtlasLocations } from './locations';
 import { installOptionalModules } from './optional';
 import { guardUnload, registerMarkerResolvers, wireUi } from './wiring';
@@ -62,6 +62,8 @@ export function romeParams(search: string): RomeParams {
 
 export async function startRome(game: Game, uiRoot: HTMLElement, params: RomeParams): Promise<GameFlow> {
   const t0 = performance.now();
+  // The calendar starts on 11 May AD 113 (GDD §2.1) before the sky reads the date.
+  Object.assign(game.time.start, START_DATE);
   const loading = showLoading(uiRoot, { bindings: game.input.bindings });
   loading.progress(0.01, 'Preparing the city…');
   const ui = installUI(game, uiRoot);
@@ -72,7 +74,7 @@ export async function startRome(game: Game, uiRoot: HTMLElement, params: RomePar
   await buildRome(game, { extent: params.extent, onProgress: (f, label) => loading.progress(0.04 + f * 0.82, label) });
   loading.progress(0.88, 'Fetching the marble');
   await whenTexturesLoaded().catch(() => {});
-  game.time.restore({ totalHours: params.quick ? 4.5 : TITLE_HOUR });
+  game.time.restore({ totalHours: params.quick ? START_HOUR : TITLE_HOUR });
   installSky(game);
 
   // The player stands at the Porta Capena from the start (the creation stage is there too).

@@ -82,6 +82,7 @@ export class GameFlow implements System {
   private title: TitleScreen | null = null;
   private stage: CreationStage | null = null;
   private capsHinted = false;
+  private deathTimer = -1;
 
   constructor(
     readonly game: Game,
@@ -122,6 +123,12 @@ export class GameFlow implements System {
   /** Apply the control settings (preset, toggles, smoothing…) to input, controller and camera. */
   applyControls() {
     const g = this.game;
+    // Unset rows (first launch, "Defaults") take the preset's values, so what Settings shows is
+    // what the controls do.
+    const preset = g.settings.data.controlPreset ?? g_guess();
+    for (const [k, v] of Object.entries(presetValues(preset))) {
+      if ((g.settings.data as unknown as Record<string, unknown>)[k] === undefined) g.settings.set(k as never, v as never);
+    }
     const s = controlState(g.settings.data);
     g.input.ignoredCodes.clear();
     for (const c of s.ignoredCodes) g.input.ignoredCodes.add(c);
@@ -140,6 +147,7 @@ export class GameFlow implements System {
   choosePreset(p: ControlPreset) {
     const vals = presetValues(p);
     for (const [k, v] of Object.entries(vals)) this.game.settings.set(k as never, v as never);
+    if (!this.game.settings.data.presetPicked) this.game.settings.set('presetPicked', true);
   }
 
   private watchCapsLock() {
@@ -164,8 +172,34 @@ export class GameFlow implements System {
     return this.game.settings.data.difficulty ?? 'normalis';
   }
 
-  update() {
+  update(dt: number) {
     this.calendar.sync(this.game.time.dayIndex);
+    // Death: a moment to see it, then load the latest save or go back to the title. The combat
+    // module can take this over by setting `game.combat.handlesDeath`.
+    if (this.state !== 'playing') return;
+    const g = this.game as Game & { combat?: { handlesDeath?: boolean } };
+    if (g.combat?.handlesDeath || !g.player?.sheet?.vitals.dead) {
+      this.deathTimer = -1;
+      return;
+    }
+    if (this.deathTimer < 0) this.deathTimer = 3;
+    else if ((this.deathTimer -= dt) <= 0) {
+      this.deathTimer = -1;
+      void this.onDeath();
+    }
+  }
+
+  private async onDeath() {
+    this.setState('spawning');
+    const latest = await this.rpg.save.latest().catch(() => null);
+    const load = await this.ui.confirm({
+      title: 'Mortuus es',
+      text: latest ? `You have died. Load your latest save (${latest.gameDate}, ${latest.location ?? 'Rome'})?` : 'You have died, with no save to return to.',
+      yes: latest ? 'Load' : 'Title',
+      no: 'Title',
+    });
+    if (load && latest) await this.loadSlot(latest.slot, { fromTitle: true });
+    else this.quitToTitle();
   }
 
   // ------------------------------------------------------------------ title
@@ -190,7 +224,7 @@ export class GameFlow implements System {
       orbitSpeed: 0.03,
       version: 'Pre-alpha · v0.1 in progress · runs in your browser',
     });
-    if (!g.settings.data.controlPreset) this.openPresetPicker();
+    if (!g.settings.data.presetPicked) this.openPresetPicker();
   }
 
   openPresetPicker() {

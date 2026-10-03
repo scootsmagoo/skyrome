@@ -20,8 +20,10 @@ export type AimAssist = 'off' | 'light' | 'strong';
 
 declare module '../core/Settings' {
   interface SettingsData {
-    /** GDD §4.3 control preset. Undefined until the player picks one at first launch. */
+    /** GDD §4.3 control preset (a guess until the player picks one). */
     controlPreset?: ControlPreset;
+    /** The player has chosen a preset in the first-launch picker (or in Settings). */
+    presetPicked?: boolean;
     /** Difficulty (§6.12); v0.1 offers tiro / normalis / difficilis. */
     difficulty?: Difficulty;
     /** Sprint key toggles instead of being held. */
@@ -40,8 +42,6 @@ declare module '../core/Settings' {
     powerHoldS?: number;
     lockOnMode?: LockOnMode;
     aimAssist?: AimAssist;
-    /** Third-person shoulder. */
-    shoulder?: 'right' | 'left';
   }
 }
 
@@ -119,7 +119,6 @@ export interface ControlState {
   sneakMode: 'hold' | 'toggle';
   zoomToFirstPerson: boolean;
   autoRecenterDelay: number;
-  shoulderSide: 1 | -1;
 }
 
 export function controlState(s: Partial<SettingsData>): ControlState {
@@ -132,6 +131,5 @@ export function controlState(s: Partial<SettingsData>): ControlState {
     sneakMode: s.sneakHold ? 'hold' : 'toggle',
     zoomToFirstPerson: s.zoomToFirstPerson ?? preset === 'mouse',
     autoRecenterDelay: (s.autoRecenter ?? preset !== 'mouse') ? 1.5 : 0,
-    shoulderSide: s.shoulder === 'left' ? -1 : 1,
   };
 }

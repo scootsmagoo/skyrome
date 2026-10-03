@@ -61,10 +61,10 @@ describe('the map from the atlas', () => {
     }
   });
 
-  it('labels regions, hills and the Tiber', () => {
+  it('labels the hills and the Tiber', () => {
     const labels = mapLabels();
-    expect(labels.some((l) => l.kind === 'region')).toBe(true);
     expect(labels.some((l) => l.kind === 'hill')).toBe(true);
+    expect(new Set(labels.filter((l) => l.kind === 'hill').map((l) => l.text)).size).toBe(labels.filter((l) => l.kind === 'hill').length);
     expect(labels.some((l) => l.kind === 'water' && l.text === 'Tiberis')).toBe(true);
   });
 

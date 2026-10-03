@@ -86,12 +86,12 @@ function centroid(points: readonly P[]): { x: number; z: number } {
   return { x: (x / Math.max(1, points.length)) * K, z: (z / Math.max(1, points.length)) * K };
 }
 
+/**
+ * Hills and the Tiber. The fourteen Augustan regions are left off: their names repeat the
+ * landmarks they are named after (Porta Capena, Circus Maximus) and crowd the plan.
+ */
 export function mapLabels(): MapLabel[] {
   const out: MapLabel[] = [];
-  for (const r of atlas.REGIONS) {
-    const c = centroid(r.polygon);
-    out.push({ text: r.name.toUpperCase(), latin: r.latin, x: c.x, z: c.z, kind: 'region' });
-  }
   for (const h of atlas.HILLS) {
     if (h.kind === 'terrace' || h.parent) continue;
     const c = centroid(h.outline);
