@@ -138,6 +138,9 @@ the river channel sunk so the water shows; its outer rings bend down into the ha
   pierced mooring blocks every ~14 m; the arched mouth of the Cloaca Maxima (three rings of
   peperino voussoirs, the dark culvert behind) in the Portus quay. Colliders: one oriented box per
   4 m wall segment plus the coping.
+- **Tiber Island** is the travertine "stone ship" of the 1st c. BC: a facing wall all round its
+  outline (the heightmap gives the island near-vertical sides to match), leaving 16 m around the
+  `island-prow` landmark for its carved prow.
 - **Reeds** (vegetation kit `reeds`, instanced `Forest`, 150 m range): stands along the natural
   banks on the margin −0.35…+0.9 m about the water, never on quays, near bridges, on roads or pads,
   or on Tiber Island. ~1350 clumps.
@@ -169,8 +172,10 @@ The headless timings are noisy (±50 %); all are far inside the budget (< 150 dr
   `surfaceAt`, `group`, `material`); `Surface` gained `'gravel'` and `'mud'`. New: `weightsAt`,
   `farHeightAt`, `ready`, `lodStats`, `refreshHeights()` (after editing `hm.heights`), `uniforms`.
 - The terrain mesh is not ray-pickable (it is an instanced unit grid); use physics or `heightAt`.
-- Grass tufts are opt-in: `addTerrainGrass(game, game.terrain)` (the city or vegetation module
-  should decide; ~250k triangles near the camera at the default density).
+- Grass tufts are opt-in: `addTerrainGrass(game, game.terrain)` — two GrassFields (green and
+  sun-dried tufts) whose masks follow the splat, so tufts match the ground under them. The city or
+  vegetation module should decide whether Rome gets them (~200–400k triangles and ~40 draw calls
+  near the camera at the default density).
 - Harbour landmarks (`portus-tiberinus`, `emporium`) and `cloaca-maxima-outlet` should not build
   their own embankment walls: the quays and the outfall arch come from here. Their builders can
   add cranes, ramps, warehouses and the culvert interior (the outfall floor is at 4.7 m ASL).
@@ -182,6 +187,8 @@ The headless timings are noisy (±50 %); all are far inside the budget (< 150 dr
 ## Known limitations
 
 - Steep cliffs are heightfield slopes (66°), not overhangs; the Tarpeian Rock wants landmark rock.
+- Regular paving (travertine slabs) still moirés a little at grazing distances despite a mip
+  bias; buildings' own floors cover most paved pads.
 - The apron is vertex-coloured: from very high up (the overview) its tone differs a little from
   the textured city ground.
 - No underwater view (the camera stays above the surface while swimming); the avatar has no swim

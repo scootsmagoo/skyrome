@@ -86,8 +86,12 @@ const scene: SceneDef = {
     const cam = p.get('cam') ?? 'overview';
     const v = VIEWS[cam];
     if (v) {
-      const rig = game.getSystem('cameraRig');
-      if (rig) game.removeSystem(rig);
+      // The fly camera takes the controls: no camera rig, and the player stands still (its
+      // controller would otherwise also consume the mouse look).
+      for (const name of ['cameraRig', 'playerController']) {
+        const sys = game.getSystem(name);
+        if (sys) game.removeSystem(sys);
+      }
       player.canMove = false;
       const [fx, fz] = toGame(v[0], v[2]);
       const [tx, tz] = toGame(v[3], v[5]);

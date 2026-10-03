@@ -51,7 +51,7 @@ function arrayTexture(data: Uint8Array, size: number, layers: number, srgb: bool
   t.magFilter = THREE.LinearFilter;
   t.minFilter = mips ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter;
   t.generateMipmaps = mips;
-  t.anisotropy = mips ? 8 : 1;
+  t.anisotropy = mips ? 16 : 1;
   if (srgb) t.colorSpace = THREE.SRGBColorSpace;
   t.needsUpdate = true;
   return t;

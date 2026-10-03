@@ -122,15 +122,18 @@ ${SPLAT_GLSL}
 void tLayer( int layer, vec2 p, float mask, float far, out vec4 alb, out vec4 srf ) {
   float fl = float( layer );
   vec2 uv = p / uTile[ layer ];
-  alb = texture( tAlbedo, vec3( uv, fl ) );
-  srf = texture( tSurface, vec3( uv, fl ) );
+  // Regular paving patterns moiré at grazing distances: blur them a little sooner.
+  float lodBias = uDetile[ layer ] > 0.5 ? 0.0 : far * 1.2;
+  alb = texture( tAlbedo, vec3( uv, fl ), lodBias );
+  srf = texture( tSurface, vec3( uv, fl ), lodBias );
   float m = mask * uDetile[ layer ];
   if ( m > 0.002 ) {
     vec2 uv2 = mat2( 0.8, - 0.6, 0.6, 0.8 ) * uv * 0.71 + vec2( 0.37, 0.61 );
     alb = mix( alb, texture( tAlbedo, vec3( uv2, fl ) ), m );
     srf = mix( srf, texture( tSurface, vec3( uv2, fl ) ), m );
   }
-  if ( far > 0.002 ) {
+  // Natural ground only: a large-scale sample over a regular paving pattern would moiré.
+  if ( far > 0.002 && uDetile[ layer ] > 0.5 ) {
     vec4 a3 = texture( tAlbedo, vec3( uv * 0.19 + vec2( 0.13, 0.71 ), fl ) );
     alb.rgb = mix( alb.rgb, a3.rgb, far * 0.55 );
   }

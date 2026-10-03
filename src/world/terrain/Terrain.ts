@@ -161,7 +161,7 @@ export class Terrain implements System {
       morph.push(new THREE.Vector2(m[0], m[1]));
       const cell = hm.spacing * 2 ** L;
       bias.push(L === 0 ? 0 : Math.min(3, 0.04 * cell));
-      skirt.push(cell * 0.75 + 0.6);
+      skirt.push(Math.min(12, cell * 0.5 + 0.6));
     }
     const tiles = layerTiles();
     this.uniforms = {
