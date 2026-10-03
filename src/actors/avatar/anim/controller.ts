@@ -25,6 +25,7 @@ import type { HumanoidAvatar } from '../HumanoidAvatar';
 interface Playing {
   name: string;
   info: ActionInfo;
+  dropFired?: boolean;
   t: number;
   speed: number;
   w: number;
@@ -151,6 +152,7 @@ export class AnimationController {
   private stanceP = new Pose();
   private armMask: BoneMask = makeMask({});
   private autoMask: BoneMask = makeMask({});
+  private keepMask: BoneMask = makeMask({});
   private readonly legScale: number;
   private readonly restHips = new THREE.Vector3();
   private readonly dq = new Float32Array(4);
@@ -221,6 +223,10 @@ export class AnimationController {
           a.t = a.info.clip.duration;
           a.w = 1;
           a.hitFired = true;
+          if (a.info.drop) {
+            a.dropFired = true;
+            this.avatar.equipment.drop(a.info.drop.what);
+          }
         }
       }
     } else {
@@ -327,6 +333,7 @@ export class AnimationController {
     if (!a.ended) {
       a.ended = true;
       if (a.info.prop) this.avatar.equipment.showProp(a.info.prop, false);
+      if (a.dropFired) this.avatar.equipment.drop(null);
       if (!a.grabFired) {
         // Interrupted mid-draw: settle the weapon where the logical state says.
         a.grabFired = true;
@@ -528,6 +535,10 @@ export class AnimationController {
         a.hitFired = true;
         if (!a.fading) a.opts?.onHit?.();
       }
+      if (a.info.drop && !a.dropFired && a.t >= a.info.drop.t && !a.fading) {
+        a.dropFired = true;
+        this.avatar.equipment.drop(a.info.drop.what);
+      }
       if (!a.grabFired && a.info.grab !== undefined && a.t >= a.info.grab) {
         a.grabFired = true;
         this.avatar.equipment.setVisualDrawn(a.name.startsWith('drawWeapon'));
@@ -550,6 +561,12 @@ export class AnimationController {
       else {
         this.buildAutoMask(moveW);
         mask = this.autoMask;
+      }
+      if (a.info.keepShield && this.drawn && hasShield(this.stance)) {
+        // Gestures leave a drawn shield where the stance holds it.
+        this.keepMask.set(mask);
+        for (const n of ARM_L) this.keepMask[B[n]] = 0;
+        mask = this.keepMask;
       }
       blendMasked(base, base, this.tmpA, smooth(0, 1, a.w), mask);
     }

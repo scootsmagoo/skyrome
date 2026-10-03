@@ -42,6 +42,10 @@ export interface ActionDef {
   fadeOut?: number;
   /** Temporary prop in the right hand. */
   prop?: 'cup';
+  /** Everyday gesture: a drawn shield stays on the left arm instead of following the clip. */
+  keepShield?: boolean;
+  /** Drop carried items at this time (death: everything; yield: the shield). */
+  drop?: { t: number; what: 'all' | 'shield' };
 }
 
 const k = (t: number, pose: PoseSpec, feet?: Partial<Feet>, hold?: boolean): Key => ({ t, pose, feet: feet as Key['feet'], hold });
@@ -719,8 +723,8 @@ function falls(): Record<string, ActionDef> {
   };
   return {
     knockdown: { def: backFall('knockdown', true), mask: 'full', busy: true, fadeIn: 0.06, fadeOut: 0.25 },
-    death: { def: backFall('death', false), mask: 'full', busy: true, hold: true, fadeIn: 0.06 },
-    'death:forward': { def: forwardDeath, mask: 'full', busy: true, hold: true, fadeIn: 0.06 },
+    death: { def: backFall('death', false), mask: 'full', busy: true, hold: true, fadeIn: 0.06, drop: { t: 0.5, what: 'all' } },
+    'death:forward': { def: forwardDeath, mask: 'full', busy: true, hold: true, fadeIn: 0.06, drop: { t: 0.7, what: 'all' } },
   };
 }
 
@@ -860,6 +864,7 @@ function gestures(stance: Stance): Record<string, ActionDef> {
         ],
       },
       mask: 'auto',
+      keepShield: true,
       busy: true,
       hit: 0.5,
       fadeIn: 0.1,
@@ -877,6 +882,7 @@ function gestures(stance: Stance): Record<string, ActionDef> {
         ],
       },
       mask: 'auto',
+      keepShield: true,
       busy: true,
       hit: 0.45,
       fadeIn: 0.12,
@@ -894,6 +900,7 @@ function gestures(stance: Stance): Record<string, ActionDef> {
         ],
       },
       mask: 'full',
+      keepShield: true,
       busy: true,
       hit: 0.58,
       fadeIn: 0.15,
@@ -913,6 +920,7 @@ function gestures(stance: Stance): Record<string, ActionDef> {
         ],
       },
       mask: 'auto',
+      keepShield: true,
       busy: true,
       hit: 1.0,
       prop: 'cup',
@@ -931,6 +939,7 @@ function gestures(stance: Stance): Record<string, ActionDef> {
         ],
       },
       mask: 'full',
+      keepShield: true,
       busy: false,
       fadeIn: 0.2,
     },
@@ -949,6 +958,7 @@ function gestures(stance: Stance): Record<string, ActionDef> {
         ],
       },
       mask: 'auto',
+      keepShield: true,
       busy: false,
       fadeIn: 0.12,
     },
@@ -968,6 +978,7 @@ function gestures(stance: Stance): Record<string, ActionDef> {
         ],
       },
       mask: 'upper',
+      keepShield: true,
       busy: false,
       fadeIn: 0.15,
     },
@@ -986,6 +997,7 @@ function gestures(stance: Stance): Record<string, ActionDef> {
         ],
       },
       mask: 'upper',
+      keepShield: true,
       busy: false,
       fadeIn: 0.2,
     },
@@ -1002,6 +1014,7 @@ function gestures(stance: Stance): Record<string, ActionDef> {
         ],
       },
       mask: 'full',
+      drop: { t: 0.35, what: 'shield' },
       busy: true,
       hold: true,
       fadeIn: 0.15,

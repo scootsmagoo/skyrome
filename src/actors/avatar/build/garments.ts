@@ -331,7 +331,8 @@ export function buildSkirt(ctx: Ctx, L: Levels, prof: TorsoProfile, sp: SkirtSpe
   const weights = (x: number, t: number, a: number): Weights => {
     const wt = smooth(0.08, 1, t) * sp.legK;
     const lat = x / Math.max(a, 1e-3);
-    const wl = smooth(-0.45, 0.45, lat);
+    // A wide blend across the front/back center keeps the cloth closed between the legs.
+    const wl = smooth(-0.75, 0.75, lat);
     const w: Weights = [B.hips, 1 - wt, B.thighL, wt * wl, B.thighR, wt * (1 - wl)];
     if (t < 0.2) return mixW([B.spine, 0.3, B.hips, 0.7], w, smooth(0, 0.2, t));
     return w;

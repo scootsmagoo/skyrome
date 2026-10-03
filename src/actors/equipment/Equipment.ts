@@ -139,6 +139,7 @@ export class Equipment {
 
   /** Re-attach meshes to the sockets for the current state. */
   private place() {
+    if (this.dropped) return;
     const av = this.avatar;
     const info = WEAPON_INFO[this.weapon];
     const drawn = this.visualDrawn;
@@ -186,6 +187,42 @@ export class Equipment {
       this.shieldMesh.visible = !(this.fp && !drawn);
     }
     if (this.weaponMesh && info.sheath === 'back' && !drawn) this.weaponMesh.visible = !this.fp;
+  }
+
+  private dropped: 'all' | 'shield' | null = null;
+
+  /**
+   * Let go of carried items (they lie on the ground beside the body) or pick them back up (null).
+   * Death drops everything; a yielding gladiator drops his shield.
+   */
+  drop(what: 'all' | 'shield' | null) {
+    this.dropped = what;
+    const root = this.avatar.root;
+    if (!what) {
+      this.place();
+      for (const m of [this.netMesh, this.torchMesh]) {
+        if (!m) continue;
+        this.avatar.getSocket('gripL').add(m);
+        m.position.set(0, 0, 0);
+        m.rotation.set(0, 0, 0);
+      }
+      return;
+    }
+    const lay = (m: THREE.Mesh | null, x: number, z: number, rx: number, rz: number, y: number) => {
+      if (!m) return;
+      m.removeFromParent();
+      root.add(m);
+      m.position.set(x, y, z);
+      m.rotation.set(rx, 0, rz);
+      m.visible = true;
+    };
+    // Shield flat on its back to the left, face up; weapon on the ground to the right.
+    lay(this.shieldMesh, 0.55, 0.15, -Math.PI / 2, 0.3, 0.09);
+    if (what === 'all') {
+      if (this.weaponMesh && this.weaponMesh.visible) lay(this.weaponMesh, -0.5, 0.35, Math.PI / 2, 0.2, 0.025);
+      lay(this.netMesh, -0.3, 0.6, Math.PI / 2, 0, 0.05);
+      lay(this.torchMesh, 0.35, 0.6, Math.PI / 2, -0.4, 0.03);
+    }
   }
 
   setWeapon(model: WeaponModel) {
@@ -259,7 +296,8 @@ export class Equipment {
     this.loopProp = this.mesh(propGeometry(prop), `prop:${prop}`);
     if (this.loopProp) {
       this.avatar.getSocket('gripR').add(this.loopProp);
-      if (prop === 'broom') this.loopProp.rotation.set(Math.PI, 0, 0);
+      // The broom runs along the forearm line: bristles toward the fingertips, down to the floor.
+      if (prop === 'broom') this.loopProp.rotation.set(-Math.PI / 2 - 0.35, 0, 0);
     }
     if (this.weaponMesh && WEAPON_INFO[this.weapon].sheath === 'hand') this.weaponMesh.visible = false;
   }
