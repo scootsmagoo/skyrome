@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { fillBlock, planLots } from '../src/arch/fabric/blockFiller';
 import { MAX_BUILDING_HEIGHT } from '../src/arch/fabric/insula';
-import { obbCorners, obbOverlap, pointInPolygon, polygonContainsOBB } from '../src/arch/fabric/polygon';
+import { distToPolygonEdge, obbCorners, obbOverlap, pointInPolygon, polygonContainsOBB } from '../src/arch/fabric/polygon';
 import type { Polygon } from '../src/arch/fabric/types';
 
 const block: Polygon = [[0, 0], [70, 0], [70, 45], [0, 45]];
@@ -96,5 +96,40 @@ describe('fillBlock on sloping ground', () => {
     expect(count(far)).toBeLessThan(count(full) * 0.6);
     const bf = new THREE.Box3().setFromObject(full), bl = new THREE.Box3().setFromObject(far);
     expect(bl.max.y).toBeCloseTo(bf.max.y, 1);
+  });
+});
+
+describe('fillBlock with avoid polygons', () => {
+  const avoid: Polygon = [[18, 12], [52, 12], [52, 40], [18, 40]];
+  // Strictly inside (a few cm of tolerance at the boundary).
+  const inside = (x: number, z: number) => pointInPolygon([x, z], avoid) && distToPolygonEdge([x, z], avoid) > 0.05;
+
+  it('puts no spots, colliders or yard surface inside the avoid area', () => {
+    for (let seed = 1; seed <= 8; seed++) {
+      const r = fillBlock(block, { heightAt: slope, seed, wealth: 0.5, density: 0.6, avoid: [avoid], id: 'A:' });
+      for (const s of r.spots) expect(inside(s.position.x, s.position.z), `seed ${seed} spot ${s.id}`).toBe(false);
+      for (const c of r.builder.colliders) {
+        if (c.kind === 'trimesh') continue;
+        expect(inside(c.center.x, c.center.z), `seed ${seed} ${c.kind} collider`).toBe(false);
+      }
+      const dirt = r.builder.build('a').children.find((m) => m.name === 'a:dirt') as THREE.Mesh;
+      expect(dirt).toBeTruthy();
+      const pos = dirt.geometry.getAttribute('position');
+      let tris = 0;
+      for (let i = 0; i < pos.count; i += 3) {
+        const x = (pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2)) / 3, z = (pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2)) / 3;
+        if (inside(x, z)) tris++;
+      }
+      expect(tris, `seed ${seed} yard triangles inside avoid`).toBe(0);
+    }
+  });
+
+  it('still paves the yard around the avoid area', () => {
+    const r = fillBlock(block, { heightAt: slope, seed: 2, wealth: 0.5, density: 0.6, avoid: [avoid] });
+    const dirt = r.builder.build('a').children.find((m) => m.name === 'a:dirt') as THREE.Mesh;
+    dirt.geometry.computeBoundingBox();
+    const bb = dirt.geometry.boundingBox!;
+    expect(bb.min.x).toBeLessThan(1);
+    expect(bb.max.x).toBeGreaterThan(69);
   });
 });

@@ -1,7 +1,7 @@
 export * from './types';
 export { Draw } from './draw';
-export { wall, wallShape, validOpenings, openingOutline, windowDetails, doorFrame, doorLeaves, plankShutters, band, archBand } from './wall';
-export type { Opening, WindowStyle } from './wall';
+export { wall, wallShape, validOpenings, openingOutline, windowDetails, doorFrame, doorLeaves, plankShutters, band, archBand, socleAndDado } from './wall';
+export type { Opening, WindowStyle, SocleOpts } from './wall';
 export { roof } from './roof';
 export type { RoofSpec } from './roof';
 export { insula, MAX_BUILDING_HEIGHT } from './insula';
@@ -20,4 +20,6 @@ export { buildStreet, buildPlaza, buildStairs, pointAt } from './streets';
 export type { StreetSpec, StreetResult, PlazaOpts, StairOpts } from './streets';
 export { CityBlockFiller, fillBlock, planLots, blockOutline } from './blockFiller';
 export type { FillOptions, FillResult, Lot, LotPlan, LotKind } from './blockFiller';
+export { CityLOD, bakeFarGeometry } from './lod';
+export type { CityLODOptions } from './lod';
 export * from './polygon';

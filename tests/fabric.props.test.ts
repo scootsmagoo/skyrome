@@ -33,6 +33,16 @@ describe('props', () => {
     expect(size('cart').z).toBeGreaterThan(3.5); // with its pole
   });
 
+  it('stays within triangle budgets (they are repeated by the hundred in shops and stacks)', () => {
+    const tris = (k: Parameters<typeof makeProp>[0]) =>
+      Math.max(...[0, 1, 2].map((v) => makeProp(k, undefined, v).parts.reduce((n, p) => n + p.geometry.getAttribute('position').count / 3, 0)));
+    expect(tris('basket')).toBeLessThan(200);
+    expect(tris('amphora_tall')).toBeLessThan(160);
+    expect(tris('amphora_globular')).toBeLessThan(200);
+    expect(tris('amphora_rack')).toBeLessThan(1700);
+    for (const k of PROP_KINDS) expect(tris(k), k).toBeLessThan(3500);
+  });
+
   it('is cached and deterministic', () => {
     expect(makeProp('stall', new Rng(1))).toBe(makeProp('stall', new Rng(1)));
     expect(makeProp('crate', undefined, 1)).toBe(makeProp('crate', undefined, 1));

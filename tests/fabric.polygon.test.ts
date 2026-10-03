@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  distToSegment, ensurePositive, insetPolygon, obbOverlap, pointInPolygon, polygonContainsOBB, rayToPolygon, resamplePolyline, signedArea,
+  distToSegment, ensurePositive, insetPolygon, obbOverlap, pointInPolygon, polygonCentroid, polygonContainsOBB, rayToPolygon, resamplePolyline, signedArea, subtractPolygons,
   type OBB,
 } from '../src/arch/fabric/polygon';
 import { openingOutline, validOpenings } from '../src/arch/fabric/wall';
@@ -86,5 +86,35 @@ describe('wall openings', () => {
       top = Math.max(top, p.y);
     }
     expect(top).toBeCloseTo(3, 1);
+  });
+});
+
+describe('polygon difference', () => {
+  const area = (ps: Polygon[]) => ps.reduce((a, p) => a + Math.abs(signedArea(p)), 0);
+
+  it('subtracts a convex hole exactly', () => {
+    const sq: Polygon = [[0, 0], [10, 0], [10, 10], [0, 10]];
+    const hole: Polygon = [[2, 2], [6, 2], [6, 5], [2, 5]];
+    const pieces = subtractPolygons(sq, [hole]);
+    expect(area(pieces)).toBeCloseTo(100 - 12, 6);
+    for (const p of pieces) {
+      const c = polygonCentroid(p);
+      expect(pointInPolygon(c, hole)).toBe(false);
+    }
+  });
+
+  it('subtracts a concave (L-shaped) hole, also when it only overlaps partly', () => {
+    const cell: Polygon = [[0, 0], [3, 0], [3, 3], [0, 3]];
+    const L: Polygon = [[1, 1], [5, 1], [5, 2], [2, 2], [2, 5], [1, 5]];
+    const pieces = subtractPolygons(cell, [L]);
+    // Overlap of the L with the cell: [1,3]x[1,2] plus [1,2]x[2,3] = 2 + 1.
+    expect(area(pieces)).toBeCloseTo(9 - 3, 6);
+    for (const p of pieces) expect(pointInPolygon(polygonCentroid(p), L)).toBe(false);
+  });
+
+  it('keeps disjoint subjects untouched and removes covered ones', () => {
+    const a: Polygon = [[0, 0], [1, 0], [1, 1], [0, 1]];
+    expect(subtractPolygons(a, [[[5, 5], [6, 5], [6, 6]]])).toEqual([a]);
+    expect(area(subtractPolygons(a, [[[-1, -1], [2, -1], [2, 2], [-1, 2]]]))).toBeCloseTo(0, 9);
   });
 });

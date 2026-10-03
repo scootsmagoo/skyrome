@@ -4,6 +4,7 @@
  * Orientation: a polygon with positive `signedArea` is "counter-clockwise" in the (x, z) plane and
  * the inward normal of its edge a→b is (−dz, dx).
  */
+import { ShapeUtils, Vector2 } from 'three';
 import type { Polygon, Vec2 } from './types';
 
 export function signedArea(poly: Polygon): number {
@@ -197,4 +198,83 @@ export function polylineLength(pts: Vec2[]): number {
   let l = 0;
   for (let i = 0; i < pts.length - 1; i++) l += Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]);
   return l;
+}
+
+// ---------------------------------------------------------------- clipping / difference
+
+/** The part of `subject` on the left of the directed line a→b (`keepLeft`), or on its right. */
+export function clipHalfPlane(subject: Polygon, a: Vec2, b: Vec2, keepLeft = true): Polygon {
+  const dx = b[0] - a[0], dz = b[1] - a[1];
+  const side = (p: Vec2) => (dx * (p[1] - a[1]) - dz * (p[0] - a[0])) * (keepLeft ? 1 : -1);
+  const out: Polygon = [];
+  for (let i = 0; i < subject.length; i++) {
+    const cur = subject[i], prev = subject[(i + subject.length - 1) % subject.length];
+    const sc = side(cur), sp = side(prev);
+    if (sc >= 0) {
+      if (sp < 0) out.push(lerp2(prev, cur, sp / (sp - sc)));
+      out.push(cur);
+    } else if (sp >= 0) out.push(lerp2(prev, cur, sp / (sp - sc)));
+  }
+  return out;
+}
+
+function lerp2(a: Vec2, b: Vec2, t: number): Vec2 {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+}
+
+export function isConvex(poly: Polygon): boolean {
+  let sign = 0;
+  for (let i = 0, n = poly.length; i < n; i++) {
+    const a = poly[i], b = poly[(i + 1) % n], c = poly[(i + 2) % n];
+    const cr = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
+    if (Math.abs(cr) < 1e-12) continue;
+    if (sign === 0) sign = Math.sign(cr);
+    else if (Math.sign(cr) !== sign) return false;
+  }
+  return true;
+}
+
+/** `subject` minus a convex polygon: disjoint pieces (convex when the subject is). */
+export function subtractConvex(subject: Polygon, convex: Polygon): Polygon[] {
+  const c = ensurePositive(convex);
+  const out: Polygon[] = [];
+  let rest = subject;
+  for (let i = 0; i < c.length && rest.length >= 3; i++) {
+    const a = c[i], b = c[(i + 1) % c.length];
+    // Outside a positive convex polygon = right of one of its edges.
+    const outside = clipHalfPlane(rest, a, b, false);
+    if (outside.length >= 3 && Math.abs(signedArea(outside)) > 1e-7) out.push(outside);
+    rest = clipHalfPlane(rest, a, b, true);
+  }
+  return out;
+}
+
+/** Convex pieces of a simple polygon (itself when convex, else its triangulation). */
+export function convexParts(poly: Polygon): Polygon[] {
+  if (isConvex(poly)) return [poly];
+  const tris = ShapeUtils.triangulateShape(poly.map((p) => new Vector2(p[0], p[1])), []);
+  return tris.map((t) => t.map((i) => poly[i]) as Polygon);
+}
+
+/** `subject` minus every polygon in `holes` (any simple polygons): a list of disjoint pieces. */
+export function subtractPolygons(subject: Polygon, holes: Polygon[]): Polygon[] {
+  let pieces: Polygon[] = [subject];
+  for (const h of holes) {
+    const hb = polygonBounds(h);
+    for (const part of convexParts(h)) {
+      const next: Polygon[] = [];
+      for (const p of pieces) {
+        const pb = polygonBounds(p);
+        if (pb.maxX <= hb.minX || pb.minX >= hb.maxX || pb.maxZ <= hb.minZ || pb.minZ >= hb.maxZ) next.push(p);
+        else next.push(...subtractConvex(p, part));
+      }
+      pieces = next;
+    }
+  }
+  return pieces;
+}
+
+/** Is p inside `poly` or closer than `r` to its boundary? */
+export function nearPolygon(p: Vec2, poly: Polygon, r = 0): boolean {
+  return pointInPolygon(p, poly) || (r > 0 && distToPolygonEdge(p, poly) < r);
 }

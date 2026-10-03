@@ -55,22 +55,53 @@ function unitSphere(w: number, h: number): THREE.BufferGeometry {
   return g;
 }
 
+/** Per-frame drawing flags, inherited by child frames. */
+export interface DrawFlags {
+  /** false: nothing drawn through this frame casts shadows (shop interiors, props behind openings). */
+  cast: boolean;
+  /**
+   * Far-LOD walls: `wall()` draws a plain slab with flat "painted" opening quads instead of cutting
+   * holes (an extruded wall with holes costs ~10× the triangles and is invisible at that range).
+   */
+  flat: boolean;
+}
+
 export class Draw {
+  readonly flags: DrawFlags;
+
   constructor(
     readonly b: MeshBuilder,
     readonly m: THREE.Matrix4 = new THREE.Matrix4(),
-  ) {}
+    flags: Partial<DrawFlags> = {},
+  ) {
+    this.flags = { cast: flags.cast ?? true, flat: flags.flat ?? false };
+  }
 
   /** Child frame: translate by (x, y, z) then rotate about the new Y axis. */
   at(x: number, y: number, z: number, rotY = 0): Draw {
     const m = this.m.clone().multiply(_m.makeTranslation(x, y, z));
     if (rotY) m.multiply(_m.makeRotationY(rotY));
-    return new Draw(this.b, m);
+    return new Draw(this.b, m, this.flags);
   }
 
   /** Child frame with an arbitrary local matrix. */
   sub(local: THREE.Matrix4): Draw {
-    return new Draw(this.b, this.m.clone().multiply(local));
+    return new Draw(this.b, this.m.clone().multiply(local), this.flags);
+  }
+
+  /** Same frame, but nothing drawn through it casts shadows (interiors: they sit in the building's own shadow). */
+  noShadow(): Draw {
+    return new Draw(this.b, this.m.clone(), { ...this.flags, cast: false });
+  }
+
+  /** Same frame with far-LOD flat walls (see `DrawFlags.flat`). */
+  flatWalls(): Draw {
+    return new Draw(this.b, this.m.clone(), { ...this.flags, flat: true });
+  }
+
+  /** Shadow flag for a part of material `mat` drawn through this frame. */
+  casts(mat: MaterialId): boolean {
+    return this.flags.cast && castsShadow(mat);
   }
 
   /** Box centred at (cx, cy, cz) with size (w, h, d). */
@@ -78,7 +109,7 @@ export class Draw {
     if (w <= 0 || h <= 0 || d <= 0) return this;
     _q.setFromEuler(_e.set(o.rx ?? 0, o.ry ?? 0, o.rz ?? 0));
     const local = new THREE.Matrix4().compose(_p.set(cx, cy, cz), _q, _s.set(w, h, d));
-    this.b.add(UNIT_BOX, mat, this.m.clone().multiply(local), { castShadow: castsShadow(mat), uvScale: o.uvScale });
+    this.b.add(UNIT_BOX, mat, this.m.clone().multiply(local), { castShadow: this.casts(mat), uvScale: o.uvScale });
     if (o.collide) this.solidRot(cx, cy, cz, w, h, d, _q.clone());
     return this;
   }
@@ -97,20 +128,20 @@ export class Draw {
     const k = (o.rTop ?? r) / r;
     _q.setFromEuler(_e.set(o.rx ?? 0, o.ry ?? 0, o.rz ?? 0));
     const local = new THREE.Matrix4().compose(_p.set(cx, cy, cz), _q, _s.set(r, h, r));
-    this.b.add(unitCylinder(seg, k, o.open), mat, this.m.clone().multiply(local), { castShadow: castsShadow(mat), uvScale: o.uvScale });
+    this.b.add(unitCylinder(seg, k, o.open), mat, this.m.clone().multiply(local), { castShadow: this.casts(mat), uvScale: o.uvScale });
     if (o.collide) this.solidCyl(cx, cy, cz, Math.max(r, o.rTop ?? r), h);
     return this;
   }
 
   /** Cylinder between two points (beams, poles, ropes). */
-  rod(mat: MaterialId, a: THREE.Vector3Like, b: THREE.Vector3Like, r: number, seg = 6, o: PartOpts & { rTop?: number } = {}): this {
+  rod(mat: MaterialId, a: THREE.Vector3Like, b: THREE.Vector3Like, r: number, seg = 6, o: PartOpts & { rTop?: number; open?: boolean } = {}): this {
     const dir = new THREE.Vector3(b.x - a.x, b.y - a.y, b.z - a.z);
     const len = dir.length();
     if (len < 1e-4) return this;
     const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
     const k = (o.rTop ?? r) / r;
     const local = new THREE.Matrix4().compose(new THREE.Vector3((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2), q, _s.set(r, len, r));
-    this.b.add(unitCylinder(seg, k), mat, this.m.clone().multiply(local), { castShadow: castsShadow(mat), uvScale: o.uvScale });
+    this.b.add(unitCylinder(seg, k, o.open), mat, this.m.clone().multiply(local), { castShadow: this.casts(mat), uvScale: o.uvScale });
     return this;
   }
 
@@ -119,7 +150,7 @@ export class Draw {
     const [w, h] = o.seg ?? [10, 7];
     _q.setFromEuler(_e.set(o.rx ?? 0, o.ry ?? 0, o.rz ?? 0));
     const local = new THREE.Matrix4().compose(_p.set(cx, cy, cz), _q, _s.set(rx, ry, rz));
-    this.b.add(unitSphere(w, h), mat, this.m.clone().multiply(local), { castShadow: castsShadow(mat), uvScale: o.uvScale });
+    this.b.add(unitSphere(w, h), mat, this.m.clone().multiply(local), { castShadow: this.casts(mat), uvScale: o.uvScale });
     return this;
   }
 
@@ -127,17 +158,21 @@ export class Draw {
   geo(g: THREE.BufferGeometry, mat: MaterialId, cx = 0, cy = 0, cz = 0, o: PartOpts & { sx?: number; sy?: number; sz?: number; keepUV?: boolean } = {}): this {
     _q.setFromEuler(_e.set(o.rx ?? 0, o.ry ?? 0, o.rz ?? 0));
     const local = new THREE.Matrix4().compose(_p.set(cx, cy, cz), _q, _s.set(o.sx ?? 1, o.sy ?? 1, o.sz ?? 1));
-    this.b.add(g, mat, this.m.clone().multiply(local), { castShadow: castsShadow(mat), uvScale: o.uvScale, uv: o.keepUV ? 'keep' : 'box' });
+    this.b.add(g, mat, this.m.clone().multiply(local), { castShadow: this.casts(mat), uvScale: o.uvScale, uv: o.keepUV ? 'keep' : 'box' });
     return this;
   }
 
-  /** Raw triangles (flat array of xyz triples, counter-clockwise = front) in this frame. */
-  tris(mat: MaterialId, positions: number[], o: PartOpts = {}): this {
+  /**
+   * Raw triangles (flat array of xyz triples, counter-clockwise = front) in this frame. `uvs` (one
+   * uv pair per vertex) keeps hand-made UVs, e.g. roof planes whose tile rows must follow the eaves.
+   */
+  tris(mat: MaterialId, positions: number[], o: PartOpts & { uvs?: number[] } = {}): this {
     if (positions.length < 9) return this;
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    if (o.uvs) g.setAttribute('uv', new THREE.Float32BufferAttribute(o.uvs, 2));
     g.computeVertexNormals();
-    this.b.add(g, mat, this.m, { castShadow: castsShadow(mat), uvScale: o.uvScale });
+    this.b.add(g, mat, this.m, { castShadow: this.casts(mat), uvScale: o.uvScale, uv: o.uvs ? 'keep' : 'box' });
     return this;
   }
 

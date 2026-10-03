@@ -19,7 +19,7 @@ import { Rng } from '../core/Rng';
 import { MeshBuilder, placeAndRegister, registerColliders } from '../gfx/MeshBuilder';
 import { getMaterial } from '../gfx/materials';
 import {
-  Draw, buildPlaza, buildStairs, buildStreet, compitalShrine, domus, fillBlock, horrea, insula, lacus, lararium, pergola,
+  CityLOD, Draw, buildPlaza, buildStairs, buildStreet, compitalShrine, domus, fillBlock, horrea, insula, lacus, lararium, pergola,
   pointInPolygon, scaffolding, streetAltar, treadwheelCrane, wall, type InsulaSpec, type Polygon, type Spot, type StreetSpec,
 } from '../arch/fabric';
 import { PROP_KINDS, PropScatter, placeProp } from '../arch/props';
@@ -34,8 +34,10 @@ declare global {
     fabricInfo?: Record<string, unknown>;
     fabricBreakdown?: () => unknown;
     fabricSpots?: Spot[];
-    /** Aim the debug camera at the n-th spot of a kind/tag: `dist` m out along its facing, `h` m up. */
-    fabricLook?: (kind: string, tag?: string, n?: number, dist?: number, h?: number) => unknown;
+    /** Aim the debug camera at the n-th spot of a kind/tag: `dist` m out along its facing, `side` m to its right, `h` m above the terrain. */
+    fabricLook?: (kind: string, tag?: string, n?: number, dist?: number, h?: number, side?: number) => unknown;
+    /** Debug: the scene's terrain height. */
+    fabricH?: (x: number, z: number) => number;
   }
 }
 
@@ -117,6 +119,12 @@ const MAIN_HALF = 2.75 + 2.2; // main street: 5.5 m roadway + 2.2 m sidewalks
 const CROSS_HALF = 2.25 + 1.8;
 const LANE = 4;
 
+/** The packed-dirt town ground (the terrain outside it is dry grass). */
+const DIRT = { x0: -78, x1: 78, z0: -98, z1: 88 };
+const inDirt = (x: number, z: number) => x > DIRT.x0 && x < DIRT.x1 && z > DIRT.z0 && z < DIRT.z1;
+/** Distance inside the dirt rectangle from its edge (negative outside). */
+const dirtDepth = (x: number, z: number) => Math.min(x - DIRT.x0, DIRT.x1 - x, z - DIRT.z0, DIRT.z1 - z);
+
 function rect(x0: number, z0: number, x1: number, z1: number): Polygon {
   return [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
 }
@@ -132,13 +140,16 @@ function terrain(game: Game) {
     heights[i] = y;
   }
   g.computeVertexNormals();
-  // Two material groups: packed dirt inside the town, sun-dried grass outside.
+  // Two material groups: packed dirt inside the town, sun-dried grass outside. Triangles are
+  // classified by their centroid; the town edge lies on the 2 m grid lines, so both triangles of a
+  // grid cell always land on the same side and the edge comes out straight (the grass fringe below
+  // then softens it).
   const idx = g.getIndex()!;
   const town: number[] = [], wild: number[] = [];
   for (let t = 0; t < idx.count; t += 3) {
-    const a = idx.getX(t);
-    const x = pos.getX(a), z = pos.getZ(a);
-    (x > -78 && x < 78 && z > -98 && z < 88 ? town : wild).push(idx.getX(t), idx.getX(t + 1), idx.getX(t + 2));
+    const a = idx.getX(t), b = idx.getX(t + 1), c = idx.getX(t + 2);
+    const x = (pos.getX(a) + pos.getX(b) + pos.getX(c)) / 3, z = (pos.getZ(a) + pos.getZ(b) + pos.getZ(c)) / 3;
+    (inDirt(x, z) ? town : wild).push(a, b, c);
   }
   g.setIndex([...town, ...wild]);
   g.clearGroups();
@@ -205,19 +216,23 @@ function neighbourhood(game: Game) {
     { id: 'E', poly: rect(MAIN_HALF, 47, 72, 82), wealth: 0.6, density: 0.6, seed: 15, sw: [0.12, 0.12, 0.12, 0.3] },
   ];
   const lots: { id: string; floorY: number }[] = [];
-  const lodSwitch = Number(new URLSearchParams(location.search).get('lod') ?? 170);
+  // Three levels per block (same seed = same massing): full detail near, the street exterior at
+  // mid range, and far stand-ins merged per cell. ?lod=near,mid overrides the distances.
+  const [lodNear, lodMid] = (new URLSearchParams(location.search).get('lod') ?? '70,220').split(',').map(Number);
+  const lod = game.addSystem(new CityLOD(game, { near: lodNear, mid: lodMid ?? 220, id: 'fabric' }));
   for (const blk of blocks) {
     const opts = { id: `${blk.id}:`, heightAt: H, wealth: blk.wealth, density: blk.density, seed: blk.seed, sidewalkHeight: blk.sw, allowHorrea: blk.id === 'A1' };
     const r = fillBlock(blk.poly, opts);
-    // Same seed with detail 'low' = identical massing without interiors / dressing: the far stand-in.
-    const far = fillBlock(blk.poly, { ...opts, detail: 'low' }).builder.build(`block${blk.id}:far`);
-    const near = r.builder.build(`block${blk.id}`);
-    near.updateMatrixWorld(true);
     registerColliders(game, r.builder.colliders);
-    game.world.add(`block${blk.id}`, near, { cullDistance: lodSwitch, far, farDistance: 3000 });
+    lod.addBlock(`block${blk.id}`, {
+      near: r.builder.build(`block${blk.id}`),
+      mid: fillBlock(blk.poly, { ...opts, detail: 'mid' }).builder.build(`block${blk.id}:mid`),
+      far: fillBlock(blk.poly, { ...opts, detail: 'low' }).builder.build(`block${blk.id}:far`),
+    });
     spots.push(...r.spots);
     for (const l of r.lots) lots.push({ id: `${l.id}:${l.kind}`, floorY: +l.floorY.toFixed(2) });
   }
+  lod.finish();
 
   // ---- piazza furniture: fountain, compital shrine at the corner, stalls, a statue, plane trees
   const pb = new MeshBuilder();
@@ -267,7 +282,8 @@ function neighbourhood(game: Game) {
   // ---- block D: garden with a vine pergola, and the building site
   const gb = new MeshBuilder();
   const gd = new Draw(gb);
-  const garden: Polygon = [[14, 12], [40, 12], [40, 43], [MAIN_HALF, 43], [MAIN_HALF, CROSS_HALF], [14, CROSS_HALF]];
+  // Block D south-east of the crossroads, minus the piazza's corner.
+  const garden: Polygon = [[14, CROSS_HALF], [40, CROSS_HALF], [40, 43], [MAIN_HALF, 43], [MAIN_HALF, 12], [14, 12]];
   buildPlaza(gb, garden, H, { material: 'grass', lift: 0.04, collide: false });
   for (const [x, z] of [[24, 24], [24, 34]]) {
     const p = gd.at(x, H(x, z) + 0.04, z);
@@ -341,7 +357,8 @@ function neighbourhood(game: Game) {
   // ---- grass & wildflowers outside the town and in the garden
   const grass = new GrassField({ minX: -200, minZ: -200, maxX: 200, maxZ: 200 }, {
     heightAt: H,
-    mask: (x, z) => (!inTown(x, z) && Math.abs(z - 45) > 3.2) || (pointInPolygon([x, z], garden) && !(x > 20 && x < 29 && z > 18 && z < 40)),
+    // Outside the town, plus a ragged fringe up to 1.8 m into the dirt so its edge is not a ruled line.
+    mask: (x, z) => (Math.abs(z - 45) > 3.2 && Math.abs(x) > MAIN_HALF + 0.4 && dirtDepth(x, z) < 1.8 * fbm2(x * 0.35, z * 0.35, 7) - 0.15) || (pointInPolygon([x, z], garden) && !(x > 20 && x < 29 && z > 18 && z < 40)),
     density: 2.6,
     dryness: 0.55,
   });
@@ -464,11 +481,14 @@ const scene: SceneDef = {
   setup(game) {
     game.world = game.addSystem(new WorldRegistry(game));
     window.fabricBreakdown = () => breakdown(game);
-    window.fabricLook = (kind, tag, n = 0, dist = 5, h = 1.7) => {
+    window.fabricH = fabricHeight;
+    window.fabricLook = (kind, tag, n = 0, dist = 5, h = 1.7, side = 0) => {
       const s = (window.fabricSpots ?? []).filter((sp) => sp.kind === kind && (!tag || sp.tag === tag))[n];
       if (!s) return null;
       const out = new THREE.Vector3(Math.sin(s.facing), 0, Math.cos(s.facing));
-      const p = s.position.clone().addScaledVector(out, dist).add(new THREE.Vector3(0, h, 0));
+      const right = new THREE.Vector3(Math.cos(s.facing), 0, -Math.sin(s.facing));
+      const p = s.position.clone().addScaledVector(out, dist).addScaledVector(right, side);
+      p.y = Math.max(fabricHeight(p.x, p.z), s.position.y - 0.4) + h;
       window.fabricCam = { pos: [p.x, p.y, p.z], look: [s.position.x, s.position.y + 1.4, s.position.z] };
       return { id: s.id, pos: s.position.toArray().map((v) => +v.toFixed(1)) };
     };

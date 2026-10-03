@@ -39,6 +39,35 @@ describe('species', () => {
     }
   });
 
+  it('far LODs carry baked albedo: trunks read as bark, not black', () => {
+    const bark = new THREE.Color(0x5c4a3a); // MATERIAL_BASE.bark, linear
+    for (const sp of ['umbrella_pine', 'plane', 'olive', 'laurel', 'fig'] as const) {
+      const t = makeTree(sp, 0);
+      expect(t.far[0].baked).toBe(true);
+      const g = t.far[0].geometry;
+      const pos = g.getAttribute('position'), col = g.getAttribute('color');
+      let r = 0, n = 0;
+      for (let i = 0; i < pos.count; i++) if (pos.getY(i) < 0.8) { r += col.getX(i); n++; }
+      expect(n).toBeGreaterThan(0);
+      expect(r / n, sp).toBeGreaterThan(bark.r * 0.6);
+    }
+  });
+
+  it('umbrella pine far LOD: a domed lens about 0.3x as deep as wide', () => {
+    for (let v = 0; v < TREE_VARIANTS; v++) {
+      const t = makeTree('umbrella_pine', v);
+      const g = t.far[0].geometry;
+      const pos = g.getAttribute('position'), col = g.getAttribute('color');
+      const top = new THREE.Box3();
+      // Canopy vertices: the green ones (the baked bark is red-brown).
+      for (let i = 0; i < pos.count; i++) if (col.getY(i) > col.getX(i)) top.expandByPoint(new THREE.Vector3().fromBufferAttribute(pos, i));
+      const s = top.getSize(new THREE.Vector3());
+      const ratio = s.y / Math.min(s.x, s.z);
+      expect(ratio).toBeGreaterThan(0.2);
+      expect(ratio).toBeLessThan(0.4);
+    }
+  });
+
   it('cypress: tall and narrow', () => {
     const t = makeTree('cypress', 1);
     const s = bounds(t.near[0].geometry).getSize(new THREE.Vector3());
@@ -80,19 +109,54 @@ describe('Forest LOD', () => {
 });
 
 describe('GrassField', () => {
+  const H = (x: number, z: number) => 0.1 * x + 0.05 * z;
+  const live = (g: GrassField) => (g.group.children as THREE.InstancedMesh[]).filter((m) => m.visible && m.count > 0);
+
   it('scatters tufts and flowers inside the mask, on the terrain', () => {
-    const H = (x: number, z: number) => 0.1 * x + 0.05 * z;
     const g = new GrassField({ minX: 0, minZ: 0, maxX: 40, maxZ: 40 }, { heightAt: H, mask: (x) => x > 20, seed: 4 });
-    const group = g.build();
+    g.build();
+    g.update(new THREE.Vector3(20, H(20, 20) + 1.7, 20), Infinity);
     expect(g.instanceCount).toBeGreaterThan(300);
     const m = new THREE.Matrix4(), p = new THREE.Vector3();
-    for (const c of group.children as THREE.InstancedMesh[]) {
+    for (const c of live(g)) {
       for (let i = 0; i < c.count; i += 17) {
         c.getMatrixAt(i, m);
         p.setFromMatrixPosition(m);
         expect(p.x).toBeGreaterThan(20);
-        expect(p.y).toBeCloseTo(H(p.x, p.z) - 0.02, 5);
+        expect(p.y).toBeCloseTo(H(p.x, p.z) - 0.02, 4);
+        // Upright, uniformly scaled in x/z.
+        const s = new THREE.Vector3().setFromMatrixScale(m);
+        expect(s.x).toBeCloseTo(s.z, 4);
       }
     }
+  });
+
+  it('only generates the ring around the camera, recycles cells and regenerates them identically', () => {
+    const g = new GrassField({ minX: -2000, minZ: -2000, maxX: 2000, maxZ: 2000 }, { heightAt: () => 0, seed: 9 });
+    g.build();
+    const at = (x: number, z: number) => g.update(new THREE.Vector3(x, 1.7, z), Infinity);
+    at(0, 0);
+    const n0 = g.instanceCount, cells0 = g.cellCount;
+    expect(cells0).toBeGreaterThan(4);
+    expect(cells0).toBeLessThan(40); // a 4 km field, but only the ring exists
+    const snapshot = () => live(g).map((m) => Array.from((m.instanceMatrix.array as Float32Array).slice(0, m.count * 16)).reduce((a, v) => a + v * 0.001, m.count)).sort().join(',');
+    const s0 = snapshot();
+    for (let i = 1; i <= 20; i++) at(i * 150, i * 90); // walk far away
+    expect(g.poolSize).toBeLessThan(cells0 * 2 + 10); // the pool does not grow with distance travelled
+    at(0, 0);
+    expect(g.instanceCount).toBe(n0);
+    expect(snapshot()).toBe(s0);
+  });
+
+  it('spreads generation over frames with a per-update budget', () => {
+    const g = new GrassField({ minX: -500, minZ: -500, maxX: 500, maxZ: 500 }, { heightAt: () => 0 });
+    g.build();
+    g.update(new THREE.Vector3(0, 1.7, 0), 3);
+    expect(g.cellCount).toBe(3);
+    for (let i = 0; i < 20; i++) g.update(new THREE.Vector3(0, 1.7, 0), 3);
+    const full = g.cellCount;
+    expect(full).toBeGreaterThan(3);
+    g.update(new THREE.Vector3(0, 1.7, 0), 3);
+    expect(g.cellCount).toBe(full);
   });
 });

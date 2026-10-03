@@ -42,3 +42,12 @@ export interface BuildingOutput {
 export type LocalGround = (x: number, z: number) => number;
 
 export const flatGround: LocalGround = () => 0;
+
+/**
+ * Level of detail of a generated building or block (same seed → same massing at every level):
+ * - 'full': everything — enterable shop interiors, props, street dressing, colliders.
+ * - 'mid': the exterior as seen from the street (window shutters, balconies, awnings, tile ribs
+ *   and courses) but dark shop mouths instead of interiors, no props and no colliders.
+ * - 'low': far stand-in — massing, roofs without tiles, openings painted flat on the walls.
+ */
+export type Detail = 'full' | 'mid' | 'low';

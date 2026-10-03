@@ -80,12 +80,15 @@ const HEAD_COLOR = /* glsl */ `
 #endif
 `;
 
-export function vegMaterial(base: MaterialId, p: VegProfile): THREE.Material {
+/**
+ * `base` is a library material id, or 'baked': a neutral white material for parts whose vertex
+ * colours already carry the albedo (far LODs).
+ */
+export function vegMaterial(base: MaterialId | 'baked', p: VegProfile): THREE.Material {
   const key = `${base}|${p.sway}|${p.flutter}|${p.fade?.join(',') ?? ''}|${p.doubleSide ? 1 : 0}|${p.heads ? 1 : 0}`;
   let m = cache.get(key);
   if (m) return m;
-  const src = getMaterial(base) as THREE.MeshStandardMaterial;
-  const mat = src.clone();
+  const mat = base === 'baked' ? new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92 }) : (getMaterial(base) as THREE.MeshStandardMaterial).clone();
   mat.name = `veg:${key}`;
   mat.vertexColors = true;
   if (p.doubleSide) mat.side = THREE.DoubleSide;

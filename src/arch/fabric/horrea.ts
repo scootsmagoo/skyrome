@@ -12,7 +12,7 @@ import { MeshBuilder } from '../../gfx/MeshBuilder';
 import { placeProp } from '../props';
 import { Draw } from './draw';
 import { roof } from './roof';
-import { flatGround, type BuildingOutput, type LocalGround, type Spot } from './types';
+import { flatGround, type BuildingOutput, type Detail, type LocalGround, type Spot } from './types';
 import { archBand, band, doorLeaves, wall, type Opening } from './wall';
 
 export interface HorreaSpec {
@@ -20,8 +20,8 @@ export interface HorreaSpec {
   depth: number;
   seed?: number;
   groundAt?: LocalGround;
-  /** 'low': far-LOD stand-in with the same massing. */
-  detail?: 'full' | 'low';
+  /** Level of detail (see `Detail`); every level has the same massing. */
+  detail?: Detail;
 }
 
 const T = 0.7;
@@ -29,11 +29,12 @@ const T = 0.7;
 export function horrea(spec: HorreaSpec): BuildingOutput {
   const rng = new Rng(spec.seed ?? 3);
   const b = new MeshBuilder();
-  const d = new Draw(b);
+  const low = spec.detail === 'low';
+  const full = (spec.detail ?? 'full') === 'full';
+  const d = low ? new Draw(b).flatWalls() : new Draw(b);
   const spots: Spot[] = [];
   const W = spec.width, D = spec.depth;
   const ground = spec.groundAt ?? flatGround;
-  const low = spec.detail === 'low';
   let gmin = 0;
   for (const [x, z] of [[-W / 2, -D / 2], [W / 2, -D / 2], [W / 2, D / 2], [-W / 2, D / 2]]) gmin = Math.min(gmin, ground(x, z));
   const yMin = gmin - 0.5;
@@ -66,7 +67,9 @@ export function horrea(spec: HorreaSpec): BuildingOutput {
     band(fr, 'travertine', -len / 2 - (len === W ? 0 : T), len / 2 + (len === W ? 0 : T), H1 - 0.1, 0.14, 0.06);
   }
   band(F, 'travertine', -W / 2, W / 2, H1 - 0.1, 0.14, 0.06);
-  for (const fr of [F, ...sides.map((s) => s[0])]) band(fr, 'travertine', -W / 2, W / 2, H - 0.25, 0.25, 0.18);
+  // Cornice, tucked under the roof slab, around all four walls.
+  band(F, 'travertine', -W / 2, W / 2, H - 0.45, 0.25, 0.18);
+  for (const [fr, len] of sides) band(fr, 'travertine', -len / 2 - (len === W ? 0 : T), len / 2 + (len === W ? 0 : T), H - 0.45, 0.25, 0.18);
 
   // Gateway: engaged brick columns, travertine archivolt, pediment.
   archBand(F, 'travertine', 0, gateH - gateW / 2, gateW / 2, gateW / 2, 0.28, 0.05);
@@ -110,16 +113,18 @@ export function horrea(spec: HorreaSpec): BuildingOutput {
     for (const o of cut) {
       if (o.y0 > 1) { fr.span('black', o.x0, o.y0, T * 0.6, o.x1, o.y1, T * 0.6 + 0.02, { shadow: false }); continue; }
       if (wi === 0 && o.x1 - o.x0 > 2.5) continue;
-      archBand(fr, 'travertine', (o.x0 + o.x1) / 2, 1.9, 1.0, 1.0, 0.2, 0.03);
+      if (!low) archBand(fr, 'travertine', (o.x0 + o.x1) / 2, 1.9, 1.0, 1.0, 0.2, 0.03);
       const C = fr.at((o.x0 + o.x1) / 2, 0, 0);
       const open = rng.chance(0.4);
       C.span('black', -1, 0, T + 2.5, 1, 2.9, T + 2.52, { shadow: false });
-      if (open && !low) {
-        C.span('concrete', -1.0, -0.05, T, 1.0, 0.01, T + 2.5);
-        for (const s of [-1, 1]) C.span('plaster_cream', s * 1.0, 0, T, s * 1.1, 2.9, T + 2.5);
-        for (let k = 0; k < 4; k++) placeProp(C, rng.chance(0.5) ? 'amphora_tall' : 'sack', -0.6 + k * 0.4, 0, T + 2.1, 0, { collide: false, rx: 0.15 });
-        doorLeaves(C, { x0: -1, x1: 1, y0: 0, y1: 1.9 }, T, 1);
-      } else doorLeaves(C, { x0: -1, x1: 1, y0: 0, y1: 1.9 }, T, 0);
+      if (open && full) {
+        const I = C.noShadow();
+        I.span('concrete', -1.0, -0.05, T, 1.0, 0.01, T + 2.5);
+        for (const s of [-1, 1]) I.span('plaster_cream', s * 1.0, 0, T, s * 1.1, 2.9, T + 2.5);
+        const crng = rng.fork(`cell${wi}:${o.x0.toFixed(2)}`);
+        for (let k = 0; k < 4; k++) placeProp(I, crng.chance(0.5) ? 'amphora_tall' : 'sack', -0.6 + k * 0.4, 0, T + 2.1, 0, { collide: false, rx: 0.15 });
+      }
+      if (!low) doorLeaves(C, { x0: -1, x1: 1, y0: 0, y1: 1.9 }, T, open ? 1 : 0);
     }
     band(fr, 'travertine', -len / 2, len / 2, H1 - 0.1, 0.14, 0.06);
   });
@@ -133,7 +138,7 @@ export function horrea(spec: HorreaSpec): BuildingOutput {
   d.span('black', -iw, 0, cz - cd / 2 - T, -cw / 2 - T - 0.01, H - 0.05, cz + cd / 2 + T, { shadow: false });
   d.span('black', cw / 2 + T + 0.01, 0, cz - cd / 2 - T, iw, H - 0.05, cz + cd / 2 + T, { shadow: false });
   // Courtyard life.
-  if (!low) {
+  if (full) {
     placeProp(d, 'amphora_stack', -cw / 2 + 2, 0, cz + 1, 0.3);
     placeProp(d, 'cart', cw / 2 - 2.5, 0, cz - 1, 0.4, { variant: 1 });
     for (let i = 0; i < 4; i++) placeProp(d, 'sack', 1 + i * 0.5, 0, cz + cd / 2 - 1.2, (i * 1.7) % 6, { collide: false });

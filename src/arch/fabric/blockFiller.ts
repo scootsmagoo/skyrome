@@ -22,12 +22,12 @@ import { lacus } from './fountain';
 import { horrea } from './horrea';
 import { insula, MAX_BUILDING_HEIGHT } from './insula';
 import {
-  distToSegment, ensurePositive, insetPolygon, obbCorners, signedArea, obbIntersectsPolygon, obbOverlap, pointInOBB, pointInPolygon, polygonBounds,
+  distToSegment, ensurePositive, insetPolygon, nearPolygon, obbCorners, signedArea, obbIntersectsPolygon, obbOverlap, pointInOBB, pointInPolygon, polygonBounds,
   polygonContainsOBB, rayToPolygon, type OBB,
 } from './polygon';
 import { compitalShrine } from './shrines';
 import { buildPlaza } from './streets';
-import type { BuildingOutput, HeightFn, Polygon, Spot, SpotKind, Vec2 } from './types';
+import type { BuildingOutput, Detail, HeightFn, Polygon, Spot, SpotKind, Vec2 } from './types';
 
 export type LotKind = 'insula' | 'domus' | 'horrea' | 'shops' | 'piazza' | 'alley';
 
@@ -55,11 +55,11 @@ export interface FillOptions {
   /** Merge into this builder instead of a new one. */
   builder?: MeshBuilder;
   /**
-   * 'low' builds a far-LOD stand-in with identical massing (same seed → same lots and buildings)
-   * but no interiors, window dressing, tile ridges, props or colliders. Use it as the `far` object
-   * of a WorldRegistry entry.
+   * Level of detail (see `Detail`). Every level has identical massing (same seed → same lots and
+   * buildings). 'mid' drops interiors, props and colliders; 'low' is the far stand-in (flat walls,
+   * plain roofs). `CityLOD` switches between the three.
    */
-  detail?: 'full' | 'low';
+  detail?: Detail;
   /** Street props / awnings on shops (default true). */
   streetDressing?: boolean;
 }
@@ -252,13 +252,14 @@ export function fillBlock(polygon: Polygon, opts: FillOptions): FillResult {
   const sidewalkOf = (e: number) => (Array.isArray(opts.sidewalkHeight) ? swByEdge.get(e) ?? 0.3 : opts.sidewalkHeight ?? 0.3);
   const spots: Spot[] = [];
   const lots: Lot[] = [];
-  const low = opts.detail === 'low';
-  const dress = (opts.streetDressing ?? true) && !low;
   const detail = opts.detail ?? 'full';
+  const low = detail === 'low', full = detail === 'full';
+  const dress = opts.streetDressing ?? true;
   const colliders0 = b.colliders.length;
 
-  // Yard surface under everything (buildings stand on top of it).
-  if (opts.yard !== null) buildPlaza(b, poly, H, { material: opts.yard ?? 'dirt', lift: 0.03, cell: 3, skirt: 0.2, collide: false });
+  // Yard surface under everything (buildings stand on top of it), leaving the avoid areas bare.
+  const avoid = opts.avoid ?? [];
+  if (opts.yard !== null) buildPlaza(b, poly, H, { material: opts.yard ?? 'dirt', lift: 0.03, cell: low ? 6 : 3, skirt: 0.2, collide: false, exclude: avoid });
 
   for (const p of plans) {
     if (p.kind === 'alley') continue;
@@ -297,7 +298,7 @@ export function fillBlock(polygon: Polygon, opts: FillOptions): FillResult {
     } else if (p.kind === 'horrea') {
       out = horrea({ width: p.width, depth: p.depth, seed: p.seed, groundAt, detail });
     } else if (p.kind === 'piazza') {
-      piazza(b, p, H, lrng, spots, sw, low);
+      piazza(b, p, H, lrng, spots, sw, !full);
     }
     if (out) {
       b.append(out.builder, m);
@@ -309,13 +310,13 @@ export function fillBlock(polygon: Polygon, opts: FillOptions): FillResult {
       lots.push({ ...p, floorY, center: new THREE.Vector3(obb.c[0], floorY, obb.c[1]), height: 0 });
     }
   }
-  if (low) b.colliders.splice(colliders0);
-  else yardDressing(b, poly, plans, H, rng, spots, opts.id ?? '');
+  if (!full) b.colliders.splice(colliders0);
+  else yardDressing(b, poly, plans, avoid, H, rng, spots, opts.id ?? '');
   return { builder: b, spots, lots };
 }
 
-/** Small square in a gap of the frontage: paving, a fountain or a shrine, benches, trees. */
-function piazza(b: MeshBuilder, p: LotPlan, H: HeightFn, rng: Rng, spots: Spot[], sw: number, low = false) {
+/** Small square in a gap of the frontage: paving, a fountain or a shrine, benches (`full` only), trees. */
+function piazza(b: MeshBuilder, p: LotPlan, H: HeightFn, rng: Rng, spots: Spot[], sw: number, noProps = false) {
   const corners = obbCorners(p.obb);
   buildPlaza(b, corners, (x, z) => H(x, z) + sw * 0.5, { material: rng.chance(0.5) ? 'paving_travertine' : 'cobbles', lift: 0.05 });
   const c = p.obb.c;
@@ -330,7 +331,7 @@ function piazza(b: MeshBuilder, p: LotPlan, H: HeightFn, rng: Rng, spots: Spot[]
     add('shrine', 0, p.obb.hv * 0.4 - 1.8, 0, 'compitum');
   }
   for (const s of [-1, 1]) {
-    if (!rng.chance(0.7) || low) continue;
+    if (!rng.chance(0.7) || noProps) continue;
     const lx = s * (p.obb.hu - 1.2);
     placeProp(d, 'bench_masonry', lx, 0, 0, s * Math.PI / 2, { variant: 0 });
     add('bench', lx - s * 0.5, 0, -s * Math.PI / 2);
@@ -339,14 +340,15 @@ function piazza(b: MeshBuilder, p: LotPlan, H: HeightFn, rng: Rng, spots: Spot[]
   add('stall', 0, -p.obb.hv + 2.0, Math.PI, 'market');
 }
 
-/** Wells, stacked amphorae, carts and trees in the leftover yard space. */
-function yardDressing(b: MeshBuilder, poly: Polygon, plans: LotPlan[], H: HeightFn, rng: Rng, spots: Spot[], prefix: string) {
+/** Wells, stacked amphorae, carts and trees in the leftover yard space (never inside `avoid`). */
+function yardDressing(b: MeshBuilder, poly: Polygon, plans: LotPlan[], avoid: Polygon[], H: HeightFn, rng: Rng, spots: Spot[], prefix: string) {
   const { minX, minZ, maxX, maxZ } = polygonBounds(poly);
   const solid = plans.filter((p) => p.kind !== 'alley');
   const free = (x: number, z: number, r: number) =>
     pointInPolygon([x, z], poly) &&
     !solid.some((p) => pointInOBB([x, z], p.obb, r)) &&
-    [[r, 0], [-r, 0], [0, r], [0, -r]].every(([dx, dz]) => pointInPolygon([x + dx, z + dz], poly));
+    [[r, 0], [-r, 0], [0, r], [0, -r]].every(([dx, dz]) => pointInPolygon([x + dx, z + dz], poly)) &&
+    !avoid.some((av) => nearPolygon([x, z], av, r));
   const d = new Draw(b);
   let n = 0;
   const area = (maxX - minX) * (maxZ - minZ);

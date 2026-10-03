@@ -87,7 +87,7 @@ export class Forest {
   }
 
   private mesh(part: TreePart, n: number, shadow: boolean): THREE.InstancedMesh {
-    const mat = vegMaterial(part.material, { ...WIND[part.wind], heads: part.heads });
+    const mat = vegMaterial(part.baked ? 'baked' : part.material, { ...WIND[part.wind], heads: part.heads });
     const m = new THREE.InstancedMesh(part.geometry, mat, n);
     m.castShadow = shadow;
     m.receiveShadow = true;

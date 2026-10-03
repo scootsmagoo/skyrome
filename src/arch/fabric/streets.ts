@@ -9,7 +9,7 @@ import type { MeshBuilder } from '../../gfx/MeshBuilder';
 import type { MaterialId } from '../../gfx/materialIds';
 import { Rng } from '../../core/Rng';
 import { castsShadow } from './shadow';
-import { polygonBounds, pointInPolygon, polylineLength, resamplePolyline } from './polygon';
+import { ensurePositive, polygonBounds, pointInPolygon, polylineLength, resamplePolyline, subtractPolygons } from './polygon';
 import type { HeightFn, Polygon, Vec2 } from './types';
 
 export interface StreetSpec {
@@ -252,16 +252,21 @@ export interface PlazaOpts {
   /** Vertical skirt depth around the edge (hides gaps against the terrain). */
   skirt?: number;
   collide?: boolean;
+  /** Holes: areas left unpaved (landmark footprints and other `avoid` areas). Any simple polygons. */
+  exclude?: Polygon[];
 }
 
-/** A paved (or yard) surface over an arbitrary polygon, draped on the terrain. */
+/** A paved (or yard) surface over an arbitrary polygon (minus `exclude` holes), draped on the terrain. */
 export function buildPlaza(b: MeshBuilder, poly: Polygon, heightAt: HeightFn, o: PlazaOpts = {}) {
   const mat = o.material ?? 'paving_travertine';
   const lift = o.lift ?? 0.07;
   const cell = o.cell ?? 2.5;
+  const holes = (o.exclude ?? []).filter((h) => h.length >= 3);
+  const holeBounds = holes.map((h) => polygonBounds(h));
   const { minX, minZ, maxX, maxZ } = polygonBounds(poly);
   const arr: number[] = [];
   const v = (x: number, z: number) => [x, heightAt(x, z) + lift, z];
+  const inHole = (p: Vec2) => holes.some((h) => pointInPolygon(p, h));
   for (let x = minX; x < maxX - 1e-6; x += cell)
     for (let z = minZ; z < maxZ - 1e-6; z += cell) {
       const x1 = Math.min(maxX, x + cell), z1 = Math.min(maxZ, z + cell);
@@ -270,38 +275,60 @@ export function buildPlaza(b: MeshBuilder, poly: Polygon, heightAt: HeightFn, o:
       if (corners.every((c) => pointInPolygon(c, poly))) piece = corners;
       else piece = clipToCell(poly, x, z, x1, z1);
       if (piece.length < 3) continue;
-      const tris = THREE.ShapeUtils.triangulateShape(piece.map((p) => new THREE.Vector2(p[0], p[1])), []);
-      for (const t of tris) {
-        // Up-facing winding in (x, z): reverse of the 2D CCW order.
-        const [a, bb, c] = [piece[t[0]], piece[t[1]], piece[t[2]]];
-        const cross = (bb[0] - a[0]) * (c[1] - a[1]) - (bb[1] - a[1]) * (c[0] - a[0]);
-        const seq = cross > 0 ? [a, c, bb] : [a, bb, c];
-        for (const p of seq) arr.push(...v(p[0], p[1]));
+      // Cut out the holes that touch this cell.
+      const near = holes.filter((_, i) => holeBounds[i].maxX > x && holeBounds[i].minX < x1 && holeBounds[i].maxZ > z && holeBounds[i].minZ < z1);
+      const pieces = near.length ? subtractPolygons(piece, near) : [piece];
+      for (const pc of pieces) {
+        if (pc.length < 3) continue;
+        const tris = THREE.ShapeUtils.triangulateShape(pc.map((p) => new THREE.Vector2(p[0], p[1])), []);
+        for (const t of tris) {
+          // Up-facing winding in (x, z): reverse of the 2D CCW order.
+          const [a, bb, c] = [pc[t[0]], pc[t[1]], pc[t[2]]];
+          const cross = (bb[0] - a[0]) * (c[1] - a[1]) - (bb[1] - a[1]) * (c[0] - a[0]);
+          const seq = cross > 0 ? [a, c, bb] : [a, bb, c];
+          for (const p of seq) arr.push(...v(p[0], p[1]));
+        }
       }
     }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
   g.computeVertexNormals();
   b.add(g, mat, undefined, { castShadow: castsShadow(mat) });
-  // Skirt.
+  // Skirt along the outline and around the holes, facing away from the paved surface.
   const skirt = o.skirt ?? 0.4;
   if (skirt > 0) {
     const s: number[] = [];
-    for (let i = 0; i < poly.length; i++) {
-      const a = poly[i], c = poly[(i + 1) % poly.length];
-      const len = Math.hypot(c[0] - a[0], c[1] - a[1]);
-      const k = Math.max(1, Math.ceil(len / cell));
-      for (let j = 0; j < k; j++) {
-        const p0: Vec2 = [a[0] + ((c[0] - a[0]) * j) / k, a[1] + ((c[1] - a[1]) * j) / k];
-        const p1: Vec2 = [a[0] + ((c[0] - a[0]) * (j + 1)) / k, a[1] + ((c[1] - a[1]) * (j + 1)) / k];
-        const t0 = v(p0[0], p0[1]), t1 = v(p1[0], p1[1]);
-        s.push(...t0, t0[0], t0[1] - skirt, t0[2], ...t1, ...t1, t0[0], t0[1] - skirt, t0[2], t1[0], t1[1] - skirt, t1[2]);
+    const paved = (p: Vec2) => pointInPolygon(p, poly) && !inHole(p);
+    const ring = (pts: Polygon) => {
+      for (let i = 0; i < pts.length; i++) {
+        const a = pts[i], c = pts[(i + 1) % pts.length];
+        const len = Math.hypot(c[0] - a[0], c[1] - a[1]);
+        if (len < 1e-6) continue;
+        const k = Math.max(1, Math.ceil(len / cell));
+        const nx = (c[1] - a[1]) / len, nz = -(c[0] - a[0]) / len; // right normal
+        for (let j = 0; j < k; j++) {
+          const p0: Vec2 = [a[0] + ((c[0] - a[0]) * j) / k, a[1] + ((c[1] - a[1]) * j) / k];
+          const p1: Vec2 = [a[0] + ((c[0] - a[0]) * (j + 1)) / k, a[1] + ((c[1] - a[1]) * (j + 1)) / k];
+          const m: Vec2 = [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2];
+          // Only where paving lies on exactly one side (skips outline stretches inside a hole).
+          const right = paved([m[0] + nx * 0.05, m[1] + nz * 0.05]), left = paved([m[0] - nx * 0.05, m[1] - nz * 0.05]);
+          if (right === left) continue;
+          const t0 = v(p0[0], p0[1]), t1 = v(p1[0], p1[1]);
+          const b0 = [t0[0], t0[1] - skirt, t0[2]], b1 = [t1[0], t1[1] - skirt, t1[2]];
+          // Face the unpaved side: (t0, b0, t1) faces left of p0→p1, (t0, t1, b0) faces right.
+          if (left) s.push(...t0, ...t1, ...b0, ...t1, ...b1, ...b0);
+          else s.push(...t0, ...b0, ...t1, ...t1, ...b0, ...b1);
+        }
       }
+    };
+    ring(poly);
+    for (const h of holes) ring(ensurePositive(h));
+    if (s.length) {
+      const sg = new THREE.BufferGeometry();
+      sg.setAttribute('position', new THREE.Float32BufferAttribute(s, 3));
+      sg.computeVertexNormals();
+      b.add(sg, mat, undefined, { castShadow: castsShadow(mat) });
     }
-    const sg = new THREE.BufferGeometry();
-    sg.setAttribute('position', new THREE.Float32BufferAttribute(s, 3));
-    sg.computeVertexNormals();
-    b.add(sg, mat, undefined, { castShadow: castsShadow(mat) });
   }
   if (o.collide ?? true) b.collider({ kind: 'trimesh', geometry: g });
 }

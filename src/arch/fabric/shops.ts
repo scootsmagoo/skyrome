@@ -50,7 +50,7 @@ export function shopInterior(d: Draw, kind: ShopKind, room: ShopRoom, rng: Rng) 
   const { w, depth, h, t } = room;
   const hw = w / 2;
   const wallMat: MaterialId = room.wealth > 0.55 ? 'plaster_white' : rng.chance(0.5) ? 'plaster_cream' : 'plaster_white';
-  const dado: MaterialId = rng.chance(0.65) ? 'plaster_red' : 'plaster_dark';
+  const dado: MaterialId = rng.chance(0.65) ? 'plaster_red' : 'plaster_ochre';
   const floor: MaterialId = room.wealth > 0.6 ? 'mosaic' : rng.chance(0.5) ? 'terracotta' : 'concrete';
   // Shell — slabs sit just outside the room volume so their inner faces are the visible walls.
   d.span(floor, -hw - 0.1, -0.12, t - 0.02, hw + 0.1, 0, depth + 0.1);

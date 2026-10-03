@@ -18,8 +18,8 @@ import { Draw } from './draw';
 import { roof } from './roof';
 import { aedicula } from './shrines';
 import { pickShopKind, shopFrontage, shopInterior, type ShopKind } from './shops';
-import { flatGround, type BuildingOutput, type LocalGround, type Spot, type SpotKind } from './types';
-import { archBand, band, doorFrame, doorLeaves, plankShutters, wall, windowDetails, type Opening } from './wall';
+import { flatGround, type BuildingOutput, type Detail, type LocalGround, type Spot, type SpotKind } from './types';
+import { archBand, band, doorFrame, doorLeaves, plankShutters, socleAndDado, wall, windowDetails, type Opening } from './wall';
 import * as THREE from 'three';
 
 /** Trajan's height limit for private buildings: 60 Roman feet ≈ 17.7 m. */
@@ -53,8 +53,8 @@ export interface InsulaSpec {
   maxHeight?: number;
   /** Shop awnings, street props (default true). */
   streetDressing?: boolean;
-  /** 'low': a cheap far-LOD stand-in with the same massing (no interiors, window dressing, tile ridges or props). */
-  detail?: 'full' | 'low';
+  /** Level of detail (see `Detail`); every level has the same massing. */
+  detail?: Detail;
   /** Corner lots: shops along a side that faces a side street. */
   sideShops?: { left?: boolean; right?: boolean };
 }
@@ -74,17 +74,20 @@ const T = 0.6; // wall thickness
 export function insula(spec: InsulaSpec): BuildingOutput {
   const rng = new Rng(spec.seed ?? 1);
   // Purely decorative choices draw from a fork, so the low-detail variant (which skips them)
-  // keeps exactly the same structure as the full one.
+  // keeps exactly the same structure as the full one; 'mid' makes every decorative draw that
+  // 'full' makes, so the two match exactly wherever both draw something.
   const drng = rng.fork('detail');
   const low = spec.detail === 'low';
+  const full = (spec.detail ?? 'full') === 'full';
   const b = new MeshBuilder();
-  const d = new Draw(b);
+  const d = low ? new Draw(b).flatWalls() : new Draw(b);
   const spots: Spot[] = [];
   const W = spec.width, D = spec.depth;
   const wealth = spec.wealth ?? 0.4;
   const ground = spec.groundAt ?? flatGround;
   const sides = { left: spec.sides?.left ?? true, right: spec.sides?.right ?? true, back: spec.sides?.back ?? true };
-  const dress = (spec.streetDressing ?? true) && !low;
+  const streetDressing = (spec.streetDressing ?? true) && !low;
+  const dress = streetDressing && full;
 
   // ---- heights (respecting the 60-foot limit)
   const G = rng.range(4.1, 4.5);
@@ -101,7 +104,10 @@ export function insula(spec: InsulaSpec): BuildingOutput {
   const wallMat: MaterialId = finish === 'brick' ? 'brick' : spec.plaster ?? rng.weighted<MaterialId>([['plaster_cream', 3], ['plaster_ochre', 2], ['plaster_white', 1.5 + wealth], ['plaster_red', 0.4]]);
   const trim: MaterialId = finish === 'brick' ? 'travertine' : wallMat === 'plaster_white' ? 'plaster_ochre' : 'plaster_white';
   const courseMat: MaterialId = finish === 'brick' ? (rng.chance(0.5) ? 'brick' : 'travertine') : trim;
-  const dadoMat: MaterialId = wallMat === 'plaster_red' ? 'plaster_dark' : rng.chance(0.6) ? 'plaster_red' : 'plaster_dark';
+  // Pompeian red or yellow-ochre dado (never the wall's own colour).
+  const dadoMat: MaterialId = wallMat === 'plaster_red' ? 'plaster_ochre' : rng.chance(0.6) || wallMat === 'plaster_ochre' ? 'plaster_red' : 'plaster_ochre';
+  // Masonry podium over foundations exposed by the slope (brick fronts simply continue down).
+  const socleMat: MaterialId | null = finish === 'brick' ? null : wealth > 0.55 ? 'travertine' : 'tufa';
   const arched = rng.chance(finish === 'brick' ? 0.45 : 0.2);
   const shutterMat: MaterialId = rng.chance(0.6) ? 'wood_painted' : 'wood';
 
@@ -143,7 +149,9 @@ export function insula(spec: InsulaSpec): BuildingOutput {
       const ow = Math.max(2.1, Math.min(3.5, bw - rng.range(0.85, 1.1)));
       o = { x0: cx - ow / 2, x1: cx + ow / 2, y0: yb, y1: yb + oh, arch: arched ? ow * 0.17 : 0 };
     }
-    return { x0, x1, kind: isShop ? kind : kind, yb, open, o };
+    // Far LOD (flat walls): shuttered shops and doors are painted wood, open ones dark.
+    if ((isShop && !open) || kind === 'entrance') o.fill = kind === 'entrance' ? 'wood_dark' : 'wood';
+    return { x0, x1, kind, yb, open, o };
   });
 
   const spot = (kind: SpotKind, x: number, y: number, z: number, facing: number, tag?: string) =>
@@ -192,17 +200,8 @@ export function insula(spec: InsulaSpec): BuildingOutput {
   // Facade details: string courses, cornice, dado on plastered ground floor.
   for (let k = 1; k < n; k++) band(F, courseMat, -W / 2 - 0.02, W / 2 + 0.02, floorY(k) - 0.07, 0.12, 0.07);
   cornice(F, trim, -W / 2, W / 2, eave);
-  if (finish === 'plaster') {
-    // Painted dado on each pier between the openings.
-    let x = -W / 2;
-    for (const bay of bays) {
-      if (bay.o && isCut(bay.o)) {
-        dado(F, dadoMat, x, bay.o.x0, yMin, bay.yb + 1.1);
-        x = bay.o.x1;
-      }
-    }
-    dado(F, dadoMat, x, W / 2, yMin, bays[bays.length - 1].yb + 1.1);
-  }
+  // Painted dado on the piers between the shop openings, following the sidewalk.
+  if (finish === 'plaster') socleAndDado(F, -W / 2, W / 2, yMin, ground, { dado: dadoMat, skip: cut });
 
   // Shops / doors.
   for (const bay of bays) {
@@ -213,8 +212,8 @@ export function insula(spec: InsulaSpec): BuildingOutput {
     const lo: Opening = { ...o, x0: -ow / 2, x1: ow / 2, y0: 0, y1: o.y1 - bay.yb };
     if (bay.kind === 'stair') {
       doorFrame(S, lo, trim === 'plaster_white' ? 'travertine' : trim);
-      if (low) S.span('black', -ow / 2, 0, T * 0.5, ow / 2, lo.y1, T * 0.5 + 0.02, { shadow: false });
-      else stairwell(S, ow, T, Math.min(sd, 3.2));
+      if (!full) S.span('black', -ow / 2, 0, T * 0.5, ow / 2, lo.y1, T * 0.5 + 0.02, { shadow: false });
+      else stairwell(S.noShadow(), ow, T, Math.min(sd, 3.2));
       S.solid(-ow / 2 - 0.05, 0, T * 0.5, ow / 2 + 0.05, 2.6, sd);
       spot('houseDoor', cx, bay.yb, zf - 0.5, Math.PI, 'stair');
       continue;
@@ -235,14 +234,18 @@ export function insula(spec: InsulaSpec): BuildingOutput {
     const ceiling = lo.y1 + 0.12 - (o.arch ?? 0) * 0;
     // Mezzanine (dark) above the shop ceiling, behind the small window.
     S.span('black', -ow / 2, ceiling + 0.11, T + 0.01, ow / 2, Math.max(ceiling + 0.3, G - bay.yb - 0.2), T + 1.2, { shadow: false });
-    if (bay.open && low) {
-      // Far stand-in: a dark shop mouth.
-      S.span('black', -ow / 2, 0, T * 0.6, ow / 2, lo.y1, T * 0.6 + 0.02, { shadow: false });
-    } else if (bay.open) {
-      shopInterior(S, kind, { w: ow, depth: T + sd, h: ceiling, t: T, wealth }, rng.fork(`shop${cx}`));
-      S.solid(-ow / 2 - 0.3, -0.4, T * 0.2, ow / 2 + 0.3, 0, T + sd); // shop floor
-      if (dress) {
-        shopFrontage(S, kind, ow, rng.fork(`front${cx}`));
+    if (bay.open) {
+      if (full) {
+        // Enterable shop: the room shell and fittings sit in the building's own shadow.
+        shopInterior(S.noShadow(), kind, { w: ow, depth: T + sd, h: ceiling, t: T, wealth }, rng.fork(`shop${cx}`));
+        S.solid(-ow / 2 - 0.3, -0.4, T * 0.2, ow / 2 + 0.3, 0, T + sd); // shop floor
+      } else {
+        // Mid / far stand-in: a dark shop mouth.
+        S.span('black', -ow / 2, 0, T * 0.6, ow / 2, lo.y1, T * 0.6 + 0.02, { shadow: false });
+      }
+      if (streetDressing) {
+        // The same decorative draws at 'full' and 'mid'; 'mid' keeps only the awning.
+        if (full) shopFrontage(S, kind, ow, rng.fork(`front${cx}`));
         if (!portico && drng.chance(0.45)) {
           const mats: [MaterialId, MaterialId] = drng.pick([['fabric_white', 'fabric_red'], ['fabric_ochre', 'fabric_white'], ['fabric_white', 'fabric_blue']] as [MaterialId, MaterialId][]);
           const ay = Math.min(lo.y1 + 0.55, G - bay.yb - 0.4);
@@ -250,14 +253,16 @@ export function insula(spec: InsulaSpec): BuildingOutput {
           for (const s of [-1, 1]) S.cyl('wood', s * (ow / 2 + 0.2), (ay - 0.6) / 2, -1.35, 0.035, ay - 0.6, 5);
           S.rod('iron', { x: 0, y: ay, z: -0.02 }, { x: 0, y: ay + 0.25, z: 0 }, 0.01, 3, { shadow: false });
         }
-        if (drng.chance(0.25)) placeProp(S, 'signboard', ow / 2 + 0.45, Math.min(lo.y1 + 0.4, G - bay.yb - 0.6), 0, 0, { variant: drng.int(0, 2), collide: false });
-        if (drng.chance(0.15)) placeProp(S, 'torch_bracket', -ow / 2 - 0.45, Math.min(lo.y1 - 0.3, 2.4), 0, 0, { collide: false });
+        if (drng.chance(0.25)) {
+          const variant = drng.int(0, 2);
+          if (full) placeProp(S, 'signboard', ow / 2 + 0.45, Math.min(lo.y1 + 0.4, G - bay.yb - 0.6), 0, 0, { variant, collide: false });
+        }
+        if (drng.chance(0.15) && full) placeProp(S, 'torch_bracket', -ow / 2 - 0.45, Math.min(lo.y1 - 0.3, 2.4), 0, 0, { collide: false });
       }
       spot('shopDoor', cx, bay.yb, zf - 0.6, Math.PI, kind);
       spot('workshop', cx, bay.yb, zf + T + 1.3, Math.PI, kind);
     } else {
-      if (low) S.span('wood', -ow / 2, 0, T * 0.3, ow / 2, lo.y1 - (o.arch ?? 0), T * 0.3 + 0.05);
-      else plankShutters(S, lo, T, drng);
+      if (!low) plankShutters(S, lo, T, drng);
       S.span('black', -ow / 2, 0, T * 0.3 + 0.08, ow / 2, lo.y1, T * 0.3 + 0.1, { shadow: false });
     }
   }
@@ -321,11 +326,13 @@ export function insula(spec: InsulaSpec): BuildingOutput {
         const yb = Math.max(yMin + 0.4, Math.min(G - 3.6, ground(side * (W / 2 + 0.4), z)));
         const oh2 = Math.min(2.9, G - yb - 0.7);
         if (oh2 < 2.2) continue;
-        shops.push({ o: { x0: lx - 1.3, x1: lx + 1.3, y0: yb, y1: yb + oh2 }, yb, lx });
+        shops.push({ o: { x0: lx - 1.3, x1: lx + 1.3, y0: yb, y1: yb + oh2, fill: low ? 'wood' : undefined }, yb, lx });
       }
     }
     const wins = [...sideWins(len, open, !spec.courtyard && !withShops), ...shops.map((s) => s.o)];
     const cutS = wall(frame, wallMat, -len / 2, len / 2, yMin, eave, T, wins);
+    // Socle and dado along free sides (the side span includes the front and back wall ends).
+    if (open) socleAndDado(frame, side === 0 ? -W / 2 - 0.03 : -Db / 2, side === 0 ? W / 2 + 0.03 : Db / 2, yMin, ground, { dado: finish === 'plaster' ? dadoMat : null, socle: socleMat, skip: cutS });
     if (open) {
       if (!low) for (const o of cutS) if (!shops.some((s) => s.o === o)) windowDetails(frame, o, { t: T, sill: 'travertine', relieving: finish === 'brick' ? 'brick' : null, shutters: drng.weighted([['open', 2], ['closed', 1.5], [null, 2]]), shutterMat, grille: o.y0 < G && o.y0 > 2 });
       for (let k = 1; k < n; k++) band(frame, courseMat, -len / 2 - (len === W ? 0.02 : T + 0.02), len / 2 + (len === W ? 0.02 : T + 0.02), floorY(k) - 0.07, 0.12, 0.07);
@@ -347,11 +354,13 @@ export function insula(spec: InsulaSpec): BuildingOutput {
       S.span(finish === 'brick' ? 'travertine' : 'wood_dark', -1.48, h, -0.035, 1.48, h + 0.22, 0.05);
       S.span('travertine', -1.32, -0.08, -0.14, 1.32, 0.02, T * 0.6);
       if (low) {
-        S.span('wood', -1.3, 0, T * 0.3, 1.3, h, T * 0.3 + 0.05);
+        // Painted flat on the far wall (see the opening's fill).
       } else if (drng.chance(0.4)) {
         const kind = drng.pick(['general', 'pottery', 'cobbler'] as const);
-        shopInterior(S, kind, { w: 2.6, depth: sideShopDepth, h: h + 0.12, t: T, wealth }, drng.fork(`side${s.lx}`));
-        S.span('black', -1.3, h + 0.23, T + 0.01, 1.3, Math.max(h + 0.4, G - s.yb - 0.2), sideShopDepth, { shadow: false });
+        if (full) {
+          shopInterior(S.noShadow(), kind, { w: 2.6, depth: sideShopDepth, h: h + 0.12, t: T, wealth }, drng.fork(`side${s.lx}`));
+          S.span('black', -1.3, h + 0.23, T + 0.01, 1.3, Math.max(h + 0.4, G - s.yb - 0.2), sideShopDepth, { shadow: false });
+        } else S.span('black', -1.3, 0, T * 0.6, 1.3, h, T * 0.6 + 0.02, { shadow: false });
         const p = S.point(0, 0, -0.6);
         spots.push({ id: `shopDoor${spots.length}`, kind: 'shopDoor', position: p, facing: side < 0 ? -Math.PI / 2 : Math.PI / 2, tag: kind });
       } else {
@@ -375,7 +384,7 @@ export function insula(spec: InsulaSpec): BuildingOutput {
     d.span('black', -ix, y0, cz1, ix, eave, iz1, { shadow: false });
     d.span('black', -ix, y0, cz0, cx0, eave, cz1, { shadow: false });
     d.span('black', cx1, y0, cz0, ix, eave, cz1, { shadow: false });
-    courtyardWalls(d, cw, cdp, ccz, n, floorY, G, eave, wallMat, courseMat, drng, shutterMat, low);
+    courtyardWalls(d, cw, cdp, ccz, n, floorY, G, eave, wallMat, courseMat, drng, shutterMat, low, full);
   } else {
     d.span('black', -ix, G - 0.25, iz0, ix, eave, iz1, { shadow: false });
   }
@@ -387,7 +396,7 @@ export function insula(spec: InsulaSpec): BuildingOutput {
   }
 
   // ---- portico
-  if (portico) porticoFront(d, W, D, pd, bays, G, yMin, wallMat, trim, sides, drng, low);
+  if (portico) porticoFront(d, W, D, pd, bays, G, yMin, wallMat, trim, sides, drng, full);
 
   // ---- roof
   const roofKind = spec.courtyard ? 'ring' : spec.roof ?? (rng.chance(0.7) ? 'hip' : 'gable');
@@ -422,15 +431,15 @@ export function insula(spec: InsulaSpec): BuildingOutput {
   return { builder: b, spots, height: eave };
 }
 
-/** Two-step projecting cornice just under the eaves (top at `y`). */
+/**
+ * Two-step projecting cornice just under the eaves (wall plate at `y`). It is tucked below the
+ * roof slab — whose underside, 0.24 m out from the wall, is about 0.23 m below the plate — so it
+ * never pokes through the tiles.
+ */
 function cornice(F: Draw, mat: MaterialId, x0: number, x1: number, y: number) {
-  F.span(mat, x0 - 0.05, y - 0.32, -0.12, x1 + 0.05, y - 0.16, 0.03);
-  F.span(mat, x0 - 0.1, y - 0.16, -0.24, x1 + 0.1, y, 0.03);
-}
-
-function dado(F: Draw, mat: MaterialId, x0: number, x1: number, y0: number, y1: number) {
-  if (x1 - x0 < 0.05) return;
-  F.span(mat, x0, y0, -0.015, x1, y1, 0.01, { shadow: false });
+  const top = y - 0.26;
+  F.span(mat, x0 - 0.05, top - 0.32, -0.12, x1 + 0.05, top - 0.16, 0.03);
+  F.span(mat, x0 - 0.1, top - 0.16, -0.24, x1 + 0.1, top, 0.03);
 }
 
 /** Steps rising into the dark from a stair door. */
@@ -478,7 +487,7 @@ function balconyAt(F: Draw, x0: number, x1: number, y: number, depth: number, rn
 }
 
 /** Inner facades of a light-well courtyard. */
-function courtyardWalls(d: Draw, cw: number, cd: number, cz: number, n: number, floorY: (k: number) => number, G: number, eave: number, wallMat: MaterialId, course: MaterialId, rng: Rng, shutterMat: MaterialId, low: boolean) {
+function courtyardWalls(d: Draw, cw: number, cd: number, cz: number, n: number, floorY: (k: number) => number, G: number, eave: number, wallMat: MaterialId, course: MaterialId, rng: Rng, shutterMat: MaterialId, low: boolean, full: boolean) {
   const walls: [Draw, number][] = [
     [d.at(0, 0, cz - cd / 2, Math.PI), cw + 2 * T],
     [d.at(0, 0, cz + cd / 2, 0), cw + 2 * T],
@@ -504,12 +513,12 @@ function courtyardWalls(d: Draw, cw: number, cd: number, cz: number, n: number, 
   }
   // Courtyard floor and a cistern head.
   d.span('cobbles', -cw / 2, -0.3, cz - cd / 2, cw / 2, 0.0, cz + cd / 2);
-  placeProp(d, 'puteal', 0, 0, cz, 0, { variant: 0 });
+  if (full) placeProp(d, 'puteal', 0, 0, cz, 0, { variant: 0 });
   void G;
 }
 
 /** Neronian street portico: an arcade carrying a terrace, in front of the shops. */
-function porticoFront(d: Draw, W: number, D: number, pd: number, bays: Bay[], G: number, yMin: number, wallMat: MaterialId, trim: MaterialId, sides: { left: boolean; right: boolean }, rng: Rng, low: boolean) {
+function porticoFront(d: Draw, W: number, D: number, pd: number, bays: Bay[], G: number, yMin: number, wallMat: MaterialId, trim: MaterialId, sides: { left: boolean; right: boolean }, rng: Rng, full: boolean) {
   const F = d.at(0, 0, -D / 2);
   const pt = 0.7;
   const arches: Opening[] = bays.map((bay) => {
@@ -547,5 +556,5 @@ function porticoFront(d: Draw, W: number, D: number, pd: number, bays: Bay[], G:
       E.solid(pd / 2 - 0.8, yMin, 0, pd / 2, top, 0.45);
     }
   }
-  if (!low && rng.chance(0.5)) placeProp(d, 'bench_masonry', bays[0].x1 - 0.2, bays[0].yb, -D / 2 + pd - 0.3, Math.PI, { variant: 0 });
+  if (full && rng.chance(0.5)) placeProp(d, 'bench_masonry', bays[0].x1 - 0.2, bays[0].yb, -D / 2 + pd - 0.3, Math.PI, { variant: 0 });
 }

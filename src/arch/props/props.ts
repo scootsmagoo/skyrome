@@ -47,33 +47,31 @@ const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 // ------------------------------------------------------------------ amphorae & storage
 
+// Lathe profiles are kept to ~10 points and 6–8 segments: amphorae are repeated by the hundred in
+// shop racks, stacks and carts, so each one stays around 130–180 triangles.
 const DRESSEL20: [number, number][] = [
-  [0, 0], [0.035, 0], [0.045, 0.03], [0.05, 0.05], [0.15, 0.09], [0.25, 0.17], [0.3, 0.29], [0.3, 0.4], [0.27, 0.5],
-  [0.2, 0.58], [0.11, 0.63], [0.075, 0.66], [0.07, 0.71], [0.095, 0.72], [0.095, 0.77], [0.07, 0.78], [0.06, 0.74],
+  [0, 0], [0.045, 0.02], [0.15, 0.09], [0.27, 0.2], [0.305, 0.34], [0.27, 0.5], [0.16, 0.6], [0.075, 0.66], [0.07, 0.72], [0.095, 0.77], [0.06, 0.78],
 ];
 const DRESSEL2_4: [number, number][] = [
-  [0, 0], [0.022, 0], [0.03, 0.04], [0.032, 0.14], [0.06, 0.2], [0.12, 0.32], [0.15, 0.45], [0.15, 0.62], [0.135, 0.7],
-  [0.07, 0.745], [0.045, 0.77], [0.04, 0.95], [0.055, 0.96], [0.055, 1.0], [0.035, 1.0], [0.03, 0.97],
+  [0, 0], [0.03, 0.03], [0.032, 0.14], [0.11, 0.3], [0.15, 0.45], [0.15, 0.62], [0.11, 0.72], [0.045, 0.77], [0.04, 0.95], [0.055, 0.99], [0.03, 1.0],
 ];
 const DOLIUM: [number, number][] = [
-  [0, 0], [0.25, 0], [0.45, 0.1], [0.6, 0.35], [0.65, 0.6], [0.6, 0.9], [0.48, 1.1], [0.36, 1.2], [0.38, 1.24], [0.42, 1.28], [0.36, 1.3], [0.3, 1.24],
+  [0, 0], [0.25, 0], [0.45, 0.1], [0.6, 0.35], [0.65, 0.6], [0.6, 0.9], [0.48, 1.1], [0.36, 1.2], [0.42, 1.28], [0.3, 1.24],
 ];
 
 export function amphoraGlobular(d: Draw) {
-  d.geo(lathe('d20', DRESSEL20, 9), 'terracotta');
+  d.geo(lathe('d20', DRESSEL20, 8), 'terracotta');
   for (const s of [-1, 1]) {
-    d.rod('terracotta', V(s * 0.19, 0.57, 0), V(s * 0.215, 0.66, 0), 0.026, 5);
-    d.rod('terracotta', V(s * 0.215, 0.66, 0), V(s * 0.08, 0.7, 0), 0.026, 5);
+    d.rod('terracotta', V(s * 0.19, 0.57, 0), V(s * 0.215, 0.66, 0), 0.026, 4, { open: true });
+    d.rod('terracotta', V(s * 0.215, 0.66, 0), V(s * 0.08, 0.7, 0), 0.026, 4, { open: true });
   }
 }
 
 export function amphoraTall(d: Draw) {
-  d.geo(lathe('d24', DRESSEL2_4, 7), 'terracotta');
+  d.geo(lathe('d24', DRESSEL2_4, 6), 'terracotta');
   for (const s of [-1, 1]) {
-    for (const dz of [-0.012, 0.012]) {
-      d.rod('terracotta', V(s * 0.11, 0.72, dz), V(s * 0.1, 0.925, dz), 0.012, 3);
-      d.rod('terracotta', V(s * 0.1, 0.925, dz), V(s * 0.045, 0.935, dz), 0.012, 3);
-    }
+    d.rod('terracotta', V(s * 0.11, 0.72, 0), V(s * 0.1, 0.925, 0), 0.016, 3, { open: true });
+    d.rod('terracotta', V(s * 0.1, 0.925, 0), V(s * 0.045, 0.935, 0), 0.016, 3, { open: true });
   }
 }
 
@@ -118,9 +116,9 @@ const amphora_rack: Builder = (d, r) => {
 
 const dolium: Builder = (d, r, v) => {
   const s = 0.85 + v * 0.1;
-  d.geo(lathe('dolium', DOLIUM, 12), 'terracotta', 0, 0, 0, { sx: s, sy: s, sz: s });
-  d.cyl('black', 0, 1.215 * s, 0, 0.31 * s, 0.01, 12, { shadow: false });
-  if (r.chance(0.5)) d.cyl('wood', 0, 1.3 * s, 0, 0.44 * s, 0.04, 12); // wooden lid
+  d.geo(lathe('dolium', DOLIUM, 10), 'terracotta', 0, 0, 0, { sx: s, sy: s, sz: s });
+  d.cyl('black', 0, 1.215 * s, 0, 0.31 * s, 0.01, 10, { shadow: false });
+  if (r.chance(0.5)) d.cyl('wood', 0, 1.3 * s, 0, 0.44 * s, 0.04, 10); // wooden lid
   d.solidCyl(0, 0.65 * s, 0, 0.62 * s, 1.3 * s);
 };
 
@@ -141,18 +139,30 @@ const sack: Builder = (d, r, v) => {
   d.geo(sackGeometry(), mat, 0, 0, 0, { ry: r.range(0, Math.PI * 2), sy: 0.9 + v * 0.1 });
 };
 
+/** Wicker basket (< 200 triangles): a low lathe, a heap of produce or loaves, a bent handle. */
 const basket: Builder = (d, r, v) => {
-  d.geo(lathe('basket', [[0, 0.03], [0.17, 0.03], [0.18, 0], [0.24, 0.2], [0.255, 0.24], [0.24, 0.245], [0.22, 0.05], [0, 0.05]], 12), 'wood');
-  for (const y of [0.08, 0.15]) d.cyl('wood_dark', 0, y, 0, 0.2 + y * 0.25, 0.012, 12, { rTop: 0.2 + y * 0.25, open: true, shadow: false });
-  if (v === 0) produce(d, 0, 0.17, 0, 0.36, 0.36, r, 0.05, true);
-  else if (v === 1) for (let i = 0; i < 5; i++) d.ellipsoid('plaster_ochre', r.range(-0.1, 0.1), 0.2, r.range(-0.1, 0.1), 0.09, 0.04, 0.09, { seg: [8, 5] });
-  if (v !== 2) d.geo(new THREE.TorusGeometry(0.22, 0.012, 4, 10, Math.PI), 'wood_dark', 0, 0.23, 0, { shadow: false });
+  d.geo(lathe('basket', [[0, 0.02], [0.18, 0], [0.25, 0.22], [0.235, 0.235], [0.2, 0.07], [0, 0.07]], 7), 'wood');
+  if (v === 0) {
+    // A mound with a few fruit standing out of it.
+    const [mat] = r.pick(PRODUCE);
+    d.ellipsoid(mat, 0, 0.17, 0, 0.19, 0.07, 0.19, { seg: [7, 3], shadow: false });
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2 + r.range(0, 1);
+      d.ellipsoid(mat, Math.cos(a) * 0.08, 0.22, Math.sin(a) * 0.08, 0.05, 0.045, 0.05, { seg: [5, 3], shadow: false });
+    }
+  } else if (v === 1) {
+    for (let i = 0; i < 3; i++) d.ellipsoid('plaster_ochre', Math.cos(i * 2.1) * 0.08, 0.2, Math.sin(i * 2.1) * 0.08, 0.095, 0.042, 0.095, { seg: [6, 3] });
+  }
+  if (v !== 2) d.geo(handleGeo, 'wood_dark', 0, 0.23, 0, { shadow: false });
 };
+const handleGeo = new THREE.TorusGeometry(0.22, 0.012, 3, 6, Math.PI);
+
+/** Produce colours (material) and fruit radius. */
+const PRODUCE: [MaterialId, number][] = [['fabric_red', 0.05], ['marble_giallo', 0.05], ['fabric_purple', 0.035], ['foliage_olive', 0.08], ['plaster_ochre', 0.045]];
 
 /** A heap of fruit / vegetables in a w×d area at height y (cheap low-poly spheres). */
 export function produce(d: Draw, x: number, y: number, z: number, w: number, dd: number, r: Rng, size = 0.05, domed = false) {
-  const kinds: [MaterialId, number][] = [['fabric_red', 0.05], ['marble_giallo', 0.05], ['fabric_purple', 0.035], ['foliage_olive', 0.08], ['plaster_ochre', 0.045]];
-  const [mat, rad0] = r.pick(kinds);
+  const [mat, rad0] = r.pick(PRODUCE);
   const rad = rad0 * (size / 0.05);
   const nx = Math.max(1, Math.floor(w / (rad * 2))), nz = Math.max(1, Math.floor(dd / (rad * 2)));
   for (let i = 0; i < nx; i++)
@@ -161,24 +171,24 @@ export function produce(d: Draw, x: number, y: number, z: number, w: number, dd:
       const pz = z - dd / 2 + rad + k * rad * 2 + r.range(-0.01, 0.01);
       const cx = (i - (nx - 1) / 2) / Math.max(1, nx / 2), cz = (k - (nz - 1) / 2) / Math.max(1, nz / 2);
       const lift = domed ? Math.max(0, 1 - (cx * cx + cz * cz)) * rad * 1.6 : 0;
-      d.ellipsoid(mat, px, y + rad * 0.8 + lift, pz, rad, rad * 0.9, rad, { seg: [6, 4], shadow: false });
+      d.ellipsoid(mat, px, y + rad * 0.8 + lift, pz, rad, rad * 0.9, rad, { seg: [5, 3], shadow: false });
     }
 }
 
 // ------------------------------------------------------------------ vehicles
 
 function solidWheel(d: Draw, x: number, y: number, z: number, rad: number, thick: number) {
-  d.cyl('wood_dark', x, y, z, rad, thick, 14, { rz: Math.PI / 2 });
-  d.geo(new THREE.TorusGeometry(rad, 0.03, 4, 16), 'iron', x, y, z, { ry: Math.PI / 2, shadow: false });
-  d.cyl('wood', x, y, z, 0.12, thick + 0.1, 8, { rz: Math.PI / 2 });
+  d.cyl('wood_dark', x, y, z, rad, thick, 12, { rz: Math.PI / 2 });
+  d.geo(new THREE.TorusGeometry(rad, 0.03, 3, 12), 'iron', x, y, z, { ry: Math.PI / 2, shadow: false });
+  d.cyl('wood', x, y, z, 0.12, thick + 0.1, 6, { rz: Math.PI / 2 });
 }
 
 function spokedWheel(d: Draw, x: number, y: number, z: number, rad: number) {
-  d.geo(new THREE.TorusGeometry(rad, 0.035, 4, 18), 'wood_dark', x, y, z, { ry: Math.PI / 2 });
-  d.cyl('wood', x, y, z, 0.07, 0.16, 8, { rz: Math.PI / 2 });
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    d.rod('wood', V(x, y, z), V(x, y + Math.sin(a) * rad, z + Math.cos(a) * rad), 0.018, 4, { shadow: false });
+  d.geo(new THREE.TorusGeometry(rad, 0.035, 3, 14), 'wood_dark', x, y, z, { ry: Math.PI / 2 });
+  d.cyl('wood', x, y, z, 0.07, 0.16, 6, { rz: Math.PI / 2 });
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    d.rod('wood', V(x, y, z), V(x, y + Math.sin(a) * rad, z + Math.cos(a) * rad), 0.018, 3, { shadow: false, open: true });
   }
 }
 
@@ -317,19 +327,20 @@ const stall_fish: Builder = (d, r, v) => {
 };
 
 export function jug(d: Draw, x: number, y: number, z: number, s = 1, mat: MaterialId = 'terracotta') {
-  d.geo(lathe('jug', [[0, 0], [0.05, 0], [0.08, 0.06], [0.085, 0.12], [0.06, 0.2], [0.035, 0.24], [0.04, 0.28], [0.03, 0.28]], 8), mat, x, y, z, { sx: s, sy: s, sz: s, shadow: false });
+  d.geo(lathe('jug', [[0, 0], [0.07, 0.02], [0.085, 0.11], [0.06, 0.2], [0.035, 0.24], [0.04, 0.28], [0, 0.28]], 7), mat, x, y, z, { sx: s, sy: s, sz: s, shadow: false });
 }
 export function bowl(d: Draw, x: number, y: number, z: number, s = 1, mat: MaterialId = 'plaster_red') {
-  d.geo(lathe('bowl', [[0, 0], [0.05, 0], [0.06, 0.01], [0.11, 0.06], [0.12, 0.08], [0.105, 0.08], [0.055, 0.025], [0, 0.025]], 10), mat, x, y, z, { sx: s, sy: s, sz: s, shadow: false });
+  d.geo(lathe('bowl', [[0, 0], [0.06, 0.01], [0.12, 0.08], [0.105, 0.08], [0.05, 0.025], [0, 0.025]], 8), mat, x, y, z, { sx: s, sy: s, sz: s, shadow: false });
+}
+/** A stack of three nested bowls as one lathe (pottery stalls). */
+export function bowlStack(d: Draw, x: number, y: number, z: number, s = 1, mat: MaterialId = 'plaster_red') {
+  d.geo(lathe('bowls', [[0, 0], [0.06, 0.01], [0.115, 0.07], [0.11, 0.085], [0.12, 0.1], [0.115, 0.115], [0.125, 0.13], [0.11, 0.13], [0, 0.1]], 8), mat, x, y, z, { sx: s, sy: s, sz: s, shadow: false });
 }
 
 const stall_pottery: Builder = (d, r, v) => {
   stallFrame(d, r, v);
   for (let i = 0; i < 7; i++) jug(d, -0.95 + i * 0.3, 0.85, -0.25 + (i % 2) * 0.2, r.range(0.9, 1.4), r.chance(0.3) ? 'black' : 'terracotta');
-  for (let i = 0; i < 6; i++) {
-    const x = -0.9 + i * 0.36;
-    for (let k = 0; k < 3; k++) bowl(d, x, 0.85 + k * 0.03, 0.22, 1 - k * 0.04, 'plaster_red');
-  }
+  for (let i = 0; i < 6; i++) bowlStack(d, -0.9 + i * 0.36, 0.85, 0.22, 1, 'plaster_red');
   for (let i = 0; i < 3; i++) amphoraTall(d.at(-0.7 + i * 0.7, 0, 0.75).sub(new THREE.Matrix4().makeScale(0.7, 0.7, 0.7)));
 };
 
@@ -728,6 +739,6 @@ export function placeProp(d: Draw, kind: PropKind, x: number, y: number, z: numb
   const m = d.m.clone().multiply(new THREE.Matrix4().makeTranslation(x, y, z)).multiply(new THREE.Matrix4().makeRotationY(rotY));
   if (o.rx) m.multiply(new THREE.Matrix4().makeRotationX(o.rx));
   if (o.scale && o.scale !== 1) m.multiply(new THREE.Matrix4().makeScale(o.scale, o.scale, o.scale));
-  for (const p of model.parts) d.b.add(p.geometry, p.material, m, { uv: 'keep', castShadow: p.castShadow });
+  for (const p of model.parts) d.b.add(p.geometry, p.material, m, { uv: 'keep', castShadow: p.castShadow && d.flags.cast });
   if (o.collide !== false) for (const c of model.colliders) d.b.collider(transformCollider(c, m));
 }

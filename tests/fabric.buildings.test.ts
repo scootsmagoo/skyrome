@@ -130,3 +130,21 @@ describe('streets', () => {
     expect(s.colliders.length).toBe(1); // smooth ramp collider
   });
 });
+
+describe('closed walls', () => {
+  it('domus side walls have no see-through slots', () => {
+    const W = 18, D = 32;
+    const g = domus({ width: W, depth: D, seed: 9 }).builder.build('d');
+    g.updateMatrixWorld(true);
+    const rc = new THREE.Raycaster();
+    for (const s of [-1, 1]) {
+      for (let z = -D / 2 + 0.3; z < D / 2 - 0.3; z += 0.35) {
+        for (const y of [1.5, 3]) {
+          rc.set(new THREE.Vector3(s * (W / 2 + 3), y, z), new THREE.Vector3(-s, 0, 0));
+          const h = rc.intersectObject(g, true)[0];
+          expect(h && Math.abs(h.point.x) > W / 2 - 0.1, `side ${s} z=${z.toFixed(2)} y=${y}`).toBe(true);
+        }
+      }
+    }
+  });
+});

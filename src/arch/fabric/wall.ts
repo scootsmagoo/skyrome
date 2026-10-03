@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import type { Rng } from '../../core/Rng';
 import type { MaterialId } from '../../gfx/materialIds';
 import type { Draw } from './draw';
+import type { LocalGround } from './types';
 
 export interface Opening {
   x0: number;
@@ -17,6 +18,8 @@ export interface Opening {
   y1: number;
   /** Rise of an arched top (0 / undefined = flat lintel). Semicircular when rise = half width. */
   arch?: number;
+  /** Far LOD (`Draw.flags.flat`): colour of the flat quad standing in for the opening (default 'black'). */
+  fill?: MaterialId;
 }
 
 const ARC_SEG = 8;
@@ -67,6 +70,12 @@ export function wallShape(x0: number, x1: number, y0: number, y1: number, openin
  */
 export function wall(d: Draw, mat: MaterialId, x0: number, x1: number, y0: number, y1: number, t: number, openings: Opening[] = [], uvScale?: number): Opening[] {
   const valid = validOpenings(x0, x1, y0, y1, openings);
+  if (d.flags.flat) {
+    // Far LOD: a plain slab with the openings painted on just in front of the outer face.
+    d.span(mat, x0, y0, 0, x1, y1, t, { uvScale });
+    for (const o of valid) d.poly(o.fill ?? 'black', openingOutline(o).reverse().map((p) => ({ x: p.x, y: p.y, z: -0.012 })));
+    return valid;
+  }
   if (!valid.length) {
     d.span(mat, x0, y0, 0, x1, y1, t, { uvScale });
     return valid;
@@ -80,6 +89,100 @@ export function wall(d: Draw, mat: MaterialId, x0: number, x1: number, y0: numbe
 /** A thin band along the wall (string course / cornice / dado). `out` = protrusion beyond z = 0. */
 export function band(d: Draw, mat: MaterialId, x0: number, x1: number, y: number, h: number, out: number, opts: { shadow?: boolean } = {}) {
   d.span(mat, x0, y, -out, x1, y + h, 0.02, { shadow: opts.shadow ?? false });
+}
+
+export interface SocleOpts {
+  /** Painted dado (null = none). */
+  dado?: MaterialId | null;
+  /** Masonry socle over the exposed foundation where the ground lies below the floor (null = none). */
+  socle?: MaterialId | null;
+  /** Dado height (default 1.1 m). */
+  h?: number;
+  /** Floor level in this frame (default 0). */
+  floor?: number;
+  /** Openings to leave clear (only those reaching down into the dado zone matter). */
+  skip?: Opening[];
+  /** Segment length along the wall (default 1.2 m). */
+  step?: number;
+}
+
+/**
+ * Socle and painted dado along a wall face (wall frame), following the terrain in front of the
+ * wall (`ground`, the building's local ground function, probed 0.3 m outside the face). Where the
+ * ground falls clearly below the floor, a masonry socle covers the exposed foundation up to floor
+ * level and the dado sits on it; elsewhere the dado starts at the ground and runs parallel to it.
+ * So a domus on a slope gets a stone podium with a ~1.1 m red band above it, never a 3 m painted
+ * band, and the plaster never runs down into the dirt. Cheap: one box per socle run and a
+ * two-face strip (4 triangles per ~1 m) for the dado.
+ */
+export function socleAndDado(d: Draw, x0: number, x1: number, yMin: number, ground: LocalGround, o: SocleOpts = {}) {
+  const h = o.h ?? 1.1, floor = o.floor ?? 0, step = o.step ?? (d.flags.flat ? 3 : 1.0);
+  if (!o.dado && !o.socle) return;
+  // Wall-x intervals between the low openings.
+  const cuts = (o.skip ?? []).filter((p) => p.y0 < floor + h).map((p) => [p.x0, p.x1] as [number, number]).sort((a, b) => a[0] - b[0]);
+  const spans: [number, number][] = [];
+  let x = x0;
+  for (const [a, b] of cuts) {
+    if (a > x) spans.push([x, Math.min(a, x1)]);
+    x = Math.max(x, b);
+  }
+  if (x < x1) spans.push([x, x1]);
+  const y0 = d.point(0, 0, 0).y;
+  const gAt = (lx: number) => {
+    const p = d.point(lx, 0, -0.3);
+    return ground(p.x, p.z) + p.y - y0;
+  };
+  for (const [a, b] of spans) {
+    if (b - a < 0.04) continue;
+    const n = Math.max(1, Math.round((b - a) / step));
+    const xs = Array.from({ length: n + 1 }, (_, i) => a + ((b - a) * i) / n);
+    const gs = xs.map(gAt);
+    const podium = gs.map((g) => !!o.socle && g < floor - 0.12);
+    // Socle: one box per run of consecutive podium samples.
+    if (o.socle) {
+      for (let i = 0; i <= n; i++) {
+        if (!podium[i]) continue;
+        let j = i;
+        while (j < n && podium[j + 1]) j++;
+        const sa = i === 0 ? a : (xs[i - 1] + xs[i]) / 2, sb = j === n ? b : (xs[j] + xs[j + 1]) / 2;
+        d.span(o.socle, sa, yMin, -0.03, sb, floor, 0.02);
+        i = j;
+      }
+    }
+    if (!o.dado) continue;
+    // Dado: a band whose bottom follows the ground (or sits on the socle), reaching 15 cm below
+    // it so no plaster shows at the foot. Front face at z = −0.015 plus a thin top face.
+    const pos: number[] = [];
+    const base = gs.map((g, i) => (podium[i] ? floor : g));
+    // Front quad facing −z (the street side of the wall frame).
+    const quad = (ax: number, ay0: number, ay1: number, bx: number, by0: number, by1: number, z: number) =>
+      pos.push(ax, ay0, z, bx, by1, z, bx, by0, z, ax, ay0, z, ax, ay1, z, bx, by1, z);
+    for (let i = 0; i < n; i++) {
+      const xa = xs[i], xb = xs[i + 1];
+      let ba = base[i], bb = base[i + 1];
+      // A step where the band leaves / meets the socle.
+      if (podium[i] !== podium[i + 1]) {
+        const xm = (xa + xb) / 2;
+        quad(xa, ba - 0.15, ba + h, xm, ba - 0.15, ba + h, -0.015);
+        quad(xm, bb - 0.15, bb + h, xb, bb - 0.15, bb + h, -0.015);
+        const lo = Math.min(ba, bb) + h, hi = Math.max(ba, bb) + h;
+        const sx = ba > bb ? 1 : -1; // the step face looks toward the lower side
+        pos.push(xm, lo, -0.015, xm, hi, -0.015, xm, hi, 0.01, xm, lo, -0.015, xm, hi, 0.01, xm, lo, 0.01);
+        if (sx < 0) for (let k = pos.length - 18; k < pos.length; k += 9) for (let c = 0; c < 3; c++) [pos[k + 3 + c], pos[k + 6 + c]] = [pos[k + 6 + c], pos[k + 3 + c]];
+        continue;
+      }
+      quad(xa, ba - 0.15, ba + h, xb, bb - 0.15, bb + h, -0.015);
+      // Top face (normal up): (xa, top, front) → (xb, top, front) → (xb, top, back).
+      pos.push(xa, ba + h, -0.015, xb, bb + h, 0.01, xb, bb + h, -0.015, xa, ba + h, -0.015, xa, ba + h, 0.01, xb, bb + h, 0.01);
+    }
+    // End faces.
+    for (const [ex, eb, sgn] of [[a, base[0], -1], [b, base[n], 1]] as const) {
+      const p0 = [ex, eb - 0.15, -0.015], p1 = [ex, eb + h, -0.015], p2 = [ex, eb + h, 0.01], p3 = [ex, eb - 0.15, 0.01];
+      if (sgn < 0) pos.push(...p0, ...p2, ...p1, ...p0, ...p3, ...p2);
+      else pos.push(...p0, ...p1, ...p2, ...p0, ...p2, ...p3);
+    }
+    d.tris(o.dado, pos);
+  }
 }
 
 /** Curved band (relieving arch / archivolt) over an opening, protruding `out` from the face. */

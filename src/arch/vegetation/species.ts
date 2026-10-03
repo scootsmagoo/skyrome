@@ -13,7 +13,7 @@
  */
 import * as THREE from 'three';
 import { Rng } from '../../core/Rng';
-import type { MaterialId } from '../../gfx/materialIds';
+import { MATERIAL_BASE, type MaterialId } from '../../gfx/materialIds';
 import { clump, mergeParts, noise3, taperedTube, tintGeometry, twoSided } from './geom';
 
 export const TREE_SPECIES = ['umbrella_pine', 'cypress', 'plane', 'olive', 'laurel', 'fig', 'oleander', 'reeds'] as const;
@@ -29,6 +29,11 @@ export interface TreePart {
   wind: WindKind;
   /** Per-vertex flower heads (aHead attribute) — rendered with per-instance colour. */
   heads?: boolean;
+  /**
+   * The vertex colours carry the full albedo (material colour × tint × AO), so the part renders
+   * with one neutral white material. Far LODs use this to merge bark and foliage into one draw.
+   */
+  baked?: boolean;
 }
 
 export interface TreeModel {
@@ -56,6 +61,16 @@ function bend(a: THREE.Vector3, b: THREE.Vector3, n: number, sag: THREE.Vector3)
 }
 
 const radii = (n: number, r0: number, r1: number, pow = 1) => Array.from({ length: n + 1 }, (_, i) => r0 + (r1 - r0) * Math.pow(i / n, pow));
+
+/**
+ * Multiply a part's vertex colours by a library material's flat colour (linear), for `baked` far
+ * LODs. MATERIAL_BASE is the documented flat / LOD colour of each id; at far-LOD range the
+ * textured near materials average out to about that colour.
+ */
+function bakeAlbedo(g: THREE.BufferGeometry, id: MaterialId, k: [number, number, number] = [1, 1, 1]): THREE.BufferGeometry {
+  const c = new THREE.Color(MATERIAL_BASE[id].color);
+  return tintGeometry(g, c.r * k[0], c.g * k[1], c.b * k[2]);
+}
 
 // ------------------------------------------------------------------ umbrella pine
 
@@ -110,12 +125,20 @@ function umbrellaPine(r: Rng): Omit<TreeModel, 'species' | 'variant'> {
     clumps.push(clump({ center: V(cc.x + Math.cos(a) * rr, yb + cd * r.range(0.36, 0.5), cc.z + Math.sin(a) * rr), radius: V(s, cd * 0.22, s), flatBottom: -0.25, seed: r.int(0, 9999), rough: 0.35 }, cc, crad));
   }
   const foliage = mergeParts(clumps);
-  // Far LOD: one flattened lumpy dome + a stick trunk.
-  const farCanopy = clump({ center: V(cc.x, yb + cd * 0.5, cc.z), radius: V(R * 0.98, cd * 0.42, R * 0.98), detail: 2, rough: 0.16, flatBottom: -0.4, seed: 3 }, cc, crad);
-  const farTrunk = tintGeometry(taperedTube([V(0, -0.3, 0), split, cc.clone().setY(yb + 0.3)], [r0, r0 * 0.6, 0.15], 5, () => 0.5), 0.55, 0.42, 0.33);
+  // Far LOD: a domed lens (about 0.3× as deep as it is wide) with a flattened, shaded underside —
+  // a central dome ringed by five lobes, so the rim is scalloped like the real crown rather than a
+  // ruled ellipse — on a trunk that keeps its full girth up to the split. Bark and foliage colours
+  // are baked into the vertex colours so the whole stand-in is one draw with a neutral material.
+  const lobes = [clump({ center: V(cc.x, yb + cd * 0.42, cc.z), radius: V(R * 0.64, cd * 0.62, R * 0.64), detail: 1, rough: 0.12, flatBottom: -0.35, seed: 3 }, cc, crad)];
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + r.range(-0.25, 0.25), rr = R * r.range(0.55, 0.62);
+    lobes.push(clump({ center: V(cc.x + Math.cos(a) * rr, yb + cd * r.range(0.3, 0.42), cc.z + Math.sin(a) * rr), radius: V(R * 0.42, cd * 0.48, R * 0.42), detail: 1, rough: 0.16, flatBottom: -0.35, seed: 10 + i }, cc, crad));
+  }
+  const farCanopy = bakeAlbedo(mergeParts(lobes), 'foliage_pine');
+  const farTrunk = bakeAlbedo(taperedTube([V(0, -0.3, 0), split, cc.clone().setY(yb + cd * 0.3)], [r0 * 1.1, r0, r0 * 0.7], 5, () => 0.85), 'bark', [1.25, 1.1, 1.0]);
   return {
     near: [{ geometry: barkGeo, material: 'bark', wind: 'tree' }, { geometry: foliage, material: 'foliage_pine', wind: 'tree' }],
-    far: [{ geometry: mergeParts([farCanopy, farTrunk]), material: 'foliage_pine', wind: 'tree' }],
+    far: [{ geometry: mergeParts([farCanopy, farTrunk]), material: 'foliage_pine', wind: 'tree', baked: true }],
     height: H,
     trunkRadius: r0,
     radius: R,
@@ -187,7 +210,7 @@ function cypressModel(r: Rng): Omit<TreeModel, 'species' | 'variant'> {
   const trunk = taperedTube([V(0, -0.3, 0), V(0, 1.0, 0)], [0.16, 0.13], 6, () => 0.6);
   return {
     near: [{ geometry: mergeParts([near]), material: 'foliage_cypress', wind: 'tree' }, { geometry: mergeParts([trunk]), material: 'bark', wind: 'tree' }],
-    far: [{ geometry: mergeParts([far]), material: 'foliage_cypress', wind: 'tree' }],
+    far: [{ geometry: mergeParts([bakeAlbedo(far, 'foliage_cypress')]), material: 'foliage_cypress', wind: 'tree', baked: true }],
     height: H,
     trunkRadius: 0.2,
     radius: (near.userData as { r: number }).r,
@@ -239,11 +262,12 @@ function broadleaf(r: Rng, s: BroadSpec): Omit<TreeModel, 'species' | 'variant'>
     const cr = r.range(s.clumpR[0], s.clumpR[1]);
     clumps.push(clump({ center: c, radius: V(cr, cr * r.range(0.75, 0.95), cr), seed: r.int(0, 9999), rough: 0.3 }, s.crownC, s.crownR, s.tint));
   }
-  const far = clump({ center: s.crownC, radius: s.crownR.clone().multiplyScalar(0.92), detail: 2, rough: 0.22, seed: 5 }, s.crownC, s.crownR, s.tint);
-  const farTrunk = tintGeometry(taperedTube([V(0, -0.3, 0), split, s.crownC], [s.trunkR, s.trunkR * 0.6, 0.1], 5, () => 0.5), 0.55, 0.45, 0.35);
+  // Far LOD: one lumpy crown on a trunk that keeps its girth to the split, colours baked (see pine).
+  const far = bakeAlbedo(clump({ center: s.crownC, radius: s.crownR.clone().multiplyScalar(0.92), detail: 2, rough: 0.22, seed: 5 }, s.crownC, s.crownR, s.tint), s.foliage);
+  const farTrunk = bakeAlbedo(taperedTube([V(0, -0.3, 0), split, s.crownC], [s.trunkR * 1.1, s.trunkR, s.trunkR * 0.6], 5, () => 0.8), 'bark', s.barkTint);
   return {
     near: [{ geometry: mergeParts(parts), material: 'bark', wind: 'tree' }, { geometry: mergeParts(clumps), material: s.foliage, wind: 'tree' }],
-    far: [{ geometry: mergeParts([far, farTrunk]), material: s.foliage, wind: 'tree' }],
+    far: [{ geometry: mergeParts([far, farTrunk]), material: s.foliage, wind: 'tree', baked: true }],
     height: s.H,
     trunkRadius: s.trunkR,
     radius: Math.max(s.crownR.x, s.crownR.z),
