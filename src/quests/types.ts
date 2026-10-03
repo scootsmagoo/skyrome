@@ -35,6 +35,8 @@ export interface QuestStageDef {
   onEnter?: (q: QuestContext) => void;
   /** Ends the quest when reached. */
   end?: 'complete' | 'fail';
+  /** Advance to this stage automatically once every non-optional objective of this stage is done. */
+  next?: string;
 }
 
 export interface Reward {
@@ -44,6 +46,10 @@ export interface Reward {
   reputation?: { faction: string; amount: number }[];
   /** Skill XP (use units). */
   skills?: { id: string; amount: number }[];
+  /** GDD §5.1 `reward.skillXp`: one level's worth (xpToNext at the current level) per entry, in a skill the quest exercised. */
+  skillXp?: (string | { id: string; levels?: number })[];
+  /** GDD §9.1: the faction rank the quest grants — the next one, or a named rank (it waits for skill gates). */
+  rank?: { faction: string; rank?: string };
 }
 
 type HandlerMap = {
@@ -69,6 +75,10 @@ export interface QuestDef {
   rewards?: Reward;
   /** Start automatically at new game. */
   autoStart?: boolean;
+  /** `on` handlers also run before the quest starts (e.g. count items picked up early). */
+  listenBeforeStart?: boolean;
+  /** May be started again after it ends (radiant/arena quests); triggers stay live. */
+  repeatable?: boolean;
 }
 
 /** Runtime view handed to quest handlers. */
@@ -77,6 +87,7 @@ export interface QuestContext {
   readonly def: QuestDef;
   readonly stage: string;
   readonly running: boolean;
+  /** Finished, completed or failed. */
   readonly done: boolean;
   /** Free-form saved variables (numbers/strings/booleans only). */
   readonly vars: Record<string, number | string | boolean>;
@@ -90,8 +101,8 @@ export interface QuestContext {
   complete(): void;
   fail(): void;
   giveReward(r: Reward): void;
-  /** Other quests' state, e.g. q.quest('mq01').stage. */
-  quest(id: string): { stage: string; running: boolean; done: boolean; failed: boolean } | undefined;
+  /** Other quests' state, e.g. q.quest('mq01').stage. `done` = finished (completed or failed). */
+  quest(id: string): { stage: string; running: boolean; done: boolean; failed: boolean; completed?: boolean } | undefined;
   /** Global saved flags shared by all quests and dialogue. */
   flag(name: string): number | string | boolean | undefined;
   setFlag(name: string, value: number | string | boolean): void;
@@ -114,14 +125,14 @@ declare module '../core/Events' {
     /** Actor died. `killerId` is 'player' when the player dealt the final blow. */
     'actor:killed': { victimId: string; killerId?: string; tags?: string[] };
     'actor:yielded': { actorId: string; byId?: string };
-    'item:added': { itemId: string; count: number; source?: string };
+    'item:added': { itemId: string; count: number; source?: string; silent?: boolean; stolen?: boolean };
     'item:removed': { itemId: string; count: number; reason?: 'sold' | 'dropped' | 'used' | 'given' | 'quest' };
     'location:entered': { locationId: string };
     'location:discovered': { locationId: string; name: string };
     'dialogue:started': { npcId: string; dialogueId: string };
     'dialogue:node': { npcId: string; dialogueId: string; nodeId: string };
     'dialogue:ended': { npcId: string; dialogueId: string };
-    'crime:committed': { crime: string; victimId?: string; witnessed: boolean; bounty: number };
+    'crime:committed': { crime: string; victimId?: string; witnessed: boolean; bounty: number; jurisdiction?: string };
     'player:levelup': { level: number };
     'skill:levelup': { skill: string; level: number };
   }
