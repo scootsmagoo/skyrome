@@ -180,8 +180,10 @@ export interface LodSetSpec {
   cullBeyond?: boolean;
 }
 
-class LodSet {
+export class LodSet {
   readonly levels: LodLevelSet[] = [];
+  /** When set, every instance uses this level (−1 hides them all); null = distance LOD. */
+  private forced: number | null = null;
   readonly anchors: THREE.Vector3[];
   readonly assign: Int8Array;
   private lastCam = new THREE.Vector3(1e9, 1e9, 1e9);
@@ -215,8 +217,21 @@ class LodSet {
     });
   }
 
+  /** Force a level for all instances (−1 = hidden), or null to return to distance LOD. */
+  setForced(level: number | null) {
+    if (level === this.forced) return;
+    this.forced = level;
+    this.dirty = true;
+  }
+
+  private dirty = false;
+
   /** Re-assign levels for a camera at world position `camWorld`. Returns true if anything changed. */
   update(camWorld: THREE.Vector3, force = false): boolean {
+    if (this.dirty) {
+      force = true;
+      this.dirty = false;
+    }
     this.root.updateWorldMatrix(true, false);
     this.inv.copy(this.root.matrixWorld).invert();
     this.cam.copy(camWorld).applyMatrix4(this.inv);
@@ -225,6 +240,14 @@ class LodSet {
     const L = this.levels;
     let changed = force;
     for (let i = 0; i < this.anchors.length; i++) {
+      if (this.forced !== null) {
+        const lv = Math.min(this.forced, L.length - 1);
+        if (lv !== this.assign[i]) {
+          this.assign[i] = lv;
+          changed = true;
+        }
+        continue;
+      }
       const d = this.anchors[i].distanceTo(this.cam);
       const cur = this.assign[i];
       let lv = -1;
@@ -261,8 +284,8 @@ class LodSet {
   }
 }
 
-/** Per-frame hooks (water animation etc.) registered by builders. */
-export type FrameHook = (dt: number, t: number) => void;
+/** Per-frame hooks (water animation, zone visibility…) registered by builders. */
+export type FrameHook = (dt: number, t: number, camWorld: THREE.Vector3) => void;
 
 /**
  * One System for the whole module: keeps every LodSet in step with the camera and runs the small
@@ -296,7 +319,7 @@ export class InstanceLod implements System {
       if (!visibleInScene(s.root)) continue;
       s.update(cam);
     }
-    for (const h of this.hooks) h(dt, this.time);
+    for (const h of this.hooks) h(dt, this.time, cam);
   }
 
   /** Force a re-evaluation (after teleports / dev camera jumps). */
@@ -329,7 +352,7 @@ export function instanceLod(game: Game | undefined): InstanceLod | null {
  * Add a LOD-instanced set under `parent`. Without a game (tests) the set is still built and
  * evaluated once against a camera at `fallbackCam` (default: far away).
  */
-export function lodInstances(game: Game | undefined, parent: THREE.Object3D, spec: LodSetSpec, fallbackCam?: THREE.Vector3): THREE.Group {
+export function lodInstances(game: Game | undefined, parent: THREE.Object3D, spec: LodSetSpec, fallbackCam?: THREE.Vector3): LodSet {
   const root = new THREE.Group();
   root.name = `lod:${spec.name}`;
   parent.add(root);
@@ -337,7 +360,7 @@ export function lodInstances(game: Game | undefined, parent: THREE.Object3D, spe
   const sys = instanceLod(game);
   if (sys) sys.add(set);
   else set.update(fallbackCam ?? new THREE.Vector3(1e6, 0, 1e6), true);
-  return root;
+  return set;
 }
 
 /** Count triangles of every (instanced) mesh under `o` as currently assigned. */

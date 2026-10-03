@@ -31,10 +31,15 @@ import { column } from '../../../arch/classical/column';
 import { entablature, corniceOnlyProfile } from '../../../arch/classical/entablature';
 import { ORDER_PROPORTIONS, type Order } from '../../../arch/classical/orders';
 import { inscriptionPanel } from '../../../arch/common/inscription';
+import { Draw } from '../../../arch/fabric';
+import { placeProp } from '../../../arch/props';
+import { Rng } from '../../../core/Rng';
 import type { LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import {
   Oval,
+  type LodSet,
   flight,
+  instanceLod,
   lodInstances,
   numeralMaterial,
   numeralUV,
@@ -302,7 +307,7 @@ function facadeBay(si: number, level: Level, bay: number, variant: 'window' | 's
     }
     // Engaged column at the bay start.
     if (level === 'near') {
-      column(b, { order: g.order, D: g.D, height: g.colH, material: mat, detail: si === 0 ? 'high' : 'low', kind: 'engaged', collide: false }, new THREE.Matrix4().makeTranslation(0, g.ped, zf));
+      column(b, { order: g.order, D: g.D, height: g.colH, material: mat, detail: 'low', kind: 'engaged', collide: false }, new THREE.Matrix4().makeTranslation(0, g.ped, zf));
     } else {
       cheapHalfColumn(b, mat, m, 0, g.ped, zf, g.D, g.colH, 4, g.order);
     }
@@ -398,7 +403,21 @@ export function buildColosseum(ctx: LandmarkContext) {
   const sec = L.section;
   const high = ctx.detail === 'high';
   const root = new THREE.Group();
-  const stat = new MeshBuilder(); // merged static parts
+  // Visibility groups (see zoneVisibility): the outer shell, the ambulatory interiors, the bowl
+  // (cavea, arena, boxes, passages) and the attic + velarium (always).
+  const gOuter = new THREE.Group();
+  const gInner = new THREE.Group();
+  const gBowl = new THREE.Group();
+  const gAttic = new THREE.Group();
+  gOuter.name = 'colosseum:outer';
+  gInner.name = 'colosseum:inner';
+  gBowl.name = 'colosseum:bowl';
+  gAttic.name = 'colosseum:attic';
+  root.add(gOuter, gInner, gBowl, gAttic);
+  const stat = new MeshBuilder(); // merged static parts of the outer shell
+  const inner = new MeshBuilder(); // ambulatory vaults, floors, ring 3
+  const cav = new MeshBuilder(); // the bowl
+  const collide = new MeshBuilder(); // collider-only
   const spots: Spot[] = [];
   const I = new THREE.Matrix4();
   const two = Math.PI * 2;
@@ -415,15 +434,19 @@ export function buildColosseum(ctx: LandmarkContext) {
     const [px, pz] = oval.point(L.centres[k], x);
     return new THREE.Vector3(px, y, pz);
   };
-  const near = 46;
-  const mid = 230;
+  const near = 34;
+  const mid = 190;
 
   // ---- facade storeys I–III (instanced, three levels)
+  const facadeSets: LodSet[] = [];
+  const hideSets: LodSet[] = []; // hidden from inside the bowl
+  const ring2Sets: LodSet[] = [];
+  let cippiSet: LodSet | null = null;
   for (let si = 0; si < 3; si++) {
     const y = SY[si];
     const mats = Array.from({ length: N }, (_, k) => instMatrix(k, XM, y, W0));
     const anchors = Array.from({ length: N }, (_, k) => anchor(k, XF, y + COLOS.storeyH[si] / 2));
-    lodInstances(ctx.game, root, {
+    facadeSets[si] = lodInstances(ctx.game, gOuter, {
       name: `colosseum-facade-${si}`,
       matrices: mats,
       anchors,
@@ -437,7 +460,7 @@ export function buildColosseum(ctx: LandmarkContext) {
   // ---- attic (alternate window / shield bays)
   for (const variant of ['window', 'shield'] as const) {
     const ks = Array.from({ length: N }, (_, k) => k).filter((k) => (k % 2 === 1) === (variant === 'window'));
-    lodInstances(ctx.game, root, {
+    lodInstances(ctx.game, gAttic, {
       name: `colosseum-attic-${variant}`,
       matrices: ks.map((k) => instMatrix(k, XM, SY[3], W0)),
       anchors: ks.map((k) => anchor(k, XF, SY[3] + 4)),
@@ -459,7 +482,7 @@ export function buildColosseum(ctx: LandmarkContext) {
         return b;
       };
       const g = storeyGeo(si, W0);
-      lodInstances(ctx.game, root, {
+      hideSets.push(lodInstances(ctx.game, gOuter, {
         name: `colosseum-statues-${si}-${v}`,
         matrices: ks.map((k) => {
           const { m, len } = chord(k, XM);
@@ -467,18 +490,18 @@ export function buildColosseum(ctx: LandmarkContext) {
         }),
         anchors: ks.map((k) => anchor(k, XF, SY[si] + 2)),
         levels: [
-          ...(high ? [{ builder: mk('near'), maxDist: 32 }] : []),
+          ...(high ? [{ builder: mk('near'), maxDist: 24 }] : []),
           { builder: mk('mid'), maxDist: mid * 0.8 },
         ],
         cullBeyond: true,
-      });
+      }));
     }
   }
   // ---- inner arcade (ring 2), three storeys
   const XR2 = (R2[0] + R2[1]) / 2;
   const W2 = oval.perimeter(XR2) / N;
   for (let si = 0; si < 3; si++) {
-    lodInstances(ctx.game, root, {
+    ring2Sets[si] = lodInstances(ctx.game, gOuter, {
       name: `colosseum-ring2-${si}`,
       matrices: Array.from({ length: N }, (_, k) => instMatrix(k, XR2, SY[si], W2)),
       anchors: Array.from({ length: N }, (_, k) => anchor(k, XR2, SY[si] + 3)),
@@ -542,7 +565,7 @@ export function buildColosseum(ctx: LandmarkContext) {
   const vault = (x0: number, x1: number, ySpring: number, mat: MaterialId) => {
     const w = x1 - x0;
     const pb = new ProfileBuilder(x1, ySpring);
-    const n = 6;
+    const n = 4;
     for (let i = 1; i <= n; i++) {
       const a = (Math.PI * i) / n;
       pb.to(x0 + w / 2 + (Math.cos(a) * w) / 2, ySpring + Math.sin(a) * w * 0.42);
@@ -550,18 +573,18 @@ export function buildColosseum(ctx: LandmarkContext) {
     // Traverse so the intrados faces down (into the corridor): reverse.
     const p = pb.build();
     p.pts.reverse();
-    stat.add(ovalSweep(oval, p, 0, two, 96, { closed: true }), mat, I, { castShadow: false });
+    inner.add(ovalSweep(oval, p, 0, two, 80, { closed: true }), mat, I, { castShadow: false });
   };
   for (let si = 0; si < 3; si++) {
     const top = si === 2 ? sec.topY - 0.9 : SY[si + 1] - 0.15;
     for (const [x0, x1] of si === 2 ? [AMB1] : [AMB1, AMB2]) {
       vault(x0, x1, top - (x1 - x0) * 0.42, 'concrete');
       // Haunch fill between vault and floor above.
-      stat.add(ovalBand(oval, x0, x1, top, si === 2 ? sec.topY : SY[si + 1], 0, two, 96, true), 'concrete', I, { castShadow: false });
+      inner.add(ovalSweep(oval, new ProfileBuilder(x1, si === 2 ? sec.topY : SY[si + 1]).to(x0, si === 2 ? sec.topY : SY[si + 1]).build(), 0, two, 80, { closed: true }), 'concrete', I, { castShadow: false });
     }
     // Paved floor.
     const fy = SY[si] + (si === 0 ? 0.03 : 0);
-    stat.add(ovalBand(oval, AMB2[0], si === 0 ? XF - 0.25 : XI, fy - 0.12, fy, 0, two, 96, true), si === 0 ? 'paving_travertine' : 'concrete', I, { castShadow: false });
+    inner.add(ovalBand(oval, AMB2[0], si === 0 ? XF - 0.25 : XI, fy - 0.12, fy, 0, two, 96, true), si === 0 ? 'paving_travertine' : 'concrete', I, { castShadow: false });
   }
   // Ring 3 (inner wall of the inner ambulatory): solid except doors at stairs and passages; a
   // red-painted dado inside. Upper storeys: plain wall.
@@ -576,7 +599,7 @@ export function buildColosseum(ctx: LandmarkContext) {
       const d = R3[1] - R3[0];
       const door = axial(k) || VOM_BAYS.includes(k) || k % 5 === 0;
       if (!door) {
-        span(stat, 'plaster_cream', m, -0.05, 0, -d / 2, len + 0.05, wallH, d / 2, true);
+        span(inner, 'plaster_cream', m, -0.05, 0, -d / 2, len + 0.05, wallH, d / 2, true);
       } else {
         const dw = gateBays.includes(k) ? 3.6 : boxBays.includes(k) ? 2.4 : 1.6;
         const dh = gateBays.includes(k) ? 3.0 : 2.6;
@@ -586,20 +609,20 @@ export function buildColosseum(ctx: LandmarkContext) {
           return [qx, 0, qz];
         })()).applyMatrix4(m.clone().invert());
         const x0 = q.x - dw / 2;
-        span(stat, 'plaster_cream', m, -0.05, 0, -d / 2, x0, wallH, d / 2, true);
-        span(stat, 'plaster_cream', m, x0 + dw, 0, -d / 2, len + 0.05, wallH, d / 2, true);
-        span(stat, 'plaster_cream', m, x0, dh, -d / 2, x0 + dw, wallH, d / 2);
-        if (!axial(k) && !VOM_BAYS.includes(k)) span(stat, 'black', m, x0, 0, d / 2 - 0.1, x0 + dw, dh, d / 2 + 0.02, true, false);
-        span(stat, 'travertine', m, x0 - 0.12, dh, -d / 2 - 0.03, x0 + dw + 0.12, dh + 0.22, -d / 2 + 0.02, false, false);
+        span(inner, 'plaster_cream', m, -0.05, 0, -d / 2, x0, wallH, d / 2, true);
+        span(inner, 'plaster_cream', m, x0 + dw, 0, -d / 2, len + 0.05, wallH, d / 2, true);
+        span(inner, 'plaster_cream', m, x0, dh, -d / 2, x0 + dw, wallH, d / 2);
+        if (!axial(k) && !VOM_BAYS.includes(k)) span(inner, 'black', m, x0, 0, d / 2 - 0.1, x0 + dw, dh, d / 2 + 0.02, true, false);
+        span(inner, 'travertine', m, x0 - 0.12, dh, -d / 2 - 0.03, x0 + dw + 0.12, dh + 0.22, -d / 2 + 0.02, false, false);
       }
       // Painted dado on the ambulatory side (not across the doorways).
-      if (!door) span(stat, 'plaster_red', m, -0.05, 0.05, -d / 2 - 0.02, len + 0.05, 1.3, -d / 2, false, false);
+      if (!door) span(inner, 'plaster_red', m, -0.05, 0.05, -d / 2 - 0.02, len + 0.05, 1.3, -d / 2, false, false);
       else {
         const dw = gateBays.includes(k) ? 3.6 : boxBays.includes(k) ? 2.4 : 1.6;
         const [qx, qz] = oval.point(L.centres[k], (R3[0] + R3[1]) / 2);
         const qc = new THREE.Vector3(qx, 0, qz).applyMatrix4(m.clone().invert()).x;
-        span(stat, 'plaster_red', m, -0.05, 0.05, -d / 2 - 0.02, qc - dw / 2, 1.3, -d / 2, false, false);
-        span(stat, 'plaster_red', m, qc + dw / 2, 0.05, -d / 2 - 0.02, len + 0.05, 1.3, -d / 2, false, false);
+        span(inner, 'plaster_red', m, -0.05, 0.05, -d / 2 - 0.02, qc - dw / 2, 1.3, -d / 2, false, false);
+        span(inner, 'plaster_red', m, qc + dw / 2, 0.05, -d / 2 - 0.02, len + 0.05, 1.3, -d / 2, false, false);
       }
     }
     // The ring-3 wall continues above the ground storey as a plain band (seen through the arches).
@@ -607,9 +630,7 @@ export function buildColosseum(ctx: LandmarkContext) {
   // Facade inner face above the ground storey and ring-2 back faces are part of the instanced bays.
 
   // ---- cavea
-  const cav = new MeshBuilder();
-  const collide = new MeshBuilder();
-  buildCavea(ctx, L, cav, collide, root, spots, high);
+  const topColonnade = buildCavea(ctx, L, cav, collide, gBowl, spots, high);
 
   // ---- arena floor (sand over boards) with the hypogeum trapdoors
   {
@@ -624,19 +645,19 @@ export function buildColosseum(ctx: LandmarkContext) {
     const floor = new THREE.ShapeGeometry(shape, 1);
     floor.rotateX(-Math.PI / 2);
     floor.translate(0, 0.05, 0);
-    stat.add(floor, 'sand', I, { castShadow: false });
+    cav.add(floor, 'sand', I, { castShadow: false });
     // Central trapdoor strip along the long axis and two rows of lift hatches.
-    span(stat, 'wood_dark', I, -COLOS.arenaA * 0.62, 0.05, -0.6, COLOS.arenaA * 0.62, 0.075, 0.6, false, false);
-    for (let i = -7; i <= 7; i++) span(stat, 'plaster_dark', I, i * 2.1 - 0.04, 0.074, -0.6, i * 2.1 + 0.04, 0.085, 0.6, false, false);
+    span(cav, 'wood_dark', I, -COLOS.arenaA * 0.62, 0.05, -0.6, COLOS.arenaA * 0.62, 0.075, 0.6, false, false);
+    for (let i = -7; i <= 7; i++) span(cav, 'plaster_dark', I, i * 2.1 - 0.04, 0.074, -0.6, i * 2.1 + 0.04, 0.085, 0.6, false, false);
     for (const zs of [-1, 1]) {
       for (let i = -6; i <= 6; i++) {
         const x = i * 3.3;
         const z = zs * (3.2 + 0.9 * Math.cos((i / 7) * 1.2));
         if (Math.abs(x) / COLOS.arenaA + Math.abs(z) / COLOS.arenaB > 1.1) continue;
-        span(stat, 'black', I, x - 0.6, 0.05, z - 0.6, x + 0.6, 0.06, z + 0.6, false, false);
-        for (let j = -2; j <= 2; j++) span(stat, 'plaster_dark', I, x - 0.6, 0.06, z + j * 0.25 - 0.03, x + 0.6, 0.085, z + j * 0.25 + 0.03, false, false);
-        span(stat, 'wood_dark', I, x - 0.66, 0.05, z - 0.66, x + 0.66, 0.07, z - 0.6, false, false);
-        span(stat, 'wood_dark', I, x - 0.66, 0.05, z + 0.6, x + 0.66, 0.07, z + 0.66, false, false);
+        span(cav, 'black', I, x - 0.6, 0.05, z - 0.6, x + 0.6, 0.06, z + 0.6, false, false);
+        for (let j = -2; j <= 2; j++) span(cav, 'plaster_dark', I, x - 0.6, 0.06, z + j * 0.25 - 0.03, x + 0.6, 0.085, z + j * 0.25 + 0.03, false, false);
+        span(cav, 'wood_dark', I, x - 0.66, 0.05, z - 0.66, x + 0.66, 0.07, z - 0.6, false, false);
+        span(cav, 'wood_dark', I, x - 0.66, 0.05, z + 0.6, x + 0.66, 0.07, z + 0.66, false, false);
       }
     }
     spots.push({ id: 'colos-arena-center', kind: 'spawn', position: new THREE.Vector3(0, 0.05, 0), heading: 0 });
@@ -652,18 +673,18 @@ export function buildColosseum(ctx: LandmarkContext) {
     const h = 2.95;
     // Side walls from ring 3 to the arena, ceiling slab, sand floor.
     const zIn = XF + 0.2 - R3[1];
-    span(stat, 'brick', fr, -hw - 0.6, 0, zIn, -hw, h + 0.3, len - 0.05, true);
-    span(stat, 'brick', fr, hw, 0, zIn, hw + 0.6, h + 0.3, len - 0.05, true);
-    span(stat, 'concrete', fr, -hw - 0.6, h - 0.05, zIn, hw + 0.6, COLOS.podium - 0.02, len - 0.05, true, false);
-    span(stat, 'plaster_white', fr, -hw - 0.01, h - 0.02, zIn, hw + 0.01, h, len - 0.2, false, false);
-    span(stat, 'sand', fr, -hw, 0.0, 0.5, hw, 0.05, len, false, false);
+    span(cav, 'brick', fr, -hw - 0.6, 0, zIn, -hw, h + 0.3, len - 0.05, true);
+    span(cav, 'brick', fr, hw, 0, zIn, hw + 0.6, h + 0.3, len - 0.05, true);
+    span(cav, 'concrete', fr, -hw - 0.6, h - 0.05, zIn, hw + 0.6, COLOS.podium - 0.02, len - 0.05, true, false);
+    span(cav, 'plaster_white', fr, -hw - 0.01, h - 0.02, zIn, hw + 0.01, h, len - 0.2, false, false);
+    span(cav, 'sand', fr, -hw, 0.0, 0.5, hw, 0.05, len, false, false);
     // Painted dado in the passage.
-    for (const sx of [-1, 1]) span(stat, 'plaster_red', fr, sx * hw - sx * 0.02, 0.05, zIn, sx * hw, 1.2, len - 0.3, false, false);
+    for (const sx of [-1, 1]) span(cav, 'plaster_red', fr, sx * hw - sx * 0.02, 0.05, zIn, sx * hw, 1.2, len - 0.3, false, false);
     // Gate leaves (iron-bound timber) swung open against the walls at the arena mouth.
     for (const sx of [-1, 1]) {
       const leaf = fr.clone().multiply(new THREE.Matrix4().makeTranslation(sx * (hw - 0.12), 0, len - 1.0)).multiply(new THREE.Matrix4().makeRotationY(sx * 0.08));
-      span(stat, 'wood_dark', leaf, -0.05, 0.05, -0.9, 0.05, 2.9, 0.9);
-      for (const yy of [0.5, 1.5, 2.5]) span(stat, 'iron', leaf, -0.07, yy, -0.9, 0.07, yy + 0.08, 0.9, false, false);
+      span(cav, 'wood_dark', leaf, -0.05, 0.05, -0.9, 0.05, 2.9, 0.9);
+      for (const yy of [0.5, 1.5, 2.5]) span(cav, 'iron', leaf, -0.07, yy, -0.9, 0.07, yy + 0.08, 0.9, false, false);
     }
     const name = k === 40 ? 'porta-triumphalis' : 'porta-libitinensis';
     spots.push({ id: `colos-${name}`, kind: 'door', position: new THREE.Vector3().setFromMatrixPosition(fr.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0.05, len - 1.5))), heading: t === 0 ? -Math.PI / 2 : Math.PI / 2 });
@@ -751,14 +772,18 @@ export function buildColosseum(ctx: LandmarkContext) {
       cmats.push(fr);
       cip.collider({ kind: 'box', center: new THREE.Vector3(px, y + 0.85, pz), half: new THREE.Vector3(0.3, 0.9, 0.3) });
     }
-    lodInstances(ctx.game, root, { name: 'colosseum-cippi', matrices: cmats, levels: [{ builder: cb, maxDist: 420 }], cullBeyond: true });
+    cippiSet = lodInstances(ctx.game, gOuter, { name: 'colosseum-cippi', matrices: cmats, levels: [{ builder: cb, maxDist: 420 }], cullBeyond: true });
     for (const c of cip.colliders) stat.collider(c);
     // Vendors and ticket checkers on the plaza.
-    [12, 31, 52, 71].forEach((k, i) => {
+    const stallRng = new Rng('colosseum-stalls');
+    [12, 31, 52, 71, 26, 47].forEach((k, i) => {
       const t = L.centres[k];
       const [px, pz] = oval.point(t, XF + COLOS.cippi * 0.55);
       const [nx, nz] = oval.normal(t);
-      spots.push({ id: `colos-vendor-${i + 1}`, kind: 'vendor', position: new THREE.Vector3(px, ground(px, pz) + 0.05, pz), heading: Math.atan2(nx, nz) });
+      const gy = ground(px, pz);
+      // Food sellers' stalls (sausages, chickpeas, cushions to hire), facing the passers-by.
+      if (high) placeProp(new Draw(stat), 'stall', px - nx * 0.9, gy + 0.05, pz - nz * 0.9, Math.atan2(nx, nz), { rng: stallRng });
+      spots.push({ id: `colos-vendor-${i + 1}`, kind: 'vendor', position: new THREE.Vector3(px - nx * 0.3, gy + 0.05, pz - nz * 0.3), heading: Math.atan2(nx, nz) });
     });
     [38, 42, 18, 22].forEach((k, i) => {
       const t = L.centres[k];
@@ -768,16 +793,24 @@ export function buildColosseum(ctx: LandmarkContext) {
     });
   }
 
-  // Merge static parts.
-  const so = stat.build('colosseum:static');
-  so.children.forEach((c) => {
-    (c as THREE.Mesh).receiveShadow = true;
-  });
-  root.add(so);
-  const co = cav.build('colosseum:cavea');
-  root.add(co);
+  // ---- the velarium: canvas strips on ropes from the 240 masts towards an open oval over the
+  //      sand, anchored by ropes down to the cippi. Exposed as object.userData.velarium (toggle).
+  const velarium = buildVelarium(L, ctx.groundAt);
+  gAttic.add(velarium);
+  root.userData.velarium = velarium;
 
-  const colliders = [...stat.colliders, ...cav.colliders, ...collide.colliders];
+  // Merge static parts into their groups.
+  gOuter.add(stat.build('colosseum:static'));
+  gInner.add(inner.build('colosseum:inner'));
+  gBowl.add(cav.build('colosseum:cavea'));
+
+  // Zone visibility: from inside the bowl the outer shell, the ambulatories and the cippi can't be
+  // seen; from outside below the rim the bowl can't be seen; far away the interiors drop out.
+  const zone = zoneVisibility(L, root, { gOuter, gInner, gBowl, facadeSets, hideSets, ring2Sets, topColonnade, cippi: cippiSet! });
+  const sys = instanceLod(ctx.game);
+  if (sys) sys.hook((_dt, _t, cam) => zone(cam));
+
+  const colliders = [...stat.colliders, ...inner.colliders, ...cav.colliders, ...collide.colliders];
   return { object: root, colliders, spots, far: buildFar(L), cullDistance: 1500 };
 }
 
@@ -828,7 +861,7 @@ function speedAt(oval: Oval, t: number, x: number): number {
   return Math.hypot(c[0] - a[0], c[1] - a[1]) / (2 * e);
 }
 
-function buildCavea(ctx: LandmarkContext, L: ColosseumLayout, cav: MeshBuilder, collideOut: MeshBuilder, root: THREE.Group, spots: Spot[], high: boolean) {
+function buildCavea(ctx: LandmarkContext, L: ColosseumLayout, cav: MeshBuilder, collideOut: MeshBuilder, root: THREE.Group, spots: Spot[], high: boolean): LodSet {
   const { oval, section: sec } = L;
   const two = Math.PI * 2;
   const I = new THREE.Matrix4();
@@ -921,6 +954,14 @@ function buildCavea(ctx: LandmarkContext, L: ColosseumLayout, cav: MeshBuilder, 
     cornice.pts.reverse();
     cav.add(ovalSweep(oval, cornice, 0, two, 128, { closed: true }), 'marble', I);
     cav.add(ovalBand(oval, -0.03, 0.0, 0.05, 0.75, 0, two, 128, true), 'plaster_red', I, { castShadow: false });
+    // Marble revetment articulated by veined pilaster strips, and a painted frieze of hunt scenes
+    // (a red band with a dark border) under the cornice.
+    cav.add(ovalBand(oval, -0.025, 0.0, P - 0.95, P - 0.4, 0, two, 128, true), 'stucco_painted', I, { castShadow: false });
+    for (const tt of oval.equalArc(64, 0, 0.5)) {
+      if (Math.abs(Math.sin(tt)) < 0.06 || Math.abs(Math.cos(tt)) < 0.12) continue;
+      const fr = oval.radialFrame(tt, 0);
+      span(cav, 'marble_veined', fr, -0.32, 0.75, -0.02, 0.32, P - 0.95, 0.06, false, false);
+    }
   }
   // Lintels over the gates (the podium face is cut there).
   for (const t of [0, Math.PI]) {
@@ -1095,6 +1136,7 @@ function buildCavea(ctx: LandmarkContext, L: ColosseumLayout, cav: MeshBuilder, 
   }
 
   // ---- porticus in summa cavea: 80 columns (instanced), entablature, lean-to tiled roof
+  let topSet: LodSet | null = null;
   {
     const yF = sec.topY;
     const xc = sec.topX + 0.75;
@@ -1112,7 +1154,7 @@ function buildCavea(ctx: LandmarkContext, L: ColosseumLayout, cav: MeshBuilder, 
     const cMid = new MeshBuilder();
     cMid.add(new THREE.CylinderGeometry(D * 0.42, D * 0.5, colH, 6), 'marble_veined', new THREE.Matrix4().makeTranslation(0, colH / 2, 0));
     cMid.add(new THREE.BoxGeometry(D * 1.2, colH * 0.1, D * 1.2), 'marble', new THREE.Matrix4().makeTranslation(0, colH * 0.95, 0));
-    lodInstances(ctx.game, root, { name: 'colosseum-top-colonnade', matrices: mats, levels: [{ builder: cNear, maxDist: 60 }, { builder: cMid, maxDist: Infinity }] });
+    topSet = lodInstances(ctx.game, root, { name: 'colosseum-top-colonnade', matrices: mats, levels: [{ builder: cNear, maxDist: 22 }, { builder: cMid, maxDist: Infinity }] });
     const yE = yF + colH;
     cav.add(ovalBand(oval, xc - 0.32, xc + 0.32, yE, yE + 0.75, 0, two, 96, true), 'marble', I);
     cav.add(ovalBand(oval, xc - 0.45, xc + 0.4, yE + 0.75, yE + 0.95, 0, two, 96, true), 'marble', I);
@@ -1137,11 +1179,131 @@ function buildCavea(ctx: LandmarkContext, L: ColosseumLayout, cav: MeshBuilder, 
   });
   void ctx;
   void collideOut;
+  return topSet!;
 }
 
 function pointY(oval: Oval, t: number, x: number, y: number): [number, number, number] {
   const [px, pz] = oval.point(t, x);
   return [px, y, pz];
+}
+
+// ---------------------------------------------------------------- velarium
+
+/** Mast-top ring, sagging canvas annulus (two-sided) with coloured strips, ropes to the cippi. */
+function buildVelarium(L: ColosseumLayout, groundAt: (x: number, z: number) => number): THREE.Group {
+  const b = new MeshBuilder();
+  const { oval } = L;
+  const two = Math.PI * 2;
+  const N = COLOS.bays;
+  const yTop = SY[4] + 2.6; // a little under the mast tops
+  const xOut = XF - 0.2;
+  const xIn = 4.0; // inner edge over the podium rows: the sand stays in the sun
+  const rings = 5;
+  const sag = 2.2;
+  // Natural linen with a saffron strip every other bay and a red one on the axes.
+  const strip = (k: number): 'fabric_white' | 'fabric_ochre' | 'fabric_red' => (k % 20 === 0 ? 'fabric_red' : k % 4 === 2 ? 'fabric_ochre' : 'fabric_white');
+  const P = (t: number, f: number): [number, number, number] => {
+    const x = xOut + (xIn - xOut) * f;
+    const [px, pz] = oval.point(t, x);
+    // Falls from the masts towards the inner rope ring (which hangs lower), with a catenary sag.
+    const y = yTop - 5.5 * f - sag * Math.sin(Math.PI * f);
+    return [px, y, pz];
+  };
+  for (let k = 0; k < N; k++) {
+    const t0 = L.ts[k];
+    const t1 = k + 1 < N ? L.ts[k + 1] : L.ts[0] + two;
+    const pos: number[] = [];
+    for (let j = 0; j < rings; j++) {
+      const f0 = j / rings;
+      const f1 = (j + 1) / rings;
+      const a = P(t0, f0), c = P(t1, f0), d = P(t1, f1), e = P(t0, f1);
+      // Top side (faces up) and underside.
+      pos.push(...a, ...e, ...c, ...c, ...e, ...d);
+      pos.push(...a, ...c, ...e, ...c, ...d, ...e);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.computeVertexNormals();
+    b.add(g, strip(k), undefined);
+  }
+  // Ropes: along each bay boundary (radial) over the canvas, the inner ring rope, and the
+  // anchor ropes from every mast top down to the cippi ring.
+  for (let k = 0; k < N; k++) {
+    const t = L.ts[k];
+    const pts: THREE.Vector3[] = [];
+    for (let j = 0; j <= rings; j++) pts.push(new THREE.Vector3(...P(t, j / rings)).add(new THREE.Vector3(0, 0.05, 0)));
+    for (let j = 0; j < rings; j++) {
+      const g = new THREE.CylinderGeometry(0.035, 0.035, pts[j].distanceTo(pts[j + 1]), 3, 1, true);
+      g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), pts[j + 1].clone().sub(pts[j]).normalize()));
+      g.translate((pts[j].x + pts[j + 1].x) / 2, (pts[j].y + pts[j + 1].y) / 2, (pts[j].z + pts[j + 1].z) / 2);
+      b.add(g, 'wood_dark', undefined, { castShadow: false });
+    }
+  }
+  for (const t of oval.equalArc(N, XM, 0)) {
+    const [mx, mz] = oval.point(t, XF + 0.25);
+    const top = new THREE.Vector3(mx, SY[4] + 2.9, mz);
+    const [cx, cz] = oval.point(t, XF + COLOS.cippi);
+    const foot = new THREE.Vector3(cx, groundAt(cx, cz) + 1.5, cz);
+    const len = top.distanceTo(foot);
+    const g = new THREE.CylinderGeometry(0.02, 0.02, len, 3, 1, true);
+    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), top.clone().sub(foot).normalize()));
+    g.translate((top.x + foot.x) / 2, (top.y + foot.y) / 2, (top.z + foot.z) / 2);
+    b.add(g, 'wood_dark', undefined, { castShadow: false });
+  }
+  const g = b.build('colosseum:velarium');
+  g.name = 'colosseum:velarium';
+  return g;
+}
+
+// ---------------------------------------------------------------- zone visibility
+
+/** Approximate offset X of a local point from the arena oval (solves the ellipse a+X, b+X). */
+export function ovalOffset(a: number, b: number, x: number, z: number): number {
+  let lo = -Math.min(a, b) + 0.01;
+  let hi = 400;
+  for (let i = 0; i < 30; i++) {
+    const m = (lo + hi) / 2;
+    const v = (x / (a + m)) ** 2 + (z / (b + m)) ** 2;
+    if (v > 1) lo = m;
+    else hi = m;
+  }
+  return (lo + hi) / 2;
+}
+
+function zoneVisibility(
+  L: ColosseumLayout,
+  root: THREE.Object3D,
+  g: { gOuter: THREE.Group; gInner: THREE.Group; gBowl: THREE.Group; facadeSets: LodSet[]; hideSets: LodSet[]; ring2Sets: LodSet[]; topColonnade: LodSet; cippi: LodSet },
+) {
+  const inv = new THREE.Matrix4();
+  const c = new THREE.Vector3();
+  let last = '';
+  return (camWorld: THREE.Vector3) => {
+    root.updateWorldMatrix(true, false);
+    inv.copy(root.matrixWorld).invert();
+    c.copy(camWorld).applyMatrix4(inv);
+    const X = ovalOffset(L.oval.a, L.oval.b, c.x, c.z);
+    const dist = Math.hypot(c.x, c.z);
+    let zone: string;
+    if (X < R3[0] && c.y > 4.6) zone = 'cavea';
+    else if (X < 0) zone = 'arena';
+    else if (X > XF + 0.3) zone = c.y > SY[4] - 1 ? 'above' : dist > 260 ? 'far' : 'outside';
+    else zone = c.y < SY[1] - 0.5 ? 'ambulatory' : 'between';
+    if (zone === last) return;
+    last = zone;
+    const inBowl = zone === 'cavea' || zone === 'arena';
+    const outside = zone === 'outside' || zone === 'far';
+    g.gBowl.visible = !outside;
+    // The ambulatories show through the arches from outside and through the gates from the sand.
+    g.gInner.visible = zone !== 'cavea' && zone !== 'far';
+    // From the ground-floor ambulatories only the ground storey's inner faces are in view.
+    const amb = zone === 'ambulatory';
+    g.facadeSets.forEach((s, si) => s.setForced(inBowl ? 2 : amb && si > 0 ? 2 : null));
+    for (const s of g.hideSets) s.setForced(inBowl || amb ? -1 : null);
+    g.cippi.setForced(inBowl ? -1 : null);
+    for (const s of g.ring2Sets) s.setForced(zone === 'cavea' ? -1 : zone === 'arena' ? 1 : null);
+    g.topColonnade.setForced(zone === 'outside' || zone === 'far' ? -1 : null);
+  };
 }
 
 // ---------------------------------------------------------------- far stand-in
