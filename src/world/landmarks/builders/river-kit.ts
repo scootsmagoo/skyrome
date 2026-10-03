@@ -11,6 +11,8 @@ import type { MaterialId } from '../../../gfx/materialIds';
 import { UV_METERS } from '../../../gfx/textures/catalog';
 import { T, makeGeometry, type V2 } from '../../../arch/common/geom';
 import { temple, templeLayout, type TempleLayout, type TempleSpec } from '../../../arch/classical/temple';
+import { entablatureDims } from '../../../arch/classical/orders';
+import { inscriptionPanel } from '../../../arch/common/inscription';
 import { Draw } from '../../../arch/fabric/draw';
 import { pointInPolygon } from '../../../arch/fabric/polygon';
 import type { Rng } from '../../../core/Rng';
@@ -168,6 +170,35 @@ export function centredTemple(ctx: LandmarkContext, b: MeshBuilder, spec: Temple
   return { L, dz, front: front + dz, back: back + dz };
 }
 
+/**
+ * Like centredTemple, but picks the number of flank columns so the temple (stairs included) fits
+ * the atlas footprint depth `depth` (game m) as closely as possible without exceeding it by more
+ * than a metre.
+ */
+export function fittedTemple(ctx: LandmarkContext, b: MeshBuilder, spec: TempleSpec, depth: number) {
+  let best = spec.sides ?? 7;
+  let bestErr = Infinity;
+  for (let sides = 4; sides <= 15; sides++) {
+    const L = templeLayout({ ...spec, sides });
+    const len = L.stylobate.z1 - L.podiumFront;
+    const err = len > depth + 1 ? 1e3 + len : Math.abs(depth - len);
+    if (err < bestErr) {
+      bestErr = err;
+      best = sides;
+    }
+  }
+  return centredTemple(ctx, b, { ...spec, sides: best });
+}
+
+/** A dedication panel on the front frieze of a kit temple (lines latinized by the caller). */
+export function friezeInscription(b: MeshBuilder, L: TempleLayout, dz: number, lines: string[], style: 'carved' | 'bronze' = 'bronze', ground = '#e9e4da') {
+  const ent = entablatureDims(L.order, L.H);
+  const y = L.podiumHeight + L.H + ent.architrave + ent.frieze / 2;
+  const w = Math.min((L.entablature.x1 - L.entablature.x0) * 0.72, 9);
+  const h = Math.max(0.3, ent.frieze * 0.8);
+  inscriptionPanel(b, { lines, width: w, height: h, style, ground, sizes: lines.map(() => 1) }, T(0, y, L.entablature.z0 + dz - 0.05), { depth: 0.05 });
+}
+
 /** A masonry skirt from y = 0 down to the lowest ground under the rectangle (if it is lower). */
 export function foundation(ctx: LandmarkContext, b: MeshBuilder, x0: number, z0: number, x1: number, z1: number, mat: MaterialId) {
   let lo = 0;
@@ -188,7 +219,9 @@ export function altar(d: Draw, w = 1.6, dpt = 1.1, h = 1.15, mat: MaterialId = '
   d.span('stucco_painted', -w / 2 - 0.005, h * 0.55, -dpt / 2 - 0.006, w / 2 + 0.005, h * 0.62, dpt / 2 + 0.006, { shadow: false });
   if (fire) {
     d.span('plaster_dark', -w / 2 + 0.3, h - 0.06, -dpt / 2 + 0.2, w / 2 - 0.3, h + 0.02, dpt / 2 - 0.2, { shadow: false });
-    d.cyl('glow_fire', 0, h + 0.16, 0, 0.22, 0.32, 6, { rTop: 0.02 });
+    // Embers and three flame tongues (stretched teardrops read better than a cone).
+    d.span('glow_fire', -w / 2 + 0.36, h - 0.02, -dpt / 2 + 0.26, w / 2 - 0.36, h + 0.04, dpt / 2 - 0.26, { shadow: false });
+    for (const [x, z, s] of [[0, 0, 1], [-0.16, 0.08, 0.7], [0.15, -0.06, 0.8]] as const) d.ellipsoid('glow_fire', x, h + 0.18 * s, z, 0.09 * s, 0.24 * s, 0.09 * s, { seg: [6, 5] });
   }
   d.solid(-w / 2 - 0.12, 0, -dpt / 2 - 0.12, w / 2 + 0.12, h, dpt / 2 + 0.12);
 }
@@ -473,4 +506,92 @@ export function insideWithMargin(p: V2, poly: V2[], inset: number): boolean {
     if (!pointInPolygon([p[0] + Math.cos(a) * inset, p[1] + Math.sin(a) * inset], poly)) return false;
   }
   return true;
+}
+
+// ------------------------------------------------------------------ cheap colonnades
+
+/**
+ * A cheap colonnade for distant or secondary porticoes (≈ 60 triangles a column): plain shafts
+ * with a moulded base and a block capital, an architrave beam along `pts` and, optionally, a
+ * lean-to roof back toward `roofTo` (an offset path on the wall side). Columns stand at `y`.
+ */
+export function simpleColonnade(
+  d: Draw,
+  pts: V2[],
+  o: { y?: number; height: number; D: number; spacing: number; mat?: MaterialId; roofDepth?: number; roofMat?: MaterialId; seg?: number; collide?: boolean },
+) {
+  const y = o.y ?? 0;
+  const mat = o.mat ?? 'marble';
+  const D = o.D;
+  const H = o.height;
+  const seg = o.seg ?? 8;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [ax, az] = pts[i];
+    const [bx, bz] = pts[i + 1];
+    const len = Math.hypot(bx - ax, bz - az);
+    const n = Math.max(1, Math.round(len / o.spacing));
+    for (let k = i === 0 ? 0 : 1; k <= n; k++) {
+      const x = ax + ((bx - ax) * k) / n;
+      const z = az + ((bz - az) * k) / n;
+      d.box(mat, x, y + D * 0.15, z, D * 1.3, D * 0.3, D * 1.3);
+      d.cyl(mat, x, y + D * 0.3 + (H - D * 0.75) / 2, z, D / 2, H - D * 0.75, seg, { rTop: D * 0.42 });
+      d.cyl(mat, x, y + H - D * 0.3, z, D * 0.42, D * 0.3, seg, { rTop: D * 0.62 });
+      d.box(mat, x, y + H - D * 0.075, z, D * 1.25, D * 0.15, D * 1.25);
+      if (o.collide) d.solidCyl(x, y + H / 2, z, D / 2, H);
+    }
+    // Architrave + frieze beam, and the roof slab sloping back.
+    const ang = Math.atan2(-(bz - az), bx - ax);
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+    d.box(mat, mx, y + H + D * 0.45, mz, len + D * 0.6, D * 0.9, D * 1.1, { ry: ang });
+    if (o.roofDepth) {
+      const nx = -(bz - az) / len, nz = (bx - ax) / len; // left-hand side of the run
+      const rd = o.roofDepth;
+      d.box(o.roofMat ?? 'roof_tile', mx + (nx * rd) / 2, y + H + D * 1.0, mz + (nz * rd) / 2, len + D, 0.14, rd + D, { ry: ang, rx: 0 });
+    }
+  }
+}
+
+/**
+ * Offset a polyline sideways by `dist` (positive = away from `centre`, e.g. outward from an
+ * island), using the per-vertex average normal.
+ */
+export function offsetAway(pts: V2[], dist: number, centre: V2): V2[] {
+  if (pts.length < 2) return pts.map((p) => [p[0], p[1]] as V2);
+  const mid = pts[Math.floor(pts.length / 2)];
+  const a = pts[Math.max(0, Math.floor(pts.length / 2) - 1)];
+  const c = pts[Math.min(pts.length - 1, Math.floor(pts.length / 2) + 1)];
+  // Left normal of the walking direction at the middle; flip if it points toward the centre.
+  let sign = 1;
+  const lx = -(c[1] - a[1]), lz = c[0] - a[0];
+  if (lx * (mid[0] - centre[0]) + lz * (mid[1] - centre[1]) < 0) sign = -1;
+  return pts.map((p, i) => {
+    const p0 = pts[Math.max(0, i - 1)];
+    const p1 = pts[Math.min(pts.length - 1, i + 1)];
+    const dx = p1[0] - p0[0], dz = p1[1] - p0[1];
+    const l = Math.hypot(dx, dz) || 1;
+    return [p[0] + (-dz / l) * dist * sign, p[1] + (dx / l) * dist * sign] as V2;
+  });
+}
+
+/**
+ * Corridors (local quads, game metres) along every atlas bridge within reach, extended `ext` real
+ * metres beyond both ends for the approach ramps: open squares and quays leave them free.
+ */
+export function bridgeCorridors(ctx: LandmarkContext, env: RiverEnv, ext = 40, extraHalf = 2.5): V2[][] {
+  const out: V2[][] = [];
+  const self = ctx.lm;
+  const r0 = radius(self) + 120;
+  for (const br of atlas.BRIDGES) {
+    const dx = br.b[0] - br.a[0], dz = br.b[1] - br.a[1];
+    const L = Math.hypot(dx, dz) || 1;
+    const ux = dx / L, uz = dz / L;
+    const near = Math.min(Math.hypot(br.a[0] - self.center[0], br.a[1] - self.center[1]), Math.hypot(br.b[0] - self.center[0], br.b[1] - self.center[1]));
+    if (near > r0) continue;
+    const h = br.width / 2 + extraHalf;
+    const a: [number, number] = [br.a[0] - ux * ext, br.a[1] - uz * ext];
+    const c: [number, number] = [br.b[0] + ux * ext, br.b[1] + uz * ext];
+    const nx = -uz * h, nz = ux * h;
+    out.push([env.local(a[0] + nx, a[1] + nz), env.local(c[0] + nx, c[1] + nz), env.local(c[0] - nx, c[1] - nz), env.local(a[0] - nx, a[1] - nz)]);
+  }
+  return out;
 }
