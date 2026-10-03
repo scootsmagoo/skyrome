@@ -207,8 +207,12 @@ function augustana(ctx: LandmarkContext) {
   d.span('plaster_white', ux0 - 3.4, up, uz1 + 3.4, ux1 + 3.4, up + 8.4, pz1, { collide: true });
   roofOver(d, ux0 - 3.4, uz1 + 3.4, ux1 + 3.4, pz1, up + 8.4, 0.34, 'roof_tile', 'plaster_white');
   // Front hall of the upper level (between the two courts).
-  d.span('plaster_white', ux0 - 3.4, up, pz0, ux1 + 3.4, up + 6.0, uz0 - 3.4, { collide: true });
-  d.span('black', -1.4, up, uz0 - 3.42, 1.4, up + 3.6, uz0 - 3.38);
+  // (split by the passage from the court stair to the upper peristyle)
+  d.span('plaster_white', ux0 - 3.4, up, pz0, -1.6, up + 6.0, uz0 - 3.4, { collide: true });
+  d.span('plaster_white', 1.6, up, pz0, ux1 + 3.4, up + 6.0, uz0 - 3.4, { collide: true });
+  d.span('plaster_white', -1.6, up + 3.6, pz0, 1.6, up + 6.0, uz0 - 3.4, { collide: true });
+  d.span('marble', -1.6, up - 0.02, pz0, 1.6, up + 0.03, uz0 - 3.4);
+  for (const z of [pz0 - 0.02, uz0 - 3.4]) d.span('marble', -2.0, up + 3.6, z - 0.1, 2.0, up + 4.0, z + 0.12);
   roofOver(d, ux0 - 3.4, pz0, ux1 + 3.4, uz0 - 3.4, up + 6.0, 0.3, 'roof_tile', 'plaster_white');
   // Main entrance from the Area Palatina side (back, +z), with guards and bronze doors.
   d.span('marble', -3.0, up, pz1 - 0.05, 3.0, up + 5.2, pz1 + 0.25);

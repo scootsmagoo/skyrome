@@ -236,7 +236,7 @@ export const at = (x: number, y: number, z: number, ry = 0) => new THREE.Matrix4
 
 /** A rough rock boulder (jittered icosahedron, flattened underneath) with an optional box collider. */
 export function boulder(d: Draw, x: number, y: number, z: number, sx: number, sy: number, sz: number, seed: number, solid = true, mat: MaterialId = 'rock') {
-  const g = new THREE.IcosahedronGeometry(1, 1).toNonIndexed();
+  const g = new THREE.IcosahedronGeometry(1, 1);
   const p = g.getAttribute('position') as THREE.BufferAttribute;
   const key = new Map<string, number>();
   for (let i = 0; i < p.count; i++) {

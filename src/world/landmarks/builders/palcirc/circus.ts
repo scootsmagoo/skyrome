@@ -239,7 +239,7 @@ function buildTunnels(b: MeshBuilder, sec: CircusSection, gaps: CircusGaps) {
     // Vomitorium stair along the left wall of the open cut: track level → first walkway.
     const n = Math.ceil(w1.y / 0.225);
     const rise = w1.y / n;
-    const run = (w1.u0 - 0.4) / n;
+    const run = Math.min(0.34, (w1.u0 - 0.05) / n);
     for (let k = 1; k <= n; k++) {
       const y = rise * k;
       const z0 = w1.u0 - (n - k + 1) * run;
