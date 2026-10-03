@@ -45,8 +45,10 @@ export const builders: LandmarkBuilder[] = [
       const wallMat = WALL[lm.category] ?? 'plaster_cream';
       const H = Math.max(2.5, lm.height * S);
       const fp = localFootprint(lm);
-      if (lm.category === 'garden' || lm.category === 'aqueduct') {
-        // Areas and linear features are handled by the city/vegetation modules.
+      const siting = (lm as { siting?: string }).siting;
+      if (lm.category === 'garden' || lm.category === 'aqueduct' || siting === 'open' || siting === 'underground') {
+        // Areas, districts, open squares, buried and linear features have no massing of their own
+        // (the city module builds the fabric over districts such as the Subura).
         return { object: b.build(lm.id), colliders: [] };
       }
       if (OPEN.has(lm.category) && fp.kind === 'rect') {
