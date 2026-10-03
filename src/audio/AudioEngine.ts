@@ -6,23 +6,27 @@
  *   installAudio(game);                                    // once, in scene setup
  *   game.audio.play('clash.metal', { position: hitPoint });
  *   const fire = game.audio.loop('fire', { position: brazier });   fire.stop(1);
- *   game.audio.music.setState('combat');
+ *   game.audio.music.setState('explore');                  // base music
+ *   game.audio.music.setOverride('combat', 'combat', 10);  // a fight (… 'combat', null) ends it)
  *   game.audio.ambience.addZone({ center, radius: 40, layers: [{ id: 'crowd', volume: 1 }] });
  *
  * The context is created lazily and resumed on the first user gesture (Safari and Chrome both
- * require that); until then `play` is a no-op and loops/music wait and start on unlock.
+ * require that); until then `play` is a no-op and loops/music wait and start on unlock. Every
+ * one-shot is pre-baked in a worker from start-up, so playing never synthesizes on the main thread
+ * (except a first-use fallback for a few critical sounds, see `play`).
  */
 import * as THREE from 'three';
 import type { Game, System } from '../core/Game';
 import { Layer } from '../core/Physics';
 import type { SettingsData } from '../core/Settings';
 import { AmbienceDirector } from './Ambience';
-import { LOOPS, SOUNDS, bakeRate, forget, getVariants, requestBake, setBaker } from './bank';
+import { LOOPS, SOUNDS, bakeRate, forget, getVariants, isBaked, requestBake, setBaker } from './bank';
 import { Rand, dbToGain } from './dsp/core';
 import { REVERBS, impulseResponse, type ReverbPreset } from './dsp/reverb';
 import { FootstepDriver, type FootstepOptions, type FootstepSource } from './FootstepDriver';
-import { DEFAULT_SPATIAL, airCutoff, distanceGain, distanceWetness, pickVariant, planVoice, sliderToGain, type VoiceSlot } from './mix';
+import { DEFAULT_SPATIAL, SOFT_CLIP_RANGE, airCutoff, distanceGain, distanceWetness, pickVariant, planVoice, sliderToGain, softClipCurve, type VoiceSlot } from './mix';
 import { MusicDirector } from './music/MusicDirector';
+import { musicSamples } from './music/samples';
 import { WorkerBaker } from './WorkerBaker';
 import type { BusName, LoopDef, LoopEvent, SoundDef, SpatialSpec } from './sounds/types';
 
@@ -65,7 +69,10 @@ export interface PlayOptions {
   occlude?: boolean;
   /** Start after this many seconds. */
   delay?: number;
-  /** Skip (and start baking) if the sound isn't baked yet instead of baking synchronously. */
+  /**
+   * Skip (and start baking) if the sound isn't baked yet instead of baking it synchronously. Only
+   * matters in the first second or so after start-up, while the worker pre-bakes the bank.
+   */
   ifReady?: boolean;
   /** Move the voice while it plays (fly-bys), m/s. */
   velocity?: THREE.Vector3Like;
@@ -108,6 +115,8 @@ export interface AudioStats {
   loops: number;
   loopsAudible: number;
   bakedMB: number;
+  /** Music samples held (lyre plucks, percussion), MB; bounded by the store's budget. */
+  musicMB: number;
   music: string;
   reverb: ReverbPreset;
   sampleRate: number;
@@ -125,6 +134,23 @@ interface Voice extends VoiceSlot {
   done: boolean;
 }
 
+/** A reverb space: its convolver and return fader. */
+interface Space {
+  conv: ConvolverNode;
+  gain: GainNode;
+  /** Input connected (it is up, or fading). */
+  connected: boolean;
+  /** Context time its fade-out reaches silence (Infinity while it is the active space). */
+  silentAt: number;
+}
+
+/** Linear ramp from the current value (gain fades with an exact end time). */
+function ramp(p: AudioParam, v: number, t: number, dur: number) {
+  p.cancelScheduledValues(t);
+  p.setValueAtTime(p.value, t);
+  p.linearRampToValueAtTime(v, t + dur);
+}
+
 const tmpV = new THREE.Vector3();
 const fwd = new THREE.Vector3();
 const up = new THREE.Vector3();
@@ -134,11 +160,16 @@ const GLOBAL_VOICES = 48;
 /** Below this estimated gain a one-shot isn't worth starting (≈ -62 dB). */
 const CULL_GAIN = 0.0008;
 /**
- * Output makeup before the limiter. Sounds are normalized to about -14 dBFS short-term and mixed
- * well below that; this brings typical play to roughly -24 dBFS RMS (combat peaks near -4 dBFS),
- * measured with `meter()` in the audio scene.
+ * Output stage: makeup → glue compressor → brick-wall limiter → soft clipper. Sounds are
+ * normalized to about -14 dBFS short-term and mixed well below that. The makeup plus the glue
+ * compressor's own automatic makeup (browsers add about 0.6 × its full-range reduction) bring
+ * exploring to about -22 dBFS RMS; the glue (2.5:1, slow-ish) evens out fights without pumping,
+ * the limiter (20:1, 1 ms) catches what is left, and the soft clipper guarantees the output never
+ * passes -0.2 dBFS, even with every slider at 100 %. Measured with `meter()` in the audio scene.
  */
-const MAKEUP_DB = 10;
+const MAKEUP_DB = 7;
+/** Sounds louder than this at the listener (est. linear gain) duck the music briefly. */
+const DUCK_ABOVE = 0.4;
 /** The music bus sits +6 dB hotter than its slider so the default (0.5) is clearly audible. */
 const MUSIC_TRIM = 2;
 
@@ -159,19 +190,36 @@ export class AudioEngine implements System {
   pauseWhenHidden = true;
 
   private master!: GainNode;
-  private limiter!: DynamicsCompressorNode;
   private makeup!: GainNode;
+  private glue!: DynamicsCompressorNode;
+  private limiter!: DynamicsCompressorNode;
+  private clipIn!: GainNode;
+  private clipper!: WaveShaperNode;
+  /** Music ducking under big impacts (after the music bus fader, so settings don't fight it). */
+  private musicDuck!: GainNode;
+  private duckUntil = 0;
   private buses = {} as Record<BusName, GainNode>;
   private sends = {} as Record<BusName, GainNode>;
   private envIn!: GainNode;
   private envReturn!: GainNode;
-  private conv: [ConvolverNode, GainNode][] = [];
-  private convActive = 0;
+  /** One convolver per reverb space in use (see setEnvironment). */
+  private spaces = new Map<ReverbPreset, Space>();
+  /** Spaces to build as soon as their impulse response arrives (zones' and the default space). */
+  private wantedSpaces = new Set<ReverbPreset>();
+  /** The space that is (fading) up. */
+  private envActive: ReverbPreset | null = null;
+  /** A space change waiting for its impulse response from the worker. */
+  private envPending = false;
+  private envFade = 1.5;
   private musicRev!: GainNode;
+  private musicConv!: ConvolverNode;
   private reverbPreset: ReverbPreset = 'open';
   private irCache = new Map<ReverbPreset, AudioBuffer>();
+  private irPending = new Set<ReverbPreset>();
   private buffers = new Map<string, AudioBuffer[]>();
   private preparing = new Set<string>();
+  /** Baked before the context existed: uploaded a few per frame once it does. */
+  private uploadQueue = new Set<string>();
   private bufferBytes = 0;
   private baker: WorkerBaker | null = null;
   private analyser: AnalyserNode | null = null;
@@ -191,7 +239,25 @@ export class AudioEngine implements System {
     this.music.isNight = () => game.time.isNight;
     this.installUnlock();
     this.offs.push(game.settings.onChange((s) => this.applySettings(s)));
-    this.offs.push(game.events.on('sfx', (e) => void this.play(e.id, e)));
+    // Fire-and-forget requests never bake on the main thread, except critical sounds on first use.
+    this.offs.push(game.events.on('sfx', (e) => void this.play(e.id, { ...e, ifReady: !isCritical(e.id) })));
+    // Start the worker now (no gesture needed) and pre-bake every one-shot in the background, so
+    // everything is ready by the time the player first clicks or presses a key.
+    this.baker = WorkerBaker.create();
+    setBaker(this.baker);
+    // Without a worker, sounds bake on first use instead (pre-baking would stall the main thread).
+    if (this.baker) this.prewarm();
+  }
+
+  /** Queue every one-shot for background baking: the commonest first. */
+  private prewarm() {
+    const first = [
+      'step.stone.walk', 'step.stone.run', 'step.dirt.walk', 'step.dirt.run', 'step.grass.walk', 'step.grass.run', 'land.stone',
+      'ui.click', 'ui.hover', 'ui.open', 'ui.close', 'swing.medium', 'swing.fast', 'clash.metal', 'block.shield', 'hit.flesh',
+      'vox.grunt.m', 'vox.pain.m', 'vox.effort.m', 'body.fall', 'stinger.questStart', 'stinger.questComplete', 'stinger.levelUp', 'stinger.discover',
+    ];
+    const rest = [...SOUNDS.values()].filter((d) => d.kind === 'oneshot' && !first.includes(d.id)).map((d) => d.id);
+    for (const id of [...first, ...rest]) this.prepare(id, false);
   }
 
   // ---------------------------------------------------------------- lifecycle
@@ -250,13 +316,6 @@ export class AudioEngine implements System {
     if (!this.ctx || this.ctx.state !== 'running' || this.unlocked) return;
     this.unlocked = true;
     this.game.events.emit('audio:unlocked', {});
-    // Bake the common sounds in the worker now, so the first footstep or swing doesn't hitch.
-    for (const id of [
-      'step.stone.walk', 'step.stone.run', 'step.dirt.walk', 'step.dirt.run', 'step.grass.walk', 'step.grass.run', 'land.stone',
-      'ui.click', 'ui.hover', 'ui.open', 'ui.close', 'swing.medium', 'swing.fast', 'clash.metal', 'block.shield', 'hit.flesh',
-      'vox.grunt.m', 'vox.pain.m', 'vox.effort.m', 'body.fall', 'stinger.questStart', 'stinger.questComplete', 'stinger.levelUp', 'stinger.discover',
-    ])
-      this.prepare(id);
   }
 
   private createContext() {
@@ -272,74 +331,141 @@ export class AudioEngine implements System {
       ctx = new Ctor();
     }
     this.ctx = ctx;
-    if (!this.baker) {
-      this.baker = WorkerBaker.create();
-      setBaker(this.baker);
-    }
     ctx.onstatechange = () => {
       if (ctx.state === 'running') this.onRunning();
     };
     this.buildGraph(ctx);
     this.applySettings(this.game.settings.data);
+    // Impulse responses bake in the worker too: the music hall and the spaces in use first.
+    for (const p of Object.keys(REVERBS) as ReverbPreset[]) this.irIfReady(p, p === 'music' || p === this.reverbPreset || this.wantedSpaces.has(p));
     this.setEnvironment(this.reverbPreset, 0);
     this.music.attach({ ctx, dry: this.buses.music, rev: this.musicRev });
   }
 
   private buildGraph(ctx: AudioContext) {
     this.master = ctx.createGain();
-    // Gentle bus limiter: catches pile-ups (big fights) without pumping normal play.
-    this.limiter = ctx.createDynamicsCompressor();
-    this.limiter.threshold.value = -8;
-    this.limiter.knee.value = 6;
-    this.limiter.ratio.value = 10;
-    this.limiter.attack.value = 0.003;
-    this.limiter.release.value = 0.25;
     this.makeup = ctx.createGain();
     this.makeup.gain.value = dbToGain(MAKEUP_DB);
+    // Glue: a gentle, slow-ish compressor that evens out pile-ups (big fights) without pumping.
+    this.glue = ctx.createDynamicsCompressor();
+    this.glue.threshold.value = -16;
+    this.glue.knee.value = 10;
+    this.glue.ratio.value = 2.5;
+    this.glue.attack.value = 0.012;
+    this.glue.release.value = 0.3;
+    // Brick wall: fast and hard, only touches what the glue let through.
+    this.limiter = ctx.createDynamicsCompressor();
+    this.limiter.threshold.value = -1.5;
+    this.limiter.knee.value = 0;
+    this.limiter.ratio.value = 20;
+    this.limiter.attack.value = 0.001;
+    this.limiter.release.value = 0.12;
+    // Soft clipper for the limiter's overshoot: linear below -3 dBFS, never above -0.2 dBFS.
+    this.clipIn = ctx.createGain();
+    this.clipIn.gain.value = 1 / SOFT_CLIP_RANGE;
+    this.clipper = ctx.createWaveShaper();
+    this.clipper.curve = softClipCurve(4096, SOFT_CLIP_RANGE);
+    this.clipper.oversample = '2x';
     this.master.connect(this.makeup);
-    this.makeup.connect(this.limiter);
-    this.limiter.connect(ctx.destination);
+    this.makeup.connect(this.glue);
+    this.glue.connect(this.limiter);
+    this.limiter.connect(this.clipIn);
+    this.clipIn.connect(this.clipper);
+    this.clipper.connect(ctx.destination);
 
     this.envIn = ctx.createGain();
     this.envReturn = ctx.createGain();
     this.envReturn.connect(this.master);
-    for (let i = 0; i < 2; i++) {
-      const c = ctx.createConvolver();
-      c.normalize = false;
-      const g = ctx.createGain();
-      g.gain.value = 0;
-      this.envIn.connect(c);
-      c.connect(g);
-      g.connect(this.envReturn);
-      this.conv.push([c, g]);
-    }
+    this.musicDuck = ctx.createGain();
+    this.musicDuck.connect(this.master);
     for (const b of BUSES) {
       const g = ctx.createGain();
-      g.connect(this.master);
+      g.connect(b === 'music' ? this.musicDuck : this.master);
       this.buses[b] = g;
       const s = ctx.createGain();
       s.connect(this.envIn);
       this.sends[b] = s;
     }
-    // Music has its own warm hall (non-diegetic), returned through the music bus.
-    const mc = ctx.createConvolver();
-    mc.normalize = false;
-    mc.buffer = this.ir('music');
+    // Music has its own warm hall (non-diegetic), returned through the music bus. Its impulse
+    // response arrives from the worker shortly after start-up (see storeIr).
+    this.musicConv = ctx.createConvolver();
+    this.musicConv.normalize = false;
     this.musicRev = ctx.createGain();
-    this.musicRev.connect(mc);
-    mc.connect(this.buses.music);
+    this.musicRev.connect(this.musicConv);
+    this.musicConv.connect(this.buses.music);
   }
 
-  private ir(preset: ReverbPreset): AudioBuffer {
-    let b = this.irCache.get(preset);
-    if (b) return b;
-    const ctx = this.ctx!;
-    const [l, r] = impulseResponse(REVERBS[preset], ctx.sampleRate);
-    b = ctx.createBuffer(2, l.length, ctx.sampleRate);
+  /**
+   * A space's impulse response, or null while the worker bakes it (the bake is started here).
+   * Without a worker it is rendered on the spot.
+   */
+  private irIfReady(preset: ReverbPreset, urgent = true): AudioBuffer | null {
+    const hit = this.irCache.get(preset);
+    const ctx = this.ctx;
+    if (hit || !ctx) return hit ?? null;
+    const rate = ctx.sampleRate;
+    const render = () => {
+      const [l, r] = impulseResponse(REVERBS[preset], rate);
+      return this.storeIr(preset, l, r, rate);
+    };
+    if (!this.baker) return render();
+    if (this.irPending.has(preset)) {
+      if (urgent) this.baker.promoteIr(preset);
+    } else {
+      this.irPending.add(preset);
+      this.baker.bakeIr(preset, rate, urgent).then(
+        ({ channels }) => {
+          this.irPending.delete(preset);
+          this.storeIr(preset, channels[0], channels[1], rate);
+        },
+        (e: Error) => {
+          this.irPending.delete(preset);
+          if (e?.name !== 'BakeCancelled' && this.ctx) render();
+        },
+      );
+    }
+    return null;
+  }
+
+  private storeIr(preset: ReverbPreset, l: Float32Array, r: Float32Array, rate: number): AudioBuffer | null {
+    const ctx = this.ctx;
+    if (!ctx || ctx.sampleRate !== rate) return null; // a convolver needs the context's own rate
+    const b = ctx.createBuffer(2, l.length, rate);
     b.getChannelData(0).set(l);
     b.getChannelData(1).set(r);
     this.irCache.set(preset, b);
+    if (preset === 'music' && !this.musicConv.buffer) this.musicConv.buffer = b;
+    // Setting a convolver's buffer is the expensive part (the browser prepares its FFT kernels on
+    // the main thread, several ms for a long hall): do it now, as the IR arrives, for every space a
+    // zone may ask for, rather than at the moment the player walks in.
+    else if (this.wantedSpaces.has(preset)) this.space(preset);
     return b;
+  }
+
+  /** The convolver for a space, built on first use (null while its impulse response bakes). */
+  private space(preset: ReverbPreset): Space | null {
+    const hit = this.spaces.get(preset);
+    if (hit) return hit;
+    const ctx = this.ctx;
+    const ir = ctx && this.irIfReady(preset);
+    if (!ctx || !ir) return null;
+    const conv = ctx.createConvolver();
+    conv.normalize = false;
+    conv.buffer = ir;
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    conv.connect(gain);
+    gain.connect(this.envReturn);
+    const sp: Space = { conv, gain, connected: false, silentAt: 0 };
+    this.spaces.set(preset, sp);
+    return sp;
+  }
+
+  /** Build a space's convolver ahead of need (ambience zones call this for their reverb). */
+  prepareEnvironment(preset: ReverbPreset) {
+    if (this.wantedSpaces.has(preset)) return;
+    this.wantedSpaces.add(preset);
+    if (this.ctx && this.irCache.has(preset)) this.space(preset);
   }
 
   private applySettings(s: SettingsData) {
@@ -366,20 +492,69 @@ export class AudioEngine implements System {
     this.applySettings(this.game.settings.data);
   }
 
-  /** Crossfade the environmental reverb to another space (street, forum, temple, room…). */
+  /**
+   * Crossfade the environmental reverb to another space (street, forum, temple, room…).
+   *
+   * Each space has its own convolver, loaded once with its impulse response and never reassigned
+   * (reassigning a ringing convolver clicks, and loading one costs milliseconds of main-thread
+   * time). Changing space only ramps gains: the new space fades up, the others fade down, and a
+   * faded-out space's input is disconnected so the browser stops running it. Going back and forth
+   * between two spaces is therefore free and seamless. A space whose impulse response is still
+   * baking is switched to as soon as it arrives.
+   */
   setEnvironment(preset: ReverbPreset, fade = 1.5) {
-    const same = preset === this.reverbPreset && this.conv[this.convActive]?.[0].buffer;
+    if (preset === this.reverbPreset && (this.envActive === preset || this.envPending)) return;
     this.reverbPreset = preset;
-    if (!this.ctx || same) return;
-    const t = this.ctx.currentTime;
-    const next = this.conv[this.convActive][0].buffer ? 1 - this.convActive : this.convActive;
-    const [c, g] = this.conv[next];
-    c.buffer = this.ir(preset);
-    const tc = Math.max(0.01, fade / 3);
-    g.gain.setTargetAtTime(1, t, tc);
-    if (next !== this.convActive) this.conv[this.convActive][1].gain.setTargetAtTime(0, t, tc);
-    this.envReturn.gain.setTargetAtTime(REVERBS[preset].wet, t, tc);
-    this.convActive = next;
+    this.envFade = Math.max(0.02, fade);
+    this.applyEnvironment();
+  }
+
+  private applyEnvironment() {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const want = this.reverbPreset;
+    this.wantedSpaces.add(want);
+    const sp = this.space(want);
+    this.envPending = !sp;
+    if (!sp || this.envActive === want) return;
+    const t = ctx.currentTime;
+    const dur = this.envFade;
+    if (!sp.connected) {
+      this.envIn.connect(sp.conv);
+      sp.connected = true;
+    }
+    ramp(sp.gain.gain, REVERBS[want].wet, t, dur);
+    sp.silentAt = Infinity;
+    for (const [p, other] of this.spaces) {
+      if (p === want || other.silentAt !== Infinity) continue;
+      ramp(other.gain.gain, 0, t, dur);
+      other.silentAt = t + dur + 0.05;
+    }
+    this.envActive = want;
+  }
+
+  /** Disconnect spaces that have faded out (an idle convolver costs nothing). */
+  private retireSpaces(t: number) {
+    for (const sp of this.spaces.values())
+      if (sp.connected && t >= sp.silentAt) {
+        this.envIn.disconnect(sp.conv);
+        sp.connected = false;
+      }
+  }
+
+  /** Dip the music for a moment (big impacts), by `db` (negative), recovering over `release` s. */
+  duckMusic(db = -4, hold = 0.25, release = 0.6) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const g = this.musicDuck.gain;
+    const target = dbToGain(db);
+    // Overlapping hits extend the hold rather than restarting the dip.
+    this.duckUntil = Math.max(this.duckUntil, t + hold);
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(g.value, t);
+    g.setTargetAtTime(Math.min(target, g.value), t, 0.015);
+    g.setTargetAtTime(1, this.duckUntil, release / 3);
   }
 
   get environment(): ReverbPreset {
@@ -391,9 +566,12 @@ export class AudioEngine implements System {
     this.offs = [];
     this.music.dispose();
     this.baker?.dispose();
+    this.baker = null;
     setBaker(null);
     void this.ctx?.close().catch(() => {});
     this.ctx = null;
+    this.buffers.clear();
+    this.uploadQueue.clear();
   }
 
   // ---------------------------------------------------------------- per frame
@@ -406,8 +584,12 @@ export class AudioEngine implements System {
     const cam = this.game.camera;
     cam.updateMatrixWorld();
     this.listener.setFromMatrixPosition(cam.matrixWorld);
-    if (!this.ctx || this.ctx.state !== 'running') return;
+    if (!this.ctx) return;
+    this.drainUploads();
+    if (this.ctx.state !== 'running') return;
     const ctx = this.ctx;
+    if (this.envPending) this.applyEnvironment();
+    this.retireSpaces(ctx.currentTime);
     fwd.set(0, 0, -1).applyQuaternion(cam.quaternion);
     up.set(0, 1, 0).applyQuaternion(cam.quaternion);
     const L = ctx.listener;
@@ -448,23 +630,47 @@ export class AudioEngine implements System {
     return vars ? this.upload(def, vars) : null;
   }
 
-  /** Uploaded buffers, or null (and start an async bake) if the sound isn't ready yet. */
+  /** Uploaded buffers, or null (and hurry its bake along) if the sound isn't baked yet. */
   buffersIfReady(def: SoundDef): AudioBuffer[] | null {
     const hit = this.buffers.get(def.id);
-    if (!hit) this.prepare(def.id);
-    return hit ?? null;
+    if (hit) return hit;
+    // Baked but not uploaded yet: copying into AudioBuffers is cheap.
+    if (isBaked(def.id)) return this.upload(def, getVariants(def.id)!);
+    this.prepare(def.id);
+    return null;
   }
 
-  /** Bake a sound off the main thread and upload it. Safe to call repeatedly. */
-  prepare(id: string) {
-    if (this.buffers.has(id) || this.preparing.has(id)) return;
+  /**
+   * Bake a sound off the main thread and upload it. Safe to call repeatedly; an urgent call promotes
+   * a queued background bake of the same sound.
+   */
+  prepare(id: string, urgent = true) {
+    if (this.buffers.has(id)) return;
+    if (this.preparing.has(id)) {
+      if (urgent) void requestBake(id, true);
+      return;
+    }
     const def = SOUNDS.get(id);
     if (!def) return;
     this.preparing.add(id);
-    void requestBake(id).then((vars) => {
+    void requestBake(id, urgent).then((vars) => {
       this.preparing.delete(id);
-      if (vars && !this.buffers.has(id)) this.upload(def, vars);
+      if (!vars || this.buffers.has(id)) return;
+      if (this.ctx) this.upload(def, vars);
+      else this.uploadQueue.add(id);
     });
+  }
+
+  /** Upload sounds baked before the context existed, about a millisecond's worth per frame. */
+  private drainUploads() {
+    if (!this.uploadQueue.size) return;
+    const t0 = performance.now();
+    for (const id of this.uploadQueue) {
+      this.uploadQueue.delete(id);
+      const def = SOUNDS.get(id);
+      if (def && !this.buffers.has(id) && isBaked(id)) this.upload(def, getVariants(id)!);
+      if (performance.now() - t0 > 1) break;
+    }
   }
 
   private upload(def: SoundDef, vars: Float32Array[]): AudioBuffer[] | null {
@@ -498,6 +704,11 @@ export class AudioEngine implements System {
     return !!hit;
   }
 
+  /**
+   * Play a one-shot. A sound not baked yet (only possible in the first second or so, while the
+   * worker pre-bakes the bank) is baked synchronously, unless `ifReady` is set, in which case it is
+   * skipped. Footsteps, ambience events and the 'sfx' event use `ifReady` (critical sounds excepted).
+   */
   play(id: string, o: PlayOptions = {}): VoiceHandle | null {
     const ctx = this.ctx;
     if (!ctx || ctx.state !== 'running' || this.muted) return null;
@@ -563,6 +774,9 @@ export class AudioEngine implements System {
     }
     const bus = o.bus ?? def.bus;
     tail.connect(this.buses[bus]);
+    // Big impacts and cries make room for themselves in the music (rather than leaning on the master
+    // compressor, which would pump the ambience too).
+    if (est > DUCK_ABOVE && (bus === 'sfx' || bus === 'voice') && (def.priority ?? 0.5) >= 0.5) this.duckMusic();
     const sendAmt = (def.reverb ?? 0.25) * (spatial ? distanceWetness(dist) : 0.7);
     if (sendAmt > 0.01 && bus !== 'music') {
       const s = ctx.createGain();
@@ -674,16 +888,16 @@ export class AudioEngine implements System {
   }
 
   /**
-   * Output level after the limiter over the last ~43 ms (peak and RMS in dBFS) and the limiter's
-   * gain reduction. The analyser is created on first use.
+   * Final output level over the last ~43 ms (peak and RMS in dBFS), and the gain reduction of the
+   * glue compressor and the limiter (dB, ≤ 0). The analyser is created on first use.
    */
-  meter(): { peakDb: number; rmsDb: number; reductionDb: number } | null {
+  meter(): { peakDb: number; rmsDb: number; reductionDb: number; glueDb: number; limiterDb: number } | null {
     const ctx = this.ctx;
     if (!ctx) return null;
     if (!this.analyser) {
       this.analyser = ctx.createAnalyser();
       this.analyser.fftSize = 2048;
-      this.limiter.connect(this.analyser);
+      this.clipper.connect(this.analyser);
       this.meterBuf = new Float32Array(this.analyser.fftSize);
     }
     const b = this.meterBuf!;
@@ -697,9 +911,13 @@ export class AudioEngine implements System {
     }
     const db = (x: number) => (x > 1e-9 ? 20 * Math.log10(x) : -120);
     // Old Safari exposed `reduction` as an AudioParam; modern browsers give a number.
-    const red = this.limiter.reduction as unknown;
-    const reductionDb = typeof red === 'number' ? red : ((red as AudioParam | undefined)?.value ?? 0);
-    return { peakDb: db(peak), rmsDb: db(Math.sqrt(sum / b.length)), reductionDb };
+    const reduction = (c: DynamicsCompressorNode) => {
+      const r = c.reduction as unknown;
+      return typeof r === 'number' ? r : ((r as AudioParam | undefined)?.value ?? 0);
+    };
+    const glueDb = reduction(this.glue);
+    const limiterDb = reduction(this.limiter);
+    return { peakDb: db(peak), rmsDb: db(Math.sqrt(sum / b.length)), reductionDb: glueDb + limiterDb, glueDb, limiterDb };
   }
 
   stats(): AudioStats {
@@ -711,6 +929,7 @@ export class AudioEngine implements System {
       loops: this.loops.size,
       loopsAudible: audible,
       bakedMB: this.bufferBytes / 1048576,
+      musicMB: musicSamples.bytes / 1048576,
       music: this.music.state,
       reverb: this.reverbPreset,
       sampleRate: this.ctx?.sampleRate ?? 0,
@@ -781,11 +1000,9 @@ class LoopInstance implements LoopHandle {
     this.fadeIn = o.fadeIn ?? 1;
     this.occlude = !!o.occlude;
     this.rnd = new Rand(`${def.id}:${Math.random()}`);
-    // Bake everything this loop needs in the background.
-    if (engine.ctx) {
-      if (def.bed) engine.prepare(def.bed);
-      for (const e of def.events ?? []) engine.prepare(e.sound);
-    }
+    // Bake everything this loop needs now (in the worker), so it is ready when it becomes audible.
+    if (def.bed) engine.prepare(def.bed);
+    for (const e of def.events ?? []) engine.prepare(e.sound);
   }
 
   get audible() {
@@ -998,6 +1215,11 @@ class LoopInstance implements LoopHandle {
   }
 }
 
+/** Sounds that may still bake synchronously on first use: rare, and must never be lost. */
+export function isCritical(id: string): boolean {
+  return id.startsWith('stinger.') || id.startsWith('ui.');
+}
+
 // ---------------------------------------------------------------- footsteps
 
 /** Keeps footstep drivers updated; culls those far from the listener. */
@@ -1015,7 +1237,8 @@ export class FootstepSystem {
       source,
       (id, o) => {
         if (o.position && engine.distanceTo(o.position) > cull()) return;
-        engine.play(id, o);
+        // Never bake on the main thread for a footstep: skip it if (rarely) not ready yet.
+        engine.play(id, { ...o, ifReady: true });
       },
       opts,
     ) as FootstepDriver & { detach(): void };

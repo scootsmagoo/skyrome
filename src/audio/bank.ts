@@ -3,8 +3,9 @@
  *
  * Baking is pure JS (no Web Audio) and deterministic per (id, variant). In the browser the engine
  * bakes in a Web Worker (`requestBake`, see bake.worker.ts) so beds that take ~100 ms never stall a
- * frame; small one-shots can also bake synchronously on first use (`getVariants`). The engine
- * copies the result into AudioBuffers and then `forget`s the PCM here, so audio is held once.
+ * frame; the engine pre-bakes every one-shot there in the background at start-up, and only a few
+ * critical sounds may still bake synchronously on first use (`getVariants`). The engine copies the
+ * result into AudioBuffers and then `forget`s the PCM here, so audio is held once.
  */
 import { Rand, fadeEdges, normalizeLoudness, normalizePeak, normalizeRms, peakOf, removeDc, trimTail } from './dsp/core';
 import { ambienceLoops, ambienceSounds } from './sounds/ambience';
@@ -12,6 +13,7 @@ import { combatSounds } from './sounds/combat';
 import { foleySounds } from './sounds/foley';
 import { footstepSounds, landingSounds } from './sounds/footsteps';
 import type { LoopDef, SoundDef } from './sounds/types';
+import type { SampleSpec } from './music/sampleSpec';
 import { uiSounds } from './sounds/ui';
 import { vocalSounds } from './sounds/vocal';
 
@@ -115,7 +117,12 @@ export function forget(id: string) {
 
 /** An off-main-thread baker (the engine installs a Web Worker one). */
 export interface Baker {
-  bake(id: string): Promise<{ variants: Float32Array[]; ms: number }>;
+  /** Bake every variant of a sound. Background (non-urgent) jobs yield to urgent ones. */
+  bake(id: string, urgent?: boolean): Promise<{ variants: Float32Array[]; ms: number }>;
+  /** Move a queued background bake to the front (someone needs it now). */
+  promote?(id: string): void;
+  /** Bake one music sample (always urgent: a performer is waiting for it). */
+  bakeSample?(spec: SampleSpec): Promise<{ data: Float32Array; ms: number }>;
 }
 
 let baker: Baker | null = null;
@@ -125,24 +132,34 @@ export function setBaker(b: Baker | null) {
   baker = b;
 }
 
+export function currentBaker(): Baker | null {
+  return baker;
+}
+
 /**
  * Bake asynchronously (in the worker when one is installed, otherwise on a later tick).
- * Resolves with the cached variants; concurrent requests share one bake.
+ * Resolves with the cached variants; concurrent requests share one bake. `urgent: false` queues it
+ * behind anything urgent (used to pre-bake the whole bank in the background).
  */
-export function requestBake(id: string): Promise<Float32Array[] | null> {
+export function requestBake(id: string, urgent = true): Promise<Float32Array[] | null> {
   const hit = cache.get(id);
   if (hit) return Promise.resolve(hit);
   if (!SOUNDS.has(id)) return Promise.resolve(null);
   const inFlight = pending.get(id);
-  if (inFlight) return inFlight;
+  if (inFlight) {
+    if (urgent) baker?.promote?.(id);
+    return inFlight;
+  }
   const job: Promise<Float32Array[] | null> = (baker
-    ? baker.bake(id).then((r) => {
+    ? baker.bake(id, urgent).then((r) => {
         bakeTimes.set(id, r.ms);
         return r.variants;
       })
     : new Promise<Float32Array[] | null>((res) => setTimeout(() => res(getVariants(id)), 0))
   )
-    .catch(() => getVariants(id))
+    // A broken worker falls back to baking here, but only for urgent requests (a failed background
+    // pre-bake must not turn into a burst of main-thread bakes); a disposed one just gives up.
+    .catch((e: Error) => (e?.name === 'BakeCancelled' || !urgent ? null : getVariants(id)))
     .then((list) => {
       pending.delete(id);
       if (list && !cache.has(id)) cache.set(id, list);

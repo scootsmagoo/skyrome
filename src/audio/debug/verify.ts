@@ -155,7 +155,7 @@ export async function renderMusic(state: Exclude<MusicState, 'silence'>, seconds
   const byPart: Record<string, number> = {};
   const director = new MusicDirector();
   director.makeRack = (out, s) => {
-    const real = new WebAudioRack(out, s);
+    const real = new WebAudioRack(out, s, { sync: true }); // offline: nothing can wait for the worker
     const count = (k: string) => (byPart[k] = (byPart[k] ?? 0) + 1);
     const rack: Rack = {
       melody: (inst, ...a) => (count(inst), real.melody(inst, ...a)),

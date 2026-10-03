@@ -13,7 +13,7 @@
  */
 import { Rand } from '../dsp/core';
 import type { DrumStroke } from '../dsp/instruments';
-import { FINALS, MODES, degreeToFreq, type Mode, type ModeName } from './theory';
+import { MODES, TRANSPOSITIONS, degreeToFreq, finalsFor, foldFinal, fourthOrFifthApart, type Mode, type ModeName } from './theory';
 import { STYLES, type DrumStyle, type LyreTexture, type MelodyInstrument, type MusicState, type Style } from './styles';
 
 export type Part = 'melody' | 'answer' | 'lyre' | 'drum' | 'cymbal' | 'drone';
@@ -119,7 +119,8 @@ const CELLS: Record<number, { calm: number[][]; busy: number[][]; cadence: numbe
   },
 };
 
-const MODE_FINAL: Record<ModeName, keyof typeof FINALS> = { dorian: 'D', phrygian: 'E', mixolydian: 'G', hypolydian: 'F', chromatic: 'E' };
+/** A mode's own final (Hz, in the octave the composer works in). */
+const FINAL_OF = (mode: Mode) => finalsFor(mode)[0];
 
 /** Weighted pick from [value, weight] pairs. */
 function weighted<T>(rnd: Rand, items: readonly (readonly [T, number])[]): T {
@@ -297,16 +298,15 @@ export class Composer {
     const rnd = this.rnd;
     const meter = weighted(rnd, s.meters);
     const mode = MODES[rnd.pick(s.modes)];
-    // Finals vary between pieces: the mode's own final, or transposed by a fourth/fifth.
-    const base = FINALS[MODE_FINAL[mode.name]];
-    const final = base * rnd.pick([1, 1, 1, 4 / 3, 3 / 4, 9 / 8]);
+    // Finals vary between pieces: usually the mode's own final, sometimes transposed (a finite set).
+    const final = foldFinal(FINAL_OF(mode) * rnd.pick([1, 1, 1, ...TRANSPOSITIONS.slice(1)]));
     // Tempo is in beats per minute; a 6/8 beat (dotted quarter) holds three eighth-note pulses.
     const tempo = Math.round(rnd.range(s.tempo[0], s.tempo[1]) * (meter === 6 ? 3 : 1));
     const melody = weighted(rnd, s.melody);
     const p: Piece = {
       index: this.pieceCount++,
       mode,
-      final: final > 360 ? final / 2 : final < 180 ? final * 2 : final,
+      final,
       tempo,
       meter,
       spp: 60 / tempo,
@@ -347,11 +347,12 @@ export class Composer {
     const s = this.style;
     p.phrasesSinceRefresh++;
     if (p.phrasesSinceRefresh % 3 === 0) {
-      // Move to a related final (up a fourth or down a fifth) and/or another mode of the style.
+      // Modulate: another mode of the style, on a final a fourth or fifth from the current one when
+      // that mode has one (finals always come from the mode's finite set; no open-ended drift).
       p.mode = MODES[rnd.pick(s.modes)];
-      p.final = p.final * rnd.pick([4 / 3, 3 / 4, 9 / 8, 8 / 9]);
-      if (p.final > 360) p.final /= 2;
-      if (p.final < 180) p.final *= 2;
+      const options = finalsFor(p.mode);
+      const related = options.filter((f) => fourthOrFifthApart(f, p.final));
+      p.final = related.length && rnd.chance(0.8) ? rnd.pick(related) : rnd.pick(options);
     }
     p.motifs = { A: makeMotif(rnd, p.mode, p.meter, s, rnd.pick([0, 2, 4])), B: rnd.chance(0.5) ? p.motifs.A : makeMotif(rnd, p.mode, p.meter, s, rnd.pick([3, 4, 5])) };
     p.plan = this.plan(p);

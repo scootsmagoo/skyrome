@@ -82,3 +82,24 @@ export function pickVariant(count: number, last: number, r: number): number {
   if (v >= last && last >= 0) v++;
   return Math.min(count - 1, v);
 }
+
+/** Input range of the output soft clipper: inputs up to ±SOFT_CLIP_RANGE are shaped, beyond are held. */
+export const SOFT_CLIP_RANGE = 2;
+
+/**
+ * WaveShaper curve for the output soft clipper. A WaveShaperNode maps input [-1, 1] across the
+ * curve, so the engine scales its input by 1 / `range` first; sample i therefore stands for input
+ * x = (2i / (n - 1) - 1) · range. Exactly linear up to `knee`, then a tanh shoulder that approaches
+ * `ceiling` (0.977 ≈ -0.2 dBFS), so nothing that leaves the engine can clip.
+ */
+export function softClipCurve(n = 4096, range = SOFT_CLIP_RANGE, knee = 0.7, ceiling = 0.977): Float32Array<ArrayBuffer> {
+  const c = new Float32Array(n);
+  const room = ceiling - knee;
+  for (let i = 0; i < n; i++) {
+    const x = ((2 * i) / (n - 1) - 1) * range;
+    const a = Math.abs(x);
+    const y = a <= knee ? a : knee + room * Math.tanh((a - knee) / room);
+    c[i] = Math.sign(x) * y;
+  }
+  return c;
+}

@@ -1,20 +1,29 @@
 /**
  * Music director: a lookahead scheduler on the Web Audio clock plus state crossfades.
  *
- *   game.audio.music.setState('combat')            // base state from game logic
- *   game.audio.music.setState('explore')           // alias: explore-day / explore-night by game time
- *   game.audio.music.setOverride('zone', 'temple') // layered requests; the highest priority wins
+ *   music.setState('explore')                  // base state: explore-day / explore-night by game time
+ *   music.setOverride('combat', 'combat', 10)  // fights (null clears it when the fight ends)
+ *   music.setOverride('tension', 'tension', 5) // enemies searching
+ *
+ * Requests are layered and the highest priority wins. Ambience zones (temples, tabernae) request
+ * their music with priority 1. The base state set by `setState` ranks below them when it is
+ * 'explore' (or 'silence'), so walking into a temple brings temple music; any other base state
+ * ('combat', 'tavern', …) ranks 2 and wins over zones. Fights should still use the 'combat'
+ * override above, which outranks everything else.
  *
  * Each state runs a Performer (a Composer + an instrument Rack). `pump(horizon)` schedules every
  * event that starts before `horizon` (Web Audio clock seconds). In real time the engine pumps
  * ~0.3 s ahead every frame and on a 50 ms timer (so frame hitches never starve the music); offline
- * rendering simply pumps the whole duration at once.
+ * rendering simply pumps the whole duration at once. A performer asks its rack to prepare each
+ * block's samples one block ahead (baked in the worker) and only schedules a block once they are
+ * ready, so the main thread never bakes music.
  */
 import type { DrumStroke } from '../dsp/instruments';
 import { Composer, type Block, type MusicEvent } from './composer';
 import { Aulos, Cymbala, Drone, Lyre, Syrinx, Tympanum, type MusicOutput } from './instruments';
+import { percussionSpecs } from './sampleSpec';
+import { musicSamples } from './samples';
 import { STYLES, type MelodyInstrument, type MusicState } from './styles';
-import { MODES, degreeToFreq } from './theory';
 
 export type { MusicState } from './styles';
 
@@ -27,8 +36,11 @@ export interface Rack {
   drone(when: number, freq: number | null, vel: number): void;
   /** Ramp the rack's output level. */
   level(when: number, gain: number, seconds: number): void;
-  /** A new piece starts in this mode/final: pre-bake what it needs. */
-  prepare?(mode: keyof typeof MODES, final: number): void;
+  /**
+   * Make sure everything a block plays is baked (starting any bakes); true when it is all ready.
+   * Racks without baked samples may omit it.
+   */
+  prepare?(block: Block): boolean;
   dispose(when: number): void;
 }
 
@@ -45,6 +57,10 @@ export class Performer {
   private queue: Queued[] = [];
   /** Start time of the next block (s). */
   private cursor: number;
+  /** The next block, generated one ahead so its samples bake while the current one plays. */
+  private upcoming: Block | null = null;
+  /** The upcoming block's samples weren't ready when it was due (the music waited for them). */
+  private waited = false;
   /** No new blocks start at or after this time. */
   stopAt = Infinity;
   /** Most recent block (for the HUD / sound board). */
@@ -74,8 +90,21 @@ export class Performer {
     for (let guard = 0; guard < 10000; guard++) {
       if (!this.queue.length) {
         if (this.cursor >= horizon || this.cursor >= this.stopAt) return;
-        const b = this.composer.next();
-        if (b.kind !== 'silence' && (!this.block || this.block.info.piece !== b.info.piece || this.block.info.final !== b.info.final)) this.rack.prepare?.(b.info.mode, b.info.final);
+        const b = (this.upcoming ??= this.composer.next());
+        if (this.rack.prepare && !this.rack.prepare(b)) {
+          // Its samples are still baking off the main thread: hold the music for a moment rather
+          // than play a block with missing notes (a new state's first block waits a few tens of ms).
+          if (now > -Infinity) {
+            this.waited = true;
+            this.cursor = Math.max(this.cursor, now + 0.03);
+          }
+          return;
+        }
+        if (this.waited && now > -Infinity) this.cursor = Math.max(this.cursor, now + 0.02);
+        this.waited = false;
+        // Generate the next block now so its samples bake while this one plays.
+        this.upcoming = this.stopAt === Infinity ? this.composer.next() : null;
+        if (this.upcoming) this.rack.prepare?.(this.upcoming);
         this.enqueue(b, this.cursor);
         this.block = b;
         this.cursor += b.pulses * b.spp;
@@ -155,6 +184,7 @@ export class WebAudioRack implements Rack {
   private readonly out: GainNode;
   private readonly revOut: GainNode;
   private readonly o: MusicOutput;
+  private readonly sync: boolean;
   private aulos?: Aulos;
   private syrinx?: Syrinx;
   private lyreInst?: Lyre;
@@ -165,8 +195,11 @@ export class WebAudioRack implements Rack {
   constructor(
     dest: MusicOutput,
     private readonly state: Exclude<MusicState, 'silence'>,
+    /** Bake samples on the spot (offline rendering) instead of in the worker. */
+    opts: { sync?: boolean } = {},
   ) {
     const ctx = dest.ctx;
+    this.sync = !!opts.sync;
     // One fader for the dry mix and one for the reverb sends; both follow `level()`.
     this.out = ctx.createGain();
     this.out.gain.value = 0;
@@ -178,14 +211,24 @@ export class WebAudioRack implements Rack {
   }
 
   private get ly() {
-    return (this.lyreInst ??= new Lyre(this.o, this.state === 'combat' || this.state === 'tavern' ? 'kithara' : 'lyre', { gain: this.state === 'combat' ? 0.32 : 0.42, pan: -0.25, reverb: 0.4 }));
+    return (this.lyreInst ??= new Lyre(this.o, this.state === 'combat' || this.state === 'tavern' ? 'kithara' : 'lyre', { gain: this.state === 'combat' ? 0.32 : 0.42, pan: -0.25, reverb: 0.4 }, this.sync));
+  }
+  private get drums() {
+    return (this.tymp ??= new Tympanum(this.o, { gain: this.state === 'combat' ? 0.5 : 0.45, pan: 0.18, reverb: 0.3 }, this.sync));
+  }
+  private get cymbals() {
+    return (this.cym ??= new Cymbala(this.o, { gain: 0.16, pan: 0.35, reverb: 0.4 }, this.sync));
   }
 
-  /** Pre-bake the lyre strings for the mode a piece is in (cheap; avoids first-pluck hitches). */
-  prepare(mode: keyof typeof MODES, final: number) {
-    const freqs: number[] = [];
-    for (let d = -1; d <= 9; d++) freqs.push(degreeToFreq(MODES[mode], d, final / 2));
-    this.ly.prepare(freqs);
+  /** Request every sample the block plays (lyre notes, drum and cymbal strokes). */
+  prepare(b: Block): boolean {
+    let ready = true;
+    for (const e of b.events) {
+      if (e.part === 'lyre') ready = this.ly.ready(e.freq!, e.bright ?? 0.55) && ready;
+      else if (e.part === 'drum') ready = this.drums.ready(e.stroke ?? 'doum') && ready;
+      else if (e.part === 'cymbal') ready = this.cymbals.ready(e.cymbal ?? 'choke') && ready;
+    }
+    return ready;
   }
 
   melody(inst: MelodyInstrument, when: number, freq: number, dur: number, vel: number, legato: boolean, release: boolean) {
@@ -196,10 +239,10 @@ export class WebAudioRack implements Rack {
     this.ly.play(when, freq, vel, dur, bright);
   }
   drum(when: number, stroke: DrumStroke, vel: number) {
-    (this.tymp ??= new Tympanum(this.o, { gain: this.state === 'combat' ? 0.5 : 0.45, pan: 0.18, reverb: 0.3 })).hit(when, stroke, vel);
+    this.drums.hit(when, stroke, vel);
   }
   cymbal(when: number, kind: 'ring' | 'choke', vel: number) {
-    (this.cym ??= new Cymbala(this.o, { gain: 0.16, pan: 0.35, reverb: 0.4 })).hit(when, kind, vel);
+    this.cymbals.hit(when, kind, vel);
   }
   drone(when: number, freq: number | null, vel: number) {
     if (!freq && !this.droneInst) return;
@@ -236,6 +279,11 @@ interface Running {
 
 export type MusicRequest = MusicState | 'explore';
 
+/** Base states that ambience zones may override (they say "nothing in particular is happening"). */
+const BACKGROUND: ReadonlySet<MusicRequest> = new Set(['explore', 'explore-day', 'explore-night', 'silence']);
+/** Priority of any other base state: above ambience zones (1), below fights and alerts. */
+const BASE_PRIORITY = 2;
+
 export class MusicDirector {
   private out: MusicOutput | null = null;
   private base: MusicRequest = 'silence';
@@ -269,16 +317,28 @@ export class MusicDirector {
   /** Connect to an audio context's music bus. Starts the real-time pump unless `offline`. */
   attach(out: MusicOutput, opts: { offline?: boolean } = {}) {
     this.out = out;
-    if (!opts.offline && !this.timer) this.timer = setInterval(() => this.update(), 50);
+    if (!opts.offline) {
+      if (!this.timer) this.timer = setInterval(() => this.update(), 50);
+      // Percussion is shared by every style and small (≈2 MB): bake it all now, in the worker.
+      for (const spec of percussionSpecs()) musicSamples.get(out.ctx, spec);
+    }
     this.resolve(true);
   }
 
+  /**
+   * The base state from game logic. 'explore' (day/night by the clock) and 'silence' yield to
+   * ambience-zone music (temples, tabernae); any other base state outranks zones. For fights use
+   * `setOverride('combat', 'combat', 10)` so ending the fight restores whatever was playing.
+   */
   setState(state: MusicRequest) {
     this.base = state;
     this.resolve();
   }
 
-  /** Layered request (combat > zone > base by priority). `null` clears it. */
+  /**
+   * Layered request; the highest priority wins (ties: the base, then the earliest request).
+   * Conventions: ambience zones 1, a non-explore base state 2, tension 5, combat 10. `null` clears.
+   */
   setOverride(key: string, state: MusicRequest | null, priority = 1) {
     if (state === null) this.overrides.delete(key);
     else this.overrides.set(key, { state, priority });
@@ -298,7 +358,12 @@ export class MusicDirector {
     this.current?.performer.pump(horizon, now);
     for (const f of this.fading) f.performer.pump(Math.min(horizon, f.end), now);
     const t = this.out?.ctx.currentTime ?? 0;
-    this.fading = this.fading.filter((f) => f.end > t || f.end > horizon - LOOKAHEAD * 2);
+    this.fading = this.fading.filter((f) => {
+      const keep = f.end > t || f.end > horizon - LOOKAHEAD * 2;
+      // Faded out: release its instruments (kept until now so the state could still come back).
+      if (!keep) f.rack.dispose(t);
+      return keep;
+    });
   }
 
   dispose() {
@@ -316,7 +381,7 @@ export class MusicDirector {
 
   private resolve(force = false) {
     let req: MusicRequest = this.base;
-    let best = -Infinity;
+    let best = BACKGROUND.has(this.base) ? -Infinity : BASE_PRIORITY;
     for (const o of this.overrides.values())
       if (o.priority > best) {
         best = o.priority;
@@ -343,12 +408,22 @@ export class MusicDirector {
       c.end = now + out;
       c.performer.stopAt = now + out;
       c.rack.level(now, 0, out);
-      c.rack.dispose(now + out + 0.2);
       this.fading.push(c);
       this.current = null;
     }
     if (next === 'silence') return;
     const style = STYLES[next];
+    // Back to a state that is still fading out (out of the temple and straight back in): bring that
+    // performance back up instead of starting a new piece from its intro.
+    const back = this.fading.findIndex((f) => f.performer.state === next && f.end > now + 0.1);
+    if (back >= 0) {
+      const r = this.fading.splice(back, 1)[0];
+      r.end = Infinity;
+      r.performer.stopAt = Infinity;
+      r.rack.level(now, 1, Math.min(style.fadeIn, 2));
+      this.current = r;
+      return;
+    }
     const delay = toCombat ? 0.05 : fromCombat ? 1.8 : 0.4;
     const start = now + delay;
     const rack = this.makeRack(this.out, next);

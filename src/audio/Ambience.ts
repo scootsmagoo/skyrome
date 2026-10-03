@@ -1,17 +1,22 @@
 /**
  * Ambience director: decides which ambience layers play and how loud, from
  *  - scene-wide base levels  (`setBase({ city: 1, birds: 0.6, wind: 0.4 })`),
- *  - zones around the listener (`addZone({ center, radius, layers: [{ id: 'crowd', volume: 1 }] })`),
+ *  - zones around the player (`addZone({ center, radius, layers: [{ id: 'crowd', volume: 1 }] })`),
  *  - the hour and month (birds and cicadas by day, crickets and owls by night, carts after dark),
  *  - altitude (the city bed thins and the wind rises as you climb a hill).
  *
  * A layer id is a loop id from the bank (sounds/ambience.ts). Each audible layer runs as one
  * engine loop whose volume is eased toward its target; silent layers are stopped after a while.
- * Zones may also set the reverb space and request a music state (e.g. a temple precinct).
+ * Zones may also set the reverb space and request a music state (e.g. a temple precinct); those
+ * single choices go through a hysteresis latch (enter above 0.6, leave below 0.4, 1 s hold).
+ *
+ * Zones and altitude are measured at `probe()` — the player's feet — not at the camera: the
+ * third-person camera swings 3–4 m around the player as you look about, which must not move you in
+ * or out of a temple. The camera (listener) is used for panning only.
  */
 import * as THREE from 'three';
 import type { AudioEngine, LoopHandle } from './AudioEngine';
-import { CITY_LAYERS, altitudeFactors, timeFactor, zoneWeight } from './ambienceCurves';
+import { CITY_LAYERS, ZoneLatch, altitudeFactors, timeFactor, zoneWeight, type LatchOption } from './ambienceCurves';
 import type { ReverbPreset } from './dsp/reverb';
 import type { MusicRequest } from './music/MusicDirector';
 
@@ -60,6 +65,14 @@ export class AmbienceDirector {
   hourOverride: number | null = null;
   monthOverride: number | null = null;
   enabled = true;
+  /**
+   * Where zones and altitude are measured. Default: the player's position when there is a player,
+   * else the listener (camera).
+   */
+  probe: () => THREE.Vector3Like = () => (this.engine.game as { player?: { position: THREE.Vector3Like } }).player?.position ?? this.engine.listener;
+  /** Hysteresis for the reverb space and the zone music request. */
+  readonly reverbLatch = new ZoneLatch<Zone>();
+  readonly musicLatch = new ZoneLatch<Zone>();
 
   private zones: Zone[] = [];
   private handles = new Map<string, { h: LoopHandle; silentFor: number }>();
@@ -75,6 +88,7 @@ export class AmbienceDirector {
   }
 
   addZone(o: ZoneOptions): Zone {
+    if (o.reverb) this.engine.prepareEnvironment(o.reverb);
     const zone: Zone = {
       ...o,
       center: { x: o.center.x, y: o.center.y, z: o.center.z },
@@ -102,7 +116,7 @@ export class AmbienceDirector {
     return this.monthOverride ?? this.engine.game.time.date().month;
   }
 
-  /** Compute target levels for every layer at a listener position (pure-ish; used by update). */
+  /** Compute target levels for every layer at a position (pure-ish; used by update with the probe). */
   computeLevels(listener: THREE.Vector3Like, hour: number, month: number): Map<string, number> {
     const raw = new Map<string, { v: number; timeless: boolean }>();
     for (const [id, v] of this.base) raw.set(id, { v, timeless: false });
@@ -132,7 +146,7 @@ export class AmbienceDirector {
     if (this.acc < UPDATE_INTERVAL) return;
     const step = this.acc;
     this.acc = 0;
-    const targets = this.enabled ? this.computeLevels(this.engine.listener, this.hour, this.month) : new Map<string, number>();
+    const targets = this.enabled ? this.computeLevels(this.probe(), this.hour, this.month) : new Map<string, number>();
     this.levels.clear();
     for (const [id, v] of targets) this.levels.set(id, v);
 
@@ -157,13 +171,15 @@ export class AmbienceDirector {
       }
     }
 
-    // Reverb space and music from the strongest zone that asks for them.
-    let rz: Zone | null = null;
-    let mz: Zone | null = null;
-    for (const z of this.zones) {
-      if (z.reverb && z.weight > 0.5 && (!rz || z.weight > rz.weight)) rz = z;
-      if (z.music && z.weight > 0.6 && (!mz || z.weight > mz.weight)) mz = z;
-    }
+    // Reverb space and music from the strongest zone that asks for them, with hysteresis.
+    const options = (pick: (z: Zone) => unknown) => {
+      const out: LatchOption<Zone>[] = [];
+      for (const z of this.zones) if (pick(z)) out.push({ key: z, weight: z.weight, radius: z.radius });
+      return out;
+    };
+    const rz = this.reverbLatch.update(options((z) => z.reverb), step);
+    const mz = this.musicLatch.update(options((z) => z.music), step);
+    this.engine.prepareEnvironment(this.defaultReverb);
     this.engine.setEnvironment(rz?.reverb ?? this.defaultReverb, 1.5);
     const req = mz?.music ?? null;
     if (req !== this.musicRequest) {

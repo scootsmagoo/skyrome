@@ -247,11 +247,15 @@ function buildTemple(game: Game) {
   placeAndRegister(game, 'audio:temple', b.build('temple'), b.colliders, { x: 0, y: 0, z: 0 });
 }
 
+const flameMat = new THREE.MeshBasicMaterial({ color: 0xff6a1c, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+const flameCoreMat = new THREE.MeshBasicMaterial({ color: 0xffc45a, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+
 function buildBrazier(game: Game, x: number, z: number) {
   const b = new MeshBuilder();
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * Math.PI * 2;
-    const m = new THREE.Matrix4().compose(new THREE.Vector3(x + Math.cos(a) * 0.22, 0.5, z + Math.sin(a) * 0.22), new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.sin(a) * 0.25, 0, -Math.cos(a) * 0.25)), new THREE.Vector3(1, 1, 1));
+    // Legs lean in at the top (under the bowl) and splay out at the feet.
+    const m = new THREE.Matrix4().compose(new THREE.Vector3(x + Math.cos(a) * 0.26, 0.5, z + Math.sin(a) * 0.26), new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.sin(a) * 0.25, 0, Math.cos(a) * 0.25)), new THREE.Vector3(1, 1, 1));
     b.add(new THREE.CylinderGeometry(0.03, 0.035, 1.05, 8), 'bronze', m);
   }
   const bowl = new THREE.LatheGeometry([new THREE.Vector2(0, 0), new THREE.Vector2(0.18, 0.02), new THREE.Vector2(0.36, 0.14), new THREE.Vector2(0.4, 0.2), new THREE.Vector2(0.37, 0.2)], 24);
@@ -259,14 +263,18 @@ function buildBrazier(game: Game, x: number, z: number) {
   b.add(new THREE.SphereGeometry(0.3, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), 'glow_fire', new THREE.Matrix4().compose(new THREE.Vector3(x, 1.08, z), new THREE.Quaternion(), new THREE.Vector3(1, 0.45, 1)), { castShadow: false });
   b.collider({ kind: 'cylinder', center: new THREE.Vector3(x, 0.6, z), halfHeight: 0.6, radius: 0.42 });
   placeAndRegister(game, `audio:brazier:${x}`, b.build('brazier'), b.colliders, { x: 0, y: 0, z: 0 });
-  // Flames: two additive cones that flicker.
-  const flameMat = new THREE.MeshBasicMaterial({ color: 0xffb35c, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
+  // Flames: three additive tongues around a hot yellow-white core, all flickering (the group sits
+  // on the brazier; the cones are offset within it).
   const flames = new THREE.Group();
+  flames.position.set(x, 0, z);
   for (let i = 0; i < 3; i++) {
-    const f = new THREE.Mesh(new THREE.ConeGeometry(0.16 - i * 0.03, 0.55 - i * 0.1, 10, 1, true), flameMat);
-    f.position.set((i - 1) * 0.09, 1.38, (i % 2) * 0.06);
+    const f = new THREE.Mesh(new THREE.ConeGeometry(0.15 - i * 0.025, 0.5 - i * 0.09, 12, 1, true).translate(0, (0.5 - i * 0.09) / 2, 0), flameMat);
+    f.position.set((i - 1) * 0.09, 1.1, (i % 2) * 0.06 - 0.03);
     flames.add(f);
   }
+  const core = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.3, 12, 1, true).translate(0, 0.15, 0), flameCoreMat);
+  core.position.set(0, 1.1, 0);
+  flames.add(core);
   game.scene.add(flames);
   const light = new THREE.PointLight(0xff9a48, 6, 9, 1.6);
   light.position.set(x, 1.6, z);
@@ -276,8 +284,10 @@ function buildBrazier(game: Game, x: number, z: number) {
 
 function buildFountain(game: Game) {
   const b = new MeshBuilder();
+  // Lathe profiles must run up the outside and down the inside so the faces point outward: outer
+  // foot → up the outer wall → across the rounded top → down the inner wall into the basin.
   const rim = new THREE.LatheGeometry(
-    [new THREE.Vector2(2.5, 0.04), new THREE.Vector2(2.5, 0.5), new THREE.Vector2(2.6, 0.6), new THREE.Vector2(2.86, 0.6), new THREE.Vector2(2.92, 0.5), new THREE.Vector2(2.84, 0.12), new THREE.Vector2(2.98, 0.0)],
+    [new THREE.Vector2(2.98, 0.0), new THREE.Vector2(2.84, 0.12), new THREE.Vector2(2.92, 0.5), new THREE.Vector2(2.86, 0.6), new THREE.Vector2(2.6, 0.6), new THREE.Vector2(2.5, 0.5), new THREE.Vector2(2.5, 0.04)],
     64,
   );
   b.add(rim, 'marble', undefined, { uv: 'keep' });
@@ -541,7 +551,8 @@ const scene: SceneDef = {
     audio.ambience.setBase({ city: 0.9, birds: 0.45, swifts: 0.7, wind: 0.75, dogs: 0.6, carts: 0.6, crickets: 0.35, owl: 0.5, cicadas: 0.25 });
     audio.ambience.addZone({ name: 'forum', center: { x: -28, y: 0, z: 0 }, radius: 13, fade: 12, layers: [{ id: 'crowd', volume: 1 }, { id: 'market', volume: 0.9 }], reverb: 'forum' });
     audio.ambience.addZone({ name: 'garden', center: { x: 29, y: 0, z: 0 }, radius: 13, fade: 10, layers: [{ id: 'birds', volume: 1 }, { id: 'cicadas', volume: 1 }, { id: 'crickets', volume: 1 }, { id: 'owl', volume: 0.9 }], reverb: 'open' });
-    audio.ambience.addZone({ name: 'temple', center: { x: 0, y: 0, z: -24 }, radius: 5.5, fade: 5, layers: [], reverb: 'temple', music: 'temple' });
+    // The porch and cella (z -19 … -31): the temple takes over at the top of the steps.
+    audio.ambience.addZone({ name: 'temple', center: { x: 0, y: 0, z: -25.5 }, radius: 5.5, fade: 3, layers: [], reverb: 'temple', music: 'temple' });
     audio.ambience.addZone({ name: 'hill', center: { x: 0, y: 16, z: 56 }, radius: 10, fade: 20, layers: [{ id: 'wind', volume: 1 }], reverb: 'open' });
     audio.loop('fountain', { position: { x: 0, y: 0.9, z: 0 } });
     for (const b of braziers) audio.loop('fire', { position: b.pos });
@@ -615,7 +626,10 @@ const scene: SceneDef = {
         for (const [i, b] of braziers.entries()) {
           const f = 0.8 + 0.2 * Math.sin(t * 13 + i) * Math.sin(t * 7.3 + i * 2);
           b.light.intensity = 5 + f * 2.5;
-          b.flames.children.forEach((c, k) => (c.scale.y = 0.85 + 0.25 * Math.abs(Math.sin(t * (9 + k * 2.3) + i))));
+          b.flames.children.forEach((c, k) => {
+            c.scale.y = 0.8 + 0.3 * Math.abs(Math.sin(t * (9 + k * 2.3) + i)) * (0.7 + 0.3 * f);
+            c.scale.x = c.scale.z = 0.92 + 0.1 * Math.sin(t * (6.1 + k) + i * 3);
+          });
         }
         (fountain.sheet.material as THREE.MeshStandardMaterial).opacity = 0.28 + 0.05 * Math.sin(t * 9);
       },

@@ -65,6 +65,41 @@ export const FINALS: Record<string, number> = {
   A: midiToHz(57),
 };
 
+/**
+ * Transpositions a piece may start on, relative to its mode's own final: none (most often), up a
+ * fourth, down a fourth (a fifth up, an octave down) or up a whole tone. Every final the composer
+ * uses is one of these, folded into one octave, so the set of pitches the lyre is ever asked for
+ * (and so its sample cache) stays finite however long the game runs.
+ */
+export const TRANSPOSITIONS = [1, 4 / 3, 3 / 4, 9 / 8] as const;
+
+/** Bring a final into the comfortable octave [lo, hi). */
+export function foldFinal(f: number, lo = 180, hi = 360): number {
+  let x = f;
+  while (x >= hi) x /= 2;
+  while (x < lo) x *= 2;
+  return x;
+}
+
+/** Every final a mode may use (its own final and the transpositions above, folded). */
+export function finalsFor(mode: Mode): number[] {
+  const base = FINALS[mode.final];
+  const out: number[] = [];
+  for (const t of TRANSPOSITIONS) {
+    const f = foldFinal(base * t);
+    if (!out.some((g) => Math.abs(g / f - 1) < 1e-6)) out.push(f);
+  }
+  return out;
+}
+
+/** Are two finals a fourth or fifth apart (in any octave)? */
+export function fourthOrFifthApart(a: number, b: number): boolean {
+  let r = a / b;
+  while (r >= 2) r /= 2;
+  while (r < 1) r *= 2;
+  return Math.abs(r / (4 / 3) - 1) < 0.002 || Math.abs(r / (3 / 2) - 1) < 0.002;
+}
+
 /** Is `semitone` (relative to the final) a member of the mode? */
 export function inMode(mode: Mode, semitone: number): boolean {
   const pc = ((semitone % 12) + 12) % 12;

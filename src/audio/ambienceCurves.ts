@@ -80,3 +80,63 @@ export function zoneWeight(dist: number, radius: number, fade: number): number {
   if (fade <= 0 || dist >= radius + fade) return 0;
   return 1 - smoothstep(0, 1, (dist - radius) / fade);
 }
+
+export interface LatchOption<T> {
+  key: T;
+  /** Zone weight 0..1 at the probe. */
+  weight: number;
+  /** Zone radius: between equally strong zones the smaller (nested, more specific) one wins. */
+  radius: number;
+}
+
+/**
+ * Chooses one zone for a single-valued setting (reverb space, music) with hysteresis, so standing on
+ * a zone's edge never flips it back and forth:
+ *  - a zone is taken above `enter`; the current one is kept until it falls below `leave`, unless
+ *    another is clearly stronger (by `margin`) or equally strong and nested inside it;
+ *  - a new choice must persist for `hold` seconds before it takes over (a zone that disappears is
+ *    let go at once).
+ */
+export class ZoneLatch<T> {
+  current: T | null = null;
+  private candidate: T | null = null;
+  private held = 0;
+
+  constructor(
+    readonly enter = 0.6,
+    readonly leave = 0.4,
+    readonly hold = 1,
+    readonly margin = 0.15,
+  ) {}
+
+  update(options: readonly LatchOption<T>[], dt: number): T | null {
+    const better = (a: LatchOption<T>, b: LatchOption<T>) => a.weight > b.weight + this.margin || (a.weight >= b.weight - 1e-6 && a.radius < b.radius);
+    let best: LatchOption<T> | null = null;
+    for (const o of options) if (o.weight > this.enter && (!best || better(o, best))) best = o;
+    const cur = this.current === null ? null : (options.find((o) => o.key === this.current) ?? null);
+    if (this.current !== null && !cur) {
+      // The zone was removed: no reason to hold on to it.
+      this.current = best?.key ?? null;
+      this.candidate = null;
+      this.held = 0;
+      return this.current;
+    }
+    const want = cur && cur.weight >= this.leave && (!best || best === cur || !better(best, cur)) ? cur.key : (best?.key ?? null);
+    if (want === this.current) {
+      this.candidate = null;
+      this.held = 0;
+      return this.current;
+    }
+    if (want !== this.candidate) {
+      this.candidate = want;
+      this.held = 0;
+    }
+    this.held += dt;
+    if (this.held >= this.hold) {
+      this.current = want;
+      this.candidate = null;
+      this.held = 0;
+    }
+    return this.current;
+  }
+}

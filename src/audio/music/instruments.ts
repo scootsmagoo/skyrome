@@ -1,16 +1,22 @@
 /**
  * Web Audio instruments for the music engine.
  *
- * - Lyre / kithara: Karplus–Strong plucks baked once per pitch (cached), played as buffers.
+ * - Lyre / kithara: Karplus–Strong plucks, one sample per pitch and brightness, played as buffers.
  * - Aulos, syrinx and the drone: one persistent oscillator voice each, driven by parameter
  *   automation (legato glides, tonguing, delayed vibrato) — almost free on the audio thread.
  * - Tympanum and cymbala: baked strokes (three variants each), played as buffers.
  *
+ * Samples come from the shared store (samples.ts), baked off the main thread. An instrument asked
+ * to play a sample that isn't baked yet drops the note and starts the bake; performers avoid that
+ * by preparing each block before scheduling it (`WebAudioRack.prepare`). With `sync` (offline
+ * rendering) samples bake on the spot instead.
+ *
  * Everything works on any BaseAudioContext, so the same code renders offline for verification.
  */
-import { Rand, normalizePeak } from '../dsp/core';
-import { cymbal, drumStroke, type DrumStroke } from '../dsp/instruments';
-import { pluck } from '../dsp/pluck';
+import { Rand } from '../dsp/core';
+import type { DrumStroke } from '../dsp/instruments';
+import { MUSIC_RATE, STROKE_VARIANTS, brightnessFor } from './sampleSpec';
+import { musicSamples } from './samples';
 
 export interface MusicOutput {
   ctx: BaseAudioContext;
@@ -20,32 +26,16 @@ export interface MusicOutput {
   rev: AudioNode;
 }
 
-const BAKE_RATE = 32000;
-const pcm = new Map<string, Float32Array>();
-const buffers = new WeakMap<BaseAudioContext, Map<string, AudioBuffer>>();
+let noise: AudioBuffer | null = null;
 
-/** Baked sample data → AudioBuffer for this context (both cached). */
-export function cachedBuffer(ctx: BaseAudioContext, key: string, rate: number, make: () => Float32Array): AudioBuffer {
-  let m = buffers.get(ctx);
-  if (!m) buffers.set(ctx, (m = new Map()));
-  const hit = m.get(key);
-  if (hit) return hit;
-  let data = pcm.get(key);
-  if (!data) pcm.set(key, (data = make()));
-  const b = ctx.createBuffer(1, data.length, rate);
-  b.getChannelData(0).set(data);
-  m.set(key, b);
-  return b;
-}
-
-/** Looping white noise for breath (1 s, shared per context). */
+/** Looping white noise for breath (1 s, shared by every context: AudioBuffers aren't tied to one). */
 function noiseBuffer(ctx: BaseAudioContext): AudioBuffer {
-  return cachedBuffer(ctx, 'noise:1s', BAKE_RATE, () => {
-    const r = new Rand('breath');
-    const d = new Float32Array(BAKE_RATE);
-    for (let i = 0; i < d.length; i++) d[i] = r.bi();
-    return d;
-  });
+  if (noise) return noise;
+  const r = new Rand('breath');
+  noise = ctx.createBuffer(1, MUSIC_RATE, MUSIC_RATE);
+  const d = noise.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = r.bi();
+  return noise;
 }
 
 function makePanner(ctx: BaseAudioContext, pan: number): AudioNode {
@@ -110,33 +100,44 @@ function oneShot(ctx: BaseAudioContext, buf: AudioBuffer, dest: AudioNode, when:
 // ---------------------------------------------------------------- lyre / kithara
 
 export class Lyre extends Instrument {
+  /** Darker notes (ostinati, drones) go through a gentle low-pass instead of a third sample set. */
+  private readonly dark: BiquadFilterNode;
+
   constructor(
     out: MusicOutput,
     private readonly body: 'lyre' | 'kithara',
     opts = { gain: 0.5, pan: -0.25, reverb: 0.5 },
+    private readonly sync = false,
   ) {
     super(out, opts);
+    this.dark = this.ctx.createBiquadFilter();
+    this.dark.type = 'lowpass';
+    this.dark.frequency.value = 2600;
+    this.dark.Q.value = 0.6;
+    this.dark.connect(this.input);
   }
 
-  private buffer(freq: number, bright: number): AudioBuffer {
-    const b = bright < 0.45 ? 0.35 : bright < 0.7 ? 0.6 : 0.85;
-    const key = `${this.body}:${freq.toFixed(1)}:${b}`;
-    return cachedBuffer(this.ctx, key, BAKE_RATE, () => {
-      const t60 = Math.max(1.2, Math.min(4.5, 5 - freq / 150));
-      const d = pluck(freq, BAKE_RATE, new Rand(key), { seconds: t60 * 0.85 + 0.1, t60, brightness: b, pluckPos: 0.12 + (1 - b) * 0.1, damping: 0.45, body: this.body });
-      return normalizePeak(d, 0.6);
-    });
+  private buffer(freq: number, bright: number): AudioBuffer | null {
+    return musicSamples.get(this.ctx, { kind: 'pluck', body: this.body, freq, bright: brightnessFor(bright).bucket }, this.sync);
   }
 
-  /** Bake the notes of a scale ahead of time (avoids a hitch on the first pluck). */
-  prepare(freqs: readonly number[], bright = 0.55) {
-    for (const f of freqs) this.buffer(f, bright);
+  /** Request a note's sample; true if it is ready to play. */
+  ready(freq: number, bright = 0.55): boolean {
+    return this.buffer(freq, bright) !== null;
   }
 
   play(when: number, freq: number, vel: number, dur?: number, bright = 0.55) {
+    const buf = this.buffer(freq, bright);
+    if (!buf) return; // still baking (the performer normally waits for it)
     // Notes shorter than ~0.6 s are damped by the hand (ostinati, dance strums); longer ones ring.
     const stop = dur !== undefined && dur < 0.6 ? when + dur : undefined;
-    oneShot(this.ctx, this.buffer(freq, bright), this.input, when, vel, 1, stop, 0.08);
+    oneShot(this.ctx, buf, brightnessFor(bright).dark ? this.dark : this.input, when, vel, 1, stop, 0.08);
+  }
+
+  override dispose(when: number) {
+    super.dispose(when);
+    const ms = Math.max(0, (when - this.ctx.currentTime) * 1000) + 200;
+    setTimeout(() => this.dark.disconnect(), ms);
   }
 }
 
@@ -379,26 +380,41 @@ export class Drone extends Instrument {
 
 export class Tympanum extends Instrument {
   private rnd = new Rand('tympanum');
-  constructor(out: MusicOutput, opts = { gain: 0.7, pan: 0.2, reverb: 0.35 }) {
+  constructor(
+    out: MusicOutput,
+    opts = { gain: 0.7, pan: 0.2, reverb: 0.35 },
+    private readonly sync = false,
+  ) {
     super(out, opts);
   }
+  /** Request every variant of a stroke; true if they are all ready. */
+  ready(stroke: DrumStroke): boolean {
+    let ok = true;
+    for (let v = 0; v < STROKE_VARIANTS; v++) ok = musicSamples.get(this.ctx, { kind: 'drum', stroke, v }, this.sync) !== null && ok;
+    return ok;
+  }
   hit(when: number, stroke: DrumStroke, vel: number) {
-    const v = this.rnd.int(0, 2);
-    const key = `drum:${stroke}:${v}`;
-    const buf = cachedBuffer(this.ctx, key, BAKE_RATE, () => normalizePeak(drumStroke(stroke, BAKE_RATE, new Rand(key), { f0: 92 }), 0.8));
-    oneShot(this.ctx, buf, this.input, when, vel, 1 + (this.rnd.next() - 0.5) * 0.02);
+    const buf = musicSamples.get(this.ctx, { kind: 'drum', stroke, v: this.rnd.int(0, STROKE_VARIANTS - 1) }, this.sync);
+    if (buf) oneShot(this.ctx, buf, this.input, when, vel, 1 + (this.rnd.next() - 0.5) * 0.02);
   }
 }
 
 export class Cymbala extends Instrument {
   private rnd = new Rand('cymbala');
-  constructor(out: MusicOutput, opts = { gain: 0.2, pan: 0.35, reverb: 0.5 }) {
+  constructor(
+    out: MusicOutput,
+    opts = { gain: 0.2, pan: 0.35, reverb: 0.5 },
+    private readonly sync = false,
+  ) {
     super(out, opts);
   }
+  ready(kind: 'ring' | 'choke'): boolean {
+    let ok = true;
+    for (let v = 0; v < STROKE_VARIANTS; v++) ok = musicSamples.get(this.ctx, { kind: 'cymbal', stroke: kind, v }, this.sync) !== null && ok;
+    return ok;
+  }
   hit(when: number, kind: 'ring' | 'choke', vel: number) {
-    const v = this.rnd.int(0, 2);
-    const key = `cym:${kind}:${v}`;
-    const buf = cachedBuffer(this.ctx, key, BAKE_RATE, () => normalizePeak(cymbal(kind, BAKE_RATE, new Rand(key)), 0.8));
-    oneShot(this.ctx, buf, this.input, when, vel);
+    const buf = musicSamples.get(this.ctx, { kind: 'cymbal', stroke: kind, v: this.rnd.int(0, STROKE_VARIANTS - 1) }, this.sync);
+    if (buf) oneShot(this.ctx, buf, this.input, when, vel);
   }
 }

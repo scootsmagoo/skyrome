@@ -345,9 +345,9 @@ export class SoundBoard implements System {
     const hh = Math.floor(t.hour);
     const mm = String(Math.floor((t.hour % 1) * 60)).padStart(2, '0');
     this.status.textContent =
-      `audio ${s.state}${s.sampleRate ? ` · ${(s.sampleRate / 1000).toFixed(1)} kHz` : ''} · voices ${s.voices} · loops ${s.loopsAudible}/${s.loops} · baked ${s.bakedMB.toFixed(1)} MB · reverb ${s.reverb}\n` +
+      `audio ${s.state}${s.sampleRate ? ` · ${(s.sampleRate / 1000).toFixed(1)} kHz` : ''} · voices ${s.voices} · loops ${s.loopsAudible}/${s.loops} · baked ${s.bakedMB.toFixed(1)} MB + music ${s.musicMB.toFixed(1)} MB · reverb ${s.reverb}\n` +
       `music ${s.music}${np ? ` · ${np.info.mode} on ${np.info.final.toFixed(0)} Hz · ${np.info.tempo} ${np.info.meter === 6 ? '6/8' : `${np.info.meter}/4`} · ${np.info.melody ?? ''} · ${np.kind}${np.kind === 'phrase' ? ` ${np.info.phrase}` : ''}` : ''}\n` +
-      (m ? `out peak ${m.peakDb.toFixed(1)} dB · rms ${m.rmsDb.toFixed(1)} dB · limiter ${m.reductionDb.toFixed(1)} dB\n` : '') +
+      (m ? `out peak ${m.peakDb.toFixed(1)} dB · rms ${m.rmsDb.toFixed(1)} dB · glue ${m.glueDb.toFixed(1)} · limiter ${m.limiterDb.toFixed(1)} dB\n` : '') +
       `${hh}:${mm} ${t.isNight ? 'night' : 'day'} · ${lv || 'no ambience'}` +
       (this.extraStatus() ? `\n${this.extraStatus()}` : '');
     for (const [st, b] of this.musicButtons) b.classList.toggle('on', a.music.requested === st);
