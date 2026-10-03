@@ -51,7 +51,7 @@ const SQUARE_STATUES: { at: P2; face: number; kind: 'togate' | 'armored' }[] = [
 const OWN_FLOORS = ['comitium-lapis-niger', 'lacus-curtius', 'equus-domitiani-site', 'volcanal'];
 
 function forumSquare(p: Part) {
-  const { ctx, b, hi, S } = p;
+  const { ctx, b, hi } = p;
   const poly = FORUM_PLAZA.map(([x, z]) => atlasToLocal(ctx, x, z));
   const strips = plazaRoadStrips().map((s) => s.map(([x, z]) => atlasToLocal(ctx, x, z)));
   const holes = [...strips, ...OWN_FLOORS.map((id) => localOutline(ctx, id, 0.4))];
@@ -59,7 +59,7 @@ function forumSquare(p: Part) {
   for (const s of strips) pave(p, s, { material: 'paving_basalt', lift: 0.075, cell: hi ? 3 : 8 });
   if (!hi) return;
   // Honorific statues on moulded bases.
-  const dedication = ['Senatus Populusque Romanus', 'Ob Merita'];
+  const dedication = text('forum-statue-base');
   SQUARE_STATUES.forEach((s, i) => {
     const [x, z] = atlasToLocal(ctx, s.at[0], s.at[1]);
     const y = ctx.groundAt(x, z) + 0.06;
@@ -71,7 +71,6 @@ function forumSquare(p: Part) {
     else armoredEmperor(b, st, { material: 'bronze', scale: 1.08, detail: 'low' });
     if (i === 0) p.spot('forum-statue-base', 'inscription', x + Math.sin(rot) * -1.4, y, z - Math.cos(rot) * 1.4, rot);
   });
-  void S;
 }
 
 // ---------------------------------------------------------------- miliarium aureum

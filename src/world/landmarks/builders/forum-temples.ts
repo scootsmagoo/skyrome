@@ -404,6 +404,7 @@ function jupiterStator(p: Part) {
     podiumHeight: 1.8,
     material: 'marble',
     podiumMaterial: 'tufa',
+    stairMaterial: 'travertine',
     cellaMaterial: 'plaster_white',
     frontTier: 'mid',
     tier: 'low',

@@ -257,7 +257,7 @@ function archAugustus(p: Part) {
   if (p.hi) {
     for (const sx of [-1, 1]) {
       const x = sx * (W / 2 + 0.005);
-      inscription(p.b, TRS(x, r.socle + 0.9, 0, 0, sx > 0 ? Math.PI / 2 : -Math.PI / 2, 0), ['Fasti Triumphales', 'Romulus Martis F Rex', 'De Caeninensibus', 'K Mart'], r.depth * 0.8, 1.3, 'carved', { depth: 0.02, sizes: [1, 0.7, 0.7, 0.7] });
+      inscription(p.b, TRS(x, r.socle + 0.9, 0, 0, sx > 0 ? Math.PI / 2 : -Math.PI / 2, 0), text('arch-augustus-fasti'), r.depth * 0.8, 1.3, 'carved', { depth: 0.02, sizes: [1, 0.7, 0.7, 0.7] });
     }
   }
   p.spot('arch-augustus', 'inscription', 0, 0, -r.depth / 2 - 3.5, 0);
@@ -289,7 +289,7 @@ function fornixFabianus(p: Part) {
 }
 
 export const builders: LandmarkBuilder[] = [
-  { handles: ['arch-titus'], build: (ctx) => landmark(ctx, archTitus, { near: 140 }) },
+  { handles: ['arch-titus'], build: (ctx) => landmark(ctx, archTitus, { near: 110 }) },
   { handles: ['arch-augustus'], build: (ctx) => landmark(ctx, archAugustus, { near: 110 }) },
   { handles: ['arch-tiberius'], build: (ctx) => landmark(ctx, archTiberius, { near: 110 }) },
   { handles: ['fornix-fabianus'], build: (ctx) => landmark(ctx, fornixFabianus, { cull: 320 }) },

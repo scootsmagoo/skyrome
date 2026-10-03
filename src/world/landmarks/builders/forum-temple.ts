@@ -143,6 +143,8 @@ export interface ForumTempleSpec extends TempleSpec {
   doorOpen?: boolean;
   /** Detail of the entablature and pediments (default: 'high' near for hero temples, else 'low'). */
   entDetail?: 'high' | 'low';
+  /** Material of the stair flights (default: the podium's). */
+  stairMaterial?: MaterialId;
 }
 
 export interface ForumTempleResult {
@@ -208,7 +210,7 @@ export function forumTemple(p: Part, spec: ForumTempleSpec, at: THREE.Matrix4 = 
       : [[s.x0, L.podiumFront, s.x1, s.z1]]);
   podium(b, { outline, height: P, material: podMat, topMaterial: 'paving_travertine', detail, colliders: p.main ? rects : [] }, m);
   if (!spec.ownStairs) {
-    for (const f of L.flights) stairs(b, { width: f.x1 - f.x0, rise: f.rise, run: f.run, count: f.count, material: podMat, collider: p.main ? 'steps' : 'none' }, mul(m, T((f.x0 + f.x1) / 2, 0, f.z0)));
+    for (const f of L.flights) stairs(b, { width: f.x1 - f.x0, rise: f.rise, run: f.run, count: f.count, material: spec.stairMaterial ?? podMat, collider: p.main ? 'steps' : 'none' }, mul(m, T((f.x0 + f.x1) / 2, 0, f.z0)));
   }
 
   // Columns: the front row at the front tier, the rest cheaper.

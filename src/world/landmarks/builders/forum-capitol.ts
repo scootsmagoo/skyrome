@@ -152,6 +152,6 @@ function deiConsentes(p: Part) {
 }
 
 export const builders: LandmarkBuilder[] = [
-  { handles: ['tabularium'], build: (ctx) => landmark(ctx, tabularium, { near: 180 }) },
+  { handles: ['tabularium'], build: (ctx) => landmark(ctx, tabularium, { near: 160 }) },
   { handles: ['porticus-dei-consentes'], build: (ctx) => landmark(ctx, deiConsentes, { near: 110 }) },
 ];

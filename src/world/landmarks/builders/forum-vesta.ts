@@ -16,7 +16,7 @@ import { entablature, pediment } from '../../../arch/classical/entablature';
 import { columnDims } from '../../../arch/classical/orders';
 import { ProfileBuilder, lathe } from '../../../arch/common/geom';
 import { stairs } from '../../../arch/common/stairs';
-import { wall } from '../../../arch/common/walls';
+import { wall, type Opening } from '../../../arch/common/walls';
 import { hedge } from '../../../arch/vegetation/decor';
 import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuilder } from '../types';
@@ -254,14 +254,16 @@ function atriumVestae(p: Part) {
   const L = 105 * p.S;
   const hw = W / 2;
   const hl = L / 2;
+  // the W end is set back from the atlas outline so the front wall clears the Temple of Vesta's steps
+  const zF = -hl + 5.0;
   const H = 8.4;
   const t = 0.7;
   const fy = 0.3;
-  foundation(p, rect(-hw, -hl, hw, hl), 0, 'brick');
-  d.span('concrete', -hw, -0.2, -hl, hw, fy - 0.02, hl, { collide: true, shadow: false });
+  foundation(p, rect(-hw, zF, hw, hl), 0, 'brick');
+  d.span('concrete', -hw, -0.2, zF, hw, fy - 0.02, hl, { collide: true, shadow: false });
   // court and portico rectangle
   const cx = 6.0;
-  const cz0 = -hl + 8.5;
+  const cz0 = zF + 8.0;
   const cz1 = hl - 11.5;
   const pd = 2.6;
   // outer brick walls, two storeys with small windows above; the entrance at the W (−z) end
@@ -272,25 +274,27 @@ function atriumVestae(p: Part) {
     return o;
   };
   const wo = { height: H, thickness: t, material: 'brick' as MaterialId, detail: p.detail, collide: false };
-  wall(b, { ...wo, length: W, openings: [{ kind: 'door', x: hw, width: 2.0, height: 3.2, leaves: 'open', leafMaterial: 'wood_dark', frame: true }] }, T(-hw, fy, -hl + t / 2));
+  wall(b, { ...wo, length: W, openings: [{ kind: 'door', x: hw, width: 2.0, height: 3.2, leaves: 'open', leafMaterial: 'wood_dark', frame: true }] }, T(-hw, fy, zF + t / 2));
   wall(b, { ...wo, length: W, openings: winRow(W) }, TRS(hw, fy, hl - t / 2, 0, Math.PI, 0));
-  wall(b, { ...wo, length: L - 2 * t, openings: winRow(L - 2 * t) }, TRS(hw - t / 2, fy, -hl + t, 0, -Math.PI / 2, 0));
-  wall(b, { ...wo, length: L - 2 * t, openings: winRow(L - 2 * t) }, TRS(-hw + t / 2, fy, hl - t, 0, Math.PI / 2, 0));
-  d.solid(-hw, 0, -hl, -1.0, H, -hl + t).solid(1.0, 0, -hl, hw, H, -hl + t);
-  d.solid(-hw, 0, hl - t, hw, H, hl).solid(-hw, 0, -hl, -hw + t, H, hl).solid(hw - t, 0, -hl, hw, H, hl);
+  wall(b, { ...wo, length: hl - zF - 2 * t, openings: winRow(hl - zF - 2 * t) }, TRS(hw - t / 2, fy, zF + t, 0, -Math.PI / 2, 0));
+  wall(b, { ...wo, length: hl - zF - 2 * t, openings: winRow(hl - zF - 2 * t) }, TRS(-hw + t / 2, fy, hl - t, 0, Math.PI / 2, 0));
+  d.solid(-hw, 0, zF, -1.0, H, zF + t).solid(1.0, 0, zF, hw, H, zF + t);
+  d.solid(-hw, 0, hl - t, hw, H, hl).solid(-hw, 0, zF, -hw + t, H, hl).solid(hw - t, 0, zF, hw, H, hl);
   // the vestibule passage from the door to the court
-  for (const sx of [-1, 1]) d.span('plaster_white', sx * 1.0, fy, -hl + t, sx * 1.4, fy + 4.0, cz0 - pd, { collide: true });
+  for (const sx of [-1, 1]) d.span('plaster_white', sx * 1.0, fy, zF + t, sx * 1.4, fy + 4.0, cz0 - pd, { collide: true });
   // ranges of rooms round the court: inner walls with doors, two storeys under tiled roofs
   const rx = cx + pd;
   const rz0 = cz0 - pd;
   const rz1 = cz1 + pd;
   const doors = (len: number) => {
-    const o = [];
     const k = Math.max(1, Math.floor(len / 4.2));
-    for (let i = 0; i < k; i++) o.push({ kind: 'door' as const, x: (len * (i + 0.5)) / k, width: 1.1, height: 2.3, leaves: 'closed' as const, leafMaterial: 'wood_dark' as MaterialId });
+    const o: Opening[] = [];
+    for (let i = 0; i < k; i++) o.push({ kind: 'door', x: (len * (i + 0.5)) / k, width: 1.1, height: 2.3, leaves: 'closed', leafMaterial: 'wood_dark' });
+    // the upper storey's windows, between the doors (above the portico roofs)
+    for (let i = 1; i < k; i++) o.push({ kind: 'window', x: (len * i) / k, width: 0.9, height: 1.3, sill: 6.2, frame: false });
     return o;
   };
-  const iwo = { height: H - 0.4, thickness: 0.5, material: 'plaster_white' as MaterialId, detail: p.detail, collide: false };
+  const iwo = { height: H + 1.2, thickness: 0.5, material: 'plaster_white' as MaterialId, detail: p.detail, collide: false };
   wall(b, { ...iwo, length: rz1 - rz0, openings: doors(rz1 - rz0) }, TRS(rx, fy, rz0, 0, -Math.PI / 2, 0));
   wall(b, { ...iwo, length: rz1 - rz0, openings: doors(rz1 - rz0) }, TRS(-rx, fy, rz1, 0, Math.PI / 2, 0));
   wall(b, { ...iwo, length: 2 * rx, openings: [{ kind: 'arch', x: rx, width: 2.2, height: 3.4 }] }, TRS(rx, fy, rz0, 0, Math.PI, 0));
@@ -299,15 +303,18 @@ function atriumVestae(p: Part) {
   // the tablinum at the E end: a wide hall open to the court
   wall(b, { ...iwo, length: 2 * rx, openings: [{ kind: 'arch', x: rx, width: 5.0, height: 5.2 }] }, T(-rx, fy, rz1));
   d.solid(-rx, 0, rz1 - 0.25, -2.5, H, rz1 + 0.25).solid(2.5, 0, rz1 - 0.25, rx, H, rz1 + 0.25);
-  d.span('black', -2.4, fy, hl - t - 0.05, 2.4, fy + 4.4, hl - t);
-  d.span('mosaic', -rx, fy - 0.01, rz1, rx, fy + 0.01, hl - t, { shadow: false });
-  // roofs: lean-to roofs over the room ranges, sloping into the court; over the porticoes
+  // a shallow tablinum: the back of the house is cut into the Palatine slope
+  const tb = rz1 + 3.2;
+  d.span('black', -2.4, fy, tb, 2.4, fy + 4.4, tb + 0.05);
+  d.span('plaster_white', -rx, fy, tb + 0.05, rx, fy + H - 0.4, hl - t, { collide: true });
+  d.span('mosaic', -rx, fy - 0.01, rz1, rx, fy + 0.01, tb, { shadow: false });
+  // roofs: lean-to roofs over the room ranges, falling from the court walls to the street walls
   const eave = fy + H - 0.4;
   // (rotated frames: Ry(+π/2) maps roof-local z to world x and x to world −z; Ry(−π/2) the mirror)
-  shedRoof(b, -rz1, -rz0, hw + 0.4, rx - 0.2, eave + 1.6, eave, 'roof_tile', TRS(0, 0, 0, 0, Math.PI / 2, 0));
-  shedRoof(b, rz0, rz1, hw + 0.4, rx - 0.2, eave + 1.6, eave, 'roof_tile', TRS(0, 0, 0, 0, -Math.PI / 2, 0));
-  shedRoof(b, -hw - 0.4, hw + 0.4, -hl - 0.4, rz0 + 0.2, eave + 1.6, eave, 'roof_tile', new THREE.Matrix4());
-  shedRoof(b, -hw - 0.4, hw + 0.4, hl + 0.4, rz1 - 0.2, eave + 1.6, eave, 'roof_tile', new THREE.Matrix4());
+  shedRoof(b, -rz1, -rz0, rx - 0.2, hw + 0.4, eave + 1.6, eave, 'roof_tile', TRS(0, 0, 0, 0, Math.PI / 2, 0));
+  shedRoof(b, rz0, rz1, rx - 0.2, hw + 0.4, eave + 1.6, eave, 'roof_tile', TRS(0, 0, 0, 0, -Math.PI / 2, 0));
+  shedRoof(b, -hw - 0.4, hw + 0.4, rz0 + 0.2, zF - 0.4, eave + 1.6, eave, 'roof_tile', new THREE.Matrix4());
+  shedRoof(b, -hw - 0.4, hw + 0.4, rz1 - 0.2, hl + 0.4, eave + 1.6, eave, 'roof_tile', new THREE.Matrix4());
   // the court portico: Ionic columns all round, a lean-to roof against the ranges
   const cH = 3.8;
   const D = cH / 9;
@@ -361,7 +368,7 @@ function atriumVestae(p: Part) {
       figure(b, mul(at, T(0, h, 0)), false, 'marble', 1.0, (s) => drapedFemale(s, { right: 'patera', left: 'mantle', head: { crown: 'veil' } }));
     }
   });
-  p.spot('atrium-vestae-door', 'door', 0, fy, -hl - 1.2, 0);
+  p.spot('atrium-vestae-door', 'door', 0, fy, zF - 1.2, 0);
   p.spot('atrium-vestae-statue', 'inscription', -(cx - 0.9) + 1.3, fy, vz[0], -Math.PI / 2);
   p.spot('atrium-vestae-vestal-1', 'npc', 0.0, fy, cz0 + 2.5, 0);
   p.spot('atrium-vestae-vestal-2', 'npc', -2.0, fy, cz1 - 1.5, Math.PI);
@@ -402,7 +409,7 @@ function juturna(p: Part) {
 export const builders: LandmarkBuilder[] = [
   { handles: ['temple-vesta'], build: (ctx) => landmark(ctx, vesta, { near: 130 }) },
   { handles: ['regia'], build: (ctx) => landmark(ctx, regia, { near: 110 }) },
-  { handles: ['atrium-vestae'], build: (ctx) => landmark(ctx, atriumVestae, { near: 130 }) },
+  { handles: ['atrium-vestae'], build: (ctx) => landmark(ctx, atriumVestae, { near: 110 }) },
   { handles: ['lacus-juturnae'], build: (ctx) => landmark(ctx, juturna, { cull: 240 }) },
 ];
 

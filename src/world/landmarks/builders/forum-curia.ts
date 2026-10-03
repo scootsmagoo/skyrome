@@ -26,7 +26,7 @@ import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuilder } from '../types';
 import { FORUM_INSCRIPTIONS } from './forum-data';
 import { drapedFemale, figure } from './forum-figures';
-import { T, TRS, addFire, altar, col, foundation, groundRange, inscription, landmark, mul, pedestal, rect, type Part } from './forum-kit';
+import { T, TRS, addFire, altar, col, foundation, groundRange, inscription, landmark, pedestal, rect, type Part } from './forum-kit';
 import { gableRoof, shedRoof } from './forum-temple';
 
 const text = (id: string) => FORUM_INSCRIPTIONS[id].latin;
@@ -40,7 +40,8 @@ function curia(p: Part) {
   const hw = W / 2;
   const hl = L / 2;
   const t = 0.9;
-  const Y = 0.4; // floor level (the front is three steps up)
+  // floor level: clear of the ground that rises under the back of the hall, the front steps make up the rest
+  const Y = Math.max(0.4, groundRange(ctx, rect(-hw, -hl, hw, hl)).max + 0.2);
   const H = 11.0; // wall top
   const ix = hw - t;
   const iz0 = -hl + t;

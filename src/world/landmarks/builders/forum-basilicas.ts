@@ -13,7 +13,7 @@
  */
 import * as THREE from 'three';
 import { archway } from '../../../arch/classical/arch';
-import { T, TRS, mul } from '../../../arch/common/geom';
+import { T, TRS } from '../../../arch/common/geom';
 import { stairs } from '../../../arch/common/stairs';
 import { Draw } from '../../../arch/fabric/draw';
 import { shopInterior, type ShopKind } from '../../../arch/fabric/shops';
@@ -21,7 +21,7 @@ import { doorLeaves, plankShutters, wall as fwall, type Opening } from '../../..
 import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuilder } from '../types';
 import { FORUM_INSCRIPTIONS } from './forum-data';
-import { foundation, gameBoard, inscription, landmark, rect, type Part } from './forum-kit';
+import { foundation, gameBoard, groundRange, inscription, landmark, rect, type Part } from './forum-kit';
 import { arcadeRow, gableRoof, shedRoof } from './forum-temple';
 
 const text = (id: string) => FORUM_INSCRIPTIONS[id].latin;
@@ -44,7 +44,6 @@ function basilicaIulia(p: Part) {
   stairs(b, st, T(0, 0, -hd));
   stairs(b, { ...st, width: Dp - sd }, TRS(hw, 0, -hd + sd + (Dp - sd) / 2, 0, -Math.PI / 2, 0));
   stairs(b, { ...st, width: Dp - sd }, TRS(-hw, 0, -hd + sd + (Dp - sd) / 2, 0, Math.PI / 2, 0));
-  const x0 = -hw + sd;
   const z0 = -hd + sd;
   b.box('concrete', 2 * (hw - sd), Y, hd * 2 - sd, T(0, Y / 2 - 0.02, (z0 + hd) / 2), { collide: p.main, castShadow: false });
   foundation(p, rect(-hw, -hd, hw, hd), 0);
@@ -229,11 +228,15 @@ function basilicaAemilia(p: Part) {
   const Dp = 36 * p.S;
   const hw = W / 2;
   const hd = Dp / 2;
-  const fy = 0.4;
-  // two steps along the portico front, a raised floor behind
-  stairs(b, { width: W, rise: 0.2, run: 0.38, count: 2, material: 'travertine', collider: p.main ? 'steps' : 'none' }, T(0, 0, -hd));
-  const z0 = -hd + 0.76;
-  d.span('paving_travertine', -hw, fy - 0.3, z0, hw, fy, hd, { collide: true, shadow: false });
+  // the floor of the portico and shops stands clear of the ground rising under the E half; steps in front
+  const gr = groundRange(p.ctx, rect(-hw, -hd, hw, -hd + 9));
+  const fy = Math.max(0.4, gr.max + 0.15);
+  const gFront = Math.min(0, groundRange(p.ctx, rect(-hw, -hd - 0.5, hw, -hd)).min);
+  const nSt = Math.max(2, Math.ceil((fy - gFront) / 0.2));
+  const runSt = 0.36;
+  stairs(b, { width: W, rise: (fy - gFront) / nSt, run: runSt, count: nSt, material: 'travertine', collider: p.main ? 'steps' : 'none' }, T(0, gFront, -hd));
+  const z0 = -hd + nSt * runSt;
+  d.span('paving_travertine', -hw, gFront - 0.3, z0, hw, fy, hd, { collide: true, shadow: false });
   foundation(p, rect(-hw, -hd, hw, hd), 0);
   // the two-storey porticus of Gaius and Lucius
   const bays = AEMILIA_SHOPS.length;

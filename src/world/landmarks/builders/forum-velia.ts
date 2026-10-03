@@ -21,6 +21,7 @@ import { doorLeaves, plankShutters, wall as fwall, type Opening } from '../../..
 import { placeProp } from '../../../arch/props';
 import { LANDMARK_BY_ID } from '../../../data/atlas';
 import type { LandmarkBuilder } from '../types';
+import { FORUM_INSCRIPTIONS } from './forum-data';
 import { figure, nudeMale } from './forum-figures';
 import { T, TRS, atlasToLocal, col, foundation, inscription, landmark, pave, plantTrees, rect, type Part } from './forum-kit';
 import { gableRoof, shedRoof } from './forum-temple';
@@ -268,7 +269,7 @@ function margaritaria(p: Part) {
   pave(p, rect(-hw + 6, bz0 + shopD, hw - 6, hd - 6), { material: 'paving_travertine', lift: fy });
   shedRoof(b, -hw - 0.3, hw + 0.3, bz0 + shopD + 0.3, zs - 0.4, fy + H + 1.4, fy + H, 'roof_tile', new THREE.Matrix4());
   shedRoof(b, -hw - 0.3, hw + 0.3, hd - 6.3, hd + 0.4, fy + H + 1.4, fy + H, 'roof_tile', new THREE.Matrix4());
-  if (hi) inscription(b, T(0, fy + cH + ent.dims.total + 1.6, zs - 0.05), ['Porticus Margaritaria'], 4.2, 0.55, 'painted', { depth: 0.03 });
+  if (hi) inscription(b, T(0, fy + cH + ent.dims.total + 1.6, zs - 0.05), FORUM_INSCRIPTIONS['porticus-margaritaria'].latin, 4.2, 0.55, 'painted', { depth: 0.03 });
   p.spot('porticus-margaritaria', 'inscription', 0, fy, z0 - 1.6, 0);
 }
 
@@ -277,7 +278,8 @@ function margaritaria(p: Part) {
 function domVestibule(p: Part) {
   const { b, d, hi } = p;
   const W = 32 * p.S;
-  const L = 25 * p.S;
+  // 22 m deep instead of the atlas 25 m: the back keeps clear of the Horrea Agrippiana's corner
+  const L = 22 * p.S;
   const hw = W / 2;
   const hl = L / 2;
   const H = 16.0;
@@ -332,8 +334,8 @@ function domVestibule(p: Part) {
 }
 
 export const builders: LandmarkBuilder[] = [
-  { handles: ['colossus-sol'], build: (ctx) => landmark(ctx, colossus, { near: 420 }) },
-  { handles: ['velia-vestibule'], build: (ctx) => landmark(ctx, vestibule, { near: 140 }) },
+  { handles: ['colossus-sol'], build: (ctx) => landmark(ctx, colossus, { near: 300 }) },
+  { handles: ['velia-vestibule'], build: (ctx) => landmark(ctx, vestibule, { near: 90 }) },
   { handles: ['horrea-piperataria'], build: (ctx) => landmark(ctx, piperataria, { near: 120 }) },
   { handles: ['horrea-agrippiana'], build: (ctx) => landmark(ctx, agrippiana, { near: 120 }) },
   { handles: ['porticus-margaritaria'], build: (ctx) => landmark(ctx, margaritaria, { near: 120 }) },

@@ -329,6 +329,35 @@ export const FORUM_INSCRIPTIONS: Record<string, InscriptionText> = {
     conf: 'C',
     note: 'The Augustan Fasti were inscribed on the Regia or on the Arch of Augustus (debated).',
   },
+  'lapis-niger': {
+    latin: ['Quoi Hon', 'Sakros Es', 'Ed Sord'],
+    english: 'Under the black stones: an archaic pillar whose few legible words curse whoever violates the place ("…let him be accursed…").',
+    conf: 'A',
+    note: 'CIL I² 1, the Forum cippus, fragmentary. Buried under the black paving long before 113: known only by tradition, so the player reads the legend, not the stone.',
+  },
+  'forum-statue-base': {
+    latin: ['Senatus Populusque Romanus', 'Ob Merita'],
+    english: 'The Senate and People of Rome, for his merits.',
+    conf: 'C',
+    note: 'A generic honorific formula for the statue bases round the square.',
+  },
+  'arch-augustus-fasti': {
+    latin: ['Fasti Triumphales', 'Romulus Martis F Rex', 'De Caeninensibus', 'K Mart'],
+    english: 'The list of triumphs: Romulus, son of Mars, king, over the Caeninenses, on the Kalends of March.',
+    conf: 'B',
+    note: 'The first entry of the Fasti Triumphales (Fasti Capitolini). That they were carved on the Parthian Arch is a modern hypothesis.',
+  },
+  'basilica-iulia-tabula-lusoria': {
+    latin: [],
+    english: 'Gaming boards scratched into the marble steps: the nested squares of the mill game, a wheel of eight spokes, and the three rows of twelve for duodecim scripta.',
+    conf: 'A',
+  },
+  'porticus-margaritaria': {
+    latin: ['Porticus Margaritaria'],
+    english: 'The Pearl-Sellers\' Arcade.',
+    conf: 'C',
+    note: 'Which excavated building carried this name is debated (Horrea Vespasiani?).',
+  },
   'atrium-vestae-statue': {
     latin: ['Virgini Vestali Maximae', 'Ob Merita'],
     english: 'To the Chief Vestal Virgin, for her merits.',
