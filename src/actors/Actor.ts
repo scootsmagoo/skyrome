@@ -136,13 +136,8 @@ export class Actor {
     this.grounded = controller.computedGrounded();
     // Bumped the ceiling while rising.
     if (wasRising && mv.y < desired.y * 0.5) v.y = 0;
-    // Hit a wall: bleed the blocked component so we don't keep accelerating into it.
-    if (dt > 0) {
-      const ax = mv.x / dt;
-      const az = mv.z / dt;
-      if (Math.abs(ax) < Math.abs(v.x) * 0.5) v.x = ax;
-      if (Math.abs(az) < Math.abs(v.z) * 0.5) v.z = az;
-    }
+    // Note: don't bleed horizontal velocity when movement is blocked — the controller's autostep
+    // needs the full forward push to climb stairs and lips; it already slides along walls.
 
     const t = body.translation();
     const nx = t.x + mv.x;

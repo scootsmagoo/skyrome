@@ -230,7 +230,7 @@ export class Physics {
     controller.setUp({ x: 0, y: 1, z: 0 });
     controller.setMaxSlopeClimbAngle((50 * Math.PI) / 180);
     controller.setMinSlopeSlideAngle((40 * Math.PI) / 180);
-    controller.enableAutostep(opts.maxStep ?? 0.42, 0.18, false);
+    controller.enableAutostep(opts.maxStep ?? 0.45, 0.15, false);
     controller.enableSnapToGround(0.45);
     controller.setSlideEnabled(true);
     controller.setApplyImpulsesToDynamicBodies(true);

@@ -48,8 +48,12 @@ const scene: SceneDef = {
     game.scene.add(ground);
     game.physics.addBox({ x: 0, y: -0.5, z: 0 }, { x: 200, y: 0.5, z: 200 });
 
-    // Stairs (0.2 m risers) and a ramp
-    for (let i = 0; i < 10; i++) box(game, new THREE.Vector3(8, 0.1 + i * 0.2, -10 - i * 0.35), new THREE.Vector3(3, 0.2 + i * 0.4, 0.35), 0xd8cfc0).position.y = (0.2 + i * 0.4) / 2;
+    // Stairs (0.2 m risers, 0.35 m treads — Roman-ish) and a ramp
+    for (let i = 0; i < 12; i++) {
+      const h = 0.2 * (i + 1);
+      box(game, new THREE.Vector3(8, h / 2, -8 - i * 0.35), new THREE.Vector3(3, h, 0.35), i % 2 ? 0xd8cfc0 : 0xcfc5b4);
+    }
+    box(game, new THREE.Vector3(8, 1.2, -13.275), new THREE.Vector3(3, 2.4, 2.5), 0xd8cfc0); // landing, flush with the top step
     const ramp = new THREE.Mesh(new THREE.BoxGeometry(4, 0.3, 12), new THREE.MeshStandardMaterial({ color: 0xc2b59b }));
     ramp.position.set(-8, 1.6, -12);
     ramp.rotation.x = 0.28;
