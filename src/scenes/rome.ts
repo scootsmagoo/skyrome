@@ -14,6 +14,7 @@ import { setupPlayer } from './common';
 import { createHumanoid } from '../actors/avatar/HumanoidAvatar';
 import { randomAppearance } from '../actors/avatar/variants';
 import { Rng } from '../core/Rng';
+import { installNpcs } from '../npc/NpcManager';
 import type { SceneDef } from './types';
 
 const scene: SceneDef = {
@@ -39,6 +40,8 @@ const scene: SceneDef = {
     const hour = params.get('hour');
     if (hour) game.time.totalHours = Number(hour);
     installSky(game);
+    // Street life: crowds, named NPCs on schedules, barks, vignettes (&npcs=0 to turn off).
+    if (params.get('npcs') !== '0') installNpcs(game);
     game.world.refreshAll();
     loading.done();
   },
