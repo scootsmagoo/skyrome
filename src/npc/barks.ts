@@ -10,7 +10,7 @@
 import type { Rng } from '../core/Rng';
 import type { DayPhase } from './crowd/budget';
 
-export type BarkKind = 'greet' | 'ambient' | 'shoved' | 'weapon' | 'flee' | 'gawk' | 'guard' | 'brushoff' | 'vendor';
+export type BarkKind = 'greet' | 'ambient' | 'shoved' | 'weapon' | 'flee' | 'gawk' | 'guard' | 'brushoff' | 'vendor' | 'crime' | 'sordidus' | 'lautus';
 
 type Table = Record<string, readonly string[]>;
 
@@ -70,18 +70,118 @@ const AMBIENT: Table = {
   carter: ['Di te perdant, beast — move!', 'Marble for the new forum, and not a moment past dawn.'],
 };
 
-/** Lines tied to a district (mixed into ambient chatter there). */
+/**
+ * Lines tied to a district (mixed into ambient chatter there, by day). The first lines of each
+ * district are from the content bible (docs/CONTENT.md §8.1).
+ */
 const DISTRICT: Table = {
   'dist-forum-romanum': [
+    'Three days the judges have slept through my case. Today they snored in my favour.',
+    'Change! Denarii for sestertii, sestertii for asses, asses for nothing!',
+    "Who's the one in the purple? Don't point. Never point.",
+    'I came to sue my brother-in-law and stayed for the gossip.',
+    'A senator fell off the Rostra this morning. Pushed, they say. Tripped, I say.',
+    "Mind the steps. They're older than your grandfather and twice as slippery.",
     'Another case at the Basilica Julia. An inheritance, of course.',
-    'Money-changers rattling their coins again.',
-    'Somebody\'s cut a new gaming board into the steps.',
-    'The Rostra\'s quiet today. No speeches, thank the gods.',
+    "Somebody's cut a new gaming board into the steps.",
   ],
-  'dist-velia': ['Pearls, pepper and perfume — the Sacra Via has everything but bargains.', 'The Colossus shines like a second sun this morning.'],
-  'dist-vallis-colossei': ['The Ludus Magnus is drilling again. Hear the shields?', 'Celadus the thraex — the girls\' heartthrob, they write on the walls.', 'The Meta Sudans is sweating today.'],
+  'dist-fora-imperialia': [
+    "Garlands up, scaffolds down, and if anyone drops a hammer on Caesar, it wasn't me.",
+    "A hundred feet. Hundred and eighty-five steps inside, they say. Don't ask how I know.",
+    'Every soldier on it has a face. Mine would look better in marble.',
+    'Dacian prisoners cut half this stone. Now they can watch themselves losing, all the way up.',
+    "Mind the paint! It's for the gods, not your elbow!",
+  ],
+  'dist-velia': [
+    'Pearls! Red Sea pearls! Tears of the sea at the price of a farm!',
+    'Pepper from India, cinnamon from the end of the world, and change from me.',
+    "The Colossus wears the Sun's face now. The old one had Nero's. I prefer the Sun's.",
+    "Smell that? That's the Piperataria. You can't afford it, but breathing's free.",
+    'Jewels for the lady, rings for the knight, glass for everyone else.',
+  ],
+  'dist-vallis-colossei': [
+    'Nereus! Nereus! Thirty-one and never touched!',
+    'I sat behind a sailor at the last games. He rigged the awning and dripped on me all afternoon.',
+    'My wife made me promise not to bet. So I promised.',
+    "Drink from the Meta, citizen. The water's sweating for you.",
+    "Hear that clacking? Wooden swords. They start at the first hour. I haven't slept past the second in three years.",
+  ],
+  'dist-circus-maximus': [
+    'Greens for ever! Blues for the boneyard!',
+    'Your future, citizen? One denarius for the past, two for the future, five if you want it good.',
+    'They say Trajan made the Circus five thousand seats bigger, and still I stand.',
+    'Figs! Figs from Caunus! Eat them before the races, cry after!',
+  ],
+  'dist-velabrum-boarium': [
+    'Oil! Sabine oil! Venafran for the rich!',
+    'Mind the cattle, mind the dung, mind your purse.',
+    'Silk from the Seres, perfume from Arabia, rats from the river, all on one street.',
+    "The Tiber's low this year. Thank the gods and the curators, in that order.",
+    'Fishermen at dawn, dockers at noon, drunks at dusk. The Velabrum never sleeps alone.',
+  ],
   'dist-subura': ['Mind the pots from the windows.', 'Noise all night in the Subura. All night!'],
-  'dist-fora-imperialia': ['Look at that column. Carved all the way up!', 'They say the libraries have Greek on one side and Latin on the other.'],
+};
+
+/** Night lines for every district (docs/CONTENT.md §8.1 "Night"). */
+const NIGHT: readonly string[] = [
+  "Light! Who's got a light? My slave ran off with the lantern.",
+  "Hush. Listen. That's the bakers starting, so it's the fourth watch. Go home.",
+  "A cart ran over a man's foot on the Clivus. He's suing the mule.",
+  'Make your will before you go out to dinner, they say.',
+];
+
+/** The Lemuria (docs/CONTENT.md §8.1; the first elapsed day, 11 May). */
+const LEMURIA: readonly string[] = [
+  "Black beans tonight. Nine handfuls. And don't look back, whatever you hear.",
+  "The temples are shut. The gods don't want to see the dead, and the dead don't want to see the priests.",
+  "My grandmother walks tonight. She'll want her good shawl back.",
+  'Not a night to marry, not a night to sell, not a night to be out after the second watch.',
+  "If someone calls your name tonight, don't answer. It's never a creditor. Usually.",
+];
+
+/** By class (docs/CONTENT.md §8.1 "By class"), keyed by bark table. */
+const CLASS: Table = {
+  senator: [
+    'Clients at dawn, the Senate at the third hour, the baths at the ninth. Being important is exhausting.',
+    'Carry me round the dung, not through it.',
+    'Parthia is a question of honour. And of trade routes.',
+    'Did you hear from Pliny? Nobody has, since winter.',
+  ],
+  matron: ['Ecastor, the price of a decent cook!', 'Carry me round the dung, not through it.'],
+  citizen: [
+    "Bread's up a quadrans. War's coming, they say. Bread always knows first.",
+    'Rent on the Kalends, dues on the Kalends, debts on the Kalends. I hate the Kalends.',
+    "Did you see the elephant? There's no elephant. I just wanted you to look.",
+    'I was a slave in Antioch. Now I own a shop in Rome. The gods have a sense of humour.',
+    "My patron gets my respect and three days' work a year. He wants more of both.",
+  ],
+  elder: ['Twenty years in the same flat and the stairs get longer every year.'],
+  woman: [
+    "My husband's at the baths, my slave's at the market, I'm the only one working in this house.",
+    "Mind your hands, citizen. My husband's a vigil and his brother's a gladiator.",
+    "Edepol, if that fuller ruins one more palla, I'll full him.",
+  ],
+  slave: [
+    'Yes, master. Coming, master. Gone, master.',
+    "Twelve years, and I've saved half my price. The other half is in the master's head.",
+    "Don't look at me. If you look at me I'll have to talk, and if I talk I'll be late.",
+  ],
+  soldier: ["Commilito! Were you at Tapae? Who wasn't.", 'The East! Sand, Parthians and no wine. I miss it already.', "Pay's late, boots are tight, the optio has a vine stick. Life is good."],
+  foreigner: [
+    'Every Roman wants a Greek doctor and nobody wants a Greek neighbour.',
+    "Silk, glass, pepper: it all comes through Antioch, and Antioch doesn't care who's emperor.",
+    "My grandfather's on that column. Third turn. The one who isn't running.",
+    'Isis heals, Rome taxes. Both are very thorough.',
+  ],
+  idler: [
+    'They say Hadrian is still in Athens, playing the Greek.',
+    "No letters from Pliny in Bithynia since the winter. That's not like Pliny.",
+    "There'll be games for the Column. Eighteen days, a hundred pairs. Or eight days and ten pairs. Someone's lying.",
+    'The emperor walked through the Forum yesterday on his own feet, like a citizen. My cousin touched his cloak.',
+  ],
+  vigil: ['Water in the flats! Lamps out! Water in the flats!', "Quis est? Who's there? A citizen, at this hour? A brave one or a stupid one."],
+  carter: ["Out of the road! Lime for the Pantheon, and I don't stop for drunks!"],
+  reveler: ["Make way for a poet... no, wait, I'm going to be sick."],
 };
 
 /** Lines tied to a phase of the day. */
@@ -89,7 +189,7 @@ const PHASE: Partial<Record<DayPhase, readonly string[]>> = {
   salutatio: ['The salutatio queue went round the block this morning.', 'Up before dawn for a patron\'s nod. Again.'],
   midday: ['Prandium, then a nap. That\'s the law, isn\'t it?', 'Too hot for the Forum. The baths, then.'],
   evening: ['Off to the baths before they close.', 'Cena at the patron\'s tonight. Leftovers, if I\'m lucky.'],
-  night: ['Make your will before you go out to dinner, they say.', 'Lemuria. Black beans at midnight, and never look back.', 'Mind the carts — the drovers don\'t stop for anyone.'],
+  night: ['Mind the carts — the drovers don\'t stop for anyone.'],
   predawn: ['The carts are leaving. Dawn soon.', 'Bakers already at it. Can\'t you smell it?'],
 };
 
@@ -105,11 +205,16 @@ const SHOVED: readonly string[] = [
 const SHOVED_SLAVE: readonly string[] = ['Pardon, domine!', 'My fault, my fault.', 'Sorry, sir!'];
 
 const WEAPON: readonly string[] = [
+  'Put that away! This is the Forum, not the arena!',
+  "Watch! Watch! Somebody's drawn steel!",
   'Sheathe that blade! This is the Forum!',
   'Put that away before the cohort sees it.',
   'Di immortales — he\'s armed!',
   'Easy, friend. Easy.',
 ];
+const CRIME: readonly string[] = ['Thief! Thief! Watch, over here!', 'I saw that. Everybody saw that.', 'Fur! Stop him!'];
+const SORDIDUS: readonly string[] = ['Gods, you stink. Did you sleep in the Cloaca?', 'Wash first, talk after.'];
+const LAUTUS: readonly string[] = ["Fresh from the baths? You smell like a rich man's dinner."];
 const FLEE: readonly string[] = ['Help! Vigiles!', 'Run! There\'s blood!', 'Murder in the street!', 'Mehercle — out of the way!', 'Gods, not again!'];
 const GAWK: readonly string[] = ['A fight! A fight!', 'Hit him! Hit him!', 'My money\'s on the big one.', 'Habet! He\'s had it!', 'Better than the games!'];
 const GUARD: readonly string[] = ['Halt! In the name of the Prefect!', 'Break it up!', 'Drop your weapon!', 'Hold there!'];
@@ -153,6 +258,8 @@ export interface BarkContext {
   phase?: DayPhase;
   /** Named NPC's own lines (used for greet / ambient). */
   own?: readonly string[];
+  /** The first elapsed day is a Lemuria day (11 May): add its lines at night. */
+  lemuria?: boolean;
 }
 
 /** Candidate lines for a situation. */
@@ -162,9 +269,13 @@ export function barkLines(ctx: BarkContext): readonly string[] {
       return ctx.own?.length ? ctx.own : (GREET[ctx.table] ?? GREET.citizen);
     case 'ambient': {
       if (ctx.own?.length) return ctx.own;
-      const lines = [...(AMBIENT[ctx.table] ?? AMBIENT.citizen)];
-      if (ctx.district && DISTRICT[ctx.district] && ctx.table !== 'vestal') lines.push(...DISTRICT[ctx.district]);
-      if (ctx.phase && PHASE[ctx.phase] && ctx.table !== 'vestal') lines.push(...PHASE[ctx.phase]!);
+      const lines = [...(AMBIENT[ctx.table] ?? AMBIENT.citizen), ...(CLASS[ctx.table] ?? [])];
+      if (ctx.table === 'vestal') return lines;
+      const night = ctx.phase === 'night' || ctx.phase === 'predawn';
+      if (ctx.district && DISTRICT[ctx.district] && !night) lines.push(...DISTRICT[ctx.district]);
+      if (ctx.phase && PHASE[ctx.phase]) lines.push(...PHASE[ctx.phase]!);
+      if (night) lines.push(...NIGHT);
+      if (night && ctx.lemuria) lines.push(...LEMURIA, ...LEMURIA);
       return lines;
     }
     case 'shoved':
@@ -181,6 +292,12 @@ export function barkLines(ctx: BarkContext): readonly string[] {
       return BRUSHOFF[ctx.table] ?? BRUSHOFF.citizen;
     case 'vendor':
       return VENDOR;
+    case 'crime':
+      return CRIME;
+    case 'sordidus':
+      return SORDIDUS;
+    case 'lautus':
+      return LAUTUS;
   }
 }
 
@@ -190,8 +307,8 @@ export interface BarkSink {
 
 /** Rations subtitles. Times are in seconds of `now` (advance with `tick`). */
 export class BarkDirector {
-  /** Minimum gap between any two barks. */
-  gap = 3.2;
+  /** Minimum gap between any two barks (docs/CONTENT.md §8.1: one every 8 s near the player). */
+  gap = 8;
   /** Minimum gap between two barks of the same speaker. */
   perSpeaker = 28;
   /** Lines remembered to avoid repeats. */

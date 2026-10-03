@@ -21,10 +21,10 @@ describe('barks', () => {
     expect(b.bark(rng, 'a', 'Citizen', { kind: 'greet', table: 'citizen' })).toBeTruthy();
     // Too soon for anyone.
     expect(b.bark(rng, 'b', 'Citizen', { kind: 'greet', table: 'citizen' })).toBeNull();
-    b.tick(4);
+    b.tick(9);
     expect(b.bark(rng, 'b', 'Citizen', { kind: 'greet', table: 'citizen' })).toBeTruthy();
-    b.tick(4);
-    // 'a' spoke 8 s ago: still on its own cooldown.
+    b.tick(9);
+    // 'a' spoke 18 s ago: still on its own cooldown.
     expect(b.bark(rng, 'a', 'Citizen', { kind: 'ambient', table: 'citizen' })).toBeNull();
     // Screams and guards cut in (urgent) after a short beat.
     b.tick(1);
@@ -42,9 +42,16 @@ describe('barks', () => {
 
   it('named NPCs speak their own lines; districts and phases add flavour', () => {
     expect(barkLines({ kind: 'greet', table: 'citizen', own: ['Bread!'] })).toEqual(['Bread!']);
-    const forum = barkLines({ kind: 'ambient', table: 'citizen', district: 'dist-forum-romanum', phase: 'night' });
-    expect(forum.some((l) => /Basilica Julia/.test(l))).toBe(true);
-    expect(forum.some((l) => /will before you go out to dinner/.test(l))).toBe(true);
+    const forumDay = barkLines({ kind: 'ambient', table: 'citizen', district: 'dist-forum-romanum', phase: 'morning' });
+    expect(forumDay.some((l) => /Basilica Julia/.test(l))).toBe(true);
+    const night = barkLines({ kind: 'ambient', table: 'citizen', district: 'dist-forum-romanum', phase: 'night' });
+    expect(night.some((l) => /will before you go out to dinner/.test(l))).toBe(true);
+    expect(night.some((l) => /Basilica Julia/.test(l))).toBe(false);
+    // The Lemuria lines only on the Lemuria, at night (docs/CONTENT.md §8.1).
+    expect(night.some((l) => /Black beans/.test(l))).toBe(false);
+    expect(barkLines({ kind: 'ambient', table: 'citizen', phase: 'night', lemuria: true }).some((l) => /Black beans/.test(l))).toBe(true);
+    // Class lines from the content bible.
+    expect(barkLines({ kind: 'ambient', table: 'slave' }).some((l) => /Coming, master/.test(l))).toBe(true);
     expect(barkLines({ kind: 'shoved', table: 'slave' }).every((l) => /domine|sir|fault|Pardon|Sorry/.test(l))).toBe(true);
     // Every role has greetings and a brush-off.
     for (const r of Object.values(CROWD_ROLES)) {

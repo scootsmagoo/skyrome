@@ -270,8 +270,11 @@ export class NavGrid {
     return true;
   }
 
-  /** Nearest walkable cell centre within `maxR` metres (spiral search), or null. */
-  nearestWalkable(x: number, z: number, maxR = 6, out = { x: 0, z: 0 }): { x: number; z: number } | null {
+  /**
+   * Nearest walkable cell centre within `maxR` metres (spiral search), or null. With
+   * `reachableOnly`, only cells the last flood labelled as reachable from the player count.
+   */
+  nearestWalkable(x: number, z: number, maxR = 6, out = { x: 0, z: 0 }, reachableOnly = false): { x: number; z: number } | null {
     const cx = this.cellOf(x);
     const cz = this.cellOf(z);
     const maxC = Math.ceil(maxR / this.cell);
@@ -283,6 +286,7 @@ export class NavGrid {
         for (let dx = -r; dx <= r; dx++) {
           if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
           if (this.cellState(cx + dx, cz + dz) !== 1) continue;
+          if (reachableOnly && this.doneGen && this.stampOf(cx + dx, cz + dz) < this.doneGen) continue;
           const px = (cx + dx + 0.5) * this.cell;
           const pz = (cz + dz + 0.5) * this.cell;
           const d = (px - x) ** 2 + (pz - z) ** 2;

@@ -21,6 +21,8 @@ export interface CartHost {
   readonly game: Game;
   readonly nav: NavService;
   streets(): StreetNav | null;
+  /** Road centrelines near the player (game metres), e.g. the atlas roads; [] if none. */
+  roads(): { x: number; z: number }[][];
   readonly player: THREE.Vector3 | null;
   rand(): number;
   isVisible(x: number, y: number, z: number): boolean;
@@ -145,6 +147,19 @@ export class Cart {
   }
 }
 
+/** Points every `step` metres along a polyline. */
+function resample(line: readonly Vec2[], step: number): Vec2[] {
+  const out: Vec2[] = [];
+  for (let k = 1; k < line.length; k++) {
+    const a = line[k - 1];
+    const b = line[k];
+    const len = Math.hypot(b.x - a.x, b.z - a.z);
+    for (let t = 0; t < len; t += step) out.push({ x: a.x + ((b.x - a.x) * t) / len, z: a.z + ((b.z - a.z) * t) / len });
+  }
+  if (line.length) out.push({ ...line[line.length - 1] });
+  return out;
+}
+
 export class CartDirector {
   readonly carts: Cart[] = [];
   private spawnT = 0;
@@ -193,6 +208,36 @@ export class CartDirector {
     }
     const g = h.nav.grid;
     if (!g) return null;
+    // Clear enough for a cart: a 1 m-radius disc fits every 1.5 m along every leg.
+    const clear = (pts: Vec2[]) => {
+      for (let k = 1; k < pts.length; k++) {
+        const a = pts[k - 1];
+        const b = pts[k];
+        const len = Math.hypot(b.x - a.x, b.z - a.z);
+        for (let t = 0; t <= len; t += 1.5) {
+          const x = a.x + ((b.x - a.x) * t) / (len || 1);
+          const z = a.z + ((b.z - a.z) * t) / (len || 1);
+          if (g.ready(x, z) && !g.areaWalkable(x, z, 1)) return false;
+        }
+      }
+      return true;
+    };
+    const hidden = (p: Vec2) => !h.isVisible(p.x, (h.floorY(p.x, p.z) ?? pl.y) + 1, p.z);
+    // Along a road through the player's area (the atlas roads: the Sacra Via, the Vicus Tuscus…).
+    for (const road of h.roads()) {
+      // The point of the road closest to the player, then ±55 m along it.
+      const along = resample(road, 3);
+      let best = 0;
+      for (let k = 1; k < along.length; k++) if (Math.hypot(along[k].x - pl.x, along[k].z - pl.z) < Math.hypot(along[best].x - pl.x, along[best].z - pl.z)) best = k;
+      const span = Math.round(55 / 3);
+      const lo = Math.max(0, best - span);
+      const hi = Math.min(along.length - 1, best + span);
+      if (hi - lo < 10) continue;
+      let pts = along.slice(lo, hi + 1);
+      if (h.rand() < 0.5) pts = pts.reverse();
+      if (!hidden(pts[0]) || !clear(pts)) continue;
+      return pts;
+    }
     for (let i = 0; i < 10; i++) {
       const a = h.rand() * Math.PI * 2;
       const off = (h.rand() - 0.5) * 30;
@@ -212,6 +257,17 @@ export class CartDirector {
         { x: ax, z: az },
         { x: bx, z: bz },
       ];
+    }
+    // Last resort: a grid path across the area whose legs are wide enough.
+    for (let i = 0; i < 4; i++) {
+      const a = h.rand() * Math.PI * 2;
+      const from = h.nav.snap(pl.x + Math.sin(a) * 45, pl.z + Math.cos(a) * 45, 6);
+      const to = h.nav.snap(pl.x - Math.sin(a) * 45, pl.z - Math.cos(a) * 45, 6);
+      if (!g.ready(from.x, from.z) || !g.ready(to.x, to.z) || !hidden(from)) continue;
+      const p = g.findPath(from.x, from.z, to.x, to.z, 8000);
+      if (!p) continue;
+      const pts = [from, ...p];
+      if (clear(pts)) return pts;
     }
     return null;
   }

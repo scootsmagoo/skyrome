@@ -140,6 +140,7 @@ export class NpcManager implements System {
   private byId = new Map<string, Npc>();
   private hash = new SpatialHash<Npc>(4);
   private neigh: Npc[] = [];
+  private stepList: Npc[] = [];
   private steerNs: SteerNeighbor[] = [];
   private sampler: PhysicsCellSampler;
   private streetNav: StreetNav | null = null;
@@ -318,13 +319,13 @@ export class NpcManager implements System {
   }
 
   /** Spawn a crowd NPC of a role (escorts included unless `escorts: false`). */
-  spawnAmbient(roleId: CrowdRoleId, x: number, z: number, heading?: number, opts: { escorts?: boolean } = {}): Npc | null {
+  spawnAmbient(roleId: CrowdRoleId, x: number, z: number, heading?: number, opts: { escorts?: boolean; appearance?: Appearance } = {}): Npc | null {
     const role = CROWD_ROLES[roleId];
     if (!role) return null;
     const y = this.floorY(x, z);
     if (y === null) return null;
     const avatarRole = this.rng.pick(role.avatar);
-    const app = this.appearanceFor(avatarRole, this.rng.int(0, VARIANTS - 1), !!role.toga);
+    const app = opts.appearance ?? this.appearanceFor(avatarRole, this.rng.int(0, VARIANTS - 1), !!role.toga);
     const label = role.id === 'foreigner' ? (FOREIGN_LABELS[avatarRole] ?? role.label) : role.id === 'citizen' && avatarRole === 'freedman' ? 'Freedman' : role.label;
     const npc = new Npc(this.game, {
       id: `cit-${++this.seq}`,
@@ -676,7 +677,7 @@ export class NpcManager implements System {
   }
 
   bark(npc: Npc, kind: BarkKind, urgent = false): boolean {
-    const ctx = { kind, table: npc.barkTable, district: this.district.id, phase: this.phase, own: kind === 'greet' || kind === 'ambient' ? npc.def?.barks : undefined };
+    const ctx = { kind, table: npc.barkTable, district: this.district.id, phase: this.phase, own: kind === 'greet' || kind === 'ambient' ? npc.def?.barks : undefined, lemuria: this.isLemuria() };
     return !!this.barks.bark(this.rng, npc.id, npc.name, ctx, urgent);
   }
 
@@ -685,10 +686,37 @@ export class NpcManager implements System {
     return this.useAtlas ? poisNear(x, z, r, kind) : [];
   }
 
+  /** Atlas roads (wheel-worthy ones) passing within 40 m of the player, in game metres. */
+  roadsNear(): { x: number; z: number }[][] {
+    const pp = this.game.player?.position;
+    if (!this.useAtlas || !pp) return [];
+    const out: { x: number; z: number }[][] = [];
+    for (const r of atlas.ROADS) {
+      if (r.kind === 'stairs' || r.kind === 'path' || r.width < 4) continue;
+      const pts = r.points.map(([x, z]) => {
+        const [gx, gz] = toGame(x, z);
+        return { x: gx, z: gz };
+      });
+      // Distance from the player to the polyline.
+      let d = Infinity;
+      for (let k = 1; k < pts.length; k++) d = Math.min(d, segDist(pp.x, pp.z, pts[k - 1], pts[k]));
+      if (d < 40) out.push(pts);
+    }
+    return this.rng.shuffle(out);
+  }
+
   /** Is there room for a person standing at (x, y, z) (feet)? */
   isFree(x: number, y: number, z: number): boolean {
     const hit = this.game.physics.world.intersectionWithShape({ x, y: y + 0.85, z }, { x: 0, y: 0, z: 0, w: 1 }, this.freeShape, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, groups(ALL_LAYERS, Layer.World));
     return !hit;
+  }
+
+  /** The first elapsed day falls on the Lemuria (9, 11 or 13 May): ghosts walk tonight. */
+  isLemuria(): boolean {
+    const t = this.game.time;
+    if (t.dayIndex !== 0) return false;
+    const d = t.date();
+    return d.month === 4 && (d.day === 9 || d.day === 11 || d.day === 13);
   }
 
   /** In the camera frustum (no occlusion). */
@@ -731,6 +759,9 @@ export class NpcManager implements System {
       get night() {
         return m.budget.night;
       },
+      get lemuria() {
+        return m.isLemuria();
+      },
       get player() {
         return m.game.player?.position ?? tmpV.set(0, 0, 0);
       },
@@ -739,10 +770,11 @@ export class NpcManager implements System {
       },
       free: (x, z, r, filter) =>
         m.near({ x, y: 0, z }, r, (n) => n.ambient && !n.scripted && !n.talking && !n.leader && !n.followers.length && !n.dead && !n.isFighting() && n.brain?.task?.kind !== 'flee' && (!filter || filter(n))),
-      spawn: (role, x, z, heading) => {
+      spawn: (role, x, z, heading, opts) => {
         if (m.crowdCount >= m.maxCrowd + 8) return null;
-        return m.spawnAmbient(role, x, z, heading);
+        return m.spawnAmbient(role, x, z, heading, opts);
       },
+      vanish: (npc) => m.despawn(npc),
       say: (npc, text) => {
         if (typeof npc === 'string') m.barks.say(`v:${npc}`, npc, text);
         else m.barks.say(npc.id, npc.name, text);
@@ -753,7 +785,7 @@ export class NpcManager implements System {
       isVisible: (x, y, z) => m.isVisible(x, y, z),
       snap: (x, z, r = 4) => {
         if (!m.grid.ready(x, z)) return { x, z };
-        return m.grid.nearestWalkable(x, z, r);
+        return m.grid.nearestWalkable(x, z, r, { x: 0, z: 0 }, true);
       },
       alive: (n) => m.byId.get(n.id) === n,
       takeOver: (n) => n.brain?.script(m.life),
@@ -774,6 +806,7 @@ export class NpcManager implements System {
         return m.nav;
       },
       streets: () => m.streets(),
+      roads: () => m.roadsNear(),
       get player() {
         return m.game.player?.position ?? null;
       },
@@ -816,7 +849,12 @@ export class NpcManager implements System {
     let tBrain = 0;
     let tSteer = 0;
     let tLoco = 0;
-    for (const n of this.list) {
+    // A copy: brains may despawn people (or vignettes spawn them) during the loop.
+    const list = this.stepList;
+    list.length = 0;
+    list.push(...this.list);
+    for (const n of list) {
+      if (this.byId.get(n.id) !== n) continue;
       if (n.dead) {
         if (n.sim === 'full') n.locomote({ x: 0, y: 0, z: 0 }, dt);
         continue;
@@ -834,6 +872,8 @@ export class NpcManager implements System {
         brain.unstickRequested = false;
         this.unstick(n);
       }
+      // Gone home (despawned) during its step: its body no longer exists.
+      if (this.byId.get(n.id) !== n) continue;
       let wx = desired.x;
       let wz = desired.z;
       const ts = performance.now();
@@ -1087,7 +1127,7 @@ export class NpcManager implements System {
     let weights = roleWeights(this.district, this.game.time.hour, this.sun, boosts);
     // Escorted roles bring 1–4 people each: cap the groups so they don't swallow the budget.
     const escorted = this.list.filter((n) => n.ambient && n.followers.length > 0).length;
-    if (escorted >= Math.max(2, Math.round(target / 15))) weights = weights.filter(([r]) => !CROWD_ROLES[r].escort);
+    if (escorted >= Math.max(2, Math.round(target / 25))) weights = weights.filter(([r]) => !CROWD_ROLES[r].escort);
     let budget = initial ? target : 3;
     while (citizens < target && budget-- > 0) {
       const role = pickRole(this.rng, weights);
@@ -1171,7 +1211,7 @@ export class NpcManager implements System {
         x = c.x;
         z = c.z;
         const h = g.heightAt(x, z);
-        if (h === null || Math.abs(h - terrain(x, z)) > 2.5) continue;
+        if (h === null || Math.abs(h - terrain(x, z)) > 1.6) continue;
         if (!g.reachable(x, z) || !this.isFree(x, h, z)) continue;
       } else continue;
       if (initial) return { x, z };
@@ -1271,7 +1311,10 @@ export class NpcManager implements System {
         n.lookAtPoint(d < 4.5 && facing && !n.scripted ? head : null);
       }
       if (!greeted && d < 3.2 && !n.scripted && this.rng.chance(0.012)) {
-        greeted = !!this.bark(n, 'greet');
+        // The streets notice a filthy (or freshly bathed) player (docs/CONTENT.md §8.1).
+        const clean = this.game.standing?.cleanliness;
+        const kind: BarkKind = clean === 'sordidus' && this.rng.chance(0.5) ? 'sordidus' : clean === 'lautus' && this.rng.chance(0.3) ? 'lautus' : 'greet';
+        greeted = !!this.bark(n, kind);
       }
     }
     this.chatterT -= dt;
@@ -1290,6 +1333,14 @@ export class NpcManager implements System {
     for (const off of this.offs) off();
     this.clear();
   }
+}
+
+function segDist(px: number, pz: number, a: { x: number; z: number }, b: { x: number; z: number }) {
+  const dx = b.x - a.x;
+  const dz = b.z - a.z;
+  const l2 = dx * dx + dz * dz || 1;
+  const t = Math.max(0, Math.min(1, ((px - a.x) * dx + (pz - a.z) * dz) / l2));
+  return Math.hypot(px - (a.x + dx * t), pz - (a.z + dz * t));
 }
 
 /** Install the population manager (idempotent). */

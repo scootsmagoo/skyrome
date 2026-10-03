@@ -5,7 +5,14 @@
 import { makeAltar } from '../props';
 import type { Npc } from '../Npc';
 import { anchorAhead, arc, faceTo, hiddenPoint, onlookers, recruit, stand, walk, walkAll } from './kit';
-import type { VignetteDef } from './types';
+import type { VignetteContext, VignetteDef } from './types';
+
+/** A named NPC (content) near a point who is free to take part, if any. */
+function namedNear(ctx: VignetteContext, id: string, x: number, z: number, r: number): Npc | null {
+  const n = ctx.game.population?.get(id);
+  if (!n || n.dead || n.talking || n.scripted || n.isFighting()) return null;
+  return Math.hypot(n.position.x - x, n.position.z - z) <= r ? n : null;
+}
 
 // ---------------------------------------------------------------- sacrifice
 
@@ -141,9 +148,11 @@ export const crier: VignetteDef = {
     return a ? { x: a.x, z: a.z, face: Math.atan2(ctx.player.x - a.x, ctx.player.z - a.z) } : null;
   },
   *run(ctx, plan) {
-    const praeco = recruit(ctx, plan.x, plan.z, 30, (n) => n.role?.id === 'citizen' || n.role?.id === 'idler', 'citizen');
+    // Cerdo the praeco (docs/CONTENT.md §2.D) when he is about; otherwise any loud citizen.
+    const cerdo = namedNear(ctx, 'npc-cerdo', plan.x, plan.z, 50);
+    const praeco = cerdo ? ctx.cast(cerdo) : recruit(ctx, plan.x, plan.z, 30, (n) => n.role?.id === 'citizen' || n.role?.id === 'idler', 'citizen');
     if (!praeco) return;
-    praeco.name = 'Crier';
+    if (!cerdo) praeco.name = 'Crier';
     yield* walk(ctx, praeco, plan.x, plan.z, 1.4);
     stand(praeco, 'talk', plan.face);
     const listeners = onlookers(ctx, plan.x, plan.z, 20, 7, (n) => n !== praeco);
@@ -201,10 +210,19 @@ export const dice: VignetteDef = {
       yield 3.5;
       stand(thrower, 'sitGround', null);
     }
-    const guard = ctx.free(plan.x, plan.z, 25, (n) => !!n.role?.guard)[0];
-    if (guard) {
-      ctx.say(players[0], 'Quick, the cohort! Hide the bones!');
-      yield 1.5;
+    // Gambling is for the Saturnalia: everyone scatters when the aediles' man (Dento) or a soldier walks by.
+    const dento = namedNear(ctx, 'npc-dento', plan.x, plan.z, 45);
+    const law = dento ?? ctx.free(plan.x, plan.z, 30, (n) => !!n.role?.guard)[0];
+    if (law) {
+      ctx.say(players[0], dento ? 'Dento! The aediles\' man! Hide the bones!' : 'Quick, the cohort! Hide the bones!');
+      yield 0.8;
+      for (const p of players) {
+        const dx = p.position.x - law.position.x;
+        const dz = p.position.z - law.position.z;
+        const d = Math.hypot(dx, dz) || 1;
+        p.brain?.scriptGo(p.position.x + (dx / d) * 9, p.position.z + (dz / d) * 9, 2.6);
+      }
+      yield 3;
     }
     yield 2;
   },

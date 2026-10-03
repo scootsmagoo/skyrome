@@ -11,6 +11,7 @@
  * when the scene ends or aborts.
  */
 import type * as THREE from 'three';
+import type { Appearance } from '../../actors/appearance';
 import type { Game } from '../../core/Game';
 import type { Rng } from '../../core/Rng';
 import type { NavService } from '../../ai/life/nav';
@@ -31,13 +32,17 @@ export interface VignetteContext {
   readonly dt: number;
   readonly now: number;
   readonly night: boolean;
+  /** Tonight is the Lemuria (9, 11 or 13 May, first elapsed day). */
+  readonly lemuria: boolean;
   readonly player: THREE.Vector3;
   /** Camera forward on the ground plane (unit). */
   readonly look: { x: number; z: number };
   /** Ambient NPCs free for a part near a point, nearest first. */
   free(x: number, z: number, r: number, filter?: (n: Npc) => boolean): Npc[];
   /** Spawn an ambient NPC of a role at a point (null if over budget). */
-  spawn(role: CrowdRoleId, x: number, z: number, heading?: number): Npc | null;
+  spawn(role: CrowdRoleId, x: number, z: number, heading?: number, opts?: { appearance?: Appearance; escorts?: boolean }): Npc | null;
+  /** Remove an NPC from the world at once (ghosts, thieves gone round a corner). */
+  vanish(npc: Npc): void;
   /** Take an NPC into this scene (scripted until released). */
   cast(npc: Npc): Npc;
   /** Give a cast member back to normal life early. */

@@ -484,7 +484,7 @@ export class NpcBrain {
     let p = ctx.nav.snap(x + Math.cos(a) * r, z + Math.sin(a) * r, 6);
     if (Math.hypot(p.x - x, p.z - z) < 12) p = { x: npc.position.x + (dx / d) * 15, z: npc.position.z + (dz / d) * 15 };
     this.setTask(task('flee', { x: p.x, z: p.z, speed: 3.6 + rng.next() * 1.0, dangerX: x, dangerZ: z, until: ctx.now + 20 }), ctx);
-    if (rng.chance(0.3)) ctx.bark(npc, 'flee', true);
+    if (rng.chance(0.3)) ctx.bark(npc, kind === 'crime' ? 'crime' : 'flee', true);
   }
 
   /** Hand the NPC to a vignette (scripted moves/loops). */

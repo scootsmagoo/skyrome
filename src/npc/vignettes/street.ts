@@ -185,13 +185,14 @@ export const fallingPot: VignetteDef = {
       const dz = Math.cos(a);
       const hit = ctx.wallProbe(ctx.player.x, py + 1.5, ctx.player.z, dx, dz, 12);
       if (!hit || hit.dist < 3) continue;
-      const hi = ctx.wallProbe(ctx.player.x, py + 7.5, ctx.player.z, dx, dz, hit.dist + 1.5);
+      // A first-floor window: the wall must still be there 5 m up.
+      const hi = ctx.wallProbe(ctx.player.x, py + 5, ctx.player.z, dx, dz, hit.dist + 1.5);
       if (!hi || Math.abs(hi.dist - hit.dist) > 1.2) continue;
       // Land between the player and the wall, a little to the side.
       const land = Math.max(1.6, Math.min(hit.dist - 0.8, 3.5));
       const x = ctx.player.x + dx * land + dz * 0.8;
       const z = ctx.player.z + dz * land - dx * 0.8;
-      return { x, z, face: a, data: { wx: ctx.player.x + dx * (hit.dist - 0.35), wz: ctx.player.z + dz * (hit.dist - 0.35), top: py + 8.5 } };
+      return { x, z, face: a, data: { wx: ctx.player.x + dx * (hit.dist - 0.35), wz: ctx.player.z + dz * (hit.dist - 0.35), top: py + 6 } };
     }
     return null;
   },

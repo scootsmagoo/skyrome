@@ -69,11 +69,11 @@ export class NavService {
     return [{ x: bx, z: bz }];
   }
 
-  /** Nearest walkable point (grid) or the point itself when the grid doesn't know. */
+  /** Nearest walkable point the player can also reach (grid), or the point itself when the grid doesn't know. */
   snap(x: number, z: number, r = 4): Vec2 {
     const g = this.grid;
     if (g && g.ready(x, z)) {
-      const n = g.nearestWalkable(x, z, r);
+      const n = g.nearestWalkable(x, z, r, { x: 0, z: 0 }, true) ?? g.nearestWalkable(x, z, r);
       if (n) return { x: n.x, z: n.z };
     }
     return { x, z };

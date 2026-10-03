@@ -260,41 +260,57 @@ export class Quadruped {
 
   constructor(readonly kind: 'dog' | 'mule') {
     const m = M();
-    const s = kind === 'dog' ? 1 : 2.4;
-    const mat = kind === 'dog' ? m.dog : m.mule;
-    const body = mesh(geo(`${kind}Body`, () => new THREE.CapsuleGeometry(0.13 * s, 0.38 * s, 3, 8).rotateX(Math.PI / 2)), mat);
-    const legH = (kind === 'dog' ? 0.3 : 0.42) * s;
-    body.position.y = legH + 0.1 * s;
+    const dog = kind === 'dog';
+    // Proportions in metres (a street dog; a mule with a long face and long ears).
+    const P = dog
+      ? { bodyR: 0.12, bodyLen: 0.42, legH: 0.32, legR: 0.026, legX: 0.08, legZ: 0.19, headW: 0.13, headH: 0.13, headL: 0.17, snoutL: 0.12, snoutW: 0.07, neckUp: 0.13, neckFwd: 0.33, earL: 0.08, earW: 0.035, tailL: 0.24, tailR: 0.022 }
+      : { bodyR: 0.27, bodyLen: 0.9, legH: 0.74, legR: 0.055, legX: 0.16, legZ: 0.5, headW: 0.17, headH: 0.2, headL: 0.26, snoutL: 0.3, snoutW: 0.13, neckUp: 0.62, neckFwd: 0.86, earL: 0.27, earW: 0.045, tailL: 0.55, tailR: 0.035 };
+    const mat = dog ? m.dog : m.mule;
+    const dark = dog ? m.dogDark : m.woodDark;
+    const body = mesh(geo(`${kind}Body`, () => new THREE.CapsuleGeometry(P.bodyR, P.bodyLen, 3, 8).rotateX(Math.PI / 2)), mat);
+    const bodyY = P.legH + P.bodyR * 0.75;
+    body.position.y = bodyY;
     this.root.add(body);
+    if (!dog) {
+      // A thick neck rising forward from the shoulders.
+      const neck = mesh(geo('muleNeck', () => new THREE.BoxGeometry(0.17, 0.62, 0.26)), mat);
+      neck.position.set(0, bodyY + 0.3, P.bodyLen / 2 + 0.12);
+      neck.rotation.x = 0.75;
+      this.root.add(neck);
+    }
     const head = new THREE.Group();
-    const skull = mesh(geo(`${kind}Head`, () => new THREE.BoxGeometry(0.14 * s, 0.14 * s, 0.2 * s)), mat);
-    const snout = mesh(geo(`${kind}Snout`, () => new THREE.BoxGeometry(0.08 * s, 0.08 * s, 0.12 * s)), kind === 'dog' ? m.dogDark : mat);
-    snout.position.set(0, -0.03 * s, 0.14 * s);
-    const ear = geo(`${kind}Ear`, () => new THREE.ConeGeometry(0.035 * s, (kind === 'dog' ? 0.08 : 0.16) * s, 4));
-    const e1 = mesh(ear, kind === 'dog' ? m.dogDark : mat, false);
-    const e2 = mesh(ear, kind === 'dog' ? m.dogDark : mat, false);
-    e1.position.set(0.05 * s, 0.1 * s, -0.04 * s);
-    e2.position.set(-0.05 * s, 0.1 * s, -0.04 * s);
+    const skull = mesh(geo(`${kind}Head`, () => new THREE.BoxGeometry(P.headW, P.headH, P.headL)), mat);
+    const snout = mesh(geo(`${kind}Snout`, () => new THREE.BoxGeometry(P.snoutW, P.headH * 0.65, P.snoutL)), dog ? dark : mat);
+    snout.position.set(0, -P.headH * 0.15, (P.headL + P.snoutL) / 2 - 0.01);
+    const ear = geo(`${kind}Ear`, () => new THREE.ConeGeometry(P.earW, P.earL, 4));
+    const e1 = mesh(ear, dark, false);
+    const e2 = mesh(ear, dark, false);
+    e1.position.set(P.headW * 0.35, P.headH / 2 + P.earL * 0.4, -P.headL * 0.25);
+    e2.position.set(-P.headW * 0.35, P.headH / 2 + P.earL * 0.4, -P.headL * 0.25);
+    e1.rotation.set(-0.35, 0, -0.25);
+    e2.rotation.set(-0.35, 0, 0.25);
     head.add(skull, snout, e1, e2);
-    head.position.set(0, body.position.y + 0.12 * s, 0.32 * s);
-    this.mouth.position.set(0, -0.06 * s, 0.2 * s);
+    head.position.set(0, bodyY + P.neckUp, P.neckFwd);
+    // The mule carries its long face angled down.
+    if (!dog) head.rotation.x = 0.55;
+    this.mouth.position.set(0, -P.headH * 0.4, P.headL / 2 + P.snoutL * 0.8);
     head.add(this.mouth);
     this.head = head;
     this.root.add(head);
-    const tail = mesh(geo(`${kind}Tail`, () => new THREE.CylinderGeometry(0.015 * s, 0.025 * s, 0.22 * s, 4).translate(0, 0.11 * s, 0)), mat, false);
-    tail.position.set(0, body.position.y + 0.04 * s, -0.3 * s);
-    tail.rotation.x = -0.9;
+    const tail = mesh(geo(`${kind}Tail`, () => new THREE.CylinderGeometry(P.tailR * 0.6, P.tailR, P.tailL, 4).translate(0, P.tailL / 2, 0)), dog ? mat : dark, false);
+    tail.position.set(0, bodyY + P.bodyR * 0.4, -(P.bodyLen / 2 + P.bodyR * 0.8));
+    tail.rotation.x = dog ? -0.9 : -2.7;
     this.tail = tail;
     this.root.add(tail);
-    const legG = geo(`${kind}Leg`, () => new THREE.CylinderGeometry(0.03 * s, 0.025 * s, legH, 5).translate(0, -legH / 2, 0));
+    const legG = geo(`${kind}Leg`, () => new THREE.CylinderGeometry(P.legR, P.legR * 0.8, P.legH + P.bodyR * 0.5, 5).translate(0, -(P.legH + P.bodyR * 0.5) / 2, 0));
     for (const [x, z] of [
-      [0.08, 0.2],
-      [-0.08, 0.2],
-      [0.08, -0.2],
-      [-0.08, -0.2],
+      [P.legX, P.legZ],
+      [-P.legX, P.legZ],
+      [P.legX, -P.legZ],
+      [-P.legX, -P.legZ],
     ]) {
       const l = mesh(legG, mat, false);
-      l.position.set(x * s, legH, z * s);
+      l.position.set(x, P.legH + P.bodyR * 0.5, z);
       this.legs.push(l);
       this.root.add(l);
     }
