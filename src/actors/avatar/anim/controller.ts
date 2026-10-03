@@ -19,6 +19,7 @@ import { Pose, REF_LEG, bakeClip, blendMasked, blendPose, makeMask, sampleClip, 
 import { GAITS, type GaitName } from './gait';
 import { actionInfo, airClips, blockClip, gaitClip, idleLoopClip, stanceIdleClip, type ActionInfo } from './library';
 import { qAxis, qMul } from './quat';
+import { leftHandOnShaft } from './armIK';
 import { FP_ARMS, hasShield, stanceArmMask, stancePose, weaponClass } from './poses';
 import type { HumanoidAvatar } from '../HumanoidAvatar';
 
@@ -586,6 +587,14 @@ export class AnimationController {
     qMul(p.q, bone * 4, this.dq, 0, p.q, bone * 4);
   }
 
+  private gripW = 0;
+
+  private fullDeathW(): number {
+    let w = 0;
+    for (const a of this.actions) if (a.name.startsWith('death') || a.name === 'knockdown' || a.name === 'yield') w = Math.max(w, a.w);
+    return w;
+  }
+
   private fullOverride(): number {
     let w = 0;
     for (const a of this.actions) if (a.info.mask === 'full' || a.name.startsWith('death') || a.name === 'yield') w = Math.max(w, a.w);
@@ -627,6 +636,14 @@ export class AnimationController {
         if (!hasShield(this.stance) && weaponClass(this.stance) !== 'blade') this.add(p, B.upperArmL, 0, -14 * k);
       }
     }
+    // Two-handed weapons: the left hand rides the shaft (unless it carries a net/torch or gestures).
+    const grip = this.avatar.equipment.twoHandGrip();
+    let gw = grip && this.drawn && !this.torch ? 1 - this.fullDeathW() : 0;
+    for (const a of this.actions) if (a.info.keepShield) gw *= 1 - a.w;
+    gw *= 1 - this.blockW * 0.5;
+    this.gripW = approach(this.gripW, gw, 12, dt);
+    if (grip && this.gripW > 0.01) leftHandOnShaft(p, this.avatar.rig, this.legScale, grip, this.gripW);
+
     // Head look-at.
     let ty = 0;
     let tp = 0;

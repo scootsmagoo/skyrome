@@ -33,6 +33,8 @@ export interface HeadFrame {
   hasHelmet: boolean;
   /** Eye centers (bind pose). */
   eyes: THREE.Vector3[];
+  /** Per-person facial variation (multipliers around 1). */
+  face: { nose: number; noseW: number; noseProj: number; chin: number; brow: number; lips: number };
 }
 
 const HEAD_W: Weights = [B.head, 1];
@@ -46,8 +48,14 @@ export function headFrame(ctx: Ctx, L: Levels): HeadFrame {
   const hs = H / 0.232;
   const fem = rig.sex === 'female';
   const child = rig.age === 'child';
-  const jawK = fem ? 0.86 : rig.build === 'heavy' ? 1.08 : rig.build === 'muscular' || rig.build === 'stocky' ? 1.04 : 1;
-  const cheekK = rig.build === 'heavy' ? 1.06 : rig.age === 'old' ? 0.96 : 1;
+  // Individual variation, seeded by the appearance (same person, same face).
+  const r = ctx.rng.fork('face');
+  const v = (amt: number) => 1 + (r.next() * 2 - 1) * amt;
+  const face = { nose: v(0.14), noseW: v(0.15), noseProj: v(0.18), chin: v(0.45), brow: v(0.35), lips: v(0.3) };
+  const faceW = v(0.05);
+  const jawK = (fem ? 0.86 : rig.build === 'heavy' ? 1.08 : rig.build === 'muscular' || rig.build === 'stocky' ? 1.04 : 1) * v(0.07);
+  const cheekK = (rig.build === 'heavy' ? 1.06 : rig.age === 'old' ? 0.96 : 1) * v(0.04);
+  const longK = v(0.04);
   // Profile rows: [yFraction, halfWidth, frontDepth, backDepth] in reference meters (× hs).
   const rows: [number, number, number, number][] = [
     [0.0, 0.012, 0.03, -0.0],
@@ -65,7 +73,11 @@ export function headFrame(ctx: Ctx, L: Levels): HeadFrame {
     [0.975, 0.034, 0.033, 0.046],
     [1.0, 0.004, 0.004, 0.006],
   ];
-  if (child) for (const r of rows) if (r[0] > 0.5) r[1] *= 1.04;
+  if (child) for (const row of rows) if (row[0] > 0.5) row[1] *= 1.04;
+  for (const row of rows) {
+    row[1] *= faceW;
+    if (row[0] < 0.5) row[2] *= longK;
+  }
   const ys = rows.map((r) => r[0]);
   const ca = new MonotoneCurve(ys, rows.map((r) => r[1] * hs));
   const cf = new MonotoneCurve(ys, rows.map((r) => r[2] * hs));
@@ -80,6 +92,7 @@ export function headFrame(ctx: Ctx, L: Levels): HeadFrame {
     H,
     hs,
     eyes: [],
+    face,
     hasHelmet: !!ctx.app.armor?.helmet && ctx.app.armor.helmet.kind !== 'pileus',
     hairline: (th) => hairlineFor(ctx.app.hair.style, th),
     at(yf, th, out = new THREE.Vector3(), raw = false) {
@@ -98,14 +111,14 @@ export function headFrame(ctx: Ctx, L: Levels): HeadFrame {
         const front = Math.pow(co, 2);
         // Eye sockets, brow ridge, cheekbones, lips, chin, temples.
         z -= gauss(Math.abs(u) - 0.45, 0.2) * gauss((y - FEAT.eye) / 0.05, 1) * 0.0075 * hs * front;
-        z += gauss((y - FEAT.brow) / 0.035, 1) * gauss(u, 0.75) * 0.004 * hs * front * nf;
+        z += gauss((y - FEAT.brow) / 0.035, 1) * gauss(u, 0.75) * 0.004 * hs * front * nf * face.brow;
         z -= gauss(u, 0.3) * gauss((y - FEAT.eye - 0.01) / 0.03, 1) * 0.002 * hs * front;
         const cheek = gauss(Math.abs(u) - 0.72, 0.18) * gauss((y - 0.45) / 0.06, 1) * 0.004 * hs;
         x += Math.sign(x) * cheek;
         z += cheek * 0.5;
-        z += gauss((y - FEAT.mouth) / 0.035, 1) * gauss(u, 0.32) * 0.0035 * hs * front * (fem ? 1.25 : 1);
+        z += gauss((y - FEAT.mouth) / 0.035, 1) * gauss(u, 0.32) * 0.0035 * hs * front * (fem ? 1.25 : 1) * face.lips;
         z -= gauss((y - FEAT.mouth) / 0.008, 1) * gauss(u, 0.28) * 0.0015 * hs * front;
-        z += gauss((y - 0.09) / 0.045, 1) * gauss(u, 0.32) * 0.004 * hs * front;
+        z += gauss((y - 0.09) / 0.045, 1) * gauss(u, 0.32) * 0.004 * hs * front * face.chin;
         x -= Math.sign(x) * gauss(Math.abs(u) - 0.95, 0.12) * gauss((y - 0.68) / 0.08, 1) * 0.003 * hs;
         // Philtrum / nose base shadow area slightly recessed under the nose.
         z -= gauss((y - FEAT.noseBase + 0.02) / 0.03, 1) * gauss(Math.abs(u) - 0.3, 0.2) * 0.002 * hs * front;
@@ -195,8 +208,10 @@ export function buildHead(ctx: Ctx, L: Levels): HeadFrame {
   const Hf = headFrame(ctx, L);
   const { b, app, rig } = ctx;
   const hs = Hf.hs;
+  // Under a helmet only cropped hair; under a veil the hair (a bun) still shows at the front.
   const style: HairStyle = Hf.hasHelmet ? 'cropped' : app.hair.style;
-  const hairT = HAIR_THICK[style] * hs;
+  const paintStyle: HairStyle = style === 'veiled' || style === 'vestal' ? 'bun' : style;
+  const hairT = HAIR_THICK[paintStyle] * hs;
   const skin = ctx.skin;
   const hair = ctx.hair;
   const fem = rig.sex === 'female';
@@ -246,8 +261,8 @@ export function buildHead(ctx: Ctx, L: Levels): HeadFrame {
       // Under-jaw shadow.
       col.multiplyScalar(1 - 0.18 * smooth(0.12, 0.0, yf) * smooth(-0.2, 0.6, -co + 0.4));
       // Hair region.
-      const hl = Hf.hairline(th);
-      let hairK = style === 'bald' || veil ? 0 : smooth(hl - 0.012, hl + 0.012, yf);
+      const hl = hairlineFor(paintStyle, th);
+      let hairK = style === 'bald' ? 0 : smooth(hl - 0.012, hl + 0.012, yf);
       // Keep the ears and sideburn area clear for long styles.
       let disp = 0;
       if (hairK > 0) {
@@ -295,7 +310,7 @@ export function buildHead(ctx: Ctx, L: Levels): HeadFrame {
     'auto',
     (j) => [0, Hf.chin + rows[j] * Hf.H, Hf.c.z],
   );
-  const topH = style === 'bald' || veil;
+  const topH = style === 'bald';
   b.capAuto(g, cols, rows.length - 1, vtx(new THREE.Vector3(0, Hf.chin + Hf.H + (topH ? 0 : hairT), Hf.c.z - 0.004 * hs), topH ? skin : shade(hair, 0.95), HEAD_W, topH ? SURF.skin : SURF.hair), [0, 1, 0]);
   b.capAuto(g, cols, 0, vtx(new THREE.Vector3(0, Hf.chin - 0.002 * hs, Hf.c.z + 0.02 * hs), shade(skin, 0.75), HEAD_W, SURF.skin), [0, -1, 0]);
 
@@ -431,14 +446,15 @@ function buildNose(ctx: Ctx, H: HeadFrame) {
   const { b, rig } = ctx;
   const hs = H.hs;
   const k = hs * (rig.age === 'old' ? 1.08 : 1) * (rig.sex === 'female' ? 0.86 : 1) * (rig.age === 'child' ? 0.8 : 1);
+  const kw = k * H.face.noseW;
   const surfAt = (yf: number, x = 0) => H.at(yf, Math.asin(Math.max(-1, Math.min(1, x / (0.07 * hs)))), new THREE.Vector3(), true);
   const yTop = FEAT.eye + 0.005;
-  const yTip = FEAT.noseBase + 0.03;
+  const yTip = FEAT.noseBase + 0.03 * H.face.nose;
   const yBase = FEAT.noseBase;
   const top = surfAt(yTop);
   const tipS = surfAt(yTip);
   const baseS = surfAt(yBase);
-  const proj = 0.0175 * k;
+  const proj = 0.0175 * k * H.face.noseProj;
   // Bridge profile points (center line) from the root to the tip and under to the base.
   const P: THREE.Vector3[] = [];
   const C: THREE.Color[] = [];
@@ -456,10 +472,10 @@ function buildNose(ctx: Ctx, H: HeadFrame) {
   const colu = add(baseS.clone().add(new THREE.Vector3(0, 0.002 * k, proj * 0.45)), under);
   const midL = add(surfAt(lerp(yTop, yTip, 0.5), 0.009 * k).add(new THREE.Vector3(0.0, 0, -0.002 * k)), side);
   const midR = add(surfAt(lerp(yTop, yTip, 0.5), -0.009 * k).add(new THREE.Vector3(0.0, 0, -0.002 * k)), side);
-  const alaL = add(surfAt(yBase + 0.014, 0.0165 * k).add(new THREE.Vector3(0, 0, 0.007 * k)), side);
-  const alaR = add(surfAt(yBase + 0.014, -0.0165 * k).add(new THREE.Vector3(0, 0, 0.007 * k)), side);
-  const tipL = add(tipS.clone().add(new THREE.Vector3(0.0095 * k, -0.003 * k, proj * 0.68)), skin);
-  const tipR = add(tipS.clone().add(new THREE.Vector3(-0.0095 * k, -0.003 * k, proj * 0.68)), skin);
+  const alaL = add(surfAt(yBase + 0.014, 0.0165 * kw).add(new THREE.Vector3(0, 0, 0.007 * k)), side);
+  const alaR = add(surfAt(yBase + 0.014, -0.0165 * kw).add(new THREE.Vector3(0, 0, 0.007 * k)), side);
+  const tipL = add(tipS.clone().add(new THREE.Vector3(0.0095 * kw, -0.003 * k, proj * 0.68)), skin);
+  const tipR = add(tipS.clone().add(new THREE.Vector3(-0.0095 * kw, -0.003 * k, proj * 0.68)), skin);
   const nosL = add(baseS.clone().add(new THREE.Vector3(0.008 * k, 0.003 * k, proj * 0.35)), under);
   const nosR = add(baseS.clone().add(new THREE.Vector3(-0.008 * k, 0.003 * k, proj * 0.35)), under);
   const ids = P.map((p, i) => b.vertex(vtx(p, C[i], HEAD_W, SURF.skin)));
@@ -675,12 +691,14 @@ function buildVeil(ctx: Ctx, H: HeadFrame, L: Levels, style: HairStyle) {
     false,
     (i, j, v) => {
       // Azimuth sweeps around the back, leaving the face open.
-      const az = lerp(-2.05, 2.05, i / (seg - 1)) + Math.PI;
+      const az = lerp(-2.25, 2.25, i / (seg - 1)) + Math.PI;
       const t = j / (rows - 1);
       let p: THREE.Vector3;
       let w: Weights;
       if (t < 0.6) {
-        const yf = lerp(1.0, 0.36, t / 0.6);
+        // Near the face the veil's edge sits just behind the hairline.
+        const front = Math.max(0, Math.cos(az));
+        const yf = lerp(1.0 - front * 0.0, 0.36 + front * 0.36, t / 0.6);
         p = H.at(yf, az);
         const n = p.clone().sub(H.c);
         n.y *= 0.4;

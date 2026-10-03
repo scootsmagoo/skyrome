@@ -309,7 +309,7 @@ const scene: SceneDef = {
     playerControls(game, playerAvatar);
 
     // Photo mode (screenshots): frame a lineup slot from a given distance/angle/height.
-    const photo = { on: false, target: 0, dist: 2.4, angle: 0, height: 1.1, look: 1.0, fov: 40 };
+    const photo = { on: false, target: 0, dist: 2.4, angle: 0, height: 1.1, look: 1.0, fov: 40, bone: -1, elev: 0 };
     game.addSystem({
       name: 'avatarPhoto',
       priority: 150,
@@ -319,8 +319,16 @@ const scene: SceneDef = {
         if (!s) return;
         const c = s.actor.root.position;
         const a = (photo.angle * Math.PI) / 180 + s.actor.heading;
-        game.camera.position.set(c.x + Math.sin(a) * photo.dist, c.y + photo.height, c.z + Math.cos(a) * photo.dist);
-        game.camera.lookAt(c.x, c.y + photo.look, c.z);
+        if (photo.bone >= 0) {
+          // Frame a bone from a direction (angle around, elevation up), e.g. a hand close-up.
+          const p = s.avatar.bones[photo.bone].getWorldPosition(tmp);
+          const e = (photo.elev * Math.PI) / 180;
+          game.camera.position.set(p.x + Math.sin(a) * Math.cos(e) * photo.dist, p.y + Math.sin(e) * photo.dist, p.z + Math.cos(a) * Math.cos(e) * photo.dist);
+          game.camera.lookAt(p);
+        } else {
+          game.camera.position.set(c.x + Math.sin(a) * photo.dist, c.y + photo.height, c.z + Math.cos(a) * photo.dist);
+          game.camera.lookAt(c.x, c.y + photo.look, c.z);
+        }
         if (game.camera.fov !== photo.fov) {
           game.camera.fov = photo.fov;
           game.camera.updateProjectionMatrix();
@@ -333,11 +341,28 @@ const scene: SceneDef = {
       crowd,
       player: playerAvatar,
       /** Frame slot i: distance, angle (deg, 0 = in front), camera height, look-at height, fov. */
+      /** Close-up of a bone (index into BONES) of slot i. */
+      photoBone(i: number, bone: number, dist = 0.5, angle = 0, elev = 10, fov = 35) {
+        Object.assign(photo, { on: true, target: i, dist, angle, fov, bone, elev });
+        labelLayer.style.display = 'none';
+        slots.forEach((sl, k) => (sl.actor.root.visible = k === i));
+        return slots[i]?.role;
+      },
       photo(i: number, dist = 2.4, angle = 0, height = 1.1, look = 1.0, fov = 40, isolate = true) {
-        Object.assign(photo, { on: true, target: i, dist, angle, height, look, fov });
+        Object.assign(photo, { on: true, target: i, dist, angle, height, look, fov, bone: -1 });
         labelLayer.style.display = 'none';
         slots.forEach((sl, k) => (sl.actor.root.visible = !isolate || k === i));
         return slots[i]?.role;
+      },
+      /** Rebuild slot i as a new random `role` (seeded). */
+      restyle(i: number, role: AvatarRole, seed = 1) {
+        const sl = slots[i];
+        const av = createHumanoid(randomAppearance(new Rng(seed), role));
+        sl.actor.setAvatar(av);
+        sl.avatar = av;
+        sl.role = role;
+        sl.script = [];
+        return `${role}:${av.appearance.sex}:${av.appearance.age}:${av.appearance.skin}`;
       },
       /** Play `clip` on slot i and hold it at time t (s). IdleLoops hold their loop at t. */
       pose(i: number, clip: string, t: number, drawn = true) {

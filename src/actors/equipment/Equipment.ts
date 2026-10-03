@@ -10,6 +10,7 @@ import { avatarMaterial, flameMaterial } from '../avatar/material';
 import { flameGeometry, propGeometry, weaponGeometry, type PropModel } from './weapons';
 import { shieldGeometry } from './shields';
 import type { HumanoidAvatar } from '../avatar/HumanoidAvatar';
+import type { GripSpec } from '../avatar/anim/armIK';
 
 export type SheathLocation = 'hipR' | 'hipL' | 'back' | 'fists';
 
@@ -29,9 +30,9 @@ export const WEAPON_INFO: Record<WeaponModel, WeaponInfo> = {
   spatha: { stance: 'oneHand', stanceShield: 'oneHandShield', sheath: 'scabbard', scabbard: 'scabbard-spatha', gripTilt: 25 },
   pugio: { stance: 'oneHand', stanceShield: 'oneHandShield', sheath: 'belt', gripTilt: 20 },
   sica: { stance: 'oneHand', stanceShield: 'oneHandShield', sheath: 'belt', gripTilt: 25 },
-  hasta: { stance: 'spear', stanceShield: 'spearShield', sheath: 'hand' },
-  pilum: { stance: 'spear', stanceShield: 'spearShield', sheath: 'hand' },
-  trident: { stance: 'spear', stanceShield: 'spearShield', sheath: 'hand' },
+  hasta: { stance: 'spear', stanceShield: 'spearShield', sheath: 'hand', gripTilt: 30 },
+  pilum: { stance: 'spear', stanceShield: 'spearShield', sheath: 'hand', gripTilt: 30 },
+  trident: { stance: 'spear', stanceShield: 'spearShield', sheath: 'hand', gripTilt: 30 },
   fustis: { stance: 'oneHand', stanceShield: 'oneHandShield', sheath: 'belt', gripTilt: 18 },
   net: { stance: 'unarmed', stanceShield: 'unarmed', sheath: 'hand' },
   bow: { stance: 'bow', stanceShield: 'bow', sheath: 'back' },
@@ -51,6 +52,8 @@ export interface EquipmentOptions {
 }
 
 const D = Math.PI / 180;
+/** Right-hand grip position in the hand bone frame (matches the gripR socket, reference meters). */
+const GRIP_R: [number, number, number] = [0.026, -0.08, 0.002];
 
 export class Equipment {
   weapon: WeaponModel;
@@ -113,6 +116,15 @@ export class Equipment {
   defaultStance(): Stance {
     const info = WEAPON_INFO[this.weapon];
     return this.shield !== 'none' ? info.stanceShield : info.stance;
+  }
+
+  /** Grip for the left hand on two-handed weapons (null when one-handed or the off hand is busy). */
+  twoHandGrip(): GripSpec | null {
+    const offsets: Partial<Record<WeaponModel, number>> = { hasta: 0.34, pilum: 0.32, trident: 0.32, axe: 0.26 };
+    const off = offsets[this.weapon];
+    if (off === undefined || this.shield !== 'none' || this.netMesh || this.torchOn) return null;
+    const tilt = ((WEAPON_INFO[this.weapon].gripTilt ?? 0) * Math.PI) / 180;
+    return { gripPos: GRIP_R, gripDir: [0, -Math.sin(tilt), Math.cos(tilt)], offset: off };
   }
 
   sheathLocation(): SheathLocation {

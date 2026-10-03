@@ -101,10 +101,11 @@ export class HumanoidAvatar implements CombatAvatar {
     // Grip: center of the fist; weapon +Y points out of the thumb side (forward in the bind pose).
     add('handR', 'handR', [0.006, -0.06, 0.012]);
     add('handL', 'handL', [-0.006, -0.06, 0.012]);
-    add('gripR', 'handR', [0.006, -0.062, 0.012], [90 * D, 0, 0]);
-    add('gripL', 'handL', [-0.006, -0.062, 0.012], [90 * D, 0, 0]);
+    // The handle runs through the curled fingers on the palm side of the hand (+X for the right hand).
+    add('gripR', 'handR', [0.026, -0.08, 0.002], [90 * D, 0, 0]);
+    add('gripL', 'handL', [-0.026, -0.08, 0.002], [90 * D, 0, 0]);
     // Shield: handle axis along the grip; the face points the way the knuckles point.
-    add('shieldL', 'handL', [-0.004, -0.07, 0.012], [90 * D, 0, -90 * D]);
+    add('shieldL', 'handL', [-0.026, -0.08, 0.002], [90 * D, 0, -90 * D]);
     add('head', 'head', [0, 0.1, 0.01]);
     add('chest', 'chest', [0, 0.1, 0.09]);
     add('hips', 'hips', [0, 0, 0]);

@@ -149,11 +149,12 @@ export const ARM_R_STAB: PoseSpec = {
   indexR: 76,
 };
 
+/** Haft held diagonally across the body: right fist low at the hip, the head up by the left shoulder. */
 export const ARM_R_TWOHAND: PoseSpec = {
   shoulderR: [2, 4],
-  upperArmR: [22, 16, -14, 6],
-  forearmR: [82, 25],
-  handR: [0, 12, 0],
+  upperArmR: [22, 14, -16, 4],
+  forearmR: [70, -42],
+  handR: [0, 8, 0],
   fingersR: 85,
   indexR: 80,
 };
@@ -167,10 +168,11 @@ export const ARM_L_TWOHAND: PoseSpec = {
   indexL: 80,
 };
 
+/** Spear at the hip: the arm nearly hangs with the thumb forward, so the shaft points ahead. */
 export const ARM_R_SPEAR: PoseSpec = {
-  shoulderR: [0, 2],
-  upperArmR: [6, 22, 2, 16],
-  forearmR: [58, 0],
+  shoulderR: [0, 4],
+  upperArmR: [18, 8, -10, 4],
+  forearmR: [68, -10],
   handR: [0, -30, 0],
   fingersR: 85,
   indexR: 80,
@@ -307,7 +309,7 @@ export function stancePose(stance: Stance, drawn: boolean, togate = false): Stan
     case 'twoHand':
       return { pose: { ...REST, ...READY_BODY, ...ARM_R_TWOHAND, ...ARM_L_TWOHAND, hips: [5, -24, 0], chest: [4, 12, 0] }, feet: FEET_READY };
     case 'spear':
-      return { pose: { ...REST, ...READY_BODY, ...ARM_R_SPEAR, ...ARM_L_SPEAR, hips: [5, -26, 0], chest: [4, 12, 0] }, feet: FEET_READY };
+      return { pose: { ...REST, ...READY_BODY, ...ARM_R_SPEAR, ...ARM_L_SPEAR, hipsPos: [0, -0.07, -0.01], hips: [8, -26, 0], spine: [9, 4, 0], chest: [6, 4, 0], shoulderL: [0, 18] }, feet: FEET_READY };
     case 'spearShield':
       return { pose: { ...REST, ...SHIELD_BODY, ...ARM_R_SPEAR, ...ARM_L_SHIELD }, feet: FEET_SHIELD };
     case 'bow':
