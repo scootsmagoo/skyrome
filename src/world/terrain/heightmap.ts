@@ -7,6 +7,9 @@
  * (WORLD_SCALE applied horizontally and vertically).
  */
 import { WORLD_SCALE } from '../coords';
+import { chain, footOn, quayInfluence, resolveQuays, TIBER_QUAYS, type TerrainQuay } from './riverbanks';
+
+export type { TerrainQuay } from './riverbanks';
 
 export type P2 = readonly [number, number];
 
@@ -39,6 +42,8 @@ export interface TerrainRoad {
   id: string;
   points: readonly P2[];
   width: number;
+  /** Surface (atlas Road.paving); default 'basalt'. Only used for texturing. */
+  paving?: 'basalt' | 'gravel' | 'dirt' | 'steps';
 }
 export interface TerrainPad {
   id: string;
@@ -66,6 +71,8 @@ export interface HeightmapOptions {
   /** Amplitude (real m) of the fine noise added on hills / flats. */
   noise?: number;
   seed?: number;
+  /** Stone quays along rivers (default: the Tiber quays of AD 113; they only apply to a river with a matching id). */
+  quays?: readonly TerrainQuay[];
 }
 
 /** Signed distance from p to a closed polygon (negative inside). */
@@ -175,10 +182,37 @@ function fbm(x: number, z: number, seed: number): number {
   return s * 2; // ~[-1, 1]
 }
 
+/**
+ * Cross-section of a natural river bank (real m ASL) at distance `d` from the centerline, for a
+ * channel of half width `half`: bed 4 m below the water, a shelving underwater slope (wading is
+ * possible only in the last few metres), a gravel/mud beach just above the water, then a cut bank
+ * (about 1:3) up to `bankHeight`, then a gentle rise inland.
+ */
+export function riverBankProfile(r: { waterLevel: number; bankHeight: number }, d: number, half: number): number {
+  const wl = r.waterLevel;
+  const bed = wl - 4;
+  if (d < half - 10) return bed;
+  if (d < half) return bed + (wl + 0.3 - bed) * smooth(half - 10, half, d);
+  if (d < half + 5) return wl + 0.3 + 0.12 * (d - half);
+  return wl + 0.9 + Math.max(0, r.bankHeight - wl - 0.9) * smooth(half + 5, half + 16, d) + Math.max(0, d - half - 16) * 0.02;
+}
+
+/**
+ * Cross-section at a stone quay: deep water right at the face (barges moor there), a flat quay top
+ * `width` m wide at `top`, then a blend back to the natural ground over 25 m.
+ */
+export function quayProfile(r: { waterLevel: number }, d: number, half: number, top: number, width: number, ground: number): number {
+  const bed = r.waterLevel - 4;
+  if (d < half - 3) return bed;
+  if (d < half) return bed + (top - bed) * smooth(half - 3, half, d);
+  return top + (ground - top) * smooth(half + width, half + width + 25, d);
+}
+
 /** The natural (pre-road, pre-pad) elevation function in real meters. */
-export function makeNaturalElevation(src: TerrainSource, opts: { noise?: number; seed?: number } = {}) {
+export function makeNaturalElevation(src: TerrainSource, opts: { noise?: number; seed?: number; quays?: readonly TerrainQuay[] } = {}) {
   const noiseAmp = opts.noise ?? 0.6;
   const seed = opts.seed ?? 113;
+  const quays = opts.quays ?? TIBER_QUAYS;
   const lowlands = src.LOWLANDS.map((l) => bbox(l, l.polygon, 60));
   const hills = src.HILLS.map((h) => {
     const b = bbox(h, h.outline, h.slope + 10);
@@ -190,7 +224,10 @@ export function makeNaturalElevation(src: TerrainSource, opts: { noise?: number;
     return { ...b, rIn };
   });
   const islands = src.ISLANDS.map((i) => bbox(i, i.outline, 15));
-  const rivers = src.RIVERS.map((r) => bbox(r, r.centerline, Math.max(...r.width) / 2 + 60));
+  const rivers = src.RIVERS.map((r) => {
+    const line = chain(r.centerline);
+    return { ...bbox(r, r.centerline, Math.max(...r.width) / 2 + 60), line, quays: resolveQuays(quays, r.id, line) };
+  });
 
   /** Ground ignoring hills (base + lowlands). */
   const ground = (x: number, z: number): number => {
@@ -237,26 +274,36 @@ export function makeNaturalElevation(src: TerrainSource, opts: { noise?: number;
       const sd = signedDistance(x, z, b.item.outline);
       if (sd < 12) islandH = Math.max(islandH, b.item.elevation - smooth(-6, 12, sd) * 6);
     }
-    // River channel carves down.
+    // River channel carves down: a natural bank (beach, then a steeper cut bank) or a stone quay.
+    const natural = h;
     for (const b of rivers) {
       if (!inBox(b, x, z)) continue;
       const r = b.item;
-      const n = polylineNearest(x, z, r.centerline);
-      const w0 = r.width[n.i] ?? r.width[r.width.length - 1];
-      const w1 = r.width[n.i + 1] ?? w0;
-      const half = (w0 + (w1 - w0) * n.t) / 2;
-      const bed = r.waterLevel - 4;
-      let profile: number;
-      if (n.d < half - 8) profile = bed;
-      else if (n.d < half) profile = bed + (r.waterLevel + 0.4 - bed) * smooth(half - 8, half, n.d);
-      else profile = r.waterLevel + 0.4 + Math.max(0, r.bankHeight - r.waterLevel - 0.4) * smooth(half, half + 30, n.d) + (n.d - half) * 0.02;
+      const f = footOn(b.line, x, z);
+      const w0 = r.width[f.i] ?? r.width[r.width.length - 1];
+      const w1 = r.width[f.i + 1] ?? w0;
+      const half = (w0 + (w1 - w0) * f.t) / 2;
+      const profile = riverBankProfile(r, f.d, half);
       if (profile < h) h = profile;
+      for (const q of b.quays) {
+        const k = quayInfluence(q, f.s, f.side);
+        if (k <= 0) continue;
+        h += (quayProfile(r, f.d, half, q.quay.top, q.quay.width ?? 12, natural) - h) * k;
+      }
     }
     if (islandH > h) h = islandH;
     // Fine noise: a little on flats, more on hill slopes.
     if (noiseAmp > 0) h += fbm(x, z, seed) * noiseAmp * (0.4 + hillFactor * 1.2);
     return h;
   };
+}
+
+export interface HeightmapFeatures {
+  roads: readonly TerrainRoad[];
+  pads: readonly TerrainPad[];
+  rivers: readonly TerrainRiver[];
+  islands: readonly TerrainIsland[];
+  quays: readonly TerrainQuay[];
 }
 
 export class Heightmap {
@@ -274,6 +321,11 @@ export class Heightmap {
   readonly padMask: Float32Array;
   /** Water level in game y of the main river (for water rendering). */
   waterLevelY = 0;
+  /**
+   * The vector features the grid was built from (REAL meters, atlas frame), kept for the terrain
+   * renderer (crisp road / pad edges, surfaces) and the water module. Null for hand-made grids.
+   */
+  features: HeightmapFeatures | null = null;
 
   constructor(minX: number, minZ: number, spacing: number, nx: number, nz: number) {
     this.minX = minX;
@@ -349,7 +401,8 @@ export function buildHeightmap(src: TerrainSource, opts: HeightmapOptions = {}):
   const nx = Math.floor((b.maxX - b.minX) * S / spacing) + 1;
   const nz = Math.floor((b.maxZ - b.minZ) * S / spacing) + 1;
   const hm = new Heightmap(minX, minZ, spacing, nx, nz);
-  const natural = makeNaturalElevation(src, { noise: opts.noise, seed: opts.seed });
+  const quays = opts.quays ?? TIBER_QUAYS;
+  const natural = makeNaturalElevation(src, { noise: opts.noise, seed: opts.seed, quays });
 
   // 1. Natural terrain (real meters).
   const real = new Float32Array(nx * nz);
@@ -468,6 +521,13 @@ export function buildHeightmap(src: TerrainSource, opts: HeightmapOptions = {}):
   for (let k = 0; k < out.length; k++) hm.heights[k] = out[k] * S;
   const river = src.RIVERS[0];
   hm.waterLevelY = river ? river.waterLevel * S : -Infinity;
+  hm.features = {
+    roads,
+    pads: (opts.pads ?? []).filter((p) => p.polygon.length >= 3),
+    rivers: src.RIVERS,
+    islands: src.ISLANDS,
+    quays: quays.filter((q) => src.RIVERS.some((r) => r.id === q.river)),
+  };
   return hm;
 }
 
