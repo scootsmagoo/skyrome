@@ -1,0 +1,10 @@
+export { TREE_SPECIES, TREE_VARIANTS, makeTree } from './species';
+export type { TreeSpecies, TreeModel, TreePart } from './species';
+export { Forest, WIND } from './Forest';
+export type { ForestOptions } from './Forest';
+export { GrassField } from './Grass';
+export type { GrassOptions } from './Grass';
+export { VegetationSystem, vegetation } from './system';
+export { vegMaterial, windTime, windStrength } from './materials';
+export { ivy, vineCanopy, hedge } from './decor';
+export { noise3, fbm2 } from './geom';
