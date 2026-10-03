@@ -11,6 +11,9 @@ import { buildRome, spawnAtLandmark, type RomeExtent } from '../world/rome/build
 import { installSky } from '../world/sky';
 import { Interactions } from '../interaction/Interactions';
 import { setupPlayer } from './common';
+import { createHumanoid } from '../actors/avatar/HumanoidAvatar';
+import { randomAppearance } from '../actors/avatar/variants';
+import { Rng } from '../core/Rng';
 import type { SceneDef } from './types';
 
 const scene: SceneDef = {
@@ -29,7 +32,8 @@ const scene: SceneDef = {
 
     const at = params.get('at') ?? 'arch-titus';
     const spawn = spawnAtLandmark(game, at, 18) ?? { position: new THREE.Vector3(0, 10, 0), heading: 0 };
-    const player = setupPlayer(game, spawn.position, spawn.heading);
+    const app = randomAppearance(new Rng('player'), 'legionary');
+    const player = setupPlayer(game, spawn.position, spawn.heading, createHumanoid(app));
     player.yaw = spawn.heading + Math.PI;
 
     const hour = params.get('hour');
