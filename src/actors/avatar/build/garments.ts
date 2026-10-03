@@ -213,6 +213,9 @@ export function paintLeg(ctx: Ctx, L: Levels, side: 'L' | 'R', y: number, th: nu
     return { color: ctx.skin, surf: SURF.skin, t: 0, edges: e };
   }
   if (armor && armor.t >= 0) return armor;
+  // Under a skirt the leg takes the skirt's (shaded) color, so a bent knee pressing through reads as cloth.
+  const under = skirtOver(o, L, y);
+  if (under) return { color: under, surf: SURF.wool, t: 0.016 * s };
   if (o.braccae && y > L.ankle + 0.01 * s) {
     const fold = Math.sin(th * 4 + y * 40);
     return { color: shade(o.braccae.color, 0.93 + 0.07 * fold), surf: SURF.wool, t: 0.008 * s + 0.003 * s * fold };
@@ -231,6 +234,14 @@ export function paintLeg(ctx: Ctx, L: Levels, side: 'L' | 'R', y: number, th: nu
   }
   const k = 1 - 0.07 * gauss((y - L.knee) / s, 0.02) * Math.max(0, -Math.sin(th));
   return skinPaint(ctx, k);
+}
+
+function skirtOver(o: Ctx['outfit'], L: Levels, y: number): THREE.Color | null {
+  if (o.braccae || !o.hem || o.hem === 'short') return null;
+  const hemY = o.hem === 'long' ? L.hemLong : L.hemKnee;
+  if (y < hemY + 0.06 * L.s) return null;
+  const c = (o.toga ?? o.stola ?? o.tunic)?.color;
+  return c ? shade(c, 0.8) : null;
 }
 
 export interface FootPaint extends Paint {
@@ -312,7 +323,8 @@ export function buildSkirt(ctx: Ctx, L: Levels, prof: TorsoProfile, sp: SkirtSpe
     const env = envelope(y);
     const flareK = Math.pow(t, 1.3);
     const a = env.a + sp.thickness + sp.flare * flareK;
-    const bf = env.bf + sp.thickness + sp.flare * 1.15 * flareK;
+    // Long skirts carry extra fullness in front so striding or bent knees stay covered.
+    const bf = env.bf + sp.thickness + sp.flare * 1.15 * flareK + (sp.hem < L.knee ? 0.04 * L.s * Math.sin(Math.PI * Math.min(1, t * 1.3)) : 0);
     const bb = env.bb + sp.thickness + sp.flare * 1.25 * flareK;
     const c = Math.cos(th);
     const sn = Math.sin(th);
@@ -329,7 +341,8 @@ export function buildSkirt(ctx: Ctx, L: Levels, prof: TorsoProfile, sp: SkirtSpe
     return { x, y, z: z + env.zc, fold };
   };
   const weights = (x: number, t: number, a: number): Weights => {
-    const wt = smooth(0.08, 1, t) * sp.legK;
+    // Thigh influence ramps in over the upper skirt so knees stay covered when they bend forward.
+    const wt = smooth(0.05, 0.65, t) * sp.legK;
     const lat = x / Math.max(a, 1e-3);
     // A wide blend across the front/back center keeps the cloth closed between the legs.
     const wl = smooth(-0.75, 0.75, lat);
@@ -348,7 +361,7 @@ export function buildSkirt(ctx: Ctx, L: Levels, prof: TorsoProfile, sp: SkirtSpe
     return c;
   };
   // Outer skirt: rows go from the hem (j = 0) up to the waist.
-  const g = b.grid(
+  b.grid(
     seg,
     rowsN,
     true,
@@ -374,7 +387,6 @@ export function buildSkirt(ctx: Ctx, L: Levels, prof: TorsoProfile, sp: SkirtSpe
       return [0, y, envelope(y).zc];
     },
   );
-  void g;
   // Inner lining for the lower part so the hem never looks hollow from below.
   const innerRows = ctx.hi ? 3 : 2;
   const inner = shade(sp.color, 0.55);
@@ -465,7 +477,7 @@ export function buildBelt(ctx: Ctx, L: Levels, prof: TorsoProfile) {
   const seg = ctx.hi ? 16 : 10;
   const extraT = (o.armor.body ? 0.03 : o.toga ? 0.03 : 0.012) * s;
   const metalStuds = o.belt.military;
-  const g = b.grid(
+  b.grid(
     seg,
     4,
     true,
@@ -495,7 +507,6 @@ export function buildBelt(ctx: Ctx, L: Levels, prof: TorsoProfile) {
     'auto',
     () => [0, y0, prof.at(y0).zc],
   );
-  void g;
   if (o.belt.military && !o.toga) buildApron(ctx, L, prof, y0 - h / 2, extraT);
 }
 
@@ -540,7 +551,7 @@ function buildApron(ctx: Ctx, L: Levels, prof: TorsoProfile, yTop: number, out: 
 export function buildLowerGarments(ctx: Ctx, L: Levels, prof: TorsoProfile) {
   const o = ctx.outfit;
   const s = L.s;
-  const legK = { short: 0.7, knee: 0.66, long: 0.5 };
+  const legK = { short: 0.7, knee: 0.66, long: 0.64 };
   if (o.toga) {
     const t = o.toga;
     const skirt = buildSkirt(ctx, L, prof, {
@@ -550,7 +561,7 @@ export function buildLowerGarments(ctx: Ctx, L: Levels, prof: TorsoProfile) {
       trim: t.trim,
       surf: SURF.wool,
       flare: 0.07 * s,
-      legK: 0.42,
+      legK: 0.5,
       folds: 9,
       foldAmp: 0.012 * s,
       thickness: 0.025 * s,
@@ -565,7 +576,7 @@ export function buildLowerGarments(ctx: Ctx, L: Levels, prof: TorsoProfile) {
       trim: o.stola.trim,
       surf: SURF.wool,
       flare: 0.06 * s,
-      legK: 0.45,
+      legK: 0.55,
       folds: 12,
       foldAmp: 0.008 * s,
       thickness: 0.012 * s,
@@ -833,4 +844,3 @@ export function ellipsoid(ctx: Ctx, c: THREE.Vector3, rx: number, ry: number, rz
   b.capAuto(g, seg, rows - 1, { x: c.x, y: c.y - ry, z: c.z, r: color.r * 0.8, g: color.g * 0.8, b: color.b * 0.8, w, s: surf }, [0, -1, 0]);
 }
 
-export { PATTERN, clamp01, tmp };

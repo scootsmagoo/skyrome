@@ -97,7 +97,7 @@ export function shieldGeometry(model: ShieldModel, color = '#8e2a1e', emblem = '
     return face.clone().multiplyScalar(0.86 + 0.14 * (1 - r * r));
   };
   // Front face.
-  const front = rb.b.grid(
+  rb.b.grid(
     nu + 1,
     nv + 1,
     false,
@@ -116,9 +116,9 @@ export function shieldGeometry(model: ShieldModel, color = '#8e2a1e', emblem = '
     },
     false,
   );
-  orientLast(rb, nu, nv, P(0, 0, 0), [0, 0, 1], front, nu + 1);
+  orientLast(rb, nu, nv, [0, 0, 1]);
   // Back face (leather-covered).
-  const back = rb.b.grid(
+  rb.b.grid(
     nu + 1,
     nv + 1,
     false,
@@ -137,7 +137,7 @@ export function shieldGeometry(model: ShieldModel, color = '#8e2a1e', emblem = '
     },
     false,
   );
-  orientLast(rb, nu, nv, P(0, 0, -0.018), [0, 0, -1], back, nu + 1);
+  orientLast(rb, nu, nv, [0, 0, -1]);
   // Rim (binding) around the outline.
   const rim: [number, number][] = [];
   if (sh.outline === 'rect') {
@@ -185,15 +185,12 @@ function square(h: number): [number, number][] {
   ];
 }
 
-/** Make the last grid face the given direction (flip its winding if needed). */
-function orientLast(rb: RigidBuilder, nu: number, nv: number, center: Vec3, dir: Vec3, _base: number, _cols: number) {
-  // Compute the normal of the first triangle of the grid by building a probe: we know the grid
-  // param runs +u along x and +v along y; the default winding (a, d, c) has normal = dv × du... so
-  // for a face toward +z we need the flipped winding.
-  const towardPlusZ = dir[2] > 0;
-  // Default winding produces (+y) × (+x) = -z facing; flip when we want +z.
-  if (towardPlusZ) rb.b.flipTail(nu * nv * 2);
-  void center;
+/**
+ * Make the most recent (nu × nv) face grid point along ±z. The grid runs +u along x and +v along y,
+ * so the default winding (a, d, c) faces (+y) × (+x) = −z; flip it for a front (+z) face.
+ */
+function orientLast(rb: RigidBuilder, nu: number, nv: number, dir: Vec3) {
+  if (dir[2] > 0) rb.b.flipTail(nu * nv * 2);
 }
 
 function rimBand(rb: RigidBuilder, outline: [number, number][], P: (u: number, v: number, d?: number) => Vec3, col: THREE.Color) {
@@ -346,4 +343,3 @@ function emblemShapes(emblem: string, sh: Shape): { pts: [number, number][]; col
   return out;
 }
 
-void (null as unknown as Vec3);

@@ -284,4 +284,3 @@ export function toAnimationClip(clip: CompiledClip, rig: Rig): THREE.AnimationCl
 /** Leg length (thigh + shin) of the 1.75 m reference body; hips offsets scale by legLength / REF_LEG. */
 export const REF_LEG = 1.75 * (0.515 - 0.278) + (1.75 * 0.278 - 0.075);
 
-export { SEM_HIPS_POS };

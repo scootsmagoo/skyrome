@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { B } from '../rig';
 import { SURF, mixW, type Weights } from '../SkinBuilder';
-import { gauss, lerp, noise1, shade, smooth, srgb, type Ctx } from './common';
+import { lerp, noise1, shade, smooth, srgb, type Ctx } from './common';
 import { torsoPoint, type Levels, type TorsoProfile } from './body';
 import { ellipsoid } from './garments';
 
@@ -226,5 +226,4 @@ function buildPaenula(ctx: Ctx, L: Levels, prof: TorsoProfile, color: THREE.Colo
   b.flipTail(cols * 2);
   // Hood bunched behind the neck.
   ellipsoid(ctx, new THREE.Vector3(0, L.trap + 0.01 * s, prof.at(L.trap).zc - prof.at(L.trap).bb - 0.03 * s), 0.07 * s, 0.045 * s, 0.04 * s, shade(color, 0.9), [B.chest, 0.6, B.neck, 0.4], SURF.wool, 0.08);
-  void gauss;
 }

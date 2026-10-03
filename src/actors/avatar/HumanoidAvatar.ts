@@ -12,7 +12,7 @@
 import * as THREE from 'three';
 import type { ActionClip, CombatAvatar, IdleLoop, LocomotionState, PlayOptions, Stance } from '../Actor';
 import type { Appearance, ShieldModel, WeaponModel } from '../appearance';
-import { BONES, B, BONE_COUNT, type BoneName, type Rig } from './rig';
+import { B, type BoneName, type Rig } from './rig';
 import { buildAvatarGeometry, createBones, type AvatarGeometry } from './buildAvatar';
 import { avatarMaterial } from './material';
 import { AnimationController } from './anim/controller';
@@ -243,4 +243,3 @@ export function createHumanoid(app: Appearance, opts?: HumanoidOptions): Humanoi
   return new HumanoidAvatar(app, opts);
 }
 
-export { BONES, BONE_COUNT };

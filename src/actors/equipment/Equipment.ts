@@ -376,4 +376,3 @@ function mergeIndexed(geos: THREE.BufferGeometry[]): THREE.BufferGeometry {
   return out;
 }
 
-export { D };

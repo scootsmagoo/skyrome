@@ -46,7 +46,7 @@ follow the camera when you look up or down.
 
 | Option | Meaning |
 | --- | --- |
-| `lod: 'high' \| 'low' \| 'auto'` | `high` (default) ~4–5k triangles for civilians and ~5–6k for armored soldiers. `low` ~1.2–2k. `auto` builds both and switches beyond 35 m. |
+| `lod: 'high' \| 'low' \| 'auto'` | `high` (default) ~4–5k triangles for civilians and ~5–6k for armored soldiers. `low` ~1.0–1.3k for civilians and ~1.5k for soldiers (mitten hands, no ears or lids). `auto` builds both and switches beyond 35 m. |
 | `castShadow` | Default true. |
 | `weapon`, `shield` | Override the appearance's visual defaults. |
 

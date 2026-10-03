@@ -232,6 +232,10 @@ export function plate(
   thick = 0.003,
 ) {
   const { b } = ctx;
+  if (!ctx.hi) {
+    nu = Math.max(1, Math.round(nu / 2));
+    nv = Math.max(1, Math.round(nv / 2));
+  }
   for (const side of [1, -1]) {
     const base = b.vertexCount;
     for (let j = 0; j <= nv; j++)
@@ -245,13 +249,11 @@ export function plate(
         b.vertex({ x: q.x, y: q.y, z: q.z, r: c.r, g: c.g, b: c.b, w: weights(u, v), s: surf });
       }
     // Orient by the normal at the plate's center.
-    const c0 = p(0.5, 0.5);
     const n0 = normal(0.5, 0.5);
     const a = p(0, 0), bu = p(1, 0), bv = p(0, 1);
     const fn = new THREE.Vector3().subVectors(bu, a).cross(new THREE.Vector3().subVectors(bv, a));
     let flip = fn.dot(n0) < 0;
     if (side < 0) flip = !flip;
-    void c0;
     for (let j = 0; j < nv; j++)
       for (let i = 0; i < nu; i++) {
         const k = base + j * (nu + 1) + i;
@@ -514,7 +516,6 @@ function buildHelmet(ctx: Ctx, H: HeadFrame, kind: HelmetKind, crestColor?: stri
   const surf: Surf = metal === 'iron' || (!metal && (kind === 'imperial-gallic' || kind === 'provocator')) ? SURF.iron : metal === 'gilded' ? SURF.gilded : SURF.bronze;
   const col = !metal && (kind === 'imperial-gallic' || kind === 'provocator') ? IRON : !metal ? BRONZE_C : base;
   const crestC = crestColor ? srgb(crestColor) : null;
-  const D = Math.PI / 180;
   const cheekGuards = (c: THREE.Color, s: Surf) => {
     for (const side of [1, -1]) {
       plate(
@@ -630,8 +631,6 @@ function buildHelmet(ctx: Ctx, H: HeadFrame, kind: HelmetKind, crestColor?: stri
       ctx,
       H,
       (t) => {
-        const th = lerp(-from * Math.PI, (1 - to) * Math.PI + Math.PI * 0, t);
-        void th;
         // Front-to-back over the crown: param angle along the sagittal plane.
         const a = lerp(0.45, -0.6, t) * Math.PI;
         const yf = 0.6 + 0.4 * Math.cos(a);
@@ -811,7 +810,6 @@ function buildHelmet(ctx: Ctx, H: HeadFrame, kind: HelmetKind, crestColor?: stri
       break;
     }
   }
-  void D;
 }
 
 function feather(ctx: Ctx, H: HeadFrame, side: number, color: THREE.Color) {
@@ -858,4 +856,3 @@ function ellipsoidRigid(ctx: Ctx, c: THREE.Vector3, rx: number, ry: number, rz: 
   b.capAuto(g, seg, rows - 1, vtx(c.clone().add(V3(0, -ry, 0)), shade(col, 0.8), s), [0, -1, 0]);
 }
 
-export { clamp01 };

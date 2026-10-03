@@ -15,7 +15,7 @@
 import { B } from '../rig';
 import { bakeFunction, type CompiledClip } from './clip';
 import { REF_RIG, restAnkle, solveLeg, type FootTarget } from './ik';
-import { PARAM_OFFSET, SEM_HIPS_POS, SEM_LEN, semZero } from './pose';
+import { PARAM_OFFSET, SEM_HIPS_POS, semZero } from './pose';
 
 export interface GaitParams {
   /** Nominal speed (m/s) for the 1.75 m reference body. */
@@ -229,13 +229,11 @@ export function gaitPose(g: GaitParams, dirDeg: number, p: number, out: Float32A
   // Legs.
   const l = footAt(g, p, 1, mx, mz, fx, fz, backward);
   const r = footAt(g, p + 0.5, -1, mx, mz, fx, fz, backward);
-  const [lx0, , lz0] = restAnkle('L');
-  const [rx0, , rz0] = restAnkle('R');
-  void lx0;
-  void rx0;
+  const lz0 = restAnkle('L')[2];
+  const rz0 = restAnkle('R')[2];
   const target = (st: FootState): FootTarget => ({ x: st.ax, y: st.ay, z: st.az + (lz0 + rz0) / 2, pitch: st.pitch, yaw: turn });
-  solveLeg(out, 'L', target(l), REF_RIG, st2toe(l));
-  solveLeg(out, 'R', target(r), REF_RIG, st2toe(r));
+  solveLeg(out, 'L', target(l), REF_RIG, l.toe);
+  solveLeg(out, 'R', target(r), REF_RIG, r.toe);
   // In the air the ankle relaxes: soft-clamp extreme foot angles (the kicked-back shin of a run).
   for (const fb of [B.footL, B.footR]) {
     const o = PARAM_OFFSET[fb];
@@ -283,10 +281,6 @@ export function gaitPose(g: GaitParams, dirDeg: number, p: number, out: Float32A
     out[PARAM_OFFSET[B[`fingers${k}`]]] = g.fist;
     out[PARAM_OFFSET[B[`index${k}`]]] = g.fist * 0.8;
   }
-}
-
-function st2toe(st: FootState) {
-  return st.toe;
 }
 
 /** Pelvis height curve for a gait: limited by leg reach, smoothed, plus a running dip. */
@@ -354,4 +348,3 @@ export function bakeGait(name: string, g: GaitParams, dirDeg: number): CompiledC
   }, 40);
 }
 
-export { SEM_LEN };

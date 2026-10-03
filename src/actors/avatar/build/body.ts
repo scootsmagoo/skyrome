@@ -312,7 +312,7 @@ function armWeights(L: Levels, side: 'L' | 'R', y: number): Weights {
 export function buildArm(ctx: Ctx, L: Levels, sideSign: 1 | -1) {
   const { b, rig } = ctx;
   const side = sideSign > 0 ? 'L' : 'R';
-  const seg = ctx.hi ? 10 : 6;
+  const seg = ctx.hi ? 10 : 5;
   const base = armRows(L, rig);
   // Insert garment boundary rings (sleeve hems, manica bands) for crisp edges.
   const extra = ctx.hi ? paintArm(ctx, L, side, 0, 0, 0, true).edges ?? [] : [];
@@ -445,7 +445,7 @@ export function buildHand(ctx: Ctx, L: Levels, sideSign: 1 | -1) {
       y -= Math.cos(ang) * l;
       pts.push([lat, y, fwd]);
     }
-    const fs = ctx.hi ? 5 : 4;
+    const fs = ctx.hi ? 5 : 3;
     const radii = [rad, rad * 0.95, rad * 0.88, rad * 0.75];
     const tube = b.grid(
       fs,
@@ -483,8 +483,9 @@ export function buildHand(ctx: Ctx, L: Levels, sideSign: 1 | -1) {
     finger(-0.011 * s, 0.081 * s, 0.0093 * s, fing, [14 * D, 36 * D, 22 * D]);
     finger(-0.028 * s, 0.064 * s, 0.0082 * s, fing, [16 * D, 36 * D, 22 * D]);
   } else {
-    finger(0.024 * s, 0.075 * s, 0.011 * s, idx, [10 * D, 32 * D, 20 * D]);
-    finger(-0.012 * s, 0.08 * s, 0.022 * s, fing, [14 * D, 36 * D, 22 * D]);
+    // Distant hands: one mitten block for all four fingers, no thumb.
+    finger(0.0, 0.078 * s, 0.03 * s, fing, [14 * D, 36 * D, 22 * D]);
+    return;
   }
   // Thumb: from the base of the palm, forward and down along the index.
   {
@@ -575,8 +576,8 @@ export function buildLeg(ctx: Ctx, L: Levels, sideSign: 1 | -1) {
   const seg = ctx.hi ? 10 : 6;
   const base = legRows(L, rig);
   const extra = ctx.hi ? paintLeg(ctx, L, side, 0, 0, true).edges ?? [] : [];
-  // Skip the hidden thigh under long skirts: start the tube just above the hem.
-  const hidden = ctx.outfit.hem === 'long' && !ctx.outfit.braccae ? L.knee + 0.1 * L.s : Infinity;
+  // (Under long skirts the legs are still built in full but dressed in the skirt's cloth; see paintLeg.)
+  const hidden = Infinity;
   let ys = [...(ctx.hi ? base.map((r) => r.y) : base.map((r) => r.y).filter((_, i, a) => i % 2 === 0 || i === a.length - 1)), ...extra].sort((a, b) => a - b);
   ys = ys.filter((y, i) => i === 0 || y - ys[i - 1] > 0.002 * L.s);
   if (hidden < Infinity) ys = ys.filter((y) => y <= hidden);
@@ -660,7 +661,7 @@ export function buildFoot(ctx: Ctx, L: Levels, sideSign: 1 | -1) {
     [0.2 * s, 0.032 * s, 0.024 * s],
     [0.212 * s, 0.017 * s, 0.017 * s],
   ];
-  if (!ctx.hi) for (const i of [7, 4, 1]) rows.splice(i, 1);
+  if (!ctx.hi) for (const i of [7, 6, 4, 1]) rows.splice(i, 1);
   const seg = ctx.hi ? 8 : 5;
   const footW = (z: number): Weights => {
     const t = smooth(ballZ - az - 0.025 * s, ballZ - az + 0.02 * s, z);

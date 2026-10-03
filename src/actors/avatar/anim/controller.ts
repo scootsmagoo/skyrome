@@ -14,7 +14,7 @@
  */
 import * as THREE from 'three';
 import type { ActionClip, IdleLoop, LocomotionState, PlayOptions, Stance } from '../../Actor';
-import { B, BONE_COUNT, BONES, type BoneName } from '../rig';
+import { B, BONE_COUNT, type BoneName } from '../rig';
 import { Pose, REF_LEG, bakeClip, blendMasked, blendPose, makeMask, sampleClip, samplePhase, toAnimationClip, type BoneMask, type CompiledClip } from './clip';
 import { GAITS, type GaitName } from './gait';
 import { actionInfo, airClips, blockClip, gaitClip, idleLoopClip, stanceIdleClip, type ActionInfo } from './library';
@@ -690,4 +690,3 @@ export class AnimationController {
   }
 }
 
-export { BONES };

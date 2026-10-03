@@ -9,9 +9,7 @@ import type { Stance } from '../../Actor';
 import type { ClipDef, FootKey, Key } from './clip';
 import type { PoseSpec } from './pose';
 import {
-  ARM_L_GUARD,
   ARM_L_SHIELD,
-  ARM_R_BLADE,
   BLOCK,
   FEET_READY,
   FEET_REST,
@@ -1109,4 +1107,3 @@ export function actionDefs(stance: Stance): Record<string, ActionDef> {
   return { ...attacks, ...reactions(cls, stance), ...falls(), ...drawSheath(stance), ...gestures(stance) };
 }
 
-export { ARM_L_GUARD, ARM_R_BLADE };

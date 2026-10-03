@@ -221,7 +221,6 @@ export function buildHead(ctx: Ctx, L: Levels): HeadFrame {
   const male = rig.sex === 'male';
   const blushC = mixC(skin, srgb('#c86a55'), fem ? 0.12 : 0.08);
   const old = rig.age === 'old';
-  const veil = style === 'veiled' || style === 'vestal';
 
   const cols = ctx.hi ? 24 : 10;
   const rows = ctx.hi ? ROWS_HI : ROWS_LO;
@@ -316,7 +315,7 @@ export function buildHead(ctx: Ctx, L: Levels): HeadFrame {
 
   buildEyes(ctx, Hf);
   buildNose(ctx, Hf);
-  buildEars(ctx, Hf);
+  if (ctx.hi) buildEars(ctx, Hf);
   if (!Hf.hasHelmet) buildHairExtras(ctx, Hf, L, style);
   if (male && beard === 'full' && !Hf.hasHelmet) buildMoustache(ctx, Hf);
   return Hf;
@@ -338,7 +337,7 @@ function buildEyes(ctx: Ctx, H: HeadFrame) {
   const sclera = mixC(srgb('#e2d9cc'), ctx.skin, 0.25);
   const lid = shade(ctx.skin, 0.95);
   const lash = mixC(shade(ctx.skin, 0.6), srgb('#1d1410'), 0.55);
-  const seg = ctx.hi ? 8 : 5;
+  const seg = ctx.hi ? 8 : 4;
   const rows = ctx.hi ? 5 : 3;
   const D = Math.PI / 180;
   for (const side of [1, -1]) {
@@ -378,6 +377,7 @@ function buildEyes(ctx: Ctx, H: HeadFrame) {
       () => [center.x, center.y, center.z],
     );
     b.capAuto(g, seg, 0, vtx(center.clone().add(new THREE.Vector3(Math.sin(yaw) * r, 0, Math.cos(yaw) * r)), shade(iris, 0.25), HEAD_W, SURF.eye), [0, 0, 1]);
+    if (!ctx.hi) continue;
     // Upper lid shell over the top of the eye; its edge is the dark lash line.
     const lidR = r * 1.12;
     const lseg = ctx.hi ? 7 : 4;

@@ -289,7 +289,7 @@ describe('geometry', () => {
       const lo = buildAvatarGeometry(app, 'low');
       const armored = !!app.armor?.helmet || !!app.armor?.body;
       expect(hi.triangles, role).toBeLessThan(armored ? 6500 : 5200);
-      expect(lo.triangles, role).toBeLessThan(armored ? 2200 : 1600);
+      expect(lo.triangles, role).toBeLessThan(armored ? 1800 : 1400);
     }
   });
 });

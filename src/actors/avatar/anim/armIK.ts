@@ -8,7 +8,7 @@
  */
 import { B, BONE_COUNT, PARENT_INDEX, type Rig } from '../rig';
 import type { Pose } from './clip';
-import { qFromUnitVectors, qInvert, qMul, qRotate, qAxis, qNlerp } from './quat';
+import { qInvert, qMul, qRotate, qAxis, qNlerp } from './quat';
 
 const gq = new Float32Array(BONE_COUNT * 4);
 const gp = new Float32Array(BONE_COUNT * 3);
@@ -89,7 +89,7 @@ export function leftHandOnShaft(p: Pose, rig: Rig, legScale: number, spec: GripS
   saved.set(p.q.subarray(B.handL * 4, B.handL * 4 + 4), 8);
   for (let pass = 0; pass < 3; pass++) {
     solve(tx, ty, tz, rig, s);
-    finish(p, rig, s, dx, dy, dz, 1);
+    finish(p, dx, dy, dz, 1);
     forwardKinematics(p, rig, legScale);
     qRotate(v3, 0, gq, B.handL * 4, GRIP_L[0] * s, GRIP_L[1] * s, GRIP_L[2] * s);
     const ex = ox - (gp[B.handL * 3] + v3[0]);
@@ -153,14 +153,11 @@ function solve(tx: number, ty: number, tz: number, rig: Rig, s: number): [number
   u2x /= l2;
   u2y /= l2;
   u2z /= l2;
-  void s;
   return [u2x, u2y, u2z];
 }
 
-function finish(p: Pose, rig: Rig, s: number, dx: number, dy: number, dz: number, w: number) {
+function finish(p: Pose, dx: number, dy: number, dz: number, w: number) {
   const ua = B.upperArmL;
-  void rig;
-  void s;
   // Hinge K = u2 × u1 (bind: arm down, forearm forward → +X).
   let kx = u2y * u1z - u2z * u1y;
   let ky = u2z * u1x - u2x * u1z;
@@ -258,4 +255,3 @@ function basisQuat(xx: number, xy: number, xz: number, yx: number, yy: number, y
   out[3] = w;
 }
 
-void qFromUnitVectors;
