@@ -60,11 +60,13 @@ export interface SeatingResult {
 /** Tiers and row depth that fit a target height and reach (pure). */
 export function seatingTiers(height: number, reach: number, podium: number, walkways: number, topWalk: number) {
   const rise = 0.4;
-  const rowsTotal = Math.max(3, Math.floor((height - podium) / rise));
   const tiers = Math.max(1, walkways + 1);
   const walk0 = 1.8;
   const walk = 1.4;
   const walks = walk0 + (tiers - 1) * walk + topWalk;
+  // As many 0.4 m rows as the height allows, but never more than fit the reach at 0.62 m a row
+  // (the seating must not overrun the facade behind it; the caller fills any height left over).
+  const rowsTotal = Math.max(3, Math.min(Math.floor((height - podium) / rise), Math.floor((reach - walks) / 0.62)));
   const depth = Math.min(1.1, Math.max(0.62, (reach - walks) / rowsTotal));
   const per = Math.floor(rowsTotal / tiers);
   const list = Array.from({ length: tiers }, (_, i) => ({ rows: i === tiers - 1 ? rowsTotal - per * (tiers - 1) : per, rise, depth, walk: i === 0 ? walk0 : walk }));

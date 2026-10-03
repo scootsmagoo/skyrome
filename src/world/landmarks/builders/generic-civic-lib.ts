@@ -5,7 +5,7 @@
  * huge warehouses stay inside the landmark budgets; heroes use the kit where the player is close.
  */
 import * as THREE from 'three';
-import { sweep, type V2 } from '../../../arch/common/geom';
+import { gridSurface, linspace, sweep, type V2 } from '../../../arch/common/geom';
 import type { Draw } from '../../../arch/fabric/draw';
 import type { Order } from '../../../arch/classical/orders';
 import type { MaterialId } from '../../../gfx/materialIds';
@@ -69,7 +69,7 @@ export function liteColumnAt(d: Draw, x: number, y: number, z: number, H: number
  * A colonnade along a polyline (column axes at ground level). As the kit's porticus it FACES the
  * right-hand side of the path; the back wall stands `depth` to the left. Lean-to tiled roof.
  */
-export function liteColonnade(d: Draw, path: V3[], spec: ColonnadeSpec): { columns: number; height: number } {
+export function liteColonnade(d: Draw, path: V3[], spec: ColonnadeSpec): { columns: number; height: number; wallTop: number } {
   const H = spec.columnHeight;
   const order = spec.order ?? 'ionic';
   const D = H / (order === 'tuscan' ? 7 : order === 'doric' ? 8 : order === 'ionic' ? 9 : 10);
@@ -106,10 +106,9 @@ export function liteColonnade(d: Draw, path: V3[], spec: ColonnadeSpec): { colum
   const yTop = yE + eh;
   const storeys = spec.storeys ?? 1;
   // Back wall (with colliders).
+  const wallTop = yTop + Math.tan((16 * Math.PI) / 180) * (depth + 0.6) + 0.4 + (storeys - 1) * (H + eh);
   if ((spec.back ?? 'wall') === 'wall') {
     const t = 0.6;
-    const rise = Math.tan((16 * Math.PI) / 180) * (depth + 0.6);
-    const wallTop = yTop + rise + 0.4 + (storeys - 1) * (H + eh);
     d.b.add(sweep(prof([[-depth, y0], [-depth, wallTop], [-depth - t, wallTop], [-depth - t, y0]]), flat, { closed, back: true, caps: !closed }), wallMat, d.m);
     for (let i = 0; i < nSeg; i++) {
       const a = flat[i], c = flat[(i + 1) % flat.length];
@@ -127,7 +126,7 @@ export function liteColonnade(d: Draw, path: V3[], spec: ColonnadeSpec): { colum
   const rise = Math.tan((16 * Math.PI) / 180) * (depth + proj);
   const roofPts: V2[] = [[proj, yTop - 0.02], [proj, yTop + 0.12], [-depth - 0.3, yTop + 0.12 + rise], [-depth - 0.3, yTop - 0.02 + rise]];
   d.b.add(sweep(prof(roofPts), flat, { closed, back: true, caps: !closed }), spec.roofMaterial ?? 'roof_tile', d.m);
-  return { columns: count, height: yTop + rise - y0 };
+  return { columns: count, height: yTop + rise - y0, wallTop };
 }
 
 // ---------------------------------------------------------------- halls and ranges
@@ -287,20 +286,22 @@ export function tabernae(d: Draw, x0: number, x1: number, z: number, depth: numb
   }
 }
 
-/** Long barrel-vaulted brick hall (warehouse aisles, cells): a half-cylinder on low walls, along z. */
+/**
+ * Long barrel vault along z (warehouse aisles, cells): the extrados (outer shell, `mat`) and the
+ * plastered intrados facing down/in, springing at `springH` over an opening `span` wide, plus the
+ * arch rings at both ends. No side walls (the caller's piers carry it).
+ */
 export function vaultedAisle(d: Draw, cx: number, z0: number, z1: number, span: number, springH: number, mat: MaterialId, detail: Detail) {
   const r = span / 2;
-  const L = z1 - z0;
-  const seg = detail === 'high' ? 10 : 6;
-  const g = new THREE.CylinderGeometry(r + 0.4, r + 0.4, L, seg * 2, 1, true, -Math.PI / 2, Math.PI);
-  g.rotateX(Math.PI / 2);
-  g.translate(cx, springH, (z0 + z1) / 2);
-  d.b.add(g, mat, d.m);
-  const ceil = new THREE.CylinderGeometry(r, r, L, seg * 2, 1, true, Math.PI / 2, Math.PI);
-  ceil.rotateX(Math.PI / 2);
-  ceil.rotateY(Math.PI);
-  ceil.translate(cx, springH, (z0 + z1) / 2);
-  d.b.add(ceil, 'plaster_white', d.m, { castShadow: false });
+  const t = 0.4;
+  const n = detail === 'high' ? 12 : 7;
+  const as = linspace(0, Math.PI, n);
+  const zs = [z0, z1];
+  d.b.add(gridSurface(as, zs, (a, z, o) => o.set(cx + Math.cos(a) * (r + t), springH + Math.sin(a) * (r + t), z)), mat, d.m);
+  d.b.add(gridSurface(as, zs, (a, z, o) => o.set(cx + Math.cos(a) * r, springH + Math.sin(a) * r, z), { flip: true }), 'plaster_white', d.m, { castShadow: false });
+  for (const [z, flip] of [[z0, false], [z1, true]] as const) {
+    d.b.add(gridSurface(as, [0, 1], (a, k, o) => o.set(cx + Math.cos(a) * (r + k * t), springH + Math.sin(a) * (r + k * t), z), { flip }), mat, d.m);
+  }
 }
 
 export { ringRoof };

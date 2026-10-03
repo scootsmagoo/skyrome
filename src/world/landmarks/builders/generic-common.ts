@@ -13,6 +13,9 @@ import * as THREE from 'three';
 import { LANDMARK_BY_ID, LANDMARKS } from '../../../data/atlas';
 import { Draw } from '../../../arch/fabric/draw';
 import { roof as tileRoof } from '../../../arch/fabric/roof';
+import { wall as fabricWall } from '../../../arch/fabric/wall';
+import { footprintPolygon } from '../../terrain/heightmap';
+import { footprintRadius } from '../footprint';
 import { stairs, stepCount } from '../../../arch/common/stairs';
 import { T, TRS, mul } from '../../../arch/common/geom';
 import { inscriptionPanel } from '../../../arch/common/inscription';
@@ -55,7 +58,8 @@ const COUNT_WORDS: Record<string, number> = { tetrastyle: 4, hexastyle: 6, octas
 export function parseHints(lm: Pick<LandmarkData, 'name' | 'description' | 'builderNotes'> & { dates?: string }): Hints {
   const dates = (lm.dates ?? '').toLowerCase();
   const text = `${lm.name} ${lm.description} ${lm.builderNotes}`.toLowerCase();
-  const has = (...words: string[]) => words.some((w) => text.includes(w));
+  // Words match at a word start ('hut' must not fire on 'shuttered'); they may end mid-word ('gild').
+  const has = (...words: string[]) => words.some((w) => new RegExp(`(^|[^a-z])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(text));
   let order: Order | undefined;
   for (const o of ['composite', 'corinthian', 'ionic', 'doric', 'tuscan'] as Order[]) {
     if (text.includes(o)) {
@@ -88,6 +92,11 @@ export function parseHints(lm: Pick<LandmarkData, 'name' | 'description' | 'buil
 export function hintsOf(lm: LandmarkData): Hints {
   const full = LANDMARK_BY_ID[lm.id] as { dates?: string } | undefined;
   return parseHints({ ...lm, dates: full?.dates });
+}
+
+/** The atlas `siting` ('pad' | 'slope' | 'open' | 'underground'); not part of LandmarkData. */
+export function sitingOf(lm: LandmarkData): string {
+  return (lm as { siting?: string }).siting ?? 'pad';
 }
 
 /** Landmarks whose `within` is this one (temples inside fora, obelisks on spinae…). */
@@ -164,7 +173,112 @@ export function flightLength(h: number): number {
   return stepCount(h, 0.2).count * 0.34;
 }
 
+// ---------------------------------------------------------------- neighbours
+
+/**
+ * Footprints of the other solid landmarks that reach into this one, as polygons in this landmark's
+ * LOCAL game frame, grown by `margin` game metres. Open areas (gardens, districts) are skipped, so a
+ * garden avoids the temple inside it but not the neighbouring garden.
+ */
+export function obstacles(ctx: LandmarkContext, margin = 2): [number, number][][] {
+  const { lm, S } = ctx;
+  const R = footprintRadius(lm);
+  const th = (lm.rotation * Math.PI) / 180;
+  const c = Math.cos(th), s = Math.sin(th);
+  const out: [number, number][][] = [];
+  for (const o of LANDMARKS) {
+    if (o.id === lm.id || o.siting === 'open' || o.category === 'aqueduct') continue;
+    if (Math.hypot(o.center[0] - lm.center[0], o.center[1] - lm.center[1]) > R + footprintRadius(o as LandmarkData) + margin / S) continue;
+    const poly = footprintPolygon(o.center, o.rotation, o.footprint, margin / S);
+    // World real → local real (inverse of footprintPolygon's rotation), then to game metres.
+    out.push(poly.map(([x, z]) => {
+      const dx = x - lm.center[0], dz = z - lm.center[1];
+      return [(dx * c + dz * s) * S, (-dx * s + dz * c) * S] as [number, number];
+    }));
+  }
+  return out;
+}
+
+/** Pure: point-in-polygon (even-odd). */
+export function insidePoly(x: number, z: number, poly: readonly (readonly [number, number])[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, zi] = poly[i];
+    const [xj, zj] = poly[j];
+    if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** A predicate that is true where (x, z) is clear of every obstacle polygon. */
+export function clearOf(obs: [number, number][][]): (x: number, z: number, r?: number) => boolean {
+  return (x, z, r = 0) => !obs.some((p) => insidePoly(x, z, p) || (r > 0 && (insidePoly(x + r, z, p) || insidePoly(x - r, z, p) || insidePoly(x, z + r, p) || insidePoly(x, z - r, p))));
+}
+
 // ---------------------------------------------------------------- walls and roofs
+
+export interface WallOpening {
+  /** Centre, measured along the wall from its start point. */
+  x: number;
+  w: number;
+  h: number;
+  /** Bottom above the wall's floor level (0 = a door). */
+  sill?: number;
+  arched?: boolean;
+  fill?: MaterialId;
+}
+
+/**
+ * A wall from (ax, az) to (bx, bz) whose outer face looks along the right-hand normal (dz, 0, −dx)
+ * of a→b and whose thickness runs inward, pierced by real openings (fabric `wall`, so reveals have
+ * depth). `floor` is the walking level at the wall; the masonry starts 0.5 m below it. Box colliders
+ * leave the doorways open.
+ */
+export function piercedWall(d: Draw, ax: number, az: number, bx: number, bz: number, floor: number, top: number, t: number, mat: MaterialId, openings: WallOpening[] = [], collide = true) {
+  const len = Math.hypot(bx - ax, bz - az);
+  if (len < 0.05 || top <= floor) return;
+  const f = d.at(ax, 0, az, Math.atan2(-(bz - az), bx - ax));
+  const y0 = floor - 0.5;
+  const ops = openings.map((o) => {
+    const sill = floor + (o.sill ?? 0);
+    return { x0: o.x - o.w / 2, x1: o.x + o.w / 2, y0: sill, y1: sill + o.h, arch: o.arched ? o.w / 2 : 0, fill: o.fill };
+  });
+  const cut = fabricWall(f, mat, 0, len, y0, top, t, ops);
+  if (!collide) return;
+  const doors = cut.filter((o) => o.y0 <= floor + 0.35).sort((p, q) => p.x0 - q.x0);
+  let x = 0;
+  for (const o of doors) {
+    if (o.x0 > x + 0.05) f.solid(x, y0, 0, o.x0, top, t);
+    f.solid(o.x0, o.y1 - (o.arch ?? 0) * 0.3, 0, o.x1, top, t);
+    x = o.x1;
+  }
+  if (len > x + 0.05) f.solid(x, y0, 0, len, top, t);
+}
+
+/**
+ * A wall that follows the terrain between two points: split into segments of about `seg` m, each
+ * standing from below the local ground to `h` above it (garden walls, camp walls on slopes).
+ */
+export function groundWall(d: Draw, ctx: LandmarkContext, ax: number, az: number, bx: number, bz: number, h: number, t: number, mat: MaterialId, seg = 6, gaps: [number, number][] = []) {
+  const len = Math.hypot(bx - ax, bz - az);
+  const n = Math.max(1, Math.round(len / seg));
+  for (let k = 0; k < n; k++) {
+    const s0 = (len * k) / n, s1 = (len * (k + 1)) / n;
+    // Skip the parts that fall in a gap (gateways), trimming partial overlaps.
+    let a = s0, b = s1;
+    for (const [g0, g1] of gaps) {
+      if (g0 <= a && g1 >= b) { a = b; break; }
+      if (g0 > a && g0 < b) b = Math.min(b, g0);
+      if (g1 > a && g1 < b) a = Math.max(a, g1);
+    }
+    if (b - a < 0.2) continue;
+    const x0 = ax + ((bx - ax) * a) / len, z0 = az + ((bz - az) * a) / len;
+    const x1 = ax + ((bx - ax) * b) / len, z1 = az + ((bz - az) * b) / len;
+    const g0 = ctx.groundAt(x0, z0), g1 = ctx.groundAt(x1, z1), gm = ctx.groundAt((x0 + x1) / 2, (z0 + z1) / 2);
+    const lo = Math.min(g0, g1, gm), hi = Math.max(g0, g1, gm);
+    wallRun(d, x0, z0, x1, z1, lo - 0.6, hi + h, t, mat);
+  }
+}
 
 /** A straight wall slab between two points in the frame (any direction), with a box collider. */
 export function wallRun(d: Draw, ax: number, az: number, bx: number, bz: number, y0: number, y1: number, t: number, mat: MaterialId, collide = true) {
@@ -319,7 +433,8 @@ export function railing(d: Draw, pts: [number, number][], y: number, h = 1.1, cl
     const gb = ground ? ground(bx, bz) : y;
     d.rod('iron', V(ax, ga + h - 0.05, az), V(bx, gb + h - 0.05, bz), 0.025, 4);
     d.rod('iron', V(ax, ga + 0.12, az), V(bx, gb + 0.12, bz), 0.02, 4);
-    wallRun(d, ax, az, bx, bz, Math.min(ga, gb), Math.max(ga, gb) + h, 0.06, 'iron', true);
+    // Collider only (an invisible slab along the rail).
+    d.at((ax + bx) / 2, 0, (az + bz) / 2, Math.atan2(-(bz - az), bx - ax)).solid(-len / 2, Math.min(ga, gb), -0.06, len / 2, Math.max(ga, gb) + h, 0.06);
   }
 }
 

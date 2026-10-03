@@ -38,7 +38,7 @@ export interface FitOptions {
   stairs?: 'front' | 'sides' | 'none';
   /**
    * Above this many columns the temple is built at 'low' detail even when `detail` is 'high' (a
-   * fluted Corinthian column costs ~6k triangles at high detail). Default 12; heroes raise it.
+   * fluted Corinthian column costs ~6k triangles at high detail). Default 8; heroes raise it.
    */
   maxHighColumns?: number;
 }
@@ -68,7 +68,7 @@ export function fitTemple(w: number, d: number, o: FitOptions): { spec: TempleSp
       sides = Math.max(minSides, sides);
       const spec = { ...base, sides };
       let layout = templeLayout(spec);
-      if (spec.detail === 'high' && layout.columns.length > (o.maxHighColumns ?? 12)) {
+      if (spec.detail === 'high' && layout.columns.length > (o.maxHighColumns ?? 8)) {
         spec.detail = 'low';
         spec.fluted = false;
         layout = templeLayout(spec);
@@ -141,7 +141,7 @@ function buildTemple(ctx: LandmarkContext): LandmarkBuild {
   }
   if (precinct) return buildPrecinct(ctx, d, h, w, dd, mats, far);
   plinth(d, ctx, -w / 2, -dd / 2, w / 2, dd / 2, 0.02, mats.podiumMaterial ?? 'travertine');
-  const t = fittedTemple(d, w, dd, { ...mats, order: h.order ?? (h.republican ? 'ionic' : 'corinthian'), plan: h.plan, front: h.front, detail }, lm.id);
+  const t = fittedTemple(d, w, dd, { ...mats, order: h.order ?? (h.republican ? 'ionic' : 'corinthian'), plan: h.plan, front: h.front, detail, maxHighColumns: lm.priority >= 3 ? 4 : 8 }, lm.id);
   spots.push(...t.spots);
   // Far: podium + cella block + roof.
   const L = t.layout;
@@ -504,7 +504,8 @@ function buildTomb(ctx: LandmarkContext): LandmarkBuild {
     pyramidTomb(far, Math.min(w, dd), H, 'marble', 0);
     return finish(lm.id, d, spots, far);
   }
-  if (lm.footprint.kind === 'circle' || h.has('drum', 'round', 'tumulus')) {
+  // (notes often mention a neighbouring drum tomb, so the more specific kinds win)
+  if (lm.footprint.kind === 'circle' || (h.has('drum', 'round', 'tumulus') && !h.has('rock-cut', 'rock cut', 'columbarium', 'cylinders', 'kneading'))) {
     const R = Math.min(w, dd) / 2;
     drumTomb(d, R, H, detail);
     spots.push(spot(`${lm.id}:door`, 'door', 0, 0, -R - 0.6, 0));
