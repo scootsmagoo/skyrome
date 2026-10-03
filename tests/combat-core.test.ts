@@ -421,6 +421,39 @@ describe('knockouts, yields and flight (§6.9)', () => {
   });
 });
 
+describe('brawls (§6.9, AC-09)', () => {
+  it('a rixa ends in a yield or a knockout, never a death; losing it is a knockout', () => {
+    const env = fakeEnv();
+    const core = makeCore(env);
+    const p = addPlayer(core, { weapon: 'caestus', health: 30 });
+    p.weaponItem = undefined;
+    p.weapon = { class: 'unarmed', skill: 'brawling', damage: 4, damageType: 'blunt', speed: 1.4, reach: 0.5, stagger: 8 };
+    const d = addNpc(core, 'drunk', archetypeProfile('ebrius-rixator', items));
+    p.brawl = d.brawl = true;
+    core.engage(d, p);
+    for (let i = 0; i < 30 && d.status === 'active'; i++) core.applyHit(p, d, light(1));
+    expect(d.status).toBe('yielded');
+    const d2 = addNpc(core, 'drunk2', archetypeProfile('ebrius-rixator', items), { x: 1 });
+    d2.brawl = true;
+    for (let i = 0; i < 40 && p.status === 'active'; i++) core.applyHit(d2, p, light(1));
+    expect(p.status).toBe('ko');
+    expect(env.of('actor:killed')).toHaveLength(0);
+    expect((env.of('combat:playerDefeated')[0] as { outcome: string }).outcome).toBe('brawl-lost');
+  });
+
+  it('drawing a blade in a brawl makes it an assault', () => {
+    const env = fakeEnv();
+    const core = makeCore(env);
+    const p = addPlayer(core);
+    const d = addNpc(core, 'drunk', archetypeProfile('ebrius-rixator', items));
+    p.brawl = d.brawl = true;
+    p.drawn = false;
+    core.setDrawn(p, true);
+    expect(env.of('combat:brawlEscalated')).toEqual([{ by: 'player' }]);
+    expect(d.brawl).toBe(false);
+  });
+});
+
 describe('the inCombat predicate (§6)', () => {
   it('true while a hostile fights the player within 40 m, and for 8 s after', () => {
     const env = fakeEnv();

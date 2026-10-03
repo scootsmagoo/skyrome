@@ -204,6 +204,8 @@ export class Combatant {
   lockTarget: Combatant | null = null;
   /** The core moves this body (spawned enemies; NPCs while fighting). */
   driven = false;
+  /** Keep driving when idle (spawned enemies); others are handed back to their module after a fight. */
+  keepDriven = false;
   home = { x: 0, z: 0 };
   /** In a rixa: non-lethal by rule (§6.9). */
   brawl = false;

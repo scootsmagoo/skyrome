@@ -29,6 +29,7 @@ const RING = 2 * Math.PI * 18;
 
 export class CombatHud {
   readonly el: HTMLElement;
+  private under: HTMLElement;
   private lock = el('div', 'cb-lock', el('i', 'tl'), el('i', 'tr'), el('i', 'bl'), el('i', 'br'), el('i', 'dot'));
   private favor: HTMLElement;
   private favorFill: HTMLElement;
@@ -99,7 +100,10 @@ export class CombatHud {
     this.msgSmall = el('div', 'small');
     this.msg = el('div', 'cb-msg', this.msgBig, this.msgSmall);
 
-    this.el = el('div', 'cb-hud', this.blind, this.netMesh, this.edge, this.lock, this.favor, this.net, this.hold, this.msg);
+    // Sand and the net cover the world, not the HUD: that layer goes first, under the bars and compass.
+    this.under = el('div', 'cb-hud', this.blind, this.netMesh);
+    this.el = el('div', 'cb-hud', this.edge, this.lock, this.favor, this.net, this.hold, this.msg);
+    parent.prepend(this.under);
     parent.appendChild(this.el);
   }
 
@@ -171,5 +175,6 @@ export class CombatHud {
 
   dispose() {
     this.el.remove();
+    this.under.remove();
   }
 }

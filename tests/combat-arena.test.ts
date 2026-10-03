@@ -113,6 +113,41 @@ describe('the bout through the core', () => {
   });
 });
 
+describe('the end of a bout is announced once (the purse is paid once)', () => {
+  it('a yielded lusio foe struck down: one end event, the player wins', () => {
+    const env = fakeEnv();
+    const core = makeCore(env);
+    const p = addPlayer(core, { weapon: 'rudis' });
+    const f = addNpc(core, 'f', { ...combatProfileFor('thug', { kit: 0 }), health: 40 });
+    core.startBout({ lusio: true, foes: ['f'], purse: 10 });
+    core.engage(f, p);
+    for (let i = 0; i < 5 && f.status === 'active'; i++) core.applyHit(p, f, { kind: 'light', start: 0, end: 1, resolved: true, chain: 1 });
+    expect(f.status).toBe('yielded');
+    core.applyHit(p, f, { kind: 'power', start: 0, end: 1, resolved: true, charge: 0.8, direction: 'none' });
+    expect(f.status).toBe('ko');
+    const ends = (env.of('combat:bout') as { phase: string; winner?: string }[]).filter((e) => e.phase === 'end');
+    expect(ends).toHaveLength(1);
+    expect(ends[0].winner).toBe('player');
+    expect(env.of('combat:yieldChoice')).toEqual([{ actorId: 'f', choice: 'kill' }]);
+  });
+
+  it('missio granted: one end event with the purse', () => {
+    const env = fakeEnv();
+    const core = makeCore(env);
+    const p = addPlayer(core, { weapon: 'rudis' });
+    const f = addNpc(core, 'f', { ...combatProfileFor('thug', { kit: 0 }), health: 40 });
+    core.startBout({ lusio: true, foes: ['f'], purse: 10 });
+    core.engage(f, p);
+    for (let i = 0; i < 5 && f.status === 'active'; i++) core.applyHit(p, f, { kind: 'light', start: 0, end: 1, resolved: true, chain: 1 });
+    core.decideYielded(f, 'spare');
+    const ends = (env.of('combat:bout') as { phase: string; purse?: number }[]).filter((e) => e.phase === 'end');
+    expect(ends).toHaveLength(1);
+    expect(ends[0].purse).toBeGreaterThan(10);
+    expect(f.status).toBe('active');
+    expect(core.hostile(p, f)).toBe(false);
+  });
+});
+
 describe('Nereus (§13.2, AC-08)', () => {
   function setup() {
     const env = fakeEnv();

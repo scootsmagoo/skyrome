@@ -20,6 +20,7 @@ import { randomAppearance } from '../actors/avatar/variants';
 import { CombatBrain } from '../ai/combat/CombatBrain';
 import { NereusScript } from '../ai/combat/nereus';
 import { brainProfileFrom, type BrainProfile } from '../ai/combat/types';
+import type { Surface } from '../audio/FootstepDriver';
 import type { Game, System } from '../core/Game';
 import { codeLabel } from '../core/Input';
 import { DEG, clamp, damp, wrapAngle } from '../core/math';
@@ -66,6 +67,10 @@ export interface InstallCombatOptions {
 export interface RegisterOptions {
   team?: string;
   group?: string;
+  /** Faction id: the call-for-help group when `group` isn't given. */
+  faction?: string;
+  /** Override the profile's kit (item ids): what the NPC really carries and wears. */
+  loadout?: { weapon?: string; shield?: string; worn?: string[] };
   name?: string;
   title?: string;
   /** NPCs: the §6.11 profile (tier stats, kit). */
@@ -121,12 +126,18 @@ export class CombatSystem implements System, PlayerCombatHost {
   private shakeAmp = 0;
   private shakeT = 0;
   private lockLostAt = -1;
+  private downHeading: number | null = null;
+  /** Which way the locked third-person camera turns off the line to the foe (+1 / −1). */
+  lockOrbit = 1;
   private netGeo: THREE.BufferGeometry;
   private drapeGeo: THREE.BufferGeometry;
   private ropeMat: THREE.LineBasicMaterial;
   private netVisuals = new Map<number, THREE.Object3D>();
   private drapes = new Map<string, THREE.Object3D>();
   private spawned = new Map<string, Actor>();
+  private footsteps = new Map<string, () => void>();
+  /** Ground surface for spawned enemies' footsteps (scenes set it: sand → 'dirt'). */
+  surfaceAt: ((x: number, y: number, z: number) => Surface) | null = null;
   private yieldOffs = new Map<string, () => void>();
   private pendingChoice: { c: Combatant; at: number } | null = null;
   private lastStruck: { c: Combatant; at: number } | null = null;
@@ -313,8 +324,8 @@ export class CombatSystem implements System, PlayerCombatHost {
 
   /** Make an actor a combatant. NPCs get vitals, stats and an AI from the profile. */
   register(actor: Actor, o: RegisterOptions = {}): Combatant {
-    const p = o.profile;
-    if (!p) throw new Error('[combat] register needs a CombatProfile for NPCs');
+    if (!o.profile) throw new Error('[combat] register needs a CombatProfile for NPCs');
+    const p: CombatProfile = { ...o.profile, ...(o.loadout ?? {}) };
     const weaponItem = p.weapon ? this.items.get(p.weapon) : undefined;
     const shieldItem = p.shield ? this.items.get(p.shield) : undefined;
     const c = new Combatant({
@@ -322,7 +333,7 @@ export class CombatSystem implements System, PlayerCombatHost {
       body: new ActorBody(actor),
       view: AvatarCombatView.from(actor.avatar),
       team: o.team ?? 'hostile',
-      group: o.group,
+      group: o.group ?? o.faction,
       name: o.name ?? p.name ?? actor.id,
       title: o.title,
       tierLabel: o.tierLabel ?? tierLabel(p.tier),
@@ -358,6 +369,7 @@ export class CombatSystem implements System, PlayerCombatHost {
       }
     }
     c.driven = !!o.driven;
+    c.keepDriven = !!o.driven;
     if (o.aggro) this.core.aggro.set(c.id, o.aggro);
     this.core.add(c);
     if (o.drawn) {
@@ -381,6 +393,13 @@ export class CombatSystem implements System, PlayerCombatHost {
     const actor = new Actor(game, { id, position, heading: o.heading ?? 0, layer: Layer.Npc, avatar });
     game.actors.add(actor);
     this.spawned.set(id, actor);
+    // Footsteps (hobnails and mail for soldiers).
+    const steps = game.audio?.footsteps?.attach(actor, {
+      surfaceAt: this.surfaceAt ?? undefined,
+      gear: profile.armorFamily === 'mail' || profile.armorFamily === 'plate' ? 'armor' : 'cloth',
+      voice: app.sex === 'female' ? 'f' : 'm',
+    });
+    if (steps) this.footsteps.set(id, () => steps.detach());
     const c = this.register(actor, {
       profile,
       team: o.team ?? spec.team,
@@ -412,6 +431,8 @@ export class CombatSystem implements System, PlayerCombatHost {
       this.game.actors.remove(a);
       this.spawned.delete(c.id);
     }
+    this.footsteps.get(c.id)?.();
+    this.footsteps.delete(c.id);
     const d = this.drapes.get(c.id);
     if (d) {
       d.removeFromParent();
@@ -553,13 +574,18 @@ export class CombatSystem implements System, PlayerCombatHost {
     const dz = t.position.z - p.position.z;
     const d = Math.hypot(dx, dz) || 1;
     const k = damp(1 / 0.15, dt);
-    p.yaw += wrapAngle(Math.atan2(-dx, -dz) - p.yaw) * k;
     if (p.viewMode === 'first') {
+      // First person: the view tracks the target's chest with a 0.15 s lag.
+      p.yaw += wrapAngle(Math.atan2(-dx, -dz) - p.yaw) * k;
       const dy = t.position.y + t.body.height * 0.72 - (p.position.y + p.eyeHeight);
       p.pitch += (Math.atan2(dy, d) - p.pitch) * k;
       if (rig) rig.framingDistance = 0;
     } else {
-      p.pitch += (-0.16 - p.pitch) * k * 0.4;
+      // Third person frames both: the yaw turns a little off the line to the foe so the camera
+      // orbits beside the player instead of hiding the foe behind it; pull back to 3.5–5 m.
+      const off = this.lockOrbit * clamp(0.5 / d, 0.12, 0.3);
+      p.yaw += wrapAngle(Math.atan2(-dx, -dz) + off - p.yaw) * k;
+      p.pitch += (-0.24 - p.pitch) * k * 0.5;
       if (rig) rig.framingDistance = clamp(3.5 + d * 0.3, 3.5, 5);
     }
   }
@@ -622,9 +648,10 @@ export class CombatSystem implements System, PlayerCombatHost {
     if (pc.lockTarget === c) this.setLock(null);
     const inter = this.game.interactions;
     if (inter) {
+      const at = new THREE.Vector3();
       const off = inter.add({
         id: `yield:${c.id}`,
-        position: () => tmp.set(c.position.x, c.position.y + 0.9, c.position.z).clone(),
+        position: () => at.set(c.position.x, c.position.y + 0.9, c.position.z),
         reach: 3.2,
         verb: () => 'Decide',
         label: () => `${c.name} (yielded)`,
@@ -849,6 +876,12 @@ export class CombatSystem implements System, PlayerCombatHost {
     return null;
   }
 
+  /** Combatants fighting the player right now. */
+  hostiles(): Combatant[] {
+    const pc = this.playerC;
+    return pc ? this.core.list.filter((c) => c.active && c.target === pc) : [];
+  }
+
   compassMarkers(): CompassMarker[] {
     const pc = this.playerC;
     if (!pc) return [];
@@ -899,6 +932,18 @@ export class CombatSystem implements System, PlayerCombatHost {
 
   fixedUpdate(dt: number) {
     this.core.difficulty = this.cached.difficulty;
+    // Locked on with a weapon drawn, the body squares up to the foe (the camera orbits a little off it).
+    const pc = this.playerC;
+    const t = pc?.lockTarget;
+    const p = this.game.player;
+    if (pc && t && pc.drawn && pc.active && !pc.stunned(this.core.now) && pc.action?.kind !== 'dodge') {
+      p.heading = Math.atan2(t.position.x - p.position.x, t.position.z - p.position.z);
+    }
+    // A fallen player stays where it fell (the controller would turn the body with the keys).
+    if (pc && pc.status !== 'active' && pc.status !== 'yielded') {
+      this.downHeading ??= p.heading;
+      p.heading = this.downHeading;
+    } else this.downHeading = null;
     this.core.fixedStep(dt);
   }
 

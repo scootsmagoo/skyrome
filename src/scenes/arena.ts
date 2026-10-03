@@ -15,6 +15,7 @@
  *   &god=1         the player can't drop         &toggle=1      toggle block (Trackpad preset)
  *   &foegod=1      the enemies can't drop (long scripted duels for block-rate statistics)
  *   &origin=<id>   RPG origin (default veteranus) &audio=0       no audio
+ *   &site=rome     fight in the city at a landmark (&at=<id>, default ludus-magnus) instead of the sand arena
  *
  * `window.__arena` (for scripts/shot.mjs): `stats` (player swings, hits, blocks, parries; the
  * most attackers holding tokens at once…), `spam(seconds, everyMs)`, `reset()`, `hurt(id, frac)`,
@@ -149,14 +150,28 @@ const scene: SceneDef = {
     game.interactions = game.addSystem(new Interactions(game));
     game.time.restore({ totalHours: num('hour', 10.5) });
     installSky(game);
-    const site = buildArena(game);
+    // &site=rome: stage the fight in the city, at a landmark (default the Ludus Magnus).
+    const inRome = q.get('site') === 'rome';
+    let origin = { x: 0, y: 0, z: 0 };
+    let site = { editor: { x: 0, z: ARENA.rz + 2.2 } };
+    if (inRome) {
+      const { buildRome, spawnAtLandmark } = await import('../world/rome/buildRome');
+      await buildRome(game, { extent: 'core' });
+      const at = spawnAtLandmark(game, q.get('at') ?? 'ludus-magnus', 0);
+      if (at) origin = { x: at.position.x, y: at.position.y, z: at.position.z };
+      site = { editor: { x: origin.x, z: origin.z + 20 } };
+      game.world.refreshAll();
+    } else site = buildArena(game);
+    const ground = (x: number, z: number) => (inRome ? (game.physics.groundHeight(origin.x + x, origin.z + z, origin.y + 40, 120) ?? origin.y) : 0) + 0.05;
+    const at = (x: number, z: number) => ({ x: origin.x + x, y: ground(x, z), z: origin.z + z });
 
     // The player: a fighter of the Ludus (gladius and scutum; practice arms in a lusio).
     const pApp = randomAppearance(new Rng('arena-player'), (q.get('player') as AvatarRole) ?? 'legionary');
     pApp.armor = { ...pApp.armor, helmet: pApp.armor?.helmet };
     const avatar = createHumanoid(pApp);
     const dist = num('dist', 8);
-    const player = setupPlayer(game, new THREE.Vector3(0, 0.05, dist / 2 + 2), Math.PI, avatar);
+    const start = at(0, dist / 2 + 2);
+    const player = setupPlayer(game, new THREE.Vector3(start.x, start.y, start.z), Math.PI, avatar);
     avatarLod.viewer = game.camera;
     const rpg = installRpg(game, { background: q.get('origin') ?? 'veteranus', sex: pApp.sex });
     const inv = rpg.inventory;
@@ -183,12 +198,15 @@ const scene: SceneDef = {
     });
     if (q.get('audio') !== '0') {
       try {
-        installAudio(game).ambience.setBase({ city: 0.6, crowd: 0.8 });
+        const audio = installAudio(game);
+        audio.ambience.setBase({ city: 0.6, crowd: inRome ? 0.2 : 0.8 });
+        audio.footsteps.attach(player, { surfaceAt: () => (inRome ? 'gravel' : 'dirt'), spatial: false, voice: pApp.sex === 'female' ? 'f' : 'm', gear: 'armor' });
       } catch {
         /* no audio in this browser */
       }
     }
     const combat = installCombat(game, { hudRoot: uiRoot, seed: q.get('seed') ?? 113 });
+    if (!inRome) combat.surfaceAt = () => 'dirt';
     if (q.get('view') === 'first') player.setViewMode('first');
     // Start with the weapon in hand (&drawn=0 starts sheathed).
     if (q.get('drawn') !== '0' && combat.playerC) {
@@ -202,7 +220,7 @@ const scene: SceneDef = {
     const aggro = num('aggro', q.get('noai') === '1' ? 0 : 30);
     for (let i = 0; i < count; i++) {
       const spread = count > 1 ? (i - (count - 1) / 2) * 2.6 : 0;
-      const c = combat.spawnEnemy(spec.id, { x: spread, y: 0.05, z: -dist / 2 + 2 - Math.abs(spread) * 0.3 }, {
+      const c = combat.spawnEnemy(spec.id, at(spread, -dist / 2 + 2 - Math.abs(spread) * 0.3), {
         id: count > 1 ? `${spec.id}-${i + 1}` : spec.id,
         heading: 0,
         tier: q.get('tier') ?? undefined,
@@ -220,7 +238,7 @@ const scene: SceneDef = {
     }
     if (bout && foes.length) combat.startBout({ foes, lusio, editor: site.editor, purse: spec.boss ? 40 : 10 });
     else if (q.get('noai') !== '1') for (const f of foes) if (combat.playerC) combat.core.engage(f, combat.playerC);
-    if (num('crowd', 24) > 0) buildCrowd(game, num('crowd', 24), rng);
+    if (num('crowd', 24) > 0 && !inRome) buildCrowd(game, num('crowd', 24), rng);
 
     // ---------------------------------------------------------------- scripted-test hooks
     const pc = combat.playerC!;
@@ -242,6 +260,7 @@ const scene: SceneDef = {
       entangled: 0,
       events: [] as string[],
       why: {} as Record<string, number>,
+      foeAttacks: 0,
       started: game.elapsed,
     };
     const startAttack = combat.core.startAttack.bind(combat.core);
@@ -252,6 +271,7 @@ const scene: SceneDef = {
         if (kind === 'light' || kind === 'riposte') stats.lightSwings++;
       }
       if (ok && kind === 'net') stats.nets++;
+      if (ok && c !== pc) stats.foeAttacks++;
       return ok;
     };
     const log = (s: string) => {
@@ -316,7 +336,7 @@ const scene: SceneDef = {
     game.events.on('combat:playerDefeated', () => {
       setTimeout(() => {
         combat.core.revive(pc);
-        player.teleport({ x: 0, y: 0.05, z: dist / 2 + 2 }, Math.PI);
+        player.teleport(start, Math.PI);
       }, 4000);
     });
 
@@ -363,7 +383,7 @@ const scene: SceneDef = {
       stats,
       tokensMax: DIFFICULTY[difficulty].tokens,
       reset() {
-        for (const k of ['swings', 'lightSwings', 'connected', 'landed', 'blocked', 'parried', 'playerHitsTaken', 'playerBlocked', 'playerParried', 'maxTokens', 'maxAttacking', 'nets', 'entangled'] as const) stats[k] = 0;
+        for (const k of ['swings', 'lightSwings', 'connected', 'landed', 'blocked', 'parried', 'playerHitsTaken', 'playerBlocked', 'playerParried', 'maxTokens', 'maxAttacking', 'nets', 'entangled', 'foeAttacks'] as const) stats[k] = 0;
         stats.tokenHistogram = {};
         stats.why = {};
         stats.events.length = 0;
@@ -408,6 +428,7 @@ const scene: SceneDef = {
           parried: stats.parried,
           blockRate: +((stats.blocked + stats.parried) / c).toFixed(3),
           hitsTaken: stats.playerHitsTaken,
+          foeAttacks: stats.foeAttacks,
           maxTokens: stats.maxTokens,
           maxAttacking: stats.maxAttacking,
           tokenHistogram: stats.tokenHistogram,

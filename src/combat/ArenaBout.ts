@@ -44,6 +44,8 @@ export class ArenaBout {
   /** The crowd's wish when a foe yields. */
   chant: Chant | null = null;
   over = false;
+  /** The end has been announced (once). */
+  reported = false;
   winner: 'player' | 'foe' | 'draw' | null = null;
   /** Seconds since the bout started. */
   t = 0;

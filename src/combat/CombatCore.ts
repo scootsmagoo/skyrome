@@ -862,7 +862,7 @@ export class CombatCore {
     const bout = this.bout;
     if (def.isPlayer) {
       const outcome = bout?.lusio ? 'saniarium-no-purse' : def.brawl ? 'brawl-lost' : 'knocked-out';
-      bout?.finish('foe');
+      this.boutOver('foe');
       this.env.emit('combat:playerDefeated', { outcome, byId: by?.id, lusio: !!bout?.lusio });
     } else if (bout && bout.foes.has(def.id)) this.foeDown(def);
   }
@@ -889,7 +889,7 @@ export class CombatCore {
       z: p.z,
     });
     if (def.isPlayer) {
-      this.bout?.finish('foe');
+      this.boutOver('foe');
       this.env.emit('combat:playerDefeated', { outcome: 'death', byId: by?.id, lusio: !!this.bout?.lusio });
     } else if (this.bout?.foes.has(def.id)) this.foeDown(def);
   }
@@ -918,10 +918,18 @@ export class CombatCore {
   private foeDown(def: Combatant) {
     const bout = this.bout!;
     const foesLeft = [...bout.foes].some((id) => this.get(id)?.active);
-    if (!foesLeft && def.status !== 'yielded') {
-      bout.finish('player');
-      this.env.emit('combat:bout', { phase: 'end', lusio: bout.lusio, winner: 'player', favor: bout.favor, purse: bout.purse() });
-    }
+    if (!foesLeft && def.status !== 'yielded') this.boutOver('player');
+  }
+
+  /** Finish the bout (if it isn't already) and announce its end exactly once. */
+  private boutOver(winner: 'player' | 'foe' | 'draw') {
+    const b = this.bout;
+    if (!b) return;
+    b.finish(winner);
+    if (b.reported) return;
+    b.reported = true;
+    const w = b.winner ?? winner;
+    this.env.emit('combat:bout', { phase: 'end', lusio: b.lusio, winner: w, favor: b.favor, purse: w === 'player' ? b.purse() : undefined });
   }
 
   /** Back on its feet after a knockout. */
@@ -975,7 +983,7 @@ export class CombatCore {
       c.driven = false;
       c.view?.play('interact');
     }
-    if (bout) this.env.emit('combat:bout', { phase: 'end', lusio: bout.lusio, winner: 'player', favor: bout.favor, purse: bout.purse() });
+    if (bout) this.boutOver('player');
     this.env.emit('combat:yieldChoice', { actorId: c.id, choice, purse: o.purse });
   }
 
@@ -1028,7 +1036,8 @@ export class CombatCore {
       c.body.move(ZERO, dt, 30);
       return;
     }
-    if (I.shout) this.callHelp(c);
+    // Bosses fight alone (adds are scripted, §13.2).
+    if (I.shout && c.profile?.tier !== 'boss') this.callHelp(c);
     if (I.phase) this.env.emit('combat:phase', { actorId: c.id, phase: I.phase });
     if (c.target && !c.drawn && !c.action && b.state !== 'flee') this.setDrawn(c, true);
     if (I.attack) this.npcAttack(c, I.attack, I.minWindup);
@@ -1044,6 +1053,11 @@ export class CombatCore {
     }
     const m = this.motionFor(c);
     c.body.move(m ?? I.move, dt, m?.accel);
+    // The fight is over for an NPC another module owns: hand the body back.
+    if (!c.keepDriven && !c.target && b.state === 'idle' && !c.action && !c.motion) {
+      c.driven = false;
+      return;
+    }
     if (b.state === 'flee') {
       const from = c.lastHitBy ? this.get(c.lastHitBy) : null;
       if (!from || dist2D(from.position, c.position) > 30) {
@@ -1136,16 +1150,22 @@ export class CombatCore {
     return p;
   }
 
+  private svc = new WeakMap<Combatant, BrainServices>();
+
+  /** Token access bound to a combatant and its current target (cached; reads the target live). */
   private services(c: Combatant): BrainServices {
-    const now = this.now;
-    const tid = c.target?.id;
-    return {
-      requestToken: (cost) => (tid ? this.tokens.request(c.id, tid, cost, now) : false),
-      releaseToken: () => this.tokens.release(c.id),
-      holdsToken: () => (tid ? this.tokens.holds(c.id, tid) : false),
-      tokenOverdue: () => this.tokens.overdue(c.id, now),
-      rng: this.env.rng,
-    };
+    let s = this.svc.get(c);
+    if (!s) {
+      s = {
+        requestToken: (cost) => (c.target ? this.tokens.request(c.id, c.target.id, cost, this.now) : false),
+        releaseToken: () => this.tokens.release(c.id),
+        holdsToken: () => (c.target ? this.tokens.holds(c.id, c.target.id) : false),
+        tokenOverdue: () => this.tokens.overdue(c.id, this.now),
+        rng: () => this.env.rng(),
+      };
+      this.svc.set(c, s);
+    }
+    return s;
   }
 
   /** Line of sight, cached 0.2 s per pair. */
@@ -1363,7 +1383,7 @@ export class CombatCore {
       stop();
       p.view?.play('yield');
       this.env.emit('combat:playerYielded', { context: 'arena', spared: r.spared, outcome: r.outcome });
-      this.env.emit('combat:bout', { phase: 'end', lusio: this.bout.lusio, winner: 'foe', favor: this.bout.favor });
+      this.boutOver('foe');
       if (!r.spared && r.outcome === 'death') this.kill(p, null);
       return { context: 'arena', spared: r.spared, outcome: r.outcome };
     }
