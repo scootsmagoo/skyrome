@@ -20,7 +20,7 @@ import { GAITS, type GaitName } from './gait';
 import { actionInfo, airClips, blockClip, gaitClip, idleLoopClip, stanceIdleClip, type ActionInfo } from './library';
 import { qAxis, qMul } from './quat';
 import { leftHandOnShaft } from './armIK';
-import { FP_ARMS, hasShield, stanceArmMask, stancePose, weaponClass } from './poses';
+import { ARM_L_TORCH, FP_ARMS, hasShield, stanceArmMask, stancePose, weaponClass } from './poses';
 import type { HumanoidAvatar } from '../HumanoidAvatar';
 
 interface Playing {
@@ -45,6 +45,16 @@ const LOWER = makeMask({ hips: 0.6, hipsPos: 1, thighL: 1, shinL: 1, footL: 1, t
 const AIR = makeMask({ hips: 0.7, spine: 0.4, chest: 0.3, thighL: 1, shinL: 1, footL: 1, toeL: 1, thighR: 1, shinR: 1, footR: 1, toeR: 1, upperArmL: 0.5, forearmL: 0.4, upperArmR: 0.5, forearmR: 0.4 });
 
 const ARMS_MASK = makeMask({ shoulderL: 1, upperArmL: 1, forearmL: 1, handL: 1, fingersL: 1, indexL: 1, shoulderR: 1, upperArmR: 1, forearmR: 1, handR: 1, fingersR: 1, indexR: 1 });
+const ARM_L_MASK = makeMask({ shoulderL: 1, upperArmL: 1, forearmL: 1, handL: 1, fingersL: 1, indexL: 1 });
+let torchArm: CompiledClip | null = null;
+/** Static pose of the left arm holding a torch up. */
+function torchClip(): CompiledClip {
+  if (!torchArm) {
+    const pose = { ...stancePose('unarmed', false).pose, ...ARM_L_TORCH };
+    torchArm = bakeClip({ name: 'torch-arm', duration: 1, loop: true, base: pose, keys: [{ t: 0, pose }] });
+  }
+  return torchArm;
+}
 const fpCache = new Map<string, CompiledClip>();
 /** Static first-person arm pose for a stance (drawn) or a torch. */
 function fpClip(stance: Stance, drawn: boolean, torch: boolean): CompiledClip {
@@ -390,6 +400,13 @@ export class AnimationController {
       blendPose(this.stanceP, this.tmpA, this.stanceP, smooth(0, 1, this.stanceFade));
     }
 
+    // A carried torch: the left arm holds it up and clear of the head (unless a shield is drawn).
+    this.torchW = approach(this.torchW, this.torch && !(this.drawn && hasShield(this.stance)) ? 1 : 0, 8, dt);
+    if (this.torchW > 0.01) {
+      sampleClip(torchClip(), 0, this.tmpA);
+      blendMasked(this.stanceP, this.stanceP, this.tmpA, this.torchW, ARM_L_MASK);
+    }
+
     // First person: the stance arms become the view poses (weapon low-right in view, shield edge left).
     this.fpW = approach(this.fpW, this.firstPerson && (this.drawn || this.torch) && !this.dead ? 1 : 0, 10, dt);
     if (this.fpW > 0.01) {
@@ -588,6 +605,7 @@ export class AnimationController {
   }
 
   private gripW = 0;
+  private torchW = 0;
 
   private fullDeathW(): number {
     let w = 0;

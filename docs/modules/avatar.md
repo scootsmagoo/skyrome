@@ -130,6 +130,12 @@ distance: mail rings, scales, wool, linen, hair strands, leather and plate. Meta
 7. Actions with crossfades: `auto` actions are full-body when standing and upper-body while moving.
 8. Procedural: elderly stoop, banking, aim pitch, the first-person lift, head look-at.
 
+Two-handed weapons (hasta, pilum, trident, dolabra) get a post-pass (`anim/armIK.ts`). It runs
+forward kinematics on the blended pose, finds the shaft from the right-hand grip, and solves the left
+arm so the fist closes on the nearest reachable point of the shaft. A few forward-kinematics
+correction passes keep it within about a centimeter. Swords and spears sit diagonally in the fist
+(`WEAPON_INFO.gripTilt`), the way real grips do.
+
 `onHit` fires at the impact time and `onEnd(interrupted)` fires on completion or replacement.
 `attackPower` picks a directional variant from the movement at play time, as in the GDD: forward =
 lunge, sideways = sweep, back = step-back cut, standing = overhead. `drawWeapon` and `sheathWeapon`

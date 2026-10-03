@@ -536,7 +536,7 @@ function unarmedAttacks(): Record<string, ActionDef> {
     keys: [
       k(0, {}, F),
       k(0.16, { hips: [10, -30, 0], spine: [8, -6, 0], hipsPos: [0, -0.1, -0.01], upperArmL: [20, 20, 0, 0], forearmL: [110, 60] }, F, true),
-      k(0.3, { hips: [-2, 6, 0], spine: [-4, 6, 0], chest: [-4, 10, 0], hipsPos: [0, -0.03, 0.05], upperArmL: [120, 10, -20, 0], forearmL: [70, 80], shoulderL: [10, 8] }, { L: step(0.06), R: rearUp(-14) }),
+      k(0.3, { hips: [-2, 6, 0], spine: [-4, 6, 0], chest: [-4, 10, 0], hipsPos: [0, -0.03, 0.05], upperArmL: [96, 10, -22, 0], forearmL: [86, 80], shoulderL: [10, 8] }, { L: step(0.06), R: rearUp(-14) }),
       k(0.4, {}, {}, true),
       k(0.72, pick(base), F),
     ],
