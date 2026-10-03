@@ -66,9 +66,9 @@
 .cc-random { white-space: nowrap; }
 
 .cc-start-row { display: flex; justify-content: center; padding-top: 0.5rem; margin-top: auto; }
-.cc-start { width: 100%; justify-content: center; white-space: nowrap; font-size: 1.1rem; padding: 0.55rem 1rem; gap: 0.6rem; }
-.cc-start .sr-key { margin: 0 0.25rem 0 0; }
-.cc-start .la { font-style: italic; color: var(--sr-ink-3); font-size: 0.86rem; margin-left: 0.3rem; }
+.cc-start { width: 100%; justify-content: center; white-space: nowrap; font-size: 1.05rem; padding: 0.55rem 0.7rem; gap: 0.5rem; }
+.cc-start .sr-key { margin: 0 0.25rem 0 0; flex: none; letter-spacing: 0.04em; }
+.cc-start .la { font-style: italic; color: var(--sr-ink-3); font-size: 0.78rem; margin-left: 0.2rem; letter-spacing: 0.06em; }
 .cc-start-row.is-selected .cc-start { border-color: var(--sr-gold); background: rgba(125, 31, 26, 0.7); }
 .cc-hints { margin-top: 0.5rem; justify-content: center; }
 

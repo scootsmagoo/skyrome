@@ -194,7 +194,7 @@ function addSettingsRows(flow: GameFlow) {
     { kind: 'slider', key: 'lookSmoothing', label: 'Look smoothing', min: 0, max: 0.2, step: 0.01, format: (v) => (v ? `${Math.round(v * 1000)} ms` : 'Off') },
     { kind: 'slider', key: 'powerHoldS', label: 'Power attack hold', min: 0.2, max: 0.6, step: 0.05, format: (v) => `${v.toFixed(2)} s` },
   ];
-  // After sensitivity and invert, before the blocking choice and the bindings button.
+  // The preset first; the toggles after the blocking choice, before the bindings button.
   controls.rows.splice(0, 0, ...rows.slice(0, 2));
   const at = controls.rows.findIndex((r) => r.kind === 'button' && r.label.startsWith('Key bindings'));
   controls.rows.splice(at < 0 ? controls.rows.length : at, 0, ...rows.slice(2));
