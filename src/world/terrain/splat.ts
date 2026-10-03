@@ -39,6 +39,8 @@ export interface SplatInput {
   padKind: number;
   urban: number;
   lush: number;
+  /** Strength of the fine-scale noise (1 near the viewer; the shader fades it with distance). */
+  fine?: number;
 }
 
 const fract = (v: number) => v - Math.floor(v);
@@ -88,28 +90,32 @@ function overlay(w: Float32Array, c: number, layer: number) {
 export function splatWeights(p: SplatInput, out = new Float32Array(LAYER_COUNT)): Float32Array {
   out.fill(0);
   const [n1, n2, n3, n4] = splatNoise(p.x, p.z);
+  const fine = p.fine ?? 1;
   const steep = 1 - p.ny;
-  // Green vs sun-dried grass.
-  let dry = 0.42 + (n1 - 0.5) * 1.3 + (n2 - 0.5) * 0.45 + p.nz * 0.55 + steep * 1.6 - p.lush * 0.6 + p.urban * 0.12;
-  dry = smoothstep(0.2, 0.8, dry);
+  // Green vs sun-dried grass: drier on south-facing and steep slopes and high ground, greener
+  // near the water and in gardens. A wide blend, so most ground is a green-gold mix.
+  const riverLush = (1 - smoothstep(1.5, 7, p.hw)) * 0.18;
+  let dry = 0.5 + (n1 - 0.5) * 1.7 + (n2 - 0.5) * 0.7 + p.nz * 0.45 + steep * 1.4 + smoothstep(12, 30, p.hw) * 0.12 - p.lush * 0.7 - riverLush + p.urban * 0.08;
+  dry = smoothstep(0.05, 0.95, dry);
   out[L.grass] = 1 - dry;
   out[L.dry] = dry;
   // Trodden and bare earth.
   const verge = p.roadSd > 0 ? Math.max(0, 1 - p.roadSd / 2.2) * 0.85 : 0;
   const apron = p.padSd > 0 ? Math.max(0, 1 - p.padSd / 5) * 0.75 : 0;
-  const town = p.urban * smoothstep(0.3, 0.62, n2 * 0.55 + n3 * 0.45 + p.urban * 0.25) * 0.9;
-  const bare = smoothstep(0.66, 0.8, n2 * 0.55 + n3 * 0.45) * 0.55 * (1 - p.lush);
+  const town = p.urban * smoothstep(0.35, 0.75, n2 * 0.55 + n3 * 0.45 + p.urban * 0.2) * 0.6;
+  const bare = smoothstep(0.7, 0.86, n2 * 0.55 + n3 * 0.45) * 0.35 * (1 - p.lush);
   const eroded = smoothstep(0.16, 0.3, steep) * 0.35;
-  const dirt = smoothstep(0.3, 0.7, clamp01(verge + apron + town + bare + eroded) + (n4 - 0.5) * 0.3);
+  const dirt = smoothstep(0.22, 0.78, clamp01(verge + apron + town + bare + eroded) + (n4 - 0.5) * 0.3 * fine);
   overlay(out, dirt, L.dirt);
   // River margins: gravelly sand above the waterline, mud at it and below.
-  overlay(out, 1 - smoothstep(0.8, 1.7, p.hw + (n3 - 0.5) * 0.8), L.sand);
-  overlay(out, 1 - smoothstep(0.12, 0.55, p.hw + (n3 - 0.5) * 0.35), L.mud);
+  overlay(out, (1 - smoothstep(0.5, 1.4, p.hw + (n3 - 0.5) * 1.1)) * smoothstep(0.42, 0.62, n2), L.sand);
+  overlay(out, (1 - smoothstep(0.2, 0.9, p.hw + (n3 - 0.5) * 0.6)) * 0.85, L.dirt);
+  overlay(out, 1 - smoothstep(-0.05, 0.22, p.hw + (n3 - 0.5) * 0.25), L.mud);
   // Tufa outcrops on cliffs.
   const slopeDeg = (Math.acos(Math.min(1, Math.max(-1, p.ny))) * 180) / Math.PI;
   overlay(out, smoothstep(31, 41, slopeDeg + (n3 - 0.5) * 9), L.rock);
   // Building pads: travertine (fora, monuments), gravel or trodden earth.
-  const pad = 1 - smoothstep(-0.15, 0.15, p.padSd + (n4 - 0.5) * 0.25);
+  const pad = 1 - smoothstep(-0.15, 0.15, p.padSd + (n4 - 0.5) * 0.25 * fine);
   const trav = smoothstep(0.7, 0.9, p.padKind);
   const grav = (1 - trav) * smoothstep(0.2, 0.4, p.padKind);
   overlay(out, pad * trav, L.travertine);
@@ -140,29 +146,31 @@ void tOverlay( inout float w[ 9 ], float c, int layer ) {
   for ( int i = 0; i < 9; i ++ ) w[ i ] *= k;
   w[ layer ] += c;
 }
-void splatWeights( vec2 p, float ny, float nz, float hw, float roadSd, float padSd, float padKind, float urban, float lush, out float w[ 9 ], out vec4 n ) {
+void splatWeights( vec2 p, float ny, float nz, float hw, float roadSd, float padSd, float padKind, float urban, float lush, float fine, out float w[ 9 ], out vec4 n ) {
   n.x = tNoise( p * 0.011 + vec2( 3.1, 7.7 ) ) * 0.65 + tNoise( p * 0.027 + vec2( 11.3, 5.1 ) ) * 0.35;
   n.y = tNoise( p * 0.05 + vec2( 1.7, 9.2 ) );
   n.z = tNoise( p * 0.21 + vec2( 4.3, 2.9 ) );
   n.w = tNoise( p * 0.9 + vec2( 0.5 ) );
   for ( int i = 0; i < 9; i ++ ) w[ i ] = 0.0;
   float steep = 1.0 - ny;
-  float dry = 0.42 + ( n.x - 0.5 ) * 1.3 + ( n.y - 0.5 ) * 0.45 + nz * 0.55 + steep * 1.6 - lush * 0.6 + urban * 0.12;
-  dry = smoothstep( 0.2, 0.8, dry );
+  float riverLush = ( 1.0 - smoothstep( 1.5, 7.0, hw ) ) * 0.18;
+  float dry = 0.5 + ( n.x - 0.5 ) * 1.7 + ( n.y - 0.5 ) * 0.7 + nz * 0.45 + steep * 1.4 + smoothstep( 12.0, 30.0, hw ) * 0.12 - lush * 0.7 - riverLush + urban * 0.08;
+  dry = smoothstep( 0.05, 0.95, dry );
   w[ 0 ] = 1.0 - dry;
   w[ 1 ] = dry;
   float verge = roadSd > 0.0 ? max( 0.0, 1.0 - roadSd / 2.2 ) * 0.85 : 0.0;
   float apron = padSd > 0.0 ? max( 0.0, 1.0 - padSd / 5.0 ) * 0.75 : 0.0;
-  float town = urban * smoothstep( 0.3, 0.62, n.y * 0.55 + n.z * 0.45 + urban * 0.25 ) * 0.9;
-  float bare = smoothstep( 0.66, 0.8, n.y * 0.55 + n.z * 0.45 ) * 0.55 * ( 1.0 - lush );
+  float town = urban * smoothstep( 0.35, 0.75, n.y * 0.55 + n.z * 0.45 + urban * 0.2 ) * 0.6;
+  float bare = smoothstep( 0.7, 0.86, n.y * 0.55 + n.z * 0.45 ) * 0.35 * ( 1.0 - lush );
   float eroded = smoothstep( 0.16, 0.3, steep ) * 0.35;
-  float dirt = smoothstep( 0.3, 0.7, clamp( verge + apron + town + bare + eroded, 0.0, 1.0 ) + ( n.w - 0.5 ) * 0.3 );
+  float dirt = smoothstep( 0.22, 0.78, clamp( verge + apron + town + bare + eroded, 0.0, 1.0 ) + ( n.w - 0.5 ) * 0.3 * fine );
   tOverlay( w, dirt, 2 );
-  tOverlay( w, 1.0 - smoothstep( 0.8, 1.7, hw + ( n.z - 0.5 ) * 0.8 ), 4 );
-  tOverlay( w, 1.0 - smoothstep( 0.12, 0.55, hw + ( n.z - 0.5 ) * 0.35 ), 5 );
+  tOverlay( w, ( 1.0 - smoothstep( 0.5, 1.4, hw + ( n.z - 0.5 ) * 1.1 ) ) * smoothstep( 0.42, 0.62, n.y ), 4 );
+  tOverlay( w, ( 1.0 - smoothstep( 0.2, 0.9, hw + ( n.z - 0.5 ) * 0.6 ) ) * 0.85, 2 );
+  tOverlay( w, 1.0 - smoothstep( -0.05, 0.22, hw + ( n.z - 0.5 ) * 0.25 ), 5 );
   float slopeDeg = degrees( acos( clamp( ny, -1.0, 1.0 ) ) );
   tOverlay( w, smoothstep( 31.0, 41.0, slopeDeg + ( n.z - 0.5 ) * 9.0 ), 3 );
-  float pad = 1.0 - smoothstep( -0.15, 0.15, padSd + ( n.w - 0.5 ) * 0.25 );
+  float pad = 1.0 - smoothstep( -0.15, 0.15, padSd + ( n.w - 0.5 ) * 0.25 * fine );
   float trav = smoothstep( 0.7, 0.9, padKind );
   float grav = ( 1.0 - trav ) * smoothstep( 0.2, 0.4, padKind );
   tOverlay( w, pad * trav, 8 );

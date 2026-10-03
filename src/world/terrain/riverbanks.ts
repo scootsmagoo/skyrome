@@ -108,13 +108,64 @@ export interface LineFoot {
   tz: number;
 }
 
-/** Nearest point on a chained polyline with chainage and side. */
-export function footOn(line: ChainedLine, px: number, pz: number): LineFoot {
+/** A uniform grid listing, per cell, the polyline segments within `reach` of it. */
+export interface SegmentIndex {
+  cell: number;
+  minX: number;
+  minZ: number;
+  nx: number;
+  nz: number;
+  lists: (number[] | null)[];
+}
+
+/** Index the segments of a polyline for queries closer than `reach` (same units as the points). */
+export function indexSegments(pts: readonly P2[], reach: number, cell = 100): SegmentIndex {
+  let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
+  for (const [x, z] of pts) {
+    minX = Math.min(minX, x);
+    minZ = Math.min(minZ, z);
+    maxX = Math.max(maxX, x);
+    maxZ = Math.max(maxZ, z);
+  }
+  minX -= reach;
+  minZ -= reach;
+  const nx = Math.max(1, Math.ceil((maxX + reach - minX) / cell));
+  const nz = Math.max(1, Math.ceil((maxZ + reach - minZ) / cell));
+  const lists: (number[] | null)[] = new Array(nx * nz).fill(null);
+  for (let i = 0; i < pts.length - 1; i++) {
+    const x0 = Math.min(pts[i][0], pts[i + 1][0]) - reach, x1 = Math.max(pts[i][0], pts[i + 1][0]) + reach;
+    const z0 = Math.min(pts[i][1], pts[i + 1][1]) - reach, z1 = Math.max(pts[i][1], pts[i + 1][1]) + reach;
+    for (let cz = Math.floor((z0 - minZ) / cell); cz <= Math.floor((z1 - minZ) / cell); cz++) {
+      for (let cx = Math.floor((x0 - minX) / cell); cx <= Math.floor((x1 - minX) / cell); cx++) {
+        if (cx < 0 || cz < 0 || cx >= nx || cz >= nz) continue;
+        const k = cz * nx + cx;
+        (lists[k] ??= []).push(i);
+      }
+    }
+  }
+  return { cell, minX, minZ, nx, nz, lists };
+}
+
+/** Segments that may lie within the index's reach of (x, z); null when none. */
+export function nearSegments(idx: SegmentIndex, x: number, z: number): number[] | null {
+  const cx = Math.floor((x - idx.minX) / idx.cell);
+  const cz = Math.floor((z - idx.minZ) / idx.cell);
+  if (cx < 0 || cz < 0 || cx >= idx.nx || cz >= idx.nz) return null;
+  return idx.lists[cz * idx.nx + cx];
+}
+
+/**
+ * Nearest point on a chained polyline with chainage and side. With `segs`, only those segments
+ * are searched (see `indexSegments`): exact whenever the true nearest point is within the reach.
+ */
+export function footOn(line: ChainedLine, px: number, pz: number, segs?: readonly number[] | null): LineFoot {
   const pts = line.pts;
   let best = Infinity;
   let bi = 0;
   let bt = 0;
-  for (let i = 0; i < pts.length - 1; i++) {
+  const n = segs ? segs.length : pts.length - 1;
+  for (let s = 0; s < n; s++) {
+    const i = segs ? segs[s] : s;
     const ax = pts[i][0], az = pts[i][1];
     const dx = pts[i + 1][0] - ax, dz = pts[i + 1][1] - az;
     const l2 = dx * dx + dz * dz;

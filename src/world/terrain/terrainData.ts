@@ -229,7 +229,8 @@ export function buildTerrainData(hm: Heightmap, inputs: TerrainDataInputs = {}):
     const off = river.waterLevel * S - hm.waterLevelY;
     if (Math.abs(off) < 0.05) continue;
     const maxHalf = (Math.max(...river.width) / 2) * S;
-    const reach = maxHalf + 30;
+    // Only the channel itself (a canal's sides are vertical): beyond it the main level applies.
+    const reach = maxHalf + 2.5;
     const pts = river.centerline;
     for (let s = 0; s < pts.length - 1; s++) {
       const ax = pts[s][0] * S, az = pts[s][1] * S, bx = pts[s + 1][0] * S, bz = pts[s + 1][1] * S;
@@ -240,7 +241,7 @@ export function buildTerrainData(hm: Heightmap, inputs: TerrainDataInputs = {}):
           const k = j * nx + i;
           if (d < reach && d < waterDist[k]) {
             waterDist[k] = d;
-            waterOff[k] = off * (1 - smooth(reach - 12, reach, d));
+            waterOff[k] = off * (1 - smooth(reach - 1.5, reach, d));
           }
         }
       }
