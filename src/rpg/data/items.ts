@@ -1,264 +1,325 @@
 /**
- * PROVISIONAL item catalogue (GDD/CONTENT pending): ~140 Roman items of AD 113.
+ * Item catalogue — docs/GDD.md §7.2 (prices) and §8 (weapons, clothing, armor, shields,
+ * consumables, misc, books), with the GDD's ids. Values are in denarii (1 as = 1/16, 1 quadrans =
+ * 1/64). Weapon damage and stagger are the GDD's absolute numbers (iron gladius 13, stagger 12).
  *
- * Prices: `value` is a fair retail price in denarii (1 d = 4 sestertii = 16 asses). Anchors: a
- * legionary earned 300 d a year; a loaf cost 2 asses; a cup of ordinary wine 1–2 asses and of
- * Falernian 4 asses (Pompeii graffiti); a tunic a few denarii. Arms and armor are priced for play
- * (tens to hundreds) rather than strict history. Weights are real kilograms.
+ * Quality tiers (§8.1) are generated: Noric steel ×1.15 damage / ×2.5 value, Bilbilis steel
+ * (blades only) ×1.3 / ×6, officer's silvered ×1.0 / ×4 and +5 persuasion with soldiers. Ids are
+ * `<base>-noric`, `<base>-bilbilis`, `<base>-silvered`.
  *
- * Weapon damage is on a Skyrim-like scale (gladius 8 ≈ steel sword); see combat-math.ts.
+ * A few period items beyond the GDD tables are kept (marked "extra") for loot and flavour.
  */
-import type { ArmorStats, Effect, ItemDef, WeaponStats } from '../types';
+import type { ArmorFamily, ArmorStats, DamageType, Effect, ItemDef, WeaponStats } from '../types';
 
 const AS = 1 / 16;
 
 // ------------------------------------------------------------------ builders
 
-function weapon(id: string, name: string, latin: string, w: WeaponStats, weight: number, value: number, model: NonNullable<ItemDef['visual']>['weapon'], description: string, extra: Partial<ItemDef> = {}): ItemDef {
+type Visual = NonNullable<ItemDef['visual']>;
+
+function weapon(id: string, name: string, latin: string, w: WeaponStats, weight: number, value: number, model: Visual['weapon'], description: string, extra: Partial<ItemDef> = {}): ItemDef {
   const thrown = w.class === 'thrown';
   return { id, name, latin, type: 'weapon', slot: 'mainHand', weapon: w, weight, value, description, visual: { weapon: model }, stackable: thrown, icon: '⚔', ...extra };
 }
-const blade = (damage: number, speed: number, reach: number, stagger: number, twoHanded = false): WeaponStats => ({ class: 'blade', skill: 'blades', damage, speed, reach, stagger, twoHanded });
-const spear = (damage: number, speed: number, reach: number, stagger: number, twoHanded = false): WeaponStats => ({ class: 'spear', skill: 'spear', damage, speed, reach, stagger, twoHanded });
-const blunt = (damage: number, speed: number, reach: number, stagger: number, twoHanded = false): WeaponStats => ({ class: 'blunt', skill: 'blunt', damage, speed, reach, stagger, twoHanded });
+const ws = (cls: WeaponStats['class'], skill: string, damage: number, damageType: DamageType, speed: number, reach: number, stagger: number, extra: Partial<WeaponStats> = {}): WeaponStats => ({ class: cls, skill, damage, damageType, speed, reach, stagger, ...extra });
 
-function armor(id: string, name: string, latin: string, slot: ItemDef['slot'], a: ArmorStats, weight: number, value: number, look: NonNullable<ItemDef['visual']>, description: string, extra: Partial<ItemDef> = {}): ItemDef {
+function armor(id: string, name: string, latin: string, slot: ItemDef['slot'], a: ArmorStats, weight: number, value: number, look: Visual, description: string, extra: Partial<ItemDef> = {}): ItemDef {
   return { id, name, latin, type: a.weightClass === 'clothing' ? 'clothing' : 'armor', slot, armor: a, weight, value, description, visual: look, icon: a.weightClass === 'clothing' ? '👕' : '🛡', ...extra };
 }
-const heavy = (rating: number): ArmorStats => ({ rating, weightClass: 'heavy' });
-const light = (rating: number): ArmorStats => ({ rating, weightClass: 'light' });
-const cloth = (rating = 0): ArmorStats => ({ rating, weightClass: 'clothing' });
+const heavy = (rating: number, family?: ArmorFamily): ArmorStats => ({ rating, weightClass: 'heavy', family });
+const light = (rating: number, family?: ArmorFamily): ArmorStats => ({ rating, weightClass: 'light', family });
+const cloth = (rating = 0): ArmorStats => ({ rating, weightClass: 'clothing', family: 'cloth' });
 
 function food(id: string, name: string, latin: string, weight: number, value: number, effects: Effect[], description: string, tags: string[] = ['food']): ItemDef {
   return { id, name, latin, type: 'consumable', weight, value, effects, description, stackable: true, icon: tags.includes('drink') ? '🍷' : '🍞', tags };
 }
-function medicine(id: string, name: string, latin: string, weight: number, value: number, effects: Effect[], description: string): ItemDef {
-  return { id, name, latin, type: 'consumable', weight, value, effects, description, stackable: true, icon: '⚱', tags: ['medicine'] };
+function remedy(id: string, name: string, latin: string, weight: number, value: number, effects: Effect[], description: string, tags: string[] = []): ItemDef {
+  return { id, name, latin, type: 'consumable', weight, value, effects, description, stackable: true, icon: '⚱', tags: ['medicine', ...tags] };
 }
-const heal = (amount: number): Effect => ({ kind: 'restore', target: 'health', amount });
-const rest = (amount: number): Effect => ({ kind: 'restore', target: 'stamina', amount });
-const regen = (target: string, amount: number, duration: number): Effect => ({ kind: 'regen', target, amount, duration });
+/** Restore `hp` over `seconds` (GDD food heals over time). */
+const hot = (hp: number, seconds: number): Effect => ({ kind: 'regen', target: 'health', amount: hp / seconds, duration: seconds });
+const stam = (amount: number): Effect => ({ kind: 'restore', target: 'stamina', amount });
+const cond = (id: string): Effect => ({ kind: 'condition', target: id, amount: 1 });
 
-function book(id: string, name: string, latin: string, value: number, text: string, description: string, teaches?: string, weight = 0.4): ItemDef {
-  return { id, name, latin, type: 'book', weight, value, text, teaches, description, icon: '📜', stackable: true };
+function book(id: string, name: string, latin: string, value: number, teaches: string | undefined, description: string, text: string, tags: string[] = []): ItemDef {
+  return { id, name, latin, type: 'book', weight: 0.4, value, text, teaches, description, icon: '📜', stackable: true, tags: ['book', ...tags] };
 }
 function misc(id: string, name: string, latin: string, weight: number, value: number, description: string, extra: Partial<ItemDef> = {}): ItemDef {
   return { id, name, latin, type: 'misc', weight, value, description, stackable: true, icon: '◆', ...extra };
 }
 
-// ------------------------------------------------------------------ weapons
+// ------------------------------------------------------------------ weapons (§8.1)
 
-const WEAPONS: ItemDef[] = [
-  weapon('pugio', 'Pugio', 'pugio', blade(5, 1.3, 0.8, 0.1), 0.4, 6, 'pugio', 'A broad-bladed legionary dagger. Every soldier carries one; so does every cutthroat.', { tags: ['dagger'] }),
-  weapon('sica', 'Sica', 'sica', blade(6, 1.25, 0.85, 0.15), 0.6, 12, 'sica', 'A short curved Thracian blade, favoured by the thraex in the arena and by assassins outside it.', { tags: ['dagger'] }),
-  weapon('gladius_rusty', 'Worn Gladius', 'gladius vetus', blade(6, 1, 1.05, 0.3), 1.2, 4, 'gladius', 'A pitted short sword that has seen better legions.'),
-  weapon('gladius', 'Gladius', 'gladius', blade(8, 1, 1.05, 0.3), 1.2, 20, 'gladius', 'The Pompeii-pattern short sword of the legions: parallel edges, a short point, made for thrusting from behind a shield.'),
-  weapon('gladius_mainz', 'Gladius Hispaniensis', 'gladius Hispaniensis', blade(9, 0.95, 1.1, 0.35), 1.4, 28, 'gladius', 'An older, longer pattern with a wasp-waisted blade and a long tapering point.'),
-  weapon('gladius_noric', 'Noric Steel Gladius', 'gladius Noricus', blade(10, 1, 1.05, 0.35), 1.2, 90, 'gladius', 'Forged from the famous hard steel of Noricum. It holds an edge through a whole campaign.'),
-  weapon('gladius_tribuni', 'Tribune’s Gladius', 'gladius tribunicius', blade(11, 1.05, 1.05, 0.35), 1.1, 240, 'gladius', 'Noric steel with an ivory grip and a silvered scabbard, carried by a young man of good family on his first command.'),
-  weapon('spatha', 'Spatha', 'spatha', blade(9, 0.9, 1.25, 0.4), 1.6, 45, 'spatha', 'The long sword of the auxiliary cavalry, made to reach down from the saddle.'),
-  weapon('falx', 'Dacian Falx', 'falx Dacica', blade(17, 0.75, 1.4, 0.85, true), 3, 120, 'spatha', 'A two-handed inward-curved blade that could split a helmet. Trajan’s legionaries added greaves and arm guards because of it.', { tags: ['dacian', 'trophy'] }),
-  weapon('rudis', 'Rudis', 'rudis', blade(3, 1.1, 1, 0.2), 0.8, 1, 'gladius', 'The wooden sword given to a gladiator on his release. Worth nothing to anyone but its owner.', { tags: ['keepsake'] }),
-  weapon('hasta', 'Hasta', 'hasta', spear(9, 0.9, 2, 0.4), 2.2, 15, 'hasta', 'A thrusting spear with a leaf-shaped iron head, light enough to use with a shield.'),
-  weapon('lancea', 'Lancea', 'lancea', spear(8, 1, 1.8, 0.35), 1.6, 12, 'hasta', 'A light auxiliary spear that can be thrust or thrown.'),
-  weapon('fuscina', 'Trident', 'fuscina', spear(10, 0.9, 1.7, 0.4), 2.4, 30, 'trident', 'The retiarius’s three-pronged fishing spear, a joke in the arena until it finds your throat.'),
-  weapon('pilum', 'Pilum', 'pilum', { class: 'thrown', skill: 'spear', damage: 14, speed: 0.7, reach: 1.6, stagger: 0.6, projectileSpeed: 22 }, 2, 8, 'pilum', 'The heavy legionary javelin. Its long iron shank bends on impact so it cannot be thrown back.'),
-  weapon('iaculum', 'Iaculum', 'iaculum', { class: 'thrown', skill: 'spear', damage: 8, speed: 1, reach: 1.4, stagger: 0.3, projectileSpeed: 25 }, 0.8, 3, 'pilum', 'A light hunting javelin.'),
-  weapon('fustis', 'Fustis', 'fustis', blunt(6, 1.05, 0.95, 0.5), 1, 1, 'fustis', 'A hardwood cudgel. The vigiles carry them; so do the men the vigiles are looking for.'),
-  weapon('clava', 'Clava', 'clava', blunt(14, 0.75, 1.2, 0.9, true), 4.5, 6, 'fustis', 'A knotted club of the kind Hercules carries in every statue in Rome.'),
-  weapon('malleus', 'Malleus', 'malleus', blunt(16, 0.65, 1.25, 1, true), 6, 15, 'hammer', 'A stonemason’s sledgehammer from the building sites of Trajan’s Forum.'),
-  weapon('securis', 'Securis', 'securis', blunt(9, 0.9, 1, 0.5), 1.4, 12, 'axe', 'A single-bladed axe like the one bound into the lictor’s fasces.'),
-  weapon('dolabra', 'Dolabra', 'dolabra', blunt(10, 0.85, 1.05, 0.55), 1.8, 10, 'axe', 'The legionary’s pick-axe: one side for digging ditches, the other for everything else.'),
-  weapon('caestus', 'Caestus', 'caestus', { class: 'unarmed', skill: 'unarmed', damage: 7, speed: 1.15, reach: 0.75, stagger: 0.35 }, 0.6, 8, 'none', 'Boxing thongs of oxhide, studded with metal. The Greeks say the Romans ruined boxing with them.'),
-  weapon('arcus', 'Composite Bow', 'arcus', { class: 'bow', skill: 'ranged', damage: 12, speed: 1, reach: 0.5, stagger: 0.3, twoHanded: true, projectileSpeed: 55, ammo: 'sagitta' }, 1, 40, 'bow', 'A recurved bow of horn, wood and sinew in the eastern style.'),
-  weapon('arcus_syrius', 'Hamian Bow', 'arcus Hamiorum', { class: 'bow', skill: 'ranged', damage: 15, speed: 1, reach: 0.5, stagger: 0.35, twoHanded: true, projectileSpeed: 62, ammo: 'sagitta' }, 1.1, 140, 'bow', 'A powerful composite bow of the Syrian archers of Hama, whose cohort guards the frontier.'),
-  weapon('funda', 'Sling', 'funda', { class: 'sling', skill: 'ranged', damage: 9, speed: 1.1, reach: 0.5, stagger: 0.4, projectileSpeed: 40, ammo: 'glans' }, 0.1, 1, 'sling', 'A braided woollen sling. Balearic boys were not fed until they hit their bread with one.'),
-  weapon('fax', 'Torch', 'fax', blunt(3, 1, 0.9, 0.2), 0.8, AS, 'torch', 'Pine splints bound with pitch. Lights the way home after the cena.', { slot: 'offHand', type: 'tool', stackable: true, tags: ['light'] }),
+const BASE_WEAPONS: ItemDef[] = [
+  weapon('caestus', 'Caestus', 'caestus', ws('unarmed', 'brawling', 7, 'blunt', 1.4, 0.5, 12), 0.6, 8, 'none', 'Oxhide boxing thongs studded with metal. Always knocks out rather than kills.', { tags: ['knockout'] }),
+  weapon('pugio', 'Pugio', 'pugio', ws('blade', 'blades', 8, 'thrust', 1.3, 0.55, 6), 0.4, 6, 'pugio', 'The broad legionary dagger. Sneak attacks ×4; the off-hand finisher.', { tags: ['dagger'] }),
+  weapon('sica', 'Sica', 'sica', ws('blade', 'blades', 11, 'cut', 1.15, 0.7, 10), 0.6, 18, 'sica', 'A curved Thracian short sword that hooks round shields: it ignores a quarter of block mitigation.', { tags: ['dagger', 'hook'] }),
+  weapon('gladius', 'Gladius', 'gladius', ws('blade', 'blades', 13, 'thrust', 1, 0.75, 12, { alt: { damageType: 'cut', damage: 11 } }), 1.2, 22, 'gladius', 'The Pompeii-pattern short sword: parallel edges and a short point. The all-rounder.'),
+  weapon('spatha', 'Spatha', 'spatha', ws('blade', 'blades', 14, 'cut', 0.9, 0.95, 14, { alt: { damageType: 'thrust', damage: 12 } }), 1.4, 35, 'spatha', 'The long cavalry sword, made to reach down from the saddle.'),
+  weapon('dolabra', 'Dolabra', 'dolabra', ws('blade', 'blades', 15, 'cut', 0.85, 0.8, 22), 2, 10, 'axe', 'The pick-axe of soldiers and Vigiles: it digs ditches and breaks doors.', { tags: ['tool', 'breaks-doors'] }),
+  weapon('falx', 'Falx', 'falx Dacica', ws('blade', 'blades', 24, 'cut', 0.7, 1.2, 30, { twoHanded: true }), 2.8, 60, 'spatha', 'The two-handed Dacian falx. It ignores half of any block, and its power sweep cannot be blocked at all.', { tags: ['falx', 'dacian', 'hook'] }),
+  weapon('hasta', 'Hasta', 'hasta', ws('spear', 'spear', 14, 'thrust', 0.9, 1.8, 14), 2, 12, 'hasta', 'A thrusting spear, light enough to use one-handed behind a shield.'),
+  weapon('lancea', 'Lancea', 'lancea', ws('spear', 'spear', 11, 'thrust', 1, 1.5, 10, { thrownDamage: 18, projectileSpeed: 28 }), 1.2, 8, 'hasta', 'A light auxiliary spear, for thrusting or throwing.', { stackable: true }),
+  weapon('venabulum', 'Venabulum', 'venabulum', ws('spear', 'spear', 16, 'thrust', 0.85, 1.9, 18), 2.4, 20, 'hasta', 'A broad-bladed boar spear with a crossbar. +25% against beasts; brace it against a charge.', { tags: ['venatio'] }),
+  weapon('tridens', 'Tridens', 'tridens', ws('spear', 'spear', 13, 'thrust', 0.9, 1.8, 12), 2.2, 25, 'trident', 'The retiarius’s trident: a fisherman’s spear made for the arena.', { tags: ['retiarius'] }),
+  weapon('pilum', 'Pilum', 'pilum', ws('thrown', 'spear', 10, 'thrust', 0.8, 1.6, 20, { thrownDamage: 30, projectileSpeed: 25 }), 2, 10, 'pilum', 'The heavy legionary javelin. It sticks in shields: the bearer’s block is halved until he drops the shield.', { tags: ['sticks-in-shields'] }),
+  weapon('iaculum', 'Iaculum', 'iaculum', ws('thrown', 'spear', 6, 'thrust', 1, 1, 12, { thrownDamage: 18, projectileSpeed: 28 }), 0.8, 4, 'pilum', 'A light javelin. Carry up to five.'),
+  weapon('rete', 'Rete', 'rete', ws('thrown', 'spear', 0, 'blunt', 1, 6, 0, { projectileSpeed: 14 }), 2, 15, 'net', 'The retiarius’s weighted net: it entangles for 3 s (bosses 1.5 s). Struggle free by mashing E or F.', { tags: ['net', 'retiarius'], stackable: false }),
+  weapon('fustis', 'Fustis', 'fustis', ws('blunt', 'brawling', 10, 'blunt', 1.05, 0.8, 20), 1, 1, 'fustis', 'A hardwood cudgel. Knocks out rather than kills, up to a soldier.', { tags: ['knockout-miles'] }),
+  weapon('clava', 'Clava', 'clava', ws('blunt', 'brawling', 13, 'blunt', 0.9, 0.8, 26), 1.8, 3, 'fustis', 'A knotted club. Knocks out rather than kills, up to a soldier.', { tags: ['knockout-miles'] }),
+  weapon('vitis', 'Vitis', 'vitis', ws('blunt', 'brawling', 9, 'blunt', 1.1, 0.85, 18), 0.6, 0, 'fustis', 'A centurion’s vine staff: badge and whip. +50% stagger against soldiers. Not sold.', { tags: ['knockout-miles', 'vitis'] }),
+  weapon('arcus', 'Arcus', 'arcus', ws('bow', 'archery', 16, 'thrust', 1, 0.5, 10, { twoHanded: true, projectileSpeed: 55, ammo: 'sagitta' }), 1, 45, 'bow', 'A composite bow of horn, wood and sinew. Full draw 0.9 s; a partial draw from 0.4 s does half.'),
+  weapon('funda', 'Funda', 'funda', ws('sling', 'archery', 0, 'blunt', 1, 0.5, 25, { projectileSpeed: 60, ammo: 'glans-plumbea' }), 0.1, 1, 'sling', 'A braided wool sling. Loud: it alerts everyone within 15 m.'),
+  // extras
+  weapon('rudis', 'Rudis', 'rudis', ws('blade', 'blades', 4, 'blunt', 1.1, 0.75, 8), 0.8, 1, 'gladius', 'A wooden practice sword — and the token of freedom given to a gladiator on his release.', { tags: ['training'] }),
+  weapon('malleus', 'Malleus', 'malleus', ws('blunt', 'brawling', 16, 'blunt', 0.65, 0.9, 32, { twoHanded: true }), 5, 6, 'hammer', 'A stonemason’s sledgehammer from the building sites of Trajan’s Forum. (Extra.)', { tags: ['tool'] }),
+  weapon('fax', 'Torch', 'fax', ws('blunt', 'brawling', 3, 'blunt', 1, 0.6, 4), 0.8, 2 * AS, 'torch', 'Pine splints bound with pitch. Light radius 8 m for 2 game hours; disperses rats, lights pitch, and makes you +50% visible.', { slot: 'offHand', type: 'tool', stackable: true, tags: ['light'], equipFlags: ['torch.lit'] }),
 ];
 
 const AMMO: ItemDef[] = [
-  { id: 'sagitta', name: 'Arrow', latin: 'sagitta', type: 'ammo', slot: 'ammo', weight: 0.03, value: 2 * AS, stackable: true, weapon: { class: 'bow', skill: 'ranged', damage: 2, speed: 1, reach: 0, stagger: 0 }, description: 'A reed arrow with an iron trilobate head.', icon: '➶' },
-  { id: 'glans', name: 'Lead Sling Bullet', latin: 'glans plumbea', type: 'ammo', slot: 'ammo', weight: 0.05, value: AS, stackable: true, weapon: { class: 'sling', skill: 'ranged', damage: 3, speed: 1, reach: 0, stagger: 0.1 }, description: 'An almond-shaped lead bullet. Some are cast with a message for the target: “Take this!”', icon: '•' },
-  { id: 'lapis', name: 'Sling Stone', latin: 'lapis', type: 'ammo', slot: 'ammo', weight: 0.06, value: 0, stackable: true, weapon: { class: 'sling', skill: 'ranged', damage: 1, speed: 1, reach: 0, stagger: 0.05 }, description: 'A smooth river stone from the Tiber bank.', icon: '•' },
+  { id: 'sagitta', name: 'Arrow', latin: 'sagitta', type: 'ammo', slot: 'ammo', weight: 0.05, value: 0.2, stackable: true, weapon: ws('bow', 'archery', 0, 'thrust', 1, 0, 0), description: 'A reed arrow with an iron trilobate head. Half of them can be recovered.', icon: '➶' },
+  { id: 'glans-plumbea', name: 'Lead Sling Bullet', latin: 'glans plumbea', type: 'ammo', slot: 'ammo', weight: 0.05, value: 0.1, stackable: true, weapon: ws('sling', 'archery', 12, 'blunt', 1, 0, 0), description: 'An almond-shaped lead bullet.', icon: '•', tags: ['lead'] },
+  { id: 'glans-inscripta', name: 'Inscribed Sling Bullet', latin: 'glans inscripta', type: 'ammo', slot: 'ammo', weight: 0.05, value: 0.5, stackable: true, weapon: ws('sling', 'archery', 13.2, 'blunt', 1, 0, 0), description: 'A lead bullet cast with FERI — “Strike!” — and a thunderbolt. A collectible (12 to find).', icon: '•', tags: ['lead', 'collectible'] },
+  { id: 'lapis', name: 'Sling Stone', latin: 'lapis', type: 'ammo', slot: 'ammo', weight: 0.06, value: 0, stackable: true, weapon: ws('sling', 'archery', 8, 'blunt', 1, 0, 0, { projectileSpeed: 45 }), description: 'A smooth river stone. Free for the picking up.', icon: '•' },
 ];
 
-// ------------------------------------------------------------------ shields
+/** §8.1 quality tiers, generated for blades and spear heads. */
+const QUALITY = {
+  noric: { suffix: 'noric', name: 'Noric-steel', latin: 'Noricus', dmg: 1.15, value: 2.5, desc: 'Forged from the hard steel of Noricum.' },
+  bilbilis: { suffix: 'bilbilis', name: 'Bilbilis-steel', latin: 'Bilbilitanus', dmg: 1.3, value: 6, desc: 'Quenched in the icy Salo at Bilbilis, Martial’s home town: the best steel in the empire.' },
+  silvered: { suffix: 'silvered', name: 'Officer’s Silvered', latin: 'argentatus', dmg: 1, value: 4, desc: 'Silver-mounted for an officer; soldiers listen to its owner (+5 persuasion with soldiers).' },
+} as const;
+
+function variant(base: ItemDef, q: keyof typeof QUALITY): ItemDef {
+  const Q = QUALITY[q];
+  const w = base.weapon!;
+  return {
+    ...base,
+    id: `${base.id}-${Q.suffix}`,
+    name: `${Q.name} ${base.name}`,
+    latin: `${base.latin} ${Q.latin}`,
+    value: Math.round(base.value * Q.value),
+    description: `${Q.desc} ${base.description}`,
+    weapon: { ...w, damage: +(w.damage * Q.dmg).toFixed(2), alt: w.alt ? { ...w.alt, damage: +(w.alt.damage * Q.dmg).toFixed(2) } : undefined, thrownDamage: w.thrownDamage ? +(w.thrownDamage * Q.dmg).toFixed(2) : undefined },
+    tags: [...(base.tags ?? []), q],
+    equipFlags: q === 'silvered' ? [...(base.equipFlags ?? []), 'dress.silvered'] : base.equipFlags,
+  };
+}
+
+const byId = (id: string) => BASE_WEAPONS.find((w) => w.id === id)!;
+const VARIANTS: ItemDef[] = [
+  ...['pugio', 'sica', 'gladius', 'spatha', 'falx', 'hasta', 'lancea', 'venabulum'].map((id) => variant(byId(id), 'noric')),
+  ...['pugio', 'sica', 'gladius', 'spatha'].map((id) => variant(byId(id), 'bilbilis')),
+  ...['pugio', 'gladius', 'spatha'].map((id) => variant(byId(id), 'silvered')),
+];
+
+/** §8.1 uniques (v1.0). */
+const UNIQUES: ItemDef[] = [
+  { ...variant(byId('gladius'), 'bilbilis'), id: 'gladius-primi-pali', name: 'Gladius of the Primus Palus', latin: 'gladius primi pali', value: 600, weapon: { ...byId('gladius').weapon!, damage: 13 * 1.4, alt: { damageType: 'cut', damage: 11 * 1.4 } }, description: 'The champion of the Ludus Magnus fought a hundred bouts with this Bilbilis blade. The grip is worn to the shape of one hand.', tags: ['unique', 'bilbilis'] },
+  { ...byId('falx'), id: 'falx-mucaporis', name: 'Falx of Mucapor', latin: 'falx Mucaporis', value: 400, weapon: { ...byId('falx').weapon!, damage: 24 * 1.15 }, description: 'The Dacian champion’s falx, black with age, its inner edge honed like a razor.', tags: ['unique', 'falx', 'dacian', 'hook'] },
+  { ...byId('vitis'), id: 'vitis-vituli', name: 'Vitis of “Vitulus”', latin: 'vitis Vituli', value: 0, weapon: { ...byId('vitis').weapon!, damage: 11, stagger: 24 }, description: 'The rogue centurion’s vine staff. Soldiers flinch at it by habit.', tags: ['unique', 'knockout-miles', 'vitis'] },
+  { ...byId('rete'), id: 'rete-nerei', name: 'Net of Nereus', latin: 'rete Nerei', value: 120, description: 'The champion retiarius’s net, weighted with lead: it entangles 1 s longer.', tags: ['unique', 'net', 'retiarius', 'entangle+1'] },
+  { ...byId('pugio'), id: 'pugio-bruti', name: 'The “Dagger of Brutus”', latin: 'pugio Bruti', value: 3, description: 'Sold as the very blade of the Ides of March. The hilt is new and the blade is Gallic; a smith (Smithing 40) would laugh.', tags: ['unique', 'dagger', 'fake'] },
+];
+
+// ------------------------------------------------------------------ shields (§8.4)
 
 const SHIELDS: ItemDef[] = [
-  { id: 'scutum', name: 'Scutum', latin: 'scutum', type: 'shield', slot: 'offHand', weight: 8, value: 35, shield: { rating: 25, blockMitigation: 0.8 }, visual: { shield: 'scutum' }, description: 'The curved rectangular legionary shield of glued plywood, leather and a bronze-rimmed iron boss.', icon: '▮' },
-  { id: 'scutum_ovale', name: 'Oval Shield', latin: 'clipeus', type: 'shield', slot: 'offHand', weight: 5.5, value: 25, shield: { rating: 18, blockMitigation: 0.72 }, visual: { shield: 'scutum-oval' }, description: 'The flat oval shield of the auxiliaries and the urban cohorts.', icon: '⬮' },
-  { id: 'parma', name: 'Parma', latin: 'parma', type: 'shield', slot: 'offHand', weight: 3.5, value: 15, shield: { rating: 12, blockMitigation: 0.65 }, visual: { shield: 'parma' }, description: 'A round cavalry shield, quick to bring up.', icon: '●' },
-  { id: 'parmula', name: 'Parmula', latin: 'parmula', type: 'shield', slot: 'offHand', weight: 2.5, value: 18, shield: { rating: 9, blockMitigation: 0.6 }, visual: { shield: 'parmula' }, description: 'The small square shield of the thraex, painted in his ludus colours.', icon: '▪' },
-  { id: 'crates', name: 'Wicker Practice Shield', latin: 'scutum vimineum', type: 'shield', slot: 'offHand', weight: 3, value: 2, shield: { rating: 6, blockMitigation: 0.5 }, visual: { shield: 'scutum' }, description: 'Woven twice as heavy as a real shield, so that real ones feel light.', icon: '▮' },
+  { id: 'scutum', name: 'Scutum', latin: 'scutum', type: 'shield', slot: 'offHand', weight: 7.5, value: 45, shield: { rating: 30, blockMitigation: 0.85, missiles: 1 }, visual: { shield: 'scutum' }, description: 'The curved rectangular shield of legionary, murmillo and secutor. Stops every missile.', icon: '▮' },
+  { id: 'scutum-ovale', name: 'Oval Shield', latin: 'clipeus', type: 'shield', slot: 'offHand', weight: 6, value: 35, shield: { rating: 26, blockMitigation: 0.78, missiles: 0.9 }, visual: { shield: 'scutum-oval' }, description: 'The flat oval clipeus of auxiliaries and praetorians.', icon: '⬮' },
+  { id: 'parma', name: 'Parma', latin: 'parma', type: 'shield', slot: 'offHand', weight: 3, value: 25, shield: { rating: 20, blockMitigation: 0.65, missiles: 0.7 }, visual: { shield: 'parma' }, description: 'A round shield of cavalry and hoplomachi.', icon: '●' },
+  { id: 'parmula', name: 'Parmula', latin: 'parmula', type: 'shield', slot: 'offHand', weight: 2.5, value: 20, shield: { rating: 18, blockMitigation: 0.58, missiles: 0.6 }, visual: { shield: 'parmula' }, description: 'The small square shield of the thraex.', icon: '▪' },
+  { id: 'galerus', name: 'Galerus', latin: 'galerus', type: 'shield', slot: 'offHand', weight: 1.2, value: 25, shield: { rating: 0, blockMitigation: 0.35, missiles: 0.2 }, visual: { shield: 'none' }, description: 'The retiarius’s raised shoulder guard. It only protects the left side.', icon: '◣', tags: ['retiarius'] },
 ];
 
-// ------------------------------------------------------------------ armor
-
-const ARMOR: ItemDef[] = [
-  armor('lorica_segmentata', 'Lorica Segmentata', 'lorica segmentata', 'body', heavy(40), 9, 350, { armor: { body: { kind: 'lorica-segmentata', metal: 'iron' } } }, 'Overlapping iron hoops on leather straps, the plate armor of Trajan’s legions on his column.'),
-  armor('lorica_hamata', 'Mail Shirt', 'lorica hamata', 'body', heavy(34), 11, 260, { armor: { body: { kind: 'lorica-hamata', metal: 'iron' } } }, 'Thirty thousand riveted iron rings. Heavy on the shoulders, kind to the ribs.'),
-  armor('lorica_squamata', 'Scale Armor', 'lorica squamata', 'body', heavy(36), 12, 300, { armor: { body: { kind: 'lorica-squamata', metal: 'bronze' } } }, 'Bronze scales wired to a linen backing. It shimmers like a fish and rattles like one too.'),
-  armor('thoracomachus', 'Padded Jerkin', 'thoracomachus', 'body', light(14), 2.5, 25, { armor: { body: { kind: 'padded' } } }, 'Quilted linen stuffed with wool, worn alone or under mail.'),
-  armor('lorica_corio', 'Leather Cuirass', 'lorica coriacea', 'body', light(18), 4, 45, { armor: { body: { kind: 'leather' } } }, 'Hardened oxhide shaped to the chest, favoured by hunters and bodyguards.'),
-  armor('galea_gallica', 'Imperial Gallic Helmet', 'galea', 'head', heavy(16), 2.2, 120, { armor: { helmet: { kind: 'imperial-gallic', metal: 'iron' } } }, 'An iron helmet with a deep neck guard, brow ridge and embossed eyebrows.'),
-  armor('galea_italica', 'Imperial Italic Helmet', 'galea', 'head', heavy(15), 2.3, 90, { armor: { helmet: { kind: 'imperial-italic', metal: 'bronze' } } }, 'A bronze helmet made in Italian workshops, a little old-fashioned now.'),
-  armor('galea_attica', 'Praetorian Helmet', 'galea Attica', 'head', heavy(18), 2.5, 320, { armor: { helmet: { kind: 'praetorian-attic', crest: '#9b1c1c', metal: 'gilded' } } }, 'A crested Attic-style parade helmet of the Praetorian Guard, gilded and embossed.'),
-  armor('galea_murmillo', 'Murmillo Helmet', 'galea gladiatoria', 'head', heavy(20), 4, 150, { armor: { helmet: { kind: 'murmillo', metal: 'bronze' } } }, 'A broad-brimmed gladiator’s helmet with a fish crest and a grille visor. Heavy, hot and nearly impenetrable.'),
-  armor('cassis_corio', 'Leather Cap', 'galerus', 'head', light(5), 0.5, 6, { armor: { helmet: { kind: 'leather-cap' } } }, 'A stitched leather cap. Better than nothing against a falling roof tile.'),
-  armor('manica', 'Manica', 'manica', 'hands', heavy(6), 1.5, 40, { armor: { manica: 'right' } }, 'An articulated iron arm guard, adopted by the legions after the Dacian falx took too many sword arms.'),
-  armor('ocreae', 'Greaves', 'ocreae', 'legs', heavy(8), 1.6, 40, { armor: { greaves: 'both' } }, 'Bronze shin guards on leather padding.'),
-  armor('caligae', 'Caligae', 'caligae', 'feet', light(3), 1.2, 4, {}, 'Hobnailed military sandal-boots. You can hear a cohort coming from the next street.'),
-];
-
-// ------------------------------------------------------------------ clothing
+// ------------------------------------------------------------------ clothing & status items (§8.2)
 
 const CLOTHING: ItemDef[] = [
-  armor('tunica', 'Wool Tunic', 'tunica', 'body', cloth(), 0.6, 3, { garment: { kind: 'tunica', color: '#c9b48a' } }, 'A plain belted tunic of undyed wool, the clothing of every working Roman.'),
-  armor('tunica_linea', 'Linen Tunic', 'tunica linea', 'body', cloth(), 0.4, 12, { garment: { kind: 'tunica', color: '#ece3cf' } }, 'Fine Egyptian linen, cool in the Roman summer.', { equipModifiers: { 'price.buy': 0.02 } }),
-  armor('tunica_brevis', 'Work Tunic', 'exomis', 'body', cloth(), 0.5, 1.5, { garment: { kind: 'tunica-short', color: '#9c8462' } }, 'A short tunic fastened on one shoulder, for porters, smiths and slaves.'),
-  armor('tunica_longa', 'Long Tunic', 'tunica talaris', 'body', cloth(), 0.7, 4, { garment: { kind: 'tunica-long', color: '#b98f5e' } }, 'An ankle-length tunic.'),
-  armor('tunica_rubra', 'Red Tunic', 'tunica russata', 'body', cloth(), 0.6, 8, { garment: { kind: 'tunica', color: '#8f2a1f' } }, 'Madder-dyed red wool. Soldiers wear red; so do supporters of the Reds at the Circus.'),
-  armor('stola', 'Stola', 'stola', 'body', cloth(), 1, 30, { garment: { kind: 'stola', color: '#7d5a7a' } }, 'The long sleeveless overdress of a respectable married woman.', { equipModifiers: { 'persuade.chance': 0.03 } }),
-  armor('toga', 'Toga', 'toga virilis', 'cloak', cloth(1), 3, 60, { garment: { kind: 'toga', color: '#efe8d8' } }, 'Six metres of white wool, draped by a slave if you have one. The dress of a citizen at the Forum.', { equipModifiers: { 'persuade.chance': 0.05 } }),
-  armor('paenula', 'Paenula', 'paenula', 'cloak', cloth(1), 1.8, 15, { garment: { kind: 'paenula', color: '#6b5236' } }, 'A hooded travelling cloak of thick wool. It sheds rain and hides faces.', { equipModifiers: { 'stealth.visibility': 0.05 } }),
-  armor('lacerna', 'Lacerna', 'lacerna', 'cloak', cloth(), 0.8, 20, { garment: { kind: 'lacerna', color: '#3f5a7a' } }, 'A light, fashionable cloak pinned at the shoulder.'),
-  armor('sagum', 'Military Cloak', 'sagum', 'cloak', cloth(1), 1.5, 12, { garment: { kind: 'sagum', color: '#8a2f22' } }, 'A rectangle of heavy red wool pinned at the right shoulder: a soldier’s blanket and cloak.'),
-  armor('palla', 'Palla', 'palla', 'cloak', cloth(), 1, 15, { garment: { kind: 'palla', color: '#5e6f4a' } }, 'A woman’s mantle, drawn over the head in the street and at sacrifice.', { equipModifiers: { 'blessing.duration': 0.05 } }),
-  armor('pallium', 'Greek Mantle', 'pallium', 'cloak', cloth(), 1.2, 10, { garment: { kind: 'lacerna', color: '#a5916c' } }, 'The rectangular himation of Greek philosophers and physicians.'),
-  armor('pileus', 'Felt Cap', 'pileus', 'head', cloth(), 0.2, 1, { armor: { helmet: { kind: 'pileus' } } }, 'A conical felt cap, the badge of a freed slave.'),
-  armor('soleae', 'Sandals', 'soleae', 'feet', cloth(), 0.3, 1.5, {}, 'Simple indoor sandals. Wearing them in the Forum is a little lazy.'),
-  armor('calcei', 'Calcei', 'calcei', 'feet', cloth(), 0.6, 6, {}, 'Closed leather shoes laced at the ankle, worn with the toga.'),
+  armor('tunica', 'Tunic', 'tunica', 'body', cloth(), 0.5, 4, { garment: { kind: 'tunica', color: '#e2d6bc' } }, 'A plain belted tunic of undyed wool.'),
+  armor('tunica-crassa', 'Thick Tunic', 'tunica crassa', 'body', cloth(2), 0.9, 6, { garment: { kind: 'tunica', color: '#b8a27c' } }, 'A tunic of heavy wool, good against the cold and the occasional knife.'),
+  armor('toga', 'Toga', 'toga', 'cloak', cloth(), 3.5, 25, { garment: { kind: 'toga', color: '#efe8d8' } }, 'Citizens only — anyone else wearing it commits usurpatio togae. +10 persuasion with elites and officials, −5 with Subura plebs; sprinting costs 50% more and attacks are 20% slower. Required at a salutatio and in court.', { tags: ['citizen-only'], equipFlags: ['dress.toga'], equipModifiers: { 'stamina.sprintCost': -0.5 } }),
+  armor('toga-fina', 'Fine Toga', 'toga pura', 'cloak', cloth(), 3.5, 80, { garment: { kind: 'toga', color: '#f5f1e6' } }, 'Fine Apulian wool, fulled to a gleam. Citizens only. As the toga.', { tags: ['citizen-only'], equipFlags: ['dress.toga'], equipModifiers: { 'stamina.sprintCost': -0.5 } }),
+  armor('paenula', 'Paenula', 'paenula', 'cloak', cloth(), 1.5, 8, { garment: { kind: 'paenula', color: '#6b5236' } }, 'A hooded travelling cloak. Hooded at night, witnesses identify you only half the time; it keeps off the rain.', { equipFlags: ['hooded'] }),
+  armor('sagum', 'Sagum', 'sagum', 'cloak', cloth(1), 1.8, 6, { garment: { kind: 'sagum', color: '#8a2f22' } }, 'A rectangle of heavy wool pinned at the shoulder: a soldier’s cloak and blanket.'),
+  armor('lacerna', 'Lacerna', 'lacerna', 'cloak', cloth(), 0.8, 10, { garment: { kind: 'lacerna', color: '#3f5a7a' } }, 'A fashionable light cloak: +3 persuasion at the games.', { equipFlags: ['dress.lacerna'] }),
+  armor('bracae', 'Bracae', 'bracae', 'legs', cloth(1), 0.6, 3, {}, 'Gallic trousers. Useful in winter, barbarous in the Forum.'),
+  armor('fasciae', 'Leg Wrappings', 'fasciae', 'legs', cloth(1), 0.2, 1, {}, 'Wool bands wound round the shins.'),
+  armor('caligae', 'Caligae', 'caligae', 'feet', cloth(1), 1, 5, {}, 'Hobnailed military boots: footsteps 20% louder on stone.', { equipFlags: ['hobnails'] }),
+  armor('calcei', 'Calcei', 'calcei', 'feet', cloth(), 0.6, 4, {}, 'Closed leather shoes, worn with the toga.'),
+  armor('soleae', 'Soleae', 'soleae', 'feet', cloth(), 0.3, 1, {}, 'Indoor sandals. In the street: −5 persuasion with elites.', { equipFlags: ['dress.soleae'] }),
+  armor('carbatinae', 'Carbatinae', 'carbatinae', 'feet', cloth(), 0.5, 1, {}, 'Rustic one-piece leather shoes.'),
+  armor('cucullus', 'Hood', 'cucullus', 'head', cloth(), 0.2, 1, {}, 'A loose hood: as the paenula’s, witnesses identify you only half the time at night.', { equipFlags: ['hooded'] }),
+  armor('petasus', 'Petasus', 'petasus', 'head', cloth(1), 0.2, 1, {}, 'A broad-brimmed sun hat for travellers.'),
+  // extras
+  armor('tunica-linea', 'Linen Tunic', 'tunica linea', 'body', cloth(), 0.4, 12, { garment: { kind: 'tunica', color: '#ece3cf' } }, 'Fine Egyptian linen, cool in the Roman summer. (Extra.)'),
+  armor('tunica-longa', 'Long Tunic', 'tunica talaris', 'body', cloth(), 0.7, 5, { garment: { kind: 'tunica-long', color: '#b98f5e' } }, 'An ankle-length tunic in the eastern fashion. (Extra.)'),
+  armor('stola', 'Stola', 'stola', 'body', cloth(), 1, 30, { garment: { kind: 'stola', color: '#7d5a7a' } }, 'The long overdress of a respectable married woman. (Extra.)'),
+  armor('palla', 'Palla', 'palla', 'cloak', cloth(), 1, 15, { garment: { kind: 'palla', color: '#5e6f4a' } }, 'A woman’s mantle, drawn over the head at sacrifice. (Extra.)'),
+  armor('pallium', 'Pallium', 'pallium', 'cloak', cloth(), 1.2, 10, { garment: { kind: 'lacerna', color: '#a5916c' } }, 'The Greek mantle of philosophers and physicians. (Extra.)'),
+  armor('pileus', 'Pileus', 'pileus', 'head', cloth(), 0.2, 1, { armor: { helmet: { kind: 'pileus' } } }, 'A conical felt cap, worn at manumission. (Extra.)'),
 ];
 
-// ------------------------------------------------------------------ food & drink
+const JEWELLERY: ItemDef[] = [
+  { id: 'fascinum', name: 'Fascinum', latin: 'fascinum', type: 'misc', slot: 'neck', weight: 0.05, value: 2, icon: '◎', equipFlags: ['amulet'], description: 'A small bronze phallic charm. Amulets negate curse tablets and halve the chance of a bad daily omen.' },
+  { id: 'bulla', name: 'Golden Bulla', latin: 'bulla aurea', type: 'misc', slot: 'neck', weight: 0.05, value: 25, icon: '◎', equipFlags: ['amulet'], description: 'The locket a freeborn boy wears until he takes the toga of manhood. As an amulet, it negates curse tablets.' },
+  { id: 'lunula', name: 'Lunula', latin: 'lunula', type: 'misc', slot: 'neck', weight: 0.05, value: 10, icon: '◎', equipFlags: ['amulet'], description: 'A crescent-moon pendant worn by girls and women against the evil eye.' },
+  { id: 'anulus-aureus', name: 'Gold Ring', latin: 'anulus aureus', type: 'misc', slot: 'finger', weight: 0.01, value: 50, icon: '○', equipFlags: ['dress.anulus-aureus'], description: 'The gold ring of the equestrian order: equites only (otherwise a crime). +10 persuasion with elites.' },
+  { id: 'anulus-signatorius', name: 'Signet Ring', latin: 'anulus signatorius', type: 'misc', slot: 'finger', weight: 0.01, value: 5, icon: '○', description: 'An iron ring with a carnelian intaglio for sealing letters. It can be copied (the Forger perk).' },
+  // extras
+  { id: 'nodus-isidis', name: 'Knot of Isis', latin: 'nodus Isiacus', type: 'misc', slot: 'neck', weight: 0.02, value: 15, icon: '◎', equipFlags: ['amulet'], description: 'A faience tyet amulet from the Iseum Campense. (Extra.)' },
+  { id: 'torques', name: 'Gold Torc', latin: 'torques', type: 'misc', weight: 0.4, value: 120, icon: '◎', tags: ['valuable'], description: 'A twisted gold neck ring taken from a Gaul or a Dacian — loot, not jewellery for a Roman. (Extra.)' },
+];
+
+// ------------------------------------------------------------------ armor (§8.3)
+
+const ARMOR: ItemDef[] = [
+  armor('subarmalis', 'Subarmalis', 'subarmalis', 'body', light(10, 'padded'), 3, 20, { armor: { body: { kind: 'padded' } } }, 'A padded linen jerkin, worn alone or under mail.'),
+  armor('thorax-coriaceus', 'Leather Cuirass', 'thorax coriaceus', 'body', light(14, 'padded'), 5, 35, { armor: { body: { kind: 'leather' } } }, 'Hardened oxhide shaped to the chest.'),
+  armor('cardiophylax', 'Cardiophylax', 'cardiophylax', 'body', light(10, 'padded'), 2, 30, { armor: { body: { kind: 'padded' } } }, 'The provocator’s small chest plate on a padded harness.'),
+  armor('lorica-hamata', 'Mail Shirt', 'lorica hamata', 'body', heavy(30, 'mail'), 9, 190, { armor: { body: { kind: 'lorica-hamata', metal: 'iron' } } }, 'Thousands of riveted iron rings: heavy on the shoulders, kind to the ribs.'),
+  armor('lorica-squamata', 'Scale Shirt', 'lorica squamata', 'body', heavy(32, 'mail'), 10, 220, { armor: { body: { kind: 'lorica-squamata', metal: 'bronze' } } }, 'Bronze scales wired to a linen backing.'),
+  armor('lorica-segmentata', 'Lorica Segmentata', 'lorica segmentata', 'body', heavy(38, 'plate'), 8.5, 260, { armor: { body: { kind: 'lorica-segmentata', metal: 'iron' } } }, 'Segmented iron plate of the Corbridge type, as on Trajan’s Column. Military issue: 390 den. on the black market.', { tags: ['military'] }),
+  armor('thorax-musculus', 'Muscle Cuirass', 'thorax', 'body', heavy(34, 'plate'), 9, 320, { armor: { body: { kind: 'lorica-segmentata', metal: 'bronze' } } }, 'A bronze cuirass modelled on a hero’s torso, for officers.'),
+  armor('galea-gallica', 'Imperial Gallic Helmet', 'galea', 'head', heavy(12), 1.8, 60, { armor: { helmet: { kind: 'imperial-gallic', metal: 'iron' } } }, 'An iron helmet with a deep neck guard and embossed brows.'),
+  armor('galea-italica', 'Imperial Italic Helmet', 'galea', 'head', heavy(11), 1.9, 55, { armor: { helmet: { kind: 'imperial-italic', metal: 'bronze' } } }, 'A bronze helmet from Italian workshops.'),
+  armor('galea-cruciata', 'Cross-braced Gallic Helmet', 'galea', 'head', heavy(14), 2.1, 80, { armor: { helmet: { kind: 'imperial-gallic', metal: 'iron' } } }, 'A Gallic helmet with iron cross-braces added in the Dacian wars, after the falx split too many skulls.'),
+  armor('galea-attica', 'Praetorian Helmet', 'galea Attica', 'head', heavy(12), 2, 150, { armor: { helmet: { kind: 'praetorian-attic', crest: '#9b1c1c', metal: 'gilded' } } }, 'The Guard’s crested Attic-style helmet.'),
+  armor('galea-murmillonis', 'Murmillo Helmet', 'galea murmillonis', 'head', heavy(14), 3.5, 90, { armor: { helmet: { kind: 'murmillo', metal: 'bronze' } } }, 'Broad brim and tall crest; a grille visor narrows your view.', { equipFlags: ['visor.medium'] }),
+  armor('galea-thraecis', 'Thraex Helmet', 'galea thraecis', 'head', heavy(13), 3.3, 90, { armor: { helmet: { kind: 'thraex', metal: 'bronze' } } }, 'A griffin-crested helmet with a grille visor.', { equipFlags: ['visor.medium'] }),
+  armor('galea-secutoris', 'Secutor Helmet', 'galea secutoris', 'head', heavy(16), 3.8, 90, { armor: { helmet: { kind: 'secutor', metal: 'bronze' } } }, 'A smooth egg of bronze with two eyeholes: no net can catch it, and you see very little.', { equipFlags: ['visor.strong', 'net.proof'] }),
+  armor('galea-hoplomachi', 'Hoplomachus Helmet', 'galea hoplomachi', 'head', heavy(13), 3.3, 85, { armor: { helmet: { kind: 'hoplomachus', metal: 'bronze' } } }, 'A Greek-style gladiator’s helmet with a feathered crest.', { equipFlags: ['visor.medium'] }),
+  armor('galea-provocatoris', 'Provocator Helmet', 'galea provocatoris', 'head', heavy(13), 3.2, 80, { armor: { helmet: { kind: 'provocator', metal: 'bronze' } } }, 'A visored helmet with a neck guard, like a legionary’s.', { equipFlags: ['visor.medium'] }),
+  armor('galea-equitis', 'Eques Helmet', 'galea equitis', 'head', heavy(12), 2.8, 80, { armor: { helmet: { kind: 'imperial-italic', metal: 'bronze' } } }, 'A brimmed visored helmet for the mounted gladiator.', { equipFlags: ['visor.medium'] }),
+  armor('manica-linea', 'Linen Manica', 'manica linea', 'hands', light(4), 1, 15, { armor: { manica: 'right' } }, 'A quilted linen arm guard.', { tags: ['manica'] }),
+  armor('manica-ferrea', 'Iron Manica', 'manica ferrea', 'hands', heavy(7), 2, 60, { armor: { manica: 'right' } }, 'A segmented iron arm guard of the kind the Dacian falx made necessary.', { tags: ['manica'] }),
+  armor('manica-thraecis-aurata', 'Gilded Thraex Manica', 'manica aurata', 'hands', light(9), 1.2, 160, { armor: { manica: 'right' } }, 'A famous thraex’s gilded arm guard.', { tags: ['manica', 'unique'] }),
+  armor('ocrea', 'Greave', 'ocrea', 'legs', light(3), 0.8, 18, { armor: { greaves: 'left' } }, 'A single bronze greave, gladiator fashion.'),
+  armor('ocreae', 'High Greaves', 'ocreae', 'legs', light(6), 1.8, 40, { armor: { greaves: 'both' } }, 'A pair of high bronze greaves.'),
+];
+
+// ------------------------------------------------------------------ food & drink, remedies, poisons (§8.5)
 
 const FOOD: ItemDef[] = [
-  food('panis', 'Bread', 'panis plebeius', 0.3, 2 * AS, [heal(5)], 'A round loaf of coarse bread scored into eight wedges, stamped by the baker.'),
-  food('panis_siligineus', 'White Bread', 'panis siligineus', 0.3, 4 * AS, [heal(8)], 'Soft bread of fine wheat flour, the kind the rich eat.'),
-  food('puls', 'Porridge', 'puls', 0.5, 2 * AS, [heal(6), regen('stamina', 1, 30)], 'A bowl of spelt porridge with beans: what Romans ate before they conquered the world.'),
-  food('caseus', 'Cheese', 'caseus', 0.4, 4 * AS, [heal(6)], 'A hard smoked cheese from the Velabrum.'),
-  food('olivae', 'Olives', 'olivae', 0.2, 2 * AS, [heal(3)], 'Brined olives in a twist of cloth.'),
-  food('ficus', 'Dried Figs', 'ficus aridae', 0.1, 2 * AS, [heal(3)], 'Dried figs threaded on a string. Cato waved one in the Senate to show how close Carthage was.', ['food', 'fig']),
-  food('palmulae', 'Dates', 'palmulae', 0.1, 8 * AS, [heal(4), rest(5)], 'Sweet dates from Syria.'),
-  food('poma', 'Apple', 'pomum', 0.15, AS, [heal(3)], 'A small sharp apple from the Alban hills.'),
-  food('ova', 'Boiled Eggs', 'ova', 0.1, AS, [heal(4)], 'Two hard-boiled eggs. A proper dinner goes “ab ovo usque ad mala” — from the egg to the apples.'),
-  food('lucanica', 'Lucanian Sausage', 'lucanica', 0.3, 6 * AS, [heal(12)], 'A smoked pork sausage spiced with pepper, cumin and rue.'),
-  food('mel', 'Honey', 'mel', 0.4, 8 * AS, [heal(5), rest(10)], 'A small jar of thyme honey.', ['food', 'ingredient']),
-  food('allec', 'Allec', 'allec', 0.3, AS, [heal(2)], 'The pungent sludge left at the bottom of the garum vat. The poor spread it on bread.'),
-  food('garum', 'Garum', 'garum', 0.3, 8 * AS, [heal(4), regen('health', 0.3, 30)], 'Fermented fish sauce. Romans put it on everything.'),
-  food('garum_sociorum', 'Garum of the Allies', 'garum sociorum', 0.3, 12, [regen('health', 1.2, 60)], 'The finest garum, from mackerel at Carthago Nova. Pliny says it costs as much as perfume.'),
-  food('posca', 'Posca', 'posca', 0.8, AS, [rest(15)], 'Sour wine cut with water: the soldier’s drink, cheap and thirst-quenching.', ['drink']),
-  food('lora', 'Lora', 'lora', 0.8, AS, [rest(10)], 'Thin wine from the second pressing of the grape skins, given to farm slaves in winter.', ['drink', 'wine']),
-  food('vinum', 'Wine', 'vinum', 1.5, 4 * AS, [rest(20), { kind: 'modifier', target: 'persuade.chance', amount: 0.05, duration: 120 }], 'A jug of ordinary Italian red from a tavern counter.', ['drink', 'wine']),
-  food('mulsum', 'Mulsum', 'mulsum', 1.5, 8 * AS, [rest(20), heal(5)], 'Wine sweetened with honey, served at the start of a meal.', ['drink', 'wine']),
-  food('vinum_falernum', 'Falernian Wine', 'vinum Falernum', 1.5, 3, [rest(30), { kind: 'modifier', target: 'persuade.chance', amount: 0.1, duration: 300 }], 'The most famous vintage of Campania, amber and strong. Horace would have approved.', ['drink', 'wine']),
-  food('vinum_caecubum', 'Caecuban Wine', 'vinum Caecubum', 1.5, 6, [rest(40), { kind: 'fortify', target: 'stamina', amount: 20, duration: 300 }], 'A rare old Caecuban, the wine Horace saved for Cleopatra’s defeat.', ['drink', 'wine']),
-  food('aqua', 'Waterskin', 'aqua', 1, 0, [rest(8)], 'Cold water from the Aqua Marcia — the best in Rome.', ['drink']),
+  food('panis', 'Bread', 'panis', 0.33, AS, [hot(8, 8)], 'A one-libra loaf scored into eight wedges.'),
+  food('puls', 'Puls', 'puls', 0.5, AS, [hot(12, 8), stam(10)], 'A bowl of spelt porridge.'),
+  food('caseus', 'Cheese', 'caseus', 0.3, 2 * AS, [hot(6, 8)], 'A portion of hard smoked cheese.'),
+  food('olivae', 'Olives', 'olivae', 0.3, 3 * AS, [hot(4, 8)], 'A small jar of brined olives.'),
+  food('ficus', 'Dried Figs', 'ficus aridae', 0.2, 2 * AS, [hot(4, 8)], 'A bag of dried figs (or dates).', ['food', 'fig']),
+  food('botulus', 'Sausage', 'botulus', 0.3, 2 * AS, [hot(15, 10)], 'A smoked pork sausage.'),
+  food('patina', 'Garum Dish', 'patina', 0.5, 8 * AS, [hot(20, 10), { kind: 'modifier', target: 'stamina.regen', amount: 0.1, duration: 15 }], 'Something baked with fish sauce — Romans put garum on everything.'),
+  food('cena', 'Full Dinner', 'cena', 1.5, 3, [hot(40, 20), cond('satur')], 'A full dinner at a good caupona: from the egg to the apples.'),
+  food('libum', 'Honey Cake', 'libum', 0.1, AS, [{ kind: 'restore', target: 'health', amount: 5 }], 'A honey cake — the standard small offering.', ['food', 'offering']),
+  food('mel', 'Honey', 'mel', 0.3, 6 * AS, [{ kind: 'restore', target: 'health', amount: 5 }], 'A small jar of thyme honey.', ['food', 'ingredient']),
+  food('aqua', 'Water', 'aqua', 0.5, 0, [stam(5)], 'Water from a street fountain (lacus): free, and it partly washes off the grime.', ['drink', 'water']),
+  food('posca', 'Posca', 'posca', 0.6, AS, [stam(30), { kind: 'modifier', target: 'stamina.regen', amount: 0.2, duration: 60 }], 'Sour wine cut with water: the soldier’s drink.', ['drink']),
+  food('vinum', 'House Wine', 'vinum', 0.25, AS, [stam(15), cond('ebrius')], 'A cup of house wine. “Here you drink for an as.”', ['drink', 'wine']),
+  food('vinum-melius', 'Better Wine', 'vinum melius', 0.25, 2 * AS, [stam(20), cond('ebrius')], 'A cup of better wine: “give two and you’ll drink better.”', ['drink', 'wine']),
+  food('vinum-falernum', 'Falernian', 'vinum Falernum', 0.25, 4 * AS, [stam(25), cond('ebrius'), { kind: 'fortify', target: 'rhetoric', amount: 5, duration: 120 }], 'A cup of Falernian: “give four and you’ll drink Falernian.” +5 Rhetoric for 120 s.', ['drink', 'wine']),
+  food('mulsum', 'Mulsum', 'mulsum', 0.25, 2 * AS, [stam(20), cond('ebrius')], 'Wine sweetened with honey.', ['drink', 'wine']),
 ];
 
-// ------------------------------------------------------------------ medicine & ingredients
-
-const MEDICINE: ItemDef[] = [
-  medicine('potio_minor', 'Herbal Draught', 'potio herbacea', 0.25, 4, [heal(25)], 'A bitter infusion of hyssop and honey from a street-corner healer.'),
-  medicine('potio', 'Physician’s Draught', 'potio medici', 0.25, 10, [heal(50)], 'A compound remedy prepared by a Greek physician to a recipe of Celsus.'),
-  medicine('potio_maior', 'Draught of Aesculapius', 'potio Aesculapii', 0.25, 25, [heal(100)], 'Prepared in the god’s sanctuary on the Tiber Island. Patients swear by it.'),
-  medicine('unguentum', 'Wound Salve', 'unguentum', 0.2, 6, [regen('health', 2, 20)], 'Honey, wax and copper salts in a little tin, to be smeared on cuts.'),
-  medicine('theriaca', 'Theriac', 'theriaca', 0.15, 30, [{ kind: 'cure', target: 'poison', amount: 1 }], 'Nero’s physician Andromachus perfected this antidote of sixty-four ingredients, including viper flesh.'),
-  medicine('collyrium', 'Eye Salve', 'collyrium', 0.05, 3, [{ kind: 'cure', target: 'disease:lippitudo', amount: 1 }], 'A dried stick of eye salve stamped with the oculist’s name. Dissolve in egg white.'),
-  medicine('cortex_salicis', 'Willow Bark Tea', 'decoctum salicis', 0.2, 2, [{ kind: 'cure', target: 'disease:febris', amount: 1 }, rest(5)], 'A bitter decoction that cools the tertian fever.'),
-  medicine('aqua_insulae', 'Water of the Tiber Island', 'aqua Insulae', 0.5, 8, [{ kind: 'cure', target: 'disease', amount: 1 }], 'Water drawn at the sanctuary of Aesculapius. It cures any sickness, the priests say.'),
-  medicine('embrocatio', 'Athlete’s Embrocation', 'oleum athletae', 0.3, 8, [{ kind: 'fortify', target: 'stamina', amount: 25, duration: 300 }], 'Olive oil infused with herbs, rubbed in before the palaestra.'),
-  medicine('papaveris', 'Poppy Tincture', 'lacrima papaveris', 0.1, 12, [{ kind: 'fortify', target: 'health', amount: 30, duration: 120 }, { kind: 'modifier', target: 'speed.move', amount: -0.1, duration: 120 }], 'The milk of the poppy. It dulls pain — and wits.'),
+const REMEDIES: ItemDef[] = [
+  remedy('fascia', 'Bandage', 'fascia', 0.05, 2 * AS, [hot(25, 5), { kind: 'cure', target: 'injury', amount: 1 }], 'A roll of clean linen: +25 health over 5 s; stops bleeding.', ['bandage']),
+  remedy('emplastrum', 'Poultice', 'emplastrum', 0.1, 4 * AS, [hot(40, 10)], 'A plaster of herbs and honey: +40 health over 10 s.'),
+  remedy('collyrium', 'Eye Salve', 'collyrium', 0.05, 4 * AS, [{ kind: 'cure', target: 'state:caecatus', amount: 1 }], 'A stick of eye salve stamped with the oculist’s name. Cures blindness from sand or smoke.'),
+  remedy('theriaca', 'Theriac', 'theriaca', 0.15, 15, [{ kind: 'cure', target: 'poison', amount: 1 }, { kind: 'flag', target: 'poison.resist', amount: 1, duration: 180 }], 'Andromachus’ antidote of sixty-four ingredients (also sold as Mithridatium): cures poison and halves it for a game hour.'),
+  remedy('febrifugum', 'Fever Draught', 'febrifugum', 0.2, 2, [{ kind: 'cure', target: 'disease:febris', amount: 1 }], 'A bitter draught of willow and wormwood. Cures the fever.'),
+  remedy('soporificum', 'Soporific', 'soporificum', 0.1, 10, [], 'Poppy and mandragora, to coat a weapon: for 3 hits, a struck target up to elite collapses after 3 s.', ['weapon-coating']),
 ];
 
 const INGREDIENTS: ItemDef[] = [
-  misc('ruta', 'Rue', 'ruta', 0.05, 4 * AS, 'A bitter herb against poison and the evil eye.', { type: 'ingredient', tags: ['herb'] }),
-  misc('allium', 'Garlic', 'allium', 0.05, AS, 'Pliny lists sixty-one remedies made from garlic.', { type: 'ingredient', tags: ['herb'] }),
-  misc('hyssopus', 'Hyssop', 'hyssopus', 0.05, 4 * AS, 'A fragrant herb for coughs and wounds.', { type: 'ingredient', tags: ['herb'] }),
-  misc('papaver', 'Poppy Heads', 'papaver', 0.05, 8 * AS, 'Dried poppy heads, scored for their milk.', { type: 'ingredient', tags: ['herb'] }),
-  misc('mandragora', 'Mandrake Root', 'mandragora', 0.1, 2, 'A forked root used to put patients to sleep before surgery.', { type: 'ingredient', tags: ['herb'] }),
-  misc('absinthium', 'Wormwood', 'absinthium', 0.05, 4 * AS, 'Steeped in wine to cure worms and sea-sickness.', { type: 'ingredient', tags: ['herb'] }),
+  ...[
+    ['papaver', 'Poppy', 'papaver', 8 * AS, 'Dried poppy heads, scored for their milk.'],
+    ['mandragora', 'Mandrake', 'mandragora', 2, 'A forked root given before surgery.'],
+    ['allium', 'Garlic', 'allium', AS, 'Pliny lists sixty-one remedies made from garlic.'],
+    ['acetum', 'Vinegar', 'acetum', AS, 'Sour wine vinegar — the base of posca and of many remedies.'],
+    ['myrrha', 'Myrrh', 'myrrha', 2, 'Arabian resin for wounds and embalming.'],
+    ['absinthium', 'Wormwood', 'absinthium', 4 * AS, 'Steeped in wine against worms and sea-sickness.'],
+    ['helleborus', 'Hellebore', 'helleborus', 8 * AS, 'Black hellebore: a purge for madness, a poison for the careless.'],
+    ['ruta', 'Rue', 'ruta', 4 * AS, 'A bitter herb against poison and the evil eye.'],
+    ['salvia', 'Sage', 'salvia', 2 * AS, 'Sage, for the throat and for wounds.'],
+  ].map(([id, name, latin, value, desc]) => misc(id as string, name as string, latin as string, 0.05, value as number, desc as string, { type: 'ingredient', tags: ['herb'] })),
+  misc('tus', 'Incense', 'tus', 0.05, AS, 'A pinch of Arabian frankincense, burned at every altar in Rome (a box costs 1 den.).', { type: 'ingredient', tags: ['offering', 'herb'] }),
+  misc('aconitum', 'Aconite', 'aconitum', 0.05, 3, 'Wolfsbane: 4 damage a second for 10 s.', { type: 'ingredient', tags: ['poison'] }),
+  misc('cicuta', 'Hemlock', 'cicuta', 0.05, 2, 'The Athenian poison: halves stamina regeneration for 60 s.', { type: 'ingredient', tags: ['poison'] }),
+  misc('taxus', 'Yew', 'taxus', 0.05, 2, 'Yew needles: 2 damage a second for 30 s.', { type: 'ingredient', tags: ['poison'] }),
 ];
 
-// ------------------------------------------------------------------ books & letters
+// ------------------------------------------------------------------ tools, misc goods, coins, keys (§8.5–8.6)
+
+const TOOLS: ItemDef[] = [
+  { id: 'hamulus', name: 'Lockpick', latin: 'hamulus', type: 'tool', weight: 0.02, value: 1, stackable: true, icon: '⌐', tags: ['lockpick'], description: 'A bent bronze pick. Owning one is not a crime; being found with one at night is a conversation.' },
+  { id: 'instrumentum-fabri', name: 'Repair Kit', latin: 'instrumentum fabri', type: 'tool', weight: 1.5, value: 8, stackable: true, icon: '⚒', tags: ['repair-kit'], description: 'Rivets, wire, whetstone and leather: +25% condition in the field (needs the Armorer of the Legion perk).' },
+  { id: 'lucerna', name: 'Clay Lamp', latin: 'lucerna', type: 'tool', weight: 0.3, value: AS, stackable: true, icon: '🪔', tags: ['light'], description: 'A mould-made clay lamp for interiors and for the lararium.' },
+  { id: 'tabula-cerata', name: 'Wax Tablet', latin: 'tabula cerata', type: 'misc', weight: 0.3, value: 3 * AS, stackable: true, icon: '▭', description: 'Two leaves of black wax with a stylus: notes, forged messages, quest letters.' },
+  misc('stilus', 'Stylus', 'stilus', 0.02, AS, 'A bronze stylus: one end to write, the other to erase.'),
+  misc('cera-signatoria', 'Sealing Wax', 'cera signatoria', 0.05, 2 * AS, 'Red sealing wax, for resealing letters (Locks & Seals).'),
+  misc('defixio', 'Curse Tablet', 'defixio', 0.2, 2 * AS, 'A blank lead sheet. Inscribe it, nail it and deposit it at a grave, well or spring. It harms only a target who learns of it.', { tags: ['curse'] }),
+  misc('clavus', 'Nail', 'clavus', 0.02, AS, 'An iron nail, to pierce a curse tablet.', { tags: ['curse'] }),
+  misc('tessera-frumentaria', 'Grain Token', 'tessera frumentaria', 0.01, 25, 'A lead token for the monthly grain dole at the Porticus Minucia. Worth 25 den. on the black market.'),
+  misc('tessera-theatralis', 'Theatre Token', 'tessera theatralis', 0.01, AS, 'A bone token for a seat at the theatre.'),
+  misc('tali', 'Knucklebones', 'tali', 0.05, 4 * AS, 'Four sheep’s knucklebones. Dice games are illegal outside the Saturnalia.'),
+  misc('fritillus', 'Dice Cup', 'fritillus', 0.1, 4 * AS, 'A turned-wood dice cup.'),
+  misc('piper', 'Black Pepper', 'piper nigrum', 0.33, 4, 'A libra of black pepper from India, stored in the Horrea Piperataria.', { tags: ['valuable', 'spice'] }),
+  misc('piper-album', 'White Pepper', 'piper album', 0.33, 7, 'A libra of white pepper.', { tags: ['valuable', 'spice'] }),
+  misc('piper-longum', 'Long Pepper', 'piper longum', 0.33, 15, 'A libra of long pepper, the dearest kind (Pliny NH 12.28).', { tags: ['valuable', 'spice'] }),
+  misc('argentum', 'Silver Plate', 'argentum', 0.6, 40, 'A silver dish chased with olive branches.', { tags: ['valuable'] }),
+  misc('vasa-arretina', 'Arretine Ware', 'vasa Arretina', 0.6, 2, 'Glossy red Arretine bowls stamped with the potter’s name.', { tags: ['valuable'] }),
+  misc('vitrum', 'Glass Beaker', 'vitrum', 0.3, 3, 'Blown glass, clear as water.', { tags: ['valuable'] }),
+  misc('purpura', 'Tyrian Purple', 'purpura', 0.1, 100, 'A vial of dye from ten thousand murex snails.', { tags: ['valuable', 'luxury'] }),
+  misc('diploma', 'Discharge Diploma', 'diploma militare', 0.1, 0, 'Two bronze tablets, wired shut and witnessed by seven, granting a veteran citizenship and the right to marry.', { tags: ['keepsake', 'document'] }),
+  misc('gemma', 'Carnelian Gem', 'gemma', 0.01, 30, 'A carnelian cut with a tiny Fortuna. (Extra.)', { tags: ['valuable'] }),
+  misc('tessera-collegii', 'Collegium Token', 'tessera collegii', 0.02, 4 * AS, 'A bronze token of a trade club, stamped with its patron god. A pass to its back rooms.', { tags: ['token'] }),
+  misc('tabula-stipendii', 'Pay Tablet', 'tabula stipendii', 0.1, 2, 'A soldier’s pay record with the deductions: hay, boots, the burial club, the camp Saturnalia.', { tags: ['document'] }),
+  misc('epistula-signata', 'Sealed Letter', 'epistula signata', 0.05, 0, 'A sealed letter from a dead man’s purse. Someone will want it back.', { tags: ['document', 'quest-lead'] }),
+  misc('nugae', 'Stolen Trinket', 'nugae', 0.05, 3, 'A pretty thing someone else paid for: a hairpin, a bronze mirror, a cheap ring.', { tags: ['valuable'] }),
+  misc('corium', 'Hide', 'corium', 1.5, 2, 'A tanned hide. (Extra.)'),
+  misc('ferrum', 'Iron Bar', 'ferrum', 2, 2, 'Wrought iron for the forge.', { tags: ['metal'] }),
+  // Coins convert to denarii when picked up (§7.1).
+  misc('aureus', 'Aureus', 'aureus', 0.007, 25, 'A gold aureus of Trajan: 25 denarii.', { tags: ['coin'] }),
+  misc('denarius-columnae', 'New Denarius', 'denarius', 0.003, 1, 'A new denarius showing the Column.', { tags: ['coin'] }),
+  misc('dupondius-domitiani', 'Worn Dupondius', 'dupondius', 0.013, 2 * AS, 'A worn dupondius of Domitian.', { tags: ['coin'] }),
+];
+
+// ------------------------------------------------------------------ books (§8.6) and curse tablets
 
 const BOOKS: ItemDef[] = [
-  book('liber_strategemata', 'Frontinus, Strategemata', 'Strategemata', 25, 'Since I alone of those interested in military science have undertaken to reduce its rules to system… I deem it a duty to collect the adroit operations of generals, which the Greeks embrace under the one name strategemata.\n\nWhen the enemy hold a height, send a few men to show themselves on the far side; draw them down; then take the hill they have left.\n\nAt Cynoscephalae the Macedonian phalanx could not turn. A spear wall is strong only where it faces.', 'Sextus Julius Frontinus, three times consul, on the stratagems of famous generals.', 'spear'),
-  book('liber_onasander', 'Onasander, The General', 'Strategicus', 20, 'The general should be chosen as temperate, self-restrained, vigilant, frugal, hardened to labour, alert, free from avarice, neither too young nor too old.\n\nLet the front rank lock shields so that no blade finds a gap; the man who lowers his shield to strike opens the whole line.', 'A Greek handbook on generalship, dedicated to a Roman consul.', 'block'),
-  book('liber_cynegeticus', 'Xenophon, On Hunting', 'Cynegeticus', 15, 'The hare runs in circles and returns to its form; set your nets where it began.\n\nThe young man who hunts learns to bear cold and heat, to aim true when his breath is short, and to wait.', 'An old Athenian’s advice on hounds, nets and the hunting bow.', 'ranged'),
-  book('liber_lanista', 'Rules of the Ludus Magnus', 'Leges Ludi', 10, 'I. The tiro trains at the palus, the wooden post, until his arm can no longer lift the wooden sword. Then he trains more.\n\nII. Strike to the thigh when the shield rises, to the throat when it falls.\n\nIII. Do not look at the crowd. The crowd does not fight for you.', 'A doctor’s copybook from the imperial gladiator school beside the Colosseum.', 'blades'),
-  book('liber_institutio', 'Quintilian, Institutio Oratoria XII', 'Institutio Oratoria', 40, 'Let the orator, then, whom I am forming be such as is defined by Marcus Cato: a good man, skilled in speaking — vir bonus dicendi peritus.\n\nIt is feeling and force of imagination that make us eloquent.', 'The last book of Quintilian’s education of the orator, published in the reign of Domitian.', 'rhetoric'),
-  book('liber_cato', 'Cato, On Agriculture', 'De Agri Cultura', 20, 'When the master arrives at the farm… let him sell oil if the price is satisfactory, and the surplus wine and grain; let him sell worn-out oxen, blemished cattle and sheep, wool, hides, an old wagon, old tools, an old slave, a sickly slave.\n\nThe master of the house should be a seller, not a buyer — patrem familias vendacem, non emacem esse oportet.', 'The elder Cato’s practical, flinty handbook on running an estate.', 'mercatura'),
-  book('liber_celsus', 'Celsus, On Medicine', 'De Medicina', 45, 'Medicine should be rational, but should draw its instruction from evident causes.\n\nThe surgeon should be youthful or at any rate nearer youth than age, with a strong and steady hand that never trembles, and be no less quick with the left hand than with the right.', 'Aulus Cornelius Celsus’s encyclopaedia of medicine, in clear Latin.', 'medicina'),
-  book('liber_amores', 'Ovid, Amores I', 'Amores', 15, 'Doorkeeper — shameful! — bound by a hard chain, swing on its hinge the stubborn door.\n\nI ask for little: let the door open a crack, so that I can slip through sideways. Long love has thinned my body for such tricks.', 'Ovid’s love elegies, including the locked-out lover’s plea to the doorkeeper. Not on the shelves of the Palatine library.', 'lockpicking'),
-  book('liber_vitruvius', 'Vitruvius, On Architecture X', 'De Architectura', 35, 'All these must be built with due reference to durability, convenience and beauty — firmitas, utilitas, venustas.\n\nA machine is a combination of timber fastened together, chiefly efficacious in moving great weights.', 'Vitruvius’s tenth book: machines, water-lifts, and how to forge and fit them.', 'fabrica'),
-  book('liber_res_gestae', 'The Deeds of the Divine Augustus', 'Res Gestae Divi Augusti', 15, 'In my sixth consulship I restored eighty-two temples of the gods in the city, neglecting none that needed repair at that time.\n\nThe doors of the temple of Janus Quirinus, which our ancestors ordered closed whenever there was peace throughout the empire by land and sea, were closed three times while I was princeps.', 'A copy of the inscription on Augustus’s mausoleum in the Campus Martius.', 'religio'),
-  book('liber_satyricon', 'Petronius, Satyricon (fragment)', 'Satyricon', 12, '…and while everyone was staring at the roast boar, Ascyltos slipped a silver cup into the fold of his toga, and I a napkin full of cakes.\n\nTrimalchio, who had been a slave himself, was too busy counting his estates to notice.', 'A scandalous, half-burned novel of thieves and freedmen from Nero’s day.', 'pickpocket'),
-  book('liber_aquaeductu', 'Frontinus, On the Aqueducts', 'De Aquaeductu', 20, 'With such an array of indispensable structures carrying so many waters, compare, if you will, the idle Pyramids or the useless, though famous, works of the Greeks!\n\nThe Aqua Marcia is the coldest and best; the Anio Vetus is often muddy; the Alsietina is unfit to drink and serves only for the Naumachia and gardens.', 'The water commissioner’s report on the nine aqueducts of Rome, AD 97.'),
-  book('epistula_plinii', 'Copy of a Letter of Pliny', 'Epistula ad Traianum', 2, 'It is my custom, my lord, to refer to you all matters about which I am in doubt…\n\nThose who denied they were or had ever been Christians, who repeated after me an invocation to the gods and offered prayer with incense and wine to your image, I thought should be discharged.', 'A copy, passed around the Forum, of a letter from the governor of Bithynia to the emperor.', undefined, 0.05),
-];
-
-// ------------------------------------------------------------------ curse tablets, amulets, keys
-
-const CURSES: ItemDef[] = [
-  misc('defixio', 'Blank Lead Tablet', 'tabella plumbea', 0.2, 8 * AS, 'A thin sheet of lead, ready to be inscribed with a curse, folded, pierced with a nail and dropped in a grave or a spring.', { tags: ['curse'] }),
-  { id: 'defixio_prasina', name: 'Curse Tablet against the Greens', latin: 'defixio', type: 'book', weight: 0.2, value: 1, icon: '✠', tags: ['curse'], description: 'A folded lead tablet pierced by a nail, scratched with a curse on the chariot team of the Greens.', text: 'I adjure you, demon, whoever you are: from this hour, this day, this moment, torture and kill the horses of the Green — Eucherius, Prasinus, Callidromus — and their driver. Bind their legs, their running, their victory. Now, now, quickly, quickly!' },
-  { id: 'defixio_furtum', name: 'Curse Tablet against a Thief', latin: 'defixio', type: 'book', weight: 0.2, value: 1, icon: '✠', tags: ['curse'], description: 'A plea to Mercury to punish whoever stole a cloak from the baths.', text: 'To the god Mercury I give the one who stole my hooded cloak, whether man or woman, slave or free. Let him not sleep, nor eat, nor drink, nor sit, nor lie, until he brings it to your temple.' },
-];
-
-const AMULETS: ItemDef[] = [
-  { id: 'bulla_aurea', name: 'Golden Bulla', latin: 'bulla aurea', type: 'misc', slot: 'neck', weight: 0.05, value: 60, icon: '◎', equipModifiers: { 'pietas.max': 10 }, description: 'The locket a freeborn boy wears against evil until he takes the toga of manhood.' },
-  { id: 'fascinum', name: 'Fascinum', latin: 'fascinum', type: 'misc', slot: 'neck', weight: 0.02, value: 2, icon: '◎', equipModifiers: { 'health.regen': 0.1 }, description: 'A small bronze phallic charm. Nothing turns aside the evil eye like a joke.' },
-  { id: 'nodus_isidis', name: 'Knot of Isis', latin: 'nodus Isiacus', type: 'misc', slot: 'neck', weight: 0.02, value: 15, icon: '◎', equipModifiers: { 'pietas.regen': 0.25 }, description: 'A faience tyet amulet from the Iseum in the Campus Martius.' },
-  { id: 'signum_mithrae', name: 'Token of Mithras', latin: 'signum Mithrae', type: 'misc', slot: 'neck', weight: 0.03, value: 10, icon: '◎', equipModifiers: { 'stamina.max': 10 }, description: 'A bronze disc stamped with the bull-slaying god. Members of the cult know what it means.' },
-  { id: 'torques', name: 'Gold Torc', latin: 'torques', type: 'misc', slot: 'neck', weight: 0.4, value: 120, icon: '◎', equipModifiers: { 'health.max': 10 }, description: 'A twisted gold neck ring taken from a Gaul or Dacian. Soldiers are decorated with smaller ones.' },
-  { id: 'anulus_aureus', name: 'Equestrian Gold Ring', latin: 'anulus aureus', type: 'misc', slot: 'finger', weight: 0.01, value: 150, icon: '○', equipModifiers: { 'price.buy': 0.05 }, description: 'The gold ring of the equestrian order. Shopkeepers notice it.' },
-  { id: 'anulus_signatorius', name: 'Signet Ring', latin: 'anulus signatorius', type: 'misc', slot: 'finger', weight: 0.01, value: 25, icon: '○', equipModifiers: { 'persuade.chance': 0.05 }, description: 'An iron ring set with a carnelian intaglio of Minerva, for sealing letters.' },
-  { id: 'anulus_ferreus', name: 'Iron Ring', latin: 'anulus ferreus', type: 'misc', slot: 'finger', weight: 0.01, value: 1, icon: '○', description: 'A plain iron ring in the old Roman fashion.' },
-];
-
-const KEYS: ItemDef[] = [
-  { id: 'clavis_cenaculum', name: 'Key to a Suburan Flat', latin: 'clavis', type: 'key', weight: 0.05, value: 0, icon: '⚷', description: 'A bronze slide key for a third-floor flat in an insula of the Subura.' },
-  { id: 'clavis_horrea', name: 'Key to the Horrea Galbana', latin: 'clavis horreorum', type: 'key', weight: 0.08, value: 0, icon: '⚷', description: 'A heavy iron key to one of the storerooms of Rome’s great warehouses by the river.' },
-  { id: 'clavis_carcer', name: 'Key of the Tullianum', latin: 'clavis carceris', type: 'key', weight: 0.1, value: 0, icon: '⚷', description: 'The key to the cells of the Carcer below the Capitol, where Jugurtha and Vercingetorix died.' },
-];
-
-// ------------------------------------------------------------------ tools & goods
-
-const GOODS: ItemDef[] = [
-  { id: 'uncus', name: 'Lockpick', latin: 'uncus', type: 'tool', weight: 0.02, value: 8 * AS, stackable: true, icon: '⌐', tags: ['lockpick'], description: 'A bent bronze pick. Owning one is not a crime. Being found with one at night is a conversation.' },
-  { id: 'lucerna', name: 'Oil Lamp', latin: 'lucerna', type: 'tool', weight: 0.3, value: 4 * AS, stackable: true, icon: '🪔', tags: ['light'], description: 'A mould-made clay lamp with a gladiator on the discus.' },
-  { id: 'strigilis', name: 'Strigil', latin: 'strigilis', type: 'tool', weight: 0.2, value: 2, icon: '⌒', description: 'A curved bronze scraper for oil and sweat at the baths.' },
-  { id: 'tabula_cerata', name: 'Wax Tablet', latin: 'tabula cerata', type: 'misc', weight: 0.3, value: 8 * AS, icon: '▭', description: 'Two wooden leaves filled with black wax and a bronze stylus. For notes, accounts and love letters.' },
-  { id: 'charta', name: 'Papyrus Roll', latin: 'charta', type: 'misc', weight: 0.1, value: 1, stackable: true, icon: '▭', description: 'A blank roll of Egyptian papyrus.' },
-  misc('tali', 'Knucklebones', 'tali', 0.05, 4 * AS, 'Four sheep’s knucklebones for gambling. The best throw is the Venus; the worst is the dogs.'),
-  misc('aureus', 'Aureus of Trajan', 'aureus', 0.007, 25, 'A gold coin worth 25 denarii, showing the emperor laureate: IMP TRAIANO AVG GER DAC.', { tags: ['coin'] }),
-  misc('tessera_frumentaria', 'Grain Dole Token', 'tessera frumentaria', 0.01, 8 * AS, 'A lead token entitling a citizen to his monthly ration of free grain at the Porticus Minucia.'),
-  misc('oleum', 'Jar of Olive Oil', 'oleum', 1, 8 * AS, 'Oil from Baetica, for lamps, cooking and the baths.'),
-  misc('sal', 'Salt', 'sal', 0.5, 4 * AS, 'Salt from the Ostian flats, carried up the Via Salaria.'),
-  misc('piper', 'Bag of Pepper', 'piper', 0.5, 8, 'Black pepper from India, stored in the Horrea Piperataria by the Via Sacra.', { tags: ['spice'] }),
-  misc('tus', 'Frankincense', 'tus', 0.2, 5, 'Arabian incense, burned at every altar in Rome.', { tags: ['offering'] }),
-  misc('purpura', 'Vial of Tyrian Purple', 'purpura', 0.1, 100, 'Dye from ten thousand murex snails. Only the emperor wears a whole garment of it.', { tags: ['luxury'] }),
-  misc('vitrum', 'Glass Beaker', 'vitrum', 0.3, 3, 'Blown glass, clear as water, from a workshop near the Porta Capena.'),
-  misc('calix_argenteus', 'Silver Cup', 'calix argenteus', 0.4, 40, 'A silver drinking cup chased with olive branches.', { tags: ['luxury'] }),
-  misc('ferrum', 'Iron Bar', 'ferrum', 2, 2, 'A bar of wrought iron, for the smith.', { tags: ['metal'] }),
-  misc('aes', 'Bronze Ingot', 'aes', 2, 4, 'A cast ingot of bronze.', { tags: ['metal'] }),
-  misc('corium', 'Leather Hide', 'corium', 1.5, 2, 'A tanned oxhide.'),
-  misc('linum', 'Bolt of Linen', 'linum', 2, 6, 'Egyptian linen, still smelling of the warehouse.'),
+  book('liber-celsus', 'Celsus, On Medicine', 'De Medicina', 5, 'medicina', 'Aulus Cornelius Celsus’ encyclopaedia of medicine, in clear Latin.', 'Medicine should be rational, but should draw its instruction from evident causes.\n\nThe surgeon should be youthful or at any rate nearer youth than age, with a strong and steady hand that never trembles, and be no less quick with the left hand than with the right.'),
+  book('liber-dioscorides', 'Dioscorides, On Medical Materials', 'De Materia Medica', 5, 'medicina', 'A Greek army doctor’s catalogue of six hundred plants and what they do.', 'Poppy: the juice, drunk in the amount of a bitter vetch, relieves pain, induces sleep and helps digestion. Taken in excess it brings lethargy, and kills.\n\nMandragora root, steeped in wine, is given to those who cannot sleep, and to those who are to be cut or burned, so they will not feel it.', ['greek']),
+  book('liber-scribonius', 'Scribonius Largus, Compositions', 'Compositiones', 5, 'medicina', 'The court physician of Claudius on compound remedies.', 'For pain of the head: the live black torpedo-fish, placed on the spot that hurts, until the pain ceases and the part grows numb.\n\nA physician must be full of mercy and humanity, as the will of medicine itself requires.'),
+  book('liber-strategemata', 'Frontinus, Strategemata', 'Strategemata', 5, 'shield', 'Sextus Julius Frontinus, three times consul, on the stratagems of famous generals.', 'Since I alone of those interested in military science have undertaken to reduce its rules to system… I deem it a duty to collect the adroit operations of generals, which the Greeks embrace under the one name strategemata.\n\nWhen the line holds and the shields lock, the enemy wears himself out on them.'),
+  book('liber-onasander', 'Onasander, The General', 'Strategikos', 5, 'blades', 'A Greek handbook on generalship, dedicated to a Roman consul.', 'The general should be chosen as temperate, self-restrained, vigilant, frugal, hardened to labour, alert, free from avarice, neither too young nor too old.\n\nA man who strikes from behind his shield and recovers it at once outlives a braver man who does not.', ['greek']),
+  book('liber-vitruvius', 'Vitruvius, On Architecture', 'De Architectura', 5, 'fabrica', 'Vitruvius’ ten books, including the machines of Book X.', 'All these must be built with due reference to durability, convenience and beauty — firmitas, utilitas, venustas.\n\nA machine is a combination of timber fastened together, chiefly efficacious in moving great weights.'),
+  book('liber-aquaeductu', 'Frontinus, On the Aqueducts', 'De Aquaeductu', 5, 'fabrica', 'The water commissioner’s report on the aqueducts of Rome, AD 97.', 'With such an array of indispensable structures carrying so many waters, compare, if you will, the idle Pyramids or the useless, though famous, works of the Greeks!\n\nThe water-men tap the pipes and sell what is the people’s; the fraud is old and the cure is inspection.'),
+  book('liber-martialis', 'Martial, Epigrams I', 'Epigrammata', 5, 'rhetoric', 'A fine copy of Martial’s first book, from the very shop it advertises.', 'You who want to have my little books with you everywhere… buy this one, which parchment confines in small pages.\n\nYou ask where I am sold? Atrectus’ shop in the Argiletum, opposite the Forum of Caesar: from the first or second shelf he will hand you a Martial, polished with pumice and decked in purple, for five denarii.'),
+  book('liber-plinii-epistulae', 'Pliny, Letters', 'Epistulae', 5, 'rhetoric', 'The younger Pliny’s polished letters, books I–IX.', 'You often urge me to collect and publish the more carefully written of my letters. I have collected them, not keeping to the order of time.\n\nAn advocate should be brief only when the case allows it; the judge must be given time to be persuaded.'),
+  book('liber-columella', 'Columella, On Agriculture', 'De Re Rustica', 5, 'mercatura', 'A Spanish landowner’s hard-headed book on estates, prices and profit.', 'The master who buys land must buy it with his eyes open: a field that does not pay its keep is a debt with a view.\n\nNothing is cheaper than what you do not need to buy.'),
+  book('liber-fasti', 'Ovid, Fasti', 'Fasti', 5, 'religio', 'Ovid’s poem on the Roman calendar and its rites.', 'When midnight has come and lends silence to sleep… he rises, his feet bare, and throws black beans behind him, saying: “These I give; with these beans I redeem me and mine.”\n\nNine times he says it without looking back.'),
+  book('liber-naturalis-28', 'Pliny the Elder, Natural History XXVIII', 'Naturalis Historia', 5, 'religio', 'Book 28 of the Natural History: remedies, words and rites.', 'Have words and formal incantations any power? The wisest men reject the belief, yet in our lives as a body we believe it at every hour, though we do not feel it.\n\nIt is thought that without a prayer it is useless to sacrifice.'),
+  book('liber-xenophon-equitandi', 'Xenophon, On Horsemanship', 'De Re Equestri', 5, 'equitatio', 'An Athenian cavalry officer on choosing and riding horses.', 'Never deal with a horse in a fit of temper. Anger is a thing that has no forethought.\n\nWhat a horse does under compulsion he does without understanding, and there is no beauty in it.', ['greek']),
+  book('liber-commentarii-doctoris', 'Commentarii Doctoris', 'Commentarii Doctoris', 1, 'spear', 'A gladiator trainer’s notes from the Ludus Magnus (fictional).', 'I. The tiro trains at the palus until his arm can no longer lift the wooden sword. Then he trains more.\n\nII. With the spear, keep the point between his eyes and your feet behind it. A spear that wanders is a spear for the enemy.'),
+  // extras
+  book('liber-quintiliani', 'Quintilian, Institutio Oratoria XII', 'Institutio Oratoria', 5, 'rhetoric', 'The last book of Quintilian’s education of the orator. (Extra.)', 'Let the orator, then, whom I am forming be such as is defined by Marcus Cato: a good man, skilled in speaking — vir bonus dicendi peritus.\n\nIt is feeling and force of imagination that make us eloquent.'),
+  book('liber-amores', 'Ovid, Amores I', 'Amores', 1, 'locks-seals', 'Ovid’s love elegies, including the locked-out lover’s plea to the doorkeeper. (Extra.)', 'Doorkeeper — shameful! — bound by a hard chain, swing on its hinge the stubborn door.\n\nI ask for little: let the door open a crack, so that I can slip through sideways.'),
+  book('liber-satyricon', 'Petronius, Satyricon (fragment)', 'Satyricon', 1, 'pickpocket', 'A scandalous half-burned novel of thieves and freedmen. (Extra.)', '…and while everyone stared at the roast boar, Ascyltos slipped a silver cup into the fold of his toga, and I a napkin full of cakes.\n\nTrimalchio, who had been a slave himself, was too busy counting his estates to notice.'),
+  book('liber-cynegeticus', 'Xenophon, On Hunting', 'Cynegeticus', 5, 'archery', 'An Athenian’s advice on hounds, nets and the hunting bow. (Extra.)', 'The hare runs in circles and returns to its form; set your nets where it began.\n\nThe young man who hunts learns to bear cold and heat, and to aim true when his breath is short.', ['greek']),
+  book('liber-res-gestae', 'The Deeds of the Divine Augustus', 'Res Gestae Divi Augusti', 1, undefined, 'A copy of the inscription on Augustus’ mausoleum. (Extra.)', 'In my sixth consulship I restored eighty-two temples of the gods in the city, neglecting none that needed repair at that time.\n\nThe doors of Janus Quirinus, which our ancestors ordered closed whenever there was peace by land and sea, were closed three times while I was princeps.'),
+  { id: 'defixio-prasina', name: 'Curse Tablet against the Greens', latin: 'defixio', type: 'book', weight: 0.2, value: 1, icon: '✠', tags: ['curse'], description: 'A folded lead tablet pierced by a nail, scratched with a curse on the Green team. (Extra.)', text: 'I adjure you, demon, whoever you are: from this hour, this day, this moment, bind the horses of the Green and their driver. Bind their legs, their running, their victory. Now, now, quickly, quickly!' },
+  { id: 'defixio-furtum', name: 'Curse Tablet against a Bath Thief', latin: 'defixio', type: 'book', weight: 0.2, value: 1, icon: '✠', tags: ['curse'], description: 'A plea to Mercury to punish whoever stole a cloak at the baths. (Extra.)', text: 'To the god Mercury I give the one who stole my hooded cloak, whether man or woman, slave or free. Let him not sleep, nor eat, nor drink, nor sit, nor lie, until he brings it to your temple.' },
 ];
 
 export const ITEMS: ItemDef[] = [
-  ...WEAPONS,
+  ...BASE_WEAPONS,
+  ...VARIANTS,
+  ...UNIQUES,
   ...AMMO,
   ...SHIELDS,
-  ...ARMOR,
   ...CLOTHING,
+  ...JEWELLERY,
+  ...ARMOR,
   ...FOOD,
-  ...MEDICINE,
+  ...REMEDIES,
   ...INGREDIENTS,
+  ...TOOLS,
   ...BOOKS,
-  ...CURSES,
-  ...AMULETS,
-  ...KEYS,
-  ...GOODS,
 ];

@@ -17,7 +17,7 @@ describe('installRpg', () => {
   it('works in a dev scene with no player and no NPCs', () => {
     const fg = fakeGame({ player: false });
     const rpg = installRpg(fg.game, { storage: new MemoryStorage() });
-    for (const k of ['items', 'npcs', 'locations', 'factions', 'crime', 'barter', 'quests', 'dialogue', 'save', 'rpg'] as const) expect(fg.game[k], k).toBeTruthy();
+    for (const k of ['items', 'npcs', 'locations', 'factions', 'standing', 'devotion', 'crime', 'barter', 'quests', 'dialogue', 'save', 'rpg'] as const) expect(fg.game[k], k).toBeTruthy();
     expect(rpg.items.size).toBeGreaterThanOrEqual(80);
     expect(rpg.dialogue.start('anyone')).toBeNull();
     expect(rpg.quests.markers()).toEqual([]);
@@ -25,14 +25,22 @@ describe('installRpg', () => {
     expect(fg.systems.map((s) => s.name).sort()).toEqual(['locations', 'rpg', 'save']);
   });
 
-  it('attaches the sheet and inventory to the player and starts a new game with a background', () => {
+  it('attaches the sheet and inventory to the player and starts a new game with an origin', () => {
     const fg = fakeGame();
-    const rpg = installRpg(fg.game, { storage: new MemoryStorage(), background: 'veteran' });
+    const rpg = installRpg(fg.game, { storage: new MemoryStorage(), background: 'veteranus' });
     expect(fg.game.player.sheet).toBe(rpg.sheet);
     expect(fg.game.player.inventory).toBe(rpg.inventory);
-    expect(rpg.sheet.skillLevel('blades')).toBe(25);
+    expect(rpg.sheet.skillLevel('shield')).toBe(25);
+    expect(rpg.sheet.skillLevel('blades')).toBe(20);
+    expect(rpg.sheet.skillLevel('athletics')).toBe(10);
+    expect(rpg.sheet.hasFlag('origin.oldWound')).toBe(true);
     expect(rpg.inventory.equipment).toMatchObject({ mainHand: 'gladius', body: 'tunica', feet: 'caligae', cloak: 'sagum' });
-    expect(rpg.inventory.denarii).toBe(25);
+    expect(rpg.inventory.count('diploma')).toBe(1);
+    expect(rpg.inventory.denarii).toBe(75);
+    expect(rpg.standing.origin).toBe('veteranus');
+    const dacus = installRpg(fakeGame().game, { storage: new MemoryStorage(), background: 'dacus' });
+    expect(dacus.standing.isCitizen).toBe(false);
+    expect(dacus.standing.dignitas).toBe('latinus');
     const plain = installRpg(fakeGame().game, { storage: new MemoryStorage() });
     expect(plain.inventory.equipment).toEqual({ body: 'tunica', feet: 'soleae' });
     expect(plain.inventory.denarii).toBe(10);
@@ -45,14 +53,14 @@ describe('installRpg', () => {
     expect(pc.canSprint()).toBe(true);
     fg.game.player.sprinting = true;
     fg.step(60);
-    expect(rpg.sheet.vitals.stamina.current).toBeCloseTo(100 - 8, 0);
-    fg.step(60 * 12);
+    expect(rpg.sheet.vitals.stamina.current).toBeCloseTo(100 - 10, 0);
+    fg.step(60 * 10);
     expect(rpg.sheet.vitals.stamina.current).toBe(0);
     expect(pc.canSprint()).toBe(false);
     fg.game.player.sprinting = false;
-    fg.step(60 * 2);
+    fg.step(30);
     expect(pc.canSprint()).toBe(false); // winded until 15%
-    fg.step(60 * 3);
+    fg.step(90);
     expect(pc.canSprint()).toBe(true);
     expect(pc.speedMultiplier()).toBe(1);
     rpg.inventory.add('malleus', 20);
@@ -65,7 +73,9 @@ describe('installRpg', () => {
     const rpg = installRpg(fg.game, { storage: new MemoryStorage() });
     rpg.sheet.applyCondition('mars');
     expect(rpg.sheet.modifier('damage.blades')).toBeCloseTo(0.1);
-    fg.step(60 * 8 * 60 + 5);
+    fg.step(4300, 1); // a game day is 4320 real seconds
+    expect(rpg.sheet.modifier('damage.blades')).toBeCloseTo(0.1);
+    fg.step(30, 1);
     expect(rpg.sheet.modifier('damage.blades')).toBe(0);
   });
 });

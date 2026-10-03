@@ -1,9 +1,9 @@
 /**
- * Shared time-to-kill scenarios: representative player builds at levels 1/10/30 duelling enemy
- * tiers. Used by tests/rpg-combat.test.ts and the TTK table in docs/modules/rpg.md
- * (print it with `npx vitest run tests/rpg-combat.test.ts -t "TTK table"`).
+ * Time-to-kill scenarios for the GDD §6.2 formula: representative player builds at levels 1/10/30
+ * against the §6.11 tiers. Used by tests/rpg-combat.test.ts and the table in docs/modules/rpg.md
+ * (print it with `PRINT_TTK=1 npx vitest run tests/rpg-combat.test.ts -t "TTK table"`).
  */
-import { applyArmor, attackInterval, computeAttack, effectiveArmorRating, timeToKill } from '../src/rpg/combat-math';
+import { armorFamilyOf, attackInterval, computeAttack, difficultyMult, effectiveArmorRating, resolveHit, timeToKill } from '../src/rpg/combat-math';
 import { ITEMS } from '../src/rpg/data/items';
 import { combatProfileFor, profileStats, profileWeapon } from '../src/rpg/enemies';
 import { ItemDb } from '../src/rpg/items';
@@ -20,17 +20,17 @@ export interface Build {
   healthPicks: number;
 }
 
-/** A veteran-background melee build as it might look at levels 1, 10 and 30. */
+/** A Veteran of Dacia as he might look at levels 1, 10 and 30 (gear repaired to full condition). */
 export const BUILDS: Build[] = [
-  { level: 1, skills: { blades: 25, block: 25, heavyArmor: 20, lightArmor: 15 }, perks: [], weapon: 'gladius', worn: ['tunica', 'caligae', 'sagum'], healthPicks: 0 },
-  { level: 10, skills: { blades: 45, block: 30, lightArmor: 30 }, perks: ['blades.arm1', 'blades.arm2', 'light.agile1'], weapon: 'gladius_mainz', worn: ['lorica_corio', 'cassis_corio', 'caligae', 'parma'], healthPicks: 6 },
+  { level: 1, skills: { blades: 15, shield: 20, 'heavy-armor': 15 }, perks: [], weapon: 'gladius', worn: ['tunica', 'sagum', 'caligae', 'galea-gallica'], healthPicks: 0 },
+  { level: 10, skills: { blades: 40, shield: 35, 'heavy-armor': 30 }, perks: ['perk-blades-punctim'], weapon: 'gladius-noric', worn: ['tunica', 'lorica-hamata', 'galea-gallica', 'caligae'], healthPicks: 5 },
   {
     level: 30,
-    skills: { blades: 85, block: 60, heavyArmor: 70 },
-    perks: ['blades.arm1', 'blades.arm2', 'blades.arm3', 'blades.arm4', 'blades.arm5', 'blades.punctim', 'heavy.miles1', 'heavy.miles2', 'heavy.miles3', 'block.wall1', 'block.wall2'],
-    weapon: 'gladius_noric',
-    worn: ['lorica_segmentata', 'galea_gallica', 'manica', 'ocreae', 'caligae', 'scutum'],
-    healthPicks: 20,
+    skills: { blades: 80, shield: 60, 'heavy-armor': 70 },
+    perks: ['perk-blades-punctim', 'perk-blades-bilbilis-edge', 'perk-heavy-armor-iron-skin', 'perk-heavy-armor-drill'],
+    weapon: 'gladius-bilbilis',
+    worn: ['tunica', 'lorica-segmentata', 'galea-cruciata', 'manica-ferrea', 'ocreae', 'caligae'],
+    healthPicks: 15,
   },
 ];
 
@@ -38,62 +38,64 @@ export function playerFor(b: Build) {
   const sheet = new CharacterSheetImpl();
   for (const [k, v] of Object.entries(b.skills)) sheet.setSkill(k, v);
   for (const p of b.perks) sheet.grantPerk(p);
-  return { sheet, armor: effectiveArmorRating(b.worn.map((id) => db.require(id)), sheet), health: 100 + b.healthPicks * 10 };
+  const worn = b.worn.map((id) => db.require(id));
+  return { sheet, armor: effectiveArmorRating(worn, sheet), family: armorFamilyOf(worn), health: 100 + b.healthPicks * 10 };
 }
 
 export interface Duel {
   level: number;
   tier: string;
-  enemyLevel: number;
   enemyHealth: number;
   enemyArmor: number;
   playerArmor: number;
-  /** Player light attack after armor. */
+  /** Player light attack after armor and damage type, on Normalis. */
   perHit: number;
   hits: number;
   /** Seconds of continuous light attacks, every swing landing. */
   seconds: number;
-  powerHit: number;
   enemyPerHit: number;
   hitsToDie: number;
   secondsToDie: number;
 }
 
-/** Player vs an enemy tier at the build's level, and the enemy back (light attacks, all landing). */
-export function duel(b: Build, tier: string): Duel {
+/** Player vs an enemy tier (one of its kits) and the enemy back, on Normalis (taken ×1.5). */
+export function duel(b: Build, tier: string, kit = 0): Duel {
   const p = playerFor(b);
   const w = db.require(b.weapon);
-  const atk = computeAttack(p.sheet, w.weapon, { item: w });
-  const prof = combatProfileFor(tier, b.level);
-  const perHit = applyArmor(atk.damage, prof.armor);
-  const toKill = timeToKill({ damagePerHit: perHit, interval: atk.interval, health: prof.health });
+  const prof = combatProfileFor(tier, { kit });
+  const perHit = resolveHit({ attack: computeAttack(p.sheet, w.weapon, { item: w }), armor: prof.armor, family: prof.armorFamily, mult: difficultyMult('normalis', true) }).damage;
+  const toKill = timeToKill({ damagePerHit: perHit, interval: attackInterval(w.weapon!), health: prof.health });
   const ew = profileWeapon(prof, db);
-  const enemyPerHit = applyArmor(computeAttack(profileStats(prof), ew).damage, p.armor);
+  const eItem = prof.weapon ? db.get(prof.weapon) : undefined;
+  const enemyPerHit = resolveHit({ attack: computeAttack(profileStats(prof), ew, { item: eItem }), armor: p.armor, family: p.family, defender: p.sheet, mult: difficultyMult('normalis', false) }).damage;
   const toDie = timeToKill({ damagePerHit: enemyPerHit, interval: attackInterval(ew), health: p.health });
-  const powerHit = applyArmor(computeAttack(p.sheet, w.weapon, { item: w, power: true }).damage, prof.armor);
   return {
     level: b.level,
-    tier,
-    enemyLevel: prof.level!,
+    tier: `${tier}${prof.weapon ? ` (${prof.weapon})` : ''}`,
     enemyHealth: prof.health,
     enemyArmor: prof.armor,
     playerArmor: Math.round(p.armor),
     perHit,
     hits: toKill.hits,
     seconds: toKill.seconds,
-    powerHit,
     enemyPerHit,
     hitsToDie: toDie.hits,
     secondsToDie: toDie.seconds,
   };
 }
 
-export function ttkTable(tiers = ['thug', 'brigand', 'gladiator', 'veteran', 'urbanus', 'praetorian', 'champion', 'boss']): string {
-  const rows = ['| Player | Enemy (level) | Enemy HP / armor | Player hit | Hits | Seconds | Enemy hit | Hits to kill player | Seconds |', '|---|---|---|---|---|---|---|---|---|'];
-  for (const b of BUILDS)
-    for (const t of tiers) {
-      const d = duel(b, t);
-      rows.push(`| L${d.level} (AR ${d.playerArmor}) | ${t} (${d.enemyLevel}) | ${d.enemyHealth} / ${d.enemyArmor} | ${d.perHit.toFixed(1)} | ${d.hits} | ${d.seconds.toFixed(1)} | ${d.enemyPerHit.toFixed(1)} | ${d.hitsToDie} | ${d.secondsToDie.toFixed(1)} |`);
-    }
+/** Rows of the documented table. */
+export const TTK_ROWS: [buildIndex: number, tier: string, kit?: number][] = [
+  [0, 'thug'], [0, 'thug', 1], [0, 'bruiser', 1], [0, 'miles'], [0, 'veteran', 1],
+  [1, 'thug'], [1, 'miles'], [1, 'veteran'], [1, 'champion'], [1, 'elite'],
+  [2, 'thug'], [2, 'miles'], [2, 'champion'], [2, 'elite'], [2, 'boss'],
+];
+
+export function ttkTable(): string {
+  const rows = ['| Player | Enemy (weapon) | Enemy HP / AR | Player hit | Hits | Seconds | Enemy hit | Hits to kill player | Seconds |', '|---|---|---|---|---|---|---|---|---|'];
+  for (const [bi, tier, kit] of TTK_ROWS) {
+    const d = duel(BUILDS[bi], tier, kit);
+    rows.push(`| L${d.level} (AR ${d.playerArmor}) | ${d.tier} | ${d.enemyHealth} / ${d.enemyArmor} | ${d.perHit.toFixed(1)} | ${d.hits} | ${d.seconds.toFixed(1)} | ${d.enemyPerHit.toFixed(1)} | ${d.hitsToDie} | ${d.secondsToDie.toFixed(1)} |`);
+  }
   return rows.join('\n');
 }

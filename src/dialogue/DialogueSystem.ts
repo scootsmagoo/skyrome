@@ -7,8 +7,11 @@
  *   game.dialogue.advance();                      // continue a node without choices (or close an ending one)
  *   game.dialogue.end();
  *
- * Skill checks pass with chance clamp((skill − difficulty + 25) / 25, 0, 1) (+ persuade.chance for
- * Rhetoric), rolled on a seeded RNG. Bribes cost denarii and always pass. `once` choices and
+ * Skill checks pass with chance clamp((skill − difficulty + 25) / 25, 0, 1), rolled on a seeded RNG.
+ * Rhetoric checks add persuasion points for the audience (dress, Fama, Infamia, cleanliness),
+ * Exordium (+10 on the first check with each person) and persuade.chance; Fortuna's "Fortune's
+ * Turn" makes the next roll pass. A passed check trains 10 × its difficulty tier, a failed one 2.
+ * Bribes cost denarii and always pass. `once` choices and
  * per-NPC memory are saved; global flags are shared with quests (game.quests.flags).
  *
  * Choice resolution order: once-mark → bribe/check → effects → end/goto. A choice with no goto,
@@ -16,13 +19,13 @@
  */
 import type { Game } from '../core/Game';
 import { Rng } from '../core/Rng';
-import { rollSkillCheck, skillCheckChance } from '../rpg/checks';
-import { XP_REWARDS } from '../rpg/data/balance';
+import { checkTier, persuasionPoints, rollSkillCheck, skillCheckChance } from '../rpg/checks';
+import { XP } from '../rpg/data/balance';
 import { formatDenarii } from '../rpg/money';
 import type { LocationDef, NpcDef } from '../npc/types';
 import { GlobalFlags, type FlagValue } from '../quests/flags';
 import type { ItemDef } from '../rpg/types';
-import type { DialogueChoice, DialogueContext, DialogueDef, DialogueNode, Text } from './types';
+import type { DialogueChoice, DialogueContext, DialogueDef, DialogueNode, SkillCheck, Text } from './types';
 
 declare module '../core/Game' {
   interface Game {
@@ -105,6 +108,8 @@ interface Session {
   map: number[];
   /** Name given to start() for unnamed citizens. */
   name?: string;
+  /** Skill checks rolled so far this conversation (Exordium). */
+  checks: number;
 }
 
 export class DialogueSystem {
@@ -200,7 +205,7 @@ export class DialogueSystem {
       }
       const mem = this.memoryOf(npcId);
       mem._talks = (typeof mem._talks === 'number' ? mem._talks : 0) + 1;
-      this.session = { def, npcId, nodeId: entry, ctx, view: null, map: [], name: opts.name };
+      this.session = { def, npcId, nodeId: entry, ctx, view: null, map: [], name: opts.name, checks: 0 };
       this.game.events.emit('dialogue:started', { npcId, dialogueId: def.id });
       return this.enter(entry);
     }
@@ -225,8 +230,14 @@ export class DialogueSystem {
       goto = choice.bribe.goto;
     } else if (choice.check) {
       const c = choice.check;
-      const r = rollSkillCheck(ctx.skill(c.skill), c.difficulty, this.rng, this.checkBonus(c.skill));
-      if (r.pass) this.game.player?.sheet?.useSkill(c.skill, XP_REWARDS.persuadeSuccess);
+      const input = this.checkInputs(c, npcId);
+      const r = rollSkillCheck(input.skill, c.difficulty, this.rng, input.bonus);
+      s.checks++;
+      if (c.skill === 'rhetoric') this.memoryOf(npcId)._exordium = true;
+      // Fortune's Turn: the next roll succeeds (consumed only when it changes the outcome).
+      if (!r.pass && this.game.player?.sheet?.consumeFlag('fortuna.nextRoll')) r.pass = true;
+      // GDD §5.4: a passed check gives 10 × tier XP, a failed one 2.
+      this.game.player?.sheet?.useSkill(c.skill, r.pass ? XP.rhetoric.perTier * checkTier(c.difficulty) : XP.rhetoric.fail);
       this.game.events.emit('dialogue:check', { npcId, dialogueId: def.id, nodeId: s.nodeId, skill: c.skill, chance: r.chance, pass: r.pass });
       goto = r.pass ? c.pass : c.fail;
     }
@@ -265,13 +276,34 @@ export class DialogueSystem {
     this.emitChange(null);
   }
 
-  /** Chance shown in a check's tag (0..1). */
-  checkChance(skill: string, difficulty: number): number {
-    return skillCheckChance(this.game.player?.sheet?.skillLevel(skill) ?? 0, difficulty, this.checkBonus(skill));
+  /** Chance shown in a check's tag (0..1) when talking to `npcId`. */
+  checkChance(check: SkillCheck, npcId: string): number {
+    const input = this.checkInputs(check, npcId);
+    return skillCheckChance(input.skill, check.difficulty, input.bonus);
   }
 
-  private checkBonus(skill: string): number {
-    return skill === 'rhetoric' ? (this.game.player?.sheet?.modifier('persuade.chance') ?? 0) : 0;
+  /**
+   * Effective skill and bonus for a check: Rhetoric adds persuasion points for the audience (dress,
+   * Fama with the NPC's faction, Infamia, cleanliness), Exordium (+10 on the first check with each
+   * person), Clientela (+15 when invoking your patron) and persuade.chance.
+   */
+  private checkInputs(c: SkillCheck, npcId: string): { skill: number; bonus: number } {
+    const sheet = this.game.player?.sheet;
+    let skill = sheet?.skillLevel(c.skill) ?? 0;
+    let bonus = 0;
+    if (c.skill === 'rhetoric' && sheet) {
+      bonus += sheet.modifier('persuade.chance');
+      if (sheet.hasFlag('perk-rhetoric-exordium') && !this.memoryOf(npcId)._exordium) skill += 10;
+      if (c.kind === 'invoke-patron' && sheet.hasFlag('perk-rhetoric-clientela')) skill += 15;
+      const faction = this.game.npcs?.get(npcId)?.faction;
+      skill += persuasionPoints(c.audience ?? 'any', {
+        flags: sheet,
+        fama: faction ? (this.game.factions?.reputation(faction) ?? 0) : 0,
+        infamia: this.game.standing?.infamia,
+        cleanliness: this.game.standing?.cleanliness,
+      });
+    }
+    return { skill, bonus };
   }
 
   private enter(nodeId: string): DialogueView | null {
@@ -339,7 +371,7 @@ export class DialogueSystem {
     } else if (c.check) {
       kind = 'check';
       const label = c.check.label ?? (c.check.skill === 'rhetoric' ? 'Persuade' : capital(c.check.skill));
-      tag = `${label} ${Math.round(this.checkChance(c.check.skill, c.check.difficulty) * 100)}%`;
+      tag = `${label} ${Math.round(this.checkChance(c.check, ctx.npcId) * 100)}%`;
     }
     return { text: resolveText(c.text, ctx, dialogueId), enabled, tag, kind };
   }

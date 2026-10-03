@@ -31,8 +31,8 @@ export interface SkillDef {
   category?: SkillCategory;
 }
 
-/** Skills-screen grouping: the three Skyrim constellations, Roman style. */
-export type SkillCategory = 'martial' | 'stealth' | 'civic';
+/** Skills-screen grouping: the three lines of the design research (Martial, Clandestine, Civic). */
+export type SkillCategory = 'martial' | 'clandestine' | 'civic';
 
 export interface PerkDef {
   id: string;
@@ -112,6 +112,12 @@ export interface WeaponStats {
   /** Poise damage. */
   stagger: number;
   twoHanded?: boolean;
+  /** Cut, thrust or blunt, against armor families (GDD §6.2 TYPE_VS_FAMILY). rpg extension; default by class. */
+  damageType?: DamageType;
+  /** A second way to strike with different damage (gladius: thrust 13, cut 11). rpg extension. */
+  alt?: { damageType: DamageType; damage: number };
+  /** Damage when thrown (lancea 18) if different from `damage`. rpg extension. */
+  thrownDamage?: number;
   /** Skill that governs and is trained by this weapon. */
   skill: SkillId;
   /** Ranged weapons: projectile speed (m/s) and ammo item id (thrown weapons consume themselves). */
@@ -122,10 +128,18 @@ export interface WeaponStats {
 export interface ArmorStats {
   rating: number;
   weightClass: 'light' | 'heavy' | 'clothing';
+  /** Armor family for the cut/thrust/blunt matrix (body armor decides). rpg extension; default by weight class. */
+  family?: ArmorFamily;
 }
 
+export type DamageType = 'cut' | 'thrust' | 'blunt';
+export type ArmorFamily = 'cloth' | 'padded' | 'mail' | 'plate';
+
 export interface ShieldStats {
+  /** Bash stagger (GDD §8.4). */
   rating: number;
+  /** Fraction of missiles a raised shield stops (scutum 1, oval 0.9, parma 0.7, parmula 0.6). rpg extension. */
+  missiles?: number;
   /** Fraction of incoming melee damage absorbed when blocking (before perks). */
   blockMitigation: number;
 }
@@ -136,11 +150,13 @@ export type EffectKind =
   | 'fortify' // +amount to resource max or a modifier for duration
   | 'damage' // poison etc.
   | 'cure'
-  | 'modifier'; // temporary ModifierId bonus
+  | 'modifier' // temporary ModifierId bonus
+  | 'flag' // temporary sheet flag (target = flag name), e.g. 'stagger.immune' — rpg extension
+  | 'condition'; // apply a named ConditionDef (target = its id), e.g. 'ebrius' — rpg extension
 
 export interface Effect {
   kind: EffectKind;
-  /** ResourceId for restore/regen/fortify/damage, ModifierId for modifier, 'disease'/'poison' for cure. */
+  /** ResourceId for restore/regen/fortify/damage (fortify may also name a SkillId: +N skill), ModifierId for modifier, a kind or source for cure, a ConditionDef id for condition. */
   target: string;
   amount: number;
   /** Seconds (game-real seconds); omit for instant. */
@@ -175,6 +191,8 @@ export interface ItemDef {
   tags?: string[];
   /** Modifiers granted while this item is equipped (amulets, rings, fine clothing). rpg extension. */
   equipModifiers?: Partial<Record<ModifierId, number>>;
+  /** Sheet flags while equipped ('dress.toga', 'hooded', 'hobnails'…). rpg extension. */
+  equipFlags?: string[];
 }
 
 export interface ItemStack {
@@ -182,6 +200,8 @@ export interface ItemStack {
   count: number;
   /** Stolen from this owner id (crime) — selling to non-fences is refused. */
   stolenFrom?: string;
+  /** Condition 0..1 for arms and armor (GDD §6.3); omitted = 1 (perfect). rpg extension. */
+  condition?: number;
 }
 
 // ------------------------------------------------------------------ factions
@@ -191,6 +211,10 @@ export interface FactionRank {
   title: string;
   latin?: string;
   minReputation: number;
+  /** Top ranks also need skills (the Morrowind lesson): every gate must pass; a gate with several skills needs any one. rpg extension. */
+  requires?: { skill: SkillId | SkillId[]; level: number }[];
+  /** Capstone ranks are granted by a quest (FactionSystem.grantRank), not by Fama. rpg extension. */
+  questOnly?: boolean;
 }
 
 export interface FactionDef {
@@ -203,6 +227,13 @@ export interface FactionDef {
   enemies?: string[];
   /** Crimes against members are reported to this faction (guards). */
   lawful?: boolean;
+  /** Only Roman citizens may join (GDD: the Urban Cohorts). rpg extension. */
+  citizensOnly?: boolean;
+  /** Joining this faction closes these (Greens vs Blues). rpg extension. */
+  exclusiveWith?: string[];
+  /** Leader NPC id and HQ landmark id (GDD §9.1). rpg extension. */
+  leader?: string;
+  hq?: string;
 }
 
 // ------------------------------------------------------------------ enemies / combatant tiers
@@ -236,6 +267,16 @@ export interface CombatProfile {
   name?: string;
   /** Multiplier on weapon damage (rpg extension; default 1). */
   damageMult?: number;
+  /** Body armor family (rpg extension; default cloth). */
+  armorFamily?: ArmorFamily;
+  /** Danger band 0–4 (rpg extension). */
+  band?: number;
+  /** Locomotion speed multiplier (rpg extension). */
+  speed?: number;
+  /** Seconds before a block or dodge reaction (rpg extension). */
+  reaction?: number;
+  /** Beasts: never yield, use unblockable charges and grapples (rpg extension). */
+  beast?: boolean;
 }
 
 // ------------------------------------------------------------------ runtime services (implemented by src/rpg)
@@ -302,22 +343,37 @@ export interface Inventory {
 
 // ------------------------------------------------------------------ rpg module extensions (data shapes)
 
-/** A starting background: skill bonuses and a starting kit. */
+/** An origin chosen at character creation (GDD §3.2). */
 export interface BackgroundDef {
   id: string;
   name: string;
   latin?: string;
   description: string;
-  /** Added to the starting skill level. */
+  /** Added to the starting skill level (+10 / +5 / +5; the veteran's old wound is −5 Athletics). */
   skills: Partial<Record<SkillId, number>>;
-  kit: { id: string; count?: number; equip?: boolean }[];
+  kit: { id: string; count?: number; equip?: boolean; condition?: number }[];
   denarii: number;
+  /** Legal status at the start. */
+  status?: LegalStatus;
+  /** Trait id (`trait-…`) and its one-line description for the origin card. */
+  traitId?: string;
+  trait?: string;
+  /** The trait's mechanics: permanent modifiers and flags. */
+  modifiers?: Partial<Record<ModifierId, number>>;
+  flags?: string[];
+  /** Personal hook (quest thread). */
+  hook?: string;
+  /** Starting debt in denarii (the fallen eques). */
+  debt?: number;
 }
 
-/** A named timed condition: disease, blessing or poison. Applied with sheet.applyEffects(`${kind}:${id}`, effects). */
+/** GDD §3.2 legal status ids. */
+export type LegalStatus = 'civis' | 'libertus' | 'latinus-iunianus' | 'peregrinus' | 'alexandrinus';
+
+/** A named timed condition. Applied with sheet.applyCondition(id); the effect source is `${kind}:${id}`. */
 export interface ConditionDef {
   id: string;
-  kind: 'disease' | 'blessing' | 'poison';
+  kind: 'disease' | 'blessing' | 'poison' | 'injury' | 'omen' | 'state';
   name: string;
   latin?: string;
   description: string;
@@ -326,13 +382,18 @@ export interface ConditionDef {
   god?: string;
   /** Diseases: chance per exposure (0..1) before resistances. */
   contagion?: number;
+  /** Several copies may run at once (bleeding stacks ×3). */
+  maxStacks?: number;
 }
 
 export interface LootEntry {
   /** Item id, or omit and give `table` to roll a nested table. */
   item?: string;
   table?: string;
-  weight: number;
+  /** Weight for weighted picks (`entries`). */
+  weight?: number;
+  /** Independent chance 0..1 (`extras`). */
+  chance?: number;
   /** Count range (inclusive). Default [1, 1]. */
   count?: [number, number];
   minLevel?: number;
@@ -341,52 +402,68 @@ export interface LootEntry {
 
 export interface LootTableDef {
   id: string;
-  /** Number of weighted picks (inclusive range). */
+  /** Number of weighted picks from `entries` (inclusive range). */
   rolls: [number, number];
   /** Chance that each roll yields nothing (0..1). */
   chanceNone?: number;
   entries: LootEntry[];
-  /** Coins: [min, max] at level 1, scaled by (1 + level * perLevel). */
+  /** Rolled independently, each with its own `chance` (the GDD's "fustis or pugio (50%)" columns). */
+  extras?: LootEntry[];
+  /** Coins in denarii: a uniform [min, max], optionally scaled by (1 + level × perLevel). */
   denarii?: { range: [number, number]; perLevel?: number; chance?: number };
   /** Always added (keys, quest items). */
   always?: { item: string; count?: number }[];
 }
 
-/** Enemy tier preset (the GDD tier table). Values scale linearly with level between min and max. */
+/** One row of the GDD §6.11 tier table (fixed stats — the GDD has no level scaling). */
 export interface EnemyTierDef {
   tier: string;
   name: string;
-  minLevel: number;
-  maxLevel: number;
-  health: [base: number, perLevel: number];
-  stamina: [base: number, perLevel: number];
-  armor: [base: number, perLevel: number];
-  skill: [base: number, perLevel: number];
-  /** Damage multiplier (NPC stand-in for perks). Default [1, 0]. */
-  damage?: [base: number, perLevel: number];
-  poise: number;
-  /** Weapon/shield ids by level threshold: the last entry with minLevel <= level wins. */
-  weapons: { minLevel: number; weapon: string; shield?: string }[];
+  /** Danger band(s) where it appears: 0 civilians … 4 elite. */
+  band: number | [number, number];
+  health: number;
+  stamina: number;
+  /** Armor rating range of its kits. */
+  ar: [number, number];
+  /** Body armor family of its usual kit. */
+  family?: ArmorFamily;
+  dmgMult: number;
+  speed: number;
   aggression: number;
   blockSkill: number;
+  poise: number;
+  /** Seconds before a block or dodge reaction. */
+  reaction: number;
+  skill: number;
   yieldAt?: number;
   fleeAt?: number;
+  /** Kits: weapon/shield combinations it may carry, with the kit's AR and body family (spawners pick one). */
+  kits: { weapon: string; shield?: string; ar?: number; family?: ArmorFamily }[];
+  /** Beasts: movement speed in m/s. */
+  moveSpeed?: number;
   loot?: string;
+  /** Beasts never yield and use unblockable charges and grapples. */
+  beast?: boolean;
 }
 
+/** Crime ids (Latin, after the GDD's furtum, caedes-supplicis, usurpatio-togae, falsum). */
 export type CrimeId =
-  | 'trespass'
-  | 'lockpick'
-  | 'theft'
-  | 'pickpocket'
-  | 'assault'
-  | 'murder'
-  | 'animal'
-  | 'sacrilege'
-  | 'arson'
-  | 'veneficium'
-  | 'escape'
-  | 'resist';
+  | 'violatio' // trespass
+  | 'effractura' // breaking a lock
+  | 'furtum' // theft
+  | 'furtum-zonae' // pickpocketing
+  | 'iniuria' // assault
+  | 'caedes' // murder
+  | 'caedes-supplicis' // killing a foe who yielded (GDD §6.9)
+  | 'damnum' // killing livestock
+  | 'sacrilegium'
+  | 'incendium' // arson
+  | 'veneficium' // poisoning or sorcery
+  | 'falsum' // forgery (lex Cornelia de falsis)
+  | 'usurpatio-togae' // the toga without citizenship
+  | 'usurpatio-anuli' // the gold ring without equestrian rank
+  | 'fuga' // escaping custody
+  | 'resistentia'; // resisting arrest
 
 export interface CrimeDef {
   id: CrimeId;
@@ -396,4 +473,17 @@ export interface CrimeDef {
   bounty: number;
   /** Extra bounty as a fraction of stolen value (theft, pickpocket). */
   valueMult?: number;
+}
+
+/** A patron deity: a passive bonus while chosen and an invocation (Z) that spends pietas. */
+export interface DeityDef {
+  id: string;
+  name: string;
+  latin: string;
+  /** Where the player chooses this god. */
+  temple: string;
+  passive: { description: string; modifiers?: Partial<Record<ModifierId, number>>; flags?: string[] };
+  invocation: { name: string; description: string; cost: number; effects: Effect[] };
+  /** The shrine blessing this god grants (ConditionDef id). */
+  blessing?: string;
 }

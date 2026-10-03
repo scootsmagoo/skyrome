@@ -11,7 +11,7 @@ export interface VitalsOptions {
   health: number;
   stamina?: number;
   pietas?: number;
-  /** Absolute regen per second for a resource; default max × REGEN[id] (× combat multiplier). */
+  /** Regen per second for a resource; default REGEN[id] (× the combat multiplier). */
   regenRate?: (id: ResourceId, v: VitalsImpl) => number;
   onDeath?: (source?: string) => void;
 }
@@ -20,8 +20,12 @@ export class VitalsImpl implements Vitals {
   private readonly res: Record<ResourceId, Resource>;
   private readonly delay: Record<ResourceId, number> = { health: 0, stamina: 0, pietas: 0 };
   private _dead = false;
-  /** Set by combat: slows regeneration (REGEN.combat). */
+  /** Set by combat: slows regeneration (REGEN.combat; no health regen in combat). */
   inCombat = false;
+  /** Set by combat while the shield is up: stamina regenerates at REGEN.blockingStamina. */
+  blocking = false;
+  /** Asked before a killing blow lands; return true to survive at 1 health (Mithras's Invictus). */
+  preventDeath?: () => boolean;
   /** Who dealt the last damage (for kill credit). */
   lastDamageSource?: string;
   regenRate: (id: ResourceId, v: VitalsImpl) => number;
@@ -64,6 +68,10 @@ export class VitalsImpl implements Vitals {
     r.current -= dealt;
     if (source) this.lastDamageSource = source;
     if (r.current <= 1e-6) {
+      if (this.preventDeath?.()) {
+        r.current = Math.min(1, r.max);
+        return dealt - r.current;
+      }
       r.current = 0;
       this._dead = true;
       this.onDeath?.(source);
@@ -124,7 +132,8 @@ export class VitalsImpl implements Vitals {
         continue;
       }
       const r = this.res[id];
-      if (r.current < r.max) r.current = Math.min(r.max, r.current + Math.max(0, this.regenRate(id, this)) * dt);
+      const blockMul = id === 'stamina' && this.blocking ? REGEN.blockingStamina : 1;
+      if (r.current < r.max) r.current = Math.min(r.max, r.current + Math.max(0, this.regenRate(id, this)) * blockMul * dt);
     }
   }
 
@@ -147,6 +156,7 @@ export class VitalsImpl implements Vitals {
   }
 }
 
+/** Absolute regeneration per second (GDD §3.3): health 0.5 out of combat, stamina 20, pietas none. */
 function defaultRegen(id: ResourceId, v: VitalsImpl): number {
-  return v.get(id).max * REGEN[id] * (v.inCombat ? REGEN.combat[id] : 1);
+  return REGEN[id] * (v.inCombat ? REGEN.combat[id] : 1);
 }

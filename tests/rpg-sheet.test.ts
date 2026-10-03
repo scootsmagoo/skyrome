@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus, type GameEvents } from '../src/core/Events';
-import { RESOURCES, SKILL_CURVE } from '../src/rpg/data/balance';
+import { DEVOTION, RESOURCES, SKILL_CURVE } from '../src/rpg/data/balance';
 import { CharacterSheetImpl, levelXpToNext, skillXpToNext } from '../src/rpg/sheet';
 import { VitalsImpl } from '../src/rpg/vitals';
 import { record } from './rpg-fakes';
@@ -10,135 +10,180 @@ function sheet() {
   return { s: new CharacterSheetImpl({ events }), events };
 }
 
-describe('XP curves', () => {
-  it('skill XP needed grows like Skyrim (≈8 uses at 15, ≈54 at 50, ≈165 at 90)', () => {
-    expect(skillXpToNext(15)).toBeCloseTo(7.9, 1);
-    expect(skillXpToNext(50)).toBeGreaterThan(50);
-    expect(skillXpToNext(50)).toBeLessThan(58);
-    expect(skillXpToNext(90)).toBeGreaterThan(155);
-    expect(skillXpToNext(90)).toBeLessThan(175);
-    expect(skillXpToNext(15, 2)).toBeCloseTo(skillXpToNext(15) * 2);
+describe('XP curves (GDD §5.2–5.3)', () => {
+  it('skill XP to next = round(difficulty × (L + 5)^1.5)', () => {
+    expect([10, 15, 20, 30, 50, 75, 99].map((l) => skillXpToNext(l))).toEqual([58, 89, 125, 207, 408, 716, 1061]);
+    expect(skillXpToNext(10, 1.2)).toBe(70);
+    expect(skillXpToNext(10, 0.8)).toBe(46);
   });
 
-  it('character XP to next level is 75 + 25 L', () => {
-    expect(levelXpToNext(1)).toBe(100);
-    expect(levelXpToNext(10)).toBe(325);
+  it('character XP to next level is 25 × (n + 2)', () => {
+    expect(levelXpToNext(1)).toBe(75);
+    expect(levelXpToNext(2)).toBe(100);
+    expect(levelXpToNext(10)).toBe(300);
   });
 });
 
 describe('skills and levels', () => {
-  it('starts every skill at 15', () => {
+  it('starts all 17 skills at 10, pietas half full', () => {
     const { s } = sheet();
-    expect(s.skillLevel('blades')).toBe(SKILL_CURVE.start);
-    expect(s.skillLevel('religio')).toBe(SKILL_CURVE.start);
+    expect(SKILL_CURVE.start).toBe(10);
+    expect(s.skillLevel('blades')).toBe(10);
+    expect(s.skillLevel('religio')).toBe(10);
+    expect(s.skillDefsList().length).toBe(17);
     expect(s.level).toBe(1);
+    expect(s.vitals.pietas).toEqual({ current: 25, max: 50 });
+    expect(s.vitals.health.max).toBe(100);
   });
 
   it('use raises a skill, emits skill:levelup and grants character XP equal to the new level', () => {
     const { s, events } = sheet();
     const log = record(events, ['skill:levelup']);
-    s.useSkill('blades', skillXpToNext(15) - 0.01);
-    expect(s.skillLevel('blades')).toBe(15);
+    s.useSkill('blades', 57.99);
+    expect(s.skillLevel('blades')).toBe(10);
     expect(s.skillProgress('blades')).toBeGreaterThan(0.99);
     s.useSkill('blades', 0.02);
-    expect(s.skillLevel('blades')).toBe(16);
-    expect(log).toEqual([{ type: 'skill:levelup', e: { skill: 'blades', level: 16 } }]);
-    expect(s.xp).toBe(16);
+    expect(s.skillLevel('blades')).toBe(11);
+    expect(log).toEqual([{ type: 'skill:levelup', e: { skill: 'blades', level: 11 } }]);
+    expect(s.xp).toBe(11);
   });
 
-  it('skill level-ups drive character levels, perk points and pending resource choices', () => {
+  it('harder skills need more XP (Pickpocket ×1.2, Athletics ×0.8)', () => {
+    const { s } = sheet();
+    s.useSkill('pickpocket', 69);
+    expect(s.skillLevel('pickpocket')).toBe(10);
+    s.useSkill('pickpocket', 1.01);
+    expect(s.skillLevel('pickpocket')).toBe(11);
+    s.useSkill('athletics', 46);
+    expect(s.skillLevel('athletics')).toBe(11);
+  });
+
+  it('skill level-ups drive character levels, perk points, pending choices and +0.2 governing pool', () => {
     const { s, events } = sheet();
     const log = record(events, ['player:levelup']);
-    // 15 → 30 grants 16+17+…+30 = 345 XP: level 1→2 at 100, 2→3 at +125, 3→4 needs +150 more.
-    for (let i = 15; i < 30; i++) s.useSkill('blades', skillXpToNext(i) + 1e-6);
+    // 10 → 30 grants 11+12+…+30 = 410 XP: levels at 75, +100, +125 (300 total); 110 toward the 150 for level 5.
+    for (let i = 10; i < 30; i++) s.useSkill('blades', skillXpToNext(i) + 1e-6);
     expect(s.skillLevel('blades')).toBe(30);
-    expect(s.level).toBe(3);
-    expect(s.xp).toBeCloseTo(345 - 225, 3);
-    expect(s.perkPoints).toBe(2);
-    expect(s.pendingLevelUps).toBe(2);
-    expect(log.map((l) => (l.e as { level: number }).level)).toEqual([2, 3]);
+    expect(s.level).toBe(4);
+    expect(s.xp).toBeCloseTo(110, 3);
+    expect(s.perkPoints).toBe(3);
+    expect(s.pendingLevelUps).toBe(3);
+    expect(log.map((l) => (l.e as { level: number }).level)).toEqual([2, 3, 4]);
+    expect(s.vitals.health.max).toBeCloseTo(104); // Blades governs health
   });
 
-  it('a level choice adds +10 to the chosen resource (max and current)', () => {
+  it('a level choice adds +10 to the chosen pool (max and current); stamina also adds 5 kg carry', () => {
     const { s } = sheet();
-    s.addXp(100);
+    s.addXp(75);
     expect(s.level).toBe(2);
     s.vitals.damage(30);
     expect(s.chooseLevelUp('health')).toBe(true);
     expect(s.vitals.health.max).toBe(RESOURCES.base.health + 10);
     expect(s.vitals.health.current).toBe(80);
     expect(s.chooseLevelUp('stamina')).toBe(false);
+    expect(s.carryCapacity()).toBe(50);
+    s.addXp(100);
+    s.chooseLevelUp('stamina');
+    expect(s.carryCapacity()).toBe(55);
+    expect(s.levelPicks()).toEqual({ health: 1, stamina: 1, pietas: 0 });
   });
 
   it('caps skills at 100 and stops gaining', () => {
     const { s } = sheet();
-    s.setSkill('sneak', 99);
-    s.useSkill('sneak', 1e6);
-    expect(s.skillLevel('sneak')).toBe(100);
-    expect(s.skillProgress('sneak')).toBe(0);
+    s.setSkill('stealth', 99);
+    s.useSkill('stealth', 1e6);
+    expect(s.skillLevel('stealth')).toBe(100);
+    expect(s.skillProgress('stealth')).toBe(0);
   });
 
-  it('xp.mult speeds up skill gain', () => {
+  it('xp.mult speeds up skill gain; an xp.<skill> flag (Minerva, the freedman) adds 10% to that skill', () => {
     const { s } = sheet();
     s.setModifierSource('test', { 'xp.mult': 1 });
-    s.useSkill('spear', skillXpToNext(15) / 2 + 0.01);
-    expect(s.skillLevel('spear')).toBe(16);
+    s.useSkill('spear', 29.01);
+    expect(s.skillLevel('spear')).toBe(11);
+    const b = sheet().s;
+    b.setFlagSource('patron', ['xp.fabrica']);
+    b.useSkill('fabrica', 1);
+    b.useSkill('medicina', 1);
+    expect(b.skillXp('fabrica')).toBeCloseTo(1.1);
+    expect(b.skillXp('medicina')).toBeCloseTo(1);
+  });
+
+  it('training dummies give half XP and nothing from level 30', () => {
+    const { s } = sheet();
+    s.useSkill('blades', 10, { dummy: true });
+    expect(s.skillXp('blades')).toBe(5);
+    s.setSkill('blades', 30);
+    s.useSkill('blades', 10, { dummy: true });
+    expect(s.skillXp('blades')).toBe(0);
   });
 
   it('raiseSkill (books, trainers) levels without a curve but still feeds character XP', () => {
     const { s } = sheet();
     s.raiseSkill('rhetoric', 2);
-    expect(s.skillLevel('rhetoric')).toBe(17);
-    expect(s.xp).toBe(16 + 17);
+    expect(s.skillLevel('rhetoric')).toBe(12);
+    expect(s.xp).toBe(11 + 12);
   });
 
   it('loseProgress zeroes the skills with most progress (jail)', () => {
     const { s } = sheet();
     s.useSkill('blades', 5);
-    s.useSkill('sneak', 3);
+    s.useSkill('stealth', 3);
     s.useSkill('spear', 1);
-    expect(s.loseProgress(2)).toEqual(['blades', 'sneak']);
+    expect(s.loseProgress(2)).toEqual(['blades', 'stealth']);
     expect(s.skillXp('blades')).toBe(0);
     expect(s.skillXp('spear')).toBeGreaterThan(0);
   });
+
+  it('trainers: cost round(0.15 L² + 10), five lessons per level, caps 40/70/90 by grade', () => {
+    const { s } = sheet();
+    expect(s.trainingCost('blades')).toBe(25);
+    s.setSkill('blades', 40);
+    expect(s.trainingCost('blades')).toBe(250);
+    expect(s.trainingBlocker('blades', 'common')).toBe('cap');
+    expect(s.trainingBlocker('blades', 'expert')).toBeNull();
+    expect(s.trainingBlocker('nope', 'master')).toBe('unknown');
+    for (let i = 0; i < 5; i++) expect(s.train('shield', 'common')).toBe(true);
+    expect(s.skillLevel('shield')).toBe(15);
+    expect(s.trainingBlocker('shield', 'common')).toBe('lessons');
+    expect(s.train('shield', 'common')).toBe(false);
+    s.addXp(1000);
+    expect(s.train('shield', 'common')).toBe(true);
+  });
 });
 
-describe('perks', () => {
-  it('gates on points, skill level and prerequisite', () => {
+describe('perks (GDD §5.5)', () => {
+  it('gates on skill level and points; ids are perk-…', () => {
     const { s } = sheet();
-    expect(s.perkBlocker('blades.arm1')).toBe('points');
-    s.grantPerkPoints(3);
-    expect(s.canTakePerk('blades.arm1')).toBe(true);
-    expect(s.perkBlocker('blades.arm2')).toBe('level'); // needs Blades 20
+    expect(s.perkBlocker('perk-blades-punctim')).toBe('level'); // needs Blades 20
     s.setSkill('blades', 20);
-    expect(s.perkBlocker('blades.arm2')).toBe('prerequisite');
-    expect(s.takePerk('blades.arm1')).toBe(true);
-    expect(s.takePerk('blades.arm1')).toBe(false);
-    expect(s.perkBlocker('blades.arm1')).toBe('taken');
-    expect(s.takePerk('blades.arm2')).toBe(true);
-    expect(s.perkPoints).toBe(1);
+    expect(s.perkBlocker('perk-blades-punctim')).toBe('points');
+    s.grantPerkPoints(1);
+    expect(s.canTakePerk('perk-blades-punctim')).toBe(true);
+    expect(s.takePerk('perk-blades-punctim')).toBe(true);
+    expect(s.takePerk('perk-blades-punctim')).toBe(false);
+    expect(s.perkBlocker('perk-blades-punctim')).toBe('taken');
+    expect(s.perkPoints).toBe(0);
     expect(s.perkBlocker('nope')).toBe('unknown');
   });
 
-  it('perk modifiers and flags are summed and visible immediately', () => {
+  it('a taken perk is a flag, and its modifiers apply immediately', () => {
     const { s } = sheet();
-    s.grantPerkPoints(5);
-    s.setSkill('blades', 40);
-    s.takePerk('blades.arm1');
-    expect(s.modifier('damage.blades')).toBeCloseTo(0.2);
-    s.takePerk('blades.arm2');
-    s.takePerk('blades.punctim');
-    expect(s.modifier('damage.blades')).toBeCloseTo(0.4);
-    expect(s.modifier('damage.power')).toBeCloseTo(0.25);
-    expect(s.hasFlag('blades.crit')).toBe(false);
+    s.grantPerk('perk-brawling-caestus');
+    expect(s.hasFlag('perk-brawling-caestus')).toBe(true);
+    expect(s.modifier('damage.unarmed')).toBeCloseTo(0.5);
+    s.grantPerk('perk-religio-pax-deorum');
+    expect(s.vitals.pietas.max).toBe(RESOURCES.base.pietas + 25);
   });
 
-  it('flat .max modifiers change resource maxima (Pius: +25 pietas)', () => {
+  it('every skill has four perks at rising levels', () => {
     const { s } = sheet();
-    s.grantPerk('rel.devotion1');
-    s.grantPerk('rel.pious');
-    expect(s.vitals.pietas.max).toBe(RESOURCES.base.pietas + 25);
-    expect(s.modifier('blessing.duration')).toBeCloseTo(0.5);
+    for (const sk of s.skillDefsList()) {
+      const levels = s.perkDefsList().filter((p) => p.skill === sk.id).map((p) => p.requiresLevel);
+      expect(levels.length, sk.id).toBe(4);
+      expect([...levels].sort((a, b) => a - b), sk.id).toEqual(levels);
+    }
+    expect(s.perkDefsList().every((p) => p.id.startsWith('perk-'))).toBe(true);
   });
 });
 
@@ -154,24 +199,24 @@ describe('modifier sources', () => {
   });
 });
 
-describe('timed effects', () => {
+describe('timed effects and conditions', () => {
   it('restore is instant; regen heals over its duration then expires', () => {
     const { s, events } = sheet();
     const log = record(events, ['effect:added', 'effect:expired']);
     s.vitals.damage(60);
-    s.applyEffects('item:potio_minor', [{ kind: 'restore', target: 'health', amount: 25 }]);
+    s.applyEffects('item:panis', [{ kind: 'restore', target: 'health', amount: 25 }]);
     expect(s.vitals.health.current).toBe(65);
-    s.vitals.inCombat = true; // keep natural regen tiny
-    s.applyEffects('item:unguentum', [{ kind: 'regen', target: 'health', amount: 2, duration: 10 }]);
-    for (let i = 0; i < 600; i++) s.tick(1 / 60);
-    expect(s.vitals.health.current).toBeGreaterThan(65 + 19);
+    s.vitals.inCombat = true; // no natural health regen
+    s.applyEffects('item:emplastrum', [{ kind: 'regen', target: 'health', amount: 2, duration: 10 }]);
+    for (let i = 0; i < 660; i++) s.tick(1 / 60);
+    expect(s.vitals.health.current).toBeCloseTo(85);
     expect(s.activeEffects.length).toBe(0);
     expect(log.map((l) => l.type)).toEqual(['effect:added', 'effect:expired']);
   });
 
-  it('fortify raises the max while active and restores it after', () => {
+  it('fortify raises a pool max while active and restores it after', () => {
     const { s } = sheet();
-    s.applyEffects('item:embrocatio', [{ kind: 'fortify', target: 'stamina', amount: 25, duration: 5 }]);
+    s.applyEffects('item:mulsum', [{ kind: 'fortify', target: 'stamina', amount: 25, duration: 5 }]);
     expect(s.vitals.stamina.max).toBe(125);
     expect(s.vitals.stamina.current).toBe(125);
     for (let i = 0; i < 6 * 60; i++) s.tick(1 / 60);
@@ -179,24 +224,62 @@ describe('timed effects', () => {
     expect(s.vitals.stamina.current).toBe(100);
   });
 
+  it('fortify on a skill raises it temporarily (Falernian +5 Rhetoric, Venus +5)', () => {
+    const { s } = sheet();
+    s.applyEffects('item:vinum-falernum', [{ kind: 'fortify', target: 'rhetoric', amount: 5, duration: 60 }]);
+    expect(s.skillLevel('rhetoric')).toBe(15);
+    expect(s.baseSkillLevel('rhetoric')).toBe(10);
+    s.applyCondition('venus');
+    expect(s.skillLevel('rhetoric')).toBe(20);
+    s.tick(61);
+    expect(s.skillLevel('rhetoric')).toBe(15);
+  });
+
+  it('a condition effect applies a named condition (mulsum makes you tipsy)', () => {
+    const { s } = sheet();
+    s.applyEffects('item:mulsum', [{ kind: 'condition', target: 'ebrius', amount: 1 }]);
+    expect(s.hasCondition('ebrius')).toBe(true);
+    expect(s.hasFlag('ebrius')).toBe(true);
+  });
+
   it('remedy magnitude scales amounts; same-source effects refresh rather than stack', () => {
     const { s } = sheet();
-    s.applyEffects('item:wine', [{ kind: 'modifier', target: 'persuade.chance', amount: 0.1, duration: 60 }], { magnitude: 1.5 });
+    s.applyEffects('item:vinum', [{ kind: 'modifier', target: 'persuade.chance', amount: 0.1, duration: 60 }], { magnitude: 1.5 });
     expect(s.modifier('persuade.chance')).toBeCloseTo(0.15);
-    s.applyEffects('item:wine', [{ kind: 'modifier', target: 'persuade.chance', amount: 0.1, duration: 60 }]);
+    s.applyEffects('item:vinum', [{ kind: 'modifier', target: 'persuade.chance', amount: 0.1, duration: 60 }]);
     expect(s.modifier('persuade.chance')).toBeCloseTo(0.1);
   });
 
-  it('poison damages over time and theriac cures it', () => {
+  it('poisons: aconite 4/s, halved by theriac resistance, blocked by immunity, cured by theriac', () => {
     const { s } = sheet();
+    s.vitals.inCombat = true; // no natural health regen
     s.applyCondition('aconitum');
     s.tick(1);
-    expect(s.vitals.health.current).toBeLessThan(97);
+    expect(s.vitals.health.current).toBeCloseTo(96);
     s.applyEffects('item:theriaca', [{ kind: 'cure', target: 'poison', amount: 1 }]);
     expect(s.activeEffects.length).toBe(0);
+    const r = sheet().s;
+    r.vitals.inCombat = true;
+    r.setFlagSource('test', ['poison.resist']);
+    r.applyCondition('aconitum');
+    r.tick(1);
+    expect(r.vitals.health.current).toBeCloseTo(98);
+    r.setFlagSource('test', ['poison.immune']);
+    expect(r.applyCondition('taxus')).toBe(false);
   });
 
-  it('diseases last until cured, can be cured specifically, and Hale grants immunity', () => {
+  it('bleeding stacks up to three (2/s each) and a bandage stops all of it', () => {
+    const { s } = sheet();
+    s.vitals.inCombat = true;
+    for (let i = 0; i < 4; i++) s.applyCondition('cruor');
+    expect(s.conditionStacks('cruor')).toBe(3);
+    s.tick(1);
+    expect(s.vitals.health.current).toBeCloseTo(94);
+    expect(s.cure('injury')).toBe(3);
+    expect(s.hasCondition('cruor')).toBe(false);
+  });
+
+  it('diseases last until cured, can be cured specifically, and immunity blocks them', () => {
     const { s } = sheet();
     expect(s.applyCondition('febris')).toBe(true);
     expect(s.hasCondition('febris')).toBe(true);
@@ -210,33 +293,71 @@ describe('timed effects', () => {
     s.cure('disease');
     expect(s.hasCondition('febris')).toBe(false);
     expect(s.vitals.health.max).toBe(100);
-    s.grantPerk('med.immune');
+    s.setFlagSource('patron', ['disease.immune']);
     expect(s.applyCondition('febris')).toBe(false);
   });
 
-  it('one blessing at a time (two with Pontifex); Devotion extends duration', () => {
+  it('blessings last a game day, one at a time (two with religio.twoBlessings), longer with blessing.duration', () => {
     const { s } = sheet();
     s.applyCondition('mars');
+    expect(s.activeEffects.find((a) => a.source === 'blessing:mars')!.remaining).toBe(DEVOTION.blessingSeconds);
     s.applyCondition('venus');
     expect(s.hasCondition('mars')).toBe(false);
     expect(s.hasCondition('venus')).toBe(true);
-    s.grantPerk('rel.pontifex');
+    s.setFlagSource('test', ['religio.twoBlessings']);
     s.applyCondition('minerva');
     expect(s.hasCondition('venus')).toBe(true);
     expect(s.hasCondition('minerva')).toBe(true);
-    s.grantPerk('rel.devotion1');
-    s.applyCondition('vesta');
-    const vesta = s.activeEffects.find((a) => a.source === 'blessing:vesta')!;
-    expect(vesta.remaining).toBeCloseTo(8 * 60 * 1.5);
+    s.setModifierSource('test', { 'blessing.duration': 0.5 });
+    s.applyCondition('lares');
+    expect(s.activeEffects.find((a) => a.source === 'blessing:lares')!.remaining).toBeCloseTo(DEVOTION.blessingSeconds * 1.5);
   });
 
-  it('serializes effects including "until cured" ones', () => {
+  it('flag effects set sheet flags for their duration; consumeFlag uses one up', () => {
+    const { s, events } = sheet();
+    const log = record(events, ['effect:expired']);
+    s.applyEffects('invocation:fortuna', [{ kind: 'flag', target: 'fortuna.nextRoll', amount: 1, duration: 600 }]);
+    expect(s.hasFlag('fortuna.nextRoll')).toBe(true);
+    expect(s.consumeFlag('fortuna.nextRoll')).toBe(true);
+    expect(s.hasFlag('fortuna.nextRoll')).toBe(false);
+    expect(s.consumeFlag('fortuna.nextRoll')).toBe(false);
+    s.applyEffects('invocation:hercules', [{ kind: 'flag', target: 'stagger.immune', amount: 1, duration: 10 }]);
+    s.tick(11);
+    expect(s.hasFlag('stagger.immune')).toBe(false);
+    expect(log.map((l) => (l.e as { source: string }).source)).toEqual(['invocation:fortuna', 'invocation:hercules']);
+  });
+
+  it('Invictus turns one killing blow into 1 health', () => {
+    const { s } = sheet();
+    s.applyEffects('invocation:mithras', [{ kind: 'flag', target: 'invictus', amount: 1, duration: 4320 }]);
+    s.vitals.damage(500);
+    expect(s.vitals.dead).toBe(false);
+    expect(s.vitals.health.current).toBe(1);
+    s.vitals.damage(500);
+    expect(s.vitals.dead).toBe(true);
+  });
+
+  it('impiety leaves you ill-omened until expiation', () => {
+    const { s } = sheet();
+    s.applyCondition('infaustus');
+    expect(s.modifier('persuade.chance')).toBeCloseTo(-0.1);
+    for (let i = 0; i < 10; i++) s.tick(1000);
+    expect(s.hasCondition('infaustus')).toBe(true);
+    s.cure('omen');
+    expect(s.hasCondition('infaustus')).toBe(false);
+  });
+
+  it('serializes perks, growth, effects (including "until cured") and vitals', () => {
     const { s } = sheet();
     s.grantPerkPoints(2);
-    s.takePerk('sneak.shadow1');
-    s.useSkill('sneak', 3);
+    s.setSkill('stealth', 20);
+    s.takePerk('perk-stealth-crowd-blend');
+    s.useSkill('stealth', 3);
+    s.raiseSkill('blades', 5);
     s.applyCondition('febris');
     s.applyCondition('mars');
+    s.applyCondition('cruor');
+    s.applyCondition('cruor');
     s.vitals.damage(20);
     const json = JSON.parse(JSON.stringify(s.serialize()));
     const t = new CharacterSheetImpl();
@@ -244,28 +365,40 @@ describe('timed effects', () => {
     expect(t.hasCondition('febris')).toBe(true);
     expect(t.activeEffects.find((a) => a.source === 'disease:febris')!.remaining).toBe(Infinity);
     expect(t.hasCondition('mars')).toBe(true);
-    expect(t.perks.has('sneak.shadow1')).toBe(true);
+    expect(t.conditionStacks('cruor')).toBe(2);
+    expect(t.perks.has('perk-stealth-crowd-blend')).toBe(true);
     expect(t.perkPoints).toBe(1);
-    expect(t.skillXp('sneak')).toBeCloseTo(s.skillXp('sneak'));
-    expect(t.vitals.health.max).toBe(85);
+    expect(t.skillXp('stealth')).toBeCloseTo(s.skillXp('stealth'));
+    expect(t.vitals.health.max).toBeCloseTo(86); // 100 + 5 × 0.2 − 15
     expect(t.vitals.health.current).toBeCloseTo(s.vitals.health.current);
     expect(t.serialize()).toEqual(s.serialize());
   });
+
+  it('restore(undefined) is a new character: skills 10, full health, pietas 25', () => {
+    const { s } = sheet();
+    s.setSkill('blades', 50);
+    s.vitals.damage(40);
+    s.vitals.restore('pietas', 25);
+    s.restore(undefined);
+    expect(s.skillLevel('blades')).toBe(10);
+    expect(s.vitals.health.current).toBe(100);
+    expect(s.vitals.pietas.current).toBe(25);
+  });
 });
 
-describe('vitals', () => {
-  it('spend fails without enough, drain takes what there is, regen waits after spending', () => {
+describe('vitals (GDD §3.3)', () => {
+  it('spend fails without enough, drain takes what there is, stamina waits 0.8 s after spending', () => {
     const v = new VitalsImpl({ health: 100, stamina: 50, pietas: 20 });
     expect(v.spend('stamina', 60)).toBe(false);
     expect(v.stamina.current).toBe(50);
     expect(v.spend('stamina', 30)).toBe(true);
     expect(v.drain('stamina', 40)).toBe(20);
     expect(v.stamina.current).toBe(0);
-    v.tick(1); // still delayed (1.2 s)
-    expect(v.stamina.current).toBe(0);
     v.tick(0.5);
+    expect(v.stamina.current).toBe(0);
+    v.tick(0.5); // the rest of the delay
     v.tick(1);
-    expect(v.stamina.current).toBeGreaterThan(0);
+    expect(v.stamina.current).toBeCloseTo(20);
   });
 
   it('dies at zero, reports damage actually dealt, revives full', () => {
@@ -283,7 +416,7 @@ describe('vitals', () => {
     expect(v.dead).toBe(false);
   });
 
-  it('regenerates slower in combat', () => {
+  it('health regenerates 0.5/s out of combat only; stamina 20/s, half while blocking', () => {
     const a = new VitalsImpl({ health: 100 });
     const b = new VitalsImpl({ health: 100 });
     a.damage(50);
@@ -291,6 +424,22 @@ describe('vitals', () => {
     b.inCombat = true;
     a.tick(10);
     b.tick(10);
-    expect(a.health.current - 50).toBeGreaterThan((b.health.current - 50) * 2);
+    expect(a.health.current).toBeCloseTo(55);
+    expect(b.health.current).toBe(50);
+    const c = new VitalsImpl({ health: 100, stamina: 100 });
+    c.drain('stamina', 100);
+    c.tick(0.8); // the delay
+    c.tick(1);
+    expect(c.stamina.current).toBeCloseTo(20);
+    c.blocking = true;
+    c.tick(1);
+    expect(c.stamina.current).toBeCloseTo(30);
+  });
+
+  it('pietas does not regenerate on its own (devotion refills it)', () => {
+    const { s } = sheet();
+    s.vitals.spend('pietas', 5);
+    for (let i = 0; i < 100; i++) s.tick(1);
+    expect(s.vitals.pietas.current).toBe(20);
   });
 });

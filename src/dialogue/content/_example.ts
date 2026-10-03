@@ -1,16 +1,16 @@
 /**
  * EXAMPLE DIALOGUE (dev scenes and tests only) for the example quest in
- * src/quests/content/_example.ts: the scribe Pudens, the banker Sextus, and a '*' fallback for
+ * src/quests/content/_example.ts: the scribe Eutychus, the banker Sextus, and a '*' fallback for
  * unnamed citizens. Shows greetings chosen by quest state, a hub, a once-choice, a Rhetoric
  * check, a bribe, conditions on items and flags, effects, and quest hand-offs via node ids.
  */
 import { defineDialogue, type DialogueContext } from '../types';
 
-const letterState = (c: DialogueContext) => c.quest('ex_letter');
+const letterState = (c: DialogueContext) => c.quest('ex-letter');
 
-const pudens = defineDialogue({
-  id: 'ex_pudens',
-  npcs: ['ex_pudens'],
+const scriba = defineDialogue({
+  id: 'ex-scriba',
+  npcs: ['ex-scriba'],
   start: (c) => {
     const q = letterState(c);
     if (q?.running) return q.stage === 'reply' ? 'return' : 'waiting';
@@ -35,7 +35,7 @@ const pudens = defineDialogue({
       ],
     },
     who: {
-      text: 'Gaius Valerius Pudens: scribe, freedman of the Valerii, servant of whoever pays. I copy contracts and petitions for people who cannot write — which is most of Rome.',
+      text: 'Gaius Valerius Eutychus: scribe, freedman of the Valerii, servant of whoever pays. I copy contracts and petitions for people who cannot write — which is most of Rome.',
       next: 'again',
     },
     offer: {
@@ -70,7 +70,7 @@ const pudens = defineDialogue({
       text: 'Why are you still here? The Basilica Aemilia is right there — the long hall with the shops along its front.',
       choices: [
         { text: 'Anything else you need?', goto: 'figs', once: true },
-        { text: 'Here are your figs.', if: (c) => c.hasItem('ficus', 3) && !!c.quest('ex_letter')?.running && !c.flag('ex_figs_given'), goto: 'figsGiven', effects: (c) => (c.takeItem('ficus', 3), c.setFlag('ex_figs_given', true)) },
+        { text: 'Here are your figs.', if: (c) => c.hasItem('ficus', 3) && !!c.quest('ex-letter')?.running && !c.flag('ex-figs-given'), goto: 'figsGiven', effects: (c) => (c.takeItem('ficus', 3), c.setFlag('ex-figs-given', true)) },
         { text: 'I’m going.', end: true },
       ],
     },
@@ -81,8 +81,8 @@ const pudens = defineDialogue({
     return: {
       text: 'You’re back! Did Sextus answer?',
       choices: [
-        { text: 'Here is his reply.', if: (c) => c.hasItem('ex_reply'), goto: 'thanks', effects: (c) => void c.takeItem('ex_reply') },
-        { text: 'Here are your figs.', if: (c) => c.hasItem('ficus', 3) && !c.flag('ex_figs_given'), goto: 'figsGiven', effects: (c) => (c.takeItem('ficus', 3), c.setFlag('ex_figs_given', true)) },
+        { text: 'Here is his reply.', if: (c) => c.hasItem('ex-reply'), goto: 'thanks', effects: (c) => void c.takeItem('ex-reply') },
+        { text: 'Here are your figs.', if: (c) => c.hasItem('ficus', 3) && !c.flag('ex-figs-given'), goto: 'figsGiven', effects: (c) => (c.takeItem('ficus', 3), c.setFlag('ex-figs-given', true)) },
         { text: 'Not yet.', end: true },
       ],
     },
@@ -93,7 +93,7 @@ const pudens = defineDialogue({
     hub: {
       text: (c) => (letterState(c)?.stage === 'reply' ? 'Now — the reply?' : 'Now — the letter?'),
       choices: [
-        { text: 'Here is Sextus’s reply.', if: (c) => c.hasItem('ex_reply'), goto: 'thanks', effects: (c) => void c.takeItem('ex_reply') },
+        { text: 'Here is Sextus’s reply.', if: (c) => c.hasItem('ex-reply'), goto: 'thanks', effects: (c) => void c.takeItem('ex-reply') },
         { text: 'I’m on my way.', end: true },
       ],
     },
@@ -109,11 +109,11 @@ const pudens = defineDialogue({
 });
 
 const sextus = defineDialogue({
-  id: 'ex_sextus',
-  npcs: ['ex_sextus'],
+  id: 'ex-sextus',
+  npcs: ['ex-sextus'],
   start: (c) => {
     const q = letterState(c);
-    if (q?.running && q.stage === 'start' && c.hasItem('ex_letter')) return 'letter';
+    if (q?.running && q.stage === 'start' && c.hasItem('ex-letter')) return 'letter';
     return 'greet';
   },
   nodes: {
@@ -129,30 +129,30 @@ const sextus = defineDialogue({
       choices: [{ text: 'Vale.', end: true }],
     },
     letter: {
-      text: (c) => (c.flag('ex_letter_opened') ? 'Pudens sent you? … This seal has been broken. Did you read it?' : 'A letter from Pudens? Give it here.'),
+      text: (c) => (c.flag('ex-letter-opened') ? 'Eutychus sent you? … This seal has been broken. Did you read it?' : 'A letter from Eutychus? Give it here.'),
       choices: [
-        { text: 'Here.', if: (c) => !c.flag('ex_letter_opened'), goto: 'delivered', effects: (c) => void c.takeItem('ex_letter') },
-        { text: 'It was broken when he gave it to me.', if: (c) => !!c.flag('ex_letter_opened'), effects: (c) => void c.takeItem('ex_letter'), check: { skill: 'rhetoric', difficulty: 35, label: 'Lie', pass: 'delivered', fail: 'suspicious' } },
+        { text: 'Here.', if: (c) => !c.flag('ex-letter-opened'), goto: 'delivered', effects: (c) => void c.takeItem('ex-letter') },
+        { text: 'It was broken when he gave it to me.', if: (c) => !!c.flag('ex-letter-opened'), effects: (c) => void c.takeItem('ex-letter'), check: { skill: 'rhetoric', difficulty: 35, label: 'Lie', pass: 'delivered', fail: 'suspicious' } },
         { text: 'Five denarii says you’ll tell me what this is about.', once: true, bribe: { amount: 5, goto: 'gossip' } },
       ],
     },
     gossip: {
-      text: 'Hm. Pudens borrowed four hundred sesterces at the Kalends to pay a gambling debt — knucklebones, in a tavern on the Vicus Tuscus. The letter will say he cannot pay. They always say that.',
+      text: 'Hm. Eutychus borrowed four hundred sesterces at the Kalends to pay a gambling debt — knucklebones, in a tavern on the Vicus Tuscus. The letter will say he cannot pay. They always say that.',
       next: 'letter',
     },
     suspicious: {
-      text: 'Then I will trust you as far as I trust Pudens — which is to the edge of this table.',
+      text: 'Then I will trust you as far as I trust Eutychus — which is to the edge of this table.',
       next: 'delivered',
     },
     delivered: {
-      text: 'Well. Well, well. Wait here… Take this reply to Pudens. And you saw nothing.',
+      text: 'Well. Well, well. Wait here… Take this reply to Eutychus. And you saw nothing.',
       end: true,
     },
   },
 });
 
 const citizen = defineDialogue({
-  id: 'ex_citizen',
+  id: 'ex-citizen',
   npcs: ['*'],
   priority: -100,
   start: () => 'hello',
@@ -164,4 +164,4 @@ const citizen = defineDialogue({
   },
 });
 
-export default [pudens, sextus, citizen];
+export default [scriba, sextus, citizen];

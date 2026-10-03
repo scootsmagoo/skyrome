@@ -28,7 +28,13 @@ declare module '../core/Events' {
     'crime:cleared': { jurisdiction: string; how: 'paid' | 'jail' | 'bribe' | 'persuade' | 'pardon' };
     'crime:jailed': { jurisdiction: string; days: number };
     'crime:resist': { jurisdiction: string };
+    /** A severe sentence instead of jail: condemnation to the gladiator school (the arena line picks this up). */
+    'crime:sentenced': { jurisdiction: string; sentence: 'ludus' };
     'barter:trade': { npcId: string; itemId: string; count: number; price: number; kind: 'buy' | 'sell' };
+    'devotion:patron': { deityId: string };
+    'devotion:invoked': { deityId: string; invocation: string };
+    'devotion:act': { act: string; god?: string };
+    'standing:changed': { dignitas: string; infamia: number; legal: string };
   }
 }
 

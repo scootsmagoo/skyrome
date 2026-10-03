@@ -135,12 +135,17 @@ describe('BarterSystem', () => {
 });
 
 describe('money', () => {
-  it('splits and formats denarii / sestertii / asses', () => {
-    expect(splitDenarii(12.6875)).toEqual({ denarii: 12, sestertii: 2, asses: 3 });
+  it('splits and formats denarii / sestertii / asses / quadrantes, and in sesterces (HS)', () => {
+    expect(splitDenarii(12.6875)).toEqual({ denarii: 12, sestertii: 2, asses: 3, quadrantes: 0 });
+    expect(splitDenarii(1 / 64)).toEqual({ denarii: 0, sestertii: 0, asses: 0, quadrantes: 1 });
     expect(formatDenarii(12.6875)).toBe('12 d 2 s 3 a');
     expect(formatDenarii(1 / 16, 'long')).toBe('1 as');
+    expect(formatDenarii(1 / 64, 'long')).toBe('1 quadrans');
     expect(formatDenarii(1.25, 'long')).toBe('1 denarius, 1 sestertius');
     expect(formatDenarii(0)).toBe('0 d');
+    expect(formatDenarii(12.6875, 'hs')).toBe('50 HS 3 a');
+    expect(formatDenarii(25000, 'hs')).toBe('100,000 HS');
+    expect(formatDenarii(0, 'hs')).toBe('0 HS');
   });
 });
 

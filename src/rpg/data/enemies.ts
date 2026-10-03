@@ -1,87 +1,75 @@
 /**
- * PROVISIONAL enemy tier table (the GDD tier table is pending). A tier's level follows the
- * player's, clamped to [minLevel, maxLevel] (Skyrim encounter zones), and its stats grow linearly
- * with level: value = base + perLevel × (level − 1).
+ * Enemy tiers and beasts — docs/GDD.md §6.11 (fixed stats: the GDD has no level scaling; areas have
+ * bands) with kits and loot from §6.14. `dmgMult` multiplies weapon damage; `speed` is a
+ * locomotion multiplier (beasts give `moveSpeed` in m/s); `reaction` is the delay in seconds before
+ * a block or dodge. A kit's AR and family override the tier default when the spawner picks it.
  *
- * `damage` is the NPC damage multiplier (their stand-in for perks): weapon damage × that value.
- *
- * Expected time-to-kill for these numbers is documented in docs/modules/rpg.md and pinned by
- * tests/rpg-combat.test.ts. Rough targets for an on-level fight, light attacks only:
- * trash (thug, brigand) 5–10 hits, soldiers (gladiator, veteran, urbanus) 10–18, elites
- * (praetorian, champion) 18–26, bosses 28–40.
+ * Lethality check (§6.2): an iron gladius at Blades 25 does 14.6 — 4 thrusts on a thug in a tunic,
+ * 10 on an urban soldier in segmentata and helmet (AR 50). Pinned by tests/rpg-combat.test.ts.
  */
-import type { EnemyTierDef } from '../types';
+import type { EnemyTierDef, WeaponStats } from '../types';
 
 export const ENEMY_TIERS: EnemyTierDef[] = [
   {
-    tier: 'animal', name: 'Stray Dog', minLevel: 1, maxLevel: 10,
-    health: [30, 4], stamina: [60, 2], armor: [0, 0], skill: [20, 2], damage: [1, 0.03], poise: 20,
-    weapons: [{ minLevel: 1, weapon: 'bite' }],
-    aggression: 0.75, blockSkill: 0, fleeAt: 0.25, loot: 'animal',
+    tier: 'civilian', name: 'Citizen', band: 0, health: 30, stamina: 50, ar: [0, 0], family: 'cloth', dmgMult: 0.6, speed: 1, aggression: 0.1, blockSkill: 0.05, poise: 20, reaction: 0.6, skill: 5, yieldAt: 0.5, fleeAt: 0.6,
+    kits: [{ weapon: 'fists' }, { weapon: 'fustis' }], loot: 'civilian',
   },
   {
-    tier: 'citizen', name: 'Angry Citizen', minLevel: 1, maxLevel: 6,
-    health: [40, 3], stamina: [60, 2], armor: [0, 0], skill: [10, 1], damage: [1, 0], poise: 25,
-    weapons: [{ minLevel: 1, weapon: 'fustis' }],
-    aggression: 0.25, blockSkill: 0.05, yieldAt: 0.4, fleeAt: 0.5, loot: 'citizen',
+    tier: 'thug', name: 'Grassator', band: 1, health: 45, stamina: 60, ar: [0, 6], family: 'cloth', dmgMult: 0.9, speed: 1, aggression: 0.55, blockSkill: 0.15, poise: 30, reaction: 0.45, skill: 15, yieldAt: 0.25, fleeAt: 0.15,
+    kits: [{ weapon: 'fustis', ar: 0 }, { weapon: 'pugio', ar: 2 }], loot: 'thug',
   },
   {
-    tier: 'thug', name: 'Suburan Thug', minLevel: 1, maxLevel: 12,
-    health: [50, 5], stamina: [80, 4], armor: [8, 0.5], skill: [20, 2.5], damage: [1, 0.03], poise: 30,
-    weapons: [{ minLevel: 1, weapon: 'fustis' }, { minLevel: 4, weapon: 'pugio' }, { minLevel: 8, weapon: 'gladius_rusty' }],
-    aggression: 0.6, blockSkill: 0.15, yieldAt: 0.15, fleeAt: 0.1, loot: 'thug',
+    tier: 'bruiser', name: 'Collegium Bruiser', band: [1, 2], health: 75, stamina: 80, ar: [10, 10], family: 'padded', dmgMult: 1, speed: 0.95, aggression: 0.7, blockSkill: 0.2, poise: 55, reaction: 0.45, skill: 25, yieldAt: 0.2, fleeAt: 0.1,
+    kits: [{ weapon: 'caestus' }, { weapon: 'clava' }], loot: 'bruiser',
   },
   {
-    tier: 'brigand', name: 'Brigand', minLevel: 3, maxLevel: 20,
-    health: [70, 6], stamina: [100, 4], armor: [20, 1], skill: [25, 2.5], damage: [1, 0.03], poise: 40,
-    weapons: [{ minLevel: 1, weapon: 'gladius_rusty', shield: 'parma' }, { minLevel: 8, weapon: 'hasta', shield: 'parma' }, { minLevel: 14, weapon: 'spatha', shield: 'scutum_ovale' }],
-    aggression: 0.6, blockSkill: 0.25, yieldAt: 0.1, fleeAt: 0.05, loot: 'brigand',
+    tier: 'skirmisher', name: 'Skirmisher', band: [1, 2], health: 45, stamina: 70, ar: [6, 6], family: 'cloth', dmgMult: 1, speed: 1.05, aggression: 0.5, blockSkill: 0.1, poise: 30, reaction: 0.4, skill: 30, yieldAt: 0.25, fleeAt: 0.2,
+    kits: [{ weapon: 'funda' }, { weapon: 'arcus' }], loot: 'skirmisher',
   },
   {
-    tier: 'vigil', name: 'Vigil of the Watch', minLevel: 4, maxLevel: 20,
-    health: [80, 6], stamina: [100, 4], armor: [18, 1], skill: [30, 2], damage: [1, 0.03], poise: 45,
-    weapons: [{ minLevel: 1, weapon: 'fustis' }, { minLevel: 10, weapon: 'securis' }],
-    aggression: 0.45, blockSkill: 0.3, loot: 'guard',
+    tier: 'miles', name: 'Soldier', band: [2, 3], health: 70, stamina: 100, ar: [45, 50], family: 'plate', dmgMult: 1, speed: 0.95, aggression: 0.5, blockSkill: 0.55, poise: 60, reaction: 0.35, skill: 35, yieldAt: 0.15, fleeAt: 0.05,
+    kits: [{ weapon: 'gladius', shield: 'scutum', ar: 50, family: 'plate' }, { weapon: 'gladius', shield: 'scutum-ovale', ar: 45, family: 'mail' }], loot: 'miles',
   },
   {
-    tier: 'urbanus', name: 'Soldier of the Urban Cohorts', minLevel: 6, maxLevel: 40,
-    health: [100, 6], stamina: [120, 4], armor: [40, 1], skill: [40, 1.5], damage: [1, 0.035], poise: 60,
-    weapons: [{ minLevel: 1, weapon: 'gladius', shield: 'scutum_ovale' }],
-    aggression: 0.5, blockSkill: 0.45, loot: 'guard',
+    tier: 'veteran', name: 'Veteran', band: 3, health: 95, stamina: 110, ar: [20, 55], family: 'mail', dmgMult: 1.15, speed: 1, aggression: 0.6, blockSkill: 0.6, poise: 70, reaction: 0.3, skill: 50, yieldAt: 0.3, fleeAt: 0,
+    kits: [{ weapon: 'gladius-noric', shield: 'scutum', ar: 55, family: 'plate' }, { weapon: 'sica', shield: 'parmula', ar: 20, family: 'cloth' }, { weapon: 'tridens', shield: 'galerus', ar: 20, family: 'cloth' }], loot: 'veteran',
   },
   {
-    tier: 'veteran', name: 'Legion Veteran', minLevel: 8, maxLevel: 35,
-    health: [100, 6], stamina: [120, 4], armor: [45, 1], skill: [45, 1.5], damage: [1, 0.035], poise: 60,
-    weapons: [{ minLevel: 1, weapon: 'gladius', shield: 'scutum' }, { minLevel: 20, weapon: 'gladius_noric', shield: 'scutum' }],
-    aggression: 0.55, blockSkill: 0.5, yieldAt: 0.1, loot: 'veteran',
+    tier: 'champion', name: 'Champion', band: [3, 4], health: 140, stamina: 130, ar: [25, 60], family: 'mail', dmgMult: 1.3, speed: 1.05, aggression: 0.65, blockSkill: 0.7, poise: 90, reaction: 0.25, skill: 70, yieldAt: 0.3, fleeAt: 0,
+    kits: [{ weapon: 'gladius-bilbilis', shield: 'scutum', ar: 60, family: 'plate' }, { weapon: 'falx', ar: 25, family: 'padded' }], loot: 'champion',
   },
   {
-    tier: 'gladiator', name: 'Gladiator', minLevel: 5, maxLevel: 40,
-    health: [90, 6], stamina: [140, 5], armor: [30, 1], skill: [40, 1.8], damage: [1.05, 0.035], poise: 55,
-    weapons: [{ minLevel: 1, weapon: 'sica', shield: 'parmula' }, { minLevel: 10, weapon: 'gladius', shield: 'scutum' }, { minLevel: 20, weapon: 'fuscina' }],
-    aggression: 0.7, blockSkill: 0.45, yieldAt: 0.2, loot: 'gladiator',
+    tier: 'elite', name: 'Elite', band: 4, health: 120, stamina: 120, ar: [55, 55], family: 'mail', dmgMult: 1.3, speed: 1, aggression: 0.6, blockSkill: 0.75, poise: 85, reaction: 0.22, skill: 70, yieldAt: 0.1, fleeAt: 0,
+    kits: [{ weapon: 'gladius-noric', shield: 'scutum-ovale', ar: 55, family: 'mail' }, { weapon: 'spatha-bilbilis', shield: 'scutum-ovale', ar: 55, family: 'mail' }], loot: 'elite',
   },
   {
-    tier: 'praetorian', name: 'Praetorian', minLevel: 15, maxLevel: 50,
-    health: [150, 6], stamina: [150, 5], armor: [60, 1.2], skill: [55, 1.2], damage: [1.1, 0.035], poise: 80,
-    weapons: [{ minLevel: 1, weapon: 'gladius_noric', shield: 'scutum' }],
-    aggression: 0.55, blockSkill: 0.6, loot: 'praetorian',
+    tier: 'boss', name: 'Boss', band: 4, health: 500, stamina: 150, ar: [55, 55], family: 'padded', dmgMult: 1.4, speed: 1, aggression: 0.6, blockSkill: 0.7, poise: 150, reaction: 0.2, skill: 80, fleeAt: 0,
+    kits: [{ weapon: 'falx' }], loot: 'boss',
   },
-  {
-    tier: 'champion', name: 'Champion', minLevel: 10, maxLevel: 50,
-    health: [160, 7], stamina: [160, 5], armor: [50, 1.2], skill: [55, 1.2], damage: [1.1, 0.04], poise: 100,
-    weapons: [{ minLevel: 1, weapon: 'spatha', shield: 'scutum_ovale' }, { minLevel: 20, weapon: 'gladius_tribuni', shield: 'scutum' }],
-    aggression: 0.65, blockSkill: 0.55, yieldAt: 0.15, loot: 'champion',
-  },
-  {
-    tier: 'boss', name: 'Boss', minLevel: 10, maxLevel: 60,
-    health: [220, 10], stamina: [200, 6], armor: [55, 1.2], skill: [60, 1], damage: [1.2, 0.045], poise: 150,
-    weapons: [{ minLevel: 1, weapon: 'falx' }],
-    aggression: 0.6, blockSkill: 0.6, loot: 'boss',
-  },
+  // ---- beasts (never yield; heavy attacks are unblockable charges and grapples)
+  { tier: 'canis', name: 'Stray Dog', band: 1, health: 25, stamina: 80, ar: [0, 0], dmgMult: 1, speed: 1, moveSpeed: 7.5, aggression: 0.6, blockSkill: 0, poise: 15, reaction: 0.4, skill: 0, fleeAt: 0.4, kits: [{ weapon: 'morsus-canis' }], loot: 'beast', beast: true },
+  { tier: 'canis-molossus', name: 'Molossian Hound', band: 2, health: 45, stamina: 100, ar: [0, 0], dmgMult: 1, speed: 1, moveSpeed: 8, aggression: 0.75, blockSkill: 0, poise: 30, reaction: 0.35, skill: 0, fleeAt: 0.2, kits: [{ weapon: 'morsus-molossi' }], loot: 'beast', beast: true },
+  { tier: 'lupus', name: 'Wolf', band: 2, health: 50, stamina: 100, ar: [0, 0], dmgMult: 1, speed: 1, moveSpeed: 8, aggression: 0.7, blockSkill: 0, poise: 25, reaction: 0.35, skill: 0, fleeAt: 0.2, kits: [{ weapon: 'morsus-lupi' }], loot: 'beast', beast: true },
+  { tier: 'aper', name: 'Boar', band: 2, health: 90, stamina: 120, ar: [0, 0], dmgMult: 1, speed: 1, moveSpeed: 7, aggression: 0.7, blockSkill: 0, poise: 60, reaction: 0.4, skill: 0, fleeAt: 0, kits: [{ weapon: 'dens-apri' }], loot: 'beast', beast: true },
+  { tier: 'pardus', name: 'Leopard', band: 3, health: 120, stamina: 120, ar: [0, 0], dmgMult: 1, speed: 1, moveSpeed: 9, aggression: 0.8, blockSkill: 0, poise: 40, reaction: 0.3, skill: 0, fleeAt: 0.15, kits: [{ weapon: 'unguis-pardi' }], loot: 'beast', beast: true },
+  { tier: 'leo', name: 'Lion', band: 3, health: 200, stamina: 150, ar: [0, 0], dmgMult: 1, speed: 1, moveSpeed: 8.5, aggression: 0.8, blockSkill: 0, poise: 80, reaction: 0.3, skill: 0, fleeAt: 0, kits: [{ weapon: 'unguis-leonis' }], loot: 'beast', beast: true },
+  { tier: 'ursus', name: 'Bear', band: 3, health: 240, stamina: 150, ar: [0, 0], dmgMult: 1, speed: 1, moveSpeed: 6.5, aggression: 0.7, blockSkill: 0, poise: 120, reaction: 0.4, skill: 0, fleeAt: 0, kits: [{ weapon: 'ictus-ursi' }], loot: 'beast', beast: true },
+  { tier: 'taurus', name: 'Bull', band: 3, health: 260, stamina: 150, ar: [0, 0], dmgMult: 1, speed: 1, moveSpeed: 7.5, aggression: 0.6, blockSkill: 0, poise: 150, reaction: 0.5, skill: 0, fleeAt: 0, kits: [{ weapon: 'cornu-tauri' }], loot: 'beast', beast: true },
+  { tier: 'crocodilus', name: 'Crocodile', band: 4, health: 320, stamina: 150, ar: [0, 0], dmgMult: 1, speed: 1, moveSpeed: 2.5, aggression: 0.5, blockSkill: 0, poise: 140, reaction: 0.4, skill: 0, fleeAt: 0, kits: [{ weapon: 'morsus-crocodili' }], loot: 'beast', beast: true },
 ];
 
-/** Natural weapons for animals (not in the item catalogue). */
-export const NATURAL_WEAPONS = {
-  bite: { class: 'unarmed' as const, skill: 'unarmed', damage: 7, speed: 1.2, reach: 0.9, stagger: 0.3 },
+const bite = (damage: number, damageType: WeaponStats['damageType'], stagger: number, reach = 0.9): WeaponStats => ({ class: 'unarmed', skill: 'brawling', damage, damageType, speed: 1.1, reach, stagger });
+
+/** Natural weapons (not in the item catalogue) and fists. */
+export const NATURAL_WEAPONS: Record<string, WeaponStats> = {
+  fists: { class: 'unarmed', skill: 'brawling', damage: 4, damageType: 'blunt', speed: 1.4, reach: 0.5, stagger: 8 },
+  'morsus-canis': bite(6, 'cut', 8),
+  'morsus-molossi': bite(10, 'cut', 12),
+  'morsus-lupi': bite(10, 'cut', 12),
+  'dens-apri': bite(16, 'thrust', 30, 1),
+  'unguis-pardi': bite(14, 'cut', 20, 1.1),
+  'unguis-leonis': bite(20, 'cut', 35, 1.3),
+  'ictus-ursi': bite(22, 'blunt', 45, 1.4),
+  'cornu-tauri': bite(25, 'thrust', 60, 1.4),
+  'morsus-crocodili': bite(24, 'cut', 50, 1.2),
 };

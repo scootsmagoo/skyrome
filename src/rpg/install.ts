@@ -4,7 +4,9 @@
  *
  *   game.player.sheet / game.player.inventory   character sheet & inventory
  *   game.items, game.npcs, game.locations        registries
- *   game.factions, game.crime, game.barter       society
+ *   game.factions, game.standing, game.crime     society: reputation, Dignitas/Fama/Infamia, law
+ *   game.devotion                                patron deity, invocations, prayer (pietas)
+ *   game.barter                                  merchants
  *   game.quests, game.dialogue, game.save        engines
  *   game.rpg                                     all of the above in one object (debugging)
  *
@@ -22,15 +24,17 @@ import type { SaveStorage } from '../save/types';
 import { LocationRegistry } from '../world/locations';
 import { BarterSystem } from './barter';
 import { CrimeSystem } from './crime';
-import { STAMINA_COSTS } from './data/balance';
+import { COMBAT, STAMINA_COSTS } from './data/balance';
 import { FACTIONS } from './data/factions';
 import { ITEMS } from './data/items';
-import { BACKGROUNDS } from './data/skills';
+import { BACKGROUNDS, COMMON_KIT } from './data/skills';
+import { Devotion } from './devotion';
 import { FactionSystem } from './factions';
 import { InventoryImpl } from './inventory';
 import { ItemDb } from './items';
 import { CharacterSheetImpl } from './sheet';
-import type { ItemDef } from './types';
+import { Standing } from './standing';
+import type { BackgroundDef, ItemDef } from './types';
 import './events';
 
 declare module '../player/Player' {
@@ -44,6 +48,8 @@ declare module '../core/Game' {
   interface Game {
     items: ItemDb;
     factions: FactionSystem;
+    standing: Standing;
+    devotion: Devotion;
     crime: CrimeSystem;
     barter: BarterSystem;
     rpg: RpgServices;
@@ -55,6 +61,8 @@ export interface RpgServices {
   sheet: CharacterSheetImpl;
   inventory: InventoryImpl;
   factions: FactionSystem;
+  standing: Standing;
+  devotion: Devotion;
   crime: CrimeSystem;
   barter: BarterSystem;
   npcs: NpcRegistry;
@@ -69,13 +77,13 @@ export interface RpgOptions {
   examples?: boolean;
   /** Save storage (default: localStorage + IndexedDB). */
   storage?: SaveStorage;
-  /** Start a new game now (default true): reset state, apply background/kit, start autoStart quests. */
+  /** Start a new game now (default true): reset state, apply origin/kit, start autoStart quests. */
   newGame?: boolean;
-  /** Background id from BACKGROUNDS for the new game; default: none (plain tunic and a few coins). */
+  /** Origin id from BACKGROUNDS for the new game; default: none (a plain citizen with a tunic and a few coins). */
   background?: string;
 }
 
-/** Kit without a background. */
+/** Kit without an origin. */
 export const DEFAULT_KIT = { items: [{ id: 'tunica', equip: true }, { id: 'soleae', equip: true }, { id: 'panis', count: 2 }], denarii: 10 };
 
 export function installRpg(game: Game, opts: RpgOptions = {}): RpgServices {
@@ -96,14 +104,19 @@ export function installRpg(game: Game, opts: RpgOptions = {}): RpgServices {
   const sheet = new CharacterSheetImpl({ events });
   const inventory = new InventoryImpl(items, { events, sheet });
   const factions = new FactionSystem(FACTIONS, events);
-  factions.gainMultiplier = () => (sheet.hasFlag('rhetoric.clients') ? 1.25 : 1);
-  const crime = new CrimeSystem({ events, inventory, sheet, time: game.time, rng: game.rng?.fork('crime') });
+  const standing = new Standing(events, () => game.time?.totalHours ?? 0);
+  factions.skillLevel = (id) => sheet.baseSkillLevel(id);
+  factions.isCitizen = () => standing.isCitizen;
+  const devotion = new Devotion({ sheet, inventory, events, day: () => game.time?.dayIndex ?? 0 });
+  const crime = new CrimeSystem({ events, inventory, sheet, factions, standing, time: game.time, rng: game.rng?.fork('crime') });
   const barter = new BarterSystem({ items, inventory, sheet, npcs, factions, events, hours: () => game.time?.totalHours ?? 0 });
 
   game.items = items;
   game.npcs = npcs;
   game.locations = locations;
   game.factions = factions;
+  game.standing = standing;
+  game.devotion = devotion;
   game.crime = crime;
   game.barter = barter;
   if (game.player) {
@@ -118,7 +131,8 @@ export function installRpg(game: Game, opts: RpgOptions = {}): RpgServices {
   const save = new SaveSystem(game, { storage: opts.storage });
   game.save = save;
 
-  const reg = (key: string, o: { serialize(): unknown; restore(d: unknown): void }) => save.register(key, { save: () => o.serialize(), load: (d) => o.restore(d), reset: () => o.restore(undefined) });
+  const reg = (key: string, o: { serialize(): unknown; restore(d: unknown): void }, afterLoad?: () => void) =>
+    save.register(key, { save: () => o.serialize(), load: (d) => o.restore(d), reset: () => o.restore(undefined), afterLoad });
   // Equipment re-applied by the inventory raises maxima (and current values, like Skyrim's
   // fortify items), so the saved current values are applied again once everything has loaded.
   let savedVitals: Parameters<typeof sheet.vitals.restoreState>[0];
@@ -134,7 +148,9 @@ export function installRpg(game: Game, opts: RpgOptions = {}): RpgServices {
     },
     afterLoad: () => sheet.vitals.restoreState(savedVitals),
   });
-  reg('inventory', inventory);
+  reg('inventory', inventory, () => updateArmorPenalty(sheet, inventory));
+  reg('standing', standing, () => applyOriginTraits(sheet, originDef(standing.origin)));
+  reg('devotion', devotion);
   reg('factions', factions);
   reg('crime', crime);
   reg('barter', barter);
@@ -146,30 +162,74 @@ export function installRpg(game: Game, opts: RpgOptions = {}): RpgServices {
   game.addSystem(save);
   game.addSystem(new RpgSystem(game, sheet));
   hookPlayerController(game, sheet, inventory);
+  for (const e of ['item:equipped', 'item:unequipped', 'perk:taken'] as const) events.on(e, () => updateArmorPenalty(sheet, inventory));
 
-  const services: RpgServices = { items, sheet, inventory, factions, crime, barter, npcs, locations, quests, dialogue, save };
+  const services: RpgServices = { items, sheet, inventory, factions, standing, devotion, crime, barter, npcs, locations, quests, dialogue, save };
   game.rpg = services;
   if (opts.newGame !== false) startNewGame(services, { background: opts.background });
   return services;
 }
 
-/** Reset the player and world state for a new game and start autoStart quests. */
+function originDef(id: string | null | undefined): BackgroundDef | undefined {
+  return id ? BACKGROUNDS.find((b) => b.id === id) : undefined;
+}
+
+function applyOriginTraits(sheet: CharacterSheetImpl, bg: BackgroundDef | undefined) {
+  sheet.setModifierSource('origin', bg?.modifiers);
+  sheet.setFlagSource('origin', bg ? [...(bg.traitId ? [bg.traitId] : []), ...(bg.flags ?? [])] : null);
+}
+
+/**
+ * GDD §6.3 heavy-armor penalties while the body piece is heavy: stamina regeneration −15% (removed
+ * by Well Fitted), sprint cost +25% (Cingulum), footsteps louder (Silent Hobnails).
+ */
+export function updateArmorPenalty(sheet: CharacterSheetImpl, inv: InventoryImpl) {
+  const body = inv.equipped('body');
+  const heavy = body ? inv.items.get(body)?.armor?.weightClass === 'heavy' : false;
+  if (!heavy) {
+    sheet.setModifierSource('armor-penalty', null);
+    sheet.setFlagSource('armor-penalty', null);
+    return;
+  }
+  const P = COMBAT.heavyPenalty;
+  const mods: Record<string, number> = {};
+  if (!sheet.hasFlag('perk-heavy-armor-well-fitted')) mods['stamina.regen'] = P.staminaRegen;
+  if (!sheet.hasFlag('perk-heavy-armor-cingulum')) mods['stamina.sprintCost'] = P.sprintCost;
+  sheet.setModifierSource('armor-penalty', mods);
+  sheet.setFlagSource('armor-penalty', sheet.hasFlag('perk-stealth-silent-hobnails') ? null : ['heavy-armor.noisy']);
+}
+
+/**
+ * Reset the player and world state for a new game and start autoStart quests. With an origin
+ * (GDD §3.2): skills 10 + bonuses, legal status, trait, kit (signature weapon at 70%), coin and the
+ * common kit of §3.5. Without one: a plain citizen with a tunic and 10 den.
+ */
 export function startNewGame(s: RpgServices, opts: { background?: string } = {}) {
   s.sheet.restore(undefined);
   s.inventory.restore(undefined);
   s.factions.restore(undefined);
+  s.standing.restore(undefined);
+  s.devotion.restore(undefined);
   s.crime.restore(undefined);
   s.barter.restore(undefined);
   s.dialogue.restore(undefined);
-  const bg = opts.background ? BACKGROUNDS.find((b) => b.id === opts.background) : undefined;
-  if (opts.background && !bg) console.warn(`[rpg] unknown background "${opts.background}"`);
-  const kit = bg ? bg.kit : DEFAULT_KIT.items;
-  if (bg) for (const [id, bonus] of Object.entries(bg.skills)) s.sheet.setSkill(id, s.sheet.skillLevel(id) + (bonus ?? 0));
+  const bg = originDef(opts.background);
+  if (opts.background && !bg) console.warn(`[rpg] unknown origin "${opts.background}"`);
+  if (bg) {
+    for (const [id, bonus] of Object.entries(bg.skills)) s.sheet.setSkill(id, s.sheet.baseSkillLevel(id) + (bonus ?? 0));
+    s.standing.setOrigin(bg.status ?? 'civis');
+    s.standing.origin = bg.id;
+    s.standing.debt = bg.debt ?? 0;
+  }
+  applyOriginTraits(s.sheet, bg);
+  const kit: { id: string; count?: number; equip?: boolean; condition?: number }[] = bg ? [...bg.kit, ...COMMON_KIT] : DEFAULT_KIT.items;
   for (const k of kit) {
-    s.inventory.add(k.id, k.count ?? 1, { silent: true, source: 'start' });
+    if (!s.items.has(k.id)) continue; // e.g. the courier's tablet before the main quest exists
+    s.inventory.add(k.id, k.count ?? 1, { silent: true, source: 'start', condition: k.condition });
     if (k.equip) s.inventory.equip(k.id);
   }
   s.inventory.addDenarii(bg ? bg.denarii : DEFAULT_KIT.denarii);
+  updateArmorPenalty(s.sheet, s.inventory);
   s.quests.newGame();
 }
 

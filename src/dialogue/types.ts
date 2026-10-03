@@ -39,6 +39,10 @@ export interface SkillCheck {
   label?: string;
   pass: string;
   fail: string;
+  /** Who is being persuaded: dress, Fama, Infamia and cleanliness count differently (GDD §3.4, §8.2). */
+  audience?: import('../rpg/checks').Audience;
+  /** 'invoke-patron' gets +15 with the Clientela perk. */
+  kind?: 'persuade' | 'intimidate' | 'lie' | 'invoke-patron' | 'other';
 }
 
 export interface DialogueChoice {

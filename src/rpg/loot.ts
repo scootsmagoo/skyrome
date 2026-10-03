@@ -1,4 +1,4 @@
-/** Weighted, level-gated loot rolls with nested tables. Deterministic given an Rng. */
+/** Loot rolls: weighted picks plus independent-chance extras, level gates and nested tables. Deterministic given an Rng. */
 import type { Rng } from '../core/Rng';
 import { LOOT_TABLES } from './data/loot';
 import type { LootEntry, LootTableDef } from './types';
@@ -38,30 +38,35 @@ function roll(id: string, level: number, rng: RngLike, out: Map<string, number>,
   if (t.denarii && rng.chance(t.denarii.chance ?? 1)) {
     const [lo, hi] = t.denarii.range;
     const scale = 1 + Math.max(0, level - 1) * (t.denarii.perLevel ?? 0);
-    // Round to the nearest as.
+    // Quantized to the as.
     coins += Math.round(rng.range(lo, hi) * scale * 16) / 16;
   }
   for (const a of t.always ?? []) out.set(a.item, (out.get(a.item) ?? 0) + (a.count ?? 1));
-  const eligible = t.entries.filter((e) => level >= (e.minLevel ?? 0) && level <= (e.maxLevel ?? Infinity) && e.weight > 0);
-  if (!eligible.length) return coins;
-  const rolls = rng.int(t.rolls[0], t.rolls[1]);
-  for (let i = 0; i < rolls; i++) {
-    if (t.chanceNone && rng.chance(t.chanceNone)) continue;
-    const e = pick(eligible, rng);
-    if (e.table) {
-      coins += roll(e.table, level, rng, out, depth + 1);
-    } else if (e.item) {
+  const inLevel = (e: LootEntry) => level >= (e.minLevel ?? 0) && level <= (e.maxLevel ?? Infinity);
+  const take = (e: LootEntry) => {
+    if (e.table) coins += roll(e.table, level, rng, out, depth + 1);
+    else if (e.item) {
       const [lo, hi] = e.count ?? [1, 1];
       out.set(e.item, (out.get(e.item) ?? 0) + rng.int(lo, hi));
     }
+  };
+  const eligible = t.entries.filter((e) => inLevel(e) && (e.weight ?? 0) > 0);
+  if (eligible.length) {
+    const rolls = rng.int(t.rolls[0], t.rolls[1]);
+    for (let i = 0; i < rolls; i++) {
+      if (t.chanceNone && rng.chance(t.chanceNone)) continue;
+      take(pick(eligible, rng));
+    }
   }
+  // Independent drops, each with its own chance (GDD §6.14 "fustis or pugio (50%)").
+  for (const e of t.extras ?? []) if (inLevel(e) && rng.chance(e.chance ?? 1)) take(e);
   return coins;
 }
 
 function pick(entries: LootEntry[], rng: RngLike): LootEntry {
   let total = 0;
-  for (const e of entries) total += e.weight;
+  for (const e of entries) total += e.weight ?? 0;
   let r = rng.next() * total;
-  for (const e of entries) if ((r -= e.weight) <= 0) return e;
+  for (const e of entries) if ((r -= e.weight ?? 0) <= 0) return e;
   return entries[entries.length - 1];
 }

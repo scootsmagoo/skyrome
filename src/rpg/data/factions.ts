@@ -1,132 +1,129 @@
 /**
- * PROVISIONAL factions (GDD/society research pending). Reputation runs from −1000 to 1000;
- * a rank is held when reputation ≥ its `minReputation` and the player has joined.
- * `lawful` factions receive crime reports (the guards). `enemies` attack each other on sight.
+ * Factions — docs/GDD.md §9.1 (ids, leaders, HQs, rank ladders, skill gates, joining rules) and
+ * §3.4 (Fama runs −100…+100 per faction). Rank Fama thresholds default to 0/10/25/45/70/90
+ * (RANK_FAMA). Capstone ranks are granted by their quest (`questOnly`). `lawful` factions receive
+ * crime reports; `enemies` attack each other on sight ('player' = hostile to the player).
  */
-import type { FactionDef } from '../types';
+import type { FactionDef, FactionRank } from '../types';
+import { RANK_FAMA, STANDING } from './balance';
+
+const MARTIAL = ['blades', 'spear', 'archery', 'shield', 'brawling', 'heavy-armor', 'light-armor'];
+
+type R = [id: string, title: string, latin: string, opts?: { requires?: FactionRank['requires']; questOnly?: boolean; fama?: number }];
+const ladder = (list: R[]): FactionRank[] =>
+  list.map(([id, title, latin, o], i) => ({ id, title, latin, minReputation: o?.fama ?? RANK_FAMA[Math.min(i, RANK_FAMA.length - 1)], requires: o?.requires, questOnly: o?.questOnly }));
 
 export const FACTIONS: FactionDef[] = [
-  // ---- law and order
   {
-    id: 'urbaniciani', name: 'Urban Cohorts', latin: 'Cohortes Urbanae', lawful: true,
-    description: 'The city’s police under the Prefect of the City, quartered with the Praetorians in the Castra Praetoria. They patrol by day and keep order at the games.',
+    id: 'vigiles', name: 'Vigiles, Cohors V', latin: 'Cohortes Vigilum', lawful: true, leader: 'npc-vindex', hq: 'statio-vigiles-v',
+    description: 'The night watch and fire brigade of the 5th Cohort on the Caelian. Any status may join; freedmen are welcome. A Junian Latin earns citizenship here.',
     enemies: ['latrones', 'grassatores'],
-    ranks: [
-      { id: 'miles', title: 'Soldier', latin: 'Miles', minReputation: 0 },
-      { id: 'tesserarius', title: 'Watch-officer', latin: 'Tesserarius', minReputation: 150 },
-      { id: 'optio', title: 'Deputy', latin: 'Optio', minReputation: 350 },
-      { id: 'centurio', title: 'Centurion', latin: 'Centurio', minReputation: 700 },
-    ],
+    ranks: ladder([
+      ['vigil', 'Watchman', 'Vigil'],
+      ['sebaciarius', 'Torch-bearer', 'Sebaciarius'],
+      ['siphonarius', 'Pump-master', 'Siphonarius'],
+      ['optio', 'Deputy', 'Optio', { requires: [{ skill: 'athletics', level: 30 }] }],
+      ['centurio', 'Centurion', 'Centurio', { requires: [{ skill: 'athletics', level: 50 }, { skill: ['brawling', 'blades'], level: 40 }] }],
+    ]),
   },
   {
-    id: 'vigiles', name: 'The Watch', latin: 'Cohortes Vigilum', lawful: true,
-    description: 'Seven cohorts of freedmen who fight the fires of Rome and patrol its streets at night with buckets, axes and cudgels.',
-    enemies: ['latrones', 'grassatores'],
-    ranks: [
-      { id: 'miles', title: 'Watchman', latin: 'Miles', minReputation: 0 },
-      { id: 'sebaciarius', title: 'Torch-bearer', latin: 'Sebaciarius', minReputation: 100 },
-      { id: 'siphonarius', title: 'Pump-master', latin: 'Siphonarius', minReputation: 300 },
-      { id: 'centurio', title: 'Centurion', latin: 'Centurio', minReputation: 600 },
-      { id: 'tribunus', title: 'Tribune', latin: 'Tribunus', minReputation: 900 },
-    ],
+    id: 'ludus-magnus', name: 'Ludus Magnus', latin: 'Ludus Magnus', leader: 'npc-glaucus', hq: 'ludus-magnus',
+    description: 'The imperial gladiator school beside the Amphitheatrum Flavium. Swear the oath as an auctoratus (Infamia +20), fight as a paid guest, or be condemned ad ludum.',
+    ranks: ladder([
+      ['tiro', 'Recruit', 'Tiro'],
+      ['veteranus', 'Veteran', 'Veteranus'],
+      ['palus-quartus', 'Fourth Post', 'Palus Quartus'],
+      ['palus-tertius', 'Third Post', 'Palus Tertius'],
+      ['palus-secundus', 'Second Post', 'Palus Secundus', { requires: [{ skill: MARTIAL, level: 50 }] }],
+      ['primus-palus', 'First Post', 'Primus Palus', { requires: [{ skill: MARTIAL, level: 70 }] }],
+      ['rudiarius', 'Freed Champion', 'Rudiarius', { questOnly: true, fama: 100 }],
+    ]),
   },
   {
-    id: 'praetoriani', name: 'Praetorian Guard', latin: 'Cohortes Praetoriae', lawful: true,
-    description: 'The emperor’s own guard: well paid, well armed and well aware that they have made and unmade emperors.',
-    enemies: ['latrones'],
-    ranks: [
-      { id: 'miles', title: 'Guardsman', latin: 'Miles', minReputation: 0 },
-      { id: 'speculator', title: 'Scout of the Guard', latin: 'Speculator', minReputation: 250 },
-      { id: 'evocatus', title: 'Recalled Veteran', latin: 'Evocatus', minReputation: 500 },
-      { id: 'centurio', title: 'Centurion', latin: 'Centurio', minReputation: 800 },
-    ],
-  },
-  // ---- society
-  {
-    id: 'populus', name: 'People of Rome', latin: 'Populus Romanus',
-    description: 'The ordinary citizens, freedmen and slaves of the city. Your standing with them is your fame.',
-    ranks: [
-      { id: 'ignotus', title: 'Unknown', latin: 'Ignotus', minReputation: 0 },
-      { id: 'notus', title: 'Known', latin: 'Notus', minReputation: 150 },
-      { id: 'clarus', title: 'Famous', latin: 'Clarus', minReputation: 450 },
-      { id: 'amicus', title: 'Friend of the People', latin: 'Amicus Populi', minReputation: 850 },
-    ],
+    id: 'cohortes-urbanae', name: 'Urban Cohorts, Cohors X Urbana', latin: 'Cohortes Urbanae', lawful: true, citizensOnly: true, leader: 'npc-rufus', hq: 'castra-praetoria',
+    description: 'The city’s police by day under the urban prefect, quartered in the Castra Praetoria. Citizens only, and no bounty.',
+    enemies: ['latrones', 'grassatores', 'coniuratio'],
+    ranks: ladder([
+      ['miles', 'Soldier', 'Miles'],
+      ['tesserarius', 'Watch-officer', 'Tesserarius'],
+      ['optio', 'Deputy', 'Optio', { requires: [{ skill: ['blades', 'spear'], level: 40 }] }],
+      ['centurio', 'Centurion', 'Centurio', { requires: [{ skill: ['blades', 'spear'], level: 60 }] }],
+    ]),
   },
   {
-    id: 'mercatores', name: 'Guild of Merchants', latin: 'Collegium Mercatorum',
-    description: 'Traders and shopkeepers of the Forum, the markets and the river port. Members trade on better terms.',
-    ranks: [
-      { id: 'socius', title: 'Associate', latin: 'Socius', minReputation: 0 },
-      { id: 'negotiator', title: 'Trader', latin: 'Negotiator', minReputation: 200 },
-      { id: 'magister', title: 'Master of the Guild', latin: 'Magister', minReputation: 600 },
-    ],
+    id: 'cultores-lavernae', name: 'Cultores Lavernae', latin: 'Collegium Cultorum Lavernae', leader: 'npc-faustus', hq: 'fullonica-suburana',
+    description: 'Thieves posing as a burial club, meeting behind a fullonica off the Clivus Suburanus with a disused cistern below. Join by stealing the doorman’s token or bringing 25 den. of stolen goods.',
+    ranks: ladder([
+      ['tiro', 'Novice', 'Tiro'],
+      ['fur', 'Thief', 'Fur'],
+      ['sector-zonarius', 'Purse-cutter', 'Sector Zonarius'],
+      ['effractor', 'Housebreaker', 'Effractor', { requires: [{ skill: 'locks-seals', level: 40 }] }],
+      ['magister', 'Master', 'Magister', { questOnly: true, fama: 100, requires: [{ skill: ['pickpocket', 'locks-seals'], level: 60 }] }],
+    ]),
   },
   {
-    id: 'ludus', name: 'Ludus Magnus', latin: 'Ludus Magnus',
-    description: 'The great imperial gladiator school beside the Flavian Amphitheatre, connected to the arena by a tunnel.',
-    ranks: [
-      { id: 'tiro', title: 'Recruit', latin: 'Tiro', minReputation: 0 },
-      { id: 'veteranus', title: 'Veteran', latin: 'Veteranus', minReputation: 200 },
-      { id: 'primus_palus', title: 'First of the School', latin: 'Primus Palus', minReputation: 550 },
-      { id: 'rudiarius', title: 'Freed Champion', latin: 'Rudiarius', minReputation: 900 },
-    ],
-  },
-  // ---- circus factions (supporters' clubs; Domitian's Purple and Gold died with him)
-  { id: 'prasina', name: 'The Greens', latin: 'Factio Prasina', enemies: [], description: 'The chariot faction of the common people — and, it is said, of the emperor’s own heart.', ranks: [{ id: 'fautor', title: 'Supporter', latin: 'Fautor', minReputation: 0 }, { id: 'sodalis', title: 'Member', latin: 'Sodalis', minReputation: 200 }, { id: 'patronus', title: 'Patron', latin: 'Patronus', minReputation: 600 }] },
-  { id: 'veneta', name: 'The Blues', latin: 'Factio Veneta', enemies: [], description: 'The chariot faction of the respectable and the rich. They hate the Greens.', ranks: [{ id: 'fautor', title: 'Supporter', latin: 'Fautor', minReputation: 0 }, { id: 'sodalis', title: 'Member', latin: 'Sodalis', minReputation: 200 }, { id: 'patronus', title: 'Patron', latin: 'Patronus', minReputation: 600 }] },
-  { id: 'russata', name: 'The Reds', latin: 'Factio Russata', description: 'The old faction of the Reds, junior partners of the Greens.', ranks: [{ id: 'fautor', title: 'Supporter', latin: 'Fautor', minReputation: 0 }, { id: 'sodalis', title: 'Member', latin: 'Sodalis', minReputation: 200 }] },
-  { id: 'albata', name: 'The Whites', latin: 'Factio Albata', description: 'The Whites, junior partners of the Blues.', ranks: [{ id: 'fautor', title: 'Supporter', latin: 'Fautor', minReputation: 0 }, { id: 'sodalis', title: 'Member', latin: 'Sodalis', minReputation: 200 }] },
-  // ---- cults
-  {
-    id: 'mithraei', name: 'Mysteries of Mithras', latin: 'Mithraici',
-    description: 'A secret brotherhood of soldiers and freedmen who meet in cave-like shrines beneath the city. Seven grades lead to the light.',
-    ranks: [
-      { id: 'corax', title: 'Raven', latin: 'Corax', minReputation: 0 },
-      { id: 'nymphus', title: 'Bridegroom', latin: 'Nymphus', minReputation: 100 },
-      { id: 'miles', title: 'Soldier', latin: 'Miles', minReputation: 220 },
-      { id: 'leo', title: 'Lion', latin: 'Leo', minReputation: 380 },
-      { id: 'perses', title: 'Persian', latin: 'Perses', minReputation: 560 },
-      { id: 'heliodromus', title: 'Sun-runner', latin: 'Heliodromus', minReputation: 760 },
-      { id: 'pater', title: 'Father', latin: 'Pater', minReputation: 950 },
-    ],
+    id: 'sodales-invicti', name: 'The Mithraic Cell', latin: 'Sodales Invicti', leader: 'npc-alcimus', hq: 'horrea-agrippiana',
+    description: 'A secret cell in a cellar spelaeum under the Horrea Agrippiana. Entry by invitation, after a soldier vouches for you and you have spared a yielded foe.',
+    ranks: ladder([
+      ['corax', 'Raven', 'Corax'],
+      ['nymphus', 'Bridegroom', 'Nymphus'],
+      ['miles', 'Soldier', 'Miles'],
+      ['leo', 'Lion', 'Leo'],
+      ['perses', 'Persian', 'Perses'],
+      ['heliodromus', 'Sun-runner', 'Heliodromus', { fama: 90 }],
+      ['pater', 'Father', 'Pater', { questOnly: true, fama: 100 }],
+    ]),
   },
   {
-    id: 'isiaci', name: 'Servants of Isis', latin: 'Isiaci',
-    description: 'Initiates of the Egyptian goddess, whose great temple stands in the Campus Martius beside the Saepta.',
-    ranks: [
-      { id: 'initiatus', title: 'Initiate', latin: 'Initiatus', minReputation: 0 },
-      { id: 'pastophorus', title: 'Shrine-bearer', latin: 'Pastophorus', minReputation: 250 },
-      { id: 'sacerdos', title: 'Priest', latin: 'Sacerdos', minReputation: 650 },
-    ],
-  },
-  // ---- the underworld
-  {
-    id: 'cloacini', name: 'Children of Cloacina', latin: 'Filii Cloacinae',
-    description: 'A brotherhood of thieves named for the goddess of the Great Drain, whose little shrine stands in the Forum. They know every tunnel under the city.',
-    enemies: [],
-    ranks: [
-      { id: 'mus', title: 'Mouse', latin: 'Mus', minReputation: 0 },
-      { id: 'fur', title: 'Thief', latin: 'Fur', minReputation: 150 },
-      { id: 'sector', title: 'Cutpurse', latin: 'Sector', minReputation: 350 },
-      { id: 'umbra', title: 'Shadow', latin: 'Umbra', minReputation: 650 },
-      { id: 'rex', title: 'King of the Drain', latin: 'Rex Cloacae', minReputation: 950 },
-    ],
+    id: 'clientela', name: 'Clientela', latin: 'Clientela', lawful: false,
+    description: 'Patronage: your patron’s house (Sergius Bassus, Calpurnia Severa or Vettius Crispinus). Attend three salutationes in a toga to become a client; non-citizens rise only to amicus.',
+    ranks: ladder([
+      ['cliens', 'Client', 'Cliens'],
+      ['amicus-minor', 'Lesser Friend', 'Amicus Minor'],
+      ['amicus', 'Friend of the House', 'Amicus', { requires: [{ skill: 'rhetoric', level: 40 }] }],
+      ['procurator', 'Agent', 'Procurator', { requires: [{ skill: 'rhetoric', level: 60 }] }],
+      ['eques', 'Knight', 'Eques', { questOnly: true, fama: 100 }],
+    ]),
   },
   {
-    id: 'locustae', name: 'Heirs of Locusta', latin: 'Heredes Locustae',
-    description: 'Poisoners for hire, who claim to keep the recipes of Nero’s infamous Gallic poisoner.',
-    ranks: [
-      { id: 'discipula', title: 'Apprentice', latin: 'Discipulus', minReputation: 0 },
-      { id: 'venefica', title: 'Poisoner', latin: 'Veneficus', minReputation: 300 },
-      { id: 'mater', title: 'Mother of Poisons', latin: 'Mater', minReputation: 800 },
-    ],
+    id: 'factio-prasina', name: 'The Greens', latin: 'Factio Prasina', leader: 'npc-felix', hq: 'stabula-factionum',
+    description: 'The Green chariot faction, with stables in the Campus Martius. Choosing a color is exclusive; Riding 15 to drive.',
+    exclusiveWith: ['factio-veneta'],
+    ranks: ladder([
+      ['agaso', 'Stable Hand', 'Agaso'],
+      ['sparsor', 'Water-thrower', 'Sparsor'],
+      ['hortator', 'Pace-rider', 'Hortator'],
+      ['auriga', 'Charioteer', 'Auriga', { requires: [{ skill: 'equitatio', level: 30 }] }],
+      ['miliarius', 'Winner of a Thousand', 'Miliarius', { questOnly: true, fama: 100 }],
+    ]),
   },
-  // ---- hostile groups (not joinable)
-  { id: 'latrones', name: 'Brigands', latin: 'Latrones', description: 'Highwaymen of the Campagna and the tombs along the consular roads.', enemies: ['urbaniciani', 'vigiles', 'praetoriani', 'player'], ranks: [] },
-  { id: 'grassatores', name: 'Street Gangs', latin: 'Grassatores', description: 'Muggers and toughs of the Subura who rule the alleys after dark.', enemies: ['urbaniciani', 'vigiles', 'player'], ranks: [] },
-  { id: 'daci', name: 'Dacian Avengers', latin: 'Daci', description: 'Survivors of Decebalus’s fallen kingdom, come to Rome for revenge.', enemies: ['praetoriani', 'urbaniciani', 'player'], ranks: [] },
+  {
+    id: 'factio-veneta', name: 'The Blues', latin: 'Factio Veneta', leader: 'npc-venustus', hq: 'stabula-factionum',
+    description: 'The Blue chariot faction. They hate the Greens. Choosing a color is exclusive; Riding 15 to drive.',
+    exclusiveWith: ['factio-prasina'],
+    ranks: ladder([
+      ['agaso', 'Stable Hand', 'Agaso'],
+      ['sparsor', 'Water-thrower', 'Sparsor'],
+      ['hortator', 'Pace-rider', 'Hortator'],
+      ['auriga', 'Charioteer', 'Auriga', { requires: [{ skill: 'equitatio', level: 30 }] }],
+      ['miliarius', 'Winner of a Thousand', 'Miliarius', { questOnly: true, fama: 100 }],
+    ]),
+  },
+  // ---- the Guard: invitation to the speculatores is the Urban Cohorts' capstone reward
+  {
+    id: 'praetoriani', name: 'Praetorian Guard', latin: 'Cohortes Praetoriae', lawful: true, citizensOnly: true, hq: 'castra-praetoria',
+    description: 'The emperor’s guard. Inside the city they wear tunic and cloak, swords hidden. Entry by invitation to the speculatores.',
+    enemies: ['latrones', 'coniuratio'],
+    ranks: ladder([['speculator', 'Scout of the Guard', 'Speculator', { questOnly: true }]]),
+  },
+  // ---- Fama with the city at large (no ranks)
+  { id: 'plebs', name: 'The Plebs', latin: 'Plebs Urbana', description: 'The common people of Rome. Your Fama with them sets the arena crowd’s first mood and how the streets greet you.', ranks: [] },
+  // ---- hostile groups (not joinable). Villains are individuals and cells, never whole peoples.
+  { id: 'latrones', name: 'Brigands', latin: 'Latrones', description: 'Smugglers, tomb robbers and highwaymen of the wharves and the consular roads.', enemies: ['cohortes-urbanae', 'vigiles', 'praetoriani', 'player'], ranks: [] },
+  { id: 'grassatores', name: 'Street Gangs', latin: 'Grassatores', description: 'Muggers and toughs who rule the alleys after dark.', enemies: ['cohortes-urbanae', 'vigiles', 'player'], ranks: [] },
+  { id: 'coniuratio', name: 'The Cabal', latin: 'Coniuratio', description: 'The conspiracy around Trajan’s departure: contractors, Parthian silver, a Dacian revenge cell and a disgraced senator.', enemies: ['cohortes-urbanae', 'praetoriani', 'player'], ranks: [] },
 ];
 
-/** Reputation bounds. */
-export const REPUTATION_MIN = -1000;
-export const REPUTATION_MAX = 1000;
+/** Fama bounds (GDD §3.4). */
+export const REPUTATION_MIN = STANDING.famaMin;
+export const REPUTATION_MAX = STANDING.famaMax;

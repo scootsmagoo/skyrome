@@ -1,15 +1,20 @@
 /**
- * The player's character sheet: skills that improve by use, character levels fed by skill
- * level-ups (Skyrim's model), perks, modifiers and timed effects (food, remedies, blessings,
- * diseases, poisons). Pure logic; emits events when given an EventBus.
+ * The player's character sheet (docs/GDD.md §3.3, §5): skills that rise by use, character levels
+ * fed by skill level-ups, perks, modifiers and timed effects (food, remedies, wine, blessings,
+ * diseases, poisons, bleeding). Pure logic; emits events when given an EventBus.
  *
- *   skill XP to next level  = base + mult × L^exp           (SKILL_CURVE)
- *   char XP per skill level = the new skill level           (LEVEL_CURVE.skillXpMult)
- *   char XP to next level   = 75 + 25 × L                   (L1 → 100, L10 → 325)
- *   each character level    = +1 perk point and +10 to a chosen resource (chooseLevelUp)
+ *   skill XP to next level   = round(difficulty × (L + 5)^1.5)      (L10 → 58, L50 → 408)
+ *   char XP per skill level  = the new skill level
+ *   char XP to next level    = 25 × (n + 2)                         (L1 → 75, L2 → 100)
+ *   each character level     = +1 perk point and +10 to a chosen pool (chooseLevelUp)
+ *   each skill level gained  = +0.2 to the skill's governing pool max
+ *
+ * A taken perk's id is a flag (hasFlag('perk-blades-punctim')). Effects of kind 'flag' set a flag
+ * for their duration; 'fortify' on a skill id raises that skill; 'condition' applies a named
+ * condition. Flags named 'xp.<skill>' give that skill +10% XP.
  */
 import type { EventBus, GameEvents } from '../core/Events';
-import { CARRY, LEVEL_CURVE, REGEN, RESOURCES, SKILL_CURVE } from './data/balance';
+import { CARRY, LEVEL_CURVE, REGEN, RESOURCES, SKILL_CURVE, TRAINING, XP } from './data/balance';
 import { CONDITIONS } from './data/conditions';
 import { PERKS, SKILLS } from './data/skills';
 import type { CharacterSheet, ConditionDef, Effect, ModifierId, PerkDef, ResourceId, SkillDef, SkillId } from './types';
@@ -28,9 +33,11 @@ export interface SheetOptions {
   perks?: readonly PerkDef[];
   conditions?: readonly ConditionDef[];
   events?: EventBus<GameEvents>;
-  /** Starting skill level (default SKILL_CURVE.start). */
+  /** Starting skill level (default SKILL_CURVE.start = 10). */
   startSkill?: number;
 }
+
+export type TrainerGrade = keyof typeof TRAINING.caps;
 
 const MODIFIER_IDS = new Set<string>([
   'damage.blades', 'damage.spear', 'damage.blunt', 'damage.ranged', 'damage.unarmed', 'damage.power', 'damage.sneak',
@@ -41,14 +48,14 @@ const MODIFIER_IDS = new Set<string>([
 ]);
 const isResource = (t: string): t is ResourceId => t === 'health' || t === 'stamina' || t === 'pietas';
 
-/** XP ("use units") needed to raise a skill from `level` to `level + 1`. */
+/** XP needed to raise a skill from `level` to `level + 1` (GDD §5.2). */
 export function skillXpToNext(level: number, difficulty = 1): number {
-  return difficulty * (SKILL_CURVE.base + SKILL_CURVE.mult * Math.pow(level, SKILL_CURVE.exp));
+  return Math.round(difficulty * Math.pow(level + SKILL_CURVE.offset, SKILL_CURVE.exp));
 }
 
-/** Character XP needed to go from `level` to `level + 1`. */
+/** Character XP needed to go from `level` to `level + 1` (GDD §5.3). */
 export function levelXpToNext(level: number): number {
-  return LEVEL_CURVE.base + LEVEL_CURVE.perLevel * level;
+  return LEVEL_CURVE.perLevel * (level + LEVEL_CURVE.offset);
 }
 
 export class CharacterSheetImpl implements CharacterSheet {
@@ -63,28 +70,35 @@ export class CharacterSheetImpl implements CharacterSheet {
   private readonly perkDefs = new Map<string, PerkDef>();
   private readonly conditionDefs = new Map<string, ConditionDef>();
   private readonly picks: Record<ResourceId, number> = { health: 0, stamina: 0, pietas: 0 };
+  /** Governing-pool growth from skill level-ups (+0.2 each). */
+  private readonly growth: Record<ResourceId, number> = { health: 0, stamina: 0, pietas: 0 };
   private effects: ActiveEffect[] = [];
   private readonly modSources = new Map<string, Partial<Record<ModifierId, number>>>();
   private readonly flagSources = new Map<string, readonly string[]>();
   private modCache: Map<string, number> | null = null;
   private flagCache: Set<string> | null = null;
-  /** Trainer sessions used since the last character level. */
+  private skillBonusCache: Map<string, number> | null = null;
+  /** Trainer lessons taken since the last character level (max TRAINING.perLevel). */
   trainedThisLevel = 0;
   readonly events?: EventBus<GameEvents>;
+  private readonly startSkill: number;
 
   constructor(opts: SheetOptions = {}) {
     this.events = opts.events;
     for (const s of opts.skills ?? SKILLS) this.skillDefs.set(s.id, s);
     for (const p of opts.perks ?? PERKS) this.perkDefs.set(p.id, p);
     for (const c of opts.conditions ?? CONDITIONS) this.conditionDefs.set(c.id, c);
-    const start = opts.startSkill ?? SKILL_CURVE.start;
-    for (const id of this.skillDefs.keys()) this.skills.set(id, { level: start, xp: 0 });
+    this.startSkill = opts.startSkill ?? SKILL_CURVE.start;
+    for (const id of this.skillDefs.keys()) this.skills.set(id, { level: this.startSkill, xp: 0 });
     this.vitals = new VitalsImpl({
       health: RESOURCES.base.health,
       stamina: RESOURCES.base.stamina,
       pietas: RESOURCES.base.pietas,
-      regenRate: (id, v) => v.get(id).max * regenFraction(id, v.inCombat) * Math.max(0, 1 + this.modifier(`${id}.regen` as ModifierId)),
+      regenRate: (id, v) => REGEN[id] * (v.inCombat ? REGEN.combat[id] : 1) * Math.max(0, 1 + this.modifier(`${id}.regen` as ModifierId)),
     });
+    this.vitals.set('pietas', RESOURCES.startCurrent.pietas);
+    // Mithras's Invictus: once, a killing blow leaves you at 1 health.
+    this.vitals.preventDeath = () => this.consumeFlag('invictus');
   }
 
   // ---------------------------------------------------------------- levels
@@ -129,10 +143,9 @@ export class CharacterSheetImpl implements CharacterSheet {
       this.events?.emit('player:levelChoice', { level: this._level, pending: this._pendingLevelUps });
       this.notify(`Level ${this._level}! Choose health, stamina or pietas.`, 'level');
     }
-    if (this._level >= LEVEL_CURVE.maxLevel) this._xp = Math.min(this._xp, levelXpToNext(this._level));
   }
 
-  /** Resolve one pending level-up: +10 (RESOURCES.perLevelPick) to the chosen resource. */
+  /** Resolve one pending level-up: +10 to the chosen pool (stamina also adds carry weight). */
   chooseLevelUp(resource: ResourceId): boolean {
     if (this._pendingLevelUps <= 0) return false;
     this._pendingLevelUps--;
@@ -147,7 +160,19 @@ export class CharacterSheetImpl implements CharacterSheet {
     return [...this.skillDefs.values()];
   }
 
+  skillDef(id: SkillId) {
+    return this.skillDefs.get(id);
+  }
+
+  /** Effective skill: base level plus temporary fortification (Falernian, Charis…). */
   skillLevel(id: SkillId): number {
+    const base = this.skills.get(id)?.level ?? 0;
+    if (!this.skillBonusCache) this.rebuildCaches();
+    return Math.max(0, base + (this.skillBonusCache!.get(id) ?? 0));
+  }
+
+  /** The trained level, without temporary bonuses. */
+  baseSkillLevel(id: SkillId): number {
     return this.skills.get(id)?.level ?? 0;
   }
 
@@ -161,10 +186,18 @@ export class CharacterSheetImpl implements CharacterSheet {
     return Math.min(1, s.xp / skillXpToNext(s.level, this.skillDefs.get(id)?.difficulty));
   }
 
-  useSkill(id: SkillId, amount: number) {
+  /**
+   * Award skill XP (GDD §5.4 amounts, e.g. XP.blades.light = 4). `dummy`: training dummies and
+   * sparring give half, and nothing above level 30. xp.mult and xp.<skill> flags apply.
+   */
+  useSkill(id: SkillId, amount: number, opts: { dummy?: boolean } = {}) {
     const s = this.skills.get(id);
     if (!s || !(amount > 0) || s.level >= SKILL_CURVE.max) return;
-    s.xp += amount * Math.max(0, 1 + this.modifier('xp.mult'));
+    if (opts.dummy) {
+      if (s.level >= XP.dummyMaxLevel) return;
+      amount *= XP.dummyMult;
+    }
+    s.xp += amount * Math.max(0, 1 + this.modifier('xp.mult') + (this.hasFlag(`xp.${id}`) ? 0.1 : 0));
     const diff = this.skillDefs.get(id)?.difficulty;
     while (s.level < SKILL_CURVE.max && s.xp >= skillXpToNext(s.level, diff)) {
       s.xp -= skillXpToNext(s.level, diff);
@@ -174,14 +207,13 @@ export class CharacterSheetImpl implements CharacterSheet {
     if (s.level >= SKILL_CURVE.max) s.xp = 0;
   }
 
-  /** Raise a skill by whole levels (skill books, trainers). Grants character XP like normal level-ups. */
+  /** Raise a skill by whole levels (skill books, trainers): character XP and pool growth as usual. */
   raiseSkill(id: SkillId, levels = 1) {
     const s = this.skills.get(id);
     if (!s) return;
     for (let i = 0; i < levels && s.level < SKILL_CURVE.max; i++) {
       s.level++;
-      const need = skillXpToNext(s.level, this.skillDefs.get(id)?.difficulty);
-      s.xp = Math.min(s.xp, need * 0.999);
+      s.xp = Math.min(s.xp, skillXpToNext(s.level, this.skillDefs.get(id)?.difficulty) - 1e-6);
       this.onSkillLevel(id, s.level);
     }
   }
@@ -197,17 +229,41 @@ export class CharacterSheetImpl implements CharacterSheet {
   /** Zero the in-progress XP of the `n` skills with the most progress (jail time). Returns their ids. */
   loseProgress(n: number): SkillId[] {
     const ranked = [...this.skills.entries()].filter(([, s]) => s.xp > 0).sort((a, b) => b[1].xp - a[1].xp);
-    const lost = ranked.slice(0, Math.max(0, n)).map(([id, s]) => {
+    return ranked.slice(0, Math.max(0, n)).map(([id, s]) => {
       s.xp = 0;
       return id;
     });
-    return lost;
   }
 
   private onSkillLevel(id: SkillId, level: number) {
+    const attr = this.skillDefs.get(id)?.attribute;
+    if (attr) this.growth[attr] += RESOURCES.governingPerSkillLevel;
+    this.recomputeMaxes();
     this.events?.emit('skill:levelup', { skill: id, level });
     this.notify(`${this.skillDefs.get(id)?.name ?? id} increased to ${level}`, 'skill');
     this.addXp(level * LEVEL_CURVE.skillXpMult);
+  }
+
+  // ---------------------------------------------------------------- trainers (§5.1)
+
+  trainingCost(id: SkillId): number {
+    return TRAINING.cost(this.baseSkillLevel(id));
+  }
+
+  /** Why a lesson can't be had, or null. */
+  trainingBlocker(id: SkillId, grade: TrainerGrade): 'unknown' | 'cap' | 'lessons' | null {
+    if (!this.skills.has(id)) return 'unknown';
+    if (this.baseSkillLevel(id) >= TRAINING.caps[grade]) return 'cap';
+    if (this.trainedThisLevel >= TRAINING.perLevel) return 'lessons';
+    return null;
+  }
+
+  /** Take a lesson (the caller charges trainingCost first). */
+  train(id: SkillId, grade: TrainerGrade): boolean {
+    if (this.trainingBlocker(id, grade)) return false;
+    this.trainedThisLevel++;
+    this.raiseSkill(id, 1);
+    return true;
   }
 
   // ---------------------------------------------------------------- perks
@@ -225,7 +281,7 @@ export class CharacterSheetImpl implements CharacterSheet {
     const p = this.perkDefs.get(id);
     if (!p) return 'unknown';
     if (this._perks.has(id)) return 'taken';
-    if (this.skillLevel(p.skill) < p.requiresLevel) return 'level';
+    if (this.baseSkillLevel(p.skill) < p.requiresLevel) return 'level';
     if (p.requiresPerk && !this._perks.has(p.requiresPerk)) return 'prerequisite';
     if (this._perkPoints <= 0) return 'points';
     return null;
@@ -267,7 +323,7 @@ export class CharacterSheetImpl implements CharacterSheet {
     return this.flagCache!.has(flag);
   }
 
-  /** Named modifier source (equipment slot, faction bonus…); null removes it. */
+  /** Named modifier source (equipment slot, origin trait, patron…); null removes it. */
   setModifierSource(source: string, mods: Partial<Record<ModifierId, number>> | null | undefined) {
     if (mods && Object.keys(mods).length) this.modSources.set(source, mods);
     else this.modSources.delete(source);
@@ -284,9 +340,11 @@ export class CharacterSheetImpl implements CharacterSheet {
     const mods = new Map<string, number>();
     const add = (k: string, v: number) => mods.set(k, (mods.get(k) ?? 0) + v);
     const flags = new Set<string>();
+    const skillBonus = new Map<string, number>();
     for (const id of this._perks) {
       const p = this.perkDefs.get(id);
       if (!p) continue;
+      flags.add(id);
       for (const [k, v] of Object.entries(p.modifiers ?? {})) add(k, v as number);
       for (const f of p.flags ?? []) flags.add(f);
     }
@@ -295,27 +353,31 @@ export class CharacterSheetImpl implements CharacterSheet {
     for (const a of this.effects) {
       const e = a.effect;
       if ((e.kind === 'modifier' || e.kind === 'fortify') && MODIFIER_IDS.has(e.target)) add(e.target, e.amount);
+      else if (e.kind === 'fortify' && this.skillDefs.has(e.target)) skillBonus.set(e.target, (skillBonus.get(e.target) ?? 0) + e.amount);
+      else if (e.kind === 'flag') flags.add(e.target);
     }
     this.modCache = mods;
     this.flagCache = flags;
+    this.skillBonusCache = skillBonus;
   }
 
   private invalidate() {
     this.modCache = null;
     this.flagCache = null;
+    this.skillBonusCache = null;
     this.recomputeMaxes();
   }
 
-  /** Resource maxima: base + level picks × 10 + `<res>.max` modifiers + fortify effects. */
+  /** Pool maxima: base + picks × 10 + skill growth + `<pool>.max` modifiers + fortify effects. */
   recomputeMaxes() {
     for (const id of RESOURCE_IDS) {
-      let max = RESOURCES.base[id] + this.picks[id] * RESOURCES.perLevelPick + this.modifier(`${id}.max` as ModifierId);
+      let max = RESOURCES.base[id] + this.picks[id] * RESOURCES.perLevelPick + this.growth[id] + this.modifier(`${id}.max` as ModifierId);
       for (const a of this.effects) if (a.effect.kind === 'fortify' && a.effect.target === id) max += a.effect.amount;
       if (Math.abs(this.vitals.get(id).max - max) > 1e-9) this.vitals.setMax(id, max);
     }
   }
 
-  /** Carry capacity in kg. */
+  /** Carry capacity in kg: 50 + 5 per stamina level-up + carry.max (Hercules, perks). */
   carryCapacity(): number {
     return CARRY.base + this.picks.stamina * CARRY.perStaminaPick + this.modifier('carry.max');
   }
@@ -327,34 +389,34 @@ export class CharacterSheetImpl implements CharacterSheet {
   }
 
   /**
-   * Apply effects from a source ('item:potio', 'blessing:mars', 'disease:febris'…). Instant kinds
-   * (restore, cure, damage without duration) act now; timed ones replace any earlier effects from
-   * the same source. `magnitude` scales amounts (remedy strength), `durationMult` durations.
+   * Apply effects from a source ('item:panis', 'blessing:mars', 'injury:cruor'…). Instant kinds
+   * (restore, cure, condition, damage without duration) act now; timed ones replace any earlier
+   * effects from the same source. `magnitude` scales amounts (remedy strength), `durationMult` durations.
    */
   applyEffects(source: string, effects: readonly Effect[], opts: { magnitude?: number; durationMult?: number } = {}) {
     const mag = opts.magnitude ?? 1;
     const dmul = opts.durationMult ?? 1;
     let timed = false;
     for (const raw of effects) {
-      const e: Effect = { ...raw, amount: raw.amount * (raw.kind === 'cure' ? 1 : mag) };
-      if (e.kind === 'cure') {
-        this.cure(e.target);
+      if (raw.kind === 'cure') {
+        this.cure(raw.target);
         continue;
       }
-      const instant = e.duration === undefined || e.duration <= 0;
-      if (instant) {
-        if (e.kind === 'restore' || e.kind === 'regen') {
-          if (isResource(e.target)) this.vitals.restore(e.target, e.amount);
-        } else if (e.kind === 'damage') {
-          if (isResource(e.target)) this.vitals.drain(e.target, e.amount);
-        }
+      if (raw.kind === 'condition') {
+        this.applyCondition(raw.target);
+        continue;
+      }
+      const e: Effect = { ...raw, amount: raw.amount * mag };
+      if (e.duration === undefined || e.duration <= 0) {
+        if ((e.kind === 'restore' || e.kind === 'regen') && isResource(e.target)) this.vitals.restore(e.target, e.amount);
+        else if (e.kind === 'damage' && isResource(e.target)) this.vitals.drain(e.target, e.amount);
         continue;
       }
       if (!timed) {
         this.effects = this.effects.filter((a) => a.source !== source);
         timed = true;
       }
-      this.effects.push({ source, effect: e, remaining: e.duration! * dmul });
+      this.effects.push({ source, effect: e, remaining: e.duration * dmul });
     }
     if (timed) {
       this.invalidate();
@@ -362,21 +424,33 @@ export class CharacterSheetImpl implements CharacterSheet {
     }
   }
 
-  /** Remove effects: 'poison', 'disease', or an exact source like 'disease:febris'. */
+  /**
+   * Remove effects: a kind ('poison', 'disease', 'injury', 'omen', 'state') or an exact condition
+   * source ('disease:febris' — with all its stacks). Returns how many effect sources were removed.
+   */
   cure(target: string): number {
-    const before = this.effects.length;
     const prefix = target.includes(':') ? null : `${target}:`;
+    const removed = new Set<string>();
     this.effects = this.effects.filter((a) => {
-      if (prefix) {
-        if (a.source.startsWith(prefix)) return false;
-        if (target === 'poison' && a.effect.kind === 'damage') return false;
-        return true;
-      }
-      return a.source !== target;
+      const hit = prefix
+        ? a.source.startsWith(prefix) || (target === 'poison' && a.effect.kind === 'damage' && a.source.startsWith('item:'))
+        : a.source === target || a.source.startsWith(`${target}#`);
+      if (hit) removed.add(a.source);
+      return !hit;
     });
-    const removed = before - this.effects.length;
-    if (removed) this.invalidate();
-    return removed;
+    if (removed.size) this.invalidate();
+    return removed.size;
+  }
+
+  /** Use up a timed flag effect (one-shot invocations). Returns true if one was active. */
+  consumeFlag(flag: string): boolean {
+    const i = this.effects.findIndex((a) => a.effect.kind === 'flag' && a.effect.target === flag);
+    if (i < 0) return false;
+    const source = this.effects[i].source;
+    this.effects.splice(i, 1);
+    this.invalidate();
+    if (!this.effects.some((a) => a.source === source)) this.events?.emit('effect:expired', { source });
+    return true;
   }
 
   removeEffectsFrom(source: string) {
@@ -389,34 +463,58 @@ export class CharacterSheetImpl implements CharacterSheet {
     return this.conditionDefs.get(id);
   }
 
-  hasCondition(id: string): boolean {
+  /** Active stacks of a condition (0 if absent). */
+  conditionStacks(id: string): number {
     const c = this.conditionDefs.get(id);
-    return !!c && this.effects.some((a) => a.source === `${c.kind}:${id}`);
+    if (!c) return 0;
+    const base = `${c.kind}:${id}`;
+    return new Set(this.effects.filter((a) => a.source === base || a.source.startsWith(`${base}#`)).map((a) => a.source)).size;
+  }
+
+  hasCondition(id: string): boolean {
+    return this.conditionStacks(id) > 0;
   }
 
   /**
-   * Catch a disease, take a poison or receive a blessing. Diseases are blocked by 'disease.immune',
-   * poisons halved by 'poison.resist', blessings last longer with 'blessing.duration' and replace
-   * the previous blessing (two may be held with 'religio.twoBlessings').
+   * Catch a disease, take a poison or a wound, fall under an ill omen, change state, or receive a
+   * blessing. Diseases are blocked by 'disease.immune', poisons by 'poison.immune' and halved by
+   * 'poison.resist'; stackable conditions (bleeding ×3) add a stack or refresh the oldest; blessings
+   * last longer with 'blessing.duration' and replace the previous one (two with 'religio.twoBlessings').
    */
   applyCondition(id: string): boolean {
     const c = this.conditionDefs.get(id);
     if (!c) return false;
-    const source = `${c.kind}:${id}`;
-    if (c.kind === 'disease') {
-      if (this.hasFlag('disease.immune')) return false;
-      this.applyEffects(source, c.effects);
-      this.notify(`You have contracted ${c.name}.`, 'effect');
-    } else if (c.kind === 'poison') {
-      this.applyEffects(source, c.effects, { magnitude: this.hasFlag('poison.resist') ? 0.5 : 1 });
-    } else {
+    let source = `${c.kind}:${id}`;
+    if (c.kind === 'disease' && this.hasFlag('disease.immune')) return false;
+    if (c.kind === 'poison' && this.hasFlag('poison.immune')) return false;
+    if (c.maxStacks && c.maxStacks > 1) {
+      const stacks = [...new Set(this.effects.filter((a) => a.source === source || a.source.startsWith(`${source}#`)).map((a) => a.source))];
+      if (stacks.length >= c.maxStacks) {
+        // Refresh the stack closest to running out.
+        const oldest = stacks.sort((x, y) => this.remainingOf(x) - this.remainingOf(y))[0];
+        source = oldest;
+      } else if (stacks.length) {
+        let n = 2;
+        while (stacks.includes(`${source}#${n}`)) n++;
+        source = `${source}#${n}`;
+      }
+    }
+    if (c.kind === 'blessing') {
       const keep = this.hasFlag('religio.twoBlessings') ? 1 : 0;
       const blessings = [...new Set(this.effects.filter((a) => a.source.startsWith('blessing:') && a.source !== source).map((a) => a.source))];
       for (const s of blessings.slice(0, Math.max(0, blessings.length - keep))) this.effects = this.effects.filter((a) => a.source !== s);
       this.applyEffects(source, c.effects, { durationMult: 1 + this.modifier('blessing.duration') });
-      this.notify(`${c.name}`, 'effect');
+    } else {
+      this.applyEffects(source, c.effects, { magnitude: c.kind === 'poison' && this.hasFlag('poison.resist') ? 0.5 : 1 });
     }
+    if (c.kind !== 'state' && c.kind !== 'injury') this.notify(c.kind === 'disease' ? `You have contracted ${c.name}.` : c.kind === 'omen' ? `You are ${c.name.toLowerCase()}.` : c.name, 'effect');
     return true;
+  }
+
+  private remainingOf(source: string): number {
+    let r = Infinity;
+    for (const a of this.effects) if (a.source === source) r = Math.min(r, a.remaining);
+    return r;
   }
 
   /** Advance timed effects and vitals regeneration. Call at a fixed rate. */
@@ -427,8 +525,10 @@ export class CharacterSheetImpl implements CharacterSheet {
       for (const a of this.effects) {
         const e = a.effect;
         if (isResource(e.target)) {
-          if (e.kind === 'regen') this.vitals.restore(e.target, e.amount * dt);
-          else if (e.kind === 'damage') this.vitals.drain(e.target, e.amount * dt);
+          // Never tick past the end of the effect.
+          const t = Math.min(dt, a.remaining);
+          if (e.kind === 'regen') this.vitals.restore(e.target, e.amount * t);
+          else if (e.kind === 'damage') this.vitals.drain(e.target, e.amount * t);
         }
         a.remaining -= dt;
         if (a.remaining <= 0) (expired ??= []).push(a.source);
@@ -453,6 +553,7 @@ export class CharacterSheetImpl implements CharacterSheet {
       perks: [...this._perks],
       skills: Object.fromEntries([...this.skills].map(([id, s]) => [id, { level: s.level, xp: s.xp }])),
       picks: { ...this.picks },
+      growth: { ...this.growth },
       trainedThisLevel: this.trainedThisLevel,
       // Infinity does not survive JSON: store -1 for "until cured".
       effects: this.effects.map((a) => ({ source: a.source, effect: { ...a.effect, duration: finiteOr(a.effect.duration) }, remaining: finiteOr(a.remaining) })),
@@ -460,9 +561,10 @@ export class CharacterSheetImpl implements CharacterSheet {
     };
   }
 
+  /** Load a snapshot; `undefined` resets to a new character (skills 10, pietas 25/50). */
   restore(data: unknown) {
     const d = (data ?? {}) as Partial<ReturnType<CharacterSheetImpl['serialize']>>;
-    this._level = posInt(d.level, 1);
+    this._level = posInt(d.level, 1) || 1;
     this._xp = num(d.xp, 0);
     this._perkPoints = posInt(d.perkPoints, 0);
     this._pendingLevelUps = posInt(d.pendingLevelUps, 0);
@@ -471,24 +573,27 @@ export class CharacterSheetImpl implements CharacterSheet {
     for (const p of Array.isArray(d.perks) ? d.perks : []) if (this.perkDefs.has(p)) this._perks.add(p);
     for (const [id, s] of this.skills) {
       const saved = d.skills?.[id];
-      s.level = saved ? Math.min(SKILL_CURVE.max, posInt(saved.level, SKILL_CURVE.start)) : SKILL_CURVE.start;
+      s.level = saved ? Math.min(SKILL_CURVE.max, posInt(saved.level, this.startSkill)) : this.startSkill;
       s.xp = saved ? num(saved.xp, 0) : 0;
     }
-    for (const id of RESOURCE_IDS) this.picks[id] = posInt(d.picks?.[id], 0);
+    for (const id of RESOURCE_IDS) {
+      this.picks[id] = posInt(d.picks?.[id], 0);
+      this.growth[id] = num(d.growth?.[id], 0);
+    }
     this.effects = (Array.isArray(d.effects) ? d.effects : [])
       .filter((a) => a && typeof a.source === 'string' && a.effect)
       .map((a) => ({ source: a.source, effect: { ...a.effect, duration: infiniteIfNeg(a.effect.duration) }, remaining: infiniteIfNeg(a.remaining) ?? 0 }));
     this.invalidate();
-    this.vitals.restoreState(d.vitals);
+    if (d.vitals) this.vitals.restoreState(d.vitals);
+    else {
+      this.vitals.revive();
+      this.vitals.set('pietas', RESOURCES.startCurrent.pietas);
+    }
   }
 
   private notify(text: string, kind: 'skill' | 'level' | 'effect') {
     this.events?.emit('rpg:notify', { text, kind });
   }
-}
-
-function regenFraction(id: ResourceId, inCombat: boolean) {
-  return REGEN[id] * (inCombat ? REGEN.combat[id] : 1);
 }
 
 function finiteOr(v: number | undefined): number | undefined {

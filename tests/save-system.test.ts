@@ -14,7 +14,7 @@ afterEach(() => vi.restoreAllMocks());
 
 function world(storage: SaveStorage = new MemoryStorage()) {
   const fg = fakeGame({ controller: true });
-  const rpg = installRpg(fg.game, { examples: true, storage, background: 'veteran' });
+  const rpg = installRpg(fg.game, { examples: true, storage, background: 'veteranus' });
   return { ...fg, rpg, storage };
 }
 
@@ -33,6 +33,10 @@ function playABit(w: ReturnType<typeof world>) {
   rpg.inventory.addDenarii(3.5);
   rpg.factions.join('vigiles');
   rpg.factions.addReputation('vigiles', 130);
+  rpg.devotion.choosePatron('mars');
+  rpg.devotion.devote('dailyPrayer', { god: 'mars' });
+  rpg.standing.addInfamia(5);
+  rpg.standing.addFame('subura', 12);
   rpg.crime.commit('theft', { witnessed: true, value: 40 });
   rpg.dialogue.start('ex_pudens');
   rpg.dialogue.choose(0);
@@ -52,7 +56,7 @@ describe('save → load round trip', () => {
     const w = world();
     playABit(w);
     const before = JSON.parse(JSON.stringify(w.rpg.save.snapshot().data));
-    expect(Object.keys(before).sort()).toEqual(['barter', 'crime', 'dialogue', 'factions', 'inventory', 'locations', 'player', 'quests', 'sheet', 'time'].sort());
+    expect(Object.keys(before).sort()).toEqual(['barter', 'crime', 'devotion', 'dialogue', 'factions', 'inventory', 'locations', 'player', 'quests', 'sheet', 'standing', 'time'].sort());
     const r = await w.rpg.save.save('manual-1', { name: 'Before the Subura' });
     expect(r.ok).toBe(true);
     expect(r.meta).toMatchObject({ slot: 'manual-1', kind: 'manual', name: 'Before the Subura', level: 1, location: 'Basilica Aemilia', version: SAVE_VERSION });
@@ -61,6 +65,9 @@ describe('save → load round trip', () => {
     // Wreck the state.
     w.rpg.sheet.restore(undefined);
     w.rpg.inventory.restore(undefined);
+    w.rpg.devotion.restore(undefined);
+    w.rpg.standing.restore(undefined);
+    w.rpg.sheet.setFlagSource('origin', null);
     w.rpg.quests.newGame();
     w.rpg.crime.restore(undefined);
     w.game.time.advanceHours(500);
@@ -72,6 +79,8 @@ describe('save → load round trip', () => {
     expect(after).toEqual(before);
     expect(w.rpg.sheet.hasCondition('febris')).toBe(true);
     expect(w.rpg.inventory.isEquipped('torques')).toBe(true);
+    expect(w.rpg.devotion.patron!.id).toBe('mars');
+    expect(w.rpg.sheet.hasFlag('origin.oldWound')).toBe(true);
     expect(w.rpg.sheet.vitals.health.max).toBe(100 - 15 + 10);
     expect(w.rpg.quests.status('ex_letter')!.running).toBe(true);
     expect(w.rpg.quests.objectives('ex_letter').find((o) => o.id === 'go')!.done).toBe(true);
@@ -184,7 +193,7 @@ describe('slots', () => {
     w.pressed.add('quickLoad');
     w.step(1);
     await w.rpg.save.idle();
-    expect(w.rpg.inventory.denarii).toBe(25);
+    expect(w.rpg.inventory.denarii).toBe(75);
   });
 });
 
