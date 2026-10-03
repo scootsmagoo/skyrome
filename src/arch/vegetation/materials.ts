@@ -62,7 +62,7 @@ const SWAY = /* glsl */ `
   vD += vec3(sin(uVegTime * 5.1 + dot(transformed, vec3(1.7, 2.3, 1.1)) * 2.0 + vPh), 0.0, cos(uVegTime * 4.3 + dot(transformed, vec3(2.1, 1.3, 1.9)) * 2.0)) * vF;
   transformed += (transpose(vB) * vD) / max(vS * vS, 1e-4);
   #ifdef VEG_FADE
-    float vDist = distance(vO.xz, cameraPosition.xz);
+    float vDist = distance(vO, cameraPosition);
     transformed *= 1.0 - smoothstep(uVegFade.x, uVegFade.y, vDist);
   #endif
 }

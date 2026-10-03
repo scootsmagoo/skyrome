@@ -22,7 +22,7 @@ import { lacus } from './fountain';
 import { horrea } from './horrea';
 import { insula, MAX_BUILDING_HEIGHT } from './insula';
 import {
-  ensurePositive, insetPolygon, obbCorners, signedArea, obbIntersectsPolygon, obbOverlap, pointInOBB, pointInPolygon, polygonBounds,
+  distToSegment, ensurePositive, insetPolygon, obbCorners, signedArea, obbIntersectsPolygon, obbOverlap, pointInOBB, pointInPolygon, polygonBounds,
   polygonContainsOBB, rayToPolygon, type OBB,
 } from './polygon';
 import { compitalShrine } from './shrines';
@@ -54,6 +54,12 @@ export interface FillOptions {
   id?: string;
   /** Merge into this builder instead of a new one. */
   builder?: MeshBuilder;
+  /**
+   * 'low' builds a far-LOD stand-in with identical massing (same seed → same lots and buildings)
+   * but no interiors, window dressing, tile ridges, props or colliders. Use it as the `far` object
+   * of a WorldRegistry entry.
+   */
+  detail?: 'full' | 'low';
   /** Street props / awnings on shops (default true). */
   streetDressing?: boolean;
 }
@@ -71,6 +77,8 @@ export interface LotPlan {
   seed: number;
   /** Sides that touch a neighbour (party walls). */
   party: { left: boolean; right: boolean; back: boolean };
+  /** Outline edge a free side faces (a corner on a side street), or −1. */
+  street: { left: number; right: number };
 }
 
 export interface Lot extends LotPlan {
@@ -170,7 +178,7 @@ export function planLots(polygon: Polygon, opts: Omit<FillOptions, 'heightAt'> =
       }
       if (roll === 'alley') {
         // An alley only makes sense between buildings.
-        if (s > 0) placed.push({ id: `${prefix}lot${lotN++}`, kind: 'alley', obb: { c: [a[0] + u[0] * (s + w / 2) + v[0] * 2, a[1] + u[1] * (s + w / 2) + v[1] * 2], u, v, hu: w / 2, hv: 2 }, edge: e, rotationY, width: w, depth: 4, seed: rng.int(0, 1e9), party: { left: false, right: false, back: false } });
+        if (s > 0) placed.push({ id: `${prefix}lot${lotN++}`, kind: 'alley', obb: { c: [a[0] + u[0] * (s + w / 2) + v[0] * 2, a[1] + u[1] * (s + w / 2) + v[1] * 2], u, v, hu: w / 2, hv: 2 }, edge: e, rotationY, width: w, depth: 4, seed: rng.int(0, 1e9), party: { left: false, right: false, back: false }, street: { left: -1, right: -1 } });
         s += w;
         continue;
       }
@@ -192,7 +200,7 @@ export function planLots(polygon: Polygon, opts: Omit<FillOptions, 'heightAt'> =
         s += 1;
         continue;
       }
-      placed.push({ id: `${prefix}lot${lotN++}`, kind: roll, obb, edge: e, rotationY, width: w, depth: d, seed: rng.int(0, 1e9), party: { left: false, right: false, back: false } });
+      placed.push({ id: `${prefix}lot${lotN++}`, kind: roll, obb, edge: e, rotationY, width: w, depth: d, seed: rng.int(0, 1e9), party: { left: false, right: false, back: false }, street: { left: -1, right: -1 } });
       s += w;
     }
   }
@@ -207,6 +215,18 @@ export function planLots(polygon: Polygon, opts: Omit<FillOptions, 'heightAt'> =
     p.party.left = probe(-hu - 0.3, 0) || probe(-hu - 0.3, hv * 0.5) || probe(-hu - 0.3, -hv * 0.5);
     p.party.right = probe(hu + 0.3, 0) || probe(hu + 0.3, hv * 0.5) || probe(hu + 0.3, -hv * 0.5);
     p.party.back = probe(0, hv + 0.3) || probe(hu * 0.5, hv + 0.3) || probe(-hu * 0.5, hv + 0.3);
+    // Corner lots: a free side lying on the block outline faces a side street.
+    const sideEdge = (sx: number) => {
+      const c: Vec2 = [p.obb.c[0] + p.obb.u[0] * sx * hu, p.obb.c[1] + p.obb.u[1] * sx * hu];
+      let best = -1, bd = 1.2;
+      for (let i = 0; i < poly.length; i++) {
+        const d = distToSegment(c, poly[i], poly[(i + 1) % poly.length]);
+        if (d < bd) { bd = d; best = i; }
+      }
+      return best;
+    };
+    p.street.left = p.party.left ? -1 : sideEdge(-1);
+    p.street.right = p.party.right ? -1 : sideEdge(1);
   }
   return placed;
 }
@@ -232,7 +252,10 @@ export function fillBlock(polygon: Polygon, opts: FillOptions): FillResult {
   const sidewalkOf = (e: number) => (Array.isArray(opts.sidewalkHeight) ? swByEdge.get(e) ?? 0.3 : opts.sidewalkHeight ?? 0.3);
   const spots: Spot[] = [];
   const lots: Lot[] = [];
-  const dress = opts.streetDressing ?? true;
+  const low = opts.detail === 'low';
+  const dress = (opts.streetDressing ?? true) && !low;
+  const detail = opts.detail ?? 'full';
+  const colliders0 = b.colliders.length;
 
   // Yard surface under everything (buildings stand on top of it).
   if (opts.yard !== null) buildPlaza(b, poly, H, { material: opts.yard ?? 'dirt', lift: 0.03, cell: 3, skirt: 0.2, collide: false });
@@ -250,10 +273,13 @@ export function fillBlock(polygon: Polygon, opts: FillOptions): FillResult {
     }
     const groundAt = (lx: number, lz: number) => {
       const [x, z] = toWorld(lx, lz);
-      return H(x, z) + 0.06 + (lz < -obb.hv + 0.01 ? sw : 0) - floorY;
+      // Sidewalks in front, and along side streets on corner lots.
+      const raise = lz < -obb.hv + 0.01 ? sw : lx < -obb.hu + 0.01 && p.street.left >= 0 ? sidewalkOf(p.street.left) : lx > obb.hu - 0.01 && p.street.right >= 0 ? sidewalkOf(p.street.right) : 0;
+      return H(x, z) + 0.06 + raise - floorY;
     };
     const m = new THREE.Matrix4().makeTranslation(obb.c[0], floorY, obb.c[1]).multiply(new THREE.Matrix4().makeRotationY(p.rotationY));
     const sides = { left: !p.party.left, right: !p.party.right, back: !p.party.back };
+    const sideShops = { left: p.street.left >= 0, right: p.street.right >= 0 };
     const lrng = new Rng(p.seed);
     let out: BuildingOutput | null = null;
     if (p.kind === 'insula') {
@@ -262,16 +288,16 @@ export function fillBlock(polygon: Polygon, opts: FillOptions): FillResult {
       out = insula({
         width: p.width, depth: p.depth, seed: p.seed, wealth: Math.min(1, Math.max(0, wealth + lrng.range(-0.15, 0.15))),
         storeys: Math.max(3, storeys), courtyard: p.width >= 18 && p.depth >= 17 && lrng.chance(0.55),
-        portico: wealth > 0.3 && p.depth > 13 && lrng.chance(0.25), groundAt, sides, streetDressing: dress, maxHeight: MAX_BUILDING_HEIGHT,
+        portico: wealth > 0.3 && p.depth > 13 && lrng.chance(0.25), groundAt, sides, sideShops, streetDressing: dress, maxHeight: MAX_BUILDING_HEIGHT, detail,
       });
     } else if (p.kind === 'shops') {
-      out = insula({ width: p.width, depth: p.depth, seed: p.seed, wealth, storeys: 2, groundAt, sides, balcony: lrng.chance(0.4) ? 'full' : 'none', roof: 'gable', streetDressing: dress });
+      out = insula({ width: p.width, depth: p.depth, seed: p.seed, wealth, storeys: 2, groundAt, sides, sideShops, balcony: lrng.chance(0.4) ? 'full' : 'none', roof: 'gable', streetDressing: dress, detail });
     } else if (p.kind === 'domus') {
-      out = domus({ width: p.width, depth: p.depth, seed: p.seed, wealth: Math.max(0.5, wealth), groundAt, sides, streetDressing: dress });
+      out = domus({ width: p.width, depth: p.depth, seed: p.seed, wealth: Math.max(0.5, wealth), groundAt, sides, streetDressing: dress, detail });
     } else if (p.kind === 'horrea') {
-      out = horrea({ width: p.width, depth: p.depth, seed: p.seed, groundAt });
+      out = horrea({ width: p.width, depth: p.depth, seed: p.seed, groundAt, detail });
     } else if (p.kind === 'piazza') {
-      piazza(b, p, H, lrng, spots, sw);
+      piazza(b, p, H, lrng, spots, sw, low);
     }
     if (out) {
       b.append(out.builder, m);
@@ -283,12 +309,13 @@ export function fillBlock(polygon: Polygon, opts: FillOptions): FillResult {
       lots.push({ ...p, floorY, center: new THREE.Vector3(obb.c[0], floorY, obb.c[1]), height: 0 });
     }
   }
-  yardDressing(b, poly, plans, H, rng, spots, opts.id ?? '');
+  if (low) b.colliders.splice(colliders0);
+  else yardDressing(b, poly, plans, H, rng, spots, opts.id ?? '');
   return { builder: b, spots, lots };
 }
 
 /** Small square in a gap of the frontage: paving, a fountain or a shrine, benches, trees. */
-function piazza(b: MeshBuilder, p: LotPlan, H: HeightFn, rng: Rng, spots: Spot[], sw: number) {
+function piazza(b: MeshBuilder, p: LotPlan, H: HeightFn, rng: Rng, spots: Spot[], sw: number, low = false) {
   const corners = obbCorners(p.obb);
   buildPlaza(b, corners, (x, z) => H(x, z) + sw * 0.5, { material: rng.chance(0.5) ? 'paving_travertine' : 'cobbles', lift: 0.05 });
   const c = p.obb.c;
@@ -303,7 +330,7 @@ function piazza(b: MeshBuilder, p: LotPlan, H: HeightFn, rng: Rng, spots: Spot[]
     add('shrine', 0, p.obb.hv * 0.4 - 1.8, 0, 'compitum');
   }
   for (const s of [-1, 1]) {
-    if (!rng.chance(0.7)) continue;
+    if (!rng.chance(0.7) || low) continue;
     const lx = s * (p.obb.hu - 1.2);
     placeProp(d, 'bench_masonry', lx, 0, 0, s * Math.PI / 2, { variant: 0 });
     add('bench', lx - s * 0.5, 0, -s * Math.PI / 2);

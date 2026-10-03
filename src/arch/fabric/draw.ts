@@ -28,7 +28,7 @@ export interface PartOpts {
   rz?: number;
   /** Also add a matching box collider. */
   collide?: boolean;
-  /** Cast shadows (default true). */
+  /** Ignored: shadow casting is decided per material (see shadow.ts) so each material merges into one mesh. */
   shadow?: boolean;
   /** Meters per texture repeat (default 2). */
   uvScale?: number;

@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { fillBlock, planLots } from '../src/arch/fabric/blockFiller';
 import { MAX_BUILDING_HEIGHT } from '../src/arch/fabric/insula';
@@ -84,5 +85,16 @@ describe('fillBlock on sloping ground', () => {
     const g = r.builder.build('t');
     expect(g.children.length).toBeGreaterThan(8);
     expect(r.builder.colliders.length).toBeGreaterThan(20);
+  });
+
+  it('low detail: same lots and massing, a fraction of the triangles, no colliders', () => {
+    const lowR = fillBlock(block, { heightAt: slope, seed: 9, wealth: 0.5, density: 0.8, sidewalkHeight: 0.3, id: 'T:', detail: 'low' });
+    expect(lowR.lots.map((l) => [l.id, l.kind, l.floorY, l.height])).toEqual(r.lots.map((l) => [l.id, l.kind, l.floorY, l.height]));
+    expect(lowR.builder.colliders.length).toBe(0);
+    const count = (g: THREE.Group) => g.children.reduce((n, c) => n + (c as THREE.Mesh).geometry.getAttribute('position').count / 3, 0);
+    const full = r.builder.build('f'), far = lowR.builder.build('l');
+    expect(count(far)).toBeLessThan(count(full) * 0.6);
+    const bf = new THREE.Box3().setFromObject(full), bl = new THREE.Box3().setFromObject(far);
+    expect(bl.max.y).toBeCloseTo(bf.max.y, 1);
   });
 });

@@ -178,7 +178,7 @@ export class GrassField {
     this.lastCam.copy(cam);
     const lim = this.o.fadeEnd + this.o.cell * 0.75;
     for (const c of this.cells) {
-      const vis = Math.hypot(c.center.x - cam.x, c.center.z - cam.z) < lim;
+      const vis = c.center.distanceTo(cam) < lim;
       for (const m of c.meshes) m.visible = vis;
     }
   }

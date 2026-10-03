@@ -20,6 +20,8 @@ export interface HorreaSpec {
   depth: number;
   seed?: number;
   groundAt?: LocalGround;
+  /** 'low': far-LOD stand-in with the same massing. */
+  detail?: 'full' | 'low';
 }
 
 const T = 0.7;
@@ -31,6 +33,7 @@ export function horrea(spec: HorreaSpec): BuildingOutput {
   const spots: Spot[] = [];
   const W = spec.width, D = spec.depth;
   const ground = spec.groundAt ?? flatGround;
+  const low = spec.detail === 'low';
   let gmin = 0;
   for (const [x, z] of [[-W / 2, -D / 2], [W / 2, -D / 2], [W / 2, D / 2], [-W / 2, D / 2]]) gmin = Math.min(gmin, ground(x, z));
   const yMin = gmin - 0.5;
@@ -111,7 +114,7 @@ export function horrea(spec: HorreaSpec): BuildingOutput {
       const C = fr.at((o.x0 + o.x1) / 2, 0, 0);
       const open = rng.chance(0.4);
       C.span('black', -1, 0, T + 2.5, 1, 2.9, T + 2.52, { shadow: false });
-      if (open) {
+      if (open && !low) {
         C.span('concrete', -1.0, -0.05, T, 1.0, 0.01, T + 2.5);
         for (const s of [-1, 1]) C.span('plaster_cream', s * 1.0, 0, T, s * 1.1, 2.9, T + 2.5);
         for (let k = 0; k < 4; k++) placeProp(C, rng.chance(0.5) ? 'amphora_tall' : 'sack', -0.6 + k * 0.4, 0, T + 2.1, 0, { collide: false, rx: 0.15 });
@@ -130,14 +133,16 @@ export function horrea(spec: HorreaSpec): BuildingOutput {
   d.span('black', -iw, 0, cz - cd / 2 - T, -cw / 2 - T - 0.01, H - 0.05, cz + cd / 2 + T, { shadow: false });
   d.span('black', cw / 2 + T + 0.01, 0, cz - cd / 2 - T, iw, H - 0.05, cz + cd / 2 + T, { shadow: false });
   // Courtyard life.
-  placeProp(d, 'amphora_stack', -cw / 2 + 2, 0, cz + 1, 0.3);
-  placeProp(d, 'cart', cw / 2 - 2.5, 0, cz - 1, 0.4, { variant: 1 });
-  for (let i = 0; i < 4; i++) placeProp(d, 'sack', 1 + i * 0.5, 0, cz + cd / 2 - 1.2, rng.range(0, 6), { collide: false });
-  placeProp(d, 'puteal', 0, 0, cz, 0, { variant: 2 });
+  if (!low) {
+    placeProp(d, 'amphora_stack', -cw / 2 + 2, 0, cz + 1, 0.3);
+    placeProp(d, 'cart', cw / 2 - 2.5, 0, cz - 1, 0.4, { variant: 1 });
+    for (let i = 0; i < 4; i++) placeProp(d, 'sack', 1 + i * 0.5, 0, cz + cd / 2 - 1.2, (i * 1.7) % 6, { collide: false });
+    placeProp(d, 'puteal', 0, 0, cz, 0, { variant: 2 });
+  }
   spots.push({ id: 'gate', kind: 'houseDoor', position: new THREE.Vector3(0, 0, -D / 2 - 0.6), facing: Math.PI, tag: 'horrea' });
   spots.push({ id: 'yard', kind: 'workshop', position: new THREE.Vector3(1.5, 0, cz), facing: 0, tag: 'horrea' });
 
-  roof(d, { kind: 'ring', w: W, d: D, y: H, inner: { w: cw, d: cd }, overhang: 0.4, pitch: 0.33 });
+  roof(d, { kind: 'ring', w: W, d: D, y: H, inner: { w: cw, d: cd }, overhang: 0.4, pitch: 0.33, ridges: !low });
 
   // Colliders: four wings, leaving the gate passage open.
   const g = gateW / 2;

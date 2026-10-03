@@ -16,7 +16,7 @@
 import * as THREE from 'three';
 import type { Game } from '../core/Game';
 import { Rng } from '../core/Rng';
-import { MeshBuilder, placeAndRegister } from '../gfx/MeshBuilder';
+import { MeshBuilder, placeAndRegister, registerColliders } from '../gfx/MeshBuilder';
 import { getMaterial } from '../gfx/materials';
 import {
   Draw, buildPlaza, buildStairs, buildStreet, compitalShrine, domus, fillBlock, horrea, insula, lacus, lararium, pergola,
@@ -205,9 +205,16 @@ function neighbourhood(game: Game) {
     { id: 'E', poly: rect(MAIN_HALF, 47, 72, 82), wealth: 0.6, density: 0.6, seed: 15, sw: [0.12, 0.12, 0.12, 0.3] },
   ];
   const lots: { id: string; floorY: number }[] = [];
+  const lodSwitch = Number(new URLSearchParams(location.search).get('lod') ?? 170);
   for (const blk of blocks) {
-    const r = fillBlock(blk.poly, { id: `${blk.id}:`, heightAt: H, wealth: blk.wealth, density: blk.density, seed: blk.seed, sidewalkHeight: blk.sw, allowHorrea: blk.id === 'A1' });
-    placeAndRegister(game, `block${blk.id}`, r.builder.build(`block${blk.id}`), r.builder.colliders, { x: 0, y: 0, z: 0 }, 0, { cullDistance: 900 });
+    const opts = { id: `${blk.id}:`, heightAt: H, wealth: blk.wealth, density: blk.density, seed: blk.seed, sidewalkHeight: blk.sw, allowHorrea: blk.id === 'A1' };
+    const r = fillBlock(blk.poly, opts);
+    // Same seed with detail 'low' = identical massing without interiors / dressing: the far stand-in.
+    const far = fillBlock(blk.poly, { ...opts, detail: 'low' }).builder.build(`block${blk.id}:far`);
+    const near = r.builder.build(`block${blk.id}`);
+    near.updateMatrixWorld(true);
+    registerColliders(game, r.builder.colliders);
+    game.world.add(`block${blk.id}`, near, { cullDistance: lodSwitch, far, farDistance: 3000 });
     spots.push(...r.spots);
     for (const l of r.lots) lots.push({ id: `${l.id}:${l.kind}`, floorY: +l.floorY.toFixed(2) });
   }

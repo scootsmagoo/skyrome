@@ -16,6 +16,7 @@ import type { MaterialId } from '../../gfx/materialIds';
 import { placeProp, stripedAwning } from '../props';
 import { Draw } from './draw';
 import { roof } from './roof';
+import { aedicula } from './shrines';
 import { pickShopKind, shopFrontage, shopInterior, type ShopKind } from './shops';
 import { flatGround, type BuildingOutput, type LocalGround, type Spot, type SpotKind } from './types';
 import { archBand, band, doorFrame, doorLeaves, plankShutters, wall, windowDetails, type Opening } from './wall';
@@ -52,6 +53,10 @@ export interface InsulaSpec {
   maxHeight?: number;
   /** Shop awnings, street props (default true). */
   streetDressing?: boolean;
+  /** 'low': a cheap far-LOD stand-in with the same massing (no interiors, window dressing, tile ridges or props). */
+  detail?: 'full' | 'low';
+  /** Corner lots: shops along a side that faces a side street. */
+  sideShops?: { left?: boolean; right?: boolean };
 }
 
 interface Bay {
@@ -68,6 +73,10 @@ const T = 0.6; // wall thickness
 
 export function insula(spec: InsulaSpec): BuildingOutput {
   const rng = new Rng(spec.seed ?? 1);
+  // Purely decorative choices draw from a fork, so the low-detail variant (which skips them)
+  // keeps exactly the same structure as the full one.
+  const drng = rng.fork('detail');
+  const low = spec.detail === 'low';
   const b = new MeshBuilder();
   const d = new Draw(b);
   const spots: Spot[] = [];
@@ -75,7 +84,7 @@ export function insula(spec: InsulaSpec): BuildingOutput {
   const wealth = spec.wealth ?? 0.4;
   const ground = spec.groundAt ?? flatGround;
   const sides = { left: spec.sides?.left ?? true, right: spec.sides?.right ?? true, back: spec.sides?.back ?? true };
-  const dress = spec.streetDressing ?? true;
+  const dress = (spec.streetDressing ?? true) && !low;
 
   // ---- heights (respecting the 60-foot limit)
   const G = rng.range(4.1, 4.5);
@@ -204,7 +213,8 @@ export function insula(spec: InsulaSpec): BuildingOutput {
     const lo: Opening = { ...o, x0: -ow / 2, x1: ow / 2, y0: 0, y1: o.y1 - bay.yb };
     if (bay.kind === 'stair') {
       doorFrame(S, lo, trim === 'plaster_white' ? 'travertine' : trim);
-      stairwell(S, ow, T, Math.min(sd, 3.2));
+      if (low) S.span('black', -ow / 2, 0, T * 0.5, ow / 2, lo.y1, T * 0.5 + 0.02, { shadow: false });
+      else stairwell(S, ow, T, Math.min(sd, 3.2));
       S.solid(-ow / 2 - 0.05, 0, T * 0.5, ow / 2 + 0.05, 2.6, sd);
       spot('houseDoor', cx, bay.yb, zf - 0.5, Math.PI, 'stair');
       continue;
@@ -225,24 +235,29 @@ export function insula(spec: InsulaSpec): BuildingOutput {
     const ceiling = lo.y1 + 0.12 - (o.arch ?? 0) * 0;
     // Mezzanine (dark) above the shop ceiling, behind the small window.
     S.span('black', -ow / 2, ceiling + 0.11, T + 0.01, ow / 2, Math.max(ceiling + 0.3, G - bay.yb - 0.2), T + 1.2, { shadow: false });
-    if (bay.open) {
+    if (bay.open && low) {
+      // Far stand-in: a dark shop mouth.
+      S.span('black', -ow / 2, 0, T * 0.6, ow / 2, lo.y1, T * 0.6 + 0.02, { shadow: false });
+    } else if (bay.open) {
       shopInterior(S, kind, { w: ow, depth: T + sd, h: ceiling, t: T, wealth }, rng.fork(`shop${cx}`));
       S.solid(-ow / 2 - 0.3, -0.4, T * 0.2, ow / 2 + 0.3, 0, T + sd); // shop floor
       if (dress) {
         shopFrontage(S, kind, ow, rng.fork(`front${cx}`));
-        if (!portico && rng.chance(0.45)) {
-          const mats: [MaterialId, MaterialId] = rng.pick([['fabric_white', 'fabric_red'], ['fabric_ochre', 'fabric_white'], ['fabric_white', 'fabric_blue']] as [MaterialId, MaterialId][]);
+        if (!portico && drng.chance(0.45)) {
+          const mats: [MaterialId, MaterialId] = drng.pick([['fabric_white', 'fabric_red'], ['fabric_ochre', 'fabric_white'], ['fabric_white', 'fabric_blue']] as [MaterialId, MaterialId][]);
           const ay = Math.min(lo.y1 + 0.55, G - bay.yb - 0.4);
           stripedAwning(S, -ow / 2 - 0.25, ow / 2 + 0.25, -1.35, -0.02, ay - 0.55, ay, mats);
           for (const s of [-1, 1]) S.cyl('wood', s * (ow / 2 + 0.2), (ay - 0.6) / 2, -1.35, 0.035, ay - 0.6, 5);
           S.rod('iron', { x: 0, y: ay, z: -0.02 }, { x: 0, y: ay + 0.25, z: 0 }, 0.01, 3, { shadow: false });
         }
-        if (rng.chance(0.25)) placeProp(S, 'signboard', ow / 2 + 0.45, Math.min(lo.y1 + 0.4, G - bay.yb - 0.6), 0, 0, { variant: rng.int(0, 2), collide: false });
+        if (drng.chance(0.25)) placeProp(S, 'signboard', ow / 2 + 0.45, Math.min(lo.y1 + 0.4, G - bay.yb - 0.6), 0, 0, { variant: drng.int(0, 2), collide: false });
+        if (drng.chance(0.15)) placeProp(S, 'torch_bracket', -ow / 2 - 0.45, Math.min(lo.y1 - 0.3, 2.4), 0, 0, { collide: false });
       }
       spot('shopDoor', cx, bay.yb, zf - 0.6, Math.PI, kind);
       spot('workshop', cx, bay.yb, zf + T + 1.3, Math.PI, kind);
     } else {
-      plankShutters(S, lo, T, rng);
+      if (low) S.span('wood', -ow / 2, 0, T * 0.3, ow / 2, lo.y1 - (o.arch ?? 0), T * 0.3 + 0.05);
+      else plankShutters(S, lo, T, drng);
       S.span('black', -ow / 2, 0, T * 0.3 + 0.08, ow / 2, lo.y1, T * 0.3 + 0.1, { shadow: false });
     }
   }
@@ -253,11 +268,12 @@ export function insula(spec: InsulaSpec): BuildingOutput {
       F.span(shutterMat, o.x0 + 0.02, o.y0, T * 0.45, o.x1 - 0.02, o.y1 - 0.02, T * 0.45 + 0.05);
       continue;
     }
-    const sh = rng.weighted<'open' | 'half' | 'closed' | null>([['open', 3], ['half', 1.5], ['closed', 2], [null, 2.5]]);
+    if (low) continue;
+    const sh = drng.weighted<'open' | 'half' | 'closed' | null>([['open', 3], ['half', 1.5], ['closed', 2], [null, 2.5]]);
     windowDetails(F, o, {
       t: T,
       sill: 'travertine',
-      lintel: finish === 'brick' ? null : rng.chance(0.4) ? 'travertine' : null,
+      lintel: finish === 'brick' ? null : drng.chance(0.4) ? 'travertine' : null,
       relieving: finish === 'brick' ? 'brick' : null,
       shutters: sh,
       shutterMat,
@@ -265,7 +281,8 @@ export function insula(spec: InsulaSpec): BuildingOutput {
   }
 
   // ---- balcony (maenianum)
-  if (bal1 >= bal0) balconyAt(F, bays[bal0].x0 + 0.15, bays[bal1].x1 - 0.15, floorY(1), rng.range(0.95, 1.2), rng, shutterMat);
+  const balDepth = rng.range(0.95, 1.2);
+  if (bal1 >= bal0) balconyAt(F, bays[bal0].x0 + 0.15, bays[bal1].x1 - 0.15, floorY(1), balDepth, drng, shutterMat, low);
 
   // ---- other walls
   const sideWins = (len: number, open: boolean, groundWins = !spec.courtyard): Opening[] => {
@@ -286,16 +303,61 @@ export function insula(spec: InsulaSpec): BuildingOutput {
     return out;
   };
   const sideLen = Db - 2 * T;
-  const L = d.at(-W / 2, 0, (zf + zb) / 2, Math.PI / 2);
-  const R = d.at(W / 2, 0, (zf + zb) / 2, -Math.PI / 2);
+  const zc = (zf + zb) / 2;
+  const L = d.at(-W / 2, 0, zc, Math.PI / 2);
+  const R = d.at(W / 2, 0, zc, -Math.PI / 2);
   const Bk = d.at(0, 0, zb, Math.PI);
-  for (const [frame, len, open] of [[L, sideLen, sides.left], [R, sideLen, sides.right], [Bk, W, sides.back]] as const) {
-    const wins = sideWins(len, open);
+  const sideShopDepth = T + 1.7;
+  for (const [frame, len, open, side] of [[L, sideLen, sides.left, -1], [R, sideLen, sides.right, 1], [Bk, W, sides.back, 0]] as const) {
+    // Corner lots: shallow shops along the side street, behind the front shop rooms.
+    const shops: { o: Opening; yb: number; lx: number }[] = [];
+    const withShops = side !== 0 && open && (side < 0 ? spec.sideShops?.left : spec.sideShops?.right);
+    if (withShops) {
+      const z0 = zf + T + sd + 0.8, z1 = zb - T - 0.5;
+      const nS = Math.floor((z1 - z0) / 4.0);
+      for (let i = 0; i < nS; i++) {
+        const z = z0 + (z1 - z0) * ((i + 0.5) / nS);
+        const lx = side < 0 ? zc - z : z - zc; // L: local +x points to the front; R: to the back
+        const yb = Math.max(yMin + 0.4, Math.min(G - 3.6, ground(side * (W / 2 + 0.4), z)));
+        const oh2 = Math.min(2.9, G - yb - 0.7);
+        if (oh2 < 2.2) continue;
+        shops.push({ o: { x0: lx - 1.3, x1: lx + 1.3, y0: yb, y1: yb + oh2 }, yb, lx });
+      }
+    }
+    const wins = [...sideWins(len, open, !spec.courtyard && !withShops), ...shops.map((s) => s.o)];
     const cutS = wall(frame, wallMat, -len / 2, len / 2, yMin, eave, T, wins);
     if (open) {
-      for (const o of cutS) windowDetails(frame, o, { t: T, sill: 'travertine', relieving: finish === 'brick' ? 'brick' : null, shutters: rng.weighted([['open', 2], ['closed', 1.5], [null, 2]]), shutterMat, grille: o.y0 < G && o.y0 > 2 });
+      if (!low) for (const o of cutS) if (!shops.some((s) => s.o === o)) windowDetails(frame, o, { t: T, sill: 'travertine', relieving: finish === 'brick' ? 'brick' : null, shutters: drng.weighted([['open', 2], ['closed', 1.5], [null, 2]]), shutterMat, grille: o.y0 < G && o.y0 > 2 });
       for (let k = 1; k < n; k++) band(frame, courseMat, -len / 2 - (len === W ? 0.02 : T + 0.02), len / 2 + (len === W ? 0.02 : T + 0.02), floorY(k) - 0.07, 0.12, 0.07);
       cornice(frame, trim, -len / 2 - (len === W ? 0 : T), len / 2 + (len === W ? 0 : T), eave);
+    }
+    // A street-corner aedicula (shrine niche) on the side wall near the front corner.
+    if (withShops && !low && drng.chance(0.35)) {
+      const lx = side < 0 ? len / 2 - 1.3 : -len / 2 + 1.3;
+      const z = side < 0 ? zc - lx : zc + lx;
+      const yb = Math.max(yMin + 0.4, ground(side * (W / 2 + 0.4), z));
+      aedicula(frame.at(lx, yb, 0), drng, 1.7);
+      spots.push({ id: `shrine${spots.length}`, kind: 'shrine', position: frame.point(lx, yb, -0.9), facing: side < 0 ? -Math.PI / 2 : Math.PI / 2, tag: 'aedicula' });
+    }
+    for (const s of shops) {
+      if (!cutS.includes(s.o)) continue;
+      const S = frame.at(s.lx, s.yb, 0);
+      const h = s.o.y1 - s.yb;
+      const lo: Opening = { x0: -1.3, x1: 1.3, y0: 0, y1: h };
+      S.span(finish === 'brick' ? 'travertine' : 'wood_dark', -1.48, h, -0.035, 1.48, h + 0.22, 0.05);
+      S.span('travertine', -1.32, -0.08, -0.14, 1.32, 0.02, T * 0.6);
+      if (low) {
+        S.span('wood', -1.3, 0, T * 0.3, 1.3, h, T * 0.3 + 0.05);
+      } else if (drng.chance(0.4)) {
+        const kind = drng.pick(['general', 'pottery', 'cobbler'] as const);
+        shopInterior(S, kind, { w: 2.6, depth: sideShopDepth, h: h + 0.12, t: T, wealth }, drng.fork(`side${s.lx}`));
+        S.span('black', -1.3, h + 0.23, T + 0.01, 1.3, Math.max(h + 0.4, G - s.yb - 0.2), sideShopDepth, { shadow: false });
+        const p = S.point(0, 0, -0.6);
+        spots.push({ id: `shopDoor${spots.length}`, kind: 'shopDoor', position: p, facing: side < 0 ? -Math.PI / 2 : Math.PI / 2, tag: kind });
+      } else {
+        plankShutters(S, lo, T, drng);
+        S.span('black', -1.3, 0, T * 0.3 + 0.08, 1.3, h, T * 0.3 + 0.1, { shadow: false });
+      }
     }
   }
 
@@ -313,15 +375,19 @@ export function insula(spec: InsulaSpec): BuildingOutput {
     d.span('black', -ix, y0, cz1, ix, eave, iz1, { shadow: false });
     d.span('black', -ix, y0, cz0, cx0, eave, cz1, { shadow: false });
     d.span('black', cx1, y0, cz0, ix, eave, cz1, { shadow: false });
-    courtyardWalls(d, cw, cdp, ccz, n, floorY, G, eave, wallMat, courseMat, rng, shutterMat);
+    courtyardWalls(d, cw, cdp, ccz, n, floorY, G, eave, wallMat, courseMat, drng, shutterMat, low);
   } else {
     d.span('black', -ix, G - 0.25, iz0, ix, eave, iz1, { shadow: false });
   }
   // Ground floor behind side/back barred windows.
-  if (!spec.courtyard) d.span('black', -ix, 2.0, iz0 + sd + 0.2, ix, G - 0.26, iz1, { shadow: false });
+  if (!spec.courtyard) {
+    const bx0 = spec.sideShops?.left && sides.left ? -W / 2 + sideShopDepth + 0.3 : -ix;
+    const bx1 = spec.sideShops?.right && sides.right ? W / 2 - sideShopDepth - 0.3 : ix;
+    d.span('black', bx0, 2.0, iz0 + sd + 0.2, bx1, G - 0.26, iz1, { shadow: false });
+  }
 
   // ---- portico
-  if (portico) porticoFront(d, W, D, pd, bays, G, yMin, wallMat, trim, sides, rng);
+  if (portico) porticoFront(d, W, D, pd, bays, G, yMin, wallMat, trim, sides, drng, low);
 
   // ---- roof
   const roofKind = spec.courtyard ? 'ring' : spec.roof ?? (rng.chance(0.7) ? 'hip' : 'gable');
@@ -336,6 +402,7 @@ export function insula(spec: InsulaSpec): BuildingOutput {
     wallMat,
     wallT: T,
     pitch: (rng.range(19, 23) * Math.PI) / 180,
+    ridges: !low,
   });
 
   // ---- colliders: upper mass, back of the ground floor, front piers per bay
@@ -378,7 +445,7 @@ function stairwell(S: Draw, w: number, t: number, depth: number) {
 }
 
 /** Wooden balcony on projecting joists with an X-lattice railing. */
-function balconyAt(F: Draw, x0: number, x1: number, y: number, depth: number, rng: Rng, mat: MaterialId) {
+function balconyAt(F: Draw, x0: number, x1: number, y: number, depth: number, rng: Rng, mat: MaterialId, low = false) {
   const len = x1 - x0;
   const nj = Math.max(2, Math.round(len / 0.95) + 1);
   for (let i = 0; i < nj; i++) {
@@ -392,7 +459,7 @@ function balconyAt(F: Draw, x0: number, x1: number, y: number, depth: number, rn
   for (let i = 0; i < posts; i++) F.span(mat, x0 + (len * i) / (posts - 1) - 0.045, y, z - 0.045, x0 + (len * i) / (posts - 1) + 0.045, y + railH + 0.05, z + 0.045);
   F.span(mat, x0 - 0.03, y + railH, z - 0.06, x1 + 0.03, y + railH + 0.07, z + 0.06);
   F.span(mat, x0, y + 0.06, z - 0.035, x1, y + 0.13, z + 0.035, { shadow: false });
-  for (let i = 0; i < posts - 1; i++) {
+  for (let i = 0; i < posts - 1 && !low; i++) {
     const a = x0 + (len * i) / (posts - 1), c = x0 + (len * (i + 1)) / (posts - 1);
     const cx = (a + c) / 2, span = c - a, h = railH - 0.13;
     const ang = Math.atan2(h, span);
@@ -405,12 +472,13 @@ function balconyAt(F: Draw, x0: number, x1: number, y: number, depth: number, rn
     F.span(mat, x - 0.02, y, -depth + 0.4, x + 0.02, y + railH, -depth + 0.46, { shadow: false });
   }
   // Pots and laundry on some balconies.
+  if (low) return;
   if (rng.chance(0.5)) F.cyl('terracotta', x0 + 0.3, y + 0.15, -0.3, 0.14, 0.28, 8, { rTop: 0.18 });
   if (rng.chance(0.4)) F.span(rng.pick(['fabric_white', 'fabric_red', 'fabric_blue'] as MaterialId[]), x0 + len * 0.4, y + 0.4, z - 0.06, x0 + len * 0.4 + 0.7, y + railH, z - 0.05, { shadow: false });
 }
 
 /** Inner facades of a light-well courtyard. */
-function courtyardWalls(d: Draw, cw: number, cd: number, cz: number, n: number, floorY: (k: number) => number, G: number, eave: number, wallMat: MaterialId, course: MaterialId, rng: Rng, shutterMat: MaterialId) {
+function courtyardWalls(d: Draw, cw: number, cd: number, cz: number, n: number, floorY: (k: number) => number, G: number, eave: number, wallMat: MaterialId, course: MaterialId, rng: Rng, shutterMat: MaterialId, low: boolean) {
   const walls: [Draw, number][] = [
     [d.at(0, 0, cz - cd / 2, Math.PI), cw + 2 * T],
     [d.at(0, 0, cz + cd / 2, 0), cw + 2 * T],
@@ -430,7 +498,7 @@ function courtyardWalls(d: Draw, cw: number, cd: number, cz: number, n: number, 
     const cutI = wall(inner, wallMat, -len / 2, len / 2, -0.3, eave, T, ops);
     for (const o of cutI) {
       if (o.y0 < 0.5) inner.span('black', o.x0, 0, T * 0.5, o.x1, o.y1, T * 0.5 + 0.02, { shadow: false });
-      else windowDetails(inner, o, { t: T, sill: 'travertine', shutters: rng.weighted([['open', 1], ['closed', 1], [null, 1]]), shutterMat });
+      else if (!low) windowDetails(inner, o, { t: T, sill: 'travertine', shutters: rng.weighted([['open', 1], ['closed', 1], [null, 1]]), shutterMat });
     }
     for (let k = 1; k < n; k++) band(inner, course, -len / 2, len / 2, floorY(k) - 0.07, 0.12, 0.06);
   }
@@ -441,7 +509,7 @@ function courtyardWalls(d: Draw, cw: number, cd: number, cz: number, n: number, 
 }
 
 /** Neronian street portico: an arcade carrying a terrace, in front of the shops. */
-function porticoFront(d: Draw, W: number, D: number, pd: number, bays: Bay[], G: number, yMin: number, wallMat: MaterialId, trim: MaterialId, sides: { left: boolean; right: boolean }, rng: Rng) {
+function porticoFront(d: Draw, W: number, D: number, pd: number, bays: Bay[], G: number, yMin: number, wallMat: MaterialId, trim: MaterialId, sides: { left: boolean; right: boolean }, rng: Rng, low: boolean) {
   const F = d.at(0, 0, -D / 2);
   const pt = 0.7;
   const arches: Opening[] = bays.map((bay) => {
@@ -479,5 +547,5 @@ function porticoFront(d: Draw, W: number, D: number, pd: number, bays: Bay[], G:
       E.solid(pd / 2 - 0.8, yMin, 0, pd / 2, top, 0.45);
     }
   }
-  if (rng.chance(0.5)) placeProp(d, 'bench_masonry', bays[0].x1 - 0.2, bays[0].yb, -D / 2 + pd - 0.3, Math.PI, { variant: 0 });
+  if (!low && rng.chance(0.5)) placeProp(d, 'bench_masonry', bays[0].x1 - 0.2, bays[0].yb, -D / 2 + pd - 0.3, Math.PI, { variant: 0 });
 }

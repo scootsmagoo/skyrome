@@ -29,6 +29,8 @@ export interface DomusSpec {
   groundAt?: LocalGround;
   sides?: { left?: boolean; right?: boolean; back?: boolean };
   streetDressing?: boolean;
+  /** 'low': far-LOD stand-in with the same massing. */
+  detail?: 'full' | 'low';
 }
 
 const T = 0.5;
@@ -41,7 +43,8 @@ export function domus(spec: DomusSpec): BuildingOutput {
   const W = spec.width, D = spec.depth;
   const wealth = spec.wealth ?? 0.75;
   const ground = spec.groundAt ?? flatGround;
-  const dress = spec.streetDressing ?? true;
+  const low = spec.detail === 'low';
+  const dress = (spec.streetDressing ?? true) && !low;
   const spot = (kind: SpotKind, x: number, y: number, z: number, facing: number, tag?: string) =>
     spots.push({ id: `${kind}${spots.length}`, kind, position: new THREE.Vector3(x, y, z), facing, tag });
 
@@ -96,7 +99,10 @@ export function domus(spec: DomusSpec): BuildingOutput {
   band(F, dadoMat, -W / 2, W / 2, yMin, fyb + 1.2 - yMin, 0.015);
   band(F, trim, -W / 2 - 0.02, W / 2 + 0.02, hf - 0.3, 0.3, 0.18);
   if (upper) band(F, trim, -W / 2 - 0.02, W / 2 + 0.02, 4.3, 0.12, 0.07);
-  for (const o of upWins) if (cut.includes(o)) windowDetails(F, o, { t: T, sill: 'travertine', shutters: rng.chance(0.5) ? 'closed' : 'open', shutterMat: 'wood_painted', grille: !upper });
+  for (const o of upWins) {
+    const sh = rng.chance(0.5) ? 'closed' : 'open';
+    if (cut.includes(o) && !low) windowDetails(F, o, { t: T, sill: 'travertine', shutters: sh, shutterMat: 'wood_painted', grille: !upper });
+  }
 
   // Main door: travertine frame with cornice, studded leaves standing ajar, dark fauces.
   if (cut.includes(fauces)) {
@@ -129,7 +135,9 @@ export function domus(spec: DomusSpec): BuildingOutput {
     const lo: Opening = { x0: -ow / 2, x1: ow / 2, y0: 0, y1: 2.9 };
     S.span('wood_dark', -ow / 2 - 0.15, 2.9, -0.03, ow / 2 + 0.15, 3.12, 0.05, { shadow: false });
     S.span('travertine', -ow / 2 - 0.02, -0.08, -0.14, ow / 2 + 0.02, 0.02, T * 0.6);
-    if (s.open) {
+    if (s.open && low) {
+      S.span('black', -ow / 2, 0, T * 0.6, ow / 2, 2.9, T * 0.6 + 0.02, { shadow: false });
+    } else if (s.open) {
       shopInterior(S, s.kind, { w: ow, depth: T + sd, h: 3.0, t: T, wealth }, rng.fork(`shop${cx}`));
       S.solid(-ow / 2 - 0.2, -0.5, 0, ow / 2 + 0.2, 0, T + sd);
       if (dress) shopFrontage(S, s.kind, ow, rng.fork(`fr${cx}`));
@@ -146,7 +154,7 @@ export function domus(spec: DomusSpec): BuildingOutput {
     wall(E, wallMat, -(ft - 2 * T) / 2, (ft - 2 * T) / 2, yMin, hf, T);
   }
   d.span('black', -W / 2 + T, upper ? 4.2 : 3.2, z0 + T + 0.01, W / 2 - T, hf, z1 - 0.01, { shadow: false });
-  roof(d.at(0, 0, (z0 + z1) / 2), { kind: 'gable', w: W, d: ft, y: hf, axis: 'x', overhang: 0.5, wallMat, wallT: T, pitch: 0.36 });
+  roof(d.at(0, 0, (z0 + z1) / 2), { kind: 'gable', w: W, d: ft, y: hf, axis: 'x', overhang: 0.5, wallMat, wallT: T, pitch: 0.36, ridges: !low });
 
   // ---- atrium block (compluviate roof over the impluvium)
   const cw = Math.max(2.6, W * 0.24), cd = Math.max(2.4, ad * 0.3);
@@ -158,7 +166,7 @@ export function domus(spec: DomusSpec): BuildingOutput {
     band(E, dadoMat, -ad / 2, ad / 2, yMin, 1.2 - yMin, 0.012);
   }
   wall(d.at(0, 0, z1), wallMat, -W / 2, W / 2, hf - 0.4, ha, T);
-  const rr = roof(d.at(0, 0, za), { kind: 'ring', w: W, d: ad, y: ha, inner: { w: cw, d: cd, overhang: 0.15 }, ridgeAt: 0.22, overhang: 0.45, pitch: 0.33 });
+  const rr = roof(d.at(0, 0, za), { kind: 'ring', w: W, d: ad, y: ha, inner: { w: cw, d: cd, overhang: 0.15 }, ridgeAt: 0.22, overhang: 0.45, pitch: 0.33, ridges: !low });
   // Atrium room under the roof: floor, painted walls, impluvium.
   d.span('mosaic', -aw / 2, -0.1, za - adIn / 2, aw / 2, 0.0, za + adIn / 2);
   for (const [x0, x1, zA, zB] of [[-aw / 2 - 0.3, -aw / 2, za - adIn / 2, za + adIn / 2], [aw / 2, aw / 2 + 0.3, za - adIn / 2, za + adIn / 2], [-aw / 2, aw / 2, za - adIn / 2 - 0.3, za - adIn / 2], [-aw / 2, aw / 2, za + adIn / 2, za + adIn / 2 + 0.3]]) {
@@ -166,8 +174,10 @@ export function domus(spec: DomusSpec): BuildingOutput {
   }
   d.span('marble', -cw / 2 - 0.25, 0, za - cd / 2 - 0.25, cw / 2 + 0.25, 0.18, za + cd / 2 + 0.25);
   d.span('water', -cw / 2 + 0.05, 0.12, za - cd / 2 + 0.05, cw / 2 - 0.05, 0.19, za + cd / 2 - 0.05, { shadow: false });
-  placeProp(d, 'puteal', cw / 2 + 0.9, 0, za + cd / 2 + 0.6, 0, { variant: 1 });
-  placeProp(d, 'table_marble', 0, 0, za + cd / 2 + 1.3, 0);
+  if (!low) {
+    placeProp(d, 'puteal', cw / 2 + 0.9, 0, za + cd / 2 + 0.6, 0, { variant: 1 });
+    placeProp(d, 'table_marble', 0, 0, za + cd / 2 + 1.3, 0);
+  }
   // Dark mass between the atrium and the outer walls, kept under the inward-sloping roof.
   const darkTop = rr.innerEave + (aw / 2 + 0.3 - cw / 2 + 0.15) * Math.tan(0.33) - 0.3;
   for (const [x0, x1] of [[-W / 2 + T, -aw / 2 - 0.3], [aw / 2 + 0.3, W / 2 - T]]) d.span('black', x0, 0, z1 + 0.01, x1, darkTop, z2 - 0.01, { shadow: false });
@@ -177,7 +187,7 @@ export function domus(spec: DomusSpec): BuildingOutput {
     const zt = (z2 + z3) / 2;
     for (const s of [-1, 1]) wall(d.at(s * W / 2, 0, zt, s < 0 ? Math.PI / 2 : -Math.PI / 2), wallMat, -tbd / 2, tbd / 2, yMin, ha - 0.6, T);
     d.span('black', -W / 2 + T, 0, z2, W / 2 - T, ha - 0.6, z3, { shadow: false });
-    roof(d.at(0, 0, zt), { kind: 'gable', w: W, d: tbd, y: ha - 0.6, axis: 'x', overhang: 0.3, wallMat, wallT: T, pitch: 0.36 });
+    roof(d.at(0, 0, zt), { kind: 'gable', w: W, d: tbd, y: ha - 0.6, axis: 'x', overhang: 0.3, wallMat, wallT: T, pitch: 0.36, ridges: !low });
   }
 
   // ---- peristyle garden
@@ -209,7 +219,7 @@ export function domus(spec: DomusSpec): BuildingOutput {
       d.span('plaster_red', x0, 0, zA, x1, 1.3, zB, { shadow: false });
       d.span('plaster_white', x0, 1.3, zA, x1, hp - 0.3, zB, { shadow: false });
     }
-    const rp = roof(d.at(0, 0, gz), { kind: 'ring', w: pw, d: pdd, y: hp, inner: { w: gw, d: gd, overhang: 0.35 }, ridgeAt: 0, overhang: 0.3, pitch: 0.3 });
+    const rp = roof(d.at(0, 0, gz), { kind: 'ring', w: pw, d: pdd, y: hp, inner: { w: gw, d: gd, overhang: 0.35 }, ridgeAt: 0, overhang: 0.3, pitch: 0.3, ridges: !low });
     // Colonnade: Pompeian columns, red lower third, white fluted-looking upper part.
     const colTop = rp.innerEave + 0.35 * Math.tan(0.3) - 0.14;
     const colsX = Math.max(2, Math.round(gw / 2.6));
@@ -243,7 +253,7 @@ export function domus(spec: DomusSpec): BuildingOutput {
       d.span('foliage_broad', x0 + 0.05, 0.55, z0 + 0.05, x1 - 0.05, 0.62, z1 - 0.05, { shadow: false });
     };
     const gx = gw / 2 - 0.6, gzz = gd / 2 - 0.6;
-    if (gx > 1.5 && gzz > 1.5) {
+    if (gx > 1.5 && gzz > 1.5 && !low) {
       hedge(-gx, gz - gzz, -0.9, gz - gzz + 0.4);
       hedge(0.9, gz - gzz, gx, gz - gzz + 0.4);
       hedge(-gx, gz + gzz - 0.4, -0.9, gz + gzz);
@@ -256,8 +266,8 @@ export function domus(spec: DomusSpec): BuildingOutput {
     d.ellipsoid('marble', 0, 1.1, gz, 0.22, 0.08, 0.22, { seg: [10, 5] });
     spot('fountain', 0, 0, gz - 1.3, Math.PI, 'domus');
     for (const [x, z] of [[-gw / 4, gz - gd / 4], [gw / 4, gz + gd / 4], [gw / 4, gz - gd / 4], [-gw / 4, gz + gd / 4]]) if (rng.chance(0.6)) spot('tree', x, 0, z, 0, rng.pick(['laurel', 'olive', 'oleander', 'cypress']));
-    if (rng.chance(0.6)) placeProp(d, 'herm', -gw / 2 + 0.6, 0, gz, Math.PI / 2);
-    if (rng.chance(0.5)) placeProp(d, 'statue_pedestal', 0, 0, gz + gd / 2 - 0.8, Math.PI, { variant: 1, scale: 0.8 });
+    if (rng.chance(0.6) && !low) placeProp(d, 'herm', -gw / 2 + 0.6, 0, gz, Math.PI / 2);
+    if (rng.chance(0.5) && !low) placeProp(d, 'statue_pedestal', 0, 0, gz + gd / 2 - 0.8, Math.PI, { variant: 1, scale: 0.8 });
   }
 
   // ---- colliders: everything but the shop recesses / fauces
