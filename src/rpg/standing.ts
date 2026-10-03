@@ -2,18 +2,22 @@
  * Social standing (game.standing) — docs/GDD.md §3.4, tracked separately from skills:
  *   Dignitas     legal rank: peregrinus / latinus-iunianus 0 · libertus 1 · civis 2 · cliens-notus 3 · eques 4
  *   Fama         reputation −100…+100 per district here (per faction: FactionSystem)
- *   Infamia      0…100: the stain of arena, stage or brothel work and of convictions
+ *   Infamia      0…100: the stain of arena, stage or brothel work and of convictions; it fades by
+ *                1 per 10 quiet days, never below 10 once you swore the gladiator's oath or were condemned
  *   Cleanliness  lautus (washed, +10 persuasion for 12 game hours) · normal · sordidus (−10)
- * Legal status comes from the origin; only citizens and freedmen may wear the toga.
+ * Legal status comes from the origin; only citizens and freed citizens may wear formal dress (the
+ * toga for men, the stola and palla for women). A gladiatrix gains arena Infamia 50% faster (§3.7).
  */
 import type { EventBus, GameEvents } from '../core/Events';
-import { STANDING } from './data/balance';
+import { ARENA } from './arena';
+import { STANDING } from './data/tuning';
 import type { LegalStatus } from './types';
 import './events';
 
 export const DIGNITAS_STEPS = ['peregrinus', 'libertus', 'civis', 'cliens-notus', 'eques'] as const;
 export type Dignitas = (typeof DIGNITAS_STEPS)[number];
 export type Cleanliness = 'lautus' | 'normal' | 'sordidus';
+export type Sex = 'male' | 'female';
 
 const LEGAL: LegalStatus[] = ['civis', 'libertus', 'latinus-iunianus', 'peregrinus', 'alexandrinus'];
 /** Dignitas a legal status starts at. */
@@ -31,6 +35,15 @@ export class Standing {
   origin: string | null = null;
   /** Debt in denarii (the fallen eques starts 2,000 in debt). */
   debt = 0;
+  /** The player's sex (§3.7): dress and a few framings; it never gates content. */
+  sex: Sex = 'male';
+  /** Swore the gladiator's oath or was condemned: Infamia never recovers below 10. */
+  branded = false;
+  /** Elapsed day of the last new stain, and of the last recovery step. */
+  private lastStainDay = 0;
+  private lastRecoveryDay = 0;
+  /** One-off stains already taken (the toga at a salutatio). */
+  private readonly stains = new Set<string>();
 
   constructor(
     private readonly events?: EventBus<GameEvents>,
@@ -54,9 +67,14 @@ export class Standing {
   get isCitizen(): boolean {
     return this._legal === 'civis';
   }
-  /** Only citizens and freedmen may wear the toga (§3.2); anyone else commits usurpatio togae. */
+  /** Only citizens and freed citizens may wear formal dress (§3.2); anyone else commits usurpatio. */
   get mayWearToga(): boolean {
     return this._legal === 'civis' || this._legal === 'libertus';
+  }
+
+  /** Alias of mayWearToga: the toga for men, the stola and palla for women. */
+  get mayWearFormalDress(): boolean {
+    return this.mayWearToga;
   }
 
   /** Character creation: legal status from the origin. */
@@ -92,11 +110,53 @@ export class Standing {
     return this.isCitizen && assets >= STANDING.equestrianCensus && this._infamia <= STANDING.equestrianMaxInfamia;
   }
 
-  addInfamia(amount: number) {
-    const v = Math.max(0, Math.min(100, this._infamia + amount));
+  /**
+   * A new stain (§3.4). `arena`: a gladiatrix takes 50% more; `brand`: the oath or a condemnation
+   * (recovery stops at 10); `once`: a key that stains only the first time (a woman's toga at a salutatio).
+   */
+  addInfamia(amount: number, opts: { arena?: boolean; brand?: boolean; once?: string } = {}) {
+    if (opts.once) {
+      if (this.stains.has(opts.once)) return;
+      this.stains.add(opts.once);
+    }
+    if (opts.brand) this.branded = true;
+    if (amount > 0) {
+      if (opts.arena && this.sex === 'female') amount *= 1 + ARENA.gladiatrix.infamia;
+      this.lastStainDay = this.lastRecoveryDay = this.day();
+    }
+    this.setInfamia(this._infamia + amount);
+  }
+
+  /** Lower Infamia (a patron's restitutio −15, the rudis −10, the Fides ending), down to the floor. */
+  reduceInfamia(amount: number) {
+    this.setInfamia(Math.max(this.infamiaFloor(), this._infamia - Math.max(0, amount)));
+  }
+
+  /** The lowest Infamia can fall by recovery: 10 once branded, else 0. */
+  infamiaFloor(): number {
+    return this.branded ? STANDING.infamia.floorBranded : 0;
+  }
+
+  /** Recovery: −1 per 10 elapsed days without a new stain. Call daily (install does, on the hour). */
+  recoverInfamia(): number {
+    const I = STANDING.infamia;
+    const steps = Math.floor((this.day() - Math.max(this.lastStainDay, this.lastRecoveryDay)) / I.recoverDays);
+    if (steps <= 0) return 0;
+    this.lastRecoveryDay += steps * I.recoverDays;
+    const before = this._infamia;
+    if (before > this.infamiaFloor()) this.setInfamia(Math.max(this.infamiaFloor(), before - steps * I.recoverAmount));
+    return before - this._infamia;
+  }
+
+  private setInfamia(value: number) {
+    const v = Math.max(0, Math.min(100, value));
     if (v === this._infamia) return;
     this._infamia = v;
     this.changed();
+  }
+
+  private day(): number {
+    return Math.floor(this.hours() / 24);
   }
 
   fame(district: string): number {
@@ -128,7 +188,21 @@ export class Standing {
   }
 
   serialize() {
-    return { legal: this._legal, dignitas: this._dignitas, infamia: this._infamia, fama: Object.fromEntries(this.fama), origin: this.origin, debt: this.debt, cleanliness: this._cleanliness, lautusUntil: this.lautusUntil };
+    return {
+      legal: this._legal,
+      dignitas: this._dignitas,
+      infamia: this._infamia,
+      fama: Object.fromEntries(this.fama),
+      origin: this.origin,
+      debt: this.debt,
+      cleanliness: this._cleanliness,
+      lautusUntil: this.lautusUntil,
+      sex: this.sex,
+      branded: this.branded,
+      lastStainDay: this.lastStainDay,
+      lastRecoveryDay: this.lastRecoveryDay,
+      stains: [...this.stains],
+    };
   }
 
   restore(data: unknown) {
@@ -142,5 +216,11 @@ export class Standing {
     this.debt = typeof d.debt === 'number' && d.debt > 0 ? d.debt : 0;
     this._cleanliness = d.cleanliness === 'lautus' || d.cleanliness === 'sordidus' ? d.cleanliness : 'normal';
     this.lautusUntil = typeof d.lautusUntil === 'number' ? d.lautusUntil : 0;
+    this.sex = d.sex === 'female' ? 'female' : 'male';
+    this.branded = !!d.branded;
+    this.lastStainDay = typeof d.lastStainDay === 'number' ? d.lastStainDay : 0;
+    this.lastRecoveryDay = typeof d.lastRecoveryDay === 'number' ? d.lastRecoveryDay : this.lastStainDay;
+    this.stains.clear();
+    for (const k of Array.isArray(d.stains) ? d.stains : []) if (typeof k === 'string') this.stains.add(k);
   }
 }

@@ -5,7 +5,7 @@
  * whose kit sets the weapon, worn pieces and AR; bosses override health and kit.
  */
 import { armorFamilyOf, flatStats, FISTS, type CombatantStats } from './combat-math';
-import { ARCHETYPES, ENEMY_TIERS, NATURAL_WEAPONS, type ArchetypeDef } from './data/enemies';
+import { ARCHETYPES, ENEMY_TIERS, NATURAL_WEAPONS, type ArchetypeDef } from './data/combatants';
 import type { ItemDb } from './items';
 import type { CombatProfile, EnemyTierDef, WeaponStats } from './types';
 
@@ -57,9 +57,11 @@ export function combatProfileFor(tier: string, opts: ProfileOptions = {}): Comba
     armorFamily: kit?.family ?? def.family ?? 'cloth',
     skill: def.skill,
     poise: def.poise,
-    damageMult: def.dmgMult,
-    speed: def.speed,
-    reaction: def.reaction,
+    dmgMult: def.dmgMult,
+    speedMult: def.speed,
+    reactionS: def.reaction,
+    // §6.12: bosses use two attack tokens.
+    tokensCost: def.tier === 'boss' ? 2 : 1,
     weapon: kit?.weapon,
     shield: kit?.shield,
     aggression: def.aggression,
@@ -73,7 +75,7 @@ export function combatProfileFor(tier: string, opts: ProfileOptions = {}): Comba
 
 /** CombatantStats for a profile: flat skill, no perks, the tier's damage multiplier. */
 export function profileStats(p: CombatProfile): CombatantStats {
-  return flatStats(p.skill, p.damageMult ?? 1);
+  return flatStats(p.skill, p.dmgMult ?? 1);
 }
 
 /** The profile's weapon stats: an item, a natural weapon (bites, claws, fists), or fists. */

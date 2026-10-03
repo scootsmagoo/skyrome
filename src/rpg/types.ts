@@ -45,6 +45,12 @@ export interface PerkDef {
   modifiers?: Partial<Record<ModifierId, number>>;
   /** Free-form flag other systems can test with sheet.hasFlag(). */
   flags?: string[];
+  /**
+   * The game system the perk depends on (GDD §5.5: 'sling', 'bow', 'bleeding', 'allies',
+   * 'market-days', 'crafting', 'racing', 'beasts'…). Perks whose system hasn't shipped are hidden.
+   * rpg extension.
+   */
+  requiresSystem?: string;
 }
 
 /** Additive modifiers (fractions where it makes sense: 0.2 = +20%). */
@@ -94,6 +100,8 @@ export type ModifierId =
   | 'fire.resist'
   | 'arena.favor'
   | 'arena.missio'
+  /** Attack speed (the toga −20%, the palla −10%). */
+  | 'attack.speed'
   | `xp.${string}`;
 
 // ------------------------------------------------------------------ items
@@ -112,7 +120,12 @@ export type ItemType =
   | 'misc'
   | 'quest';
 
-export type EquipSlot = 'mainHand' | 'offHand' | 'head' | 'body' | 'hands' | 'legs' | 'feet' | 'cloak' | 'neck' | 'finger' | 'ammo';
+/**
+ * Equipment slots (GDD §8.2). Layers stack the way they were worn: `under` (tunic), `padding`
+ * (subarmalis), `body` (cuirass or stola), `cloak` (toga, palla, paenula, sagum, lacerna); `legs`
+ * (bracae, fasciae), `shins` (ocreae), `arm` (manica), `head` (a helmet or a hood or hat).
+ */
+export type EquipSlot = 'mainHand' | 'offHand' | 'under' | 'padding' | 'body' | 'cloak' | 'legs' | 'shins' | 'arm' | 'head' | 'feet' | 'neck' | 'finger' | 'ammo';
 
 export type WeaponClass = 'blade' | 'spear' | 'blunt' | 'bow' | 'sling' | 'thrown' | 'unarmed';
 
@@ -133,6 +146,14 @@ export interface WeaponStats {
   alt?: { damageType: DamageType; damage: number };
   /** Damage when thrown (lancea 18) if different from `damage`. rpg extension. */
   thrownDamage?: number;
+  /**
+   * Damage type of each attack (GDD §6.2 attack-type table) when it differs from `damageType`:
+   * the light chain (hits 1/2/3) and the power directions. The type picks the value (`alt` for the
+   * second type). rpg extension.
+   */
+  attackTypes?: { light?: [DamageType, DamageType, DamageType]; overhead?: DamageType; forward?: DamageType; side?: DamageType };
+  /** Arma lusoria (rudis, practice trident): never kills — 0 health is a knockout (§6.10). rpg extension. */
+  practice?: boolean;
   /** Skill that governs and is trained by this weapon. */
   skill: SkillId;
   /** Ranged weapons: projectile speed (m/s) and ammo item id (thrown weapons consume themselves). */
@@ -251,6 +272,10 @@ export interface FactionDef {
   /** Leader NPC id and HQ landmark id (GDD §9.1). rpg extension. */
   leader?: string;
   hq?: string;
+  /** Non-citizens rise no higher than this rank until they are citizens (Clientela: amicus). rpg extension. */
+  nonCitizenMaxRank?: string;
+  /** Infamia for joining (the gladiator's oath +20). rpg extension. */
+  joinInfamia?: number;
 }
 
 // ------------------------------------------------------------------ enemies / combatant tiers
@@ -282,16 +307,20 @@ export interface CombatProfile {
   poise?: number;
   /** Display name for the tier ("Suburan Thug"). */
   name?: string;
-  /** Multiplier on weapon damage (rpg extension; default 1). */
-  damageMult?: number;
-  /** Body armor family (rpg extension; default cloth). */
+  /** Multiplier on weapon damage (GDD §6.11 dmgMult; default 1). */
+  dmgMult?: number;
+  /** Damage-type family of the outermost torso piece (§6.11; default cloth). */
   armorFamily?: ArmorFamily;
-  /** Danger band 0–4 (rpg extension). */
+  /** Danger band 0–5 (§6.11, §13.3). */
   band?: number;
-  /** Locomotion speed multiplier (rpg extension). */
-  speed?: number;
-  /** Seconds before a block or dodge reaction (rpg extension). */
-  reaction?: number;
+  /** Locomotion speed multiplier (§6.11). */
+  speedMult?: number;
+  /** Seconds before a reactive guard, dodge or counter (§6.11). */
+  reactionS?: number;
+  /** Seconds between attacks; overrides lerp(2.5, 0.9, aggression) when set (§6.13). */
+  attackIntervalS?: number;
+  /** Attack tokens the NPC uses: 1, bosses 2 (§6.12). */
+  tokensCost?: number;
   /** Beasts: never yield, use unblockable charges and grapples (rpg extension). */
   beast?: boolean;
   /** §13.1 archetype id ('grassator', 'miles-urbanus'…) (rpg extension). */
@@ -392,6 +421,12 @@ export interface BackgroundDef {
   hook?: string;
   /** Starting debt in denarii (the fallen eques). */
   debt?: number;
+  /** Version in which the origin becomes playable (v0.1 ships four; the rest show locked). rpg extension. */
+  since?: string;
+  /** Formal dress that starts in the pack, by sex (a toga; or a stola and palla). rpg extension. */
+  pack?: { male?: BackgroundDef['kit']; female?: BackgroundDef['kit'] };
+  /** Picks a creation extra (a used parmula or +40 den.); every origin but the veteran. rpg extension. */
+  creationExtra?: boolean;
 }
 
 /** GDD §3.2 legal status ids. */

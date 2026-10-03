@@ -95,8 +95,8 @@ export const COMBAT = {
   skillDiv: 200,
   /** attackMult (§6.2): light 1.0, third chain hit 1.25, power charge 1.5 at 0.35 s → 2.0 at 0.8 s, bash 0.3, riposte 2.0. */
   attack: { light: 1, chain3: 1.25, powerMin: 1.5, powerMax: 2, chargeMinSec: 0.35, chargeMaxSec: 0.8, bash: 0.3, riposte: 2, sprint: 1.3 },
-  /** Directional power attacks (§6.1): forward lunge, sideways sweep (every target in 140°), back step-cut, overhead. */
-  directional: { forward: 2, sideways: 1.4, back: 1.3, none: 2 },
+  /** Power attack direction (§6.1): attackMult = chargeMult × dirFactor — overhead (none) and the forward lunge 1.0, the sideways sweep 0.7, the back step-cut 0.65. */
+  directional: { none: 1, forward: 1, sideways: 0.7, back: 0.65 },
   /** Overhead power attack: +50% poise damage. */
   overheadPoise: 1.5,
   /** 3% chance of ×1.5 on non-sneak hits, shifted by the `luck` and `crit.chance` modifiers (Fortuna +5 points). */
@@ -118,14 +118,16 @@ export const COMBAT = {
   armorSkillDiv: 250,
   /** Final damage is at least this. */
   minDamage: 1,
-  /** §6.3 Condition: AR and damage × (0.5 + 0.5 × condition); −1% per 10 damage absorbed or dealt. */
-  conditionFloor: 0.5,
-  wearPerDamage: 0.001,
-  /** §6.4 Block: weapon-only mitigation; + Shield skill / 400 (max +0.25); cap 0.95. */
+  /** §6.3 Condition: AR, damage and shield block mitigation × (0.75 + 0.25 × condition); −1% per 100 damage dealt or absorbed. */
+  conditionFloor: 0.75,
+  wearPerDamage: 0.0001,
+  /** §6.4 Block: base + (0.95 − base) × Shield/200, where base is the shield or weapon-only value; cap 0.90. */
   weaponBlock: { blade: 0.45, twoHand: 0.55, fists: 0.25 },
-  blockSkillDiv: 400,
-  blockSkillMax: 0.25,
-  blockCap: 0.95,
+  blockSkillDiv: 200,
+  blockTarget: 0.95,
+  blockCap: 0.9,
+  /** perk-shield-wall: block stamina −30% per ally within 2 m (max −60%). */
+  shieldWall: { perAlly: 0.3, max: 0.6 },
   /** Stamina per absorbed hit: max(min, mult × raw × (1 − Shield skill / 200)). */
   blockStamina: { min: 4, mult: 0.6, skillDiv: 200 },
   guardBreakStagger: 1.2,
@@ -133,8 +135,16 @@ export const COMBAT = {
   blockIgnore: { sica: 0.25, falx: 0.5, hooked: 0.5 },
   /** §6.4 Parry. */
   parry: { attackerPoiseLoss: 0.6, attackerStagger: 1, riposteWindow: 0.8, finisherAtHealth: 0.25, perkWindowBonus: 0.06 },
-  /** §6.5 Poise. */
-  poise: { player: 50, heavyBody: 12, shieldRaised: 20, regen: 15, regenDelay: 1.5, flinchFrac: 0.2, staggerLight: 0.8, staggerHeavy: 1.5, knockdown: 2 },
+  /**
+   * §6.5 Poise. Flinch from hits ≥ 20% of max (NPCs) or 35% (the player); anti-loop: 1.5 s of poise
+   * immunity after a stagger, 0.4 s of flinch immunity after a flinch, at most 2 staggers per 4 s.
+   */
+  poise: {
+    player: 50, heavyBody: 12, shieldRaised: 20, regen: 15, regenDelay: 1.5, flinchFrac: 0.2, flinchFracPlayer: 0.35,
+    staggerLight: 0.8, staggerHeavy: 1.5, knockdown: 2, immunityAfterStagger: 1.5, flinchImmunity: 0.4, staggerLimit: 2, staggerWindow: 4,
+  },
+  /** Nemesis' Retribution: +25% against your last attacker. */
+  retribution: 1.25,
   /** Poise damage = weapon.stagger × these. Parry takes 60% of max. */
   poiseMult: { light: 1, power: 2.5, bash: 2, sprint: 1.5 },
   /** §6.7 Sneak attacks: melee ×3 (Sicarius perk ×4), pugio/sica ×4 (perk ×6), ranged ×2. */
@@ -158,6 +168,8 @@ export const DIFFICULTY = {
   herculea: { name: 'Herculea', dealt: 0.75, taken: 3, parryWindow: 0.1, tokens: 3 },
 } as const;
 export type Difficulty = keyof typeof DIFFICULTY;
+/** v0.1 ships three levels; facilis and herculea are Should (§6.12). */
+export const DIFFICULTY_V01: readonly Difficulty[] = ['tiro', 'normalis', 'difficilis'];
 
 /** §14.6 Pietas and the gods. Gains and losses are pietas points. */
 export const DEVOTION = {
@@ -170,10 +182,6 @@ export const DEVOTION = {
     /** Home lararium prayer, once a day (full with perk-religio-lararium). */
     lararium: 15,
     festival: 25,
-    /** Fulfilling a vow: +20, rising to +50 for a rich offering (+1 per 10 den. vowed). */
-    vowMin: 20,
-    vowMax: 50,
-    vowPerDenarii: 10,
     spareYielded: 5,
     burial: 10,
   },
@@ -197,6 +205,11 @@ export const DEVOTION = {
   paxDeorumDiscount: 0.2,
   /** perk-religio-votum: vow buffs +50%. */
   votumPerk: 0.5,
+  /**
+   * Vows: V ≥ max(5 den., 10% of the quest's expected reward). `votum` gives damage resistance and
+   * stamina regeneration by V (5% / 10% at 25 den. / 15% at 100 den.); paying gives pietas 20 / 30 / 50.
+   */
+  vow: { min: 5, minRewardFraction: 0.1, tiers: [{ at: 100, buff: 0.15, pietas: 50 }, { at: 25, buff: 0.1, pietas: 30 }, { at: 0, buff: 0.05, pietas: 20 }] },
   /** Days to pay a vow after the quest succeeds. */
   vowDays: 3,
   /** Piaculum: 2 × the vow's value, or 20 den. */
@@ -206,30 +219,42 @@ export const DEVOTION = {
   omen: { good: 0.2, bad: 0.2 },
 };
 
-/** §7.4 Barter. */
+/**
+ * §7.4 Barter. Every price modifier goes inside the clamps, summed as fractions:
+ *   buy  = value × max(1.05, 1.60 − 0.50 × mercatura/100 − disposition/200 − Σbuy)
+ *   sell = value × min(0.90, 0.35 + 0.35 × mercatura/100 + disposition/200 + Σsell)
+ * which keeps sell ≤ buy × 0.86 for any skill and modifiers (no arbitrage).
+ */
 export const BARTER = {
-  /** buy = value × max(buyFloor, buyBase − buyMerc × mercatura/100 − disposition/200 − price.buy) */
   buyBase: 1.6,
   buyMerc: 0.5,
   buyFloor: 1.05,
-  /** sell = value × min(sellCap, sellBase + sellMerc × mercatura/100 + disposition/200 + price.sell) */
   sellBase: 0.35,
   sellMerc: 0.35,
   sellCap: 0.9,
-  /** Disposition runs −20…+20 (Fama, origin traits, gifts). */
+  /** The no-arbitrage invariant the clamps guarantee. */
+  arbitrage: 0.86,
+  /** Disposition runs −20…+20 (Fama/10, origin traits, gifts); Fama reaches prices only through it. */
   dispositionMax: 20,
   /** Fences pay this fraction of the normal sell price for stolen goods (perk-mercatura-fence: 0.7). */
   fenceMult: 0.5,
   fencePerkMult: 0.7,
-  /** Market days (nundinae, every 8th elapsed day): stall vendors give −10% on buying. */
+  /** Σbuy terms: market day at stall vendors (every 8th elapsed day), the Nundinae perk, street-wise at plebeian vendors, Bilbilis blades for the hispanus. */
   nundinaeEvery: 8,
-  nundinaeDiscount: 0.1,
-  /** Haggle: one Rhetoric check per vendor per day; success ∓10%, failure +5% and −5 disposition. */
-  haggle: { difficulty: { stall: 10, shop: 25, banker: 40 }, success: 0.1, failure: 0.05, failureDisposition: -5 },
+  marketDay: 0.1,
+  nundinaePerk: 0.1,
+  streetWise: 0.05,
+  bilbilis: 0.2,
+  /** Haggle: one Rhetoric check per vendor per day; success Σbuy +0.10 and Σsell +0.10; failure Σbuy −0.05 and −5 disposition. */
+  haggle: { difficulty: { stall: 10, shop: 25, banker: 40 }, success: 0.1, failure: -0.05, failureDisposition: -5, argentarius: 15 },
   /** Vendor purses refresh every 2 game days. */
   restockHours: 48,
   /** Prices are quantized to the quadrans (1/64 den.). */
   round: 1 / 64,
+  /** Repairs (§7.2 #39): 10% of the value per 25% of condition restored. */
+  repairPerQuarter: 0.1,
+  /** perk-mercatura-nauticum: after 30 days +40% (80%) or a total loss (20%), rolled when you invest; stake ≤ 20% of the banker's purse. */
+  nauticum: { days: 30, gain: 0.4, successChance: 0.8, stakeCap: 0.2 },
 };
 
 /** §14.1 Crime and bounty. */
@@ -287,8 +312,8 @@ export const PERSUASION = {
   div: 100,
   /** 5 × (your Dignitas step − theirs). */
   dignitasStep: 5,
-  /** Intimidate: rhetoric + 2 × (your level − theirs) + 10 if armed and armored; −5 disposition afterwards. */
-  intimidate: { perLevel: 2, armed: 10, dispositionAfter: -5 },
+  /** Intimidate: rhetoric + 10 × (your band − theirs) + 10 if armed and armored; −5 disposition afterwards. Your band = min(5, 1 + floor(level / 8)). */
+  intimidate: { perBand: 10, armed: 10, dispositionAfter: -5 },
   /** Bribe: DC × 0.5 den. × status. */
   bribe: { perDc: 0.5, status: { plebs: 1, soldier: 2, official: 5 } },
   /** Invoke patron: Clientela rank ≥ amicus-minor (index 1); +15, +15 more with perk-rhetoric-clientela. */
@@ -318,17 +343,19 @@ export const XP = {
   shield: { block: 3, perAbsorbed: 0.2, parry: 8, bash: 5 },
   brawling: { hit: 3, bluntHit: 4, knockout: 12, throw: 8 },
   armor: { hit: 2, perDamage: 0.3, max: 10 },
-  athletics: { sprintMeters: 25, climb: 2, swimMeters: 20, fall: 3 },
+  athletics: { sprintMeters: 10, climb: 4, rooftopRoute: 25, fireRun: 20, swimMeters: 20, fall: 3 },
   stealth: { perSecond: 0.6, maxPerMinute: 30, sneakAttack: 15 },
   pickpocket: { base: 10, valueDiv: 5, max: 60 },
   locks: { tiers: [8, 15, 25, 40], reseal: 15, forge: 40 },
-  rhetoric: { perTier: 10, fail: 2, haggle: 5, court: 100, speech: 50 },
-  mercatura: { base: 1, valueDiv: 10, max: 50, fenceMult: 1.5 },
+  rhetoric: { perTier: 10, fail: 2, haggle: 10, salutatio: 5, popinaDebate: 15, radiantMin: 20, radiantMax: 40, court: 100, speech: 50 },
+  /** Per transaction worth ≥ 1 den.; each repeat of the same item with the same vendor on the same day halves it again. */
+  mercatura: { base: 1, valueDiv: 10, max: 50, fenceMult: 1.5, minValue: 1, repeatMult: 0.5 },
+  /** Remedy-making arrives with the crafting workbench (v0.5). */
   medicina: { remedy: 10, perEffect: 5, learned: 5, treat: 15, selfBandage: 3 },
   fabrica: { improve: 10, improveValueDiv: 20, repair: 5, cast: 6, forge: 25 },
   religio: { dailyPrayer: 8, offering: 5, offeringValueDiv: 2, offeringMax: 30, vow: 40, festival: 25, omen: 10 },
   equitatio: { per100m: 2, lap: 15, win: 100 },
-  /** Training dummies and sparring give half, and nothing above level 30. */
+  /** Training dummies give half, and nothing above level 30; lusiones against living opponents count as real fights. */
   dummyMult: 0.5,
   dummyMaxLevel: 30,
 };
@@ -356,7 +383,15 @@ export const STANDING = {
   lautusHours: 12,
   /** §14.8 Lautus also gives +10% stamina regeneration. */
   lautusStaminaRegen: 0.1,
+  /**
+   * Infamia (§3.4): oath +20, each public bout +2, convictions +10, brothel or stage +10, a woman's
+   * toga at a salutatio or in court +5 (once). Recovery: −1 per 10 elapsed days without a new stain,
+   * down to 10 if you ever swore the oath or were condemned (else 0); restitutio −15; the rudis −10.
+   */
+  infamia: { oath: 20, bout: 2, conviction: 10, trade: 10, togaWoman: 5, recoverDays: 10, recoverAmount: 1, floorBranded: 10, restitutio: 15, rudis: 10 },
+  /** §3.7 A woman in a toga: respectable NPCs −15 disposition, the underworld +5. */
+  togaWomanDisposition: { respectable: -15, underworld: 5 },
 };
 
-/** §9.1 Default faction rank thresholds (Fama) when a faction doesn't state its own. */
-export const RANK_FAMA = [0, 10, 25, 45, 70, 90];
+/** §9.1 Skill gates unless a rank states its own: middle ranks 30, top ranks 45 (the Ludus 45 / 60). */
+export const RANK_GATES = { middle: 30, top: 45, ludusMiddle: 45, ludusTop: 60 };

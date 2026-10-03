@@ -30,8 +30,8 @@ function setup(defs: DialogueDef[], roll = 0.5) {
   fg.game.npcs = new NpcRegistry([
     { id: 'marcus', name: 'Marcus the Cobbler', appearance },
     { id: 'chosen', name: 'Chosen One', appearance, dialogue: 'special' },
-    { id: 'senator', name: 'Senator Bassus', appearance, tags: ['elite'], combat: { tier: 'civilian', health: 30, stamina: 50, armor: 0, aggression: 0, blockSkill: 0, skill: 5, level: 5 } },
-    { id: 'miles', name: 'A Soldier', appearance, tags: ['soldier', 'baetican'], combat: { tier: 'miles', health: 70, stamina: 100, armor: 50, aggression: 0.5, blockSkill: 0.5, skill: 35, level: 3 } },
+    { id: 'senator', name: 'Senator Bassus', appearance, tags: ['elite'], combat: { tier: 'civilian', band: 0, health: 30, stamina: 50, armor: 0, aggression: 0, blockSkill: 0, skill: 5 } },
+    { id: 'miles', name: 'A Soldier', appearance, tags: ['soldier', 'baetican'], combat: { tier: 'miles', band: 2, health: 70, stamina: 100, armor: 50, aggression: 0.5, blockSkill: 0.5, skill: 35 } },
     { id: 'cato', name: 'Cato the Honest', appearance, tags: ['official', 'incorruptible'] },
   ]);
   const dialogue = new DialogueSystem(fg.game, { defs, rng: fixed(roll) });
@@ -261,20 +261,42 @@ describe('approaches and mods (GDD §14.5)', () => {
     expect(tags(dialogue.start('cato')!)[3]).toEqual(['Bribe — refused', false]);
   });
 
-  it('intimidation: +2 per level above the target, +10 armed and armored; it sours the NPC either way', () => {
+  it('formal dress follows sex (§3.7): a stola with a palla for a woman; a woman in a toga gets no bonus and −15 disposition (underworld +5)', () => {
+    const { dialogue, sheet, game } = setup([approaches]);
+    game.standing = new Standing(game.events);
+    game.standing.sex = 'female';
+    sheet.setSkill('rhetoric', 50);
+    sheet.setFlagSource('equip:body', ['dress.stola']);
+    expect(dialogue.start('senator')!.choices[0].tag).toBe('Persuade 50%'); // stola alone is not formal dress
+    dialogue.end();
+    sheet.setFlagSource('equip:cloak', ['dress.palla']);
+    expect(dialogue.start('senator')!.choices[0].tag).toBe('Persuade 60%');
+    dialogue.end();
+    sheet.setFlagSource('equip:body', null);
+    sheet.setFlagSource('equip:cloak', ['dress.toga']);
+    expect(dialogue.disposition('senator')).toBe(-15);
+    expect(dialogue.start('senator')!.choices[0].tag).toBe('Persuade 35%'); // 50 − 10 (Dignitas) − 15 vs 40
+    dialogue.end();
+    game.standing.sex = 'male';
+    expect(dialogue.start('senator')!.choices[0].tag).toBe('Persuade 60%');
+  });
+
+  it('intimidation compares bands (§14.5): +10 per band above the target’s (yours = 1 + level/8), +10 armed and armored; it sours the NPC', () => {
     const { dialogue, sheet, inventory, game } = setup([approaches], 0.99);
     game.standing = new Standing(game.events);
     sheet.setSkill('rhetoric', 40);
-    sheet.addXp(75 + 100 + 125 + 150); // level 5
-    expect(sheet.level).toBe(5);
-    // The soldier is level 3 (+4); unarmed: 40 + 4 − 40 → 54%; Baetican traits don't apply.
-    expect(dialogue.start('miles')!.choices[1].tag).toBe('Intimidate 54%');
+    // A new character is band 1: against a band-2 soldier, −10.
+    expect(dialogue.start('miles')!.choices[1].tag).toBe('Intimidate 40%');
+    dialogue.end();
+    sheet.addXp(3750); // level 16 → band 3
+    expect(sheet.level).toBe(16);
+    expect(dialogue.start('miles')!.choices[1].tag).toBe('Intimidate 60%');
     dialogue.end();
     inventory.add('gladius');
     inventory.equip('gladius');
     inventory.add('thorax-coriaceus');
     inventory.equip('thorax-coriaceus');
-    expect(dialogue.start('miles')!.choices[1].tag).toBe('Intimidate 64%');
+    expect(dialogue.start('miles')!.choices[1].tag).toBe('Intimidate 70%');
     dialogue.choose(1);
     expect(dialogue.disposition('miles')).toBe(-5);
     expect(dialogue.start('miles')!.choices[0].tag).toBe('Persuade 45%'); // disposition −5
@@ -289,7 +311,7 @@ describe('approaches and mods (GDD §14.5)', () => {
     game.factions.join('clientela');
     expect(dialogue.start('marcus')!.choices[2]).toMatchObject({ enabled: false, tag: 'Invoke patron — you have no patron' });
     dialogue.end();
-    game.factions.addReputation('clientela', 10);
+    game.factions.grantRank('clientela', 'amicus-minor');
     expect(dialogue.start('marcus')!.choices[2].tag).toBe('Invoke patron 35%'); // 10 + 15 vs 40
     dialogue.end();
     sheet.grantPerk('perk-rhetoric-clientela');

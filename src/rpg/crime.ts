@@ -18,7 +18,7 @@
  */
 import type { EventBus, GameEvents } from '../core/Events';
 import { checkTier, rollSkillCheck, skillCheckChance } from './checks';
-import { CRIME, XP } from './data/balance';
+import { CRIME, XP } from './data/tuning';
 import { CRIMES, LEDGERS, USURPATIO_BOUNTY } from './data/crimes';
 import type { FactionSystem } from './factions';
 import type { InventoryImpl } from './inventory';
@@ -92,10 +92,15 @@ export interface ArrestOptions {
   canAsylum: boolean;
 }
 
-/** The status crime (if any) of wearing an item: the toga without citizenship or freedom, the gold ring without rank. */
-export function statusCrimeFor(item: ItemDef, standing: Pick<Standing, 'mayWearToga' | 'dignitas'>): { crime: CrimeId; bounty: number } | null {
-  if (item.tags?.includes('citizen-only') && !standing.mayWearToga) return { crime: 'usurpatio', bounty: USURPATIO_BOUNTY.toga };
-  if (item.id === 'anulus-aureus' && standing.dignitas !== 'eques') return { crime: 'usurpatio', bounty: USURPATIO_BOUNTY.anulus };
+/**
+ * The status crime (if any) of wearing an item (§14.1): the toga or stola without citizenship or
+ * freedom (100), the gold ring on a man without equestrian rank (200). A woman in a toga commits
+ * no crime (she takes a social stain instead, §3.7); on a woman the gold ring is jewellery.
+ */
+export function statusCrimeFor(item: ItemDef, standing: Pick<Standing, 'mayWearToga' | 'dignitas'> & { sex?: 'male' | 'female' }): { crime: CrimeId; bounty: number } | null {
+  const female = standing.sex === 'female';
+  if (item.tags?.includes('citizen-only') && !standing.mayWearToga && !(female && item.tags.includes('toga'))) return { crime: 'usurpatio', bounty: USURPATIO_BOUNTY.toga };
+  if (item.id === 'anulus-aureus' && !female && standing.dignitas !== 'eques') return { crime: 'usurpatio', bounty: USURPATIO_BOUNTY.anulus };
   return null;
 }
 

@@ -12,6 +12,7 @@
 import { Vector3 } from 'three';
 import type { GameEvents } from '../core/Events';
 import type { Game } from '../core/Game';
+import { skillXpToNext } from '../rpg/sheet';
 import type { LocationDef, NpcDef } from '../npc/types';
 import '../rpg/events';
 import type { ItemDef } from '../rpg/types';
@@ -394,7 +395,17 @@ export class QuestSystem {
       parts.push(`${this.game.items?.get(it.id)?.name ?? it.id}${(it.count ?? 1) > 1 ? ` ×${it.count}` : ''}`);
     }
     for (const s of r.skills ?? []) sheet?.useSkill(s.id, s.amount);
+    // One level's worth of XP per entry (§5.1), at the level the skill has when it lands.
+    for (const e of r.skillXp ?? []) {
+      const { id, levels = 1 } = typeof e === 'string' ? { id: e } : e;
+      for (let i = 0; i < levels && sheet; i++) sheet.useSkill(id, skillXpToNext(sheet.baseSkillLevel(id), sheet.skillDef(id)?.difficulty) + 1e-6);
+    }
     for (const f of r.reputation ?? []) this.game.factions?.addReputation(f.faction, f.amount);
+    if (r.rank) {
+      const f = this.game.factions;
+      if (r.rank.rank) f?.grantRank(r.rank.faction, r.rank.rank);
+      else f?.promote(r.rank.faction);
+    }
     if (r.xp) sheet?.addXp(r.xp);
     if (parts.length) this.game.events.emit('rpg:notify', { text: `Received ${parts.join(', ')}`, kind: 'item' });
   }

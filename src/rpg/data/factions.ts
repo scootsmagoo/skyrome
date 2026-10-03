@@ -1,17 +1,18 @@
 /**
  * Factions — docs/GDD.md §9.1 (ids, leaders, HQs, rank ladders, skill gates, joining rules) and
- * §3.4 (Fama runs −100…+100 per faction). Rank Fama thresholds default to 0/10/25/45/70/90
- * (RANK_FAMA). Capstone ranks are granted by their quest (`questOnly`). `lawful` factions receive
- * crime reports; `enemies` attack each other on sight ('player' = hostile to the player).
+ * §3.4 (Fama runs −100…+100 per track). Ranks are granted by quest completion (the Skyrim model);
+ * middle and top ranks also need a skill (30 / 45 unless stated; the Ludus 45 / 60), and a
+ * promotion waits until you have it. Fama no longer gates rank (minReputation 0): it drives
+ * discounts, dialogue, radiant pay and greetings. Capstones are flagged `questOnly`. `lawful`
+ * factions receive crime reports; `enemies` attack each other on sight ('player' = hostile to you).
  */
 import type { FactionDef, FactionRank } from '../types';
-import { RANK_FAMA, STANDING } from './balance';
+import { STANDING } from './tuning';
 
 const MARTIAL = ['blades', 'spear', 'archery', 'shield', 'brawling', 'heavy-armor', 'light-armor'];
 
-type R = [id: string, title: string, latin: string, opts?: { requires?: FactionRank['requires']; questOnly?: boolean; fama?: number }];
-const ladder = (list: R[]): FactionRank[] =>
-  list.map(([id, title, latin, o], i) => ({ id, title, latin, minReputation: o?.fama ?? RANK_FAMA[Math.min(i, RANK_FAMA.length - 1)], requires: o?.requires, questOnly: o?.questOnly }));
+type R = [id: string, title: string, latin: string, opts?: { requires?: FactionRank['requires']; questOnly?: boolean }];
+const ladder = (list: R[]): FactionRank[] => list.map(([id, title, latin, o]) => ({ id, title, latin, minReputation: 0, requires: o?.requires, questOnly: o?.questOnly }));
 
 export const FACTIONS: FactionDef[] = [
   {
@@ -23,20 +24,21 @@ export const FACTIONS: FactionDef[] = [
       ['sebaciarius', 'Torch-bearer', 'Sebaciarius'],
       ['siphonarius', 'Pump-master', 'Siphonarius'],
       ['optio', 'Deputy', 'Optio', { requires: [{ skill: 'athletics', level: 30 }] }],
-      ['centurio', 'Centurion', 'Centurio', { requires: [{ skill: 'athletics', level: 50 }, { skill: ['brawling', 'blades'], level: 40 }] }],
+      ['centurio', 'Centurion', 'Centurio', { requires: [{ skill: 'athletics', level: 45 }, { skill: ['brawling', 'blades'], level: 30 }] }],
     ]),
   },
   {
     id: 'ludus-magnus', name: 'Ludus Magnus', latin: 'Ludus Magnus', leader: 'npc-glaucus', hq: 'ludus-magnus',
-    description: 'The imperial gladiator school beside the Amphitheatrum Flavium. Swear the oath as an auctoratus (Infamia +20), fight as a paid guest, or be condemned ad ludum.',
+    description: 'The imperial gladiator school beside the Amphitheatrum Flavium. Fight as a paid guest (no ranks, no Infamia), swear the oath as an auctoratus (Infamia +20, which blocks equestrian rank), or be condemned ad ludum. Ranks need the oath.',
+    joinInfamia: 20,
     ranks: ladder([
       ['tiro', 'Recruit', 'Tiro'],
       ['veteranus', 'Veteran', 'Veteranus'],
       ['palus-quartus', 'Fourth Post', 'Palus Quartus'],
       ['palus-tertius', 'Third Post', 'Palus Tertius'],
-      ['palus-secundus', 'Second Post', 'Palus Secundus', { requires: [{ skill: MARTIAL, level: 50 }] }],
-      ['primus-palus', 'First Post', 'Primus Palus', { requires: [{ skill: MARTIAL, level: 70 }] }],
-      ['rudiarius', 'Freed Champion', 'Rudiarius', { questOnly: true, fama: 100 }],
+      ['palus-secundus', 'Second Post', 'Palus Secundus', { requires: [{ skill: MARTIAL, level: 45 }] }],
+      ['primus-palus', 'First Post', 'Primus Palus', { requires: [{ skill: MARTIAL, level: 60 }] }],
+      ['rudiarius', 'Freed Champion', 'Rudiarius', { questOnly: true }],
     ]),
   },
   {
@@ -46,8 +48,8 @@ export const FACTIONS: FactionDef[] = [
     ranks: ladder([
       ['miles', 'Soldier', 'Miles'],
       ['tesserarius', 'Watch-officer', 'Tesserarius'],
-      ['optio', 'Deputy', 'Optio', { requires: [{ skill: ['blades', 'spear'], level: 40 }] }],
-      ['centurio', 'Centurion', 'Centurio', { requires: [{ skill: ['blades', 'spear'], level: 60 }] }],
+      ['optio', 'Deputy', 'Optio', { requires: [{ skill: ['blades', 'spear'], level: 30 }] }],
+      ['centurio', 'Centurion', 'Centurio', { requires: [{ skill: ['blades', 'spear'], level: 45 }] }],
     ]),
   },
   {
@@ -57,8 +59,8 @@ export const FACTIONS: FactionDef[] = [
       ['tiro', 'Novice', 'Tiro'],
       ['fur', 'Thief', 'Fur'],
       ['sector-zonarius', 'Purse-cutter', 'Sector Zonarius'],
-      ['effractor', 'Housebreaker', 'Effractor', { requires: [{ skill: 'locks-seals', level: 40 }] }],
-      ['magister', 'Master', 'Magister', { questOnly: true, fama: 100, requires: [{ skill: ['pickpocket', 'locks-seals'], level: 60 }] }],
+      ['effractor', 'Housebreaker', 'Effractor', { requires: [{ skill: 'locks-seals', level: 30 }] }],
+      ['magister', 'Master', 'Magister', { questOnly: true, requires: [{ skill: ['pickpocket', 'locks-seals'], level: 45 }] }],
     ]),
   },
   {
@@ -70,19 +72,20 @@ export const FACTIONS: FactionDef[] = [
       ['miles', 'Soldier', 'Miles'],
       ['leo', 'Lion', 'Leo'],
       ['perses', 'Persian', 'Perses'],
-      ['heliodromus', 'Sun-runner', 'Heliodromus', { fama: 90 }],
-      ['pater', 'Father', 'Pater', { questOnly: true, fama: 100 }],
+      ['heliodromus', 'Sun-runner', 'Heliodromus'],
+      ['pater', 'Father', 'Pater', { questOnly: true }],
     ]),
   },
   {
     id: 'clientela', name: 'Clientela', latin: 'Clientela', lawful: false,
-    description: 'Patronage: your patron’s house (Sergius Bassus, Calpurnia Severa or Vettius Crispinus). Attend three salutationes in a toga to become a client; non-citizens rise only to amicus.',
+    description: 'Patronage: your patron’s house (Sergius Bassus, Calpurnia Severa or Vettius Crispinus). Attend three salutationes in formal dress (a toga, or a stola and palla) to become a client; non-citizens rise only to amicus until they are citizens.',
+    nonCitizenMaxRank: 'amicus',
     ranks: ladder([
       ['cliens', 'Client', 'Cliens'],
       ['amicus-minor', 'Lesser Friend', 'Amicus Minor'],
-      ['amicus', 'Friend of the House', 'Amicus', { requires: [{ skill: 'rhetoric', level: 40 }] }],
-      ['procurator', 'Agent', 'Procurator', { requires: [{ skill: 'rhetoric', level: 60 }] }],
-      ['eques', 'Knight', 'Eques', { questOnly: true, fama: 100 }],
+      ['amicus', 'Friend of the House', 'Amicus', { requires: [{ skill: 'rhetoric', level: 30 }] }],
+      ['procurator', 'Agent', 'Procurator', { requires: [{ skill: 'rhetoric', level: 45 }] }],
+      ['eques', 'Knight', 'Eques', { questOnly: true }],
     ]),
   },
   {
@@ -94,7 +97,7 @@ export const FACTIONS: FactionDef[] = [
       ['sparsor', 'Water-thrower', 'Sparsor'],
       ['hortator', 'Pace-rider', 'Hortator'],
       ['auriga', 'Charioteer', 'Auriga', { requires: [{ skill: 'equitatio', level: 30 }] }],
-      ['miliarius', 'Winner of a Thousand', 'Miliarius', { questOnly: true, fama: 100 }],
+      ['miliarius', 'Winner of a Thousand', 'Miliarius', { questOnly: true }],
     ]),
   },
   {
@@ -106,7 +109,7 @@ export const FACTIONS: FactionDef[] = [
       ['sparsor', 'Water-thrower', 'Sparsor'],
       ['hortator', 'Pace-rider', 'Hortator'],
       ['auriga', 'Charioteer', 'Auriga', { requires: [{ skill: 'equitatio', level: 30 }] }],
-      ['miliarius', 'Winner of a Thousand', 'Miliarius', { questOnly: true, fama: 100 }],
+      ['miliarius', 'Winner of a Thousand', 'Miliarius', { questOnly: true }],
     ]),
   },
   // ---- the Guard: invitation to the speculatores is the Urban Cohorts' capstone reward
@@ -123,6 +126,14 @@ export const FACTIONS: FactionDef[] = [
   { id: 'grassatores', name: 'Street Gangs', latin: 'Grassatores', description: 'Muggers and toughs who rule the alleys after dark.', enemies: ['cohortes-urbanae', 'vigiles', 'player'], ranks: [] },
   { id: 'coniuratio', name: 'The Cabal', latin: 'Coniuratio', description: 'The conspiracy around Trajan’s departure: contractors, Parthian silver, a Dacian revenge cell and a disgraced senator.', enemies: ['cohortes-urbanae', 'praetoriani', 'player'], ranks: [] },
 ];
+
+/**
+ * Fama tracks (§9.1): one per faction (`fama.vigiles`…), one per district (`fama.dist-<id>`), and
+ * `fama.plebs` (the city crowd and the arena). Faction tracks are FactionSystem.reputation(id);
+ * district tracks are Standing.fame('dist-<id>').
+ */
+export const FAMA_FACTIONS = ['vigiles', 'ludus-magnus', 'cohortes-urbanae', 'cultores-lavernae', 'sodales-invicti', 'clientela', 'factio-prasina', 'factio-veneta', 'plebs'];
+export const famaTrack = (id: string) => `fama.${id}`;
 
 /** Fama bounds (GDD §3.4). */
 export const REPUTATION_MIN = STANDING.famaMin;

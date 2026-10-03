@@ -6,12 +6,16 @@
  *   mods: disposition (−20…+20) + 5 × (your Dignitas step − theirs) + dress + cleanliness
  *         + Fama/10 + Infamia effects + perks (+ Venus' Charis through fortified Rhetoric)
  *
- * Approaches: persuade (Rhetoric), intimidate (+2 per level above the target, +10 armed and
+ * Approaches: persuade (Rhetoric), intimidate (+10 per band above the target, +10 armed and
  * armored; fails against elites), bribe (always works on the corruptible; DC × 0.5 den. × status),
  * invoke patron (Clientela rank ≥ amicus-minor: +15, +15 more with the perk).
+ *
+ * Formal dress (§3.7, §8.2) is the toga for a man, the stola with the palla for a woman: +10 with
+ * elites and officials, −5 with Subura plebs. A woman in a toga gets no bonus: respectable NPCs
+ * take −15 disposition, the underworld +5. The gold ring counts only on a man.
  */
 import { clamp } from '../core/math';
-import { PERSUASION } from './data/balance';
+import { PERSUASION, STANDING } from './data/tuning';
 
 /**
  * Chance to pass a check: 50% when skill + mods equals the DC, ±1% per point, between 5% and 95%.
@@ -62,8 +66,25 @@ const DIGNITAS_BY_ID: Record<string, number> = { peregrinus: 0, 'latinus-iunianu
 /** What a check needs to know about the person being persuaded (from NpcDef tags and combat profile). */
 export interface Listener {
   tags?: readonly string[];
-  /** Character level of the target (intimidation); default 1. */
-  level?: number;
+  /** The target's danger band 0–5 (intimidation compares bands, §14.5); default 0. */
+  band?: number;
+}
+
+export type Sex = 'male' | 'female';
+
+/** Wearing formal dress (§8.2): the toga for a man; the stola with the palla for a woman. */
+export function wearsFormalDress(flags: { hasFlag(f: string): boolean }, sex: Sex = 'male'): boolean {
+  return sex === 'female' ? flags.hasFlag('dress.stola') && flags.hasFlag('dress.palla') : flags.hasFlag('dress.toga');
+}
+
+/** A woman in a toga (§3.7): no status bonus, a stain with the respectable. */
+export function womanInToga(flags: { hasFlag(f: string): boolean }, sex: Sex = 'male'): boolean {
+  return sex === 'female' && flags.hasFlag('dress.toga');
+}
+
+/** The player's band for intimidation: min(5, 1 + floor(level / 8)) — a new character counts as band 1. */
+export function playerBand(level: number): number {
+  return Math.min(5, 1 + Math.floor(Math.max(1, level) / 8));
 }
 
 /**
@@ -91,10 +112,11 @@ export function dignitasOf(l: Listener | undefined, audience: Audience = audienc
  * old wound +10 with soldiers, eastern archer −5 with soldiers, survivor +20 with Dacians and −10
  * with xenophobes, Alexandrian learning +10 with devotees of Isis, ill-omened −5 with the pious.
  */
-export function traitDisposition(flags: { hasFlag(f: string): boolean }, l: Listener | undefined): number {
+export function traitDisposition(flags: { hasFlag(f: string): boolean }, l: Listener | undefined, sex: Sex = 'male'): number {
   const t = l?.tags ?? [];
   const f = (x: string) => flags.hasFlag(x);
   let d = 0;
+  if (womanInToga(flags, sex)) d += audienceOf(l) === 'underworld' ? STANDING.togaWomanDisposition.underworld : STANDING.togaWomanDisposition.respectable;
   if (f('trait-caesars-countryman') && t.includes('baetican')) d += 10;
   if (f('trait-old-wound') && t.includes('soldier')) d += 10;
   if (f('trait-eastern-archer') && t.includes('soldier')) d -= 5;
@@ -116,6 +138,8 @@ export interface PersuasionInputs {
   disposition?: number;
   /** Your Dignitas step and the listener's (5 points per step of difference). */
   dignitas?: { mine: number; theirs?: number };
+  /** The speaker's sex: formal dress and the gold ring depend on it. */
+  sex?: Sex;
 }
 
 /**
@@ -131,10 +155,10 @@ export function persuasionPoints(audience: Audience, i: PersuasionInputs): numbe
   const plebs = audience === 'plebs' || audience === 'subura';
   let p = clamp(i.disposition ?? 0, -PERSUASION.dispositionMax, PERSUASION.dispositionMax);
   if (i.dignitas && i.dignitas.theirs !== undefined) p += PERSUASION.dignitasStep * (i.dignitas.mine - i.dignitas.theirs);
-  if (f('dress.toga')) p += elite ? 10 : audience === 'subura' ? -5 : 0;
+  if (wearsFormalDress(i.flags, i.sex)) p += elite ? 10 : audience === 'subura' ? -5 : 0;
   if (f('dress.soleae') && audience === 'elite') p -= 5;
   if (f('dress.lacerna') && audience === 'games') p += 3;
-  if (f('dress.anulus-aureus') && audience === 'elite') p += 10;
+  if (f('dress.anulus-aureus') && audience === 'elite' && i.sex !== 'female') p += 10;
   if (f('dress.silvered') && audience === 'soldier') p += 5;
   if (f('ebrius') && plebs) p += 5;
   p += (i.fama ?? 0) / 10;
@@ -146,10 +170,10 @@ export function persuasionPoints(audience: Audience, i: PersuasionInputs): numbe
   return p;
 }
 
-/** Intimidation points: +2 per level above the target, +10 if armed and armored. */
-export function intimidationPoints(o: { playerLevel: number; targetLevel?: number; armedAndArmored?: boolean }): number {
+/** Intimidation points (§14.5): +10 per band above the target's (your band from your level), +10 if armed and armored. */
+export function intimidationPoints(o: { playerLevel: number; targetBand?: number; armedAndArmored?: boolean }): number {
   const I = PERSUASION.intimidate;
-  return I.perLevel * (o.playerLevel - (o.targetLevel ?? 1)) + (o.armedAndArmored ? I.armed : 0);
+  return I.perBand * (playerBand(o.playerLevel) - (o.targetBand ?? 0)) + (o.armedAndArmored ? I.armed : 0);
 }
 
 /** Intimidation fails automatically against elites. */

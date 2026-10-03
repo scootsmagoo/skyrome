@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus, type GameEvents } from '../src/core/Events';
-import { DEVOTION, RESOURCES, SKILL_CURVE } from '../src/rpg/data/balance';
+import { DEVOTION, RESOURCES, SKILL_CURVE } from '../src/rpg/data/tuning';
 import { CharacterSheetImpl, levelXpToNext, skillXpToNext } from '../src/rpg/sheet';
 import { VitalsImpl } from '../src/rpg/vitals';
 import { record } from './rpg-fakes';

@@ -3,7 +3,8 @@ import { EventBus, type GameEvents } from '../src/core/Events';
 import { Rng } from '../src/core/Rng';
 import type { NpcDef } from '../src/npc/types';
 import { NpcRegistry } from '../src/npc/registry';
-import { BarterSystem, buyFactor, buyPrice, roundPrice, sellFactor, sellPrice, tradeXp, type PriceContext } from '../src/rpg/barter';
+import { BarterSystem, buyFactor, buyPrice, repairCost, roundPrice, sellFactor, sellPrice, tradeXp, type PriceContext } from '../src/rpg/barter';
+import { VENDORS } from '../src/rpg/data/vendors';
 import { ITEMS } from '../src/rpg/data/items';
 import { LOOT_TABLES } from '../src/rpg/data/loot';
 import { FactionSystem } from '../src/rpg/factions';
@@ -22,6 +23,7 @@ const AS = 1 / 16;
 describe('prices (GDD §7.2)', () => {
   it('base values follow the price table', () => {
     const table: Record<string, number> = {
+      stola: 20, 'stola-fina': 60, palla: 8, 'palla-fina': 30,
       vinum: AS, 'vinum-melius': 2 * AS, 'vinum-falernum': 4 * AS, posca: AS, panis: AS, puls: AS, botulus: 2 * AS, caseus: 2 * AS, olivae: 3 * AS, ficus: 2 * AS, mel: 6 * AS, patina: 8 * AS, libum: AS, cena: 3,
       tunica: 4, toga: 25, 'toga-fina': 80, paenula: 8, calcei: 4, caligae: 5, soleae: 1,
       pugio: 6, sica: 18, gladius: 22, spatha: 35, 'gladius-noric': 55, 'gladius-bilbilis': 132, hasta: 12, pilum: 10, fustis: 1, arcus: 45, sagitta: 0.2, funda: 1, 'glans-plumbea': 0.1,
@@ -50,22 +52,28 @@ describe('barter formulas (GDD §7.4)', () => {
     expect(buyFactor({ mercatura: 10, disposition: -20 })).toBeCloseTo(1.65);
   });
 
-  it('market days, haggling and traits are fractional discounts on top', () => {
-    expect(buyFactor({ ...novice, buyDiscount: 0.1 })).toBeCloseTo(1.55 * 0.9);
-    expect(sellFactor({ ...novice, sellBonus: 0.1 })).toBeCloseTo(0.385 * 1.1);
+  it('market days, haggling and traits go inside the clamps (Σbuy, Σsell), never multiply after them', () => {
+    expect(buyFactor({ ...novice, buyDiscount: 0.1 })).toBeCloseTo(1.45);
+    expect(sellFactor({ ...novice, sellBonus: 0.1 })).toBeCloseTo(0.485);
+    expect(buyFactor({ mercatura: 100, disposition: 20, buyDiscount: 0.4 })).toBe(1.05);
   });
 
-  it('never allows buy-low/sell-high arbitrage', () => {
-    for (let m = 0; m <= 100; m += 10)
-      for (const disp of [-20, 0, 20])
-        for (const mod of [0, 0.1, 0.3, 0.5])
-          for (const disc of [0, 0.3]) {
-            const ctx: PriceContext = { mercatura: m, disposition: disp, buyMod: mod, sellMod: mod, buyDiscount: disc, sellBonus: disc };
-            for (const d of ITEMS) {
-              const s = sellPrice(d, ctx);
-              if (s !== null) expect(s, `${d.id} m${m} d${disp} mod${mod}`).toBeLessThanOrEqual(buyPrice(d.value, ctx));
-            }
-          }
+  it('property: for random skills, dispositions and modifier sets, sell ≤ buy × 0.86 (and never above buy at any price)', () => {
+    const rng = new Rng(86);
+    for (let i = 0; i < 3000; i++) {
+      const ctx: PriceContext = {
+        mercatura: rng.range(0, 100),
+        disposition: rng.range(-30, 30),
+        buyMod: rng.range(-0.2, 1),
+        sellMod: rng.range(-0.2, 1),
+        buyDiscount: rng.range(-0.05, 1),
+        sellBonus: rng.range(-0.05, 1),
+      };
+      expect(sellFactor(ctx)).toBeLessThanOrEqual(buyFactor(ctx) * 0.86);
+      const d = ITEMS[rng.int(0, ITEMS.length - 1)];
+      const sp = sellPrice(d, ctx);
+      if (sp !== null) expect(sp, d.id).toBeLessThanOrEqual(buyPrice(d.value, ctx));
+    }
   });
 
   it('prices are quantized to the quadrans (1/64 den.), at least one for anything with value', () => {
@@ -87,10 +95,27 @@ describe('barter formulas (GDD §7.4)', () => {
     expect(sellPrice(silver, { ...novice, fence: true }, { buys: ['consumable'] })).not.toBeNull();
   });
 
-  it('Trade XP per transaction: 1 + value/10 (max 50), fencing ×1.5', () => {
+  it('Trade XP per transaction worth ≥ 1 den.: 1 + value/10 (max 50), fencing ×1.5, same-day repeats halve', () => {
     expect(tradeXp(20)).toBe(3);
     expect(tradeXp(2000)).toBe(50);
     expect(tradeXp(20, true)).toBe(4.5);
+    expect(tradeXp(0.5)).toBe(0);
+    expect(tradeXp(20, false, 1)).toBe(1.5);
+    expect(tradeXp(20, false, 2)).toBe(0.75);
+  });
+
+  it('repairs cost 10% of the value per 25% of condition restored', () => {
+    expect(repairCost(22, 0.5)).toBe(roundPrice(22 * 0.1 * 2));
+    expect(repairCost(45, 0.4)).toBe(roundPrice(45 * 0.1 * 2.4));
+    expect(repairCost(22, 1)).toBe(0);
+  });
+
+  it('the vendor kinds of §7.3', () => {
+    expect(VENDORS['armorum-negotiator']).toMatchObject({ purse: 500, repairs: true, grade: 'shop' });
+    expect(VENDORS.argentarius).toMatchObject({ purse: 3000, grade: 'banker' });
+    expect(VENDORS.receptator).toMatchObject({ purse: 400, fence: true });
+    expect(VENDORS.popina).toMatchObject({ purse: 40, stall: true, plebeian: true });
+    expect(Object.keys(VENDORS).length).toBe(19);
   });
 });
 
@@ -103,6 +128,7 @@ describe('BarterSystem', () => {
       { id: 'pistrix', name: 'Fabia the Baker', appearance, faction: 'plebs', tags: ['vendor:pistor'], services: ['vendor'], vendor: { stock: [{ id: 'panis', count: 10 }, { id: 'patina', count: 2 }], denarii: 20, buys: ['consumable'] } },
       { id: 'armorum', name: 'Lucius the Arms Dealer', appearance, tags: ['vendor:armorum-negotiator', 'baetican'], services: ['vendor'], vendor: { stock: [{ id: 'gladius', count: 2 }, { id: 'gladius-bilbilis', count: 1 }], denarii: 50, buys: ['weapon', 'armor', 'shield', 'ammo'] } },
       { id: 'receptator', name: 'Lurco', appearance, tags: ['vendor:receptator'], services: ['vendor', 'fence'], vendor: { stock: [], denarii: 400 } },
+      { id: 'sextus', name: 'Sextus the Banker', appearance, tags: ['vendor:argentarius'], services: ['vendor', 'banker'], vendor: { stock: [], denarii: 3000 } },
     ]);
     const factions = new FactionSystem(undefined, events);
     let hours = 0;
@@ -119,7 +145,7 @@ describe('BarterSystem', () => {
     expect(inventory.denarii).toBe(2 - 24 / 64);
     expect(barter.merchant('pistrix')!.stock.find((s) => s.itemId === 'panis')!.count).toBe(6);
     expect(barter.merchant('pistrix')!.denarii).toBe(20 + 24 / 64);
-    expect(sheet.skillXp('mercatura')).toBeCloseTo(tradeXp(0.25));
+    expect(sheet.skillXp('mercatura')).toBe(0); // under 1 den.: no Trade XP
     expect(barter.buy('pistrix', 'panis', 7).reason).toBe('no-stock');
     expect(barter.buy('armorum', 'gladius').reason).toBe('no-money');
     expect(barter.buy('nobody', 'panis').reason).toBe('not-merchant');
@@ -143,66 +169,110 @@ describe('BarterSystem', () => {
     expect(barter.merchant('receptator')!.stock).toEqual([]);
   });
 
-  it('disposition: Fama with the vendor’s faction / 10, origin traits, dialogue; street-wise −5% at plebeian vendors', () => {
+  it('disposition: Fama with the vendor’s faction / 10, origin traits and what happened in dialogue (±20); street-wise is a price term', () => {
     const { barter, factions, sheet } = setup();
     expect(barter.disposition('pistrix')).toBe(0);
     factions.addReputation('plebs', 100);
     expect(barter.disposition('pistrix')).toBe(10);
     sheet.setFlagSource('origin', ['trait-street-wise']);
-    expect(barter.disposition('pistrix')).toBe(20);
+    expect(barter.disposition('pistrix')).toBe(10);
+    // Σbuy: street-wise 0.05 at a plebeian vendor: 1.60 − 0.05 − 10/200 − 0.05 = 1.45.
     expect(barter.buyPrice('pistrix', 'patina')).toBe(roundPrice(0.5 * 1.45));
+    expect(barter.buyPrice('armorum', 'gladius')).toBe(roundPrice(22 * 1.55));
     barter.extraDisposition = () => 15;
     expect(barter.disposition('pistrix')).toBe(20); // clamped
     expect(barter.disposition('armorum')).toBe(15);
   });
 
-  it('Caesar’s countryman: +10 with Baetican vendors and Bilbilis steel 20% cheaper', () => {
+  it('Caesar’s countryman: +10 disposition with Baetican vendors and Bilbilis steel 0.20 off inside the clamp', () => {
     const { barter, sheet } = setup();
     const plain = barter.buyPrice('armorum', 'gladius-bilbilis')!;
     sheet.setFlagSource('origin', ['trait-caesars-countryman']);
     expect(barter.disposition('armorum')).toBe(10);
-    expect(barter.buyPrice('armorum', 'gladius-bilbilis')).toBe(roundPrice(132 * 1.5 * 0.8));
+    expect(barter.buyPrice('armorum', 'gladius-bilbilis')).toBe(roundPrice(132 * (1.55 - 0.05 - 0.2)));
     expect(barter.buyPrice('armorum', 'gladius-bilbilis')!).toBeLessThan(plain);
   });
 
-  it('market days (every 8th day): −10% at stalls, and at every vendor with the Nundinae perk', () => {
+  it('market days (every 8th day): 0.10 off at stalls, and 0.10 more at every vendor with the Nundinae perk; festival discounts add', () => {
     const { barter, sheet, setHours } = setup();
     expect(barter.isMarketDay()).toBe(false);
     setHours(7 * 24 + 9);
     expect(barter.isMarketDay()).toBe(true);
-    expect(barter.buyPrice('pistrix', 'patina')).toBe(roundPrice(0.5 * 1.55 * 0.9));
+    expect(barter.buyPrice('pistrix', 'patina')).toBe(roundPrice(0.5 * 1.45));
     expect(barter.buyPrice('armorum', 'gladius')).toBe(roundPrice(22 * 1.55));
     sheet.grantPerk('perk-mercatura-nundinae');
-    expect(barter.buyPrice('armorum', 'gladius')).toBe(roundPrice(22 * 1.55 * 0.9));
+    expect(barter.buyPrice('armorum', 'gladius')).toBe(roundPrice(22 * 1.45));
+    expect(barter.buyPrice('pistrix', 'patina')).toBe(roundPrice(0.5 * 1.35));
+    const fest = setup();
+    (fest.barter as unknown as { deps: { festivalDiscount: () => number } }).deps.festivalDiscount = () => 0.1; // the Mercuralia
+    expect(fest.barter.buyPrice('armorum', 'gladius')).toBe(roundPrice(22 * 1.45));
   });
 
-  it('haggling: one Rhetoric check per vendor per day (stall 10, shop 25, banker 40); success −10%/+10%, failure +5% and −5 disposition', () => {
+  it('haggling: one Rhetoric check per vendor per day at its grade (stall 10, shop 25, banker 40); success Σbuy and Σsell +0.10, failure Σbuy −0.05 and −5 disposition', () => {
     const won = setup({ rng: 0 });
-    expect(won.barter.haggle('pistrix', 'stall')).toEqual({ ok: true, pass: true, chance: 0.5 });
-    expect(won.barter.buyPrice('pistrix', 'patina')).toBe(roundPrice(0.5 * 1.55 * 0.9));
-    expect(won.barter.haggle('pistrix', 'stall').ok).toBe(false);
-    expect(won.sheet.skillXp('rhetoric')).toBe(5);
+    expect(won.barter.haggle('pistrix')).toEqual({ ok: true, pass: true, chance: 0.5 });
+    expect(won.barter.buyPrice('pistrix', 'patina')).toBe(roundPrice(0.5 * 1.45));
+    expect(won.barter.haggle('pistrix').ok).toBe(false);
+    expect(won.sheet.skillXp('rhetoric')).toBe(10);
+    won.inventory.add('patina');
+    expect(won.barter.sellPrice('pistrix', 'patina')).toBe(roundPrice(0.5 * 0.485));
     const lost = setup({ rng: 0.99 });
-    expect(lost.barter.haggle('armorum', 'shop')).toMatchObject({ ok: true, pass: false });
+    expect(lost.barter.haggle('armorum')).toMatchObject({ ok: true, pass: false, chance: 0.35 });
     expect(lost.barter.disposition('armorum')).toBe(-5);
-    expect(lost.barter.buyPrice('armorum', 'gladius')).toBe(roundPrice(22 * 1.575 * 1.05));
-    lost.setHours(24);
-    expect(lost.barter.haggle('armorum', 'banker')).toMatchObject({ ok: true, chance: 0.2 });
+    expect(lost.barter.buyPrice('armorum', 'gladius')).toBe(roundPrice(22 * (1.6 - 0.05 + 5 / 200 + 0.05)));
+    expect(lost.barter.haggle('sextus')).toMatchObject({ ok: true, chance: 0.2 }); // banker
   });
 
-  it('Argentarius doubles vendor purses; Receptator pays the full fence rate; state round-trips', () => {
+  it('the arms dealer repairs at the smith’s price; the baker doesn’t', () => {
+    const { barter, inventory } = setup();
+    inventory.add('gladius', 1, { condition: 0.5 });
+    inventory.equip('gladius');
+    expect(barter.repairPrice('mainHand')).toBe(repairCost(22, 0.5));
+    expect(barter.repair('pistrix', 'mainHand').reason).toBe('no-repair');
+    expect(barter.repair('armorum', 'mainHand').reason).toBe('no-money');
+    inventory.addDenarii(10);
+    expect(barter.repair('armorum', 'mainHand')).toEqual({ ok: true, price: repairCost(22, 0.5) });
+    expect(inventory.conditionOf('mainHand')).toBe(1);
+    expect(barter.repair('armorum', 'mainHand').reason).toBe('nothing-to-repair');
+  });
+
+  it('Faenus Nauticum: stake ≤ 20% of the banker’s purse, outcome rolled when you invest, +40% after 30 days', () => {
+    const { barter, sheet, inventory, setHours } = setup({ rng: 0.5 });
+    inventory.addDenarii(1000);
+    expect(barter.invest('sextus', 100).reason).toBe('no-perk');
+    sheet.grantPerk('perk-mercatura-nauticum');
+    expect(barter.invest('armorum', 100).reason).toBe('not-merchant');
+    expect(barter.maxStake('sextus')).toBe(600);
+    expect(barter.invest('sextus', 601).reason).toBe('too-much');
+    expect(barter.invest('sextus', 100)).toMatchObject({ ok: true, investment: { stake: 100, outcome: 'gain', dueAt: 720 } });
+    expect(barter.invest('sextus', 50, { next: () => 0.9 })).toMatchObject({ ok: true, investment: { outcome: 'loss' } });
+    expect(barter.pendingInvestments().map((i) => i.stake)).toEqual([100, 50]);
+    expect(barter.collectInvestments()).toBe(0);
+    setHours(720);
+    expect(barter.collectInvestments()).toBe(140);
+    expect(inventory.denarii).toBe(1000 - 150 + 140);
+    expect(barter.pendingInvestments()).toEqual([]);
+  });
+
+  it('Argentarius doubles vendor purses; Receptator pays 70%; Trade XP halves on same-day repeats; state round-trips (old format too)', () => {
     const { barter, sheet, inventory, setHours } = setup();
     sheet.grantPerk('perk-mercatura-argentarius');
     expect(barter.merchant('armorum')!.denarii).toBe(100);
     sheet.grantPerk('perk-mercatura-fence');
     expect(barter.sellPrice('receptator', 'argentum', true)).toBe(roundPrice(40 * 0.385 * 0.7));
-    inventory.addDenarii(10);
-    barter.buy('pistrix', 'panis', 1);
+    inventory.add('gladius', 2);
+    barter.sell('armorum', 'gladius');
+    const once = sheet.skillXp('mercatura');
+    expect(once).toBeCloseTo(tradeXp(22));
+    barter.sell('armorum', 'gladius');
+    expect(sheet.skillXp('mercatura') - once).toBeCloseTo(tradeXp(22) / 2);
     setHours(5);
     const saved = JSON.parse(JSON.stringify(barter.serialize()));
     const other = setup().barter;
     other.restore(saved);
     expect(other.serialize()).toEqual(barter.serialize());
+    other.restore({ armorum: { stock: [{ itemId: 'gladius', count: 1 }], denarii: 7, restockAt: 99, dispositionDelta: -5 } });
+    expect(other.merchant('armorum')!.denarii).toBe(7);
   });
 });
 

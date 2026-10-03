@@ -3,6 +3,7 @@ import { EventBus, type GameEvents } from '../src/core/Events';
 import { GameTime } from '../src/core/GameTime';
 import { CrimeSystem, identifyChance, statusCrimeFor } from '../src/rpg/crime';
 import { ITEMS } from '../src/rpg/data/items';
+import { famaTrack } from '../src/rpg/data/factions';
 import { FactionSystem } from '../src/rpg/factions';
 import { InventoryImpl } from '../src/rpg/inventory';
 import { ItemDb } from '../src/rpg/items';
@@ -125,7 +126,7 @@ describe('crime and bounty', () => {
     crime.commit('furtum', { witnessed: true, value: 10 });
     expect(crime.arrestOptions()).toMatchObject({ ledger: 'urbs', guards: 'cohortes-urbanae', bounty: 20, fine: 20, canPay: false, sentence: 'carcer' });
     factions.join('clientela');
-    factions.addReputation('clientela', 25); // amicus: rank index 2 → 30% off
+    factions.grantRank('clientela', 'amicus'); // rank index 2 → 30% off
     expect(crime.fine()).toBe(14);
     expect(crime.payFine()).toBe(false);
     inventory.addDenarii(15);
@@ -322,6 +323,14 @@ describe('crime and bounty', () => {
     expect(statusCrimeFor(db.require('toga-fina'), standing)).toEqual({ crime: 'usurpatio', bounty: 100 });
     expect(statusCrimeFor(db.require('anulus-aureus'), standing)).toEqual({ crime: 'usurpatio', bounty: 200 });
     expect(statusCrimeFor(db.require('tunica'), standing)).toBeNull();
+    expect(statusCrimeFor(db.require('stola'), standing)).toEqual({ crime: 'usurpatio', bounty: 100 });
+    expect(statusCrimeFor(db.require('palla'), standing)).toBeNull();
+    // §3.7: a woman in a toga commits no crime (a stain instead); on her the gold ring is jewellery.
+    standing.sex = 'female';
+    expect(statusCrimeFor(db.require('toga'), standing)).toBeNull();
+    expect(statusCrimeFor(db.require('stola'), standing)).toEqual({ crime: 'usurpatio', bounty: 100 });
+    expect(statusCrimeFor(db.require('anulus-aureus'), standing)).toBeNull();
+    standing.sex = 'male';
     standing.grantCitizenship();
     standing.raise('eques');
     expect(statusCrimeFor(db.require('toga'), standing)).toBeNull();
@@ -330,51 +339,84 @@ describe('crime and bounty', () => {
 });
 
 describe('factions (GDD §9.1)', () => {
-  it('join, gain Fama (−100…+100), rise through ranks', () => {
+  it('ranks come from quests (promote / grantRank), not from Fama; Fama runs −100…+100', () => {
     const events = new EventBus<GameEvents>();
     const f = new FactionSystem(undefined, events);
     const log = record(events, ['faction:joined', 'faction:rank']);
     expect(f.rank('vigiles')).toBeUndefined();
+    expect(f.promote('vigiles')).toBeUndefined(); // not a member
     expect(f.join('vigiles')).toBe(true);
     expect(f.join('vigiles')).toBe(false);
     expect(f.rank('vigiles')!.id).toBe('vigil');
     expect(f.rankIndex('vigiles')).toBe(0);
-    f.addReputation('vigiles', 10);
-    expect(f.rank('vigiles')!.latin).toBe('Sebaciarius');
     f.addReputation('vigiles', 5000);
     expect(f.reputation('vigiles')).toBe(100);
+    expect(f.rank('vigiles')!.id).toBe('vigil'); // Fama doesn't promote
+    expect(f.promote('vigiles')!.latin).toBe('Sebaciarius');
+    f.promote('vigiles');
+    f.promote('vigiles');
+    f.promote('vigiles');
     expect(f.rank('vigiles')!.id).toBe('centurio'); // no skill lookup: gates ignored
-    expect(log.map((l) => l.type)).toEqual(['faction:joined', 'faction:rank', 'faction:rank']);
+    expect(f.promote('vigiles')!.id).toBe('centurio'); // the top
+    expect(log.map((l) => l.type)).toEqual(['faction:joined', 'faction:rank', 'faction:rank', 'faction:rank', 'faction:rank']);
     expect(f.joinBlocker('latrones')).toBe('not-joinable');
     expect(f.join('latrones')).toBe(false);
     expect(f.joinBlocker('nope')).toBe('unknown');
   });
 
-  it('upper ranks also need skills (any martial skill for the Ludus); capstones come from quests', () => {
-    const f = new FactionSystem();
+  it('skill gates (middle 30, top 45; the Ludus 45 / 60): a granted rank waits until you reach the skill', () => {
+    const events = new EventBus<GameEvents>();
+    const f = new FactionSystem(undefined, events);
+    const notes = record(events, ['rpg:notify']);
     let blades = 30;
     f.skillLevel = (id) => (id === 'blades' ? blades : 0);
     f.join('ludus-magnus');
-    f.addReputation('ludus-magnus', 100);
+    for (let i = 0; i < 3; i++) f.promote('ludus-magnus');
     expect(f.rank('ludus-magnus')!.id).toBe('palus-tertius');
-    expect(f.nextRank('ludus-magnus')).toMatchObject({ rank: { id: 'palus-secundus' }, reputation: 0, quest: false });
-    expect(f.nextRank('ludus-magnus')!.skills).toEqual([{ skill: ['blades', 'spear', 'archery', 'shield', 'brawling', 'heavy-armor', 'light-armor'], level: 50 }]);
-    blades = 70;
+    expect(f.nextRank('ludus-magnus')).toMatchObject({ rank: { id: 'palus-secundus' }, quest: true, citizenship: false });
+    expect(f.nextRank('ludus-magnus')!.skills).toEqual([{ skill: ['blades', 'spear', 'archery', 'shield', 'brawling', 'heavy-armor', 'light-armor'], level: 45 }]);
+    expect(f.promote('ludus-magnus')!.id).toBe('palus-tertius'); // waits
+    expect(f.pendingRank('ludus-magnus')!.id).toBe('palus-secundus');
+    expect((notes.at(-1)!.e as { text: string }).text).toContain('awaits');
+    f.promote('ludus-magnus'); // the next quest's promotion queues behind it
+    expect(f.pendingRank('ludus-magnus')!.id).toBe('primus-palus');
+    expect(f.checkPromotions()).toBe(0);
+    blades = 50;
+    expect(f.checkPromotions()).toBe(1);
+    expect(f.rank('ludus-magnus')!.id).toBe('palus-secundus');
+    expect(f.pendingRank('ludus-magnus')!.id).toBe('primus-palus');
+    blades = 60;
+    f.checkPromotions();
     expect(f.rank('ludus-magnus')!.id).toBe('primus-palus');
-    expect(f.nextRank('ludus-magnus')).toMatchObject({ rank: { id: 'rudiarius' }, reputation: 0, skills: [], quest: true });
+    expect(f.pendingRank('ludus-magnus')).toBeUndefined();
     expect(f.grantRank('ludus-magnus', 'rudiarius')).toBe(true);
     expect(f.rank('ludus-magnus')!.title).toBe('Freed Champion');
     expect(f.nextRank('ludus-magnus')).toBeUndefined();
     expect(f.grantRank('ludus-magnus', 'imperator')).toBe(false);
+    // Gates by the GDD table.
+    const gates = (fac: string, rank: string) => f.def(fac)!.ranks.find((r) => r.id === rank)!.requires;
+    expect(gates('vigiles', 'centurio')).toEqual([{ skill: 'athletics', level: 45 }, { skill: ['brawling', 'blades'], level: 30 }]);
+    expect(gates('cohortes-urbanae', 'optio')).toEqual([{ skill: ['blades', 'spear'], level: 30 }]);
+    expect(gates('clientela', 'procurator')).toEqual([{ skill: 'rhetoric', level: 45 }]);
+    expect(f.def('ludus-magnus')!.ranks.every((r) => r.minReputation === 0)).toBe(true);
   });
 
-  it('citizens only (Urban Cohorts) and exclusive colors (Greens vs Blues)', () => {
+  it('citizens only (Urban Cohorts), the non-citizen cap (Clientela: amicus), exclusive colors (Greens vs Blues)', () => {
     const f = new FactionSystem();
     let citizen = false;
     f.isCitizen = () => citizen;
     expect(f.joinBlocker('cohortes-urbanae')).toBe('citizens-only');
     expect(f.join('vigiles')).toBe(true); // any status
+    f.join('clientela');
+    f.grantRank('clientela', 'procurator');
+    expect(f.rank('clientela')!.id).toBe('cliens');
+    expect(f.pendingRank('clientela')!.id).toBe('procurator');
+    f.grantRank('clientela', 'amicus');
+    expect(f.rank('clientela')!.id).toBe('amicus');
+    expect(f.nextRank('clientela')).toMatchObject({ citizenship: true });
     citizen = true;
+    f.checkPromotions();
+    expect(f.rank('clientela')!.id).toBe('procurator');
     expect(f.join('cohortes-urbanae')).toBe(true);
     expect(f.join('factio-prasina')).toBe(true);
     expect(f.joinBlocker('factio-veneta')).toBe('exclusive');
@@ -382,7 +424,7 @@ describe('factions (GDD §9.1)', () => {
     expect(f.join('factio-veneta')).toBe(true);
   });
 
-  it('Laudatio multiplies gains; enemies and hostility; persistence', () => {
+  it('Laudatio multiplies gains; enemies and hostility; Fama tracks; persistence', () => {
     const f = new FactionSystem();
     f.gainMultiplier = () => 1.25;
     f.addReputation('plebs', 40);
@@ -390,6 +432,7 @@ describe('factions (GDD §9.1)', () => {
     expect(f.reputation('plebs')).toBe(30);
     f.addReputation('plebs', 500);
     expect(f.reputation('plebs')).toBe(100);
+    expect(famaTrack('plebs')).toBe('fama.plebs');
     expect(f.areEnemies('vigiles', 'grassatores')).toBe(true);
     expect(f.areEnemies('grassatores', 'vigiles')).toBe(true);
     expect(f.areEnemies('factio-prasina', 'vigiles')).toBe(false);
@@ -398,14 +441,20 @@ describe('factions (GDD §9.1)', () => {
     f.addReputation('vigiles', -60);
     expect(f.hostileToPlayer('vigiles')).toBe(true);
     f.join('sodales-invicti');
+    f.promote('sodales-invicti');
     f.grantRank('praetoriani', 'speculator');
+    f.skillLevel = () => 0;
+    f.join('cultores-lavernae');
+    f.grantRank('cultores-lavernae', 'effractor');
     const f2 = new FactionSystem();
     f2.restore(JSON.parse(JSON.stringify(f.serialize())));
     expect(f2.serialize()).toEqual(f.serialize());
-    expect(f2.isMember('sodales-invicti')).toBe(true);
+    expect(f2.rank('sodales-invicti')!.id).toBe('nymphus');
     expect(f2.rank('praetoriani')!.id).toBe('speculator');
-    f2.restore({ rep: { plebs: 900, nope: 3 }, members: ['nope', 'vigiles'], granted: { vigiles: 'imperator' } });
+    expect(f2.pendingRank('cultores-lavernae')!.id).toBe('effractor');
+    f2.restore({ rep: { plebs: 900, nope: 3 }, members: ['nope', 'vigiles'], granted: { vigiles: 'optio' } });
     expect(f2.reputation('plebs')).toBe(100);
     expect(f2.joined()).toEqual(['vigiles']);
+    expect(f2.rank('vigiles')!.id).toBe('optio'); // the old save format
   });
 });

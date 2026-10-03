@@ -147,6 +147,34 @@ describe('example quest: The Scribe’s Letter (driven by events)', () => {
   });
 });
 
+describe('faction quest rewards (GDD §5.1, §9.1)', () => {
+  it('reward.skillXp gives one level’s worth of XP; reward.rank promotes (or grants a named rank, waiting for skill gates)', () => {
+    const { rpg } = rpgGame();
+    rpg.quests.register(defineQuest({
+      id: 'vig-01-hamae', title: 'Buckets', category: 'faction', faction: 'vigiles', summary: 'Join a bucket chain.',
+      stages: { start: { journal: 'A fire in the Velabrum.' } },
+      rewards: { skillXp: ['athletics', { id: 'brawling', levels: 2 }], rank: { faction: 'vigiles' } },
+    }));
+    rpg.quests.register(defineQuest({
+      id: 'vig-04', title: 'The Landlord of Flames', category: 'faction', faction: 'vigiles', summary: '',
+      stages: { start: { journal: 'Fires for profit.' } },
+      rewards: { rank: { faction: 'vigiles', rank: 'optio' } },
+    }));
+    rpg.factions.join('vigiles');
+    rpg.quests.start('vig-01-hamae');
+    rpg.quests.complete('vig-01-hamae');
+    expect(rpg.sheet.skillLevel('athletics')).toBe(11);
+    expect(rpg.sheet.skillLevel('brawling')).toBe(12);
+    expect(rpg.factions.rank('vigiles')!.id).toBe('sebaciarius');
+    rpg.quests.start('vig-04');
+    rpg.quests.complete('vig-04');
+    expect(rpg.factions.rank('vigiles')!.id).toBe('sebaciarius'); // optio needs Athletics 30
+    expect(rpg.factions.pendingRank('vigiles')!.id).toBe('optio');
+    rpg.sheet.raiseSkill('athletics', 19); // skill:levelup → checkPromotions
+    expect(rpg.factions.rank('vigiles')!.id).toBe('optio');
+  });
+});
+
 // ---------------------------------------------------------------- engine unit tests
 
 function questGame(defs: QuestDef[]) {

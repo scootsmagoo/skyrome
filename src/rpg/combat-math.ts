@@ -14,7 +14,7 @@
  * Poise damage = weapon.stagger × (light 1, power 2.5, bash 2, sprint 1.5); regen 15/s after 1.5 s.
  */
 import { clamp } from '../core/math';
-import { COMBAT, DIFFICULTY, STAMINA_COSTS, type Difficulty } from './data/balance';
+import { COMBAT, DIFFICULTY, STAMINA_COSTS, type Difficulty } from './data/tuning';
 import type { ArmorFamily, DamageType, ItemDef, ModifierId, ShieldStats, WeaponClass, WeaponStats } from './types';
 
 /** What combat needs to know about a combatant: the player's sheet, or an NPC stub. */
@@ -61,12 +61,12 @@ export function damageTypeOf(w: WeaponStats): DamageType {
   return w.class === 'blunt' || w.class === 'unarmed' || w.class === 'sling' ? 'blunt' : 'thrust';
 }
 
-/** Armor family of an outfit: the body piece decides (§8.3); cloth without one. */
+/** Armor family of an outfit (§8.2): the outermost torso piece decides — body, else padding, else cloth. */
 export function armorFamilyOf(pieces: readonly ItemDef[]): ArmorFamily {
-  const body = pieces.find((p) => p.slot === 'body' && p.armor);
-  if (!body?.armor) return 'cloth';
-  if (body.armor.family) return body.armor.family;
-  return body.armor.weightClass === 'heavy' ? 'mail' : body.armor.weightClass === 'light' ? 'padded' : 'cloth';
+  const torso = pieces.find((p) => p.slot === 'body' && p.armor && p.armor.weightClass !== 'clothing') ?? pieces.find((p) => p.slot === 'padding' && p.armor);
+  if (!torso?.armor) return 'cloth';
+  if (torso.armor.family) return torso.armor.family;
+  return torso.armor.weightClass === 'heavy' ? 'mail' : torso.armor.weightClass === 'light' ? 'padded' : 'cloth';
 }
 
 /** TYPE_VS_FAMILY (§6.2). */
@@ -74,7 +74,7 @@ export function typeFactor(type: DamageType, family: ArmorFamily): number {
   return COMBAT.typeVsFamily[family][type];
 }
 
-/** §6.3 Condition scales AR and damage by 0.5 + 0.5 × condition. */
+/** §6.3 Condition scales AR, damage and shield mitigation by 0.75 + 0.25 × condition. */
 export function conditionFactor(condition = 1): number {
   return COMBAT.conditionFloor + (1 - COMBAT.conditionFloor) * clamp(condition, 0, 1);
 }
@@ -87,7 +87,7 @@ export interface AttackOptions {
   /** Power attack, with how long it was charged (seconds; 0.35 → ×1.5, 0.8+ → ×2.0) or a direction. */
   power?: boolean;
   chargeSeconds?: number;
-  /** WASD direction of a power attack (§6.1): forward 2.0, sideways 1.4 (sweep), back 1.3, none 2.0 (+50% poise). */
+  /** Power attack direction (§6.1), multiplying the charge: none = overhead 1.0 (+50% poise), forward 1.0, sideways 0.7, back 0.65. */
   direction?: PowerDirection;
   /** Position in the light-attack chain (the 3rd hit is ×1.25). */
   chain?: number;
@@ -99,7 +99,7 @@ export interface AttackOptions {
   riposte?: boolean;
   /** Target unaware (§6.7). */
   sneak?: boolean;
-  /** Use the weapon's alternative strike (a gladius cut, a spatha thrust). */
+  /** Force the weapon's alternative strike (a gladius cut, a spatha thrust); by default the attack type table decides (§6.2). */
   alt?: boolean;
   /** Thrown (pilum, lancea, iaculum). */
   thrown?: boolean;
@@ -117,6 +117,8 @@ export interface AttackOptions {
   vsSoldier?: boolean;
   /** Ranged headshot. */
   headshot?: 'bare' | 'helmeted';
+  /** The target is whoever last struck the attacker (Nemesis' Retribution). */
+  vsLastAttacker?: boolean;
   /** Random 0..1 for the crit roll (omit = no crit). */
   critRoll?: number;
 }
@@ -151,6 +153,22 @@ export function powerChargeMult(seconds = COMBAT.attack.chargeMaxSec): number {
   return a.powerMin + (a.powerMax - a.powerMin) * t;
 }
 
+/**
+ * The damage type of an attack (§6.2 attack-type table): the weapon's `attackTypes` by light-chain
+ * hit (1/2/3) or power direction (none = overhead), else its main type. The type picks the value.
+ */
+export function attackTypeFor(w: WeaponStats, o: { chain?: number; power?: boolean; direction?: PowerDirection } = {}): DamageType {
+  const t = w.attackTypes;
+  const main = damageTypeOf(w);
+  if (!t) return main;
+  if (o.power) {
+    const d = o.direction ?? 'none';
+    return (d === 'none' ? t.overhead : d === 'forward' ? t.forward : t.side) ?? main;
+  }
+  const i = clamp(Math.round(o.chain ?? 1), 1, 3) - 1;
+  return t.light?.[i] ?? main;
+}
+
 /** Everything about one swing or shot by a combatant with a weapon (undefined = fists). */
 export function computeAttack(stats: CombatantStats, weapon: WeaponStats | undefined, opts: AttackOptions = {}): AttackResult {
   const w = weapon ?? FISTS;
@@ -160,12 +178,13 @@ export function computeAttack(stats: CombatantStats, weapon: WeaponStats | undef
   const dagger = tags.includes('dagger');
   const ammo = opts.ammo ?? opts.ammoItem?.weapon;
 
-  // Base damage and type.
+  // Base damage and type: the attack type picks the value (gladius thrust 13, cut 11).
   let base = opts.thrown && w.thrownDamage !== undefined ? w.thrownDamage : w.damage;
   let damageType = damageTypeOf(w);
-  if (opts.alt && w.alt) {
+  const wanted = opts.alt && w.alt ? w.alt.damageType : opts.thrown || ranged ? damageType : attackTypeFor(w, { chain: opts.chain, power, direction: opts.direction });
+  if (wanted !== damageType && w.alt && w.alt.damageType === wanted) {
     base = w.alt.damage;
-    damageType = w.alt.damageType;
+    damageType = wanted;
   }
   if (opts.bash) damageType = 'blunt';
   base += ammo?.damage ?? 0;
@@ -175,7 +194,7 @@ export function computeAttack(stats: CombatantStats, weapon: WeaponStats | undef
   const A = COMBAT.attack;
   let attackMult = A.light;
   if (opts.bash) attackMult = A.bash;
-  else if (power) attackMult = opts.direction ? COMBAT.directional[opts.direction] : powerChargeMult(opts.chargeSeconds);
+  else if (power) attackMult = powerChargeMult(opts.chargeSeconds) * COMBAT.directional[opts.direction ?? 'none'];
   else if ((opts.chain ?? 1) >= 3) attackMult = A.chain3;
   if (power) attackMult *= 1 + stats.modifier('damage.power');
   if (opts.sprint) attackMult *= A.sprint;
@@ -188,7 +207,7 @@ export function computeAttack(stats: CombatantStats, weapon: WeaponStats | undef
     if (tags.includes('venatio')) attackMult *= 1.25;
     if (stats.hasFlag('trait-beast-wise')) attackMult *= 1.2;
   }
-  if (stats.hasFlag('nemesis.retribution')) attackMult *= 1.5;
+  if (opts.vsLastAttacker && stats.hasFlag('nemesis.retribution')) attackMult *= COMBAT.retribution;
   raw *= attackMult;
 
   let sneakMult = 1;
@@ -209,7 +228,7 @@ export function computeAttack(stats: CombatantStats, weapon: WeaponStats | undef
   // Poise.
   const P = COMBAT.poiseMult;
   let poise = w.stagger * (opts.bash ? P.bash : power ? P.power : opts.sprint ? P.sprint : P.light);
-  if (power && opts.direction === 'none') poise *= COMBAT.overheadPoise;
+  if (power && (opts.direction ?? 'none') === 'none') poise *= COMBAT.overheadPoise;
   if (ammo?.stagger) poise += ammo.stagger;
   if (opts.ammoItem?.tags?.includes('lead') && stats.hasFlag('perk-archery-lead-shot')) poise *= 1.5;
   if (opts.vsSoldier && tags.includes('vitis')) poise *= 1.5;
@@ -239,13 +258,14 @@ export function computeAttack(stats: CombatantStats, weapon: WeaponStats | undef
     bleedChance,
     crit,
     takedown: !!opts.sneak && !power && (w.class === 'unarmed' || opts.item?.id === 'fustis'),
-    interval: attackInterval(w, power),
+    interval: attackInterval(w, power, stats),
   };
 }
 
-/** Seconds per swing (wind-up + active + recovery), scaled by weapon speed. */
-export function attackInterval(w: WeaponStats, power = false): number {
-  return (power ? COMBAT.swingSeconds + COMBAT.attack.chargeMaxSec : COMBAT.swingSeconds) / Math.max(0.1, w.speed);
+/** Seconds per swing (wind-up + active + recovery), scaled by weapon speed and attack.speed (the toga −20%). */
+export function attackInterval(w: WeaponStats, power = false, stats?: Pick<CombatantStats, 'modifier'>): number {
+  const speed = Math.max(0.1, w.speed * (1 + (stats?.modifier('attack.speed') ?? 0)));
+  return (power ? COMBAT.swingSeconds + COMBAT.attack.chargeMaxSec : COMBAT.swingSeconds) / speed;
 }
 
 // ------------------------------------------------------------------ armor
@@ -279,16 +299,14 @@ export function effectiveArmorRating(pieces: readonly (ItemDef | { def: ItemDef;
   return total;
 }
 
-/** Which armor skill a hit trains: whichever class gives at least half the worn AR (§5.4). */
+/**
+ * Which armor skill a hit trains (§5.4, §6.3): the class of the body piece — heavy or light — or
+ * Light Armor when you wear only padding. Helmets, manicae and greaves never decide.
+ */
 export function armorSkillFor(pieces: readonly ItemDef[]): 'heavy-armor' | 'light-armor' | null {
-  let heavy = 0;
-  let light = 0;
-  for (const p of pieces) {
-    if (p.armor?.weightClass === 'heavy') heavy += p.armor.rating;
-    else if (p.armor?.weightClass === 'light') light += p.armor.rating;
-  }
-  if (heavy + light <= 0) return null;
-  return heavy >= (heavy + light) / 2 ? 'heavy-armor' : 'light-armor';
+  const body = pieces.find((p) => p.slot === 'body' && p.armor && p.armor.weightClass !== 'clothing');
+  if (body) return body.armor!.weightClass === 'heavy' ? 'heavy-armor' : 'light-armor';
+  return pieces.some((p) => p.slot === 'padding' && p.armor) ? 'light-armor' : null;
 }
 
 // ------------------------------------------------------------------ block & parry
@@ -309,6 +327,10 @@ export interface BlockInput {
   alliesNear?: number;
   /** The blocker's current stamina. */
   stamina: number;
+  /** The shield's condition 0..1 (scales its value by 0.75 + 0.25 × condition). */
+  condition?: number;
+  /** Formation bonus (three or more miles in line: +0.15, §6.13). */
+  formation?: number;
 }
 
 export interface BlockResult {
@@ -320,12 +342,16 @@ export interface BlockResult {
   mitigation: number;
 }
 
-/** Block mitigation (§6.4): shield value or weapon-only, + Shield skill/400 (max +0.25), cap 0.95. */
-export function blockMitigation(stats: CombatantStats, opts: { shield?: ShieldStats; twoHanded?: boolean; fists?: boolean; alliesNear?: number } = {}): number {
+/**
+ * Block mitigation (§6.4): base + (0.95 − base) × Shield/200, where base is the shield's value (×
+ * its condition factor) or weapon-only (blades 0.45, two-handed spear or falx 0.55, fists 0.25);
+ * perks and formations add on top; cap 0.90. Scutum 0.85 → 0.90, parmula 0.58 → 0.77, blades 0.45 → 0.70.
+ */
+export function blockMitigation(stats: CombatantStats, opts: { shield?: ShieldStats; twoHanded?: boolean; fists?: boolean; condition?: number; formation?: number } = {}): number {
   const wb = COMBAT.weaponBlock;
-  const base = opts.shield ? opts.shield.blockMitigation : opts.fists ? wb.fists : opts.twoHanded ? wb.twoHand : wb.blade;
-  let m = base + Math.min(COMBAT.blockSkillMax, stats.skillLevel('shield') / COMBAT.blockSkillDiv) + stats.modifier('block.mitigation');
-  if (opts.shield && stats.hasFlag('perk-shield-wall')) m += 0.1 * Math.min(2, opts.alliesNear ?? 0);
+  const base = opts.shield ? opts.shield.blockMitigation * conditionFactor(opts.condition) : opts.fists ? wb.fists : opts.twoHanded ? wb.twoHand : wb.blade;
+  const skill = clamp(stats.skillLevel('shield'), 0, 100) / COMBAT.blockSkillDiv;
+  const m = base + Math.max(0, COMBAT.blockTarget - base) * skill + stats.modifier('block.mitigation') + (opts.formation ?? 0);
   return Math.min(COMBAT.blockCap, m);
 }
 
@@ -334,6 +360,8 @@ export function resolveBlock(stats: CombatantStats, i: BlockInput): BlockResult 
   const B = COMBAT.blockStamina;
   let staminaCost = Math.max(B.min, B.mult * i.damage * (1 - stats.skillLevel('shield') / B.skillDiv));
   staminaCost *= Math.max(0, 1 - stats.modifier('block.staminaCost'));
+  // Shield Wall: −30% block stamina per ally within 2 m, at most −60%.
+  if (i.shield && stats.hasFlag('perk-shield-wall')) staminaCost *= 1 - Math.min(COMBAT.shieldWall.max, COMBAT.shieldWall.perAlly * (i.alliesNear ?? 0));
   if (i.ranged) {
     // Missiles: a raised shield either stops one (its `missiles` fraction) or doesn't (§6.4); Testudo: 0 stamina.
     if (!i.shield) mitigation = 0;
@@ -373,10 +401,20 @@ export interface PoiseState {
   max: number;
   /** Seconds until regeneration resumes. */
   delay: number;
+  /** Seconds of poise immunity left (the stagger plus 1.5 s after it). */
+  immune: number;
+  /** Seconds of flinch immunity left (0.4 s after any flinch). */
+  flinchImmune: number;
+  /** Clock times of recent staggers (at most 2 within 4 s). */
+  staggers: number[];
+  /** The state's own clock (seconds, advanced by tickPoise). */
+  t: number;
+  /** The player flinches only from hits ≥ 35% of max (NPCs 20%). */
+  player: boolean;
 }
 
-export function createPoise(max: number): PoiseState {
-  return { current: max, max, delay: 0 };
+export function createPoise(max: number, opts: { player?: boolean } = {}): PoiseState {
+  return { current: max, max, delay: 0, immune: 0, flinchImmune: 0, staggers: [], t: 0, player: !!opts.player };
 }
 
 /**
@@ -394,29 +432,58 @@ export function playerPoise(stats: CombatantStats, o: { heavyBody?: boolean; shi
   return p + stats.modifier('poise.max');
 }
 
-/**
- * Apply poise damage (§6.5). A hit that breaks poise staggers (0.8 s light, 1.5 s heavy); one that
- * doesn't flinches only if it is at least 20% of max. `knockdown` attacks (Umbo, pankration, bear
- * charge, net) floor the target for 2 s. Immunity (Labor) ignores it all.
- */
-export function applyPoiseDamage(state: PoiseState, amount: number, opts: { heavy?: boolean; knockdown?: boolean; immune?: boolean } = {}): { result: StaggerResult; seconds: number } {
-  const P = COMBAT.poise;
-  if (opts.immune || !(amount > 0)) return { result: 'none', seconds: 0 };
-  state.delay = P.regenDelay;
-  if (opts.knockdown) {
-    state.current = state.max;
-    return { result: 'knockdown', seconds: P.knockdown };
-  }
-  state.current -= amount;
-  if (state.current <= 0) {
-    state.current = state.max;
-    return { result: 'stagger', seconds: opts.heavy ? P.staggerHeavy : P.staggerLight };
-  }
-  return amount >= state.max * P.flinchFrac ? { result: 'flinch', seconds: 0 } : { result: 'none', seconds: 0 };
+export interface PoiseResult {
+  result: StaggerResult;
+  seconds: number;
+  /** A stagger opens the riposte window — except a riposte's own guaranteed stagger (§6.5). */
+  riposteWindow: boolean;
 }
 
-/** Poise regenerates 15/s after 1.5 s without poise damage. */
+/**
+ * Apply poise damage (§6.5). Breaking poise staggers (0.8 s light, 1.5 s heavy) and refills it;
+ * the victim then has 1.5 s of poise immunity after the stagger, and a third stagger within 4 s
+ * only flinches. A hit that doesn't break poise flinches only at ≥ 20% of max (the player 35%),
+ * with 0.4 s of flinch immunity after. `knockdown` attacks floor the target for 2 s; `riposte`
+ * hits always stagger but open no new riposte window; `immune` (Labor) ignores it all.
+ */
+export function applyPoiseDamage(state: PoiseState, amount: number, opts: { heavy?: boolean; knockdown?: boolean; immune?: boolean; riposte?: boolean } = {}): PoiseResult {
+  const P = COMBAT.poise;
+  const none: PoiseResult = { result: 'none', seconds: 0, riposteWindow: false };
+  if (opts.immune || !(amount > 0) || state.immune > 0) return none;
+  state.delay = P.regenDelay;
+  const recent = state.staggers.filter((t) => state.t - t < P.staggerWindow).length;
+  const stagger = (seconds: number, result: StaggerResult): PoiseResult => {
+    state.staggers.push(state.t);
+    state.current = state.max; // refilled when the stagger ends
+    state.immune = seconds + P.immunityAfterStagger;
+    return { result, seconds, riposteWindow: result === 'stagger' && !opts.riposte };
+  };
+  if (recent < P.staggerLimit) {
+    if (opts.knockdown) return stagger(P.knockdown, 'knockdown');
+    state.current -= amount;
+    if (state.current <= 0 || opts.riposte) return stagger(opts.heavy || opts.riposte ? P.staggerHeavy : P.staggerLight, 'stagger');
+  } else {
+    state.current = Math.max(0, state.current - amount);
+    if (state.current <= 0 || opts.riposte || opts.knockdown) return flinch(state, true);
+  }
+  return amount >= state.max * (state.player ? P.flinchFracPlayer : P.flinchFrac) ? flinch(state, false) : none;
+}
+
+function flinch(state: PoiseState, forced: boolean): PoiseResult {
+  if (state.flinchImmune > 0 && !forced) return { result: 'none', seconds: 0, riposteWindow: false };
+  state.flinchImmune = COMBAT.poise.flinchImmunity;
+  return { result: 'flinch', seconds: 0, riposteWindow: false };
+}
+
+/** Advance poise timers; poise regenerates 15/s after 1.5 s without poise damage (immunity counts as none). */
 export function tickPoise(state: PoiseState, dt: number) {
+  state.t += dt;
+  state.flinchImmune = Math.max(0, state.flinchImmune - dt);
+  state.staggers = state.staggers.filter((t) => state.t - t < COMBAT.poise.staggerWindow);
+  if (state.immune > 0) {
+    state.immune = Math.max(0, state.immune - dt);
+    return;
+  }
   if (state.delay > 0) {
     state.delay = Math.max(0, state.delay - dt);
     return;

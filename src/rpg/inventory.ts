@@ -9,7 +9,7 @@
  * denarii when picked up (§7.1). Quest items weigh nothing and cannot be dropped or sold (§8.6).
  */
 import type { EventBus, GameEvents } from '../core/Events';
-import { CARRY } from './data/balance';
+import { CARRY, COMBAT } from './data/tuning';
 import { isTwoHanded, slotOf, type ItemDb } from './items';
 import { roundQuadrans } from './money';
 import type { CharacterSheetImpl } from './sheet';
@@ -344,9 +344,9 @@ export class InventoryImpl implements Inventory {
     return to;
   }
 
-  /** −1% condition per 10 damage absorbed or dealt (§6.3). Returns the new condition. */
+  /** −1% condition per 100 damage absorbed or dealt (§6.3). Returns the new condition. */
   wear(slot: EquipSlot, damage: number) {
-    return this.adjustCondition(slot, -Math.max(0, damage) * 0.001);
+    return this.adjustCondition(slot, -Math.max(0, damage) * COMBAT.wearPerDamage);
   }
 
   repair(slot: EquipSlot, amount: number) {

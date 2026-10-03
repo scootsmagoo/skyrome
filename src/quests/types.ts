@@ -46,6 +46,10 @@ export interface Reward {
   reputation?: { faction: string; amount: number }[];
   /** Skill XP (use units). */
   skills?: { id: string; amount: number }[];
+  /** GDD §5.1 `reward.skillXp`: one level's worth (xpToNext at the current level) per entry, in a skill the quest exercised. */
+  skillXp?: (string | { id: string; levels?: number })[];
+  /** GDD §9.1: the faction rank the quest grants — the next one, or a named rank (it waits for skill gates). */
+  rank?: { faction: string; rank?: string };
 }
 
 type HandlerMap = {

@@ -2,7 +2,7 @@
  * Health / stamina / pietas pools with delayed regeneration. Used by the player (through the
  * CharacterSheet, which supplies modifier-aware regen rates) and directly by NPCs and enemies.
  */
-import { REGEN } from './data/balance';
+import { REGEN } from './data/tuning';
 import type { Resource, ResourceId, Vitals } from './types';
 
 export const RESOURCE_IDS: readonly ResourceId[] = ['health', 'stamina', 'pietas'];

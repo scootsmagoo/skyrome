@@ -1,8 +1,13 @@
 /**
- * Faction membership, Fama (reputation, −100…+100) and ranks (game.factions) — GDD §3.4, §9.1.
- * A rank needs its Fama threshold and, for top ranks, skills (every gate must pass; a gate listing
- * several skills needs any one). Capstone ranks are granted by their quest (grantRank). Some
- * factions take only citizens; some exclude each other (Greens vs Blues).
+ * Faction membership, ranks and Fama (game.factions) — docs/GDD.md §9.1 and §3.4.
+ *
+ *   - Ranks are granted by quest completion (promote / grantRank). A rank with skill gates (every
+ *     gate must pass; a gate naming several skills needs any one) waits as a pending promotion
+ *     until you reach the skill — checkPromotions() applies it.
+ *   - Fama (−100…+100 per faction: the `fama.<id>` tracks) no longer gates rank by default; a
+ *     rank with a non-zero minReputation still asks for it.
+ *   - Some factions take only citizens; non-citizens may be capped (the Clientela: amicus); some
+ *     exclude each other (Greens vs Blues); some cost Infamia to join (the gladiator's oath +20).
  */
 import type { EventBus, GameEvents } from '../core/Events';
 import { FACTIONS, REPUTATION_MAX, REPUTATION_MIN } from './data/factions';
@@ -11,17 +16,29 @@ import './events';
 
 export type JoinBlocker = 'unknown' | 'member' | 'not-joinable' | 'citizens-only' | 'exclusive';
 
+export interface PromotionNeeds {
+  rank: FactionRank;
+  /** Skill gates not yet met. */
+  skills: { skill: string | string[]; level: number }[];
+  /** Fama still missing (only for ranks that ask for it). */
+  reputation: number;
+  /** Capped as a non-citizen. */
+  citizenship: boolean;
+}
+
 export class FactionSystem {
   private readonly defs = new Map<string, FactionDef>();
   private readonly rep = new Map<string, number>();
   private readonly members = new Set<string>();
-  /** Ranks granted by quests (capstones, invitations). */
-  private readonly granted = new Map<string, string>();
+  /** Rank index held, per faction. */
+  private readonly held = new Map<string, number>();
+  /** Rank index granted by a quest but waiting for its gates. */
+  private readonly pending = new Map<string, number>();
   /** Multiplier on positive Fama gains (the Laudatio perk sets this through install). */
   gainMultiplier: () => number = () => 1;
-  /** Skill lookup for skill-gated ranks; without it gates are ignored. */
+  /** Skill lookup for gated ranks; without it gates are ignored. */
   skillLevel?: (id: string) => number;
-  /** Citizenship check for citizens-only factions; without it everyone may join. */
+  /** Citizenship check (citizens-only factions, non-citizen caps); without it everyone counts as a citizen. */
   isCitizen?: () => boolean;
 
   constructor(
@@ -39,7 +56,7 @@ export class FactionSystem {
     return [...this.defs.values()];
   }
 
-  /** Fama with a faction (−100…+100). */
+  /** Fama with a faction (−100…+100), the `fama.<id>` track. */
   reputation(id: string): number {
     return this.rep.get(id) ?? 0;
   }
@@ -52,45 +69,59 @@ export class FactionSystem {
     return [...this.members];
   }
 
-  private sortedRanks(id: string): FactionRank[] {
-    return [...(this.defs.get(id)?.ranks ?? [])].sort((a, b) => a.minReputation - b.minReputation);
+  private ranks(id: string): FactionRank[] {
+    return this.defs.get(id)?.ranks ?? [];
   }
 
-  /** Current rank (members only): the highest earned by Fama and skills, or granted by a quest. */
+  /** Current rank (members only; joining gives the first). */
   rank(id: string): FactionRank | undefined {
     if (!this.members.has(id)) return undefined;
-    const ranks = this.sortedRanks(id);
-    let best: FactionRank | undefined;
-    for (const r of ranks) if (!r.questOnly && this.qualifies(id, r)) best = r;
-    const g = this.granted.get(id);
-    const granted = g ? ranks.find((r) => r.id === g) : undefined;
-    if (granted && (!best || ranks.indexOf(granted) > ranks.indexOf(best))) best = granted;
-    return best ?? ranks[0];
+    const ranks = this.ranks(id);
+    return ranks[Math.min(this.held.get(id) ?? 0, ranks.length - 1)];
   }
 
   /** 0-based rank index, or -1 when not a member. */
   rankIndex(id: string): number {
-    const r = this.rank(id);
-    return r ? this.sortedRanks(id).indexOf(r) : -1;
+    return this.members.has(id) ? (this.held.get(id) ?? 0) : -1;
   }
 
-  /** The next rank up and what it still needs (Fama, skill gates not met, or a quest). */
-  nextRank(id: string): { rank: FactionRank; reputation: number; skills: { skill: string | string[]; level: number }[]; quest: boolean } | undefined {
-    const ranks = this.sortedRanks(id);
-    const cur = this.rank(id);
-    const next = ranks[cur ? ranks.indexOf(cur) + 1 : 0];
-    if (!next) return undefined;
-    return { rank: next, reputation: Math.max(0, next.minReputation - this.reputation(id)), skills: (next.requires ?? []).filter((g) => !this.gatePasses(g)), quest: !!next.questOnly };
+  /** A promotion granted by a quest that waits for its skill gates, if any. */
+  pendingRank(id: string): FactionRank | undefined {
+    const i = this.pending.get(id);
+    return i === undefined ? undefined : this.ranks(id)[i];
   }
 
   private gatePasses(g: { skill: string | string[]; level: number }): boolean {
     if (!this.skillLevel) return true;
-    const skills = Array.isArray(g.skill) ? g.skill : [g.skill];
-    return skills.some((s) => this.skillLevel!(s) >= g.level);
+    return [g.skill].flat().some((s) => this.skillLevel!(s) >= g.level);
   }
 
-  private qualifies(id: string, r: FactionRank): boolean {
-    return this.reputation(id) >= r.minReputation && (r.requires ?? []).every((g) => this.gatePasses(g));
+  /** What a rank still needs from you (empty lists and zeros when you qualify). */
+  needs(id: string, rankId: string): PromotionNeeds | undefined {
+    const ranks = this.ranks(id);
+    const i = ranks.findIndex((r) => r.id === rankId);
+    if (i < 0) return undefined;
+    const rank = ranks[i];
+    const cap = this.defs.get(id)?.nonCitizenMaxRank;
+    const capIndex = cap ? ranks.findIndex((r) => r.id === cap) : -1;
+    return {
+      rank,
+      skills: (rank.requires ?? []).filter((g) => !this.gatePasses(g)),
+      reputation: Math.max(0, (rank.minReputation ?? 0) - this.reputation(id)),
+      citizenship: capIndex >= 0 && i > capIndex && !!this.isCitizen && !this.isCitizen(),
+    };
+  }
+
+  private qualifies(id: string, rankIndex: number): boolean {
+    const n = this.needs(id, this.ranks(id)[rankIndex]?.id ?? '');
+    return !!n && !n.skills.length && n.reputation <= 0 && !n.citizenship;
+  }
+
+  /** The next rank up and what it needs (all ranks are granted by quests). */
+  nextRank(id: string): (PromotionNeeds & { quest: true }) | undefined {
+    const next = this.ranks(id)[this.rankIndex(id) + 1];
+    if (!next) return undefined;
+    return { ...this.needs(id, next.id)!, quest: true };
   }
 
   joinBlocker(id: string): JoinBlocker | null {
@@ -107,6 +138,7 @@ export class FactionSystem {
     if (this.joinBlocker(id)) return false;
     const d = this.defs.get(id)!;
     this.members.add(id);
+    this.held.set(id, 0);
     this.events?.emit('faction:joined', { factionId: id });
     this.events?.emit('rpg:notify', { text: `Joined ${d.name}`, kind: 'faction' });
     return true;
@@ -114,33 +146,91 @@ export class FactionSystem {
 
   leave(id: string) {
     if (!this.members.delete(id)) return;
-    this.granted.delete(id);
+    this.held.delete(id);
+    this.pending.delete(id);
     this.events?.emit('faction:left', { factionId: id });
   }
 
-  /** A quest promotes the player (capstones such as rudiarius, eques, the speculatores' invitation). */
+  /** A quest grants the next rank (it waits if a gate isn't met). Returns the rank now held. */
+  promote(id: string): FactionRank | undefined {
+    if (!this.members.has(id)) return undefined;
+    const next = this.rankIndex(id) + 1;
+    const top = this.ranks(id).length - 1;
+    const target = Math.max(next, (this.pending.get(id) ?? -1) + 1);
+    if (target > top) return this.rank(id);
+    return this.grantIndex(id, target);
+  }
+
+  /** A quest grants a named rank (capstones, invitations); joins if needed. Waits for gates. */
   grantRank(id: string, rankId: string): boolean {
-    const r = this.defs.get(id)?.ranks.find((x) => x.id === rankId);
-    if (!r) return false;
-    if (!this.members.has(id)) this.members.add(id);
-    this.granted.set(id, rankId);
-    this.events?.emit('faction:rank', { factionId: id, rankId: r.id, title: r.title });
+    const i = this.ranks(id).findIndex((r) => r.id === rankId);
+    if (i < 0) return false;
+    if (!this.members.has(id)) {
+      this.members.add(id);
+      this.held.set(id, 0);
+    }
+    this.grantIndex(id, i);
     return true;
+  }
+
+  private grantIndex(id: string, target: number): FactionRank | undefined {
+    if (target <= this.rankIndex(id)) return this.rank(id);
+    if (this.qualifies(id, target)) {
+      this.setRank(id, target);
+      if ((this.pending.get(id) ?? -1) <= target) this.pending.delete(id);
+    } else {
+      this.pending.set(id, Math.max(target, this.pending.get(id) ?? -1));
+      const r = this.ranks(id)[target];
+      this.events?.emit('rpg:notify', { text: `${this.defs.get(id)!.name}: ${r.title} awaits — ${this.describeNeeds(id, r.id)}`, kind: 'faction' });
+    }
+    return this.rank(id);
+  }
+
+  private describeNeeds(id: string, rankId: string): string {
+    const n = this.needs(id, rankId)!;
+    const parts = n.skills.map((g) => `${[g.skill].flat().join(' or ')} ${g.level}`);
+    if (n.citizenship) parts.push('citizenship');
+    if (n.reputation > 0) parts.push(`${n.reputation} more Fama`);
+    return parts.join(', ');
+  }
+
+  private setRank(id: string, index: number) {
+    const before = this.rankIndex(id);
+    this.held.set(id, index);
+    if (index !== before) {
+      const r = this.ranks(id)[index];
+      this.events?.emit('faction:rank', { factionId: id, rankId: r.id, title: r.title });
+      this.events?.emit('rpg:notify', { text: `${this.defs.get(id)!.name}: you are now ${r.title}`, kind: 'faction' });
+    }
+  }
+
+  /** Apply pending promotions whose gates are now met (call after skill level-ups). Returns how many applied. */
+  checkPromotions(): number {
+    let n = 0;
+    for (const [id, target] of [...this.pending]) {
+      if (!this.members.has(id)) {
+        this.pending.delete(id);
+        continue;
+      }
+      // Rise as far as the gates allow, one rank at a time.
+      let i = this.rankIndex(id);
+      while (i < target && this.qualifies(id, i + 1)) i++;
+      if (i > this.rankIndex(id)) {
+        this.setRank(id, i);
+        n++;
+      }
+      if (i >= target) this.pending.delete(id);
+    }
+    return n;
   }
 
   addReputation(id: string, amount: number) {
     if (!this.defs.has(id) || !amount) return;
     if (amount > 0) amount *= this.gainMultiplier();
-    const before = this.rank(id);
     const value = Math.max(REPUTATION_MIN, Math.min(REPUTATION_MAX, this.reputation(id) + amount));
     const delta = value - this.reputation(id);
     this.rep.set(id, value);
     this.events?.emit('faction:reputation', { factionId: id, amount: value, delta });
-    const after = this.rank(id);
-    if (after && before && after !== before) {
-      this.events?.emit('faction:rank', { factionId: id, rankId: after.id, title: after.title });
-      this.events?.emit('rpg:notify', { text: `${this.defs.get(id)!.name}: you are now ${after.title}`, kind: 'faction' });
-    }
   }
 
   /** True if members of a and b fight on sight. */
@@ -154,16 +244,27 @@ export class FactionSystem {
   }
 
   serialize() {
-    return { rep: Object.fromEntries(this.rep), members: [...this.members], granted: Object.fromEntries(this.granted) };
+    return { rep: Object.fromEntries(this.rep), members: [...this.members], held: Object.fromEntries(this.held), pending: Object.fromEntries(this.pending) };
   }
 
   restore(data: unknown) {
-    const d = (data ?? {}) as { rep?: Record<string, number>; members?: string[]; granted?: Record<string, string> };
+    const d = (data ?? {}) as { rep?: Record<string, number>; members?: string[]; held?: Record<string, number>; pending?: Record<string, number>; granted?: Record<string, string> };
     this.rep.clear();
     this.members.clear();
-    this.granted.clear();
+    this.held.clear();
+    this.pending.clear();
     for (const [k, v] of Object.entries(d.rep ?? {})) if (typeof v === 'number' && Number.isFinite(v)) this.rep.set(k, Math.max(REPUTATION_MIN, Math.min(REPUTATION_MAX, v)));
     for (const m of Array.isArray(d.members) ? d.members : []) if (this.defs.has(m)) this.members.add(m);
-    for (const [k, v] of Object.entries(d.granted ?? {})) if (this.defs.get(k)?.ranks.some((r) => r.id === v)) this.granted.set(k, v);
+    const idx = (id: string, v: unknown) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < this.ranks(id).length ? v : undefined);
+    for (const id of this.members) this.held.set(id, idx(id, d.held?.[id]) ?? 0);
+    // Older saves stored granted rank ids.
+    for (const [id, rankId] of Object.entries(d.granted ?? {})) {
+      const i = this.ranks(id).findIndex((r) => r.id === rankId);
+      if (i >= 0 && this.members.has(id)) this.held.set(id, Math.max(this.held.get(id) ?? 0, i));
+    }
+    for (const [id, v] of Object.entries(d.pending ?? {})) {
+      const i = idx(id, v);
+      if (i !== undefined && this.members.has(id)) this.pending.set(id, i);
+    }
   }
 }

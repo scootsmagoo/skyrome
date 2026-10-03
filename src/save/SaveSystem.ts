@@ -17,7 +17,7 @@
  */
 import type { Game, System } from '../core/Game';
 import '../rpg/events';
-import { SAVE } from '../rpg/data/balance';
+import { SAVE } from '../rpg/data/tuning';
 import { EntityDeltas } from './deltas';
 import { createDefaultStorage } from './storage';
 import type { LoadResult, Saveable, SaveFile, SaveKind, SaveMeta, SaveResult, SaveStorage } from './types';

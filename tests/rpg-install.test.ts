@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventBus, type GameEvents } from '../src/core/Events';
 import { NpcRegistry } from '../src/npc/registry';
 import type { NpcDef } from '../src/npc/types';
+import { playableOrigins } from '../src/rpg/data/origins';
 import { installRpg } from '../src/rpg/install';
 import { canArrest, resolveYield } from '../src/rpg/yield';
 import { MemoryStorage } from '../src/save/storage';
@@ -38,16 +39,17 @@ describe('installRpg', () => {
     expect(rpg.sheet.skillLevel('athletics')).toBe(5);
     expect(rpg.sheet.skillLevel('rhetoric')).toBe(10);
     expect(rpg.sheet.hasFlag('trait-old-wound')).toBe(true);
-    expect(rpg.inventory.equipment).toEqual({ mainHand: 'gladius', offHand: 'scutum', body: 'tunica', cloak: 'sagum', feet: 'caligae', head: 'galea-gallica' });
-    // The signature weapon starts at 70%; the worn scutum at 60%.
-    expect(rpg.inventory.conditionOf('mainHand')).toBe(0.7);
-    expect(rpg.inventory.conditionOf('offHand')).toBe(0.6);
+    expect(rpg.inventory.equipment).toEqual({ mainHand: 'gladius', offHand: 'scutum-ovale', under: 'tunica', cloak: 'sagum', feet: 'caligae', head: 'galea-gallica' });
+    // The signature weapon starts at 90%; the worn oval shield at 40%.
+    expect(rpg.inventory.conditionOf('mainHand')).toBe(0.9);
+    expect(rpg.inventory.conditionOf('offHand')).toBe(0.4);
     expect(rpg.inventory.count('diploma')).toBe(1);
-    // §3.5 common kit: 2 bandages, a loaf, a wax tablet (the courier's tablet comes with mq-01).
+    // §3.5 common kit: 2 bandages, a loaf, a wax tablet and stylus (the courier's tablet comes with mq-01).
     expect(rpg.inventory.count('fascia')).toBe(2);
     expect(rpg.inventory.count('panis')).toBe(1);
     expect(rpg.inventory.count('tabula-cerata')).toBe(1);
-    expect(rpg.inventory.denarii).toBe(120);
+    expect(rpg.inventory.count('stilus')).toBe(1);
+    expect(rpg.inventory.denarii).toBe(60);
     expect(rpg.standing.origin).toBe('veteranus');
     expect(rpg.standing.legal).toBe('civis');
     expect(rpg.sheet.vitals.pietas.current).toBe(25);
@@ -59,10 +61,60 @@ describe('installRpg', () => {
     const eques = installRpg(fakeGame().game, { storage: new MemoryStorage(), background: 'eques-lapsus' });
     expect(eques.standing.debt).toBe(2000);
     expect(eques.inventory.denarii).toBe(20);
-    expect(eques.inventory.conditionOf('cloak')).toBe(0.5);
+    // Formal dress starts in the pack, not worn: the fallen eques' fine toga, worn thin.
+    expect(eques.inventory.equipped('cloak')).toBeUndefined();
+    expect(eques.inventory.stacks.find((x) => x.itemId === 'toga-fina')).toMatchObject({ count: 1, condition: 0.5 });
     const plain = installRpg(fakeGame().game, { storage: new MemoryStorage() });
-    expect(plain.inventory.equipment).toEqual({ body: 'tunica', feet: 'soleae' });
+    expect(plain.inventory.equipment).toEqual({ under: 'tunica', feet: 'soleae' });
     expect(plain.inventory.denarii).toBe(10);
+  });
+
+  it('sex sets the packed formal dress (§3.7); the creation extra is a used parmula or 40 den. (not for the veteran); v0.1 ships four origins', () => {
+    const woman = installRpg(fakeGame().game, { storage: new MemoryStorage(), background: 'hispanus', sex: 'female', extra: 'parmula' });
+    expect(woman.standing.sex).toBe('female');
+    expect(woman.inventory.count('stola')).toBe(1);
+    expect(woman.inventory.count('palla')).toBe(1);
+    expect(woman.inventory.count('toga')).toBe(0);
+    expect(woman.inventory.stacks.find((x) => x.itemId === 'parmula')).toMatchObject({ condition: 0.6 });
+    expect(woman.inventory.equipment).toEqual({ under: 'tunica', mainHand: 'gladius' });
+    expect(woman.sheet.modifier('arena.favor')).toBeCloseTo(0.25); // a gladiatrix wins the crowd faster
+    const man = installRpg(fakeGame().game, { storage: new MemoryStorage(), background: 'civis-suburanus', extra: 'denarii' });
+    expect(man.inventory.count('toga')).toBe(1);
+    expect(man.inventory.denarii).toBe(100);
+    expect(man.sheet.modifier('arena.favor')).toBe(0);
+    const vet = installRpg(fakeGame().game, { storage: new MemoryStorage(), background: 'veteranus', extra: 'denarii' });
+    expect(vet.inventory.denarii).toBe(60);
+    expect(playableOrigins('v0.1').map((o) => o.id)).toEqual(['civis-suburanus', 'hispanus', 'veteranus', 'dacus']);
+    expect(playableOrigins('v0.2').length).toBe(10);
+  });
+
+  it('AC-14: with no gated systems shipped, every v0.1 origin has at least 2 perks it can take at level 2', () => {
+    for (const o of playableOrigins('v0.1')) {
+      const rpg = installRpg(fakeGame().game, { storage: new MemoryStorage(), background: o.id, systems: [] });
+      rpg.sheet.addXp(75);
+      expect(rpg.sheet.level, o.id).toBe(2);
+      const takeable = rpg.sheet.availablePerkDefs().filter((p) => rpg.sheet.canTakePerk(p.id));
+      expect(takeable.length, `${o.id}: ${takeable.map((p) => p.id)}`).toBeGreaterThanOrEqual(2);
+      expect(rpg.sheet.perkBlocker('perk-equitatio-quadriga')).toBe('unavailable');
+    }
+  });
+
+  it('the gladiator’s oath costs Infamia +20 (a gladiatrix 30) and brands; quest promotions wait for skills; Infamia fades by 1 per 10 quiet days', () => {
+    const fg = fakeGame();
+    const rpg = installRpg(fg.game, { storage: new MemoryStorage(), background: 'veteranus' });
+    rpg.factions.join('ludus-magnus');
+    expect(rpg.standing.infamia).toBe(20);
+    expect(rpg.standing.branded).toBe(true);
+    for (let i = 0; i < 4; i++) rpg.factions.promote('ludus-magnus');
+    expect(rpg.factions.rank('ludus-magnus')!.id).toBe('palus-tertius');
+    expect(rpg.factions.pendingRank('ludus-magnus')!.id).toBe('palus-secundus');
+    rpg.sheet.raiseSkill('shield', 25); // shield 45: the martial gate
+    expect(rpg.factions.rank('ludus-magnus')!.id).toBe('palus-secundus');
+    fg.game.time.advanceHours(10 * 24 * 12);
+    expect(rpg.standing.infamia).toBe(10); // the floor for the branded
+    const her = installRpg(fakeGame().game, { storage: new MemoryStorage(), sex: 'female' });
+    her.factions.join('ludus-magnus');
+    expect(her.standing.infamia).toBe(30);
   });
 
   it('sprinting drains 8 stamina/s (heavy armor +25%); exhausted until 15 is back; over-encumbered you walk', () => {
@@ -154,7 +206,7 @@ describe('installRpg', () => {
     expect(rpg.inventory.denarii).toBe(33);
     rpg.factions.join('vigiles');
     expect(canArrest(deps)).toBe(false); // a vigil needs the rank of sebaciarius
-    rpg.factions.addReputation('vigiles', 10);
+    rpg.factions.promote('vigiles'); // sebaciarius
     fg.game.time.advanceHours(14); // 22:00
     expect(canArrest(deps)).toBe(true);
     resolveYield(deps, 'kill', { npcId: 'grassator-4', witnessed: true });

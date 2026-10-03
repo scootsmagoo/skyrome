@@ -10,7 +10,7 @@
  * Skill checks follow docs/GDD.md §14.5: p = clamp(0.05, 0.95, 0.50 + (skill + mods − DC) / 100),
  * rolled on a seeded RNG. Rhetoric checks add the persuasion mods (disposition, Dignitas, dress,
  * Fama, Infamia, cleanliness), Exordium (+10 on the first check with each person), the approach
- * (intimidate, invoke patron) and persuade.chance; Fortuna's "Fortune's Turn" makes the next roll
+ * (intimidate by bands, invoke patron) and persuade.chance; Fortuna's "Fortune's Turn" makes the next roll
  * pass. A passed check trains 10 × its tier, a failed one 2, and a failure locks that approach with
  * that NPC for 24 game hours. Bribes cost denarii and always pass (not with the incorruptible).
  * `once` choices and per-NPC memory are saved; global flags are shared with quests (game.quests.flags).
@@ -34,7 +34,7 @@ import {
   traitDisposition,
   type Audience,
 } from '../rpg/checks';
-import { PERSUASION, XP } from '../rpg/data/balance';
+import { PERSUASION, XP } from '../rpg/data/tuning';
 import { formatDenarii } from '../rpg/money';
 import type { LocationDef, NpcDef } from '../npc/types';
 import { GlobalFlags, type FlagValue } from '../quests/flags';
@@ -306,7 +306,7 @@ export class DialogueSystem {
     const sheet = this.game.player?.sheet;
     const mem = this.memoryOf(npcId);
     const delta = typeof mem._disp === 'number' ? mem._disp : 0;
-    const traits = sheet ? traitDisposition(sheet, this.game.npcs?.get(npcId)) : 0;
+    const traits = sheet ? traitDisposition(sheet, this.game.npcs?.get(npcId), this.game.standing?.sex) : 0;
     return Math.max(-PERSUASION.dispositionMax, Math.min(PERSUASION.dispositionMax, traits + delta));
   }
 
@@ -334,7 +334,7 @@ export class DialogueSystem {
   checkInputs(c: SkillCheck, npcId: string): { skill: number; bonus: number; possible: boolean; audience: Audience } {
     const sheet = this.game.player?.sheet;
     const npc = this.game.npcs?.get(npcId);
-    const listener = { tags: npc?.tags, level: npc?.combat?.level };
+    const listener = { tags: npc?.tags, band: npc?.combat?.band ?? (npc?.combat ? 1 : 0) };
     const audience = c.audience ?? audienceOf(listener);
     let skill = sheet?.skillLevel(c.skill) ?? 0;
     let bonus = 0;
@@ -352,13 +352,14 @@ export class DialogueSystem {
         cleanliness: this.game.standing?.cleanliness,
         disposition: this.disposition(npcId),
         dignitas: this.game.standing ? { mine: this.game.standing.rank, theirs } : undefined,
+        sex: this.game.standing?.sex,
       });
       if (approach === 'intimidate') {
         possible = intimidationPossible(audience);
         const inv = this.game.player?.inventory;
         const armed = !!inv?.equipped('mainHand');
         const armored = !!inv?.worn().some((w) => w.slot === 'body' && (w.def.armor?.weightClass === 'light' || w.def.armor?.weightClass === 'heavy'));
-        skill += intimidationPoints({ playerLevel: sheet.level, targetLevel: listener.level, armedAndArmored: armed && armored });
+        skill += intimidationPoints({ playerLevel: sheet.level, targetBand: listener.band, armedAndArmored: armed && armored });
       } else if (approach === 'invoke-patron') {
         const rank = this.game.factions?.rankIndex('clientela') ?? -1;
         const pts = patronPoints({ clientelaRank: rank, perk: sheet.hasFlag('perk-rhetoric-clientela'), targetDignitas: theirs });

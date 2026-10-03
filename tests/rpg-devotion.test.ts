@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus, type GameEvents } from '../src/core/Events';
-import { DEVOTION } from '../src/rpg/data/balance';
-import { blessingAt } from '../src/rpg/data/conditions';
-import { patronAt } from '../src/rpg/data/deities';
+import { DEVOTION } from '../src/rpg/data/tuning';
+import { blessingAt } from '../src/rpg/data/religio';
+import { patronAt } from '../src/rpg/data/religio';
 import { ITEMS } from '../src/rpg/data/items';
 import { Devotion } from '../src/rpg/devotion';
 import { InventoryImpl } from '../src/rpg/inventory';
@@ -191,7 +191,7 @@ describe('vows, omens and curses (GDD §14.6)', () => {
     expect(devotion.payVow('q-test')).toBe(false);
     inventory.addDenarii(50);
     expect(devotion.payVow('q-test')).toBe(true);
-    expect(pietas()).toBe(50); // +25 (20 + 50/10), capped at the max
+    expect(pietas()).toBe(50); // +30 for a vow of 25 den. or more, capped at the max
     expect(sheet.skillXp('religio')).toBe(40);
     expect(inventory.count('tabella-votiva')).toBe(1);
     expect(devotion.vows()).toEqual([]);
@@ -277,6 +277,92 @@ describe('vows, omens and curses (GDD §14.6)', () => {
     b.devotion.restore(undefined);
     expect(b.devotion.patron).toBeUndefined();
     expect(b.sheet.modifier('stealth.noise')).toBe(0);
+  });
+});
+
+describe('impietas, vow tiers and closed temples (GDD §14.6, §14.10)', () => {
+  function world(o: { closed?: boolean; sex?: 'male' | 'female'; vowMult?: number } = {}) {
+    const events = new EventBus<GameEvents>();
+    const sheet = new CharacterSheetImpl({ events });
+    const inventory = new InventoryImpl(new ItemDb(ITEMS), { events, sheet });
+    const state = { closed: !!o.closed, sex: o.sex ?? 'male', vowMult: o.vowMult ?? 1 };
+    const devotion = new Devotion({ sheet, inventory, events, templesClosed: () => state.closed, sex: () => state.sex, vowMult: () => state.vowMult });
+    return { sheet, inventory, devotion, state, pietas: () => sheet.vitals.pietas.current };
+  }
+
+  it('a loss the pool can’t cover becomes impietas: infaustus until devotion pays it off', () => {
+    const { devotion, sheet, pietas } = world();
+    devotion.impiety('killYielded');
+    devotion.impiety('falseOath');
+    expect(pietas()).toBe(0);
+    expect(devotion.debt).toBe(0); // 15 + 10 = 25, exactly the pool
+    devotion.impiety('killYielded');
+    expect(devotion.debt).toBe(15);
+    expect(sheet.hasCondition('infaustus')).toBe(true);
+    expect(devotion.prayAtCompitum('compitum-a').pietas).toBe(0); // all 5 go to the debt
+    expect(devotion.debt).toBe(10);
+    devotion.festivalRite('fest-lemuria');
+    expect(devotion.debt).toBe(0);
+    expect(pietas()).toBe(15);
+    expect(sheet.hasCondition('infaustus')).toBe(false); // the omen came only from the debt
+  });
+
+  it('an impious act’s omen stays until a piaculum, which also clears the debt', () => {
+    const { devotion, sheet, inventory } = world();
+    devotion.impiety('killInTemple'); // −30 and infaustus: 25 from the pool, 5 owed
+    expect(devotion.debt).toBe(5);
+    devotion.gainPietas(10);
+    expect(devotion.debt).toBe(0);
+    expect(sheet.hasCondition('infaustus')).toBe(true);
+    inventory.addDenarii(20);
+    expect(devotion.expiate()).toBe(true);
+    expect(sheet.hasCondition('infaustus')).toBe(false);
+    devotion.impiety('killYielded');
+    devotion.impiety('killYielded');
+    expect(devotion.debt).toBeGreaterThan(0);
+    inventory.addDenarii(20);
+    expect(devotion.expiate()).toBe(true);
+    expect(devotion.debt).toBe(0);
+  });
+
+  it('vows: V ≥ max(5, 10% of the reward); votum 5% / 10% / 15% and pietas 20 / 30 / 50 by V; festivals multiply', () => {
+    const { devotion, sheet, inventory, pietas, state } = world();
+    expect(devotion.vow('q-a', 4)).toBe(false);
+    expect(devotion.vow('q-a', 10, { expectedReward: 200 })).toBe(false);
+    expect(devotion.minVow(200)).toBe(20);
+    expect(devotion.vow('q-a', 5)).toBe(true);
+    expect(sheet.modifier('damage.taken')).toBeCloseTo(-0.05);
+    expect(sheet.modifier('stamina.regen')).toBeCloseTo(0.05);
+    devotion.vow('q-b', 100);
+    expect(sheet.modifier('damage.taken')).toBeCloseTo(-0.15); // the largest vow decides
+    devotion.resolveVow('q-b', true);
+    expect(sheet.modifier('damage.taken')).toBeCloseTo(-0.05);
+    inventory.addDenarii(100);
+    sheet.vitals.spend('pietas', 25);
+    devotion.payVow('q-b');
+    expect(pietas()).toBe(50);
+    expect([5, 24, 25, 99, 100].map((v) => devotion.vowTier(v).pietas)).toEqual([20, 20, 30, 30, 50]);
+    state.vowMult = 1.5; // the Ludi Augustales
+    devotion.vow('q-c', 30);
+    expect(sheet.modifier('damage.taken')).toBeCloseTo(-0.15);
+  });
+
+  it('on the Lemuria the temple cellae are shut (no blessings, vows or patrons) but the compitum shrines are open', () => {
+    const { devotion, inventory, state } = world({ closed: true });
+    inventory.addDenarii(5);
+    expect(devotion.prayAtTemple('temple-castor-pollux', { denarii: 1 })).toMatchObject({ ok: false, reason: 'closed' });
+    expect(devotion.vow('q-a', 10)).toBe(false);
+    expect(devotion.choosePatron('patronus-mars').reason).toBe('closed');
+    expect(devotion.prayAtCompitum('compitum-a')).toMatchObject({ ok: true, pietas: 5, blessing: 'favor-larum' });
+    state.closed = false;
+    expect(devotion.prayAtTemple('temple-castor-pollux', { denarii: 1 })).toMatchObject({ ok: true, blessing: 'benedictio-castores' });
+  });
+
+  it('women are barred from the Ara Maxima’s rites and pray to Hercules at Hercules Victor', () => {
+    const { devotion, inventory } = world({ sex: 'female' });
+    inventory.addDenarii(5);
+    expect(devotion.prayAtTemple('ara-maxima', { denarii: 1 })).toMatchObject({ ok: false, reason: 'barred' });
+    expect(devotion.prayAtTemple('temple-hercules-victor', { denarii: 1 })).toMatchObject({ ok: true, blessing: 'benedictio-hercules' });
   });
 });
 

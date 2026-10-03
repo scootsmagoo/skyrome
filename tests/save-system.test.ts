@@ -283,7 +283,7 @@ describe('slots and blockers', () => {
     w.pressed.add('quickLoad');
     w.step(1);
     await w.rpg.save.idle();
-    expect(w.rpg.inventory.denarii).toBe(120);
+    expect(w.rpg.inventory.denarii).toBe(60);
   });
 });
 

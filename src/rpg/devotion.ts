@@ -5,18 +5,21 @@
  *     per day, with the Lares favor), a temple prayer with an offering +10 (and the temple's blessing),
  *     the home lararium +15 once a day (full with the perk), a festival rite +25, a fulfilled vow
  *     +20…+50, sparing a yielded foe +5, burying the dead +10. Impiety costs it (and may leave you
- *     `infaustus`).
+ *     `infaustus`); a loss the pool can't cover becomes a hidden `impietas` debt that keeps you
+ *     infaustus and that devotion pays off before it refills the pool.
+ *   - Temple cellae can be shut (the Lemuria): no temple blessings, vows or patron choice that day;
+ *     compitum shrines stay open. Women are barred from the Ara Maxima (they pray at Hercules Victor).
  *   - Two blessing slots: one temple blessing (24 game hours) and the Lares favor (2 game hours).
  *   - A patron deity, chosen at its temple, gives a passive bonus and an invocation (Z) that spends
  *     pietas. The first choice is free; changing costs 100 den. and waits 7 days.
- *   - Vows (vota): pledge V before a quest for `votum`; pay V within 3 days of success or become
- *     infaustus. A piaculum (2 × V, at least 20 den.) lifts the ill omen.
+ *   - Vows (vota): pledge V ≥ max(5, 10% of the expected reward) before a quest for `votum` (scaled
+ *     by V); pay V within 3 days of success or become infaustus. A piaculum (2 × V, at least 20 den.)
+ *     lifts the ill omen and clears any impietas debt.
  *   - The daily omen and curse tablets work through belief, as at Rome.
  */
 import type { EventBus, GameEvents } from '../core/Events';
-import { DEVOTION, XP } from './data/balance';
-import { blessingAt } from './data/conditions';
-import { DEITIES } from './data/deities';
+import { DEVOTION, XP } from './data/tuning';
+import { blessingAt, DEITIES } from './data/religio';
 import type { InventoryImpl } from './inventory';
 import type { CharacterSheetImpl } from './sheet';
 import type { DeityDef } from './types';
@@ -32,6 +35,12 @@ export interface DevotionDeps {
   /** Whole game days since the start (GameTime.dayIndex). */
   day?: () => number;
   rng?: { next(): number };
+  /** Temple cellae shut today (the Lemuria, §14.10): no temple blessings, vows or patron choice. */
+  templesClosed?: () => boolean;
+  /** The player's sex: women are barred from the Ara Maxima's rites. */
+  sex?: () => 'male' | 'female';
+  /** Festival multiplier on vows (the Ludi Augustales ×1.5). */
+  vowMult?: () => number;
 }
 
 export interface PrayerResult {
@@ -42,7 +51,7 @@ export interface PrayerResult {
   blessing?: string;
   /** Ailments cured (Isis as patron). */
   cured?: number;
-  reason?: 'no-blessing' | 'no-offering' | 'unknown';
+  reason?: 'no-blessing' | 'no-offering' | 'unknown' | 'closed' | 'barred';
 }
 
 export interface Vow {
@@ -70,6 +79,10 @@ export class Devotion {
   private invokedDay: Record<string, number> = {};
   private readonly vowList = new Map<string, Vow>();
   private brokenVowValue = 0;
+  /** Pietas owed after losses the pool couldn't cover (§14.6): infaustus until paid off. */
+  private impietas = 0;
+  /** infaustus from an act (temple theft, a broken vow), lifted only by a piaculum. */
+  private omenFromAct = false;
   private omenDay = -1;
   private omenOptions: Omen[] = [];
 
@@ -94,8 +107,20 @@ export class Devotion {
 
   // ---------------------------------------------------------------- pietas
 
-  /** Add pietas (capped at max) with a "+5 Pietas" notification. Returns what was gained. */
+  /** Pietas owed to the gods (hidden; while above 0 you are infaustus). */
+  get debt(): number {
+    return this.impietas;
+  }
+
+  /** Add pietas (capped at max), paying off any impietas debt first, with a "+5 Pietas" notification. Returns what reached the pool. */
   gainPietas(amount: number): number {
+    if (!(amount > 0)) return 0;
+    if (this.impietas > 0) {
+      const paid = Math.min(this.impietas, amount);
+      this.impietas -= paid;
+      amount -= paid;
+      if (this.impietas <= 0) this.liftDebtOmen();
+    }
     const v = this.deps.sheet.vitals;
     const before = v.pietas.current;
     v.restore('pietas', amount);
@@ -104,18 +129,32 @@ export class Devotion {
     return gained;
   }
 
-  /** Lose pietas (never below 0). Returns what was lost. */
+  /** Lose pietas; what the pool can't cover becomes impietas debt (and infaustus). Returns the total lost. */
   losePietas(amount: number): number {
+    if (!(amount > 0)) return 0;
     const lost = this.deps.sheet.vitals.drain('pietas', amount);
-    if (lost > 0) this.notify(`−${round1(lost)} Pietas`);
-    return lost;
+    const owed = amount - lost;
+    if (owed > 1e-9) {
+      this.impietas += owed;
+      this.deps.sheet.applyCondition('infaustus');
+    }
+    this.notify(`−${round1(amount)} Pietas`);
+    return amount;
+  }
+
+  private liftDebtOmen() {
+    this.impietas = 0;
+    if (!this.omenFromAct) this.deps.sheet.cure('omen:infaustus');
   }
 
   /** An impious act (§14.6): killing a yielded foe, temple theft, killing in a precinct, a broken vow, a false oath. */
   impiety(kind: PietasLoss = 'templeTheft') {
     const l = DEVOTION.loss[kind];
+    if (l.omen) {
+      this.omenFromAct = true;
+      this.deps.sheet.applyCondition('infaustus');
+    }
     this.losePietas(l.pietas);
-    if (l.omen) this.deps.sheet.applyCondition('infaustus');
   }
 
   sparedYielded() {
@@ -157,6 +196,8 @@ export class Devotion {
    */
   prayAtTemple(templeId: string, offering: { itemId?: string; denarii?: number } = {}): PrayerResult {
     const { sheet, inventory } = this.deps;
+    if (this.deps.templesClosed?.()) return { ok: false, pietas: 0, reason: 'closed' };
+    if (templeId === 'ara-maxima' && this.deps.sex?.() === 'female') return { ok: false, pietas: 0, reason: 'barred' };
     const cond = blessingAt(templeId);
     const value = this.offeringValue(offering);
     if (value === null) return { ok: false, pietas: 0, reason: 'no-offering' };
@@ -231,9 +272,10 @@ export class Devotion {
   }
 
   /** Take a god as patron at their temple (changing: 100 den., and not within 7 days of the last choice). */
-  choosePatron(id: string): { ok: boolean; cost: number; reason?: 'unknown' | 'same' | 'no-money' | 'too-soon'; waitDays?: number } {
+  choosePatron(id: string): { ok: boolean; cost: number; reason?: 'unknown' | 'same' | 'no-money' | 'too-soon' | 'closed'; waitDays?: number } {
     const d = this.defs.get(id);
     if (!d) return { ok: false, cost: 0, reason: 'unknown' };
+    if (this.deps.templesClosed?.()) return { ok: false, cost: 0, reason: 'closed' };
     if (this._patron === id) return { ok: false, cost: 0, reason: 'same' };
     const cost = this.patronCost(id);
     const wait = this.patronWait();
@@ -274,9 +316,20 @@ export class Devotion {
     return [...this.vowList.values()].map((v) => ({ ...v }));
   }
 
-  /** Pledge an offering of `value` den. for a quest's success: `votum` (+50% with perk-religio-votum) until it ends. */
-  vow(questId: string, value: number): boolean {
-    if (this.vowList.has(questId) || !(value > 0)) return false;
+  /** The least a vow for a quest may pledge: max(5 den., 10% of its expected reward). */
+  minVow(expectedReward = 0): number {
+    return Math.max(DEVOTION.vow.min, DEVOTION.vow.minRewardFraction * Math.max(0, expectedReward));
+  }
+
+  /** The tier of a vow of V den.: its buff and the pietas it pays. */
+  vowTier(value: number) {
+    return DEVOTION.vow.tiers.find((t) => value >= t.at) ?? DEVOTION.vow.tiers[DEVOTION.vow.tiers.length - 1];
+  }
+
+  /** Pledge an offering of `value` den. for a quest's success: `votum` until it ends (scaled by V; +50% with Votum). */
+  vow(questId: string, value: number, opts: { expectedReward?: number } = {}): boolean {
+    if (this.vowList.has(questId) || !(value >= this.minVow(opts.expectedReward))) return false;
+    if (this.deps.templesClosed?.()) return false;
     this.vowList.set(questId, { questId, value, state: 'active' });
     this.applyVotum();
     this.deps.events?.emit('devotion:act', { act: 'vow', god: questId });
@@ -300,8 +353,7 @@ export class Devotion {
     const v = this.vowList.get(questId);
     if (!v || v.state !== 'owed' || !this.deps.inventory?.spendDenarii(v.value)) return false;
     this.vowList.delete(questId);
-    const G = DEVOTION.gain;
-    this.gainPietas(Math.min(G.vowMax, G.vowMin + Math.floor(v.value / G.vowPerDenarii)));
+    this.gainPietas(this.vowTier(v.value).pietas);
     this.deps.sheet.useSkill('religio', XP.religio.vow);
     if (this.deps.inventory.items.has('tabella-votiva')) this.deps.inventory.add('tabella-votiva', 1, { source: 'vow' });
     this.notify('Votum solvit libens merito');
@@ -321,16 +373,17 @@ export class Devotion {
     return n;
   }
 
+  /** votum follows the largest active vow (5% / 10% / 15% by V; ×1.5 with Votum; festival multipliers). */
   private applyVotum() {
     const { sheet } = this.deps;
-    const active = [...this.vowList.values()].some((v) => v.state === 'active');
-    if (!active) {
-      sheet.cure('state:votum');
-      return;
-    }
-    if (sheet.hasCondition('votum')) return;
+    const active = [...this.vowList.values()].filter((v) => v.state === 'active');
+    sheet.cure('state:votum');
+    if (!active.length) return;
     const def = sheet.conditionDef('votum');
-    if (def) sheet.applyEffects('state:votum', def.effects, { magnitude: sheet.hasFlag('perk-religio-votum') ? 1 + DEVOTION.votumPerk : 1 });
+    if (!def) return;
+    const buff = this.vowTier(Math.max(...active.map((v) => v.value))).buff;
+    const mag = (buff / 0.1) * (sheet.hasFlag('perk-religio-votum') ? 1 + DEVOTION.votumPerk : 1) * (this.deps.vowMult?.() ?? 1);
+    sheet.applyEffects('state:votum', def.effects, { magnitude: mag });
   }
 
   // ---------------------------------------------------------------- piaculum
@@ -340,13 +393,15 @@ export class Devotion {
     return Math.max(DEVOTION.piaculumMin, DEVOTION.piaculumMult * this.brokenVowValue);
   }
 
-  /** Pay the piaculum at a temple: lifts `infaustus`. */
+  /** Pay the piaculum at a temple: lifts `infaustus` and clears any impietas debt. */
   expiate(): boolean {
     const { sheet, inventory } = this.deps;
-    if (!sheet.hasCondition('infaustus')) return false;
+    if (!sheet.hasCondition('infaustus') && this.impietas <= 0) return false;
     if (!inventory?.spendDenarii(this.piaculumCost())) return false;
     sheet.cure('omen:infaustus');
     this.brokenVowValue = 0;
+    this.impietas = 0;
+    this.omenFromAct = false;
     sheet.useSkill('religio', XP.religio.offering);
     this.notify('The gods are appeased');
     return true;
@@ -451,6 +506,8 @@ export class Devotion {
       invokedDay: { ...this.invokedDay },
       vows: this.vows(),
       brokenVowValue: this.brokenVowValue,
+      impietas: this.impietas,
+      omenFromAct: this.omenFromAct,
       omenDay: this.omenDay,
       omenOptions: [...this.omenOptions],
     };
@@ -476,6 +533,8 @@ export class Devotion {
       this.vowList.set(v.questId, { questId: v.questId, value: v.value, state: v.state === 'owed' ? 'owed' : 'active', due: typeof v.due === 'number' ? v.due : undefined });
     }
     this.brokenVowValue = typeof d.brokenVowValue === 'number' ? d.brokenVowValue : 0;
+    this.impietas = typeof d.impietas === 'number' && d.impietas > 0 ? d.impietas : 0;
+    this.omenFromAct = !!d.omenFromAct;
     this.omenDay = typeof d.omenDay === 'number' ? d.omenDay : -1;
     this.omenOptions = (Array.isArray(d.omenOptions) ? d.omenOptions : []).filter((o): o is Omen => o === 'none' || o === 'good' || o === 'bad');
     this.applyPassive();

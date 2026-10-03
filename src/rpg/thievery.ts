@@ -7,7 +7,7 @@
  *                   − 0.04 × kg − value/400 − 0.30·alert) + pickpocket.chance + luck
  */
 import { clamp } from '../core/math';
-import { XP } from './data/balance';
+import { XP } from './data/tuning';
 
 /** Roman lift-and-slide tumbler locks (§14.3). */
 export const LOCK_TIERS = {

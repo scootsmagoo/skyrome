@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus, type GameEvents } from '../src/core/Events';
-import { CARRY } from '../src/rpg/data/balance';
+import { CARRY } from '../src/rpg/data/tuning';
 import { CONDITIONS } from '../src/rpg/data/conditions';
-import { DEITIES } from '../src/rpg/data/deities';
-import { ENEMY_TIERS, NATURAL_WEAPONS } from '../src/rpg/data/enemies';
+import { DEITIES } from '../src/rpg/data/religio';
+import { ENEMY_TIERS, NATURAL_WEAPONS } from '../src/rpg/data/combatants';
 import { FACTIONS } from '../src/rpg/data/factions';
 import { ITEMS } from '../src/rpg/data/items';
 import { LOOT_TABLES } from '../src/rpg/data/loot';
-import { BACKGROUNDS, COMMON_KIT, PERKS, SKILLS } from '../src/rpg/data/skills';
+import { BACKGROUNDS, COMMON_KIT } from '../src/rpg/data/origins';
+import { PERKS } from '../src/rpg/data/perks';
+import { SKILLS } from '../src/rpg/data/skills';
 import { InventoryImpl } from '../src/rpg/inventory';
 import { ItemDb, slotOf } from '../src/rpg/items';
 import { CharacterSheetImpl, skillXpToNext } from '../src/rpg/sheet';
@@ -282,12 +284,13 @@ describe('condition (GDD §6.3)', () => {
     expect(inv.worn()).toEqual([{ slot: 'mainHand', def: inv.items.get('gladius'), condition: 0.7 }]);
   });
 
-  it('wear costs 1% per 10 damage; repair restores; removing spares the worn copy', () => {
+  it('wear costs 1% per 100 damage; repair restores; removing spares the worn copy', () => {
     const { inv } = setup();
     inv.add('gladius', 1, { condition: 0.7 });
     inv.add('gladius', 1, { condition: 0.5 });
     inv.equip('gladius');
-    expect(inv.wear('mainHand', 100)).toBeCloseTo(0.6);
+    expect(inv.wear('mainHand', 100)).toBeCloseTo(0.69);
+    expect(inv.wear('mainHand', 900)).toBeCloseTo(0.6);
     expect(inv.repair('mainHand', 0.5)).toBe(1);
     expect(inv.stacks.find((s) => s.condition === undefined)?.count).toBe(1);
     inv.remove('gladius', 1);

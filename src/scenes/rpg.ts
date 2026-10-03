@@ -15,7 +15,7 @@ import { DEG } from '../core/math';
 import type { DialogueView } from '../dialogue/DialogueSystem';
 import { MeshBuilder, placeAndRegister } from '../gfx/MeshBuilder';
 import { Interactions, type Interactable } from '../interaction/Interactions';
-import { BACKGROUNDS } from '../rpg/data/skills';
+import { BACKGROUNDS } from '../rpg/data/origins';
 import { installRpg, type RpgServices } from '../rpg/install';
 import { formatDenarii } from '../rpg/money';
 import { basicLights, setupPlayer } from './common';

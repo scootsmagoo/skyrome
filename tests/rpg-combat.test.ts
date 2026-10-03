@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyPoiseDamage,
+  attackTypeFor,
   armorFamilyOf,
   armorReduction,
   armorSkillFor,
@@ -23,8 +24,8 @@ import {
   timeToKill,
   typeFactor,
 } from '../src/rpg/combat-math';
-import { COMBAT } from '../src/rpg/data/balance';
-import { ARCHETYPES } from '../src/rpg/data/enemies';
+import { COMBAT } from '../src/rpg/data/tuning';
+import { ARCHETYPES } from '../src/rpg/data/combatants';
 import { allArchetypes, archetypeProfile, combatProfileFor, profileStats, profileWeapon, tierDef, tiersInBand } from '../src/rpg/enemies';
 import { CharacterSheetImpl } from '../src/rpg/sheet';
 import { BUILDS, db, duel, ttkTable, TTK_ROWS } from './rpg-ttk';
@@ -78,13 +79,31 @@ describe('attack multipliers (§6.1–6.7)', () => {
   const p = stats({ blades: 0 });
   const base = computeAttack(p, gladius.weapon, { item: gladius }).damage;
 
-  it('power attacks: ×1.5 at 0.35 s rising to ×2.0 at 0.8 s; directions; chain, sprint, bash, riposte', () => {
+  it('attack types (§6.2): the gladius thrusts, cuts, thrusts; overhead and sweeps cut, the lunge thrusts; the type picks the value', () => {
+    const g = gladius.weapon!;
+    expect([1, 2, 3].map((chain) => attackTypeFor(g, { chain }))).toEqual(['thrust', 'cut', 'thrust']);
+    expect(attackTypeFor(g, { power: true })).toBe('cut');
+    expect(attackTypeFor(g, { power: true, direction: 'forward' })).toBe('thrust');
+    expect(attackTypeFor(g, { power: true, direction: 'back' })).toBe('cut');
+    const spatha = db.require('spatha').weapon!;
+    expect([1, 2, 3].map((chain) => attackTypeFor(spatha, { chain }))).toEqual(['cut', 'cut', 'thrust']);
+    expect(attackTypeFor(db.require('pugio').weapon!, { power: true })).toBe('thrust');
+    expect(attackTypeFor(db.require('sica').weapon!, { chain: 3 })).toBe('cut');
+    expect(attackTypeFor(db.require('hasta').weapon!, { power: true })).toBe('thrust');
+    expect(computeAttack(p, g, { item: gladius, chain: 2 })).toMatchObject({ damageType: 'cut', damage: 11 });
+    expect(computeAttack(p, g, { item: gladius, chain: 3 })).toMatchObject({ damageType: 'thrust' });
+    expect(computeAttack(p, db.require('gladius-noric').weapon, { chain: 2 }).damage).toBeCloseTo(11 * 1.15);
+  });
+
+  it('power attacks: chargeMult (×1.5 at 0.35 s → ×2.0 at 0.8 s) × dirFactor (overhead and lunge 1.0, sweep 0.7, back 0.65)', () => {
     expect(base).toBe(13);
     expect(powerChargeMult(0.35)).toBeCloseTo(1.5);
     expect(powerChargeMult(0.8)).toBeCloseTo(2);
-    expect(computeAttack(p, gladius.weapon, { item: gladius, power: true, chargeSeconds: 0.575 }).damage / base).toBeCloseTo(1.75);
-    expect(computeAttack(p, gladius.weapon, { item: gladius, power: true, direction: 'sideways' }).damage / base).toBeCloseTo(1.4);
-    expect(computeAttack(p, gladius.weapon, { item: gladius, power: true, direction: 'back' }).damage / base).toBeCloseTo(1.3);
+    // The overhead is a cut (11): 11 × 1.75.
+    expect(computeAttack(p, gladius.weapon, { item: gladius, power: true, chargeSeconds: 0.575 }).damage).toBeCloseTo(11 * 1.75);
+    expect(computeAttack(p, gladius.weapon, { item: gladius, power: true, direction: 'forward' }).damage).toBeCloseTo(13 * 2);
+    expect(computeAttack(p, gladius.weapon, { item: gladius, power: true, direction: 'sideways' }).damage).toBeCloseTo(11 * 1.4);
+    expect(computeAttack(p, gladius.weapon, { item: gladius, power: true, direction: 'back', chargeSeconds: 0.35 }).damage).toBeCloseTo(11 * 1.5 * 0.65);
     expect(computeAttack(p, gladius.weapon, { item: gladius, chain: 3 }).damage / base).toBeCloseTo(1.25);
     expect(computeAttack(p, gladius.weapon, { item: gladius, sprint: true }).damage / base).toBeCloseTo(1.3);
     expect(computeAttack(p, gladius.weapon, { item: gladius, bash: true })).toMatchObject({ damageType: 'blunt' });
@@ -169,9 +188,13 @@ describe('attack multipliers (§6.1–6.7)', () => {
     expect(attackInterval(gladius.weapon!)).toBeCloseTo(COMBAT.swingSeconds);
   });
 
-  it('condition scales damage by 0.5 + 0.5 × condition; Caestus +50% fists', () => {
-    expect(conditionFactor(0.7)).toBeCloseTo(0.85);
-    expect(computeAttack(p, gladius.weapon, { item: gladius, condition: 0.7 }).damage).toBeCloseTo(13 * 0.85);
+  it('condition scales damage by 0.75 + 0.25 × condition; Caestus +50% fists; the toga slows attacks 20%', () => {
+    expect(conditionFactor(0.7)).toBeCloseTo(0.925);
+    expect(conditionFactor(0)).toBeCloseTo(0.75);
+    expect(computeAttack(p, gladius.weapon, { item: gladius, condition: 0.7 }).damage).toBeCloseTo(13 * 0.925);
+    const togatus = stats({});
+    togatus.setModifierSource('equip:cloak', { 'attack.speed': -0.2 });
+    expect(computeAttack(togatus, gladius.weapon).interval).toBeCloseTo(COMBAT.swingSeconds / 0.8);
     const boxer = stats({});
     boxer.grantPerk('perk-brawling-caestus');
     expect(computeAttack(boxer, undefined).damage).toBeCloseTo(COMBAT.fists.damage * 1.5);
@@ -207,15 +230,26 @@ describe('armor (§6.2–6.3, §8.3)', () => {
     expect(effectiveArmorRating([seg], s)).toBeCloseTo(38 * 1.2);
     s.grantPerk('perk-heavy-armor-iron-skin');
     expect(effectiveArmorRating([seg], s)).toBeCloseTo(38 * 1.2 * 1.15);
-    expect(effectiveArmorRating([{ def: seg, condition: 0.5 }], s)).toBeCloseTo(38 * 1.2 * 1.15 * 0.75);
+    expect(effectiveArmorRating([{ def: seg, condition: 0.5 }], s)).toBeCloseTo(38 * 1.2 * 1.15 * 0.875);
     expect(effectiveArmorRating([db.require('tunica-crassa')], s)).toBe(2);
     const m = db.require('manica-linea');
     expect(effectiveArmorRating([m], s)).toBe(4);
     s.grantPerk('perk-light-armor-manica');
     expect(effectiveArmorRating([m], s)).toBe(8);
+    // The body piece's class decides (§6.3): helmets, manicae and greaves never make you "heavy".
     expect(armorSkillFor([seg, db.require('ocreae')])).toBe('heavy-armor');
     expect(armorSkillFor([db.require('thorax-coriaceus'), db.require('galea-gallica')])).toBe('light-armor');
+    expect(armorSkillFor([db.require('tunica'), db.require('galea-murmillonis'), db.require('manica-ferrea')])).toBeNull();
+    expect(armorSkillFor([db.require('subarmalis')])).toBe('light-armor');
+    expect(armorSkillFor([db.require('subarmalis'), db.require('lorica-hamata')])).toBe('heavy-armor');
     expect(armorSkillFor([db.require('tunica')])).toBeNull();
+  });
+
+  it('layers (§8.2): the outermost torso piece sets the family — body, else padding, else cloth', () => {
+    expect(armorFamilyOf([db.require('tunica'), db.require('subarmalis')])).toBe('padded');
+    expect(armorFamilyOf([db.require('tunica'), db.require('subarmalis'), db.require('lorica-hamata')])).toBe('mail');
+    expect(armorFamilyOf([db.require('stola')])).toBe('cloth');
+    expect(['tunica', 'subarmalis', 'lorica-segmentata', 'toga', 'ocreae', 'manica-linea', 'galea-gallica', 'cucullus'].map((id) => db.require(id).slot)).toEqual(['under', 'padding', 'body', 'cloak', 'shins', 'arm', 'head', 'head']);
   });
 
   it('Punctim: thrusts +25% against mail and plate; Padded: −20% blunt damage taken', () => {
@@ -234,16 +268,24 @@ describe('armor (§6.2–6.3, §8.3)', () => {
 });
 
 describe('blocking and parrying (§6.4)', () => {
-  it('mitigation: shield value or weapon-only (blades 0.45, two-handed 0.55, fists 0.25) + Shield/400 (max +0.25), cap 0.95', () => {
+  it('mitigation = base + (0.95 − base) × Shield/200 (cap 0.90): scutum 0.85 → 0.90, parmula 0.58 → 0.77, blades 0.45 → 0.70', () => {
     const s = stats({ shield: 0 });
+    const parmula = db.require('parmula').shield;
     expect(resolveBlock(s, { damage: 20, shield: scutum.shield, stamina: 100 }).mitigation).toBeCloseTo(0.85);
     expect(resolveBlock(s, { damage: 20, stamina: 100 }).mitigation).toBeCloseTo(0.45);
     expect(resolveBlock(s, { damage: 20, stamina: 100, twoHanded: true }).mitigation).toBeCloseTo(0.55);
     expect(resolveBlock(s, { damage: 20, stamina: 100, fists: true }).mitigation).toBeCloseTo(0.25);
+    // A worn shield: its value × (0.75 + 0.25 × condition) — the veteran's oval shield at 40%.
+    expect(resolveBlock(s, { damage: 20, shield: scutum.shield, stamina: 100, condition: 0.4 }).mitigation).toBeCloseTo(0.85 * 0.85);
     s.setSkill('shield', 40);
-    expect(resolveBlock(s, { damage: 20, stamina: 100 }).mitigation).toBeCloseTo(0.55);
+    expect(resolveBlock(s, { damage: 20, stamina: 100 }).mitigation).toBeCloseTo(0.45 + 0.5 * 0.2);
     s.setSkill('shield', 100);
-    expect(resolveBlock(s, { damage: 20, shield: scutum.shield, stamina: 100 }).mitigation).toBe(0.95);
+    expect(resolveBlock(s, { damage: 20, shield: scutum.shield, stamina: 100 }).mitigation).toBeCloseTo(0.9);
+    expect(resolveBlock(s, { damage: 20, shield: parmula, stamina: 100 }).mitigation).toBeCloseTo(0.765);
+    expect(resolveBlock(s, { damage: 20, stamina: 100 }).mitigation).toBeCloseTo(0.7);
+    // Formations add on top (+0.15 for a line of miles), still capped.
+    expect(resolveBlock(stats({ shield: 0 }), { damage: 20, shield: parmula, stamina: 100, formation: 0.15 }).mitigation).toBeCloseTo(0.73);
+    expect(resolveBlock(s, { damage: 20, shield: scutum.shield, stamina: 100, formation: 0.15 }).mitigation).toBe(0.9);
   });
 
   it('stamina per absorbed hit = max(4, 0.6 × raw × (1 − Shield/200)); at 0 stamina the guard breaks', () => {
@@ -269,9 +311,12 @@ describe('blocking and parrying (§6.4)', () => {
     const hook = stats({});
     hook.grantPerk('perk-blades-falx-hook');
     expect(computeAttack(hook, sica.weapon, { item: sica }).blockIgnore).toBe(0.5);
+    // Shield Wall: block stamina −30% per ally within 2 m, at most −60%.
     const wall = stats({ shield: 0 });
     wall.grantPerk('perk-shield-wall');
-    expect(resolveBlock(wall, { damage: 10, shield: scutum.shield, stamina: 100, alliesNear: 3 }).mitigation).toBeCloseTo(0.95);
+    expect(resolveBlock(wall, { damage: 10, shield: scutum.shield, stamina: 100, alliesNear: 1 }).staminaCost).toBeCloseTo(6 * 0.7);
+    expect(resolveBlock(wall, { damage: 10, shield: scutum.shield, stamina: 100, alliesNear: 3 }).staminaCost).toBeCloseTo(6 * 0.4);
+    expect(resolveBlock(wall, { damage: 10, shield: scutum.shield, stamina: 100, alliesNear: 3 }).mitigation).toBeCloseTo(0.85);
   });
 
   it('missiles: scutum 100%, parma 70%; no shield, no block; Testudo blocks them for 0 stamina', () => {
@@ -333,16 +378,39 @@ describe('poise (§6.5)', () => {
     expect(playerPoise(d, { enemies: 1 })).toBe(65);
   });
 
-  it('flinch only from hits ≥ 20% of max; breaks into stagger (0.8 s light, 1.5 s heavy); knockdown 2 s; regen 15/s after 1.5 s', () => {
+  it('flinch at ≥ 20% of max (the player 35%) with 0.4 s of flinch immunity; a break staggers 0.8 s (heavy 1.5 s) and refills', () => {
     const p = createPoise(50);
     expect(applyPoiseDamage(p, 5).result).toBe('none');
     expect(applyPoiseDamage(p, 12).result).toBe('flinch');
-    expect(applyPoiseDamage(p, 40)).toEqual({ result: 'stagger', seconds: 0.8 });
+    expect(applyPoiseDamage(p, 12).result).toBe('none'); // flinch immunity
+    tickPoise(p, 0.5);
+    expect(applyPoiseDamage(p, 40)).toEqual({ result: 'stagger', seconds: 0.8, riposteWindow: true });
     expect(p.current).toBe(50);
-    applyPoiseDamage(p, 20);
-    expect(applyPoiseDamage(p, 40, { heavy: true })).toEqual({ result: 'stagger', seconds: 1.5 });
-    expect(applyPoiseDamage(p, 1, { knockdown: true })).toEqual({ result: 'knockdown', seconds: 2 });
-    expect(applyPoiseDamage(p, 99, { immune: true }).result).toBe('none');
+    const player = createPoise(50, { player: true });
+    expect(applyPoiseDamage(player, 12).result).toBe('none');
+    expect(applyPoiseDamage(player, 18).result).toBe('flinch');
+    expect(applyPoiseDamage(createPoise(50), 60, { heavy: true })).toMatchObject({ result: 'stagger', seconds: 1.5 });
+    expect(applyPoiseDamage(createPoise(50), 1, { knockdown: true })).toMatchObject({ result: 'knockdown', seconds: 2 });
+    expect(applyPoiseDamage(createPoise(50), 99, { immune: true }).result).toBe('none');
+  });
+
+  it('anti-loop (§6.5): 1.5 s of poise immunity after a stagger; a riposte opens no new window; at most 2 staggers in 4 s', () => {
+    const p = createPoise(50);
+    applyPoiseDamage(p, 60);
+    expect(applyPoiseDamage(p, 99).result).toBe('none'); // staggered and immune
+    tickPoise(p, 0.8 + 1.4);
+    expect(applyPoiseDamage(p, 99).result).toBe('none');
+    tickPoise(p, 0.2);
+    expect(applyPoiseDamage(p, 1, { riposte: true })).toMatchObject({ result: 'stagger', riposteWindow: false });
+    // A third stagger inside 4 s (say, with immunity cut short) only flinches.
+    p.immune = 0;
+    expect(applyPoiseDamage(p, 99).result).toBe('flinch');
+    tickPoise(p, 4);
+    expect(applyPoiseDamage(p, 99).result).toBe('stagger');
+  });
+
+  it('regeneration: 15/s after 1.5 s without poise damage', () => {
+    const p = createPoise(50);
     applyPoiseDamage(p, 30);
     tickPoise(p, 1);
     expect(p.current).toBe(20);
@@ -354,7 +422,8 @@ describe('poise (§6.5)', () => {
   it('poise damage: stagger × light 1, power 2.5, bash 2, sprint 1.5', () => {
     const s = flatStats(0);
     expect(computeAttack(s, gladius.weapon).poise).toBe(12);
-    expect(computeAttack(s, gladius.weapon, { power: true }).poise).toBe(30);
+    expect(computeAttack(s, gladius.weapon, { power: true }).poise).toBe(45); // overhead +50%
+    expect(computeAttack(s, gladius.weapon, { power: true, direction: 'forward' }).poise).toBe(30);
     expect(computeAttack(s, gladius.weapon, { bash: true }).poise).toBe(24);
     expect(computeAttack(s, gladius.weapon, { sprint: true }).poise).toBe(18);
   });
@@ -362,7 +431,8 @@ describe('poise (§6.5)', () => {
 
 describe('enemy tiers (§6.11)', () => {
   it('fixed stats from the table, kits, and bands', () => {
-    expect(combatProfileFor('thug')).toMatchObject({ tier: 'thug', health: 45, stamina: 60, armor: 0, armorFamily: 'cloth', damageMult: 0.9, weapon: 'fustis', skill: 15, yieldAt: 0.25, fleeAt: 0.15, loot: 'thug' });
+    expect(combatProfileFor('thug')).toMatchObject({ tier: 'thug', band: 1, health: 45, stamina: 60, armor: 0, armorFamily: 'cloth', dmgMult: 0.9, speedMult: 1, reactionS: 0.45, tokensCost: 1, weapon: 'fustis', skill: 15, yieldAt: 0.25, fleeAt: 0.15, loot: 'thug' });
+    expect(combatProfileFor('boss').tokensCost).toBe(2);
     expect(combatProfileFor('thug', { kit: 'pugio' }).weapon).toBe('pugio');
     expect(combatProfileFor('miles', { kit: 1 })).toMatchObject({ armor: 45, armorFamily: 'mail', shield: 'scutum-ovale' });
     expect(combatProfileFor('boss', { health: 700 }).health).toBe(700);

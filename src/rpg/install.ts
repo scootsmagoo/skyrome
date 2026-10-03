@@ -4,15 +4,18 @@
  *
  *   game.player.sheet / game.player.inventory   character sheet & inventory
  *   game.items, game.npcs, game.locations        registries
- *   game.factions, game.standing, game.crime     society: reputation, Dignitas/Fama/Infamia, law
+ *   game.factions, game.standing, game.crime     society: Fama and ranks, Dignitas/Infamia, the law
  *   game.devotion                                patron deity, invocations, prayer (pietas)
- *   game.barter                                  merchants
- *   game.quests, game.dialogue, game.save        engines
- *   game.rpg                                     all of the above in one object (debugging)
+ *   game.barter                                  merchants, repairs, investments
+ *   game.quests, game.dialogue, game.save        engines (game.deltas: world deltas)
+ *   game.rpg                                     all of the above in one object, plus `hooks`
  *
  * Also adds the 'rpg' system (effects, regen, sprint stamina), hooks the PlayerController's
- * canSprint/speedMultiplier (composing with any hooks already installed), and wires the hourly
- * checks (lapsed bounties, overdue vows), vows to quest outcomes and cleanliness to its condition.
+ * canSprint/speedMultiplier (composing with any hooks already installed), and wires: hourly checks
+ * (lapsed bounties, overdue vows, Infamia recovery), vows to quest outcomes, pending faction
+ * promotions to skill-ups, the gladiator's oath to Infamia, and cleanliness to its condition.
+ * `rpg.hooks` lets the calendar module say when temples are shut (the Lemuria), what festivals
+ * take off prices, and how vows are multiplied.
  */
 import type { Game, System } from '../core/Game';
 import { DialogueSystem, dialogueModules } from '../dialogue/DialogueSystem';
@@ -26,16 +29,16 @@ import { LocationRegistry } from '../world/locations';
 import { BarterSystem } from './barter';
 import { persuasionPoints } from './checks';
 import { CrimeSystem } from './crime';
-import { COMBAT, STAMINA_COSTS } from './data/balance';
 import { FACTIONS } from './data/factions';
 import { ITEMS } from './data/items';
-import { BACKGROUNDS, COMMON_KIT } from './data/skills';
+import { COMMON_KIT, CREATION_EXTRAS, ORIGINS, type CreationExtra } from './data/origins';
+import { COMBAT, STAMINA_COSTS } from './data/tuning';
 import { Devotion } from './devotion';
 import { FactionSystem } from './factions';
 import { InventoryImpl } from './inventory';
 import { ItemDb } from './items';
 import { CharacterSheetImpl } from './sheet';
-import { Standing } from './standing';
+import { Standing, type Sex } from './standing';
 import type { BackgroundDef, ItemDef } from './types';
 import './events';
 
@@ -58,6 +61,16 @@ declare module '../core/Game' {
   }
 }
 
+/** Calendar-driven rules other modules switch on (§14.10). Replace the functions to wire them. */
+export interface RpgHooks {
+  /** Temple cellae shut today (the Lemuria): no temple blessings, vows or patron choice. */
+  templesClosed: () => boolean;
+  /** Festival discount on buying (the Mercuralia 0.10). */
+  festivalDiscount: () => number;
+  /** Festival multiplier on vows (the Ludi Augustales ×1.5). */
+  vowMult: () => number;
+}
+
 export interface RpgServices {
   items: ItemDb;
   sheet: CharacterSheetImpl;
@@ -72,17 +85,26 @@ export interface RpgServices {
   quests: QuestSystem;
   dialogue: DialogueSystem;
   save: SaveSystem;
+  hooks: RpgHooks;
 }
 
-export interface RpgOptions {
+export interface NewGameOptions {
+  /** Origin id (ORIGINS); default: none (a plain citizen with a tunic and a few coins). */
+  background?: string;
+  sex?: Sex;
+  /** The creation extra (every origin but the veteran): a used parmula or +40 den. */
+  extra?: CreationExtra;
+}
+
+export interface RpgOptions extends NewGameOptions {
   /** Load '_'-prefixed example content (quests, dialogue, NPCs) — dev scenes and tests. */
   examples?: boolean;
-  /** Save storage (default: localStorage + IndexedDB). */
+  /** Save storage (default: IndexedDB with a localStorage fallback). */
   storage?: SaveStorage;
   /** Start a new game now (default true): reset state, apply origin/kit, start autoStart quests. */
   newGame?: boolean;
-  /** Origin id from BACKGROUNDS for the new game; default: none (a plain citizen with a tunic and a few coins). */
-  background?: string;
+  /** Game systems that have shipped: perks needing others are hidden (§5.5). Default: all. */
+  systems?: readonly string[];
 }
 
 /** Kit without an origin. */
@@ -91,6 +113,7 @@ export const DEFAULT_KIT = { items: [{ id: 'tunica', equip: true }, { id: 'solea
 export function installRpg(game: Game, opts: RpgOptions = {}): RpgServices {
   const events = game.events;
   const examples = !!opts.examples;
+  const hooks: RpgHooks = { templesClosed: () => false, festivalDiscount: () => 0, vowMult: () => 1 };
 
   // Content modules may carry their own items, locations and NPCs.
   const modules = [...questModules(examples), ...dialogueModules(examples)];
@@ -104,12 +127,22 @@ export function installRpg(game: Game, opts: RpgOptions = {}): RpgServices {
   locations.add(extra<LocationDef>((m) => m.locations));
 
   const sheet = new CharacterSheetImpl({ events });
+  if (opts.systems) sheet.shippedSystems = new Set(opts.systems);
   const inventory = new InventoryImpl(items, { events, sheet });
   const factions = new FactionSystem(FACTIONS, events);
   const standing = new Standing(events, () => game.time?.totalHours ?? 0);
   factions.skillLevel = (id) => sheet.baseSkillLevel(id);
   factions.isCitizen = () => standing.isCitizen;
-  const devotion = new Devotion({ sheet, inventory, events, day: () => game.time?.dayIndex ?? 0, rng: game.rng?.fork('devotion') });
+  const devotion = new Devotion({
+    sheet,
+    inventory,
+    events,
+    day: () => game.time?.dayIndex ?? 0,
+    rng: game.rng?.fork('devotion'),
+    templesClosed: () => hooks.templesClosed(),
+    sex: () => standing.sex,
+    vowMult: () => hooks.vowMult(),
+  });
   const crime = new CrimeSystem({
     events,
     inventory,
@@ -119,9 +152,20 @@ export function installRpg(game: Game, opts: RpgOptions = {}): RpgServices {
     time: game.time,
     rng: game.rng?.fork('crime'),
     // Talking a guard down: persuasion mods with a soldier (dress, Dignitas, cleanliness, Infamia).
-    persuasionPoints: () => persuasionPoints('soldier', { flags: sheet, infamia: standing.infamia, cleanliness: standing.cleanliness, dignitas: { mine: standing.rank, theirs: 2 } }),
+    persuasionPoints: () => persuasionPoints('soldier', { flags: sheet, infamia: standing.infamia, cleanliness: standing.cleanliness, dignitas: { mine: standing.rank, theirs: 2 }, sex: standing.sex }),
   });
-  const barter = new BarterSystem({ items, inventory, sheet, npcs, factions, events, hours: () => game.time?.totalHours ?? 0, rng: game.rng?.fork('barter') });
+  const barter = new BarterSystem({
+    items,
+    inventory,
+    sheet,
+    npcs,
+    factions,
+    events,
+    hours: () => game.time?.totalHours ?? 0,
+    rng: game.rng?.fork('barter'),
+    festivalDiscount: () => hooks.festivalDiscount(),
+    sex: () => standing.sex,
+  });
 
   game.items = items;
   game.npcs = npcs;
@@ -175,22 +219,36 @@ export function installRpg(game: Game, opts: RpgOptions = {}): RpgServices {
   game.addSystem(new RpgSystem(game, sheet));
   hookPlayerController(game, sheet, inventory);
   for (const e of ['item:equipped', 'item:unequipped', 'perk:taken'] as const) events.on(e, () => updateArmorPenalty(sheet, inventory));
-  // Hourly: city bounties under 40 lapse after 7 quiet days; unpaid vows break after 3 (§14.1, §14.6).
+  // Hourly: city bounties under 40 lapse after 7 quiet days; unpaid vows break after 3; Infamia fades (§14.1, §14.6, §3.4).
   events.on('time:hour', () => {
     crime.checkLapse();
     devotion.checkVows();
+    standing.recoverInfamia();
   });
   // A vow lasts until its quest ends (§14.6).
   events.on('quest:completed', (e) => devotion.resolveVow(e.questId, true));
   events.on('quest:failed', (e) => devotion.resolveVow(e.questId, false));
+  // Promotions granted by quests wait for their skill gates (§9.1).
+  events.on('skill:levelup', () => factions.checkPromotions());
+  // Swearing the gladiator's oath costs Infamia +20 (a gladiatrix +50%) and marks you for good (§3.4, §9.1).
+  events.on('faction:joined', (e) => {
+    const inf = factions.def(e.factionId)?.joinInfamia;
+    if (inf) standing.addInfamia(inf, { arena: true, brand: true });
+  });
+  // A condemnation ad ludum brands you the same way (§14.1).
+  events.on('crime:sentenced', () => {
+    standing.branded = true;
+  });
   // Cleanliness (§14.8) shows as a condition: lautus (+10% stamina regeneration) or sordidus.
   events.on('standing:cleanliness', (e) => syncCleanliness(sheet, e.cleanliness));
   // Disposition toward the player also counts in barter (origin traits, what happened in dialogue).
   barter.extraDisposition = (npcId) => (dialogue.memoryOf(npcId)._disp as number | undefined) ?? 0;
+  // A gladiatrix wins the crowd 25% faster (§3.7): arena.favor follows the player's sex.
+  events.on('standing:changed', () => applySex(sheet, standing.sex));
 
-  const services: RpgServices = { items, sheet, inventory, factions, standing, devotion, crime, barter, npcs, locations, quests, dialogue, save };
+  const services: RpgServices = { items, sheet, inventory, factions, standing, devotion, crime, barter, npcs, locations, quests, dialogue, save, hooks };
   game.rpg = services;
-  if (opts.newGame !== false) startNewGame(services, { background: opts.background });
+  if (opts.newGame !== false) startNewGame(services, { background: opts.background, sex: opts.sex, extra: opts.extra });
   return services;
 }
 
@@ -201,8 +259,13 @@ function syncCleanliness(sheet: CharacterSheetImpl, c: 'lautus' | 'normal' | 'so
   if (c !== 'normal') sheet.applyCondition(c);
 }
 
+/** §3.7: a gladiatrix gains crowd favor 25% faster. */
+function applySex(sheet: CharacterSheetImpl, sex: Sex) {
+  sheet.setModifierSource('sex', sex === 'female' ? { 'arena.favor': 0.25 } : null);
+}
+
 function originDef(id: string | null | undefined): BackgroundDef | undefined {
-  return id ? BACKGROUNDS.find((b) => b.id === id) : undefined;
+  return id ? ORIGINS.find((b) => b.id === id) : undefined;
 }
 
 function applyOriginTraits(sheet: CharacterSheetImpl, bg: BackgroundDef | undefined) {
@@ -232,10 +295,11 @@ export function updateArmorPenalty(sheet: CharacterSheetImpl, inv: InventoryImpl
 
 /**
  * Reset the player and world state for a new game and start autoStart quests. With an origin
- * (GDD §3.2): skills 10 + bonuses, legal status, trait, kit (signature weapon at 70%), coin and the
- * common kit of §3.5. Without one: a plain citizen with a tunic and 10 den.
+ * (GDD §3.2): skills 10 + bonuses, legal status, trait, kit (signature weapon at 90%), formal dress
+ * by sex in the pack, the creation extra, coin, and the common kit of §3.5. Without one: a plain
+ * citizen with a tunic and 10 den.
  */
-export function startNewGame(s: RpgServices, opts: { background?: string } = {}) {
+export function startNewGame(s: RpgServices, opts: NewGameOptions = {}) {
   s.sheet.restore(undefined);
   s.inventory.restore(undefined);
   s.factions.restore(undefined);
@@ -244,6 +308,8 @@ export function startNewGame(s: RpgServices, opts: { background?: string } = {})
   s.crime.restore(undefined);
   s.barter.restore(undefined);
   s.dialogue.restore(undefined);
+  s.standing.sex = opts.sex === 'female' ? 'female' : 'male';
+  applySex(s.sheet, s.standing.sex);
   const bg = originDef(opts.background);
   if (opts.background && !bg) console.warn(`[rpg] unknown origin "${opts.background}"`);
   if (bg) {
@@ -253,13 +319,19 @@ export function startNewGame(s: RpgServices, opts: { background?: string } = {})
     s.standing.debt = bg.debt ?? 0;
   }
   applyOriginTraits(s.sheet, bg);
-  const kit: { id: string; count?: number; equip?: boolean; condition?: number }[] = bg ? [...bg.kit, ...COMMON_KIT] : DEFAULT_KIT.items;
+  type Kit = { id: string; count?: number; equip?: boolean; condition?: number };
+  const kit: Kit[] = bg ? [...bg.kit, ...(bg.pack?.[s.standing.sex] ?? []), ...COMMON_KIT] : DEFAULT_KIT.items;
+  let denarii = bg ? bg.denarii : DEFAULT_KIT.denarii;
+  if (bg && bg.creationExtra !== false && opts.extra) {
+    if (opts.extra === 'parmula') kit.push({ id: CREATION_EXTRAS.parmula.item, condition: CREATION_EXTRAS.parmula.condition });
+    else denarii += CREATION_EXTRAS.denarii.denarii;
+  }
   for (const k of kit) {
     if (!s.items.has(k.id)) continue; // e.g. the courier's tablet before the main quest exists
     s.inventory.add(k.id, k.count ?? 1, { silent: true, source: 'start', condition: k.condition });
-    if (k.equip) s.inventory.equip(k.id);
+    if (k.equip) s.inventory.equip(k.id, { condition: k.condition });
   }
-  s.inventory.addDenarii(bg ? bg.denarii : DEFAULT_KIT.denarii);
+  s.inventory.addDenarii(denarii);
   updateArmorPenalty(s.sheet, s.inventory);
   s.quests.newGame();
 }

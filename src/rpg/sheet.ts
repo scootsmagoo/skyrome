@@ -15,9 +15,10 @@
  * 1 + xp.mult + xp.<skill> (+10% with an 'xp.<skill>' flag).
  */
 import type { EventBus, GameEvents } from '../core/Events';
-import { CARRY, LEVEL_CURVE, REGEN, RESOURCES, SKILL_CURVE, TRAINING, XP } from './data/balance';
+import { CARRY, LEVEL_CURVE, REGEN, RESOURCES, SKILL_CURVE, TRAINING, XP } from './data/tuning';
 import { CONDITIONS, POISONED } from './data/conditions';
-import { PERKS, SKILLS } from './data/skills';
+import { PERKS } from './data/perks';
+import { SKILLS } from './data/skills';
 import type { CharacterSheet, ConditionDef, Effect, ModifierId, PerkDef, ResourceId, SkillDef, SkillId } from './types';
 import { RESOURCE_IDS, VitalsImpl } from './vitals';
 import './events';
@@ -47,7 +48,7 @@ const MODIFIER_IDS = new Set<string>([
   'speed.move', 'price.buy', 'price.sell', 'persuade.chance', 'stealth.noise', 'stealth.visibility', 'lockpick.ease',
   'pickpocket.chance', 'potion.strength', 'blessing.duration', 'xp.mult', 'damage.taken', 'luck', 'crit.chance',
   'stamina.regenCombat', 'poise.max', 'bandage.strength', 'food.strength', 'poison.resist', 'fire.resist', 'arena.favor',
-  'arena.missio',
+  'arena.missio', 'attack.speed',
 ]);
 const isModifier = (t: string) => MODIFIER_IDS.has(t) || t.startsWith('xp.');
 const isResource = (t: string): t is ResourceId => t === 'health' || t === 'stamina' || t === 'pietas';
@@ -84,6 +85,11 @@ export class CharacterSheetImpl implements CharacterSheet {
   private skillBonusCache: Map<string, number> | null = null;
   /** Trainer lessons taken since the last character level (max TRAINING.perLevel). */
   trainedThisLevel = 0;
+  /**
+   * Game systems that have shipped (GDD §5.5 PerkDef.requiresSystem): perks needing any other are
+   * hidden — 'unavailable' to take and left out of availablePerkDefs(). null = everything ships.
+   */
+  shippedSystems: ReadonlySet<string> | null = null;
   readonly events?: EventBus<GameEvents>;
   private readonly startSkill: number;
 
@@ -289,11 +295,21 @@ export class CharacterSheetImpl implements CharacterSheet {
     return [...this.perkDefs.values()];
   }
 
+  /** Perks the player can see: those whose system has shipped. */
+  availablePerkDefs(): PerkDef[] {
+    return this.perkDefsList().filter((p) => this.perkShipped(p));
+  }
+
+  private perkShipped(p: PerkDef): boolean {
+    return !p.requiresSystem || !this.shippedSystems || this.shippedSystems.has(p.requiresSystem);
+  }
+
   /** Why a perk can't be taken, or null if it can. */
-  perkBlocker(id: string): 'unknown' | 'taken' | 'points' | 'level' | 'prerequisite' | null {
+  perkBlocker(id: string): 'unknown' | 'unavailable' | 'taken' | 'points' | 'level' | 'prerequisite' | null {
     const p = this.perkDefs.get(id);
     if (!p) return 'unknown';
     if (this._perks.has(id)) return 'taken';
+    if (!this.perkShipped(p)) return 'unavailable';
     if (this.baseSkillLevel(p.skill) < p.requiresLevel) return 'level';
     if (p.requiresPerk && !this._perks.has(p.requiresPerk)) return 'prerequisite';
     if (this._perkPoints <= 0) return 'points';
