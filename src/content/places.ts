@@ -1,23 +1,24 @@
 /**
- * Places the v0.1 content refers to (quest objectives, NPC homes and schedules) as LocationDefs.
+ * Places the v0.1 content refers to (quest objectives, NPC homes, schedules and patrol routes) as
+ * LocationDefs, following docs/CONTENT.md §1:
  *
- * - LANDMARKS: the atlas landmarks that quests and schedules name, by their atlas id, centered on
- *   the atlas position. If the world later registers every atlas landmark itself, those replace these.
- * - CONTRACT SPOTS: points the landmark builders expose ('spawn-capena', 'castor-strongroom',
- *   'ludus-arena-center'…). Here they are fallbacks computed from the atlas, so markers and
- *   'location:entered' work before (or without) the builders' spots. A spot registered later with
- *   the same id replaces the fallback (LocationRegistry.add keeps the last one).
- * - CONTENT SPOTS: places only the content needs (the popina on the Vicus Tuscus, the leaning
- *   insula, the bean-thrower's insula in the Velabrum…).
+ * - LANDMARKS: atlas landmarks the content names, by atlas id, at the atlas centre. If the world
+ *   later registers every atlas landmark itself, those replace these.
+ * - CONTRACT SPOTS: the ids the landmark builders expose ('spawn-capena', 'castor-strongroom',
+ *   'ludus-arena-center', 'armory'…). The content targets these; their fallback positions here are
+ *   the CONTENT.md coordinates of the same places. A spot the world registers later with the same
+ *   id replaces the fallback (LocationRegistry.add keeps the last one).
+ * - CONTENT.md SPOTS (§1.1–1.3): every other proposed spot the v0.1 content uses, at the bible's
+ *   coordinates (real metres → game metres). Where the bible names a place that is also a contract
+ *   spot (castor-loculi = castor-strongroom, ludus-cavea = ludus-arena-center…), the bible id is
+ *   registered too, as an alias at the same position (CONTRACT_ALIASES).
+ * - A few content-only helper areas (the 40 m fight area at the gate, evidence points inside the
+ *   leaning insula).
  *
- * Positions are game meters (atlas real meters × WORLD_SCALE). Spots near a landmark are given
- * relative to its facade: `forward` along the facade normal (outward, toward the street), `side` to
- * the right of someone standing at the facade looking out. Both are game meters.
- *
- * Content files are installed through src/quests/content/places.ts (installRpg registers the
- * `locations` export of every quest module).
+ * Positions are game metres (atlas real metres × WORLD_SCALE). Installed through
+ * src/quests/content/places.ts (installRpg registers the `locations` export of every quest module).
  */
-import { LANDMARK_BY_ID, type Landmark } from '../data/atlas';
+import { LANDMARK_BY_ID, ROADS, BRIDGES, ISLANDS, GATES, type Landmark } from '../data/atlas';
 import type { LocationDef } from '../npc/types';
 import { elevToY, toGame, WORLD_SCALE } from '../world/coords';
 
@@ -29,7 +30,7 @@ const MARKER_BY_CATEGORY: Partial<Record<Landmark['category'], Marker>> = {
   warehouse: 'market', palace: 'palace', house: 'house', prison: 'landmark', portico: 'landmark', baths: 'baths', harbor: 'bridge',
 };
 
-/** Horizontal extent of an atlas footprint in game meters (half the larger side). */
+/** Horizontal half-extent of an atlas footprint in game metres. */
 export function footprintHalf(lm: Landmark): { w: number; d: number } {
   const f = lm.footprint;
   if (f.kind === 'rect') return { w: (f.w / 2) * WORLD_SCALE, d: (f.d / 2) * WORLD_SCALE };
@@ -41,7 +42,7 @@ export function footprintHalf(lm: Landmark): { w: number; d: number } {
   return { w: r * WORLD_SCALE, d: r * WORLD_SCALE };
 }
 
-/** Game-space point at a landmark's facade frame (see the header). */
+/** Game-space point at a landmark's facade frame: `forward` along the facade normal, `side` to its right (game m). */
 export function atLandmark(id: string, forward = 0, side = 0): { x: number; y: number; z: number } {
   const lm = LANDMARK_BY_ID[id];
   if (!lm) throw new Error(`[content] unknown landmark "${id}"`);
@@ -54,7 +55,7 @@ export function atLandmark(id: string, forward = 0, side = 0): { x: number; y: n
   };
 }
 
-/** Game-space point from atlas REAL meters (streets and quarters without a landmark). */
+/** Game-space point from atlas REAL metres (CONTENT.md §1 coordinates). */
 export function atReal(x: number, z: number, elevation = 13): { x: number; y: number; z: number } {
   const [gx, gz] = toGame(x, z);
   return { x: round1(gx), y: round1(elevToY(elevation)), z: round1(gz) };
@@ -79,81 +80,167 @@ export function landmarkLocation(id: string, extra: Partial<LocationDef> = {}): 
   };
 }
 
-function spot(id: string, name: string, position: { x: number; y: number; z: number }, radius: number, extra: Partial<LocationDef> = {}): LocationDef {
-  return { id, name, position, radius, discoverable: false, ...extra };
+/** A spot at CONTENT.md real coordinates. */
+function spot(id: string, name: string, real: [number, number], radius: number, extra: Partial<LocationDef> = {}): LocationDef {
+  return { id, name, position: atReal(real[0], real[1]), radius, discoverable: false, ...extra };
 }
 
 /** Atlas landmarks the content names (objectives, homes, schedules, patrol routes). */
 export const CONTENT_LANDMARK_IDS = [
-  'porta-capena', 'circus-maximus', 'obelisk-circus-maximus', 'ara-maxima', 'forum-boarium', 'temple-portunus',
-  'miliarium-aureum', 'rostra', 'temple-saturn', 'basilica-julia', 'basilica-aemilia', 'curia-julia', 'shrine-venus-cloacina',
-  'temple-castor-pollux', 'lacus-juturnae', 'temple-vesta', 'atrium-vestae', 'carcer-tullianum', 'horrea-agrippiana',
-  'arch-titus', 'colossus-sol', 'velia-vestibule', 'porticus-margaritaria', 'meta-sudans', 'colosseum', 'ludus-magnus',
-  'forum-trajan', 'column-trajan', 'forum-nerva', 'subura', 'statio-vigiles-v',
+  'porta-capena', 'circus-maximus', 'arch-titus-circus', 'forum-boarium', 'portus-tiberinus', 'cloaca-maxima-outlet', 'temple-portunus',
+  'miliarium-aureum', 'rostra', 'temple-saturn', 'basilica-julia', 'basilica-aemilia', 'curia-julia', 'shrine-venus-cloacina', 'lacus-juturnae',
+  'temple-castor-pollux', 'temple-vesta', 'atrium-vestae', 'regia', 'carcer-tullianum', 'horrea-agrippiana', 'horrea-piperataria',
+  'arch-titus', 'colossus-sol', 'velia-vestibule', 'porticus-margaritaria', 'meta-sudans', 'colosseum', 'ludus-magnus', 'baths-titus',
+  'forum-trajan', 'column-trajan', 'basilica-ulpia', 'equus-traiani', 'domus-augustana', 'castra-peregrina', 'castra-praetoria',
+  'statio-vigiles-v', 'temple-aesculapius',
 ] as const;
 
-export const LANDMARK_LOCATIONS: LocationDef[] = CONTENT_LANDMARK_IDS.map((id) => landmarkLocation(id));
+/** Landmarks whose trigger radius the content widens (the Golden Milestone stands for the Forum). */
+const LANDMARK_OVERRIDES: Record<string, Partial<LocationDef>> = {
+  'miliarium-aureum': { radius: 22 },
+  'meta-sudans': { radius: 16 },
+};
 
-/**
- * Spot ids the landmark builders are asked to expose (the content contract). Fallback positions
- * below; the real spots replace them when the world registers them as locations.
- */
-export const CONTRACT_SPOT_IDS = ['spawn-capena', 'night-cart', 'courier-ambush', 'castor-strongroom', 'ludus-gate', 'ludus-arena-center', 'lanista', 'armory', 'medicus'] as const;
+export const LANDMARK_LOCATIONS: LocationDef[] = CONTENT_LANDMARK_IDS.map((id) => landmarkLocation(id, LANDMARK_OVERRIDES[id]));
 
-// The Porta Capena faces SE (bearing 140) out along the Via Appia; the city lies behind it (forward < 0).
-// The Ludus Magnus faces WNW (289) toward the amphitheatre; its arena is in the middle of the courtyard.
-// The Temple of Castor faces NNE (25) onto the Forum; the strongroom doors open in the side of the podium.
-export const CONTRACT_SPOTS: LocationDef[] = [
-  spot('spawn-capena', 'Porta Capena (inside the gate)', atLandmark('porta-capena', -14, 0), 6, { parent: 'porta-capena' }),
-  spot('night-cart', 'The night cart', atLandmark('porta-capena', -8, 2.5), 5, { parent: 'porta-capena' }),
-  // Far enough up the road that the player, spawning at 'spawn-capena', is not already inside it.
-  spot('courier-ambush', 'Under the dripping arches', atLandmark('porta-capena', -36, -3), 9, { parent: 'porta-capena' }),
-  spot('castor-strongroom', 'Strongrooms of the Temple of Castor', atLandmark('temple-castor-pollux', -3, -11.5), 6, { parent: 'temple-castor-pollux', latin: 'Loculi Aedis Castoris', mapMarker: 'shop' }),
-  spot('ludus-gate', 'Gate of the Ludus Magnus', atLandmark('ludus-magnus', 35, 0), 6, { parent: 'ludus-magnus' }),
-  spot('ludus-arena-center', 'Practice arena of the Ludus Magnus', atLandmark('ludus-magnus', 0, 0), 14, { parent: 'ludus-magnus' }),
-  spot('lanista', 'The procurator’s office', atLandmark('ludus-magnus', 24, -14), 5, { parent: 'ludus-magnus' }),
-  spot('armory', 'The armory of the Ludus', atLandmark('ludus-magnus', 20, 16), 5, { parent: 'ludus-magnus', latin: 'Armamentarium' }),
-  spot('medicus', 'The Saniarium (infirmary)', atLandmark('ludus-magnus', -22, 16), 5, { parent: 'ludus-magnus', latin: 'Saniarium' }),
+/** CONTENT.md §1.1 (v0.1) and the §1.2 spots the v0.1 content uses, at the bible's coordinates. */
+export const BIBLE_SPOTS: LocationDef[] = [
+  // §1.1 — the golden path, vendors, shrines, the v0.1 interiors
+  spot('capena-extra', 'Outside the Capena Gate', [523, 974], 8, { parent: 'porta-capena', latin: 'extra Portam Capenam' }),
+  spot('fons-mercurii', 'Mercury’s Spring', [488, 968], 4, { parent: 'porta-capena', latin: 'aqua Mercurii', mapMarker: 'landmark', discoverable: true }),
+  spot('temple-mercury', 'Temple of Mercury', [232, 978], 12, { latin: 'Aedes Mercurii', mapMarker: 'temple', discoverable: true }),
+  spot('compitum-capenae', 'Crossroads Shrine by the Capena Gate', [470, 915], 3, { mapMarker: 'temple', discoverable: true }),
+  spot('compitum-circi', 'Crossroads Shrine below the Palatine', [300, 755], 3, { mapMarker: 'temple', discoverable: true }),
+  spot('astrologi-circi', 'Astrologers’ Arcade', [200, 690], 10, { parent: 'circus-maximus', latin: 'sub arcubus Circi', mapMarker: 'shop', discoverable: true }),
+  spot('caupona-carcerum', 'The Inn at the Starting Gates', [-175, 520], 6, { mapMarker: 'tavern', discoverable: true }),
+  spot('popina-vici-tusci', 'The Silver Pig', [2, 215], 6, { latin: 'Ad Porcum Argenteum', mapMarker: 'tavern', discoverable: true }),
+  spot('seplasia-vici-tusci', 'Fadia’s Perfumery', [18, 178], 4, { mapMarker: 'shop', discoverable: true }),
+  spot('taberna-collapsa', 'The Burned Taberna', [-8, 262], 4, { mapMarker: 'dungeon', discoverable: true }),
+  spot('taberna-collapsa-puteus', 'Light well of the burned taberna', [-20, 275], 3, { parent: 'taberna-collapsa' }),
+  spot('compitum-vici-tusci', 'Crossroads Shrine of the Vicus Tuscus', [-33, 290], 3, { mapMarker: 'temple', discoverable: true }),
+  spot('signum-vortumni', 'Statue of Vortumnus', [92, 64], 3, { latin: 'signum Vortumni', mapMarker: 'temple', discoverable: true }),
+  spot('castor-loculi', 'Strongrooms of Castor', [88, 98], 5, { parent: 'temple-castor-pollux', latin: 'loculi aedis Castoris', discoverable: true }),
+  spot('tabernae-aemiliae', 'Shops of the Basilica Paulli', [135, 12], 8, { parent: 'basilica-aemilia', latin: 'tabernae', mapMarker: 'market' }),
+  spot('basilica-julia-gradus', 'Steps of the Basilica Julia', [44, 44], 10, { parent: 'basilica-julia' }),
+  spot('cloaca-grate-aemiliae', 'Drain Grate by the Basilica Paulli', [118, 22], 3),
+  spot('taberna-armorum', 'Euhodus’ Arms Shop', [478, 268], 6, { latin: 'arma venalia', mapMarker: 'shop', discoverable: true }),
+  spot('compitum-acili', 'Crossroads Shrine of Acilius', [455, 125], 3, { latin: 'Compitum Acili', mapMarker: 'temple', discoverable: true }),
+  spot('lacus-metae', 'Basin by the Meta Sudans', [530, 262], 3, { parent: 'meta-sudans' }),
+  spot('ludus-cavea', 'Practice Arena of the Ludus Magnus', [875, 285], 22, { parent: 'ludus-magnus', mapMarker: 'arena' }),
+  spot('ludus-armamentarium', 'Ludus Armory', [834, 297], 5, { parent: 'ludus-magnus' }),
+  spot('ludus-saniarium', 'Ludus Infirmary', [916, 273], 5, { parent: 'ludus-magnus', latin: 'saniarium' }),
+  spot('ludus-cellae', 'Ludus Barracks', [885, 257], 8, { parent: 'ludus-magnus' }),
+  spot('lectica-statio-forum', 'Litter Stand (Forum)', [62, 32], 4),
+  spot('lectica-statio-capena', 'Litter Stand (Capena Gate)', [492, 930], 4),
+  spot('lectica-statio-metae', 'Litter Stand (Meta Sudans)', [540, 300], 4),
+  spot('statio-cohortium-urbanarum', 'Post of the Urban Cohorts', [30, -62], 6, { mapMarker: 'camp', discoverable: true }),
+  // §1.2 — used by v0.1 people and quests (and the three ids src/rpg/data already references)
+  spot('insula-mariorum', 'Insula of the Marii', [-82, 345], 8, { mapMarker: 'house', discoverable: true }),
+  spot('insula-nutans', 'The Leaning Insula', [-42, 352], 8, { latin: 'Insula Nutans', mapMarker: 'house', discoverable: true }),
+  spot('insula-tuccii', 'Insula of Tuccius the Cooper', [-55, 420], 8, { mapMarker: 'house' }),
+  spot('excubitorium-velabri', 'Watch Post of the Vigiles, Velabrum', [-110, 300], 6, { latin: 'Excubitorium', mapMarker: 'camp', discoverable: true }),
+  spot('compitum-velabri', 'Crossroads Shrine of the Velabrum', [-125, 355], 3, { mapMarker: 'temple', discoverable: true }),
+  spot('lacus-velabri', 'Velabrum Basin', [-140, 375], 3),
+  spot('fullonica-velabri', 'Fullery of the Velabrum', [-150, 320], 5, { latin: 'Fullonica', mapMarker: 'shop', discoverable: true }),
+  spot('pistrinum-velabri', 'Bakery of the Velabrum', [-95, 395], 5, { latin: 'Pistrinum', mapMarker: 'shop', discoverable: true }),
+  spot('officina-columnae', 'Carvers’ Hut at the Column', [-18, -366], 5, { parent: 'column-trajan' }),
+  spot('taberna-vestiarii', 'Clothier in the Horrea Agrippiana', [28, 205], 4, { parent: 'horrea-agrippiana', mapMarker: 'shop', discoverable: true }),
+  spot('domus-vettii', 'House of Sex. Vettius Crispinus', [545, -30], 10, { mapMarker: 'house', discoverable: true }),
+  spot('fullonica-suburana', 'The Fullery off the Clivus Suburanus', [620, -250], 6),
+  spot('stabula-factionum', 'Stables of the Circus Factions', [-1040, -470], 25, { latin: 'stabula IIII factionum', mapMarker: 'camp', discoverable: true }),
 ];
 
-/** Places only the content needs. Street positions come from the atlas roads (real meters). */
+/** CONTENT.md §1.3: features from other atlas arrays registered as places (roads at their midpoint). */
+function featureLocations(): LocationDef[] {
+  const out: LocationDef[] = [];
+  const mid = (pts: readonly (readonly [number, number])[]) => pts[Math.floor(pts.length / 2)];
+  // Roads are corridors; a circle at the middle vertex is the closest a LocationDef can come.
+  for (const id of ['vicus-tuscus', 'street-north-of-circus', 'clivus-victoriae', 'gradus-monetae']) {
+    const r = ROADS.find((x) => x.id === id);
+    if (r?.points.length) out.push(spot(id, r.name, [mid(r.points)[0], mid(r.points)[1]], 18, { latin: r.latin }));
+  }
+  for (const id of ['pons-sublicius', 'pons-aemilius']) {
+    const b = BRIDGES.find((x) => x.id === id);
+    if (b) out.push(spot(id, b.name, [(b.a[0] + b.b[0]) / 2, (b.a[1] + b.b[1]) / 2], id === 'pons-sublicius' ? 35 : 45, { latin: b.latin, mapMarker: 'bridge', discoverable: true }));
+  }
+  const isle = ISLANDS.find((x) => x.id === 'insula-tiberina');
+  if (isle) {
+    const c = isle.outline.reduce((s, [x, z]) => [s[0] + x / isle.outline.length, s[1] + z / isle.outline.length], [0, 0]);
+    out.push(spot('insula-tiberina', isle.name, [c[0], c[1]], 60, { mapMarker: 'landmark', discoverable: true }));
+  }
+  const gate = GATES.find((g) => g.id === 'porta-lavernalis');
+  if (gate) out.push(spot('porta-lavernalis', gate.name, [gate.at[0], gate.at[1]], 8, { mapMarker: 'gate' }));
+  return out;
+}
+
+export const FEATURE_LOCATIONS: LocationDef[] = featureLocations();
+
+/** Spot ids the landmark builders are asked to expose (the content contract). */
+export const CONTRACT_SPOT_IDS = ['spawn-capena', 'night-cart', 'courier-ambush', 'castor-strongroom', 'ludus-gate', 'ludus-arena-center', 'lanista', 'armory', 'medicus'] as const;
+
+/** Contract spot → the CONTENT.md id of the same place (both are registered, at the same position). */
+export const CONTRACT_ALIASES: Record<(typeof CONTRACT_SPOT_IDS)[number], string | null> = {
+  'spawn-capena': 'capena-extra', // the new-game spawn: the cart stand 25 m outside the gate
+  'night-cart': 'capena-extra', // Dromo's cart (prop-plaustrum-dromonis)
+  'courier-ambush': null, // under the arch of the porta-capena (the bible's "within 6 m of the arch")
+  'castor-strongroom': 'castor-loculi',
+  'ludus-gate': null, // the gate on the Ludus' WNW facade
+  'ludus-arena-center': 'ludus-cavea',
+  lanista: 'ludus-cellae', // the procurator's office in the barracks block
+  armory: 'ludus-armamentarium',
+  medicus: 'ludus-saniarium',
+};
+
+const bible = (id: string) => BIBLE_SPOTS.find((s) => s.id === id)!;
+function alias(id: string, of: string, radius?: number, extra: Partial<LocationDef> = {}): LocationDef {
+  const b = bible(of);
+  return { ...b, id, radius: radius ?? b.radius, discoverable: false, mapMarker: undefined, ...extra };
+}
+
+export const CONTRACT_SPOTS: LocationDef[] = [
+  alias('spawn-capena', 'capena-extra', 8, { name: 'Outside the Capena Gate (the night cart)' }),
+  alias('night-cart', 'capena-extra', 5, { name: 'Dromo’s cart' }),
+  { id: 'courier-ambush', name: 'Under the dripping arch', position: atReal(507, 955), radius: 6, parent: 'porta-capena' },
+  alias('castor-strongroom', 'castor-loculi', 5, { name: 'Strongrooms of Castor' }),
+  { id: 'ludus-gate', name: 'Gate of the Ludus Magnus', position: atLandmark('ludus-magnus', 35, 0), radius: 6, parent: 'ludus-magnus' },
+  alias('ludus-arena-center', 'ludus-cavea', 22),
+  alias('lanista', 'ludus-cellae', 5, { name: 'The procurator’s office' }),
+  alias('armory', 'ludus-armamentarium', 5),
+  alias('medicus', 'ludus-saniarium', 5),
+];
+
+/** Helper areas only the content uses. */
 export const CONTENT_SPOTS: LocationDef[] = [
-  // Porta Capena and the Circus valley
-  spot('capena-spring', 'Spring of Mercury by the Porta Capena', atLandmark('porta-capena', 12, -8), 5, { parent: 'porta-capena', latin: 'Aqua Mercurii' }),
-  spot('circus-carceres', 'Starting gates of the Circus Maximus', atLandmark('circus-maximus', 190, 0), 14, { parent: 'circus-maximus', latin: 'Carceres' }),
-  spot('circus-arcades', 'Arcades of the Circus (Palatine side)', atLandmark('circus-maximus', 60, 48), 10, { parent: 'circus-maximus' }),
-  // Forum Romanum
-  spot('castor-steps', 'Steps of the Temple of Castor', atLandmark('temple-castor-pollux', 16, 0), 6, { parent: 'temple-castor-pollux' }),
-  spot('basilica-julia-steps', 'Steps of the Basilica Julia (the gaming boards)', atLandmark('basilica-julia', 16, 0), 10, { parent: 'basilica-julia' }),
-  spot('basilica-aemilia-tabernae', 'Shops of the Basilica Aemilia', atLandmark('basilica-aemilia', 12, 8), 10, { parent: 'basilica-aemilia', latin: 'Tabernae Novae', mapMarker: 'shop' }),
-  spot('forum-tonsor', 'A barber’s chair by the Rostra', atLandmark('rostra', 9, 6), 4, { parent: 'rostra' }),
-  // Vicus Tuscus and the Velabrum (atlas road vicus-tuscus: (45,140) → (−45,311) → (−73,452) real).
-  // Street-front spots sit on or beside the street line so NPCs stand at their doors, not in walls.
-  spot('popina-vicus-tuscus', 'Popina of the Cockerel (Vicus Tuscus)', atReal(20, 188), 7, { latin: 'Popina ad Gallum', mapMarker: 'tavern', discoverable: true }),
-  spot('insula-nutans', 'The leaning insula (Vicus Tuscus)', atReal(-8, 246), 9, { latin: 'Insula Nutans', mapMarker: 'house', discoverable: true }),
-  spot('insula-nutans-scalae', 'Stairwell of the leaning insula', atReal(-4, 252), 3, { parent: 'insula-nutans' }),
-  spot('insula-nutans-taberna', 'Ground-floor shop of the leaning insula', atReal(-6, 240), 3, { parent: 'insula-nutans' }),
-  spot('insula-nutans-paries', 'Party wall of the leaning insula', atReal(-14, 250), 3, { parent: 'insula-nutans' }),
-  spot('insula-fabaria', 'Insula of the Fabii (Velabrum)', atReal(-55, 335), 9, { latin: 'Insula Fabiorum', mapMarker: 'house', discoverable: true }),
-  spot('insula-fabaria-atrium', 'Courtyard of the Insula of the Fabii', atReal(-58, 340), 4, { parent: 'insula-fabaria' }),
-  spot('insula-fabaria-scalae', 'Back stairs of the Insula of the Fabii', atReal(-62, 346), 3, { parent: 'insula-fabaria' }),
-  spot('fullonica-velabri', 'Fullery in the Velabrum', atReal(-36, 290), 6, { latin: 'Fullonica', mapMarker: 'shop', discoverable: true }),
-  spot('pistrinum-velabri', 'Bakery in the Velabrum', atReal(-40, 318), 6, { latin: 'Pistrinum', mapMarker: 'shop', discoverable: true }),
-  // Velia and the Colosseum valley (atlas road via-sacra: (343,209) → (505,269) real, by the Meta Sudans)
-  spot('taberna-armorum', 'Arms dealer’s shop (Sacra Via)', atReal(498, 266), 6, { latin: 'Taberna Armorum', mapMarker: 'shop', discoverable: true }),
-  spot('meta-sudans-ring', 'Around the Meta Sudans', atLandmark('meta-sudans', 0, 0), 14, { parent: 'meta-sudans' }),
-  spot('ludus-palus', 'Training posts of the Ludus', atLandmark('ludus-magnus', 8, -20), 5, { parent: 'ludus-magnus', latin: 'Pali' }),
-  spot('ludus-cellae', 'Barracks of the Ludus', atLandmark('ludus-magnus', -10, -22), 6, { parent: 'ludus-magnus' }),
-  // Night watch: a provisional post in the Velabrum (the 14 excubitoria are unlocated, GDD §9.1)
-  spot('excubitorium-velabri', 'Watch post in the Velabrum', atReal(-48, 365), 5, { latin: 'Excubitorium', mapMarker: 'camp' }),
+  // mq-01: "If the player runs more than 40 m away, the grassatores give up" (CONTENT.md §3.1.1).
+  { id: 'capena-fight-area', name: 'Around the Capena Gate', position: atReal(507, 955), radius: 40, parent: 'porta-capena' },
+  // misc-insula-nutans: evidence points inside the leaning insula (child spots, CONTENT.md §3.3.3).
+  spot('insula-nutans-taberna', 'Ground-floor wall behind the taberna', [-38, 350], 2.5, { parent: 'insula-nutans' }),
+  spot('insula-nutans-scalae', 'The propped stair', [-44, 356], 2.5, { parent: 'insula-nutans' }),
+  spot('insula-nutans-tectum', 'Top floor of the leaning insula', [-42, 354], 2.5, { parent: 'insula-nutans' }),
+  spot('insula-nutans-cenaculum', 'Iulia Prima’s flat', [-46, 349], 2.5, { parent: 'insula-nutans' }),
 ];
 
 /** Every location the content installs. */
-export const CONTENT_LOCATIONS: LocationDef[] = [...LANDMARK_LOCATIONS, ...CONTRACT_SPOTS, ...CONTENT_SPOTS];
+export const CONTENT_LOCATIONS: LocationDef[] = [...LANDMARK_LOCATIONS, ...BIBLE_SPOTS, ...FEATURE_LOCATIONS, ...CONTRACT_SPOTS, ...CONTENT_SPOTS];
+
+const KNOWN = new Set(CONTENT_LOCATIONS.map((l) => l.id));
 
 /** Every id content may target: content locations plus any atlas landmark. */
 export function isKnownPlace(id: string): boolean {
-  return !!LANDMARK_BY_ID[id] || CONTENT_LOCATIONS.some((l) => l.id === id);
+  return KNOWN.has(id) || !!LANDMARK_BY_ID[id];
+}
+
+/**
+ * Keep the bible aliases on top of the world's spots: once the world has registered a contract
+ * spot (castor-strongroom, ludus-arena-center…), copy its position to the CONTENT.md id of the same
+ * place. Call after the world's spots are in `game.locations`.
+ */
+export function syncAliases(locations: { get(id: string): LocationDef | undefined; add(d: LocationDef): void }) {
+  for (const [contract, bibleId] of Object.entries(CONTRACT_ALIASES)) {
+    const world = locations.get(contract);
+    const b = bibleId ? locations.get(bibleId) : undefined;
+    if (world && b && (world.position.x !== b.position.x || world.position.z !== b.position.z)) locations.add({ ...b, position: { ...world.position } });
+  }
 }
 
 function round1(v: number) {

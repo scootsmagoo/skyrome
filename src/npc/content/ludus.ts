@@ -1,201 +1,228 @@
 /**
- * The Ludus Magnus for lud-01-sacramentum (GDD §9.2, §13.2, §17.2): the procurator who signs on
- * guests (the 'lanista' vendor), the doctor Glaucus (GDD's npc-glaucus), the armorer, the medicus of
- * the Saniarium, and the three practice opponents: the tiro Pullus, the thraex Callinicus and the
- * champion retiarius Nereus (boss-nereus). Gladiators drill hours 1–6 and 8–10 and are locked in
- * at night (§14.7).
+ * The Ludus Magnus (docs/CONTENT.md §2.C) for lud-01-sacramentum: Glaucus the doctor (the giver;
+ * signs on guests and sworn men), Sextus Attius Celer the procurator, Hermippus the physician of
+ * the Saniarium, Successus who keeps the armory, Asiaticus the referee, and the three practice
+ * opponents: the tiro Pullus, the thraex Auctus and the champion retiarius Nereus (boss-nereus).
+ * Gladiators follow the §14.7 template: drill h1–h6 and h8–h10, locked in at night.
  */
-import { archetype, NEREUS_PROFILE } from '../../content/profiles';
+import { at } from '../../content/hours';
+import { AUCTUS_PROFILE, NEREUS_PROFILE, PULLUS_PROFILE } from '../../content/profiles';
 import type { NpcDef, ScheduleEntry } from '../types';
 
-/** §14.7 'gladiator' template: drill, rest, drill, locked in. */
-function gladiatorDay(post: string): ScheduleEntry[] {
+/** GDD §14.7 'gladiator' template. */
+function gladiatorDay(evening: ScheduleEntry['activity'] = 'sleep'): ScheduleEntry[] {
   return [
-    { from: 0, at: 'ludus-cellae', activity: 'sleep' },
-    { from: 5.5, at: post, activity: 'work' },
-    { from: 11.5, at: 'ludus-cellae', activity: 'sit' },
-    { from: 13.5, at: post, activity: 'work' },
-    { from: 17, at: 'ludus-cellae', activity: 'sit' },
-    { from: 20, at: 'ludus-cellae', activity: 'sleep' },
+    { from: at('h1'), at: 'ludus-arena-center', activity: 'work' },
+    { from: at('h6'), at: 'ludus-cellae', activity: 'sit' },
+    { from: at('h8'), at: 'ludus-arena-center', activity: 'work' },
+    { from: at('h10'), at: 'ludus-cellae', activity: 'sit' },
+    { from: at('v1'), at: 'ludus-cellae', activity: evening },
   ];
 }
 
 const npcs: NpcDef[] = [
   {
-    id: 'npc-attius-celer',
+    id: 'npc-glaucus',
+    name: 'Glaucus',
+    title: 'Doctor of the Ludus Magnus',
+    faction: 'ludus-magnus',
+    rank: 'rudiarius',
+    home: 'ludus-cellae',
+    schedule: [
+      { from: at('h1'), at: 'ludus-arena-center', activity: 'work' }, // drills
+      { from: at('h6'), at: 'ludus-cellae', activity: 'sit' },
+      { from: at('h8'), at: 'ludus-arena-center', activity: 'work' },
+      { from: at('h10'), at: 'ludus-cellae', activity: 'talk' },
+      { from: at('v1'), at: 'ludus-cellae', activity: 'sleep' },
+    ],
+    dialogue: 'npc-glaucus',
+    disposition: 'neutral',
+    essential: true,
+    services: ['trainer', 'lanista'],
+    trainer: { skill: 'blades', maxLevel: 70 },
+    // A Thracian-born rudiarius: scars (one across the nose), barefoot on the sand, a long practice stick and his own rudis on the belt.
+    appearance: {
+      sex: 'male', age: 'middle', build: 'muscular', height: 1.72, skin: '#b07d58',
+      hair: { style: 'cropped', color: '#8a8580' }, beard: 'none',
+      garments: [{ kind: 'tunica-short', color: '#e2dac6' }, { kind: 'balteus', color: '#3b2a1c' }],
+      footwear: 'barefoot', weapon: 'fustis',
+    },
+    barks: ['Feet first, then the shield, then the sword. Then your mouth, if there’s time.', 'You parry with the eyes. The arm only agrees.', 'The crowd isn’t cruel, tiro. It’s bored. Don’t bore it.', 'I got this stick after forty bouts. You’ll get a bruise after four.', 'Guest or sworn? Make up your mind before the sand does.'],
+    tags: ['gladiator', 'arena-fan', 'rudiarius'],
+  },
+  {
+    id: 'npc-celer',
     name: 'Sextus Attius Celer',
     title: 'Procurator of the Ludus Magnus',
     faction: 'ludus-magnus',
     home: 'lanista',
     schedule: [
-      { from: 0, at: 'lanista', activity: 'sleep' },
-      { from: 6, at: 'lanista', activity: 'sit' },
-      { from: 12, at: 'ludus-arena-center', activity: 'stand' },
-      { from: 14, at: 'lanista', activity: 'sit' },
-      { from: 19, at: 'lanista', activity: 'sleep' },
+      { from: at('h2'), at: 'lanista', activity: 'work' }, // the office in the barracks block
+      { from: at('h6'), at: 'ludus-magnus', activity: 'travel' }, // offstage
     ],
-    dialogue: 'npc-attius-celer',
+    dialogue: 'npc-celer',
     disposition: 'neutral',
     essential: true,
-    services: ['lanista', 'vendor'],
-    vendor: {
-      stock: [
-        { id: 'manica-linea', count: 2 }, { id: 'ocrea', count: 2 }, { id: 'ocreae', count: 1 }, { id: 'parmula', count: 1 },
-        { id: 'galea-thraecis', count: 1 }, { id: 'galea-murmillonis', count: 1 }, { id: 'cardiophylax', count: 1 }, { id: 'fascia', count: 6 },
-      ],
-      denarii: 400,
-    },
-    // An imperial procurator of equestrian rank: narrow stripes and a toga for business.
+    // An equestrian procurator: narrow stripes, a toga, a gold ring; a slave with tablets follows.
     appearance: {
-      sex: 'male', age: 'middle', build: 'heavy', height: 1.68, skin: '#d9ab84',
-      hair: { style: 'receding', color: '#4a3524' }, beard: 'none',
-      garments: [{ kind: 'tunica', color: '#efe9dc', clavi: 'narrow', trim: '#4f1838' }, { kind: 'toga', color: '#efe9dc' }],
+      sex: 'male', age: 'middle', build: 'heavy', height: 1.66, skin: '#ddb48f',
+      hair: { style: 'receding', color: '#cfcbc4' }, beard: 'none',
+      garments: [{ kind: 'tunica', color: '#efe8d8', clavi: 'narrow', trim: '#5b1f3b' }, { kind: 'toga', color: '#efe8d8' }],
       footwear: 'calcei',
     },
-    barks: ['Guests pay their own doctor.', 'Sign here. Or make your mark. Either.', 'The emperor’s school does not haggle.'],
-    tags: ['vendor:lanista', 'official', 'dignitas:eques'],
+    barks: ['Each pair costs Caesar more than a ship. Fight like it.', 'Guests sign here. The sworn sign there. The dead sign nothing.', 'The Column will want games. Games want men.'],
+    tags: ['official', 'elite', 'dignitas:eques'],
   },
   {
-    id: 'npc-glaucus',
-    name: 'Glaucus',
-    title: 'Doctor of the Ludus (trainer)',
-    faction: 'ludus-magnus',
-    rank: 'rudiarius',
-    home: 'ludus-palus',
-    schedule: [
-      { from: 0, at: 'ludus-cellae', activity: 'sleep' },
-      { from: 5.5, at: 'ludus-palus', activity: 'guard' },
-      { from: 11.5, at: 'ludus-arena-center', activity: 'stand' },
-      { from: 13.5, at: 'ludus-palus', activity: 'guard' },
-      { from: 18, at: 'popina-vicus-tuscus', activity: 'drunk' },
-      { from: 21, at: 'ludus-cellae', activity: 'sleep' },
-    ],
-    dialogue: 'npc-glaucus',
-    disposition: 'neutral',
-    essential: true,
-    services: ['trainer'],
-    trainer: { skill: 'blades', maxLevel: 40 },
-    // A Thracian-born rudiarius: freed with the wooden sword, now the school's doctor. Scarred, grey, still hard.
-    appearance: {
-      sex: 'male', age: 'middle', build: 'muscular', height: 1.74, skin: '#bd9067',
-      hair: { style: 'cropped', color: '#8a857d' }, beard: 'stubble',
-      garments: [{ kind: 'tunica', color: '#8a6e50', sleeves: 'none' }, { kind: 'balteus', color: '#3b2a1c' }],
-      footwear: 'soleae', weapon: 'gladius',
-    },
-    barks: ['Again!', 'Shield up, point out, step!', 'You fight like a senator dances.', 'Watch his hips, not his eyes.'],
-    tags: ['gladiator', 'arena-fan', 'trainer:blades'],
-  },
-  {
-    id: 'npc-bassus',
-    name: 'Bassus',
-    title: 'Armorer of the Ludus',
-    faction: 'ludus-magnus',
-    home: 'armory',
-    schedule: [
-      { from: 0, at: 'armory', activity: 'sleep' },
-      { from: 5, at: 'armory', activity: 'work' },
-      { from: 20, at: 'armory', activity: 'sleep' },
-    ],
-    dialogue: 'npc-bassus',
-    disposition: 'friendly',
-    appearance: {
-      sex: 'male', age: 'old', build: 'stocky', height: 1.62, skin: '#bb8660',
-      hair: { style: 'bald', color: '#8a857d' }, beard: 'short',
-      garments: [{ kind: 'tunica-short', color: '#6f5843' }, { kind: 'apron', color: '#5e4a36' }],
-      footwear: 'soleae',
-    },
-    barks: ['Bring it back with all its pieces.', 'That rudis has more bouts than you have teeth.'],
-    tags: ['plebs', 'dignitas:libertus'],
-  },
-  {
-    id: 'npc-eudemus',
-    name: 'Eudemus',
-    title: 'Medicus of the Ludus',
+    id: 'npc-hermippus',
+    name: 'Hermippus of Cos',
+    title: 'Physician of the Ludus',
     faction: 'ludus-magnus',
     home: 'medicus',
     schedule: [
-      { from: 0, at: 'medicus', activity: 'sleep' },
-      { from: 6, at: 'medicus', activity: 'work' },
-      { from: 21, at: 'medicus', activity: 'sleep' },
+      { from: at('h1'), at: 'medicus', activity: 'work' },
+      { from: at('v1'), at: 'medicus', activity: 'sleep' },
     ],
-    dialogue: 'npc-eudemus',
+    dialogue: 'npc-hermippus',
     disposition: 'friendly',
-    services: ['healer', 'vendor'],
-    vendor: { stock: [{ id: 'fascia', count: 10 }, { id: 'emplastrum', count: 4 }, { id: 'collyrium', count: 3 }, { id: 'febrifugum', count: 2 }], denarii: 150 },
-    // A Greek physician, linen tunic and a philosopher's short beard; he reads Celsus and quotes Hippocrates.
+    services: ['healer', 'vendor', 'trainer'],
+    vendor: { stock: [{ id: 'fascia', count: 10 }, { id: 'emplastrum', count: 4 }, { id: 'collyrium', count: 2 }, { id: 'posca', count: 6 }], denarii: 150 },
+    trainer: { skill: 'medicina', maxLevel: 40 },
+    // A Greek physician: the full beard, a long white tunic and an apron, a bronze probe and a bowl of vinegar.
     appearance: {
-      sex: 'male', age: 'adult', build: 'slight', height: 1.66, skin: '#c09670',
-      hair: { style: 'curly-short', color: '#2e2219' }, beard: 'short',
-      garments: [{ kind: 'tunica', color: '#e0d8c6' }, { kind: 'palla', color: '#cfc4ad' }],
+      sex: 'male', age: 'old', build: 'slight', height: 1.62, skin: '#ddb48f',
+      hair: { style: 'receding', color: '#cfcbc4' }, beard: 'full',
+      garments: [{ kind: 'tunica-long', color: '#f2eee4' }, { kind: 'apron', color: '#cfc4ad' }],
       footwear: 'soleae',
     },
-    barks: ['Sit. Show me. No, the other arm.', 'Wine on the wound, not in the mouth.'],
+    barks: ['Vinegar, honey and silence. Mostly silence.', 'Lie down. You’ll be a hero tomorrow; today you’re a patient.', 'The best wound is the one you stepped away from.', 'Rest till the lamps are lit. Doctor’s orders, and the doctor is me.'],
     tags: ['vendor:medicus', 'greek'],
+  },
+  {
+    id: 'npc-successus',
+    name: 'Successus',
+    title: 'Keeper of the Ludus armory',
+    faction: 'ludus-magnus',
+    home: 'armory',
+    schedule: [
+      { from: at('h1'), at: 'armory', activity: 'work' },
+      { from: at('h11'), at: 'ludus-cellae', activity: 'sit' },
+      { from: at('v1'), at: 'armory', activity: 'sleep' },
+    ],
+    dialogue: 'npc-successus',
+    disposition: 'neutral',
+    services: ['vendor'],
+    vendor: {
+      stock: [
+        { id: 'manica-linea', count: 2 }, { id: 'ocrea', count: 2 }, { id: 'ocreae', count: 1 }, { id: 'fasciae', count: 4 }, { id: 'subarmalis', count: 1 },
+        { id: 'galea-thraecis', count: 1 }, { id: 'galea-murmillonis', count: 1 }, { id: 'rete', count: 1 },
+      ],
+      denarii: 400,
+    },
+    appearance: {
+      sex: 'male', age: 'adult', build: 'stocky', height: 1.6, skin: '#8e5e3e',
+      hair: { style: 'cropped', color: '#1b1612' }, beard: 'none',
+      garments: [{ kind: 'tunica-short', color: '#7a6248' }, { kind: 'apron', color: '#5e4a36' }],
+      footwear: 'barefoot',
+    },
+    barks: ['One rudis, one shield, one signature. Bring them back or I’ll know.', 'That scutum has blocked more blows than you’ve thrown.', 'Wood for practice, iron for Caesar.'],
+    tags: ['vendor:lanista', 'servus'],
+  },
+  {
+    id: 'npc-asiaticus',
+    name: 'Asiaticus',
+    title: 'Summa rudis (chief referee)',
+    faction: 'ludus-magnus',
+    home: 'ludus-cellae',
+    schedule: [
+      { from: at('h2'), at: 'ludus-arena-center', activity: 'guard' }, // referees the bouts
+      { from: at('h6'), at: 'ludus-cellae', activity: 'sit' },
+      { from: at('h8'), at: 'ludus-arena-center', activity: 'guard' },
+      { from: at('v1'), at: 'ludus-cellae', activity: 'sleep' },
+    ],
+    dialogue: 'npc-asiaticus',
+    disposition: 'neutral',
+    services: ['trainer'],
+    trainer: { skill: 'shield', maxLevel: 40 },
+    // A retired rudiarius: bald, a white tunic with the referee's two red bands at the hem, a long staff.
+    appearance: {
+      sex: 'male', age: 'old', build: 'slight', height: 1.65, skin: '#c99a72',
+      hair: { style: 'bald', color: '#8a8580' }, beard: 'none',
+      garments: [{ kind: 'tunica', color: '#f2eee4', trim: '#9e3b2e' }],
+      footwear: 'soleae', weapon: 'fustis',
+    },
+    barks: ['Shields up! The sand is hungry!', 'A finger! He raises a finger! Ad digitum!', 'Step apart! Step apart, I said, or I’ll part you.', 'The crowd asks: Mitte! or Iugula? Today, it asks Mitte!'],
+    tags: ['rudiarius', 'arena-fan'],
   },
   {
     id: 'npc-pullus',
     name: 'Pullus',
     title: 'Tiro of the Ludus',
     faction: 'ludus-magnus',
-    home: 'ludus-palus',
-    schedule: gladiatorDay('ludus-palus'),
-    dialogue: 'npc-ludus-gladiators',
+    rank: 'tiro',
+    home: 'ludus-cellae',
+    schedule: gladiatorDay(),
+    dialogue: 'npc-ludus-tirones',
     disposition: 'friendly',
+    // A free volunteer from Capua, nineteen: a light first beard.
     appearance: {
-      sex: 'male', age: 'young', build: 'average', height: 1.66, skin: '#e3bf9f',
-      hair: { style: 'cropped', color: '#9c7442' }, beard: 'none',
-      garments: [{ kind: 'subligaculum', color: '#e6dfcf' }, { kind: 'balteus', color: '#5a3c24' }],
+      sex: 'male', age: 'young', build: 'slight', height: 1.66, skin: '#ddb48f',
+      hair: { style: 'cropped', color: '#4a3424' }, beard: 'stubble',
+      garments: [{ kind: 'subligaculum', color: '#efe9dc' }, { kind: 'balteus', color: '#5a3c24' }],
       footwear: 'barefoot', weapon: 'gladius', shield: { model: 'scutum', color: '#8e2a1e', emblem: 'wreath' },
     },
-    combat: archetype('murmillo', { tier: 'thug' }, { name: 'Tiro', weapon: 'rudis', yieldAt: 0.25 }),
-    barks: ['Hit me gently, I’m new.', 'My arm! My arm is lead.'],
-    tags: ['gladiator', 'tiro'],
+    combat: PULLUS_PROFILE,
+    barks: ['My mother thinks I’m a baker.', 'Is it true they throw roses? Or is it just the bread?', 'Go easy. Not too easy. Medium.'],
+    tags: ['gladiator', 'tiro', 'lud01-pullus'],
   },
   {
-    id: 'npc-callinicus',
-    name: 'Callinicus',
-    title: 'Thraex',
+    id: 'npc-auctus',
+    name: 'Auctus',
+    title: 'Thraex (veteranus)',
     faction: 'ludus-magnus',
-    home: 'ludus-palus',
-    schedule: gladiatorDay('ludus-palus'),
-    dialogue: 'npc-ludus-gladiators',
+    rank: 'veteranus',
+    home: 'ludus-cellae',
+    schedule: gladiatorDay(),
+    dialogue: 'npc-auctus',
     disposition: 'neutral',
+    // Gallic-born, sunburned; high greaves, manica on the right, the griffin-crested thraex helmet for bouts.
     appearance: {
-      sex: 'male', age: 'adult', build: 'muscular', height: 1.7, skin: '#b0825a',
-      hair: { style: 'curly-short', color: '#2a1f17' }, beard: 'none',
-      garments: [{ kind: 'subligaculum', color: '#d9d0bd' }, { kind: 'balteus', color: '#3b2a1c' }],
+      sex: 'male', age: 'adult', build: 'muscular', height: 1.68, skin: '#ddb48f',
+      hair: { style: 'cropped', color: '#6b3a22' }, beard: 'none',
+      garments: [{ kind: 'subligaculum', color: '#e2dac6' }, { kind: 'balteus', color: '#3b2a1c' }],
       footwear: 'barefoot',
       armor: { helmet: { kind: 'thraex', crest: '#b3261e', metal: 'bronze' }, manica: 'right', greaves: 'both' },
       weapon: 'sica', shield: { model: 'parmula', color: '#c98b2e', emblem: 'none' },
     },
-    // A practice bout: the sica is wooden today (the rudis's numbers, §6.10).
-    combat: archetype('thraex', { tier: 'veteran' }, { weapon: 'rudis', yieldAt: 0.3 }),
-    barks: ['The parmularii love me. Ask anyone at the Meta Sudans.', 'Low and round, tiro. Low and round.'],
-    tags: ['gladiator', 'thraex'],
+    combat: AUCTUS_PROFILE,
+    barks: ['The thraex fights low. Watch my feet, not my sword.', 'Thirty bouts, eighteen wins, eleven missio, one draw. And a cold.', 'Up from under, that’s the thraex’s stroke. Nobody else uses it in the street.'],
+    tags: ['gladiator', 'thraex', 'lud01-auctus'],
   },
   {
     id: 'npc-nereus',
     name: 'Nereus',
     title: 'Retiarius, victor of 31',
     faction: 'ludus-magnus',
-    rank: 'primus-palus',
-    home: 'ludus-palus',
-    schedule: gladiatorDay('ludus-arena-center'),
+    rank: 'palus-secundus',
+    home: 'ludus-cellae',
+    schedule: gladiatorDay('sit'), // mends nets in the evening
     dialogue: 'npc-nereus',
     disposition: 'neutral',
     essential: true,
-    // Tall and quick; no helmet (the retiarius fights bareheaded), linen manica on the left arm, the galerus on the shoulder.
+    // The retiarius' bare face: no helmet; manica on the left arm, the galerus on the left shoulder.
     appearance: {
-      sex: 'male', age: 'adult', build: 'muscular', height: 1.78, skin: '#a46b49',
-      hair: { style: 'curly-short', color: '#1f1914' }, beard: 'none',
+      sex: 'male', age: 'adult', build: 'slight', height: 1.75, skin: '#8e5e3e',
+      hair: { style: 'curly-short', color: '#1b1612' }, beard: 'none',
       garments: [{ kind: 'subligaculum', color: '#efe9dc' }, { kind: 'balteus', color: '#c98b2e' }],
       footwear: 'barefoot',
       armor: { manica: 'left', greaves: 'left' },
       weapon: 'trident',
     },
     combat: NEREUS_PROFILE,
-    barks: ['Fish come to the net.', 'Thirty-one. Count them.', 'Salute the crowd. They pay.'],
-    tags: ['gladiator', 'retiarius', 'boss-nereus', 'arena-fan'],
+    services: [],
+    trainer: { skill: 'spear', maxLevel: 40 }, // after lud-01 completes (his dialogue gates it)
+    barks: ['The net has no edges. Only patience.', 'Thirty-one wins, and I still pray before each one.', 'You blocked my net with your shield? Clever. Do it again.', 'Non te peto, piscem peto! I’m after the fish, not you. Old habit.'],
+    tags: ['gladiator', 'retiarius', 'boss-nereus'],
   },
 ];
 
