@@ -111,7 +111,9 @@ export class CameraRig implements System {
     camera.rotation.set(p.pitch, p.yaw, 0, 'YXZ');
 
     const feet = p.root.position; // interpolated
-    this.firstPersonEye(feet, dt, eye);
+    // The head-bone eye only matters while first person is (partly) in view.
+    if (this.blend < 1) this.firstPersonEye(feet, dt, eye);
+    else this.eyeInit = false;
     if (this.blend === 0) {
       camera.position.copy(eye);
     } else {

@@ -111,8 +111,11 @@ export class GameFlow implements System {
     this.registerSaveables();
     // Nothing is saved outside a game in progress (title, creation, loading).
     rpg.save.addBlocker(() => (this.state === 'playing' ? null : 'Not in a game'));
-    // Quickload always asks first (GDD §4.2); F9/L and the pause menu both come here.
+    // Quickload always asks first (GDD §4.2); F9/L and the pause menu both come here. Outside a
+    // game in progress (title, creation) P and L do nothing at all.
     rpg.save.quickload = () => this.confirmQuickload();
+    const quicksave = rpg.save.quicksave.bind(rpg.save);
+    rpg.save.quicksave = () => (this.state === 'playing' ? quicksave() : Promise.resolve({ ok: false, error: 'not in a game' }));
     this.applyControls();
     game.settings.onChange(() => this.applyControls());
     this.watchCapsLock();

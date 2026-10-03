@@ -43,6 +43,7 @@ export class PlayerController implements System {
   /** Seconds without look input while moving before the camera swings behind you; 0 = off. */
   autoRecenterDelay = 0;
   private sprintLatched = false;
+  private stillTime = 0;
   private noLookTime = 0;
 
   constructor(
@@ -75,8 +76,10 @@ export class PlayerController implements System {
     const moving = wish.lengthSq() > 1e-6;
     if (moving) wish.normalize();
 
-    // A toggled sprint ends when you stop or start sneaking.
-    if (!moving || p.sneaking || !input.enabled) this.sprintLatched = false;
+    // A toggled sprint ends when you stop (for a moment: pressing Shift just before W still
+    // counts) or start sneaking.
+    this.stillTime = moving ? 0 : this.stillTime + dt;
+    if (this.stillTime > 0.3 || p.sneaking || !input.enabled) this.sprintLatched = false;
     const sprintKey = this.sprintMode === 'toggle' ? this.sprintLatched : input.down('sprint');
     const wantsSprint = sprintKey && moving && axes.z <= 0 && !p.sneaking;
     p.sprinting = wantsSprint && p.grounded && this.canSprint();

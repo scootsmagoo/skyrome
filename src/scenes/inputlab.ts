@@ -141,8 +141,15 @@ function log(s: LabState, cls: string, text: string) {
   if (s.lines.length > 48) s.lines.length = 48;
 }
 
+/** Choose a preset (written to the settings the game shares), then apply the controls. */
 function applyPreset(game: Game, p: ControlPreset) {
   for (const [k, v] of Object.entries(presetValues(p))) game.settings.set(k as never, v as never);
+  game.settings.set('presetPicked' as never, true as never);
+  applyControls(game);
+}
+
+/** Apply the current control settings to core input (the game's flow does this in Rome). */
+function applyControls(game: Game) {
   const c = controlState(game.settings.data);
   game.input.ignoredCodes.clear();
   for (const code of c.ignoredCodes) game.input.ignoredCodes.add(code);
@@ -181,7 +188,9 @@ const scene: SceneDef = {
     const state: LabState = { lines: [], wheelEvents: 0, gestureEvents: 0, zoomSteps: { in: 0, out: 0 }, lastGesture: { events: 0, steps: 0, t: 0 }, lockClickAttacked: null, lockedAt: 0, freeClicks: 0, freeClickAt: 0, freeClickAttacks: 0, presses: {}, pageZoom: 1 };
     const els = { log: q('.log'), acts: q('.acts'), checks: q('.checks'), center: q('.center'), presets: q('.presets') };
     root.querySelectorAll('.presets button').forEach((btn) => btn.addEventListener('click', () => applyPreset(game, (btn as HTMLElement).dataset.p as ControlPreset)));
-    applyPreset(game, game.settings.data.controlPreset ?? 'trackpad');
+    // Use the settings as they are; only the preset buttons change them.
+    if (!game.settings.data.controlPreset) for (const [k, v] of Object.entries(presetValues('trackpad'))) game.settings.set(k as never, v as never);
+    applyControls(game);
 
     // Raw events, captured before anything else sees them.
     const caps = (e: KeyboardEvent) => (e.getModifierState?.('CapsLock') ? ' ⇪on' : '');
