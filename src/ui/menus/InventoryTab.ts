@@ -264,5 +264,6 @@ function describeEffect(ef: NonNullable<ItemDef['effects']>[number]): string {
     case 'damage': return `Harms ${target} by ${ef.amount}${dur}`;
     case 'cure': return `Cures ${ef.target}`;
     case 'modifier': return `${ef.target} ${ef.amount > 0 ? '+' : ''}${Math.round(ef.amount * 100)}%${dur}`;
+    default: return `${ef.kind} ${target} ${ef.amount}${dur}`;
   }
 }
