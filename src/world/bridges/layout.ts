@@ -134,11 +134,14 @@ export function layoutBridge(inp: LayoutInput): BridgeLayout {
     let pw = spec.piers.map((p) => p * S);
     let La = spans.reduce((a, b) => a + b, 0) + pw.reduce((a, b) => a + b, 0);
     const wet = w1 - w0 + 2;
-    if (wet > La) {
-      const k = wet / La;
+    // Fit the arcade to the channel: widen the spans if the river is wider than the historical
+    // arcade; narrow them (to 75% at most) if it would run far up the banks, which would push
+    // the approach ramps deep into the streets.
+    const k = wet > La ? wet / La : La > wet + 8 ? Math.max(0.75, (wet + 8) / La) : 1;
+    if (k !== 1) {
       spans = spans.map((s) => s * k);
       pw = pw.map((p) => p * k);
-      La = wet;
+      La *= k;
     }
     let a0 = (w0 + w1) / 2 - La / 2;
     // Keep the arcade inside the bridge where it fits (abutments on the banks).

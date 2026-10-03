@@ -175,7 +175,7 @@ function columnaLactaria(ctx: LandmarkContext) {
   // Milk stains down the base (lighter streaks) and the offerings.
   d.span('plaster_white', -0.2, 0.33, -0.725, 0.12, 0.6, -0.72, { shadow: false });
   for (const [x, z, s] of [[0.5, -0.5, 1], [-0.45, -0.55, 0.8], [0.55, 0.45, 0.9]] as const) d.ellipsoid('terracotta', x, 0.62 + 0.1 * s, z, 0.08 * s, 0.11 * s, 0.08 * s, { seg: [8, 6] });
-  placeProp(d, 'basket', 0.2, 0.32, -0.95, 0.3, { variant: 2, collide: false });
+  placeProp(d, 'basket', 0.75, 0.32, -0.62, 0.3, { variant: 2, collide: false });
   inscriptionPanel(b, { lines: ['COLVMNA', 'LACTARIA'], width: 0.9, height: 0.3, style: 'carved', ground: '#d8ccb2' }, T(0, 0.47, -0.725), { depth: 0.01, bodyMaterial: 'travertine' });
   const spots: Spot[] = [
     spot('columna-lactaria:offering', 'shrine', 0, 0, -1.6, 0),

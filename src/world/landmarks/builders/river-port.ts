@@ -209,26 +209,37 @@ function portusTiberinus(ctx: LandmarkContext) {
     placeProp(d, kind as never, cx, top(cx, cz), cz, rng.range(0, 6), { variant: v });
     if (k % 3 === 0) spots.push(spot(`portus-tiberinus:cargo-${k}`, 'container', cx, top(cx, cz), cz - 1.2, 0));
   }
-  // Storerooms (cellae) behind the quay: brick vaults opening onto it, tiled lean-to roof.
-  const sz0 = Dd / 2 - 7.5;
-  const sz1 = Dd / 2 - 1;
+  // Storerooms (cellae) behind the quay: brick vaults opening onto it, in units of four cells
+  // under their own gabled roofs (alternating heights), slit windows to the street behind.
+  // (Back faces 0.3 m behind the quay deck's edge, so the deck's skirt stays inside the walls.)
+  const sz1 = Dd / 2 - 0.7;
+  const sz0 = sz1 - 6.5;
   const blocks = hi ? [[-W * 0.4, -W * 0.12], [W * 0.02, W * 0.38]] : [[-W * 0.4, W * 0.38]];
   for (const [ax, bx] of blocks) {
     if (insideAny((ax + bx) / 2, (sz0 + sz1) / 2, blocked)) continue;
     const y = Math.min(top(ax, sz0), top(bx, sz0));
-    const h = 4.6;
-    d.span('brick', ax, y - 1.0, sz0 + 0.6, bx, y + h, sz1, { collide: true });
-    const nCell = Math.max(2, Math.round((bx - ax) / 4.2));
-    for (let k = 0; k < nCell; k++) {
-      const cx = ax + ((k + 0.5) * (bx - ax)) / nCell;
-      d.span('black', cx - 1.2, y, sz0 + 0.58, cx + 1.2, y + 2.7, sz0 + 0.62, { shadow: false });
-      d.span('travertine', cx - 1.4, y + 2.7, sz0 + 0.5, cx + 1.4, y + 2.95, sz0 + 0.7); // lintel
-      if (k % 2 === 0) spots.push(spot(`portus-tiberinus:cella-${Math.round(cx)}`, 'door', cx, y, sz0 - 0.3, Math.PI));
+    const nUnit = Math.max(1, Math.round((bx - ax) / 17));
+    const uw = (bx - ax) / nUnit;
+    for (let u = 0; u < nUnit; u++) {
+      const ux0 = ax + u * uw;
+      const ux1 = ux0 + uw;
+      const h = u % 2 ? 5.2 : 4.4;
+      d.span('brick', ux0, y - 1.0, sz0 + 0.6, ux1, y + h, sz1, { collide: true });
+      // Brick pilasters at the unit ends and a travertine string course on the quay side.
+      for (const x of [ux0, ux1]) d.span('brick', x - 0.35, y - 1.0, sz0 + 0.35, x + 0.35, y + h + 0.1, sz0 + 0.62);
+      d.span('travertine', ux0, y + 3.3, sz0 + 0.45, ux1, y + 3.45, sz0 + 0.62);
+      const nCell = 4;
+      for (let k = 0; k < nCell; k++) {
+        const cx = ux0 + ((k + 0.5) * uw) / nCell;
+        d.span('black', cx - 1.2, y, sz0 + 0.58, cx + 1.2, y + 2.7, sz0 + 0.62, { shadow: false });
+        d.span('travertine', cx - 1.4, y + 2.7, sz0 + 0.5, cx + 1.4, y + 2.95, sz0 + 0.7); // lintel
+        if (hi) d.span('black', cx - 0.25, y + h - 1.6, sz1 - 0.02, cx + 0.25, y + h - 0.6, sz1 + 0.01, { shadow: false }); // slit window behind
+        if (k % 2 === 0) spots.push(spot(`portus-tiberinus:cella-${Math.round(cx)}`, 'door', cx, y, sz0 - 0.3, Math.PI));
+      }
+      const m = new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition((ux0 + ux1) / 2, 0, (sz0 + sz1) / 2 + 0.3);
+      gableRoof(b, -(sz1 - sz0) / 2 - 0.6, (sz1 - sz0) / 2 + 0.6, -uw / 2 - 0.15, uw / 2 + 0.15, y + h, 18, 'roof_tile', hi, m);
     }
-    // Lean-to roof sloping toward the quay (tiles) and a cornice.
-    const m = new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition((ax + bx) / 2, 0, (sz0 + sz1) / 2 + 0.3);
-    gableRoof(b, -(sz1 - sz0) / 2 - 0.6, (sz1 - sz0) / 2 + 0.6, -(bx - ax) / 2 - 0.3, (bx - ax) / 2 + 0.3, y + h, 16, 'roof_tile', hi, m);
-    paintedSign(b, ['HORREA', 'VINVM·OLEVM·LATERES'], 2.2, 0.8, T((ax + bx) / 2, y + 3.5, sz0 + 0.56));
+    paintedSign(b, ['HORREA', 'VINVM·OLEVM·LATERES'], 2.2, 0.8, T(ax + uw / 2, y + 3.95, sz0 + 0.33));
   }
   // The harbour master's office (statio) by the stairs: a small travertine kiosk with a counter.
   const st = [W * 0.08, faceZ + 9.5] as const;

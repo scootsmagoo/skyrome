@@ -66,14 +66,8 @@ export async function buildBridges(game: Game, atlas: typeof Atlas, hm: Heightma
   }
 }
 
-function buildOne(
-  game: Game,
-  br: Atlas.Bridge,
-  hm: Heightmap,
-  waterY: number,
-  river: Atlas.River,
-  hiB: { minX: number; maxX: number; minZ: number; maxZ: number },
-): PlacedBridge {
+/** Axis, ground profile and layout of one atlas bridge on a heightmap (shared with the landmark builders). */
+export function bridgeLayoutFor(br: Atlas.Bridge, hm: Heightmap, river: Atlas.River, waterY = Number.isFinite(hm.waterLevelY) ? hm.waterLevelY : river.waterLevel * WORLD_SCALE) {
   const S = WORLD_SCALE;
   const ax = br.a[0] * S, az = br.a[1] * S;
   const bx = br.b[0] * S, bz = br.b[1] * S;
@@ -100,8 +94,21 @@ function buildOne(
     S,
     arches: style,
     deckAbove: style.deckAbove,
-    grade: style.kind === 'timber' ? 0.16 : 0.18,
+    grade: style.kind === 'timber' ? 0.16 : 0.19,
   });
+  return { ax, az, bx, bz, length, ux, uz, ground, style, layout, waterY };
+}
+
+function buildOne(
+  game: Game,
+  br: Atlas.Bridge,
+  hm: Heightmap,
+  waterY: number,
+  river: Atlas.River,
+  hiB: { minX: number; maxX: number; minZ: number; maxZ: number },
+): PlacedBridge {
+  const S = WORLD_SCALE;
+  const { ax, az, bx, bz, length, ux, uz, ground, style, layout } = bridgeLayoutFor(br, hm, river, waterY);
   const mx = (br.a[0] + br.b[0]) / 2, mz = (br.a[1] + br.b[1]) / 2;
   const detail = mx >= hiB.minX && mx <= hiB.maxX && mz >= hiB.minZ && mz <= hiB.maxZ ? 'high' : 'low';
   // Bridge frame: x along A→B, z across (x × y), origin at A on y = 0 (heights are absolute).

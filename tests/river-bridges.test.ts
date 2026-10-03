@@ -74,9 +74,9 @@ describe('bridges on the real terrain', () => {
       const ux = (bx - ax) / length, uz = (bz - az) / length;
       const ground = (u: number) => hm.heightAt(ax + ux * u, az + uz * u);
       const st = styleFor(br.id, br.arches, br.length ?? length / S);
-      const L = layoutBridge({ length, ground, waterY, S, arches: st, deckAbove: st.deckAbove, grade: st.kind === 'timber' ? 0.16 : 0.18 });
-      // Walkable: under ~11° everywhere (the character controller climbs up to 50°).
-      expect(maxGrade(L.deck)).toBeLessThan(0.2);
+      const L = layoutBridge({ length, ground, waterY, S, arches: st, deckAbove: st.deckAbove, grade: st.kind === 'timber' ? 0.16 : 0.19 });
+      // Walkable: under ~11.5° everywhere (the character controller climbs up to 50°).
+      expect(maxGrade(L.deck)).toBeLessThan(0.205);
       // The deck never dips into the ground between the ends.
       for (let u = 0; u <= length; u += 1) expect(deckAt(L.deck, u)).toBeGreaterThan(ground(u) + 0.1);
       // Wet channel covered by the arcade (stone) or the trestle.

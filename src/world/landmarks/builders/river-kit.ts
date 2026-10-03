@@ -17,7 +17,8 @@ import { Draw } from '../../../arch/fabric/draw';
 import { pointInPolygon } from '../../../arch/fabric/polygon';
 import type { Rng } from '../../../core/Rng';
 import { bearingToRotationY } from '../../../core/math';
-import { footprintPolygon } from '../../terrain/heightmap';
+import { footprintPolygon, type Heightmap } from '../../terrain/heightmap';
+import { bridgeLayoutFor } from '../../bridges';
 import type { LandmarkBuilder, LandmarkContext, LandmarkData, Spot } from '../types';
 
 export const builders: LandmarkBuilder[] = [];
@@ -581,15 +582,23 @@ export function bridgeCorridors(ctx: LandmarkContext, env: RiverEnv, ext = 40, e
   const out: V2[][] = [];
   const self = ctx.lm;
   const r0 = radius(self) + 120;
+  const hm = ctx.game.heightmap as Heightmap | undefined;
   for (const br of atlas.BRIDGES) {
     const dx = br.b[0] - br.a[0], dz = br.b[1] - br.a[1];
     const L = Math.hypot(dx, dz) || 1;
     const ux = dx / L, uz = dz / L;
     const near = Math.min(Math.hypot(br.a[0] - self.center[0], br.a[1] - self.center[1]), Math.hypot(br.b[0] - self.center[0], br.b[1] - self.center[1]));
     if (near > r0) continue;
+    // With the terrain at hand, use the bridge's real extent (ramp foot to ramp foot).
+    let s0 = -ext, s1 = L + ext;
+    if (hm) {
+      const lay = bridgeLayoutFor(br, hm, atlas.RIVERS[0]).layout;
+      s0 = lay.start / ctx.S - 2;
+      s1 = lay.end / ctx.S + 2;
+    }
     const h = br.width / 2 + extraHalf;
-    const a: [number, number] = [br.a[0] - ux * ext, br.a[1] - uz * ext];
-    const c: [number, number] = [br.b[0] + ux * ext, br.b[1] + uz * ext];
+    const a: [number, number] = [br.a[0] + ux * s0, br.a[1] + uz * s0];
+    const c: [number, number] = [br.a[0] + ux * s1, br.a[1] + uz * s1];
     const nx = -uz * h, nz = ux * h;
     out.push([env.local(a[0] + nx, a[1] + nz), env.local(c[0] + nx, c[1] + nz), env.local(c[0] - nx, c[1] - nz), env.local(a[0] - nx, a[1] - nz)]);
   }
