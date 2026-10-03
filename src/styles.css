@@ -1,0 +1,44 @@
+:root {
+  --ink: #f3ead8;
+  --ink-dim: #c9bda4;
+  --gold: #d9b35a;
+  --purple: #6b1f3a;
+  --red: #8f2a1f;
+  --panel: rgba(18, 13, 10, 0.78);
+  --panel-edge: rgba(217, 179, 90, 0.45);
+  --font-display: 'Cinzel', 'Trajan Pro', 'Times New Roman', serif;
+  --font-body: 'EB Garamond', 'Iowan Old Style', Georgia, serif;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #0b0907;
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+#app { position: fixed; inset: 0; }
+.game-canvas { display: block; outline: none; }
+.ui-root { position: absolute; inset: 0; pointer-events: none; user-select: none; }
+.ui-root .interactive { pointer-events: auto; }
+
+.debug-overlay {
+  position: absolute; left: 8px; bottom: 8px;
+  font: 12px/1.35 ui-monospace, Menlo, monospace;
+  background: rgba(0, 0, 0, 0.55); color: #e7e2d4;
+  padding: 6px 8px; border-radius: 4px; white-space: pre;
+}
+.crosshair {
+  position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px;
+  border-radius: 50%; background: rgba(255, 248, 230, 0.85); box-shadow: 0 0 2px #000;
+}
+.click-to-play {
+  position: absolute; left: 50%; bottom: 14%; transform: translateX(-50%);
+  font-family: var(--font-display); letter-spacing: 0.08em; font-size: 15px;
+  background: var(--panel); border: 1px solid var(--panel-edge); padding: 8px 16px; border-radius: 3px;
+}
+.boot-error {
+  position: absolute; inset: 0; display: grid; place-items: center; padding: 24px;
+  font: 15px/1.5 var(--font-body); background: #120c09; color: #f3d9c9; white-space: pre-wrap;
+}

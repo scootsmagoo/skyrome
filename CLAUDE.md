@@ -1,0 +1,35 @@
+# Skyrome — agent guide
+
+Skyrome is a non-linear, Skyrim-style open-world action RPG set in Rome in AD 113, under Trajan. It runs in the browser on TypeScript, Three.js r186, Rapier 0.21 (WASM physics) and Vite 8. Everything is procedural: architecture, characters, textures and audio are generated in code or come from CC0 sources. The owner is new to game development. AI agents do most of the building.
+
+Design docs: `docs/GDD.md` (game design), `docs/CONTENT.md` (NPCs, quests, items), `docs/ATLAS.md` with `src/data/atlas.ts` (historical map data), `docs/ARCHITECTURE.md` (code structure), and `docs/research/` (background research).
+
+## Commands
+- `npm run dev`: dev server on http://127.0.0.1:5173. Pick a scene with `?scene=<name>` (files in `src/scenes/`) and turn on the stats overlay with `?debug`. The <code>`</code> key toggles the overlay too.
+- `npm test`: Vitest, for pure logic in `tests/` and `src/**/*.test.ts`.
+- `npm run typecheck`: `tsc --noEmit`. It must stay clean.
+- `npm run build`: typecheck plus a production build into `dist/`.
+- `node scripts/shot.mjs --scene <name> [--steps '<json>'] [--name x.png] [--browser webkit]`: boots the game headless on the real GPU, runs scripted input, saves screenshots to `.shots/`, and prints console errors and frame stats. **Always verify visual work this way and look at the PNG with the Read tool.** Steps are described at the top of the script, for example `[{"hold":"KeyW","ms":1500},{"press":"KeyV"},{"eval":"game.player.position"},{"shot":"a.png"}]`. Each run starts its own Vite server on a free port, so parallel agents don't collide.
+
+## Conventions (do not change without updating this file)
+- **Units and axes.** Meters, with +x east, +y up and +z **south** (north is −z). The time step is fixed at 60 Hz.
+- **Facing.** Character models face **+Z** in local space. A heading θ means forward is `(sin θ, 0, cos θ)` and `object.rotation.y = θ`. A camera with yaw ψ looks along `(−sin ψ, 0, −cos ψ)`. Helpers live in `src/core/math.ts`.
+- **Atlas.** `src/data/atlas.ts` stores real meters. The origin is the Miliarium Aureum, and elevations are meters above sea level at ancient ground level. Convert with `src/world/coords.ts`: `toGame()` and `elevToY()` apply `WORLD_SCALE = 0.6` both horizontally and vertically. Landmark `rotation` is a compass bearing in degrees for the main facade (0 = facing north), with the facade facing −z in local space, so `rotation.y = bearingToRotationY(rotation)`. Human-scale things stay 1:1: people, doors, step risers of about 0.2 m, generic insulae with storeys of about 3 m.
+- **History.** The setting is accurate to AD 113. Nothing appears that was built later (no Aurelian Walls, no Temple of Venus and Roma, no Arch of Constantine or Septimius Severus, no Baths of Caracalla or Diocletian). The fantasy is low and ambiguous: omens, curse tablets and cults, but no fireballs or dragons.
+- **Controls.** The owner uses a Mac trackpad, so every mouse action also has a key: F attacks, Q blocks, R readies the weapon, E interacts, V toggles the view, C sneaks, and the arrow keys turn the camera. Bindings live in `src/core/Input.ts` (`DEFAULT_BINDINGS`). Read actions, never raw keys.
+
+## Architecture rules
+- `Game` (`src/core/Game.ts`) owns the renderer, scene, camera, events, input, physics, time, settings and the system list. A **System** has optional `fixedUpdate(dt)`, `update(dt, alpha)` and `lateUpdate(dt)`, plus a `priority` where lower runs first. The camera runs at 100.
+- **Don't edit shared files to plug in.** Use these extension points instead:
+  - Services on `Game`: `declare module '../core/Game' { interface Game { foo: Foo } }`, then assign `game.foo = …` during setup.
+  - Events: `declare module '../core/Events' { interface GameEvents { 'foo:bar': {...} } }`.
+  - Player state works the same way, through `interface Player` in `src/player/Player.ts`.
+  - Scenes: drop a file in `src/scenes/` that default-exports a `SceneDef`. It is discovered automatically and opened with `?scene=<file>`.
+- **Actors.** `src/actors/Actor.ts` is a kinematic capsule plus a visual root at the feet. Call `locomote(wish, dt)` in fixed steps; `ActorSystem` interpolates the visuals. The avatar implements `AvatarView`.
+- **World content.** Register big static objects with `game.world.add(id, object, { cullDistance })` for distance culling. Use boxes or cylinders for colliders where possible (`game.physics.addBox` and friends), and trimeshes only for irregular shapes.
+- **Interactables.** Use `game.interactions.add({ id, position, verb, label, interact })`.
+- **Performance.** Target 60 fps in Safari and Chrome on an M-series Mac, with fewer than about 1500 draw calls and fewer than about 3M triangles visible. Merge static geometry per material. Use `InstancedMesh` for repeated props, share materials, and never create materials or geometries per frame. Check `stats.drawCalls` in the shot output.
+- Keep modules self-contained under their own directory. Give pure logic unit tests. Match the surrounding code style: 2-space indent, single quotes, semicolons, and comment density similar to `src/core`.
+
+## Working as a parallel agent
+If you run in a git worktree, the other agents are building other modules at the same time. Stay inside the directories you were assigned. If you must touch a shared file, keep the edit tiny and mention it in your report. Run `npm install` first if `node_modules` is missing. Before finishing, run `npm run typecheck && npm test`, then commit to your branch with a descriptive message.
