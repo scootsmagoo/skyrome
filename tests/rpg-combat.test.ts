@@ -20,6 +20,7 @@ import {
   resolveBlock,
   resolveHit,
   resolveParry,
+  staggerPoise,
   tickPoise,
   timeToKill,
   typeFactor,
@@ -397,16 +398,52 @@ describe('poise (§6.5)', () => {
   it('anti-loop (§6.5): 1.5 s of poise immunity after a stagger; a riposte opens no new window; at most 2 staggers in 4 s', () => {
     const p = createPoise(50);
     applyPoiseDamage(p, 60);
-    expect(applyPoiseDamage(p, 99).result).toBe('none'); // staggered and immune
+    expect(applyPoiseDamage(p, 99).result).toBe('none'); // staggered
     tickPoise(p, 0.8 + 1.4);
-    expect(applyPoiseDamage(p, 99).result).toBe('none');
+    expect(applyPoiseDamage(p, 99).result).toBe('none'); // immune for 1.5 s after the stagger
+    expect(applyPoiseDamage(p, 1, { riposte: true }).result).toBe('none'); // the window has long closed
     tickPoise(p, 0.2);
     expect(applyPoiseDamage(p, 1, { riposte: true })).toMatchObject({ result: 'stagger', riposteWindow: false });
-    // A third stagger inside 4 s (say, with immunity cut short) only flinches.
+    // A third stagger inside 4 s (say, with stagger and immunity cut short) only flinches.
+    p.stagger = 0;
     p.immune = 0;
     expect(applyPoiseDamage(p, 99).result).toBe('flinch');
     tickPoise(p, 4);
     expect(applyPoiseDamage(p, 99).result).toBe('stagger');
+  });
+
+  it('a riposte inside the window a poise break opens gets its guaranteed stagger; immunity starts when the stagger ends', () => {
+    const p = createPoise(50);
+    expect(applyPoiseDamage(p, 60)).toEqual({ result: 'stagger', seconds: 0.8, riposteWindow: true });
+    tickPoise(p, 0.3);
+    expect(applyPoiseDamage(p, 99).result).toBe('none'); // an ordinary hit on a staggered target
+    // The riposte restaggers (heavy, 1.5 s) without a new window (rule 2).
+    expect(applyPoiseDamage(p, 10, { riposte: true })).toEqual({ result: 'stagger', seconds: 1.5, riposteWindow: false });
+    tickPoise(p, 1.4);
+    expect(p.stagger).toBeCloseTo(0.1);
+    expect(applyPoiseDamage(p, 99).result).toBe('none'); // still staggered
+    tickPoise(p, 0.2); // the stagger ended 0.1 s ago: 1.4 s of immunity left
+    expect(p.immune).toBeCloseTo(1.4);
+    expect(applyPoiseDamage(p, 99).result).toBe('none');
+    tickPoise(p, 1.4);
+    expect(p.immune).toBe(0);
+    // Two staggers within 4 s: the next breaking hit only flinches (rule 3).
+    expect(applyPoiseDamage(p, 99).result).toBe('flinch');
+    // A heavy stagger is longer than the 0.8 s window, so a riposte still lands at its end.
+    const h = createPoise(50);
+    applyPoiseDamage(h, 60, { heavy: true });
+    tickPoise(h, 0.75);
+    expect(applyPoiseDamage(h, 1, { riposte: true }).result).toBe('stagger');
+  });
+
+  it('a parry or guard break staggers through staggerPoise: it counts for the limit and the riposte lands', () => {
+    const p = createPoise(60);
+    const parry = resolveParry({ attackerPoiseMax: 60, withShield: true });
+    expect(staggerPoise(p, parry.attackerStagger)).toEqual({ result: 'stagger', seconds: 1, riposteWindow: true });
+    tickPoise(p, 0.5);
+    expect(applyPoiseDamage(p, 99).result).toBe('none');
+    expect(applyPoiseDamage(p, 5, { riposte: true })).toMatchObject({ result: 'stagger', riposteWindow: false });
+    expect(staggerPoise(p, 1.2).result).toBe('flinch'); // a third within 4 s
   });
 
   it('regeneration: 15/s after 1.5 s without poise damage', () => {
@@ -414,9 +451,12 @@ describe('poise (§6.5)', () => {
     applyPoiseDamage(p, 30);
     tickPoise(p, 1);
     expect(p.current).toBe(20);
+    tickPoise(p, 1); // regeneration starts halfway through this step
+    expect(p.current).toBeCloseTo(27.5);
     tickPoise(p, 1);
+    expect(p.current).toBeCloseTo(42.5);
     tickPoise(p, 1);
-    expect(p.current).toBe(35);
+    expect(p.current).toBe(50);
   });
 
   it('poise damage: stagger × light 1, power 2.5, bash 2, sprint 1.5', () => {

@@ -280,6 +280,8 @@ export const CRIME = {
   bribeMax: 200,
   bribeMult: 1.5,
   corruptible: { vigiles: 0.4, 'cohortes-urbanae': 0.25, praetoriani: 0.05 } as Record<string, number>,
+  /** A guard with no id is rolled once per confrontation; the roll holds this many game hours (or until it ends). */
+  confrontationHours: 1,
   /** Asylum at a statue or altar: guards hold off 1 game hour; non-violent crimes, bounty ≤ 1000, once a day. */
   asylumHours: 1,
   asylumMaxBounty: 1000,

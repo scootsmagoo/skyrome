@@ -590,6 +590,24 @@ export class CharacterSheetImpl implements CharacterSheet {
     this.vitals.tick(dt);
   }
 
+  /**
+   * Run timed effects forward by `seconds` of skipped time (sleep, wait, the baths, the Carcer;
+   * §14.10): they count down and expire as if you had waited. Over-time healing and damage are not
+   * applied and the vitals don't regenerate — sleep restores them itself.
+   */
+  skipTime(seconds: number) {
+    if (!(seconds > 0) || !this.effects.length) return;
+    const expired = new Set<string>();
+    for (const a of this.effects) {
+      a.remaining -= seconds;
+      if (a.remaining <= 0) expired.add(a.source);
+    }
+    if (!expired.size) return;
+    this.effects = this.effects.filter((a) => a.remaining > 0);
+    this.invalidate();
+    for (const s of expired) if (!this.effects.some((a) => a.source === s)) this.events?.emit('effect:expired', { source: s });
+  }
+
   // ---------------------------------------------------------------- persistence
 
   serialize() {
