@@ -1,0 +1,255 @@
+/**
+ * The in-game HUD: compass, resource bars, crosshair and interaction prompt, enemy/boss bars,
+ * sneak eye, notifications, banners, subtitles, hit indicator and the clock readout.
+ * Reads state each frame from the game and `ui.sources`; never owns game state.
+ */
+import * as THREE from 'three';
+import type { Game } from '../../core/Game';
+import { codeLabel } from '../../core/Input';
+import type { Interactions } from '../../interaction/Interactions';
+import { h, setClass, setText } from '../dom';
+import { formatClock, romanHour } from '../format';
+import { UI_ICONS, iconSvg } from '../icons';
+import type { MapLocation, UISources } from '../types';
+import { BossBar, ResourceBar, TargetBar } from './Bars';
+import { Compass, type CompassItem } from './Compass';
+import { bearingOfDir, bearingTo, relativeBearing } from './compassMath';
+import { Banners, HitIndicator, Notifications, Subtitles } from './Feed';
+import './hud.css';
+
+const dir = new THREE.Vector3();
+
+/** Undiscovered locations appear on the compass within this range (game m); discovered ones farther. */
+const NEARBY_UNDISCOVERED = 110;
+const NEARBY_DISCOVERED = 260;
+const MAX_LOCATIONS = 6;
+
+export class Hud {
+  readonly el: HTMLElement;
+  readonly compass = new Compass();
+  readonly health = new ResourceBar('health');
+  readonly stamina = new ResourceBar('stamina');
+  readonly pietas = new ResourceBar('pietas');
+  readonly target = new TargetBar();
+  readonly boss = new BossBar();
+  readonly notes = new Notifications();
+  readonly banners = new Banners();
+  readonly subtitles = new Subtitles();
+  readonly hits = new HitIndicator();
+
+  private crosshair: HTMLElement;
+  private prompt: HTMLElement;
+  private promptName: HTMLElement;
+  private promptVerb: HTMLElement;
+  private promptKey: HTMLElement;
+  private promptDetail: HTMLElement;
+  private sneak: HTMLElement;
+  private sneakLabel: HTMLElement;
+  private sneakEye: HTMLElement;
+  private clock: HTMLElement;
+  private clockHour: HTMLElement;
+  private clockDate: HTMLElement;
+  private clockPlace: HTMLElement;
+  private hint: HTMLElement;
+  private barWrap: Record<'health' | 'stamina' | 'pietas', HTMLElement>;
+
+  private visible = true;
+  private markerTimer = 0;
+  private items: CompassItem[] = [];
+  private hintTime = 0;
+  /** Held by the clock key or forced by screenshots. */
+  clockVisible = false;
+  heading = 0;
+
+  constructor(
+    private readonly game: Game,
+    private readonly sources: UISources,
+  ) {
+    this.crosshair = h('div', { class: 'hud-crosshair' }, h('i', { class: 'dot' }), h('i', { class: 'ring' }));
+    this.promptName = h('div', { class: 'name' });
+    this.promptKey = h('span', { class: 'sr-key' });
+    this.promptVerb = h('span', { class: 'verb' });
+    this.promptDetail = h('div', { class: 'detail' });
+    this.prompt = h('div', { class: 'hud-prompt' }, this.promptName, h('div', { class: 'action' }, this.promptKey, this.promptVerb), this.promptDetail);
+    this.sneakEye = h('div', { class: 'eye' });
+    this.sneakEye.innerHTML = iconSvg(UI_ICONS.eye);
+    this.sneakLabel = h('div', { class: 'label' });
+    this.sneak = h('div', { class: 'hud-sneak' }, h('span', { class: 'bracket' }, '['), this.sneakEye, h('span', { class: 'bracket' }, ']'), this.sneakLabel);
+    this.clockHour = h('div', { class: 'hour' });
+    this.clockDate = h('div', { class: 'date' });
+    this.clockPlace = h('div', { class: 'place' });
+    this.clock = h('div', { class: 'hud-clock' }, this.clockHour, this.clockDate, this.clockPlace);
+    this.hint = h('div', { class: 'hud-hint' });
+
+    this.barWrap = {
+      pietas: h('div', { class: 'hud-res pietas' }, this.pietas.el),
+      health: h('div', { class: 'hud-res health' }, this.health.el),
+      stamina: h('div', { class: 'hud-res stamina' }, this.stamina.el),
+    };
+
+    this.el = h(
+      'div',
+      { class: 'sr-hud-root' },
+      // Top center stacks instead of overlapping: compass, enemy bar, then banners.
+      h('div', { class: 'hud-top' }, this.compass.el, this.target.el, this.banners.el),
+      this.notes.el,
+      this.hits.el,
+      this.crosshair,
+      this.sneak,
+      this.prompt,
+      this.clock,
+      this.subtitles.el,
+      this.boss.el,
+      this.barWrap.pietas,
+      this.barWrap.health,
+      this.barWrap.stamina,
+      this.hint,
+    );
+  }
+
+  setVisible(v: boolean) {
+    if (v === this.visible) return;
+    this.visible = v;
+    setClass(this.el, 'is-hidden', !v);
+    // Messages that arrived or were showing under a menu get their full time once it closes.
+    if (v) {
+      this.notes.resume();
+      this.banners.resume();
+    }
+  }
+
+  /** Brief hint for mouse-look when the pointer isn't captured (trackpad players use arrows). */
+  showLookHint() {
+    const b = this.game.input.bindings;
+    this.hint.replaceChildren(
+      h('span', null, 'Click the view to look with the mouse'),
+      h('span', { class: 'sep' }, '·'),
+      h('span', null, 'or turn with '),
+      h('span', { class: 'sr-key sr-key-sm' }, codeLabel(b.lookLeft[0] ?? 'ArrowLeft')),
+      h('span', { class: 'sr-key sr-key-sm' }, codeLabel(b.lookRight[0] ?? 'ArrowRight')),
+    );
+    this.hintTime = 7;
+  }
+
+  update(dt: number) {
+    const { game, sources } = this;
+    const cam = game.camera;
+    cam.getWorldDirection(dir);
+    const heading = (this.heading = bearingOfDir(dir.x, dir.z));
+    const p = game.player ? game.player.root.position : cam.position;
+
+    // ---- compass (marker list refreshed at 8 Hz; positions every frame)
+    this.markerTimer -= dt;
+    if (this.markerTimer <= 0) {
+      this.markerTimer = 0.125;
+      this.items = this.collectMarkers(p.x, p.z);
+    }
+    this.compass.update(heading, p.x, p.z, this.items, !!game.settings.data.compassLatin);
+
+    // ---- resource bars
+    const vitals = sources.vitals?.() ?? null;
+    const combat = sources.inCombat?.() ?? false;
+    const always = game.settings.data.hudBars === 'always';
+    for (const id of ['health', 'stamina', 'pietas'] as const) {
+      const wrap = this.barWrap[id];
+      if (!vitals) {
+        setClass(wrap, 'is-visible', false);
+        continue;
+      }
+      const r = vitals[id];
+      const frac = r.max > 0 ? r.current / r.max : 0;
+      const changed = this[id].set(frac, dt);
+      setClass(wrap, 'is-visible', always || combat || changed || frac < 0.995);
+    }
+
+    this.target.update(sources.target?.() ?? null, dt);
+    this.boss.update(sources.boss?.() ?? null, dt);
+
+    // ---- crosshair & interaction prompt
+    const interactions = game.interactions as Interactions | undefined; // not every scene installs it
+    const focus = game.input.enabled ? (interactions?.focus ?? null) : null;
+    setClass(this.crosshair, 'is-focus', !!focus);
+    setClass(this.crosshair, 'is-hidden', game.settings.data.crosshair === false && !focus);
+    if (focus) {
+      const illegal = focus.illegal?.() ?? false;
+      setText(this.promptName, focus.label());
+      setText(this.promptVerb, focus.verb());
+      setText(this.promptKey, codeLabel(game.input.bindings.interact[0] ?? 'KeyE'));
+      const detail = focus.detail?.() ?? '';
+      setText(this.promptDetail, detail);
+      setClass(this.promptDetail, 'is-empty', !detail);
+      setClass(this.prompt, 'is-illegal', illegal);
+    }
+    setClass(this.prompt, 'is-visible', !!focus);
+
+    // ---- sneak eye
+    const sneaking = !!game.player?.sneaking;
+    setClass(this.sneak, 'is-visible', sneaking);
+    if (sneaking) {
+      const det = Math.max(0, Math.min(1, sources.detection?.() ?? 0));
+      this.sneakEye.style.transform = `scaleY(${(0.22 + det * 0.78).toFixed(3)})`;
+      this.sneak.style.setProperty('--det', det.toFixed(3));
+      setText(this.sneakLabel, det > 0.85 ? 'Detected' : det > 0.35 ? 'Caution' : 'Hidden');
+      setClass(this.sneak, 'is-detected', det > 0.85);
+    }
+
+    // ---- clock
+    setClass(this.clock, 'is-visible', this.clockVisible);
+    if (this.clockVisible) {
+      const rh = romanHour(game.time.hour);
+      setText(this.clockHour, `${rh.latin} · ${formatClock(game.time.hour)}`);
+      setText(this.clockDate, game.time.formatRoman());
+      setText(this.clockPlace, sources.currentLocation?.() ?? '');
+    }
+
+    // ---- feed: frozen while a menu or conversation hides the HUD, so nothing that happens there
+    // (a quest started from dialogue, a skill raised by a book) expires unseen.
+    if (this.visible) {
+      this.notes.update(dt);
+      this.banners.update(dt);
+      this.subtitles.update(dt);
+      this.hits.update(dt, (x, z) => relativeBearing(heading, bearingTo(p.x, p.z, x, z)));
+    }
+
+    if (this.hintTime > 0) {
+      this.hintTime -= dt;
+      if (game.input.pointerLocked) this.hintTime = 0;
+    }
+    setClass(this.hint, 'is-visible', this.hintTime > 0);
+  }
+
+  private collectMarkers(px: number, pz: number): CompassItem[] {
+    const s = this.sources;
+    const out: CompassItem[] = [];
+    // Tracked quest objectives.
+    const log = s.quests?.();
+    const map = s.map?.();
+    let locations: MapLocation[] | null = null;
+    const locs = () => (locations ??= map?.locations() ?? []);
+    if (log) {
+      for (const q of log.quests()) {
+        if (!q.tracked || q.state !== 'active') continue;
+        for (const o of q.objectives) {
+          if (o.done || !o.target) continue;
+          let pos = s.resolveTarget?.(o.target) ?? null;
+          if (!pos && o.target.kind === 'point') pos = { x: o.target.x, z: o.target.z };
+          if (!pos && o.target.kind === 'location') {
+            const id = o.target.id;
+            const l = locs().find((x) => x.id === id);
+            if (l) pos = { x: l.x, z: l.z };
+          }
+          if (pos) out.push({ key: `q:${q.id}:${o.id}`, kind: 'quest', x: pos.x, z: pos.z });
+        }
+      }
+    }
+    // Nearby locations: the closest few, so a dense quarter doesn't bury the compass.
+    const near = locs()
+      .map((l) => ({ l, d: Math.hypot(l.x - px, l.z - pz) }))
+      .filter(({ l, d }) => d > 3 && d < (l.discovered ? NEARBY_DISCOVERED : NEARBY_UNDISCOVERED))
+      .sort((a, b) => a.d - b.d)
+      .slice(0, MAX_LOCATIONS);
+    for (const { l } of near) out.push({ key: `l:${l.id}`, kind: 'location', x: l.x, z: l.z, icon: l.icon, discovered: l.discovered });
+    for (const m of s.compassMarkers?.() ?? []) out.push({ key: `m:${m.id}`, kind: m.kind, x: m.x, z: m.z, icon: m.icon, discovered: m.discovered ?? true, label: m.label });
+    return out;
+  }
+}
