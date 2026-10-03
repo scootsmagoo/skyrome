@@ -5,6 +5,7 @@
  * sectile floors, fountain basins. All write into a MeshBuilder in the caller's local frame.
  */
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { armoredEmperor, equestrian, seatedDeity, togate } from '../../../../arch/classical/statues';
 import { ProfileBuilder, lathe, makeGeometry, mul, tube, type V2 } from '../../../../arch/common/geom';
 import { inscriptionPanel, latinize, type InscriptionStyle } from '../../../../arch/common/inscription';
@@ -398,5 +399,162 @@ export function terrace(
       box(b, mat, ax + ux * (len / 2) + nx * (t / 2), y + ph / 2, az + uz * (len / 2) + nz * (t / 2), len + t, ph, t * 0.8, at, true, ry);
       box(b, 'travertine', ax + ux * (len / 2) + nx * (t / 2), y + ph + 0.05, az + uz * (len / 2) + nz * (t / 2), len + t + 0.1, 0.1, t, at, false, ry);
     }
+  }
+}
+
+// ---------------------------------------------------------------- cheap statues
+
+export type FigureKind = 'togate' | 'armored' | 'draped' | 'nude';
+
+const figureCache = new Map<string, THREE.BufferGeometry>();
+
+/**
+ * A cheap life-size statue (≈ 250–600 triangles) for galleries of many figures: niches of the
+ * summi viri, attic rows, votive statues crowding a precinct. Faces −z, feet at y = 0, 1.75 m
+ * tall at scale 1 (plinth not included). Geometry is cached per kind and detail.
+ */
+export function figure(b: MeshBuilder, kind: FigureKind, at: THREE.Matrix4, opts: { scale?: number; material?: MaterialId | THREE.Material; detail?: Detail } = {}) {
+  const hi = (opts.detail ?? 'high') === 'high';
+  const key = `${kind}|${hi ? 1 : 0}`;
+  let g = figureCache.get(key);
+  if (!g) {
+    g = makeFigure(kind, hi);
+    figureCache.set(key, g);
+  }
+  const s = opts.scale ?? 1;
+  b.add(g, opts.material ?? 'bronze', mul(at, new THREE.Matrix4().makeScale(s, s, s)));
+}
+
+function makeFigure(kind: FigureKind, hi: boolean): THREE.BufferGeometry {
+  const seg = hi ? 10 : 6;
+  const parts: THREE.BufferGeometry[] = [];
+  const lathePart = (pts: [number, number][], sx = 1, sz = 0.75) => {
+    const p = new ProfileBuilder(0, pts[0][1]);
+    for (const [x, y] of pts) p.to(x, y);
+    const g = lathe(p.build(), { segments: seg });
+    g.scale(sx, 1, sz);
+    parts.push(g);
+  };
+  const limb = (a: THREE.Vector3, c: THREE.Vector3, r: number) => {
+    const len = a.distanceTo(c);
+    const g = new THREE.CylinderGeometry(r, r * 0.85, len, hi ? 6 : 4);
+    g.translate(0, len / 2, 0);
+    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), c.clone().sub(a).normalize()));
+    g.translate(a.x, a.y, a.z);
+    parts.push(g);
+  };
+  const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+  if (kind === 'togate' || kind === 'draped') {
+    const w = kind === 'draped' ? 0.92 : 1;
+    lathePart([[0.01, 0], [0.26 * w, 0.02], [0.24 * w, 0.4], [0.22 * w, 0.85], [0.23 * w, 1.12], [0.235 * w, 1.32], [0.2 * w, 1.42], [0.1, 1.48], [0.01, 1.5]]);
+    // Sinus fold of the toga / palla over the front.
+    limb(V(-0.16, 1.38, -0.12), V(0.2, 0.9, -0.14), 0.05);
+    limb(V(-0.21, 1.36, 0), V(-0.22, 0.95, -0.12), 0.065);
+    limb(V(0.21, 1.36, 0), V(0.24, 1.0, -0.2), 0.055);
+  } else if (kind === 'armored') {
+    // Kilted cuirass: legs, skirt of pteryges, breastplate, paludamentum over the left shoulder.
+    limb(V(-0.1, 0, -0.02), V(-0.09, 0.62, 0), 0.07);
+    limb(V(0.1, 0, 0.04), V(0.09, 0.62, 0), 0.07);
+    lathePart([[0.01, 0.55], [0.23, 0.56], [0.22, 0.75], [0.2, 0.9], [0.24, 1.25], [0.22, 1.38], [0.1, 1.45], [0.01, 1.48]], 1, 0.7);
+    limb(V(-0.2, 1.38, 0.05), V(-0.24, 0.55, 0.12), 0.09);
+    limb(V(0.21, 1.36, 0), V(0.3, 1.62, -0.1), 0.055);
+    limb(V(-0.24, 1.34, 0), V(-0.26, 1.0, -0.15), 0.055);
+    limb(V(-0.28, 0.0, -0.2), V(-0.28, 2.1, -0.2), 0.02);
+  } else {
+    // Heroic nude with a cloak: legs, torso, arms.
+    limb(V(-0.1, 0, 0), V(-0.09, 0.85, 0), 0.075);
+    limb(V(0.1, 0, 0.05), V(0.09, 0.85, 0), 0.075);
+    lathePart([[0.01, 0.8], [0.17, 0.82], [0.15, 1.0], [0.19, 1.25], [0.22, 1.36], [0.1, 1.45], [0.01, 1.48]], 1, 0.62);
+    limb(V(-0.21, 1.35, 0), V(-0.24, 0.85, -0.05), 0.05);
+    limb(V(0.21, 1.35, 0), V(0.26, 0.9, -0.1), 0.05);
+  }
+  // Neck and head.
+  limb(V(0, 1.45, 0), V(0, 1.55, -0.01), 0.055);
+  const head = new THREE.SphereGeometry(0.11, seg, hi ? 6 : 4);
+  head.scale(0.9, 1.08, 1);
+  head.translate(0, 1.64, -0.02);
+  parts.push(head);
+  const merged = mergeGeometries(parts.map((p) => (p.index ? p.toNonIndexed() : p)).map((p) => {
+    for (const n of Object.keys(p.attributes)) if (n !== 'position' && n !== 'normal') p.deleteAttribute(n);
+    return p;
+  }));
+  return merged ?? new THREE.BufferGeometry();
+}
+
+// ---------------------------------------------------------------- ground and blocks
+
+/** A solid block from `y1` down to below the lowest ground in the rectangle (foundations on slopes). */
+export function footing(b: MeshBuilder, mat: MaterialId, groundAt: (x: number, z: number) => number, x0: number, z0: number, x1: number, z1: number, y1: number, at?: THREE.Matrix4, collide = true) {
+  let min = Infinity;
+  const nx = Math.max(1, Math.ceil((x1 - x0) / 2));
+  const nz = Math.max(1, Math.ceil((z1 - z0) / 2));
+  for (let i = 0; i <= nx; i++) for (let j = 0; j <= nz; j++) min = Math.min(min, groundAt(x0 + ((x1 - x0) * i) / nx, z0 + ((z1 - z0) * j) / nz));
+  const y0 = Math.min(y1 - 0.2, min - 0.3);
+  span(b, mat, x0, y0, z0, x1, y1, z1, at, collide);
+  return y0;
+}
+
+/** Lowest ground over a local rectangle (sampled every ~2 m). */
+export function groundMin(groundAt: (x: number, z: number) => number, x0: number, z0: number, x1: number, z1: number): number {
+  let min = Infinity;
+  const nx = Math.max(1, Math.ceil(Math.abs(x1 - x0) / 2));
+  const nz = Math.max(1, Math.ceil(Math.abs(z1 - z0) / 2));
+  for (let i = 0; i <= nx; i++) for (let j = 0; j <= nz; j++) min = Math.min(min, groundAt(x0 + ((x1 - x0) * i) / nx, z0 + ((z1 - z0) * j) / nz));
+  return min;
+}
+
+/** Cylinder between two heights at (x, z) (posts, column drums, poles). */
+export function post(b: MeshBuilder, mat: MaterialId | THREE.Material, x: number, y0: number, z: number, h: number, r: number, at?: THREE.Matrix4, seg = 8, collide = false) {
+  const g = new THREE.CylinderGeometry(r, r, h, seg);
+  g.translate(x, y0 + h / 2, z);
+  b.add(g, mat, at);
+  if (collide) {
+    const c = new THREE.Vector3(x, y0 + h / 2, z);
+    if (at) c.applyMatrix4(at);
+    b.collider({ kind: 'cylinder', center: c, halfHeight: h / 2, radius: r });
+  }
+}
+
+/** A legionary standard (aquila on a pole with phalerae) — the recovered Parthian standards. */
+export function standard(b: MeshBuilder, at: THREE.Matrix4, h = 2.6, detail: Detail = 'high') {
+  post(b, 'wood_dark', 0, 0, 0, h, 0.025, at, 5);
+  const n = detail === 'high' ? 4 : 2;
+  for (let i = 0; i < n; i++) {
+    const disc = new THREE.CylinderGeometry(0.09, 0.09, 0.02, 10);
+    disc.rotateX(Math.PI / 2);
+    disc.translate(0, h * (0.45 + i * 0.1), -0.03);
+    b.add(disc, 'gilded_bronze', at);
+  }
+  // Eagle: body, spread wings, thunderbolt in the talons.
+  const body = new THREE.SphereGeometry(0.09, 8, 6);
+  body.scale(0.8, 1, 1.4);
+  body.translate(0, h + 0.12, 0);
+  b.add(body, 'gilded_bronze', at);
+  for (const sx of [-1, 1]) {
+    const wing = new THREE.BoxGeometry(0.3, 0.16, 0.02);
+    wing.rotateZ(sx * 0.6);
+    wing.translate(sx * 0.17, h + 0.25, 0);
+    b.add(wing, 'gilded_bronze', at);
+  }
+  const bolt = new THREE.BoxGeometry(0.26, 0.04, 0.04);
+  bolt.translate(0, h, 0);
+  b.add(bolt, 'gilded_bronze', at);
+}
+
+/** A trophy (tropaeum): cuirass, helmet and shields hung on a post — spoils on the Capitol. */
+export function trophy(b: MeshBuilder, at: THREE.Matrix4, mat: MaterialId = 'bronze') {
+  post(b, 'wood_dark', 0, 0, 0, 2.6, 0.06, at, 6);
+  box(b, mat, 0, 1.9, 0, 0.5, 0.6, 0.3, at);
+  const helm = new THREE.SphereGeometry(0.16, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+  helm.translate(0, 2.25, 0);
+  b.add(helm, mat, at);
+  const arm = new THREE.BoxGeometry(1.2, 0.07, 0.07);
+  arm.translate(0, 2.05, 0);
+  b.add(arm, 'wood_dark', at);
+  for (const sx of [-1, 1]) {
+    const sh = new THREE.CylinderGeometry(0.3, 0.3, 0.05, 12);
+    sh.rotateX(Math.PI / 2);
+    sh.translate(sx * 0.55, 1.75, -0.06);
+    b.add(sh, mat, at);
   }
 }

@@ -376,3 +376,58 @@ export function capTemple(b: MeshBuilder, spec: CapTempleSpec, at?: THREE.Matrix
   const stairFoot = new THREE.Vector3(L.stairMode === 'sides' ? s.x0 - 1 : 0, 0, L.stairMode === 'front' ? st.z0 - 0.5 : L.podiumFront);
   return { layout: L, doors, stairTop, stairFoot, interior: info, apexY };
 }
+
+/**
+ * A small archaic or Republican shrine-temple (Jupiter Feretrius, Fides, minor aedes): podium with a
+ * frontal stair, `n` columns in front (low-detail kit columns), a solid cella, a plain entablature
+ * band and a gable roof with pediments. Cheap (≈ 3–6k triangles). Facade −z, origin at the podium
+ * centre on the ground; `w` × `d` is the podium.
+ */
+export function smallTemple(
+  b: MeshBuilder,
+  o: { w: number; d: number; P: number; H: number; n: number; order: 'tuscan' | 'ionic' | 'corinthian'; mat: MaterialId; podium: MaterialId; roof?: MaterialId; tympanum?: MaterialId | THREE.Material; detail: 'high' | 'low' },
+  at: THREE.Matrix4,
+): { stairFoot: number; top: number } {
+  const { w, d, P, H, n } = o;
+  const run = 0.34;
+  const { count, rise } = stepCountLocal(P);
+  const sd = count * run;
+  const z0 = -d / 2 + sd; // podium front (top of the stair)
+  podium(b, { outline: [[-w / 2, z0], [w / 2, z0], [w / 2, d / 2], [-w / 2, d / 2]], height: P, material: o.podium, topMaterial: 'paving_travertine', detail: o.detail }, at);
+  stairs(b, { width: w * 0.7, rise, run, count, material: o.podium }, mul(at, T(0, 0, -d / 2)));
+  const D = H / (o.order === 'tuscan' ? 7 : o.order === 'ionic' ? 9 : 10);
+  const zc = z0 + D * 1.2;
+  const span = w - 2 * D;
+  for (let i = 0; i < n; i++) column(b, { order: o.order, D, height: H, material: o.mat, detail: 'low' }, mul(at, T(-span / 2 + (span * i) / Math.max(1, n - 1), P, zc)));
+  // Cella behind a porch two intercolumns deep.
+  const cz0 = zc + Math.min(d * 0.35, span / Math.max(1, n - 1) * 1.6);
+  solid(b, 0, P + H / 2, (cz0 + d / 2 - 0.2) / 2, w - 0.6, H, d / 2 - 0.2 - cz0, at);
+  b.box(o.mat, w - 0.6, H, d / 2 - 0.2 - cz0, mul(at, T(0, P + H / 2, (cz0 + d / 2 - 0.2) / 2)));
+  // Door in the cella front.
+  b.box('bronze', Math.min(1.6, w * 0.25), Math.min(H * 0.7, 3.2), 0.06, mul(at, T(0, P + Math.min(H * 0.7, 3.2) / 2, cz0 - 0.03)));
+  // Entablature band and roof.
+  const eh = H * 0.22;
+  const ez0 = zc - D * 0.6;
+  b.box(o.mat, w + 0.1, eh, d / 2 - ez0, mul(at, T(0, P + H + eh / 2, (ez0 + d / 2) / 2)));
+  const rise2 = (w / 2 + 0.3) * Math.tan((16 * Math.PI) / 180);
+  const yR = P + H + eh;
+  for (const sx of [-1, 1]) {
+    const g = new THREE.BoxGeometry(Math.hypot(w / 2 + 0.4, rise2), 0.16, d / 2 - ez0 + 0.5);
+    g.rotateZ(sx * -Math.atan2(rise2, w / 2 + 0.4));
+    g.translate((sx * (w / 2 + 0.4)) / 2, yR + rise2 / 2 + 0.05, (ez0 + d / 2) / 2);
+    b.add(g, o.roof ?? 'roof_tile', at);
+  }
+  for (const z of [ez0 - 0.01, d / 2 + 0.01]) {
+    const shape = new THREE.Shape([new THREE.Vector2(-w / 2 - 0.05, 0), new THREE.Vector2(w / 2 + 0.05, 0), new THREE.Vector2(0, rise2)]);
+    const g = new THREE.ShapeGeometry(shape);
+    if (z < 0) g.rotateY(Math.PI);
+    g.translate(0, yR, z);
+    b.add(g, z < 0 ? (o.tympanum ?? o.mat) : o.mat, at);
+  }
+  return { stairFoot: -d / 2, top: yR + rise2 };
+}
+
+function stepCountLocal(P: number) {
+  const count = Math.max(1, Math.round(P / 0.21));
+  return { count, rise: P / count };
+}

@@ -156,3 +156,108 @@ export function friezeRelief(kind: Kind): THREE.MeshStandardMaterial {
   }
   return m;
 }
+
+// ---------------------------------------------------------------- relief panels
+
+let minervaPanel: THREE.MeshStandardMaterial | undefined;
+
+/**
+ * Square relief panel of Minerva standing with spear and shield in a moulded frame (the attic
+ * panels of the Forum of Nerva). UVs 0..1 over the panel face.
+ */
+export function minervaRelief(): THREE.MeshStandardMaterial {
+  if (minervaPanel) return minervaPanel;
+  const N = 256;
+  const f = new HeightField(N, N, false);
+  // Frame: raised border with an inner fillet.
+  f.rect(0, 0, N - 1, 14, 0.8);
+  f.rect(0, N - 15, N - 1, N - 1, 0.8);
+  f.rect(0, 0, 14, N - 1, 0.8);
+  f.rect(N - 15, 0, N - 1, N - 1, 0.8);
+  f.rect(18, 18, N - 19, 22, 0.5);
+  f.rect(18, N - 23, N - 19, N - 19, 0.5);
+  // The goddess, frontal, helmeted, spear in the right hand, shield at her left.
+  woman(f, N * 0.48, 26, N * 0.74, 'spear');
+  f.ellipse(N * 0.48, 26 + N * 0.74 * 1.0, 10, 14, 0.9); // helmet crest
+  f.blur(2);
+  minervaPanel = reliefMaterial(f, { ground: [214, 208, 196], relief: [242, 238, 230], noise: 0.05, strength: 4, roughness: 0.5, repeat: false });
+  minervaPanel.name = 'capfora:minerva-panel';
+  return minervaPanel;
+}
+
+let granite: THREE.MeshStandardMaterial | undefined;
+
+/** Red Aswan granite (unfluted shafts of the Templum Pacis porticoes): pink-red with dark specks. */
+export function redGranite(): THREE.MeshStandardMaterial {
+  if (granite) return granite;
+  const N = 256;
+  const data = new Uint8Array(N * N * 4);
+  let seed = 113;
+  const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+  for (let i = 0; i < N * N; i++) {
+    const r = rnd();
+    let c: [number, number, number];
+    if (r < 0.12) c = [38, 32, 34]; // biotite / hornblende
+    else if (r < 0.3) c = [212, 196, 190]; // quartz, pale
+    else if (r < 0.75) c = [178, 92, 82]; // pink feldspar
+    else c = [150, 74, 68];
+    const k = 0.9 + rnd() * 0.2;
+    data[i * 4] = c[0] * k;
+    data[i * 4 + 1] = c[1] * k;
+    data[i * 4 + 2] = c[2] * k;
+    data[i * 4 + 3] = 255;
+  }
+  const t = new THREE.DataTexture(data, N, N, THREE.RGBAFormat, THREE.UnsignedByteType);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.repeat.set(3, 3);
+  t.needsUpdate = true;
+  granite = new THREE.MeshStandardMaterial({ map: t, roughness: 0.35, metalness: 0 });
+  granite.name = 'capfora:red-granite';
+  return granite;
+}
+
+let cityPlan: THREE.MeshStandardMaterial | undefined;
+
+/**
+ * A marble plan of the city (Flavian, hypothetical: the surviving Severan Forma Urbis is ninety
+ * years later): incised blocks of buildings, colonnades and the bend of the Tiber on slabs.
+ */
+export function cityPlanRelief(): THREE.MeshStandardMaterial {
+  if (cityPlan) return cityPlan;
+  const W = 512;
+  const H = 384;
+  const f = new HeightField(W, H, false);
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+  // Slab joints.
+  for (let x = 0; x < W; x += 64) f.rect(x, 0, x + 1, H - 1, -0.5);
+  for (let y = 0; y < H; y += 96) f.rect(0, y, W - 1, y + 1, -0.5);
+  // The river: a broad incised band sweeping across the lower left.
+  for (let i = 0; i <= 200; i++) {
+    const t = i / 200;
+    const x = t * W * 0.55;
+    const y = H * (0.15 + 0.35 * Math.sin(t * 2.4));
+    f.ellipse(x, y, 14, 14, -0.6);
+  }
+  // City blocks: incised outlines with inner rooms; colonnades as dotted lines.
+  for (let k = 0; k < 140; k++) {
+    const x = rnd() * W;
+    const y = rnd() * H;
+    const w = 10 + rnd() * 40;
+    const h = 8 + rnd() * 30;
+    const v = -0.45;
+    f.rect(x, y, x + w, y + 1, v);
+    f.rect(x, y + h, x + w, y + h + 1, v);
+    f.rect(x, y, x + 1, y + h, v);
+    f.rect(x + w, y, x + w + 1, y + h + 1, v);
+    if (rnd() < 0.3) for (let c = x + 3; c < x + w - 2; c += 4) f.ellipse(c, y + 4, 1, 1, -0.4);
+  }
+  f.blur(1);
+  cityPlan = reliefMaterial(f, { ground: [226, 222, 214], relief: [150, 60, 50], noise: 0.06, strength: 3, roughness: 0.45, repeat: false });
+  cityPlan.name = 'capfora:city-plan';
+  return cityPlan;
+}

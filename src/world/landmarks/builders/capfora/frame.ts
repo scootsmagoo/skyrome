@@ -102,3 +102,16 @@ export function groundRange(groundAt: (x: number, z: number) => number, x0: numb
     }
   return { min, max };
 }
+
+/** Game y of a landmark's local origin (its pad), as `buildLandmarks()` places it. */
+export function padY(ctx: Pick<LandmarkContext, 'game'>, id: string): number {
+  return frameOf(ctx.game, landmark(id)).y;
+}
+
+/**
+ * Local y (in `ctx.lm`'s frame) of a floor level given as an offset above another landmark's pad —
+ * so neighbouring builders (a forum, its temple, its basilica) agree on one absolute floor.
+ */
+export function sharedFloor(ctx: Pick<LandmarkContext, 'game' | 'lm'>, ownerId: string, aboveOwnerPad: number): number {
+  return padY(ctx, ownerId) + aboveOwnerPad - frameOf(ctx.game, ctx.lm).y;
+}
