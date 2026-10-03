@@ -69,6 +69,8 @@ export class Game {
   paused = false;
   /** Multiplier on simulated time (hit-stop, slow-mo). */
   timeScale = 1;
+  /** Draws the frame. Post-processing (src/gfx/post) replaces this. */
+  renderFrame: () => void = () => this.renderer.render(this.scene, this.camera);
 
   private systems: System[] = [];
   private running = false;
@@ -201,7 +203,7 @@ export class Game {
     for (const s of this.systems) if (!this.paused) s.update?.(simDt, alpha);
     for (const s of this.systems) s.lateUpdate?.(dt);
 
-    this.renderer.render(this.scene, this.camera);
+    this.renderFrame();
     const info = this.renderer.info;
     this.stats.drawCalls = info.render.calls;
     this.stats.triangles = info.render.triangles;
