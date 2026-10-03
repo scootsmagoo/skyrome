@@ -207,3 +207,70 @@ export class Actor {
     this.game.physics.removeCharacter(this.body);
   }
 }
+
+// ---------------------------------------------------------------- combat-capable avatars
+
+/** Weapon handling style; drives idle/locomotion/attack animation sets. */
+export type Stance = 'unarmed' | 'oneHand' | 'oneHandShield' | 'twoHand' | 'spear' | 'spearShield' | 'bow';
+
+/** One-shot animation actions an avatar can play. */
+export type ActionClip =
+  | 'attackLight1'
+  | 'attackLight2'
+  | 'attackLight3'
+  | 'attackPower'
+  | 'bash'
+  | 'blockHit'
+  | 'hitFront'
+  | 'hitBack'
+  | 'stagger'
+  | 'knockdown'
+  | 'death'
+  | 'drawWeapon'
+  | 'sheathWeapon'
+  | 'bowDraw'
+  | 'bowRelease'
+  | 'throw'
+  | 'interact'
+  | 'pickup'
+  | 'drink'
+  | 'pray'
+  | 'cheer'
+  | 'wave'
+  | 'talk'
+  | 'yield';
+
+/** Loops an NPC can idle in (schedules). */
+export type IdleLoop = 'stand' | 'sit' | 'sitGround' | 'lean' | 'work' | 'sweep' | 'talk' | 'pray' | 'sleep' | 'cheer' | 'guard' | 'drunk';
+
+export interface PlayOptions {
+  speed?: number;
+  /** Fired at the impact frame of attacks (combat applies damage then). */
+  onHit?: () => void;
+  /** Fired when the clip finishes or is interrupted. */
+  onEnd?: (interrupted: boolean) => void;
+}
+
+/** What a combat-capable avatar adds on top of AvatarView. */
+export interface CombatAvatar extends AvatarView {
+  setStance(stance: Stance): void;
+  /** Weapon drawn (in hand) vs sheathed. */
+  setDrawn(drawn: boolean): void;
+  setBlocking(blocking: boolean): void;
+  /** Hold a charged power-attack wind-up pose (0..1 charge). */
+  setCharge?(charge: number): void;
+  play(clip: ActionClip, opts?: PlayOptions): void;
+  /** True while a one-shot action that blocks other actions is playing. */
+  isBusy(): boolean;
+  setIdleLoop?(loop: IdleLoop | null): void;
+  /** Dead pose (stays down). */
+  setDead(dead: boolean): void;
+  /** Bone/socket objects for attachments and hit tests. */
+  getSocket(name: 'handR' | 'handL' | 'head' | 'chest' | 'hips' | 'back'): THREE.Object3D;
+  /** Look-at target for the head (dialogue), or null. */
+  lookAt?(worldPoint: THREE.Vector3 | null): void;
+}
+
+export function isCombatAvatar(v: AvatarView | null | undefined): v is CombatAvatar {
+  return !!v && typeof (v as CombatAvatar).play === 'function';
+}
