@@ -67,6 +67,8 @@ function tabularium(p: Part) {
   const gx0 = -(nW * bay) / 2;
   const gH = 5.4;
   arcadeRow(p, { bays: nW, bay, pier: 1.0, depth: 1.0, storeys: [{ order: 'doric', height: gH }], material: 'travertine', collide: true, archDetail: 'low' }, T(gx0, yG, -hd + 0.5));
+  // a parapet in every arch: the gallery looks out over the Forum from twenty metres up
+  d.span('travertine', gx0, yG, -hd + 0.15, -gx0, yG + 1.05, -hd + 0.85, { collide: true });
   for (const sx of [-1, 1]) d.span('peperino', sx > 0 ? -gx0 : -hw, yG, -hd, sx > 0 ? hw : gx0, yG + gH, -hd + 4.5, { collide: true });
   d.span('paving_travertine', gx0, yG - 0.05, -hd + 1.0, -gx0, yG + 0.02, -hd + 4.5, { shadow: false });
   // the upper storey set back behind the gallery, with a passage through it from the Capitol side
@@ -77,14 +79,34 @@ function tabularium(p: Part) {
     [1.3, hw - 0.5],
   ]) d.span('peperino', x0, yG, uz0, x1, yG + uH, hd, { collide: true });
   d.span('peperino', -1.3, yG + 3.4, uz0, 1.3, yG + uH, hd);
-  d.span('black', -1.3, yG, hd + 0.01, 1.3, yG + 0.02, hd + 0.02);
+  // steps from the Capitol saddle up to the passage
+  {
+    const g = ctx.groundAt(0, hd + 1.2);
+    if (g < yG - 0.05) {
+      const n = Math.max(1, Math.ceil((yG - g) / 0.2));
+      stairs(b, { width: 2.6, rise: (yG - g) / n, run: 0.33, count: n, material: 'travertine', collider: p.main ? 'steps' : 'none' }, TRS(0, g, hd + n * 0.33, 0, Math.PI, 0));
+    }
+  }
+  // the face towards the Capitol: travertine pilasters, small windows, a cornice
+  if (hi) {
+    const n = 12;
+    for (let i = 0; i <= n; i++) {
+      const x = -hw + 0.8 + (i * (W - 1.6)) / n;
+      d.box('travertine', x, yG + uH / 2, hd + 0.12, 0.7, uH, 0.24);
+      if (i < n && Math.abs(x + (W - 1.6) / n / 2) > 2) {
+        for (const y of [2.6, 6.6]) d.box('black', x + (W - 1.6) / n / 2, yG + y, hd + 0.015, 0.8, 1.2, 0.02);
+      }
+    }
+  }
+  d.span('travertine', -hw - 0.2, yG + uH - 0.5, hd - 0.1, hw + 0.2, yG + uH, hd + 0.45);
   arcadeRow(p, { bays: 9, bay: (W - 1) / 9, pier: 1.0, depth: 0.6, storeys: [{ order: 'corinthian', height: uH - gH, blind: true, windows: true }], material: 'travertine', collide: false }, T(-(W - 1) / 2, yG + gH, uz0 - 0.3));
   shedRoof(b, gx0 - 0.3, -gx0 + 0.3, uz0 + 0.05, -hd - 0.4, yG + gH + 1.4, yG + gH + 0.05, 'roof_tile', new THREE.Matrix4());
   const pitch = (15 * Math.PI) / 180;
   gableRoof(b, -(hd - uz0) / 2 - 0.4, (hd - uz0) / 2 + 0.4, -hw - 0.2, hw + 0.2, yG + uH, pitch, 'roof_tile', hi, TRS(0, 0, (uz0 + hd) / 2, 0, Math.PI / 2, 0));
   p.spot('tabularium-door', 'door', dx, gDoor, -hd - 1.2, 0);
   p.spot('tabularium', 'inscription', dx, gDoor, -hd - 3.0, 0);
-  p.spot('tabularium-gallery-vista', 'vista', 0, yG, -hd + 2.2, Math.PI);
+  // the best view down the Forum is from the S end of the gallery, past the Temple of Vespasian's roof
+  p.spot('tabularium-gallery-vista', 'vista', 15, yG, -hd + 1.6, Math.atan2(0.3, -1));
   p.spot('tabularium-back-door', 'door', 0, yG, hd + 1.0, Math.PI);
 }
 
