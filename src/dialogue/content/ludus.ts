@@ -298,7 +298,7 @@ const celer = person({
   again: ['Each pair costs Caesar more than a ship. Fight like it.', 'The Column will want games. Games want men.', 'Quid vis? Money is my business; blood is Glaucus’.'],
   topics: [
     { ask: 'How does the school work?', say: 'Caesar owns the school and the men in it: the sworn, the slaves, the condemned. Paying guests are my idea and they pay for the benches. Everything is in pairs, citizen. Pairs of fighters, pairs of swords, pairs of accounts: what comes in and what goes out.' },
-    { ask: 'I’m looking for a man who hires knives.', say: 'Then you are in the wrong building, or the right one. Half the men in here could hire out a knife. Ask in the barracks. Nobody talks to tourists.', once: true },
+    { ask: 'I’m looking for a man who hires knives.', say: 'Then you are in the wrong building, or the right one. Half the men in here could hire out a knife. Ask in the barracks. Nobody talks to strangers.', once: true },
     { ask: 'Is it true Nereus has never been touched?', say: 'In pairs, I said. Thirty-one wins, and a scar for every one of them that he doesn’t show. The crowd prefers legends. I prefer accounts.' },
   ],
 });
@@ -309,7 +309,7 @@ const tirones = person({
   greet: '(A thin boy with a first beard and a wooden sword that is too big for him.) You’re the guest. Glaucus says I’m to hit you. I’m sorry in advance.',
   again: ['My mother thinks I’m a baker.', 'Go easy. Not too easy. Medium.', 'Is it true they throw roses? Or is it just the bread?'],
   topics: [
-    { ask: 'Why did you sell yourself to the school?', say: 'Debts. My father’s, then mine. Fifteen hundred sesterces and a year of sand, and then I’m a freeman with a name the crowd knows. Or I’m ash. Glaucus says ash is rare. I’d like to see the statistic.' },
+    { ask: 'Why did you sell yourself to the school?', say: 'Debts. My father’s, then mine. Fifteen hundred sesterces and a year of sand, and then I’m a freeman with a name the crowd knows. Or I’m ash. Glaucus says ash is rare. I’d like to see the count.' },
     { ask: 'Any advice for the bout?', say: 'Block early, strike when he’s tired, and don’t listen to the crowd. They’ll shout for me. They always shout for the one who’s losing.' },
   ],
 });

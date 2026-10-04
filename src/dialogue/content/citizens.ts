@@ -82,7 +82,7 @@ const citizen = defineDialogue({
   },
   nodes: {
     greet: {
-      text: (c) => rotate(c, '_greet', ['Salve. Quid novi?', 'Ave. You look lost. Everyone looks lost in this city.', 'Mind the carts. They come through at night, but the drivers are still drunk at noon.', 'Yes? I have a minute. Half a minute.']),
+      text: (c) => rotate(c, '_greet', ['Salve. Quid novi?', 'Ave. You look lost. Everyone looks lost in this city.', 'Mind the carts. They come through at night, but the drivers are still drunk at noon.', 'Yes? I have a moment. Half a moment.']),
       choices: [
         { text: 'What’s the news?', goto: 'news' },
         { text: 'Which way to…', goto: 'directions' },

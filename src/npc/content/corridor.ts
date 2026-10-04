@@ -31,7 +31,7 @@ const npcs: NpcDef[] = [
       garments: [{ kind: 'tunica', color: '#8e8a80' }, { kind: 'sagum', color: '#7a6248' }],
       footwear: 'caligae',
     },
-    barks: ['An as for a man who held the line at Tapae! Eh? You weren’t there. I was.', 'Twenty-two years in the Thirteenth and this is my pension: the best draught in Rome, dripping on my neck.', 'Mind the drip, friend. The gate cries for every soldier it ever sent out.', 'The Dacians? Good fighters. Better than the Syrians. Say what you like about the Thracians.'],
+    barks: ['An as for a man who held the line at Tapae! Eh? You weren’t there. I was.', 'Twenty-two years in the Thirteenth, and this is what the emperor’s gratitude buys: the best draught in Rome, dripping on my neck.', 'Mind the drip, friend. The gate cries for every soldier it ever sent out.', 'The Dacians? Good fighters. Better than the Syrians. Say what you like about the Thracians.'],
     tags: ['plebs', 'mendicus', 'veteranus', 'dignitas:civis'],
   },
   {
@@ -213,7 +213,7 @@ const npcs: NpcDef[] = [
       garments: [{ kind: 'tunica', color: '#9c4a3a' }, { kind: 'lacerna', color: '#e0a526' }],
       footwear: 'barefoot',
     },
-    barks: ['Ladies and gentlemen and whatever the Greeks are, a tragedy in one act: my purse.', 'I do Jupiter and the cuckolded husband. The crowd likes the husband.', 'Throw an as and I’ll be Trajan. Throw two and I’ll be somebody you can criticise.', 'Look! The senator slips on the banana. No: on the fig. There are no bananas in this reign.'],
+    barks: ['Citizens, matrons, and whatever the Greeks are: a tragedy in one act, entitled My Purse.', 'I do Jupiter and the cuckolded husband. The crowd likes the husband.', 'Throw an as and I’ll be Trajan. Throw two and I’ll be somebody you can criticise.', 'Look! The senator slips on a fig skin. Ha! The fall of the mighty on the fruit of the humble.'],
     tags: ['plebs', 'histrio', 'dignitas:libertus'],
   },
   {
@@ -378,7 +378,7 @@ const npcs: NpcDef[] = [
   {
     id: 'npc-hilarus',
     name: 'Hilarus',
-    title: 'Lamp-tender of the Vicus Tuscus (a public slave)',
+    title: 'Lamp-tender of the Vicus Tuscus (a slave of the street)',
     home: 'seplasia-vici-tusci',
     // Snuffs the street lamps of the Vicus Tuscus at first light and trims them at dusk.
     schedule: [
@@ -396,7 +396,7 @@ const npcs: NpcDef[] = [
       footwear: 'barefoot', weapon: 'torch',
     },
     barks: ['Lamps out! The sun’s up, and it burns for free!', 'Oil costs a quadrans a lamp. The aediles want it saved, the people want it lit. I trim.', 'Mind the ladder. The last man to stand under it asked for a hat.', 'On the ghost nights they want every lamp burning. I’ve been up since the first watch.'],
-    tags: ['servus', 'publicus', 'dignitas:peregrinus'],
+    tags: ['servus', 'dignitas:peregrinus'],
   },
   {
     id: 'npc-licinia',

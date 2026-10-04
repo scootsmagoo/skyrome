@@ -62,7 +62,7 @@ export interface PersonSpec {
   bye?: string;
 }
 
-const AGAIN = ['Yes? I have a minute.', 'Back again? Ask, then.', 'Quid vis?', 'Well?'];
+const AGAIN = ['Yes? I have a moment.', 'Back again? Ask, then.', 'Quid vis?', 'Well?'];
 
 /** Build a DialogueDef from a PersonSpec. */
 export function person(spec: PersonSpec): DialogueDef {

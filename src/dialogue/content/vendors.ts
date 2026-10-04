@@ -313,7 +313,7 @@ const dama = person({
   trade: { ask: 'What have you got to eat and drink?', service: 'barter' },
   news: 'Anything new?',
   choices: [{ text: 'A room for the night. (4 as.)', goto: 'room', effects: (c) => c.openService('rent') }],
-  nodes: { room: { text: 'A bed, a blanket, and fleas as a bonus.', end: true } },
+  nodes: { room: { text: 'A bed, a blanket, and fleas thrown in.', end: true } },
 });
 
 const hermogenes = person({

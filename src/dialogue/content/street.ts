@@ -25,7 +25,7 @@ const capito = person({
       : origin(c) === 'dacus'
         ? '(An old man on the pavement looks at you for a long moment.) You’re one of theirs. I can tell. We fought your people at Tapae. You were good. Better than the Syrians. An as, for a man who was on the other side of the same hill?'
         : '(An old man on the pavement under the arch, a soldier’s cloak older than the Dacian wars over his knees, holds out a bowl.) An as for a man who held the line at Tapae! Eh? You weren’t there. I was.',
-  again: ['Mind the drip, friend. The gate cries for every soldier it ever sent out.', 'Twenty-two years in the Thirteenth and this is my pension: the best draught in Rome, dripping on my neck.', 'The Dacians? Good fighters. Better than the Syrians. Say what you like about the Thracians.'],
+  again: ['Mind the drip, friend. The gate cries for every soldier it ever sent out.', 'Twenty-two years in the Thirteenth, and this is what the emperor’s gratitude buys: the best draught in Rome, dripping on my neck.', 'The Dacians? Good fighters. Better than the Syrians. Say what you like about the Thracians.'],
   topics: [
     { ask: '(Give him an as.)', say: '(He tucks the coin away with a speed that suggests practice.) The gods bless your purse. The gate sees, too.', if: (c) => c.denarii() >= 1 / 16, effects: (c) => { c.pay(1 / 16); c.changeDisposition(8); } },
     { ask: 'What happened at the gate this morning?', say: 'A man was cut down here, before dawn. I saw the three of them come down the Appian from the tombs with the cart. The hooded one did the knifing. He went off up the Circus road, up on his toes like a cat. Not a Roman walk. A fighter’s.', if: (c) => completed(c, MQ1) || stage(c, MQ1) === 'dying' || stage(c, MQ1) === 'city', effects: (c) => c.setFlag('clue-hooded-fighter', true), once: true },
@@ -92,7 +92,7 @@ const trophimus = person({
 
 const latinus = person({
   id: 'npc-latinus',
-  greet: '(A man with a white-powdered face, one yellow sock and a patched tunic bows with a flourish.) Ladies and gentlemen and whatever the Greeks are, a tragedy in one act: my purse. Latinus, mime. I do Jupiter and the cuckolded husband. The crowd likes the husband.',
+  greet: '(A man with a white-powdered face, one yellow sock and a patched tunic bows with a flourish.) Citizens, matrons, and whatever the Greeks are: a tragedy in one act, entitled My Purse. Latinus, mime. I do Jupiter and the cuckolded husband. The crowd likes the husband.',
   topics: [
     { ask: '(Throw him an as.)', say: '(He catches it in his teeth, bows, and does an impeccable impression of a jealous senator tripping over his own toga, and then of the emperor reading a letter.) Throw two and I’ll be Trajan. Throw three and I’ll be somebody you can criticise.', if: (c) => c.denarii() >= 1 / 16, effects: (c) => { c.pay(1 / 16); c.changeDisposition(8); } },
     { ask: 'Is it safe to do the emperor?', say: 'The divine Augustus banned the mimes who mocked living men. Trajan hasn’t, yet. So I do him fondly: a bluff soldier, a loving husband, a man who doesn’t know what to do with a Column. Everybody cheers.' },
@@ -190,7 +190,7 @@ const aufidia = person({
 
 const hilarus = person({
   id: 'npc-hilarus',
-  greet: '(A slight man on a short ladder reaches up with a snuffer to a bracket lamp.) Lamps out! The sun’s up, and it burns for free! Hilarus, lamp-tender of the Vicus Tuscus. A public slave, and the only man in Rome who is paid to put things out.',
+  greet: '(A slight man on a short ladder reaches up with a snuffer to a bracket lamp.) Lamps out! The sun’s up, and it burns for free! Hilarus, lamp-tender of the Vicus Tuscus: a slave of the street, and the only man in Rome who is kept to put things out.',
   topics: [
     { ask: 'Do you tend the shrine lamps too?', say: 'Every crossroads lamp on the street, from the vicomagister’s shrine to the statue of Vortumnus. He pays for the oil and I carry the ladder. Zethus is fussy, but a lamp that goes out at a crossroads is a bad omen, so I don’t complain.' },
     { ask: 'Anything strange on the street at night?', say: 'The burned taberna, down toward the Velabrum. There’s a light in there some nights where there shouldn’t be, and nobody sells lamp oil down that end. I trim what I’m paid to trim and I keep my head down.', effects: (c) => c.setFlag('hideout-known', true), once: true },
