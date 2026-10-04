@@ -45,8 +45,10 @@ export const builders: LandmarkBuilder[] = [
       const wallMat = WALL[lm.category] ?? 'plaster_cream';
       const H = Math.max(2.5, lm.height * S);
       const fp = localFootprint(lm);
-      if (lm.category === 'garden' || lm.category === 'aqueduct') {
-        // Areas and linear features are handled by the city/vegetation modules.
+      const siting = (lm as { siting?: string }).siting;
+      if (lm.category === 'garden' || lm.category === 'aqueduct' || siting === 'open' || siting === 'underground') {
+        // Areas, districts, open squares, buried and linear features have no massing of their own
+        // (the city module builds the fabric over districts such as the Subura).
         return { object: b.build(lm.id), colliders: [] };
       }
       if (OPEN.has(lm.category) && fp.kind === 'rect') {
@@ -67,6 +69,15 @@ export const builders: LandmarkBuilder[] = [
             b.box(wallMat, sx, wallH, sz, new THREE.Matrix4().makeTranslation(x, wallH / 2, z), { collide: true });
           }
         }
+      } else if (fp.kind === 'rect' && lm.category === 'gate') {
+        // Gates: two piers and an attic over a passage (the road runs through, front to back).
+        const w = fp.w * S;
+        const d = fp.d * S;
+        const gap = Math.max(3.6, w * 0.4);
+        const seg = Math.max(0.8, (w - gap) / 2);
+        const spring = Math.min(H - 1.5, Math.max(4, H * 0.62));
+        for (const sx of [-1, 1]) b.box(wallMat, seg, H, d, new THREE.Matrix4().makeTranslation(sx * (gap / 2 + seg / 2), H / 2, 0), { collide: true });
+        b.box(wallMat, gap, H - spring, d, new THREE.Matrix4().makeTranslation(0, spring + (H - spring) / 2, 0), { collide: true });
       } else if (fp.kind === 'rect') {
         const w = fp.w * S;
         const d = fp.d * S;

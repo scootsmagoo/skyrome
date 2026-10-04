@@ -67,13 +67,18 @@ export class BuiltProbe {
     if (!v) {
       const cx = this.hm.minX + i * this.cell, cz = this.hm.minZ + j * this.cell;
       const g = this.hm.heightAt(cx, cz);
-      // The first World surface from above. The terrain's own heightfield (or a surface of unknown
-      // owner, as in tests) counts as built over only a hand above the ground; anything a builder
-      // registered (paving, kerbs, steps, plazas) counts even when laid flush or slightly sunk.
-      const hit = this.game.physics.raycast({ x: cx, y: g + 45, z: cz }, { x: 0, y: -1, z: 0 }, 46, Layer.World);
-      const terrain = hit && this.game.terrain && hit.owner === this.game.terrain;
-      const known = hit && hit.owner !== undefined;
-      v = this.cells[k] = hit && (terrain || !known ? hit.point.y > g + 0.25 : hit.point.y > g - 0.35) ? 2 : 1;
+      // The city fabric lays its streets and yards flush with the ground and streams them in
+      // later: it says itself which ground it dresses. Otherwise probe the first World surface from
+      // above: the terrain's own heightfield (or a surface of unknown owner, as in tests) counts as
+      // built over only a hand above the ground; anything a builder registered (paving, kerbs,
+      // steps, plazas) counts even when laid flush or slightly sunk.
+      if (this.game.city?.coversGround(cx, cz)) v = this.cells[k] = 2;
+      else {
+        const hit = this.game.physics.raycast({ x: cx, y: g + 45, z: cz }, { x: 0, y: -1, z: 0 }, 46, Layer.World);
+        const terrain = hit && this.game.terrain && hit.owner === this.game.terrain;
+        const known = hit && hit.owner !== undefined;
+        v = this.cells[k] = hit && (terrain || !known ? hit.point.y > g + 0.25 : hit.point.y > g - 0.35) ? 2 : 1;
+      }
     }
     return v === 2;
   }
@@ -300,6 +305,7 @@ export function dressTerrain(game: Game, opts: DressOptions = {}): TerrainDressi
         if (r0 > 0.25) continue; // the densest rule plants ~0.4 per 25 m²: cull early
         const x = b.minX + (i + 0.15 + 0.7 * rnd(i, j, 1)) * step;
         const z = b.minZ + (j + 0.15 + 0.7 * rnd(i, j, 2)) * step;
+        if (game.city?.ownsTrees(x, z)) continue; // the city plants its own quarters
         const inp = terrain.inputAt(x, z);
         splatWeights(inp, w);
         const corridor = route.length > 1 ? Math.max(0, 1 - polyDist(route, x / S, z / S) / 110) * 0.8 : 0;
