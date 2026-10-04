@@ -598,6 +598,50 @@ export function ovalBand(oval: Oval, x0: number, x1: number, y0: number, y1: num
   return ovalSweep(oval, prof, t0, t1, n, { closed, caps: !closed });
 }
 
+// ---------------------------------------------------------------- readable inscriptions
+
+export interface ReadableSpec {
+  /** Unique id (also the spot id it belongs to). */
+  id: string;
+  /** Landmark-local point the player aims at (the inscribed face). */
+  at: THREE.Vector3;
+  /** Reach from the eye (m): monumental lettering reads from further away. */
+  reach?: number;
+  title: string;
+  /** The Latin as cut, a blank line, then the English (italics with *…*). */
+  text: string;
+}
+
+interface ReaderGame {
+  interactions?: { add(i: { id: string; position(): THREE.Vector3; reach?: number; verb(): string; label(): string; detail?(): string | null; enabled?(): boolean; interact(game: unknown): void }): unknown };
+  ui?: { openBook?(b: { title: string; kind: 'tablet'; text: string }): void };
+}
+
+/**
+ * Make inscriptions readable now ("Read" with the interaction key opens the text in the book
+ * reader). Positions follow `root`'s world matrix, which buildLandmarks sets once the build returns.
+ * No-op without a running game (tests) or without the interaction system. The same texts are kept
+ * on the `inscription` spots' ids so the gameplay team can replace this with a generic reader.
+ */
+export function addReadables(game: Game | undefined, root: THREE.Object3D, items: ReadableSpec[]) {
+  const g = game as unknown as ReaderGame | undefined;
+  if (!g?.interactions?.add) return;
+  for (const it of items) {
+    const local = it.at.clone();
+    const out = new THREE.Vector3();
+    g.interactions.add({
+      id: `colos:${it.id}`,
+      position: () => out.copy(local).applyMatrix4(root.matrixWorld),
+      reach: it.reach ?? 4,
+      verb: () => 'Read',
+      label: () => it.title,
+      detail: () => 'Inscription',
+      enabled: () => root.visible,
+      interact: () => g.ui?.openBook?.({ title: it.title, kind: 'tablet', text: it.text }),
+    });
+  }
+}
+
 // ---------------------------------------------------------------- trees in landmark-local space
 
 /** A Forest whose instances live in its group's LOCAL frame (inside a landmark object). */

@@ -32,12 +32,14 @@ import { entablature, corniceOnlyProfile } from '../../../arch/classical/entabla
 import { ORDER_PROPORTIONS, type Order } from '../../../arch/classical/orders';
 import { inscriptionPanel } from '../../../arch/common/inscription';
 import { Draw } from '../../../arch/fabric';
-import { placeProp } from '../../../arch/props';
+import { placeProp, type PropKind } from '../../../arch/props';
 import { Rng } from '../../../core/Rng';
 import type { LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import {
   Oval,
   type LodSet,
+  type ReadableSpec,
+  addReadables,
   flight,
   instanceLod,
   lodInstances,
@@ -419,6 +421,7 @@ export function buildColosseum(ctx: LandmarkContext) {
   const cav = new MeshBuilder(); // the bowl
   const collide = new MeshBuilder(); // collider-only
   const spots: Spot[] = [];
+  const readables: ReadableSpec[] = [];
   const I = new THREE.Matrix4();
   const two = Math.PI * 2;
   const tAt = (k: number) => (k < N ? ts[k] : ts[k - N] + two);
@@ -578,7 +581,7 @@ export function buildColosseum(ctx: LandmarkContext) {
   for (let si = 0; si < 3; si++) {
     const top = si === 2 ? sec.topY - 0.9 : SY[si + 1] - 0.15;
     for (const [x0, x1] of si === 2 ? [AMB1] : [AMB1, AMB2]) {
-      vault(x0, x1, top - (x1 - x0) * 0.42, 'concrete');
+      vault(x0, x1, top - (x1 - x0) * 0.42, 'plaster_cream');
       // Haunch fill between vault and floor above.
       inner.add(ovalSweep(oval, new ProfileBuilder(x1, si === 2 ? sec.topY : SY[si + 1]).to(x0, si === 2 ? sec.topY : SY[si + 1]).build(), 0, two, 80, { closed: true }), 'concrete', I, { castShadow: false });
     }
@@ -627,6 +630,17 @@ export function buildColosseum(ctx: LandmarkContext) {
     }
     // The ring-3 wall continues above the ground storey as a plain band (seen through the arches).
   }
+  // The underside of the summum seating over the third-storey inner ambulatory: seen from outside
+  // through the arches of storeys III and ring 2 (the cavea itself is one-sided and hidden there).
+  {
+    const w3 = sec.walks[3];
+    const xw = w3.wallX + 0.03;
+    const r0 = sec.rows.find((r) => r.tier === 3 && r.row === 0)!;
+    const yLow = r0.yPrev - 0.12;
+    const yHigh = SY[2] + 4.2 - 0.25;
+    const p = new ProfileBuilder(xw, SY[2]).to(xw, yLow).to(r0.x0, yLow).to(R2[0] + 0.05, Math.min(yHigh, yLow + (R2[0] - r0.x0) * 0.55)).build();
+    inner.add(ovalSweep(oval, p, 0, two, 96, { closed: true }), 'concrete', I, { castShadow: false });
+  }
   // Facade inner face above the ground storey and ring-2 back faces are part of the instanced bays.
 
   // ---- cavea
@@ -646,18 +660,28 @@ export function buildColosseum(ctx: LandmarkContext) {
     floor.rotateX(-Math.PI / 2);
     floor.translate(0, 0.05, 0);
     cav.add(floor, 'sand', I, { castShadow: false });
-    // Central trapdoor strip along the long axis and two rows of lift hatches.
-    span(cav, 'wood_dark', I, -COLOS.arenaA * 0.62, 0.05, -0.6, COLOS.arenaA * 0.62, 0.075, 0.6, false, false);
-    for (let i = -7; i <= 7; i++) span(cav, 'plaster_dark', I, i * 2.1 - 0.04, 0.074, -0.6, i * 2.1 + 0.04, 0.085, 0.6, false, false);
+    // The boards over the hypogeum's central corridor along the long axis (iron-strapped, nearly
+    // flush with the sand) and two rows of square lift hatches over the cage shafts; every third
+    // hatch is an open iron grating over the dark shaft (the hypogeum itself is a later dungeon).
+    const yS = 0.05;
+    span(cav, 'wood_dark', I, -COLOS.arenaA * 0.62, yS, -0.6, COLOS.arenaA * 0.62, yS + 0.018, 0.6, false, false);
+    for (let i = -7; i <= 7; i++) span(cav, 'iron', I, i * 2.1 - 0.035, yS + 0.018, -0.6, i * 2.1 + 0.035, yS + 0.026, 0.6, false, false);
     for (const zs of [-1, 1]) {
       for (let i = -6; i <= 6; i++) {
         const x = i * 3.3;
         const z = zs * (3.2 + 0.9 * Math.cos((i / 7) * 1.2));
         if (Math.abs(x) / COLOS.arenaA + Math.abs(z) / COLOS.arenaB > 1.1) continue;
-        span(cav, 'black', I, x - 0.6, 0.05, z - 0.6, x + 0.6, 0.06, z + 0.6, false, false);
-        for (let j = -2; j <= 2; j++) span(cav, 'plaster_dark', I, x - 0.6, 0.06, z + j * 0.25 - 0.03, x + 0.6, 0.085, z + j * 0.25 + 0.03, false, false);
-        span(cav, 'wood_dark', I, x - 0.66, 0.05, z - 0.66, x + 0.66, 0.07, z - 0.6, false, false);
-        span(cav, 'wood_dark', I, x - 0.66, 0.05, z + 0.6, x + 0.66, 0.07, z + 0.66, false, false);
+        const grate = (((i + (zs > 0 ? 1 : 0)) % 3) + 3) % 3 === 0;
+        if (grate) {
+          span(cav, 'black', I, x - 0.55, yS - 0.01, z - 0.55, x + 0.55, yS + 0.004, z + 0.55, false, false);
+          for (let j = -4; j <= 4; j++) span(cav, 'iron', I, x - 0.55, yS + 0.004, z + j * 0.12 - 0.018, x + 0.55, yS + 0.02, z + j * 0.12 + 0.018, false, false);
+        } else {
+          span(cav, 'wood_dark', I, x - 0.58, yS, z - 0.58, x + 0.58, yS + 0.014, z + 0.58, false, false);
+          for (const j of [-0.3, 0.3]) span(cav, 'iron', I, x - 0.58, yS + 0.014, z + j - 0.03, x + 0.58, yS + 0.02, z + j + 0.03, false, false);
+        }
+        // Iron frame round each opening.
+        for (const sz of [-1, 1]) span(cav, 'iron', I, x - 0.62, yS, z + sz * 0.6 - 0.035, x + 0.62, yS + 0.022, z + sz * 0.6 + 0.035, false, false);
+        for (const sx of [-1, 1]) span(cav, 'iron', I, x + sx * 0.6 - 0.035, yS, z - 0.6, x + sx * 0.6 + 0.035, yS + 0.022, z + 0.6, false, false);
       }
     }
     spots.push({ id: 'colos-arena-center', kind: 'spawn', position: new THREE.Vector3(0, 0.05, 0), heading: 0 });
@@ -730,6 +754,13 @@ export function buildColosseum(ctx: LandmarkContext) {
       }
       const p = new THREE.Vector3().setFromMatrixPosition(fr.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0.05, -pd - 5)));
       spots.push({ id: 'colos-inscription', kind: 'inscription', position: p, heading: Math.PI / 2 });
+      readables.push({
+        id: 'colos-inscription',
+        at: new THREE.Vector3().setFromMatrixPosition(fr.clone().multiply(new THREE.Matrix4().makeTranslation(0, yA + 0.28 + (yT - 0.22 - yA - 0.28) / 2, -pd - 0.3))),
+        reach: 8,
+        title: 'Dedication of the Amphitheatre',
+        text: 'IMP · T · CAES · VESPASIANVS · AVG / AMPHITHEATRVM · NOVVM / EX · MANVBIS · FIERI · IVSSIT\n\n*The Emperor Titus Caesar Vespasian Augustus ordered the new amphitheatre to be built from the spoils of war.*\n\nGilded bronze letters pinned into the marble of the west porch. The spoils were Judaea\'s: the Temple of Jerusalem, sacked forty-three years ago, paid for these walls.',
+      });
       spots.push({ id: 'colos-spawn-west', kind: 'spawn', position: new THREE.Vector3().setFromMatrixPosition(fr.clone().multiply(new THREE.Matrix4().makeTranslation(2.5, 0.05, -9))), heading: Math.PI / 2 });
     }
   }
@@ -774,17 +805,7 @@ export function buildColosseum(ctx: LandmarkContext) {
     }
     cippiSet = lodInstances(ctx.game, gOuter, { name: 'colosseum-cippi', matrices: cmats, levels: [{ builder: cb, maxDist: 420 }], cullBeyond: true });
     for (const c of cip.colliders) stat.collider(c);
-    // Vendors and ticket checkers on the plaza.
-    const stallRng = new Rng('colosseum-stalls');
-    [12, 31, 52, 71, 26, 47].forEach((k, i) => {
-      const t = L.centres[k];
-      const [px, pz] = oval.point(t, XF + COLOS.cippi * 0.55);
-      const [nx, nz] = oval.normal(t);
-      const gy = ground(px, pz);
-      // Food sellers' stalls (sausages, chickpeas, cushions to hire), facing the passers-by.
-      if (high) placeProp(new Draw(stat), 'stall', px - nx * 0.9, gy + 0.05, pz - nz * 0.9, Math.atan2(nx, nz), { rng: stallRng });
-      spots.push({ id: `colos-vendor-${i + 1}`, kind: 'vendor', position: new THREE.Vector3(px - nx * 0.3, gy + 0.05, pz - nz * 0.3), heading: Math.atan2(nx, nz) });
-    });
+    plazaLife(L, stat, ground, spots, high);
     [38, 42, 18, 22].forEach((k, i) => {
       const t = L.centres[k];
       const [px, pz] = oval.point(t, XF + 1.6);
@@ -810,8 +831,107 @@ export function buildColosseum(ctx: LandmarkContext) {
   const sys = instanceLod(ctx.game);
   if (sys) sys.hook((_dt, _t, cam) => zone(cam));
 
+  addReadables(ctx.game, root, readables);
   const colliders = [...stat.colliders, ...inner.colliders, ...cav.colliders, ...collide.colliders];
   return { object: root, colliders, spots, far: buildFar(L), cullDistance: 1500 };
+}
+
+// ---------------------------------------------------------------- the plaza
+
+/**
+ * Life on the travertine ring round the building on an ordinary morning: eight sellers' pitches
+ * between the axial entrances (sausages and chickpeas over braziers, cushions to hire for the stone
+ * seats, wine, clay lamps with gladiators on them), the Misenum sailors' rope coils by the cippi,
+ * and torch brackets beside the four axial porches. Props only at high detail; spots always.
+ */
+function plazaLife(L: ColosseumLayout, stat: MeshBuilder, ground: (x: number, z: number) => number, spots: Spot[], high: boolean) {
+  const { oval } = L;
+  const rng = new Rng('colosseum-plaza');
+  const D0 = new Draw(stat);
+  const floorAt = (x: number, z: number) => Math.max(ground(x, z), -0.05) + 0.05;
+  /** Landmark-local point at bay parameter t, ring offset X, `along` metres along the tangent. */
+  const at = (t: number, X: number, along: number): [number, number, number, number] => {
+    const [px, pz] = oval.point(t, X);
+    const [nx, nz] = oval.normal(t);
+    const x = px - nz * along;
+    const z = pz + nx * along;
+    return [x, floorAt(x, z), z, Math.atan2(nx, nz)];
+  };
+  const put = (kind: PropKind, t: number, X: number, along: number, rot = 0, opts: { variant?: number; collide?: boolean; scale?: number } = {}) => {
+    if (!high) return;
+    const [x, y, z, yaw] = at(t, X, along);
+    placeProp(D0, kind, x, y, z, yaw + rot, { rng, ...opts });
+  };
+  const box = (mat: MaterialId, t: number, X: number, along: number, w: number, h: number, dd: number, y0 = 0) => {
+    if (!high) return;
+    const [x, y, z, yaw] = at(t, X, along);
+    D0.at(x, y + y0, z, yaw).span(mat, -w / 2, 0, -dd / 2, w / 2, h, dd / 2);
+  };
+  const Xs = XF + COLOS.cippi * 0.5;
+  const kinds = ['food', 'cushions', 'wine', 'lamps'] as const;
+  [5, 15, 25, 35, 45, 55, 65, 75].forEach((k, i) => {
+    const t = L.centres[k];
+    const kind = kinds[i % kinds.length];
+    const [vx, vy, vz, vyaw] = at(t, Xs + 0.4, 0);
+    spots.push({ id: `colos-vendor-${i + 1}`, kind: 'vendor', position: new THREE.Vector3(vx, vy, vz), heading: vyaw + Math.PI });
+    switch (kind) {
+      case 'food':
+        put('stall_fruit', t, Xs + 1.4, 0, Math.PI);
+        put('brazier', t, Xs - 0.4, 1.6);
+        put('table', t, Xs - 0.4, -1.4, 0.2);
+        put('amphora_tall', t, Xs + 1.0, 2.1, 0.4);
+        put('stool', t, Xs + 0.6, -2.4, 1.1, { variant: 2 });
+        break;
+      case 'cushions':
+        put('table', t, Xs, 0, 0);
+        // Stacks of hired cushions (red and saffron wool) for the stone seats.
+        for (let s = 0; s < 4; s++) {
+          box(s % 2 ? 'fabric_ochre' : 'fabric_red', t, Xs + 0.1, -1.6, 0.55, 0.12, 0.4, s * 0.12);
+          box(s % 2 ? 'fabric_red' : 'fabric_purple', t, Xs + 0.1, 1.6, 0.55, 0.12, 0.4, s * 0.12);
+        }
+        put('bench', t, Xs + 1.6, 0, Math.PI);
+        break;
+      case 'wine':
+        put('amphora_stack', t, Xs + 1.0, -1.2, 0.3);
+        put('amphora_rack', t, Xs + 1.3, 1.0, Math.PI);
+        put('handcart', t, Xs - 0.8, 2.6, 1.2);
+        break;
+      case 'lamps':
+        put('stall_pottery', t, Xs + 1.4, 0, Math.PI);
+        put('basket', t, Xs + 0.2, 1.7);
+        put('crate', t, Xs + 0.5, -1.8, 0.5);
+        break;
+    }
+  });
+  // The sailors who rig the awning: coils of rope and a chest by the bollards, four places.
+  [9, 29, 49, 69].forEach((k, i) => {
+    const t = L.centres[k];
+    const X = XF + COLOS.cippi - 1.4;
+    const [x, y, z, yaw] = at(t, X, 0);
+    spots.push({ id: `colos-sailor-${i + 1}`, kind: 'npc', position: new THREE.Vector3(x, y, z), heading: yaw + Math.PI });
+    if (!high) return;
+    for (const [along, n] of [[1.0, 3], [1.9, 2]] as const) {
+      const [cx, cy, cz] = at(t, X + 0.3, along);
+      for (let s = 0; s < n; s++) {
+        const coil = new THREE.TorusGeometry(0.34, 0.075, 5, 14);
+        coil.rotateX(Math.PI / 2);
+        coil.translate(cx, cy + 0.075 + s * 0.13, cz);
+        stat.add(coil, 'fabric_ochre', undefined, { castShadow: true });
+      }
+    }
+    put('crate', t, X + 0.4, -1.2, 0.2);
+  });
+  // Torch brackets either side of the four axial porches (lit at night by the sky module's lamps).
+  if (high) {
+    for (const k of [0, 20, 40, 60]) {
+      for (const s of [-1, 1]) {
+        const t = L.centres[k] + (s * 2.6) / speedAt(oval, L.centres[k], XF);
+        const [px, pz] = oval.point(t, XF + 0.02);
+        const [nx, nz] = oval.normal(t);
+        placeProp(D0, 'torch_bracket', px, 2.7, pz, Math.atan2(-nx, -nz), { rng, collide: false });
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------- cavea
@@ -1043,8 +1163,8 @@ function buildCavea(ctx: LandmarkContext, L: ColosseumLayout, cav: MeshBuilder, 
     const slope = Math.atan2(H, count * run);
     const ceilLen = Math.hypot(H, count * run);
     const cm = fr.clone().multiply(new THREE.Matrix4().makeTranslation(0, H / 2 + 3.05, -(xBack + (count * run) / 2))).multiply(new THREE.Matrix4().makeRotationX(-slope));
-    cav.box('concrete', hw * 2 + 0.8, 0.3, ceilLen - 0.4, cm, { collide: true, castShadow: false });
-    span(cav, 'concrete', fr, -hw - 0.4, 2.9, -R3[0], hw + 0.4, 3.2, -xFoot, true, false);
+    cav.box('plaster_cream', hw * 2 + 0.8, 0.3, ceilLen - 0.4, cm, { collide: true, castShadow: false });
+    span(cav, 'plaster_cream', fr, -hw - 0.4, 2.9, -R3[0], hw + 0.4, 3.2, -xFoot, true, false);
     spots.push({ id: `colos-vomitorium-${spots.filter((s) => s.id.startsWith('colos-vomitorium')).length + 1}`, kind: 'door', position: new THREE.Vector3().setFromMatrixPosition(fr.clone().multiply(new THREE.Matrix4().makeTranslation(0, H + 0.05, -(w.x0 + w.x1) / 2))), heading: 0 });
   };
   for (const t of vomWalk) mouthAt(t, 1, true);
@@ -1126,10 +1246,10 @@ function buildCavea(ctx: LandmarkContext, L: ColosseumLayout, cav: MeshBuilder, 
     const xFoot = back + 0.3 + count * run;
     // Passage walls from ring 3 to the box, ceiling.
     for (const sx of [-1, 1]) span(cav, 'brick', fr, sx * 0.8, 0, -R3[0], sx * 1.2, P + 3.0, -back - 0.3, true);
-    span(cav, 'concrete', fr, -1.2, 2.95, -R3[0], 1.2, 3.25, -xFoot, true, false);
+    span(cav, 'plaster_cream', fr, -1.2, 2.95, -R3[0], 1.2, 3.25, -xFoot, true, false);
     const slope = Math.atan2(P, count * run);
     const cm = fr.clone().multiply(new THREE.Matrix4().makeTranslation(0, P / 2 + 3.1, -(back + 0.3 + (count * run) / 2))).multiply(new THREE.Matrix4().makeRotationX(-slope));
-    cav.box('concrete', 2.4, 0.3, Math.hypot(P, count * run) - 0.6, cm, { collide: true, castShadow: false });
+    cav.box('plaster_cream', 2.4, 0.3, Math.hypot(P, count * run) - 0.6, cm, { collide: true, castShadow: false });
     span(cav, 'paving_travertine', fr, -0.8, 0, -R3[0], 0.8, 0.04, -xFoot, false, false);
     const sp = new THREE.Vector3().setFromMatrixPosition(fr.clone().multiply(new THREE.Matrix4().makeTranslation(0, P + 0.05, -2.0)));
     spots.push({ id: imperial ? 'colos-pulvinar' : 'colos-editor-box', kind: 'vista', position: sp, heading: imperial ? Math.PI : 0 });
@@ -1189,6 +1309,15 @@ function pointY(oval: Oval, t: number, x: number, y: number): [number, number, n
 
 // ---------------------------------------------------------------- velarium
 
+/**
+ * Whether bay k's awning strip is furled. On 11 May the sailors have run out the awning over the
+ * sunny south, east and west of the bowl only; the north arc (local −z) stays furled, which also
+ * opens the bowl to the view from the Oppian and the Esquiline.
+ */
+export function velariumFurled(L: ColosseumLayout, k: number): boolean {
+  return Math.sin(L.centres[k]) < -0.45;
+}
+
 /** Mast-top ring, sagging canvas annulus (two-sided) with coloured strips, ropes to the cippi. */
 function buildVelarium(L: ColosseumLayout, groundAt: (x: number, z: number) => number): THREE.Group {
   const b = new MeshBuilder();
@@ -1212,6 +1341,22 @@ function buildVelarium(L: ColosseumLayout, groundAt: (x: number, z: number) => n
   for (let k = 0; k < N; k++) {
     const t0 = L.ts[k];
     const t1 = k + 1 < N ? L.ts[k + 1] : L.ts[0] + two;
+    if (velariumFurled(L, k)) {
+      // Furled: the strip is hauled out along its ropes and hangs bunched under the mast ring.
+      const n = 4;
+      for (let i = 0; i < n; i++) {
+        const a = new THREE.Vector3(...P(t0 + ((t1 - t0) * i) / n, 0.035));
+        const c = new THREE.Vector3(...P(t0 + ((t1 - t0) * (i + 1)) / n, 0.035));
+        a.y -= 0.35;
+        c.y -= 0.35;
+        const sag = 0.25 * Math.sin((Math.PI * (i + 0.5)) / n);
+        const g = new THREE.CylinderGeometry(0.26, 0.26, a.distanceTo(c) + 0.08, 6, 1, false);
+        g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), c.clone().sub(a).normalize()));
+        g.translate((a.x + c.x) / 2, (a.y + c.y) / 2 - sag, (a.z + c.z) / 2);
+        b.add(g, strip(k), undefined, { castShadow: false });
+      }
+      continue;
+    }
     const pos: number[] = [];
     for (let j = 0; j < rings; j++) {
       const f0 = j / rings;

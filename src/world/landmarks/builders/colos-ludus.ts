@@ -15,12 +15,13 @@ import * as THREE from 'three';
 import { MeshBuilder } from '../../../gfx/MeshBuilder';
 import type { MaterialId } from '../../../gfx/materialIds';
 import { Draw } from '../../../arch/fabric';
-import { ProfileBuilder } from '../../../arch/common/geom';
+import { ProfileBuilder, extrudePolygon } from '../../../arch/common/geom';
 import { inscriptionPanel } from '../../../arch/common/inscription';
 import { placeProp } from '../../../arch/props';
 import { Rng } from '../../../core/Rng';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
-import { Oval, flight, ovalBand, ovalSweep, risers, solid, span } from './colos-kit';
+import { Oval, type ReadableSpec, addReadables, flight, ovalBand, ovalSweep, risers, solid, span, statueGeometry } from './colos-kit';
+import { column } from '../../../arch/classical/column';
 import { complementRanges } from './colos-colosseum';
 import { courtyardBuilding, palus, weaponRack, type CourtSpec } from './colos-court';
 
@@ -54,7 +55,7 @@ export function ludusTop(A = LUDUS_ARENA): number {
 
 // ---------------------------------------------------------------- the arena with its stands
 
-function ludusArena(ctx: LandmarkContext, b: MeshBuilder, spots: Spot[], high: boolean) {
+function ludusArena(ctx: LandmarkContext, b: MeshBuilder, spots: Spot[], readables: ReadableSpec[], high: boolean) {
   const A = LUDUS_ARENA;
   const oval = new Oval(A.a, A.b);
   const two = Math.PI * 2;
@@ -88,10 +89,22 @@ function ludusArena(ctx: LandmarkContext, b: MeshBuilder, spots: Spot[], high: b
     }
   };
   const col: THREE.BufferGeometry[] = [];
-  // Podium face (cut at the two gates), marble-faced with a red base band.
+  // Podium face (cut at the two gates): marble revetment over a red dado, a painted frieze of
+  // hunting scenes under a moulded marble cornice, veined pilaster strips.
   const gateCut = cutsAt(0, A.gateW / 2, gates);
-  sweepRanges(new ProfileBuilder(0, P).to(0, 0).build(), 0, gateCut, 'plaster_white', col);
+  sweepRanges(new ProfileBuilder(0, P).to(0, 0).build(), 0, gateCut, 'marble', col);
   sweepRanges(new ProfileBuilder(-0.02, 0.9).to(-0.02, 0.02).build(), 0, gateCut, 'plaster_red');
+  if (high) {
+    sweepRanges(new ProfileBuilder(-0.015, P - 0.28).to(-0.015, P - 0.78).build(), 0, gateCut, 'stucco_painted');
+    const cornice = new ProfileBuilder(-0.02, P - 0.28).to(-0.08, P - 0.22).to(-0.08, P - 0.14).to(-0.16, P - 0.06).to(-0.16, P).build();
+    cornice.pts.reverse();
+    sweepRanges(cornice, 0, gateCut, 'marble');
+    for (const t of oval.equalArc(28, 0, 0.5)) {
+      if (gates.some((g) => Math.abs(Math.atan2(Math.sin(t - g), Math.cos(t - g))) < 0.16)) continue;
+      const fr = oval.radialFrame(t, 0);
+      span(b, 'marble_veined', fr, -0.24, 0.9, -0.01, 0.24, P - 0.78, 0.035, false, false);
+    }
+  }
   // Terrace, rows, top walk.
   sweepRanges(new ProfileBuilder(A.walk, P).to(0, P).build(), A.walk / 2, null, 'travertine', col);
   let y = P;
@@ -259,8 +272,149 @@ function ludusArena(ctx: LandmarkContext, b: MeshBuilder, spots: Spot[], high: b
     const [nx, nz] = oval.normal(t);
     spots.push({ id: `spectator-${++si}`, kind: r < 0 ? 'npc' : 'sit', position: new THREE.Vector3(px, yy + 0.02, pz), heading: Math.atan2(-nx, -nz) });
   }
-  // Editor's seat on the terrace facing the long side.
-  spots.push({ id: 'ludus-editor', kind: 'vista', position: new THREE.Vector3(A.a + 0.6, P + 0.02, 0), heading: -Math.PI / 2 });
+  // ---- the tribunal on the east long side (t = 0): the procurator's box, a level extension of the
+  //      top walk out over the rows to the terrace, under a tiled roof with a pediment.
+  {
+    const fr = oval.radialFrame(0, 0); // +z towards the sand; outward is −z
+    const hw = 3.3;
+    const zF = -A.walk; // front face over the terrace
+    const zB = -xTop0;
+    span(b, 'marble', fr, -hw, P - 0.02, zB, hw, top, zF, true);
+    span(b, 'marble_veined', fr, -hw + 0.1, top, zB + 0.1, hw - 0.1, top + 0.02, zF - 0.1, false, false);
+    // Front parapet (marble, painted panel, bronze rail) and side parapets.
+    span(b, 'marble', fr, -hw, top, zF - 0.3, hw, top + 1.0, zF, true);
+    if (high) {
+      span(b, 'plaster_red', fr, -hw + 0.25, P + 0.35, zF - 0.01, hw - 0.25, top - 0.25, zF + 0.01, false, false);
+      span(b, 'gilded_bronze', fr, -hw + 0.1, top + 1.0, zF - 0.24, hw - 0.1, top + 1.06, zF - 0.06, false, false);
+    }
+    for (const sx of [-1, 1]) span(b, 'marble', fr, sx * hw - (sx > 0 ? 0.25 : 0), top, zB, sx * hw + (sx < 0 ? 0.25 : 0), top + 1.0, zF - 0.3, true);
+    // Columns at the front and piers in the back wall carry the roof over the box and the walk.
+    const ch = 3.2;
+    const D = 0.3;
+    for (const x of [-hw + 0.3, -1.1, 1.1, hw - 0.3]) {
+      column(b, { order: 'corinthian', D, height: ch, material: 'marble', detail: high ? 'low' : 'far', kind: 'free', collide: true }, fr.clone().multiply(new THREE.Matrix4().makeTranslation(x, top, zF - 0.55)));
+    }
+    for (const sx of [-1, 1]) span(b, 'brick', fr, sx * hw - 0.25, top, -xWall, sx * hw + 0.25, top + ch, -xOut, true);
+    const yE = top + ch;
+    span(b, 'marble', fr, -hw - 0.2, yE, -xWall - 0.1, hw + 0.2, yE + 0.45, zF - 0.25);
+    if (high) span(b, 'gilded_bronze', fr, -hw - 0.2, yE + 0.12, zF - 0.27, hw + 0.2, yE + 0.3, zF - 0.24, false, false);
+    const ped = extrudePolygon([[-hw - 0.3, 0], [hw + 0.3, 0], [0, 1.1]], 0.5);
+    b.add(ped, 'marble', fr.clone().multiply(new THREE.Matrix4().makeTranslation(0, yE + 0.45, zF - 0.25)));
+    const roofLen = xWall - A.walk + 0.4;
+    const roofG = extrudePolygon([[-hw - 0.45, -0.05], [hw + 0.45, -0.05], [0, 1.2]], roofLen);
+    b.add(roofG, 'roof_tile', fr.clone().multiply(new THREE.Matrix4().makeTranslation(0, yE + 0.47, zF - 0.3)));
+    span(b, 'wood_dark', fr, -hw, yE - 0.06, -xWall, hw, yE, zF - 0.3, false, false);
+    // Seats: two curule chairs and a cushioned bench for the guests.
+    if (high) {
+      for (const x of [-0.7, 0.7]) {
+        span(b, 'gilded_bronze', fr, x - 0.3, top, -2.9, x + 0.3, top + 0.48, -2.4);
+        span(b, 'fabric_purple', fr, x - 0.28, top + 0.48, -2.9, x + 0.28, top + 0.55, -2.4, false, false);
+      }
+      span(b, 'wood_dark', fr, -hw + 0.4, top, -4.6, hw - 0.4, top + 0.45, -4.1);
+      span(b, 'fabric_red', fr, -hw + 0.45, top + 0.45, -4.6, hw - 0.45, top + 0.52, -4.1, false, false);
+    }
+    spots.push({ id: 'ludus-editor', kind: 'vista', position: new THREE.Vector3().setFromMatrixPosition(fr.clone().multiply(new THREE.Matrix4().makeTranslation(0, top + 0.02, zF - 1.0))), heading: -Math.PI / 2 });
+    spots.push({ id: 'ludus-procurator', kind: 'sit', position: new THREE.Vector3().setFromMatrixPosition(fr.clone().multiply(new THREE.Matrix4().makeTranslation(0.7, top + 0.5, -2.65))), heading: -Math.PI / 2 });
+  }
+
+  // ---- the gladiators' statue of Trajan on the west side, facing the tribunal (t = π)
+  {
+    const fr = oval.radialFrame(Math.PI, 0);
+    const bw = 1.1;
+    const bd = 0.85;
+    const bh = 1.55;
+    span(b, 'marble', fr, -bw / 2 - 0.08, 0, 0, bw / 2 + 0.08, 0.22, bd + 0.08, true);
+    span(b, 'marble', fr, -bw / 2, 0.22, 0, bw / 2, bh, bd, true);
+    span(b, 'marble', fr, -bw / 2 - 0.06, bh, 0, bw / 2 + 0.06, bh + 0.12, bd + 0.06);
+    statueGeometry(b, fr.clone().multiply(new THREE.Matrix4().makeTranslation(0, bh + 0.12, bd / 2)).multiply(new THREE.Matrix4().makeRotationY(Math.PI)), { level: high ? 'near' : 'mid', variant: 1, body: 'bronze', plinth: 'marble', scale: 1.15 });
+    if (high && typeof document !== 'undefined') {
+      inscriptionPanel(
+        b,
+        { lines: ['Imp Caesari Nervae', 'Traiano Aug Germ Dacico', 'Familia Gladiatoria', 'Ludi Magni'], width: bw - 0.16, height: 0.85, style: 'carved', sizes: [1, 0.9, 0.9, 0.9] },
+        fr.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0.95, bd + 0.012)).multiply(new THREE.Matrix4().makeRotationY(Math.PI)),
+        { depth: 0.01 },
+      );
+    }
+    const at = new THREE.Vector3().setFromMatrixPosition(fr.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0.95, bd + 0.02)));
+    const sp = new THREE.Vector3().setFromMatrixPosition(fr.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0.06, bd + 1.6)));
+    spots.push({ id: 'ludus-trajan-base', kind: 'inscription', position: sp, heading: Math.atan2(-oval.normal(Math.PI)[0], -oval.normal(Math.PI)[1]) + Math.PI });
+    readables.push({
+      id: 'ludus-trajan-base',
+      at,
+      reach: 3.5,
+      title: 'Statue base of Trajan',
+      text: 'IMP · CAESARI · NERVAE / TRAIANO · AVG · GERM · DACICO / FAMILIA · GLADIATORIA / LVDI · MAGNI\n\n*To the Emperor Caesar Nerva Trajan Augustus, conqueror of the Germans and the Dacians: the gladiator troupe of the Great School.*\n\nThe bronze emperor watches the sand from the west side, facing the procurator\'s box. Fresh wreaths are tied round his ankles; someone has left a wooden practice sword on the base.',
+    });
+  }
+
+  // ---- awnings on masts along the back wall, shading the long sides of the stands
+  if (high) {
+    const xm = xOut + A.wallT / 2;
+    const masts: number[] = [];
+    for (const t of oval.equalArc(26, xm, 0.5)) {
+      const near = (c: number, w: number) => Math.abs(Math.atan2(Math.sin(t - c), Math.cos(t - c))) < w;
+      if (near(0, 0.32) || gates.some((g) => near(g, 0.42)) || stairT.some((s) => near(s, 0.14))) {
+        masts.push(NaN);
+        continue;
+      }
+      masts.push(t);
+    }
+    const ym = top + 3.6;
+    const pos: number[] = [];
+    const pos2: number[] = [];
+    for (let i = 0; i < masts.length; i++) {
+      const t = masts[i];
+      if (Number.isNaN(t)) continue;
+      const [px, pz] = oval.point(t, xm);
+      const d = new Draw(b);
+      d.cyl('wood', px, top + (ym - top) / 2, pz, 0.075, ym - top + 0.3, 6);
+      const t2 = masts[(i + 1) % masts.length];
+      if (Number.isNaN(t2)) continue;
+      const P0 = (tt: number, f: number): [number, number, number] => {
+        const x = xm - (xm - A.walk * 0.6) * f;
+        const [qx, qz] = oval.point(tt, x);
+        return [qx, ym - 0.25 - 1.5 * f - 0.3 * Math.sin(Math.PI * f), qz];
+      };
+      const target = i % 2 ? pos : pos2;
+      for (let j = 0; j < 3; j++) {
+        const f0 = j / 3;
+        const f1 = (j + 1) / 3;
+        const a = P0(t, f0), c = P0(t2, f0), dd = P0(t2, f1), e = P0(t, f1);
+        target.push(...a, ...e, ...c, ...c, ...e, ...dd);
+        target.push(...a, ...c, ...e, ...c, ...dd, ...e);
+      }
+    }
+    for (const [arr, mat] of [[pos, 'fabric_white'], [pos2, 'fabric_red']] as const) {
+      if (!arr.length) continue;
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
+      g.computeVertexNormals();
+      b.add(g, mat, undefined);
+    }
+  }
+
+  // ---- hangings on the podium face, rakes and the referee's staff by the back gate
+  if (high) {
+    const d = new Draw(b);
+    oval.equalArc(12, 0, 0.5).forEach((t, i) => {
+      if (gates.some((g) => Math.abs(Math.atan2(Math.sin(t - g), Math.cos(t - g))) < 0.3)) return;
+      if (Math.abs(Math.atan2(Math.sin(t), Math.cos(t))) < 0.3 || Math.abs(Math.atan2(Math.sin(t - Math.PI), Math.cos(t - Math.PI))) < 0.3) return;
+      const fr = oval.radialFrame(t, 0);
+      span(b, i % 2 ? 'fabric_ochre' : 'fabric_red', fr, -0.36, P - 1.25, 0.03, 0.36, P - 0.12, 0.05, false, false);
+      span(b, 'gilded_bronze', fr, -0.42, P - 0.16, 0.02, 0.42, P - 0.1, 0.08, false, false);
+    });
+    const gb = oval.radialFrame(Math.PI / 2 + 0.22, 0);
+    for (const [x, lean] of [[-0.4, 0.18], [0.0, 0.22]] as const) {
+      const a = new THREE.Vector3(x, 0.06, 0.45).applyMatrix4(gb);
+      const c = new THREE.Vector3(x + 0.05, 2.0, 0.45 - lean * 2).applyMatrix4(gb);
+      d.rod('wood', a, c, 0.025, 5);
+      const head = new THREE.Vector3(x, 0.12, 0.47).applyMatrix4(gb);
+      d.box('wood_dark', head.x, head.y, head.z, 0.5, 0.06, 0.06);
+    }
+    const st0 = new THREE.Vector3(0.7, 0.06, 0.3).applyMatrix4(gb);
+    const st1 = new THREE.Vector3(0.72, 2.1, 0.06).applyMatrix4(gb);
+    d.rod('wood_dark', st0, st1, 0.022, 5);
+  }
   return { oval, xWall, top };
 }
 
@@ -310,7 +464,7 @@ function buildLudusMagnus(ctx: LandmarkContext): LandmarkBuild {
     w: W,
     d: D,
     range: 4.2,
-    storeys: 2,
+    storeys: 3,
     wallMat: 'brick',
     courtWallMat: 'plaster_cream',
     portico: { depth: 2.6, posts: 'columns', material: 'travertine', spacing: 3.3, gallery: true },
@@ -339,12 +493,18 @@ function buildLudusMagnus(ctx: LandmarkContext): LandmarkBuild {
   const res = courtyardBuilding(spec);
   const b = res.b;
   const spots = [...res.spots];
+  const readables: ReadableSpec[] = [];
   const y0 = res.court.y;
   // The arena + stands sit on the court floor.
   const ab = new MeshBuilder();
-  const arena = ludusArena(ctx, ab, spots, high);
+  const arenaSpots: Spot[] = [];
+  const arenaReadables: ReadableSpec[] = [];
+  const arena = ludusArena(ctx, ab, arenaSpots, arenaReadables, high);
   b.append(ab, new THREE.Matrix4().makeTranslation(0, y0, 0));
-  for (const s of spots) if (s.id.startsWith('spectator') || s.id.startsWith('ludus-gate') || s.id.startsWith('ludus-arena') || s.id.startsWith('ludus-fighter') || s.id === 'ludus-doctor' || s.id === 'ludus-editor') s.position.y += y0;
+  for (const s of arenaSpots) s.position.y += y0;
+  for (const r of arenaReadables) r.at.y += y0;
+  spots.push(...arenaSpots);
+  readables.push(...arenaReadables);
   // Triangular fountains in the court corners.
   const cx = res.court.w / 2 - 0.1;
   const cz = res.court.d / 2 - 0.1;
@@ -354,13 +514,24 @@ function buildLudusMagnus(ctx: LandmarkContext): LandmarkBuild {
     b.append(fb, new THREE.Matrix4().makeTranslation(0, y0, 0));
     spots.push({ id: `ludus-fountain-${sx < 0 ? 'w' : 'e'}${sz < 0 ? 'n' : 's'}`, kind: 'shrine', position: new THREE.Vector3(sx * (cx - 2.4), y0 + 0.05, sz * (cz - 2.4)), heading: Math.atan2(sx, sz) });
   }
-  // Weapon racks under the front portico, training dummies in the corners between stair and fountain.
+  // Weapon racks under the front portico, benches along the long sides, and by the front arena
+  // gate the fighters' corner: a trough, a bench, water jars and a rack of practice weapons.
   const d = new Draw(b).at(0, y0, 0);
   if (high) {
+    const rng = new Rng('ludus-court');
     weaponRack(d, -4.5, 0, -res.inner.d / 2 + 0.9, 0);
     weaponRack(d, 4.5, 0, -res.inner.d / 2 + 0.9, 0);
-    for (const sx of [-1, 1]) placeProp(d, 'bench', sx * (res.court.w / 2 - 1.2), 0, 0, sx > 0 ? -Math.PI / 2 : Math.PI / 2, { rng: new Rng('lb' + sx) });
+    for (const sx of [-1, 1]) placeProp(d, 'bench', sx * (res.court.w / 2 - 1.2), 0, 0, sx > 0 ? -Math.PI / 2 : Math.PI / 2, { rng });
+    const zg = -(LUDUS_ARENA.b + ludusReach()) - 1.6;
+    placeProp(d, 'trough', -3.2, 0, zg, Math.PI / 2, { rng });
+    placeProp(d, 'bench', 3.0, 0, zg + 0.2, -Math.PI / 2, { rng });
+    placeProp(d, 'amphora_tall', -3.0, 0, zg - 1.3, 0.4, { rng });
+    placeProp(d, 'amphora_tall', -2.6, 0, zg - 1.5, 1.6, { rng });
+    weaponRack(d, 3.6, 0, zg - 1.6, Math.PI / 2);
+    // Pali in the court's free corners for the tirones' drill.
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) palus(d, sx * (res.court.w / 2 - 6.5), 0, sz * (res.court.d / 2 - 2.2));
   }
+  spots.push({ id: 'ludus-fighters-corner', kind: 'sit', position: d.point(3.0, 0.5, -(LUDUS_ARENA.b + ludusReach()) - 1.4), heading: -Math.PI / 2 });
   // Tunnel stair down towards the amphitheatre in the front-left court corner (portico).
   {
     const tx = -res.inner.w / 2 + 1.4;
@@ -373,20 +544,62 @@ function buildLudusMagnus(ctx: LandmarkContext): LandmarkBuild {
     f.solid(-0.85, 0, 0.2, 0.85, 1.1, 3.6);
     spots.push({ id: 'ludus-tunnel', kind: 'door', position: d.point(tx, 0.05, tz - 0.6), heading: 0 });
   }
-  // Painted programme beside the main gate (Pompeian formula), and the gate inscription.
-  if (high && typeof document !== 'undefined') {
-    const W2 = W / 2;
-    inscriptionPanel(
-      b,
-      { lines: ['Familia Gladiatoria', 'Pugnabit Venatio', 'Vela Erunt'], width: 2.4, height: 1.3, style: 'painted' },
-      new THREE.Matrix4().makeTranslation(-3.3, y0 + 4.4, -D / 2 - 0.03),
-      { depth: 0.03 },
-    );
-    void W2;
+  // The street front: LVDVS · MAGNVS carved over the gate, torches either side, and a painted
+  // programme (Pompeian formula) on the plaster panel right of the gate.
+  const zFront = -D / 2;
+  const gateTop = 2.6 + 1.6;
+  if (high) {
+    const fd = new Draw(b);
+    for (const sx of [-1, 1]) placeProp(fd, 'torch_bracket', sx * 2.35, y0 + 2.9, zFront - 0.01, 0, { rng: new Rng('lt' + sx), collide: false });
+    fd.span('plaster_cream', 3.75, y0 + 3.36, zFront - 0.025, 6.65, y0 + 4.12, zFront);
+    if (typeof document !== 'undefined') {
+      inscriptionPanel(b, { lines: ['Ludus Magnus'], width: 3.6, height: 0.62, style: 'carved' }, new THREE.Matrix4().makeTranslation(0, y0 + gateTop + 0.85, zFront - 0.04), { depth: 0.04 });
+      inscriptionPanel(b, { lines: ['Familia Gladiatoria Pugnabit', 'Venatio Vela Erunt'], width: 2.7, height: 0.62, style: 'painted' }, new THREE.Matrix4().makeTranslation(5.2, y0 + 3.74, zFront - 0.03), { depth: 0.005 });
+    }
   }
-  spots.push({ id: 'ludus-notice', kind: 'inscription', position: new THREE.Vector3(-3.3, y0 + 0.05, -D / 2 - 2.5), heading: 0 });
-  // Bench and bucket for the doctor by the sand.
+  spots.push({ id: 'ludus-gate-inscription', kind: 'inscription', position: new THREE.Vector3(0, y0 + 0.05, zFront - 4.0), heading: 0 });
+  spots.push({ id: 'ludus-notice', kind: 'inscription', position: new THREE.Vector3(5.2, y0 + 0.05, zFront - 2.0), heading: 0 });
+  readables.push(
+    {
+      id: 'ludus-gate-inscription',
+      at: new THREE.Vector3(0, y0 + gateTop + 0.85, zFront - 0.05),
+      reach: 7,
+      title: 'Ludus Magnus',
+      text: 'LVDVS · MAGNVS\n\n*The Great School.*\n\nCaesar\'s own school of gladiators, begun by Domitian and rebuilt in fresh brick by Trajan. Wooden swords clack beyond the gate from the first hour; the doctor, a Thracian called Glaucus, takes paid guests on the practice sand.',
+    },
+    {
+      id: 'ludus-notice',
+      at: new THREE.Vector3(5.2, y0 + 3.74, zFront - 0.04),
+      reach: 5,
+      title: 'Painted notice',
+      text: 'FAMILIA · GLADIATORIA · PVGNABIT / VENATIO · VELA · ERVNT\n\n*The gladiator troupe will fight. A beast hunt. There will be awnings.*\n\nRed letters on fresh whitewash, the formula every Roman knows from a hundred walls. The date has been left blank, to be painted in when the games are announced.',
+    },
+  );
+  // Gladiators' graffiti scratched into the plaster of the back portico (content T4).
+  {
+    const gx = -9.5;
+    const gz = res.inner.d / 2;
+    if (high) {
+      const rng = new Rng('ludus-graffiti');
+      for (let i = 0; i < 26; i++) {
+        const x = gx - 0.7 + rng.next() * 1.4;
+        const y = y0 + 1.2 + rng.next() * 0.75;
+        const len = 0.06 + rng.next() * 0.22;
+        const m = new THREE.Matrix4().makeTranslation(x, y, gz - 0.006).multiply(new THREE.Matrix4().makeRotationZ((rng.next() - 0.5) * 2.4));
+        b.box('plaster_dark', len, 0.012, 0.006, m, { castShadow: false });
+      }
+    }
+    spots.push({ id: 'ludus-graffiti', kind: 'inscription', position: new THREE.Vector3(gx, y0 + 0.05, gz - 1.1), heading: 0 });
+    readables.push({
+      id: 'ludus-graffiti',
+      at: new THREE.Vector3(gx, y0 + 1.55, gz - 0.02),
+      reach: 3,
+      title: 'Graffiti in the barracks',
+      text: 'NEREVS · RET · V · XXXI\n\n*"Nereus, retiarius: 31 wins."* Beside it, a net drawn with a fish caught in it.\n\nAVCTVS · THR · XXX · V · XVIII · M · XI · ST · I\n\n*"Auctus, thraex: 30 bouts, 18 won, 11 spared, 1 draw."*\n\nPVLLVS · MATRI · SALVTEM · PISTOR · SVM\n\n*"Pullus to his mother, greetings: I\'m a baker."*\n\nDIZAS · MVS · FVR · EST\n\n*"Dizas the Mouse is a thief."* Someone has scratched a cloak next to it, and then scratched it out.\n\nTIRO · HODIE · CRAS · HEROS · POSTRIDIE · CINIS\n\n*"Today a recruit, tomorrow a hero, the day after, ash."*',
+    });
+  }
   const object = b.build('ludus-magnus');
+  addReadables(ctx.game, object, readables);
   const far = farCourt(W, D, res.height, y0, 'brick', arena.top);
   return { object, colliders: b.colliders, spots, far, cullDistance: 900 };
 }

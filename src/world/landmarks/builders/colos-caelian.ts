@@ -20,7 +20,7 @@ import type { MaterialId } from '../../../gfx/materialIds';
 import { Draw, roof } from '../../../arch/fabric';
 import { hedge } from '../../../arch/vegetation';
 import { temple } from '../../../arch/classical/temple';
-import { plainArch } from '../../../arch/classical/arch';
+import { archway, plainArch } from '../../../arch/classical/arch';
 import { column } from '../../../arch/classical/column';
 import { dome } from '../../../arch/classical/vaults';
 import { inscriptionPanel } from '../../../arch/common/inscription';
@@ -240,18 +240,26 @@ function buildDolabella(ctx: LandmarkContext): LandmarkBuild {
       { depth: 0.02 },
     );
   }
-  // Nero's aqueduct channel on its back (brick specus with a vaulted cover), running across the arch
-  // (the arcade continues both ways as part of the city's aqueducts).
+  // Nero's aqueduct channel on its back (brick specus with a cocciopesto-lined channel under a
+  // slab cover), running across the arch, and the first brick arch of the Arcus Neroniani on each
+  // side (the arcade itself continues along the Caelian as part of the city's aqueducts).
   const yS = top + 1.0;
-  d.span('brick', -res.width / 2 - 6, yS, -1.1, res.width / 2 + 6, yS + 1.6, 1.1);
-  d.span('concrete', -res.width / 2 - 6, yS + 1.6, -1.2, res.width / 2 + 6, yS + 1.9, 1.2);
+  const spanA = 3.4;
+  const pierA = 1.5;
+  const inner = 0.75;
+  const reach = res.width / 2 + inner + spanA + pierA;
+  d.span('brick', -reach, yS, -1.1, reach, yS + 1.5, 1.1);
+  d.span('concrete', -reach - 0.1, yS + 1.5, -1.2, reach + 0.1, yS + 1.75, 1.2);
+  d.span('travertine', -reach - 0.12, yS - 0.12, -1.22, reach + 0.12, yS, 1.22);
   for (const sx of [-1, 1]) {
-    const x0 = sx * (res.width / 2);
-    const x1 = sx * (res.width / 2 + 6);
-    d.span('brick', Math.min(x0, x1), -0.3, -1.2, Math.max(x0, x1), yS, -0.6);
-    d.span('brick', Math.min(x0, x1), -0.3, 0.6, Math.max(x0, x1), yS, 1.2);
-    d.span('brick', sx * (res.width / 2 + 5), -0.3, -1.2, sx * (res.width / 2 + 6), yS, 1.2, { collide: true });
-    d.span('black', Math.min(x0, x1) + 0.6, -0.3, -0.6, Math.max(x0, x1) - 0.6, yS - 1.0, 0.6);
+    // Ground under the side arch: the piers go down to the terrain.
+    const cx = sx * (res.width / 2 + inner + spanA / 2);
+    const g = Math.min(ctx.groundAt(cx, 0), ctx.groundAt(sx * reach, 0), 0);
+    archway(b, { span: spanA, springing: yS - 0.6 - spanA / 2 - g, pier: inner, depth: 2.2, top: yS - g, material: 'brick', trim: 'brick', detail: ctx.detail === 'high' ? 'high' : 'low', leftPier: sx > 0, rightPier: sx < 0 }, T(cx, g, 0));
+    // The next pier, where the arcade carries on along the Caelian.
+    const xa = sx * (res.width / 2 + inner + spanA);
+    const xb = sx * reach;
+    d.span('brick', Math.min(xa, xb), g - 0.3, -1.1, Math.max(xa, xb), yS, 1.1, { collide: true });
   }
   const spots: Spot[] = [
     { id: 'dolabella-inscription', kind: 'inscription', position: new THREE.Vector3(0, 0.05, -5), heading: 0 },

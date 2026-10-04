@@ -11,14 +11,14 @@
  */
 import * as THREE from 'three';
 import { MeshBuilder } from '../../../gfx/MeshBuilder';
-import { Draw } from '../../../arch/fabric';
+import { Draw, lacus } from '../../../arch/fabric';
 import { ProfileBuilder, lathe } from '../../../arch/common/geom';
 import { inscriptionPanel } from '../../../arch/common/inscription';
 import { seatedDeity, togate } from '../../../arch/classical/statues';
 import { placeProp } from '../../../arch/props';
 import { Rng } from '../../../core/Rng';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
-import { instanceLod } from './colos-kit';
+import { type ReadableSpec, addReadables, instanceLod } from './colos-kit';
 
 // ---------------------------------------------------------------- moving water material
 
@@ -125,7 +125,7 @@ function buildMetaSudans(ctx: LandmarkContext): LandmarkBuild {
     }
   }
   // The cone: a slightly concave turning-post profile rising to an egg-shaped finial.
-  const rc = 2.6 * S;
+  const rc = 2.95 * S;
   const coneTop = H - 1.2;
   const coneProf = new ProfileBuilder(rc, hd);
   const n = high ? 12 : 6;
@@ -182,8 +182,77 @@ function buildMetaSudans(ctx: LandmarkContext): LandmarkBuild {
     placeProp(d, 'amphora_tall', Rb + 1.1, 0.08, 1.2, 1.2, { rng });
     placeProp(d, 'altar', -(Rb + 2.6), 0.08, -(Rb + 0.8), Math.PI / 3, { rng });
   }
+  // The public basin by the Meta (lacus metae), north of the fountain by the road to the Esquiline.
+  const readables: ReadableSpec[] = [];
+  const floor = (x: number, z: number) => Math.max(0, ctx.groundAt(x, z));
+  {
+    const dir = new THREE.Vector2(4.8, -8.4).normalize();
+    const R = Rb + 4.0;
+    const x = dir.x * R;
+    const z = dir.y * R;
+    const f = d.at(x, floor(x, z), z, Math.atan2(dir.x, dir.y));
+    const stand = lacus(f, new Rng('lacus-metae'), { stone: 'travertine', length: 2.6, width: 1.5 });
+    spots.push({ id: 'lacus-metae', kind: 'shrine', position: f.point(stand[0].x, 0.05, stand[0].z), heading: Math.atan2(-dir.x, -dir.y) + Math.PI });
+    spots.push({ id: 'lacus-metae-2', kind: 'npc', position: f.point(stand[1].x, 0.05, stand[1].z), heading: Math.atan2(-dir.x, -dir.y) - Math.PI / 2 });
+  }
+  // A plastered notice wall (album) facing the fountain from the WSW, with the playbill for the
+  // games of 18 May painted on it (content T7), a masonry bench below.
+  {
+    const br = (260 * Math.PI) / 180;
+    const dir = new THREE.Vector2(Math.sin(br), -Math.cos(br));
+    const R = Rb + 8.2;
+    const x = dir.x * R;
+    const z = dir.y * R;
+    let gmin = Infinity;
+    let gmax = -Infinity;
+    for (const s of [-3.8, 0, 3.8]) {
+      const gx = x + dir.y * s;
+      const gz = z - dir.x * s;
+      gmin = Math.min(gmin, ctx.groundAt(gx, gz));
+      gmax = Math.max(gmax, ctx.groundAt(gx, gz));
+    }
+    const y = Math.max(0, gmax);
+    const f = d.at(x, y, z, Math.atan2(dir.x, dir.y));
+    f.span('travertine', -3.75, gmin - y - 0.4, -0.06, 3.75, 0.28, 0.51);
+    f.span('plaster_cream', -3.6, 0.28, 0, 3.6, 3.0, 0.45);
+    f.span('plaster_red', -3.6, 0.28, -0.012, 3.6, 1.0, 0);
+    f.span('roof_tile', -3.78, 3.0, -0.14, 3.78, 3.16, 0.59);
+    f.span('roof_tile', -3.78, 3.16, 0.06, 3.78, 3.3, 0.39);
+    f.solid(-3.75, gmin - y - 0.4, -0.06, 3.75, 3.3, 0.51);
+    if (high) placeProp(f, 'bench_masonry', 0, 0, -0.65, 0, { rng: new Rng('album') });
+    if (high && typeof document !== 'undefined') {
+      inscriptionPanel(
+        b,
+        { lines: ['Ob Dedicationem Columnae', 'Imp Caesaris Nervae Traiani Aug Germ Dacici', 'Venatio Et Paria Gladiatorum', 'In Amphitheatro A D XV K Iun Et Sequentibus Diebus', 'Vela Erunt Sparsiones Erunt', 'Feliciter'], width: 3.9, height: 1.55, style: 'painted', sizes: [1.1, 0.9, 1, 0.8, 0.9, 1.15] },
+        f.m.clone().multiply(new THREE.Matrix4().makeTranslation(0, 2.05, -0.02)),
+        { depth: 0.004 },
+      );
+      inscriptionPanel(b, { lines: ['Nereus Ret Pugnabit'], width: 1.5, height: 0.22, style: 'painted' }, f.m.clone().multiply(new THREE.Matrix4().makeTranslation(1.2, 1.12, -0.02)), { depth: 0.004 });
+    }
+    spots.push({ id: 'meta-sudans-playbill', kind: 'inscription', position: f.point(0, 0.05, -1.6), heading: Math.atan2(dir.x, dir.y) + Math.PI });
+    readables.push({
+      id: 'meta-sudans-playbill',
+      at: f.point(0, 2.0, -0.03),
+      reach: 4.5,
+      title: 'Playbill for the games',
+      text: 'OB · DEDICATIONEM · COLVMNAE / IMP · CAESARIS · NERVAE · TRAIANI · AVG · GERM · DACICI / VENATIO · ET · PARIA · GLADIATORVM / IN · AMPHITHEATRO · A · D · XV · K · IVN · ET · SEQVENTIBVS · DIEBVS / VELA · ERVNT · SPARSIONES · ERVNT / FELICITER\n\nAdded below in red, in a smaller hand: NEREVS · RET · PVGNABIT\n\n*"For the dedication of the Column of the Emperor Caesar Nerva Trajan Augustus, conqueror of the Germans and the Dacians: a beast hunt and pairs of gladiators in the amphitheatre, on the 15th day before the Kalends of June (18 May) and the following days. There will be awnings. There will be sprinklings of perfume. Good luck to all!"* And below: *"Nereus the retiarius will fight."*',
+    });
+  }
+  // Where the fan parties gather (murmillo fans and thraex fans, content misc-meta-sudans-rixa),
+  // and a loose paving slab with a hollow under it (a street cache) on the plaza ring.
+  spots.push({ id: 'meta-sudans-stand-1', kind: 'npc', position: new THREE.Vector3(Rb + 2.2, 0.1, -1.6), heading: -Math.PI / 2 });
+  spots.push({ id: 'meta-sudans-stand-2', kind: 'npc', position: new THREE.Vector3(Rb + 2.0, 0.1, 2.4), heading: -Math.PI / 2 - 0.4 });
+  {
+    const a = (115 * Math.PI) / 180;
+    const r = Rb + 3.3;
+    const x = Math.sin(a) * r;
+    const z = -Math.cos(a) * r;
+    d.at(x, 0, z, a + 0.08).box('paving_travertine', 0, 0.1, 0, 0.9, 0.05, 0.6, { rx: 0.035 });
+    spots.push({ id: 'meta-sudans-latebra', kind: 'container', position: new THREE.Vector3(x, 0.1, z), heading: a });
+  }
   const object = b.build('meta-sudans');
   object.add(filmMesh);
+  addReadables(ctx.game, object, readables);
   return { object, colliders: b.colliders, spots, cullDistance: 1600 };
 }
 
