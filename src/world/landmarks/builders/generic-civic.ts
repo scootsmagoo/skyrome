@@ -29,9 +29,11 @@ import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../t
 import {
   T, TRS, V, altar, broadTree, clearOf, cornice, crenellations, cypress, dims, draw, farDraw, finish, flight, flightLength, groundRange,
   groundWall, hedge, heightG, hintsOf, inscription, mul, sitingOf, obstacles, piercedWall, plinth, pool, railing, roundBasin, spot, statueOnPedestal,
-  tiledRoof, wallRun, type Detail, type Hints, type WallOpening,
+  tiledRoof, wallRun, type Detail, type Hints, type V3, type WallOpening,
 } from './generic-common';
 import { courtyardRanges, hall, liteColonnade, liteColumnAt, tabernae, vaultedAisle } from './generic-civic-lib';
+import { liteArcade } from './generic-seating';
+import { wallTorch } from './generic-world';
 import { aedicula, fittedTemple, templeMaterials } from './generic-sacred';
 import { sacredGrove } from './generic-groves';
 
@@ -339,8 +341,60 @@ function buildPrison(ctx: LandmarkContext): LandmarkBuild {
 
 // ---------------------------------------------------------------- palace
 
+/**
+ * Arcaded substructures where the ground falls away in front of a hill-top building: in runs of
+ * ~10 m along the front edge (z), each run finds where the slope in front reaches (nearly) its
+ * foot, pushes a paved terrace out to there and drops a wall of blind arches (storeys of ~7 m,
+ * dark galleries behind) from the platform to the ground — the Palatine as seen from the Forum or
+ * the Circus. Never reaches into another landmark. Returns whether any was built.
+ */
+export function substructureFacade(d: Draw, ctx: LandmarkContext, w: number, z: number, detail: Detail, far?: Draw): boolean {
+  const runs = Math.max(1, Math.round(w / 10));
+  const free = clearOf(obstacles(ctx, 2));
+  let built = false;
+  for (let i = 0; i < runs; i++) {
+    const x0 = -w / 2 + (i * w) / runs, x1 = -w / 2 + ((i + 1) * w) / runs, xm = (x0 + x1) / 2;
+    // Ground profile in front of the run (worst of three lines across it).
+    const prof: number[] = [];
+    for (let k = 0; k <= 12; k++) prof.push(Math.min(ctx.groundAt(x0 + 0.5, z - k * 1.5), ctx.groundAt(xm, z - k * 1.5), ctx.groundAt(x1 - 0.5, z - k * 1.5)));
+    const minG = Math.min(...prof);
+    if (minG > -3) continue;
+    let k = prof.findIndex((g) => g <= minG * 0.82);
+    while (k > 0 && !free(xm, z - k * 1.5 - 2, 1)) k--;
+    const zf = z - k * 1.5;
+    let lo = 0;
+    for (let j = 0; j <= 4; j++) lo = Math.min(lo, ctx.groundAt(x0 + ((x1 - x0) * j) / 4, zf - 1.2));
+    if (lo > -2.5) continue;
+    built = true;
+    const bottom = lo - 0.6;
+    const n = Math.max(1, Math.round(-bottom / 7));
+    const f = d.at(0, bottom, 0);
+    liteArcade(f, [V(x0, 0, zf), V(x1, 0, zf)], { storeys: Array.from({ length: n }, (_, j) => ({ height: -bottom / n, columns: false, parapet: j > 0 ? 0.01 : 0 })), bay: 4.6, depth: 1.8, material: 'brick', detail, open: 0.56 });
+    f.span('black', x0, 0, zf + 2.6, x1, -bottom - 0.4, zf + 2.7);
+    f.span('brick', x0, 0, zf + 2.7, x1, -bottom, Math.max(zf + 4.2, z), { collide: true });
+    f.span('concrete', x0, 0, zf + 1.8, x1, 0.05, zf + 2.6);
+    // Terrace out to the new edge, with a parapet.
+    if (zf < z - 0.5) d.span('paving_travertine', x0, -0.3, zf, x1, 0.04, z, { collide: true });
+    d.span('travertine', x0, 0, zf, x1, 1.05, zf + 0.45, { collide: true });
+    far?.span('brick', x0, bottom, zf, x1, 0, Math.max(zf + 4, z));
+  }
+  return built;
+}
+
+/** A plain wall band along a path in this frame (offsets x0..x1 along the right-hand normal). */
+function ribbonWallLocal(d: Draw, path: V3[], x0: number, x1: number, y0: number, y1: number, mat: MaterialId) {
+  for (let i = 0; i < path.length - 1; i++) {
+    const a = path[i], b = path[i + 1];
+    const t = b.clone().sub(a).normalize();
+    const n = V(t.z, 0, -t.x);
+    const mid = a.clone().add(b).multiplyScalar(0.5).addScaledVector(n, (x0 + x1) / 2);
+    d.box(mat, mid.x, (y0 + y1) / 2, mid.z, a.distanceTo(b) + 0.05, y1 - y0, Math.abs(x1 - x0), { ry: Math.atan2(-t.z, t.x) });
+  }
+}
+
 function buildPalace(ctx: LandmarkContext): LandmarkBuild {
   const { lm, detail } = ctx;
+  const h = hintsOf(lm);
   const d = draw(ctx);
   const far = farDraw();
   const { w, d: dd } = dims(ctx);
@@ -365,18 +419,48 @@ function buildPalace(ctx: LandmarkContext): LandmarkBuild {
   plinth(d, ctx, -w / 2, -dd / 2, w / 2, dd / 2, 0.02, 'brick');
   const wing = clamp(Math.min(w, dd) * 0.16, 6, 14);
   const rangeH = Math.min(H * 0.55, 13);
-  courtyardRanges(d, -w / 2, -dd / 2 + 4, w / 2, dd / 2, wing, rangeH, 'brick', detail, { gate: 6, inner: 'plain', ring: true, courtMat: 'paving_travertine' });
+  const exR = h.has('exedra') ? Math.min(w * 0.42, 24) : 0;
+  const cz = -dd / 2 + 4 + (exR ? exR + 3 : 0);
+  courtyardRanges(d, -w / 2, cz, w / 2, dd / 2, wing, rangeH, 'brick', detail, { gate: 6, inner: 'plain', ring: true, courtMat: 'paving_travertine' });
   // Peristyle round the court.
-  const cx0 = -w / 2 + wing + 3.2, cx1 = w / 2 - wing - 3.2, cz0 = -dd / 2 + 4 + wing + 3.2, cz1 = dd / 2 - wing - 3.2;
+  const cx0 = -w / 2 + wing + 3.2, cx1 = w / 2 - wing - 3.2, cz0 = cz + wing + 3.2, cz1 = dd / 2 - wing - 3.2;
   if (cx1 - cx0 > 6 && cz1 - cz0 > 6) {
     liteColonnade(d, [V(cx0, 0, cz0), V(cx0, 0, cz1), V(cx1, 0, cz1), V(cx1, 0, cz0)], { columnHeight: Math.min(rangeH * 0.55, 6), spacing: 3, depth: 2.8, back: 'none', closed: true, material: 'marble_giallo', detail, order: 'corinthian' });
     hedge(d, -1.5, cz0 + 3, 1.5, cz1 - 3, 0, 0.7);
     roundBasin(d, 0, 0, (cz0 + cz1) / 2, Math.min(3, (cx1 - cx0) / 6), 'marble', 0.5, detail);
   }
-  // Audience hall rising at the back of the court, and a columned front porch.
+  // Audience hall rising at the back of the court.
   const hw = Math.min(w * 0.4, 30), hd = Math.min(dd * 0.28, 26);
   hall(d, -hw / 2, dd / 2 - wing - hd * 0.5, hw / 2, dd / 2 - 0.5, { mat: 'brick', height: H, roof: 'gable', roofAxis: 'z', doors: 1, detail, arched: true, pilasters: 4 });
-  liteColonnade(d, [V(w / 2 - 2, 0.02, -dd / 2 + 3.2), V(-w / 2 + 2, 0.02, -dd / 2 + 3.2)].reverse(), { columnHeight: Math.min(rangeH * 0.6, 7), spacing: 3.2, depth: 2.6, back: 'none', material: 'marble', detail, order: 'corinthian' });
+  // The front: arcaded substructures down the slope (the Palatine seen from the Forum or the
+  // Circus), a concave exedra facade, or a plain columned porch.
+  const sub = substructureFacade(d, ctx, w, -dd / 2, detail, far);
+  if (exR) {
+    const R = exR;
+    const pts: V3[] = [];
+    const n = detail === 'high' ? 16 : 10;
+    for (let i = 0; i <= n; i++) {
+      const a = Math.PI - (Math.PI * i) / n;
+      pts.push(V(R * Math.cos(a), 0, -dd / 2 + 0.5 + R * Math.sin(a)));
+    }
+    const eh = Math.min(rangeH * 1.25, 16);
+    liteArcade(d.at(0, 0.02, 0), pts, { storeys: [{ height: eh * 0.55, columns: true }, { height: eh * 0.45, columns: true, parapet: 1.0 }], bay: 4.2, depth: 1.6, material: 'travertine', detail });
+    // The gallery behind the arches (a brick back wall and a floor at mid height), the wings
+    // either side of the hemicycle out to the full width, a terrace paving in front.
+    ribbonWallLocal(d, pts, -1.6 - 3.4, -1.6 - 2.8, 0, eh, 'brick');
+    ribbonWallLocal(d, pts, -1.6 - 2.8, -1.6, eh * 0.55 - 0.3, eh * 0.55, 'concrete');
+    for (const sx of [-1, 1]) {
+      if (w / 2 - R > 2) hall(d, sx > 0 ? R : -w / 2, -dd / 2 + 0.5, sx > 0 ? w / 2 : -R, cz, { mat: 'brick', height: eh, roof: 'flat', doors: 1, detail, arched: true, windowRows: 2 });
+      wallRun(d, sx * R, -dd / 2 + 0.5, sx * R, cz, 0, eh, 0.8, 'brick');
+    }
+    d.span('paving_travertine', -R - 1, 0.0, -dd / 2, R + 1, 0.06, -dd / 2 + 3);
+    spots.push(spot(`${lm.id}:exedra`, 'vista', 0, 0.06, -dd / 2 + 1.5, Math.PI));
+    far.geo(new THREE.CylinderGeometry(R, R, eh, 10, 1, true, -Math.PI / 2, Math.PI), 'travertine', 0, eh / 2, -dd / 2 + 0.5);
+  } else if (!sub) {
+    liteColonnade(d, [V(w / 2 - 2, 0.02, -dd / 2 + 3.2), V(-w / 2 + 2, 0.02, -dd / 2 + 3.2)].reverse(), { columnHeight: Math.min(rangeH * 0.6, 7), spacing: 3.2, depth: 2.6, back: 'none', material: 'marble', detail, order: 'corinthian' });
+  }
+  // Lamps at the gate: the palace is guarded day and night.
+  for (const sx of [-1, 1]) wallTorch(ctx, d, sx * 4.2, 3.2, -dd / 2 + 3.95, 0);
   spots.push(spot(`${lm.id}:gate`, 'door', 0, 0, -dd / 2 + 2, 0), spot(`${lm.id}:guard`, 'npc', 4, 0, -dd / 2 + 2, Math.PI), spot(`${lm.id}:court`, 'vista', 0, 0, (cz0 + cz1) / 2 - 4, 0));
   far.span('brick', -w / 2, 0, -dd / 2 + 4, w / 2, rangeH, dd / 2);
   far.span('brick', -hw / 2, 0, dd / 2 - wing - hd * 0.5, hw / 2, H, dd / 2 - 0.5);
