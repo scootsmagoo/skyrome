@@ -260,13 +260,15 @@ export function createTerrainMaterial(u: TerrainUniforms): THREE.MeshStandardMat
         '#include <aomap_fragment>',
         `#include <aomap_fragment>
         {
-          float tAo = mix( 1.0, tAO, 0.85 );
+          // The photos' cavity AO, gently on the sky light: at full strength the ground went
+          // charcoal in twilight (sky-lit only) while the buildings around it stayed bright.
+          float tAo = mix( 1.0, tAO, 0.5 );
           reflectedLight.indirectDiffuse *= tAo;
-          reflectedLight.indirectSpecular *= tAo;
+          reflectedLight.indirectSpecular *= mix( 1.0, tAO, 0.85 );
         }`,
       );
   };
-  m.customProgramCacheKey = () => 'skyrome-terrain-v1';
+  m.customProgramCacheKey = () => 'skyrome-terrain-v2';
   return m;
 }
 

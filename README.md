@@ -166,4 +166,6 @@ The full plan is in the [Game Design Document](docs/GDD.md) (§17–§18).
 
 Skyrome is a fan-made, independent project. It is not affiliated with or endorsed by Bethesda Softworks, ZeniMax or Microsoft. *The Elder Scrolls* and *Skyrim* are their trademarks, and they're mentioned here only to describe the genre.
 
-No open-source license has been chosen for this repository yet.
+## License
+
+The code is released under the [MIT License](LICENSE). Third-party assets keep their own licenses: the textures are CC0 and the fonts are under the SIL Open Font License 1.1 (see [Credits](#credits) and [`docs/credits/`](docs/credits/)).

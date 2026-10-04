@@ -13,11 +13,14 @@ export const PLAYER_SPEEDS = {
   turnRate: 12, // rad/s for the body to face the move direction in third person
 };
 
+/** Fastest auto-recenter swing (rad/s): slow enough to read as the camera settling, not turning. */
+export const RECENTER_MAX_RATE = 0.5;
+
 /**
  * Third-person auto-recenter (GDD §4.3, Trackpad and Keyboard presets): the camera yaw eases
  * toward "behind the character" at up to `maxRate` rad/s, slowing near alignment. Pure.
  */
-export function recenterYaw(yaw: number, heading: number, dt: number, maxRate = 1): number {
+export function recenterYaw(yaw: number, heading: number, dt: number, maxRate = RECENTER_MAX_RATE): number {
   const target = heading + Math.PI;
   const d = Math.abs(wrapAngle(target - yaw));
   const rate = Math.min(maxRate, d * 1.5);
@@ -47,11 +50,22 @@ export class PlayerController implements System {
   sprintMode: 'hold' | 'toggle' = 'hold';
   /** Sneak key: a toggle (default) or held. */
   sneakMode: 'toggle' | 'hold' = 'toggle';
-  /** Seconds without look input while moving before the camera swings behind you; 0 = off. */
+  /** Seconds of moving without look input before the camera swings behind you; 0 = off. */
   autoRecenterDelay = 0;
   private sprintLatched = false;
   private stillTime = 0;
-  private noLookTime = 0;
+  /** Seconds the player has been moving without touching the camera (resets on stop or look). */
+  private moveTime = 0;
+  /**
+   * The camera yaw the move keys are read against while the auto-recenter swings the camera.
+   * Movement is camera-relative, so without this latch a diagonal (W+D) would chase the turning
+   * camera and run in a circle; latched, the path stays straight while the camera settles behind
+   * it. Cleared (null = follow the camera) when the keys change, the player stops or looks.
+   */
+  private inputYaw: number | null = null;
+  private inputKeys = 0;
+  /** p.yaw as this controller left it: anything else turning the camera (a lock-on, a teleport) drops the latch. */
+  private yawAfter = NaN;
 
   constructor(
     private readonly game: Game,
@@ -61,11 +75,18 @@ export class PlayerController implements System {
   update(dt: number) {
     const { input } = this.game;
     const p = this.player;
+    if (p.yaw !== this.yawAfter) this.inputYaw = null;
     const look = input.consumeLook(dt);
     p.yaw += look.yaw;
     p.pitch = clamp(p.pitch + look.pitch, -1.45, 1.35);
-    this.noLookTime = input.lookActive ? 0 : this.noLookTime + dt;
-    this.autoRecenter(dt);
+    const axes = input.moveAxes();
+    const moving = axes.x !== 0 || axes.z !== 0;
+    const keys = (axes.x + 1) * 3 + (axes.z + 1);
+    if (input.lookActive || !moving || keys !== this.inputKeys) this.inputYaw = null;
+    this.inputKeys = keys;
+    this.moveTime = input.lookActive || !moving ? 0 : this.moveTime + dt;
+    this.autoRecenter(dt, axes);
+    this.yawAfter = p.yaw;
     if (input.pressed('jump') && this.canJump()) this.jumpQueued = true;
     if (input.pressed('walkToggle')) p.walkMode = !p.walkMode;
     if (this.sneakMode === 'hold') p.sneaking = input.down('sneak');
@@ -77,7 +98,8 @@ export class PlayerController implements System {
     const { input } = this.game;
     const p = this.player;
     const axes = input.moveAxes();
-    p.lookForward(fwd);
+    const yaw = this.inputYaw ?? p.yaw;
+    fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw)); // camera forward (or the latched one)
     right.set(-fwd.z, 0, fwd.x); // camera right
     wish.set(0, 0, 0).addScaledVector(right, axes.x).addScaledVector(fwd, -axes.z);
     const moving = wish.lengthSq() > 1e-6;
@@ -112,15 +134,23 @@ export class PlayerController implements System {
     this.jumpQueued = false;
   }
 
-  /** Swing the third-person camera behind a moving character after a pause in look input. */
-  private autoRecenter(dt: number) {
+  /**
+   * Swing the third-person camera behind a character who has been moving for a while without
+   * look input (GDD §4.3). Forward and forward-diagonal only: strafing and backing up keep the
+   * camera where the player put it. The move keys stay mapped to the yaw the swing started from,
+   * so a held W+D keeps running in a straight line while the camera comes round behind it.
+   */
+  private autoRecenter(dt: number, axes: { x: number; z: number }) {
     const p = this.player;
-    if (this.autoRecenterDelay <= 0 || p.viewMode !== 'third' || p.combatStance) return;
-    if (this.noLookTime < this.autoRecenterDelay) return;
-    const axes = this.game.input.moveAxes();
-    // Only while heading forward: strafing or backing up would chase its own tail.
-    if (axes.z >= 0) return;
+    if (this.autoRecenterDelay <= 0 || p.viewMode !== 'third' || p.combatStance) {
+      this.inputYaw = null;
+      return;
+    }
+    if (this.moveTime < this.autoRecenterDelay || axes.z >= 0) return;
     if (Math.hypot(p.velocity.x, p.velocity.z) < 0.5) return;
-    p.yaw = recenterYaw(p.yaw, p.heading, dt);
+    const next = recenterYaw(p.yaw, p.heading, dt);
+    if (next === p.yaw) return;
+    this.inputYaw ??= p.yaw;
+    p.yaw = next;
   }
 }
