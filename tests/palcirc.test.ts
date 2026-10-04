@@ -294,6 +294,8 @@ describe('palcirc walkability', () => {
     registerColliders({ physics: p } as unknown as Game, built.colliders);
     const end = walk(p, new THREE.Vector3(0, AUG.low + 1.0, -16.5), new THREE.Vector3(0, 0, 1), 4.4, 10);
     expect(end.y).toBeGreaterThan(AUG.up - 0.15);
+    // ...on through the front hall and the doorway in the upper peristyle's (solid) back wall.
+    expect(end.z).toBeGreaterThan(5);
   });
 
   // The facade's tabernae and the gallery over the Circus are walked on the real terrain in

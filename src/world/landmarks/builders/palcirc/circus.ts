@@ -728,8 +728,8 @@ export function buildApron(b: MeshBuilder, ground: (x: number, z: number) => num
     const road = roadInCircus(id);
     if (road.length < 2) continue;
     const outer = (z: number) => {
-      // The road's inner edge (half its 5 m width in from the centreline), at most 12 m out.
-      const x = Math.abs(polyX(road, z)) - 2.6;
+      // Up to the road's kerb (its paving is 3 m wide; the kerbstones stand just outside it), at most 12 m out.
+      const x = Math.abs(polyX(road, z)) - 1.8;
       return side * Math.max(edge + 1.5, Math.min(edge + 12, x));
     };
     const pts: [number, number][] = [];

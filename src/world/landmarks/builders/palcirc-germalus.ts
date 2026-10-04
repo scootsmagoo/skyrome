@@ -580,7 +580,8 @@ function vicusTuscusCorner(ctx: LandmarkContext, b: MeshBuilder, d: Draw, spots:
   let n: [number, number] = [-t[1], t[0]];
   // The hill (and the Lupercal) side.
   if (n[0] * -A[0] + n[1] * -A[1] < 0) n = [-n[0], -n[1]];
-  const off = 4.1;
+  // Property line just past the road's kerb (its basalt is 3 m wide) and a 1.6 m sidewalk.
+  const off = 3.4;
   const start = 9;
   streetRow(ctx, b, spots, lamps, {
     a: [A[0] + n[0] * off + t[0] * start, A[1] + n[1] * off + t[1] * start],

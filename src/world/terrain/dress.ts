@@ -21,6 +21,7 @@ import { hash2 } from '../../core/Rng';
 import * as atlas from '../../data/atlas';
 import { getMaterial } from '../../gfx/materials';
 import { registerColliders } from '../../gfx/MeshBuilder';
+import { Layer } from '../../core/Physics';
 import { WORLD_SCALE } from '../coords';
 import { bodyAt, type WaterBody } from '../water/bodies';
 import { addTerrainGrass } from './grass';
@@ -38,9 +39,11 @@ declare module '../../core/Game' {
 // ------------------------------------------------------------------------------- built probe
 
 /**
- * Is (x, z) built over? A ray down from high above: if the first World surface it meets stands
- * more than 0.25 m above the terrain, something (a floor, a wall, a street, a trunk) is there.
- * Answers are cached per 2 m cell and computed only when first asked.
+ * Is (x, z) built over? A ray down from high above: if the first World surface it meets is not
+ * the terrain's own heightfield and stands at (or above) the terrain, something (a floor, a wall,
+ * a street, a paved square, a trunk) is there; surfaces that are not terrain-owned count from
+ * 0.35 m below it (paving sits a few centimetres up, the heightfield's triangles differ a little
+ * from the bilinear height). Answers are cached per 2 m cell and computed only when first asked.
  */
 export class BuiltProbe {
   private readonly cells: Uint8Array;
@@ -64,8 +67,9 @@ export class BuiltProbe {
     if (!v) {
       const cx = this.hm.minX + i * this.cell, cz = this.hm.minZ + j * this.cell;
       const g = this.hm.heightAt(cx, cz);
-      const hit = this.game.physics.groundHeight(cx, cz, g + 45, 46);
-      v = this.cells[k] = hit !== null && hit > g + 0.25 ? 2 : 1;
+      const hit = this.game.physics.raycast({ x: cx, y: g + 45, z: cz }, { x: 0, y: -1, z: 0 }, 46, Layer.World);
+      const terrain = hit && this.game.terrain && hit.owner === this.game.terrain;
+      v = this.cells[k] = hit && (terrain ? hit.point.y > g + 0.25 : hit.point.y > g - 0.35) ? 2 : 1;
     }
     return v === 2;
   }
@@ -258,6 +262,9 @@ export function dressTerrain(game: Game, opts: DressOptions = {}): TerrainDressi
   const group = new THREE.Group();
   group.name = 'terrain-dressing';
   game.scene.add(group);
+  // Rapier only sees colliders in ray casts after a step: flush everything registered since the
+  // last one (the landmarks, streets and squares built during loading) before probing.
+  game.physics.step(1e-4);
   const built = new BuiltProbe(game, hm);
   const b = playableBounds(hm, 8);
   const w = new Float32Array(LAYER_COUNT);
