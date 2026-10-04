@@ -90,6 +90,11 @@ Spots (`LandmarkBuild.spots`) use the landmark's prefix (`colos-`, `ludus-`, `me
 location ids (`ludus-cavea`, `ludus-armamentarium`, `ludus-saniarium`, `ludus-cellae`), and the
 Meta Sudans has `lacus-metae`, so NPC schedules can point at them directly.
 
+The Ludus stands carry 86 `spectator-N` seats and 8 `spectator-standing-N` places (a practice
+day's 80–120 onlookers). For game-day crowds in the amphitheatre, `colosseumLayout()` and
+`caveaSection()` (exported from `colos-colosseum.ts`) give every row's offset and height, so a
+crowd system can place sitters along any row without thousands of spots.
+
 `addReadables()` makes inscriptions readable now: looking at one within reach shows **Read** and
 the interact key opens the text (Latin as cut, translation, a line of context) in the UI's book
 reader. Wired: the Colosseum dedication and the shrine of Nemesis; the Ludus gate, its painted
