@@ -2,7 +2,7 @@
  * The combat parts of the HUD that the UI module doesn't draw (docs/GDD.md §15.1): the lock-on
  * bracket, the arena crowd-favor meter with the missio chant, the cinnabar edge pulse that
  * telegraphs an unblockable attack (§6.4), the net prompt, sand in the eyes, hold rings (yield,
- * salute, finishing a body) and a centre message. Plain DOM over the canvas, mounted inside the
+ * salute, finishing a body), the dark of a knockout and a centre message. Plain DOM over the canvas, mounted inside the
  * UI's HUD root when there is one (so it hides with the HUD under menus).
  */
 import './combat-hud.css';
@@ -16,6 +16,8 @@ export interface CombatHudState {
   net: number | null;
   blind: boolean;
   hold: { progress: number; label: string } | null;
+  /** The player is out cold: the world goes dark (the HUD stays). */
+  dark?: boolean;
 }
 
 function el(tag: string, cls: string, ...kids: (Node | string)[]): HTMLElement {
@@ -38,6 +40,7 @@ export class CombatHud {
   private chant: HTMLElement;
   private edge = el('div', 'cb-edge');
   private blind = el('div', 'cb-blind');
+  private dark = el('div', 'cb-dark');
   private netMesh = el('div', 'cb-netmesh');
   private net: HTMLElement;
   private netBar: HTMLElement;
@@ -101,7 +104,7 @@ export class CombatHud {
     this.msg = el('div', 'cb-msg', this.msgBig, this.msgSmall);
 
     // Sand and the net cover the world, not the HUD: that layer goes first, under the bars and compass.
-    this.under = el('div', 'cb-hud', this.blind, this.netMesh);
+    this.under = el('div', 'cb-hud', this.blind, this.netMesh, this.dark);
     this.el = el('div', 'cb-hud', this.edge, this.lock, this.favor, this.net, this.hold, this.msg);
     parent.prepend(this.under);
     parent.appendChild(this.el);
@@ -157,6 +160,7 @@ export class CombatHud {
     this.netMesh.classList.toggle('is-on', s.net !== null);
     if (s.net !== null) this.netBar.style.transform = `scaleX(${Math.max(0, Math.min(1, s.net)).toFixed(3)})`;
     this.blind.classList.toggle('is-on', s.blind);
+    this.dark.classList.toggle('is-on', !!s.dark);
 
     // Hold ring.
     this.hold.classList.toggle('is-on', !!s.hold);

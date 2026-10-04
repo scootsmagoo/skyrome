@@ -9,7 +9,7 @@ import { NereusScript } from '../src/ai/combat/nereus';
 import type { Action } from '../src/combat/Combatant';
 import { TIMING } from '../src/combat/timing';
 import { combatProfileFor } from '../src/rpg/enemies';
-import { addNpc, addPlayer, fakeEnv, makeCore, run } from './combat-fakes';
+import { addNpc, addPlayer, deaths, fakeEnv, makeCore, run } from './combat-fakes';
 
 describe('crowd favor (§6.10)', () => {
   it('starts at 30 (+10 with plebs Fama > 30) and moves by the table', () => {
@@ -109,7 +109,7 @@ describe('the bout through the core', () => {
     for (let i = 0; i < 3 && f.status === 'active'; i++) core.applyHit(p, f, { kind: 'light', start: 0, end: 1, resolved: true, chain: 1 });
     expect(f.status).toBe('ko');
     expect(bout.winner).toBe('player');
-    expect(env.of('actor:killed')).toHaveLength(0);
+    expect(deaths(env)).toHaveLength(0);
   });
 });
 

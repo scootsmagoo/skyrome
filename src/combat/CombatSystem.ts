@@ -21,6 +21,7 @@ import { CombatBrain } from '../ai/combat/CombatBrain';
 import { NereusScript } from '../ai/combat/nereus';
 import { brainProfileFrom, type BrainProfile } from '../ai/combat/types';
 import type { Surface } from '../audio/FootstepDriver';
+import type { GameEvents } from '../core/Events';
 import type { Game, System } from '../core/Game';
 import { codeLabel } from '../core/Input';
 import { DEG, clamp, damp, wrapAngle } from '../core/math';
@@ -36,10 +37,14 @@ import { rollLoot } from '../rpg/loot';
 import type { CombatProfile } from '../rpg/types';
 import { VitalsImpl } from '../rpg/vitals';
 import { canArrest, resolveYield, type YieldChoice } from '../rpg/yield';
-import type { BossView, CompassMarker, DialogueChoiceView, DialogueLine, DialogueView, TargetView } from '../ui/types';
+import type { BossView, CompassMarker, TargetView } from '../ui/types';
 import { AvatarCombatView, ActorBody } from './adapters';
+import { ChoiceView } from './choice';
 import type { BoutOptions } from './ArenaBout';
-import { ENEMIES, visualsFor, type EnemyOptions } from './archetypes';
+import { visualsFor, type EnemyOptions, type Opener } from './archetypes';
+import { Bodies } from './bodies';
+import { StreetDanger } from './danger';
+import { adoptProfile, resolveSpawn, type NpcLike } from './spawnSpec';
 import { Combatant, type CombatView } from './Combatant';
 import { CombatCore, type CombatEnv, type Projectile } from './CombatCore';
 import { angleTo, dist2D } from './geometry';
@@ -90,6 +95,12 @@ export interface RegisterOptions {
   driven?: boolean;
   /** Tier label for the enemy bar. */
   tierLabel?: string;
+  /** Echoed in 'actor:killed' (quest tags). */
+  tags?: string[];
+  /** Attach Nereus' script (net, phases) even when the profile's archetype says 'retiarius'. */
+  nereus?: boolean;
+  /** A scripted first exchange (the mq-01 tutorial pair). */
+  opener?: Opener;
 }
 
 export interface SpawnOptions extends EnemyOptions {
@@ -105,6 +116,40 @@ export interface SpawnOptions extends EnemyOptions {
   lod?: 'high' | 'low' | 'auto';
   drawn?: boolean;
   name?: string;
+  // ---- the words quest content uses (src/content/director.ts)
+  /** Practice arms (= `lusio`). A practice gladiator also starts an arena bout with crowd favor. */
+  practice?: boolean;
+  /** A rixa: non-lethal by rule (§6.9); drawing a blade makes it an assault. */
+  brawl?: boolean;
+  /** Override the yield threshold (fraction of health). */
+  yieldAt?: number;
+  /** Hostile to the player at once (default: as the archetype is). */
+  hostile?: boolean;
+  /** Echoed in 'actor:killed'.tags (with 'dead', 'ko' or 'fled'). */
+  tags?: string[];
+  /** Owning quest id (also a tag; picks the quest's scripted openers). */
+  quest?: string;
+  /** Named NPC id (game.npcs): its name, title, look, stat block and essential flag. */
+  npc?: string;
+  /** Boss id ('boss-nereus'): wins over the archetype. */
+  boss?: string;
+  /** A scripted first exchange: 'chain' or 'delayed-power'. */
+  opener?: Opener;
+  /** Start an arena bout (crowd favor, missio) against this foe (default: practice gladiators). */
+  bout?: boolean;
+}
+
+/** Options for engage(actor) without a second combatant (quest content): fight the player. */
+export interface EngageOptions {
+  hostile?: boolean;
+  practice?: boolean;
+  brawl?: boolean;
+  yieldAt?: number;
+  tags?: string[];
+  quest?: string;
+  name?: string;
+  /** The profile to fight with when the actor isn't a combatant yet. */
+  profile?: CombatProfile;
 }
 
 const tmp = new THREE.Vector3();
@@ -143,6 +188,18 @@ export class CombatSystem implements System, PlayerCombatHost {
   private lastStruck: { c: Combatant; at: number } | null = null;
   private seq = 0;
   private cached: CombatSettings;
+  /** Dev-scene settings that are never persisted (arena URL parameters). */
+  private overrides: Partial<CombatSettings> = {};
+  /** Fighters spawned per quest so far (for its scripted openers). */
+  private questSpawns = new Map<string, number>();
+  /** Lootable bodies (§6.14). */
+  readonly bodies: Bodies;
+  /** Muggers in the streets at night (§13.3). */
+  readonly danger: StreetDanger;
+  /** Game flow: the combat module does not take over the death prompt. */
+  readonly handlesDeath = false;
+  /** The player is out cold (the screen goes dark) until this time (game.elapsed). */
+  private blackoutUntil = -1;
 
   constructor(
     readonly game: Game,
@@ -151,8 +208,10 @@ export class CombatSystem implements System, PlayerCombatHost {
     this.rng = new Rng(opts.seed ?? 'combat');
     this.items = game.items ?? new ItemDb(ITEMS);
     this.cached = combatSettings(game.settings.data);
-    game.settings.onChange((s) => (this.cached = combatSettings(s)));
+    game.settings.onChange((s) => (this.cached = { ...combatSettings(s), ...this.overrides }));
     this.core = new CombatCore(this.env());
+    this.bodies = new Bodies(game, this.items, () => this.rng.next());
+    this.danger = new StreetDanger(game, this);
     this.core.difficulty = this.cached.difficulty;
     this.input = new PlayerCombat(this);
     // Rope: shared line geometry for the thrown net (a flat disc) and the drape over a netted body.
@@ -167,6 +226,12 @@ export class CombatSystem implements System, PlayerCombatHost {
 
   settings(): CombatSettings {
     return this.cached;
+  }
+
+  /** Dev scenes: override settings for this session only (never written to the player's settings). */
+  override(o: Partial<CombatSettings>) {
+    Object.assign(this.overrides, o);
+    this.cached = { ...combatSettings(this.game.settings.data), ...this.overrides };
   }
 
   // ------------------------------------------------------------------ env
@@ -281,9 +346,9 @@ export class CombatSystem implements System, PlayerCombatHost {
     c.shieldCondition = worn.find((w) => w.slot === 'offHand')?.condition ?? 1;
     c.armor = effectiveArmorRating(worn.filter((w) => w.def.armor), c.stats);
     c.family = armorFamilyOf(worn.map((w) => w.def));
-    // The avatar carries what is equipped.
+    // The avatar carries what is equipped (the game flow's PlayerLook does it, with colours, when present).
     const av = this.game.player.avatar;
-    if (av instanceof HumanoidAvatar) {
+    if (av instanceof HumanoidAvatar && !this.game.getSystem('playerLook')) {
       const wm = c.weaponItem?.visual?.weapon ?? 'none';
       const sm = c.shieldItem?.visual?.shield ?? 'none';
       if (av.equipment.weapon !== wm) av.setWeapon(wm);
@@ -353,11 +418,13 @@ export class CombatSystem implements System, PlayerCombatHost {
       boss: o.boss,
     });
     c.brawl = !!o.brawl;
+    if (o.tags) c.tags = [...o.tags];
     if (o.voice) c.voice = o.voice;
     else if (actor.avatar instanceof HumanoidAvatar) c.voice = actor.avatar.appearance.sex === 'female' ? 'f' : 'm';
     if (o.ai !== false) {
       c.brain = new CombatBrain(brainProfileFrom(p, o.brain), () => this.rng.next());
-      if (p.archetype === 'boss-nereus') {
+      c.brain.opener = o.opener ?? null;
+      if (o.nereus || p.archetype === 'boss-nereus') {
         const s = new NereusScript();
         s.onNetLost = () => {
           c.hasNet = false;
@@ -379,45 +446,61 @@ export class CombatSystem implements System, PlayerCombatHost {
     return c;
   }
 
-  /** Spawn a §13 enemy archetype at a position: avatar, actor, combatant and AI. */
+  /**
+   * Spawn a §13 enemy archetype at a position: avatar, actor, combatant and AI. Unknown archetypes
+   * fall back to the RPG's §13.1 table (murmillo, retiarius, cloacarius…), then to a knife thug.
+   */
   spawnEnemy(archetypeId: string, position: THREE.Vector3Like, opts: SpawnOptions = {}): Combatant {
-    const spec = ENEMIES[archetypeId];
-    if (!spec) throw new Error(`[combat] unknown enemy archetype "${archetypeId}" (known: ${Object.keys(ENEMIES).join(', ')})`);
     const game = this.game;
-    const o: SpawnOptions = { ...spec.defaults, ...opts };
-    const profile = spec.profile(this.items, o);
-    const id = o.id ?? `${archetypeId}-${++this.seq}`;
-    const app = randomAppearance(new Rng(o.seed ?? id), spec.role);
-    const vis = visualsFor(this.items, profile);
-    const avatar = createHumanoid(app, { lod: o.lod ?? 'auto', weapon: vis.weapon, shield: vis.shield });
-    const actor = new Actor(game, { id, position, heading: o.heading ?? 0, layer: Layer.Npc, avatar });
+    const npc = opts.npc ? (game.npcs?.get(opts.npc) as NpcLike | undefined) : undefined;
+    const qi = opts.quest ? (this.questSpawns.get(opts.quest) ?? 0) : 0;
+    if (opts.quest) this.questSpawns.set(opts.quest, qi + 1);
+    const r = resolveSpawn({ ...opts, archetype: archetypeId, npc: npc ?? (opts.npc ? { id: opts.npc } : undefined) }, this.items, qi);
+    const id = opts.id ?? `${r.spec.id}-${++this.seq}`;
+    // Someone with this id is already here (a respawned quest foe): replace it.
+    const old = this.core.get(id);
+    if (old && !old.isPlayer) this.despawn(old);
+    const app = r.appearance ?? randomAppearance(new Rng(opts.seed ?? id), r.spec.role);
+    const vis = visualsFor(this.items, r.profile);
+    const avatar = createHumanoid(app, { lod: opts.lod ?? 'auto', weapon: vis.weapon, shield: vis.shield });
+    const actor = new Actor(game, { id, position, heading: opts.heading ?? 0, layer: Layer.Npc, avatar });
     game.actors.add(actor);
     this.spawned.set(id, actor);
     // Footsteps (hobnails and mail for soldiers).
     const steps = game.audio?.footsteps?.attach(actor, {
       surfaceAt: this.surfaceAt ?? undefined,
-      gear: profile.armorFamily === 'mail' || profile.armorFamily === 'plate' ? 'armor' : 'cloth',
+      gear: r.profile.armorFamily === 'mail' || r.profile.armorFamily === 'plate' ? 'armor' : 'cloth',
       voice: app.sex === 'female' ? 'f' : 'm',
     });
     if (steps) this.footsteps.set(id, () => steps.detach());
+    const team = opts.team ?? r.team;
     const c = this.register(actor, {
-      profile,
-      team: o.team ?? spec.team,
-      group: o.group ?? spec.group,
-      name: o.name ?? spec.name,
-      title: spec.title,
-      lawful: spec.lawful,
-      brawl: spec.brawl,
-      boss: spec.boss,
-      brain: spec.brain,
-      aggro: o.aggro ?? 18,
+      profile: r.profile,
+      team,
+      group: opts.group ?? r.group,
+      name: r.name,
+      title: r.title,
+      lawful: r.lawful,
+      essential: r.essential,
+      brawl: r.brawl,
+      boss: r.spec.boss,
+      brain: r.spec.brain,
+      aggro: opts.aggro ?? 18,
       driven: true,
-      drawn: o.drawn,
+      drawn: opts.drawn,
+      tags: r.tags,
+      nereus: r.nereus,
+      opener: r.opener ?? undefined,
     });
-    if (spec.team === 'hostile' || o.team === 'hostile') this.core.setHostile(c.team, 'player');
-    const engage = o.engage;
+    if (r.hostile) this.core.setHostile(team, 'player');
+    if (c.brawl && this.playerC) this.playerC.brawl = true;
+    const engage = opts.engage;
     if (engage === true && this.playerC) this.core.engage(c, this.playerC);
     else if (engage instanceof Combatant) this.core.engage(c, engage);
+    // A practice bout of the Ludus has a crowd: favor, the chant, missio (§6.10).
+    const bout = opts.bout ?? (r.lusio && r.spec.team === 'ludus' && (opts.practice !== undefined || !!opts.quest));
+    if (bout && this.playerC && (!this.core.bout || this.core.bout.over)) this.startBout({ foes: [c], lusio: r.lusio, purse: r.spec.boss ? 40 : 10 });
+    else if (bout && this.core.bout && !this.core.bout.over) this.core.bout.foes.add(c.id);
     return c;
   }
 
@@ -445,11 +528,59 @@ export class CombatSystem implements System, PlayerCombatHost {
     return this.core.get(typeof idOrActor === 'string' ? idOrActor : idOrActor.id);
   }
 
-  /** `a` fights `b` (combatants, actors or ids). */
-  engage(a: string | Actor | Combatant, b: string | Actor | Combatant) {
-    const ca = this.get(a);
-    const cb = this.get(b);
-    if (ca && cb) this.core.engage(ca, cb);
+  /**
+   * `a` fights `b` (combatants, actors or ids). Without `b` (or with options instead, as quest
+   * content calls it) `a` fights the player. An actor that isn't a combatant yet — an NPC another
+   * module placed — is made one first, from its definition's profile (adoptActor). Returns whether
+   * a fight started.
+   */
+  engage(a: string | Actor | Combatant, b?: string | Actor | Combatant | EngageOptions): boolean {
+    const opts = b && !(b instanceof Combatant) && !(b instanceof Actor) && typeof b !== 'string' ? (b as EngageOptions) : undefined;
+    const ca = this.get(a) ?? this.adoptActor(a, opts);
+    const cb = opts || b === undefined ? this.playerC : (this.get(b as string | Actor | Combatant) ?? this.adoptActor(b as string | Actor, undefined));
+    if (!ca || !cb || ca === cb) return false;
+    if (opts) {
+      if (opts.tags) for (const t of opts.tags) if (!ca.tags.includes(t)) ca.tags.push(t);
+      if (opts.quest && !ca.tags.includes(opts.quest)) ca.tags.push(opts.quest);
+      if (opts.brawl) {
+        ca.brawl = true;
+        if (cb.isPlayer) cb.brawl = true;
+      }
+      if (opts.yieldAt !== undefined && ca.brain) ca.brain.profile.yieldAt = opts.yieldAt;
+      if (opts.name) ca.name = opts.name;
+    }
+    if ((opts?.hostile ?? true) && cb.isPlayer && ca.team !== 'player' && !ca.lawful) this.core.setHostile(ca.team, cb.team);
+    this.core.engage(ca, cb);
+    return ca.target === cb;
+  }
+
+  /**
+   * Make an actor another module placed into a combatant (it is driven by combat only while it
+   * fights, then handed back). Its profile comes from its NPC definition (game.npcs, or the actor's
+   * own `def`), else from its faction, else a civilian who defends himself.
+   */
+  adoptActor(a: string | Actor | Combatant, opts?: EngageOptions): Combatant | undefined {
+    if (a instanceof Combatant) return a;
+    const actor = typeof a === 'string' ? this.game.actors.get(a) : a;
+    if (!actor || actor === (this.game.player as unknown)) return actor ? (this.playerC ?? undefined) : undefined;
+    const existing = this.core.get(actor.id);
+    if (existing) return existing;
+    const ext = actor as Actor & { def?: NpcLike; hostile?: boolean; essential?: boolean };
+    const def = (this.game.npcs?.get(actor.id) as NpcLike | undefined) ?? ext.def;
+    const ad = adoptProfile(actor.id, this.items, { npc: def, hostile: ext.hostile ?? opts?.hostile, essential: ext.essential });
+    const profile = opts?.profile ?? (opts?.practice ? { ...ad.profile, weapon: 'rudis' } : ad.profile);
+    return this.register(actor, {
+      profile,
+      team: ad.team,
+      group: ad.group,
+      name: opts?.name ?? ad.name,
+      title: ad.title,
+      lawful: ad.lawful,
+      essential: ad.essential,
+      brawl: opts?.brawl,
+      tags: opts?.tags,
+      aggro: 0,
+    });
   }
 
   disengage(a: string | Actor | Combatant) {
@@ -596,6 +727,9 @@ export class CombatSystem implements System, PlayerCombatHost {
     const ev = this.game.events;
     ev.on('item:equipped', () => this.refreshPlayerLoadout());
     ev.on('item:unequipped', () => this.refreshPlayerLoadout());
+    // New clothes replace the player's avatar object (src/game/PlayerLook.ts): fight with the new one.
+    ev.on('player:avatar', () => this.onPlayerAvatar());
+    ev.on('combat:death', (e) => this.onDeath(e));
     ev.on('combat:parry', (e) => {
       if (e.defenderId === this.playerC?.id) this.input.onParried();
     });
@@ -622,6 +756,7 @@ export class CombatSystem implements System, PlayerCombatHost {
       else if (e.context === 'brawl') this.hud?.message('You yield', 'The brawl is over. It cost you a tenth of your purse.', 3);
     });
     ev.on('combat:playerDefeated', (e) => {
+      if (e.outcome !== 'death') this.onPlayerKnockedOut(e);
       const msg: Record<string, [string, string]> = {
         death: ['MORTVVS ES', 'You have fallen.'],
         'knocked-out': ['You are knocked out', ''],
@@ -638,6 +773,67 @@ export class CombatSystem implements System, PlayerCombatHost {
       const c = this.core.get(e.actorId);
       if (c?.boss) this.game.events.emit('ui:subtitle', { text: e.phase === 2 ? 'Now you dance, tiro!' : 'No more games.', speaker: c.name, duration: 3 });
     });
+  }
+
+  /** The player's avatar was rebuilt: point the combatant's view at it and restore the stance. */
+  private onPlayerAvatar() {
+    const c = this.playerC;
+    const av = this.game.player?.avatar;
+    if (!c || !av) return;
+    c.view = AvatarCombatView.from(av);
+    c.view?.setDrawn(c.drawn);
+    c.view?.setBlocking(c.guardActive);
+    if (av instanceof HumanoidAvatar) c.voice = av.appearance.sex === 'female' ? 'f' : 'm';
+  }
+
+  /** A body to search, and the NPC module told of the death of someone it placed. */
+  private onDeath(e: GameEvents['combat:death']) {
+    const c = this.core.get(e.actorId);
+    if (!c || c.isPlayer) return;
+    this.bodies.add(e, c.name, () => c.position);
+    if (!this.spawned.has(c.id)) {
+      const actor = (c.body as ActorBody).actor;
+      const pop = (this.game as unknown as { population?: { kill?: (a: unknown) => void } }).population;
+      try {
+        pop?.kill?.(actor);
+      } catch (err) {
+        console.error('[combat] population.kill failed', err);
+      }
+    }
+  }
+
+  /**
+   * The player is out cold outside a bout's rules (§6.9): the screen goes dark for a few seconds.
+   * Street thugs take part of the purse and leave; the brawlers and the law simply stop. The bout
+   * and quest outcomes follow from the events.
+   */
+  private onPlayerKnockedOut(e: GameEvents['combat:playerDefeated']) {
+    const g = this.game;
+    this.blackoutUntil = g.elapsed + TIMING.playerKnockout;
+    const foes = (e.foes ?? []).map((id) => this.core.get(id)).filter((c): c is Combatant => !!c);
+    let robbed = 0;
+    for (const f of foes) {
+      this.core.disengage(f);
+      // They don't pick the fight up again the moment you stand.
+      this.core.aggro.delete(f.id);
+      if (!f.lawful && !f.brawl && f.team === 'hostile' && !robbed && !e.lusio) {
+        const inv = g.player?.inventory;
+        const purse = inv?.denarii ?? 0;
+        robbed = Math.round(purse * 0.5 * 4) / 4;
+        if (robbed > 0) inv?.spendDenarii(robbed);
+      }
+      if (this.spawned.has(f.id) && f.team === 'hostile') this.leaveAt.push({ c: f, at: g.elapsed + TIMING.playerKnockout * 0.6 });
+    }
+    if (robbed > 0) setTimeout(() => g.events.emit('ui:notify', { text: `You come to in the street. Your purse is ${robbed} denarii lighter.`, kind: 'warning' }), TIMING.playerKnockout * 1000);
+  }
+
+  private leaveAt: { c: Combatant; at: number }[] = [];
+
+  /** Hostile NPCs aware of the player but not fighting yet (music: tension). */
+  alerted(): boolean {
+    const pc = this.playerC;
+    if (!pc || this.core.playerInCombat) return false;
+    return this.core.list.some((c) => c.active && !c.isPlayer && !!c.brain && (c.brain.state === 'search' || (c.target === pc && dist2D(c.position, pc.position) < 60)));
   }
 
   private onYielded(id: string) {
@@ -849,14 +1045,21 @@ export class CombatSystem implements System, PlayerCombatHost {
       target: () => this.targetView(),
       boss: () => this.bossView(),
       inCombat: () => this.core.playerInCombat,
-      compassMarkers: () => [...(prevMarkers?.() ?? []), ...this.compassMarkers()],
+      // The game flow's wiring may already ask game.combat for its markers: never list one twice.
+      compassMarkers: () => {
+        const own = this.compassMarkers();
+        const prev = prevMarkers?.() ?? [];
+        if (!prev.length) return own;
+        const ids = new Set(own.map((m) => m.id));
+        return [...prev.filter((m) => !ids.has(m.id)), ...own];
+      },
     });
   }
 
   /** The enemy bar: the lock target, else the last one struck (for 4 s), else whoever is attacking. */
   targetView(): TargetView | null {
     const pc = this.playerC;
-    if (!pc) return null;
+    if (!pc || pc.status === 'ko' || pc.status === 'dead') return null;
     let c: Combatant | null = pc.lockTarget;
     if (!c && this.lastStruck && this.game.elapsed - this.lastStruck.at < 4 && this.lastStruck.c.status !== 'dead') c = this.lastStruck.c;
     if (!c || c.boss) return null;
@@ -908,7 +1111,8 @@ export class CombatSystem implements System, PlayerCombatHost {
     const favor = b && (!b.over || b.chant) ? { value: b.favor, chant: b.chant } : null;
     let net: number | null = null;
     if (pc && pc.entangled(now)) net = clamp((pc.entangledUntil - now) / TIMING.net.entangle, 0, 1);
-    return { lock, favor, net, blind: !!pc && now < pc.blindUntil, hold: this.input.hold };
+    const dark = !!pc && pc.status === 'ko' && this.game.elapsed < this.blackoutUntil;
+    return { lock, favor, net, blind: !!pc && now < pc.blindUntil, hold: this.input.hold, dark };
   }
 
   /** Mount the HUD overlay and the UI sources (called once the UI exists, or at install). */
@@ -944,6 +1148,7 @@ export class CombatSystem implements System, PlayerCombatHost {
       this.downHeading ??= p.heading;
       p.heading = this.downHeading;
     } else this.downHeading = null;
+    this.danger.fixedUpdate(dt);
     this.core.fixedStep(dt);
   }
 
@@ -972,7 +1177,45 @@ export class CombatSystem implements System, PlayerCombatHost {
         this.despawnAt.splice(i, 1);
       }
     }
+    // Thugs who robbed a knocked-out player are gone when the player comes to.
+    for (let i = this.leaveAt.length - 1; i >= 0; i--) {
+      if (g.elapsed >= this.leaveAt[i].at) {
+        const c = this.leaveAt[i].c;
+        if (c.status === 'active' && !c.target) this.despawn(c);
+        this.leaveAt.splice(i, 1);
+      }
+    }
+    this.housekeeping();
+    this.danger.update();
     this.updateVisuals(dt);
+  }
+
+  private nextHousekeeping = 0;
+
+  /**
+   * Every few seconds: old bodies expire (3 game days), and spawned enemies that are over —
+   * corpses already searched or far away, the fled, the spared who walked off — leave the world.
+   */
+  private housekeeping() {
+    const g = this.game;
+    if (g.elapsed < this.nextHousekeeping) return;
+    this.nextHousekeeping = g.elapsed + 3;
+    for (const id of this.bodies.expire()) {
+      const c = this.core.get(id);
+      if (c && this.spawned.has(id)) this.despawn(c);
+    }
+    const pp = g.player?.position;
+    if (!pp) return;
+    for (const c of [...this.core.list]) {
+      if (!this.spawned.has(c.id) || c.isPlayer) continue;
+      const d = dist2D(c.position, pp);
+      const over = c.status === 'fled' || (c.status === 'active' && c.team.startsWith('spared:'));
+      const corpse = c.status === 'dead';
+      if ((over && d > 30) || (corpse && d > 160) || (c.status === 'active' && !c.target && d > 220)) {
+        this.bodies.remove(c.id);
+        this.despawn(c);
+      }
+    }
   }
 
   lateUpdate(dt: number) {
@@ -999,45 +1242,6 @@ export class CombatSystem implements System, PlayerCombatHost {
   }
 }
 
-/** A tiny DialogueView for one choice (the yield decision). */
-class ChoiceView implements DialogueView {
-  readonly line: DialogueLine;
-  readonly choices: DialogueChoiceView[];
-  ended = false;
-  private fns = new Set<() => void>();
-
-  constructor(
-    readonly npcId: string,
-    readonly npcName: string,
-    readonly npcTitle: string | undefined,
-    text: string,
-    private readonly opts: { text: string; act: () => void; disabled?: boolean; reason?: string }[],
-  ) {
-    this.line = { speaker: 'narrator', text };
-    this.choices = opts.map((o) => ({ text: o.text, disabled: o.disabled, disabledReason: o.reason }));
-  }
-
-  choose(i: number) {
-    const o = this.opts[i];
-    if (!o || o.disabled || this.ended) return;
-    o.act();
-    this.end();
-  }
-
-  advance() {}
-
-  end() {
-    if (this.ended) return;
-    this.ended = true;
-    for (const f of [...this.fns]) f();
-  }
-
-  onChange(fn: () => void) {
-    this.fns.add(fn);
-    return () => this.fns.delete(fn);
-  }
-}
-
 function tierLabel(tier: string): string | undefined {
   const t: Record<string, string> = { civilian: 'Civilian', thug: 'Thug', bruiser: 'Bruiser', skirmisher: 'Skirmisher', miles: 'Soldier', veteran: 'Veteran', champion: 'Champion', elite: 'Elite' };
   return t[tier];
@@ -1050,6 +1254,18 @@ export function installCombat(game: Game, opts: InstallCombatOptions = {}): Comb
   game.combat = sys;
   game.addSystem(sys);
   sys.attachHud();
+  // Dev: &danger=0 keeps the streets safe; &danger=<site id> stages that encounter just ahead of
+  // you when the game starts (src/combat/danger.ts).
+  const d = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('danger') : null;
+  if (d === '0') sys.danger.enabled = false;
+  else if (d) {
+    game.events.on('game:started', () => {
+      const p = game.player;
+      if (!p) return;
+      const f = { x: -Math.sin(p.yaw), z: -Math.cos(p.yaw) };
+      sys.danger.trigger(d, { x: p.position.x + f.x * 20, z: p.position.z + f.z * 20 });
+    });
+  }
   return sys;
 }
 

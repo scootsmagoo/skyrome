@@ -50,6 +50,8 @@ export const TIMING = {
   shake: { light: 0.02, power: 0.05, heavy: 0.08 },
   /** A knockout lasts 60 game minutes = 3 real minutes (§6.9). */
   knockout: 180,
+  /** The player comes to sooner [design]: the screen goes dark for this long (robbed in the street). */
+  playerKnockout: 6,
   /** inCombat: a hostile aware of the player within 40 m at any moment in the last 8 s (§6). */
   inCombat: { radius: 40, memory: 8 },
   /** Code displacement (no root motion, §6.15), metres over the clip's active part. */

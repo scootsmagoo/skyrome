@@ -228,3 +228,13 @@
 .cb-msg.is-on { opacity: 1; transition-duration: 0.2s; }
 .cb-msg .big { font-family: var(--sr-display, serif); font-size: 2.2rem; font-weight: 700; letter-spacing: 0.14em; color: var(--cb-gold); text-shadow: var(--sr-shadow-text, 0 1px 2px #000); }
 .cb-msg .small { font-size: 1.15rem; font-style: italic; text-shadow: var(--sr-shadow-text, 0 1px 2px #000); }
+
+/* Knocked out: the world goes dark for a few seconds (the bars and messages stay on top). */
+.cb-dark {
+  position: absolute;
+  inset: 0;
+  background: #050302;
+  opacity: 0;
+  transition: opacity 0.9s ease-in;
+}
+.cb-dark.is-on { opacity: 0.93; transition: opacity 0.35s ease-out; }

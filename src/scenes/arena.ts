@@ -186,8 +186,6 @@ const scene: SceneDef = {
       const off = inv.equipped('offHand');
       if (off) inv.unequip('offHand');
     }
-    game.settings.set('combatDifficulty', difficulty);
-    if (q.has('toggle')) game.settings.set('blockToggle', q.get('toggle') === '1');
 
     const ui = installUI(game, uiRoot);
     ui.provide({
@@ -206,6 +204,8 @@ const scene: SceneDef = {
       }
     }
     const combat = installCombat(game, { hudRoot: uiRoot, seed: q.get('seed') ?? 113 });
+    // URL choices hold for this visit only (never written into the player's settings).
+    combat.override({ difficulty, streetDanger: false, ...(q.has('toggle') ? { blockToggle: q.get('toggle') === '1' } : {}) });
     if (!inRome) combat.surfaceAt = () => 'dirt';
     if (q.get('view') === 'first') player.setViewMode('first');
     // Start with the weapon in hand (&drawn=0 starts sheathed).

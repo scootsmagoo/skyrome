@@ -25,8 +25,18 @@ declare module '../core/Settings' {
     combatHitStop?: boolean;
     /** Reduce flashing (§4.5): the unblockable cue glows instead of pulsing. */
     reduceFlashing?: boolean;
+    /** World danger (§13.3): muggers lurk in the streets at night. Default on. */
+    combatStreetDanger?: boolean;
   }
 }
+
+/**
+ * The game flow's own settings (src/game/settings.ts) that combat follows: the Gameplay difficulty
+ * and the control preset's power-hold and lock-on values. Read structurally so this module never
+ * depends on the flow being present; they take precedence over the older `combat…` keys. Dev
+ * scenes use `CombatSystem.override()` (never persisted) instead of writing settings.
+ */
+type FlowSettings = { difficulty?: Difficulty; powerHoldS?: number; lockOnMode?: 'manual' | 'suggest' | 'auto' };
 
 export interface CombatSettings {
   difficulty: Difficulty;
@@ -39,21 +49,24 @@ export interface CombatSettings {
   hitStop: boolean;
   reduceFlashing: boolean;
   blockToggle: boolean;
+  streetDanger: boolean;
 }
 
 /** Read the combat settings with their defaults. */
 export function combatSettings(s: SettingsData): CombatSettings {
-  const hold = s.combatPowerHold ?? 0.35;
+  const flow = s as SettingsData & FlowSettings;
+  const hold = flow.powerHoldS ?? s.combatPowerHold ?? 0.35;
   return {
-    difficulty: s.combatDifficulty ?? 'normalis',
+    difficulty: flow.difficulty ?? s.combatDifficulty ?? 'normalis',
     simplePower: !!s.combatSimplePower,
     powerHold: Math.min(0.6, Math.max(0.2, Number.isFinite(hold) ? hold : 0.35)),
     parryWindow: s.combatParryWindow && s.combatParryWindow > 0 ? s.combatParryWindow : null,
     shake: s.combatShake ?? 'third',
-    lockOn: s.combatLockOn ?? 'suggest',
+    lockOn: flow.lockOnMode ?? s.combatLockOn ?? 'suggest',
     spaceAlwaysJumps: !!s.combatSpaceAlwaysJumps,
     hitStop: s.combatHitStop !== false,
     reduceFlashing: !!s.reduceFlashing,
     blockToggle: !!s.blockToggle,
+    streetDanger: s.combatStreetDanger !== false,
   };
 }

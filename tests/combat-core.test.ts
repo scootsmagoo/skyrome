@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import type { Action } from '../src/combat/Combatant';
 import { TIMING } from '../src/combat/timing';
 import { combatProfileFor, archetypeProfile } from '../src/rpg/enemies';
-import { addNpc, addPlayer, fakeEnv, items, makeCore, run } from './combat-fakes';
+import { addNpc, addPlayer, deaths, fakeEnv, items, makeCore, run } from './combat-fakes';
 
 const light = (chain = 1): Action => ({ kind: 'light', start: 0, end: 1, resolved: true, chain });
 const near = (x: number, y: number, d = 0.05) => Math.abs(x - y) <= d;
@@ -355,7 +355,7 @@ describe('knockouts, yields and flight (§6.9)', () => {
     core.engage(t, p);
     for (let i = 0; i < 10 && t.status === 'active'; i++) core.applyHit(p, t, light(1));
     expect(t.status).toBe('ko');
-    expect(env.of('actor:killed')).toHaveLength(0);
+    expect(deaths(env)).toHaveLength(0);
     expect(env.of('combat:knockout')).toHaveLength(1);
   });
 
@@ -405,7 +405,9 @@ describe('knockouts, yields and flight (§6.9)', () => {
     core.startBout({ lusio: true, foes: ['t'] });
     for (let i = 0; i < 5 && p.status === 'active'; i++) core.applyHit(t, p, light(1));
     expect(p.status).toBe('ko');
-    expect(env.of('combat:playerDefeated')).toEqual([{ outcome: 'saniarium-no-purse', byId: 't', lusio: true }]);
+    expect(env.of('combat:playerDefeated')).toEqual([{ outcome: 'saniarium-no-purse', byId: 't', lusio: true, foes: [] }]);
+    // Quests hear it as the player going down, not dying.
+    expect(env.of('actor:killed')).toEqual([{ victimId: 'player', killerId: 't', tags: ['ko'] }]);
   });
 
   it('the player yields in a brawl: the fight stops and costs a tenth of the purse (no inventory here)', () => {
@@ -437,7 +439,7 @@ describe('brawls (§6.9, AC-09)', () => {
     d2.brawl = true;
     for (let i = 0; i < 40 && p.status === 'active'; i++) core.applyHit(d2, p, light(1));
     expect(p.status).toBe('ko');
-    expect(env.of('actor:killed')).toHaveLength(0);
+    expect(deaths(env)).toHaveLength(0);
     expect((env.of('combat:playerDefeated')[0] as { outcome: string }).outcome).toBe('brawl-lost');
   });
 

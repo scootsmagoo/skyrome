@@ -849,34 +849,48 @@ export class CombatCore {
     c.motion = { vx: dx * v, vz: dz * v, until: this.now + seconds, accel: 30 };
   }
 
-  knockout(def: Combatant, by: Combatant | null, seconds = TIMING.knockout) {
+  knockout(def: Combatant, by: Combatant | null, seconds = def.isPlayer ? TIMING.playerKnockout : TIMING.knockout) {
     if (def.status === 'dead' || def.status === 'ko') return;
     const essential = def.essential && !def.isPlayer;
+    const foes = def.isPlayer ? this.list.filter((o) => o.target === def).map((o) => o.id) : undefined;
     def.status = 'ko';
     def.koUntil = this.now + (essential ? 3 : seconds);
     this.downed(def);
     def.view?.setDead(true);
     this.env.sfx('body.fall', this.chest(def));
     this.env.emit('combat:knockout', { actorId: def.id, byId: by?.id, seconds: essential ? 3 : seconds });
+    // Out of the fight: quests count a knockout like a kill (docs/CONTENT.md `kill:<tag>`).
+    this.env.emit('actor:killed', { victimId: def.id, killerId: by?.id, tags: this.outcomeTags(def, 'ko') });
     if (by?.isPlayer && (by.weapon.skill === 'brawling' || by.weapon.class === 'unarmed')) by.sheet?.useSkill('brawling', XP.brawling.knockout);
     const bout = this.bout;
     if (def.isPlayer) {
       const outcome = bout?.lusio ? 'saniarium-no-purse' : def.brawl ? 'brawl-lost' : 'knocked-out';
       this.boutOver('foe');
-      this.env.emit('combat:playerDefeated', { outcome, byId: by?.id, lusio: !!bout?.lusio });
+      this.env.emit('combat:playerDefeated', { outcome, byId: by?.id, lusio: !!bout?.lusio, foes });
     } else if (bout && bout.foes.has(def.id)) this.foeDown(def);
+  }
+
+  /** The tags 'actor:killed' carries: the combatant's own (quest tags, archetype) and how it ended. */
+  outcomeTags(c: Combatant, how: 'dead' | 'ko' | 'fled'): string[] {
+    const tags = [...c.tags];
+    const arch = c.profile?.archetype;
+    if (arch && !tags.includes(arch)) tags.push(arch);
+    tags.push(how);
+    return tags;
   }
 
   kill(def: Combatant, by: Combatant | null) {
     if (def.status === 'dead') return;
     def.status = 'dead';
+    // Dead by the rules even when the blow didn't take the last point (a refused missio, Hold F).
+    if (!def.vitals.dead) def.vitals.damage(def.vitals.health.current + 1, by?.id);
     this.downed(def);
     def.view?.setDead(true);
     def.body.setGhost?.(true);
     this.env.sfx(this.voice(def, 'death'), this.chest(def));
     this.env.sfx('body.fall', this.chest(def));
     const p = def.position;
-    this.env.emit('actor:killed', { victimId: def.id, killerId: by?.id, tags: def.profile?.archetype ? [def.profile.archetype] : undefined });
+    this.env.emit('actor:killed', { victimId: def.id, killerId: by?.id, tags: this.outcomeTags(def, 'dead') });
     this.env.emit('combat:death', {
       actorId: def.id,
       killerId: by?.id,
@@ -1059,12 +1073,15 @@ export class CombatCore {
       return;
     }
     if (b.state === 'flee') {
-      const from = c.lastHitBy ? this.get(c.lastHitBy) : null;
-      if (!from || dist2D(from.position, c.position) > 30) {
+      // Away from whoever it runs from (the last to hit it, else its foe); gone at 30 m, or after 15 s.
+      const from = (c.lastHitBy ? this.get(c.lastHitBy) : null) ?? c.target ?? this.player;
+      c.fleeSince ??= now;
+      if (!from || dist2D(from.position, c.position) > 30 || now - c.fleeSince > 15) {
         c.status = 'fled';
         c.target = null;
         c.driven = false;
         this.env.emit('combat:fled', { actorId: c.id });
+        this.env.emit('actor:killed', { victimId: c.id, killerId: from?.id, tags: this.outcomeTags(c, 'fled') });
         if (this.bout?.foes.has(c.id)) this.foeDown(c);
       }
     }
@@ -1378,10 +1395,13 @@ export class CombatCore {
       p.action = null;
       p.guardWanted = false;
     };
+    // Quests hear the player give up like any other yield ('actor:yielded', actorId 'player').
+    const by = foes[0]?.id;
     if (this.bout && !this.bout.over) {
       const r = this.bout.playerYields(this.env.rng);
       stop();
       p.view?.play('yield');
+      this.env.emit('actor:yielded', { actorId: p.id, byId: by });
       this.env.emit('combat:playerYielded', { context: 'arena', spared: r.spared, outcome: r.outcome });
       this.boutOver('foe');
       if (!r.spared && r.outcome === 'death') this.kill(p, null);
@@ -1389,6 +1409,7 @@ export class CombatCore {
     }
     if (foes.length && foes.every((f) => f.brawl)) {
       stop();
+      this.env.emit('actor:yielded', { actorId: p.id, byId: by });
       const purse = p.inventory?.denarii ?? 0;
       if (purse > 0) p.inventory?.spendDenarii(Math.round(purse * 0.1 * 4) / 4);
       this.env.emit('combat:playerYielded', { context: 'brawl', outcome: 'lost 10% of the purse' });
@@ -1396,6 +1417,7 @@ export class CombatCore {
     }
     if (foes.some((f) => f.lawful)) {
       stop();
+      this.env.emit('actor:yielded', { actorId: p.id, byId: by });
       this.env.emit('combat:playerYielded', { context: 'arrest' });
       return { context: 'arrest' };
     }

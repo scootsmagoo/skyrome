@@ -215,6 +215,8 @@ export class Combatant {
   hasNet = false;
   /** Pila stuck in the shield (block mitigation −50 %). */
   pila = 0;
+  /** When it started to run (combat clock), or null. */
+  fleeSince: number | null = null;
   /** Yield already granted once (the yield floor applies to the first crossing only). */
   yieldedOnce = false;
   /** Last time this combatant attacked (arena "no attack for 6 s"). */
@@ -222,6 +224,11 @@ export class Combatant {
   /** Last time it was hit, and by whom. */
   lastHitAt = -Infinity;
   lastHitBy: string | null = null;
+  /**
+   * Tags echoed in 'actor:killed' (quest tags from the spawner, the archetype), followed there by
+   * how the fight ended for it: 'dead', 'ko' or 'fled'.
+   */
+  tags: string[] = [];
 
   constructor(init: CombatantInit) {
     this.id = init.id;

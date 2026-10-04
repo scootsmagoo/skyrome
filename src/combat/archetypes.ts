@@ -13,9 +13,9 @@
  *   boss-nereus        Nereus the retiarius: practice trident, net, phases 75/45, yields at 15 %
  */
 import type { ShieldModel, WeaponModel } from '../actors/appearance';
-import type { AvatarRole } from '../actors/avatar/variants';
+import { isAvatarRole, type AvatarRole } from '../actors/avatar/variants';
 import type { BrainProfile } from '../ai/combat/types';
-import { archetypeProfile, combatProfileFor } from '../rpg/enemies';
+import { archetypeDef, archetypeProfile, combatProfileFor } from '../rpg/enemies';
 import type { ItemDb } from '../rpg/items';
 import type { CombatProfile } from '../rpg/types';
 import { NEREUS } from '../ai/combat/nereus';
@@ -49,11 +49,15 @@ export interface EnemySpec {
 }
 
 /** Replace steel with practice arms for a lusio (§6.10). */
-function practice(p: CombatProfile, o: EnemyOptions): CombatProfile {
+export function practice(p: CombatProfile, o: EnemyOptions): CombatProfile {
   if (!o.lusio) return p;
+  if (p.weapon === 'rudis' || p.weapon === 'tridens-lusorius' || p.weapon === 'sica-lusoria' || p.weapon === 'fists' || p.weapon === 'caestus') return p;
   const spear = p.weapon === 'tridens' || p.weapon === 'hasta';
   return { ...p, weapon: spear ? 'tridens-lusorius' : 'rudis' };
 }
+
+/** How a scripted fighter opens (docs/CONTENT.md §5.2, the mq-01 tutorial pair). */
+export type Opener = 'chain' | 'delayed-power';
 
 export const ENEMIES: Record<string, EnemySpec> = {
   grassator: {
@@ -167,8 +171,53 @@ export function visualsFor(items: ItemDb, p: CombatProfile): { weapon: WeaponMod
   return { weapon: w ?? (p.weapon === 'tridens-lusorius' ? 'trident' : 'none'), shield: s ?? 'none' };
 }
 
-export function enemySpec(id: string): EnemySpec | undefined {
-  return ENEMIES[id];
+/** Gladiator armaturae: they fight for the Ludus, in practice arms unless told otherwise. */
+const GLADIATORS = new Set(['murmillo', 'thraex', 'hoplomachus', 'secutor', 'retiarius', 'provocator', 'dimachaerus', 'eques']);
+/** Avatar looks for archetypes whose id isn't an avatar role. */
+const ROLE_FOR: Record<string, AvatarRole> = {
+  praetorianus: 'praetorian',
+  desertor: 'legionary',
+  'veteranus-coniurationis': 'legionary',
+  falcarius: 'dacian',
+  sagittarius: 'syrian',
+  'agens-parthicus': 'syrian',
+};
+
+/**
+ * Any other §13.1 archetype of the RPG tables (murmillo, retiarius, cloacarius, funditor,
+ * sicarius…): its tier and kit, a fitting look, the Ludus team for gladiators, the law for lawful
+ * ones. Ranged kits fight in melee until ranged attacks ship.
+ */
+export function genericSpec(id: string): EnemySpec | undefined {
+  const a = archetypeDef(id);
+  if (!a) return undefined;
+  const gladiator = GLADIATORS.has(id);
+  const role: AvatarRole = isAvatarRole(id) ? id : (ROLE_FOR[id] ?? (a.lawful ? 'urban-cohort' : 'plebeian-man'));
+  return {
+    id,
+    name: a.name,
+    title: a.latin ? a.latin.charAt(0).toUpperCase() + a.latin.slice(1) : undefined,
+    role,
+    profile: (items, o) => practice(archetypeProfile(id, items, { tier: o.tier, kit: o.kit }), o),
+    lawful: a.lawful,
+    team: gladiator ? 'ludus' : a.lawful ? 'law' : 'hostile',
+    group: a.faction ?? id,
+    defaults: gladiator ? { lusio: true } : undefined,
+  };
 }
+
+/** The spec for an archetype id: the authored ones above, then any RPG archetype. */
+export function enemySpec(id: string): EnemySpec | undefined {
+  return ENEMIES[id] ?? genericSpec(id);
+}
+
+/**
+ * Scripted openers for quests that spawn plain archetypes (until content passes `opener` itself):
+ * mq-01's tutorial pair — A (knife) opens with a light chain, B (cudgel) waits 3 s and then winds
+ * up a long power attack, so the parry lesson always lands (docs/CONTENT.md §5.2).
+ */
+export const QUEST_OPENERS: Record<string, { archetype: string; seq: { opener: Opener; kit: number }[] }> = {
+  'mq-01-madida-capena': { archetype: 'grassator', seq: [{ opener: 'chain', kit: 0 }, { opener: 'delayed-power', kit: 1 }] },
+};
 
 export const ENEMY_IDS = Object.keys(ENEMIES);

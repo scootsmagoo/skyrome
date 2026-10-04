@@ -40,7 +40,7 @@ declare module '../core/Events' {
     /** A boss changed phase. */
     'combat:phase': { actorId: string; phase: number };
     /** The player lost: death, a knockout, or a refused missio. Game flow decides what happens. */
-    'combat:playerDefeated': { outcome: 'death' | 'knocked-out' | 'saniarium' | 'saniarium-no-purse' | 'brawl-lost'; byId?: string; lusio: boolean };
+    'combat:playerDefeated': { outcome: 'death' | 'knocked-out' | 'saniarium' | 'saniarium-no-purse' | 'brawl-lost'; byId?: string; lusio: boolean; foes?: string[] };
     /** The player held Y to yield. `context` says what the yield means (§6.9). */
     'combat:playerYielded': { context: 'brawl' | 'arena' | 'arrest' | 'none'; spared?: boolean; outcome?: string };
     /** Arena bout lifecycle and crowd favor (§6.10). */

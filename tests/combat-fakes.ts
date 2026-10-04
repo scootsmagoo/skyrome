@@ -141,3 +141,8 @@ export function run(core: CombatCore, seconds: number, each?: () => void) {
     each?.();
   }
 }
+
+/** 'actor:killed' events that were real deaths (knockouts and flights carry 'ko' / 'fled' instead). */
+export function deaths(env: RecordingEnv) {
+  return (env.of('actor:killed') as { victimId: string; tags?: string[] }[]).filter((e) => e.tags?.includes('dead'));
+}

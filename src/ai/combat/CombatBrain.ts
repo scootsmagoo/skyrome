@@ -18,6 +18,7 @@
  *   call-help at combat start and at 50 % health (the system shouts to allies)
  *   flee      health ≤ fleeAt;  yield: health ≤ yieldAt (the system kneels the actor)
  *   search    lost sight for 2 s: go to the last known position, search 20 s, then idle
+ *   opener    scripted first exchanges (a light chain; a delayed, long power wind-up)
  *
  * Bosses add a `BrainScript` (Nereus' net, phases). Pure logic: see ./types.ts.
  */
@@ -54,7 +55,14 @@ export class CombatBrain {
   /** For the scripted bosses: the next attack's kind. */
   forceNext: 'light' | 'power' | null = null;
   script: BrainScript | null = null;
+  /**
+   * A scripted first exchange (docs/CONTENT.md §5.2, the mq-01 tutorial pair): 'chain' takes the
+   * first turn with a three-hit light chain; 'delayed-power' waits 3 s, then opens with a power
+   * attack wound up for a full second, so a beginner sees it coming and can parry.
+   */
+  opener: 'chain' | 'delayed-power' | null = null;
 
+  private chainLeft = 0;
   private nextDecide = 0;
   private circleDir = 1;
   private circleSwitchAt = 0;
@@ -190,6 +198,16 @@ export class CombatBrain {
       }
       // First swing a moment after contact, not instantly.
       this.nextAttackAt = now + 0.4 + this.rng() * 0.6;
+      if (this.opener === 'chain') {
+        this.chainLeft = 3;
+        this.nextAttackAt = now + 0.6;
+      } else if (this.opener === 'delayed-power') {
+        this.tokenCooldownUntil = now + 3;
+        this.nextAttackAt = now + 3;
+        this.forceNext = 'power';
+        this.pendingMinWindup = 1;
+      }
+      this.opener = null;
     }
     if (!this.shoutedHalf && hp <= 0.5) {
       this.shoutedHalf = true;
@@ -221,7 +239,7 @@ export class CombatBrain {
     if (!has && now >= this.tokenCooldownUntil && d <= CIRCLE.max + 3) {
       has = svc.requestToken(P.tokensCost);
       if (has) {
-        this.turnAttacks = 1 + Math.floor(this.rng() * 3);
+        this.turnAttacks = this.chainLeft > 0 ? this.chainLeft : 1 + Math.floor(this.rng() * 3);
         this.nextAttackAt = Math.max(this.nextAttackAt, now + 0.15 + this.rng() * 0.35);
       }
     }
@@ -230,7 +248,8 @@ export class CombatBrain {
 
     // Attack — a skilled fighter (chance blockSkill) doesn't swing into the target's wind-up: it
     // keeps its guard and strikes in the target's recovery instead (at most 1.5 s late).
-    const opening = !(t.attacking && t.impactIn < Infinity) || !this.waitForOpening || now > this.nextAttackAt + 1.5;
+    const chaining = this.chainLeft > 0;
+    const opening = chaining || !(t.attacking && t.impactIn < Infinity) || !this.waitForOpening || now > this.nextAttackAt + 1.5;
     if (this.state === 'engage' && p.self.canAct && now >= this.nextAttackAt && d <= p.self.reach - 0.05 && opening) {
       let kind: 'light' | 'power' | 'feint' = this.rng() < P.powerChance ? 'power' : 'light';
       if (P.canFeint && this.rng() < 0.25 * P.aggression) kind = 'feint';
@@ -238,13 +257,16 @@ export class CombatBrain {
         kind = this.forceNext;
         this.forceNext = null;
       }
+      if (chaining) kind = 'light';
       I.attack = kind;
       if (this.pendingMinWindup > 0) {
         I.minWindup = this.pendingMinWindup;
         this.pendingMinWindup = 0;
       }
       if (kind !== 'feint') this.turnAttacks--;
-      this.nextAttackAt = now + this.attackInterval * (0.85 + 0.3 * this.rng());
+      // A chain swings again as soon as the last blow is over (inside the 0.35 s chain gap).
+      if (chaining) this.chainLeft--;
+      this.nextAttackAt = this.chainLeft > 0 ? now : now + this.attackInterval * (0.85 + 0.3 * this.rng());
       this.waitForOpening = this.rng() < P.blockSkill;
       // Taking the token to attack drops a reactive guard (§6.13).
       this.reactive = false;
