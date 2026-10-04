@@ -180,7 +180,7 @@ function aqueductOverGate(ctx: LandmarkContext, d: Draw, far: Draw, w: number, H
     const g = Math.min(ctx.groundAt(x - pier / 2, z), ctx.groundAt(x + pier / 2, z));
     d.span('tufa', x - pier / 2, g - 0.5, z - thick / 2, x + pier / 2, spring, z + thick / 2, { collide: true });
     d.span('travertine', x - pier / 2 - 0.08, spring - 0.25, z - thick / 2 - 0.08, x + pier / 2 + 0.08, spring, z + thick / 2 + 0.08);
-    if (detail === 'high') d.span('foliage_broad', x - pier / 2 - 0.03, g + 0.2, z - thick / 2 - 0.03, x - pier / 2 + 0.3, spring - 0.3, z - thick / 2 + 0.25);
+    if (detail === 'high' && i % 2 === 0) d.span('foliage_olive', x - pier / 2 - 0.03, g + 0.2, z - thick / 2 - 0.03, x - pier / 2 + 0.12, g + 0.2 + (spring - g) * 0.35, z - thick / 2 + 0.25);
   }
   for (let i = -nb; i <= nb; i++) {
     const x = i * bay;
@@ -193,8 +193,15 @@ function aqueductOverGate(ctx: LandmarkContext, d: Draw, far: Draw, w: number, H
   d.span('concrete', -L, top + 0.25, z - thick / 2, L, top + 1.5, z - thick / 2 + 0.35);
   d.span('concrete', -L, top + 0.25, z + thick / 2 - 0.35, L, top + 1.5, z + thick / 2);
   d.span('peperino', -L, top + 1.5, z - thick / 2 - 0.05, L, top + 1.75, z + thick / 2 + 0.05);
-  // The leak: moss streaks down the arch over the road, drips, a puddle and wet stones.
-  d.span('foliage_broad', -1.2, spring - 1.5, z - thick / 2 - 0.04, 1.2, top + 0.3, z - thick / 2 - 0.01);
+  // The leak: dark wet streaks and a few threads of moss down the arch over the road, drips, a
+  // puddle and wet stones.
+  const rs = ctx.rng.fork('leak');
+  for (let i = 0; i < 7; i++) {
+    const x = rs.range(-r * 0.9, r * 0.9);
+    const y1 = top + 0.2, y0 = spring + Math.sqrt(Math.max(0, r * r - x * x)) - rs.range(0, 0.3);
+    const wd = rs.range(0.12, 0.35);
+    d.span(i % 3 === 0 ? 'foliage_olive' : 'peperino', x - wd / 2, y0, z - thick / 2 - 0.03, x + wd / 2, y1, z - thick / 2 - 0.01);
+  }
   if (detail === 'high') {
     for (let i = 0; i < 6; i++) {
       const x = ctx.rng.range(-1.6, 1.6), zz = z + ctx.rng.range(-0.5, 0.5);
