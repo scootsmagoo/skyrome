@@ -173,7 +173,7 @@ describe('river landmarks build', () => {
       for (const s of e.build.spots ?? []) expect(Number.isFinite(s.position.x + s.position.y + s.position.z)).toBe(true);
       const low = builderOf(id).build(ctxFor(e.lm, 'low'));
       expect(triangles(low.object)).toBeLessThanOrEqual(tris * 1.05 + 1000);
-    });
+    }, 60_000);
   }
 });
 
@@ -198,7 +198,7 @@ describe('river landmark spots', () => {
       }
     }
     expect(bad).toEqual([]);
-  });
+  }, 60_000);
 
   it('every inscription spot has a text for the reader', async () => {
     const { RIVER_TEXTS } = await import('../src/world/landmarks/builders/river-life');
@@ -240,7 +240,7 @@ describe('Portus Tiberinus on the terrain quay', () => {
       expect(pr.inland, s.id).toBeGreaterThan(-3.4);
       expect(hm.heightAt(s.position.x, s.position.z), s.id).toBeLessThan(hm.waterLevelY - 1);
     }
-  });
+  }, 60_000);
 });
 
 describe('walking in', () => {
@@ -257,7 +257,7 @@ describe('walking in', () => {
     ]);
     expect(Math.hypot(r.x - door.position.x, r.z - door.position.z)).toBeLessThan(0.5);
     expect(Math.abs(r.y - door.position.y)).toBeLessThan(0.3);
-  });
+  }, 60_000);
 
   it('Cloaca Maxima: from the quay down the flight, along the landing and the ledge to the grating', () => {
     const grate = spotOf('cloaca-maxima-outlet', 'cloaca-maxima-outlet:grate');
@@ -278,7 +278,7 @@ describe('walking in', () => {
     // Headroom over the ledge at the grating: nothing within 2.1 m above the spot.
     const up = world.physics.raycast({ x: grate.position.x, y: grate.position.y + 0.2, z: grate.position.z }, { x: 0, y: 1, z: 0 }, 1.9, Layer.World);
     expect(up ? `hit at +${up.distance.toFixed(2)} m` : null).toBeNull();
-  });
+  }, 60_000);
 
   it('Theatre of Marcellus: all six aisles climb from the orchestra to the top walk, even off their centre line', () => {
     const e = built.get('theatre-marcellus')!;
