@@ -51,6 +51,8 @@ export interface CellRec {
   bounds: { minX: number; minZ: number; maxX: number; maxZ: number };
   y: number;
   near: { handle: BatchHandle; colliders: RAPIER.Collider[] } | null;
+  /** Street furniture and props (built within `detailR`). */
+  detail: { handle: BatchHandle; colliders: RAPIER.Collider[] } | null;
   far: BatchHandle | null;
   d: number;
 }
@@ -60,6 +62,8 @@ export interface StreamerOptions {
   midR?: number;
   lowR?: number;
   cellR?: number;
+  /** Street furniture / props of the cells. */
+  detailR?: number;
   farMax?: number;
   /** Max milliseconds of building per frame (one build always runs when something is due). */
   budgetMs?: number;
@@ -92,7 +96,7 @@ export class CityStreamer implements System {
     private readonly H: HeightFn,
     opts: StreamerOptions = {},
   ) {
-    this.o = { nearR: 36, midR: 85, lowR: 190, cellR: 230, farMax: 3200, budgetMs: 6, ...opts };
+    this.o = { nearR: 30, midR: 85, lowR: 165, cellR: 230, detailR: 110, farMax: 3200, budgetMs: 6, ...opts };
   }
 
   private get scale() {
@@ -108,7 +112,7 @@ export class CityStreamer implements System {
     this.prevCam.copy(pos);
     this.evaluate(pos);
     const s = this.scale;
-    const lim = { full: this.o.nearR * s, mid: this.o.midR * s, low: Math.min(this.o.lowR, 140) * s, cell: Math.min(this.o.cellR, 200) * s };
+    const lim = { full: this.o.nearR * s, mid: this.o.midR * s, low: Math.min(this.o.lowR, 140) * s, cell: Math.min(this.o.cellR, 200) * s, detail: this.o.detailR * s };
     let guard = 0;
     while (this.step(lim) && guard++ < 800);
     this.applyVisibility();
@@ -153,17 +157,20 @@ export class CityStreamer implements System {
   private urgent(): boolean {
     const s = this.scale;
     for (const r of this.blocks) if (!r.levels.full && r.layout && r.blk.detailed && r.d < this.o.nearR * 0.6 * s) return true;
-    for (const c of this.cells) if (!c.near && c.d < 60 * s) return true;
+    for (const c of this.cells) if ((!c.near || (!c.detail && c.work.detail.length)) && c.d < 50 * s) return true;
     return false;
   }
 
   /** Run evictions and the most urgent build. Returns false when nothing is due. */
-  private step(lim?: Record<Level | 'cell', number>): boolean {
+  private step(lim?: Record<Level | 'cell' | 'detail', number>): boolean {
     const s = this.scale;
     for (const r of this.blocks) {
       for (const l of LEVELS) if (r.levels[l] && r.d > this.radius(l) * 1.6 + 20) this.drop(r, l);
     }
-    for (const c of this.cells) if (c.near && c.d > this.o.cellR * 1.5 * s) this.dropCell(c);
+    for (const c of this.cells) {
+      if (c.near && c.d > this.o.cellR * 1.5 * s) this.dropCell(c);
+      if (c.detail && c.d > this.o.detailR * 1.5 * s) this.dropDetail(c);
+    }
     let best: (() => void) | null = null, bp = Infinity;
     for (const r of this.blocks) {
       if (!r.layout || !r.blk.detailed) continue;
@@ -177,8 +184,10 @@ export class CityStreamer implements System {
       }
     }
     const cellLim = lim?.cell ?? this.o.cellR * s;
+    const detailLim = lim?.detail ?? this.o.detailR * s;
     for (const c of this.cells) {
       if (!c.near && c.d < cellLim && c.d - 40 < bp) { bp = c.d - 40; best = () => this.buildCell(c); }
+      if (!c.detail && c.work.detail.length && c.d < detailLim && c.d - 20 < bp) { bp = c.d - 20; best = () => this.buildDetail(c); }
     }
     if (!best) return false;
     const t0 = performance.now();
@@ -231,6 +240,30 @@ export class CityStreamer implements System {
     this.builds.cellMs += performance.now() - t0;
   }
 
+  private buildDetail(c: CellRec) {
+    const t0 = performance.now();
+    const b = new MeshBuilder();
+    for (const item of c.work.detail) {
+      try {
+        item(b);
+      } catch (err) {
+        console.warn('[city] street prop failed', c.work.key, err);
+      }
+    }
+    const handle = this.pool.addGroup(b.build(`city:props:${c.work.key}`), { offset: groundOffset });
+    handle.setVisible(false);
+    c.detail = { handle, colliders: addColliders(this.game, b.colliders, { city: c.work.key }) };
+    this.builds.cell++;
+    this.builds.cellMs += performance.now() - t0;
+  }
+
+  private dropDetail(c: CellRec) {
+    if (!c.detail) return;
+    c.detail.handle.dispose();
+    for (const col of c.detail.colliders) this.game.physics.removeCollider(col);
+    c.detail = null;
+  }
+
   private dropCell(c: CellRec) {
     if (!c.near) return;
     c.near.handle.dispose();
@@ -259,6 +292,7 @@ export class CityStreamer implements System {
     for (const c of this.cells) {
       const show = !!c.near && c.d < this.o.cellR * 1.5 * this.scale;
       c.near?.handle.setVisible(show);
+      c.detail?.handle.setVisible(c.d < this.o.detailR * 1.5 * this.scale);
       c.far?.setVisible(!show && c.d < farMax);
     }
   }

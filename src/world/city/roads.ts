@@ -33,7 +33,10 @@ export interface CellWork {
   key: string;
   cx: number;
   cz: number;
+  /** Street surfaces and ground cover (built within the streamer's cell range). */
   items: WorkItem[];
+  /** Street furniture and props (built only close to the camera). */
+  detail: WorkItem[];
 }
 
 export interface StreetSpotDef {
@@ -197,17 +200,20 @@ export interface StreetWork {
   runs: { road: number; s0: number; s1: number; ctx: string }[];
 }
 
-/** Queue a work item into the cell at (x, z) (ignored outside the area). */
+/**
+ * Queue a work item into the cell at (x, z) (ignored outside the area): `base` for surfaces,
+ * `detail` for street furniture and props (built only near the camera).
+ */
 export function cellAdder(cells: Map<string, CellWork>, size: number, inArea: (x: number, z: number) => boolean) {
-  return (x: number, z: number, item: WorkItem) => {
+  return (x: number, z: number, item: WorkItem, layer: 'base' | 'detail' = 'base') => {
     if (!inArea(x, z)) return;
     const key = cellKey(x, z, size);
     let c = cells.get(key);
     if (!c) {
       const [ix, iz] = key.split(',').map(Number);
-      cells.set(key, (c = { key, cx: (ix + 0.5) * size, cz: (iz + 0.5) * size, items: [] }));
+      cells.set(key, (c = { key, cx: (ix + 0.5) * size, cz: (iz + 0.5) * size, items: [], detail: [] }));
     }
-    c.items.push(item);
+    (layer === 'detail' ? c.detail : c.items).push(item);
   };
 }
 
@@ -354,16 +360,18 @@ export function streetWork(plan: CityPlan, H: HeightFn, area: { minX: number; mi
       if (l) l.push(st);
       else byCell.set(k, [st]);
     }
-    for (const list of byCell.values()) {
+    for (const [key, list] of byCell) {
       add(list[0].p[0], list[0].p[1], (b) => {
+        // A fresh generator per build: a cell dropped and rebuilt gets the same props.
+        const r = new Rng(`market:${pl.id}:${key}`);
         const d = new Draw(b);
         for (const st of list) {
           const y = H(st.p[0], st.p[1]);
           // Stall fronts (local −z) face the middle of the square.
-          placeProp(d, st.kind as 'stall_fruit', st.p[0], y, st.p[1], st.facing + Math.PI, { rng });
-          if (rng.chance(0.5)) placeProp(d, rng.pick(['basket', 'crate', 'amphora_stack', 'sack'] as const), st.p[0] + rng.range(-1.6, 1.6), y, st.p[1] + rng.range(-1.6, 1.6), rng.range(0, 6), { rng });
+          placeProp(d, st.kind as 'stall_fruit', st.p[0], y, st.p[1], st.facing + Math.PI, { rng: r });
+          if (r.chance(0.5)) placeProp(d, r.pick(['basket', 'crate', 'amphora_stack', 'sack'] as const), st.p[0] + r.range(-1.6, 1.6), y, st.p[1] + r.range(-1.6, 1.6), r.range(0, 6), { rng: r });
         }
-      });
+      }, 'detail');
     }
     if (pl.id === 'forum-boarium') {
       // Cattle pens: timber post-and-rail enclosures near the river side of the square.
@@ -375,7 +383,8 @@ export function streetWork(plan: CityPlan, H: HeightFn, area: { minX: number; mi
         if (stalls.some((st) => Math.hypot(st.p[0] - p[0], st.p[1] - p[1]) < 7)) continue;
         pens++;
         const rot = rng.range(0, Math.PI);
-        add(p[0], p[1], (b) => cattlePen(new Draw(b).at(p[0], H(p[0], p[1]), p[1], rot), 8, 6, rng));
+        const seed = rng.int(0, 1e9);
+        add(p[0], p[1], (b) => cattlePen(new Draw(b).at(p[0], H(p[0], p[1]), p[1], rot), 8, 6, new Rng(seed)), 'detail');
       }
     }
   }
@@ -396,14 +405,16 @@ export function streetWork(plan: CityPlan, H: HeightFn, area: { minX: number; mi
         const L = Math.hypot(z[0] - a[0], z[1] - a[1]) || 1;
         const t: Vec2 = [(z[0] - a[0]) / L, (z[1] - a[1]) / L], n: Vec2 = [-t[1], t[0]];
         const count = rng.int(2, 4);
+        const seed = rng.int(0, 1e9);
         add(a[0], a[1], (b) => {
+          const r = new Rng(seed);
           const d = new Draw(b);
           for (let k = 0; k < count; k++) {
             const off = road.half + 1.8;
             const x = a[0] + t[0] * (k * 5.5) + n[0] * off, zz = a[1] + t[1] * (k * 5.5) + n[1] * off;
-            placeProp(d, k % 2 ? 'handcart' : 'cart', x, H(x, zz), zz, Math.atan2(t[0], t[1]) + rng.range(-0.2, 0.2), { rng });
+            placeProp(d, k % 2 ? 'handcart' : 'cart', x, H(x, zz), zz, Math.atan2(t[0], t[1]) + r.range(-0.2, 0.2), { rng: r });
           }
-        });
+        }, 'detail');
       }
     }
   }
@@ -423,7 +434,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, area: { minX: number; mi
         const w = st.width + 0.3;
         const mats = rng.pick([['fabric_white', 'fabric_red'], ['fabric_ochre', 'fabric_white'], ['fabric_white', 'fabric_blue']] as const);
         // velum(): width along local x (across the lane), poles at local z = −depth.
-        add(a[0], a[1], (b) => velum(new Draw(b).at(a[0], H(a[0], a[1]) + LIFT.lane, a[1], ang + Math.PI / 2), w, 2.2, 3.7, [mats[0], mats[1]]));
+        add(a[0], a[1], (b) => velum(new Draw(b).at(a[0], H(a[0], a[1]) + LIFT.lane, a[1], ang + Math.PI / 2), w, 2.2, 3.7, [mats[0], mats[1]]), 'detail');
       }
     }
   }
@@ -455,22 +466,28 @@ export function streetWork(plan: CityPlan, H: HeightFn, area: { minX: number; mi
     if (bench) spots.push({ id: `${pz.id}:bench`, kind: 'bench', position: at(pz.r - 1.1, -0.5), heading: pz.facing - Math.PI / 2 });
     const stall = rng.chance(0.35);
     if (stall) spots.push({ id: `${pz.id}:stall`, kind: 'stall', position: at(-pz.r + 1.6, 0.4), heading: pz.facing, tag: 'market' });
+    const travertine = rng.chance(0.5);
+    const amphorae = rng.chance(0.4);
+    const seed = rng.int(0, 1e9);
     add(pz.center[0], pz.center[1], (b) => {
       const poly: Polygon = [];
       for (let k = 0; k < 14; k++) {
         const a = (k / 14) * Math.PI * 2;
         poly.push([pz.center[0] + Math.cos(a) * pz.r, pz.center[1] + Math.sin(a) * pz.r]);
       }
-      buildPlaza(b, poly, H, { material: rng.chance(0.5) ? 'paving_travertine' : 'cobbles', lift: LIFT.piazza, cell: 2.5, skirt: 0.3 });
+      buildPlaza(b, poly, H, { material: travertine ? 'paving_travertine' : 'cobbles', lift: LIFT.piazza, cell: 2.5, skirt: 0.3 });
+    });
+    add(pz.center[0], pz.center[1], (b) => {
+      const r = new Rng(seed);
       const d = new Draw(b).at(pz.center[0], y, pz.center[1], rot);
       if (pz.kind === 'lacus') {
-        lacus(d.at(0, 0, 0.2, 0), rng);
+        lacus(d.at(0, 0, 0.2, 0), r);
         placeProp(d, 'lampstand', -1.9, 0, -1.5, 0, { variant: 0 });
-      } else compitalShrine(d.at(0, 0, -0.6, 0), rng);
+      } else compitalShrine(d.at(0, 0, -0.6, 0), r);
       if (bench) placeProp(d, 'bench_masonry', -(pz.r - 1.1), 0, 0.5, -Math.PI / 2, { variant: 0 });
-      if (stall) placeProp(d, 'stall', pz.r - 1.6, 0, -0.4, Math.PI, { rng });
-      if (rng.chance(0.4)) placeProp(d, 'amphora_stack', pz.r - 1.4, 0, 2.2, rng.range(0, 6), { rng });
-    });
+      if (stall) placeProp(d, 'stall', pz.r - 1.6, 0, -0.4, Math.PI, { rng: r });
+      if (amphorae) placeProp(d, 'amphora_stack', pz.r - 1.4, 0, 2.2, r.range(0, 6), { rng: r });
+    }, 'detail');
   }
   return { cells, junctions, spots, runs, lamps };
 }
@@ -578,9 +595,12 @@ function edgeDist(p: Vec2, poly: readonly Vec2[]): number {
   return d;
 }
 
-const COVER = new Set<number>([K.STREET, K.PIAZZA, K.SCRAP, K.FREE, K.ROAD, K.AQUEDUCT, K.WALL]);
-/** Landmark margins are paved (the walkable apron round a monument, where the stalls stand). */
-const PAVED = new Set<number>([K.MARGIN]);
+const COVER = new Set<number>([K.STREET, K.PIAZZA, K.SCRAP, K.FREE, K.AQUEDUCT, K.WALL]);
+/**
+ * Paved: landmark margins (the walkable apron round a monument, where the stalls stand) and the
+ * edges of the atlas roads' corridors between the sidewalks and the house fronts.
+ */
+const PAVED = new Set<number>([K.MARGIN, K.ROAD]);
 
 /**
  * Ground cover over the covered raster classes of one cell: packed earth over the town's scraps
@@ -589,17 +609,21 @@ const PAVED = new Set<number>([K.MARGIN]);
  * (45°) edge pieces, so the cover never shows the raster's staircase against the grass.
  */
 function groundCover(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: number, size: number) {
-  coverSet(b, plan, H, x0, z0, size, COVER, 'dirt', 0.04);
-  coverSet(b, plan, H, x0, z0, size, PAVED, 'cobbles', 0.05);
+  const g = plan.grid;
+  // Gravel and dirt roads keep earth edges; paved roads get cobbles up to the house fronts.
+  const pavedRoad = (i: number) => plan.roads[g.owner[i] - 1_000_000]?.style === 'paved';
+  const paved = (i: number) => PAVED.has(g.cls[i]) && (g.cls[i] !== K.ROAD || pavedRoad(i));
+  coverSet(b, plan, H, x0, z0, size, (i) => COVER.has(g.cls[i]) || (g.cls[i] === K.ROAD && !pavedRoad(i)), 'dirt', 0.04);
+  coverSet(b, plan, H, x0, z0, size, paved, 'cobbles', 0.05);
 }
 
-function coverSet(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: number, size: number, set: Set<number>, material: 'dirt' | 'cobbles', lift: number) {
+function coverSet(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: number, size: number, inSet: (i: number) => boolean, material: 'dirt' | 'cobbles', lift: number) {
   const g = plan.grid;
   const c = g.cell;
   const pos: number[] = [];
   const iz0 = Math.max(0, g.iz(z0) - 1), iz1 = Math.min(g.nz - 2, g.iz(z0 + size - 1e-6));
   const ix0 = Math.max(0, g.ix(x0) - 1), ix1 = Math.min(g.nx - 2, g.ix(x0 + size - 1e-6));
-  const on = (ix: number, iz: number) => set.has(g.cls[iz * g.nx + ix]);
+  const on = (ix: number, iz: number) => inSet(iz * g.nx + ix);
   const X = (fx: number) => g.x0 + (fx + 0.5) * c, Z = (fz: number) => g.z0 + (fz + 0.5) * c;
   const v = (fx: number, fz: number) => {
     const x = X(fx), z = Z(fz);

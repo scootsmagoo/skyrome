@@ -129,7 +129,9 @@ function mix(category: string, corridor: boolean): readonly (readonly [Item, num
  * Plan the street life of the area and queue its geometry with `add(x, z, item)` (the street cell
  * at x, z builds it). Deterministic.
  */
-export function lifeWork(plan: CityPlan, H: HeightFn, inArea: (x: number, z: number) => boolean, add: (x: number, z: number, item: (b: MeshBuilder) => void) => void): LifeWork {
+export function lifeWork(plan: CityPlan, H: HeightFn, inArea: (x: number, z: number) => boolean, add0: (x: number, z: number, item: (b: MeshBuilder) => void, layer: 'detail') => void): LifeWork {
+  // Everything here is street furniture: built only near the camera.
+  const add = (x: number, z: number, item: (b: MeshBuilder) => void) => add0(x, z, item, 'detail');
   const g = plan.grid;
   const spots: LifeSpot[] = [];
   const lamps: LampDef[] = [];

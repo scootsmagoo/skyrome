@@ -3,7 +3,7 @@
  * ordinary city.
  *
  *   ?scene=city&view=subura|argiletum|tuscus|velabrum|boarium|caelian|aventine|aerial|capitol|palatine|far|
- *              aqueduct|arcades|neroniani|wall|gate|agger|scalae|river
+ *              aqueduct|arcades|neroniani|wall|gate|agger|scalae|river|capena|circus|golden
  *              [&hour=9.5][&extent=core|city][&walk=1]
  *
  * Street views put the player on the nearest street-graph node and look along the street at eye
@@ -41,7 +41,10 @@ const VIEWS: Record<string, View> = {
   aventine: { at: [-150, 900], look: [-250, 1000], h: 1.7, street: true },
   aerial: { at: [250, 1030], look: [250, 80], h: 330 },
   capitol: { at: [-95, -150], look: [600, -250], h: 8 },
-  palatine: { at: [180, 300], look: [500, -300], h: 6 },
+  palatine: { at: [150, 330], look: [700, -200], h: 24 },
+  capena: { at: [470, 905], look: [300, 760], h: 1.7, street: true },
+  circus: { at: [280, 748], look: [156, 657], h: 1.7, street: true },
+  golden: { at: [640, 1180], look: [120, 520], h: 150 },
   far: { at: [-200, 80], look: [1200, -500], h: 30 },
   aqueduct: { at: [470, 700], look: [420, 590], h: 2 },
   arcades: { at: [380, 760], look: [800, 640], h: 70 },

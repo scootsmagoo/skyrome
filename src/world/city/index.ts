@@ -138,11 +138,11 @@ export async function buildCity(
   const keys = new Set([...work.cells.keys(), ...ribbons.keys()]);
   for (const key of keys) {
     const [ix, iz] = key.split(',').map(Number);
-    const w = work.cells.get(key) ?? { key, cx: (ix + 0.5) * size, cz: (iz + 0.5) * size, items: [] };
+    const w = work.cells.get(key) ?? { key, cx: (ix + 0.5) * size, cz: (iz + 0.5) * size, items: [], detail: [] };
     const rib = ribbons.get(key);
     const far = rib && !rib.empty ? pool.handle([farBatch.add(rib.geometry())]) : null;
     cells.push({
-      work: w, far, near: null, d: Infinity,
+      work: w, far, near: null, detail: null, d: Infinity,
       bounds: { minX: ix * size, minZ: iz * size, maxX: (ix + 1) * size, maxZ: (iz + 1) * size },
       y: H(w.cx, w.cz),
     });
