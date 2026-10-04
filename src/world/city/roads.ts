@@ -25,6 +25,7 @@ import type { Polygon, Vec2 } from '../../arch/fabric/types';
 import { K } from './raster';
 import type { CityPlan, PlanRoad, PlanStreet, PlanPiazza } from './plan';
 import type { HeightFn } from './massing';
+import type { LampDef } from './life';
 
 export type WorkItem = (b: MeshBuilder) => void;
 
@@ -37,7 +38,7 @@ export interface CellWork {
 
 export interface StreetSpotDef {
   id: string;
-  kind: 'fountain' | 'shrine' | 'bench' | 'stall';
+  kind: 'fountain' | 'shrine' | 'bench' | 'stall' | 'container';
   position: THREE.Vector3;
   heading: number;
   tag?: string;
@@ -188,16 +189,17 @@ function chunks(s0: number, s1: number, max: number): [number, number][] {
 
 export interface StreetWork {
   cells: Map<string, CellWork>;
+  /** Lamps of the street furniture (shrines, fountains). */
+  lamps: LampDef[];
   junctions: Junction[];
   spots: StreetSpotDef[];
   /** Road runs that got geometry (for the street graph: open / urban / rural). */
   runs: { road: number; s0: number; s1: number; ctx: string }[];
 }
 
-export function streetWork(plan: CityPlan, H: HeightFn, area: { minX: number; minZ: number; maxX: number; maxZ: number }, size = 128): StreetWork {
-  const inArea = (x: number, z: number) => x >= area.minX && x <= area.maxX && z >= area.minZ && z <= area.maxZ;
-  const cells = new Map<string, CellWork>();
-  const add = (x: number, z: number, item: WorkItem) => {
+/** Queue a work item into the cell at (x, z) (ignored outside the area). */
+export function cellAdder(cells: Map<string, CellWork>, size: number, inArea: (x: number, z: number) => boolean) {
+  return (x: number, z: number, item: WorkItem) => {
     if (!inArea(x, z)) return;
     const key = cellKey(x, z, size);
     let c = cells.get(key);
@@ -207,7 +209,14 @@ export function streetWork(plan: CityPlan, H: HeightFn, area: { minX: number; mi
     }
     c.items.push(item);
   };
+}
+
+export function streetWork(plan: CityPlan, H: HeightFn, area: { minX: number; minZ: number; maxX: number; maxZ: number }, size = 128): StreetWork {
+  const inArea = (x: number, z: number) => x >= area.minX && x <= area.maxX && z >= area.minZ && z <= area.maxZ;
+  const cells = new Map<string, CellWork>();
+  const add = cellAdder(cells, size, inArea);
   const spots: StreetSpotDef[] = [];
+  const lamps: LampDef[] = [];
   const runs: StreetWork['runs'] = [];
 
   // ---- ground cover: packed earth over every urban scrap of ground the streets and yards leave
@@ -433,8 +442,14 @@ export function streetWork(plan: CityPlan, H: HeightFn, area: { minX: number; mi
     if (pz.kind === 'lacus') {
       spots.push({ id: `${pz.id}:fountain`, kind: 'fountain', position: at(0, 1.2 + 0.65), heading: pz.facing, tag: 'lacus' });
       spots.push({ id: `${pz.id}:fountain2`, kind: 'fountain', position: at(-1.25, 0.6), heading: pz.facing - Math.PI / 2, tag: 'lacus' });
+      // A lampstand by the basin (the fountain is where the street gathers before dawn).
+      const lp = at(1.9, 1.5);
+      lamps.push({ x: lp.x, y: lp.y + 1.42, z: lp.z, kind: 'fountain' });
     } else {
       spots.push({ id: `${pz.id}:shrine`, kind: 'shrine', position: at(0, 1.6), heading: pz.facing + Math.PI, tag: 'compitum' });
+      // The Lares' lamp burns on the shrine's altar.
+      const lp = at(0, 0.6);
+      lamps.push({ x: lp.x, y: lp.y + 1.25, z: lp.z, kind: 'shrine' });
     }
     const bench = rng.chance(0.7);
     if (bench) spots.push({ id: `${pz.id}:bench`, kind: 'bench', position: at(pz.r - 1.1, -0.5), heading: pz.facing - Math.PI / 2 });
@@ -448,14 +463,16 @@ export function streetWork(plan: CityPlan, H: HeightFn, area: { minX: number; mi
       }
       buildPlaza(b, poly, H, { material: rng.chance(0.5) ? 'paving_travertine' : 'cobbles', lift: LIFT.piazza, cell: 2.5, skirt: 0.3 });
       const d = new Draw(b).at(pz.center[0], y, pz.center[1], rot);
-      if (pz.kind === 'lacus') lacus(d.at(0, 0, 0.2, 0), rng);
-      else compitalShrine(d.at(0, 0, -0.6, 0), rng);
+      if (pz.kind === 'lacus') {
+        lacus(d.at(0, 0, 0.2, 0), rng);
+        placeProp(d, 'lampstand', -1.9, 0, -1.5, 0, { variant: 0 });
+      } else compitalShrine(d.at(0, 0, -0.6, 0), rng);
       if (bench) placeProp(d, 'bench_masonry', -(pz.r - 1.1), 0, 0.5, -Math.PI / 2, { variant: 0 });
       if (stall) placeProp(d, 'stall', pz.r - 1.6, 0, -0.4, Math.PI, { rng });
       if (rng.chance(0.4)) placeProp(d, 'amphora_stack', pz.r - 1.4, 0, 2.2, rng.range(0, 6), { rng });
     });
   }
-  return { cells, junctions, spots, runs };
+  return { cells, junctions, spots, runs, lamps };
 }
 
 /** What a road runs through at a sample: 'skip' (inside a building), 'urban', 'open' or 'rural'. */
@@ -561,21 +578,28 @@ function edgeDist(p: Vec2, poly: readonly Vec2[]): number {
   return d;
 }
 
-const COVER = new Set<number>([K.STREET, K.PIAZZA, K.SCRAP, K.FREE, K.MARGIN, K.ROAD, K.AQUEDUCT, K.WALL]);
+const COVER = new Set<number>([K.STREET, K.PIAZZA, K.SCRAP, K.FREE, K.ROAD, K.AQUEDUCT, K.WALL]);
+/** Landmark margins are paved (the walkable apron round a monument, where the stalls stand). */
+const PAVED = new Set<number>([K.MARGIN]);
 
 /**
- * Packed earth over the covered raster classes of one cell, as marching squares on the lattice
- * of cell centres: interior squares merge into runs of up to ~6 m, the boundary squares get the
- * smooth (45°) edge pieces, so the cover never shows the raster's staircase against the grass.
+ * Ground cover over the covered raster classes of one cell: packed earth over the town's scraps
+ * and under the streets, cobbles on the landmark margins. Marching squares on the lattice of cell
+ * centres: interior squares merge into runs of up to ~6 m, the boundary squares get the smooth
+ * (45°) edge pieces, so the cover never shows the raster's staircase against the grass.
  */
 function groundCover(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: number, size: number) {
+  coverSet(b, plan, H, x0, z0, size, COVER, 'dirt', 0.04);
+  coverSet(b, plan, H, x0, z0, size, PAVED, 'cobbles', 0.05);
+}
+
+function coverSet(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: number, size: number, set: Set<number>, material: 'dirt' | 'cobbles', lift: number) {
   const g = plan.grid;
   const c = g.cell;
   const pos: number[] = [];
-  const lift = 0.04;
   const iz0 = Math.max(0, g.iz(z0) - 1), iz1 = Math.min(g.nz - 2, g.iz(z0 + size - 1e-6));
   const ix0 = Math.max(0, g.ix(x0) - 1), ix1 = Math.min(g.nx - 2, g.ix(x0 + size - 1e-6));
-  const on = (ix: number, iz: number) => COVER.has(g.cls[iz * g.nx + ix]);
+  const on = (ix: number, iz: number) => set.has(g.cls[iz * g.nx + ix]);
   const X = (fx: number) => g.x0 + (fx + 0.5) * c, Z = (fz: number) => g.z0 + (fz + 0.5) * c;
   const v = (fx: number, fz: number) => {
     const x = X(fx), z = Z(fz);
@@ -625,10 +649,10 @@ function groundCover(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.computeVertexNormals();
-  b.add(geo, 'dirt', undefined, { castShadow: false });
+  b.add(geo, material, undefined, { castShadow: false });
 }
 
-/** A cattle pen: timber posts and two rails round a w × d rectangle, a gate gap on one side. */
+/** One piece of an atlas road (≤ 80 m) in its context (urban, open ground, rural, stairs). */
 function buildRoadPiece(b: MeshBuilder, road: PlanRoad, ctx: string, pts: Vec2[], H: HeightFn, capStart: boolean, capEnd: boolean) {
   if (road.style === 'stairs') {
     for (let k = 0; k + 1 < pts.length; k++) {

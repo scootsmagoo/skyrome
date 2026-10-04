@@ -16,7 +16,7 @@ import { K, polyCentroid } from './raster';
 import type { StreetWork } from './roads';
 
 export type NodeKind = 'road' | 'street' | 'stairs' | 'junction' | 'piazza' | 'plaza' | 'landmark';
-export type StreetSpotKind = 'shopDoor' | 'houseDoor' | 'fountain' | 'shrine' | 'stall' | 'bench';
+export type StreetSpotKind = 'shopDoor' | 'houseDoor' | 'fountain' | 'shrine' | 'stall' | 'bench' | 'container';
 
 export interface StreetNode {
   id: number;

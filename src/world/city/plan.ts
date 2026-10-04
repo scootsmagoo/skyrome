@@ -20,7 +20,7 @@ import { Rng, hash2 } from '../../core/Rng';
 import type * as Atlas from '../../data/atlas';
 import { WORLD_SCALE } from '../coords';
 import { footprintPolygon, type P2 } from '../terrain/heightmap';
-import { DISTRICT_LANDMARKS, OPEN_SPACES, QUARTERS, SIGHTLINE_LANDMARKS, SIGHTLINE_RADIUS, SKIPPED_AQUEDUCTS, WILD_LANDMARKS, type Quarter } from './data';
+import { CORRIDORS, DISTRICT_LANDMARKS, EXTRA_ROADS, OPEN_SPACES, QUARTERS, SIGHTLINE_LANDMARKS, SIGHTLINE_RADIUS, SKIPPED_AQUEDUCTS, WILD_LANDMARKS, type Quarter } from './data';
 import { Grid, K, cleanRing, components, pointInPoly, polyBounds, polyCentroid, signedArea, simplifyRing, splitCells, traceLoops, type Pt } from './raster';
 
 const S = WORLD_SCALE;
@@ -53,6 +53,8 @@ export interface PlanOptions {
   seed?: number;
   /** Merge cell size for far massing (game m). */
   mergeCell?: number;
+  /** Streets added to the atlas roads (default data.ts EXTRA_ROADS). */
+  extraRoads?: typeof EXTRA_ROADS;
 }
 
 export type RoadStyle = 'paved' | 'rural' | 'gravel' | 'dirt' | 'stairs' | 'path';
@@ -86,6 +88,7 @@ export interface PlanStreet {
   steps: boolean[];
   density: number;
   wealth: number;
+  corridor: boolean;
 }
 
 export interface PlanBlock {
@@ -117,6 +120,8 @@ export interface PlanBlock {
   seed: number;
   /** Mean terrain slope (rise / run) under the block. */
   slope: number;
+  /** On the golden path (data.ts CORRIDORS): always built, dressed with more lamps and stalls. */
+  corridor: boolean;
 }
 
 export interface PlanPiazza {
@@ -181,6 +186,10 @@ export interface CityPlan {
   mergeCell: number;
   /** Category of each atlas landmark (raster owner ids of LANDMARK / MARGIN / PLAZA cells index this). */
   landmarkCategory: string[];
+  /** Footprints (game m) of the solid landmarks (buildings with a walkable margin round them). */
+  landmarkPolys: { index: number; id: string; category: string; poly: Pt[] }[];
+  /** On the golden path (data.ts CORRIDORS)? Game coordinates. */
+  corridor(x: number, z: number): boolean;
   stats: Record<string, number>;
 }
 
@@ -319,7 +328,7 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
   // 5. Atlas roads.
   const roads: PlanRoad[] = [];
   const roadable = (c: number) => c === K.FREE || c === K.STEEP || c === K.OUTSIDE || c === K.GARDEN || c === K.MARGIN || c === K.PLAZA;
-  atlas.ROADS.forEach((r) => {
+  [...atlas.ROADS, ...(opts.extraRoads ?? EXTRA_ROADS)].forEach((r) => {
     if (r.points.length < 2) return;
     const d = roadDims(r);
     const pts = gpoly(r.points);
@@ -399,6 +408,17 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
     }
     return { q: best, w: bw };
   };
+  const corridorAt = (gx: number, gz: number) => {
+    const x = gx / S, z = gz / S;
+    let best: (typeof CORRIDORS)[number] | null = null, bw = 0;
+    for (const c of CORRIDORS) {
+      let d = Infinity;
+      for (let k = 0; k + 1 < c.points.length; k++) d = Math.min(d, distSeg([x, z], c.points[k] as Pt, c.points[k + 1] as Pt));
+      const w = 1 - smooth(c.r * 0.6, c.r, d);
+      if (w > bw) { bw = w; best = c; }
+    }
+    return { c: best, w: bw };
+  };
   const character = (gx: number, gz: number) => {
     const i = g.index(gx, gz);
     const ri = i >= 0 ? region[i] : 255;
@@ -409,7 +429,14 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
       density += ((q.density ?? density) - density) * w;
       wealth += ((q.wealth ?? wealth) - wealth) * w;
     }
-    return { reg, density, wealth, q: w > 0.5 ? q : null };
+    // The golden path is packed with shops whatever the region (the Palatine's and Regio I's
+    // averages would leave it half gardens).
+    const cor = corridorAt(gx, gz);
+    if (cor.c && cor.w > 0) {
+      density = Math.max(density, density + (cor.c.density - density) * cor.w);
+      wealth += (cor.c.wealth - wealth) * cor.w;
+    }
+    return { reg, density, wealth, q: w > 0.5 ? q : null, corridor: cor.w > 0.5 };
   };
 
   const streets: PlanStreet[] = [];
@@ -540,7 +567,7 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
       const dy = Math.abs(hm.heightAt(pts[k + 1][0], pts[k + 1][1]) - hm.heightAt(pts[k][0], pts[k][1]));
       steps.push(L > 0 && dy / L > 0.16);
     }
-    streets.push({ id: `st${si}`, index: si, points: pts, width, kind, level, steps, density: ch.density, wealth: ch.wealth });
+    streets.push({ id: `st${si}`, index: si, points: pts, width, kind, level, steps, density: ch.density, wealth: ch.wealth, corridor: ch.corridor });
     // Re-label the pieces.
     const pieces = splitCells(g, c.cells, (i) => lab[i] === c.id && cls[i] === K.FREE, mark, stamp);
     stamp += 2;
@@ -719,6 +746,7 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
       const bseed = hash2(Math.round(centroid[0]), Math.round(centroid[1]), seed);
       const brng = new Rng(bseed);
       let pGarden = smooth(0.62, 0.1, ch.density) * 0.85 + (sl > 0.28 ? 0.35 : 0);
+      if (ch.corridor) pGarden = 0;
       if (!frontEdges.length) pGarden = 1;
       const garden = brng.chance(Math.min(1, pGarden));
       let maxStoreys = ch.q?.maxStoreys ?? (ch.density > 0.85 ? 6 : 5);
@@ -739,7 +767,7 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
         yard: ch.q?.yard ?? (ch.wealth > 0.65 ? 'gravel' : ch.density > 0.8 ? 'dirt' : 'cobbles'),
         frontEdges, sidewalk, detailed,
         cell: `${Math.floor(centroid[0] / mergeCell)},${Math.floor(centroid[1] / mergeCell)}`,
-        seed: bseed, slope: sl,
+        seed: bseed, slope: sl, corridor: ch.corridor,
       };
       blocks.push(blk);
       if (garden) for (const i of cells) cls[i] = K.GARDEN;
@@ -749,7 +777,7 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
   stats.blocks = blocks.length;
   stats.builtBlocks = blocks.filter((b) => b.kind === 'built').length;
   stats.totalMs = now() - t0;
-  return { grid: g, hy, region, roads, streets, blocks, piazzas, walls, gates, aqueducts, bridges: (atlas.BRIDGES ?? []).map((b) => ({ id: b.id, a: g2(b.a), b: g2(b.b), width: Math.max(3, b.width * S) })), plazas, detailBounds, mergeCell, landmarkCategory: atlas.LANDMARKS.map((l) => l.category), stats };
+  return { grid: g, hy, region, roads, streets, blocks, piazzas, walls, gates, aqueducts, bridges: (atlas.BRIDGES ?? []).map((b) => ({ id: b.id, a: g2(b.a), b: g2(b.b), width: Math.max(3, b.width * S) })), plazas, detailBounds, mergeCell, landmarkCategory: atlas.LANDMARKS.map((l) => l.category), landmarkPolys: lmPolys.filter((l) => l.solid).map((l) => ({ index: l.index, id: l.lm.id, category: l.lm.category, poly: l.poly })), corridor: (x, z) => corridorAt(x, z).w > 0.5, stats };
 }
 
 // ---------------------------------------------------------------- small geometry

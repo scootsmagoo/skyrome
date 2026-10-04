@@ -9,11 +9,12 @@ import * as THREE from 'three';
 import { Rng } from '../../core/Rng';
 import { planLots, type FillOptions, type LotPlan } from '../../arch/fabric/blockFiller';
 import { MAX_BUILDING_HEIGHT } from '../../arch/fabric/insula';
-import { obbCorners, pointInOBB, type OBB } from '../../arch/fabric/polygon';
+import { obbCorners, pointInOBB, polygonContainsOBB, type OBB } from '../../arch/fabric/polygon';
 import type { Polygon } from '../../arch/fabric/types';
 import { MATERIAL_BASE, type MaterialId } from '../../gfx/materialIds';
 import type { PlanBlock } from './plan';
 import { pointInPoly, polyBounds, type Pt } from './raster';
+import { blockTorches, type Torch } from './life';
 
 export type HeightFn = (x: number, z: number) => number;
 
@@ -213,6 +214,8 @@ export function backLots(blk: PlanBlock, lots: LotPlan[], H: HeightFn): BackLot[
         const cu = u0 + (i0 + ni / 2) * cs, cv = v0 + (j0 + nj / 2) * cs;
         const c = W(cu, cv);
         const o: OBB = { c, u, v, hu: w / 2, hv: d / 2 };
+        // The eroded raster can still let a corner poke out of a concave outline: check exactly.
+        if (!polygonContainsOBB(blk.outline as Polygon, o, 0.05)) continue;
         const seed = (blk.seed ^ Math.imul(out.length + 1, 0x9e3779b1)) >>> 0;
         let floorY = -Infinity, base = Infinity;
         for (const [su, sv] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]]) {
@@ -248,6 +251,8 @@ export interface BlockLayout {
   back: BackLot[];
   masses: LotMass[];
   trees: Pt[];
+  /** Wall torches on the shop fronts (life.ts). */
+  torches: Torch[];
 }
 
 /** Lot plan, back buildings, massing and yard trees of a built block. */
@@ -267,7 +272,7 @@ export function layoutBlock(blk: PlanBlock, H: HeightFn): BlockLayout {
   // The filler keeps its yard surface and yard props off the back buildings and the tree pits.
   const opts = blockFillOptions(blk, H, trees);
   for (const bl of back) opts.avoid!.push(obbCorners({ ...bl.obb, hu: bl.obb.hu + 0.3, hv: bl.obb.hv + 0.3 }) as Polygon);
-  return { opts, lots, back, masses, trees };
+  return { opts, lots, back, masses, trees, torches: blockTorches(blk, lots, H) };
 }
 
 // ---------------------------------------------------------------- geometry

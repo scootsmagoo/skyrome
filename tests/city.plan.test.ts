@@ -54,6 +54,8 @@ describe('city plan', () => {
       for (let x = Math.min(...xs); x < Math.max(...xs); x += 3)
         for (let z = Math.min(...zs); z < Math.max(...zs); z += 3) {
           if (!pointInPoly(x, z, b.outline) || distToPoly(x, z, b.outline) < 2) continue;
+          // Holes are islands the block keeps clear (a landmark enclosed by the block, e.g. the Lupercal).
+          if (b.holes.some((h) => pointInPoly(x, z, h) || distToPoly(x, z, h) < 1)) continue;
           checked++;
           if (solids.some((poly) => pointInPoly(x, z, poly))) bad++;
         }
@@ -146,8 +148,9 @@ describe('city street graph', () => {
   });
 
   it('finds the nearest node of a point on a street', () => {
-    const s = plan.streets.find((st) => inCore(st.points[0][0], st.points[0][1]))!;
-    const p = s.points[Math.floor(s.points.length / 2)];
+    const mid = (st: (typeof plan.streets)[number]) => st.points[Math.floor(st.points.length / 2)];
+    const s = plan.streets.find((st) => inCore(mid(st)[0], mid(st)[1]) && !st.steps.some(Boolean))!;
+    const p = mid(s);
     const n = graph.nearest(p[0], p[1], 30);
     expect(n).toBeGreaterThanOrEqual(0);
   });

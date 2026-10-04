@@ -26,7 +26,9 @@ import { buildMonuments } from './monuments';
 import { buildStreetGraph, type StreetGraph } from './network';
 import { planCity, scaleBounds, type CityPlan } from './plan';
 import { K } from './raster';
-import { cellKey, streetWork } from './roads';
+import { cellAdder, cellKey, streetWork } from './roads';
+import { CityLamps } from './lamps';
+import { lifeWork, torchLamp } from './life';
 import { CityStreamer, addColliders, type BlockRec, type CellRec } from './streamer';
 import type { ColliderSpec } from '../../gfx/MeshBuilder';
 import { TreeLayer } from './trees';
@@ -36,6 +38,7 @@ export interface CityService {
   plan: CityPlan;
   pool: BatchPool;
   streamer: CityStreamer;
+  lamps: CityLamps;
   trees: TreeLayer;
   grass: GrassField | null;
   /** Exact NPC spots of a block once its full detail has been built (else null). */
@@ -116,6 +119,11 @@ export async function buildCity(
   // ---- 3. streets: detailed work per cell in the detail area, far ribbons elsewhere
   const inDetail = (x: number, z: number) => x >= detailBounds.minX - 60 && x <= detailBounds.maxX + 60 && z >= detailBounds.minZ - 60 && z <= detailBounds.maxZ + 60;
   const work = streetWork(plan, H, { minX: detailBounds.minX - 60, minZ: detailBounds.minZ - 60, maxX: detailBounds.maxX + 60, maxZ: detailBounds.maxZ + 60 }, STREET_CELL);
+  // Street life: stalls, goods, benches, statues and trees on the landmark frontages, washing
+  // lines over the lanes (built with the street cells).
+  const life = lifeWork(plan, H, inDetail, cellAdder(work.cells, STREET_CELL, inDetail));
+  work.spots.push(...life.spots);
+  stats.lifeItems = Object.values(life.counts).reduce((a, b) => a + b, 0);
   const cells: CellRec[] = [];
   const size = STREET_CELL;
   const ribbons = new Map<string, FlatSoup>();
@@ -153,6 +161,7 @@ export async function buildCity(
   await whenTexturesLoaded().catch(() => {});
   const trees = new TreeLayer({ near: 45, far: 1000, thinFrom: 200, minKeep: 0.12 });
   for (const sp of placeTrees(plan, cityBounds, hm.waterLevelY)) trees.add(sp.species, sp.x, H(sp.x, sp.z), sp.z, { scale: sp.scale });
+  for (const sp of life.trees) trees.add(sp.species, sp.x, H(sp.x, sp.z), sp.z, { scale: sp.scale });
   const yardSpecies = ['fig', 'laurel', 'umbrella_pine', 'cypress', 'olive', 'fig'] as const;
   for (const r of blocks) {
     if (!r.layout) continue;
@@ -166,7 +175,8 @@ export async function buildCity(
     heightAt: H,
     mask: (x, z) => {
       const c = g.at(x, z);
-      return c === K.GARDEN || c === K.STEEP || c === K.OUTSIDE || c === K.SCRAP || c === K.MARGIN || c === K.WALL || c === K.AQUEDUCT;
+      // Not on the paved landmark margins, nor in the town's scraps along the golden path.
+      return c === K.GARDEN || c === K.STEEP || c === K.OUTSIDE || (c === K.SCRAP && !plan.corridor(x, z)) || c === K.WALL || c === K.AQUEDUCT;
     },
     density: 1.0,
     flowers: 0.2,
@@ -177,7 +187,16 @@ export async function buildCity(
   game.scene.add(grass.build());
   const veg = vegetation(game);
   veg.addGrass(grass);
-  game.addSystem({ name: 'cityTrees', priority: 106, lateUpdate: () => trees.update(game.camera, game.world?.distanceScale ?? 1) });
+  game.addSystem({
+    name: 'cityTrees',
+    priority: 106,
+    lateUpdate: () => {
+      trees.update(game.camera, game.world?.distanceScale ?? 1);
+      // Lamplit windows in the far massing follow the sky's lamp factor.
+      const sky = (game as Game & { sky?: { lampFactor?: number } }).sky;
+      farMat.userData.uLamp.value = sky?.lampFactor ?? 0;
+    },
+  });
   report(0.8, 'Planting the gardens');
   await tick();
 
@@ -186,11 +205,18 @@ export async function buildCity(
   game.streets = graph;
   stats.graphNodes = graph.nodes.length;
 
-  // ---- 7. streamer
+  // ---- 7. lamps (wall torches of the detailed blocks, shrine and fountain lamps, stall lamps)
+  const lamps = game.addSystem(new CityLamps(game));
+  for (const r of blocks) if (r.blk.detailed && r.layout) for (const t of r.layout.torches) lamps.add(torchLamp(t));
+  for (const l of work.lamps) lamps.add(l);
+  for (const l of life.lamps) lamps.add(l);
+  stats.lamps = lamps.total;
+
+  // ---- 8. streamer
   const streamer = game.addSystem(new CityStreamer(game, pool, blocks, cells, H));
   const byId = new Map(blocks.map((b) => [b.blk.id, b]));
   const service: CityService = {
-    plan, pool, streamer, trees, grass, stats,
+    plan, pool, streamer, lamps, trees, grass, stats,
     blockSpots: (id) => byId.get(id)?.spots ?? null,
     classAt: (x, z) => g.at(x, z),
     prime: (p) => streamer.prime(new THREE.Vector3(p.x, p.y, p.z)),
@@ -220,16 +246,21 @@ export async function buildCity(
     });
 }
 
-/** The rome scene spawns at `?at=<landmark>` (default the Arch of Titus), 18 m out from the facade. */
+/**
+ * Where the game will put the player: `?at=<landmark>` (18 m out from its facade), else the Porta
+ * Capena (the new-game spawn, 16 m out on the Via Appia; the title screen stands there too).
+ */
 function guessSpawn(atlas: typeof Atlas, H: (x: number, z: number) => number): THREE.Vector3 | null {
   if (typeof location === 'undefined') return null;
   const p = new URLSearchParams(location.search);
-  const id = p.get('at') ?? (p.get('scene') === 'rome' || !p.get('scene') ? 'arch-titus' : null);
+  const at = p.get('at');
+  const id = at ?? (p.get('scene') === 'rome' || !p.get('scene') ? 'porta-capena' : null);
   const lm = id ? atlas.LANDMARK_BY_ID[id] : null;
   if (!lm) return null;
   const [gx, gz] = toGame(lm.center[0], lm.center[1]);
   const th = (lm.rotation * Math.PI) / 180;
-  const x = gx + Math.sin(th) * 18, z = gz - Math.cos(th) * 18;
+  const f = at ? 18 : 16;
+  const x = gx + Math.sin(th) * f, z = gz - Math.cos(th) * f;
   return new THREE.Vector3(x, H(x, z), z);
 }
 
@@ -237,39 +268,52 @@ function guessSpawn(atlas: typeof Atlas, H: (x: number, z: number) => number): T
  * Flat vertex-coloured material of the far massing (colours are linear bytes). Walls with facade
  * coordinates get a procedural pattern of shop openings on the ground floor and window rows above
  * (faded out where a window would be smaller than a pixel), so distant blocks read as buildings at
- * no geometry cost.
+ * no geometry cost. From dusk to dawn (`uLamp`, the sky's lamp factor) about one window in six and
+ * a few shop fronts glow with lamplight, so the city twinkles from the hills before sunrise.
  */
-function massingMaterial(): THREE.MeshStandardMaterial {
+function massingMaterial(): THREE.MeshStandardMaterial & { userData: { uLamp: { value: number } } } {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.92, metalness: 0 });
   m.name = 'city:massing';
+  const uLamp = { value: 0 };
+  m.userData.uLamp = uLamp;
   m.onBeforeCompile = (shader) => {
+    shader.uniforms.uLamp = uLamp;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec2 facade;\nvarying vec2 vFacade;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFacade = facade;');
+      .replace('#include <common>', '#include <common>\nattribute vec2 facade;\nvarying vec2 vFacade;\nvarying vec2 vCityXZ;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFacade = facade;\nvCityXZ = position.xz;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec2 vFacade;')
+      .replace('#include <common>', '#include <common>\nvarying vec2 vFacade;\nvarying vec2 vCityXZ;\nuniform float uLamp;\nfloat cityHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }')
       .replace('#include <color_fragment>', `#include <color_fragment>
+float cityLit = 0.0;
 {
   vec2 f = vFacade;
   if (f.y > 0.0) {
     vec2 fw = fwidth(f);
     float aa = clamp(1.6 - max(fw.x, fw.y) * 1.4, 0.0, 1.0);
     float w = 0.0;
+    vec2 cellId;
     if (f.y < 4.3) {
       float bx = fract(f.x / 3.9);
       w = step(0.13, bx) * step(bx, 0.87) * step(0.15, f.y) * step(f.y, 3.0) * 0.72;
+      cellId = vec2(floor(f.x / 3.9), -1.0);
     } else {
       float bx = fract(f.x / 3.3 + 0.5);
       float by = fract((f.y - 4.3) / 3.0);
       w = step(0.36, bx) * step(bx, 0.64) * step(0.3, by) * step(by, 0.74) * 0.68;
+      cellId = vec2(floor(f.x / 3.3 + 0.5), floor((f.y - 4.3) / 3.0));
       w = max(w, step(by, 0.06) * 0.1);
     }
     diffuseColor.rgb *= 1.0 - w * aa;
+    // Lamplight in some openings (seeded by the window and the ~14 m patch of city it is in).
+    float h = cityHash(cellId + floor(vCityXZ / 14.0) * 17.0);
+    float lit = step(h, cellId.y < 0.0 ? 0.22 : 0.16);
+    cityLit = lit * step(0.5, w) * uLamp * max(aa, 0.35);
   }
-}`);
+}`)
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0, 0.56, 0.24) * 1.6 * cityLit;');
   };
-  m.customProgramCacheKey = () => 'city:massing';
-  return m;
+  m.customProgramCacheKey = () => 'city:massing:2';
+  return m as THREE.MeshStandardMaterial & { userData: { uLamp: { value: number } } };
 }
 
 const tick = () => new Promise((r) => setTimeout(r, 0));

@@ -29,6 +29,7 @@ import type { BatchHandle, BatchPool } from './batches';
 import type { BlockLayout, HeightFn } from './massing';
 import type { PlanBlock } from './plan';
 import type { CellWork } from './roads';
+import { drawTorches } from './life';
 
 export type Level = 'full' | 'mid' | 'low';
 const LEVELS: Level[] = ['full', 'mid', 'low'];
@@ -76,6 +77,7 @@ export class CityStreamer implements System {
   readonly priority = 96;
   private o: Required<StreamerOptions>;
   private lastPos = new THREE.Vector3(Infinity, 0, 0);
+  private prevCam = new THREE.Vector3(Infinity, 0, 0);
   private frame = 0;
   /** Builds done so far and their cost (debug). */
   builds = { full: 0, mid: 0, low: 0, cell: 0, ms: 0, fullMs: 0, midMs: 0, lowMs: 0, cellMs: 0 };
@@ -103,6 +105,7 @@ export class CityStreamer implements System {
 
   /** Build what the first frames need around `pos` right now (loading screen, teleports). */
   prime(pos: THREE.Vector3) {
+    this.prevCam.copy(pos);
     this.evaluate(pos);
     const s = this.scale;
     const lim = { full: this.o.nearR * s, mid: this.o.midR * s, low: Math.min(this.o.lowR, 140) * s, cell: Math.min(this.o.cellR, 200) * s };
@@ -114,6 +117,14 @@ export class CityStreamer implements System {
   lateUpdate() {
     const cam = this.game.camera.position;
     this.frame++;
+    // A jump (teleport, loaded save, a new spawn): build what the new place needs right away
+    // rather than streaming it in over the next seconds.
+    if (cam.distanceToSquared(this.prevCam) > 80 * 80) {
+      this.prevCam.copy(cam);
+      this.prime(cam);
+      return;
+    }
+    this.prevCam.copy(cam);
     if (cam.distanceToSquared(this.lastPos) > 4 || this.frame % 20 === 0) this.evaluate(cam);
     // At most one build every other frame (a block takes 10–50 ms), unless something close is missing.
     let n = 0;
@@ -280,6 +291,7 @@ export function fillLevel(r: BlockRec, detail: Detail, H: HeightFn) {
     const m = new THREE.Matrix4().makeTranslation(c[0], bl.floorY, c[1]).multiply(new THREE.Matrix4().makeRotationY(bl.rotationY));
     out.builder.append(ins.builder, m);
   }
+  if (detail !== 'low') drawTorches(out.builder, r.layout!.torches);
   if (detail !== 'full') out.builder.colliders.length = 0;
   return out;
 }

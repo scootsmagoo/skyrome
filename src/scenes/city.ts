@@ -57,6 +57,8 @@ declare global {
   interface Window {
     /** Switch to a view; `turn` (radians) turns the player from the street direction (walk tests). */
     cityView?: (name: string, turn?: number) => unknown;
+    /** Free survey camera in game coordinates (builds the city detail around the eye first). */
+    cityCam?: (x: number, y: number, z: number, tx: number, ty: number, tz: number) => unknown;
   }
 }
 
@@ -90,6 +92,13 @@ const scene: SceneDef = {
       return { feet: s.feet.toArray().map((x) => +x.toFixed(1)), heading: +s.heading.toFixed(2) };
     };
     window.cityView = (n: string, turn = 0) => apply(VIEWS[n] ?? VIEWS.subura, turn);
+    window.cityCam = (x, y, z, tx, ty, tz) => {
+      const eye = new THREE.Vector3(x, y, z);
+      player.teleport(new THREE.Vector3(x, H(x, z) + 0.05, z), 0);
+      game.city?.prime(eye);
+      devCamera(game).look(eye, new THREE.Vector3(tx, ty, tz));
+      return 1;
+    };
     apply(first);
   },
 };

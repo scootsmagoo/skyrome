@@ -81,3 +81,30 @@ export const SIGHTLINE_RADIUS = 150;
 
 /** Aqueducts left out on purpose (GDD E1: no Janiculum water-mills in 113). */
 export const SKIPPED_AQUEDUCTS = new Set(['janiculum-mill-race']);
+
+/**
+ * Streets the city adds where the atlas has a gap the game needs (REAL meters, atlas Road shape).
+ * The atlas ends the Via Appia at the Porta Capena and starts the valley roads ~150 m inside it,
+ * so nothing led from the gate (the spawn) into the city: the road through the gate forks to the
+ * street under the Palatine (N side of the Circus, and the triumphal road to the Colosseum) and to
+ * the street under the Aventine (S side of the Circus).
+ */
+export const EXTRA_ROADS: { id: string; name: string; kind: 'via' | 'clivus' | 'vicus' | 'street'; width: number; paving: 'basalt' | 'gravel' | 'dirt'; points: readonly P2[] }[] = [
+  { id: 'porta-capena-intra', name: 'Road inside the Porta Capena', kind: 'street', width: 8, paving: 'basalt', points: [[507, 955], [472, 912], [436, 868], [410, 835]] },
+  { id: 'porta-capena-circus-south', name: 'Road from the Porta Capena to the Aventine side of the Circus', kind: 'street', width: 5, paving: 'basalt', points: [[472, 912], [420, 940], [370, 968], [330, 990]] },
+];
+
+/**
+ * The golden path (GDD §17.2: Porta Capena → Circus valley → Velabrum → Vicus Tuscus → Forum)
+ * and the Via Appia outside the gate where the player spawns. Blocks within `r` (real m) of these
+ * lines are always built (no garden lots), packed with shops, and dressed with more lamps, stalls
+ * and street furniture: the first minutes of the game must never cross empty ground.
+ */
+export const CORRIDORS: { id: string; points: readonly P2[]; r: number; density: number; wealth: number }[] = [
+  { id: 'via-appia-suburb', points: [[507, 955], [560, 1030], [620, 1110], [700, 1185]], r: 70, density: 0.92, wealth: 0.35 },
+  { id: 'capena-valley', points: [[507, 955], [472, 912], [436, 868], [406, 840], [156, 657], [-96, 471], [-180, 398]], r: 75, density: 0.95, wealth: 0.45 },
+  { id: 'circus-south', points: [[472, 912], [370, 968], [330, 990], [239, 949], [119, 855], [-1, 773], [-70, 703], [-150, 640]], r: 60, density: 0.9, wealth: 0.4 },
+  { id: 'velabrum-tuscus', points: [[-150, 560], [-73, 452], [-45, 311], [45, 140], [66, 131], [97, 62]], r: 75, density: 0.95, wealth: 0.5 },
+  { id: 'velabrum-pons-aemilius', points: [[-60, 380], [-150, 368], [-260, 362], [-340, 352]], r: 55, density: 0.92, wealth: 0.45 },
+  { id: 'triumphal-road', points: [[410, 835], [490, 459], [501, 432], [512, 330]], r: 55, density: 0.85, wealth: 0.5 },
+];
