@@ -24,7 +24,7 @@ import { placeProp, type PropKind } from '../../../arch/props';
 import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import {
-  T, TRS, V, altar, broadTree, cornice, dims, draw, farDraw, finish, hedge, inscription, mul, piercedWall, plinth, pool, ringRoof, roundBasin, spot,
+  T, TRS, V, altar, broadTree, clearOf, cornice, obstacles, dims, draw, farDraw, finish, hedge, inscription, mul, piercedWall, plinth, pool, ringRoof, roundBasin, spot,
   statueOnPedestal, tiledRoof, wallRun, type Detail, type WallOpening,
 } from './generic-common';
 import { tree } from './generic-world';
@@ -194,6 +194,8 @@ function buildMinucia(ctx: LandmarkContext): LandmarkBuild {
   const q = quadriporticusGarden(d, ctx, w, dd, 7.2, spots, { order: 'tuscan', material: 'travertine', wallMat: 'plaster_cream', columnHeight: 5.2, depth: 5, gates: [gate, 0, 0, 0], propylon: false, garden: 'paved' });
   // The ostia: framed doorways all round the outside, each with its number painted above (the
   // distribution ran through them by tribe and day; the main gate on the front is walkable).
+  // Clerks' tables stand outside only where the street is clear of the neighbours.
+  const free = clearOf(obstacles(ctx, 0.5));
   let n = 0;
   const sides: [number, number, number, number, number][] = [[-w / 2, -dd / 2, w / 2, -dd / 2, w], [w / 2, -dd / 2, w / 2, dd / 2, dd], [w / 2, dd / 2, -w / 2, dd / 2, w], [-w / 2, dd / 2, -w / 2, -dd / 2, dd]];
   for (const [ax, az, bx, bz, len] of sides) {
@@ -210,7 +212,8 @@ function buildMinucia(ctx: LandmarkContext): LandmarkBuild {
       f.span('travertine', -1.2, 2.7, -0.16, 1.2, 3.05, 0.02);
       f.span('wood_dark', -0.9, 0, -0.04, 0.9, 2.7, 0.0);
       if (detail === 'high' && n < 45 && (n < 12 || n % 4 === 0)) inscriptionPanel(d.b, { lines: [`OSTIVM ${ROMAN[n]}`], width: 1.5, height: 0.36, style: 'painted', interpunct: false }, mul(f.m, T(0, 3.35, -0.05)), { depth: 0.03 });
-      if (i % 3 === 1) {
+      const out = f.point(0, 0, -2.2);
+      if (i % 3 === 1 && free(out.x, out.z, 1)) {
         placeProp(f, 'table', 0, 0, -1.4, 0, { rng: rng.fork(`t${n}`) });
         for (let j = 0; j < 3; j++) placeProp(f, 'sack', -1.6 + j * 0.5, 0, -0.6, j, { collide: false });
         spots.push({ ...spot(`${lm.id}:ostium${n}`, 'npc', 0, 0, 0, 0), position: f.point(0, 0, -2.2), heading: rot });

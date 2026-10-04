@@ -155,6 +155,10 @@ function guardPost(ctx: LandmarkContext, d: Draw, w: number, z0: number, spots: 
   // Trough across the road.
   const tx = -w / 2 - 2.4, tz = z0 - 3.4;
   placeProp(d, 'trough', tx, ctx.groundAt(tx, tz), tz, Math.PI / 2);
+  // The first milestone of the road out of this gate (miles are counted from the old gates).
+  const mx = w / 2 + 1.6, mz = z0 - 9.5;
+  placeProp(d, 'milestone', mx, ctx.groundAt(mx, mz), mz, -Math.PI / 2, { variant: 0 });
+  spots.push(spot(`${lm.id}:milestone`, 'inscription', mx - 1.2, ctx.groundAt(mx - 1.2, mz), mz, Math.PI / 2));
   // A hawker's stall a little further out.
   const sx = -w / 2 - 3.2, sz = z0 - 8.5;
   placeProp(d, 'stall', sx, ctx.groundAt(sx, sz), sz, Math.PI / 2, { rng: ctx.rng.fork('stall') });
