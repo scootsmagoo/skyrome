@@ -38,7 +38,7 @@ import {
 } from './circusLayout';
 import { relById } from './frames';
 import { bandColliders, cutFace, cutting, pieces, riser, ringFrame, ringStrip, tread, type RingGap } from './ring';
-import { facing, instanced } from './runtime';
+import { InstanceLod, facing, instanced } from './runtime';
 import { archBandLite, archDoorWall, rectHoleWall } from './shapes';
 import { Spots, halfColumn, lowColumn } from './util';
 
@@ -280,6 +280,33 @@ const H2 = CIRCUS.storeys[1];
 const H3 = CIRCUS.storeys[2];
 
 /** One facade bay, three storeys, in the bay frame (outer face z = 0 facing −z, wall to z = T). */
+/** Low-poly facade bay for distant parts of the ring: the same massing, few triangles. */
+function facadeBayFar(w: number): MeshBuilder {
+  const b = new MeshBuilder();
+  const d = new Draw(b);
+  const M = STONE;
+  const span1 = CIRCUS.span;
+  const spring1 = CIRCUS.shopCeiling - span1 / 2;
+  const top1 = H1 - 0.9;
+  d.geo(archDoorWall(w, top1, span1, spring1, T, 4), M);
+  d.box(M, -w / 2, top1 / 2, -0.15, 0.62, top1, 0.3);
+  d.box(M, 0, top1 + 0.3, (T - 0.2) / 2, w + 0.02, 0.6, T + 0.2);
+  d.box(M, 0, H1 - 0.15, (T - 0.5) / 2, w + 0.02, 0.3, T + 0.5);
+  const y2 = H1, plinth = 0.95, top2 = H2 - 1.15, span2 = 2.8;
+  d.box(M, 0, y2 + plinth / 2, (T - 0.16) / 2, w + 0.02, plinth, T + 0.16);
+  d.geo(archDoorWall(w, top2 - plinth, span2, top2 - plinth - span2 / 2 - 0.05, T, 4), M, 0, y2 + plinth, 0);
+  d.poly('black', [{ x: -span2 / 2, y: y2 + plinth, z: 0.85 }, { x: -span2 / 2, y: y2 + top2, z: 0.85 }, { x: span2 / 2, y: y2 + top2, z: 0.85 }, { x: span2 / 2, y: y2 + plinth, z: 0.85 }], { doubleSided: true });
+  d.box(M, -w / 2, y2 + top2 / 2, -0.12, 0.5, top2, 0.24);
+  d.box(M, 0, y2 + top2 + 0.33, (T - 0.17) / 2, w + 0.02, 0.66, T + 0.17);
+  d.box(M, 0, y2 + H2 - 0.25, (T - 0.45) / 2, w + 0.02, 0.5, T + 0.45);
+  const y3 = H1 + H2, top3 = H3 - 1.1;
+  d.geo(rectHoleWall(w, top3, [[0, 1.3, 1.1, 1.5]], T), M, 0, y3, 0);
+  d.box(M, -w / 2, y3 + top3 / 2, -0.06, 0.56, top3, 0.12);
+  d.box(M, 0, y3 + top3 + 0.4, (T - 0.6) / 2, w + 0.02, 0.8, T + 0.6);
+  d.box(M, 0, y3 + H3 - 0.15, T / 2, w + 0.02, 0.3, T);
+  return b;
+}
+
 function facadeBay(w: number, detail: 'high' | 'low'): MeshBuilder {
   const b = new MeshBuilder();
   const d = new Draw(b);
@@ -430,6 +457,8 @@ function bayUses(gaps: CircusGaps, bays: FacadeBay[]): BayUse[] {
 
 export interface FacadeResult {
   group: THREE.Group;
+  /** Distance LOD of the instanced bays and shop fronts (driven by the landmark's System). */
+  lod: InstanceLod;
   uses: BayUse[];
   /** Bays dressed with an awning or wares (lamps go there). */
   dressed: { bay: FacadeBay; kind: string }[];
@@ -441,15 +470,23 @@ export function buildFacade(b: MeshBuilder, gaps: CircusGaps, detail: 'high' | '
   const bays = [...facadeBays([gaps.channel[0], gaps.channel[1]]), ...carceresFaceBays()];
   const W = bays[0].w;
   const mats = bays.map((bay) => facing(bay.x, 0, bay.z, bay.nx, bay.nz, bay.w / W));
-  group.add(instanced(facadeBay(W, detail), 'circus-bays', mats));
+  const lod = new InstanceLod(110);
+  // Near and far versions of the bays; everything at the shop fronts is drawn near only.
+  const add = (tb: MeshBuilder, name: string, ms: THREE.Matrix4[], mode: 'near' | 'far' = 'near') => {
+    const g = instanced(tb, name, ms);
+    group.add(g);
+    lod.add(g, ms, mode);
+  };
+  add(facadeBay(W, detail), 'circus-bays', mats);
+  add(facadeBayFar(W), 'circus-bays-far', mats, 'far');
   const uses = bayUses(gaps, bays);
   // Shop shells for every bay that isn't a tunnel.
   const shellMats = uses.filter((u) => u.kind !== 'tunnel').map((u) => facing(u.bay.x, 0, u.bay.z, u.bay.nx, u.bay.nz, u.bay.w / W));
-  if (detail === 'high') group.add(instanced(shopShell(W), 'circus-shops', shellMats));
+  if (detail === 'high') add(shopShell(W), 'circus-shops', shellMats);
   for (const kind of ['taberna', 'shutters', 'popina', 'stair', 'blind'] as const) {
     const ms = uses.filter((u) => u.kind === kind).map((u) => facing(u.bay.x, 0, u.bay.z, u.bay.nx, u.bay.nz, u.bay.w / W));
     if (!ms.length || (detail === 'low' && kind !== 'blind')) continue;
-    group.add(instanced(shopFit(W, kind), `circus-${kind}`, ms));
+    add(shopFit(W, kind), `circus-${kind}`, ms);
   }
   // Painted shop signs over a few doors (one texture per sign).
   if (detail === 'high') {
@@ -463,7 +500,7 @@ export function buildFacade(b: MeshBuilder, gaps: CircusGaps, detail: 'high' | '
       const sb = new MeshBuilder();
       paintedSign(sb, lines, 2.2, 0.55, new THREE.Matrix4().makeTranslation(0, CIRCUS.shopCeiling + 0.55, -0.12));
       const pick = uses.filter((u) => (u.kind === 'taberna' || u.kind === 'popina') && u.bay.side !== 0).filter((_, j) => j % 5 === i);
-      group.add(instanced(sb, `circus-sign-${i}`, pick.map((u) => facing(u.bay.x, 0, u.bay.z, u.bay.nx, u.bay.nz, u.bay.w / W))));
+      add(sb, `circus-sign-${i}`, pick.map((u) => facing(u.bay.x, 0, u.bay.z, u.bay.nx, u.bay.nz, u.bay.w / W)));
     }
   }
   // Street dressing in front of the shops: striped awnings, wares on the sidewalk (high detail).
@@ -475,19 +512,19 @@ export function buildFacade(b: MeshBuilder, gaps: CircusGaps, detail: 'high' | '
       const ab = new MeshBuilder();
       velum(new Draw(ab).at(0, 0, -0.35), CIRCUS.span + 0.5, 1.8, CIRCUS.shopCeiling - 0.35, awn[v]);
       const pick = shopsOut.filter((_, j) => j % 2 === 0 && (j / 2) % 3 === v);
-      group.add(instanced(ab, `circus-awning-${v}`, pick.map((u) => facing(u.bay.x, 0, u.bay.z, u.bay.nx, u.bay.nz, u.bay.w / W))));
+      add(ab, `circus-awning-${v}`, pick.map((u) => facing(u.bay.x, 0, u.bay.z, u.bay.nx, u.bay.nz, u.bay.w / W)));
       for (const u of pick) dressed.push({ bay: u.bay, kind: 'awning' });
     }
     const wares: [string, (dd: Draw) => void][] = [
-      ['wine', (dd) => { placeProp(dd, 'amphora_stack', 1.1, 0, -1.3, 0.2, { variant: 1 }); placeProp(dd, 'stool', -1.0, 0, -1.0, 0.5, { variant: 2 }); }],
+      ['wine', (dd) => { for (const [x, z] of [[0.9, -1.2], [1.35, -1.45], [1.15, -0.95]]) amphora(dd, x, 0, z, 0.95); placeProp(dd, 'stool', -1.0, 0, -1.0, 0.5, { variant: 2 }); }],
       ['goods', (dd) => { placeProp(dd, 'table', -0.6, 0, -1.25, 0.05, { variant: 1 }); placeProp(dd, 'basket', 0.9, 0, -1.1, 0.4, { variant: 0 }); placeProp(dd, 'basket', 1.3, 0, -1.4, 1.0, { variant: 2 }); }],
-      ['cook', (dd) => { placeProp(dd, 'brazier', 1.2, 0, -1.2, 0, { variant: 0 }); placeProp(dd, 'bench', -0.8, 0, -1.3, 0, { variant: 0 }); }],
+      ['cook', (dd) => { dd.cyl('iron', 1.2, 0.35, -1.2, 0.05, 0.7, 5); dd.cyl('bronze', 1.2, 0.75, -1.2, 0.3, 0.1, 8, { rTop: 0.36 }); dd.box('glow_fire', 1.2, 0.82, -1.2, 0.36, 0.04, 0.36); placeProp(dd, 'bench', -0.8, 0, -1.3, 0, { variant: 0 }); }],
     ];
     for (const [k, [name, make]] of wares.entries()) {
       const wb = new MeshBuilder();
       make(new Draw(wb));
       const pick = shopsOut.filter((u, j) => (name === 'cook' ? u.kind === 'popina' : u.kind === 'taberna' && j % 4 === (k === 0 ? 1 : 3)));
-      group.add(instanced(wb, `circus-wares-${name}`, pick.map((u) => facing(u.bay.x, 0, u.bay.z, u.bay.nx, u.bay.nz))));
+      add(wb, `circus-wares-${name}`, pick.map((u) => facing(u.bay.x, 0, u.bay.z, u.bay.nx, u.bay.nz)));
       for (const u of pick) dressed.push({ bay: u.bay, kind: name });
     }
   }
@@ -553,7 +590,7 @@ export function buildFacade(b: MeshBuilder, gaps: CircusGaps, detail: 'high' | '
     pd.span(STONE, -0.8, 0, -0.42, 0.8, 0.6, T + 0.2);
     pd.span(STONE, -0.8, CIRCUS.height - 0.7, -0.5, 0.8, CIRCUS.height, T + 0.2);
   }
-  return { group, uses, dressed };
+  return { group, uses, dressed, lod };
 }
 
 // ---------------------------------------------------------------- gallery colonnade

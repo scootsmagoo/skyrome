@@ -159,3 +159,70 @@ export function animateDrips(game: Game, drips: Drips) {
   };
   game.addSystem(sys);
 }
+
+// ---------------------------------------------------------------- instance LOD
+
+/**
+ * Distance-based selection of instances for the instanced parts of a long landmark (the Circus
+ * facade): near sets draw only the instances within `radius` of the camera, far sets only the
+ * others. Instances are repacked into the first slots and `count` is set, so the draw calls stay
+ * the same and far detail costs nothing. Positions are in the landmark's local frame.
+ */
+export class InstanceLod {
+  private readonly sets: { meshes: THREE.InstancedMesh[]; mats: THREE.Matrix4[]; pos: THREE.Vector3[]; near: boolean }[] = [];
+  private readonly last = new THREE.Vector3(Infinity, 0, 0);
+
+  constructor(public radius: number) {}
+
+  /** Registers the InstancedMeshes of `group` (built by `instanced` with these matrices). */
+  add(group: THREE.Group, mats: THREE.Matrix4[], mode: 'near' | 'far') {
+    const meshes = group.children.filter((c): c is THREE.InstancedMesh => (c as THREE.InstancedMesh).isInstancedMesh);
+    if (!meshes.length) return;
+    this.sets.push({ meshes, mats, pos: mats.map((m) => new THREE.Vector3().setFromMatrixPosition(m)), near: mode === 'near' });
+    if (mode === 'far') for (const m of meshes) m.count = 0;
+  }
+
+  /** Re-selects the instances for a camera at `cam` (local frame); cheap no-op if it barely moved. */
+  update(cam: THREE.Vector3, force = false) {
+    if (!force && cam.distanceToSquared(this.last) < 36) return;
+    this.last.copy(cam);
+    const r2 = this.radius * this.radius;
+    for (const s of this.sets) {
+      let k = 0;
+      for (let i = 0; i < s.mats.length; i++) {
+        if (s.pos[i].distanceToSquared(cam) < r2 !== s.near) continue;
+        for (const m of s.meshes) m.setMatrixAt(k, s.mats[i]);
+        k++;
+      }
+      for (const m of s.meshes) {
+        m.count = k;
+        m.instanceMatrix.needsUpdate = true;
+      }
+    }
+  }
+
+  get size() {
+    return this.sets.length;
+  }
+}
+
+/** Drives an InstanceLod from the camera, four times a second, while its landmark is visible. */
+export function attachLod(game: Game, obj: THREE.Object3D, lod: InstanceLod) {
+  if (!lod.size || typeof document === 'undefined') return;
+  const inv = new THREE.Matrix4();
+  const p = new THREE.Vector3();
+  let t = 1;
+  const sys: System & { name: string } = {
+    name: 'palcirc-lod',
+    priority: 96,
+    update(dt: number) {
+      t += dt;
+      if (t < 0.25) return;
+      t = 0;
+      if (!obj.parent || !obj.visible) return;
+      inv.copy(obj.matrixWorld).invert();
+      lod.update(p.copy(game.camera.position).applyMatrix4(inv));
+    },
+  };
+  game.addSystem(sys);
+}

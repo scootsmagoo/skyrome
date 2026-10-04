@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import type { LandmarkBuilder, LandmarkContext } from '../types';
 import { CIRCUS, circusSection, ringPoint, totalStations } from './palcirc/circusLayout';
 import { buildFacade, buildGallery, buildSidewalk, buildStandsAll, buildTrack, circusGaps } from './palcirc/circus';
-import { facing, requestLamps } from './palcirc/runtime';
+import { attachLod, facing, requestLamps } from './palcirc/runtime';
 import type { Lamp } from './palcirc/capenaParts';
 import { buildCarceres, buildSpina, buildTrackLines, circusFar } from './palcirc/circusParts';
 import { relById } from './palcirc/frames';
@@ -80,6 +80,7 @@ function circus(ctx: LandmarkContext) {
   spots.add('circus-npc-charioteer', 'npc', 8, 0, -170, Math.PI);
   spots.add('circus-npc-bookie', 'npc', -CIRCUS.halfW - 3, 0, -40, Math.PI / 2);
   group.add(b.build(ctx.lm.id));
+  attachLod(ctx.game, group, facade.lod);
   return { object: group, colliders: b.colliders, spots: spots.list, far: circusFar(), cullDistance: 1600 };
 }
 
