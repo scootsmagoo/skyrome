@@ -17,7 +17,9 @@ import { buildPlaza } from '../../../arch/fabric/streets';
 import { placeProp } from '../../../arch/props/props';
 import { Rng } from '../../../core/Rng';
 import type { MaterialId } from '../../../gfx/materialIds';
-import type { LandmarkBuilder, LandmarkContext } from '../types';
+import type { LandmarkBuilder, LandmarkContext, LandmarkData } from '../types';
+import { LANDMARK_BY_ID, ROADS } from '../../../data/atlas';
+import { WORLD_SCALE as S } from '../../coords';
 import { arcadeFace, block, gardenBed, openings, peristyle, pool, roofOver, shedTiles, stair, substructureFace, terraceWall, wallRing } from './palcirc/palace';
 import { facing } from './palcirc/runtime';
 import type { MeshBuilder } from '../../../gfx/MeshBuilder';
@@ -350,28 +352,25 @@ function tiberiana(ctx: LandmarkContext) {
   const yF = Math.min(-2, gF.min - 0.5);
   d.span('concrete', -HW, Math.min(yW, yF), -HD, HW, -0.3, HD, { collide: true });
   d.solid(-HW, -0.3, -HD, HW, 0, HD);
-  // Arcaded substructures over the Clivus Victoriae, out where the hillside has fallen to the road
-  // (W flank toward the Velabrum, the front behind the House of the Vestals and over the road to the
-  // Velia): the palace terrace is carried out to them, so the hill shows no bare cliff from the Forum.
-  const WX = -41, FZ = -50, D0: [number, number] = [WX, -40], D1: [number, number] = [-2, -48], EX = 44;
-  terraceWall(ctx, b, WX, 50, WX, D0[1], 0, { hi });
-  terraceWall(ctx, b, D0[0], D0[1], D1[0], D1[1], 0, { hi });
-  terraceWall(ctx, b, D1[0], D1[1], D1[0], FZ, 0, { hi });
-  terraceWall(ctx, b, D1[0], FZ, EX, FZ, 0, { hi });
-  terraceWall(ctx, b, EX, FZ, EX, -40, 0, { hi });
-  // Terrace fills (colliders) and their paving.
+  // Arcaded substructures along the Clivus Victoriae, which climbs round the palace's W and N sides:
+  // the palace terrace is carried out over the hillside to the road's inner edge (offset from the
+  // atlas road), so the hill shows no bare cliff from the Forum and the Velabrum.
+  const face = tiberianaFace();
+  for (let i = 0; i < face.length - 1; i++) terraceWall(ctx, b, face[i][0], face[i][1], face[i + 1][0], face[i + 1][1], 0, { hi });
   const deep = Math.min(yW, yF, -21);
-  d.solid(WX, deep, D0[1], -HW, 0, 50);
-  d.span('paving_travertine', WX, -0.05, D0[1], -HW, 0.03, 50);
-  d.solid(D1[0], deep, FZ, EX, 0, -HD);
-  d.span('paving_travertine', D1[0], -0.05, FZ, EX, 0.03, -HD);
-  for (let x = -31.5; x < D1[0] - 1e-6; x += 1.5) {
-    const xb = Math.min(D1[0], x + 1.5);
-    const zl = D0[1] + ((D1[1] - D0[1]) * (xb - D0[0])) / (D1[0] - D0[0]);
-    if (zl < -HD) {
-      d.solid(x, deep, zl, xb, 0, -HD);
-      d.span('paving_travertine', x, -0.05, zl, xb, 0.03, -HD);
-    }
+  // Terrace fills (colliders and paving) between the face and the pad, in slices.
+  for (let z = -HD; z < 50 - 1e-6; z += 1.5) {
+    const zb = Math.min(50, z + 1.5);
+    const xf = Math.min(polyAt(face, (z + zb) / 2, 'z'), -HW);
+    d.solid(xf, deep, z, -HW, 0, zb);
+    d.span('paving_travertine', xf, -0.05, z, -HW, 0.03, zb);
+  }
+  const xc = polyAt(face, -HD, 'z');
+  for (let x = xc; x < 44 - 1e-6; x += 1.5) {
+    const xb = Math.min(44, x + 1.5);
+    const zf = Math.min(polyAt(face, (x + xb) / 2, 'x'), -HD);
+    d.solid(x, deep, zf, xb, 0, -HD);
+    d.span('paving_travertine', x, -0.05, zf, xb, 0.03, -HD);
   }
   d.span('paving_travertine', -HW, -0.05, -HD, HW, 0.03, HD);
   // Buildings round the great peristyle: two storeys of offices and quarters.
@@ -403,16 +402,79 @@ function tiberiana(ctx: LandmarkContext) {
   // Trees in the garden.
   const trees: TreeSpec[] = [[-10, -12], [10, -12], [-10, 14], [10, 14], [-22, 30], [22, 30]].map(([x, z], i) => ({ species: i < 4 ? 'laurel' : 'umbrella_pine', x, z, y: 0, scale: i < 4 ? 0.9 : 1.1, variant: i % 3 }) as TreeSpec);
   // A line of cypresses and pines along the W terrace: the palace's skyline over the Forum.
-  for (let k = 0; k < 8; k++) trees.push({ species: k % 3 === 1 ? 'umbrella_pine' : 'cypress', x: -37.5, z: -32 + k * 10.5, y: 0, scale: k % 3 === 1 ? 0.95 : 1.0, variant: k % 3 });
+  for (let k = 0; k < 8; k++) {
+    const z = -30 + k * 10.2;
+    trees.push({ species: k % 3 === 1 ? 'umbrella_pine' : 'cypress', x: polyAt(face, z, 'z') + 2.2, z, y: 0, scale: k % 3 === 1 ? 0.95 : 1.0, variant: k % 3 });
+  }
   for (const t of plantTrees(ctx, trees)) b.collider(t);
   spots.add('tiberiana-cryptoporticus', 'door', gx + 3.0, 0, gz, Math.PI / 2);
   spots.add('tiberiana-gate', 'door', HW - 3.0, 0, 0, Math.PI / 2);
-  spots.add('tiberiana-vista-forum', 'vista', -39.2, 0, -37.5, Math.atan2(-1, -1));
+  spots.add('tiberiana-vista-forum', 'vista', polyAt(face, -38, 'z') + 1.2, 0, -38, Math.atan2(-1, -1));
   spots.add('tiberiana-clerk', 'npc', 0, 0, cz0 - 1.5, 0);
   spots.add('tiberiana-guard', 'npc', HW - 2.0, 0, 3.5, Math.PI / 2);
   spots.add('tiberiana-bench', 'sit', -12, 0, 0, Math.PI / 2);
   void hi;
   return { object: b.build(ctx.lm.id), colliders: b.colliders, spots: spots.list, cullDistance: 2500 };
+}
+
+/**
+ * The Tiberiana's substructure line (local game m): the inner edge of the Clivus Victoriae (atlas
+ * road, offset 2.6 m toward the palace) round the W and N sides, then straight on to the E end.
+ */
+export function tiberianaFace(): [number, number][] {
+  const road = ROADS.find((r) => r.id === 'clivus-victoriae');
+  const host = LANDMARK_BY_ID['domus-tiberiana'] as LandmarkData;
+  const th = (host.rotation * Math.PI) / 180;
+  const loc = ([x, z]: readonly [number, number]): [number, number] => {
+    const dx = (x - host.center[0]) * S, dz = (z - host.center[1]) * S;
+    return [dx * Math.cos(th) + dz * Math.sin(th), -dx * Math.sin(th) + dz * Math.cos(th)];
+  };
+  const pts = road ? road.points.map(loc) : [[-46.9, 20.6], [-42.5, -20.8], [-34.1, -52.8], [3.2, -51.3], [27.8, -45.3]] as [number, number][];
+  // Keep the stretch that wraps the palace (z ≤ 30 on the W side), offset each segment toward the
+  // centre, and join consecutive offset segments at their intersections.
+  const run = pts.filter(([, z]) => z < 30);
+  const off = 1.9;
+  const segs: [[number, number], [number, number]][] = [];
+  for (let i = 0; i < run.length - 1; i++) {
+    const [ax, az] = run[i], [bx, bz] = run[i + 1];
+    const L = Math.hypot(bx - ax, bz - az);
+    let nx = -(bz - az) / L, nz = (bx - ax) / L;
+    if (nx * -(ax + bx) / 2 + nz * -(az + bz) / 2 < 0) { nx = -nx; nz = -nz; }
+    segs.push([[ax + nx * off, az + nz * off], [bx + nx * off, bz + nz * off]]);
+  }
+  const out: [number, number][] = [[segs[0][0][0], 50], segs[0][0]];
+  for (let i = 0; i < segs.length - 1; i++) {
+    const [p, q] = segs[i], [r, t] = segs[i + 1];
+    const d1x = q[0] - p[0], d1z = q[1] - p[1], d2x = t[0] - r[0], d2z = t[1] - r[1];
+    const den = d1x * d2z - d1z * d2x;
+    if (Math.abs(den) < 1e-6) out.push(q);
+    else {
+      const u = ((r[0] - p[0]) * d2z - (r[1] - p[1]) * d2x) / den;
+      out.push([p[0] + d1x * u, p[1] + d1z * u]);
+    }
+  }
+  const last = segs[segs.length - 1][1];
+  out.push(last, [44, last[1]]);
+  return out;
+}
+
+/** Coordinate of a polyline at a given z (axis 'z': returns x) or x (axis 'x': returns z); clamped at the ends. */
+export function polyAt(poly: [number, number][], v: number, axis: 'x' | 'z'): number {
+  const k = axis === 'z' ? 1 : 0;
+  let best: number | null = null;
+  for (let i = 0; i < poly.length - 1; i++) {
+    const a = poly[i], c = poly[i + 1];
+    const lo = Math.min(a[k], c[k]), hiV = Math.max(a[k], c[k]);
+    if (v < lo - 1e-6 || v > hiV + 1e-6 || hiV - lo < 1e-6) continue;
+    const t = (v - a[k]) / (c[k] - a[k]);
+    const r = a[1 - k] + (c[1 - k] - a[1 - k]) * t;
+    // Several pieces may cover v: keep the outermost (the most negative x or z).
+    if (best === null || r < best) best = r;
+  }
+  if (best !== null) return best;
+  const ends = [poly[0], poly[poly.length - 1]];
+  const e = Math.abs(ends[0][k] - v) < Math.abs(ends[1][k] - v) ? ends[0] : ends[1];
+  return e[1 - k];
 }
 
 // ---------------------------------------------------------------- Palatine Stadium (garden hippodrome)
@@ -567,7 +629,7 @@ function stadiumTerrace(ctx: LandmarkContext, b: MeshBuilder, d: Draw, hi: boole
     const g = groundRange(ctx, Math.min(x0, x1) - 0.5, Math.min(z0, z1) - 0.5, Math.max(x0, x1) + 0.5, Math.max(z0, z1) + 0.5, 1.5);
     if (g.min > -1.0) return false;
     const f = new Draw(b, facing((x0 + x1) / 2 + nx * 0.0, 0, (z0 + z1) / 2 + nz * 0.0, nx, nz));
-    substructureFace(f, len + 0.02, g.min - 0.8, 0, { ground: g.min, hi, bay: 4.2 });
+    substructureFace(f, len + 0.02, g.min - 0.8, 0, { ground: Math.min(g.max, -2.5), hi, bay: 4.2 });
     f.solid(-len / 2, g.min - 0.8, 0, len / 2, 0, 1.0);
     f.solid(-len / 2, 0, -0.1, len / 2, 1.0, 0.3);
     return true;

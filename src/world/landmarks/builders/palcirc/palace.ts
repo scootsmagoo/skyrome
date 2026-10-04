@@ -285,8 +285,10 @@ export function substructureFace(d: Draw, len: number, y0: number, y1: number, o
   const w = len / n;
   const two = H > 8.5;
   const h1 = two ? Math.min(7, H * 0.52) : H - 0.9;
-  // Plinth down to the foundation.
-  d.span('travertine', -len / 2, y0, -0.05, len / 2, g + 0.5, 1.0);
+  // Base course down to the foundation, tall enough that the banked earth of the hillside and the
+  // road's shoulder lean on solid masonry rather than showing inside the arches.
+  d.span('travertine', -len / 2, y0, -0.14, len / 2, g + 1.3, 1.0);
+  d.span('travertine', -len / 2 - 0.02, g + 1.2, -0.22, len / 2 + 0.02, g + 1.45, 0.2);
   for (let i = 0; i < n; i++) {
     const cx = -len / 2 + (i + 0.5) * w;
     const f = d.at(cx, g, 0);
@@ -334,7 +336,9 @@ export function terraceWall(ctx: LandmarkContext, b: MeshBuilder, x0: number, z0
     const g = groundRange(ctx, Math.min(ax, bx) - 0.4 + nx * 0.6, Math.min(az, bz) - 0.4 + nz * 0.6, Math.max(ax, bx) + 0.4 + nx * 0.6, Math.max(az, bz) + 0.4 + nz * 0.6, 1.2);
     if (g.min > top - (opts.minDrop ?? 1.0)) continue;
     const f = new Draw(b, facingMatrix((ax + bx) / 2, 0, (az + bz) / 2, nx, nz));
-    substructureFace(f, len + 0.02, g.min - 0.8, top, { ground: g.min, hi: opts.hi ?? true, bay: 4.2 });
+    // Arches start at the piece's uphill ground (a road climbing along the wall would bury them);
+    // the base course steps down to the downhill end.
+    substructureFace(f, len + 0.02, g.min - 0.8, top, { ground: Math.min(g.max, top - 2.5), hi: opts.hi ?? true, bay: 4.2 });
     f.solid(-len / 2, g.min - 0.8, 0, len / 2, top, 1.0);
     f.solid(-len / 2, top, -0.1, len / 2, top + 1.0, 0.3);
     built++;
