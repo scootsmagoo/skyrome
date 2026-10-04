@@ -17,7 +17,9 @@ import { Draw } from '../../../arch/fabric/draw';
 import { pointInPolygon } from '../../../arch/fabric/polygon';
 import type { Rng } from '../../../core/Rng';
 import { bearingToRotationY } from '../../../core/math';
-import { footprintPolygon, type Heightmap } from '../../terrain/heightmap';
+import { footprintPolygon, type Heightmap, type TerrainRiver } from '../../terrain/heightmap';
+import { chain, resolveQuays, type ResolvedQuay } from '../../terrain/riverbanks';
+import { QUAY, stationAt } from '../../water/quays';
 import { bridgeLayoutFor } from '../../bridges';
 import type { LandmarkBuilder, LandmarkContext, LandmarkData, Spot } from '../types';
 
@@ -310,7 +312,7 @@ export type BoatKind = 'caudicaria' | 'linter' | 'scapha';
  * - 'scapha': a ship's boat / lighter (≈ 7 × 2.2 m) with oars.
  * - 'linter': a small punt (≈ 5 × 1.4 m).
  */
-export function boat(d: Draw, kind: BoatKind, rng: Rng, hi = true) {
+export function boat(d: Draw, kind: BoatKind, rng: Rng, hi = true): { floor: number; standZ: number } {
   const L = kind === 'caudicaria' ? 15 : kind === 'scapha' ? 7 : 5;
   const B = kind === 'caudicaria' ? 4.4 : kind === 'scapha' ? 2.2 : 1.4;
   const H = kind === 'caudicaria' ? 1.6 : kind === 'scapha' ? 0.9 : 0.6;
@@ -383,75 +385,15 @@ export function boat(d: Draw, kind: BoatKind, rng: Rng, hi = true) {
   } else {
     d.rod('wood', V(0.3, 0.2, 1.2), V(0.6, 4.2, 2.6), 0.035, 4); // punt pole
   }
+  // The hold floor is walkable: one box from the keel to the floorboards (a boatman stands on it,
+  // the player can jump aboard).
+  const floor = H - draft - (kind === 'caudicaria' ? 0.35 : 0.4);
+  d.solid((-B / 2) * 0.82, -draft, -L / 2 + 1.2, (B / 2) * 0.82, floor, L / 2 - 1.2);
+  // Where the boatman stands: between the cargo and the deckhouse on a barge, amidships otherwise.
+  return { floor, standZ: kind === 'caudicaria' ? L / 2 - 4.6 : 0 };
 }
 
-// ------------------------------------------------------------------ cattle
-
-/**
- * A grazing / standing ox or cow at 1:1 (≈ 2.3 m long, 1.4 m at the withers), facing −z, feet
- * on y = 0. `pose` lowers the head to graze.
- */
-export function ox(d: Draw, mat: MaterialId, rng: Rng, pose: 'stand' | 'graze' = 'stand', hi = true) {
-  const s = rng.range(0.9, 1.08);
-  const seg: [number, number] = hi ? [10, 7] : [6, 4];
-  const legH = 0.72 * s;
-  // Body barrel and hindquarters.
-  d.ellipsoid(mat, 0, legH + 0.36 * s, 0.05, 0.42 * s, 0.4 * s, 0.95 * s, { seg });
-  d.ellipsoid(mat, 0, legH + 0.42 * s, -0.55 * s, 0.38 * s, 0.4 * s, 0.4 * s, { seg }); // shoulders
-  // Legs.
-  for (const [x, z] of [[-0.24, -0.62], [0.24, -0.62], [-0.24, 0.66], [0.24, 0.66]] as const) {
-    d.rod(mat, V(x * s, legH + 0.1, z * s), V(x * s * 0.95, 0.08, z * s), 0.075 * s, hi ? 6 : 4, { rTop: 0.1 * s });
-    d.cyl('plaster_dark', x * s * 0.95, 0.04, z * s, 0.07 * s, 0.08, 6);
-  }
-  // Neck, dewlap and head.
-  const graze = pose === 'graze';
-  const hy = graze ? 0.35 * s : legH + 0.55 * s;
-  const hz = graze ? -1.15 * s : -1.18 * s;
-  d.rod(mat, V(0, legH + 0.5 * s, -0.75 * s), V(0, hy + 0.12, hz + 0.18), 0.2 * s, hi ? 7 : 5, { rTop: 0.15 * s });
-  d.ellipsoid(mat, 0, hy, hz, 0.15 * s, 0.17 * s, 0.3 * s, { seg, rx: graze ? 0.9 : 0.35 });
-  d.ellipsoid('plaster_dark', 0, hy - (graze ? 0.22 : 0.1) * s, hz - (graze ? 0.06 : 0.24) * s, 0.1 * s, 0.08 * s, 0.08 * s, { seg: [6, 4] });
-  // Horns (lyre-shaped, cream), ears.
-  for (const sx of [-1, 1]) {
-    const base = V(sx * 0.1 * s, hy + 0.14 * s, hz + 0.12 * s);
-    d.rod('plaster_cream', base, V(sx * 0.32 * s, hy + 0.3 * s, hz + 0.02 * s), 0.035 * s, 4, { rTop: 0.012 });
-    d.ellipsoid(mat, sx * 0.17 * s, hy + 0.07 * s, hz + 0.16 * s, 0.09 * s, 0.04 * s, 0.05 * s, { seg: [5, 3] });
-  }
-  // Tail.
-  d.rod(mat, V(0, legH + 0.5 * s, 0.98 * s), V(0, legH - 0.25 * s, 1.08 * s), 0.025 * s, 4);
-}
-
-/**
- * A standing nude hero (Hercules) at 1:1 × `s`, weight on the right leg, the left hand resting on
- * a club, a lion skin over the left forearm. Faces −z, feet on y = 0.
- */
-export function heracles(d: Draw, mat: MaterialId, s = 1, hi = true) {
-  const seg: [number, number] = hi ? [10, 7] : [6, 4];
-  const P = (x: number, y: number, z: number) => V(x * s, y * s, z * s);
-  // legs (contrapposto)
-  d.rod(mat, P(0.11, 1.0, 0), P(0.12, 0.52, -0.02), 0.085 * s, 7, { rTop: 0.07 * s });
-  d.rod(mat, P(0.12, 0.52, -0.02), P(0.12, 0.06, 0.02), 0.065 * s, 7, { rTop: 0.05 * s });
-  d.rod(mat, P(-0.12, 1.0, 0), P(-0.16, 0.54, -0.08), 0.085 * s, 7, { rTop: 0.07 * s });
-  d.rod(mat, P(-0.16, 0.54, -0.08), P(-0.2, 0.08, 0.04), 0.065 * s, 7, { rTop: 0.05 * s });
-  for (const [x, z] of [[0.12, -0.04], [-0.2, -0.02]]) d.ellipsoid(mat, x * s, 0.04 * s, z * s, 0.06 * s, 0.04 * s, 0.13 * s, { seg: [6, 4] });
-  // pelvis, torso, chest
-  d.ellipsoid(mat, 0, 1.05 * s, 0, 0.21 * s, 0.14 * s, 0.14 * s, { seg });
-  d.ellipsoid(mat, 0, 1.3 * s, 0, 0.2 * s, 0.22 * s, 0.14 * s, { seg });
-  d.ellipsoid(mat, 0, 1.52 * s, -0.01 * s, 0.27 * s, 0.15 * s, 0.16 * s, { seg });
-  d.cyl(mat, 0, 1.69 * s, 0, 0.07 * s, 0.12 * s, 7);
-  d.ellipsoid(mat, 0, 1.82 * s, -0.01 * s, 0.1 * s, 0.13 * s, 0.11 * s, { seg });
-  d.ellipsoid(mat, 0, 1.86 * s, 0.01 * s, 0.11 * s, 0.1 * s, 0.11 * s, { seg: [7, 5] }); // curly hair / beard mass
-  // right arm hanging (holding the apples of the Hesperides behind the back)
-  d.rod(mat, P(0.27, 1.56, 0), P(0.33, 1.22, 0.05), 0.065 * s, 6, { rTop: 0.055 * s });
-  d.rod(mat, P(0.33, 1.22, 0.05), P(0.3, 0.96, 0.14), 0.05 * s, 6, { rTop: 0.04 * s });
-  // left arm down to the club
-  d.rod(mat, P(-0.27, 1.56, 0), P(-0.38, 1.24, -0.06), 0.065 * s, 6, { rTop: 0.055 * s });
-  d.rod(mat, P(-0.38, 1.24, -0.06), P(-0.42, 1.02, -0.2), 0.05 * s, 6, { rTop: 0.045 * s });
-  // club (knotted, standing on the ground)
-  d.rod(mat, P(-0.44, 0.02, -0.26), P(-0.43, 1.02, -0.22), 0.05 * s, 6, { rTop: 0.085 * s });
-  // lion skin draped over the left forearm
-  d.box(mat, -0.44 * s, 0.86 * s, -0.12 * s, 0.14 * s, 0.5 * s, 0.24 * s, { rx: 0.1 });
-  d.ellipsoid(mat, -0.44 * s, 0.6 * s, -0.12 * s, 0.09 * s, 0.12 * s, 0.1 * s, { seg: [6, 4] });
-}
+// Cattle and statues: see river-sculpt.ts (lofted bodies, vertex-coloured hides).
 
 // ------------------------------------------------------------------ fences, stalls
 
@@ -603,4 +545,151 @@ export function bridgeCorridors(ctx: LandmarkContext, env: RiverEnv, ext = 40, e
     out.push([env.local(a[0] + nx, a[1] + nz), env.local(c[0] + nx, c[1] + nz), env.local(c[0] - nx, c[1] - nz), env.local(a[0] - nx, a[1] - nz)]);
   }
   return out;
+}
+
+// ------------------------------------------------------------------ the terrain's stone quays
+
+/** A point on a quay in a landmark's local frame: position, tangent (downstream) and inland normal. */
+export interface QuayPoint {
+  x: number;
+  z: number;
+  tx: number;
+  tz: number;
+  nx: number;
+  nz: number;
+}
+
+/**
+ * The stone quay the terrain/water modules built near a landmark (`hm.features.quays`, walls in
+ * src/world/water/quays.ts), in the landmark's local frame. Positions follow the water module's
+ * geometry exactly: the face line at the river bed (`inland` = 0), the face top 0.3 m further in
+ * (batter), a travertine coping 0.2 m proud of the quay surface from 0.22 to 1.12 m inland, the
+ * flat quay surface behind it out to ~10 m.
+ */
+export interface QuayEdge {
+  quay: ResolvedQuay;
+  river: TerrainRiver;
+  /** Chainage (real m) range of the quay that lies near the landmark. */
+  s0: number;
+  s1: number;
+  /** Quay surface, coping top, water level and river bed at the face (local y). */
+  top: number;
+  coping: number;
+  water: number;
+  bed: number;
+  /** Local point at chainage `s` (real m), `inland` game metres in from the bed-level face line. */
+  at(s: number, inland?: number): QuayPoint;
+  /** Nearest chainage and inland distance (game m) of a local point. */
+  project(x: number, z: number): { s: number; inland: number };
+  /** Chainages of the water module's mooring blocks, stair landings and wall gaps. */
+  moorings: number[];
+  stairs: number[];
+  gaps: { s: number; half: number }[];
+}
+
+/**
+ * The quay whose wall passes within `reach` (real m) of the landmark's centre, or null (natural
+ * banks, or a heightmap without quay features).
+ */
+export function quayEdge(ctx: LandmarkContext, env: RiverEnv, reach = 120): QuayEdge | null {
+  const hm = ctx.game.heightmap as Heightmap | undefined;
+  const quays = hm?.features?.quays;
+  if (!hm || !quays?.length) return null;
+  const S = ctx.S;
+  const rot = bearingToRotationY(ctx.lm.rotation);
+  const c = Math.cos(rot);
+  const s = Math.sin(rot);
+  const dirLocal = (dx: number, dz: number): V2 => [dx * c - dz * s, dx * s + dz * c];
+  let best: { rq: ResolvedQuay; river: TerrainRiver; d: number; sNear: number } | null = null;
+  for (const river of hm.features!.rivers) {
+    const line = chain(river.centerline);
+    for (const rq of resolveQuays(quays, river.id, line)) {
+      for (let ch = rq.s0; ch <= rq.s1; ch += 2) {
+        const p = stationAt(line, river.width, ch);
+        const bx = rq.side * p.tz, bz = rq.side * -p.tx;
+        const fx = p.x + bx * (p.half + QUAY.faceOffset), fz = p.z + bz * (p.half + QUAY.faceOffset);
+        const d = Math.hypot(fx - ctx.lm.center[0], fz - ctx.lm.center[1]);
+        if (d < reach && (!best || d < best.d)) best = { rq, river, d, sNear: ch };
+      }
+    }
+  }
+  if (!best) return null;
+  const { rq, river } = best;
+  const line = chain(river.centerline);
+  const at = (ch: number, inland = 0): QuayPoint => {
+    const p = stationAt(line, river.width, ch);
+    const bx = rq.side * p.tz, bz = rq.side * -p.tx;
+    const d = p.half + QUAY.faceOffset;
+    const [x, z] = env.local(p.x + bx * d, p.z + bz * d);
+    const [nx, nz] = dirLocal(bx, bz);
+    const [tx, tz] = dirLocal(p.tx, p.tz);
+    return { x: x + nx * inland, z: z + nz * inland, tx, tz, nx, nz };
+  };
+  // The water module's stairs and mooring blocks (same rules as buildQuay).
+  const len = rq.s1 - rq.s0;
+  const stairs: number[] = [];
+  if (len > 40) {
+    const k = Math.max(1, Math.round(len / QUAY.stairEvery));
+    for (let i = 0; i < k; i++) {
+      const ch = rq.s0 + (len * (i + 0.5)) / k;
+      if (!rq.gaps.some((g) => Math.abs(ch - g.s) < g.half + 20)) stairs.push(ch);
+    }
+  }
+  const moorings: number[] = [];
+  const n = Math.max(1, Math.round(len / QUAY.station));
+  const ds = len / n;
+  for (let i = 0; i < n; i++) {
+    const sa = rq.s0 + i * ds, sb = sa + ds;
+    const sm = (sa + sb) / 2;
+    if (rq.gaps.some((g) => Math.abs(sm - g.s) < g.half + 0.8)) continue;
+    if (Math.floor((sa - rq.s0) / QUAY.mooringEvery) !== Math.floor((sb - rq.s0) / QUAY.mooringEvery) && !stairs.some((st) => Math.abs(sm - st) < 12)) moorings.push(sm);
+  }
+  // The part of the quay near the landmark.
+  const r = radius(ctx.lm) + 30;
+  let s0 = Infinity, s1 = -Infinity;
+  for (let ch = rq.s0; ch <= rq.s1; ch += 1) {
+    const p = stationAt(line, river.width, ch);
+    if (Math.hypot(p.x - ctx.lm.center[0], p.z - ctx.lm.center[1]) < r + p.half) {
+      s0 = Math.min(s0, ch);
+      s1 = Math.max(s1, ch);
+    }
+  }
+  if (!Number.isFinite(s0)) {
+    s0 = best.sNear;
+    s1 = best.sNear;
+  }
+  const project = (x: number, z: number) => {
+    let bs = s0, bd = Infinity;
+    for (let ch = Math.max(rq.s0, s0 - 40); ch <= Math.min(rq.s1, s1 + 40); ch += 1) {
+      const p = at(ch);
+      const d = (p.x - x) ** 2 + (p.z - z) ** 2;
+      if (d < bd) {
+        bd = d;
+        bs = ch;
+      }
+    }
+    const p = at(bs);
+    return { s: bs, inland: (x - p.x) * p.nx + (z - p.z) * p.nz };
+  };
+  return {
+    quay: rq,
+    river,
+    s0,
+    s1,
+    top: rq.quay.top * S - env.baseY,
+    coping: rq.quay.top * S + QUAY.coping - env.baseY,
+    water: river.waterLevel * S - env.baseY,
+    bed: (river.waterLevel - 4.6) * S - env.baseY,
+    at,
+    project,
+    moorings,
+    stairs,
+    gaps: rq.gaps,
+  };
+}
+
+/** A Draw frame at a quay point whose local −z faces the river (x along the quay). */
+export function quayFrame(d: Draw, p: QuayPoint, y: number): Draw {
+  // Local −z = riverward (−n): rotation.y = atan2(nx, nz) maps +z to (nx, nz).
+  return d.at(p.x, y, p.z, Math.atan2(p.nx, p.nz));
 }

@@ -19,6 +19,7 @@ import { placeProp } from '../../../arch/props';
 import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import { altar, centredTemple, draw, farBoxes, fittedTemple, friezeInscription, gableRoof, insideAny, neighbourFootprints, riverEnv, roadCorridors, simpleColonnade, spot } from './river-kit';
+import { LampList, riverLife } from './river-life';
 
 // ------------------------------------------------------------------ Apollo Sosianus
 
@@ -48,6 +49,7 @@ function templeApolloSosianus(ctx: LandmarkContext) {
     spot('temple-apollo-sosianus:door', 'door', 0, L.podiumHeight, L.cella.z0 + dz - 0.8, Math.PI),
     spot('temple-apollo-sosianus:steps', 'vista', 0, L.podiumHeight, L.stylobate.z0 + dz + 0.4, 0),
   ];
+  riverLife(ctx, spots, new LampList().add(xa, gl(xa, za) + 1.3, za, 'fire'));
   return { object: b.build(lm.id), colliders: b.colliders, spots };
 }
 
@@ -73,6 +75,7 @@ function templeBellona(ctx: LandmarkContext) {
     spot('temple-bellona:senate-door', 'door', 0, L.podiumHeight, L.cella.z0 + dz - 0.8, Math.PI),
     spot('temple-bellona:envoys', 'npc', 1.5, L.podiumHeight, L.stylobate.z0 + dz + 1.0, 0),
   ];
+  riverLife(ctx, spots, new LampList().add(-2.2, gl(-2.2, za) + 1.2, za, 'fire'));
   return { object: b.build(lm.id), colliders: b.colliders, spots };
 }
 
@@ -102,6 +105,7 @@ function columnaBellica(ctx: LandmarkContext) {
     spot('columna-bellica:fetial', 'shrine', 0, 0.18, 1.0, Math.PI),
     spot('columna-bellica:column', 'vista', 0, 0, -2.2, 0),
   ];
+  riverLife(ctx, spots);
   return { object: b.build(lm.id), colliders: b.colliders, spots };
 }
 
@@ -264,9 +268,10 @@ function porticusOctaviae(ctx: LandmarkContext) {
     spot('porticus-octaviae:horsemen', 'inscription', 0, 0, hz - 2.6, 0),
     spot('porticus-octaviae:jupiter-altar', 'shrine', -9.2, 0, altars[0][1] - 1.5, 0),
     spot('porticus-octaviae:juno-altar', 'shrine', 9.2, 0, altars[1][1] - 1.5, 0),
-    spot('porticus-octaviae:library', 'door', -6, 0.3, lz0 + 0.6, Math.PI),
-    spot('porticus-octaviae:librarian', 'npc', 6, 0.3, lz0 + 0.4, 0),
-    spot('porticus-octaviae:curia', 'door', 0, 0.3, lz0 + 0.6, Math.PI),
+    // In the portico before the halls (columns every 3 m along lz0), facing the doors.
+    spot('porticus-octaviae:library', 'door', -6, 0.3, lz0 + 1.0, 0),
+    spot('porticus-octaviae:librarian', 'npc', 7.5, 0.3, lz0 + 0.9, Math.PI),
+    spot('porticus-octaviae:curia', 'door', 0, 0.3, lz0 + 1.0, 0),
   ];
   for (let k = 0; k < 4; k++) spots.push(spot(`porticus-octaviae:bench-${k}`, 'sit', x0 + depth / 2, st, z0 + 14 + k * 12, Math.PI / 2));
   const far = farBoxes([
@@ -277,6 +282,7 @@ function porticusOctaviae(ctx: LandmarkContext) {
     { mat: 'marble', c: [-9.2, 5, tz], s: [10, 10, 16] },
     { mat: 'marble', c: [9.2, 5, tz], s: [10, 10, 16] },
   ], 'porticus-octaviae:far');
+  riverLife(ctx, spots, new LampList().add(altars[0][0], 1.25, altars[0][1], 'fire').add(altars[1][0], 1.25, altars[1][1], 'fire'));
   return { object: b.build(lm.id), colliders: b.colliders, spots, far, cullDistance: 900 };
 }
 
@@ -350,7 +356,9 @@ function circusFlaminius(ctx: LandmarkContext) {
     t.cyl('bronze', 0.75, 1.5, 0.05, 0.42, 0.06, 12, { rx: Math.PI / 2 });
     t.cyl('bronze', -0.75, 1.5, 0.05, 0.42, 0.06, 12, { rx: Math.PI / 2 });
     placeProp(t, 'bench', 0, 0, -2.2, 0, { variant: k % 3 });
-    spots.push(spot(`circus-flaminius:spoils-${k}`, 'sit', x, gl(x, z), z, 0));
+    // On the bench before the trophy (seat top 0.47 m), facing it.
+    const sp = t.point(0, 0.47, -2.2);
+    spots.push(spot(`circus-flaminius:spoils-${k}`, 'sit', sp.x, sp.y, sp.z, t.yaw));
   }
   // Statues on bases along both margins (the square is crowded with honorific monuments).
   for (const sx of [-1, 1]) {
@@ -363,6 +371,7 @@ function circusFlaminius(ctx: LandmarkContext) {
   }
   spots.push(spot('circus-flaminius:muster', 'spawn', 0, gl(0, -L / 2 + 30), -L / 2 + 30, 0));
   spots.push(spot('circus-flaminius:centre', 'npc', 0, gl(0, 0), 0, 0));
+  riverLife(ctx, spots);
   return { object: b.build(lm.id), colliders: b.colliders, spots, cullDistance: 900 };
 }
 

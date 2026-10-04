@@ -11,6 +11,9 @@
  *   two phases cross-faded, so the pattern really travels downstream and stretches with speed),
  *   plus two wind-ripple layers; they flatten with distance so far water doesn't sparkle.
  * - Sun glints: a sharp extra specular lobe of the key light on top of the GGX highlight.
+ * - Murk: the sky reflection is tinted and damped (`uReflect`) and light scattered back out of the
+ *   silt (`uMurk`) is added whatever the view angle, so the river stays *flavus* at the grazing
+ *   angles a walker sees it at instead of turning into a blue-grey mirror.
  */
 import * as THREE from 'three';
 
@@ -24,6 +27,10 @@ export interface WaterUniforms {
   uShallow: { value: THREE.Color };
   uSilt: { value: THREE.Color };
   uGlint: { value: number };
+  /** Tint and strength of the sky reflection. */
+  uReflect: { value: THREE.Color };
+  /** Silt back-scattering (0 = clear water). */
+  uMurk: { value: number };
 }
 
 /** Tileable ripple normal map (RGBA8, xy in rg): sine swell plus periodic value-noise chop. */
@@ -90,7 +97,9 @@ export function makeWaterNormalTexture(size = 256, seed = 7): THREE.DataTexture 
 
 const VERTEX_PARS = /* glsl */ `
 attribute vec2 aFlow;
+attribute float aClear;
 varying vec2 vFlow;
+varying float vClear;
 varying vec3 vWWorld;
 `;
 
@@ -104,7 +113,10 @@ uniform vec3 uDeep;
 uniform vec3 uShallow;
 uniform vec3 uSilt;
 uniform float uGlint;
+uniform vec3 uReflect;
+uniform float uMurk;
 varying vec2 vFlow;
+varying float vClear;
 varying vec3 vWWorld;
 
 float wGround( vec2 xz ) {
@@ -156,12 +168,20 @@ const FRAGMENT_MAP = /* glsl */ `
   float wEdge = 1.0 - smoothstep( 0.0, 0.16, wDepth );
   float wFoam = wEdge * smoothstep( 0.35, 0.75, wHash( floor( wP * 3.0 ) ) * 0.5 + 0.5 * ( wFlowN.x * 0.5 + 0.5 ) );
   wCol = mix( wCol, uSilt, wFoam * 0.6 );
+  // Clear spring water (Agrippa's canal): dark and green over its masonry bed.
+  wCol = mix( wCol, vec3( 0.075, 0.1, 0.07 ), vClear * 0.8 );
   diffuseColor.rgb = wCol;
   diffuseColor.a = smoothstep( 0.0, 0.45, wDepth );
 `;
 
 const FRAGMENT_GLINT = /* glsl */ `
 #include <lights_fragment_end>
+// Turbid water: a damped, silt-tinted sky reflection, plus light scattered back out of the body.
+reflectedLight.indirectSpecular *= uReflect;
+reflectedLight.indirectDiffuse += uMurk * material.diffuseColor * ( irradiance + iblIrradiance ) * RECIPROCAL_PI;
+#if NUM_DIR_LIGHTS > 0
+reflectedLight.indirectDiffuse += uMurk * 0.22 * material.diffuseColor * directionalLights[ 0 ].color * max( directionalLights[ 0 ].direction.y, 0.0 );
+#endif
 #if NUM_DIR_LIGHTS > 0
 {
   vec3 wR = reflect( - geometryViewDir, normal );
@@ -172,24 +192,24 @@ const FRAGMENT_GLINT = /* glsl */ `
 `;
 
 export function createWaterMaterial(u: WaterUniforms): THREE.MeshStandardMaterial {
-  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.07, metalness: 0, transparent: true, depthWrite: true });
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.14, metalness: 0, transparent: true, depthWrite: true });
   m.name = 'water';
-  m.envMapIntensity = 0.6;
+  m.envMapIntensity = 0.5;
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, u);
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${VERTEX_PARS}`)
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFlow = aFlow;\nvWWorld = ( modelMatrix * vec4( position, 1.0 ) ).xyz;');
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFlow = aFlow;\nvClear = aClear;\nvWWorld = ( modelMatrix * vec4( position, 1.0 ) ).xyz;');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${FRAGMENT_PARS}`)
       .replace('#include <map_fragment>', FRAGMENT_MAP)
-      .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = mix( 0.32, 0.075, diffuseColor.a );')
+      .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = mix( 0.34, 0.13, diffuseColor.a );')
       .replace('#include <normal_fragment_maps>', 'normal = normalize( ( viewMatrix * vec4( wNormal, 0.0 ) ).xyz );')
       .replace('#include <lights_fragment_end>', FRAGMENT_GLINT);
   };
-  m.customProgramCacheKey = () => 'skyrome-water-v1';
+  m.customProgramCacheKey = () => 'skyrome-water-v3';
   return m;
 }
 
 /** Tiber palette (sRGB): flavus Tiberis. */
-export const TIBER_COLORS = { deep: 0x726942, shallow: 0x8f7e54, silt: 0xb6a780 };
+export const TIBER_COLORS = { deep: 0x786641, shallow: 0x927c53, silt: 0xb6a780 };

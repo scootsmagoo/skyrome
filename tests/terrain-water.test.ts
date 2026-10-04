@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { WORLD_SCALE } from '../src/world/coords';
 import { buildHeightmap, type TerrainSource } from '../src/world/terrain/heightmap';
@@ -74,6 +75,31 @@ describe('water', () => {
     const names = group.children.map((c) => c.name);
     expect(names.some((n) => n.includes('reticulatum'))).toBe(true);
     expect(names.some((n) => n.includes('black'))).toBe(true); // the outfall's dark mouth
+  });
+
+  it('the parapet is open across the gap and QUAY.gapFlank beyond it (a landmark\'s flight climbs out there), and closed past that', () => {
+    const rq = resolveQuays([quay], 'r', chain(river.centerline))[0];
+    const q = buildQuay(river, rq, (x, z) => hm.heightAt(x, z), S);
+    // The quay runs along z; the gap is centred on z = 60 (real m) and its wall opening is half + 0.8 wide.
+    const zGap = 60 * S;
+    const open = (4 + 0.8) * S + QUAY.gapFlank;
+    const spans: [number, number][] = [];
+    for (const c of q.colliders) {
+      if (c.kind !== 'box' || Math.abs(c.half.y - QUAY.parapet / 2) > 1e-6 || Math.abs(c.half.z - QUAY.parapetThick / 2) > 1e-6) continue;
+      let lo = Infinity, hi = -Infinity;
+      for (const sx of [-1, 1]) {
+        const z = new THREE.Vector3(sx * c.half.x, 0, 0).applyQuaternion(c.rotation ?? new THREE.Quaternion()).add(c.center).z;
+        lo = Math.min(lo, z);
+        hi = Math.max(hi, z);
+      }
+      spans.push([lo, hi]);
+    }
+    expect(spans.length).toBeGreaterThan(10);
+    // No parapet piece reaches into the opening (with its flanks)...
+    for (const [lo, hi] of spans) expect(hi <= zGap - open + 0.05 || lo >= zGap + open - 0.05, `${lo.toFixed(2)}..${hi.toFixed(2)}`).toBe(true);
+    // ...and it resumes right at their edges, on both sides.
+    expect(spans.some(([, hi]) => Math.abs(hi - (zGap - open)) < 0.1)).toBe(true);
+    expect(spans.some(([lo]) => Math.abs(lo - (zGap + open)) < 0.1)).toBe(true);
   });
 
   it('reeds grow on the natural margin, never on the quay', () => {

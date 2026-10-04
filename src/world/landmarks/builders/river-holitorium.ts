@@ -14,6 +14,7 @@ import type { MaterialId } from '../../../gfx/materialIds';
 import type { TempleSpec } from '../../../arch/classical/temple';
 import type { LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import { altar, draw, fittedTemple, footprintLocal, friezeInscription, insideAny, neighbourFootprints, riverEnv, roadCorridors, spot } from './river-kit';
+import { LampList, riverLife } from './river-life';
 
 // ------------------------------------------------------------------ the three temples
 
@@ -59,9 +60,11 @@ function trioTemple(ctx: LandmarkContext) {
   altar(d.at(0, gl(0, za), za), 1.3, 0.9, 1.05, t.altarMat);
   const spots: Spot[] = [
     spot(`${lm.id}:altar`, 'shrine', 0, gl(0, za - 1.4), za - 1.4, 0),
-    spot(`${lm.id}:steps`, 'sit', (L.stairs.x0 + L.stairs.x1) / 2 + 0.8, L.stairs.rise * 2, L.stairs.z0 + dz + L.stairs.run * 2.5, Math.PI),
+    // Sitting on the third step: the tread top of step index 2 (rise × 3).
+    spot(`${lm.id}:steps`, 'sit', (L.stairs.x0 + L.stairs.x1) / 2 + 0.8, L.stairs.rise * 3, L.stairs.z0 + dz + L.stairs.run * 2.5, Math.PI),
     spot(`${lm.id}:dedication`, 'inscription', 0, 0, front - 4, 0),
   ];
+  riverLife(ctx, spots, new LampList().add(0, gl(0, za) + 1.25, za, 'fire'));
   return { object: b.build(lm.id), colliders: b.colliders, spots };
 }
 
@@ -94,6 +97,7 @@ function forumHolitorium(ctx: LandmarkContext) {
     return !insideAny(x, z, blocked);
   };
   const spots: Spot[] = [];
+  const lamps = new LampList();
   // Rows of greengrocers' stalls under striped awnings, facing the aisles between them.
   const kinds = ['stall_fruit', 'stall_fruit', 'stall_fruit', 'stall_pottery', 'stall_cloth'] as const;
   const awnings: [MaterialId, MaterialId][] = [['fabric_white', 'fabric_red'], ['fabric_white', 'fabric_ochre'], ['fabric_white', 'fabric_blue']];
@@ -110,7 +114,14 @@ function forumHolitorium(ctx: LandmarkContext) {
       if (hi && n % 2 === 0) velum(s.at(0, 0, 1.0), 3.0, 2.4, 2.5, awnings[n % awnings.length]);
       // Baskets and sacks of produce around the stall.
       for (let k = 0; k < (hi ? 3 : 1); k++) placeProp(s, k % 2 ? 'basket' : 'sack', rng.range(-1.4, 1.4), 0, rng.range(0.9, 1.6), rng.range(0, 6), { variant: k % 3, collide: false });
-      spots.push(spot(`forum-holitorium:stall-${n}`, 'stall', xx, gl(xx, z), z + (face === 0 ? 0.9 : -0.9), face + Math.PI));
+      // The stall-holder stands behind the counter (its collider reaches 0.6 m back), facing out.
+      const v = s.point(0, 0, 1.15);
+      spots.push(spot(`forum-holitorium:stall-${n}`, 'stall', v.x, gl(xx, z), v.z, face + Math.PI));
+      if (n % 3 === 0) {
+        // An oil lamp on the awning pole, lit at dusk.
+        const lp = s.point(1.2, 2.0, -0.8);
+        lamps.add(lp.x, lp.y, lp.z, 'lamp');
+      }
       n++;
     }
   }
@@ -132,6 +143,8 @@ function forumHolitorium(ctx: LandmarkContext) {
   if (lp) {
     const ls = lacus(d.at(lp[0], gl(lp[0], lp[1]), lp[1]), rng, { stone: 'travertine' });
     ls.forEach((p, i) => spots.push(spot(`forum-holitorium:fountain-${i}`, 'npc', lp[0] + p.x, gl(lp[0], lp[1]), lp[1] + p.z, p.facing)));
+    placeProp(d, 'lampstand', lp[0] + 2.2, gl(lp[0] + 2.2, lp[1]), lp[1], 0, { collide: true });
+    lamps.add(lp[0] + 2.2, gl(lp[0] + 2.2, lp[1]) + 1.45, lp[1], 'lamp');
   }
   // Painted notice: an aedile's edict on prices by the market's north corner.
   const np = findFree(free, [[-W * 0.42, -D * 0.4], [W * 0.42, -D * 0.4]]);
@@ -149,7 +162,10 @@ function forumHolitorium(ctx: LandmarkContext) {
     placeProp(s, 'crate', 1.3, 0, 0.2, 0.2, { variant: 0 });
     spots.push(spot('forum-holitorium:strongbox', 'container', cp[0] + 1.3, gl(cp[0], cp[1]), cp[1] - 0.6, 0));
   }
-  spots.push(spot('forum-holitorium:centre', 'spawn', 0, gl(0, 0), 0, 0));
+  // The spawn in an aisle between the stall rows.
+  const ctr = findFree((x, z, r) => free(x, z, r ?? 1.2), [[0, 4.25], [0, -4.25], [6, 4.25], [-6, 4.25], [0, 12], [0, -12]]) ?? [0, 4.25];
+  spots.push(spot('forum-holitorium:centre', 'spawn', ctr[0], gl(ctr[0], ctr[1]), ctr[1], 0));
+  riverLife(ctx, spots, lamps);
   return { object: b.build(lm.id), colliders: b.colliders, spots };
 }
 
@@ -184,6 +200,7 @@ function columnaLactaria(ctx: LandmarkContext) {
     spot('columna-lactaria:inscription', 'inscription', 0.3, 0, -1.4, 0),
   ];
   void THREE;
+  riverLife(ctx, spots);
   return { object: b.build(lm.id), colliders: b.colliders, spots };
 }
 
