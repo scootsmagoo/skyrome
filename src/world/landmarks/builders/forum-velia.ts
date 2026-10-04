@@ -23,7 +23,7 @@ import { LANDMARK_BY_ID } from '../../../data/atlas';
 import type { LandmarkBuilder } from '../types';
 import { FORUM_INSCRIPTIONS } from './forum-data';
 import { figure, nudeMale } from './forum-figures';
-import { T, TRS, atlasToLocal, col, foundation, inscription, landmark, pave, plantTrees, rect, type Part } from './forum-kit';
+import { T, TRS, addFire, atlasToLocal, balustrade, col, foundation, inscription, landmark, localToAtlas, pave, plantTrees, rect, streetEdge, type Part } from './forum-kit';
 import { gableRoof, shedRoof } from './forum-temple';
 import { aediculaShrine } from './forum-vesta';
 
@@ -164,10 +164,76 @@ function horreaBuilding(p: Part, w: number, dpt: number, label: string[]) {
   for (const s of out.spots) p.spot(`${ctx.lm.id}-${s.id}`, s.kind === 'houseDoor' ? 'door' : 'npc', s.position.x, s.position.y, s.position.z, s.facing);
 }
 
+/**
+ * The Horrea Piperataria's front on the Sacra Via: a paved terrace at the warehouse floor along the
+ * whole front, held by a travertine retaining wall where the street falls away toward the Forum
+ * and cut into the slope where it rises toward the Velia, a colonnade either side of the gate with
+ * the pepper and spice dealers' tables under it, and flights of steps down to the street.
+ */
+function piperatariaFront(p: Part, w: number, dp: number) {
+  const { b, d, hi } = p;
+  const zf = -dp / 2;
+  const tz = zf - 5.0;
+  const hw = w / 2;
+  foundation(p, rect(-hw, tz, hw, zf), 0, 'travertine');
+  d.span('paving_travertine', -hw, -0.3, tz, hw, 0, zf, { collide: true, shadow: false });
+  // the slope behind the E end is held back by a low wall along the terrace edge
+  const stairsAt = [0, hw * 0.62];
+  const run = 0.33;
+  const segs = 12;
+  for (let i = 0; i < segs; i++) {
+    const x0 = -hw + (i * w) / segs;
+    const x1 = x0 + w / segs;
+    const xm = (x0 + x1) / 2;
+    const g = p.ctx.groundAt(xm, tz - 0.8);
+    const gapped = stairsAt.some((sx) => Math.abs(xm - sx) < 2.6);
+    if (g > 0.25) d.span('travertine', x0, -0.3, tz - 0.45, x1, Math.min(g + 0.15, 4.5), tz, { collide: true });
+    else if (g < -0.6 && !gapped) balustrade(d, x0, tz + 0.12, x1, tz + 0.12, { h: 1.0, mat: 'travertine' });
+  }
+  for (const sx of stairsAt) {
+    const g = Math.min(p.ctx.groundAt(sx - 2, tz - 1.0), p.ctx.groundAt(sx + 2, tz - 1.0));
+    if (g > -0.12) continue;
+    const count = Math.ceil(-g / 0.2);
+    stairs(b, { width: 4.6, rise: -g / count, run, count, material: 'travertine', collider: p.main ? 'steps' : 'none' }, T(sx, g, tz - count * run));
+    for (const k of [-1, 1]) d.span('travertine', sx + k * 2.3 - 0.2, g, tz - count * run, sx + k * 2.3 + 0.2, 0.9, tz, { collide: true });
+  }
+  // colonnades either side of the gate, lean-to roofs against the warehouse front
+  const cH = 3.8;
+  const D = cH / 7;
+  const cz = zf - 3.2;
+  for (const side of [-1, 1]) {
+    const xa = side < 0 ? -hw + 0.6 : 4.4;
+    const xb = side < 0 ? -4.4 : hw - 0.6;
+    const n = Math.max(1, Math.round((xb - xa) / 3.6));
+    for (let i = 0; i <= n; i++) col(b, { order: 'tuscan', D, H: cH, tier: hi ? 'mid' : 'stub', material: 'travertine', collide: p.main }, T(xa + ((xb - xa) * i) / n, 0, cz));
+    d.span('travertine', xa - 0.35, cH, cz - 0.35, xb + 0.35, cH + 0.45, cz + 0.35);
+    d.span('wood_dark', xa - 0.3, cH + 0.15, cz + 0.35, xb + 0.3, cH + 0.27, zf, { shadow: false });
+    shedRoof(b, xa - 0.4, xb + 0.4, zf + 0.05, cz - 0.6, cH + 1.35, cH + 0.45, 'roof_tile', new THREE.Matrix4());
+    // spice dealers under the colonnade: sacks, baskets, a weighing table
+    if (hi) {
+      const r = p.ctx.rng.fork(`spice-${side}`);
+      for (let k = 0; k < 3; k++) {
+        const x = xa + ((xb - xa) * (k + 0.5)) / 3;
+        placeProp(d, 'table', x, 0, zf - 1.4, 0, { variant: k % 3, collide: p.main });
+        for (let j = 0; j < 4; j++) placeProp(d, j % 2 ? 'basket' : 'sack', x - 0.9 + j * 0.6, 0, zf - 0.55, r.range(0, 6), { variant: j % 3, collide: false });
+        p.spot(`horrea-piperataria-dealer-${side < 0 ? 'e' : 'w'}${k}`, 'vendor', x, 0, zf - 0.9, Math.PI);
+      }
+    }
+    addFire(p, (xa + xb) / 2, 1.45 + 0, cz + 0.6, { night: true, intensity: 6, distance: 8, glow: 0.3 });
+    if (hi) placeProp(d, 'lampstand', (xa + xb) / 2, 0, cz + 0.6, 0, { collide: p.main });
+  }
+}
+
 function piperataria(p: Part) {
   const w = 80 * p.S;
   const dp = 40 * p.S;
   horreaBuilding(p, w, dp, ['Horrea', 'Piperataria']);
+  piperatariaFront(p, w, dp);
+  // the N side of the summa Sacra Via from the Fornix up to the causeway below the Arch of Titus:
+  // sidewalk and retaining walls, open (with steps) opposite the warehouse's two flights
+  const tz = -dp / 2 - 5.0;
+  const gaps = [0, (w / 2) * 0.62].map((x) => localToAtlas(p.ctx, x, tz - 2));
+  streetEdge(p, 'via-sacra', -1, [206, 86.5], [309.5, 146.6], { gaps, walk: 2.4 });
   const d = p.d;
   // pepper and spice sacks, baskets and a weighing table at the gate
   if (p.hi) {
@@ -271,6 +337,8 @@ function margaritaria(p: Part) {
   shedRoof(b, -hw - 0.3, hw + 0.3, hd - 6.3, hd + 0.4, fy + H + 1.4, fy + H, 'roof_tile', new THREE.Matrix4());
   if (hi) inscription(b, T(0, fy + cH + ent.dims.total + 1.6, zs - 0.05), FORUM_INSCRIPTIONS['porticus-margaritaria'].latin, 4.2, 0.55, 'painted', { depth: 0.03 });
   p.spot('porticus-margaritaria', 'inscription', 0, fy, z0 - 1.6, 0);
+  // the S side of the summa Sacra Via along the portico's front, open (with steps) at its gate
+  streetEdge(p, 'via-sacra', 1, [257, 128.8], [309.5, 146.6], { gaps: [localToAtlas(p.ctx, 0, -hd)], walk: 2.4 });
 }
 
 // ---------------------------------------------------------------- Domitian's vestibule

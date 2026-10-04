@@ -24,7 +24,9 @@ import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuilder } from '../types';
 import { FORUM_INSCRIPTIONS } from './forum-data';
 import { drapedFemale, figure, nudeMale } from './forum-figures';
-import { T, TRS, balustrade, col, foundation, inscription, landmark, mul, shipRam, type Part } from './forum-kit';
+import { T, TRS, addFire, atlasToLocal, balustrade, col, foundation, inscription, landmark, mul, shipRam, type Part } from './forum-kit';
+import { placeProp } from '../../../arch/props';
+import { Draw } from '../../../arch/fabric/draw';
 import { sacrificeFriezeMaterial } from './forum-reliefs';
 import { forumTemple, gableRoof, type ForumTempleSpec } from './forum-temple';
 
@@ -58,6 +60,36 @@ function podiumDoor(p: Part, at: THREE.Matrix4, w = 1.2, h = 2.25, grille: Mater
     for (let i = 0; i <= 5; i++) b.box(grille, 0.035, h - 0.05, 0.035, mul(at, T(-w / 2 + (i * w) / 5, h / 2, -0.07)));
     for (const y of [0.35, h * 0.5, h - 0.3]) b.box(grille, w, 0.05, 0.04, mul(at, T(0, y, -0.07)));
   } else b.box(grille, w, h, 0.02, mul(at, T(0, h / 2, -0.05)), { castShadow: false });
+}
+
+/**
+ * The open door of the deposit vaults in a podium flank (faces −z in `at`): a travertine frame, the
+ * dark passage, the iron grille swung open against the wall, the carved plaque LOCVLI · DEPOSITORVM
+ * above and an oil lamp on a bracket that burns day and night.
+ */
+function strongroomDoor(p: Part, at: THREE.Matrix4) {
+  const { b } = p;
+  const w = 1.3;
+  const h = 2.35;
+  b.box('black', w, h, 0.05, mul(at, T(0, h / 2, -0.02)), { castShadow: false });
+  b.box('travertine', 0.22, h + 0.12, 0.16, mul(at, T(-w / 2 - 0.11, (h + 0.12) / 2, -0.08)));
+  b.box('travertine', 0.22, h + 0.12, 0.16, mul(at, T(w / 2 + 0.11, (h + 0.12) / 2, -0.08)));
+  b.box('travertine', w + 0.7, 0.3, 0.2, mul(at, T(0, h + 0.15, -0.1)));
+  b.box('travertine', w + 0.3, 0.08, 0.5, mul(at, T(0, 0.04, -0.25)));
+  // a worn threshold and the grille leaf standing open, hinged on the left jamb
+  b.box('marble_veined', w, 0.03, 0.34, mul(at, T(0, 0.095, -0.2)), { castShadow: false });
+  const leaf = mul(at, TRS(-w / 2, 0, -0.1, 0, 1.75, 0));
+  if (p.hi) {
+    for (let i = 0; i <= 5; i++) b.box('iron', 0.035, h - 0.08, 0.035, mul(leaf, T((i * w) / 5, h / 2, 0)));
+    for (const y of [0.3, h * 0.5, h - 0.25]) b.box('iron', w, 0.05, 0.04, mul(leaf, T(w / 2, y, 0)));
+  } else b.box('iron', w, h - 0.08, 0.03, mul(leaf, T(w / 2, h / 2, 0)));
+  inscription(b, mul(at, T(0, h + 0.62, -0.03)), FORUM_INSCRIPTIONS['castor-loculi-plaque'].latin, 1.9, 0.42, 'carved', { depth: 0.04, body: 'marble' });
+  // lamp on a bracket beside the door, and its glow inside the passage
+  const lamp = new THREE.Vector3(w / 2 + 0.55, 2.0, -0.02).applyMatrix4(at);
+  placeProp(new Draw(b, mul(at, T(w / 2 + 0.55, 1.75, -0.02))), 'torch_bracket', 0, 0, 0, 0, { collide: false });
+  addFire(p, lamp.x, lamp.y, lamp.z, { intensity: 7, distance: 8, dayScale: 0.35, glow: 0.35 });
+  const inner = new THREE.Vector3(0, 1.6, -0.3).applyMatrix4(at);
+  addFire(p, inner.x, inner.y, inner.z, { intensity: 3, distance: 4, dayScale: 1, glow: 0.6, flicker: 0.25 });
 }
 
 /** A flat many-pointed star (the sidus Iulium), facing −z. */
@@ -356,8 +388,8 @@ function castor(p: Part) {
     frontCount: 4,
   };
   const zs = centreShift(spec);
-  const at = T(0, 0, zs);
-  const r = forumTemple(p, spec, at);
+  const at0 = T(0, 0, zs);
+  const r = forumTemple(p, spec, at0);
   const L = r.L;
   const s = L.stylobate;
   // marble pilasters articulating the travertine front of the tribunal
@@ -372,18 +404,58 @@ function castor(p: Part) {
   }
   // marble balustrade along the front of the speakers' tribunal
   balustrade(p.d, s.x0 + 0.3, L.podiumFront + zs + 0.25, s.x1 - 0.3, L.podiumFront + zs + 0.25, { y: L.podiumHeight, h: 1.0 });
-  // strongrooms and offices in the podium: barred doors along both flanks behind the flights
+  // Strongrooms and offices in the podium: barred doors along both flanks behind the flights. The
+  // deposit vaults (loculi) open on the W flank toward the Vicus Tuscus (CONTENT.md castor-loculi,
+  // real 88, 98): that door stands open, lamp-lit, under its plaque, since the vaults are the
+  // bankers' and not the god's and stay open on the Lemuria.
   const zStart = L.podiumFront + L.flights[0].count * L.flights[0].run + 1.6;
   const n = 4;
   const step = (s.z1 - 1.2 - zStart) / (n - 1);
+  const [, lzLoc] = atlasToLocal(p.ctx, 88, 98);
+  let loc = 0;
+  for (let i = 1; i < n; i++) if (Math.abs(zStart + i * step + zs - lzLoc) < Math.abs(zStart + loc * step + zs - lzLoc)) loc = i;
   for (const sx of [-1, 1]) {
     for (let i = 0; i < n; i++) {
       const z = zStart + i * step;
       const x = sx < 0 ? s.x0 - 0.005 : s.x1 + 0.005;
-      podiumDoor(p, mul(at, TRS(x, 0, z, 0, sx < 0 ? Math.PI / 2 : -Math.PI / 2, 0)), 1.2, 2.2, 'iron');
-      if (sx > 0 && i === 1) p.spot('castor-strongroom', 'door', x + 1.2, 0, z + zs, -Math.PI / 2);
-      if (sx < 0 && i === 0) p.spot('castor-weights-office', 'door', x - 1.2, 0, z + zs, Math.PI / 2);
+      const at = mul(at0, TRS(x, 0, z, 0, sx < 0 ? Math.PI / 2 : -Math.PI / 2, 0));
+      if (sx < 0 && i === loc) {
+        strongroomDoor(p, at);
+        p.spot('castor-strongroom', 'door', x - 1.2, 0, z + zs, Math.PI / 2);
+        p.spot('castor-loculi-plaque', 'inscription', x - 2.4, 0, z + zs + 0.6, Math.PI / 2);
+        p.spot('castor-chrysippus', 'npc', x - 0.9, 0, z + zs + 1.5, -Math.PI / 2);
+        continue;
+      }
+      podiumDoor(p, at, 1.2, 2.2, 'iron');
+      if (sx > 0 && i === 0) p.spot('castor-weights-office', 'door', x + 1.2, 0, z + zs, -Math.PI / 2);
     }
+  }
+  // The cella doors are shut for the Lemuria: the aedituus has hung a black wool fillet across them.
+  {
+    const cl = L.cella;
+    const dw = Math.min((cl.x1 - cl.x0) * 0.42, L.H * 0.36);
+    const dh = Math.min(L.H * 0.72, dw * 2.1);
+    const zf = cl.z0 + zs - 0.06;
+    const wool = 'black' as const;
+    const y = L.podiumHeight + dh * 0.45;
+    const sag = 0.35;
+    const pts = [-1, -0.5, 0, 0.5, 1].map((t) => new THREE.Vector3((t * (dw + 0.5)) / 2, y - sag * (1 - t * t), zf));
+    for (let i = 0; i < pts.length - 1; i++) p.d.rod(wool, pts[i], pts[i + 1], 0.05, 5);
+    for (const t of [-1, 1]) p.d.rod(wool, pts[t < 0 ? 0 : 4], new THREE.Vector3(pts[t < 0 ? 0 : 4].x, y - 0.8, zf - 0.02), 0.035, 4);
+    p.spot('castor-aedituus', 'npc', 0.9, L.podiumHeight, cl.z0 + zs - 1.4, Math.PI);
+  }
+  // Fortunata's tray of honey cakes at the foot of the W flight (CONTENT.md vig-libaria).
+  {
+    const f = L.flights[0];
+    const x = (f.x0 + f.x1) / 2 - 0.4;
+    const z = f.z0 + zs - 1.6;
+    if (p.hi) {
+      placeProp(p.d, 'table', x, 0, z, 0.2, { variant: 1, collide: true });
+      placeProp(p.d, 'basket', x - 0.25, 0.78, z, 0, { variant: 0, collide: false, scale: 0.8 });
+      placeProp(p.d, 'basket', x + 0.85, 0, z + 0.2, 0.4, { variant: 2, collide: false });
+      for (let k = 0; k < 6; k++) p.d.cyl('terracotta', x + 0.05 + (k % 3) * 0.16, 0.8, z - 0.1 + Math.floor(k / 3) * 0.16, 0.06, 0.04, 8);
+    }
+    p.spot('castor-libaria', 'vendor', x, 0, z + 0.7, Math.PI);
   }
   foundation(p, [[s.x0, L.podiumFront + zs], [s.x1, L.podiumFront + zs], [s.x1, s.z1 + zs], [s.x0, s.z1 + zs]], 0);
   p.spot('castor-tribunal', 'npc', 0, L.podiumHeight, L.podiumFront + zs + 1.2, Math.PI);

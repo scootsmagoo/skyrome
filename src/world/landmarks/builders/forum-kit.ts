@@ -23,7 +23,7 @@ import type { Polygon } from '../../../arch/fabric/types';
 import { capitalPieces } from '../../../arch/classical/capitals';
 import { column } from '../../../arch/classical/column';
 import { ORDER_PROPORTIONS, columnDims, entasisRadius, type Order } from '../../../arch/classical/orders';
-import { ProfileBuilder, T, TRS, gridSurface, lathe, mul, type V2 } from '../../../arch/common/geom';
+import { ProfileBuilder, T, TRS, gridSurface, lathe, makeGeometry, mul, type V2 } from '../../../arch/common/geom';
 import { inscriptionPanel, type InscriptionStyle } from '../../../arch/common/inscription';
 import { stairs } from '../../../arch/common/stairs';
 import { prism } from '../../../arch/common/walls';
@@ -34,6 +34,7 @@ import { UV_METERS } from '../../../gfx/textures/catalog';
 import { MeshBuilder } from '../../../gfx/MeshBuilder';
 import { placeProp } from '../../../arch/props';
 import type { MaterialId } from '../../../gfx/materialIds';
+import { ROADS } from '../../../data/atlas';
 import { toGame } from '../../coords';
 import type { LandmarkBuild, LandmarkContext, Spot } from '../types';
 
@@ -194,6 +195,223 @@ export function atlasToLocal(ctx: LandmarkContext, x: number, z: number): V2 {
   const c = Math.cos(th);
   const s = Math.sin(th);
   return [dx * c + dz * s, -dx * s + dz * c];
+}
+
+/** This landmark's local frame (game metres) → atlas real metres (inverse of atlasToLocal). */
+export function localToAtlas(ctx: LandmarkContext, lx: number, lz: number): [number, number] {
+  const th = (ctx.lm.rotation * Math.PI) / 180;
+  const c = Math.cos(th);
+  const s = Math.sin(th);
+  const dx = lx * c - lz * s;
+  const dz = lx * s + lz * c;
+  return [ctx.lm.center[0] + dx / ctx.S, ctx.lm.center[1] + dz / ctx.S];
+}
+
+/** An atlas road in this landmark's local frame: centreline points (game metres) and half width. */
+export function roadLocal(ctx: LandmarkContext, id: string): { pts: V2[]; hw: number } | null {
+  const r = ROADS.find((x) => x.id === id);
+  if (!r) return null;
+  return { pts: r.points.map(([x, z]) => atlasToLocal(ctx, x, z)), hw: (r.width / 2) * ctx.S };
+}
+
+/** Local x where a polyline crosses the line z = const (the first crossing), or null. */
+export function crossingX(pts: readonly V2[], z: number): number | null {
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [ax, az] = pts[i];
+    const [bx, bz] = pts[i + 1];
+    if ((az - z) * (bz - z) > 0 || az === bz) continue;
+    const t = (z - az) / (bz - az);
+    return ax + (bx - ax) * t;
+  }
+  return null;
+}
+
+/** Arc-length position (real metres from the first point) of the point of a polyline nearest to `q`. */
+export function projectOnPolyline(pts: readonly (readonly [number, number])[], q: readonly [number, number]): number {
+  let best = Infinity;
+  let bestS = 0;
+  let s = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [ax, az] = pts[i];
+    const [bx, bz] = pts[i + 1];
+    const dx = bx - ax;
+    const dz = bz - az;
+    const l2 = dx * dx + dz * dz;
+    const l = Math.sqrt(l2);
+    const t = l2 > 0 ? Math.max(0, Math.min(1, ((q[0] - ax) * dx + (q[1] - az) * dz) / l2)) : 0;
+    const d = Math.hypot(ax + dx * t - q[0], az + dz * t - q[1]);
+    if (d < best) {
+      best = d;
+      bestS = s + t * l;
+    }
+    s += l;
+  }
+  return bestS;
+}
+
+/** Point and unit direction of a polyline at arc length `s` (real metres). */
+export function pointOnPolyline(pts: readonly (readonly [number, number])[], s: number): { p: [number, number]; d: [number, number] } {
+  let acc = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [ax, az] = pts[i];
+    const [bx, bz] = pts[i + 1];
+    const l = Math.hypot(bx - ax, bz - az);
+    if (s <= acc + l || i === pts.length - 2) {
+      const t = l > 0 ? Math.max(0, Math.min(1, (s - acc) / l)) : 0;
+      return { p: [ax + (bx - ax) * t, az + (bz - az) * t], d: l > 0 ? [(bx - ax) / l, (bz - az) / l] : [1, 0] };
+    }
+    acc += l;
+  }
+  return { p: [pts[0][0], pts[0][1]], d: [1, 0] };
+}
+
+/**
+ * The edge of a street between two atlas points (real metres) on one side of an atlas road: a
+ * raised sidewalk (crepido) of travertine slabs behind a kerb, level across with the roadway, and
+ * where the ground behind stands higher (the street cut into a slope) a retaining wall of opus
+ * reticulatum with a travertine coping, so the banks along the street read as built terraces.
+ * `side` +1 is the left of the road as its points are listed, −1 the right.
+ */
+export function streetEdge(p: Part, roadId: string, side: 1 | -1, from: readonly [number, number], to: readonly [number, number], o: { walk?: number; step?: number; minWall?: number; gaps?: (readonly [number, number])[] } = {}) {
+  const road = ROADS.find((r) => r.id === roadId);
+  if (!road) return;
+  const { ctx, b } = p;
+  const s0 = projectOnPolyline(road.points, from);
+  const s1 = projectOnPolyline(road.points, to);
+  const [sa, sb] = s0 < s1 ? [s0, s1] : [s1, s0];
+  const step = o.step ?? 2.5;
+  const n = Math.max(1, Math.ceil((sb - sa) / step));
+  const hwr = road.width / 2;
+  const walk = o.walk ?? 2.2;
+  const kerb = 0.15;
+  const minWall = o.minWall ?? 0.35;
+  type Row = { e0: V2; e1: V2; w1: V2; y: number; top: number; s: number };
+  const rows: Row[] = [];
+  const gapS = (o.gaps ?? []).map((g) => projectOnPolyline(road.points, g));
+  const inGap = (s: number) => gapS.some((g) => Math.abs(s - g) < 2.6);
+  for (let i = 0; i <= n; i++) {
+    const s = sa + ((sb - sa) * i) / n;
+    const { p: c, d } = pointOnPolyline(road.points, s);
+    const nx = d[1] * side;
+    const nz = -d[0] * side;
+    const at = (k: number) => atlasToLocal(ctx, c[0] + nx * k, c[1] + nz * k);
+    const cl = atlasToLocal(ctx, c[0], c[1]);
+    const y = ctx.groundAt(cl[0], cl[1]);
+    const w1 = at(hwr + walk + 0.5);
+    const behind = Math.max(ctx.groundAt(w1[0], w1[1]), ctx.groundAt(...at(hwr + walk + 2.0)));
+    rows.push({ e0: at(hwr), e1: at(hwr + walk), w1, y, top: behind + 0.2, s });
+  }
+  const pos: number[] = [];
+  const nor: number[] = [];
+  const uv: number[] = [];
+  const quad = (a: number[], bb: number[], c: number[], d: number[], ua: number, ub: number, va: number, vb: number) => {
+    // a-b-c-d counter-clockwise seen from the front; flat normal
+    const e1 = new THREE.Vector3(bb[0] - a[0], bb[1] - a[1], bb[2] - a[2]);
+    const e2 = new THREE.Vector3(d[0] - a[0], d[1] - a[1], d[2] - a[2]);
+    const nn = e1.cross(e2).normalize();
+    for (const [v, u, w] of [
+      [a, ua, va],
+      [bb, ub, va],
+      [c, ub, vb],
+      [a, ua, va],
+      [c, ub, vb],
+      [d, ua, vb],
+    ] as [number[], number, number][]) {
+      pos.push(v[0], v[1], v[2]);
+      nor.push(nn.x, nn.y, nn.z);
+      uv.push(u, w);
+    }
+  };
+  const wpos: number[] = [];
+  const wnor: number[] = [];
+  const wuv: number[] = [];
+  const quadW = (a: number[], bb: number[], c: number[], d: number[], ua: number, ub: number, va: number, vb: number) => {
+    const n0 = pos.length;
+    quad(a, bb, c, d, ua, ub, va, vb);
+    wpos.push(...pos.splice(n0));
+    wnor.push(...nor.splice((n0 / 3) * 3));
+    wuv.push(...uv.splice((n0 / 3) * 2));
+  };
+  const U = UV_METERS;
+  let along = 0;
+  for (let i = 0; i < rows.length - 1; i++) {
+    const r0 = rows[i];
+    const r1 = rows[i + 1];
+    const len = Math.hypot(r1.e1[0] - r0.e1[0], r1.e1[1] - r0.e1[1]);
+    const y0 = r0.y + kerb;
+    const y1 = r1.y + kerb;
+    // orientation: make the walk surface face up whichever side the street edge is on
+    const up = (a: V2, bb: V2, c: V2) => (bb[0] - a[0]) * (c[1] - a[1]) - (bb[1] - a[1]) * (c[0] - a[0]) < 0;
+    const flip = !up(r0.e0, r1.e0, r1.e1);
+    const A = [r0.e0[0], y0, r0.e0[1]];
+    const B = [r1.e0[0], y1, r1.e0[1]];
+    const C = [r1.e1[0], y1, r1.e1[1]];
+    const D = [r0.e1[0], y0, r0.e1[1]];
+    if (flip) quad(B, A, D, C, (along + len) / U, along / U, 0, walk * ctx.S / U);
+    else quad(A, B, C, D, along / U, (along + len) / U, 0, walk * ctx.S / U);
+    // kerb face toward the roadway
+    const Ak = [r0.e0[0], r0.y - 0.1, r0.e0[1]];
+    const Bk = [r1.e0[0], r1.y - 0.1, r1.e0[1]];
+    if (flip) quad(Bk, Ak, A, B, (along + len) / U, along / U, 0, 0.25 / U);
+    else quad(Ak, Bk, B, A, along / U, (along + len) / U, 0, 0.25 / U);
+    if (p.main) {
+      // collider of the walk slab (an oriented box following the street's grade)
+      const ux = (r1.e0[0] - r0.e0[0]) / (len || 1);
+      const uz = (r1.e0[1] - r0.e0[1]) / (len || 1);
+      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.atan2(y1 - y0, len || 1), Math.atan2(ux, uz), 0, 'YXZ'));
+      p.b.collider({ kind: 'box', center: new THREE.Vector3((r0.e0[0] + r1.e1[0]) / 2, (y0 + y1) / 2 - 0.2, (r0.e0[1] + r1.e1[1]) / 2), half: new THREE.Vector3((walk * ctx.S) / 2, 0.2, len / 2 + 0.05), rotation: q });
+    }
+    // retaining wall at the back of the walk, up to the ground behind (open at the gaps)
+    if (inGap((r0.s + r1.s) / 2)) {
+      along += len;
+      continue;
+    }
+    const t0 = Math.max(y0 + minWall, r0.top);
+    const t1 = Math.max(y1 + minWall, r1.top);
+    const Dw = [r0.e1[0], t0, r0.e1[1]];
+    const Cw = [r1.e1[0], t1, r1.e1[1]];
+    const Db = [r0.e1[0], y0 - 0.05, r0.e1[1]];
+    const Cb = [r1.e1[0], y1 - 0.05, r1.e1[1]];
+    if (flip) quadW(Cb, Db, Dw, Cw, (along + len) / U, along / U, (y0 - 0.05) / U, t0 / U);
+    else quadW(Db, Cb, Cw, Dw, along / U, (along + len) / U, (y0 - 0.05) / U, t0 / U);
+    if (p.main) {
+      // collider of the wall as an oriented box along the segment
+      const ux = (r1.e0[0] - r0.e0[0]) / (len || 1);
+      const uz = (r1.e0[1] - r0.e0[1]) / (len || 1);
+      const yaw = Math.atan2(ux, uz);
+      const top = Math.max(t0, t1);
+      const bot = Math.min(y0, y1);
+      const wx = (r0.e1[0] + r1.e1[0]) / 2;
+      const wz = (r0.e1[1] + r1.e1[1]) / 2;
+      const nxl = r0.w1[0] - r0.e1[0];
+      const nzl = r0.w1[1] - r0.e1[1];
+      const nl = Math.hypot(nxl, nzl) || 1;
+      p.b.collider({ kind: 'box', center: new THREE.Vector3(wx + (nxl / nl) * 0.3, (top + bot) / 2, wz + (nzl / nl) * 0.3), half: new THREE.Vector3(0.3, (top - bot) / 2, len / 2 + 0.05), rotation: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)) });
+    }
+    // coping along the wall top
+    const cy = (t0 + t1) / 2;
+    const cm = new THREE.Matrix4().compose(new THREE.Vector3((r0.e1[0] + r1.e1[0]) / 2, cy + 0.06, (r0.e1[1] + r1.e1[1]) / 2), new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.atan2(t1 - t0, len || 1), Math.atan2(r1.e1[0] - r0.e1[0], r1.e1[1] - r0.e1[1]), 0, 'YXZ')), new THREE.Vector3(1, 1, 1));
+    b.box('travertine', 0.5, 0.14, Math.hypot(len, t1 - t0) + 0.04, cm);
+    along += len;
+  }
+  b.add(makeGeometry(pos, nor, uv), 'paving_travertine', undefined, { uv: 'keep', castShadow: false });
+  b.add(makeGeometry(wpos, wnor, wuv), 'reticulatum', undefined, { uv: 'keep' });
+  // at each gap a flight of steps from the walk up to the ground behind
+  for (const g of gapS) {
+    if (g < sa || g > sb) continue;
+    const { p: c, d } = pointOnPolyline(road.points, g);
+    const nx = d[1] * side;
+    const nz = -d[0] * side;
+    const e1 = atlasToLocal(ctx, c[0] + nx * (hwr + walk), c[1] + nz * (hwr + walk));
+    const cl = atlasToLocal(ctx, c[0], c[1]);
+    const out = atlasToLocal(ctx, c[0] + nx * (hwr + walk + 1), c[1] + nz * (hwr + walk + 1));
+    const y = ctx.groundAt(cl[0], cl[1]) + kerb;
+    const count = Math.ceil(Math.max(0, ctx.groundAt(out[0], out[1]) - y + 0.05) / 0.2);
+    if (count < 1) continue;
+    const top = ctx.groundAt(out[0], out[1]) + 0.05;
+    const yaw = Math.atan2(out[0] - e1[0], out[1] - e1[1]);
+    stairs(b, { width: 3.6, rise: (top - y) / count, run: 0.33, count, material: 'travertine', collider: p.main ? 'steps' : 'none' }, TRS(e1[0], y, e1[1], 0, yaw, 0));
+  }
 }
 
 // ---------------------------------------------------------------- vegetation and fire

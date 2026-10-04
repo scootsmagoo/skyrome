@@ -21,6 +21,7 @@ import { FORUM_INSCRIPTIONS, FORUM_PLAZA, plazaRoadStrips, type P2 } from './for
 import { drapedFemale, figure, nudeMale } from './forum-figures';
 import { T, TRS, altar, atlasToLocal, balustrade, inscription, landmark, mul, paint, pave, pedestal, plantTrees, rect, ring, shipRam, type Part, type V2 } from './forum-kit';
 import { curtiusMaterial, panel } from './forum-reliefs';
+import { forumLife } from './forum-life';
 
 const text = (id: string) => FORUM_INSCRIPTIONS[id].latin;
 
@@ -48,7 +49,7 @@ const SQUARE_STATUES: { at: P2; face: number; kind: 'togate' | 'armored' }[] = [
 ];
 
 /** The small monuments that pave their own ground (holes in the square's paving). */
-const OWN_FLOORS = ['comitium-lapis-niger', 'lacus-curtius', 'equus-domitiani-site', 'volcanal'];
+const OWN_FLOORS = ['comitium-lapis-niger', 'lacus-curtius', 'equus-domitiani-site', 'volcanal', 'regia'];
 
 function forumSquare(p: Part) {
   const { ctx, b, hi } = p;
@@ -442,6 +443,7 @@ export const builders: LandmarkBuilder[] = [
         (p) => {
           miliarium(p);
           forumSquare(p);
+          forumLife(p);
         },
         { near: 170 },
       ),

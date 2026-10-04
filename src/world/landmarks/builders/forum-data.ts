@@ -11,31 +11,53 @@ import { LANDMARK_BY_ID, ROADS } from '../../../data/atlas';
 export type P2 = [number, number];
 
 /**
- * The paved Forum square in atlas REAL metres: from the Rostra and the temples under the Capitol
- * (W) to the Temple of Divus Iulius (E), between the steps of the Basilica Iulia (S) and the portico
- * of the Basilica Aemilia (N), including the Comitium and the area of the Volcanal. Built by the
- * miliarium-aureum builder (the world origin, so local = real × 0.6).
+ * The paved Forum in atlas REAL metres, one simple polygon: the square from the Rostra and the
+ * temples under the Capitol (W) to the Basilica Paulli (N) and the steps of the Basilica Iulia (S),
+ * the Comitium in front of the Curia and the Carcer, the lower Forum round the temples of Divus
+ * Iulius, Castor and Vesta, the Regia and the Spring of Juturna up to the Fornix Fabianus, and the
+ * Forum mouths of the Vicus Tuscus (to the Horrea Agrippiana and Domitian's vestibule) and of the
+ * Vicus Iugarius (round the Servilian basin). Built by the miliarium-aureum builder (the world
+ * origin, so local = real × 0.6). The city module should not pave streets inside it
+ * (`forumPavedArea()`): the streets crossing it get their basalt strips here.
  */
 export const FORUM_PLAZA: P2[] = [
   [12.5, -50.5], // Concord, N end of its front
-  [22, -46],
-  [30, -26],
-  [67, -40.5], // Curia front
-  [80, -26],
+  [10.5, -60.5], // Carcer, front S corner
+  [21, -70.5], // Carcer, front E corner
+  [44, -70], // Comitium, N edge (clear of the Forum of Caesar)
+  [87, -58.5], // Curia, W side, back
+  [68.5, -41], // Curia, front W corner
+  [80, -26], // Curia, front S corner
   [92.5, -17], // Basilica Aemilia, W corner
   [176, 38], // Basilica Aemilia, E corner
-  [158.5, 57], // Divus Iulius, NE corner
-  [131.5, 41.5], // Divus Iulius, front N corner
-  [117.7, 65.6], // Divus Iulius, front S corner
-  [127, 82.8], // Castor, front E part (by the Arch of Augustus)
-  [100.5, 70.3], // Castor, front W corner
+  [198, 47], // beyond the Basilica Aemilia's E end
+  [205, 70],
+  [206, 88], // past the Fornix Fabianus
+  [212, 111], // Atrium Vestae, N side
+  [170, 92.7], // Atrium Vestae, front N corner (the built front, set back)
+  [148, 140], // Atrium Vestae, front S corner
+  [112, 140], // behind Juturna and Castor
+  [114.7, 160.1], // Domitian's vestibule, front E corner
+  [85.5, 147.1], // Domitian's vestibule, front W corner
+  [75.3, 169.9], // Domitian's vestibule, W side
+  [44.4, 154.4], // Horrea Agrippiana, front W corner
+  [33.8, 127.2], // Divus Augustus, front E corner
+  [70.2, 108.9], // Basilica Iulia, back E corner
   [90.3, 63.7], // Basilica Iulia, E corner
   [-2, 22.6], // Basilica Iulia, W corner
+  [-22.1, 67.9], // Basilica Iulia, back W corner
+  [-34, 62], // beyond the Servilian basin
+  [-28.3, 42.9], // Saturn, back E corner
   [-5, 9.7], // Saturn, front E corner
   [-23, -3], // Saturn, front W corner
   [-19.5, -19], // Vespasian, front N corner
   [-10.5, -12.5], // Concord, S end of its front
 ];
+
+/** The paved Forum (atlas real metres) for other modules: streets and city blocks stay out of it. */
+export function forumPavedArea(): P2[] {
+  return FORUM_PLAZA.map(([x, z]) => [x, z]);
+}
 
 /**
  * Streets that cross the square keep their own paving (city module): their corridors are cut out
@@ -48,6 +70,8 @@ export const PLAZA_ROAD_GAPS: { id: string; margin: number }[] = [
   { id: 'vicus-iugarius', margin: 0.1 },
   { id: 'vicus-tuscus', margin: 0.1 },
   { id: 'clivus-argentarius', margin: 0.1 },
+  { id: 'via-nova', margin: 0.1 },
+  { id: 'clivus-palatinus', margin: 0.1 },
 ];
 
 /** A polyline buffered to a closed polygon (mitred joins, flat caps), half width `hw`. Pure. */
@@ -346,6 +370,30 @@ export const FORUM_INSCRIPTIONS: Record<string, InscriptionText> = {
     english: 'The list of triumphs: Romulus, son of Mars, king, over the Caeninenses, on the Kalends of March.',
     conf: 'B',
     note: 'The first entry of the Fasti Triumphales (Fasti Capitolini). That they were carved on the Parthian Arch is a modern hypothesis.',
+  },
+  'acta-diurna': {
+    latin: ['Acta Diurna', 'A D V Id Mai', 'Lemuria Aedes Clausae', 'Cras Imp Traianus Columnam', 'in Foro Suo Dedicabit'],
+    english: 'The Daily Acts. The fifth day before the Ides of May (11 May). Lemuria: the temples are shut. Tomorrow the Emperor Trajan dedicates the Column in his Forum.',
+    conf: 'C',
+    note: 'The board and its wording are the game\'s. The dedication is attested: the Fasti Ostienses put the dedication of the Column (and of the Temple of Venus in the Forum of Caesar) on IIII Id. Mai. 113 [A]; temples shut on the Lemuria, Ovid Fasti 5.485–6.',
+  },
+  'tabernae-aemiliae-notice': {
+    latin: ['Canis Molossa Nomine Hilara', 'Aberravit A D VIII Id Mai', 'Qui Eam Reduxerit Ad Tonstrinam Tryphonis', 'In Tabernis Basilicae Paulli', 'Accipiet HS XX'],
+    english: 'A Molossian bitch named Hilara went astray on the 8th day before the Ides of May (8 May). Whoever brings her back to Tryphon\'s barber\'s shop in the shops of the Basilica Paulli will receive 20 sesterces.',
+    conf: 'C',
+    note: 'CONTENT.md T10 (a rad-vicus seed).',
+  },
+  'basilica-iulia-lampoon': {
+    latin: ['De Columna'],
+    english: 'A lampoon chalked on the step: "A hundred feet of Luna stone, and every foot a war…" (Juvenal, asked, says he has never seen it before in his life.)',
+    conf: 'C',
+    note: 'CONTENT.md T5 (prop-lampoon); the full verse lives with the content; the vigiles wash it off at dusk.',
+  },
+  'castor-loculi-plaque': {
+    latin: ['Loculi Depositorum'],
+    english: 'Deposit vaults.',
+    conf: 'C',
+    note: 'CONTENT.md sign list (castor-loculi door). Deposits in temple vaults: Juvenal 14.260–2 (later); the plaque is the game\'s.',
   },
   'basilica-iulia-tabula-lusoria': {
     latin: [],

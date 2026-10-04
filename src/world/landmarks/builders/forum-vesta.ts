@@ -22,8 +22,10 @@ import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuilder } from '../types';
 import { FORUM_INSCRIPTIONS } from './forum-data';
 import { drapedFemale, figure, horse, nudeMale, Sculpt } from './forum-figures';
-import { T, TRS, addFire, altar, balustrade, col, foundation, inscription, landmark, mul, pave, pedestal, plantTrees, rect, type Part } from './forum-kit';
-import { shedRoof } from './forum-temple';
+import { T, TRS, addFire, altar, balustrade, col, crossingX, foundation, inscription, landmark, mul, pave, pedestal, plantTrees, rect, roadLocal, type Part, type V2 } from './forum-kit';
+import { gableRoof, shedRoof } from './forum-temple';
+import { shopInterior, type ShopKind } from '../../../arch/fabric/shops';
+import { placeProp } from '../../../arch/props';
 
 const text = (id: string) => FORUM_INSCRIPTIONS[id].latin;
 
@@ -194,13 +196,32 @@ function regia(p: Part) {
   // front wall with the door
   wall(b, { ...wo, length: wf, openings: [{ kind: 'door', x: wf / 2, width: 1.7, height: 3.0, leaves: 'open', leafMaterial: 'bronze' }] }, T(-wf / 2, 0, -hd + t / 2));
   d.solid(-wf / 2, 0, -hd, -0.85, H, -hd + t).solid(0.85, 0, -hd, wf / 2, H, -hd + t);
-  // trapezoid flanks and the back wall
+  // trapezoid flanks and the back wall: marble ashlar (Domitius Calvinus' rebuilding of 36 BC)
   const side = Math.hypot((wf - wb) / 2, dp);
   for (const sx of [-1, 1]) {
     const a = Math.atan2((-sx * (wf - wb)) / 2, dp);
-    d.box('marble', (sx * (wf + wb)) / 4 - sx * (t / 2), H / 2, 0, t, H, side, { ry: a, collide: true });
+    const cx = (sx * (wf + wb)) / 4 - sx * (t / 2);
+    // wall frame: runs along +x from one end, outer face toward −z (turned outward)
+    const ry = sx > 0 ? -Math.PI / 2 + a : Math.PI / 2 + a;
+    const at = TRS(cx, 0, 0, 0, ry, 0);
+    wall(b, { ...wo, length: side }, mul(at, T(-side / 2, 0, 0)));
+    d.at(cx, 0, 0, a).solid(-t / 2, 0, -side / 2, t / 2, H, side / 2);
   }
-  d.span('marble', -wb / 2, 0, hd - t, wb / 2, H, hd, { collide: true });
+  wall(b, { ...wo, length: wb }, TRS(wb / 2, 0, hd - t / 2, 0, Math.PI, 0));
+  d.solid(-wb / 2, 0, hd - t, wb / 2, H, hd);
+  // a moulded cornice round the top and corner pilasters
+  if (hi) {
+    for (const sx of [-1, 1]) {
+      const a = Math.atan2((-sx * (wf - wb)) / 2, dp);
+      d.box('marble', (sx * (wf + wb)) / 4 - sx * (t / 2) + sx * 0.08, H - 0.12, 0, t + 0.3, 0.24, side + 0.3, { ry: a });
+      for (const z of [-hd + 0.3, hd - 0.3]) {
+        const x = (z < 0 ? wf / 2 : wb / 2) - 0.1;
+        d.box('marble', sx * x, H / 2, z, 0.6, H, 0.6);
+      }
+    }
+    d.box('marble', 0, H - 0.12, hd + 0.08, wb + 0.3, 0.24, 0.3);
+    d.box('marble', 0, H - 0.12, -hd - 0.08, wf + 0.3, 0.24, 0.3);
+  }
   // the cross wall of the front range with a door into the court, and partition walls
   const xr = (wf / 2) * 0.96 - ((wf - wb) / 2) * (5.5 / dp);
   wall(b, { ...wo, height: H + 1.25, material: 'plaster_white', courses: 0, length: 2 * xr, openings: [{ kind: 'door', x: xr, width: 1.6, height: 2.8, leaves: 'none' }] }, T(-xr, 0, zr));
@@ -276,10 +297,26 @@ function atriumVestae(p: Part) {
   const wo = { height: H, thickness: t, material: 'brick' as MaterialId, detail: p.detail, collide: false };
   wall(b, { ...wo, length: W, openings: [{ kind: 'door', x: hw, width: 2.0, height: 3.2, leaves: 'open', leafMaterial: 'wood_dark', frame: true }] }, T(-hw, fy, zF + t / 2));
   wall(b, { ...wo, length: W, openings: winRow(W) }, TRS(hw, fy, hl - t / 2, 0, Math.PI, 0));
-  wall(b, { ...wo, length: hl - zF - 2 * t, openings: winRow(hl - zF - 2 * t) }, TRS(hw - t / 2, fy, zF + t, 0, -Math.PI / 2, 0));
-  wall(b, { ...wo, length: hl - zF - 2 * t, openings: winRow(hl - zF - 2 * t) }, TRS(-hw + t / 2, fy, hl - t, 0, Math.PI / 2, 0));
+  // the N side on the Sacra Via: a row of shops let into the outer wall (see sacraViaShops)
+  const sideL = hl - zF - 2 * t;
+  const shops = sacraViaBays(sideL);
+  const shopOpenings: Opening[] = shops.map((sb) => (sb.kind === 'closed' ? { kind: 'door' as const, x: sb.x, width: 2.7, height: 2.9, leaves: 'closed' as const, leafMaterial: 'wood_dark' as MaterialId } : { kind: 'door' as const, x: sb.x, width: 2.7, height: 2.9, leaves: 'none' as const }));
+  wall(b, { ...wo, length: sideL, openings: [...winRow(sideL), ...shopOpenings] }, TRS(hw - t / 2, fy, zF + t, 0, -Math.PI / 2, 0));
+  wall(b, { ...wo, length: sideL, openings: winRow(sideL) }, TRS(-hw + t / 2, fy, hl - t, 0, Math.PI / 2, 0));
   d.solid(-hw, 0, zF, -1.0, H, zF + t).solid(1.0, 0, zF, hw, H, zF + t);
-  d.solid(-hw, 0, hl - t, hw, H, hl).solid(-hw, 0, zF, -hw + t, H, hl).solid(hw - t, 0, zF, hw, H, hl);
+  d.solid(-hw, 0, hl - t, hw, H, hl).solid(-hw, 0, zF, -hw + t, H, hl);
+  {
+    let zPrev = zF;
+    for (const sb of shops) {
+      const zc = zF + t + sb.x;
+      d.solid(hw - t, 0, zPrev, hw, H, zc - 1.35);
+      d.solid(hw - t, fy + 2.9, zc - 1.35, hw, H, zc + 1.35);
+      zPrev = zc + 1.35;
+    }
+    d.solid(hw - t, 0, zPrev, hw, H, hl);
+  }
+  sacraViaShops(p, hw, zF + t, shops, fy);
+  entrancePorch(p, zF, fy);
   // the vestibule passage from the door to the court
   for (const sx of [-1, 1]) d.span('plaster_white', sx * 1.0, fy, zF + t, sx * 1.4, fy + 4.0, cz0 - pd, { collide: true });
   // ranges of rooms round the court: inner walls with doors, two storeys under tiled roofs
@@ -323,7 +360,8 @@ function atriumVestae(p: Part) {
   const nz = Math.round((cz1 - cz0) / 3.2);
   for (let i = 0; i <= nx; i++) ring.push([-cx + (2 * cx * i) / nx, cz0], [-cx + (2 * cx * i) / nx, cz1]);
   for (let j = 1; j < nz; j++) ring.push([-cx, cz0 + ((cz1 - cz0) * j) / nz], [cx, cz0 + ((cz1 - cz0) * j) / nz]);
-  for (const [x, z] of ring) col(b, { order: 'ionic', D, H: cH, tier: hi ? 'mid' : 'stub', material: 'marble', fluted: false, collide: p.main }, T(x, fy, z));
+  // (kit 'low' columns: the court is only seen from inside it, and there are thirty-two of them)
+  for (const [x, z] of ring) col(b, { order: 'ionic', D, H: cH, tier: hi ? 'low' : 'stub', material: 'marble', fluted: false, collide: p.main }, T(x, fy, z));
   const dd = columnDims('ionic', D, cH).d;
   // the entablature faces into the court (path reversed so the profile's face points inward)
   entablature(b, [new THREE.Vector3(-cx + dd / 2, fy + cH, cz0 + dd / 2), new THREE.Vector3(cx - dd / 2, fy + cH, cz0 + dd / 2), new THREE.Vector3(cx - dd / 2, fy + cH, cz1 - dd / 2), new THREE.Vector3(-cx + dd / 2, fy + cH, cz1 - dd / 2)].reverse(), { order: 'ionic', columnHeight: cH, D, material: 'marble', detail: p.detail }, { closed: true });
@@ -373,6 +411,130 @@ function atriumVestae(p: Part) {
   p.spot('atrium-vestae-vestal-1', 'npc', 0.0, fy, cz0 + 2.5, 0);
   p.spot('atrium-vestae-vestal-2', 'npc', -2.0, fy, cz1 - 1.5, Math.PI);
   p.spot('atrium-vestae-tablinum', 'npc', 0, fy, rz1 + 2.0, Math.PI);
+}
+
+// ---------------------------------------------------------------- Atrium Vestae: porch and shops
+
+type SacraBay = { x: number; kind: ShopKind | 'closed' };
+
+/** Shops along the Atrium's N wall (wall length `len`), by centre along the wall. */
+function sacraViaBays(len: number): SacraBay[] {
+  const kinds: (ShopKind | 'closed')[] = ['moneychanger', 'textile', 'general', 'closed', 'moneychanger', 'pottery', 'thermopolium', 'general', 'closed', 'textile', 'moneychanger'];
+  const bay = 4.4;
+  const n = Math.min(kinds.length, Math.floor((len - 6) / bay));
+  const x0 = (len - n * bay) / 2;
+  return Array.from({ length: n }, (_, i) => ({ x: x0 + (i + 0.5) * bay, kind: kinds[i] }));
+}
+
+/**
+ * The Sacra Via front of the Atrium Vestae (local +x side): Nero rebuilt the street after the fire
+ * of 64 as a porticoed avenue up to his vestibule, so the shops let into the house's outer wall open
+ * under a travertine colonnade with a tiled lean-to roof; steps take up the fall of the street.
+ * Jewellers, money-changers, cloth and pottery dealers and a hot-food bar, lamps lit at dusk.
+ */
+function sacraViaShops(p: Part, hw: number, zWall: number, bays: SacraBay[], fy: number) {
+  const { b, d, hi } = p;
+  if (!bays.length) return;
+  const bay = 4.4;
+  const zA = zWall + bays[0].x - bay / 2 - 0.4;
+  const zB = zWall + bays[bays.length - 1].x + bay / 2 + 0.4;
+  const pd = 3.0;
+  const xf = hw + pd;
+  // portico floor on a foundation down to the street
+  foundation(p, rect(hw, zA, xf, zB), fy - 0.02, 'travertine');
+  d.span('paving_travertine', hw, fy - 0.3, zA, xf, fy, zB, { collide: true, shadow: false });
+  // Tuscan columns of travertine at the bay divisions, a timber-cased beam, the lean-to roof
+  const cH = 3.6;
+  const D = cH / 7;
+  for (let i = 0; i <= bays.length; i++) {
+    const z = i === 0 ? zA + 0.4 : i === bays.length ? zB - 0.4 : zWall + bays[i - 1].x + bay / 2;
+    col(b, { order: 'tuscan', D, H: cH, tier: hi ? 'mid' : 'stub', material: 'travertine', collide: p.main }, T(xf - 0.4, fy, z));
+  }
+  d.span('travertine', xf - 0.75, fy + cH, zA, xf - 0.05, fy + cH + 0.5, zB);
+  d.span('wood_dark', hw, fy + cH + 0.2, zA, xf - 0.75, fy + cH + 0.32, zB, { shadow: false });
+  shedRoof(b, -zB - 0.2, -zA + 0.2, hw - 0.05, xf + 0.3, fy + cH + 1.5, fy + cH + 0.5, 'roof_tile', TRS(0, 0, 0, 0, Math.PI / 2, 0));
+  // steps down to the street where it falls away, bay by bay
+  const run = 0.33;
+  const segs: [number, number][] = [[zA, zWall + bays[0].x + bay / 2]];
+  for (let i = 1; i < bays.length - 1; i++) segs.push([zWall + bays[i].x - bay / 2, zWall + bays[i].x + bay / 2]);
+  segs.push([zWall + bays[bays.length - 1].x - bay / 2, zB]);
+  for (const [z0, z1] of segs) {
+    let g = Infinity;
+    for (let k = 0; k <= 4; k++) g = Math.min(g, p.ctx.groundAt(xf + 0.6, z0 + ((z1 - z0) * k) / 4));
+    const hgt = fy - g;
+    if (hgt < 0.08) continue;
+    const count = Math.ceil(hgt / 0.2);
+    stairs(b, { width: z1 - z0 - 0.5, rise: hgt / count, run, count, material: 'travertine', collider: p.main ? 'steps' : 'none' }, TRS(xf + count * run, g, (z0 + z1) / 2, 0, -Math.PI / 2, 0));
+  }
+  // the sidewalk from the portico steps out to the kerb of the Sacra Via
+  const road = roadLocal(p.ctx, 'via-sacra');
+  if (road) {
+    const edge: V2[] = [];
+    for (let k = 0; k <= 8; k++) {
+      const z = zA + ((zB - zA) * k) / 8;
+      const xr = crossingX(road.pts, z);
+      if (xr !== null && xr > xf) edge.push([Math.max(xf + 0.6, xr - road.hw - 0.1), z]);
+    }
+    if (edge.length >= 2) pave(p, [[xf - 0.05, edge[0][1]], ...edge, [xf - 0.05, edge[edge.length - 1][1]]].reverse() as V2[], { material: 'paving_travertine', lift: 0.05 });
+  }
+  // the shops (frame: front at the wall face, room toward −x)
+  const rng = p.ctx.rng.fork('sacra-shops');
+  const depth = 4.0;
+  bays.forEach((sb, i) => {
+    const zc = zWall + sb.x;
+    const sd = d.at(hw, fy, zc, -Math.PI / 2).noShadow();
+    if (sb.kind !== 'closed') {
+      if (hi) {
+        shopInterior(sd, sb.kind, { w: 3.6, depth, h: 3.3, t: 0.7, wealth: 0.8 }, rng.fork(i));
+        // a jeweller's touch on the money-changers' counters: gold rings and pearls on a tray
+        if (sb.kind === 'moneychanger') for (let k = 0; k < 6; k++) sd.cyl(k % 2 ? 'gilded_bronze' : 'marble', -0.9 + k * 0.12, 0.95, 1.2, 0.03, 0.02, 8);
+      } else sd.span('black', -1.4, 0, 0.75, 1.4, 2.9, 0.8);
+      p.spot(`sacra-via-taberna-${i}`, 'vendor', hw - 1.6, fy, zc, -Math.PI / 2);
+    }
+    if (p.main) {
+      sd.solid(-1.9, 0, depth, 1.9, 3.3, depth + 0.2);
+      sd.solid(-1.95, 0, 0.7, -1.8, 3.3, depth);
+      sd.solid(1.8, 0, 0.7, 1.95, 3.3, depth);
+    }
+  });
+  // lamps under the portico, crowd spots on the street front
+  for (const k of [1, Math.floor(bays.length / 2), bays.length - 2]) {
+    const z = zWall + bays[k].x + bay / 2;
+    if (hi) placeProp(d, 'lampstand', xf - 1.0, fy, z, 0, { collide: p.main });
+    addFire(p, xf - 1.0, fy + 1.45, z, { night: true, intensity: 6, distance: 8, glow: 0.3 });
+  }
+  for (const k of [0, 3, 6, 9]) {
+    if (k >= bays.length) continue;
+    p.spot(`sacra-via-porticus-${k}`, 'npc', xf - 1.4, fy, zWall + bays[k].x + 0.8, Math.PI / 2);
+  }
+}
+
+/** A small Ionic porch (prothyron) before the Atrium's door on its W front (outer face at z = zF). */
+function entrancePorch(p: Part, zF: number, fy: number) {
+  const { b, d, hi } = p;
+  const H = 4.4;
+  const D = H / 9;
+  const dims = columnDims('ionic', D, H);
+  const zc = zF - 2.3;
+  const hwp = 3.6;
+  foundation(p, rect(-hwp, zc - 0.6, hwp, zF), fy - 0.02, 'travertine');
+  d.span('travertine', -hwp, fy - 0.3, zc - 0.6, hwp, fy, zF, { collide: true, shadow: false });
+  {
+    const g = Math.min(p.ctx.groundAt(-2, zc - 1.2), p.ctx.groundAt(2, zc - 1.2), p.ctx.groundAt(0, zc - 1.2));
+    const hgt = fy - g;
+    if (hgt > 0.05) {
+      const count = Math.max(1, Math.ceil(hgt / 0.2));
+      stairs(b, { width: 2 * hwp - 0.4, rise: hgt / count, run: 0.33, count, material: 'travertine', collider: p.main ? 'steps' : 'none' }, T(0, g, zc - 0.6 - count * 0.33));
+    }
+  }
+  for (const x of [-3.0, -1.25, 1.25, 3.0]) col(b, { order: 'ionic', D, H, tier: hi ? 'mid' : 'stub', material: 'marble', collide: p.main }, T(x, fy, zc));
+  const ez = zc - dims.d / 2;
+  const ent = entablature(b, [new THREE.Vector3(-3.4, fy + H, zF), new THREE.Vector3(-3.4, fy + H, ez), new THREE.Vector3(3.4, fy + H, ez), new THREE.Vector3(3.4, fy + H, zF)], { order: 'ionic', columnHeight: H, D, material: 'marble', detail: p.detail }, { caps: false });
+  const yTop = fy + H + ent.dims.total;
+  pediment(b, { order: 'ionic', span: 6.8, cornice: ent.dims.cornice, depth: 0.5, material: 'marble', detail: p.detail, D, relief: false }, T(0, yTop, ez));
+  gableRoof(b, -3.5 - ent.projection, 3.5 + ent.projection, ez + 0.2, zF + 0.3, yTop - 0.05, (14 * Math.PI) / 180, 'roof_tile', hi, new THREE.Matrix4());
+  d.span('wood_dark', -3.3, fy + H + ent.dims.architrave, ez, 3.3, fy + H + ent.dims.architrave + 0.15, zF, { shadow: false });
+  addFire(p, 1.6, fy + 2.2, zF - 0.3, { night: true, intensity: 5, distance: 7, glow: 0.3 });
 }
 
 // ---------------------------------------------------------------- Lacus Iuturnae

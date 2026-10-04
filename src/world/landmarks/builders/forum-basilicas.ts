@@ -21,7 +21,9 @@ import { doorLeaves, plankShutters, wall as fwall, type Opening } from '../../..
 import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuilder } from '../types';
 import { FORUM_INSCRIPTIONS } from './forum-data';
-import { foundation, gameBoard, groundRange, inscription, landmark, rect, type Part } from './forum-kit';
+import { addFire, foundation, gameBoard, groundRange, inscription, landmark, rect, type Part } from './forum-kit';
+import { inscriptionPanel } from '../../../arch/common/inscription';
+import { placeProp } from '../../../arch/props';
 import { arcadeRow, gableRoof, shedRoof } from './forum-temple';
 
 const text = (id: string) => FORUM_INSCRIPTIONS[id].latin;
@@ -212,6 +214,16 @@ function basilicaIulia(p: Part) {
       if (i % 2 === 0) p.spot(`basilica-iulia-gamers-${i}`, 'sit', x + 0.55, Y - 2 * rise, z - run, Math.PI);
     });
     p.spot('basilica-iulia-tabula-lusoria', 'inscription', -9.5, Y - 2 * rise, -hd + (nSteps - 3) * run, 0);
+    // a lampoon on the Column chalked in red on a tread (CONTENT.md T5), near the idlers' boards
+    const lz = -hd + (nSteps - 3) * run + run / 2;
+    inscriptionPanel(b, { lines: ['De Columna', 'centum pedes Lunensis lapidis…'], width: 1.25, height: 0.34, style: 'painted', ground: '#e8e4dc', ink: '#9A3A24', interpunct: false, sizes: [1, 0.62], condense: 0.8 }, TRS(-0.6, Y - 2 * rise + 0.004, lz, Math.PI / 2, 0, 0), { depth: 0.004, bodyMaterial: 'marble' });
+    p.spot('basilica-iulia-lampoon', 'inscription', -0.6, Y - 3 * rise, lz - 2 * run, 0);
+  }
+  // lamps on the top step, lit at dusk
+  for (const i of [3, 9, 15]) {
+    const x = ax0 + i * bay;
+    if (hi) placeProp(d, 'lampstand', x, Y, z0 - 0.3, 0, { collide: p.main });
+    addFire(p, x, Y + 1.45, z0 - 0.3, { night: true, intensity: 6, distance: 8, glow: 0.3 });
   }
   p.spot('basilica-iulia-steps', 'sit', -20, Y - 2 * rise, -hd + (nSteps - 2.5) * run, Math.PI);
   p.spot('basilica-iulia-steps-2', 'sit', 22, Y - 3 * rise, -hd + (nSteps - 3.5) * run, Math.PI);
@@ -296,6 +308,29 @@ function basilicaAemilia(p: Part) {
       if (kind === 'closed') plankShutters(fd, o, 0.35, rng);
     }
     if (p.main) sd.solid(-bay / 2 + 0.1, 0, shopD, bay / 2 - 0.1, sh, shopD + 0.3);
+  }
+  // the lost-dog notice painted on the pier between the 8th shop and the hall door (CONTENT.md T10)
+  if (hi) {
+    const nx = -(bays * bay) / 2 + 8 * bay - 0.25;
+    inscriptionPanel(b, { lines: text('tabernae-aemiliae-notice'), width: 0.95, height: 0.72, style: 'painted', interpunct: true, sizes: [1, 0.8, 0.72, 0.72, 0.9], condense: 0.78 }, T(nx, fy + 1.75, zb - 0.012), { depth: 0.01, bodyMaterial: 'plaster_white' });
+  }
+  p.spot('tabernae-aemiliae-notice', 'inscription', -(bays * bay) / 2 + 8 * bay - 0.25, fy, zb - 1.3, 0);
+  // the money-changers' tables set out in the portico, and lamps lit at dusk
+  for (let i = 0; i < bays; i++) {
+    const cx = -(bays * bay) / 2 + (i + 0.5) * bay;
+    if (hi && (i === 5 || i === 11)) {
+      placeProp(fd, 'table_marble', cx, 0, -1.25, 0, { collide: p.main });
+      placeProp(fd, 'stool', cx, 0, -0.55, Math.PI, { variant: 2, collide: false });
+      for (let k = 0; k < 5; k++) fd.cyl(k % 2 ? 'bronze' : 'gilded_bronze', cx - 0.35 + k * 0.17, 0.92 + (k % 3) * 0.012, -1.3, 0.035, 0.03 + (k % 3) * 0.025, 8);
+      fd.rod('bronze', { x: cx + 0.45, y: 0.9, z: -1.2 }, { x: cx + 0.45, y: 1.35, z: -1.2 }, 0.012, 4);
+      fd.box('bronze', cx + 0.45, 1.35, -1.2, 0.5, 0.015, 0.02);
+      for (const sx of [-1, 1]) fd.cyl('bronze', cx + 0.45 + sx * 0.24, 1.18, -1.2, 0.07, 0.015, 8);
+      p.spot(`basilica-paulli-mensa-${i}`, 'vendor', cx, fy, zb - 0.6, Math.PI);
+    }
+    if (i === 2 || i === 8 || i === 13) {
+      if (hi) placeProp(fd, 'lampstand', cx + bay / 2, 0, -2.2, 0, { collide: p.main });
+      addFire(p, cx + bay / 2, fy + 1.45, zb - 2.2, { night: true, intensity: 6, distance: 8, glow: 0.3 });
+    }
   }
   // the hall behind: tall walls, clerestory and roofs (not enterable)
   const hz0 = zb + shopD + 0.3;

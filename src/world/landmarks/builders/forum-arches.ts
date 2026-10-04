@@ -18,7 +18,7 @@ import type { MeshBuilder } from '../../../gfx/MeshBuilder';
 import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuilder } from '../types';
 import { FORUM_INSCRIPTIONS } from './forum-data';
-import { T, TRS, col, inscription, landmark, mul, type Part, type Tier } from './forum-kit';
+import { T, TRS, atlasToLocal, col, inscription, landmark, mul, type Part, type Tier } from './forum-kit';
 import { apotheosisMaterial, panel, spoilsMaterial, triumphMaterial } from './forum-reliefs';
 
 const text = (id: string) => FORUM_INSCRIPTIONS[id].latin;
@@ -246,6 +246,71 @@ function archTitus(p: Part) {
   // v0.0 spawn: on the Sacra Via just W of the arch, looking down towards the Forum
   p.spot('spawn-sacra-via', 'spawn', 0.5, 0, hd + 6, 0);
   p.spot('arch-titus-vista', 'vista', 0, 0, -hd - 9, Math.PI);
+  summaSacraVia(p);
+}
+
+/**
+ * The last climb of the Sacra Via to the arch (atlas real 310, 147 → 340, 180): the terrain model
+ * puts a 4.5 m step just below the arch's pad, so the street is carried up on an embanked causeway
+ * at an even grade (about 1 in 6), basalt between travertine kerbs, its retaining walls of tufa
+ * ashlar with a parapet: the Flavian regrading of the summa Sacra Via. Skipped where the terrain is
+ * already smooth (less than a metre to make up).
+ */
+function summaSacraVia(p: Part) {
+  const { b, ctx } = p;
+  const A = atlasToLocal(ctx, 310, 147.1);
+  const B = atlasToLocal(ctx, 340.5, 180.5);
+  const yA = ctx.groundAt(A[0], A[1]) + 0.03;
+  const yB = ctx.groundAt(B[0], B[1]) + 0.03;
+  const dx = B[0] - A[0];
+  const dz = B[1] - A[1];
+  const L = Math.hypot(dx, dz);
+  // is there a step to smooth? (sample the road profile against the straight line)
+  let worst = 0;
+  for (let k = 1; k < 10; k++) {
+    const t = k / 10;
+    worst = Math.max(worst, yA + (yB - yA) * t - ctx.groundAt(A[0] + dx * t, A[1] + dz * t));
+  }
+  if (worst < 1.0) return;
+  const u = new THREE.Vector3(dx / L, 0, dz / L);
+  const n = new THREE.Vector3(-u.z, 0, u.x);
+  const yaw = Math.atan2(u.x, u.z);
+  const pitch = Math.atan2(yB - yA, L);
+  const mid = (o: number, y: number) => new THREE.Matrix4().compose(new THREE.Vector3((A[0] + B[0]) / 2 + n.x * o, (yA + yB) / 2 + y, (A[1] + B[1]) / 2 + n.z * o), new THREE.Quaternion().setFromEuler(new THREE.Euler(-pitch, yaw, 0, 'YXZ')), new THREE.Vector3(1, 1, 1));
+  const hw = 3.3;
+  const Ls = L / Math.cos(pitch);
+  // deck (basalt), kerbs and sidewalks (travertine), parapets; the deck runs on 1.5 m below the
+  // foot so its leading edge is buried in the street
+  const lead = 1.5;
+  const midD = (o: number, y: number) => mid(o, y).multiply(new THREE.Matrix4().makeTranslation(0, 0, -lead / 2));
+  b.box('paving_basalt', 2 * hw - 1.8, 1.2, Ls + lead, midD(0, -0.6), { collide: p.main });
+  for (const sx of [-1, 1]) {
+    b.box('travertine', 0.9, 1.35, Ls + lead, midD(sx * (hw - 0.45), -0.6 + 0.075), { collide: p.main });
+    b.box('reticulatum', 0.5, 1.0, Ls, mid(sx * (hw + 0.25), 0.5), { collide: p.main });
+    b.box('travertine', 0.62, 0.12, Ls, mid(sx * (hw + 0.25), 1.06));
+  }
+  // retaining walls down to the ground on both sides (a vertical slab under each parapet)
+  let gmin = Math.min(yA, yB);
+  for (let k = 0; k <= 10; k++) {
+    const t = k / 10;
+    for (const sx of [-1, 1]) gmin = Math.min(gmin, ctx.groundAt(A[0] + dx * t + n.x * sx * hw, A[1] + dz * t + n.z * sx * hw));
+  }
+  for (const sx of [-1, 1]) {
+    // shape x → along the road (from A on the right side, from B on the left, so the basis stays
+    // right-handed), shape y → up, extrusion z → across, outward
+    const [o, y0, y1] = sx > 0 ? [A, yA, yB] : [B, yB, yA];
+    const shape: V2[] = [
+      [0, gmin - 0.4],
+      [L, gmin - 0.4],
+      [L, y1],
+      [0, y0],
+    ];
+    const g = extrudePolygon(shape, 0.6);
+    const basis = new THREE.Matrix4().makeBasis(u.clone().multiplyScalar(sx), new THREE.Vector3(0, 1, 0), n.clone().multiplyScalar(sx));
+    basis.setPosition(o[0] + n.x * sx * (hw - 0.05), 0, o[1] + n.z * sx * (hw - 0.05));
+    b.add(g, 'reticulatum', basis);
+  }
+  p.spot('summa-sacra-via-vista', 'vista', A[0] + dx * 0.95, yB, A[1] + dz * 0.95, Math.atan2(-u.x, -u.z));
 }
 
 // ---------------------------------------------------------------- Arch of Augustus
@@ -276,7 +341,7 @@ function archTiberius(p: Part) {
 
 function fornixFabianus(p: Part) {
   const { b, hi } = p;
-  const r = plainArch(b, { span: 3.0, height: 4.6, pier: 0.9, depth: 2.2, material: 'tufa', detail: p.detail }, new THREE.Matrix4());
+  const r = plainArch(b, { span: 3.0, height: 4.6, pier: 0.9, depth: 2.2, material: 'peperino', detail: p.detail }, new THREE.Matrix4());
   // travertine attic carrying the restoration inscription
   const aw = r.width - 0.1;
   b.box('travertine', aw, 1.2, r.depth - 0.2, T(0, r.height + 0.6, 0), { collide: false });
