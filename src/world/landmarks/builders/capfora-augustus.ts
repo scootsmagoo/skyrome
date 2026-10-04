@@ -35,6 +35,8 @@ import { PAINT, paint } from './capfora/paint';
 import { forumPortico } from './capfora/portico';
 import { capTemple } from './capfora/temple';
 import { addLamp } from './capfora/life';
+import { Draw } from '../../../arch/fabric/draw';
+import { placeProp } from '../../../arch/props/props';
 
 /** Plan of the Forum of Augustus in REAL metres (local frame). Shared with the Forum of Nerva. */
 export const AUGUSTUS = {
@@ -325,6 +327,31 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
       inscription(b, lines, 3.2, 0.9, mul(at, T(0, 7.3, -1.24)), 'bronze');
       armoredEmperor(b, mul(at, TRS(0, 8.25, 0, 0, 0, 0, 1.1)), { material: 'gilded_bronze', detail: 'low' });
     }
+  }
+
+  // ---- a court in session: the praetor's tribunal in the NW portico (trials were held in this
+  // forum), a raised platform with the sella curulis, benches for the parties and the jurors.
+  {
+    const x = colX + depth * 0.55;
+    const z = 12;
+    const tw = 4.2;
+    const td = 2.6;
+    const ty = Y0 + floorY;
+    span(b, 'marble', x - td / 2, ty, z - tw / 2, x + td / 2, ty + 1.1, z + tw / 2, I, true);
+    span(b, 'marble', x - td / 2 - 0.05, ty + 1.05, z - tw / 2 - 0.05, x + td / 2 + 0.05, ty + 1.15, z + tw / 2 + 0.05, I);
+    // Steps up the side (0.22 m risers).
+    for (let k = 0; k < 5; k++) span(b, 'marble', x - td / 2 + 0.2, ty, z + tw / 2 + k * 0.32, x + td / 2 - 0.2, ty + 1.1 - k * 0.22, z + tw / 2 + (k + 1) * 0.32, I, true);
+    // The curule chair: an ivory X-frame stool, with the praetor's lictors' fasces leaning by it.
+    const d = new Draw(b);
+    placeProp(d, 'stool', x + 0.2, ty + 1.15, z, -Math.PI / 2, { variant: 2, collide: false });
+    for (const dz of [-1.4, 1.4]) {
+      span(b, 'wood_dark', x - 0.4, ty + 1.15, z + dz - 0.06, x - 0.28, ty + 2.6, z + dz + 0.06, I);
+      span(b, 'fabric_red', x - 0.42, ty + 1.15, z + dz - 0.1, x - 0.26, ty + 1.9, z + dz + 0.1, I);
+    }
+    for (const dz of [-3.2, 3.2]) placeProp(d, 'bench', x - 2.5, ty, z + dz, Math.PI / 2, { collide: true });
+    spots.push(spotAt('praetor', 'npc', x + 0.2, ty + 1.15, z, x - 6, z, { label: 'The praetor hearing a case from the tribunal' }));
+    spots.push(spotAt('advocate', 'npc', x - 2.4, ty, z - 1.2, x, z, { label: 'An advocate pleading (a fine chance for a Rhetoric check)' }));
+    spots.push(spotAt('jurors', 'sit', x - 2.5, ty, z + 3.2, x, z, { label: 'Jurors\' bench' }));
   }
 
   // ---- life: a magistrate's spot, a bench in the portico, boys taking the toga virilis

@@ -34,6 +34,9 @@ import { PAINT, friezeRelief, paint } from './capfora/paint';
 import { forumPortico } from './capfora/portico';
 import { tabernae } from './capfora/tabernae';
 import { capTemple } from './capfora/temple';
+import { brazier } from './capfora/life';
+import { Draw } from '../../../arch/fabric/draw';
+import { placeProp } from '../../../arch/props/props';
 
 /**
  * The square's paving: one absolute level for the forum, its temple and its basilica, 1.32 m above
@@ -193,6 +196,54 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
     );
   }
   spots.push(spotAt('festival-crowd', 'npc', xa + 3, Y0, zTempleFront - 4, xa, zTempleFront, { label: 'Crowd gathering for the rededication (12 May)' }));
+
+  // ---- the eve of the rededication (12 May 113): the square is being dressed for the ceremony
+  {
+    const d = new Draw(b);
+    // Tripod incense burners down the axis between the Equus and the SE end, garlanded posts
+    // between them (festoons hung post to post), torches lit at dusk.
+    const zs: number[] = [];
+    for (let z = zTempleFront - 16; z > zSE + 8; z -= 9) zs.push(z);
+    for (const [i, z] of zs.entries()) {
+      for (const sx of [-1, 1]) {
+        const x = xa + sx * 5.2;
+        brazier(ctx, b, x, Y0, z);
+        // Garland pole with a laurel crown and ribbons.
+        span(b, 'wood_painted', x - 0.06, Y0, z + 2.2 - 0.06, x + 0.06, Y0 + 3.4, z + 2.2 + 0.06, I, true);
+        if (i > 0) festoon(b, new THREE.Vector3(x, Y0 + 3.3, z + 2.2), new THREE.Vector3(x, Y0 + 3.3, z + 2.2 + 9), { sag: 0.9, r: 0.12, detail: detail === 'high' ? 'high' : 'low' });
+      }
+    }
+    // Wooden stands for the senators and the magistrates along the NE portico (seats 0.45 m).
+    {
+      const x0 = colNE + 2.4;
+      const zA = zSE + 14;
+      const zB = zSE + 30;
+      for (let r = 0; r < 4; r++) {
+        const h = 0.45 * (r + 1);
+        span(b, 'wood', x0 + r * 0.75, Y0, zA, x0 + (r + 1) * 0.75, Y0 + h, zB, I, true);
+      }
+      span(b, 'fabric_red', x0 - 0.05, Y0 + 0.1, zA - 0.02, x0 + 0.02, Y0 + 0.45, zB + 0.02, I);
+      // The steps up the stand at its ends (0.225 m risers).
+      for (const z of [zA - 0.9, zB + 0.1]) for (let r = 0; r < 8; r++) span(b, 'wood', x0 + r * 0.375, Y0, z, x0 + (r + 1) * 0.375, Y0 + 0.225 * (r + 1), z + 0.8, I, true);
+      spots.push(spotAt('stands', 'sit', x0 + 1.9, Y0 + 1.35, (zA + zB) / 2, xa, (zA + zB) / 2, { label: 'Stands for the senators at the rededication' }));
+    }
+    // Garland and incense sellers in the SW portico, and workmen with ladders by the temple.
+    const stallZ = [zSE + 8, zSE + 22, zSE + 36];
+    stallZ.forEach((z, i) => {
+      placeProp(d, i === 1 ? 'stall_cloth' : 'stall_fruit', colSW - 2.0, Y0 + 0.4, z, Math.PI / 2, { collide: true });
+      spots.push(spotAt(`stall-${i}`, 'stall', colSW - 3.4, Y0 + 0.4, z, colSW + 2, z, { label: i === 1 ? 'Seller of ribbons and festive wreaths' : 'Garland seller (roses and laurel for 12 May)' }));
+    });
+    placeProp(d, 'amphora_stack', colSW - 1.6, Y0 + 0.4, zSE + 29, Math.PI / 2, { collide: true });
+    spots.push(spotAt('herald', 'npc', xa - 2, Y0, zSE + 6, xa, zSE + 20, { label: 'Herald announcing the rededication by the Emperor tomorrow' }));
+    spots.push(spotAt('praeco-notice', 'inscription', xa + 7.5, Y0, zSE + 4, xa + 9, zSE + 2.5, {
+      label: 'Painted notice of the rededication',
+      text: 'IV IDVS MAIAS / IMP CAESAR NERVA TRAIANVS AVG / AEDEM VENERIS GENETRICIS / DEDICABIT',
+      gloss: 'On the fourth day before the Ides of May the Emperor Caesar Nerva Trajan Augustus will dedicate the temple of Venus Genetrix. (A painted notice; the Column in his forum is dedicated the same day.)',
+    }));
+    // The notice board itself (painted, on two posts).
+    for (const dx of [-0.8, 0.8]) span(b, 'wood_dark', xa + 9 + dx - 0.06, Y0, zSE + 2.5 - 0.06, xa + 9 + dx + 0.06, Y0 + 2.2, zSE + 2.5 + 0.06, I, true);
+    inscription(b, ['IV IDVS MAIAS', 'IMP CAESAR NERVA TRAIANVS AVG', 'AEDEM VENERIS GENETRICIS', 'DEDICABIT'], 1.9, 0.95, TRS(xa + 9, Y0 + 1.55, zSE + 2.5 - 0.04, 0, Math.PI, 0), 'painted', { ground: '#efe6d2', ink: '#a3271f' });
+  }
   spots.push(spotAt('portico-ne', 'sit', colNE - 1.5, Y0 + 0.4, (zSE + zP1) / 2, colNE + 3, (zSE + zP1) / 2, { label: 'Bench in the NE portico' }));
 }
 
