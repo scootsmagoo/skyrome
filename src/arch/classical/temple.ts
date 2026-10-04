@@ -18,7 +18,7 @@ import * as THREE from 'three';
 import type { MeshBuilder } from '../../gfx/MeshBuilder';
 import type { MaterialId } from '../../gfx/materialIds';
 import { UV_METERS } from '../../gfx/textures/catalog';
-import { T, TRS, makeGeometry, mul, type V2 } from '../common/geom';
+import { T, TRS, extrudePolygon, makeGeometry, mul, type V2 } from '../common/geom';
 import { stairs, stepCount } from '../common/stairs';
 import { wall } from '../common/walls';
 import { column } from './column';
@@ -94,6 +94,12 @@ export interface TempleLayout {
   stairs: { x0: number; x1: number; z0: number; z1: number; count: number; rise: number; run: number };
   /** Every flight; each climbs towards +z from z0 to z1. */
   flights: { x0: number; x1: number; z0: number; z1: number; count: number; rise: number; run: number }[];
+  /**
+   * 'sides' only: a landing at podium height at the top of each lateral flight (same x range,
+   * z from the flight's top to z1), closed by a parapet along its outer side and an end wall, so
+   * the flight delivers the player onto the podium instead of off its end.
+   */
+  landings: { x0: number; x1: number; z0: number; z1: number }[];
   /** Podium front edge (the rostrum front for 'sides'). */
   podiumFront: number;
   stairMode: 'front' | 'sides' | 'none';
@@ -174,6 +180,7 @@ export function templeLayout(spec: TempleSpec): TempleLayout {
   const stairMode = spec.stairs ?? 'front';
   let st = { x0: stylobate.x0 + wing, x1: stylobate.x1 - wing, z1: stylobate.z0, z0: stylobate.z0 - count * run, count, rise, run };
   let flights = [st];
+  let landings: TempleLayout['landings'] = [];
   let podiumFront = st.z0;
   if (stairMode === 'sides') {
     // Rostrum in front of the columns; lateral flights run up along the flanks from its front.
@@ -185,6 +192,9 @@ export function templeLayout(spec: TempleSpec): TempleLayout {
       { x0: stylobate.x0 - w, x1: stylobate.x0, z0: podiumFront, z1: podiumFront + len, count, rise, run },
       { x0: stylobate.x1, x1: stylobate.x1 + w, z0: podiumFront, z1: podiumFront + len, count, rise, run },
     ];
+    // Landings long enough to reach past the first flank intercolumniation onto the podium.
+    const lz = Math.max(0, Math.min(Math.max(2, axial + 1), stylobate.z1 - (podiumFront + len)));
+    landings = lz > 0 ? flights.map((f) => ({ x0: f.x0, x1: f.x1, z0: f.z1, z1: f.z1 + lz })) : [];
     st = flights[0];
   } else if (stairMode === 'none') {
     flights = [];
@@ -195,7 +205,7 @@ export function templeLayout(spec: TempleSpec): TempleLayout {
   const ex = spanX / 2 + d / 2;
   const entablatureRect = { x0: -ex, x1: ex, z0: -spanZ / 2 - d / 2, z1: spanZ / 2 + d / 2, height: ent.total };
   const totalHeight = podiumHeight + H + ent.total + pedimentRise(2 * ex, spec.pitchDeg ?? 14) + ent.cornice;
-  return { order, plan, D, H, axial, front, sides, spanX, spanZ, columns, stylobate, podiumHeight, stairs: st, flights, podiumFront, stairMode, cella, entablature: entablatureRect, totalHeight };
+  return { order, plan, D, H, axial, front, sides, spanX, spanZ, columns, stylobate, podiumHeight, stairs: st, flights, landings, podiumFront, stairMode, cella, entablature: entablatureRect, totalHeight };
 }
 
 export interface TempleResult {
@@ -271,6 +281,60 @@ function roof(b: MeshBuilder, x0: number, x1: number, z0: number, z1: number, yE
   b.add(cap, mat, m);
 }
 
+/**
+ * The landing at the top of a lateral flight: a podium block at full height, a parapet along the
+ * flight's and landing's outer side (sloped with the stairs, ~1 m above the nosings) and an end
+ * wall, all with colliders. The inner side stays open onto the podium.
+ */
+function landing(b: MeshBuilder, f: TempleLayout['flights'][number], ld: TempleLayout['landings'][number], P: number, mat: MaterialId, detail: Detail, m: THREE.Matrix4) {
+  podium(b, { outline: [[ld.x0, ld.z0], [ld.x1, ld.z0], [ld.x1, ld.z1], [ld.x0, ld.z1]], height: P, material: mat, topMaterial: 'paving_travertine', detail }, m);
+  const t = 0.32;
+  const hp = 0.95;
+  // Outer side: the flight's outer edge is the one away from the podium (−x for the west flight).
+  const west = ld.x1 <= 0;
+  const xo = west ? ld.x0 - t : ld.x1;
+  // Side profile in (z, y): newel at the foot, slope parallel to the nosing line, flat along the landing.
+  const zFoot = f.z0;
+  const yFoot = f.rise + hp;
+  const zTop = f.z1 - f.run;
+  const prof: V2[] = [
+    [zFoot, 0],
+    [ld.z1, 0],
+    [ld.z1, P + hp],
+    [zTop, P + hp],
+    [zFoot + f.run * 0.5, yFoot],
+    [zFoot, yFoot],
+  ];
+  const g = extrudePolygon(prof, t);
+  // Shape x → +z, extrusion (0 → −t along z) → +x: the parapet spans x ∈ [xo, xo + t].
+  g.rotateY(-Math.PI / 2);
+  g.translate(xo, 0, 0);
+  b.add(g, mat, m);
+  const q = new THREE.Quaternion();
+  m.decompose(new THREE.Vector3(), q, new THREE.Vector3());
+  const box = (cx: number, cy: number, cz: number, hx: number, hy: number, hz: number, rotX = 0) => {
+    const rq = q.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), rotX));
+    b.collider({ kind: 'box', center: new THREE.Vector3(cx, cy, cz).applyMatrix4(m), half: new THREE.Vector3(hx, hy, hz), rotation: rq });
+  };
+  // Parapet colliders: flat run along the landing, a tilted slab along the flight.
+  box(xo + t / 2, (P + hp) / 2, (zTop + ld.z1) / 2, t / 2, (P + hp) / 2, (ld.z1 - zTop) / 2);
+  const ang = Math.atan2(P + hp - yFoot, zTop - zFoot);
+  const len = Math.hypot(zTop - zFoot, P + hp - yFoot);
+  const thick = 2.4;
+  const mid = new THREE.Vector3(0, (yFoot + P + hp) / 2, (zFoot + zTop) / 2);
+  // Rotating about +x by −ang lifts the box's +z end; its top face passes through the parapet top.
+  const n = new THREE.Vector3(0, Math.cos(ang), -Math.sin(ang));
+  mid.addScaledVector(n, -thick / 2);
+  box(xo + t / 2, mid.y, mid.z, t / 2, thick / 2, len / 2, -ang);
+  // End wall across the landing, standing on it.
+  const xa = west ? ld.x0 - t : ld.x0;
+  const xb = west ? ld.x1 : ld.x1 + t;
+  const end = new THREE.BoxGeometry(xb - xa, hp, t);
+  end.translate((xa + xb) / 2, P + hp / 2, ld.z1 - t / 2);
+  b.add(end, mat, m);
+  box((xa + xb) / 2, P + hp / 2, ld.z1 - t / 2, (xb - xa) / 2, hp / 2, t / 2);
+}
+
 export function temple(b: MeshBuilder, spec: TempleSpec, at?: THREE.Matrix4): TempleResult {
   const L = templeLayout(spec);
   const m = at ?? new THREE.Matrix4();
@@ -312,6 +376,7 @@ export function temple(b: MeshBuilder, spec: TempleSpec, at?: THREE.Matrix4): Te
       : [[s.x0, L.podiumFront, s.x1, s.z1]];
   podium(b, { outline, height: P, material: podMat, topMaterial: 'paving_travertine', detail, colliders }, m);
   for (const f of L.flights) stairs(b, { width: f.x1 - f.x0, rise: f.rise, run: f.run, count: f.count, material: podMat }, mul(m, T((f.x0 + f.x1) / 2, 0, f.z0)));
+  L.landings.forEach((ld, i) => landing(b, L.flights[i], ld, P, podMat, detail, m));
 
   // Columns.
   const colSpec = { order: L.order, D: L.D, height: L.H, fluted: spec.fluted ?? true, material: mat, detail };
@@ -376,7 +441,7 @@ export function temple(b: MeshBuilder, spec: TempleSpec, at?: THREE.Matrix4): Te
   const over = ent.projection + 0.1;
   roof(b, e.x0 - over, e.x1 + over, e.z0 + 0.4 * L.D, e.z1 - 0.4 * L.D, yTop - 0.05, pitch, roofMat, detail, m);
   // Acroteria.
-  if ((spec.acroteria ?? 'palmette') === 'palmette') {
+  if ((spec.acroteria ?? 'palmette') === 'palmette' && detail !== 'far') {
     const size = L.D * 1.1;
     const acMat: MaterialId = roofMat === 'gilded_bronze' ? 'gilded_bronze' : mat;
     for (const z of [e.z0, e.z1]) {

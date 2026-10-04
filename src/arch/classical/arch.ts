@@ -12,6 +12,7 @@ import type { MeshBuilder } from '../../gfx/MeshBuilder';
 import type { MaterialId } from '../../gfx/materialIds';
 import { ProfileBuilder, T, TRS, extrudePolygon, mul, sweep, type V2 } from '../common/geom';
 import { inscriptionPanel } from '../common/inscription';
+import { windowVoidMaterial } from '../common/walls';
 import { column } from './column';
 import { corniceOnlyProfile, entablature } from './entablature';
 import { ORDER_PROPORTIONS, columnDims, diameterForHeight, entablatureDims, type Detail, type Order } from './orders';
@@ -312,7 +313,7 @@ export function triumphalArch(b: MeshBuilder, spec: TriumphalArchSpec = {}, at?:
   for (const side of [-1, 1]) {
     inscriptionPanel(
       b,
-      { lines, width: panelW, height: panelH, style: spec.inscriptionStyle ?? 'carved', sizes: lines.map((_, i) => (i === 0 ? 1.05 : 0.8)), border: true },
+      { lines, width: panelW, height: panelH, style: spec.inscriptionStyle ?? 'carved', sizes: lines.map((_, i) => (i === 0 ? 1.05 : 0.8)), border: true, monumental: true },
       mul(m, TRS(0, yAttic + atticH * 0.48, side * (ad + 0.03), 0, side < 0 ? 0 : Math.PI, 0)),
       { depth: 0.06 },
     );
@@ -327,15 +328,20 @@ export function triumphalArch(b: MeshBuilder, spec: TriumphalArchSpec = {}, at?:
       victory(b, mat, mul(m, TRS(-main.span / 2 - 0.05, main.spring + main.span * 0.36, z, 0, rot, 0)), vs, false);
       victory(b, mat, mul(m, TRS(main.span / 2 + 0.05, main.spring + main.span * 0.36, z, 0, rot, 0)), vs, true);
     }
-    // Processional reliefs on the passage walls (spoils and triumph).
-    const ph = main.spring * 0.45;
+    // Processional reliefs on the passage walls (spoils and triumph), as on the Arch of Titus:
+    // between the socle's crowning moulding and the impost, so no moulding crosses the figures.
+    const impostH = Math.max(0.12, main.span * 0.06);
+    const y0 = socle + 0.14;
+    const y1 = main.spring - impostH - 0.1;
+    const ph = y1 - y0 - 0.12;
     for (const sx of [-1, 1]) {
       const x = sx * (main.span / 2) - sx * 0.005;
-      const frameMat: MaterialId = mat;
-      const back = new THREE.BoxGeometry(0.04, ph + 0.2, depth * 0.78);
-      back.translate(x - sx * 0.02, main.spring * 0.48, 0);
+      // A greyer ground than the arch's marble so the figures read in the passage's shade.
+      const frameMat: MaterialId = mat === 'marble' ? 'marble_veined' : mat;
+      const back = new THREE.BoxGeometry(0.04, y1 - y0, depth * 0.78);
+      back.translate(x - sx * 0.02, (y0 + y1) / 2, 0);
       b.add(back, frameMat, m);
-      reliefProcession(b, mul(m, TRS(x - sx * 0.04, main.spring * 0.26, 0, 0, sx < 0 ? -Math.PI / 2 : Math.PI / 2, 0)), depth * 0.72, ph, { material: mat, depth: 0.1 });
+      reliefProcession(b, mul(m, TRS(x - sx * 0.04, y0 + 0.04, 0, 0, sx < 0 ? -Math.PI / 2 : Math.PI / 2, 0)), depth * 0.72, ph, { material: mat, depth: 0.16 });
     }
   }
   // Crowning group.
@@ -454,7 +460,9 @@ export function arcadeBay(b: MeshBuilder, spec: ArcadeSpec, si: number, y0: numb
       b.box(mat, bay - cx - ww / 2 + ext, wallTop, depth, mul(m, T((bay + cx + ww / 2 + ext) / 2, y0 + wallTop / 2, 0)));
       b.box(mat, ww, wy, depth, mul(m, T(cx, y0 + wy / 2, 0)));
       b.box(mat, ww, wallTop - wy - wh, depth, mul(m, T(cx, y0 + (wy + wh + wallTop) / 2, 0)));
-      b.box('black', ww, wh, 0.05, mul(m, T(cx, y0 + wy + wh / 2, 0)), { castShadow: false });
+      // A real opening with reveals; a dark card at the back of the reveal reads as the unlit
+      // gallery behind it (the attic corridor has no interior to see).
+      b.box(windowVoidMaterial(), ww + 0.04, wh + 0.04, 0.02, mul(m, T(cx, y0 + wy + wh / 2, depth / 2 + 0.01)), { castShadow: false });
     } else {
       b.box(mat, bay + 2 * ext, wallTop, depth, mul(m, T(bay / 2, y0 + wallTop / 2, 0)));
     }

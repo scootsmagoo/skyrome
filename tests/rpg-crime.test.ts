@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus, type GameEvents } from '../src/core/Events';
 import { GameTime } from '../src/core/GameTime';
+import { Rng } from '../src/core/Rng';
 import { CrimeSystem, identifyChance, statusCrimeFor } from '../src/rpg/crime';
 import { ITEMS } from '../src/rpg/data/items';
 import { famaTrack } from '../src/rpg/data/factions';
@@ -233,6 +234,48 @@ describe('crime and bounty', () => {
     expect(share('cohortes-urbanae')).toBeCloseTo(0.25, 1);
     expect(share('praetoriani')).toBeLessThan(0.1);
     expect(crime.isCorruptible({ id: 'vigiles-7', faction: 'vigiles' })).toBe(crime.isCorruptible({ id: 'vigiles-7', faction: 'vigiles' }));
+  });
+
+  it('an unnamed guard is rolled once per confrontation at its faction’s rate — never one fixed answer per faction', () => {
+    const events = new EventBus<GameEvents>();
+    const time = new GameTime(events); // 08:00: the Urban Cohorts
+    const inventory = new InventoryImpl(new ItemDb(ITEMS), { events });
+    const crime = new CrimeSystem({ events, inventory, time, rng: new Rng('guards') });
+    const share = (ledger: string) => {
+      let n = 0;
+      for (let i = 0; i < 4000; i++) {
+        crime.endConfrontation();
+        if (crime.isCorruptible({}, ledger)) n++;
+      }
+      return n / 4000;
+    };
+    expect(share('urbs')).toBeCloseTo(0.25, 1);
+    expect(share('palatium')).toBeCloseTo(0.05, 1);
+    expect(share('palatium')).toBeGreaterThan(0);
+    time.advanceHours(14); // 22:00: the Vigiles
+    expect(share('urbs')).toBeCloseTo(0.4, 1);
+    // Within one confrontation the offer and the bribe agree.
+    crime.commit('vis', { witnessed: true });
+    inventory.addDenarii(100);
+    let tries = 0;
+    do crime.endConfrontation();
+    while (!crime.arrestOptions().corruptible && ++tries < 100);
+    for (let i = 0; i < 20; i++) expect(crime.arrestOptions()).toMatchObject({ corruptible: true, bribe: 60, canBribe: true });
+    expect(crime.bribe()).toBe(true);
+    expect(crime.bounty()).toBe(0);
+    // A refusing guard stays refusing for the confrontation…
+    crime.commit('vis', { witnessed: true });
+    tries = 0;
+    do crime.endConfrontation();
+    while (crime.arrestOptions().corruptible && ++tries < 100);
+    for (let i = 0; i < 20; i++) expect(crime.bribe()).toBe(false);
+    // …and fleeing ends it: the next guard is a new roll.
+    const rolls = new Set<boolean>();
+    for (let i = 0; i < 50; i++) {
+      crime.flee();
+      rolls.add(crime.arrestOptions().corruptible);
+    }
+    expect([...rolls].sort()).toEqual([false, true]);
   });
 
   it('persuasion: bounty < 200, DC min(85, 10 + bounty/20); success halves the bounty; a failure locks it for a day', () => {

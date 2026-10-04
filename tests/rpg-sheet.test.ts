@@ -253,6 +253,30 @@ describe('timed effects and conditions', () => {
     expect(s.vitals.health.current).toBeCloseTo(90);
   });
 
+  it('skipTime runs timers forward without over-time healing, damage or regeneration (§14.10)', () => {
+    const { s, events } = sheet();
+    const log = record(events, ['effect:expired']);
+    s.vitals.damage(50);
+    s.applyEffects('item:posca', [{ kind: 'regen', target: 'health', amount: 1, duration: 30 }]);
+    s.applyEffects('test:short', [{ kind: 'modifier', target: 'stamina.regen', amount: 0.1, duration: 100 }]);
+    s.applyEffects('test:long', [{ kind: 'modifier', target: 'xp.mult', amount: 0.1, duration: 1000 }]);
+    s.applyEffects('test:forever', [{ kind: 'flag', target: 'forever', amount: 1, duration: Infinity }]);
+    const health = s.vitals.health.current;
+    s.skipTime(500);
+    expect(s.vitals.health.current).toBe(health);
+    expect(s.modifier('stamina.regen')).toBe(0);
+    expect(s.modifier('xp.mult')).toBeCloseTo(0.1);
+    expect(s.hasFlag('forever')).toBe(true);
+    expect(log.map((l) => (l.e as { source: string }).source).sort()).toEqual(['item:posca', 'test:short']);
+    s.skipTime(499);
+    expect(s.modifier('xp.mult')).toBeCloseTo(0.1);
+    s.skipTime(1);
+    expect(s.modifier('xp.mult')).toBe(0);
+    s.skipTime(-5);
+    s.skipTime(NaN);
+    expect(s.hasFlag('forever')).toBe(true);
+  });
+
   it('a condition effect applies a named condition (mulsum makes you tipsy)', () => {
     const { s } = sheet();
     s.applyEffects('item:mulsum', [{ kind: 'condition', target: 'ebrius', amount: 1 }]);

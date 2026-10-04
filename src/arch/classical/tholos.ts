@@ -105,16 +105,31 @@ export function tholos(b: MeshBuilder, spec: TholosSpec, at?: THREE.Matrix4): Th
     b.add(lathe(prof, { segments: segs, capTop: false }), podMat, m);
     const c = new THREE.Vector3(0, P / 2, 0).applyMatrix4(m);
     b.collider({ kind: 'cylinder', center: c, halfHeight: P / 2, radius: outerR });
-    // Frontal stairs towards −z, flanked by the curve of the podium.
+    // Frontal stairs towards −z. The top riser meets the podium's front point (z = −outerR); the
+    // podium face curves away behind the flight's corners, so a filler block closes that lens-
+    // shaped gap: its collider makes the last tread deep enough for the character controller
+    // (a tread pushed into the round podium left ~0.08 m on the centre line and stalled it).
     const { count, rise } = stepCount(P, 0.22);
     const run = 0.34;
     const w = Math.min(outerR * 1.1, 2 * R * Math.sin(Math.PI / n) * 2.2);
-    const z0 = -outerR - count * run + 0.6;
+    const z0 = -outerR - count * run;
     stairs(b, { width: w, rise, run, count, material: podMat }, mul(m, T(0, 0, z0)));
     // cheek walls
+    const cheek = 0.5;
     for (const sx of [-1, 1]) {
-      b.box(podMat, 0.5, P, count * run, mul(m, T(sx * (w / 2 + 0.25), P / 2, z0 + (count * run) / 2)), { collide: true });
+      b.box(podMat, cheek, P, count * run, mul(m, T(sx * (w / 2 + cheek / 2), P / 2, z0 + (count * run) / 2)), { collide: true });
     }
+    // Filler from the flight's back line to where the circle meets its outer corners. Its top
+    // sits 4 mm under the paving disc so the two never share a plane.
+    const fw = w + 2 * cheek;
+    const zc = -Math.sqrt(Math.max(0, outerR * outerR - (fw / 2) ** 2));
+    const fd = zc + outerR + 0.02;
+    b.box(podMat, fw, P - 0.004, fd, mul(m, T(0, (P - 0.004) / 2, -outerR + fd / 2 - 0.01)));
+    const ct = mul(m, T(0, P / 2, -outerR + fd / 2 - 0.01));
+    const cp = new THREE.Vector3();
+    const cq = new THREE.Quaternion();
+    ct.decompose(cp, cq, new THREE.Vector3());
+    b.collider({ kind: 'box', center: cp, half: new THREE.Vector3(fw / 2, P / 2, fd / 2), rotation: cq });
   }
   // Paving of the top (the base profiles stop just below it, so nothing is coplanar).
   b.add(lathe(new ProfileBuilder(outerR + (baseKind === 'steps' ? 0 : 0.02), P).to(0, P).build(), { segments: segs }), 'paving_travertine', m, { castShadow: false });

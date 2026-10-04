@@ -221,6 +221,10 @@ const scene: SceneDef = {
     lights(game, () => player.root.position);
     avatarLod.viewer = game.camera;
 
+    // Delayed actions in game time (the demo scripts release blocks with these).
+    const timers: { t: number; fn: () => void }[] = [];
+    const later = (seconds: number, fn: () => void) => timers.push({ t: seconds, fn });
+
     // Lineup in two rows facing the plaza (+z).
     const slots: Slot[] = [];
     const labelLayer = document.createElement('div');
@@ -232,7 +236,8 @@ const scene: SceneDef = {
       const col = i % 10;
       const app = randomAppearance(rng.fork(`slot${i}`), role);
       const avatar = createHumanoid(app, { lod });
-      const pos = { x: -8.1 + col * 1.8, y: 0.05, z: -3 + row * 3 };
+      // The back row sits half a slot over, so its name labels fall between the front row's.
+      const pos = { x: -8.1 + col * 1.8 + (row === 0 ? 0.9 : 0), y: 0.05, z: -3 + row * 3 };
       const actor = new Actor(game, { id: `slot-${i}`, position: pos, heading: 0, layer: Layer.Npc, avatar });
       game.actors.add(actor);
       const slot: Slot = { actor, avatar, role, script: [], step: 0, wait: 0.3 + (i % 5) * 0.37 };
@@ -244,7 +249,7 @@ const scene: SceneDef = {
         slot.label = el;
       }
       if (drawnAll) avatar.setDrawn(true);
-      slot.script = clip ? clipScript(avatar, clip, freeze) : demoScript(avatar, role, i);
+      slot.script = clip ? clipScript(avatar, clip, freeze) : demoScript(avatar, role, i, later);
       slots.push(slot);
     });
     // A torch-bearer and a sitter for variety.
@@ -263,6 +268,8 @@ const scene: SceneDef = {
 
     const wish = new THREE.Vector3();
     const tmp = new THREE.Vector3();
+    const byDistance: Slot[] = [];
+    const placed: [number, number, number][] = [];
     game.addSystem({
       name: 'avatarScene',
       priority: 0,
@@ -280,6 +287,10 @@ const scene: SceneDef = {
         }
       },
       update(dt) {
+        for (let i = timers.length - 1; i >= 0; i--) {
+          timers[i].t -= dt;
+          if (timers[i].t <= 0) timers.splice(i, 1)[0].fn();
+        }
         for (const s of slots) {
           s.wait -= dt;
           if (s.wait <= 0 && s.script.length) {
@@ -293,15 +304,26 @@ const scene: SceneDef = {
         const cam = game.camera;
         const w = game.canvas.clientWidth;
         const h = game.canvas.clientHeight;
-        for (const s of slots) {
-          if (!s.label) continue;
+        // Nearest first; a label that would overlap one already placed is hidden.
+        byDistance.length = 0;
+        for (const s of slots) if (s.label) byDistance.push(s);
+        byDistance.sort((a, b) => cam.position.distanceToSquared(a.actor.root.position) - cam.position.distanceToSquared(b.actor.root.position));
+        placed.length = 0;
+        for (const s of byDistance) {
+          const label = s.label!;
           tmp.copy(s.actor.root.position);
           tmp.y += s.avatar.rig.height + 0.25;
           tmp.project(cam);
-          const vis = tmp.z < 1 && Math.abs(tmp.x) < 1.1 && Math.abs(tmp.y) < 1.1 && cam.position.distanceTo(s.actor.root.position) < 22;
-          s.label.style.display = vis ? '' : 'none';
-          if (vis) s.label.style.left = `${(tmp.x * 0.5 + 0.5) * w}px`;
-          if (vis) s.label.style.top = `${(-tmp.y * 0.5 + 0.5) * h}px`;
+          let vis = tmp.z < 1 && Math.abs(tmp.x) < 1.1 && Math.abs(tmp.y) < 1.1 && cam.position.distanceTo(s.actor.root.position) < 18;
+          const x = (tmp.x * 0.5 + 0.5) * w;
+          const y = (-tmp.y * 0.5 + 0.5) * h;
+          const half = label.textContent!.length * 3.4 + 4;
+          if (vis) for (const r of placed) if (Math.abs(r[0] - x) < r[2] + half && Math.abs(r[1] - y) < 15) vis = false;
+          label.style.display = vis ? '' : 'none';
+          if (!vis) continue;
+          placed.push([x, y, half]);
+          label.style.left = `${x}px`;
+          label.style.top = `${y}px`;
         }
       },
     });
@@ -442,7 +464,7 @@ function clipScript(avatar: HumanoidAvatar, clip: string, freeze: number | null)
 }
 
 /** A per-role demo loop so the lineup shows a variety of motion. */
-function demoScript(avatar: HumanoidAvatar, role: AvatarRole, i: number): (() => number)[] {
+function demoScript(avatar: HumanoidAvatar, role: AvatarRole, i: number, later: (seconds: number, fn: () => void) => void): (() => number)[] {
   const armed = avatar.equipment.weapon !== 'none';
   const play = (c: ActionClip, t = 1.4) => () => {
     avatar.play(c);
@@ -459,7 +481,7 @@ function demoScript(avatar: HumanoidAvatar, role: AvatarRole, i: number): (() =>
   };
   const block = (t: number) => () => {
     avatar.setBlocking(true);
-    setTimeout(() => avatar.setBlocking(false), t * 1000);
+    later(t, () => avatar.setBlocking(false));
     return t + 0.4;
   };
   if (armed && role !== 'vigil') {

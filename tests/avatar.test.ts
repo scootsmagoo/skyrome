@@ -10,10 +10,11 @@ import { GAITS, DIRECTIONS } from '../src/actors/avatar/anim/gait';
 import { actionInfo, actionNames, gaitClip, idleLoopClip, stanceIdleClip, STANCES } from '../src/actors/avatar/anim/library';
 import { semAt } from '../src/actors/avatar/anim/clip';
 import { speedWeights } from '../src/actors/avatar/anim/controller';
-import { createHumanoid } from '../src/actors/avatar/HumanoidAvatar';
-import { buildAvatarGeometry } from '../src/actors/avatar/buildAvatar';
+import { createHumanoid, type HumanoidAvatar } from '../src/actors/avatar/HumanoidAvatar';
+import { MAX_IDLE, avatarCacheStats, buildAvatarGeometry } from '../src/actors/avatar/buildAvatar';
+import { flameMaterial, syncFlameClock } from '../src/actors/avatar/material';
 import { AVATAR_ROLES, randomAppearance } from '../src/actors/avatar/variants';
-import { AvatarLod } from '../src/actors/avatar/lod';
+import { AvatarLod, avatarLod } from '../src/actors/avatar/lod';
 import { Rng } from '../src/core/Rng';
 import type { Appearance } from '../src/actors/appearance';
 
@@ -264,6 +265,271 @@ describe('HumanoidAvatar', () => {
         for (const b of av.bones) expect(Number.isFinite(b.quaternion.w)).toBe(true);
       }
     }
+  });
+});
+
+const headY = (av: HumanoidAvatar) => {
+  av.root.updateMatrixWorld(true);
+  return new THREE.Vector3().setFromMatrixPosition(av.bones[B.head].matrixWorld).y;
+};
+const world = (o: THREE.Object3D) => new THREE.Vector3().setFromMatrixPosition(o.matrixWorld);
+const run = (av: HumanoidAvatar, seconds: number, st: LocomotionState = STAND) => {
+  for (let t = 0; t < seconds; t += 1 / 60) av.update(1 / 60, st);
+};
+
+describe('HumanoidAvatar state', () => {
+  it('keeps a corpse down: later clips are refused and the dropped kit stays on the ground', () => {
+    const av = createHumanoid(legionary());
+    av.setDrawn(true);
+    run(av, 0.5);
+    av.setDead(true);
+    run(av, 1);
+    expect(av.equipment.droppedItems).toBe('all');
+    let ended: boolean | null = null;
+    av.play('hitFront', { onEnd: (i) => (ended = i) });
+    expect(ended).toBe(true);
+    run(av, 2);
+    expect(headY(av)).toBeLessThan(0.4);
+    expect(av.equipment.droppedItems).toBe('all');
+    expect(av.equipment.shieldObject!.parent).toBe(av.root);
+    // setDead(true) again is harmless; reviving gets up and picks the kit back up.
+    av.setDead(true);
+    av.setDead(false);
+    run(av, 1);
+    expect(av.equipment.droppedItems).toBe(null);
+    expect(headY(av)).toBeGreaterThan(1.3);
+  });
+
+  it('cancels a draw when told to stay sheathed (and the reverse)', () => {
+    const av = createHumanoid(legionary());
+    av.play('drawWeapon');
+    run(av, 0.15);
+    av.setDrawn(false);
+    run(av, 1.5);
+    expect(av.anim.drawn).toBe(false);
+    expect(av.equipment.inHand).toBe(false);
+    expect(av.equipment.weaponObject!.parent!.name).not.toBe('socket:gripR');
+
+    av.setDrawn(true);
+    run(av, 0.2);
+    expect(av.equipment.inHand).toBe(true);
+    av.play('sheathWeapon');
+    run(av, 0.15);
+    av.setDrawn(true);
+    run(av, 1.5);
+    expect(av.anim.drawn).toBe(true);
+    expect(av.equipment.inHand).toBe(true);
+  });
+
+  it('puts the weapon back when a draw is cancelled after the grab', () => {
+    const av = createHumanoid(legionary());
+    av.play('drawWeapon');
+    run(av, 0.5);
+    expect(av.equipment.inHand).toBe(true);
+    av.setDrawn(false);
+    expect(av.anim.current).toMatch(/^sheathWeapon/);
+    run(av, 1.5);
+    expect(av.anim.drawn).toBe(false);
+    expect(av.equipment.inHand).toBe(false);
+  });
+
+  it('commits the drawn state when a draw clip plays on its own', () => {
+    const av = createHumanoid(legionary());
+    av.play('drawWeapon');
+    expect(av.anim.drawn).toBe(true);
+    expect(av.equipment.inHand).toBe(false);
+    run(av, 1.2);
+    expect(av.equipment.inHand).toBe(true);
+    expect(av.equipment.shieldObject!.parent!.name).toBe('socket:shieldL');
+  });
+
+  it('holds the bow in the left hand and draws the string to the right hand', () => {
+    const app = { ...legionary(), weapon: 'bow' as const, shield: undefined, armor: undefined };
+    const av = createHumanoid(app);
+    expect(av.anim.stance).toBe('bow');
+    av.setDrawn(true);
+    expect(av.equipment.weaponObject!.parent!.name).toBe('socket:gripL');
+    av.play('bowDraw');
+    run(av, 1);
+    const bow = av.equipment.weaponObject!;
+    const arrow = bow.getObjectByName('bow:arrow')!;
+    expect(arrow.visible).toBe(true);
+    // The nock (arrow origin) is pulled well back toward the archer.
+    expect(arrow.position.z).toBeLessThan(-0.35);
+    av.play('bowRelease');
+    run(av, 0.1);
+    expect(arrow.visible).toBe(false);
+  });
+
+  it('anchors the bow hand at the jaw at full draw, the string in its fingers', () => {
+    const av = createHumanoid({ ...legionary(), weapon: 'bow', shield: undefined, armor: undefined });
+    av.setDrawn(true);
+    run(av, 0.3);
+    av.play('bowDraw');
+    run(av, 1);
+    av.root.updateMatrixWorld(true);
+    const grip = world(av.getSocket('gripR'));
+    const head = av.bones[B.head];
+    // The jaw anchor: right of the mouth, in the head's frame.
+    const jaw = head.localToWorld(new THREE.Vector3(-0.035 * av.rig.s, -0.012 * av.rig.s, 0.07 * av.rig.s));
+    expect(grip.distanceTo(jaw)).toBeLessThan(0.03);
+    // The string's nock is at the hand.
+    const bow = av.equipment.weaponObject!;
+    const arrow = bow.getObjectByName('bow:arrow')!;
+    expect(bow.localToWorld(arrow.position.clone()).distanceTo(grip)).toBeLessThan(0.03);
+  });
+
+  it('shows the first-person sword fist low right in view, the blade toward the center', () => {
+    const av = createHumanoid({ ...legionary(), shield: undefined });
+    av.setDrawn(true);
+    av.setFirstPerson(true);
+    const cam = new THREE.PerspectiveCamera(70, 16 / 9, 0.05, 100);
+    for (const pitch of [-0.9, -0.1, 0.6]) {
+      av.setAimPitch(pitch);
+      run(av, 1);
+      av.root.updateMatrixWorld(true);
+      // CameraRig: eyes at eyeHeight, 0.12 m forward, looking along the avatar's +Z.
+      cam.position.set(0, av.eyeHeight, 0.12);
+      cam.rotation.set(pitch, Math.PI, 0, 'YXZ');
+      cam.updateMatrixWorld(true);
+      const fist = world(av.getSocket('gripR')).project(cam);
+      expect(fist.x, `pitch ${pitch}`).toBeGreaterThan(0.25);
+      expect(fist.x, `pitch ${pitch}`).toBeLessThan(0.95);
+      expect(fist.y, `pitch ${pitch}`).toBeGreaterThan(-0.98);
+      expect(fist.y, `pitch ${pitch}`).toBeLessThan(-0.3);
+      // The blade leans from the fist toward the middle of the screen.
+      const tip = av.equipment.weaponObject!.localToWorld(new THREE.Vector3(0, 0.4, 0)).project(cam);
+      expect(tip.x).toBeLessThan(fist.x);
+      expect(tip.y).toBeGreaterThan(fist.y);
+    }
+  });
+
+  it('sleeps with both hands resting on the ground or the body', () => {
+    const av = createHumanoid({ ...legionary(), armor: undefined, weapon: 'none', shield: undefined });
+    av.setIdleLoop('sleep');
+    run(av, 3);
+    av.root.updateMatrixWorld(true);
+    const torso = [B.hips, B.spine, B.chest].map((b) => world(av.bones[b]));
+    for (const h of [B.handL, B.handR]) {
+      const p = world(av.bones[h]);
+      const nearBody = Math.min(...torso.map((t) => t.distanceTo(p)));
+      expect(p.y < 0.25 || nearBody < 0.25, `hand ${h}: y=${p.y.toFixed(2)} body=${nearBody.toFixed(2)}`).toBe(true);
+    }
+  });
+
+  it('times hits and ends the same far away (pose updates are throttled, action clocks are not)', () => {
+    const viewer = new THREE.Object3D();
+    viewer.position.set(400, 0, 0);
+    viewer.updateMatrixWorld(true);
+    const prev = avatarLod.viewer;
+    avatarLod.viewer = viewer;
+    try {
+      const av = createHumanoid(legionary());
+      av.setDrawn(true);
+      run(av, 0.5);
+      const hit = actionInfo(av.anim.stance, 'attackLight1')!.hit!;
+      let hitAt = -1;
+      let t = 0;
+      av.play('attackLight1', { onHit: () => (hitAt = t) });
+      for (let i = 0; i < 120 && hitAt < 0; i++) {
+        t += 1 / 60;
+        av.update(1 / 60, STAND);
+      }
+      expect(Math.abs(hitAt - hit)).toBeLessThan(1 / 60 + 1e-6);
+    } finally {
+      avatarLod.viewer = prev;
+    }
+  });
+
+  it('drops the kit beside the body, not on it', () => {
+    for (const forward of [false, true]) {
+      const av = createHumanoid(legionary());
+      av.setDrawn(true);
+      run(av, 0.3);
+      (av.anim as unknown as { rng: () => number }).rng = () => (forward ? 0.1 : 0.9);
+      av.setDead(true);
+      run(av, 2);
+      expect(av.anim.current).toBe(forward ? 'death:forward' : 'death');
+      const shield = av.equipment.shieldObject!;
+      // The scutum (0.66 m wide) lies entirely to the body's left, beside the torso.
+      expect(shield.position.x - 0.33).toBeGreaterThan(0.3);
+      // Beside the torso: behind the feet on its back, in front of them face down.
+      expect(forward ? shield.position.z : -shield.position.z).toBeGreaterThan(0.3);
+      expect(av.equipment.weaponObject!.position.x).toBeLessThan(-0.4);
+    }
+  });
+
+  it('keeps a torch or net arm out of two-handed attacks', () => {
+    const vigil = createHumanoid({ ...legionary(), weapon: 'axe', shield: undefined, armor: undefined });
+    vigil.setTorch(true);
+    vigil.setDrawn(true);
+    run(vigil, 1);
+    const before = vigil.bones[B.upperArmL].quaternion.clone();
+    const flame = vigil.root.getObjectByName('torch:flame')!;
+    vigil.play('attackLight1');
+    run(vigil, 0.4);
+    expect(vigil.bones[B.upperArmL].quaternion.angleTo(before)).toBeLessThan(0.15);
+    // The flame burns upward in world space whatever the torch does (its shader ignores rotation).
+    expect(flame.frustumCulled).toBe(false);
+  });
+
+  it('advances the flame clock from wall time, not per torch', () => {
+    syncFlameClock(1000);
+    syncFlameClock(1000);
+    expect(flameMaterial().uniforms.time.value).toBeCloseTo(0.5, 6);
+  });
+
+  it('hides head and neck in first person and does not bend the spine to aim', () => {
+    const av = createHumanoid(legionary());
+    av.setDrawn(true);
+    av.setFirstPerson(true);
+    expect(av.bones[B.neck].scale.x).toBeLessThan(0.01);
+    av.setAimPitch(-0.9);
+    run(av, 1);
+    // Spine and chest do not bend forward (they lean back a little so the collar stays out of view).
+    av.root.updateMatrixWorld(true);
+    const neck = new THREE.Vector3().setFromMatrixPosition(av.bones[B.neck].matrixWorld);
+    expect(neck.z).toBeLessThan(0.02);
+  });
+
+  it('swaps armor and clothes in place, keeping bones, animation and kit', () => {
+    const av = createHumanoid(legionary());
+    av.setDrawn(true);
+    run(av, 0.3);
+    const bones = av.bones;
+    const geo = av.mesh.geometry;
+    av.setArmor({ helmet: { kind: 'praetorian-attic', crest: '#b3261e' }, body: { kind: 'lorica-squamata' } });
+    expect(av.mesh.geometry).not.toBe(geo);
+    expect(av.bones).toBe(bones);
+    expect(av.anim.drawn).toBe(true);
+    expect(av.equipment.inHand).toBe(true);
+    av.setGarments([{ kind: 'tunica', color: '#a33b2a' }, { kind: 'toga', color: '#efe9dc' }]);
+    expect(av.anim.togate).toBe(true);
+    // New proportions move the joints and the eyes.
+    const eye = av.eyeHeight;
+    av.setAppearance({ ...av.appearance, height: 1.85 });
+    expect(av.eyeHeight).toBeGreaterThan(eye + 0.1);
+    av.root.updateMatrixWorld(true);
+    run(av, 0.1);
+    for (const b of av.bones) expect(Number.isFinite(b.quaternion.w)).toBe(true);
+    expect(av.skeleton.boneInverses[B.head].elements[13]).toBeCloseTo(-av.rig.joints[B.head * 3 + 1], 5);
+  });
+
+  it('releases geometry: unheld meshes are evicted and disposed, held ones never', () => {
+    const rng = new Rng(11);
+    const held = createHumanoid(randomAppearance(rng.fork('keep'), 'matron'));
+    let disposed = 0;
+    for (let i = 0; i < MAX_IDLE + 30; i++) {
+      const av = createHumanoid(randomAppearance(rng.fork(`npc${i}`), 'plebeian-man'));
+      av.mesh.geometry.addEventListener('dispose', () => disposed++);
+      av.dispose();
+      av.dispose();
+    }
+    const st = avatarCacheStats();
+    expect(st.idle).toBeLessThanOrEqual(MAX_IDLE);
+    expect(st.held).toBeGreaterThanOrEqual(1);
+    expect(disposed).toBeGreaterThanOrEqual(30);
+    expect(held.mesh.geometry.getAttribute('position').count).toBeGreaterThan(100);
   });
 });
 

@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import type { MeshBuilder } from '../../gfx/MeshBuilder';
 import type { MaterialId } from '../../gfx/materialIds';
-import { ProfileBuilder, T, gridSurface, lathe, linspace, mul, sweep, type Profile, type V2 } from '../common/geom';
+import { ProfileBuilder, T, gridSurface, lathe, linspace, makeGeometry, mul, sweep, type Profile, type V2 } from '../common/geom';
 import { column } from './column';
 import { diameterForHeight, type Detail, type Order } from './orders';
 
@@ -25,8 +25,13 @@ export interface DomeSpec {
   coffers?: { rings: number; perRing: number } | false;
   /** Stepped rings on the extrados (default 5). */
   steps?: number;
-  /** Inner (intrados) material. */
+  /** Inner (intrados) material: the coffer ribs. */
   material?: MaterialId;
+  /**
+   * Coffer backs (the intrados between the ribs) when coffered. Default: a shade darker than the
+   * ribs (plaster_white → plaster_cream) so the grid reads in the flat light under a dome.
+   */
+  cofferMaterial?: MaterialId;
   /** Outer (extrados) material — concrete, lead sheeting or tiles. */
   outerMaterial?: MaterialId;
   detail?: Detail;
@@ -34,6 +39,9 @@ export interface DomeSpec {
   theta0?: number;
   theta1?: number;
 }
+
+/** Default coffer-back material per rib material: a shade darker, so the coffers read. */
+const COFFER_BACK: Partial<Record<MaterialId, MaterialId>> = { plaster_white: 'plaster_cream', marble: 'marble_veined', concrete: 'concrete' };
 
 /** Map a rib profile (p = protrusion into the room, w = across) into the latitude-ring sweep frame at elevation e. */
 function ribRing(e: number, prof: V2[]): Profile {
@@ -56,10 +64,13 @@ export function dome(b: MeshBuilder, spec: DomeSpec, at?: THREE.Matrix4) {
   const range = { theta0: th0, theta1: th1 };
   const inner = spec.material ?? 'concrete';
   const outer = spec.outerMaterial ?? 'concrete';
+  const cof = spec.coffers === undefined ? { rings: 5, perRing: 28 } : spec.coffers;
+  const coffered = !!cof && hi;
+  const backs = coffered ? (spec.cofferMaterial ?? COFFER_BACK[inner] ?? inner) : inner;
   // Intrados: traverse from the crown down to the springing so normals face the centre.
   const rows = hi ? 18 : 8;
   const inPts: V2[] = linspace(eTop, 0, rows).map((e) => [R * Math.cos(e), R * Math.sin(e)] as V2);
-  b.add(lathe({ pts: inPts, smooth: inPts.map(() => true) }, { segments: segs, ...range }), inner, m);
+  b.add(lathe({ pts: inPts, smooth: inPts.map(() => true) }, { segments: segs, ...range }), backs, m);
   // Extrados: thick haunches with stepped rings, thinning to t/3 at the oculus.
   const outerR = (e: number) => R + t * (1 - 0.65 * (e / (Math.PI / 2)));
   const steps = spec.steps ?? 5;
@@ -80,8 +91,7 @@ export function dome(b: MeshBuilder, spec: DomeSpec, at?: THREE.Matrix4) {
     b.add(lathe(rim, { segments: segs, ...range }), 'bronze', m);
   }
   // Coffers: stepped latitude and meridian ribs on the intrados.
-  const cof = spec.coffers === undefined ? { rings: 5, perRing: 28 } : spec.coffers;
-  if (cof && hi) {
+  if (cof && coffered) {
     const e0 = 0.12;
     const e1 = Math.min(eTop - 0.12, 1.05);
     const depth = 0.05 * R;
@@ -97,24 +107,102 @@ export function dome(b: MeshBuilder, spec: DomeSpec, at?: THREE.Matrix4) {
       [depth * 0.5, ribW],
       [0, ribW],
     ];
-    const ringPath = (e: number) => linspace(th0, th1, segs).slice(0, th1 - th0 >= Math.PI * 2 - 1e-6 ? segs : segs + 1).map((a) => new THREE.Vector3(R * Math.cos(e) * Math.sin(a), R * Math.sin(e), R * Math.cos(e) * Math.cos(a)));
     const full = th1 - th0 >= Math.PI * 2 - 1e-6;
-    for (let k = 0; k <= cof.rings; k++) {
-      const e = e0 + ((e1 - e0) * k) / cof.rings;
-      // walk with decreasing angle so the sweep's outward normal is +radial; profile maps inward
-      const path = ringPath(e).reverse();
-      b.add(sweep(ribRing(e, rib.map(([p, w]) => [p, w] as V2)), path, { closed: full, caps: !full }), inner, m);
-    }
-    for (let k = 0; k < cof.perRing; k++) {
-      const a = th0 + ((th1 - th0) * (k + (full ? 0 : 0.5))) / cof.perRing;
-      if (!full && k >= cof.perRing) break;
-      const path = linspace(e0, e1, hi ? 10 : 4).map((e) => new THREE.Vector3(R * Math.cos(e) * Math.sin(a), R * Math.sin(e), R * Math.cos(e) * Math.cos(a)));
+    const meridian = (a: number, shift = 0) => {
+      // Tangent of the latitude circle at angle a; `shift` slides the rib along it (edge bands).
       const n = new THREE.Vector3(Math.cos(a), 0, -Math.sin(a));
+      const path = linspace(e0, e1, hi ? 10 : 4).map((e) => new THREE.Vector3(R * Math.cos(e) * Math.sin(a), R * Math.sin(e), R * Math.cos(e) * Math.cos(a)).addScaledVector(n, shift));
       const prof: Profile = { pts: rib.map(([p, w]) => [w, p] as V2), smooth: rib.map(() => false) };
       b.add(sweep(prof, path, { outward: n, caps: true }), inner, m);
+    };
+    for (let k = 0; k <= cof.rings; k++) {
+      const e = e0 + ((e1 - e0) * k) / cof.rings;
+      // A half dome's rings stop inside the edge bands (below) instead of ending on the open
+      // face, where their capped ends showed as a row of teeth along the rim.
+      const inset = full ? 0 : ribW / (R * Math.cos(e));
+      const a0 = th0 + inset;
+      const a1 = th1 - inset;
+      const path = linspace(a0, a1, segs).slice(0, full ? segs : segs + 1).map((a) => new THREE.Vector3(R * Math.cos(e) * Math.sin(a), R * Math.sin(e), R * Math.cos(e) * Math.cos(a)));
+      // walk with decreasing angle so the sweep's outward normal is +radial; profile maps inward
+      b.add(sweep(ribRing(e, rib.map(([p, w]) => [p, w] as V2)), path.reverse(), { closed: full, caps: !full }), inner, m);
+    }
+    for (let k = 0; k < cof.perRing; k++) meridian(th0 + ((th1 - th0) * (k + (full ? 0 : 0.5))) / cof.perRing);
+    if (!full) {
+      // Edge bands framing the coffer field along the open face, flush with it.
+      meridian(th0, ribW);
+      meridian(th1, -ribW);
     }
   }
   return { height: R * Math.sin(eTop) + t * 0.35 };
+}
+
+// ---------------------------------------------------------------- niches in curved walls
+
+export interface CurvedNiche {
+  /** Angle of the niche axis (lathe convention: (R sin a, y, R cos a)). */
+  a: number;
+  width: number;
+  height: number;
+  /** Sill height. */
+  y0: number;
+  /** Recess depth (default width / 2: a semicircular plan). */
+  depth?: number;
+}
+
+/**
+ * The inner face (radius R, y ∈ [0, H], facing the centre) of a curved wall between θ0 and θ1,
+ * with real recessed niches: each opening is cut out of the face, lined with a half-elliptical
+ * recess (semicircular plan by default), a floor and a flat soffit in `lining`. The recess runs
+ * from the chord between the opening's edges into the wall, so it needs depth < wall thickness.
+ */
+export function innerFaceWithNiches(b: MeshBuilder, R: number, H: number, theta0: number, theta1: number, niches: CurvedNiche[], segs: number, mat: MaterialId, lining: MaterialId, m: THREE.Matrix4, detail: Detail) {
+  const face = (a0: number, a1: number, y0: number, y1: number) => {
+    if (a1 - a0 < 1e-6 || y1 - y0 < 1e-6) return;
+    const n = Math.max(1, Math.ceil((segs * (a1 - a0)) / (Math.PI * 2)));
+    b.add(lathe(new ProfileBuilder(R, y1).to(R, y0).build(), { segments: n, theta0: a0, theta1: a1 }), mat, m);
+  };
+  const list = [...niches].sort((p, q) => p.a - q.a).map((nc) => ({ ...nc, da: Math.asin(Math.min(0.95, nc.width / 2 / R)) }));
+  let a = theta0;
+  for (const nc of list) {
+    face(a, nc.a - nc.da, 0, H);
+    face(nc.a - nc.da, nc.a + nc.da, 0, nc.y0);
+    face(nc.a - nc.da, nc.a + nc.da, nc.y0 + nc.height, H);
+    a = nc.a + nc.da;
+  }
+  face(a, theta1, 0, H);
+  const k = detail === 'high' ? 14 : 7;
+  for (const nc of list) {
+    const hw = nc.width / 2;
+    const dep = nc.depth ?? hw;
+    // Local frame: origin on the chord between the opening's edges, +z outward into the wall.
+    const local = mul(m, new THREE.Matrix4().makeRotationY(nc.a).setPosition(R * Math.cos(nc.da) * Math.sin(nc.a), 0, R * Math.cos(nc.da) * Math.cos(nc.a)));
+    const phis = linspace(-Math.PI / 2, Math.PI / 2, k);
+    b.add(gridSurface(phis, [nc.y0, nc.y0 + nc.height], (f, y, out) => out.set(hw * Math.sin(f), y, dep * Math.cos(f)), { flip: true }), lining, local);
+    // Floor and soffit: the lens between chord and wall face plus the recess's half-ellipse.
+    const outline: V2[] = [];
+    for (const t of linspace(nc.da, -nc.da, 4)) outline.push([R * Math.sin(t), R * Math.cos(t) - R * Math.cos(nc.da)]);
+    for (const f of linspace(-Math.PI / 2, Math.PI / 2, k).slice(1, -1)) outline.push([hw * Math.sin(f), dep * Math.cos(f)]);
+    b.add(flatPolygon(outline, nc.y0, true), lining, local);
+    b.add(flatPolygon(outline, nc.y0 + nc.height, false), lining, local);
+  }
+}
+
+/** A horizontal polygon given in (x, z), facing up or down. */
+function flatPolygon(pts: V2[], y: number, up: boolean): THREE.BufferGeometry {
+  const contour = pts.map(([x, z]) => new THREE.Vector2(x, z));
+  if (THREE.ShapeUtils.isClockWise(contour)) contour.reverse();
+  const tris = THREE.ShapeUtils.triangulateShape(contour, []);
+  const pos: number[] = [];
+  const nor: number[] = [];
+  for (const tri of tris) {
+    // A CCW (x, z) contour seen from above (+y) is clockwise, so "up" needs the reversed order.
+    const order = up ? [tri[0], tri[2], tri[1]] : tri;
+    for (const i of order) {
+      pos.push(contour[i].x, y, contour[i].y);
+      nor.push(0, up ? 1 : -1, 0);
+    }
+  }
+  return makeGeometry(pos, nor);
 }
 
 // ---------------------------------------------------------------- apse / exedra
@@ -131,6 +219,8 @@ export interface ApseSpec {
   semidome?: boolean;
   /** Statue niches round the curve (exedrae of the imperial fora). */
   niches?: number;
+  /** Niche lining (default marble). */
+  liningMaterial?: MaterialId;
   /** Columns across the open chord (screen colonnade). */
   colonnade?: { order: Order; count: number };
   detail?: Detail;
@@ -151,8 +241,8 @@ export function apse(b: MeshBuilder, spec: ApseSpec, at?: THREE.Matrix4) {
   const mat = spec.material ?? 'brick';
   // θ ∈ [−π/2, π/2] covers the +z half (x = r sin θ, z = r cos θ).
   const range = { theta0: -Math.PI / 2, theta1: Math.PI / 2 };
-  // Outer face (going up: normal outward) + top; inner face going down: normal inward.
-  const wall = new ProfileBuilder(R + t, 0).up(H).in(t).to(R, 0).build();
+  // Outer face (going up: normal outward) + top; the inner face (with niches) separately.
+  const wall = new ProfileBuilder(R + t, 0).up(H).in(t).build();
   b.add(lathe(wall, { segments: segs, ...range }), mat, m);
   // Wall ends at the chord.
   for (const sx of [-1, 1]) {
@@ -160,17 +250,17 @@ export function apse(b: MeshBuilder, spec: ApseSpec, at?: THREE.Matrix4) {
     end.translate(sx * (R + t / 2), H / 2, 0.01);
     b.add(end, mat, m);
   }
-  if (spec.niches && spec.niches > 0) {
-    const n = spec.niches;
-    const nh = Math.min(H * 0.55, 3.2);
-    const nw = Math.min((Math.PI * R) / (n + 1) * 0.55, nh * 0.5);
-    for (let i = 0; i < n; i++) {
-      const a = -Math.PI / 2 + (Math.PI * (i + 1)) / (n + 1);
-      // A shallow framed recess: a dark back panel set into the wall with a marble frame.
+  const niches: CurvedNiche[] = [];
+  const n = spec.niches ?? 0;
+  const nh = Math.min(H * 0.55, 3.2);
+  const nw = Math.min((Math.PI * R) / (n + 1) * 0.55, nh * 0.5);
+  for (let i = 0; i < n; i++) niches.push({ a: -Math.PI / 2 + (Math.PI * (i + 1)) / (n + 1), width: nw, height: nh, y0: H * 0.18, depth: Math.min(nw / 2, t - 0.15) });
+  // Inner face going down (normal inward), with real recessed statue niches.
+  innerFaceWithNiches(b, R, H, range.theta0, range.theta1, niches, segs * 2, mat, spec.liningMaterial ?? 'marble', m, detail);
+  if (n > 0) {
+    for (const { a } of niches) {
+      // Marble frame round each recess.
       const local = new THREE.Matrix4().makeRotationY(a).setPosition(R * Math.sin(a), 0, R * Math.cos(a));
-      const back = new THREE.BoxGeometry(nw, nh, 0.06);
-      back.translate(0, H * 0.18 + nh / 2, -0.04);
-      b.add(back, 'plaster_dark', mul(m, local), { castShadow: false });
       for (const sx of [-1, 1]) {
         const jamb = new THREE.BoxGeometry(0.12, nh + 0.12, 0.14);
         jamb.translate(sx * (nw / 2 + 0.06), H * 0.18 + nh / 2, -0.07);
@@ -254,7 +344,8 @@ export function barrelVault(b: MeshBuilder, spec: BarrelVaultSpec, at?: THREE.Ma
   // from increasing parameters, and the winding follows the sample order.
   const as = linspace(0, Math.PI, n);
   const zs = [0, L];
-  b.add(gridSurface(as, zs, (a, z, o) => o.set(Math.cos(a) * r, hs + Math.sin(a) * r, z), { flip: true }), vmat, m);
+  const backs = spec.coffers && detail === 'high' ? (COFFER_BACK[vmat] ?? vmat) : vmat;
+  b.add(gridSurface(as, zs, (a, z, o) => o.set(Math.cos(a) * r, hs + Math.sin(a) * r, z), { flip: true }), backs, m);
   b.add(gridSurface(as, zs, (a, z, o) => o.set(Math.cos(a) * (r + t), hs + Math.sin(a) * (r + t), z)), mat, m);
   // End rings: ∂a × ∂k points −z, so the front (z = 0) keeps it and the back flips.
   for (const [z, flip] of [
@@ -266,16 +357,19 @@ export function barrelVault(b: MeshBuilder, spec: BarrelVaultSpec, at?: THREE.Ma
   }
   if (spec.coffers && detail === 'high') {
     const rows = Math.max(2, Math.round(L / 1.2));
+    // Transverse ribs (0.16 m wide); the first and last sit flush inside the end faces, framing
+    // the coffers, and the longitudinal ribs run between them so no rib end shows on a face.
+    const hw = 0.08;
     for (let j = 0; j <= rows; j++) {
-      const z = (L * j) / rows;
-      const rib = new ProfileBuilder(-0.08, 0).to(0.08, 0).to(0.08, 0.12).to(-0.08, 0.12).build();
+      const z = hw + ((L - 2 * hw) * j) / rows;
+      const rib = new ProfileBuilder(-hw, 0).to(hw, 0).to(hw, 0.12).to(-hw, 0.12).build();
       const path = linspace(Math.PI, 0, n).map((a) => new THREE.Vector3(Math.cos(a) * r, hs + Math.sin(a) * r, z));
       // (a sweep path may run either way; only gridSurface needs increasing samples)
       b.add(sweep({ pts: rib.pts.map(([x, y]) => [x, -y] as V2), smooth: rib.smooth }, path, { outward: new THREE.Vector3(0, 0, 1), caps: false }), vmat, m);
     }
     for (let i = 1; i < 8; i++) {
       const a = (Math.PI * i) / 8;
-      const g = new THREE.BoxGeometry(0.16, 0.12, L);
+      const g = new THREE.BoxGeometry(0.16, 0.12, L - 4 * hw + 0.02);
       g.rotateZ(a - Math.PI / 2);
       g.translate(Math.cos(a) * (r - 0.06), hs + Math.sin(a) * (r - 0.06), L / 2);
       b.add(g, vmat, m);
@@ -297,6 +391,8 @@ export interface RotundaSpec {
   floorMaterial?: MaterialId;
   /** Niches round the interior (alternating rectangular/semicircular in reality). */
   niches?: number;
+  /** Niche lining (default: a greyer marble than a white interior, so the recesses read). */
+  liningMaterial?: MaterialId;
   doorWidth?: number;
   detail?: Detail;
 }
@@ -320,9 +416,13 @@ export function rotunda(b: MeshBuilder, spec: RotundaSpec, at?: THREE.Matrix4) {
   b.add(lathe(outer, { segments: segs, theta0: Math.PI + halfOut, theta1: Math.PI * 3 - halfOut }), mat, m);
   const top = new ProfileBuilder(R + t, H).to(R, H).build();
   b.add(lathe(top, { segments: segs }), mat, m);
-  // Inner face (traverse down so normals face the centre).
-  const inner = new ProfileBuilder(R, H).to(R, 0).build();
-  b.add(lathe(inner, { segments: segs, theta0: Math.PI + half, theta1: Math.PI * 3 - half }), imat, m);
+  // Inner face (traverse down so normals face the centre) with recessed niches.
+  const niches = spec.niches ?? 6;
+  const nw = Math.min(2.4, R * 0.28);
+  const nh = Math.min(H * 0.5, 4.2);
+  const nicheList: CurvedNiche[] = [];
+  for (let i = 0; i < niches; i++) nicheList.push({ a: Math.PI + ((i + 1) * Math.PI * 2) / (niches + 1), width: nw, height: nh, y0: H * 0.12, depth: Math.min(nw / 2, t - 0.25) });
+  innerFaceWithNiches(b, R, H, Math.PI + half, Math.PI * 3 - half, nicheList, segs, imat, spec.liningMaterial ?? (imat === 'marble' ? 'marble_veined' : imat), m, detail);
   // Lintel over the door through the wall thickness.
   const lin = new ProfileBuilder(R + t, doorH).up(H - doorH).build();
   b.add(lathe(lin, { segments: 4, theta0: Math.PI - halfOut, theta1: Math.PI + halfOut }), mat, m);
@@ -342,16 +442,9 @@ export function rotunda(b: MeshBuilder, spec: RotundaSpec, at?: THREE.Matrix4) {
   b.add(lathe(corn, { segments: segs }), 'marble', m);
   // Interior: floor, niches with frames, an attic cornice at the springing.
   b.add(lathe(new ProfileBuilder(R, 0.03).to(0, 0.03).build(), { segments: segs }), spec.floorMaterial ?? 'paving_travertine', m, { castShadow: false });
-  const niches = spec.niches ?? 6;
-  for (let i = 0; i < niches; i++) {
-    const a = Math.PI + ((i + 1) * Math.PI * 2) / (niches + 1);
-    const nw = Math.min(2.4, R * 0.28);
-    const nh = Math.min(H * 0.5, 4.2);
-    // local −z faces the centre of the room
+  for (const { a } of nicheList) {
+    // Giallo antico colonnettes and a marble cornice frame each recess; local −z faces the room.
     const local = new THREE.Matrix4().makeRotationY(a).setPosition(R * Math.sin(a), 0, R * Math.cos(a));
-    const back = new THREE.BoxGeometry(nw, nh, 0.05);
-    back.translate(0, H * 0.12 + nh / 2, -0.03);
-    b.add(back, 'plaster_dark', mul(m, local), { castShadow: false });
     for (const sx of [-1, 1]) {
       const col = new THREE.BoxGeometry(0.22, nh + 0.2, 0.25);
       col.translate(sx * (nw / 2 + 0.11), H * 0.12 + nh / 2, -0.06);

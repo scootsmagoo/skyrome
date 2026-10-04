@@ -64,7 +64,7 @@ The UI only reads through these small read models, defined in `src/ui/types.ts`.
 | I / J / M / K | Inventory / Journal / Map / Skills (the same key again closes) |
 | [ ] | Previous or next tab |
 | T | Wait |
-| hold H | Show the time and date |
+| hold O | Show the time and date (H swaps the camera shoulder, GDD §4.2) |
 
 In menus: ↑↓ select, ←→ change column, category or value (Shift for bigger steps), Enter, Space or E activates, and the key shown on each button does the same thing. For example, X drops and S sorts in the inventory; T tracks and M shows the map in the journal; C confirms a barter; R takes everything from a container; F fast-travels on the map. Dialogue choices also take the number keys 1–9.
 
