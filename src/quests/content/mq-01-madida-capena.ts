@@ -45,6 +45,19 @@ function giveTablet(q: QuestContext) {
   if (!hasItem(q, 'quest-tabella-signata')) giveItem(q, 'quest-tabella-signata');
 }
 
+/**
+ * The courier dies without his last words (the player walked on, or could not reach him): the tablet
+ * is the player's all the same (he pressed it on them as they fought), so the thread never stops here.
+ */
+function festusDiesUnheard(q: QuestContext, why: string) {
+  if (q.stage !== 'dying') return;
+  giveTablet(q);
+  q.notify(why);
+  q.setFlag('festus-dead', true);
+  scriptedDeath(q.game, 'npc-festus', 'npc-mus');
+  q.completeObjective('talk-dying');
+}
+
 /** The ambush is over: the knife-men are down, fled or given up. */
 function ambushOver(q: QuestContext) {
   if (q.stage === 'ambush') q.progress('fight', 2);
@@ -63,7 +76,7 @@ export default defineQuest({
       journal: 'I came to Rome in the fourth watch of the night, on the last wine cart up the Appian Way. A courier called Festus shared the cart and the cold. Ahead of us the aqueduct arches dripped over the Capena Gate. At the cart stand outside the walls I climbed down to stretch my legs.',
       objectives: [
         { id: 'talk-festus', text: 'Talk to the courier', optional: true, target: { kind: 'npc', id: 'npc-festus' } },
-        { id: 'dismount', text: 'Walk on toward the Capena Gate', target: { kind: 'location', id: 'porta-capena' } },
+        { id: 'dismount', text: 'Leave the cart stand', target: { kind: 'location', id: 'courier-ambush' } },
       ],
       onEnter: (q) => {
         removeExamine(BODY.id); // a New Game from the title: the old courier's body is gone
@@ -73,7 +86,7 @@ export default defineQuest({
     },
     gate: {
       journal: 'Festus walked ahead to stretch his legs. Under the arch the water fell like thin rain. “The gate weeps for every stranger,” he said.',
-      objectives: [{ id: 'walk-gate', text: 'Walk through the Capena Gate', target: { kind: 'location', id: 'courier-ambush' } }],
+      objectives: [{ id: 'walk-gate', text: 'Walk on into the city', target: { kind: 'location', id: 'courier-ambush' } }],
       onEnter: (q) => {
         if (q.game.locations?.isInside?.('courier-ambush')) q.completeObjective('walk-gate');
       },
@@ -92,7 +105,11 @@ export default defineQuest({
         let spawned = 0;
         (['a', 'b'] as const).forEach((which, i) => {
           const id = GRASSATORES[i];
-          const placed = spawnEnemy(q.game, 'grassator', 'courier-ambush', { id, name: which === 'a' ? 'Grassator with a knife' : 'Grassator with a cudgel', tags: [QUEST_ID, 'mq01-grassator'], quest: QUEST_ID, profile: mq01GrassatorProfile(which) }, { x: i ? 2.5 : -0.5, z: i ? -1.5 : 2.5 });
+          // Where the world (or the content's fallback) says each one waits; else around the ambush.
+          const spot = `capena-grassator-${which}`;
+          const at = q.game.locations?.get(spot) ? spot : 'courier-ambush';
+          const offset = at === spot ? {} : { x: i ? 2.5 : -0.5, z: i ? -1.5 : 2.5 };
+          const placed = spawnEnemy(q.game, 'grassator', at, { id, name: which === 'a' ? 'Grassator with a knife' : 'Grassator with a cudgel', tags: [QUEST_ID, 'mq01-grassator'], quest: QUEST_ID, profile: mq01GrassatorProfile(which) }, offset);
           addFoe(q, 'foes', placed);
           if (placed) spawned++;
         });
@@ -137,6 +154,7 @@ export default defineQuest({
       ],
       onEnter: (q) => {
         if (q.game.locations?.isInside?.('miliarium-aureum')) q.completeObjective('forum');
+        if (q.game.locations?.isInside?.('circus-maximus')) q.completeObjective('circus');
         if (q.flag('hideout-known')) q.reveal('hideout');
         placeExamine(q.game, BODY);
         hint(q.game, 'Your journal (J) tracks the tablet. Press M for the map.');
@@ -158,7 +176,8 @@ export default defineQuest({
     'game:started': (q, e) => {
       if (e.kind !== 'new' || q.stage !== 'start' || typeof setTimeout !== 'function') return;
       setTimeout(() => {
-        if (q.stage === 'start' && !q.game.dialogue?.active && !q.isObjectiveDone('talk-festus')) q.game.dialogue?.start('npc-festus');
+        // Still at the cart (or a step away from it) and not yet talked: Festus speaks first.
+        if ((q.stage === 'start' || q.stage === 'gate') && !q.game.dialogue?.active && !q.isObjectiveDone('talk-festus')) q.game.dialogue?.start('npc-festus');
       }, 2500);
     },
     'dialogue:node': (q, e) => {
@@ -191,6 +210,10 @@ export default defineQuest({
       if ((q.stage === 'start' || q.stage === 'gate') && e.locationId === 'courier-ambush') {
         q.completeObjective('dismount');
         q.completeObjective('walk-gate');
+      }
+      // Safety net: the player walked on into the city without the courier's last words.
+      if (q.stage === 'dying' && FORUM_PLACES.includes(e.locationId)) {
+        festusDiesUnheard(q, 'Festus died under the arch behind you. His sealed tablet is in your belt: he pressed it on you while you fought.');
       }
       if (q.stage === 'city') {
         if (e.locationId === 'circus-maximus') q.completeObjective('circus');

@@ -81,13 +81,13 @@ const npcs: NpcDef[] = [
     id: 'npc-philetus',
     name: 'Marcus Pomponius Philetus',
     title: 'Aedituus of the Temple of Castor',
-    home: 'temple-castor-pollux',
+    home: 'temple-castor-pollux:front',
     schedule: [
-      { from: at('h1'), at: 'temple-castor-pollux', activity: 'work' }, // opens the doors (on the Lemuria: stands at the shut doors)
-      { from: at('h6'), at: 'temple-castor-pollux', activity: 'sit' },
-      { from: at('h7'), at: 'temple-castor-pollux', activity: 'work' },
-      { from: at('v1'), at: 'temple-castor-pollux', activity: 'sweep' }, // closes
-      { from: at('v2'), at: 'temple-castor-pollux', activity: 'sleep' },
+      { from: at('h1'), at: 'temple-castor-pollux:front', activity: 'work' }, // opens the doors (on the Lemuria: stands at the shut doors)
+      { from: at('h6'), at: 'temple-castor-pollux:front', activity: 'sit' },
+      { from: at('h7'), at: 'temple-castor-pollux:front', activity: 'work' },
+      { from: at('v1'), at: 'temple-castor-pollux:front', activity: 'sweep' }, // closes
+      { from: at('v2'), at: 'temple-castor-pollux:front', activity: 'sleep' },
     ],
     dialogue: 'npc-philetus',
     disposition: 'friendly',
@@ -152,12 +152,12 @@ const npcs: NpcDef[] = [
     id: 'npc-cerdo',
     name: 'Lucius Seius Cerdo',
     title: 'Public crier',
-    home: 'rostra',
+    home: 'rostra:front',
     schedule: [
-      { from: at('h2'), at: 'rostra', activity: 'stand' },
+      { from: at('h2'), at: 'rostra:front', activity: 'stand' },
       { from: at('h6'), at: 'basilica-julia-gradus', activity: 'sit' },
-      { from: at('h8'), at: 'rostra', activity: 'stand' },
-      { from: at('v1'), at: 'rostra', activity: 'sleep' },
+      { from: at('h8'), at: 'rostra:front', activity: 'stand' },
+      { from: at('v1'), at: 'rostra:front', activity: 'sleep' },
     ],
     dialogue: 'npc-cerdo',
     disposition: 'friendly',
@@ -205,9 +205,9 @@ const npcs: NpcDef[] = [
     id: 'npc-fortunata',
     name: 'Fortunata',
     title: 'Seller of honey cakes',
-    home: 'temple-castor-pollux',
+    home: 'temple-castor-pollux:front',
     schedule: [
-      { from: at('h1'), at: 'temple-castor-pollux', activity: 'stand' }, // a tray by the steps
+      { from: at('h1'), at: 'temple-castor-pollux:front', activity: 'stand' }, // a tray by the steps
       { from: at('h10'), at: 'pistrinum-velabri', activity: 'work' },
       { from: at('v1'), at: 'pistrinum-velabri', activity: 'sleep' },
     ],
@@ -324,7 +324,7 @@ const npcs: NpcDef[] = [
     home: 'seplasia-vici-tusci',
     schedule: [
       { from: at('h2'), at: 'seplasia-vici-tusci', activity: 'work' },
-      { from: at('h10'), at: 'basilica-aemilia', activity: 'wander' },
+      { from: at('h10'), at: 'basilica-aemilia:front', activity: 'wander' },
       { from: at('v1'), at: 'seplasia-vici-tusci', activity: 'sleep' },
     ],
     dialogue: 'npc-fadia',
@@ -372,7 +372,7 @@ const npcs: NpcDef[] = [
     home: 'tabernae-aemiliae',
     schedule: [
       { from: at('h2'), at: 'tabernae-aemiliae', activity: 'work' },
-      { from: at('h7'), at: 'basilica-aemilia', activity: 'talk' },
+      { from: at('h7'), at: 'basilica-aemilia:front', activity: 'talk' },
       { from: at('h8'), at: 'tabernae-aemiliae', activity: 'sleep' }, // home to the Esquiline (offstage)
     ],
     dialogue: 'npc-hermogenes',

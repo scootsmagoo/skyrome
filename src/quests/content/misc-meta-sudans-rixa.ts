@@ -17,7 +17,7 @@
  * a side (they egged it on); it is the other side's if the Rhetoric check failed and a cup flew.
  * Without a combat module the brawl is over in a few punches.
  */
-import { beat, hint, say, spawnEnemy } from '../../content/director';
+import { beat, fight, hint, say, spawnEnemy } from '../../content/director';
 import { addFoe, beatFoe, isPlayer } from '../../content/questkit';
 import { defineQuest, type QuestContext } from '../types';
 
@@ -28,6 +28,8 @@ const OTHER: Record<Side, Side> = { scutarii: 'parmularii', parmularii: 'scutari
 /** The rival leader (a collegium bruiser with the caestus) and the two drunk toughs of each side. */
 const LEADER: Record<Side, string> = { scutarii: 'npc-bassulus', parmularii: 'npc-anicetus' };
 const TOUGHS: Record<Side, [string, string]> = { scutarii: ['rixa-scut-a', 'rixa-scut-b'], parmularii: ['rixa-parm-a', 'rixa-parm-b'] };
+/** Where the fight happens: the street before the fountain (its centre is masonry), where the fans stand. */
+const ARENA = 'meta-sudans:front';
 
 function sideOf(q: QuestContext): Side {
   return q.flag('rixa-side') === 'parmularii' ? 'parmularii' : 'scutarii';
@@ -70,18 +72,20 @@ export default defineQuest({
         say(q.game, other === 'scutarii' ? 'Bassulus' : 'Anicetus', other === 'scutarii' ? 'Big shields, big men! Come on, then!' : 'Small shields, quick feet! Come on, then!');
         beat(q.game, QUEST_ID, 'brawl-start', { actors: [LEADER[side], LEADER[other]], at: 'meta-sudans' });
         let spawned = 0;
-        // The rival leader fights with the caestus; his two toughs are drunks with fists (non-lethal).
-        const leader = spawnEnemy(q.game, 'collegium-bruiser', 'meta-sudans', { id: LEADER[other], npc: LEADER[other], brawl: true, tags: [QUEST_ID, `rixa-${other}`], quest: QUEST_ID }, { x: 0, z: 3 });
+        // The rival leader (already standing at the fountain by his schedule) fights with the caestus:
+        // the NPC is engaged where he is, or spawned with his look if he is not in the world.
+        const leader = fight(q.game, LEADER[other], 'collegium-bruiser', ARENA, { brawl: true, tags: [QUEST_ID, `rixa-${other}`], quest: QUEST_ID }, { x: 0, z: 3 });
         addFoe(q, 'foes', leader);
         if (leader) spawned++;
+        // His two toughs are drunks with fists (non-lethal).
         TOUGHS[other].forEach((id, i) => {
-          const f = spawnEnemy(q.game, 'ebrius-rixator', 'meta-sudans', { id, name: 'Drunken fan', brawl: true, tags: [QUEST_ID, `rixa-${other}`], quest: QUEST_ID }, { x: i ? 2.5 : -2.5, z: 3 });
+          const f = spawnEnemy(q.game, 'ebrius-rixator', ARENA, { id, name: 'Drunken fan', brawl: true, tags: [QUEST_ID, `rixa-${other}`], quest: QUEST_ID }, { x: i ? 2.5 : -2.5, z: 3 });
           addFoe(q, 'foes', f);
           if (f) spawned++;
         });
         // Two allies on the player's side, if they took one.
         if (q.flag('rixa-outcome') !== 'walked') {
-          TOUGHS[side].forEach((id, i) => spawnEnemy(q.game, 'ebrius-rixator', 'meta-sudans', { id, name: 'Your fan', brawl: true, hostile: false, tags: [QUEST_ID, 'rixa-ally'], quest: QUEST_ID }, { x: i ? 2 : -2, z: -2 }));
+          TOUGHS[side].forEach((id, i) => spawnEnemy(q.game, 'ebrius-rixator', ARENA, { id, name: 'Your fan', brawl: true, hostile: false, tags: [QUEST_ID, 'rixa-ally'], quest: QUEST_ID }, { x: i ? 2 : -2, z: -2 }));
         }
         if (spawned) hint(q.game, 'Sheathe your blade (R) and use your fists: fists always knock out. Drawing a blade turns this into assault. Hold Y for a second to yield.');
         else {

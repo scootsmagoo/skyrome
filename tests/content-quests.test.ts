@@ -213,6 +213,8 @@ describe('mq-01-madida-capena: The Dripping Gate', () => {
 
   it('leaving the spot of the cart stand counts as climbing down; running 40 m off ends the fight', () => {
     const w = world({ actors: ['npc-festus'] });
+    goTo(w, 'spawn-capena'); // the new game puts the player here
+    expect(objective(w, 'mq-01-madida-capena', 'dismount')!.done).toBe(false);
     goTo(w, 'porta-capena');
     expect(objective(w, 'mq-01-madida-capena', 'dismount')!.done).toBe(true);
     goTo(w, 'courier-ambush');
@@ -220,6 +222,35 @@ describe('mq-01-madida-capena: The Dripping Gate', () => {
     kill(w, 'mq01-grassator-a');
     goTo(w, 'circus-maximus'); // far away: the other one gives up (the bible: 8 s; here at once)
     expect(status(w, 'mq-01-madida-capena')!.stage).toBe('dying');
+  });
+
+  it('never stops at the dying courier: walking on to the Forum without his last words still gives the tablet', () => {
+    const w = world({ actors: ['npc-festus'] });
+    const deaths = record(w.events, ['actor:killed']);
+    goTo(w, 'courier-ambush');
+    kill(w, 'mq01-grassator-a');
+    kill(w, 'mq01-grassator-b');
+    expect(status(w, 'mq-01-madida-capena')!.stage).toBe('dying');
+    goTo(w, 'circus-maximus'); // still dying: the player may go back
+    expect(status(w, 'mq-01-madida-capena')!.stage).toBe('dying');
+    goTo(w, 'miliarium-aureum');
+    expect(w.rpg.inventory.count('quest-tabella-signata')).toBe(1);
+    expect(flag(w, 'festus-dead')).toBe(true);
+    expect(deaths.some((d) => (d.e as { victimId: string }).victimId === 'npc-festus')).toBe(true);
+    expect(status(w, 'mq-01-madida-capena')).toMatchObject({ completed: true });
+    expect(status(w, 'mq-02-tabella')!.running).toBe(true);
+  });
+
+  it('spawns the knife-men where the world says they wait (the Capena builder’s spots, or the fallback)', () => {
+    const w = world({ actors: ['npc-festus'] });
+    const at: { id: string; x: number; z: number }[] = [];
+    (w.game as unknown as { combat: { spawnEnemy: (a: string, p: { x: number; z: number }, o: SpawnOptions) => unknown } }).combat.spawnEnemy = (_a, p, o) => (at.push({ id: o.id, x: p.x, z: p.z }), { id: o.id });
+    goTo(w, 'courier-ambush');
+    for (const which of ['a', 'b']) {
+      const spot = w.rpg.locations.get(`capena-grassator-${which}`)!;
+      const s = at.find((x) => x.id === `mq01-grassator-${which}`)!;
+      expect(Math.hypot(s.x - spot.position.x, s.z - spot.position.z), which).toBeLessThan(1.5);
+    }
   });
 
   it('every dialogue line of the quest renders at every stage and the hideout is revealed by the street talk', () => {
@@ -627,6 +658,31 @@ describe('misc-meta-sudans-rixa: Brawl at the Fountain', () => {
     expect(flag(w, 'rixa-outcome')).toBe('won');
     expect(w.rpg.inventory.count('vinum-falernum')).toBe(1);
     expect(w.rpg.standing.fame('dist-vallis-colossei')).toBe(5);
+  });
+
+  it('the rival leader who already stands at the fountain is engaged where he is, never cloned under his own id', () => {
+    const w = rixaWorld({ actors: ['npc-anicetus', 'npc-bassulus'], engage: true });
+    talk(w, 'npc-bassulus', 'The big shield wins');
+    close(w);
+    expect(w.engaged).toEqual(['npc-anicetus']);
+    const ids = w.spawned.map((s) => s.opts.id);
+    expect(ids).not.toContain('npc-anicetus');
+    expect(ids.filter((id) => id === 'npc-anicetus' || id === 'npc-bassulus')).toEqual([]);
+    yieldTo(w, 'rixa-parm-a');
+    kill(w, 'rixa-parm-b');
+    kill(w, 'npc-anicetus'); // the engaged NPC, by his own id
+    expect(status(w, 'misc-meta-sudans-rixa')!.stage).toBe('after');
+
+    // A combat module that cannot turn an NPC: a stand-in with its own id, never a second npc-anicetus.
+    const w2 = rixaWorld({ actors: ['npc-anicetus'] });
+    talk(w2, 'npc-bassulus', 'The big shield wins');
+    close(w2);
+    expect(w2.spawned.map((s) => s.opts.id)).toContain('npc-anicetus~foe');
+    expect(w2.spawned.map((s) => s.opts.id)).not.toContain('npc-anicetus');
+    kill(w2, 'npc-anicetus~foe');
+    kill(w2, 'rixa-parm-a');
+    kill(w2, 'rixa-parm-b');
+    expect(status(w2, 'misc-meta-sudans-rixa')!.stage).toBe('after');
   });
 
   it('a Rhetoric check calms them (peacemaker), walking away does nothing, a failed check starts the brawl', () => {

@@ -11,7 +11,9 @@ import { AVATAR_ROLES } from '../src/actors/avatar/variants';
 import { ARCHETYPE_BARKS, DISTRICT_BARKS, DISTRICTS, FESTIVAL_BARKS, barkFits, districtAt, festivalsOn, pickBark, REACTION_BARKS } from '../src/content/barks';
 import { CONTAINERS, STREET_CONTAINERS, UNOWNED_CONTAINERS, routePoint } from '../src/content/containers';
 import { lampSpecs } from '../src/content/lamps';
-import { CONTENT_LOCATIONS, CONTRACT_SPOT_IDS, STREET_SPOTS, isKnownPlace } from '../src/content/places';
+import { CAPENA_FALLBACK_SPAWN, CONTENT_LOCATIONS, CONTENT_SPOTS, CONTRACT_SPOT_IDS, FRONT_SPOTS, LANDMARK_LOCATIONS, OPENING_SPOTS, STREET_SPOTS, isKnownPlace } from '../src/content/places';
+import { isSolidLandmark, solidLandmarkAt } from '../src/content/ground';
+import { SPAWN_INSIDE } from '../src/game/GameFlow';
 import { GOLDEN_PATH_LENGTH, onPath, projectOnPath } from '../src/content/route';
 import { thingPoint } from '../src/content/install';
 import { SHRINES } from '../src/content/shrines';
@@ -77,6 +79,36 @@ describe('places', () => {
     // Atlas-landmark locations sit on their atlas centers (×0.6).
     const capena = CONTENT_LOCATIONS.find((l) => l.id === 'porta-capena')!;
     expect(capena.position.x).toBeCloseTo(LANDMARK_BY_ID['porta-capena'].center[0] * 0.6, 0);
+  });
+
+  it('puts no spot inside a building: quest spots, NPC homes and stations, the opening and the door-side spots stand outside every solid footprint', () => {
+    const landmarks = new Set(LANDMARK_LOCATIONS.map((l) => l.id));
+    const areas = new Set(['capena-fight-area']);
+    const bad: string[] = [];
+    for (const l of [...CONTENT_LOCATIONS.filter((x) => !landmarks.has(x.id) && !areas.has(x.id) && x.radius <= 25), ...FRONT_SPOTS]) {
+      const lm = solidLandmarkAt(l.position.x, l.position.z, 0);
+      if (lm) bad.push(`${l.id} is inside ${lm.id}`);
+    }
+    expect(bad).toEqual([]);
+    // The courier's ambush, his body and the gate lamps are on the street outside the gate's footprint.
+    const amb = CONTENT_LOCATIONS.find((l) => l.id === 'courier-ambush')!;
+    expect(solidLandmarkAt(amb.position.x - 1.5, amb.position.z, 0.5)).toBeNull();
+  });
+
+  it('stages the opening where the flow puts the player (the fallback spawn inside the solid gate): the cart beside, the ambush ahead', () => {
+    expect(CAPENA_FALLBACK_SPAWN).toBe(SPAWN_INSIDE);
+    const at = (id: string) => OPENING_SPOTS.find((l) => l.id === id)!.position;
+    const lm = LANDMARK_BY_ID['porta-capena'];
+    const [gx, gz] = toGame(lm.center[0], lm.center[1]);
+    const th = (lm.rotation * Math.PI) / 180;
+    const spawn = { x: gx - Math.sin(th) * SPAWN_INSIDE, z: gz + Math.cos(th) * SPAWN_INSIDE }; // GameFlow.spawnPoint's fallback
+    expect(Math.hypot(at('spawn-capena').x - spawn.x, at('spawn-capena').z - spawn.z)).toBeLessThan(0.2);
+    const d = (a: string, b: { x: number; z: number }) => Math.hypot(at(a).x - b.x, at(a).z - b.z);
+    expect(d('night-cart', spawn)).toBeLessThan(7); // the cart is the first thing the player sees
+    expect(d('courier-ambush', spawn)).toBeGreaterThan(5 + 4); // not ambushed on arrival
+    expect(d('courier-ambush', spawn)).toBeLessThan(20); // but a few steps ahead
+    // Further down the street than the spawn (the gate is behind the player).
+    expect(d('courier-ambush', { x: gx, z: gz })).toBeGreaterThan(d('spawn-capena', { x: gx, z: gz }));
   });
 
   it('keeps the courier ambush away from the spawn so the player is not ambushed on arrival', () => {
@@ -252,6 +284,27 @@ describe('NPCs', () => {
         if (e.activity === 'patrol') expect(e.route?.length, `${n.id} patrol route`).toBeGreaterThan(1);
       }
     }
+  });
+
+  it('are never scheduled inside a solid building (the aedituus waits on Castor’s steps, not on its roof)', () => {
+    const bad: string[] = [];
+    for (const n of npcs) {
+      const places = [n.home, ...(n.schedule ?? []).flatMap((e) => [e.at, ...(e.route ?? [])])].filter((x): x is string => !!x);
+      for (const id of places) {
+        const lm = LANDMARK_BY_ID[id];
+        if (lm && isSolidLandmark(lm)) bad.push(`${n.id}: ${id} (use ${id}:front)`);
+      }
+    }
+    expect([...new Set(bad)]).toEqual([]);
+    const philetus = npcs.find((n) => n.id === 'npc-philetus')!;
+    expect(philetus.schedule!.every((e) => e.at === 'temple-castor-pollux:front' || e.activity === 'sleep')).toBe(true);
+  });
+
+  it('keep Mus out of sight until the player is on his trail (his corner is a place that exists only then)', () => {
+    const mus = npcs.find((n) => n.id === 'npc-mus')!;
+    expect(mus.home).toBe('mus-latebra');
+    expect(mus.schedule!.every((e) => e.at === 'mus-latebra')).toBe(true);
+    expect(CONTENT_LOCATIONS.some((l) => l.id === 'mus-latebra')).toBe(false);
   });
 
   it('cover the cast the brief asks for', () => {
@@ -500,6 +553,8 @@ describe('AC-23: a "thing" at every tier-1 landmark of the v0.1 districts', () =
       const lm = LANDMARK_BY_ID[t.at];
       const [cx, cz] = toGame(lm.center[0], lm.center[1]);
       expect(Math.hypot(p.x - cx, p.z - cz), `${t.at} thing is near the landmark`).toBeLessThan(260);
+      // In front of the façade, outside the building (no 40 m clamp that left it inside the Colosseum).
+      expect(solidLandmarkAt(p.x, p.z, 0)?.id ?? null, `${t.at} thing is outside every building`).toBeNull();
     }
     expect(new Set(THINGS.map((t) => t.at)).size).toBe(THINGS.length);
     // Nothing from after AD 113 is promised.

@@ -14,10 +14,10 @@ const npcs: NpcDef[] = [
     id: 'npc-festus',
     name: 'Gaius Marius Festus',
     title: 'Imperial courier (miles frumentarius)',
-    home: 'night-cart',
+    home: 'night-cart-courier',
     dialogue: 'npc-festus',
     disposition: 'friendly',
-    // Scripted only: on the cart at capena-extra, dies under the arch of the porta-capena (mq-01).
+    // Scripted only: beside the night cart at the start, dies at the gate (mq-01).
     appearance: {
       sex: 'male', age: 'adult', build: 'average', height: 1.68, skin: '#c99a72',
       hair: { style: 'cropped', color: '#2a1d14' }, beard: 'stubble', // nine days on the road
@@ -32,12 +32,12 @@ const npcs: NpcDef[] = [
     id: 'npc-dromo',
     name: 'Dromo',
     title: 'Night carter',
-    home: 'night-cart',
+    home: 'night-cart-driver',
     schedule: [
-      { from: at('v3'), at: 'night-cart', activity: 'sleep' }, // under the cart
-      { from: at('v4'), at: 'night-cart', activity: 'work' }, // the cart, mq-01
+      { from: at('v3'), at: 'night-cart-driver', activity: 'sleep' }, // under the cart
+      { from: at('v4'), at: 'night-cart-driver', activity: 'work' }, // the cart, mq-01
       { from: at('h2'), at: 'caupona-carcerum', activity: 'sit' }, // tells the story all day (the bible's h1, an hour later so he is still at the cart when the player asks)
-      { from: at('v1'), at: 'night-cart', activity: 'work' }, // the next load
+      { from: at('v1'), at: 'night-cart-driver', activity: 'work' }, // the next load
     ],
     dialogue: 'npc-dromo',
     disposition: 'friendly',
@@ -106,9 +106,9 @@ const npcs: NpcDef[] = [
     home: 'statio-cohortium-urbanarum',
     schedule: [
       { from: at('h1'), at: 'statio-cohortium-urbanarum', activity: 'guard' },
-      { from: at('h2'), at: 'statio-cohortium-urbanarum', activity: 'patrol', route: ['statio-cohortium-urbanarum', 'rostra', 'basilica-julia-gradus', 'temple-castor-pollux', 'tabernae-aemiliae', 'statio-cohortium-urbanarum'] },
+      { from: at('h2'), at: 'statio-cohortium-urbanarum', activity: 'patrol', route: ['statio-cohortium-urbanarum', 'rostra:front', 'basilica-julia-gradus', 'temple-castor-pollux:front', 'tabernae-aemiliae', 'statio-cohortium-urbanarum'] },
       { from: at('h7'), at: 'statio-cohortium-urbanarum', activity: 'sit' },
-      { from: at('h8'), at: 'statio-cohortium-urbanarum', activity: 'patrol', route: ['statio-cohortium-urbanarum', 'rostra', 'basilica-julia-gradus', 'temple-castor-pollux', 'tabernae-aemiliae', 'statio-cohortium-urbanarum'] },
+      { from: at('h8'), at: 'statio-cohortium-urbanarum', activity: 'patrol', route: ['statio-cohortium-urbanarum', 'rostra:front', 'basilica-julia-gradus', 'temple-castor-pollux:front', 'tabernae-aemiliae', 'statio-cohortium-urbanarum'] },
       { from: at('v1'), at: 'statio-cohortium-urbanarum', activity: 'guard' }, // hands the city to the vigiles
       { from: at('v2'), at: 'castra-praetoria', activity: 'sleep' },
     ],
@@ -132,10 +132,13 @@ const npcs: NpcDef[] = [
     name: 'Dizas, called Mus',
     title: 'Leader of the knife-men',
     faction: 'grassatores',
-    home: 'taberna-collapsa',
+    // Gone to ground after the murder: his corner (mus-latebra, at the burned taberna) exists only
+    // while the player is on his trail and he has not been dealt with (src/content/install.ts
+    // syncMusHideout), so before that nobody sees him, and after it he is gone.
+    home: 'mus-latebra',
     schedule: [
-      { from: at('h1'), at: 'taberna-collapsa', activity: 'sit' },
-      { from: at('v1'), at: 'taberna-collapsa', activity: 'guard' },
+      { from: at('h1'), at: 'mus-latebra', activity: 'sit' },
+      { from: at('v1'), at: 'mus-latebra', activity: 'guard' },
     ],
     dialogue: 'npc-mus',
     // Talks first (dlg-mus); the encounter turns him hostile (dialogue 'attack' effect).

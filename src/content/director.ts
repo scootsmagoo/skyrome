@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import type { Game } from '../core/Game';
 import type { CombatProfile } from '../rpg/types';
 import { festivalsOn } from './barks';
+import { Placer } from './ground';
 
 declare module '../core/Events' {
   interface GameEvents {
@@ -71,11 +72,21 @@ function combat(game: Game): CombatLike | undefined {
   return (game as unknown as { combat?: CombatLike }).combat;
 }
 
-/** World position of a named place (location registry), or null. */
+/** World position of a named place (location registry), on open street level, or null. */
 export function placePosition(game: Game, id: string): THREE.Vector3 | null {
   const l = game.locations?.get(id);
   if (!l) return null;
-  return groundAt(game, l.position);
+  return streetPoint(game, l.position);
+}
+
+/**
+ * The nearest point to `p` where a person can stand in the open: out of solid buildings (a place
+ * id may name a temple or the Meta Sudans, whose centre is masonry) and off roofs and podiums
+ * (src/content/ground.ts). Enemies, moved NPCs and examine points go through it.
+ */
+export function streetPoint(game: Game, p: Vec3): THREE.Vector3 {
+  const s = new Placer(game).find(p.x, p.z, { clearance: 0.4, claim: 0 });
+  return new THREE.Vector3(s.x, s.y + 0.05, s.z);
 }
 
 /**
@@ -103,7 +114,7 @@ export function spawnEnemy(game: Game, archetype: string, at: string | Vec3, opt
   if (!c?.spawnEnemy) return null;
   const base = typeof at === 'string' ? placePosition(game, at) : groundAt(game, at);
   if (!base) return null;
-  const pos = groundAt(game, { x: base.x + (offset.x ?? 0), y: base.y, z: base.z + (offset.z ?? 0) });
+  const pos = streetPoint(game, { x: base.x + (offset.x ?? 0), y: base.y, z: base.z + (offset.z ?? 0) });
   try {
     const actor = c.spawnEnemy(archetype, pos, { hostile: true, ...opts }) as { id?: unknown } | null | undefined;
     return typeof actor?.id === 'string' ? actor.id : opts.id;
@@ -124,7 +135,8 @@ export function moveActor(game: Game, id: string, to: string | Vec3, offset: { x
   if (!actor || typeof actor.teleport !== 'function') return false;
   const base = typeof to === 'string' ? placePosition(game, to) : groundAt(game, to);
   if (!base) return false;
-  actor.teleport({ x: base.x + (offset.x ?? 0), y: base.y, z: base.z + (offset.z ?? 0) });
+  const p = streetPoint(game, { x: base.x + (offset.x ?? 0), y: base.y, z: base.z + (offset.z ?? 0) });
+  actor.teleport({ x: p.x, y: p.y, z: p.z });
   return true;
 }
 
@@ -208,7 +220,8 @@ export function placeExamine(game: Game, spec: ExamineSpec): boolean {
   if (!inter?.add) return false;
   const base = typeof spec.at === 'string' ? placePosition(game, spec.at) : groundAt(game, spec.at);
   if (!base) return false;
-  const pos = new THREE.Vector3(base.x + (spec.offset?.x ?? 0), base.y + (spec.height ?? 1.2), base.z + (spec.offset?.z ?? 0));
+  const foot = streetPoint(game, { x: base.x + (spec.offset?.x ?? 0), y: base.y, z: base.z + (spec.offset?.z ?? 0) });
+  const pos = new THREE.Vector3(foot.x, foot.y + (spec.height ?? 1.2), foot.z);
   const target = {
     id: `content:${spec.id}`,
     reach: spec.reach ?? 2.5,

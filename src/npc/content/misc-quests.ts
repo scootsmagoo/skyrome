@@ -15,9 +15,9 @@ const npcs: NpcDef[] = [
     id: 'npc-bassulus',
     name: 'Bassulus',
     title: 'Butcher, leader of the scutarii',
-    home: 'meta-sudans',
+    home: 'meta-sudans:front',
     schedule: [
-      { from: at('h8'), at: 'meta-sudans', activity: 'stand' },
+      { from: at('h8'), at: 'meta-sudans:front', activity: 'stand' },
       { from: at('v1'), at: 'popina-vici-tusci', activity: 'drunk' },
     ],
     dialogue: 'npc-rixa',
@@ -37,9 +37,9 @@ const npcs: NpcDef[] = [
     id: 'npc-anicetus',
     name: 'Anicetus',
     title: 'Tanner, leader of the parmularii',
-    home: 'meta-sudans',
+    home: 'meta-sudans:front',
     schedule: [
-      { from: at('h8'), at: 'meta-sudans', activity: 'stand' },
+      { from: at('h8'), at: 'meta-sudans:front', activity: 'stand' },
       { from: at('v1'), at: 'popina-vici-tusci', activity: 'drunk' },
     ],
     dialogue: 'npc-rixa',
@@ -203,12 +203,12 @@ const npcs: NpcDef[] = [
     id: 'npc-dento',
     name: 'Sextus Furius Dento',
     title: 'Apparitor of the aediles',
-    home: 'rostra',
+    home: 'rostra:front',
     schedule: [
-      { from: at('h2'), at: 'rostra', activity: 'work' }, // by the aediles' tribunal
+      { from: at('h2'), at: 'rostra:front', activity: 'work' }, // by the aediles' tribunal
       { from: at('h6'), at: 'basilica-julia-gradus', activity: 'sit' },
-      { from: at('h7'), at: 'rostra', activity: 'patrol', route: ['rostra', 'vicus-tuscus', 'forum-boarium', 'vicus-tuscus', 'rostra'] }, // markets and weights
-      { from: at('v1'), at: 'rostra', activity: 'sleep' },
+      { from: at('h7'), at: 'rostra:front', activity: 'patrol', route: ['rostra:front', 'vicus-tuscus', 'forum-boarium', 'vicus-tuscus', 'rostra:front'] }, // markets and weights
+      { from: at('v1'), at: 'rostra:front', activity: 'sleep' },
     ],
     dialogue: 'npc-dento',
     disposition: 'neutral',
@@ -227,9 +227,9 @@ const npcs: NpcDef[] = [
     id: 'npc-ianuarius',
     name: 'Ianuarius',
     title: 'Public slave of the drains',
-    home: 'shrine-venus-cloacina',
+    home: 'shrine-venus-cloacina:front',
     schedule: [
-      { from: at('h1'), at: 'shrine-venus-cloacina', activity: 'patrol', route: ['shrine-venus-cloacina', 'cloaca-grate-aemiliae', 'basilica-julia-gradus', 'cloaca-maxima-outlet', 'shrine-venus-cloacina'] }, // checks grates
+      { from: at('h1'), at: 'shrine-venus-cloacina:front', activity: 'patrol', route: ['shrine-venus-cloacina:front', 'cloaca-grate-aemiliae', 'basilica-julia-gradus', 'cloaca-maxima-outlet', 'shrine-venus-cloacina:front'] }, // checks grates
       { from: at('h8'), at: 'popina-vici-tusci', activity: 'sit' },
       { from: at('v1'), at: 'popina-vici-tusci', activity: 'sleep' },
     ],
@@ -275,7 +275,7 @@ const npcs: NpcDef[] = [
     schedule: [
       { from: at('v3'), at: 'officina-columnae', activity: 'sleep' },
       { from: at('h1'), at: 'officina-columnae', activity: 'work' },
-      { from: at('v1'), at: 'column-trajan', activity: 'sitGround' }, // keeps watch over "his" face
+      { from: at('v1'), at: 'column-trajan:front', activity: 'sitGround' }, // keeps watch over "his" face
     ],
     dialogue: 'npc-antiochus',
     disposition: 'friendly',
@@ -293,9 +293,9 @@ const npcs: NpcDef[] = [
     id: 'npc-moschus',
     name: 'Moschus',
     title: 'Foreman of the carving crew',
-    home: 'column-trajan',
+    home: 'column-trajan:front',
     schedule: [
-      { from: at('h1'), at: 'column-trajan', activity: 'work' },
+      { from: at('h1'), at: 'column-trajan:front', activity: 'work' },
       { from: at('v1'), at: 'officina-columnae', activity: 'talk' },
       { from: at('v2'), at: 'officina-columnae', activity: 'sleep' },
     ],

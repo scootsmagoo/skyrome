@@ -15,10 +15,10 @@ const npcs: NpcDef[] = [
     title: 'Satirist (Juvenal)',
     home: 'basilica-julia-gradus',
     schedule: [
-      { from: at('h2'), at: 'rostra', activity: 'stand' }, // heckles the crier
+      { from: at('h2'), at: 'rostra:front', activity: 'stand' }, // heckles the crier
       { from: at('h3'), at: 'basilica-julia-gradus', activity: 'sit' },
       { from: at('h7'), at: 'popina-vici-tusci', activity: 'sit' },
-      { from: at('h9'), at: 'baths-titus', activity: 'sleep' }, // offstage
+      { from: at('h9'), at: 'baths-titus:front', activity: 'sleep' }, // offstage
       { from: at('v1'), at: 'popina-vici-tusci', activity: 'drunk' },
       { from: at('v2'), at: 'popina-vici-tusci', activity: 'sleep' }, // home to his third-floor cenaculum (offstage)
     ],
@@ -49,10 +49,10 @@ const npcs: NpcDef[] = [
     home: 'forum-trajan',
     // 11 May, the eve of the dedication: at the Column and the carvers' hut all day.
     schedule: [
-      { from: at('h1'), at: 'column-trajan', activity: 'work' },
+      { from: at('h1'), at: 'column-trajan:front', activity: 'work' },
       { from: at('h4'), at: 'officina-columnae', activity: 'talk' },
-      { from: at('h7'), at: 'basilica-ulpia', activity: 'work' },
-      { from: at('h10'), at: 'column-trajan', activity: 'work' },
+      { from: at('h7'), at: 'basilica-ulpia:front', activity: 'work' },
+      { from: at('h10'), at: 'column-trajan:front', activity: 'work' },
       { from: at('v1'), at: 'forum-trajan', activity: 'sleep' }, // offstage, toward the Baths of Trajan
     ],
     dialogue: 'npc-apollodorus',
@@ -72,11 +72,11 @@ const npcs: NpcDef[] = [
     id: 'npc-traianus',
     name: 'Imperator Caesar Nerva Traianus Augustus',
     title: 'The Emperor',
-    home: 'domus-augustana',
+    home: 'domus-augustana:front',
     // v0.1-Should (the bible's "Trajan on foot", 11 May h11): down from the palace along the Sacra Via to his forum and back by sunset.
     schedule: [
-      { from: at('h11'), at: 'domus-augustana', activity: 'patrol', route: ['domus-augustana', 'arch-titus', 'forum-trajan', 'arch-titus', 'domus-augustana'] },
-      { from: at('v1'), at: 'domus-augustana', activity: 'sleep' },
+      { from: at('h11'), at: 'domus-augustana:front', activity: 'patrol', route: ['domus-augustana:front', 'arch-titus:front', 'forum-trajan', 'arch-titus:front', 'domus-augustana:front'] },
+      { from: at('v1'), at: 'domus-augustana:front', activity: 'sleep' },
     ],
     dialogue: 'npc-traianus',
     disposition: 'friendly',
@@ -95,11 +95,11 @@ const npcs: NpcDef[] = [
     id: 'npc-vestalis-maxima',
     name: 'Cassia Lucilla',
     title: 'Virgo Vestalis Maxima',
-    home: 'atrium-vestae',
+    home: 'atrium-vestae:front',
     schedule: [
-      { from: at('h1'), at: 'temple-vesta', activity: 'pray' },
-      { from: at('h6'), at: 'atrium-vestae', activity: 'sit' },
-      { from: at('v1'), at: 'atrium-vestae', activity: 'sleep' },
+      { from: at('h1'), at: 'temple-vesta:front', activity: 'pray' },
+      { from: at('h6'), at: 'atrium-vestae:front', activity: 'sit' },
+      { from: at('v1'), at: 'atrium-vestae:front', activity: 'sleep' },
     ],
     dialogue: 'npc-vestalis-maxima',
     disposition: 'neutral',
@@ -121,7 +121,7 @@ const npcs: NpcDef[] = [
     home: 'domus-vettii',
     schedule: [
       { from: at('h1'), at: 'domus-vettii', activity: 'talk' }, // the salutatio
-      { from: at('h2'), at: 'curia-julia', activity: 'stand' },
+      { from: at('h2'), at: 'curia-julia:front', activity: 'stand' },
       { from: at('h4'), at: 'domus-vettii', activity: 'sit' },
       { from: at('v1'), at: 'domus-vettii', activity: 'sleep' },
     ],

@@ -21,6 +21,7 @@
 import { LANDMARK_BY_ID, ROADS, BRIDGES, ISLANDS, GATES, type Landmark } from '../data/atlas';
 import type { LocationDef } from '../npc/types';
 import { elevToY, toGame, WORLD_SCALE } from '../world/coords';
+import { frontOf, pushOutOfFootprints } from './ground';
 import { onPath } from './route';
 
 type Marker = NonNullable<LocationDef['mapMarker']>;
@@ -81,9 +82,15 @@ export function landmarkLocation(id: string, extra: Partial<LocationDef> = {}): 
   };
 }
 
-/** A spot at CONTENT.md real coordinates. */
+/**
+ * A spot at CONTENT.md real coordinates. A spot the bible puts inside a building the world builds
+ * as solid masonry (the strongrooms in Castor's podium, the steps of the Basilica Julia) stands at
+ * the edge of it instead, on the side the bible names, until the building has an inside.
+ */
 function spot(id: string, name: string, real: [number, number], radius: number, extra: Partial<LocationDef> = {}): LocationDef {
-  return { id, name, position: atReal(real[0], real[1]), radius, discoverable: false, ...extra };
+  const p = atReal(real[0], real[1]);
+  const out = pushOutOfFootprints(p.x, p.z);
+  return { id, name, position: { x: out.x, y: p.y, z: out.z }, radius, discoverable: false, ...extra };
 }
 
 /** Atlas landmarks the content names (objectives, homes, schedules, patrol routes). */
@@ -182,8 +189,8 @@ export const CONTRACT_SPOT_IDS = ['spawn-capena', 'night-cart', 'courier-ambush'
 
 /** Contract spot → the CONTENT.md id of the same place (both are registered, at the same position). */
 export const CONTRACT_ALIASES: Record<(typeof CONTRACT_SPOT_IDS)[number], string | null> = {
-  'spawn-capena': 'capena-extra', // the new-game spawn: the cart stand 25 m outside the gate
-  'night-cart': 'capena-extra', // Dromo's cart (prop-plaustrum-dromonis)
+  'spawn-capena': null, // the new-game spawn (the flow reads the Porta Capena builder's spot)
+  'night-cart': 'capena-extra', // Dromo's cart, the bible's cart stand outside the gate
   'courier-ambush': null, // under the arch of the porta-capena (the bible's "within 6 m of the arch")
   'castor-strongroom': 'castor-loculi',
   'ludus-gate': null, // the gate on the Ludus' WNW facade
@@ -199,10 +206,30 @@ function alias(id: string, of: string, radius?: number, extra: Partial<LocationD
   return { ...b, id, radius: radius ?? b.radius, discoverable: false, mapMarker: undefined, ...extra };
 }
 
+/**
+ * The opening scene until the Porta Capena has a builder with a passage (its spots then replace
+ * these: see mirrorLandmarkSpots). The fallback gate is a solid block, and the flow puts the player
+ * `SPAWN_INSIDE` (10 m) inside it on the city side, facing down the Circus valley
+ * (src/game/GameFlow.ts). So the night cart stands there, beside the player, and the knife-men wait
+ * a dozen metres further down the street: everything happens in front of the player, on open
+ * ground, and nothing stands in or on the gate. Gate frame: `forward` along the façade normal
+ * (the city side is negative), `side` along the façade (positive is the walker's left).
+ */
+export const CAPENA_FALLBACK_SPAWN = 10;
+const gate = (forward: number, side: number) => atLandmark('porta-capena', forward, side);
+export const OPENING_SPOTS: LocationDef[] = [
+  { id: 'spawn-capena', name: 'Inside the Capena Gate (the night cart)', position: gate(-CAPENA_FALLBACK_SPAWN, 0), radius: 6, parent: 'porta-capena' },
+  { id: 'night-cart', name: 'Dromo’s cart', position: gate(-13.5, 4.4), radius: 5, parent: 'porta-capena' },
+  { id: 'night-cart-driver', name: 'Beside Dromo’s cart', position: gate(-12, 6.9), radius: 1.5, parent: 'porta-capena' },
+  { id: 'night-cart-courier', name: 'Where Festus waits by the cart', position: gate(-12.4, 1.9), radius: 1.5, parent: 'porta-capena' },
+  { id: 'courier-ambush', name: 'Below the dripping arch', position: gate(-23, -2.5), radius: 5, parent: 'porta-capena' },
+  { id: 'capena-grassator-a', name: 'Where the first knife-man waits', position: gate(-26.5, -4.5), radius: 2, parent: 'porta-capena' },
+  { id: 'capena-grassator-b', name: 'Where the second knife-man waits', position: gate(-21, 1.5), radius: 2, parent: 'porta-capena' },
+];
+const opening = (id: string) => OPENING_SPOTS.find((s) => s.id === id)!;
+
 export const CONTRACT_SPOTS: LocationDef[] = [
-  alias('spawn-capena', 'capena-extra', 8, { name: 'Outside the Capena Gate (the night cart)' }),
-  alias('night-cart', 'capena-extra', 5, { name: 'Dromo’s cart' }),
-  { id: 'courier-ambush', name: 'Under the dripping arch', position: atReal(507, 955), radius: 6, parent: 'porta-capena' },
+  ...OPENING_SPOTS.filter((s) => (CONTRACT_SPOT_IDS as readonly string[]).includes(s.id)),
   alias('castor-strongroom', 'castor-loculi', 5, { name: 'Strongrooms of Castor' }),
   { id: 'ludus-gate', name: 'Gate of the Ludus Magnus', position: atLandmark('ludus-magnus', 35, 0), radius: 6, parent: 'ludus-magnus' },
   alias('ludus-arena-center', 'ludus-cavea', 22),
@@ -210,6 +237,27 @@ export const CONTRACT_SPOTS: LocationDef[] = [
   alias('armory', 'ludus-armamentarium', 5),
   alias('medicus', 'ludus-saniarium', 5),
 ];
+
+/**
+ * Door-side spots of buildings the content's people visit (`<landmark>:front`): 2.5 m in front of
+ * the façade. Until interiors exist the aedituus waits on Castor's steps, the bankers by the
+ * Basilica Paulli's door and the Vestal before her house, instead of on a roof or a podium (where a
+ * schedule at the building's centre would put them).
+ */
+export const FRONT_LANDMARK_IDS = [
+  'temple-castor-pollux', 'basilica-aemilia', 'basilica-ulpia', 'curia-julia', 'domus-augustana', 'atrium-vestae', 'temple-vesta', 'rostra',
+  'meta-sudans', 'colossus-sol', 'column-trajan', 'shrine-venus-cloacina', 'arch-titus', 'baths-titus',
+] as const;
+
+/** The `:front` spot id of a building. */
+export const front = (id: (typeof FRONT_LANDMARK_IDS)[number]) => `${id}:front`;
+
+export const FRONT_SPOTS: LocationDef[] = FRONT_LANDMARK_IDS.map((id) => {
+  const lm = LANDMARK_BY_ID[id];
+  const f = frontOf(lm, 2.5);
+  const out = pushOutOfFootprints(f.x, f.z);
+  return { id: `${id}:front`, name: `Before the ${lm.name}`, position: { x: out.x, y: round1(elevToY(lm.baseElevation ?? 13)), z: out.z }, radius: 4, parent: id, discoverable: false };
+});
 
 /**
  * Street stations on the golden path (GDD §17.2, the owner's "bland corridor" feedback): the places
@@ -243,7 +291,12 @@ export const STREET_SPOTS: LocationDef[] = [
 /** Helper areas only the content uses. */
 export const CONTENT_SPOTS: LocationDef[] = [
   // mq-01: "If the player runs more than 40 m away, the grassatores give up" (CONTENT.md §3.1.1).
-  { id: 'capena-fight-area', name: 'Around the Capena Gate', position: atReal(507, 955), radius: 40, parent: 'porta-capena' },
+  // Centred on the ambush (moved with it when the world provides the spot).
+  { id: 'capena-fight-area', name: 'Around the Capena Gate', position: { ...opening('courier-ambush').position }, radius: 40 },
+  opening('night-cart-driver'),
+  opening('night-cart-courier'),
+  opening('capena-grassator-a'),
+  opening('capena-grassator-b'),
   // misc-insula-nutans: evidence points inside the leaning insula (child spots, CONTENT.md §3.3.3).
   spot('insula-nutans-taberna', 'Ground-floor wall behind the taberna', [-38, 350], 2.5, { parent: 'insula-nutans' }),
   spot('insula-nutans-scalae', 'The propped stair', [-44, 356], 2.5, { parent: 'insula-nutans' }),
@@ -252,9 +305,17 @@ export const CONTENT_SPOTS: LocationDef[] = [
 ];
 
 /** Every location the content installs. */
-export const CONTENT_LOCATIONS: LocationDef[] = [...LANDMARK_LOCATIONS, ...BIBLE_SPOTS, ...FEATURE_LOCATIONS, ...CONTRACT_SPOTS, ...STREET_SPOTS, ...CONTENT_SPOTS];
+export const CONTENT_LOCATIONS: LocationDef[] = [...LANDMARK_LOCATIONS, ...BIBLE_SPOTS, ...FEATURE_LOCATIONS, ...CONTRACT_SPOTS, ...STREET_SPOTS, ...CONTENT_SPOTS, ...FRONT_SPOTS];
 
-const KNOWN = new Set(CONTENT_LOCATIONS.map((l) => l.id));
+/**
+ * Where Mus sits (his schedule's place). It is registered only while the player is on his trail
+ * (the hideout is known, or mq-02 sends them after him) and he is still there: the population module
+ * spawns nobody at a place that does not exist, so before that he is nowhere to be seen
+ * (src/content/install.ts keeps it in step). At the burned taberna on the Vicus Tuscus.
+ */
+export const MUS_HIDEOUT: LocationDef = { ...bible('taberna-collapsa'), id: 'mus-latebra', name: 'The Mouse’s corner', radius: 3, discoverable: false, mapMarker: undefined, parent: 'taberna-collapsa' };
+
+const KNOWN = new Set([...CONTENT_LOCATIONS.map((l) => l.id), MUS_HIDEOUT.id]);
 
 /** Every id content may target: content locations plus any atlas landmark. */
 export function isKnownPlace(id: string): boolean {
@@ -262,16 +323,72 @@ export function isKnownPlace(id: string): boolean {
 }
 
 /**
- * Keep the bible aliases on top of the world's spots: once the world has registered a contract
- * spot (castor-strongroom, ludus-arena-center…), copy its position to the CONTENT.md id of the same
- * place. Call after the world's spots are in `game.locations`.
+ * Copy the position of contract spots the world provides onto the CONTENT.md id of the same place
+ * (castor-strongroom → castor-loculi, ludus-arena-center → ludus-cavea…). `only`: the contract ids
+ * that came from the world (the content's own fallbacks are already where their aliases are).
  */
-export function syncAliases(locations: { get(id: string): LocationDef | undefined; add(d: LocationDef): void }) {
+export function syncAliases(locations: { get(id: string): LocationDef | undefined; add(d: LocationDef): void }, only?: Iterable<string>) {
+  const ids = only ? new Set(only) : null;
   for (const [contract, bibleId] of Object.entries(CONTRACT_ALIASES)) {
+    if (ids && !ids.has(contract)) continue;
     const world = locations.get(contract);
     const b = bibleId ? locations.get(bibleId) : undefined;
     if (world && b && (world.position.x !== b.position.x || world.position.z !== b.position.z)) locations.add({ ...b, position: { ...world.position } });
   }
+}
+
+/**
+ * Spots of landmark builders the content uses (by id, or `<landmark>:<id>`), with the radius and
+ * name the content gives them, and the content place each one also moves.
+ */
+export const WORLD_SPOTS: Record<string, { radius: number; name: string; also?: string[] }> = {
+  'spawn-capena': { radius: 6, name: 'Outside the Capena Gate (the night cart)' },
+  'night-cart': { radius: 5, name: 'Dromo’s cart', also: ['capena-extra', 'night-cart-courier'] },
+  'night-cart-driver': { radius: 1.5, name: 'Beside Dromo’s cart' },
+  'courier-ambush': { radius: 6, name: 'Under the dripping arch', also: ['capena-fight-area'] },
+  'capena-grassator-a': { radius: 2, name: 'Where the first knife-man waits' },
+  'capena-grassator-b': { radius: 2, name: 'Where the second knife-man waits' },
+  'capena-mercury-spring': { radius: 4, name: 'Mercury’s Spring', also: ['fons-mercurii'] },
+  'castor-strongroom': { radius: 5, name: 'Strongrooms of Castor', also: ['castor-loculi'] },
+  'ludus-gate': { radius: 6, name: 'Gate of the Ludus Magnus' },
+  'ludus-arena-center': { radius: 22, name: 'Practice Arena of the Ludus Magnus', also: ['ludus-cavea'] },
+  lanista: { radius: 5, name: 'The procurator’s office', also: ['ludus-cellae'] },
+  armory: { radius: 5, name: 'Ludus Armory', also: ['ludus-armamentarium'] },
+  medicus: { radius: 5, name: 'Ludus Infirmary', also: ['ludus-saniarium'] },
+};
+
+interface PlacedLike {
+  spots: { id: string; position: { x: number; y: number; z: number } }[];
+}
+
+/**
+ * Mirror the spots the landmark builders expose (`game.landmarks`) into the location registry, so the
+ * quests, schedules and props use the world's real cart, arch and strongroom instead of the
+ * fallbacks above; the content places they stand for (`also`) move with them, keeping their own
+ * radius (capena-fight-area stays 40 m round the new ambush). Returns the mirrored spot ids.
+ */
+export function mirrorLandmarkSpots(
+  landmarks: { values(): Iterable<PlacedLike> } | undefined,
+  locations: { get(id: string): LocationDef | undefined; add(d: LocationDef | LocationDef[]): void } | undefined,
+): Set<string> {
+  const done = new Set<string>();
+  if (!landmarks || !locations) return done;
+  for (const placed of landmarks.values()) {
+    for (const s of placed.spots ?? []) {
+      const key = WORLD_SPOTS[s.id] ? s.id : Object.keys(WORLD_SPOTS).find((k) => s.id.endsWith(`:${k}`));
+      if (!key || done.has(key)) continue;
+      const def = WORLD_SPOTS[key];
+      const position = { x: round1(s.position.x), y: round1(s.position.y), z: round1(s.position.z) };
+      const prev = locations.get(key);
+      locations.add({ ...(prev ?? {}), id: key, name: def.name, position, radius: def.radius, discoverable: prev?.discoverable ?? false });
+      for (const other of def.also ?? []) {
+        const o = locations.get(other);
+        if (o) locations.add({ ...o, position: { ...position } });
+      }
+      done.add(key);
+    }
+  }
+  return done;
 }
 
 function round1(v: number) {

@@ -54,9 +54,9 @@ const npcs: NpcDef[] = [
     id: 'npc-pusio',
     name: 'Marcus Valerius “Pusio”',
     title: 'The pearl-seller’s son',
-    home: 'colossus-sol',
+    home: 'colossus-sol:front',
     schedule: [
-      { from: at('h2'), at: 'colossus-sol', activity: 'wander' }, // with his gang
+      { from: at('h2'), at: 'colossus-sol:front', activity: 'wander' }, // with his gang
       { from: at('h8'), at: 'porticus-margaritaria', activity: 'sit' },
       { from: at('v1'), at: 'porticus-margaritaria', activity: 'sleep' },
     ],
