@@ -54,11 +54,15 @@ export function lemuriaWindow(c: DialogueContext): boolean {
 }
 
 /** A physician's treatment: health back to full and the arena injury healed. */
-export function treat(c: DialogueContext) {
-  const sheet = c.game.player?.sheet;
+export function treatWounds(game: DialogueContext['game']) {
+  const sheet = game.player?.sheet;
   if (!sheet) return;
   sheet.cure('injury');
   sheet.vitals.restore('health', sheet.vitals.get('health').max);
+}
+
+export function treat(c: DialogueContext) {
+  treatWounds(c.game);
 }
 
 /** Cycle through lines on each visit (per NPC memory). */

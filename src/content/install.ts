@@ -30,6 +30,7 @@ import { CONTAINERS, CONTAINER_STYLES, STREET_CONTAINERS, routePoint, type Conta
 import { groundAt } from './director';
 import { syncAliases } from './places';
 import { lampSpecs, type LampSpec } from './lamps';
+import { installServices } from './services';
 import { SHRINES, type ShrineSpec } from './shrines';
 import { WALL_TEXTS, type WallText } from './texts';
 
@@ -440,7 +441,7 @@ export function installContent(game: Game): ContentService {
       lamps++;
     }
   }
-  const disposers: (() => void)[] = [() => handles.forEach((h) => h.remove())];
+  const disposers: (() => void)[] = [() => handles.forEach((h) => h.remove()), installServices(game)];
   void placeCarts(game, disposers, carts);
 
   const service: ContentService = {
