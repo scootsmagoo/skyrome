@@ -97,7 +97,9 @@ function triangles(o: THREE.Object3D): number {
   let n = 0;
   o.traverse((c) => {
     const m = c as THREE.Mesh;
-    if (m.isMesh) n += (m.geometry.index ? m.geometry.index.count : m.geometry.getAttribute('position').count) / 3;
+    if (!m.isMesh) return;
+    const inst = (m as THREE.InstancedMesh).isInstancedMesh ? (m as THREE.InstancedMesh).count : 1;
+    n += ((m.geometry.index ? m.geometry.index.count : m.geometry.getAttribute('position').count) / 3) * inst;
   });
   return n;
 }
@@ -158,6 +160,7 @@ describe('river landmarks build', () => {
     it(`${id}: builds at both details, finite, inside ${Math.round(budget / 1000)}k triangles, with colliders and spots`, () => {
       const e = built.get(id)!;
       const tris = triangles(e.build.object);
+      if (process.env.RIVER_TRIS) console.log(`${id}: ${Math.round(tris / 100) / 10}k high, ${Math.round(triangles(builderOf(id).build(ctxFor(e.lm, 'low')).object) / 100) / 10}k low`);
       expect(tris).toBeLessThan(budget);
       expect(e.build.colliders.length).toBeGreaterThan(0);
       expect((e.build.spots ?? []).length).toBeGreaterThan(0);

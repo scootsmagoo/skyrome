@@ -393,73 +393,7 @@ export function boat(d: Draw, kind: BoatKind, rng: Rng, hi = true): { floor: num
   return { floor, standZ: kind === 'caudicaria' ? L / 2 - 4.6 : 0 };
 }
 
-// ------------------------------------------------------------------ cattle
-
-/**
- * A grazing / standing ox or cow at 1:1 (≈ 2.3 m long, 1.4 m at the withers), facing −z, feet
- * on y = 0. `pose` lowers the head to graze.
- */
-export function ox(d: Draw, mat: MaterialId, rng: Rng, pose: 'stand' | 'graze' = 'stand', hi = true) {
-  const s = rng.range(0.9, 1.08);
-  const seg: [number, number] = hi ? [10, 7] : [6, 4];
-  const legH = 0.72 * s;
-  // Body barrel and hindquarters.
-  d.ellipsoid(mat, 0, legH + 0.36 * s, 0.05, 0.42 * s, 0.4 * s, 0.95 * s, { seg });
-  d.ellipsoid(mat, 0, legH + 0.42 * s, -0.55 * s, 0.38 * s, 0.4 * s, 0.4 * s, { seg }); // shoulders
-  // Legs.
-  for (const [x, z] of [[-0.24, -0.62], [0.24, -0.62], [-0.24, 0.66], [0.24, 0.66]] as const) {
-    d.rod(mat, V(x * s, legH + 0.1, z * s), V(x * s * 0.95, 0.08, z * s), 0.075 * s, hi ? 6 : 4, { rTop: 0.1 * s });
-    d.cyl('plaster_dark', x * s * 0.95, 0.04, z * s, 0.07 * s, 0.08, 6);
-  }
-  // Neck, dewlap and head.
-  const graze = pose === 'graze';
-  const hy = graze ? 0.35 * s : legH + 0.55 * s;
-  const hz = graze ? -1.15 * s : -1.18 * s;
-  d.rod(mat, V(0, legH + 0.5 * s, -0.75 * s), V(0, hy + 0.12, hz + 0.18), 0.2 * s, hi ? 7 : 5, { rTop: 0.15 * s });
-  d.ellipsoid(mat, 0, hy, hz, 0.15 * s, 0.17 * s, 0.3 * s, { seg, rx: graze ? 0.9 : 0.35 });
-  d.ellipsoid('plaster_dark', 0, hy - (graze ? 0.22 : 0.1) * s, hz - (graze ? 0.06 : 0.24) * s, 0.1 * s, 0.08 * s, 0.08 * s, { seg: [6, 4] });
-  // Horns (lyre-shaped, cream), ears.
-  for (const sx of [-1, 1]) {
-    const base = V(sx * 0.1 * s, hy + 0.14 * s, hz + 0.12 * s);
-    d.rod('plaster_cream', base, V(sx * 0.32 * s, hy + 0.3 * s, hz + 0.02 * s), 0.035 * s, 4, { rTop: 0.012 });
-    d.ellipsoid(mat, sx * 0.17 * s, hy + 0.07 * s, hz + 0.16 * s, 0.09 * s, 0.04 * s, 0.05 * s, { seg: [5, 3] });
-  }
-  // Tail.
-  d.rod(mat, V(0, legH + 0.5 * s, 0.98 * s), V(0, legH - 0.25 * s, 1.08 * s), 0.025 * s, 4);
-}
-
-/**
- * A standing nude hero (Hercules) at 1:1 × `s`, weight on the right leg, the left hand resting on
- * a club, a lion skin over the left forearm. Faces −z, feet on y = 0.
- */
-export function heracles(d: Draw, mat: MaterialId, s = 1, hi = true) {
-  const seg: [number, number] = hi ? [10, 7] : [6, 4];
-  const P = (x: number, y: number, z: number) => V(x * s, y * s, z * s);
-  // legs (contrapposto)
-  d.rod(mat, P(0.11, 1.0, 0), P(0.12, 0.52, -0.02), 0.085 * s, 7, { rTop: 0.07 * s });
-  d.rod(mat, P(0.12, 0.52, -0.02), P(0.12, 0.06, 0.02), 0.065 * s, 7, { rTop: 0.05 * s });
-  d.rod(mat, P(-0.12, 1.0, 0), P(-0.16, 0.54, -0.08), 0.085 * s, 7, { rTop: 0.07 * s });
-  d.rod(mat, P(-0.16, 0.54, -0.08), P(-0.2, 0.08, 0.04), 0.065 * s, 7, { rTop: 0.05 * s });
-  for (const [x, z] of [[0.12, -0.04], [-0.2, -0.02]]) d.ellipsoid(mat, x * s, 0.04 * s, z * s, 0.06 * s, 0.04 * s, 0.13 * s, { seg: [6, 4] });
-  // pelvis, torso, chest
-  d.ellipsoid(mat, 0, 1.05 * s, 0, 0.21 * s, 0.14 * s, 0.14 * s, { seg });
-  d.ellipsoid(mat, 0, 1.3 * s, 0, 0.2 * s, 0.22 * s, 0.14 * s, { seg });
-  d.ellipsoid(mat, 0, 1.52 * s, -0.01 * s, 0.27 * s, 0.15 * s, 0.16 * s, { seg });
-  d.cyl(mat, 0, 1.69 * s, 0, 0.07 * s, 0.12 * s, 7);
-  d.ellipsoid(mat, 0, 1.82 * s, -0.01 * s, 0.1 * s, 0.13 * s, 0.11 * s, { seg });
-  d.ellipsoid(mat, 0, 1.86 * s, 0.01 * s, 0.11 * s, 0.1 * s, 0.11 * s, { seg: [7, 5] }); // curly hair / beard mass
-  // right arm hanging (holding the apples of the Hesperides behind the back)
-  d.rod(mat, P(0.27, 1.56, 0), P(0.33, 1.22, 0.05), 0.065 * s, 6, { rTop: 0.055 * s });
-  d.rod(mat, P(0.33, 1.22, 0.05), P(0.3, 0.96, 0.14), 0.05 * s, 6, { rTop: 0.04 * s });
-  // left arm down to the club
-  d.rod(mat, P(-0.27, 1.56, 0), P(-0.38, 1.24, -0.06), 0.065 * s, 6, { rTop: 0.055 * s });
-  d.rod(mat, P(-0.38, 1.24, -0.06), P(-0.42, 1.02, -0.2), 0.05 * s, 6, { rTop: 0.045 * s });
-  // club (knotted, standing on the ground)
-  d.rod(mat, P(-0.44, 0.02, -0.26), P(-0.43, 1.02, -0.22), 0.05 * s, 6, { rTop: 0.085 * s });
-  // lion skin draped over the left forearm
-  d.box(mat, -0.44 * s, 0.86 * s, -0.12 * s, 0.14 * s, 0.5 * s, 0.24 * s, { rx: 0.1 });
-  d.ellipsoid(mat, -0.44 * s, 0.6 * s, -0.12 * s, 0.09 * s, 0.12 * s, 0.1 * s, { seg: [6, 4] });
-}
+// Cattle and statues: see river-sculpt.ts (lofted bodies, vertex-coloured hides).
 
 // ------------------------------------------------------------------ fences, stalls
 

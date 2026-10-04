@@ -5,18 +5,20 @@ Marcellus with its neighbours on the southern Campus, and every bridge standing 
 builders follow the landmark contract (`src/world/landmarks/types.ts`): local space, facade to −z,
 monumental sizes × `WORLD_SCALE`, human-scale parts 1:1.
 
-Open `?scene=river` for the whole district on the real terrain with a stand-in water sheet
-(`&at=<landmark or bridge id>` to spawn there, `&far=1` for every bridge over the whole city
-terrain, `&water=0` to hide the sheet, `&cam=x,y,z,tx,ty,tz` for a fixed camera). Single landmarks
-work in `?scene=landmark&id=…` as usual.
+Open `?scene=river` for the whole district on the real terrain with the water module's river,
+quays and island facing (`&at=<landmark or bridge id>` to spawn there, `&far=1` for every bridge
+over the whole city terrain, `&cam=x,y,z,tx,ty,tz` for a fixed camera). Single landmarks work in
+`?scene=landmark&id=…` as usual.
 
 ## Files
 
 | File | Builds |
 | --- | --- |
-| `src/world/landmarks/builders/river-kit.ts` | Shared helpers: local/atlas conversion with water and bed heights (`riverEnv`), neighbour footprints, road and bridge corridors for open squares to leave free, fitted kit temples and frieze dedications, altar, gable and shed roofs, river boats (caudicaria barge, scapha, punt), oxen, Hercules statue, fences, a cheap colonnade (≈ 60 triangles a column), far stand-ins. |
-| `river-boarium.ts` | `temple-portunus` (Ionic tetrastyle pseudoperipteral, stuccoed, Portunalia notice), `temple-hercules-victor` (tholos of 20 fluted Corinthian columns on a crepidoma, door east), `ara-maxima` (tufa platform, altar, bronze Hercules). |
-| `river-port.ts` | `forum-boarium` (paved square, bronze bull of Aegina, cattle pens with oxen, butchers and hawkers, the sealed stone chamber), `portus-tiberinus` (quay wall and deck, mooring stones, paired water stairs, treadwheel cranes, cargo, storerooms, harbour office, moored barges), `cloaca-maxima-outlet` (headwall at the waterline, three rings of voussoirs, ledge and stair down to the iron grating). |
+| `src/world/landmarks/builders/river-kit.ts` | Shared helpers: local/atlas conversion with water and bed heights (`riverEnv`), the terrain's stone quay in a landmark's frame (`quayEdge`: face line, quay top, the water module's stairs, mooring blocks and wall gaps; `quayFrame`), neighbour footprints, road and bridge corridors for open squares to leave free, fitted kit temples and frieze dedications, altar, gable and shed roofs, river boats (caudicaria barge, scapha, punt; walkable hold), fences, a cheap colonnade (≈ 60 triangles a column), far stand-ins. |
+| `river-sculpt.ts` | Lofted figures (the statue kit's method): oxen, cows and bulls (stand, graze, lie) — live ones merged into one vertex-coloured mesh per landmark (`HideMesh`: white, grey, red, dun, piebald hides), the bronze bull of Aegina — and the bronze Hercules of the Ara Maxima. |
+| `river-life.ts` | What the landmarks hand to the running game: lamps (altar fires, tripods, braziers, torches, stall and shop lamps) through `game.lights` once the sky installs it, and an "E — Read" interaction (Latin + English gloss in the book reader) for every inscription spot with a text in `RIVER_TEXTS` (ids `river:<spot id>`; the bridges' too). |
+| `river-boarium.ts` | `temple-portunus` (Ionic tetrastyle pseudoperipteral, stuccoed, Portunalia notice), `temple-hercules-victor` (tholos of 20 fluted Corinthian columns on a crepidoma, door east; the door intercolumniation widened so the player can walk in to the cella door), `ara-maxima` (tufa platform, altar, tripods, bronze Hercules). |
+| `river-port.ts` | `forum-boarium` (paved square ringed on its landward sides by two-storey porticoed shop rows — the fabric kit's insula with a Neronian arcade, enterable shops —, two market lanes of butchers and hawkers north and south of the street to the Pons Aemilius, cattle pens, tethering rails, a yoked ox-cart, the bronze bull of Aegina, notice boards, the sealed stone chamber, lamps), `portus-tiberinus` (dresses the terrain module's quay: treadwheel cranes on its top, cargo, storerooms 7 m back, the harbour office, barges moored against the wall on lines to its mooring blocks, boatmen at its stair landings; builds its own quay only without terrain quays), `cloaca-maxima-outlet` (a vaulted outfall bastion projecting from the quay at the water module's wall gap: three rings of wedge voussoirs with a keystone, the half-drowned channel, a ledge to the iron grating at the quay face — the sewer dungeon's entrance —, a stair down from the quay, a platform with a parapet over the vault). |
 | `river-holitorium.ts` | `forum-holitorium` (vegetable market: stalls under awnings, mensa ponderaria, lacus, aediles' edict, strongbox), `temple-janus-holitorium`, `temple-juno-sospita`, `temple-spes` (peripteral, fitted to their footprints, altars), `columna-lactaria`. |
 | `river-marcellus.ts` | `theatre-marcellus` (see below). |
 | `river-campus.ts` | `temple-apollo-sosianus`, `temple-bellona`, `columna-bellica`, `porticus-octaviae`, `circus-flaminius`. |
@@ -24,6 +26,7 @@ work in `?scene=landmark&id=…` as usual.
 | `src/world/bridges/` | `buildBridges()` (index), pure layout (`layout.ts`), per-bridge data (`specs.ts`), geometry (`geometry.ts`). |
 | `src/scenes/river.ts` | The dev scene. |
 | `tests/river-bridges.test.ts` | Layout maths and walkability of the bridges on the real terrain. |
+| `tests/river-landmarks.test.ts` | Every landmark on the real terrain with the water module's quays in one physics world: budgets, no embedded or floating person spots, the Portus on the quay top, and walks (the Actor) into Hercules Victor, down to the Cloaca grating, up all six theatre aisles (on and off their centre lines). |
 
 ## Theatre of Marcellus
 
@@ -37,8 +40,9 @@ with the royal and guest doors, a sloping stage roof, the side halls with the tr
 vaulted aditus, the stage building and a portico toward the river.
 
 **Walk in:** through any facade arch into the ambulatory, round to either end, into the aditus and
-the orchestra; the six aisles (0.22 m half-steps, flights of 0.2 m over the praecinctio wall)
-climb to the top walk. Every row, aisle step, the ring wall and the portico have box/cylinder
+the orchestra; the six aisles (1.6 m wide, 0.22 m half-steps, flights of 0.2 m over the
+praecinctio wall) climb to the top walk. The seat rows' 0.44 m risers can't be climbed, so the
+aisles are the only way up; at 1.6 m a capsule 0.4 m off the centre line still climbs (tested). Every row, aisle step, the ring wall and the portico have box/cylinder
 colliders (≈ 1,700), tested by walking from the orchestra to the top.
 
 ## Bridges
@@ -92,29 +96,53 @@ Columna Lactaria, the sealed chamber in the Forum Boarium, the Argei on the Subl
 the storerooms), containers (strongbox, votive shelves, cargo), NPC and vendor posts (drovers,
 butchers, crane crews, the harbour master, wet-nurses, incubants, librarian), seats in the cavea.
 
+Conventions: a spot is where a person's feet are, on a walkable surface and clear of colliders
+(tested); vendors and stall-holders stand behind their counters facing out; `sit` spots lie on the
+seat or tread top; `door`, `shrine` and `inscription` spots face the thing; boatmen stand on the
+boats' (walkable) hold floors.
+
 ## Triangles (high / low detail, from the builders)
 
 | Landmark | High | Low | Notes |
 | --- | ---: | ---: | --- |
-| theatre-marcellus | 158k | 126k | far stand-in 0.2k, cull 1100 m |
-| porticus-octaviae | 152k | 81k | far stand-in, cull 900 m |
-| temple-hercules-victor | 167k | 19k | kit tholos at high detail (20 fluted Corinthian columns) |
-| temple-portunus | 107k | 13k | |
-| forum-holitorium / forum-boarium | 49k / 47k | 23k / 20k | stalls, pens, plazas |
-| circus-flaminius / portus-tiberinus | 38k / 26k | 21k / 11k | |
+| forum-boarium | 173k | 53k | plaza, 4–6 porticoed shop blocks, ~28 stalls, ~28 lofted cattle (one hide mesh), cull 700 m |
+| theatre-marcellus | 159k | 127k | far stand-in 0.2k, cull 1100 m |
+| temple-hercules-victor | 167k | 19k | 20 fluted Corinthian columns (instanced) at high detail |
+| porticus-octaviae | 128k | 71k | far stand-in, cull 900 m |
+| temple-portunus | 104k | 13k | |
+| forum-holitorium | 50k | 23k | stalls, plaza |
+| circus-flaminius / portus-tiberinus | 28k / 20k | 21k / 7k | |
 | Holitorium trio, Apollo, Bellona, Aesculapius | 9–19k each | same | M fidelity (GDD §12.1), low-detail kit temples |
-| ara-maxima, cloaca outlet, prow, columns, obelisk | 0.2–4k | | |
+| ara-maxima, cloaca outlet, prow, columns, obelisk | 0.2–6k | | |
+
+(Instanced parts counted once per instance; `RIVER_TRIS=1 npx vitest run tests/river-landmarks.test.ts -t builds` prints them.)
 
 The whole district from the air in `?scene=river`: about 175–380 draw calls and 0.6–1.4M
 triangles depending on the view, 60 fps (M4 Max, Chromium).
 
 ## Integration notes
 
-- **Water.** `buildWater` is still a stub; the river scene shows a flat stand-in sheet at
-  `hm.waterLevelY`. Bridges, boats, the quay stairs and the cloaca use `hm.waterLevelY` too.
-- **Quays.** The Portus Tiberinus builds its own quay wall and deck unless the heightmap already
-  carries stone quays (`hm.features.quays`, from the terrain module's riverbanks): then it only
-  dresses the terrain's quay (cranes, cargo, storerooms, stairs, boats, mooring stones).
+- **Water.** Bridges, boats, the quay dressing and the cloaca use `hm.waterLevelY`, the level the
+  water module draws.
+- **Quays.** The terrain module shapes the stone quays and the water module builds their walls,
+  stairs and mooring blocks (`src/world/water/quays.ts`). `quayEdge()` reproduces that geometry
+  in a landmark's frame, so the Portus Tiberinus dresses the real quay: cranes on its top behind
+  the coping, cargo 3–5 m in, storerooms from 7 m back, the office by a stair, boats against the
+  wall on lines to the water module's mooring rings, boatmen at its stair landings. Without
+  terrain quays the Portus builds its own wall, deck, mooring stones and stairs.
+- **Cloaca Maxima.** The water module leaves a gap in the quay wall at the outfall and builds a
+  small culvert mouth there; the landmark's bastion covers it (its platform stands 0.75 m over
+  the quay so the water module's voussoirs stay inside) and its grating wall frames that mouth.
+  The channel is 3.8 m wide (not 0.6 × 4.5 m) so the ledge has 2.1 m of headroom.
+- **Lamps and readables** (`river-life.ts`): requested once `game.lights` / `game.interactions`
+  exist (they are installed after the world is built), via one small System that removes itself.
+  A later generic pass over `PlacedLandmark.spots` should skip interactables whose id starts with
+  `river:`.
+- **NPCs.** About 90 occupant spots (npc, vendor, stall, sit) are published but nothing consumes
+  them yet: the population module should put people there. Every spot is tested free of colliders
+  and on the ground.
+- **The Velabrum and the Vicus Tuscus** are city fabric (the city module's golden-path corridors:
+  shops, horrea, torches), not landmarks; this module dresses the squares (Boarium, Holitorium).
 - **Open squares** (`forum-boarium`, `forum-holitorium`, `circus-flaminius`) pave their footprint
   minus the neighbours' footprints, the atlas road corridors (for the street builders) and the
   bridges' real extents, with a trimesh collider 0.1 m over the terrain.
