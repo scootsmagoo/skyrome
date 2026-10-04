@@ -27,7 +27,7 @@ import { peopleAt, type PersonDef, type PersonPlace } from './people';
 /** Shown within this distance of the player (m), hidden beyond HIDE_R. */
 export const SHOW_R = 55;
 const HIDE_R = 68;
-const MAX_SHOWN = 40;
+const MAX_SHOWN = 32;
 /** Turn the head to the player within this distance (m). */
 const LOOK_R = 5;
 
