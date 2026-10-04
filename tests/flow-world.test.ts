@@ -94,5 +94,10 @@ describe('footstep surfaces', () => {
     expect(footstepSurface('water', 0)).toBe('water');
     expect(footstepSurface('grass', 0.6)).toBe('stone');
     expect(footstepSurface(null, 0)).toBe('stone');
+    // Every terrain surface has its own bank (not all stone).
+    expect(footstepSurface('gravel', 0)).toBe('gravel');
+    expect(footstepSurface('mud', 0)).toBe('dirt');
+    expect(footstepSurface('dirt', 0)).toBe('dirt');
+    expect(footstepSurface('rock', 0)).toBe('stone');
   });
 });

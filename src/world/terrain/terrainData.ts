@@ -30,6 +30,8 @@ export interface TerrainDataInputs {
   gardens?: readonly (readonly P2[])[];
   /** Surface of a building pad's apron by pad id (default earth). */
   padKind?: (padId: string) => PadKind;
+  /** Trodden tracks (REAL m, `width` real m) drawn as beaten earth, like an unpaved road. */
+  paths?: readonly { points: readonly P2[]; width: number }[];
 }
 
 export interface TerrainData {
@@ -128,6 +130,7 @@ export function buildTerrainData(hm: Heightmap, inputs: TerrainDataInputs = {}):
     if (paving === 'basalt' || paving === 'steps') stampSegments(road.points, half, null);
     else stampSegments(road.points, half, PAD_KIND_VALUE[paving === 'gravel' ? 'gravel' : 'earth']);
   }
+  for (const path of inputs.paths ?? []) stampSegments(path.points, (path.width * S) / 2, PAD_KIND_VALUE.earth);
   if (!feat) {
     // Hand-made grid: approximate the fields from the 0..1 masks.
     for (let k = 0; k < N; k++) {
@@ -229,19 +232,23 @@ export function buildTerrainData(hm: Heightmap, inputs: TerrainDataInputs = {}):
     const off = river.waterLevel * S - hm.waterLevelY;
     if (Math.abs(off) < 0.05) continue;
     const maxHalf = (Math.max(...river.width) / 2) * S;
-    // Only the channel itself (a canal's sides are vertical): beyond it the main level applies.
-    const reach = maxHalf + 2.5;
+    // Only the channel and the walls' inner half: beyond them the main level applies.
+    const reach = maxHalf + 1.4;
     const pts = river.centerline;
     for (let s = 0; s < pts.length - 1; s++) {
       const ax = pts[s][0] * S, az = pts[s][1] * S, bx = pts[s + 1][0] * S, bz = pts[s + 1][1] * S;
       const r = range(Math.min(ax, bx) - reach, Math.max(ax, bx) + reach, Math.min(az, bz) - reach, Math.max(az, bz) + reach);
+      const l2 = (bx - ax) ** 2 + (bz - az) ** 2 || 1;
       for (let j = r.j0; j <= r.j1; j++) {
         for (let i = r.i0; i <= r.i1; i++) {
+          // The channel ends square at its end walls: nothing past either end of the line.
+          const t = ((minX + i * sp - ax) * (bx - ax) + (minZ + j * sp - az) * (bz - az)) / l2;
+          if ((s === 0 && t < 0) || (s === pts.length - 2 && t > 1)) continue;
           const d = segD(minX + i * sp, minZ + j * sp, ax, az, bx, bz);
           const k = j * nx + i;
           if (d < reach && d < waterDist[k]) {
             waterDist[k] = d;
-            waterOff[k] = off * (1 - smooth(reach - 1.5, reach, d));
+            waterOff[k] = off * (1 - smooth(reach - 1.0, reach, d));
           }
         }
       }
