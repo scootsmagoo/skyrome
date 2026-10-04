@@ -10,6 +10,7 @@
  * seats stay 1:1.
  */
 import * as THREE from 'three';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { LANDMARK_BY_ID, LANDMARKS } from '../../../data/atlas';
 import { Draw } from '../../../arch/fabric/draw';
 import { roof as tileRoof } from '../../../arch/fabric/roof';
@@ -22,7 +23,7 @@ import { inscriptionPanel } from '../../../arch/common/inscription';
 import { armoredEmperor, equestrian, seatedDeity, togate } from '../../../arch/classical/statues';
 import type { Order } from '../../../arch/classical/orders';
 import type { TemplePlan } from '../../../arch/classical/temple';
-import type { MaterialId } from '../../../gfx/materialIds';
+import { MATERIAL_BASE, type MaterialId } from '../../../gfx/materialIds';
 import { MeshBuilder } from '../../../gfx/MeshBuilder';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, LandmarkData, Spot } from '../types';
 
@@ -485,9 +486,106 @@ export function farDraw(): Draw {
   return new Draw(new MeshBuilder()).flatWalls();
 }
 
+/**
+ * Package a landmark build. The near mesh is swapped for a far stand-in beyond ~600 m: the given
+ * `far` massing, or — for small landmarks without one — the near mesh itself; either way baked into
+ * ONE vertex-coloured mesh (`bakeFar`), so a whole-city view costs one draw call per landmark.
+ */
 export function finish(name: string, d: Draw, spots: Spot[] = [], far?: Draw, cullDistance?: number): LandmarkBuild {
-  return { object: d.b.build(name), colliders: d.b.colliders, spots, far: far ? far.b.build(`${name}:far`) : undefined, cullDistance };
+  const object = d.b.build(name);
+  let farObj: THREE.Object3D | undefined;
+  let cull = cullDistance;
+  if (far) {
+    farObj = bakeFar(far.b.build(`${name}:far`), `${name}:far`);
+    cull = Math.min(cullDistance ?? FAR_SWAP, FAR_SWAP);
+  } else if (d.b.triangleCount < AUTO_FAR_MAX) {
+    // Same geometry, flat colours: the swap is invisible a few hundred metres out.
+    farObj = bakeFar(object, `${name}:far`);
+    cull = Math.min(cullDistance ?? AUTO_FAR_SWAP, AUTO_FAR_SWAP);
+  }
+  return { object, colliders: d.b.colliders, spots, far: farObj, cullDistance: cull };
 }
+
+/** Landmarks below this many triangles get their own near mesh, baked, as the far stand-in... */
+const AUTO_FAR_MAX = 30000;
+/** ...swapped in from this distance. */
+const AUTO_FAR_SWAP = 260;
+
+let farMat: THREE.MeshStandardMaterial | null = null;
+/** Shared flat-shaded vertex-colour material for baked far stand-ins (sRGB byte colours decoded in the shader). */
+export function farMaterial(): THREE.MeshStandardMaterial {
+  if (farMat) return farMat;
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9, metalness: 0 });
+  m.name = 'landmark:far';
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace('#include <color_vertex>', `#include <color_vertex>
+#ifdef USE_COLOR
+  vColor.rgb = pow(vColor.rgb, vec3(2.2));
+#endif`);
+  };
+  m.customProgramCacheKey = () => 'landmark:far';
+  farMat = m;
+  return m;
+}
+
+/**
+ * Bake every mesh of `obj` (instanced ones expanded) into one geometry with per-vertex MATERIAL_BASE
+ * colours (or the material's own colour for one-off textured parts), in `obj`'s local frame.
+ */
+export function bakeFar(obj: THREE.Object3D, name: string): THREE.Mesh {
+  obj.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(obj.matrixWorld).invert();
+  const pos: number[] = [];
+  const col: number[] = [];
+  const v = new THREE.Vector3();
+  const m = new THREE.Matrix4();
+  const im = new THREE.Matrix4();
+  const c = new THREE.Color();
+  obj.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const mat = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.MeshStandardMaterial;
+    const id = mat?.name as MaterialId;
+    if (id === 'glow_fire' || id === 'water') return;
+    const base = (MATERIAL_BASE as Record<string, { color: number }>)[id];
+    if (base) c.setHex(base.color);
+    else if (mat?.color) c.copy(mat.color).convertLinearToSRGB();
+    else c.setHex(0x9a9a9a);
+    const r = Math.round(c.r * 255), g = Math.round(c.g * 255), b = Math.round(c.b * 255);
+    const geo = mesh.geometry;
+    const p = geo.getAttribute('position') as THREE.BufferAttribute;
+    const idx = geo.index;
+    const n = idx ? idx.count : p.count;
+    const inst = (mesh as THREE.InstancedMesh).isInstancedMesh ? (mesh as THREE.InstancedMesh) : null;
+    const count = inst ? inst.count : 1;
+    for (let k = 0; k < count; k++) {
+      m.multiplyMatrices(inv, mesh.matrixWorld);
+      if (inst) {
+        inst.getMatrixAt(k, im);
+        m.multiply(im);
+      }
+      for (let i = 0; i < n; i++) {
+        v.fromBufferAttribute(p, idx ? idx.getX(i) : i).applyMatrix4(m);
+        pos.push(v.x, v.y, v.z);
+        col.push(r, g, b);
+      }
+    }
+  });
+  let geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(new Uint8Array(col), 3, true));
+  // No normals (flat shading from derivatives): vertices weld across faces, ~10 bytes a triangle.
+  if (pos.length) geo = mergeVertices(geo, 1e-3);
+  geo.computeBoundingSphere();
+  const out = new THREE.Mesh(geo, farMaterial());
+  out.name = name;
+  out.castShadow = false;
+  out.receiveShadow = true;
+  return out;
+}
+
+/** Distance (m, from the landmark's bounding sphere) beyond which a far stand-in replaces it. */
+export const FAR_SWAP = 450;
 
 /** Fresh drawing frame for a landmark. */
 export function draw(ctx: LandmarkContext): Draw {
