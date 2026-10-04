@@ -23,6 +23,7 @@ import {
   T, V, arc, dims, draw, farDraw, finish, flight, inscription, mul, piercedWall, plinth, spot, statueOnPedestal, tiledRoof, wallRun, type Detail,
 } from './generic-common';
 import { liteColumnAt } from './generic-civic-lib';
+import { brazier, wallTorch } from './generic-world';
 import { ribbonWall } from './generic-seating';
 
 const AGRIPPA = ['M AGRIPPA L F COS TERTIVM FECIT'];
@@ -73,6 +74,48 @@ function centring(d: Draw, x: number, y: number, z: number, rot: number, r: numb
     const a = (Math.PI * i) / 12;
     f.box('wood', Math.cos(a) * r, Math.sin(a) * r, 0, 0.3, 0.06, depth, { rz: a - Math.PI / 2 });
   }
+}
+
+let sootMat: THREE.MeshStandardMaterial | null = null;
+/**
+ * Soot staining as a transparent decal: dense just above the opening, fading upward in ragged
+ * tongues (a small RGBA DataTexture, so it also builds headless).
+ */
+function soot(): THREE.MeshStandardMaterial {
+  if (sootMat) return sootMat;
+  const W = 64, H = 128;
+  const data = new Uint8Array(W * H * 4);
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const tongues = Array.from({ length: 6 }, () => ({ u: 0.15 + rnd() * 0.7, w: 0.06 + rnd() * 0.1, h: 0.5 + rnd() * 0.5 }));
+  for (let y = 0; y < H; y++) {
+    const v = y / (H - 1); // 0 = bottom (the opening's head), 1 = top
+    for (let x = 0; x < W; x++) {
+      const u = x / (W - 1);
+      let a = Math.pow(1 - v, 2.2) * Math.exp(-Math.pow((u - 0.5) / (0.32 + 0.1 * v), 2));
+      for (const t of tongues) a = Math.max(a, (v < t.h ? Math.pow(1 - v / t.h, 1.2) : 0) * Math.exp(-Math.pow((u - t.u) / t.w, 2)) * 0.85);
+      a *= 0.75 + rnd() * 0.25;
+      const i = (y * W + x) * 4;
+      data[i] = 28; data[i + 1] = 24; data[i + 2] = 22;
+      data[i + 3] = Math.round(Math.min(1, a * 1.15) * 235);
+    }
+  }
+  const tex = new THREE.DataTexture(data, W, H, THREE.RGBAFormat);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  sootMat = new THREE.MeshStandardMaterial({ map: tex, transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  sootMat.name = 'soot';
+  return sootMat;
+}
+
+/** A soot decal rising from an opening at (x, y) on a wall face z (facing −z), w wide and h tall. */
+function sootFan(d: Draw, x: number, y: number, z: number, w: number, h: number) {
+  const g = new THREE.PlaneGeometry(w, h);
+  g.rotateY(Math.PI);
+  g.translate(x, y + h / 2, z);
+  d.b.add(g, soot(), d.m, { uv: 'keep', castShadow: false });
 }
 
 function buildPantheon(ctx: LandmarkContext): LandmarkBuild {
@@ -167,17 +210,27 @@ function buildPantheon(ctx: LandmarkContext): LandmarkBuild {
   // The pronaos wall: tall, cracked, the bronze doors gone; soot streaks; the cella walls behind
   // half demolished in steps.
   const zW = pz1 - 1.6;
-  piercedWall(d, -w / 2 + 1, zW, w / 2 - 1, zW, P, 15, 2.2, 'brick', [{ x: (w - 2) / 2, w: 4.4, h: 8.5 }]);
+  // Two tall windows each side of the doorway, their frames gone; the fire vented through them.
+  const winX = [-1, 1].flatMap((sx) => [sx * (w * 0.22), sx * (w * 0.38)]);
+  piercedWall(d, -w / 2 + 1, zW, w / 2 - 1, zW, P, 15, 2.2, 'brick', [{ x: (w - 2) / 2, w: 4.4, h: 8.5 }, ...winX.map((x) => ({ x: x + (w - 2) / 2, w: 1.6, h: 3.2, sill: 5.2, arched: true }))]);
   for (const sx of [-1, 1]) {
-    d.span('marble', sx * 4.2, P, zW - 0.12, sx * (w / 2 - 2), P + 4.5, zW, { collide: false });
-    // Soot: a scorched band under the broken top, licks of black running down from it.
-    d.span('concrete', sx * 2.2, 12.2, zW - 0.13, sx * (w / 2 - 1), 15, zW - 0.12);
-    for (let k = 0; k < 5; k++) {
-      const x = sx * rng.range(2.6, w / 2 - 2.5);
-      const wd = rng.range(0.6, 2.2);
-      d.span('plaster_dark', x - wd / 2, rng.range(6.5, 10.5), zW - 0.14, x + wd / 2, 12.3, zW - 0.13);
+    // Marble revetment slabs on the lower wall, half of them prised off for the lime kilns (the
+    // clamp holes show as dark dots on the bare brick).
+    for (let k = 0; k < 6; k++) {
+      for (let r = 0; r < 3; r++) {
+        const x0 = sx * (4.2 + k * ((w / 2 - 6.2) / 6)), x1 = sx * (4.2 + (k + 1) * ((w / 2 - 6.2) / 6));
+        const y0 = P + r * 1.5;
+        if (rng.next() < 0.45) {
+          d.box('black', (x0 + x1) / 2, y0 + 0.75, zW - 0.005, 0.08, 0.08, 0.02);
+          continue;
+        }
+        d.span(r === 0 ? 'marble_veined' : 'marble', x0 + sx * 0.02, y0 + 0.02, zW - 0.1, x1 - sx * 0.02, y0 + 1.48, zW);
+      }
     }
   }
+  // Soot rising from the windows and the doorway (fire licks upward).
+  for (const x of winX) sootFan(d, x + rng.range(-0.2, 0.2), P + 5.2 + 1.9, zW - 0.13, rng.range(2.6, 3.4), rng.range(4, 6));
+  sootFan(d, 0, P + 8.3, zW - 0.13, 7.5, 7);
   // Ragged top: the wall is being taken down from the outer ends.
   for (let k = 0; k < 5; k++) {
     for (const sx of [-1, 1]) {
@@ -237,6 +290,10 @@ function buildPantheon(ctx: LandmarkContext): LandmarkBuild {
   wallRun(d, -hx, hz1, -hx, hz0, 0, 2.4, 0.1, 'wood');
   for (const sx of [-1, 1]) d.cyl('wood_dark', sx * 3, 1.5, hz0, 0.12, 3, 6, { collide: true });
   d.box('wood', 0, 2.9, hz0, 6.4, 0.25, 0.25);
+  // The night watchman's brazier by the gate, torches on the gate posts, a painted notice.
+  brazier(ctx, d, 4.6, 0.02, hz0 + 2.2, 0.9);
+  for (const sx of [-1, 1]) wallTorch(ctx, d, sx * 3, 2.2, hz0 - 0.13, 0);
+  inscription(d, ['OPVS CAESARIS', 'NE INTRATO'], -5.5, 1.5, hz0 - 0.08, 2.2, 0.8, 0, 'painted');
   statueOnPedestal(d, 'togate', -w / 2 + 2, 0.02, zN + 6, 0.4, 1, 'plaster_dark', 'low', 1.2, 'marble');
   spots.push(
     spot(`${lm.id}:gate`, 'door', 0, 0.04, hz0 - 1.2, 0),
