@@ -142,20 +142,22 @@ export function stairsToWater(b: MeshBuilder, mat: MaterialId, frame: THREE.Matr
       frameBox(b, mat, frame, x, (y0 + yT) / 2, W / 2, QUAY.tread + 0.01, yT - y0, W, true);
     }
   }
-  // Submerged steps riverward of the landing, down to below a swimmer's feet.
-  const wet = Math.ceil((yLand - (water - QUAY.wetDepth)) / QUAY.riser);
-  for (let k = 0; k < wet; k++) {
-    const yT = yLand - (k + 1) * QUAY.riser;
-    const z = W + (k + 0.5) * QUAY.tread;
-    frameBox(b, mat, frame, 0, (y0 + yT) / 2, z, QUAY.landing, yT - y0, QUAY.tread + 0.01, true);
-  }
-  // A parapet along each flight's river side, rising with it, and across its head (the way up
-  // turns onto the quay through the opening in the coping parapet).
-  // It starts a few steps up, so the landing stays open on the river side across its full width.
   const ph = QUAY.parapet + 0.15, pt = 0.3;
   const run = steps * QUAY.tread;
   const slope = Math.atan2(rise, run);
   const xEnd = QUAY.landing / 2 + run;
+  // Submerged steps along the whole front (landing and flights), down to below a swimmer's feet:
+  // whoever swims up to the stairs meets a step, and the first one, just awash, leads along to
+  // the landing.
+  const wet = Math.ceil((yLand - (water - QUAY.wetDepth)) / QUAY.riser);
+  for (let k = 0; k < wet; k++) {
+    const yT = yLand - (k + 1) * QUAY.riser;
+    const z = W + (k + 0.5) * QUAY.tread;
+    frameBox(b, mat, frame, 0, (y0 + yT) / 2, z, 2 * (xEnd + pt), yT - y0, QUAY.tread + 0.01, true);
+  }
+  // A parapet along each flight's river side, rising with it, and across its head (the way up
+  // turns onto the quay through the opening in the coping parapet).
+  // It starts a few steps up, so the landing stays open on the river side across its full width.
   const skip = Math.min(run * 0.5, 3 * QUAY.tread);
   for (const dir of [-1, 1]) {
     const pr = run - skip, prise = rise * (pr / run);

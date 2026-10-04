@@ -10,7 +10,7 @@
  * `canJump`, `motionOverride`), and sets `player.swimming` (combat should refuse attacks while it
  * is true) plus a `player:swim` event.
  *
- * Climbing out: swimming (or wading in a canal) while pushing against a ledge no higher than
+ * Climbing out: swimming (or wading, or standing awash) while pushing against a ledge no higher than
  * `mantleReach` above the water — a quay landing, a submerged step, a canal kerb — pulls the player
  * up onto it in about half a second (`player:mantle`). Depth is measured against the physics world
  * (so steps and landings count), not just the terrain.
@@ -226,8 +226,9 @@ export class SwimSystem implements System {
     }
     const level = hit.body.level;
     const tn = this.tuning;
-    // Climb out onto a landing, a step or a kerb (swimming, or wading deep as in a canal).
-    if (p.canMove && (p.swimming || pos.y < level - 0.35) && this.tryMantle(p, level)) return;
+    // Climb out onto a landing, a step or a kerb: swimming, wading (as in the canal), or standing
+    // just awash at the water's edge and stuck against something too tall to step.
+    if (p.canMove && (p.swimming || pos.y < level + 0.6) && this.tryMantle(p, level, dt)) return;
     const depth = level - this.groundAt(pos.x, pos.z, level + 0.4);
     if (!p.swimming) {
       if (depth > tn.enterDepth && pos.y < level - tn.floatDepth + 0.3) this.setSwimming(true);
@@ -254,9 +255,11 @@ export class SwimSystem implements System {
   }
 
   /** Start a climb if the player pushes at a reachable ledge (for a few steps running). */
-  private tryMantle(p: Player, level: number): boolean {
+  private tryMantle(p: Player, level: number, dt: number): boolean {
     const axes = this.game.input.moveAxes();
-    if (Math.abs(axes.x) + Math.abs(axes.z) < 0.3 || Math.hypot(p.velocity.x, p.velocity.z) > 1.6) {
+    // Only when the last step barely moved: pushing against something, not walking past it.
+    const moved = Math.hypot(p.position.x - p.prevPos.x, p.position.z - p.prevPos.z) / dt;
+    if (Math.abs(axes.x) + Math.abs(axes.z) < 0.3 || moved > 0.7) {
       this.ledgeSteps = 0;
       return false;
     }

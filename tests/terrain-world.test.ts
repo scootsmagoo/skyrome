@@ -139,6 +139,20 @@ describe('the river can always be left', () => {
     expect(w.player.position.x).toBeGreaterThan(land.x + 3);
   });
 
+  it('a swimmer who reaches the stairs beside the landing still gets out', () => {
+    const land = q.landings[0];
+    for (const dz of [-4.5, 3.5, 5.5]) {
+      const w = makeGame(hm, { x: land.x - 6, y: level - 1.38, z: land.z + dz });
+      registerColliders(w.game, q.colliders);
+      w.physics.step(DT);
+      w.face(1, 0);
+      w.input.held.add('forward');
+      w.run(14, () => w.player.grounded && !w.player.swimming && w.player.position.y > level - 0.3);
+      expect(w.player.swimming).toBeFalsy();
+      expect(w.player.position.y).toBeGreaterThan(level - 0.3);
+    }
+  });
+
   it('a swimmer at the plain quay wall cannot climb the 2 m face (but the landing is reachable)', () => {
     const land = q.landings[0];
     const w = makeGame(hm, { x: land.x - 6, y: level - 1.38, z: land.z + 40 });

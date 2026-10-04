@@ -29,7 +29,7 @@ const hasDom = typeof document !== 'undefined' && typeof Image !== 'undefined';
 
 /** Palette overrides (sRGB) for the terrain: May in Rome, green-gold rather than golf-course. */
 export const GROUND_PALETTE: Partial<Record<MaterialId, number>> = {
-  grass: 0x6f7944,
+  grass: 0x75804a,
   dry_grass: 0xa49a5f,
   dirt: 0x8b7a60,
   rock: 0x9d8b6c, // cappellaccio / tufa cliffs: warm grey-brown
