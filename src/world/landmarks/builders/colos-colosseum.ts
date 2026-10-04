@@ -119,8 +119,8 @@ export interface CaveaTierDef {
 
 export const CAVEA_TIERS: CaveaTierDef[] = [
   { name: 'podium', walk: 2.4, wall: 0, cap: 0, rows: 3, rise: 0.42, depth: 0.85, seat: 'marble', riser: 'marble_veined' },
-  { name: 'maenianum primum', walk: 2.14, wall: 1.26, cap: 0.4, rows: 8, rise: 0.42, depth: 0.68, seat: 'marble', riser: 'travertine' },
-  { name: 'maenianum secundum imum', walk: 2.14, wall: 1.26, cap: 0.4, rows: 8, rise: 0.42, depth: 0.68, seat: 'marble', riser: 'travertine' },
+  { name: 'maenianum primum', walk: 2.14, wall: 1.26, cap: 0.4, rows: 8, rise: 0.42, depth: 0.68, seat: 'marble', riser: 'marble_veined' },
+  { name: 'maenianum secundum imum', walk: 2.14, wall: 1.26, cap: 0.4, rows: 8, rise: 0.42, depth: 0.68, seat: 'travertine', riser: 'marble_veined' },
   { name: 'summum in ligneis', walk: 1.4, wall: 2.52, cap: 0.4, rows: 6, rise: 0.42, depth: 0.68, seat: 'wood', riser: 'wood' },
 ];
 
@@ -1487,13 +1487,15 @@ function zoneVisibility(
     let zone: string;
     if (X < R3[0] && c.y > 4.6) zone = 'cavea';
     else if (X < 0) zone = 'arena';
-    else if (X > XF + 0.3) zone = c.y > SY[4] - 1 ? 'above' : dist > 260 ? 'far' : 'outside';
+    else if (X > XF + 0.3) zone = c.y > SY[4] - 1 ? 'above' : dist > 260 ? 'far' : X < XF + 18 && c.y < SY[1] ? 'plaza' : 'outside';
     else zone = c.y < SY[1] - 0.5 ? 'ambulatory' : 'between';
     if (zone === last) return;
     last = zone;
     const inBowl = zone === 'cavea' || zone === 'arena';
-    const outside = zone === 'outside' || zone === 'far';
-    g.gBowl.visible = !outside;
+    const outside = zone === 'outside' || zone === 'far' || zone === 'plaza';
+    // From the plaza the bowl shows through the axial gates (a third-person camera trails the
+    // player into the passages), so it stays drawn there.
+    g.gBowl.visible = !outside || zone === 'plaza';
     // The ambulatories show through the arches from outside and through the gates from the sand.
     g.gInner.visible = zone !== 'cavea' && zone !== 'far';
     // From the ground-floor ambulatories only the ground storey's inner faces are in view.
@@ -1502,7 +1504,7 @@ function zoneVisibility(
     for (const s of g.hideSets) s.setForced(inBowl || amb ? -1 : null);
     g.cippi.setForced(inBowl ? -1 : null);
     for (const s of g.ring2Sets) s.setForced(zone === 'cavea' ? -1 : zone === 'arena' ? 1 : null);
-    g.topColonnade.setForced(zone === 'outside' || zone === 'far' ? -1 : null);
+    g.topColonnade.setForced(outside ? -1 : null);
   };
 }
 
