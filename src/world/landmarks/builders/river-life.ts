@@ -270,8 +270,9 @@ class LifeSystem implements System {
       }
       q.reads.length = 0;
     }
-    // Stay registered (cheap) only while something still waits for its service.
-    if (!q.reads.length && (!q.lamps.length || !game.lights) && this.frames > 600) {
+    // Stay registered (cheap) only while something still waits for its service (a long loading
+    // screen may run frames before the sky installs the light pool); queue() re-adds it later.
+    if ((!q.reads.length && !q.lamps.length) || this.frames > 36_000) {
       game.removeSystem(this);
       q.system = null;
     }
