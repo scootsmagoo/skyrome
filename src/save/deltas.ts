@@ -28,7 +28,11 @@ export class EntityDeltas {
 
   constructor(private readonly events?: EventBus<GameEvents>) {
     // Killed actors stay dead across saves (§6.14: killed named NPCs are recorded as world deltas).
-    events?.on('actor:killed', (e) => this.merge(e.victimId, { dead: true }));
+    // Combat also reports knockouts and flights (tags 'ko' / 'fled'): those people live on.
+    events?.on('actor:killed', (e) => {
+      if (e.tags?.includes('ko') || e.tags?.includes('fled')) return;
+      this.merge(e.victimId, { dead: true });
+    });
   }
 
   get(id: string): Readonly<Delta> | undefined {
