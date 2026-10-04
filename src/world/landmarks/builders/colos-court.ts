@@ -358,9 +358,9 @@ export function courtyardBuilding(spec: CourtSpec): CourtResult {
       // Flames: the forge fire burns all day; shrine and infirmary lamps are small.
       const back = t + 0.35;
       if (r.kind === 'forge') lamps.push({ at: fy.point(x0 + 1.0, 1.08, back + 0.6), kind: 'hearth', intensity: 18, distance: 10 });
-      else if (r.kind === 'shrine') lamps.push({ at: fy.point(c, 1.4, back + 0.2), kind: 'hearth', intensity: 5, distance: 5 });
-      else if (r.kind === 'medicus') lamps.push({ at: fy.point(c + 0.4, 0.88, back + 0.9), kind: 'lamp' });
-      else if (r.kind === 'office' || r.kind === 'mess') lamps.push({ at: fy.point(c + 0.35, 0.85, back + 1.2), kind: 'lamp' });
+      else if (r.kind === 'shrine') lamps.push({ at: fy.point(c, 1.4, back + 0.2), kind: 'hearth', intensity: 5, distance: 5, glow: 0.1 });
+      else if (r.kind === 'medicus') lamps.push({ at: fy.point(c + 0.4, 0.88, back + 0.9), kind: 'lamp', glow: 0.1 });
+      else if (r.kind === 'office' || r.kind === 'mess') lamps.push({ at: fy.point(c + 0.35, 0.85, back + 1.2), kind: 'lamp', glow: 0.1 });
     }
     const kindMap: Record<RoomKind, string> = { armory: 'container', medicus: 'npc', office: 'npc', workshop: 'npc', store: 'container', shrine: 'shrine', mess: 'sit', forge: 'npc', cell: 'container' };
     // Containers face the shelves; people stand where the furniture leaves room (see roomStand).

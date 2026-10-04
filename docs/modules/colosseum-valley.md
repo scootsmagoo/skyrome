@@ -13,7 +13,7 @@ the city with `?scene=rome&at=<id>`. `&at=colosseum` lands you on the arena sand
 
 | File | Builds |
 | --- | --- |
-| `builders/colos-kit.ts` | Shared helpers (no builders): `Oval` (an ellipse and its parallel curves, bays at equal arc length), the `InstanceLod` system and `lodInstances()` (repeated pieces as InstancedMeshes with per-instance distance LOD), carved Roman numerals, cheap statues, `ovalPaving` (terrain-following ring paving that stops at a kerb where a hillside rises), `frontSteps`, `plantTrees`, `smokePlume` (a one-draw column of furnace smoke, animated while visible) and `addReadables` (see below). |
+| `builders/colos-kit.ts` | Shared helpers (no builders): `Oval` (an ellipse and its parallel curves, bays at equal arc length), the `InstanceLod` system and `lodInstances()` (repeated pieces as InstancedMeshes with per-instance distance LOD), carved Roman numerals, cheap statues, `ovalPaving` (terrain-following ring paving that stops at a kerb where a hillside rises), `frontSteps`, `plantTrees`, `smokePlume` (a one-draw column of furnace smoke, animated while visible), `addReadables` and `addLamps` (see below). |
 | `builders/colos-colosseum.ts` | `colosseum`. |
 | `builders/colos-ludus.ts` | `ludus-magnus` (the playable arena), `ludus-dacicus`, `ludus-gallicus`, `ludus-matutinus`. |
 | `builders/colos-court.ts` | `courtyardBuilding()`: ranges of rooms round a court with portico and gallery, gates, shop fronts and furnished enterable rooms (armoury, infirmary, office, shrine, mess, forge…). Used by the schools, the camps, the mint, the watch station and the Curiae. |
@@ -21,7 +21,11 @@ the city with `?scene=rome&at=<id>`. `&at=colosseum` lands you on the arena sand
 | `builders/colos-baths.ts` | `baths-trajan`, `baths-titus`, `sette-sale`, `domus-aurea-buried`. |
 | `builders/colos-caelian.ts` | `temple-divus-claudius`, `arch-dolabella`, `castra-peregrina`, `macellum-magnum`, `statio-vigiles-v`. |
 | `builders/colos-quarter.ts` | `castra-misenatium`, `moneta`, `curiae-veteres`, `porticus-liviae`, `domus-plinii`. |
+| `tests/colos-ctx.ts` | Shared set-up: the ids and a landmark context on the real heightmap with the real pads. |
 | `tests/colos-builders.test.ts` | Every id builds on the real terrain with valid colliders and unique spots; triangle budgets; the spots the gameplay team relies on; a "thing" at every tier-1 landmark. |
+| `tests/colos-spots.test.ts` | Every spot of every landmark against the real heightmap and the builder's own colliders: none under the terrain, none inside furniture or walls (a 0.3 m-radius body column), none floating over its floor. |
+| `tests/colos-pads.test.ts` | The plaza, the Titus forecourt and the Trajan approach lie on the flat pad. |
+| `tests/colos-lamps.test.ts` | The lamp system waits for the light pool, requests each flame at its world position and switches it off with the landmark. |
 | `tests/colos-walk.test.ts` | The real character controller walks the routes: plaza → arena by both long-axis gates, passage → imperial box, vomitorium → first balteus; the podium can't be climbed; the Ludus gate, its unclimbable arena wall and the stairs to the stands. |
 
 ## The Flavian Amphitheatre
@@ -76,11 +80,29 @@ T4). The street front has LVDVS · MAGNVS over the gate, torches and a painted n
   film runs down the cone (`waterSheetMaterial`, animated by the module's LOD system). Round it:
   the `lacus-metae` drinking basin, a plastered notice wall with the playbill for the games of
   18 May (content T7), the fan parties' standing spots and a loose paving slab (street cache).
+- **Baths of Titus:** brick ranges round two palaestrae and the caldarium; the porch of four
+  Corinthian columns (dedication on the frieze, torches beside the door) stands on a paved forecourt
+  on the Oppian brow. The door is real: leaves that open inwards, a groin-vaulted vestibule (mosaic
+  floor, the attendant behind his counter, statue niches, lampstands) and a passage into the great
+  hall, the frigidarium (20 × 31 m under two groin vaults, thermal windows, statues, a porphyry
+  labrum, the strongbox). The caldarium end is closed. South, the wide flight down to the plaza.
 - **Baths of Trajan:** walled garden with porticoes, libraries, the great hemicycle over the
   Golden House, and the bath block: porch with Trajan's dedication of 109, the natatio with its
   columnar screen, the enterable frigidarium (three groin vaults on eight granite columns), the
   caldarium projecting SW, palaestrae; smoke from the furnace stacks drifts over the garden (also
   over the Baths of Titus and the mint).
+
+## Light after dark
+
+`addLamps(game, root, specs)` (colos-kit) hands a landmark's flames to the sky module's light pool
+(`game.lights`). The pool is installed after the world is built, so the module queues the flames
+and requests them once it exists, from the landmark's final world matrix; a flame is switched off
+while its landmark is culled. Kinds: `torch` (night only: the axial porches, gates, the Baths'
+porches), `lamp` (night only: lampstands in the ambulatory, the Baths, office and infirmary
+lamps), `brazier` (burns all day, its light lost in sunlight: the sellers' pitches), `hearth` (burns
+all day and keeps its light by day: forges, shrine lamps, the vestibule of the Baths of Titus).
+The Colosseum has about 60, the Ludus Magnus and the baths a dozen each. Courtyard buildings
+return their flames in `CourtResult.lamps`.
 
 ## Spots and readable inscriptions
 
@@ -106,14 +128,18 @@ interaction system). If the gameplay team builds a generic reader for `inscripti
 ## Shared-file changes
 
 - `src/world/rome/buildRome.ts` (`landmarkPads`): landmarks with `siting: 'underground'` (the
-  buried Domus Aurea) no longer flatten a terrain pad.
+  buried Domus Aurea) no longer flatten a terrain pad. `PAD_EXTRA` widens the pads of the places
+  whose builders pave outside the atlas footprint: the Colosseum +20 m (real) all round with a 22 m
+  blend (the plaza out to the cippi, cut into the foot of the Velia), and a forecourt strip in
+  front of the facade for the Baths of Titus (26 m) and of Trajan (22 m).
 
 ## Known limits
 
-- The plaza's outer ring lies partly on the terrain pad's blend zone (pads are flat to 1 m past the
-  atlas footprint, then blend over 14 m). Where the Oppian rises the paving stops at a kerb. A
-  per-landmark pad surround in `landmarkPads` (e.g. +20 m for the Colosseum) would let the whole
-  ring lie flat.
+- On the north arc of the plaza (towards the Baths of Titus) the foot of the Titus terrace meets
+  the rim: the paving stops at a kerb there instead of climbing the bank.
+- The east edge of the Titus forecourt meets the platform of the Baths of Trajan (6 m higher, its own
+  pad), so its paving stops at x = 5.
 - The cavea is empty (no games until 18 May). A crowd for game days belongs to the NPC module; the
   seats have `sit` spots.
-- The hypogeum, the Domus Aurea and the Ludus tunnel are entrances only (later dungeons).
+- The hypogeum, the Domus Aurea and the Ludus tunnel are entrances only (later dungeons). The
+  caldarium of the Baths of Titus is closed.

@@ -884,13 +884,14 @@ export interface LampSpec {
   /** Landmark-local position of the flame. */
   at: THREE.Vector3;
   kind: LampKind;
-  /** Override the preset's reach (m) or intensity. */
+  /** Override the preset's reach (m), intensity or glow-sprite radius (m). */
   distance?: number;
   intensity?: number;
+  glow?: number;
 }
 
 /** Local-space point and kind for a quick `lamps.push(...)`. */
-export function lampAt(kind: LampKind, x: number, y: number, z: number, o: { distance?: number; intensity?: number } = {}): LampSpec {
+export function lampAt(kind: LampKind, x: number, y: number, z: number, o: { distance?: number; intensity?: number; glow?: number } = {}): LampSpec {
   return { at: new THREE.Vector3(x, y, z), kind, ...o };
 }
 
@@ -941,7 +942,7 @@ export class LampSystem implements System {
               distance: l.distance ?? o.distance,
               night: o.night,
               dayScale: o.dayScale,
-              glow: o.glow,
+              glow: l.glow ?? o.glow,
               flicker: o.flicker,
               priority: o.priority,
             }),

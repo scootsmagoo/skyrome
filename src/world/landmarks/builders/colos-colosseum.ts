@@ -677,7 +677,7 @@ export function buildColosseum(ctx: LandmarkContext) {
       const lp = new THREE.Vector3().setFromMatrixPosition(fr.clone().multiply(new THREE.Matrix4().makeTranslation(0.12, 1.0, -1.02)));
       placeProp(new Draw(inner), 'oil_lamp', lp.x, lp.y, lp.z, 0, { collide: false, rng: new Rng('nemesis') });
       // A shrine lamp burns all day in the dark corridor.
-      lamps.push(lampAt('hearth', lp.x, lp.y + 0.07, lp.z, { intensity: 5, distance: 5 }));
+      lamps.push(lampAt('hearth', lp.x, lp.y + 0.07, lp.z, { intensity: 5, distance: 5, glow: 0.1 }));
     }
     const sp = new THREE.Vector3().setFromMatrixPosition(fr.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0.05, -1.75)));
     const [nx, nz] = oval.normal(t);
