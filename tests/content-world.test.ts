@@ -211,6 +211,36 @@ describe('content in the built world', () => {
     expect([...new Set(bad)]).toEqual([]);
   });
 
+  it('the builders\' own places replace the fallbacks and stand in the open: the opening at the Porta Capena, the Leaning Insula and Tuccius\' house on the Vicus Tuscus', () => {
+    const ids = [
+      'spawn-capena', 'night-cart', 'night-cart-driver', 'courier-ambush', 'capena-grassator-a', 'capena-grassator-b',
+      'insula-nutans', 'insula-nutans-taberna', 'insula-nutans-scalae', 'insula-nutans-tectum', 'insula-nutans-cenaculum', 'insula-tuccii',
+    ];
+    expect(content.worldSpots).toEqual(expect.arrayContaining(ids));
+    for (const id of ids) {
+      const l = game.locations!.get(id)!;
+      const p = { x: l.position.x, y: l.position.y ?? 0, z: l.position.z };
+      // On the ground there (looked for from just above, so the passage under the arch counts), a person's height clear of every collider.
+      const ground = world.physics.groundHeight(p.x, p.z, p.y + 0.6, 60);
+      expect(ground, id).not.toBeNull();
+      expect(Math.abs(p.y - ground!), `${id} floats or sinks`).toBeLessThan(0.3);
+      expect(world.physics.overlapSphere({ x: p.x, y: p.y + 0.45, z: p.z }, 0.28, Layer.World).length, `${id} is in a wall at the feet`).toBe(0);
+      expect(world.physics.overlapSphere({ x: p.x, y: p.y + 1.5, z: p.z }, 0.28, Layer.World).length, `${id} is in a wall at the head`).toBe(0);
+      // Not on a roof or a podium: the street under the open sky, except the passage of the gate.
+      if (!/capena-grassator-b/.test(id)) expect(top(p.x, p.z)! - hm.heightAt(p.x, p.z), `${id} is above the street`).toBeLessThan(0.9);
+    }
+    // The cart stands outside the gate, on the road well before the arcade and the gate block (the builder puts it 11 m out).
+    const gate = game.landmarks.get('porta-capena')!;
+    const cart = game.locations!.get('night-cart')!.position;
+    expect(Math.hypot(cart.x - gate.position.x, cart.z - gate.position.z)).toBeGreaterThan(9);
+    // The insulae are the builder's blocks: the fallbacks moved off them, onto the street.
+    for (const id of ['insula-nutans', 'insula-tuccii']) {
+      const f = CONTENT_LOCATIONS.find((x) => x.id === id)!.position;
+      const l = game.locations!.get(id)!.position;
+      expect(Math.hypot(f.x - l.x, f.z - l.z), `${id}: fallback near the building`).toBeLessThan(14);
+    }
+  });
+
   it('stages the opening on open ground: the spawn, the cart, Festus, Dromo and the ambush are at street level', () => {
     for (const s of OPENING_SPOTS) {
       const g = top(s.position.x, s.position.z)!;

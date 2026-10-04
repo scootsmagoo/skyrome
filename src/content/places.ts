@@ -63,6 +63,22 @@ export function atReal(x: number, z: number, elevation = 13): { x: number; y: nu
   return { x: round1(gx), y: round1(elevToY(elevation)), z: round1(gz) };
 }
 
+/**
+ * Atlas real metres on the line of an atlas road at real z (the roads here run north to south, so z
+ * is single-valued), `west` metres toward −x. Open street by construction: nothing is ever built on
+ * the road itself, whatever stands beside it.
+ */
+function onRoad(roadId: string, z: number, west = 0): [number, number] {
+  const pts = ROADS.find((r) => r.id === roadId)?.points;
+  if (!pts?.length) throw new Error(`[content] unknown road "${roadId}"`);
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [x0, z0] = pts[i];
+    const [x1, z1] = pts[i + 1];
+    if (z >= Math.min(z0, z1) && z <= Math.max(z0, z1)) return [x0 + ((x1 - x0) * (z - z0)) / (z1 - z0 || 1) - west, z];
+  }
+  throw new Error(`[content] z = ${z} is off the road "${roadId}"`);
+}
+
 /** A LocationDef for an atlas landmark (radius from its footprint, clamped 8…60 m). */
 export function landmarkLocation(id: string, extra: Partial<LocationDef> = {}): LocationDef {
   const lm = LANDMARK_BY_ID[id];
@@ -146,8 +162,11 @@ export const BIBLE_SPOTS: LocationDef[] = [
   spot('statio-cohortium-urbanarum', 'Post of the Urban Cohorts', [30, -62], 6, { mapMarker: 'camp', discoverable: true }),
   // §1.2 — used by v0.1 people and quests (and the three ids src/rpg/data already references)
   spot('insula-mariorum', 'Insula of the Marii', [-82, 345], 8, { mapMarker: 'house', discoverable: true }),
-  spot('insula-nutans', 'The Leaning Insula', [-42, 352], 8, { latin: 'Insula Nutans', mapMarker: 'house', discoverable: true }),
-  spot('insula-tuccii', 'Insula of Tuccius the Cooper', [-55, 420], 8, { mapMarker: 'house' }),
+  // The bible puts the Leaning Insula (-42, 352) and Tuccius' house (-55, 420) beside the Vicus Tuscus,
+  // on the lots the Lupercal's row of blocks now stands on: the builder's spots (WORLD_SPOTS below) are
+  // their real places. These fallbacks, for a world without that row, are on the street in front of them.
+  spot('insula-nutans', 'The Leaning Insula', onRoad('vicus-tuscus', 352), 8, { latin: 'Insula Nutans', mapMarker: 'house', discoverable: true }),
+  spot('insula-tuccii', 'Insula of Tuccius the Cooper', onRoad('vicus-tuscus', 420), 8, { mapMarker: 'house' }),
   spot('excubitorium-velabri', 'Watch Post of the Vigiles, Velabrum', [-110, 300], 6, { latin: 'Excubitorium', mapMarker: 'camp', discoverable: true }),
   spot('compitum-velabri', 'Crossroads Shrine of the Velabrum', [-125, 355], 3, { mapMarker: 'temple', discoverable: true }),
   spot('compitum-boarii', 'Crossroads Shrine of the Cattle Market', [-215, 445], 3, { parent: 'forum-boarium', mapMarker: 'temple', discoverable: true }),
@@ -216,13 +235,17 @@ function alias(id: string, of: string, radius?: number, extra: Partial<LocationD
  * a dozen metres further down the street: everything happens in front of the player, on open
  * ground, and nothing stands in or on the gate. Gate frame: `forward` along the façade normal
  * (the city side is negative), `side` along the façade (positive is the walker's left).
+ *
+ * The cart, its driver and Festus stand on the road itself (|side| < 2 m): the Porta Capena builder's
+ * quarter inside the gate lines that street with shops and houses from 3.5 m either side, and a cart
+ * a little further out, where the open ground of the solid-gate world was, would be inside one of them.
  */
 export const CAPENA_FALLBACK_SPAWN = 10;
 const gate = (forward: number, side: number) => atLandmark('porta-capena', forward, side);
 export const OPENING_SPOTS: LocationDef[] = [
   { id: 'spawn-capena', name: 'Inside the Capena Gate (the night cart)', position: gate(-CAPENA_FALLBACK_SPAWN, 0), radius: 6, parent: 'porta-capena' },
-  { id: 'night-cart', name: 'Dromo’s cart', position: gate(-13.5, 4.4), radius: 5, parent: 'porta-capena' },
-  { id: 'night-cart-driver', name: 'Beside Dromo’s cart', position: gate(-12, 6.9), radius: 1.5, parent: 'porta-capena' },
+  { id: 'night-cart', name: 'Dromo’s cart', position: gate(-14.5, -0.9), radius: 5, parent: 'porta-capena' },
+  { id: 'night-cart-driver', name: 'Beside Dromo’s cart', position: gate(-14.5, 1.1), radius: 1.5, parent: 'porta-capena' },
   { id: 'night-cart-courier', name: 'Where Festus waits by the cart', position: gate(-12.4, 1.9), radius: 1.5, parent: 'porta-capena' },
   { id: 'courier-ambush', name: 'Below the dripping arch', position: gate(-23, -2.5), radius: 5, parent: 'porta-capena' },
   { id: 'capena-grassator-a', name: 'Where the first knife-man waits', position: gate(-26.5, -4.5), radius: 2, parent: 'porta-capena' },
@@ -301,10 +324,11 @@ export const CONTENT_SPOTS: LocationDef[] = [
   opening('capena-grassator-a'),
   opening('capena-grassator-b'),
   // misc-insula-nutans: evidence points inside the leaning insula (child spots, CONTENT.md §3.3.3).
-  spot('insula-nutans-taberna', 'Ground-floor wall behind the taberna', [-38, 350], 2.5, { parent: 'insula-nutans' }),
-  spot('insula-nutans-scalae', 'The propped stair', [-44, 356], 2.5, { parent: 'insula-nutans' }),
-  spot('insula-nutans-tectum', 'Top floor of the leaning insula', [-42, 354], 2.5, { parent: 'insula-nutans' }),
-  spot('insula-nutans-cenaculum', 'Iulia Prima’s flat', [-46, 349], 2.5, { parent: 'insula-nutans' }),
+  // (Fallbacks on the street, as above; the builder's spots stand at the real building's door, stair and front.)
+  spot('insula-nutans-taberna', 'Ground-floor wall behind the taberna', onRoad('vicus-tuscus', 347, -1.2), 2.5, { parent: 'insula-nutans' }),
+  spot('insula-nutans-scalae', 'The propped stair', onRoad('vicus-tuscus', 357, 1.2), 2.5, { parent: 'insula-nutans' }),
+  spot('insula-nutans-tectum', 'Top floor of the leaning insula', onRoad('vicus-tuscus', 354), 2.5, { parent: 'insula-nutans' }),
+  spot('insula-nutans-cenaculum', 'Iulia Prima’s flat', onRoad('vicus-tuscus', 346, 1.2), 2.5, { parent: 'insula-nutans' }),
 ];
 
 /** Every location the content installs. */
@@ -357,6 +381,15 @@ export const WORLD_SPOTS: Record<string, { radius: number; name: string; also?: 
   'ludus-arena-center': { radius: 22, name: 'Practice Arena of the Ludus Magnus', also: ['ludus-cavea'] },
   lanista: { radius: 5, name: 'The procurator’s office' },
   'ludus-cellae': { radius: 8, name: 'Ludus Barracks' },
+  // The Lupercal builder's row on the Vicus Tuscus (src/world/landmarks/builders/palcirc-germalus.ts): the
+  // Leaning Insula (its cobbler's front, stair door, and the sidewalk below the crack that runs up its
+  // front) and Tuccius' stair, all at street level; the upper floors have no way in.
+  'insula-nutans': { radius: 8, name: 'The Leaning Insula' },
+  'insula-nutans-taberna': { radius: 2.5, name: 'Ground-floor wall behind the taberna' },
+  'insula-nutans-scalae': { radius: 2.5, name: 'The propped stair' },
+  'insula-nutans-tectum': { radius: 2.5, name: 'Top floor of the leaning insula' },
+  'insula-nutans-cenaculum': { radius: 2.5, name: 'Iulia Prima’s flat' },
+  'insula-tuccii': { radius: 8, name: 'Insula of Tuccius the Cooper' },
   armory: { radius: 5, name: 'Ludus Armory', also: ['ludus-armamentarium'] },
   medicus: { radius: 5, name: 'Ludus Infirmary', also: ['ludus-saniarium'] },
 };
