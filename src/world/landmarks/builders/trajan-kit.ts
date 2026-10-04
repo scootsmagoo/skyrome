@@ -75,15 +75,13 @@ export class LodChunks {
   }
 }
 
-/** Shift every mesh of a built group so `center` becomes its origin. */
+/**
+ * Re-origin a built group on `center` (the LOD sits there, so its distance test is measured from
+ * the chunk). The group is offset rather than its geometry translated: instanced parts (the kit's
+ * columns) share one geometry across the whole program and must never be modified in place.
+ */
 function recentre(group: THREE.Group, c: THREE.Vector3): THREE.Group {
-  group.traverse((o) => {
-    const m = o as THREE.Mesh;
-    if (!m.isMesh) return;
-    m.geometry.translate(-c.x, -c.y, -c.z);
-    m.geometry.computeBoundingSphere();
-    m.geometry.computeBoundingBox();
-  });
+  group.position.set(-c.x, -c.y, -c.z);
   return group;
 }
 
@@ -153,7 +151,7 @@ export function facing(b: MeshBuilder, mat: Mat, m: THREE.Matrix4, pts: THREE.Ve
 export const UP = new THREE.Vector3(0, 1, 0);
 
 /** Vertical arc band (annular sector wall) centred on (cx, cz), angles measured from +x towards +z. */
-export function arcWall(b: MeshBuilder, mat: Mat, m: THREE.Matrix4, cx: number, cz: number, r0: number, r1: number, a0: number, a1: number, y0: number, y1: number, segs: number) {
+export function arcWall(b: MeshBuilder, mat: Mat, m: THREE.Matrix4, cx: number, cz: number, r0: number, r1: number, a0: number, a1: number, y0: number, y1: number, segs: number, opts: { castShadow?: boolean } = {}) {
   const pts: V2[] = [];
   for (let i = 0; i <= segs; i++) {
     const a = a0 + ((a1 - a0) * i) / segs;
@@ -170,7 +168,7 @@ export function arcWall(b: MeshBuilder, mat: Mat, m: THREE.Matrix4, cx: number, 
   );
   g.rotateX(-Math.PI / 2);
   g.translate(0, y1, 0);
-  b.add(g, mat, m);
+  b.add(g, mat, m, { castShadow: opts.castShadow });
 }
 
 /** Box colliders approximating an arc wall (one per `n` segments). */
@@ -189,8 +187,56 @@ export function arcColliders(b: MeshBuilder, m: THREE.Matrix4, cx: number, cz: n
 }
 
 /** Horizontal annular sector (floor/paving ring) at height y, facing up. */
-export function arcFloor(b: MeshBuilder, mat: Mat, m: THREE.Matrix4, cx: number, cz: number, r0: number, r1: number, a0: number, a1: number, y: number, segs: number, thickness = 0.1) {
-  arcWall(b, mat, m, cx, cz, r0, r1, a0, a1, y - thickness, y, segs);
+export function arcFloor(b: MeshBuilder, mat: Mat, m: THREE.Matrix4, cx: number, cz: number, r0: number, r1: number, a0: number, a1: number, y: number, segs: number, thickness = 0.1, opts: { castShadow?: boolean } = {}) {
+  arcWall(b, mat, m, cx, cz, r0, r1, a0, a1, y - thickness, y, segs, opts);
+}
+
+/**
+ * Conical roof over a circular sector (angles a0 → a1 from +x towards +z): eaves at radius `r` and
+ * height `y0`, apex over the centre at `apexY`. Every facet faces up; UVs run in metres (/UV_METERS)
+ * along the eaves (u) and down the slope (v), so tile textures keep their real size.
+ */
+export function coneRoof(b: MeshBuilder, mat: Mat, m: THREE.Matrix4, cx: number, cz: number, r: number, a0: number, a1: number, y0: number, apexY: number, segs: number, opts: { castShadow?: boolean } = {}) {
+  const apex = new THREE.Vector3(cx, apexY, cz);
+  const slope = Math.hypot(r, apexY - y0) / UV_METERS;
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const pa = new THREE.Vector3();
+  const pb = new THREE.Vector3();
+  const e1 = new THREE.Vector3();
+  const e2 = new THREE.Vector3();
+  for (let i = 0; i < segs; i++) {
+    const aa = a0 + ((a1 - a0) * i) / segs;
+    const ab = a0 + ((a1 - a0) * (i + 1)) / segs;
+    pa.set(cx + Math.cos(aa) * r, y0, cz + Math.sin(aa) * r);
+    pb.set(cx + Math.cos(ab) * r, y0, cz + Math.sin(ab) * r);
+    const u0 = (Math.abs(aa - a0) * r) / UV_METERS;
+    const u1 = (Math.abs(ab - a0) * r) / UV_METERS;
+    const up = e1.subVectors(pa, apex).cross(e2.subVectors(pb, apex)).y > 0;
+    const [p, q, uq, up2] = up ? [pa, pb, u0, u1] : [pb, pa, u1, u0];
+    pos.push(apex.x, apex.y, apex.z, p.x, p.y, p.z, q.x, q.y, q.z);
+    uv.push((u0 + u1) / 2, 0, uq, slope, up2, slope);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.computeVertexNormals();
+  b.add(g, mat, m, { uv: 'keep', castShadow: opts.castShadow });
+}
+
+/** A rectangular beam of section w × h from `a` to `b` (its h axis kept as close to world up as possible). */
+export function beam(bld: MeshBuilder, mat: Mat, m: THREE.Matrix4, a: THREE.Vector3, b: THREE.Vector3, w: number, h: number, opts: { castShadow?: boolean } = {}) {
+  const dir = new THREE.Vector3().subVectors(b, a);
+  const len = dir.length();
+  if (len < 1e-4) return;
+  dir.divideScalar(len);
+  const side = new THREE.Vector3().crossVectors(dir, UP);
+  if (side.lengthSq() < 1e-6) side.set(1, 0, 0);
+  side.normalize();
+  const up = new THREE.Vector3().crossVectors(side, dir).normalize();
+  const basis = new THREE.Matrix4().makeBasis(side, up, dir.clone().negate());
+  basis.setPosition((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+  bld.box(mat, w, h, len, mul(m, basis), { castShadow: opts.castShadow });
 }
 
 // ---------------------------------------------------------------- columns

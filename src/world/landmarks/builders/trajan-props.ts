@@ -267,9 +267,11 @@ export function altar(b: MeshBuilder, at: THREE.Matrix4, o: { w?: number; d?: nu
     }
   }
   if (o.fire ?? true) {
-    const f = new THREE.ConeGeometry(0.2, 0.45, 6);
-    f.translate(0, h + 0.25, 0);
-    b.add(f, 'glow_fire', at, { castShadow: false });
+    const coals = new THREE.CylinderGeometry(0.32, 0.36, 0.08, 10);
+    coals.translate(0, h + 0.04, 0);
+    b.add(coals, 'glow_fire', at, { castShadow: false });
+    flame(b, mul(at, T(0, h + 0.06, 0)), 0.45, 0.13);
+    flame(b, mul(at, TRS(0.12, h + 0.06, 0.05, 0, 0.7, 0)), 0.3, 0.09);
   }
   return h;
 }
@@ -286,7 +288,63 @@ export function tripod(b: MeshBuilder, at: THREE.Matrix4, h = 1.2) {
   const coals = new THREE.CylinderGeometry(0.25, 0.25, 0.04, 10);
   coals.translate(0, h + 0.1, 0);
   b.add(coals, 'glow_fire', at, { castShadow: false });
+  flame(b, mul(at, T(0, h + 0.11, 0)), 0.22, 0.07);
   solidBox(b, at, 0, h / 2, 0, 0.5, h, 0.5);
+}
+
+/** A small flame: two crossed tapering blades of glowing fire (reads as a flame from any side). */
+export function flame(b: MeshBuilder, at: THREE.Matrix4, h = 0.4, r = 0.12) {
+  for (const ry of [0, Math.PI / 2]) {
+    const g = new THREE.BufferGeometry();
+    const pts = [-r, 0, 0, r, 0, 0, r * 0.35, h * 0.55, 0, -r, 0, 0, r * 0.35, h * 0.55, 0, 0, h, 0, -r, 0, 0, 0, h, 0, -r * 0.4, h * 0.6, 0];
+    // Both faces (no DoubleSide material needed).
+    const both = [...pts];
+    for (let i = 0; i < pts.length; i += 9) both.push(pts[i], pts[i + 1], pts[i + 2], pts[i + 6], pts[i + 7], pts[i + 8], pts[i + 3], pts[i + 4], pts[i + 5]);
+    g.setAttribute('position', new THREE.Float32BufferAttribute(both, 3));
+    g.computeVertexNormals();
+    b.add(g, 'glow_fire', mul(at, TRS(0, 0, 0, 0, ry, 0)), { castShadow: false });
+  }
+}
+
+/**
+ * Bronze candelabrum (lampadarius) for the processional way and the halls: three lion-paw feet, a
+ * fluted shaft with knops, and an oil dish with its flame at the top. Returns the flame's base height.
+ */
+export function candelabrum(b: MeshBuilder, at: THREE.Matrix4, h = 2.3, collide = true): number {
+  for (let k = 0; k < 3; k++) {
+    const a = (k / 3) * Math.PI * 2;
+    b.add(cylinderBetween(V(0, 0.32, 0), V(Math.sin(a) * 0.32, 0.06, Math.cos(a) * 0.32), 0.03, 0.022, 5), 'bronze', at);
+    const paw = new THREE.SphereGeometry(0.055, 6, 4);
+    paw.scale(1, 0.8, 1.3);
+    paw.translate(Math.sin(a) * 0.34, 0.045, Math.cos(a) * 0.34);
+    b.add(paw, 'bronze', at);
+  }
+  b.add(cylinderBetween(V(0, 0.3, 0), V(0, h - 0.12, 0), 0.035, 0.026, 8), 'bronze', at);
+  for (const y of [0.34, h * 0.45, h - 0.18]) {
+    const knop = new THREE.SphereGeometry(0.06, 8, 5);
+    knop.scale(1, 0.6, 1);
+    knop.translate(0, y, 0);
+    b.add(knop, 'gilded_bronze', at);
+  }
+  const dish = new THREE.CylinderGeometry(0.2, 0.08, 0.1, 10, 1, true);
+  dish.translate(0, h - 0.05, 0);
+  b.add(dish, 'bronze', at);
+  const oil = new THREE.CylinderGeometry(0.18, 0.18, 0.02, 10);
+  oil.translate(0, h - 0.03, 0);
+  b.add(oil, 'black', at, { castShadow: false });
+  flame(b, mul(at, T(0, h - 0.03, 0)), 0.24, 0.065);
+  if (collide) solidBox(b, at, 0, h / 2, 0, 0.35, h, 0.35);
+  return h - 0.03;
+}
+
+/** A pitch torch on a wooden pole planted in a stone block (the tribunal, the guards' posts). Returns the flame height. */
+export function torchPole(b: MeshBuilder, at: THREE.Matrix4, h = 2.6): number {
+  b.box('travertine', 0.34, 0.24, 0.34, mul(at, T(0, 0.12, 0)));
+  b.add(cylinderBetween(V(0, 0.2, 0), V(0, h - 0.25, 0), 0.04, 0.035, 6), 'wood_dark', at);
+  b.add(cylinderBetween(V(0, h - 0.3, 0), V(0, h, 0), 0.07, 0.085, 6), 'fabric_ochre', at);
+  flame(b, mul(at, T(0, h, 0)), 0.34, 0.08);
+  solidBox(b, at, 0, h / 2, 0, 0.34, h, 0.34);
+  return h + 0.15;
 }
 
 /** A vexillum: a pole with a crossbar and a hanging square banner (red with a gold fringe). */

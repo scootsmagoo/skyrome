@@ -15,6 +15,8 @@ import { builderFor } from '../src/world/landmarks/registry';
 import type { LandmarkBuild, LandmarkData, Spot } from '../src/world/landmarks/types';
 import { SIDE_X } from '../src/world/landmarks/builders/trajan-basilica';
 import { PLAN, TRAJAN_INSCRIPTIONS, divide, flight, forumSite, forumToLocal, uvToLocal, uvToWorld, worldToLocal, worldToUV } from '../src/world/landmarks/builders/trajan-layout';
+import { brickFront } from '../src/world/landmarks/builders/trajan-facades';
+import { coneRoof } from '../src/world/landmarks/builders/trajan-kit';
 
 const IDS = ['forum-trajan', 'forum-trajan-gateway', 'equus-traiani', 'basilica-ulpia', 'column-trajan', 'bibliotheca-ulpia-east', 'bibliotheca-ulpia-west', 'markets-trajan'];
 const SPOT_KINDS = new Set(['inscription', 'vista', 'shrine', 'container', 'door', 'npc', 'vendor', 'spawn', 'sit', 'stall']);
@@ -277,5 +279,84 @@ describe('trajan walkability (collider ground profile)', () => {
     const { p, dir } = spotWorld('markets-trajan', 'markets-taberna5-stall');
     const w = walk(cols, [p.clone().setY(0), p.clone().addScaledVector(dir, 3.2)], 0.04);
     expect(w.blockedAt).toBeNull();
+  });
+});
+
+describe('trajan lamps, roofs and street fronts', () => {
+  /** A stand-in Game: collects systems, and a light pool that records requests. */
+  function fakeGame() {
+    const systems: { update?: (dt: number, a: number) => void }[] = [];
+    const requests: { position: THREE.Vector3Like; intensity?: number }[] = [];
+    const game = { addSystem: (s: (typeof systems)[number]) => (systems.push(s), s), lights: undefined as unknown };
+    return { game, systems, requests, installPool: () => (game.lights = { request: (r: (typeof requests)[number]) => (requests.push(r), {}) }) };
+  }
+
+  it('queue their lamps until the light pool exists, then request them in world space', () => {
+    const f = fakeGame();
+    const lm = lmOf('forum-trajan');
+    const built = builderFor(lm)!.build({ game: f.game as never, lm, S: 0.6, rng: new Rng('x'), detail: 'high', builder: () => new MeshBuilder(), groundAt: () => 0 });
+    built.object.position.set(100, 10, -50);
+    built.object.updateMatrixWorld(true);
+    expect(f.systems.length).toBe(1);
+    f.systems[0].update?.(0.016, 1);
+    expect(f.requests.length).toBe(0); // no pool yet
+    f.installPool();
+    f.systems[0].update?.(0.016, 1);
+    expect(f.requests.length).toBeGreaterThanOrEqual(20);
+    for (const r of f.requests) {
+      expect(Number.isFinite(r.position.x + r.position.y + r.position.z)).toBe(true);
+      expect(r.position.y).toBeGreaterThan(10); // above the pad, in world space
+    }
+    f.systems[0].update?.(0.016, 1);
+    expect(f.requests.length).toBeLessThan(200); // requested once
+  });
+
+  it('every Trajanic landmark lights something for the 04:30 start', () => {
+    const f = fakeGame();
+    for (const id of IDS) {
+      const lm = lmOf(id);
+      builderFor(lm)!.build({ game: f.game as never, lm, S: 0.6, rng: new Rng(id), detail: 'high', builder: () => new MeshBuilder(), groundAt: () => 0 });
+    }
+    f.installPool();
+    for (const s of f.systems) s.update?.(0.016, 1);
+    expect(f.systems.length).toBe(1); // one shared queue per game
+    expect(f.requests.length).toBeGreaterThanOrEqual(60);
+  });
+
+  it('cone roofs face up on both hands of the axis', () => {
+    for (const [a0, a1] of [
+      [-Math.PI / 2, Math.PI / 2],
+      [Math.PI / 2, Math.PI * 1.5],
+    ]) {
+      const b = new MeshBuilder();
+      coneRoof(b, 'roof_tile', new THREE.Matrix4(), 0, 0, 10, a0, a1, 5, 8, 12);
+      const g = b.build().children[0] as THREE.Mesh;
+      const n = g.geometry.getAttribute('normal');
+      for (let i = 0; i < n.count; i++) expect(n.getY(i)).toBeGreaterThan(0);
+    }
+  });
+
+  it('brick street fronts shutter most shops at dawn and close the face with a collider', () => {
+    const b = new MeshBuilder();
+    const f = brickFront(b, new THREE.Matrix4(), { x0: -20, x1: 20, storeys: [4.4, 4.0], shops: true, seed: 3 });
+    expect(f.shops.length).toBeGreaterThanOrEqual(9);
+    expect(f.shops.filter((s) => s.open).length).toBeLessThan(f.shops.length);
+    expect(f.top).toBeCloseTo(8.4, 6);
+    expect(b.colliders.length).toBe(1);
+  });
+
+  const cols = worldColliders();
+  it('the processional way runs from the gateway to the tribunal past the Equus and the candelabra', () => {
+    const w = walk(cols, [fl(3.2, -34), fl(3.2, 18)], 0.03);
+    expect(w.blockedAt, `blocked at ${w.blockedAt?.toArray().map((v) => v.toFixed(2))}`).toBeNull();
+  });
+
+  it('the street behind the Markets is open, and its shop fronts are solid', () => {
+    const m = placement('markets-trajan');
+    const P = (x: number, z: number) => new THREE.Vector3(x, 0, z).applyMatrix4(m);
+    const along = walk(cols, [P(-38, 19.6), P(38, 19.6)], 0);
+    expect(along.blockedAt).toBeNull();
+    const into = walk(cols, [P(3, 21), P(3, 15)], 0);
+    expect(into.blockedAt).not.toBeNull();
   });
 });

@@ -27,10 +27,11 @@ import { inscriptionPanel } from '../../../arch/common/inscription';
 import { wall, type Opening } from '../../../arch/common/walls';
 import type { ColliderSpec, MeshBuilder } from '../../../gfx/MeshBuilder';
 import type { LandmarkBuilder, LandmarkContext, Spot } from '../types';
-import { LodChunks, UP, arcColliders, arcFloor, arcWall, boxMinMax, colonnadeColumn, facing, farColumn, quad, solidBox, type Mat } from './trajan-kit';
+import { LodChunks, UP, arcColliders, arcFloor, arcWall, boxMinMax, colonnadeColumn, coneRoof, facing, farColumn, quad, solidBox, type Mat } from './trajan-kit';
 import { PLAN, S, TRAJAN_INSCRIPTIONS, divide, forumToLocal } from './trajan-layout';
 import { cipollinoMaterial, coffersMaterial, gildedTilesMaterial, graniteMaterial, sectileMaterial } from './trajan-materials';
-import { garland, statueBase, tribunal } from './trajan-props';
+import { Lamps } from './trajan-lights';
+import { candelabrum, garland, statueBase, tribunal } from './trajan-props';
 import { chariotTeam, clipeus, dacianCaptive, figureBlock, victory } from './trajan-sculpture';
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -288,12 +289,14 @@ function shell(ctx: LandmarkContext, b: MeshBuilder, F: THREE.Matrix4, spots: Sp
       const ab = a0 + (Math.PI * (i + 1)) / segs;
       const pa = V(cx + Math.cos(aa) * rr, B.yOuter - 0.1, zc + Math.sin(aa) * rr);
       const pb = V(cx + Math.cos(ab) * rr, B.yOuter - 0.1, zc + Math.sin(ab) * rr);
-      const tri = sx > 0 ? [apex, pa, pb] : [apex, pb, pa];
+      // Wind each facet so it faces up (angles grow from +x towards +z, i.e. clockwise from above).
+      const up = new THREE.Vector3().subVectors(pa, apex).cross(new THREE.Vector3().subVectors(pb, apex)).y > 0;
+      const tri = up ? [apex, pa, pb] : [apex, pb, pa];
       for (const p of tri) g.push(p.x, p.y, p.z);
       const u0 = (i * rr * Math.PI) / segs / 2;
       const u1 = ((i + 1) * rr * Math.PI) / segs / 2;
       const w = rr / 2;
-      uvs.push(...(sx > 0 ? [(u0 + u1) / 2, 0, u0, w, u1, w] : [(u0 + u1) / 2, 0, u1, w, u0, w]));
+      uvs.push(...(up ? [(u0 + u1) / 2, 0, u0, w, u1, w] : [(u0 + u1) / 2, 0, u1, w, u0, w]));
     }
     const cone = new THREE.BufferGeometry();
     cone.setAttribute('position', new THREE.Float32BufferAttribute(g, 3));
@@ -417,7 +420,7 @@ function porches(ctx: LandmarkContext, chunks: LodChunks, F: THREE.Matrix4, main
 
 // ---------------------------------------------------------------- interior
 
-function interior(ctx: LandmarkContext, chunks: LodChunks, F: THREE.Matrix4, main: MeshBuilder, spots: Spot[]) {
+function interior(ctx: LandmarkContext, chunks: LodChunks, F: THREE.Matrix4, main: MeshBuilder, spots: Spot[], lamps: Lamps) {
   const B = BAS;
   const hi = ctx.detail === 'high';
   const granite = graniteMaterial();
@@ -485,6 +488,11 @@ function interior(ctx: LandmarkContext, chunks: LodChunks, F: THREE.Matrix4, mai
     solidBox(main, at, 0, 0.45, 0, 1.6, 0.9, 0.8);
     spots.push({ id: `basilica-scribe${k}`, kind: 'stall', position: V(x, B.yF, z + 0.9).applyMatrix4(F), heading: Math.PI });
   }
+  // Candelabra by the courts and down the nave (lit before dawn: cases start at first light).
+  for (const p of [V(-15.4, 0, B.zc + 4.2), V(-8.6, 0, B.zc + 4.2), V(8.6, 0, B.zc + 4.2), V(15.4, 0, B.zc + 4.2), V(-21, 0, B.zc - 3), V(21, 0, B.zc - 3), V(0, 0, B.zc + 5.2)]) {
+    const at = mul(F, T(p.x, B.yF, p.z));
+    lamps.add('interior', V(0, candelabrum(main, at, 2.3) + 0.12, 0), at);
+  }
   spots.push({ id: 'basilica-spawn-nave', kind: 'spawn', position: V(0, B.yF, B.zc - 4).applyMatrix4(F), heading: 0 });
   spots.push({ id: 'basilica-vista-nave', kind: 'vista', position: V(-B.innerX + 3, B.yF, B.zc).applyMatrix4(F), heading: -Math.PI / 2 });
 
@@ -501,6 +509,10 @@ function interior(ctx: LandmarkContext, chunks: LodChunks, F: THREE.Matrix4, mai
       spots.push({ id: 'basilica-libertatis-praetor', kind: 'npc', position: t.places[0].clone().applyMatrix4(at), heading: 0 });
       spots.push({ id: 'basilica-libertatis-lictor', kind: 'npc', position: V(back + 6.5, B.yF, B.zc + 2.4).applyMatrix4(F), heading: Math.PI / 2 });
       spots.push({ id: 'basilica-libertatis-manumission', kind: 'shrine', position: V(back + 7.2, B.yF, B.zc).applyMatrix4(F), heading: -Math.PI / 2 });
+      for (const dz of [-3.4, 3.4]) {
+        const at = mul(F, T(back + 6.2, B.yF, B.zc + dz));
+        lamps.add('interior', V(0, candelabrum(main, at, 2.3) + 0.12, 0), at);
+      }
       statueBase(ck.near, mul(F, TRS(back, B.yF, B.zc, 0, face, 0)), { w: 1.6, d: 1.2, h: 1.4, detail: 'low' });
       togate(ck.near, mul(F, TRS(back, B.yF + 1.4, B.zc, 0, face, 0)), { material: 'marble', scale: 1.9, detail: hi ? 'high' : 'low', plinth: false });
     } else {
@@ -539,7 +551,11 @@ function farMassing(ctx: LandmarkContext, F: THREE.Matrix4): THREE.Object3D {
     facing(b, 'marble', F, [V(sx * B.innerX, B.yEaves, B.zc - B.innerZ - 1), V(sx * B.innerX, B.yEaves + rise, B.zc), V(sx * B.innerX, B.yEaves, B.zc + B.innerZ + 1)], V(sx, 0, 0));
     facing(b, gilt, F, [V(sx * B.innerX, B.yClere, B.zc - B.innerZ), V(sx * B.innerX, B.yClere, B.zc + B.innerZ), V(sx * (B.half + 0.5), B.yOuter + 1.1, B.zc + (B.back - B.front) / 2 + 0.5), V(sx * (B.half + 0.5), B.yOuter + 1.1, B.zc - (B.back - B.front) / 2 - 0.5)], UP);
   }
-  for (const sx of [-1, 1]) arcWall(b, 'marble', F, sx * (B.half - B.t / 2), B.zc, 0, B.apseR + B.apseT, sx > 0 ? -Math.PI / 2 : Math.PI / 2, sx > 0 ? Math.PI / 2 : Math.PI * 1.5, 0, B.yOuter, 8);
+  for (const sx of [-1, 1]) {
+    const a0 = sx > 0 ? -Math.PI / 2 : Math.PI / 2;
+    arcWall(b, 'marble', F, sx * (B.half - B.t / 2), B.zc, 0, B.apseR + B.apseT, a0, a0 + Math.PI, 0, B.yOuter, 8);
+    coneRoof(b, gilt, F, sx * (B.half - B.t / 2), B.zc, B.apseR + B.apseT + 0.5, a0, a0 + Math.PI, B.yOuter - 0.1, B.yOuter + 3.2, 8);
+  }
   for (const P of PORCHES) {
     const hw = ((P.cols - 1) * 2.4) / 2;
     boxMinMax(b, 'marble', F, P.x - hw - 0.4, 0, B.front - P.depth - 0.4, P.x + hw + 0.4, B.yF + B.Hg + B.entG + 2.3, B.front);
@@ -558,12 +574,14 @@ export const builders: LandmarkBuilder[] = [
       const inside = new LodChunks(ctx.detail === 'high' ? 34 : 24, 150, false);
       shell(ctx, main, F, spots);
       porches(ctx, outside, F, main, spots);
-      interior(ctx, inside, F, main, spots);
+      const lamps = new Lamps();
+      interior(ctx, inside, F, main, spots, lamps);
       const colliders: ColliderSpec[] = [...main.colliders];
       const group = new THREE.Group();
       group.add(main.build('basilica-ulpia'));
       group.add(outside.build('basilica-ulpia:porches', colliders));
       group.add(inside.build('basilica-ulpia:nave', colliders));
+      lamps.attach(ctx.game, group);
       return { object: group, colliders, spots, far: farMassing(ctx, F), cullDistance: 1100 };
     },
   },

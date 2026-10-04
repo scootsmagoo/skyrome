@@ -12,16 +12,20 @@
 import * as THREE from 'three';
 import { triumphalArch } from '../../../arch/classical/arch';
 import { column } from '../../../arch/classical/column';
-import { armoredEmperor, equestrian } from '../../../arch/classical/statues';
+import { armoredEmperor } from '../../../arch/classical/statues';
 import { ProfileBuilder, T, TRS, mul, sweep } from '../../../arch/common/geom';
 import { inscriptionPanel } from '../../../arch/common/inscription';
+import { Draw } from '../../../arch/fabric/draw';
+import { placeProp } from '../../../arch/props/props';
 import type { ColliderSpec, MeshBuilder } from '../../../gfx/MeshBuilder';
 import type { LandmarkBuilder, LandmarkContext, Spot } from '../types';
+import { equusStatue } from './trajan-equus';
 import { FORUM_X } from './trajan-forum';
 import { LodChunks, boxMinMax, quad } from './trajan-kit';
 import { TRAJAN_INSCRIPTIONS, forumToLocal } from './trajan-layout';
 import { dacianArmsMaterial } from './trajan-materials';
-import { garland } from './trajan-props';
+import { Lamps } from './trajan-lights';
+import { garland, tripod } from './trajan-props';
 import { chariotTeam, signum, tropaeum, victory } from './trajan-sculpture';
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -29,7 +33,7 @@ const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 /** Passage width of the gateway arch (game m; ≈ 6.3 m real). */
 const SPAN = 3.8;
 
-function gateway(b: MeshBuilder, F: THREE.Matrix4, detail: 'high' | 'low', spots: Spot[] | null) {
+function gateway(b: MeshBuilder, F: THREE.Matrix4, detail: 'high' | 'low', spots: Spot[] | null, fires?: Fires) {
   const X = FORUM_X;
   const z = X.zGate - 0.45; // centre of the SE wall's thickness
   const at = mul(F, T(0, 0, z));
@@ -93,9 +97,18 @@ function gateway(b: MeshBuilder, F: THREE.Matrix4, detail: 'high' | 'low', spots
     spots.push({ id: 'forum-gateway-passage', kind: 'spawn', position: V(0, 0.03, -arch.depth / 2 - 3).applyMatrix4(at), heading: 0 });
     for (const sx of [-1, 1]) spots.push({ id: `forum-gateway-guard${sx < 0 ? 'ne' : 'sw'}`, kind: 'npc', position: V(sx * (SPAN / 2 + 0.6), 0.03, -arch.depth / 2 - 0.8).applyMatrix4(at), heading: Math.PI });
   }
+  if (fires) {
+    // Braziers burning before the gate on the Forum of Augustus side (the guards' fires).
+    for (const sx of [-1, 1]) {
+      const x = sx * (SPAN / 2 + 1.5);
+      const z = -arch.depth / 2 - 2.2;
+      placeProp(new Draw(fires.b, at), 'brazier', x, 0, z, 0, { variant: 1 });
+      fires.lamps.add('brazier', V(x, 0.86, z), at);
+    }
+  }
 }
 
-function equus(b: MeshBuilder, F: THREE.Matrix4, detail: 'high' | 'low', spots: Spot[] | null) {
+function equus(b: MeshBuilder, F: THREE.Matrix4, detail: 'high' | 'low', spots: Spot[] | null, fires?: Fires) {
   const z = -12.7 * 0.6; // PLAN.equus.v
   const at = mul(F, T(0, 0, z));
   // The horse walks along the axis (towards the entrance), so the base is long in z.
@@ -140,7 +153,15 @@ function equus(b: MeshBuilder, F: THREE.Matrix4, detail: 'high' | 'low', spots: 
     garland(b, at, V(ax, y0 + h - 0.45, az), V(cx, y0 + h - 0.45, cz), 0.35, 0.08, true, detail === 'high' ? 9 : 5);
   }
   // The colossal gilded horseman (≈ 2.4 × life, the horse's right foreleg raised).
-  equestrian(b, mul(at, T(0, y0 + h, 0.1)), { material: 'gilded_bronze', scale: 2.2, detail, plinth: false });
+  equusStatue(b, mul(at, T(0, y0 + h, 0.1)), { scale: 2.2, detail });
+  if (fires) {
+    // Incense tripods before the statue for the dedication.
+    for (const sx of [-1, 1]) {
+      const p = V(sx * 1.9, 0.03, -d / 2 - 1.7);
+      tripod(fires.b, mul(at, T(p.x, p.y, p.z)), 1.1);
+      fires.lamps.add('brazier', V(p.x, p.y + 1.3, p.z), at, { intensity: 9, distance: 9, glow: 0.3, priority: 0.9 });
+    }
+  }
   if (spots) {
     spots.push({ id: 'equus-inscription', kind: 'inscription', position: V(0, y0 + h * 0.5, -d / 2 - 0.05).applyMatrix4(at), heading: 0 });
     spots.push({ id: 'equus-orator', kind: 'npc', position: V(-2.2, 0.39, -d / 2 - 1.4).applyMatrix4(at), heading: Math.PI });
@@ -148,15 +169,27 @@ function equus(b: MeshBuilder, F: THREE.Matrix4, detail: 'high' | 'low', spots: 
   }
 }
 
-function lodBuild(ctx: LandmarkContext, name: string, distance: number, fn: (b: MeshBuilder, F: THREE.Matrix4, detail: 'high' | 'low', spots: Spot[] | null) => void) {
+/** Fires and their stands: drawn at every distance (small, and lit from afar), with their lamps. */
+interface Fires {
+  b: MeshBuilder;
+  lamps: Lamps;
+}
+
+function lodBuild(ctx: LandmarkContext, name: string, distance: number, fn: (b: MeshBuilder, F: THREE.Matrix4, detail: 'high' | 'low', spots: Spot[] | null, fires?: Fires) => void) {
   const F = forumToLocal(ctx.lm);
   const spots: Spot[] = [];
+  const fires: Fires = { b: ctx.builder(), lamps: new Lamps() };
   const chunks = new LodChunks(distance);
   const c = chunks.chunk('all', V(0, 4, 0));
-  fn(c.near, F, ctx.detail, spots);
+  fn(c.near, F, ctx.detail, spots, fires);
   fn(c.far, F, 'low', null);
   const colliders: ColliderSpec[] = [];
   const object = chunks.build(name, colliders);
+  if (!fires.b.isEmpty) {
+    object.add(fires.b.build(`${name}:fires`));
+    for (const s of fires.b.colliders) colliders.push(s);
+  }
+  fires.lamps.attach(ctx.game, object);
   return { object, colliders, spots };
 }
 

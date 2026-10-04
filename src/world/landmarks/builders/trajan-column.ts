@@ -29,7 +29,8 @@ import type { LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import { LodChunks, boxMinMax, colonnadeColumn, farColumn, quad, solidBox, solidCyl } from './trajan-kit';
 import { PLAN, S, TRAJAN_INSCRIPTIONS, divide, forumToLocal } from './trajan-layout';
 import { dacianArmsMaterial, libraryFloorMaterial, scrollsMaterial, slabPavingMaterial } from './trajan-materials';
-import { altar, garland, ladder, statueBase, tripod } from './trajan-props';
+import { Lamps } from './trajan-lights';
+import { altar, candelabrum, garland, ladder, statueBase, torchPole, tripod } from './trajan-props';
 import { aquila, victory } from './trajan-sculpture';
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -209,7 +210,7 @@ function columnBody(b: MeshBuilder, at: THREE.Matrix4, hi: boolean): number {
 
 // ---------------------------------------------------------------- the court
 
-function court(ctx: LandmarkContext, b: MeshBuilder, chunks: LodChunks, F: THREE.Matrix4, spots: Spot[]) {
+function court(ctx: LandmarkContext, b: MeshBuilder, chunks: LodChunks, F: THREE.Matrix4, spots: Spot[], lamps: Lamps) {
   const C = COURT;
   const hi = ctx.detail === 'high';
   // Paving between the basilica's back steps, the library porches and the NW colonnade.
@@ -284,8 +285,17 @@ function court(ctx: LandmarkContext, b: MeshBuilder, chunks: LodChunks, F: THREE
   // (The altar stands to the SW of the door, clear of the way from the basilica's back door.)
   const xA = 4.6;
   const zA = C.colZ - PED_W / 2 - 1.6;
-  altar(b, mul(F, TRS(xA, 0.03, zA, 0, -Math.PI / 2, 0)), { w: 1.4, d: 0.9, h: 1.0 });
-  for (const dz of [-1.5, 1.5]) tripod(b, mul(F, T(xA + 0.3, 0.03, zA + dz)));
+  const yAltar = altar(b, mul(F, TRS(xA, 0.03, zA, 0, -Math.PI / 2, 0)), { w: 1.4, d: 0.9, h: 1.0 });
+  lamps.add('altar', V(xA, 0.03 + yAltar + 0.35, zA), F, { intensity: 18, distance: 12 });
+  for (const dz of [-1.5, 1.5]) {
+    tripod(b, mul(F, T(xA + 0.3, 0.03, zA + dz)));
+    lamps.add('brazier', V(xA + 0.3, 0.03 + 1.4, zA + dz), F, { intensity: 8, distance: 8, glow: 0.28, priority: 0.8 });
+  }
+  // Torches either side of the Column's door.
+  for (const sx of [-1, 1]) {
+    const at = mul(F, T(sx * 2.4, 0.03, C.colZ - PED_W / 2 - 0.5));
+    lamps.add('torch', V(0, torchPole(b, at, 2.6), 0), at);
+  }
   spots.push({ id: 'column-altar', kind: 'shrine', position: V(xA - 1.2, 0.03, zA).applyMatrix4(F), heading: Math.PI / 2 });
   spots.push({ id: 'column-priest', kind: 'npc', position: V(xA - 1.1, 0.03, zA + 1.0).applyMatrix4(F), heading: Math.PI / 2 });
   spots.push({ id: 'column-guard', kind: 'npc', position: V(-1.2, 0.03, C.colZ - PED_W / 2 - 0.8).applyMatrix4(F), heading: 0 });
@@ -319,7 +329,7 @@ function court(ctx: LandmarkContext, b: MeshBuilder, chunks: LodChunks, F: THREE
  * One library in its own frame: facade (porch) towards −z on the court, hall centred on the
  * origin, x along the facade. `sign` picks the label.
  */
-function library(ctx: LandmarkContext, b: MeshBuilder, chunks: LodChunks, M: THREE.Matrix4, which: 'east' | 'west', spots: Spot[]) {
+function library(ctx: LandmarkContext, b: MeshBuilder, chunks: LodChunks, M: THREE.Matrix4, which: 'east' | 'west', spots: Spot[], lamps: Lamps) {
   const hi = ctx.detail === 'high';
   const W = (PLAN.library.v0 - PLAN.library.v1) * S; // 14.64 along the facade
   const Dp = COURT.libDepth; // 11.7 deep
@@ -461,6 +471,11 @@ function library(ctx: LandmarkContext, b: MeshBuilder, chunks: LodChunks, M: THR
     basket.translate(1.3, 0.21, -1.4);
     ik.near.add(basket, 'wood_dark', at);
   }
+  // Candelabra by the reading tables.
+  for (const sx of [-1, 1]) {
+    const at = mul(M, T(sx * 2.7, yF, 1.0));
+    lamps.add('interior', V(0, candelabrum(b, at, 2.1) + 0.12, 0), at);
+  }
   spots.push({ id: `library-${which}-librarian`, kind: 'npc', position: V(-2.5, yF, zWall + t + 1.4).applyMatrix4(M), heading: 0 });
   spots.push({ id: `library-${which}-entrance`, kind: 'spawn', position: V(0, yF, zWall - 1.2).applyMatrix4(M), heading: 0 });
   // Label over the door (which library held the Greek and which the Latin books is unknown;
@@ -482,11 +497,13 @@ function libraryBuild(ctx: LandmarkContext, which: 'east' | 'west') {
   const b = ctx.builder();
   const chunks = new LodChunks(ctx.detail === 'high' ? 45 : 30, 220);
   const spots: Spot[] = [];
-  library(ctx, b, chunks, M, which, spots);
+  const lamps = new Lamps();
+  library(ctx, b, chunks, M, which, spots, lamps);
   const colliders: ColliderSpec[] = [...b.colliders];
   const group = new THREE.Group();
   group.add(b.build(`bibliotheca-ulpia-${which}`));
   group.add(chunks.build(`bibliotheca-ulpia-${which}:lod`, colliders));
+  lamps.attach(ctx.game, group);
   return { object: group, colliders, spots, cullDistance: 800 };
 }
 
@@ -506,11 +523,13 @@ export const builders: LandmarkBuilder[] = [
       columnBody(col.near, at, hi);
       pedestal(col.far, at, false, null);
       columnBody(col.far, at, false);
-      court(ctx, b, chunks, F, spots);
+      const lamps = new Lamps();
+      court(ctx, b, chunks, F, spots, lamps);
       const colliders: ColliderSpec[] = [...b.colliders];
       const group = new THREE.Group();
       group.add(b.build('column-trajan'));
       group.add(chunks.build('column-trajan:lod', colliders));
+      lamps.attach(ctx.game, group);
       // The column must stay on the skyline from anywhere in the centre.
       const far = ctx.builder();
       pedestal(far, at, false, null);

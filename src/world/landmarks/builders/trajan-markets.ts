@@ -21,13 +21,16 @@ import { T, TRS, gridSurface, linspace, mul } from '../../../arch/common/geom';
 import { paintedSign } from '../../../arch/common/inscription';
 import { wall, type Opening } from '../../../arch/common/walls';
 import { Draw } from '../../../arch/fabric/draw';
+import { roof } from '../../../arch/fabric/roof';
 import { placeProp, type PropKind } from '../../../arch/props/props';
 import type { ColliderSpec, MeshBuilder } from '../../../gfx/MeshBuilder';
 import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuilder, LandmarkContext, Spot } from '../types';
+import { brickFront } from './trajan-facades';
 import { FORUM_X } from './trajan-forum';
 import { LodChunks, UP, arcFloor, arcWall, boxMinMax, facing, solidBox } from './trajan-kit';
 import { PLAN, S, TRAJAN_INSCRIPTIONS, uvToLocal, type Sited } from './trajan-layout';
+import { Lamps } from './trajan-lights';
 import { garland } from './trajan-props';
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -123,7 +126,7 @@ function taberna(main: MeshBuilder, det: MeshBuilder, m: THREE.Matrix4, o: { zf:
   }
 }
 
-function hemicycle(ctx: LandmarkContext, main: MeshBuilder, chunks: LodChunks, P: ReturnType<typeof marketsPolar>, spots: Spot[]) {
+function hemicycle(ctx: LandmarkContext, main: MeshBuilder, chunks: LodChunks, P: ReturnType<typeof marketsPolar>, spots: Spot[], lamps: Lamps) {
   const hi = ctx.detail === 'high';
   const c = P.c;
   const a0 = P.bulge - MK.half;
@@ -178,6 +181,13 @@ function hemicycle(ctx: LandmarkContext, main: MeshBuilder, chunks: LodChunks, P
     if (k === 4) spots.push({ id: 'markets-taberna-strongbox', kind: 'container', position: at(0.8, 0.04, MK.rB - 0.5), heading: sh + Math.PI });
     // Festival garland over the door.
     if (k % 2 === 1) garland(ck.near, m, V(-1.2, MK.y1 - 0.35, zf - 0.25), V(1.2, MK.y1 - 0.35, zf - 0.25), 0.4, 0.07, true, 6);
+    // Street torches on every other pier, and a lamp burning in some of the shops.
+    if (k % 2 === 1) {
+      const fr = mul(m, T(-(hw + 0.3 + 1.3) / 2, 2.7, zf));
+      placeProp(new Draw(main, fr), 'torch_bracket', 0, 0, 0, 0);
+      lamps.add('torch', V(0, 0.53, -0.3), fr);
+    }
+    if (k % 3 === 0) lamps.add('lamp', V(0.6, 2.4, zf + 1.6), m);
   }
   // Solid mass behind the second storey, and the third-storey floor slab over the terrace.
   arcWall(main, 'brick', I, c.x, c.z, zf + 1.2, MK.rB + 0.6, a0, a1, MK.y1, MK.y2, segs);
@@ -213,6 +223,8 @@ function hemicycle(ctx: LandmarkContext, main: MeshBuilder, chunks: LodChunks, P
     boxMinMax(main, 'plaster_white', at, -0.5, 0, -0.35, 0.5, 1.1, 0.35, { collide: true });
     boxMinMax(main, 'plaster_red', at, -0.55, 1.1, -0.4, 0.55, 1.2, 0.4);
     spots.push({ id: 'markets-lares-shrine', kind: 'shrine', position: V(0, 0.04, MK.rStreet + 1.9).applyMatrix4(m), heading: inward(a) + Math.PI });
+    placeProp(new Draw(main, at), 'oil_lamp', 0, 1.2, 0.15, Math.PI, { collide: false });
+    lamps.add('shrine', V(0, 1.27, 0.08), at);
     const sign = TRAJAN_INSCRIPTIONS['markets-sign-wine'].latin;
     const ms = polar(c, a0 + 3.5 * da);
     paintedSign(main, sign, 2.2, 0.6, mul(ms, T(0, 3.55, zf - 0.08)));
@@ -333,6 +345,16 @@ function upperLevel(ctx: LandmarkContext, main: MeshBuilder, chunks: LodChunks, 
     boxMinMax(main, 'brick', polar(c, a - h), -0.3, MK.y2, MK.rV1, 0.3, MK.y4, MK.rO + 0.6, { collide: true });
     if (k === nO - 1) boxMinMax(main, 'brick', polar(c, a + h), -0.3, MK.y2, MK.rV1, 0.3, MK.y4, MK.rO + 0.6, { collide: true });
     boxMinMax(main, 'brick', m, -hwO - 0.3, yU, zf + 0.6, hwO + 0.3, MK.y4, MK.rO + 0.6);
+    // Windows on the outer (back) face, over the terrace behind the street.
+    const zo = MK.rO + 0.6;
+    for (const [yw, hwin] of [
+      [MK.y2 + 1.3, 1.5],
+      [yU + 1.1, 1.4],
+    ]) {
+      boxMinMax(main, 'black', m, -0.5, yw, zo, 0.5, yw + hwin, zo + 0.02, { castShadow: false });
+      boxMinMax(main, 'travertine', m, -0.62, yw - 0.1, zo, 0.62, yw, zo + 0.1, { castShadow: false });
+      boxMinMax(main, 'terracotta', m, -0.62, yw + hwin, zo, 0.62, yw + hwin + 0.14, zo + 0.05, { castShadow: false });
+    }
   }
   arcRoof(main, c, MK.rV1 - 0.5, MK.y4, MK.rO + 1.0, MK.y4 + 1.2, oA0, oA1, 24);
   // Closing walls: north of the outer row (to the hall passage) and parapets on the landing.
@@ -406,8 +428,9 @@ function greatHall(ctx: LandmarkContext, main: MeshBuilder, chunks: LodChunks, P
   for (const side of [-1, 1]) {
     const zFace = side < 0 ? zN0 : zN1;
     const zOut = side < 0 ? zA : zB;
-    // outer wall of the hall block
-    boxMinMax(main, 'brick', I, x0, y0, Math.min(zOut, zOut - side * 0.6), x1, yTop, Math.max(zOut, zOut - side * 0.6), { collide: true });
+    // Outer wall of the hall block: two storeys of windows lighting the side rooms.
+    const mo = side < 0 ? T(0, y0, zOut) : TRS(0, y0, zOut, 0, Math.PI, 0);
+    brickFront(main, mo, { x0: side < 0 ? x0 : -x1, x1: side < 0 ? x1 : -x0, storeys: [3.6, yTop - y0 - 3.6], seed: `hall${side}`, yBase: -0.05, backdrop: false, colliderDepth: 0.6, bay: (x1 - x0) / 6 });
     for (let k = 0; k < nB; k++) {
       const xa = x0 + 0.6 + (k * (x1 - x0 - 1.2)) / nB;
       const xb = x0 + 0.6 + ((k + 1) * (x1 - x0 - 1.2)) / nB;
@@ -429,7 +452,7 @@ function greatHall(ctx: LandmarkContext, main: MeshBuilder, chunks: LodChunks, P
   }
   // End walls (door at the passage end).
   wall(main, { length: zB - zA, height: yTop - y0, thickness: 0.6, material: 'brick', openings: [{ kind: 'door', x: zc - zA, width: 3.0, height: 4.0, leaves: 'open', leafMaterial: 'wood_dark' }], detail: ctx.detail, collide: true }, mul(I, TRS(x0 + 0.3, y0, zB, 0, Math.PI / 2, 0)));
-  boxMinMax(main, 'brick', I, x1 - 0.6, y0, zA, x1, yTop, zB, { collide: true });
+  brickFront(main, TRS(x1, y0, 0, 0, -Math.PI / 2, 0), { x0: zA, x1: zB, storeys: [3.6, yTop - y0 - 3.6], seed: 'hall-end', yBase: -0.05, backdrop: false, colliderDepth: 0.6, bay: 3.5 });
   // Six groin vaults over the nave, with clerestory lunettes; tiled roof above.
   const bay = (x1 - x0 - 1.2) / 6;
   for (let k = 0; k < 6; k++) {
@@ -456,76 +479,113 @@ function greatHall(ctx: LandmarkContext, main: MeshBuilder, chunks: LodChunks, P
   spots.push({ id: 'markets-hall-entrance', kind: 'spawn', position: V(x0 + 1.6, y0, zc), heading: Math.PI / 2 });
 }
 
-/** Brick blocks filling the rest of the site behind the upper street. */
-function backBlocks(ctx: LandmarkContext, main: MeshBuilder, P: ReturnType<typeof marketsPolar>) {
+/**
+ * Brick blocks filling the rest of the site behind the upper street. The two lower storeys are a
+ * solid fill whose outer faces are street fronts (tabernae, mezzanine and arched windows) on the
+ * back street and both flanks; above them, blocks of two or three storeys stand back from the rear
+ * edge behind a parapet terrace, with windows on every face and hipped tile roofs.
+ */
+function backBlocks(ctx: LandmarkContext, main: MeshBuilder, P: ReturnType<typeof marketsPolar>, spots: Spot[], lamps: Lamps) {
   const I = new THREE.Matrix4();
+  const hi = ctx.detail === 'high';
   const c = P.c;
   const fp = ctx.lm.footprint;
   const hw = fp.kind === 'rect' ? (fp.w * S) / 2 : 41.1;
   const back = fp.kind === 'rect' ? (fp.d * S) / 2 : 18;
   const rClear = MK.rO + 0.7;
-  // Lower fill (0..y2) as boxes outside the clearance circle.
+  const inset = 1.6; // the street fronts' shops are this deep in front of the fill
+  const front = -back;
+  // Lower fill (0..y2) as boxes outside the clearance circle, behind the street fronts.
   const strips: [number, number][] = [
-    [4.8, back],
+    [4.8, back - inset],
     [-4, 4.8],
     [-12, -4],
-    [-18, -12],
+    [front, -12],
   ];
+  const xL = -hw + inset;
+  const xR = hw - inset;
+  const lower = [4.4, MK.y2 - 4.4];
   for (const [za, zb] of strips) {
     const dz = Math.max(0, Math.min(Math.abs(za - c.z), Math.abs(zb - c.z)));
     const reach = dz >= rClear ? 0 : Math.sqrt(rClear * rClear - dz * dz);
     if (reach === 0) {
-      boxMinMax(main, 'brick', I, -hw, 0, za, hw, MK.y2, zb, { collide: true });
+      boxMinMax(main, 'brick', I, xL, 0, za, xR, MK.y2, zb, { collide: true });
       continue;
     }
     const xl = c.x - reach;
     const xr = c.x + reach;
-    if (xl > -hw) boxMinMax(main, 'brick', I, -hw, 0, za, xl, MK.y2, zb, { collide: true });
-    if (xr < hw) boxMinMax(main, 'brick', I, xr, 0, za, hw, MK.y2, zb, { collide: true });
+    if (xl > xL) boxMinMax(main, 'brick', I, xL, 0, za, xl, MK.y2, zb, { collide: true });
+    if (xr < xR) boxMinMax(main, 'brick', I, xr, 0, za, xR, MK.y2, zb, { collide: true });
+    // The fill's ends towards the forum get windows too (they face the ring street's ends).
+    if (za === front) {
+      if (xl > xL + 2) brickFront(main, T(0, 0, front), { x0: -hw + 0.6, x1: xl, storeys: lower, seed: 'markets-front-n', colliderDepth: 0.6 });
+      if (xr < xR - 2) brickFront(main, T(0, 0, front), { x0: xr, x1: hw - 0.6, storeys: lower, seed: 'markets-front-s', colliderDepth: 0.6 });
+    }
   }
   // Roof terraces in signinum over the fill.
   boxMinMax(main, 'terracotta', I, -hw, MK.y2, 4.8, hw, MK.y2 + 0.04, back, { castShadow: false });
-  // Upper blocks with windows and tiled roofs, climbing towards the cut hillside.
-  const blocks: [number, number, number, number, number][] = [
-    [-hw, -16, 6.5, back, MK.y2 + 6.2],
-    [-16, 9, 7.5, back, MK.y2 + 9.0],
-    [9, hw, 2.5, back, MK.y2 + 5.0],
+  // Street fronts of the two lower storeys: the back street and the two flanks.
+  const fronts: [THREE.Matrix4, number, number, string][] = [
+    [TRS(0, 0, back, 0, Math.PI, 0), -hw, hw, 'back'],
+    // (the back front owns the rear corners, the flanks the front ones)
+    [TRS(-hw, 0, 0, 0, Math.PI / 2, 0), -back + 0.6, -front, 'nnw'],
+    [TRS(hw, 0, 0, 0, -Math.PI / 2, 0), front, back - 0.6, 'sse'],
   ];
-  for (const [xa, xb, za, zb, top] of blocks) {
-    const len = xb - xa;
-    const ops: Opening[] = [];
-    for (let x = 1.6; x < len - 1.2; x += 2.6) {
-      for (let y = 1.2; y < top - MK.y2 - 1.4; y += 3.1) ops.push({ kind: 'window', x, width: 0.9, height: 1.3, sill: y, arched: y > 4, frame: false, leaves: 'none' });
-    }
-    wall(main, { length: len, height: top - MK.y2, thickness: 0.6, material: 'brick', openings: ops, detail: 'low', collide: true }, mul(I, T(xa, MK.y2, za + 0.3)));
-    boxMinMax(main, 'brick', I, xa, MK.y2, za + 0.6, xb, top, zb, { collide: true });
-    const rise = Math.min(2.4, (zb - za) * 0.2);
-    facing(main, 'roof_tile', I, [V(xa - 0.3, top, za - 0.3), V(xb + 0.3, top, za - 0.3), V(xb + 0.3, top + rise, zb + 0.3), V(xa - 0.3, top + rise, zb + 0.3)], UP);
-    for (const x of [xa - 0.3, xb + 0.3]) facing(main, 'brick', I, [V(x, top, za - 0.3), V(x, top, zb + 0.3), V(x, top + rise, zb + 0.3)], V(x < 0 ? -1 : 1, 0, 0));
+  for (const [m, x0, x1, key] of fronts) {
+    const f = brickFront(main, m, { x0, x1, storeys: lower, shops: true, seed: `markets-${key}`, lamps });
+    // Shopkeepers' spots at the open shops (one in three).
+    f.shops.forEach((sh, i) => {
+      if (!sh.open || i % 3) return;
+      spots.push({ id: `markets-${key}-shop${i}`, kind: 'vendor', position: V(sh.x, 0.02, -0.8).applyMatrix4(m), heading: Math.atan2(-m.elements[8], -m.elements[10]) });
+    });
   }
-  // Back wall towards the cut hillside: storeys of windows, a travertine band at each floor.
-  const gBack = Math.max(0, ctx.groundAt(0, back + 6));
-  const topBack = Math.max(MK.y2 + 9.0, gBack + 1);
-  boxMinMax(main, 'brick', I, -hw, 0, back - 0.6, hw, topBack, back + 0.6, { collide: true });
-  windowGrid(main, I, -hw + 1.5, hw - 1.5, 1.4, topBack - 1.0, back + 0.6, 1);
-  // Flanks of the block (towards the NNW and the SSE): windows over the lower fill.
-  for (const sx of [-1, 1]) windowGrid(main, TRS(sx * hw, 0, 0, 0, sx * (Math.PI / 2), 0), -back + 1.5, back - 1.5, 1.4, MK.y2 - 0.8, 0, 1);
-}
-
-/**
- * Rows of windows on a flat brick face (the plane z = zFace of frame m, facing +z·dir): dark
- * openings with travertine sills, one storey every 3.1 m.
- */
-function windowGrid(b: MeshBuilder, m: THREE.Matrix4, x0: number, x1: number, y0: number, y1: number, zFace: number, dir: 1 | -1) {
-  const n = Math.max(1, Math.floor((x1 - x0) / 2.8));
-  for (let y = y0; y + 1.5 <= y1; y += 3.1) {
-    for (let i = 0; i < n; i++) {
-      const x = x0 + ((i + 0.5) * (x1 - x0)) / n;
-      boxMinMax(b, 'black', m, x - 0.45, y, Math.min(zFace, zFace + dir * 0.03), x + 0.45, y + 1.35, Math.max(zFace, zFace + dir * 0.03), { castShadow: false });
-      boxMinMax(b, 'travertine', m, x - 0.6, y - 0.12, Math.min(zFace, zFace + dir * 0.12), x + 0.6, y, Math.max(zFace, zFace + dir * 0.12), { castShadow: false });
+  // Parapets round the terraces at y2 (back edge, and the flanks in front of the upper blocks).
+  const parapet = (m: THREE.Matrix4, x0: number, x1: number) => {
+    boxMinMax(main, 'brick', m, x0, MK.y2, 0, x1, MK.y2 + 1.0, 0.5, { collide: true });
+    boxMinMax(main, 'travertine', m, x0 - 0.05, MK.y2 + 1.0, -0.06, x1 + 0.05, MK.y2 + 1.12, 0.56);
+  };
+  parapet(TRS(0, 0, back, 0, Math.PI, 0), -hw, hw);
+  // Upper blocks, set back from the rear edge.
+  const zb = back - 2.6;
+  const blocks: [number, number, number, number[]][] = [
+    [-hw, -16, 6.5, [3.1, 3.1]],
+    [-16, 9, 7.5, [3.0, 3.0, 3.0]],
+    [9, hw, 2.5, [2.6, 2.4]],
+  ];
+  const tops = blocks.map(([, , , st]) => MK.y2 + st.reduce((a, h) => a + h, 0));
+  blocks.forEach(([xa, xb, za, storeys], i) => {
+    const top = tops[i];
+    const seed = `markets-block${i}`;
+    boxMinMax(main, 'brick', I, xa + 1.0, MK.y2, za + 1.0, xb - 1.0, top - 0.1, zb - 1.0, { collide: true });
+    boxMinMax(main, 'brick', I, xa + 0.6, top - 0.6, za + 0.6, xb - 0.6, top, zb - 0.6);
+    // Front (towards the upper street) and back faces.
+    brickFront(main, T(0, MK.y2, za), { x0: xa, x1: xb, storeys, seed: `${seed}f`, colliderDepth: 1.0 });
+    brickFront(main, TRS(0, MK.y2, zb, 0, Math.PI, 0), { x0: -xb, x1: -xa, storeys, seed: `${seed}b`, colliderDepth: 1.0 });
+    // Side faces: full height on the flanks; above the lower neighbour between blocks.
+    for (const side of [-1, 1] as const) {
+      const x = side < 0 ? xa : xb;
+      const m = side < 0 ? TRS(x, 0, 0, 0, Math.PI / 2, 0) : TRS(x, 0, 0, 0, -Math.PI / 2, 0);
+      // (the front and back faces own the corners)
+      const [x0, x1] = side < 0 ? [-zb + 0.6, -za - 0.6] : [za + 0.6, zb - 0.6];
+      const nb = i + side;
+      if (nb < 0 || nb >= blocks.length) {
+        brickFront(main, mul(m, T(0, MK.y2, 0)), { x0, x1, storeys, seed: `${seed}s${side}`, colliderDepth: 1.0 });
+        continue;
+      }
+      const other = tops[nb];
+      if (other >= top) continue;
+      // Party wall up to the neighbour's eaves, a storey of windows above it.
+      const za2 = Math.max(za, blocks[nb][2]);
+      const [p0, p1] = side < 0 ? [-zb, -za2] : [za2, zb];
+      boxMinMax(main, 'brick', m, p0, MK.y2, 0, p1, other, 0.6);
+      brickFront(main, mul(m, T(0, other, 0)), { x0, x1, storeys: [top - other], seed: `${seed}s${side}`, yBase: -0.2, colliderDepth: 0, backdrop: false });
+      if (za2 > za) boxMinMax(main, 'brick', m, side < 0 ? -za2 : za, MK.y2, 0, side < 0 ? -za : za2, other, 0.6);
     }
-    boxMinMax(b, 'travertine', m, x0 - 1.2, y - 0.5, Math.min(zFace, zFace + dir * 0.06), x1 + 1.2, y - 0.38, Math.max(zFace, zFace + dir * 0.06), { castShadow: false });
-  }
+    roof(new Draw(main, T((xa + xb) / 2, 0, (za + zb) / 2)), { kind: 'hip', w: xb - xa, d: zb - za, y: top, pitch: (20 * Math.PI) / 180, overhang: 0.5, ridges: hi });
+  });
+  // Flank parapets in front of the end blocks (over the fill towards the forum).
+  parapet(TRS(-hw, 0, 0, 0, Math.PI / 2, 0), -blocks[0][2], -front);
+  parapet(TRS(hw, 0, 0, 0, -Math.PI / 2, 0), front, blocks[2][2]);
 }
 
 function farMassing(ctx: LandmarkContext, P: ReturnType<typeof marketsPolar>): THREE.Object3D {
@@ -549,15 +609,17 @@ export const builders: LandmarkBuilder[] = [
       const P = marketsPolar(ctx.lm);
       const main = ctx.builder();
       const spots: Spot[] = [];
+      const lamps = new Lamps();
       const chunks = new LodChunks(ctx.detail === 'high' ? 45 : 30, 260);
-      hemicycle(ctx, main, chunks, P, spots);
+      hemicycle(ctx, main, chunks, P, spots, lamps);
       upperLevel(ctx, main, chunks, P, spots);
       greatHall(ctx, main, chunks, P, spots);
-      backBlocks(ctx, main, P);
+      backBlocks(ctx, main, P, spots, lamps);
       const colliders: ColliderSpec[] = [...main.colliders];
       const group = new THREE.Group();
       group.add(main.build('markets-trajan'));
       group.add(chunks.build('markets-trajan:lod', colliders));
+      lamps.attach(ctx.game, group);
       return { object: group, colliders, spots, far: farMassing(ctx, P), cullDistance: 1000 };
     },
   },

@@ -441,6 +441,45 @@ export function pavonazzettoMaterial(): THREE.MeshStandardMaterial {
   );
 }
 
+/**
+ * Peperino ashlar (opus quadratum) for the outer faces of the forum's enclosure walls, as on the
+ * Forum of Augustus firewall: dark grey "peppercorn" tuff in 0.6 m courses of 1.2 m blocks laid in
+ * stretcher bond, each block with a drafted margin and a slightly different tone.
+ */
+export function ashlarMaterial(): THREE.MeshStandardMaterial {
+  const cloud = fbm2D(1191, 3, 3);
+  const grain = fbm2D(1192, 40, 2);
+  const rows = 4;
+  const cols = 2;
+  return procMaterial(
+    'ashlar',
+    256,
+    2.4,
+    (u, v, x, y) => {
+      const row = Math.floor(v * rows);
+      const cu = u * cols + (row % 2) * 0.5;
+      const col = Math.floor(cu);
+      const fu = cu - col;
+      const fv = v * rows - row;
+      // Distance to the nearest joint in metres (blocks 1.2 × 0.6 m).
+      const d = Math.min(Math.min(fu, 1 - fu) * 1.2, Math.min(fv, 1 - fv) * 0.6);
+      const id = hash2(((col % cols) + cols) % cols, row, 13);
+      const g = grain(u, v);
+      let rgb: RGB = scale([128, 125, 118], (0.86 + 0.24 * id) * (0.94 + 0.12 * cloud(u, v)) * (0.95 + 0.1 * g));
+      // Peppercorn inclusions: dark scoria and a few pale crystals.
+      const r = hash2(x, y, 29);
+      if (r < 0.05) rgb = mix(rgb, [52, 50, 48], 0.7);
+      else if (r > 0.985) rgb = mix(rgb, [196, 190, 176], 0.6);
+      const joint = d < 0.014;
+      const draft = smooth(0.014, 0.06, d);
+      if (joint) rgb = scale(rgb, 0.5);
+      else rgb = scale(rgb, 0.9 + 0.1 * draft);
+      return { rgb, h: joint ? 0 : 0.35 + 0.65 * draft + 0.06 * g, rough: 0.92, ao: joint ? 0.6 : 1 };
+    },
+    { normal: 2.4, macro: 0.05 },
+  );
+}
+
 /** Materials created here, for the dev scene and tests. */
 export function trajanMaterialNames(): string[] {
   return [...cache.keys()];

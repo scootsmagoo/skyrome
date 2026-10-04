@@ -23,12 +23,15 @@ import { columnDims, diameterForHeight } from '../../../arch/classical/orders';
 import { togate, armoredEmperor } from '../../../arch/classical/statues';
 import { ProfileBuilder, T, TRS, mul, sweep } from '../../../arch/common/geom';
 import { inscriptionPanel } from '../../../arch/common/inscription';
+import { Draw } from '../../../arch/fabric/draw';
+import { placeProp } from '../../../arch/props/props';
 import type { MeshBuilder } from '../../../gfx/MeshBuilder';
 import type { LandmarkBuilder, LandmarkContext, Spot } from '../types';
-import { LodChunks, arcColliders, arcFloor, arcWall, boxMinMax, colonnadeColumn, farColumn, solidBox, type ColumnDetail } from './trajan-kit';
+import { LodChunks, arcColliders, arcFloor, arcWall, beam, boxMinMax, colonnadeColumn, coneRoof, facing, farColumn, solidBox, type ColumnDetail } from './trajan-kit';
 import { PLAN, S, TRAJAN_INSCRIPTIONS, divide } from './trajan-layout';
-import { coffersMaterial, sectileMaterial, slabPavingMaterial } from './trajan-materials';
-import { altar, banner, carpet, garland, grandstand, honorificStatue, ladder, statueBase, tribunal, tripod, workClutter } from './trajan-props';
+import { ashlarMaterial, coffersMaterial, sectileMaterial, slabPavingMaterial } from './trajan-materials';
+import { Lamps } from './trajan-lights';
+import { altar, banner, candelabrum, carpet, garland, grandstand, honorificStatue, ladder, statueBase, torchPole, tribunal, tripod, workClutter } from './trajan-props';
 import { clipeus, dacianCaptive, figureBlock, horseStatue, signum } from './trajan-sculpture';
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -64,7 +67,7 @@ export const FORUM_X = {
 
 const SPACING = 2.5;
 
-function portico(ctx: LandmarkContext, main: MeshBuilder, chunks: LodChunks, s: -1 | 1, spots: Spot[]) {
+function portico(ctx: LandmarkContext, main: MeshBuilder, chunks: LodChunks, s: -1 | 1, spots: Spot[], lamps: Lamps) {
   const Y = FORUM_Y;
   const X = FORUM_X;
   const hiAll = ctx.detail === 'high';
@@ -173,12 +176,18 @@ function portico(ctx: LandmarkContext, main: MeshBuilder, chunks: LodChunks, s: 
   // The hidden roof space (between the ceiling and the tiles) is closed by the attic and the wall.
   boxMinMax(main, 'wood_dark', I, Math.min(xAtticBack, xw), Y.yEntTop, za, Math.max(xAtticBack, xw), Y.yEntTop + 0.05, zb, { castShadow: false });
 
+  // Torches in iron brackets on the back wall, lit before dawn for the preparations.
+  for (const z of [-32, -21, 25, 33]) {
+    const fr = TRS(s * (X.wallIn - 0.04), Y.styl + 2.7, z, 0, s * (Math.PI / 2), 0);
+    placeProp(new Draw(main, fr), 'torch_bracket', 0, 0, 0, 0);
+    lamps.add('torch', V(0, 0.53, -0.3), fr);
+  }
   // Stall and vendor spots in the portico (sellers of garlands and dedication souvenirs).
   [-24, 6].forEach((z, i) => spots.push({ id: `forum-portico-${s < 0 ? 'ne' : 'sw'}-stall${i}`, kind: 'stall', position: V(s * (X.col + 3.5), Y.styl, z), heading: -face }));
 }
 
 /** Lateral back wall with the exedra opening and the exedra itself. */
-function backWallAndExedra(ctx: LandmarkContext, main: MeshBuilder, chunks: LodChunks, s: -1 | 1, spots: Spot[]) {
+function backWallAndExedra(ctx: LandmarkContext, main: MeshBuilder, chunks: LodChunks, s: -1 | 1, spots: Spot[], lamps: Lamps) {
   const Y = FORUM_Y;
   const X = FORUM_X;
   const hi = ctx.detail === 'high';
@@ -188,16 +197,19 @@ function backWallAndExedra(ctx: LandmarkContext, main: MeshBuilder, chunks: LodC
   const ze0 = X.exedraZ - X.exedraR; // exedra mouth (SE end)
   const ze1 = X.exedraZ + X.exedraR; // (NW end)
   const yFoot = Math.min(-0.4, ctx.groundAt(xo + s * 2, 0) - 0.4);
+  const ashlar = ashlarMaterial();
   // Wall pieces either side of the mouth, and the lintel wall above it.
   for (const [za, zb] of [
     [X.zGate - 0.9, ze0],
     [ze1, X.zBasilica],
   ]) {
-    boxMinMax(main, 'peperino', I, Math.min(xi, xo), yFoot, za, Math.max(xi, xo), Y.wall, zb, { collide: true });
+    boxMinMax(main, ashlar, I, Math.min(xi, xo), yFoot, za, Math.max(xi, xo), Y.wall, zb, { collide: true });
     boxMinMax(main, 'marble', I, Math.min(xi, xi - s * 0.04), Y.styl, Math.max(za, X.zGate), Math.max(xi, xi - s * 0.04), Y.yEntTop, zb);
   }
-  boxMinMax(main, 'peperino', I, Math.min(xi, xo), Y.yEnt, ze0, Math.max(xi, xo), Y.wall, ze1);
+  boxMinMax(main, ashlar, I, Math.min(xi, xo), Y.yEnt, ze0, Math.max(xi, xo), Y.wall, ze1);
   boxMinMax(main, 'marble', I, Math.min(xi, xo) - 0.03, Y.yEnt, ze0, Math.max(xi, xo) + 0.03, Y.yEntTop, ze1);
+  // Stucco over the lintel wall on the exedra side, up to the ceiling.
+  boxMinMax(main, 'plaster_white', I, Math.min(xo, xo + s * 0.03), Y.yEntTop, ze0, Math.max(xo, xo + s * 0.03), Y.wall - 0.25, ze1, { castShadow: false });
   // Travertine string course on the outside.
   boxMinMax(main, 'travertine', I, Math.min(xo, xo + s * 0.08), Y.yEntTop - 0.3, X.zGate - 0.9, Math.max(xo, xo + s * 0.08), Y.yEntTop, X.zBasilica);
   // Inner pilasters opposite the columns (outside the exedra mouth).
@@ -215,8 +227,9 @@ function backWallAndExedra(ctx: LandmarkContext, main: MeshBuilder, chunks: LodC
   const a0 = s > 0 ? -Math.PI / 2 : Math.PI / 2;
   const a1 = a0 + Math.PI;
   const segs = hi ? 40 : 16;
-  arcWall(main, 'peperino', I, cx, cz, R, R + tW, a0, a1, yFoot, Y.wall, segs);
+  arcWall(main, ashlar, I, cx, cz, R, R + tW, a0, a1, yFoot, Y.wall, segs);
   arcWall(main, 'marble', I, cx, cz, R - 0.04, R, a0, a1, Y.styl, Y.yEntTop + 0.4, segs);
+  arcWall(main, 'plaster_white', I, cx, cz, R - 0.03, R, a0, a1, Y.yEntTop + 0.4, Y.wall - 0.25, segs, { castShadow: false });
   arcColliders(main, I, cx, cz, R, R + tW, a0, a1, 0, Y.wall, 14);
   arcFloor(main, sectileMaterial(3.0), I, cx, cz, 0.001, R, a0, a1, Y.styl, segs, 0.02);
   arcFloor(main, 'marble', I, cx, cz, 0.001, R, a0, a1, Y.styl - 0.02, segs, Y.styl + 0.23);
@@ -233,6 +246,18 @@ function backWallAndExedra(ctx: LandmarkContext, main: MeshBuilder, chunks: LodC
   }
   // Coping on the exedra wall.
   arcWall(main, 'travertine', I, cx, cz, R - 0.05, R + tW + 0.05, a0, a1, Y.wall, Y.wall + 0.18, segs);
+  // Roof: a half-cone of terracotta tiles over the hall, a coffered ceiling inside, and a gable
+  // over the mouth where the roof rises above the portico's lean-to.
+  const rr = R + tW + 0.5;
+  const yEave = Y.wall + 0.18;
+  const apexY = yEave + rr * Math.tan((17 * Math.PI) / 180);
+  coneRoof(main, 'roof_tile', I, cx, cz, rr, a0, a1, yEave, apexY, hi ? 32 : 12);
+  arcFloor(main, coffersMaterial(2.2), I, cx, cz, 0.001, R, a0, a1, Y.wall - 0.25, segs, 0.25, { castShadow: false });
+  const gA = V(cx, yEave - 0.01, cz - rr);
+  const gB = V(cx, yEave - 0.01, cz + rr);
+  const gC = V(cx, apexY, cz);
+  facing(main, ashlar, I, [gA, gB, gC], V(-s, 0, 0));
+  for (const g of [gA, gB]) beam(main, 'travertine', I, V(g.x - s * 0.15, g.y + 0.1, g.z), V(gC.x - s * 0.15, gC.y + 0.1, gC.z), 0.5, 0.26);
   // Screen of columns across the mouth.
   const D = FORUM_Y.D;
   const screen = divide(ze0 + 1.3, ze1 - 1.3, 3.1);
@@ -275,10 +300,15 @@ function backWallAndExedra(ctx: LandmarkContext, main: MeshBuilder, chunks: LodC
     spots.push({ id: `forum-exedra${s < 0 ? 'ne' : 'sw'}-bench${k}`, kind: 'sit', position: V(px, Y.styl + 0.45, pz), heading: rot + Math.PI });
   }
   spots.push({ id: `forum-exedra${s < 0 ? 'ne' : 'sw'}-teacher`, kind: 'npc', position: V(cx + s * (R - 1.5), Y.styl, cz), heading: s > 0 ? -Math.PI / 2 : Math.PI / 2 });
+  // Candelabra either side of the teacher's chair (the hall is dark under its roof).
+  for (const dz of [-2.4, 2.4]) {
+    const at = T(cx + s * (R - 2.0), Y.styl, cz + dz);
+    lamps.add('interior', V(0, candelabrum(main, at, 2.1) + 0.12, 0), at);
+  }
 }
 
 /** SE enclosure wall either side of the gateway opening. */
-function gateWall(ctx: LandmarkContext, main: MeshBuilder, spots: Spot[]) {
+function gateWall(ctx: LandmarkContext, main: MeshBuilder, spots: Spot[], lamps: Lamps) {
   const Y = FORUM_Y;
   const X = FORUM_X;
   const I = new THREE.Matrix4();
@@ -288,7 +318,7 @@ function gateWall(ctx: LandmarkContext, main: MeshBuilder, spots: Spot[]) {
   for (const sx of [-1, 1]) {
     const xa = sx * X.gateHalf;
     const xb = sx * X.wallOut;
-    boxMinMax(main, 'peperino', I, Math.min(xa, xb), yFoot, zo, Math.max(xa, xb), Y.wall, zi, { collide: true });
+    boxMinMax(main, ashlarMaterial(), I, Math.min(xa, xb), yFoot, zo, Math.max(xa, xb), Y.wall, zi, { collide: true });
     // Inner face: marble revetment, pilasters, cornice at the portico entablature line.
     const x0 = Math.min(xa, sx * X.stylEdge);
     const x1 = Math.max(xa, sx * X.stylEdge);
@@ -314,10 +344,16 @@ function gateWall(ctx: LandmarkContext, main: MeshBuilder, spots: Spot[]) {
     for (let i = 0; i < xs.length - 1; i++) garland(main, I, V(xs[i], Y.yEnt - 0.2, X.zGate + 0.3), V(xs[i + 1], Y.yEnt - 0.2, X.zGate + 0.3), 0.8, 0.09, true, 7);
   }
   spots.push({ id: 'forum-spawn-gateway', kind: 'spawn', position: V(0, 0, X.zGate + 5), heading: 0 });
+  // Braziers burning either side of the way in.
+  for (const sx of [-1, 1]) {
+    const x = sx * (X.gateHalf + 1.3);
+    placeProp(new Draw(main), 'brazier', x, 0.03, X.zGate + 2.4, 0, { variant: 0 });
+    lamps.add('brazier', V(x, 0.03 + 0.86, X.zGate + 2.4));
+  }
 }
 
 /** Square paving, honorific statues and the festive preparations. */
-function square(ctx: LandmarkContext, main: MeshBuilder, spots: Spot[]) {
+function square(ctx: LandmarkContext, main: MeshBuilder, spots: Spot[], lamps: Lamps) {
   const X = FORUM_X;
   const I = new THREE.Matrix4();
   const hi = ctx.detail === 'high';
@@ -346,9 +382,25 @@ function square(ctx: LandmarkContext, main: MeshBuilder, spots: Spot[]) {
   const zT = 25; // tribunal centre, in front of the basilica's central porch
   const trib = tribunal(main, T(0, 0.03, zT), { w: 8, d: 5, h: 1.6, detail: ctx.detail });
   trib.places.forEach((p, i) => spots.push({ id: `forum-tribunal-${['consul', 'praetor', 'herald'][i]}`, kind: 'npc', position: p.clone().add(V(0, 0.03, zT)), heading: Math.PI }));
-  altar(main, T(0, 0.03, zT - 9));
+  const yAltar = altar(main, T(0, 0.03, zT - 9));
+  lamps.add('altar', V(0, 0.03 + yAltar + 0.35, zT - 9));
   spots.push({ id: 'forum-altar', kind: 'shrine', position: V(0, 0.03, zT - 10.2), heading: 0 });
-  for (const sx of [-1, 1]) tripod(main, T(sx * 2.2, 0.03, zT - 8.4));
+  for (const sx of [-1, 1]) {
+    tripod(main, T(sx * 2.2, 0.03, zT - 8.4));
+    lamps.add('brazier', V(sx * 2.2, 0.03 + 1.4, zT - 8.4), undefined, { intensity: 9, distance: 9, glow: 0.3, priority: 0.9 });
+  }
+  // Torches at the front corners of the tribunal.
+  for (const sx of [-1, 1]) {
+    const at = T(sx * 5.3, 0.03, zT - 3.2);
+    lamps.add('torch', V(0, torchPole(main, at, 2.8), 0), at, { priority: 1.2 });
+  }
+  // Bronze candelabra lining the processional way from the gateway to the altar.
+  for (const z of [-24, -12, 0, 12]) {
+    for (const sx of [-1, 1]) {
+      const at = T(sx * 4.5, 0.03, z);
+      lamps.add('candelabrum', V(0, candelabrum(main, at, 2.4) + 0.12, 0), at);
+    }
+  }
   carpet(main, T(0, 0.03, zT - 5.8), 2.4, 5.2, 'fabric_red');
   const standLen = 15;
   for (const sx of [-1, 1]) {
@@ -389,6 +441,8 @@ function farMassing(ctx: LandmarkContext): THREE.Object3D {
     const cx = (s * (X.wallIn + X.wallOut)) / 2;
     const a0 = s > 0 ? -Math.PI / 2 : Math.PI / 2;
     arcWall(b, 'peperino', I, cx, X.exedraZ, X.exedraR, X.exedraR + X.exedraT, a0, a0 + Math.PI, 0, Y.wall, 8);
+    const rr = X.exedraR + X.exedraT + 0.5;
+    coneRoof(b, 'roof_tile', I, cx, X.exedraZ, rr, a0, a0 + Math.PI, Y.wall, Y.wall + rr * 0.3, 8);
   }
   for (const sx of [-1, 1]) boxMinMax(b, 'peperino', I, Math.min(sx * X.gateHalf, sx * X.wallOut), 0, X.zGate - 0.9, Math.max(sx * X.gateHalf, sx * X.wallOut), Y.wall, X.zGate);
   return b.build('forum-trajan:far');
@@ -401,16 +455,18 @@ export const builders: LandmarkBuilder[] = [
       const main = ctx.builder();
       const chunks = new LodChunks(ctx.detail === 'high' ? 60 : 40);
       const spots: Spot[] = [];
+      const lamps = new Lamps();
       for (const s of [-1, 1] as const) {
-        portico(ctx, main, chunks, s, spots);
-        backWallAndExedra(ctx, main, chunks, s, spots);
+        portico(ctx, main, chunks, s, spots, lamps);
+        backWallAndExedra(ctx, main, chunks, s, spots, lamps);
       }
-      gateWall(ctx, main, spots);
-      square(ctx, main, spots);
+      gateWall(ctx, main, spots, lamps);
+      square(ctx, main, spots, lamps);
       const colliders = [...main.colliders];
       const group = new THREE.Group();
       group.add(main.build('forum-trajan'));
       group.add(chunks.build('forum-trajan:lod', colliders));
+      lamps.attach(ctx.game, group);
       return { object: group, colliders, spots, far: farMassing(ctx), cullDistance: 900 };
     },
   },
