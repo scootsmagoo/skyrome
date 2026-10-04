@@ -19,6 +19,7 @@
  *   flee      health ≤ fleeAt;  yield: health ≤ yieldAt (the system kneels the actor)
  *   search    lost sight for 2 s: go to the last known position, search 20 s, then idle
  *   opener    scripted first exchanges (a light chain; a delayed, long power wind-up)
+ *   bash      shield fighters pressed by a target who keeps swinging answer with the umbo [design]
  *
  * Bosses add a `BrainScript` (Nereus' net, phases). Pure logic: see ./types.ts.
  */
@@ -63,6 +64,8 @@ export class CombatBrain {
   opener: 'chain' | 'delayed-power' | null = null;
 
   private chainLeft = 0;
+  /** How much of the time the target has been swinging lately (0..1, an average over ~1.5 s). */
+  private pressure = 0;
   private nextDecide = 0;
   private circleDir = 1;
   private circleSwitchAt = 0;
@@ -230,6 +233,7 @@ export class CombatBrain {
     }
 
     const d = Math.hypot(t.x - p.self.x, t.z - p.self.z);
+    this.pressure += ((t.attacking && d <= t.reach + 0.5 ? 1 : 0) - this.pressure) * 0.07;
     // Token turn-taking.
     if (svc.holdsToken() && ((this.turnAttacks <= 0 && !p.self.busy) || svc.tokenOverdue())) {
       svc.releaseToken();
@@ -251,8 +255,12 @@ export class CombatBrain {
     const chaining = this.chainLeft > 0;
     const opening = chaining || !(t.attacking && t.impactIn < Infinity) || !this.waitForOpening || now > this.nextAttackAt + 1.5;
     if (this.state === 'engage' && p.self.canAct && now >= this.nextAttackAt && d <= p.self.reach - 0.05 && opening) {
-      let kind: 'light' | 'power' | 'feint' = this.rng() < P.powerChance ? 'power' : 'light';
+      let kind: 'light' | 'power' | 'feint' | 'bash' = this.rng() < P.powerChance ? 'power' : 'light';
       if (P.canFeint && this.rng() < 0.25 * P.aggression) kind = 'feint';
+      // Against a target who keeps swinging, a shield fighter answers with the umbo [design]: the
+      // bash knocks the next swing out of its wind-up instead of trading blows.
+      const pressed = !!p.self.shield && this.pressure > 0.55;
+      if (pressed && this.rng() < Math.min(0.9, P.blockSkill * 1.5)) kind = 'bash';
       if (this.forceNext) {
         kind = this.forceNext;
         this.forceNext = null;
@@ -266,8 +274,10 @@ export class CombatBrain {
       if (kind !== 'feint') this.turnAttacks--;
       // A chain swings again as soon as the last blow is over (inside the 0.35 s chain gap).
       if (chaining) this.chainLeft--;
-      this.nextAttackAt = this.chainLeft > 0 ? now : now + this.attackInterval * (0.85 + 0.3 * this.rng());
-      this.waitForOpening = this.rng() < P.blockSkill;
+      // Pressed behind the shield, it picks its moments more sparingly.
+      this.nextAttackAt = this.chainLeft > 0 ? now : now + this.attackInterval * (0.85 + 0.3 * this.rng()) * (pressed ? 1.3 : 1);
+      // A shield fighter fights from behind the shield: more often it waits for the opening [design].
+      this.waitForOpening = this.rng() < (p.self.shield ? Math.min(0.9, P.blockSkill * 1.5) : P.blockSkill);
       // Taking the token to attack drops a reactive guard (§6.13).
       this.reactive = false;
       this.powerGuard = false;
@@ -322,7 +332,9 @@ export class CombatBrain {
     const struck = p.self.lastHitAt !== undefined && p.self.lastHitAt > this.lastStruck;
     if (struck) this.lastStruck = p.self.lastHitAt!;
     if (inReach && (!this.prevInReach || ownSwingEnded || struck) && !this.reactive && this.reactiveAt === Infinity) {
-      const chance = P.blockSkill * (tired ? 0.7 : 1);
+      // Pressed by a target who keeps swinging, a shield fighter gets the shield back up more surely [design].
+      const skill = p.self.shield && this.pressure > 0.5 ? Math.min(0.95, P.blockSkill * 1.5) : P.blockSkill;
+      const chance = skill * (tired ? 0.7 : 1);
       if (this.rng() < chance) this.reactiveAt = p.now + P.reactionS;
     }
     this.prevInReach = inReach;

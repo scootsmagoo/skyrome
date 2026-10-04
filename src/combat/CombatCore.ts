@@ -1104,8 +1104,14 @@ export class CombatCore {
     if (best) this.engage(c, best);
   }
 
-  private npcAttack(c: Combatant, kind: 'light' | 'power' | 'feint', minWindup?: number) {
+  private npcAttack(c: Combatant, kind: 'light' | 'power' | 'feint' | 'bash', minWindup?: number) {
     if (!this.free(c)) return;
+    // An NPC's bash keeps a readable telegraph (§6.5) and needs the shield.
+    if (kind === 'bash') {
+      if (c.shield) this.startAttack(c, 'bash', { minWindup: Math.max(minWindup ?? 0, TIMING.npcMinWindup.bash) });
+      else this.startAttack(c, 'light', { minWindup });
+      return;
+    }
     let weapon: WeaponStats | undefined;
     // Nereus in phase 3: the practice dagger at close range.
     if (c.script && c.script.phase >= 3 && c.target && dist2D(c.target.position, c.position) < 1.4 && kind === 'light') weapon = PRACTICE_DAGGER;
@@ -1135,6 +1141,7 @@ export class CombatCore {
         canAct: this.free(c) && !c.winded,
         reach,
         guardable: true,
+        shield: !!c.shield,
         hasNet: c.hasNet,
         lastHitAt: c.lastHitAt,
       },
@@ -1424,10 +1431,19 @@ export class CombatCore {
     return { context: 'none' };
   }
 
-  /** Bring the player back (dev scenes, game flow after a defeat). */
+  /** Bring the player back (dev scenes, game flow after a defeat): full pools. */
   revive(c: Combatant) {
-    c.status = 'active';
     c.vitals.revive();
+    this.standUp(c);
+  }
+
+  /** On its feet again with its pools as they are (after a load restored them). */
+  standUp(c: Combatant) {
+    c.status = 'active';
+    c.koUntil = Infinity;
+    c.fleeSince = null;
+    c.target = null;
+    c.lockTarget = null;
     c.view?.setDead(false);
     c.body.setGhost?.(false);
     c.action = null;

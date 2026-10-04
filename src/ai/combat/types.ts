@@ -69,6 +69,8 @@ export interface SelfPerception {
   reach: number;
   /** Has a shield or weapon to guard with. */
   guardable: boolean;
+  /** Carries a shield (fights from behind it: more patient for an opening). */
+  shield?: boolean;
   /** Boss props (Nereus' net). */
   hasNet?: boolean;
   /** When it was last struck (combat clock), for the guard reaction to a blow. */
@@ -122,7 +124,8 @@ export interface Intent {
   guard: boolean;
   /** Try a timed parry now (elites, champions, bosses). */
   parry: boolean;
-  attack: 'light' | 'power' | 'feint' | null;
+  /** 'bash': a shield fighter's umbo strike against a target who keeps swinging. */
+  attack: 'light' | 'power' | 'feint' | 'bash' | null;
   /** Boss actions: 'net', 'sandKick'. */
   special: string | null;
   /** Stretch the next attack's wind-up to at least this (Nereus' telegraphed follow-up). */

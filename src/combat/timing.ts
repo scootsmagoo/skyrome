@@ -28,8 +28,8 @@ export const TIMING = {
   guardUp: 0.1,
   /** Toggle-block rule (§4.2): a press shorter than this is a parry attempt only. */
   togglePress: 0.18,
-  /** NPC wind-ups are stretched to these telegraph minimums (§6.5, Normal). */
-  npcMinWindup: { light: 0.35, power: 0.7 },
+  /** NPC wind-ups are stretched to these telegraph minimums (§6.5, Normal; the bash [design]). */
+  npcMinWindup: { light: 0.35, power: 0.7, bash: 0.3 },
   /** A feint cancels its wind-up at 40 % (§6.13). */
   feintCancel: 0.4,
   /** Nereus' net (§6.8, §13.2): 0.8 s twirl, cast, 0.5 s recovery; 14 m/s, 6 m; entangles 3 s (bosses 1.5 s); −0.4 s per struggle press. */

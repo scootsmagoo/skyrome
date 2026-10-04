@@ -730,6 +730,9 @@ export class CombatSystem implements System, PlayerCombatHost {
     // New clothes replace the player's avatar object (src/game/PlayerLook.ts): fight with the new one.
     ev.on('player:avatar', () => this.onPlayerAvatar());
     ev.on('combat:death', (e) => this.onDeath(e));
+    // A load or a new game: the fights of the moment before are over, and you are on your feet.
+    ev.on('save:loaded', () => this.resetFights());
+    ev.on('game:started', () => this.resetFights());
     ev.on('combat:parry', (e) => {
       if (e.defenderId === this.playerC?.id) this.input.onParried();
     });
@@ -828,6 +831,22 @@ export class CombatSystem implements System, PlayerCombatHost {
   }
 
   private leaveAt: { c: Combatant; at: number }[] = [];
+
+  /** End every fight with the player, drop the street encounter and the bout, stand the player up. */
+  resetFights() {
+    const pc = this.playerC;
+    this.danger.clear();
+    this.leaveAt.length = 0;
+    this.blackoutUntil = -1;
+    this.pendingChoice = null;
+    if (this.core.bout && !this.core.bout.over) this.core.bout = null;
+    if (!pc) return;
+    for (const c of this.core.list) if (c !== pc && c.target === pc) this.core.disengage(c);
+    this.setLock(null);
+    if (pc.status !== 'active' && !pc.vitals.dead) this.core.standUp(pc);
+    pc.brawl = false;
+    this.core.playerCombatUntil = -Infinity;
+  }
 
   /** Hostile NPCs aware of the player but not fighting yet (music: tension). */
   alerted(): boolean {
@@ -1156,12 +1175,16 @@ export class CombatSystem implements System, PlayerCombatHost {
     const pc = this.playerC;
     const g = this.game;
     if (pc) {
+      // Brought back by someone else (a load, the flow's revive): stand up.
+      if (pc.status === 'dead' && !pc.vitals.dead) this.core.standUp(pc);
       this.input.update();
       g.player.combatStance = pc.drawn && pc.active;
       const av = g.player.avatar;
       if (av instanceof HumanoidAvatar) av.setAimPitch(g.player.pitch);
       this.maintainLock();
       if (this.cached.lockOn === 'auto' && !pc.lockTarget && this.core.playerInCombat) this.acquireLock();
+      // A brawl is over once no brawler is about any more.
+      if (pc.brawl && !this.core.playerInCombat && !this.core.list.some((c) => c !== pc && c.brawl && c.active && dist2D(c.position, pc.position) < 30)) pc.brawl = false;
       this.frameLock(dt);
     }
     if (this.pendingChoice && g.elapsed >= this.pendingChoice.at) {
