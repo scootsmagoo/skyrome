@@ -18,6 +18,7 @@
  */
 import type { EventBus, GameEvents } from '../core/Events';
 import { checkTier, rollSkillCheck, skillCheckChance } from './checks';
+import { skipTime } from './clock';
 import { CRIME, XP } from './data/tuning';
 import { CRIMES, LEDGERS, USURPATIO_BOUNTY } from './data/crimes';
 import type { FactionSystem } from './factions';
@@ -66,7 +67,10 @@ export interface GuardInfo {
   id?: string;
   /** 'cohortes-urbanae', 'vigiles' or 'praetoriani' (default: on duty now). */
   faction?: string;
-  /** Force corruptibility (default: decided per guard id from CRIME.corruptible). */
+  /**
+   * Force corruptibility. Default: from the faction's rate in CRIME.corruptible — fixed per guard id,
+   * or, with no id, rolled once per confrontation with the crime rng.
+   */
   corruptible?: boolean;
 }
 
@@ -124,6 +128,8 @@ export class CrimeSystem {
   private asylumDay = -1;
   private _evidence: ItemStack[] = [];
   private _condemned: { ledger: string; bouts: number } | null = null;
+  /** The confrontation with an unnamed guard: its corruptibility is rolled once and kept. */
+  private confrontation: { ledger: string; faction: string; at: number; corruptible: boolean } | null = null;
   /** Forces a ledger (outside the city, scripted scenes); null = by place and crime. */
   override: string | null = null;
 
@@ -271,11 +277,27 @@ export class CrimeSystem {
     return Math.min(CRIME.persuadeDcMax, Math.round(CRIME.persuadeDcBase + bounty / CRIME.persuadeDcDiv));
   }
 
-  /** Whether a guard takes bribes: decided once per guard (by id) from the faction's rate (vigiles 40%, urban 25%, praetorians 5%). */
+  /**
+   * Whether a guard takes bribes, at the faction's rate (vigiles 40%, urban 25%, praetorians 5%).
+   * A guard with an id is always corruptible or never; an unnamed guard is rolled once per
+   * confrontation (same ledger and faction, within an hour, until the bounty is settled or the
+   * player flees or resists), so the offer and the bribe agree.
+   */
   isCorruptible(guard: GuardInfo = {}, ledger = this.ledger): boolean {
     if (guard.corruptible !== undefined) return guard.corruptible;
     const faction = guard.faction ?? this.guardsFor(ledger);
-    return hash01(`${guard.id ?? faction}`) < (CRIME.corruptible[faction] ?? 0);
+    const rate = CRIME.corruptible[faction] ?? 0;
+    if (guard.id) return hash01(guard.id) < rate;
+    const c = this.confrontation;
+    if (c && c.ledger === ledger && c.faction === faction && this.now() - c.at < CRIME.confrontationHours) return c.corruptible;
+    const rng = this.deps.rng ?? { next: Math.random };
+    this.confrontation = { ledger, faction, at: this.now(), corruptible: rng.next() < rate };
+    return this.confrontation.corruptible;
+  }
+
+  /** The confrontation is over (settled, fled, resisted): the next unnamed guard is a new roll. */
+  endConfrontation() {
+    this.confrontation = null;
   }
 
   /** What the guard's "Stop right there!" dialogue should offer. */
@@ -359,7 +381,7 @@ export class CrimeSystem {
     if (this.bounty(ledger) <= 0 || this.sentence(ledger) !== 'carcer') return null;
     const days = this.jailDays(ledger);
     const confiscated = this.confiscate();
-    this.deps.time?.advanceHours(days * 24);
+    skipTime(this.deps.time, this.deps.events, days * 24);
     const lostProgress = this.deps.sheet?.loseProgress(days * CRIME.jailProgressLossPerDay, rng) ?? [];
     this.deps.events?.emit('crime:jailed', { jurisdiction: ledger, days });
     this.clear(ledger, 'jail');
@@ -404,12 +426,14 @@ export class CrimeSystem {
   /** Run from the guards: +10% bounty. */
   flee(ledger = this.ledger) {
     this.add(ledger, Math.ceil(this.bounty(ledger) * CRIME.fleeMult));
+    this.endConfrontation();
   }
 
   /** Refuse arrest: +50% bounty, and guards attack until it is cleared. */
   resistArrest(ledger = this.ledger) {
     this.resisting.add(ledger);
     this.add(ledger, Math.ceil(this.bounty(ledger) * CRIME.resistMult));
+    this.endConfrontation();
     this.deps.events?.emit('crime:resist', { jurisdiction: ledger });
   }
 
@@ -436,6 +460,7 @@ export class CrimeSystem {
     this.bounties.delete(ledger);
     this.booked.delete(ledger);
     this.resisting.delete(ledger);
+    if (this.confrontation?.ledger === ledger) this.endConfrontation();
     this.deps.events?.emit('crime:cleared', { jurisdiction: ledger, how });
   }
 
@@ -513,6 +538,7 @@ export class CrimeSystem {
     this.asylumUntil = typeof d.asylumUntil === 'number' ? d.asylumUntil : -Infinity;
     this.asylumDay = typeof d.asylumDay === 'number' ? d.asylumDay : -1;
     this._evidence = (Array.isArray(d.evidence) ? d.evidence : []).filter((s) => s && typeof s.itemId === 'string' && s.count > 0).map((s) => ({ ...s }));
+    this.confrontation = null;
     const c = d.condemned;
     this._condemned = c && typeof c.ledger === 'string' && typeof c.bouts === 'number' && c.bouts > 0 ? { ledger: c.ledger, bouts: c.bouts } : null;
   }

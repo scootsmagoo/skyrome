@@ -10,9 +10,9 @@
 import * as THREE from 'three';
 import type { MeshBuilder } from '../../gfx/MeshBuilder';
 import type { MaterialId } from '../../gfx/materialIds';
-import { ProfileBuilder, T, gridSurface, lathe, linspace, mul, sweep, type V2 } from '../common/geom';
+import { ProfileBuilder, T, gridSurface, lathe, linspace, mul, sweep, tube, type V2 } from '../common/geom';
 import { inscriptionPanel } from '../common/inscription';
-import { friezeBand, hieroglyphFace, reliefMaterial } from '../common/relief';
+import { friezeStrip, hieroglyphFace, reliefMaterial } from '../common/relief';
 import { stairs, stepCount } from '../common/stairs';
 import { wall } from '../common/walls';
 import { doricCapital } from './capitals';
@@ -37,10 +37,31 @@ export interface ObeliskSpec {
 
 let obeliskMaterial: THREE.MeshStandardMaterial | null = null;
 
-/** Red Aswan granite with carved hieroglyph columns. */
+/**
+ * Red Aswan granite (syenite) with carved hieroglyph columns: coarse pink and red feldspar, grey
+ * quartz and black biotite/hornblende crystals of 1–3 cm, polished.
+ */
 function graniteGlyphs(): THREE.MeshStandardMaterial {
   if (!obeliskMaterial) {
-    obeliskMaterial = reliefMaterial(hieroglyphFace(128, 1024, 30), { ground: [176, 112, 102], relief: [120, 76, 70], noise: 0.18, strength: 2.4, roughness: 0.55 });
+    obeliskMaterial = reliefMaterial(hieroglyphFace(192, 1536, 30), {
+      ground: [170, 104, 92],
+      relief: [104, 62, 56],
+      noise: 0.06,
+      strength: 2.4,
+      roughness: 0.42,
+      grains: {
+        palette: [
+          [196, 118, 100], // pink feldspar
+          [158, 80, 70], // red feldspar
+          [132, 122, 122], // grey quartz
+          [44, 38, 38], // biotite / hornblende
+          [214, 186, 174], // pale plagioclase
+        ],
+        weights: [0.38, 0.24, 0.18, 0.12, 0.08],
+        cell: 2.2,
+        mix: 0.55,
+      },
+    });
     obeliskMaterial.name = 'obelisk-granite';
   }
   return obeliskMaterial;
@@ -133,7 +154,7 @@ export interface HonorificColumnSpec {
 
 const TRAJAN = ['Senatus Populusque Romanus', 'Imp Caesari Divi Nervae F Nervae', 'Traiano Aug Germ Dacico Pontif', 'Maximo Trib Pot XVII Imp VI Cos VI P P', 'Ad Declarandum Quantae Altitudinis', 'Mons et Locus Tantis Operibus Sit Egestus'];
 
-let friezeMat: THREE.MeshStandardMaterial | null = null;
+let friezeMats: { near: THREE.MeshStandardMaterial; far: THREE.MeshStandardMaterial } | null = null;
 
 export function honorificColumn(b: MeshBuilder, spec: HonorificColumnSpec, at?: THREE.Matrix4) {
   const m = at ?? new THREE.Matrix4();
@@ -160,7 +181,7 @@ export function honorificColumn(b: MeshBuilder, spec: HonorificColumnSpec, at?: 
   const crown = new ProfileBuilder(-0.02, -0.45).to(0, -0.45).cymaReversa(0.08, 0.14, n).up(0.05).out(0.1).up(0.18).ovolo(0.08, 0.08, n).to(-0.02, 0).build();
   b.add(sweep(crown, sq(pw / 2, plinthH + ph), { closed: true }), mat, m);
   // Inscription tablet above the door.
-  inscriptionPanel(b, { lines: spec.inscription ?? TRAJAN, width: pw * 0.62, height: ph * 0.36, style: 'carved', sizes: [1, 0.82, 0.82, 0.82, 0.82, 0.82], border: true }, mul(m, T(0, plinthH + doorH + 0.35 + ph * 0.18 + 0.15, -pw / 2 - 0.03)), { depth: 0.08 });
+  inscriptionPanel(b, { lines: spec.inscription ?? TRAJAN, width: pw * 0.62, height: ph * 0.36, style: 'carved', sizes: [1, 0.82, 0.82, 0.82, 0.82, 0.82], border: true, monumental: true }, mul(m, T(0, plinthH + doorH + 0.35 + ph * 0.18 + 0.15, -pw / 2 - 0.03)), { depth: 0.08 });
   // Eagles at the corners of the pedestal top (stylised blocks).
   const y0 = plinthH + ph;
   if (hi) {
@@ -194,29 +215,66 @@ export function honorificColumn(b: MeshBuilder, spec: HonorificColumnSpec, at?: 
   const shaftH = Hc - baseH - capH;
   const turns = spec.turns ?? 23;
   const topRatio = 0.87;
-  const ths = linspace(0, Math.PI * 2, hi ? 64 : 20);
-  const rows = linspace(0, 1, hi ? 48 : 8);
-  const pitch = 1 / Math.max(1, turns);
-  let shaftMat: THREE.Material | MaterialId = mat;
+  // The frieze is one long strip (friezeStrip) wound round the shaft. The shaft is built in
+  // helical bands (s = band coordinate, a = angle) so each band's UVs run continuously along
+  // the helix: u advances 1/STRIP_TURNS per turn, a non-integer, so scenes never stack up in
+  // vertical lines and the 4096 px strip only comes round again 3.37 turns later.
+  const STRIP_TURNS = 3.37;
+  let farMat: THREE.Material | MaterialId = mat;
+  let nearMat: THREE.Material | MaterialId = mat;
   if (turns > 0 && typeof document !== 'undefined') {
-    if (!friezeMat) {
-      // Deeper relief and darker ground between figures (ancient reliefs were also painted).
-      friezeMat = reliefMaterial(friezeBand(1024, 112, 113), { ground: [196, 188, 172], relief: [240, 234, 222], noise: 0.06, strength: 6, roughness: 0.55, repeat: true });
-      friezeMat.name = 'column-frieze';
+    if (!friezeMats) {
+      // Darker ground between figures (ancient reliefs were also painted) and deep relief.
+      const far = reliefMaterial(friezeStrip(4096, 128, 113), { ground: [192, 184, 168], relief: [242, 236, 224], noise: 0.06, strength: 6, roughness: 0.55, repeat: true });
+      far.name = 'column-frieze';
+      // The lowest turns are seen close up from the street: carve them deeper still.
+      const near = far.clone();
+      near.normalScale.setScalar(1.6);
+      near.name = 'column-frieze-near';
+      friezeMats = { near, far };
     }
-    shaftMat = friezeMat;
+    farMat = friezeMats.far;
+    nearMat = friezeMats.near;
   }
-  const shaft = gridSurface(
-    ths,
-    rows,
-    (a, t, out) => {
-      const r = entasisRadius(D, topRatio, t) * 1.0;
+  const nA = hi ? 64 : 20;
+  const ths = linspace(0, Math.PI * 2, nA);
+  const tAt = (a: number, sb: number) => Math.min(1, Math.max(0, (sb + a / (Math.PI * 2)) / Math.max(1, turns)));
+  const P = (a: number, sb: number, out: THREE.Vector3, lift = 0) => {
+    const t = tAt(a, sb);
+    const r = entasisRadius(D, topRatio, t) + lift;
+    return out.set(r * Math.sin(a), ys + t * shaftH, r * Math.cos(a));
+  };
+  if (turns > 0) {
+    const sub = linspace(0, 1, hi ? 3 : 1);
+    for (let n = -1; n < turns; n++) {
+      const band = gridSurface(ths, sub.map((k) => n + k), (a, sb, out) => P(a, sb, out), { uv: (a, sb) => [(n + a / (Math.PI * 2)) / STRIP_TURNS, sb - n] });
+      // Radial normals: the clamped rows at the shaft's ends would otherwise get degenerate ones.
+      const pos = band.getAttribute('position');
+      const nor = band.getAttribute('normal');
+      for (let i = 0; i < pos.count; i++) {
+        const l = Math.hypot(pos.getX(i), pos.getZ(i)) || 1;
+        nor.setXYZ(i, pos.getX(i) / l, 0, pos.getZ(i) / l);
+      }
+      const near = (Math.max(0, n) / turns) * shaftH < 4.5;
+      b.add(band, near ? nearMat : farMat, m, { uv: 'keep' });
+    }
+    if (hi) {
+      // The raised fillet dividing the bands, one continuous helix.
+      const path: THREE.Vector3[] = [];
+      const steps = Math.ceil(turns * 48);
+      for (let i = 0; i <= steps; i++) {
+        const a = (i / steps) * turns * Math.PI * 2;
+        path.push(P(a % (Math.PI * 2), Math.floor(a / (Math.PI * 2)), new THREE.Vector3(), D * 0.004));
+      }
+      b.add(tube(path, D * 0.009, 4, false), mat, m);
+    }
+  } else {
+    const shaft = gridSurface(ths, linspace(0, 1, hi ? 12 : 4), (a, t, out) => {
+      const r = entasisRadius(D, topRatio, t);
       return out.set(r * Math.sin(a), ys + t * shaftH, r * Math.cos(a));
-    },
-    // u: once round per turn; v: climbs one band per turn along the helix.
-    { uv: (a, t) => [a / (Math.PI * 2), t / pitch - a / (Math.PI * 2)] },
-  );
-  b.add(shaft, shaftMat, m, { uv: 'keep' });
+    });
+    b.add(shaft, mat, m);
+  }
   // Doric capital (echinus + abacus) and the cylindrical statue base with its small dome.
   const yc = ys + shaftH;
   for (const p of doricCapital({ D, d: D * topRatio, height: capH, detail })) {

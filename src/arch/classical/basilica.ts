@@ -127,7 +127,7 @@ export function basilica(b: MeshBuilder, spec: BasilicaSpec, at?: THREE.Matrix4)
   placeRing(0, H1, D1, true, detail);
   const d1 = e1.d;
   entablature(b, rect(cx + d1 / 2, cz + d1 / 2, H1), { order, columnHeight: H1, D: D1, material: 'marble', detail, depth: d1 + 0.3, sima: false }, { closed: true, at: m });
-  placeRing(yGal, H2, D2, false, spec.upperDetail ?? 'low');
+  placeRing(yGal, H2, D2, false, spec.upperDetail ?? (detail === 'far' ? 'far' : 'low'));
   const d2 = columnDims(order, D2, H2).d;
   entablature(b, rect(cx + d2 / 2, cz + d2 / 2, yGal + H2), { order, columnHeight: H2, D: D2, material: 'marble', detail, depth: d2 + 0.3, sima: false }, { closed: true, at: m });
 

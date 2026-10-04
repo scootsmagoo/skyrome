@@ -10,7 +10,9 @@ export function triangles(b: MeshBuilder): number {
   let n = 0;
   g.traverse((o) => {
     const m = o as THREE.Mesh;
-    if (m.isMesh) n += m.geometry.getAttribute('position').count / 3;
+    if (!m.isMesh) return;
+    const tris = (m.geometry.index?.count ?? m.geometry.getAttribute('position').count) / 3;
+    n += tris * ((m as THREE.InstancedMesh).isInstancedMesh ? (m as THREE.InstancedMesh).count : 1);
   });
   return n;
 }
