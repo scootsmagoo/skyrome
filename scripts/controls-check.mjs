@@ -4,6 +4,10 @@
  * listener runs: the UI's capture handler, menus, dialogue) and asserts what each control does.
  *
  *   node scripts/controls-check.mjs [--browser chromium|webkit|both] [--preset mouse|trackpad|keyboard|all] [--url http://…/] [--only name,name]
+ *                                    [--extension /path/to/unpacked/extension]
+ *
+ * --extension loads a browser extension (e.g. an unpacked copy of Vimium, which takes d/f/r/x for its
+ * own commands on every page) into Chromium and checks that the game still gets those keys.
  *
  * Exit code 1 if any check fails. Run it after touching input, the UI's key handling, the player
  * controller, the camera rig, combat input or the game flow.
@@ -46,6 +50,7 @@ for (const browserName of browsers) {
     await browser.close();
   }
 }
+if (typeof args.extension === 'string') failures += await runExtensionCheck(args.extension);
 if (server) await server.close();
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll controls checks passed');
 process.exit(failures ? 1 : 0);
@@ -617,6 +622,53 @@ async function runRepairCheck(browser) {
     if (!ok) fails++;
   } catch (e) {
     console.log(`FAIL  repair saved bindings              ${e.message}`);
+    fails++;
+  }
+  await ctx.close();
+  return fails;
+}
+
+/** With a keyboard extension loaded (Vimium & co.), the game still receives its keys. */
+async function runExtensionCheck(ext) {
+  console.log(`\n=== chromium + extension ${ext} ===`);
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const dir = mkdtempSync(`${tmpdir()}/skyrome-ext-`);
+  const ctx = await pw.chromium.launchPersistentContext(dir, {
+    headless: true,
+    channel: 'chromium',
+    viewport: { width: 1280, height: 720 },
+    args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`, '--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
+  });
+  let fails = 0;
+  try {
+    await new Promise((r) => setTimeout(r, 1500));
+    // Listen before the game does: its UI consumes menu keys (J, Tab…) and stops them propagating.
+    await ctx.addInitScript(() => {
+      window.__seen = [];
+      window.addEventListener('keydown', (e) => window.__seen.push(e.code), true);
+    });
+    const page = await ctx.newPage();
+    let reloads = -1;
+    page.on('framenavigated', (f) => { if (f === page.mainFrame()) reloads++; });
+    await boot(page, 'scene=rome&at=circus-maximus&hour=10');
+    await page.mouse.click(900, 500);
+    await page.waitForTimeout(300);
+    await page.evaluate(() => { window.__seen.length = 0; });
+    for (const k of ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyR', 'KeyX', 'KeyV', 'KeyJ']) {
+      await page.keyboard.down(k);
+      await page.waitForTimeout(100);
+      await page.keyboard.up(k);
+      await page.waitForTimeout(150);
+      if (k === 'KeyJ') { await page.keyboard.press('Tab'); await page.waitForTimeout(200); }
+    }
+    const seen = await page.evaluate(() => window.__seen);
+    const missing = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyR', 'KeyX', 'KeyV', 'KeyJ'].filter((k) => !seen.includes(k));
+    const ok = missing.length === 0 && reloads <= 0;
+    console.log(`${ok ? 'PASS' : 'FAIL'}  keys reach the game past the extension  ${missing.length ? 'missing ' + missing.join(',') : 'all arrived'}${reloads > 0 ? ' · page reloaded' : ''}`);
+    if (!ok) fails++;
+  } catch (e) {
+    console.log(`FAIL  extension check  ${e.message}`);
     fails++;
   }
   await ctx.close();

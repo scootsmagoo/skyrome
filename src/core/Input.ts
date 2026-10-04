@@ -14,6 +14,10 @@
  *   when it turns off, so either edge counts as one press (see `capsLockToggled`).
  * - Cmd+key (and Ctrl+key unless Ctrl is bound) is left to the browser: never an action, never
  *   prevented. Releasing Cmd releases every key, since macOS drops keyups while Cmd is down.
+ * - Keyboard extensions (Vimium and the like) take plain letters before any page sees them: d
+ *   scrolls, r reloads, x closes the tab, f shows link hints. They stand aside while a form field
+ *   has focus, so while playing the focus sits on an invisible, empty <select> (the key sink).
+ *   Unlike a text field it never pops up macOS's accent picker when a letter is held.
  */
 
 export type Action =
@@ -347,6 +351,8 @@ export class Input {
   private gestureScale = 1;
   private lastGestureAt = -Infinity;
   private listeners: Array<() => void> = [];
+  /** Invisible focus target that makes keyboard extensions pass keys through (see the header). */
+  private sink: HTMLSelectElement | null = null;
 
   constructor(
     private readonly target: HTMLElement,
@@ -354,8 +360,68 @@ export class Input {
   ) {
     this.bindings = { ...DEFAULT_BINDINGS, ...bindings };
     this.rebuildIndex();
+    this.createSink();
     this.attach();
   }
+
+  /**
+   * Keep keyboard focus on the key sink, unless the player is typing somewhere (a text field,
+   * a real <select> in a menu) or the page is hidden. Cheap; called every frame.
+   */
+  focusSink() {
+    const sink = this.sink;
+    if (!sink || typeof document === 'undefined' || document.hidden) return;
+    const a = document.activeElement as HTMLElement | null;
+    if (a === sink) return;
+    if (a && a !== document.body && a !== document.documentElement && a !== this.target) return;
+    try {
+      sink.focus({ preventScroll: true });
+    } catch {
+      /* not focusable right now */
+    }
+  }
+
+  /** True when the key sink holds focus (diagnostics). */
+  get sinkFocused(): boolean {
+    return typeof document !== 'undefined' && !!this.sink && document.activeElement === this.sink;
+  }
+
+  private createSink() {
+    if (typeof document === 'undefined' || !document.body) return;
+    const s = document.createElement('select');
+    s.dataset.keySink = '1';
+    s.tabIndex = -1;
+    s.setAttribute('aria-hidden', 'true');
+    s.setAttribute('aria-label', 'Game keyboard focus');
+    s.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0;margin:0;';
+    // A focused select would open on Space/Enter/arrows or jump on a typed letter: never.
+    s.addEventListener('keydown', (e) => {
+      if (!e.metaKey && !e.ctrlKey) e.preventDefault();
+    });
+    s.addEventListener('mousedown', (e) => e.preventDefault());
+    // Vimium-style extensions treat Esc in a form field as "leave the field": they blur it and
+    // swallow the key, so the game never hears Esc. Their blur has a signature: focus goes to
+    // nothing (no other element, no click, the window still focused) after the player has started
+    // interacting. Then hand the game the Escape it was meant to get (pause, back out of menus).
+    s.addEventListener('blur', (e) => {
+      if (!this.interacted || e.relatedTarget || document.hidden) return;
+      if (performance.now() - this.lastPointerAt < 250) return;
+      setTimeout(() => {
+        const a = document.activeElement;
+        if (!document.hasFocus() || (a && a !== document.body && a !== document.documentElement)) return;
+        const init = { code: 'Escape', key: 'Escape', bubbles: true, cancelable: true };
+        window.dispatchEvent(new KeyboardEvent('keydown', init));
+        window.dispatchEvent(new KeyboardEvent('keyup', init));
+      }, 0);
+    });
+    document.body.appendChild(s);
+    this.sink = s;
+    this.listeners.push(() => s.remove());
+  }
+
+  /** The player has pressed a key or clicked (extensions grab focus back before that). */
+  private interacted = false;
+  private lastPointerAt = -Infinity;
 
   setBindings(bindings: Partial<Bindings>) {
     this.bindings = { ...this.bindings, ...bindings };
@@ -452,6 +518,7 @@ export class Input {
 
   /** Call once at the end of every rendered frame. */
   endFrame() {
+    this.focusSink();
     this.pressedCodes.clear();
     this.releasedCodes.clear();
     // Wheel "keys" and toggle edges are momentary.
@@ -530,6 +597,7 @@ export class Input {
     };
 
     on(window, 'keydown', (e) => {
+      if (e.isTrusted) this.interacted = true;
       if (isTypingTarget(e.target)) return;
       // Cmd shortcuts (Cmd+R, Cmd+L, Cmd+F…) belong to the browser and are never game actions.
       if (this.isShortcut(e)) return;
@@ -555,6 +623,10 @@ export class Input {
       for (const c of [...this.held]) this.release(c);
     });
 
+    on(window, 'pointerdown', () => {
+      this.interacted = true;
+      this.lastPointerAt = performance.now();
+    }, { capture: true });
     on(this.target, 'mousedown', (e) => {
       if (!this.locked) {
         // This click captures the mouse; it never attacks or blocks (GDD §4.1, AC-24).
@@ -637,6 +709,7 @@ function isGameplay(action: Action) {
 function isTypingTarget(t: EventTarget | null) {
   const el = t as HTMLElement | null;
   if (!el) return false;
+  if (el.dataset?.keySink === '1') return false; // our own key sink, not a form field
   const tag = el.tagName;
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
 }

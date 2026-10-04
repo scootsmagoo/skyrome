@@ -75,6 +75,12 @@ The game is designed to be fully playable on a Mac trackpad, so every mouse acti
 | Stuck somewhere? | Esc → I'm stuck |
 | Check your trackpad and keys | `?scene=inputlab` |
 
+### Keyboard extensions (Vimium and similar)
+
+Extensions like Vimium use plain letter keys on every website: **d** scrolls, **r** reloads, **x** closes the tab, **f** shows link hints. Skyrome keeps keyboard focus on a hidden form field while you play, which makes these extensions pass your keys through to the game. The one exception is **Esc**: Vimium always keeps it. Esc still pauses while the mouse is captured, and **Tab** backs out of any menu. To get Esc back everywhere, add the game's address (e.g. `http://127.0.0.1:5173/*`) to the extension's excluded sites.
+
+If a key ever seems dead, open `?scene=inputlab`, press it, and see whether it shows up.
+
 ## How it's made
 
 - **Everything is procedural.** There are no artists and no 3D model files. Buildings, characters, animations, the sky, sound effects and music are all generated in TypeScript. The only third-party assets are CC0 stone, brick and ground textures and two OFL fonts (see [Credits](#credits)).
