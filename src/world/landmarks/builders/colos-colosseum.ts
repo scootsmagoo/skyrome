@@ -743,7 +743,7 @@ export function buildColosseum(ctx: LandmarkContext) {
     const zIn = XF + 0.2 - R3[1];
     span(cav, 'brick', fr, -hw - 0.6, 0, zIn, -hw, h + 0.3, len - 0.05, true);
     span(cav, 'brick', fr, hw, 0, zIn, hw + 0.6, h + 0.3, len - 0.05, true);
-    span(cav, 'concrete', fr, -hw - 0.6, h - 0.05, zIn, hw + 0.6, COLOS.podium - 0.02, len - 0.05, true, false);
+    span(cav, 'plaster_cream', fr, -hw - 0.6, h - 0.05, zIn, hw + 0.6, COLOS.podium - 0.02, len - 0.05, true, false);
     span(cav, 'plaster_white', fr, -hw - 0.01, h - 0.02, zIn, hw + 0.01, h, len - 0.2, false, false);
     span(cav, 'sand', fr, -hw, 0.0, 0.5, hw, 0.05, len, false, false);
     // Painted dado in the passage.
@@ -837,7 +837,8 @@ export function buildColosseum(ctx: LandmarkContext) {
       const x = xr[i % segs] + (xr[(i + 1) % segs] - xr[i % segs]) * (f - i);
       return Math.min(XF + COLOS.cippi, x - 0.7);
     };
-    const cipT = oval.equalArc(N * 2, XF + COLOS.cippi, 0.25);
+    // Phase 0.5 leaves the gap between two bollards on each axis, in front of the axial gates.
+    const cipT = oval.equalArc(N * 2, XF + COLOS.cippi, 0.5);
     const cip = new MeshBuilder();
     const cb = new MeshBuilder();
     // A travertine bollard 1.75 m tall with a rounded top and an iron ring.

@@ -81,16 +81,24 @@ describe('Colosseum is walkable where it should be', () => {
     p = world(out.colliders);
   });
 
-  it('Porta Triumphalis: from the west plaza along the long axis onto the arena sand', () => {
-    const x0 = -(COLOS.arenaA + COLOS.xF + 8);
+  it('Porta Triumphalis: from beyond the bollards along the long axis onto the arena sand', () => {
+    const x0 = -(COLOS.arenaA + COLOS.xF + COLOS.cippi + 4);
     const r = walk(p, new THREE.Vector3(x0, 0.05, 0), 4.4, 14, new THREE.Vector3(1, 0, 0));
     expect(r.x).toBeGreaterThan(-COLOS.arenaA + 2);
     expect(r.y).toBeLessThan(0.5);
   });
 
-  it('Porta Libitinensis: from the arena out to the east plaza', () => {
-    const r = walk(p, new THREE.Vector3(0, 0.05, 0), 4.4, 14, new THREE.Vector3(1, 0, 0));
-    expect(r.x).toBeGreaterThan(COLOS.arenaA + COLOS.xF + 2);
+  it('Porta Libitinensis: from the arena out past the bollards', () => {
+    const r = walk(p, new THREE.Vector3(0, 0.05, 0), 4.4, 18, new THREE.Vector3(1, 0, 0));
+    expect(r.x).toBeGreaterThan(COLOS.arenaA + COLOS.xF + COLOS.cippi + 2);
+  });
+
+  it('the north (editor) and south (imperial) entrances are open from beyond the bollards', () => {
+    for (const sz of [-1, 1]) {
+      const z0 = sz * (COLOS.arenaB + COLOS.xF + COLOS.cippi + 4);
+      const r = walk(p, new THREE.Vector3(0, 0.05, z0), 4.4, 6, new THREE.Vector3(0, 0, -sz));
+      expect(Math.abs(r.z), `side ${sz}`).toBeLessThan(COLOS.arenaB + COLOS.xF - 1);
+    }
   });
 
   it('the south passage and stair lead up into the imperial box on the podium', () => {
