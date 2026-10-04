@@ -1,0 +1,246 @@
+/* Combat HUD overlay (src/combat/hud/CombatHud.ts): lock-on bracket, crowd-favor meter, the
+   unblockable cue, the net prompt, sand in the eyes, hold rings. Uses the UI tokens (--sr-*)
+   with fallbacks so it also works in scenes without the UI module. Sizes in rem. */
+.cb-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: var(--sr-body, Georgia, serif);
+  color: var(--sr-ink, #f4ebd8);
+  --cb-cinnabar: #c8331f;
+  --cb-gold: var(--sr-gold, #e6c67e);
+}
+
+/* ---- lock-on bracket */
+.cb-lock {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3.2rem;
+  height: 3.2rem;
+  margin: -1.6rem 0 0 -1.6rem;
+  opacity: 0;
+  transition: opacity 0.15s;
+  will-change: transform;
+}
+.cb-lock.is-on { opacity: 1; }
+.cb-lock i {
+  position: absolute;
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 2px solid var(--cb-gold);
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
+}
+.cb-lock .tl { left: 0; top: 0; border-right: 0; border-bottom: 0; }
+.cb-lock .tr { right: 0; top: 0; border-left: 0; border-bottom: 0; }
+.cb-lock .bl { left: 0; bottom: 0; border-right: 0; border-top: 0; }
+.cb-lock .br { right: 0; bottom: 0; border-left: 0; border-top: 0; }
+.cb-lock .dot {
+  left: 50%;
+  top: 50%;
+  width: 0.35rem;
+  height: 0.35rem;
+  margin: -0.175rem 0 0 -0.175rem;
+  border: 0;
+  border-radius: 50%;
+  background: var(--cb-cinnabar);
+}
+
+/* ---- crowd favor (right edge, vertical) */
+.cb-favor {
+  position: absolute;
+  right: 1.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+.cb-favor.is-on { opacity: 1; }
+.cb-favor .label {
+  font-family: var(--sr-display, serif);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #f6dc96;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  /* Legible over bright stands and sand: a dark plate and a heavy shadow. */
+  padding: 0.5rem 0.2rem;
+  background: rgba(10, 7, 5, 0.62);
+  border-radius: 2px;
+  text-shadow: 0 0 3px #000, 0 1px 2px #000, 0 0 8px rgba(0, 0, 0, 0.9);
+}
+.cb-favor .col { display: flex; align-items: center; gap: 0.5rem; }
+.cb-favor .track {
+  position: relative;
+  width: 0.7rem;
+  height: 13rem;
+  background: rgba(10, 7, 5, 0.7);
+  border: 1px solid var(--sr-line-strong, rgba(226, 194, 122, 0.7));
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.7);
+}
+.cb-favor .fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 30%;
+  background: linear-gradient(0deg, #8a6519, var(--sr-pietas, #d2a238) 60%, var(--sr-pietas-hi, #f2d07a));
+  transition: height 0.35s var(--sr-ease, ease-out);
+}
+.cb-favor .tick { position: absolute; left: -0.3rem; right: -0.3rem; height: 1px; background: rgba(244, 235, 216, 0.7); }
+.cb-favor .value {
+  font-family: var(--sr-display, serif);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #fff4dc;
+  text-shadow: 0 0 3px #000, 0 1px 2px #000;
+}
+.cb-favor .delta { position: absolute; right: 1.4rem; font-family: var(--sr-display, serif); font-size: 0.9rem; opacity: 0; transition: opacity 0.6s, transform 0.6s; }
+.cb-favor .delta.is-on { opacity: 1; transform: translateY(-0.4rem); transition-duration: 0.1s; }
+.cb-favor .delta.up { color: var(--sr-good, #95c46e); }
+.cb-favor .delta.down { color: var(--sr-bad, #e46450); }
+.cb-favor .chant {
+  position: absolute;
+  right: 2.2rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--sr-display, serif);
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  color: var(--cb-gold);
+  text-shadow: var(--sr-shadow-text, 0 1px 2px #000);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.cb-favor .chant.is-on { opacity: 1; }
+.cb-favor .chant.iugula { color: #ef6a55; }
+
+/* ---- unblockable telegraph: a brief cinnabar pulse on the screen edge (§6.4) */
+.cb-edge {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  box-shadow: inset 0 0 6rem 1.2rem rgba(200, 51, 31, 0.75);
+}
+.cb-edge.is-on { animation: cb-edge 0.8s ease-out; }
+.cb-edge.is-calm.is-on { animation: none; opacity: 0.55; transition: opacity 0.8s; }
+@keyframes cb-edge {
+  0% { opacity: 0; }
+  20% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ---- sand in the eyes */
+.cb-blind {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(ellipse at 50% 50%, rgba(214, 186, 132, 0.25) 0%, rgba(176, 140, 86, 0.82) 55%, rgba(120, 92, 54, 0.96) 100%);
+  backdrop-filter: blur(6px);
+  transition: opacity 0.35s;
+}
+.cb-blind.is-on { opacity: 1; transition-duration: 0.05s; }
+
+/* ---- the net */
+.cb-netmesh {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.2s;
+  background-image:
+    repeating-linear-gradient(35deg, transparent 0 2.6rem, rgba(70, 52, 30, 0.85) 2.6rem 2.85rem),
+    repeating-linear-gradient(-35deg, transparent 0 2.6rem, rgba(70, 52, 30, 0.85) 2.6rem 2.85rem);
+}
+.cb-netmesh.is-on { opacity: 0.85; }
+.cb-net {
+  position: absolute;
+  left: 50%;
+  top: 62%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.7rem 1.4rem 0.8rem;
+  background: var(--sr-bg-1, rgba(20, 15, 11, 0.9));
+  border: 1px solid var(--sr-line-strong, rgba(226, 194, 122, 0.7));
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.cb-net.is-on { opacity: 1; }
+.cb-net .title { font-family: var(--sr-display, serif); font-weight: 700; letter-spacing: 0.16em; color: var(--cb-gold); }
+.cb-net .hint { font-size: 1.05rem; }
+.cb-net .bar { width: 12rem; height: 0.4rem; background: rgba(255, 255, 255, 0.12); }
+.cb-net .bar i { display: block; height: 100%; width: 100%; background: var(--cb-cinnabar); transform-origin: left; }
+.cb-key {
+  display: inline-block;
+  min-width: 1.5rem;
+  padding: 0 0.35rem;
+  border: 1px solid var(--sr-line-strong, rgba(226, 194, 122, 0.7));
+  border-radius: 0.2rem;
+  font-family: var(--sr-display, serif);
+  font-size: 0.85rem;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+/* ---- hold ring (yield, salute, finishing a body) */
+.cb-hold {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4.2rem;
+  height: 4.2rem;
+  margin: -2.1rem 0 0 -2.1rem;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.cb-hold.is-on { opacity: 1; }
+.cb-hold svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.cb-hold circle { fill: none; stroke-width: 3; }
+.cb-hold .bg { stroke: rgba(0, 0, 0, 0.45); }
+.cb-hold .fg { stroke: var(--cb-gold); stroke-linecap: round; }
+.cb-hold .label {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 0.3rem;
+  white-space: nowrap;
+  font-family: var(--sr-display, serif);
+  font-size: 0.85rem;
+  letter-spacing: 0.12em;
+  color: var(--cb-gold);
+  text-shadow: var(--sr-shadow-text, 0 1px 2px #000);
+}
+
+/* ---- centre message (bout won, knocked out…) */
+.cb-msg {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translateX(-50%);
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+.cb-msg.is-on { opacity: 1; transition-duration: 0.2s; }
+.cb-msg .big { font-family: var(--sr-display, serif); font-size: 2.2rem; font-weight: 700; letter-spacing: 0.14em; color: var(--cb-gold); text-shadow: var(--sr-shadow-text, 0 1px 2px #000); }
+.cb-msg .small { font-size: 1.15rem; font-style: italic; text-shadow: var(--sr-shadow-text, 0 1px 2px #000); }
+
+/* Knocked out: the world goes dark for a few seconds (the bars and messages stay on top). */
+.cb-dark {
+  position: absolute;
+  inset: 0;
+  background: #050302;
+  opacity: 0;
+  transition: opacity 0.9s ease-in;
+}
+.cb-dark.is-on { opacity: 0.93; transition: opacity 0.35s ease-out; }

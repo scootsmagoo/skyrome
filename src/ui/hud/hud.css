@@ -113,6 +113,13 @@
 .hud-boss .name { font-family: var(--sr-display); font-weight: 700; font-size: 1.3rem; letter-spacing: 0.12em; white-space: nowrap; }
 .hud-boss .title { font-style: italic; color: var(--sr-gold); font-size: 1.05rem; white-space: nowrap; }
 .hud-boss .hud-bar { height: 0.85rem; }
+/* Boss phase pips (BossView.phases): a notch where the fight changes, dimmed once passed. */
+.hud-boss .pips { position: absolute; inset: -0.2rem 0; pointer-events: none; }
+.hud-boss .pip { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--sr-gold); box-shadow: 0 0 3px rgba(0, 0, 0, 0.9); }
+.hud-boss .pip.is-passed { background: rgba(230, 198, 126, 0.35); }
+/* A refused cost (ResourceBar.flash). */
+.hud-bar.is-flash .track { animation: hud-bar-flash 0.35s ease-in-out 2; }
+@keyframes hud-bar-flash { 50% { box-shadow: 0 0 0 2px rgba(255, 236, 190, 0.85), 0 0 12px rgba(255, 236, 190, 0.6); filter: brightness(1.6); } }
 
 /* ---------------------------------------------------------------- crosshair & prompt */
 .hud-crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transition: opacity 0.2s; }
