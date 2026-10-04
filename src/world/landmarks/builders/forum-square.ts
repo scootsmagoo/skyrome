@@ -392,7 +392,11 @@ function servilius(p: Part) {
 // ---------------------------------------------------------------- janus geminus
 
 function janus(p: Part) {
-  const { b, d, hi } = p;
+  const { b, hi } = p;
+  // set 1.5 m west of the atlas point, clear of the Basilica Paulli's front steps
+  const ox = 0.39;
+  const oz = 1.45;
+  const d = p.d.at(ox, 0, oz);
   const W = 4 * p.S;
   const L = 7 * p.S;
   const H = 2.95;
@@ -429,8 +433,8 @@ function janus(p: Part) {
   d.box(mat, 0, y0 + H + 0.3, 0, W + 0.1, 0.12, L + 0.1);
   // two-faced Janus on a low base inside
   d.box('marble', 0, y0 + 0.25, 0, 0.55, 0.5, 0.55, { collide: true });
-  figure(b, T(0, y0 + 0.5, 0), hi, 'bronze', 1.0, (s) => nudeMale(s, { right: 'spear', left: 'down', cloak: true, plinth: false, head: { janus: true, beard: true } }));
-  p.spot('janus-geminus', 'shrine', 0, y0, -L / 2 - 1.0, 0);
+  figure(b, T(ox, y0 + 0.5, oz), hi, 'bronze', 1.0, (s) => nudeMale(s, { right: 'spear', left: 'down', cloak: true, plinth: false, head: { janus: true, beard: true } }));
+  p.spot('janus-geminus', 'shrine', ox, y0, oz - L / 2 - 1.0, 0);
 }
 
 // ---------------------------------------------------------------- builders
