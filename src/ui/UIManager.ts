@@ -384,6 +384,7 @@ export class UIManager implements System {
   private onKeyDown(e: KeyboardEvent) {
     const t = e.target as HTMLElement | null;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    if (e.metaKey) return; // Cmd shortcuts belong to the browser (Cmd+R, Cmd+M…)
     const top = this.top;
     let handled = false;
     if (top) {
@@ -476,7 +477,8 @@ export class UIManager implements System {
 
     on('location:discovered', (e) => {
       const loc = this.sources.map?.()?.locations().find((l) => l.id === e.locationId);
-      const latin = loc?.latin;
+      // Regions without a map marker (the hills) still carry a Latin name.
+      const latin = loc?.latin ?? this.game.locations?.get(e.locationId)?.latin;
       this.banner({ kind: 'location', title: latin ?? e.name, subtitle: latin && latin !== e.name ? e.name : undefined });
     });
     const questTitle = (id: string) => this.sources.quests?.()?.quests().find((q) => q.id === id);
