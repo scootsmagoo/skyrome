@@ -34,6 +34,7 @@ import { altar, box, figure, footing, groundMin, inscription, span, standard } f
 import { PAINT, paint } from './capfora/paint';
 import { forumPortico } from './capfora/portico';
 import { capTemple } from './capfora/temple';
+import { addLamp } from './capfora/life';
 
 /** Plan of the Forum of Augustus in REAL metres (local frame). Shared with the Forum of Nerva. */
 export const AUGUSTUS = {
@@ -390,6 +391,7 @@ function buildMarsUltor(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, sp
   // Altar in front of the stair.
   const az = res.stairFoot.z + dz - 2.2;
   altar(b, 2.6, 1.6, 1.15, T(0, Y0, az), { detail, fire: true });
+  addLamp(ctx, 0, Y0 + 1.5, az, 'brazier');
   // Dedication on the architrave (reconstructed text; the original is lost).
   const L2 = res.layout;
   const archY = Y0 + L2.podiumHeight + L2.H + 0.35;

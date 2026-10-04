@@ -4,49 +4,39 @@
  * sacred geese, the augurs' platform, the Insula of the Ara Coeli and the Tomb of Bibulus.
  */
 import * as THREE from 'three';
-import { capTemple } from './capfora/temple';
+import { capTemple, smallTemple } from './capfora/temple';
 import { templeLayout } from '../../../arch/classical/temple';
 import { column } from '../../../arch/classical/column';
 import { podium } from '../../../arch/classical/podium';
-import { T, TRS, mul } from '../../../arch/common/geom';
+import { T, TRS, gridSurface, mul } from '../../../arch/common/geom';
 import { stairs, stepCount } from '../../../arch/common/stairs';
 import { insula } from '../../../arch/fabric/insula';
-import { Forest } from '../../../arch/vegetation/Forest';
-import { vegetation } from '../../../arch/vegetation/system';
+import { Draw } from '../../../arch/fabric/draw';
+import { placeProp } from '../../../arch/props/props';
 import type { TreeSpecies } from '../../../arch/vegetation/species';
 import type { MeshBuilder } from '../../../gfx/MeshBuilder';
 import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuilder, LandmarkContext } from '../types';
 import { makeLandmark, type Detail } from './capfora/build';
 import { roofPrism, templeFar } from './capfora/far';
-import { S, frameOf, spotAt, type CapSpot } from './capfora/frame';
-import { altar, box, figure, footing, groundMin, inscription, post, span } from './capfora/ornament';
+import { S, spotAt, type CapSpot } from './capfora/frame';
+import { lampstand, plantTrees, torch, type TreeReq } from './capfora/life';
+import { altar, box, figure, footing, groundMin, inscription, post, span, terrace } from './capfora/ornament';
 import { PAINT, friezeRelief, paint } from './capfora/paint';
 
-// ------------------------------------------------------------------ trees (groves)
+// ------------------------------------------------------------------ ground cover
 
 /**
- * Plant trees with the vegetation system (instanced, world space, its own LOD) and return trunk
- * colliders in local space. No-op without a running game (unit tests).
+ * A skin of `mat` draped over the terrain (lifted 4 cm) across a local rectangle: the landmark pads
+ * are drawn as paving by the terrain, which is wrong for a grove or a garden.
  */
-function grove(ctx: LandmarkContext, b: MeshBuilder, trees: { sp: TreeSpecies; x: number; z: number; s?: number }[]) {
-  const game = ctx.game as unknown as { addSystem?: unknown; scene?: THREE.Scene };
-  for (const t of trees) {
-    const r = t.sp === 'plane' ? 0.5 : t.sp === 'cypress' ? 0.22 : 0.22;
-    const y = ctx.groundAt(t.x, t.z);
-    b.collider({ kind: 'cylinder', center: new THREE.Vector3(t.x, y + 1.5, t.z), halfHeight: 1.5, radius: r * (t.s ?? 1) });
-  }
-  if (typeof game?.addSystem !== 'function' || !game.scene) return;
-  const fr = frameOf(ctx.game, ctx.lm);
-  const f = new Forest({ near: 140, far: 1600, seed: ctx.lm.id.length });
-  const v = new THREE.Vector3();
-  for (const t of trees) {
-    v.set(t.x, ctx.groundAt(t.x, t.z) - 0.05, t.z).applyMatrix4(fr.matrix);
-    f.add(t.sp, v.x, v.y, v.z, { scale: t.s });
-  }
-  f.group.name = `landmark:${ctx.lm.id}:grove`;
-  game.scene.add(f.build());
-  vegetation(ctx.game).addForest(f);
+function groundSkin(b: MeshBuilder, g: (x: number, z: number) => number, mat: MaterialId, x0: number, z0: number, x1: number, z1: number, step = 2, lift = 0.04) {
+  const nx = Math.max(1, Math.round((x1 - x0) / step));
+  const nz = Math.max(1, Math.round((z1 - z0) / step));
+  const xs = Array.from({ length: nx + 1 }, (_, i) => x0 + ((x1 - x0) * i) / nx);
+  const zs = Array.from({ length: nz + 1 }, (_, j) => z0 + ((z1 - z0) * j) / nz);
+  const geo = gridSurface(zs, xs, (z, x, out) => out.set(x, g(x, z) + lift, z));
+  b.add(geo, mat, undefined, { castShadow: false });
 }
 
 // ------------------------------------------------------------------ the Asylum
@@ -54,50 +44,96 @@ function grove(ctx: LandmarkContext, b: MeshBuilder, trees: { sp: TreeSpecies; x
 function buildAsylum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots: CapSpot[]) {
   const g = ctx.groundAt;
   const I = new THREE.Matrix4();
-  // "Inter duos lucos": an open sacred area between two groves. A paved walk crosses it from the
-  // Clivus (front) to the Arx stairs (back); an old altar stands in the middle, boundary stones at
-  // the corners.
+  // "Inter duos lucos": the open sacred space between two groves on the saddle. A paved walk crosses
+  // it from the Clivus side (front, towards the Tabularium) to the stairs up to the Arx (back); the
+  // old altar of the god of the refuge stands in a clearing in the middle; each grove is fenced by a
+  // low tufa wall with an opening onto the walk.
   const hw = (70 * S) / 2;
   const hd = (60 * S) / 2;
   const walkW = 3.2;
+  groundSkin(b, g, 'grass', -hw, -hd, hw, hd, detail === 'high' ? 2 : 4);
   for (let z = -hd; z < hd; z += 3) {
     const y = g(0, z + 1.5);
-    span(b, 'paving_travertine', -walkW / 2, Math.min(y, g(0, z), g(0, z + 3)) - 0.3, z, walkW / 2, y + 0.06, z + 3, I, true);
+    span(b, 'paving_travertine', -walkW / 2, Math.min(y, g(0, z), g(0, z + 3)) - 0.3, z, walkW / 2, y + 0.08, z + 3, I, true);
+  }
+  // Cross walk to the Capitolium (left, −x) and the Arx (right).
+  for (let x = -hw; x < hw; x += 3) {
+    if (Math.abs(x + 1.5) < walkW) continue;
+    const y = g(x + 1.5, 0);
+    span(b, 'gravel', x, y - 0.25, -1.2, x + 3, y + 0.07, 1.2, I);
   }
   // A round clearing of beaten earth and the altar of the god of the asylum.
   const ay = g(0, 0);
-  span(b, 'dirt', -5, ay - 0.2, -5, 5, ay + 0.03, 5, I);
-  altar(b, 1.6, 1.0, 1.05, T(0, ay + 0.03, 1.6), { detail, material: 'tufa', fire: false });
+  {
+    const disc = new THREE.CylinderGeometry(5.5, 5.5, 0.1, detail === 'high' ? 24 : 12);
+    disc.translate(0, ay + 0.06, 0);
+    b.add(disc, 'dirt', I, { castShadow: false });
+  }
+  altar(b, 1.6, 1.0, 1.05, T(0, ay + 0.1, 1.6), { detail, material: 'tufa', fire: false });
   spots.push(spotAt('altar', 'shrine', 0, ay, -0.6, 0, 1.6, { label: 'Altar of the Asylum (Veiovis, god of the refuge)' }));
-  spots.push(spotAt('suppliant', 'npc', 2.2, ay, 1.2, 0, 1.6, { label: 'A runaway claiming the old right of asylum' }));
-  for (const [x, z] of [
-    [-hw + 1, -hd + 1],
-    [hw - 1, -hd + 1],
-    [hw - 1, hd - 1],
-    [-hw + 1, hd - 1],
-  ]) {
+  spots.push(spotAt('suppliant', 'npc', 2.2, ay, 1.2, 0, 1.6, { label: 'A runaway slave claiming the old right of asylum' }));
+  spots.push(spotAt('priest', 'npc', -2.4, ay, 2.4, 0, 1.6, { label: 'Aedituus of Veiovis, sweeping the clearing' }));
+  // An inscribed boundary stone at the walk: the sacred ground of the refuge.
+  {
+    const x = walkW / 2 + 0.9;
+    const z = -hd + 2.5;
     const y = g(x, z);
-    box(b, 'tufa', x, y + 0.45, z, 0.45, 1.1, 0.35, I, true);
+    box(b, 'tufa', x, y + 0.55, z, 0.55, 1.1, 0.4, I, true);
+    const text = inscription(b, ['INTER DVOS', 'LVCOS', 'ASYLVM'], 0.5, 0.5, T(x, y + 0.7, z - 0.21), 'carved', { depth: 0.02 });
+    spots.push(
+      spotAt('cippus', 'inscription', x, y, z - 1.6, x, z, {
+        label: 'Boundary stone of the Asylum',
+        text,
+        gloss: 'Between the two groves: the Asylum. Romulus, they say, opened this place as a refuge for any fugitive, slave or free, to people his new city (Livy 1.8). The right of refuge is still claimed here, if rarely honoured.',
+      }),
+    );
   }
-  // Benches under the trees.
-  for (const sx of [-1, 1]) {
-    const x = sx * 6.5;
-    const y = g(x, -6);
-    span(b, 'tufa', x - 1.2, y, -6.3, x + 1.2, y + 0.45, -5.8, I, true);
-    if (sx < 0) spots.push(spotAt('bench', 'sit', x, y, -6.6, x, -12, { label: 'Bench in the grove' }));
-  }
-  // The two groves: laurel, holm-oak-like laurels, a few planes and cypresses at the edges.
+  // The two groves, each fenced by a low wall with a gap onto the walk: holm-oak-like laurels, olives,
+  // a plane at the heart of each, cypresses along the fence.
   const rng = ctx.rng;
-  const trees: { sp: TreeSpecies; x: number; z: number; s?: number }[] = [];
+  const trees: TreeReq[] = [];
   for (const sx of [-1, 1]) {
-    for (let i = 0; i < (detail === 'high' ? 11 : 7); i++) {
-      const x = sx * rng.range(6.5, hw - 2);
-      const z = rng.range(-hd + 2, hd - 2);
-      const sp: TreeSpecies = i % 5 === 0 ? 'plane' : i % 4 === 1 ? 'cypress' : 'laurel';
-      trees.push({ sp, x, z, s: rng.range(0.85, 1.15) });
+    const x0 = sx < 0 ? -hw + 1.2 : walkW / 2 + 3.6;
+    const x1 = sx < 0 ? -walkW / 2 - 3.6 : hw - 1.2;
+    const z0 = -hd + 1.5;
+    const z1 = hd - 1.5;
+    // Fence: low tufa wall on the three outer sides, the walk side open in the middle.
+    const fy = (x: number, z: number) => g(x, z);
+    const seg = (ax: number, az: number, cx: number, cz: number) => {
+      const n = Math.max(1, Math.round(Math.hypot(cx - ax, cz - az) / 3));
+      for (let k = 0; k < n; k++) {
+        const pa = [ax + ((cx - ax) * k) / n, az + ((cz - az) * k) / n];
+        const pc = [ax + ((cx - ax) * (k + 1)) / n, az + ((cz - az) * (k + 1)) / n];
+        const y = Math.min(fy(pa[0], pa[1]), fy(pc[0], pc[1]));
+        span(b, 'tufa', Math.min(pa[0], pc[0]) - 0.2, y - 0.3, Math.min(pa[1], pc[1]) - 0.2, Math.max(pa[0], pc[0]) + 0.2, y + 0.75, Math.max(pa[1], pc[1]) + 0.2, I, true);
+      }
+    };
+    const xo = sx < 0 ? x0 : x1; // outer side
+    const xi = sx < 0 ? x1 : x0; // walk side
+    seg(xo, z0, xo, z1);
+    seg(Math.min(xo, xi), z0, Math.max(xo, xi), z0);
+    seg(Math.min(xo, xi), z1, Math.max(xo, xi), z1);
+    seg(xi, z0, xi, -2.5);
+    seg(xi, 2.5, xi, z1);
+    const n = detail === 'high' ? 16 : 9;
+    for (let i = 0; i < n; i++) {
+      const x = rng.range(Math.min(x0, x1) + 1.5, Math.max(x0, x1) - 1.5);
+      const z = rng.range(z0 + 1.5, z1 - 1.5);
+      const sp: TreeSpecies = i === 0 ? 'plane' : i % 3 === 0 ? 'olive' : 'laurel';
+      trees.push({ sp, x: i === 0 ? (x0 + x1) / 2 : x, z: i === 0 ? 0 : z, s: i === 0 ? 1.15 : rng.range(0.85, 1.2) });
     }
+    for (let z = z0 + 2; z < z1 - 1; z += 4.5) trees.push({ sp: 'cypress', x: xo + (sx < 0 ? 1.0 : -1.0), z, s: rng.range(0.85, 1.1) });
   }
-  grove(ctx, b, trees);
+  plantTrees(ctx, b, trees);
+  // Benches at the edge of the clearing.
+  for (const sx of [-1, 1]) {
+    const x = sx * 4.6;
+    const y = g(x, -4.6);
+    span(b, 'tufa', x - 1.2, y, -4.9, x + 1.2, y + 0.45, -4.4, I, true);
+    spots.push(spotAt(`bench${sx < 0 ? 'W' : 'E'}`, 'sit', x, y, -5.2, x, -12, { label: 'Bench in the Asylum' }));
+  }
+  // Herms of old gods along the walk.
+  for (const z of [-hd + 6, hd - 6]) for (const sx of [-1, 1]) placeProp(new Draw(b), 'herm', sx * (walkW / 2 + 0.5), g(sx * 2, z), z, sx < 0 ? Math.PI / 2 : -Math.PI / 2);
   spots.push(spotAt('asylum', 'vista', 0, g(0, -hd + 2), -hd + 2, 0, hd, { label: 'The Asylum, between the two groves' }));
 }
 
@@ -186,6 +222,7 @@ function buildMoneta(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots
   const sf = res.stairFoot.z + dz;
   altar(b, 1.8, 1.1, 1.0, T(0, 0.05, sf - 2.6), { detail, material: 'tufa' });
   spots.push(spotAt('altar', 'shrine', 0, 0.05, sf - 4.0, 0, sf, { label: 'Altar of Juno Moneta, the Warner' }));
+  arxPrecinct(ctx, b, detail, spots);
   // Juno's sacred geese, kept at public expense since they woke the garrison in 390 BC.
   const px = L.stylobate.x1 + 4.5;
   const pz = dz + 2;
@@ -222,6 +259,76 @@ function buildMoneta(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots
   box(b, 'bronze', mx, 1.25, dz - 3.04, 1.4, 2.4, 0.08, undefined);
   const text = inscription(b, ['MONETA'], 2.2, 0.5, T(mx, 3.4, dz - 3.06), 'carved');
   spots.push(spotAt('old-mint', 'inscription', mx, 0.05, dz - 5, mx, dz - 3, { label: 'The old mint of Moneta', text, gloss: "Rome's coins were struck here beside Juno the Warner until Domitian moved the mint near the amphitheatre; 'money' and 'mint' both come from her name." }));
+}
+
+/**
+ * The citadel round Juno Moneta: a paved terrace at the temple's level held up by the old tufa
+ * walls of the Arx (buttressed over the slopes), with a parapet, a stair at the front down towards
+ * the Asylum and a gate stair on the east side where the Gradus Monetae arrive. Inside: the small
+ * Temple of Concordia vowed on the Arx in 218 BC, a lampstand at the temple door, cypresses.
+ * Local frame of Juno Moneta (facade −z = S, +x = W towards the cliff).
+ */
+export const ARX = { x0: -18, x1: 13, z0: -17, z1: 18, gate: [-11.5, -6.5] as [number, number], stairHalf: 3.2 };
+
+function arxPrecinct(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots: CapSpot[]) {
+  const g = ctx.groundAt;
+  const I = new THREE.Matrix4();
+  const A = ARX;
+  const y = 0.02;
+  terrace(
+    b,
+    [
+      [A.x0, A.z0],
+      [-A.stairHalf, A.z0],
+      [A.stairHalf, A.z0],
+      [A.x1, A.z0],
+      [A.x1, A.z1],
+      [A.x0, A.z1],
+      [A.x0, A.gate[1]],
+      [A.x0, A.gate[0]],
+    ],
+    y,
+    g,
+    { material: 'tufa', paving: 'paving_travertine', thickness: 0.9, skipEdges: [1, 6], parapet: 1.0, parapetEdges: [0, 2, 3, 4, 5, 7], buttress: { edges: [2, 3, 4], every: 5.5 } },
+  );
+  // Front stair towards the Asylum.
+  {
+    const gOut = Math.min(y - 0.15, groundMin(g, -A.stairHalf, A.z0 - 6, A.stairHalf, A.z0 - 1));
+    const { count, rise } = stepCount(y - gOut, 0.19);
+    const z0 = A.z0 - count * 0.34;
+    stairs(b, { width: 2 * A.stairHalf, rise, run: 0.34, count, material: 'travertine' }, T(0, gOut, z0));
+    footing(b, 'tufa', g, -A.stairHalf, z0, A.stairHalf, A.z0, gOut, I, false);
+  }
+  // Gate stair (east) for the Gradus Monetae coming up from the Forum side.
+  {
+    const zc = (A.gate[0] + A.gate[1]) / 2;
+    const gOut = Math.min(y - 0.15, g(A.x0 - 3, zc));
+    const { count, rise } = stepCount(y - gOut, 0.19);
+    const x0 = A.x0 - count * 0.34;
+    stairs(b, { width: A.gate[1] - A.gate[0], rise, run: 0.34, count, material: 'travertine' }, TRS(x0, gOut, zc, 0, Math.PI / 2, 0));
+    footing(b, 'tufa', g, x0, A.gate[0], A.x0, A.gate[1], gOut, I, false);
+    // Gate piers with torches.
+    for (const z of [A.gate[0] - 0.5, A.gate[1] + 0.5]) {
+      span(b, 'tufa', A.x0 - 0.9, y, z - 0.5, A.x0 + 0.1, y + 3.0, z + 0.5, I, true);
+      span(b, 'travertine', A.x0 - 1.0, y + 3.0, z - 0.6, A.x0 + 0.2, y + 3.25, z + 0.6, I);
+      torch(ctx, b, A.x0 - 0.9, y + 1.9, z, Math.PI / 2);
+    }
+    spots.push(spotAt('gradus-monetae', 'spawn', A.x0 + 2, y, zc, 0, zc, { label: 'Top of the Steps of Moneta (Gradus Monetae)' }));
+  }
+  // The Temple of Concordia on the Arx (vowed 218 BC by L. Manlius, dedicated 216 BC).
+  smallTemple(b, { w: 4.4, d: 6.2, P: 1.0, H: 3.9, n: 4, order: 'tuscan', mat: 'plaster_white', podium: 'tufa', roof: 'roof_tile', tympanum: paint(PAINT.yellowOchre, 0.85), detail }, TRS(-12.2, y, -10.5, 0, 0, 0));
+  spots.push(spotAt('concordia', 'shrine', -12.2, y, -15.2, -12.2, -10.5, { label: 'Temple of Concord on the Arx (216 BC)' }));
+  // Cypresses at the corners and a laurel by the temple.
+  plantTrees(ctx, b, [
+    { sp: 'cypress', x: A.x0 + 1.6, z: A.z1 - 1.6, y },
+    { sp: 'cypress', x: A.x1 - 1.6, z: A.z1 - 1.6, y },
+    { sp: 'cypress', x: A.x1 - 1.6, z: A.z0 + 1.8, y },
+    { sp: 'laurel', x: -6.8, z: A.z1 - 3.5, y, s: 0.9 },
+    { sp: 'cypress', x: A.x0 + 1.6, z: A.z0 + 1.8, y },
+  ]);
+  for (const sx of [-1, 1]) lampstand(ctx, b, sx * 2.6, y, A.z0 + 1.2);
+  spots.push(spotAt('arx-wall', 'vista', A.x1 - 1.4, y, 2, A.x1 + 40, 2, { label: 'The wall of the Arx: the Campus Martius and the bend of the Tiber below' }));
+  spots.push(spotAt('arx-guard', 'npc', A.x0 + 1.5, y, A.gate[1] + 1.8, A.x0 - 5, A.gate[1] + 1.8, { label: 'Public slave guarding the Arx gate' }));
 }
 
 /** A white goose (≈ 50 triangles), facing −z, feet at y = 0. */

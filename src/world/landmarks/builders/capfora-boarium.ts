@@ -18,6 +18,7 @@ import { S, spotAt, type CapSpot } from './capfora/frame';
 import { altar, box, figure, footing, groundMin, inscription, post, span } from './capfora/ornament';
 import { PAINT, paint } from './capfora/paint';
 import { capTemple } from './capfora/temple';
+import { addLamp } from './capfora/life';
 
 // ------------------------------------------------------------------ the twin temples
 
@@ -63,6 +64,7 @@ function buildTwins(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
     // An altar before each temple.
     const az = res.stairFoot.z + dz - 3.0;
     altar(b, 2.2, 1.4, 1.0, T(n.x, y, az), { detail, material: 'tufa', fire: n.id === 'fortuna' });
+    if (n.id === 'fortuna') addLamp(ctx, n.x, y + 1.35, az, 'brazier');
     spots.push(spotAt(n.id, 'shrine', n.x, y, az - 1.6, n.x, az, { label: n.label }));
   }
   spots.push(spotAt('matron', 'npc', 0, y, -h + 4, 7.2, 0, { label: 'A matron, married once, bringing cakes for the Matralia' }));
@@ -126,6 +128,7 @@ function buildCarmentalis(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, 
   span(b, 'plaster_white', sx0 - 0.8, 0.9, ww / 2, sx0 + 0.8, 2.6, ww / 2 + 0.25, I);
   span(b, 'plaster_red', sx0 - 0.6, 1.05, ww / 2 + 0.26, sx0 + 0.6, 2.4, ww / 2 + 0.27, I);
   altar(b, 0.9, 0.6, 0.85, T(sx0, 0, ww / 2 + 0.9), { detail, material: 'tufa', fire: true });
+  addLamp(ctx, sx0, 1.2, ww / 2 + 0.9, 'brazier');
   post(b, 'bronze', sx0 + 0.6, 0.85, ww / 2 + 0.9, 0.5, 0.03, I, 5);
   spots.push(spotAt('carmenta', 'shrine', sx0, 0, ww / 2 + 2.3, sx0, ww / 2, { label: 'Shrine of Carmenta, the prophetess' }));
   spots.push(spotAt('gate-left', 'door', xL, 0, depth / 2 + 1.2, xL, -depth, { label: 'Porta Carmentalis', text }));

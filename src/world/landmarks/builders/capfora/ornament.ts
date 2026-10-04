@@ -244,7 +244,9 @@ export function pedestalStatue(b: MeshBuilder, kind: StatueKind, at: THREE.Matri
  * An inscription panel (carved+rubricated, gilded bronze letters, or painted) and the latinized
  * text it shows. Panel centred on the origin of `at`, face at z = 0 facing −z.
  */
-export function inscription(b: MeshBuilder, lines: string[], width: number, height: number, at: THREE.Matrix4, style: InscriptionStyle = 'carved', opts: { bodyMaterial?: MaterialId; ground?: string; ink?: string; depth?: number } = {}): string {
+export function inscription(b: MeshBuilder, raw: string[], width: number, height: number, at: THREE.Matrix4, style: InscriptionStyle = 'carved', opts: { bodyMaterial?: MaterialId; ground?: string; ink?: string; depth?: number } = {}): string {
+  // latinize() puts the interpuncts between words itself: drop any typed into the source text.
+  const lines = raw.map((l) => l.replace(/\s*·\s*/g, ' ').trim());
   inscriptionPanel(b, { lines, width, height, style, ground: opts.ground, ink: opts.ink, border: style !== 'painted' }, at, { depth: opts.depth ?? 0.1, bodyMaterial: opts.bodyMaterial });
   return lines.map((l) => latinize(l)).join(' / ');
 }
@@ -340,7 +342,18 @@ export function terrace(
   poly: V2[],
   y: number,
   groundAt: (x: number, z: number) => number,
-  opts: { material?: MaterialId; paving?: MaterialId; parapet?: number; parapetEdges?: number[]; at?: THREE.Matrix4; thickness?: number; walls?: boolean; skipEdges?: number[] } = {},
+  opts: {
+    material?: MaterialId;
+    paving?: MaterialId;
+    parapet?: number;
+    parapetEdges?: number[];
+    at?: THREE.Matrix4;
+    thickness?: number;
+    walls?: boolean;
+    skipEdges?: number[];
+    /** Buttress piers on the outer face of these edges, every `every` m (substructures on slopes). */
+    buttress?: { edges: number[]; every: number; width?: number; depth?: number };
+  } = {},
 ) {
   const mat = opts.material ?? 'tufa';
   const t = opts.thickness ?? 0.6;
@@ -394,6 +407,21 @@ export function terrace(
       box(b, mat, mx, (bot + y) / 2, mz, s1 - s0 + 0.02, y - bot, t, at, true, ry);
     }
     box(b, 'travertine', ax + ux * (len / 2) + nx * (t / 2 + 0.05), y - 0.12, az + uz * (len / 2) + nz * (t / 2 + 0.05), len + t * 0.5, 0.24, t + 0.15, at, false, ry);
+    if (opts.buttress?.edges.includes(i) && len > 2) {
+      const bw = opts.buttress.width ?? 1.0;
+      const bd = opts.buttress.depth ?? 0.55;
+      const nb = Math.max(1, Math.round(len / opts.buttress.every));
+      for (let k = 0; k <= nb; k++) {
+        const sv = (k / nb) * len;
+        const px = ax + ux * sv + nx * (t + bd / 2);
+        const pz = az + uz * sv + nz * (t + bd / 2);
+        const gb = Math.min(groundAt(px, pz), groundAt(px + nx * bd, pz + nz * bd)) - 0.4;
+        if (y - 0.35 - gb < 0.8) continue;
+        // Slightly battered: a wider foot, the pier's top sloping back under the coping.
+        box(b, mat, px, (gb + y - 0.35) / 2, pz, bw, y - 0.35 - gb, bd, at, true, ry);
+        box(b, 'travertine', px - nx * 0.05, y - 0.42, pz - nz * 0.05, bw + 0.1, 0.14, bd + 0.1, at, false, ry);
+      }
+    }
     if (opts.parapet && parapetEdges.has(i)) {
       const ph = opts.parapet;
       box(b, mat, ax + ux * (len / 2) + nx * (t / 2), y + ph / 2, az + uz * (len / 2) + nz * (t / 2), len + t, ph, t * 0.8, at, true, ry);
