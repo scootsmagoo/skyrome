@@ -300,6 +300,47 @@ describe('condition (GDD §6.3)', () => {
     expect(inv.wear('body', 50)).toBeUndefined();
   });
 
+  it('wear from many small hits adds up (combat calls wear() per hit)', () => {
+    const { inv } = setup();
+    inv.add('gladius');
+    inv.equip('gladius');
+    for (let i = 0; i < 100; i++) inv.wear('mainHand', 15); // 1,500 damage in all
+    expect(inv.conditionOf('mainHand')).toBeCloseTo(0.85);
+    expect(inv.stacks).toEqual([{ itemId: 'gladius', count: 1, condition: 0.85 }]);
+    // The same as one big hit.
+    const { inv: one } = setup();
+    one.add('gladius');
+    one.equip('gladius');
+    expect(one.wear('mainHand', 1500)).toBeCloseTo(0.85);
+    // A copy that only has hidden wear (under half a percent) still counts as new.
+    const { inv: light } = setup();
+    light.add('gladius');
+    light.equip('gladius');
+    for (let i = 0; i < 4; i++) light.wear('mainHand', 10);
+    expect(light.conditionOf('mainHand')).toBe(1);
+    light.wear('mainHand', 15); // 0.55% in all
+    expect(light.conditionOf('mainHand')).toBe(0.99);
+    // Repair to full clears the hidden wear too.
+    light.repair('mainHand', 1);
+    light.wear('mainHand', 40);
+    expect(light.conditionOf('mainHand')).toBe(1);
+  });
+
+  it('hidden wear survives a save and load', () => {
+    const { inv } = setup();
+    inv.add('gladius');
+    inv.equip('gladius');
+    for (let i = 0; i < 4; i++) inv.wear('mainHand', 10); // 0.4%: still shown as 100%
+    const inv2 = new InventoryImpl(new ItemDb(ITEMS), { sheet: new CharacterSheetImpl() });
+    inv2.restore(JSON.parse(JSON.stringify(inv.serialize())));
+    inv2.wear('mainHand', 15);
+    expect(inv2.conditionOf('mainHand')).toBe(0.99);
+    // A saved precise value that doesn't match its copy is ignored.
+    const inv3 = new InventoryImpl(new ItemDb(ITEMS));
+    inv3.restore({ stacks: [{ itemId: 'gladius', count: 1, condition: 0.7 }], equipped: { mainHand: { itemId: 'gladius', condition: 0.7, exact: 0.2 } } });
+    expect(inv3.wear('mainHand', 100)).toBeCloseTo(0.69);
+  });
+
   it('non-wearables ignore condition', () => {
     const { inv } = setup();
     inv.add('panis', 1, { condition: 0.3 });

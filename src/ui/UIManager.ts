@@ -507,7 +507,7 @@ export class UIManager implements System {
       this.notify(`${def?.name ?? capitalize(e.skill)} increased to ${e.level}`, 'skill');
     });
     on('item:added', (e) => {
-      if (e.source === 'silent' || e.source === 'barter' || e.source === 'container') return;
+      if (e.silent || e.source === 'silent' || e.source === 'barter' || e.source === 'container') return;
       const name = this.sources.itemName?.(e.itemId) ?? e.itemId;
       this.notify(e.count > 1 ? `${name} (${e.count}) added` : `${name} added`, 'item');
     });

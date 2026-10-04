@@ -18,7 +18,16 @@
 export type Order = 'tuscan' | 'doric' | 'ionic' | 'corinthian' | 'composite';
 export const ORDERS: readonly Order[] = ['tuscan', 'doric', 'ionic', 'corinthian', 'composite'];
 
-export type Detail = 'high' | 'low';
+/**
+ * Level of detail (docs/research/architecture.md §1.8):
+ *  - 'high' LOD0/1, touching to street distance: flutes, carved capitals, dentils and modillions.
+ *  - 'low'  LOD1/2, street to district: lathe shafts, simplified capitals and mouldings.
+ *  - 'far'  LOD2, district to skyline (> ~150 m): 8-sided column prisms with a frustum capital and
+ *           a slab abacus, entablatures as architrave/frieze/corona with the cornice shadow line,
+ *           no mouldings, ornaments or sculpture. About 1–5k triangles per building.
+ * Everything not special-cased treats 'far' like 'low'.
+ */
+export type Detail = 'high' | 'low' | 'far';
 
 export interface OrderProportions {
   /** Column height (base + shaft + capital) in D. */

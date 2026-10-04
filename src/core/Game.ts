@@ -79,6 +79,7 @@ export class Game {
   private fpsAccum = 0;
   private fpsFrames = 0;
   private rafId = 0;
+  private lastRenderAt = 0;
 
   static async create(container: HTMLElement, opts: { seed?: number } = {}): Promise<Game> {
     await initPhysics();
@@ -141,9 +142,28 @@ export class Game {
     const loop = (now: number) => {
       if (!this.running) return;
       this.rafId = requestAnimationFrame(loop);
+      // Idle throttling: when the window is in the background or unfocused (and the mouse isn't
+      // captured) the world freezes and we redraw only twice a second; with a menu open we cap
+      // at ~30 fps. Keeps an idle tab from heating the machine. Automation (navigator.webdriver)
+      // always runs at full rate so headless screenshots and tests are unaffected.
+      const idle = this.isIdle();
+      const minGap = idle ? 500 : this.paused ? 32 : 0;
+      if (minGap && now - this.lastRenderAt < minGap) return;
+      this.lastRenderAt = now;
+      if (idle) {
+        this.lastTime = now; // no simulated time passes while idle
+        this.renderer.render(this.scene, this.camera);
+        return;
+      }
       this.frame(now);
     };
     this.rafId = requestAnimationFrame(loop);
+  }
+
+  /** True when nobody is playing: background tab, or an unfocused window without pointer lock. */
+  isIdle(): boolean {
+    if (typeof document === 'undefined' || (typeof navigator !== 'undefined' && navigator.webdriver)) return false;
+    return document.hidden || (!document.hasFocus() && !this.input.pointerLocked);
   }
 
   stop() {
