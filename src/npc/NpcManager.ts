@@ -82,7 +82,7 @@ export interface NpcManagerOptions {
   named?: boolean;
   vignettes?: boolean;
   carts?: boolean;
-  /** Hard cap on ambient NPCs (default 96). */
+  /** Hard cap on ambient NPCs (default 110). */
   maxCrowd?: number;
   /** Nav grid radius around the player (default 80 m). */
   navRadius?: number;
@@ -98,6 +98,8 @@ export interface NpcManagerOptions {
 
 /** Character controller within this distance (m); measured cost ~0.05–0.15 ms per NPC per step. */
 const KCC_RADIUS = 26;
+/** At most this many NPCs get the character controller at once (the nearest moving ones). */
+const KCC_MAX = 28;
 /** Steering (separation, avoidance, the player) within this distance. */
 const STEER_RADIUS = 62;
 const DESPAWN_UNSEEN = 82;
@@ -198,7 +200,7 @@ export class NpcManager implements System {
     this.namedEnabled = opts.named ?? true;
     const qd = Number(q.get('crowd'));
     this.density = qd > 0 && qd <= 4 ? qd : (opts.density ?? 1);
-    this.maxCrowd = opts.maxCrowd ?? 96;
+    this.maxCrowd = opts.maxCrowd ?? 110;
     this.useAtlas = opts.atlas ?? true;
     this.fixedDistrict = opts.district ?? null;
     this.sampler = new PhysicsCellSampler(game.physics, {
@@ -419,6 +421,7 @@ export class NpcManager implements System {
 
   private register(npc: Npc) {
     npc.brain = new NpcBrain(npc);
+    npc.bornAt = this.clock;
     this.list.push(npc);
     this.byId.set(npc.id, npc);
     this.game.actors.add(npc);
@@ -663,6 +666,7 @@ export class NpcManager implements System {
   private wanderTarget(npc: Npc, radius: number, minR: number): Vec2 | null {
     const g = this.grid;
     const lanes = this.lanes();
+    const square = this.inSquare();
     const pl = this.game.player?.position;
     let best: Vec2 | null = null;
     let bestScore = -Infinity;
@@ -687,7 +691,7 @@ export class NpcManager implements System {
       found++;
       let score = this.rng.next();
       // Streets and squares over open ground.
-      const ln = lanes?.nearest(p.x, p.z, 8);
+      const ln = square ? null : lanes?.nearest(p.x, p.z, 8);
       if (ln && ln.d < ln.lane.width / 2 + 3) score += 0.6;
       if (pl) {
         const fx = (p.x - pl.x) / (dp || 1);
@@ -973,8 +977,33 @@ export class NpcManager implements System {
    */
   crowdRadius(): number {
     if (!this.useAtlas) return SPAWN_MAX;
-    const square = this.district.id === 'dist-forum-romanum' || this.district.id === 'dist-fora-imperialia';
-    return square ? 42 : this.budget.night ? 50 : 56;
+    return this.inSquare() ? 42 : this.budget.night ? 50 : 56;
+  }
+
+  /** In one of the great squares (the fora), where people mill about rather than stream past. */
+  inSquare(): boolean {
+    return this.district.id === 'dist-forum-romanum' || this.district.id === 'dist-fora-imperialia';
+  }
+
+  /** A walkable, reachable point in front of the camera, 8–34 m from the player (or null). */
+  viewTarget(): Vec2 | null {
+    const pp = this.game.player?.position;
+    if (!pp) return null;
+    const ahead = Math.atan2(this.look.x, this.look.z);
+    const halfFov = Math.atan(Math.tan((this.game.camera.fov * Math.PI) / 360) * this.game.camera.aspect);
+    for (let i = 0; i < 6; i++) {
+      const a = ahead + (this.rng.next() * 2 - 1) * halfFov * 0.8;
+      const d = 8 + this.rng.next() * 26;
+      const x = pp.x + Math.sin(a) * d;
+      const z = pp.z + Math.cos(a) * d;
+      if (!this.grid.ready(x, z)) continue;
+      const c = this.grid.nearestWalkable(x, z, 2, { x: 0, z: 0 }, true);
+      if (!c) continue;
+      const y = this.grid.heightAt(c.x, c.z);
+      if (y === null || Math.abs(y - pp.y) > 4 || this.steep(c.x, c.z, y)) continue;
+      return { x: c.x, z: c.z };
+    }
+    return null;
   }
 
   /** Terrain slope (rise over run) at a point; hillsides are no place for a crowd. */
@@ -1020,8 +1049,7 @@ export class NpcManager implements System {
     if (!lanes || npc.station || npc.leader) return 0;
     const near = lanes.nearest(npc.position.x, npc.position.z, 10);
     if (!near) return 0;
-    const square = this.district.id === 'dist-forum-romanum' || this.district.id === 'dist-fora-imperialia';
-    return square ? 0.25 : this.budget.night ? 0.7 : 0.55;
+    return this.inSquare() ? 0.2 : this.budget.night ? 0.7 : 0.55;
   }
 
   // ---------------------------------------------------------------- systems
@@ -1261,6 +1289,18 @@ export class NpcManager implements System {
     let visible = 0;
     let seen = 0;
     const cam = this.game.camera.getWorldPosition(new THREE.Vector3());
+    // The character controller costs ~0.05–0.15 ms per NPC: only the nearest people who are on the
+    // move get it (standing people glide in place on the nav-grid floor at no cost).
+    const near: [Npc, number][] = [];
+    for (const n of this.list) {
+      const d = Math.hypot(n.position.x - pp.x, n.position.z - pp.z);
+      const k = n.brain?.task?.kind;
+      const standing = (k === 'idle' || k === 'converse') && Math.hypot(n.velocity.x, n.velocity.z) < 0.3 && d > 3;
+      if (d < KCC_RADIUS + 4 && !standing) near.push([n, d]);
+    }
+    near.sort((a, b) => a[1] - b[1]);
+    const kcc = new Set<Npc>();
+    for (let i = 0; i < near.length && i < KCC_MAX; i++) kcc.add(near[i][0]);
     for (const n of [...this.list]) {
       const d = Math.hypot(n.position.x - pp.x, n.position.z - pp.z);
       n.distToPlayer = d;
@@ -1279,7 +1319,7 @@ export class NpcManager implements System {
       // Tiers with hysteresis so walkers on a boundary don't flap.
       const h = n.sim === 'full' ? 4 : -4;
       const hm = n.sim === 'cheap' ? -4 : 4;
-      const sim = d < KCC_RADIUS + h || n.isFighting() || n.talking ? 'full' : d < STEER_RADIUS + hm || n.scripted ? 'mid' : 'cheap';
+      const sim = (d < KCC_RADIUS + h && kcc.has(n)) || n.isFighting() || n.talking ? 'full' : d < STEER_RADIUS + hm || n.scripted ? 'mid' : 'cheap';
       // Gliding keeps the capsule's kinematic body in place, so switching tiers needs no re-seat.
       n.sim = sim;
       if (n.sim === 'full') full++;
@@ -1303,7 +1343,15 @@ export class NpcManager implements System {
         // Far away, or a while out of view: recycle them where the player looks (they respawn just
         // outside the edges of the view and walk into it). Sooner when well behind the camera.
         const behind = (n.position.x - pp.x) * this.look.x + (n.position.z - pp.z) * this.look.z < -0.5 * d;
-        const recycle = !n.leader && !n.followers.length && ((behind && d > RECYCLE_BEHIND && n.unseenFor > 3) || (d > RECYCLE_SIDE && n.unseenFor > 6));
+        // People standing at a spot or chatting stay put (the place keeps its regulars).
+        const k = n.brain?.task?.kind;
+        const settled = (k === 'idle' && !!n.brain?.task?.spot) || k === 'converse';
+        let recycle = !n.leader && !n.followers.length && ((behind && d > RECYCLE_BEHIND && n.unseenFor > 3) || (d > RECYCLE_SIDE && n.unseenFor > 6) || (!settled && d > 10 && n.unseenFor > 6 && this.clock - n.bornAt > 14));
+        // A senator and his train go together, once none of them has been seen for a while.
+        if (n.followers.length && d > RECYCLE_SIDE && n.unseenFor > 8 && n.followers.every((f) => f.unseenFor > 8 && !f.scripted && !f.talking)) {
+          for (const f of [...n.followers]) this.despawn(f);
+          recycle = true;
+        }
         if (d > DESPAWN_ALWAYS || (d > DESPAWN_UNSEEN && n.unseenFor > 1) || recycle) this.despawn(n);
       } else if (d > NAMED_DESPAWN && n.unseenFor > 1 && !n.isFighting()) {
         this.despawn(n);
@@ -1346,6 +1394,11 @@ export class NpcManager implements System {
       citizens += 1 + n.followers.length;
       if (p.spotPlaced && n.brain) n.brain.next(this.life);
       else if (p.onLane && n.brain && !n.followers.length && this.rng.chance(0.8)) n.brain.travel(this.life);
+      else if (!initial && n.brain && n.brain.activity !== 'home') {
+        // Spawned just outside the view: walk into it.
+        const t = this.viewTarget();
+        if (t) n.brain.setTask(makeTask('goto', { x: t.x, z: t.z, speed: n.walkSpeed }), this.life);
+      }
     }
     while (vigiles < b.vigiles && budget-- >= 0) {
       const p = this.spawnPoint('vigil', initial);
@@ -1386,10 +1439,13 @@ export class NpcManager implements System {
         if (s && Math.hypot(s.x - pp.x, s.z - pp.z) > 4) return { x: s.x, z: s.z, heading: s.face, spotPlaced: true };
       }
     }
+    const ahead = Math.atan2(this.look.x, this.look.z);
+    const halfFov = Math.atan(Math.tan((this.game.camera.fov * Math.PI) / 360) * this.game.camera.aspect);
+    /** Angle between a point's bearing from the player and the view direction. */
+    const offView = (x: number, z: number) => Math.abs(((Math.atan2(x - pp.x, z - pp.z) - ahead + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
     // On a street, heading along it (most people are going somewhere).
     const lanes = this.lanes();
-    if (lanes && this.rng.chance(this.budget.night ? 0.85 : 0.6)) {
-      const ahead = Math.atan2(this.look.x, this.look.z);
+    if (lanes && this.rng.chance(this.inSquare() ? 0.2 : this.budget.night ? 0.85 : 0.6)) {
       for (let i = 0; i < 10; i++) {
         const p = lanes.sample(() => this.rng.next(), pp.x, pp.z, initial ? 5 : SPAWN_MIN - 6, R);
         if (!p) break;
@@ -1401,13 +1457,18 @@ export class NpcManager implements System {
         if (!initial) {
           const y = h + 1.2;
           const d = Math.hypot(c.x - pp.x, c.z - pp.z);
-          // Out of sight, or behind something: they walk into view along the street.
+          // Out of sight, or behind something: they walk into view along the street. Not far
+          // behind the camera, where they would only be recycled again.
           if (this.isVisible(c.x, y, c.z) && (d < 22 || this.isSeen(c.x, y, c.z))) continue;
-        } else if (i < 5 && Math.abs(((Math.atan2(c.x - pp.x, c.z - pp.z) - ahead + Math.PI * 3) % (Math.PI * 2)) - Math.PI) > 1.2 && this.rng.chance(0.5)) {
+          if (offView(c.x, c.z) > halfFov + 1.1) continue;
+        } else if (i < 5 && offView(c.x, c.z) > 1.2 && this.rng.chance(0.5)) {
           // The first crowd: favour the stretch of street in front of the camera.
           continue;
         }
-        return { x: c.x, z: c.z, heading: p.heading, onLane: true };
+        // Late arrivals walk toward the player's side of the street, into view.
+        let heading = p.heading;
+        if (!initial && Math.sin(heading) * (pp.x - c.x) + Math.cos(heading) * (pp.z - c.z) < 0) heading += Math.PI;
+        return { x: c.x, z: c.z, heading, onLane: true };
       }
     }
     // A doorway (people step out of houses even in view).
@@ -1420,8 +1481,6 @@ export class NpcManager implements System {
       }
     }
     const terrain = (x: number, z: number) => (this.game.heightmap ? this.game.heightmap.heightAt(x, z) : pp.y);
-    const ahead = Math.atan2(this.look.x, this.look.z);
-    const halfFov = Math.atan(Math.tan((this.game.camera.fov * Math.PI) / 360) * this.game.camera.aspect);
     for (let i = 0; i < 24; i++) {
       let a: number;
       let d: number;
@@ -1429,10 +1488,10 @@ export class NpcManager implements System {
         // The first crowd: half of it in front of the camera (nothing has been seen yet).
         a = this.rng.chance(0.7) ? ahead + (this.rng.next() - 0.5) * 1.7 : this.rng.next() * Math.PI * 2;
         d = 4 + Math.pow(this.rng.next(), 0.75) * (R - 4);
-      } else if (this.rng.chance(0.6)) {
+      } else if (this.rng.chance(0.85)) {
         // Just outside the edges of the view, so people walk into it.
-        a = ahead + (this.rng.chance(0.5) ? 1 : -1) * (halfFov + 0.12 + this.rng.next() * 0.7);
-        d = 14 + this.rng.next() * 36;
+        a = ahead + (this.rng.chance(0.5) ? 1 : -1) * (halfFov + 0.08 + this.rng.next() * 0.45);
+        d = 12 + this.rng.next() * 30;
       } else {
         a = this.rng.next() * Math.PI * 2;
         d = SPAWN_MIN + Math.sqrt(this.rng.next()) * (R - SPAWN_MIN);

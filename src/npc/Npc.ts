@@ -95,6 +95,8 @@ export class Npc extends Actor implements Positioned {
   hostile = false;
   /** Controlled by a vignette script. */
   scripted = false;
+  /** Manager clock when spawned (s). */
+  bornAt = 0;
   /** Manning a station (stands at its post; outside the crowd budget). */
   station: StationPost | null = null;
   /** Followers (escorts) and the leader this one follows. */

@@ -12,7 +12,7 @@ import type { CrowdRoleId } from './roles';
 export interface District {
   id: string;
   name: string;
-  /** Crowd density 0..1.4 (1 = a busy quarter; the Forum is 1.25). */
+  /** Crowd density 0..1.8 (1 = a busy quarter; the Forum is 1.6). */
   density: number;
   /** Day mix: relative weights per role. */
   weights: Partial<Record<CrowdRoleId, number>>;
@@ -28,8 +28,9 @@ const DISTRICTS: readonly DistrictDef[] = [
     id: 'dist-forum-romanum',
     name: 'Forum Romanum',
     lowlands: ['forum-romanum'],
-    // The busiest place in Rome: ~85 people around the player at hours 2–6 (GDD §14.7: ≥ 60 on screen is the Should).
-    density: 1.4,
+    // The busiest place in Rome: ~100 people around the player at hours 2–6, packed into a 42 m
+    // radius, so that 30–60 are on screen (GDD §14.7: v0.1 Must 30, Should 60).
+    density: 1.6,
     weights: { citizen: 10, 'citizen-woman': 6, senator: 3, matron: 3, porter: 6, merchant: 4, artisan: 2, soldier: 3, priest: 2, idler: 4, beggar: 1, child: 2, elder: 2, foreigner: 3 },
   },
   {

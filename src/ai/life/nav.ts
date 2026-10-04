@@ -43,10 +43,16 @@ export class NavService {
     if (grid && grid.ready(ax, az) && grid.ready(bx, bz)) {
       // Cheap first: a clear straight line needs no search.
       if (grid.lineWalkable(ax, az, bx, bz)) return [{ x: bx, z: bz }];
+      // Walled off from where we stand (the reachability labels): no search can succeed, and a
+      // failing search is the most expensive kind.
+      if (grid.reachable(ax, az) && !grid.reachable(bx, bz)) {
+        this.failures++;
+        return null;
+      }
       if (this.used >= this.budget) return 'busy';
       this.used++;
       this.searches++;
-      const p = grid.findPath(ax, az, bx, bz, Math.min(12000, 800 + d * d * 4));
+      const p = grid.findPath(ax, az, bx, bz, Math.min(8000, 600 + d * d * 3));
       if (!p) this.failures++;
       return p;
     }

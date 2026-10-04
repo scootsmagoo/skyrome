@@ -66,14 +66,14 @@ export interface CrowdBudget {
 export const NIGHT_CAP = 25;
 
 /**
- * @param density district density 0..1.4 (1 = a busy quarter; the Forum at its peak is 1.25)
+ * @param density district density 0..1.8 (1 = a busy quarter; the Forum is 1.6)
  * @param scale player setting / dev override (1 = default)
  */
 export function crowdBudget(hour: number, sun: SunTimes, density: number, scale = 1): CrowdBudget {
   const p = romanPosition(hour, sun);
   const phase = dayPhase(hour, sun);
   const night = phase === 'night' || phase === 'predawn';
-  let citizens = Math.round(curve(p) * Math.max(0.2, Math.min(1.4, density)) * scale);
+  let citizens = Math.round(curve(p) * Math.max(0.2, Math.min(1.8, density)) * scale);
   const vigiles = night ? Math.max(2, Math.round(3 * Math.min(1, density + 0.3))) : 0;
   if (night) citizens = Math.min(citizens, NIGHT_CAP - vigiles - 2);
   else citizens = Math.max(citizens, Math.round(8 * scale));
