@@ -13,7 +13,7 @@ the city with `?scene=rome&at=<id>`. `&at=colosseum` lands you on the arena sand
 
 | File | Builds |
 | --- | --- |
-| `builders/colos-kit.ts` | Shared helpers (no builders): `Oval` (an ellipse and its parallel curves, bays at equal arc length), the `InstanceLod` system and `lodInstances()` (repeated pieces as InstancedMeshes with per-instance distance LOD), carved Roman numerals, cheap statues, `ovalPaving` (terrain-following ring paving that stops at a kerb where a hillside rises), `frontSteps`, `plantTrees`, and `addReadables` (see below). |
+| `builders/colos-kit.ts` | Shared helpers (no builders): `Oval` (an ellipse and its parallel curves, bays at equal arc length), the `InstanceLod` system and `lodInstances()` (repeated pieces as InstancedMeshes with per-instance distance LOD), carved Roman numerals, cheap statues, `ovalPaving` (terrain-following ring paving that stops at a kerb where a hillside rises), `frontSteps`, `plantTrees`, `smokePlume` (a one-draw column of furnace smoke, animated while visible) and `addReadables` (see below). |
 | `builders/colos-colosseum.ts` | `colosseum`. |
 | `builders/colos-ludus.ts` | `ludus-magnus` (the playable arena), `ludus-dacicus`, `ludus-gallicus`, `ludus-matutinus`. |
 | `builders/colos-court.ts` | `courtyardBuilding()`: ranges of rooms round a court with portico and gallery, gates, shop fronts and furnished enterable rooms (armoury, infirmary, office, shrine, mess, forge…). Used by the schools, the camps, the mint, the watch station and the Curiae. |
@@ -79,7 +79,8 @@ T4). The street front has LVDVS · MAGNVS over the gate, torches and a painted n
 - **Baths of Trajan:** walled garden with porticoes, libraries, the great hemicycle over the
   Golden House, and the bath block: porch with Trajan's dedication of 109, the natatio with its
   columnar screen, the enterable frigidarium (three groin vaults on eight granite columns), the
-  caldarium projecting SW, palaestrae.
+  caldarium projecting SW, palaestrae; smoke from the furnace stacks drifts over the garden (also
+  over the Baths of Titus and the mint).
 
 ## Spots and readable inscriptions
 
