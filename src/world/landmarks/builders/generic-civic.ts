@@ -31,6 +31,7 @@ import {
 } from './generic-common';
 import { courtyardRanges, hall, liteColonnade, liteColumnAt, tabernae, vaultedAisle } from './generic-civic-lib';
 import { aedicula, fittedTemple, templeMaterials } from './generic-sacred';
+import { sacredGrove } from './generic-groves';
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
@@ -1229,21 +1230,8 @@ function buildGarden(ctx: LandmarkContext): LandmarkBuild {
     return finish(lm.id, d, spots);
   }
   if (h.has('grove', 'spring', 'lucus') && !h.has('gardens', 'pavilion', 'porticoes')) {
-    // A sacred grove with a spring: a fenced spring basin, a shrine and an altar in the trees.
-    const free = clearOf(obstacles(ctx, 2));
-    const g = (x: number, z: number) => ctx.groundAt(x, z);
-    const y = g(0, 0);
-    pool(d, 0, y, 0, 6, 4, 'travertine', 0.5, 0.5);
-    aedicula(d, 0, y, 4.5, 2.8, 'plaster_white', ctx.detail);
-    altar(d, -4, g(-4, -3), -3, 1.2, 0.8, 0.9, 'travertine');
-    const rng = ctx.rng.fork('grove');
-    for (let i = 0; i < 18; i++) {
-      const a = rng.range(0, Math.PI * 2), r = rng.range(9, Math.min(w, dd) * 0.45);
-      const x = Math.cos(a) * r, z = Math.sin(a) * r;
-      if (!free(x, z, 2)) continue;
-      broadTree(d, x, g(x, z), z, rng.range(8, 13), ctx.detail, rng.chance(0.3) ? 'pine' : 'plane');
-    }
-    spots.push(spot(`${lm.id}:spring`, 'shrine', 0, y, -2.8, 0), spot(`${lm.id}:altar`, 'shrine', -4, g(-4, -4.6), -4.6, 0));
+    // A sacred grove with its spring (and, where let out, the people living in it).
+    sacredGrove(d, ctx, w, dd, h, spots);
     return finish(lm.id, d, spots);
   }
   gardenLayout(d, ctx, w, dd, spots, { tower: h.has('tower', 'turris', 'watched rome burn'), nymphaeum: true });

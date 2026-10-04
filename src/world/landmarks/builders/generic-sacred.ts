@@ -3,12 +3,13 @@
  * the order, plan and column count read from the atlas notes; round ones as tholoi; big precincts
  * as a porticoed court round the temple), shrines, monuments (obelisks, statues, altars,
  * enclosures), honorific columns, fountains, tombs (drum, pyramid, altar, columbarium, rock-cut,
- * roadside cemeteries), arches and the old Servian gates.
+ * roadside cemeteries) and arches. (The Servian gates are in generic-gates.ts.)
  */
 import * as THREE from 'three';
 import { obelisk, honorificColumn } from '../../../arch/classical/monuments';
 import { column } from '../../../arch/classical/column';
-import { diameterForHeight, type Order } from '../../../arch/classical/orders';
+import { diameterForHeight, entablatureDims, type Order } from '../../../arch/classical/orders';
+import { inscriptionPanel } from '../../../arch/common/inscription';
 import { temple, templeLayout, type TempleLayout, type TemplePlan, type TempleSpec } from '../../../arch/classical/temple';
 import { tholos } from '../../../arch/classical/tholos';
 import { plainArch, triumphalArch } from '../../../arch/classical/arch';
@@ -21,6 +22,7 @@ import {
   railing, roundBasin, spot, statueOnPedestal, tiledRoof, wallRun, type Detail, type Hints,
 } from './generic-common';
 import { liteColonnade } from './generic-civic-lib';
+import { lamp } from './generic-world';
 
 // ---------------------------------------------------------------- temples
 
@@ -41,6 +43,12 @@ export interface FitOptions {
    * fluted Corinthian column costs ~6k triangles at high detail). Default 6; heroes raise it.
    */
   maxHighColumns?: number;
+  /** Dedication carved on the front frieze (lines, latinized here). */
+  dedication?: string[];
+  /** Bronze statues on pedestals flanking the foot of the stairs. */
+  statues?: boolean;
+  /** For lights: with a context the altar gets a live fire (light pool). */
+  ctx?: LandmarkContext;
 }
 
 /**
@@ -101,6 +109,15 @@ export interface TempleBuild {
   spots: Spot[];
 }
 
+/** A carved dedication on the front frieze of a kit temple (architrave-face plane, centred). */
+export function friezeDedication(d: Draw, L: TempleLayout, offsetZ: number, lines: string[], ground = '#ebe7df') {
+  const ent = entablatureDims(L.order, L.H);
+  const y = L.podiumHeight + L.H + ent.architrave + ent.frieze / 2;
+  const w = Math.min((L.entablature.x1 - L.entablature.x0) * 0.74, 12);
+  const h = Math.max(0.28, ent.frieze * 0.78);
+  inscriptionPanel(d.b, { lines, width: w, height: h, style: 'carved', ground, sizes: lines.map(() => 1) }, mul(d.m, T(0, y, L.entablature.z0 + offsetZ - 0.04)), { depth: 0.04 });
+}
+
 /** A temple fitted to a local rectangle centred at (cx, cz) and facing −z of the frame `d`. */
 export function fittedTemple(d: Draw, w: number, dd: number, o: FitOptions, id: string, withAltar = true): TempleBuild {
   const fit = fitTemple(w, dd, o);
@@ -112,10 +129,21 @@ export function fittedTemple(d: Draw, w: number, dd: number, o: FitOptions, id: 
   // Door of the cella and the top of the stairs.
   spots.push(spot(`${id}:door`, 'door', 0, P, fit.offsetZ + L.cella.z0 - 0.6, Math.PI));
   spots.push(spot(`${id}:steps`, 'sit', L.stairs.x0 + 0.6, L.stairs.rise * Math.floor(L.stairs.count / 3), front + L.stairs.run * Math.floor(L.stairs.count / 3) + 0.15, Math.PI));
+  if (o.dedication?.length) friezeDedication(d, L, fit.offsetZ, o.dedication, o.material === 'plaster_white' || o.material === 'travertine' ? '#ece5d4' : '#ebe7df');
   if (withAltar && front + dd / 2 > 3.2) {
     const z = (front - dd / 2) / 2;
     altar(d, 0, 0, z, 1.6, 1.0, 1.0, o.material === 'plaster_white' ? 'travertine' : 'marble');
     spots.push(spot(`${id}:altar`, 'shrine', 0, 0, z - 1.6, 0));
+    if (o.ctx) {
+      // Embers on the altar (always burning: offerings go on at dawn).
+      d.cyl('glow_fire', 0, 1.24, z, 0.32, 0.08, 7);
+      d.cyl('glow_fire', 0, 1.42, z, 0.18, 0.3, 6, { rTop: 0.02 });
+      lamp(o.ctx, d, 0, 1.6, z, { kind: 'fire', intensity: 20, distance: 12, flicker: 0.5, glow: 0.45 });
+    }
+  }
+  if (o.statues && L.stairs.count > 0) {
+    const sx = (L.stairs.x1 - L.stairs.x0) / 2 + 0.9;
+    for (const s of [-1, 1]) statueOnPedestal(d, 'togate', s * Math.min(sx, w / 2 - 0.8), 0, front - 1.0, 0, 1.0, 'bronze', 'low', 1.2, 'marble');
   }
   return { layout: L, offsetZ: fit.offsetZ, front, spots };
 }
@@ -142,7 +170,10 @@ function buildTemple(ctx: LandmarkContext): LandmarkBuild {
   }
   if (precinct) return buildPrecinct(ctx, d, h, w, dd, mats, far);
   plinth(d, ctx, -w / 2, -dd / 2, w / 2, dd / 2, 0.02, mats.podiumMaterial ?? 'travertine');
-  const t = fittedTemple(d, w, dd, { ...mats, order: h.order ?? (h.republican ? 'ionic' : 'corinthian'), plan: h.plan, front: h.front, detail, maxHighColumns: lm.priority >= 3 ? 4 : 6 }, lm.id);
+  const t = fittedTemple(d, w, dd, {
+    ...mats, order: h.order ?? (h.republican ? 'ionic' : 'corinthian'), plan: h.plan, front: h.front, detail, maxHighColumns: lm.priority >= 3 ? 4 : 6,
+    dedication: [lm.latin.split('/')[0].trim()], statues: detail === 'high' && w > 10, ctx,
+  }, lm.id);
   spots.push(...t.spots);
   // Far: podium + cella block + roof.
   const L = t.layout;
@@ -674,39 +705,6 @@ function buildArch(ctx: LandmarkContext): LandmarkBuild {
   return finish(lm.id, d, spots);
 }
 
-function buildGate(ctx: LandmarkContext): LandmarkBuild {
-  const { lm, detail } = ctx;
-  const h = hintsOf(lm);
-  const d = draw(ctx);
-  const { w, d: dd } = dims(ctx);
-  const H = heightG(ctx, 4);
-  const spots: Spot[] = [];
-  plinth(d, ctx, -w / 2, -dd / 2, w / 2, dd / 2, 0.02, 'tufa');
-  const triple = h.has('triple', 'trigemina');
-  const travertineFace = h.has('travertine', 'augustan');
-  const mat: MaterialId = travertineFace ? 'travertine' : 'tufa';
-  const spans = triple ? [-w * 0.3, 0, w * 0.3] : [0];
-  const span = triple ? Math.max(2.8, w * 0.2) : Math.max(3.2, w * 0.36);
-  const crown = Math.min(H * 0.72, span * 1.5 + 1);
-  // Gate body: a solid block of ashlar with the arch(es) through it.
-  const pts = [-w / 2, ...spans.flatMap((x) => [x - span / 2, x + span / 2]), w / 2];
-  for (let i = 0; i < pts.length; i += 2) d.span(mat, pts[i], 0, -dd / 2, pts[i + 1], H, dd / 2, { collide: true });
-  for (const x of spans) {
-    plainArch(d.b, { span, height: crown, pier: 0.01, depth: dd + 0.2, material: travertineFace ? 'travertine' : 'tufa', detail, cornice: false }, mul(d.m, T(x, 0, 0)));
-    d.span(mat, x - span / 2, crown + span * 0.35, -dd / 2, x + span / 2, H, dd / 2);
-  }
-  if (!travertineFace) {
-    // Old republican gate: crenellations; the wall stubs run out to the sides.
-    crenellations(d, -w / 2, -dd / 2 + 0.3, w / 2, -dd / 2 + 0.3, H, 0.6, mat, 0.9, 0.7, 0.9);
-    for (const sx of [-1, 1]) wallRun(d, sx * w / 2, 0, sx * (w / 2 + 6), 0, -0.5, H * 0.75, Math.min(dd, 3.5), 'tufa');
-  } else {
-    d.span('travertine', -w / 2 - 0.2, H - 0.6, -dd / 2 - 0.2, w / 2 + 0.2, H, dd / 2 + 0.2);
-    inscription(d, [lm.latin.split('/')[0].trim().toUpperCase()], 0, H - 1.6, -dd / 2 - 0.02, Math.min(w * 0.6, 8), 0.9);
-  }
-  spots.push(spot(`${lm.id}:passage`, 'vista', 0, 0, -dd / 2 - 2, 0), spot(`${lm.id}:guard`, 'npc', span / 2 + 1, 0, -dd / 2 - 1, 0));
-  return finish(lm.id, d, spots);
-}
-
 export const builders: LandmarkBuilder[] = [
   { handles: ['category:temple'], build: buildTemple },
   { handles: ['category:shrine'], build: buildShrine },
@@ -715,7 +713,6 @@ export const builders: LandmarkBuilder[] = [
   { handles: ['category:fountain'], build: buildFountain },
   { handles: ['category:tomb'], build: buildTomb },
   { handles: ['category:arch'], build: buildArch },
-  { handles: ['category:gate'], build: buildGate },
 ];
 
 export { TRS };

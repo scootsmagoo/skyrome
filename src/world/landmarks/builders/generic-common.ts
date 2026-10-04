@@ -288,6 +288,34 @@ export function wallRun(d: Draw, ax: number, az: number, bx: number, bz: number,
   d.box(mat, (ax + bx) / 2, (y0 + y1) / 2, (az + bz) / 2, len + t * 0.98, y1 - y0, t, { ry, collide });
 }
 
+/**
+ * Ashlar coursing on a wall face along x (from x0 to x1, y0 to y1) whose surface is the plane z,
+ * facing `face` (−1: towards −z). Blocks stand 4 cm proud of the core, 2.5 cm short of their
+ * neighbours, so the joints read as fine shadow lines; courses alternate stretchers (≈ 1.3 m) and
+ * headers (≈ 0.6 m) as in the Servian wall (0.6 m = 2 Roman feet, kept 1:1). Blocks overlapping a
+ * `hole` (an arch opening, below its y1) are left out.
+ */
+export function ashlarFace(d: Draw, x0: number, x1: number, y0: number, y1: number, z: number, face: -1 | 1, mat: MaterialId, rng: { range(a: number, b: number): number }, holes: { x0: number; x1: number; y1: number }[] = [], course = 0.58) {
+  const proud = 0.04, gap = 0.025;
+  const rows = Math.max(1, Math.round((y1 - y0) / course));
+  const c = (y1 - y0) / rows;
+  for (let r = 0; r < rows; r++) {
+    const ya = y0 + r * c;
+    const len = r % 2 ? 0.62 : 1.32;
+    let x = x0 - (r % 2 ? 0 : rng.range(0, len * 0.5));
+    while (x < x1 - 0.05) {
+      const l = r % 2 ? len : len * rng.range(0.85, 1.2);
+      const a = Math.max(x0, x), b = Math.min(x1, x + l);
+      x += l;
+      if (b - a < 0.15) continue;
+      if (holes.some((h) => b > h.x0 && a < h.x1 && ya < h.y1)) continue;
+      // Slight random relief so a whole face doesn't look stamped.
+      const p = proud * rng.range(0.6, 1.25);
+      d.span(mat, a + gap, ya + gap, z, b - gap, ya + c - gap, z + face * p);
+    }
+  }
+}
+
 /** Merlons along a wall top between two points. */
 export function crenellations(d: Draw, ax: number, az: number, bx: number, bz: number, y: number, t: number, mat: MaterialId, merlon = 1.0, gap = 0.8, h = 1.0) {
   const len = Math.hypot(bx - ax, bz - az);
