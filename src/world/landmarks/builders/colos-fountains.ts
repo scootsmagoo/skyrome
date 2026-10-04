@@ -14,7 +14,7 @@ import { MeshBuilder } from '../../../gfx/MeshBuilder';
 import { Draw, lacus } from '../../../arch/fabric';
 import { ProfileBuilder, lathe } from '../../../arch/common/geom';
 import { inscriptionPanel } from '../../../arch/common/inscription';
-import { seatedDeity, togate } from '../../../arch/classical/statues';
+import { seatedDeity } from '../../../arch/classical/statues';
 import { placeProp } from '../../../arch/props';
 import { Rng } from '../../../core/Rng';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
@@ -304,8 +304,6 @@ function buildLacusOrphei(ctx: LandmarkContext): LandmarkBuild {
     if (high) d.rod('water', { x, y: 1.3, z: 1.05 }, { x, y: 0.62, z: 0.3 }, 0.025, 5);
   }
   d.cyl('travertine', 0, 0.08, -1.6, 0.42, 0.16, 10);
-  void togate;
-  void inscriptionPanel;
   const spots: Spot[] = [
     { id: 'lacus-orphei-basin', kind: 'container', position: d.point(0, 0.05, -1.7), heading: 0 },
     { id: 'lacus-orphei-statue', kind: 'shrine', position: d.point(0.8, 0.05, -2.2), heading: 0 },

@@ -1198,9 +1198,6 @@ function buildCavea(ctx: LandmarkContext, L: ColosseumLayout, cav: MeshBuilder, 
     const H = y0;
     const { count, rise } = risers(H, 0.2);
     const run = 0.34;
-    const zTop = -xBack; // top of the flight at the mouth's back
-    const zBot = zTop + count * run; // further in-ring (towards ring 3) = +z? No: outward is −z.
-    void zBot;
     // Flight climbs from the outside (−z, larger x) towards the arena (+z): steps at x = xBack + i·run.
     for (let i = 0; i < count; i++) {
       const xa = xBack + (count - i) * run;
@@ -1336,11 +1333,8 @@ function buildCavea(ctx: LandmarkContext, L: ColosseumLayout, cav: MeshBuilder, 
     cav.add(ovalBand(oval, xc - 0.45, xc + 0.4, yE + 0.75, yE + 0.95, 0, two, 96, true), 'marble', I);
     // Lean-to roof from the colonnade up to the attic's inner face (tiles above, timber below).
     const roofTop = yE + 2.15;
-    const rp = new ProfileBuilder(xc - 0.55, yE + 0.95).to(XI + 0.02, roofTop).to(XI + 0.02, roofTop - 0.18).to(xc - 0.55, yE + 0.77).build();
-    rp.pts.reverse();
     cav.add(ovalSweep(oval, new ProfileBuilder(XI + 0.02, roofTop).to(xc - 0.55, yE + 0.95).build(), 0, two, 96, { closed: true }), 'roof_tile', I);
     cav.add(ovalSweep(oval, new ProfileBuilder(xc - 0.55, yE + 0.8).to(XI + 0.02, roofTop - 0.15).build(), 0, two, 96, { closed: true }), 'wood_dark', I, { castShadow: false });
-    void rp;
     // Back wall: the attic's inner face (the attic's instanced bays carry the outer face only
     // to the full wall depth, so add a plain inner band above the portico roof).
     cav.add(ovalBand(oval, XI - 0.07, XI - 0.03, yF, SY[4] - 0.3, 0, two, 96, true), 'travertine', I, { castShadow: false });
@@ -1353,8 +1347,6 @@ function buildCavea(ctx: LandmarkContext, L: ColosseumLayout, cav: MeshBuilder, 
     const [nx, nz] = oval.normal(t);
     spots.push({ id: `colos-seat-${i + 1}`, kind: 'sit', position: new THREE.Vector3(px, r.y + 0.02, pz), heading: Math.atan2(-nx, -nz) });
   });
-  void ctx;
-  void collideOut;
   return topSet!;
 }
 
