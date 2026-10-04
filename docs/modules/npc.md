@@ -89,7 +89,9 @@ itself), `game.locations`, `game.dialogue`, `game.ui`, `game.audio`, `game.light
   colliders the characters collide with.
 - **Reachability.** An incremental flood from the player's cell labels where you can walk to;
   spawns, wander targets and snapped points only use reachable cells, so nobody appears on a roof,
-  inside a closed precinct or on top of the Rostra.
+  inside a closed precinct or on top of the Rostra. When the player stands in a pocket (a podium
+  top, a rooftop: fewer than 300 cells), the flood starts from the street below instead, so the
+  town around still fills.
 - **Street graph.** `game.streets` (`{ nodes, edges, spots }`, owned by the city module) is read
   through a tolerant adapter (arrays or Maps, `{a,b}`/`{from,to}`/`[a,b]` edges, `position` or
   `x/z` nodes). Long routes go node to node; door spots are where people step out of and go home

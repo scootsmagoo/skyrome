@@ -172,6 +172,8 @@ export class NpcManager implements System {
   private floodT = 0;
   /** Where the player was last frame (a jump of more than 40 m is a teleport). */
   private lastPlayer = { x: NaN, z: NaN };
+  /** Where the reachability flood starts (the player, or the street below them). */
+  private readonly floodOrigin = { x: 0, z: 0 };
   /** Game hours at the last frame (a jump of more than half an hour is a wait or a load). */
   private lastHours = NaN;
   private readonly freeShape = new RAPIER.Capsule(0.5, 0.3);
@@ -1008,6 +1010,30 @@ export class NpcManager implements System {
     return null;
   }
 
+  /** A walkable cell at street level (on the terrain) near a point: a lane if there is one. */
+  private streetLevelNear(x: number, z: number): Vec2 | null {
+    const g = this.grid;
+    const hm = this.game.heightmap;
+    const ok = (p: Vec2 | null) => {
+      if (!p || !g.walkable(p.x, p.z)) return false;
+      const h = g.heightAt(p.x, p.z);
+      return h !== null && (!hm || Math.abs(h - hm.heightAt(p.x, p.z)) < 0.8);
+    };
+    const ln = this.lanes()?.nearest(x, z, 40);
+    if (ln) {
+      const c = g.nearestWalkable(ln.x, ln.z, 3);
+      if (ok(c)) return c;
+    }
+    for (let r = 4; r <= 32; r += 4) {
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        const c = g.nearestWalkable(x + Math.cos(a) * r, z + Math.sin(a) * r, 1.5);
+        if (ok(c)) return c;
+      }
+    }
+    return null;
+  }
+
   /** Terrain slope (rise over run) at a point; hillsides are no place for a crowd. */
   slopeAt(x: number, z: number): number {
     const hm = this.game.heightmap;
@@ -1236,10 +1262,27 @@ export class NpcManager implements System {
     this.grid.build(this.initialDone ? this.buildBudget : 9000);
     // Which cells can be walked to from where the player stands (spawns and wander targets).
     this.floodT -= dt;
-    if (this.grid.flooding) this.grid.flood(pp.x, pp.z, 2500);
+    const fo = this.floodOrigin;
+    if (this.grid.flooding) this.grid.flood(fo.x, fo.z, 2500);
     else if (this.floodT <= 0 || !this.initialDone) {
       this.floodT = 2;
-      this.grid.flood(pp.x, pp.z, this.initialDone ? 2500 : 1e6);
+      // Flood from the player; if that labels only a pocket (a rooftop, a podium top, a closed
+      // room), from the street below instead, so the town around still fills with people.
+      fo.x = pp.x;
+      fo.z = pp.z;
+      if (this.grid.lastFloodSize > 0 && this.grid.lastFloodSize < 300) {
+        const alt = this.streetLevelNear(pp.x, pp.z);
+        if (alt) {
+          fo.x = alt.x;
+          fo.z = alt.z;
+        }
+      }
+      this.grid.flood(fo.x, fo.z, this.initialDone ? 2500 : 1e6);
+      // The first fill can't wait two seconds for that.
+      if (!this.initialDone && !this.grid.flooding && this.grid.lastFloodSize < 300) {
+        const alt = this.streetLevelNear(pp.x, pp.z);
+        if (alt) this.grid.flood(alt.x, alt.z, 1e6);
+      }
     }
     this.spots.refresh(pp.x, pp.z, dt, this.nav, this.streets(), this.rng, this.wallProbe, (x, z) => this.floorY(x, z), (x, z, r, k) => this.pois(x, z, r, k));
 

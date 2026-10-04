@@ -365,6 +365,9 @@ export class NavGrid {
   private fq: number[] = [];
   private fqHead = 0;
   private floodOn = false;
+  private floodCount = 0;
+  /** Cells labelled reachable by the last finished flood (a handful: the origin is a rooftop or a closed room). */
+  lastFloodSize = 0;
 
   /**
    * Label the cells reachable on foot from (x, z) (incremental BFS, `maxCells` per call).
@@ -387,6 +390,7 @@ export class NavGrid {
   private startFlood(sx: number, sz: number, maxCells: number) {
     this.floodGen++;
     this.floodOn = true;
+    this.floodCount = 1;
     this.fq.length = 0;
     this.fqHead = 0;
     this.stamp(sx, sz);
@@ -421,6 +425,7 @@ export class NavGrid {
           if (this.stampOf(nx, nz) === this.floodGen) continue;
           if (!this.canStep(cx, cz, nx, nz)) continue;
           this.stamp(nx, nz);
+          this.floodCount++;
           q.push(nx, nz);
         }
       }
@@ -428,6 +433,7 @@ export class NavGrid {
     if (this.fqHead >= q.length) {
       this.floodOn = false;
       this.doneGen = this.floodGen;
+      this.lastFloodSize = this.floodCount;
       q.length = 0;
       this.fqHead = 0;
       // Drop stamp arrays of evicted chunks.
@@ -441,6 +447,7 @@ export class NavGrid {
   resetFlood() {
     this.floodOn = false;
     this.doneGen = 0;
+    this.lastFloodSize = 0;
     this.fq.length = 0;
     this.fqHead = 0;
   }
