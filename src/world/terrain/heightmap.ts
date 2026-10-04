@@ -7,6 +7,9 @@
  * (WORLD_SCALE applied horizontally and vertically).
  */
 import { WORLD_SCALE } from '../coords';
+import { chain, footOn, indexSegments, nearSegments, quayInfluence, resolveQuays, TIBER_QUAYS, type TerrainQuay } from './riverbanks';
+
+export type { TerrainQuay } from './riverbanks';
 
 export type P2 = readonly [number, number];
 
@@ -29,6 +32,8 @@ export interface TerrainRiver {
   width: readonly number[];
   waterLevel: number;
   bankHeight: number;
+  /** 'canal': a narrow masonry-sided channel cut into the ground (no natural banks). */
+  kind?: 'river' | 'canal';
 }
 export interface TerrainIsland {
   id: string;
@@ -39,6 +44,8 @@ export interface TerrainRoad {
   id: string;
   points: readonly P2[];
   width: number;
+  /** Surface (atlas Road.paving); default 'basalt'. Only used for texturing. */
+  paving?: 'basalt' | 'gravel' | 'dirt' | 'steps';
 }
 export interface TerrainPad {
   id: string;
@@ -66,6 +73,8 @@ export interface HeightmapOptions {
   /** Amplitude (real m) of the fine noise added on hills / flats. */
   noise?: number;
   seed?: number;
+  /** Stone quays along rivers (default: the Tiber quays of AD 113; they only apply to a river with a matching id). */
+  quays?: readonly TerrainQuay[];
 }
 
 /** Signed distance from p to a closed polygon (negative inside). */
@@ -146,6 +155,53 @@ function bbox<T>(item: T, pts: readonly P2[], pad: number): Bounded<T> {
 
 const inBox = (b: Bounded<unknown>, x: number, z: number) => x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ;
 
+/**
+ * Signed distance to a polygon sampled on a regular grid over a box, read back bilinearly. Exact
+ * along straight edges (the field is linear there), slightly rounded at corners; ~20× cheaper than
+ * `signedDistance` per query, which matters for the 2.3 M heightmap samples.
+ */
+interface SdfGrid {
+  x0: number;
+  z0: number;
+  cell: number;
+  nx: number;
+  nz: number;
+  d: Float32Array;
+}
+
+function sdfGrid(poly: readonly P2[], b: { minX: number; maxX: number; minZ: number; maxZ: number }, cell: number): SdfGrid {
+  const nx = Math.max(2, Math.ceil((b.maxX - b.minX) / cell) + 1);
+  const nz = Math.max(2, Math.ceil((b.maxZ - b.minZ) / cell) + 1);
+  const d = new Float32Array(nx * nz);
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) d[j * nx + i] = signedDistance(b.minX + i * cell, b.minZ + j * cell, poly);
+  return { x0: b.minX, z0: b.minZ, cell, nx, nz, d };
+}
+
+function sampleSdf(g: SdfGrid, x: number, z: number): number {
+  const fx = Math.min(Math.max((x - g.x0) / g.cell, 0), g.nx - 1.0001);
+  const fz = Math.min(Math.max((z - g.z0) / g.cell, 0), g.nz - 1.0001);
+  const ix = fx | 0, iz = fz | 0;
+  const tx = fx - ix, tz = fz - iz;
+  const k = iz * g.nx + ix;
+  const d = g.d;
+  const a = d[k] + (d[k + 1] - d[k]) * tx;
+  const c = d[k + g.nx] + (d[k + g.nx + 1] - d[k + g.nx]) * tx;
+  return a + (c - a) * tz;
+}
+
+/** Intersect a box with the terrain bounds (plus a margin); null when they don't overlap. */
+function clipBox<T extends { minX: number; maxX: number; minZ: number; maxZ: number }>(b: T, bounds: TerrainSource['bounds'] | undefined, m = 40): T | null {
+  if (!bounds) return b;
+  const out = { ...b, minX: Math.max(b.minX, bounds.minX - m), maxX: Math.min(b.maxX, bounds.maxX + m), minZ: Math.max(b.minZ, bounds.minZ - m), maxZ: Math.min(b.maxZ, bounds.maxZ + m) };
+  return out.minX < out.maxX && out.minZ < out.maxZ ? out : null;
+}
+
+/** Horizontal run (real m) of a cliff face from plateau edge to foot. */
+const CLIFF_RUN = 13;
+
+/** Grid cell (real m) of the polygon distance fields. */
+const SDF_CELL = 6;
+
 /** Cheap deterministic value noise (real-meter input). */
 function valueNoise(x: number, z: number, seed: number): number {
   const xi = Math.floor(x);
@@ -175,49 +231,146 @@ function fbm(x: number, z: number, seed: number): number {
   return s * 2; // ~[-1, 1]
 }
 
+/** Width (real m) of the gentle flood-plain rise behind a natural bank top. */
+export const RIVER_PLAIN = 120;
+/** Grade of the river's influence beyond the flood plain: steep, so hills keep their shape. */
+const RIVER_OUTER_GRADE = 0.35;
+/** Highest ground (m ASL) the river profile has to clear before it stops mattering. */
+const RIVER_MAX_GROUND = 100;
+
+/**
+ * Cross-section of a natural river bank (real m ASL) at distance `d` from the centerline, for a
+ * channel of half width `half`: bed 4 m below the water, a shelving underwater slope (wading is
+ * possible only in the last few metres), a gravel/mud beach just above the water, then a cut bank
+ * (about 1:3) up to `bankHeight`, then a gentle 2 % flood-plain rise for RIVER_PLAIN m. Beyond that
+ * the profile climbs steeply, so the valley never shaves the foot of a hill (the Janiculum).
+ * The terrain takes min(natural, profile).
+ */
+export function riverBankProfile(r: { waterLevel: number; bankHeight: number }, d: number, half: number): number {
+  const wl = r.waterLevel;
+  const bed = wl - 4;
+  if (d < half - 10) return bed;
+  if (d < half) return bed + (wl + 0.3 - bed) * smooth(half - 10, half, d);
+  if (d < half + 5) return wl + 0.3 + 0.12 * (d - half);
+  const inland = Math.max(0, d - half - 16);
+  return wl + 0.9 + Math.max(0, r.bankHeight - wl - 0.9) * smooth(half + 5, half + 16, d) + Math.min(inland, RIVER_PLAIN) * 0.02 + Math.max(0, inland - RIVER_PLAIN) * RIVER_OUTER_GRADE;
+}
+
+/**
+ * The channel as a cut through anything standing in it (hill slopes): the natural bank profile up
+ * to the bank top, then a 45° face. Applied after the hills, so a hill that reaches the river
+ * ends in a river cliff instead of filling the channel.
+ */
+export function channelProfile(r: { waterLevel: number; bankHeight: number }, d: number, half: number): number {
+  if (d < half + 16) return riverBankProfile(r, d, half);
+  return Math.max(r.waterLevel + 0.9, r.bankHeight) + (d - half - 16);
+}
+
+/** Distance beyond the channel half width (real m) past which a river can't lower the ground. */
+export function riverReach(r: { bankHeight: number; kind?: 'river' | 'canal' }): number {
+  if (r.kind === 'canal') return 2;
+  return 16 + RIVER_PLAIN + Math.max(0, RIVER_MAX_GROUND - r.bankHeight - RIVER_PLAIN * 0.02) / RIVER_OUTER_GRADE + 10;
+}
+
+/**
+ * Cross-section of a canal (real m ASL): a flat bed 1.6 m below the water and near-vertical
+ * masonry sides up to 0.5 m above it; the ground beyond is untouched.
+ */
+export function canalProfile(r: { waterLevel: number }, d: number, half: number): number {
+  const bed = r.waterLevel - 1.6;
+  if (d < half) return bed;
+  if (d < half + 0.8) return bed + (r.waterLevel + 0.5 - bed) * smooth(half, half + 0.8, d);
+  return Infinity;
+}
+
+/**
+ * Cross-section at a stone quay: deep water right at the face (barges moor there), a flat quay top
+ * `width` m wide at `top`, then a blend back to the natural ground over 25 m.
+ */
+export function quayProfile(r: { waterLevel: number }, d: number, half: number, top: number, width: number, ground: number): number {
+  const bed = r.waterLevel - 4;
+  // The rise sits wholly behind the masonry face (water/quays.ts puts it at half - 3.2).
+  if (d < half - 3.4) return bed;
+  if (d < half - 1.4) return bed + (top - bed) * smooth(half - 3.4, half - 1.4, d);
+  return top + (ground - top) * smooth(half + width, half + width + 25, d);
+}
+
 /** The natural (pre-road, pre-pad) elevation function in real meters. */
-export function makeNaturalElevation(src: TerrainSource, opts: { noise?: number; seed?: number } = {}) {
+export function makeNaturalElevation(src: TerrainSource, opts: { noise?: number; seed?: number; quays?: readonly TerrainQuay[]; sdfCell?: number } = {}) {
   const noiseAmp = opts.noise ?? 0.6;
   const seed = opts.seed ?? 113;
-  const lowlands = src.LOWLANDS.map((l) => bbox(l, l.polygon, 60));
-  const hills = src.HILLS.map((h) => {
-    const b = bbox(h, h.outline, h.slope + 10);
+  const quays = opts.quays ?? TIBER_QUAYS;
+  const lowlands = src.LOWLANDS.flatMap((l) => {
+    const b = clipBox(bbox(l, l.polygon, 60), src.bounds);
+    return b ? [{ ...b, sdf: sdfGrid(l.polygon, b, opts.sdfCell ?? SDF_CELL) }] : [];
+  });
+  const hills = src.HILLS.flatMap((h) => {
+    const b = clipBox(bbox(h, h.outline, h.slope + 10), src.bounds);
+    if (!b) return [];
     // Inner radius ~ sqrt(area/π) so the summit dome reaches the summit near the middle.
     let area = 0;
     const o = h.outline;
     for (let i = 0, j = o.length - 1; i < o.length; j = i++) area += (o[j][0] + o[i][0]) * (o[j][1] - o[i][1]);
     const rIn = Math.max(20, Math.sqrt(Math.abs(area / 2) / Math.PI));
-    return { ...b, rIn };
+    return [{ ...b, rIn, sdf: sdfGrid(h.outline, b, opts.sdfCell ?? SDF_CELL) }];
   });
   const islands = src.ISLANDS.map((i) => bbox(i, i.outline, 15));
-  const rivers = src.RIVERS.map((r) => bbox(r, r.centerline, Math.max(...r.width) / 2 + 60));
+  const rivers = src.RIVERS.map((r) => {
+    const line = chain(r.centerline);
+    const reach = Math.max(...r.width) / 2 + riverReach(r);
+    return { ...bbox(r, r.centerline, reach), line, index: indexSegments(r.centerline, reach, 100), quays: resolveQuays(quays, r.id, line) };
+  });
 
   /** Ground ignoring hills (base + lowlands). */
   const ground = (x: number, z: number): number => {
     let g = src.BASE_ELEVATION;
     for (const b of lowlands) {
       if (!inBox(b, x, z)) continue;
-      const sd = signedDistance(x, z, b.item.polygon);
+      const sd = sampleSdf(b.sdf, x, z);
       const w = 1 - smooth(-15, 45, sd);
       if (w > 0) g += (b.item.elevation - g) * w;
     }
     return g;
   };
 
+  // Per-sample river feet, reused by the ground carve, the channel cut and the quays.
+  const feet: ({ f: ReturnType<typeof footOn>; half: number } | null)[] = rivers.map(() => null);
+
   return (x: number, z: number): number => {
-    const g = ground(x, z);
+    // 1. Ground (base + lowlands), with the river valley carved into it: channel, banks and the
+    //    gentle flood plain. Hills are raised on top of this, so the valley never shaves them.
+    let g = ground(x, z);
+    let smoothK = 1;
+    for (let ri = 0; ri < rivers.length; ri++) {
+      const b = rivers[ri];
+      feet[ri] = null;
+      if (!inBox(b, x, z)) continue;
+      const segs = nearSegments(b.index, x, z);
+      if (!segs) continue;
+      const r = b.item;
+      const f = footOn(b.line, x, z, segs);
+      const w0 = r.width[f.i] ?? r.width[r.width.length - 1];
+      const w1 = r.width[f.i + 1] ?? w0;
+      const half = (w0 + (w1 - w0) * f.t) / 2;
+      feet[ri] = { f, half };
+      const profile = r.kind === 'canal' ? canalProfile(r, f.d, half) : riverBankProfile(r, f.d, half);
+      if (profile < g) g = profile;
+      if (r.kind === 'canal' && f.d < half + 1.5) smoothK = 0;
+    }
     let h = g;
     let hillFactor = 0;
     for (const b of hills) {
       if (!inBox(b, x, z)) continue;
       const hill = b.item;
-      const sd = signedDistance(x, z, hill.outline);
+      const sd = sampleSdf(b.sdf, x, z);
       let slope = hill.slope;
       if (hill.cliffs) {
         for (const c of hill.cliffs) {
           const dc = Math.sqrt(segDist2(x, z, c.a[0], c.a[1], c.b[0], c.b[1]));
+          // Near-vertical tufa faces, but no steeper than the 2 m grid can draw without a
+          // sawtooth where the cliff runs diagonally to it.
           const k = smooth(0, 70, dc);
-          slope = Math.min(slope, 9 + (hill.slope - 9) * k);
+          slope = Math.min(slope, CLIFF_RUN + (hill.slope - CLIFF_RUN) * k);
         }
       }
       let hh: number;
@@ -230,33 +383,46 @@ export function makeNaturalElevation(src: TerrainSource, opts: { noise?: number;
       if (hh > h) h = hh;
       hillFactor = Math.max(hillFactor, 1 - smooth(0, slope, Math.max(0, sd)));
     }
-    // Islands rise out of the river.
+    // Islands rise out of the river. Tiber Island was faced in travertine like a ship (the water
+    // module builds the facing just outside the outline), so it stands on near-vertical sides.
     let islandH = -Infinity;
     for (const b of islands) {
       if (!inBox(b, x, z)) continue;
       const sd = signedDistance(x, z, b.item.outline);
-      if (sd < 12) islandH = Math.max(islandH, b.item.elevation - smooth(-6, 12, sd) * 6);
+      if (sd < 4.5) islandH = Math.max(islandH, b.item.elevation - smooth(1.2, 4.5, sd) * 9);
     }
-    // River channel carves down.
-    for (const b of rivers) {
-      if (!inBox(b, x, z)) continue;
+    // 2. The channel itself always wins over hill slopes: where a hill reaches the river the
+    //    water cuts a steep bank into it (the Aventine's river cliff). Then the stone quays.
+    const natural = h;
+    for (let ri = 0; ri < rivers.length; ri++) {
+      const ft = feet[ri];
+      if (!ft) continue;
+      const b = rivers[ri];
       const r = b.item;
-      const n = polylineNearest(x, z, r.centerline);
-      const w0 = r.width[n.i] ?? r.width[r.width.length - 1];
-      const w1 = r.width[n.i + 1] ?? w0;
-      const half = (w0 + (w1 - w0) * n.t) / 2;
-      const bed = r.waterLevel - 4;
-      let profile: number;
-      if (n.d < half - 8) profile = bed;
-      else if (n.d < half) profile = bed + (r.waterLevel + 0.4 - bed) * smooth(half - 8, half, n.d);
-      else profile = r.waterLevel + 0.4 + Math.max(0, r.bankHeight - r.waterLevel - 0.4) * smooth(half, half + 30, n.d) + (n.d - half) * 0.02;
-      if (profile < h) h = profile;
+      const { f, half } = ft;
+      const cut = r.kind === 'canal' ? canalProfile(r, f.d, half) : channelProfile(r, f.d, half);
+      if (cut < h) h = cut;
+      for (const q of b.quays) {
+        const k = quayInfluence(q, f.s, f.side);
+        if (k <= 0) continue;
+        h += (quayProfile(r, f.d, half, q.quay.top, q.quay.width ?? 12, natural) - h) * k;
+        // Built quays are flat: no ground noise on them.
+        if (f.d < half + (q.quay.width ?? 12) + 25) smoothK = Math.min(smoothK, 1 - k);
+      }
     }
     if (islandH > h) h = islandH;
     // Fine noise: a little on flats, more on hill slopes.
-    if (noiseAmp > 0) h += fbm(x, z, seed) * noiseAmp * (0.4 + hillFactor * 1.2);
+    if (noiseAmp > 0 && smoothK > 0) h += fbm(x, z, seed) * noiseAmp * (0.4 + hillFactor * 1.2) * smoothK;
     return h;
   };
+}
+
+export interface HeightmapFeatures {
+  roads: readonly TerrainRoad[];
+  pads: readonly TerrainPad[];
+  rivers: readonly TerrainRiver[];
+  islands: readonly TerrainIsland[];
+  quays: readonly TerrainQuay[];
 }
 
 export class Heightmap {
@@ -274,6 +440,11 @@ export class Heightmap {
   readonly padMask: Float32Array;
   /** Water level in game y of the main river (for water rendering). */
   waterLevelY = 0;
+  /**
+   * The vector features the grid was built from (REAL meters, atlas frame), kept for the terrain
+   * renderer (crisp road / pad edges, surfaces) and the water module. Null for hand-made grids.
+   */
+  features: HeightmapFeatures | null = null;
 
   constructor(minX: number, minZ: number, spacing: number, nx: number, nz: number) {
     this.minX = minX;
@@ -349,7 +520,8 @@ export function buildHeightmap(src: TerrainSource, opts: HeightmapOptions = {}):
   const nx = Math.floor((b.maxX - b.minX) * S / spacing) + 1;
   const nz = Math.floor((b.maxZ - b.minZ) * S / spacing) + 1;
   const hm = new Heightmap(minX, minZ, spacing, nx, nz);
-  const natural = makeNaturalElevation(src, { noise: opts.noise, seed: opts.seed });
+  const quays = opts.quays ?? TIBER_QUAYS;
+  const natural = makeNaturalElevation(src, { noise: opts.noise, seed: opts.seed, quays });
 
   // 1. Natural terrain (real meters).
   const real = new Float32Array(nx * nz);
@@ -400,26 +572,53 @@ export function buildHeightmap(src: TerrainSource, opts: HeightmapOptions = {}):
       }
       return s / c;
     });
-    const line: P2[] = pts.map((p) => [p[0], p[1]] as const);
     const half = road.width / 2;
     const reach = half + 6;
-    const rb = bbox(null, line, reach);
+    // Stamp segment by segment (nearest segment wins), then blend: much cheaper than a nearest-
+    // point search over the whole polyline for every sample in the road's bounding box.
+    const rb = bbox(null, pts.map((p) => [p[0], p[1]] as const), reach);
     const ix0 = Math.max(0, Math.floor((rb.minX * S - minX) / spacing));
     const ix1 = Math.min(nx - 1, Math.ceil((rb.maxX * S - minX) / spacing));
     const iz0 = Math.max(0, Math.floor((rb.minZ * S - minZ) / spacing));
     const iz1 = Math.min(nz - 1, Math.ceil((rb.maxZ * S - minZ) / spacing));
+    if (ix0 > ix1 || iz0 > iz1) continue;
+    const bw = ix1 - ix0 + 1;
+    const bestD = new Float32Array(bw * (iz1 - iz0 + 1)).fill(Infinity);
+    const bestT = new Float32Array(bestD.length);
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [ax, az] = pts[i];
+      const [bx, bz] = pts[i + 1];
+      const dx = bx - ax, dz = bz - az;
+      const l2 = dx * dx + dz * dz;
+      const jx0 = Math.max(ix0, Math.floor(((Math.min(ax, bx) - reach) * S - minX) / spacing));
+      const jx1 = Math.min(ix1, Math.ceil(((Math.max(ax, bx) + reach) * S - minX) / spacing));
+      const jz0 = Math.max(iz0, Math.floor(((Math.min(az, bz) - reach) * S - minZ) / spacing));
+      const jz1 = Math.min(iz1, Math.ceil(((Math.max(az, bz) + reach) * S - minZ) / spacing));
+      for (let iz = jz0; iz <= jz1; iz++) {
+        const z = (minZ + iz * spacing) / S;
+        for (let ix = jx0; ix <= jx1; ix++) {
+          const x = (minX + ix * spacing) / S;
+          let t = l2 > 0 ? ((x - ax) * dx + (z - az) * dz) / l2 : 0;
+          t = t < 0 ? 0 : t > 1 ? 1 : t;
+          const ex = ax + dx * t - x, ez = az + dz * t - z;
+          const d = Math.sqrt(ex * ex + ez * ez);
+          const q = (iz - iz0) * bw + (ix - ix0);
+          if (d < bestD[q]) {
+            bestD[q] = d;
+            bestT[q] = prof[i] + (prof[i + 1] - prof[i]) * t;
+          }
+        }
+      }
+    }
     for (let iz = iz0; iz <= iz1; iz++) {
-      const z = (minZ + iz * spacing) / S;
       for (let ix = ix0; ix <= ix1; ix++) {
-        const x = (minX + ix * spacing) / S;
-        const n = polylineNearest(x, z, line);
-        if (n.d > reach) continue;
-        const target = prof[n.i] + ((prof[n.i + 1] ?? prof[n.i]) - prof[n.i]) * n.t;
-        const w = 1 - smooth(half, reach, n.d);
+        const q = (iz - iz0) * bw + (ix - ix0);
+        const d = bestD[q];
+        if (d > reach) continue;
+        const w = 1 - smooth(half, reach, d);
         const k = iz * nx + ix;
-        // Don't raise roads out of the river: only level where the ground is above water.
-        out[k] = out[k] + (target - out[k]) * w;
-        const m = 1 - smooth(half - 0.5, half + 1.5, n.d);
+        out[k] = out[k] + (bestT[q] - out[k]) * w;
+        const m = 1 - smooth(half - 0.5, half + 1.5, d);
         if (m > hm.roadMask[k]) hm.roadMask[k] = m;
       }
     }
@@ -468,6 +667,13 @@ export function buildHeightmap(src: TerrainSource, opts: HeightmapOptions = {}):
   for (let k = 0; k < out.length; k++) hm.heights[k] = out[k] * S;
   const river = src.RIVERS[0];
   hm.waterLevelY = river ? river.waterLevel * S : -Infinity;
+  hm.features = {
+    roads,
+    pads: (opts.pads ?? []).filter((p) => p.polygon.length >= 3),
+    rivers: src.RIVERS,
+    islands: src.ISLANDS,
+    quays: quays.filter((q) => src.RIVERS.some((r) => r.id === q.river)),
+  };
   return hm;
 }
 

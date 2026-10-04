@@ -10,6 +10,7 @@ import { NavList } from '../nav';
 
 type Key = keyof SettingsData;
 
+export type SettingsRow = Row;
 type Row =
   | { kind: 'slider'; key: Key; label: string; min: number; max: number; step: number; format: (v: number) => string; note?: string; live?: (ui: UIManager) => string }
   | { kind: 'toggle'; key: Key; label: string; note?: string; invert?: boolean }
@@ -18,7 +19,8 @@ type Row =
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 
-const SECTIONS: { id: string; label: string; latin: string; rows: Row[] }[] = [
+/** The sections and rows; other modules may add a section or rows before the screen opens. */
+export const SETTINGS_SECTIONS: { id: string; label: string; latin: string; rows: Row[] }[] = [
   {
     id: 'display',
     label: 'Display',
@@ -133,12 +135,12 @@ export class SettingsScreen extends BaseModal {
   }
 
   private setSection(i: number) {
-    this.section = (i + SECTIONS.length) % SECTIONS.length;
+    this.section = (i + SETTINGS_SECTIONS.length) % SETTINGS_SECTIONS.length;
     setChildren(
       this.tabsEl,
-      SECTIONS.map((s, k) => h('div', { class: `sr-tab${k === this.section ? ' is-active' : ''}`, on: { click: () => this.setSection(k) } }, s.label)),
+      SETTINGS_SECTIONS.map((s, k) => h('div', { class: `sr-tab${k === this.section ? ' is-active' : ''}`, on: { click: () => this.setSection(k) } }, s.label)),
     );
-    this.rows = SECTIONS[this.section].rows;
+    this.rows = SETTINGS_SECTIONS[this.section].rows;
     const els = this.rows.map((r) => this.buildRow(r));
     setChildren(this.bodyEl, els);
     this.nav.index = 0;
@@ -247,7 +249,7 @@ export class SettingsScreen extends BaseModal {
       const def = (DEFAULT_SETTINGS as Partial<SettingsData>)[r.key];
       s.set(r.key, def as never);
     }
-    this.ui.flash(`${SECTIONS[this.section].label} reset to defaults`);
+    this.ui.flash(`${SETTINGS_SECTIONS[this.section].label} reset to defaults`);
   }
 
   onKey(e: KeyboardEvent) {

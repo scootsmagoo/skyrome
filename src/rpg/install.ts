@@ -28,6 +28,7 @@ import type { SaveStorage } from '../save/types';
 import { LocationRegistry } from '../world/locations';
 import { BarterSystem } from './barter';
 import { persuasionPoints } from './checks';
+import { skippedSeconds, skipTime } from './clock';
 import { CrimeSystem } from './crime';
 import { FACTIONS } from './data/factions';
 import { ITEMS } from './data/items';
@@ -86,6 +87,8 @@ export interface RpgServices {
   dialogue: DialogueSystem;
   save: SaveSystem;
   hooks: RpgHooks;
+  /** Skip game time (a calendar "Wait until…", scripted jumps): every timer advances with it (§14.10). */
+  skipHours(hours: number): void;
 }
 
 export interface NewGameOptions {
@@ -212,7 +215,7 @@ export function installRpg(game: Game, opts: RpgOptions = {}): RpgServices {
   reg('barter', barter);
   reg('quests', quests);
   reg('dialogue', dialogue);
-  reg('locations', locations);
+  save.register('locations', { save: () => locations.serialize(), load: (d) => locations.restore(d), reset: () => locations.reset() });
 
   game.addSystem(locations);
   game.addSystem(save);
@@ -239,6 +242,8 @@ export function installRpg(game: Game, opts: RpgOptions = {}): RpgServices {
   events.on('crime:sentenced', () => {
     standing.branded = true;
   });
+  // Skipped time (sleep or wait, the baths, the Carcer, "Wait until…") runs timed effects forward (§14.10).
+  events.on('time:skipped', (e) => sheet.skipTime(skippedSeconds(e.hours, game.time?.timeScale)));
   // Cleanliness (§14.8) shows as a condition: lautus (+10% stamina regeneration) or sordidus.
   events.on('standing:cleanliness', (e) => syncCleanliness(sheet, e.cleanliness));
   // Disposition toward the player also counts in barter (origin traits, what happened in dialogue).
@@ -246,7 +251,8 @@ export function installRpg(game: Game, opts: RpgOptions = {}): RpgServices {
   // A gladiatrix wins the crowd 25% faster (§3.7): arena.favor follows the player's sex.
   events.on('standing:changed', () => applySex(sheet, standing.sex));
 
-  const services: RpgServices = { items, sheet, inventory, factions, standing, devotion, crime, barter, npcs, locations, quests, dialogue, save, hooks };
+  const skipHours = (hours: number) => skipTime(game.time, events, hours);
+  const services: RpgServices = { items, sheet, inventory, factions, standing, devotion, crime, barter, npcs, locations, quests, dialogue, save, hooks, skipHours };
   game.rpg = services;
   if (opts.newGame !== false) startNewGame(services, { background: opts.background, sex: opts.sex, extra: opts.extra });
   return services;
@@ -294,20 +300,15 @@ export function updateArmorPenalty(sheet: CharacterSheetImpl, inv: InventoryImpl
 }
 
 /**
- * Reset the player and world state for a new game and start autoStart quests. With an origin
+ * Reset the player and world state for a new game (every saveable: the sheet, inventory, society,
+ * quests and dialogue, but also the clock, play time, discovered places, world deltas and other
+ * modules' state) and start autoStart quests. With an origin
  * (GDD §3.2): skills 10 + bonuses, legal status, trait, kit (signature weapon at 90%), formal dress
  * by sex in the pack, the creation extra, coin, and the common kit of §3.5. Without one: a plain
  * citizen with a tunic and 10 den.
  */
 export function startNewGame(s: RpgServices, opts: NewGameOptions = {}) {
-  s.sheet.restore(undefined);
-  s.inventory.restore(undefined);
-  s.factions.restore(undefined);
-  s.standing.restore(undefined);
-  s.devotion.restore(undefined);
-  s.crime.restore(undefined);
-  s.barter.restore(undefined);
-  s.dialogue.restore(undefined);
+  s.save.resetAll();
   s.standing.sex = opts.sex === 'female' ? 'female' : 'male';
   applySex(s.sheet, s.standing.sex);
   const bg = originDef(opts.background);

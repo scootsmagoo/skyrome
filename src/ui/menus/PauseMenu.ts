@@ -7,12 +7,16 @@ import { spqrCrest } from '../motifs';
 import { NavList } from '../nav';
 import './menus.css';
 
-interface Item {
+export interface PauseItem {
   label: string;
   latin: string;
   run: () => void;
   enabled?: () => boolean;
 }
+type Item = PauseItem;
+
+/** Extra entries other modules add after Save/Load (e.g. Quicksave / Quickload, GDD §4.2). */
+export const PAUSE_EXTRA_ITEMS: ((ui: UIManager, menu: PauseMenu) => PauseItem)[] = [];
 
 export class PauseMenu extends BaseModal {
   readonly id = 'pause';
@@ -32,6 +36,7 @@ export class PauseMenu extends BaseModal {
       { label: 'Resume', latin: 'Perge', run: () => this.close() },
       { label: 'Save', latin: 'Serva', run: () => ui.openSaves('save'), enabled: canSave },
       { label: 'Load', latin: 'Repete', run: () => ui.openSaves('load'), enabled: saves },
+      ...PAUSE_EXTRA_ITEMS.map((f) => f(ui, this)),
       { label: 'Settings', latin: 'Optiones', run: () => ui.openSettings() },
       { label: 'Controls', latin: 'Moderamina', run: () => ui.openControls() },
       { label: 'Credits', latin: 'Gratiae', run: () => ui.openCredits() },

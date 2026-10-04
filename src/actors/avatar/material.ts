@@ -168,7 +168,11 @@ export function avatarMaterial(): THREE.MeshStandardMaterial {
   return m;
 }
 
-/** Additive flickering flame (torches). Animate with `flameMaterial().uniforms.time.value`. */
+/**
+ * Additive flickering flame (torches). The flame is built in WORLD axes at its mesh's origin, so it
+ * burns upward however the torch is tilted. `time` is absolute (see `syncFlameClock`), so any number
+ * of torches flicker at the same rate.
+ */
 export function flameMaterial(): THREE.ShaderMaterial {
   if (flame) return flame;
   flame = new THREE.ShaderMaterial({
@@ -191,7 +195,9 @@ export function flameMaterial(): THREE.ShaderMaterial {
         p.x += sin(time * 9.0 + seed * 6.0 + uv.y * 5.0) * 0.012 * k;
         p.z += cos(time * 7.0 + seed * 4.0 + uv.y * 4.0) * 0.012 * k;
         p.y *= 0.9 + 0.15 * sin(time * 13.0 + seed * 3.0);
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+        vec3 origin = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+        float sc = length(modelMatrix[1].xyz);
+        gl_Position = projectionMatrix * viewMatrix * vec4(origin + p * sc, 1.0);
       }`,
     fragmentShader: /* glsl */ `
       uniform float time;
@@ -207,4 +213,9 @@ export function flameMaterial(): THREE.ShaderMaterial {
       }`,
   });
   return flame;
+}
+
+/** Flicker clock in seconds (half speed), from wall time: idempotent, so every flame may call it. */
+export function syncFlameClock(now = performance.now()) {
+  flameMaterial().uniforms.time.value = now * 0.0005;
 }

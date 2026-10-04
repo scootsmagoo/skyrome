@@ -16,6 +16,11 @@ const LABELS: Record<AnyAction, string> = {
   forward: 'Move forward', back: 'Move back', left: 'Strafe left', right: 'Strafe right',
   jump: 'Jump', sprint: 'Sprint (hold)', walkToggle: 'Walk / run', sneak: 'Sneak',
   attack: 'Attack', block: 'Block', readyWeapon: 'Ready weapon', interact: 'Interact',
+  dodge: 'Dodge', parry: 'Parry (optional)', lockOn: 'Lock on (tap) · release (hold)', yield: 'Yield (hold)',
+  invoke: 'Invoke your patron god', quickWheel: 'Quick items',
+  hotbar1: 'Hotbar 1', hotbar2: 'Hotbar 2', hotbar3: 'Hotbar 3', hotbar4: 'Hotbar 4',
+  hotbar5: 'Hotbar 5', hotbar6: 'Hotbar 6', hotbar7: 'Hotbar 7', hotbar8: 'Hotbar 8',
+  shoulderSwap: 'Swap camera shoulder',
   toggleView: 'First / third person', lookLeft: 'Turn left', lookRight: 'Turn right', lookUp: 'Look up', lookDown: 'Look down',
   zoomIn: 'Camera closer', zoomOut: 'Camera farther', menu: 'Character menu', inventory: 'Inventory',
   journal: 'Journal', map: 'Map', skills: 'Skills', pause: 'Pause menu', quickSave: 'Quick save', quickLoad: 'Quick load',
@@ -24,9 +29,10 @@ const LABELS: Record<AnyAction, string> = {
 
 const GROUPS: { title: string; latin: string; actions: AnyAction[] }[] = [
   { title: 'Movement', latin: 'Iter', actions: ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'walkToggle', 'sneak'] },
-  { title: 'Combat', latin: 'Pugna', actions: ['attack', 'block', 'readyWeapon'] },
-  { title: 'Camera', latin: 'Conspectus', actions: ['lookLeft', 'lookRight', 'lookUp', 'lookDown', 'zoomIn', 'zoomOut', 'toggleView'] },
-  { title: 'Actions & menus', latin: 'Res', actions: ['interact', 'menu', 'inventory', 'journal', 'map', 'skills', 'wait', 'clock', 'quickSave', 'quickLoad', 'pause', 'debug'] },
+  { title: 'Combat', latin: 'Pugna', actions: ['attack', 'block', 'dodge', 'parry', 'lockOn', 'readyWeapon', 'yield', 'invoke'] },
+  { title: 'Camera', latin: 'Conspectus', actions: ['lookLeft', 'lookRight', 'lookUp', 'lookDown', 'zoomIn', 'zoomOut', 'toggleView', 'shoulderSwap'] },
+  { title: 'Actions & menus', latin: 'Res', actions: ['interact', 'quickWheel', 'menu', 'inventory', 'journal', 'map', 'skills', 'wait', 'clock', 'quickSave', 'quickLoad', 'pause', 'debug'] },
+  { title: 'Hotbar', latin: 'Promptuarium', actions: ['hotbar1', 'hotbar2', 'hotbar3', 'hotbar4', 'hotbar5', 'hotbar6', 'hotbar7', 'hotbar8'] },
 ];
 
 const LOCKED = new Set<AnyAction>(['pause']);

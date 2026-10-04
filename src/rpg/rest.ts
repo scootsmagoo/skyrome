@@ -2,8 +2,9 @@
  * Rest, baths and cleanliness — docs/GDD.md §14.8.
  *
  *   sleep / wait (T): 1–24 game hours; not while in combat or trespassing. Sleep restores all
- *     health and stamina; your own bed gives `bene-quietus` (+10% skill XP for 8 game hours), a
- *     rented bed `quietus` (+5%). Both ask for an autosave ('save:request', §14.13).
+ *     health and stamina and cures `injured`; your own bed gives `bene-quietus` (+10% skill XP for
+ *     8 game hours), a rented bed `quietus` (+5%). Both ask for an autosave ('save:request', §14.13).
+ *     Every jump goes through skipTime() (clock.ts), so timed effects run forward with it (§14.10).
  *   baths: 1 quadrans, 1 game hour → `lautus` for 12 game hours (+10 persuasion, +10% stamina
  *     regeneration) and no more `sordidus`; a massage (2 as.) restores stamina; tip the capsarius
  *     (1 as.) or there is a 15% chance your outer garment is stolen.
@@ -11,6 +12,7 @@
  *   fast travel (§14.12): not in combat, over-encumbered or trespassing.
  */
 import type { EventBus, GameEvents } from '../core/Events';
+import { skipTime } from './clock';
 import type { InventoryImpl } from './inventory';
 import type { CharacterSheetImpl } from './sheet';
 import type { Standing } from './standing';
@@ -45,8 +47,10 @@ export function sleep(d: RestDeps, hours: number, bed: Bed = 'none'): { ok: bool
   const why = restBlocker(d);
   if (why) return { ok: false, hours: 0, reason: why };
   const h = Math.max(1, Math.min(REST.maxHours, Math.round(hours)));
-  d.time?.advanceHours(h);
+  skipTime(d.time, d.events, h);
   if (bed !== 'none') {
+    // Rest cures an injury (§14.9); the injury's −20% max health goes before health is refilled.
+    d.sheet.cure('injury:injured');
     const v = d.sheet.vitals;
     v.restore('health', v.health.max);
     v.restore('stamina', v.stamina.max);
@@ -66,7 +70,7 @@ export function bathe(d: RestDeps, opts: { massage?: boolean; tip?: boolean; rng
   const B = REST.bath;
   const cost = B.fee + (opts.massage ? B.massage : 0) + (opts.tip ? B.tip : 0);
   if (d.inventory && !d.inventory.spendDenarii(cost)) return { ok: false, cost, reason: 'no-money' };
-  d.time?.advanceHours(B.hours);
+  skipTime(d.time, d.events, B.hours);
   d.standing?.setCleanliness('lautus');
   if (opts.massage) d.sheet.vitals.restore('stamina', d.sheet.vitals.stamina.max);
   let stolen: string | undefined;
