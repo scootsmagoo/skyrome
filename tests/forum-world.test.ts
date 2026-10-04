@@ -228,4 +228,19 @@ describe('the golden path on the real terrain', () => {
     const [ex, ez] = G(340, 180);
     expect(Math.hypot(r.x - ex, r.z - ez), ends.join(' ')).toBeLessThan(2.5);
   }, 120_000);
+
+  it('walks in from the street to the vendors of the Horrea Agrippiana\'s tabernae', () => {
+    for (const i of [0, 3, 4]) {
+      const sp = worldSpots('horrea-agrippiana').find((x) => x.id === `horrea-agrippiana-taberna-${i}`)!;
+      expect(sp, `taberna ${i}`).toBeDefined();
+      // the vendor faces the street: start 3.2 m out in front of him, on the walk, and walk to him
+      const out = new THREE.Vector3(Math.sin(sp.heading!), 0, Math.cos(sp.heading!));
+      const sx = sp.position.x + out.x * 3.4;
+      const sz = sp.position.z + out.z * 3.4;
+      const start = new THREE.Vector3(sx, hm.heightAt(sx, sz) + 0.45, sz);
+      const r = walk(world, start, [{ to: [sp.position.x, sp.position.z], seconds: 8, reach: 0.5 }]);
+      // (a vendor behind his counter is reached across it: within a counter's width)
+      expect(Math.hypot(r.x - sp.position.x, r.z - sp.position.z), `taberna ${i}`).toBeLessThan(1.6);
+    }
+  }, 60_000);
 });
