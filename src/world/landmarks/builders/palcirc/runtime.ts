@@ -197,7 +197,7 @@ export class InstanceLod {
     const meshes = group.children.filter((c): c is THREE.InstancedMesh => (c as THREE.InstancedMesh).isInstancedMesh);
     if (!meshes.length) return;
     this.sets.push({ meshes, mats, pos: mats.map((m) => new THREE.Vector3().setFromMatrixPosition(m)), near: mode === 'near' });
-    if (mode === 'far') for (const m of meshes) m.count = 0;
+    if (mode === 'far') for (const m of meshes) { m.count = 0; m.visible = false; }
   }
 
   /** Re-selects the instances for a camera at `cam` (local frame); cheap no-op if it barely moved. */
@@ -214,6 +214,7 @@ export class InstanceLod {
       }
       for (const m of s.meshes) {
         m.count = k;
+        m.visible = k > 0; // empty InstancedMeshes still cost a program bind each
         m.instanceMatrix.needsUpdate = true;
       }
     }

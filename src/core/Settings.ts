@@ -21,6 +21,11 @@ export interface SettingsData {
   showFps: boolean;
   /** Bigger HUD text. */
   uiScale: number;
+  /**
+   * Frame-rate cap (frames per second; 0 = as fast as the display refreshes). A MacBook's 120 Hz
+   * display would otherwise draw every frame twice as often for no visible gain — and run hot.
+   */
+  maxFps: number;
 }
 
 export const DEFAULT_SETTINGS: SettingsData = {
@@ -39,6 +44,7 @@ export const DEFAULT_SETTINGS: SettingsData = {
   latinNames: true,
   showFps: false,
   uiScale: 1,
+  maxFps: 60,
 };
 
 const KEY = 'skyrome.settings.v1';

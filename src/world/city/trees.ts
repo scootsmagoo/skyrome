@@ -136,6 +136,7 @@ export class TreeLayer {
     m.castShadow = shadow;
     m.receiveShadow = true;
     m.count = 0;
+    m.visible = false; // hidden while empty (see Forest.mesh)
     m.frustumCulled = false;
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     if (part.heads) {
@@ -228,10 +229,12 @@ export class TreeLayer {
     for (const b of this.batches) {
       for (const m of b.near) {
         m.count = b.nNear;
+        m.visible = b.nNear > 0;
         m.instanceMatrix.needsUpdate = true;
       }
       for (const m of b.far) {
         m.count = b.nFar;
+        m.visible = b.nFar > 0;
         m.instanceMatrix.needsUpdate = true;
       }
       this.nearCount += b.nNear;

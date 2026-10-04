@@ -92,6 +92,9 @@ export class Forest {
     m.castShadow = shadow;
     m.receiveShadow = true;
     m.count = 0;
+    // Hidden while empty: three still binds the program and uploads uniforms for an empty
+    // InstancedMesh before skipping the draw (~1,300 of them at once across the city's forests).
+    m.visible = false;
     if (part.heads) m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3).fill(1), 3);
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     return m;
@@ -140,12 +143,16 @@ export class Forest {
         }
       }
       for (const m of b.near) {
+        if (!ni && !m.count) continue; // stays empty: nothing to upload
         m.count = ni;
+        m.visible = ni > 0;
         m.instanceMatrix.needsUpdate = true;
         if (m.instanceColor) m.instanceColor.needsUpdate = true;
       }
       for (const m of b.far) {
+        if (!fi && !m.count) continue;
         m.count = fi;
+        m.visible = fi > 0;
         m.instanceMatrix.needsUpdate = true;
       }
       this.nearCount += ni;

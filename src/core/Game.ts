@@ -73,6 +73,9 @@ export class Game {
   renderFrame: () => void = () => this.renderer.render(this.scene, this.camera);
 
   private systems: System[] = [];
+  /** Per-system CPU timing (ms per frame, smoothed). Off unless `profiling` is set (dev overlay, perf runs). */
+  profiling = false;
+  readonly profile = new Map<string, number>();
   private running = false;
   private accumulator = 0;
   private lastTime = 0;
@@ -80,6 +83,11 @@ export class Game {
   private fpsFrames = 0;
   private rafId = 0;
   private lastRenderAt = 0;
+  /** `?fps=N` overrides the frame-rate setting for this page load (0 = uncapped; perf runs). */
+  private readonly fpsOverride = (() => {
+    const v = new URLSearchParams(location.search).get('fps');
+    return v !== null && Number.isFinite(+v) ? +v : undefined;
+  })();
 
   static async create(container: HTMLElement, opts: { seed?: number } = {}): Promise<Game> {
     await initPhysics();
@@ -147,8 +155,12 @@ export class Game {
       // at ~30 fps. Keeps an idle tab from heating the machine. Automation (navigator.webdriver)
       // always runs at full rate so headless screenshots and tests are unaffected.
       const idle = this.isIdle();
-      const minGap = idle ? 500 : this.paused ? 32 : 0;
-      if (minGap && now - this.lastRenderAt < minGap) return;
+      // Frame cap (settings.maxFps): skip display refreshes beyond it. The 1.5 ms slack keeps a
+      // 60 fps cap on a 120 Hz display at every other refresh despite rAF jitter.
+      const cap = this.fpsOverride ?? this.settings.data.maxFps;
+      const capGap = cap > 0 ? 1000 / cap - 1.5 : 0;
+      const minGap = idle ? 500 : this.paused ? Math.max(32, capGap) : capGap;
+      if (minGap > 0 && now - this.lastRenderAt < minGap) return;
       this.lastRenderAt = now;
       if (idle) {
         this.lastTime = now; // no simulated time passes while idle
@@ -207,23 +219,47 @@ export class Game {
     }
 
     const simDt = this.paused ? 0 : dt * this.timeScale;
+    const prof = this.profiling;
+    const tick = prof ? new Map<string, number>() : null;
+    const time = (name: string, t0: number) => tick!.set(name, (tick!.get(name) ?? 0) + performance.now() - t0);
     if (!this.paused) {
       this.time.tick(simDt);
       this.accumulator += simDt;
       let steps = 0;
       while (this.accumulator >= FIXED_DT && steps < MAX_SUBSTEPS) {
-        for (const s of this.systems) s.fixedUpdate?.(FIXED_DT);
+        for (const s of this.systems) {
+          if (!s.fixedUpdate) continue;
+          if (!prof) s.fixedUpdate(FIXED_DT);
+          else { const t0 = performance.now(); s.fixedUpdate(FIXED_DT); time(s.name, t0); }
+        }
+        const tp = prof ? performance.now() : 0;
         this.physics.step(FIXED_DT);
+        if (prof) time('(physics)', tp);
         this.accumulator -= FIXED_DT;
         steps++;
       }
       if (steps === MAX_SUBSTEPS) this.accumulator = 0;
     }
     const alpha = this.paused ? 1 : this.accumulator / FIXED_DT;
-    for (const s of this.systems) if (!this.paused) s.update?.(simDt, alpha);
-    for (const s of this.systems) s.lateUpdate?.(dt);
+    for (const s of this.systems) {
+      if (this.paused || !s.update) continue;
+      if (!prof) s.update(simDt, alpha);
+      else { const t0 = performance.now(); s.update(simDt, alpha); time(s.name, t0); }
+    }
+    for (const s of this.systems) {
+      if (!s.lateUpdate) continue;
+      if (!prof) s.lateUpdate(dt);
+      else { const t0 = performance.now(); s.lateUpdate(dt); time(s.name, t0); }
+    }
 
+    const tr = prof ? performance.now() : 0;
     this.renderFrame();
+    if (prof) {
+      time('(render submit)', tr);
+      // Exponential smoothing per entry; entries not seen this frame decay toward zero.
+      for (const [k, v] of this.profile) if (!tick!.has(k)) this.profile.set(k, v * 0.9);
+      for (const [k, v] of tick!) this.profile.set(k, (this.profile.get(k) ?? v) * 0.9 + v * 0.1);
+    }
     const info = this.renderer.info;
     this.stats.drawCalls = info.render.calls;
     this.stats.triangles = info.render.triangles;

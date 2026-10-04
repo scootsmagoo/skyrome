@@ -6,6 +6,7 @@ import { bearingToRotationY } from '../../core/math';
 import { MeshBuilder, registerColliders } from '../../gfx/MeshBuilder';
 import { WORLD_SCALE, toGame } from '../coords';
 import type { Heightmap } from '../terrain/heightmap';
+import { LANDMARK_DETAIL_DISTANCE, bakeLandmarkFar } from './farBake';
 import { builderFor } from './registry';
 import type { LandmarkData, Spot } from './types';
 
@@ -83,15 +84,31 @@ export async function buildLandmarks(
       obj.rotation.y = rotY;
       obj.updateMatrixWorld(true);
       registerColliders(game, built.colliders, obj.matrixWorld, { landmarkId: lm.id });
-      game.world.add(`landmark:${lm.id}`, obj, {
-        cullDistance: built.cullDistance ?? (lm.height * WORLD_SCALE > 20 ? 1600 : 700),
-        far: built.far,
-        farDistance: built.far ? 3000 : undefined,
-      });
-      if (built.far) {
-        built.far.position.copy(obj.position);
-        built.far.rotation.y = rotY;
+      const cull = built.cullDistance ?? (lm.height * WORLD_SCALE > 20 ? 1600 : 700);
+      // Tree groves keep their own range (they have their own near/far LOD); the landmark itself
+      // switches to a one-draw baked stand-in beyond LANDMARK_DETAIL_DISTANCE (see farBake.ts).
+      const groves: THREE.Object3D[] = [];
+      obj.traverse((o) => { if (o !== obj && isGrove(o)) groves.push(o); });
+      const bake = cull > LANDMARK_DETAIL_DISTANCE ? bakeLandmarkFar(built.far ?? obj, isGrove) : null;
+      let far = built.far;
+      if (bake) {
+        if (built.far) built.far.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
+        far = bake.mesh;
+        far.name = `landmark:${lm.id}:far`;
+        for (const [i, g] of groves.entries()) {
+          game.scene.attach(g);
+          game.world.add(`landmark:${lm.id}:grove:${i}`, g, { cullDistance: cull });
+        }
       }
+      if (far) {
+        far.position.copy(obj.position);
+        far.rotation.y = rotY;
+      }
+      game.world.add(`landmark:${lm.id}`, obj, {
+        cullDistance: bake ? LANDMARK_DETAIL_DISTANCE : cull,
+        far,
+        farDistance: built.far ? 3000 : bake ? cull : undefined,
+      });
       const spots = (built.spots ?? []).map((s) => ({ ...s, position: s.position.clone().applyMatrix4(obj.matrixWorld), heading: (s.heading ?? 0) + rotY }));
       placed.set(lm.id, { lm, object: obj, position: obj.position.clone(), rotationY: rotY, spots, builder: builder.handles[0] });
     } catch (err) {
@@ -102,4 +119,9 @@ export async function buildLandmarks(
     if (i % 8 === 0) await new Promise((r) => setTimeout(r, 0));
   }
   return placed;
+}
+
+/** A vegetation Forest's group (arch/vegetation/Forest.ts names it 'forest'). */
+function isGrove(o: THREE.Object3D): boolean {
+  return o.name === 'forest';
 }

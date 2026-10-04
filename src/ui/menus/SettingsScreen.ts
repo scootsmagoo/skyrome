@@ -27,6 +27,11 @@ export const SETTINGS_SECTIONS: { id: string; label: string; latin: string; rows
     latin: 'Species',
     rows: [
       { kind: 'slider', key: 'fov', label: 'Field of view', min: 55, max: 100, step: 1, format: (v) => `${v}°` },
+      {
+        kind: 'choice', key: 'maxFps', label: 'Frame rate limit',
+        options: [{ value: 30, label: '30 fps' }, { value: 60, label: '60 fps' }, { value: 0, label: 'Unlimited' }],
+        note: '30 runs cooler and quieter; Unlimited runs hot on 120 Hz screens',
+      },
       { kind: 'slider', key: 'renderScale', label: 'Render scale', min: 0.5, max: 1, step: 0.05, format: pct, note: 'Lower is faster' },
       { kind: 'slider', key: 'maxPixelRatio', label: 'Sharpness (pixel ratio cap)', min: 1, max: 2, step: 0.25, format: (v) => `${v.toFixed(2)}×` },
       { kind: 'choice', key: 'shadows', label: 'Shadows', options: [{ value: 'off', label: 'Off' }, { value: 'low', label: 'Low' }, { value: 'high', label: 'High' }] },

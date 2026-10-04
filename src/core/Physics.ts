@@ -51,6 +51,14 @@ export interface CharacterBody {
   halfHeight: number;
 }
 
+/** The rapier.js 0.21 World fields its step() passes to the physics pipeline. */
+interface RawStepWorld {
+  physicsPipeline?: { step: (...args: unknown[]) => void };
+  gravity: unknown; integrationParameters: unknown; islands: unknown; broadPhase: unknown;
+  narrowPhase: unknown; bodies: unknown; colliders: unknown; softBodies: unknown;
+  impulseJoints: unknown; multibodyJoints: unknown; ccdSolver: unknown;
+}
+
 const tmpQ = new THREE.Quaternion();
 const tmpE = new THREE.Euler();
 
@@ -64,7 +72,18 @@ export class Physics {
 
   step(dt: number) {
     this.world.timestep = dt;
-    this.world.step();
+    // rapier.js's World.step() ends by re-syncing its JS handle maps: it walks every collider and
+    // body across the WASM boundary, ~2 ms a step with the city's ~40k static colliders (the
+    // physics itself takes ~0.02 ms). Colliders and bodies are only ever created and removed
+    // through the World API here, which keeps those maps in sync itself, so step the pipeline
+    // directly. Falls back to the full step if a rapier upgrade changes these internals.
+    const w = this.world as unknown as RawStepWorld;
+    if (w.physicsPipeline?.step && 'softBodies' in w) {
+      w.physicsPipeline.step(
+        w.gravity, w.integrationParameters, w.islands, w.broadPhase, w.narrowPhase, w.bodies,
+        w.colliders, w.softBodies, w.impulseJoints, w.multibodyJoints, w.ccdSolver, undefined, undefined,
+      );
+    } else this.world.step();
   }
 
   setOwner(collider: RAPIER.Collider, owner: unknown) {
