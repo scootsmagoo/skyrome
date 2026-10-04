@@ -24,6 +24,7 @@ import { CreationScreen } from './CreationScreen';
 import { CreationStage } from './CreationStage';
 import { PlayerLook } from './PlayerLook';
 import { allSightings, DiscoverySpotter } from './discovery';
+import { QuickActions } from './quickActions';
 import { FirstStepsGuide, GUIDE_STEPS } from './guide';
 import { PresetPicker } from './PresetPicker';
 import { controlState, guessPreset, presetValues, settingsFixups, type ControlPreset } from './settings';
@@ -155,6 +156,8 @@ export class GameFlow implements System {
       ),
     );
     game.addSystem(new DiscoverySpotter(game, allSightings(), playing));
+    // Z invokes your patron; 1–8 use consumables (healing first).
+    game.addSystem(new QuickActions(game, playing));
     // Nothing is saved outside a game in progress (title, creation, loading).
     rpg.save.addBlocker(() => (this.state === 'playing' ? null : 'Not in a game'));
     // Quickload always asks first (GDD §4.2); F9/L and the pause menu both come here. Outside a

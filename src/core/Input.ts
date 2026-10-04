@@ -117,6 +117,52 @@ export const DEFAULT_BINDINGS: Bindings = {
   debug: ['Backquote'],
 };
 
+/**
+ * Actions the game can't be played without. A saved or edited binding set may never leave one of
+ * these keyless (see `sanitizeBindings` and the Controls screen): a stray rebind once left
+ * "Strafe right" without D, and since bindings persist, the key stayed dead.
+ */
+export const ESSENTIAL_ACTIONS: readonly Action[] = [
+  'forward', 'back', 'left', 'right', 'jump', 'interact', 'attack', 'block', 'readyWeapon', 'toggleView', 'pause', 'menu',
+];
+
+export interface BindingRepair {
+  action: Action;
+  codes: string[];
+}
+
+/**
+ * Repairs a saved binding set (player overrides merged over the defaults). Pure.
+ * - Unknown actions and non-string or empty codes are dropped; duplicates within an action removed.
+ * - An essential action left without keys gets its default keys back. A restored key is taken back
+ *   from any NON-essential action that holds it; a key another essential action holds is not
+ *   restored (unless nothing else is left, because a duplicate beats an unplayable game).
+ * Returns the full binding set and what was repaired (empty when the input was healthy).
+ */
+export function sanitizeBindings(saved?: Partial<Record<string, unknown>> | null): { bindings: Bindings; repaired: BindingRepair[] } {
+  const out = Object.fromEntries(Object.entries(DEFAULT_BINDINGS).map(([a, c]) => [a, [...c]])) as Bindings;
+  for (const [a, v] of Object.entries(saved ?? {})) {
+    if (!(a in DEFAULT_BINDINGS) || !Array.isArray(v)) continue;
+    out[a as Action] = [...new Set(v.filter((c): c is string => typeof c === 'string' && c.length > 0))];
+  }
+  const essential = new Set<Action>(ESSENTIAL_ACTIONS);
+  const repaired: BindingRepair[] = [];
+  for (const action of ESSENTIAL_ACTIONS) {
+    if (out[action].length > 0) continue;
+    const heldByEssential = (code: string) => ESSENTIAL_ACTIONS.some((e) => e !== action && out[e].includes(code));
+    let codes = DEFAULT_BINDINGS[action].filter((c) => !heldByEssential(c));
+    if (codes.length === 0) codes = [...DEFAULT_BINDINGS[action]];
+    for (const code of codes) {
+      for (const a of Object.keys(out) as Action[]) {
+        if (a !== action && !essential.has(a)) out[a] = out[a].filter((c) => c !== code);
+      }
+    }
+    out[action] = codes;
+    repaired.push({ action, codes });
+  }
+  return { bindings: out, repaired };
+}
+
 /** The hotbar actions in slot order (1–8). */
 export const HOTBAR_ACTIONS = ['hotbar1', 'hotbar2', 'hotbar3', 'hotbar4', 'hotbar5', 'hotbar6', 'hotbar7', 'hotbar8'] as const satisfies readonly Action[];
 

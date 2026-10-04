@@ -3,8 +3,15 @@
  * stay valid) and live application of settings changes to the running game.
  */
 import type { Game } from '../core/Game';
-import { DEFAULT_BINDINGS, type Action, type Bindings } from '../core/Input';
+import { DEFAULT_BINDINGS, codeLabel, sanitizeBindings, type Action, type Bindings } from '../core/Input';
 import type { SettingsData } from '../core/Settings';
+
+/** Short names for binding repair messages (the Controls screen has the full labels). */
+const ACTION_NAMES: Partial<Record<Action, string>> = {
+  forward: 'Move forward', back: 'Move back', left: 'Strafe left', right: 'Strafe right', jump: 'Jump',
+  interact: 'Interact', attack: 'Attack', block: 'Block', readyWeapon: 'Ready weapon', toggleView: 'First / third person',
+  pause: 'Pause', menu: 'Character menu',
+};
 
 /** Keys the UI handles itself (not gameplay actions in core Input). */
 export type UiAction = 'wait' | 'clock';
@@ -79,7 +86,27 @@ export function bindSettings(game: Game, applyUiScale: (s: number) => void): () 
         if (dbg.el) dbg.el.style.display = s.showFps ? '' : 'none';
       }
     }
-    if (changed('bindings')) game.input.setBindings({ ...DEFAULT_BINDINGS, ...(s.bindings ?? {}) });
+    if (changed('bindings')) {
+      // Saved bindings are repaired before use: an essential action (move, jump, interact, attack,
+      // block, view, pause…) can never be left without a key, whatever the saved file says.
+      const { bindings, repaired } = sanitizeBindings(s.bindings as Partial<Record<string, unknown>> | undefined);
+      game.input.setBindings(bindings);
+      if (repaired.length) {
+        // Persist every action the repair changed (the restored one AND any it took a key back
+        // from), so the saved set is healthy and the next load is a no-op.
+        const merged = { ...DEFAULT_BINDINGS, ...(s.bindings ?? {}) } as Bindings;
+        const next = { ...(s.bindings ?? {}) } as Partial<Bindings>;
+        for (const a of Object.keys(bindings) as Action[]) {
+          if (JSON.stringify(bindings[a]) !== JSON.stringify(merged[a] ?? [])) next[a] = bindings[a];
+        }
+        const what = repaired.map((r) => `${r.codes.map(codeLabel).join(' / ')} → ${ACTION_NAMES[r.action] ?? r.action}`).join(', ');
+        // After this apply returns: persisting re-enters apply (it is a settings change).
+        queueMicrotask(() => {
+          game.settings.set('bindings', next);
+          setTimeout(() => game.events.emit('ui:notify', { text: `Controls repaired: ${what}`, kind: 'info' }), 1500);
+        });
+      }
+    }
     prev = { ...s };
   };
   apply(game.settings.data);

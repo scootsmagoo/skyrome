@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "shot": "node scripts/shot.mjs"
+    "shot": "node scripts/shot.mjs",
+    "check:controls": "node scripts/controls-check.mjs --browser both --preset all"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.21.0",

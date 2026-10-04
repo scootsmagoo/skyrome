@@ -3,7 +3,7 @@
  * Enter) and press a key / mouse button to rebind. Bindings are written back with
  * input.setBindings and persisted in settings. A key taken from another action is unbound there.
  */
-import { DEFAULT_BINDINGS, codeLabel, type Action } from '../../core/Input';
+import { DEFAULT_BINDINGS, ESSENTIAL_ACTIONS, codeLabel, type Action } from '../../core/Input';
 import { BaseModal } from '../Modal';
 import type { UIManager } from '../UIManager';
 import { h, keycap, setChildren } from '../dom';
@@ -31,11 +31,13 @@ const GROUPS: { title: string; latin: string; actions: AnyAction[] }[] = [
   { title: 'Movement', latin: 'Iter', actions: ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'walkToggle', 'sneak'] },
   { title: 'Combat', latin: 'Pugna', actions: ['attack', 'block', 'dodge', 'parry', 'lockOn', 'readyWeapon', 'yield', 'invoke'] },
   { title: 'Camera', latin: 'Conspectus', actions: ['lookLeft', 'lookRight', 'lookUp', 'lookDown', 'zoomIn', 'zoomOut', 'toggleView', 'shoulderSwap'] },
-  { title: 'Actions & menus', latin: 'Res', actions: ['interact', 'quickWheel', 'menu', 'inventory', 'journal', 'map', 'skills', 'wait', 'clock', 'quickSave', 'quickLoad', 'pause', 'debug'] },
+  { title: 'Actions & menus', latin: 'Res', actions: ['interact', 'menu', 'inventory', 'journal', 'map', 'skills', 'wait', 'clock', 'quickSave', 'quickLoad', 'pause', 'debug'] },
   { title: 'Hotbar', latin: 'Promptuarium', actions: ['hotbar1', 'hotbar2', 'hotbar3', 'hotbar4', 'hotbar5', 'hotbar6', 'hotbar7', 'hotbar8'] },
 ];
 
 const LOCKED = new Set<AnyAction>(['pause']);
+/** Actions that must keep at least one key (see ESSENTIAL_ACTIONS in core Input). */
+const ESSENTIAL = new Set<AnyAction>(ESSENTIAL_ACTIONS);
 const isUi = (a: AnyAction): a is UiAction => a === 'wait' || a === 'clock';
 
 export class ControlsScreen extends BaseModal {
@@ -185,23 +187,40 @@ export class ControlsScreen extends BaseModal {
     const cap = this.capture;
     if (!cap) return;
     this.stopCapture();
-    // Steal the code from any other action.
+    const mine = [...this.codes(cap.action)];
+    const replaced = mine[cap.slot];
+    if (replaced === code) return;
+    // Plan first: take the code from every other action that has it. An essential action (move,
+    // jump, interact, attack…) is never left keyless: it gets the replaced key instead (a swap),
+    // or, if this slot was empty, the rebind is refused.
+    const writes: [AnyAction, string[]][] = [];
     const stolenFrom: AnyAction[] = [];
+    let swappedWith: AnyAction | null = null;
     for (const g of GROUPS) {
       for (const a of g.actions) {
         if (a === cap.action) continue;
         const codes = this.codes(a);
-        if (codes.includes(code)) {
-          this.write(a, codes.filter((c) => c !== code));
-          stolenFrom.push(a);
-        }
+        if (!codes.includes(code)) continue;
+        let next = codes.filter((c) => c !== code);
+        if (next.length === 0 && ESSENTIAL.has(a)) {
+          if (!replaced || this.codes(a).includes(replaced)) {
+            this.ui.flash(`${codeLabel(code)} is the only key for ${LABELS[a]}. Give ${LABELS[a]} another key first.`);
+            return;
+          }
+          next = [replaced];
+          swappedWith = a;
+        } else stolenFrom.push(a);
+        writes.push([a, next]);
       }
     }
-    const codes = [...this.codes(cap.action)];
-    const others = codes.filter((c, i) => i !== cap.slot && c !== code);
+    for (const [a, next] of writes) this.write(a, next);
+    const others = mine.filter((c, i) => i !== cap.slot && c !== code);
     const next = cap.slot === 0 ? [code, ...others.slice(0, 1)] : [others[0], code].filter(Boolean);
     this.write(cap.action, next as string[]);
-    if (stolenFrom.length) this.ui.flash(`${codeLabel(code)} removed from ${stolenFrom.map((a) => LABELS[a]).join(', ')}`);
+    const notes: string[] = [];
+    if (swappedWith && replaced) notes.push(`Swapped: ${LABELS[swappedWith]} now uses ${codeLabel(replaced)}`);
+    if (stolenFrom.length) notes.push(`${codeLabel(code)} removed from ${stolenFrom.map((a) => LABELS[a]).join(', ')}`);
+    if (notes.length) this.ui.flash(notes.join(' · '));
     this.render();
   }
 
@@ -214,6 +233,10 @@ export class ControlsScreen extends BaseModal {
     const a = this.actions[this.nav.index];
     if (!a || LOCKED.has(a)) return;
     const codes = this.codes(a).filter((_, i) => i !== this.col);
+    if (codes.length === 0 && ESSENTIAL.has(a)) {
+      this.ui.flash(`${LABELS[a]} needs at least one key.`);
+      return;
+    }
     this.write(a, codes);
     this.render();
   }
