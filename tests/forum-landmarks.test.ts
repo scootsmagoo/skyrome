@@ -14,7 +14,8 @@ import { LANDMARK_BY_ID } from '../src/data/atlas';
 import { MeshBuilder } from '../src/gfx/MeshBuilder';
 import type { Game } from '../src/core/Game';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext } from '../src/world/landmarks/types';
-import { FORUM_INSCRIPTIONS, FORUM_PLAZA, bufferPolyline, clipPolyline, isSimplePolygon, plazaRoadStrips, pointInPolygon, polygonArea } from '../src/world/landmarks/builders/forum-data';
+import { FORUM_INSCRIPTIONS, FORUM_PLAZA, bufferPolyline, clipPolyline, forumPavedArea, isSimplePolygon, plazaRoadStrips, pointInPolygon, polygonArea } from '../src/world/landmarks/builders/forum-data';
+import { atlasToLocal, crossingX, localToAtlas, pointOnPolyline, projectOnPolyline } from '../src/world/landmarks/builders/forum-kit';
 import * as square from '../src/world/landmarks/builders/forum-square';
 import * as temples from '../src/world/landmarks/builders/forum-temples';
 import * as basilicas from '../src/world/landmarks/builders/forum-basilicas';
@@ -46,9 +47,9 @@ function fakeGame(): Game {
   return { scene, camera: new THREE.PerspectiveCamera(), addSystem: <T>(s: T) => s, removeSystem: () => {} } as unknown as Game;
 }
 
-function context(id: string, game: Game): LandmarkContext {
+function context(id: string, game: Game, groundAt: (x: number, z: number) => number = () => 0): LandmarkContext {
   const lm = LANDMARK_BY_ID[id];
-  return { game, lm, S: 0.6, rng: new Rng(`landmark:${id}`), detail: 'high', groundAt: () => 0, builder: () => new MeshBuilder() };
+  return { game, lm, S: 0.6, rng: new Rng(`landmark:${id}`), detail: 'high', groundAt, builder: () => new MeshBuilder() };
 }
 
 const built = new Map<string, LandmarkBuild>();
@@ -71,6 +72,43 @@ describe('forum plaza geometry', () => {
     expect(pointInPolygon(60, 25, FORUM_PLAZA)).toBe(true);
     expect(pointInPolygon(34, 66, FORUM_PLAZA)).toBe(false);
     expect(pointInPolygon(145, -6, FORUM_PLAZA)).toBe(false);
+  });
+
+  it('paves the Comitium, the lower Forum and the street mouths, but not the buildings round them', () => {
+    const area = forumPavedArea();
+    expect(isSimplePolygon(area)).toBe(true);
+    for (const [x, z] of [
+      [30, -60], // Comitium, before the Carcer
+      [140, 100], // lower Forum, by Vesta
+      [125, 112], // Spring of Juturna
+      [80, 95], // Vicus Tuscus, between the Basilica Iulia and Castor
+      [-20, 55], // Vicus Iugarius, by the Servilian basin
+      [190, 80], // Sacra Via at the Fornix
+    ]) expect(pointInPolygon(x, z, area), `${x},${z}`).toBe(true);
+    for (const [x, z] of [
+      [34, 66], // Basilica Iulia
+      [145, -6], // Basilica Paulli
+      [60, -85], // Forum of Caesar
+      [199, 135], // Atrium Vestae
+      [-26, 20], // Saturn
+    ]) expect(pointInPolygon(x, z, area), `${x},${z}`).toBe(false);
+  });
+
+  it('projects onto and walks along a polyline, and converts between atlas and local frames', () => {
+    const line: [number, number][] = [[0, 0], [10, 0], [10, 10]];
+    expect(projectOnPolyline(line, [5, 3])).toBeCloseTo(5, 6);
+    expect(projectOnPolyline(line, [12, 6])).toBeCloseTo(16, 6);
+    const q = pointOnPolyline(line, 13);
+    expect(q.p[0]).toBeCloseTo(10, 6);
+    expect(q.p[1]).toBeCloseTo(3, 6);
+    expect(q.d[1]).toBeCloseTo(1, 6);
+    expect(crossingX([[0, -5], [4, 5]], 0)).toBeCloseTo(2, 6);
+    expect(crossingX([[0, -5], [4, -1]], 0)).toBeNull();
+    const ctx = context('temple-castor-pollux', fakeGame());
+    const [lx, lz] = atlasToLocal(ctx, 88, 98);
+    const [ax, az] = localToAtlas(ctx, lx, lz);
+    expect(ax).toBeCloseTo(88, 6);
+    expect(az).toBeCloseTo(98, 6);
   });
 
   it('buffers a polyline to a closed strip of the right width', () => {
@@ -154,7 +192,17 @@ describe('forum builders', () => {
       expect(kinds.size, id).toBeGreaterThan(0);
     }
     const castor = build('temple-castor-pollux').spots ?? [];
-    expect(castor.some((s) => s.id === 'castor-strongroom' && s.kind === 'door')).toBe(true);
+    const strong = castor.find((s) => s.id === 'castor-strongroom');
+    expect(strong?.kind).toBe('door');
+    // on the W flank, toward the Vicus Tuscus (CONTENT.md castor-loculi at real 88, 98)
+    const [sx, sz] = localToAtlas(context('temple-castor-pollux', fakeGame()), strong!.position.x, strong!.position.z);
+    expect(Math.hypot(sx - 88, sz - 98)).toBeLessThan(6);
+    for (const id of ['castor-aedituus', 'castor-chrysippus', 'castor-libaria', 'castor-loculi-plaque']) expect(castor.some((s) => s.id === id), id).toBe(true);
+    const square = build('miliarium-aureum').spots ?? [];
+    for (const id of ['signum-vortumni', 'acta-diurna', 'lectica-statio-forum', 'cloaca-grate-aemiliae', 'statio-cohortium-urbanarum', 'puteal-libonis', 'praetor-tribunal']) expect(square.some((s) => s.id === id), id).toBe(true);
+    expect(square.filter((s) => s.id.startsWith('forum-crowd-')).length).toBeGreaterThanOrEqual(15);
+    const atrium = build('atrium-vestae').spots ?? [];
+    expect(atrium.filter((s) => s.id.startsWith('sacra-via-taberna-') && s.kind === 'vendor').length).toBeGreaterThanOrEqual(6);
     const carcer = build('carcer-tullianum').spots ?? [];
     expect(carcer.some((s) => s.kind === 'door')).toBe(true);
     const titus = build('arch-titus').spots ?? [];
@@ -224,6 +272,27 @@ describe('forum walkability', () => {
     const r = walk(world('basilica-julia'), new THREE.Vector3(1.52, 0.05, -18), new THREE.Vector3(0, 0, 1), 6);
     expect(r.z).toBeGreaterThan(-8);
     expect(r.y).toBeCloseTo(1.4, 1);
+  });
+
+  it('carries the Sacra Via up to the Arch of Titus on a causeway the player can walk up', () => {
+    // a terrain with the 4.5 m step of the real heightmap just below the arch's pad
+    const ground = (x: number, z: number) => (Math.hypot(x, z) > 19 ? -4.5 : 0);
+    const ctx = context('arch-titus', fakeGame(), ground);
+    const r = arches.builders.find((b) => b.handles.includes('arch-titus'))!.build(ctx);
+    expect(r.colliders.length).toBeGreaterThan(build('arch-titus').colliders.length);
+    const p = new Physics();
+    p.addBox({ x: 0, y: -0.5 - 4.5, z: 0 }, { x: 200, y: 0.5, z: 200 });
+    for (const c of r.colliders) {
+      if (c.kind === 'box') p.addOrientedBox(c.center, c.half, c.rotation ?? new THREE.Quaternion());
+      else if (c.kind === 'cylinder') p.addCylinder(c.center, c.halfHeight, c.radius);
+      else p.addTrimesh(c.geometry, c.matrix);
+    }
+    p.step(1 / 60);
+    const A = atlasToLocal(ctx, 310, 147.1);
+    const B = atlasToLocal(ctx, 340.5, 180.5);
+    const dir = new THREE.Vector3(B[0] - A[0], 0, B[1] - A[1]).normalize();
+    const w = walk(p, new THREE.Vector3(A[0] - dir.x * 2, -4.4, A[1] - dir.z * 2), dir, 14);
+    expect(w.maxY).toBeGreaterThan(-0.6);
   });
 
   it('passes through the Arch of Titus', () => {

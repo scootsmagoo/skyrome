@@ -295,6 +295,10 @@ export interface HeroicNudeOptions {
   radiate?: boolean;
   /** Left hand on a steering oar standing on a globe (Sol as ruler of the world). */
   rudder?: boolean;
+  /** A chlamys over the left shoulder and forearm (default true unless `wineskin`). */
+  chlamys?: boolean;
+  /** Marsyas: the wineskin slung over the left shoulder, held by the raised left hand; satyr's tail. */
+  wineskin?: boolean;
 }
 
 /**
@@ -317,19 +321,29 @@ export function heroicNude(b: MeshBuilder, at: THREE.Matrix4, o: HeroicNudeOptio
   const wrR = V(0.41, Y(1.86), -0.12);
   arm(s, shR, elR, wrR);
   hand(s, wrR, V(0.15, 1, -0.2), V(0, 0.2, -1), true);
-  // the left arm lowered and forward, the hand on the oar
   const shL = V(-0.2, Y(1.45), 0);
-  const elL = V(-0.29, Y(1.17), -0.06);
-  const wrL = V(-0.37, Y(1.05), -0.24);
-  arm(s, shL, elL, wrL);
-  hand(s, wrL, V(-0.25, -0.2, -1), V(1, 0, 0));
+  if (o.wineskin) {
+    // the left hand up at the shoulder, holding the neck of the wineskin slung behind it
+    const elL = V(-0.31, Y(1.3), 0.05);
+    const wrL = V(-0.25, Y(1.55), 0.08);
+    arm(s, shL, elL, wrL);
+    hand(s, wrL, V(0.1, 1, 0.2), V(1, 0, 0));
+    s.blob(V(-0.15, Y(1.52), 0.17), 0.15, 0.11, 0.1, new THREE.Euler(0.3, 0, 0.5));
+    s.blob(V(0, Y(0.98), 0.14), 0.025, 0.025, 0.07, new THREE.Euler(0.7, 0, 0));
+  } else {
+    // the left arm lowered and forward, the hand on the oar
+    const elL = V(-0.29, Y(1.17), -0.06);
+    const wrL = V(-0.37, Y(1.05), -0.24);
+    arm(s, shL, elL, wrL);
+    hand(s, wrL, V(-0.25, -0.2, -1), V(1, 0, 0));
+  }
   // chlamys: pinned on the left shoulder, down the back and wound over the left forearm
   const out = (p: THREE.Vector3) => V(p.x + 0.05, 0, p.z - 0.02).normalize();
-  s.loft([V(-0.16, Y(1.52), -0.02), V(-0.22, Y(1.4), 0.1), V(-0.2, Y(1.15), 0.14), V(-0.24, Y(0.98), 0.1), V(-0.31, Y(1.06), -0.06), V(-0.33, Y(1.1), -0.2)], [[0.05, 0.02], [0.09, 0.026], [0.1, 0.028], [0.09, 0.028], [0.08, 0.03], [0.06, 0.028]], { front: out, seg: s.hi ? 12 : 6, shape: (th) => 1 + (s.hi ? 0.12 * Math.sin(th * 3) : 0) });
+  if (o.chlamys ?? !o.wineskin) s.loft([V(-0.16, Y(1.52), -0.02), V(-0.22, Y(1.4), 0.1), V(-0.2, Y(1.15), 0.14), V(-0.24, Y(0.98), 0.1), V(-0.31, Y(1.06), -0.06), V(-0.33, Y(1.1), -0.2)], [[0.05, 0.02], [0.09, 0.026], [0.1, 0.028], [0.09, 0.028], [0.08, 0.03], [0.06, 0.028]], { front: out, seg: s.hi ? 12 : 6, shape: (th) => 1 + (s.hi ? 0.12 * Math.sin(th * 3) : 0) });
   // the end hanging from the forearm: a heavy fall of cloth, round in section with deep folds
-  s.loft([V(-0.34, Y(1.1), -0.17), V(-0.35, Y(0.95), -0.15), V(-0.35, Y(0.78), -0.14), V(-0.34, Y(0.6), -0.13), V(-0.33, Y(0.52), -0.13)], [[0.06, 0.05], [0.075, 0.06], [0.085, 0.062], [0.08, 0.058], [0.05, 0.04]], { front: V(-1, 0, 0), seg: s.hi ? 16 : 8, shape: (th, u) => 1 + (s.hi ? 0.2 * Math.sin(th * 6 + u * 4) * (0.3 + u) : 0) });
+  if (o.chlamys ?? !o.wineskin) s.loft([V(-0.34, Y(1.1), -0.17), V(-0.35, Y(0.95), -0.15), V(-0.35, Y(0.78), -0.14), V(-0.34, Y(0.6), -0.13), V(-0.33, Y(0.52), -0.13)], [[0.06, 0.05], [0.075, 0.06], [0.085, 0.062], [0.08, 0.058], [0.05, 0.04]], { front: V(-1, 0, 0), seg: s.hi ? 16 : 8, shape: (th, u) => 1 + (s.hi ? 0.2 * Math.sin(th * 6 + u * 4) * (0.3 + u) : 0) });
   const C = head(s, V(0, Y(1.515), 0.02), 0.12);
-  if (o.radiate ?? true) {
+  if (o.radiate ?? !o.wineskin) {
     const cm = o.crownMat ?? 'gilded_bronze';
     const band = new THREE.TorusGeometry(0.098, 0.012, 5, s.n(s.hi ? 20 : 10));
     band.rotateX(Math.PI / 2 - 0.12);
@@ -359,7 +373,7 @@ export function heroicNude(b: MeshBuilder, at: THREE.Matrix4, o: HeroicNudeOptio
       s.geo(blade, cm);
     }
   }
-  if (o.rudder ?? true) {
+  if (o.rudder ?? !o.wineskin) {
     // the steering oar standing on a globe beside the left foot
     s.blob(V(-0.44, Y(0.17), -0.3), 0.17, 0.17, 0.17);
     s.loft([V(-0.43, Y(0.32), -0.3), V(-0.41, Y(0.75), -0.29), V(-0.39, Y(1.12), -0.27)], [[0.022, 0.022], [0.02, 0.02], [0.018, 0.018]], { seg: 8, sub: 1 });

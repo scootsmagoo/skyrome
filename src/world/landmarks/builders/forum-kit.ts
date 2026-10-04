@@ -640,33 +640,49 @@ export function col(b: MeshBuilder, s: ColSpec, at: THREE.Matrix4) {
 // ---------------------------------------------------------------- furniture
 
 /**
- * A bronze warship ram (rostrum): a socket that wrapped the keel and stem, three horizontal fins
- * and a blunt front plate. Origin at the mount on a wall face (z = 0), pointing toward −z, `len` long.
+ * A bronze warship ram (rostrum), after the Athlit ram: a long socket that wrapped the keel and the
+ * stem, tapering to a blunt head of three horizontal blades crossed by a vertical plate, with the
+ * fore-deck cap sloping back to the wall. Origin at the mount on a wall face (z = 0), pointing
+ * toward −z, `len` long. Dark patinated bronze, so the beaks read against the marble.
  */
-export function shipRam(b: MeshBuilder, at: THREE.Matrix4, len = 1.4, mat: MaterialId = 'bronze') {
-  const h = len * 0.42;
-  const w = len * 0.32;
-  // Socket: tapered box from the wall forward.
-  const sock = new THREE.CylinderGeometry(0.32, 0.5, 1, 4, 1);
-  sock.rotateY(Math.PI / 4);
+export function shipRam(b: MeshBuilder, at: THREE.Matrix4, len = 1.4, mat: MaterialId | THREE.Material = ramBronze()) {
+  const w = len * 0.4;
+  const h = len * 0.5;
+  // socket: a four-sided frustum from the wall to the head, its section a rounded diamond
+  const sock = new THREE.CylinderGeometry(0.26, 0.5, 1, 6, 1);
+  sock.rotateY(Math.PI / 6);
   sock.rotateX(-Math.PI / 2);
-  sock.scale(w, h, len * 0.75);
-  sock.translate(0, 0, -len * 0.375);
+  sock.scale(w, h, len * 0.82);
+  sock.translate(0, 0, -len * 0.41);
   b.add(sock, mat, at);
-  // Fins: three horizontal blades and a vertical stem post.
-  for (const y of [-0.3, 0, 0.3]) {
-    const fin = new THREE.BoxGeometry(w * 1.25, h * 0.08, len * 0.32);
-    fin.translate(0, y * h, -len * 0.82);
+  // the flange where the socket met the hull
+  const fl = new THREE.BoxGeometry(w * 1.05, h * 0.95, len * 0.05);
+  fl.translate(0, 0, -len * 0.025);
+  b.add(fl, mat, at);
+  // the fore-deck cap: a wedge rising back to the wall
+  const cap = new THREE.BoxGeometry(w * 0.55, h * 0.16, len * 0.62);
+  cap.rotateX(-0.22);
+  cap.translate(0, h * 0.36, -len * 0.33);
+  b.add(cap, mat, at);
+  // the head: three blades and the vertical plate
+  for (const y of [-0.26, 0, 0.26]) {
+    const fin = new THREE.BoxGeometry(w * 0.82, h * 0.09, len * 0.2);
+    fin.translate(0, y * h, -len * 0.9);
     b.add(fin, mat, at);
   }
-  const plate = new THREE.BoxGeometry(w * 0.2, h * 0.86, len * 0.06);
-  plate.translate(0, 0, -len * 0.98);
+  const plate = new THREE.BoxGeometry(w * 0.14, h * 0.74, len * 0.22);
+  plate.translate(0, 0, -len * 0.91);
   b.add(plate, mat, at);
-  // Top cap (the fore-deck socket), a slanted wedge.
-  const cap = new THREE.BoxGeometry(w * 0.7, h * 0.18, len * 0.5);
-  cap.rotateX(-0.25);
-  cap.translate(0, h * 0.5, -len * 0.28);
-  b.add(cap, mat, at);
+}
+
+let ramMat: THREE.MeshStandardMaterial | null = null;
+/** Dark patinated bronze for the rams. */
+export function ramBronze(): THREE.MeshStandardMaterial {
+  if (!ramMat) {
+    ramMat = new THREE.MeshStandardMaterial({ color: '#6b5b3c', roughness: 0.45, metalness: 0.7 });
+    ramMat.name = 'forum:ram-bronze';
+  }
+  return ramMat;
 }
 
 /**

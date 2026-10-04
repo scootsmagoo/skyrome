@@ -22,6 +22,7 @@ import { drapedFemale, figure, nudeMale } from './forum-figures';
 import { T, TRS, altar, atlasToLocal, balustrade, inscription, landmark, mul, paint, pave, pedestal, plantTrees, rect, ring, shipRam, type Part, type V2 } from './forum-kit';
 import { curtiusMaterial, panel } from './forum-reliefs';
 import { forumLife } from './forum-life';
+import { heroicNude } from './forum-statue';
 
 const text = (id: string) => FORUM_INSCRIPTIONS[id].latin;
 
@@ -260,7 +261,7 @@ function lacusCurtius(p: Part) {
   {
     const at = TRS(-h - 1.6, 0.06, -0.4, 0, 0.3, 0);
     const ph = pedestal(b, at, 0.9, 0.9, 1.2);
-    figure(b, mul(at, T(0, ph, 0)), hi, 'bronze', 1.0, (s) => nudeMale(s, { right: 'raised', left: 'wineskin', satyr: true, belly: true, head: { beard: true } }));
+    heroicNude(b, mul(at, T(0, ph, 0)), { material: 'bronze', scale: 1.0, hi, wineskin: true });
   }
   // the sacred fig, olive and vine beside it
   plantTrees(p, [
