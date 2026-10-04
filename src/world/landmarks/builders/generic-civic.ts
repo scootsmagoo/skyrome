@@ -577,7 +577,7 @@ export function macellum(d: Draw, ctx: LandmarkContext, w: number, dd: number, H
   const { detail } = ctx;
   plinth(d, ctx, -w / 2, -dd / 2, w / 2, dd / 2, 0.02, 'brick');
   const wing = clamp(Math.min(w, dd) * 0.22, 4.5, 9);
-  courtyardRanges(d, -w / 2, -dd / 2, w / 2, dd / 2, wing, Math.min(H, 8), 'brick', detail, { gate: 4.5, inner: 'cells', courtMat: 'paving_travertine' });
+  courtyardRanges(d, -w / 2, -dd / 2, w / 2, dd / 2, wing, Math.min(H, 8), 'brick', detail, { gate: 4.5, inner: 'cells', courtMat: 'paving_travertine', street: w <= 16 });
   // Street-front shops along the facade.
   if (w > 16) {
     tabernae(d, -w / 2 + 1, -3.2, -dd / 2 - 0.02, 0.7, Math.min(H, 8) - 0.6, 'brick', detail, ctx.rng.fork('tab'));

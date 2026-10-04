@@ -217,7 +217,7 @@ export function hall(d: Draw, x0: number, z0: number, x1: number, z1: number, s:
 }
 
 /** Four ranges round a courtyard (horrea, barracks, macella); the front range keeps a gate passage. */
-export function courtyardRanges(d: Draw, x0: number, z0: number, x1: number, z1: number, wing: number, H: number, mat: MaterialId, detail: Detail, opts: { gate?: number; inner?: 'cells' | 'colonnade' | 'plain'; ring?: boolean; courtMat?: MaterialId } = {}) {
+export function courtyardRanges(d: Draw, x0: number, z0: number, x1: number, z1: number, wing: number, H: number, mat: MaterialId, detail: Detail, opts: { gate?: number; inner?: 'cells' | 'colonnade' | 'plain'; ring?: boolean; courtMat?: MaterialId; street?: boolean } = {}) {
   const gate = opts.gate ?? 4;
   const w = x1 - x0, dd = z1 - z0;
   const cx = (x0 + x1) / 2;
@@ -232,7 +232,7 @@ export function courtyardRanges(d: Draw, x0: number, z0: number, x1: number, z1:
   d.span('travertine', cx - gate / 2 - 0.45, 0, z0 - 0.12, cx - gate / 2, gh + 0.45, z0 + 0.05);
   d.span('travertine', cx + gate / 2, 0, z0 - 0.12, cx + gate / 2 + 0.45, gh + 0.45, z0 + 0.05);
   d.span('travertine', cx - gate / 2 - 0.6, gh, z0 - 0.18, cx + gate / 2 + 0.6, gh + 0.5, z0 + 0.05);
-  if (H > 5.5) {
+  if (H > 5.5 && (opts.street ?? true)) {
     const yw = Math.max(3.4, H * 0.55);
     for (const [ax, az, bx, bz, nx, nz] of [[x0, z0, x1, z0, 0, -1], [x1, z1, x0, z1, 0, 1], [x0, z1, x0, z0, -1, 0], [x1, z0, x1, z1, 1, 0]] as const) {
       const len = Math.hypot(bx - ax, bz - az);
