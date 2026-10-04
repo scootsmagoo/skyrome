@@ -41,6 +41,8 @@ export interface TreeReq {
 export type LampKind = 'brazier' | 'lamp' | 'torch';
 
 interface Pending {
+  /** Bumped on every request, so the flush can wait for a burst of builds to finish. */
+  version: number;
   trees: { sp: TreeSpecies; p: THREE.Vector3; s: number }[];
   lamps: { p: THREE.Vector3; kind: LampKind }[];
   reads: { id: string; p: THREE.Vector3; title: string; text: string }[];
@@ -57,13 +59,14 @@ function live(ctx: Pick<LandmarkContext, 'game'>): Game | null {
 function queue(game: Game): Pending {
   let q = pending.get(game);
   if (!q) {
-    q = { trees: [], lamps: [], reads: [], system: null };
+    q = { version: 0, trees: [], lamps: [], reads: [], system: null };
     pending.set(game, q);
   }
   if (!q.system) {
     q.system = new LifeSystem(game, q);
     game.addSystem(q.system);
   }
+  q.version++;
   return q;
 }
 
@@ -143,7 +146,8 @@ class LifeSystem implements System {
   readonly name = 'capfora-life';
   /** Just before the world registry's culling (95 is the registry; 100 the camera). */
   readonly priority = 94;
-  private frames = 0;
+  private seen = -1;
+  private quiet = 0;
 
   constructor(
     private readonly game: Game,
@@ -152,8 +156,14 @@ class LifeSystem implements System {
 
   lateUpdate() {
     const { game, q } = this;
-    // Wait two frames so a burst of landmark builds finishes queueing before the first flush.
-    if (++this.frames < 2) return;
+    // Flush once the world is complete: the sky (and its light pool) is installed after every
+    // landmark is built; without a sky, after ~3 s with no new requests. One flush means one
+    // shared Forest for every grove.
+    if (q.version !== this.seen) {
+      this.seen = q.version;
+      this.quiet = 0;
+    } else this.quiet++;
+    if (!game.lights && this.quiet < 180) return;
     if (q.trees.length) {
       const f = new Forest({ near: 150, far: 1700, seed: 113 + q.trees.length });
       for (const t of q.trees) f.add(t.sp, t.p.x, t.p.y, t.p.z, { scale: t.s });
@@ -182,8 +192,9 @@ class LifeSystem implements System {
       }
       q.reads.length = 0;
     }
-    // Stay registered (cheap) only while something is still waiting for its service.
-    if (!q.trees.length && !q.reads.length && (!q.lamps.length || !game.lights) && this.frames > 600) {
+    // Stay registered (one check a frame) while something still waits for its service: the light
+    // pool only arrives with the sky, after the world is built.
+    if (!q.trees.length && !q.reads.length && !q.lamps.length) {
       game.removeSystem(this);
       q.system = null;
     }
