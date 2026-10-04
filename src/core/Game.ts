@@ -83,6 +83,10 @@ export class Game {
   private fpsFrames = 0;
   private rafId = 0;
   private lastRenderAt = 0;
+  private lastShadowAt = -Infinity;
+  private nextFrameAt = 0;
+  /** Minimum time between shadow-map renders (ms); 0 = every frame. */
+  shadowIntervalMs = 1000 / 30;
   /** `?fps=N` overrides the frame-rate setting for this page load (0 = uncapped; perf runs). */
   private readonly fpsOverride = (() => {
     const v = new URLSearchParams(location.search).get('fps');
@@ -155,12 +159,17 @@ export class Game {
       // at ~30 fps. Keeps an idle tab from heating the machine. Automation (navigator.webdriver)
       // always runs at full rate so headless screenshots and tests are unaffected.
       const idle = this.isIdle();
-      // Frame cap (settings.maxFps): skip display refreshes beyond it. The 1.5 ms slack keeps a
-      // 60 fps cap on a 120 Hz display at every other refresh despite rAF jitter.
-      const cap = this.fpsOverride ?? this.settings.data.maxFps;
-      const capGap = cap > 0 ? 1000 / cap - 1.5 : 0;
-      const minGap = idle ? 500 : this.paused ? Math.max(32, capGap) : capGap;
+      const minGap = idle ? 500 : this.paused ? 32 : 0;
       if (minGap > 0 && now - this.lastRenderAt < minGap) return;
+      // Frame cap (settings.maxFps): render on a fixed schedule and skip the display refreshes in
+      // between, so a 60 fps cap draws every other frame of a 120 Hz display and averages 60 on a
+      // 144 Hz one. 1.5 ms of slack absorbs rAF jitter; a slow frame never causes a catch-up burst.
+      const cap = this.fpsOverride ?? this.settings.data.maxFps;
+      if (cap > 0 && !idle) {
+        const interval = 1000 / cap;
+        if (now < this.nextFrameAt - 1.5) return;
+        this.nextFrameAt = Math.max(this.nextFrameAt + interval, now);
+      }
       this.lastRenderAt = now;
       if (idle) {
         this.lastTime = now; // no simulated time passes while idle
@@ -252,6 +261,17 @@ export class Game {
       else { const t0 = performance.now(); s.lateUpdate(dt); time(s.name, t0); }
     }
 
+    // Shadow maps re-render at most every `shadowIntervalMs` (≈30 Hz): the shadow pass is about a
+    // third of the GPU frame, and a one-frame-old shadow is invisible at a 60 fps cap. The shadow
+    // matrices only change when the map re-renders, so a skipped frame stays consistent.
+    const sm = this.renderer.shadowMap;
+    if (sm.enabled) {
+      sm.autoUpdate = false;
+      if (now - this.lastShadowAt >= this.shadowIntervalMs - 1.5 || now < this.lastShadowAt) {
+        sm.needsUpdate = true;
+        this.lastShadowAt = now;
+      }
+    }
     const tr = prof ? performance.now() : 0;
     this.renderFrame();
     if (prof) {

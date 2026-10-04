@@ -6,7 +6,12 @@
  * game's per-system profiler), and memory (JS heap, geometry bytes by top-level scene group).
  *
  *   node scripts/perf.mjs [--views spawn,forum,circus,colosseum,pantheon] [--browser webkit]
- *                         [--size 1280x720] [--settle 5000] [--json out.json] [--url <server>]
+ *                         [--size 1280x720] [--dpr 2] [--fps 0] [--settle 5000] [--json out.json]
+ *                         [--url <server>]
+ *
+ * `--dpr 2 --size 1512x860` approximates a MacBook's browser window. `--fps 60` measures with the
+ * default frame cap instead of uncapped. GPU time comes from EXT_disjoint_timer_query_webgl2
+ * where the browser offers it (Chromium does).
  *
  * Headless GPU numbers are not the owner's MacBook, but they move together: compare runs.
  */
@@ -20,6 +25,8 @@ const args = parseArgs(process.argv.slice(2));
 const [vw, vh] = (args.size ?? '1280x720').split('x').map(Number);
 const browserName = args.browser ?? 'chromium';
 const settle = Number(args.settle ?? 5000);
+const dpr = Number(args.dpr ?? 1);
+const fpsCap = Number(args.fps ?? 0);
 
 const VIEWS = {
   spawn: '',
@@ -50,10 +57,10 @@ const results = [];
 
 try {
   for (const view of views) {
-    const page = await browser.newPage({ viewport: { width: vw, height: vh } });
+    const page = await browser.newPage({ viewport: { width: vw, height: vh }, deviceScaleFactor: dpr });
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e?.message ?? e)));
-    const url = `${baseUrl}?scene=rome&quick=1&hour=10&fps=0${VIEWS[view]}`;
+    const url = `${baseUrl}?scene=rome&quick=1&hour=10&fps=${fpsCap}${VIEWS[view]}`;
     const t0 = Date.now();
     await page.goto(url, { waitUntil: 'load' });
     await page.waitForFunction(() => window.__skyrome?.ready || window.__skyrome?.error, null, { timeout: 120000, polling: 100 });
@@ -103,6 +110,35 @@ async function measure() {
   }
   const elapsed = performance.now() - t0;
   p.yaw = yaw0;
+
+  // GPU time per frame (timer queries around the game's render, where available).
+  let gpuMs = null;
+  const gl = game.renderer.getContext();
+  const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+  if (ext) {
+    const orig = game.renderFrame;
+    const queries = [];
+    game.renderFrame = () => {
+      const q = gl.createQuery();
+      gl.beginQuery(ext.TIME_ELAPSED_EXT, q);
+      orig();
+      gl.endQuery(ext.TIME_ELAPSED_EXT);
+      queries.push(q);
+    };
+    await frames(40);
+    game.renderFrame = orig;
+    await frames(4);
+    const times = [];
+    for (const q of queries) {
+      let n = 0;
+      while (!gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE) && n++ < 40) await new Promise((r) => setTimeout(r, 5));
+      if (gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE) && !gl.getParameter(ext.GPU_DISJOINT_EXT)) times.push(gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6);
+      gl.deleteQuery(q);
+    }
+    times.sort((a, b) => a - b);
+    if (times.length) gpuMs = { median: +times[Math.floor(times.length / 2)].toFixed(1), p90: +times[Math.floor(times.length * 0.9)].toFixed(1) };
+  }
+  const canvas = game.renderer.domElement;
   cpu.sort((a, b) => a - b);
   const mean = cpu.reduce((s, v) => s + v, 0) / cpu.length;
   const p95 = cpu[Math.floor(cpu.length * 0.95)];
@@ -147,6 +183,8 @@ async function measure() {
   game.profiling = false;
   return {
     fps: +((frameCount / elapsed) * 1000).toFixed(1),
+    gpuMs,
+    buffer: [canvas.width, canvas.height],
     cpuMean: +mean.toFixed(1),
     cpuP95: +p95.toFixed(1),
     dirs,
@@ -166,7 +204,8 @@ async function measure() {
 
 function print(r) {
   console.log(`\n== ${r.view}  (boot ${(r.bootMs / 1000).toFixed(1)} s, player ${r.player.join(', ')})`);
-  console.log(`  ${r.fps} fps uncapped · cpu ${r.cpuMean} ms mean / ${r.cpuP95} ms p95 · programs ${r.programs} · geo ${r.geometries} · tex ${r.textures} · heap ${r.heapMB} MB`);
+  console.log(`  ${r.buffer.join('×')} · gpu ${r.gpuMs ? `${r.gpuMs.median} ms median / ${r.gpuMs.p90} p90` : 'n/a'}`);
+  console.log(`  ${r.fps} fps · cpu ${r.cpuMean} ms mean / ${r.cpuP95} ms p95 · programs ${r.programs} · geo ${r.geometries} · tex ${r.textures} · heap ${r.heapMB} MB`);
   console.log(`  draws/tris by direction: ${r.dirs.map((d) => `${d.draws}/${(d.tris / 1e6).toFixed(2)}M`).join('  ')}`);
   console.log(`  meshes ${r.sceneMeshes} (${r.visibleMeshes} visible) · instances ${r.instances} · geometry ${r.geometryMB} MB`);
   console.log(`  geometry by group: ${r.topGroups.map((g) => `${g.group} ${g.mb} MB/${g.meshes}`).join(' · ')}`);

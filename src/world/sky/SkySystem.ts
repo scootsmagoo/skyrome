@@ -195,6 +195,8 @@ export class SkySystem implements System {
     const eph = (this.ephemeris = computeEphemeris(d.year, d.month, d.day, time.hour));
     this.sunDir.set(eph.sun.x, eph.sun.y, eph.sun.z);
     this.moonDir.set(eph.moon.x, eph.moon.y, eph.moon.z);
+    // The star points cost a pass over every star even when the day sky hides them all.
+    this.brightStars.visible = eph.sun.y < 0.12;
     const sm = eph.starMatrix;
     this.dome.uniforms.uStarMatrix.value.set(sm[0], sm[3], sm[6], sm[1], sm[4], sm[7], sm[2], sm[5], sm[8]);
 
