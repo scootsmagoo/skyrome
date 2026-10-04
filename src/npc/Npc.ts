@@ -61,6 +61,8 @@ export interface CarriedLight {
 }
 
 const tmp = new THREE.Vector3();
+/** Reused translation for gliders (Rapier copies it). */
+const glideT = { x: 0, y: 0, z: 0 };
 
 export class Npc extends Actor implements Positioned {
   readonly humanoid: HumanoidAvatar;
@@ -97,6 +99,8 @@ export class Npc extends Actor implements Positioned {
   scripted = false;
   /** Manager clock when spawned (s). */
   bornAt = 0;
+  /** Not recycled for being out of view before this manager time (s): people overtaking from behind. */
+  recycleGraceUntil = 0;
   /** Manning a station (stands at its post; outside the crowd budget). */
   station: StationPost | null = null;
   /** Followers (escorts) and the leader this one follows. */
@@ -207,7 +211,10 @@ export class Npc extends Actor implements Positioned {
     this.prevPos.copy(this.currPos);
     this.currPos.set(nx, ny, nz);
     this.grounded = true;
-    this.body.body.setNextKinematicTranslation({ x: nx, y: ny + this.body.halfHeight + this.body.radius, z: nz });
+    glideT.x = nx;
+    glideT.y = ny + this.body.halfHeight + this.body.radius;
+    glideT.z = nz;
+    this.body.body.setNextKinematicTranslation(glideT);
   }
 
   /** Turn shadows off far away (tech.md §5.6: no shadows beyond ~50 m). */

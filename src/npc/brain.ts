@@ -16,7 +16,7 @@ import type { Game } from '../core/Game';
 import type { Rng } from '../core/Rng';
 import type { NavService } from '../ai/life/nav';
 import type { MoverEvent } from '../ai/life/mover';
-import type { Vec2 } from '../ai/life/steering';
+import { hyp, type Vec2 } from '../ai/life/steering';
 import type { BarkKind } from './barks';
 import type { DayPhase } from './crowd/budget';
 import type { Npc } from './Npc';
@@ -52,6 +52,14 @@ export interface LifeContext {
   travelTarget?(npc: Npc): Vec2 | null;
   /** How likely a wandering NPC here walks on along the street rather than browsing (0..1). */
   travelChance?(npc: Npc): number;
+  /** Temple cellae are shut today (the Lemuria): priests stand at the doors instead of praying. */
+  templesShut?(): boolean;
+  /** Guards stay out of this fight (a quest's scripted fight): they watch instead of engaging. */
+  guardsStandDown?(aggressor: Actor | null): boolean;
+  /** Can the player walk to this point (nav grid; true where the grid doesn't know)? */
+  reachable?(x: number, z: number): boolean;
+  /** Put an NPC at a point at once (out of sight only); false when there is no floor there. */
+  warp?(npc: Npc, x: number, z: number): boolean;
 }
 
 export type TaskKind = 'idle' | 'goto' | 'follow' | 'flee' | 'gawk' | 'respond' | 'leave' | 'converse' | 'script';
@@ -177,8 +185,8 @@ export class NpcBrain {
         const fz = Math.cos(h);
         const tx = leader.position.x - fx * back - fz * side;
         const tz = leader.position.z - fz * back + fx * side;
-        const d = Math.hypot(tx - npc.position.x, tz - npc.position.z);
-        const ls = Math.hypot(leader.velocity.x, leader.velocity.z);
+        const d = hyp(tx - npc.position.x, tz - npc.position.z);
+        const ls = hyp(leader.velocity.x, leader.velocity.z);
         if (d < 0.5 && ls < 0.2) {
           this.applyLoop(leader.brain?.task?.kind === 'idle' ? 'stand' : null);
           npc.turnToward(leader.heading, 3, dt);
@@ -186,7 +194,7 @@ export class NpcBrain {
           return;
         }
         this.applyLoop(null);
-        if (!npc.mover.active || Math.hypot(npc.mover.goalX - tx, npc.mover.goalZ - tz) > 1) npc.mover.setGoal(tx, tz, 1, 0.35);
+        if (!npc.mover.active || hyp(npc.mover.goalX - tx, npc.mover.goalZ - tz) > 1) npc.mover.setGoal(tx, tz, 1, 0.35);
         npc.mover.speed = Math.min(npc.walkSpeed * 1.8, Math.max(0.6, ls + d * 0.8));
         this.lastEvent = npc.mover.update(dt, npc.position.x, npc.position.z, ctx.nav, out);
         if (this.lastEvent === 'stuck') this.unstickRequested = true;
@@ -350,23 +358,44 @@ export class NpcBrain {
     const s = ctx.spots.find(kinds, npc.position.x, npc.position.z, radius, ctx.rng, npc.position.y);
     if (!s) return false;
     ctx.spots.claim(s, npc.id);
+    let l = loop ?? s.loop;
+    // The Lemuria day: temple doors stay shut, so nobody prays before them (the compita stay open).
+    if (s.kind === 'temple' && l === 'pray' && ctx.templesShut?.()) l = 'stand';
     // The idle's `until` is set on arrival (now + duration).
-    const idle = task('idle', { loop: loop ?? s.loop, face: s.face, spot: s, duration });
+    const idle = task('idle', { loop: l, face: s.face, spot: s, duration });
     this.setTask(task('goto', { x: s.x, z: s.z, speed: npc.walkSpeed, spot: s, then: idle }), ctx);
     return true;
   }
 
-  /** Station members: walk back to the post if pushed off it, then stand there in its loop. */
+  /**
+   * Station members: walk to the post (pushed off it, or walking in), then stand there in its loop.
+   * A post boxed in by its own stall can't be walked to: out of sight the member steps onto it,
+   * in view he waits beside it.
+   */
   private toPost(ctx: LifeContext) {
     const npc = this.npc;
     const st = npc.station!;
     this.activity = 'idle';
     const idle = task('idle', { loop: st.loop, face: st.face, until: ctx.now + 20 + ctx.rng.next() * 20 });
-    if (Math.hypot(st.x - npc.position.x, st.z - npc.position.z) > 0.7) {
-      this.setTask(task('goto', { x: st.x, z: st.z, speed: npc.walkSpeed, then: { ...idle, until: Infinity, duration: 20 + ctx.rng.next() * 20 } }), ctx);
-    } else {
+    if (hyp(st.x - npc.position.x, st.z - npc.position.z) <= 0.7) {
       this.setTask(idle, ctx);
+      return;
     }
+    if (ctx.reachable && !ctx.reachable(st.x, st.z)) {
+      if (!ctx.isVisible(npc.position.x, npc.position.y + 1, npc.position.z) && ctx.warp?.(npc, st.x, st.z)) {
+        this.setTask(idle, ctx);
+        return;
+      }
+      const a = ctx.nav.snap(st.x, st.z, 3);
+      const face = Math.atan2(st.x - npc.position.x, st.z - npc.position.z);
+      const wait = task('idle', { loop: 'stand', face, duration: 3 + ctx.rng.next() * 3 });
+      if (hyp(a.x - npc.position.x, a.z - npc.position.z) <= 0.9) {
+        wait.until = ctx.now + (wait.duration ?? 4);
+        this.setTask(wait, ctx);
+      } else this.setTask(task('goto', { x: a.x, z: a.z, speed: npc.walkSpeed, then: wait }), ctx);
+      return;
+    }
+    this.setTask(task('goto', { x: st.x, z: st.z, speed: npc.walkSpeed, then: { ...idle, until: Infinity, duration: 20 + ctx.rng.next() * 20 } }), ctx);
   }
 
   /** Walk on along the street (lanes); false when there is no street here. */
@@ -396,7 +425,7 @@ export class NpcBrain {
         const off = 0.6;
         const dx = npc.position.x - p.position.x;
         const dz = npc.position.z - p.position.z;
-        const d = Math.hypot(dx, dz) || 1;
+        const d = hyp(dx, dz) || 1;
         this.setTask(task('goto', { x: mx + (dx / d) * off, z: mz + (dz / d) * off, speed: npc.walkSpeed, then: mine }), ctx);
         p.brain.setTask(task('goto', { x: mx - (dx / d) * off, z: mz - (dz / d) * off, speed: p.walkSpeed, then: theirs }), ctx);
         return;
@@ -456,7 +485,7 @@ export class NpcBrain {
       this.wander(ctx);
       return;
     }
-    const d = Math.hypot(loc.x - npc.position.x, loc.z - npc.position.z);
+    const d = hyp(loc.x - npc.position.x, loc.z - npc.position.z);
     const r = Math.min(loc.radius, 4);
     if (activity === 'wander' || activity === 'patrol') {
       this.activity = activity === 'patrol' ? 'patrol' : 'wander';
@@ -496,9 +525,15 @@ export class NpcBrain {
     const rng = ctx.rng;
     const dx = npc.position.x - x;
     const dz = npc.position.z - z;
-    const d = Math.hypot(dx, dz) || 1;
+    const d = hyp(dx, dz) || 1;
     this.alarmUntil = ctx.now + 6;
     if (role?.guard || npc.def?.faction === 'cohortes-urbanae' || npc.def?.faction === 'vigiles') {
+      if (ctx.guardsStandDown?.(aggressor)) {
+        // A scripted fight (a quest's ambush): the watch keeps its post and looks on.
+        const face = Math.atan2(x - npc.position.x, z - npc.position.z);
+        this.setTask(task('idle', { loop: 'guard', face, until: ctx.now + 8 + rng.next() * 4 }), ctx);
+        return;
+      }
       ctx.bark(npc, 'guard', true);
       const p = ctx.nav.snap(x + (dx / d) * 2.5, z + (dz / d) * 2.5, 3);
       this.setTask(task('respond', { x: p.x, z: p.z, speed: 4.2, dangerX: x, dangerZ: z, until: ctx.now + 25 }), ctx);
@@ -516,7 +551,7 @@ export class NpcBrain {
     const r = 25 + rng.next() * 15;
     const a = Math.atan2(dz, dx) + (rng.next() - 0.5) * 0.9;
     let p = ctx.nav.snap(x + Math.cos(a) * r, z + Math.sin(a) * r, 6);
-    if (Math.hypot(p.x - x, p.z - z) < 12) p = { x: npc.position.x + (dx / d) * 15, z: npc.position.z + (dz / d) * 15 };
+    if (hyp(p.x - x, p.z - z) < 12) p = { x: npc.position.x + (dx / d) * 15, z: npc.position.z + (dz / d) * 15 };
     this.setTask(task('flee', { x: p.x, z: p.z, speed: 3.6 + rng.next() * 1.0, dangerX: x, dangerZ: z, until: ctx.now + 20 }), ctx);
     if (rng.chance(0.3)) ctx.bark(npc, kind === 'crime' ? 'crime' : 'flee', true);
   }

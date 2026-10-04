@@ -12,6 +12,14 @@ export interface Vec2 {
   z: number;
 }
 
+/**
+ * Length of (x, z). Math.hypot is a builtin call that boxes its double arguments (garbage on every
+ * call in the per-NPC per-step paths); this small function is inlined and allocation-free.
+ */
+export function hyp(x: number, z: number): number {
+  return Math.sqrt(x * x + z * z);
+}
+
 export interface SteerAgent {
   x: number;
   z: number;
@@ -61,7 +69,7 @@ export const DEFAULT_STEER: SteerParams = {
 export function seek(ax: number, az: number, tx: number, tz: number, speed: number, arrive: number, out: Vec2): Vec2 {
   const dx = tx - ax;
   const dz = tz - az;
-  const d = Math.hypot(dx, dz);
+  const d = hyp(dx, dz);
   if (d < 1e-4) {
     out.x = out.z = 0;
     return out;
@@ -104,7 +112,7 @@ export function separation(a: SteerAgent, ns: readonly SteerNeighbor[], p: Steer
  */
 export function avoidance(a: SteerAgent, desired: Vec2, ns: readonly SteerNeighbor[], p: SteerParams, out: Vec2): Vec2 {
   out.x = out.z = 0;
-  const sp = Math.hypot(desired.x, desired.z);
+  const sp = hyp(desired.x, desired.z);
   if (sp < 0.05) return out;
   for (const n of ns) {
     const px = n.x - a.x;
@@ -117,7 +125,7 @@ export function avoidance(a: SteerAgent, desired: Vec2, ns: readonly SteerNeighb
     if (t <= 0 || t > p.horizon) continue;
     const cx = px + rvx * t;
     const cz = pz + rvz * t;
-    const dist = Math.hypot(cx, cz);
+    const dist = hyp(cx, cz);
     const rsum = a.radius + n.radius + p.personalSpace * Math.min(2, n.weight);
     if (dist >= rsum) continue;
     const urgency = (1 - t / p.horizon) * (1 - dist / rsum) * p.avoidance * n.weight;
@@ -149,17 +157,17 @@ export function steer(a: SteerAgent, desired: Vec2, ns: readonly SteerNeighbor[]
   const avo = avoidance(a, desired, ns, p, tmpB);
   let x = desired.x + sep.x + avo.x;
   let z = desired.z + sep.z + avo.z;
-  const s = Math.hypot(x, z);
-  const max = Math.max(a.maxSpeed, Math.hypot(sep.x, sep.z));
+  const s = hyp(x, z);
+  const max = Math.max(a.maxSpeed, hyp(sep.x, sep.z));
   if (s > max) {
     x = (x / s) * max;
     z = (z / s) * max;
   }
   // Don't let avoidance turn a walker fully around: keep some forward progress if it wanted to move.
-  const ds = Math.hypot(desired.x, desired.z);
+  const ds = hyp(desired.x, desired.z);
   if (ds > 0.1) {
     const fwd = (x * desired.x + z * desired.z) / ds;
-    if (fwd < -0.2 * ds && Math.hypot(sep.x, sep.z) < 0.5) {
+    if (fwd < -0.2 * ds && hyp(sep.x, sep.z) < 0.5) {
       x -= (desired.x / ds) * (fwd + 0.2 * ds);
       z -= (desired.z / ds) * (fwd + 0.2 * ds);
     }
@@ -212,7 +220,7 @@ export class StuckMonitor {
     }
     this.t += dt;
     if (this.t >= this.window) {
-      const moved = Math.hypot(x - this.ax, z - this.az);
+      const moved = hyp(x - this.ax, z - this.az);
       // Expect at least a fifth of the requested speed (crowds slow people a lot), min 12 cm.
       const need = Math.max(0.12, speed * this.window * 0.2);
       if (moved < need) this.stuckTime += this.t;

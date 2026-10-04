@@ -15,7 +15,10 @@ who step in, and small scripted street scenes every 15–60 s.
   `&crowd=0|2`, `&vignettes=0`, `&stations=0`
 - Tests: `tests/npc-*.test.ts` (schedules, budgets, districts, nav grid, street graph, steering and
   a 40–70-walker fake-world simulation for AC-22, barks, spots, the shoulder-through physics,
-  lanes, stations and the gate crowd)
+  lanes, stations and the gate crowd) and `tests/npc-manager.test.ts`, which drives the whole
+  `NpcManager` over a headless Rapier world (`tests/npc-harness.ts`): street spawns while walking
+  an open street, stations staffed on approach, the night cap at 00:30, named NPCs at a building and
+  at the content bible's landmark ids, the Lemuria day and night, guards in scripted fights
 - Third-party assets or libraries: none
 
 ## Quick start
@@ -52,9 +55,10 @@ itself), `game.locations`, `game.dialogue`, `game.ui`, `game.audio`, `game.light
 | `npc/Npc.ts` | `Npc extends Actor`: humanoid avatar (from `NpcDef.appearance` or a crowd role), brain slot, `Talk` interactable, look-at, carried prop and its light, simulation tier, soft/solid body |
 | `npc/NpcManager.ts` | `installNpcs`, `game.population`: spawning, the simulation bubble, steering, crowd director, named NPCs, reactions, barks, talking, unsticking |
 | `npc/brain.ts` | `NpcBrain`: schedule slot → task (goto, idle in a loop, wander, chat, follow, patrol, leave); reactions (flee, gawk, respond) |
-| `npc/schedules.ts` | Roman hours ↔ clock, 19 archetype templates, resolution, `scheduleFor()` for content authors |
+| `npc/schedules.ts` | Roman hours ↔ clock, 20 archetype templates, resolution, `scheduleFor()` for content authors |
 | `npc/crowd/roles.ts` | 23 crowd roles: looks, archetype, speed, props, escorts, bark table |
 | `npc/crowd/budget.ts` | How many people by hour and district (AC-10), who is out (pure) |
+| `npc/crowd/spawnRules.ts` | Where late arrivals may appear along a street, the crowd cap with people walking home counted, when station posts are staffed in view (pure) |
 | `npc/crowd/districts.ts` | Districts from the atlas lowlands and regions (and the Porta Capena), points of interest on landmark forecourts |
 | `npc/crowd/atlasLanes.ts` | Lanes from the atlas roads plus the Porta Capena connector |
 | `npc/crowd/stations.ts` | Station data (who stands where, when, with what dressing) and their geometry (pure) |
@@ -99,13 +103,23 @@ itself), `game.locations`, `game.dialogue`, `game.ui`, `game.audio`, `game.light
   it everything still works on the grid and the atlas forecourts.
 - **Lanes (until the street graph exists).** The atlas roads, converted to game metres, plus a
   connector from the Porta Capena to the head of the Circus valley, are the streets people use:
-  60% of spawns (85% at night, 20% in the fora) are on a lane, heading along it; wanderers near a
+  75% of spawns (85% at night, 20% in the fora) are on a lane, heading along it; wanderers near a
   lane walk on along it 55% of the time (70% at night, 20% in the fora), 22–44 m a leg, keeping to
   the right of their direction (two streams, one each way), turning at junctions and dead ends;
   people going home walk off down the street away from the player; carts drive the clear stretch
   of the nearest lane. Wander targets near a lane score higher, and **open terrain steeper than
   0.3 is rejected** for spawns and wander targets (no crowds on the Palatine's grass), as are
   spots more than 7 m above or below the walker or unreachable from the player.
+- **Street spawns on open streets** (`crowd/spawnRules.ts`). A straight street with nothing beside
+  it hides nothing, so "only out of sight" left the road ahead empty once the first crowd had
+  walked past. Late arrivals on a street may appear: out of the frustum to the side; in it but
+  behind something (≥ 22 m); in it and far away (≥ 50 m, a person is a few pixels tall there),
+  walking toward the player; or behind the camera (≥ 25 m) while the player stands still, walking
+  the way he looks so they overtake into view (they are spared the behind-the-camera recycling for
+  30 s). Street spawns reach 80 m out by day (70 m at night) instead of the crowd radius, and every
+  other try draws only from the far part of that ring. Walking the golden path at 07:30 the
+  people in view went from 0–4 (most samples 0 past the Circus head) to 12–39, and the people on
+  the street from 2–7 of ~45 to 33–45.
 - **A\* only when it can succeed.** `NavService.findPath` skips the search when the goal is walled
   off from the start (the reachability labels): failing searches cost the most (in the Forum crowd
   path search fell from 199 ms to 13 ms per 13 s).
@@ -136,8 +150,9 @@ are turned off beyond 50 m. Ambient people despawn out of view past ~82 m (alway
 recycled toward where the player looks: after 3 s when more than 12 m behind the camera, after 6 s
 when more than 18 m off to the side, and walkers (not people settled at a spot or chatting) after
 6 s out of view beyond 10 m once they are 14 s old; a senator and his train go together. New ones
-spawn just outside the edges of the view (or behind something in it) and are sent into it, or step
-out of doorways. Wander targets are scored toward the visible, unoccluded area: nobody is simulated just to
+spawn along the streets (see above: to the side, behind something, far down the street in view,
+or overtaking from behind), just outside the edges of the view and are sent into it, or step out
+of doorways. Wander targets are scored toward the visible, unoccluded area: nobody is simulated just to
 be unseen.
 
 ## Crowds (GDD §14.7, AC-10)
@@ -147,7 +162,13 @@ midday rest, thins after dusk). Districts set the density: the Forum 1.6 (~96 at
 into a 42 m radius so 30–40 are on screen), the Subura 0.9, the Colosseum valley 0.85, the Velia
 and the Velabrum 0.75, the Circus valley 0.7, the Porta Capena 0.6, elsewhere by region
 (0.35–0.8). Outside the fora the crowd spreads over 56 m (50 m at night). `crowdTarget()` caps it:
-at night the station people count toward the ≤ 25.
+at night the station people count toward the ≤ 25. People walking home count toward the cap
+too (`crowdRoom()`): by day a margin of 10% lets them be replaced before they vanish, at night the
+cap is hard. A role is never picked at an hour its archetype spends at home: revelers have their own
+night archetype (`comissator`, out from sunset to sunrise). Before, revelers (archetype `civis`,
+home from the 3rd watch) turned for home the moment they spawned, did not count, and were replaced
+3 every 0.3 s: from midnight to 02:24 the Forum ran up to 122–145 people, 100+ visible, 1,000+ draw
+calls.
 
 | Hour (13 May) | Forum budget | Night extras |
 | --- | --- | --- |
@@ -177,7 +198,10 @@ travellers, farmers, porters, muleteers; before dawn, only those and the night p
 ## Stations (the golden path, GDD §17.2)
 
 Small authored groups who are always at a place at certain phases of the day, with their dressing.
-They spawn out of sight within 85 m of the station (at once after a teleport or a new game), stand
+Within 85 m of the station they spawn at their posts when the post is out of sight or still at
+least 45 m away (a few pixels tall: on an open street they are there long before the player
+arrives), at once after a teleport or a new game; nearer and in view they walk in from a hidden
+point nearby. They stand
 at their posts in their loops (pushed off, they walk back), walk off when the phase ends, and are
 cleared beyond 115 m. They are outside the crowd budget (but count toward the night cap) and are
 never recycled or borrowed by vignettes. Data in `crowd/stations.ts`: an anchor (an atlas landmark's
@@ -208,7 +232,7 @@ and the crossroads shrine clear (`tests/npc-stations.test.ts`).
 
 Templates are written in Roman hours (`{ hora: n }`, `{ vigilia: n }`) and compiled for the date
 (13 May: sunrise 04:47, sunset 19:13, a hora ≈ 72 min). Archetypes: `rusticus` (farmer: in before
-dawn, gone by the 8th hour), `viator` (traveller), `tabernarius` (shopkeeper),
+dawn, gone by the 8th hour), `viator` (traveller), `comissator` (reveler: dusk to dawn), `tabernarius` (shopkeeper),
 `faber` (worker), `patronus` (senator), `cliens`, `matrona`, `servus-baiulus` (porter),
 `miles-urbanus` (soldier/guard), `vigil` (sleeps by day), `sacerdos` (priest), `vestalis`,
 `otiosus` (idler at the gaming boards), `mendicus`, `plaustrarius` (night carter), `puer`,
@@ -216,8 +240,11 @@ dawn, gone by the 8th hour), `viator` (traveller), `tabernarius` (shopkeeper),
 stand, sit, work, pray, guard, talk, sitGround, lean, sleep), `visit`, `wander`, `patrol`, `follow`
 or `home` (walk to a door or out of sight and vanish).
 
-Named NPCs use their own `NpcDef.schedule` (clock hours, location ids). Location ids resolve via
-`game.locations`, then atlas landmarks (to the forecourt in front of the facade), then street spot
+Named NPCs use their own `NpcDef.schedule` (clock hours, location ids). Atlas landmark ids resolve
+to the forecourt in front of the main facade, a few metres beyond the footprint
+(`landmarkForecourt()`; the centre for fora and open sites), even though the game flow registers
+every landmark in `game.locations` at its centre; a location registered under a landmark id at a
+point of its own wins. Other ids resolve via `game.locations` (content's places), then street spot
 ids. Content authors can build a schedule from an archetype:
 
 ```ts
@@ -226,7 +253,10 @@ schedule: scheduleFor('tabernarius', { work: 'popina-vici-tusci', home: 'insula-
 ```
 
 Named NPCs appear when the player is within ~100 m of where their schedule puts them (not while
-`sleep`ing), walk between their places as the hours change, and go when the player is far; dead
+`sleep`ing) on a cell the player can reach, at most 2.5 m above or below the terrain (searched
+within 5, 12, then 25 m; deferred while the nav grid there isn't built), so nobody stands on a
+temple roof or pediment; `positionOf()` (quest markers) gives the same forecourt on the ground.
+They walk between their places as the hours change, and go when the player is far; dead
 ones stay dead (`npc:died`). `disposition: 'hostile'` ones are solid and, if `game.combat`
 exists, engage the player within 12 m.
 
@@ -259,6 +289,12 @@ others flee 25–40 m or, if curious, gawk from 8–13 m cheering. `crime:commit
 `npc:alarm` event do the same. A drawn weapon makes people step wide around you and complain.
 The module never fights.
 
+**Scripted fights.** A quest's ambush (mq-01's courier fight at the Porta Capena, with the vigiles'
+brazier 20 m away) must not be joined by the watch: mark the quest's enemies with
+`game.population.questFight(actor)` (or set `game.population.suppressGuards = true` for the whole
+scene). Guards, vigiles and station watchmen then keep their posts and look on (`guard` loop,
+facing the fight) instead of calling `game.combat.engage`; bystanders still flee or gawk.
+
 ## Vignettes (GDD §12.3; docs/CONTENT.md §8.3.1)
 
 Every 15–30 s by day (30–60 s at night; the first 6–12 s after arriving somewhere new), at most
@@ -272,7 +308,7 @@ back when the scene ends; props and lights are cleaned up.
 | `pot` | A pot thrown from a first-floor window shatters beside you (Juvenal 3.268–77; `vig-matella`) | any, by a wall |
 | `thief` | *Fur!* A thief runs off through the crowd, the victim shouts, a soldier gives chase | day |
 | `hawker` | A tray-seller calls his wares; a few people buy | day |
-| `sacrifice` | Priest, altar fire, *favete linguis*, the victimarius, onlookers praying (`vig-sacrificium`) | day |
+| `sacrifice` | Priest, altar fire, *favete linguis*, the victimarius, onlookers praying (`vig-sacrificium`); on the Lemuria day only at an open-air shrine, to the Lares (the cellae are shut) | day |
 | `procession` | A senator with his clients crosses the square: *"Way for Gaius Calpurnius!"* | day |
 | `crier` | The praeco (Cerdo, if he is about) announces games, lost property, the grain ships (`vig-praeco`) | day |
 | `dice` | Idlers dice on the steps; *Venus!*; they scatter when Dento or a soldier walks by (`vig-aleatores`) | day |
@@ -281,6 +317,14 @@ back when the scene ends; props and lights are cleaned up.
 | `vigiles` | A vigil with a lantern: *"Water in the flats! Lamps out!"* (`vig-vigiles-lucerna`) | night |
 | `fabae` | The Lemuria: a paterfamilias throws black beans for the dead (Ovid, *Fasti* 5) | Lemuria night |
 | `umbra` | The ghost-glimpse: a figure in a brown paenula at the edge of vision, gone when looked at (`vig-lemuria-umbra`) | Lemuria night |
+
+**The Lemuria** (`lemuriaPhase()`): festival effects fire on the first elapsed day that shows 9, 11
+or 13 May (the calendar, `game.calendar`, knows which day that was; without it only the start
+date counts). 'day' is sunrise to sunset of that day: temple cellae are shut (`templesShut()`,
+from `game.rpg.hooks.templesClosed` when the RPG module is there), so priests stand at the shut
+doors instead of praying and the sacrifice moves to a shrine. 'night' runs from that sunset to
+sunrise of the next elapsed day, so the bean rite and the ghost-glimpse still play after midnight
+(the 3rd watch, mq-03); before, they stopped at 00:00 when the day index rolled over.
 
 Night carts (`vig-plaustrum`) run as their own system. New vignettes: add a `VignetteDef` (plan +
 generator script; see `vignettes/kit.ts`) to `vignettes/index.ts`.
@@ -295,6 +339,8 @@ Listened to: `npc:alarm {x, z, radius?, kind?, aggressorId?}` (anyone may emit i
 
 - **Combat** (`game.combat`, theirs): `engage(a, b)` and `isInCombat(a)`. Fighters are left to
   combat (the brain stops) and made solid. `game.population.kill(npc)` for deaths.
+- **Quests** (scripted fights): `game.population.questFight(enemy)` per enemy, or
+  `suppressGuards = true`, keeps the watch out of a set-piece fight (see Reactions).
 - **City** (`game.streets`, theirs): see the adapter above.
 - **Game flow** (`src/game/`): installs the module through `src/npc/install.ts`; reads
   `game.population.positionOf(npcId)` for quest markers; `game.flow.state` silences barks and
@@ -317,16 +363,27 @@ Philo the aedituus), the RPG/dialogue engine, the UI and audio.
 ## Measured (M4 Max, Chrome via `scripts/shot.mjs`, 1280×720)
 
 "In view" is in the camera frustum; "unoccluded" also has a clear line from the camera to the head.
-Forum shots look across the square from the Rostra, 15 s after turning.
+Forum shots look across the square from the Rostra, 4–24 s after turning. Measured 2026-10-04 on
+main with the terrain, river district and game flow (the whole frame costs more than it did on the
+bare city, with or without people).
 
 | Where | People | In view / unoccluded | fps | CPU ms/frame (all systems) | NPC fixed step + update | Draw calls | Triangles |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Crowd scene, 09:30 | 65 + 2 named | 55 / 44 | 60 | 4.4 | 0.58 + 0.74 ms | 289 | 0.42 M |
-| Rome, spawn (Porta Capena), 04:30 | 27 (10 at stations, 6 vigiles, 1 cart) | 22 / 11 | 60 | 2.9–4.0 | 0.32 + 0.17 ms | 234–611 | 0.4–1.3 M |
-| Rome, Forum, 09:00 | 101–103 (7 at stations) | 41–42 / 30–32 | 60 | 5.3–5.8 | 1.0–1.2 + 0.06–0.16 ms | 415 | 0.93–0.96 M |
-| Rome, Forum, 09:00 (WebKit) | 96 | 31 | 60 | 6.0 | 1.1 + 0.25 ms | 413 | 0.96 M |
-| Rome, Forum, 14:00 | 73 | 20 / 14 | 60 | 4.3 | 1.0 + 0.03 ms | 355 | 0.77 M |
-| Rome, Forum, 23:00 | 25 (5 vigiles, 11 lights, 2 carts) | 15 / 9 | 60 | 3.8 | 0.66 + 0.13 ms | 410 | 0.52 M |
+| Crowd scene, 09:30 | 68 | 55 / 43 | 60 | 2.6–4.2 | 0.36 + 0.03 ms | 282 | 0.40 M |
+| Golden path walk, 07:30 (Porta Capena → Velabrum) | 44–53 (stations staffed ahead) | 12–39 / 9–38 | 60 | 7.4–11 | — | 790–875 | 1.9–2.3 M |
+| Rome, Forum, 09:00 | 100–103 (7 at stations) | 45–50 / 32–39 | 60 | 9–11 | 1.15–1.5 ms | 560–590 | 1.25 M |
+| Rome, Forum, 14:00 | 71–73 | 24–30 / 12–18 | 58–60 | 8–11 | 0.9–1.7 ms | 469–489 | 1.05 M |
+| Rome, Forum, 23:00 | 24 (5 vigiles, 2 at the post, 1 cart) | 11–13 / 5–6 | 60 | 8.7–11.9 | 0.6–0.9 ms | 470–476 | 0.75 M |
+| Rome, Forum, 00:30 | 24 (18 revelers, 5 vigiles, 1 drover) | 15 / 10 | 58–60 | 11–14 | 1.0–1.35 ms | 495 | 0.85 M |
+
+Before the night fix the 00:30 row ran away: 50 → 122 people in 40 s, 103 visible, 1,056 draw calls.
+
+Garbage (CDP heap sampling, 10 s in the Forum at 09:00 with ~103 people):
+`NpcManager.fixedUpdate` 37 MB inclusive (88 MB before pooling the steering records, reusing the
+agent, the cart rotation and the glide translation, and replacing `Math.hypot`, which boxes its
+arguments, in the per-step paths); nav-grid `canStep` + `stepFlood` 4 MB (14 MB before: map keys
+past 2^30 were heap numbers). The rest of the NPC cost is avatar animation (`sampleClip` ~300 MB
+inclusive, `sampleGait` ~160 MB, avatar module) and spawning (`spawnAmbient` ~39 MB).
 
 AC-22 in the Forum crowd at 09:00 with the player walking through it: longest no-progress 0.52 s
 over 30 s, no unsticks.
@@ -355,3 +412,8 @@ over 30 s, no unsticks.
   from the spawn and carts can't drive through it yet.
 - No crowd under the title camera (it circles the Colosseum valley while the player stands at the
   gate); the crowd fills around the player.
+- Avatar animation allocates heavily per frame (`avatar/anim/clip.ts` `sampleClip`: `Math.hypot`
+  and temporary arrays; `controller.ts` `sampleGait`): for the avatar crew. `Actor.locomote` gets
+  a new vector from Rapier's `computedMovement()` per character per step (shared file).
+- Far street spawns appear in plain view at 50–80 m without a fade (the haze is too thin there to
+  hide them); a dithered fade-in would need an avatar material hook.

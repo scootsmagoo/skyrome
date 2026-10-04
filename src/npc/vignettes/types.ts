@@ -32,8 +32,10 @@ export interface VignetteContext {
   readonly dt: number;
   readonly now: number;
   readonly night: boolean;
-  /** Tonight is the Lemuria (9, 11 or 13 May, first elapsed day). */
+  /** The Lemuria night: from sunset of the festival day (9, 11 or 13 May, first elapsed day) to sunrise. */
   readonly lemuria: boolean;
+  /** Temple cellae are shut today (the Lemuria day): no rites before temples, compita only. */
+  readonly templesShut: boolean;
   readonly player: THREE.Vector3;
   /** Camera forward on the ground plane (unit). */
   readonly look: { x: number; z: number };

@@ -26,11 +26,12 @@ import { ALL_LAYERS, groups, Layer, RAPIER } from '../core/Physics';
 import { Rng } from '../core/Rng';
 import * as atlas from '../data/atlas';
 import { toGame } from '../world/coords';
+import { dateOfOrdinal, festivalsOn } from '../game/calendar';
 import { NavGrid } from '../ai/life/navgrid';
 import { NavService } from '../ai/life/nav';
 import { PhysicsCellSampler } from '../ai/life/physicsSampler';
 import { SpatialHash } from '../ai/life/spatialHash';
-import { DEFAULT_STEER, steer, type SteerNeighbor, type Vec2 } from '../ai/life/steering';
+import { DEFAULT_STEER, steer, type SteerAgent, type SteerNeighbor, type Vec2 } from '../ai/life/steering';
 import { StreetNav } from '../ai/life/streets';
 import { laneAt, type LaneSet } from '../ai/life/lanes';
 import { atlasLanes, cartLane } from './crowd/atlasLanes';
@@ -39,9 +40,10 @@ import { StationDirector, type StationHost } from './stationDirector';
 import { BarkDirector, type BarkKind } from './barks';
 import { makeTask, NpcBrain, type LifeContext } from './brain';
 import { CartDirector, type CartHost } from './carts';
-import { crowdBudget, crowdTarget, dayPhase, pickRole, roleWeights, type CrowdBudget, type DayPhase } from './crowd/budget';
-import { districtAt, poiBoosts, poisNear, type District, type Poi, type PoiKind } from './crowd/districts';
+import { crowdBudget, crowdTarget, dayPhase, NIGHT_CAP, pickRole, roleWeights, type CrowdBudget, type DayPhase } from './crowd/budget';
+import { allPois, districtAt, landmarkForecourt, poiBoosts, poisNear, type District, type Poi, type PoiKind } from './crowd/districts';
 import { CROWD_ROLES, FOREIGN_LABELS, type CrowdRole, type CrowdRoleId } from './crowd/roles';
+import { crowdRoom, LANE_SPAWN, laneSpawnRing, laneSpawnVerdict, type LaneSpawnVerdict } from './crowd/spawnRules';
 import { combatOf, streetsOf } from './hooks';
 import { Npc } from './Npc';
 import { attachProp, makeWorkBlock } from './props';
@@ -94,6 +96,8 @@ export interface NpcManagerOptions {
   district?: District;
   /** Authored stations (vigiles' posts, stalls, the cart stand…; needs the atlas). Default true. */
   stations?: boolean;
+  /** Fixed street centrelines (test beds); default: the atlas roads when the atlas is on. */
+  lanes?: LaneSet;
 }
 
 /** Character controller within this distance (m); measured cost ~0.05–0.15 ms per NPC per step. */
@@ -106,6 +110,8 @@ const DESPAWN_UNSEEN = 82;
 const DESPAWN_ALWAYS = 115;
 const NAMED_SPAWN = 100;
 const NAMED_DESPAWN = 140;
+/** A named NPC never appears more than this far above or below the terrain (m): no roofs. */
+const NAMED_MAX_LIFT = 2.5;
 const SPAWN_MIN = 20;
 /** Unseen people farther than this behind the camera are recycled toward the view… */
 const RECYCLE_BEHIND = 12;
@@ -115,6 +121,30 @@ const SPAWN_MAX = 62;
 /** Appearance variants per avatar role (shared → geometry cache hits, cheap spawns). */
 const VARIANTS = 14;
 
+/** Where the crowd director puts a new citizen. */
+interface SpawnPick {
+  x: number;
+  z: number;
+  heading?: number;
+  /** At its work spot (initial fill): start the schedule there. */
+  spotPlaced?: boolean;
+  /** On a street: walk on along it. */
+  onLane?: boolean;
+  /** Behind the camera (overtaking a player standing still): not recycled at once. */
+  behind?: boolean;
+}
+
+/** The calendar's public surface used here (src/game/calendar.ts; read structurally). */
+interface CalendarLike {
+  year?: number;
+  serialize(): { firstSeen?: Record<string, number> };
+}
+
+function isLemuriaDate(month: number, day: number): boolean {
+  return festivalsOn(month, day).some((f) => f.id === 'fest-lemuria');
+}
+
+const ZERO = { x: 0, y: 0, z: 0 };
 const tmpV = new THREE.Vector3();
 const tmpV2 = new THREE.Vector3();
 const wish = new THREE.Vector3();
@@ -141,6 +171,13 @@ export class NpcManager implements System {
   maxCrowd: number;
   readonly useAtlas: boolean;
   private readonly fixedDistrict: District | null;
+  private readonly fixedLanes: LaneSet | null;
+  /**
+   * Scripted fights (a quest's ambush, a set piece): while true no guard steps in anywhere. For a
+   * single fight mark its enemies with `questFight(actor)` instead.
+   */
+  suppressGuards = false;
+  private readonly questFighters = new WeakSet<Actor>();
   /** Seconds of simulation. */
   clock = 0;
   /** Nav-grid cells sampled per frame. */
@@ -153,6 +190,9 @@ export class NpcManager implements System {
   private neigh: Npc[] = [];
   private stepList: Npc[] = [];
   private steerNs: SteerNeighbor[] = [];
+  /** Pooled steering records (reused every step). */
+  private readonly neighborPool: SteerNeighbor[] = [];
+  private readonly agent: SteerAgent = { x: 0, z: 0, vx: 0, vz: 0, radius: 0.28, maxSpeed: 1 };
   private sampler: PhysicsCellSampler;
   private streetNav: StreetNav | null = null;
   private district: District;
@@ -162,6 +202,7 @@ export class NpcManager implements System {
   private sunDay = -1;
   private phase: DayPhase = 'morning';
   private seq = 0;
+  private stepNo = 0;
   private tierT = 0;
   private crowdT = 0;
   private namedT = 0;
@@ -190,6 +231,11 @@ export class NpcManager implements System {
   private registryFallback: NpcRegistry | null = null;
   private workBlocks = new Map<string, THREE.Object3D>();
   private readonly ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 });
+  private readonly tmpCell = { x: 0, z: 0 };
+  /** Floor height on the nav grid for gliders (one closure, not one per NPC per step). */
+  private readonly gridFloor = (x: number, z: number) => (this.grid.walkable(x, z) ? this.grid.heightAt(x, z) : null);
+  /** The Lemuria phase and the temple rule for one game minute (`key`). */
+  private readonly lemCache: { key: number; phase: 'day' | 'night' | null; shut: boolean | null } = { key: NaN, phase: null, shut: null };
   readonly wallProbe: WallProbe;
 
   constructor(
@@ -205,6 +251,7 @@ export class NpcManager implements System {
     this.maxCrowd = opts.maxCrowd ?? 110;
     this.useAtlas = opts.atlas ?? true;
     this.fixedDistrict = opts.district ?? null;
+    this.fixedLanes = opts.lanes ?? null;
     this.sampler = new PhysicsCellSampler(game.physics, {
       refHeight: (x, z) => (game.heightmap ? game.heightmap.heightAt(x, z) : null),
       fallbackY: 0,
@@ -295,6 +342,21 @@ export class NpcManager implements System {
       out.push(n.id);
     }
     return out;
+  }
+
+  /**
+   * A scripted fight (a quest's ambush): guards, vigiles and station watchmen leave fights involving
+   * this actor to the player (bystanders still flee or gawk). Unmark with `on = false`; dead or
+   * despawned actors drop out on their own.
+   */
+  questFight(actor: Actor, on = true) {
+    if (on) this.questFighters.add(actor);
+    else this.questFighters.delete(actor);
+  }
+
+  /** Do guards stay out of a fight with this aggressor (suppressGuards, or a quest fighter)? */
+  guardsStandDown(aggressor: Actor | null): boolean {
+    return this.suppressGuards || (!!aggressor && this.questFighters.has(aggressor));
   }
 
   /** Something alarming at a point (see the 'npc:alarm' event). */
@@ -630,6 +692,16 @@ export class NpcManager implements System {
       get playerPos() {
         return m.game.player?.position ?? null;
       },
+      templesShut: () => m.templesShut(),
+      guardsStandDown: (aggressor) => m.guardsStandDown(aggressor),
+      reachable: (x, z) => !m.grid.ready(x, z) || m.grid.reachable(x, z),
+      warp: (npc, x, z) => {
+        const y = m.floorY(x, z);
+        if (y === null) return false;
+        npc.teleport({ x, y: y + 0.03, z });
+        npc.mover.stuck.reset(x, z);
+        return true;
+      },
       wanderTarget: (npc, radius, minR = 0) => m.wanderTarget(npc, radius, minR),
       exitTarget: (npc) => m.exitTarget(npc),
       resolveLocation: (id) => m.resolveLocation(id),
@@ -742,19 +814,49 @@ export class NpcManager implements System {
     return null;
   }
 
-  /** Location id → game point: game.locations, atlas landmark (forecourt), street spot. */
+  /**
+   * Location id → game point. Atlas landmarks resolve to the forecourt in front of the facade (the
+   * game flow registers every landmark in game.locations at its centre, which is inside or on top
+   * of the building; a location registered under a landmark id at a point of its own wins); then
+   * game.locations (content's places); then street spots.
+   */
   resolveLocation(id: string): { x: number; z: number; radius: number } | null {
     const loc = this.game.locations?.get(id);
-    if (loc) return { x: loc.position.x, z: loc.position.z, radius: loc.radius };
     const lm = this.useAtlas ? atlas.LANDMARK_BY_ID[id] : undefined;
     if (lm) {
       const [gx, gz] = toGame(lm.center[0], lm.center[1]);
-      const poi = this.pois(gx, gz, 80).find((p) => p.landmarkId === id);
-      if (poi) return { x: poi.x, z: poi.z, radius: Math.max(4, poi.radius) };
-      return { x: gx, z: gz, radius: 10 };
+      if (loc && Math.hypot(loc.position.x - gx, loc.position.z - gz) > 1) return { x: loc.position.x, z: loc.position.z, radius: loc.radius };
+      const f = landmarkForecourt(lm);
+      const poi = allPois().find((p) => p.landmarkId === id);
+      return { x: f.x, z: f.z, radius: poi ? Math.max(4, poi.radius) : 6 };
     }
+    if (loc) return { x: loc.position.x, z: loc.position.z, radius: loc.radius };
     const s = this.streets()?.spots.find((sp) => sp.id === id);
     if (s) return { x: s.x, z: s.z, radius: 2 };
+    return null;
+  }
+
+  /**
+   * Where a named NPC appears near a resolved location: a walkable cell the player can reach, at
+   * street level (not on a podium top, a roof or a pediment). Null while the nav grid there isn't
+   * built yet (the NPC waits until the player is closer) or when nothing near qualifies.
+   */
+  namedSpawnPoint(loc: { x: number; z: number; radius: number }): { x: number; z: number } | null {
+    const g = this.grid;
+    if (!g.ready(loc.x, loc.z)) return null;
+    const hm = this.game.heightmap;
+    const jitter = Math.min(4, loc.radius);
+    for (const [r, tries] of [[5, 4], [12, 2], [25, 1]] as const) {
+      for (let i = 0; i < tries; i++) {
+        const j = i === 0 ? 0 : jitter;
+        const c = g.nearestWalkable(loc.x + (this.rng.next() - 0.5) * j, loc.z + (this.rng.next() - 0.5) * j, r, { x: 0, z: 0 }, true);
+        if (!c || !g.reachable(c.x, c.z)) continue;
+        const y = g.heightAt(c.x, c.z);
+        if (y === null) continue;
+        if (hm && Math.abs(y - hm.heightAt(c.x, c.z)) > NAMED_MAX_LIFT) continue;
+        return c;
+      }
+    }
     return null;
   }
 
@@ -809,12 +911,63 @@ export class NpcManager implements System {
     return !!f && typeof f.state === 'string' && f.state !== 'playing';
   }
 
-  /** The first elapsed day falls on the Lemuria (9, 11 or 13 May): ghosts walk tonight. */
-  isLemuria(): boolean {
+  /**
+   * Is elapsed day `day` the Lemuria? Festival effects fire on the first elapsed day that shows
+   * 9, 11 or 13 May (GDD §14.10); the calendar (game.calendar) knows which day that was, and
+   * without it (test beds) only the start date counts.
+   */
+  lemuriaOnDay(day: number): boolean {
+    if (day < 0) return false;
+    const cal = (this.game as unknown as { calendar?: CalendarLike }).calendar;
+    if (cal && typeof cal.serialize === 'function') {
+      const seen = cal.serialize().firstSeen ?? {};
+      for (const k in seen) {
+        if (seen[k] !== day) continue;
+        const d = dateOfOrdinal(Number(k), cal.year ?? 113);
+        return isLemuriaDate(d.month, d.day);
+      }
+      return false;
+    }
+    const st = this.game.time.start;
+    return day === 0 && !!st && isLemuriaDate(st.month, st.day);
+  }
+
+  /**
+   * The Lemuria right now: 'day' from sunrise to sunset of the festival day (temple cellae shut),
+   * 'night' from that sunset until sunrise of the next elapsed day (the midnight bean rite, the
+   * ghost-glimpse, mq-03), else null.
+   */
+  lemuriaPhase(): 'day' | 'night' | null {
     const t = this.game.time;
-    if (t.dayIndex !== 0) return false;
-    const d = t.date();
-    return d.month === 4 && (d.day === 9 || d.day === 11 || d.day === 13);
+    // Asked by every bark and scene: worked out once per game minute.
+    const key = Math.floor(t.totalHours * 60);
+    const c = this.lemCache;
+    if (c.key === key) return c.phase;
+    const h = t.hour;
+    const day = t.dayIndex;
+    let phase: 'day' | 'night' | null;
+    if (h < this.sun.rise) phase = this.lemuriaOnDay(day - 1) ? 'night' : null;
+    else if (!this.lemuriaOnDay(day)) phase = null;
+    else phase = h >= this.sun.set ? 'night' : 'day';
+    c.key = key;
+    c.phase = phase;
+    c.shut = null;
+    return phase;
+  }
+
+  /** Ghosts walk tonight (the Lemuria night). */
+  isLemuria(): boolean {
+    return this.lemuriaPhase() === 'night';
+  }
+
+  /** Temple cellae are shut today (the Lemuria day): no sacrifices before temples, nobody at prayer inside. */
+  templesShut(): boolean {
+    this.lemuriaPhase();
+    const c = this.lemCache;
+    if (c.shut !== null) return c.shut;
+    const hooks = (this.game as unknown as { rpg?: { hooks?: { templesClosed?: () => boolean } } }).rpg?.hooks;
+    c.shut = hooks && typeof hooks.templesClosed === 'function' ? !!hooks.templesClosed() : this.lemuriaOnDay(this.game.time.dayIndex);
+    return c.shut;
   }
 
   /** In the camera frustum (no occlusion). */
@@ -860,6 +1013,9 @@ export class NpcManager implements System {
       get lemuria() {
         return m.isLemuria();
       },
+      get templesShut() {
+        return m.templesShut();
+      },
       get player() {
         return m.game.player?.position ?? tmpV.set(0, 0, 0);
       },
@@ -869,7 +1025,8 @@ export class NpcManager implements System {
       free: (x, z, r, filter) =>
         m.near({ x, y: 0, z }, r, (n) => n.ambient && !n.scripted && !n.station && !n.talking && !n.leader && !n.followers.length && !n.dead && !n.isFighting() && n.brain?.task?.kind !== 'flee' && (!filter || filter(n))),
       spawn: (role, x, z, heading, opts) => {
-        if (m.crowdCount >= m.maxCrowd + 8) return null;
+        // Scenes recruit from the crowd first; extras never break the night cap (AC-10).
+        if (m.crowdCount >= m.maxCrowd + 8 || (m.budget.night && m.crowdCount >= NIGHT_CAP)) return null;
         return m.spawnAmbient(role, x, z, heading, opts);
       },
       vanish: (npc) => m.despawn(npc),
@@ -940,7 +1097,8 @@ export class NpcManager implements System {
       },
       isSeen: (x, y, z) => m.isSeen(x, y, z),
       floorY: (x, z) => m.floorY(x, z),
-      spawnMember: (def, mem, x, z, heading) => m.spawnStationMember(def, mem, x, z, heading),
+      spawnMember: (def, mem, x, z, heading, from) => m.spawnStationMember(def, mem, x, z, heading, from),
+      hiddenNear: (x, z, rMin, rMax) => m.hiddenNear(x, z, rMin, rMax),
       dismiss: (npc, now) => {
         if (now || !npc.brain) {
           m.despawn(npc);
@@ -956,9 +1114,14 @@ export class NpcManager implements System {
     };
   }
 
-  /** A station member at its post: the role's look, the station's prop, label and loop. */
-  private spawnStationMember(def: StationDef, mem: StationMember, x: number, z: number, heading: number): Npc | null {
-    const n = this.spawnAmbient(mem.role, x, z, heading, { escorts: false, noProp: mem.prop !== undefined });
+  /**
+   * A station member for its post at (x, z): the role's look, the station's prop, label and loop.
+   * Spawned at `from` (out of sight nearby) it walks to the post first.
+   */
+  private spawnStationMember(def: StationDef, mem: StationMember, x: number, z: number, heading: number, from?: { x: number; z: number }): Npc | null {
+    const sx = from?.x ?? x;
+    const sz = from?.z ?? z;
+    const n = this.spawnAmbient(mem.role, sx, sz, from ? Math.atan2(x - sx, z - sz) : heading, { escorts: false, noProp: mem.prop !== undefined });
     if (!n) return null;
     if (mem.prop) this.giveProp(n, mem.prop);
     if (mem.label) n.name = mem.label;
@@ -968,11 +1131,29 @@ export class NpcManager implements System {
     return n;
   }
 
+  /** A walkable, reachable point within rMin–rMax of (x, z) at street level that the camera can't see. */
+  hiddenNear(x: number, z: number, rMin: number, rMax: number): { x: number; z: number } | null {
+    const g = this.grid;
+    if (!g.ready(x, z)) return null;
+    const hm = this.game.heightmap;
+    for (let i = 0; i < 10; i++) {
+      const a = this.rng.next() * Math.PI * 2;
+      const r = rMin + this.rng.next() * (rMax - rMin);
+      const c = g.nearestWalkable(x + Math.sin(a) * r, z + Math.cos(a) * r, 2, { x: 0, z: 0 }, true);
+      if (!c) continue;
+      const y = g.heightAt(c.x, c.z);
+      if (y === null || (hm && Math.abs(y - hm.heightAt(c.x, c.z)) > 1.6) || this.steep(c.x, c.z, y)) continue;
+      if (this.isSeen(c.x, y + 1.2, c.z) || this.isSeen(c.x, y + 0.2, c.z)) continue;
+      return c;
+    }
+    return null;
+  }
+
   // ---------------------------------------------------------------- streets (lanes)
 
   /** Street centrelines people walk along: the atlas roads (until the city's street graph). */
   lanes(): LaneSet | null {
-    return this.useAtlas ? atlasLanes() : null;
+    return this.fixedLanes ?? (this.useAtlas ? atlasLanes() : null);
   }
 
   /**
@@ -980,8 +1161,17 @@ export class NpcManager implements System {
    * wider in the streets where people stream past.
    */
   crowdRadius(): number {
-    if (!this.useAtlas) return SPAWN_MAX;
+    if (!this.useAtlas && !this.fixedLanes) return SPAWN_MAX;
     return this.inSquare() ? 42 : this.budget.night ? 50 : 56;
+  }
+
+  /**
+   * How far along the streets late arrivals spawn (m): wider than the crowd radius outside the
+   * squares, so people far down an open street can appear in view and walk toward the player.
+   */
+  laneRadius(): number {
+    if (this.inSquare()) return this.crowdRadius();
+    return this.budget.night ? LANE_SPAWN.radiusNight : LANE_SPAWN.radiusDay;
   }
 
   /** In one of the great squares (the fora), where people mill about rather than stream past. */
@@ -1096,19 +1286,24 @@ export class NpcManager implements System {
       if (!n.dead) this.hash.insert(n);
     }
     const pv = player?.velocity;
-    const pSpeed = pv ? Math.hypot(pv.x, pv.z) : 0;
+    const pSpeed = pv ? Math.sqrt(pv.x * pv.x + pv.z * pv.z) : 0;
     const armed = !!player?.combatStance;
+    // The per-phase timings (stats) are taken on every 8th step only: performance.now() per NPC
+    // costs time and garbage (boxed doubles).
+    const timed = (this.stepNo++ & 7) === 0;
     let tBrain = 0;
     let tSteer = 0;
     let tLoco = 0;
     // A copy: brains may despawn people (or vignettes spawn them) during the loop.
     const list = this.stepList;
     list.length = 0;
-    list.push(...this.list);
-    for (const n of list) {
+    for (let i = 0; i < this.list.length; i++) list.push(this.list[i]);
+    const carts = this.carts.carts;
+    for (let li = 0; li < list.length; li++) {
+      const n = list[li];
       if (this.byId.get(n.id) !== n) continue;
       if (n.dead) {
-        if (n.sim === 'full') n.locomote({ x: 0, y: 0, z: 0 }, dt);
+        if (n.sim === 'full') n.locomote(ZERO, dt);
         continue;
       }
       if (n.isFighting()) {
@@ -1117,9 +1312,9 @@ export class NpcManager implements System {
         continue;
       }
       const brain = n.brain!;
-      const tb = performance.now();
+      const tb = timed ? performance.now() : 0;
       brain.step(dt, this.life, desired);
-      tBrain += performance.now() - tb;
+      if (timed) tBrain += performance.now() - tb;
       if (brain.unstickRequested) {
         brain.unstickRequested = false;
         this.unstick(n);
@@ -1128,52 +1323,78 @@ export class NpcManager implements System {
       if (this.byId.get(n.id) !== n) continue;
       let wx = desired.x;
       let wz = desired.z;
-      const ts = performance.now();
+      const ts = timed ? performance.now() : 0;
       if (n.sim !== 'cheap') {
-        // Steering with neighbours, the player and carts.
+        // Steering with neighbours, the player and carts (pooled records: no garbage per step).
         const ns = this.steerNs;
         ns.length = 0;
-        for (const o of this.hash.query(n.hx, n.hz, 3.2, this.neigh, n)) {
+        const around = this.hash.query(n.hx, n.hz, 3.2, this.neigh, n);
+        for (let k = 0; k < around.length; k++) {
+          const o = around[k];
           // Followers don't push their own leader around (and vice versa) as hard.
           const w = o === n.leader || o.leader === n ? 0.4 : 1;
-          ns.push({ x: o.hx, z: o.hz, vx: o.velocity.x, vz: o.velocity.z, radius: 0.28, weight: w });
+          ns.push(this.neighbor(ns.length, o.hx, o.hz, o.velocity.x, o.velocity.z, 0.28, w));
         }
         if (pp && pv) {
           const dpx = pp.x - n.position.x;
           const dpz = pp.z - n.position.z;
-          const dp = Math.hypot(dpx, dpz);
+          const dp = Math.sqrt(dpx * dpx + dpz * dpz);
           if (dp < 4) {
-            ns.push({ x: pp.x, z: pp.z, vx: pv.x, vz: pv.z, radius: 0.35, weight: armed ? 4 : 2.2 });
+            ns.push(this.neighbor(ns.length, pp.x, pp.z, pv.x, pv.z, 0.35, armed ? 4 : 2.2));
             // Shoulder-through: the player walking into someone shoves them aside (GDD §14.7b).
             if (dp < 0.85 && pSpeed > 1 && (pv.x * -dpx + pv.z * -dpz) / (dp || 1) > 0.5) this.shove(n, pp.x, pp.z, pSpeed, dp);
           }
         }
-        for (const c of this.carts.carts) {
-          if (Math.hypot(c.pos.x - n.position.x, c.pos.z - n.position.z) < 6) ns.push({ x: c.pos.x, z: c.pos.z, vx: Math.sin(c.heading) * c.speed, vz: Math.cos(c.heading) * c.speed, radius: c.radius, weight: 3 });
+        for (let k = 0; k < carts.length; k++) {
+          const c = carts[k];
+          const cx = c.pos.x - n.position.x;
+          const cz = c.pos.z - n.position.z;
+          if (cx * cx + cz * cz < 36) ns.push(this.neighbor(ns.length, c.pos.x, c.pos.z, Math.sin(c.heading) * c.speed, Math.cos(c.heading) * c.speed, c.radius, 3));
         }
         if (ns.length) {
-          steer({ x: n.position.x, z: n.position.z, vx: n.velocity.x, vz: n.velocity.z, radius: 0.28, maxSpeed: Math.max(n.walkSpeed * 1.3, Math.hypot(desired.x, desired.z)) }, desired, ns, DEFAULT_STEER, steered);
+          const ag = this.agent;
+          ag.x = n.position.x;
+          ag.z = n.position.z;
+          ag.vx = n.velocity.x;
+          ag.vz = n.velocity.z;
+          ag.maxSpeed = Math.max(n.walkSpeed * 1.3, Math.sqrt(desired.x * desired.x + desired.z * desired.z));
+          steer(ag, desired, ns, DEFAULT_STEER, steered);
           wx = steered.x;
           wz = steered.z;
         }
       }
       // Face where we walk.
-      const sp = Math.hypot(wx, wz);
-      if (sp > 0.25 && Math.hypot(desired.x, desired.z) > 0.1) n.turnToward(headingFromDir(desired.x * 0.7 + wx * 0.3, desired.z * 0.7 + wz * 0.3), 5.5, dt);
+      if (wx * wx + wz * wz > 0.0625 && desired.x * desired.x + desired.z * desired.z > 0.01) n.turnToward(headingFromDir(desired.x * 0.7 + wx * 0.3, desired.z * 0.7 + wz * 0.3), 5.5, dt);
       wish.set(wx, 0, wz);
       n.wish.copy(wish);
-      const tl = performance.now();
-      tSteer += tl - ts;
+      const tl = timed ? performance.now() : 0;
+      if (timed) tSteer += tl - ts;
       if (n.sim === 'full') n.locomote(wish, dt);
-      else n.glide(wish, dt, (x, z) => (this.grid.walkable(x, z) ? this.grid.heightAt(x, z) : null));
-      tLoco += performance.now() - tl;
-      this.stats.maxStuck = Math.max(this.stats.maxStuck, n.mover.stuck.stuckTime);
+      else n.glide(wish, dt, this.gridFloor);
+      if (timed) tLoco += performance.now() - tl;
+      const st = n.mover.stuck.stuckTime;
+      if (st > this.stats.maxStuck) this.stats.maxStuck = st;
     }
-    this.stats.msBrain = this.stats.msBrain * 0.95 + tBrain * 0.05;
-    this.stats.msSteer = this.stats.msSteer * 0.95 + tSteer * 0.05;
-    this.stats.msLoco = this.stats.msLoco * 0.95 + tLoco * 0.05;
+    if (timed) {
+      this.stats.msBrain = this.stats.msBrain * 0.7 + tBrain * 0.3;
+      this.stats.msSteer = this.stats.msSteer * 0.7 + tSteer * 0.3;
+      this.stats.msLoco = this.stats.msLoco * 0.7 + tLoco * 0.3;
+    }
     if (this.cartsEnabled) this.carts.update(dt, this.budget.carts);
     this.stats.ms = this.stats.ms * 0.95 + (performance.now() - t0) * 0.05;
+  }
+
+  /** Pooled neighbour record number `i`, filled in. */
+  private neighbor(i: number, x: number, z: number, vx: number, vz: number, radius: number, weight: number): SteerNeighbor {
+    let r = this.neighborPool[i];
+    if (!r) this.neighborPool[i] = r = { x: 0, z: 0, vx: 0, vz: 0, radius: 0, weight: 0 };
+    r.x = x;
+    r.z = z;
+    r.vx = vx;
+    r.vz = vz;
+    r.radius = radius;
+    r.weight = weight;
+    return r;
   }
 
   private shove(n: Npc, px: number, pz: number, speed: number, d: number) {
@@ -1351,6 +1572,7 @@ export class NpcManager implements System {
       n.distToPlayer = d;
       n.inView = this.isVisible(n.position.x, n.position.y + 1, n.position.z);
       n.unseenFor = n.inView ? 0 : n.unseenFor + dt;
+      if (n.inView) n.recycleGraceUntil = 0;
       if (n.inView && d < 150) {
         visible++;
         // Not hidden behind a building (head or feet visible)?
@@ -1391,7 +1613,9 @@ export class NpcManager implements System {
         // People standing at a spot or chatting stay put (the place keeps its regulars).
         const k = n.brain?.task?.kind;
         const settled = (k === 'idle' && !!n.brain?.task?.spot) || k === 'converse';
-        let recycle = !n.leader && !n.followers.length && ((behind && d > RECYCLE_BEHIND && n.unseenFor > 3) || (d > RECYCLE_SIDE && n.unseenFor > 6) || (!settled && d > 10 && n.unseenFor > 6 && this.clock - n.bornAt > 14));
+        // People overtaking a player who stands still are behind the camera on purpose.
+        const graced = this.clock < n.recycleGraceUntil;
+        let recycle = !graced && !n.leader && !n.followers.length && ((behind && d > RECYCLE_BEHIND && n.unseenFor > 3) || (d > RECYCLE_SIDE && n.unseenFor > 6) || (!settled && d > 10 && n.unseenFor > 6 && this.clock - n.bornAt > 14));
         // A senator and his train go together, once none of them has been seen for a while.
         if (n.followers.length && d > RECYCLE_SIDE && n.unseenFor > 8 && n.followers.every((f) => f.unseenFor > 8 && !f.scripted && !f.talking)) {
           for (const f of [...n.followers]) this.despawn(f);
@@ -1409,17 +1633,29 @@ export class NpcManager implements System {
     this.stats.seen = seen;
   }
 
-  /** Keep the crowd at its budget: spawn out of sight / in doors, send extras home. */
+  /**
+   * Keep the crowd at its budget: spawn out of sight, far down the street or in doors; send extras
+   * home. People walking home still count toward the cap (they are still in the street), so a role
+   * that turns for home at once can never make the crowd run away (AC-10 at night).
+   */
   private updateCrowd(initial: boolean) {
     if (!this.crowdEnabled) return;
     const pp = this.game.player!.position;
     const b = this.budget;
     let citizens = 0;
+    let present = 0;
     let vigiles = 0;
+    let vigilesPresent = 0;
     for (const n of this.list) {
-      if (!n.ambient || n.station || n.brain?.activity === 'home') continue;
-      if (n.role?.id === 'vigil') vigiles++;
-      else if (n.role?.id !== 'carter') citizens++;
+      if (!n.ambient || n.station || n.role?.id === 'carter') continue;
+      const leaving = n.brain?.activity === 'home';
+      if (n.role?.id === 'vigil') {
+        vigilesPresent++;
+        if (!leaving) vigiles++;
+      } else {
+        present++;
+        if (!leaving) citizens++;
+      }
     }
     // At night the station people (vigiles' posts, drovers) count toward the ≤ 25 cap (AC-10).
     const target = crowdTarget(b, this.maxCrowd, this.stations.count);
@@ -1428,15 +1664,22 @@ export class NpcManager implements System {
     // Escorted roles bring 1–4 people each: cap the groups so they don't swallow the budget.
     const escorted = this.list.filter((n) => n.ambient && n.followers.length > 0).length;
     if (escorted >= Math.max(2, Math.round(target / 25))) weights = weights.filter(([r]) => !CROWD_ROLES[r].escort);
+    let room = crowdRoom(present, citizens, target, b.night);
     let budget = initial ? target : 3;
-    while (citizens < target && budget-- > 0) {
+    while (room > 0 && budget-- > 0) {
       const role = pickRole(this.rng, weights);
       if (!role) break;
+      // A group bigger than the room left would overshoot the cap: someone on their own instead.
+      const big = !!CROWD_ROLES[role].escort && room < 3;
       const p = this.spawnPoint(role, initial);
       if (!p) break;
-      const n = this.spawnAmbient(role, p.x, p.z, p.heading);
+      const n = this.spawnAmbient(role, p.x, p.z, p.heading, { escorts: !big });
       if (!n) continue;
-      citizens += 1 + n.followers.length;
+      const added = 1 + n.followers.length;
+      citizens += added;
+      present += added;
+      room -= added;
+      if (p.behind) n.recycleGraceUntil = this.clock + 30;
       if (p.spotPlaced && n.brain) n.brain.next(this.life);
       else if (p.onLane && n.brain && !n.followers.length && this.rng.chance(0.8)) n.brain.travel(this.life);
       else if (!initial && n.brain && n.brain.activity !== 'home') {
@@ -1445,11 +1688,12 @@ export class NpcManager implements System {
         if (t) n.brain.setTask(makeTask('goto', { x: t.x, z: t.z, speed: n.walkSpeed }), this.life);
       }
     }
-    while (vigiles < b.vigiles && budget-- >= 0) {
+    while (vigilesPresent < b.vigiles && budget-- >= 0) {
       const p = this.spawnPoint('vigil', initial);
       if (!p) break;
-      if (this.spawnAmbient('vigil', p.x, p.z, p.heading)) vigiles++;
-      else break;
+      if (!this.spawnAmbient('vigil', p.x, p.z, p.heading)) break;
+      vigiles++;
+      vigilesPresent++;
     }
     // Too many (the hour turned, or night fell): send the farthest unseen ones home.
     const excess = citizens - (target + 4);
@@ -1467,14 +1711,14 @@ export class NpcManager implements System {
   }
 
   /**
-   * Where to spawn a new citizen: at its work spot (initial fill), in a doorway, or out of sight
-   * 22–78 m away, on street level.
+   * Where to spawn a new citizen: at its work spot (initial fill), along a street (see
+   * crowd/spawnRules.ts: out of view, behind something, or far down the street in view), in a
+   * doorway, or out of sight off the street.
    */
-  private spawnPoint(role: CrowdRoleId, initial: boolean): { x: number; z: number; heading?: number; spotPlaced?: boolean; onLane?: boolean } | null {
+  private spawnPoint(role: CrowdRoleId, initial: boolean): SpawnPick | null {
     const pp = this.game.player!.position;
     const g = this.grid;
     const r = CROWD_ROLES[role];
-    const terrainAt = (x: number, z: number) => (this.game.heightmap ? this.game.heightmap.heightAt(x, z) : pp.y);
     const R = this.crowdRadius();
     // Initial fill: workers appear at their posts so shops are open and priests at prayer.
     if (initial && r) {
@@ -1490,31 +1734,9 @@ export class NpcManager implements System {
     const offView = (x: number, z: number) => Math.abs(((Math.atan2(x - pp.x, z - pp.z) - ahead + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
     // On a street, heading along it (most people are going somewhere).
     const lanes = this.lanes();
-    if (lanes && this.rng.chance(this.inSquare() ? 0.2 : this.budget.night ? 0.85 : 0.6)) {
-      for (let i = 0; i < 10; i++) {
-        const p = lanes.sample(() => this.rng.next(), pp.x, pp.z, initial ? 5 : SPAWN_MIN - 6, R);
-        if (!p) break;
-        if (!g.ready(p.x, p.z)) continue;
-        const c = g.nearestWalkable(p.x, p.z, 1.5);
-        if (!c) continue;
-        const h = g.heightAt(c.x, c.z);
-        if (h === null || Math.abs(h - terrainAt(c.x, c.z)) > 1.6 || !g.reachable(c.x, c.z) || !this.isFree(c.x, h, c.z)) continue;
-        if (!initial) {
-          const y = h + 1.2;
-          const d = Math.hypot(c.x - pp.x, c.z - pp.z);
-          // Out of sight, or behind something: they walk into view along the street. Not far
-          // behind the camera, where they would only be recycled again.
-          if (this.isVisible(c.x, y, c.z) && (d < 22 || this.isSeen(c.x, y, c.z))) continue;
-          if (offView(c.x, c.z) > halfFov + 1.1) continue;
-        } else if (i < 5 && offView(c.x, c.z) > 1.2 && this.rng.chance(0.5)) {
-          // The first crowd: favour the stretch of street in front of the camera.
-          continue;
-        }
-        // Late arrivals walk toward the player's side of the street, into view.
-        let heading = p.heading;
-        if (!initial && Math.sin(heading) * (pp.x - c.x) + Math.cos(heading) * (pp.z - c.z) < 0) heading += Math.PI;
-        return { x: c.x, z: c.z, heading, onLane: true };
-      }
+    if (lanes && this.rng.chance(this.inSquare() ? 0.2 : this.budget.night ? 0.85 : 0.75)) {
+      const p = this.laneSpawn(initial, halfFov, offView);
+      if (p) return p;
     }
     // A doorway (people step out of houses even in view).
     const streets = this.streets();
@@ -1562,6 +1784,56 @@ export class NpcManager implements System {
     return null;
   }
 
+  /** A street spawn point (see crowd/spawnRules.ts), or null after a dozen tries. */
+  private laneSpawn(initial: boolean, halfFov: number, offView: (x: number, z: number) => number): SpawnPick | null {
+    const lanes = this.lanes();
+    const player = this.game.player!;
+    const pp = player.position;
+    const g = this.grid;
+    const R = initial ? this.crowdRadius() : this.laneRadius();
+    const pv = player.velocity;
+    const playerSpeed = pv ? Math.hypot(pv.x, pv.z) : 0;
+    for (let i = 0; i < 12 && lanes; i++) {
+      const [r0, r1] = laneSpawnRing(i, initial, R, SPAWN_MIN - 6);
+      const p = lanes.sample(() => this.rng.next(), pp.x, pp.z, r0, r1);
+      if (!p) break;
+      if (!g.ready(p.x, p.z)) continue;
+      const c = g.nearestWalkable(p.x, p.z, 1.5, this.tmpCell);
+      if (!c) continue;
+      const cx = c.x;
+      const cz = c.z;
+      const h = g.heightAt(cx, cz);
+      const terrain = this.game.heightmap ? this.game.heightmap.heightAt(cx, cz) : pp.y;
+      if (h === null || Math.abs(h - terrain) > 1.6 || !g.reachable(cx, cz) || !this.isFree(cx, h, cz)) continue;
+      let verdict: LaneSpawnVerdict = 'side';
+      if (!initial) {
+        const y = h + 1.2;
+        verdict = laneSpawnVerdict({
+          d: Math.hypot(cx - pp.x, cz - pp.z),
+          inView: this.isVisible(cx, y, cz),
+          seen: () => this.isSeen(cx, y, cz),
+          offView: offView(cx, cz),
+          halfFov,
+          playerSpeed,
+        });
+        if (!verdict) continue;
+      } else if (i < 5 && offView(cx, cz) > 1.2 && this.rng.chance(0.5)) {
+        // The first crowd: favour the stretch of street in front of the camera.
+        continue;
+      }
+      let heading = p.heading;
+      if (verdict === 'behind') {
+        // From behind the camera: walking the way the player looks, so they overtake into view.
+        if (Math.sin(heading) * this.look.x + Math.cos(heading) * this.look.z < 0) heading += Math.PI;
+      } else if (!initial && Math.sin(heading) * (pp.x - cx) + Math.cos(heading) * (pp.z - cz) < 0) {
+        // Late arrivals walk toward the player's side of the street, into view.
+        heading += Math.PI;
+      }
+      return { x: cx, z: cz, heading, onLane: true, behind: verdict === 'behind' };
+    }
+    return null;
+  }
+
   /** Named NPCs appear at their schedule locations when the player comes near. */
   private updateNamed() {
     if (!this.namedEnabled) return;
@@ -1576,7 +1848,9 @@ export class NpcManager implements System {
       const loc = this.resolveLocation(at);
       if (!loc) continue;
       if (Math.hypot(loc.x - pp.x, loc.z - pp.z) > NAMED_SPAWN) continue;
-      const p = this.nav.snap(loc.x + (this.rng.next() - 0.5) * Math.min(4, loc.radius), loc.z + (this.rng.next() - 0.5) * Math.min(4, loc.radius), 5);
+      // Reachable and at street level, or not yet (asked again every second).
+      const p = this.namedSpawnPoint(loc);
+      if (!p) continue;
       const n = this.spawnNamed(def, p.x, p.z, this.rng.next() * Math.PI * 2);
       if (n?.hostile && this.game.player) {
         n.setSolid(true);
@@ -1601,8 +1875,10 @@ export class NpcManager implements System {
       for (const f of fighters) {
         if (seen.some((s) => Math.hypot(s.x - f.position.x, s.z - f.position.z) < 5)) continue;
         seen.push({ x: f.position.x, z: f.position.z });
-        // The aggressor guards go for: whoever is fighting that isn't the player.
-        const foe = fighters.find((o) => o !== player && Math.hypot(o.position.x - f.position.x, o.position.z - f.position.z) < 8) ?? null;
+        // The aggressor guards go for: whoever is fighting that isn't the player; a quest's
+        // fighter first, so a scripted fight keeps the watch out of it.
+        const near = (o: Actor) => o !== player && Math.hypot(o.position.x - f.position.x, o.position.z - f.position.z) < 8;
+        const foe = fighters.find((o) => near(o) && this.questFighters.has(o)) ?? fighters.find(near) ?? null;
         for (const n of this.near(f.position, 16)) {
           if (n === f || n.isFighting() || n.brain?.task?.kind === 'flee' || n.brain?.task?.kind === 'respond' || n.brain?.task?.kind === 'gawk') continue;
           n.brain?.alarm(this.life, f.position.x, f.position.z, 'fight', foe);

@@ -177,6 +177,34 @@ const KIND_BY_CATEGORY: Partial<Record<atlas.LandmarkCategory, PoiKind>> = {
 
 let pois: Poi[] | null = null;
 
+/** How far a landmark's footprint reaches from its centre along a real-metre unit direction. */
+function footprintReach(lm: atlas.Landmark, nx: number, nz: number): number {
+  const fp = lm.footprint;
+  if (fp.kind === 'rect') return fp.d / 2;
+  if (fp.kind === 'circle') return fp.r;
+  if (fp.kind === 'ellipse') return fp.rz;
+  let m = 0;
+  for (const [px, pz] of fp.points) m = Math.max(m, (px - lm.center[0]) * nx + (pz - lm.center[1]) * nz);
+  return m || 10;
+}
+
+/**
+ * The open ground in front of a landmark's main facade, in game metres: a few metres beyond the
+ * footprint along the facade normal (steps and podium included), or the centre of an open square
+ * (fora, gardens, open sites). `face` is the heading from the point toward the building.
+ * Named NPCs scheduled "at" a landmark stand here, not on its roof.
+ */
+export function landmarkForecourt(lm: atlas.Landmark, margin = 3.5): { x: number; z: number; face: number } {
+  const [gx, gz] = toGame(lm.center[0], lm.center[1]);
+  const th = (lm.rotation * Math.PI) / 180;
+  // Facade normal for compass bearing th: (sin th, -cos th) in x/z.
+  const nx = Math.sin(th);
+  const nz = -Math.cos(th);
+  if (lm.category === 'forum' || lm.siting === 'open' || lm.category === 'garden') return { x: gx, z: gz, face: Math.atan2(-nx, -nz) };
+  const off = footprintReach(lm, nx, nz) * 0.6 + margin;
+  return { x: gx + nx * off, z: gz + nz * off, face: Math.atan2(-nx, -nz) };
+}
+
 /** Every point of interest in the atlas (computed once). */
 export function allPois(): readonly Poi[] {
   if (pois) return pois;

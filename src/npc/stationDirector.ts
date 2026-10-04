@@ -1,13 +1,18 @@
 /**
  * Mans the stations (crowd/stations.ts) near the player: puts out each one's set dressing (with its
- * collider and fire light) and spawns its people at their posts, out of sight where possible;
- * sends them off when the station's hours end and clears everything when the player is far away.
+ * collider and fire light) and spawns its people at their posts; sends them off when the station's
+ * hours end and clears everything when the player is far away.
+ *
+ * People appear at a post that is out of sight, or in plain view while it is still far away
+ * (≥ 45 m, a few pixels tall), so a stall up an open street is staffed long before the player gets
+ * there. Closer and in view, they walk in from somewhere out of sight nearby instead.
  */
 import * as THREE from 'three';
 import type { Game } from '../core/Game';
 import type { RAPIER } from '../core/Physics';
 import type { DayPhase } from './crowd/budget';
 import { activeStations, memberHeading, STATIONS, stationAnchor, stationPoint, type StationDef, type StationDressing, type StationMember } from './crowd/stations';
+import { STATION_SEEN_SPAWN } from './crowd/spawnRules';
 import type { Npc } from './Npc';
 import { makeBrazier, makeParkedCart, makeStall, makeTable } from './props';
 
@@ -18,8 +23,13 @@ export interface StationHost {
   /** Is a point in view and unoccluded? */
   isSeen(x: number, y: number, z: number): boolean;
   floorY(x: number, z: number): number | null;
-  /** Spawn a station member standing at its post. */
-  spawnMember(def: StationDef, m: StationMember, x: number, z: number, heading: number): Npc | null;
+  /**
+   * Spawn a station member for its post at (x, z): standing there, or at `from` (out of sight
+   * nearby), from where it walks to the post.
+   */
+  spawnMember(def: StationDef, m: StationMember, x: number, z: number, heading: number, from?: { x: number; z: number }): Npc | null;
+  /** A walkable, reachable point within `rMin`–`rMax` of (x, z) that the camera can't see (or null). */
+  hiddenNear?(x: number, z: number, rMin: number, rMax: number): { x: number; z: number } | null;
   /** Send a member home (walk off, despawn) or remove it at once. */
   dismiss(npc: Npc, now: boolean): void;
   alive(npc: Npc): boolean;
@@ -117,10 +127,16 @@ export class StationDirector {
     this.eager = false;
   }
 
-  /** Spawn missing members (out of sight unless eager). */
+  /**
+   * Spawn missing members: at the post when it is out of sight or still far away (or on the eager
+   * fill after a teleport); near and in view, walking in from out of sight (one hidden point per
+   * station and update, shared by its members).
+   */
   private fill(m: Manned) {
     const a = stationAnchor(m.def);
     if (!a) return;
+    const pl = this.host.player;
+    let from: { x: number; z: number } | null | undefined;
     m.def.members.forEach((mem, i) => {
       const cur = m.members[i];
       if (cur && this.host.alive(cur)) return;
@@ -128,8 +144,14 @@ export class StationDirector {
       const p = stationPoint(a, mem.out, mem.side);
       const y = this.host.floorY(p.x, p.z);
       if (y === null) return;
-      if (!this.eager && this.host.isSeen(p.x, y + 1.2, p.z)) return;
-      m.members[i] = this.host.spawnMember(m.def, mem, p.x, p.z, memberHeading(a, m.def, mem));
+      const heading = memberHeading(a, m.def, mem);
+      const far = !pl || Math.hypot(p.x - pl.x, p.z - pl.z) >= STATION_SEEN_SPAWN;
+      if (this.eager || far || !this.host.isSeen(p.x, y + 1.2, p.z)) {
+        m.members[i] = this.host.spawnMember(m.def, mem, p.x, p.z, heading);
+        return;
+      }
+      if (from === undefined) from = this.host.hiddenNear?.(p.x, p.z, 6, 24) ?? null;
+      if (from) m.members[i] = this.host.spawnMember(m.def, mem, p.x, p.z, heading, from);
     });
   }
 

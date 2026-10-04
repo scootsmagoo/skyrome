@@ -10,8 +10,9 @@ export class SpatialHash<T extends Positioned> {
 
   constructor(readonly size = 4) {}
 
+  /** A small-integer key (no heap numbers): |cell| < 8192. */
   private key(ix: number, iz: number) {
-    return (ix + 32768) * 65536 + (iz + 32768);
+    return (ix + 8192) * 16384 + (iz + 8192);
   }
 
   clear() {
@@ -45,7 +46,8 @@ export class SpatialHash<T extends Positioned> {
       for (let ix = x0; ix <= x1; ix++) {
         const l = this.cells.get(this.key(ix, iz));
         if (!l) continue;
-        for (const it of l) {
+        for (let i = 0; i < l.length; i++) {
+          const it = l[i];
           if (it === self) continue;
           const dx = it.hx - x;
           const dz = it.hz - z;

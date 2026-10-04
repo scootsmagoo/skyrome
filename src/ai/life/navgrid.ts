@@ -50,8 +50,14 @@ interface Chunk {
   builtAt: number;
 }
 
-const OFF = 32768;
-const key = (cx: number, cz: number) => (cx + OFF) * 65536 + (cz + OFF);
+/**
+ * Map keys stay small integers (V8 Smis): a key past 2^30 is a heap number, allocated on every
+ * lookup in the hottest loops (cell state, the flood). Chunks: |chunk| < 2048 (32 km of 16 m
+ * chunks); A* cells: |cell| < 8192 m.
+ */
+const OFF = 8192;
+const SPAN = 16384;
+const key = (cx: number, cz: number) => (cx + 2048) * 4096 + (cz + 2048);
 
 export class NavGrid {
   readonly cell: number;
@@ -492,7 +498,7 @@ export class NavGrid {
     }
     if (sx === gx && sz === gz) return [{ x: exactEnd ? bx : (gx + 0.5) * c, z: exactEnd ? bz : (gz + 0.5) * c }];
 
-    const pk = (x: number, z: number) => (x + OFF) * 65536 + (z + OFF);
+    const pk = (x: number, z: number) => (x + OFF) * SPAN + (z + OFF);
     const g = new Map<number, number>();
     const came = new Map<number, number>();
     const heap = new MinHeap();
@@ -514,8 +520,8 @@ export class NavGrid {
         break;
       }
       if (++expanded > maxExpand) break;
-      const cx = Math.floor(cur / 65536) - OFF;
-      const cz = (cur % 65536) - OFF;
+      const cx = Math.floor(cur / SPAN) - OFF;
+      const cz = (cur % SPAN) - OFF;
       const gc = g.get(cur)!;
       for (let dz = -1; dz <= 1; dz++) {
         for (let dx = -1; dx <= 1; dx++) {
@@ -538,7 +544,7 @@ export class NavGrid {
     const cells: { x: number; z: number }[] = [];
     let k = goal;
     while (k !== start) {
-      cells.push({ x: (Math.floor(k / 65536) - OFF + 0.5) * c, z: ((k % 65536) - OFF + 0.5) * c });
+      cells.push({ x: (Math.floor(k / SPAN) - OFF + 0.5) * c, z: ((k % SPAN) - OFF + 0.5) * c });
       k = came.get(k)!;
     }
     cells.reverse();

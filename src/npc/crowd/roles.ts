@@ -92,7 +92,7 @@ export const CROWD_ROLES: Record<CrowdRoleId, CrowdRole> = {
   child: { id: 'child', label: 'Child', avatar: ['child'], archetype: 'puer', speed: [1.6, 2.6], barks: 'child', fragile: true },
   elder: { id: 'elder', label: 'Elder', avatar: ['elderly'], archetype: 'civis', speed: [0.65, 0.9], barks: 'elder', fragile: true },
   foreigner: { id: 'foreigner', label: 'Foreigner', avatar: ['greek', 'syrian', 'egyptian'], archetype: 'civis', speed: [1.05, 1.4], prop: 'scroll', propChance: 0.1, barks: 'foreigner', gawks: true },
-  reveler: { id: 'reveler', label: 'Reveler', avatar: ['plebeian-man', 'freedman'], archetype: 'civis', speed: [0.8, 1.1], prop: 'torch', propChance: 0.5, barks: 'reveler', gawks: true },
+  reveler: { id: 'reveler', label: 'Reveler', avatar: ['plebeian-man', 'freedman'], archetype: 'comissator', speed: [0.8, 1.1], prop: 'torch', propChance: 0.5, barks: 'reveler', gawks: true },
   carter: { id: 'carter', label: 'Drover', avatar: ['plebeian-man', 'slave'], archetype: 'plaustrarius', speed: [1.1, 1.2], prop: 'lantern', propChance: 1, barks: 'carter', escortOnly: true },
   // Market gardeners and smallholders from the Campagna bring produce in at dawn (Martial 3.47).
   farmer: { id: 'farmer', label: 'Farmer', avatar: ['plebeian-man', 'plebeian-man', 'elderly', 'plebeian-woman'], archetype: 'rusticus', speed: [1.0, 1.3], prop: 'basket', propChance: 0.7, barks: 'farmer', gawks: true },

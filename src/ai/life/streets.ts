@@ -132,7 +132,7 @@ export class StreetNav {
   }
 
   private cellKey(x: number, z: number) {
-    return (Math.floor(x / this.gridSize) + 32768) * 65536 + (Math.floor(z / this.gridSize) + 32768);
+    return (Math.floor(x / this.gridSize) + 8192) * 16384 + (Math.floor(z / this.gridSize) + 8192);
   }
 
   /** Nearest node within `maxR` metres (grid-bucketed search). */
@@ -146,7 +146,7 @@ export class StreetNav {
       for (let dz = -r; dz <= r; dz++) {
         for (let dx = -r; dx <= r; dx++) {
           if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
-          const l = this.grid.get((cx + dx + 32768) * 65536 + (cz + dz + 32768));
+          const l = this.grid.get((cx + dx + 8192) * 16384 + (cz + dz + 8192));
           if (!l) continue;
           for (const i of l) {
             const n = this.nodes[i];

@@ -111,7 +111,7 @@ const NIGHT_ONLY = new Set<CrowdRoleId>(['reveler']);
 
 /**
  * Weighted role list for a district at an hour, honouring each role's archetype schedule
- * (a role whose archetype is at home now gets weight 0) and local boosts.
+ * (a role whose archetype is at home now gets weight 0, night roles included) and local boosts.
  */
 export function roleWeights(
   district: District,
@@ -132,8 +132,9 @@ export function roleWeights(
     if (NIGHT_ONLY.has(id) && !night) continue;
     let w = w0 * (mult[id] ?? 1);
     if (boosts[id] !== undefined) w = Math.max(w, (w0 || 1) * boosts[id]!);
-    // The schedule decides who is out at all (except night roles whose archetype is 'civis').
-    if (!NIGHT_ONLY.has(id) && !isOut(role.archetype, hour, sun)) w = 0;
+    // The schedule decides who is out at all: a role whose archetype is at home now never spawns
+    // (it would turn round and walk home at once, and the crowd would keep replacing it).
+    if (!isOut(role.archetype, hour, sun)) w = 0;
     if (w > 0) out.push([id, w]);
   }
   return out;

@@ -17,6 +17,10 @@ import type { Vec2 } from '../ai/life/steering';
 import type { Npc } from './Npc';
 import { Quadruped, makeCart } from './props';
 
+const UP = new THREE.Vector3(0, 1, 0);
+const tmpQ = new THREE.Quaternion();
+const tmpT = { x: 0, y: 0, z: 0 };
+
 export interface CartHost {
   readonly game: Game;
   readonly nav: NavService;
@@ -126,9 +130,12 @@ export class Cart {
     this.group.rotation.y = this.heading;
     for (const w of this.wheels) w.rotation.x += step / 0.5;
     this.mule.animate(dt, this.speed);
-    this.body.setNextKinematicTranslation({ x: this.pos.x, y: this.pos.y + 0.9, z: this.pos.z });
-    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.heading);
-    this.body.setNextKinematicRotation({ x: q.x, y: q.y, z: q.z, w: q.w });
+    tmpT.x = this.pos.x;
+    tmpT.y = this.pos.y + 0.9;
+    tmpT.z = this.pos.z;
+    this.body.setNextKinematicTranslation(tmpT);
+    const q = tmpQ.setFromAxisAngle(UP, this.heading);
+    this.body.setNextKinematicRotation(q);
     // The drover walks at the mule's left shoulder.
     if (this.drover?.brain) {
       const lx = this.pos.x + Math.sin(this.heading) * 3.0 + Math.cos(this.heading) * 1.1;

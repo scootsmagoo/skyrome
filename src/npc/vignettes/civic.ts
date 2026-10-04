@@ -22,11 +22,14 @@ export const sacrifice: VignetteDef = {
   weight: 2,
   cooldown: 240,
   plan(ctx) {
+    // On the Lemuria day the temple doors stay shut (GDD §14.10): only an open-air shrine's rite.
+    const shut = ctx.templesShut;
     // Prefer a temple forecourt near the player.
-    for (const p of ctx.pois(ctx.player.x, ctx.player.z, 45, ['temple', 'shrine', 'vesta'])) {
+    for (const p of ctx.pois(ctx.player.x, ctx.player.z, 45, shut ? ['shrine'] : ['temple', 'shrine', 'vesta'])) {
       const s = ctx.snap(p.x - Math.sin(p.face) * 3, p.z - Math.cos(p.face) * 3, 3);
-      if (s && (!ctx.nav.grid || ctx.nav.grid.areaWalkable(s.x, s.z, 2))) return { x: s.x, z: s.z, face: p.face, data: { place: p.name } };
+      if (s && (!ctx.nav.grid || ctx.nav.grid.areaWalkable(s.x, s.z, 2))) return { x: s.x, z: s.z, face: p.face, data: { place: p.name, lares: shut } };
     }
+    if (shut) return null;
     const a = anchorAhead(ctx, 10, 20, 3);
     return a ? { x: a.x, z: a.z, face: Math.atan2(a.x - ctx.player.x, a.z - ctx.player.z) } : null;
   },
@@ -61,7 +64,12 @@ export const sacrifice: VignetteDef = {
     ctx.onEnd(() => music?.stop?.(2));
     yield 4;
     for (let i = 0; i < crowd.length; i++) stand(crowd[i], i % 3 === 0 ? 'pray' : 'stand', faceTo(crowd[i], plan.x, plan.z));
-    ctx.say(priest, 'Iuppiter Optime Maxime, accept this wine and this incense, and be kind to the city of Rome.');
+    ctx.say(
+      priest,
+      plan.data?.lares
+        ? 'Lares of the crossroads, accept this cake and this wine, and keep the street safe from the restless dead.'
+        : 'Iuppiter Optime Maxime, accept this wine and this incense, and be kind to the city of Rome.',
+    );
     yield 5;
     stand(popa, 'work', faceTo(popa, plan.x, plan.z));
     yield 3.5;

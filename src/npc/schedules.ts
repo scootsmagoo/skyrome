@@ -53,7 +53,8 @@ export type ArchetypeId =
   | 'grassator'
   | 'civis'
   | 'rusticus'
-  | 'viator';
+  | 'viator'
+  | 'comissator';
 
 const h = (n: number): RomanTime => ({ hora: n });
 const w = (n: number): RomanTime => ({ vigilia: n });
@@ -203,6 +204,11 @@ export const ARCHETYPES: Record<ArchetypeId, readonly ArchetypeSlot[]> = {
     { at: h(8), activity: 'wander', place: 'open' },
     { at: h(12), activity: 'wander', place: 'tavern' },
     { at: w(2), activity: 'home' },
+  ],
+  // Reveler: out from dusk between the taverns until the night is over, home by sunrise.
+  comissator: [
+    { at: w(1), activity: 'wander', place: 'tavern' },
+    { at: h(1), activity: 'home' },
   ],
   // Ordinary citizen of either sex: errands, the Forum, the baths, home after dusk.
   civis: [

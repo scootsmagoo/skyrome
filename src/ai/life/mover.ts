@@ -10,7 +10,7 @@
  * it to the next free cell out of view or drop the goal). Pure: no three.js, no physics.
  */
 import type { NavService } from './nav';
-import { seek, stuckAction, StuckMonitor, type Vec2 } from './steering';
+import { hyp, seek, stuckAction, StuckMonitor, type Vec2 } from './steering';
 
 export type MoverEvent = 'none' | 'arrived' | 'failed' | 'blocked' | 'stuck';
 
@@ -58,7 +58,7 @@ export class Mover {
 
   /** Remaining straight-line distance to the goal from the last update. */
   get remaining() {
-    return Math.hypot(this.goalX - this.lastX, this.goalZ - this.lastZ);
+    return hyp(this.goalX - this.lastX, this.goalZ - this.lastZ);
   }
 
   /** The point being walked to right now. */
@@ -74,7 +74,7 @@ export class Mover {
       this.stuck.reset(x, z);
       return 'none';
     }
-    if (Math.hypot(this.goalX - x, this.goalZ - z) <= this.arrive) {
+    if (hyp(this.goalX - x, this.goalZ - z) <= this.arrive) {
       this.clear();
       return 'arrived';
     }
@@ -98,12 +98,12 @@ export class Mover {
     // Advance along corners; a pushed-aside walker skips corners it has already passed.
     let c = this.path[this.idx];
     while (c && this.idx < this.path.length - 1) {
-      const d = Math.hypot(c.x - x, c.z - z);
+      const d = hyp(c.x - x, c.z - z);
       if (d > 0.7) {
         // Passed it? (the next corner is closer than this one and roughly ahead)
         const n = this.path[this.idx + 1];
-        const dn = Math.hypot(n.x - x, n.z - z);
-        const seg = Math.hypot(n.x - c.x, n.z - c.z);
+        const dn = hyp(n.x - x, n.z - z);
+        const seg = hyp(n.x - c.x, n.z - c.z);
         if (dn >= seg) break;
         if (nav.grid && nav.grid.ready(x, z) && !nav.grid.lineWalkable(x, z, n.x, n.z)) break;
       }
@@ -136,7 +136,7 @@ export class Mover {
     }
     if (this.sidestepT > 0) {
       this.sidestepT -= dt;
-      const s = Math.hypot(out.x, out.z) || 1;
+      const s = hyp(out.x, out.z) || 1;
       // Right of (x, z) is (-z, x).
       const lx = (-out.z / s) * this.sidestepDir;
       const lz = (out.x / s) * this.sidestepDir;

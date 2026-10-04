@@ -115,7 +115,7 @@ export class LaneSet {
   }
 
   private key(cx: number, cz: number) {
-    return (cx + 32768) * 65536 + (cz + 32768);
+    return (cx + 8192) * 16384 + (cz + 8192);
   }
 
   /** Lanes that may pass within ~one cell of (x, z). */
