@@ -18,7 +18,8 @@ import { Draw } from '../../arch/fabric/draw';
 import { placeProp } from '../../arch/props/props';
 import type { PropKind } from '../../arch/props/props';
 import type { LotPlan } from '../../arch/fabric/blockFiller';
-import type { MeshBuilder } from '../../gfx/MeshBuilder';
+import { MeshBuilder } from '../../gfx/MeshBuilder';
+import { getMaterial } from '../../gfx/materials';
 import type { MaterialId } from '../../gfx/materialIds';
 import type { TreeSpecies } from '../../arch/vegetation/species';
 import type { CityPlan, PlanBlock } from './plan';
@@ -86,6 +87,33 @@ export function torchLamp(t: Torch): LampDef {
 export function drawTorches(b: MeshBuilder, torches: Torch[]) {
   const d = new Draw(b);
   for (const t of torches) placeProp(d, 'torch_bracket', t.x, t.y, t.z, t.rotY, { variant: 0, collide: false });
+}
+
+let flame: THREE.Material | null = null;
+
+/**
+ * The material of the wall torches' flames: the library's `glow_fire`, cloned so that the city can
+ * put the torches out by day (`torchFlames().visible = lampFactor > 0`) without dousing forges,
+ * ovens and altars.
+ */
+export function torchFlames(): THREE.Material {
+  if (!flame) {
+    flame = getMaterial('glow_fire').clone();
+    flame.name = 'glow_fire_torch';
+  }
+  return flame;
+}
+
+/** Torches of a block as a built group whose flames use `torchFlames()`. */
+export function torchGroup(torches: Torch[], name: string): THREE.Group {
+  const b = new MeshBuilder();
+  drawTorches(b, torches);
+  const g = b.build(name);
+  g.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh && m.name.endsWith(':glow_fire')) m.material = torchFlames();
+  });
+  return g;
 }
 
 // ---------------------------------------------------------------- landmark frontages & lanes

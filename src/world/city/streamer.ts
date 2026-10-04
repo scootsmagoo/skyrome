@@ -29,7 +29,7 @@ import type { BatchHandle, BatchPool } from './batches';
 import type { BlockLayout, HeightFn } from './massing';
 import type { PlanBlock } from './plan';
 import type { CellWork } from './roads';
-import { drawTorches } from './life';
+import { torchGroup } from './life';
 
 export type Level = 'full' | 'mid' | 'low';
 const LEVELS: Level[] = ['full', 'mid', 'low'];
@@ -200,7 +200,12 @@ export class CityStreamer implements System {
     const t0 = performance.now();
     const out = fillLevel(r, l, this.H);
     // The low level (beyond ~85 m) casts no shadows: the shadow pass is the expensive half there.
-    const handle = this.pool.addGroup(out.builder.build(`city:${r.blk.id}:${l}`), { offset: groundOffset, shadows: l !== 'low' });
+    let handle = this.pool.addGroup(out.builder.build(`city:${r.blk.id}:${l}`), { offset: groundOffset, shadows: l !== 'low' });
+    // Wall torches (their flames go out by day, see life.ts torchFlames).
+    if (l !== 'low' && r.layout!.torches.length) {
+      const th = this.pool.addGroup(torchGroup(r.layout!.torches, `city:${r.blk.id}:torches`), { shadows: false });
+      handle = this.pool.handle([...handle.refs, ...th.refs]);
+    }
     handle.setVisible(false);
     r.levels[l] = handle;
     if (l === 'full') {
@@ -325,7 +330,6 @@ export function fillLevel(r: BlockRec, detail: Detail, H: HeightFn) {
     const m = new THREE.Matrix4().makeTranslation(c[0], bl.floorY, c[1]).multiply(new THREE.Matrix4().makeRotationY(bl.rotationY));
     out.builder.append(ins.builder, m);
   }
-  if (detail !== 'low') drawTorches(out.builder, r.layout!.torches);
   if (detail !== 'full') out.builder.colliders.length = 0;
   return out;
 }

@@ -28,7 +28,7 @@ import { planCity, scaleBounds, type CityPlan } from './plan';
 import { K } from './raster';
 import { cellAdder, cellKey, streetWork } from './roads';
 import { CityLamps } from './lamps';
-import { lifeWork, torchLamp } from './life';
+import { lifeWork, torchFlames, torchLamp } from './life';
 import { CityStreamer, addColliders, type BlockRec, type CellRec } from './streamer';
 import type { ColliderSpec } from '../../gfx/MeshBuilder';
 import { TreeLayer } from './trees';
@@ -195,6 +195,8 @@ export async function buildCity(
       // Lamplit windows in the far massing follow the sky's lamp factor.
       const sky = (game as Game & { sky?: { lampFactor?: number } }).sky;
       farMat.userData.uLamp.value = sky?.lampFactor ?? 0;
+      // Wall torches burn from dusk to dawn only.
+      torchFlames().visible = (sky?.lampFactor ?? 1) > 0.05;
     },
   });
   report(0.8, 'Planting the gardens');

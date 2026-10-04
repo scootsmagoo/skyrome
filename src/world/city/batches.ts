@@ -174,6 +174,18 @@ export class BatchPool {
       const batch = this.get(mat, mesh.castShadow && opts.shadows !== false, off);
       const g = mesh.geometry;
       if (!g.getAttribute('position')?.count) return;
+      const im = mesh as THREE.InstancedMesh;
+      if (im.isInstancedMesh) {
+        // Instanced parts (e.g. kit columns): one batch instance per instance matrix.
+        const flat = g.index ? g.toNonIndexed() : g;
+        const key = `${g.uuid}`;
+        const m = new THREE.Matrix4();
+        for (let i = 0; i < im.count; i++) {
+          im.getMatrixAt(i, m);
+          refs.push(batch.instance(key, () => flat, mesh.matrixWorld.clone().multiply(m)));
+        }
+        return;
+      }
       const isIdentity = mesh.matrixWorld.equals(IDENTITY);
       refs.push(batch.add(g.index ? g.toNonIndexed() : g, isIdentity ? undefined : mesh.matrixWorld));
     });

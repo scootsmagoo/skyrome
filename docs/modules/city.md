@@ -82,10 +82,11 @@ nobody walks through the backdrop; `extent: 'city'` streams detail everywhere.
 
 ## Street life and lamps
 
-- **Torches.** One iron bracket with a burning torch at a corner pier of insulae and shop rows:
+- **Torches.** One iron bracket with a pitch torch at a corner pier of insulae and shop rows:
   85 % of lots on the golden path, 55 % on atlas roads, 32 % on vici, 12 % in the lanes (domus and
-  horrea half that). 786 lamps in the core (torches, shrine and fountain lamps, stall lamps,
-  braziers).
+  horrea half that). The flames use their own clone of `glow_fire` (`torchFlames()`), hidden by
+  day, so forges, ovens and altars keep burning while the torches are out. 786 lamps in the core
+  (torches, shrine and fountain lamps, stall lamps, braziers).
 - **Landmark frontages.** Where a landmark's margin faces a street: stalls (with an oil lamp on
   some) in front of markets, the Circus, porticoes, theatres and baths; inscribed statue bases,
   benches and shade trees in front of temples and basilicas; crates, sacks, dolia and amphora
@@ -161,13 +162,16 @@ Street level (draw calls / triangles incl. the shadow pass, `__cityBreakdown()`)
 
 The city stays at ~80 draw calls (batched); most of its triangles are the full and mid blocks
 around the player and their shadows. A whole-core aerial is ~600 draw calls / 2.3 M triangles.
+`extent: 'city'` boots in ~7 s too (3,300 lamps, 15,400 graph nodes).
+
+Walk test (scripted, player physics, `scripts/shot.mjs`): from the spawn through the Porta Capena,
+along the street under the Palatine, into the Velabrum and down the Vicus Tuscus toward the Forum
+with no stops; walking straight at shop fronts in the Velabrum and the Subura stops at the walls.
 
 ## Known gaps
 
 - Block interiors are the filler's (shops, stairwells, yards); the far massing has no interiors.
 - Yards inside large blocks can be big patches of earth from above; back insulae fill dense ones.
-- Corridor torches burn by day too (the flame is geometry; only the light and glow follow the
-  lamp factor).
 - Gates that are landmarks (the Porta Capena…) are other crews' work; until its hero builder lands
   the fallback gate has a passage (tiny change in `landmarks/builders/fallback.ts`).
 - `extent: 'city'` streams everywhere but has not been profiled across the whole city.
