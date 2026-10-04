@@ -39,7 +39,7 @@ import { StationDirector, type StationHost } from './stationDirector';
 import { BarkDirector, type BarkKind } from './barks';
 import { makeTask, NpcBrain, type LifeContext } from './brain';
 import { CartDirector, type CartHost } from './carts';
-import { crowdBudget, dayPhase, NIGHT_CAP, pickRole, roleWeights, type CrowdBudget, type DayPhase } from './crowd/budget';
+import { crowdBudget, crowdTarget, dayPhase, pickRole, roleWeights, type CrowdBudget, type DayPhase } from './crowd/budget';
 import { districtAt, poiBoosts, poisNear, type District, type Poi, type PoiKind } from './crowd/districts';
 import { CROWD_ROLES, FOREIGN_LABELS, type CrowdRole, type CrowdRoleId } from './crowd/roles';
 import { combatOf, streetsOf } from './hooks';
@@ -1329,7 +1329,7 @@ export class NpcManager implements System {
       else if (n.role?.id !== 'carter') citizens++;
     }
     // At night the station people (vigiles' posts, drovers) count toward the ≤ 25 cap (AC-10).
-    const target = Math.min(this.maxCrowd, b.night ? Math.max(4, Math.min(b.citizens, NIGHT_CAP - b.vigiles - 2 - this.stations.count)) : b.citizens);
+    const target = crowdTarget(b, this.maxCrowd, this.stations.count);
     const boosts = this.useAtlas ? poiBoosts(pp.x, pp.z) : {};
     let weights = roleWeights(this.district, this.game.time.hour, this.sun, boosts);
     // Escorted roles bring 1–4 people each: cap the groups so they don't swallow the budget.

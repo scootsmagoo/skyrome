@@ -86,6 +86,15 @@ export function crowdBudget(hour: number, sun: SunTimes, density: number, scale 
   return { phase, citizens: Math.max(0, citizens), vigiles, carts, night };
 }
 
+/**
+ * How many ambient citizens to keep around the player: the budget, capped by `maxCrowd`, and at
+ * night by the ≤ 25 rule with the vigiles and the people at stations (posts, drovers) counted in.
+ */
+export function crowdTarget(b: CrowdBudget, maxCrowd: number, stationPeople = 0): number {
+  if (!b.night) return Math.min(maxCrowd, b.citizens);
+  return Math.min(maxCrowd, Math.max(4, Math.min(b.citizens, NIGHT_CAP - b.vigiles - 2 - stationPeople)));
+}
+
 /** Phase multipliers on role weights (who is out when). */
 const PHASE_MULT: Record<DayPhase, Partial<Record<CrowdRoleId, number>>> = {
   predawn: { client: 2, porter: 1.5, citizen: 0.5, 'citizen-woman': 0.2, senator: 0, matron: 0, child: 0, elder: 0.2, reveler: 1, farmer: 2, traveller: 1.2 },

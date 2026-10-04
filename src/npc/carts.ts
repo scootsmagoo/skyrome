@@ -230,9 +230,14 @@ export class CartDirector {
       const along = resample(road, 3);
       let best = 0;
       for (let k = 1; k < along.length; k++) if (Math.hypot(along[k].x - pl.x, along[k].z - pl.z) < Math.hypot(along[best].x - pl.x, along[best].z - pl.z)) best = k;
+      // The clear stretch of road around that point (a gate or a building across it ends it).
       const span = Math.round(55 / 3);
-      const lo = Math.max(0, best - span);
-      const hi = Math.min(along.length - 1, best + span);
+      const ok = (p: Vec2) => !g.ready(p.x, p.z) || g.areaWalkable(p.x, p.z, 1);
+      if (!ok(along[best])) continue;
+      let lo = best;
+      let hi = best;
+      while (lo > 0 && best - lo < span && ok(along[lo - 1])) lo--;
+      while (hi < along.length - 1 && hi - best < span && ok(along[hi + 1])) hi++;
       if (hi - lo < 10) continue;
       let pts = along.slice(lo, hi + 1);
       if (h.rand() < 0.5) pts = pts.reverse();
@@ -276,5 +281,6 @@ export class CartDirector {
   clear() {
     for (const c of this.carts) c.dispose();
     this.carts.length = 0;
+    this.spawnT = 1;
   }
 }
