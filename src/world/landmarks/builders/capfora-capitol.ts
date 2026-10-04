@@ -274,7 +274,7 @@ function areaCapitolina(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, sp
       }),
     );
     spots.push(spotAt('votive-seller', 'stall', F.x0 + 2.2, foreY, F.z1 - 2.2, F.x0 + 6, F.z1 - 5, { label: 'Seller of votive figurines, incense and garlands' }));
-    spots.push(spotAt('gate-guard', 'npc', e - 0.6, 0, A.gate[1] + 0.8, e - 6, zc, { label: 'Temple slave keeping the gate of the Area Capitolina' }));
+    spots.push(spotAt('gate-guard', 'npc', e + 2.9, 0, zc + 1.7, e - 6, zc, { label: 'Temple slave keeping the gate of the Area Capitolina' }));
     spots.push(spotAt('forecourt-crowd', 'npc', F.x0 + 5, foreY, -45.5, e, zc, { label: 'Pilgrims and petitioners climbing to the Capitol' }));
   }
 

@@ -64,7 +64,8 @@ export function withoutLife<T>(fn: () => T): T {
   }
 }
 
-function live(ctx: Pick<LandmarkContext, 'game'>): Game | null {
+/** The running game, or null in unit tests and during a far stand-in pass. */
+export function live(ctx: Pick<LandmarkContext, 'game'>): Game | null {
   if (muted > 0) return null;
   const g = ctx.game as Game | undefined;
   return g && typeof (g as { addSystem?: unknown }).addSystem === 'function' && g.scene ? g : null;
@@ -85,7 +86,7 @@ function queue(game: Game): Pending {
 }
 
 /** Local → world point for the landmark being built. */
-function toWorld(ctx: Pick<LandmarkContext, 'game' | 'lm'>, x: number, y: number, z: number): THREE.Vector3 {
+export function toWorld(ctx: Pick<LandmarkContext, 'game' | 'lm'>, x: number, y: number, z: number): THREE.Vector3 {
   return new THREE.Vector3(x, y, z).applyMatrix4(frameOf(ctx.game, ctx.lm).matrix);
 }
 

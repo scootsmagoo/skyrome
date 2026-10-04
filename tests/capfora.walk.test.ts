@@ -28,6 +28,7 @@ import { builders as caesar } from '../src/world/landmarks/builders/capfora-caes
 import { builders as nerva } from '../src/world/landmarks/builders/capfora-nerva';
 import { builders as pacis } from '../src/world/landmarks/builders/capfora-pacis';
 import { builders as boarium } from '../src/world/landmarks/builders/capfora-boarium';
+import { peopleAt } from '../src/world/landmarks/builders/capfora/people';
 import { makeWorld, walk, type Leg, type TestWorld } from './arch.walker';
 
 const ALL: LandmarkBuilder[] = [...augustus, ...capitol, ...arx, ...caesar, ...nerva, ...pacis, ...boarium];
@@ -212,6 +213,30 @@ describe('capfora walkability', () => {
         }
       }
     }
+  });
+
+  it('the people at the spots stand on something and clear of walls and props', () => {
+    let n = 0;
+    for (const ids of GROUPS) {
+      const P = place(ids);
+      P.world.physics.step(1 / 60);
+      for (const id of ids) {
+        for (const pp of peopleAt(id, P.spots(id))) {
+          n++;
+          const w = P.local(id, pp.position.x, pp.position.z, pp.position.y);
+          const g = P.world.physics.groundHeight(w.x, w.z, w.y + 1.0, 2.2);
+          expect(g, `${id}:${pp.id} has ground`).not.toBeNull();
+          expect(Math.abs(g! - w.y), `${id}:${pp.id} on its floor`).toBeLessThan(0.7);
+          // Seated people sit on a bench, a stool or a tier: only standing ones must be clear.
+          if (pp.idle === 'sit' || pp.idle === 'sitGround') continue;
+          for (const dy of [0.5, 1.1, 1.6]) {
+            const hits = P.world.physics.overlapSphere({ x: w.x, y: g! + dy, z: w.z }, 0.22);
+            expect(hits.length, `${id}:${pp.id} clear at +${dy}`).toBe(0);
+          }
+        }
+      }
+    }
+    expect(n).toBeGreaterThan(60);
   });
 
   it('Forum of Augustus: entrance → square → steps of Mars Ultor → cella', () => {

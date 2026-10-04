@@ -6,6 +6,7 @@ import type * as THREE from 'three';
 import type { MeshBuilder } from '../../../../gfx/MeshBuilder';
 import type { LandmarkBuild, LandmarkContext } from '../../types';
 import type { CapSpot } from './frame';
+import { addPeople } from './crowd';
 import { addReadables, withoutLife } from './life';
 
 export type Detail = 'high' | 'low';
@@ -29,8 +30,10 @@ export function makeLandmark(ctx: LandmarkContext, make: (b: MeshBuilder, detail
   const b = ctx.builder();
   const spots: CapSpot[] = [];
   make(b, ctx.detail, spots);
-  // Inscriptions with a text become "Read" interactions in the running game.
+  // Inscriptions with a text become "Read" interactions in the running game, and people stand at
+  // the npc / vendor / stall spots.
   addReadables(ctx, spots);
+  addPeople(ctx, spots);
   const object = b.build(ctx.lm.id);
   let far: THREE.Object3D | undefined;
   if (opts.far) {

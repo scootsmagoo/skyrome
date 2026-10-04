@@ -20,6 +20,9 @@ import { builders as pacis } from '../src/world/landmarks/builders/capfora-pacis
 import { builders as capitol } from '../src/world/landmarks/builders/capfora-capitol';
 import { builders as arx } from '../src/world/landmarks/builders/capfora-arx';
 import { builders as boarium } from '../src/world/landmarks/builders/capfora-boarium';
+import { PEOPLE, peopleAt, personFor } from '../src/world/landmarks/builders/capfora/people';
+import { SmallTalk } from '../src/world/landmarks/builders/capfora/crowd';
+import type { CapSpot } from '../src/world/landmarks/builders/capfora/frame';
 
 const ALL: LandmarkBuilder[] = [...augustus, ...caesar, ...nerva, ...pacis, ...capitol, ...arx, ...boarium];
 
@@ -117,7 +120,46 @@ describe('capfora landmarks', () => {
       expect(hi.spots?.length ?? 0).toBeGreaterThan(0);
       // Where `&at=<id>` (and the gameplay team) put the player: one arrival point per landmark.
       expect(hi.spots?.some((s) => s.kind === 'spawn'), `${id} has a spawn spot`).toBe(true);
+      // Somebody written for every person spot (not the generic stand-in).
+      for (const sp of (hi.spots ?? []) as CapSpot[]) {
+        if (sp.kind !== 'npc' && sp.kind !== 'vendor' && sp.kind !== 'stall') continue;
+        const def = personFor(id, sp)!;
+        expect(Object.values(PEOPLE).includes(def) || def.name !== 'A trader', `${id}:${sp.id} has a person`).toBe(true);
+        expect(def.greet, `${id}:${sp.id}`).not.toBe('Salve, stranger.');
+      }
       for (const s of hi.spots ?? []) expect(Number.isFinite(s.position.x + s.position.y + s.position.z)).toBe(true);
     });
   }
+});
+
+describe('capfora people', () => {
+  it('groups stand round their spot, a seated row side by side', () => {
+    const spot = (id: string, kind = 'npc'): CapSpot => ({ id, kind, position: new THREE.Vector3(10, 2, 5), heading: Math.PI / 2 });
+    const crowd = peopleAt('forum-caesar', [spot('festival-crowd')]);
+    expect(crowd.length).toBe(6);
+    for (const p of crowd) expect(p.position.distanceTo(new THREE.Vector3(10, 2, 5))).toBeLessThan(3.5);
+    const senators = peopleAt('forum-caesar', [spot('stands', 'sit')]);
+    expect(senators.length).toBe(3);
+    // Facing +x: the row runs along z, all at the same x.
+    for (const p of senators) expect(p.position.x).toBeCloseTo(10, 5);
+    expect(new Set(senators.map((p) => p.position.z.toFixed(2))).size).toBe(3);
+    // Unknown benches stay empty.
+    expect(peopleAt('forum-caesar', [spot('nowhere', 'sit')]).length).toBe(0);
+  });
+
+  it('small talk: greeting, topics, farewell', () => {
+    const def = PEOPLE['forum-caesar:herald'];
+    const v = new SmallTalk('x', def);
+    let changes = 0;
+    const off = v.onChange(() => changes++);
+    expect(v.line.text).toBe(def.greet);
+    expect(v.choices.at(-1)?.exit).toBe(true);
+    v.choose(0);
+    expect(v.line.text).toBe(def.topics![0].answer);
+    expect(v.choices[0].seen).toBe(true);
+    v.choose(v.choices.length - 1);
+    expect(v.ended).toBe(true);
+    expect(changes).toBe(2);
+    off();
+  });
 });

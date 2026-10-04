@@ -196,7 +196,10 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
   for (const s of tab.shops) {
     if (!s.open) continue;
     const z = zBas - s.x;
-    spots.push(spotAt(`taberna-${Math.round(s.x)}`, 'vendor', xa + half + 1.5, Y0 + 0.4, z, xa, z, { label: s.kind === 'moneychanger' ? 'Argentarius (money-changer)' : `Shopkeeper (${s.kind})` }));
+    // Behind the counter: the money-changer on his stool behind the table, the others clear of
+    // their counters and shelves.
+    const back = s.kind === 'moneychanger' ? 2.05 : s.kind === 'wine' ? 1.9 : 1.6;
+    spots.push(spotAt(`taberna-${Math.round(s.x)}`, 'vendor', xa + half + back, Y0 + 0.4, z, xa, z, { label: s.kind === 'moneychanger' ? 'Argentarius (money-changer)' : `Shopkeeper (${s.kind})` }));
   }
 
   // ---- the SE end: steps down to the Argiletum
@@ -238,19 +241,22 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
         if (i > 0) festoon(b, new THREE.Vector3(x, Y0 + 3.3, z + 2.2), new THREE.Vector3(x, Y0 + 3.3, z + 2.2 + 9), { sag: 0.9, r: 0.12, detail: hi ? 'high' : 'low' });
       }
     }
-    // Wooden stands for the senators and the magistrates along the NE portico (seats 0.45 m).
+    // Wooden stands for the senators and the magistrates along the NE portico, rising away from
+    // the square (tiers of 0.45 m, the lowest at the front).
     {
       const x0 = colNE + 2.4;
+      const xf = x0 + 3.0; // front edge, on the square
       const zA = zSE + 14;
       const zB = zSE + 30;
       for (let r = 0; r < 4; r++) {
         const h = 0.45 * (r + 1);
-        span(b, 'wood', x0 + r * 0.75, Y0, zA, x0 + (r + 1) * 0.75, Y0 + h, zB, I, true);
+        span(b, 'wood', xf - (r + 1) * 0.75, Y0, zA, xf - r * 0.75, Y0 + h, zB, I, true);
       }
-      span(b, 'fabric_red', x0 - 0.05, Y0 + 0.1, zA - 0.02, x0 + 0.02, Y0 + 0.45, zB + 0.02, I);
-      // The steps up the stand at its ends (0.225 m risers).
-      for (const z of [zA - 0.9, zB + 0.1]) for (let r = 0; r < 8; r++) span(b, 'wood', x0 + r * 0.375, Y0, z, x0 + (r + 1) * 0.375, Y0 + 0.225 * (r + 1), z + 0.8, I, true);
-      spots.push(spotAt('stands', 'sit', x0 + 1.9, Y0 + 1.35, (zA + zB) / 2, xa, (zA + zB) / 2, { label: 'Stands for the senators at the rededication' }));
+      span(b, 'fabric_red', xf - 0.02, Y0 + 0.05, zA - 0.02, xf + 0.05, Y0 + 0.42, zB + 0.02, I);
+      // The steps up the stand at its ends (0.225 m risers), climbing from the square.
+      for (const z of [zA - 0.9, zB + 0.1]) for (let r = 0; r < 8; r++) span(b, 'wood', xf - (r + 1) * 0.375, Y0, z, xf - r * 0.375, Y0 + 0.225 * (r + 1), z + 0.8, I, true);
+      // Feet on the second tier, seated on the third.
+      spots.push(spotAt('stands', 'sit', xf - 1.15, Y0 + 0.9, (zA + zB) / 2, xa, (zA + zB) / 2, { label: 'Stands for the senators at the rededication' }));
     }
     // Garland and incense sellers on the square before the SW portico, the counters facing the
     // square, and workmen with ladders by the temple.
@@ -364,7 +370,7 @@ function buildVenusGenetrix(ctx: LandmarkContext, b: MeshBuilder, detail: Detail
   );
   spots.push(spotAt('rostrum', 'vista', 0, Y0 + P, front + 0.8, 0, front - 30, { label: 'The rostrum of Venus Genetrix' }));
   spots.push(spotAt('forum', 'spawn', 3.6, Y0, front - 6.5, 0, front, { label: 'Before the Temple of Venus Genetrix' }));
-  spots.push(spotAt('workmen', 'npc', s.x1 + 0.6, Y0, s.z0 + 4, s.x1 + 0.6, s.z0 + 10, { label: 'Marble workers finishing the cupid frieze' }));
+  spots.push(spotAt('workmen', 'npc', s.x1 + 0.95, Y0, s.z0 + 4, s.x1 - 5, s.z0 + 4, { label: 'Marble workers finishing the cupid frieze' }));
   if (res.interior) {
     const it = res.interior;
     spots.push(spotAt('cult-statue', 'shrine', 0, it.y + Y0, it.z1 + vg.dz - 7, 0, it.z1 + vg.dz, { label: 'Venus Genetrix, ancestress of the Julii' }));
