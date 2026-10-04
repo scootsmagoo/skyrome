@@ -25,7 +25,7 @@ import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import {
   T, TRS, V, altar, broadTree, clearOf, cornice, obstacles, dims, draw, farDraw, finish, hedge, inscription, mul, piercedWall, plinth, pool, ringRoof, roundBasin, spot,
-  statueOnPedestal, tiledRoof, wallRun, type Detail, type WallOpening,
+  statueOnPedestal, tiledRoof, wallRun, type Detail, type WallOpening, liftAll,
 } from './generic-common';
 import { tree } from './generic-world';
 import { liteColonnade, tabernae } from './generic-civic-lib';
@@ -537,13 +537,13 @@ function buildIseum(ctx: LandmarkContext): LandmarkBuild {
   return finish(lm.id, d, spots, far, 900);
 }
 
-export const builders: LandmarkBuilder[] = [
+export const builders: LandmarkBuilder[] = liftAll([
   { handles: ['saepta-julia'], build: buildSaepta },
   { handles: ['diribitorium'], build: buildDiribitorium },
   { handles: ['porticus-minucia-frumentaria'], build: buildMinucia },
   { handles: ['porticus-philippi'], build: buildPhilippi },
   { handles: ['porticus-vipsania'], build: buildVipsania },
   { handles: ['iseum-campense'], build: buildIseum },
-];
+]);
 
 export { porch, roundBasin, tiledRoof };

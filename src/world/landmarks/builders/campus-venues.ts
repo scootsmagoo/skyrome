@@ -15,7 +15,7 @@ import { apse } from '../../../arch/classical/vaults';
 import { placeProp } from '../../../arch/props';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import {
-  T, V, dims, draw, farDraw, finish, inscription, mul, piercedWall, plinth, ringRoof, roundBasin, spot, statueOnPedestal,
+  T, V, dims, draw, farDraw, finish, inscription, mul, piercedWall, plinth, ringRoof, roundBasin, spot, statueOnPedestal, liftAll,
 } from './generic-common';
 import { quadriporticusGarden } from './generic-civic';
 import { liteArcade } from './generic-seating';
@@ -154,9 +154,9 @@ function buildCryptaBalbi(ctx: LandmarkContext): LandmarkBuild {
   return finish(lm.id, d, spots, far);
 }
 
-export const builders: LandmarkBuilder[] = [
+export const builders: LandmarkBuilder[] = liftAll([
   { handles: ['stadium-domitian'], build: buildStadiumDomitian },
   { handles: ['odeum-domitian'], build: buildOdeumDomitian },
   { handles: ['theatre-balbus'], build: buildTheatreBalbus },
   { handles: ['crypta-balbi'], build: buildCryptaBalbi },
-];
+]);

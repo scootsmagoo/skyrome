@@ -21,7 +21,7 @@ import { HeightField, reliefMaterial } from '../../../arch/common/relief';
 import type { Draw } from '../../../arch/fabric/draw';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import {
-  T, TRS, V, altar, broadTree, cypress, dims, draw, farDraw, finish, flight, flightLength, inscription, mul, plinth, spot, type Detail,
+  T, TRS, V, altar, broadTree, cypress, dims, draw, farDraw, finish, flight, flightLength, inscription, mul, plinth, spot, type Detail, liftAll,
 } from './generic-common';
 import { tree } from './generic-world';
 
@@ -362,10 +362,10 @@ function buildHorologium(ctx: LandmarkContext): LandmarkBuild {
   return finish(lm.id, d, spots, far, 800);
 }
 
-export const builders: LandmarkBuilder[] = [
+export const builders: LandmarkBuilder[] = liftAll([
   { handles: ['mausoleum-augustus'], build: buildMausoleum },
   { handles: ['ara-pacis'], build: buildAraPacis },
   { handles: ['horologium-augusti'], build: buildHorologium },
-];
+]);
 
 export { V, type Detail };

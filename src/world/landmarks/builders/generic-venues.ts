@@ -19,7 +19,7 @@ import { LANDMARKS } from '../../../data/atlas';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import {
   T, V, arc, children, crenellations, dims, draw, farDraw, finish, flight, flightLength, groundRange, heightG, hintsOf, inscription, mul, offsetLine, pathLength,
-  piercedWall, plinth, spot, statueOnPedestal, tiledRoof, type Detail, type V3,
+  piercedWall, plinth, spot, statueOnPedestal, tiledRoof, type Detail, type V3, liftAll,
 } from './generic-common';
 import { liteColonnade, liteColumnAt } from './generic-civic-lib';
 import { liteArcade, ribbonSlab, ribbonWall, seating, seatingTiers, type LiteStorey } from './generic-seating';
@@ -657,12 +657,12 @@ export function obeliskAt(d: Draw, x: number, y: number, z: number, height: numb
   }
 }
 
-export const builders: LandmarkBuilder[] = [
+export const builders: LandmarkBuilder[] = liftAll([
   { handles: ['category:theatre'], build: buildTheatre },
   { handles: ['category:odeum'], build: buildTheatre },
   { handles: ['category:stadium'], build: buildStadium },
   { handles: ['category:circus'], build: buildCircus },
   { handles: ['category:amphitheatre'], build: buildAmphitheatre },
-];
+]);
 
 export { arc, LANDMARKS, type Order };

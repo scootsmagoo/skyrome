@@ -151,3 +151,24 @@ describe('every landmark we build', () => {
     });
   }
 });
+
+describe('terrain lift', () => {
+  it('raises a build only where the ground pokes up through its floor', async () => {
+    const { groundLift } = await import('../src/world/landmarks/builders/generic-common');
+    expect(groundLift(0)).toBe(0);
+    expect(groundLift(0.25)).toBe(0);
+    expect(groundLift(2)).toBeCloseTo(1.95, 6);
+  });
+
+  it('moves object, colliders and spots up together and adds steps from the street', () => {
+    const lm = LANDMARKS.find((l) => l.id === 'templum-gentis-flaviae')!;
+    const b = builderFor(lm as unknown as LandmarkData)!;
+    const ctx = (groundAt: (x: number, z: number) => number) => ({ game: {} as never, lm: lm as unknown as LandmarkData, S: 0.6, rng: new Rng('x'), detail: 'low' as const, builder: () => new MeshBuilder(), groundAt });
+    const flat = b.build(ctx(() => 0));
+    const hill = b.build(ctx((x, z) => Math.max(0, z * 0.1)));
+    const lift = (hill.object.children[0] as THREE.Object3D).position.y;
+    expect(lift).toBeGreaterThan(1);
+    expect(hill.colliders.length).toBeGreaterThan(flat.colliders.length);
+    expect(hill.spots![0].position.y).toBeCloseTo(flat.spots![0].position.y + lift, 3);
+  });
+});

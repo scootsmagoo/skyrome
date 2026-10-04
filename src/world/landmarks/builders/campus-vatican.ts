@@ -18,7 +18,7 @@ import { inscriptionPanel } from '../../../arch/common/inscription';
 import type { Draw } from '../../../arch/fabric/draw';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import {
-  T, V, broadTree, clearOf, cypress, dims, draw, farDraw, finish, groundRange, inscription, mul, obstacles, plinth, spot, wallRun, type Detail,
+  T, V, broadTree, clearOf, cypress, dims, draw, farDraw, finish, groundRange, inscription, mul, obstacles, plinth, spot, wallRun, type Detail, liftAll,
 } from './generic-common';
 import { tree } from './generic-world';
 import { liteArcade, ribbonSlab, seating } from './generic-seating';
@@ -199,11 +199,11 @@ function buildNaumachiaAugusti(ctx: LandmarkContext): LandmarkBuild {
   return finish(lm.id, d, spots, undefined, 800);
 }
 
-export const builders: LandmarkBuilder[] = [
+export const builders: LandmarkBuilder[] = liftAll([
   { handles: ['circus-vaticanus'], build: buildCircusVaticanus },
   { handles: ['vatican-obelisk'], build: buildVaticanObelisk },
   { handles: ['naumachia-traiani'], build: buildNaumachiaTraiani },
   { handles: ['naumachia-augusti'], build: buildNaumachiaAugusti },
-];
+]);
 
 export { farDraw };

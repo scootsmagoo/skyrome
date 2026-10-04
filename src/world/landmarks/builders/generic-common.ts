@@ -24,7 +24,7 @@ import { armoredEmperor, equestrian, seatedDeity, togate } from '../../../arch/c
 import type { Order } from '../../../arch/classical/orders';
 import type { TemplePlan } from '../../../arch/classical/temple';
 import { MATERIAL_BASE, type MaterialId } from '../../../gfx/materialIds';
-import { MeshBuilder } from '../../../gfx/MeshBuilder';
+import { MeshBuilder, transformCollider } from '../../../gfx/MeshBuilder';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, LandmarkData, Spot } from '../types';
 
 /** This file only exports helpers; the registry glob still imports it, so give it an empty list. */
@@ -596,6 +596,72 @@ export const FAR_SWAP = 450;
 /** Fresh drawing frame for a landmark. */
 export function draw(ctx: LandmarkContext): Draw {
   return new Draw(ctx.builder());
+}
+
+// ---------------------------------------------------------------- terrain lift
+
+/** Builders that follow the terrain themselves (forts, terraced and self-founded monuments). */
+const NO_LIFT = new Set(['category:camp', 'category:garden', 'castra-praetoria', 'pyramid-cestius', 'monte-testaccio', 'naumachia-augusti', 'emporium', 'porticus-aemilia']);
+
+/**
+ * Pure: how far to raise a landmark so no terrain pokes through its floor — the highest ground
+ * under the footprint (given relative to the pad) less a small tolerance, or 0.
+ */
+export function groundLift(maxGround: number): number {
+  return maxGround > 0.3 ? Math.round((maxGround - 0.05) * 100) / 100 : 0;
+}
+
+/**
+ * Wrap a builder so that, where its landmark has no flattened pad (priority 3, big or unpadded
+ * categories) and the ground under the footprint rises above the centre, the whole build is raised
+ * to the highest ground: the builder sees the ground relative to the new floor (so its plinths reach
+ * down to the low side), the object, colliders, spots and far stand-in move up together, and a flight
+ * of steps climbs from the street in front of the facade to the raised floor.
+ */
+export function lifted(b: LandmarkBuilder): LandmarkBuilder {
+  if (b.handles.some((h) => NO_LIFT.has(h))) return b;
+  return {
+    handles: b.handles,
+    build(ctx: LandmarkContext): LandmarkBuild {
+      const lm = ctx.lm;
+      if (sitingOf(lm) !== 'pad' || NO_LIFT.has(lm.id)) return b.build(ctx);
+      const { w, d: dd } = dims(ctx);
+      const lift = groundLift(groundRange(ctx, -w / 2, -dd / 2, w / 2, dd / 2, 8).max);
+      if (lift <= 0) return b.build(ctx);
+      const r = b.build({ ...ctx, groundAt: (x, z) => ctx.groundAt(x, z) - lift });
+      const up = new THREE.Matrix4().makeTranslation(0, lift, 0);
+      const root = new THREE.Group();
+      r.object.position.y += lift;
+      root.add(r.object);
+      const colliders = r.colliders.map((c) => transformCollider(c, up));
+      // Steps up from the street in front of the facade.
+      const sb = new MeshBuilder();
+      const sd = new Draw(sb);
+      const L = flightLength(lift);
+      const y0 = Math.min(lift - 0.05, ctx.groundAt(0, -dd / 2 - L / 2));
+      if (lift - y0 > 0.1) {
+        const sw = Math.min(w * 0.5, 12);
+        flight(sd, 0, -dd / 2 - flightLength(lift - y0), sw, y0, lift, 'travertine');
+        sd.span('travertine', -sw / 2, Math.min(y0, ctx.groundAt(0, -dd / 2 - 0.5)) - 0.5, -dd / 2 - flightLength(lift - y0), sw / 2, y0, -dd / 2);
+        root.add(sb.build(`${lm.id}:lift`));
+        colliders.push(...sb.colliders);
+      }
+      const spots = (r.spots ?? []).map((s) => ({ ...s, position: s.position.clone().setY(s.position.y + lift) }));
+      let far = r.far;
+      if (far) {
+        const fg = new THREE.Group();
+        far.position.y += lift;
+        fg.add(far);
+        far = fg;
+      }
+      return { ...r, object: root, colliders, spots, far };
+    },
+  };
+}
+
+/** Apply `lifted` to a list of builders (each file's export). */
+export function liftAll(list: LandmarkBuilder[]): LandmarkBuilder[] {
+  return list.map(lifted);
 }
 
 // ---------------------------------------------------------------- swept paths

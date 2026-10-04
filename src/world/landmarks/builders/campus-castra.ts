@@ -11,7 +11,7 @@
  */
 import { placeProp } from '../../../arch/props';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
-import { dims, draw, farDraw, finish, groundRange, inscription, plinth, spot } from './generic-common';
+import { dims, draw, farDraw, finish, groundRange, inscription, plinth, spot, liftAll } from './generic-common';
 import { fort, thermae } from './generic-civic';
 
 function buildCastraPraetoria(ctx: LandmarkContext): LandmarkBuild {
@@ -44,4 +44,4 @@ function buildCastraPraetoria(ctx: LandmarkContext): LandmarkBuild {
   return finish(lm.id, d, spots, far, 1000);
 }
 
-export const builders: LandmarkBuilder[] = [{ handles: ['castra-praetoria'], build: buildCastraPraetoria }];
+export const builders: LandmarkBuilder[] = liftAll([{ handles: ['castra-praetoria'], build: buildCastraPraetoria }]);

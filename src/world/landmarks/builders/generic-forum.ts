@@ -17,7 +17,7 @@ import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import {
   T, V, children, clearOf, dims, draw, farDraw, finish, hintsOf, inscription, insidePoly, mul, obstacles, piercedWall, plinth, pool, spot, statueOnPedestal,
-  tiledRoof, wallRun, type Detail, type V3,
+  tiledRoof, wallRun, type Detail, type V3, liftAll,
 } from './generic-common';
 import { liteColonnade } from './generic-civic-lib';
 import { localOf } from './generic-venues';
@@ -270,4 +270,4 @@ function halfDisc(R: number) {
 }
 
 
-export const builders: LandmarkBuilder[] = [{ handles: ['category:forum'], build: buildForum }];
+export const builders: LandmarkBuilder[] = liftAll([{ handles: ['category:forum'], build: buildForum }]);

@@ -15,7 +15,7 @@ import { placeProp } from '../../../arch/props';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import {
   T, V, broadTree, clearOf, cornice, cypress, dims, draw, farDraw, finish, groundRange, hedge, inscription, mul, obstacles, piercedWall, plinth, pool,
-  roundBasin, spot, statueOnPedestal, tiledRoof, wallRun, type WallOpening,
+  roundBasin, spot, statueOnPedestal, tiledRoof, wallRun, type WallOpening, liftAll,
 } from './generic-common';
 import { tree } from './generic-world';
 import { liteColonnade, liteColumnAt } from './generic-civic-lib';
@@ -183,9 +183,9 @@ function buildThermaeSuranae(ctx: LandmarkContext): LandmarkBuild {
   return finish(lm.id, d, spots, far);
 }
 
-export const builders: LandmarkBuilder[] = [
+export const builders: LandmarkBuilder[] = liftAll([
   { handles: ['baths-agrippa'], build: buildBathsAgrippa },
   { handles: ['stagnum-agrippae'], build: buildStagnum },
   { handles: ['baths-nero'], build: buildBathsNero },
   { handles: ['thermae-suranae'], build: buildThermaeSuranae },
-];
+]);

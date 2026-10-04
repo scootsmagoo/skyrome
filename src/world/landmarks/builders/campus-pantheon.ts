@@ -20,7 +20,7 @@ import { placeProp } from '../../../arch/props';
 import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import {
-  T, V, arc, dims, draw, farDraw, finish, flight, inscription, mul, piercedWall, plinth, spot, statueOnPedestal, tiledRoof, wallRun, type Detail,
+  T, V, arc, dims, draw, farDraw, finish, flight, inscription, mul, piercedWall, plinth, spot, statueOnPedestal, tiledRoof, wallRun, type Detail, liftAll,
 } from './generic-common';
 import { liteColumnAt } from './generic-civic-lib';
 import { brazier, wallTorch } from './generic-world';
@@ -397,7 +397,7 @@ function buildBasilicaNeptune(ctx: LandmarkContext): LandmarkBuild {
   return finish(lm.id, d, spots, far);
 }
 
-export const builders: LandmarkBuilder[] = [
+export const builders: LandmarkBuilder[] = liftAll([
   { handles: ['pantheon'], build: buildPantheon },
   { handles: ['basilica-neptune'], build: buildBasilicaNeptune },
-];
+]);

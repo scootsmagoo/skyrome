@@ -12,7 +12,7 @@ import { placeProp } from '../../../arch/props';
 import { domus } from '../../../arch/fabric/domus';
 import { inscriptionPanel } from '../../../arch/common/inscription';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
-import { T, dims, draw, farDraw, finish, mul, plinth, spot, tiledRoof } from './generic-common';
+import { T, dims, draw, farDraw, finish, mul, plinth, spot, tiledRoof, liftAll } from './generic-common';
 import { liteColumnAt } from './generic-civic-lib';
 import { appendBuilding } from './generic-civic';
 import { fitTemple } from './generic-sacred';
@@ -81,7 +81,7 @@ function buildDianaAventine(ctx: LandmarkContext): LandmarkBuild {
   return finish(lm.id, d, spots, far);
 }
 
-export const builders: LandmarkBuilder[] = [
+export const builders: LandmarkBuilder[] = liftAll([
   { handles: ['privata-traiani'], build: buildPrivataTraiani },
   { handles: ['temple-diana-aventine'], build: buildDianaAventine },
-];
+]);

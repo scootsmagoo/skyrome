@@ -17,7 +17,7 @@ import type { Draw } from '../../../arch/fabric/draw';
 import { placeProp } from '../../../arch/props';
 import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
-import { ashlarFace, dims, draw, farDraw, finish, heightG, hintsOf, inscription, spot, tiledRoof, wallRun, type Detail } from './generic-common';
+import { ashlarFace, dims, draw, farDraw, finish, heightG, hintsOf, inscription, spot, tiledRoof, wallRun, type Detail, liftAll } from './generic-common';
 import { brazier, wallTorch } from './generic-world';
 
 /** Pure: passages of a gate from its notes (triple / double / single). */
@@ -221,4 +221,4 @@ function aqueductOverGate(ctx: LandmarkContext, d: Draw, far: Draw, w: number, H
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
-export const builders: LandmarkBuilder[] = [{ handles: ['category:gate'], build: buildGate }];
+export const builders: LandmarkBuilder[] = liftAll([{ handles: ['category:gate'], build: buildGate }]);

@@ -20,7 +20,7 @@ import { LANDMARK_BY_ID } from '../../../data/atlas';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import {
   T, V, altar, broadTree, cornice, dims, draw, farDraw, finish, flight, flightLength, hedge, inscription, mul, piercedWall, plinth, roundBasin, spot,
-  statueOnPedestal, tiledRoof,
+  statueOnPedestal, tiledRoof, liftAll,
 } from './generic-common';
 import { tree } from './generic-world';
 import { liteColonnade } from './generic-civic-lib';
@@ -292,12 +292,12 @@ function buildLargoArgentina(ctx: LandmarkContext): LandmarkBuild {
   return finish(lm.id, d, spots, far);
 }
 
-export const builders: LandmarkBuilder[] = [
+export const builders: LandmarkBuilder[] = liftAll([
   { handles: ['theatre-pompey'], build: buildTheatrePompey },
   { handles: ['temple-venus-victrix'], build: buildVenusVictrix },
   { handles: ['porticus-pompeiana'], build: buildPorticusPompeiana },
   { handles: ['curia-pompey'], build: buildCuriaPompey },
   { handles: ['largo-argentina-temples'], build: buildLargoArgentina },
-];
+]);
 
 export { flightLength, gable, porch, templeMaterials };

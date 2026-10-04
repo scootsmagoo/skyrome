@@ -29,7 +29,7 @@ import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../t
 import {
   T, TRS, V, altar, broadTree, clearOf, cornice, crenellations, cypress, dims, draw, farDraw, finish, flight, flightLength, groundRange,
   groundWall, hedge, heightG, hintsOf, inscription, mul, sitingOf, obstacles, piercedWall, plinth, pool, railing, roundBasin, spot, statueOnPedestal,
-  tiledRoof, wallRun, type Detail, type Hints, type V3, type WallOpening,
+  tiledRoof, wallRun, type Detail, type Hints, type V3, type WallOpening, liftAll,
 } from './generic-common';
 import { courtyardRanges, hall, liteColonnade, liteColumnAt, tabernae, vaultedAisle } from './generic-civic-lib';
 import { liteArcade } from './generic-seating';
@@ -1514,7 +1514,7 @@ function buildOther(ctx: LandmarkContext): LandmarkBuild {
   return finish(lm.id, d, spots, far);
 }
 
-export const builders: LandmarkBuilder[] = [
+export const builders: LandmarkBuilder[] = liftAll([
   { handles: ['category:basilica'], build: buildBasilica },
   { handles: ['category:curia'], build: buildCuria },
   { handles: ['category:library'], build: buildLibrary },
@@ -1529,6 +1529,6 @@ export const builders: LandmarkBuilder[] = [
   { handles: ['category:harbor'], build: buildHarbor },
   { handles: ['category:garden'], build: buildGarden },
   { handles: ['category:other'], build: buildOther },
-];
+]);
 
 export { TRS, type Hints };

@@ -19,7 +19,7 @@ import { placeProp } from '../../../arch/props';
 import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import {
-  T, TRS, V, cornice, dims, draw, farDraw, finish, groundRange, groundWall, inscription, mul, plinth, spot, statueOnPedestal, tiledRoof,
+  T, TRS, V, cornice, dims, draw, farDraw, finish, groundRange, groundWall, inscription, mul, plinth, spot, statueOnPedestal, tiledRoof, liftAll,
 } from './generic-common';
 import { hall, tabernae, vaultedAisle } from './generic-civic-lib';
 import { horreaBlocks, quay } from './generic-civic';
@@ -327,13 +327,13 @@ function buildCestius(ctx: LandmarkContext): LandmarkBuild {
   return finish(lm.id, d, spots, far, 1000);
 }
 
-export const builders: LandmarkBuilder[] = [
+export const builders: LandmarkBuilder[] = liftAll([
   { handles: ['emporium'], build: buildEmporium },
   { handles: ['porticus-aemilia'], build: buildPorticusAemilia },
   { handles: ['horrea-galbana'], build: (ctx) => horreaComplex(ctx, 3, 'HORREA GALBIANA') },
   { handles: ['horrea-lolliana'], build: (ctx) => horreaComplex(ctx, 2, 'HORREA LOLLIANA') },
   { handles: ['monte-testaccio'], build: buildTestaccio },
   { handles: ['pyramid-cestius'], build: buildCestius },
-];
+]);
 
 export { V, cornice, tabernae, tiledRoof, treadwheelCrane };

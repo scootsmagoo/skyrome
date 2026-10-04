@@ -19,7 +19,7 @@ import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import {
   T, TRS, V, altar, broadTree, crenellations, cypress, dims, draw, farDraw, finish, flight, heightG, hintsOf, inscription, mul, plinth, pool,
-  railing, roundBasin, spot, statueOnPedestal, tiledRoof, wallRun, type Detail, type Hints,
+  railing, roundBasin, spot, statueOnPedestal, tiledRoof, wallRun, type Detail, type Hints, liftAll,
 } from './generic-common';
 import { liteColonnade } from './generic-civic-lib';
 import { lamp, tree } from './generic-world';
@@ -716,7 +716,7 @@ function buildArch(ctx: LandmarkContext): LandmarkBuild {
   return finish(lm.id, d, spots);
 }
 
-export const builders: LandmarkBuilder[] = [
+export const builders: LandmarkBuilder[] = liftAll([
   { handles: ['category:temple'], build: buildTemple },
   { handles: ['category:shrine'], build: buildShrine },
   { handles: ['category:monument'], build: buildMonument },
@@ -724,6 +724,6 @@ export const builders: LandmarkBuilder[] = [
   { handles: ['category:fountain'], build: buildFountain },
   { handles: ['category:tomb'], build: buildTomb },
   { handles: ['category:arch'], build: buildArch },
-];
+]);
 
 export { TRS };
