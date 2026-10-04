@@ -55,11 +55,15 @@ const PAD_EXTRA: Record<string, { grow?: number; margin?: number; front?: number
   'baths-trajan': { front: 22, frontMargin: 14 },
 };
 
+/** Circuses, stadia, theatres and amphitheatres: built level on their pad (generic-common NO_LIFT_CATEGORIES). */
+const BOWLS = new Set(['amphitheatre', 'circus', 'theatre', 'odeum', 'stadium']);
+
 export function landmarkPads(bounds: { minX: number; maxX: number; minZ: number; maxZ: number }): TerrainPad[] {
   const pads: TerrainPad[] = [];
   for (const lm of atlas.LANDMARKS) {
     if (!PAD_CATEGORIES.has(lm.category)) continue;
-    if (lm.priority > 2) continue;
+    // Seating bowls are never raised by their builders, so they get their pad at any priority.
+    if (lm.priority > 2 && !BOWLS.has(lm.category)) continue;
     // Buried structures (the Domus Aurea under the Baths of Trajan) must not flatten the surface.
     if (lm.siting === 'underground') continue;
     const [x, z] = lm.center;
