@@ -321,7 +321,7 @@ poise 150, reaction 0.25 s, block 0.45 weapon-only, intervals of 1.6, 1.3 and 1.
 The night band of the v0.1 districts (docs/CONTENT.md §5.2 spawn bands) brings out grassator pairs
 at four street sites: two on the street under the Palatine (the Circus north side), one on the Vicus
 Tuscus south of its compitum, one on the road from the Porta Capena to the Colosseum. A site comes
-alive when it is night (19:30–05:30), the player has been playing for a minute, nothing else is
+alive when it is night (19:30–05:30), the player has been playing for 90 s, nothing else is
 going on (no fight, no menu, no dialogue), the site is 55–130 m away and out of sight, it hasn't
 been used tonight, and no vigil stands within 20 m. The pair waits beside the street (`lean` or
 `stand`), steps out when the player comes within 14 m in sight ("You there. A word, friend."), and

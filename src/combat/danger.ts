@@ -4,7 +4,7 @@
  * by the street; when you come near they step out and demand your purse ("Purse or blood,
  * friend"). Pay, and they melt back into the dark; refuse, walk on or draw steel, and it's a fight
  * (they flee at low health, §13.1). One encounter at a time, each street at most once a night,
- * never while you are fighting, talking or in a menu, and never in the first minute of a game.
+ * never while you are fighting, talking or in a menu, and never in the first 90 s of a game.
  *
  *   game.combat.danger.enabled           off with the setting `combatStreetDanger: false`
  *   game.combat.danger.trigger(siteId)   stage one now (dev, tests: ?scene=rome&danger=<site id>)
@@ -100,7 +100,7 @@ const tmp = new THREE.Vector3();
 export class StreetDanger {
   enabled = true;
   /** Seconds of play before the first encounter can come. */
-  graceSeconds = 60;
+  graceSeconds = 90;
   private enc: Encounter | null = null;
   private used = new Map<string, number>();
   private nextCheck = 0;
