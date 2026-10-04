@@ -17,7 +17,8 @@ import { WORLD_SCALE } from '../coords';
 import type { Heightmap } from '../terrain/heightmap';
 import { chain, resolveQuays } from '../terrain/riverbanks';
 import { bodyAt, currentOf, makeWaterBodies, type BodyHit, type WaterBody } from './bodies';
-import { buildIslandFacing, buildQuay } from './quays';
+import { buildCanal, mergeSurfaces } from './canal';
+import { bridgeCorridors, buildIslandFacing, buildQuay } from './quays';
 import { placeReeds } from './reeds';
 import { buildWaterSurface } from './surfaceMesh';
 import { SwimSystem } from './swim';
@@ -79,6 +80,31 @@ export class WaterService implements System {
   }
 }
 
+/**
+ * Keeps the camera above the river: a third-person camera behind a swimmer looking up, or one
+ * following a fall from a quay, would otherwise dip under the single-sided surface and show the
+ * dry bed. Runs right after the camera rig, before anything reads the camera.
+ */
+export class WaterCamera implements System {
+  readonly name = 'waterCamera';
+  readonly priority = 100.5;
+  /** Minimum clearance of the camera above the surface (m). */
+  clearance = 0.2;
+
+  constructor(private readonly water: WaterService) {}
+
+  lateUpdate() {
+    const cam = this.water.game.camera;
+    const p = cam.position;
+    const hit = this.water.hitAt(p.x, p.z);
+    if (!hit) return;
+    const min = hit.body.level + this.clearance;
+    if (p.y >= min || this.water.hm.heightAt(p.x, p.z) > hit.body.level) return;
+    p.y = min;
+    cam.updateMatrixWorld();
+  }
+}
+
 export async function buildWater(game: Game, atlas: typeof Atlas, hm: Heightmap): Promise<void> {
   const S = WORLD_SCALE;
   const bodies = makeWaterBodies(atlas.RIVERS);
@@ -90,7 +116,12 @@ export async function buildWater(game: Game, atlas: typeof Atlas, hm: Heightmap)
   // Beyond the grid (where the terrain draws its coarse apron) the river continues too.
   const far = game.terrain?.apron ? 3000 : 0;
   const ground = game.terrain?.farHeightAt ?? ((x: number, z: number) => hm.heightAt(x, z));
-  const data = buildWaterSurface(bodies, ground, { minX: hm.minX - far, maxX: hm.maxX + far, minZ: hm.minZ - far, maxZ: hm.maxZ + far }, 4);
+  const rivers = bodies.filter((b) => b.kind !== 'canal');
+  const canals = bodies.filter((b) => b.kind === 'canal').map((b) => ({ body: b, build: buildCanal(b, rivers, S) }));
+  const data = mergeSurfaces([
+    buildWaterSurface(rivers, ground, { minX: hm.minX - far, maxX: hm.maxX + far, minZ: hm.minZ - far, maxZ: hm.maxZ + far }, 4),
+    ...canals.map((c) => c.build.ribbon),
+  ]);
   let heightTex: THREE.Texture | null = game.terrain?.uniforms?.tHeight.value ?? null;
   if (!heightTex) {
     const t = new THREE.DataTexture(hm.heights, hm.nx, hm.nz, THREE.RedFormat, THREE.FloatType);
@@ -109,11 +140,14 @@ export async function buildWater(game: Game, atlas: typeof Atlas, hm: Heightmap)
     uShallow: { value: lin(TIBER_COLORS.shallow) },
     uSilt: { value: lin(TIBER_COLORS.silt) },
     uGlint: { value: 6 },
+    uReflect: { value: new THREE.Color(0.5, 0.48, 0.4) },
+    uMurk: { value: 0.9 },
   };
   if (data.index.length) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
     g.setAttribute('aFlow', new THREE.BufferAttribute(data.flow, 2));
+    g.setAttribute('aClear', new THREE.BufferAttribute(data.clear ?? new Float32Array(data.positions.length / 3), 1));
     const normals = new Float32Array(data.positions.length);
     for (let i = 1; i < normals.length; i += 3) normals[i] = 1;
     g.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
@@ -129,14 +163,30 @@ export async function buildWater(game: Game, atlas: typeof Atlas, hm: Heightmap)
     water.group.add(mesh);
   }
 
+  // ---- canal masonry (Agrippa's Euripus)
+  for (const c of canals) {
+    const group = c.build.builder.build(`canal:${c.body.id}`);
+    registerColliders(game, c.build.builder.colliders, undefined, water);
+    if (game.world) game.world.add(`canal:${c.body.id}`, group, { cullDistance: 900, parent: water.group });
+    else water.group.add(group);
+  }
+
   // ---- quays
   const features = hm.features;
+  // Parapets stay open at the bridges and wherever a landmark (built before the water) already
+  // stands out over the river at the wall: its own stairs, landings, crane platforms.
+  const corridors = bridgeCorridors(atlas.BRIDGES);
+  const occupied = (x: number, z: number) => {
+    const level = hm.waterLevelY;
+    const g = game.physics.groundHeight(x, z, level + 9, 13);
+    return g !== null && g > level + 0.3;
+  };
   const quaySkip: { body: string; side: number; s0: number; s1: number }[] = [];
   for (const river of atlas.RIVERS) {
     const rqs = resolveQuays(features?.quays ?? [], river.id, chain(river.centerline));
     for (const rq of rqs) {
       quaySkip.push({ body: river.id, side: rq.side, s0: rq.s0 * S, s1: rq.s1 * S });
-      const q = buildQuay(river, rq, ground, S);
+      const q = buildQuay(river, rq, ground, S, { corridors, occupied });
       const group = q.builder.build(rq.quay.id);
       registerColliders(game, q.colliders, undefined, water);
       if (game.world) game.world.add(`quay:${rq.quay.id}`, group, { cullDistance: 1600, parent: water.group });
@@ -149,7 +199,8 @@ export async function buildWater(game: Game, atlas: typeof Atlas, hm: Heightmap)
   for (const isl of atlas.ISLANDS) {
     const prow = atlas.LANDMARK_BY_ID['island-prow'];
     const skip = prow ? [{ at: prow.center, r: 16 }] : [];
-    const b = buildIslandFacing(isl.outline, isl.elevation, atlas.RIVERS[0]?.waterLevel ?? 6, skip, S);
+    const b = buildIslandFacing(isl.outline, isl.elevation, atlas.RIVERS[0]?.waterLevel ?? 6, skip, S, { corridors });
+    water.landings.push(...b.landings);
     const group = b.build(`island-facing:${isl.id}`);
     registerColliders(game, b.colliders, undefined, water);
     if (game.world) game.world.add(`island-facing:${isl.id}`, group, { cullDistance: 1600, parent: water.group });
@@ -180,6 +231,7 @@ export async function buildWater(game: Game, atlas: typeof Atlas, hm: Heightmap)
 
   // ---- swimming
   water.swim = game.addSystem(new SwimSystem(game, (x, z) => water.hitAt(x, z)));
+  game.addSystem(new WaterCamera(water));
 
   game.scene.add(water.group);
 }

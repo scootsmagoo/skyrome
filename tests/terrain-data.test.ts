@@ -32,7 +32,7 @@ describe('terrain data', () => {
     expect(decodeSdf(encodeSdf(100))).toBeCloseTo(SDF_RANGE, 1);
   });
 
-  it('river profile: bed, beach, cut bank, bounded flood plain; canal: narrow and vertical', () => {
+  it('river profile: bed, beach, cut bank, bounded flood plain; canal: a trench between walls', () => {
     const r = { waterLevel: 6, bankHeight: 10.5 };
     expect(riverBankProfile(r, 0, 50)).toBeCloseTo(2);
     expect(riverBankProfile(r, 50, 50)).toBeCloseTo(6.3, 1);
@@ -41,8 +41,10 @@ describe('terrain data', () => {
     expect(riverBankProfile(r, 50 + 16 + 120 + 100, 50)).toBeGreaterThan(40);
     expect(riverReach(r)).toBeGreaterThan(200);
     expect(canalProfile({ waterLevel: 10.5 }, 2, 4)).toBeCloseTo(8.9);
-    expect(canalProfile({ waterLevel: 10.5 }, 6, 4)).toBe(Infinity);
-    expect(riverReach({ bankHeight: 11, kind: 'canal' })).toBeLessThan(5);
+    // The trench runs on under the walls' inner half; beyond the walls the cut changes nothing.
+    expect(canalProfile({ waterLevel: 10.5 }, 5, 4)).toBeCloseTo(8.9);
+    expect(canalProfile({ waterLevel: 10.5 }, 7, 4)).toBe(Infinity);
+    expect(riverReach({ bankHeight: 11, kind: 'canal' })).toBeLessThan(20);
   });
 
   it('keeps the hill beside the river, carves the canal, levels the quay', () => {

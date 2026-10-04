@@ -12,6 +12,7 @@ import { buildCity } from '../city';
 import { buildLandmarks } from '../landmarks/buildLandmarks';
 import { buildWater } from '../water';
 import { footprintRadius } from '../landmarks/footprint';
+import { dressTerrain } from '../terrain/dress';
 import { Terrain } from '../terrain/Terrain';
 import { buildHeightmap, footprintPolygon, type Heightmap, type TerrainPad } from '../terrain/heightmap';
 
@@ -101,6 +102,8 @@ export async function buildRome(game: Game, opts: BuildRomeOptions = {}) {
   await buildBridges(game, atlas, hm);
   report(f + 0.02, 'Building the insulae');
   await buildCity(game, atlas, hm, { extent, onProgress: (x, label) => report(f + 0.02 + 0.08 * x, label) });
+  // Grass, trees, stones and kerbs on the open ground, after everything built on it.
+  dressTerrain(game);
   f += 0.1;
   for (const step of opts.steps ?? []) {
     report(f, step.label);

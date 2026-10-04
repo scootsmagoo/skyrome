@@ -24,6 +24,7 @@ import { toGame } from '../world/coords';
 import { dialogueViewFrom, notifyKindFor, questLogFrom, saveSlotsFrom } from './adapters';
 import { statusLine } from './character';
 import type { GameFlow } from './GameFlow';
+import { withGuide } from './guide';
 import { AtlasMapSource } from './mapSource';
 import { DIFFICULTY_CHOICES, PRESETS } from './settings';
 
@@ -86,7 +87,8 @@ export function wireUi(game: Game, ui: UIManager, rpg: RpgServices, flow: GameFl
       open: () => bookFromDef(def) ?? { title: def.name, kind: 'note', text: def.description },
     }));
   const questEvents = ['quest:started', 'quest:stage', 'quest:objective', 'quest:completed', 'quest:failed', 'quest:tracked'] as const;
-  const log: QuestLogView = questLogFrom(quests, {
+  // The journal, with the first-steps guide's entry while no quest leads the way.
+  const questLog: QuestLogView = questLogFrom(quests, {
     npcName: (id) => game.npcs?.name(id),
     notes,
     subscribe: (fn) => {
@@ -94,6 +96,7 @@ export function wireUi(game: Game, ui: UIManager, rpg: RpgServices, flow: GameFl
       return () => offs.forEach((o) => o());
     },
   });
+  const log = withGuide(questLog, flow.guide);
 
   const map = new AtlasMapSource({
     heightAt: (x, z) => game.heightmap?.heightAt(x, z) ?? 0,
@@ -195,17 +198,10 @@ function addSettingsRows(flow: GameFlow) {
     { kind: 'slider', key: 'powerHoldS', label: 'Power attack hold', min: 0.2, max: 0.6, step: 0.05, format: (v) => `${v.toFixed(2)} s` },
   ];
   // The preset first; the toggles after the blocking choice, before the bindings button.
+  // (Choosing a different preset in the row rewrites the rows below: GameFlow.applyControls.)
   controls.rows.splice(0, 0, ...rows.slice(0, 2));
   const at = controls.rows.findIndex((r) => r.kind === 'button' && r.label.startsWith('Key bindings'));
   controls.rows.splice(at < 0 ? controls.rows.length : at, 0, ...rows.slice(2));
-  // Choosing a different preset from the row applies its values.
-  let prev = flow.game.settings.data.controlPreset;
-  flow.game.settings.onChange((s) => {
-    if (s.controlPreset && s.controlPreset !== prev) {
-      prev = s.controlPreset;
-      flow.choosePreset(s.controlPreset);
-    }
-  });
 }
 
 /** GDD §4.2: Quicksave and Quickload are also buttons in the Esc menu. */

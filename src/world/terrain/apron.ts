@@ -100,9 +100,9 @@ export function buildApron(hm: Heightmap, height: (x: number, z: number) => numb
       c.setRGB(0, 0, 0);
       for (let l = 0; l < LAYER_COUNT; l++) if (w[l] > 0) c.r += palette[l].r * w[l], c.g += palette[l].g * w[l], c.b += palette[l].b * w[l];
       // A touch darker than the palette: the photos' shading and AO at a distance.
-      col[k] = c.r * 0.9;
-      col[k + 1] = c.g * 0.9;
-      col[k + 2] = c.b * 0.9;
+      col[k] = c.r * 0.94;
+      col[k + 1] = c.g * 0.94;
+      col[k + 2] = c.b * 0.94;
     }
   }
   const idx: number[] = [];
