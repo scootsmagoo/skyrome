@@ -6,7 +6,9 @@
  * Seats are 1:1 (0.4 m rows, not walkable; the radial aisles are); monumental heights are scaled.
  */
 import * as THREE from 'three';
-import { cavea, caveaSection, ellipticalArcade } from '../../../arch/classical/amphitheatre';
+import { amphitheatre, caveaSection, type AmphitheatreSpec } from '../../../arch/classical/amphitheatre';
+import { amphitheatreFar } from '../../../arch/classical/amphitheatreFar';
+import { MeshBuilder } from '../../../gfx/MeshBuilder';
 import { colosseumStoreys } from '../../../arch/classical/arch';
 import { obelisk } from '../../../arch/classical/monuments';
 import type { Order } from '../../../arch/classical/orders';
@@ -553,23 +555,76 @@ function buildCircus(ctx: LandmarkContext): LandmarkBuild {
 
 // ---------------------------------------------------------------- amphitheatre
 
+/**
+ * Pure: an amphitheatre spec for the kit's `amphitheatre()` fitted to a footprint (game m): the
+ * facade on the footprint ellipse in Colosseum storeys scaled to the height, and a cavea of 1:1
+ * rows whose reach exactly fills the space between the arena and the ambulatory's inner wall. The
+ * arena comes from the notes ("Arena 83 x 48 m", real) or the Colosseum's proportions.
+ */
+export function fitAmphitheatre(rx: number, rz: number, H: number, S: number, arenaReal: [number, number] | null, detail: Detail, arches?: number): AmphitheatreSpec {
+  const k = H / 48.15;
+  const storeys = H > 20 ? colosseumStoreys(k) : colosseumStoreys(k).slice(0, H > 12 ? 3 : 2);
+  const bays = arches && arches % 4 === 0 ? arches : Math.max(32, Math.round((Math.PI * (rx + rz)) / 4.05 / 4) * 4);
+  const depth = 2.4 * S, corridor = 6 * S;
+  const inner = (r: number) => r - depth / 2 - corridor - 0.9;
+  let ax = arenaReal ? (arenaReal[0] / 2) * S : rx * 0.46;
+  let az = arenaReal ? (arenaReal[1] / 2) * S : rz * 0.35;
+  // Reach available round the arena (the tighter of the two axes).
+  const avail = Math.min(inner(rx) - ax, inner(rz) - az);
+  const tiersFor = (rows: number) => {
+    const a = Math.max(3, Math.round(rows * 0.3)), b = Math.max(3, Math.round(rows * 0.45)), c = Math.max(2, rows - a - b);
+    return [{ rows: a, rise: 0.4, depth: 0.7 }, { rows: b, rise: 0.4, depth: 0.7, wall: 1.0 }, { rows: c, rise: 0.4, depth: 0.7, wall: 1.0 }];
+  };
+  // The colonnade in summa cavea is added by the caller with lite columns (the kit's costs ~130k).
+  const base = { podium: 4 * S, segments: detail === 'high' ? 80 : 56, aisles: Math.max(12, Math.round(bays / 4)), seatMaterial: 'marble' as const, riserMaterial: 'marble_veined' as const, topWalk: 3.5, detail: 'low' as const };
+  let rows = Math.max(9, Math.floor((avail - 3.5 - 2.2 - 3.2) / 0.7));
+  let reach = caveaSection({ arenaRx: ax, arenaRz: az, ...base, tiers: tiersFor(rows) }).reach;
+  while (reach > avail && rows > 9) reach = caveaSection({ arenaRx: ax, arenaRz: az, ...base, tiers: tiersFor(--rows) }).reach;
+  // The arena takes up the slack so the back of the cavea meets the inner wall on both axes.
+  ax = inner(rx) - reach;
+  az = inner(rz) - reach;
+  return {
+    // Engaged columns as 8-sided prisms: 80 bays × 4 storeys of 'low' columns alone are ~120k triangles.
+    facade: { rx, rz, bays, storeys, depth, corridor, material: 'travertine', detail: 'low', columnDetail: 'far', masts: H > 20 },
+    cavea: { arenaRx: ax, arenaRz: az, ...base, tiers: tiersFor(rows) },
+  };
+}
+
 function buildAmphitheatre(ctx: LandmarkContext): LandmarkBuild {
-  const { lm } = ctx;
+  const { lm, detail } = ctx;
   const d = draw(ctx);
-  const far = farDraw();
+  const far = new MeshBuilder();
   const { w, d: dd } = dims(ctx);
   const H = heightG(ctx, 8);
   const spots: Spot[] = [];
-  plinth(d, ctx, -w / 2, -dd / 2, w / 2, dd / 2, 0.02, 'travertine');
-  const rx = w / 2, rz = dd / 2;
-  const k = H / 48.15;
-  const storeys = H > 20 ? colosseumStoreys(k) : colosseumStoreys(k).slice(0, 2);
-  const bays = Math.max(24, Math.round((Math.PI * (rx + rz)) / 5) & ~1);
-  const arc = ellipticalArcade(d.b, { rx, rz, bays, storeys, depth: 2.0, corridor: 3, detail: 'low', columnDetail: 'low' }, d.m);
-  cavea(d.b, { arenaRx: rx * 0.42, arenaRz: rz * 0.36, podium: 2.4, tiers: [{ rows: Math.max(4, Math.floor(arc.height * 0.35 / 0.38)) }, { rows: Math.max(4, Math.floor(arc.height * 0.3 / 0.38)), wall: 1.6 }], detail: 'low', aisles: 16, segments: 48 }, d.m);
-  spots.push(spot(`${lm.id}:entrance`, 'door', 0, 0, -rz - 1, 0), spot(`${lm.id}:arena`, 'npc', 0, 0.04, 0, 0));
-  far.geo(new THREE.CylinderGeometry(1, 1, arc.height, 24, 1, true), 'travertine', 0, arc.height / 2, 0, { sx: rx, sz: rz });
-  return finish(lm.id, d, spots, far, 1000);
+  const h = hintsOf(lm);
+  const m = h.text.match(/arena\s+(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/);
+  const arches = h.text.match(/facade of (\d+) arches|(\d+) arches/);
+  const spec = fitAmphitheatre(w / 2, dd / 2, H, ctx.S, m ? [Number(m[1]), Number(m[2])] : null, detail, arches ? Number(arches[1] ?? arches[2]) : undefined);
+  // Footing under the whole ellipse down to the lowest ground round it.
+  const gr = groundRange(ctx, -w / 2, -dd / 2, w / 2, dd / 2, 6);
+  if (gr.min < -0.05) d.geo(new THREE.CylinderGeometry(1, 1, 0.6 - gr.min, 40), 'travertine', 0, (gr.min - 0.6) / 2 + 0.02, 0, { sx: w / 2 + 0.3, sz: dd / 2 + 0.3 });
+  const res = amphitheatre(d.b, spec, d.m);
+  amphitheatreFar(far, { ...spec, cavea: { ...spec.cavea, topPortico: { order: 'corinthian', columnHeight: 6 } } });
+  // Porticus in summa cavea: a lite colonnade on the top walk, facing the arena, roofed to the facade.
+  const c = spec.cavea;
+  const ring: V3[] = [];
+  const nr = detail === 'high' ? 96 : 64;
+  const off = res.cavea.reach - 3.5 + 0.9;
+  for (let i = nr; i >= 0; i--) {
+    const t = (i / nr) * Math.PI * 2;
+    const ex = c.arenaRx * Math.cos(t), ez = c.arenaRz * Math.sin(t);
+    const nx = c.arenaRz * Math.cos(t), nz = c.arenaRx * Math.sin(t), nl = Math.hypot(nx, nz);
+    ring.push(V(ex + (nx / nl) * off, 0, ez + (nz / nl) * off));
+  }
+  liteColonnade(d, ring, { columnHeight: Math.min(6.5, Math.max(3, res.facade.height - res.cavea.height - 1.6)), spacing: 2.6, depth: 3.2, back: 'none', closed: true, material: 'marble', detail, order: 'corinthian', y: res.cavea.height, stylobate: 0.15 });
+  for (const e of res.entrances) if (e.kind === 'gate') spots.push(spot(`${lm.id}:gate${e.bay}`, 'door', e.x + e.nx * 2.5, 0, e.z + e.nz * 2.5, Math.atan2(-e.nx, -e.nz)));
+  spots.push(
+    spot(`${lm.id}:entrance`, 'door', 0, 0, -dd / 2 - 1.5, 0),
+    spot(`${lm.id}:arena`, 'npc', 0, 0.04, 0, 0),
+    spot(`${lm.id}:topwalk`, 'vista', 0, res.cavea.height, -(spec.cavea.arenaRz + res.cavea.reach - 1.5), 0),
+  );
+  return { object: d.b.build(lm.id), colliders: d.b.colliders, spots, far: far.build(`${lm.id}:far`), cullDistance: 420 };
 }
 
 /** A free-standing obelisk on a moulded base at local (x, z) — for spinae and forecourts. */

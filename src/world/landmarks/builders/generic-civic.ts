@@ -9,9 +9,11 @@
  * `thermae`, `fort`, `quay`, `gardenLayout`.
  */
 import * as THREE from 'three';
+import { arcade } from '../../../arch/classical/arch';
 import { basilica } from '../../../arch/classical/basilica';
 import { column } from '../../../arch/classical/column';
 import { diameterForHeight, type Order } from '../../../arch/classical/orders';
+import { quadriga } from '../../../arch/classical/statues';
 import { tholos } from '../../../arch/classical/tholos';
 import { dome } from '../../../arch/classical/vaults';
 import { pergola, velum } from '../../../arch/fabric/awnings';
@@ -47,7 +49,7 @@ export function gable(d: Draw, mat: MaterialId, cx: number, y: number, z0: numbe
  * A columnar porch (prostyle front) across x ∈ [x0, x1] at z = zc: `n` columns of height `colH` on a
  * floor at y, an architrave band, and a pediment if `pedimentDepth` > 0. Returns the top of the cornice.
  */
-export function porch(d: Draw, x0: number, x1: number, zc: number, y: number, colH: number, n: number, order: Order, mat: MaterialId, detail: Detail, pedimentDepth = 0): number {
+export function porch(d: Draw, x0: number, x1: number, zc: number, y: number, colH: number, n: number, order: Order, mat: MaterialId, detail: Detail, pedimentDepth = 0, trim: MaterialId = mat): number {
   const D = diameterForHeight(order, colH);
   for (let i = 0; i < n; i++) {
     const x = x0 + D * 0.6 + ((x1 - x0 - D * 1.2) * i) / Math.max(1, n - 1);
@@ -55,9 +57,9 @@ export function porch(d: Draw, x0: number, x1: number, zc: number, y: number, co
   }
   const eh = colH * 0.22;
   const zb = zc - D * 0.7, zf = pedimentDepth > 0 ? zc + pedimentDepth : zc + D * 0.7;
-  d.span(mat, x0, y + colH, zb, x1, y + colH + eh * 0.6, zf);
-  d.span(mat, x0 - 0.2, y + colH + eh * 0.6, zb - 0.25, x1 + 0.2, y + colH + eh, zf);
-  if (pedimentDepth > 0) gable(d, mat, (x0 + x1) / 2, y + colH + eh, zb - 0.25, x1 - x0 + 0.4, (x1 - x0) * 0.13, zf - zb + 0.25);
+  d.span(trim, x0, y + colH, zb, x1, y + colH + eh * 0.6, zf);
+  d.span(trim, x0 - 0.2, y + colH + eh * 0.6, zb - 0.25, x1 + 0.2, y + colH + eh, zf);
+  if (pedimentDepth > 0) gable(d, trim, (x0 + x1) / 2, y + colH + eh, zb - 0.25, x1 - x0 + 0.4, (x1 - x0) * 0.13, zf - zb + 0.25);
   return y + colH + eh;
 }
 
@@ -93,24 +95,83 @@ function buildBasilica(ctx: LandmarkContext): LandmarkBuild {
   plinth(d, ctx, -w / 2, -dd / 2, w / 2, dd / 2, 0.02, 'travertine');
   const t = 1.0;
   const front = 1.4; // steps in front of the doors
-  const Wa = clamp(dd * 0.17, 3, 9);
-  const Wn = Math.max(6, dd - front - 2 * Wa - 2 * t);
+  // Republican/Augustan basilicas on the Forum open onto it through two storeys of arcades (Julia's
+  // piers with Tuscan half-columns, the Porticus of Gaius and Lucius before the Aemilia's shops).
+  const arcaded = h.has('arcade', 'arcades', 'arcaded', 'porticus of', 'two-storey portico');
+  const portD = arcaded ? clamp(dd * 0.15, 4, 7) : 0;
+  const hallD = dd - portD;
+  const Wa = clamp(hallD * 0.17, 3, 9);
+  const Wn = Math.max(6, hallD - front - 2 * Wa - 2 * t);
   const apses = h.has('apse') ? 'both' : 'none';
   const apseR = Math.min(Wn / 2, 8);
   const L = Math.max(10, w - 2 * t - (apses === 'both' ? 2 * (apseR + t) : 0));
   const colH = clamp(H * 0.3, 4, 9);
-  const big = L * (Wn + 2 * Wa) > 1800;
-  const zc = front / 2;
+  const zc = front / 2 + portD / 2;
   const res = basilica(d.b, {
     length: L, naveWidth: Wn, aisleWidth: Wa, columnHeight: colH, apses,
-    wallMaterial: h.has('marble') ? 'marble' : 'brick', columnMaterial: h.has('granite') ? 'marble_veined' : 'marble',
+    wallMaterial: h.has('marble') ? 'marble' : 'brick', columnMaterial: h.has('granite') ? 'marble_veined' : h.has('african marble', 'giallo') ? 'marble_giallo' : 'marble',
+    roofMaterial: h.has('gilded bronze tiles', 'gilded roof') ? 'gilded_bronze' : undefined,
     // Two superimposed colonnades of kit columns are heavy: the category keeps them at 'low'.
     detail: 'low', upperDetail: 'low', doors: 3,
   }, mul(d.m, T(0, 0, zc)));
+  const zFront = zc - res.depth / 2 - portD; // the line of the steps' top
+  if (arcaded) {
+    const sh = clamp(H * 0.27, 4.6, 7.5);
+    const bay = clamp(sh * 0.78, 3.6, 5.2);
+    const len = res.width;
+    const bays = Math.max(3, Math.floor(len / bay));
+    const depthW = 1.1;
+    const storeys = [
+      { order: 'tuscan' as const, height: sh },
+      { order: h.has('ionic') ? 'ionic' as const : 'tuscan' as const, height: sh * 0.92, pedestal: 0.9 },
+    ];
+    arcade(d.b, { bays, bay: len / bays, pier: (len / bays) * 0.34, depth: depthW, storeys, material: h.has('travertine') ? 'travertine' : 'marble', detail: 'low', columnDetail: detail === 'high' ? 'low' : 'far', corridor: portD - depthW / 2 }, mul(d.m, T(-len / 2, 0, zFront + depthW / 2)));
+    // Lean-to roof of the upper gallery against the hall's front wall.
+    tiledRoof(d, 'shed', 0, zFront + portD / 2, len, portD, sh * 1.92, 'low', { axis: 'x', pitchDeg: 14 });
+    d.span('paving_travertine', -len / 2, -0.1, zFront, len / 2, 0.03, zFront + portD);
+    // Shops at the back of the portico (Tabernae Novae) or gaming boards on the floor and steps.
+    if (h.has('shops', 'tabernae')) {
+      const n = Math.floor(len / 4.4);
+      for (let i = 0; i < n; i++) d.span('black', -len / 2 + (i + 0.5) * (len / n) - 1.1, 0.03, zc - res.depth / 2 - 0.06, -len / 2 + (i + 0.5) * (len / n) + 1.1, 2.8, zc - res.depth / 2 - 0.02);
+    }
+    far.span('marble', -len / 2, 0, zFront, len / 2, sh * 1.92, zFront + depthW);
+    // The aisles behind the arches read as dim interiors (or shop mouths), not as a lit wall.
+    const n = Math.max(3, Math.floor(len / (len / bays)));
+    for (let i = 0; i < n; i++) {
+      const x = -len / 2 + (i + 0.5) * (len / n);
+      d.span('black', x - (len / n) * 0.3, 0.03, zc - res.depth / 2 - 0.06, x + (len / n) * 0.3, sh * 0.62, zc - res.depth / 2 - 0.02);
+      d.span('black', x - (len / n) * 0.25, sh + 1.0, zc - res.depth / 2 - 0.06, x + (len / n) * 0.25, sh + sh * 0.6, zc - res.depth / 2 - 0.02);
+    }
+  }
+  // Projecting columnar porches on the facade (Basilica Ulpia: three, the middle one of 10 columns).
+  let porchD = 0;
+  if (!arcaded && h.has('porches', 'porch')) {
+    const ph = clamp(res.height * 0.45, 5, 9.5);
+    porchD = clamp(ph * 0.42, 2.5, 4.5);
+    const cw = Math.min(res.width * 0.3, 30);
+    const pm: MaterialId = h.has('giallo') ? 'marble_giallo' : 'marble';
+    const top = porch(d, -cw / 2, cw / 2, zFront - porchD, 0, ph, /\b10 (giallo|columns)|of 10\b/.test(h.text) ? 10 : 8, 'corinthian', pm, 'low', porchD, 'marble');
+    for (const sx of [-1, 1]) porch(d, sx * res.width * 0.33 - cw * 0.2, sx * res.width * 0.33 + cw * 0.2, zFront - porchD, 0, ph, 4, 'corinthian', pm, 'low', porchD, 'marble');
+    if (h.has('quadriga')) quadriga(d.b, mul(d.m, TRS(0, top + cw * 0.13 + 0.3, zFront - porchD * 0.4, 0, 0, 0, 1.25)), { material: 'gilded_bronze', detail: 'low' });
+    if (h.has('statues', 'bigae') && detail === 'high') for (const sx of [-1, 1]) for (let k = 1; k <= 3; k++) statueOnPedestal(d, 'emperor', sx * (cw / 2 + k * res.width * 0.09), res.height * 0.62, zc - res.depth / 2 + 0.4, 0, 1.1, 'gilded_bronze', 'low', 0.6);
+  }
   // A three-step crepidoma along the front.
-  for (let i = 0; i < 3; i++) d.span('travertine', -res.width / 2, i * 0.18 - 0.2, zc - res.depth / 2 - front + i * 0.45, res.width / 2, (i + 1) * 0.18 - 0.2, zc - res.depth / 2, { collide: true });
-  inscription(d, [lm.latin.split('/')[0].trim()], 0, Math.min(res.height * 0.62, colH * 1.6), zc - res.depth / 2 - 0.08, Math.min(res.width * 0.5, 12), 0.9);
-  const spots = [spot(`${lm.id}:door`, 'door', 0, 0, zc - res.depth / 2 - front - 0.5, 0), spot(`${lm.id}:steps`, 'sit', -res.width / 4, 0.36, zc - res.depth / 2 - 0.5, Math.PI)];
+  const zS = zFront - porchD;
+  for (let i = 0; i < 3; i++) d.span('travertine', -res.width / 2, i * 0.18 - 0.2, zS - front + i * 0.45, res.width / 2, (i + 1) * 0.18 - 0.2, zS, { collide: true });
+  if (porchD) d.span('travertine', -res.width / 2, -0.2, zS, res.width / 2, 0.34, zFront, { collide: true });
+  if (h.has('gaming', 'tabula lusoria')) {
+    for (let i = 0; i < 6; i++) {
+      const x = -res.width * 0.4 + i * res.width * 0.16;
+      d.span('black', x - 0.25, 0.341, zFront - 0.42, x + 0.25, 0.345, zFront - 0.12);
+    }
+  }
+  inscription(d, [lm.latin.split('/')[0].trim()], 0, arcaded ? clamp(H * 0.27, 4.6, 7.5) * 1.92 + 1.0 : Math.min(res.height * 0.62, colH * 1.6), arcaded ? zFront - 0.1 : zFront - 0.08, Math.min(res.width * 0.5, 12), 0.9);
+  const spots = [
+    spot(`${lm.id}:door`, 'door', 0, 0, zS - front - 0.5, 0),
+    spot(`${lm.id}:steps`, 'sit', -res.width / 4, 0.36, zFront - 0.5, Math.PI),
+    spot(`${lm.id}:steps2`, 'sit', res.width / 5, 0.16, zFront - 0.95, Math.PI),
+    spot(`${lm.id}:inside`, 'npc', 0, 0.03, zc, 0),
+  ];
   far.span('brick', -res.width / 2, 0, zc - res.depth / 2, res.width / 2, res.height * 0.75, zc + res.depth / 2);
   tiledRoof(far, 'gable', 0, zc, res.width, res.depth, res.height * 0.75, 'low', { axis: 'x' });
   return finish(lm.id, d, spots, far);
