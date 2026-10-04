@@ -248,14 +248,7 @@ function ludusArena(ctx: LandmarkContext, b: MeshBuilder, spots: Spot[], readabl
     floor.translate(0, 0.06, 0);
     b.add(floor, 'sand', I, { castShadow: false });
   }
-  // Pali at the two ends of the sand (the doctor's drill posts) and a rack by the front gate.
-  const d = new Draw(b);
-  if (high) {
-    palus(d, -6.5, 0.05, -12.5);
-    palus(d, 6.5, 0.05, -12.5);
-    palus(d, -6.5, 0.05, 12.5);
-    palus(d, 6.5, 0.05, 12.5);
-  }
+  // The sand stays clear for the bouts: the doctor's drill posts (pali) stand in the court.
   spots.push({ id: 'ludus-arena-center', kind: 'spawn', position: new THREE.Vector3(0, 0.06, 0), heading: Math.PI });
   spots.push({ id: 'ludus-fighter-a', kind: 'spawn', position: new THREE.Vector3(0, 0.06, -7), heading: 0 });
   spots.push({ id: 'ludus-fighter-b', kind: 'spawn', position: new THREE.Vector3(0, 0.06, 7), heading: Math.PI });
@@ -607,6 +600,16 @@ function buildLudusMagnus(ctx: LandmarkContext): LandmarkBuild {
       text: 'NEREVS · RET · V · XXXI\n\n*"Nereus, retiarius: 31 wins."* Beside it, a net drawn with a fish caught in it.\n\nAVCTVS · THR · XXX · V · XVIII · M · XI · ST · I\n\n*"Auctus, thraex: 30 bouts, 18 won, 11 spared, 1 draw."*\n\nPVLLVS · MATRI · SALVTEM · PISTOR · SVM\n\n*"Pullus to his mother, greetings: I\'m a baker."*\n\nDIZAS · MVS · FVR · EST\n\n*"Dizas the Mouse is a thief."* Someone has scratched a cloak next to it, and then scratched it out.\n\nTIRO · HODIE · CRAS · HEROS · POSTRIDIE · CINIS\n\n*"Today a recruit, tomorrow a hero, the day after, ash."*',
     });
   }
+  // Aliases under the location ids the content bible uses for NPC schedules (CONTENT §1.1):
+  // the practice arena, the armoury, the infirmary and the barracks.
+  const alias = (id: string, from: string, kind = 'npc') => {
+    const s = spots.find((x) => x.id === from);
+    if (s) spots.push({ id, kind, position: s.position.clone(), heading: s.heading });
+  };
+  alias('ludus-cavea', 'ludus-arena-center');
+  alias('ludus-armamentarium', 'armory');
+  alias('ludus-saniarium', 'medicus');
+  spots.push({ id: 'ludus-cellae', kind: 'npc', position: new THREE.Vector3(-6.5, y0 + 0.05, res.inner.d / 2 - 1.2), heading: 0 });
   const object = b.build('ludus-magnus');
   addReadables(ctx.game, object, readables);
   const far = farCourt(W, D, res.height, y0, 'brick', arena.top);

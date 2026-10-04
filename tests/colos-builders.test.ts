@@ -85,6 +85,42 @@ describe('colos builders', () => {
     const ids2 = (out.spots ?? []).map((s) => s.id);
     expect(new Set(ids2).size).toBe(ids2.length);
   });
+
+  // Triangles drawn with the camera far away (instanced bays at their far level): heroes stay
+  // under ~160k, the others far less; the near levels only swap in round the camera.
+  const HEROES = ['colosseum', 'ludus-magnus', 'meta-sudans', 'baths-trajan'];
+  it.each(ids)('%s stays inside its triangle budget', (id) => {
+    const out = built.get(id) ?? find(id)!.build(ctxFor(id));
+    const n = countTriangles(out.object);
+    expect(n, `${id}: ${n} triangles`).toBeLessThan(HEROES.includes(id) ? 160_000 : 80_000);
+    if (out.far) expect(countTriangles(out.far)).toBeLessThan(8_000);
+  });
+
+  it('exposes the spots the gameplay team relies on', () => {
+    const need: Record<string, string[]> = {
+      'colosseum': ['colos-arena-center', 'colos-porta-triumphalis', 'colos-porta-libitinensis', 'colos-pulvinar', 'colos-inscription', 'colos-nemeseum', 'colos-vendor-1', 'colos-sailor-1', 'colos-vista-summa'],
+      'ludus-magnus': ['ludus-arena-center', 'ludus-gate', 'lanista', 'armory', 'medicus', 'spectator-1', 'ludus-editor', 'ludus-graffiti', 'ludus-gate-inscription', 'ludus-trajan-base'],
+      'meta-sudans': ['meta-sudans-fountain', 'meta-sudans-playbill', 'lacus-metae', 'meta-sudans-stand-1', 'meta-sudans-latebra'],
+      'baths-trajan': ['trajan-inscription', 'trajan-frigidarium'],
+      'baths-titus': ['titus-inscription', 'titus-stairs-foot'],
+      'arch-dolabella': ['dolabella-inscription'],
+    };
+    for (const [id, spots] of Object.entries(need)) {
+      const out = built.get(id) ?? find(id)!.build(ctxFor(id));
+      const have = new Set((out.spots ?? []).map((s) => s.id));
+      for (const s of spots) expect(have.has(s), `${id} lacks spot ${s}`).toBe(true);
+    }
+  });
+
+  it('every tier-1 landmark has a "thing" (GDD §12.3): an inscription, vista, shrine, door or container spot', () => {
+    for (const id of ids) {
+      const lm = atlas.LANDMARK_BY_ID[id];
+      if (lm.priority !== 1) continue;
+      const out = built.get(id) ?? find(id)!.build(ctxFor(id));
+      const kinds = new Set((out.spots ?? []).map((s) => s.kind));
+      expect(['inscription', 'vista', 'shrine', 'door', 'container'].some((k) => kinds.has(k)), id).toBe(true);
+    }
+  });
 });
 
 export { countTriangles };
