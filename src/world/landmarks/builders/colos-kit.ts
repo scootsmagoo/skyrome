@@ -592,15 +592,50 @@ export function frontSteps(b: MeshBuilder, groundAt: (x: number, z: number) => n
 /**
  * Terrain-following paving for a ring band between ovals x0..x1 (segments round × rings across).
  * Heights come from `ground(lx, lz)` (relative to the pad) plus `lift`; never below `minY`.
+ * With `maxRise`, the band stops (per segment, smoothed) where the ground climbs above that height,
+ * so a plaza ends at a kerb at the foot of a hillside instead of paving the bank; `kerb` draws that
+ * edge stone (also round the flat parts). Returns the outer offset per segment.
  */
-export function ovalPaving(b: MeshBuilder, oval: Oval, x0: number, x1: number, segs: number, rings: number, ground: (x: number, z: number) => number, mat: MaterialId, lift = 0.04, minY = -Infinity) {
+export function ovalPaving(
+  b: MeshBuilder,
+  oval: Oval,
+  x0: number,
+  x1: number,
+  segs: number,
+  rings: number,
+  ground: (x: number, z: number) => number,
+  mat: MaterialId,
+  lift = 0.04,
+  minY = -Infinity,
+  opts: { maxRise?: number; kerb?: MaterialId } = {},
+): number[] {
+  const tAt = (i: number) => (i / segs) * Math.PI * 2;
+  const gAt = (t: number, x: number) => {
+    const [px, pz] = oval.point(t, x);
+    return Math.max(minY, ground(px, pz));
+  };
+  // Outer edge per segment vertex.
+  let xr = new Array<number>(segs).fill(x1);
+  if (opts.maxRise !== undefined) {
+    for (let i = 0; i < segs; i++) {
+      for (let x = x0; x <= x1 + 1e-6; x += 0.25) {
+        if (gAt(tAt(i), x) > opts.maxRise) {
+          xr[i] = Math.max(x0 + 0.6, x - 0.25);
+          break;
+        }
+      }
+    }
+    // Smooth: the minimum over a 5-wide window, then a 3-tap average.
+    const mn = xr.map((_, i) => Math.min(...[-2, -1, 0, 1, 2].map((k) => xr[(i + k + segs) % segs])));
+    xr = mn.map((_, i) => (mn[(i - 1 + segs) % segs] + mn[i] * 2 + mn[(i + 1) % segs]) / 4);
+  }
   const pos: number[] = [];
   const P = (i: number, j: number): [number, number, number] => {
-    const t = (i / segs) * Math.PI * 2;
-    const x = x0 + ((x1 - x0) * j) / rings;
+    const ii = i % segs;
+    const t = tAt(i);
+    const x = x0 + ((xr[ii] - x0) * j) / rings;
     const [px, pz] = oval.point(t, x);
-    const y = Math.max(minY, ground(px, pz)) + lift;
-    return [px, y, pz];
+    return [px, gAt(t, x) + lift, pz];
   };
   for (let i = 0; i < segs; i++) {
     for (let j = 0; j < rings; j++) {
@@ -613,7 +648,31 @@ export function ovalPaving(b: MeshBuilder, oval: Oval, x0: number, x1: number, s
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.computeVertexNormals();
   b.add(g, mat, undefined, { castShadow: false });
-  return g;
+  if (opts.kerb) {
+    // Kerb: a 0.35 m stone along the outer edge, its top 0.12 m above the paving, its outer face
+    // down into the ground.
+    const kp: number[] = [];
+    const K = (i: number, dx: number, dy: number): [number, number, number] => {
+      const ii = i % segs;
+      const t = tAt(i);
+      const x = xr[ii] + dx;
+      const [px, pz] = oval.point(t, x);
+      return [px, gAt(t, xr[ii]) + lift + dy, pz];
+    };
+    for (let i = 0; i < segs; i++) {
+      const a = K(i, 0, 0.12), c = K(i + 1, 0, 0.12), d = K(i + 1, 0.35, 0.12), e = K(i, 0.35, 0.12);
+      kp.push(...a, ...c, ...e, ...c, ...d, ...e);
+      const f = K(i, 0.35, -0.6), h = K(i + 1, 0.35, -0.6);
+      kp.push(...e, ...d, ...f, ...d, ...h, ...f);
+      const a2 = K(i, 0, -0.05), c2 = K(i + 1, 0, -0.05);
+      kp.push(...a2, ...c2, ...a, ...c2, ...c, ...a);
+    }
+    const kg = new THREE.BufferGeometry();
+    kg.setAttribute('position', new THREE.Float32BufferAttribute(kp, 3));
+    kg.computeVertexNormals();
+    b.add(kg, opts.kerb, undefined, { castShadow: false });
+  }
+  return xr;
 }
 
 /** Simple rectangular-section ring band (e.g. a wall or slab) between ovals x0..x1, heights y0..y1. */

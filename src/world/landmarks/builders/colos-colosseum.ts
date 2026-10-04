@@ -445,6 +445,7 @@ export function buildColosseum(ctx: LandmarkContext) {
   const hideSets: LodSet[] = []; // hidden from inside the bowl
   const ring2Sets: LodSet[] = [];
   let cippiSet: LodSet | null = null;
+  let cippiX = (_t: number) => XF + COLOS.cippi;
   for (let si = 0; si < 3; si++) {
     const y = SY[si];
     const mats = Array.from({ length: N }, (_, k) => instMatrix(k, XM, y, W0));
@@ -827,7 +828,15 @@ export function buildColosseum(ctx: LandmarkContext) {
   // ---- plaza: travertine paving to the cippi ring, the cippi themselves
   {
     const ground = (x: number, z: number) => ctx.groundAt(x, z);
-    ovalPaving(stat, oval, XF + 0.85, XF + COLOS.cippi + 1.6, 160, 4, ground, 'paving_travertine', 0.05, -0.05);
+    const segs = 160;
+    const xr = ovalPaving(stat, oval, XF + 0.85, XF + COLOS.cippi + 1.6, segs, 4, ground, 'paving_travertine', 0.05, -0.05, { maxRise: 0.7, kerb: 'travertine' });
+    // Where the plaza stops short at a hillside the bollards stand just inside its kerb.
+    cippiX = (t: number) => {
+      const f = ((((t / two) % 1) + 1) % 1) * segs;
+      const i = Math.floor(f);
+      const x = xr[i % segs] + (xr[(i + 1) % segs] - xr[i % segs]) * (f - i);
+      return Math.min(XF + COLOS.cippi, x - 0.7);
+    };
     const cipT = oval.equalArc(N * 2, XF + COLOS.cippi, 0.25);
     const cip = new MeshBuilder();
     const cb = new MeshBuilder();
@@ -839,16 +848,17 @@ export function buildColosseum(ctx: LandmarkContext) {
     cb.add(cap, 'travertine', new THREE.Matrix4().makeTranslation(0, 1.5, 0));
     const cmats: THREE.Matrix4[] = [];
     for (const t of cipT) {
-      const [px, pz] = oval.point(t, XF + COLOS.cippi);
-      const y = ground(px, pz);
-      const fr = oval.radialFrame(t, XF + COLOS.cippi);
+      const cx = cippiX(t);
+      const [px, pz] = oval.point(t, cx);
+      const y = Math.max(ground(px, pz), -0.05) + 0.05;
+      const fr = oval.radialFrame(t, cx);
       fr.setPosition(px, y - 0.05, pz);
       cmats.push(fr);
       cip.collider({ kind: 'box', center: new THREE.Vector3(px, y + 0.85, pz), half: new THREE.Vector3(0.3, 0.9, 0.3) });
     }
     cippiSet = lodInstances(ctx.game, gOuter, { name: 'colosseum-cippi', matrices: cmats, levels: [{ builder: cb, maxDist: 420 }], cullBeyond: true });
     for (const c of cip.colliders) stat.collider(c);
-    plazaLife(L, stat, ground, spots, high);
+    plazaLife(L, stat, ground, spots, high, cippiX);
     [38, 42, 18, 22].forEach((k, i) => {
       const t = L.centres[k];
       const [px, pz] = oval.point(t, XF + 1.6);
@@ -859,7 +869,7 @@ export function buildColosseum(ctx: LandmarkContext) {
 
   // ---- the velarium: canvas strips on ropes from the 240 masts towards an open oval over the
   //      sand, anchored by ropes down to the cippi. Exposed as object.userData.velarium (toggle).
-  const velarium = buildVelarium(L, ctx.groundAt);
+  const velarium = buildVelarium(L, ctx.groundAt, cippiX);
   gAttic.add(velarium);
   root.userData.velarium = velarium;
 
@@ -887,13 +897,15 @@ export function buildColosseum(ctx: LandmarkContext) {
  * seats, wine, clay lamps with gladiators on them), the Misenum sailors' rope coils by the cippi,
  * and torch brackets beside the four axial porches. Props only at high detail; spots always.
  */
-function plazaLife(L: ColosseumLayout, stat: MeshBuilder, ground: (x: number, z: number) => number, spots: Spot[], high: boolean) {
+function plazaLife(L: ColosseumLayout, stat: MeshBuilder, ground: (x: number, z: number) => number, spots: Spot[], high: boolean, edge: (t: number) => number) {
   const { oval } = L;
   const rng = new Rng('colosseum-plaza');
   const D0 = new Draw(stat);
   const floorAt = (x: number, z: number) => Math.max(ground(x, z), -0.05) + 0.05;
   /** Landmark-local point at bay parameter t, ring offset X, `along` metres along the tangent. */
-  const at = (t: number, X: number, along: number): [number, number, number, number] => {
+  const at = (t: number, X0: number, along: number): [number, number, number, number] => {
+    // Keep clear of the kerb where the plaza is cut short by a hillside.
+    const X = Math.min(X0, edge(t) - 0.4 - (XF + COLOS.cippi - X0) * 0.35);
     const [px, pz] = oval.point(t, X);
     const [nx, nz] = oval.normal(t);
     const x = px - nz * along;
@@ -1362,7 +1374,7 @@ export function velariumFurled(L: ColosseumLayout, k: number): boolean {
 }
 
 /** Mast-top ring, sagging canvas annulus (two-sided) with coloured strips, ropes to the cippi. */
-function buildVelarium(L: ColosseumLayout, groundAt: (x: number, z: number) => number): THREE.Group {
+function buildVelarium(L: ColosseumLayout, groundAt: (x: number, z: number) => number, cippiX: (t: number) => number): THREE.Group {
   const b = new MeshBuilder();
   const { oval } = L;
   const two = Math.PI * 2;
@@ -1430,7 +1442,7 @@ function buildVelarium(L: ColosseumLayout, groundAt: (x: number, z: number) => n
   for (const t of oval.equalArc(N, XM, 0)) {
     const [mx, mz] = oval.point(t, XF + 0.25);
     const top = new THREE.Vector3(mx, SY[4] + 2.9, mz);
-    const [cx, cz] = oval.point(t, XF + COLOS.cippi);
+    const [cx, cz] = oval.point(t, cippiX(t));
     const foot = new THREE.Vector3(cx, groundAt(cx, cz) + 1.5, cz);
     const len = top.distanceTo(foot);
     const g = new THREE.CylinderGeometry(0.02, 0.02, len, 3, 1, true);
