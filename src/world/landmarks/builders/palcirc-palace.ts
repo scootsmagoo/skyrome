@@ -78,6 +78,14 @@ function augustana(ctx: LandmarkContext) {
   d.span('concrete', -1.3, low + 3.6, zApex, 1.3, low + 3.9, -51.2);
   for (const sx of [-1, 1]) d.span('plaster_red', sx * 1.29, low, zApex, sx * 1.3, low + 1.1, -51.2);
   for (const z of [-51.15, zApex + 0.1]) d.span('marble', -1.6, low + 3.4, z - 0.12, 1.6, low + 3.75, z + 0.12);
+  // A terrace walk on substructures along the NW flank, over the hillside that falls to the
+  // Paedagogium (the palace stands on its pad; the slope beside it would show as bare rock).
+  const FX = 29.5, FZ0 = -66, FZ1 = -28;
+  terraceWall(ctx, b, hw + 0.3, FZ0, FX, FZ0, low, { hi });
+  terraceWall(ctx, b, FX, FZ0, FX, FZ1, low, { hi });
+  d.solid(hw, -21, FZ0, FX, low, FZ1);
+  d.span('paving_travertine', hw, low - 0.05, FZ0, FX, low + 0.03, FZ1);
+  const flankTrees: TreeSpec[] = [-60, -50, -40, -32].map((z, k) => ({ species: k % 2 ? 'laurel' : 'cypress', x: FX - 1.8, z, y: low, scale: 0.9, variant: k % 3 }));
   // ---------------------------------------------------------- lower (sunken) peristyle
   const cx0 = -12, cx1 = 12, cz0 = -48, cz1 = -18;
   // Ground-floor rooms round the court; their roofs are the upper level's terraces.
@@ -175,6 +183,7 @@ function augustana(ctx: LandmarkContext) {
   const trees: TreeSpec[] = [];
   for (const [x, z] of [[-11, 12], [11, 12], [-11, 44], [11, 44]]) trees.push({ species: 'laurel', x, z, y: up, scale: 0.9, variant: (x > 0 ? 1 : 0) + (z > 30 ? 1 : 0) });
   for (const [x, z] of [[-9, -44], [9, -22]]) trees.push({ species: 'oleander', x, z, y: low, scale: 1.0 });
+  trees.push(...flankTrees);
   for (const t of plantTrees(ctx, trees)) b.collider(t);
 
   // ---------------------------------------------------------- spots

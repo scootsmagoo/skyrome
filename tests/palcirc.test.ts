@@ -314,6 +314,19 @@ describe('palcirc walkability', () => {
     expect(end.y).toBeGreaterThan(AUG.low - 0.3);
   });
 
+  it('every palcirc landmark offers the player a "thing" (GDD §12.3)', () => {
+    const p = new Physics();
+    const all = [...circusBuilders, ...capenaBuilders, ...palaceBuilders, ...germalusBuilders];
+    const things = new Set(['inscription', 'vista', 'shrine', 'container']);
+    for (const b of all) for (const id of b.handles) {
+      const built = b.build(fakeCtx(id, p));
+      expect((built.spots ?? []).some((s) => things.has(s.kind)), id).toBe(true);
+    }
+    // The quest hooks at the spawn.
+    const cap = capenaBuilders[0].build(fakeCtx('porta-capena', p));
+    for (const id of ['spawn-capena', 'courier-ambush', 'night-cart']) expect(cap.spots?.some((s) => s.id === id), id).toBe(true);
+  });
+
   it('every palcirc builder also builds at low detail', () => {
     const p = new Physics();
     const all = [...circusBuilders, ...capenaBuilders, ...palaceBuilders, ...germalusBuilders];
