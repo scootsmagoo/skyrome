@@ -19,7 +19,7 @@ import { column } from '../../../arch/classical/column';
 import { placeProp } from '../../../arch/props';
 import { Rng } from '../../../core/Rng';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
-import { frontSteps, lodInstances, plantTrees, risers, span, type TreeSpot } from './colos-kit';
+import { frontSteps, smokePlume, lodInstances, plantTrees, risers, span, type TreeSpot } from './colos-kit';
 import { courtyardBuilding } from './colos-court';
 import { farCourt } from './colos-ludus';
 
@@ -145,7 +145,9 @@ function buildMoneta(ctx: LandmarkContext): LandmarkBuild {
   }
   spots.push({ id: 'moneta-guard', kind: 'npc', position: new THREE.Vector3(2.4, y0 + 0.05, -D / 2 - 1.2), heading: Math.PI });
   spots.push({ id: 'moneta-yard', kind: 'npc', position: new THREE.Vector3(0, y0 + 0.05, 1.5), heading: Math.PI });
-  return { object: b.build('moneta'), colliders: b.colliders, spots, far: farCourt(W, D, res.height, y0, 'brick'), cullDistance: 700 };
+  const object = b.build('moneta');
+  if (high) for (const [i, x] of [-W / 2 + 3, W / 2 - 3].entries()) smokePlume(ctx.game, object, new THREE.Vector3(x, y0 + res.height + 1.6, 0), { seed: 13 + i * 6, height: 20, count: 26, shade: [0.12, 0.42] });
+  return { object, colliders: b.colliders, spots, far: farCourt(W, D, res.height, y0, 'brick'), cullDistance: 700 };
 }
 
 // ---------------------------------------------------------------- Curiae Veteres

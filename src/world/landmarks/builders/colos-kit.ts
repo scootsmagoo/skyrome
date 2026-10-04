@@ -681,6 +681,133 @@ export function ovalBand(oval: Oval, x0: number, x1: number, y0: number, y1: num
   return ovalSweep(oval, prof, t0, t1, n, { closed, caps: !closed });
 }
 
+// ---------------------------------------------------------------- furnace smoke
+
+let smokeMat: THREE.PointsMaterial | null = null;
+
+/** Soft round puff (alpha falls off with a little lumpiness), as a DataTexture so it builds in tests. */
+export function smokePuffTexture(n = 64): Uint8Array {
+  const data = new Uint8Array(n * n * 4);
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const dx = (x + 0.5) / n - 0.5;
+      const dy = (y + 0.5) / n - 0.5;
+      const ang = Math.atan2(dy, dx);
+      const r = Math.hypot(dx, dy) * 2 * (1 + 0.12 * Math.sin(ang * 5) + 0.06 * Math.sin(ang * 11 + 1.3));
+      const a = Math.max(0, 1 - r) ** 1.6;
+      const i = (y * n + x) * 4;
+      data[i] = data[i + 1] = data[i + 2] = 255;
+      data[i + 3] = Math.round(a * 255);
+    }
+  }
+  return data;
+}
+
+function smokeMaterial(): THREE.PointsMaterial {
+  if (smokeMat) return smokeMat;
+  const tex = new THREE.DataTexture(smokePuffTexture(), 64, 64, THREE.RGBAFormat);
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.needsUpdate = true;
+  const mat = new THREE.PointsMaterial({ size: 1, map: tex, transparent: true, depthWrite: false, vertexColors: true, sizeAttenuation: true, fog: true });
+  mat.name = 'colos:smoke';
+  // Per-puff size: a `puff` attribute scales gl_PointSize.
+  mat.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float puff;')
+      .replace('gl_PointSize = size;', 'gl_PointSize = size * puff;');
+  };
+  smokeMat = mat;
+  return mat;
+}
+
+export interface SmokeOpts {
+  /** Puffs in the column. */
+  count?: number;
+  /** Height the smoke rises before it has thinned away (m). */
+  height?: number;
+  /** Rise speed (m/s). */
+  speed?: number;
+  /** Puff diameter at the vent and at the top (m). */
+  size?: [number, number];
+  /** Greyness at the vent and at the top (0 black … 1 white). */
+  shade?: [number, number];
+  /** Peak opacity. */
+  opacity?: number;
+  seed?: number;
+}
+
+/**
+ * A column of furnace smoke rising from `at` (local to `parent`): soft puffs that rise, swell, drift
+ * downwind (one world-space wind for every plume) and thin out, animated by the module's LOD system
+ * while visible. One draw call; deterministic.
+ */
+export function smokePlume(game: Game | undefined, parent: THREE.Object3D, at: THREE.Vector3, opts: SmokeOpts = {}): THREE.Points {
+  const n = opts.count ?? 36;
+  const H = opts.height ?? 26;
+  const speed = opts.speed ?? 1.1;
+  const [s0, s1] = opts.size ?? [2.6, 13];
+  const [c0, c1] = opts.shade ?? [0.16, 0.5];
+  const peak = opts.opacity ?? 0.62;
+  let seed = opts.seed ?? 11;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const phase = Float32Array.from({ length: n }, (_, i) => (i + rnd() * 0.6) / n);
+  const wob = Float32Array.from({ length: n }, () => rnd() * Math.PI * 2);
+  const pos = new Float32Array(n * 3);
+  const col = new Float32Array(n * 4);
+  const puff = new Float32Array(n);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 4).setUsage(THREE.DynamicDrawUsage));
+  g.setAttribute('puff', new THREE.BufferAttribute(puff, 1).setUsage(THREE.DynamicDrawUsage));
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(at.x + H * 0.3, at.y + H / 2, at.z), H);
+  const pts = new THREE.Points(g, smokeMaterial());
+  pts.name = 'smoke';
+  pts.renderOrder = 3;
+  pts.castShadow = false;
+  parent.add(pts);
+  const windWorld = new THREE.Vector3(0.82, 0, 0.42).normalize();
+  const wind = new THREE.Vector3();
+  let windReady = false;
+  wind.copy(windWorld);
+  const update = (t: number, initial = false) => {
+    // The landmark's rotation is only set once the build returns: take the wind into the local
+    // frame on the first animated frame.
+    if (!windReady && !initial) {
+      parent.updateWorldMatrix(true, false);
+      const q = new THREE.Quaternion();
+      parent.matrixWorld.decompose(new THREE.Vector3(), q, new THREE.Vector3());
+      wind.copy(windWorld).applyQuaternion(q.invert());
+      windReady = true;
+    }
+    for (let i = 0; i < n; i++) {
+      const f = (t * speed / H + phase[i]) % 1;
+      const y = f * H;
+      const drift = f * f * H * 0.55;
+      const sway = Math.sin(t * 0.35 + wob[i]) * (0.3 + f * 2.2);
+      pos[i * 3] = at.x + wind.x * drift + Math.cos(wob[i]) * sway * 0.6;
+      pos[i * 3 + 1] = at.y + y;
+      pos[i * 3 + 2] = at.z + wind.z * drift + Math.sin(wob[i]) * sway * 0.6;
+      const c = c0 + (c1 - c0) * Math.sqrt(f);
+      col[i * 4] = col[i * 4 + 1] = col[i * 4 + 2] = c;
+      col[i * 4 + 3] = peak * Math.min(1, f / 0.12) * (1 - f) ** 1.3;
+      puff[i] = s0 + (s1 - s0) * Math.sqrt(f);
+    }
+    g.attributes.position.needsUpdate = true;
+    g.attributes.color.needsUpdate = true;
+    g.attributes.puff.needsUpdate = true;
+  };
+  update(0, true);
+  const sys = instanceLod(game);
+  if (sys) {
+    sys.hook((_dt, t) => {
+      if (visibleInScene(pts)) update(t);
+    });
+  }
+  return pts;
+}
+
 // ---------------------------------------------------------------- readable inscriptions
 
 export interface ReadableSpec {

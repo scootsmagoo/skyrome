@@ -29,7 +29,7 @@ import { placeProp } from '../../../arch/props';
 import { Rng } from '../../../core/Rng';
 import { bearingToRotationY } from '../../../core/math';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
-import { Oval, addReadables, flight, lodInstances, ovalBand, ovalSweep, plantTrees, risers, solid, span, type TreeSpot } from './colos-kit';
+import { Oval, addReadables, smokePlume, flight, lodInstances, ovalBand, ovalSweep, plantTrees, risers, solid, span, type TreeSpot } from './colos-kit';
 import { stripWall } from './colos-court';
 import type { Opening } from '../../../arch/fabric';
 
@@ -453,8 +453,14 @@ function buildTrajanBlock(ctx: LandmarkContext, b: MeshBuilder, d: Draw, root: T
   for (const sx of [-1, 1]) {
     range(d, Math.min(sx * 15, sx * 57), -14, Math.max(sx * 15, sx * 57), 6, 14, sx < 0 ? 'sw' : 'se', { low, rows: 2 });
   }
-  // Smoke from the furnaces (praefurnia) — dark vents on the service side.
-  for (const sx of [-1, 1]) d.span('black', sx * 16.5, 0, 5.98, sx * 18, 1.6, 6.05);
+  // The furnaces (praefurnia) on the service side: stoking vents below, flue stacks above the back
+  // ranges, and their smoke drifting over the garden all day.
+  for (const sx of [-1, 1]) {
+    d.span('black', sx * 16.5, 0, 5.98, sx * 18, 1.6, 6.05);
+    d.span('brick', sx * 17.25 - 0.7, 13.5, 3.6, sx * 17.25 + 0.7, 16.4, 5.0);
+    d.span('black', sx * 17.25 - 0.45, 16.3, 3.85, sx * 17.25 + 0.45, 16.42, 4.75);
+    if (high) smokePlume(ctx.game, root, new THREE.Vector3(sx * 17.25, 16.4, 4.3), { seed: sx > 0 ? 3 : 7, height: 30 });
+  }
 }
 
 /** The frigidarium: three groin-vaulted bays on eight granite columns, enterable. */
@@ -768,6 +774,9 @@ function buildBathsTitus(ctx: LandmarkContext): LandmarkBuild {
   spots.push({ id: 'titus-entrance', kind: 'door', position: new THREE.Vector3(0, 0.25, -hd - 5), heading: 0 });
   spots.push({ id: 'titus-vista', kind: 'vista', position: new THREE.Vector3(0, 0.95, hd + 0.4), heading: Math.PI * 0.85 });
   spots.push({ id: 'titus-attendant', kind: 'npc', position: new THREE.Vector3(2.5, 0.25, -hd - 1.5), heading: Math.PI });
+  // A furnace stack behind the caldarium, smoking.
+  d.span('brick', 5.3, 13.5, hd - 6.2, 6.7, 16.2, hd - 4.8);
+  if (high) smokePlume(ctx.game, root, new THREE.Vector3(6, 16.2, hd - 5.5), { seed: 5, height: 24, count: 28 });
   root.add(b.build('baths-titus'));
   return { object: root, colliders: b.colliders, spots, cullDistance: 1600 };
 }
