@@ -17,11 +17,11 @@
 import * as THREE from 'three';
 import { Forest, vegetation, type GrassField, type TreeSpecies } from '../../arch/vegetation';
 import type { Game } from '../../core/Game';
+import { Layer } from '../../core/Physics';
 import { hash2 } from '../../core/Rng';
 import * as atlas from '../../data/atlas';
 import { getMaterial } from '../../gfx/materials';
 import { registerColliders } from '../../gfx/MeshBuilder';
-import { Layer } from '../../core/Physics';
 import { WORLD_SCALE } from '../coords';
 import { bodyAt, type WaterBody } from '../water/bodies';
 import { addTerrainGrass } from './grass';
@@ -67,9 +67,13 @@ export class BuiltProbe {
     if (!v) {
       const cx = this.hm.minX + i * this.cell, cz = this.hm.minZ + j * this.cell;
       const g = this.hm.heightAt(cx, cz);
+      // The first World surface from above. The terrain's own heightfield (or a surface of unknown
+      // owner, as in tests) counts as built over only a hand above the ground; anything a builder
+      // registered (paving, kerbs, steps, plazas) counts even when laid flush or slightly sunk.
       const hit = this.game.physics.raycast({ x: cx, y: g + 45, z: cz }, { x: 0, y: -1, z: 0 }, 46, Layer.World);
       const terrain = hit && this.game.terrain && hit.owner === this.game.terrain;
-      v = this.cells[k] = hit && (terrain ? hit.point.y > g + 0.25 : hit.point.y > g - 0.35) ? 2 : 1;
+      const known = hit && hit.owner !== undefined;
+      v = this.cells[k] = hit && (terrain || !known ? hit.point.y > g + 0.25 : hit.point.y > g - 0.35) ? 2 : 1;
     }
     return v === 2;
   }
