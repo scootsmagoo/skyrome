@@ -253,17 +253,32 @@ function ludusArena(ctx: LandmarkContext, b: MeshBuilder, spots: Spot[], readabl
   spots.push({ id: 'ludus-fighter-a', kind: 'spawn', position: new THREE.Vector3(0, 0.06, -7), heading: 0 });
   spots.push({ id: 'ludus-fighter-b', kind: 'spawn', position: new THREE.Vector3(0, 0.06, 7), heading: Math.PI });
   spots.push({ id: 'ludus-doctor', kind: 'npc', position: new THREE.Vector3(-A.a + 1.5, 0.06, -3), heading: Math.PI / 2 });
-  // Spectators on the rows and along the top walk.
+  // Spectators: seats on every other row 2.5 m apart (≈ 110 sitters, the "80–120" of a practice
+  // day) and standing places along the top walk, clear of the gates, the tribunal and the aisles.
+  const angDist = (t: number, c: number) => Math.abs(Math.atan2(Math.sin(t - c), Math.cos(t - c)));
+  const blocked = (t: number) => gates.some((g) => angDist(t, g) < 0.3) || angDist(t, 0) < 0.36 || aisleT.some((a) => angDist(t, a) < 0.06);
   let si = 0;
-  for (let k = 0; k < 16; k++) {
-    const t = (k / 16) * two + 0.2;
-    if (gates.some((g) => Math.abs(((t - g + Math.PI) % two) - Math.PI) < 0.25)) continue;
-    const r = k % 3 === 0 ? -1 : 1 + (k % 4);
-    const x = r < 0 ? xTop0 + A.topWalk / 2 : A.walk + r * A.depth + A.depth / 2;
-    const yy = r < 0 ? top : P + (r + 1) * A.rise;
-    const [px, pz] = oval.point(t, x);
-    const [nx, nz] = oval.normal(t);
-    spots.push({ id: `spectator-${++si}`, kind: r < 0 ? 'npc' : 'sit', position: new THREE.Vector3(px, yy + 0.02, pz), heading: Math.atan2(-nx, -nz) });
+  for (const r of [0, 2, 4]) {
+    const x = A.walk + r * A.depth + A.depth / 2;
+    const yy = P + (r + 1) * A.rise;
+    const n = Math.round(oval.perimeter(x, 256) / 2.5);
+    for (const t of oval.equalArc(n, x, r * 0.17)) {
+      if (blocked(t)) continue;
+      const [px, pz] = oval.point(t, x);
+      const [nx, nz] = oval.normal(t);
+      spots.push({ id: `spectator-${++si}`, kind: 'sit', position: new THREE.Vector3(px, yy + 0.02, pz), heading: Math.atan2(-nx, -nz) });
+    }
+  }
+  {
+    const x = xTop0 + A.topWalk / 2;
+    const n = Math.round(oval.perimeter(x, 256) / 6);
+    let k = 0;
+    for (const t of oval.equalArc(n, x, 0.5)) {
+      if (blocked(t) || stairT.some((st) => angDist(t, st) < 0.12)) continue;
+      const [px, pz] = oval.point(t, x);
+      const [nx, nz] = oval.normal(t);
+      spots.push({ id: `spectator-standing-${++k}`, kind: 'npc', position: new THREE.Vector3(px, top + 0.02, pz), heading: Math.atan2(-nx, -nz) });
+    }
   }
   // ---- the tribunal on the east long side (t = 0): the procurator's box, a level extension of the
   //      top walk out over the rows to the terrace, under a tiled roof with a pediment.
