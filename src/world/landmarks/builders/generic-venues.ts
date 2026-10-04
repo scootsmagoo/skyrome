@@ -277,6 +277,8 @@ export interface BowlSpec {
   /** Upper rows of timber (older or makeshift circuses). */
   timberTop?: boolean;
   bay?: number;
+  /** Width of a gate passage cut through the apex of the curved end (an arch landmark stands in it). */
+  apexGap?: number;
 }
 
 export interface BowlResult {
@@ -359,6 +361,9 @@ export function bowl(d: Draw, ctx: LandmarkContext, s: BowlSpec, spots: Spot[], 
     if (sg <= gw || sg >= straight - gw) continue;
     cuts.push([sg - gw / 2, sg + gw / 2], [L - sg - gw / 2, L - sg + gw / 2]);
   }
+  // The apex passage: arc-length interval at the middle of the U (seats are cut a little wider).
+  const apexCuts: [number, number][] = s.apexGap ? [[L / 2 - s.apexGap / 2, L / 2 + s.apexGap / 2]] : [];
+  if (s.apexGap) cuts.push([L / 2 - s.apexGap / 2 - 1, L / 2 + s.apexGap / 2 + 1]);
   let seatTop = 0;
   let seatReach = s.reach;
   for (const piece of cutPath(path, cuts)) {
@@ -369,14 +374,23 @@ export function bowl(d: Draw, ctx: LandmarkContext, s: BowlSpec, spots: Spot[], 
     seatTop = r.height;
     seatReach = r.reach;
   }
-  // Facade arcade and ambulatory along the offset U.
-  const fpath = offsetLine(path, outerOff);
-  liteArcade(d, fpath, { storeys: arcadeStoreys(s.H, s.storeys, s.storeys > 2), bay: s.bay ?? 4.4, depth: fd, material: mat, detail });
-  for (let k = 1; k < s.storeys; k++) ribbonSlab(d, fpath, -fd - c - 0.2, -fd, Math.min((k * s.H) / s.storeys, seatTop), 0.4, 'concrete');
-  ribbonSlab(d, fpath, -fd - c - 0.2, -fd, seatTop, 0.5, 'concrete');
-  ribbonSlab(d, fpath, -fd - c - 0.2, -fd, 0.03, 0.25, 'paving_travertine');
-  ribbonWall(d, fpath, -fd - c - 0.6, -fd - c, 0, seatTop, 'plaster_dark');
-  summaPorticus(d, offsetLine(path, seatReach - 1.4), seatTop, s.H, outerOff - fd - (seatReach - 1.4), detail);
+  // Facade arcade and ambulatory along the offset U (in pieces either side of an apex passage).
+  for (const piece of cutPath(path, apexCuts)) {
+    const fpath = offsetLine(piece, outerOff);
+    liteArcade(d, fpath, { storeys: arcadeStoreys(s.H, s.storeys, s.storeys > 2), bay: s.bay ?? 4.4, depth: fd, material: mat, detail });
+    for (let k = 1; k < s.storeys; k++) ribbonSlab(d, fpath, -fd - c - 0.2, -fd, Math.min((k * s.H) / s.storeys, seatTop), 0.4, 'concrete');
+    ribbonSlab(d, fpath, -fd - c - 0.2, -fd, seatTop, 0.5, 'concrete');
+    ribbonSlab(d, fpath, -fd - c - 0.2, -fd, 0.03, 0.25, 'paving_travertine');
+    ribbonWall(d, fpath, -fd - c - 0.6, -fd - c, 0, seatTop, 'plaster_dark');
+    summaPorticus(d, offsetLine(piece, seatReach - 1.4), seatTop, s.H, outerOff - fd - (seatReach - 1.4), detail);
+  }
+  if (s.apexGap) {
+    // Passage floor from the arena out through the gap, its sides closed by ashlar end walls.
+    const za = s.zs + s.aw / 2, zb = za + outerOff + 1;
+    d.span('paving_travertine', -s.apexGap / 2, -0.2, za, s.apexGap / 2, 0.04, zb);
+    for (const sx of [-1, 1]) d.span(mat, sx * s.apexGap / 2 - (sx > 0 ? 0 : 1.2), -0.3, za - 1.2, sx * s.apexGap / 2 + (sx > 0 ? 1.2 : 0), s.H, zb - 1, { collide: true });
+    spots.push(spot(`${lm.id}:apexGate`, 'door', 0, 0.04, zb + 1.5, Math.PI));
+  }
   // Passages and tribunals at the gaps.
   for (const g of s.gaps ?? []) {
     for (const sx of [-1, 1]) {
@@ -541,7 +555,14 @@ function buildCircus(ctx: LandmarkContext): LandmarkBuild {
   const zs = dd / 2 - aw / 2 - reach - 4.4;
   const z0 = -dd / 2 + 8;
   curvedPlinth(d, ctx, w / 2, -dd / 2, zs, w / 2, zs, 1);
-  bowl(d, ctx, { aw, z0, zs, H, storeys: H > 14 ? 3 : 2, reach, timberTop: h.has('disused', 'wooden', 'timber'), gaps: [z0 + (zs - z0) * 0.55] }, spots, far);
+  // An arch standing in the curved end (the Arch of Titus in the Circus Maximus) gets a passage.
+  let apexGap = 0;
+  for (const c of children(lm)) {
+    if (c.category !== 'arch') continue;
+    const p = localOf(ctx, c);
+    if (p.z > zs && Math.abs(p.x) < aw / 2) apexGap = Math.max(apexGap, (c.footprint.kind === 'rect' ? c.footprint.w : 12) * ctx.S + 1.5);
+  }
+  bowl(d, ctx, { aw, z0, zs, H, storeys: H > 14 ? 3 : 2, reach, timberTop: h.has('disused', 'wooden', 'timber'), gaps: [z0 + (zs - z0) * 0.55], apexGap }, spots, far);
   carceres(d, ctx, aw + 2 * reach, z0 - 2, Math.min(H * 0.6, 8), 12, spots);
   // Spina, leaving room for any obelisk or shrine standing on it (built as its own landmark).
   const gaps: [number, number][] = [];
