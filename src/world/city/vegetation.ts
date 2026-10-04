@@ -32,7 +32,7 @@ const SCRAP: Mix = [['fig', 1], ['laurel', 1.2], ['cypress', 0.5], ['oleander', 
  * Tree spots over the plan inside `area` (game m). `step` is the sampling grid; each sample plants
  * at most one tree with a probability from the ground class and a clumping noise.
  */
-export function placeTrees(plan: CityPlan, area: { minX: number; minZ: number; maxX: number; maxZ: number }, waterY: number, seed = 31): TreeSpot[] {
+export function placeTrees(plan: CityPlan, area: { minX: number; minZ: number; maxX: number; maxZ: number }, waterY: number, seed = 31, lush?: (x: number, z: number) => boolean): TreeSpot[] {
   const g = plan.grid;
   const out: TreeSpot[] = [];
   const rng = new Rng(seed);
@@ -46,11 +46,13 @@ export function placeTrees(plan: CityPlan, area: { minX: number; minZ: number; m
       const clump = fbm2(jx * 0.018, jz * 0.018, 9);
       let p = 0;
       let mix: Mix | null = null;
+      // The core's hill flanks and horti are kept green and full (no bare slopes on the way).
+      const rich = lush?.(jx, jz) ?? false;
       if (c === K.GARDEN) {
-        p = clump > 0.42 ? 0.55 : 0.1;
+        p = clump > 0.42 ? (rich ? 0.7 : 0.55) : rich ? 0.25 : 0.1;
         mix = GARDEN;
       } else if (c === K.STEEP) {
-        p = clump > 0.45 ? 0.5 : 0.15;
+        p = clump > 0.45 ? (rich ? 0.68 : 0.5) : rich ? 0.32 : 0.15;
         mix = STEEP;
       } else if (c === K.OUTSIDE) {
         p = clump > 0.58 ? 0.35 : 0.025;

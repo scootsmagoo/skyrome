@@ -129,7 +129,8 @@ export interface BackLot {
  */
 export function backLots(blk: PlanBlock, lots: LotPlan[], H: HeightFn): BackLot[] {
   const out: BackLot[] = [];
-  const max = Math.floor(blk.area / 300);
+  // Rome's blocks were built up almost solid: the denser the quarter, the more back buildings.
+  const max = Math.floor(blk.area / (blk.density > 0.8 ? 190 : 300));
   if (max < 1 || blk.density < 0.45) return out;
   // Frame along the longest outline edge.
   let best = 0, bl = 0;
@@ -205,7 +206,7 @@ export function backLots(blk: PlanBlock, lots: LotPlan[], H: HeightFn): BackLot[
   const occupied = (i0: number, j0: number, ni: number, nj: number) =>
     sat[(j0 + nj) * (gu + 1) + i0 + ni] - sat[j0 * (gu + 1) + i0 + ni] - sat[(j0 + nj) * (gu + 1) + i0] + sat[j0 * (gu + 1) + i0];
   const rng = new Rng(blk.seed ^ 0xbac4);
-  const sizes: [number, number][] = [[18, 15], [15, 13], [13, 11], [11, 10], [9.5, 8.5], [8, 7]];
+  const sizes: [number, number][] = [[18, 15], [15, 13], [13, 11], [11, 10], [9.5, 8.5], [8, 7], [7, 6.5]];
   for (const [w, d] of sizes) {
     const ni = Math.ceil(w / cs), nj = Math.ceil(d / cs);
     for (let j0 = 0; j0 + nj <= gv && out.length < max; j0++) {

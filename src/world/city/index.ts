@@ -160,7 +160,7 @@ export async function buildCity(
   // ---- 5. trees and grass (vegetation materials clone the textured library materials)
   await whenTexturesLoaded().catch(() => {});
   const trees = new TreeLayer({ near: 45, far: 1000, thinFrom: 200, minKeep: 0.12 });
-  for (const sp of placeTrees(plan, cityBounds, hm.waterLevelY)) trees.add(sp.species, sp.x, H(sp.x, sp.z), sp.z, { scale: sp.scale });
+  for (const sp of placeTrees(plan, cityBounds, hm.waterLevelY, 31, inDetail)) trees.add(sp.species, sp.x, H(sp.x, sp.z), sp.z, { scale: sp.scale });
   for (const sp of life.trees) trees.add(sp.species, sp.x, H(sp.x, sp.z), sp.z, { scale: sp.scale });
   const yardSpecies = ['fig', 'laurel', 'umbrella_pine', 'cypress', 'olive', 'fig'] as const;
   for (const r of blocks) {
