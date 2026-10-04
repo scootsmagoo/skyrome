@@ -165,23 +165,26 @@ export function weaponGeometry(model: WeaponModel): THREE.BufferGeometry | null 
       return g;
     }
     case 'bow': {
-      // Composite recurve: limbs along ±Y, belly toward -Z (the archer), tips recurving forward.
+      // Composite recurve, braced: the grip toward the target (+Z), limbs sweeping back toward the
+      // archer to the string bridges, then the stiff bone ears (siyahs) kicking forward. The string
+      // from each bridge to the nock is a separate live mesh (Equipment) so it can be drawn.
       const limb = (sign: number) => {
         const rows: number[][] = [];
-        const n = 8;
+        const n = 10;
         for (let i = 0; i <= n; i++) {
           const t = i / n;
-          const y = sign * (0.05 + t * 0.53);
-          const z = -0.11 * Math.sin(t * Math.PI * 0.75) + (t > 0.8 ? (t - 0.8) * 0.4 : 0);
-          rows.push([y, 0.009 - t * 0.004, 0.016 - t * 0.008, 0, z]);
+          const y = sign * (0.05 + t * (BOW.tipY - 0.05));
+          rows.push([y, 0.0095 - t * 0.0045, 0.017 - t * 0.008, 0, bowLimbZ(t)]);
         }
-        rb.lathe(sign > 0 ? rows : rows.reverse(), 5, (y) => (Math.abs(y) > 0.5 ? BONE : WOOD_DARK), SURF.leather);
+        rb.lathe(sign > 0 ? rows : rows.reverse(), 5, (y) => (Math.abs(y) > BOW.bridgeY + 0.01 ? BONE : WOOD_DARK), SURF.leather);
+        // The string's loop runs along the belly of the ear, from the tip to the bridge.
+        const e = (BOW.bridgeY - 0.05) / (BOW.tipY - 0.05);
+        rb.lathe([[sign * BOW.bridgeY, 0.0016, 0.0016, 0, bowLimbZ(e) - 0.006], [sign * (BOW.tipY - 0.004), 0.0016, 0.0016, 0, bowLimbZ(1) - 0.004]].sort((a, b) => a[0] - b[0]), 3, BONE, SURF.linen);
       };
       limb(1);
       limb(-1);
+      // Leather-wrapped grip.
       rb.lathe([[-0.07, 0.016, 0.02], [0.07, 0.016, 0.02]], 6, LEATHER, SURF.leather);
-      // String.
-      rb.lathe([[-0.57, 0.0015, 0.0015, 0, -0.035], [0.57, 0.0015, 0.0015, 0, -0.035]], 3, BONE, SURF.linen);
       break;
     }
     case 'sling': {
@@ -256,6 +259,107 @@ export function propGeometry(model: PropModel): THREE.BufferGeometry {
   }
   const g = rb.build(key);
   cache.set(key, g);
+  return g;
+}
+
+// ------------------------------------------------------------------ bow string and arrow
+
+/** Bow layout (weapon frame): limb tips, string bridges, the braced string plane and the arrow rest. */
+export const BOW = {
+  tipY: 0.6,
+  bridgeY: 0.5,
+  /** Braced string plane (z), i.e. minus the brace height. */
+  stringZ: -0.118,
+  /** The arrow rides on the left of the grip (a right-handed archer), just above the hand. */
+  rest: new THREE.Vector3(0.016, 0.035, 0.01),
+  /** Longest draw (string to grip, m). */
+  maxDraw: 0.72,
+};
+
+/** Limb profile: back toward the archer to the bridge, then the ear kicks forward. */
+function bowLimbZ(t: number): number {
+  const e = (BOW.bridgeY - 0.05) / (BOW.tipY - 0.05);
+  if (t <= e) return (BOW.stringZ + 0.008) * Math.pow(Math.sin((t / e) * Math.PI * 0.5), 1.4);
+  const k = (t - e) / (1 - e);
+  return BOW.stringZ + 0.008 + 0.075 * Math.pow(k, 1.2);
+}
+
+const STRING_SIDES = 4;
+
+/** A live bowstring (two thin tubes, bridge → nock) for one bow; update with `setBowString`. */
+export function createBowString(): THREE.BufferGeometry {
+  const n = 2 * 2 * STRING_SIDES;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage));
+  g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage));
+  const col = new Float32Array(n * 3);
+  const surf = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    col.set([BONE.r, BONE.g, BONE.b], i * 3);
+    surf.set([0.8, 0, 0, 0], i * 4);
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.setAttribute('surf', new THREE.BufferAttribute(surf, 4));
+  const idx: number[] = [];
+  for (let seg = 0; seg < 2; seg++) {
+    const o = seg * 2 * STRING_SIDES;
+    for (let i = 0; i < STRING_SIDES; i++) {
+      const a = o + i;
+      const b = o + ((i + 1) % STRING_SIDES);
+      idx.push(a, b, b + STRING_SIDES, a, b + STRING_SIDES, a + STRING_SIDES);
+    }
+  }
+  g.setIndex(idx);
+  g.name = 'bowstring';
+  setBowString(g, new THREE.Vector3(0, 0, BOW.stringZ));
+  return g;
+}
+
+const sv = { d: new THREE.Vector3(), u: new THREE.Vector3(), w: new THREE.Vector3(), a: new THREE.Vector3() };
+/** Bend the string to a nock point (weapon frame). */
+export function setBowString(g: THREE.BufferGeometry, nock: THREE.Vector3) {
+  const pos = g.getAttribute('position') as THREE.BufferAttribute;
+  const nor = g.getAttribute('normal') as THREE.BufferAttribute;
+  const r = 0.0017;
+  for (let seg = 0; seg < 2; seg++) {
+    const a = sv.a.set(0, seg ? -BOW.bridgeY : BOW.bridgeY, BOW.stringZ);
+    const d = sv.d.subVectors(nock, a).normalize();
+    // Any perpendicular frame around the segment.
+    const u = sv.u.set(1, 0, 0).addScaledVector(d, -d.x).normalize();
+    const w = sv.w.crossVectors(d, u);
+    for (let end = 0; end < 2; end++) {
+      const p = end ? nock : a;
+      for (let i = 0; i < STRING_SIDES; i++) {
+        const th = (i / STRING_SIDES) * Math.PI * 2;
+        const c = Math.cos(th);
+        const s = Math.sin(th);
+        const k = seg * 2 * STRING_SIDES + end * STRING_SIDES + i;
+        nor.setXYZ(k, u.x * c + w.x * s, u.y * c + w.y * s, u.z * c + w.z * s);
+        pos.setXYZ(k, p.x + (u.x * c + w.x * s) * r, p.y + (u.y * c + w.y * s) * r, p.z + (u.z * c + w.z * s) * r);
+      }
+    }
+  }
+  pos.needsUpdate = true;
+  nor.needsUpdate = true;
+  g.computeBoundingSphere();
+}
+
+/** Arrow along +Y from the nock (origin) to the tip, 0.76 m: fletching, reed shaft, iron head. */
+export function arrowGeometry(): THREE.BufferGeometry {
+  const hit = cache.get('arrow');
+  if (hit) return hit;
+  const rb = new RigidBuilder();
+  rb.lathe([[0, 0.0035, 0.0035], [0.012, 0.0045, 0.0045], [0.7, 0.0042, 0.0042]], 5, WOOD, wood);
+  rb.lathe([[0.69, 0.005, 0.005], [0.72, 0.0045, 0.0045]], 5, STEEL_DARK, steel);
+  blade(rb, 0.72, 0.74, 0.77, (t) => 0.007 * (1 - t * 0.3), 0.002);
+  // Three vanes.
+  for (let k = 0; k < 3; k++) {
+    const a = (k / 3) * Math.PI * 2;
+    const m = new THREE.Matrix4().makeRotationY(a);
+    rb.box([0, 0.075, 0.009], [0.0006, 0.05, 0.006], k === 0 ? srgb('#a8322a') : srgb('#e2dccd'), SURF.linen, m);
+  }
+  const g = rb.build('arrow');
+  cache.set('arrow', g);
   return g;
 }
 

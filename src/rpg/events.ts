@@ -37,6 +37,11 @@ declare module '../core/Events' {
     'standing:changed': { dignitas: string; infamia: number; legal: string };
     /** Washed at the baths, cleaned at a fountain, or dirtied by blood, sewers or rain (§14.8). */
     'standing:cleanliness': { cleanliness: 'lautus' | 'normal' | 'sordidus' };
+    /**
+     * Game time jumped (sleep or wait, the baths, the Carcer, "Wait until…", §14.10): every timer
+     * advances by `hours` as if you had waited. Emitted by skipTime() after the clock has moved.
+     */
+    'time:skipped': { hours: number };
   }
 }
 

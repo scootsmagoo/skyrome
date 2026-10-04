@@ -7,7 +7,8 @@ const sceneModules = import.meta.glob<{ default: SceneDef }>('./scenes/*.ts');
 
 declare global {
   interface Window {
-    __skyrome?: { game: Game; scene: string; ready: boolean; error?: string };
+    /** Automation hooks: `ready` once the scene is up (Rome: the title, or play with &quick=1). */
+    __skyrome?: { game: Game; scene: string; ready: boolean; error?: string; readyMs?: number };
   }
 }
 
@@ -31,6 +32,7 @@ async function boot() {
   const mod = await sceneModules[`./scenes/${sceneName}.ts`]();
   await mod.default.setup(game, ui);
   game.start();
+  window.__skyrome.readyMs = Math.round(performance.now());
   window.__skyrome.ready = true;
 }
 

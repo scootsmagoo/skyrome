@@ -7,7 +7,7 @@
  */
 import type { Stance } from '../../Actor';
 import type { ClipDef, FootKey, Key } from './clip';
-import type { PoseSpec } from './pose';
+import { mirrorPose, type PoseSpec } from './pose';
 import {
   ARM_L_SHIELD,
   BLOCK,
@@ -296,13 +296,15 @@ function bladeAttacks(stance: Stance): Record<string, ActionDef> {
         hips: [6, -30, 0], spine: [6, 4, 0], chest: [5, 6, 0], neck: [1, 8, 0], head: [-6, 10, 0], hipsPos: [0, -0.075, -0.02],
         shoulderR: [8, -8], upperArmR: [70, 34, 52, 20], forearmR: [80, 50], handR: [10, -20, 0],
       }, F, true),
+      // The fist stays right of the board's edge (only the blade cuts across in front of it) and
+      // the follow-through stops there instead of sweeping through the scutum.
       k(0.3, {
         hips: [8, -12, 0], spine: [8, 8, 0], chest: [8, 12, 0], neck: [1, -2, 0], head: [-6, -2, 0], hipsPos: [0, -0.09, 0.05],
-        shoulderR: [4, 14], upperArmR: [84, 12, -14, 5], forearmR: [20, -85], handR: [0, -25, 0],
+        shoulderR: [4, 14], upperArmR: [86, 14, 2, 5], forearmR: [20, -85], handR: [0, -25, 0],
       }, { L: step(0.06), R: rearUp(-10) }),
       k(0.42, {
-        hips: [8, -6, 0], spine: [8, 10, 0], chest: [8, 14, 0], hipsPos: [0, -0.09, 0.05],
-        shoulderR: [2, 14], upperArmR: [76, 8, -42, -5], forearmR: [28, -88], handR: [0, -15, 0],
+        hips: [8, -10, 0], spine: [8, 6, 0], chest: [8, 8, 0], hipsPos: [0, -0.09, 0.05],
+        shoulderR: [2, 12], upperArmR: [80, 14, 6, -5], forearmR: [28, -88], handR: [0, -30, 0],
       }, {}, true),
       k(0.8, pick(base), F),
     ], 1);
@@ -737,7 +739,11 @@ function drawSheath(stance: Stance): Record<string, ActionDef> {
     back: { chest: [-2, -6, 0], shoulderR: [16, -10], upperArmR: [150, 24, 24, 10], forearmR: [140, 0], handR: [0, 0, 0], fingersR: 70, indexR: 60 },
     fists: { upperArmL: [30, 14, -10, 10], forearmL: [100, 30], fingersL: 90, upperArmR: [30, 16, -10, 10], forearmR: [100, 30], fingersR: 90 },
   };
-  const shieldReach: PoseSpec = { shoulderL: [16, -10], upperArmL: [140, 24, 24, 10], forearmL: [135, 0], fingersL: 70 };
+  // The bow hangs on the back with its upper limb over the left shoulder: the bow hand reaches for it.
+  if (stance === 'bow') reach.back = mirrorPose(reach.back);
+  // A shield slung on the back: the left hand reaches back to its rim by the left hip and swings it
+  // round onto the arm (the shield travels with the hand from the grab frame, see Equipment).
+  const shieldReach: PoseSpec = { shoulderL: [-6, -14], upperArmL: [-30, 24, 6, 6], forearmL: [26, 30], handL: [14, 0, 0], fingersL: 75, indexL: 70 };
   for (const loc of ['hipR', 'hipL', 'back', 'fists'] as const) {
     const r = { ...reach[loc], ...(hasShield(stance) && loc !== 'fists' ? shieldReach : {}) };
     out[`drawWeapon:${loc}`] = {
@@ -807,10 +813,14 @@ function gestures(stance: Stance): Record<string, ActionDef> {
   const R = FEET_REST;
   const rest = stancePose(stance, false).pose;
   const bowAim: PoseSpec = {
-    hips: [2, -52, 0], spine: [2, 14, 0], chest: [0, 16, -4], neck: [0, 10, 0], head: [-4, 14, 4],
+    // Side-on to the target, the head turned back over the bow shoulder.
+    hips: [2, -66, 0], spine: [2, 6, 0], chest: [0, 4, -4], neck: [0, 24, 0], head: [-4, 30, 4],
     hipsPos: [0, -0.03, 0],
-    shoulderL: [4, -4], upperArmL: [88, 0, 34, -6], forearmL: [4, 0], handL: [0, 0, 0], fingersL: 90, indexL: 88,
-    shoulderR: [6, 10], upperArmR: [90, 8, -40, 0], forearmR: [146, 0], handR: [0, 0, 0], fingersR: 40, indexR: 30,
+    shoulderL: [4, -4], upperArmL: [100, 0, 70, -6], forearmL: [4, 0], handL: [0, 0, 0], fingersL: 90, indexL: 88,
+    // Full draw: the drawing elbow out at shoulder height behind the shoulder line, the forearm in
+    // line with the arrow, three fingers hooked on the string (Mediterranean draw) at the jaw. (The
+    // controller's IK places the hand exactly; this is the shape it starts from.)
+    shoulderR: [8, -12], upperArmR: [0, 96, 70, 0], forearmR: [142, -40], handR: [-6, 0, 0], fingersR: 68, indexR: 58,
   };
   const bowFeet: Feet = { L: [0.06, 0.08, 0, 0, -30], R: [-0.06, -0.08, 0, 0, -70] };
   const out: Record<string, ActionDef> = {
@@ -837,8 +847,9 @@ function gestures(stance: Stance): Record<string, ActionDef> {
         base: bowAim,
         keys: [
           k(0, bowAim, bowFeet),
-          k(0.06, { upperArmR: [92, 10, -30, 0], forearmR: [120, 0], fingersR: -10, indexR: -10, chest: [-2, 18, -4] }),
-          k(0.22, { upperArmR: [80, 14, -20, 0], forearmR: [110, 0] }, undefined, true),
+          // Release: the string hand flies straight back past the jaw (follow-through).
+          k(0.06, { upperArmR: [2, 86, 70, 0], forearmR: [122, -40], fingersR: -10, indexR: -10, chest: [-2, 6, -4] }),
+          k(0.22, { upperArmR: [4, 80, 66, 0], forearmR: [116, -30] }, undefined, true),
           k(0.5, { ...rest, upperArmL: [20, 12, 10, 0], forearmL: [70, 0] }, R),
         ],
       },

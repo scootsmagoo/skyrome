@@ -1,9 +1,9 @@
 import type { Vector3 } from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { installRpg } from '../src/rpg/install';
+import { installRpg, startNewGame } from '../src/rpg/install';
 import { proceduralId } from '../src/save/deltas';
 import { GENERATOR_VERSION, MANUAL_SLOTS, migrateV1toV2, SAVE_VERSION, SaveSystem } from '../src/save/SaveSystem';
-import { createDefaultStorage, FallbackStorage, HybridStorage, IDB_POINTER, MemoryStorage } from '../src/save/storage';
+import { createDefaultStorage, FallbackStorage, HybridStorage, IDB_POINTER, IdbSaveStorage, MemoryStorage } from '../src/save/storage';
 import type { SaveStorage } from '../src/save/types';
 import { fakeGame, record } from './rpg-fakes';
 
@@ -243,6 +243,40 @@ describe('slots and blockers', () => {
     expect((await w.rpg.save.list()).length).toBe(2);
   });
 
+  it('a save made while an autosave finishes loses neither the rotation counter nor its own index entry', async () => {
+    /** Storage whose every access takes a little while, so operations would interleave. */
+    class Slow extends MemoryStorage {
+      override async read(key: string) {
+        await new Promise((r) => setTimeout(r, 2));
+        return super.read(key);
+      }
+      override async write(key: string, value: string) {
+        await new Promise((r) => setTimeout(r, 2));
+        return super.write(key, value);
+      }
+    }
+    const storage = new Slow();
+    const w = world(storage);
+    let fired = false;
+    w.events.on('save:saved', (e) => {
+      if (e.slot === 'auto1' && !fired) {
+        fired = true;
+        void w.rpg.save.quicksave(); // F5 as the autosave lands
+      }
+    });
+    expect((await w.rpg.save.autosave({ force: true })).ok).toBe(true);
+    await w.rpg.save.idle();
+    const index = JSON.parse((await storage.read('skyrome.save.index'))!);
+    expect(Object.keys(index.slots).sort()).toEqual(['auto1', 'quick']);
+    expect(index.autoCounter).toBe(1);
+    // The next autosave goes to the next slot.
+    expect((await w.rpg.save.autosave({ force: true })).meta!.slot).toBe('auto2');
+    // Autosaves fired back to back still rotate.
+    await Promise.all([w.rpg.save.autosave({ force: true }), w.rpg.save.autosave({ force: true })]);
+    const list = await w.rpg.save.list();
+    expect(list.map((m) => m.slot).sort()).toEqual(['auto1', 'auto2', 'auto3', 'quick']);
+  });
+
   it('autosave triggers: quest stages (after the conversation ends), save:request (sleep, interiors) and every 10 minutes', async () => {
     const w = world();
     const saved = record(w.events, ['save:saved']);
@@ -284,6 +318,45 @@ describe('slots and blockers', () => {
     w.step(1);
     await w.rpg.save.idle();
     expect(w.rpg.inventory.denarii).toBe(60);
+  });
+});
+
+describe('new game', () => {
+  it('starts from the beginning: the clock, play time, discovered places, world deltas and pending autosaves too', async () => {
+    const w = world();
+    const start = w.game.time.totalHours;
+    const scale = w.game.time.timeScale;
+    playABit(w);
+    await w.rpg.save.idle(); // the quest autosave playABit set off
+    w.game.time.advanceHours(240);
+    w.game.time.timeScale = 60;
+    w.rpg.save.playTime = 5000;
+    expect(w.rpg.locations.isDiscovered('ex-basilica')).toBe(true);
+    w.events.emit('save:request', { reason: 'sleep' });
+    // Another module's saveable is reset too.
+    let other = 'played';
+    w.rpg.save.register('calendar', { save: () => other, load: (d) => (other = String(d)), reset: () => (other = 'fresh') });
+
+    startNewGame(w.rpg, { background: 'veteranus' });
+    expect(w.game.time.totalHours).toBe(start);
+    expect(w.game.time.timeScale).toBe(scale);
+    expect(w.rpg.save.playTime).toBe(0);
+    expect(w.rpg.locations.isDiscovered('ex-basilica')).toBe(false);
+    expect(w.game.deltas.isDead('npc-nobody')).toBe(false);
+    expect(w.game.deltas.isLooted('urbs:3,-2:insula-chest:0')).toBe(false);
+    expect(other).toBe('fresh');
+    expect(w.rpg.crime.bounty()).toBe(0);
+    expect(w.rpg.quests.status('ex-letter')!.running).toBe(false);
+    expect(w.rpg.sheet.hasFlag('trait-old-wound')).toBe(true);
+    // The sleep autosave asked for before New Game doesn't fire into the new game.
+    const saved = record(w.events, ['save:saved']);
+    w.step(1);
+    await w.rpg.save.idle();
+    expect(saved).toEqual([]);
+    // Saves of the new game carry its own play time.
+    w.step(60);
+    const r = await w.rpg.save.save('manual-2');
+    expect(r.meta!.playTime).toBe(1);
   });
 });
 
@@ -369,6 +442,68 @@ describe('storage', () => {
     expect(await ok.read('k')).toBeNull();
   });
 
+  it('FallbackStorage reads the newest copy: a save that fell back is not shadowed by an older primary copy', async () => {
+    let failWrites = false;
+    class Flaky extends MemoryStorage {
+      override async write(key: string, value: string) {
+        if (failWrites) throw new Error('QuotaExceededError');
+        return super.write(key, value);
+      }
+      override async remove(key: string) {
+        if (failWrites) throw new Error('IDB gone');
+        return super.remove(key);
+      }
+    }
+    const prim = new Flaky();
+    const fb = new MemoryStorage();
+    const s = new FallbackStorage(prim, fb);
+    await s.write('slot:quick', 'OLD');
+    await s.write('index', '{"v":1}');
+    failWrites = true;
+    await s.write('slot:quick', 'NEW');
+    await s.write('index', '{"v":2}');
+    expect(prim.map.get('slot:quick')).toBe('OLD'); // couldn't be removed
+    expect(await s.read('slot:quick')).toBe('NEW');
+    expect(await s.read('index')).toBe('{"v":2}');
+    // The primary recovers: its write takes over and the fallback copy goes.
+    failWrites = false;
+    await s.write('slot:quick', 'NEWER');
+    expect(fb.map.has('slot:quick')).toBe(false);
+    expect(await s.read('slot:quick')).toBe('NEWER');
+    // When the primary can drop its old copy on a fallback write, it does.
+    failWrites = true;
+    prim.remove = MemoryStorage.prototype.remove;
+    await s.write('slot:quick', 'LATEST');
+    await Promise.resolve();
+    expect(prim.map.has('slot:quick')).toBe(false);
+    expect(await s.read('slot:quick')).toBe('LATEST');
+  });
+
+  it('IdbSaveStorage settles on the transaction: an abort on commit (quota) rejects, and FallbackStorage falls back', async () => {
+    const idb = fakeIdb();
+    const store = new IdbSaveStorage('test', 'saves', idb.factory);
+    await store.write('k', 'one');
+    expect(await store.read('k')).toBe('one');
+    expect(await store.keys('')).toEqual(['k']);
+    idb.abortNextCommit = true;
+    await expect(store.write('k', 'two')).rejects.toThrow('QuotaExceededError');
+    expect(await store.read('k')).toBe('one');
+    // Through FallbackStorage: the aborted write lands in localStorage and reads back.
+    const fb = new MemoryStorage();
+    await fb.write('k', 'stale-fallback');
+    const s = new FallbackStorage(store, fb);
+    await s.write('k', 'three'); // succeeds in IDB: the stale fallback copy goes
+    expect(fb.map.has('k')).toBe(false);
+    idb.abortNextCommit = true;
+    await s.write('k', 'four');
+    expect(fb.map.get('k')).toBe('four');
+    expect(await s.read('k')).toBe('four');
+    // A connection closed by the browser is reopened.
+    idb.closeAll();
+    await store.write('k2', 'x');
+    expect(idb.opens).toBe(2);
+  });
+
   it('HybridStorage sends saves over the size guard to the big store, leaving a pointer', async () => {
     const local = new MemoryStorage();
     const big = new MemoryStorage();
@@ -397,3 +532,83 @@ describe('storage', () => {
     expect(r.error).toMatch(/storage error/);
   });
 });
+
+/**
+ * A tiny IndexedDB stand-in: requests succeed asynchronously, then the transaction completes — or,
+ * with `abortNextCommit`, aborts with a QuotaExceededError after the request has succeeded (what
+ * browsers do when the commit runs out of quota).
+ */
+function fakeIdb() {
+  const data = new Map<string, unknown>();
+  const conns: { closed: boolean; onclose: (() => void) | null }[] = [];
+  const ctl = {
+    abortNextCommit: false,
+    opens: 0,
+    closeAll() {
+      for (const c of conns) {
+        c.closed = true;
+        c.onclose?.();
+      }
+    },
+    factory: null as unknown as IDBFactory,
+  };
+  const later = (fn: () => void) => setTimeout(fn, 0);
+  function makeDb() {
+    const conn = {
+      closed: false,
+      onclose: null as (() => void) | null,
+      onversionchange: null as (() => void) | null,
+      close() {
+        conn.closed = true;
+      },
+      transaction(_store: string, mode: string) {
+        if (conn.closed) throw new Error('InvalidStateError');
+        const abort = mode === 'readwrite' && ctl.abortNextCommit;
+        if (abort) ctl.abortNextCommit = false;
+        const staged = new Map(data);
+        const t = { error: null as Error | null, oncomplete: null as (() => void) | null, onabort: null as (() => void) | null, onerror: null as (() => void) | null };
+        const request = (op: () => unknown) => {
+          const req = { result: undefined as unknown, error: null, onsuccess: null as (() => void) | null, onerror: null as (() => void) | null };
+          later(() => {
+            req.result = op();
+            req.onsuccess?.();
+            later(() => {
+              if (abort) {
+                t.error = new Error('QuotaExceededError');
+                t.onabort?.();
+              } else {
+                if (mode === 'readwrite') {
+                  data.clear();
+                  for (const [k, v] of staged) data.set(k, v);
+                }
+                t.oncomplete?.();
+              }
+            });
+          });
+          return req;
+        };
+        const objectStore = () => ({
+          get: (k: string) => request(() => staged.get(k)),
+          put: (v: unknown, k: string) => request(() => (staged.set(k, v), k)),
+          delete: (k: string) => request(() => (staged.delete(k), undefined)),
+          getAllKeys: () => request(() => [...staged.keys()]),
+        });
+        return Object.assign(t, { objectStore });
+      },
+    };
+    conns.push(conn);
+    return conn;
+  }
+  ctl.factory = {
+    open() {
+      ctl.opens++;
+      const req = { result: null as unknown, error: null, onsuccess: null as (() => void) | null, onerror: null as (() => void) | null, onupgradeneeded: null as (() => void) | null };
+      later(() => {
+        req.result = makeDb();
+        req.onsuccess?.();
+      });
+      return req;
+    },
+  } as unknown as IDBFactory;
+  return ctl;
+}
