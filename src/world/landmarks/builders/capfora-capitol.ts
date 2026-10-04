@@ -471,6 +471,7 @@ function buildTonans(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots
     }),
   );
   spots.push(spotAt('altar', 'shrine', 0, 0.05, sf - 1.5, 0, sf + 3, { label: 'Altar of Jupiter Tonans' }));
+  spots.push(spotAt('approach', 'spawn', 1.5, 0.05, sf - 9, 0, sf, { label: 'Before the Temple of Jupiter Tonans' }));
   altar(b, 1.8, 1.1, 1.0, T(0, 0.05, sf - 3.0), { detail });
 }
 
@@ -505,6 +506,7 @@ function buildTarpeian(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spo
     }),
   );
   spots.push(spotAt('lictor', 'npc', 9.5, y, z1 - 1.5, 5.5, z0, { label: 'A lictor on watch' }));
+  spots.push(spotAt('ledge', 'spawn', 5.5, y, z1 - 1.6, 5.5, z0, { label: 'The ledge of the Tarpeian Rock' }));
   // The cliff itself: a stratified tufa face over the steep stretch of the terrain, leaving the
   // Centum Gradus (the hundred steps down to the Forum Holitorium side) open at x ≈ −8 … −12.
   cliffFace(b, g, {

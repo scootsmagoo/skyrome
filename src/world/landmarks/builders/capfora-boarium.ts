@@ -168,6 +168,7 @@ function buildCarmentalis(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, 
   for (const x of [-(mid / 2 + pass + pier) + 0.55, mid / 2 + pass + pier - 0.55]) torch(ctx, b, x, 2.6, depth / 2, Math.PI);
   spots.push(spotAt('superstitious', 'npc', xR + 1.8, 0, depth / 2 + 3.5, xL, -depth, { label: 'A traveller who goes the long way round rather than through the Porta Scelerata' }));
   spots.push(spotAt('greens-seller', 'stall', xL - 4.2, 0, -depth / 2 - 4.5, xL, 0, { label: 'Greengrocer from the Forum Holitorium' }));
+  spots.push(spotAt('city-side', 'spawn', xL - 0.5, g(xL - 0.5, depth / 2 + 5), depth / 2 + 5, xL, 0, { label: 'Porta Carmentalis' }));
   spots.push(spotAt('gate-left', 'door', xL, 0, depth / 2 + 1.2, xL, -depth, { label: 'Porta Carmentalis', text }));
   spots.push(spotAt('gate-scelerata', 'door', xR, 0, depth / 2 + 1.2, xR, -depth, { label: 'Porta Scelerata — the wicked gate (superstitious people avoid it)' }));
 }

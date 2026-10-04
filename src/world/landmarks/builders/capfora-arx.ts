@@ -19,7 +19,7 @@ import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuilder, LandmarkContext } from '../types';
 import { makeLandmark, type Detail } from './capfora/build';
 import { roofPrism, templeFar } from './capfora/far';
-import { S, spotAt, type CapSpot } from './capfora/frame';
+import { S, relMatrix, spotAt, type CapSpot } from './capfora/frame';
 import { lampstand, plantTrees, torch, type TreeReq } from './capfora/life';
 import { altar, box, figure, footing, groundMin, inscription, post, span, stairsToGround, terrace } from './capfora/ornament';
 import { PAINT, friezeRelief, paint } from './capfora/paint';
@@ -88,6 +88,19 @@ function buildAsylum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots
       }),
     );
   }
+  // The Temple of Veiovis stands at the front of the Arx-side half (−x), its porch facing into the
+  // Asylum: that grove starts behind a paved forecourt before the temple, which a path joins to
+  // the walk.
+  const vt = veiovisInAsylum(ctx);
+  {
+    const zf0 = vt.front;
+    const zf1 = vt.front + 3.6;
+    for (let x = vt.x0 + 1.5; x < -walkW / 2; x += 3) {
+      const xe = Math.min(x + 3, -walkW / 2);
+      const y = Math.max(g(x, zf0), g(xe, zf1), g(x, zf1), g(xe, zf0));
+      span(b, 'paving_travertine', x, Math.min(g(x, zf0), g(xe, zf1)) - 0.3, zf0, xe, y + 0.06, zf1, I, true);
+    }
+  }
   // The two groves, each fenced by a low wall with a gap onto the walk: holm-oak-like laurels, olives,
   // a plane at the heart of each, cypresses along the fence.
   const rng = ctx.rng;
@@ -95,7 +108,7 @@ function buildAsylum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots
   for (const sx of [-1, 1]) {
     const x0 = sx < 0 ? -hw + 1.2 : walkW / 2 + 3.6;
     const x1 = sx < 0 ? -walkW / 2 - 3.6 : hw - 1.2;
-    const z0 = -hd + 1.5;
+    const z0 = sx < 0 ? Math.max(-hd + 1.5, vt.front + 4.6) : -hd + 1.5;
     const z1 = hd - 1.5;
     // Fence: low tufa wall on the three outer sides, the walk side open in the middle.
     const fy = (x: number, z: number) => g(x, z);
@@ -113,8 +126,8 @@ function buildAsylum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots
     seg(xo, z0, xo, z1);
     seg(Math.min(xo, xi), z0, Math.max(xo, xi), z0);
     seg(Math.min(xo, xi), z1, Math.max(xo, xi), z1);
-    seg(xi, z0, xi, -2.5);
-    seg(xi, 2.5, xi, z1);
+    if (z0 < -3.5) seg(xi, z0, xi, -2.5);
+    seg(xi, Math.max(2.5, z0), xi, z1);
     const n = detail === 'high' ? 16 : 9;
     for (let i = 0; i < n; i++) {
       const x = rng.range(Math.min(x0, x1) + 1.5, Math.max(x0, x1) - 1.5);
@@ -135,65 +148,104 @@ function buildAsylum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots
   // Herms of old gods along the walk.
   for (const z of [-hd + 6, hd - 6]) for (const sx of [-1, 1]) placeProp(new Draw(b), 'herm', sx * (walkW / 2 + 0.5), g(sx * 2, z), z, sx < 0 ? Math.PI / 2 : -Math.PI / 2);
   spots.push(spotAt('asylum', 'vista', 0, g(0, -hd + 2), -hd + 2, 0, hd, { label: 'The Asylum, between the two groves' }));
+  spots.push(spotAt('walk', 'spawn', 0, g(0, -hd + 3.5), -hd + 3.5, 0, 0, { label: 'The Asylum' }));
 }
 
 // ------------------------------------------------------------------ the Temple of Veiovis
 
+/**
+ * The Temple of Veiovis's footprint in the Asylum's frame: it stands behind the Tabularium, its
+ * porch facing into the Asylum (the two frames are half a turn apart). `front` is the porch's
+ * edge (+z in the Asylum frame), `x0`/`x1` its flanks.
+ */
+function veiovisInAsylum(ctx: Pick<LandmarkContext, 'game' | 'lm'>): { x0: number; x1: number; front: number; back: number } {
+  const m = relMatrix(ctx, 'temple-veiovis');
+  const hw = (30 * S) / 2;
+  const hd = (18 * S) / 2;
+  const a = new THREE.Vector3(-hw, 0, -hd).applyMatrix4(m);
+  const c = new THREE.Vector3(hw, 0, hd).applyMatrix4(m);
+  return { x0: Math.min(a.x, c.x), x1: Math.max(a.x, c.x), front: Math.max(a.z, c.z), back: Math.min(a.z, c.z) };
+}
+
 function buildVeiovis(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots: CapSpot[]) {
   const g = ctx.groundAt;
   const I = new THREE.Matrix4();
-  // A transverse cella (wider than deep) on a podium, with a tetrastyle porch in front.
+  // A transverse cella (wider than deep) on a podium, with a tetrastyle porch in front, its steps
+  // between the podium's wings. Sullan stuccoed tufa: white columns and walls over a red dado,
+  // travertine trim.
   const hw = (30 * S) / 2;
+  const hd = (18 * S) / 2;
   const P = 2.4 * S;
-  const cz0 = -1.0;
-  const cz1 = (18 * S) / 2;
+  const cz0 = 1.0; // cella front wall
+  const cz1 = hd;
   const pw = 9.0; // porch width
-  const pz0 = -(18 * S) / 2 + 0.2;
-  const yb = Math.min(-0.3, groundMin(g, -hw, pz0 - 3, hw, cz1) - 0.3);
+  const pf = -2.6; // porch front (top of the steps)
+  const t = 0.6;
+  const yb = Math.min(-0.3, groundMin(g, -hw, -hd, hw, cz1) - 0.3);
   // Podium: the cella block and the porch.
   podium(b, { outline: [[-hw, cz0 - 0.4], [hw, cz0 - 0.4], [hw, cz1], [-hw, cz1]], height: P, material: 'travertine', detail }, I);
-  podium(b, { outline: [[-pw / 2, pz0 + 2.7], [pw / 2, pz0 + 2.7], [pw / 2, cz0 - 0.3], [-pw / 2, cz0 - 0.3]], height: P, material: 'travertine', detail }, I);
+  podium(b, { outline: [[-pw / 2, pf], [pw / 2, pf], [pw / 2, cz0 - 0.3], [-pw / 2, cz0 - 0.3]], height: P, material: 'travertine', detail }, I);
   span(b, 'travertine', -hw, yb, cz0 - 0.4, hw, 0.02, cz1, I, false);
+  span(b, 'travertine', -pw / 2, yb, pf, pw / 2, 0.02, cz0, I, false);
   const { count, rise } = stepCount(P, 0.21);
-  stairs(b, { width: pw - 1.6, rise, run: 0.34, count, material: 'travertine' }, T(0, 0, pz0 + 2.7 - count * 0.34));
-  // Porch: four Corinthian columns of stuccoed tufa.
+  stairs(b, { width: pw - 1.6, rise, run: 0.34, count, material: 'travertine' }, T(0, 0, pf - count * 0.34));
+  for (const sx of [-1, 1]) span(b, 'travertine', sx * (pw / 2 - 0.8), 0, pf - count * 0.34, sx * pw / 2, P, pf, I, true);
+  // Porch: four Corinthian columns, 2.6 m clear of the cella wall.
   const H = 5.4;
   const D = H / 10;
-  for (let i = 0; i < 4; i++) column(b, { order: 'corinthian', D, height: H, material: 'plaster_white', trimMaterial: 'travertine', detail: 'low', fluted: true }, T(-pw / 2 + 0.8 + ((pw - 1.6) * i) / 3, P, pz0 + 3.3));
-  // Cella walls (enterable through the bronze door), roof ridges crossing.
-  const t = 0.6;
+  const zc = pf + 0.6;
+  for (let i = 0; i < 4; i++) column(b, { order: 'corinthian', D, height: H, material: 'plaster_white', trimMaterial: 'travertine', detail: 'low', fluted: true }, T(-pw / 2 + 0.8 + ((pw - 1.6) * i) / 3, P, zc));
+  // Cella walls (enterable through the bronze door) with a red dado and travertine pilasters.
   const wh = H + 0.9;
   span(b, 'plaster_white', -hw + 0.3, P, cz0, -1.4, P + wh, cz0 + t, I, true);
   span(b, 'plaster_white', 1.4, P, cz0, hw - 0.3, P + wh, cz0 + t, I, true);
   span(b, 'plaster_white', -1.4, P + 3.6, cz0, 1.4, P + wh, cz0 + t, I);
   span(b, 'plaster_white', -hw + 0.3, P, cz1 - t, hw - 0.3, P + wh, cz1, I, true);
   for (const sx of [-1, 1]) span(b, 'plaster_white', sx > 0 ? hw - 0.3 - t : -hw + 0.3, P, cz0, sx > 0 ? hw - 0.3 : -hw + 0.3 + t, P + wh, cz1, I, true);
+  for (const sx of [-1, 1]) span(b, 'plaster_red', sx < 0 ? -hw + 0.28 : 1.42, P, cz0 - 0.02, sx < 0 ? -1.42 : hw - 0.28, P + 1.0, cz0 + 0.02, I);
+  span(b, 'bronze', -1.2, P, cz0 + t * 0.5 - 0.04, -0.15, P + 3.4, cz0 + t * 0.5 + 0.04, I);
+  for (const x of [-hw + 0.3, -pw / 2 - 0.6, pw / 2 + 0.6, hw - 0.3]) span(b, 'travertine', x - 0.35, P, cz0 - 0.08, x + 0.35, P + wh, cz0 + 0.02, I);
   span(b, 'mosaic', -hw + 0.3 + t, P, cz0 + t, hw - 0.3 - t, P + 0.03, cz1 - t, I);
   span(b, 'wood_dark', -hw + 0.3, P + wh, cz0, hw - 0.3, P + wh + 0.2, cz1, I);
-  // Porch roof (ridge along z) and the cella's transverse roof (ridge along x).
-  span(b, 'travertine', -pw / 2, P + H, pz0 + 2.8, pw / 2, P + H + 0.9, cz0 + 0.2, I);
-  roofPrism(b, 'roof_tile', -pw / 2 - 0.3, pw / 2 + 0.3, pz0 + 2.6, cz0 + 0.5, P + H + 0.9, 1.3, I);
+  // Entablature: architrave and a painted frieze along the cella front and over the porch.
+  span(b, 'travertine', -hw + 0.2, P + wh - 0.7, cz0 - 0.12, hw - 0.2, P + wh + 0.25, cz0 + 0.02, I);
+  span(b, paint(PAINT.redOchre, 0.85), -hw + 0.25, P + wh - 0.42, cz0 - 0.135, hw - 0.25, P + wh - 0.05, cz0 - 0.125, I);
+  span(b, 'travertine', -pw / 2, P + H, pf + 0.1, pw / 2, P + H + 0.9, cz0 + 0.2, I);
+  span(b, paint(PAINT.blue, 0.85), -pw / 2 + 0.05, P + H + 0.35, pf + 0.085, pw / 2 - 0.05, P + H + 0.75, pf + 0.095, I);
+  // Porch roof (ridge along z, pediment in front) and the cella's transverse roof (ridge along x).
+  roofPrism(b, 'roof_tile', -pw / 2 - 0.3, pw / 2 + 0.3, pf - 0.1, cz0 + 0.5, P + H + 0.9, 1.3, I);
   {
     const shape = new THREE.Shape([new THREE.Vector2(-pw / 2 - 0.3, 0), new THREE.Vector2(pw / 2 + 0.3, 0), new THREE.Vector2(0, 1.3)]);
     const gg = new THREE.ShapeGeometry(shape);
     gg.rotateY(Math.PI);
-    gg.translate(0, P + H + 0.9, pz0 + 2.58);
+    gg.translate(0, P + H + 0.9, pf - 0.12);
     b.add(gg, paint(PAINT.redOchre, 0.85), I);
+    // Terracotta acroteria at the apex and the corners of the pediment.
+    for (const [x, y] of [[0, 1.3], [-pw / 2 - 0.2, 0.05], [pw / 2 + 0.2, 0.05]] as const) box(b, 'terracotta', x, P + H + 0.9 + y + 0.25, pf - 0.05, 0.35, 0.5, 0.2, I);
   }
-  const rg = new THREE.BoxGeometry(2 * hw, 0.2, 0.1);
-  void rg;
   roofPrism(b, 'roof_tile', cz0 - 0.4, cz1 + 0.3, -hw - 0.3, hw + 0.3, P + wh + 0.2, 1.6, mul(I, new THREE.Matrix4().makeRotationY(-Math.PI / 2)));
   // Cult statue: young Veiovis with his arrows, the she-goat beside him.
-  figure(b, 'nude', TRS(0, P, cz1 - 1.6, 0, 0, 0), { scale: 1.6, material: 'marble', detail });
-  box(b, 'marble', 0.0, P + 0.15, cz1 - 1.6, 1.2, 0.3, 0.9, I, true);
+  const zs = cz1 - t - 0.8;
+  figure(b, 'nude', TRS(0, P + 0.3, zs, 0, 0, 0), { scale: 1.6, material: 'marble', detail });
+  box(b, 'marble', 0.0, P + 0.15, zs, 1.2, 0.3, 0.9, I, true);
   const goat = new THREE.SphereGeometry(0.32, 8, 6);
   goat.scale(1.5, 0.9, 0.8);
-  goat.translate(1.1, P + 0.6, cz1 - 1.5);
+  goat.translate(1.1, P + 0.6, zs + 0.1);
   b.add(goat, 'marble', I);
-  box(b, 'bronze', -0.5, P + 1.9, cz1 - 1.9, 0.04, 0.8, 0.04, I);
-  spots.push(spotAt('cult-statue', 'shrine', 0, P, cz1 - 4.2, 0, cz1 - 1.6, { label: 'Veiovis, the young anti-Jupiter, with his arrows and the she-goat' }));
+  box(b, 'bronze', -0.5, P + 2.2, zs - 0.3, 0.04, 0.8, 0.04, I);
+  // The dedication of the Sullan rebuild on the architrave (the text is a reconstruction).
+  const text = inscription(b, ['VEDIOVI · PATRI · SACRVM'], pw - 1.6, 0.4, T(0, P + H + 0.55, pf + 0.06), 'carved', { depth: 0.02 });
+  spots.push(spotAt('cult-statue', 'shrine', 0, P, cz0 + t + 0.7, 0, zs, { label: 'Veiovis, the young anti-Jupiter, with his arrows and the she-goat' }));
   spots.push(spotAt('porch', 'door', 0, P, cz0 - 1.0, 0, cz0 + 2, { label: 'Temple of Veiovis' }));
-  void g;
+  spots.push(
+    spotAt('dedication', 'inscription', 0, g(0, pf - count * 0.34 - 2.4), pf - count * 0.34 - 2.4, 0, pf, {
+      label: 'Temple of Veiovis',
+      text,
+      gloss: 'Sacred to Father Vediovis. The young god of the Asylum holds arrows, a she-goat at his side: some call him the Jupiter of the underworld, and offer him a goat in the rite of the dead. (Reconstructed text.)',
+    }),
+  );
+  // On the forecourt the Asylum lays before the steps.
+  spots.push(spotAt('forecourt', 'spawn', 1.2, g(1.2, pf - count * 0.34 - 2.0), pf - count * 0.34 - 2.0, 0, 0, { label: 'Before the Temple of Veiovis' }));
 }
 
 // ------------------------------------------------------------------ Juno Moneta and the geese
@@ -371,6 +423,7 @@ function buildAuguraculum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, 
   span(b, 'tufa', 0.25, 0.85, -0.4, 0.4, 1.4, 0.4, undefined);
   spots.push(spotAt('augur-seat', 'sit', 0, 0.85, 0, -10, 0, { label: "The augur's seat" }));
   spots.push(spotAt('augur', 'npc', -1.2, 0.4, 1.2, -10, 0, { label: 'An augur watching the birds, lituus in hand' }));
+  spots.push(spotAt('approach', 'spawn', 1.2, g(1.2, -h - 3), -h - 3, 0, 0, { label: 'The augurs\' platform' }));
   spots.push(spotAt('view-campus', 'vista', 0, 0.4, h - 0.6, 0, h + 40, { label: 'The view north over the Campus Martius', gloss: 'From the auguraculum the augurs mark out the sky and watch for the flight of birds.' }));
   void detail;
 }
@@ -458,6 +511,7 @@ function buildBibulus(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spot
     }),
   );
   spots.push(spotAt('via-lata', 'vista', 2.5, 0, -d / 2 - 4, 6, -40, { label: 'Start of the Via Flaminia' }));
+  spots.push(spotAt('street', 'spawn', -1.5, g(-1.5, -d / 2 - 5), -d / 2 - 5, 0, -d / 2, { label: 'The Tomb of Bibulus' }));
 }
 
 // ------------------------------------------------------------------ registration

@@ -115,6 +115,8 @@ describe('capfora landmarks', () => {
       expect(tl).toBeLessThanOrEqual(th);
       expect(hi.colliders.length).toBeGreaterThan(0);
       expect(hi.spots?.length ?? 0).toBeGreaterThan(0);
+      // Where `&at=<id>` (and the gameplay team) put the player: one arrival point per landmark.
+      expect(hi.spots?.some((s) => s.kind === 'spawn'), `${id} has a spawn spot`).toBe(true);
       for (const s of hi.spots ?? []) expect(Number.isFinite(s.position.x + s.position.y + s.position.z)).toBe(true);
     });
   }

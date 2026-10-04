@@ -375,6 +375,7 @@ function buildMinerva(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spot
     }),
   );
   spots.push(spotAt('altar', 'shrine', 0, Y0, sf.z - 1.5, 0, sf.z + 5, { label: 'Altar of Minerva' }));
+  spots.push(spotAt('forum', 'spawn', 1.5, Y0, sf.z - 8, 0, sf.z, { label: 'Before the Temple of Minerva' }));
   if (res.interior) spots.push(spotAt('cult-statue', 'shrine', 0, res.interior.y + Y0, res.interior.z1 + dz - 5, 0, res.interior.z1 + dz, { label: 'Minerva, patron of crafts' }));
 }
 

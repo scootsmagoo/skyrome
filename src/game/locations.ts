@@ -172,6 +172,32 @@ export function discoveryRadius(lm: LandmarkData): number {
   return Math.max(6, footprintRadius(lm) * WORLD_SCALE);
 }
 
+/**
+ * Walled precincts (the imperial fora): long narrow rectangles that touch each other, so a circle
+ * round one covers the next (standing in the Forum of Caesar was being "in" the Forum of Nerva).
+ * They count as entered when you are inside their outline, and are discovered on entry rather
+ * than on sight: their walls hide them until you are in.
+ */
+export function isEnclosure(lm: Pick<Landmark, 'category' | 'footprint'>): boolean {
+  return lm.category === 'forum' && lm.footprint.kind === 'rect';
+}
+
+/** A rectangular footprint's corners in game meters (the atlas rotation convention). */
+export function footprintOutline(lm: Pick<Landmark, 'center' | 'rotation' | 'footprint'>): [number, number][] | undefined {
+  const fp = lm.footprint;
+  if (fp.kind !== 'rect') return undefined;
+  const th = (lm.rotation * Math.PI) / 180;
+  const c = Math.cos(th);
+  const s = Math.sin(th);
+  const out: [number, number][] = [];
+  for (const [lx, lz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+    const x = (lx * fp.w) / 2;
+    const z = (lz * fp.d) / 2;
+    out.push(toGame(lm.center[0] + x * c - z * s, lm.center[1] + x * s + z * c));
+  }
+  return out;
+}
+
 /** One atlas landmark → LocationDef (game meters), with player-facing names. */
 export function landmarkLocation(lm: Landmark, heightAt?: (x: number, z: number) => number): LocationDef {
   const [x, z] = toGame(lm.center[0], lm.center[1]);
@@ -182,6 +208,7 @@ export function landmarkLocation(lm: Landmark, heightAt?: (x: number, z: number)
     latin: displayLatin(lm.latin, name),
     position: { x, y: heightAt?.(x, z), z },
     radius: discoveryRadius(lm as unknown as LandmarkData),
+    area: isEnclosure(lm) ? footprintOutline(lm) : undefined,
     mapMarker: markerFor(lm.category),
     parent: lm.within,
     discoverable: isDiscoverable(lm),

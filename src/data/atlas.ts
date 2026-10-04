@@ -1096,11 +1096,11 @@ export const LANDMARKS: Landmark[] = [
   },
   {
     id: 'temple-veiovis', name: 'Temple of Veiovis', latin: 'Aedes Veiovis', category: 'temple',
-    center: [-78, -25], rotation: 216, footprint: { kind: 'rect', w: 30, d: 18 }, height: 15, baseElevation: 37,
-    region: 'regio-viii', status113: 'complete', within: 'tabularium', priority: 2, confidence: 'high',
+    center: [-87, -72], rotation: 300, footprint: { kind: 'rect', w: 30, d: 18 }, height: 15, baseElevation: 37,
+    region: 'regio-viii', status113: 'complete', within: 'asylum', priority: 2, confidence: 'high',
     dates: '196/192 BC; Sullan rebuild',
     description: 'Temple of the young, sinister \'anti-Jupiter\', with a cult statue holding arrows beside a she-goat.',
-    builderNotes: 'Under the later Palazzo Senatorio, in the Asylum. FLAG on facing (216 SW or ~300). The cella is wider than deep. Transverse cella: the footprint is wider than deep. Stands at Asylum level (~37 m) right behind the Tabularium, inside its footprint envelope.',
+    builderNotes: 'Under the later Palazzo Senatorio, in the Asylum. FLAG on facing (216 SW or ~300): ~300 used, the porch facing the Asylum. The cella is wider than deep. Transverse cella: the footprint is wider than deep. Stands at Asylum level (~37 m) right behind the Tabularium: its back 1.5 m off the Tabularium\'s rear (NW) wall, N of the passage through it (moved out of the Tabularium\'s footprint, where it was buried; was [-78, -25] rot 216).',
   },
   {
     id: 'temple-juno-moneta', name: 'Temple of Juno Moneta', latin: 'Aedes Iunonis Monetae', category: 'temple',

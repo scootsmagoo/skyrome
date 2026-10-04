@@ -330,6 +330,7 @@ function buildVenusGenetrix(ctx: LandmarkContext, b: MeshBuilder, detail: Detail
     }),
   );
   spots.push(spotAt('rostrum', 'vista', 0, Y0 + P, front + 0.8, 0, front - 30, { label: 'The rostrum of Venus Genetrix' }));
+  spots.push(spotAt('forum', 'spawn', 3.6, Y0, front - 6.5, 0, front, { label: 'Before the Temple of Venus Genetrix' }));
   spots.push(spotAt('workmen', 'npc', s.x1 + 0.6, Y0, s.z0 + 4, s.x1 + 0.6, s.z0 + 10, { label: 'Marble workers finishing the cupid frieze' }));
   if (res.interior) {
     const it = res.interior;
@@ -342,7 +343,6 @@ function buildVenusGenetrix(ctx: LandmarkContext, b: MeshBuilder, detail: Detail
 
 function buildBasilica(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots: CapSpot[]) {
   const g = ctx.groundAt;
-  void spots;
   const I = new THREE.Matrix4();
   const hw = (46 * S) / 2;
   const hd = (23 * S) / 2;
@@ -366,6 +366,7 @@ function buildBasilica(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spo
     const xCut = Math.max(-hw, Math.min(hw, nw.x + 0.7));
     const { count, rise } = stepCount(fy - Yf, 0.21);
     stairs(b, { width: hw - xCut, rise, run: 0.34, count, material: 'travertine' }, T((xCut + hw) / 2, Yf, z0 - count * 0.34));
+    spots.push(spotAt('forum-steps', 'spawn', (xCut + hw) / 2, Yf, z0 - count * 0.34 - 1.6, (xCut + hw) / 2, z0, { label: 'Steps up to the Basilica Argentaria' }));
   }
   // Two-storey arcade of tufa piers with travertine trim along the NE front.
   const bays = 9;

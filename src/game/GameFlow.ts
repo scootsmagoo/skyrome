@@ -445,6 +445,10 @@ export class GameFlow implements System {
   spawnPoint(at: string | null = null): { position: THREE.Vector3; heading: number } {
     const g = this.game;
     if (at) {
+      // The landmark's own arrival point (an entrance, a street in front) when its builder has
+      // one: 18 m along the facade normal can fall inside a large precinct's walls.
+      const own = g.landmarks?.get(at)?.spots.find((sp) => sp.kind === 'spawn');
+      if (own) return { position: own.position.clone().setY(own.position.y + 0.05), heading: own.heading ?? 0 };
       const s = spawnAtLandmark(g, at, 18);
       if (s) return s;
       console.warn(`[flow] unknown landmark "${at}" for &at=; spawning at the Porta Capena`);

@@ -446,6 +446,7 @@ function buildMarsUltor(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, sp
   );
   spots.push(spotAt('altar', 'shrine', 0, Y0, az - 2.2, 0, az, { label: 'Altar of Mars Ultor' }));
   spots.push(spotAt('priest', 'npc', 1.6, Y0, az - 0.8, 0, az - 6, { label: 'Priest at the altar' }));
+  spots.push(spotAt('forum-square', 'spawn', -2.5, Y0, az - 10, 0, az, { label: 'Before the Temple of Mars Ultor' }));
   const st = res.stairTop.clone().add(new THREE.Vector3(0, Y0, dz));
   spots.push(spotAt('steps-top', 'vista', 0, st.y, st.z + 0.6, 0, st.z - 40, { label: 'Top of the steps of Mars Ultor' }));
   if (res.interior) {

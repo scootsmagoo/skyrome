@@ -123,6 +123,9 @@ export function spawnAtLandmark(game: Game, id: string, forward = 0, side = 0): 
   const x = gx + Math.sin(th) * forward + Math.cos(th) * side;
   const z = gz - Math.cos(th) * forward + Math.sin(th) * side;
   const y = game.heightmap ? game.heightmap.heightAt(x, z) : 0;
+  // Ray casts only see colliders added before the last physics step: right after the world is
+  // built the ray would miss every raised floor and podium and drop the player under them.
+  game.physics.step(1 / 60);
   const ground = game.physics.groundHeight(x, z, y + 80, 200);
   return { position: new THREE.Vector3(x, (ground ?? y) + 0.05, z), heading: Math.atan2(gx - x, gz - z) };
 }
