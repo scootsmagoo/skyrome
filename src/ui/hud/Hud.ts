@@ -118,6 +118,11 @@ export class Hud {
     }
   }
 
+  /** Flash a resource bar: a cost was refused (no stamina to attack or dodge, §15.1). */
+  flashBar(kind: 'health' | 'stamina' | 'pietas') {
+    this[kind].flash();
+  }
+
   /** Brief hint for mouse-look when the pointer isn't captured (trackpad players use arrows). */
   showLookHint() {
     const b = this.game.input.bindings;
@@ -159,7 +164,8 @@ export class Hud {
       const r = vitals[id];
       const frac = r.max > 0 ? r.current / r.max : 0;
       const changed = this[id].set(frac, dt);
-      setClass(wrap, 'is-visible', always || combat || changed || frac < 0.995);
+      const flashing = this[id].flashing(dt);
+      setClass(wrap, 'is-visible', always || combat || changed || flashing || frac < 0.995);
     }
 
     this.target.update(sources.target?.() ?? null, dt);

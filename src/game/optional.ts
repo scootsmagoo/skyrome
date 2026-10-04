@@ -7,6 +7,8 @@
  *   src/combat/index.ts | install.ts            → installCombat(game)        (game.combat)
  *   src/npc/population/index.ts | src/npc/install.ts | src/npc/life/index.ts
  *                                                → installPopulation / installNpcs / installNpcLife
+ *   src/content/install.ts                       → installContent(game)       (game.content: shrines, wall texts,
+ *                                                  street containers, lamps along the golden path; docs/modules/content.md)
  */
 import type { Game } from '../core/Game';
 
@@ -14,6 +16,7 @@ type Mod = Record<string, unknown>;
 
 const combat = import.meta.glob<Mod>(['../combat/index.ts', '../combat/install.ts']);
 const npcs = import.meta.glob<Mod>(['../npc/population/index.ts', '../npc/install.ts', '../npc/life/index.ts', '../npc/life/install.ts']);
+const content = import.meta.glob<Mod>(['../content/install.ts']);
 
 async function run(game: Game, mods: Record<string, () => Promise<Mod>>, label: string): Promise<string[]> {
   const done: string[] = [];
@@ -34,10 +37,11 @@ async function run(game: Game, mods: Record<string, () => Promise<Mod>>, label: 
 }
 
 export async function installOptionalModules(game: Game): Promise<string[]> {
-  const g = game as Game & { combat?: unknown; population?: unknown };
+  const g = game as Game & { combat?: unknown; population?: unknown; content?: unknown };
   const out: string[] = [];
   if (!g.combat) out.push(...(await run(game, combat, 'combat')));
   if (!g.population) out.push(...(await run(game, npcs, 'npc')));
+  if (!g.content) out.push(...(await run(game, content, 'content')));
   if (out.length) console.info(`[flow] installed ${out.join(', ')}`);
   return out;
 }

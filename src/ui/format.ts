@@ -24,18 +24,36 @@ const ORDINALS_EN = [
   'seventh', 'eighth', 'ninth', 'tenth', 'eleventh', 'twelfth',
 ];
 
+export interface Daylight {
+  /** Sunrise and sunset, local solar hours. */
+  rise: number;
+  set: number;
+}
+
+let daylightSource: () => Daylight = () => ({ rise: 6, set: 18 });
+
 /**
- * Roman time of day. Daylight is twelve horae from sunrise (taken as 06:00, so hora sexta ends at
- * noon); the night is four military watches (vigiliae) of three hours.
+ * Where the day starts and ends for `romanHour` (default 06:00–18:00). The game sets the real
+ * sunrise and sunset of the current date (in May about 04:54–19:06).
  */
-export function romanHour(hour: number): { latin: string; english: string } {
+export function setDaylight(source: () => Daylight) {
+  daylightSource = source;
+}
+
+/**
+ * Roman time of day. Daylight is twelve equal horae from sunrise to sunset (long in summer: hora
+ * sexta always ends at noon); the night is four equal military watches (vigiliae).
+ */
+export function romanHour(hour: number, day: Daylight = daylightSource()): { latin: string; english: string } {
   const h = ((hour % 24) + 24) % 24;
-  if (h >= 6 && h < 18) {
-    const i = Math.floor(h - 6);
+  const { rise, set } = day;
+  if (h >= rise && h < set) {
+    const i = Math.min(11, Math.floor(((h - rise) / (set - rise)) * 12));
     return { latin: `Hora ${ORDINALS[i]}`, english: `the ${ORDINALS_EN[i]} hour` };
   }
-  const nightHours = h >= 18 ? h - 18 : h + 6;
-  const w = Math.min(3, Math.floor(nightHours / 3));
+  const night = 24 - (set - rise);
+  const into = h >= set ? h - set : h + 24 - set;
+  const w = Math.min(3, Math.floor((into / night) * 4));
   const latin = ['Prima', 'Secunda', 'Tertia', 'Quarta'][w];
   return { latin: `${latin} vigilia`, english: `the ${ORDINALS_EN[w]} watch of the night` };
 }

@@ -13,6 +13,7 @@ import { buildPlaza } from '../../../arch/fabric';
 import { placeProp } from '../../../arch/props';
 import type { LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import { altar, centredTemple, draw, offsetAway, riverEnv, simpleColonnade, spot, V } from './river-kit';
+import { riverLife } from './river-life';
 
 // ------------------------------------------------------------------ Aesculapius
 
@@ -52,7 +53,8 @@ function templeAesculapius(ctx: LandmarkContext) {
     d.span('wood', x - 0.4, 0.25, z - 0.95, x + 0.4, 0.45, z + 0.95, { collide: true });
     d.span('fabric_white', x - 0.38, 0.45, z - 0.9, x + 0.38, 0.52, z + 0.9, { shadow: false });
     if (k % 2 === 0) d.ellipsoid('fabric_ochre', x, 0.62, z - 0.2, 0.22, 0.12, 0.6, { seg: [8, 5] }); // a sleeper under a blanket
-    spots.push(spot(`temple-aesculapius:incubant-${k}`, k % 2 === 0 ? 'npc' : 'sit', x, 0.25, z, -Math.PI / 2));
+    // On the pallet (its top at 0.45 m, the mattress 0.52 m).
+    spots.push(spot(`temple-aesculapius:incubant-${k}`, k % 2 === 0 ? 'npc' : 'sit', x, 0.52, z, -Math.PI / 2));
   }
   // Shelves of terracotta anatomical votives (legs, feet, eyes, hands, wombs) on the back wall.
   const sx = px0 + pd - 0.18;
@@ -66,12 +68,14 @@ function templeAesculapius(ctx: LandmarkContext) {
       else d.cyl('terracotta', sx - 0.08, y + 0.12, z, 0.05, 0.18, 6); // hand / finger
     }
   }
-  spots.push(spot('temple-aesculapius:votives', 'container', sx - 0.9, 0.25, (pz0 + pz1) / 2, Math.PI / 2));
+  // In front of the row of pallets, facing the shelves on the back wall.
+  spots.push(spot('temple-aesculapius:votives', 'container', px0 + pd - 1.9, 0.25, (pz0 + pz1) / 2, Math.PI / 2));
   // The sacred well (puteal) at the portico's end and a thank-offering inscription.
   placeProp(d, 'puteal', px0 + pd / 2, 0.25, pz1 + 1.6, 0, { variant: 1 });
   spots.push(spot('temple-aesculapius:well', 'npc', px0 + pd / 2 - 1.1, 0.25, pz1 + 1.6, Math.PI / 2));
   inscriptionPanel(b, { lines: ['AESCVLAPIO·DEO', 'VOTVM·SOLVIT·LIBENS·MERITO'], width: 1.5, height: 0.6, style: 'carved' }, T(px0 + pd - 0.01, 3.1, (pz0 + pz1) / 2).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)), { depth: 0.04 });
   spots.push(spot('temple-aesculapius:ex-voto', 'inscription', px0 + pd - 1.6, 0.25, (pz0 + pz1) / 2 + 0.8, Math.PI / 2));
+  riverLife(ctx, spots);
   return { object: b.build(lm.id), colliders: b.colliders, spots };
 }
 
@@ -214,10 +218,12 @@ function islandProw(ctx: LandmarkContext) {
   for (const s of [-1, 1]) ox.rod('travertine', V(s * 0.2, top - 1.3, 0.74), V(s * 0.55, top - 1.0, 0.72), 0.06, 5, { rTop: 0.02 });
   const spots: Spot[] = [
     spot('island-prow:bow', 'vista', tip[0] - out.x * 2.5, h1 - 0.02, tip[1] - out.y * 2.5, Math.atan2(out.x, out.y)),
-    spot('island-prow:relief', 'inscription', (ra[0] + rb[0]) / 2, h1, (ra[1] + rb[1]) / 2, rAng),
+    // On the deck a metre inside the bulwark, looking out and down over the carved panel.
+    spot('island-prow:relief', 'inscription', (ra[0] + rb[0]) / 2 - unit[relI][0], h1 - 0.02, (ra[1] + rb[1]) / 2 - unit[relI][1], rAng),
   ];
   void inscriptionPanel;
   void extrudePolygon;
+  riverLife(ctx, spots);
   return { object: b.build(lm.id), colliders: b.colliders, spots };
 }
 
@@ -252,6 +258,7 @@ function islandObelisk(ctx: LandmarkContext) {
     spot('island-obelisk:glyphs', 'inscription', 0, 0, -2.2, 0),
     spot('island-obelisk:mast', 'vista', 2.2, 0, 0, -Math.PI / 2),
   ];
+  riverLife(ctx, spots);
   return { object: b.build(lm.id), colliders: b.colliders, spots };
 }
 

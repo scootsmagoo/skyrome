@@ -7,23 +7,17 @@ import { installAudio, type AudioEngine, type Surface } from '../audio';
 import type { Game, System } from '../core/Game';
 import * as atlas from '../data/atlas';
 import type { Surface as TerrainSurface } from '../world/terrain/Terrain';
+import { footstepSound } from '../world/terrain/surface';
 import { WORLD_SCALE as K, toGame } from '../world/coords';
 
-/** Terrain surface → footstep surface. Above the terrain (paving, steps, floors) is stone. Pure. */
+/**
+ * Terrain surface → footstep surface: the terrain module's own mapping (mud → dirt, gravel and
+ * sand → gravel, paving and rock → stone), except that anything above the terrain (paving, steps,
+ * floors, bridges) is stone. Pure.
+ */
 export function footstepSurface(terrain: TerrainSurface | null, aboveGround: number): Surface {
   if (aboveGround > 0.15 || !terrain) return 'stone';
-  switch (terrain) {
-    case 'grass':
-      return 'grass';
-    case 'dirt':
-      return 'dirt';
-    case 'sand':
-      return 'gravel';
-    case 'water':
-      return 'water';
-    default:
-      return 'stone';
-  }
+  return footstepSound(terrain);
 }
 
 /** Crowds and markets by atlas landmark: [id, layer, volume, reverb]. */

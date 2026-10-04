@@ -1,4 +1,5 @@
 /** Skill books (excerpts in translation; all exist by 113) and curse tablets — docs/GDD.md §8.6. */
+import { T6_DEFIXIO_PRASINA } from '../../../content/texts';
 import type { ItemDef } from '../../types';
 import { book } from './build';
 
@@ -23,6 +24,7 @@ export const BOOKS: ItemDef[] = [
   book('liber-satyricon', 'Petronius, Satyricon (fragment)', 'Satyricon', 1, 'pickpocket', 'A scandalous half-burned novel of thieves and freedmen. (Extra.)', '…and while everyone stared at the roast boar, Ascyltos slipped a silver cup into the fold of his toga, and I a napkin full of cakes.\n\nTrimalchio, who had been a slave himself, was too busy counting his estates to notice.'),
   book('liber-cynegeticus', 'Xenophon, On Hunting', 'Cynegeticus', 5, 'archery', 'An Athenian’s advice on hounds, nets and the hunting bow. (Extra.)', 'The hare runs in circles and returns to its form; set your nets where it began.\n\nThe young man who hunts learns to bear cold and heat, and to aim true when his breath is short.', ['greek']),
   book('liber-res-gestae', 'The Deeds of the Divine Augustus', 'Res Gestae Divi Augusti', 1, undefined, 'A copy of the inscription on Augustus’ mausoleum. (Extra.)', 'In my sixth consulship I restored eighty-two temples of the gods in the city, neglecting none that needed repair at that time.\n\nThe doors of Janus Quirinus, which our ancestors ordered closed whenever there was peace by land and sea, were closed three times while I was princeps.'),
-  { id: 'defixio-prasina', name: 'Curse Tablet against the Greens', latin: 'defixio', type: 'book', weight: 0.2, value: 1, icon: '✠', tags: ['curse'], description: 'A folded lead tablet pierced by a nail, scratched with a curse on the Green team. (Extra.)', text: 'I adjure you, demon, whoever you are: from this hour, this day, this moment, bind the horses of the Green and their driver. Bind their legs, their running, their victory. Now, now, quickly, quickly!' },
+  // Text T6 of docs/CONTENT.md §7; value 2 as. (§4.11).
+  { id: 'defixio-prasina', name: 'Curse Tablet against the Greens', latin: 'defixio', type: 'book', weight: 0.2, value: 2 / 16, icon: '✠', tags: ['curse', 'tablet'], description: 'A thin rolled lead sheet pierced by a nail, cursing the horses and the driver of the Greens. It works only on those who learn of it.', text: T6_DEFIXIO_PRASINA },
   { id: 'defixio-furtum', name: 'Curse Tablet against a Bath Thief', latin: 'defixio', type: 'book', weight: 0.2, value: 1, icon: '✠', tags: ['curse'], description: 'A plea to Mercury to punish whoever stole a cloak at the baths. (Extra.)', text: 'To the god Mercury I give the one who stole my hooded cloak, whether man or woman, slave or free. Let him not sleep, nor eat, nor drink, nor sit, nor lie, until he brings it to your temple.' },
 ];
