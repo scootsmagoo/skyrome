@@ -88,7 +88,7 @@ Every landmark exposes `spots` (kinds `inscription`, `vista`, `shrine`, `contain
 gives the Latin, an English translation and a confidence grade ([A] surviving text, [B] attested in
 substance, [C] the game's). Spots for CONTENT.md: `castor-strongroom` (door of `castor-loculi`, W
 flank), `castor-aedituus`, `castor-chrysippus`, `castor-libaria`, `signum-vortumni`,
-`lectica-statio-forum`, `cloaca-grate-aemiliae`, `statio-cohortium-urbanarum`,
+`lectica-statio-forum`, `curia-forecourt` (street level, at the foot of the Curia's stair: content's `curia-julia:front`), `cloaca-grate-aemiliae`, `statio-cohortium-urbanarum`,
 `tabernae-aemiliae-notice` (T10), `basilica-iulia-lampoon` (T5), `rostra-orator` (the crier),
 `spawn-sacra-via` (v0.0 spawn by the Arch of Titus).
 

@@ -143,7 +143,10 @@ export const BIBLE_SPOTS: LocationDef[] = [
   spot('taberna-collapsa-puteus', 'Light well of the burned taberna', [-20, 275], 3, { parent: 'taberna-collapsa' }),
   spot('compitum-vici-tusci', 'Crossroads Shrine of the Vicus Tuscus', [-33, 290], 3, { mapMarker: 'temple', discoverable: true }),
   spot('signum-vortumni', 'Statue of Vortumnus', [92, 64], 3, { latin: 'signum Vortumni', mapMarker: 'temple', discoverable: true }),
-  spot('castor-loculi', 'Strongrooms of Castor', [88, 98], 5, { parent: 'temple-castor-pollux', latin: 'loculi aedis Castoris', discoverable: true }),
+  // The deposit vaults (the bible: 88, 98, which falls on the built podium, 4.2 m up): the fallback is the Forum
+  // builder's own `castor-strongroom`, 1.2 m in front of the barred door in the podium's W flank, on the paving of
+  // the Vicus Tuscus (forum-temples.ts), so the quest and the people at the vaults stand in the street.
+  { id: 'castor-loculi', name: 'Strongrooms of Castor', position: atLandmark('temple-castor-pollux', -0.1, -10.7), radius: 5, discoverable: true, parent: 'temple-castor-pollux', latin: 'loculi aedis Castoris' },
   spot('tabernae-aemiliae', 'Shops of the Basilica Paulli', [135, 12], 8, { parent: 'basilica-aemilia', latin: 'tabernae', mapMarker: 'market' }),
   spot('basilica-julia-gradus', 'Steps of the Basilica Julia', [44, 44], 10, { parent: 'basilica-julia' }),
   spot('cloaca-grate-aemiliae', 'Drain Grate by the Basilica Paulli', [118, 22], 3),
@@ -174,7 +177,10 @@ export const BIBLE_SPOTS: LocationDef[] = [
   spot('fullonica-velabri', 'Fullery of the Velabrum', [-150, 320], 5, { latin: 'Fullonica', mapMarker: 'shop', discoverable: true }),
   spot('pistrinum-velabri', 'Bakery of the Velabrum', [-95, 395], 5, { latin: 'Pistrinum', mapMarker: 'shop', discoverable: true }),
   spot('officina-columnae', 'Carvers’ Hut at the Column', [-18, -366], 5, { parent: 'column-trajan' }),
-  spot('taberna-vestiarii', 'Clothier in the Horrea Agrippiana', [28, 205], 4, { parent: 'horrea-agrippiana', mapMarker: 'shop', discoverable: true }),
+  // The bible's (28, 205) is in the Horrea's flank, where the Forum builder now has its row of tabernae on the Vicus
+  // Tuscus; the clothier's is the first (textile) one, and the fallback is its own `horrea-agrippiana-taberna-0`: the
+  // shopkeeper's place on the raised floor of the shop, open to the walk.
+  { id: 'taberna-vestiarii', name: 'Clothier in the Horrea Agrippiana', position: atLandmark('horrea-agrippiana', -14.4, -15.8), radius: 4, discoverable: true, parent: 'horrea-agrippiana', mapMarker: 'shop' },
   spot('domus-vettii', 'House of Sex. Vettius Crispinus', [545, -30], 10, { mapMarker: 'house', discoverable: true }),
   spot('fullonica-suburana', 'The Fullery off the Clivus Suburanus', [620, -250], 6),
   spot('stabula-factionum', 'Stables of the Circus Factions', [-1040, -470], 25, { latin: 'stabula IIII factionum', mapMarker: 'camp', discoverable: true }),
@@ -278,9 +284,16 @@ export const FRONT_LANDMARK_IDS = [
 /** The `:front` spot id of a building. */
 export const front = (id: (typeof FRONT_LANDMARK_IDS)[number]) => `${id}:front`;
 
+/**
+ * Buildings whose façade is reached by a stair or a porch: `:front` is beyond its foot, on the paving, not 2.5 m from
+ * the wall (the Curia's Chalcidicum and nine marble steps, 1.7 m up). Metres beyond the footprint's edge; the Forum
+ * builder's `curia-forecourt` is the same place (WORLD_SPOTS).
+ */
+const FRONT_OUT: Partial<Record<(typeof FRONT_LANDMARK_IDS)[number], number>> = { 'curia-julia': 7.4 };
+
 export const FRONT_SPOTS: LocationDef[] = FRONT_LANDMARK_IDS.map((id) => {
   const lm = LANDMARK_BY_ID[id];
-  const f = frontOf(lm, 2.5);
+  const f = frontOf(lm, FRONT_OUT[id] ?? 2.5);
   const out = pushOutOfFootprints(f.x, f.z);
   return { id: `${id}:front`, name: `Before the ${lm.name}`, position: { x: out.x, y: round1(elevToY(lm.baseElevation ?? 13)), z: out.z }, radius: 4, parent: id, discoverable: false };
 });
@@ -377,6 +390,10 @@ export const WORLD_SPOTS: Record<string, { radius: number; name: string; also?: 
   'capena-grassator-b': { radius: 2, name: 'Where the second knife-man waits' },
   'capena-mercury-spring': { radius: 4, name: 'Mercury’s Spring', also: ['fons-mercurii'] },
   'castor-strongroom': { radius: 5, name: 'Strongrooms of Castor', also: ['castor-loculi'] },
+  // The Forum builders' street-level places (forum-curia.ts, forum-velia.ts): the paving at the foot of the Curia's
+  // stair, where the senators wait (the Chalcidicum above it is 1.7 m up), and the clothier's shop on the Vicus Tuscus.
+  'curia-forecourt': { radius: 4, name: 'Before the Senate House', also: ['curia-julia:front'] },
+  'horrea-agrippiana-taberna-0': { radius: 4, name: 'Clothier in the Horrea Agrippiana', also: ['taberna-vestiarii'] },
   'ludus-gate': { radius: 6, name: 'Gate of the Ludus Magnus' },
   'ludus-arena-center': { radius: 22, name: 'Practice Arena of the Ludus Magnus', also: ['ludus-cavea'] },
   lanista: { radius: 5, name: 'The procurator’s office' },

@@ -94,6 +94,9 @@ function curia(p: Part) {
   stairs(b, { width: W + 0.8, rise, run, count: steps, material: 'marble', collider: p.main ? 'steps' : 'none' }, T(0, y0, pz - steps * run));
   d.span('marble', -hw - 0.4, y0, pz, hw + 0.4, Y, -hl, { collide: true });
   foundation(p, rect(-hw - 0.4, pz - steps * run, hw + 0.4, -hl), y0, 'marble');
+  // Where the senators and lictors wait for the doors to open: on the Comitium's paving at the foot of
+  // the stair, 1.6 m off its lowest tread, in the street (the content's `curia-julia:front` follows it).
+  p.spot('curia-forecourt', 'npc', 0, p.ctx.groundAt(0, pz - steps * run - 1.6), pz - steps * run - 1.6, 0);
   const cH = 4.6;
   const D = diameterForHeight('ionic', cH);
   const xs = [-hw + 0.5, -hw + 0.5 + (W - 1) / 5, -hw + 0.5 + (2 * (W - 1)) / 5, hw - 0.5 - (2 * (W - 1)) / 5, hw - 0.5 - (W - 1) / 5, hw - 0.5];
