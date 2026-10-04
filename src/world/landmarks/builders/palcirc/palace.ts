@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import type { Draw } from '../../../../arch/fabric/draw';
 import type { MaterialId } from '../../../../gfx/materialIds';
 import type { LandmarkContext } from '../../types';
-import { archDoorWall } from './shapes';
+import { archDoorWall, archWindowWall } from './shapes';
 import { gableRoof, groundRange, lowColumn } from './util';
 
 export type Face = 'n' | 's' | 'e' | 'w'; // n = −z, s = +z, w = −x, e = +x
@@ -268,4 +268,48 @@ export function rockPlinth(d: Draw, x0: number, z0: number, x1: number, z1: numb
   pos.push(x0, yTop, z0, x0, yTop, z1, x1, yTop, z1, x0, yTop, z0, x1, yTop, z1, x1, yTop, z0);
   d.tris(mat, pos, { uvScale: 2.5 });
   d.solid(x0, yBot, z0, x1, yTop, z1);
+}
+
+/**
+ * Substructure facade for terraces over the Palatine slopes: a run of `len` metres centred on x = 0
+ * with its face on z = 0 toward −z, from y0 (below the ground) up to the terrace at y1. A travertine
+ * arcade storey with dark vaults, a plastered upper storey with arched windows when it is tall, a
+ * marble cornice and a balustrade on the terrace edge. Geometry only (colliders are the caller's).
+ */
+export function substructureFace(d: Draw, len: number, y0: number, y1: number, opts: { ground?: number; hi?: boolean; bay?: number } = {}) {
+  const hi = opts.hi ?? true;
+  const g = Math.max(y0, opts.ground ?? y0);
+  const H = y1 - g;
+  const n = Math.max(1, Math.round(len / (opts.bay ?? 4.4)));
+  const w = len / n;
+  const two = H > 8.5;
+  const h1 = two ? Math.min(7, H * 0.52) : H - 0.9;
+  // Plinth down to the foundation.
+  d.span('travertine', -len / 2, y0, -0.05, len / 2, g + 0.5, 1.0);
+  for (let i = 0; i < n; i++) {
+    const cx = -len / 2 + (i + 0.5) * w;
+    const f = d.at(cx, g, 0);
+    const span = Math.min(3.0, w * 0.6);
+    const spring = Math.min(h1 - span / 2 - 0.8, 3.0);
+    f.geo(archDoorWall(w, h1, span, spring, 1.0, hi ? 7 : 5), 'travertine');
+    f.span('black', -span / 2, 0, 0.75, span / 2, spring + span / 2, 0.8);
+    if (hi) f.box('travertine', 0, spring + span / 2 + 0.25, -0.08, 0.45, 0.6, 0.16);
+    f.box('travertine', -w / 2, h1 / 2, -0.1, 0.7, h1, 0.2);
+    if (two) {
+      const h2 = H - h1 - 0.9;
+      const sp2 = Math.min(1.8, w * 0.42);
+      f.geo(archWindowWall(w, h2, sp2, 0.9, Math.max(1.2, h2 - sp2 / 2 - 0.9), 1.0, hi ? 7 : 5), 'plaster_cream', 0, h1, 0);
+      f.span('black', -sp2 / 2, h1 + 0.9, 0.75, sp2 / 2, h1 + h2 - 0.8, 0.8);
+      f.box('plaster_white', -w / 2, h1 + h2 / 2, -0.07, 0.6, h2, 0.14);
+    }
+  }
+  d.span('travertine', -len / 2, g + h1 - 0.35, -0.18, len / 2, g + h1, 0.2);
+  d.span('marble', -len / 2, y1 - 0.9, -0.3, len / 2, y1 - 0.5, 0.3);
+  d.span(two ? 'plaster_cream' : 'travertine', -len / 2, two ? g + h1 : g + h1, 0, len / 2, y1 - 0.9, 1.0);
+  d.span('marble', -len / 2, y1 - 0.5, -0.12, len / 2, y1, 1.0);
+  // Balustrade.
+  d.span('marble', -len / 2, y1, -0.1, len / 2, y1 + 0.1, 0.3);
+  d.span('marble', -len / 2, y1 + 0.85, -0.12, len / 2, y1 + 0.98, 0.32);
+  if (hi) for (let x = -len / 2 + 0.2; x < len / 2 - 0.1; x += 0.34) d.cyl('marble', x, y1 + 0.48, 0.1, 0.07, 0.75, 5, { rTop: 0.05 });
+  else d.span('marble', -len / 2, y1 + 0.1, 0.04, len / 2, y1 + 0.85, 0.16);
 }

@@ -17,19 +17,23 @@ import { placeProp } from '../../../arch/props/props';
 import { Rng } from '../../../core/Rng';
 import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuilder, LandmarkContext } from '../types';
-import { arcadeFace, block, gardenBed, openings, peristyle, pool, roofOver, shedTiles, stair, wallRing } from './palcirc/palace';
+import { arcadeFace, block, gardenBed, openings, peristyle, pool, roofOver, shedTiles, stair, substructureFace, wallRing } from './palcirc/palace';
+import { facing } from './palcirc/runtime';
+import type { MeshBuilder } from '../../../gfx/MeshBuilder';
 import { ringSector } from './palcirc/shapes';
-import { Spots, drawFor, gableRoof, groundRange, lowColumn, plantTrees, type TreeSpec } from './palcirc/util';
+import { Spots, drawFor, gableRoof, groundRange, landmarkToWorld, lowColumn, plantTrees, type TreeSpec } from './palcirc/util';
+import { fromHost, relById } from './palcirc/frames';
+import { buildAugustanaFacade } from './palcirc/augFacade';
+import type { Lamp } from './palcirc/capenaParts';
+import { requestLamps } from './palcirc/runtime';
 
 // ---------------------------------------------------------------- Domus Augustana
 
 /** Augustana levels and plan (local game m; facade toward −z over the Circus). */
 export const AUG = {
   hw: 21.6,
-  /** Front face of the substructure (where the ground has fallen to the Circus street). */
-  front: -70.5,
-  /** Exedra radius (centre on the front line). */
-  R: 13.5,
+  /** Chord of the curved facade, out where the ground has fallen to the Circus street. */
+  front: -80,
   /** Lower (sunken) peristyle level and the upper palace level. */
   low: 0,
   up: 4.8,
@@ -41,81 +45,36 @@ function augustana(ctx: LandmarkContext) {
   const { b, d } = drawFor(ctx);
   const spots = new Spots();
   const hi = ctx.detail === 'high';
-  const { hw, front, R, low, up } = AUG;
+  const { hw, front, low, up } = AUG;
   const rng = new Rng('domus-augustana');
-  const street = Math.min(AUG.street, groundRange(ctx, -hw, front - 2, hw, front).min) - 0.6;
 
-  // ---------------------------------------------------------- substructure over the Circus
-  // Solid core from the street up to the lower level, the full width, from the front to z = −60.
-  d.span('concrete', -hw, street, front + 1.2, hw, low - 0.27, -58, { collide: true });
-  d.solid(-hw, low - 0.3, front + 1.2, hw, low, -58);
-  // Arcaded front (three tiers of blind arches with dark vaults), travertine string courses.
-  arcadeFace(d, -hw, hw, front, street, low - 0.2, { dir: -1, bay: 4.3, tier: 6.6, mat: 'brick', trim: 'travertine', depth: 1.3 });
-  // Side faces of the substructure.
-  for (const sx of [-1, 1]) {
-    const x = sx * hw;
-    d.span('brick', sx < 0 ? x - 0.2 : x, street, front, sx < 0 ? x : x + 0.2, low, -58);
-  }
-  // Base plinth along the street.
-  d.span('travertine', -hw - 0.3, street, front - 0.35, hw + 0.3, street + 1.2, front + 0.4);
-
-  // ---------------------------------------------------------- exedra: terrace and two-storey colonnade
-  const cz = front;
-  const ex = new Draw(b, new THREE.Matrix4().makeTranslation(0, 0, cz));
-  // Terrace floor (the semicircle behind the chord) and the chord balustrade over the Circus.
-  ex.geo(ringSector(0, R + 3.2, 0, Math.PI, 0.25, 24), 'marble_giallo', 0, low - 0.25, 0);
-  ex.span('marble', -hw, low, -0.4, hw, low + 1.05, 0.0, { collide: true });
-  for (let i = 0; i <= 16; i++) ex.box('marble', -hw + (2 * hw * i) / 16, low + 1.12, -0.2, 0.32, 0.14, 0.5);
-  // Colonnade on the arc (two storeys), the curved back wall of the rooms behind.
-  const nCol = 16;
+  // ---------------------------------------------------------- the curved facade over the Circus
+  const group = new THREE.Group();
+  const lamps: Lamp[] = [];
   const H1 = 4.4, H2 = 4.0;
-  for (let i = 0; i <= nCol; i++) {
-    const a = (Math.PI * i) / nCol;
-    const x = Math.cos(a) * R, z = Math.sin(a) * R;
-    lowColumn(ex, 'marble_giallo', x, low, z, 0.56, H1, { cap: 'corinthian', capMat: 'marble', collide: true, seg: hi ? 10 : 6 });
-    lowColumn(ex, 'marble', x, up, z, 0.48, H2, { cap: 'corinthian', collide: false, seg: hi ? 8 : 6 });
+  const fac = buildAugustanaFacade(ctx, b, d, group, spots, lamps, { front, hw, low, up, H1, H2, back: -54 });
+  const { plan } = fac;
+  // Rooms between the gallery's curved back wall and the lower court, two storeys high, leaving
+  // a corridor (|x| < 1.3) from the gallery's apex door to the court's south portico.
+  const Rw = plan.Rb + 0.5;
+  const top = up + H2 + 3.2;
+  for (let x = -plan.pav; x < plan.pav - 1e-6; x += 1.5) {
+    const xa = x, xb = Math.min(plan.pav, x + 1.5);
+    for (const [ua, ub] of [[xa, Math.min(xb, -1.3)], [Math.max(xa, 1.3), xb]] as const) {
+      if (ub - ua < 0.05) continue;
+      const xm = Math.max(Math.abs(ua), Math.abs(ub));
+      const zArc = plan.zc + Math.sqrt(Math.max(0, Rw * Rw - xm * xm));
+      if (zArc >= -54) continue;
+      d.span('plaster_white', ua, low, zArc - 0.4, ub, top, -54, { collide: true });
+      d.span('roof_tile', ua, top, zArc - 0.6, ub, top + 0.15, -54);
+    }
   }
-  // Curved entablatures and balcony floor (ring sectors), back wall with doors and windows.
-  ex.geo(ringSector(R - 0.45, R + 3.2, 0, Math.PI, up - low - H1, 24), 'marble', 0, low + H1, 0);
-  ex.geo(ringSector(R - 0.4, R + 0.4, 0, Math.PI, 1.0, 24), 'marble', 0, up, 0);
-  ex.geo(ringSector(R - 0.45, R + 3.2, 0, Math.PI, 0.7, 24), 'marble', 0, up + H2, 0);
-  ex.geo(ringSector(R + 3.0, R + 3.6, 0, Math.PI, up + H2 + 3.2, 24), 'plaster_white', 0, low, 0);
-  // Lean-to roof over the upper gallery: from the back wall down to the colonnade.
-  const nSeg = 24;
-  const roofPts: number[] = [];
-  const rr = (r: number, a: number, y: number) => [Math.cos(a) * r, y, Math.sin(a) * r];
-  for (let i = 0; i < nSeg; i++) {
-    const a0 = (Math.PI * i) / nSeg, a1 = (Math.PI * (i + 1)) / nSeg;
-    const yo = up + H2 + 0.7, yi = up + H2 + 2.4;
-    roofPts.push(...rr(R - 0.6, a0, yo), ...rr(R + 3.3, a1, yi), ...rr(R - 0.6, a1, yo));
-    roofPts.push(...rr(R - 0.6, a0, yo), ...rr(R + 3.3, a0, yi), ...rr(R + 3.3, a1, yi));
-  }
-  ex.tris('roof_tile', roofPts);
-  // Doors and windows on the curved wall (rooms looking out over the Circus).
-  for (let i = 0; i < 8; i++) {
-    const a = (Math.PI * (i + 0.5)) / 8;
-    const m = ex.at(Math.cos(a) * (R + 2.88), 0, Math.sin(a) * (R + 2.88), -a + Math.PI / 2 + Math.PI);
-    m.span('black', -0.75, low, -0.02, 0.75, low + 3.2, 0);
-    m.span('black', -0.6, up + 0.9, -0.02, 0.6, up + 2.8, 0);
-  }
-  // Colliders round the back wall (segments).
-  for (let i = 0; i < 12; i++) {
-    const a = (Math.PI * (i + 0.5)) / 12;
-    const m = ex.at(Math.cos(a) * (R + 3.3), 0, Math.sin(a) * (R + 3.3), -a + Math.PI / 2);
-    m.solid(-1.9, low, -0.3, 1.9, up + H2 + 3.2, 0.3);
-  }
-  // Straight wings either side of the exedra, two storeys over the substructure, windows on the Circus.
-  for (const sx of [-1, 1]) {
-    const x0 = sx < 0 ? -hw : R + 3.6, x1 = sx < 0 ? -(R + 3.6) : hw;
-    const top = up + H2 + 3.2;
-    d.span('plaster_white', x0, low, front, x1, top, -54, { collide: true });
-    d.span('marble', x0 - 0.15, top - 0.45, front - 0.2, x1 + 0.15, top, -54 + 0.15);
-    d.span('marble', x0 - 0.1, up - 0.3, front - 0.15, x1 + 0.1, up, -54);
-    openings(d, x0, front, x1, -54, 'n', low + 1.2, 1.1, 2.4, 2.4, { frame: 'marble' });
-    openings(d, x0, front, x1, -54, 'n', up + 1.0, 1.0, 2.2, 2.4, { frame: 'marble' });
-    roofOver(d, x0, front, x1, -54, top, 0.32, 'roof_tile', 'plaster_white');
-  }
-
+  // The corridor: marble floor, plastered walls, a vault, a door at each end.
+  const zApex = plan.zc + Rw;
+  d.span('marble', -1.3, low - 0.05, zApex - 0.5, 1.3, low + 0.03, -51.0);
+  d.span('concrete', -1.3, low + 3.6, zApex, 1.3, low + 3.9, -51.2);
+  for (const sx of [-1, 1]) d.span('plaster_red', sx * 1.29, low, zApex, sx * 1.3, low + 1.1, -51.2);
+  for (const z of [-51.15, zApex + 0.1]) d.span('marble', -1.6, low + 3.4, z - 0.12, 1.6, low + 3.75, z + 0.12);
   // ---------------------------------------------------------- lower (sunken) peristyle
   const cx0 = -12, cx1 = 12, cz0 = -48, cz1 = -18;
   // Ground-floor rooms round the court; their roofs are the upper level's terraces.
@@ -125,22 +84,11 @@ function augustana(ctx: LandmarkContext) {
   };
   ring(-hw, -54, cx0 - 3.2, cz1 + 3.2);
   ring(cx1 + 3.2, -54, hw, cz1 + 3.2);
-  ring(cx0 - 3.2, -54, cx1 + 3.2, cz0 - 3.2);
+  ring(cx0 - 3.2, -54, -1.3, cz0 - 3.2);
+  ring(1.3, -54, cx1 + 3.2, cz0 - 3.2);
   // Back block, split round the stair well that climbs to the upper level.
   ring(cx0 - 3.2, cz1 + 3.2, -1.6, -8);
   ring(1.6, cz1 + 3.2, cx1 + 3.2, -8);
-  // Rooms behind the exedra's curved wall (between the arc and the lower court's front block).
-  const Rw = R + 3.6;
-  for (let i = 0; i < 10; i++) {
-    const xa = (Rw * i) / 10, xb = (Rw * (i + 1)) / 10;
-    const zc = front + Math.sqrt(Math.max(0, Rw * Rw - xb * xb));
-    if (zc >= -54) continue;
-    for (const sx of [-1, 1]) {
-      const x0 = sx < 0 ? -xb : xa, x1 = sx < 0 ? -xa : xb;
-      d.span('plaster_white', x0, low, zc, x1, up + 4.0 + 3.2, -54, { collide: true });
-      d.span('roof_tile', x0, up + 7.2, zc, x1, up + 7.35, -54);
-    }
-  }
   // Plastered inner faces of the court walls (red dado, cream above) and doors into the rooms.
   for (const [x0, z0, x1, z1, face] of [
     [cx0 - 3.2, cz0 - 3.2, cx1 + 3.2, cz0 - 3.2, 's'],
@@ -227,16 +175,17 @@ function augustana(ctx: LandmarkContext) {
   for (const t of plantTrees(ctx, trees)) b.collider(t);
 
   // ---------------------------------------------------------- spots
-  spots.add('augustana-vista-circus', 'vista', 0, low, front + 3.5, Math.PI);
-  spots.add('augustana-exedra-seat', 'sit', -6, low, front + 7, Math.PI);
   spots.add('augustana-lower-peristyle', 'vista', 0, up, cz1 + 3.6, Math.PI);
+  spots.add('augustana-corridor', 'door', 0, low, -52.2, Math.PI);
   spots.add('augustana-island-shrine', 'shrine', 0, up + 0.5, tz - 4.6, 0);
   spots.add('augustana-entrance', 'door', 0, back.min, pz1 + 6, Math.PI);
   spots.add('augustana-guard-a', 'npc', -3.4, back.min, pz1 + 6.5, 0);
   spots.add('augustana-guard-b', 'npc', 3.4, back.min, pz1 + 6.5, 0);
   spots.add('augustana-garden-bench', 'sit', 12.5, up, tz, -Math.PI / 2);
   void rng;
-  return { object: b.build(ctx.lm.id), colliders: b.colliders, spots: spots.list, cullDistance: 2500 };
+  group.add(b.build(ctx.lm.id));
+  requestLamps(ctx.game, landmarkToWorld(ctx), lamps);
+  return { object: group, colliders: b.colliders, spots: spots.list, cullDistance: 2500 };
 }
 
 // ---------------------------------------------------------------- Domus Flavia (state palace)
@@ -432,26 +381,30 @@ function stadium(ctx: LandmarkContext) {
   const g = groundRange(ctx, -HW - 1, -HD - 1, HW + 1, HD + 1);
   const bottom = Math.min(-2, g.min - 0.8);
   const top = H1 + H2 + 0.6;
-  d.span('brick', -HW - 1.0, bottom, -HD, -HW, top, zc, { collide: true });
-  d.span('brick', HW, bottom, -HD, HW + 1.0, top, zc, { collide: true });
-  d.span('brick', -HW - 1.0, bottom, -HD - 1.0, HW + 1.0, top, -HD, { collide: true });
-  // Curved end wall (segments) and its substructure.
+  // Outer walls: stuccoed above the pad (a travertine band at the gallery floor), brick below.
+  for (const [x0, z0, x1, z1] of [[-HW - 1.0, -HD, -HW, zc], [HW, -HD, HW + 1.0, zc], [-HW - 1.0, -HD - 1.0, HW + 1.0, -HD]] as const) {
+    d.span('brick', x0, bottom, z0, x1, 0, z1, { collide: true });
+    d.span('plaster_cream', x0, 0, z0, x1, top, z1, { collide: true });
+    d.span('travertine', x0 - 0.1, H1 - 0.2, z0 - 0.1, x1 + 0.1, H1 + 0.15, z1 + 0.1);
+    d.span('marble', x0 - 0.12, top - 0.35, z0 - 0.12, x1 + 0.12, top, z1 + 0.12);
+  }
+  // Curved end wall (segments).
   const nC = 16;
   for (let i = 0; i < nC; i++) {
     const a0 = (Math.PI * i) / nC, a1 = (Math.PI * (i + 1)) / nC;
     const am = (a0 + a1) / 2;
     const r = R + 0.5;
     const len = 2 * r * Math.sin((a1 - a0) / 2) + 0.1;
-    d.box('brick', Math.cos(am) * r, (bottom + top) / 2, zc + Math.sin(am) * r, len, top - bottom, 1.0, { ry: -am + Math.PI / 2, collide: true });
+    const ry = -am + Math.PI / 2;
+    d.box('brick', Math.cos(am) * r, (bottom + 0) / 2, zc + Math.sin(am) * r, len, -bottom, 1.0, { ry, collide: true });
+    d.box('plaster_cream', Math.cos(am) * r, top / 2, zc + Math.sin(am) * r, len, top, 1.0, { ry, collide: true });
+    d.box('travertine', Math.cos(am) * r, H1 - 0.02, zc + Math.sin(am) * r, len + 0.05, 0.35, 1.2, { ry });
+    d.box('marble', Math.cos(am) * r, top - 0.17, zc + Math.sin(am) * r, len + 0.05, 0.35, 1.24, { ry });
   }
-  // Blind arcades on the SE substructure's outer face (it stands over the falling ground).
-  arcadeFace(new Draw(b, new THREE.Matrix4().makeRotationY(Math.PI / 2)), -zc, HD, HW + 1.3, bottom, top, { dir: 1, bay: 4.0, tier: 5.2, mat: 'brick', trim: 'travertine', depth: 0.3, collide: false });
-  // Buttresses on the SE substructure.
-  for (let k = -4; k <= 4; k++) {
-    const z = (k * (HD + zc)) / 9 + (zc - HD) / 2;
-    const gz = groundRange(ctx, HW + 1, z - 1, HW + 3, z + 1);
-    if (gz.min < -1) d.span('brick', HW + 1, gz.min - 0.5, z - 0.9, HW + 2.6, Math.min(top - 1, H1), z + 0.9, { collide: true });
-  }
+  // The terrace round the SE flank and the curved end, on substructures that come down to the
+  // valley floor (they hide the hillside the palace was built over) — gardens and a balustrade on top.
+  const terr = stadiumTerrace(ctx, b, d, hi);
+  openings(d, HW, -HD, HW + 1.0, zc, 'e', H1 + 0.9, 1.0, 1.8, 4.0, { margin: 3, frame: 'travertine' });
   // Inner faces: plaster with a red dado; the two-storey portico of piers with half-columns.
   const portico = (x0: number, z0: number, x1: number, z1: number, faceX: number) => {
     // piers along a straight side (x = faceX), facing the garden.
@@ -505,8 +458,10 @@ function stadium(ctx: LandmarkContext) {
   d.geo(ringSector(R - depth - 0.5, R + 0.5, 0, Math.PI, 0.5, 16), 'roof_tile', 0, top - 0.2, zc);
   // Imperial box: a great exedra on the SE side, projecting over the slope, two storeys.
   const bz = 0;
-  const box = d.at(HW + 1.0, 0, bz, -Math.PI / 2);
-  box.span('brick', -6.2, bottom, 0, 6.2, top + 2.4, 7.0, { collide: true });
+  const box = d.at(HW + 0.2, 0, bz, Math.PI / 2);
+  box.span('plaster_cream', -6.2, 0, 0, 6.2, top + 2.4, 7.0, { collide: true });
+  box.span('marble', -6.35, top + 2.0, -0.1, 6.35, top + 2.4, 7.15);
+  gableRoof(box, -6.2, 0, 6.2, 7.0, top + 2.4, { axis: 'z', pitch: 0.3, over: 0.3, gables: 'plaster_cream' });
   box.span('black', -3.2, 0, -0.02, 3.2, 4.2, 0.0);
   box.span('marble', -4.4, H1, -2.2, 4.4, H1 + 0.45, 0.2, { collide: true });
   box.span('marble', -4.4, H1 + 0.45, -2.2, 4.4, H1 + 1.4, -1.95, { collide: true });
@@ -527,14 +482,93 @@ function stadium(ctx: LandmarkContext) {
     trees.push({ species: k % 2 ? 'plane' : 'laurel', x: ix - 1.3, z, y: 0, scale: k % 2 ? 0.75 : 0.8, variant: (k + 1) % 3 });
   }
   for (let k = 0; k < 6; k++) trees.push({ species: 'oleander', x: k % 2 ? 1.0 : -1.0, z: -HD + 12 + k * 12, y: 0, scale: 0.9 });
+  trees.push(...terr.trees);
   for (const t of plantTrees(ctx, trees)) b.collider(t);
   // Spots.
-  spots.add('stadium-imperial-box', 'vista', HW - 1.2, H1 + 0.45, bz, -Math.PI / 2);
+  spots.add('stadium-imperial-box', 'vista', HW - 1.4, H1 + 0.45, bz, -Math.PI / 2);
+  for (const sp of terr.spots) spots.add(sp.id, sp.kind, sp.x, sp.y, sp.z, sp.h);
   spots.add('stadium-bench-a', 'sit', -ix + 0.8, 0, -10, Math.PI / 2);
   spots.add('stadium-bench-b', 'sit', ix - 0.8, 0, 14, -Math.PI / 2);
   spots.add('stadium-gardener', 'npc', 0, 0, 0, 0);
   spots.add('stadium-fountain', 'shrine', 0, 0, zc - 4.5, Math.PI);
   return { object: b.build(ctx.lm.id), colliders: b.colliders, spots: spots.list, cullDistance: 1600 };
+}
+
+/**
+ * Terrace on substructures round the stadium's SE flank (x = +HW side) and its curved end, out to
+ * where the hillside has fallen to the valley floor. Stadium local frame: garden floor y = 0.
+ */
+function stadiumTerrace(ctx: LandmarkContext, b: MeshBuilder, d: Draw, hi: boolean) {
+  const HW = 15, zc = 33, XO = 32, Z0 = -24, RO = 32;
+  // The Augustana stands beside the curved end: the terrace runs up to its −x flank and stops.
+  const aug = relById('palatine-stadium', 'domus-augustana');
+  const inAug = (x: number, z: number) => {
+    const [ax, az] = fromHost(aug, x, z);
+    return ax > -AUG.hw - 0.2 && ax < AUG.hw && az > AUG.front - 1 && az < -54;
+  };
+  const trees: TreeSpec[] = [];
+  const spots: { id: string; kind: 'vista' | 'sit'; x: number; y: number; z: number; h: number }[] = [];
+  const run = (x0: number, z0: number, x1: number, z1: number) => {
+    // A straight piece of outer wall from (x0, z0) to (x1, z1), its face looking outward (right of the direction).
+    const len = Math.hypot(x1 - x0, z1 - z0);
+    const tx = (x1 - x0) / len, tz = (z1 - z0) / len;
+    const nx = tz, nz = -tx; // outward
+    const g = groundRange(ctx, Math.min(x0, x1) - 0.5, Math.min(z0, z1) - 0.5, Math.max(x0, x1) + 0.5, Math.max(z0, z1) + 0.5, 1.5);
+    if (g.min > -1.0) return false;
+    const f = new Draw(b, facing((x0 + x1) / 2 + nx * 0.0, 0, (z0 + z1) / 2 + nz * 0.0, nx, nz));
+    substructureFace(f, len + 0.02, g.min - 0.8, 0, { ground: g.min, hi, bay: 4.2 });
+    f.solid(-len / 2, g.min - 0.8, 0, len / 2, 0, 1.0);
+    f.solid(-len / 2, 0, -0.1, len / 2, 1.0, 0.3);
+    return true;
+  };
+  // Straight flank.
+  const nS = Math.round((zc - Z0) / 4.2);
+  for (let i = 0; i < nS; i++) run(XO, Z0 + ((zc - Z0) * i) / nS, XO, Z0 + ((zc - Z0) * (i + 1)) / nS);
+  // Curve (from the flank round to the far side, wherever the ground has fallen away).
+  const nA = 20;
+  let aEnd = 0;
+  const P = (a: number): [number, number] => [Math.cos(a) * RO, zc + Math.sin(a) * RO];
+  for (let i = 0; i < nA; i++) {
+    const a0 = (Math.PI * i) / nA;
+    let a1 = (Math.PI * (i + 1)) / nA;
+    if (inAug(...P(a0))) break;
+    if (inAug(...P(a1))) {
+      // Clip the last piece at the Augustana's flank (bisection on the angle).
+      let lo = a0, hi2 = a1;
+      for (let k = 0; k < 20; k++) {
+        const m = (lo + hi2) / 2;
+        if (inAug(...P(m))) hi2 = m;
+        else lo = m;
+      }
+      a1 = hi2 + 0.01;
+    }
+    if (run(...P(a0), ...P(a1))) aEnd = a1;
+  }
+  // End wall closing the terrace toward the Augustana side (the hillside rises there).
+  const ge = groundRange(ctx, HW + 1, Z0 - 2, XO, Z0, 1.5);
+  d.span('travertine', HW + 1.0, ge.min - 0.8, Z0 - 0.8, XO + 1.0, -0.5, Z0, { collide: true });
+  d.span('marble', HW + 1.0, -0.5, Z0 - 0.9, XO + 1.0, 0.0, Z0);
+  d.span('marble', HW + 1.0, 0.0, Z0 - 0.6, XO + 1.0, 1.0, Z0 - 0.3, { collide: true });
+  // Terrace fill (one collider block per piece) and its garden floor.
+  d.solid(HW + 1.0, -14.5, Z0, XO, 0, zc);
+  d.span('gravel', HW + 1.0, -0.06, Z0, XO, 0.02, zc);
+  d.span('grass', HW + 3.0, -0.04, Z0 + 2, XO - 2.5, 0.06, zc);
+  d.geo(ringSector(15.5, RO, 0, aEnd, 0.08, 24), 'gravel', 0, -0.06, zc);
+  d.geo(ringSector(17.5, RO - 2.5, 0.05, aEnd - 0.05, 0.1, 24), 'grass', 0, -0.04, zc);
+  for (let i = 0; i < 12; i++) {
+    const a0 = (aEnd * i) / 12, a1 = (aEnd * (i + 1)) / 12, am = (a0 + a1) / 2;
+    const rm = (16 + RO) / 2, len = 2 * RO * Math.sin((a1 - a0) / 2) + 0.2;
+    d.at(Math.cos(am) * rm, 0, zc + Math.sin(am) * rm, -am + Math.PI / 2).solid(-len / 2, -14.5, -(RO - 16) / 2, len / 2, 0, (RO - 16) / 2);
+  }
+  // Cypresses and stone pines along the terrace (the Palatine's skyline from the valley), laurels.
+  for (let k = 0; k < 6; k++) trees.push({ species: k % 2 ? 'cypress' : 'laurel', x: XO - 1.6, z: Z0 + 4 + k * 9.6, y: 0, scale: k % 2 ? 0.9 : 0.85, variant: k % 3 });
+  for (let k = 0; k < 7; k++) {
+    const a = (aEnd * (k + 0.5)) / 7;
+    trees.push({ species: k % 3 === 1 ? 'umbrella_pine' : 'cypress', x: Math.cos(a) * (RO - 1.8), z: zc + Math.sin(a) * (RO - 1.8), y: 0, scale: k % 3 === 1 ? 0.85 : 0.95, variant: k % 3 });
+  }
+  spots.push({ id: 'stadium-terrace-vista', kind: 'vista', x: XO - 0.8, y: 0, z: 12, h: Math.PI / 2 });
+  spots.push({ id: 'stadium-terrace-bench', kind: 'sit', x: Math.cos(0.8) * (RO - 3.5), y: 0, z: zc + Math.sin(0.8) * (RO - 3.5), h: Math.atan2(Math.cos(0.8), Math.sin(0.8)) });
+  return { trees, spots };
 }
 
 // ---------------------------------------------------------------- Paedagogium
