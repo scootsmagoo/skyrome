@@ -43,7 +43,7 @@ Dev switches: `?scene=rome&quick=1` (no menus), `&hour=5.5`, `&at=<landmark id>`
 | Places, hours, the golden path | `src/content/places.ts` (landmarks, bible spots, contract spots, street stations), `hours.ts` (Roman hours, `shift()`, `entryAt()`), `route.ts` (`onPath(d, side)`) |
 | Conversation kit | `src/content/people.ts` (`person()`: greeting, topics, news, trade, one Rhetoric check) and `talk.ts` (quest conditions, rumors) |
 | Quest helpers | `src/content/director.ts` (spawn, fight, examine points, scripted deaths, moving actors), `questkit.ts`, `profiles.ts` (stat blocks of Mus, Pullus, Auctus, Nereus, the Rex, the mq-01 pair) |
-| Texts | `src/content/texts.ts` (the bible's T1 to T13, 10 more along the walk, the §8.4 signs; `bookViewFor`) |
+| Texts and landmark things | `src/content/texts.ts` (the bible's T1 to T13, 9 more along the walk, the §8.4 signs; `bookViewFor`), `things.ts` (a note, inscription or vista at each of the 54 landmarks of the nine districts) |
 | Barks and vignettes | `src/content/barks.ts` (districts, archetypes, festivals, reactions), `vignettes.ts` (28 scenes with casts and lines) |
 | In the world | `src/content/install.ts` (`installContent`), `containers.ts`, `shrines.ts`, `lamps.ts`, `services.ts` |
 | Items and loot | `src/rpg/data/items/content.ts`, `quest.ts`, `loot.ts` (the bible's §4 and §6) |
@@ -138,6 +138,7 @@ lawFine, lawClear · `npc-fabae` accept, florusLie, florusPersuaded, florusTold 
 |---|---|
 | Shrines | 13 "Pray" points (the six compita, Vortumnus, Venus Cloacina, Juturna, Vulcan, the Lacus Curtius, Janus, Mercury's spring): `devotion.prayAtCompitum`, +5 Pietas once a day per shrine and the Lares favor, on the Lemuria too; Cloacina purifies, Juturna heals 10 HP and washes |
 | Texts | 42 "Read" points open the book reader: T3 to T13 (graffiti, playbill, fire notice, the altar of the Vicus Tuscus, the lost dog, the club's rules, 20 points in all), 9 more along the walk (the gate pier, Mercury's votive tablet, the litter tariff, the Circus chalk, the diviners' boards, two altars, the burned shop's notice, Vortumnus' base) and the §8.4 shop signs; the lampoon on the basilica steps is washed off at sunset |
+| Landmark things | 54 "Read" / "Look" points, one in front of the façade of every landmark of the nine v0.1 districts (AC-23): Tiberius' rebuilding of Castor's temple, the beaks of Antium on the Rostra, the Tullianum, the Menorah in Vespasian's Temple of Peace, Trajan's Column, the Circus' two hundred and fifty thousand seats, the bronze bull, the island shaped like a ship… all of them what a Roman of 113 could know |
 | Containers | 66 in the street (20+ unowned, owned ones are `furtum` if `population.witnesses` sees you), 13 more indoors waiting for their interiors; loot rolled once with a seed per container and kept in the world deltas; the Mouse's strongbox opens only with his key; the Rex's cache is a container the quest listens for |
 | Lamps | 68, flagged `night` so they light at dusk and go out one by one at dawn: the gate, shrines, stations, shops and one every ~45 m of the corridor |
 | Carts | when `src/npc/props.ts` exists (the NPC crew's), Dromo's cart and mule stand at the cart stand and Cornix's with a wheel off; their load containers only appear with the cart |
