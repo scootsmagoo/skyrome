@@ -133,7 +133,11 @@ triangles depending on the view, 60 fps (M4 Max, Chromium).
 - **Cloaca Maxima.** The water module leaves a gap in the quay wall at the outfall and builds a
   small culvert mouth there; the landmark's bastion covers it (its platform stands 0.75 m over
   the quay so the water module's voussoirs stay inside) and its grating wall frames that mouth.
-  The channel is 3.8 m wide (not 0.6 × 4.5 m) so the ledge has 2.1 m of headroom.
+  The channel is 3.8 m wide (not 0.6 × 4.5 m) so the ledge has 2.1 m of headroom. The flight
+  down from the quay stands on the bastion's flank, just outside the water module's wall gap
+  (±3.2 m), where the quay's parapet would wall off its head: the water module keeps the parapet
+  open `QUAY.gapFlank` (2 m) beyond the gap on both sides, which covers the flight (to 5.0 m from
+  the axis), and `tests/river-landmarks.test.ts` walks it from the quay.
 - **Lamps and readables** (`river-life.ts`): requested once `game.lights` / `game.interactions`
   exist (they are installed after the world is built), via one small System that removes itself.
   A later generic pass over `PlacedLandmark.spots` should skip interactables whose id starts with
