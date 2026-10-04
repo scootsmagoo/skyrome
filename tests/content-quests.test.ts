@@ -236,6 +236,34 @@ describe('mq-01-madida-capena: The Dripping Gate', () => {
   });
 });
 
+describe('mq-01: the opening conversation', () => {
+  it('opens Festus’ cart conversation by itself two seconds after a new game begins, but not on a quick start or a load', () => {
+    vi.useFakeTimers();
+    try {
+      const w = world({ actors: ['npc-festus'] });
+      w.events.emit('game:started', { kind: 'quick' });
+      w.events.emit('game:started', { kind: 'load' });
+      vi.advanceTimersByTime(3000);
+      expect(w.rpg.dialogue.active).toBe(false);
+      w.events.emit('game:started', { kind: 'new' });
+      vi.advanceTimersByTime(1000);
+      expect(w.rpg.dialogue.active).toBe(false);
+      vi.advanceTimersByTime(2000);
+      expect(w.rpg.dialogue.active).toBe(true);
+      expect(w.rpg.dialogue.view).toMatchObject({ npcId: 'npc-festus', nodeId: 'n0' });
+      w.rpg.dialogue.end();
+      // Once the player has talked, a later new-game event (or a replay) does not talk again.
+      talk(w, 'npc-festus', 'Let’s go.');
+      close(w);
+      w.events.emit('game:started', { kind: 'new' });
+      vi.advanceTimersByTime(3000);
+      expect(w.rpg.dialogue.active).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 /** A world where mq-01 is done (the no-combat path) and the player stands in the Forum. */
 function afterArrival(o: WorldOptions = {}) {
   const w = world(o);

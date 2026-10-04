@@ -150,6 +150,14 @@ export default defineQuest({
     },
   },
   on: {
+    // "The cart dialogue opens by itself when the scene starts" (§3.1.1): a new game begins with Festus
+    // asking whether this is the first time in Rome. Quick starts (agents, tests) and loads stay quiet.
+    'game:started': (q, e) => {
+      if (e.kind !== 'new' || q.stage !== 'start' || typeof setTimeout !== 'function') return;
+      setTimeout(() => {
+        if (q.stage === 'start' && !q.game.dialogue?.active && !q.isObjectiveDone('talk-festus')) q.game.dialogue?.start('npc-festus');
+      }, 2500);
+    },
     'dialogue:node': (q, e) => {
       if (e.dialogueId === 'npc-festus') {
         if (e.nodeId === 'cartEnd') {

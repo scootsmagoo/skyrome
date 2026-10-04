@@ -135,6 +135,16 @@ export const WALL_TEXTS: WallText[] = [
     id: 't11-fuscus', at: 'insula-mariorum', kind: 'tablet', title: 'A wax tablet on the lararium', source: 'CONTENT.md T11 [G]; Ovid, Fasti 5.429–44 [A]',
     text: 'Midnight. Bare feet. No knots on you anywhere.\n\nMake the sign: thumb between the fingers.\n\nWash the hands at the basin.\n\nBeans: the BLACK ones, in the blue jar. NOT Helpis’ cooking beans.\n\nThrow them behind. Do not look back. Nine times:\n*haec ego mitto; his redimo meque meosque fabis.*\n\nWash again. Strike the bronze. Nine times:\n*Manes exite paterni.*\n\nThen look back. Not before. NOT BEFORE.',
   },
+  // ---- the walk from the Capena Gate: invented additions [G] for the golden path (the owner's "nothing to look at")
+  { id: 't15-pier', at: 'capena-intus', kind: 'graffito', title: 'Scratched on the gate pier', latin: 'MADIDA · CAPENA · CAVE · STILLICIDIVM\nCAPITO · HIC · SEDET · ET · VIDET', text: '“The Capena Gate is dripping: beware the drip.” (Beneath, in another hand:) “Capito sits here and sees everything.”', source: 'addition [G]; Juvenal 3.11 (madidam Capenam)' },
+  { id: 't14-fons-mercurii', at: 'fons-mercurii', kind: 'tablet', title: 'A votive tablet at Mercury’s spring', latin: 'MERCVRIO · SACRVM\nNEGOTIATORES · PORTAE · CAPENAE · EX · VOTO', text: '“Sacred to Mercury. The traders of the Capena Gate, in fulfilment of a vow.” (Scratched below:) “Wash away the lies of yesterday and the lies of tomorrow. Let the profit be large and the weights light.”', source: 'addition [G]; after the merchants’ prayer of Ovid, Fasti 5.673–690 [A]' },
+  { id: 't16-lectica', at: 'lectica-statio-capena', kind: 'dipinto', title: 'The litter-bearers’ tariff', latin: 'LECTICA · CONDVCITVR\nAD · FORVM · ET · AD · CIRCVM · ET · AD · METAM · DENARIVS · I', text: '“Litter for hire: to the Forum, to the Circus or to the Meta Sudans, one denarius.” (Hand-written under it:) “By night, ask. The answer is more.”', source: 'addition [G]; GDD §7.2 (litter hire 1 den.)' },
+  { id: 't17-circus-chalk', at: 'circi-factiones', kind: 'graffito', title: 'Chalked on the Circus wall', latin: 'PRASINA · VINCIT\nVENETA · VINCIT\nVTRAQVE · VICTA', text: '“Green wins!” — “Blue wins!” — and, in a third hand, “Both lose.”', source: 'addition [G]; CONTENT.md §8.4 (faction graffiti) [A: the factions]' },
+  { id: 't18-astrologi', at: 'astrologi-circi', kind: 'dipinto', title: 'The diviners’ boards', latin: 'GENITVRAE · HIC · FIVNT · DENARII · X\nEXTA · INSPICIVNTVR · DENARII · II', text: '“Nativities cast here, ten denarii.” (On the next booth:) “Entrails inspected, two denarii.”', source: 'addition [G]; CONTENT.md §2.D (Zenon 10 den., Arruns 2 den.)' },
+  { id: 't19-compitum-capenae', at: 'compitum-capenae', kind: 'inscription', title: 'The altar of the Capena crossroads', latin: 'LARIBVS · AVGVSTIS · VICANI · VIAE · CAPENAE · V · S · L · M', text: '“To the Lares Augusti: the people of the Capena street, in fulfilment of a vow, gladly and deservedly.”', source: 'addition [G]; the formula V·S·L·M [A]' },
+  { id: 't20-compitum-circi', at: 'compitum-circi', kind: 'inscription', title: 'The altar below the Palatine', latin: 'LARIBVS · COMPITALIBVS · ET · GENIO · CAESARIS · MINISTRI · VICI · SVB · PALATIO', text: '“To the Lares of the crossroads and the Genius of Caesar: the attendants of the street below the Palatine.”', source: 'addition [G]' },
+  { id: 't22-taberna', at: 'taberna-collapsa', kind: 'dipinto', title: 'A faded notice on the burned shop', latin: 'LOCATVR\nINQVIRE · APVD · CALLISTVM', text: '“To let. Inquire of Callistus.” (Underneath, scratched into the soot:) “Not any more.”', source: 'addition [G]; ties to misc-insula-nutans' },
+  { id: 't23-vortumnus', at: 'signum-vortumni', kind: 'inscription', title: 'The base of the statue of Vortumnus', latin: 'VORTVMNO · DEO · SACRVM', text: '“Sacred to the god Vortumnus.” (A bronze god of the seasons and of change, a basket of fruit on his arm, at the Forum end of the Etruscan Street.)', source: 'addition [G]; Propertius 4.2, Varro LL 5.46 [A for the statue]' },
   // T13 — the burial club's rules (v0.3 place; v0.2 copy carried by Chrysis)
   {
     id: 't13-lex-collegii', at: 'fullonica-suburana', kind: 'notice', title: 'LEX · COLLEGII · CVLTORVM · LAVERNAE', source: 'CONTENT.md T13 [G]; after the Lanuvium statutes (AD 136) [A, later model]',
@@ -171,6 +181,20 @@ export const SIGNS: Sign[] = [
   { at: 'miliarium-aureum', latin: '', english: 'Gilded bronze without legible letters (what it carried is unknown).', kind: 'prop' },
   { at: 'column-trajan', latin: 'SENATVS · POPVLVSQVE · ROMANVS …', english: 'The dedicatory inscription of 113 (CIL VI 960): the real text, in the Lexicon.', kind: 'inscription', note: 'historical [A]' },
 ];
+
+/** The signs of §8.4 as readable texts too (shop signs, plaques, painted boards), placed at their places. */
+export const SIGN_TEXTS: WallText[] = SIGNS.filter((g) => g.at !== '*' && g.at !== 'circus-maximus' && g.latin && g.kind !== 'prop' && g.kind !== 'mosaic').map((g, i) => ({
+  id: `sign-${i + 1}-${g.at}`,
+  at: g.at,
+  kind: g.kind === 'inscription' || g.kind === 'plaque' ? 'inscription' : g.kind === 'graffito' ? 'graffito' : 'sign',
+  title: g.english,
+  latin: g.latin,
+  text: g.note ? `${g.english}. (${g.note.charAt(0).toUpperCase()}${g.note.slice(1)}.)` : g.english,
+  source: 'CONTENT.md §8.4',
+}));
+
+/** Everything the installer places as a "Read" point. */
+export const ALL_WALL_TEXTS: WallText[] = [...WALL_TEXTS, ...SIGN_TEXTS];
 
 /** A reader view for any item that carries text (books, letters, quest tablets). */
 export function bookViewFor(def: Pick<ItemDef, 'name' | 'text' | 'tags'> | undefined): BookView | null {

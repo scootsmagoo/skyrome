@@ -14,7 +14,7 @@ import { lampSpecs } from '../src/content/lamps';
 import { CONTENT_LOCATIONS, CONTRACT_SPOT_IDS, STREET_SPOTS, isKnownPlace } from '../src/content/places';
 import { GOLDEN_PATH_LENGTH, onPath, projectOnPath } from '../src/content/route';
 import { SHRINES } from '../src/content/shrines';
-import { TEXT_ITEMS, WALL_TEXTS } from '../src/content/texts';
+import { ALL_WALL_TEXTS, TEXT_ITEMS, WALL_TEXTS } from '../src/content/texts';
 import { entryAt } from '../src/content/hours';
 import { castSize, VIGNETTES } from '../src/content/vignettes';
 import { LANDMARK_BY_ID } from '../src/data/atlas';
@@ -316,10 +316,11 @@ describe('items and texts', () => {
   });
 
   it('places every wall text somewhere known', () => {
-    const ids = WALL_TEXTS.map((w) => w.id);
+    const ids = ALL_WALL_TEXTS.map((w) => w.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(WALL_TEXTS.length).toBeGreaterThanOrEqual(10);
-    for (const w of WALL_TEXTS) {
+    expect(WALL_TEXTS.length).toBeGreaterThanOrEqual(20);
+    expect(ALL_WALL_TEXTS.length).toBeGreaterThanOrEqual(30);
+    for (const w of ALL_WALL_TEXTS) {
       expect(isKnownPlace(w.at), `${w.id} at ${w.at}`).toBe(true);
       expect(w.source.length, w.id).toBeGreaterThan(5);
     }

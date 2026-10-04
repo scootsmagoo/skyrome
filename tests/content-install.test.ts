@@ -7,7 +7,7 @@ import { CONTAINERS, STREET_CONTAINERS } from '../src/content/containers';
 import { installContent, placeXZ } from '../src/content/install';
 import { lampSpecs } from '../src/content/lamps';
 import { SHRINES } from '../src/content/shrines';
-import { WALL_TEXTS } from '../src/content/texts';
+import { ALL_WALL_TEXTS } from '../src/content/texts';
 import type { Game } from '../src/core/Game';
 import type { Interactable } from '../src/interaction/Interactions';
 import { installRpg } from '../src/rpg/install';
@@ -42,7 +42,7 @@ describe('installContent', () => {
   it('places everything the content defines and is idempotent', () => {
     const w = world();
     expect(w.content.shrines).toBe(SHRINES.length);
-    expect(w.content.texts).toBe(WALL_TEXTS.length);
+    expect(w.content.texts).toBe(ALL_WALL_TEXTS.length);
     expect(w.content.containers).toBe(STREET_CONTAINERS.length);
     expect(w.content.containers).toBeGreaterThanOrEqual(40);
     expect(w.content.lamps).toBe(lampSpecs().length);

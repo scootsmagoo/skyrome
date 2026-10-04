@@ -32,7 +32,7 @@ import { syncAliases } from './places';
 import { lampSpecs, type LampSpec } from './lamps';
 import { installServices } from './services';
 import { SHRINES, type ShrineSpec } from './shrines';
-import { WALL_TEXTS, type WallText } from './texts';
+import { ALL_WALL_TEXTS, type WallText } from './texts';
 
 declare module '../core/Game' {
   interface Game {
@@ -418,7 +418,7 @@ export function installContent(game: Game): ContentService {
 
   let texts = 0;
   const bySite = new Map<string, WallText[]>();
-  for (const t of WALL_TEXTS) bySite.set(t.at, [...(bySite.get(t.at) ?? []), t]);
+  for (const t of ALL_WALL_TEXTS) bySite.set(t.at, [...(bySite.get(t.at) ?? []), t]);
   for (const list of bySite.values()) list.forEach((t, i) => keep(addWallText(game, t, i, list.length)) && texts++);
 
   const ids: string[] = [];
