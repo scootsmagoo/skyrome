@@ -18,7 +18,9 @@ import type { MeshBuilder } from '../../../gfx/MeshBuilder';
 import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuilder } from '../types';
 import { FORUM_INSCRIPTIONS } from './forum-data';
-import { T, TRS, atlasToLocal, col, inscription, landmark, mul, type Part, type Tier } from './forum-kit';
+import { T, TRS, addFire, atlasToLocal, col, inscription, landmark, mul, turned, type Part, type Tier } from './forum-kit';
+import { placeProp } from '../../../arch/props';
+import { lampAt } from './forum-street';
 import { apotheosisMaterial, panel, spoilsMaterial, triumphMaterial } from './forum-reliefs';
 
 const text = (id: string) => FORUM_INSCRIPTIONS[id].latin;
@@ -240,6 +242,17 @@ function archTitus(p: Part) {
     const crown = r.spring + W / 2;
     panel(b, apotheosisMaterial(), 1.0, 1.0, TRS(0, crown - 0.04, 0, -Math.PI / 2, 0, 0));
   }
+  // torches on the passage walls light the reliefs after dark; lamps at both mouths
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      const x = sx * (W / 2 - 0.02);
+      const z = sz * hd * 0.5;
+      if (hi) placeProp(p.d.at(x, 2.3, z, sx > 0 ? Math.PI / 2 : -Math.PI / 2), 'torch_bracket', 0, 0, 0, 0, { collide: false });
+      addFire(p, x - sx * 0.35, 2.85, z, { night: true, intensity: 7, distance: 7, glow: 0.3 });
+    }
+    lampAt(p, sx * (r.width / 2 + 0.6), -hd - 1.6);
+    lampAt(p, sx * (r.width / 2 + 0.6), hd + 1.6);
+  }
   p.spot('arch-titus', 'inscription', 0, 0, -hd - 4.5, 0);
   p.spot('arch-titus-spoils', 'inscription', 0, 0, 0, Math.PI / 2);
   p.spot('arch-titus-triumph', 'inscription', 0, 0, 0.3, -Math.PI / 2);
@@ -331,10 +344,20 @@ function archAugustus(p: Part) {
 
 // ---------------------------------------------------------------- Arch of Tiberius
 
+/**
+ * The atlas sets the arch with its passage on the Temple of Saturn's shut aerarium door (a dead
+ * end), 2.6 m from the flank. Tacitus has it by the temple on the way up from the Forum, which is
+ * the Vicus Iugarius, and the atlas point lies on that street: the arch is turned (passage along
+ * the street, facade to the Forum, 81 degrees from the atlas bearing) and set 1.5 m off the flank.
+ */
+const TIBERIUS_TURN = (81 * Math.PI) / 180;
+
 function archTiberius(p: Part) {
   const W = (8 * p.S) / 2.52;
-  const r = forumArch(p, { W, bays: 1, order: 'corinthian', front: text('arch-tiberius'), back: text('arch-tiberius'), style: 'carved', quadriga: true, victories: true });
-  p.spot('arch-tiberius', 'inscription', 0, 0, -r.depth / 2 - 3, 0);
+  turned(p, TIBERIUS_TURN, [0, -1.5], (q) => {
+    const r = forumArch(q, { W, bays: 1, order: 'corinthian', front: text('arch-tiberius'), back: text('arch-tiberius'), style: 'carved', quadriga: true, victories: true });
+    q.spot('arch-tiberius', 'inscription', 0, 0, -r.depth / 2 - 3, 0);
+  });
 }
 
 // ---------------------------------------------------------------- Fornix Fabianus

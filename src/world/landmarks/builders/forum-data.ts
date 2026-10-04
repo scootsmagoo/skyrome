@@ -375,7 +375,7 @@ export const FORUM_INSCRIPTIONS: Record<string, InscriptionText> = {
     latin: ['Acta Diurna', 'A D V Id Mai', 'Lemuria Aedes Clausae', 'Cras Imp Traianus Columnam', 'in Foro Suo Dedicabit'],
     english: 'The Daily Acts. The fifth day before the Ides of May (11 May). Lemuria: the temples are shut. Tomorrow the Emperor Trajan dedicates the Column in his Forum.',
     conf: 'C',
-    note: 'The board and its wording are the game\'s. The dedication is attested: the Fasti Ostienses put the dedication of the Column (and of the Temple of Venus in the Forum of Caesar) on IIII Id. Mai. 113 [A]; temples shut on the Lemuria, Ovid Fasti 5.485–6.',
+    note: 'The board and its wording are the game\'s. The dedication of the Column in 113 is attested [A] (Fasti Ostienses, with the rededication of the Temple of Venus Genetrix on 12 May [A]), but its exact day is uncertain, some place it on 18 May, so a dedication tomorrow is the game\'s choice [C]. Temples shut on the Lemuria (9, 11, 13 May): Ovid, Fasti 5.485–6 [A].',
   },
   'tabernae-aemiliae-notice': {
     latin: ['Canis Molossa Nomine Hilara', 'Aberravit A D VIII Id Mai', 'Qui Eam Reduxerit Ad Tonstrinam Tryphonis', 'In Tabernis Basilicae Paulli', 'Accipiet HS XX'],

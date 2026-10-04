@@ -31,12 +31,13 @@ import { Forest } from '../../../arch/vegetation/Forest';
 import type { TreeSpecies } from '../../../arch/vegetation/species';
 import { vegetation } from '../../../arch/vegetation/system';
 import { UV_METERS } from '../../../gfx/textures/catalog';
-import { MeshBuilder } from '../../../gfx/MeshBuilder';
+import { MeshBuilder, type ColliderSpec } from '../../../gfx/MeshBuilder';
 import { placeProp } from '../../../arch/props';
 import type { MaterialId } from '../../../gfx/materialIds';
 import { ROADS } from '../../../data/atlas';
 import { toGame } from '../../coords';
 import type { LandmarkBuild, LandmarkContext, Spot } from '../types';
+import { forumInteractions } from './forum-interactions';
 
 export type Detail = 'high' | 'low';
 export type { V2 };
@@ -56,6 +57,14 @@ export interface Part {
   spot(id: string, kind: string, x: number, y: number, z: number, heading?: number): void;
   /** True on the near pass (colliders and spots count); false while building the far stand-in. */
   main: boolean;
+  /** Paved patches laid on the terrain by `pave()` (near pass): spots on them stand on the paving. */
+  paved: PavedPatch[];
+}
+
+export interface PavedPatch {
+  poly: V2[];
+  holes: V2[][];
+  lift: number;
 }
 
 export interface LandmarkOpts {
@@ -68,6 +77,7 @@ export interface LandmarkOpts {
 /** Runs `fn` for the near version (and the far stand-in when `near` is set) and packages the result. */
 export function landmark(ctx: LandmarkContext, fn: (p: Part) => void, o: LandmarkOpts = {}): LandmarkBuild {
   const spots: Spot[] = [];
+  const paved: PavedPatch[] = [];
   const make = (detail: Detail, main: boolean) => {
     const b = ctx.builder();
     const p: Part = {
@@ -78,6 +88,7 @@ export function landmark(ctx: LandmarkContext, fn: (p: Part) => void, o: Landmar
       hi: detail === 'high',
       S: ctx.S,
       main,
+      paved,
       spot(id, kind, x, y, z, heading) {
         if (main) spots.push({ id, kind, position: new THREE.Vector3(x, y, z), heading });
       },
@@ -86,6 +97,8 @@ export function landmark(ctx: LandmarkContext, fn: (p: Part) => void, o: Landmar
     return b;
   };
   const near = make(ctx.detail, true);
+  settleSpots(ctx, near.colliders, spots, paved);
+  forumInteractions(ctx, spots);
   const out: LandmarkBuild = { object: near.build(ctx.lm.id), colliders: near.colliders, spots };
   if (o.near && ctx.detail === 'high') {
     const far = make('low', false);
@@ -93,6 +106,135 @@ export function landmark(ctx: LandmarkContext, fn: (p: Part) => void, o: Landmar
     out.cullDistance = o.near;
   } else if (o.cull) out.cullDistance = o.cull;
   return out;
+}
+
+/**
+ * Build part of a landmark in a frame turned by `angle` (radians about y) and moved by `offset`
+ * (x, z) in the landmark's own frame: `fn` draws in the turned frame (its groundAt, spots and
+ * colliders are carried over), e.g. an arch whose passage must lie along a street, not along the
+ * atlas bearing.
+ */
+export function turned(p: Part, angle: number, offset: V2, fn: (q: Part) => void) {
+  const b = p.ctx.builder();
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  // frame → landmark: x' = x c + z s + ox, z' = −x s + z c + oz
+  const ctx: LandmarkContext = { ...p.ctx, groundAt: (x, z) => p.ctx.groundAt(x * c + z * s + offset[0], -x * s + z * c + offset[1]) };
+  const q: Part = {
+    ...p,
+    ctx,
+    b,
+    d: new Draw(b),
+    spot: (id, kind, x, y, z, heading) => p.spot(id, kind, x * c + z * s + offset[0], y, -x * s + z * c + offset[1], (heading ?? 0) + angle),
+  };
+  fn(q);
+  p.b.append(b, new THREE.Matrix4().makeRotationY(angle).setPosition(offset[0], 0, offset[1]));
+}
+
+// ---------------------------------------------------------------- spot settling
+
+/** Spot kinds where a person (or the player) stands: they must be clear of every collider. */
+const STANDING = new Set(['npc', 'vendor', 'stall', 'spawn', 'door', 'shrine', 'inscription', 'vista', 'container']);
+/** How far (m) a spot may be nudged to get clear, per kind: shopkeepers and idlers move freely, doors hardly. */
+const NUDGE: Record<string, number> = { npc: 2.2, vendor: 2.2, stall: 2.2, spawn: 1.5, door: 1.2, shrine: 1.2, inscription: 1.2, vista: 1.2, container: 1.2 };
+
+interface Solid {
+  cx: number;
+  cz: number;
+  bottom: number;
+  top: number;
+  hx: number;
+  hz: number;
+  r: number;
+  /** Inverse yaw of a box (xz test in box space); null for a cylinder. */
+  inv: THREE.Quaternion | null;
+  tilted: boolean;
+}
+
+function solidsOf(cols: readonly ColliderSpec[]): Solid[] {
+  const out: Solid[] = [];
+  for (const c of cols) {
+    if (c.kind === 'box') {
+      const q = c.rotation ?? new THREE.Quaternion();
+      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+      out.push({ cx: c.center.x, cz: c.center.z, bottom: c.center.y - c.half.y, top: c.center.y + c.half.y, hx: c.half.x, hz: c.half.z, r: 0, inv: q.clone().invert(), tilted: Math.abs(up.y) < 0.999 });
+    } else if (c.kind === 'cylinder') {
+      out.push({ cx: c.center.x, cz: c.center.z, bottom: c.center.y - c.halfHeight, top: c.center.y + c.halfHeight, hx: 0, hz: 0, r: c.radius, inv: null, tilted: false });
+    }
+  }
+  return out;
+}
+
+const _sv = new THREE.Vector3();
+
+function inPoly(x: number, z: number, poly: readonly V2[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, zi] = poly[i];
+    const [xj, zj] = poly[j];
+    if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** Does a solid's xz footprint, grown by `pad`, contain (x, z)? */
+function inFootprint(s: Solid, x: number, z: number, pad: number): boolean {
+  if (!s.inv) return Math.hypot(x - s.cx, z - s.cz) <= s.r + pad;
+  _sv.set(x - s.cx, 0, z - s.cz).applyQuaternion(s.inv);
+  const grow = s.tilted ? s.hx * 0 + 0.2 : 0;
+  return Math.abs(_sv.x) <= s.hx + pad + grow && Math.abs(_sv.z) <= s.hz + pad + grow;
+}
+
+/**
+ * Put every standing spot (an NPC, a vendor, a door, a reading place…) on a floor and clear of the
+ * colliders: its height snaps to the walking surface under it (a box top within a step, else the
+ * terrain, where the paving lies a few centimetres above), and a spot that stands inside furniture,
+ * a pier or a counter moves to the nearest free point within `NUDGE[kind]` metres. Seats ('sit')
+ * are left alone: they sit in their furniture on purpose. Builders then place spots where they
+ * mean them and this pass keeps them honest on the real terrain.
+ */
+export function settleSpots(ctx: LandmarkContext, cols: readonly ColliderSpec[], spots: Spot[], paved: readonly PavedPatch[] = []) {
+  const solids = solidsOf(cols);
+  const R = 0.34;
+  const near = (x: number, z: number, pad: number) => solids.filter((s) => inFootprint(s, x, z, pad));
+  /** The walking surface under (x, z) at about height y: a box top within a step, else the terrain + paving. */
+  const floorAt = (x: number, z: number, y: number): number => {
+    let best = -Infinity;
+    for (const s of near(x, z, 0.05)) if (!s.tilted && s.top >= y - 0.5 && s.top <= y + 0.25 && s.top > best) best = s.top;
+    if (best > -Infinity) return best;
+    const g = ctx.groundAt(x, z);
+    // paving laid on the terrain here (the highest patch wins)
+    let lift = 0.07;
+    for (const pv of paved) if (pv.lift > lift - 0.01 && inPoly(x, z, pv.poly) && !pv.holes.some((h) => inPoly(x, z, h))) lift = Math.max(lift, pv.lift + 0.01);
+    return Math.abs(g - y) < 0.7 + lift ? g + lift : y;
+  };
+  const blocked = (x: number, z: number, y: number) => near(x, z, R).some((s) => s.top > y + 0.12 && s.bottom < y + 1.75);
+  for (const sp of spots) {
+    if (!STANDING.has(sp.kind)) continue;
+    const { x, z } = sp.position;
+    const y0 = floorAt(x, z, sp.position.y);
+    let y = y0;
+    if (!blocked(x, z, y)) {
+      sp.position.y = y;
+      continue;
+    }
+    const maxR = NUDGE[sp.kind] ?? 1.2;
+    let found = false;
+    for (let r = 0.15; r <= maxR && !found; r += 0.15) {
+      const n = Math.max(8, Math.round((Math.PI * 2 * r) / 0.15));
+      for (let k = 0; k < n && !found; k++) {
+        const a = (k / n) * Math.PI * 2 + 0.7;
+        const nx = x + Math.cos(a) * r;
+        const nz = z + Math.sin(a) * r;
+        y = floorAt(nx, nz, sp.position.y);
+        if (blocked(nx, nz, y)) continue;
+        // keep the floor level of the spot (no hopping onto a counter or a podium, or down a flight)
+        if (y > y0 + 0.2 || y < y0 - 0.3) continue;
+        sp.position.set(nx, y, nz);
+        found = true;
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------- ground
@@ -157,6 +299,7 @@ export function flight(b: MeshBuilder, at: THREE.Matrix4, width: number, height:
 
 /** Pave a local polygon over the terrain (lift above the ground), optional holes. Collider: trimesh. */
 export function pave(p: Part, poly: V2[], o: { material?: MaterialId; lift?: number; exclude?: V2[][]; cell?: number; skirt?: number; collide?: boolean } = {}) {
+  if (p.main) p.paved.push({ poly, holes: o.exclude ?? [], lift: o.lift ?? 0.06 });
   buildPlaza(p.b, poly as Polygon, (x, z) => p.ctx.groundAt(x, z), {
     material: o.material ?? 'paving_travertine',
     lift: o.lift ?? 0.06,
@@ -453,7 +596,19 @@ export function addFire(p: Part, x: number, y: number, z: number, o: Omit<FireRe
 
 const pendingFires = new WeakMap<Game, FireRequest[]>();
 
+type LightPool = { request(o: object): unknown };
+
+function requestFire(lights: LightPool, f: FireRequest) {
+  lights.request({ position: f.position, color: 0xff9a45, intensity: f.intensity ?? 10, distance: f.distance ?? 9, flicker: f.flicker ?? 0.45, glow: f.glow ?? 0.45, dayScale: f.dayScale ?? 0, night: f.night });
+}
+
 function queueFire(game: Game, r: FireRequest) {
+  // The light pool already exists (a landmark built late): ask for the fire right away.
+  const live = (game as unknown as { lights?: LightPool }).lights;
+  if (live) {
+    requestFire(live, r);
+    return;
+  }
   let q = pendingFires.get(game);
   if (!q) {
     const list: FireRequest[] = [];
@@ -464,13 +619,17 @@ function queueFire(game: Game, r: FireRequest) {
       name: 'forumFires',
       priority: 200,
       update() {
-        const lights = (game as unknown as { lights?: { request(o: object): unknown } }).lights;
+        const lights = (game as unknown as { lights?: LightPool }).lights;
         if (lights) {
-          for (const f of list) {
-            lights.request({ position: f.position, color: 0xff9a45, intensity: f.intensity ?? 10, distance: f.distance ?? 9, flicker: f.flicker ?? 0.45, glow: f.glow ?? 0.45, dayScale: f.dayScale ?? 0, night: f.night });
-          }
+          for (const f of list) requestFire(lights, f);
+          // the queue is spent: a later addFire goes straight to the pool, not into a dead list
+          list.length = 0;
+          pendingFires.delete(game);
           game.removeSystem(sys);
-        } else if (++tries > 6000) game.removeSystem(sys);
+        } else if (++tries > 6000) {
+          pendingFires.delete(game);
+          game.removeSystem(sys);
+        }
       },
     };
     game.addSystem(sys);
@@ -683,6 +842,16 @@ export function ramBronze(): THREE.MeshStandardMaterial {
     ramMat.name = 'forum:ram-bronze';
   }
   return ramMat;
+}
+
+let brightMat: THREE.MeshStandardMaterial | null = null;
+/** Polished, golden-brown bronze for grilles, door leaves and railings (contrasts with `ramBronze`). */
+export function brightBronze(): THREE.MeshStandardMaterial {
+  if (!brightMat) {
+    brightMat = new THREE.MeshStandardMaterial({ color: '#b48a46', roughness: 0.3, metalness: 0.8 });
+    brightMat.name = 'forum:bright-bronze';
+  }
+  return brightMat;
 }
 
 /**

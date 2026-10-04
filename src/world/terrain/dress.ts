@@ -17,6 +17,7 @@
 import * as THREE from 'three';
 import { Forest, vegetation, type GrassField, type TreeSpecies } from '../../arch/vegetation';
 import type { Game } from '../../core/Game';
+import { Layer } from '../../core/Physics';
 import { hash2 } from '../../core/Rng';
 import * as atlas from '../../data/atlas';
 import { getMaterial } from '../../gfx/materials';
@@ -64,8 +65,12 @@ export class BuiltProbe {
     if (!v) {
       const cx = this.hm.minX + i * this.cell, cz = this.hm.minZ + j * this.cell;
       const g = this.hm.heightAt(cx, cz);
-      const hit = this.game.physics.groundHeight(cx, cz, g + 45, 46);
-      v = this.cells[k] = hit !== null && hit > g + 0.25 ? 2 : 1;
+      // The first World surface from above. Anything but the terrain's own heightfield that stands
+      // a hand above the ground (paving, kerbs, steps: 4 cm up) is built over; the 25 cm rule stays
+      // for surfaces of unknown owner (a heightfield without one, as in tests).
+      const hit = this.game.physics.raycast({ x: cx, y: g + 45, z: cz }, { x: 0, y: -1, z: 0 }, 46, Layer.World);
+      const up = hit ? hit.point.y - g : -1;
+      v = this.cells[k] = hit && (hit.owner !== undefined && hit.owner !== this.game.terrain ? up > 0.04 : up > 0.25) ? 2 : 1;
     }
     return v === 2;
   }
@@ -258,6 +263,9 @@ export function dressTerrain(game: Game, opts: DressOptions = {}): TerrainDressi
   const group = new THREE.Group();
   group.name = 'terrain-dressing';
   game.scene.add(group);
+  // Rapier's ray queries only see colliders that a step has put in the broad phase: take one step
+  // so every landmark, street and kerb added since the last frame counts as built-over.
+  game.physics.step(1 / 60);
   const built = new BuiltProbe(game, hm);
   const b = playableBounds(hm, 8);
   const w = new Float32Array(LAYER_COUNT);

@@ -29,6 +29,8 @@ import { placeProp } from '../../../arch/props';
 import { Draw } from '../../../arch/fabric/draw';
 import { sacrificeFriezeMaterial } from './forum-reliefs';
 import { forumTemple, gableRoof, type ForumTempleSpec } from './forum-temple';
+import { lampstand } from './forum-life';
+import { CREPIDO, court, lampAt, sidewalk } from './forum-street';
 
 const text = (id: string) => FORUM_INSCRIPTIONS[id].latin;
 
@@ -128,6 +130,7 @@ function saturn(p: Part) {
   const dz = s.z0 + zs + 3.2;
   podiumDoor(p, TRS(s.x1 + 0.005, 0, dz, 0, -Math.PI / 2, 0), 1.5, 2.5, 'bronze');
   if (p.hi) inscription(p.b, TRS(s.x1 + 0.02, 3.0, dz, 0, -Math.PI / 2, 0), ['Aerarium'], 1.6, 0.4, 'carved', { depth: 0.03 });
+  for (const sx of [-1, 1]) lampAt(p, sx * (s.x1 + 1.0), r.L.stairs.z0 + zs - 1.2);
   p.spot('aerarium-door', 'door', s.x1 + 1.2, 0, dz, -Math.PI / 2);
   p.spot('aerarium-scribe', 'npc', s.x1 + 1.6, 0, dz + 2.0, Math.PI / 2);
   p.spot('temple-saturn', 'inscription', 0, 0, r.L.stairs.z0 + zs - 3.0, 0);
@@ -190,6 +193,7 @@ function vespasian(p: Part) {
   foundation(p, (spec.podiumOutline as V2[]).map(([x, z]) => [x, z + zs] as V2), 0);
   // dedication on the architrave
   if (p.hi) inscription(p.b, mul(at, T(0, r.yE + r.architrave * 0.5, r.e.z0 - 0.03)), text('temple-vespasian-titus'), (r.e.x1 - r.e.x0) * 0.8, r.architrave * 0.7, 'bronze', { depth: 0.01, sizes: [1] });
+  for (const sx of [-1, 1]) lampAt(p, sx * (s.x1 + 0.9), z0 + zs - 1.2);
   p.spot('temple-vespasian-titus', 'inscription', 0, 0, z0 + zs - 2.5, 0);
 }
 
@@ -270,6 +274,7 @@ function concord(p: Part) {
   for (const sx of hi ? [-1, 1] : []) figure(b, T(sx * (ex - 0.4), yTop + 0.05, ez0 + 0.4), false, 'gilded_bronze', 1.1, (s) => drapedFemale(s, { right: 'wreath', left: 'palm', wings: true, stride: true }));
   for (const sx of hi ? [-1, 1] : []) figure(b, T(sx * (W / 2 - 1.0), cTop + 0.05, wz0 + 0.2), false, 'gilded_bronze', 1.1, (s) => nudeMale(s, { right: 'spear', left: 'down', cloak: true }));
   foundation(p, [[-W / 2, sz0], [W / 2, sz0], [W / 2, cz1], [-W / 2, cz1]], 0);
+  for (const sx of [-1, 1]) lampAt(p, sx * (px + 1.2), sz0 - 1.2);
   p.spot('temple-concord', 'inscription', 0, 0, sz0 - 2.5, 0);
 }
 
@@ -293,8 +298,18 @@ function divusAugustus(p: Part) {
   const r = forumTemple(p, spec, T(0, 0, zs));
   const s = r.L.stylobate;
   foundation(p, [[s.x0, r.L.stairs.z0 + zs], [s.x1, r.L.stairs.z0 + zs], [s.x1, s.z1 + zs], [s.x0, s.z1 + zs]], 0);
-  p.spot('temple-divus-augustus', 'inscription', 0, 0, r.L.stairs.z0 + zs - 2.5, 0);
+  // The precinct: a travertine court before the stair (the plaza's own paving stops at its corner),
+  // lamps either side of the stair, and the walk along the Vicus Tuscus beside the temple.
+  const zf = r.L.stairs.z0 + zs;
+  court(p, [[-13, zf - 15], [13, zf - 15], [13, zf + 0.3], [-13, zf + 0.3]]);
+  sidewalk(p, 'vicus-tuscus', -1, [62, 133], [8, 218], 3.4);
+  if (p.hi) {
+    for (const [x, z] of [[-6.5, zf - 3], [6.5, zf - 3], [-6.5, zf - 12], [6.5, zf - 12]] as const) lampstand(p, new THREE.Vector3(x, p.ctx.groundAt(x, z) + CREPIDO, z));
+  }
+  p.spot('temple-divus-augustus', 'inscription', 0, 0, zf - 2.5, 0);
   p.spot('bibliotheca-divi-augusti', 'door', s.x1 + 1.5, 0, s.z1 + zs - 4, -Math.PI / 2);
+  p.spot('divus-augustus-priest', 'npc', 4.5, 0.06, zf - 4.5, 0);
+  p.spot('divus-augustus-petitioner', 'npc', -3.5, 0.06, zf - 8, Math.PI);
 }
 
 // ---------------------------------------------------------------- Divus Iulius

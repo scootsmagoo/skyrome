@@ -18,6 +18,7 @@ import { FORUM_INSCRIPTIONS } from './forum-data';
 import { drapedFemale, figure, nudeMale } from './forum-figures';
 import { T, TRS, col, inscription, landmark, mul, type Part } from './forum-kit';
 import { arcadeRow, gableRoof, shedRoof } from './forum-temple';
+import { lampAt } from './forum-street';
 
 const text = (id: string) => FORUM_INSCRIPTIONS[id].latin;
 
@@ -47,7 +48,8 @@ function tabularium(p: Part) {
   const openings: { kind: 'door' | 'window'; x: number; width: number; height: number; sill: number; leaves?: 'closed'; leafMaterial?: MaterialId; frame?: boolean }[] = [];
   const nW = 11;
   const bay = 3.6;
-  const dx = Math.max(-hw + 3, Math.min(hw - 3, xLow + 4));
+  // the door opens on the flat Forum-level foot, a little beside where the cliff starts to climb
+  const dx = Math.max(-hw + 3, Math.min(hw - 3, xLow - 2));
   const gDoor = ctx.groundAt(dx, -hd - 0.8);
   openings.push({ kind: 'door', x: dx + hw, width: 1.8, height: 3.0, sill: gDoor - yMin + 0.02, leaves: 'closed', leafMaterial: 'bronze', frame: true });
   for (let i = 0; i < nW; i++) {
@@ -103,8 +105,9 @@ function tabularium(p: Part) {
   shedRoof(b, gx0 - 0.3, -gx0 + 0.3, uz0 + 0.05, -hd - 0.4, yG + gH + 1.4, yG + gH + 0.05, 'roof_tile', new THREE.Matrix4());
   const pitch = (15 * Math.PI) / 180;
   gableRoof(b, -(hd - uz0) / 2 - 0.4, (hd - uz0) / 2 + 0.4, -hw - 0.2, hw + 0.2, yG + uH, pitch, 'roof_tile', hi, TRS(0, 0, (uz0 + hd) / 2, 0, Math.PI / 2, 0));
-  p.spot('tabularium-door', 'door', dx, gDoor, -hd - 1.2, 0);
-  p.spot('tabularium', 'inscription', dx, gDoor, -hd - 3.0, 0);
+  for (const sx of [-1, 1]) lampAt(p, dx + sx * 2.1, -hd - 1.1);
+  p.spot('tabularium-door', 'door', dx, ctx.groundAt(dx, -hd - 1.0) + 0.06, -hd - 1.0, 0);
+  p.spot('tabularium', 'inscription', dx, ctx.groundAt(dx, -hd - 1.9) + 0.06, -hd - 1.9, 0);
   // the best view down the Forum is from the S end of the gallery, past the Temple of Vespasian's roof
   p.spot('tabularium-gallery-vista', 'vista', 15, yG, -hd + 1.6, Math.atan2(0.3, -1));
   p.spot('tabularium-back-door', 'door', 0, yG, hd + 1.0, Math.PI);

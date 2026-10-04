@@ -229,7 +229,8 @@ function basilicaIulia(p: Part) {
   }
   p.spot('basilica-iulia-steps', 'sit', -20, Y - 2 * rise, -hd + (nSteps - 2.5) * run, Math.PI);
   p.spot('basilica-iulia-steps-2', 'sit', 22, Y - 3 * rise, -hd + (nSteps - 3.5) * run, Math.PI);
-  p.spot('basilica-iulia-entrance', 'door', 0, Y, z0 + 1.0, 0);
+  // the middle two bays of the 18 are open (the pier stands on x = 0): the door stands in the E one
+  p.spot('basilica-iulia-entrance', 'door', bay / 2, Y, z0 + 1.0, 0);
 }
 
 /**
@@ -425,7 +426,7 @@ function basilicaAemilia(p: Part) {
   shedRoof(b, -hw, hw, nz1, hz1 + 0.4, fy + hH + 0.4, fy + hH - 0.3, 'roof_tile', new THREE.Matrix4());
   // the dedication to Lucius Caesar on the portico's upper storey, at the centre
   if (hi) inscription(b, T(0, fy + 5.2 + 2.0, z0 - 0.06), text('basilica-aemilia-lucius'), 5.0, 1.5, 'carved', { depth: 0.05 });
-  p.spot('basilica-aemilia-lucius', 'inscription', 0, fy, z0 - 2.5, 0);
+  p.spot('basilica-aemilia-lucius', 'inscription', 0, p.ctx.groundAt(0, -hd - 2.0) + 0.06, -hd - 2.0, 0);
 }
 
 export const builders: LandmarkBuilder[] = [

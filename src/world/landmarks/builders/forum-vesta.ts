@@ -24,6 +24,7 @@ import { FORUM_INSCRIPTIONS } from './forum-data';
 import { drapedFemale, figure, horse, nudeMale, Sculpt } from './forum-figures';
 import { T, TRS, addFire, altar, balustrade, col, crossingX, foundation, inscription, landmark, mul, pave, pedestal, plantTrees, rect, roadLocal, type Part, type V2 } from './forum-kit';
 import { gableRoof, shedRoof } from './forum-temple';
+import { lampAt } from './forum-street';
 import { shopInterior, type ShopKind } from '../../../arch/fabric/shops';
 import { placeProp } from '../../../arch/props';
 
@@ -261,6 +262,7 @@ function regia(p: Part) {
   if (hi) {
     for (const sx of [-1, 1]) inscription(b, T(sx * 4.6, 2.5, -hd - 0.035), text('regia-fasti'), 5.0, 2.2, 'carved', { depth: 0.04, sizes: [1, 0.6, 0.6, 0.6] });
   }
+  for (const sx of [-1, 1]) lampAt(p, sx * 2.4, -hd - 1.2);
   p.spot('regia-door', 'door', 0, 0, -hd - 1.0, 0);
   p.spot('regia-fasti', 'inscription', 4.6, 0, -hd - 2.0, 0);
   p.spot('regia-ancilia', 'shrine', -0.6, 0, -hd + t + 2.2, -Math.PI / 2);

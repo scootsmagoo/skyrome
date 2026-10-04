@@ -24,7 +24,9 @@ import type { LandmarkBuilder } from '../types';
 import { FORUM_INSCRIPTIONS } from './forum-data';
 import { nudeMale } from './forum-figures';
 import { heroicNude } from './forum-statue';
-import { T, TRS, addFire, atlasToLocal, balustrade, col, foundation, inscription, landmark, localToAtlas, pave, plantTrees, rect, streetEdge, type Part } from './forum-kit';
+import { T, TRS, addFire, brazier, atlasToLocal, balustrade, col, foundation, inscription, landmark, localToAtlas, pave, plantTrees, rect, streetEdge, type Part } from './forum-kit';
+import { lampAt, sidewalk, tabernaeRow, type BayKind } from './forum-street';
+import { lampstand } from './forum-life';
 import { gableRoof, shedRoof } from './forum-temple';
 import { aediculaShrine } from './forum-vesta';
 
@@ -58,6 +60,8 @@ function colossus(p: Part) {
   const k = H / 1.85;
   heroicNude(b, T(0, ph, 0.3), { material: 'bronze', crownMat: 'gilded_bronze', scale: k, hi, q: hi ? 1.6 : 1, radiate: true, rudder: true });
   d.solidCyl(0, ph + 2.5, 0.3, 1.6, 5.0);
+  // braziers at the corners of the steps burn day and night, as at a shrine
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) brazier(p, sx * (pw / 2 + 1.9), p.ctx.groundAt(sx * (pw / 2 + 1.9), sz * (pw / 2 + 1.9)) + 0.08, sz * (pw / 2 + 1.9));
   p.spot('colossus-sol', 'vista', 0, 0.44, -pw / 2 - 2.2, 0);
   p.spot('colossus-sol-base', 'npc', 2.5, 0, -pw / 2 - 1.2, Math.PI);
 }
@@ -137,6 +141,7 @@ function vestibule(p: Part) {
     }
   }
   plantTrees(p, trees);
+  for (const x of [-hw + 3, -hw * 0.5, 0, hw * 0.5, hw - 3]) lampstand(p, new THREE.Vector3(x, fy, fz - 0.6));
   p.spot('velia-vestibule-gate', 'door', 0, fy, fz - 1.4, 0);
   p.spot('velia-vista', 'vista', -hw + 2, fy, fz + 1.8, Math.PI);
 }
@@ -242,17 +247,37 @@ function piperataria(p: Part) {
 function agrippiana(p: Part) {
   const w = 50 * p.S;
   const dp = 60 * p.S;
+  const hw = w / 2;
+  const hd = dp / 2;
   horreaBuilding(p, w, dp, ['Horrea', 'Agrippiana']);
   // the aedicula of the warehouse's Genius in the court, facing the gate
   aediculaShrine(p, T(0, 0, 4.5), (s) => nudeMale(s, { right: 'forward', left: 'globe', cloak: true, plinth: false, head: { crown: 'wreath' } }), 'marble', 'bronze');
   if (p.hi) {
     for (const [x, z] of [
-      [-2.5, -dp / 2 - 1.5],
-      [2.8, -dp / 2 - 1.8],
+      [-2.5, -hd - 1.5],
+      [2.8, -hd - 1.8],
     ] as const) placeProp(p.d, 'stall_cloth', x, 0, z, 0.1, { variant: 0 });
   }
   p.spot('horrea-agrippiana-genius', 'shrine', 0, 0, 2.6, 0);
-  p.spot('horrea-agrippiana-vestiarius', 'vendor', 2.8, 0, -dp / 2 - 2.8, 0);
+  p.spot('horrea-agrippiana-vestiarius', 'vendor', 2.8, 0, -hd - 2.8, 0);
+  // The flank on the Vicus Tuscus: the street runs only 3 to 7 m off the wall (narrowing toward the
+  // front corner), so the cloth dealers' and victuallers' tabernae take the southern part of the
+  // flank, shallow, with a walk to the kerb, torches on the party walls, a bench and the porters.
+  const depth = 2.2;
+  const bay = 3.8;
+  const kinds: BayKind[] = ['textile', 'general', 'closed', 'textile', 'wine'];
+  const zS = hd - 2.0;
+  const zN = zS - kinds.length * bay;
+  const xf = -hw - depth;
+  tabernaeRow(p, { id: 'horrea-agrippiana-taberna', frame: p.d.at(xf, 0, zS, Math.PI / 2), bay, depth, kinds, torches: [0, 2, 4, 5] });
+  sidewalk(p, 'vicus-tuscus', 1, localToAtlas(p.ctx, xf, zN - 8), localToAtlas(p.ctx, xf, zS + 10), 3.2);
+  if (p.hi) {
+    // the blank north end of the flank carries a torch and the warehouse's pilasters
+    for (const z of [zN - 3, zN - 8]) p.d.box('brick', -hw - 0.2, 2.2, z, 0.4, 4.4, 0.7);
+    placeProp(p.d, 'amphora_stack', xf - 0.1, 0.06, zS + 1.3, 0.4, { collide: p.main });
+  }
+  p.spot('horrea-agrippiana-porter-1', 'npc', xf - 0.6, 0.06, zS - bay * 2.5, -Math.PI / 2);
+  p.spot('horrea-agrippiana-porter-2', 'npc', xf - 0.8, 0.06, zS + 2.5, -Math.PI / 2);
 }
 
 // ---------------------------------------------------------------- Porticus Margaritaria
@@ -329,6 +354,7 @@ function margaritaria(p: Part) {
   shedRoof(b, -hw - 0.3, hw + 0.3, bz0 + shopD + 0.3, zs - 0.4, fy + H + 1.4, fy + H, 'roof_tile', new THREE.Matrix4());
   shedRoof(b, -hw - 0.3, hw + 0.3, hd - 6.3, hd + 0.4, fy + H + 1.4, fy + H, 'roof_tile', new THREE.Matrix4());
   if (hi) inscription(b, T(0, fy + cH + ent.dims.total + 1.6, zs - 0.05), FORUM_INSCRIPTIONS['porticus-margaritaria'].latin, 4.2, 0.55, 'painted', { depth: 0.03 });
+  for (const i of [1, 4, 8]) lampstand(p, new THREE.Vector3(-(n * bay) / 2 + (i + 0.5) * bay, fy, z0 + 1.5));
   p.spot('porticus-margaritaria', 'inscription', 0, fy, z0 - 1.6, 0);
   // the S side of the summa Sacra Via along the portico's front, open (with steps) at its gate
   streetEdge(p, 'via-sacra', 1, [257, 128.8], [309.5, 146.6], { gaps: [localToAtlas(p.ctx, 0, -hd)], walk: 2.4 });
@@ -388,6 +414,11 @@ function domVestibule(p: Part) {
   gableRoof(b, -hw - 0.3, hw + 0.3, -hl - 0.3, hl + 0.3, H + 0.55, (12 * Math.PI) / 180, 'roof_tile', hi, new THREE.Matrix4());
   // brick cornice bands
   for (const y of [9.6, H - 0.2]) d.span('travertine', -hw - 0.15, y, -hl - 0.15, hw + 0.15, y + 0.3, hl + 0.15);
+  // lamps and the Praetorians at the great entrance
+  for (const sx of [-1, 1]) {
+    lampAt(p, sx * 5.2, -hl - 1.8);
+    p.spot(`domitianic-vestibule-guard-${sx < 0 ? 'w' : 'e'}`, 'npc', sx * 3.4, p.ctx.groundAt(sx * 3.4, -hl - 1.2) + 0.06, -hl - 1.2, 0);
+  }
   p.spot('palatine-ramp-gate', 'door', 0, fy, hl - t - 1.0, Math.PI);
   p.spot('palatine-guard-1', 'npc', -2.4, fy, hl - t - 0.9, Math.PI);
   p.spot('palatine-guard-2', 'npc', 2.4, fy, hl - t - 0.9, Math.PI);

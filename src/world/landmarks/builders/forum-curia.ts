@@ -28,6 +28,7 @@ import { FORUM_INSCRIPTIONS } from './forum-data';
 import { drapedFemale, figure } from './forum-figures';
 import { T, TRS, addFire, altar, col, foundation, groundRange, inscription, landmark, pedestal, rect, type Part } from './forum-kit';
 import { gableRoof, shedRoof } from './forum-temple';
+import { lampAt } from './forum-street';
 
 const text = (id: string) => FORUM_INSCRIPTIONS[id].latin;
 
@@ -168,7 +169,10 @@ function curia(p: Part) {
     placeProp(di, 'stool', -0.8, yT, tz0 + 1.5, Math.PI, { variant: 2, collide: false });
     placeProp(di, 'stool', 0.8, yT, tz0 + 1.5, Math.PI, { variant: 2, collide: false });
   }
-  p.spot('curia-consul', 'npc', 0, yT, tz0 + 1.2, Math.PI);
+  // the presiding consul sits on the right-hand stool (the curule chair)
+  // lamps at the foot of the stair
+  for (const sx of [-1, 1]) lampAt(p, sx * (hw + 1.0), pz - steps * run - 0.8);
+  p.spot('curia-consul', 'sit', 0.8, yT + 0.45, tz0 + 1.5, Math.PI);
   // the Statue of Victory on her globe, and before it the Altar of Victory with incense burning
   {
     const at = T(0, yT, iz1 - 0.6);
@@ -211,6 +215,7 @@ function carcer(p: Part) {
   b.box('travertine', wf + 0.3, 0.22, 0.9, T(0, H + 0.51, -hd + 0.35));
   // low tiled roof
   shedRoof(b, -wf / 2, wf / 2, hd + 0.3, -hd + 0.6, H + 0.4, H + 1.1, 'roof_tile', new THREE.Matrix4());
+  lampAt(p, -wf / 2 - 0.2, -hd - 1.1);
   p.spot('carcer-door', 'door', 1.4, 0, -hd - 1.2, 0);
   p.spot('carcer-tullianum', 'inscription', -1.0, 0, -hd - 2.4, 0);
   p.spot('carcer-guard', 'npc', 2.9, 0, -hd - 0.8, Math.PI);

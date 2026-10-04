@@ -9,9 +9,10 @@
  */
 import * as THREE from 'three';
 import { armoredEmperor, equestrian, togate } from '../../../arch/classical/statues';
+import type { MaterialId } from '../../../gfx/materialIds';
 import { column } from '../../../arch/classical/column';
 import { podium } from '../../../arch/classical/podium';
-import { ProfileBuilder, lathe, tube } from '../../../arch/common/geom';
+import { ProfileBuilder, extrudePolygon, lathe, tube } from '../../../arch/common/geom';
 import { stairs } from '../../../arch/common/stairs';
 import { prism } from '../../../arch/common/walls';
 import { LANDMARK_BY_ID } from '../../../data/atlas';
@@ -19,10 +20,11 @@ import { footprintPolygon } from '../../terrain/heightmap';
 import type { LandmarkBuilder, LandmarkContext } from '../types';
 import { FORUM_INSCRIPTIONS, FORUM_PLAZA, plazaRoadStrips, type P2 } from './forum-data';
 import { drapedFemale, figure, nudeMale } from './forum-figures';
-import { T, TRS, altar, atlasToLocal, balustrade, inscription, landmark, mul, paint, pave, pedestal, plantTrees, rect, ring, shipRam, type Part, type V2 } from './forum-kit';
+import { T, TRS, altar, atlasToLocal, balustrade, brightBronze, inscription, landmark, mul, paint, pave, pedestal, plantTrees, ramBronze, rect, ring, shipRam, type Part, type V2 } from './forum-kit';
 import { curtiusMaterial, panel } from './forum-reliefs';
 import { forumLife } from './forum-life';
 import { heroicNude } from './forum-statue';
+import { lampAt } from './forum-street';
 
 const text = (id: string) => FORUM_INSCRIPTIONS[id].latin;
 
@@ -113,14 +115,19 @@ function rostra(p: Part) {
   const run = 0.32;
   stairs(b, { width: 5, rise: H / n, run, count: n, material: 'travertine' }, TRS(0, 0, z1 + n * run, 0, Math.PI, 0));
   for (const sx of [-1, 1]) d.box('marble', sx * 2.7, H / 2, z1 + (n * run) / 2, 0.4, H, n * run, { collide: true });
-  // bronze rams in two staggered rows on the front
-  for (const [y, k, off] of [
-    [0.75, 8, 0],
-    [1.65, 9, 0.5],
-  ] as const) {
-    for (let i = 0; i < k; i++) {
-      const x = -W / 2 + 1.0 + ((i + off) * (W - 2.0)) / (k - 1 + off * 2);
-      shipRam(b, TRS(x, y, z0 - 0.02, 0, 0, 0), hi ? 1.15 : 1.0);
+  // The beaks of the Antiates (338 BC), with those added since: a few dozen would be too tidy, so
+  // fewer, irregular in spacing, length, height and angle, in two loose rows, some places empty.
+  {
+    const r = p.ctx.rng.fork('rams');
+    for (const [y, x0, step, jy] of [
+      [0.78, -W / 2 + 1.1, 1.9, 0.12],
+      [1.7, -W / 2 + 1.9, 2.3, 0.16],
+    ] as const) {
+      for (let x = x0; x < W / 2 - 1.0; x += step * r.range(0.8, 1.25)) {
+        if (r.chance(0.14)) continue;
+        const len = (hi ? 1.0 : 0.9) * r.range(0.95, 1.5);
+        shipRam(b, TRS(x, y + r.range(-jy, jy), z0 - 0.02, r.range(-0.05, 0.06), r.range(-0.1, 0.1), 0), len);
+      }
     }
   }
   // marble balustrade on top, open at the stair
@@ -162,6 +169,8 @@ function rostra(p: Part) {
     d.solidCyl(cx, (h + colH) / 2, cz, 0.7, h + colH);
     p.spot('rostra-duilius', 'inscription', cx, 0.06, cz - 1.6, 0);
   }
+  // lamps beside the back stair
+  for (const sx of [-1, 1]) lampAt(p, sx * 3.5, z1 + n * run + 0.6);
   p.spot('rostra-orator', 'npc', 0, H, z0 + 1.0, Math.PI);
   p.spot('rostra-vista', 'vista', 2.0, H, z0 + 1.6, Math.PI);
   p.spot('rostra-crowd', 'npc', 0, 0.06, z0 - 5, 0);
@@ -220,12 +229,13 @@ function volcanal(p: Part) {
   ] as const) d.ellipsoid('rock', x, 0.42, z, r, 0.22, r * 0.8);
   altar(d, 0, 0.45, 0.2, { w: 0.8, h: 0.8, mat: 'tufa' });
   // bronze railing round it
-  const rail = { y: 0.06, h: 0.9, mat: 'bronze' as const, lattice: true };
+  const rail = { y: 0.06, h: 0.85, mat: 'tufa' as const };
   balustrade(d, -w / 2, -dp / 2, w / 2, -dp / 2, rail);
   balustrade(d, w / 2, -dp / 2, w / 2, dp / 2, rail);
   balustrade(d, w / 2, dp / 2, -w / 2, dp / 2, rail);
   balustrade(d, -w / 2, dp / 2, -w / 2, -dp / 2, rail);
-  p.spot('volcanal', 'shrine', 0, ctx.groundAt(0, -dp / 2 - 0.9) + 0.06, -dp / 2 - 0.9, 0);
+  // the Umbilicus stands 3.5 m in front of the enclosure: the reader stands beside it
+  p.spot('volcanal', 'shrine', w / 2 + 1.2, ctx.groundAt(w / 2 + 1.2, 0) + 0.06, 0, -Math.PI / 2);
 }
 
 // ---------------------------------------------------------------- lacus curtius
@@ -391,6 +401,13 @@ function servilius(p: Part) {
 
 // ---------------------------------------------------------------- janus geminus
 
+/**
+ * Janus Geminus after Nero's coins: a small bronze shrine, a plinth of solid panels under a lattice
+ * of diamond-pattern grilles along the sides, a doorway in each end under a pediment with a gilded
+ * acroterion, and a verdigris-green gabled roof. The two-leaf bronze doors stand OPEN (Rome is
+ * going to war), the two-faced god inside on a marble base. Dark bronze, gilded trim and green
+ * patina so that it reads as metal and not as planks.
+ */
 function janus(p: Part) {
   const { b, hi } = p;
   // set 1.5 m west of the atlas point, clear of the Basilica Paulli's front steps
@@ -399,41 +416,99 @@ function janus(p: Part) {
   const d = p.d.at(ox, 0, oz);
   const W = 4 * p.S;
   const L = 7 * p.S;
-  const H = 2.95;
+  const H = 3.1;
   const t = 0.16;
-  const mat = 'bronze' as const;
-  // stepped travertine base
-  d.span('travertine', -W / 2 - 0.35, 0, -L / 2 - 0.35, W / 2 + 0.35, 0.16, L / 2 + 0.35, { collide: true });
-  const y0 = 0.16;
-  // side walls with a lattice window in each, between pilasters
+  const dark = ramBronze();
+  const shine = brightBronze();
+  const gold = 'gilded_bronze' as const;
+  const green = paint('#5c7d6a', 0.5, 0.5);
+  /** A box of a custom material in the shrine's frame (centre, size, optional rotation about x/y/z). */
+  const bx = (mat: MaterialId | THREE.Material, cx: number, cy: number, cz: number, w: number, h: number, dd: number, rot: [number, number, number] = [0, 0, 0], shadow = true) => {
+    const m = new THREE.Matrix4().compose(new THREE.Vector3(ox + cx, cy, oz + cz), new THREE.Quaternion().setFromEuler(new THREE.Euler(rot[0], rot[1], rot[2])), new THREE.Vector3(1, 1, 1));
+    b.box(mat, w, h, dd, m, { castShadow: shadow });
+  };
+  // two steps of travertine
+  d.span('travertine', -W / 2 - 0.55, 0, -L / 2 - 0.55, W / 2 + 0.55, 0.14, L / 2 + 0.55, { collide: true });
+  d.span('travertine', -W / 2 - 0.3, 0.14, -L / 2 - 0.3, W / 2 + 0.3, 0.28, L / 2 + 0.3, { collide: true });
+  const y0 = 0.28;
+  const plinth = 0.95;
+  const lat0 = y0 + plinth;
+  const lat1 = y0 + H - 0.55;
   for (const sx of [-1, 1]) {
     const x = sx * (W / 2 - t / 2);
-    d.box(mat, x, y0 + H / 2, 0, t, H, L, { collide: true });
+    // solid plinth, a gilded moulding over it, a black ground behind the lattice
+    d.solid(Math.min(sx * (W / 2 - t), sx * W / 2), y0, -L / 2, Math.max(sx * (W / 2 - t), sx * W / 2), y0 + H - 0.5, L / 2);
+    bx(dark, x, y0 + H / 2, 0, t, H, L);
+    bx(gold, sx * (W / 2 + 0.03), y0 + H - 0.2, 0, 0.12, 0.1, L + 0.04);
+    bx(gold, sx * (W / 2 + 0.02), lat0 + 0.03, 0, 0.1, 0.07, L + 0.02);
+    bx(gold, sx * (W / 2 + 0.02), lat1 - 0.03, 0, 0.1, 0.07, L + 0.02);
+    // pilasters at the corners and the middle
+    for (const z of [-L / 2 + 0.14, 0, L / 2 - 0.14]) bx(gold, sx * (W / 2 + 0.03), y0 + (H - 0.5) / 2, z, 0.1, H - 0.5, 0.24);
     if (hi) {
-      for (const zz of [-L / 2 + 0.12, L / 2 - 0.12, 0]) d.box(mat, x + sx * 0.06, y0 + H / 2, zz, 0.06, H, 0.22);
-      d.box('black', x + sx * 0.085, y0 + 1.9, 0, 0.01, 0.6, L * 0.5);
-      for (let i = -3; i <= 3; i++) d.box(mat, x + sx * 0.095, y0 + 1.9, i * (L * 0.07), 0.02, 0.6, 0.03, { rx: 0.0, ry: 0, rz: 0 });
-      for (const yy of [1.65, 1.9, 2.15]) d.box(mat, x + sx * 0.095, y0 + yy, 0, 0.02, 0.03, L * 0.5);
-    }
+      // the lattice: an X in every 0.42 m cell, three rows
+      const cell = 0.42;
+      const nz = Math.floor((L - 0.7) / cell);
+      const rows = Math.floor((lat1 - lat0) / cell);
+      const ch = (lat1 - lat0) / rows;
+      const ang = Math.atan2(ch, cell);
+      const len = Math.hypot(ch, cell) * 0.98;
+      for (let i = 0; i < nz; i++) {
+        const z = -((nz - 1) * cell) / 2 + i * cell;
+        if (Math.abs(z) < 0.3) continue; // the middle pilaster
+        for (let r = 0; r < rows; r++) {
+          const y = lat0 + (r + 0.5) * ch;
+          for (const k of [-1, 1]) bx(shine, sx * (W / 2 + 0.03), y, z, 0.04, 0.045, len, [k * ang, 0, 0], false);
+          bx(gold, sx * (W / 2 + 0.06), y, z, 0.04, 0.08, 0.08, [0, 0, 0], false);
+        }
+      }
+    } else bx(shine, sx * (W / 2 + 0.03), (lat0 + lat1) / 2, 0, 0.04, lat1 - lat0, L - 0.7, [0, 0, 0], false);
   }
-  // lintels and a cornice round the top, a flat bronze roof
+  // the ends: pilasters and a lintel round the doorway, the pediment over it, the doors open
+  const dw = W - 2 * t - 0.3;
   for (const sz of [-1, 1]) {
-    d.box(mat, 0, y0 + H - 0.25, sz * (L / 2 - 0.1), W, 0.5, 0.2);
-    // the double doors stand OPEN (Rome is going to war): leaves swung outward against the walls
+    const z = sz * (L / 2 - 0.1);
+    for (const sx of [-1, 1]) bx(gold, sx * (dw / 2 + 0.1), y0 + (H - 0.5) / 2, z + sz * 0.05, 0.2, H - 0.5, 0.2);
+    bx(gold, 0, y0 + H - 0.62, z + sz * 0.05, W, 0.24, 0.26);
+    bx(dark, 0, y0 + H - 0.28, z, W + 0.1, 0.34, 0.3);
+    // pediment: a triangular prism of verdigris with a gilded raking cornice
+    const rise = (W / 2 + 0.25) * 0.42;
+    const tri = extrudePolygon([[-W / 2 - 0.25, 0], [W / 2 + 0.25, 0], [0, rise]], 0.22);
+    const pm = new THREE.Matrix4().compose(new THREE.Vector3(ox, y0 + H - 0.1, oz + z - sz * 0.0), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, sz < 0 ? 0 : Math.PI, 0)), new THREE.Vector3(1, 1, 1));
+    b.add(tri, green, pm);
+    for (const sx of [-1, 1]) bx(gold, sx * (W / 4 + 0.12), y0 + H - 0.1 + rise / 2 + 0.05, z + sz * 0.1, 0.07, Math.hypot(W / 2 + 0.25, rise) + 0.05, 0.1, [0, 0, -sx * Math.atan2(rise, W / 2 + 0.25)], false);
+    if (hi) {
+      bx(gold, 0, y0 + H - 0.1 + rise + 0.18, z + sz * 0.06, 0.28, 0.36, 0.08);
+      bx(gold, 0, y0 + H - 0.1 + rise * 0.4, z + sz * 0.13, 0.6, 0.6, 0.04, [0, 0, Math.PI / 4]);
+    }
+    // the double doors stand OPEN: leaves swung outward against the end walls
     for (const sx of [-1, 1]) {
-      const lw = W / 2 - t - 0.02;
-      const hx = sx * (W / 2 - t);
+      const lw = dw / 2 - 0.02;
+      const hx = sx * (W / 2 - t - 0.04);
       const phi = 1.75;
       const cx = hx - sx * Math.cos(phi) * (lw / 2);
-      const cz = sz * (L / 2 + Math.sin(phi) * (lw / 2));
-      d.box(mat, cx, y0 + (H - 0.5) / 2, cz, lw, H - 0.52, 0.06, { ry: sx * sz * phi });
+      const cz = z + sz * (0.2 + Math.sin(phi) * (lw / 2));
+      bx(shine, cx, y0 + (H - 0.75) / 2, cz, lw, H - 0.8, 0.07, [0, sx * sz * phi, 0]);
+      if (hi) {
+        // raised panels and studs on each leaf
+        for (const py of [0.28, 0.62]) {
+          const ch = (H - 0.8) * 0.28;
+          const yy = y0 + (H - 0.8) * py + 0.35;
+          const off = new THREE.Vector3(0, 0, -sz * 0.045).applyAxisAngle(new THREE.Vector3(0, 1, 0), sx * sz * phi);
+          bx(gold, cx + off.x, yy, cz + off.z, lw * 0.7, ch, 0.025, [0, sx * sz * phi, 0], false);
+        }
+      }
     }
   }
-  d.box(mat, 0, y0 + H + 0.12, 0, W + 0.3, 0.24, L + 0.3);
-  d.box(mat, 0, y0 + H + 0.3, 0, W + 0.1, 0.12, L + 0.1);
+  // gabled roof of verdigris bronze with a gilded ridge
+  const pitch = 0.36;
+  const run = W / 2 + 0.35;
+  const slope = run / Math.cos(pitch);
+  for (const sx of [-1, 1]) bx(green, sx * (run / 2), y0 + H + 0.05 + (run / 2) * Math.tan(pitch) + 0.08, 0, slope, 0.1, L + 0.5, [0, 0, -sx * pitch]);
+  bx(gold, 0, y0 + H + 0.05 + run * Math.tan(pitch) + 0.14, 0, 0.14, 0.14, L + 0.55);
   // two-faced Janus on a low base inside
   d.box('marble', 0, y0 + 0.25, 0, 0.55, 0.5, 0.55, { collide: true });
   figure(b, T(ox, y0 + 0.5, oz), hi, 'bronze', 1.0, (s) => nudeMale(s, { right: 'spear', left: 'down', cloak: true, plinth: false, head: { janus: true, beard: true } }));
+  lampAt(p, ox + W / 2 + 1.4, oz - L / 2 - 0.6);
   p.spot('janus-geminus', 'shrine', ox, y0, oz - L / 2 - 1.0, 0);
 }
 
