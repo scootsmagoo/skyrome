@@ -84,6 +84,28 @@ export interface PorticoOpts {
   collide?: boolean;
   /** Skip the portico on these sides. */
   skip?: Face[];
+  /** Doorways (2.4 m wide) through the back walls: centres along each wall (x for n/s, z for e/w). */
+  doors?: Partial<Record<Face, number[]>>;
+}
+
+/**
+ * A straight wall from `a` to `b` along one axis (thickness spanning `c0..c1` on the other), from y0
+ * to y1, solid, with doorways (`w` wide, `h` high) centred at `doors` along it.
+ */
+function wallWithDoors(d: Draw, mat: MaterialId, axis: 'x' | 'z', a: number, b: number, c0: number, c1: number, y0: number, y1: number, doors: number[], collide: boolean, w = 2.4, h = 3.2) {
+  const cuts = doors.map((m) => [m - w / 2, m + w / 2] as const).filter(([u0, u1]) => u1 > a && u0 < b).sort((p, q) => p[0] - q[0]);
+  const piece = (u0: number, u1: number, v0: number, v1: number) => {
+    if (u1 - u0 < 1e-3 || v1 - v0 < 1e-3) return;
+    if (axis === 'x') d.span(mat, u0, v0, c0, u1, v1, c1, { collide });
+    else d.span(mat, c0, v0, u0, c1, v1, u1, { collide });
+  };
+  let u = a;
+  for (const [u0, u1] of cuts) {
+    piece(u, Math.max(u, u0), y0, y1);
+    piece(Math.max(a, u0), Math.min(b, u1), Math.min(y1, y0 + h), y1);
+    u = Math.min(b, u1);
+  }
+  piece(u, b, y0, y1);
 }
 
 /**
@@ -112,28 +134,28 @@ export function peristyle(d: Draw, x0: number, z0: number, x1: number, z1: numbe
     ['n', () => {
       cols(x0, z0, x1, z0);
       d.span(mat, x0 - 0.3, top, z0 - 0.3, x1 + 0.3, top + eH, z0 + 0.3);
-      if (o.back ?? true) d.span(o.backMat ?? 'plaster_red', x0 - dp, y, z0 - dp - 0.4, x1 + dp, top + eH, z0 - dp);
+      if (o.back ?? true) wallWithDoors(d, o.backMat ?? 'plaster_red', 'x', x0 - dp, x1 + dp, z0 - dp - 0.4, z0 - dp, y, top + eH, o.doors?.n ?? [], o.collide ?? true);
       shedTiles(d, x0 - dp, x1 + dp, z0 - dp, top + eH + 1.0, z0 + 0.3, top + eH);
       if (o.floor) d.span(o.floor, x0 - dp, y - 0.05, z0 - dp, x1 + dp, y + 0.02, z0 + 0.4);
     }],
     ['s', () => {
       cols(x0, z1, x1, z1);
       d.span(mat, x0 - 0.3, top, z1 - 0.3, x1 + 0.3, top + eH, z1 + 0.3);
-      if (o.back ?? true) d.span(o.backMat ?? 'plaster_red', x0 - dp, y, z1 + dp, x1 + dp, top + eH, z1 + dp + 0.4);
+      if (o.back ?? true) wallWithDoors(d, o.backMat ?? 'plaster_red', 'x', x0 - dp, x1 + dp, z1 + dp, z1 + dp + 0.4, y, top + eH, o.doors?.s ?? [], o.collide ?? true);
       shedTiles(d, x0 - dp, x1 + dp, z1 + dp, top + eH + 1.0, z1 - 0.3, top + eH);
       if (o.floor) d.span(o.floor, x0 - dp, y - 0.05, z1 - 0.4, x1 + dp, y + 0.02, z1 + dp);
     }],
     ['w', () => {
       cols(x0, z0, x0, z1);
       d.span(mat, x0 - 0.3, top, z0 - 0.3, x0 + 0.3, top + eH, z1 + 0.3);
-      if (o.back ?? true) d.span(o.backMat ?? 'plaster_red', x0 - dp - 0.4, y, z0 - dp, x0 - dp, top + eH, z1 + dp);
+      if (o.back ?? true) wallWithDoors(d, o.backMat ?? 'plaster_red', 'z', z0 - dp, z1 + dp, x0 - dp - 0.4, x0 - dp, y, top + eH, o.doors?.w ?? [], o.collide ?? true);
       shedTilesX(d, z0 - dp, z1 + dp, x0 - dp, top + eH + 1.0, x0 + 0.3, top + eH);
       if (o.floor) d.span(o.floor, x0 - dp, y - 0.05, z0, x0 + 0.4, y + 0.02, z1);
     }],
     ['e', () => {
       cols(x1, z0, x1, z1);
       d.span(mat, x1 - 0.3, top, z0 - 0.3, x1 + 0.3, top + eH, z1 + 0.3);
-      if (o.back ?? true) d.span(o.backMat ?? 'plaster_red', x1 + dp, y, z0 - dp, x1 + dp + 0.4, top + eH, z1 + dp);
+      if (o.back ?? true) wallWithDoors(d, o.backMat ?? 'plaster_red', 'z', z0 - dp, z1 + dp, x1 + dp, x1 + dp + 0.4, y, top + eH, o.doors?.e ?? [], o.collide ?? true);
       shedTilesX(d, z0 - dp, z1 + dp, x1 + dp, top + eH + 1.0, x1 - 0.3, top + eH);
       if (o.floor) d.span(o.floor, x1 - 0.4, y - 0.05, z0, x1 + dp, y + 0.02, z1);
     }],

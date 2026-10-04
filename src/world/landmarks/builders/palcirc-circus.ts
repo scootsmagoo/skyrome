@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import type { LandmarkBuilder, LandmarkContext } from '../types';
 import { CIRCUS, circusSection, ringPoint, totalStations } from './palcirc/circusLayout';
-import { buildFacade, buildGallery, buildSidewalk, buildStandsAll, buildTrack, circusGaps } from './palcirc/circus';
+import { buildApron, buildFacade, buildGallery, buildSidewalk, buildStandsAll, buildTrack, circusGaps } from './palcirc/circus';
 import { attachLod, facing, requestLamps } from './palcirc/runtime';
 import type { Lamp } from './palcirc/capenaParts';
 import { buildCarceres, buildSpina, buildTrackLines, circusFar } from './palcirc/circusParts';
@@ -23,6 +23,7 @@ import { inscriptionPanel, paintedSign } from '../../../arch/common/inscription'
 import { LANDMARK_BY_ID } from '../../../data/atlas';
 import type { LandmarkData } from '../types';
 import { Spots, drawFor, footingRect, frameFrom, landmarkToWorld } from './palcirc/util';
+import { settled } from './palcirc/settle';
 
 function circus(ctx: LandmarkContext) {
   const { b } = drawFor(ctx);
@@ -37,6 +38,7 @@ function circus(ctx: LandmarkContext) {
   buildGallery(group, b, sec, gaps, detail);
   buildTrack(b, ctx);
   buildSidewalk(b, gaps, (x, z) => ctx.groundAt(x, z));
+  buildApron(b, (x, z) => ctx.groundAt(x, z));
   // Lamps at the dressed shops and the popinae (lit at dusk; the nearest get real lights).
   const lamps: Lamp[] = [];
   for (const dr of facade.dressed) {
@@ -128,8 +130,10 @@ function pulvinarBuild(ctx: LandmarkContext) {
   const xf = CIRCUS.track + w1.u1; // front face (balteus line)
   const xb = CIRCUS.halfW - CIRCUS.wall; // back = facade inner face
   const floor = w1.y1 + 0.8; // box floor, above the first rows of the upper tier
-  // Solid substructure and the marble front of the box.
-  c.span('brick', xf + 0.3, 0, z0, xb, floor, z1, { collide: true });
+  // Solid substructure and the marble front of the box (the facade's shops stay open below it).
+  const xs = CIRCUS.track + CIRCUS.shopBack;
+  c.span('brick', xf + 0.3, 0, z0, xs, floor, z1, { collide: true });
+  c.span('brick', xs, CIRCUS.shopCeiling, z0, xb, floor, z1, { collide: true });
   c.span('marble', xf, w1.y - 0.05, z0, xf + 0.3, floor, z1, { collide: true });
   c.span('marble_giallo', xf, floor - 0.02, z0 + 0.3, xb, floor + 0.04, z1 - 0.3);
   // Side walls closing the slot, with a cornice.
@@ -148,7 +152,7 @@ function pulvinarBuild(ctx: LandmarkContext) {
   const span = z1 - z0 - 1.4;
   for (let i = 0; i < n; i++) {
     const z = z0 + 0.7 + (span * i) / (n - 1);
-    column(b, { order: 'corinthian', D, height: colH, material: 'marble', detail: hi ? 'low' : 'low', collide: true }, F.clone().multiply(new THREE.Matrix4().makeTranslation(xf + 0.75, floor, z)));
+    column(b, { order: 'corinthian', D, height: colH, material: 'marble', detail: 'low', collide: true }, F.clone().multiply(new THREE.Matrix4().makeTranslation(xf + 0.75, floor, z)));
     if (i < n - 1) c.span('bronze', xf + 0.68, floor, z + 0.45, xf + 0.82, floor + 1.0, z + span / (n - 1) - 0.45, { collide: true });
   }
   // Entablature round three sides and the pediment facing the track.
@@ -196,7 +200,9 @@ function pulvinarBuild(ctx: LandmarkContext) {
   at(xb - 2.0, floor, zm, Math.PI, 'pulvinar-gods-couch', 'shrine');
   at(xf - 0.8, w1.y, z0 + 0.8, Math.PI, 'pulvinar-guard-a', 'npc');
   at(xf - 0.8, w1.y, z1 - 0.8, Math.PI, 'pulvinar-guard-b', 'npc');
-  at(CIRCUS.halfW + 1.5, 0, zm, 0, 'pulvinar-rear-door', 'door');
+  // Outside, on the sidewalk along the facade (it follows the street up the Palatine side).
+  const rd = new THREE.Vector3(CIRCUS.halfW + 1.5, 0, zm).applyMatrix4(F);
+  spots.add('pulvinar-rear-door', 'door', rd.x, Math.max(rd.y + 0.14, ctx.groundAt(rd.x, rd.z) + 0.12), rd.z, 0);
   return { object: b.build(ctx.lm.id), colliders: b.colliders, spots: spots.list, cullDistance: 1600 };
 }
 
@@ -243,8 +249,10 @@ function solBuild(ctx: LandmarkContext) {
   const xf = -(CIRCUS.track + w1.u1);
   const xb = -(CIRCUS.halfW - CIRCUS.wall);
   const floor = w1.y1 + 0.8;
-  // Substructure and podium front with a stair from the walkway.
-  c.span('brick', xb, 0, z0, xf - 0.3, floor, z1, { collide: true });
+  // Substructure (the facade's shops stay open below it) and the podium front.
+  const xs = -(CIRCUS.track + CIRCUS.shopBack);
+  c.span('brick', xs, 0, z0, xf - 0.3, floor, z1, { collide: true });
+  c.span('brick', xb, CIRCUS.shopCeiling, z0, xs, floor, z1, { collide: true });
   c.span('marble', xf - 0.3, w1.y - 0.05, z0, xf, floor, z1, { collide: true });
   // Temple in its own frame facing +x (the track): local −z → circus +x.
   const tm = F.clone().multiply(new THREE.Matrix4().makeTranslation((xf + xb) / 2 - 0.2, floor, zm)).multiply(new THREE.Matrix4().makeRotationY(-Math.PI / 2));
@@ -274,9 +282,19 @@ function solBuild(ctx: LandmarkContext) {
 
 // ---------------------------------------------------------------- Temple of Ceres, Liber and Libera
 
-function ceresBuild(ctx: LandmarkContext) {
-  const { b, d } = drawFor(ctx);
-  const spots = new Spots();
+/** Setback (local m, toward +z) of the Temple of Ceres from its atlas point, clear of the carceres' sidewalk. */
+export const CERES_SETBACK = 6.5;
+
+function ceresBuild(ctx0: LandmarkContext) {
+  const { b, d: d0 } = drawFor(ctx0);
+  const spots0 = new Spots();
+  // The atlas point puts the stair's foot on the sidewalk along the carceres' outer face: the
+  // temple stands a few metres back (see the crew report).
+  const OZ = CERES_SETBACK;
+  const d = d0.at(0, 0, OZ);
+  const ctx: LandmarkContext = { ...ctx0, groundAt: (x, z) => ctx0.groundAt(x, z + OZ) };
+  const spots = { add: (id: string, kind: Parameters<Spots['add']>[1], x: number, y: number, z: number, h = 0) => spots0.add(id, kind, x, y, z + OZ, h) };
+  const at = (m: THREE.Matrix4) => new THREE.Matrix4().makeTranslation(0, 0, OZ).multiply(m);
   const w = 30 * ctx.S * 0.9;
   // An Etrusco-Italic temple: widely spaced Tuscan columns of stuccoed tufa, a deep porch, three
   // cellae, a broad tiled roof with painted terracotta revetments and statues (Damophilos and
@@ -298,10 +316,9 @@ function ceresBuild(ctx: LandmarkContext) {
     pedimentRelief: false,
     detail: ctx.detail,
     pitchDeg: 18,
-  }).layout;
+  }, at(new THREE.Matrix4())).layout;
   // Footing down to the ground on any slope.
-  const g = footingRect(ctx, d, L.stylobate.x0, L.podiumFront, L.stylobate.x1, L.stylobate.z1);
-  void g;
+  footingRect(ctx, d, L.stylobate.x0, L.podiumFront, L.stylobate.x1, L.stylobate.z1);
   // Painted terracotta frieze plaques and antefixes along the eaves; terracotta acroteria.
   const yE = L.podiumHeight + L.H;
   const e = L.entablature;
@@ -316,23 +333,35 @@ function ceresBuild(ctx: LandmarkContext) {
     d.span('bronze', x - 0.6, L.podiumHeight, cz - 0.04, x + 0.6, L.podiumHeight + 2.8, cz);
     d.span('plaster_white', x - 0.8, L.podiumHeight + 2.8, cz - 0.08, x + 0.8, L.podiumHeight + 3.1, cz);
   }
-  // The aediles' notice board (album) on the podium wall, an altar and the archive chest.
+  // The aediles' notice board (album) on the podium wall, an altar, and the aediles' archive: a
+  // bronze-bound chest under guard in the porch, by Ceres' door.
   const front = L.podiumFront;
-  paintedSign(b, ['Aediles Plebis Edicunt', 'Frumentum · Ludi Ceriales', 'A D XII K Mai'], 2.6, 1.0, new THREE.Matrix4().makeTranslation(L.stylobate.x0 + 1.8, L.podiumHeight * 0.45, front - 0.02));
+  paintedSign(b, ['Aediles Plebis Edicunt', 'Mercatores Idibus Maiis', 'Ad Aedem Mercurii'], 2.6, 1.0, at(new THREE.Matrix4().makeTranslation(L.stylobate.x0 + 1.8, L.podiumHeight * 0.45, front - 0.02)));
   d.span('tufa', -0.8, 0, front - 4.0, 0.8, 1.0, front - 2.8, { collide: true });
   d.box('glow_fire', 0, 1.03, front - 3.4, 0.6, 0.05, 0.5);
-  spots.add('temple-ceres-album', 'inscription', L.stylobate.x0 + 1.8, 0, front - 1.5, Math.PI);
+  const chX = (L.cella.x1 - L.cella.x0) / 3 + 1.3;
+  d.span('wood_dark', chX - 0.55, L.podiumHeight, cz - 0.9, chX + 0.55, L.podiumHeight + 0.7, cz - 0.3, { collide: true });
+  d.span('bronze', chX - 0.58, L.podiumHeight + 0.55, cz - 0.93, chX + 0.58, L.podiumHeight + 0.62, cz - 0.27);
+  d.span('bronze', chX - 0.08, L.podiumHeight + 0.3, cz - 0.93, chX + 0.08, L.podiumHeight + 0.5, cz - 0.91);
+  spots.add('temple-ceres-album', 'inscription', L.stylobate.x0 + 1.8, 0, front - 1.5, 0);
   spots.add('temple-ceres-altar', 'shrine', 0, 0, front - 5.0, 0);
-  spots.add('temple-ceres-archive', 'container', 0, L.podiumHeight, L.cella.z0 + 1.0, Math.PI);
-  spots.add('temple-ceres-clerk', 'npc', L.stylobate.x0 + 2.5, 0, front - 2.5, Math.PI);
-  return { object: b.build(ctx.lm.id), colliders: b.colliders, spots: spots.list, cullDistance: 1200 };
+  spots.add('temple-ceres-archive', 'container', chX, L.podiumHeight, cz - 1.6, 0);
+  spots.add('temple-ceres-clerk', 'npc', L.stylobate.x0 + 2.8, 0, front - 2.6, Math.PI);
+  return { object: b.build(ctx0.lm.id), colliders: b.colliders, spots: spots0.list, cullDistance: 1200 };
 }
 
+// The landmarks nested in the circus (obelisk, pulvinar, Sol) stand on the circus's spina and
+// stands, which their own colliders don't include: their spots are placed by hand, not settled
+// (tests/palcirc-world.test.ts checks them with the circus's colliders).
 export const builders: LandmarkBuilder[] = [
-  { handles: ['circus-maximus'], build: circus },
-  { handles: ['obelisk-circus-maximus'], build: obeliskBuild },
-  { handles: ['pulvinar'], build: pulvinarBuild },
-  { handles: ['arch-titus-circus'], build: archTitusBuild },
-  { handles: ['temple-sol-circus'], build: solBuild },
-  { handles: ['temple-ceres'], build: ceresBuild },
+  ...settled([
+    { handles: ['circus-maximus'], build: circus },
+    { handles: ['arch-titus-circus'], build: archTitusBuild },
+    { handles: ['temple-ceres'], build: ceresBuild },
+  ]),
+  ...settled([
+    { handles: ['obelisk-circus-maximus'], build: obeliskBuild },
+    { handles: ['pulvinar'], build: pulvinarBuild },
+    { handles: ['temple-sol-circus'], build: solBuild },
+  ], { settle: false }),
 ];

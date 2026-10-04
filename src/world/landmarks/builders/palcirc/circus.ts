@@ -36,7 +36,10 @@ import {
   type FacadeBay,
   type Interval,
 } from './circusLayout';
-import { relById } from './frames';
+import { relById, relLocal } from './frames';
+import { buildPlaza } from '../../../../arch/fabric/streets';
+import { LANDMARK_BY_ID, ROADS } from '../../../../data/atlas';
+import type { LandmarkData } from '../../types';
 import { bandColliders, cutFace, cutting, pieces, riser, ringFrame, ringStrip, tread, type RingGap } from './ring';
 import { InstanceLod, facing, instanced } from './runtime';
 import { archBandLite, archDoorWall, rectHoleWall } from './shapes';
@@ -689,6 +692,55 @@ export function buildSidewalk(b: MeshBuilder, gaps: CircusGaps, ground: (x: numb
   }
   d.span('paving_travertine', -CIRCUS.halfW, yc - 0.4, zo - 2.6, CIRCUS.halfW, yc, zo, { collide: true });
   d.span('travertine', -CIRCUS.halfW - 2.6, yc - 0.5, zo - 2.62, CIRCUS.halfW + 2.6, yc + 0.01, zo - 2.3);
+}
+
+// ---------------------------------------------------------------- paved apron to the streets
+
+/** An atlas road's centreline in the circus frame (game m). */
+function roadInCircus(id: string): [number, number][] {
+  const host = LANDMARK_BY_ID['circus-maximus'] as LandmarkData;
+  const road = ROADS.find((r) => r.id === id);
+  if (!road) return [];
+  return road.points.map((p) => {
+    const r = relLocal(host, { center: p, rotation: 0 });
+    return [r.x, r.z];
+  });
+}
+
+/** x of a polyline at z (linear between its points, clamped at the ends). */
+function polyX(pts: [number, number][], z: number): number {
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
+    if ((z - az) * (z - bz) <= 0 && az !== bz) return ax + ((bx - ax) * (z - az)) / (bz - az);
+  }
+  const first = pts[0], last = pts[pts.length - 1];
+  return Math.abs(z - first[1]) < Math.abs(z - last[1]) ? first[0] : last[0];
+}
+
+/**
+ * A paved apron from the sidewalk's curb out to the streets that run along both long sides (the
+ * atlas's street north and south of the Circus): the shops face a paved street front instead of
+ * a strip of earth. Stops short of the carceres' corners and of the curved end.
+ */
+export function buildApron(b: MeshBuilder, ground: (x: number, z: number) => number) {
+  const edge = CIRCUS.halfW + 2.6 + 0.02;
+  for (const [side, id, z0, z1] of [[1, 'street-north-of-circus', carceresFront() + 2, curveZ() - 4], [-1, 'street-south-of-circus', carceresFront() + 8, curveZ() - 4]] as const) {
+    const road = roadInCircus(id);
+    if (road.length < 2) continue;
+    const outer = (z: number) => {
+      // The road's inner edge (half its 5 m width in from the centreline), at most 12 m out.
+      const x = Math.abs(polyX(road, z)) - 2.6;
+      return side * Math.max(edge + 1.5, Math.min(edge + 12, x));
+    };
+    const pts: [number, number][] = [];
+    const n = Math.ceil((z1 - z0) / 12);
+    for (let i = 0; i <= n; i++) pts.push([side * edge, z0 + ((z1 - z0) * i) / n]);
+    for (let i = n; i >= 0; i--) {
+      const z = z0 + ((z1 - z0) * i) / n;
+      pts.push([outer(z), z]);
+    }
+    buildPlaza(b, side > 0 ? pts : pts.reverse(), ground, { material: 'paving_travertine', lift: 0.08, skirt: 0.35, cell: 3 });
+  }
 }
 
 // ---------------------------------------------------------------- track

@@ -28,7 +28,7 @@ import { buildStandsAll, circusGaps } from '../src/world/landmarks/builders/palc
 import { ringFrame } from '../src/world/landmarks/builders/palcirc/ring';
 import { relLocal, toHost, fromHost } from '../src/world/landmarks/builders/palcirc/frames';
 import { builders as capenaBuilders, capenaArcade } from '../src/world/landmarks/builders/palcirc-capena';
-import { PL, SQUARE, appiaTombs, quarterLots, tombHalf } from '../src/world/landmarks/builders/palcirc/capenaParts';
+import { PL, SQUARE, appiaTombs, capenaKeepOuts, quarterLots, tombBox, tombHalf } from '../src/world/landmarks/builders/palcirc/capenaParts';
 import { augFacadePlan, augFaceZ } from '../src/world/landmarks/builders/palcirc/augFacade';
 import { builders as palaceBuilders, AUG } from '../src/world/landmarks/builders/palcirc-palace';
 import { builders as circusBuilders } from '../src/world/landmarks/builders/palcirc-circus';
@@ -142,9 +142,23 @@ describe('Porta Capena surroundings', () => {
         expect(overlap).toBe(false);
       }
     }
-    // Some carry inscriptions to read, some a lamp for the Lemuria.
+    // Some carry inscriptions to read, some a grave lamp.
     expect(tombs.filter((t) => t.text).length).toBeGreaterThanOrEqual(6);
     expect(tombs.some((t) => t.lamp)).toBe(true);
+  });
+
+  it('the tombs keep out of the neighbouring landmarks (the Temple of Honos and Virtus by the road)', () => {
+    const keep = capenaKeepOuts();
+    expect(keep.length).toBeGreaterThan(0);
+    const kept = appiaTombs(keep);
+    expect(kept.length).toBeGreaterThanOrEqual(12);
+    expect(kept.length).toBeLessThan(appiaTombs().length);
+    // The tower tomb at z = −117 stood inside the temple's footprint.
+    expect(kept.some((t) => t.z === -117)).toBe(false);
+    for (const t of kept) {
+      const b = tombBox(t);
+      expect(Math.min(Math.abs(b.x0), Math.abs(b.x1))).toBeGreaterThanOrEqual(PL);
+    }
   });
 
   it('the gate quarter: blocks front the street behind the sidewalk and leave the square clear', () => {
@@ -282,37 +296,8 @@ describe('palcirc walkability', () => {
     expect(end.y).toBeGreaterThan(AUG.up - 0.15);
   });
 
-  it('Domus Augustana: from the forecourt into a taberna under the curved facade', () => {
-    const p = new Physics();
-    world(p);
-    const built = palaceBuilders.find((x) => x.handles.includes('domus-augustana'))!.build(fakeCtx('domus-augustana', p));
-    registerColliders({ physics: p } as unknown as Game, built.colliders);
-    const plan = augFacadePlan(AUG.front, AUG.hw);
-    const arc = plan.bays.filter((b) => b.kind === 'arc');
-    const bay = arc[Math.floor(arc.length / 2)];
-    // Flat test ground: the facade's foot is 14 m below the terrace; walk in on its left side.
-    const base = AUG.low - 14;
-    p.addBox(new THREE.Vector3(bay.x, base - 0.5, bay.z), new THREE.Vector3(30, 0.5, 30));
-    const tx = -bay.nz, tz = bay.nx; // along the facade (bay frame +x is the tangent)
-    const side = -0.7;
-    const start = new THREE.Vector3(bay.x + bay.nx * 5 + tx * side, base + 1.0, bay.z + bay.nz * 5 + tz * side);
-    const end = walk(p, start, new THREE.Vector3(-bay.nx, 0, -bay.nz), 2.5, 4);
-    const inward = (end.x - bay.x) * -bay.nx + (end.z - bay.z) * -bay.nz;
-    expect(inward).toBeGreaterThan(2.0);
-    expect(inward).toBeLessThan(1.2 + 3.8);
-  });
-
-  it('Domus Augustana: through the corridor from the sunken court to the gallery over the Circus', () => {
-    const p = new Physics();
-    world(p);
-    const built = palaceBuilders.find((x) => x.handles.includes('domus-augustana'))!.build(fakeCtx('domus-augustana', p));
-    registerColliders({ physics: p } as unknown as Game, built.colliders);
-    const plan = augFacadePlan(AUG.front, AUG.hw);
-    const end = walk(p, new THREE.Vector3(0.75, AUG.low + 1.0, -46.5), new THREE.Vector3(0, 0, -1), 3.5, 9);
-    // Past the gallery's back wall (radius Rb + 0.5 round the centre), onto the gallery floor.
-    expect(end.z).toBeLessThan(plan.zc + plan.Rb - 1.0);
-    expect(end.y).toBeGreaterThan(AUG.low - 0.3);
-  });
+  // The facade's tabernae and the gallery over the Circus are walked on the real terrain in
+  // tests/palcirc-world.test.ts (flat test ground hides the drop under the gallery).
 
   it('every palcirc landmark offers the player a "thing" (GDD §12.3)', () => {
     const p = new Physics();

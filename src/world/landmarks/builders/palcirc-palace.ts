@@ -9,13 +9,10 @@
  */
 import * as THREE from 'three';
 import { Draw } from '../../../arch/fabric/draw';
-import { column } from '../../../arch/classical/column';
-import { entablature, pediment } from '../../../arch/classical/entablature';
-import { armoredEmperor, togate } from '../../../arch/classical/statues';
+import { armoredEmperor } from '../../../arch/classical/statues';
 import { inscriptionPanel, paintedSign } from '../../../arch/common/inscription';
 import { buildPlaza } from '../../../arch/fabric/streets';
 import { placeProp } from '../../../arch/props/props';
-import { Rng } from '../../../core/Rng';
 import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuilder, LandmarkContext, LandmarkData } from '../types';
 import { LANDMARK_BY_ID, ROADS } from '../../../data/atlas';
@@ -29,6 +26,7 @@ import { fromHost, relById } from './palcirc/frames';
 import { buildAugustanaFacade } from './palcirc/augFacade';
 import type { Lamp } from './palcirc/capenaParts';
 import { requestLamps } from './palcirc/runtime';
+import { settled } from './palcirc/settle';
 
 // ---------------------------------------------------------------- Domus Augustana
 
@@ -49,7 +47,6 @@ function augustana(ctx: LandmarkContext) {
   const spots = new Spots();
   const hi = ctx.detail === 'high';
   const { hw, front, low, up } = AUG;
-  const rng = new Rng('domus-augustana');
 
   // ---------------------------------------------------------- the curved facade over the Circus
   const group = new THREE.Group();
@@ -142,7 +139,7 @@ function augustana(ctx: LandmarkContext) {
   block(d, ctx, -hw, pz0, hw, pz1, up, 'brick', { cornice: 'travertine' });
   const ux0 = -15, ux1 = 15, uz0 = 6, uz1 = 50;
   d.span('paving_travertine', ux0 - 3, up - 0.05, uz0 - 3, ux1 + 3, up + 0.03, uz1 + 3);
-  peristyle(d, ux0, uz0, ux1, uz1, up, { D: 0.55, H: 4.4, spacing: 3.2, depth: 3.0, mat: 'marble', cap: 'corinthian', backMat: 'plaster_red', lite: !hi });
+  peristyle(d, ux0, uz0, ux1, uz1, up, { D: 0.55, H: 4.4, spacing: 3.2, depth: 3.0, mat: 'marble', cap: 'corinthian', backMat: 'plaster_red', lite: !hi, doors: { n: [0] } });
   // Great pool with the temple island and its bridge.
   pool(d, ux0 + 3.5, uz0 + 5, ux1 - 3.5, uz1 - 5, up);
   const tz = (uz0 + uz1) / 2;
@@ -177,7 +174,8 @@ function augustana(ctx: LandmarkContext) {
   d.span('marble', -3.0, up, pz1 - 0.05, 3.0, up + 5.2, pz1 + 0.25);
   d.span('bronze', -1.3, up, pz1 + 0.26, 1.3, up + 3.8, pz1 + 0.32);
   const back = groundRange(ctx, -4, pz1, 4, pz1 + 6);
-  const bst = d.at(0, back.min, pz1 + 0.3 + Math.ceil((up - back.min) / 0.2) * 0.32, Math.PI);
+  const stairFoot = pz1 + 0.3 + Math.ceil((up - back.min) / 0.2) * 0.32;
+  const bst = d.at(0, back.min, stairFoot, Math.PI);
   stair(bst, 5.0, up - back.min, 'marble');
   // Trees in the upper peristyle garden beds (box, laurel).
   const trees: TreeSpec[] = [];
@@ -187,14 +185,15 @@ function augustana(ctx: LandmarkContext) {
   for (const t of plantTrees(ctx, trees)) b.collider(t);
 
   // ---------------------------------------------------------- spots
-  spots.add('augustana-lower-peristyle', 'vista', 0, up, cz1 + 3.6, Math.PI);
+  // On the upper terrace behind the balustrade, looking down into the sunken court.
+  spots.add('augustana-lower-peristyle', 'vista', -6, up, cz1 + 4.0, Math.PI);
   spots.add('augustana-corridor', 'door', 0, low, -52.2, Math.PI);
   spots.add('augustana-island-shrine', 'shrine', 0, up + 0.5, tz - 4.6, 0);
-  spots.add('augustana-entrance', 'door', 0, back.min, pz1 + 6, Math.PI);
-  spots.add('augustana-guard-a', 'npc', -3.4, back.min, pz1 + 6.5, 0);
-  spots.add('augustana-guard-b', 'npc', 3.4, back.min, pz1 + 6.5, 0);
+  // At the foot of the entrance stair (the bronze doors are at its head), guards either side.
+  spots.add('augustana-entrance', 'door', 0, back.min, stairFoot + 1.0, Math.PI);
+  spots.add('augustana-guard-a', 'npc', -3.3, back.min, stairFoot + 0.6, 0);
+  spots.add('augustana-guard-b', 'npc', 3.3, back.min, stairFoot + 0.6, 0);
   spots.add('augustana-garden-bench', 'sit', 12.5, up, tz, -Math.PI / 2);
-  void rng;
   group.add(b.build(ctx.lm.id));
   requestLamps(ctx.game, landmarkToWorld(ctx), lamps);
   return { object: group, colliders: b.colliders, spots: spots.list, cullDistance: 2500 };
@@ -422,7 +421,6 @@ function tiberiana(ctx: LandmarkContext) {
   spots.add('tiberiana-clerk', 'npc', 0, 0, cz0 - 1.5, 0);
   spots.add('tiberiana-guard', 'npc', HW - 2.0, 0, 3.5, Math.PI / 2);
   spots.add('tiberiana-bench', 'sit', -12, 0, 0, Math.PI / 2);
-  void hi;
   return { object: b.build(ctx.lm.id), colliders: b.colliders, spots: spots.list, cullDistance: 2500 };
 }
 
@@ -528,7 +526,7 @@ function stadium(ctx: LandmarkContext) {
   const terr = stadiumTerrace(ctx, b, d, hi);
   openings(d, HW, -HD, HW + 1.0, zc, 'e', H1 + 0.9, 1.0, 1.8, 4.0, { margin: 3, frame: 'travertine' });
   // Inner faces: plaster with a red dado; the two-storey portico of piers with half-columns.
-  const portico = (x0: number, z0: number, x1: number, z1: number, faceX: number) => {
+  const portico = (z0: number, z1: number, faceX: number) => {
     // piers along a straight side (x = faceX), facing the garden.
     const n = Math.round((z1 - z0) / 4.0);
     for (let i = 0; i <= n; i++) {
@@ -538,11 +536,9 @@ function stadium(ctx: LandmarkContext) {
       lowColumn(d, 'marble', faceX + sgn * 0.5, 0, z, 0.42, H1 - 0.5, { cap: 'ionic', seg: hi ? 8 : 6, lite: !hi });
       lowColumn(d, 'marble', faceX + sgn * 0.5, H1 + 0.4, z, 0.36, H2 - 0.6, { cap: 'corinthian', seg: hi ? 8 : 6, lite: !hi });
     }
-    void x0;
-    void x1;
   };
-  portico(-HW, -HD + 2, -HW, zc, -ix);
-  portico(HW, -HD + 2, HW, zc, ix);
+  portico(-HD + 2, zc, -ix);
+  portico(-HD + 2, zc, ix);
   for (const sx of [-1, 1]) {
     const xi = sx * ix, xo = sx * HW;
     const a = Math.min(xi, xo), c = Math.max(xi, xo);
@@ -624,9 +620,9 @@ function stadiumTerrace(ctx: LandmarkContext, b: MeshBuilder, d: Draw, hi: boole
   const HW = 15, zc = 33, XO = 32, Z0 = -24, RO = 32;
   // The Augustana stands beside the curved end: the terrace runs up to its −x flank and stops.
   const aug = relById('palatine-stadium', 'domus-augustana');
-  const inAug = (x: number, z: number) => {
+  const inAug = (x: number, z: number, m = 0) => {
     const [ax, az] = fromHost(aug, x, z);
-    return ax > -AUG.hw - 0.2 && ax < AUG.hw && az > AUG.front - 1 && az < -54;
+    return ax > -AUG.hw - 0.2 - m && ax < AUG.hw + m && az > AUG.front - 1 - m && az < -54 + m;
   };
   const trees: TreeSpec[] = [];
   const spots: { id: string; kind: 'vista' | 'sit'; x: number; y: number; z: number; h: number }[] = [];
@@ -653,16 +649,19 @@ function stadiumTerrace(ctx: LandmarkContext, b: MeshBuilder, d: Draw, hi: boole
   for (let i = 0; i < nA; i++) {
     const a0 = (Math.PI * i) / nA;
     let a1 = (Math.PI * (i + 1)) / nA;
-    if (inAug(...P(a0))) break;
-    if (inAug(...P(a1))) {
+    // A piece is clipped where its face or its back (1 m inside) would enter the Augustana's flank.
+    const Pin = (a: number): [number, number] => [Math.cos(a) * (RO - 1.05), zc + Math.sin(a) * (RO - 1.05)];
+    const hits = (a: number) => inAug(...P(a), 0.1) || inAug(...Pin(a), 0.1);
+    if (hits(a0)) break;
+    if (hits(a1)) {
       // Clip the last piece at the Augustana's flank (bisection on the angle).
       let lo = a0, hi2 = a1;
       for (let k = 0; k < 20; k++) {
         const m = (lo + hi2) / 2;
-        if (inAug(...P(m))) hi2 = m;
+        if (hits(m)) hi2 = m;
         else lo = m;
       }
-      a1 = hi2 + 0.01;
+      a1 = lo;
     }
     if (run(...P(a0), ...P(a1))) aEnd = a1;
   }
@@ -677,8 +676,12 @@ function stadiumTerrace(ctx: LandmarkContext, b: MeshBuilder, d: Draw, hi: boole
   d.span('grass', HW + 3.0, -0.04, Z0 + 2, XO - 2.5, 0.06, zc);
   d.geo(ringSector(15.5, RO, 0, aEnd, 0.08, 24), 'gravel', 0, -0.06, zc);
   d.geo(ringSector(17.5, RO - 2.5, 0.05, aEnd - 0.05, 0.1, 24), 'grass', 0, -0.04, zc);
-  for (let i = 0; i < 12; i++) {
-    const a0 = (aEnd * i) / 12, a1 = (aEnd * (i + 1)) / 12, am = (a0 + a1) / 2;
+  // (Pieces that would reach into the Augustana's substructure are left out: it fills that corner.)
+  const nFill = 24;
+  for (let i = 0; i < nFill; i++) {
+    const a0 = (aEnd * i) / nFill, a1 = (aEnd * (i + 1)) / nFill, am = (a0 + a1) / 2;
+    const corners = [[16, a0], [16, a1], [RO, a0], [RO, a1], [(16 + RO) / 2, am]].map(([r, a]) => [Math.cos(a) * r, zc + Math.sin(a) * r] as const);
+    if (corners.some(([x, z]) => inAug(x, z, 0.6))) continue;
     const rm = (16 + RO) / 2, len = 2 * RO * Math.sin((a1 - a0) / 2) + 0.2;
     d.at(Math.cos(am) * rm, 0, zc + Math.sin(am) * rm, -am + Math.PI / 2).solid(-len / 2, -14.5, -(RO - 16) / 2, len / 2, 0, (RO - 16) / 2);
   }
@@ -724,7 +727,7 @@ function paedagogium(ctx: LandmarkContext) {
   openings(d, -HW, -HD, HW, HD, 'n', fl + 1.4, 0.7, 1.0, 5.6, { margin: 6.5 });
   // Graffiti scratched into the plaster by the pages (texts composed for the game).
   const g1 = ['Hic Fuimus', 'Eutyches · Libanus · Hermes'];
-  const g2 = ['Valete Pueri', 'Felix Prasina'];
+  const g2 = ['Valete Pueri', 'Prasine Vincas'];
   paintedSign(b, g1, 2.2, 0.8, new THREE.Matrix4().makeTranslation(-4.0, fl + 1.5, back0 - 0.02), { ink: '#4a4038', ground: '#e2d6bd' });
   paintedSign(b, g2, 2.0, 0.7, new THREE.Matrix4().makeTranslation(4.2, fl + 1.6, back0 - 0.02), { ink: '#5a3a30', ground: '#e2d6bd' });
   // The approach: a short stair from the street up to the entrance.
@@ -737,17 +740,11 @@ function paedagogium(ctx: LandmarkContext) {
   return { object: b.build(ctx.lm.id), colliders: b.colliders, spots: spots.list, cullDistance: 1200 };
 }
 
-export const builders: LandmarkBuilder[] = [
+export const builders: LandmarkBuilder[] = settled([
   { handles: ['domus-augustana'], build: augustana },
   { handles: ['domus-flavia'], build: flavia },
   { handles: ['domus-tiberiana'], build: tiberiana },
   { handles: ['palatine-stadium'], build: stadium },
   { handles: ['paedagogium'], build: paedagogium },
-];
+]);
 
-void column;
-void entablature;
-void pediment;
-void togate;
-void placeProp;
-void Rng;

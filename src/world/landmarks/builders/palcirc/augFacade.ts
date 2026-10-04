@@ -231,11 +231,25 @@ export function buildAugustanaFacade(
   // Room use: the five central arches are let as tabernae; the ends are the palace's service doors.
   const nArc = plan.bays.filter((bb) => bb.kind === 'arc').length;
   const mid = (nArc - 1) / 2;
+  // A room whose floor the hillside (the pad's terrain ramp behind the facade) would break
+  // through is kept shuttered: its interior is never seen.
+  const roomDry = (bb: AugFacadePlan['bays'][number]) => {
+    const m = facing(bb.x, 0, bb.z, bb.nx, bb.nz);
+    const p = new THREE.Vector3();
+    for (const x of [-1.5, 0, 1.5]) {
+      for (const z of [T + 0.6, T + 2.0, T + ROOM_D - 0.3]) {
+        p.set(x, 0, z).applyMatrix4(m);
+        if (ctx.groundAt(p.x, p.z) > base + 0.25) return false;
+      }
+    }
+    return true;
+  };
   const use = plan.bays.map((bb, i) => {
     if (bb.kind === 'wing') return 'blind' as const;
     const k = Math.abs(i - mid);
     if (k > 2.6) return 'blind' as const;
-    return (['shop', 'wine', 'shutters', 'shop', 'wine'] as const)[i % 5];
+    const u = (['shop', 'wine', 'shutters', 'shop', 'wine'] as const)[i % 5];
+    return u === 'shutters' || roomDry(bb) ? u : ('shutters' as const);
   });
   for (const kind of ['shop', 'wine', 'shutters', 'blind'] as const) {
     const ms = plan.bays.flatMap((bb, i) => (use[i] === kind ? [facing(bb.x, base, bb.z, bb.nx, bb.nz, bb.w / W)] : []));
@@ -313,6 +327,17 @@ export function buildAugustanaFacade(
   const ex = new Draw(b, new THREE.Matrix4().makeTranslation(0, 0, zc));
   const seg = hi ? 28 : 16;
   ex.geo(ringSector(R - 0.4, Rb + 0.3, a0, a1, 0.3, seg), 'marble', 0, o.low - 0.3, 0);
+  // Its own continuous collider: radial slabs over the whole sector, out under the back wall. (The
+  // bays' boxes diverge behind the concave face and the core only starts past the rooms, which
+  // left a wedge open at every bay seam.)
+  const nF = 36;
+  const fIn = R - 0.4, fOut = Rb + 0.8;
+  const fHalf = fOut * Math.sin((a1 - a0) / nF / 2) + 0.05;
+  for (let i = 0; i < nF; i++) {
+    const a = a0 + ((a1 - a0) * (i + 0.5)) / nF;
+    const rm = (fIn + fOut) / 2;
+    ex.at(Math.cos(a) * rm, 0, Math.sin(a) * rm, Math.atan2(Math.cos(a), Math.sin(a))).solid(-fHalf, o.low - 1.2, -(fOut - fIn) / 2, fHalf, o.low, (fOut - fIn) / 2);
+  }
   // Colonnade: giallo antico below, pavonazzetto above (kit columns, instanced).
   const nCol = Math.max(6, Math.round((Rc * (a1 - a0)) / 2.25));
   const colAt = (k: number) => a0 + ((a1 - a0) * k) / nCol;
@@ -436,7 +461,14 @@ export function buildAugustanaFacade(
     lamps.push({ position: new THREE.Vector3(Math.cos(a) * (Rc + 1.6), o.up + 2.6, zc + Math.sin(a) * (Rc + 1.6)), color: 0xffb46a, intensity: 5, distance: 9, flicker: 0.15, night: true, glow: 0.2 });
   }
   spots.add('augustana-vista-circus', 'vista', 0, o.low, zc + Rc + 1.6, Math.PI);
-  spots.add('augustana-exedra-seat', 'sit', -5, o.low, zc + Rc + 2.6, Math.PI);
+  // A marble bench against the gallery's back wall, between two doors, looking out over the Circus.
+  const ab = bw0 + ((bw1 - bw0) * 5) / nDoor;
+  const br = Rb - 0.35;
+  const bench = ex.at(Math.cos(ab) * br, o.low, Math.sin(ab) * br, Math.atan2(Math.cos(ab), Math.sin(ab)));
+  bench.span('marble', -1.0, 0, -0.25, 1.0, 0.45, 0.25, { collide: true });
+  for (const sx of [-0.85, 0.85]) bench.span('marble', sx - 0.12, 0, -0.27, sx + 0.12, 0.38, 0.27);
+  const bp = new THREE.Vector3(Math.cos(ab) * (br - 0.1), 0, zc + Math.sin(ab) * (br - 0.1));
+  spots.add('augustana-exedra-seat', 'sit', bp.x, o.low + 0.45, bp.z, Math.atan2(-Math.cos(ab), -Math.sin(ab)));
   spots.add('augustana-facade-vista', 'vista', 0, base, o.front - 14, 0);
   return { plan, base };
 }

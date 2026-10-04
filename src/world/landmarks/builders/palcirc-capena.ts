@@ -29,6 +29,7 @@ import { Spots, drawFor, gableRoof, groundRange, landmarkToWorld, plantTrees, ty
 import { relById } from './palcirc/frames';
 import { buildAppia, buildGroveCamp, buildQuarter, type Lamp } from './palcirc/capenaParts';
 import { ox } from './palcirc/animals';
+import { settled } from './palcirc/settle';
 
 /** Gate block half sizes, passage. */
 const GX = 4.2;
@@ -115,7 +116,11 @@ function capena(ctx: LandmarkContext) {
   for (const z of [tz0 - 0.01, tz1 + 0.01]) {
     for (const x of [tx0 + 1.6, tx1 - 1.6]) d.span('black', x - 0.35, 6.4, z - 0.01, x + 0.35, 7.5, z + 0.01);
   }
-  d.span('wood_dark', tx1 - 0.02, 0, -0.6, tx1 + 0.02, 2.3, 0.6);
+  // Its door opens on the city side (the +x face is built against the gate's pier).
+  const tdx = (tx0 + tx1) / 2, tdy = Math.max(0, g(tdx, tz1 + 1));
+  d.span('travertine', tdx - 0.85, tdy, tz1 - 0.02, tdx + 0.85, tdy + 2.6, tz1 + 0.1);
+  d.span('wood_dark', tdx - 0.6, tdy, tz1 + 0.1, tdx + 0.6, tdy + 2.3, tz1 + 0.14);
+  if (tdy > 0.05) d.span('tufa', tdx - 1.0, Math.min(0, tg.min) - 0.3, tz1, tdx + 1.0, tdy, tz1 + 1.4, { collide: true });
 
   // ------------------------------------------------------------ Servian wall stubs
   const WT = 2.4;
@@ -297,14 +302,15 @@ function capena(ctx: LandmarkContext) {
   spots.add('spawn-capena', 'spawn', -0.9, Math.max(0, g(-0.9, -15)), -15, 0);
   spots.add('courier-ambush', 'npc', 1.1, Math.max(0, g(1.1, -5.5)), -5.5, Math.PI * 0.85);
   spots.add('capena-grassator-a', 'npc', -WIDE_PIER_X - 1.4, Math.max(0, g(-6.4, -6.6)), -6.6, head(-6.4, -6.6, 0, -5.5));
-  spots.add('capena-grassator-b', 'npc', 2.2, 0, 2.6, head(2.2, 2.6, 0, -2));
+  // The second robber waits in the passage, under the inner arch, for the courier to come through.
+  spots.add('capena-grassator-b', 'npc', 0.5, 0.05, 2.4, head(0.5, 2.4, 0, -6));
   spots.add('night-cart', 'container', cartX - 1.1, Math.max(0, g(cartX - 1.1, cartZ)), cartZ, Math.PI / 2);
   spots.add('night-cart-driver', 'npc', cartX + 1.2, Math.max(0, g(cartX + 1.2, cartZ + 3.4)), cartZ + 3.4, 0);
   spots.add('capena-customs', 'vendor', bx, by, bz, -Math.PI / 2);
   spots.add('capena-mercury-spring', 'shrine', fx + 1.4, Math.max(0, g(fx + 1.4, fz)), fz, -Math.PI / 2);
   spots.add('porta-capena-arch', 'inscription', 0, Math.max(0, g(0, -12)), -12, 0);
   spots.add('capena-vista-city', 'vista', 0, 0, 10, head(0, 10, vista.x, vista.z));
-  spots.add('capena-door-tower', 'door', tx1 + 0.05, 0, 0, Math.PI / 2);
+  spots.add('capena-door-tower', 'door', tdx, tdy, tz1 + 1.1, Math.PI);
   spots.add('capena-castellum-outlet', 'shrine', cx0 - 2.2, Math.max(0, g(cx0 - 2.2, AZ)), AZ, Math.PI / 2);
 
   const obj = b.build(ctx.lm.id);
@@ -332,4 +338,4 @@ function house(d: Draw, ctx: LandmarkContext, x0: number, z0: number, x1: number
   d.span('wood', (x0 + x1) / 2 - 1.4, fl, z1 + 0.01, (x0 + x1) / 2 + 1.4, fl + 2.6, z1 + 0.06);
 }
 
-export const builders: LandmarkBuilder[] = [{ handles: ['porta-capena'], build: capena }];
+export const builders: LandmarkBuilder[] = settled([{ handles: ['porta-capena'], build: capena }]);

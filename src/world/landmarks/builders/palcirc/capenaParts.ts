@@ -4,7 +4,7 @@
  *
  * - the tombs lining the Via Appia outside the gate, fading into the night behind the spawn
  *   (altar, aedicula, drum, tower and house tombs, a schola bench, a plot of stelae), with grave
- *   lamps lit for the Lemuria and cypresses;
+ *   lamps and cypresses (the lamps are flavour, [G]: see PALCIRC_NOTES in texts.ts);
  * - the grove of the Camenae, "now let to Jews whose furniture is a basket and some hay"
  *   (Juvenal 3.13–16): a few makeshift shelters among the trees;
  * - the gate quarter just inside: a small square where the carts wait for the night, the compitum
@@ -27,7 +27,11 @@ import type { MaterialId } from '../../../../gfx/materialIds';
 import type { LightRequest } from '../../../lights/LightPool';
 import type { LandmarkContext } from '../../types';
 import { mule, sleepingDog } from './animals';
-import { Spots, gableRoof, groundRange, lowColumn, type TreeSpec } from './util';
+import { S, Spots, gableRoof, groundRange, lowColumn, type TreeSpec } from './util';
+import { relLocal } from './frames';
+import { LANDMARKS, LANDMARK_BY_ID } from '../../../../data/atlas';
+import { footprintPolygon } from '../../../terrain/heightmap';
+import type { LandmarkData } from '../../types';
 
 export type Lamp = LightRequest & { position: THREE.Vector3 };
 
@@ -51,8 +55,69 @@ export interface TombSite {
   lamp?: boolean;
 }
 
-/** Plan of the tombs outside the gate (pure, tested): nothing overlaps the road or each other. */
-export function appiaTombs(): TombSite[] {
+/** Footprint box of a tomb in the gate's frame: x and z extents. */
+export function tombBox(t: TombSite): { x0: number; x1: number; z0: number; z1: number } {
+  const [ha, hd] = tombHalf(t.kind);
+  const xa = t.side * (PL + t.setback), xb = t.side * (PL + t.setback + 2 * hd);
+  return { x0: Math.min(xa, xb), x1: Math.max(xa, xb), z0: t.z - ha, z1: t.z + ha };
+}
+
+/**
+ * Other landmarks' footprints near the gate (grown by 2 m), in the gate's local frame (game m): the
+ * tombs keep out of them (the atlas puts the Temple of Honos and Virtus beside the road).
+ */
+export function capenaKeepOuts(): [number, number][][] {
+  const host = LANDMARK_BY_ID['porta-capena'] as LandmarkData | undefined;
+  if (!host) return [];
+  const out: [number, number][][] = [];
+  for (const lm of LANDMARKS as readonly LandmarkData[]) {
+    if (lm.id === host.id || lm.category === 'garden' || lm.category === 'aqueduct') continue;
+    if (Math.hypot(lm.center[0] - host.center[0], lm.center[1] - host.center[1]) > 450) continue;
+    const poly = footprintPolygon(lm.center, lm.rotation, lm.footprint, 2 / S);
+    out.push(poly.map((p) => {
+      const r = relLocal(host, { center: p, rotation: 0 });
+      return [r.x, r.z] as [number, number];
+    }));
+  }
+  return out;
+}
+
+function boxHitsPolygon(b: { x0: number; x1: number; z0: number; z1: number }, poly: [number, number][]): boolean {
+  const inPoly = (x: number, z: number) => {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, zi] = poly[i], [xj, zj] = poly[j];
+      if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+    }
+    return inside;
+  };
+  const corners: [number, number][] = [[b.x0, b.z0], [b.x1, b.z0], [b.x1, b.z1], [b.x0, b.z1]];
+  if (corners.some(([x, z]) => inPoly(x, z))) return true;
+  if (poly.some(([x, z]) => x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1)) return true;
+  // Edges crossing (a thin polygon through the box).
+  const cross = (a: number[], c: number[], e: number[], f: number[]) => {
+    const d1 = (f[0] - e[0]) * (a[1] - e[1]) - (f[1] - e[1]) * (a[0] - e[0]);
+    const d2 = (f[0] - e[0]) * (c[1] - e[1]) - (f[1] - e[1]) * (c[0] - e[0]);
+    const d3 = (c[0] - a[0]) * (e[1] - a[1]) - (c[1] - a[1]) * (e[0] - a[0]);
+    const d4 = (c[0] - a[0]) * (f[1] - a[1]) - (c[1] - a[1]) * (f[0] - a[0]);
+    return d1 * d2 < 0 && d3 * d4 < 0;
+  };
+  for (let i = 0; i < poly.length; i++) {
+    const e = poly[i], f = poly[(i + 1) % poly.length];
+    for (let k = 0; k < 4; k++) if (cross(corners[k], corners[(k + 1) % 4], e, f)) return true;
+  }
+  return false;
+}
+
+/**
+ * Plan of the tombs outside the gate (pure, tested): nothing overlaps the road or each other, and
+ * none stands in `keepOut` (other landmarks' footprints, see capenaKeepOuts).
+ */
+export function appiaTombs(keepOut: [number, number][][] = []): TombSite[] {
+  return allTombs().filter((t) => !keepOut.some((poly) => boxHitsPolygon(tombBox(t), poly)));
+}
+
+function allTombs(): TombSite[] {
   return [
     { kind: 'schola', z: -36, side: 1, setback: 0.6, text: ['Siste Viator', 'Et Lege'] },
     { kind: 'altar', z: -41, side: -1, setback: 0.8, text: ['D M', 'C Iulio Felici', 'Vix Ann LXII', 'Iulia Prima Coniugi'], lamp: true },
@@ -62,7 +127,7 @@ export function appiaTombs(): TombSite[] {
     { kind: 'tower', z: -73, side: -1, setback: 1.2, text: ['L Valerius L F', 'Pal Rufus'] },
     { kind: 'altar', z: -83, side: 1, setback: 0.8, text: ['Dis Manibus', 'Antoniae Helpidi', 'Vix Ann XXIV'] },
     { kind: 'stelae', z: -89, side: -1, setback: 0.6 },
-    { kind: 'columbarium', z: -98, side: 1, setback: 1.0, text: ['Collegium', 'Fabrum Tignariorum'] },
+    { kind: 'columbarium', z: -95.5, side: 1, setback: 1.0, text: ['Collegium', 'Fabrum Tignariorum'] },
     { kind: 'drum', z: -106, side: -1, setback: 1.5, lamp: true },
     { kind: 'tower', z: -117, side: 1, setback: 1.2 },
     { kind: 'aedicula', z: -124, side: -1, setback: 1.2 },
@@ -91,7 +156,10 @@ export function buildAppia(ctx: LandmarkContext, b: MeshBuilder, d: Draw, spots:
   const g = (x: number, z: number) => ctx.groundAt(x, z);
   buildStreet(b, { points: [[0, -158], [0, zGate - 0.6]], kind: 'paved', roadWidth: 2 * ROAD_HW, sidewalk: SIDEWALK, curb: 0.25, capEnd: true, seed: 3, steppingStones: [] }, g);
   const rng = new Rng('appia-tombs');
-  for (const [i, t] of appiaTombs().entries()) {
+  const keep = capenaKeepOuts();
+  for (const t of appiaTombs(keep)) {
+    // (The index of the tomb in the full plan keeps the spot ids and texts stable.)
+    const i = allTombs().findIndex((u) => u.z === t.z && u.side === t.side);
     const [ha, hd] = tombHalf(t.kind);
     // Tomb frame: front toward the road. +x side → front faces −x (rotY = +π/2).
     const cx = t.side * (PL + t.setback + hd);
@@ -101,7 +169,7 @@ export function buildAppia(ctx: LandmarkContext, b: MeshBuilder, d: Draw, spots:
     const f = d.at(cx, y, t.z, rot);
     const rise = gr.max - gr.min;
     tomb(b, f, t, rng.fork(i), hi, rise);
-    // A grave lamp on the step (Lemuria: the dead walk these nights).
+    // A grave lamp on the step, kept by the family ([G] flavour, not the Lemuria: see texts.ts).
     if (t.lamp) {
       const p = f.point(0.45, 0.62 + rise, -hd - 0.05);
       placeProp(f, 'oil_lamp', 0.45, 0.6 + rise, -hd + 0.05, 0, { collide: false });
@@ -292,8 +360,19 @@ export function quarterLots(): Lot[] {
     { side: -1, z0: 28, z1: 41, depth: 12, storeys: 4, finish: 'brick', bays: ['general', 'pottery', 'stair', 'cobbler', 'textile'] },
     { side: 1, z0: 13, z1: 25, depth: 11, storeys: 3, finish: 'plaster', plaster: 'plaster_cream', portico: true, bays: ['barber', 'stair', 'moneychanger', 'wine'] },
     { side: 1, z0: 27, z1: 41, depth: 12, storeys: 4, finish: 'brick', bays: ['smithy', 'closed', 'stair', 'general', 'butcher'] },
+    // On toward the Circus: the street stays built up to where it meets the street along the
+    // Circus (an alley with a fountain and a crossroads shrine halfway).
+    { side: -1, z0: 44, z1: 56.5, depth: 11, storeys: 3, finish: 'plaster', plaster: 'plaster_red', bays: ['wine', 'stair', 'textile', 'bakery'] },
+    { side: -1, z0: 60, z1: 74, depth: 12, storeys: 4, finish: 'brick', portico: true, bays: ['general', 'thermopolium', 'stair', 'barber', 'cobbler'] },
+    { side: -1, z0: 76.5, z1: 89, depth: 11, storeys: 3, finish: 'plaster', plaster: 'plaster_ochre', bays: ['pottery', 'stair', 'butcher', 'wine'] },
+    { side: 1, z0: 44, z1: 58, depth: 11, storeys: 4, finish: 'brick', bays: ['moneychanger', 'stair', 'general', 'fullonica'] },
+    { side: 1, z0: 60.5, z1: 73.5, depth: 11, storeys: 3, finish: 'plaster', plaster: 'plaster_cream', bays: ['thermopolium', 'wine', 'stair', 'smithy'] },
+    { side: 1, z0: 77, z1: 88, depth: 10, storeys: 3, finish: 'brick', bays: ['bakery', 'stair', 'textile'] },
   ];
 }
+
+/** The alley mouths of the outer blocks: a fountain (−x side) and a crossroads shrine (+x side). */
+export const APPIA_ALLEYS = { lacus: 58.25, compitum: 75.25 };
 
 /** The square inside the gate: from the gate's inner face to the first blocks. */
 export const SQUARE = { z0: 3.6, z1: 12.5 };
@@ -402,8 +481,8 @@ export function buildQuarter(ctx: LandmarkContext, b: MeshBuilder, d: Draw, spot
   placeProp(d, 'bench', vx + 1.4, g(vx + 1.4, vz) + 0.28, vz + 0.4, -Math.PI / 2, { variant: 0 });
   for (const k of [0, 1, 2]) placeProp(d, 'basket', vx + 2.3, g(vx + 2.3, vz) + 0.28, vz - 0.6 + k * 0.5, 0, { variant: 2, collide: false });
   lamps.push({ position: new THREE.Vector3(vx, g(vx, vz) + 1.2, vz), color: 0xff8a3a, intensity: 10, distance: 11, flicker: 0.55, night: false, dayScale: 0, glow: 0.3 });
-  spots.add('capena-vigil', 'npc', vx + 0.9, g(vx + 0.9, vz) + 0.28, vz + 1.2, Math.PI);
-  spots.add('capena-vigil-b', 'npc', vx - 1.0, g(vx - 1.0, vz) + 0.28, vz + 0.6, Math.PI * 0.75);
+  spots.add('capena-vigil', 'sit', vx + 1.4, g(vx + 1.4, vz) + 0.28 + 0.45, vz + 0.4, -Math.PI / 2);
+  spots.add('capena-vigil-b', 'npc', vx - 1.2, g(vx - 1.2, vz) + 0.28, vz + 1.0, Math.PI * 0.75);
   // Carts waiting their turn to unload before dawn, and a mule standing patient in the traces.
   const cx2 = -10.0, cz2 = 5.0;
   const cf = d.at(cx2, g(cx2, cz2) + 0.28, cz2, -Math.PI / 2 - 0.15);
@@ -413,6 +492,18 @@ export function buildQuarter(ctx: LandmarkContext, b: MeshBuilder, d: Draw, spot
   placeProp(d, 'sack', -11.2, g(-11.2, 6.2) + 0.28, 6.2, 0.6);
   placeProp(d, 'crate', 11.2, g(11.2, 6.0) + 0.28, 6.0, 0.2, { variant: 1 });
   spots.add('capena-carter', 'npc', cx2 + 1.0, g(cx2 + 1.0, cz2 + 1.2) + 0.28, cz2 + 1.2, -Math.PI / 2);
+  // Halfway to the Circus: a fountain in one alley mouth, a crossroads shrine in another.
+  const lz = APPIA_ALLEYS.lacus, lx = -(PL + 0.9);
+  const lf = d.at(lx, g(lx, lz) + 0.3, lz, -Math.PI / 2);
+  lacus(lf, new Rng('capena-lacus-appia'), { stone: 'travertine' });
+  const lp = lf.point(0, 0, -1.6);
+  spots.add('capena-lacus-appia', 'shrine', lp.x, lp.y, lp.z, -Math.PI / 2);
+  const kz = APPIA_ALLEYS.compitum, kx = PL + 1.0;
+  const ks = d.at(kx, g(kx, kz) + 0.3, kz, Math.PI / 2);
+  compitalShrine(ks, new Rng('capena-compitum-appia'));
+  lamps.push({ position: ks.point(0, 1.6, 1.2), color: 0xffb060, intensity: 4.5, distance: 6, flicker: 0.3, night: false, dayScale: 0, glow: 0.12 });
+  const kp = ks.point(0, 0, -2.0);
+  spots.add('capena-compitum-appia', 'shrine', kp.x, kp.y, kp.z, Math.PI / 2);
   // Plane trees shading the square.
   trees.push({ species: 'plane', x: -11.5, z: 4.2, y: g(-11.5, 4.2) + 0.28, scale: 0.75, variant: 1 });
   trees.push({ species: 'plane', x: 11.8, z: 11.2, y: g(11.8, 11.2) + 0.28, scale: 0.7, variant: 2 });

@@ -14,10 +14,19 @@ import { Rng } from '../../../core/Rng';
 import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuilder, LandmarkContext } from '../types';
 import { block, boulder as rockBoulder, gardenBed, openings, peristyle, pool, rockPlinth, roofOver, stair } from './palcirc/palace';
-import { lion, mergeAll } from './palcirc/shapes';
+import { lion } from './palcirc/shapes';
 import { Spots, drawFor, gableRoof, groundRange, lowColumn, plantTrees, type TreeSpec } from './palcirc/util';
 import { requestLamps } from './palcirc/runtime';
+import { streetRow } from './palcirc/streetRow';
+import type { Lamp } from './palcirc/capenaParts';
+import { fromHost, relLocal } from './palcirc/frames';
+import { CIRCUS } from './palcirc/circusLayout';
+import { compitalShrine } from '../../../arch/fabric/shrines';
+import { lacus } from '../../../arch/fabric/fountain';
+import { LANDMARK_BY_ID, ROADS } from '../../../data/atlas';
+import type { LandmarkData } from '../types';
 import { landmarkToWorld } from './palcirc/util';
+import { settled } from './palcirc/settle';
 
 /** Near range (m) of the high-detail temples; beyond it their low-detail stand-in is shown. */
 const NEAR = 320;
@@ -39,6 +48,20 @@ function templeFooting(ctx: LandmarkContext, d: Draw, L: TempleLayout, mat: Mate
   const z0 = L.podiumFront, z1 = L.stylobate.z1;
   const g = groundRange(ctx, x0, z0, x1, z1, 2);
   if (g.min < -0.05) d.span(mat, x0, g.min - 0.6, z0, x1, 0.02, z1, { collide: true });
+}
+
+/**
+ * Footing steps (≤ 0.2 m risers, 0.32 m treads) in front of a temple's frontal flight, from the
+ * lowest ground before it up to the pad (y = 0), wherever the pad's edge falls away. Returns the
+ * ground level at the foot (≤ 0).
+ */
+function footSteps(ctx: LandmarkContext, d: Draw, f: TempleLayout['flights'][number], mat: MaterialId): number {
+  const probe = groundRange(ctx, f.x0, f.z0 - 3, f.x1, f.z0, 0.5).min;
+  if (probe >= -0.12) return Math.min(0, probe);
+  const n = Math.ceil(-probe / 0.2 - 1e-6);
+  const r = -probe / n;
+  for (let i = 0; i < n; i++) d.span(mat, f.x0, probe + i * r, f.z0 - (n - i) * 0.32, f.x1, probe + (i + 1) * r, f.z0, { collide: true });
+  return probe;
 }
 
 /** Simple draped standing figure (Danaids, votive statues): cheap, ~60 triangles. */
@@ -90,17 +113,21 @@ function apollo(ctx: LandmarkContext) {
   const L = temple(b, spec).layout;
   // The gilded chariot of the Sun on the apex of the pediment.
   const apexZ = L.entablature.z0 + 0.6;
-  quadriga(b, T4(0, L.totalHeight - 0.4, apexZ + 0.9), { material: 'gilded_bronze', driverMaterial: 'gilded_bronze', scale: 0.85, detail: hi ? 'low' : 'low' });
+  quadriga(b, T4(0, L.totalHeight - 0.4, apexZ + 0.9), { material: 'gilded_bronze', driverMaterial: 'gilded_bronze', scale: 0.85, detail: 'low' });
   // Dedication on the podium front, between the stair wings.
   inscriptionPanel(b, { lines: ['Apollini Palatino', 'Imp Caesar Divi F'], width: 3.4, height: 0.8, style: 'bronze', border: true }, T4(L.stylobate.x0 + 1.8, L.podiumHeight * 0.55, L.stylobate.z0 - 0.02 - (L.stylobate.z0 - L.podiumFront)), { depth: 0.04, bodyMaterial: 'marble' });
-  // Altar with Myron's four bronze cattle, before the stairs.
-  const az = L.podiumFront - 3.2;
+  // Altar before the stairs with Myron's four bronze cattle, two either side facing it (the
+  // terrace is shallow in front: the House of Augustus is just below).
+  const az = L.podiumFront - 1.9;
   d.span('marble', -1.3, 0, az - 0.9, 1.3, 1.2, az + 0.9, { collide: true });
   d.span('marble', -1.5, 1.2, az - 1.1, 1.5, 1.4, az + 1.1);
   d.box('glow_fire', 0, 1.44, az, 0.7, 0.06, 0.5);
-  for (const [x, z, ry] of [[-2.8, az - 1.6, 0.3], [2.8, az - 1.6, -0.3], [-2.8, az + 1.6, Math.PI - 0.3], [2.8, az + 1.6, Math.PI + 0.3]] as const) {
-    d.span('marble', x - 0.6, 0, z - 1.1, x + 0.6, 0.4, z + 1.1, { collide: true });
-    bull(d, x, 0.4, z, ry, 'bronze');
+  for (const sx of [-1, 1]) {
+    for (const k of [0, 1]) {
+      const x = sx * (2.75 + k * 2.2);
+      d.span('marble', x - 1.0, 0, az - 0.5, x + 1.0, 0.4, az + 0.5, { collide: true });
+      bull(d, x, 0.4, az, sx > 0 ? -Math.PI / 2 : Math.PI / 2, 'bronze');
+    }
   }
   // Portico of the Danaids along both flanks: giallo antico columns with statues between them.
   for (const sx of [-1, 1]) {
@@ -123,13 +150,15 @@ function apollo(ctx: LandmarkContext) {
       : [xo, 5.6, tz1 - 1.6, xc, 4.75, tz1 - 1.6, xc, 4.75, tz0 + 1.6, xo, 5.6, tz1 - 1.6, xc, 4.75, tz0 + 1.6, xo, 5.6, tz0 + 1.6];
     d.tris('roof_tile', q);
   }
-  // Steps down from the terrace front to the lower ground.
-  const gs = groundRange(ctx, -3, tz0 - 4, 3, tz0 - 1);
-  if (gs.min < -0.25) stair(d.at(0, gs.min, tz0 - Math.ceil(-gs.min / 0.2) * 0.32, 0), 5.0, -gs.min, 'marble');
+  // The terrace front looks down over the House of Augustus, built close below it (the atlas
+  // puts the house just in front): a marble balustrade, no stair (the way in is from the Area
+  // Palatina behind and at the corners).
+  d.span('marble', -tx, 0, tz0, tx, 1.05, tz0 + 0.3, { collide: true });
+  d.span('marble', -tx - 0.05, 1.0, tz0 - 0.03, tx + 0.05, 1.12, tz0 + 0.33);
   spots.add('temple-apollo-inscription', 'inscription', L.stylobate.x0 + 1.8, 0, L.podiumFront - 1.5, 0);
-  spots.add('apollo-altar', 'shrine', 0, 0, az - 2.4, 0);
+  spots.add('apollo-altar', 'shrine', 0, 0, az + 1.55, Math.PI);
   spots.add('apollo-temple-door', 'door', 0, L.podiumHeight, L.cella.z0 - 1.0, Math.PI);
-  spots.add('apollo-vista-terrace', 'vista', 0, 0, tz0 + 0.8, Math.PI);
+  spots.add('apollo-vista-terrace', 'vista', 8.0, 0, tz0 + 0.9, Math.PI);
   spots.add('apollo-librarian', 'npc', sx(1) * (tx - 3.6), 0, 4, -Math.PI / 2);
   spots.add('apollo-portico-bench', 'sit', -(tx - 3.4), 0, -6, Math.PI / 2);
   // Far stand-in: the same temple at low detail with the chariot, on its terrace.
@@ -146,20 +175,22 @@ const sx = (s: number) => s;
 function houseAugustus(ctx: LandmarkContext) {
   const { b, d } = drawFor(ctx);
   const spots = new Spots();
-  const HW = 11.4, HD = 9.3;
+  // 38 × 31 m in the atlas; the back is cut 2.5 m short so the house stands clear of the Temple of
+  // Apollo's terrace, which the atlas puts right behind it (HB is the back line).
+  const HW = 11.4, HD = 9.3, HB = HD - 2.5;
   const fl = 0.3;
-  block(d, ctx, -HW, -HD, HW, HD, fl, 'tufa', { cornice: 'travertine' });
+  block(d, ctx, -HW, -HD, HW, HB, fl, 'tufa', { cornice: 'travertine' });
   // Basement storey exposed on the falling front, with small windows.
-  openings(d, -HW, -HD, HW, HD, 'n', -2.4, 0.6, 0.9, 3.0);
+  openings(d, -HW, -HD, HW, HB, 'n', -2.4, 0.6, 0.9, 3.0);
   // Two-storey ranges round a small peristyle.
   const H = 7.0;
-  const cx0 = -4.2, cx1 = 4.2, cz0 = -2.4, cz1 = 4.6;
-  for (const [x0, z0, x1, z1] of [[-HW, -HD, HW, cz0 - 1.6], [-HW, cz1 + 1.6, HW, HD], [-HW, cz0 - 1.6, cx0 - 1.6, cz1 + 1.6], [cx1 + 1.6, cz0 - 1.6, HW, cz1 + 1.6]] as const) {
+  const cx0 = -4.2, cx1 = 4.2, cz0 = -4.2, cz1 = 2.4;
+  for (const [x0, z0, x1, z1] of [[-HW, -HD, HW, cz0 - 1.6], [-HW, cz1 + 1.6, HW, HB], [-HW, cz0 - 1.6, cx0 - 1.6, cz1 + 1.6], [cx1 + 1.6, cz0 - 1.6, HW, cz1 + 1.6]] as const) {
     d.span('plaster_cream', x0, fl, z0, x1, fl + H, z1, { collide: true });
     roofOver(d, x0, z0, x1, z1, fl + H, 0.36, 'roof_tile', 'plaster_cream');
   }
   d.span('plaster_red', -HW, fl, -HD - 0.02, HW, fl + 1.1, -HD);
-  openings(d, -HW, -HD, HW, HD, 'n', fl + 4.2, 0.8, 1.2, 2.6, { margin: 2 });
+  openings(d, -HW, -HD, HW, HB, 'n', fl + 4.2, 0.8, 1.2, 2.6, { margin: 2 });
   peristyle(d, cx0, cz0, cx1, cz1, fl, { D: 0.3, H: 3.0, spacing: 2.1, depth: 1.5, mat: 'plaster_white', cap: 'ionic', back: false, lite: true });
   gardenBed(d, cx0 + 0.6, cz0 + 0.6, cx1 - 0.6, cz1 - 0.6, fl, true);
   // The door with the two laurels and the oak-leaf civic crown voted by the Senate (Res Gestae 34).
@@ -168,13 +199,18 @@ function houseAugustus(ctx: LandmarkContext) {
   door.span('wood_dark', -0.85, 0, -0.3, 0.85, 2.9, -0.24);
   door.cyl('foliage_broad', 0, 3.95, -0.32, 0.55, 0.14, 14, { rx: Math.PI / 2, open: true });
   door.cyl('foliage_olive', 0, 3.95, -0.3, 0.42, 0.14, 14, { rx: Math.PI / 2, open: true });
-  const gf = groundRange(ctx, -2, -HD - 3, 2, -HD).min;
-  if (fl - gf > 0.15) stair(d.at(0, gf, -HD - Math.ceil((fl - gf) / 0.2) * 0.32), 2.2, fl - gf, 'travertine');
-  const trees: TreeSpec[] = [{ species: 'laurel', x: -2.3, z: -HD - 0.9, scale: 0.75, variant: 0 }, { species: 'laurel', x: 2.3, z: -HD - 0.9, scale: 0.75, variant: 1 }];
+  // A landing before the door (the laurels stand on it), and the stair down the slope from it.
+  const LD = 2.6;
+  const gl = groundRange(ctx, -3, -HD - LD, 3, -HD);
+  if (gl.min < fl - 0.05) d.span('tufa', -3, gl.min - 0.5, -HD - LD, 3, fl - 0.02, -HD, { collide: true });
+  d.span('travertine', -3, fl - 0.04, -HD - LD, 3, fl + 0.02, -HD, { collide: true });
+  const gf = groundRange(ctx, -1.2, -HD - LD - 3, 1.2, -HD - LD).min;
+  if (fl - gf > 0.15) stair(d.at(0, gf, -HD - LD - Math.ceil((fl - gf) / 0.2) * 0.32), 2.2, fl - gf, 'travertine');
+  const trees: TreeSpec[] = [{ species: 'laurel', x: -2.2, z: -HD - 0.8, y: fl, scale: 0.75, variant: 0 }, { species: 'laurel', x: 2.2, z: -HD - 0.8, y: fl, scale: 0.75, variant: 1 }];
   for (const t of plantTrees(ctx, trees)) b.collider(t);
-  spots.add('house-augustus-door', 'door', 0, Math.max(gf, 0), -HD - 2.8, 0);
-  spots.add('house-augustus-laurels', 'shrine', 0, Math.max(gf, 0), -HD - 3.6, 0);
-  spots.add('house-augustus-custodian', 'npc', 1.6, Math.max(gf, 0), -HD - 2.2, Math.PI);
+  spots.add('house-augustus-door', 'door', 0, fl, -HD - 1.2, 0);
+  spots.add('house-augustus-laurels', 'shrine', -0.9, fl, -HD - 1.9, 0.3);
+  spots.add('house-augustus-custodian', 'npc', 1.0, fl, -HD - 1.6, Math.PI);
   return { object: b.build(ctx.lm.id), colliders: b.colliders, spots: spots.list, cullDistance: 1200 };
 }
 
@@ -208,9 +244,9 @@ function houseLivia(ctx: LandmarkContext) {
   d.span('wood_dark', -0.7, fl, -HD - 0.24, 0.7, fl + 2.6, -HD - 0.2);
   openings(d, -HW, -HD, HW, HD, 'w', fl + 3.4, 0.6, 0.8, 3.0);
   openings(d, -HW, -HD, HW, HD, 'e', fl + 3.4, 0.6, 0.8, 3.0);
-  // The lead pipe stamped IVLIA AVG (Livia's name after 14) running along the wall.
+  // The lead pipe stamped IVLIAE AVG (Livia's name after 14) running along the wall.
   d.cyl('lead', HW + 0.12, fl + 0.25, 0, 0.08, 2 * HD - 1, 6, { rx: Math.PI / 2 });
-  paintedSign(b, ['Iulia Aug'], 0.5, 0.12, T4(HW + 0.21, fl + 0.25, 0, -Math.PI / 2), { ink: '#3a3a3a', ground: '#8a8e94' });
+  paintedSign(b, ['Iuliae Aug'], 0.5, 0.12, T4(HW + 0.21, fl + 0.25, 0, -Math.PI / 2), { ink: '#3a3a3a', ground: '#8a8e94' });
   const gf = groundRange(ctx, -1.5, -HD - 3, 1.5, -HD).min;
   if (fl - gf > 0.15) stair(d.at(0, gf, -HD - Math.ceil((fl - gf) / 0.2) * 0.32), 2.0, fl - gf, 'travertine');
   spots.add('house-livia-door', 'door', 0, fl, -HD - 1.5, 0);
@@ -224,7 +260,6 @@ function houseLivia(ctx: LandmarkContext) {
 function magnaMater(ctx: LandmarkContext) {
   const { b, d } = drawFor(ctx);
   const spots = new Spots();
-  const hi = ctx.detail === 'high';
   const spec: TempleSpec = {
     order: 'corinthian',
     plan: 'prostyle',
@@ -240,9 +275,10 @@ function magnaMater(ctx: LandmarkContext) {
   };
   const L = temple(b, spec).layout;
   templeFooting(ctx, d, L, 'tufa');
-  // The great flight is the cavea of the Megalesian plays (the kit's frontal stair).
+  // The great flight is the cavea of the Megalesian plays (the kit's frontal stair); footing steps
+  // carry it down to the ground where the pad's edge falls away in front of it.
   const f = L.flights[0];
-  const gfront = Math.min(0, groundRange(ctx, f.x0, f.z0 - 2, f.x1, f.z0).min);
+  const gfront = footSteps(ctx, d, f, 'tufa');
   // Cybele's lions flanking the stair.
   for (const s of [-1, 1]) {
     const x = s * ((L.stylobate.x1 - L.stylobate.x0) / 2 - 0.6);
@@ -250,16 +286,19 @@ function magnaMater(ctx: LandmarkContext) {
     d.geo(lion(), 'bronze', x, L.podiumHeight + 0.2, f.z0 + 0.7, { sx: 0.9, sy: 0.9, sz: 0.9 });
   }
   inscriptionPanel(b, { lines: ['Matri Deum Magnae Idaeae'], width: 3.6, height: 0.5, style: 'carved', border: true }, T4(0, L.podiumHeight + L.H + L.entablature.height * 0.45, L.entablature.z0 - 0.06), { depth: 0.04, bodyMaterial: 'plaster_white' });
-  // Altar at the foot of the steps; tympana (drums) hung on the cella.
+  // Altar beside the foot of the steps, on its own plinth down to the falling ground.
   const az = f.z0 - 1.2;
   const ax = L.stylobate.x1 + 1.6;
-  d.span('tufa', ax - 0.7, Math.min(0, gfront), az - 0.7, ax + 0.7, Math.min(0, gfront) + 1.1, az + 0.7, { collide: true });
-  void hi;
-  spots.add('magna-mater-inscription', 'inscription', 0, Math.min(0, gfront), f.z0 - 4.0, 0);
-  spots.add('magna-mater-altar', 'shrine', ax, Math.min(0, gfront), az - 1.4, 0);
-  spots.add('magna-mater-gallus-a', 'npc', -2.2, L.podiumHeight, L.stylobate.z0 + 0.8, Math.PI);
-  spots.add('magna-mater-gallus-b', 'npc', 2.2, L.podiumHeight, L.stylobate.z0 + 0.8, Math.PI);
+  const ga = groundRange(ctx, ax - 1.6, az - 2.4, ax + 1.6, az + 1.6, 0.8);
+  d.span('tufa', ax - 1.6, ga.min - 0.4, az - 2.4, ax + 1.6, ga.max + 0.12, az + 1.6, { collide: true });
+  d.span('tufa', ax - 0.7, ga.max + 0.12, az - 0.7, ax + 0.7, ga.max + 1.22, az + 0.7, { collide: true });
+  d.box('glow_fire', ax, ga.max + 1.25, az, 0.5, 0.05, 0.4);
+  spots.add('magna-mater-inscription', 'inscription', 0, gfront, f.z0 - 4.0, 0);
+  spots.add('magna-mater-altar', 'shrine', ax, ga.max + 0.12, az - 1.6, 0);
+  spots.add('magna-mater-gallus-a', 'npc', -1.2, L.podiumHeight, L.stylobate.z0 + 2.2, Math.PI);
+  spots.add('magna-mater-gallus-b', 'npc', 1.2, L.podiumHeight, L.stylobate.z0 + 2.2, Math.PI);
   spots.add('magna-mater-steps', 'sit', -1.5, L.podiumHeight * 0.5, (f.z0 + f.z1) / 2, Math.PI);
+  spots.add('magna-mater-door', 'door', 0, L.podiumHeight, L.cella.z0 - 1.0, Math.PI);
   return { object: b.build(ctx.lm.id), colliders: b.colliders, spots: spots.list, cullDistance: NEAR, far: templeFar(ctx, spec) };
 }
 
@@ -284,11 +323,7 @@ function victoria(ctx: LandmarkContext) {
   const L = temple(b, spec).layout;
   templeFooting(ctx, d, L, 'tufa');
   const f = L.flights[0];
-  const gfront = groundRange(ctx, f.x0, f.z0 - 3, f.x1, f.z0).min;
-  if (gfront < -0.2) {
-    const n = Math.ceil(-gfront / 0.2);
-    for (let i = 0; i < n; i++) d.span('tufa', f.x0, gfront + i * (-gfront / n), f.z0 - (n - i) * 0.32, f.x1, gfront + (i + 1) * (-gfront / n), f.z0, { collide: true });
-  }
+  const gfront = footSteps(ctx, d, f, 'tufa');
   // A gilded Victory on the apex acroterion.
   const ap = L.totalHeight;
   d.cyl('gilded_bronze', 0, ap + 0.6, L.entablature.z0 + 0.3, 0.18, 1.2, 8, { rTop: 0.08 });
@@ -370,7 +405,7 @@ export function hutGeometry(d: Draw, rng: Rng, hi: boolean) {
 }
 
 /** Offset (local m) of the hut from the atlas point, clear of the Magna Mater's stair. */
-export const CASA_OFFSET: [number, number] = [8.5, 3.4];
+export const CASA_OFFSET: [number, number] = [9.5, 4.5];
 
 function casaRomuli(ctx0: LandmarkContext) {
   const { b, d: d0 } = drawFor(ctx0);
@@ -444,55 +479,138 @@ function casaRomuli(ctx0: LandmarkContext) {
 function lupercal(ctx: LandmarkContext) {
   const { b, d } = drawFor(ctx);
   const spots = new Spots();
-  const rng = new Rng('lupercal');
   const hi = ctx.detail === 'high';
-  // A tufa crag at the foot of the Palatine (local +z is the hill): the cave opens in its face.
+  // A tufa crag at the foot of the Palatine (local +z is the hill): the grotto opens in its face, a
+  // walkable chamber 3.2 m wide and 4.2 m deep with the spring along one side and the bronze
+  // she-wolf with the twins against the back wall.
   const face = 4.5;
   const caveW = 3.2, caveH = 3.6, caveD = 4.2;
   const back = face + caveD;
   const boulder = (x: number, y: number, z: number, sx: number, sy: number, sz: number, seed: number, solid = true) => rockBoulder(d, x, y, z, sx, sy, sz, seed, solid);
   const gAt = (x: number, z: number) => ctx.groundAt(x, z);
+  // The crag round the chamber (the boulders stand clear of its walls so none bulges into it).
   let seed = 1;
   for (const [x, z, sx2, sy2, sz2] of [
-    [-6.0, face + 3.2, 4.4, 5.6, 3.6], [6.2, face + 3.2, 4.6, 5.2, 3.6], [-12.0, face + 5.0, 3.8, 4.2, 3.8], [12.0, face + 5.5, 3.8, 3.8, 4.0],
-    [0, face + 7.5, 5.0, 4.0, 4.4], [-5.0, face + 10.5, 5.6, 5.2, 4.6], [5.0, face + 11.0, 5.6, 5.4, 4.6], [0, face + 14.5, 6.0, 4.6, 4.4],
-    [-11.0, face + 13.0, 4.6, 4.4, 4.6], [11.0, face + 13.5, 4.4, 4.0, 4.4],
+    [-7.6, face + 3.4, 4.0, 5.6, 3.6], [7.8, face + 3.4, 4.2, 5.2, 3.6], [-13.0, face + 5.0, 3.8, 4.2, 3.8], [13.2, face + 5.5, 3.8, 3.8, 4.0],
+    [0, back + 5.4, 5.0, 4.0, 4.4], [-5.6, face + 11.5, 5.6, 5.2, 4.6], [5.6, face + 12.0, 5.6, 5.4, 4.6], [0, face + 16.0, 6.0, 4.6, 4.4],
+    [-11.5, face + 13.0, 4.6, 4.4, 4.6], [11.5, face + 13.5, 4.4, 4.0, 4.4],
   ] as const) {
     boulder(x, Math.max(0, gAt(x, z)) + sy2 * 0.5, z, sx2, sy2, sz2, seed++);
   }
-  // The lintel crag over the cave mouth and the grotto chamber walls behind it.
+  // The lintel crag over the mouth and the chamber: side walls, rock roof, back wall, floor.
   boulder(0, caveH + 1.9, face + 1.8, 3.2, 2.4, 2.4, 41, false);
   d.solid(-caveW / 2 - 0.3, caveH, face, caveW / 2 + 0.3, caveH + 3.5, face + 3.5);
   for (const sx2 of [-1, 1]) d.span('rock', sx2 * (caveW / 2), -0.1, face - 0.2, sx2 * (caveW / 2 + 1.6), caveH + 0.4, back + 0.3, { collide: true });
-  d.span('rock', -caveW / 2 - 0.2, caveH, face + 0.4, caveW / 2 + 0.2, caveH + 0.8, back + 0.3);
+  d.span('rock', -caveW / 2 - 0.2, caveH, face + 0.4, caveW / 2 + 0.2, caveH + 0.8, back + 0.3, { collide: true });
   d.span('rock', -caveW / 2 - 0.2, -0.1, back, caveW / 2 + 0.2, caveH + 0.4, back + 0.6, { collide: true });
-  // Grotto lining (dark rock) and floor; spring basin; the bronze she-wolf with the twins.
   d.span('rock', -caveW / 2, -0.1, face, caveW / 2, 0.05, back, { collide: true });
+  // Grotto lining (smoke-dark), the spring in a marble basin along the east side.
+  for (const sx2 of [-1, 1]) d.span('black', sx2 * (caveW / 2) - (sx2 > 0 ? 0.02 : 0), 0.05, face + 0.3, sx2 * (caveW / 2) + (sx2 < 0 ? 0.02 : 0), caveH, back);
   d.span('black', -caveW / 2 + 0.02, 0.05, back - 0.05, caveW / 2 - 0.02, caveH, back - 0.02);
-  d.span('marble', -1.2, 0, back - 1.4, 1.2, 0.5, back - 0.3, { collide: true });
-  d.span('water', -1.05, 0.38, back - 1.25, 1.05, 0.46, back - 0.45);
-  const wolfY = 0.0;
-  d.span('marble', -0.7, wolfY, face + 1.0, 0.7, 0.8, face + 2.4, { collide: true });
-  d.geo(lion(), 'bronze', 0, 0.8, face + 1.7, { sx: 0.75, sy: 0.82, sz: 0.85, ry: Math.PI / 2 });
-  for (const s of [-1, 1]) d.ellipsoid('bronze', s * 0.18, 1.05, face + 1.6 + s * 0.15, 0.1, 0.12, 0.18, { seg: [6, 5] });
+  d.span('marble', 0.55, 0.05, face + 0.8, caveW / 2 - 0.02, 0.6, face + 2.5, { collide: true });
+  d.span('water', 0.7, 0.4, face + 0.95, caveW / 2 - 0.15, 0.52, face + 2.35);
+  d.cyl('bronze', caveW / 2 - 0.08, 1.05, face + 1.65, 0.05, 0.3, 6, { rz: Math.PI / 2 });
+  d.cyl('water', caveW / 2 - 0.35, 0.8, face + 1.65, 0.025, 0.5, 5);
+  // The bronze she-wolf suckling the twins, on a marble base against the back wall.
+  d.span('marble', -0.75, 0.05, back - 1.6, 0.75, 0.85, back - 0.15, { collide: true });
+  d.geo(lion(), 'bronze', 0, 0.85, back - 0.9, { sx: 0.75, sy: 0.82, sz: 0.85, ry: Math.PI / 2 });
+  for (const s of [-1, 1]) d.ellipsoid('bronze', s * 0.18, 1.1, back - 1.0 + s * 0.15, 0.1, 0.12, 0.18, { seg: [6, 5] });
+  for (const x of [-0.55, 0.55]) placeProp(d, 'oil_lamp', x, 0.85, back - 1.5, 0, { collide: false });
   // Augustan aedicula framing the mouth: two columns, entablature, pediment.
   const af = d.at(0, 0, face - 0.3);
-  af.span('marble', -2.6, -0.05, -1.5, 2.6, 0.35, 0.3, { collide: true });
-  for (const x of [-2.1, 2.1]) lowColumn(af, 'marble', x, 0.35, -0.6, 0.42, 3.8, { cap: 'corinthian', collide: true, seg: hi ? 10 : 6 });
-  af.span('marble', -2.6, 4.15, -1.1, 2.6, 4.75, 0.2);
-  gableRoof(af, -2.6, -1.1, 2.6, 0.2, 4.75, { axis: 'z', pitch: 0.28, over: 0.15, gables: 'marble' });
-  inscriptionPanel(b, { lines: ['Lupercal'], width: 1.6, height: 0.42, style: 'bronze' }, T4(0, 4.45, face - 1.42), { depth: 0.03, bodyMaterial: 'marble' });
-  // The Ruminal fig before the cave, votive lamps.
-  const trees: TreeSpec[] = [{ species: 'fig', x: -4.2, z: face - 3.5, scale: 1.1, variant: 1 }];
+  af.span('marble', -2.6, -0.05, -1.5, 2.6, 0.3, 0.3, { collide: true });
+  for (const x of [-2.1, 2.1]) lowColumn(af, 'marble', x, 0.3, -0.6, 0.42, 3.8, { cap: 'corinthian', collide: true, seg: hi ? 10 : 6 });
+  af.span('marble', -2.6, 4.1, -1.1, 2.6, 4.7, 0.2);
+  gableRoof(af, -2.6, -1.1, 2.6, 0.2, 4.7, { axis: 'z', pitch: 0.28, over: 0.15, gables: 'marble' });
+  inscriptionPanel(b, { lines: ['Lupercal'], width: 1.6, height: 0.42, style: 'bronze' }, T4(0, 4.4, face - 1.42), { depth: 0.03, bodyMaterial: 'marble' });
+  // Steps down to the ground in front of the aedicula's platform where it falls away.
+  const ga = groundRange(ctx, -2.6, face - 3.2, 2.6, face - 1.8, 0.5).min;
+  if (ga < 0.1) {
+    const n = Math.ceil((0.3 - ga) / 0.2 - 1e-6), r = (0.3 - ga) / n;
+    for (let i = 0; i < n - 1; i++) d.span('marble', -2.0, ga + i * r - 0.05, face - 1.8 - (n - 1 - i) * 0.32, 2.0, ga + (i + 1) * r, face - 1.8, { collide: true });
+  }
+  // The Ruminal fig before the cave.
+  const trees: TreeSpec[] = [{ species: 'fig', x: -4.4, z: face - 3.5, scale: 1.1, variant: 1 }];
+  const lamps: Lamp[] = [{ position: new THREE.Vector3(0, 1.3, back - 1.4), color: 0xffa54f, intensity: 3, distance: 5, flicker: 0.3, night: false, dayScale: 1, glow: 0.1 }];
+  // The street corner below: shops along the Vicus Tuscus at the foot of the hill, a crossroads
+  // shrine and a fountain where it meets the street along the Circus (the walk from the Circus to
+  // the Velabrum passes here).
+  vicusTuscusCorner(ctx, b, d, spots, lamps, trees);
   for (const t of plantTrees(ctx, trees)) b.collider(t);
-  for (const x of [-0.9, 0.9]) placeProp(d, 'oil_lamp', x, 0.5, back - 0.9, 0, { collide: false });
-  requestLamps(ctx.game, landmarkToWorld(ctx), [{ position: new THREE.Vector3(0, 1.2, back - 1.0), color: 0xffa54f, intensity: 3, distance: 5, flicker: 0.3, night: false, dayScale: 1, glow: 0.1 }]);
-  void rng;
+  requestLamps(ctx.game, landmarkToWorld(ctx), lamps);
   spots.add('lupercal-inscription', 'inscription', 0, 0, face - 3.0, 0);
-  spots.add('lupercal-shrine', 'shrine', 0, 0, back - 2.0, 0);
-  spots.add('lupercal-cave', 'door', 0, 0, face - 0.8, 0);
-  spots.add('lupercal-lupercus', 'npc', 2.6, 0, face - 2.5, -0.4);
+  spots.add('lupercal-shrine', 'shrine', -0.5, 0.05, back - 2.3, 0);
+  spots.add('lupercal-cave', 'door', -0.4, 0.3, face - 0.8, 0);
+  spots.add('lupercal-lupercus', 'npc', 2.9, 0, face - 2.6, -0.4);
   return { object: b.build(ctx.lm.id), colliders: b.colliders, spots: spots.list, cullDistance: 1200 };
+}
+
+/**
+ * The Vicus Tuscus at the Lupercal (its local frame): a row of four blocks with shops on the hill
+ * side of the street, from just past the corner with the street along the Circus northward, and a
+ * compitum and a lacus on the corner.
+ */
+function vicusTuscusCorner(ctx: LandmarkContext, b: MeshBuilder, d: Draw, spots: Spots, lamps: Lamp[], trees: TreeSpec[]) {
+  const host = LANDMARK_BY_ID['lupercal'] as LandmarkData;
+  const road = ROADS.find((r) => r.id === 'vicus-tuscus');
+  if (!road) return;
+  const pts = road.points.map((p) => {
+    const r = relLocal(host, { center: p, rotation: 0 });
+    return [r.x, r.z] as [number, number];
+  });
+  // The segment nearest the Lupercal that runs clear of the Circus (the street turns along the
+  // carceres south of the corner).
+  const circ = relLocal(host, LANDMARK_BY_ID['circus-maximus'] as LandmarkData);
+  const inCircus = (x: number, z: number) => {
+    const [cx, cz] = fromHost(circ, x, z);
+    return Math.abs(cx) < CIRCUS.halfW + 6 && Math.abs(cz) < CIRCUS.halfLen + 6;
+  };
+  let best = -1, bestD = Infinity;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const m = [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2];
+    if (inCircus(m[0], m[1]) || inCircus(...pts[i]) || inCircus(...pts[i + 1])) continue;
+    const dd = Math.hypot(m[0], m[1]);
+    if (dd < bestD) { bestD = dd; best = i; }
+  }
+  if (best < 0) return;
+  let [A, C] = [pts[best], pts[best + 1]];
+  if (A[1] > C[1]) [A, C] = [C, A];
+  const L = Math.hypot(C[0] - A[0], C[1] - A[1]);
+  const t: [number, number] = [(C[0] - A[0]) / L, (C[1] - A[1]) / L];
+  let n: [number, number] = [-t[1], t[0]];
+  // The hill (and the Lupercal) side.
+  if (n[0] * -A[0] + n[1] * -A[1] < 0) n = [-n[0], -n[1]];
+  const off = 4.1;
+  const start = 9;
+  streetRow(ctx, b, spots, lamps, {
+    a: [A[0] + n[0] * off + t[0] * start, A[1] + n[1] * off + t[1] * start],
+    c: [C[0] + n[0] * off, C[1] + n[1] * off],
+    n,
+    sidewalk: 1.6,
+    seed: 4950,
+    idPrefix: 'lupercal',
+    lots: [
+      { len: 12, depth: 10, storeys: 3, finish: 'plaster', plaster: 'plaster_ochre', bays: ['thermopolium', 'stair', 'wine', 'bakery'], gap: 3 },
+      { len: 14, depth: 11, storeys: 4, finish: 'brick', bays: ['general', 'textile', 'stair', 'cobbler', 'pottery'], gap: 2.5 },
+      { len: 12, depth: 10, storeys: 3, finish: 'plaster', plaster: 'plaster_cream', portico: true, bays: ['barber', 'stair', 'moneychanger', 'butcher'], gap: 3 },
+      { len: 13, depth: 10, storeys: 4, finish: 'brick', bays: ['smithy', 'stair', 'general', 'fullonica'] },
+    ],
+  });
+  // The corner: the compitum facing the street along the Circus, the lacus beside it.
+  const ca: [number, number] = [A[0] + n[0] * (off + 2.5) + t[0] * 1.0, A[1] + n[1] * (off + 2.5) + t[1] * 1.0];
+  const face = Math.atan2(n[0], n[1]); // frame −z (the front) toward the street (−n)
+  const cs = d.at(ca[0], ctx.groundAt(ca[0], ca[1]) + 0.05, ca[1], face);
+  compitalShrine(cs, new Rng('lupercal-compitum'));
+  const cl = cs.point(0, 1.6, 1.2);
+  lamps.push({ position: cl, color: 0xffb060, intensity: 4.5, distance: 6, flicker: 0.3, night: false, dayScale: 0, glow: 0.12 });
+  const cp = cs.point(0, 0, -2.0);
+  spots.add('lupercal-compitum', 'shrine', cp.x, cp.y, cp.z, face);
+  const la: [number, number] = [ca[0] - t[0] * 6.5, ca[1] - t[1] * 6.5];
+  const lf = d.at(la[0], ctx.groundAt(la[0], la[1]) + 0.05, la[1], face);
+  lacus(lf, new Rng('lupercal-lacus'), { stone: 'travertine' });
+  const lp = lf.point(0, 0, -1.6);
+  spots.add('lupercal-lacus', 'shrine', lp.x, lp.y, lp.z, face);
+  trees.push({ species: 'plane', x: la[0] - t[0] * 5 + n[0] * 2, z: la[1] - t[1] * 5 + n[1] * 2, scale: 0.8, variant: 2 });
 }
 
 // ---------------------------------------------------------------- Adonaea (gardens)
@@ -508,7 +626,22 @@ function adonaea(ctx: LandmarkContext) {
   d.span('tufa', x0, Math.min(gU.min, y) - 0.6, z0, x1, y - 0.04, z1, { collide: true });
   d.span('gravel', x0, y - 0.05, z0, x1, y + 0.02, z1);
   // Porticoes on three sides (NW, NE, SW), a retaining wall with a balustrade on the SE edge.
-  peristyle(d, x0 + 4, z0 + 4, x1 + 2, z1 - 4, y, { D: 0.42, H: 3.8, spacing: 3.4, depth: 3.2, mat: 'marble', cap: 'corinthian', backMat: 'plaster_cream', lite: !hi, skip: ['e'] });
+  // The way in: a gateway in the NE portico's back wall, on the garden's long axis, with a flight
+  // of steps down to the street below the terrace.
+  const ex = -20;
+  peristyle(d, x0 + 4, z0 + 4, x1 + 2, z1 - 4, y, { D: 0.42, H: 3.8, spacing: 3.4, depth: 3.2, mat: 'marble', cap: 'corinthian', backMat: 'plaster_cream', lite: !hi, skip: ['e'], doors: { n: [ex] } });
+  const wz = z0 + 4 - 3.2 - 0.4;
+  for (const sx of [-1, 1]) d.span('marble', ex + sx * 1.2 - (sx < 0 ? 0.45 : 0), y, wz - 0.12, ex + sx * 1.2 + (sx > 0 ? 0.45 : 0), y + 3.6, wz);
+  d.span('marble', ex - 1.75, y + 3.2, wz - 0.16, ex + 1.75, y + 3.75, wz);
+  gableRoof(d, ex - 1.8, wz - 0.7, ex + 1.8, wz, y + 3.75, { axis: 'x', pitch: 0.3, over: 0.1, gables: 'marble' });
+  d.span('paving_travertine', ex - 1.6, y - 0.05, z0, ex + 1.6, y + 0.02, wz, { collide: true });
+  const ge = groundRange(ctx, ex - 1.6, z0 - 5, ex + 1.6, z0, 0.8).min;
+  const nE = Math.max(1, Math.ceil((y - ge) / 0.2 - 1e-6));
+  if (y - ge > 0.15) {
+    stair(d.at(ex, ge, z0 - nE * 0.32), 3.0, y - ge, 'travertine');
+    for (const sx of [-1, 1]) d.span('travertine', ex + sx * 1.5 - (sx < 0 ? 0.35 : 0), Math.min(ge, y) - 0.4, z0 - nE * 0.32, ex + sx * 1.5 + (sx > 0 ? 0.35 : 0), y + 0.9, z0, { collide: true });
+  }
+  spots.add('adonaea-entrance', 'door', ex, ge, z0 - nE * 0.32 - 1.0, 0);
   d.span('marble', x1 - 0.4, y, z0, x1, y + 1.0, z1, { collide: true });
   // Beds of the "gardens of Adonis" (pots of quick seedlings), hedges, a long pool and fountains.
   gardenBed(d, x0 + 7, z0 + 7, -22, -2, y);
@@ -545,7 +678,7 @@ function adonaea(ctx: LandmarkContext) {
   return { object: b.build(ctx.lm.id), colliders: b.colliders, spots: spots.list, cullDistance: 1600 };
 }
 
-export const builders: LandmarkBuilder[] = [
+export const builders: LandmarkBuilder[] = settled([
   { handles: ['temple-apollo-palatinus'], build: apollo },
   { handles: ['house-augustus'], build: houseAugustus },
   { handles: ['house-livia'], build: houseLivia },
@@ -554,6 +687,5 @@ export const builders: LandmarkBuilder[] = [
   { handles: ['casa-romuli'], build: casaRomuli },
   { handles: ['lupercal'], build: lupercal },
   { handles: ['adonaea'], build: adonaea },
-];
+]);
 
-void mergeAll;

@@ -141,20 +141,38 @@ export class Drips {
   }
 }
 
-/** Animates a set of drips while they are visible (one System per game, shared). */
+const dripSets = new WeakMap<Game, Drips[]>();
+const dripPos = new THREE.Vector3();
+
+/** Visible and within 200 m of the camera (the mesh and every ancestor shown). */
+function dripsLive(game: Game, drips: Drips): boolean {
+  let o: THREE.Object3D | null = drips.mesh;
+  while (o) {
+    if (!o.visible) return false;
+    o = o.parent;
+  }
+  if (!drips.mesh.parent) return true;
+  return game.camera.position.distanceToSquared(dripPos.setFromMatrixPosition(drips.mesh.matrixWorld)) <= 200 * 200;
+}
+
+/**
+ * Animates sets of drips while they are visible: one System per game, shared by every set
+ * registered with it (it is added with the first set and never allocates per frame).
+ */
 export function animateDrips(game: Game, drips: Drips) {
+  const list = dripSets.get(game);
+  if (list) {
+    list.push(drips);
+    return;
+  }
+  const sets = [drips];
+  dripSets.set(game, sets);
   const sys: System & { name: string } = {
     name: 'palcirc-drips',
     priority: 60,
     update(dt: number) {
-      // Skip the work while the mesh (or its landmark) is culled.
-      let o: THREE.Object3D | null = drips.mesh;
-      while (o) {
-        if (!o.visible) return;
-        o = o.parent;
-      }
-      if (drips.mesh.parent && game.camera.position.distanceToSquared(new THREE.Vector3().setFromMatrixPosition(drips.mesh.matrixWorld)) > 200 * 200) return;
-      drips.update(Math.min(dt, 0.05));
+      const step = Math.min(dt, 0.05);
+      for (const d of sets) if (dripsLive(game, d)) d.update(step);
     },
   };
   game.addSystem(sys);
