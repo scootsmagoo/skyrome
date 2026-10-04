@@ -17,7 +17,7 @@ import { roof as tileRoof } from '../../../arch/fabric/roof';
 import { wall as fabricWall } from '../../../arch/fabric/wall';
 import { footprintPolygon } from '../../terrain/heightmap';
 import { footprintRadius } from '../footprint';
-import { stairs, stepCount } from '../../../arch/common/stairs';
+import { stairs } from '../../../arch/common/stairs';
 import { T, TRS, mul } from '../../../arch/common/geom';
 import { inscriptionPanel } from '../../../arch/common/inscription';
 import { armoredEmperor, equestrian, seatedDeity, togate } from '../../../arch/classical/statues';
@@ -162,16 +162,22 @@ export function plinth(d: Draw, ctx: LandmarkContext, x0: number, z0: number, x1
 export function flight(d: Draw, x: number, z0: number, width: number, y0: number, y1: number, mat: MaterialId = 'travertine'): number {
   const h = y1 - y0;
   if (h <= 0.05) return z0;
-  const { count, rise } = stepCount(h, 0.2);
+  const { count, rise } = flightSteps(h);
   const run = 0.34;
   stairs(d.b, { width, rise, run, count, material: mat }, mul(d.m, T(x, y0, z0)));
   return z0 + count * run;
 }
 
+/** Pure: steps for a rise of h — never a riser over 0.21 m (the player's capsule climbs ~0.26). */
+export function flightSteps(h: number): { count: number; rise: number } {
+  const count = Math.max(1, Math.ceil(h / 0.21 - 1e-9));
+  return { count, rise: h / count };
+}
+
 /** Length of a flight for a rise (for layout). */
 export function flightLength(h: number): number {
   if (h <= 0.05) return 0;
-  return stepCount(h, 0.2).count * 0.34;
+  return flightSteps(h).count * 0.34;
 }
 
 // ---------------------------------------------------------------- neighbours

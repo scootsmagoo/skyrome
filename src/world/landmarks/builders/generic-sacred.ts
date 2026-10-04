@@ -66,6 +66,8 @@ export function fitTemple(w: number, d: number, o: FitOptions): { spec: TempleSp
       order: o.order ?? 'corinthian', plan, front, width, sides: 5, material: o.material, podiumMaterial: o.podiumMaterial, cellaMaterial: o.cellaMaterial,
       roofMaterial: o.roofMaterial, detail: o.detail, pedimentRelief: o.pedimentRelief, podiumHeight: o.podiumHeight, stairs: o.stairs,
       fluted: o.detail === 'high',
+      // The kit rounds the step count; a 0.195 m target keeps every riser under 0.22 m.
+      riser: 0.195,
     };
     const L0 = templeLayout(base);
     const stairLen = L0.stylobate.z0 - L0.podiumFront;
