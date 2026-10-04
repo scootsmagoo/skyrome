@@ -10,7 +10,7 @@
  *   game.combat.danger.trigger(siteId)   stage one now (dev, tests: ?scene=rome&danger=<site id>)
  */
 import * as THREE from 'three';
-import type { Actor } from '../actors/Actor';
+import type { Actor, IdleLoop } from '../actors/Actor';
 import type { Game } from '../core/Game';
 import { ROADS, type P2 } from '../data/atlas';
 import { toGame } from '../world/coords';
@@ -242,13 +242,18 @@ export class StreetDanger {
       }),
     );
     // Lurking: the danger director moves them until the talking is over.
-    for (const c of pair) {
+    for (const [i, c] of pair.entries()) {
       c.driven = false;
-      const av = (c.body as unknown as { actor?: Actor }).actor?.avatar as { setIdleLoop?: (l: string) => void } | null | undefined;
-      av?.setIdleLoop?.(Math.random() < 0.5 ? 'lean' : 'stand');
+      this.idle(c, i ? 'lean' : 'stand');
     }
     this.enc = { site, at: spots[0], pair, phase: 'lurk', since: this.game.elapsed, price: 0 };
     return true;
+  }
+
+  /** The avatar's idle loop (lurking against a wall), or null for the normal stance. */
+  private idle(c: Combatant, loop: IdleLoop | null) {
+    const av = (c.body as unknown as { actor?: Actor }).actor?.avatar as { setIdleLoop?: (l: IdleLoop | null) => void } | null | undefined;
+    av?.setIdleLoop?.(loop);
   }
 
   /** Steer the lurkers toward the player (fixed step, while they aren't fighting yet). */
@@ -368,7 +373,10 @@ export class StreetDanger {
     if (this.game.ui?.isOpen('dialogue')) this.game.ui.close();
     if (line) this.game.events.emit('ui:subtitle', { speaker: 'Grassator', text: line, duration: 2.5 });
     e.phase = 'fight';
-    for (const c of e.pair) if (c.active) this.combat.core.engage(c, pc);
+    for (const c of e.pair) {
+      this.idle(c, null);
+      if (c.active) this.combat.core.engage(c, pc);
+    }
   }
 
   /** End the encounter; `vanish` removes the pair (they slipped away), else the bodies stay. */

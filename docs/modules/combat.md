@@ -353,6 +353,8 @@ closing the panel counts as a refusal. At dawn unmet muggers slip away; far from
 - **AC-06:** light chain, held power attack, hold and toggle block (§4.2 timings), parries 6 of 6 with
   taps 0.12 s before impact, riposte ×2, bash, Space and Option dodges (Space doesn't jump in
   combat), lock-on with cycle and hold-release, R, V mid-fight (AC-04), hold Y.
+- **First/third person parity:** 10 s of F every 0.15 s against a training post connects 11 of 14
+  swings (8 blocked, 3 landed) in both views, identically.
 - Screenshots: mid-swing in third and first person, a hit reaction, a death with the dropped
   cudgel, a tiro's yield pose, the knockout blackout, the mugger's demand.
 - Runs in Chrome (Metal) without console errors. 41–62 draw calls in the arena.
