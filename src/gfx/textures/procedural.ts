@@ -1,7 +1,7 @@
 /**
  * Procedural texture generators for materials that have no photo set: fabrics, black-and-white
  * floor mosaic, Pompeian painted stucco, gilded and plain bronze, iron/lead, porphyry, opus
- * reticulatum and foliage. Pure functions: they return raw RGBA arrays (row 0 = v 0, i.e. the
+ * reticulatum, travertine ashlar and foliage. Pure functions: they return raw RGBA arrays (row 0 = v 0, i.e. the
  * layout `DataTexture` uploads), so they run in tests and need no canvas. All are seamless.
  */
 import type { ProceduralId } from './catalog';
@@ -394,6 +394,81 @@ function reticulatum(seed: number): ProcImage {
   return img.finish(2.2);
 }
 
+/**
+ * Lapis Tiburtinus as cut for Roman ashlar (fresh in AD 113, honed, never pockmarked): warm cream
+ * with wavy horizontal laminae, sparse small voids drawn out along the bedding, and fine tight
+ * joints of opus quadratum (two 0.6 m courses per repeat, staggered head joints). Designed for a
+ * 2.4 × 1.2 m repeat, so features are drawn half as wide as they appear.
+ */
+function travertine(seed: number): ProcImage {
+  const S = 1024;
+  const img = new Img(S);
+  const warp = fbm2D(seed, 3, 3, 0.5, 2);
+  // One lattice cell across u: the laminae run straight across, then get warped.
+  const lam = fbm2D(seed + 1, 1, 5, 0.62, 18);
+  const lamFine = fbm2D(seed + 2, 2, 3, 0.5, 90);
+  const mott = fbm2D(seed + 3, 5, 4, 0.5, 3);
+  const grain = fbm2D(seed + 4, 96, 2);
+  const porous = fbm2D(seed + 5, 1, 3, 0.5, 7);
+  // Voids: small ellipses elongated along the bedding, clustered in porous laminae (wrapping).
+  const voids = new Float32Array(S * S);
+  const rnd = prng(seed + 99);
+  let placed = 0;
+  for (let tries = 0; placed < 1300 && tries < 40000; tries++) {
+    const cx = rnd() * S;
+    const cy = rnd() * S;
+    // Porosity varies by lamina, but every band has a few voids (no stripes of holes).
+    if (rnd() > 0.3 + 0.7 * smooth(0.35, 0.75, porous(cx / S, cy / S))) continue;
+    placed++;
+    const rx = 1.2 + rnd() ** 4 * 7;
+    const ry = Math.max(0.7, rx * (0.35 + rnd() * 0.35));
+    const depth = 0.45 + rnd() * 0.45;
+    for (let dy = -Math.ceil(ry) - 1; dy <= Math.ceil(ry) + 1; dy++)
+      for (let dx = -Math.ceil(rx) - 1; dx <= Math.ceil(rx) + 1; dx++) {
+        const d = Math.hypot(dx / rx, dy / ry);
+        if (d >= 1.15) continue;
+        const px = ((((cx | 0) + dx) % S) + S) % S;
+        const py = ((((cy | 0) + dy) % S) + S) % S;
+        const i = py * S + px;
+        voids[i] = Math.max(voids[i], depth * smooth(1.15, 0.6, d));
+      }
+  }
+  const cream = hexRgb(0xe3dac6);
+  const light = hexRgb(0xeee6d4);
+  const warm = hexRgb(0xd9c7a4);
+  const weathered = hexRgb(0xcfc4ac);
+  const pore = hexRgb(0x8f826a);
+  // Head joints per course (u position), courses at v = 0 and 0.5.
+  const heads = [0.31, 0.83];
+  for (let y = 0; y < S; y++)
+    for (let x = 0; x < S; x++) {
+      const u = x / S;
+      const v = y / S;
+      const lv = v + (warp(u, v) - 0.5) * 0.07;
+      const L = lam(u, lv);
+      const lf = lamFine(u, lv);
+      const m = mott(u, v);
+      const g = grain(u, v);
+      let rgb = mixRgb(cream, light, smooth(0.5, 0.75, L));
+      rgb = mixRgb(rgb, warm, smooth(0.52, 0.32, L) * 0.4);
+      rgb = mixRgb(rgb, weathered, smooth(0.45, 0.8, m) * 0.5);
+      const k = 0.97 + 0.06 * (lf - 0.5) + 0.05 * (g - 0.5);
+      rgb = [rgb[0] * k, rgb[1] * k, rgb[2] * k];
+      const vd = voids[y * S + x];
+      rgb = mixRgb(rgb, pore, vd * 0.55);
+      // Ashlar joints: hairline, slightly darker and recessed.
+      const course = v < 0.5 ? 0 : 1;
+      const dv = Math.min(Math.abs(v - 0), Math.abs(v - 0.5), Math.abs(v - 1)) * S;
+      let du = Math.abs(u - heads[course]);
+      du = Math.min(du, 1 - du) * S;
+      const joint = Math.max(smooth(2.2, 0.6, dv), smooth(1.6, 0.4, du));
+      rgb = mixRgb(rgb, [rgb[0] * 0.72, rgb[1] * 0.7, rgb[2] * 0.66], joint);
+      const h = (L - 0.5) * 0.25 + (lf - 0.5) * 0.15 + g * 0.08 - vd * 1.6 - joint * 0.9;
+      img.set(x, y, rgb, h, 0.8 + 0.1 * g + 0.08 * vd, 1 - 0.45 * vd - 0.3 * joint);
+    }
+  return img.finish(2.0);
+}
+
 /** Leaf clusters for foliage cards/blobs: dark interiors, lit leaf edges. */
 function foliage(seed: number): ProcImage {
   const S = 256;
@@ -423,6 +498,7 @@ const GENERATORS: Record<ProceduralId, (seed: number) => ProcImage> = {
   porphyry,
   reticulatum,
   foliage,
+  travertine,
 };
 
 const cache = new Map<string, ProcImage>();

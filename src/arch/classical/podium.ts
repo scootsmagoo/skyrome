@@ -35,7 +35,8 @@ export function podium(b: MeshBuilder, spec: PodiumSpec, at?: THREE.Matrix4) {
   b.add(prism(outline, 0, P - topH), mat, m);
   b.add(prism(outline, P - topH, P), spec.topMaterial ?? mat, m);
   const s = Math.min(1, P / 3);
-  if (spec.base ?? true) {
+  // 'far': the crown's shadow line stays, the base moulding goes.
+  if ((spec.base ?? true) && detail !== 'far') {
     const prof = new ProfileBuilder(-0.05, 0)
       .to(0.16 * s, 0)
       .up(0.22 * s)

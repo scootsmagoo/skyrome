@@ -11,7 +11,8 @@ export type UiAction = 'wait' | 'clock';
 
 export const DEFAULT_UI_BINDINGS: Record<UiAction, string[]> = {
   wait: ['KeyT'],
-  clock: ['KeyH'],
+  // H swaps the camera shoulder (GDD §4.2); hold O (hora) shows the time.
+  clock: ['KeyO'],
 };
 
 declare module '../core/Settings' {

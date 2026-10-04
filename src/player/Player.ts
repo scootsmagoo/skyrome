@@ -24,7 +24,7 @@ export class Player extends Actor {
   viewMode: ViewMode = 'third';
   /** Third-person camera distance (m). */
   zoom = 3.4;
-  /** Walk instead of run (Caps Lock). */
+  /** Walk instead of run (N, the walkToggle action). */
   walkMode = false;
   /** While true the character faces the camera direction (weapon drawn, aiming, blocking). */
   combatStance = false;
