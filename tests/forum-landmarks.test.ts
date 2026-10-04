@@ -32,7 +32,10 @@ const SPOT_KINDS = new Set(['inscription', 'vista', 'shrine', 'container', 'door
 
 const ALL: LandmarkBuilder[] = [square, temples, basilicas, arches, curia, vesta, capitol, velia].flatMap((m) => m.builders);
 
-function triangles(o: THREE.Object3D) {
+/** Triangles of the full near build (of an LOD, its first level: the others are cheaper tiers). */
+function triangles(o: THREE.Object3D): number {
+  const lod = o as THREE.LOD;
+  if (lod.isLOD) return triangles(lod.levels[0].object);
   let n = 0;
   o.traverse((x) => {
     const m = x as THREE.Mesh;

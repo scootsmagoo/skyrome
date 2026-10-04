@@ -223,10 +223,11 @@ export function streetLamps(p: Part, a: V2, b: V2, every: number, side = 0) {
   }
 }
 
-/** A bench against a wall with a seat spot, facing out. */
-export function benchSpot(p: Part, id: string, x: number, z: number, y: number, facing: number) {
-  placeProp(p.d, 'bench_masonry', x, y, z, -facing + Math.PI, { variant: 0, collide: p.main });
-  p.spot(id, 'sit', x, y + 0.45, z, facing);
+/** A masonry bench with a seat spot for someone sitting and looking along `heading`. */
+export function benchSpot(p: Part, id: string, x: number, z: number, y: number, heading: number) {
+  // the bench's front is its −z: turned by (heading − π) it faces `heading` (model +z convention)
+  placeProp(p.d, 'bench_masonry', x, y, z, heading - Math.PI, { variant: 0, collide: p.main });
+  p.spot(id, 'sit', x, y + 0.45, z, heading);
 }
 
 /** A lampstand on the ground (plus `lift`) at local (x, z), lit at dusk. */

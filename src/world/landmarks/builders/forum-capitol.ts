@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { entablature } from '../../../arch/classical/entablature';
 import { columnDims } from '../../../arch/classical/orders';
+import { extrudePolygon } from '../../../arch/common/geom';
 import { stairs } from '../../../arch/common/stairs';
 import { wall } from '../../../arch/common/walls';
 import type { MaterialId } from '../../../gfx/materialIds';
@@ -89,18 +90,38 @@ function tabularium(p: Part) {
       stairs(b, { width: 2.6, rise: (yG - g) / n, run: 0.33, count: n, material: 'travertine', collider: p.main ? 'steps' : 'none' }, TRS(0, g, hd + n * 0.33, 0, Math.PI, 0));
     }
   }
-  // the face towards the Capitol: travertine pilasters, small windows, a cornice
+  // the face towards the Capitol (the back, seen from the saddle): a warm tufa skin, travertine
+  // pilasters on bases, two string-courses, framed windows, a portal with a pediment where the
+  // passage comes out, and a heavy cornice on modillions
   if (hi) {
+    d.span('tufa', -hw, yG, hd, hw, yG + uH, hd + 0.05, { shadow: false });
     const n = 12;
+    const bayW = (W - 1.6) / n;
     for (let i = 0; i <= n; i++) {
-      const x = -hw + 0.8 + (i * (W - 1.6)) / n;
+      const x = -hw + 0.8 + i * bayW;
       d.box('travertine', x, yG + uH / 2, hd + 0.12, 0.7, uH, 0.24);
-      if (i < n && Math.abs(x + (W - 1.6) / n / 2) > 2) {
-        for (const y of [2.6, 6.6]) d.box('black', x + (W - 1.6) / n / 2, yG + y, hd + 0.015, 0.8, 1.2, 0.02);
+      d.box('travertine', x, yG + 0.3, hd + 0.17, 0.9, 0.6, 0.34);
+      d.box('travertine', x, yG + uH - 0.55, hd + 0.17, 0.9, 0.22, 0.34);
+      if (i < n && Math.abs(x + bayW / 2) > 2.2) {
+        const xc = x + bayW / 2;
+        for (const y of [2.6, 6.6]) {
+          d.box('black', xc, yG + y, hd + 0.06, 0.8, 1.2, 0.02);
+          d.box('travertine', xc, yG + y + 0.7, hd + 0.1, 1.1, 0.16, 0.14);
+          d.box('travertine', xc, yG + y - 0.66, hd + 0.1, 1.05, 0.1, 0.18);
+          for (const sx of [-1, 1]) d.box('travertine', xc + sx * 0.46, yG + y, hd + 0.08, 0.12, 1.2, 0.1);
+        }
       }
     }
+    for (const y of [4.4, uH - 1.9]) d.span('travertine', -hw, yG + y, hd + 0.03, hw, yG + y + 0.22, hd + 0.17);
+    // the portal at the passage: pilasters, lintel and a little pediment
+    for (const sx of [-1, 1]) d.box('travertine', sx * 1.7, yG + 1.8, hd + 0.3, 0.36, 3.6, 0.36);
+    d.box('travertine', 0, yG + 3.75, hd + 0.3, 4.1, 0.34, 0.42);
+    b.add(extrudePolygon([[-2.2, 0], [2.2, 0], [0, 0.85]], 0.3), 'travertine', T(0, yG + 3.92, hd + 0.18));
+    // modillions under the cornice
+    for (let x = -hw; x <= hw; x += 1.3) d.box('travertine', x, yG + uH - 0.62, hd + 0.3, 0.3, 0.26, 0.4);
   }
-  d.span('travertine', -hw - 0.2, yG + uH - 0.5, hd - 0.1, hw + 0.2, yG + uH, hd + 0.45);
+  d.span('travertine', -hw - 0.2, yG + uH - 0.5, hd - 0.1, hw + 0.2, yG + uH, hd + 0.5);
+  d.span('travertine', -hw - 0.25, yG + uH - 0.05, hd - 0.1, hw + 0.25, yG + uH + 0.12, hd + 0.62);
   arcadeRow(p, { bays: 9, bay: (W - 1) / 9, pier: 1.0, depth: 0.6, storeys: [{ order: 'corinthian', height: uH - gH, blind: true, windows: true }], material: 'travertine', collide: false }, T(-(W - 1) / 2, yG + gH, uz0 - 0.3));
   shedRoof(b, gx0 - 0.3, -gx0 + 0.3, uz0 + 0.05, -hd - 0.4, yG + gH + 1.4, yG + gH + 0.05, 'roof_tile', new THREE.Matrix4());
   const pitch = (15 * Math.PI) / 180;

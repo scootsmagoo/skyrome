@@ -72,20 +72,30 @@ export interface LandmarkOpts {
   near?: number;
   /** Override cull distance when there is no far stand-in. */
   cull?: number;
+  /**
+   * Distance (m from the landmark's outer edge) where the full near build gives way to the mid tier
+   * (the far build with proper low-poly columns, no interiors or shop contents). Default 48; 0 = no
+   * mid tier. Only landmarks with a far stand-in and a near build over 12k triangles get one.
+   */
+  mid?: number;
 }
+
+/** While the mid tier is built, 'stub' columns are promoted to the kit's 'low' column. */
+let promoteStubs = false;
 
 /** Runs `fn` for the near version (and the far stand-in when `near` is set) and packages the result. */
 export function landmark(ctx: LandmarkContext, fn: (p: Part) => void, o: LandmarkOpts = {}): LandmarkBuild {
   const spots: Spot[] = [];
   const paved: PavedPatch[] = [];
-  const make = (detail: Detail, main: boolean) => {
+  const make = (detail: Detail | 'mid', main: boolean) => {
     const b = ctx.builder();
+    const lod: Detail = detail === 'high' ? 'high' : 'low';
     const p: Part = {
       ctx,
       b,
       d: new Draw(b),
-      detail,
-      hi: detail === 'high',
+      detail: lod,
+      hi: lod === 'high',
       S: ctx.S,
       main,
       paved,
@@ -93,17 +103,33 @@ export function landmark(ctx: LandmarkContext, fn: (p: Part) => void, o: Landmar
         if (main) spots.push({ id, kind, position: new THREE.Vector3(x, y, z), heading });
       },
     };
-    fn(p);
+    promoteStubs = detail === 'mid';
+    try {
+      fn(p);
+    } finally {
+      promoteStubs = false;
+    }
     return b;
   };
   const near = make(ctx.detail, true);
   settleSpots(ctx, near.colliders, spots, paved);
   forumInteractions(ctx, spots);
-  const out: LandmarkBuild = { object: near.build(ctx.lm.id), colliders: near.colliders, spots };
+  const nearObj = near.build(ctx.lm.id);
+  const out: LandmarkBuild = { object: nearObj, colliders: near.colliders, spots };
   if (o.near && ctx.detail === 'high') {
     const far = make('low', false);
     out.far = far.build(`${ctx.lm.id}:far`);
     out.cullDistance = o.near;
+    const midD = o.mid ?? 48;
+    if (midD > 0 && near.triangleCount > 12_000) {
+      const mid = make('mid', false);
+      const radius = new THREE.Box3().setFromObject(nearObj).getBoundingSphere(new THREE.Sphere()).radius;
+      const lod = new THREE.LOD();
+      lod.name = ctx.lm.id;
+      lod.addLevel(nearObj, 0);
+      lod.addLevel(mid.build(`${ctx.lm.id}:mid`), radius + midD);
+      out.object = lod;
+    }
   } else if (o.cull) out.cullDistance = o.cull;
   return out;
 }
@@ -765,24 +791,54 @@ function midParts(order: Order, D: number, H: number, half: boolean, fluted: boo
   return out;
 }
 
+/**
+ * A cheap stand-in column: a tapered hexagonal prism with an abacus block (far); in the mid tier
+ * (`rich`) a 12-sided shaft on a base block, with an echinus and an abacus: about 100 triangles,
+ * and from 60 m on indistinguishable from the kit's 700-triangle low column.
+ */
+function stubColumn(b: MeshBuilder, s: ColSpec, at: THREE.Matrix4, rich: boolean) {
+  const mat = s.material ?? 'marble';
+  const kind = s.kind ?? 'free';
+  const half = kind === 'engaged';
+  const sides = rich ? 12 : 6;
+  const arc = [half ? Math.PI / 2 : 0, half ? Math.PI : Math.PI * 2] as const;
+  if (rich) {
+    const base = 0.16 * s.D;
+    const capH = 0.34 * s.D;
+    const plinth = new THREE.BoxGeometry(s.D * 1.3, base, half ? s.D * 0.65 : s.D * 1.3);
+    plinth.translate(0, base / 2, half ? -s.D * 0.32 : 0);
+    b.add(plinth, s.trim ?? mat, at);
+    const shaftH = s.H - base - capH;
+    const shaft = new THREE.CylinderGeometry(s.D * 0.41, s.D * 0.5, shaftH, sides, 1, half, arc[0], arc[1]);
+    shaft.translate(0, base + shaftH / 2, 0);
+    b.add(shaft, mat, at);
+    const ech = new THREE.CylinderGeometry(s.D * 0.66, s.D * 0.41, capH * 0.7, sides, 1, half, arc[0], arc[1]);
+    ech.translate(0, s.H - capH + capH * 0.35, 0);
+    b.add(ech, s.trim ?? mat, at);
+    const abacus = new THREE.BoxGeometry(s.D * 1.4, capH * 0.3, half ? s.D * 0.7 : s.D * 1.4);
+    abacus.translate(0, s.H - capH * 0.15, half ? -s.D * 0.35 : 0);
+    b.add(abacus, s.trim ?? mat, at);
+  } else {
+    const shaft = new THREE.CylinderGeometry(s.D * 0.43, s.D * 0.5, s.H * 0.9, sides, 1, half, arc[0], arc[1]);
+    shaft.translate(0, s.H * 0.47, 0);
+    b.add(shaft, mat, at);
+    const cap = new THREE.BoxGeometry(s.D * 1.25, s.H * 0.08, half ? s.D * 0.62 : s.D * 1.25);
+    cap.translate(0, s.H * 0.96, half ? -s.D * 0.31 : 0);
+    b.add(cap, s.trim ?? mat, at);
+  }
+  if (s.collide ?? kind === 'free') {
+    const c = new THREE.Vector3(0, s.H / 2, 0).applyMatrix4(at);
+    b.collider({ kind: 'cylinder', center: c, halfHeight: s.H / 2, radius: s.D * 0.52 });
+  }
+}
+
 /** A column at the given tier (origin on the ground at the axis). */
 export function col(b: MeshBuilder, s: ColSpec, at: THREE.Matrix4) {
   const mat = s.material ?? 'marble';
   const fluted = s.fluted ?? s.order !== 'tuscan';
   const kind = s.kind ?? 'free';
   if (s.tier === 'stub') {
-    // far stand-in: a tapered hexagonal prism with a plinth and an abacus block
-    const half = kind === 'engaged';
-    const shaft = new THREE.CylinderGeometry(s.D * 0.43, s.D * 0.5, s.H * 0.9, 6, 1, half, half ? Math.PI / 2 : 0, half ? Math.PI : Math.PI * 2);
-    shaft.translate(0, s.H * 0.47, 0);
-    b.add(shaft, mat, at);
-    const cap = new THREE.BoxGeometry(s.D * 1.25, s.H * 0.08, half ? s.D * 0.62 : s.D * 1.25);
-    cap.translate(0, s.H * 0.96, half ? -s.D * 0.31 : 0);
-    b.add(cap, s.trim ?? mat, at);
-    if (s.collide ?? kind === 'free') {
-      const c = new THREE.Vector3(0, s.H / 2, 0).applyMatrix4(at);
-      b.collider({ kind: 'cylinder', center: c, halfHeight: s.H / 2, radius: s.D * 0.52 });
-    }
+    stubColumn(b, s, at, promoteStubs);
     return;
   }
   if (s.tier !== 'mid') {
@@ -934,26 +990,28 @@ export function inscription(b: MeshBuilder, at: THREE.Matrix4, lines: string[], 
  */
 export function gameBoard(d: Draw, x: number, y: number, z: number, kind: 'mill' | 'rota' | 'scripta') {
   const f = d.at(x, y, z);
-  const t = 0.004;
-  const w = 0.018;
-  const mat: MaterialId = 'plaster_dark';
+  // grooves worn dark by hands, wide and raised enough to read from a walking camera
+  const t = 0.007;
+  const w = 0.045;
+  const k = 1.35;
+  const mat: MaterialId = 'black';
   const line = (x0: number, z0: number, x1: number, z1: number) => {
     const len = Math.hypot(x1 - x0, z1 - z0);
-    f.box(mat, (x0 + x1) / 2, t / 2, (z0 + z1) / 2, len + w, t, w, { ry: -Math.atan2(z1 - z0, x1 - x0) });
+    f.box(mat, (x0 + x1) / 2, t / 2, (z0 + z1) / 2, len + w, t, w, { ry: -Math.atan2(z1 - z0, x1 - x0), shadow: false });
   };
   if (kind === 'mill') {
-    for (const r of [0.28, 0.19, 0.1]) {
+    for (const r of [0.28 * k, 0.19 * k, 0.1 * k]) {
       line(-r, -r, r, -r);
       line(r, -r, r, r);
       line(r, r, -r, r);
       line(-r, r, -r, -r);
     }
-    line(-0.28, 0, -0.1, 0);
-    line(0.1, 0, 0.28, 0);
-    line(0, -0.28, 0, -0.1);
-    line(0, 0.1, 0, 0.28);
+    line(-0.28 * k, 0, -0.1 * k, 0);
+    line(0.1 * k, 0, 0.28 * k, 0);
+    line(0, -0.28 * k, 0, -0.1 * k);
+    line(0, 0.1 * k, 0, 0.28 * k);
   } else if (kind === 'rota') {
-    const r = 0.26;
+    const r = 0.26 * k;
     const n = 16;
     for (let i = 0; i < n; i++) {
       const a0 = (i / n) * Math.PI * 2;
@@ -967,8 +1025,8 @@ export function gameBoard(d: Draw, x: number, y: number, z: number, kind: 'mill'
   } else {
     for (let row = 0; row < 3; row++)
       for (let i = 0; i < 12; i++) {
-        const xx = -0.42 + i * 0.07 + (i >= 6 ? 0.06 : 0);
-        f.box(mat, xx, t / 2, -0.1 + row * 0.1, 0.04, t, 0.04);
+        const xx = (-0.42 + i * 0.07 + (i >= 6 ? 0.06 : 0)) * 1.15;
+        f.box(mat, xx, t / 2, (-0.1 + row * 0.1) * 1.15, 0.055, t, 0.055, { shadow: false });
       }
   }
 }

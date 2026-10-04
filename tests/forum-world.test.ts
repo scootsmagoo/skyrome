@@ -178,3 +178,54 @@ describe('forum debug probes', () => {
     writeFileSync('/tmp/forum-probe.txt', `${id} ground (x from ${x0} to ${x1} step ${step})\n` + lines.join('\n'));
   });
 });
+
+/** Atlas real metres → game metres. */
+const G = (x: number, z: number): [number, number] => toGame(x, z);
+
+describe('the golden path on the real terrain', () => {
+  /** Walk a chain of atlas waypoints; return where each leg ended (game metres). */
+  function route(points: [number, number][], seconds = 14) {
+    const [sx, sz] = G(points[0][0], points[0][1]);
+    const start = new THREE.Vector3(sx, hm.heightAt(sx, sz) + 0.4, sz);
+    const legs = points.slice(1).map((q) => {
+      const [x, z] = G(q[0], q[1]);
+      return { to: [x, z] as [number, number], seconds, reach: 0.6 };
+    });
+    const r = walk(world, start, legs);
+    return { r, ends: r.ends.map((e) => `(${e.x.toFixed(1)},${e.y.toFixed(1)},${e.z.toFixed(1)})`) };
+  }
+
+  it('from the Vicus Tuscus up to the Forum mouth', () => {
+    const pts: [number, number][] = [[18, 190], [32, 160], [50, 138], [66, 131], [78, 108], [90, 80], [97, 62]];
+    const { r, ends } = route(pts);
+    if (process.env.FORUM_PATH_DEBUG) writeFileSync('/tmp/forum-path1.txt', ends.join('\n'));
+    const [ex, ez] = G(97, 62);
+    expect(Math.hypot(r.x - ex, r.z - ez), ends.join(' ')).toBeLessThan(2);
+  }, 60_000);
+
+  it('across the square and up the back stair onto the Rostra', () => {
+    const pts: [number, number][] = [[18, 190], [32, 160], [50, 138], [66, 131], [78, 108], [90, 80], [97, 62], [75, 50], [60, 38], [42, 22], [10, 16], [0, 10], [6, -4], [12, -6.8], [19, -4.5], [24, -2.5]];
+    const { r, ends } = route(pts, 16);
+    if (process.env.FORUM_PATH_DEBUG) writeFileSync('/tmp/forum-path2.txt', ends.join('\n'));
+    const [ex, ez] = G(24, -2.5);
+    expect(Math.hypot(r.x - ex, r.z - ez), ends.join(' ')).toBeLessThan(2);
+    // on the platform, 2.4 m above the square
+    expect(r.y - hm.heightAt(ex, ez)).toBeGreaterThan(2.0);
+  }, 120_000);
+
+  it('through the Arch of Tiberius from the Vicus Iugarius into the Forum', () => {
+    const pts: [number, number][] = [[-22, 42], [-11, 26.6], [-3, 18], [8, 14]];
+    const { r, ends } = route(pts, 10);
+    if (process.env.FORUM_PATH_DEBUG) writeFileSync('/tmp/forum-path3.txt', ends.join('\n'));
+    const [ex, ez] = G(8, 14);
+    expect(Math.hypot(r.x - ex, r.z - ez), ends.join(' ')).toBeLessThan(2);
+  }, 60_000);
+
+  it('along the Sacra Via from the Fornix Fabianus up to the Arch of Titus', () => {
+    const pts: [number, number][] = [[200, 83], [230, 100], [262, 116], [295, 131], [310, 147], [325, 163], [340, 180]];
+    const { r, ends } = route(pts, 20);
+    if (process.env.FORUM_PATH_DEBUG) writeFileSync('/tmp/forum-path4.txt', ends.join('\n'));
+    const [ex, ez] = G(340, 180);
+    expect(Math.hypot(r.x - ex, r.z - ez), ends.join(' ')).toBeLessThan(2.5);
+  }, 120_000);
+});

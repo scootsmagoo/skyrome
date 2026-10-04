@@ -30,7 +30,7 @@ import { Draw } from '../../../arch/fabric/draw';
 import { sacrificeFriezeMaterial } from './forum-reliefs';
 import { forumTemple, gableRoof, type ForumTempleSpec } from './forum-temple';
 import { lampstand } from './forum-life';
-import { CREPIDO, court, lampAt, sidewalk } from './forum-street';
+import { CREPIDO, benchSpot, court, lampAt, sidewalk } from './forum-street';
 
 const text = (id: string) => FORUM_INSCRIPTIONS[id].latin;
 
@@ -308,6 +308,7 @@ function divusAugustus(p: Part) {
   }
   p.spot('temple-divus-augustus', 'inscription', 0, 0, zf - 2.5, 0);
   p.spot('bibliotheca-divi-augusti', 'door', s.x1 + 1.5, 0, s.z1 + zs - 4, -Math.PI / 2);
+  if (p.hi) for (const sx of [-1, 1]) benchSpot(p, `divus-augustus-bench-${sx < 0 ? 'w' : 'e'}`, sx * 9.2, zf - 7, p.ctx.groundAt(sx * 9.2, zf - 7) + CREPIDO, 0);
   p.spot('divus-augustus-priest', 'npc', 4.5, 0.06, zf - 4.5, 0);
   p.spot('divus-augustus-petitioner', 'npc', -3.5, 0.06, zf - 8, Math.PI);
 }
@@ -515,6 +516,6 @@ export const builders: LandmarkBuilder[] = [
   { handles: ['temple-concord'], build: (ctx) => landmark(ctx, concord, { near: 130 }) },
   { handles: ['temple-divus-augustus'], build: (ctx) => landmark(ctx, divusAugustus, { near: 110 }) },
   { handles: ['temple-divus-julius'], build: (ctx) => landmark(ctx, divusIulius, { near: 120 }) },
-  { handles: ['temple-castor-pollux'], build: (ctx) => landmark(ctx, castor, { near: 150 }) },
+  { handles: ['temple-castor-pollux'], build: (ctx) => landmark(ctx, castor, { near: 150, mid: 56 }) },
   { handles: ['temple-jupiter-stator'], build: (ctx) => landmark(ctx, jupiterStator, { near: 100 }) },
 ];

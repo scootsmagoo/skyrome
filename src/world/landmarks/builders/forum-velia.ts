@@ -25,7 +25,7 @@ import { FORUM_INSCRIPTIONS } from './forum-data';
 import { nudeMale } from './forum-figures';
 import { heroicNude } from './forum-statue';
 import { T, TRS, addFire, brazier, atlasToLocal, balustrade, col, foundation, inscription, landmark, localToAtlas, pave, plantTrees, rect, streetEdge, type Part } from './forum-kit';
-import { lampAt, sidewalk, tabernaeRow, type BayKind } from './forum-street';
+import { benchSpot, lampAt, sidewalk, tabernaeRow, type BayKind } from './forum-street';
 import { lampstand } from './forum-life';
 import { gableRoof, shedRoof } from './forum-temple';
 import { aediculaShrine } from './forum-vesta';
@@ -355,6 +355,7 @@ function margaritaria(p: Part) {
   shedRoof(b, -hw - 0.3, hw + 0.3, hd - 6.3, hd + 0.4, fy + H + 1.4, fy + H, 'roof_tile', new THREE.Matrix4());
   if (hi) inscription(b, T(0, fy + cH + ent.dims.total + 1.6, zs - 0.05), FORUM_INSCRIPTIONS['porticus-margaritaria'].latin, 4.2, 0.55, 'painted', { depth: 0.03 });
   for (const i of [1, 4, 8]) lampstand(p, new THREE.Vector3(-(n * bay) / 2 + (i + 0.5) * bay, fy, z0 + 1.5));
+  if (hi) benchSpot(p, 'margaritaria-bench', -(n * bay) / 2 + 2.5 * bay, z0 + 1.7, fy, Math.PI);
   p.spot('porticus-margaritaria', 'inscription', 0, fy, z0 - 1.6, 0);
   // the S side of the summa Sacra Via along the portico's front, open (with steps) at its gate
   streetEdge(p, 'via-sacra', 1, [257, 128.8], [309.5, 146.6], { gaps: [localToAtlas(p.ctx, 0, -hd)], walk: 2.4 });

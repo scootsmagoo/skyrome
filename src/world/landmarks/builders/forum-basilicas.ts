@@ -42,7 +42,7 @@ function basilicaIulia(p: Part) {
   const run = 0.4;
   const Y = nSteps * rise;
   const sd = nSteps * run;
-  const st = { width: W, rise, run, count: nSteps, material: 'marble' as MaterialId, collider: (p.main ? 'steps' : 'none') as 'steps' | 'none' };
+  const st = { width: W, rise, run, count: nSteps, material: 'travertine' as MaterialId, collider: (p.main ? 'steps' : 'none') as 'steps' | 'none' };
   stairs(b, st, T(0, 0, -hd));
   stairs(b, { ...st, width: Dp - sd }, TRS(hw, 0, -hd + sd + (Dp - sd) / 2, 0, -Math.PI / 2, 0));
   stairs(b, { ...st, width: Dp - sd }, TRS(-hw, 0, -hd + sd + (Dp - sd) / 2, 0, Math.PI / 2, 0));
@@ -76,7 +76,8 @@ function basilicaIulia(p: Part) {
   const nz1 = az1 - 6.8;
   const nx0 = ax0 + 2 * bay;
   const nx1 = ax1 - 2 * bay;
-  d.span('marble', ax0, Y - 0.02, az0, ax1, Y + 0.02, az1, { shadow: false });
+  // (travertine slabs, not white marble: in the arcade's shade white marble takes the blue of the sky)
+  d.span('paving_travertine', ax0, Y - 0.02, az0, ax1, Y + 0.02, az1, { shadow: false });
   if (hi) {
     const cols: MaterialId[] = ['marble_giallo', 'marble_pavonazzetto', 'marble_veined'];
     const n = 14;
@@ -218,7 +219,7 @@ function basilicaIulia(p: Part) {
     p.spot('basilica-iulia-tabula-lusoria', 'inscription', -9.5, Y - 2 * rise, -hd + (nSteps - 3) * run, 0);
     // a lampoon on the Column chalked in red on a tread (CONTENT.md T5), near the idlers' boards
     const lz = -hd + (nSteps - 3) * run + run / 2;
-    inscriptionPanel(b, { lines: ['De Columna', 'centum pedes Lunensis lapidis…'], width: 1.25, height: 0.34, style: 'painted', ground: '#e8e4dc', ink: '#9A3A24', interpunct: false, sizes: [1, 0.62], condense: 0.8 }, TRS(-0.6, Y - 2 * rise + 0.004, lz, Math.PI / 2, 0, 0), { depth: 0.004, bodyMaterial: 'marble' });
+    inscriptionPanel(b, { lines: ['De Columna', 'centum pedes Lunensis lapidis…'], width: 2.3, height: 0.37, style: 'painted', ground: '#efe9dd', ink: '#8a2a1c', interpunct: false, sizes: [1, 0.72], condense: 0.85 }, TRS(-0.9, Y - 2 * rise + 0.005, lz, Math.PI / 2, 0, 0), { depth: 0.004, bodyMaterial: 'marble' });
     p.spot('basilica-iulia-lampoon', 'inscription', -0.6, Y - 3 * rise, lz - 2 * run, 0);
   }
   // lamps on the top step, lit at dusk
@@ -430,6 +431,6 @@ function basilicaAemilia(p: Part) {
 }
 
 export const builders: LandmarkBuilder[] = [
-  { handles: ['basilica-julia'], build: (ctx) => landmark(ctx, basilicaIulia, { near: 160 }) },
-  { handles: ['basilica-aemilia'], build: (ctx) => landmark(ctx, basilicaAemilia, { near: 160 }) },
+  { handles: ['basilica-julia'], build: (ctx) => landmark(ctx, basilicaIulia, { near: 160, mid: 65 }) },
+  { handles: ['basilica-aemilia'], build: (ctx) => landmark(ctx, basilicaAemilia, { near: 160, mid: 65 }) },
 ];
