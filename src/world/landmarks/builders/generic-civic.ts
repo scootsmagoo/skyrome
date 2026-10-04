@@ -137,6 +137,22 @@ function buildBasilica(ctx: LandmarkContext): LandmarkBuild {
       for (let i = 0; i < n; i++) d.span('black', -len / 2 + (i + 0.5) * (len / n) - 1.1, 0.03, zc - res.depth / 2 - 0.06, -len / 2 + (i + 0.5) * (len / n) + 1.1, 2.8, zc - res.depth / 2 - 0.02);
     }
     far.span('marble', -len / 2, 0, zFront, len / 2, sh * 1.92, zFront + depthW);
+    // The other three sides: lighter arcades (lite geometry) round the hall, dark behind the arches.
+    if (!h.has('shops', 'tabernae')) {
+      // The arcade stands clear of the hall's walls (its 0.9 m depth plus a 1 m gallery behind).
+      const x1 = res.width / 2 + 2.0, zb = zc + res.depth / 2 + 2.0, zf = zFront + depthW;
+      const runs: V3[][] = [[V(x1, 0, zb), V(-x1, 0, zb)], [V(-x1, 0, zb), V(-x1, 0, zf)], [V(x1, 0, zf), V(x1, 0, zb)]];
+      for (const run of runs) {
+        liteArcade(d, run, { storeys: [{ height: sh, columns: true }, { height: sh * 0.92, columns: true, parapet: 1.0 }], bay: len / bays, depth: 0.9, material: h.has('travertine') ? 'travertine' : 'marble', detail });
+        const a = run[0], b = run[1];
+        const t = b.clone().sub(a).normalize();
+        const n = V(t.z, 0, -t.x);
+        const mid = a.clone().add(b).multiplyScalar(0.5).addScaledVector(n, -1.6);
+        const L = a.distanceTo(b);
+        for (const [y0, y1] of [[0.03, sh * 0.66], [sh + 1.0, sh + sh * 0.62]]) d.box('black', mid.x, (y0 + y1) / 2, mid.z, Math.abs(t.x) * L + Math.abs(t.z) * 0.05, y1 - y0, Math.abs(t.z) * L + Math.abs(t.x) * 0.05);
+      }
+      far.span('marble', -x1, 0, zf, x1, sh * 1.92, zb);
+    }
     // The aisles behind the arches read as dim interiors (or shop mouths), not as a lit wall.
     const n = Math.max(3, Math.floor(len / (len / bays)));
     for (let i = 0; i < n; i++) {
