@@ -69,13 +69,13 @@ is the landmark crews'), `GARDEN`, `WATER`, `STEEP`, `WALL`, `AQUEDUCT`, `PIAZZA
 | --- | --- | --- |
 | full | The `CityBlockFiller` block (`fillBlock`, `detail: 'full'`): shop interiors, props, colliders, exact spots, plus back insulae and torches | within 30 m of the block footprint |
 | mid | The street-facing exterior (no interiors, no colliders) | to 85 m |
-| low | Flat walls with painted openings, no shadows | to 165 m |
+| low | Flat walls with painted openings, no shadows | to 140 m |
 | far | Merged flat-coloured massing (one box + roof per lot, ~16 triangles a building, window pattern in the shader) | everything else, to 3.2 km |
 | street cells | Roads, streets, junctions, piazza paving, ground cover (128 m cells) | to 230 m; far ribbons beyond |
 | street furniture | Fountains, shrines, stalls, carts, awnings, frontage life, washing lines | to 110 m |
 
 Blocks are built lazily, nearest first (a missing full level next to the player first), within a
-6 ms budget per frame (one build every other frame), and dropped again at 1.6 × their range. A
+6 ms budget per frame (one build every other frame), and dropped again beyond 1.35 × their range + 16 m. A
 coarser built level stands in while a finer one is being built. Outside the detail area
 (`extent: 'core'`: `CORE_BOUNDS` + 150 m real) only the far massing exists, with box colliders so
 nobody walks through the backdrop; `extent: 'city'` streams detail everywhere.
@@ -152,16 +152,17 @@ Street level (draw calls / triangles incl. the shadow pass, `__cityBreakdown()`)
 
 | Where | Total | City (blocks + streets) | Trees | Landmarks |
 | --- | --- | --- | --- | --- |
-| Porta Capena spawn | 528 / 2.53 M | 86 / 1.28 M | 14 / 115 k | 380 / 718 k |
-| Circus street | 654 / 2.09 M | 80 / 717 k | 18 / 135 k | 502 / 807 k |
-| Velabrum | 440 / 1.79 M | 85 / 960 k | 22 / 139 k | 314 / 341 k |
-| Vicus Tuscus | 306 / 1.13 M | 75 / 668 k | 14 / 129 k | 202 / 4 k |
-| Subura | 139 / 1.58 M | 80 / 1.02 M | 30 / 235 k | 11 / 0 |
-| Argiletum | 143 / 1.65 M | 81 / 1.16 M | 14 / 184 k | 38 / 1 k |
-| Colosseum valley | 146 / 1.36 M | 84 / 843 k | 16 / 220 k | 36 / 1 k |
+| Porta Capena spawn | 528 / 2.51 M | 86 / 1.26 M | 14 / 115 k | 380 / 718 k |
+| Circus street | 654 / 2.09 M | 80 / 710 k | 18 / 135 k | 502 / 807 k |
+| Velabrum | 440 / 1.78 M | 85 / 948 k | 22 / 139 k | 314 / 341 k |
+| Vicus Tuscus | 307 / 1.12 M | 76 / 663 k | 14 / 129 k | 202 / 4 k |
+| Subura | 139 / 1.54 M | 80 / 979 k | 30 / 235 k | 11 / 0 |
+| Argiletum | 143 / 1.61 M | 81 / 1.12 M | 14 / 184 k | 38 / 1 k |
+| Colosseum valley | 146 / 1.35 M | 84 / 829 k | 16 / 220 k | 36 / 1 k |
 
 The city stays at ~80 draw calls (batched); most of its triangles are the full and mid blocks
 around the player and their shadows. A whole-core aerial is ~600 draw calls / 2.3 M triangles.
+The batches hold 4.5–7 M live vertices (capacity ≤ 10 M) while walking the core.
 `extent: 'city'` boots in ~7 s too (3,300 lamps, 15,400 graph nodes).
 
 Walk test (scripted, player physics, `scripts/shot.mjs`): from the spawn through the Porta Capena,

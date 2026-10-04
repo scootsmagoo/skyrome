@@ -96,7 +96,7 @@ export class CityStreamer implements System {
     private readonly H: HeightFn,
     opts: StreamerOptions = {},
   ) {
-    this.o = { nearR: 30, midR: 85, lowR: 165, cellR: 230, detailR: 110, farMax: 3200, budgetMs: 6, ...opts };
+    this.o = { nearR: 30, midR: 85, lowR: 140, cellR: 230, detailR: 110, farMax: 3200, budgetMs: 6, ...opts };
   }
 
   private get scale() {
@@ -165,7 +165,8 @@ export class CityStreamer implements System {
   private step(lim?: Record<Level | 'cell' | 'detail', number>): boolean {
     const s = this.scale;
     for (const r of this.blocks) {
-      for (const l of LEVELS) if (r.levels[l] && r.d > this.radius(l) * 1.6 + 20) this.drop(r, l);
+      // Dropped a little beyond their build reach (hysteresis), so hidden levels do not pile up in memory.
+      for (const l of LEVELS) if (r.levels[l] && r.d > this.radius(l) * 1.35 + 16) this.drop(r, l);
     }
     for (const c of this.cells) {
       if (c.near && c.d > this.o.cellR * 1.5 * s) this.dropCell(c);
