@@ -28,10 +28,11 @@ import { toGame } from '../world/coords';
 import type { BookView, ContainerView } from '../ui/types';
 import { CONTAINERS, CONTAINER_STYLES, STREET_CONTAINERS, routePoint, type ContainerSpec } from './containers';
 import { groundAt } from './director';
-import { syncAliases } from './places';
 import { lampSpecs, type LampSpec } from './lamps';
+import { footprintHalf, atLandmark, syncAliases } from './places';
 import { installServices } from './services';
 import { SHRINES, type ShrineSpec } from './shrines';
+import { THINGS, type Thing } from './things';
 import { ALL_WALL_TEXTS, type WallText } from './texts';
 
 declare module '../core/Game' {
@@ -52,6 +53,8 @@ declare module '../core/Events' {
 export interface ContentService {
   readonly shrines: number;
   readonly texts: number;
+  /** Landmark things (a note, inscription or vista at each tier-1 landmark, AC-23). */
+  readonly things: number;
   readonly containers: number;
   readonly lamps: number;
   /** Container ids placed in the street (the AC-23 count). */
@@ -316,6 +319,39 @@ function addContainer(game: Game, spec: ContainerSpec, carts: Set<string>): { of
   return { off: game.interactions.add(it), runtime: rt };
 }
 
+// ------------------------------------------------------------------ the "thing" at every landmark
+
+/** Where a landmark's thing stands: in front of its façade (at most 40 m out), a little to one side. */
+export function thingPoint(thing: Thing): { x: number; y: number; z: number } | null {
+  const lm = LANDMARK_BY_ID[thing.at];
+  if (!lm) return null;
+  const forward = Math.min(footprintHalf(lm).d + 2.5, 40);
+  const side = ((hash(thing.at) % 9) - 4) * 1.1;
+  return atLandmark(thing.at, forward, side);
+}
+
+function addThing(game: Game, thing: Thing): (() => void) | null {
+  const base = thingPoint(thing);
+  if (!base || !game.interactions) return null;
+  const g = groundAt(game, base);
+  const pos = new THREE.Vector3(base.x, g.y + 1.1, base.z);
+  const lm = LANDMARK_BY_ID[thing.at];
+  const it: Interactable = {
+    id: `thing:${thing.at}`,
+    reach: 3,
+    position: () => pos,
+    verb: () => (thing.kind === 'vista' ? 'Look' : 'Read'),
+    label: () => thing.title,
+    detail: () => lm?.name ?? null,
+    interact: (gm) => {
+      const text = thing.latin ? `${thing.latin}\n\n${thing.text}` : thing.text;
+      gm.ui?.openBook({ title: thing.title, kind: thing.kind === 'inscription' ? 'tablet' : 'note', text });
+      gm.events.emit('content:read', { id: `thing:${thing.at}` });
+    },
+  };
+  return game.interactions.add(it);
+}
+
 // ------------------------------------------------------------------ lamps and the cart
 
 function addLamp(game: Game, spec: LampSpec): { remove(): void } | null {
@@ -421,6 +457,9 @@ export function installContent(game: Game): ContentService {
   for (const t of ALL_WALL_TEXTS) bySite.set(t.at, [...(bySite.get(t.at) ?? []), t]);
   for (const list of bySite.values()) list.forEach((t, i) => keep(addWallText(game, t, i, list.length)) && texts++);
 
+  let things = 0;
+  for (const th of THINGS) if (keep(addThing(game, th))) things++;
+
   const ids: string[] = [];
   const street = new Set(STREET_CONTAINERS.map((c) => c.id));
   for (const spec of CONTAINERS) {
@@ -447,6 +486,7 @@ export function installContent(game: Game): ContentService {
   const service: ContentService = {
     shrines,
     texts,
+    things,
     containers: ids.length,
     lamps,
     containerIds: () => [...ids],

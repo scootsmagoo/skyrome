@@ -13,12 +13,15 @@ import { CONTAINERS, STREET_CONTAINERS, UNOWNED_CONTAINERS, routePoint } from '.
 import { lampSpecs } from '../src/content/lamps';
 import { CONTENT_LOCATIONS, CONTRACT_SPOT_IDS, STREET_SPOTS, isKnownPlace } from '../src/content/places';
 import { GOLDEN_PATH_LENGTH, onPath, projectOnPath } from '../src/content/route';
+import { thingPoint } from '../src/content/install';
 import { SHRINES } from '../src/content/shrines';
+import { THINGS } from '../src/content/things';
 import { ALL_WALL_TEXTS, TEXT_ITEMS, WALL_TEXTS } from '../src/content/texts';
 import { entryAt } from '../src/content/hours';
 import { castSize, VIGNETTES } from '../src/content/vignettes';
 import { LANDMARK_BY_ID } from '../src/data/atlas';
 import { dialogueModules, loadDialogueContent } from '../src/dialogue/DialogueSystem';
+import { toGame } from '../src/world/coords';
 import { loadNpcContent } from '../src/npc/registry';
 import type { NpcDef } from '../src/npc/types';
 import { loadQuestContent, questModules } from '../src/quests/QuestSystem';
@@ -475,5 +478,32 @@ describe('street containers, shrines and texts', () => {
     expect(new Set(ids).size).toBe(ids.length);
     for (const id of ['compitum-capenae', 'compitum-circi', 'compitum-vici-tusci', 'compitum-velabri', 'compitum-boarii', 'compitum-acili']) expect(ids, id).toContain(id);
     for (const s of SHRINES) expect(isKnownPlace(s.id), s.id).toBe(true);
+  });
+});
+
+describe('AC-23: a "thing" at every tier-1 landmark of the v0.1 districts', () => {
+  it('has a note, an inscription or a vista for every landmark of the nine districts (and nothing for unknown ones)', () => {
+    const anchors = DISTRICTS.flatMap((d) => d.anchors);
+    expect(anchors.length).toBeGreaterThanOrEqual(40);
+    const have = new Set(THINGS.map((t) => t.at));
+    for (const a of anchors) expect(have.has(a), `a thing for ${a}`).toBe(true);
+    for (const t of THINGS) {
+      expect(LANDMARK_BY_ID[t.at], `${t.at} is an atlas landmark`).toBeTruthy();
+      expect(t.text.length, t.at).toBeGreaterThan(120);
+      expect(t.text.length, t.at).toBeLessThan(700);
+      expect(t.title.length, t.at).toBeGreaterThan(5);
+      expect(t.source.length, t.at).toBeGreaterThan(5);
+      expect(['inscription', 'vista', 'note']).toContain(t.kind);
+      if (t.kind === 'inscription') expect(t.latin, `${t.at} inscription has its Latin`).toBeTruthy();
+      if (t.latin) expect(t.latin, t.at).toBe(t.latin.toUpperCase());
+      const p = thingPoint(t)!;
+      const lm = LANDMARK_BY_ID[t.at];
+      const [cx, cz] = toGame(lm.center[0], lm.center[1]);
+      expect(Math.hypot(p.x - cx, p.z - cz), `${t.at} thing is near the landmark`).toBeLessThan(260);
+    }
+    expect(new Set(THINGS.map((t) => t.at)).size).toBe(THINGS.length);
+    // Nothing from after AD 113 is promised.
+    for (const t of THINGS) expect(t.text, t.at).not.toMatch(/Hadrian|Severus|Constantine|Caracalla|Diocletian|Aurelian|Venus and Roma/);
+    expect(THINGS.filter((t) => t.kind === 'vista').length).toBeGreaterThanOrEqual(8);
   });
 });

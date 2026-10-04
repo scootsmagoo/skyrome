@@ -7,6 +7,7 @@ import { CONTAINERS, STREET_CONTAINERS } from '../src/content/containers';
 import { installContent, placeXZ } from '../src/content/install';
 import { lampSpecs } from '../src/content/lamps';
 import { SHRINES } from '../src/content/shrines';
+import { THINGS } from '../src/content/things';
 import { ALL_WALL_TEXTS } from '../src/content/texts';
 import type { Game } from '../src/core/Game';
 import type { Interactable } from '../src/interaction/Interactions';
@@ -43,13 +44,14 @@ describe('installContent', () => {
     const w = world();
     expect(w.content.shrines).toBe(SHRINES.length);
     expect(w.content.texts).toBe(ALL_WALL_TEXTS.length);
+    expect(w.content.things).toBe(THINGS.length);
     expect(w.content.containers).toBe(STREET_CONTAINERS.length);
     expect(w.content.containers).toBeGreaterThanOrEqual(40);
     expect(w.content.lamps).toBe(lampSpecs().length);
     expect(w.lamps.every((l) => l.night)).toBe(true); // lit from dusk to dawn, out at first light
     expect(w.game.content).toBe(w.content);
     expect(installContent(w.game)).toBe(w.content);
-    expect(w.items.length).toBe(w.content.shrines + w.content.texts + w.content.containers);
+    expect(w.items.length).toBe(w.content.shrines + w.content.texts + w.content.things + w.content.containers);
     // Interior containers wait for their interiors.
     expect(CONTAINERS.filter((c) => c.interior).every((c) => !w.items.some((i) => i.id === `container:${c.id}`))).toBe(true);
     w.content.dispose();
@@ -129,6 +131,25 @@ describe('wall texts', () => {
     w.game.time.advanceHours(12); // evening
     expect(w.game.time.hour).toBeGreaterThan(19.1);
     expect(lampoon.enabled!()).toBe(false);
+  });
+});
+
+describe('landmark things', () => {
+  it('Read or Look at a landmark opens its note; an inscription shows its Latin first', () => {
+    const w = world();
+    const reads = record(w.events, ['content:read']);
+    const col = w.find('thing:column-trajan');
+    expect(col.verb()).toBe('Read');
+    expect(col.detail!()).toContain('Trajan');
+    col.interact(w.game);
+    expect(w.books[0].kind).toBe('tablet');
+    expect(w.books[0].text.startsWith('SENATVS')).toBe(true);
+    expect(w.books[0].text).toContain('hundred feet of marble');
+    const circus = w.find('thing:circus-maximus');
+    expect(circus.verb()).toBe('Look');
+    circus.interact(w.game);
+    expect(w.books[1].text).toContain('two hundred and fifty thousand');
+    expect(reads.map((r) => (r.e as { id: string }).id)).toEqual(['thing:column-trajan', 'thing:circus-maximus']);
   });
 });
 
