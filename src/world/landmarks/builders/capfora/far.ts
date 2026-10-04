@@ -11,7 +11,7 @@ import type { MaterialId } from '../../../../gfx/materialIds';
 import { span } from './ornament';
 
 /** Gable roof prism along z between x0..x1, eaves at y, ridge rise `rise`. */
-export function roofPrism(b: MeshBuilder, mat: MaterialId, x0: number, x1: number, z0: number, z1: number, y: number, rise: number, at?: THREE.Matrix4) {
+export function roofPrism(b: MeshBuilder, mat: MaterialId | THREE.Material, x0: number, x1: number, z0: number, z1: number, y: number, rise: number, at?: THREE.Matrix4) {
   const w = x1 - x0;
   const shape = new THREE.Shape([new THREE.Vector2(-w / 2, 0), new THREE.Vector2(w / 2, 0), new THREE.Vector2(0, rise)]);
   const g = new THREE.ExtrudeGeometry(shape, { depth: z1 - z0, bevelEnabled: false });
@@ -30,7 +30,7 @@ export function leanTo(b: MeshBuilder, mat: MaterialId, x0: number, x1: number, 
 }
 
 /** A temple from its kit layout: podium, stair, columns as prisms, cella, entablature, roof, pediments. */
-export function templeFar(b: MeshBuilder, L: TempleLayout, at: THREE.Matrix4, o: { mat?: MaterialId; podium?: MaterialId; roof?: MaterialId; cella?: MaterialId } = {}) {
+export function templeFar(b: MeshBuilder, L: TempleLayout, at: THREE.Matrix4, o: { mat?: MaterialId; podium?: MaterialId; roof?: MaterialId | THREE.Material; cella?: MaterialId } = {}) {
   const mat = o.mat ?? 'marble';
   const P = L.podiumHeight;
   const s = L.stylobate;

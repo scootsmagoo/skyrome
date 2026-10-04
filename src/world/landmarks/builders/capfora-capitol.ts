@@ -30,7 +30,7 @@ import { altar, box, figure, footing, groundMin, inscription, labrum, pedestalSt
 import { forumPortico } from './capfora/portico';
 import { cliffFace } from './capfora/cliff';
 import { addLamp, brazier, cellaLamps, lampstand, plantTrees, torch } from './capfora/life';
-import { PAINT, friezeRelief, paint } from './capfora/paint';
+import { PAINT, friezeRelief, giltRoof, paint } from './capfora/paint';
 import { capTemple, smallTemple } from './capfora/temple';
 
 // ------------------------------------------------------------------ Jupiter Optimus Maximus
@@ -82,6 +82,7 @@ function buildJOM(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots: C
       interior: true,
       hiColumns: 'front',
       roofMaterial: 'gilded_bronze',
+      roofSurface: giltRoof(),
       antefix: 'gilded_bronze',
       doorMaterial: 'gilded_bronze',
       tympanum: paint(PAINT.blue, 0.85),
@@ -410,7 +411,7 @@ function jomFar(b: MeshBuilder) {
   const at = T(0, 0, dz);
   const A = AREA;
   span(b, 'tufa', -JOM_MARGIN, -2, L.stylobate.z0 + dz, JOM_MARGIN, L.podiumHeight, L.stylobate.z1 + margin + dz, undefined);
-  templeFar(b, L, at, { podium: 'tufa', roof: 'gilded_bronze' });
+  templeFar(b, L, at, { podium: 'tufa', roof: giltRoof() });
   box(b, 'gilded_bronze', 0, L.totalHeight + 1.0, L.entablature.z0 + dz, 3.4, 2.6, 2.2, undefined);
   // The area's substructures and paving, and the west portico on the brink.
   span(b, 'tufa', -JOM_MARGIN, -3.6, A.front, A.west, 0, A.north, undefined);

@@ -35,6 +35,22 @@ export const PAINT = {
   rose: '#C2475A',
 } as const;
 
+let gilt: THREE.MeshStandardMaterial | undefined;
+
+/**
+ * Gilded bronze roof tiles (Jupiter Optimus Maximus): polished gold metal, plus a faint warm
+ * emissive so the roof still reads as gold where it only reflects the sky or lies in shade, which is
+ * how the Capitolium's roof "flashes over the whole city" from every street (art direction, GDD
+ * §16.1). Flat colour on purpose: at roof scale the tile ribs carry the detail.
+ */
+export function giltRoof(): THREE.MeshStandardMaterial {
+  if (!gilt) {
+    gilt = new THREE.MeshStandardMaterial({ color: new THREE.Color('#D9AE48'), metalness: 1, roughness: 0.24, emissive: new THREE.Color('#7A5414'), emissiveIntensity: 0.55 });
+    gilt.name = 'capfora:gilt-roof';
+  }
+  return gilt;
+}
+
 // ---------------------------------------------------------------- relief friezes
 
 type Kind = 'cupids' | 'arachne' | 'weapons' | 'garland';

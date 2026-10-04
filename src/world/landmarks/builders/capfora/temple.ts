@@ -72,6 +72,8 @@ export interface CapTempleSpec extends TempleSpec {
   /** Free columns along the inside of the long walls (count per side). */
   innerColumns?: number;
   furnish?: (b: MeshBuilder, info: TempleInterior) => void;
+  /** A one-off material for the roof surface (and its tile ribs and ridge), e.g. `giltRoof()`. */
+  roofSurface?: THREE.Material;
 }
 
 export interface CapTempleResult {
@@ -88,7 +90,7 @@ export interface CapTempleResult {
 }
 
 /** Tiled (or gilded) gable roof along z, as the kit's, with the antefix material exposed. */
-function roof(b: MeshBuilder, x0: number, x1: number, z0: number, z1: number, yEave: number, pitch: number, mat: MaterialId, antefix: MaterialId, detail: 'high' | 'low', m: THREE.Matrix4) {
+function roof(b: MeshBuilder, x0: number, x1: number, z0: number, z1: number, yEave: number, pitch: number, mat: MaterialId | THREE.Material, antefix: MaterialId, detail: 'high' | 'low', m: THREE.Matrix4) {
   const halfW = (x1 - x0) / 2;
   const rise = halfW * Math.tan(pitch);
   const thick = 0.18;
@@ -294,7 +296,7 @@ export function capTemple(b: MeshBuilder, spec: CapTempleSpec, at?: THREE.Matrix
   pediment(b, ped, mul(m, TRS(0, yTop, e.z1, 0, Math.PI, 0)));
   const roofMat = spec.roofMaterial ?? 'roof_tile';
   const over = ent.projection + 0.1;
-  roof(b, e.x0 - over, e.x1 + over, e.z0 + 0.4 * L.D, e.z1 - 0.4 * L.D, yTop - 0.05, pitch, roofMat, spec.antefix ?? (roofMat === 'gilded_bronze' ? 'gilded_bronze' : 'terracotta'), detail, m);
+  roof(b, e.x0 - over, e.x1 + over, e.z0 + 0.4 * L.D, e.z1 - 0.4 * L.D, yTop - 0.05, pitch, spec.roofSurface ?? roofMat, spec.antefix ?? (roofMat === 'gilded_bronze' ? 'gilded_bronze' : 'terracotta'), detail, m);
   const apexY = yTop + pf.apex;
   {
     const size = L.D * 1.1;
