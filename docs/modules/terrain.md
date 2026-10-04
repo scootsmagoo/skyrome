@@ -187,10 +187,14 @@ falls below the world (30 m under its lowest ground) to where they last stood on
   0.32 m, box colliders), with cheek walls on the flights' river side and submerged steps along
   the whole front down to 1.55 m below the water, so a swimmer who reaches the stairs anywhere
   walks (or climbs) out; a low travertine parapet on the coping (0.9 m over the quay, more than a
-  jump), open at the stair heads, the bridges' abutments (`bridgeCorridors`) and wherever a landmark
-  built before the water already stands out over the river at the wall (a physics probe), so
-  falling in is a choice; pierced mooring blocks every ~14 m; the arched mouth of the Cloaca
-  Maxima (three rings of peperino voussoirs, the dark culvert behind) in the Portus quay.
+  jump), open at the stair heads, the bridges' abutments (`bridgeCorridors`), across each opening
+  in the face and `QUAY.gapFlank` (2 m) beyond it on both sides (the flight that climbs out of the
+  Cloaca outfall's flank starts there; this is data, so it holds in any build order) and wherever a
+  landmark built before the water already stands out over the river at the wall (a physics probe;
+  note Rapier queries only see colliders added before the last `step`, which the game doesn't run
+  during setup, so the probe is inert in a real boot), so falling in is a choice; pierced
+  mooring blocks every ~14 m; the arched mouth of the Cloaca Maxima (three rings of peperino
+  voussoirs, the dark culvert behind) in the Portus quay.
   Colliders: one oriented box per 4 m wall segment plus the coping and the parapet.
 - **Tiber Island** is the travertine "stone ship" of the 1st c. BC: a facing wall all round its
   outline (the heightmap gives the island near-vertical sides to match), leaving 16 m around the

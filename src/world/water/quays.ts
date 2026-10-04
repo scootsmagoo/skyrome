@@ -7,8 +7,9 @@
  *   Emporium and the Transtiberim wharves), a travertine coping course standing 0.2 m proud.
  * - Paired travertine stairs down to a landing just above the water, every ~110 m, and submerged
  *   steps on from the landing to below a swimmer's feet, so the river can always be left there.
- * - A low travertine parapet on the coping (open at the stair heads, bridge abutments and wherever
- *   a landmark builds something out over the water), so falling in is a choice.
+ * - A low travertine parapet on the coping (open at the stair heads, bridge abutments, across the
+ *   openings in the face and `QUAY.gapFlank` beyond them, and wherever a landmark builds something
+ *   out over the water), so falling in is a choice.
  * - Pierced travertine mooring blocks every ~14 m.
  * - Openings in the face (`gaps`): the arched outfall of the Cloaca Maxima, with three rings of
  *   peperino voussoirs and the dark culvert behind.
@@ -78,6 +79,13 @@ export const QUAY = {
   /** Parapet on the coping: height above the coping and thickness (game m). */
   parapet: 0.7,
   parapetThick: 0.42,
+  /**
+   * The parapet also stays open this far (game m) beyond each opening in the face, on both sides:
+   * the landmark that fills the opening (the Cloaca Maxima's outfall bastion) climbs out of the
+   * quay on a flight along its flank, and that flight's head must be reachable from the quay top.
+   * It is data, not a probe, so it holds in whatever order the world is built.
+   */
+  gapFlank: 2,
 };
 
 /** A strip (REAL m, atlas frame) where the parapet stays open: a bridge and its abutment ramps. */
@@ -263,11 +271,12 @@ export function buildQuay(river: TerrainRiver, rq: ResolvedQuay, heightAt: (x: n
     }
   }
   const nearStair = (s: number) => stairAt.some((c) => Math.abs(s - c) < 12);
-  // The parapet stays open at the stair heads and over the gaps.
+  // The parapet stays open at the stair heads and over the gaps (and their flanks).
   const [hIn, hOut] = stairHead(wl, yCop);
   const open: [number, number][] = [];
   for (const sc of stairAt) open.push([sc + hIn / S, sc + hOut / S], [sc - hOut / S, sc - hIn / S]);
-  for (const g of rq.gaps) open.push([g.s - g.half - 0.8, g.s + g.half + 0.8]);
+  const flank = QUAY.gapFlank / S;
+  for (const g of rq.gaps) open.push([g.s - g.half - 0.8 - flank, g.s + g.half + 0.8 + flank]);
   const corridors = opts.corridors ?? [];
   const parapetOpen = (s: number) => {
     const c = at(s, QUAY.faceOffset);
