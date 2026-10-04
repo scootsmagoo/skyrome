@@ -127,11 +127,16 @@ describe('category coverage', () => {
 describe('every landmark we build', () => {
   // Ours: every landmark outside the other crews' regions, plus anything anywhere that falls back
   // to one of our category builders.
+  // Custom builders other crews wrote for landmarks outside their own regions (the Palatine crew's
+  // Porta Capena sits in Regio I); they are tested by those crews.
+  const OTHER_CREW_CUSTOM = new Set(['porta-capena']);
   const ours = LANDMARKS.filter((lm) => {
     const key = builderFor(lm as unknown as LandmarkData)?.handles[0] ?? '';
+    if (OTHER_CREW_CUSTOM.has(lm.id)) return false;
     return key !== 'category:*' && (key.startsWith('category:') || !OTHER_REGIONS.has(lm.region));
   });
-  it('covers well over a hundred landmarks', () => expect(ours.length).toBeGreaterThan(120));
+  // > 120 before the other landmark crews merged; they now custom-build more of the atlas.
+  it('covers most of the atlas outside the other crews\' custom builds', () => expect(ours.length).toBeGreaterThan(90));
   for (const lm of ours) {
     it(`${lm.id} builds within budget with valid spots`, () => {
       // The detail the game builds it at (core extent: priority ≤ 2 high).
