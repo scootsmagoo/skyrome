@@ -132,7 +132,9 @@ export class Actor {
 
     const desired = tmp.set(v.x * dt, v.y * dt, v.z * dt);
     const { controller, collider, body } = this.body;
-    controller.computeColliderMovement(collider, desired);
+    // Respect collision groups, so a crowd NPC whose capsule ignores the player never blocks the
+    // player's controller (GDD §14.7b: the player shoulders through crowds).
+    controller.computeColliderMovement(collider, desired, undefined, collider.collisionGroups());
     const mv = controller.computedMovement();
     const wasRising = v.y > 0;
     this.grounded = controller.computedGrounded();

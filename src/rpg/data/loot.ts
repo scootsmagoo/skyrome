@@ -63,4 +63,57 @@ export const LOOT_TABLES: LootTableDef[] = [
   { id: 'strongbox', rolls: [1, 2], denarii: { range: [20, 80] }, entries: [{ item: 'aureus', weight: 3, count: [1, 3] }, { table: 'valuables', weight: 4 }] },
   { id: 'shrine', rolls: [1, 2], chanceNone: 0.3, denarii: { range: [0.25, 4], chance: 0.7 }, entries: [{ item: 'tus', weight: 3 }, { item: 'lucerna', weight: 3 }, { item: 'libum', weight: 2 }, { item: 'fascinum', weight: 1 }, { item: 'defixio', weight: 1 }] },
   { id: 'tomb', rolls: [1, 3], chanceNone: 0.25, denarii: { range: [0.5, 8], chance: 0.5 }, entries: [{ item: 'lucerna', weight: 4 }, { item: 'vitrum', weight: 2 }, { table: 'valuables', weight: 2 }, { item: 'defixio-furtum', weight: 0.5 }, { item: 'defixio-prasina', weight: 0.5 }, { item: 'bulla', weight: 0.3 }] },
+
+  // ---- docs/CONTENT.md §6.2: street caches, loads, lockers, the Cloaca, enemy types, purses
+  {
+    id: 'cache.street', rolls: [1, 1], chanceNone: 0.2, denarii: { range: [0.25, 4], chance: 0.5 },
+    entries: [
+      { item: 'nugae', weight: 3 }, { item: 'tali', weight: 2 }, { item: 'dupondius-domitiani', weight: 3 }, { item: 'denarius-columnae', weight: 2, count: [1, 3] },
+      { item: 'fascia', weight: 2 }, { item: 'vasa-arretina', weight: 1 }, { item: 'fascinum', weight: 0.5 }, { item: 'defixio', weight: 0.5 },
+      { item: 'hamulus', weight: 0.5 }, { item: 'glans-inscripta', weight: 0.3 },
+    ],
+  },
+  {
+    id: 'amphora.wine', rolls: [1, 2], chanceNone: 0.25,
+    entries: [{ item: 'vinum', weight: 5, count: [1, 3] }, { item: 'posca', weight: 3 }, { item: 'vinum-melius', weight: 2 }, { item: 'vinum-falernum', weight: 0.5 }, { item: 'olivae', weight: 2 }, { item: 'acetum', weight: 1 }],
+  },
+  { id: 'building.load', rolls: [1, 1], entries: [{ item: 'ferrum', weight: 2 }, { item: 'malleus', weight: 0.3 }, { item: 'lucerna', weight: 1 }] },
+  {
+    id: 'locker.ludus', rolls: [1, 2], chanceNone: 0.1, denarii: { range: [0.25, 3], chance: 0.4 },
+    entries: [
+      { item: 'fascia', weight: 4, count: [1, 2] }, { item: 'posca', weight: 3 }, { item: 'panis', weight: 3 }, { item: 'tali', weight: 2 },
+      { item: 'manica-linea', weight: 1 }, { item: 'fasciae', weight: 1 }, { item: 'lucerna', weight: 1 }, { item: 'emplastrum', weight: 1 },
+    ],
+  },
+  {
+    id: 'cloaca.silt', rolls: [1, 2], chanceNone: 0.3, denarii: { range: [0.25, 3], chance: 0.6 },
+    entries: [
+      { item: 'nugae', weight: 4 }, { item: 'dupondius-domitiani', weight: 3 }, { item: 'vitrum', weight: 1 }, { item: 'glans-plumbea', weight: 1, count: [2, 5] },
+      { item: 'anulus-signatorius', weight: 0.3 }, { item: 'gemma', weight: 0.2 }, { item: 'defixio-furtum', weight: 0.5 },
+    ],
+  },
+  { id: 'rixator', rolls: [0, 0], entries: [], denarii: { range: [0, 1] }, extras: [{ item: 'tali', chance: 0.2 }, { item: 'vinum', chance: 0.3 }, { item: 'panis', chance: 0.2 }] },
+  { id: 'vigil', rolls: [0, 0], entries: [], denarii: { range: [0.5, 2] }, extras: [{ item: 'lucerna', chance: 0.6 }, { item: 'fascia', chance: 0.5 }, { item: 'hama', chance: 0.2 }] },
+  { id: 'cloacarius', rolls: [0, 0], entries: [], denarii: { range: [0.25, 3] }, extras: [{ table: 'cloaca.silt', chance: 0.5 }, { item: 'fax', chance: 0.3 }, { item: 'tunica', chance: 0.2 }] },
+  { id: 'sicarius', rolls: [0, 0], entries: [], denarii: { range: [10, 30] }, extras: [{ item: 'aconitum', chance: 0.4 }, { item: 'sica', chance: 0.6 }, { item: 'epistula-signata', chance: 0.1 }, { item: 'aureus', chance: 0.1 }] },
+  // ---- loose things on the street (the bible's "20 unowned loose props", §6.1): a coin in a basin, a dropped tool, a bundle on a cart
+  { id: 'loose.coin', rolls: [0, 0], entries: [], denarii: { range: [0.0625, 0.5] } },
+  { id: 'loose.tool', rolls: [1, 1], entries: [{ item: 'clavus', weight: 3, count: [1, 3] }, { item: 'malleus', weight: 1 }, { item: 'instrumentum-fabri', weight: 1 }, { item: 'ferrum', weight: 1 }] },
+  { id: 'loose.bundle', rolls: [1, 1], entries: [{ item: 'panis', weight: 3 }, { item: 'lucerna', weight: 2 }, { item: 'fascia', weight: 2 }, { item: 'tunica', weight: 1 }, { item: 'tali', weight: 1 }] },
+  // pickpocket purses by class (v0.2, GDD §14.4)
+  { id: 'purse.plebs', rolls: [1, 1], chanceNone: 0.3, denarii: { range: [0.25, 3] }, entries: [{ item: 'tali', weight: 1 }, { item: 'libum', weight: 1 }, { item: 'nugae', weight: 1 }] },
+  { id: 'purse.mercator', rolls: [1, 1], chanceNone: 0.3, denarii: { range: [3, 15] }, entries: [{ item: 'tessera-collegii', weight: 2 }, { item: 'vasa-arretina', weight: 1 }, { item: 'tabula-cerata', weight: 2 }] },
+  { id: 'purse.miles', rolls: [1, 1], chanceNone: 0.5, denarii: { range: [2, 8] }, entries: [{ item: 'tabula-stipendii', weight: 2 }, { item: 'tali', weight: 1 }] },
+  { id: 'purse.elite', rolls: [1, 1], chanceNone: 0.2, denarii: { range: [10, 40] }, entries: [{ item: 'anulus-signatorius', weight: 1 }, { item: 'gemma', weight: 1 }, { item: 'aureus', weight: 1 }] },
+
+  // ---- docs/CONTENT.md §6.3: fixed (authored) loot. Conditional items (Mus' sica if he surrendered it) are the quest's job.
+  { id: 'body.npc-festus', rolls: [0, 0], entries: [], denarii: { range: [6.1875, 6.1875] }, always: [{ item: 'pugio' }, { item: 'quest-epistula-festi' }] },
+  { id: 'cista-muris', rolls: [0, 0], entries: [], denarii: { range: [18, 18] }, always: [{ item: 'quest-sacculum-festi' }, { item: 'quest-tabula-rasa' }, { item: 'quest-drachma-parthica' }, { item: 'nugae', count: 2 }, { item: 'fascia', count: 2 }] },
+  { id: 'body.npc-mus', rolls: [0, 0], entries: [], denarii: { range: [3, 6] }, always: [{ item: 'clavis-cellae-muris' }, { item: 'sica-muris' }, { item: 'pugio' }, { item: 'cucullus' }] },
+  {
+    id: 'cista-regis-cloacae', rolls: [1, 1], entries: [{ table: 'valuables', weight: 1 }], denarii: { range: [30, 40] },
+    always: [{ item: 'pugio-noric' }, { item: 'quest-tabella-drachmae' }, { item: 'tunica-linea' }, { item: 'lacerna' }, { item: 'palla' }, { item: 'defixio-furtum' }],
+  },
+  { id: 'body.npc-rex-cloacae', rolls: [0, 0], entries: [], denarii: { range: [12, 20] }, always: [{ item: 'gladius' }, { item: 'pugio' }, { item: 'thorax-coriaceus' }, { item: 'nugae' }] },
+  { id: 'body.boss-suchus', rolls: [0, 0], entries: [], always: [{ item: 'corium', count: 2 }, { item: 'nugae' }] },
 ];

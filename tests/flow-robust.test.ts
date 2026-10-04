@@ -70,6 +70,10 @@ describe('the game flow survives broken content', () => {
     rpg.quests.all = () => {
       throw new Error('bad quest definition');
     };
+    // With the content module's mq-01 in the build the flow finds it by id first: break that too.
+    rpg.quests.get = () => {
+      throw new Error('bad quest definition');
+    };
     const err = vi.spyOn(console, 'error').mockImplementation(() => {});
     await flow.quickStart();
     expect(flow.state).toBe('playing');

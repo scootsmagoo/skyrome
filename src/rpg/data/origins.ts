@@ -104,13 +104,16 @@ export const ORIGINS: BackgroundDef[] = [
 /** @deprecated Use ORIGINS (GDD Appendix A: origins.ts). */
 export const BACKGROUNDS = ORIGINS;
 
-/** §3.5 Every origin also starts with these (the courier's tablet is added if the main quest defines it). */
+/**
+ * §3.5 Every origin also starts with these. The courier's sealed tablet (`quest-tabella-signata`)
+ * is not in the starting pack: mq-01 puts it in the player's hands when the courier dies at the
+ * Porta Capena, minutes into the game.
+ */
 export const COMMON_KIT: { id: string; count?: number }[] = [
   { id: 'fascia', count: 2 },
   { id: 'panis', count: 1 },
   { id: 'tabula-cerata', count: 1 },
   { id: 'stilus', count: 1 },
-  { id: 'quest-tabella-signata', count: 1 },
 ];
 
 /** §3.2 creation extra (every origin but the veteran): a used parmula or 40 den. */

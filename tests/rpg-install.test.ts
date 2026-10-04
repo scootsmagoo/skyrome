@@ -22,8 +22,10 @@ describe('installRpg', () => {
     const rpg = installRpg(fg.game, { storage: new MemoryStorage() });
     for (const k of ['items', 'npcs', 'locations', 'factions', 'standing', 'devotion', 'crime', 'barter', 'quests', 'dialogue', 'save', 'rpg'] as const) expect(fg.game[k], k).toBeTruthy();
     expect(rpg.items.size).toBeGreaterThanOrEqual(80);
-    expect(rpg.dialogue.start('anyone')).toBeNull();
-    expect(rpg.quests.markers()).toEqual([]);
+    // Unnamed citizens get the content's '*' dialogue (if any); either way nothing may throw.
+    expect(() => (rpg.dialogue.start('anyone'), rpg.dialogue.end())).not.toThrow();
+    // The shipped main quest auto-starts with the new game and points at the gate; nothing else marks the map.
+    expect(rpg.quests.markers().map((m) => m.questId)).toEqual(['mq-01-madida-capena']);
     expect(() => fg.step(30)).not.toThrow();
     expect(fg.systems.map((s) => s.name).sort()).toEqual(['locations', 'rpg', 'save']);
   });

@@ -312,7 +312,8 @@ describe('slots and blockers', () => {
     w.pressed.add('quickSave');
     w.step(1);
     await w.rpg.save.idle();
-    expect((await w.rpg.save.list()).map((m) => m.slot)).toEqual(['quick']);
+    // (The new game's main quest may already have made an autosave.)
+    expect((await w.rpg.save.list()).map((m) => m.slot).filter((s) => !s.startsWith('auto'))).toEqual(['quick']);
     w.rpg.inventory.addDenarii(100);
     w.pressed.add('quickLoad');
     w.step(1);
@@ -348,7 +349,10 @@ describe('new game', () => {
     expect(w.rpg.crime.bounty()).toBe(0);
     expect(w.rpg.quests.status('ex-letter')!.running).toBe(false);
     expect(w.rpg.sheet.hasFlag('trait-old-wound')).toBe(true);
-    // The sleep autosave asked for before New Game doesn't fire into the new game.
+    // The sleep autosave asked for before New Game doesn't fire into the new game. (The shipped main
+    // quest starts with the new game and asks for an autosave of its own: let that one go first.)
+    w.step(1);
+    await w.rpg.save.idle();
     const saved = record(w.events, ['save:saved']);
     w.step(1);
     await w.rpg.save.idle();

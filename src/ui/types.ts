@@ -67,6 +67,8 @@ export interface BossView {
   title?: string;
   /** 0..1 */
   health: number;
+  /** Health fractions where the boss changes phase (pips on the bar), e.g. [0.75, 0.45]. */
+  phases?: number[];
 }
 
 // ------------------------------------------------------------------ character & skills

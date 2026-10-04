@@ -39,21 +39,49 @@ const PAD_CATEGORIES = new Set([
   'palace', 'market', 'camp', 'monument', 'fountain', 'portico', 'prison', 'warehouse', 'library', 'curia', 'gate', 'tomb', 'shrine',
 ]);
 
+/**
+ * Flat ground a builder lays OUTSIDE the atlas footprint (real m): a plaza, an approach, a porch.
+ * `grow` widens the whole pad; `front` adds a forecourt that deep in front of the facade (rect
+ * footprints), as wide as the building, blending out over `frontMargin`; `margin` replaces the 14 m
+ * blend of the main pad to the natural ground.
+ */
+const PAD_EXTRA: Record<string, { grow?: number; margin?: number; front?: number; frontMargin?: number }> = {
+  // The Colosseum's paved plaza out to its ring of cippi (builder: colos-colosseum.ts), cut into
+  // the foot of the Velia and the Oppian.
+  colosseum: { grow: 20, margin: 22 },
+  // The porch and approach on the north side, on the brow of the Oppian (colos-baths.ts).
+  'baths-titus': { front: 26, frontMargin: 20 },
+  // The entrance porch and its inscription stand on the lip of the Oppian (colos-baths.ts).
+  'baths-trajan': { front: 22, frontMargin: 14 },
+};
+
 export function landmarkPads(bounds: { minX: number; maxX: number; minZ: number; maxZ: number }): TerrainPad[] {
   const pads: TerrainPad[] = [];
   for (const lm of atlas.LANDMARKS) {
     if (!PAD_CATEGORIES.has(lm.category)) continue;
     if (lm.priority > 2) continue;
+    // Buried structures (the Domus Aurea under the Baths of Trajan) must not flatten the surface.
+    if (lm.siting === 'underground') continue;
     const [x, z] = lm.center;
     if (x < bounds.minX || x > bounds.maxX || z < bounds.minZ || z > bounds.maxZ) continue;
     // Very large complexes on slopes (e.g. terraced markets) keep their natural ground unless pinned.
     if (footprintRadius(lm) > 260 && lm.baseElevation === undefined) continue;
+    const extra = PAD_EXTRA[lm.id];
     pads.push({
       id: lm.id,
-      polygon: footprintPolygon(lm.center, lm.rotation, lm.footprint as any, 3),
+      polygon: footprintPolygon(lm.center, lm.rotation, lm.footprint as any, 3 + (extra?.grow ?? 0)),
       elevation: lm.baseElevation,
-      margin: 14,
+      margin: extra?.margin ?? 14,
     });
+    if (extra?.front && lm.footprint.kind === 'rect') {
+      // Forecourt: the strip in front of the facade (local −z), same height and ground kind, joined to the main pad.
+      const { w, d } = lm.footprint;
+      const th = (lm.rotation * Math.PI) / 180;
+      const cos = Math.cos(th), sin = Math.sin(th);
+      const tr = (lx: number, lz: number): [number, number] => [lm.center[0] + lx * cos - lz * sin, lm.center[1] + lx * sin + lz * cos];
+      const hw = w / 2 + 3, z0 = -d / 2 - extra.front, z1 = -d / 2 + 6;
+      pads.push({ id: lm.id, polygon: [tr(-hw, z0), tr(hw, z0), tr(hw, z1), tr(-hw, z1)], elevation: lm.baseElevation, margin: extra.frontMargin ?? 14 });
+    }
   }
   return pads;
 }
@@ -123,6 +151,9 @@ export function spawnAtLandmark(game: Game, id: string, forward = 0, side = 0): 
   const x = gx + Math.sin(th) * forward + Math.cos(th) * side;
   const z = gz - Math.cos(th) * forward + Math.sin(th) * side;
   const y = game.heightmap ? game.heightmap.heightAt(x, z) : 0;
+  // Ray casts only see colliders added before the last physics step: right after the world is
+  // built the ray would miss every raised floor and podium and drop the player under them.
+  game.physics.step(1 / 60);
   const ground = game.physics.groundHeight(x, z, y + 80, 200);
   return { position: new THREE.Vector3(x, (ground ?? y) + 0.05, z), heading: Math.atan2(gx - x, gz - z) };
 }
