@@ -3,11 +3,11 @@
  * capfora crew. All three are freshly rebuilt by Trajan; the temple is rededicated on 12 May 113,
  * the day after the game starts, so it is hung with garlands.
  *
- * Plan: the square is laid out on the temple's axis (the atlas puts the temple 19 m off the
- * forum's own centreline, see the crew report): two porticoes on the long sides, shops (tabernae,
- * two storeys) behind the SW portico, the temple closing the NW end between the enclosure walls,
- * the gilded Equus Caesaris in the square, the Appiades fountain before the temple's rostrum. The
- * Basilica Argentaria stands behind the temple's SW flank, its arcade opening towards it.
+ * Plan (`fcPlan`): ~160 x 75 m overall, laid out on the temple's axis. Double colonnades (two rows
+ * of columns) run down both long sides from the SE end to the NW end wall, flanking the temple;
+ * behind the SW portico, two storeys of shops (tabernae) from the Curia's corner to the Basilica
+ * Argentaria, whose arcade opens onto the portico beside the temple; the gilded Equus Caesaris in
+ * the square, the Appiades fountain before the temple's rostrum.
  *
  * Temple: Corinthian octastyle peripteros sine postico, pycnostyle, on a 5 m podium with a central
  * rostrum and two lateral flights within the front; Trajanic frieze of cupids among acanthus;
@@ -28,7 +28,7 @@ import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuilder, LandmarkContext } from '../types';
 import { makeLandmark, type Detail } from './capfora/build';
 import { farColonnade, farWall, leanTo, templeFar } from './capfora/far';
-import { S, landmark, relMatrix, sharedFloor, spotAt, type CapSpot } from './capfora/frame';
+import { S, landmark, realLocal, relMatrix, sharedFloor, spotAt, type CapSpot } from './capfora/frame';
 import { basin, box, festoon, figure, footing, groundMin, inscription, span, stairsToGround } from './capfora/ornament';
 import { PAINT, friezeRelief, paint } from './capfora/paint';
 import { forumPortico } from './capfora/portico';
@@ -78,41 +78,70 @@ export function vgPlan() {
   return { L, P, count, rise, run, flight, dz, s, rw, wing, front };
 }
 
+// ------------------------------------------------------------------ the forum's plan
+
+/**
+ * The forum's plan in ITS frame (game m): the axis `xa` is the temple's; the front row of each
+ * portico stands `W2` off it (the portico steps clear the temple's podium by 1.5 m), the back walls
+ * `half` off it; the shops (6 m deep) run behind the SW portico from the Curia's rear corner
+ * (`zShops`) to the basilica (`zBas`); the NW end wall closes behind the temple.
+ */
+export function fcPlan(game: LandmarkContext['game']) {
+  const fctx = { game, lm: landmark('forum-caesar') };
+  const tp = new THREE.Vector3().setFromMatrixPosition(relMatrix(fctx, 'temple-venus-genetrix'));
+  const bp = new THREE.Vector3().setFromMatrixPosition(relMatrix(fctx, 'basilica-argentaria'));
+  const xa = tp.x;
+  const W2 = 11.8;
+  const depth = 12 * S;
+  const half = W2 + depth;
+  const wallT = 0.6;
+  const shopD = 6.0;
+  const zSE = -80 * S + 0.8;
+  const zNW = 80 * S;
+  const zBas = bp.z - 23 * S;
+  // The Curia's rear corner stands behind the SE end of the SW side: the shops stop short of it.
+  const cu = landmark('curia-julia');
+  let zShops = zSE;
+  if (cu.footprint.kind === 'rect') {
+    const th = (cu.rotation * Math.PI) / 180;
+    for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      const lx = (sx * cu.footprint.w) / 2;
+      const lz = (sz * cu.footprint.d) / 2;
+      const [fx, fz] = realLocal(fctx.lm, cu.center[0] + lx * Math.cos(th) - lz * Math.sin(th), cu.center[1] + lx * Math.sin(th) + lz * Math.cos(th));
+      if (fx * S < xa + half + wallT + shopD) zShops = Math.max(zShops, fz * S + 1.0);
+    }
+  }
+  return { tp, xa, W2, depth, half, wallT, shopD, zSE, zNW, zBas, zShops, colNE: xa - W2, colSW: xa + W2 };
+}
+
 // ------------------------------------------------------------------ the forum
 
 function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots: CapSpot[]) {
   const g = ctx.groundAt;
   const Y0 = floorY(ctx);
   const I = new THREE.Matrix4();
-  const tm = relMatrix(ctx, 'temple-venus-genetrix');
-  const tp = new THREE.Vector3().setFromMatrixPosition(tm);
+  const P = fcPlan(ctx.game);
+  const { xa, W2, depth, half, wallT, zSE, zNW, zBas, zShops, colNE, colSW } = P;
   const vg = vgPlan();
-  const xa = tp.x; // temple axis
-  const half = 17.5 * S; // axis to the inner face of each enclosure wall
-  const depth = 6 * S; // portico depth
-  const wallT = 0.6;
-  const zSE = -80 * S + 0.8; // SE end of the square
-  const zTempleFront = tp.z + vg.front; // rostrum face
-  const zP1 = zTempleFront - 1.2; // porticoes end before the rostrum
-  const zNW = 80 * S;
-  const colNE = xa - half + depth;
-  const colSW = xa + half - depth;
+  const zTempleFront = P.tp.z + vg.front; // rostrum face
+  const hi = detail === 'high';
 
-  // ---- the square (white marble paving) from the SE end to the NW end, wall to wall
-  const gmin = groundMin(g, xa - half, zSE, xa + half, zNW);
+  // ---- the square: white marble before the temple, travertine flags down the rest, on one bed
+  const gmin = groundMin(g, xa - half - wallT, zSE, xa + half + P.shopD, zNW);
   span(b, 'travertine', xa - half, Math.min(-0.3, gmin - 0.3), zSE - 0.4, xa + half, Y0 - 0.04, zNW, I, true);
   span(b, 'paving_travertine', colNE + 0.5, Y0 - 0.04, zSE - 0.4, colSW - 0.5, Y0, zNW, I);
-  span(b, 'marble', xa - half, Y0 - 0.04, zP1, xa + half, Y0, zNW, I);
-  if (detail === 'high') for (let z = zSE + 4; z < zP1 - 1; z += 4.5) span(b, 'marble', colNE + 0.5, Y0 - 0.035, z - 0.1, colSW - 0.5, Y0 + 0.004, z + 0.1, I);
+  span(b, 'marble', colNE + 0.5, Y0 - 0.035, zTempleFront - 3, colSW - 0.5, Y0 + 0.002, zNW, I);
+  if (hi) for (let z = zSE + 4; z < zTempleFront - 4; z += 4.5) span(b, 'marble', colNE + 0.5, Y0 - 0.035, z - 0.1, colSW - 0.5, Y0 + 0.004, z + 0.1, I);
 
-  // ---- porticoes: NE (faces +x) and SW (faces −x, shops behind)
-  const L = zP1 - zSE;
+  // ---- double porticoes the whole length: NE (faces +x, statues in niches in its marble back
+  // wall) and SW (faces −x; the shops and the basilica open off it)
+  const L = zNW - zSE;
   const pSpec = {
     length: L,
     depth,
     order: 'corinthian' as const,
     H: 8 * S,
-    spacing: 2.6,
+    spacing: 2.8,
     material: 'marble' as MaterialId,
     fluted: true,
     detail,
@@ -120,26 +149,34 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
     floorY: 0.4,
     groundMin: gmin,
     wallThickness: wallT,
-    frieze: detail === 'high' ? friezeRelief('cupids') : undefined,
+    frieze: hi ? friezeRelief('cupids') : undefined,
+    innerRow: depth / 2,
   };
   const ne = forumPortico(
     b,
     {
       ...pSpec,
       wallMaterial: 'marble',
-      openings: Array.from({ length: Math.floor(L / 7) }, (_, k) => ({ kind: 'niche' as const, x: 3.5 + k * 7, width: 1.2, height: 2.9, sill: 0.7, depth: 0.35 })),
+      openings: Array.from({ length: Math.floor(L / 7.5) }, (_, k) => ({ kind: 'niche' as const, x: 3.75 + k * 7.5, width: 1.2, height: 2.9, sill: 0.7, depth: 0.35 })),
       nicheStatues: 'togate',
       endWalls: [true, false],
     },
     mul(I, TRS(colNE, Y0, zSE, 0, -Math.PI / 2, 0)),
   );
-  // SW portico: its back wall is the front of the tabernae.
-  forumPortico(b, { ...pSpec, wallMaterial: 'none', endWalls: [false, true] }, mul(I, TRS(colSW, Y0, zP1, 0, Math.PI / 2, 0)));
+  forumPortico(b, { ...pSpec, wallMaterial: 'none', endWalls: [false, true] }, mul(I, TRS(colSW, Y0, zNW, 0, Math.PI / 2, 0)));
+  const wallTop = Y0 + ne.wallTop;
+  const yb = Math.min(-0.5, gmin - 0.4);
+  // SE of the shops (the Curia's rear stands behind) a plain wall closes the SW portico.
+  if (zShops > zSE + 0.5) span(b, 'marble', xa + half, yb, zSE - 0.4, xa + half + wallT, wallTop, zShops, I, true);
+  // NW end wall behind the temple.
+  span(b, 'marble', xa - half - wallT, yb, zNW, xa + half + wallT, wallTop, zNW + wallT, I, true);
+
+  // ---- the shops behind the SW portico (two storeys, the Trajanic upper floor)
   const tab = tabernae(
     b,
     {
-      length: L,
-      depth: 6.0,
+      length: zBas - zShops,
+      depth: P.shopD,
       storeyH: 3.4,
       storeys: 2,
       material: 'brick',
@@ -149,34 +186,22 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
       open: [
         { index: 2, kind: 'moneychanger' },
         { index: 5, kind: 'textile' },
-        { index: 10, kind: 'moneychanger' },
+        { index: 9, kind: 'moneychanger' },
         { index: 12, kind: 'wine' },
       ],
-      passages: [8],
+      passages: [7],
     },
-    mul(I, TRS(xa + half, Y0 + 0.4, zP1, 0, Math.PI / 2, 0)),
+    mul(I, TRS(xa + half, Y0 + 0.4, zBas, 0, Math.PI / 2, 0)),
   );
   for (const s of tab.shops) {
     if (!s.open) continue;
-    const z = zP1 - s.x;
+    const z = zBas - s.x;
     spots.push(spotAt(`taberna-${Math.round(s.x)}`, 'vendor', xa + half + 1.5, Y0 + 0.4, z, xa, z, { label: s.kind === 'moneychanger' ? 'Argentarius (money-changer)' : `Shopkeeper (${s.kind})` }));
   }
 
-  // ---- enclosure walls alongside the temple (the SW one stops where the basilica's arcade opens)
-  const wallTop = Y0 + ne.wallTop;
-  const yb = Math.min(-0.5, gmin - 0.4);
-  const bas = relMatrix(ctx, 'basilica-argentaria');
-  const bp = new THREE.Vector3().setFromMatrixPosition(bas);
-  const zBas = bp.z - 23 * S; // the basilica's SE end (its 46 m run lies along the forum axis)
-  span(b, 'marble', xa - half - wallT, yb, zP1, xa - half, wallTop, zNW, I, true);
-  span(b, 'marble', xa + half, yb, zP1, xa + half + wallT, wallTop, Math.min(zNW, zBas), I, true);
-  // NW end wall behind the temple.
-  span(b, 'marble', xa - half - wallT, yb, zNW, xa + half + wallT, wallTop, zNW + wallT, I, true);
-  span(b, 'marble', xa - half - wallT - 0.1, wallTop - 0.4, zP1, xa - half + 0.1, wallTop, zNW + wallT, I);
-
   // ---- the SE end: steps down to the Argiletum
   {
-    stairsToGround(b, g, Y0, 2 * (half - depth) - 1.0, T(xa, 0, zSE - 0.4));
+    stairsToGround(b, g, Y0, 2 * W2 - 3.4, T(xa, 0, zSE - 0.4));
     spots.push(spotAt('entrance', 'spawn', xa, Y0, zSE + 3, xa, zSE + 20, { label: 'Forum of Caesar' }));
   }
 
@@ -185,7 +210,7 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
     const ez = zTempleFront - 9;
     span(b, 'marble', xa - 1.3, Y0, ez - 2.4, xa + 1.3, Y0 + 2.0, ez + 2.4, I, true);
     span(b, 'marble', xa - 1.45, Y0 + 1.9, ez - 2.55, xa + 1.45, Y0 + 2.1, ez + 2.55, I);
-    equestrian(b, mul(I, TRS(xa, Y0 + 2.1, ez, 0, 0, 0, 1.25)), { material: 'gilded_bronze', detail: detail === 'high' ? 'high' : 'low', plinth: false });
+    equestrian(b, mul(I, TRS(xa, Y0 + 2.1, ez, 0, 0, 0, 1.25)), { material: 'gilded_bronze', detail: hi ? 'high' : 'low', plinth: false });
     const text = inscription(b, ['C IVLIO CAESARI', 'DICTATORI'], 2.2, 0.7, mul(I, T(xa, Y0 + 1.1, ez - 2.42)), 'carved');
     spots.push(
       spotAt('equus-caesaris', 'inscription', xa, Y0, ez - 5, xa, ez, {
@@ -206,11 +231,11 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
     for (let z = zTempleFront - 16; z > zSE + 8; z -= 9) zs.push(z);
     for (const [i, z] of zs.entries()) {
       for (const sx of [-1, 1]) {
-        const x = xa + sx * 5.2;
+        const x = xa + sx * 5.8;
         brazier(ctx, b, x, Y0, z);
         // Garland pole with a laurel crown and ribbons.
         span(b, 'wood_painted', x - 0.06, Y0, z + 2.2 - 0.06, x + 0.06, Y0 + 3.4, z + 2.2 + 0.06, I, true);
-        if (i > 0) festoon(b, new THREE.Vector3(x, Y0 + 3.3, z + 2.2), new THREE.Vector3(x, Y0 + 3.3, z + 2.2 + 9), { sag: 0.9, r: 0.12, detail: detail === 'high' ? 'high' : 'low' });
+        if (i > 0) festoon(b, new THREE.Vector3(x, Y0 + 3.3, z + 2.2), new THREE.Vector3(x, Y0 + 3.3, z + 2.2 + 9), { sag: 0.9, r: 0.12, detail: hi ? 'high' : 'low' });
       }
     }
     // Wooden stands for the senators and the magistrates along the NE portico (seats 0.45 m).
@@ -227,13 +252,15 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
       for (const z of [zA - 0.9, zB + 0.1]) for (let r = 0; r < 8; r++) span(b, 'wood', x0 + r * 0.375, Y0, z, x0 + (r + 1) * 0.375, Y0 + 0.225 * (r + 1), z + 0.8, I, true);
       spots.push(spotAt('stands', 'sit', x0 + 1.9, Y0 + 1.35, (zA + zB) / 2, xa, (zA + zB) / 2, { label: 'Stands for the senators at the rededication' }));
     }
-    // Garland and incense sellers in the SW portico, and workmen with ladders by the temple.
+    // Garland and incense sellers on the square before the SW portico, the counters facing the
+    // square, and workmen with ladders by the temple.
+    const sx0 = colSW - 3.4;
     const stallZ = [zSE + 8, zSE + 22, zSE + 36];
     stallZ.forEach((z, i) => {
-      placeProp(d, i === 1 ? 'stall_cloth' : 'stall_fruit', colSW - 2.0, Y0 + 0.4, z, Math.PI / 2, { collide: true });
-      spots.push(spotAt(`stall-${i}`, 'stall', colSW - 3.4, Y0 + 0.4, z, colSW + 2, z, { label: i === 1 ? 'Seller of ribbons and festive wreaths' : 'Garland seller (roses and laurel for 12 May)' }));
+      placeProp(d, i === 1 ? 'stall_cloth' : 'stall_fruit', sx0, Y0, z, Math.PI / 2, { collide: true });
+      spots.push(spotAt(`stall-${i}`, 'stall', sx0 + 1.25, Y0, z, sx0 - 6, z, { label: i === 1 ? 'Seller of ribbons and festive wreaths' : 'Garland seller (roses and laurel for 12 May)' }));
     });
-    placeProp(d, 'amphora_stack', colSW - 1.6, Y0 + 0.4, zSE + 29, Math.PI / 2, { collide: true });
+    placeProp(d, 'amphora_stack', sx0 + 0.4, Y0, zSE + 29, Math.PI / 2, { collide: true });
     spots.push(spotAt('herald', 'npc', xa - 2, Y0, zSE + 6, xa, zSE + 20, { label: 'Herald announcing the rededication by the Emperor tomorrow' }));
     spots.push(spotAt('praeco-notice', 'inscription', xa + 7.5, Y0, zSE + 4, xa + 9, zSE + 2.5, {
       label: 'Painted notice of the rededication',
@@ -244,7 +271,13 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
     for (const dx of [-0.8, 0.8]) span(b, 'wood_dark', xa + 9 + dx - 0.06, Y0, zSE + 2.5 - 0.06, xa + 9 + dx + 0.06, Y0 + 2.2, zSE + 2.5 + 0.06, I, true);
     inscription(b, ['IV IDVS MAIAS', 'IMP CAESAR NERVA TRAIANVS AVG', 'AEDEM VENERIS GENETRICIS', 'DEDICABIT'], 1.9, 0.95, TRS(xa + 9, Y0 + 1.55, zSE + 2.5 - 0.04, 0, Math.PI, 0), 'painted', { ground: '#efe6d2', ink: '#a3271f' });
   }
-  spots.push(spotAt('portico-ne', 'sit', colNE - 1.5, Y0 + 0.4, (zSE + zP1) / 2, colNE + 3, (zSE + zP1) / 2, { label: 'Bench in the NE portico' }));
+  // A marble bench against the NE back wall, between two niches.
+  {
+    const zb = zSE + 7.5 * 5;
+    const xb = colNE - depth;
+    span(b, 'marble', xb + 0.02, Y0 + 0.4, zb - 1.3, xb + 0.5, Y0 + 0.85, zb + 1.3, I, true);
+    spots.push(spotAt('portico-ne', 'sit', xb + 0.75, Y0 + 0.4, zb, colNE + 3, zb, { label: 'Bench in the NE portico' }));
+  }
 }
 
 // ------------------------------------------------------------------ the temple
@@ -345,33 +378,23 @@ function buildBasilica(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spo
   const g = ctx.groundAt;
   const I = new THREE.Matrix4();
   const hw = (46 * S) / 2;
-  const hd = (23 * S) / 2;
-  // Keep the front (NE) clear of the forum's enclosure line beside the temple.
+  // Behind the forum's SW portico: the hall's front is the portico's back line (the two frames are
+  // exactly a right angle apart, so that line is z = const here), 14 m deep.
+  const P = fcPlan(ctx.game);
   const fm = relMatrix(ctx, 'forum-caesar');
-  const xaForum = new THREE.Vector3().setFromMatrixPosition(relMatrix({ game: ctx.game, lm: landmark('forum-caesar') }, 'temple-venus-genetrix')).x;
-  // The forum's SW enclosure line x = xa + half (+ wall) mapped into this frame: its z here (the
-  // two frames are exactly a right angle apart, so the line is z = const).
-  const line = new THREE.Vector3(xaForum + 17.5 * S + 0.6, 0, 0).applyMatrix4(fm);
-  const z0 = Math.max(-hd, line.z + 0.1);
-  const z1 = hd;
+  const z0 = new THREE.Vector3(P.xa + P.half, 0, 0).applyMatrix4(fm).z;
+  const z1 = z0 + 14 * S;
   const Yf = floorY(ctx); // the forum's paving in this frame
-  const fy = Yf + 0.63; // the hall rises three steps above the square
+  const fy = Yf + 0.62; // one step up from the portico floor (Yf + 0.4)
   const gmin = groundMin(g, -hw - 2, z0 - 2, hw + 2, z1 + 2);
   span(b, 'tufa', -hw, Math.min(-0.3, gmin - 0.3), z0, hw, fy, z1, I, true);
   span(b, 'paving_travertine', -hw, fy - 0.03, z0, hw, fy, z1, I);
-  // Steps up from the forum along the stretch of the front that lies inside the forum (beside the
-  // temple, SE of the forum's NW end wall).
-  {
-    const nw = new THREE.Vector3(xaForum + 17.5 * S, 0, 80 * S).applyMatrix4(fm);
-    const xCut = Math.max(-hw, Math.min(hw, nw.x + 0.7));
-    const { count, rise } = stepCount(fy - Yf, 0.21);
-    stairs(b, { width: hw - xCut, rise, run: 0.34, count, material: 'travertine' }, T((xCut + hw) / 2, Yf, z0 - count * 0.34));
-    spots.push(spotAt('forum-steps', 'spawn', (xCut + hw) / 2, Yf, z0 - count * 0.34 - 1.6, (xCut + hw) / 2, z0, { label: 'Steps up to the Basilica Argentaria' }));
-  }
+  // The stretch of the front that opens onto the portico (SE of the forum's NW end wall).
+  const xCut = Math.max(-hw, Math.min(hw, new THREE.Vector3(P.xa + P.half, 0, P.zNW + P.wallT).applyMatrix4(fm).x));
   // Two-storey arcade of tufa piers with travertine trim along the NE front.
   const bays = 9;
   const bay = (2 * hw) / bays;
-  const res = arcade(
+  arcade(
     b,
     {
       bays,
@@ -389,7 +412,6 @@ function buildBasilica(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spo
     },
     T(-hw, fy, z0 + 0.5),
   );
-  void res;
   const H = fy + 5.2 + 4.4;
   // Upper floor, back and end walls, roof.
   span(b, 'wood_dark', -hw, fy + 5.0, z0 + 1.0, hw, fy + 5.25, z1 - 0.6, I, true);
@@ -397,7 +419,7 @@ function buildBasilica(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spo
   for (const sx of [-1, 1]) span(b, 'brick', sx * hw - (sx > 0 ? 0 : 0.8), 0, z0, sx * hw + (sx > 0 ? 0.8 : 0), H, z1, I, true);
   const rise = (z1 - z0) * 0.25;
   leanTo(b, 'roof_tile', -hw - 0.8, hw + 0.8, z0 + 0.2, H + 0.2, z1, H + rise, I);
-  // The stairs at the SW (back) end: two flights up to the doors from the lower street behind.
+  // The stairs at the SW (back) end: two flights up to the doors from the lower ground behind.
   for (const x of [-hw * 0.65, hw * 0.65]) {
     const gb = g(x, z1 + 3);
     if (fy - gb > 0.2) {
@@ -429,8 +451,8 @@ function buildBasilica(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spo
       gloss: '“All fell silent and held their gaze intent” — the opening of Aeneid II, scratched by a pupil of the school that meets here between the bankers’ tables.',
     }),
   );
-  void column;
-  void togate;
+  // In the SW portico before the arcade.
+  spots.push(spotAt('portico', 'spawn', (xCut + hw) / 2, Yf + 0.4, z0 - 2.2, (xCut + hw) / 2, z0, { label: 'The Basilica Argentaria, off the portico of the Forum of Caesar' }));
 }
 
 // ------------------------------------------------------------------ far stand-ins
@@ -438,17 +460,18 @@ function buildBasilica(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spo
 function forumFar(ctx: LandmarkContext) {
   const Y0 = floorY(ctx);
   return (b: MeshBuilder) => {
-    const tp = new THREE.Vector3().setFromMatrixPosition(relMatrix(ctx, 'temple-venus-genetrix'));
-    const xa = tp.x;
-    const half = 17.5 * S;
-    const zSE = -80 * S;
-    const zNW = 80 * S;
+    const P = fcPlan(ctx.game);
+    const { xa, half, depth, zSE, zNW } = P;
     span(b, 'paving_travertine', xa - half, -0.4, zSE, xa + half, Y0, zNW, undefined);
     for (const sd of [-1, 1]) {
       farWall(b, sd > 0 ? 'brick' : 'marble', xa + sd * (half + 0.3), zSE, xa + sd * (half + 0.3), zNW, 0.6, -0.5, 8.5);
-      leanTo(b, 'roof_tile', Math.min(xa + sd * (half - 3.6), xa + sd * half), Math.max(xa + sd * (half - 3.6), xa + sd * half), zSE, 6.6, 18, 7.6);
-      farColonnade(b, 'marble', zSE, 18, 0, Y0 + 0.4, 4.8, 18, 0.5, TRS(xa + sd * (half - 3.6), 0, 0, 0, -Math.PI / 2, 0));
+      const xc = xa + sd * P.W2;
+      leanTo(b, 'roof_tile', Math.min(xc, xa + sd * half), Math.max(xc, xa + sd * half), zSE, 6.6, zNW, 7.6);
+      farColonnade(b, 'marble', zSE, zNW, 0, Y0 + 0.4, 4.8, 34, 0.5, TRS(xc, 0, 0, 0, -Math.PI / 2, 0));
+      void depth;
     }
+    // The shops' block behind the SW portico.
+    span(b, 'brick', xa + half, -0.4, P.zShops, xa + half + P.shopD, Y0 + 7.4, P.zBas, undefined);
   };
 }
 
@@ -459,11 +482,16 @@ const vgFar = (ctx: LandmarkContext) => (b: MeshBuilder) => {
   span(b, 'marble', -vg.rw, Y0, vg.front, vg.rw, Y0 + vg.P, vg.s.z0, undefined);
 };
 
-function basilicaFar(b: MeshBuilder) {
-  const hw = (46 * S) / 2;
-  const hd = (23 * S) / 2;
-  span(b, 'tufa', -hw, 0, -hd * 0.4, hw, 10.5, hd, undefined);
-  leanTo(b, 'roof_tile', -hw, hw, -hd * 0.4, 10.5, hd, 12.5, undefined);
+function basilicaFar(ctx: LandmarkContext) {
+  return (b: MeshBuilder) => {
+    const hw = (46 * S) / 2;
+    const P = fcPlan(ctx.game);
+    const z0 = new THREE.Vector3(P.xa + P.half, 0, 0).applyMatrix4(relMatrix(ctx, 'forum-caesar')).z;
+    const z1 = z0 + 14 * S;
+    const top = floorY(ctx) + 10.2;
+    span(b, 'tufa', -hw, 0, z0, hw, top, z1, undefined);
+    leanTo(b, 'roof_tile', -hw, hw, z0, top, z1, top + 2, undefined);
+  };
 }
 
 export const builders: LandmarkBuilder[] = [
@@ -477,6 +505,6 @@ export const builders: LandmarkBuilder[] = [
   },
   {
     handles: ['basilica-argentaria'],
-    build: (ctx) => makeLandmark(ctx, (b, d, spots) => buildBasilica(ctx, b, d, spots), { far: ctx.detail === 'high' && basilicaFar, cull: 280 }),
+    build: (ctx) => makeLandmark(ctx, (b, d, spots) => buildBasilica(ctx, b, d, spots), { far: ctx.detail === 'high' && basilicaFar(ctx), cull: 280 }),
   },
 ];

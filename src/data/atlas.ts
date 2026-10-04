@@ -1153,19 +1153,19 @@ export const LANDMARKS: Landmark[] = [
   },
   {
     id: 'temple-venus-genetrix', name: 'Temple of Venus Genetrix', latin: 'Aedes Veneris Genetricis', category: 'temple',
-    center: [38, -175], rotation: 131, footprint: { kind: 'rect', w: 30, d: 45 }, height: 30, baseElevation: 15.5,
+    center: [28.5, -164], rotation: 131, footprint: { kind: 'rect', w: 30, d: 45 }, height: 30, baseElevation: 15.5,
     region: 'regio-viii', status113: 'new', statusNote: 'new (rebuilt; rededicated by Trajan 12 May 113)', within: 'forum-caesar', priority: 1, confidence: 'high',
     dates: 'vowed 48 BC, dedicated 46 BC; Trajanic rebuild',
     description: 'Temple of Venus the Mother, ancestress of the Julian line. Its treasures include a gilded statue of Cleopatra, Greek paintings and a corslet of British pearls.',
-    builderNotes: 'Corinthian octastyle peripteros sine postico with a pycnostyle (closely spaced) colonnade, rich Trajanic cornices with cupids, and an apse at the back. It faces SE down the forum. Fountains (Appiades) stand in front of the podium.',
+    builderNotes: 'Corinthian octastyle peripteros sine postico with a pycnostyle (closely spaced) colonnade, rich Trajanic cornices with cupids, and an apse at the back. It faces SE down the forum. Fountains (Appiades) stand in front of the podium. Centre on the forum\'s axis, 4.5 m NE of the forum rectangle\'s centreline (the tabernae fill the SW side; was [38, -175], 19 m off-axis, which left no room for the double porticoes).',
   },
   {
     id: 'basilica-argentaria', name: 'Bankers\' Hall', latin: 'Basilica Argentaria', category: 'basilica',
-    center: [12, -168], rotation: 41, footprint: { kind: 'rect', w: 46, d: 23 }, height: 14, baseElevation: 17,
+    center: [-8, -145], rotation: 41, footprint: { kind: 'rect', w: 46, d: 14 }, height: 14, baseElevation: 17,
     region: 'regio-viii', status113: 'new', statusNote: 'new (c. 113)', siting: 'slope', within: 'forum-caesar', priority: 1, confidence: 'high',
     dates: 'Trajanic',
     description: 'Trajan\'s new hall for moneychangers and bankers on the rise between the Forum and the Campus, carved into the Capitoline flank.',
-    builderNotes: 'Two-storey arcaded hall on tuff pillars. It rises above the square, reached by two stairs at its SW end, and wraps around behind the temple (irregular plan). Graffiti suggest a school used it.',
+    builderNotes: 'Two-storey arcaded hall on tuff pillars. It rises above the square, reached by two stairs at its SW end, and wraps around behind the temple (irregular plan). Graffiti suggest a school used it. Placed behind the forum\'s SW (double) portico, which its arcade opens onto, beside the temple and running on past the forum\'s NW end (was [12, -168], 46 x 23, inside the forum\'s portico and the temple).',
   },
   {
     id: 'forum-augustus', name: 'Forum of Augustus', latin: 'Forum Augusti', category: 'forum',

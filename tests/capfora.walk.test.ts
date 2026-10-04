@@ -24,9 +24,13 @@ import { frameOf } from '../src/world/landmarks/builders/capfora/frame';
 import { builders as augustus } from '../src/world/landmarks/builders/capfora-augustus';
 import { builders as capitol } from '../src/world/landmarks/builders/capfora-capitol';
 import { builders as arx } from '../src/world/landmarks/builders/capfora-arx';
+import { builders as caesar } from '../src/world/landmarks/builders/capfora-caesar';
+import { builders as nerva } from '../src/world/landmarks/builders/capfora-nerva';
+import { builders as pacis } from '../src/world/landmarks/builders/capfora-pacis';
+import { builders as boarium } from '../src/world/landmarks/builders/capfora-boarium';
 import { makeWorld, walk, type Leg, type TestWorld } from './arch.walker';
 
-const ALL: LandmarkBuilder[] = [...augustus, ...capitol, ...arx];
+const ALL: LandmarkBuilder[] = [...augustus, ...capitol, ...arx, ...caesar, ...nerva, ...pacis, ...boarium];
 
 let hm: Heightmap;
 beforeAll(async () => {
@@ -41,6 +45,8 @@ interface Placed {
   spot(id: string, spotId: string): THREE.Vector3;
   /** A landmark-local point in world space (y from the terrain if omitted). */
   local(id: string, x: number, z: number, y?: number): THREE.Vector3;
+  /** The landmark's spots (local space). */
+  spots(id: string): Spot[];
 }
 
 /** Build landmarks at 'high' detail and drop their colliders, plus the terrain, into one world. */
@@ -85,6 +91,7 @@ function place(ids: string[], terrainHalf = 110): Placed {
       if (!s) throw new Error(`no spot ${id}:${spotId}`);
       return s.position.clone().applyMatrix4(frames.get(id)!.matrix);
     },
+    spots: (id) => spots.get(id) ?? [],
     local: (id, x, z, y) => {
       const fr = frames.get(id)!;
       const p = new THREE.Vector3(x, 0, z).applyMatrix4(fr.matrix);
@@ -105,6 +112,21 @@ function addWorldCollider(world: TestWorld, c: ColliderSpec, m: THREE.Matrix4) {
 }
 
 const to = (v: THREE.Vector3, seconds = 20, reach = 0.6): Leg => ({ to: [v.x, v.z], seconds, reach });
+
+/** Composite landmarks are placed with their siblings (they share floors and walls). */
+const GROUPS: string[][] = [
+  ['forum-caesar', 'temple-venus-genetrix', 'basilica-argentaria'],
+  ['forum-augustus', 'temple-mars-ultor'],
+  ['forum-nerva', 'temple-minerva-nerva'],
+  ['templum-pacis'],
+  ['temple-jupiter-capitolinus', 'temple-jupiter-tonans', 'tarpeian-rock'],
+  ['asylum', 'temple-veiovis'],
+  ['temple-juno-moneta', 'auguraculum'],
+  ['insula-aracoeli'],
+  ['tomb-bibulus'],
+  ['sant-omobono-temples', 'porta-carmentalis'],
+  ['subura'],
+];
 
 describe('capfora walkability', () => {
   it('Capitol: Clivus → forecourt → Arch of Scipio → Area Capitolina → temple steps → cella', () => {
@@ -151,6 +173,45 @@ describe('capfora walkability', () => {
     expect(r.ends[1].distanceTo(altar)).toBeLessThan(1.2);
     // On the temple's stair or podium (the podium is 1.56 m).
     expect(r.ends[4].y - padY).toBeGreaterThan(1.3);
+  });
+
+  it('Forum of Caesar: entrance → the Equus → the SW portico → up into the Basilica Argentaria', () => {
+    const P = place(['forum-caesar', 'temple-venus-genetrix', 'basilica-argentaria']);
+    const entrance = P.spot('forum-caesar', 'entrance');
+    const equus = P.spot('forum-caesar', 'equus-caesaris');
+    const portico = P.spot('basilica-argentaria', 'portico');
+    const hall = P.spot('basilica-argentaria', 'graffito');
+    const r = walk(P.world, entrance.clone().setY(entrance.y + 0.3), [to(equus), to(portico, 25), to(hall, 15, 0.5)]);
+    expect(r.ends[0].distanceTo(equus)).toBeLessThan(1.2);
+    expect(r.ends[1].distanceTo(portico)).toBeLessThan(1.2);
+    expect(new THREE.Vector2(r.ends[2].x - hall.x, r.ends[2].z - hall.z).length()).toBeLessThan(0.9);
+    expect(Math.abs(r.ends[2].y - hall.y)).toBeLessThan(0.15);
+  });
+
+  it('every spawn spot is clear of colliders and you can walk away from it', () => {
+    for (const ids of GROUPS) {
+      const P = place(ids);
+      // Scene queries only see colliders after a step.
+      P.world.physics.step(1 / 60);
+      for (const id of ids) {
+        for (const s of P.spots(id).filter((x) => x.kind === 'spawn')) {
+          const p = P.spot(id, s.id);
+          for (const dy of [0.45, 0.9, 1.45]) {
+            const hits = P.world.physics.overlapSphere({ x: p.x, y: p.y + dy, z: p.z }, 0.3);
+            expect(hits.length, `${id}:${s.id} embedded at +${dy}`).toBe(0);
+          }
+          // Something to stand on just below.
+          const g = P.world.physics.groundHeight(p.x, p.z, p.y + 0.5, 1.5);
+          expect(g, `${id}:${s.id} has ground`).not.toBeNull();
+          // Walk 1.5 s in the direction the spot faces, or backwards if that is a wall.
+          const h = s.heading ?? 0;
+          const fwd = walk(P.world, p.clone().setY(p.y + 0.1), [{ dir: [Math.sin(h), Math.cos(h)], seconds: 1.5 }]);
+          const back = walk(P.world, p.clone().setY(p.y + 0.1), [{ dir: [-Math.sin(h), -Math.cos(h)], seconds: 1.5 }]);
+          const moved = Math.max(Math.hypot(fwd.x - p.x, fwd.z - p.z), Math.hypot(back.x - p.x, back.z - p.z));
+          expect(moved, `${id}:${s.id} can walk away`).toBeGreaterThan(2.5);
+        }
+      }
+    }
   });
 
   it('Forum of Augustus: entrance → square → steps of Mars Ultor → cella', () => {

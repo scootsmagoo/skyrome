@@ -458,7 +458,7 @@ function buildInsula(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots
     const p = s.position.clone().add(new THREE.Vector3(0, floor, 0));
     spots.push({ id: `insula-${s.id}`, kind: s.kind === 'shopDoor' ? 'vendor' : s.kind === 'houseDoor' ? 'door' : s.kind, position: p, heading: s.facing, label: s.tag });
   }
-  spots.push(spotAt('street', 'spawn', 0, floor, -D / 2 - 2.5, 0, 0, { label: 'Insula at the foot of the Capitol' }));
+  spots.push(spotAt('street', 'spawn', 0, g(0, -D / 2 - 2.5), -D / 2 - 2.5, 0, 0, { label: 'Insula at the foot of the Capitol' }));
 }
 
 // ------------------------------------------------------------------ the Tomb of Bibulus

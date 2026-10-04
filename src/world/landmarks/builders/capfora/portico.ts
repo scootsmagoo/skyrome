@@ -66,6 +66,8 @@ export interface PorticoSpec {
   friezeTile?: number;
   /** Columns at the very ends of the run (x = 0 and x = length) instead of half a bay in. */
   endColumns?: boolean;
+  /** Double colonnade: a second row on the same axes at this z (0 < z < depth), under a plain beam. */
+  innerRow?: number;
 }
 
 export interface PorticoResult {
@@ -135,6 +137,11 @@ export function forumPortico(b: MeshBuilder, spec: PorticoSpec, at: THREE.Matrix
 
   // ---- ceiling
   const yc = yE + ent.dims.architrave + ent.dims.frieze;
+  if (spec.innerRow !== undefined) {
+    const zi = spec.innerRow;
+    for (const x of xs) column(b, { order: spec.order, D, height: spec.H, fluted: spec.fluted ?? false, material: shaft, trimMaterial: trimMat, detail: 'low' }, mul(at, T(x, floorY, zi)));
+    span(b, entMat, 0, yE, zi - d * 0.55, L, yc, zi + d * 0.55, at);
+  }
   if ((spec.ceiling ?? 'coffers') === 'coffers' && detail === 'high') coffers(b, 0, L, d / 2, depth, yc, Math.max(1.6, axial / 2), at, 'low');
   else span(b, 'wood_dark', 0, yc - 0.05, d / 2, L, yc, depth, at);
 

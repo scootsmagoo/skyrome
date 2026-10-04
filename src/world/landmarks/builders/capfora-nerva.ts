@@ -29,7 +29,7 @@ import { AUGUSTUS } from './capfora-augustus';
 import { makeLandmark, type Detail } from './capfora/build';
 import { exedraWall } from './capfora/exedra';
 import { farColonnade, farWall, templeFar } from './capfora/far';
-import { S, landmark, relMatrix, sharedFloor, spotAt, type CapSpot } from './capfora/frame';
+import { S, groundRange, landmark, relMatrix, sharedFloor, spotAt, type CapSpot } from './capfora/frame';
 import { box, figure, footing, friezeStrip, groundMin, inscription, span, stairsToGround } from './capfora/ornament';
 import { PAINT, friezeRelief, minervaRelief, paint } from './capfora/paint';
 import { capTemple } from './capfora/temple';
@@ -383,21 +383,23 @@ function buildMinerva(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spot
 
 function buildSubura(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots: CapSpot[]) {
   // Nothing big: the Subura is filled by the city fabric. Its anchor is a crossroads with the
-  // compitum of the Lares (a vicus shrine), a public basin and a painted notice.
+  // compitum of the Lares (a vicus shrine), a public basin and a painted notice, on a basalt
+  // platform level with the highest corner of the sloping street (a kerb on the low side).
   const rng = ctx.rng;
   const d = new Draw(b);
-  footing(b, 'basalt', ctx.groundAt, -3.5, -3.5, 3.5, 3.5, 0.02, undefined, true);
-  compitalShrine(d.at(0, 0.02, 1.4, 0), rng.fork('compitum'));
-  const fills = lacus(d.at(-3.0, 0.02, -1.0, Math.PI / 2), rng.fork('lacus'));
+  const y = Math.max(0.02, groundRange(ctx.groundAt, -3.5, -3.5, 3.5, 3.5, 1).max + 0.02);
+  footing(b, 'basalt', ctx.groundAt, -3.5, -3.5, 3.5, 3.5, y, undefined, true);
+  compitalShrine(d.at(0, y, 1.4, 0), rng.fork('compitum'));
+  const fills = lacus(d.at(-3.0, y, -1.0, Math.PI / 2), rng.fork('lacus'));
   void fills;
   // A notice board on two posts beside the shrine.
-  for (const x of [1.9, 3.3]) box(b, 'wood_dark', x, 1.0, -0.2, 0.12, 2.0, 0.12, undefined, true);
-  const text = inscription(b, ['VICVS · SVBVRANVS', 'MAG · VICI · LARIBVS · AVGVSTIS'], 1.6, 0.6, T(2.6, 1.55, -0.3), 'painted', { ground: '#efe6d2', ink: '#a3271f' });
-  spots.push(spotAt('compitum', 'shrine', 0, 0.02, -1.2, 0, 1.4, { label: 'Compitum of the Lares (vicus shrine)' }));
-  spots.push(spotAt('vicomagister', 'npc', 1.4, 0.02, -1.6, 0, 0, { label: 'The vicomagister of the Subura' }));
-  spots.push(spotAt('lacus', 'shrine', -3.0, 0.02, -2.6, -3.0, -1.0, { label: 'Public basin' }));
-  spots.push(spotAt('notice', 'inscription', 2.6, 0.02, -1.6, 2.6, -0.3, { label: 'Painted notice of the vicus', text, gloss: 'The magistri of the vicus to the Augustan Lares.' }));
-  spots.push(spotAt('subura', 'spawn', 0, 0.02, -3.0, 0, 0, { label: 'The Subura' }));
+  for (const x of [1.9, 3.3]) box(b, 'wood_dark', x, y + 1.0, -0.2, 0.12, 2.0, 0.12, undefined, true);
+  const text = inscription(b, ['VICVS · SVBVRANVS', 'MAG · VICI · LARIBVS · AVGVSTIS'], 1.6, 0.6, T(2.6, y + 1.55, -0.3), 'painted', { ground: '#efe6d2', ink: '#a3271f' });
+  spots.push(spotAt('compitum', 'shrine', 0, y, -1.2, 0, 1.4, { label: 'Compitum of the Lares (vicus shrine)' }));
+  spots.push(spotAt('vicomagister', 'npc', 1.4, y, -1.6, 0, 0, { label: 'The vicomagister of the Subura' }));
+  spots.push(spotAt('lacus', 'shrine', -3.0, y, -2.6, -3.0, -1.0, { label: 'Public basin' }));
+  spots.push(spotAt('notice', 'inscription', 2.6, y, -1.6, 2.6, -0.3, { label: 'Painted notice of the vicus', text, gloss: 'The magistri of the vicus to the Augustan Lares.' }));
+  spots.push(spotAt('subura', 'spawn', 0.4, y, -2.9, 0, 0, { label: 'The Subura' }));
   void detail;
 }
 

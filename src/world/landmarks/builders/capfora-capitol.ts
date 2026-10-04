@@ -471,7 +471,7 @@ function buildTonans(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots
     }),
   );
   spots.push(spotAt('altar', 'shrine', 0, 0.05, sf - 1.5, 0, sf + 3, { label: 'Altar of Jupiter Tonans' }));
-  spots.push(spotAt('approach', 'spawn', 1.5, 0.05, sf - 9, 0, sf, { label: 'Before the Temple of Jupiter Tonans' }));
+  spots.push(spotAt('approach', 'spawn', 1.5, ctx.groundAt(1.5, sf - 7), sf - 7, 0, sf, { label: 'Before the Temple of Jupiter Tonans' }));
   altar(b, 1.8, 1.1, 1.0, T(0, 0.05, sf - 3.0), { detail });
 }
 
