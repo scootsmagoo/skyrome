@@ -26,6 +26,8 @@ export interface Trade {
   ask: Text;
   service: 'barter' | 'heal' | 'train' | 'repair' | 'rent';
   if?: (c: DialogueContext) => boolean;
+  /** Offer the daily haggle (GDD §7.4, a Rhetoric check against the vendor's grade); default: for barter. */
+  haggle?: boolean;
 }
 
 export interface Persuasion {
@@ -74,6 +76,17 @@ export function person(spec: PersonSpec): DialogueDef {
     topics.forEach((t, i) => out.push({ text: t.ask, if: t.if, once: t.once, goto: `t${i}` }));
     if (spec.news) out.push({ text: spec.news, goto: 'news' });
     if (spec.trade) out.push({ text: spec.trade.ask, if: spec.trade.if, end: true, effects: (c) => c.openService(spec.trade!.service) });
+    if (spec.trade && spec.trade.service === 'barter' && spec.trade.haggle !== false) {
+      out.push({
+        text: 'Let’s talk about the price. (Haggle)',
+        if: spec.trade.if,
+        goto: 'haggle',
+        effects: (c) => {
+          const r = c.game.barter?.haggle(c.npcId);
+          c.memory._haggle = !r?.ok ? 'done' : r.pass ? 'pass' : 'fail';
+        },
+      });
+    }
     if (spec.persuade) {
       const p = spec.persuade;
       out.push({ text: p.ask, if: p.if, once: p.once, check: { skill: 'rhetoric', difficulty: p.dc, kind: p.kind, pass: 'persuadePass', fail: 'persuadeFail' } });
@@ -97,6 +110,17 @@ export function person(spec: PersonSpec): DialogueDef {
   });
   Object.assign(nodes, spec.nodes);
   if (spec.news) nodes.news = { text: (c) => rumor(c), next: 'hub' };
+  if (spec.trade && spec.trade.service === 'barter' && spec.trade.haggle !== false) {
+    nodes.haggle = {
+      text: (c) =>
+        c.memory._haggle === 'pass'
+          ? 'Ha! You drive a hard bargain. All right: a friend’s price, today only. Don’t tell the others.'
+          : c.memory._haggle === 'fail'
+            ? 'Haggle? In my shop? The price is the price, and today it is a little more, for the insult.'
+            : 'We have haggled once today, and my wife says that is plenty. Tomorrow.',
+      next: 'hub',
+    };
+  }
   if (spec.persuade) {
     nodes.persuadePass = { text: spec.persuade.pass, effects: spec.persuade.reward, next: 'hub' };
     nodes.persuadeFail = { text: spec.persuade.fail, next: 'hub' };

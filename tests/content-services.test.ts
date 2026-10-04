@@ -100,6 +100,27 @@ describe('barter', () => {
   });
 });
 
+describe('haggling', () => {
+  it('a vendor offers the daily haggle: the buying prices move one way or the other, and only once a day', () => {
+    const w = world();
+    const price = () => barterViewFor(w.game, 'npc-euhodus')!.merchantGoods().find((g) => g.itemId === 'gladius')!.price;
+    const base = price();
+    const v = w.rpg.dialogue.start('npc-euhodus');
+    const i = v!.choices.findIndex((c) => c.text.includes('Haggle'));
+    expect(i).toBeGreaterThanOrEqual(0);
+    w.rpg.dialogue.choose(i);
+    expect(w.rpg.dialogue.view!.nodeId).toBe('haggle');
+    expect(['pass', 'fail']).toContain(w.rpg.dialogue.memoryOf('npc-euhodus')._haggle);
+    w.rpg.dialogue.end();
+    expect(price()).not.toBe(base);
+    // The second try the same day is refused.
+    const v2 = w.rpg.dialogue.start('npc-euhodus');
+    w.rpg.dialogue.choose(v2!.choices.findIndex((c) => c.text.includes('Haggle')));
+    expect(w.rpg.dialogue.memoryOf('npc-euhodus')._haggle).toBe('done');
+    expect(w.rpg.dialogue.view!.text).toContain('once today');
+  });
+});
+
 describe('other services', () => {
   it('train: a lesson costs §5.1 gold and raises the skill; the cap stops it', () => {
     const w = world();
