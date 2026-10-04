@@ -167,6 +167,8 @@ export interface TriumphalArchSpec {
   order?: Order;
   material?: MaterialId;
   detail?: Detail;
+  /** Detail of the engaged columns alone (default `detail`): thin columns don't need flutes. */
+  columnDetail?: Detail;
   /** Attic inscription lines (Latin; U/V and interpuncts handled). */
   inscription?: string[];
   inscriptionStyle?: 'carved' | 'bronze';
@@ -292,7 +294,7 @@ export function triumphalArch(b: MeshBuilder, spec: TriumphalArchSpec = {}, at?:
       const ped = new THREE.BoxGeometry(D * 1.5, socle, D * 0.9);
       ped.translate(x, socle / 2, pz + side * D * 0.45 - side * 0.02);
       b.add(ped, mat, m);
-      column(b, { order, D, height: colH, fluted: true, material: mat, detail, kind: 'engaged', collide: false }, mul(m, TRS(x, yCol, pz, 0, side < 0 ? 0 : Math.PI, 0)));
+      column(b, { order, D, height: colH, fluted: true, material: mat, detail: spec.columnDetail ?? detail, kind: 'engaged', collide: false }, mul(m, TRS(x, yCol, pz, 0, side < 0 ? 0 : Math.PI, 0)));
     }
   }
   // Entablature round the body at the column faces.

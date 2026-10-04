@@ -19,7 +19,7 @@ import { LANDMARKS } from '../../../data/atlas';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import {
   T, V, arc, children, crenellations, dims, draw, farDraw, finish, flight, flightLength, groundRange, heightG, hintsOf, inscription, mul, offsetLine, pathLength,
-  piercedWall, plinth, spot, statueOnPedestal, tiledRoof, type Detail, type V3, liftAll,
+  piercedWall, plinth, spot, statueOnPedestal, tiledRoof, type Detail, type V3, liftAll, NEAR_BUILD, footprintGround,
 } from './generic-common';
 import { liteColonnade, liteColumnAt } from './generic-civic-lib';
 import { liteArcade, ribbonSlab, ribbonWall, seating, seatingTiers, type LiteStorey } from './generic-seating';
@@ -622,9 +622,20 @@ function buildAmphitheatre(ctx: LandmarkContext): LandmarkBuild {
   const m = h.text.match(/arena\s+(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/);
   const arches = h.text.match(/facade of (\d+) arches|(\d+) arches/);
   const spec = fitAmphitheatre(w / 2, dd / 2, H, ctx.S, m ? [Number(m[1]), Number(m[2])] : null, detail, arches ? Number(arches[1] ?? arches[2]) : undefined);
-  // Footing under the whole ellipse down to the lowest ground round it.
-  const gr = groundRange(ctx, -w / 2, -dd / 2, w / 2, dd / 2, 6);
-  if (gr.min < -0.05) d.geo(new THREE.CylinderGeometry(1, 1, 0.6 - gr.min, 40), 'travertine', 0, (gr.min - 0.6) / 2 + 0.02, 0, { sx: w / 2 + 0.3, sz: dd / 2 + 0.3 });
+  // A solid footing under the ellipse (never lifted: it stands on its pad) down to the lowest
+  // ground inside it, where the terrain falls away; solid to walk on, no hollow to get under.
+  const gmin = Math.min(...footprintGround(ctx));
+  if (gmin < -0.05) {
+    const bottom = gmin - 0.6;
+    d.geo(new THREE.CylinderGeometry(1, 1, 0.02 - bottom, 40), 'travertine', 0, (bottom + 0.02) / 2, 0, { sx: w / 2 + 0.3, sz: dd / 2 + 0.3 });
+    const strips = 8;
+    for (let k = 0; k < strips; k++) {
+      const za = -dd / 2 + (dd * k) / strips, zb = za + dd / strips;
+      const zEdge = Math.max(Math.abs(za), Math.abs(zb)) / (dd / 2);
+      const hx = (w / 2) * Math.sqrt(Math.max(0, 1 - zEdge * zEdge)) + 0.3;
+      if (hx > 0.5) d.solid(-hx, bottom, za, hx, 0.02, zb);
+    }
+  }
   const res = amphitheatre(d.b, spec, d.m);
   amphitheatreFar(far, { ...spec, cavea: { ...spec.cavea, topPortico: { order: 'corinthian', columnHeight: 6 } } });
   // Porticus in summa cavea: a lite colonnade on the top walk, facing the arena, roofed to the facade.
@@ -645,7 +656,7 @@ function buildAmphitheatre(ctx: LandmarkContext): LandmarkBuild {
     spot(`${lm.id}:arena`, 'npc', 0, 0.04, 0, 0),
     spot(`${lm.id}:topwalk`, 'vista', 0, res.cavea.height, -(spec.cavea.arenaRz + res.cavea.reach - 1.5), 0),
   );
-  return { object: d.b.build(lm.id), colliders: d.b.colliders, spots, far: far.build(`${lm.id}:far`), cullDistance: 420 };
+  return { object: d.b.build(lm.id, NEAR_BUILD), colliders: d.b.colliders, spots, far: far.build(`${lm.id}:far`, { releaseCpu: true }), cullDistance: 420 };
 }
 
 /** A free-standing obelisk on a moulded base at local (x, z) — for spinae and forecourts. */

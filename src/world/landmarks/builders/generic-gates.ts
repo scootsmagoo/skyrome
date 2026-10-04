@@ -17,7 +17,7 @@ import type { Draw } from '../../../arch/fabric/draw';
 import { placeProp } from '../../../arch/props';
 import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
-import { ashlarFace, dims, draw, farDraw, finish, heightG, hintsOf, inscription, spot, tiledRoof, wallRun, type Detail, liftAll } from './generic-common';
+import { ashlarFace, dims, draw, farDraw, finish, heightG, hintsOf, inscription, onRoad, roadsNear, spot, tiledRoof, wallRun, type Detail, type LocalRoad, liftAll } from './generic-common';
 import { brazier, wallTorch } from './generic-world';
 
 /** Pure: passages of a gate from its notes (triple / double / single). */
@@ -78,14 +78,17 @@ function buildGate(ctx: LandmarkContext): LandmarkBuild {
       for (let i = 0; i < m; i++) d.box(mat, -w / 2 + (i + 0.5) * (w / m), H + 0.55, z, (w / m) * 0.58, 1.1, 0.5);
     }
   }
-  // Stubs of the wall running off either side, following the ground, ragged where they stop.
+  // Stubs of the wall running off either side, following the ground, ragged where they stop — and
+  // breached wherever another road leaves the gate sideways (the Porta Collina's four roads).
   const stub = travertine ? 0 : clamp(w * 1.6, 9, 18);
   const t = Math.min(depth * 0.7, 3.0);
+  const roads = roadsNear(lm, ctx.S, stub + 8);
   for (const sx of [-1, 1]) {
     if (!stub) break;
     const segs = Math.round(stub / 2.4);
     for (let k = 0; k < segs; k++) {
       const xa = sx * (w / 2 + k * (stub / segs)), xb = sx * (w / 2 + (k + 1) * (stub / segs));
+      if ([0, 0.5, 1].some((f) => onRoad(roads, xa + (xb - xa) * f, 0, t / 2 + 0.5))) continue;
       const g0 = Math.min(ctx.groundAt(xa, 0), ctx.groundAt(xb, 0), ctx.groundAt(xa, t / 2), ctx.groundAt(xa, -t / 2));
       // The top steps down towards the broken end; the last two blocks are lower still.
       const top = H * (0.86 - 0.03 * k) - (k >= segs - 2 ? rng.range(0.6, 1.6) : 0);
@@ -98,11 +101,12 @@ function buildGate(ctx: LandmarkContext): LandmarkBuild {
     // Fallen blocks at the broken end.
     for (let i = 0; i < 3; i++) {
       const x = sx * (w / 2 + stub + rng.range(0.5, 2.2)), z = rng.range(-2, 2);
+      if (onRoad(roads, x, z, 0.8)) continue;
       d.box(mat, x, ctx.groundAt(x, z) + 0.28, z, 1.2, 0.56, 0.6, { ry: rng.range(-0.6, 0.6), collide: true });
     }
   }
   far.span(mat, -w / 2, gmin - 0.5, z0, w / 2, H, z1);
-  if (stub) for (const sx of [-1, 1]) far.span(mat, sx * w / 2, 0, -t / 2, sx * (w / 2 + stub), H * 0.75, t / 2);
+  if (stub && !roads.length) for (const sx of [-1, 1]) far.span(mat, sx * w / 2, 0, -t / 2, sx * (w / 2 + stub), H * 0.75, t / 2);
   // The aqueduct arcade crossing over the gate, leaking ("dripping gate").
   if (h.has('aqueduct', 'dripping', 'madida')) aqueductOverGate(ctx, d, far, w, H, z1, detail, spots);
   // The shunned passage (Porta Carmentalis: the right-hand arch, seen from inside the city).
@@ -118,7 +122,7 @@ function buildGate(ctx: LandmarkContext): LandmarkBuild {
       wallTorch(ctx, d, x + sx * (span / 2 + 0.55), 2.7, z1 + (detail === 'high' ? 0.05 : 0), Math.PI);
     }
   }
-  guardPost(ctx, d, w, z0, spots);
+  guardPost(ctx, d, w, z0, spots, roads);
   const name = lm.id.replace(/^porta-/, '');
   spots.push(
     spot(`${lm.id}:spawn-${name}`, 'spawn', xs[0] === 0 ? 0 : xs[Math.floor(n / 2)], ctx.groundAt(0, z0 - 12) + 0.05, z0 - 12, 0),
@@ -135,9 +139,12 @@ function buildGate(ctx: LandmarkContext): LandmarkBuild {
  * entering the city) with a table, an amphora stack, a bench and a brazier, and a trough for the
  * draught animals.
  */
-function guardPost(ctx: LandmarkContext, d: Draw, w: number, z0: number, spots: Spot[]) {
+function guardPost(ctx: LandmarkContext, d: Draw, w: number, z0: number, spots: Spot[], roads: LocalRoad[]) {
   const { lm } = ctx;
+  // Booth, trough, milestone and stall stand beside the road, never on another one.
+  const off = (x: number, z: number, r: number) => !onRoad(roads, x, z, r);
   const x = w / 2 + 2.6, z = z0 - 4.2;
+  if (!off(x, z, 1.8)) return;
   const f = d.at(x, ctx.groundAt(x, z), z, 0);
   // Booth: plank walls on three sides, open to the road (−x), shed roof.
   f.span('wood', 1.0, 0, -1.3, 1.12, 2.4, 1.3, { collide: true });
@@ -154,13 +161,14 @@ function guardPost(ctx: LandmarkContext, d: Draw, w: number, z0: number, spots: 
   spots.push(spot(`${lm.id}:bench`, 'sit', x - 1.6, f.m.elements[13], z + 1.8, Math.PI));
   // Trough across the road.
   const tx = -w / 2 - 2.4, tz = z0 - 3.4;
-  placeProp(d, 'trough', tx, ctx.groundAt(tx, tz), tz, Math.PI / 2);
+  if (off(tx, tz, 1)) placeProp(d, 'trough', tx, ctx.groundAt(tx, tz), tz, Math.PI / 2);
   // The first milestone of the road out of this gate (miles are counted from the old gates).
   const mx = w / 2 + 1.6, mz = z0 - 9.5;
   placeProp(d, 'milestone', mx, ctx.groundAt(mx, mz), mz, -Math.PI / 2, { variant: 0 });
   spots.push(spot(`${lm.id}:milestone`, 'inscription', mx - 1.2, ctx.groundAt(mx - 1.2, mz), mz, Math.PI / 2));
   // A hawker's stall a little further out.
   const sx = -w / 2 - 3.2, sz = z0 - 8.5;
+  if (!off(sx, sz, 1.6)) return;
   placeProp(d, 'stall', sx, ctx.groundAt(sx, sz), sz, Math.PI / 2, { rng: ctx.rng.fork('stall') });
   spots.push(spot(`${lm.id}:stall`, 'stall', sx + 1.2, ctx.groundAt(sx, sz), sz, Math.PI / 2));
 }

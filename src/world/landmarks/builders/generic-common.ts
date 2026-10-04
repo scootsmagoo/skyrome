@@ -11,12 +11,12 @@
  */
 import * as THREE from 'three';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { LANDMARK_BY_ID, LANDMARKS } from '../../../data/atlas';
+import { LANDMARK_BY_ID, LANDMARKS, ROADS } from '../../../data/atlas';
 import { Draw } from '../../../arch/fabric/draw';
 import { roof as tileRoof } from '../../../arch/fabric/roof';
 import { wall as fabricWall } from '../../../arch/fabric/wall';
 import { footprintPolygon } from '../../terrain/heightmap';
-import { footprintRadius } from '../footprint';
+import { footprintRadius, localFootprint } from '../footprint';
 import { stairs } from '../../../arch/common/stairs';
 import { T, TRS, mul } from '../../../arch/common/geom';
 import { inscriptionPanel } from '../../../arch/common/inscription';
@@ -24,7 +24,7 @@ import { armoredEmperor, equestrian, seatedDeity, togate } from '../../../arch/c
 import type { Order } from '../../../arch/classical/orders';
 import type { TemplePlan } from '../../../arch/classical/temple';
 import { MATERIAL_BASE, type MaterialId } from '../../../gfx/materialIds';
-import { MeshBuilder, transformCollider } from '../../../gfx/MeshBuilder';
+import { MeshBuilder, transformCollider, type ColliderSpec } from '../../../gfx/MeshBuilder';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, LandmarkData, Spot } from '../types';
 
 /** This file only exports helpers; the registry glob still imports it, so give it an empty list. */
@@ -185,10 +185,13 @@ export function flightLength(h: number): number {
 /**
  * Footprints of the other solid landmarks that reach into this one, as polygons in this landmark's
  * LOCAL game frame, grown by `margin` game metres. Open areas (gardens, districts) are skipped, so a
- * garden avoids the temple inside it but not the neighbouring garden.
+ * garden avoids the temple inside it but not the neighbouring garden. With `roads` (default) the
+ * carriageways of the atlas roads crossing it are obstacles too (grown by the same margin), so
+ * walls, stalls, terraces and features leave the streets open.
  */
-export function obstacles(ctx: LandmarkContext, margin = 2): [number, number][][] {
+export function obstacles(ctx: LandmarkContext, margin = 2, roads = true): [number, number][][] {
   const { lm, S } = ctx;
+  const corridors = roads ? roadsNear(lm, S, margin).map((r) => roadQuad(r, margin)) : [];
   const R = footprintRadius(lm);
   const th = (lm.rotation * Math.PI) / 180;
   const c = Math.cos(th), s = Math.sin(th);
@@ -203,7 +206,21 @@ export function obstacles(ctx: LandmarkContext, margin = 2): [number, number][][
       return [(dx * c + dz * s) * S, (-dx * s + dz * c) * S] as [number, number];
     }));
   }
-  return out;
+  return [...out, ...corridors];
+}
+
+/** A road segment's carriageway (grown by `margin`) as a quad, extended past its ends to close joints. */
+export function roadQuad(r: LocalRoad, margin = 0): [number, number][] {
+  const L = Math.hypot(r.bx - r.ax, r.bz - r.az) || 1;
+  const ux = (r.bx - r.ax) / L, uz = (r.bz - r.az) / L;
+  const h = r.half + margin;
+  const ex = ux * h, ez = uz * h;
+  return [
+    [r.ax - ex - uz * h, r.az - ez + ux * h],
+    [r.bx + ex - uz * h, r.bz + ez + ux * h],
+    [r.bx + ex + uz * h, r.bz + ez - ux * h],
+    [r.ax - ex + uz * h, r.az - ez - ux * h],
+  ];
 }
 
 /** Pure: point-in-polygon (even-odd). */
@@ -498,7 +515,7 @@ export function farDraw(): Draw {
  * ONE vertex-coloured mesh (`bakeFar`), so a whole-city view costs one draw call per landmark.
  */
 export function finish(name: string, d: Draw, spots: Spot[] = [], far?: Draw, cullDistance?: number): LandmarkBuild {
-  const object = d.b.build(name);
+  const object = d.b.build(name, NEAR_BUILD);
   let farObj: THREE.Object3D | undefined;
   let cull = cullDistance;
   if (far) {
@@ -511,6 +528,13 @@ export function finish(name: string, d: Draw, spots: Spot[] = [], far?: Draw, cu
   }
   return { object, colliders: d.b.colliders, spots, far: farObj, cullDistance: cull };
 }
+
+/**
+ * Near meshes weld their vertices and drop the CPU copies once they are on the GPU (~200 MB of JS
+ * heap for the whole city otherwise): nothing raycasts landmark meshes (colliders are separate),
+ * and `bakeFar` reads the arrays synchronously, before the first upload.
+ */
+export const NEAR_BUILD = { index: true, releaseCpu: true } as const;
 
 /** Landmarks below this many triangles get their own near mesh, baked, as the far stand-in... */
 const AUTO_FAR_MAX = 30000;
@@ -598,65 +622,500 @@ export function draw(ctx: LandmarkContext): Draw {
   return new Draw(ctx.builder());
 }
 
+// ---------------------------------------------------------------- footprint shape, roads
+
+/**
+ * Pure: a test for "local (x, z), in game metres, lies inside this landmark's footprint shape"
+ * (the rectangle, ellipse, circle or polygon itself, not its bounding box).
+ */
+export function footprintTest(lm: Pick<LandmarkData, 'footprint' | 'rotation' | 'center'>, S: number): (x: number, z: number) => boolean {
+  const fp = localFootprint(lm as LandmarkData);
+  if (fp.kind === 'rect') {
+    const hw = (fp.w * S) / 2, hd = (fp.d * S) / 2;
+    return (x, z) => Math.abs(x) <= hw + 1e-6 && Math.abs(z) <= hd + 1e-6;
+  }
+  if (fp.kind === 'circle') {
+    const r = fp.r * S;
+    return (x, z) => x * x + z * z <= r * r + 1e-6;
+  }
+  if (fp.kind === 'ellipse') {
+    const rx = fp.rx * S, rz = fp.rz * S;
+    return (x, z) => (x / rx) ** 2 + (z / rz) ** 2 <= 1 + 1e-6;
+  }
+  const pts = fp.points;
+  return (x, z) => insidePoly(x / S, z / S, pts);
+}
+
+/** Ground heights (relative to the pad) on an n × n grid over the footprint, inside its shape only. */
+export function footprintGround(ctx: LandmarkContext, n = 10): number[] {
+  const { w, d: dd } = dims(ctx);
+  const inside = footprintTest(ctx.lm, ctx.S);
+  // Bounding box of the shape (polygons need not be centred on the origin).
+  const fp = localFootprint(ctx.lm);
+  let x0 = -w / 2, x1 = w / 2, z0 = -dd / 2, z1 = dd / 2;
+  if (fp.kind === 'poly') {
+    x0 = Math.min(...fp.points.map((p) => p[0])) * ctx.S; x1 = Math.max(...fp.points.map((p) => p[0])) * ctx.S;
+    z0 = Math.min(...fp.points.map((p) => p[1])) * ctx.S; z1 = Math.max(...fp.points.map((p) => p[1])) * ctx.S;
+  }
+  const out: number[] = [ctx.groundAt(0, 0)];
+  for (let i = 0; i <= n; i++) {
+    for (let j = 0; j <= n; j++) {
+      // Pull the outer rows in a little so a shape's rim counts but its bounding corners never do.
+      const x = (x0 + ((x1 - x0) * i) / n) * 0.99, z = (z0 + ((z1 - z0) * j) / n) * 0.99;
+      if (inside(x, z)) out.push(ctx.groundAt(x, z));
+    }
+  }
+  return out;
+}
+
+/** An atlas road crossing near a landmark, as a local (game m) segment with its half-width. */
+export interface LocalRoad {
+  id: string;
+  ax: number;
+  az: number;
+  bx: number;
+  bz: number;
+  half: number;
+}
+
+/** Segments of atlas roads within `margin` game m of the landmark's footprint, in its local frame. */
+export function roadsNear(lm: Pick<LandmarkData, 'id' | 'footprint' | 'rotation' | 'center'>, S: number, margin = 6): LocalRoad[] {
+  const R = footprintRadius(lm as LandmarkData) * S + margin;
+  const th = (lm.rotation * Math.PI) / 180;
+  const c = Math.cos(th), s = Math.sin(th);
+  const loc = ([x, z]: readonly [number, number]) => {
+    const dx = x - lm.center[0], dz = z - lm.center[1];
+    return [(dx * c + dz * s) * S, (-dx * s + dz * c) * S] as const;
+  };
+  const out: LocalRoad[] = [];
+  for (const r of ROADS) {
+    for (let i = 0; i < r.points.length - 1; i++) {
+      const [ax, az] = loc(r.points[i]);
+      const [bx, bz] = loc(r.points[i + 1]);
+      if (segDist(0, 0, ax, az, bx, bz) > R + (r.width * S) / 2) continue;
+      out.push({ id: r.id, ax, az, bx, bz, half: (r.width * S) / 2 });
+    }
+  }
+  return out;
+}
+
+/** Pure: distance from (x, z) to the segment a–b. */
+export function segDist(x: number, z: number, ax: number, az: number, bx: number, bz: number): number {
+  const dx = bx - ax, dz = bz - az;
+  const L2 = dx * dx + dz * dz;
+  const t = L2 > 0 ? Math.min(1, Math.max(0, ((x - ax) * dx + (z - az) * dz) / L2)) : 0;
+  return Math.hypot(ax + dx * t - x, az + dz * t - z);
+}
+
+/** True where (x, z) (local game m) lies on the carriageway of one of `roads` (grown by `pad`). */
+export function onRoad(roads: readonly LocalRoad[], x: number, z: number, pad = 0): boolean {
+  return roads.some((r) => segDist(x, z, r.ax, r.az, r.bx, r.bz) < r.half + pad);
+}
+
 // ---------------------------------------------------------------- terrain lift
 
 /** Builders that follow the terrain themselves (forts, terraced and self-founded monuments). */
 const NO_LIFT = new Set(['category:camp', 'category:garden', 'castra-praetoria', 'pyramid-cestius', 'monte-testaccio', 'naumachia-augusti', 'emporium', 'porticus-aemilia']);
 
 /**
- * Pure: how far to raise a landmark so no terrain pokes through its floor — the highest ground
- * under the footprint (given relative to the pad) less a small tolerance, or 0.
+ * Seating bowls are never lifted: they stand on their building pad. (Raising a Colosseum by the
+ * height of the slope at its bounding corners left its arcade on a blank plinth and a hollow
+ * footing the player could walk into under the arena.)
+ */
+export const NO_LIFT_CATEGORIES = new Set(['amphitheatre', 'circus', 'theatre', 'odeum', 'stadium', 'camp', 'garden']);
+
+/** The most a building is raised (game m); ground higher than that under it is cut into instead. */
+export const LIFT_CAP = 2;
+
+/**
+ * Pure: how far to raise a floor so no terrain pokes through it, from the highest ground under the
+ * footprint (relative to the pad) less a small tolerance, or 0.
  */
 export function groundLift(maxGround: number): number {
   return maxGround > 0.3 ? Math.round((maxGround - 0.05) * 100) / 100 : 0;
 }
 
 /**
- * Wrap a builder so that, where its landmark has no flattened pad (priority 3, big or unpadded
- * categories) and the ground under the footprint rises above the centre, the whole build is raised
- * to the highest ground: the builder sees the ground relative to the new floor (so its plinths reach
- * down to the low side), the object, colliders, spots and far stand-in move up together, and a flight
- * of steps climbs from the street in front of the facade to the raised floor.
+ * Pure: the lift for a set of ground samples taken inside the footprint. On gentle ground the floor
+ * goes up to the highest sample (nothing shows through it); where the ground rises more than
+ * `cap` the building is not made into a tower: it is lifted to the 75th percentile (at most `cap`)
+ * and the higher, uphill part is cut into the slope (`embedTerraces`).
+ */
+export function liftFor(samples: readonly number[], cap = LIFT_CAP): number {
+  if (!samples.length) return 0;
+  const sorted = [...samples].sort((a, b) => a - b);
+  const max = sorted[sorted.length - 1];
+  if (max <= cap) return Math.min(cap, groundLift(max));
+  const p75 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.75))];
+  return Math.min(cap, groundLift(p75));
+}
+
+/** A landmark context that knows its build was raised (so trees and lamps follow; generic-world). */
+export interface LiftedContext extends LandmarkContext {
+  liftY?: number;
+}
+
+/**
+ * Where the slope rises above the (lifted) floor inside the footprint, the building is cut into the
+ * hill: tufa retaining blocks fill those cells up to the ground (stepped every 0.25 m, merged along
+ * rows), so no grass shows through floors and walls, and the uphill rear reads as built into the
+ * slope. Heights are relative to the lifted floor.
+ */
+export function embedTerraces(d: Draw, ground: (x: number, z: number) => number, inside: (x: number, z: number) => boolean, x0: number, z0: number, x1: number, z1: number, cell = 2): number {
+  const nx = Math.max(1, Math.min(60, Math.round((x1 - x0) / cell)));
+  const nz = Math.max(1, Math.min(60, Math.round((z1 - z0) / cell)));
+  const cw = (x1 - x0) / nx, cd = (z1 - z0) / nz;
+  let blocks = 0;
+  for (let j = 0; j < nz; j++) {
+    const za = z0 + j * cd, zb = za + cd;
+    let run: { i0: number; top: number } | null = null;
+    const flush = (i: number) => {
+      if (!run) return;
+      const xa = x0 + run.i0 * cw, xb = x0 + i * cw;
+      d.span('tufa', xa, -0.3, za, xb, run.top, zb, { collide: true });
+      d.span('grass', xa + 0.02, run.top, za + 0.02, xb - 0.02, run.top + 0.04, zb - 0.02);
+      blocks++;
+      run = null;
+    };
+    for (let i = 0; i < nx; i++) {
+      const xa = x0 + i * cw, xb = xa + cw;
+      const cx = (xa + xb) / 2, cz = (za + zb) / 2;
+      let top = -Infinity;
+      if (inside(cx, cz)) for (const [x, z] of [[xa, za], [xb, za], [xa, zb], [xb, zb], [cx, cz]]) top = Math.max(top, ground(x, z));
+      const q = top > 0.35 ? Math.ceil((top + 0.05) / 0.25) * 0.25 : 0;
+      if (run && (q === 0 || q !== run.top)) flush(i);
+      if (q > 0 && !run) run = { i0: i, top: q };
+    }
+    flush(nx);
+  }
+  return blocks;
+}
+
+/** The four sides a flight or a spawn point can use: outward normal and the frame rotation facing it. */
+const SIDES = [
+  { nx: 0, nz: -1, rot: 0 },
+  { nx: 0, nz: 1, rot: Math.PI },
+  { nx: -1, nz: 0, rot: Math.PI / 2 },
+  { nx: 1, nz: 0, rot: -Math.PI / 2 },
+] as const;
+
+/** Distance from the centre to the footprint's edge along a side's normal (game m). */
+function edgeAlong(inside: (x: number, z: number) => boolean, nx: number, nz: number, max: number): number {
+  let r = 0;
+  while (r < max && inside(nx * (r + 0.25), nz * (r + 0.25))) r += 0.25;
+  return r;
+}
+
+/**
+ * Where to put things outside the footprint on a side (a flight up to a lifted floor, the spawn
+ * point): the first side, front first, whose rectangle [half-width × depth] beyond the edge is clear
+ * of neighbouring landmarks and of atlas roads. Returns the side and its edge distance.
+ */
+export function clearSide(ctx: LandmarkContext, halfW: number, depth: number, roads: readonly LocalRoad[], obs: [number, number][][]): { side: (typeof SIDES)[number]; edge: number } | null {
+  const inside = footprintTest(ctx.lm, ctx.S);
+  const { w, d: dd } = dims(ctx);
+  const clear = clearOf(obs);
+  for (const side of SIDES) {
+    const edge = edgeAlong(inside, side.nx, side.nz, Math.max(w, dd));
+    const tx = -side.nz, tz = side.nx; // along the edge
+    let ok = true;
+    for (const a of [-1, 0, 1]) {
+      for (const b of [0.15, 0.5, 1]) {
+        const x = side.nx * (edge + depth * b) + tx * halfW * a;
+        const z = side.nz * (edge + depth * b) + tz * halfW * a;
+        if (!clear(x, z) || onRoad(roads, x, z)) ok = false;
+      }
+    }
+    if (ok) return { side, edge };
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------- siting against the streets
+
+/** Categories that stand ACROSS a road (its passage on the road's line) rather than beside it. */
+export const PASSAGE_CATEGORIES = new Set(['arch', 'gate']);
+
+/** Categories (and custom ids) moved or trimmed off the atlas roads that run into their footprint. */
+const ROAD_SITED_CATEGORIES = new Set(['temple', 'basilica', 'curia', 'library', 'prison', 'palace', 'house', 'market', 'warehouse', 'portico', 'baths', 'camp', 'harbor', 'other', 'tomb', 'fountain', 'shrine', 'monument', 'column']);
+const ROAD_SITED_IDS = new Set(['thermae-suranae', 'privata-traiani', 'horrea-galbana', 'horrea-lolliana']);
+
+export interface Siting {
+  /** Local offset (game m) of the new centre. */
+  dx: number;
+  dz: number;
+  /** New rect size (game m), when trimmed. */
+  w?: number;
+  d?: number;
+  /** Road samples still covered after siting (0 = clear). */
+  left: number;
+}
+
+/**
+ * Pure: how to site a footprint (game m, centred, `inside` its shape) clear of road carriageways.
+ * First the smallest nudge (up to `maxShift`) that clears every road without pushing further into
+ * the neighbours (`blocked`), then, for rectangles, trimming the sides the roads run along (at most
+ * 40 % of each dimension). Returns null when no road touches it.
+ */
+export function roadSiting(
+  w: number, d: number, inside: (x: number, z: number) => boolean, rect: boolean,
+  onRoadAt: (x: number, z: number) => boolean, blocked: (x: number, z: number) => boolean, maxShift: number,
+): Siting | null {
+  const step = Math.max(1, Math.min(w, d) / 14);
+  const pts: [number, number][] = [];
+  for (let x = -w / 2; x <= w / 2 + 1e-6; x += step) for (let z = -d / 2; z <= d / 2 + 1e-6; z += step) if (inside(x * 0.999, z * 0.999)) pts.push([x * 0.98, z * 0.98]);
+  const count = (dx: number, dz: number, sx = 1, sz = 1, ox = 0, oz = 0) => {
+    let roads = 0, nb = 0;
+    for (const [x, z] of pts) {
+      const px = x * sx + ox + dx, pz = z * sz + oz + dz;
+      if (onRoadAt(px, pz)) roads++;
+      if (blocked(px, pz)) nb++;
+    }
+    return { roads, nb };
+  };
+  const base = count(0, 0);
+  if (base.roads === 0) return null;
+  // 1. Nudge: nearest offset first.
+  const offs: [number, number][] = [];
+  for (let dx = -maxShift; dx <= maxShift + 1e-6; dx += 0.5) for (let dz = -maxShift; dz <= maxShift + 1e-6; dz += 0.5) if (Math.hypot(dx, dz) <= maxShift) offs.push([dx, dz]);
+  offs.sort((a, b) => Math.hypot(a[0], a[1]) - Math.hypot(b[0], b[1]));
+  for (const [dx, dz] of offs) {
+    const c = count(dx, dz);
+    if (c.roads === 0 && c.nb <= base.nb) return { dx, dz, left: 0 };
+  }
+  if (!rect) return { dx: 0, dz: 0, left: base.roads };
+  // 2. Trim: greedily cut back whichever side clears the most road, 0.5 m at a time.
+  let x0 = -w / 2, x1 = w / 2, z0 = -d / 2, z1 = d / 2;
+  const roadsIn = (a: number, b: number, c: number, e: number) => count((a + b) / 2, (c + e) / 2, (b - a) / w, (e - c) / d).roads;
+  let left = base.roads;
+  for (let i = 0; i < 200 && left > 0; i++) {
+    const cands: [number, number, number, number][] = [[x0 + 0.5, x1, z0, z1], [x0, x1 - 0.5, z0, z1], [x0, x1, z0 + 0.5, z1], [x0, x1, z0, z1 - 0.5]];
+    let best: [number, number, number, number] | null = null;
+    let bestLeft = Infinity;
+    for (const cnd of cands) {
+      if (cnd[1] - cnd[0] < w * 0.6 || cnd[3] - cnd[2] < d * 0.6) continue;
+      const l = roadsIn(...cnd);
+      if (l < bestLeft) { bestLeft = l; best = cnd; }
+    }
+    if (!best) break;
+    [x0, x1, z0, z1] = best;
+    left = bestLeft;
+  }
+  return { dx: (x0 + x1) / 2, dz: (z0 + z1) / 2, w: x1 - x0, d: z1 - z0, left };
+}
+
+/**
+ * Pure: how to stand an arch or a gate on the road that runs through it: the foot of the
+ * perpendicular from its centre to the nearest road segment (the new centre, local game m), and
+ * the turn (radians, about +y) that lines its passage up with the road when the atlas facing is
+ * more than 20° off (both faces of a passage are alike, so the turn is within ±90°). Null when no
+ * road comes within reach.
+ */
+export function passageAlign(roads: readonly LocalRoad[], w: number, d: number): { x: number; z: number; rot: number } | null {
+  let best: { x: number; z: number; rot: number; dist: number } | null = null;
+  const reach = Math.max(w, d, 6);
+  for (const r of roads) {
+    const dx = r.bx - r.ax, dz = r.bz - r.az;
+    const L2 = dx * dx + dz * dz;
+    if (L2 < 1e-6) continue;
+    const t = Math.min(1, Math.max(0, -(r.ax * dx + r.az * dz) / L2));
+    const x = r.ax + dx * t, z = r.az + dz * t;
+    const dist = Math.hypot(x, z);
+    if (dist > reach) continue;
+    let rot = Math.atan2(dx, dz);
+    if (rot > Math.PI / 2) rot -= Math.PI;
+    if (rot <= -Math.PI / 2) rot += Math.PI;
+    if (Math.abs(rot) < 0.35) rot = 0;
+    if (!best || dist < best.dist - 0.5 || (Math.abs(dist - best.dist) <= 0.5 && Math.abs(rot) < Math.abs(best.rot))) best = { x, z, rot, dist };
+  }
+  return best && { x: best.x, z: best.z, rot: best.rot };
+}
+
+/**
+ * A copy of the landmark with its centre moved by a local offset (game m), optionally a new rect
+ * size, and turned by `rot` radians about +y (its bearing changes by −rot in degrees).
+ */
+function movedLandmark(lm: LandmarkData, S: number, dx: number, dz: number, w?: number, d?: number, rot = 0): LandmarkData {
+  const th = (lm.rotation * Math.PI) / 180;
+  const c = Math.cos(th), s = Math.sin(th);
+  const lx = dx / S, lz = dz / S;
+  const center: [number, number] = [lm.center[0] + lx * c - lz * s, lm.center[1] + lx * s + lz * c];
+  const footprint = w !== undefined && d !== undefined && lm.footprint.kind === 'rect' ? { kind: 'rect' as const, w: w / S, d: d / S } : lm.footprint;
+  const rotation = lm.rotation - (rot * 180) / Math.PI;
+  if (lm.footprint.kind === 'poly') {
+    // Polygons are in absolute coordinates: move every vertex with the centre (never turned).
+    const ox = center[0] - lm.center[0], oz = center[1] - lm.center[1];
+    return { ...lm, center, footprint: { kind: 'poly', points: lm.footprint.points.map(([x, z]) => [x + ox, z + oz] as [number, number]) } };
+  }
+  return { ...lm, center, footprint, rotation };
+}
+
+/**
+ * Wrap a builder so it sits properly in the city:
+ * - streets first: an arch or a gate slides along its facade so its passage lies on the road that
+ *   runs through it; other buildings are nudged (or, failing that, trimmed) off the carriageways of
+ *   the atlas roads that run into their footprint, so streets stay open (atlas conflicts that
+ *   cannot be resolved are left as they are);
+ * - the ground is sampled inside the footprint SHAPE only and the build is raised by `liftFor`
+ *   (to the highest ground on gentle slopes, never more than LIFT_CAP); seating bowls, forts,
+ *   gardens and self-founded monuments are never raised;
+ * - the builder sees the ground relative to the new floor (so its plinths reach down to the low
+ *   side), and the object, colliders, spots, trees, lamps and far stand-in move together;
+ * - any ground still above the floor (the uphill rear on a steep site) is cut in with terraces;
+ * - a short flight climbs from the street to a raised floor, on the first side (front first) that
+ *   is clear of neighbours and roads;
+ * - a `spawn` spot is added on clear ground outside the building (GameFlow's `&at=<id>` uses it),
+ *   unless the builder made its own.
  */
 export function lifted(b: LandmarkBuilder): LandmarkBuilder {
-  if (b.handles.some((h) => NO_LIFT.has(h))) return b;
   return {
     handles: b.handles,
-    build(ctx: LandmarkContext): LandmarkBuild {
-      const lm = ctx.lm;
-      if (sitingOf(lm) !== 'pad' || NO_LIFT.has(lm.id)) return b.build(ctx);
-      const { w, d: dd } = dims(ctx);
-      const lift = groundLift(groundRange(ctx, -w / 2, -dd / 2, w / 2, dd / 2, 8).max);
-      if (lift <= 0) return b.build(ctx);
-      const r = b.build({ ...ctx, groundAt: (x, z) => ctx.groundAt(x, z) - lift });
-      const up = new THREE.Matrix4().makeTranslation(0, lift, 0);
-      const root = new THREE.Group();
-      r.object.position.y += lift;
-      root.add(r.object);
-      const colliders = r.colliders.map((c) => transformCollider(c, up));
-      // Steps up from the street in front of the facade.
-      const sb = new MeshBuilder();
-      const sd = new Draw(sb);
-      const L = flightLength(lift);
-      const y0 = Math.min(lift - 0.05, ctx.groundAt(0, -dd / 2 - L / 2));
-      if (lift - y0 > 0.1) {
-        const sw = Math.min(w * 0.5, 12);
-        flight(sd, 0, -dd / 2 - flightLength(lift - y0), sw, y0, lift, 'travertine');
-        sd.span('travertine', -sw / 2, Math.min(y0, ctx.groundAt(0, -dd / 2 - 0.5)) - 0.5, -dd / 2 - flightLength(lift - y0), sw / 2, y0, -dd / 2);
-        root.add(sb.build(`${lm.id}:lift`));
-        colliders.push(...sb.colliders);
+    build(ctx0: LandmarkContext): LandmarkBuild {
+      const lm0 = ctx0.lm;
+      const S = ctx0.S;
+      const custom = !b.handles[0].startsWith('category:');
+      // 1. Streets.
+      let ox = 0, oz = 0, rot = 0;
+      let lm = lm0;
+      const d0 = dims(ctx0);
+      const roads0 = roadsNear(lm0, S, 0);
+      if (roads0.length && !custom && PASSAGE_CATEGORIES.has(lm0.category) && lm0.footprint.kind !== 'poly') {
+        const a = passageAlign(roads0, d0.w, d0.d);
+        if (a && (Math.hypot(a.x, a.z) > 0.3 || a.rot)) {
+          ox = a.x;
+          oz = a.z;
+          rot = a.rot;
+          lm = movedLandmark(lm0, S, ox, oz, undefined, undefined, rot);
+        }
+      } else if (roads0.length && (custom ? ROAD_SITED_IDS.has(lm0.id) : ROAD_SITED_CATEGORIES.has(lm0.category)) && sitingOf(lm0) !== 'open' && sitingOf(lm0) !== 'underground') {
+        const near = clearOf(obstacles(ctx0, 0, false));
+        // Small things (a shrine, a temple at a crossroads) may move further than big ones.
+        const big = Math.max(d0.w, d0.d);
+        const maxShift = d0.w * d0.d < 500 ? Math.max(12, 0.9 * big) : Math.min(12, 0.35 * big);
+        const sited = roadSiting(d0.w, d0.d, footprintTest(lm0, S), lm0.footprint.kind === 'rect', (x, z) => onRoad(roads0, x, z, 0.4), (x, z) => !near(x, z), maxShift);
+        if (sited && (sited.dx || sited.dz || sited.w)) {
+          ox = sited.dx;
+          oz = sited.dz;
+          lm = movedLandmark(lm0, S, ox, oz, sited.w, sited.d);
+        }
       }
-      const spots = (r.spots ?? []).map((s) => ({ ...s, position: s.position.clone().setY(s.position.y + lift) }));
+      const cr = Math.cos(rot), sr = Math.sin(rot);
+      // Builder frame → this landmark's (atlas) frame: turn by `rot`, then move by (ox, oz).
+      const toAtlas = (x: number, z: number): [number, number] => [x * cr + z * sr + ox, -x * sr + z * cr + oz];
+      const ctx: LandmarkContext = lm === lm0 ? ctx0 : { ...ctx0, lm, groundAt: (x, z) => ctx0.groundAt(...toAtlas(x, z)) };
+      // The new centre's ground relative to the old pad (trees and lamps measure from the centre).
+      const g0 = ctx0.groundAt(ox, oz);
+      // 2. Ground.
+      const noLift = b.handles.some((h) => NO_LIFT.has(h)) || NO_LIFT.has(lm.id) || NO_LIFT_CATEGORIES.has(lm.category) || sitingOf(lm) !== 'pad';
+      const samples = noLift ? [] : footprintGround(ctx);
+      const lift = noLift ? 0 : liftFor(samples);
+      const maxGround = samples.length ? Math.max(...samples) : 0;
+      const moved = lift > 0 || ox !== 0 || oz !== 0 || rot !== 0;
+      const r = moved ? b.build({ ...ctx, liftY: lift - g0, groundAt: (x, z) => ctx.groundAt(x, z) - lift } as LiftedContext) : b.build(ctx);
+      const turn = new THREE.Matrix4().makeRotationY(rot);
+      const up = new THREE.Matrix4().makeTranslation(ox, lift, oz).multiply(turn);
+      const flat = new THREE.Matrix4().makeTranslation(ox, 0, oz).multiply(turn);
+      const spots = (r.spots ?? []).map((q) => (moved ? { ...q, position: q.position.clone().applyMatrix4(up), heading: (q.heading ?? 0) + rot } : q));
+      // From here on, work in the builder's frame (the moved centre), then shift everything.
+      const { w, d: dd } = dims(ctx);
+      const roads = roadsNear(lm, S, 4);
+      const obs = obstacles(ctx, 0.6, false);
+      const extra = new MeshBuilder();
+      const ed = new Draw(extra);
+      const inside = footprintTest(lm, S);
+      if (!noLift && maxGround - lift > 0.35) {
+        const fp = localFootprint(lm);
+        const xs = fp.kind === 'poly' ? fp.points.map((p) => p[0] * S) : [-w / 2, w / 2];
+        const zs = fp.kind === 'poly' ? fp.points.map((p) => p[1] * S) : [-dd / 2, dd / 2];
+        embedTerraces(ed.at(0, lift, 0), (x, z) => ctx.groundAt(x, z) - lift, inside, Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs));
+      }
+      // Steps from the street to a raised floor.
+      let stepSide: ReturnType<typeof clearSide> = null;
+      if (lift > 0) {
+        const sw = Math.min(Math.max(w, dd) * 0.4, 8, w * 0.8);
+        const L = flightLength(lift) + 0.5;
+        stepSide = clearSide(ctx, sw / 2 + 0.5, L + 1.5, roads, obs) ?? { side: SIDES[0], edge: edgeAlong(inside, 0, -1, dd) };
+        const { side, edge } = stepSide;
+        const f = ed.at(side.nx * edge, 0, side.nz * edge, side.rot);
+        const footG = ctx.groundAt(side.nx * (edge + L * 0.6), side.nz * (edge + L * 0.6));
+        const y0 = Math.min(lift - 0.05, footG);
+        if (lift - y0 > 0.1) {
+          const len = flightLength(lift - y0);
+          flight(f, 0, -len, sw, y0, lift, 'travertine');
+          f.span('travertine', -sw / 2, Math.min(y0, footG) - 0.5, -len, sw / 2, y0, 0.3);
+          // Cheeks either side of the flight, down to the ground.
+          for (const sx of [-1, 1]) f.span('travertine', sx * (sw / 2) - (sx > 0 ? 0 : 0.35), Math.min(y0, footG) - 0.5, -len, sx * (sw / 2) + (sx > 0 ? 0.35 : 0), lift + 0.15, 0.3, { collide: true });
+        }
+      }
+      // Spawn point on clear ground outside (unless the builder has one): never inside a neighbour,
+      // on a road's carriageway is fine, never inside one of the build's own solids (an altar, a
+      // flight, a statue base).
+      if (!spots.some((q) => q.kind === 'spawn')) {
+        const clear = clearOf(obs);
+        const liftUp = new THREE.Matrix4().makeTranslation(0, lift, 0);
+        const solids = [...r.colliders.map((c) => (lift > 0 ? transformCollider(c, liftUp) : c)), ...extra.colliders];
+        const first = stepSide?.side ?? clearSide(ctx, 1.2, 4, roads, obs)?.side ?? SIDES[0];
+        let best: [number, number] | null = null;
+        for (const side of [first, ...SIDES.filter((q) => q !== first)]) {
+          const edge = edgeAlong(inside, side.nx, side.nz, Math.max(w, dd));
+          for (const out of [2.5, 4.5, 7, 10]) {
+            const x = side.nx * (edge + out), z = side.nz * (edge + out);
+            if (!clear(x, z, 0.6) || solidAt(solids, x, z, ctx.groundAt(x, z))) continue;
+            best = [x, z];
+            break;
+          }
+          if (best) break;
+        }
+        const [x, z] = best ?? [0, -edgeAlong(inside, 0, -1, dd) - 3];
+        const [ax, az] = toAtlas(x, z);
+        // Heading (+Z model convention) toward the building's centre.
+        spots.push(spot(`${lm.id}:spawn`, 'spawn', ax, ctx.groundAt(x, z), az, Math.atan2(-x, -z) + rot));
+      }
+      if (!moved && extra.isEmpty) return { ...r, spots };
+      const root = new THREE.Group();
+      const inner = new THREE.Group();
+      inner.position.set(ox, lift, oz);
+      inner.rotation.y = rot;
+      inner.add(r.object);
+      root.add(inner);
+      const colliders = moved ? r.colliders.map((c) => transformCollider(c, up)) : [...r.colliders];
+      if (!extra.isEmpty) {
+        const eo = extra.build(`${lm.id}:footing`, NEAR_BUILD);
+        eo.position.set(ox, 0, oz);
+        eo.rotation.y = rot;
+        root.add(eo);
+        colliders.push(...extra.colliders.map((c) => transformCollider(c, flat)));
+      }
       let far = r.far;
-      if (far) {
+      if (far && moved) {
         const fg = new THREE.Group();
-        far.position.y += lift;
-        fg.add(far);
+        const fi = new THREE.Group();
+        fi.position.set(ox, lift, oz);
+        fi.rotation.y = rot;
+        fi.add(far);
+        fg.add(fi);
         far = fg;
       }
       return { ...r, object: root, colliders, spots, far };
     },
   };
+}
+
+/** True if one of `solids` (box/cylinder colliders) stands over (x, z) above `ground` + 0.3, with 0.5 m to spare. */
+export function solidAt(solids: readonly ColliderSpec[], x: number, z: number, ground: number): boolean {
+  const p = new THREE.Vector3();
+  const q = new THREE.Quaternion();
+  for (const c of solids) {
+    if (c.kind === 'box') {
+      if (c.center.y + c.half.y < ground + 0.3 || c.center.y - c.half.y > ground + 2) continue;
+      p.set(x - c.center.x, 0, z - c.center.z).applyQuaternion(q.copy(c.rotation ?? q.identity()).invert());
+      if (Math.abs(p.x) < c.half.x + 0.5 && Math.abs(p.z) < c.half.z + 0.5) return true;
+    } else if (c.kind === 'cylinder') {
+      if (c.center.y + c.halfHeight < ground + 0.3 || c.center.y - c.halfHeight > ground + 2) continue;
+      if (Math.hypot(x - c.center.x, z - c.center.z) < c.radius + 0.5) return true;
+    }
+  }
+  return false;
 }
 
 /** Apply `lifted` to a list of builders (each file's export). */

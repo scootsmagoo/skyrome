@@ -16,10 +16,11 @@ import { plainArch, triumphalArch } from '../../../arch/classical/arch';
 import { lathe, ProfileBuilder } from '../../../arch/common/geom';
 import type { Draw } from '../../../arch/fabric/draw';
 import type { MaterialId } from '../../../gfx/materialIds';
-import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
+import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, LandmarkData, Spot } from '../types';
 import {
-  T, TRS, V, altar, broadTree, crenellations, cypress, dims, draw, farDraw, finish, flight, heightG, hintsOf, inscription, mul, plinth, pool,
-  railing, roundBasin, spot, statueOnPedestal, tiledRoof, wallRun, type Detail, type Hints, liftAll,
+  T, TRS, V, altar, broadTree, clearOf, crenellations, cypress, dims, draw, farDraw, finish, flight, flightLength, heightG, hintsOf, inscription, mul,
+  obstacles, onRoad, parseHints, plinth, pool, railing, roadsNear, roundBasin, spot, statueOnPedestal, tiledRoof, wallRun, type Detail, type Hints,
+  type LiftedContext, liftAll,
 } from './generic-common';
 import { liteColonnade } from './generic-civic-lib';
 import { lamp, tree } from './generic-world';
@@ -49,7 +50,14 @@ export interface FitOptions {
   statues?: boolean;
   /** For lights: with a context the altar gets a live fire (light pool). */
   ctx?: LandmarkContext;
+  /** Reserve this much (game m) at the front of the rectangle for the altar; the temple fits behind. */
+  altarZone?: number;
+  /** Put the altar here instead (frame z of its centre, ground y), e.g. outside the footprint. */
+  altarAt?: { z: number; y: number };
 }
+
+/** Columns thinner than this (game m, ~0.4 m radius) are always built at 'low' detail. */
+export const HIGH_COLUMN_MIN_D = 0.8;
 
 /**
  * Pure: a temple spec whose podium + stairs fill a w × d (game m) rectangle. Returns the spec, the
@@ -78,7 +86,9 @@ export function fitTemple(w: number, d: number, o: FitOptions): { spec: TempleSp
       sides = Math.max(minSides, sides);
       const spec = { ...base, sides };
       let layout = templeLayout(spec);
-      if (spec.detail === 'high' && layout.columns.length > (o.maxHighColumns ?? 6)) {
+      // Fluted high-detail columns cost ~6k triangles each whatever their size: only big ones,
+      // and only a few, earn them (a 0.25 m shrine column at high detail is 35k for six).
+      if (spec.detail === 'high' && (layout.columns.length > (o.maxHighColumns ?? 6) || layout.D < HIGH_COLUMN_MIN_D)) {
         spec.detail = 'low';
         spec.fluted = false;
         layout = templeLayout(spec);
@@ -122,7 +132,10 @@ export function friezeDedication(d: Draw, L: TempleLayout, offsetZ: number, line
 
 /** A temple fitted to a local rectangle centred at (cx, cz) and facing −z of the frame `d`. */
 export function fittedTemple(d: Draw, w: number, dd: number, o: FitOptions, id: string, withAltar = true): TempleBuild {
-  const fit = fitTemple(w, dd, o);
+  // An altar zone in front: the temple fits the rest of the depth, pushed back.
+  const zone = withAltar && !o.altarAt && o.altarZone ? Math.min(o.altarZone, dd * 0.4) : 0;
+  const fit0 = fitTemple(w, dd - zone, o);
+  const fit = { ...fit0, offsetZ: fit0.offsetZ + zone / 2 };
   temple(d.b, fit.spec, mul(d.m, T(0, 0, fit.offsetZ)));
   const L = fit.layout;
   const front = fit.offsetZ + L.podiumFront;
@@ -132,22 +145,64 @@ export function fittedTemple(d: Draw, w: number, dd: number, o: FitOptions, id: 
   spots.push(spot(`${id}:door`, 'door', 0, P, fit.offsetZ + L.cella.z0 - 0.6, Math.PI));
   spots.push(spot(`${id}:steps`, 'sit', L.stairs.x0 + 0.6, L.stairs.rise * Math.floor(L.stairs.count / 3), front + L.stairs.run * Math.floor(L.stairs.count / 3) + 0.15, Math.PI));
   if (o.dedication?.length) friezeDedication(d, L, fit.offsetZ, o.dedication, o.material === 'plaster_white' || o.material === 'travertine' ? '#ece5d4' : '#ebe7df');
-  if (withAltar && front + dd / 2 > 3.2) {
-    const z = (front - dd / 2) / 2;
-    altar(d, 0, 0, z, 1.6, 1.0, 1.0, o.material === 'plaster_white' ? 'travertine' : 'marble');
-    spots.push(spot(`${id}:altar`, 'shrine', 0, 0, z - 1.6, 0));
-    if (o.ctx) {
-      // Embers on the altar (always burning: offerings go on at dawn).
-      d.cyl('glow_fire', 0, 1.24, z, 0.32, 0.08, 7);
-      d.cyl('glow_fire', 0, 1.42, z, 0.18, 0.3, 6, { rTop: 0.02 });
-      lamp(o.ctx, d, 0, 1.6, z, { kind: 'fire', intensity: 20, distance: 12, flicker: 0.5, glow: 0.45 });
-    }
+  const site = o.altarAt ?? (front + dd / 2 > 3.2 ? { z: (front - dd / 2) / 2, y: 0 } : null);
+  if (withAltar && site) {
+    burningAltar(d, 0, site.y, site.z, o.material === 'plaster_white' ? 'travertine' : 'marble', o.ctx);
+    spots.push(spot(`${id}:altar`, 'shrine', 0, site.y, site.z - 1.6, 0));
   }
   if (o.statues && L.stairs.count > 0) {
     const sx = (L.stairs.x1 - L.stairs.x0) / 2 + 0.9;
     for (const s of [-1, 1]) statueOnPedestal(d, 'togate', s * Math.min(sx, w / 2 - 0.8), 0, front - 1.0, 0, 1.0, 'bronze', 'low', 1.2, 'marble');
   }
   return { layout: L, offsetZ: fit.offsetZ, front, spots };
+}
+
+/**
+ * The altar in front of a temple with its embers always burning (offerings go on at dawn): the
+ * glowing coals are geometry, and with a game context a live fire joins the light pool.
+ */
+export function burningAltar(d: Draw, x: number, y: number, z: number, mat: MaterialId = 'marble', ctx?: LandmarkContext, size = 1) {
+  altar(d, x, y, z, 1.6 * size, 1.0 * size, 1.0 * size, mat);
+  const top = y + 0.2 + 1.0 * size;
+  d.cyl('glow_fire', x, top + 0.04, z, 0.32 * size, 0.08, 7);
+  d.cyl('glow_fire', x, top + 0.22, z, 0.18 * size, 0.3, 6, { rTop: 0.02 });
+  if (ctx) lamp(ctx, d, x, top + 0.4, z, { kind: 'fire', intensity: 20, distance: 12, flicker: 0.5, glow: 0.45 });
+}
+
+/**
+ * Where a temple's altar can stand OUTSIDE its footprint, in front of the stairs (and of any flight
+ * up to a lifted floor): clear of neighbouring landmarks and atlas roads and on level-enough ground.
+ * Returns the local z of the altar centre and its ground height, or null.
+ */
+export function altarSite(ctx: LandmarkContext, front: number): { z: number; y: number } | null {
+  const lift = (ctx as LiftedContext).liftY ?? 0;
+  const z = front - (lift > 0 ? flightLength(lift) + 0.8 : 0) - 2.6;
+  const clear = clearOf(obstacles(ctx, 0.3));
+  const roads = roadsNear(ctx.lm, ctx.S, 2);
+  const pts: [number, number][] = [[-1.4, z - 1.1], [1.4, z - 1.1], [-1.4, z + 1.1], [1.4, z + 1.1], [0, z], [0, z - 2.2]];
+  if (pts.some(([x, zz]) => !clear(x, zz) || onRoad(roads, x, zz, 0.3))) return null;
+  const g = pts.map(([x, zz]) => ctx.groundAt(x, zz));
+  if (Math.max(...g) - Math.min(...g) > 0.6) return null;
+  return { z, y: Math.min(...g) };
+}
+
+/** Minimum footprint depth (game m) for a category temple to get an altar and its fire. */
+export const ALTAR_MIN_DEPTH = 9;
+
+/** What a temple footprint is built as: a round temple, a porticoed precinct round a temple, or a temple. */
+export function templeKind(lm: LandmarkData, h: Hints, w: number, dd: number): 'round' | 'precinct' | 'temple' {
+  // Only what describes the landmark itself counts: notes often go on about its neighbours ("the
+  // precinct also holds the temples of Fides and Ops…" made the Capitolium a small temple in a stoa).
+  const own = selfHints(lm);
+  if (lm.footprint.kind === 'circle' || lm.footprint.kind === 'ellipse' || (h.round && !own.has('precinct') && w < 30)) return 'round';
+  if ((w > 34 && dd > 34) || (own.has('precinct', 'porticoed', 'platform', 'terrace') && w > 24 && dd > 24)) return 'precinct';
+  return 'temple';
+}
+
+/** Hints from the name, description and those note sentences that are about the landmark itself. */
+export function selfHints(lm: Pick<LandmarkData, 'name' | 'description' | 'builderNotes'>): Hints {
+  const own = lm.builderNotes.split(/(?<=\.)\s+/).filter((sentence) => !/\b(also|beside|nearby|near the|next to|neighbou?r|plus)\b|\btemples? of\b/i.test(sentence)).join(' ');
+  return parseHints({ name: lm.name, description: lm.description, builderNotes: own });
 }
 
 function buildTemple(ctx: LandmarkContext): LandmarkBuild {
@@ -158,24 +213,41 @@ function buildTemple(ctx: LandmarkContext): LandmarkBuild {
   const spots: Spot[] = [];
   const far = farDraw();
   const mats = templeMaterials(h);
-  const round = lm.footprint.kind === 'circle' || lm.footprint.kind === 'ellipse' || (h.round && !h.has('precinct') && w < 30);
-  const precinct = !round && ((w > 34 && dd > 34) || (h.has('precinct', 'porticoed', 'platform', 'terrace') && w > 24 && dd > 24));
-  if (round) {
+  const kind = templeKind(lm, h, w, dd);
+  if (kind === 'round') {
     const R = Math.min(w, dd) / 2;
     const steps = h.has('crepidoma', 'steps all round');
     // A ring of 16–20 fluted columns at high detail is ~150k triangles: keep the columns light.
     const res = tholos(d.b, { radius: R * 0.78, columns: R > 6 ? 20 : 16, order: h.order ?? 'corinthian', base: steps ? 'steps' : 'podium', material: mats.material, cellaMaterial: mats.cellaMaterial, podiumMaterial: mats.podiumMaterial, detail: 'low' }, d.m);
     spots.push(spot(`${lm.id}:door`, 'door', 0, res.baseHeight, -R * 0.5, Math.PI));
+    if (h.has('vesta', 'eternal', 'sacred fire', 'hearth')) {
+      // The sacred hearth burns inside the round cella, never let out.
+      d.cyl('travertine', 0, res.baseHeight + 0.25, 0, 0.7, 0.5, 10, { collide: true });
+      d.cyl('glow_fire', 0, res.baseHeight + 0.55, 0, 0.45, 0.1, 8);
+      d.cyl('glow_fire', 0, res.baseHeight + 0.85, 0, 0.25, 0.5, 6, { rTop: 0.02 });
+      lamp(ctx, d, 0, res.baseHeight + 1.2, 0, { kind: 'fire', intensity: 18, distance: 9, flicker: 0.5, glow: 0.4, dayScale: 1 });
+      spots.push(spot(`${lm.id}:hearth`, 'shrine', 0, res.baseHeight, -R * 0.3, 0));
+    }
+    const site = R * 2 >= ALTAR_MIN_DEPTH * 0.6 ? altarSite(ctx, -R) : null;
+    if (site) {
+      burningAltar(d, 0, site.y, site.z, mats.material === 'plaster_white' ? 'travertine' : 'marble', ctx);
+      spots.push(spot(`${lm.id}:altar`, 'shrine', 0, site.y, site.z - 1.6, 0));
+    }
     far.cyl(mats.material ?? 'marble', 0, res.height * 0.4, 0, R * 0.8, res.height * 0.8, 10);
     far.cyl('roof_tile', 0, res.height * 0.9, 0, R * 0.85, res.height * 0.2, 10, { rTop: 0.2 });
     return finish(lm.id, d, spots, far);
   }
-  if (precinct) return buildPrecinct(ctx, d, h, w, dd, mats, far);
+  if (kind === 'precinct') return buildPrecinct(ctx, d, h, w, dd, mats, far);
   plinth(d, ctx, -w / 2, -dd / 2, w / 2, dd / 2, 0.02, mats.podiumMaterial ?? 'travertine');
+  // Every temple of some size gets its altar: outside in front where that is clear, else in a zone
+  // kept free at the front of the footprint.
+  const wantAltar = dd >= ALTAR_MIN_DEPTH;
+  const outside = wantAltar ? altarSite(ctx, -dd / 2) : null;
   const t = fittedTemple(d, w, dd, {
     ...mats, order: h.order ?? (h.republican ? 'ionic' : 'corinthian'), plan: h.plan, front: h.front, detail, maxHighColumns: lm.priority >= 3 ? 4 : 6,
-    dedication: [lm.latin.split('/')[0].trim()], statues: detail === 'high' && w > 10, ctx,
-  }, lm.id);
+    dedication: [lm.latin.split('/')[0].trim()], statues: detail === 'high' && w > 10 && !outside, ctx,
+    altarAt: outside ?? undefined, altarZone: wantAltar && !outside ? 4.6 : undefined,
+  }, lm.id, wantAltar);
   spots.push(...t.spots);
   // Far: podium + cella block + roof.
   const L = t.layout;
@@ -215,7 +287,7 @@ function buildPrecinct(ctx: LandmarkContext, d: Draw, h: Hints, w: number, dd: n
     spots.push(...t.spots.map((s) => ({ ...s, position: s.position.clone().add(V(0, 0.12, tz)) })));
     far.span('marble', -tw / 2, 0, tz - td / 2, tw / 2, t.layout.totalHeight * 0.8, tz + td / 2);
   }
-  altar(d, 0, 0.12, tz - td / 2 - 4, 2, 1.2, 1.1);
+  burningAltar(d, 0, 0.12, tz - td / 2 - 4, 'marble', ctx, 1.2);
   spots.push(spot(`${lm.id}:altar`, 'shrine', 0, 0.12, tz - td / 2 - 6, 0), spot(`${lm.id}:gate`, 'door', 0, 0, -dd / 2 - 0.5, 0));
   far.span('plaster_cream', -w / 2, 0, -dd / 2, w / 2, wallH, -dd / 2 + 1);
   far.span('plaster_cream', -w / 2, 0, dd / 2 - 1, w / 2, wallH, dd / 2);
@@ -256,6 +328,7 @@ function buildShrine(ctx: LandmarkContext): LandmarkBuild {
   if (open) {
     // Sacred ground or grove: low boundary wall with a gate, an altar, a spring basin, an aedicula.
     const wallH = 0.9;
+    const roads = roadsNear(lm, ctx.S, 0);
     const pts: [number, number][] = [[-w / 2, -dd / 2], [w / 2, -dd / 2], [w / 2, dd / 2], [-w / 2, dd / 2]];
     for (let i = 0; i < 4; i++) {
       const [ax, az] = pts[i];
@@ -265,6 +338,7 @@ function buildShrine(ctx: LandmarkContext): LandmarkBuild {
         if (i === 0 && k === Math.floor(segs / 2)) continue; // gate gap in the front
         const x0 = ax + ((bx - ax) * k) / segs, z0 = az + ((bz - az) * k) / segs;
         const x1 = ax + ((bx - ax) * (k + 1)) / segs, z1 = az + ((bz - az) * (k + 1)) / segs;
+        if ([0, 0.5, 1].some((f) => onRoad(roads, x0 + (x1 - x0) * f, z0 + (z1 - z0) * f, 0.6))) continue; // a street runs through
         const gy = Math.min(g(x0, z0), g(x1, z1));
         wallRun(d, x0, z0, x1, z1, gy - 0.3, gy + wallH, 0.45, 'tufa');
       }
@@ -659,9 +733,12 @@ export function drumTomb(d: Draw, R: number, H: number, detail: Detail, ctx: Lan
 function necropolis(ctx: LandmarkContext, d: Draw, w: number, dd: number, detail: Detail, spots: Spot[]) {
   const rng = ctx.rng.fork('tombs');
   const n = Math.min(detail === 'high' ? 70 : 30, Math.round((w * dd) / 90));
+  // The tombs line the roads; they never stand on them.
+  const roads = roadsNear(ctx.lm, ctx.S, 0);
   for (let i = 0; i < n; i++) {
     const x = rng.range(-w / 2 + 2, w / 2 - 2);
     const z = rng.range(-dd / 2 + 2, dd / 2 - 2);
+    if (onRoad(roads, x, z, 3)) continue;
     const y = ctx.groundAt(x, z);
     const r = rng.next();
     const rot = rng.range(-0.15, 0.15);
@@ -710,8 +787,10 @@ function buildArch(ctx: LandmarkContext): LandmarkBuild {
     spots.push(spot(`${lm.id}:passage`, 'vista', 0, 0, -dd / 2 - 1.5, 0));
     return finish(lm.id, d, spots);
   }
-  const W = triple ? w / 3.96 : w / 2.52;
-  triumphalArch(d.b, { bays: triple ? 3 : 1, span: Math.max(2.6, W), material: 'marble', detail, inscription: ['Senatus Populusque Romanus', latin], quadriga: H > 10 }, d.m);
+  const W = Math.max(2.6, triple ? w / 3.96 : w / 2.52);
+  // The engaged columns (1.18 W tall) are thin at this scale: keep the reliefs, not the flutes.
+  const colD = diameterForHeight('composite', 1.18 * W) * 1.02;
+  triumphalArch(d.b, { bays: triple ? 3 : 1, span: W, material: 'marble', detail, columnDetail: colD < HIGH_COLUMN_MIN_D ? 'low' : detail, inscription: ['Senatus Populusque Romanus', latin], quadriga: H > 10 }, d.m);
   spots.push(spot(`${lm.id}:inscription`, 'inscription', 0, 0, -Math.max(dd, W) - 2, 0));
   return finish(lm.id, d, spots);
 }

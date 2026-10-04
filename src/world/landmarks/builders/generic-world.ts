@@ -38,6 +38,8 @@ export interface LampOptions {
   flicker?: number;
   priority?: number;
   glow?: number;
+  /** Fires: share of the light kept in daylight (1 for a hearth inside a dark cella). */
+  dayScale?: number;
 }
 
 interface QueuedLamp extends LampOptions {
@@ -70,6 +72,7 @@ class LandmarkExtras implements System {
           night: (l.kind ?? 'lamp') === 'lamp',
           priority: l.priority ?? 1,
           glow: l.glow ?? 0.32,
+          dayScale: l.dayScale,
         });
       }
       this.lamps = [];
@@ -98,7 +101,8 @@ function extras(game: Game): LandmarkExtras | null {
 export function landmarkToWorld(ctx: LandmarkContext, local: THREE.Vector3, out = new THREE.Vector3()): THREE.Vector3 {
   const [gx, gz] = toGame(ctx.lm.center[0], ctx.lm.center[1]);
   const hm = (ctx.game as Partial<Game> & { heightmap?: { heightAt(x: number, z: number): number } }).heightmap;
-  const baseY = hm ? hm.heightAt(gx, gz) : 0;
+  // A lifted build (generic-common `lifted`) draws relative to its raised floor.
+  const baseY = (hm ? hm.heightAt(gx, gz) : 0) + ((ctx as LandmarkContext & { liftY?: number }).liftY ?? 0);
   const r = bearingToRotationY(ctx.lm.rotation);
   const c = Math.cos(r), s = Math.sin(r);
   return out.set(gx + local.x * c + local.z * s, baseY + local.y, gz - local.x * s + local.z * c);

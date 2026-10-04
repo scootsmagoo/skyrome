@@ -376,7 +376,13 @@ export function substructureFacade(d: Draw, ctx: LandmarkContext, w: number, z: 
     const minG = Math.min(...prof);
     if (minG > -3) continue;
     let k = prof.findIndex((g) => g <= minG * 0.82);
-    while (k > 0 && !free(xm, z - k * 1.5 - 2, 1)) k--;
+    // The whole terrace (all along the run, out to 2 m past its edge) must stay off neighbours and
+    // streets (the Clivus Victoriae under the Domus Tiberiana).
+    const clearTo = (kk: number) => {
+      for (let j = 0; j <= kk * 1.5 + 2; j += 1) for (const x of [x0 + 0.5, xm, x1 - 0.5]) if (!free(x, z - j, 0.5)) return false;
+      return true;
+    };
+    while (k > 0 && !clearTo(k)) k--;
     const zf = z - k * 1.5;
     let lo = 0;
     for (let j = 0; j <= 4; j++) lo = Math.min(lo, ctx.groundAt(x0 + ((x1 - x0) * j) / 4, zf - 1.2));
