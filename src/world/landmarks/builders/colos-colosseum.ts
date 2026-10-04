@@ -37,10 +37,13 @@ import { Rng } from '../../../core/Rng';
 import type { LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import {
   Oval,
+  type LampSpec,
   type LodSet,
   type ReadableSpec,
+  addLamps,
   addReadables,
   flight,
+  lampAt,
   instanceLod,
   lodInstances,
   numeralMaterial,
@@ -422,6 +425,8 @@ export function buildColosseum(ctx: LandmarkContext) {
   const collide = new MeshBuilder(); // collider-only
   const spots: Spot[] = [];
   const readables: ReadableSpec[] = [];
+  /** Torches, braziers and lamps handed to the light pool once the sky module has installed it. */
+  const lamps: LampSpec[] = [];
   const I = new THREE.Matrix4();
   const two = Math.PI * 2;
   const tAt = (k: number) => (k < N ? ts[k] : ts[k - N] + two);
@@ -631,6 +636,15 @@ export function buildColosseum(ctx: LandmarkContext) {
     }
     // The ring-3 wall continues above the ground storey as a plain band (seen through the arches).
   }
+  // Lampstands in the outer ambulatory between the doorways, lit from dusk (the arches let the day in).
+  if (high) {
+    const rngA = new Rng('colos-ambulatory');
+    for (let k = 3; k < N; k += 5) {
+      const [lx, lz] = oval.point(L.centres[k], (AMB1[0] + AMB1[1]) / 2);
+      placeProp(new Draw(inner), 'lampstand', lx, 0, lz, 0, { rng: rngA });
+      lamps.push(lampAt('lamp', lx, 1.46, lz, { distance: 9, intensity: 8 }));
+    }
+  }
   // The shrine of Nemesis (Nemesis Augusta) in the inner ambulatory beside the Porta Triumphalis,
   // where the fighters pass on their way to the sand: a marble aedicula, its bronze doors shut for
   // the Lemuria, a little altar in front.
@@ -662,6 +676,8 @@ export function buildColosseum(ctx: LandmarkContext) {
       inner.add(wreath, 'foliage_broad', undefined, { castShadow: false });
       const lp = new THREE.Vector3().setFromMatrixPosition(fr.clone().multiply(new THREE.Matrix4().makeTranslation(0.12, 1.0, -1.02)));
       placeProp(new Draw(inner), 'oil_lamp', lp.x, lp.y, lp.z, 0, { collide: false, rng: new Rng('nemesis') });
+      // A shrine lamp burns all day in the dark corridor.
+      lamps.push(lampAt('hearth', lp.x, lp.y + 0.07, lp.z, { intensity: 5, distance: 5 }));
     }
     const sp = new THREE.Vector3().setFromMatrixPosition(fr.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0.05, -1.75)));
     const [nx, nz] = oval.normal(t);
@@ -859,7 +875,7 @@ export function buildColosseum(ctx: LandmarkContext) {
     }
     cippiSet = lodInstances(ctx.game, gOuter, { name: 'colosseum-cippi', matrices: cmats, levels: [{ builder: cb, maxDist: 420 }], cullBeyond: true });
     for (const c of cip.colliders) stat.collider(c);
-    plazaLife(L, stat, ground, spots, high, cippiX);
+    plazaLife(L, stat, ground, spots, lamps, high, cippiX);
     [38, 42, 18, 22].forEach((k, i) => {
       const t = L.centres[k];
       const [px, pz] = oval.point(t, XF + 1.6);
@@ -886,6 +902,7 @@ export function buildColosseum(ctx: LandmarkContext) {
   if (sys) sys.hook((_dt, _t, cam) => zone(cam));
 
   addReadables(ctx.game, root, readables);
+  addLamps(ctx.game, root, lamps);
   const colliders = [...stat.colliders, ...inner.colliders, ...cav.colliders, ...collide.colliders];
   return { object: root, colliders, spots, far: buildFar(L), cullDistance: 1500 };
 }
@@ -898,7 +915,7 @@ export function buildColosseum(ctx: LandmarkContext) {
  * seats, wine, clay lamps with gladiators on them), the Misenum sailors' rope coils by the cippi,
  * and torch brackets beside the four axial porches. Props only at high detail; spots always.
  */
-function plazaLife(L: ColosseumLayout, stat: MeshBuilder, ground: (x: number, z: number) => number, spots: Spot[], high: boolean, edge: (t: number) => number) {
+function plazaLife(L: ColosseumLayout, stat: MeshBuilder, ground: (x: number, z: number) => number, spots: Spot[], lamps: LampSpec[], high: boolean, edge: (t: number) => number) {
   const { oval } = L;
   const rng = new Rng('colosseum-plaza');
   const D0 = new Draw(stat);
@@ -928,12 +945,17 @@ function plazaLife(L: ColosseumLayout, stat: MeshBuilder, ground: (x: number, z:
   [5, 15, 25, 35, 45, 55, 65, 75].forEach((k, i) => {
     const t = L.centres[k];
     const kind = kinds[i % kinds.length];
-    const [vx, vy, vz, vyaw] = at(t, Xs + 0.4, 0);
+    // The seller stands where the pitch's furniture leaves room: beyond the table for the cushions.
+    const [vx, vy, vz, vyaw] = at(t, kind === 'cushions' ? Xs + 0.95 : Xs + 0.4, 0);
     spots.push({ id: `colos-vendor-${i + 1}`, kind: 'vendor', position: new THREE.Vector3(vx, vy, vz), heading: vyaw + Math.PI });
     switch (kind) {
       case 'food':
         put('stall_fruit', t, Xs + 1.4, 0, Math.PI);
         put('brazier', t, Xs - 0.4, 1.6);
+        if (high) {
+          const [bx, by, bz] = at(t, Xs - 0.4, 1.6);
+          lamps.push(lampAt('brazier', bx, by + 0.85, bz));
+        }
         put('table', t, Xs - 0.4, -1.4, 0.2);
         put('amphora_tall', t, Xs + 1.0, 2.1, 0.4);
         put('stool', t, Xs + 0.6, -2.4, 1.1, { variant: 2 });
@@ -977,7 +999,7 @@ function plazaLife(L: ColosseumLayout, stat: MeshBuilder, ground: (x: number, z:
     }
     put('crate', t, X + 0.4, -1.2, 0.2);
   });
-  // Torch brackets either side of the four axial porches (lit at night by the sky module's lamps).
+  // Torch brackets either side of the four axial porches (their flames are lit from dusk by the light pool).
   if (high) {
     for (const k of [0, 20, 40, 60]) {
       for (const s of [-1, 1]) {
@@ -985,6 +1007,8 @@ function plazaLife(L: ColosseumLayout, stat: MeshBuilder, ground: (x: number, z:
         const [px, pz] = oval.point(t, XF + 0.02);
         const [nx, nz] = oval.normal(t);
         placeProp(D0, 'torch_bracket', px, 2.7, pz, Math.atan2(-nx, -nz), { rng, collide: false });
+        // The flame stands 0.3 m out from the wall and 0.5 m above the bracket's pivot.
+        lamps.push(lampAt('torch', px + nx * 0.3, 3.2, pz + nz * 0.3));
       }
     }
   }

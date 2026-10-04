@@ -19,7 +19,7 @@ import * as THREE from 'three';
 import * as atlas from '../../../data/atlas';
 import { MeshBuilder } from '../../../gfx/MeshBuilder';
 import type { MaterialId } from '../../../gfx/materialIds';
-import { Draw, roof } from '../../../arch/fabric';
+import { Draw, doorLeaves, roof } from '../../../arch/fabric';
 import { ProfileBuilder, gridSurface, linspace } from '../../../arch/common/geom';
 import { column } from '../../../arch/classical/column';
 import { apse } from '../../../arch/classical/vaults';
@@ -29,7 +29,7 @@ import { placeProp } from '../../../arch/props';
 import { Rng } from '../../../core/Rng';
 import { bearingToRotationY } from '../../../core/math';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
-import { Oval, addReadables, smokePlume, flight, lodInstances, ovalBand, ovalSweep, plantTrees, risers, solid, span, type TreeSpot } from './colos-kit';
+import { Oval, addLamps, addReadables, lampAt, smokePlume, flight, lodInstances, ovalBand, ovalSweep, plantTrees, risers, solid, span, type LampSpec, type TreeSpot } from './colos-kit';
 import { stripWall } from './colos-court';
 import type { Opening } from '../../../arch/fabric';
 
@@ -169,6 +169,7 @@ function buildBathsTrajan(ctx: LandmarkContext): LandmarkBuild {
   const d = new Draw(b);
   const root = new THREE.Group();
   const spots: Spot[] = [];
+  const lamps: LampSpec[] = [];
   const high = ctx.detail === 'high';
   const low = !high;
   const S = ctx.S;
@@ -244,9 +245,10 @@ function buildBathsTrajan(ctx: LandmarkContext): LandmarkBuild {
   // ---- the great hemicycle on substructures, rows facing the baths
   buildHemicycle(ctx, b, d, root, spots, ED, hemiR, hemiOpen, high);
   // ---- the bath block
-  buildTrajanBlock(ctx, b, d, root, spots, high, low);
+  buildTrajanBlock(ctx, b, d, root, spots, lamps, high, low);
   spots.push({ id: 'trajan-garden', kind: 'vista', position: new THREE.Vector3(0, 0.05, zBlockBack + 12), heading: Math.PI });
   root.add(b.build('baths-trajan'));
+  addLamps(ctx.game, root, lamps);
   return { object: root, colliders: b.colliders, spots, far: farBaths(EW, ED), cullDistance: 2000 };
 }
 
@@ -352,7 +354,7 @@ function buildHemicycle(ctx: LandmarkContext, b: MeshBuilder, d: Draw, root: THR
   void d;
 }
 
-function buildTrajanBlock(ctx: LandmarkContext, b: MeshBuilder, d: Draw, root: THREE.Group, spots: Spot[], high: boolean, low: boolean) {
+function buildTrajanBlock(ctx: LandmarkContext, b: MeshBuilder, d: Draw, root: THREE.Group, spots: Spot[], lamps: LampSpec[], high: boolean, low: boolean) {
   const ED = 66;
   const zF = -ED; // block front (also the enclosure front)
   // ---- entrance porch and the front ranges
@@ -373,7 +375,7 @@ function buildTrajanBlock(ctx: LandmarkContext, b: MeshBuilder, d: Draw, root: T
     // imp. VI, cos. V; NOT "Optimus" (granted 114).
     inscriptionPanel(b, { lines: ['Imp Caesar Divi Nervae F Nerva Traianus Aug', 'Germ Dacicus Pont Max Trib Pot XIII Imp VI', 'Cos V P P Thermas Fecit'], width: 12.5, height: 1.15, style: 'bronze', sizes: [1, 0.85, 0.85] }, new THREE.Matrix4().makeTranslation(0, 8.6, zF - 4.85), { depth: 0.03 });
   }
-  spots.push({ id: 'trajan-inscription', kind: 'inscription', position: new THREE.Vector3(0, 0.35, zF - 9), heading: 0 });
+  spots.push({ id: 'trajan-inscription', kind: 'inscription', position: new THREE.Vector3(0, Math.max(0, ctx.groundAt(0, zF - 9)) + 0.05, zF - 9), heading: 0 });
   addReadables(ctx.game, root, [
     {
       id: 'trajan-inscription',
@@ -385,6 +387,11 @@ function buildTrajanBlock(ctx: LandmarkContext, b: MeshBuilder, d: Draw, root: T
   ]);
   spots.push({ id: 'trajan-entrance', kind: 'door', position: new THREE.Vector3(0, 0.35, zF - 1), heading: 0 });
   spots.push({ id: 'trajan-doorkeeper', kind: 'npc', position: new THREE.Vector3(3.2, 0.35, zF - 1.5), heading: Math.PI });
+  // Torches on the wall either side of the door, lit through the night.
+  for (const sx of [-1, 1]) {
+    placeProp(d, 'torch_bracket', sx * 4.2, 3.4, zF, 0, { rng: new Rng('trajan-torch'), collide: false });
+    lamps.push(lampAt('torch', sx * 4.2, 3.9, zF - 0.32));
+  }
   // ---- natatio (open-air pool) court
   const nz0 = zF + 1.5;
   const nz1 = -46;
@@ -415,7 +422,7 @@ function buildTrajanBlock(ctx: LandmarkContext, b: MeshBuilder, d: Draw, root: T
   }
   spots.push({ id: 'trajan-natatio', kind: 'vista', position: new THREE.Vector3(0, 0.1, nz0 + 1.5), heading: 0 });
   // ---- the frigidarium (enterable)
-  frigidarium(ctx, b, d, root, spots, high);
+  frigidarium(ctx, b, d, root, spots, lamps, high);
   // ---- tepidarium, caldarium
   range(d, -8 - 1.5, -27, 8 + 1.5, -17, 13, '', { low, roof: 'hip' });
   caldarium(b, d, high, low);
@@ -457,6 +464,8 @@ function buildTrajanBlock(ctx: LandmarkContext, b: MeshBuilder, d: Draw, root: T
   // ranges, and their smoke drifting over the garden all day.
   for (const sx of [-1, 1]) {
     d.span('black', sx * 16.5, 0, 5.98, sx * 18, 1.6, 6.05);
+    d.span('glow_fire', sx * 16.7, 0.15, 6.0, sx * 17.8, 0.7, 6.06);
+    lamps.push(lampAt('hearth', sx * 17.25, 0.6, 6.7, { intensity: 14, distance: 8 }));
     d.span('brick', sx * 17.25 - 0.7, 13.5, 3.6, sx * 17.25 + 0.7, 16.4, 5.0);
     d.span('black', sx * 17.25 - 0.45, 16.3, 3.85, sx * 17.25 + 0.45, 16.42, 4.75);
     if (high) smokePlume(ctx.game, root, new THREE.Vector3(sx * 17.25, 16.4, 4.3), { seed: sx > 0 ? 3 : 7, height: 30 });
@@ -464,7 +473,7 @@ function buildTrajanBlock(ctx: LandmarkContext, b: MeshBuilder, d: Draw, root: T
 }
 
 /** The frigidarium: three groin-vaulted bays on eight granite columns, enterable. */
-function frigidarium(ctx: LandmarkContext, b: MeshBuilder, d: Draw, root: THREE.Group, spots: Spot[], high: boolean) {
+function frigidarium(ctx: LandmarkContext, b: MeshBuilder, d: Draw, root: THREE.Group, spots: Spot[], lamps: LampSpec[], high: boolean) {
   const x0 = -24;
   const x1 = 24;
   const z0 = -44.5;
@@ -589,6 +598,14 @@ function frigidarium(ctx: LandmarkContext, b: MeshBuilder, d: Draw, root: THREE.
   // Cornice under the eaves.
   d.span('travertine', x0 - t - 0.2, crown + 0.85, z0 - t - 0.2, x1 + t + 0.2, crown + 1.1, z0 - t + 0.4);
   d.span('travertine', x0 - t - 0.2, crown + 0.85, z1 + t - 0.4, x1 + t + 0.2, crown + 1.1, z1 + t + 0.2);
+  // Lampstands: four along the back wall between the statues, two by the benches at the front.
+  {
+    const lrng = new Rng('trajan-frigidarium');
+    for (const [lx, lz] of [[-16, z1 - 1.5], [-4, z1 - 1.5], [4, z1 - 1.5], [16, z1 - 1.5], [-12, z0 + 1.6], [12, z0 + 1.6]] as const) {
+      if (high) placeProp(d, 'lampstand', lx, 0.08, lz, 0, { rng: lrng });
+      lamps.push(lampAt('lamp', lx, 1.54, lz, { distance: 12, intensity: 10 }));
+    }
+  }
   spots.push({ id: 'trajan-frigidarium', kind: 'vista', position: new THREE.Vector3(0, 0.12, (z0 + z1) / 2 - 4), heading: 0 });
   spots.push({ id: 'trajan-bath-attendant', kind: 'npc', position: new THREE.Vector3(-14, 0.12, z1 - 2.5), heading: Math.PI });
   spots.push({ id: 'trajan-strongbox', kind: 'container', position: new THREE.Vector3(20, 0.12, z1 - 1.6), heading: 0 });
@@ -693,11 +710,208 @@ function farBaths(EW: number, ED: number): THREE.Object3D {
 
 // ---------------------------------------------------------------- Baths of Titus
 
+/** Floor level of the porch, vestibule and great hall: one 0.2 m step up from the paved forecourt. */
+const TITUS_FL = 0.2;
+
+/** Statue niche on a wall: frame at (x, y, z), `wallYaw` turns its −z (the room side) to face into the room. */
+function wallNiche(b: MeshBuilder, x: number, y: number, z: number, wallYaw: number, v: number) {
+  niche(b, new THREE.Matrix4().makeRotationY(wallYaw).setPosition(x, y, z), v);
+}
+
+/**
+ * The vestibule of the Baths of Titus: a doorway through the brick front wall (marble frame, the
+ * leaves open inwards) into a groin-vaulted entrance hall 12 × 7 m with a mosaic floor, benches,
+ * the attendant's counter, statue niches and lampstands, and a wide passage on into the great hall.
+ * Local frame as the landmark; the front wall's outer face is at z = −hd.
+ */
+function titusVestibule(ctx: LandmarkContext, b: MeshBuilder, d: Draw, spots: Spot[], lamps: LampSpec[], hd: number, high: boolean) {
+  const FL = TITUS_FL;
+  const zf = -hd; // outer face of the front wall
+  const zIn = zf + 1.0; // inner face
+  const zBack = zf + 8; // face of the back wall (towards the vestibule)
+  const topW = 8.4; // wall tops under the attic block
+  const ys = 4.6; // springing of the vault
+  const rng = new Rng('titus-vestibule');
+  // Front wall with the door (3.6 × 5.6 m with a round head) and two small barred windows.
+  const fw = d.at(-6, 0, zf, 0);
+  const door = { x0: 4.2, x1: 7.8, y0: FL, y1: 5.6, arch: 1.8 };
+  const winL = { x0: 1.3, x1: 2.7, y0: 1.7, y1: 4.4, arch: 0.7 };
+  const winR = { x0: 9.3, x1: 10.7, y0: 1.7, y1: 4.4, arch: 0.7 };
+  stripWall(fw, 'brick', 0, 12, 0, topW, 1.0, [door, winL, winR]);
+  fw.solid(0, 0, 0, 4.2, topW, 1.0);
+  fw.solid(7.8, 0, 0, 12, topW, 1.0);
+  fw.solid(4.2, 5.6, 0, 7.8, topW, 1.0);
+  // Marble frame (jambs, lintel, cornice) round the door; bronze grilles in the windows.
+  fw.span('marble', 3.8, 0, -0.1, 4.2, 5.6 + 0.5, 0.25);
+  fw.span('marble', 7.8, 0, -0.1, 8.2, 5.6 + 0.5, 0.25);
+  fw.span('marble', 3.8, 5.6 + 0.5, -0.14, 8.2, 5.6 + 0.8, 0.3);
+  for (const w of [winL, winR]) {
+    const cx = (w.x0 + w.x1) / 2;
+    for (let i = -2; i <= 2; i++) fw.span('bronze', cx + i * 0.26 - 0.02, w.y0, 0.3, cx + i * 0.26 + 0.02, w.y1 - 0.2, 0.34);
+  }
+  doorLeaves(fw, door, 1.0, 0.85, 'wood_dark', true);
+  fw.span('marble', 3.9, 0, -0.9, 8.1, FL, 0.0); // threshold step into the porch
+  // Floor: black-and-white mosaic; the walls revetted in grey marble below, white stucco above.
+  d.span('mosaic', -6, -0.1, zIn, 6, FL, zBack, { collide: true });
+  for (const sx of [-1, 1]) {
+    const xw = sx * 6;
+    d.span('marble_veined', Math.min(xw, xw - sx * 0.06), FL, zIn, Math.max(xw, xw - sx * 0.06), 2.6, zBack);
+    d.span('plaster_cream', Math.min(xw, xw - sx * 0.05), 2.6, zIn, Math.max(xw, xw - sx * 0.05), topW, zBack);
+  }
+  // Front wall, inner face: dado and stucco round the door and windows (never across them).
+  for (const sx of [-1, 1]) {
+    const seg = (xa: number, xb: number, y0: number, y1: number, mat: MaterialId) => d.span(mat, Math.min(sx * xa, sx * xb), y0, zIn, Math.max(sx * xa, sx * xb), y1, zIn + 0.06);
+    seg(6, 1.8, FL, 1.7, 'marble_veined');
+    seg(6, 4.7, 1.7, topW, 'plaster_cream');
+    seg(4.7, 3.3, 4.4, topW, 'plaster_cream');
+    seg(3.3, 1.8, 1.7, topW, 'plaster_cream');
+  }
+  d.span('plaster_cream', -1.8, 5.6, zIn, 1.8, topW, zIn + 0.06);
+  // Groin vault over the room and the attic above it.
+  groinVault(b, 'plaster_white', new THREE.Matrix4(), -6, 6, zIn, zBack, ys + FL, high ? 16 : 8);
+  d.span('brick', -6, topW, zf, 6, 11, zf + 9);
+  d.span('travertine', -6, topW - 0.05, zf - 0.15, 6, topW + 0.2, zf + 0.0);
+  // Back wall (towards the hall), pierced by the passage (5 m wide, round head).
+  const bw = d.at(-6, 0, zBack, 0);
+  const pass = { x0: 3.5, x1: 8.5, y0: FL, y1: 7.5, arch: 2.5 };
+  stripWall(bw, 'brick', 0, 12, 0, topW, 1.0, [pass]);
+  bw.solid(0, 0, 0, 3.5, topW, 1.0);
+  bw.solid(8.5, 0, 0, 12, topW, 1.0);
+  bw.solid(3.5, 7.5, 0, 8.5, topW, 1.0);
+  bw.span('marble_veined', 0, FL, -0.06, 3.5, 2.6, 0);
+  bw.span('marble_veined', 8.5, FL, -0.06, 12, 2.6, 0);
+  bw.span('plaster_cream', 0, 2.6, -0.05, 3.5, topW, 0);
+  bw.span('plaster_cream', 8.5, 2.6, -0.05, 12, topW, 0);
+  bw.span('marble', 3.2, FL, -0.12, 3.5, 7.5 + 0.4, 0.2);
+  bw.span('marble', 8.5, FL, -0.12, 8.8, 7.5 + 0.4, 0.2);
+  // Furniture: an attendant's counter at the door end (the quadrans is paid here), stone benches
+  // along the side walls, statue niches flanking the passage, towel shelves, lampstands.
+  d.span('marble', -5.4, FL, zIn + 1.05, -2.6, FL + 0.95, zIn + 1.7, { collide: true });
+  d.span('travertine', -5.5, FL + 0.95, zIn + 1.0, -2.5, FL + 1.03, zIn + 1.78);
+  placeProp(d, 'shelf', -5.1, FL, zIn + 0.12, 0, { rng });
+  for (const sx of [-1, 1]) d.span('marble', sx > 0 ? 5.3 : -5.9, FL, zIn + 2.6, sx > 0 ? 5.9 : -5.3, FL + 0.48, zBack - 1.0, { collide: true });
+  if (high) {
+    for (const sx of [-1, 1]) wallNiche(b, sx * 4.9, FL, zBack - 0.06, 0, sx > 0 ? 1 : 2);
+    for (const sx of [-1, 1]) placeProp(d, 'lampstand', sx * 4.4, FL, zIn + 3.1, 0, { rng });
+  }
+  for (const sx of [-1, 1]) lamps.push(lampAt('hearth', sx * 4.4, FL + 1.46, zIn + 3.1, { distance: 10 }));
+  // Spots: the attendant behind the counter facing the room; the vestibule itself as a place to wait.
+  spots.push({ id: 'titus-attendant', kind: 'npc', position: new THREE.Vector3(-4.0, FL + 0.05, zIn + 0.5), heading: 0 });
+  spots.push({ id: 'titus-vestibule', kind: 'vista', position: new THREE.Vector3(0, FL + 0.05, zIn + 2.2), heading: 0 });
+  void ctx;
+}
+
+/**
+ * The great hall of the Baths of Titus (the frigidarium): 20 × 31 m under two groin vaults 16 m high,
+ * thermal windows in the side walls, statues in niches, a porphyry labrum on the axis. Walls and
+ * floor are real; the end wall towards the caldarium is closed (the hot rooms stay shut).
+ */
+function titusHall(ctx: LandmarkContext, b: MeshBuilder, d: Draw, spots: Spot[], lamps: LampSpec[], hd: number, high: boolean) {
+  const FL = TITUS_FL;
+  const x0 = -10;
+  const x1 = 10;
+  const z0 = -hd + 10; // inner face of the front wall (−26)
+  const z1 = 5;
+  const zm = (z0 + z1) / 2;
+  const hz = (z1 - z0) / 4; // half a bay
+  const ys = 8.0 + FL; // springing
+  const top = 17;
+  const rng = new Rng('titus-hall');
+  // Floor of giallo antico with porphyry roundels.
+  d.span('marble_giallo', x0, -0.1, z0, x1, FL, z1, { collide: true });
+  if (high) for (const z of [z0 + 4.5, z1 - 4.5]) d.cyl('porphyry', 0, FL + 0.006, z, 2.2, 0.012, 24);
+  // Front wall (from the vestibule, x ±11, 1 m thick) with the passage; the back wall is solid.
+  const fw = d.at(-11, 0, z0 - 1.0, 0);
+  const pass = { x0: 8.5, x1: 13.5, y0: FL, y1: 7.5, arch: 2.5 };
+  stripWall(fw, 'brick', 0, 22, 0, top, 1.0, [pass]);
+  fw.solid(0, 0, 0, 8.5, top, 1.0);
+  fw.solid(13.5, 0, 0, 22, top, 1.0);
+  fw.solid(8.5, 7.5, 0, 13.5, top, 1.0);
+  d.span('brick', -11, 0, z1, 11, top, z1 + 1.0, { collide: true });
+  // Side walls: solid to the springing (revetted inside), then a lunette with a big thermal window per bay.
+  for (const sx of [-1, 1]) {
+    const xi = sx * 10;
+    const xo = sx * 11;
+    d.span('brick', Math.min(xi, xo), 0, z0, Math.max(xi, xo), ys, z1, { collide: true });
+    d.span('marble_veined', Math.min(xi, xi - sx * 0.06), FL, z0, Math.max(xi, xi - sx * 0.06), 3.4, z1);
+    d.span('plaster_white', Math.min(xi, xi - sx * 0.05), 3.4, z0, Math.max(xi, xi - sx * 0.05), ys, z1);
+    for (const zc of [z0 + hz, z1 - hz]) {
+      lunette(b, new THREE.Matrix4().makeTranslation((xi + xo) / 2, ys, zc).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)), hz, 1.0, top - 0.3 - ys);
+    }
+  }
+  // End walls: revetted and stuccoed up to the vault (the passage in the front wall stays clear).
+  for (const [xa, xb] of [[x0, -2.5], [2.5, x1]] as const) {
+    d.span('marble_veined', xa, FL, z0, xb, 3.4, z0 + 0.06);
+    d.span('plaster_white', xa, 3.4, z0, xb, top - 0.3, z0 + 0.05);
+  }
+  d.span('plaster_white', -2.5, 7.5, z0, 2.5, top - 0.3, z0 + 0.05);
+  d.span('marble_veined', x0, FL, z1 - 0.06, x1, 3.4, z1);
+  d.span('plaster_white', x0, 3.4, z1 - 0.05, x1, top - 0.3, z1);
+  // Two groin vaults, the transverse rib between them and wall piers under it.
+  groinVault(b, 'plaster_white', new THREE.Matrix4(), x0, x1, z0, zm, ys, high ? 18 : 8);
+  groinVault(b, 'plaster_white', new THREE.Matrix4(), x0, x1, zm, z1, ys, high ? 18 : 8);
+  {
+    const hx = (x1 - x0) / 2;
+    const ry = hz; // vault rise over a bay (min half-extent)
+    const pts: THREE.Vector3[] = [];
+    for (let i = 0; i <= 18; i++) {
+      const a = Math.PI - (Math.PI * i) / 18;
+      pts.push(new THREE.Vector3(Math.cos(a) * hx, ys + Math.sin(a) * ry, zm));
+    }
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p = pts[i];
+      const q = pts[i + 1];
+      const mid = p.clone().add(q).multiplyScalar(0.5);
+      const ang = Math.atan2(q.y - p.y, q.x - p.x);
+      const m = new THREE.Matrix4().makeTranslation(mid.x, mid.y, mid.z).multiply(new THREE.Matrix4().makeRotationZ(ang));
+      b.box('marble', p.distanceTo(q) + 0.05, 0.5, 1.2, m, { castShadow: false });
+    }
+  }
+  for (const sx of [-1, 1]) {
+    const xa = sx * 10;
+    const xb = sx * 9.2;
+    d.span('brick', Math.min(xa, xb), FL, zm - 0.7, Math.max(xa, xb), ys, zm + 0.7, { collide: true });
+    d.span('marble', Math.min(xa, xb) - 0.05, ys - 0.5, zm - 0.9, Math.max(xa, xb) + 0.05, ys, zm + 0.9);
+  }
+  // Roof: a concrete slab under a tiled hip roof (the old closed block's roof, now over a real room).
+  d.span('concrete', -11, top - 0.3, z0 - 1.0, 11, top, z1 + 1.0);
+  roof(d.at(0, 0, (z0 - 1.0 + z1 + 1.0) / 2), { kind: 'hip', w: 22, d: z1 - z0 + 2.0, y: top, ridges: high });
+  // Labrum on the axis: marble pedestal, porphyry basin, water.
+  d.cyl('marble', 0, FL + 0.55, zm, 0.6, 1.1, 12, { collide: true });
+  d.cyl('porphyry', 0, FL + 1.25, zm, 2.0, 0.3, 24, { rTop: 2.2, collide: true });
+  d.cyl('water', 0, FL + 1.36, zm, 1.9, 0.03, 24);
+  if (high) {
+    // Statues in niches along the walls (togati and an armoured Titus), benches between them,
+    // lampstands, and the bath's strongbox.
+    let v = 0;
+    for (const z of [z0 + 4.2, z0 + 9.8, z1 - 9.8, z1 - 4.2]) {
+      wallNiche(b, x0 + 0.04, FL, z, -Math.PI / 2, v++);
+      wallNiche(b, x1 - 0.04, FL, z, Math.PI / 2, v++);
+    }
+    for (const x of [-6, 0, 6]) wallNiche(b, x, FL, z1 - 0.04, 0, v++);
+    for (const sx of [-1, 1]) for (const zc of [z0 + hz, z1 - hz]) {
+      const xa = sx * 9.95;
+      const xb = sx * 9.35;
+      d.span('marble', Math.min(xa, xb), FL, zc - 1.8, Math.max(xa, xb), FL + 0.46, zc + 1.8, { collide: true });
+    }
+    for (const sx of [-1, 1]) for (const z of [z0 + 3, z1 - 3]) placeProp(d, 'lampstand', sx * 8.7, FL, z, 0, { rng });
+  }
+  for (const sx of [-1, 1]) for (const z of [z0 + 3, z1 - 3]) lamps.push(lampAt('lamp', sx * 8.7, FL + 1.46, z, { distance: 11, intensity: 9 }));
+  // The strongbox (iron-bound, the takings of the baths) against the back wall, east of the axis.
+  d.span('iron', 7.4 - 0.65, FL, z1 - 0.7, 7.4 + 0.65, FL + 0.62, z1 - 0.2, { collide: true });
+  d.span('bronze', 7.4 - 0.6, FL + 0.62, z1 - 0.68, 7.4 + 0.6, FL + 0.67, z1 - 0.22);
+  spots.push({ id: 'titus-frigidarium', kind: 'vista', position: new THREE.Vector3(0, FL + 0.05, zm - 5.5), heading: 0 });
+  spots.push({ id: 'titus-bath-attendant', kind: 'npc', position: new THREE.Vector3(-5.5, FL + 0.05, zm + 3.5), heading: Math.PI });
+  spots.push({ id: 'titus-strongbox', kind: 'container', position: new THREE.Vector3(7.4, FL + 0.05, z1 - 1.5), heading: Math.PI });
+  void ctx;
+}
+
 function buildBathsTitus(ctx: LandmarkContext): LandmarkBuild {
   const b = new MeshBuilder();
   const d = new Draw(b);
   const root = new THREE.Group();
   const spots: Spot[] = [];
+  const lamps: LampSpec[] = [];
   const high = ctx.detail === 'high';
   const low = !high;
   const W = 105 * ctx.S; // 63
@@ -715,10 +929,14 @@ function buildBathsTitus(ctx: LandmarkContext): LandmarkBuild {
   // Front (north) entrance facade, ranges, a central frigidarium hall with lunettes, caldarium S.
   range(d, -hw, -hd, -6, -hd + 9, 11, 'nw', { low });
   range(d, 6, -hd, hw, -hd + 9, 11, 'ne', { low });
-  d.span('brick', -6, 6, -hd, 6, 11, -hd + 9);
-  d.span('black', -2.2, 0, -hd + 0.4, 2.2, 5.0, -hd + 0.5);
-  for (const x of [-4.5, -1.5, 1.5, 4.5]) column(b, { order: 'corinthian', D: 0.65, height: 5.8, material: 'marble', detail: 'low', kind: 'free', collide: true }, new THREE.Matrix4().makeTranslation(x, 0.2, -hd - 3));
-  d.span('marble', -5.5, 0, -hd - 4, 5.5, 0.2, -hd, { collide: true });
+  // The way in: a real doorway through the front wall into the vestibule, a passage on into the
+  // great hall (frigidarium). The forecourt is flat (landmarkPads), paved to the porch.
+  const FL = TITUS_FL;
+  // (The Baths of Trajan's platform rises 6 m just east of here, so the paving stays west of x = 5.)
+  d.span('paving_travertine', -18, -0.06, -hd - 14, 5, 0.03, -hd - 4);
+  titusVestibule(ctx, b, d, spots, lamps, hd, high);
+  for (const x of [-4.5, -1.5, 1.5, 4.5]) column(b, { order: 'corinthian', D: 0.65, height: 5.8, material: 'marble', detail: 'low', kind: 'free', collide: true }, new THREE.Matrix4().makeTranslation(x, FL, -hd - 3));
+  d.span('marble', -5.5, 0, -hd - 4, 5.5, FL, -hd, { collide: true });
   d.span('marble', -5.3, 6.0, -hd - 3.7, 5.3, 7.1, -hd);
   // Pediment and tiled roof over the porch, the dedication on the frieze. Reconstructed formula
   // (no text survives): Titus' titulature of late AD 80, the year the baths opened with the
@@ -729,7 +947,7 @@ function buildBathsTitus(ctx: LandmarkContext): LandmarkBuild {
   if (high && typeof document !== 'undefined') {
     inscriptionPanel(b, { lines: ['Imp Titus Caesar Divi F Vespasianus Aug', 'Pont Max Trib Pot X Imp XVII Cos VIII P P', 'Thermas Fecit'], width: 9.6, height: 0.82, style: 'bronze', sizes: [1, 0.85, 0.9] }, new THREE.Matrix4().makeTranslation(0, 6.55, -hd - 3.72), { depth: 0.02 });
   }
-  spots.push({ id: 'titus-inscription', kind: 'inscription', position: new THREE.Vector3(0, 0.25, -hd - 8), heading: 0 });
+  spots.push({ id: 'titus-inscription', kind: 'inscription', position: new THREE.Vector3(0, 0.05, -hd - 8), heading: 0 });
   addReadables(ctx.game, root, [
     {
       id: 'titus-inscription',
@@ -750,7 +968,7 @@ function buildBathsTitus(ctx: LandmarkContext): LandmarkBuild {
     colonnade(ctx, root, b, [new THREE.Vector3(cx - cw / 2, 0, -hd + 11), new THREE.Vector3(cx + cw / 2, 0, -hd + 11), new THREE.Vector3(cx + cw / 2, 0, 4), new THREE.Vector3(cx - cw / 2, 0, 4), new THREE.Vector3(cx - cw / 2, 0, -hd + 11.01)], 3.4, 4.8, 0.48, 'marble', `titus-palaestra-${sx}`);
   }
   // Central hall (frigidarium) and the caldarium projecting south with windows to the plaza.
-  range(d, -11, -hd + 9, 11, 6, 17, '', { low, roof: 'hip' });
+  titusHall(ctx, b, d, spots, lamps, hd, high);
   range(d, -9, 6, 9, hd - 2, 14, 's', { low, roof: 'hip', rows: 2 });
   for (const sx of [-1, 1]) range(d, Math.min(sx * 9, sx * (hw - 5)), 6, Math.max(sx * 9, sx * (hw - 5)), hd - 2, 9, 's', { low });
   // The wide flight of steps down to the amphitheatre plaza (S, centred).
@@ -769,15 +987,23 @@ function buildBathsTitus(ctx: LandmarkContext): LandmarkBuild {
       const pm = m.clone().multiply(new THREE.Matrix4().makeTranslation(sx * (sw / 2 + 0.3), drop / 2 + 0.5, (count * run) / 2)).multiply(new THREE.Matrix4().makeRotationX(-ang));
       b.box('brick', 0.6, 1.2 + drop * 0.15, Math.hypot(drop, count * run) + 0.4, pm, { collide: true });
     }
-    spots.push({ id: 'titus-stairs-foot', kind: 'spawn', position: new THREE.Vector3(0, -drop + 0.05, hd + 1.4 + count * run + 1.5), heading: Math.PI });
+    const zf = hd + 1.4 + count * run + 1.5;
+    spots.push({ id: 'titus-stairs-foot', kind: 'spawn', position: new THREE.Vector3(0, Math.max(-drop, ctx.groundAt(0, zf)) + 0.05, zf), heading: Math.PI });
   }
-  spots.push({ id: 'titus-entrance', kind: 'door', position: new THREE.Vector3(0, 0.25, -hd - 5), heading: 0 });
+  // The door spot is the threshold on the porch (the leaves open inwards); the attendant who
+  // takes the quadrans stands behind his counter in the vestibule (see titusVestibule).
+  spots.push({ id: 'titus-entrance', kind: 'door', position: new THREE.Vector3(0, FL + 0.05, -hd - 1.2), heading: 0 });
   spots.push({ id: 'titus-vista', kind: 'vista', position: new THREE.Vector3(0, 0.95, hd + 0.4), heading: Math.PI * 0.85 });
-  spots.push({ id: 'titus-attendant', kind: 'npc', position: new THREE.Vector3(2.5, 0.25, -hd - 1.5), heading: Math.PI });
   // A furnace stack behind the caldarium, smoking.
   d.span('brick', 5.3, 13.5, hd - 6.2, 6.7, 16.2, hd - 4.8);
   if (high) smokePlume(ctx.game, root, new THREE.Vector3(6, 16.2, hd - 5.5), { seed: 5, height: 24, count: 28 });
+  // Torches either side of the door: the baths keep their porch lit through the night.
+  for (const sx of [-1, 1]) {
+    placeProp(d, 'torch_bracket', sx * 2.75, 3.0, -hd, 0, { rng: new Rng('titus-torch'), collide: false });
+    lamps.push(lampAt('torch', sx * 2.75, 3.5, -hd - 0.35));
+  }
   root.add(b.build('baths-titus'));
+  addLamps(ctx.game, root, lamps);
   return { object: root, colliders: b.colliders, spots, cullDistance: 1600 };
 }
 
@@ -858,8 +1084,8 @@ function buildSetteSale(ctx: LandmarkContext): LandmarkBuild {
   const m = new THREE.Matrix4().setPosition(-W / 2 - 0.9, lo, D / 2 - 0.5);
   const fm = m.clone().multiply(new THREE.Matrix4().makeRotationY(Math.PI));
   flight(b, 'travertine', fm, 0, 1.4, 0, 0, rise, 0.32, count, true);
-  spots.push({ id: 'sette-sale-hatch', kind: 'door', position: new THREE.Vector3(-W / 2 + cw * 4.5, y0 + H * 0.62 + cw * 0.45 + 0.35, -2.6), heading: Math.PI });
-  spots.push({ id: 'sette-sale-door', kind: 'door', position: new THREE.Vector3(-W / 2 + cw * 4.5, lo + 0.05, -D / 2 - 1.2), heading: 0 });
+  spots.push({ id: 'sette-sale-hatch', kind: 'door', position: new THREE.Vector3(-W / 2 + cw * 4.5, y0 + H * 0.62 + cw * 0.45 + 0.33, -2.6), heading: Math.PI });
+  spots.push({ id: 'sette-sale-door', kind: 'door', position: new THREE.Vector3(-W / 2 + cw * 4.5, Math.max(lo, ctx.groundAt(-W / 2 + cw * 4.5, -D / 2 - 1.2)) + 0.05, -D / 2 - 1.2), heading: 0 });
   spots.push({ id: 'sette-sale-roof', kind: 'vista', position: new THREE.Vector3(-W / 2 + cw * 2.5, y0 + H * 0.62 + cw * 0.45 + 0.05, 6), heading: Math.PI });
   return { object: b.build('sette-sale'), colliders: b.colliders, spots, cullDistance: 900 };
 }

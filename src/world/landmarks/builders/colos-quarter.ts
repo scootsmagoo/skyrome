@@ -19,7 +19,7 @@ import { column } from '../../../arch/classical/column';
 import { placeProp } from '../../../arch/props';
 import { Rng } from '../../../core/Rng';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
-import { frontSteps, smokePlume, lodInstances, plantTrees, risers, span, type TreeSpot } from './colos-kit';
+import { addLamps, frontSteps, smokePlume, lodInstances, plantTrees, risers, span, type TreeSpot } from './colos-kit';
 import { courtyardBuilding } from './colos-court';
 import { farCourt } from './colos-ludus';
 
@@ -96,7 +96,9 @@ function buildMisenatium(ctx: LandmarkContext): LandmarkBuild {
     placeProp(d, 'cart', -6, 0, 3, 0.4, { rng });
   }
   spots.push({ id: 'misenatium-yard', kind: 'npc', position: new THREE.Vector3(0, y0 + 0.05, 0), heading: Math.PI });
-  return { object: b.build('castra-misenatium'), colliders: b.colliders, spots, far: farCourt(W, D, res.height, y0, 'brick'), cullDistance: 800 };
+  const object = b.build('castra-misenatium');
+  addLamps(ctx.game, object, res.lamps);
+  return { object, colliders: b.colliders, spots, far: farCourt(W, D, res.height, y0, 'brick'), cullDistance: 800 };
 }
 
 // ---------------------------------------------------------------- Moneta
@@ -143,9 +145,11 @@ function buildMoneta(ctx: LandmarkContext): LandmarkBuild {
     for (let i = 0; i < 3; i++) placeProp(d, 'basket', 2 + i * 0.6, 0, 2.4, 0, { rng });
     for (const x of [-W / 2 + 3, W / 2 - 3]) d.span('black', x - 0.6, res.height, -0.6, x + 0.6, res.height + 1.6, 0.6);
   }
-  spots.push({ id: 'moneta-guard', kind: 'npc', position: new THREE.Vector3(2.4, y0 + 0.05, -D / 2 - 1.2), heading: Math.PI });
+  // The guard stands inside the gate passage (3 m wide between its jambs), to one side, looking out.
+  spots.push({ id: 'moneta-guard', kind: 'npc', position: new THREE.Vector3(1.0, y0 + 0.05, -D / 2 + 2.0), heading: Math.PI });
   spots.push({ id: 'moneta-yard', kind: 'npc', position: new THREE.Vector3(0, y0 + 0.05, 1.5), heading: Math.PI });
   const object = b.build('moneta');
+  addLamps(ctx.game, object, res.lamps);
   if (high) for (const [i, x] of [-W / 2 + 3, W / 2 - 3].entries()) smokePlume(ctx.game, object, new THREE.Vector3(x, y0 + res.height + 1.6, 0), { seed: 13 + i * 6, height: 20, count: 26, shade: [0.12, 0.42] });
   return { object, colliders: b.colliders, spots, far: farCourt(W, D, res.height, y0, 'brick'), cullDistance: 700 };
 }
@@ -193,9 +197,16 @@ function buildCuriae(ctx: LandmarkContext): LandmarkBuild {
   const root = new THREE.Group();
   if (ctx.detail === 'high') for (const c of plantTrees(ctx.game, root, trees, 4)) b.collider(c);
   for (const [x, z] of [[-res.court.w / 2 + 0.6, -res.court.d / 2 + 0.6], [res.court.w / 2 - 0.6, -res.court.d / 2 + 0.6]] as const) d.span('travertine', x - 0.25, 0, z - 0.25, x + 0.25, 1.1, z + 0.25, { collide: true });
+  // The altar fills the middle of the court: the court spot stands south of it, facing it.
+  const cc = spots.find((sp) => sp.id === 'curiae-court');
+  if (cc) {
+    cc.position.set(0, y0 + 0.05, 3.2);
+    cc.heading = Math.PI;
+  }
   spots.push({ id: 'curiae-altar', kind: 'shrine', position: new THREE.Vector3(0, y0 + 0.05, -2.2), heading: 0 });
   spots.push({ id: 'curiae-priest', kind: 'npc', position: new THREE.Vector3(2.2, y0 + 0.05, -1), heading: -Math.PI / 2 });
   root.add(b.build('curiae-veteres'));
+  addLamps(ctx.game, root, res.lamps);
   return { object: root, colliders: b.colliders, spots, cullDistance: 700 };
 }
 
@@ -317,7 +328,11 @@ function buildDomusPlinii(ctx: LandmarkContext): LandmarkBuild {
   const obj = b.build('domus-plinii');
   obj.position.y = y0;
   root.add(obj);
-  const spots: Spot[] = out.spots.map((s) => ({ id: `plinii-${s.id}`, kind: s.kind === 'houseDoor' ? 'door' : s.kind === 'tree' ? 'vista' : 'npc', position: s.position.clone().add(new THREE.Vector3(0, y0, 0)), heading: s.facing }));
+  // Only what lies outside the shuttered house: its garden fountain and trees are behind the
+  // solid walls, so the domus builder's spots there (fountain, tree) would stand inside masonry.
+  const spots: Spot[] = out.spots
+    .filter((s) => s.kind === 'houseDoor' || s.position.z < -D / 2 + 1)
+    .map((s) => ({ id: `plinii-${s.id}`, kind: s.kind === 'houseDoor' ? 'door' : s.kind === 'tree' ? 'vista' : 'npc', position: s.position.clone().add(new THREE.Vector3(0, y0, 0)), heading: s.facing }));
   // The steward at the shut door; a bench by the entrance for callers.
   spots.push({ id: 'plinii-door', kind: 'door', position: new THREE.Vector3(0, y0 + 0.05, -D / 2 - 0.8), heading: 0 });
   spots.push({ id: 'plinii-steward', kind: 'npc', position: new THREE.Vector3(1.4, y0 + 0.05, -D / 2 - 0.6), heading: Math.PI });

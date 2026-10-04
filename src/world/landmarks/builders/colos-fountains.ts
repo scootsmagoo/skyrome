@@ -229,7 +229,10 @@ function buildMetaSudans(ctx: LandmarkContext): LandmarkBuild {
       );
       inscriptionPanel(b, { lines: ['Nereus Ret Pugnabit'], width: 1.5, height: 0.22, style: 'painted' }, f.m.clone().multiply(new THREE.Matrix4().makeTranslation(1.2, 1.12, -0.02)), { depth: 0.004 });
     }
-    spots.push({ id: 'meta-sudans-playbill', kind: 'inscription', position: f.point(0, 0.05, -1.6), heading: Math.atan2(dir.x, dir.y) + Math.PI });
+    // The reader stands on the ground in front of the wall (which may sit higher than the plinth foot).
+    const pb = f.point(0, 0.05, -1.6);
+    pb.y = ctx.groundAt(pb.x, pb.z) + 0.05;
+    spots.push({ id: 'meta-sudans-playbill', kind: 'inscription', position: pb, heading: Math.atan2(dir.x, dir.y) + Math.PI });
     readables.push({
       id: 'meta-sudans-playbill',
       at: f.point(0, 2.0, -0.03),

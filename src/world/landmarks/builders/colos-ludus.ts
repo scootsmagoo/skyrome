@@ -20,7 +20,7 @@ import { inscriptionPanel } from '../../../arch/common/inscription';
 import { placeProp } from '../../../arch/props';
 import { Rng } from '../../../core/Rng';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
-import { Oval, type ReadableSpec, addReadables, flight, frontSteps, ovalBand, ovalSweep, risers, solid, span, statueGeometry } from './colos-kit';
+import { Oval, type ReadableSpec, addLamps, addReadables, flight, frontSteps, lampAt, ovalBand, ovalSweep, risers, solid, span, statueGeometry } from './colos-kit';
 import { column } from '../../../arch/classical/column';
 import { complementRanges } from './colos-colosseum';
 import { courtyardBuilding, palus, weaponRack, type CourtSpec } from './colos-court';
@@ -497,6 +497,7 @@ function buildLudusMagnus(ctx: LandmarkContext): LandmarkBuild {
     groundAt: ctx.groundAt,
     detail: ctx.detail,
     seed: 'ludus-magnus',
+    gateTorches: false, // it has its own, beside the carved name
   };
   const res = courtyardBuilding(spec);
   const b = res.b;
@@ -548,9 +549,11 @@ function buildLudusMagnus(ctx: LandmarkContext): LandmarkBuild {
     f.span('brick', -1.2, 0, -0.2, -0.85, 1.1, 3.6, { collide: true });
     f.span('brick', 0.85, 0, -0.2, 1.2, 1.1, 3.6, { collide: true });
     f.span('black', -0.85, -2.6, 0.2, 0.85, 0.0, 3.6);
-    for (let i = 0; i < 6; i++) f.span('travertine', -0.85, -0.2 * (i + 1), 0.4 + i * 0.5, 0.85, -0.2 * i, 0.4 + (i + 1) * 0.5);
+    // The flight leads down towards the front wall (−z, the Colosseum): its head, level with the
+    // court, is at the south end where the player stands.
+    for (let i = 0; i < 6; i++) f.span('travertine', -0.85, -0.2 * (i + 1), 0.4 + (5 - i) * 0.5, 0.85, -0.2 * i, 0.4 + (6 - i) * 0.5);
     f.solid(-0.85, 0, 0.2, 0.85, 1.1, 3.6);
-    spots.push({ id: 'ludus-tunnel', kind: 'door', position: d.point(tx, 0.05, tz - 0.6), heading: 0 });
+    spots.push({ id: 'ludus-tunnel', kind: 'door', position: d.point(tx, 0.05, tz + 4.3), heading: Math.PI });
   }
   // The street front: LVDVS · MAGNVS carved over the gate, torches either side, and a painted
   // programme (Pompeian formula) on the plaster panel right of the gate.
@@ -558,7 +561,10 @@ function buildLudusMagnus(ctx: LandmarkContext): LandmarkBuild {
   const gateTop = 2.6 + 1.6;
   if (high) {
     const fd = new Draw(b);
-    for (const sx of [-1, 1]) placeProp(fd, 'torch_bracket', sx * 2.35, y0 + 2.9, zFront - 0.01, 0, { rng: new Rng('lt' + sx), collide: false });
+    for (const sx of [-1, 1]) {
+      placeProp(fd, 'torch_bracket', sx * 2.35, y0 + 2.9, zFront - 0.01, 0, { rng: new Rng('lt' + sx), collide: false });
+      res.lamps.push(lampAt('torch', sx * 2.35, y0 + 3.38, zFront - 0.31));
+    }
     fd.span('plaster_cream', 3.75, y0 + 3.36, zFront - 0.025, 6.65, y0 + 4.12, zFront);
     if (typeof document !== 'undefined') {
       inscriptionPanel(b, { lines: ['Ludus Magnus'], width: 3.6, height: 0.62, style: 'carved' }, new THREE.Matrix4().makeTranslation(0, y0 + gateTop + 0.85, zFront - 0.04), { depth: 0.04 });
@@ -627,6 +633,7 @@ function buildLudusMagnus(ctx: LandmarkContext): LandmarkBuild {
   spots.push({ id: 'ludus-cellae', kind: 'npc', position: new THREE.Vector3(-6.5, y0 + 0.05, res.inner.d / 2 - 1.2), heading: 0 });
   const object = b.build('ludus-magnus');
   addReadables(ctx.game, object, readables);
+  addLamps(ctx.game, object, res.lamps);
   const far = farCourt(W, D, res.height, y0, 'brick', arena.top);
   return { object, colliders: b.colliders, spots, far, cullDistance: 900 };
 }
@@ -713,6 +720,7 @@ function buildSchool(ctx: LandmarkContext, o: SchoolOpts): LandmarkBuild {
     spots.push({ id: `${o.prefix}cages`, kind: 'container', position: d.point(-cw / 2 + 4, 0.05, cd / 2 - 3.2), heading: 0 });
   }
   const object = b.build(o.id);
+  addLamps(ctx.game, object, res.lamps);
   return { object, colliders: b.colliders, spots, far: farCourt(W, D, res.height, y0, o.wallMat ?? 'brick'), cullDistance: 700 };
 }
 

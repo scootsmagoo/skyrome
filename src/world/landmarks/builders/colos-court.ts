@@ -16,6 +16,7 @@ import { placeProp } from '../../../arch/props';
 import { column } from '../../../arch/classical/column';
 import { Rng } from '../../../core/Rng';
 import type { LandmarkBuilder, Spot } from '../types';
+import { lampAt, type LampSpec } from './colos-kit';
 
 export const builders: LandmarkBuilder[] = [];
 
@@ -79,6 +80,8 @@ export interface CourtSpec {
   plinthMat?: MaterialId;
   /** Skip the court floor (the caller paves it). */
   noFloor?: boolean;
+  /** Torch brackets either side of every gate on the street front (default true). */
+  gateTorches?: boolean;
   /** Prefix for spot ids. */
   prefix: string;
 }
@@ -86,6 +89,8 @@ export interface CourtSpec {
 export interface CourtResult {
   b: MeshBuilder;
   spots: Spot[];
+  /** Flames (gate torches, forges, lamps) in the building's local frame, for `addLamps`. */
+  lamps: LampSpec[];
   /** Open court rect (inside the portico), its floor level and the court-wall rect. */
   court: { w: number; d: number; y: number };
   inner: { w: number; d: number };
@@ -139,6 +144,7 @@ export function courtyardBuilding(spec: CourtSpec): CourtResult {
   const d = low ? d0.flatWalls() : d0;
   const rng = new Rng(spec.seed ?? spec.prefix);
   const spots: Spot[] = [];
+  const lamps: LampSpec[] = [];
   const rooms: CourtResult['rooms'] = {};
   const sh = spec.storeyH ?? 3.2;
   const H = spec.storeys * sh;
@@ -198,6 +204,8 @@ export function courtyardBuilding(spec: CourtSpec): CourtResult {
       for (let i = 0; i < n; i++) {
         const c = from + pitch * (i + 0.5);
         if (ground0.some(([a, z]) => c + 1.4 > a && c - 1.4 < z)) continue;
+        // No tabernae where an enterable room stands behind the wall (its furniture fills the depth).
+        if (roomsSpec.some((r) => r.side === side && Math.abs(c - (len / 2 + r.at)) < r.width / 2 + 1.4)) continue;
         const o: Opening = { x0: c - 1.2, x1: c + 1.2, y0: 0, y1: 2.6, fill: 'wood' };
         ops.push(o);
         ground0.push([o.x0, o.x1]);
@@ -314,8 +322,17 @@ export function courtyardBuilding(spec: CourtSpec): CourtResult {
     for (const sx of [-1, 1]) fy.span(cwMat, c + sx * hw, 0, t, c + sx * (hw + 0.3), top + 0.2, R, { collide: true });
     fy.span('concrete', c - hw - 0.3, top, t, c + hw + 0.3, top + 0.3, R);
     fy.span('paving_travertine', c - hw, 0, -0.6, c + hw, 0.04, R + P);
+    if (!low && g.side === 'front' && (spec.gateTorches ?? true)) {
+      // Torch brackets on the street face either side of the gate (lit from dusk).
+      for (const sx of [-1, 1]) {
+        const xT = c + sx * (hw + 0.85);
+        placeProp(fy, 'torch_bracket', xT, 2.7, 0, 0, { rng, collide: false });
+        lamps.push({ at: fy.point(xT, 3.2, -0.32), kind: 'torch' });
+      }
+    }
     if (g.spot) {
-      const p = fy.point(c, 0.05, -1.2);
+      // On the threshold (the top tread where the building stands on a plinth with steps).
+      const p = fy.point(c, 0.05, -0.16);
       spots.push({ id: `${spec.prefix}${g.spot}`, kind: 'door', position: p, heading: outHeading(g.side) + Math.PI });
     }
   }
@@ -336,10 +353,22 @@ export function courtyardBuilding(spec: CourtSpec): CourtResult {
     const deep = t + 0.45;
     const P2 = (x: number, z: number) => fy.point(x, 0.05, z);
     const head = outHeading(r.side) + Math.PI; // looking into the court
-    if (!low) furnishRoom(fy, r.kind, x0, x1, t, R, rng);
+    if (!low) {
+      furnishRoom(fy, r.kind, x0, x1, t, R, rng);
+      // Flames: the forge fire burns all day; shrine and infirmary lamps are small.
+      const back = t + 0.35;
+      if (r.kind === 'forge') lamps.push({ at: fy.point(x0 + 1.0, 1.08, back + 0.6), kind: 'hearth', intensity: 18, distance: 10 });
+      else if (r.kind === 'shrine') lamps.push({ at: fy.point(c, 1.4, back + 0.2), kind: 'hearth', intensity: 5, distance: 5 });
+      else if (r.kind === 'medicus') lamps.push({ at: fy.point(c + 0.4, 0.88, back + 0.9), kind: 'lamp' });
+      else if (r.kind === 'office' || r.kind === 'mess') lamps.push({ at: fy.point(c + 0.35, 0.85, back + 1.2), kind: 'lamp' });
+    }
     const kindMap: Record<RoomKind, string> = { armory: 'container', medicus: 'npc', office: 'npc', workshop: 'npc', store: 'container', shrine: 'shrine', mess: 'sit', forge: 'npc', cell: 'container' };
-    const pos = r.kind === 'armory' || r.kind === 'store' ? P2(c, deep + 0.4) : P2(c, mid);
-    spots.push({ id: r.spotId ?? `${spec.prefix}${r.id}`, kind: r.spotKind ?? kindMap[r.kind], position: pos, heading: r.kind === 'armory' || r.kind === 'store' ? head + Math.PI : head });
+    // Containers face the shelves; people stand where the furniture leaves room (see roomStand).
+    const spotKind = r.spotKind ?? kindMap[r.kind];
+    const person = spotKind === 'npc' || spotKind === 'vendor';
+    const [sx, sz] = roomStand(r.kind, c, r.width, deep, mid, person);
+    const pos = P2(sx, sz);
+    spots.push({ id: r.spotId ?? `${spec.prefix}${r.id}`, kind: spotKind, position: pos, heading: (r.kind === 'armory' || r.kind === 'store') && !person ? head + Math.PI : head });
     rooms[r.id] = { center: P2(c, mid), heading: head };
   }
 
@@ -397,7 +426,7 @@ export function courtyardBuilding(spec: CourtSpec): CourtResult {
   });
 
   spots.push({ id: `${spec.prefix}court`, kind: 'spawn', position: new THREE.Vector3(0, y0 + 0.05, 0), heading: 0 });
-  return { b, spots, court: { w: wc, d: dc, y: y0 }, inner: { w: wi, d: di }, height: H, rooms };
+  return { b, spots, lamps, court: { w: wc, d: dc, y: y0 }, inner: { w: wi, d: di }, height: H, rooms };
 }
 
 /**
@@ -451,6 +480,32 @@ export function stripWall(d: Draw, mat: MaterialId, x0: number, x1: number, y0: 
   }
 }
 
+/**
+ * Where a spot goes in a furnished room (side frame: x along the wall, z inward from the outer
+ * wall's inner face `t`; `back` = t + 0.35, the court opening is at the far end). Offices: a person
+ * stands behind the desk facing the door, a container is the strongbox. Infirmary: between the bed
+ * and the instrument table. Forge and workshop: in the open floor beside the anvil / bench. A store
+ * or armoury keeps its container at the shelves and puts a person in the open floor.
+ */
+function roomStand(kind: RoomKind, c: number, width: number, deep: number, mid: number, person: boolean): [number, number] {
+  const back = deep - 0.1; // t + 0.35
+  switch (kind) {
+    case 'armory':
+    case 'store':
+      return person ? [c, back + 1.9] : [c, deep + 0.4];
+    case 'office':
+      return person ? [c, back + 0.4] : [c + width / 2 - 0.65, back + 1.1];
+    case 'medicus':
+      return [c - 0.9, back + 1.9];
+    case 'forge':
+      return [c - 0.2, back + 2.4];
+    case 'workshop':
+      return [c, back + 2.2];
+    default:
+      return [c, mid];
+  }
+}
+
 /** Props for an enterable room, in its side frame (x0..x1 along the wall, z from t inward to R). */
 function furnishRoom(f: Draw, kind: RoomKind, x0: number, x1: number, t: number, R: number, rng: Rng) {
   const back = t + 0.35;
@@ -484,6 +539,7 @@ function furnishRoom(f: Draw, kind: RoomKind, x0: number, x1: number, t: number,
     }
     case 'office': {
       placeProp(f, 'table', cx, 0, back + 1.2, 0, { rng });
+      placeProp(f, 'oil_lamp', cx + 0.35, 0.77, back + 1.2, 0, { rng, collide: false });
       placeProp(f, 'stool', cx, 0, back + 2.0, Math.PI, { rng, variant: 2 });
       placeProp(f, 'shelf', x0 + 0.6, 0, back + 0.1, 0, { rng });
       f.span('iron', x1 - 1.0, 0, back, x1 - 0.3, 0.6, back + 0.5, { collide: true });
@@ -515,6 +571,7 @@ function furnishRoom(f: Draw, kind: RoomKind, x0: number, x1: number, t: number,
       break;
     case 'mess':
       placeProp(f, 'table', cx, 0, back + 1.2, 0, { rng });
+      placeProp(f, 'oil_lamp', cx + 0.35, 0.77, back + 1.2, 0, { rng, collide: false });
       placeProp(f, 'bench', cx, 0, back + 0.5, 0, { rng });
       placeProp(f, 'bench', cx, 0, back + 1.9, Math.PI, { rng });
       placeProp(f, 'amphora_tall', x0 + 0.5, 0, back + 0.2, 0, { rng });

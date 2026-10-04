@@ -4,15 +4,11 @@
  * colliders and spots, and stays inside its triangle budget.
  */
 import * as THREE from 'three';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import * as atlas from '../src/data/atlas';
-import { Rng } from '../src/core/Rng';
-import { bearingToRotationY } from '../src/core/math';
-import { MeshBuilder, type ColliderSpec } from '../src/gfx/MeshBuilder';
-import { WORLD_SCALE, toGame } from '../src/world/coords';
-import { landmarkPads } from '../src/world/rome/buildRome';
-import { buildHeightmap, type Heightmap } from '../src/world/terrain/heightmap';
-import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, LandmarkData } from '../src/world/landmarks/types';
+import type { ColliderSpec } from '../src/gfx/MeshBuilder';
+import type { LandmarkBuild, LandmarkBuilder } from '../src/world/landmarks/types';
+import { COLOS_IDS, ctxFor } from './colos-ctx';
 import { countTriangles } from '../src/world/landmarks/builders/colos-kit';
 import { builders as colosseum } from '../src/world/landmarks/builders/colos-colosseum';
 import { builders as ludus } from '../src/world/landmarks/builders/colos-ludus';
@@ -21,35 +17,7 @@ import { builders as baths } from '../src/world/landmarks/builders/colos-baths';
 import { builders as caelian } from '../src/world/landmarks/builders/colos-caelian';
 import { builders as quarter } from '../src/world/landmarks/builders/colos-quarter';
 
-export const COLOS_IDS = [
-  'colosseum', 'ludus-magnus', 'ludus-dacicus', 'ludus-matutinus', 'ludus-gallicus', 'castra-misenatium', 'moneta', 'meta-sudans',
-  'baths-titus', 'baths-trajan', 'domus-aurea-buried', 'sette-sale', 'porticus-liviae', 'lacus-orphei', 'domus-plinii',
-  'temple-divus-claudius', 'arch-dolabella', 'castra-peregrina', 'macellum-magnum', 'statio-vigiles-v', 'curiae-veteres',
-];
-
 const ALL: LandmarkBuilder[] = [...colosseum, ...ludus, ...fountains, ...baths, ...caelian, ...quarter];
-
-let hm: Heightmap;
-beforeAll(() => {
-  const bounds = { minX: 200, maxX: 1500, minZ: -500, maxZ: 1050 };
-  hm = buildHeightmap({ ...atlas, bounds } as never, { spacing: 2, pads: landmarkPads(atlas.CITY_BOUNDS) });
-});
-
-export function ctxFor(id: string, detail: 'high' | 'low' = 'high'): LandmarkContext {
-  const lm = atlas.LANDMARK_BY_ID[id] as unknown as LandmarkData;
-  const [gx, gz] = toGame(lm.center[0], lm.center[1]);
-  const baseY = hm.heightAt(gx, gz);
-  const r = bearingToRotationY(lm.rotation);
-  return {
-    game: undefined as never,
-    lm,
-    S: WORLD_SCALE,
-    rng: new Rng(`landmark:${id}`),
-    detail,
-    builder: () => new MeshBuilder(),
-    groundAt: (lx, lz) => hm.heightAt(gx + lx * Math.cos(r) + lz * Math.sin(r), gz - lx * Math.sin(r) + lz * Math.cos(r)) - baseY,
-  };
-}
 
 function validCollider(c: ColliderSpec): boolean {
   const fin = (v: THREE.Vector3) => Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);

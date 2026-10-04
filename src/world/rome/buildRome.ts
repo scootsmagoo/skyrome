@@ -39,6 +39,22 @@ const PAD_CATEGORIES = new Set([
   'palace', 'market', 'camp', 'monument', 'fountain', 'portico', 'prison', 'warehouse', 'library', 'curia', 'gate', 'tomb', 'shrine',
 ]);
 
+/**
+ * Flat ground a builder lays OUTSIDE the atlas footprint (real m): a plaza, an approach, a porch.
+ * `grow` widens the whole pad; `front` adds a forecourt that deep in front of the facade (rect
+ * footprints), as wide as the building, blending out over `frontMargin`; `margin` replaces the 14 m
+ * blend of the main pad to the natural ground.
+ */
+const PAD_EXTRA: Record<string, { grow?: number; margin?: number; front?: number; frontMargin?: number }> = {
+  // The Colosseum's paved plaza out to its ring of cippi (builder: colos-colosseum.ts), cut into
+  // the foot of the Velia and the Oppian.
+  colosseum: { grow: 20, margin: 22 },
+  // The porch and approach on the north side, on the brow of the Oppian (colos-baths.ts).
+  'baths-titus': { front: 26, frontMargin: 20 },
+  // The entrance porch and its inscription stand on the lip of the Oppian (colos-baths.ts).
+  'baths-trajan': { front: 22, frontMargin: 14 },
+};
+
 export function landmarkPads(bounds: { minX: number; maxX: number; minZ: number; maxZ: number }): TerrainPad[] {
   const pads: TerrainPad[] = [];
   for (const lm of atlas.LANDMARKS) {
@@ -50,12 +66,22 @@ export function landmarkPads(bounds: { minX: number; maxX: number; minZ: number;
     if (x < bounds.minX || x > bounds.maxX || z < bounds.minZ || z > bounds.maxZ) continue;
     // Very large complexes on slopes (e.g. terraced markets) keep their natural ground unless pinned.
     if (footprintRadius(lm) > 260 && lm.baseElevation === undefined) continue;
+    const extra = PAD_EXTRA[lm.id];
     pads.push({
       id: lm.id,
-      polygon: footprintPolygon(lm.center, lm.rotation, lm.footprint as any, 3),
+      polygon: footprintPolygon(lm.center, lm.rotation, lm.footprint as any, 3 + (extra?.grow ?? 0)),
       elevation: lm.baseElevation,
-      margin: 14,
+      margin: extra?.margin ?? 14,
     });
+    if (extra?.front && lm.footprint.kind === 'rect') {
+      // Forecourt: the strip in front of the facade (local −z), same height and ground kind, joined to the main pad.
+      const { w, d } = lm.footprint;
+      const th = (lm.rotation * Math.PI) / 180;
+      const cos = Math.cos(th), sin = Math.sin(th);
+      const tr = (lx: number, lz: number): [number, number] => [lm.center[0] + lx * cos - lz * sin, lm.center[1] + lx * sin + lz * cos];
+      const hw = w / 2 + 3, z0 = -d / 2 - extra.front, z1 = -d / 2 + 6;
+      pads.push({ id: lm.id, polygon: [tr(-hw, z0), tr(hw, z0), tr(hw, z1), tr(-hw, z1)], elevation: lm.baseElevation, margin: extra.frontMargin ?? 14 });
+    }
   }
   return pads;
 }

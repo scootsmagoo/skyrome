@@ -852,6 +852,119 @@ export function addReadables(game: Game | undefined, root: THREE.Object3D, items
   }
 }
 
+// ---------------------------------------------------------------- lamps, torches and braziers
+
+/**
+ * What a flame is called in the light pool (src/world/lights):
+ * - `torch`: a bracket torch, lit from dusk to dawn.
+ * - `lamp`: an oil lamp or lantern, lit from dusk to dawn (small, short reach).
+ * - `brazier`: burns all day (its glow shows) but sunlight drowns its light outdoors.
+ * - `hearth`: burns all day and keeps its light by day: for dark rooms (forges, shrines, baths).
+ */
+export type LampKind = 'torch' | 'lamp' | 'brazier' | 'hearth';
+
+interface LampPreset {
+  intensity: number;
+  distance: number;
+  night: boolean;
+  dayScale: number;
+  glow: number;
+  flicker: number;
+  priority: number;
+}
+
+const LAMP_PRESETS: Record<LampKind, LampPreset> = {
+  torch: { intensity: 14, distance: 11, night: true, dayScale: 0, glow: 0.35, flicker: 0.4, priority: 1.1 },
+  lamp: { intensity: 7, distance: 6.5, night: true, dayScale: 0, glow: 0.2, flicker: 0.22, priority: 0.9 },
+  brazier: { intensity: 22, distance: 11, night: false, dayScale: 0, glow: 0.55, flicker: 0.45, priority: 1.2 },
+  hearth: { intensity: 16, distance: 9, night: false, dayScale: 0.8, glow: 0.45, flicker: 0.4, priority: 1.1 },
+};
+
+export interface LampSpec {
+  /** Landmark-local position of the flame. */
+  at: THREE.Vector3;
+  kind: LampKind;
+  /** Override the preset's reach (m) or intensity. */
+  distance?: number;
+  intensity?: number;
+}
+
+/** Local-space point and kind for a quick `lamps.push(...)`. */
+export function lampAt(kind: LampKind, x: number, y: number, z: number, o: { distance?: number; intensity?: number } = {}): LampSpec {
+  return { at: new THREE.Vector3(x, y, z), kind, ...o };
+}
+
+interface LightsGame {
+  lights?: { request(r: Record<string, unknown>): { setEnabled(on: boolean): void; remove(): void } };
+}
+
+interface LampGroup {
+  root: THREE.Object3D;
+  lamps: LampSpec[];
+  handles: { setEnabled(on: boolean): void; remove(): void }[];
+  shown: boolean;
+}
+
+/**
+ * Registers a landmark's flames with the sky module's light pool (`game.lights`), which only
+ * exists once the world is built and the sky installed: requests wait for it, then take their
+ * world positions from `root` (its matrix is final by then). A flame is switched off while its
+ * landmark is culled. One System for the whole module (cheap: a visibility check every few frames).
+ */
+export class LampSystem implements System {
+  readonly name = 'colos-lamps';
+  readonly priority = 94;
+  private groups: LampGroup[] = [];
+  private frame = 0;
+
+  constructor(private readonly game: Game) {}
+
+  add(root: THREE.Object3D, lamps: LampSpec[]) {
+    if (lamps.length) this.groups.push({ root, lamps, handles: [], shown: true });
+  }
+
+  lateUpdate() {
+    const pool = (this.game as unknown as LightsGame).lights;
+    if (!pool || this.frame++ % 6 !== 0) return;
+    const p = new THREE.Vector3();
+    for (const g of this.groups) {
+      if (!g.root.parent) continue; // not in the scene yet
+      if (!g.handles.length) {
+        g.root.updateWorldMatrix(true, false);
+        for (const l of g.lamps) {
+          const o = LAMP_PRESETS[l.kind];
+          p.copy(l.at).applyMatrix4(g.root.matrixWorld);
+          g.handles.push(
+            pool.request({
+              position: { x: p.x, y: p.y, z: p.z },
+              intensity: l.intensity ?? o.intensity,
+              distance: l.distance ?? o.distance,
+              night: o.night,
+              dayScale: o.dayScale,
+              glow: o.glow,
+              flicker: o.flicker,
+              priority: o.priority,
+            }),
+          );
+        }
+      }
+      const on = visibleInScene(g.root);
+      if (on !== g.shown) {
+        g.shown = on;
+        for (const h of g.handles) h.setEnabled(on);
+      }
+    }
+  }
+}
+
+/** Light up a landmark's flames once the light pool exists. No-op without a running game (tests). */
+export function addLamps(game: Game | undefined, root: THREE.Object3D, lamps: LampSpec[]) {
+  if (!game || typeof (game as Partial<Game>).addSystem !== 'function' || !lamps.length) return;
+  const g = game as Game & { colosLamps?: LampSystem };
+  if (!g.colosLamps || !game.getSystem?.('colos-lamps')) g.colosLamps = game.addSystem(new LampSystem(game));
+  g.colosLamps.add(root, lamps);
+}
+
 // ---------------------------------------------------------------- trees in landmark-local space
 
 /** A Forest whose instances live in its group's LOCAL frame (inside a landmark object). */

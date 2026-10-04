@@ -27,7 +27,7 @@ import { inscriptionPanel } from '../../../arch/common/inscription';
 import { placeProp } from '../../../arch/props';
 import { Rng } from '../../../core/Rng';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
-import { addReadables, flight, lodInstances, plantTrees, risers, span, type TreeSpot } from './colos-kit';
+import { addLamps, addReadables, flight, lodInstances, plantTrees, risers, span, type LampSpec, type TreeSpot } from './colos-kit';
 import { courtyardBuilding, palus } from './colos-court';
 import { waterSheetMaterial } from './colos-fountains';
 
@@ -151,7 +151,8 @@ function buildClaudianum(ctx: LandmarkContext): LandmarkBuild {
       for (const sx of [-1, 1]) span(b, 'travertine', m, sx * (sw / 2), -1.2, 0, sx * (sw / 2 + 0.8), drop + 1.1, count * run + 0.3, true);
       // Gap in the parapet.
       d.span('paving_travertine', -sw / 2, -0.05, Z0 - 0.45, sw / 2, 0.06, Z0 + 1.6);
-      spots.push({ id: 'claudium-stairs', kind: 'spawn', position: new THREE.Vector3(0, -drop + 0.05, Z0 - count * run - 2), heading: 0 });
+      const zs = Z0 - count * run - 2;
+      spots.push({ id: 'claudium-stairs', kind: 'spawn', position: new THREE.Vector3(0, Math.max(-drop, ctx.groundAt(0, zs)) + 0.05, zs), heading: 0 });
     }
   }
   // ---- porticoes round the garden (instanced columns) and the garden rows
@@ -362,12 +363,15 @@ function buildPeregrina(ctx: LandmarkContext): LandmarkBuild {
     s.position.add(new THREE.Vector3(0, 0, D - 15));
     spots.push(s);
   }
+  const lamps: LampSpec[] = pr.lamps.map((l) => ({ ...l, at: l.at.clone().add(new THREE.Vector3(0, 0, D - 15)) }));
   if (high) {
     palus(d, -16, 0, -6);
     palus(d, 16, 0, -6);
     placeProp(d, 'cart', 10, 0, -D + 3.5, 0.2, { rng: new Rng('per') });
   }
-  return { object: b.build('castra-peregrina'), colliders: b.colliders, spots, cullDistance: 900 };
+  const object = b.build('castra-peregrina');
+  addLamps(ctx.game, object, lamps);
+  return { object, colliders: b.colliders, spots, cullDistance: 900 };
 }
 
 // ---------------------------------------------------------------- Macellum Magnum
@@ -435,9 +439,17 @@ function buildMacellum(ctx: LandmarkContext): LandmarkBuild {
     }
     for (const [x, z] of [[-15, -15], [15, 15], [-15, 15]] as const) placeProp(d, 'amphora_stack', x, 0.05, z, 0, { rng });
   }
+  // The court spot sits between the tholos platform and the ring of stalls (the tholos fills the centre).
+  const cs = spots.find((sp) => sp.id === 'macellum-court');
+  if (cs) {
+    cs.position.set(0, 0.05, R + 1.2 + 1.8);
+    cs.heading = Math.PI;
+  }
   spots.push({ id: 'macellum-tholos', kind: 'vista', position: new THREE.Vector3(0, 0.55, R + 0.6), heading: Math.PI });
   spots.push({ id: 'macellum-aedile', kind: 'npc', position: new THREE.Vector3(2, 0.55, -R - 0.8), heading: Math.PI });
-  return { object: b.build('macellum-magnum'), colliders: b.colliders, spots, cullDistance: 1000 };
+  const object = b.build('macellum-magnum');
+  addLamps(ctx.game, object, res.lamps);
+  return { object, colliders: b.colliders, spots, cullDistance: 1000 };
 }
 
 // ---------------------------------------------------------------- Statio vigilum V
@@ -482,8 +494,16 @@ function buildVigiles(ctx: LandmarkContext): LandmarkBuild {
     }
     void flight;
   }
+  // The cistern fills the middle of the court: the court spot stands south of it, facing it.
+  const vc = spots.find((sp) => sp.id === 'vigiles-court');
+  if (vc) {
+    vc.position.set(0, 0.05, 2.6);
+    vc.heading = Math.PI;
+  }
   spots.push({ id: 'vigiles-sentry', kind: 'npc', position: new THREE.Vector3(2.6, 0.05, -(30 * ctx.S) / 2 - 1.2), heading: Math.PI });
-  return { object: b.build('statio-vigiles-v'), colliders: b.colliders, spots, cullDistance: 700 };
+  const object = b.build('statio-vigiles-v');
+  addLamps(ctx.game, object, res.lamps);
+  return { object, colliders: b.colliders, spots, cullDistance: 700 };
 }
 
 export const builders: LandmarkBuilder[] = [
