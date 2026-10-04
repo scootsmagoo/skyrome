@@ -21,12 +21,13 @@ import type { ColliderSpec, MeshBuilder } from '../../../gfx/MeshBuilder';
 import type { LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import { equusStatue } from './trajan-equus';
 import { FORUM_X } from './trajan-forum';
-import { LodChunks, boxMinMax, quad } from './trajan-kit';
+import { LodChunks, boxMinMax, quad, solidBox } from './trajan-kit';
 import { TRAJAN_INSCRIPTIONS, forumToLocal } from './trajan-layout';
 import { dacianArmsMaterial } from './trajan-materials';
 import { Lamps } from './trajan-lights';
 import { garland, tripod } from './trajan-props';
 import { chariotTeam, signum, tropaeum, victory } from './trajan-sculpture';
+import { installExtras } from './trajan-extras';
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
@@ -60,10 +61,12 @@ function gateway(b: MeshBuilder, F: THREE.Matrix4, detail: 'high' | 'low', spots
   for (const sx of [-1, 1]) {
     const xa = Math.min(sx * x0, sx * x1);
     const xb = Math.max(sx * x0, sx * x1);
-    boxMinMax(b, 'marble', at, xa, -0.3, -wingDepth / 2, xb, yEnt + ent, wingDepth / 2, { collide: true });
-    boxMinMax(b, 'marble', at, xa, yEnt + ent, -wingDepth / 2 + 0.15, xb, yAttic + 0.6, wingDepth / 2 - 0.15);
     const xc = (xa + xb) / 2;
     const D = (colH / 10) * 0.9;
+    boxMinMax(b, 'marble', at, xa, -0.3, -wingDepth / 2, xb, yEnt + ent, wingDepth / 2);
+    // The collider takes in the column plinths standing proud of both faces (D·0.9).
+    solidBox(b, at, xc, (yEnt + ent - 0.3) / 2, 0, xb - xa, yEnt + ent + 0.3, wingDepth + 2 * D * 0.9);
+    boxMinMax(b, 'marble', at, xa, yEnt + ent, -wingDepth / 2 + 0.15, xb, yAttic + 0.6, wingDepth / 2 - 0.15);
     for (const side of [-1, 1]) {
       const zf = side * (wingDepth / 2);
       const rot = side < 0 ? 0 : Math.PI;
@@ -164,7 +167,8 @@ function equus(b: MeshBuilder, F: THREE.Matrix4, detail: 'high' | 'low', spots: 
   }
   if (spots) {
     spots.push({ id: 'equus-inscription', kind: 'inscription', position: V(0, y0 + h * 0.5, -d / 2 - 0.05).applyMatrix4(at), heading: 0 });
-    spots.push({ id: 'equus-orator', kind: 'npc', position: V(-2.2, 0.39, -d / 2 - 1.4).applyMatrix4(at), heading: Math.PI });
+    // (on the upper step, beside the inscription, addressing the square)
+    spots.push({ id: 'equus-orator', kind: 'npc', position: V(-1.2, 0.39, -d / 2 - 0.42).applyMatrix4(at), heading: Math.PI });
     spots.push({ id: 'equus-vista', kind: 'vista', position: V(0, 0.03, -d / 2 - 9).applyMatrix4(at), heading: 0 });
   }
 }
@@ -176,6 +180,7 @@ interface Fires {
 }
 
 function lodBuild(ctx: LandmarkContext, name: string, distance: number, fn: (b: MeshBuilder, F: THREE.Matrix4, detail: 'high' | 'low', spots: Spot[] | null, fires?: Fires) => void) {
+  installExtras(ctx.game);
   const F = forumToLocal(ctx.lm);
   const spots: Spot[] = [];
   const fires: Fires = { b: ctx.builder(), lamps: new Lamps() };

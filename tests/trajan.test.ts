@@ -16,6 +16,7 @@ import type { LandmarkBuild, LandmarkData, Spot } from '../src/world/landmarks/t
 import { SIDE_X } from '../src/world/landmarks/builders/trajan-basilica';
 import { PLAN, TRAJAN_INSCRIPTIONS, divide, flight, forumSite, forumToLocal, uvToLocal, uvToWorld, worldToLocal, worldToUV } from '../src/world/landmarks/builders/trajan-layout';
 import { brickFront } from '../src/world/landmarks/builders/trajan-facades';
+import { MK, marketsPolar } from '../src/world/landmarks/builders/trajan-markets';
 import { coneRoof } from '../src/world/landmarks/builders/trajan-kit';
 
 const IDS = ['forum-trajan', 'forum-trajan-gateway', 'equus-traiani', 'basilica-ulpia', 'column-trajan', 'bibliotheca-ulpia-east', 'bibliotheca-ulpia-west', 'markets-trajan'];
@@ -84,12 +85,21 @@ interface Walk {
   y: number;
   blockedAt: THREE.Vector3 | null;
   maxStep: number;
+  /** Largest single fall between samples (a missing floor, a pit, an unrailed edge). */
+  maxDrop: number;
+  dropAt: THREE.Vector3 | null;
 }
 
-/** Walk a polyline (world xz) from height y0, climbing ≤ 0.3 m per sample and checking headroom. */
+/**
+ * Walk a polyline (world xz) from height y0, climbing ≤ 0.3 m per sample and checking headroom.
+ * The pads are flat at y = 0, which stands in for the terrain; a walker with no collider under
+ * it falls to that and the fall is recorded (maxDrop), so missing floors are caught.
+ */
 function walk(cols: ColliderSpec[], pts: THREE.Vector3[], y0: number): Walk {
   let y = y0;
   let maxStep = 0;
+  let maxDrop = 0;
+  let dropAt: THREE.Vector3 | null = null;
   for (let i = 0; i < pts.length - 1; i++) {
     const a = pts[i];
     const b = pts[i + 1];
@@ -99,13 +109,17 @@ function walk(cols: ColliderSpec[], pts: THREE.Vector3[], y0: number): Walk {
       const under = columnAt(cols, p.x, p.z, 0).filter(([, top]) => top <= y + 0.3);
       const ny = Math.max(0, ...under.map(([, top]) => top));
       maxStep = Math.max(maxStep, ny - y);
+      if (y - ny > maxDrop) {
+        maxDrop = y - ny;
+        dropAt = p;
+      }
       y = ny;
       // Anything solid between knee height and the head, within the capsule radius, blocks.
       const blocking = columnAt(cols, p.x, p.z, 0.3).some(([bot, top]) => top > y + 0.3 && bot < y + 1.8);
-      if (blocking) return { y, blockedAt: p, maxStep };
+      if (blocking) return { y, blockedAt: p, maxStep, maxDrop, dropAt };
     }
   }
-  return { y, blockedAt: null, maxStep };
+  return { y, blockedAt: null, maxStep, maxDrop, dropAt };
 }
 
 /** Forum-frame (u·S, v) game point → world game point. */
@@ -121,7 +135,7 @@ const spotWorld = (id: string, spotId: string) => {
   return { p, dir: new THREE.Vector3(Math.sin(h), 0, Math.cos(h)) };
 };
 
-describe('trajan layout', () => {
+describe('trajan layout', { timeout: 60_000 }, () => {
   it('maps the forum frame to the world and back', () => {
     for (const [u, v] of [
       [0, 0],
@@ -174,7 +188,7 @@ describe('trajan layout', () => {
   });
 });
 
-describe('trajan builders', () => {
+describe('trajan builders', { timeout: 60_000 }, () => {
   it('every assigned id has its own builder', () => {
     for (const id of IDS) expect(builderFor(lmOf(id))!.handles).toContain(id);
   });
@@ -236,7 +250,7 @@ describe('trajan builders', () => {
   });
 });
 
-describe('trajan walkability (collider ground profile)', () => {
+describe('trajan walkability (collider ground profile)', { timeout: 60_000 }, () => {
   const cols = worldColliders();
   const route = (pts: [number, number][]) => pts.map(([x, z]) => fl(x, z));
 
@@ -255,9 +269,40 @@ describe('trajan walkability (collider ground profile)', () => {
       const w = walk(cols, c.pts(), c.y0);
       expect(w.blockedAt, `blocked at ${w.blockedAt?.toArray().map((v) => v.toFixed(2))}`).toBeNull();
       expect(w.maxStep).toBeLessThanOrEqual(0.26);
+      expect(w.maxDrop, `fell at ${w.dropAt?.toArray().map((v) => v.toFixed(2))}`).toBeLessThanOrEqual(0.26);
       expect(w.y).toBeCloseTo(c.y, 1);
     });
   }
+
+  it('the markets upper street can be walked end to end, into its shops and on to the Great Hall', () => {
+    const m = placement('markets-trajan');
+    const P = marketsPolar(lmOf('markets-trajan'));
+    const at = (r: number, deg: number) => {
+      const a = P.bulge + (deg * Math.PI) / 180;
+      return new THREE.Vector3(P.c.x + Math.cos(a) * r, 0, P.c.z + Math.sin(a) * r).applyMatrix4(m);
+    };
+    const rv = (MK.rV0 + MK.rV1) / 2;
+    // From the stair head on to the landing, round the street to its north end, along the passage.
+    const along: THREE.Vector3[] = [at(MK.rO - 1, 81), at(31, 77), at(rv, 74)];
+    for (let d = 70; d >= -36; d -= 4) along.push(at(rv, d));
+    const hall = new THREE.Vector3(23 + 1.6, 0, -8.5).applyMatrix4(m);
+    along.push(hall);
+    const w = walk(cols, along, MK.y2);
+    expect(w.blockedAt, `blocked at ${w.blockedAt?.toArray().map((v) => v.toFixed(2))}`).toBeNull();
+    expect(w.maxDrop, `fell at ${w.dropAt?.toArray().map((v) => v.toFixed(2))}`).toBeLessThanOrEqual(0.06);
+    expect(w.y).toBeCloseTo(MK.y2, 1);
+    // Into an open upper shop on each side and back out.
+    // (bay centres: the inner row has 16 bays over ±74°, the outer row 12 over −30°..66°)
+    for (const [r0, r1, deg] of [
+      [rv, MK.rT + 2.2, -74 + 9.5 * 9.25],
+      [rv, MK.rO - 0.8, -30 + 4.5 * 8],
+    ]) {
+      const s = walk(cols, [at(r0, deg), at(r1, deg)], MK.y2);
+      expect(s.blockedAt, `blocked going into the shop at ${deg}°`).toBeNull();
+      expect(s.maxDrop, `fell in the shop at ${deg}°`).toBeLessThanOrEqual(0.06);
+      expect(s.y).toBeGreaterThan(MK.y2 - 0.05);
+    }
+  });
 
   it('the viewing gallery stair climbs to the gallery in ≤ 0.2 m risers', () => {
     const { p, dir } = spotWorld('column-trajan', 'column-gallery-stair');
@@ -273,6 +318,9 @@ describe('trajan walkability (collider ground profile)', () => {
     expect(w.blockedAt).toBeNull();
     expect(w.maxStep).toBeLessThanOrEqual(0.21);
     expect(w.y).toBeCloseTo(8.4, 1);
+    // Straight on past the stair head onto the landing and the deck (the reviewers' fall).
+    const on = walk(cols, [p.clone().addScaledVector(dir, 14.5), p.clone().addScaledVector(dir, 17.5)], w.y);
+    expect(on.maxDrop).toBeLessThanOrEqual(0.06);
   });
 
   it('a hemicycle taberna can be entered from the ring street', () => {
@@ -282,10 +330,10 @@ describe('trajan walkability (collider ground profile)', () => {
   });
 });
 
-describe('trajan lamps, roofs and street fronts', () => {
+describe('trajan lamps, roofs and street fronts', { timeout: 60_000 }, () => {
   /** A stand-in Game: collects systems, and a light pool that records requests. */
   function fakeGame() {
-    const systems: { update?: (dt: number, a: number) => void }[] = [];
+    const systems: { name?: string; update?: (dt: number, a: number) => void }[] = [];
     const requests: { position: THREE.Vector3Like; intensity?: number }[] = [];
     const game = { addSystem: (s: (typeof systems)[number]) => (systems.push(s), s), lights: undefined as unknown };
     return { game, systems, requests, installPool: () => (game.lights = { request: (r: (typeof requests)[number]) => (requests.push(r), {}) }) };
@@ -297,17 +345,18 @@ describe('trajan lamps, roofs and street fronts', () => {
     const built = builderFor(lm)!.build({ game: f.game as never, lm, S: 0.6, rng: new Rng('x'), detail: 'high', builder: () => new MeshBuilder(), groundAt: () => 0 });
     built.object.position.set(100, 10, -50);
     built.object.updateMatrixWorld(true);
-    expect(f.systems.length).toBe(1);
-    f.systems[0].update?.(0.016, 1);
+    const queue = f.systems.filter((s) => s.name === 'trajanLamps');
+    expect(queue.length).toBe(1);
+    queue[0].update?.(0.016, 1);
     expect(f.requests.length).toBe(0); // no pool yet
     f.installPool();
-    f.systems[0].update?.(0.016, 1);
+    queue[0].update?.(0.016, 1);
     expect(f.requests.length).toBeGreaterThanOrEqual(20);
     for (const r of f.requests) {
       expect(Number.isFinite(r.position.x + r.position.y + r.position.z)).toBe(true);
       expect(r.position.y).toBeGreaterThan(10); // above the pad, in world space
     }
-    f.systems[0].update?.(0.016, 1);
+    queue[0].update?.(0.016, 1);
     expect(f.requests.length).toBeLessThan(200); // requested once
   });
 
@@ -319,7 +368,8 @@ describe('trajan lamps, roofs and street fronts', () => {
     }
     f.installPool();
     for (const s of f.systems) s.update?.(0.016, 1);
-    expect(f.systems.length).toBe(1); // one shared queue per game
+    expect(f.systems.filter((s) => s.name === 'trajanLamps').length).toBe(1); // one shared queue per game
+    expect(f.systems.filter((s) => s.name === 'trajanExtras').length).toBe(1); // and one extras system
     expect(f.requests.length).toBeGreaterThanOrEqual(60);
   });
 

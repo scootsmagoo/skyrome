@@ -27,12 +27,13 @@ import { inscriptionPanel } from '../../../arch/common/inscription';
 import { wall, type Opening } from '../../../arch/common/walls';
 import type { ColliderSpec, MeshBuilder } from '../../../gfx/MeshBuilder';
 import type { LandmarkBuilder, LandmarkContext, Spot } from '../types';
-import { LodChunks, UP, arcColliders, arcFloor, arcWall, boxMinMax, colonnadeColumn, coneRoof, facing, farColumn, quad, solidBox, type Mat } from './trajan-kit';
+import { LodChunks, UP, arcColliders, arcFloor, arcWall, boxMinMax, colonnadeColumn, coneRoof, facing, farColumn, halfDiscFloor, quad, solidBox, type Mat } from './trajan-kit';
 import { PLAN, S, TRAJAN_INSCRIPTIONS, divide, forumToLocal } from './trajan-layout';
 import { cipollinoMaterial, coffersMaterial, gildedTilesMaterial, graniteMaterial, sectileMaterial } from './trajan-materials';
 import { Lamps } from './trajan-lights';
 import { candelabrum, garland, statueBase, tribunal } from './trajan-props';
 import { chariotTeam, clipeus, dacianCaptive, figureBlock, victory } from './trajan-sculpture';
+import { installExtras } from './trajan-extras';
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
@@ -169,9 +170,13 @@ function shell(ctx: LandmarkContext, b: MeshBuilder, F: THREE.Matrix4, spots: Sp
   const clear = (x: number, ops: Opening[]) => ops.every((o) => o.kind !== 'door' || Math.abs(o.x - x) > o.width / 2 + 1.0);
   for (const x of divide(3, len - 3, 4.2)) if (clear(x, frontOps)) frontOps.push(gw(x));
   const backOps: Opening[] = [{ kind: 'door', x: B.half, width: 2.6, height: 4.6, sill: B.yF, leaves: 'open', leafMaterial: 'bronze' }];
-  for (const x of divide(3, len - 3, 4.2)) {
-    if (!clear(x, backOps)) continue;
-    backOps.push(gw(x));
+  // Gallery windows, and aisle windows below them half a bay over: the kit's wall cuts one opening
+  // per stretch of wall, so two openings sharing an x would close each other (and leave a
+  // negative-width pier between them).
+  const bayX = divide(3, len - 3, 4.2);
+  for (const x of bayX) if (clear(x, backOps)) backOps.push(gw(x));
+  for (let i = 0; i < bayX.length - 1; i++) {
+    const x = (bayX[i] + bayX[i + 1]) / 2;
     if (Math.abs(x - B.half) > 3) backOps.push({ kind: 'window', x, width: 1.4, height: 2.4, sill: B.yF + 3.4, arched: true, frame: false });
   }
   const W = { height: B.yOuter, thickness: B.t, detail: ctx.detail, collide: true } as const;
@@ -268,13 +273,8 @@ function shell(ctx: LandmarkContext, b: MeshBuilder, F: THREE.Matrix4, spots: Sp
     arcWall(b, 'marble', F, cx, zc, R, R + B.apseT, a0, a1, -0.3, B.yOuter, segs);
     arcColliders(b, F, cx, zc, R, R + B.apseT, a0, a1, 0, B.yOuter, 12);
     arcFloor(b, sect, F, cx, zc, 0.001, R, a0, a1, B.yF, segs, B.yF + 0.3);
-    for (let k = 0; k < 6; k++) {
-      const zA = zc - R + (2 * R * k) / 6;
-      const zB = zA + (2 * R) / 6;
-      const zFar = Math.abs(zA - zc) > Math.abs(zB - zc) ? zA : zB;
-      const reach = Math.sqrt(Math.max(0, R * R - (zFar - zc) ** 2)) - 0.05;
-      solidBox(b, F, cx + (sx * reach) / 2, (B.yF - 0.3) / 2, (zA + zB) / 2, reach, B.yF + 0.3, zB - zA);
-    }
+    // Floor strips reaching the curve (their far corners overshoot by < 0.9 m, inside the 1.3 m wall).
+    halfDiscFloor(b, F, cx, zc, R, sx as -1 | 1, -0.3, B.yF, 0, 0.9);
     entablature(b, Array.from({ length: segs + 1 }, (_, i) => {
       const a = sx > 0 ? a0 + (Math.PI * i) / segs : a1 - (Math.PI * i) / segs;
       return V(cx + Math.cos(a) * (R + B.apseT), B.yOuter - 0.9, zc + Math.sin(a) * (R + B.apseT));
@@ -567,6 +567,7 @@ export const builders: LandmarkBuilder[] = [
   {
     handles: ['basilica-ulpia'],
     build(ctx) {
+      installExtras(ctx.game);
       const F = forumToLocal(ctx.lm);
       const main = ctx.builder();
       const spots: Spot[] = [];

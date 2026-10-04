@@ -408,6 +408,7 @@ export function vendorStall(b: MeshBuilder, at: THREE.Matrix4, kind: 'garlands' 
   const d = 0.8;
   const top = 0.85;
   b.box('wood', w, 0.06, d, mul(at, T(0, top, 0)));
+  solidBox(b, at, 0, (top + 0.03) / 2, 0, w, top + 0.03, d);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.box('wood_dark', 0.06, top, 0.06, mul(at, T(sx * (w / 2 - 0.08), top / 2, sz * (d / 2 - 0.08))));
   b.box('fabric_white', w + 0.04, 0.3, 0.02, mul(at, T(0, top - 0.17, -d / 2 - 0.01)), { castShadow: false });
   // Awning: poles and a sloping striped canopy.

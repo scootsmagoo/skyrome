@@ -27,12 +27,13 @@ import { Draw } from '../../../arch/fabric/draw';
 import { placeProp } from '../../../arch/props/props';
 import type { MeshBuilder } from '../../../gfx/MeshBuilder';
 import type { LandmarkBuilder, LandmarkContext, Spot } from '../types';
-import { LodChunks, arcColliders, arcFloor, arcWall, beam, boxMinMax, colonnadeColumn, coneRoof, facing, farColumn, solidBox, type ColumnDetail } from './trajan-kit';
+import { LodChunks, arcColliders, arcFloor, arcWall, beam, boxMinMax, colonnadeColumn, coneRoof, facing, farColumn, halfDiscFloor, type ColumnDetail } from './trajan-kit';
 import { PLAN, S, TRAJAN_INSCRIPTIONS, divide } from './trajan-layout';
 import { ashlarMaterial, coffersMaterial, sectileMaterial, slabPavingMaterial } from './trajan-materials';
 import { Lamps } from './trajan-lights';
 import { altar, banner, candelabrum, carpet, garland, grandstand, honorificStatue, ladder, statueBase, torchPole, tribunal, tripod, vendorStall, workClutter } from './trajan-props';
 import { clipeus, dacianCaptive, figureBlock, horseStatue, signum } from './trajan-sculpture';
+import { installExtras } from './trajan-extras';
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
@@ -233,17 +234,10 @@ function backWallAndExedra(ctx: LandmarkContext, main: MeshBuilder, chunks: LodC
   arcColliders(main, I, cx, cz, R, R + tW, a0, a1, 0, Y.wall, 14);
   arcFloor(main, sectileMaterial(3.0), I, cx, cz, 0.001, R, a0, a1, Y.styl, segs, 0.02);
   arcFloor(main, 'marble', I, cx, cz, 0.001, R, a0, a1, Y.styl - 0.02, segs, Y.styl + 0.23);
-  // Walkable floor colliders: strips clipped inside the semicircle, reaching back under the wall
-  // opening to meet the portico's stylobate.
-  const strips = 7;
-  const back = Math.abs(cx) - X.wallIn + 0.05;
-  for (let k = 0; k < strips; k++) {
-    const zA = cz - R + (2 * R * k) / strips;
-    const zB = zA + (2 * R) / strips;
-    const zFar = Math.abs(zA - cz) > Math.abs(zB - cz) ? zA : zB;
-    const reach = Math.sqrt(Math.max(0, R * R - (zFar - cz) ** 2)) - 0.05;
-    solidBox(main, I, cx + (s * (reach - back)) / 2, (Y.styl - 0.25) / 2, (zA + zB) / 2, reach + back, Y.styl + 0.25, zB - zA);
-  }
+  // Walkable floor colliders: narrow strips that reach the curve (the overshoot at their far
+  // corners stays inside the 0.96 m wall), reaching back under the wall opening to meet the
+  // portico's stylobate.
+  halfDiscFloor(main, I, cx, cz, R, s, -0.25, Y.styl, Math.abs(cx) - X.wallIn + 0.05, 0.8);
   // Coping on the exedra wall.
   arcWall(main, 'travertine', I, cx, cz, R - 0.05, R + tW + 0.05, a0, a1, Y.wall, Y.wall + 0.18, segs);
   // Roof: a half-cone of terracotta tiles over the hall, a coffered ceiling inside, and a gable
@@ -299,7 +293,7 @@ function backWallAndExedra(ctx: LandmarkContext, main: MeshBuilder, chunks: LodC
     main.box('marble', 2.6, 0.45, 0.55, mul(at, T(0, 0.225, 0)), { collide: true });
     spots.push({ id: `forum-exedra${s < 0 ? 'ne' : 'sw'}-bench${k}`, kind: 'sit', position: V(px, Y.styl + 0.45, pz), heading: rot + Math.PI });
   }
-  spots.push({ id: `forum-exedra${s < 0 ? 'ne' : 'sw'}-teacher`, kind: 'npc', position: V(cx + s * (R - 1.5), Y.styl, cz), heading: s > 0 ? -Math.PI / 2 : Math.PI / 2 });
+  spots.push({ id: `forum-exedra${s < 0 ? 'ne' : 'sw'}-teacher`, kind: 'npc', position: V(cx + s * (R - 2.3), Y.styl, cz), heading: s > 0 ? -Math.PI / 2 : Math.PI / 2 });
   // Candelabra either side of the teacher's chair (the hall is dark under its roof).
   for (const dz of [-2.4, 2.4]) {
     const at = T(cx + s * (R - 2.0), Y.styl, cz + dz);
@@ -460,6 +454,7 @@ export const builders: LandmarkBuilder[] = [
   {
     handles: ['forum-trajan'],
     build(ctx) {
+      installExtras(ctx.game);
       const main = ctx.builder();
       const chunks = new LodChunks(ctx.detail === 'high' ? 60 : 40);
       const spots: Spot[] = [];

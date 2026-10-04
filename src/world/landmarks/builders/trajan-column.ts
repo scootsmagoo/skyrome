@@ -34,6 +34,7 @@ import { dacianArmsMaterial, libraryFloorMaterial, scrollsMaterial, slabPavingMa
 import { Lamps } from './trajan-lights';
 import { altar, candelabrum, garland, ladder, statueBase, torchPole, tripod } from './trajan-props';
 import { aquila, victory } from './trajan-sculpture';
+import { installExtras } from './trajan-extras';
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
@@ -331,7 +332,8 @@ function court(ctx: LandmarkContext, b: MeshBuilder, chunks: LodChunks, F: THREE
     b.add(cylinderBetween(V(sxs + dx, 0, sz + dz), V(sxs + dx, sH, sz + dz), 0.07, 0.06, 5), 'wood', F);
     solidCyl(b, F, sxs + dx, sH / 2, sz + dz, 0.08, sH);
   }
-  for (const y of [3.2, 6.4, 9.2]) b.box('wood', 2.0, 0.08, 2.0, mul(F, T(sxs + 0.8, y, sz + 0.8)));
+  // Plank platforms (solid: the carver works on the lowest one).
+  for (const y of [3.2, 6.4, 9.2]) b.box('wood', 2.0, 0.08, 2.0, mul(F, T(sxs + 0.8, y, sz + 0.8)), { collide: true });
   for (const y of [1.6, 4.8, 7.8]) {
     b.add(cylinderBetween(V(sxs, y - 1.2, sz), V(sxs + 1.6, y + 1.2, sz), 0.04, 0.04, 4), 'wood', F);
     b.add(cylinderBetween(V(sxs, y - 1.2, sz + 1.6), V(sxs + 1.6, y + 1.2, sz + 1.6), 0.04, 0.04, 4), 'wood', F);
@@ -507,7 +509,8 @@ function library(ctx: LandmarkContext, b: MeshBuilder, chunks: LodChunks, M: THR
   togate(ik.near, mul(M, T(0, yF + 1.2, zBack - t - 1.0)), { material: 'marble', scale: 2.5, detail: hi ? 'high' : 'low', plinth: false });
   // Reading tables with benches and scroll baskets (capsae).
   let seat = 0;
-  for (const z of [-0.5, 2.5]) {
+  // (the second table keeps its far bench clear of the statue's base)
+  for (const z of [-0.5, 2.2]) {
     const at = mul(M, T(0, yF, z));
     ik.near.box('wood', 4.0, 0.08, 1.0, mul(at, T(0, 0.8, 0)));
     for (const sx of [-1, 1]) ik.near.box('wood_dark', 0.12, 0.76, 0.8, mul(at, T(sx * 1.8, 0.38, 0)));
@@ -537,6 +540,7 @@ function library(ctx: LandmarkContext, b: MeshBuilder, chunks: LodChunks, M: THR
 }
 
 function libraryBuild(ctx: LandmarkContext, which: 'east' | 'west') {
+  installExtras(ctx.game);
   const F = forumToLocal(ctx.lm);
   const s = which === 'east' ? -1 : 1;
   const cx = s * (COURT.x + COURT.libDepth / 2);
@@ -560,6 +564,7 @@ export const builders: LandmarkBuilder[] = [
   {
     handles: ['column-trajan'],
     build(ctx) {
+      installExtras(ctx.game);
       const F = forumToLocal(ctx.lm);
       const hi = ctx.detail === 'high';
       const spots: Spot[] = [];

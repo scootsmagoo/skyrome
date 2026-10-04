@@ -91,10 +91,52 @@ const _p = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 const _s = new THREE.Vector3();
 
-/** Box collider of full size (w, h, d) centred at local (x, y, z) of matrix `m` (no geometry). */
+/**
+ * Box collider of full size (w, h, d) centred at local (x, y, z) of matrix `m` (no geometry).
+ * Degenerate or negative sizes (a clipped strip that came out empty) build nothing: Rapier must
+ * never see a negative half-extent.
+ */
 export function solidBox(b: MeshBuilder, m: THREE.Matrix4, x: number, y: number, z: number, w: number, h: number, d: number) {
+  if (!(w > 0.01 && h > 0.01 && d > 0.01)) return;
   mul(m, T(x, y, z)).decompose(_p, _q, _s);
   b.collider({ kind: 'box', center: _p.clone(), half: new THREE.Vector3(w / 2, h / 2, d / 2), rotation: _q.clone() });
+}
+
+/**
+ * Solid annular sector (a floor deck over a curved plan) as oriented boxes, one per angular step
+ * of at most `seg` metres of arc at the outer radius. Each box spans the full chord at r1, so the
+ * outer rim is covered exactly; the inner corners miss r0·(1 − cos(step/2)) (millimetres at these
+ * steps) and the boxes overshoot the end angles by (r1 − r0)·sin(step/2) at the inner radius.
+ */
+export function arcSlab(b: MeshBuilder, m: THREE.Matrix4, cx: number, cz: number, r0: number, r1: number, a0: number, a1: number, y0: number, y1: number, seg = 0.8) {
+  const n = Math.max(1, Math.ceil((Math.abs(a1 - a0) * r1) / seg));
+  const half = Math.abs(a1 - a0) / n / 2;
+  for (let i = 0; i < n; i++) {
+    const am = a0 + ((a1 - a0) * (i + 0.5)) / n;
+    const rm = (r0 + r1) / 2;
+    // Frame with +z running radially out at angle am (the same convention as arcColliders).
+    const local = new THREE.Matrix4().makeRotationY(-am + Math.PI / 2).setPosition(cx + Math.cos(am) * rm, (y0 + y1) / 2, cz + Math.sin(am) * rm);
+    solidBox(b, mul(m, local), 0, 0, 0, 2 * r1 * Math.sin(half) + 0.02, y1 - y0, r1 - r0);
+  }
+}
+
+/**
+ * Floor colliders for a half-disc of radius R (centre (cx, cz), opening along z, bulging towards
+ * `side`·x) as strips along z no wider than `w`. Each strip reaches the circle at its NEAR edge
+ * (the larger chord), so the disc is covered to the curve; the far corner overshoots the circle by
+ * less than `w`, which stays inside a wall thicker than that. `back` extends every strip behind the
+ * diameter (under the opening, to meet the floor in front).
+ */
+export function halfDiscFloor(b: MeshBuilder, m: THREE.Matrix4, cx: number, cz: number, R: number, side: -1 | 1, yBottom: number, yTop: number, back: number, w = 0.8) {
+  const n = Math.max(2, Math.ceil((2 * R) / w));
+  const dz = (2 * R) / n;
+  for (let k = 0; k < n; k++) {
+    const zA = cz - R + k * dz;
+    const zB = zA + dz;
+    const near = zA <= cz && zB >= cz ? 0 : Math.min(Math.abs(zA - cz), Math.abs(zB - cz));
+    const reach = Math.max(0.1, Math.sqrt(Math.max(0, R * R - near * near)));
+    solidBox(b, m, cx + (side * (reach - back)) / 2, (yBottom + yTop) / 2, (zA + zB) / 2, reach + back, yTop - yBottom, dz + 0.01);
+  }
 }
 
 /** Cylinder collider (vertical) at local (x, y, z) of `m`. */
@@ -222,6 +264,48 @@ export function coneRoof(b: MeshBuilder, mat: Mat, m: THREE.Matrix4, cx: number,
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   g.computeVertexNormals();
   b.add(g, mat, m, { uv: 'keep', castShadow: opts.castShadow });
+}
+
+/**
+ * Hipped tile roof over a w × d rectangle centred on (cx, cz), wall plate at height y. Every facet
+ * is one planar polygon with its own UVs (u along its eave, v up its slope, in metres/UV_METERS),
+ * so the tile rows run true on all four faces and nothing is wrapped round the hips; the hips and
+ * the ridge get plain terracotta cap beams, the overhang a timber underside and fascia.
+ */
+export function hipRoof(b: MeshBuilder, m: THREE.Matrix4, cx: number, cz: number, w: number, d: number, y: number, pitch: number, overhang = 0.5, mat: Mat = 'roof_tile') {
+  const tp = Math.tan(pitch);
+  const hw = w / 2 + overhang;
+  const hd = d / 2 + overhang;
+  const ye = y - overhang * tp;
+  const h = y + (Math.min(w, d) / 2) * tp;
+  const rx = Math.max(0, hw - hd);
+  const rz = Math.max(0, hd - hw);
+  const P = (x: number, yy: number, z: number) => new THREE.Vector3(cx + x, yy, cz + z);
+  const O = [P(-hw, ye, -hd), P(hw, ye, -hd), P(hw, ye, hd), P(-hw, ye, hd)];
+  const R = [P(-rx, h, -rz), P(rx, h, -rz), P(rx, h, rz), P(-rx, h, rz)];
+  const T = 0.12;
+  for (let i = 0; i < 4; i++) {
+    const j = (i + 1) % 4;
+    const pts: THREE.Vector3[] = [];
+    for (const p of [O[i], O[j], R[j], R[i]]) if (!pts.some((q) => q.distanceToSquared(p) < 1e-8)) pts.push(p);
+    if (pts.length < 3) continue;
+    const e = new THREE.Vector3().subVectors(O[j], O[i]).normalize();
+    const n = new THREE.Vector3().subVectors(pts[1], pts[0]).cross(new THREE.Vector3().subVectors(pts[2], pts[0])).normalize();
+    if (n.y < 0) n.negate();
+    const up = new THREE.Vector3().crossVectors(n, e).normalize();
+    if (up.y < 0) up.negate();
+    const uvs = pts.map((p): [number, number] => {
+      const q = new THREE.Vector3().subVectors(p, O[i]);
+      return [q.dot(e) / UV_METERS, q.dot(up) / UV_METERS];
+    });
+    facing(b, mat, m, pts, UP, { uvs });
+    facing(b, 'wood_dark', m, pts.map((p) => p.clone().setY(p.y - T)), new THREE.Vector3(0, -1, 0), { castShadow: false });
+    // Fascia along the eave.
+    quad(b, 'wood_dark', m, O[j].clone().setY(ye - T), O[i].clone().setY(ye - T), O[i], O[j], 'world', false);
+  }
+  for (let i = 0; i < 4; i++) beam(b, 'terracotta', m, O[i].clone().setY(O[i].y + 0.04), R[i].clone().setY(R[i].y + 0.04), 0.22, 0.12, { castShadow: false });
+  if (rx > 0 || rz > 0) beam(b, 'terracotta', m, R[0].clone().setY(h + 0.05), R[2].clone().setY(h + 0.05), 0.24, 0.14, { castShadow: false });
+  return h;
 }
 
 /** A rectangular beam of section w × h from `a` to `b` (its h axis kept as close to world up as possible). */
