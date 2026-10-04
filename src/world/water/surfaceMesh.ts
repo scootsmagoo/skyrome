@@ -15,6 +15,8 @@ export interface WaterSurfaceData {
   index: Uint32Array;
   /** Quads per body id. */
   cells: Record<string, number>;
+  /** Per vertex: 1 for clear, spring-fed water (the canal), 0 for the silty river (default 0). */
+  clear?: Float32Array;
 }
 
 export interface Bounds2 {
