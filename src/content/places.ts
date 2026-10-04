@@ -137,7 +137,9 @@ export const BIBLE_SPOTS: LocationDef[] = [
   spot('ludus-cavea', 'Practice Arena of the Ludus Magnus', [875, 285], 22, { parent: 'ludus-magnus', mapMarker: 'arena' }),
   spot('ludus-armamentarium', 'Ludus Armory', [834, 297], 5, { parent: 'ludus-magnus' }),
   spot('ludus-saniarium', 'Ludus Infirmary', [916, 273], 5, { parent: 'ludus-magnus', latin: 'saniarium' }),
-  spot('ludus-cellae', 'Ludus Barracks', [885, 257], 8, { parent: 'ludus-magnus' }),
+  // The barracks (CONTENT.md has them at 885, 257): the built school has its stands there (4.8 m up),
+  // so the fallback is the Ludus Magnus builder's own `ludus-cellae`, under the back portico of the court.
+  { id: 'ludus-cellae', name: 'Ludus Barracks', position: atLandmark('ludus-magnus', -27.6, -6.5), radius: 8, discoverable: false, parent: 'ludus-magnus' },
   spot('lectica-statio-forum', 'Litter Stand (Forum)', [62, 32], 4),
   spot('lectica-statio-capena', 'Litter Stand (Capena Gate)', [492, 930], 4),
   spot('lectica-statio-metae', 'Litter Stand (Meta Sudans)', [540, 300], 4),
@@ -195,7 +197,7 @@ export const CONTRACT_ALIASES: Record<(typeof CONTRACT_SPOT_IDS)[number], string
   'castor-strongroom': 'castor-loculi',
   'ludus-gate': null, // the gate on the Ludus' WNW facade
   'ludus-arena-center': 'ludus-cavea',
-  lanista: 'ludus-cellae', // the procurator's office in the barracks block
+  lanista: null, // the procurator's office in the front range; the barracks (`ludus-cellae`) are a place of their own
   armory: 'ludus-armamentarium',
   medicus: 'ludus-saniarium',
 };
@@ -233,7 +235,8 @@ export const CONTRACT_SPOTS: LocationDef[] = [
   alias('castor-strongroom', 'castor-loculi', 5, { name: 'Strongrooms of Castor' }),
   { id: 'ludus-gate', name: 'Gate of the Ludus Magnus', position: atLandmark('ludus-magnus', 35, 0), radius: 6, parent: 'ludus-magnus' },
   alias('ludus-arena-center', 'ludus-cavea', 22),
-  alias('lanista', 'ludus-cellae', 5, { name: 'The procurator’s office' }),
+  // The office: a room in the front range at street level (the builder's own `lanista`).
+  { id: 'lanista', name: 'The procurator’s office', position: atLandmark('ludus-magnus', 31.7, 8.2), radius: 5, parent: 'ludus-magnus' },
   alias('armory', 'ludus-armamentarium', 5),
   alias('medicus', 'ludus-saniarium', 5),
 ];
@@ -352,7 +355,8 @@ export const WORLD_SPOTS: Record<string, { radius: number; name: string; also?: 
   'castor-strongroom': { radius: 5, name: 'Strongrooms of Castor', also: ['castor-loculi'] },
   'ludus-gate': { radius: 6, name: 'Gate of the Ludus Magnus' },
   'ludus-arena-center': { radius: 22, name: 'Practice Arena of the Ludus Magnus', also: ['ludus-cavea'] },
-  lanista: { radius: 5, name: 'The procurator’s office', also: ['ludus-cellae'] },
+  lanista: { radius: 5, name: 'The procurator’s office' },
+  'ludus-cellae': { radius: 8, name: 'Ludus Barracks' },
   armory: { radius: 5, name: 'Ludus Armory', also: ['ludus-armamentarium'] },
   medicus: { radius: 5, name: 'Ludus Infirmary', also: ['ludus-saniarium'] },
 };
