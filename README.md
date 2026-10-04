@@ -54,7 +54,17 @@ Then open one of these scenes. Click into the game to look around and press Esc 
 | Sound | http://127.0.0.1:5173/?scene=audio | Procedural sound effects, ambience, and generative music in the ancient modes |
 | Landmark viewer | http://127.0.0.1:5173/?scene=landmark&id=colosseum&cam=aerial | One landmark on the real terrain, with framed camera views |
 
-Add `&debug` to any URL to show fps, draw calls and position.
+Add `&debug` to any URL to show fps, draw calls, position, and the systems costing the most CPU each frame.
+
+### Laptop running hot?
+
+The game is capped at 60 fps by default. Without the cap, a MacBook's 120 Hz screen would have it draw every frame twice as often, for no visible gain. To make it run cooler and quieter, open **Esc → Settings → Display** and do one or more of these:
+
+- Set **Frame rate limit** to 30 fps. This roughly halves the work.
+- Lower **Render scale**.
+- Turn **Shadows** to Low.
+
+The game also slows to a crawl on its own when its tab or window is in the background.
 
 ### Controls
 
@@ -118,7 +128,7 @@ src/
   scenes/      rome (the game) and the dev test beds
   data/        atlas.ts: Rome c. AD 113
 docs/          GDD, atlas, architecture, module docs, research, credits
-scripts/       headless screenshot driver, atlas renderer
+scripts/       headless screenshot driver, controls and performance checks, atlas renderer
 ```
 
 ## Where things stand

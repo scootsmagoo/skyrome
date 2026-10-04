@@ -10,6 +10,7 @@ Design docs: `docs/GDD.md` (game design), `docs/CONTENT.md` (NPCs, quests, items
 - `npm run typecheck`: `tsc --noEmit`. It must stay clean.
 - `npm run build`: typecheck plus a production build into `dist/`.
 - `npm run check:controls`: drives the real game with real keyboard events in Chromium and WebKit, for all three control presets (mouse, trackpad, keyboard). It checks movement, camera, combat, talking, menus, stuck keys, the hotbar, saves and saved-binding repair. Run it after touching input, UI key handling, the player controller, the camera, combat input or the game flow. Use `--only "name,name"` to run single checks.
+- `node scripts/perf.mjs [--views spawn,forum,circus,cavea,colosseum,pantheon] [--size 1512x860 --dpr 2]`: performance survey. For each viewpoint it reports the frame rate and CPU ms (mean and p95), GPU ms (timer queries), draw calls and triangles looking four ways, CPU per system, and memory. Run it before and after performance work and compare. `--size 1512x860 --dpr 2` approximates the owner's MacBook.
 - `node scripts/shot.mjs --scene <name> [--steps '<json>'] [--name x.png] [--browser webkit]`: boots the game headless on the real GPU, runs scripted input, saves screenshots to `.shots/`, and prints console errors and frame stats. **Always verify visual work this way and look at the PNG with the Read tool.** Steps are described at the top of the script, for example `[{"hold":"KeyW","ms":1500},{"press":"KeyV"},{"eval":"game.player.position"},{"shot":"a.png"}]`. Each run starts its own Vite server on a free port, so parallel agents don't collide.
 
 ## Conventions (do not change without updating this file)
@@ -31,7 +32,14 @@ Design docs: `docs/GDD.md` (game design), `docs/CONTENT.md` (NPCs, quests, items
 - **Teleports and spawns.** The city builds its buildings and their colliders lazily, near the camera and player. Never trust a ray test far from the player. Move the player only with `player.teleport()`, which primes the city at the destination first, and pick destinations with `findSafeGround()` (`src/world/safeGround.ts`), which re-checks each candidate after streaming the city in. `settleAfterTeleport()` steps the player clear if something appeared around them.
 - **Climbing.** `src/player/Climb.ts` (clamber when pushing into a ledge of 0.42–0.8 m, mantle with Space up to 1.6 m) shares its ledge search with swimming (`findLedge` and `mantlePose` in `src/world/water/swim.ts`).
 - **Interactables.** Use `game.interactions.add({ id, position, verb, label, interact })`.
-- **Performance.** Target 60 fps in Safari and Chrome on an M-series Mac, with fewer than about 1500 draw calls and fewer than about 3M triangles visible. Merge static geometry per material. Use `InstancedMesh` for repeated props, share materials, and never create materials or geometries per frame. Check `stats.drawCalls` in the shot output.
+- **Performance.** Target 60 fps in Safari and Chrome on an M-series Mac, with fewer than about 1500 draw calls and fewer than about 3M triangles visible. The owner's laptop runs hot, so cheaper is always better.
+  - **Budget.** Merge static geometry per material. Use `InstancedMesh` for repeated props, share materials, and never create materials or geometries per frame. Check `stats.drawCalls` in the shot output, and use `scripts/perf.mjs` for anything bigger.
+  - **The loop.** It is capped by `settings.maxFps` (default 60; `?fps=0` lifts the cap for measuring). Shadow maps re-render at about 30 Hz (`game.shadowIntervalMs`).
+  - **Profiling.** Set `game.profiling = true` (the `?debug` overlay does) and `game.profile` holds the CPU ms per system, plus `(physics)` and `(render submit)`.
+  - **Hide empty instanced meshes.** Set `visible = count > 0` on an `InstancedMesh`: three.js binds the program and uploads uniforms for an empty one before skipping it.
+  - **Landmarks beyond 300 m.** These draw a baked one-mesh stand-in (`src/world/landmarks/farBake.ts`). A builder whose instanced meshes fill in at runtime (empty at build time) is skipped, so give it its own `far`.
+  - **Physics.** `Physics.step` drives Rapier's pipeline directly (rapier.js `World.step()` walks every collider after each step). Create and remove colliders only through the `Physics` and `World` API.
+  - **NPC path failures.** These must back off, not re-plan at once: failing A* searches are the most expensive kind.
 - Keep modules self-contained under their own directory. Give pure logic unit tests. Match the surrounding code style: 2-space indent, single quotes, semicolons, and comment density similar to `src/core`.
 
 ## Working as a parallel agent
