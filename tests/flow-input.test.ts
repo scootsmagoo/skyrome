@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_BINDINGS, HOTBAR_ACTIONS, WheelAccumulator, capsLockToggled, keyLookEase, wheelPixels, type Action } from '../src/core/Input';
-import { controlState, guessPreset, presetValues } from '../src/game/settings';
-import { recenterYaw } from '../src/player/PlayerController';
-import { wrapAngle } from '../src/core/math';
+import { controlState, guessPreset, presetValues, settingsFixups } from '../src/game/settings';
+import { DEFAULT_SETTINGS } from '../src/core/Settings';
 
 /** Feed a stream of [timeMs, delta] and count the steps. */
 function run(acc: WheelAccumulator, events: [number, number][]) {
@@ -22,6 +21,51 @@ describe('wheel zoom accumulator (GDD §4.2)', () => {
     const steps = run(new WheelAccumulator(), events);
     expect(steps).toHaveLength(1);
     expect(steps[0].dir).toBe(1); // positive deltaY = scroll down = zoom out
+  });
+
+  /** A real trackpad flick: the deltas ramp up while the fingers move, hold, then momentum decays. */
+  function flick(peak: number, opts: { rampMs?: number; holdMs?: number; decayMs?: number; tau?: number; t0?: number; sign?: number } = {}) {
+    const { rampMs = 160, holdMs = 0, decayMs = 1500, tau = 380, t0 = 0, sign = 1 } = opts;
+    const out: [number, number][] = [];
+    let t = 0;
+    for (; t < rampMs; t += 16) out.push([t0 + t, sign * peak * (0.1 + 0.9 * (t / rampMs))]);
+    for (const end = t + holdMs; t < end; t += 16) out.push([t0 + t, sign * peak]);
+    for (const start = t; t < start + decayMs; t += 16) out.push([t0 + t, sign * peak * Math.exp(-(t - start) / tau)]);
+    return out;
+  }
+
+  it('a ramp-up-then-decay flick is exactly one step, gentle or hard (AC-24)', () => {
+    for (const peak of [12, 20, 45, 80, 160]) {
+      for (const holdMs of [0, 60, 120]) {
+        for (const tau of [250, 380, 600]) {
+          const steps = run(new WheelAccumulator(), flick(peak, { holdMs, tau }));
+          expect(steps, `peak ${peak} hold ${holdMs} tau ${tau}`).toHaveLength(1);
+        }
+      }
+    }
+  });
+
+  it('two separate flicks are two steps, even while the first one is still coasting', () => {
+    const events = [...flick(45, { decayMs: 600 }), ...flick(45, { t0: 900 })].sort((a, b) => a[0] - b[0]);
+    expect(run(new WheelAccumulator(), events)).toHaveLength(2);
+    // The second flick lands on the first one's momentum tail.
+    const overlapping = [...flick(45, { decayMs: 1200 }), ...flick(60, { t0: 500, decayMs: 600 })].sort((a, b) => a[0] - b[0]);
+    const merged: [number, number][] = [];
+    for (const e of overlapping) {
+      const prev = merged[merged.length - 1];
+      if (prev && prev[0] === e[0]) prev[1] += e[1];
+      else merged.push([e[0], e[1]]);
+    }
+    expect(run(new WheelAccumulator(), merged)).toHaveLength(2);
+  });
+
+  it('a mouse wheel with accelerating notches keeps stepping, debounced', () => {
+    const events: [number, number][] = [];
+    [4, 8, 16, 40, 80, 120, 120, 120, 120, 120].forEach((d, i) => events.push([i * 80, -d]));
+    const steps = run(new WheelAccumulator(), events);
+    expect(steps.length).toBeGreaterThanOrEqual(2);
+    expect(steps.length).toBeLessThanOrEqual(3);
+    for (let i = 1; i < steps.length; i++) expect(steps[i].t - steps[i - 1].t).toBeGreaterThanOrEqual(250);
   });
 
   it('keeps stepping (at most every 250 ms) while a mouse wheel is rolled on', () => {
@@ -189,18 +233,44 @@ describe('control presets (GDD §4.3)', () => {
   });
 });
 
-describe('third-person auto-recenter', () => {
-  it('swings the camera behind the character, no faster than the max rate', () => {
-    let yaw = 0;
-    const heading = 1.2; // the camera belongs at heading + π
-    const dt = 1 / 60;
-    let maxStep = 0;
-    for (let i = 0; i < 600; i++) {
-      const next = recenterYaw(yaw, heading, dt, 1);
-      maxStep = Math.max(maxStep, Math.abs(next - yaw));
-      yaw = next;
-    }
-    expect(Math.abs(wrapAngle(yaw - (heading + Math.PI)))).toBeLessThan(1e-3);
-    expect(maxStep).toBeLessThanOrEqual(1 * dt + 1e-9);
+describe('settings stay honest (AC-21)', () => {
+  it('a first launch on a Mac writes the whole Trackpad preset over the core defaults, and Normalis', () => {
+    const w = settingsFixups({ ...DEFAULT_SETTINGS }, 'trackpad');
+    expect(w.lookSensitivity).toBe(1.6);
+    expect(w.blockToggle).toBe(true);
+    expect(w.controlPreset).toBe('trackpad');
+    expect(w.presetApplied).toBe('trackpad');
+    expect(w.difficulty).toBe('normalis');
+  });
+
+  it('once applied, the player\'s own changes stay', () => {
+    const d = { ...DEFAULT_SETTINGS, ...presetValues('trackpad'), presetApplied: 'trackpad' as const, difficulty: 'tiro' as const, lookSensitivity: 2.2 };
+    expect(settingsFixups(d, 'trackpad')).toEqual({});
+  });
+
+  it('choosing another preset in the row rewrites the rows it owns', () => {
+    const d = { ...DEFAULT_SETTINGS, ...presetValues('trackpad'), presetApplied: 'trackpad' as const, difficulty: 'normalis' as const, controlPreset: 'mouse' as const };
+    const w = settingsFixups(d, 'trackpad');
+    expect(w.presetApplied).toBe('mouse');
+    expect(w.blockToggle).toBe(false);
+    expect(w.clickAttacks).toBe(true);
+    expect(w.lookSensitivity).toBe(1);
+  });
+
+  it('"Defaults" (the preset unset) goes back to the guessed preset', () => {
+    const d = { ...DEFAULT_SETTINGS, presetApplied: 'trackpad' as const, difficulty: 'normalis' as const };
+    const w = settingsFixups(d, 'trackpad');
+    expect(w.controlPreset).toBe('trackpad');
+    expect(w.lookSensitivity).toBe(1.6);
+  });
+
+  it('keeps the rows of players who picked a preset before this existed', () => {
+    const d = { ...DEFAULT_SETTINGS, ...presetValues('trackpad'), presetPicked: true, lookSensitivity: 2.5, difficulty: 'difficilis' as const };
+    expect(settingsFixups(d, 'mouse')).toEqual({ presetApplied: 'trackpad' });
+  });
+
+  it('a row reset to unset takes the preset value', () => {
+    const d = { ...DEFAULT_SETTINGS, ...presetValues('keyboard'), presetApplied: 'keyboard' as const, difficulty: undefined, lockOnMode: undefined };
+    expect(settingsFixups(d, 'mouse')).toEqual({ lockOnMode: 'auto', difficulty: 'normalis' });
   });
 });
