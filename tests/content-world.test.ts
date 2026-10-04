@@ -66,6 +66,7 @@ beforeAll(async () => {
   g.physics = world.physics;
   g.heightmap = hm;
   g.scene = new THREE.Scene();
+  g.camera = new THREE.PerspectiveCamera(); // the Forum builders plant trees (vegetation LOD reads it): without one four of them fail to build
   g.world = { add: (_id: string, o: THREE.Object3D) => (g.scene as THREE.Scene).add(o), remove: () => {}, refreshAll: () => {} };
   for (const river of hm.features!.rivers) {
     for (const rq of resolveQuays(hm.features!.quays, river.id, chain(river.centerline))) {
@@ -127,6 +128,7 @@ describe('content in the built world', () => {
     // The world is really there: the landmarks of the area with their colliders.
     expect(game.landmarks.size).toBeGreaterThan(80);
     expect(game.landmarks.has('temple-castor-pollux') && game.landmarks.has('porta-capena') && game.landmarks.has('forum-boarium')).toBe(true);
+    for (const id of ['curia-julia', 'horrea-agrippiana', 'atrium-vestae', 'regia', 'lacus-curtius', 'velia-vestibule']) expect(game.landmarks.has(id), `${id} failed to build`).toBe(true);
     expect(world.physics.groundHeight(304.2, 573, 60, 80)! - hm.heightAt(304.2, 573)).toBeGreaterThan(4); // the gate's block
     expect(content.shrines).toBeGreaterThanOrEqual(13);
     expect(content.texts).toBeGreaterThanOrEqual(40);
@@ -238,6 +240,23 @@ describe('content in the built world', () => {
       const f = CONTENT_LOCATIONS.find((x) => x.id === id)!.position;
       const l = game.locations!.get(id)!.position;
       expect(Math.hypot(f.x - l.x, f.z - l.z), `${id}: fallback near the building`).toBeLessThan(14);
+    }
+  });
+
+  it('the Forum builders\' street-level places replace the fallbacks: the strongroom door, the foot of the Curia\'s stair, the clothier\'s shop', () => {
+    const pairs: [string, string][] = [['castor-strongroom', 'castor-loculi'], ['curia-forecourt', 'curia-julia:front'], ['horrea-agrippiana-taberna-0', 'taberna-vestiarii']];
+    expect(content.worldSpots).toEqual(expect.arrayContaining(pairs.map(([w]) => w)));
+    for (const [w, id] of pairs) {
+      const l = game.locations!.get(id)!.position;
+      const f = CONTENT_LOCATIONS.find((x) => x.id === id)!.position;
+      expect(game.locations!.get(w)!.position, `${w} and ${id} are one place`).toMatchObject({ x: l.x, z: l.z });
+      for (const [what, p] of [['the builder', l], ['the fallback', f]] as const) {
+        const g = top(p.x, p.z)!;
+        expect(g - hm.heightAt(p.x, p.z), `${id} (${what}) is above the street`).toBeLessThan(0.9);
+        expect(world.physics.overlapSphere({ x: p.x, y: g + 0.95, z: p.z }, 0.3, Layer.World).length, `${id} (${what}) is in a wall`).toBe(0);
+      }
+      // The fallback is where the builder's spot is, to the metre (a world without the builder keeps the same place).
+      expect(Math.hypot(f.x - l.x, f.z - l.z), `${id}: fallback off the builder's spot`).toBeLessThan(1.5);
     }
   });
 
