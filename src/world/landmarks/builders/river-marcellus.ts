@@ -24,26 +24,59 @@ import type { ArcadeStorey } from '../../../arch/classical/arch';
 import type { MeshBuilder } from '../../../gfx/MeshBuilder';
 import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuilder, LandmarkContext, Spot } from '../types';
+import { placeProp } from '../../../arch/props';
 import { draw, farBoxes, riverEnv, simpleColonnade, spot } from './river-kit';
+import { LampList, riverLife } from './river-life';
 
 /** Atlas: orchestra centre (real metres). */
 const ORCHESTRA: [number, number] = [-425, 92];
+
+/** The cavea section: 1:1 seats (0.44 × 0.7), two tiers, a top walk under a portico. */
+const CAVEA: CaveaSpec = {
+  arenaRx: 1,
+  arenaRz: 1,
+  podium: 0.9,
+  tiers: [
+    { rows: 11, rise: 0.44, depth: 0.7, walk: 2.0 },
+    { rows: 9, rise: 0.44, depth: 0.7, wall: 1.4 },
+  ],
+  topWalk: 1.6,
+  material: 'travertine',
+  seatMaterial: 'marble',
+  riserMaterial: 'tufa',
+};
+
+/**
+ * Plan of the theatre in its local frame (game m): the orchestra centre `z0` on the axis, the
+ * facade radius `R`, the cavea back `rb`, the orchestra radius `ro`, the height of the top walk,
+ * and the angles of the six aisles (θ from +x, the cavea spans π … 2π).
+ */
+export function theatreLayout(ctx: Pick<LandmarkContext, 'S' | 'lm' | 'game'>) {
+  const { S, lm } = ctx;
+  const env = riverEnv(ctx as LandmarkContext);
+  const fp = lm.footprint as { w: number; d: number };
+  const z0 = env.local(ORCHESTRA[0], ORCHESTRA[1])[1];
+  const R = (fp.w / 2) * S;
+  const wallD = 1.4, amb = 3.2, innerT = 0.9;
+  const rb = R - wallD - amb - innerT;
+  const sec = caveaSection(CAVEA);
+  const aisles = 6;
+  return { z0, R, wallD, amb, innerT, rb, ro: rb - sec.reach, caveaTop: sec.height, sec, aisles, aisleAngles: Array.from({ length: aisles }, (_, k) => Math.PI + (Math.PI * (k + 0.5)) / aisles) };
+}
 
 function theatreMarcellus(ctx: LandmarkContext) {
   const { S, lm } = ctx;
   const hi = ctx.detail === 'high';
   const b = ctx.builder();
-  const env = riverEnv(ctx);
   const fp = lm.footprint as { w: number; d: number };
-  const z0 = env.local(ORCHESTRA[0], ORCHESTRA[1])[1];
+  const lay = theatreLayout(ctx);
+  const z0 = lay.z0;
   const O = T(0, 0, z0);
   const d = draw(b, O);
 
   // ---- dimensions (game metres)
-  const R = (fp.w / 2) * S; // outer face of the facade
-  const wallD = 1.4;
-  const amb = 3.2;
-  const innerT = 0.9;
+  const R = lay.R; // outer face of the facade
+  const { wallD, amb, innerT } = lay;
   const Htot = lm.height * S; // 32.6 m real
   const storeys: ArcadeStorey[] = [
     { order: 'doric', height: 11.4 * S },
@@ -53,25 +86,11 @@ function theatreMarcellus(ctx: LandmarkContext) {
   const yS1 = storeys[0].height;
   const yS2 = yS1 + storeys[1].height;
   const back = (fp.d / 2) * S - z0; // back wall, relative to the orchestra centre
-  const rb = R - wallD - amb - innerT; // cavea back face
-
-  // ---- cavea section: 1:1 seats (0.44 × 0.7), two tiers, a top walk under a portico
-  const caveaSpec: CaveaSpec = {
-    arenaRx: 1,
-    arenaRz: 1,
-    podium: 0.9,
-    tiers: [
-      { rows: hi ? 11 : 11, rise: 0.44, depth: 0.7, walk: 2.0 },
-      { rows: 9, rise: 0.44, depth: 0.7, wall: 1.4 },
-    ],
-    topWalk: 1.6,
-    material: 'travertine',
-    seatMaterial: 'marble',
-    riserMaterial: 'tufa',
-  };
-  const sec = caveaSection(caveaSpec);
-  const ro = rb - sec.reach; // orchestra radius
-  const caveaTop = sec.height;
+  const rb = lay.rb; // cavea back face
+  const caveaSpec = CAVEA;
+  const sec = lay.sec;
+  const ro = lay.ro; // orchestra radius
+  const caveaTop = lay.caveaTop;
 
   // ---- facade: 41 bays on the front semicircle (82 round a full circle), split so the ground
   // storey (seen up close) keeps the full arch mouldings and keystones; the upper ones are simpler.
@@ -123,7 +142,7 @@ function theatreMarcellus(ctx: LandmarkContext) {
   b.add(sweep(rect(0, 0.02, ambOut - ambIn - 0.1, 0.08), ring(ambIn + innerT), { back: true }), 'paving_travertine', O, { castShadow: false });
 
   // ---- cavea seating (semicircle), aisles, colliders
-  semicircleCavea(b, caveaSpec, ro, { segments: N, aisles: 6, detail: ctx.detail }, O);
+  semicircleCavea(b, caveaSpec, ro, { segments: N, aisles: lay.aisles, detail: ctx.detail }, O);
   // Porticus in summa cavea: a colonnade on the top walk facing the stage.
   const portR = rb - 0.9;
   simpleColonnade(d, ring(portR, Math.PI * 2, Math.PI, hi ? 24 : 12).map((p) => [p.x, p.z] as V2), {
@@ -290,8 +309,14 @@ function theatreMarcellus(ctx: LandmarkContext) {
     spot('theatre-marcellus:dedication', 'inscription', 0, stageH, z0 + sfZ - 2.5, Math.PI),
     spot('theatre-marcellus:stage', 'npc', 0, stageH, z0 + pulpFront + 2.5, Math.PI),
     spot('theatre-marcellus:orchestra', 'spawn', 0, 0, z0 - ro * 0.4, 0),
-    spot('theatre-marcellus:summa-cavea', 'vista', 0, caveaTop, z0 - rb + 1.2, 0),
   ];
+  // The top walk between two columns of the summa cavea portico (they stand every π/24 on the
+  // walk's centre line), looking down over the stage to the island.
+  {
+    const a = Math.PI * 1.5 + Math.PI / 48;
+    const rr = rb - 1.1;
+    spots.push(spot('theatre-marcellus:summa-cavea', 'vista', Math.cos(a) * rr, caveaTop, z0 + Math.sin(a) * rr, Math.atan2(-Math.cos(a), -Math.sin(a))));
+  }
   // A few seats for NPC audiences (on the rows near the aisles).
   for (const [k, row] of [[0, 2], [1, 6], [2, 9], [3, 14], [4, 18]] as const) {
     const r = sec.rows[Math.min(row, sec.rows.length - 1)];
@@ -299,6 +324,16 @@ function theatreMarcellus(ctx: LandmarkContext) {
     const rr = ro + (r.x0 + r.x1) / 2;
     spots.push(spot(`theatre-marcellus:seat-${k}`, 'sit', Math.cos(a) * rr, r.y, z0 + Math.sin(a) * rr, Math.atan2(-Math.cos(a), -Math.sin(a))));
   }
+
+  // Torches either side of the main axis arch, lit at dusk.
+  const lamps = new LampList();
+  for (const sx of [-1, 1]) {
+    const x = sx * 1.5;
+    const zf = -Math.sqrt(R * R - x * x);
+    placeProp(d, 'torch_bracket', x, 3.1, zf - 0.02, Math.atan2(x, -zf) * -1, { collide: false });
+    lamps.add(x, 3.6, z0 + zf - 0.32, 'torch');
+  }
+  riverLife(ctx, spots, lamps);
 
   // ---- far stand-in: half ring of facade, block of the stage building
   const far = theatreFar(R, wallD, Htot, back, z0);
@@ -341,8 +376,10 @@ function semicircleCavea(b: MeshBuilder, spec: CaveaSpec, ro: number, o: { segme
     const horizontal = Math.abs(seatPts[i + 1][1] - seatPts[i][1]) < 1e-6;
     b.add(sweep(toProfile([seatPts[i], seatPts[i + 1]]), path), horizontal ? seat : (spec.riserMaterial ?? mat), at);
   }
-  // Balustrade on the podium edge, open where each aisle comes down to the orchestra.
-  const W = 1.1;
+  // Balustrade on the podium edge, open where each aisle comes down to the orchestra. Aisles are
+  // 1.6 m wide: the seat rows' 0.44 m risers cannot be climbed, so the aisles are the only way up
+  // and a 0.7 m capsule needs room to correct its line on a trackpad.
+  const W = 1.6;
   const aisleAngles: number[] = [];
   for (let k = 0; k < o.aisles; k++) aisleAngles.push(Math.PI + (Math.PI * (k + 0.5)) / o.aisles);
   const gapAt = (seg: number) => {

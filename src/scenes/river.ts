@@ -1,15 +1,15 @@
 /**
  * River district test bed: the Forum Boarium, Portus Tiberinus, Forum Holitorium, Theatre of
  * Marcellus, Porticus Octaviae, Circus Flaminius, Tiber Island and the Tiber bridges on the real
- * terrain, with a flat stand-in water surface (until the water module lands).
- *   ?scene=river[&at=<landmark or bridge id>][&hour=9][&water=0][&far=1 (all bridges, wide terrain)]
+ * terrain with the water module's river, quays and island facing.
+ *   ?scene=river[&at=<landmark or bridge id>][&hour=9][&far=1 (all bridges, wide terrain)]
  *   [&cam=x,y,z,tx,ty,tz (game metres)]
  */
 import * as THREE from 'three';
 import * as atlas from '../data/atlas';
 import type { Game } from '../core/Game';
 import { devCamera } from '../dev/devCamera';
-import { getMaterial, whenTexturesLoaded } from '../gfx/materials';
+import { whenTexturesLoaded } from '../gfx/materials';
 import { Interactions } from '../interaction/Interactions';
 import { WorldRegistry } from '../world/WorldRegistry';
 import { buildBridges } from '../world/bridges';
@@ -46,15 +46,6 @@ const scene: SceneDef = {
     await buildLandmarks(game, atlas.LANDMARKS, hm, { only, highDetailPriority: 3 });
     await buildWater(game, atlas, hm);
     await buildBridges(game, atlas, hm, far ? {} : { only: ['pons-fabricius', 'pons-cestius', 'pons-aemilius', 'pons-sublicius'] });
-    if (p.get('water') !== '0') {
-      // Stand-in water: a flat sheet at the river level over the district.
-      const w = new THREE.Mesh(new THREE.PlaneGeometry(b.maxX - b.minX, b.maxZ - b.minZ).rotateX(-Math.PI / 2), getMaterial('water'));
-      w.position.set(((b.minX + b.maxX) / 2) * 0.6, hm.waterLevelY, ((b.minZ + b.maxZ) / 2) * 0.6);
-      w.scale.setScalar(0.6);
-      w.receiveShadow = true;
-      w.name = 'stand-in water';
-      game.scene.add(w);
-    }
     await whenTexturesLoaded().catch(() => {});
     const at = p.get('at') ?? 'temple-portunus';
     let spawn = spawnAtLandmark(game, at, 14);

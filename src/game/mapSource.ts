@@ -8,7 +8,7 @@ import type { Landmark } from '../data/atlas';
 import type { LocationDef } from '../npc/types';
 import type { MapDataSource, MapLabel, MapLandmark, MapLandmarkStyle, MapLine, MapLocation, MapQuestMarker, MapRiver, MapRoad, MapShape } from '../ui/types';
 import { WORLD_SCALE as K } from '../world/coords';
-import { iconFor } from './locations';
+import { displayLatin, iconFor, mapName } from './locations';
 
 type P = readonly [number, number];
 const pts = (list: readonly P[]): [number, number][] => list.map(([x, z]) => [x * K, z * K]);
@@ -67,8 +67,8 @@ export function mapLandmarks(list: readonly Landmark[] = atlas.LANDMARKS): MapLa
     .filter((lm) => lm.siting !== 'underground')
     .map((lm) => ({
       id: lm.id,
-      name: lm.name,
-      latin: lm.latin && lm.latin !== lm.name ? lm.latin : undefined,
+      name: mapName(lm.name),
+      latin: displayLatin(lm.latin, mapName(lm.name)),
       shapes: [landmarkShape(lm)],
       style: styleFor(lm.category),
       labelAt: { x: lm.center[0] * K, z: lm.center[1] * K },
@@ -95,7 +95,7 @@ export function mapLabels(): MapLabel[] {
   for (const h of atlas.HILLS) {
     if (h.kind === 'terrace' || h.parent) continue;
     const c = centroid(h.outline);
-    out.push({ text: h.name.toUpperCase(), latin: h.latin, x: c.x, z: c.z, kind: 'hill' });
+    out.push({ text: mapName(h.name).toUpperCase(), latin: displayLatin(h.latin, mapName(h.name)), x: c.x, z: c.z, kind: 'hill' });
   }
   const tiber = atlas.RIVERS.find((r) => r.id === 'tiber');
   if (tiber) {
@@ -159,7 +159,8 @@ export class AtlasMapSource implements MapDataSource {
     if (now - this.locCache.at < 250) return this.locCache.list;
     const list: MapLocation[] = [];
     for (const d of this.hooks.locations?.() ?? []) {
-      if (!d.mapMarker) continue;
+      // Places you can't find (buried, underground) stay off the map and out of the count.
+      if (!d.mapMarker || d.discoverable === false) continue;
       const lm = atlas.LANDMARK_BY_ID[d.id];
       list.push({
         id: d.id,

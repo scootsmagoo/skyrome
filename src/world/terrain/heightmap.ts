@@ -266,21 +266,60 @@ export function channelProfile(r: { waterLevel: number; bankHeight: number }, d:
   return Math.max(r.waterLevel + 0.9, r.bankHeight) + (d - half - 16);
 }
 
-/** Distance beyond the channel half width (real m) past which a river can't lower the ground. */
+/**
+ * A canal's masonry (real m): water `depth` deep between walls `wall` thick whose tops (the kerb)
+ * stand `kerb` above the water, then a flat bank `bank` wide at kerb height and a `ramp` down to
+ * the natural ground. The water module builds the walls; the terrain carries the rest.
+ */
+export const CANAL = { depth: 1.6, kerb: 0.5, wall: 2.4, bank: 3, ramp: 7 };
+
+/** Distance beyond the channel half width (real m) past which a river can't change the ground. */
 export function riverReach(r: { bankHeight: number; kind?: 'river' | 'canal' }): number {
-  if (r.kind === 'canal') return 2;
+  if (r.kind === 'canal') return CANAL.wall + CANAL.bank + CANAL.ramp + 1;
   return 16 + RIVER_PLAIN + Math.max(0, RIVER_MAX_GROUND - r.bankHeight - RIVER_PLAIN * 0.02) / RIVER_OUTER_GRADE + 10;
 }
 
 /**
- * Cross-section of a canal (real m ASL): a flat bed 1.6 m below the water and near-vertical
- * masonry sides up to 0.5 m above it; the ground beyond is untouched.
+ * Cross-section of a canal cut (real m ASL): a flat bed `CANAL.depth` below the water that runs
+ * on under the inner half of the masonry walls (so the coarse grid never pokes up inside the
+ * channel), rising to the kerb at the walls' back; beyond them the cut changes nothing.
  */
 export function canalProfile(r: { waterLevel: number }, d: number, half: number): number {
-  const bed = r.waterLevel - 1.6;
-  if (d < half) return bed;
-  if (d < half + 0.8) return bed + (r.waterLevel + 0.5 - bed) * smooth(half, half + 0.8, d);
+  const bed = r.waterLevel - CANAL.depth;
+  const trench = half + CANAL.wall * 0.5;
+  if (d < trench) return bed;
+  if (d < half + CANAL.wall) return bed + (r.waterLevel + CANAL.kerb - bed) * smooth(trench, half + CANAL.wall, d);
   return Infinity;
+}
+
+/**
+ * Effective distance from a canal's centerline for its cross-section: beyond either end of the
+ * line the channel stops square at the end wall (the water module builds it `CANAL.wall` thick)
+ * instead of rounding off, so `max(lateral, half + distance past the end)`. Pure.
+ */
+export function canalDistance(pts: readonly P2[], f: { d: number; i: number; t: number; tx: number; tz: number }, x: number, z: number, half: number): number {
+  const last = pts.length - 2;
+  const atStart = f.i === 0 && f.t <= 0, atEnd = f.i === last && f.t >= 1;
+  if (!atStart && !atEnd) return f.d;
+  const [ex, ez] = atStart ? pts[0] : pts[pts.length - 1];
+  const vx = x - ex, vz = z - ez;
+  const along = Math.abs(vx * f.tx + vz * f.tz);
+  const lateral = Math.abs(vx * f.tz - vz * f.tx);
+  return Math.max(lateral, half + along);
+}
+
+/**
+ * Ground at distance `d` from a canal's centerline, given the natural ground `g` (real m ASL):
+ * the cut, then a bank at kerb height where the land lies lower (Agrippa's Euripus, fed by the
+ * Aqua Virgo, ran a little above the Campus), ramping down to `g`. Pure.
+ */
+export function canalBank(r: { waterLevel: number }, d: number, half: number, g: number): number {
+  const kerb = r.waterLevel + CANAL.kerb;
+  const top = half + CANAL.wall + CANAL.bank;
+  if (d < half + CANAL.wall) return canalProfile(r, d, half);
+  if (d < top) return Math.max(g, kerb);
+  if (d < top + CANAL.ramp) return g + Math.max(0, kerb - g) * (1 - smooth(top, top + CANAL.ramp, d));
+  return g;
 }
 
 /**
@@ -336,6 +375,15 @@ export function makeNaturalElevation(src: TerrainSource, opts: { noise?: number;
   // Per-sample river feet, reused by the ground carve, the channel cut and the quays.
   const feet: ({ f: ReturnType<typeof footOn>; half: number } | null)[] = rivers.map(() => null);
 
+  /** A canal yields where it reaches a river's channel or beach (its outfall). */
+  const canalYields = (ri: number) => {
+    for (let k = 0; k < rivers.length; k++) {
+      const ft = feet[k];
+      if (k !== ri && ft && rivers[k].item.kind !== 'canal' && ft.f.d < ft.half + 16) return true;
+    }
+    return false;
+  };
+
   return (x: number, z: number): number => {
     // 1. Ground (base + lowlands), with the river valley carved into it: channel, banks and the
     //    gentle flood plain. Hills are raised on top of this, so the valley never shaves them.
@@ -353,9 +401,22 @@ export function makeNaturalElevation(src: TerrainSource, opts: { noise?: number;
       const w1 = r.width[f.i + 1] ?? w0;
       const half = (w0 + (w1 - w0) * f.t) / 2;
       feet[ri] = { f, half };
-      const profile = r.kind === 'canal' ? canalProfile(r, f.d, half) : riverBankProfile(r, f.d, half);
+      if (r.kind === 'canal') continue;
+      const profile = riverBankProfile(r, f.d, half);
       if (profile < g) g = profile;
-      if (r.kind === 'canal' && f.d < half + 1.5) smoothK = 0;
+    }
+    // Canals after the rivers: their banks may raise the ground, except at their outfall.
+    for (let ri = 0; ri < rivers.length; ri++) {
+      const ft = feet[ri];
+      const r = rivers[ri].item;
+      if (!ft || r.kind !== 'canal') continue;
+      if (canalYields(ri)) {
+        feet[ri] = null;
+        continue;
+      }
+      const d = canalDistance(rivers[ri].line.pts, ft.f, x, z, ft.half);
+      g = canalBank(r, d, ft.half, g);
+      if (d < ft.half + CANAL.wall + CANAL.bank + CANAL.ramp) smoothK = 0;
     }
     let h = g;
     let hillFactor = 0;
@@ -400,7 +461,7 @@ export function makeNaturalElevation(src: TerrainSource, opts: { noise?: number;
       const b = rivers[ri];
       const r = b.item;
       const { f, half } = ft;
-      const cut = r.kind === 'canal' ? canalProfile(r, f.d, half) : channelProfile(r, f.d, half);
+      const cut = r.kind === 'canal' ? canalProfile(r, canalDistance(b.line.pts, f, x, z, half), half) : channelProfile(r, f.d, half);
       if (cut < h) h = cut;
       for (const q of b.quays) {
         const k = quayInfluence(q, f.s, f.side);

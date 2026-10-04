@@ -3,9 +3,10 @@
  * only where the splat draws grass: not on roads, paving, trodden earth, river mud or rock. Two
  * fields, one of green and one of sun-dried tufts, each accepting a tuft with the probability of
  * its layer's share at that spot, so the tufts match the ground under them.
- * Opt-in (the city / vegetation modules decide where Rome gets grass); the terrain dev scene uses it.
+ * `dressTerrain` (dress.ts) plants it over Rome, keeping it out of buildings and streets with
+ * `exclude`.
  *
- *   addTerrainGrass(game, game.terrain, { density: 2 });
+ *   addTerrainGrass(game, game.terrain, { density: 2, exclude: (x, z) => built.at(x, z) });
  */
 import type { Game } from '../../core/Game';
 import { GrassField, vegetation, type GrassOptions } from '../../arch/vegetation';
@@ -16,10 +17,14 @@ const frac = (v: number) => v - Math.floor(v);
 /** Deterministic 0..1 per position (so a cell regenerates identically). */
 const spotHash = (x: number, z: number) => frac(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453);
 
-export function addTerrainGrass(game: Game, terrain: Terrain, opts: Partial<GrassOptions> & { minGrass?: number } = {}): GrassField[] {
+export function addTerrainGrass(
+  game: Game,
+  terrain: Terrain,
+  opts: Partial<GrassOptions> & { minGrass?: number; exclude?: (x: number, z: number) => boolean } = {},
+): GrassField[] {
   const hm = terrain.hm;
   const w = new Float32Array(LAYER_COUNT);
-  const minGrass = opts.minGrass ?? 0.6;
+  const { minGrass = 0.6, exclude, ...grassOpts } = opts;
   const fields: GrassField[] = [];
   for (const dry of [false, true]) {
     const field = new GrassField(
@@ -30,6 +35,7 @@ export function addTerrainGrass(game: Game, terrain: Terrain, opts: Partial<Gras
           const ww = terrain.weightsAt(x, z, w);
           const g = ww[L.grass] + ww[L.dry];
           if (g < minGrass) return false;
+          if (exclude?.(x, z)) return false;
           const greenShare = ww[L.grass] / g;
           return dry ? spotHash(x, z) >= greenShare : spotHash(x, z) < greenShare;
         },
@@ -39,7 +45,7 @@ export function addTerrainGrass(game: Game, terrain: Terrain, opts: Partial<Gras
         fadeStart: 22,
         fadeEnd: 38,
         seed: dry ? 37 : 21,
-        ...opts,
+        ...grassOpts,
       },
     );
     game.scene.add(field.build());
