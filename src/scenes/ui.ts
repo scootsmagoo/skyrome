@@ -2,7 +2,7 @@
  * UI test bed: a small sunlit Roman set (paving, a temple front, insulae, pines), the player,
  * a baker to talk to, a strongbox and a book — with every HUD source fed by mocks.
  *
- *   ?scene=ui                      play with the HUD (Tab/I/J/M/K menus, T wait, hold H clock)
+ *   ?scene=ui                      play with the HUD (Tab/I/J/M/K menus, T wait, hold O clock)
  *   &open=<screen>                 pause | character | skills | inventory | journal | map | settings |
  *                                  controls | credits | save | load | dialogue | barter | container |
  *                                  book | letter | wait | confirm | title | loading

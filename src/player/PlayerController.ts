@@ -1,7 +1,7 @@
 /** Reads input and drives the player's locomotion and facing. */
 import * as THREE from 'three';
 import type { Game, System } from '../core/Game';
-import { clamp, headingFromDir } from '../core/math';
+import { approachAngle, clamp, headingFromDir, wrapAngle } from '../core/math';
 import type { Player } from './Player';
 
 export const PLAYER_SPEEDS = {
@@ -12,6 +12,17 @@ export const PLAYER_SPEEDS = {
   jump: 5.6,
   turnRate: 12, // rad/s for the body to face the move direction in third person
 };
+
+/**
+ * Third-person auto-recenter (GDD §4.3, Trackpad and Keyboard presets): the camera yaw eases
+ * toward "behind the character" at up to `maxRate` rad/s, slowing near alignment. Pure.
+ */
+export function recenterYaw(yaw: number, heading: number, dt: number, maxRate = 1): number {
+  const target = heading + Math.PI;
+  const d = Math.abs(wrapAngle(target - yaw));
+  const rate = Math.min(maxRate, d * 1.5);
+  return approachAngle(yaw, target, rate * dt);
+}
 
 const wish = new THREE.Vector3();
 const fwd = new THREE.Vector3();
@@ -32,6 +43,15 @@ export class PlayerController implements System {
    * attack steps, staggers and the like; `accel` overrides the ground acceleration. null = normal.
    */
   motionOverride: (dt: number) => { x: number; z: number; accel?: number } | null = () => null;
+  /** Sprint key: held (Mouse preset) or a toggle that lasts until you stop (Trackpad, Keyboard). */
+  sprintMode: 'hold' | 'toggle' = 'hold';
+  /** Sneak key: a toggle (default) or held. */
+  sneakMode: 'toggle' | 'hold' = 'toggle';
+  /** Seconds without look input while moving before the camera swings behind you; 0 = off. */
+  autoRecenterDelay = 0;
+  private sprintLatched = false;
+  private stillTime = 0;
+  private noLookTime = 0;
 
   constructor(
     private readonly game: Game,
@@ -44,9 +64,13 @@ export class PlayerController implements System {
     const look = input.consumeLook(dt);
     p.yaw += look.yaw;
     p.pitch = clamp(p.pitch + look.pitch, -1.45, 1.35);
+    this.noLookTime = input.lookActive ? 0 : this.noLookTime + dt;
+    this.autoRecenter(dt);
     if (input.pressed('jump') && this.canJump()) this.jumpQueued = true;
     if (input.pressed('walkToggle')) p.walkMode = !p.walkMode;
-    if (input.pressed('sneak')) p.sneaking = !p.sneaking;
+    if (this.sneakMode === 'hold') p.sneaking = input.down('sneak');
+    else if (input.pressed('sneak')) p.sneaking = !p.sneaking;
+    if (this.sprintMode === 'toggle' && input.pressed('sprint')) this.sprintLatched = !this.sprintLatched;
   }
 
   fixedUpdate(dt: number) {
@@ -59,7 +83,12 @@ export class PlayerController implements System {
     const moving = wish.lengthSq() > 1e-6;
     if (moving) wish.normalize();
 
-    const wantsSprint = input.down('sprint') && moving && axes.z <= 0 && !p.sneaking;
+    // A toggled sprint ends when you stop (for a moment: pressing Shift just before W still
+    // counts) or start sneaking.
+    this.stillTime = moving ? 0 : this.stillTime + dt;
+    if (this.stillTime > 0.3 || p.sneaking || !input.enabled) this.sprintLatched = false;
+    const sprintKey = this.sprintMode === 'toggle' ? this.sprintLatched : input.down('sprint');
+    const wantsSprint = sprintKey && moving && axes.z <= 0 && !p.sneaking;
     p.sprinting = wantsSprint && p.grounded && this.canSprint();
     let speed = p.sneaking ? PLAYER_SPEEDS.sneak : p.walkMode ? PLAYER_SPEEDS.walk : PLAYER_SPEEDS.run;
     if (p.sprinting) speed = PLAYER_SPEEDS.sprint;
@@ -81,5 +110,17 @@ export class PlayerController implements System {
     }
     p.locomote(wish, dt, { jump: this.jumpQueued ? PLAYER_SPEEDS.jump : 0, accel: override?.accel });
     this.jumpQueued = false;
+  }
+
+  /** Swing the third-person camera behind a moving character after a pause in look input. */
+  private autoRecenter(dt: number) {
+    const p = this.player;
+    if (this.autoRecenterDelay <= 0 || p.viewMode !== 'third' || p.combatStance) return;
+    if (this.noLookTime < this.autoRecenterDelay) return;
+    const axes = this.game.input.moveAxes();
+    // Only while heading forward: strafing or backing up would chase its own tail.
+    if (axes.z >= 0) return;
+    if (Math.hypot(p.velocity.x, p.velocity.z) < 0.5) return;
+    p.yaw = recenterYaw(p.yaw, p.heading, dt);
   }
 }

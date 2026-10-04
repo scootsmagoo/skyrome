@@ -5,7 +5,13 @@
  * - Edge queries (`pressed`/`released`) are valid for exactly one rendered frame; read them from
  *   `update()` (per frame), not from fixed-step code.
  * - Every mouse-button action also has a keyboard binding, because the owner plays on a Mac trackpad.
- * - Mouse look uses Pointer Lock (click the canvas). Arrow keys also turn the camera.
+ * - Mouse look uses Pointer Lock (click the canvas). Arrow keys also turn the camera, with a short
+ *   ease-in (GDD §4.3). The click that captures the pointer is swallowed: it never attacks (§4.1).
+ * - The wheel steps the zoom through an accumulator with a threshold and a quiet-gap debounce, so
+ *   a trackpad's momentum scrolling fires one step, not a burst (§4.2). Pinch (Chrome: ctrl+wheel,
+ *   Safari: gesture events) zooms the camera and never the page.
+ * - Caps Lock may be bound as an alternate toggle: macOS fires keydown when it turns on and keyup
+ *   when it turns off, so either edge counts as one press (see `capsLockToggled`).
  */
 
 export type Action =
@@ -25,7 +31,19 @@ export type Action =
   | 'yield'
   | 'readyWeapon'
   | 'interact'
+  | 'invoke'
+  | 'quickWheel'
+  | 'hotbar1'
+  | 'hotbar2'
+  | 'hotbar3'
+  | 'hotbar4'
+  | 'hotbar5'
+  | 'hotbar6'
+  | 'hotbar7'
+  | 'hotbar8'
+  | 'wait'
   | 'toggleView'
+  | 'shoulderSwap'
   | 'lookLeft'
   | 'lookRight'
   | 'lookUp'
@@ -45,6 +63,7 @@ export type Action =
 /** Binding codes are `KeyboardEvent.code` values plus `Mouse0..4`, `WheelUp`, `WheelDown`. */
 export type Bindings = Record<Action, string[]>;
 
+/** GDD §4.2 default bindings (keyboard + mouse). */
 export const DEFAULT_BINDINGS: Bindings = {
   forward: ['KeyW'],
   back: ['KeyS'],
@@ -52,7 +71,8 @@ export const DEFAULT_BINDINGS: Bindings = {
   right: ['KeyD'],
   jump: ['Space'],
   sprint: ['ShiftLeft', 'ShiftRight'],
-  walkToggle: ['CapsLock'],
+  // N, not Caps Lock (macOS reports Caps Lock as a latch); Caps Lock may be added as an alternate.
+  walkToggle: ['KeyN'],
   sneak: ['KeyC'],
   attack: ['Mouse0', 'KeyF'],
   block: ['Mouse2', 'KeyQ'],
@@ -64,7 +84,19 @@ export const DEFAULT_BINDINGS: Bindings = {
   yield: ['KeyY'],
   readyWeapon: ['KeyR'],
   interact: ['KeyE'],
+  invoke: ['KeyZ'],
+  quickWheel: ['KeyG'],
+  hotbar1: ['Digit1'],
+  hotbar2: ['Digit2'],
+  hotbar3: ['Digit3'],
+  hotbar4: ['Digit4'],
+  hotbar5: ['Digit5'],
+  hotbar6: ['Digit6'],
+  hotbar7: ['Digit7'],
+  hotbar8: ['Digit8'],
+  wait: ['KeyT'],
   toggleView: ['KeyV'],
+  shoulderSwap: ['KeyH'],
   lookLeft: ['ArrowLeft'],
   lookRight: ['ArrowRight'],
   lookUp: ['ArrowUp'],
@@ -77,10 +109,14 @@ export const DEFAULT_BINDINGS: Bindings = {
   map: ['KeyM'],
   skills: ['KeyK'],
   pause: ['Escape'],
-  quickSave: ['F5'],
-  quickLoad: ['F9'],
+  // P and L because Apple keyboards send media keys on F5/F9 unless fn is held.
+  quickSave: ['F5', 'KeyP'],
+  quickLoad: ['F9', 'KeyL'],
   debug: ['Backquote'],
 };
+
+/** The hotbar actions in slot order (1–8). */
+export const HOTBAR_ACTIONS = ['hotbar1', 'hotbar2', 'hotbar3', 'hotbar4', 'hotbar5', 'hotbar6', 'hotbar7', 'hotbar8'] as const satisfies readonly Action[];
 
 /** Human-readable label for a binding code (for HUD prompts and the controls screen). */
 export function codeLabel(code: string): string {
@@ -97,6 +133,7 @@ export function codeLabel(code: string): string {
     ShiftRight: 'Shift',
     ControlLeft: 'Ctrl',
     AltLeft: 'Option',
+    AltRight: 'Option',
     CapsLock: 'Caps Lock',
     Escape: 'Esc',
     Backquote: '`',
@@ -110,6 +147,93 @@ export function codeLabel(code: string): string {
   return map[code] ?? code;
 }
 
+// ------------------------------------------------------------------ pure helpers (unit-tested)
+
+/** Wheel delta in CSS pixels whatever the event's deltaMode (0 px, 1 lines, 2 pages). */
+export function wheelPixels(deltaY: number, deltaMode = 0): number {
+  return deltaMode === 1 ? deltaY * 16 : deltaMode === 2 ? deltaY * 400 : deltaY;
+}
+
+/**
+ * Turns a stream of wheel deltas into discrete zoom steps (GDD §4.2).
+ *
+ * - Deltas are summed; a step fires once the sum passes `threshold` (px), then the sum restarts.
+ * - After a step the stream is locked: nothing more fires until the wheel has been quiet for
+ *   `quietMs`. A trackpad flick's momentum tail is one long, decaying stream, so it fires once.
+ * - A deliberate, continued scroll re-arms the lock after `quietMs` when its deltas are as strong
+ *   as the one that fired (momentum only ever decays), so a mouse wheel rolled on keeps stepping.
+ * - A reversal of direction starts a fresh sum; tiny jitter below `deadzone` is ignored.
+ *
+ * `push` returns -1 (scroll up = zoom in), +1 (scroll down = zoom out) or 0.
+ */
+export class WheelAccumulator {
+  threshold = 60;
+  quietMs = 250;
+  deadzone = 0.5;
+  /** A continued scroll re-arms when |delta| ≥ this fraction of the delta that fired the step. */
+  rearmRatio = 0.8;
+  private sum = 0;
+  private last = -Infinity;
+  private lockedAt = -Infinity;
+  private locked = false;
+  private lockDelta = 0;
+
+  push(delta: number, timeMs: number): -1 | 0 | 1 {
+    const gap = timeMs - this.last;
+    this.last = timeMs;
+    if (gap > this.quietMs) {
+      this.locked = false;
+      this.sum = 0;
+    }
+    if (!Number.isFinite(delta) || Math.abs(delta) < this.deadzone) return 0;
+    if (this.locked) {
+      const strong = Math.abs(delta) >= this.rearmRatio * this.lockDelta && Math.sign(delta) === Math.sign(this.lockDelta);
+      if (timeMs - this.lockedAt >= this.quietMs && strong) {
+        this.locked = false;
+        this.sum = 0;
+      } else return 0;
+    }
+    if (this.sum !== 0 && Math.sign(delta) !== Math.sign(this.sum)) this.sum = 0;
+    this.sum += delta;
+    if (Math.abs(this.sum) < this.threshold) return 0;
+    const dir = this.sum < 0 ? -1 : 1;
+    this.sum = 0;
+    this.locked = true;
+    this.lockedAt = timeMs;
+    this.lockDelta = delta;
+    return dir;
+  }
+
+  reset() {
+    this.sum = 0;
+    this.locked = false;
+    this.last = -Infinity;
+  }
+}
+
+/**
+ * Whether a Caps Lock key event toggles (GDD §4.2). macOS sends keydown when the lock turns on and
+ * keyup when it turns off; Windows and Linux send both per press. Comparing the lock state before
+ * and after makes either platform toggle exactly once per physical press. `next` is
+ * `getModifierState('CapsLock')` (null when the browser can't tell: then only keydown counts).
+ */
+export function capsLockToggled(prev: boolean | null, next: boolean | null, type: 'keydown' | 'keyup'): boolean {
+  if (next === null) return type === 'keydown';
+  if (prev === null) return type === 'keydown';
+  return prev !== next;
+}
+
+/** Arrow-key look ease-in: 0.15 at the first frame, smoothly to 1 after `easeIn` seconds. */
+export function keyLookEase(heldS: number, easeIn: number): number {
+  if (easeIn <= 0) return 1;
+  const t = Math.min(1, Math.max(0, heldS / easeIn));
+  return 0.15 + 0.85 * t * t * (3 - 2 * t);
+}
+
+const DEG = Math.PI / 180;
+/** Pinch deltas are small (a few px per event); scale them up to wheel pixels. */
+const PINCH_GAIN = 6;
+
 export class Input {
   bindings: Bindings;
   /** Mouse look sensitivity (radians per pixel of pointer movement). */
@@ -117,14 +241,32 @@ export class Input {
   invertY = false;
   /** When false, gameplay actions read as idle (menus/dialogue own the input). */
   enabled = true;
+  /** Codes that never register as presses (e.g. clicks in the Trackpad preset, GDD §4.3). */
+  readonly ignoredCodes = new Set<string>();
+  /** Arrow-key look (GDD §4.3 keyboard preset): yaw and pitch rates (rad/s) and ease-in (s). */
+  keyLook = { yaw: 150 * DEG, pitch: 90 * DEG, easeIn: 0.25 };
+  /** Pointer-look smoothing time constant in seconds (0 = raw; the Trackpad preset uses 0.08). */
+  lookSmoothing = 0;
+  /** Wheel → zoom steps. */
+  readonly wheel = new WheelAccumulator();
+  /** True if the pointer or the look keys turned the camera this frame (auto-recenter waits on it). */
+  lookActive = false;
 
   private held = new Set<string>();
   private pressedCodes = new Set<string>();
   private releasedCodes = new Set<string>();
+  /** Codes held for one frame only (wheel steps, Caps Lock edges). */
+  private momentary = new Set<string>();
   private codeToActions = new Map<string, Action[]>();
   private lookX = 0;
   private lookY = 0;
+  private velX = 0;
+  private velY = 0;
+  private keyLookHeld = 0;
   private locked = false;
+  private capsOn: boolean | null = null;
+  private gestureScale = 1;
+  private lastGestureAt = -Infinity;
   private listeners: Array<() => void> = [];
 
   constructor(
@@ -144,21 +286,26 @@ export class Input {
   /** True while any key/button bound to the action is held. */
   down(action: Action): boolean {
     if (!this.enabled && isGameplay(action)) return false;
-    for (const c of this.bindings[action]) if (this.held.has(c)) return true;
+    for (const c of this.bindings[action] ?? []) if (this.held.has(c)) return true;
     return false;
   }
 
   /** True on the frame the action was pressed. */
   pressed(action: Action): boolean {
     if (!this.enabled && isGameplay(action)) return false;
-    for (const c of this.bindings[action]) if (this.pressedCodes.has(c)) return true;
+    for (const c of this.bindings[action] ?? []) if (this.pressedCodes.has(c)) return true;
     return false;
   }
 
   /** True on the frame the action was released. */
   released(action: Action): boolean {
-    for (const c of this.bindings[action]) if (this.releasedCodes.has(c)) return true;
+    for (const c of this.bindings[action] ?? []) if (this.releasedCodes.has(c)) return true;
     return false;
+  }
+
+  /** True while a raw code is held (input lab, rebinding UI). */
+  isHeld(code: string): boolean {
+    return this.held.has(code);
   }
 
   /** -1..1 movement axes from WASD. */
@@ -170,18 +317,39 @@ export class Input {
 
   /** Consume accumulated look delta (radians) since last call. Includes arrow-key turning. */
   consumeLook(dt: number): { yaw: number; pitch: number } {
-    let yaw = -this.lookX * this.sensitivity;
-    let pitch = -this.lookY * this.sensitivity * (this.invertY ? -1 : 1);
+    let mx = this.lookX;
+    let my = this.lookY;
     this.lookX = this.lookY = 0;
+    if (this.lookSmoothing > 0 && dt > 0) {
+      // Low-pass the pointer velocity: trackpad jitter becomes smooth turning, and because the
+      // filter has unity gain the total turn is unchanged (it only lags by ~lookSmoothing).
+      const k = 1 - Math.exp(-dt / this.lookSmoothing);
+      this.velX += (mx / dt - this.velX) * k;
+      this.velY += (my / dt - this.velY) * k;
+      mx = this.velX * dt;
+      my = this.velY * dt;
+      if (Math.abs(this.velX) < 0.5) this.velX = 0;
+      if (Math.abs(this.velY) < 0.5) this.velY = 0;
+    }
+    let yaw = -mx * this.sensitivity;
+    let pitch = -my * this.sensitivity * (this.invertY ? -1 : 1);
     if (this.enabled) {
-      const keyTurn = 2.2 * dt; // rad/s for arrow keys
-      if (this.down('lookLeft')) yaw += keyTurn;
-      if (this.down('lookRight')) yaw -= keyTurn;
-      if (this.down('lookUp')) pitch += keyTurn * 0.7;
-      if (this.down('lookDown')) pitch -= keyTurn * 0.7;
+      const l = this.down('lookLeft');
+      const r = this.down('lookRight');
+      const u = this.down('lookUp');
+      const d = this.down('lookDown');
+      this.keyLookHeld = l || r || u || d ? this.keyLookHeld + dt : 0;
+      const ease = keyLookEase(this.keyLookHeld, this.keyLook.easeIn);
+      if (l) yaw += this.keyLook.yaw * ease * dt;
+      if (r) yaw -= this.keyLook.yaw * ease * dt;
+      if (u) pitch += this.keyLook.pitch * ease * dt;
+      if (d) pitch -= this.keyLook.pitch * ease * dt;
     } else {
       yaw = pitch = 0;
+      this.velX = this.velY = 0;
+      this.keyLookHeld = 0;
     }
+    this.lookActive = Math.abs(yaw) > 1e-5 || Math.abs(pitch) > 1e-5;
     return { yaw, pitch };
   }
 
@@ -207,15 +375,23 @@ export class Input {
   endFrame() {
     this.pressedCodes.clear();
     this.releasedCodes.clear();
-    // Wheel "keys" are momentary.
-    this.held.delete('WheelUp');
-    this.held.delete('WheelDown');
+    // Wheel "keys" and toggle edges are momentary.
+    for (const c of this.momentary) this.held.delete(c);
+    this.momentary.clear();
   }
 
   /** Simulate input (tests, automation, on-screen buttons). */
   simulate(code: string, isDown: boolean) {
     if (isDown) this.press(code);
     else this.release(code);
+  }
+
+  /** A one-frame press of a code (wheel steps, toggles) — also for automation. */
+  pulse(code: string) {
+    if (this.ignoredCodes.has(code)) return;
+    this.pressedCodes.add(code);
+    this.held.add(code);
+    this.momentary.add(code);
   }
 
   dispose() {
@@ -226,7 +402,7 @@ export class Input {
   private rebuildIndex() {
     this.codeToActions.clear();
     for (const [action, codes] of Object.entries(this.bindings) as [Action, string[]][]) {
-      for (const c of codes) {
+      for (const c of codes ?? []) {
         const list = this.codeToActions.get(c) ?? [];
         list.push(action);
         this.codeToActions.set(c, list);
@@ -235,6 +411,7 @@ export class Input {
   }
 
   private press(code: string) {
+    if (this.ignoredCodes.has(code)) return;
     if (!this.held.has(code)) this.pressedCodes.add(code);
     this.held.add(code);
   }
@@ -244,8 +421,19 @@ export class Input {
     this.held.delete(code);
   }
 
+  private zoomStep(delta: number, timeMs: number) {
+    const step = this.wheel.push(delta, timeMs);
+    if (step) this.pulse(step < 0 ? 'WheelUp' : 'WheelDown');
+  }
+
+  private capsEdge(e: KeyboardEvent) {
+    const next = typeof e.getModifierState === 'function' ? e.getModifierState('CapsLock') : null;
+    if (capsLockToggled(this.capsOn, next, e.type === 'keyup' ? 'keyup' : 'keydown')) this.pulse('CapsLock');
+    this.capsOn = next;
+  }
+
   private attach() {
-    const on = <K extends keyof WindowEventMap | 'pointerlockchange'>(
+    const on = <K extends keyof WindowEventMap | 'pointerlockchange' | 'gesturestart' | 'gesturechange' | 'gestureend'>(
       el: Window | Document | HTMLElement,
       type: K,
       fn: (e: K extends keyof WindowEventMap ? WindowEventMap[K] : Event) => void,
@@ -261,17 +449,26 @@ export class Input {
         // Keep Tab/Space/arrows/F5 etc. from scrolling or reloading the page.
         e.preventDefault();
       }
+      if (e.code === 'CapsLock') return this.capsEdge(e);
+      if (typeof e.getModifierState === 'function') this.capsOn = e.getModifierState('CapsLock');
       if (e.repeat) return;
       this.press(e.code);
     });
-    on(window, 'keyup', (e) => this.release(e.code));
+    on(window, 'keyup', (e) => {
+      if (e.code === 'CapsLock') return this.capsEdge(e);
+      this.release(e.code);
+    });
     on(window, 'blur', () => {
       for (const c of [...this.held]) this.release(c);
     });
 
     on(this.target, 'mousedown', (e) => {
+      if (!this.locked) {
+        // This click captures the mouse; it never attacks or blocks (GDD §4.1, AC-24).
+        if (this.enabled) this.requestPointerLock();
+        return;
+      }
       this.press(`Mouse${e.button}`);
-      if (!this.locked && this.enabled) this.requestPointerLock();
     });
     on(window, 'mouseup', (e) => this.release(`Mouse${e.button}`));
     on(this.target, 'contextmenu', (e) => e.preventDefault());
@@ -287,11 +484,41 @@ export class Input {
       'wheel',
       (e) => {
         e.preventDefault();
-        if (Math.abs(e.deltaY) < 2) return;
-        this.press(e.deltaY < 0 ? 'WheelUp' : 'WheelDown');
+        const t = e.timeStamp || performance.now();
+        // Safari reports a pinch as gesture events (handled below) and may echo it as ctrl+wheel.
+        if (e.ctrlKey && t - this.lastGestureAt < 80) return;
+        const px = wheelPixels(e.deltaY, e.deltaMode);
+        this.zoomStep(e.ctrlKey ? px * PINCH_GAIN : px, t);
       },
       { passive: false },
     );
+    // A pinch anywhere (menus included) must never zoom the page: Chrome sends ctrl+wheel...
+    on(
+      window,
+      'wheel',
+      (e) => {
+        if (e.ctrlKey) e.preventDefault();
+      },
+      { passive: false },
+    );
+    // ...and Safari sends gesture events. Inside the view, the pinch zooms the camera instead.
+    on(document, 'gesturestart', (e) => {
+      e.preventDefault();
+      this.gestureScale = 1;
+      this.lastGestureAt = e.timeStamp || performance.now();
+    });
+    on(document, 'gesturechange', (e) => {
+      e.preventDefault();
+      const scale = (e as Event & { scale?: number }).scale ?? 1;
+      const t = e.timeStamp || performance.now();
+      this.lastGestureAt = t;
+      if (e.target !== this.target || !(scale > 0)) return;
+      // Spreading the fingers (scale up) zooms in, like scrolling up.
+      const d = -Math.log(scale / this.gestureScale) * 400;
+      this.gestureScale = scale;
+      this.zoomStep(d, t);
+    });
+    on(document, 'gestureend', (e) => e.preventDefault());
     on(document, 'pointerlockchange', () => {
       this.locked = document.pointerLockElement === this.target;
     });

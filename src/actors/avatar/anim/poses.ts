@@ -216,6 +216,16 @@ export const ARM_L_TORCH: PoseSpec = {
   indexL: 84,
 };
 
+/** Retiarius: the gathered net held low and out to the left, ready to cast. */
+export const ARM_L_NET: PoseSpec = {
+  shoulderL: [2, 6],
+  upperArmL: [26, 24, 8, 0],
+  forearmL: [46, 20],
+  handL: [8, 0, 0],
+  fingersL: 90,
+  indexL: 86,
+};
+
 // ---- blocks ------------------------------------------------------------------
 
 export const BLOCK: Record<WeaponClass | 'shield', PoseSpec> = {
@@ -318,7 +328,14 @@ export function stancePose(stance: Stance, drawn: boolean, togate = false): Stan
 }
 
 /** Bones the stance's arms own while walking (the rest of the body follows the gait). */
-export function stanceArmMask(stance: Stance, drawn: boolean, torch: boolean, togate = false): { L: number; R: number; chest: number } {
+export interface ArmMask {
+  L: number;
+  R: number;
+  chest: number;
+}
+
+/** Writes into `out` (pass a reused object from per-frame code). */
+export function stanceArmMask(stance: Stance, drawn: boolean, torch: boolean, togate = false, out: ArmMask = { L: 0, R: 0, chest: 0 }): ArmMask {
   let L = 0;
   let R = 0;
   let chest = 0;
@@ -349,7 +366,10 @@ export function stanceArmMask(stance: Stance, drawn: boolean, torch: boolean, to
   } else if (stance === 'spear' || stance === 'spearShield') R = 1;
   if (togate && !drawn) L = 1;
   if (torch && !(drawn && hasShield(stance))) L = 1;
-  return { L, R, chest };
+  out.L = L;
+  out.R = R;
+  out.chest = chest;
+  return out;
 }
 
 // ---- first person ---------------------------------------------------------------
@@ -358,12 +378,13 @@ export function stanceArmMask(stance: Stance, drawn: boolean, torch: boolean, to
 // forward and no more than ~0.3 m below the eye to be on screen, so the view poses reach further
 // forward than the third-person stances. Applied only to the arms, only in first person.
 
-export const FP_ARMS: Record<WeaponClass | 'shield' | 'torch', PoseSpec> = {
+export const FP_ARMS: Record<WeaponClass | 'shield' | 'torch' | 'net', PoseSpec> = {
   blade: { shoulderR: [6, 16], upperArmR: [76, 12, -22, 0], forearmR: [34, -40], handR: [-12, -28, 0], fingersR: 82, indexR: 76, upperArmL: [34, 22, 24, 0], forearmL: [70, 40] },
   shield: { shoulderL: [0, -8], upperArmL: [30, 34, 46, 0], forearmL: [84, -90], handL: [0, 0, 0] },
   spear: { shoulderR: [6, 12], upperArmR: [32, 20, -8, 14], forearmR: [64, 0], handR: [0, -30, 0], shoulderL: [6, 18], upperArmL: [64, 6, -26, 0], forearmL: [34, 70] },
   twoHand: { shoulderR: [6, 14], upperArmR: [58, 16, -22, 0], forearmR: [62, 20], handR: [0, 10, 0], shoulderL: [6, 18], upperArmL: [72, 8, -36, 0], forearmL: [52, 55] },
   unarmed: { shoulderL: [8, 14], shoulderR: [8, 14], upperArmL: [66, 20, -16, 10], forearmL: [104, 35], upperArmR: [62, 22, -16, 10], forearmR: [108, 35] },
   bow: { shoulderL: [4, 10], upperArmL: [72, 10, 22, 0], forearmL: [22, 0] },
-  torch: { shoulderL: [4, 10], upperArmL: [56, 22, 26, 0], forearmL: [56, 0], handL: [0, 0, 0] },
+  torch: { shoulderL: [2, 8], upperArmL: [36, 24, 24, 0], forearmL: [58, 0], handL: [0, 0, 0] },
+  net: { shoulderL: [4, 10], upperArmL: [48, 26, 20, 0], forearmL: [50, 20], handL: [6, 0, 0] },
 };
