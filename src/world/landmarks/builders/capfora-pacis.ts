@@ -24,7 +24,7 @@ import type { LandmarkBuilder, LandmarkContext } from '../types';
 import { makeLandmark, type Detail } from './capfora/build';
 import { farColonnade, farWall, leanTo } from './capfora/far';
 import { S, spotAt, type CapSpot } from './capfora/frame';
-import { basin, box, coffers, figure, footing, groundMin, inscription, post, sectileFloor, span } from './capfora/ornament';
+import { basin, box, coffers, figure, footing, groundMin, inscription, post, sectileFloor, span, stairsToGround } from './capfora/ornament';
 import { PAINT, cityPlanRelief, paint, redGranite } from './capfora/paint';
 import { forumPortico } from './capfora/portico';
 
@@ -111,11 +111,7 @@ function buildPacis(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
   spots.push(spotAt('door-nerva', 'door', 0, Y0 + 0.4, -hz + 1.5, 0, -hz - 2, { label: 'Passage to the Forum of Nerva' }));
   // Steps down outside the SW door if the ground falls away.
   {
-    const gOut = Math.min(0, groundMin(g, -hx - 5, zd - 2, -hx - 0.5, zd + 2));
-    if (Y0 + 0.4 - gOut > 0.15) {
-      const { count, rise } = stepCount(Y0 + 0.4 - gOut, 0.19);
-      stairs(b, { width: 4.0, rise, run: 0.36, count, material: 'travertine' }, TRS(-hx - t - count * 0.36, gOut, zd, 0, Math.PI / 2, 0));
-    }
+    stairsToGround(b, g, Y0 + 0.4, 4.0, TRS(-hx - t, 0, zd, 0, Math.PI / 2, 0));
   }
 
   // ---- the SE range: library (NE), aedes (centre), plan hall (SW), behind the portico line

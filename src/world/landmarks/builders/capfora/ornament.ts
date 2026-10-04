@@ -12,6 +12,7 @@ import { inscriptionPanel, latinize, type InscriptionStyle } from '../../../../a
 import type { MeshBuilder } from '../../../../gfx/MeshBuilder';
 import type { MaterialId } from '../../../../gfx/materialIds';
 import { PAINT, paint } from './paint';
+import { stairs, stepCount } from '../../../../arch/common/stairs';
 
 export type Detail = 'high' | 'low';
 const I = () => new THREE.Matrix4();
@@ -585,4 +586,60 @@ export function trophy(b: MeshBuilder, at: THREE.Matrix4, mat: MaterialId = 'bro
     sh.translate(sx * 0.55, 1.75, -0.06);
     b.add(sh, mat, at);
   }
+}
+
+// ---------------------------------------------------------------- stairs down to the terrain
+
+/**
+ * A flight of steps from a level `top` down to the terrain. Frame `at` (a Y rotation plus a
+ * translation in the landmark's local frame) puts the TOP edge of the flight on its x axis, centred,
+ * with the flight descending towards −z. The flight is lengthened one step at a time until the
+ * terrain (the lowest point across the width, under the bottom step and just beyond it) comes up
+ * to the foot, so there is never a ledge at the bottom however the ground falls, and where the
+ * terrain is higher it simply covers the lowest steps. A tufa block fills under the flight down to
+ * the ground; returns the foot's level and the flight's length (0 when no steps are needed).
+ */
+export function stairsToGround(
+  b: MeshBuilder,
+  groundAt: (x: number, z: number) => number,
+  top: number,
+  width: number,
+  at: THREE.Matrix4,
+  opts: { run?: number; rise?: number; material?: MaterialId; maxSteps?: number } = {},
+): { foot: number; length: number } {
+  // 0.205 / 0.31 (33.5°): steeper than the steepest walkable road ramps on the terrain (~31°), so
+  // a flight running down a ramp still meets it; still well inside the controller's step limits.
+  const run = opts.run ?? 0.31;
+  const rise = opts.rise ?? 0.205;
+  const p = new THREE.Vector3();
+  const g = (x: number, z: number) => {
+    p.set(x, 0, z).applyMatrix4(at);
+    return groundAt(p.x, p.z);
+  };
+  const minIn = (z0: number, z1: number) => {
+    let m = Infinity;
+    for (let i = 0; i <= 4; i++) for (const z of [z0, (z0 + z1) / 2, z1]) m = Math.min(m, g(-width / 2 + (width * i) / 4, z));
+    return m;
+  };
+  if (minIn(-1.0, -0.2) >= top - 0.1) return { foot: top, length: 0 };
+  let n = 1;
+  const max = opts.maxSteps ?? 70;
+  let best = 1;
+  let bestGap = Infinity;
+  for (; n <= max; n++) {
+    const gap = top - n * rise - minIn(-n * run - 0.8, -(n - 1) * run);
+    if (gap <= 0.06) break;
+    if (gap < bestGap) {
+      bestGap = gap;
+      best = n;
+    }
+  }
+  // The terrain falls away faster than any flight (a cliff): stop where the ledge is smallest.
+  if (n > max) n = best;
+  const foot = top - n * rise;
+  const len = n * run;
+  stairs(b, { width, rise, run, count: n, material: opts.material ?? 'travertine' }, mul(at, new THREE.Matrix4().makeTranslation(0, foot, -len)));
+  const gmin = Math.min(foot, minIn(-len, 0)) - 0.4;
+  if (foot - gmin > 0.05) box(b, 'tufa', 0, (gmin + foot) / 2, -len / 2, width, foot - gmin, len, at, false);
+  return { foot, length: len };
 }

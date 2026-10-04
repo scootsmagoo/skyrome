@@ -26,7 +26,7 @@ import type { LandmarkBuilder, LandmarkContext } from '../types';
 import { makeLandmark, type Detail } from './capfora/build';
 import { farColonnade, farWall, leanTo, templeFar } from './capfora/far';
 import { S, padY, spotAt, type CapSpot } from './capfora/frame';
-import { altar, box, figure, footing, groundMin, inscription, labrum, pedestalStatue, post, span, terrace, trophy } from './capfora/ornament';
+import { altar, box, figure, footing, groundMin, inscription, labrum, pedestalStatue, post, span, stairsToGround, terrace, trophy } from './capfora/ornament';
 import { forumPortico } from './capfora/portico';
 import { cliffFace } from './capfora/cliff';
 import { addLamp, brazier, lampstand, plantTrees, torch } from './capfora/life';
@@ -205,11 +205,9 @@ function areaCapitolina(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, sp
 
   // Broad steps from the front edge down to the brow over the Tarpeian Rock.
   {
-    const gOut = Math.min(-0.15, groundMin(g, -A.stairHalf, A.front - 7, A.stairHalf, A.front - 1));
-    const { count, rise } = stepCount(-gOut, 0.19);
-    const z0 = A.front - count * 0.36;
-    stairs(b, { width: 2 * A.stairHalf, rise, run: 0.36, count, material: 'travertine' }, T(0, gOut, z0));
-    footing(b, 'tufa', g, -A.stairHalf, z0, A.stairHalf, A.front, gOut, I, false);
+    const fl = stairsToGround(b, g, 0, 2 * A.stairHalf, T(0, 0, A.front));
+    const z0 = A.front - fl.length;
+    const gOut = fl.foot;
     // Cheeks either side of the flight, carrying statues.
     for (const sx of [-1, 1]) {
       const x = sx * (A.stairHalf + 0.45);
@@ -239,11 +237,7 @@ function areaCapitolina(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, sp
   );
   {
     // Steps from the Clivus Capitolinus (arriving from the east along z ≈ −44) onto the forecourt.
-    const gRoad = Math.min(foreY - 0.15, g(F.x0 - 1.2, -44));
-    const { count, rise } = stepCount(foreY - gRoad, 0.19);
-    const x0 = F.x0 - count * 0.36;
-    stairs(b, { width: 6, rise, run: 0.36, count, material: 'travertine' }, TRS(x0, gRoad, -44, 0, Math.PI / 2, 0));
-    footing(b, 'tufa', g, x0, -47, F.x0, -41, gRoad, I, false);
+    stairsToGround(b, g, foreY, 6, TRS(F.x0, 0, -44, 0, Math.PI / 2, 0));
     spots.push(spotAt('clivus-top', 'spawn', F.x0 + 2, foreY, -44, -hw, -44, { label: 'Top of the Clivus Capitolinus' }));
   }
   {

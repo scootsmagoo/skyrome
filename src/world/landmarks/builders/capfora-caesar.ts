@@ -29,7 +29,7 @@ import type { LandmarkBuilder, LandmarkContext } from '../types';
 import { makeLandmark, type Detail } from './capfora/build';
 import { farColonnade, farWall, leanTo, templeFar } from './capfora/far';
 import { S, landmark, relMatrix, sharedFloor, spotAt, type CapSpot } from './capfora/frame';
-import { basin, box, festoon, figure, footing, groundMin, inscription, span } from './capfora/ornament';
+import { basin, box, festoon, figure, footing, groundMin, inscription, span, stairsToGround } from './capfora/ornament';
 import { PAINT, friezeRelief, paint } from './capfora/paint';
 import { forumPortico } from './capfora/portico';
 import { tabernae } from './capfora/tabernae';
@@ -173,13 +173,7 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
 
   // ---- the SE end: steps down to the Argiletum
   {
-    const gOut = Math.min(0, groundMin(g, xa - half, zSE - 5, xa + half, zSE - 1));
-    if (gOut < -0.1) {
-      const { count, rise } = stepCount(Y0 - gOut, 0.19);
-      const w = 2 * (half - depth) - 1.0;
-      stairs(b, { width: w, rise, run: 0.36, count, material: 'travertine' }, T(xa, gOut, zSE - 0.4 - count * 0.36));
-      footing(b, 'travertine', g, xa - w / 2, zSE - 0.4 - count * 0.36, xa + w / 2, zSE - 0.4, gOut, I, false);
-    }
+    stairsToGround(b, g, Y0, 2 * (half - depth) - 1.0, T(xa, 0, zSE - 0.4));
     spots.push(spotAt('entrance', 'spawn', xa, Y0, zSE + 3, xa, zSE + 20, { label: 'Forum of Caesar' }));
   }
 

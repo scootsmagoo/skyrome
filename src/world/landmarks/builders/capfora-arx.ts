@@ -21,7 +21,7 @@ import { makeLandmark, type Detail } from './capfora/build';
 import { roofPrism, templeFar } from './capfora/far';
 import { S, spotAt, type CapSpot } from './capfora/frame';
 import { lampstand, plantTrees, torch, type TreeReq } from './capfora/life';
-import { altar, box, figure, footing, groundMin, inscription, post, span, terrace } from './capfora/ornament';
+import { altar, box, figure, footing, groundMin, inscription, post, span, stairsToGround, terrace } from './capfora/ornament';
 import { PAINT, friezeRelief, paint } from './capfora/paint';
 
 // ------------------------------------------------------------------ ground cover
@@ -293,20 +293,12 @@ function arxPrecinct(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots
   );
   // Front stair towards the Asylum.
   {
-    const gOut = Math.min(y - 0.15, groundMin(g, -A.stairHalf, A.z0 - 6, A.stairHalf, A.z0 - 1));
-    const { count, rise } = stepCount(y - gOut, 0.19);
-    const z0 = A.z0 - count * 0.34;
-    stairs(b, { width: 2 * A.stairHalf, rise, run: 0.34, count, material: 'travertine' }, T(0, gOut, z0));
-    footing(b, 'tufa', g, -A.stairHalf, z0, A.stairHalf, A.z0, gOut, I, false);
+    stairsToGround(b, g, y, 2 * A.stairHalf, T(0, 0, A.z0));
   }
   // Gate stair (east) for the Gradus Monetae coming up from the Forum side.
   {
     const zc = (A.gate[0] + A.gate[1]) / 2;
-    const gOut = Math.min(y - 0.15, g(A.x0 - 3, zc));
-    const { count, rise } = stepCount(y - gOut, 0.19);
-    const x0 = A.x0 - count * 0.34;
-    stairs(b, { width: A.gate[1] - A.gate[0], rise, run: 0.34, count, material: 'travertine' }, TRS(x0, gOut, zc, 0, Math.PI / 2, 0));
-    footing(b, 'tufa', g, x0, A.gate[0], A.x0, A.gate[1], gOut, I, false);
+    stairsToGround(b, g, y, A.gate[1] - A.gate[0], TRS(A.x0, 0, zc, 0, Math.PI / 2, 0));
     // Gate piers with torches.
     for (const z of [A.gate[0] - 0.5, A.gate[1] + 0.5]) {
       span(b, 'tufa', A.x0 - 0.9, y, z - 0.5, A.x0 + 0.1, y + 3.0, z + 0.5, I, true);

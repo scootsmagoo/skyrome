@@ -29,8 +29,8 @@ import type { LandmarkBuilder, LandmarkContext } from '../types';
 import { makeLandmark, type Detail } from './capfora/build';
 import { exedraWall } from './capfora/exedra';
 import { farColonnade, farWall, leanTo, templeFar } from './capfora/far';
-import { S, spotAt, type CapSpot } from './capfora/frame';
-import { altar, box, figure, footing, groundMin, inscription, span, standard } from './capfora/ornament';
+import { S, sharedFloor, spotAt, type CapSpot } from './capfora/frame';
+import { altar, box, figure, footing, groundMin, inscription, span, stairsToGround, standard } from './capfora/ornament';
 import { PAINT, paint } from './capfora/paint';
 import { forumPortico } from './capfora/portico';
 import { capTemple } from './capfora/temple';
@@ -146,7 +146,10 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
         height: eH,
         chord: (A.halfW - ex.cx) * S,
         base: gWide - floorY - Y0 - 0.4,
-        material: 'peperino',
+        // The SE exedra's back bulges into the Forum of Nerva: there it is veneered and carries the
+        // Forum of Nerva's entablature and attic lines round its curve, between pilasters.
+        material: side < 0 ? 'marble_veined' : 'peperino',
+        outer: side < 0 ? nervaDressing(sharedFloor(ctx, 'forum-nerva', 0.7) - (Y0 + floorY)) : undefined,
         innerMaterial: 'marble',
         detail,
         niches: {
@@ -217,12 +220,7 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
     span(b, 'marble', -hw - 0.7, wH - 0.5, fz - t / 2 - 0.15, hw + 0.7, wH, fz + t / 2, I);
     for (const sx of [-1, 1]) span(b, 'marble', sx * (gw / 2 + 0.3) - 0.45, Y0, fz - t / 2 - 0.25, sx * (gw / 2 + 0.3) + 0.45, wH - 0.5, fz - t / 2 + 0.05, I);
     // Steps down to the ground outside the entrance.
-    const gOut = Math.min(0, groundMin(g, -gw / 2, -hd - 6, gw / 2, -hd - 1));
-    if (gOut < -0.15) {
-      const { count, rise } = stepCount(Y0 - gOut, 0.19);
-      stairs(b, { width: gw, rise, run: 0.36, count, material: 'travertine' }, T(0, gOut, -hd - count * 0.36));
-      footing(b, 'travertine', g, -gw / 2, -hd - count * 0.36, gw / 2, -hd, gOut, I, false);
-    }
+    stairsToGround(b, g, Y0, gw, T(0, 0, -hd));
     spots.push(spotAt('entrance', 'spawn', 0, Y0, -hd - 3, 0, 0, { label: 'Entrance to the Forum of Augustus' }));
   }
 
@@ -333,6 +331,20 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
   spots.push(spotAt('magistrate', 'npc', 0, Y0, 8, 0, 20, { label: 'Praetor setting out for his province' }));
   spots.push(spotAt('toga-virilis', 'npc', -6, Y0, -4, 0, 20, { label: 'A family at the toga virilis ceremony' }));
   spots.push(spotAt('portico-nw', 'sit', colX + 3, Y0 + floorY, -15, colX - 5, -15, { label: 'Bench in the NW portico' }));
+}
+
+/** Bands and pilasters of the Forum of Nerva's order (columns 6 m) at a floor `y0` (exedra frame). */
+function nervaDressing(y0: number) {
+  return {
+    bands: [
+      { y: y0 - 0.05, h: 0.45, proj: 0.18, material: 'marble' as MaterialId },
+      { y: y0 + 6.0, h: 0.85, proj: 0.12, material: 'marble' as MaterialId },
+      { y: y0 + 6.85, h: 0.56, proj: 0.38, material: 'marble' as MaterialId },
+      { y: y0 + 7.41, h: 1.9, proj: 0.06, material: 'marble' as MaterialId },
+      { y: y0 + 9.3, h: 0.22, proj: 0.24, material: 'marble' as MaterialId },
+    ],
+    pilasters: { count: 9, y0: y0 + 0.4, y1: y0 + 6.0, width: 0.85, proj: 0.2, material: 'marble' as MaterialId },
+  };
 }
 
 // ------------------------------------------------------------------ the temple

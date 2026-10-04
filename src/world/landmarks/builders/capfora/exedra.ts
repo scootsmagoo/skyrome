@@ -38,6 +38,17 @@ export interface ExedraSpec {
   base?: number;
   /** Angular ranges [a0, a1] left open (gates). */
   gaps?: [number, number][];
+  /**
+   * Dressing of the OUTER face where it shows in a neighbouring space (the SE exedra of the Forum
+   * of Augustus bulges into the Forum of Nerva): bands (string courses, an entablature, an attic
+   * cornice) and pilasters, heights in this frame.
+   */
+  outer?: {
+    bands?: { y: number; h: number; proj: number; material?: MaterialId }[];
+    pilasters?: { count: number; y0: number; y1: number; width: number; proj?: number; material?: MaterialId };
+    /** Only dress this angular range (default: the whole segment). */
+    range?: [number, number];
+  };
 }
 
 export interface ExedraResult {
@@ -84,6 +95,34 @@ export function exedraWall(b: MeshBuilder, spec: ExedraSpec, at: THREE.Matrix4):
       g.rotateY(a);
       g.translate((R + t / 2) * Math.sin(a), 0, (R + t / 2) * Math.cos(a));
       b.add(g, mat, at);
+    }
+  }
+  // Outer dressing.
+  if (spec.outer) {
+    const [o0, o1] = spec.outer.range ?? [-half, half];
+    for (const [p0, p1] of pieces) {
+      const a0 = Math.max(p0, o0);
+      const a1 = Math.min(p1, o1);
+      if (a1 - a0 < 0.02) continue;
+      const range = { segments: Math.max(2, Math.round((seg * (a1 - a0)) / (2 * half))), theta0: a0, theta1: a1 };
+      for (const bnd of spec.outer.bands ?? []) {
+        const r0 = R + t;
+        const prof = new ProfileBuilder(r0, bnd.y).out(bnd.proj).up(bnd.h).in(bnd.proj).build();
+        b.add(lathe(prof, range), bnd.material ?? 'marble', at);
+      }
+    }
+    const pil = spec.outer.pilasters;
+    if (pil) {
+      for (let k = 0; k < pil.count; k++) {
+        const a = o0 + ((o1 - o0) * (k + 0.5)) / pil.count;
+        if (!pieces.some(([p0, p1]) => a > p0 && a < p1)) continue;
+        const pr = pil.proj ?? 0.25;
+        const g = new THREE.BoxGeometry(pil.width, pil.y1 - pil.y0, pr);
+        g.translate(0, (pil.y0 + pil.y1) / 2, pr / 2);
+        g.rotateY(a);
+        g.translate((R + t) * Math.sin(a), 0, (R + t) * Math.cos(a));
+        b.add(g, pil.material ?? 'marble', at);
+      }
     }
   }
   // Floor of the segment (fan from the chord midpoint); the floor also gets a trimesh collider.

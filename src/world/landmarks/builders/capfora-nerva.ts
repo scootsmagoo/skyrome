@@ -30,7 +30,7 @@ import { makeLandmark, type Detail } from './capfora/build';
 import { exedraWall } from './capfora/exedra';
 import { farColonnade, farWall, templeFar } from './capfora/far';
 import { S, landmark, relMatrix, sharedFloor, spotAt, type CapSpot } from './capfora/frame';
-import { box, figure, footing, friezeStrip, groundMin, inscription, span } from './capfora/ornament';
+import { box, figure, footing, friezeStrip, groundMin, inscription, span, stairsToGround } from './capfora/ornament';
 import { PAINT, friezeRelief, minervaRelief, paint } from './capfora/paint';
 import { capTemple } from './capfora/temple';
 
@@ -247,15 +247,16 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
     const ry = Math.atan2(-(c.z - a.z), c.x - a.x);
     const m = mul(I, TRS((a.x + c.x) / 2, (yb + wallTop) / 2, (a.z + c.z) / 2, 0, ry, 0));
     b.box('peperino', len, wallTop - yb, t, m, { collide: true });
-    // Steps down to the Argiletum outside the opening.
-    const gOut = Math.min(0, groundMin(g, xo0, swz(xNW) - 2.5, xNW, swz(xo0) - 1));
-    if (YL - gOut > 0.15) {
-      const { count, rise } = stepCount(YL - gOut, 0.19);
-      const w = xNW - xo0 - 0.4;
-      const zf = Math.min(swz(xo0), swz(xNW));
-      stairs(b, { width: w, rise, run: 0.36, count, material: 'travertine' }, T((xo0 + xNW) / 2, gOut, zf - count * 0.36));
-      footing(b, 'travertine', g, xo0, zf - count * 0.36, xNW, zf, gOut, I, false);
+    // Its forum face veneered like the long walls, with the cornice line of the colonnacce.
+    {
+      const yc = (yb + wallTop) / 2;
+      const hv = wallTop - 0.3 - YL;
+      b.box('marble_veined', len - 0.1, hv, 0.04, mul(m, T(0, YL + hv / 2 - yc, t / 2 + 0.02)));
+      b.box('marble', len, 0.56, 0.38, mul(m, T(0, Y0 + 6.85 + 0.28 - yc, t / 2 + 0.19)));
+      b.box('marble', len, 0.45, 0.2, mul(m, T(0, YL + 0.2 - yc, t / 2 + 0.1)));
     }
+    // Steps down to the Argiletum outside the opening.
+    stairsToGround(b, g, YL, xNW - xo0 - 0.4, T((xo0 + xNW) / 2, 0, Math.min(swz(xo0), swz(xNW))));
     spots.push(spotAt('entrance-argiletum', 'spawn', (xo0 + xNW) / 2, YL, swz((xo0 + xNW) / 2) + 2, (xo0 + xNW) / 2, 20, { label: 'Forum Transitorium (from the Argiletum)' }));
     spots.push(spotAt('bookseller', 'vendor', xNW - 1.5, YL, swz(xNW) + 5, xNW - 6, swz(xNW) + 5, { label: 'Bookseller of the Argiletum (Martial in stock)' }));
   }
@@ -295,11 +296,7 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
   spots.push(spotAt('passers-by', 'npc', 0, floorAt(-20), -20, 0, 20, { label: 'Traffic of the Argiletum crossing the forum' }));
   // Steps outside the door to the Forum of Caesar, down to the lane between the two fora.
   {
-    const gOut = Math.min(Y0 - 0.1, groundMin(g, xNW + t, zc - 1.5, xNW + t + 2.5, zc + 1.5));
-    if (Y0 - gOut > 0.15) {
-      const { count, rise } = stepCount(Y0 - gOut, 0.19);
-      stairs(b, { width: 3.0, rise, run: 0.34, count, material: 'travertine' }, TRS(xNW + t + count * 0.34, gOut, zc, 0, -Math.PI / 2, 0));
-    }
+    stairsToGround(b, g, Y0, 3.0, TRS(xNW + t, 0, zc, 0, -Math.PI / 2, 0));
   }
 }
 
