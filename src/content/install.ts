@@ -172,16 +172,20 @@ export class ContainerRuntime {
     return CONTAINER_STYLES[this.spec.kind];
   }
 
+  /** The container's state: the world deltas are the truth (a new game clears them); the local copy is only for worlds without deltas. */
   private read(): Stored {
-    const d = this.game.deltas?.get(this.spec.id) as Partial<Stored> | undefined;
+    const deltas = this.game.deltas;
+    const d = deltas?.get(this.spec.id) as Partial<Stored> | undefined;
     if (d?.items) return { items: d.items.map((i) => ({ ...i })), coins: d.coins ?? 0, emptied: d.emptied, unlocked: d.unlocked, reported: d.reported };
-    if (this.local) return this.local;
+    if (!deltas && this.local) return this.local;
     const loot = rollLoot(this.spec.table, 1, new Rng(`ctn:${this.spec.id}`));
-    return (this.local = { items: loot.items.map((i) => ({ ...i })), coins: loot.denarii });
+    const fresh: Stored = { items: loot.items.map((i) => ({ ...i })), coins: loot.denarii };
+    if (!deltas) this.local = fresh;
+    return fresh;
   }
 
   private write(s: Stored) {
-    this.local = s;
+    if (!this.game.deltas) this.local = s;
     s.emptied = s.items.length === 0 && s.coins <= 0;
     if (this.game.deltas) {
       this.game.deltas.merge(this.spec.id, { items: s.items, coins: s.coins, emptied: s.emptied, unlocked: s.unlocked, reported: s.reported });

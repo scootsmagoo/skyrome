@@ -186,6 +186,11 @@ describe('containers', () => {
     expect(view.items()).toEqual([]);
     expect(w.game.deltas.isLooted('ctn-latebra-vortumni')).toBe(true);
     expect(it.enabled!()).toBe(false); // emptied: nothing left to prompt for
+    // A new game clears the deltas: the slab holds its hollow again.
+    w.game.deltas.restore({});
+    expect(it.enabled!()).toBe(true);
+    it.interact(w.game);
+    expect(w.views.at(-1)!.items().map((i) => [i.itemId, i.count])).toEqual(before);
   });
 
   it('a coin in a basin and a dropped tool are taken at once', () => {

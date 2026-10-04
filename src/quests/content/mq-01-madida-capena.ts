@@ -65,7 +65,10 @@ export default defineQuest({
         { id: 'talk-festus', text: 'Talk to the courier', optional: true, target: { kind: 'npc', id: 'npc-festus' } },
         { id: 'dismount', text: 'Walk on toward the Capena Gate', target: { kind: 'location', id: 'porta-capena' } },
       ],
-      onEnter: (q) => hint(q.game, 'Walk with W (look with the arrow keys or the trackpad). Press E to talk to the courier. The compass at the top shows where to go.'),
+      onEnter: (q) => {
+        removeExamine(BODY.id); // a New Game from the title: the old courier's body is gone
+        hint(q.game, 'Walk with W (look with the arrow keys or the trackpad). Press E to talk to the courier. The compass at the top shows where to go.');
+      },
       next: 'gate',
     },
     gate: {
