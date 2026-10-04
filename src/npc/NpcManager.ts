@@ -32,10 +32,14 @@ import { PhysicsCellSampler } from '../ai/life/physicsSampler';
 import { SpatialHash } from '../ai/life/spatialHash';
 import { DEFAULT_STEER, steer, type SteerNeighbor, type Vec2 } from '../ai/life/steering';
 import { StreetNav } from '../ai/life/streets';
+import { laneAt, type LaneSet } from '../ai/life/lanes';
+import { atlasLanes, cartLane } from './crowd/atlasLanes';
+import type { StationDef, StationMember } from './crowd/stations';
+import { StationDirector, type StationHost } from './stationDirector';
 import { BarkDirector, type BarkKind } from './barks';
 import { makeTask, NpcBrain, type LifeContext } from './brain';
 import { CartDirector, type CartHost } from './carts';
-import { crowdBudget, dayPhase, pickRole, roleWeights, type CrowdBudget, type DayPhase } from './crowd/budget';
+import { crowdBudget, dayPhase, NIGHT_CAP, pickRole, roleWeights, type CrowdBudget, type DayPhase } from './crowd/budget';
 import { districtAt, poiBoosts, poisNear, type District, type Poi, type PoiKind } from './crowd/districts';
 import { CROWD_ROLES, FOREIGN_LABELS, type CrowdRole, type CrowdRoleId } from './crowd/roles';
 import { combatOf, streetsOf } from './hooks';
@@ -78,7 +82,7 @@ export interface NpcManagerOptions {
   named?: boolean;
   vignettes?: boolean;
   carts?: boolean;
-  /** Hard cap on ambient NPCs (default 84). */
+  /** Hard cap on ambient NPCs (default 96). */
   maxCrowd?: number;
   /** Nav grid radius around the player (default 80 m). */
   navRadius?: number;
@@ -88,6 +92,8 @@ export interface NpcManagerOptions {
   atlas?: boolean;
   /** Fixed crowd mix (test beds); default: the atlas district at the player. */
   district?: District;
+  /** Authored stations (vigiles' posts, stalls, the cart stand…; needs the atlas). Default true. */
+  stations?: boolean;
 }
 
 /** Character controller within this distance (m); measured cost ~0.05–0.15 ms per NPC per step. */
@@ -99,8 +105,10 @@ const DESPAWN_ALWAYS = 115;
 const NAMED_SPAWN = 100;
 const NAMED_DESPAWN = 140;
 const SPAWN_MIN = 20;
-/** Unseen people farther than this behind the camera are recycled toward the view. */
-const RECYCLE_BEHIND = 24;
+/** Unseen people farther than this behind the camera are recycled toward the view… */
+const RECYCLE_BEHIND = 12;
+/** …and those this far off to the side, out of view for longer. */
+const RECYCLE_SIDE = 18;
 const SPAWN_MAX = 62;
 /** Appearance variants per avatar role (shared → geometry cache hits, cheap spawns). */
 const VARIANTS = 14;
@@ -121,6 +129,7 @@ export class NpcManager implements System {
   readonly barks: BarkDirector;
   readonly vignettes: VignetteDirector;
   readonly carts: CartDirector;
+  readonly stations: StationDirector;
   readonly rng: Rng;
   readonly list: Npc[] = [];
   readonly life: LifeContext;
@@ -159,6 +168,10 @@ export class NpcManager implements System {
   private lookT = 0;
   private initialDone = false;
   private floodT = 0;
+  /** Where the player was last frame (a jump of more than 40 m is a teleport). */
+  private lastPlayer = { x: NaN, z: NaN };
+  /** Game hours at the last frame (a jump of more than half an hour is a wait or a load). */
+  private lastHours = NaN;
   private readonly freeShape = new RAPIER.Capsule(0.5, 0.3);
   private frameDt = 1 / 60;
   private readonly frustum = new THREE.Frustum();
@@ -185,7 +198,7 @@ export class NpcManager implements System {
     this.namedEnabled = opts.named ?? true;
     const qd = Number(q.get('crowd'));
     this.density = qd > 0 && qd <= 4 ? qd : (opts.density ?? 1);
-    this.maxCrowd = opts.maxCrowd ?? 84;
+    this.maxCrowd = opts.maxCrowd ?? 96;
     this.useAtlas = opts.atlas ?? true;
     this.fixedDistrict = opts.district ?? null;
     this.sampler = new PhysicsCellSampler(game.physics, {
@@ -210,7 +223,10 @@ export class NpcManager implements System {
       const l = Math.hypot(n.x, n.z) || 1;
       return { dist: hit.timeOfImpact, nx: n.x / l, nz: n.z / l };
     };
-    this.barks = new BarkDirector((text, speaker) => game.events.emit('ui:subtitle', { text, speaker }));
+    // No subtitles over the title, the creation screen or a loading fade.
+    this.barks = new BarkDirector((text, speaker) => {
+      if (!this.quiet()) game.events.emit('ui:subtitle', { text, speaker });
+    });
     this.sun = sunTimes(game.time.date());
     this.budget = crowdBudget(game.time.hour, this.sun, 1, this.density);
     this.district = this.fixedDistrict ?? districtAt(0, 0);
@@ -219,6 +235,8 @@ export class NpcManager implements System {
     this.vignettes.enabled = opts.vignettes ?? q.get('vignettes') !== '0';
     this.carts = new CartDirector(this.makeCartHost());
     if (opts.carts === false) this.cartsEnabled = false;
+    this.stations = new StationDirector(this.makeStationHost());
+    this.stations.enabled = this.useAtlas && (opts.stations ?? q.get('stations') !== '0');
     if (!avatarLod.viewer) avatarLod.viewer = game.camera;
     this.listen();
   }
@@ -233,6 +251,23 @@ export class NpcManager implements System {
 
   all(): readonly Npc[] {
     return this.list;
+  }
+
+  /**
+   * Where a named NPC is (quest markers): its body when spawned, else where its schedule puts it
+   * at this hour (or its home). Null for unknown or dead NPCs.
+   */
+  positionOf(id: string): THREE.Vector3 | null {
+    const n = this.byId.get(id);
+    if (n) return n.position.clone();
+    if (this.deadNamed.has(id)) return null;
+    const def = this.registry().get(id);
+    if (!def) return null;
+    const e = activeScheduleEntry(def.schedule, this.game.time.hour);
+    const at = e?.at ?? def.home;
+    const loc = at ? this.resolveLocation(at) : null;
+    if (!loc) return null;
+    return new THREE.Vector3(loc.x, this.game.heightmap?.heightAt(loc.x, loc.z) ?? 0, loc.z);
   }
 
   /** Living NPCs within `r` of a point (xz), nearest first. */
@@ -319,7 +354,7 @@ export class NpcManager implements System {
   }
 
   /** Spawn a crowd NPC of a role (escorts included unless `escorts: false`). */
-  spawnAmbient(roleId: CrowdRoleId, x: number, z: number, heading?: number, opts: { escorts?: boolean; appearance?: Appearance } = {}): Npc | null {
+  spawnAmbient(roleId: CrowdRoleId, x: number, z: number, heading?: number, opts: { escorts?: boolean; appearance?: Appearance; noProp?: boolean } = {}): Npc | null {
     const role = CROWD_ROLES[roleId];
     if (!role) return null;
     const y = this.floorY(x, z);
@@ -339,7 +374,7 @@ export class NpcManager implements System {
     });
     this.register(npc);
     const night = this.budget.night;
-    if (role.prop && this.rng.chance(role.propChance ?? 0)) {
+    if (role.prop && !opts.noProp && this.rng.chance(role.propChance ?? 0)) {
       const lightProp = role.prop === 'lantern' || role.prop === 'torch';
       if (!lightProp || night || role.id === 'torchbearer') this.giveProp(npc, role.prop);
     }
@@ -421,10 +456,29 @@ export class NpcManager implements System {
     this.game.events.emit('npc:despawned', { id: npc.id });
   }
 
+  /**
+   * The player jumped somewhere else: drop the ambient people and scenes left behind (named NPCs
+   * go by their own distance rule) and fill the new place at once on the next update.
+   */
+  relocate() {
+    this.vignettes.stopAll();
+    this.carts.clear();
+    this.stations.reset();
+    if (this.talk) this.endTalk();
+    for (const n of [...this.list]) if (n.ambient) this.despawn(n);
+    this.initialDone = false;
+    this.floodT = 0;
+    this.grid.resetFlood();
+    // The hour may have jumped: no stale night budget (carts!) for the next fixed step.
+    this.budget = crowdBudget(this.game.time.hour, this.sun, this.district.density, this.density);
+    this.districtAt = { x: Infinity, z: Infinity };
+  }
+
   /** Despawn everyone (scene change, tests). */
   clear() {
     this.vignettes.stopAll();
     this.carts.clear();
+    this.stations.clear();
     for (const n of [...this.list]) this.despawn(n);
   }
 
@@ -521,6 +575,8 @@ export class NpcManager implements System {
         if (this.game.player) combatOf(this.game)?.engage?.(n, this.game.player);
         this.alarm(n.position.x, n.position.z, 14, 'fight', this.game.player ?? null);
       }),
+      // A new game, a loaded save or the quick start: fill the place afresh for its hour.
+      ev.on('game:started', () => this.relocate()),
       ev.on('npc:alarm', (e) => {
         const a = e.aggressorId ? (this.game.actors.get(e.aggressorId) ?? null) : null;
         this.alarm(e.x, e.z, e.radius ?? 16, e.kind ?? 'fight', a);
@@ -573,9 +629,11 @@ export class NpcManager implements System {
       despawn: (npc) => m.despawn(npc),
       bark: (npc, kind, urgent) => m.bark(npc, kind, urgent),
       isVisible: (x, y, z) => m.isVisible(x, y, z),
+      travelTarget: (npc) => m.travelTarget(npc),
+      travelChance: (npc) => m.travelChance(npc),
       chatPartner: (npc) => {
         for (const o of m.near(npc.position, 7)) {
-          if (o === npc || !o.ambient || o.scripted || o.leader || o.followers.length || o.talking) continue;
+          if (o === npc || !o.ambient || o.scripted || o.station || o.leader || o.followers.length || o.talking) continue;
           const k = o.brain?.task?.kind;
           if (k === 'goto' || k === 'idle' || k === undefined) {
             if (o.brain?.task?.spot) continue;
@@ -604,6 +662,7 @@ export class NpcManager implements System {
    */
   private wanderTarget(npc: Npc, radius: number, minR: number): Vec2 | null {
     const g = this.grid;
+    const lanes = this.lanes();
     const pl = this.game.player?.position;
     let best: Vec2 | null = null;
     let bestScore = -Infinity;
@@ -618,13 +677,18 @@ export class NpcManager implements System {
       if (!p) continue;
       // Stay around the player's bubble (people out there are despawned anyway).
       const dp = pl ? Math.hypot(p.x - pl.x, p.z - pl.z) : 0;
-      if (pl && dp > DESPAWN_UNSEEN - 12) continue;
+      if (pl && dp > this.crowdRadius() + 8) continue;
       // Stay on the street level: skip podium tops and roofs far above the terrain.
       const y = g.heightAt(p.x, p.z);
       if (y !== null && Math.abs(y - npc.position.y) > 3) continue;
       if (!g.reachable(p.x, p.z)) continue;
+      // Not up a grassy hillside.
+      if (this.steep(p.x, p.z, y)) continue;
       found++;
       let score = this.rng.next();
+      // Streets and squares over open ground.
+      const ln = lanes?.nearest(p.x, p.z, 8);
+      if (ln && ln.d < ln.lane.width / 2 + 3) score += 0.6;
       if (pl) {
         const fx = (p.x - pl.x) / (dp || 1);
         const fz = (p.z - pl.z) / (dp || 1);
@@ -647,6 +711,16 @@ export class NpcManager implements System {
     }
     const pl = this.game.player?.position;
     if (!pl) return null;
+    // Off down the street, away from the player.
+    const lanes = this.lanes();
+    if (lanes) {
+      const away = Math.atan2(npc.position.x - pl.x, npc.position.z - pl.z);
+      const t = lanes.ahead(() => this.rng.next(), npc.position.x, npc.position.z, away, 34 + this.rng.next() * 20, 10);
+      if (t && Math.hypot(t.x - pl.x, t.z - pl.z) > Math.hypot(npc.position.x - pl.x, npc.position.z - pl.z) + 8) {
+        const p = this.nav.snap(t.x, t.z, 4);
+        return { x: p.x, z: p.z, door: false };
+      }
+    }
     // Away from the player, ideally out of sight.
     const dx = npc.position.x - pl.x;
     const dz = npc.position.z - pl.z;
@@ -689,26 +763,42 @@ export class NpcManager implements System {
   /** Atlas roads (wheel-worthy ones) passing within 40 m of the player, in game metres. */
   roadsNear(): { x: number; z: number }[][] {
     const pp = this.game.player?.position;
-    if (!this.useAtlas || !pp) return [];
+    const lanes = this.lanes();
+    if (!lanes || !pp) return [];
     const out: { x: number; z: number }[][] = [];
-    for (const r of atlas.ROADS) {
-      if (r.kind === 'stairs' || r.kind === 'path' || r.width < 4) continue;
-      const pts = r.points.map(([x, z]) => {
-        const [gx, gz] = toGame(x, z);
-        return { x: gx, z: gz };
-      });
-      // Distance from the player to the polyline.
-      let d = Infinity;
-      for (let k = 1; k < pts.length; k++) d = Math.min(d, segDist(pp.x, pp.z, pts[k - 1], pts[k]));
-      if (d < 40) out.push(pts);
-    }
-    return this.rng.shuffle(out);
+    for (const l of lanes.near(pp.x, pp.z, 40)) if (cartLane(l)) out.push(l.pts.map((p) => ({ x: p.x, z: p.z })));
+    const shuffled = this.rng.shuffle(out);
+    // Before dawn at the Porta Capena the last carts leave the city through the gate (GDD §17.2).
+    const gate = this.gateRoute(pp);
+    if (gate) shuffled.unshift(gate);
+    return shuffled;
+  }
+
+  /** From inside the Porta Capena out along the Via Appia, when the player is near it in the night watches. */
+  private gateRoute(pp: THREE.Vector3Like): { x: number; z: number }[] | null {
+    if (!this.budget.night) return null;
+    const lanes = this.lanes();
+    const intra = lanes?.lanes.find((l) => l.id === 'conn-capena-intra');
+    const appia = lanes?.lanes.find((l) => l.id === 'via-appia');
+    if (!intra || !appia) return null;
+    const gate = intra.pts[0];
+    if (Math.hypot(gate.x - pp.x, gate.z - pp.z) > 90) return null;
+    const inner = [...intra.pts].reverse();
+    const outer: { x: number; z: number }[] = [];
+    for (let s = 6; s <= 80; s += 6) outer.push(laneAt(appia, s, 1.2));
+    return [...inner.map((p) => ({ x: p.x, z: p.z })), ...outer.map((p) => ({ x: p.x, z: p.z }))];
   }
 
   /** Is there room for a person standing at (x, y, z) (feet)? */
   isFree(x: number, y: number, z: number): boolean {
     const hit = this.game.physics.world.intersectionWithShape({ x, y: y + 0.85, z }, { x: 0, y: 0, z: 0, w: 1 }, this.freeShape, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, groups(ALL_LAYERS, Layer.World));
     return !hit;
+  }
+
+  /** The game flow is somewhere other than play (title, creation, spawning): no barks or scenes. */
+  quiet(): boolean {
+    const f = (this.game as unknown as { flow?: { state?: string } }).flow;
+    return !!f && typeof f.state === 'string' && f.state !== 'playing';
   }
 
   /** The first elapsed day falls on the Lemuria (9, 11 or 13 May): ghosts walk tonight. */
@@ -769,7 +859,7 @@ export class NpcManager implements System {
         return m.look;
       },
       free: (x, z, r, filter) =>
-        m.near({ x, y: 0, z }, r, (n) => n.ambient && !n.scripted && !n.talking && !n.leader && !n.followers.length && !n.dead && !n.isFighting() && n.brain?.task?.kind !== 'flee' && (!filter || filter(n))),
+        m.near({ x, y: 0, z }, r, (n) => n.ambient && !n.scripted && !n.station && !n.talking && !n.leader && !n.followers.length && !n.dead && !n.isFighting() && n.brain?.task?.kind !== 'flee' && (!filter || filter(n))),
       spawn: (role, x, z, heading, opts) => {
         if (m.crowdCount >= m.maxCrowd + 8) return null;
         return m.spawnAmbient(role, x, z, heading, opts);
@@ -792,7 +882,7 @@ export class NpcManager implements System {
       giveBack: (n) => n.brain?.release(m.life),
       addToScene: (o) => m.game.scene.add(o),
       pois: (x, z, r, k) => m.pois(x, z, r, k),
-      busy: () => !!m.talk || !!(m.game.player && combatOf(m.game)?.isInCombat?.(m.game.player)),
+      busy: () => m.quiet() || !!m.talk || !!(m.game.player && combatOf(m.game)?.isInCombat?.(m.game.player)),
     };
   }
 
@@ -826,6 +916,112 @@ export class NpcManager implements System {
       },
       bark: (n, text) => m.barks.say(n.id, n.name, text),
     };
+  }
+
+  private makeStationHost(): StationHost {
+    const m = this;
+    return {
+      get game() {
+        return m.game;
+      },
+      get player() {
+        return m.game.player?.position ?? null;
+      },
+      get phase() {
+        return m.phase;
+      },
+      isSeen: (x, y, z) => m.isSeen(x, y, z),
+      floorY: (x, z) => m.floorY(x, z),
+      spawnMember: (def, mem, x, z, heading) => m.spawnStationMember(def, mem, x, z, heading),
+      dismiss: (npc, now) => {
+        if (now || !npc.brain) {
+          m.despawn(npc);
+          return;
+        }
+        npc.station = null;
+        if (!npc.scripted && !npc.talking) npc.brain.leave(m.life);
+      },
+      alive: (n) => m.byId.get(n.id) === n,
+      block: (x, z, r) => {
+        for (let dz = -r; dz <= r; dz += 0.5) for (let dx = -r; dx <= r; dx += 0.5) if (dx * dx + dz * dz <= r * r) m.grid.block(x + dx, z + dz);
+      },
+    };
+  }
+
+  /** A station member at its post: the role's look, the station's prop, label and loop. */
+  private spawnStationMember(def: StationDef, mem: StationMember, x: number, z: number, heading: number): Npc | null {
+    const n = this.spawnAmbient(mem.role, x, z, heading, { escorts: false, noProp: mem.prop !== undefined });
+    if (!n) return null;
+    if (mem.prop) this.giveProp(n, mem.prop);
+    if (mem.label) n.name = mem.label;
+    if (mem.barks) n.barkTable = mem.barks;
+    n.station = { id: def.id, x, z, face: heading, loop: mem.loop };
+    n.brain?.next(this.life);
+    return n;
+  }
+
+  // ---------------------------------------------------------------- streets (lanes)
+
+  /** Street centrelines people walk along: the atlas roads (until the city's street graph). */
+  lanes(): LaneSet | null {
+    return this.useAtlas ? atlasLanes() : null;
+  }
+
+  /**
+   * How far from the player the crowd spreads (m): tight in the fora so the squares feel packed,
+   * wider in the streets where people stream past.
+   */
+  crowdRadius(): number {
+    if (!this.useAtlas) return SPAWN_MAX;
+    const square = this.district.id === 'dist-forum-romanum' || this.district.id === 'dist-fora-imperialia';
+    return square ? 42 : this.budget.night ? 50 : 56;
+  }
+
+  /** Terrain slope (rise over run) at a point; hillsides are no place for a crowd. */
+  slopeAt(x: number, z: number): number {
+    const hm = this.game.heightmap;
+    if (!hm) return 0;
+    const e = 1.5;
+    const gx = (hm.heightAt(x + e, z) - hm.heightAt(x - e, z)) / (2 * e);
+    const gz = (hm.heightAt(x, z + e) - hm.heightAt(x, z - e)) / (2 * e);
+    return Math.hypot(gx, gz);
+  }
+
+  /** On open terrain steeper than a street (a built floor, steps or a podium, doesn't count). */
+  private steep(x: number, z: number, floorY: number | null): boolean {
+    const hm = this.game.heightmap;
+    if (!hm) return false;
+    if (floorY !== null && Math.abs(floorY - hm.heightAt(x, z)) > 0.4) return false;
+    return this.slopeAt(x, z) > 0.3;
+  }
+
+  /** The next leg along the street an NPC is on (keeps its direction, turns at junctions). */
+  private travelTarget(npc: Npc): Vec2 | null {
+    const lanes = this.lanes();
+    if (!lanes) return null;
+    const pl = this.game.player?.position;
+    for (let i = 0; i < 3; i++) {
+      // Mostly carry on the way they face; sometimes turn round.
+      const h = i === 0 && this.rng.chance(0.85) ? npc.heading : npc.heading + Math.PI;
+      const t = lanes.ahead(() => this.rng.next(), npc.position.x, npc.position.z, h, 22 + this.rng.next() * 22, 12);
+      if (!t) return null;
+      // Stay in the bubble.
+      if (pl && Math.hypot(t.x - pl.x, t.z - pl.z) > this.crowdRadius() + 16) continue;
+      if (!this.grid.ready(t.x, t.z)) return { x: t.x, z: t.z };
+      const p = this.grid.nearestWalkable(t.x, t.z, 3, { x: 0, z: 0 }, true);
+      if (p) return { x: p.x, z: p.z };
+    }
+    return null;
+  }
+
+  /** Wanderers near a street usually walk on along it; in the squares they mostly browse. */
+  private travelChance(npc: Npc): number {
+    const lanes = this.lanes();
+    if (!lanes || npc.station || npc.leader) return 0;
+    const near = lanes.nearest(npc.position.x, npc.position.z, 10);
+    if (!near) return 0;
+    const square = this.district.id === 'dist-forum-romanum' || this.district.id === 'dist-fora-imperialia';
+    return square ? 0.25 : this.budget.night ? 0.7 : 0.55;
   }
 
   // ---------------------------------------------------------------- systems
@@ -995,6 +1191,13 @@ export class NpcManager implements System {
 
     // Physics queries only see colliders after the first physics step.
     if (this.clock <= 0) return;
+    // Teleported (spawn after the title, fast travel, a loaded save): start afresh around the
+    // player instead of waiting for the old crowd to drift out of range.
+    if (Number.isFinite(this.lastPlayer.x) && Math.hypot(pp.x - this.lastPlayer.x, pp.z - this.lastPlayer.z) > 40) this.relocate();
+    this.lastPlayer.x = pp.x;
+    this.lastPlayer.z = pp.z;
+    if (Number.isFinite(this.lastHours) && Math.abs(time.totalHours - this.lastHours) > 0.5) this.relocate();
+    this.lastHours = time.totalHours;
     // Nav grid around the player.
     this.sampler.fallbackY = pp.y;
     this.grid.setFocus(pp.x, pp.z);
@@ -1028,6 +1231,7 @@ export class NpcManager implements System {
       this.updateCrowd(!this.initialDone);
       this.initialDone = true;
     }
+    this.stations.update(dt);
     this.namedT -= dt;
     if (this.namedT <= 0) {
       this.namedT = 1;
@@ -1094,11 +1298,13 @@ export class NpcManager implements System {
         this.workBlocks.get(n.id)!.removeFromParent();
         this.workBlocks.delete(n.id);
       }
-      if (n.scripted || n.talking) continue;
+      if (n.scripted || n.talking || n.station) continue;
       if (n.ambient) {
-        // Far away, or long unseen well behind the camera: recycle them where the player looks.
+        // Far away, or a while out of view: recycle them where the player looks (they respawn just
+        // outside the edges of the view and walk into it). Sooner when well behind the camera.
         const behind = (n.position.x - pp.x) * this.look.x + (n.position.z - pp.z) * this.look.z < -0.5 * d;
-        if (d > DESPAWN_ALWAYS || (d > DESPAWN_UNSEEN && n.unseenFor > 1) || (behind && d > RECYCLE_BEHIND && n.unseenFor > 5 && !n.leader && !n.followers.length)) this.despawn(n);
+        const recycle = !n.leader && !n.followers.length && ((behind && d > RECYCLE_BEHIND && n.unseenFor > 3) || (d > RECYCLE_SIDE && n.unseenFor > 6));
+        if (d > DESPAWN_ALWAYS || (d > DESPAWN_UNSEEN && n.unseenFor > 1) || recycle) this.despawn(n);
       } else if (d > NAMED_DESPAWN && n.unseenFor > 1 && !n.isFighting()) {
         this.despawn(n);
       }
@@ -1118,11 +1324,12 @@ export class NpcManager implements System {
     let citizens = 0;
     let vigiles = 0;
     for (const n of this.list) {
-      if (!n.ambient || n.brain?.activity === 'home') continue;
+      if (!n.ambient || n.station || n.brain?.activity === 'home') continue;
       if (n.role?.id === 'vigil') vigiles++;
       else if (n.role?.id !== 'carter') citizens++;
     }
-    const target = Math.min(this.maxCrowd, b.citizens);
+    // At night the station people (vigiles' posts, drovers) count toward the ≤ 25 cap (AC-10).
+    const target = Math.min(this.maxCrowd, b.night ? Math.max(4, Math.min(b.citizens, NIGHT_CAP - b.vigiles - 2 - this.stations.count)) : b.citizens);
     const boosts = this.useAtlas ? poiBoosts(pp.x, pp.z) : {};
     let weights = roleWeights(this.district, this.game.time.hour, this.sun, boosts);
     // Escorted roles bring 1–4 people each: cap the groups so they don't swallow the budget.
@@ -1138,6 +1345,7 @@ export class NpcManager implements System {
       if (!n) continue;
       citizens += 1 + n.followers.length;
       if (p.spotPlaced && n.brain) n.brain.next(this.life);
+      else if (p.onLane && n.brain && !n.followers.length && this.rng.chance(0.8)) n.brain.travel(this.life);
     }
     while (vigiles < b.vigiles && budget-- >= 0) {
       const p = this.spawnPoint('vigil', initial);
@@ -1149,13 +1357,13 @@ export class NpcManager implements System {
     const excess = citizens - (target + 4);
     if (excess > 0) {
       const extra = this.list
-        .filter((n) => n.ambient && !n.scripted && !n.leader && n.brain?.activity !== 'home' && n.role?.id !== 'vigil')
+        .filter((n) => n.ambient && !n.scripted && !n.station && !n.leader && n.brain?.activity !== 'home' && n.role?.id !== 'vigil')
         .sort((a, c) => (c.inView ? 0 : 1) - (a.inView ? 0 : 1) || c.distToPlayer - a.distToPlayer)
         .slice(0, Math.min(excess, 3));
       for (const n of extra) n.brain?.leave(this.life);
     }
     if (vigiles > b.vigiles + 1) {
-      const v = this.list.find((n) => n.role?.id === 'vigil' && !n.scripted && n.brain?.activity !== 'home');
+      const v = this.list.find((n) => n.role?.id === 'vigil' && !n.scripted && !n.station && n.brain?.activity !== 'home');
       v?.brain?.leave(this.life);
     }
   }
@@ -1164,16 +1372,42 @@ export class NpcManager implements System {
    * Where to spawn a new citizen: at its work spot (initial fill), in a doorway, or out of sight
    * 22–78 m away, on street level.
    */
-  private spawnPoint(role: CrowdRoleId, initial: boolean): { x: number; z: number; heading?: number; spotPlaced?: boolean } | null {
+  private spawnPoint(role: CrowdRoleId, initial: boolean): { x: number; z: number; heading?: number; spotPlaced?: boolean; onLane?: boolean } | null {
     const pp = this.game.player!.position;
     const g = this.grid;
     const r = CROWD_ROLES[role];
+    const terrainAt = (x: number, z: number) => (this.game.heightmap ? this.game.heightmap.heightAt(x, z) : pp.y);
+    const R = this.crowdRadius();
     // Initial fill: workers appear at their posts so shops are open and priests at prayer.
     if (initial && r) {
       const slot = archetypeSlot(r.archetype, this.game.time.hour, this.sun);
       if ((slot.activity === 'work' || slot.activity === 'idle') && slot.place) {
-        const s = this.spots.find(slot.place, pp.x, pp.z, 70, this.rng);
+        const s = this.spots.find(slot.place, pp.x, pp.z, 70, this.rng, pp.y);
         if (s && Math.hypot(s.x - pp.x, s.z - pp.z) > 4) return { x: s.x, z: s.z, heading: s.face, spotPlaced: true };
+      }
+    }
+    // On a street, heading along it (most people are going somewhere).
+    const lanes = this.lanes();
+    if (lanes && this.rng.chance(this.budget.night ? 0.85 : 0.6)) {
+      const ahead = Math.atan2(this.look.x, this.look.z);
+      for (let i = 0; i < 10; i++) {
+        const p = lanes.sample(() => this.rng.next(), pp.x, pp.z, initial ? 5 : SPAWN_MIN - 6, R);
+        if (!p) break;
+        if (!g.ready(p.x, p.z)) continue;
+        const c = g.nearestWalkable(p.x, p.z, 1.5);
+        if (!c) continue;
+        const h = g.heightAt(c.x, c.z);
+        if (h === null || Math.abs(h - terrainAt(c.x, c.z)) > 1.6 || !g.reachable(c.x, c.z) || !this.isFree(c.x, h, c.z)) continue;
+        if (!initial) {
+          const y = h + 1.2;
+          const d = Math.hypot(c.x - pp.x, c.z - pp.z);
+          // Out of sight, or behind something: they walk into view along the street.
+          if (this.isVisible(c.x, y, c.z) && (d < 22 || this.isSeen(c.x, y, c.z))) continue;
+        } else if (i < 5 && Math.abs(((Math.atan2(c.x - pp.x, c.z - pp.z) - ahead + Math.PI * 3) % (Math.PI * 2)) - Math.PI) > 1.2 && this.rng.chance(0.5)) {
+          // The first crowd: favour the stretch of street in front of the camera.
+          continue;
+        }
+        return { x: c.x, z: c.z, heading: p.heading, onLane: true };
       }
     }
     // A doorway (people step out of houses even in view).
@@ -1193,15 +1427,15 @@ export class NpcManager implements System {
       let d: number;
       if (initial) {
         // The first crowd: half of it in front of the camera (nothing has been seen yet).
-        a = this.rng.chance(0.55) ? ahead + (this.rng.next() - 0.5) * 1.7 : this.rng.next() * Math.PI * 2;
-        d = 5 + Math.sqrt(this.rng.next()) * (SPAWN_MAX - 5);
+        a = this.rng.chance(0.7) ? ahead + (this.rng.next() - 0.5) * 1.7 : this.rng.next() * Math.PI * 2;
+        d = 4 + Math.pow(this.rng.next(), 0.75) * (R - 4);
       } else if (this.rng.chance(0.6)) {
         // Just outside the edges of the view, so people walk into it.
         a = ahead + (this.rng.chance(0.5) ? 1 : -1) * (halfFov + 0.12 + this.rng.next() * 0.7);
         d = 14 + this.rng.next() * 36;
       } else {
         a = this.rng.next() * Math.PI * 2;
-        d = SPAWN_MIN + Math.sqrt(this.rng.next()) * (SPAWN_MAX - SPAWN_MIN);
+        d = SPAWN_MIN + Math.sqrt(this.rng.next()) * (R - SPAWN_MIN);
       }
       let x = pp.x + Math.sin(a) * d;
       let z = pp.z + Math.cos(a) * d;
@@ -1213,6 +1447,7 @@ export class NpcManager implements System {
         const h = g.heightAt(x, z);
         if (h === null || Math.abs(h - terrain(x, z)) > 1.6) continue;
         if (!g.reachable(x, z) || !this.isFree(x, h, z)) continue;
+        if (this.steep(x, z, h)) continue;
       } else continue;
       if (initial) return { x, z };
       const y = (g.heightAt(x, z) ?? pp.y) + 1.2;

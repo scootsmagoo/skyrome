@@ -48,6 +48,10 @@ export interface LifeContext {
   chatPartner(npc: Npc): Npc | null;
   /** Combat module hook (guards). */
   engage(guard: Npc, target: Actor | null): void;
+  /** The next leg of a walk along the street the NPC is on (lanes), or null when not near one. */
+  travelTarget?(npc: Npc): Vec2 | null;
+  /** How likely a wandering NPC here walks on along the street rather than browsing (0..1). */
+  travelChance?(npc: Npc): number;
 }
 
 export type TaskKind = 'idle' | 'goto' | 'follow' | 'flee' | 'gawk' | 'respond' | 'leave' | 'converse' | 'script';
@@ -268,6 +272,7 @@ export class NpcBrain {
 
   /** Periodic check while busy: schedule changes interrupt idling or wandering. */
   private recheck(ctx: LifeContext) {
+    if (this.npc.station) return;
     const key = this.scheduleKey(ctx);
     if (key !== this.slotKey && this.task && (this.task.kind === 'idle' || this.task.kind === 'goto')) {
       this.next(ctx);
@@ -298,6 +303,10 @@ export class NpcBrain {
     }
     if (npc.def) {
       this.nextNamed(ctx);
+      return;
+    }
+    if (npc.station) {
+      this.toPost(ctx);
       return;
     }
     const role = npc.role;
@@ -338,7 +347,7 @@ export class NpcBrain {
     if (kind === 'workshop') kinds.push('stall', 'open');
     if (kind === 'forum') kinds.push('rostra', 'steps');
     if (kind === 'curia' || kind === 'rostra') kinds.push('open');
-    const s = ctx.spots.find(kinds, npc.position.x, npc.position.z, radius, ctx.rng);
+    const s = ctx.spots.find(kinds, npc.position.x, npc.position.z, radius, ctx.rng, npc.position.y);
     if (!s) return false;
     ctx.spots.claim(s, npc.id);
     // The idle's `until` is set on arrival (now + duration).
@@ -347,9 +356,34 @@ export class NpcBrain {
     return true;
   }
 
+  /** Station members: walk back to the post if pushed off it, then stand there in its loop. */
+  private toPost(ctx: LifeContext) {
+    const npc = this.npc;
+    const st = npc.station!;
+    this.activity = 'idle';
+    const idle = task('idle', { loop: st.loop, face: st.face, until: ctx.now + 20 + ctx.rng.next() * 20 });
+    if (Math.hypot(st.x - npc.position.x, st.z - npc.position.z) > 0.7) {
+      this.setTask(task('goto', { x: st.x, z: st.z, speed: npc.walkSpeed, then: { ...idle, until: Infinity, duration: 20 + ctx.rng.next() * 20 } }), ctx);
+    } else {
+      this.setTask(idle, ctx);
+    }
+  }
+
+  /** Walk on along the street (lanes); false when there is no street here. */
+  travel(ctx: LifeContext): boolean {
+    const t = ctx.travelTarget?.(this.npc);
+    if (!t) return false;
+    this.activity = 'wander';
+    const pause = ctx.rng.chance(0.15) ? task('idle', { loop: ctx.rng.pick<IdleLoop | null>(['stand', 'talk', null]), duration: 2 + ctx.rng.next() * 4 }) : null;
+    this.setTask(task('goto', { x: t.x, z: t.z, speed: this.npc.walkSpeed, then: pause }), ctx);
+    return true;
+  }
+
   private wander(ctx: LifeContext, place?: PlaceKind) {
     const npc = this.npc;
     const rng = ctx.rng;
+    // Walk on down the street most of the time (people pass through; streets carry traffic).
+    if (ctx.travelChance && rng.chance(ctx.travelChance(npc)) && this.travel(ctx)) return;
     // A chat with someone nearby.
     if (rng.chance(0.22)) {
       const p = ctx.chatPartner(npc);

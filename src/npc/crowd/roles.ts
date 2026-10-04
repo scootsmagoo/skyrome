@@ -29,7 +29,9 @@ export type CrowdRoleId =
   | 'foreigner'
   | 'reveler'
   | 'carter'
-  | 'torchbearer';
+  | 'torchbearer'
+  | 'farmer'
+  | 'traveller';
 
 export interface CrowdRole {
   id: CrowdRoleId;
@@ -92,6 +94,10 @@ export const CROWD_ROLES: Record<CrowdRoleId, CrowdRole> = {
   foreigner: { id: 'foreigner', label: 'Foreigner', avatar: ['greek', 'syrian', 'egyptian'], archetype: 'civis', speed: [1.05, 1.4], prop: 'scroll', propChance: 0.1, barks: 'foreigner', gawks: true },
   reveler: { id: 'reveler', label: 'Reveler', avatar: ['plebeian-man', 'freedman'], archetype: 'civis', speed: [0.8, 1.1], prop: 'torch', propChance: 0.5, barks: 'reveler', gawks: true },
   carter: { id: 'carter', label: 'Drover', avatar: ['plebeian-man', 'slave'], archetype: 'plaustrarius', speed: [1.1, 1.2], prop: 'lantern', propChance: 1, barks: 'carter', escortOnly: true },
+  // Market gardeners and smallholders from the Campagna bring produce in at dawn (Martial 3.47).
+  farmer: { id: 'farmer', label: 'Farmer', avatar: ['plebeian-man', 'plebeian-man', 'elderly', 'plebeian-woman'], archetype: 'rusticus', speed: [1.0, 1.3], prop: 'basket', propChance: 0.7, barks: 'farmer', gawks: true },
+  // Travellers on the consular roads: arrivals with their bundles, muleteers, pilgrims, couriers.
+  traveller: { id: 'traveller', label: 'Traveller', avatar: ['plebeian-man', 'freedman', 'greek', 'syrian', 'egyptian'], archetype: 'viator', speed: [1.15, 1.45], prop: 'sack', propChance: 0.75, barks: 'traveller', gawks: true },
   torchbearer: { id: 'torchbearer', label: 'Slave', avatar: ['slave'], archetype: 'servus-baiulus', speed: [1.0, 1.2], prop: 'torch', propChance: 1, barks: 'slave', escortOnly: true },
 };
 

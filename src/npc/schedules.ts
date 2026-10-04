@@ -51,7 +51,9 @@ export type ArchetypeId =
   | 'puer'
   | 'gladiator'
   | 'grassator'
-  | 'civis';
+  | 'civis'
+  | 'rusticus'
+  | 'viator';
 
 const h = (n: number): RomanTime => ({ hora: n });
 const w = (n: number): RomanTime => ({ vigilia: n });
@@ -185,6 +187,22 @@ export const ARCHETYPES: Record<ArchetypeId, readonly ArchetypeSlot[]> = {
     { at: w(1), activity: 'wander', place: 'open' },
     { at: w(4), activity: 'home' },
     { at: h(12), activity: 'idle', place: 'door', loop: 'lean' },
+  ],
+  // Farmer from the Campagna: walks in before dawn with produce, sells at the markets, gone by noon.
+  rusticus: [
+    { at: w(4), activity: 'wander', place: 'forum' },
+    { at: h(1), activity: 'wander', place: 'stall' },
+    { at: h(3), activity: 'idle', place: 'stall', loop: 'stand' },
+    { at: h(6), activity: 'wander', place: 'tavern' },
+    { at: h(8), activity: 'home' },
+  ],
+  // Traveller: on the road from the last watch to dusk, then an inn.
+  viator: [
+    { at: w(4), activity: 'wander', place: 'open' },
+    { at: h(6), activity: 'wander', place: 'tavern' },
+    { at: h(8), activity: 'wander', place: 'open' },
+    { at: h(12), activity: 'wander', place: 'tavern' },
+    { at: w(2), activity: 'home' },
   ],
   // Ordinary citizen of either sex: errands, the Forum, the baths, home after dusk.
   civis: [

@@ -172,7 +172,8 @@ export class CartDirector {
       c.update(dt);
       const pl = this.host.player;
       const far = pl ? Math.hypot(c.pos.x - pl.x, c.pos.z - pl.z) > 130 : false;
-      if (c.done || far) {
+      // Daylight (Caesar's ban): carts still about leave as soon as nobody is looking.
+      if (c.done || far || target === 0) {
         // Vanish only out of sight (or far away).
         if (far || !this.host.isVisible(c.pos.x, c.pos.y + 1, c.pos.z)) {
           c.dispose();

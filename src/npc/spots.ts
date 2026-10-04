@@ -26,6 +26,8 @@ export interface LifeSpot {
   place?: string;
   /** Needs a mason's block in front ('work'). */
   block?: boolean;
+  /** Floor height when known (people don't climb a hill to stand at a spot). */
+  y?: number;
 }
 
 /** Ray caster used to find walls: returns the hit distance and the wall normal, or null. */
@@ -74,9 +76,9 @@ export class SpotIndex {
       if (ids.has(s.id)) return;
       if (Math.hypot(s.x - x, s.z - z) > this.radius) return;
       const g = nav.grid;
-      if (g && g.ready(s.x, s.z) && !g.walkable(s.x, s.z)) return;
+      if (g && g.ready(s.x, s.z) && (!g.walkable(s.x, s.z) || !g.reachable(s.x, s.z))) return;
       ids.add(s.id);
-      out.push({ ...s, claimedBy: null });
+      out.push({ ...s, y: s.y ?? (g?.ready(s.x, s.z) ? (g.heightAt(s.x, s.z) ?? undefined) : undefined), claimedBy: null });
     };
     // 1. Street spots.
     if (streets) {
@@ -209,11 +211,12 @@ export class SpotIndex {
   }
 
   /** A free spot of a kind near a point (random among the nearest few), or null. */
-  find(kind: PlaceKind | readonly PlaceKind[], x: number, z: number, r: number, rng: Rng): LifeSpot | null {
+  find(kind: PlaceKind | readonly PlaceKind[], x: number, z: number, r: number, rng: Rng, fromY?: number, maxRise = 7): LifeSpot | null {
     const kinds = Array.isArray(kind) ? kind : [kind];
     const cand: [number, LifeSpot][] = [];
     for (const s of this.spots) {
       if (s.claimedBy || !kinds.includes(s.kind)) continue;
+      if (fromY !== undefined && s.y !== undefined && Math.abs(s.y - fromY) > maxRise) continue;
       const d = Math.hypot(s.x - x, s.z - z);
       if (d <= r) cand.push([d, s]);
     }

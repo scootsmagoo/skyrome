@@ -35,6 +35,11 @@ const GREET: Table = {
   foreigner: ['Chaire! Er — salve.', 'Salve. Is this the way to the Forum?', 'So many people!'],
   reveler: ['Bene sit tibi! Your health!', 'Propino tibi! I drink to you!', 'Salve, salve, salve!'],
   carter: ['Out of the way! Wheels!', 'Mind the mule.'],
+  farmer: ['Salve! Fresh from Aricia, these.', 'Mind the basket, friend.', 'Salve. Is the market open yet?'],
+  traveller: ['Salve! Is this Rome, then? It looks bigger from the hills.', 'Salve. Which way to the Forum?', 'Forty miles on foot. My feet are Roman now.'],
+  portitor: ['Anything to declare? Everything has a duty.', 'Goods in? Two and a half in the hundred.', 'Salve. Open the bundle, please.'],
+  sortilega: ['Your palm, stranger? The Circus knows your fate.', 'Sit, sit. The stars are cheap today.', 'I see a long road behind you. And a short purse.'],
+  argentarius: ['Change! Good silver, honest weight!', 'Denarii for sestertii, fair rates!', 'A loan, domine? Interest by the month.'],
 };
 
 /** Overheard chatter. Generic lines first; role and district lines are mixed in. */
@@ -68,6 +73,21 @@ const AMBIENT: Table = {
   foreigner: ['The Syrian Orontes flows into the Tiber now, they say. Good for business.', 'Rome! So much noise.', 'Where in all this marble do they keep the scribes?'],
   reveler: ['Hic! To the Greens!', 'One more cup! Just one!', 'Where are you from? Whose sour wine and beans are you full of?'],
   carter: ['Di te perdant, beast — move!', 'Marble for the new forum, and not a moment past dawn.'],
+  farmer: [
+    'Cabbages from my own field, and the Velabrum men want them for nothing.',
+    'Up at the second watch to walk in. The city sleeps till the first hour.',
+    'Eggs, cheese and a kid goat. Not bad for a morning.',
+    'My brother sells at the Macellum. I sell at the gate. He pays rent.',
+  ],
+  traveller: [
+    'Brundisium to Rome in nine days. My mule did better than I did.',
+    'The inn at Aricia had fleas the size of denarii.',
+    'They say you can buy anything in Rome. Even justice, if you can find the seller.',
+    'Is it always this loud? It\'s not even dawn.',
+  ],
+  portitor: ['Wine, oil, a slave girl — everything pays at the gate.', 'You\'d be amazed what people hide in a cabbage.'],
+  sortilega: ['Chaldean stars, Phrygian augury, Etruscan livers. One price.', 'The Greens win on the Ides. Trust me.'],
+  argentarius: ['Rates from Puteoli this morning: silver steady, gold up.', 'Clipped coin. I can always tell.'],
 };
 
 /**
@@ -118,6 +138,13 @@ const DISTRICT: Table = {
     'Silk from the Seres, perfume from Arabia, rats from the river, all on one street.',
     "The Tiber's low this year. Thank the gods and the curators, in that order.",
     'Fishermen at dawn, dockers at noon, drunks at dusk. The Velabrum never sleeps alone.',
+  ],
+  'dist-porta-capena': [
+    'The gate weeps again. The aqueduct men say it\'s fixed. It drips on them too.',
+    'Mind the drip — that\'s Aqua Marcia, the coldest water in Rome, straight down your neck.',
+    'Carts out by dawn, or the aediles fine you. Out! Out!',
+    'Egeria\'s grove is all Jews and beggars now, with a basket and a bundle of hay for furniture.',
+    'Mercury\'s spring is just there. Merchants wash their lies off in it on the Ides.',
   ],
   'dist-subura': ['Mind the pots from the windows.', 'Noise all night in the Subura. All night!'],
 };
@@ -239,6 +266,11 @@ const BRUSHOFF: Table = {
   foreigner: ['Sorry, my Latin… not good.'],
   reveler: ['Shhh. Shhh! The world\'s spinning.'],
   carter: ['No time! Dawn\'s coming.'],
+  farmer: ['I\'ve cabbages to sell, not stories.', 'Ask a Roman. I just got here.'],
+  traveller: ['Sorry, friend — I\'m new here myself.', 'Long road. Let me be.'],
+  portitor: ['Pay the duty or stand aside.', 'Next!'],
+  sortilega: ['Cross my palm first.', 'The stars are silent for the stingy.'],
+  argentarius: ['Come back with coin.', 'Business only, domine.'],
 };
 
 const VENDOR: readonly string[] = [

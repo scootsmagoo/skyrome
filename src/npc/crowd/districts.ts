@@ -28,8 +28,8 @@ const DISTRICTS: readonly DistrictDef[] = [
     id: 'dist-forum-romanum',
     name: 'Forum Romanum',
     lowlands: ['forum-romanum'],
-    // The busiest place in Rome: ~75 people around the player at hours 2–6 (GDD §14.7: ≥ 60 on screen is the Should).
-    density: 1.25,
+    // The busiest place in Rome: ~85 people around the player at hours 2–6 (GDD §14.7: ≥ 60 on screen is the Should).
+    density: 1.4,
     weights: { citizen: 10, 'citizen-woman': 6, senator: 3, matron: 3, porter: 6, merchant: 4, artisan: 2, soldier: 3, priest: 2, idler: 4, beggar: 1, child: 2, elder: 2, foreigner: 3 },
   },
   {
@@ -76,6 +76,20 @@ const DISTRICTS: readonly DistrictDef[] = [
   },
 ];
 
+/** Small districts around a point (real metres), checked before the lowlands. */
+const RADIAL: readonly (District & { center: readonly [number, number]; r: number })[] = [
+  {
+    // The Porta Capena, where the Via Appia enters the city (the new-game spawn, GDD §2.1):
+    // travellers, farmers bringing produce in at dawn, porters and muleteers.
+    id: 'dist-porta-capena',
+    name: 'Porta Capena',
+    center: [490, 930],
+    r: 140,
+    density: 0.6,
+    weights: { traveller: 7, farmer: 4, porter: 5, citizen: 4, 'citizen-woman': 2, merchant: 3, artisan: 2, soldier: 1, beggar: 1, foreigner: 2 },
+  },
+];
+
 /** Generic mix for wherever no named district applies, scaled by the region's wealth. */
 function genericDistrict(wealth: number, density: number, name: string): District {
   return {
@@ -95,6 +109,7 @@ function genericDistrict(wealth: number, density: number, name: string): Distric
       child: 3,
       elder: 2,
       foreigner: 2,
+      traveller: 1,
     },
   };
 }
@@ -114,6 +129,7 @@ const lowlandById = new Map(atlas.LOWLANDS.map((l) => [l.id, l]));
 /** The district at a game-space point. */
 export function districtAt(x: number, z: number): District {
   const [rx, rz] = toReal(x, z);
+  for (const d of RADIAL) if (Math.hypot(rx - d.center[0], rz - d.center[1]) <= d.r) return d;
   for (const d of DISTRICTS) {
     for (const id of d.lowlands) {
       const l = lowlandById.get(id);

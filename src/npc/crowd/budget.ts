@@ -88,13 +88,13 @@ export function crowdBudget(hour: number, sun: SunTimes, density: number, scale 
 
 /** Phase multipliers on role weights (who is out when). */
 const PHASE_MULT: Record<DayPhase, Partial<Record<CrowdRoleId, number>>> = {
-  predawn: { client: 2, porter: 1.5, citizen: 0.5, 'citizen-woman': 0.2, senator: 0, matron: 0, child: 0, elder: 0.2, reveler: 1 },
-  salutatio: { senator: 1.5, porter: 1.3, merchant: 1.4, child: 0.5, idler: 0.4 },
+  predawn: { client: 2, porter: 1.5, citizen: 0.5, 'citizen-woman': 0.2, senator: 0, matron: 0, child: 0, elder: 0.2, reveler: 1, farmer: 2, traveller: 1.2 },
+  salutatio: { senator: 1.5, porter: 1.3, merchant: 1.4, child: 0.5, idler: 0.4, farmer: 1.5 },
   morning: {},
   midday: { idler: 1.6, senator: 0.4, matron: 0.6, artisan: 0.6 },
   afternoon: { senator: 0.7, idler: 1.3, child: 1.2 },
   evening: { senator: 0.3, matron: 0.3, priest: 0.5, vestal: 0.3, child: 0.4, reveler: 1, idler: 1.2 },
-  night: { citizen: 0.6, 'citizen-woman': 0.15, porter: 0.5, reveler: 3, senator: 0.15, matron: 0, child: 0, elder: 0.1, beggar: 0.6, priest: 0, vestal: 0, merchant: 0.2, artisan: 0.3, soldier: 0.6, foreigner: 0.3 },
+  night: { traveller: 0.3, citizen: 0.6, 'citizen-woman': 0.15, porter: 0.5, reveler: 3, senator: 0.15, matron: 0, child: 0, elder: 0.1, beggar: 0.6, priest: 0, vestal: 0, merchant: 0.2, artisan: 0.3, soldier: 0.6, foreigner: 0.3 },
 };
 
 /** Night-only roles and roles that never come from the mix. */

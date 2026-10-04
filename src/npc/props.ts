@@ -5,6 +5,7 @@
  * shared; meshes are cheap wrappers.
  */
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { HumanoidAvatar } from '../actors/avatar/HumanoidAvatar';
 import type { PropKind } from './crowd/roles';
 
@@ -31,6 +32,15 @@ function M() {
     bread: m(0xc08a4a, 0.9),
     iron: m(0x3a3a3a, 0.6, 0.6),
     stone: m(0xcfc6b2, 0.85),
+    terracottaRed: m(0x9a4a2e, 0.8),
+    fruit: m(0xc0642a, 0.75),
+    fruitGreen: m(0x7a8a3a, 0.75),
+    clothRed: m(0x9e3a2a, 0.95),
+    clothBlue: m(0x3f5f8a, 0.95),
+    clothSaffron: m(0xc98b2e, 0.95),
+    clothGreen: m(0x4f6b45, 0.95),
+    clothAwning: m(0xd9cdb0, 0.95, 0, { side: THREE.DoubleSide }),
+    glass: m(0x9ab8a8, 0.3, 0, { transparent: true, opacity: 0.7 }),
   };
   return mats;
 }
@@ -381,4 +391,127 @@ export function makeCart(load: 'amphorae' | 'marble'): { group: THREE.Group; whe
   lamp.position.set(0.6, 1.3, 1.25);
   group.add(lamp);
   return { group, wheels, lamp };
+}
+
+// ---------------------------------------------------------------- station dressing
+
+/** Merge child meshes per material into one mesh each (a few draw calls per piece of dressing). */
+function mergeByMaterial(parts: { g: THREE.BufferGeometry; m: THREE.Material; at: THREE.Matrix4 }[], cast = true): THREE.Group {
+  const byMat = new Map<THREE.Material, THREE.BufferGeometry[]>();
+  for (const p of parts) {
+    const g = (p.g.index ? p.g.toNonIndexed() : p.g.clone()).applyMatrix4(p.at);
+    for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv') g.deleteAttribute(k);
+    if (!g.getAttribute('uv')) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.getAttribute('position').count * 2), 2));
+    let arr = byMat.get(p.m);
+    if (!arr) byMat.set(p.m, (arr = []));
+    arr.push(g);
+  }
+  const group = new THREE.Group();
+  for (const [m, gs] of byMat) {
+    const merged = mergeGeometries(gs, false);
+    for (const g of gs) g.dispose();
+    if (merged) group.add(mesh(merged, m, cast && m !== M().fire));
+  }
+  return group;
+}
+
+const mat4 = (x: number, y: number, z: number, ry = 0, rx = 0, rz = 0, s = 1) =>
+  new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(s, s, s));
+
+const dressingCache = new Map<string, THREE.Group>();
+
+function cachedDressing(key: string, build: () => THREE.Group): THREE.Group {
+  let g = dressingCache.get(key);
+  if (!g) dressingCache.set(key, (g = build()));
+  // Clones share geometry and materials.
+  return g.clone();
+}
+
+/** A bronze brazier on a tripod with glowing coals and a low flame; `flame` is where the fire light goes. */
+export function makeBrazier(): { group: THREE.Group; flame: THREE.Object3D } {
+  const group = cachedDressing('brazier', () => {
+    const m = M();
+    const parts: { g: THREE.BufferGeometry; m: THREE.Material; at: THREE.Matrix4 }[] = [];
+    const leg = geo('brazierLeg', () => new THREE.CylinderGeometry(0.025, 0.03, 0.82, 5));
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      parts.push({ g: leg, m: m.bronze, at: mat4(Math.cos(a) * 0.2, 0.4, Math.sin(a) * 0.2, 0, Math.sin(a) * 0.22, -Math.cos(a) * 0.22) });
+    }
+    parts.push({ g: geo('brazierBowl', () => lathe([[0.0, 0], [0.18, 0.0], [0.34, 0.12], [0.36, 0.17], [0.0, 0.1]], 12)), m: m.bronze, at: mat4(0, 0.8, 0) });
+    parts.push({ g: geo('brazierCoals', () => new THREE.CylinderGeometry(0.3, 0.26, 0.06, 10)), m: m.fire, at: mat4(0, 0.93, 0) });
+    parts.push({ g: geo('brazierFlame', () => new THREE.ConeGeometry(0.16, 0.36, 7)), m: m.fire, at: mat4(0.04, 1.12, 0) });
+    parts.push({ g: geo('brazierFlame2', () => new THREE.ConeGeometry(0.11, 0.26, 6)), m: m.fire, at: mat4(-0.1, 1.06, 0.06) });
+    return mergeByMaterial(parts);
+  });
+  const flame = new THREE.Object3D();
+  flame.position.set(0, 1.25, 0);
+  group.add(flame);
+  return { group, flame };
+}
+
+/**
+ * A trestle stall (front is +Z, the seller stands behind it at −Z): food (loaves, fruit, a jar),
+ * cloth (folded bolts in dyed colours, an awning) or pots (lamps, cups and jars).
+ */
+export function makeStall(kind: 'food' | 'cloth' | 'pots'): THREE.Group {
+  return cachedDressing(`stall-${kind}`, () => {
+    const m = M();
+    const parts: { g: THREE.BufferGeometry; m: THREE.Material; at: THREE.Matrix4 }[] = [];
+    parts.push({ g: geo('stallTop', () => new THREE.BoxGeometry(1.8, 0.06, 0.8)), m: m.wood, at: mat4(0, 0.82, 0) });
+    const leg = geo('stallLeg', () => new THREE.BoxGeometry(0.06, 0.8, 0.06));
+    for (const [x, z] of [[0.82, 0.32], [-0.82, 0.32], [0.82, -0.32], [-0.82, -0.32]]) parts.push({ g: leg, m: m.woodDark, at: mat4(x, 0.4, z) });
+    if (kind === 'food') {
+      const loaf = geo('stallLoaf', () => new THREE.SphereGeometry(0.1, 8, 5).scale(1.1, 0.55, 1.1));
+      for (let i = 0; i < 7; i++) parts.push({ g: loaf, m: m.bread, at: mat4(-0.7 + i * 0.16, 0.89, -0.15 + (i % 2) * 0.16) });
+      const fruit = geo('stallFruit', () => new THREE.SphereGeometry(0.045, 6, 4));
+      for (let i = 0; i < 12; i++) parts.push({ g: fruit, m: i % 3 ? m.fruit : m.fruitGreen, at: mat4(0.42 + (i % 4) * 0.1, 0.9, -0.12 + Math.floor(i / 4) * 0.1) });
+      parts.push({ g: geo('basket', () => lathe([[0.0, 0], [0.15, 0.0], [0.2, 0.12], [0.21, 0.14], [0.0, 0.1]], 9)), m: m.wicker, at: mat4(0.55, 0.85, 0.05) });
+      parts.push({ g: amphoraGeo(), m: m.terracotta, at: mat4(1.1, 0.36, -0.2, 0, 0, 0.12) });
+    } else if (kind === 'cloth') {
+      const bolt = geo('stallBolt', () => new THREE.BoxGeometry(0.34, 0.1, 0.5));
+      const cols = [m.clothRed, m.clothBlue, m.clothSaffron, m.clothRed, m.clothGreen];
+      for (let i = 0; i < 5; i++) parts.push({ g: bolt, m: cols[i], at: mat4(-0.68 + i * 0.34, 0.9 + (i % 2) * 0.1, 0, (i - 2) * 0.05) });
+      // An awning on two poles behind the table.
+      const pole = geo('stallPole', () => new THREE.CylinderGeometry(0.025, 0.025, 2.1, 5));
+      parts.push({ g: pole, m: m.woodDark, at: mat4(0.88, 1.05, -0.45) }, { g: pole, m: m.woodDark, at: mat4(-0.88, 1.05, -0.45) });
+      parts.push({ g: geo('stallAwning', () => new THREE.BoxGeometry(2.0, 0.02, 1.1)), m: m.clothAwning, at: mat4(0, 2.0, 0.05, 0, 0.22) });
+      parts.push({ g: geo('lanternBody', () => new THREE.CylinderGeometry(0.07, 0.08, 0.2, 8)), m: m.glass, at: mat4(-0.4, 0.95, -0.2) });
+    } else {
+      const jar = geo('stallJar', () => lathe([[0, 0], [0.07, 0.01], [0.09, 0.08], [0.06, 0.16], [0.04, 0.2], [0, 0.2]], 8));
+      const cup = geo('stallCup', () => lathe([[0, 0], [0.04, 0], [0.06, 0.06], [0.06, 0.07], [0, 0.04]], 8));
+      const lamp = geo('stallLamp', () => new THREE.SphereGeometry(0.06, 7, 4).scale(1.4, 0.45, 1));
+      for (let i = 0; i < 5; i++) parts.push({ g: jar, m: m.terracotta, at: mat4(-0.7 + i * 0.22, 0.85, -0.18) });
+      for (let i = 0; i < 6; i++) parts.push({ g: cup, m: i % 2 ? m.terracottaRed : m.terracotta, at: mat4(-0.65 + i * 0.16, 0.85, 0.12) });
+      for (let i = 0; i < 4; i++) parts.push({ g: lamp, m: m.terracottaRed, at: mat4(0.45 + (i % 2) * 0.18, 0.88, -0.1 + Math.floor(i / 2) * 0.2) });
+      parts.push({ g: amphoraGeo(), m: m.terracotta, at: mat4(1.1, 0.36, 0.1) }, { g: amphoraGeo(), m: m.terracotta, at: mat4(1.15, 0.36, -0.25, 0, 0, -0.1) });
+    }
+    return mergeByMaterial(parts);
+  });
+}
+
+/** A small table with a stool (money-changers, the customs officer): coins, a ledger, a scale. */
+export function makeTable(): THREE.Group {
+  return cachedDressing('table', () => {
+    const m = M();
+    const parts: { g: THREE.BufferGeometry; m: THREE.Material; at: THREE.Matrix4 }[] = [];
+    parts.push({ g: geo('tableTop', () => new THREE.BoxGeometry(1.1, 0.05, 0.6)), m: m.wood, at: mat4(0, 0.76, 0) });
+    const leg = geo('tableLeg', () => new THREE.BoxGeometry(0.05, 0.74, 0.05));
+    for (const [x, z] of [[0.5, 0.25], [-0.5, 0.25], [0.5, -0.25], [-0.5, -0.25]]) parts.push({ g: leg, m: m.woodDark, at: mat4(x, 0.37, z) });
+    const coin = geo('tableCoins', () => new THREE.CylinderGeometry(0.05, 0.05, 0.03, 8));
+    for (let i = 0; i < 4; i++) parts.push({ g: coin, m: m.bronze, at: mat4(-0.35 + i * 0.12, 0.8, 0.08 + (i % 2) * 0.05) });
+    parts.push({ g: geo('tableLedger', () => new THREE.BoxGeometry(0.26, 0.03, 0.2)), m: m.papyrus, at: mat4(0.3, 0.8, -0.05, 0.2) });
+    parts.push({ g: geo('tableStool', () => new THREE.CylinderGeometry(0.18, 0.16, 0.45, 8)), m: m.woodDark, at: mat4(0, 0.225, -0.62) });
+    return mergeByMaterial(parts);
+  });
+}
+
+/** A cart parked at a stand: the loaded plaustrum with its shafts down and the mule unhitched beside it. */
+export function makeParkedCart(load: 'amphorae' | 'marble'): { group: THREE.Group; mule: Quadruped; lamp: THREE.Object3D } {
+  const c = makeCart(load);
+  const mule = new Quadruped('mule');
+  mule.root.position.set(1.7, 0, 1.6);
+  mule.root.rotation.y = 0.5;
+  mule.animate(0, 0);
+  c.group.add(mule.root);
+  return { group: c.group, mule, lamp: c.lamp };
 }

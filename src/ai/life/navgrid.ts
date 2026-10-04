@@ -437,6 +437,14 @@ export class NavGrid {
     return false;
   }
 
+  /** Forget the reachability labels (after a teleport): everything counts as reachable again until the next flood finishes. */
+  resetFlood() {
+    this.floodOn = false;
+    this.doneGen = 0;
+    this.fq.length = 0;
+    this.fqHead = 0;
+  }
+
   /** A labelling is in progress. */
   get flooding() {
     return this.floodOn;

@@ -45,6 +45,15 @@ export interface NpcOptions {
   lod?: 'high' | 'low' | 'auto';
 }
 
+/** A station post (crowd/stations.ts): where the NPC stands and how. */
+export interface StationPost {
+  id: string;
+  x: number;
+  z: number;
+  face: number;
+  loop: IdleLoop;
+}
+
 /** Light handle shape from the sky module's light pool (kept structural to avoid a hard import). */
 export interface CarriedLight {
   setPosition(p: THREE.Vector3Like): void;
@@ -86,6 +95,8 @@ export class Npc extends Actor implements Positioned {
   hostile = false;
   /** Controlled by a vignette script. */
   scripted = false;
+  /** Manning a station (stands at its post; outside the crowd budget). */
+  station: StationPost | null = null;
   /** Followers (escorts) and the leader this one follows. */
   leader: Npc | null = null;
   followers: Npc[] = [];
