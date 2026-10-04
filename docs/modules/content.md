@@ -157,13 +157,14 @@ New events (declared in `director.ts` and `install.ts`): `content:interact` (an 
   Without a combat module every fight resolves on its own, so the thread stays playable.
 - **NPC life**: schedules use `sleep` for offstage. `scriptedDeath` calls `game.population.kill(npc)` and emits
   `'actor:killed'`: the world deltas record the death, but the population module must also skip dead NPCs when it
-  respawns named people after a load. Quests emit `'content:beat'` (`courier-knifed`, `mus-flees`, `courier-dying`,
+  respawns named people after a load and forget its dead ones (Festus) on a New Game from the title. Quests emit `'content:beat'` (`courier-knifed`, `mus-flees`, `courier-dying`,
   `grassatores-flee`, `bout-start`, `bout-stopped`, `brawl-start`, `cloacarius-grate`, `insula-collapses`) for scenes the NPC and
   combat sides may play; nothing depends on them.
 - **World**: the contract spots (`spawn-capena`, `courier-ambush`, `castor-strongroom`, `ludus-gate`, `ludus-arena-center`,
   `lanista`, `armory`, `medicus`) and the bible's spots have fallback positions in `places.ts`; a spot the world registers with the
   same id replaces them and `syncAliases` keeps the bible's alias ids on top. The interior cells `dun-taberna-collapsa`,
   `dun-cloaca-maxima` and the small interiors are the world side's; the quests work at their entrances today.
+- **UI**: the content opens `ui.openBook` (texts, things), `ui.openContainer` (containers) and `ui.openBarter` (trade, through `services.ts`); the dialogue panel is the flow's.
 - **Calendar**: `rpg.hooks.templesClosed` must be true on the Lemuria for the offering to be refused (the dialogue
   also checks the date itself).
 - **Flow**: nothing else to wire; `installContent` is found by `optional.ts`. The new game starts `mq-01` and tracks it.
