@@ -226,6 +226,10 @@ export class NpcBrain {
           this.onArrive(ctx);
         } else if (ev === 'failed' || ev === 'blocked') {
           if (t.kind === 'leave' && !ctx.isVisible(npc.position.x, npc.position.y + 1, npc.position.z)) ctx.despawn(npc);
+          // No way there: stand a moment before choosing again. Choosing at once sends a crowd
+          // with unreachable goals (seen on the Circus seating) into a storm of failing path
+          // searches, the most expensive kind (~10 ms a frame).
+          else if (ev === 'failed') this.setTask(task('idle', { loop: 'stand', until: ctx.now + 1.5 + ctx.rng.next() * 2.5 }), ctx);
           else this.setTask(null, ctx);
         } else if (ev === 'stuck') {
           this.unstickRequested = true;

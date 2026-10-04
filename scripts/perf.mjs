@@ -28,14 +28,17 @@ const settle = Number(args.settle ?? 5000);
 const dpr = Number(args.dpr ?? 1);
 const fpsCap = Number(args.fps ?? 0);
 
+/** URL query per view, plus an optional teleport (x, y, z) after boot. */
 const VIEWS = {
   spawn: '',
   forum: '&at=rostra',
   circus: '&at=circus-maximus',
+  cavea: ['&at=circus-maximus', [29, 16, 459]], // the top gallery of the Circus seating
   colosseum: '&at=colosseum',
   pantheon: '&at=pantheon',
 };
-const views = (args.views ? String(args.views).split(',') : Object.keys(VIEWS)).filter((v) => v in VIEWS);
+const DEFAULT_VIEWS = ['spawn', 'forum', 'circus', 'colosseum', 'pantheon'];
+const views = (args.views ? String(args.views).split(',') : DEFAULT_VIEWS).filter((v) => v in VIEWS);
 
 let server = null;
 let baseUrl = args.url;
@@ -60,11 +63,16 @@ try {
     const page = await browser.newPage({ viewport: { width: vw, height: vh }, deviceScaleFactor: dpr });
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e?.message ?? e)));
-    const url = `${baseUrl}?scene=rome&quick=1&hour=10&fps=${fpsCap}${VIEWS[view]}`;
+    const [query, tp] = Array.isArray(VIEWS[view]) ? VIEWS[view] : [VIEWS[view], null];
+    const url = `${baseUrl}?scene=rome&quick=1&hour=10&fps=${fpsCap}${query}`;
     const t0 = Date.now();
     await page.goto(url, { waitUntil: 'load' });
     await page.waitForFunction(() => window.__skyrome?.ready || window.__skyrome?.error, null, { timeout: 120000, polling: 100 });
     const bootMs = Date.now() - t0;
+    if (tp) {
+      await page.waitForTimeout(1000);
+      await page.evaluate(([x, y, z]) => window.__skyrome.game.player.teleport({ x, y, z }, 0), tp);
+    }
     await page.waitForTimeout(settle);
     const r = await page.evaluate(measure);
     r.view = view;
