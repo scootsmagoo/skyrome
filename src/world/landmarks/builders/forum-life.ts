@@ -20,6 +20,8 @@ import { paintedSign } from '../../../arch/common/inscription';
 import type { MaterialId } from '../../../gfx/materialIds';
 import { FORUM_INSCRIPTIONS, type P2 } from './forum-data';
 import { togate } from '../../../arch/classical/statues';
+import { column } from '../../../arch/classical/column';
+import { stairs } from '../../../arch/common/stairs';
 import { T, TRS, addFire, atlasToLocal, mul, pedestal, type Part } from './forum-kit';
 
 /** Local rotation (TRS / placeProp, model −z forward) for a world bearing. */
@@ -181,7 +183,7 @@ function bookseller(p: Part) {
     // a cylindrical book box (capsa) on the ground
     f.cyl('wood_painted', 0.9, 0.22, -0.4, 0.2, 0.44, 10);
     // the title list painted on a board
-    paintedSign(p.b, ['Libri Novi', 'Martialis XII'], 0.9, 0.42, mul(TRS(v.x, v.y, v.z, 0, bearingRot(p, B), 0), T(-0.9, 1.25, -0.42)), { ink: '#9A3A24' });
+    paintedSign(p.b, ['Libri Venales', 'Martialis Plinius'], 0.9, 0.42, mul(TRS(v.x, v.y, v.z, 0, bearingRot(p, B), 0), T(-0.9, 1.25, -0.42)), { ink: '#9A3A24' });
   }
   const s = ahead(p, v, B + 180, 0.9);
   p.spot('librarius', 'vendor', s.x, v.y, s.z, bearingHeading(p, B));
@@ -243,6 +245,62 @@ function urbanCohortPost(p: Part) {
   p.spot('statio-bench', 'sit', bs.x, bs.y, bs.z, bearingHeading(p, B));
 }
 
+/** The Columna Maenia by the Comitium, where the tresviri capitales sat in judgement on thieves. */
+function columnaMaenia(p: Part) {
+  const v = onPaving(p, [24, -48]);
+  const at = TRS(v.x, v.y, v.z, 0, bearingRot(p, 160), 0);
+  const h = pedestal(p.b, at, 1.2, 1.2, 1.4, 'travertine');
+  column(p.b, { order: 'tuscan', D: 0.6, height: 5.2, fluted: false, material: 'peperino', trimMaterial: 'travertine', detail: p.detail, collide: false }, mul(at, T(0, h, 0)));
+  togate(p.b, mul(at, T(0, h + 5.2, 0)), { material: 'bronze', scale: 1.0, detail: 'low' });
+  p.d.solidCyl(v.x, v.y + (h + 5.2) / 2, v.z, 0.75, h + 5.2);
+  const s = ahead(p, v, 160, 2.0);
+  p.spot('tresviri-capitales', 'npc', s.x, v.y, s.z, bearingHeading(p, 340));
+}
+
+/**
+ * The Puteal Libonis (Scribonianum) in the lower Forum: the marble well-head over a spot struck by
+ * lightning, garlanded and set with lyres as on Libo's coins, where the money-lenders met; beside
+ * it the praetor's tribunal, a stone platform with his curule chair (the court sat in the open).
+ */
+function putealAndTribunal(p: Part) {
+  const v = onPaving(p, [106, 56]);
+  const seg = p.hi ? 32 : 12;
+  p.d.cyl('travertine', v.x, v.y + 0.08, v.z, 1.05, 0.16, seg, { collide: true });
+  p.d.cyl('marble', v.x, v.y + 0.62, v.z, 0.78, 0.92, seg, { collide: true });
+  p.d.cyl('marble', v.x, v.y + 1.12, v.z, 0.84, 0.08, seg);
+  p.d.cyl('black', v.x, v.y + 1.165, v.z, 0.6, 0.01, seg);
+  if (p.hi) {
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const x = v.x + Math.sin(a) * 0.79;
+      const z = v.z + Math.cos(a) * 0.79;
+      // a garland swag and, between them, a bronze lyre
+      p.d.ellipsoid(i % 2 ? 'foliage_broad' : 'fabric_red', x, v.y + 0.82, z, 0.16, 0.06, 0.05, { seg: [8, 4], shadow: false });
+      if (i % 2 === 0) p.d.box('bronze', x * 1.0 + Math.sin(a) * 0.02, v.y + 0.55, z + Math.cos(a) * 0.02, 0.14, 0.22, 0.02, { ry: a });
+    }
+  }
+  p.spot('puteal-libonis', 'shrine', ahead(p, v, 300, 1.8).x, v.y, ahead(p, v, 300, 1.8).z, bearingHeading(p, 120));
+  p.spot('faenerator', 'vendor', ahead(p, v, 30, 1.6).x, v.y, ahead(p, v, 30, 1.6).z, bearingHeading(p, 210));
+  // the tribunal
+  const t = onPaving(p, [99, 47]);
+  const B = 300;
+  const f = p.d.at(t.x, t.y, t.z, bearingRot(p, B));
+  const w = 4.2;
+  const dp = 3.0;
+  const H = 1.2;
+  f.span('travertine', -w / 2, -0.3, -dp / 2, w / 2, H, dp / 2, { collide: p.main });
+  f.span('marble', -w / 2 - 0.08, H - 0.12, -dp / 2 - 0.08, w / 2 + 0.08, H, dp / 2 + 0.08);
+  stairs(p.b, { width: 1.6, rise: H / 6, run: 0.3, count: 6, material: 'travertine', collider: p.main ? 'steps' : 'none' }, mul(TRS(t.x, t.y, t.z, 0, bearingRot(p, B), 0), TRS(w / 2 - 1.0, 0, dp / 2 + 6 * 0.3, 0, Math.PI, 0)));
+  placeProp(f, 'stool', 0, H, 0.3, 0, { variant: 2, collide: false });
+  placeProp(f, 'bench', -1.4, H, 0.9, 0, { variant: 1, collide: false });
+  // the spear planted beside the court (hasta), the sign of a Roman court
+  f.cyl('wood_dark', 1.6, H + 1.4, -0.9, 0.025, 2.8, 5);
+  f.cyl('iron', 1.6, H + 2.9, -0.9, 0.04, 0.25, 4, { rTop: 0.004 });
+  p.spot('praetor-tribunal', 'sit', t.x, t.y + H + 0.45, t.z, bearingHeading(p, B));
+  const fr = ahead(p, t, B, 3.0);
+  p.spot('tribunal-litigants', 'npc', fr.x, t.y, fr.z, bearingHeading(p, B + 180));
+}
+
 /** Where the crowd stands about: idlers, talkers, clients waiting for their patrons (real m, bearing). */
 const CROWD: [number, number, number][] = [
   [40, 12, 300],
@@ -279,6 +337,8 @@ export function forumLife(p: Part) {
   bookseller(p);
   scribe(p);
   urbanCohortPost(p);
+  columnaMaenia(p);
+  putealAndTribunal(p);
   CROWD.forEach(([x, z, b], i) => {
     const v = onPaving(p, [x, z]);
     p.spot(`forum-crowd-${i + 1}`, 'npc', v.x, v.y, v.z, bearingHeading(p, b));

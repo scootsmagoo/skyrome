@@ -22,7 +22,8 @@ import { placeProp } from '../../../arch/props';
 import { LANDMARK_BY_ID } from '../../../data/atlas';
 import type { LandmarkBuilder } from '../types';
 import { FORUM_INSCRIPTIONS } from './forum-data';
-import { figure, nudeMale } from './forum-figures';
+import { nudeMale } from './forum-figures';
+import { heroicNude } from './forum-statue';
 import { T, TRS, addFire, atlasToLocal, balustrade, col, foundation, inscription, landmark, localToAtlas, pave, plantTrees, rect, streetEdge, type Part } from './forum-kit';
 import { gableRoof, shedRoof } from './forum-temple';
 import { aediculaShrine } from './forum-vesta';
@@ -55,15 +56,7 @@ function colossus(p: Part) {
   // the god: nude, the right hand raised, the left on a rudder set on a globe, the radiate crown
   const H = 30 * p.S;
   const k = H / 1.85;
-  figure(
-    b,
-    T(0, ph, 0.3),
-    hi,
-    'bronze',
-    k,
-    (s) => nudeMale(s, { right: 'raised', left: 'rudder', plinth: false, cloak: true, attrMat: 'bronze', head: { crown: 'radiate', crownMat: 'gilded_bronze', rays: 7, rayLen: 0.42 } }),
-    hi ? 2.2 : 1.4,
-  );
+  heroicNude(b, T(0, ph, 0.3), { material: 'bronze', crownMat: 'gilded_bronze', scale: k, hi, q: hi ? 1.6 : 1, radiate: true, rudder: true });
   d.solidCyl(0, ph + 2.5, 0.3, 1.6, 5.0);
   p.spot('colossus-sol', 'vista', 0, 0.44, -pw / 2 - 2.2, 0);
   p.spot('colossus-sol-base', 'npc', 2.5, 0, -pw / 2 - 1.2, Math.PI);
