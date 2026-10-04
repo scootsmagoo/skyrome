@@ -304,6 +304,9 @@ describe('the world’s spots and the people who come and go', () => {
     // The builder's spring is the shrine: the prompt is there and the content adds no altar of its own.
     const shrine = w.find('shrine:fons-mercurii').position();
     expect(Math.hypot(shrine.x - 300, shrine.z - 590)).toBeLessThan(0.5);
+    const coin = w.find('container:ctn-moneta-mercurii').position(); // in the builder's basin, a step from the prayer
+    expect(Math.hypot(coin.x - 300, coin.z - 590)).toBeLessThan(1.6);
+    expect(coin.distanceTo(shrine)).toBeGreaterThan(1);
     // The builder's cart is in the world: its load can be searched at once.
     expect(w.find('container:ctn-plaustrum-dromonis').enabled!()).toBe(true);
   });

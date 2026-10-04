@@ -551,6 +551,13 @@ function containerPoint(ctx: Ctx, spec: ContainerSpec): THREE.Vector3 | null {
   }
   let start = placeXZ(game, spec.at, spec.dx ?? 0, spec.dz ?? 0);
   if (!start) return null;
+  // A coin in the basin of a spring the world builds itself (the Porta Capena builder's): no basin of ours.
+  const worldSpring = typeof spec.at === 'string' && WORLD_SHRINES[spec.at] && ctx.world.has(WORLD_SHRINES[spec.at]);
+  if (spec.kind === 'moneta-in-fonte' && worldSpring) {
+    const spring = placeXZ(game, spec.at as string)!;
+    const x = spring.x + 1.3;
+    return new THREE.Vector3(x, placer.groundY(x, spring.z) + 0.6, spring.z);
+  }
   // The offering box stands beside the shrine's altar, far enough apart to aim at either.
   const altar = typeof spec.at === 'string' && spec.kind === 'arca-compiti' ? ctx.altars.get(spec.at) : undefined;
   if (altar) start = { x: altar.s.x + Math.cos(altar.rotY) * 1.7, z: altar.s.z - Math.sin(altar.rotY) * 1.7 };
