@@ -161,10 +161,12 @@ function buildCuriae(ctx: LandmarkContext): LandmarkBuild {
     range: 4.5,
     storeys: 1,
     storeyH: 4.2,
-    wallMat: 'tufa',
+    // Rebuilt after the fire of 64: reticulate facing with travertine trim, a travertine portico.
+    wallMat: 'reticulatum',
+    plinthMat: 'tufa',
     courtWallMat: 'plaster_white',
     trimMat: 'travertine',
-    portico: { depth: 2.6, posts: 'columns', material: 'tufa', spacing: 3.0 },
+    portico: { depth: 2.6, posts: 'columns', material: 'travertine', spacing: 3.0 },
     gates: [{ side: 'front', width: 2.8, height: 2.6, arch: false, spot: 'gate' }],
     rooms: [
       { id: 'dining', spotId: 'curiae-dining', side: 'back', at: -5, width: 7, kind: 'mess' },

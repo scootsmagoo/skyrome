@@ -288,18 +288,37 @@ function buildPeregrina(ctx: LandmarkContext): LandmarkBuild {
   const W = (150 * ctx.S) / 2; // 45
   const D = (120 * ctx.S) / 2; // 36
   const H = 5.5;
-  // Enclosure wall (tufa ashlar), towers at the corners, gates front and back.
+  // Enclosure wall (brick-faced, travertine coping), towers with tiled roofs at the corners, arched
+  // gates front and back with the camp's name over the front one.
   for (const [x0, z0, x1, z1] of [[-W, -D, -3, -D + 1], [3, -D, W, -D + 1], [-W, D - 1, -3, D], [3, D - 1, W, D], [-W, -D, -W + 1, D], [W - 1, -D, W, D]] as const) {
     const gy = Math.min(minGround(ctx, x0, z0, x1, z0, 4), minGround(ctx, x0, z1, x1, z1, 4)) - 0.4;
-    d.span('tufa', x0, gy, z0, x1, H, z1, { collide: true });
-    d.span('tufa', x0 - 0.1, H, z0 - 0.1, x1 + 0.1, H + 0.3, z1 + 0.1);
+    d.span('brick', x0, gy, z0, x1, H, z1, { collide: true });
+    d.span('travertine', x0 - 0.1, H, z0 - 0.1, x1 + 0.1, H + 0.25, z1 + 0.1);
   }
   for (const sz of [-1, 1]) {
-    d.span('tufa', -3.5, H - 1.2, sz * D - 0.7, 3.5, H + 0.6, sz * D + 0.7);
-    d.span('travertine', -3.2, 3.8, sz * D - 0.75, 3.2, 4.2, sz * D + 0.75);
+    const gy = Math.min(ctx.groundAt(0, sz * D), 0);
+    archway(b, { span: 4.0, springing: 2.9 - gy, pier: 1.0, depth: 1.4, top: H + 0.9 - gy, material: 'brick', trim: 'travertine', detail: high ? 'high' : 'low' }, T(0, gy, sz * (D - 0.5)));
+    d.span('travertine', -3.2, H + 0.9, sz * (D - 0.5) - 0.8, 3.2, H + 1.2, sz * (D - 0.5) + 0.8);
     spots.push({ id: `peregrina-gate-${sz < 0 ? 'front' : 'back'}`, kind: 'door', position: new THREE.Vector3(0, 0.05, sz * (D + 1.5)), heading: sz < 0 ? 0 : Math.PI });
   }
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) d.span('tufa', sx * W - 2.5, -0.5, sz * D - 2.5, sx * W + 2.5, H + 2.5, sz * D + 2.5, { collide: true });
+  if (high && typeof document !== 'undefined') {
+    inscriptionPanel(b, { lines: ['Castra Peregrina'], width: 3.6, height: 0.5, style: 'carved' }, T(0, H + 0.35, -D - 0.22), { depth: 0.02 });
+  }
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      const cx = sx * W;
+      const cz = sz * D;
+      const gy = Math.min(ctx.groundAt(cx, cz), 0) - 0.5;
+      d.span('brick', cx - 2.5, gy, cz - 2.5, cx + 2.5, H + 2.6, cz + 2.5, { collide: true });
+      d.span('travertine', cx - 2.6, H + 2.6, cz - 2.6, cx + 2.6, H + 2.8, cz + 2.6);
+      roof(d.at(cx, 0, cz), { kind: 'hip', w: 5.6, d: 5.6, y: H + 2.8, ridges: high });
+      if (high) {
+        for (const [ox, oz, ry] of [[0, -2.51, 0], [0, 2.51, Math.PI], [-2.51, 0, Math.PI / 2], [2.51, 0, -Math.PI / 2]] as const) {
+          d.at(cx + ox, 0, cz + oz, ry).span('black', -0.25, H + 1.2, -0.02, 0.25, H + 2.1, 0.02);
+        }
+      }
+    }
+  }
   d.span('gravel', -W + 1, -0.1, -D + 1, W - 1, 0.04, D - 1);
   // Barrack blocks (contubernia: a front room and a sleeping room each), tiled roofs.
   for (const sx of [-1, 1]) {
