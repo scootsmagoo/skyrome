@@ -24,6 +24,8 @@ declare module '../core/Settings' {
     controlPreset?: ControlPreset;
     /** The player has chosen a preset in the first-launch picker (or in Settings). */
     presetPicked?: boolean;
+    /** The preset whose values were last written into the rows (see `settingsFixups`). */
+    presetApplied?: ControlPreset;
     /** Difficulty (§6.12); v0.1 offers tiro / normalis / difficilis. */
     difficulty?: Difficulty;
     /** Sprint key toggles instead of being held. */
@@ -109,6 +111,30 @@ export function presetValues(preset: ControlPreset): Partial<SettingsData> {
 export function guessPreset(env: { platform?: string; userAgent?: string; maxTouchPoints?: number }): ControlPreset {
   const mac = /Mac/i.test(env.platform ?? '') || /Macintosh/i.test(env.userAgent ?? '');
   return mac ? 'trackpad' : 'mouse';
+}
+
+/**
+ * The settings writes that keep the Settings screen honest (what it shows is what the game does).
+ * Pure. `guess` is the preset for a first launch.
+ * - A preset not yet written into the rows (first launch, a new choice in the Preset row, or the
+ *   Controls "Defaults", which unsets the preset) writes every row it owns, including the ones the
+ *   core settings pre-fill (look sensitivity 1, hold-to-block) that would otherwise disagree.
+ * - Settings saved before `presetApplied` existed keep the player's rows if they picked a preset.
+ * - A row reset to unset takes the preset's value; difficulty defaults to Normalis.
+ */
+export function settingsFixups(d: Partial<SettingsData>, guess: ControlPreset): Partial<SettingsData> {
+  const preset = d.controlPreset ?? guess;
+  const vals = presetValues(preset) as Record<string, unknown>;
+  const cur = d as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  if (d.presetApplied === undefined && d.presetPicked && d.controlPreset) out.presetApplied = d.controlPreset;
+  else if (d.presetApplied !== preset || d.controlPreset === undefined) {
+    out.presetApplied = preset;
+    for (const [k, v] of Object.entries(vals)) if (cur[k] !== v) out[k] = v;
+  }
+  for (const [k, v] of Object.entries(vals)) if (cur[k] === undefined && !(k in out)) out[k] = v;
+  if (d.difficulty === undefined) out.difficulty = 'normalis';
+  return out as Partial<SettingsData>;
 }
 
 /** What the input/camera/controller should do for a settings snapshot. Pure (unit-tested). */

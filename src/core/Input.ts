@@ -12,6 +12,8 @@
  *   Safari: gesture events) zooms the camera and never the page.
  * - Caps Lock may be bound as an alternate toggle: macOS fires keydown when it turns on and keyup
  *   when it turns off, so either edge counts as one press (see `capsLockToggled`).
+ * - Cmd+key (and Ctrl+key unless Ctrl is bound) is left to the browser: never an action, never
+ *   prevented. Releasing Cmd releases every key, since macOS drops keyups while Cmd is down.
  */
 
 export type Action =
@@ -159,9 +161,14 @@ export function wheelPixels(deltaY: number, deltaMode = 0): number {
  *
  * - Deltas are summed; a step fires once the sum passes `threshold` (px), then the sum restarts.
  * - After a step the stream is locked: nothing more fires until the wheel has been quiet for
- *   `quietMs`. A trackpad flick's momentum tail is one long, decaying stream, so it fires once.
- * - A deliberate, continued scroll re-arms the lock after `quietMs` when its deltas are as strong
- *   as the one that fired (momentum only ever decays), so a mouse wheel rolled on keeps stepping.
+ *   `quietMs`. A trackpad flick (a ramp-up while the fingers move, then a long decaying momentum
+ *   tail) is one stream, so it fires once.
+ * - A deliberate, continued scroll re-arms the lock `quietMs` after the step when a delta is as
+ *   strong as the stream's strongest so far (`rearmRatio` of the peak) *and* looks like a new
+ *   push: a discrete notch (line/page deltas, or an event at least `notchGapMs` after the last
+ *   one, as a mouse wheel sends them) or a delta rising again (a second flick). Momentum arrives
+ *   every frame and only decays away from its peak, so it never re-arms; a mouse wheel rolled on
+ *   keeps stepping, at most every `quietMs`.
  * - A reversal of direction starts a fresh sum; tiny jitter below `deadzone` is ignored.
  *
  * `push` returns -1 (scroll up = zoom in), +1 (scroll down = zoom out) or 0.
@@ -170,42 +177,64 @@ export class WheelAccumulator {
   threshold = 60;
   quietMs = 250;
   deadzone = 0.5;
-  /** A continued scroll re-arms when |delta| ≥ this fraction of the delta that fired the step. */
+  /** A continued scroll re-arms when |delta| ≥ this fraction of the stream's peak |delta|. */
   rearmRatio = 0.8;
+  /** Events this far apart are separate notches (trackpads send one per frame, ~16 ms). */
+  notchGapMs = 50;
   private sum = 0;
+  private prevMag = 0;
   private last = -Infinity;
   private lockedAt = -Infinity;
   private locked = false;
-  private lockDelta = 0;
+  private lockSign = 0;
+  /** Largest |delta| of the current accumulation (before a step) or since the step (locked). */
+  private peak = 0;
 
-  push(delta: number, timeMs: number): -1 | 0 | 1 {
+  /** `discrete`: the event came in lines or pages (a mouse wheel notch). */
+  push(delta: number, timeMs: number, discrete = false): -1 | 0 | 1 {
     const gap = timeMs - this.last;
     this.last = timeMs;
     if (gap > this.quietMs) {
       this.locked = false;
       this.sum = 0;
+      this.peak = 0;
+      this.prevMag = 0;
     }
     if (!Number.isFinite(delta) || Math.abs(delta) < this.deadzone) return 0;
+    const mag = Math.abs(delta);
+    const prevMag = this.prevMag;
+    this.prevMag = mag;
     if (this.locked) {
-      const strong = Math.abs(delta) >= this.rearmRatio * this.lockDelta && Math.sign(delta) === Math.sign(this.lockDelta);
-      if (timeMs - this.lockedAt >= this.quietMs && strong) {
+      const same = Math.sign(delta) === this.lockSign;
+      const push = discrete || gap >= this.notchGapMs || mag > prevMag * 1.04;
+      if (same && push && timeMs - this.lockedAt >= this.quietMs && mag >= this.rearmRatio * this.peak) {
         this.locked = false;
         this.sum = 0;
-      } else return 0;
+        this.peak = 0;
+      } else {
+        if (same) this.peak = Math.max(this.peak, mag);
+        return 0;
+      }
     }
-    if (this.sum !== 0 && Math.sign(delta) !== Math.sign(this.sum)) this.sum = 0;
+    if (this.sum !== 0 && Math.sign(delta) !== Math.sign(this.sum)) {
+      this.sum = 0;
+      this.peak = 0;
+    }
     this.sum += delta;
+    this.peak = Math.max(this.peak, mag);
     if (Math.abs(this.sum) < this.threshold) return 0;
     const dir = this.sum < 0 ? -1 : 1;
     this.sum = 0;
     this.locked = true;
     this.lockedAt = timeMs;
-    this.lockDelta = delta;
+    this.lockSign = dir;
     return dir;
   }
 
   reset() {
     this.sum = 0;
+    this.peak = 0;
+    this.prevMag = 0;
     this.locked = false;
     this.last = -Infinity;
   }
@@ -231,6 +260,10 @@ export function keyLookEase(heldS: number, easeIn: number): number {
 }
 
 const DEG = Math.PI / 180;
+/** Modifier keys: they send their own keyup and never form a shortcut by themselves. */
+const MODIFIER_CODES: ReadonlySet<string> = new Set([
+  'ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight', 'OSLeft', 'OSRight', 'CapsLock', 'Fn',
+]);
 /** Pinch deltas are small (a few px per event); scale them up to wheel pixels. */
 const PINCH_GAIN = 6;
 
@@ -421,9 +454,16 @@ export class Input {
     this.held.delete(code);
   }
 
-  private zoomStep(delta: number, timeMs: number) {
-    const step = this.wheel.push(delta, timeMs);
+  private zoomStep(delta: number, timeMs: number, discrete = false) {
+    const step = this.wheel.push(delta, timeMs, discrete);
     if (step) this.pulse(step < 0 ? 'WheelUp' : 'WheelDown');
+  }
+
+  /** A browser/OS shortcut: Cmd+key, or Ctrl+key unless Ctrl is bound to an action. */
+  private isShortcut(e: KeyboardEvent): boolean {
+    if (MODIFIER_CODES.has(e.code)) return false;
+    if (e.metaKey) return true;
+    return e.ctrlKey && !this.codeToActions.has('ControlLeft') && !this.codeToActions.has('ControlRight');
   }
 
   private capsEdge(e: KeyboardEvent) {
@@ -445,6 +485,8 @@ export class Input {
 
     on(window, 'keydown', (e) => {
       if (isTypingTarget(e.target)) return;
+      // Cmd shortcuts (Cmd+R, Cmd+L, Cmd+F…) belong to the browser and are never game actions.
+      if (this.isShortcut(e)) return;
       if (this.codeToActions.has(e.code)) {
         // Keep Tab/Space/arrows/F5 etc. from scrolling or reloading the page.
         e.preventDefault();
@@ -457,6 +499,11 @@ export class Input {
     on(window, 'keyup', (e) => {
       if (e.code === 'CapsLock') return this.capsEdge(e);
       this.release(e.code);
+      // macOS sends no keyup for a key released while Cmd is down, so letting go of Cmd lets go
+      // of every key (a Cmd+D must not leave the character walking right).
+      if (e.code === 'MetaLeft' || e.code === 'MetaRight' || e.key === 'Meta') {
+        for (const c of [...this.held]) if (!c.startsWith('Mouse') && !MODIFIER_CODES.has(c)) this.release(c);
+      }
     });
     on(window, 'blur', () => {
       for (const c of [...this.held]) this.release(c);
@@ -488,7 +535,7 @@ export class Input {
         // Safari reports a pinch as gesture events (handled below) and may echo it as ctrl+wheel.
         if (e.ctrlKey && t - this.lastGestureAt < 80) return;
         const px = wheelPixels(e.deltaY, e.deltaMode);
-        this.zoomStep(e.ctrlKey ? px * PINCH_GAIN : px, t);
+        this.zoomStep(e.ctrlKey ? px * PINCH_GAIN : px, t, e.deltaMode !== 0);
       },
       { passive: false },
     );

@@ -7,7 +7,9 @@
  * ground textures (grass, sun-dried grass, trodden earth, tufa rock, river sand and mud, gravel,
  * basalt road paving, travertine pavement) from per-sample data (normals, road / pad distance
  * fields, urban wear, gardens, water level), so `surfaceAt` reports what is drawn underfoot.
- * Physics uses Rapier heightfields per 128 m chunk.
+ * Physics uses Rapier heightfields per 128 m chunk, closed by invisible walls just inside the grid
+ * edge (the apron beyond is scenery), with a safety net that returns a player who falls out of
+ * the world to where they last stood.
  *
  * Public API (stable): `new Terrain(game, hm, opts)`, `heightAt`, `normalAt`, `surfaceAt`,
  * `group`, `material`.
@@ -21,6 +23,7 @@ import { buildApron, farHeight, type ApronOptions } from './apron';
 import { flatGroundTextures, loadGroundTextures, type GroundTextures } from './groundTextures';
 import { PATCH_STRIDE, TerrainQuadtree, type QuadtreeOptions } from './quadtree';
 import { romeTerrainInputs } from './romeInputs';
+import { addWorldEdgeWalls, SafetyNet } from './safety';
 import { LAYER_COUNT, SPLAT_LAYERS, splatWeights, type SplatInput } from './splat';
 import { buildTerrainData, decodeSdf, sampleChannel, WATER_OFFSET_RANGE, type TerrainData, type TerrainDataInputs } from './terrainData';
 import { createTerrainMaterial, defaultLayerUniforms, MAX_LOD_LEVELS, type TerrainUniforms } from './terrainMaterial';
@@ -117,6 +120,8 @@ export class Terrain implements System {
   readonly apron: THREE.Mesh | null = null;
   /** Ground height anywhere (game m): the grid inside, the atlas landform outside. */
   readonly farHeightAt: (x: number, z: number) => number;
+  /** Returns a player who falls out of the world (null without colliders). */
+  readonly safetyNet: SafetyNet | null = null;
   /** Last LOD selection: patches drawn and triangles. */
   readonly lodStats = { patches: 0, triangles: 0, perLevel: [] as number[] };
   private readonly patchAttr: THREE.InstancedBufferAttribute;
@@ -222,8 +227,12 @@ export class Terrain implements System {
       this.group.add(this.apron);
     }
 
-    // ---- physics: Rapier heightfields per chunk
-    if (!opts.noColliders) this.addColliders(opts.chunkSamples ?? 65);
+    // ---- physics: Rapier heightfields per chunk, walls at the edge, the safety net
+    if (!opts.noColliders) {
+      this.addColliders(opts.chunkSamples ?? 65);
+      addWorldEdgeWalls(game, hm, this);
+      this.safetyNet = game.addSystem(new SafetyNet(game, hm));
+    }
 
     game.scene.add(this.group);
     game.addSystem(this);
@@ -296,12 +305,12 @@ export class Terrain implements System {
     return this.hm.normalAt(x, z);
   }
 
-  /** Splat layer weights at (x, z), exactly as the shader computes them (Float32Array, reused). */
-  weightsAt(x: number, z: number, out = this.splatScratch): Float32Array {
+  /** The splat rules' inputs at (x, z): slope, height above the water, road / pad distances… */
+  inputAt(x: number, z: number): SplatInput {
     const hm = this.hm;
     const n = hm.normalAt(x, z);
     const a = this.data.a, b = this.data.b;
-    const p: SplatInput = {
+    return {
       x,
       z,
       ny: n.y,
@@ -313,7 +322,11 @@ export class Terrain implements System {
       urban: sampleChannel(hm, b, 1, x, z),
       lush: sampleChannel(hm, b, 2, x, z),
     };
-    return splatWeights(p, out);
+  }
+
+  /** Splat layer weights at (x, z), exactly as the shader computes them (Float32Array, reused). */
+  weightsAt(x: number, z: number, out = this.splatScratch): Float32Array {
+    return splatWeights(this.inputAt(x, z), out);
   }
 
   /** Surface type for footsteps / effects. */
@@ -326,6 +339,7 @@ export class Terrain implements System {
 
   dispose() {
     this.game.removeSystem(this);
+    if (this.safetyNet) this.game.removeSystem(this.safetyNet);
     this.game.scene.remove(this.group);
     this.geometry.dispose();
     this.material.dispose();
