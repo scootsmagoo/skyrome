@@ -21,7 +21,7 @@ import { doorLeaves, plankShutters, wall as fwall, type Opening } from '../../..
 import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuilder } from '../types';
 import { FORUM_INSCRIPTIONS } from './forum-data';
-import { addFire, foundation, gameBoard, groundRange, inscription, landmark, rect, type Part } from './forum-kit';
+import { addFire, foundation, gameBoard, groundRange, inscription, landmark, pave, rect, type Part } from './forum-kit';
 import { inscriptionPanel } from '../../../arch/common/inscription';
 import { placeProp } from '../../../arch/props';
 import { arcadeRow, gableRoof, shedRoof } from './forum-temple';
@@ -47,7 +47,9 @@ function basilicaIulia(p: Part) {
   stairs(b, { ...st, width: Dp - sd }, TRS(hw, 0, -hd + sd + (Dp - sd) / 2, 0, -Math.PI / 2, 0));
   stairs(b, { ...st, width: Dp - sd }, TRS(-hw, 0, -hd + sd + (Dp - sd) / 2, 0, Math.PI / 2, 0));
   const z0 = -hd + sd;
-  b.box('concrete', 2 * (hw - sd), Y, hd * 2 - sd, T(0, Y / 2 - 0.02, (z0 + hd) / 2), { collide: p.main, castShadow: false });
+  // the raised floor stops at the back wall, whose shops open at street level
+  const zBack = z0 + 8 * 3.05;
+  b.box('concrete', 2 * (hw - sd), Y, zBack - z0, T(0, Y / 2 - 0.02, (z0 + zBack) / 2), { collide: p.main, castShadow: false });
   foundation(p, rect(-hw, -hd, hw, hd), 0);
   // arcade geometry
   const bay = 3.05;
@@ -67,8 +69,8 @@ function basilicaIulia(p: Part) {
   arcadeRow(p, { ...row, bays: nx }, T(ax0, Y, az0 + depth / 2));
   arcadeRow(p, { ...row, bays: nz }, TRS(ax1 - depth / 2, Y, az0, 0, -Math.PI / 2, 0));
   arcadeRow(p, { ...row, bays: nz }, TRS(ax0 + depth / 2, Y, az1, 0, Math.PI / 2, 0));
-  // back wall (shops open on the street behind)
-  d.span('brick', ax0, Y, az1, ax1, Y + H, hd, { collide: true });
+  // back wall: the tabernae let into it open on the street behind, at street level
+  iuliaBackShops(p, ax0, ax1, az1, hd, Y + H);
   // floors: white marble aisles, the nave in coloured slabs
   const nz0 = az0 + 6.8;
   const nz1 = az1 - 6.8;
@@ -228,6 +230,69 @@ function basilicaIulia(p: Part) {
   p.spot('basilica-iulia-steps', 'sit', -20, Y - 2 * rise, -hd + (nSteps - 2.5) * run, Math.PI);
   p.spot('basilica-iulia-steps-2', 'sit', 22, Y - 3 * rise, -hd + (nSteps - 3.5) * run, Math.PI);
   p.spot('basilica-iulia-entrance', 'door', 0, Y, z0 + 1.0, 0);
+}
+
+/**
+ * The S side of the Basilica Iulia: shops (tabernae) let into the thick back wall, opening on the
+ * street behind at street level (the plan has a row of them along that side), with a sidewalk and
+ * a lamp here and there; the wall rises plain above to the roof line.
+ */
+const IULIA_BACK: (ShopKind | 'closed')[] = ['wine', 'closed', 'cobbler', 'thermopolium', 'closed', 'general', 'barber', 'closed', 'pottery'];
+
+function iuliaBackShops(p: Part, ax0: number, ax1: number, az1: number, hd: number, top: number) {
+  const { b, d, hi } = p;
+  const t = hd - az1;
+  // the wall's outer face is at z = hd facing +z: a frame turned round (front −z → +z)
+  const g0 = Math.min(0, groundRange(p.ctx, rect(ax0, hd, ax1, hd + 1.5)).min);
+  const fd = new Draw(b).at(0, 0, hd, Math.PI);
+  const n = IULIA_BACK.length;
+  const span = ax1 - ax0;
+  const bay = span / n;
+  const openings: Opening[] = [];
+  for (let i = 0; i < n; i++) {
+    // frame x runs opposite to local x (turned round)
+    const cx = -(ax0 + (i + 0.5) * bay);
+    const sx = ax0 + (i + 0.5) * bay;
+    const gs = p.ctx.groundAt(sx, hd + 0.8);
+    openings.push({ x0: cx - 1.3, x1: cx + 1.3, y0: gs, y1: gs + 2.9 });
+  }
+  const cut = fwall(fd, 'brick', -ax1, -ax0, g0 - 0.4, top, t, openings);
+  if (p.main) {
+    let xPrev = -ax1;
+    for (const o of [...cut].sort((a, c) => a.x0 - c.x0)) {
+      fd.solid(xPrev, g0 - 0.4, 0, o.x0, top, t);
+      fd.solid(o.x0, o.y1, 0, o.x1, top, t);
+      xPrev = o.x1;
+    }
+    fd.solid(xPrev, g0 - 0.4, 0, -ax0, top, t);
+  }
+  const rng = p.ctx.rng.fork('iulia-back');
+  const depth = t - 0.05;
+  for (let i = 0; i < n; i++) {
+    const o = openings[i];
+    const cx = (o.x0 + o.x1) / 2;
+    const kind = IULIA_BACK[i];
+    const sd = fd.at(cx, o.y0, 0).noShadow();
+    if (kind === 'closed') {
+      plankShutters(fd, o, 0.3, rng);
+      sd.span('black', -1.25, 0, 0.4, 1.25, 2.85, 0.45);
+      continue;
+    }
+    if (hi) {
+      shopInterior(sd, kind, { w: 2.6, depth, h: 2.9, t: 0.3, wealth: 0.4 }, rng.fork(i));
+      const sxl = ax0 + (i + 0.5) * bay;
+      p.spot(`basilica-iulia-taberna-${i}`, 'vendor', sxl, o.y0, hd - 1.0, 0);
+    } else sd.span('black', -1.25, 0, 0.6, 1.25, 2.85, 0.65);
+    if (p.main) sd.solid(-1.4, 0, depth, 1.4, 2.9, depth + 0.05);
+  }
+  // a sidewalk along the back, and lamps lit at dusk
+  pave(p, rect(ax0, hd, ax1, hd + 2.4), { material: 'paving_travertine', lift: 0.05 });
+  for (const k of [1, 4, 7]) {
+    const x = ax0 + (k + 1) * bay;
+    const g = p.ctx.groundAt(x, hd + 0.4);
+    placeProp(new Draw(b).at(x, g + 2.4, hd, Math.PI), 'torch_bracket', 0, 0, 0, 0, { collide: false });
+    addFire(p, x, g + 2.9, hd + 0.3, { night: true, intensity: 6, distance: 8, glow: 0.3 });
+  }
 }
 
 // ---------------------------------------------------------------- Basilica Paulli (Aemilia)
