@@ -51,6 +51,11 @@ export interface CombatEnv {
   parryWindowOverride(): number | null;
   /** Show or remove a projectile's visual. */
   projectileVisual?(p: Projectile, on: boolean): void;
+  /**
+   * People in front of a player's swing who aren't combatants yet (the crowd, a shopkeeper): make
+   * them combatants so the blow can land (an assault, §14.1). Returns how many were added.
+   */
+  adoptNear?(c: Combatant, radius: number): number;
 }
 
 export const nullEnv: CombatEnv = {
@@ -535,6 +540,8 @@ export class CombatCore {
       y1: Math.max(handY, pivot.y) + 0.6,
     };
     const hits: { o: Combatant; ang: number; hostile: boolean }[] = [];
+    // The player can strike anyone: bystanders within reach become combatants first.
+    if (c.isPlayer && !sweep) this.env.adoptNear?.(c, spec.handDist + spec.reach + 0.8);
     for (const o of this.list) {
       if (o === c || o.status === 'dead' || o.status === 'fled' || o.status === 'ko') continue;
       // A kneeling, yielded fighter is struck only on purpose: a power attack, or locked on him.

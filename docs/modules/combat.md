@@ -6,9 +6,9 @@ RPG's combat math), the enemies' combat AI, Nereus the retiarius, and the arena'
 `docs/GDD.md` §4.2–4.4 (controls and camera), §6 (all of combat), §13 (enemies and bosses) and the
 acceptance criteria AC-04, AC-06–AC-09 and AC-22.
 
-- Code: `src/combat/` (rules, the game wiring, player input, HUD overlay), `src/ai/combat/` (brain, attack tokens, Nereus)
-- Test bed: `?scene=arena` (`src/scenes/arena.ts`)
-- Tests: `tests/combat-*.test.ts` (87 cases)
+- Code: `src/combat/` (rules, the game wiring, player input, HUD overlay, bodies, street danger), `src/ai/combat/` (brain, attack tokens, Nereus)
+- Test bed: `?scene=arena` (`src/scenes/arena.ts`); in the city it is installed by the game flow (`src/game/optional.ts`)
+- Tests: `tests/combat-*.test.ts` (107 cases)
 - Third-party assets or libraries: none
 
 ## How to try it (for the owner)
@@ -32,7 +32,22 @@ acceptance criteria AC-04, AC-06–AC-09 and AC-22.
    you are netted. He changes his style at 75 % and 45 % health and yields at 15 %; then you
    choose: *Mitte* (spare him) or strike.
 7. Difficulty: add `&difficulty=tiro` (story) or `&difficulty=difficilis`.
-   `&toggle=1` turns on toggle-block (the Trackpad preset).
+   `&toggle=1` turns on toggle-block (the Trackpad preset). These URL choices last for the visit
+   only; they never change your saved settings.
+
+**In the city** (`?scene=rome`, the real game): combat is always on. R draws, F attacks, and the
+difficulty, block mode, power-hold time and lock-on follow Esc → Settings.
+
+8. **Night muggers.** After dark (19:30–05:30) a pair of *grassatores* may wait by the street under
+   the Palatine, on the Vicus Tuscus or on the road from the Porta Capena to the Colosseum. They step
+   out when you come near: *"Purse or blood, friend."* Pay a quarter of your purse and they let you
+   pass, or refuse and fight. To see one at once:
+   <http://127.0.0.1:5173/?scene=rome&quick=1&hour=21&danger=circus-north-capena> (they wait 20 m
+   ahead). `&danger=0` keeps the streets safe.
+9. **Bodies.** A fallen enemy can be searched: look at it and press **E** (*Search*). You find its
+   weapon, some of its clothes and a few coins. **R** takes everything.
+10. **Knocked out in the street.** A cudgel or fists can knock you out instead of killing you. The
+    screen goes dark for a few seconds; muggers take half your purse and are gone when you come to.
 
 ## Wiring it in
 
@@ -46,9 +61,17 @@ installAudio(game);                                  // optional: swings, clashe
 const combat = installCombat(game, { hudRoot: uiRoot });  // game.combat — install it last
 ```
 
+In Rome the game flow installs it (`src/game/optional.ts` finds `installCombat` in
+`src/combat/index.ts`), after the UI wiring: the flow's HUD sources already ask `game.combat` for
+`targetView()`, `bossView()` and `compassMarkers()`, the music follows `game.combat.active` and
+`alerted()`, and the flow keeps its own death prompt (`game.combat.handlesDeath` is false).
+
 `installCombat` builds the player's combatant from `player.sheet` and `player.inventory` when the
-RPG is installed (it re-reads the loadout on every equip change and puts the equipped weapon and
-shield on the avatar). Without the RPG the player fights with fists at skill 25. It hooks the
+RPG is installed (it re-reads the loadout on every equip change and, unless the flow's `PlayerLook`
+dresses the avatar, puts the equipped weapon and shield on it). When `PlayerLook` rebuilds the avatar
+for new clothes (`'player:avatar'`), the combatant follows the new one. A load (`'save:loaded'`) or a
+new game (`'game:started'`) ends every fight and stands the player up with the pools the save
+restored. Without the RPG the player fights with fists at skill 25. It hooks the
 `PlayerController` (`canJump`, `motionOverride`, `speedMultiplier`, `canSprint`; each composes with
 earlier hooks), provides the UI's `target`, `boss`, `inCombat` and `compassMarkers` sources (it
 composes with existing markers), and mounts its HUD overlay inside the UI's HUD root.
@@ -57,25 +80,56 @@ composes with existing markers), and mounts its HUD overlay inside the UI's HUD 
 
 ```ts
 // NPC module
-const c = game.combat.register(actor, { profile, team: 'law', faction: 'vigiles', lawful: true, loadout: { weapon: 'fustis' } });
-game.combat.engage(actor, game.player);          // actors, combatants or ids
+game.combat.engage(npcActor, game.player);       // actors, combatants or ids; returns whether a fight started
+game.combat.engage(guard, thief);                //   an actor that isn't a combatant yet is adopted (below)
 game.combat.isInCombat(actor);                   // fighting? (no argument: the player, §6 predicate)
 game.combat.isDriving(actor);                    // true while combat moves this body: skip your own locomotion
 game.combat.disengage(actor);
+const c = game.combat.register(actor, { profile, team: 'law', faction: 'vigiles', lawful: true, loadout: { weapon: 'fustis' } });
 
-// Spawners and quests
+// Quest content (src/content/director.ts speaks this already)
+game.combat.spawnEnemy('grassator', pos, { id: 'npc-sorex', npc: 'npc-sorex', quest: 'mq-01-madida-capena', tags: ['grassator'], hostile: true });
+game.combat.spawnEnemy('retiarius', pos, { id: 'npc-nereus', boss: 'boss-nereus', practice: true, quest: 'lud-01-sacramentum' });
+game.combat.engage('npc-crispus', { brawl: true, tags: ['rixa'] });   // an actor id + options: fight the player
+
+// Spawners and dev scenes
 const thug = game.combat.spawnEnemy('grassator', pos, { engage: true });        // avatar, actor, AI
 const nereus = game.combat.spawnEnemy('boss-nereus', pos, { lusio: true });
 game.combat.startBout({ foes: [nereus], lusio: true, editor: { x, z }, purse: 40 });
 game.combat.despawn(thug);
+game.combat.override({ difficulty: 'tiro' });     // dev scenes: settings for this visit only
+game.combat.danger.trigger('vicus-tuscus-south'); // stage a night mugging now
 ```
 
-- `spawnEnemy(archetype, position, opts)`: archetypes are `grassator`, `ebrius-rixator`,
-  `collegium-bruiser`, `tiro`, `thraex`, `miles-urbanus`, `vigil` and `boss-nereus`
-  (`src/combat/archetypes.ts`). Options: `tier`, `kit`, `lusio` (practice arms), `team`, `group`,
-  `aggro` (the attack-on-sight radius, default 18 m), `engage`, `heading`, `seed`, `lod`, `drawn`, `id`,
-  `name`. Stats come from `src/rpg/enemies.ts` (§6.11 tiers and §13.1 kits). The look comes from
-  `randomAppearance(role)` with the kit's weapon and shield models.
+- `spawnEnemy(archetype, position, opts)`: the authored archetypes are `grassator`,
+  `ebrius-rixator`, `collegium-bruiser`, `tiro`, `thraex`, `miles-urbanus`, `vigil` and
+  `boss-nereus` (`src/combat/archetypes.ts`); any other §13.1 archetype of the RPG tables spawns too
+  (`murmillo`, `retiarius`, `cloacarius`, `sicarius`…: its tier and kit, a fitting look, the Ludus
+  team for gladiators), and an unknown id becomes a knife thug. Options: `tier`, `kit`, `lusio` or
+  `practice` (practice arms; a practice gladiator spawned by a quest also starts an arena bout with
+  crowd favor), `brawl`, `yieldAt`, `hostile`, `tags` and `quest` (echoed in `'actor:killed'`),
+  `npc` (a named NPC id: its name, title, look, stat block and essential flag), `boss`
+  (`boss-nereus` wins over the archetype), `opener`, `bout`, `team`, `group`, `aggro` (the
+  attack-on-sight radius, default 18 m), `engage`, `heading`, `seed`, `lod`, `drawn`, `id`, `name`.
+  Spawning with an id that is already in use replaces that fighter. Stats come from
+  `src/rpg/enemies.ts` (§6.11 tiers and §13.1 kits). The look comes from `randomAppearance(role)`
+  (or the NPC's own appearance) with the kit's weapon and shield models. The resolution is pure and
+  tested (`src/combat/spawnSpec.ts`).
+- **Scripted openers** (docs/CONTENT.md §5.2): `opener: 'chain'` takes the first turn with a three-hit
+  light chain; `'delayed-power'` waits 3 s and then winds up a power attack for a full second.
+  mq-01's two grassatores get them automatically (the first spawned for `mq-01-madida-capena` chains
+  with a knife, the second waits with a cudgel) until content passes `opener` itself.
+- `engage(a, b?)`: without `b`, or with options instead (`{ hostile, practice, brawl, yieldAt, tags,
+  quest, name, profile }`), `a` fights the player. An actor another module placed is adopted first
+  (`adoptActor`): its profile comes from `game.npcs` (or the actor's own `def`), else from its
+  faction (`vigiles` → a vigil, `cohortes-urbanae` → a miles), else it is a civilian who defends
+  himself; its team is its faction. Adopted actors are driven by combat only while they fight, and
+  their deaths are passed to `game.population.kill(actor)` when that exists.
+- **Anyone can be struck.** A player's thrust or cut adopts up to three humanoid actors in front
+  within reach (the crowd, a shopkeeper) before it resolves, so the blow lands on whoever is there
+  when no enemy is (an assault: `combat:assault`; a civilian yields at half health or runs). Sweeps
+  still strike only hostiles (AC-22). Adopted people idle for 30 s, or gone from the world, are let
+  go again.
 - `register(actor, opts)`: any actor with a `CombatProfile`. A registered NPC is driven by combat
   only while it fights, and is handed back once it is idle again (`isDriving`). Spawned enemies
   stay driven.
@@ -93,13 +147,13 @@ game.combat.despawn(thug);
 | `combat:started` / `combat:ended` | The player's §6 inCombat predicate flips (combat music follows) |
 | `combat:hit` | A blow landed, was blocked or was parried (attacker, target, damage, kind, flags, stagger) |
 | `combat:parry` | A timed block landed |
-| `actor:killed` | A death (the loot hook; `killerId` is `player` for the player's kills) |
-| `combat:death` | The same death with its loot table, worn items, weapon, shield and position, for a body container |
-| `actor:yielded` | An NPC knelt (§6.9); the combat system offers the spare/rob/arrest/kill choice |
+| `actor:killed` | Someone is out of the fight for good: a death, a **knockout** or a **flight**. `tags` carries the spawn's tags, its archetype and how it ended: `'dead'`, `'ko'` or `'fled'` (quest `kill:<tag>` objectives count all three; the save's world deltas record only deaths). The player's own knockout is `{ victimId: 'player', tags: ['ko'] }` |
+| `combat:death` | A real death with its loot table, worn items, weapon, shield and position (the body container hook; the combat module's own bodies use it) |
+| `actor:yielded` | An NPC knelt (§6.9): the combat system offers the spare/rob/arrest/kill choice. Also the player holding Y (`actorId: 'player'`) |
 | `combat:yieldChoice` | The decision (the combat system applies `rpg/yield.ts`: Pietas, Fama, the purse, crime) |
 | `combat:knockout`, `combat:fled` | A knockout (with its duration), a successful flight |
 | `combat:callHelp`, `combat:assault`, `combat:brawlEscalated` | For the NPC and crime modules |
-| `combat:playerDefeated` | `death`, `knocked-out`, `brawl-lost`, `saniarium`, `saniarium-no-purse`: game flow decides what happens next |
+| `combat:playerDefeated` | `death`, `knocked-out`, `brawl-lost`, `saniarium`, `saniarium-no-purse` (with the ids of the `foes` who were fighting): game flow decides what happens after a death; knockouts end in a short blackout |
 | `combat:playerYielded` | Hold Y: `brawl` (fight over, −10 % purse), `arena` (missio roll), `arrest` (open the arrest dialogue) |
 | `combat:bout`, `combat:favor`, `combat:phase`, `combat:lock` | Arena bout start and end (with the purse), favor changes, boss phases, lock-on |
 
@@ -109,11 +163,15 @@ Sound goes out as `sfx` events (`swing.*`, `clash.metal`, `block.shield`, `block
 
 ### Settings (all optional, declared in `src/combat/settings.ts`)
 
-`combatDifficulty` (default `normalis`), `combatSimplePower`, `combatPowerHold` (0.2–0.6 s,
-default 0.35), `combatParryWindow` (accessibility override in seconds), `combatShake` (`third`, the
-default per §4.4 = off in first person; `on`; `off`), `combatLockOn` (`suggest` is the default:
-drawing a weapon with a hostile within 8 m locks on; `manual`; `auto`), `combatSpaceAlwaysJumps`,
-`combatHitStop`, `reduceFlashing`. Hold or toggle block is the core setting `blockToggle`.
+The game flow's settings come first: `difficulty` (Gameplay; default `normalis`), `powerHoldS`
+(0.2–0.6 s, default 0.35) and `lockOnMode` (`suggest` is the default: drawing a weapon with a hostile
+within 8 m locks on; `manual`; `auto`), set by the control presets. Hold or toggle block is the core
+setting `blockToggle`. The combat module's own keys: `combatSimplePower`, `combatParryWindow`
+(accessibility override in seconds), `combatShake` (`third`, the default per §4.4 = off in first
+person; `on`; `off`), `combatSpaceAlwaysJumps`, `combatHitStop`, `reduceFlashing`,
+`combatStreetDanger` (night muggers, default on), and the older `combatDifficulty`, `combatPowerHold`
+and `combatLockOn` (used only when the flow's keys are unset). Dev scenes call
+`game.combat.override({...})`, which is never saved.
 
 ## Rules at a glance
 
@@ -190,6 +248,16 @@ knocked-out body kills it (an `assault` event). An NPC that can yield doesn't di
 that crosses its yield threshold. The grassator flees at it instead. NPCs flee at `fleeAt` and
 are gone once 30 m away. Drawing a blade in a brawl turns it into an assault.
 
+**The player knocked out.** Outside a bout's rules the player is out for 6 s [design] (an NPC for
+3 minutes): the world goes dark, the foes stop and lose interest, and street thugs take half the
+purse and are gone when the player comes to with a quarter of their health. In a lusio or a brawl the
+events tell the quest (lud-01 stops the bout; the rixa is lost).
+
+**Bodies (§6.14, `bodies.ts`).** A dead NPC is a container: E (*Search*) opens the UI's container
+panel. It holds its weapon and shield (never practice arms or fists), each worn piece with a 50 %
+chance, and a roll of its tier's loot table with coin, rolled the first time it is opened. Bodies
+last 3 game days; spawned corpses leave the world once searched-out and far away (160 m).
+
 **Arena (§6.10, `ArenaBout.ts`).** Favor starts at 30 (+10 with plebs Fama over 30). It rises for
 a parry (+6), a riposte or finisher (+8), a power hit (+3), dodging an unblockable (+4) and a
 salute (+5: hold E facing the editor's box at 50 or more, once). It falls by 2/s when you retreat
@@ -219,6 +287,13 @@ and elites, champions and bosses parry (blockSkill × 0.4). It moves only throug
 cost 2, though a lone boss may still attack on Tiro. The longest waiter is served first, and a
 holder gives its token back after its turn of 1–3 attacks or 4.5 s.
 
+**Shield fighters under a rain of blows [design].** The brain keeps a running measure of how much
+of the time its target has been swinging within reach. A shield-bearer pressed that way (above 55 %)
+waits for the opening more often (blockSkill × 1.5), gets the shield back up after its own swing
+more surely, attacks 30 % less often, and answers with an **umbo bash** (wind-up stretched to 0.3 s)
+instead of trading blows: the bash knocks the attacker's next swing out of its wind-up. This is what
+holds a *miles* above the AC-07 bar against light-attack spam.
+
 **Nereus (`nereus.ts`, §13.2).** 300 HP, AR 7 cloth, a practice trident (8 blunt, 1.8 m), skill 60,
 poise 150, reaction 0.25 s, block 0.45 weapon-only, intervals of 1.6, 1.3 and 1.1 s by phase,
 2 tokens, a lusio.
@@ -241,11 +316,36 @@ poise 150, reaction 0.25 s, block 0.45 weapon-only, intervals of 1.6, 1.3 and 1.
   ×0.45 mid-swing; NPCs plant their feet while striking. The §6.6 ×0.85 run in combat is applied.
 - **Engage spacing.** NPCs engage at no closer than 1.15 m (a dagger's reach would make them hug).
 
+## World danger (`danger.ts`, §13.3)
+
+The night band of the v0.1 districts (docs/CONTENT.md §5.2 spawn bands) brings out grassator pairs
+at four street sites: two on the street under the Palatine (the Circus north side), one on the Vicus
+Tuscus south of its compitum, one on the road from the Porta Capena to the Colosseum. A site comes
+alive when it is night (19:30–05:30), the player has been playing for a minute, nothing else is
+going on (no fight, no menu, no dialogue), the site is 55–130 m away and out of sight, it hasn't
+been used tonight, and no vigil stands within 20 m. The pair waits beside the street (`lean` or
+`stand`), steps out when the player comes within 14 m in sight ("You there. A word, friend."), and
+at 3 m makes its demand in the dialogue panel: pay `max(3, ⌈purse/4⌉)` denarii (never more than the
+purse) and they walk off, or refuse and fight. Walking away, drawing a blade, striking first or
+closing the panel counts as a refusal. At dawn unmet muggers slip away; far from the player
+(200 m) the encounter ends. One encounter at a time.
+
 ## Verified (scripts/shot.mjs and Vitest)
 
-- **AC-07 block rates** (a 20 s scripted duel with F every 0.15 s from within reach, 3 seeds):
-  *miles* 42 %, 53 % and 44 %; thug 15 % and 12 % (a third run ended early when the thug fled
-  after an opening sneak attack).
+- **AC-07 block rates** (`__arena.duel(60, 150)`: a 60 s scripted duel, F every 0.15 s from within
+  reach, god mode on both sides, after the main merge of 2026-10-04): *miles* 58.5 %, 42 %, 58 %,
+  56 % and 41.5 % (seeds 1–5; 20 s duels scatter ±10 % around the same mean), thug 18.5 %, 10 % and
+  11 %. A Vitest duel through the core asserts ≥ 40 % and the bash.
+- **In Rome** (`?scene=rome&quick=1`): combat installs through the flow; spawned thugs fight on the
+  Via Appia; the night mugging plays through approach, demand (the dialogue panel), refusal, fight
+  and the player's knockout blackout; a death shows the flow's prompt and a load stands the player
+  up; a gladius and scutum equipped mid-game swap onto the avatar in place.
+- **Content's calls** (simulated in the arena with content's exact options): mq-01's pair spawns with
+  the openers (knife: light ×3 at 0.7 s spacing, chain 1-2-3; cudgel: a 1.0 s power wind-up 2.3 s
+  later); `spawnEnemy('retiarius', …, { boss: 'boss-nereus', practice: true, quest })` is Nereus with
+  the net and starts a lusio bout.
+- **Bodies:** a killed grassator shows *Search* and opens the container (2.5 denarii, his fustis, his
+  tunic).
 - **AC-07 tokens:** 1 vs 4 grassatores gives at most 2 attackers at once on Normal and 1 on Tiro;
   the others circle (in-game histogram and `tests/combat-ai.test.ts`).
 - **Nereus:** nets entangle (screenshots of the drape and the IRRETITVS prompt), phases at 73 % and
@@ -253,17 +353,21 @@ poise 150, reaction 0.25 s, block 0.45 weapon-only, intervals of 1.6, 1.3 and 1.
 - **AC-06:** light chain, held power attack, hold and toggle block (§4.2 timings), parries 6 of 6 with
   taps 0.12 s before impact, riposte ×2, bash, Space and Option dodges (Space doesn't jump in
   combat), lock-on with cycle and hold-release, R, V mid-fight (AC-04), hold Y.
-- Runs in Chrome (Metal) and WebKit without console errors. 41–62 draw calls in the arena.
-  `?scene=arena&site=rome` fights inside the city at the Ludus Magnus (265 draw calls).
+- Screenshots: mid-swing in third and first person, a hit reaction, a death with the dropped
+  cudgel, a tiro's yield pose, the knockout blackout, the mugger's demand.
+- Runs in Chrome (Metal) without console errors. 41–62 draw calls in the arena.
+  `?scene=arena&site=rome` fights inside the city at the Ludus Magnus.
 
 ## Shared-file changes
 
-- `src/core/Input.ts`: the actions `dodge` (Option), `parry` (unbound), `lockOn` (X) and `yield` (Y).
-- `src/player/PlayerController.ts`: the `canJump` and `motionOverride` hooks.
-- `src/player/CameraRig.ts`: `framingDistance` for lock-on.
-- `src/ui/menus/ControlsScreen.ts`: labels for the new actions.
+The input actions, the `PlayerController` hooks (`canJump`, `motionOverride`) and
+`CameraRig.framingDistance` this module needs are on main (the game-flow crew merged them).
+On this branch:
+
 - `src/ui/types.ts` (`BossView.phases`), `src/ui/hud/Bars.ts`, `Hud.ts` and `hud.css`: boss phase
   pips (both edges of the centre-shrinking bar) and `hud.flashBar(kind)` for a refused cost.
+- `src/save/deltas.ts`: `'actor:killed'` with a `'ko'` or `'fled'` tag no longer records the actor
+  as dead (knockouts and flights are reported to quests through the same event).
 
 ## Not done yet
 
@@ -276,11 +380,17 @@ poise 150, reaction 0.25 s, block 0.45 weapon-only, intervals of 1.6, 1.3 and 1.
 - **Stubs.** Search and flight are simple (go to the last known position; run away from the
   attacker). Yield-choice crimes pass `witnessed: false` until the stealth module provides
   witnesses.
-- **Hooks left to other modules.** No loot container UI (`combat:death` carries everything a body
-  container needs). Player death, knockout and Saniarium outcomes are events for game flow (the
-  arena scene revives you after 4 s).
+- **Hooks left to other modules.** Player death and Saniarium outcomes are events for game flow
+  (the arena scene revives you after 4 s; in Rome the flow's death prompt loads a save). Bodies are
+  not saved (world deltas record the death only). The hotbar, quick wheel and patron invocation keys
+  are the RPG and UI crews'.
+- **Street danger.** Only the night muggers. Daytime band-1 trouble (the ebrius rixator, Lurco's
+  bruisers) is left to the NPC crew's vignettes and quest content; lit areas don't yet keep the
+  muggers away (only a vigil within 20 m does).
+- **First-person view of the scutum.** The big shield covers much of the left of the screen in the
+  drawn stance in first person (the avatar module's pose).
 - **AC-08 fight length** (3–6 minutes) needs the owner's playtest. With god-mode light spam, Nereus
   yields in about 30 s, but a real fight is mostly blocking and dodging his pokes (≈22 damage each
   on Normal).
-- **Control presets.** The Mouse/Trackpad/Keyboard-only presets (click-to-attack off, auto-lock)
-  belong to the settings screen. Combat reads `combatLockOn` and `blockToggle`.
+- **Control presets.** The presets live in the game flow's settings; combat follows `blockToggle`,
+  `powerHoldS` and `lockOnMode`. Aim assist is for ranged weapons, which the player can't use yet.

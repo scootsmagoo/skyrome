@@ -251,8 +251,31 @@ export class CombatSystem implements System, PlayerCombatHost {
       rng: () => this.rng.next(),
       parryWindowOverride: () => this.cached.parryWindow,
       projectileVisual: (p, on) => this.projectileVisual(p, on),
+      adoptNear: (c, r) => this.adoptNear(c, r),
     };
   }
+
+  /** People (humanoid actors) in front of `c` within `r` m who aren't combatants yet: adopt them. */
+  private adoptNear(c: Combatant, r: number): number {
+    const game = this.game;
+    if (!game.actors) return 0;
+    let n = 0;
+    for (const a of game.actors.near(c.position, r)) {
+      if (n >= 3) break;
+      if (a === (game.player as unknown) || this.core.get(a.id)) continue;
+      if (!(a.avatar instanceof HumanoidAvatar) || (a as Actor & { dead?: boolean }).dead) continue;
+      if (Math.abs(angleTo(c.heading, a.position.x - c.position.x, a.position.z - c.position.z)) > 80 * DEG) continue;
+      const adopted = this.adoptActor(a);
+      if (adopted) {
+        this.adopted.set(adopted.id, this.core.now);
+        n++;
+      }
+    }
+    return n;
+  }
+
+  /** Actors adopted from other modules, and when (combat clock): idle ones are let go again. */
+  private adopted = new Map<string, number>();
 
   private lineOfSight(a: Combatant, b: Combatant): boolean {
     const pa = a.position;
@@ -535,9 +558,11 @@ export class CombatSystem implements System, PlayerCombatHost {
    * a fight started.
    */
   engage(a: string | Actor | Combatant, b?: string | Actor | Combatant | EngageOptions): boolean {
-    const opts = b && !(b instanceof Combatant) && !(b instanceof Actor) && typeof b !== 'string' ? (b as EngageOptions) : undefined;
+    // Options are a plain object; anything with a position is someone to fight.
+    const opts = b && typeof b === 'object' && !(b instanceof Combatant) && !('position' in b) ? (b as EngageOptions) : undefined;
     const ca = this.get(a) ?? this.adoptActor(a, opts);
     const cb = opts || b === undefined ? this.playerC : (this.get(b as string | Actor | Combatant) ?? this.adoptActor(b as string | Actor, undefined));
+    for (const x of [ca, cb]) if (x && !x.isPlayer && !this.spawned.has(x.id) && !this.adopted.has(x.id)) this.adopted.set(x.id, this.core.now);
     if (!ca || !cb || ca === cb) return false;
     if (opts) {
       if (opts.tags) for (const t of opts.tags) if (!ca.tags.includes(t)) ca.tags.push(t);
@@ -1226,6 +1251,18 @@ export class CombatSystem implements System, PlayerCombatHost {
     for (const id of this.bodies.expire()) {
       const c = this.core.get(id);
       if (c && this.spawned.has(id)) this.despawn(c);
+    }
+    // Adopted people who are gone from the world, or idle for 30 s, go back to their own module.
+    for (const [id, at] of this.adopted) {
+      const c = this.core.get(id);
+      const actor = c ? (c.body as ActorBody).actor : null;
+      const gone = !c || !actor || g.actors.get(id) !== actor;
+      const idle = !!c && c.status === 'active' && !c.target && !c.driven && this.core.now - Math.max(at, c.lastHitAt, c.lastAttackAt) > 30;
+      if (gone) this.bodies.remove(id);
+      if (gone || idle) {
+        if (c) this.core.remove(c);
+        this.adopted.delete(id);
+      }
     }
     const pp = g.player?.position;
     if (!pp) return;
