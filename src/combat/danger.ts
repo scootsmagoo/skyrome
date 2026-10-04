@@ -1,10 +1,12 @@
 /**
  * World danger (docs/GDD.md §13.3, docs/CONTENT.md §5.2 spawn bands): after dark the night band of
  * the Circus valley, the Velabrum and the Capena–Colosseum road brings out grassatores. A pair waits
- * by the street; when you come near they step out and demand your purse ("Purse or blood,
- * friend"). Pay, and they melt back into the dark; refuse, walk on or draw steel, and it's a fight
- * (they flee at low health, §13.1). One encounter at a time, each street at most once a night,
- * never while you are fighting, talking or in a menu, and never in the first 90 s of a game.
+ * by the street ahead of you; when you come near they step out and demand your purse ("Purse or
+ * blood, friend"). Pay, and they melt back into the dark; refuse, walk on or draw steel, and it's a
+ * fight (they flee at low health, §13.1). One encounter at a time, each street at most once a night
+ * (counted once they step out), never while you are fighting, talking or in a menu, never in the
+ * first 20 s of a game or the 20 s after a fight. A pair you walk past without meeting slips away
+ * and frees the way for the next street.
  *
  *   game.combat.danger.enabled           off with the setting `combatStreetDanger: false`
  *   game.combat.danger.trigger(siteId)   stage one now (dev, tests: ?scene=rome&danger=<site id>)
@@ -36,9 +38,12 @@ export const DANGER_SITES: DangerSite[] = [
   { id: 'capena-colosseum', where: 'the road to the Colosseum', road: 'road-between-palatine-and-caelian', t: 0.45 },
 ];
 
-/** Night for the muggers: the §13.3 night band (as the combat clock's night). */
+/** The muggers' night: dusk to first light (docs/GDD.md §17.2: dawn breaks at 06:10 on the first morning). */
+export const NIGHT = { dusk: 19.5, firstLight: 6 + 10 / 60 };
+
+/** Night for the muggers (the §13.3 night band, up to first light). */
 export function isNight(hour: number): boolean {
-  return hour < 5.5 || hour >= 19.5;
+  return hour < NIGHT.firstLight || hour >= NIGHT.dusk;
 }
 
 /** A point along a polyline of atlas points (real metres) at fraction t, in game metres, with the street's direction. */
@@ -73,16 +78,36 @@ export function muggerPrice(purse: number): number {
   return Math.min(purse, Math.max(3, Math.ceil(purse * 0.25)));
 }
 
-/**
- * Should a site come alive now? Pure, for tests: night, the player 55–130 m away (and not looking
- * straight at it when closer than 85 m), not used tonight, nothing else going on.
- */
-export function siteReady(o: { night: boolean; dist: number; facing: number; usedTonight: boolean; busy: boolean }): boolean {
-  if (!o.night || o.usedTonight || o.busy) return false;
-  if (o.dist < 55 || o.dist > 130) return false;
-  // Out of sight: behind the player or far enough to pass unnoticed in the dark.
-  return o.facing < Math.cos(55 * (Math.PI / 180)) || o.dist > 85;
+/** Where a site may come alive (m from the player): far enough not to see them arrive, near enough to meet them. */
+export const SITE_BAND = { min: 40, max: 170, unseen: 80 };
+
+export interface SiteCheck {
+  night: boolean;
+  dist: number;
+  /** Cosine between the way the player is going (moving, else looking) and the way to the site. */
+  ahead: number;
+  /** Cosine between the camera's view and the way to the site. */
+  facing: number;
+  usedTonight: boolean;
+  /** Recently walked past without meeting them. */
+  cooling?: boolean;
+  busy: boolean;
 }
+
+/**
+ * Should a site come alive now? Pure, for tests: night, nothing else going on, not used tonight,
+ * 40–170 m AHEAD of the player (within 60° of the way they are going, so they walk into it), and
+ * out of sight: 80 m or more off in the dark, or off to the side of the view.
+ */
+export function siteReady(o: SiteCheck): boolean {
+  if (!o.night || o.usedTonight || o.cooling || o.busy) return false;
+  if (o.dist < SITE_BAND.min || o.dist > SITE_BAND.max) return false;
+  if (o.ahead < 0.5) return false;
+  return o.dist >= SITE_BAND.unseen || o.facing < Math.cos(35 * (Math.PI / 180));
+}
+
+/** Demand within this distance; give up when the player stays farther than `giveUp` for `giveUpS`. */
+export const MUGGING = { stepOut: 14, demand: 5, close: 3, giveUp: 15, giveUpS: 3, passed: 15 };
 
 type Phase = 'lurk' | 'approach' | 'demand' | 'leave' | 'fight' | 'over';
 
@@ -93,6 +118,10 @@ interface Encounter {
   phase: Phase;
   since: number;
   price: number;
+  /** Closest the player has come while they lurk (walked past = a lot farther again). */
+  minD: number;
+  /** Since when the player has been out of their reach during the approach. */
+  farSince: number | null;
 }
 
 const tmp = new THREE.Vector3();
@@ -100,11 +129,19 @@ const tmp = new THREE.Vector3();
 export class StreetDanger {
   enabled = true;
   /** Seconds of play before the first encounter can come. */
-  graceSeconds = 90;
+  graceSeconds = 20;
+  /** Seconds of quiet after any fight before muggers can come. */
+  breatherSeconds = 20;
   private enc: Encounter | null = null;
   private used = new Map<string, number>();
+  /** Sites walked past without meeting the pair: not again until this time (game.elapsed). */
+  private cooling = new Map<string, number>();
   private nextCheck = 0;
   private playingSince: number | null = null;
+  private lastBusyAt = -Infinity;
+  /** The player's way over the last check (a 1 s position delta), for "ahead". */
+  private lastPos = { x: NaN, z: NaN, at: 0 };
+  private travel = { x: 0, z: 0, speed: 0 };
 
   constructor(
     private readonly game: Game,
@@ -147,7 +184,7 @@ export class StreetDanger {
     return this.combat.core.list.some((c) => !c.isPlayer && c.active && !!c.target);
   }
 
-  /** Once a second: start, advance or end the encounter. */
+  /** Every frame: advance the encounter; once a second, maybe start one. */
   update() {
     const g = this.game;
     const p = g.player;
@@ -162,25 +199,52 @@ export class StreetDanger {
     if (!this.enabled || !this.combat.settings().streetDanger) return;
     if (g.elapsed < this.nextCheck) return;
     this.nextCheck = g.elapsed + 1;
+    this.trackTravel(p.position.x, p.position.z, g.elapsed);
+    const busy = this.busy();
+    if (busy) this.lastBusyAt = g.elapsed;
     if (this.playingSince === null || g.elapsed - this.playingSince < this.graceSeconds) return;
+    if (g.elapsed - this.lastBusyAt < this.breatherSeconds) return;
     const night = this.night();
     if (!night) return;
-    const busy = this.busy();
     const key = this.nightKey();
     g.camera.getWorldDirection(tmp);
+    const cl = Math.hypot(tmp.x, tmp.z) || 1;
+    const cam = { x: tmp.x / cl, z: tmp.z / cl };
+    // The way the player is going: moving, else looking.
+    const way = this.travel.speed > 0.8 ? this.travel : cam;
     for (const site of DANGER_SITES) {
       const pt = this.sitePoint(site);
       if (!pt) continue;
       const dx = pt.x - p.position.x;
       const dz = pt.z - p.position.z;
-      const dist = Math.hypot(dx, dz);
-      const facing = dist > 0 ? (tmp.x * dx + tmp.z * dz) / (dist * Math.hypot(tmp.x, tmp.z) || 1) : 1;
-      if (!siteReady({ night, dist, facing, usedTonight: this.used.get(site.id) === key, busy })) continue;
+      const dist = Math.hypot(dx, dz) || 1e-3;
+      const facing = (cam.x * dx + cam.z * dz) / dist;
+      const ahead = (way.x * dx + way.z * dz) / dist;
+      const cooling = (this.cooling.get(site.id) ?? -Infinity) > g.elapsed;
+      if (!siteReady({ night, dist, ahead, facing, usedTonight: this.used.get(site.id) === key, cooling, busy })) continue;
       if (this.watchNear(pt)) continue;
-      this.used.set(site.id, key);
-      this.spawn(site);
-      return;
+      if (this.spawn(site)) return;
+      // No room beside the street there (buildings): try again in a while.
+      this.cooling.set(site.id, g.elapsed + 30);
     }
+  }
+
+  private trackTravel(x: number, z: number, now: number) {
+    const l = this.lastPos;
+    const dt = now - l.at;
+    if (Number.isFinite(l.x) && dt > 0.2) {
+      const dx = x - l.x;
+      const dz = z - l.z;
+      const d = Math.hypot(dx, dz);
+      this.travel.speed = d / dt;
+      if (d > 1e-3) {
+        this.travel.x = dx / d;
+        this.travel.z = dz / d;
+      }
+    }
+    l.x = x;
+    l.z = z;
+    l.at = now;
   }
 
   private sitePoint(site: DangerSite): { x: number; z: number; dx: number; dz: number } | null {
@@ -246,7 +310,8 @@ export class StreetDanger {
       c.driven = false;
       this.idle(c, i ? 'lean' : 'stand');
     }
-    this.enc = { site, at: spots[0], pair, phase: 'lurk', since: this.game.elapsed, price: 0 };
+    const p = this.game.player?.position;
+    this.enc = { site, at: spots[0], pair, phase: 'lurk', since: this.game.elapsed, price: 0, minD: p ? dist2D(spots[0], p) : Infinity, farSince: null };
     return true;
   }
 
@@ -271,8 +336,10 @@ export class StreetDanger {
       const dz = p.position.z - c.position.z;
       const d = Math.hypot(dx, dz) || 1;
       if (e.phase === 'approach' && d > 2.4) {
-        wx = (dx / d) * 2.2;
-        wz = (dz / d) * 2.2;
+        // A brisk walk, hurrying when the mark is getting away.
+        const v = d > 6 ? 3.4 : 2.2;
+        wx = (dx / d) * v;
+        wz = (dz / d) * v;
       } else if (e.phase === 'leave') {
         wx = (-dx / d) * 2.4;
         wz = (-dz / d) * 2.4;
@@ -297,21 +364,40 @@ export class StreetDanger {
       return;
     }
     const d = dist2D(lead.position, p.position);
+    const M = MUGGING;
     switch (e.phase) {
       case 'lurk':
         // They step out when you come near and they can see you; at dawn they slip away.
         if (!this.night() && d > 40) return this.finish(e, true);
-        if (d < 14 && this.combat.core.sight(lead, pc)) {
+        // Struck first while they wait: it's a fight.
+        if (e.pair.some((c) => c.lastHitBy === pc.id)) return this.fight(e);
+        if (d < M.stepOut && this.combat.core.sight(lead, pc)) {
           e.phase = 'approach';
           e.since = g.elapsed;
+          e.farSince = null;
+          // The street is spent for tonight once they have stepped out.
+          this.used.set(e.site.id, this.nightKey());
           g.events.emit('ui:subtitle', { speaker: 'Grassator', text: 'You there. A word, friend.', duration: 2.5 });
+          return;
         }
-        // Struck first while they wait: it's a fight.
-        if (e.pair.some((c) => c.lastHitBy === pc.id)) this.fight(e);
+        // Walked past (or turned back): they slip away, and the next street ahead may have its pair.
+        e.minD = Math.min(e.minD, d);
+        if (d > e.minD + M.passed && d > 30) {
+          this.cooling.set(e.site.id, g.elapsed + 120);
+          return this.finish(e, true);
+        }
         return;
       case 'approach':
         if (e.pair.some((c) => c.lastHitBy === pc.id) || pc.drawn) return this.fight(e, pc.drawn ? 'Steel, is it? Then blood.' : undefined);
-        if (d <= 3 || g.elapsed - e.since > 8) this.demand(e);
+        // The demand only face to face; a mark who keeps out of reach isn't worth the chase.
+        if (d <= M.close || (d <= M.demand && g.elapsed - e.since > 8)) return this.demand(e);
+        if (d > M.giveUp) {
+          e.farSince ??= g.elapsed;
+          if (g.elapsed - e.farSince > M.giveUpS) {
+            g.events.emit('ui:subtitle', { speaker: 'Grassator', text: 'Run, then. The night is long.', duration: 2.5 });
+            return this.finish(e, true);
+          }
+        } else e.farSince = null;
         return;
       case 'demand':
         // Walked off, or drew a blade, without an answer: they take that as a no.
@@ -381,6 +467,8 @@ export class StreetDanger {
 
   /** End the encounter; `vanish` removes the pair (they slipped away), else the bodies stay. */
   private finish(e: Encounter, vanish = false) {
+    // A quiet spell before the next street's pair (as after any fight).
+    if (e.phase !== 'lurk') this.lastBusyAt = this.game.elapsed;
     for (const c of e.pair) {
       if (vanish && c.status === 'active') this.combat.despawn(c);
       else if (c.status === 'active' && !c.target) c.driven = true; // the combat system's housekeeping takes them later

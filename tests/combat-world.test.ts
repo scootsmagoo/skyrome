@@ -54,6 +54,15 @@ describe('spawn requests in content words (src/content/director.ts)', () => {
     expect(u.profile.archetype).toBe('grassator');
   });
 
+  it("content's own stat block (opts.profile) replaces the archetype's numbers; practice arms and yieldAt still apply", () => {
+    const profile = { ...archetypeProfile('grassator', items, { kit: 1 }), name: 'Grassator with a cudgel', skill: 15, blockSkill: 0.15, yieldAt: 0.25, fleeAt: 0.15, health: 52 };
+    const r = resolveSpawn({ archetype: 'grassator', quest: 'mq-01-madida-capena', profile }, items, 1);
+    expect([r.profile.health, r.profile.blockSkill, r.profile.fleeAt, r.profile.weapon]).toEqual([52, 0.15, 0.15, 'fustis']);
+    expect(r.opener).toBe('delayed-power');
+    const named = resolveSpawn({ archetype: 'thraex', practice: true, profile: { ...archetypeProfile('thraex', items), weapon: 'sica', health: 70 }, yieldAt: 0.3 }, items);
+    expect([named.profile.health, named.profile.weapon, named.profile.yieldAt]).toEqual([70, 'rudis', 0.3]);
+  });
+
   it("mq-01's two grassatores get the tutorial openers: A (knife) chains, B (cudgel) waits and powers", () => {
     const a = resolveSpawn({ archetype: 'grassator', quest: 'mq-01-madida-capena' }, items, 0);
     const b = resolveSpawn({ archetype: 'grassator', quest: 'mq-01-madida-capena' }, items, 1);
@@ -174,8 +183,8 @@ describe('lootable bodies (§6.14)', () => {
 });
 
 describe('night muggers (§13.3)', () => {
-  it('night is the band from 19:30 to 05:30', () => {
-    expect([isNight(4.5), isNight(5.6), isNight(12), isNight(19.6), isNight(23)]).toEqual([true, false, false, true, true]);
+  it('night is the band from 19:30 to first light (06:10, §17.2)', () => {
+    expect([isNight(4.5), isNight(5.6), isNight(6.1), isNight(6.2), isNight(12), isNight(19.6), isNight(23)]).toEqual([true, true, true, false, false, true, true]);
   });
 
   it('every site lies on its street, in game metres', () => {
@@ -196,15 +205,19 @@ describe('night muggers (§13.3)', () => {
     expect([muggerPrice(0), muggerPrice(2), muggerPrice(8), muggerPrice(60)]).toEqual([0, 2, 3, 15]);
   });
 
-  it('a site comes alive only at night, out of sight, at a distance, once a night, when nothing else is going on', () => {
-    const base = { night: true, dist: 100, facing: 0, usedTonight: false, busy: false };
-    expect(siteReady(base)).toBe(true);
+  it('a site comes alive only at night, ahead of you, out of sight, at a distance, once a night, when nothing else is going on', () => {
+    const base = { night: true, dist: 100, ahead: 0.9, facing: 0.9, usedTonight: false, busy: false };
+    expect(siteReady(base)).toBe(true); // far off in the dark, on your way
     expect(siteReady({ ...base, night: false })).toBe(false);
     expect(siteReady({ ...base, usedTonight: true })).toBe(false);
+    expect(siteReady({ ...base, cooling: true })).toBe(false);
     expect(siteReady({ ...base, busy: true })).toBe(false);
     expect(siteReady({ ...base, dist: 30 })).toBe(false);
-    expect(siteReady({ ...base, dist: 70, facing: 0.95 })).toBe(false); // right in front of you
-    expect(siteReady({ ...base, dist: 100, facing: 0.95 })).toBe(true); // far off in the dark
+    expect(siteReady({ ...base, dist: 200 })).toBe(false);
+    expect(siteReady({ ...base, dist: 60, facing: 0.95 })).toBe(false); // right in front of you
+    expect(siteReady({ ...base, dist: 60, ahead: 0.7, facing: 0.5 })).toBe(true); // ahead, off to the side of the view
+    expect(siteReady({ ...base, ahead: -0.6, facing: -0.6 })).toBe(false); // behind you: you would never meet them
+    expect(siteReady({ ...base, ahead: 0.2 })).toBe(false); // off your way
   });
 });
 

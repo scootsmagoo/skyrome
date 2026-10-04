@@ -12,7 +12,7 @@
  *   vigil              night watchman: fustis or dolabra (law, prefers knockouts)
  *   boss-nereus        Nereus the retiarius: practice trident, net, phases 75/45, yields at 15 %
  */
-import type { ShieldModel, WeaponModel } from '../actors/appearance';
+import type { Appearance, ShieldModel, WeaponModel } from '../actors/appearance';
 import { isAvatarRole, type AvatarRole } from '../actors/avatar/variants';
 import type { BrainProfile } from '../ai/combat/types';
 import { archetypeDef, archetypeProfile, combatProfileFor } from '../rpg/enemies';
@@ -46,6 +46,11 @@ export interface EnemySpec {
   boss?: { title: string; phases: number[] };
   /** Defaults for options. */
   defaults?: EnemyOptions;
+  /**
+   * Adjust the look (after randomAppearance, or a named NPC's own appearance when `named`): what
+   * makes the archetype read at a glance.
+   */
+  look?(app: Appearance, named: boolean): Appearance;
 }
 
 /** Replace steel with practice arms for a lusio (§6.10). */
@@ -134,8 +139,25 @@ export const ENEMIES: Record<string, EnemySpec> = {
     team: 'ludus',
     boss: { title: 'Retiarius, victor of 31', phases: [...NEREUS.phases] },
     defaults: { lusio: true },
+    look: retiariusLook,
   },
 };
+
+/**
+ * The retiarius reads at a glance: no helmet, the quilted linen manica on the left arm and the
+ * bronze galerus over the left shoulder (the avatar builds it for a trident with a manica), and a
+ * sun-browned skin the white linen stands out against (unless he is a named NPC with his own look).
+ */
+export function retiariusLook(app: Appearance, named: boolean): Appearance {
+  const armor = { ...(app.armor ?? {}), helmet: undefined, manica: 'left' as const };
+  const out: Appearance = { ...app, armor, weapon: 'trident' };
+  if (!named) {
+    out.skin = '#a0744d';
+    out.hair = { ...app.hair, style: 'cropped', color: '#2a1f17' };
+    out.beard = 'stubble';
+  }
+  return out;
+}
 
 /** §13.2 stat block for Nereus (boss tier defaults otherwise: dmgMult 1.4). */
 export function nereusProfile(): CombatProfile {

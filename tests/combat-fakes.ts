@@ -146,3 +146,88 @@ export function run(core: CombatCore, seconds: number, each?: () => void) {
 export function deaths(env: RecordingEnv) {
   return (env.of('actor:killed') as { victimId: string; tags?: string[] }[]).filter((e) => e.tags?.includes('dead'));
 }
+
+// ---------------------------------------------------------------- walls (pathing tests)
+
+/** An axis-aligned block on the ground (x0..x1, z0..z1). */
+export interface Box {
+  x0: number;
+  x1: number;
+  z0: number;
+  z1: number;
+}
+
+/** Does the segment a→b come within `r` of the box (slab test on the box grown by r)? */
+export function segmentHitsBox(ax: number, az: number, bx: number, bz: number, b: Box, r: number): boolean {
+  const x0 = b.x0 - r;
+  const x1 = b.x1 + r;
+  const z0 = b.z0 - r;
+  const z1 = b.z1 + r;
+  let t0 = 0;
+  let t1 = 1;
+  const dx = bx - ax;
+  const dz = bz - az;
+  for (const [p, d, lo, hi] of [
+    [ax, dx, x0, x1],
+    [az, dz, z0, z1],
+  ]) {
+    if (Math.abs(d) < 1e-9) {
+      if (p < lo || p > hi) return false;
+      continue;
+    }
+    let ta = (lo - p) / d;
+    let tb = (hi - p) / d;
+    if (ta > tb) [ta, tb] = [tb, ta];
+    t0 = Math.max(t0, ta);
+    t1 = Math.min(t1, tb);
+    if (t0 > t1) return false;
+  }
+  return true;
+}
+
+/** A nav probe over boxes (what the game does with rays against the world). */
+export function boxProbe(boxes: Box[]) {
+  return {
+    blocked: (ax: number, az: number, bx: number, bz: number, _y: number, r: number) => boxes.some((b) => segmentHitsBox(ax, az, bx, bz, b, r * 0.9)),
+  };
+}
+
+/** A point body that can't walk into the boxes: it slides along them like the character controller. */
+export class WalledBody extends FakeBody {
+  constructor(
+    id: string,
+    x: number,
+    z: number,
+    heading: number,
+    readonly boxes: Box[],
+  ) {
+    super(id, x, z, heading);
+  }
+  private inside(x: number, z: number) {
+    const r = this.radius;
+    return this.boxes.some((b) => x > b.x0 - r && x < b.x1 + r && z > b.z0 - r && z < b.z1 + r);
+  }
+  override move(w: { x: number; z: number }, dt: number) {
+    const p = this.position;
+    let nx = p.x + w.x * dt;
+    let nz = p.z + w.z * dt;
+    if (this.inside(nx, nz)) {
+      if (!this.inside(nx, p.z)) nz = p.z;
+      else if (!this.inside(p.x, nz)) nx = p.x;
+      else {
+        nx = p.x;
+        nz = p.z;
+      }
+    }
+    this.vel = { x: (nx - p.x) / dt, z: (nz - p.z) / dt };
+    p.x = nx;
+    p.z = nz;
+  }
+}
+
+/** Put a combatant's body behind walls (replaces its point body). */
+export function wall(c: Combatant, boxes: Box[]) {
+  const b = new WalledBody(c.id, c.position.x, c.position.z, c.heading, boxes);
+  (c as unknown as { body: CombatBody }).body = b;
+  return b;
+}

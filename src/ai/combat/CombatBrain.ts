@@ -85,6 +85,8 @@ export class CombatBrain {
   private tokenCooldownUntil = 0;
   private lastSeen = -Infinity;
   private lastKnown = { x: 0, z: 0 };
+  private goalPt = { x: 0, z: 0 };
+  private foeId = '';
   private searchUntil = 0;
   private shoutedStart = false;
   private shoutedHalf = false;
@@ -100,6 +102,12 @@ export class CombatBrain {
     this.attackInterval = profile.attackIntervalS ?? lerp(2.5, 0.9, profile.aggression);
     this.circleRadius = CIRCLE.min + 0.2 + rng() * (CIRCLE.max - CIRCLE.min - 0.6);
     this.circleDir = rng() < 0.5 ? -1 : 1;
+  }
+
+  /** Turn the other way round the target (the system, when circling runs into a wall). */
+  flipCircle(now: number) {
+    this.circleDir = -this.circleDir;
+    this.circleSwitchAt = now + 2 + 2 * this.rng();
   }
 
   /** Force a state (scripts, the system: 'down' while knocked out, 'idle' when spared). */
@@ -174,6 +182,15 @@ export class CombatBrain {
       if (this.state !== 'search') this.state = 'idle';
       else if (now > this.searchUntil) this.state = 'idle';
       return;
+    }
+    // A new foe it was told to fight (engaged, called for help) is placed where it is at that
+    // moment, seen or not: that is where the search starts.
+    if (t.id !== this.foeId) {
+      this.foeId = t.id;
+      this.gaveUp = false;
+      this.lastKnown.x = t.x;
+      this.lastKnown.z = t.z;
+      if (!t.visible) this.lastSeen = Math.max(this.lastSeen, now - 2.01);
     }
     if (t.visible) {
       this.lastSeen = now;
@@ -381,6 +398,7 @@ export class CombatBrain {
     const P = this.profile;
     const m = I.move;
     m.x = m.z = 0;
+    I.goal = null;
     const s = p.self;
     const t = p.target;
     const speed = P.speedMult;
@@ -398,6 +416,7 @@ export class CombatBrain {
           m.x = (dx / d) * AI_SPEEDS.walk * speed;
           m.z = (dz / d) * AI_SPEEDS.walk * speed;
           I.face = headingFromDir(dx, dz);
+          I.goal = this.lastKnown;
         }
         return;
       }
@@ -419,6 +438,8 @@ export class CombatBrain {
     const ux = dx / d;
     const uz = dz / d;
     I.face = headingFromDir(dx, dz);
+    this.goalPt.x = t.x;
+    this.goalPt.z = t.z;
     switch (this.state) {
       case 'approach': {
         const stop = s.reach + 0.3;
@@ -426,6 +447,7 @@ export class CombatBrain {
           const v = (d > stop + 3 ? AI_SPEEDS.run : AI_SPEEDS.walk * 1.3) * speed;
           m.x = ux * v;
           m.z = uz * v;
+          I.goal = this.goalPt;
         }
         break;
       }
@@ -436,6 +458,7 @@ export class CombatBrain {
           const v = (d > want + 2.5 ? AI_SPEEDS.run : AI_SPEEDS.walk * 1.4) * speed;
           m.x = ux * v;
           m.z = uz * v;
+          I.goal = this.goalPt;
         } else if (d < Math.max(0.95, want - 0.7)) {
           m.x = -ux * AI_SPEEDS.walk * 0.8;
           m.z = -uz * AI_SPEEDS.walk * 0.8;

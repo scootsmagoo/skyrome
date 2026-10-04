@@ -19,6 +19,7 @@ import { createHumanoid, HumanoidAvatar } from '../actors/avatar/HumanoidAvatar'
 import { randomAppearance } from '../actors/avatar/variants';
 import { CombatBrain } from '../ai/combat/CombatBrain';
 import { NereusScript } from '../ai/combat/nereus';
+import type { NavPoint, NavProbe } from '../ai/combat/pathing';
 import { brainProfileFrom, type BrainProfile } from '../ai/combat/types';
 import type { Surface } from '../audio/FootstepDriver';
 import type { GameEvents } from '../core/Events';
@@ -137,6 +138,11 @@ export interface SpawnOptions extends EnemyOptions {
   opener?: Opener;
   /** Start an arena bout (crowd favor, missio) against this foe (default: practice gladiators). */
   bout?: boolean;
+  /**
+   * The stat block content wants (src/content/profiles.ts: the mq-01 pair, named gladiators): it
+   * replaces the archetype's numbers; practice arms and `yieldAt` still apply on top.
+   */
+  profile?: CombatProfile;
 }
 
 /** Options for engage(actor) without a second combatant (quest content): fight the player. */
@@ -196,8 +202,20 @@ export class CombatSystem implements System, PlayerCombatHost {
   readonly bodies: Bodies;
   /** Muggers in the streets at night (§13.3). */
   readonly danger: StreetDanger;
-  /** Game flow: the combat module does not take over the death prompt. */
-  readonly handlesDeath = false;
+  /** Is there any save to go back to (cached: the save list is async)? */
+  private hasSave = false;
+  /** When the Aesculapian rescue happens (game.elapsed), or −1. */
+  private rescueAt = -1;
+
+  /**
+   * Game flow asks: does combat take over the player's death? On Tiro, yes: the Aesculapian
+   * rescue (§6.12). And on any difficulty while there is no save to load, rather than ending a new
+   * game at the title [design]. Only in the real game (the flow), never in dev scenes.
+   */
+  get handlesDeath(): boolean {
+    const flow = (this.game as unknown as { flow?: unknown }).flow;
+    return !!flow && (this.core.difficulty === 'tiro' || !this.hasSave);
+  }
   /** The player is out cold (the screen goes dark) until this time (game.elapsed). */
   private blackoutUntil = -1;
 
@@ -222,6 +240,11 @@ export class CombatSystem implements System, PlayerCombatHost {
     this.ropeMat = new THREE.LineBasicMaterial({ color: 0x4a3a24 });
     if (game.player) this.registerPlayer();
     this.wireEvents();
+    const save = (game as unknown as { save?: { latest?: () => Promise<unknown> } }).save;
+    void save
+      ?.latest?.()
+      .then((m) => (this.hasSave ||= !!m))
+      .catch(() => {});
   }
 
   settings(): CombatSettings {
@@ -251,12 +274,62 @@ export class CombatSystem implements System, PlayerCombatHost {
       rng: () => this.rng.next(),
       parryWindowOverride: () => this.cached.parryWindow,
       projectileVisual: (p, on) => this.projectileVisual(p, on),
-      adoptNear: (c, r) => this.adoptNear(c, r),
+      adoptNear: (c, r, o) => this.adoptNear(c, r, o.power),
+      nav: this.navProbe(),
     };
   }
 
-  /** People (humanoid actors) in front of `c` within `r` m who aren't combatants yet: adopt them. */
-  private adoptNear(c: Combatant, r: number): number {
+  /**
+   * The world for the NPCs' steering: rays against the world at knee and chest height (and at the
+   * shoulders) for "is the way blocked", and the NPC crew's paths (`game.population.nav`, read
+   * structurally: built in parallel) when they exist.
+   */
+  private navProbe(): NavProbe {
+    const g = this.game;
+    const o = new THREE.Vector3();
+    const d = new THREE.Vector3();
+    const ray = (x: number, y: number, z: number, len: number) => {
+      o.set(x, y, z);
+      return !!g.physics.raycast(o, d, len, Layer.World);
+    };
+    return {
+      blocked: (ax, az, bx, bz, y, r) => {
+        let dx = bx - ax;
+        let dz = bz - az;
+        const L = Math.hypot(dx, dz);
+        if (L < 0.05) return false;
+        dx /= L;
+        dz /= L;
+        // Follow the lie of the land so a slope isn't a wall.
+        const hm = (g as { heightmap?: { heightAt(x: number, z: number): number } }).heightmap;
+        const rise = hm ? hm.heightAt(bx, bz) - hm.heightAt(ax, az) : 0;
+        const k = Math.hypot(L, rise);
+        d.set((dx * L) / k, rise / k, (dz * L) / k);
+        if (ray(ax, y + 0.55, az, k) || ray(ax, y + 1.25, az, k)) return true;
+        const sx = -dz * r * 0.9;
+        const sz = dx * r * 0.9;
+        return ray(ax + sx, y + 0.9, az + sz, k) || ray(ax - sx, y + 0.9, az - sz, k);
+      },
+      findPath: (ax, az, bx, bz) => {
+        const nav = (g as unknown as { population?: { nav?: { findPath?(ax: number, az: number, bx: number, bz: number): NavPoint[] | null | 'busy' } } }).population?.nav;
+        if (!nav?.findPath) return null;
+        try {
+          const p = nav.findPath(ax, az, bx, bz);
+          // A lone point at the goal is the service's "unknown ground, go straight": no help here.
+          if (p && p !== 'busy' && p.length === 1 && Math.hypot(p[0].x - bx, p[0].z - bz) < 0.5) return null;
+          return p;
+        } catch {
+          return null;
+        }
+      },
+    };
+  }
+
+  /**
+   * People (humanoid actors) in front of `c` within `r` m who aren't combatants yet: adopt them so
+   * a deliberate blow can land. Essential and named people only for a power attack.
+   */
+  private adoptNear(c: Combatant, r: number, power: boolean): number {
     const game = this.game;
     if (!game.actors) return 0;
     let n = 0;
@@ -265,6 +338,7 @@ export class CombatSystem implements System, PlayerCombatHost {
       if (a === (game.player as unknown) || this.core.get(a.id)) continue;
       if (!(a.avatar instanceof HumanoidAvatar) || (a as Actor & { dead?: boolean }).dead) continue;
       if (Math.abs(angleTo(c.heading, a.position.x - c.position.x, a.position.z - c.position.z)) > 80 * DEG) continue;
+      if (!power && this.protectedActor(a)) continue;
       const adopted = this.adoptActor(a);
       if (adopted) {
         this.adopted.set(adopted.id, this.core.now);
@@ -272,6 +346,13 @@ export class CombatSystem implements System, PlayerCombatHost {
       }
     }
     return n;
+  }
+
+  /** An essential or named NPC (a definition in game.npcs): struck only with a held power attack. */
+  private protectedActor(a: Actor): boolean {
+    const ext = a as Actor & { def?: NpcLike; essential?: boolean };
+    const def = (this.game.npcs?.get(a.id) as NpcLike | undefined) ?? ext.def;
+    return !!(ext.essential || def?.essential || this.game.npcs?.get(a.id));
   }
 
   /** Actors adopted from other modules, and when (combat clock): idle ones are let go again. */
@@ -486,7 +567,8 @@ export class CombatSystem implements System, PlayerCombatHost {
     const old = this.core.get(id);
     if (old && !old.isPlayer && this.spawned.has(id)) this.despawn(old);
     else if (game.actors.get(id) || old) id = `${id}~foe`;
-    const app = r.appearance ?? randomAppearance(new Rng(opts.seed ?? id), r.spec.role);
+    const base = r.appearance ?? randomAppearance(new Rng(opts.seed ?? id), r.spec.role);
+    const app = r.spec.look ? r.spec.look(base, !!r.appearance) : base;
     const vis = visualsFor(this.items, r.profile);
     const avatar = createHumanoid(app, { lod: opts.lod ?? 'auto', weapon: vis.weapon, shield: vis.shield });
     const actor = new Actor(game, { id, position, heading: opts.heading ?? 0, layer: Layer.Npc, avatar });
@@ -519,6 +601,9 @@ export class CombatSystem implements System, PlayerCombatHost {
       opener: r.opener ?? undefined,
     });
     if (r.hostile) this.core.setHostile(team, 'player');
+    // A quest's ambushers (and anyone told to engage) know where you are: they notice you within
+    // their aggro radius without a line of sight, and walk round what stands between.
+    if (r.hostile && (opts.quest || opts.engage)) this.core.hearing.set(c.id, opts.aggro ?? 18);
     if (c.brawl && this.playerC) this.playerC.brawl = true;
     const engage = opts.engage;
     if (engage === true && this.playerC) this.core.engage(c, this.playerC);
@@ -597,7 +682,7 @@ export class CombatSystem implements System, PlayerCombatHost {
     const def = (this.game.npcs?.get(actor.id) as NpcLike | undefined) ?? ext.def;
     const ad = adoptProfile(actor.id, this.items, { npc: def, hostile: ext.hostile ?? opts?.hostile, essential: ext.essential });
     const profile = opts?.profile ?? (opts?.practice ? { ...ad.profile, weapon: 'rudis' } : ad.profile);
-    return this.register(actor, {
+    const c = this.register(actor, {
       profile,
       team: ad.team,
       group: ad.group,
@@ -609,6 +694,8 @@ export class CombatSystem implements System, PlayerCombatHost {
       tags: opts?.tags,
       aggro: 0,
     });
+    c.named = !!this.game.npcs?.get(actor.id);
+    return c;
   }
 
   disengage(a: string | Actor | Combatant) {
@@ -759,7 +846,12 @@ export class CombatSystem implements System, PlayerCombatHost {
     ev.on('player:avatar', () => this.onPlayerAvatar());
     ev.on('combat:death', (e) => this.onDeath(e));
     // A load or a new game: the fights of the moment before are over, and you are on your feet.
-    ev.on('save:loaded', () => this.resetFights());
+    ev.on('save:loaded', () => {
+      this.hasSave = true;
+      this.rescueAt = -1;
+      this.resetFights();
+    });
+    ev.on('save:saved', () => (this.hasSave = true));
     ev.on('game:started', () => this.resetFights());
     ev.on('combat:parry', (e) => {
       if (e.defenderId === this.playerC?.id) this.input.onParried();
@@ -772,7 +864,7 @@ export class CombatSystem implements System, PlayerCombatHost {
     });
     ev.on('combat:started', () => this.game.audio?.music?.setOverride('combat', 'combat', 10));
     ev.on('combat:ended', () => this.game.audio?.music?.setOverride('combat', null));
-    ev.on('actor:yielded', (e) => this.onYielded(e.actorId));
+    ev.on('actor:yielded', (e) => this.onYielded(e.actorId, e.byId));
     ev.on('combat:yieldChoice', (e) => this.onYieldChoice(e));
     ev.on('combat:bout', (e) => {
       if (e.phase !== 'end') return;
@@ -855,16 +947,19 @@ export class CombatSystem implements System, PlayerCombatHost {
       }
       if (this.spawned.has(f.id) && f.team === 'hostile') this.leaveAt.push({ c: f, at: g.elapsed + TIMING.playerKnockout * 0.6 });
     }
-    if (robbed > 0) setTimeout(() => g.events.emit('ui:notify', { text: `You come to in the street. Your purse is ${robbed} denarii lighter.`, kind: 'warning' }), TIMING.playerKnockout * 1000);
+    if (robbed > 0) this.notices.push({ at: g.elapsed + TIMING.playerKnockout, text: `You come to in the street. Your purse is ${robbed} denarii lighter.` });
   }
 
   private leaveAt: { c: Combatant; at: number }[] = [];
+  /** Notifications due on the game clock (cleared by a load or a new game). */
+  private notices: { at: number; text: string }[] = [];
 
   /** End every fight with the player, drop the street encounter and the bout, stand the player up. */
   resetFights() {
     const pc = this.playerC;
     this.danger.clear();
     this.leaveAt.length = 0;
+    this.notices.length = 0;
     this.blackoutUntil = -1;
     this.pendingChoice = null;
     if (this.core.bout && !this.core.bout.over) this.core.bout = null;
@@ -883,11 +978,12 @@ export class CombatSystem implements System, PlayerCombatHost {
     return this.core.list.some((c) => c.active && !c.isPlayer && !!c.brain && (c.brain.state === 'search' || (c.target === pc && dist2D(c.position, pc.position) < 60)));
   }
 
-  private onYielded(id: string) {
+  private onYielded(id: string, byId?: string) {
     const c = this.core.get(id);
     const pc = this.playerC;
     if (!c || !pc || c.isPlayer) return;
-    if (c.lastHitBy !== pc.id && !this.core.bout?.foes.has(c.id)) return;
+    // The event says who made him kneel (the blow's attacker; lastHitBy is set before the blow too).
+    if ((byId ?? c.lastHitBy) !== pc.id && !this.core.bout?.foes.has(c.id)) return;
     if (pc.lockTarget === c) this.setLock(null);
     const inter = this.game.interactions;
     if (inter) {
@@ -1088,6 +1184,7 @@ export class CombatSystem implements System, PlayerCombatHost {
     const ui = this.game.ui;
     if (!ui) return;
     const prevMarkers = ui.sources.compassMarkers;
+    const merged: CompassMarker[] = [];
     ui.provide({
       target: () => this.targetView(),
       boss: () => this.bossView(),
@@ -1097,11 +1194,22 @@ export class CombatSystem implements System, PlayerCombatHost {
         const own = this.compassMarkers();
         const prev = prevMarkers?.() ?? [];
         if (!prev.length) return own;
-        const ids = new Set(own.map((m) => m.id));
-        return [...prev.filter((m) => !ids.has(m.id)), ...own];
+        merged.length = 0;
+        for (const m of prev) if (!m.id.startsWith('enemy:') || !own.some((o) => o.id === m.id)) merged.push(m);
+        for (const m of own) merged.push(m);
+        return merged;
       },
     });
   }
+
+  // Reused views for the UI's per-frame sources (the HUD reads them at once and keeps nothing).
+  private tv: TargetView = { name: '', health: 1 };
+  private bv: BossView = { name: '', health: 1 };
+  private markers: CompassMarker[] = [];
+  private markerOf = new WeakMap<Combatant, CompassMarker>();
+  private hs: CombatHudState = { lock: null, favor: null, net: null, blind: false, hold: null, dark: false };
+  private hsLock = { x: 0, y: 0 };
+  private hsFavor: { value: number; chant: 'mitte' | 'iugula' | null } = { value: 0, chant: null };
 
   /** The enemy bar: the lock target, else the last one struck (for 4 s), else whoever is attacking. */
   targetView(): TargetView | null {
@@ -1110,7 +1218,11 @@ export class CombatSystem implements System, PlayerCombatHost {
     let c: Combatant | null = pc.lockTarget;
     if (!c && this.lastStruck && this.game.elapsed - this.lastStruck.at < 4 && this.lastStruck.c.status !== 'dead') c = this.lastStruck.c;
     if (!c || c.boss) return null;
-    return { name: c.name, health: c.healthFrac(), tier: c.tierLabel };
+    const v = this.tv;
+    v.name = c.name;
+    v.health = c.healthFrac();
+    v.tier = c.tierLabel;
+    return v;
   }
 
   /** The boss bar while a boss is fighting the player within 30 m. */
@@ -1121,7 +1233,12 @@ export class CombatSystem implements System, PlayerCombatHost {
       if (!c.boss || c.status === 'dead' || c.status === 'fled') continue;
       if (c.target !== pc && c.status === 'active' && !this.core.bout?.foes.has(c.id)) continue;
       if (dist2D(c.position, pc.position) > 30) continue;
-      return { name: c.name, title: c.boss.title, health: c.healthFrac(), phases: c.boss.phases };
+      const v = this.bv;
+      v.name = c.name;
+      v.title = c.boss.title;
+      v.health = c.healthFrac();
+      v.phases = c.boss.phases;
+      return v;
     }
     return null;
   }
@@ -1132,18 +1249,28 @@ export class CombatSystem implements System, PlayerCombatHost {
     return pc ? this.core.list.filter((c) => c.active && c.target === pc) : [];
   }
 
+  /** Compass ticks for everyone fighting the player (a reused list; read it at once). */
   compassMarkers(): CompassMarker[] {
+    const out = this.markers;
+    out.length = 0;
     const pc = this.playerC;
-    if (!pc) return [];
-    const out: CompassMarker[] = [];
-    for (const c of this.core.list) if (c.active && c.target === pc) out.push({ id: `enemy:${c.id}`, kind: 'enemy', x: c.position.x, z: c.position.z });
+    if (!pc) return out;
+    for (const c of this.core.list) {
+      if (!c.active || c.target !== pc) continue;
+      let m = this.markerOf.get(c);
+      if (!m) this.markerOf.set(c, (m = { id: `enemy:${c.id}`, kind: 'enemy', x: 0, z: 0 }));
+      m.x = c.position.x;
+      m.z = c.position.z;
+      out.push(m);
+    }
     return out;
   }
 
   private hudState(): CombatHudState {
     const pc = this.playerC;
     const now = this.core.now;
-    let lock: CombatHudState['lock'] = null;
+    const s = this.hs;
+    s.lock = null;
     const t = pc?.lockTarget;
     if (t) {
       const cam = this.game.camera;
@@ -1151,15 +1278,24 @@ export class CombatSystem implements System, PlayerCombatHost {
       if (tmp.z < 1) {
         const w = this.game.canvas.clientWidth || window.innerWidth;
         const h = this.game.canvas.clientHeight || window.innerHeight;
-        lock = { x: (tmp.x * 0.5 + 0.5) * w, y: (-tmp.y * 0.5 + 0.5) * h };
+        this.hsLock.x = (tmp.x * 0.5 + 0.5) * w;
+        this.hsLock.y = (-tmp.y * 0.5 + 0.5) * h;
+        s.lock = this.hsLock;
       }
     }
     const b = this.core.bout;
-    const favor = b && (!b.over || b.chant) ? { value: b.favor, chant: b.chant } : null;
-    let net: number | null = null;
-    if (pc && pc.entangled(now)) net = clamp((pc.entangledUntil - now) / TIMING.net.entangle, 0, 1);
-    const dark = !!pc && pc.status === 'ko' && this.game.elapsed < this.blackoutUntil;
-    return { lock, favor, net, blind: !!pc && now < pc.blindUntil, hold: this.input.hold, dark };
+    s.favor = null;
+    if (b && (!b.over || b.chant)) {
+      this.hsFavor.value = b.favor;
+      this.hsFavor.chant = b.chant;
+      s.favor = this.hsFavor;
+    }
+    s.net = pc && pc.entangled(now) ? clamp((pc.entangledUntil - now) / TIMING.net.entangle, 0, 1) : null;
+    // Out cold, or carried off to the Aesculapian rescue: the world goes dark for a moment.
+    s.dark = !!pc && pc.status !== 'yielded' && this.game.elapsed < this.blackoutUntil;
+    s.blind = !!pc && now < pc.blindUntil;
+    s.hold = this.input.hold;
+    return s;
   }
 
   /** Mount the HUD overlay and the UI sources (called once the UI exists, or at install). */
@@ -1190,6 +1326,7 @@ export class CombatSystem implements System, PlayerCombatHost {
     if (pc && t && pc.drawn && pc.active && !pc.stunned(this.core.now) && pc.action?.kind !== 'dodge') {
       p.heading = Math.atan2(t.position.x - p.position.x, t.position.z - p.position.z);
     }
+    if (pc) pc.sneaking = !!p.sneaking;
     // A fallen player stays where it fell (the controller would turn the body with the keys).
     if (pc && pc.status !== 'active' && pc.status !== 'yielded') {
       this.downHeading ??= p.heading;
@@ -1215,6 +1352,7 @@ export class CombatSystem implements System, PlayerCombatHost {
       if (pc.brawl && !this.core.playerInCombat && !this.core.list.some((c) => c !== pc && c.brawl && c.active && dist2D(c.position, pc.position) < 30)) pc.brawl = false;
       this.frameLock(dt);
     }
+    this.tickRescue();
     if (this.pendingChoice && g.elapsed >= this.pendingChoice.at) {
       const c = this.pendingChoice.c;
       this.pendingChoice = null;
@@ -1228,6 +1366,12 @@ export class CombatSystem implements System, PlayerCombatHost {
         this.despawnAt.splice(i, 1);
       }
     }
+    for (let i = this.notices.length - 1; i >= 0; i--) {
+      if (g.elapsed >= this.notices[i].at) {
+        g.events.emit('ui:notify', { text: this.notices[i].text, kind: 'warning' });
+        this.notices.splice(i, 1);
+      }
+    }
     // Thugs who robbed a knocked-out player are gone when the player comes to.
     for (let i = this.leaveAt.length - 1; i >= 0; i--) {
       if (g.elapsed >= this.leaveAt[i].at) {
@@ -1239,6 +1383,77 @@ export class CombatSystem implements System, PlayerCombatHost {
     this.housekeeping();
     this.danger.update();
     this.updateVisuals(dt);
+  }
+
+  /** Dead with combat handling the death: a moment of black, then the Aesculapian rescue. */
+  private tickRescue() {
+    const g = this.game;
+    const pc = this.playerC;
+    const flow = (g as unknown as { flow?: { state?: string } }).flow;
+    const dead = !!pc && (pc.vitals.dead || pc.status === 'dead');
+    if (!dead || !this.handlesDeath || flow?.state !== 'playing') {
+      this.rescueAt = -1;
+      return;
+    }
+    if (this.rescueAt < 0) {
+      this.rescueAt = g.elapsed + 3;
+      this.blackoutUntil = this.rescueAt + 0.5;
+    } else if (g.elapsed >= this.rescueAt) this.rescue();
+  }
+
+  /**
+   * The Aesculapian rescue (§6.12, §6.14): people found you and carried you to the Temple of
+   * Aesculapius on the Tiber Island. You wake on your feet there with full health and a fifth less
+   * coin (no miracle). The fights of the moment before are over.
+   */
+  rescue() {
+    const g = this.game;
+    const pc = this.playerC;
+    if (!pc) return;
+    this.rescueAt = -1;
+    this.resetFights();
+    this.core.revive(pc);
+    const inv = g.player?.inventory;
+    const purse = inv?.denarii ?? 0;
+    const fee = Math.round(purse * 0.2 * 4) / 4;
+    if (fee > 0) inv?.spendDenarii(fee);
+    const at = this.rescuePoint();
+    if (at) {
+      g.player.teleport(at.position, at.heading);
+      g.player.yaw = at.heading + Math.PI;
+      g.player.pitch = -0.1;
+      (g as unknown as { world?: { refreshAll?: () => void } }).world?.refreshAll?.();
+    }
+    // Whoever was fighting you is far away now (and stops looking).
+    for (const c of this.core.list) if (c !== pc && c.target === pc) this.core.disengage(c);
+    this.blackoutUntil = g.elapsed + 0.6;
+    this.hud?.message('AESCVLAPIVS', 'Passers-by carried you to the Tiber Island. The priests patched you up.', 5);
+    g.events.emit('ui:notify', { text: fee > 0 ? `You wake in the Temple of Aesculapius. The priests' care cost ${fee} denarii.` : 'You wake in the Temple of Aesculapius.', kind: 'warning' });
+    g.events.emit('combat:rescued', { fee, place: at ? 'temple-aesculapius' : null });
+  }
+
+  /** In front of the Temple of Aesculapius (Tiber Island), facing it; null without the landmark. */
+  private rescuePoint(): { position: THREE.Vector3; heading: number } | null {
+    const g = this.game;
+    const placed = g.landmarks?.get('temple-aesculapius');
+    if (!placed) return null;
+    const altar = placed.spots.find((s) => s.id.endsWith('temple-aesculapius:altar'));
+    const door = placed.spots.find((s) => s.id.endsWith('temple-aesculapius:door'));
+    const base = altar?.position ?? placed.position;
+    // A couple of metres out from the altar, away from the temple door.
+    let ox = Math.sin(placed.rotationY + Math.PI);
+    let oz = Math.cos(placed.rotationY + Math.PI);
+    if (altar && door) {
+      const dx = altar.position.x - door.position.x;
+      const dz = altar.position.z - door.position.z;
+      const d = Math.hypot(dx, dz) || 1;
+      ox = dx / d;
+      oz = dz / d;
+    }
+    const x = base.x + ox * 2.2;
+    const z = base.z + oz * 2.2;
+    const y = g.physics.groundHeight(x, z, base.y + 4, 12) ?? base.y;
+    return { position: new THREE.Vector3(x, y + 0.05, z), heading: Math.atan2(-ox, -oz) };
   }
 
   private nextHousekeeping = 0;
@@ -1269,6 +1484,7 @@ export class CombatSystem implements System, PlayerCombatHost {
     }
     const pp = g.player?.position;
     if (!pp) return;
+    this.releaseUndecided(pp);
     for (const c of [...this.core.list]) {
       if (!this.spawned.has(c.id) || c.isPlayer) continue;
       const d = dist2D(c.position, pp);
@@ -1277,6 +1493,30 @@ export class CombatSystem implements System, PlayerCombatHost {
       if ((over && d > 30) || (corpse && d > 160) || (c.status === 'active' && !c.target && d > 220)) {
         this.bodies.remove(c.id);
         this.despawn(c);
+      }
+    }
+  }
+
+  /**
+   * A yield nobody decides: once the player is 40 m away, or after 60 s (15 s when he didn't yield
+   * to the player), he gets up and goes about his business. An adopted NPC goes back to its own
+   * module. Arena foes wait for the missio.
+   */
+  private releaseUndecided(pp: { x: number; z: number }) {
+    const now = this.core.now;
+    const g = this.game;
+    for (const c of [...this.core.list]) {
+      if (c.status !== 'yielded' || c.isPlayer || this.core.bout?.foes.has(c.id)) continue;
+      if (this.pendingChoice?.c === c || (g.ui?.isOpen?.('dialogue') && dist2D(c.position, pp) < 6)) continue;
+      const mine = this.yieldOffs.has(c.id);
+      const age = now - c.yieldedAt;
+      if (dist2D(c.position, pp) <= 40 && age <= (mine ? 60 : 15)) continue;
+      this.yieldOffs.get(c.id)?.();
+      this.yieldOffs.delete(c.id);
+      this.core.releaseYielded(c);
+      if (this.adopted.has(c.id)) {
+        this.core.remove(c);
+        this.adopted.delete(c.id);
       }
     }
   }

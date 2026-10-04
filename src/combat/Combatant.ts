@@ -224,6 +224,12 @@ export class Combatant {
   /** Last time it was hit, and by whom. */
   lastHitAt = -Infinity;
   lastHitBy: string | null = null;
+  /** When it knelt (combat clock), for the auto-release of a yield nobody decides. */
+  yieldedAt = -Infinity;
+  /** A named NPC (a definition in game.npcs): struck only on purpose, like an essential one. */
+  named = false;
+  /** The player is sneaking (set by the system): a deliberate sneak attack even on a non-hostile. */
+  sneaking = false;
   /**
    * Tags echoed in 'actor:killed' (quest tags from the spawner, the archetype), followed there by
    * how the fight ended for it: 'dead', 'ko' or 'fled'.

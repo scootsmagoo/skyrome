@@ -80,12 +80,31 @@ describe('§6.2 damage through the core', () => {
     expect(1000 - p.vitals.health.current).toBeCloseTo(npcHit * 0.5, 3);
   });
 
-  it('an unaware target takes ×3 (sneak attack, §6.7)', () => {
+  it('an unaware enemy takes ×3 (sneak attack, §6.7)', () => {
     const core = makeCore();
     const p = addPlayer(core);
     const thug = addNpc(core, 'thug', { ...combatProfileFor('thug', { kit: 0 }), health: 500, yieldAt: 0 });
+    core.setHostile('hostile', 'player'); // an enemy who hasn't noticed you
     core.applyHit(p, thug, light(1));
     expect(500 - thug.vitals.health.current).toBeCloseTo(14.625 * 3, 3);
+  });
+
+  it('a bystander struck by the player gets no sneak bonus (unless the player sneaks) and gives no XP', () => {
+    const env = fakeEnv();
+    const core = makeCore(env);
+    const p = addPlayer(core);
+    const xp: number[] = [];
+    (p as unknown as { sheet: { useSkill: (s: string, n: number) => void } }).sheet = { useSkill: (_s, n) => void xp.push(n) };
+    const civ = addNpc(core, 'baker', { ...combatProfileFor('civilian', { kit: 0 }), health: 500, yieldAt: 0, fleeAt: 0 }, { team: 'npc:baker' });
+    core.applyHit(p, civ, light(1));
+    expect(500 - civ.vitals.health.current).toBeLessThan(14.625 * 1.5);
+    expect(xp).toEqual([]);
+    expect(env.of('combat:assault').length).toBe(1);
+    // Sneaking up on purpose is a sneak attack.
+    const civ2 = addNpc(core, 'cobbler', { ...combatProfileFor('civilian', { kit: 0 }), health: 500, yieldAt: 0, fleeAt: 0 }, { team: 'npc:cobbler' });
+    p.sneaking = true;
+    core.applyHit(p, civ2, light(1));
+    expect(500 - civ2.vitals.health.current).toBeGreaterThan(14.625 * 2);
   });
 });
 
@@ -137,6 +156,54 @@ describe('real swings: timeline, reach, hit frame', () => {
       run(core, 0.7);
     }
     expect(chains).toEqual([1, 2, 3, 1]);
+  });
+});
+
+describe('bystanders are struck only on purpose (§6.9, AC-22)', () => {
+  const civilian = () => ({ ...combatProfileFor('civilian', { kit: 0 }), health: 500, yieldAt: 0, fleeAt: 0 });
+
+  it("an ordinary blow whiffs past a passer-by; a held power attack lands (an assault)", () => {
+    const env = fakeEnv();
+    const core = makeCore(env);
+    const p = addPlayer(core);
+    const civ = addNpc(core, 'baker', civilian(), { z: 1.2, team: 'npc:baker' });
+    core.startAttack(p, 'light');
+    run(core, 0.8);
+    expect(civ.vitals.health.current).toBe(500);
+    expect(env.of('combat:assault')).toEqual([]);
+    core.beginCharge(p);
+    run(core, 0.5);
+    core.releaseCharge(p);
+    run(core, 0.8);
+    expect(civ.vitals.health.current).toBeLessThan(500);
+    expect(env.of('combat:assault').length).toBe(1);
+  });
+
+  it('a miss on an enemy never clips the bystander beside him', () => {
+    const core = makeCore();
+    const p = addPlayer(core);
+    const civ = addNpc(core, 'baker', civilian(), { x: 0.3, z: 1.2, team: 'npc:baker' });
+    const thug = addNpc(core, 'thug', { ...combatProfileFor('thug', { kit: 0 }), health: 500, yieldAt: 0 }, { x: 0, z: 4 });
+    core.engage(thug, p);
+    core.startAttack(p, 'light');
+    run(core, 0.8);
+    expect(civ.vitals.health.current).toBe(500);
+  });
+
+  it('a punch is deliberate (the first punch of a brawl); an essential or named NPC takes only a power attack', () => {
+    const core = makeCore();
+    const p = addPlayer(core, { weapon: 'fists' });
+    const civ = addNpc(core, 'drunk', civilian(), { z: 1.0, team: 'npc:drunk' });
+    core.startAttack(p, 'light');
+    run(core, 0.8);
+    expect(civ.vitals.health.current).toBeLessThan(500);
+    const core2 = makeCore();
+    const p2 = addPlayer(core2, { weapon: 'fists' });
+    const courier = addNpc(core2, 'npc-festus', civilian(), { z: 1.0, team: 'npc:festus' });
+    courier.named = true;
+    core2.startAttack(p2, 'light');
+    run(core2, 0.8);
+    expect(courier.vitals.health.current).toBe(500);
   });
 });
 
@@ -385,6 +452,28 @@ describe('knockouts, yields and flight (§6.9)', () => {
     expect(t.status).toBe('yielded');
     expect(t.healthFrac()).toBeCloseTo(0.25, 5);
     expect(env.of('actor:yielded')).toHaveLength(1);
+  });
+
+  it("a yield caused by the very first blow says who caused it (the decision prompt needs it)", () => {
+    const env = fakeEnv();
+    const core = makeCore(env);
+    const p = addPlayer(core);
+    const civ = addNpc(core, 'baker', { ...combatProfileFor('civilian', { kit: 0 }), yieldAt: 0.5, fleeAt: 0 }, { team: 'npc:baker' });
+    let lastHitByAtEvent: string | null = null;
+    const emit = env.emit;
+    env.emit = (type, payload) => {
+      if (type === 'actor:yielded') lastHitByAtEvent = civ.lastHitBy;
+      emit(type, payload);
+    };
+    core.applyHit(p, civ, { kind: 'power', start: 0, end: 1, resolved: true, charge: 0.8, direction: 'none' });
+    expect(civ.status).toBe('yielded');
+    expect(env.of('actor:yielded')).toEqual([{ actorId: 'baker', byId: 'player' }]);
+    expect(lastHitByAtEvent).toBe('player');
+    expect(civ.yieldedAt).toBe(core.now);
+    // Nobody decides: he gets up and leaves the fight, with no choice event.
+    core.releaseYielded(civ);
+    expect([civ.status, civ.driven, core.hostile(p, civ)]).toEqual(['active', false, false]);
+    expect(env.of('combat:yieldChoice')).toEqual([]);
   });
 
   it('a grassator runs instead of kneeling', () => {

@@ -14,8 +14,9 @@ import type { GameEvents } from '../core/Events';
 import { DEG, approachAngle, clamp, wrapAngle } from '../core/math';
 import type { ActionClip } from '../actors/Actor';
 import { CombatBrain } from '../ai/combat/CombatBrain';
+import { PathFollower, type NavProbe } from '../ai/combat/pathing';
 import { AttackTokens } from '../ai/combat/tokens';
-import type { BrainServices, Perception } from '../ai/combat/types';
+import type { BrainServices, Perception, TargetPerception } from '../ai/combat/types';
 import {
   applyPoiseDamage,
   armorSkillFor,
@@ -52,10 +53,13 @@ export interface CombatEnv {
   /** Show or remove a projectile's visual. */
   projectileVisual?(p: Projectile, on: boolean): void;
   /**
-   * People in front of a player's swing who aren't combatants yet (the crowd, a shopkeeper): make
-   * them combatants so the blow can land (an assault, §14.1). Returns how many were added.
+   * People in front of a player's deliberate blow (a power attack, a punch) who aren't combatants
+   * yet (the crowd, a shopkeeper): make them combatants so the blow can land (an assault, §14.1).
+   * Essential and named people only for a power attack. Returns how many were added.
    */
-  adoptNear?(c: Combatant, radius: number): number;
+  adoptNear?(c: Combatant, radius: number, o: { power: boolean }): number;
+  /** The world's walls for the NPCs' steering (rays, the NPC crew's paths); none = open ground. */
+  nav?: NavProbe;
 }
 
 export const nullEnv: CombatEnv = {
@@ -89,6 +93,10 @@ export interface Projectile {
 export const PRACTICE_DAGGER: WeaponStats = { class: 'blade', skill: 'blades', damage: 6, damageType: 'blunt', speed: 1.3, reach: 0.55, stagger: 6, practice: true };
 
 const ZERO = { x: 0, z: 0 };
+/** An NPC with an aggro radius notices a hostile this close without seeing it (it hears it). */
+export const HEAR = 5;
+/** An engaged NPC keeps track of its foe this close, round a corner or behind a cart. */
+const TRACK = 6;
 const tmpA = new THREE.Vector3();
 const tmpB = new THREE.Vector3();
 /** A viewed attack resolves at its clip's onHit, or this long after the timeline's hit time. */
@@ -112,9 +120,19 @@ export class CombatCore {
   private hostileTeams = new Set<string>();
   private wasInCombat = false;
   private projectileSeq = 0;
-  private los = new Map<string, { at: number; ok: boolean }>();
+  /** Line-of-sight cache per viewer → seen (pruned when a combatant leaves). */
+  private los = new Map<Combatant, Map<Combatant, { at: number; ok: boolean }>>();
   /** Auto-aggro radius per NPC (spawned hostiles attack on sight). */
   readonly aggro = new Map<string, number>();
+  /**
+   * Within this radius an NPC with an aggro radius notices a hostile without seeing it (it hears
+   * it, or it was told where the player is: a quest's ambush). Default `HEAR`.
+   */
+  readonly hearing = new Map<string, number>();
+  /** Route-finding around obstacles per driven NPC (src/ai/combat/pathing.ts). */
+  private followers = new Map<Combatant, PathFollower>();
+  /** Reused perception records (one per NPC; the brain copies what it keeps). */
+  private perceptions = new Map<Combatant, Perception>();
 
   constructor(public env: CombatEnv = nullEnv) {
     this.tokens = new AttackTokens((targetId) => (targetId === this.player?.id ? DIFFICULTY[this.difficulty].tokens : 2));
@@ -136,9 +154,14 @@ export class CombatCore {
     this.byId.delete(c.id);
     this.tokens.forget(c.id);
     this.aggro.delete(c.id);
+    this.hearing.delete(c.id);
+    this.followers.delete(c);
+    this.perceptions.delete(c);
+    this.los.delete(c);
     for (const o of this.list) {
       if (o.target === c) o.target = null;
       if (o.lockTarget === c) o.lockTarget = null;
+      this.los.get(o)?.delete(c);
     }
     if (this.player === c) this.player = null;
   }
@@ -540,15 +563,25 @@ export class CombatCore {
       y1: Math.max(handY, pivot.y) + 0.6,
     };
     const hits: { o: Combatant; ang: number; hostile: boolean }[] = [];
-    // The player can strike anyone: bystanders within reach become combatants first.
-    if (c.isPlayer && !sweep) this.env.adoptNear?.(c, spec.handDist + spec.reach + 0.8);
+    // The player strikes someone who isn't an enemy only on purpose (§6.9, AC-22): a held power
+    // attack, or a punch (throwing the first punch starts a brawl). Those bystanders become
+    // combatants first; any other blow whiffs past them.
+    const power = a.kind === 'power';
+    const deliberate = c.isPlayer && !sweep && (power || c.weapon.class === 'unarmed');
+    if (deliberate) this.env.adoptNear?.(c, spec.handDist + spec.reach + 0.8, { power });
     for (const o of this.list) {
       if (o === c || o.status === 'dead' || o.status === 'fled' || o.status === 'ko') continue;
       // A kneeling, yielded fighter is struck only on purpose: a power attack, or locked on him.
-      if (o.status === 'yielded' && a.kind !== 'power' && c.lockTarget !== o) continue;
+      if (o.status === 'yielded' && !power && c.lockTarget !== o) continue;
       const hostile = this.hostile(c, o);
       // NPCs strike only their enemies; a sweep strikes only hostiles (§6.1, AC-22).
       if ((!c.isPlayer || sweep) && !hostile) continue;
+      // The player's ordinary blow never lands on a bystander; essential and named people
+      // (quest givers, the courier) only take a held power attack.
+      if (c.isPlayer && !hostile && c.lockTarget !== o && o.status !== 'yielded') {
+        if (!deliberate) continue;
+        if ((o.essential || o.named) && !power) continue;
+      }
       const p = o.position;
       const ang = sweepCapsule(spec, { x: p.x, z: p.z, y0: p.y + 0.1, y1: p.y + o.body.height, r: o.body.radius });
       if (ang < 0 || !this.sight(c, o)) continue;
@@ -570,7 +603,10 @@ export class CombatCore {
     const now = this.now;
     const bout = this.bout;
     const player = att.isPlayer || def.isPlayer;
-    if (att.isPlayer && !def.isPlayer && !this.hostile(att, def) && def.active) {
+    // A blow by the player on someone who wasn't an enemy: an assault, with no skill XP and no
+    // sneak bonus unless the player was deliberately sneaking.
+    const bystander = att.isPlayer && !def.isPlayer && !this.hostile(att, def);
+    if (bystander && def.active) {
       att.aggressor = true;
       this.env.emit('combat:assault', { attackerId: att.id, victimId: def.id, lawfulVictim: def.lawful });
     }
@@ -607,7 +643,7 @@ export class CombatCore {
     }
     const blocking = def.active && !a.unblockable && frontal && (parryAsBlock || (def.guardActive && now - def.guardSince >= TIMING.guardUp));
 
-    const unaware = !def.isPlayer && def.active && !def.target && (def.brain?.state ?? 'idle') === 'idle';
+    const unaware = !def.isPlayer && def.active && !def.target && (def.brain?.state ?? 'idle') === 'idle' && (!bystander || att.sneaking);
     const riposte = def.riposteUntil > now && def.active;
     if (riposte) def.riposteUntil = -Infinity;
     const finisher = riposte && def.healthFrac() <= COMBAT.parry.finisherAtHealth;
@@ -672,9 +708,10 @@ export class CombatCore {
       }
     }
 
-    const outcome = this.dealDamage(att, def, hit.damage, { finisher, weapon });
+    // Who struck comes first: a yield or flight the blow causes reads it ('actor:yielded' → the decision).
     def.lastHitAt = now;
     def.lastHitBy = att.id;
+    const outcome = this.dealDamage(att, def, hit.damage, { finisher, weapon });
 
     let stagger = 'none';
     if (def.active && def.status === 'active') {
@@ -708,7 +745,7 @@ export class CombatCore {
     if (player) this.env.feedback(finisher || riposte ? 'heavy' : power && !hit.blocked ? 'power' : 'light');
 
     if (att.isPlayer) {
-      const xp = this.attackXp(weapon, { power, riposte, sneak: unaware, bash: a.kind === 'bash' });
+      const xp = bystander ? null : this.attackXp(weapon, { power, riposte, sneak: unaware, bash: a.kind === 'bash' });
       if (xp) att.sheet?.useSkill(xp.skill, xp.amount);
       if (!a.weapon) att.inventory?.wear('mainHand', hit.damage);
       if (bout && bout.foes.has(def.id)) {
@@ -721,7 +758,11 @@ export class CombatCore {
 
     // Striking down a yielded foe is the "kill" choice, made with the sword (§6.9, §6.10).
     if (yieldedVictim && att.isPlayer && (outcome === 'dead' || outcome === 'ko')) {
-      if (bout?.foes.has(def.id) && !bout.over) bout.decide(false);
+      if (bout?.foes.has(def.id)) {
+        if (!bout.over) bout.decide(false);
+        // lud-01's missio objective hears the choice made with the sword.
+        this.env.emit('content:missio', { spared: false });
+      }
       this.env.emit('combat:yieldChoice', { actorId: def.id, choice: 'kill' });
     }
     this.env.emit('combat:hit', this.hitEvent(att, def, { kind: a.kind, damage: hit.damage, blocked: hit.blocked, power, riposte, finisher, sneak: unaware, stagger }));
@@ -970,6 +1011,7 @@ export class CombatCore {
     if (c.status !== 'active') return;
     c.status = 'yielded';
     c.yieldedOnce = true;
+    c.yieldedAt = this.now;
     this.downed(c);
     c.drawn = false;
     c.action = { kind: 'kneel', start: this.now, end: Infinity, resolved: true };
@@ -1006,6 +1048,23 @@ export class CombatCore {
     }
     if (bout) this.boutOver('player');
     this.env.emit('combat:yieldChoice', { actorId: c.id, choice, purse: o.purse });
+    // The arena's missio (lud-01 'Decide Nereus' missio' listens for it, docs/CONTENT.md).
+    if (bout) this.env.emit('content:missio', { spared: choice !== 'kill' });
+  }
+
+  /**
+   * Nobody decided (the player walked off, or the yield wasn't to the player): he gets up and goes
+   * about his business, with no consequences for anyone.
+   */
+  releaseYielded(c: Combatant) {
+    if (c.status !== 'yielded') return;
+    c.action = null;
+    c.status = 'active';
+    c.team = `spared:${c.id}`;
+    c.target = null;
+    c.brain?.setState('idle');
+    c.driven = false;
+    c.view?.play('interact');
   }
 
   startFlee(c: Combatant) {
@@ -1073,6 +1132,8 @@ export class CombatCore {
       c.body.heading = approachAngle(c.body.heading, I.face, rate * dt);
     }
     const m = this.motionFor(c);
+    // Round walls, carts and stalls toward where the brain is heading (and never stuck, AC-22).
+    if (!m && this.env.nav) this.follower(c).steer({ now, x: c.position.x, y: c.position.y, z: c.position.z, radius: c.body.radius, goal: I.goal, wish: I.move, free: !c.action && !c.stunned(now) });
     c.body.move(m ?? I.move, dt, m?.accel);
     // The fight is over for an NPC another module owns: hand the body back.
     if (!c.keepDriven && !c.target && b.state === 'idle' && !c.action && !c.motion) {
@@ -1094,21 +1155,48 @@ export class CombatCore {
     }
   }
 
-  /** Spawned hostiles attack on sight within their aggro radius. */
+  /**
+   * Spawned hostiles attack on sight within their aggro radius, and notice a hostile they can't
+   * see within their hearing radius (default 5 m; a quest's ambushers know where you are).
+   */
   private acquire(c: Combatant) {
     const r = this.aggro.get(c.id) ?? 0;
     if (r <= 0) return;
+    const hear = Math.min(r, this.hearing.get(c.id) ?? HEAR);
     let best: Combatant | null = null;
     let bestD = r;
     for (const o of this.list) {
       if (o === c || !o.active || !this.hostile(c, o)) continue;
       const d = dist2D(o.position, c.position);
-      if (d < bestD && this.sight(c, o)) {
+      if (d < bestD && (d <= hear || this.sight(c, o))) {
         best = o;
         bestD = d;
       }
     }
     if (best) this.engage(c, best);
+  }
+
+  /** The route-finder of a driven NPC (created on first use). */
+  follower(c: Combatant): PathFollower {
+    let f = this.followers.get(c);
+    if (!f) {
+      f = new PathFollower(this.env.nav!);
+      f.lastProgressAt = this.now;
+      f.onStuck = () => c.brain?.state === 'circle' && c.brain.flipCircle(this.now);
+      this.followers.set(c, f);
+    }
+    return f;
+  }
+
+  /** How long the longest-stuck driven NPC has been trying to move without progress (AC-22 logs). */
+  worstStuck(): { id: string; seconds: number } | null {
+    let best: { id: string; seconds: number } | null = null;
+    for (const [c, f] of this.followers) {
+      if (!c.driven || !c.active) continue;
+      const s = f.stuckFor(this.now);
+      if (!best || s > best.seconds) best = { id: c.id, seconds: s };
+    }
+    return best;
   }
 
   private npcAttack(c: Combatant, kind: 'light' | 'power' | 'feint' | 'bash', minWindup?: number) {
@@ -1135,49 +1223,61 @@ export class CombatCore {
   perceive(c: Combatant): Perception {
     const now = this.now;
     const t = c.target;
-    const reach = meleeRange(c.weapon.reach, t?.body.radius ?? BODY.radius);
-    const p: Perception = {
-      now,
-      self: {
-        x: c.position.x,
-        z: c.position.z,
-        heading: c.heading,
-        health: c.healthFrac(),
-        stamina: c.vitals.fraction('stamina'),
-        busy: !!c.action || c.stunned(now) || c.entangled(now),
-        canAct: this.free(c) && !c.winded,
-        reach,
-        guardable: true,
-        shield: !!c.shield,
-        hasNet: c.hasNet,
-        lastHitAt: c.lastHitAt,
-      },
-      target: null,
-      allies: [],
-      night: this.env.night(),
-    };
+    let p = this.perceptions.get(c);
+    if (!p) {
+      p = {
+        now,
+        self: { x: 0, z: 0, heading: 0, health: 1, stamina: 1, busy: false, canAct: false, reach: 1, guardable: true },
+        target: null,
+        allies: [],
+        night: false,
+      };
+      this.perceptions.set(c, p);
+    }
+    p.now = now;
+    p.night = this.env.night();
+    const self = p.self;
+    self.x = c.position.x;
+    self.z = c.position.z;
+    self.heading = c.heading;
+    self.health = c.healthFrac();
+    self.stamina = c.vitals.fraction('stamina');
+    self.busy = !!c.action || c.stunned(now) || c.entangled(now);
+    self.canAct = this.free(c) && !c.winded;
+    self.reach = meleeRange(c.weapon.reach, t?.body.radius ?? BODY.radius);
+    self.guardable = true;
+    self.shield = !!c.shield;
+    self.hasNet = c.hasNet;
+    self.lastHitAt = c.lastHitAt;
     if (t) {
       const ta = t.action;
-      p.target = {
-        id: t.id,
-        x: t.position.x,
-        z: t.position.z,
-        heading: t.heading,
-        visible: this.sight(c, t),
-        reach: meleeRange(t.weapon.reach, c.body.radius),
-        attacking: t.attacking(),
-        power: ta?.kind === 'charge' || (ta?.kind === 'power' && t.inWindup(now)),
-        impactIn: ta && ta.hitAt !== undefined && !ta.resolved ? ta.hitAt - now : Infinity,
-        facingMe: Math.abs(angleTo(t.heading, c.position.x - t.position.x, c.position.z - t.position.z)) <= FRONT,
-        entangled: t.entangled(now),
-      };
-    }
-    const allies: { x: number; z: number }[] = [];
+      const tp: TargetPerception = (p.target ??= { id: '', x: 0, z: 0, heading: 0, visible: false, reach: 1, attacking: false, power: false, impactIn: Infinity, facingMe: false });
+      const d = dist2D(t.position, c.position);
+      tp.id = t.id;
+      tp.x = t.position.x;
+      tp.z = t.position.z;
+      tp.heading = t.heading;
+      // Seen, or close enough to hear (an ambusher knows where you are): it keeps track.
+      tp.visible = d <= Math.max(TRACK, this.hearing.get(c.id) ?? 0) || this.sight(c, t);
+      tp.reach = meleeRange(t.weapon.reach, c.body.radius);
+      tp.attacking = t.attacking();
+      tp.power = ta?.kind === 'charge' || (ta?.kind === 'power' && t.inWindup(now));
+      tp.impactIn = ta && ta.hitAt !== undefined && !ta.resolved ? ta.hitAt - now : Infinity;
+      tp.facingMe = Math.abs(angleTo(t.heading, c.position.x - t.position.x, c.position.z - t.position.z)) <= FRONT;
+      tp.entangled = t.entangled(now);
+    } else p.target = null;
+    // Allies close by, from a pool of points kept with the record.
+    const allies = p.allies as { x: number; z: number }[];
+    let n = 0;
     for (const o of this.list) {
       if (o === c || !o.active || o.isPlayer || o.team !== c.team) continue;
-      if (Math.abs(o.position.x - c.position.x) < 2 && Math.abs(o.position.z - c.position.z) < 2) allies.push({ x: o.position.x, z: o.position.z });
+      if (Math.abs(o.position.x - c.position.x) >= 2 || Math.abs(o.position.z - c.position.z) >= 2) continue;
+      const a = (allies[n] ??= { x: 0, z: 0 });
+      a.x = o.position.x;
+      a.z = o.position.z;
+      n++;
     }
-    p.allies = allies;
+    allies.length = n;
     return p;
   }
 
@@ -1199,25 +1299,33 @@ export class CombatCore {
     return s;
   }
 
-  /** Line of sight, cached 0.2 s per pair. */
+  /** Line of sight, cached 0.2 s per pair (entries go with the combatant, see remove). */
   sight(a: Combatant, b: Combatant): boolean {
-    const key = `${a.id}>${b.id}`;
-    const e = this.los.get(key);
+    let row = this.los.get(a);
+    if (!row) this.los.set(a, (row = new Map()));
+    const e = row.get(b);
     if (e && this.now - e.at < 0.2) return e.ok;
     const ok = this.env.lineOfSight(a, b);
-    this.los.set(key, { at: this.now, ok });
+    if (e) {
+      e.at = this.now;
+      e.ok = ok;
+    } else row.set(b, { at: this.now, ok });
     return ok;
   }
 
   // ------------------------------------------------------------------ motion
 
-  /** Code displacement for this step (dodges, steps, pushes), or a stop; null = free movement. */
+  /**
+   * Code displacement for this step (dodges, steps, pushes), or a stop; null = free movement. The
+   * returned object is reused: read it at once.
+   */
   motionFor(c: Combatant): { x: number; z: number; accel: number } | null {
     const now = this.now;
-    if (c.status !== 'active' && c.status !== 'fled') return { x: 0, z: 0, accel: 30 };
-    if (c.motion && now < c.motion.until) return { x: c.motion.vx, z: c.motion.vz, accel: c.motion.accel };
-    if (c.entangled(now) || c.stunned(now) || c.action?.kind === 'kneel') return { x: 0, z: 0, accel: 20 };
-    if (!c.isPlayer && c.attacking() && c.action?.kind !== 'charge') return { x: 0, z: 0, accel: 20 };
+    const m = MOTION;
+    if (c.status !== 'active' && c.status !== 'fled') return set3(m, 0, 0, 30);
+    if (c.motion && now < c.motion.until) return set3(m, c.motion.vx, c.motion.vz, c.motion.accel);
+    if (c.entangled(now) || c.stunned(now) || c.action?.kind === 'kneel') return set3(m, 0, 0, 20);
+    if (!c.isPlayer && c.attacking() && c.action?.kind !== 'charge') return set3(m, 0, 0, 20);
     return null;
   }
 
@@ -1555,6 +1663,14 @@ export function clipFor(a: Pick<Action, 'kind' | 'chain'>): ActionClip {
     default:
       return 'attackLight1';
   }
+}
+
+const MOTION = { x: 0, z: 0, accel: 0 };
+function set3(m: typeof MOTION, x: number, z: number, accel: number) {
+  m.x = x;
+  m.z = z;
+  m.accel = accel;
+  return m;
 }
 
 /** Facing helper for the system: heading from a to b. */

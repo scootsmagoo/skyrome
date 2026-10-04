@@ -145,6 +145,21 @@ describe('the end of a bout is announced once (the purse is paid once)', () => {
     expect(ends[0].purse).toBeGreaterThan(10);
     expect(f.status).toBe('active');
     expect(core.hostile(p, f)).toBe(false);
+    // lud-01's missio objective hears the decision made in combat's prompt.
+    expect(env.of('content:missio')).toEqual([{ spared: true }]);
+  });
+
+  it("a yielded foe struck down with the sword is the missio refused (content:missio, spared false)", () => {
+    const env = fakeEnv();
+    const core = makeCore(env);
+    const p = addPlayer(core, { weapon: 'rudis' });
+    const f = addNpc(core, 'f', { ...combatProfileFor('thug', { kit: 0 }), health: 40 });
+    core.startBout({ lusio: true, foes: ['f'], purse: 10 });
+    core.engage(f, p);
+    for (let i = 0; i < 5 && f.status === 'active'; i++) core.applyHit(p, f, { kind: 'light', start: 0, end: 1, resolved: true, chain: 1 });
+    expect(f.status).toBe('yielded');
+    for (let i = 0; i < 6 && f.status === 'yielded'; i++) core.applyHit(p, f, { kind: 'power', start: 0, end: 1, resolved: true, charge: 0.8, direction: 'none' });
+    expect(env.of('content:missio')).toEqual([{ spared: false }]);
   });
 });
 

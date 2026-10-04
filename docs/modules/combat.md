@@ -8,7 +8,7 @@ acceptance criteria AC-04, AC-06–AC-09 and AC-22.
 
 - Code: `src/combat/` (rules, the game wiring, player input, HUD overlay, bodies, street danger), `src/ai/combat/` (brain, attack tokens, Nereus)
 - Test bed: `?scene=arena` (`src/scenes/arena.ts`); in the city it is installed by the game flow (`src/game/optional.ts`)
-- Tests: `tests/combat-*.test.ts` (107 cases)
+- Tests: `tests/combat-*.test.ts` (126 cases)
 - Third-party assets or libraries: none
 
 ## How to try it (for the owner)
@@ -38,16 +38,22 @@ acceptance criteria AC-04, AC-06–AC-09 and AC-22.
 **In the city** (`?scene=rome`, the real game): combat is always on. R draws, F attacks, and the
 difficulty, block mode, power-hold time and lock-on follow Esc → Settings.
 
-8. **Night muggers.** After dark (19:30–05:30) a pair of *grassatores* may wait by the street under
-   the Palatine, on the Vicus Tuscus or on the road from the Porta Capena to the Colosseum. They step
-   out when you come near: *"Purse or blood, friend."* Pay a quarter of your purse and they let you
-   pass, or refuse and fight. To see one at once:
+8. **Night muggers.** After dark (19:30 until first light at 06:10) a pair of *grassatores* may wait
+   by the street ahead of you: under the Palatine, on the Vicus Tuscus or on the road from the Porta
+   Capena to the Colosseum. On a new game's walk from the Porta Capena you meet the first pair on
+   the street under the Palatine. They step out when you come near: *"Purse or blood, friend."* Pay
+   a quarter of your purse and they let you pass, or refuse and fight. Run, and they let you go.
+   To see one at once:
    <http://127.0.0.1:5173/?scene=rome&quick=1&hour=21&danger=circus-north-capena> (they wait 20 m
    ahead). `&danger=0` keeps the streets safe.
 9. **Bodies.** A fallen enemy can be searched: look at it and press **E** (*Search*). You find its
    weapon, some of its clothes and a few coins. **R** takes everything.
 10. **Knocked out in the street.** A cudgel or fists can knock you out instead of killing you. The
     screen goes dark for a few seconds; muggers take half your purse and are gone when you come to.
+11. **Tiro: the Aesculapian rescue.** On Tiro a death is not the end: after a moment of black you
+    wake in front of the Temple of Aesculapius on the Tiber Island with full health and a fifth less
+    coin (passers-by carried you there). The same happens on any difficulty while you have no save
+    to load yet, so a new game never ends at the title.
 
 ## Wiring it in
 
@@ -63,8 +69,10 @@ const combat = installCombat(game, { hudRoot: uiRoot });  // game.combat — ins
 
 In Rome the game flow installs it (`src/game/optional.ts` finds `installCombat` in
 `src/combat/index.ts`), after the UI wiring: the flow's HUD sources already ask `game.combat` for
-`targetView()`, `bossView()` and `compassMarkers()`, the music follows `game.combat.active` and
-`alerted()`, and the flow keeps its own death prompt (`game.combat.handlesDeath` is false).
+`targetView()`, `bossView()` and `compassMarkers()`, and the music follows `game.combat.active` and
+`alerted()`. The flow keeps its own death prompt ("Mortuus es", load or title) except when
+`game.combat.handlesDeath` is true: on Tiro (§6.12) and while there is no save to load at all
+[design], combat runs the **Aesculapian rescue** instead (`rescue()`, `'combat:rescued'`).
 
 `installCombat` builds the player's combatant from `player.sheet` and `player.inventory` when the
 RPG is installed (it re-reads the loadout on every equip change and, unless the flow's `PlayerLook`
@@ -88,7 +96,7 @@ game.combat.disengage(actor);
 const c = game.combat.register(actor, { profile, team: 'law', faction: 'vigiles', lawful: true, loadout: { weapon: 'fustis' } });
 
 // Quest content (src/content/director.ts speaks this already)
-game.combat.spawnEnemy('grassator', pos, { id: 'npc-sorex', npc: 'npc-sorex', quest: 'mq-01-madida-capena', tags: ['grassator'], hostile: true });
+game.combat.spawnEnemy('grassator', pos, { id: 'npc-sorex', npc: 'npc-sorex', quest: 'mq-01-madida-capena', tags: ['grassator'], hostile: true, profile });
 game.combat.spawnEnemy('retiarius', pos, { id: 'npc-nereus', boss: 'boss-nereus', practice: true, quest: 'lud-01-sacramentum' });
 game.combat.engage('npc-crispus', { brawl: true, tags: ['rixa'] });   // an actor id + options: fight the player
 
@@ -108,9 +116,14 @@ game.combat.danger.trigger('vicus-tuscus-south'); // stage a night mugging now
   team for gladiators), and an unknown id becomes a knife thug. Options: `tier`, `kit`, `lusio` or
   `practice` (practice arms; a practice gladiator spawned by a quest also starts an arena bout with
   crowd favor), `brawl`, `yieldAt`, `hostile`, `tags` and `quest` (echoed in `'actor:killed'`),
-  `npc` (a named NPC id: its name, title, look, stat block and essential flag), `boss`
-  (`boss-nereus` wins over the archetype), `opener`, `bout`, `team`, `group`, `aggro` (the
-  attack-on-sight radius, default 18 m), `engage`, `heading`, `seed`, `lod`, `drawn`, `id`, `name`.
+  `npc` (a named NPC id: its name, title, look, stat block and essential flag), `profile` (content's
+  own stat block, e.g. `mq01GrassatorProfile`: it wins over the archetype's and the NPC's numbers,
+  with practice arms and `yieldAt` still applied on top), `boss` (`boss-nereus` wins over the
+  archetype), `opener`, `bout`, `team`, `group`, `aggro` (the attack-on-sight radius, default 18 m),
+  `engage`, `heading`, `seed`, `lod`, `drawn`, `id`, `name`. A `hostile` fighter spawned for a
+  `quest` (or with `engage`) knows where the player is: it notices you anywhere within its aggro
+  radius, seen or not (mq-01's ambush behind the solid Porta Capena block starts), and walks round
+  whatever stands between (see *Getting round things* below).
   Spawning with an id that is already in use replaces that fighter. Stats come from
   `src/rpg/enemies.ts` (§6.11 tiers and §13.1 kits). The look comes from `randomAppearance(role)`
   (or the NPC's own appearance) with the kit's weapon and shield models. The resolution is pure and
@@ -125,11 +138,19 @@ game.combat.danger.trigger('vicus-tuscus-south'); // stage a night mugging now
   faction (`vigiles` → a vigil, `cohortes-urbanae` → a miles), else it is a civilian who defends
   himself; its team is its faction. Adopted actors are driven by combat only while they fight, and
   their deaths are passed to `game.population.kill(actor)` when that exists.
-- **Anyone can be struck.** A player's thrust or cut adopts up to three humanoid actors in front
-  within reach (the crowd, a shopkeeper) before it resolves, so the blow lands on whoever is there
-  when no enemy is (an assault: `combat:assault`; a civilian yields at half health or runs). Sweeps
-  still strike only hostiles (AC-22). Adopted people idle for 30 s, or gone from the world, are let
-  go again.
+- **Bystanders are struck only on purpose** (§6.9, AC-22). An ordinary blow (a light attack, a
+  riposte, a bash, a sweep) never lands on someone who isn't an enemy: it whiffs past the crowd, the
+  courier, a passer-by beside a dodging mugger. A held **power attack** or a **punch** (the first
+  punch of a brawl) is deliberate: it adopts up to three humanoid actors in front within reach and
+  lands on whoever is there (an assault: `combat:assault`; a civilian yields at half health or
+  runs). Essential and named NPCs (a definition in `game.npcs`) take only a power attack. A blow on
+  a bystander gives no skill XP and no sneak bonus, unless the player was sneaking (C). Adopted
+  people idle for 30 s, or gone from the world, are let go again.
+- **Yields nobody decides.** A yield to the player opens the spare/rob/arrest/kill choice (the
+  prompt, and *Decide* with E while he kneels), also when the very first blow caused it. If nobody
+  decides, he gets up and goes about his business once the player is 40 m away or after 60 s
+  (15 s when he didn't yield to the player); an adopted NPC goes back to its module, a spawned one
+  leaves. Arena foes wait for the missio.
 - `register(actor, opts)`: any actor with a `CombatProfile`. A registered NPC is driven by combat
   only while it fights, and is handed back once it is idle again (`isDriving`). Spawned enemies
   stay driven.
@@ -151,6 +172,8 @@ game.combat.danger.trigger('vicus-tuscus-south'); // stage a night mugging now
 | `combat:death` | A real death with its loot table, worn items, weapon, shield and position (the body container hook; the combat module's own bodies use it) |
 | `actor:yielded` | An NPC knelt (§6.9): the combat system offers the spare/rob/arrest/kill choice. Also the player holding Y (`actorId: 'player'`) |
 | `combat:yieldChoice` | The decision (the combat system applies `rpg/yield.ts`: Pietas, Fama, the purse, crime) |
+| `content:missio` | An arena foe's missio was decided in combat's prompt (`spared: true` for *Mitte*) or by striking him down (`false`). Declared identically by quest content; lud-01's *Decide Nereus' missio* objective listens for it |
+| `combat:rescued` | The Aesculapian rescue: the player woke at the Temple of Aesculapius (`place`) for `fee` denarii |
 | `combat:knockout`, `combat:fled` | A knockout (with its duration), a successful flight |
 | `combat:callHelp`, `combat:assault`, `combat:brawlEscalated` | For the NPC and crime modules |
 | `combat:playerDefeated` | `death`, `knocked-out`, `brawl-lost`, `saniarium`, `saniarium-no-purse` (with the ids of the `foes` who were fighting): game flow decides what happens after a death; knockouts end in a short blackout |
@@ -192,8 +215,8 @@ sideways sweep, 90° for a bash. Every capsule it touches is tested (`geometry.t
 sight check stops blows through walls. The camera is never involved, so first and third person
 fight identically (a scripted first-person duel gives the same results). NPCs strike only their
 enemies, and sweeps strike only hostiles. A player's thrust or cut takes the lock target if it is
-in the arc, otherwise the most central hostile, and touches a bystander only when no hostile is
-there (AC-22). A kneeling, yielded fighter is struck only on purpose: with a power attack, or while
+in the arc, otherwise the most central hostile; it touches a bystander only as a deliberate power
+attack or punch with no hostile there (AC-22, see *Bystanders* above). A kneeling, yielded fighter is struck only on purpose: with a power attack, or while
 locked on him.
 
 **Damage (§6.2–6.4).** `computeAttack` and `resolveHit` from `src/rpg/combat-math.ts`. The core
@@ -277,11 +300,27 @@ approach (stop at reach + 0.3 m), engage (needs an attack token; attack every le
 aggression) s; 30 % power attacks, 40 % for elites; feints from veteran up), circle (3–5 m at
 1.5 m/s, switching direction every 2–4 s, spacing from allies), retreat under 25 % stamina (until
 60 %), call-help at the start and at 50 % health, yield, flee, and search (the last known position
-for 20 s). Guards are pre-emptive (spells of 1–3 s for blockSkill × 0.6 of the time) and reactive:
+for 20 s). It notices hostiles in sight within its aggro radius, or unseen within its hearing radius (5 m;
+a quest's ambushers: their whole aggro radius), and keeps track of a foe it can hear (6 m) or was
+told to fight (its last known position starts where the foe was). Guards are pre-emptive (spells
+of 1–3 s for blockSkill × 0.6 of the time) and reactive:
 when the target steps into reach facing the NPC, chance blockSkill (−30 % when tired) after the
 reaction time, held until the NPC attacks or tires. A power wind-up can also be read and guarded,
 and elites, champions and bosses parry (blockSkill × 0.4). It moves only through
 `Actor.locomote` and faces its target (slower during its own wind-up, so a dodge works).
+
+**Getting round things (`pathing.ts`, §6.13 "path to the target", AC-22).** The brain steers in
+straight lines toward a goal (the target, or its last known position); a `PathFollower` per driven
+NPC turns that wish into one that goes round a gate block, a cart, a stall or a wall. The straight
+line to the goal is probed with rays against the world (knee, chest and both shoulders; cached
+0.25 s). When it is blocked the follower takes waypoints from the NPC crew's `NavService`
+(`game.population.nav.findPath`, read structurally) when it exists, else follows the wall: the clear
+direction nearest the goal, keeping to one side until the goal is in the clear again. Circling,
+retreating and fleeing slide along walls instead of pushing into them. A mover that tries to walk
+but makes no 0.35 m of progress in 1.5 s is stuck: it changes sides, drops its path, sidesteps for
+0.6 s (and circling flips direction). `core.worstStuck()` reports the longest stuck spell for logs;
+`tests/combat-nav.test.ts` checks a fighter round a fake gate block, a search round a wall, and a
+1-vs-4 fight among walls with nobody stuck for 3 s.
 
 `AttackTokens` hands out at most 1 (Tiro), 2 (Normal) or 3 (Difficilis) tokens per target. Bosses
 cost 2, though a lone boss may still attack on Tiro. The longest waiter is served first, and a
@@ -303,7 +342,10 @@ poise 150, reaction 0.25 s, block 0.45 weapon-only, intervals of 1.6, 1.3 and 1.
   a power poke with a wind-up of at least 0.8 s.
 - **Phase 2 (75 %):** faster (speed ×1.1), feints, and a sand kick every 9 s that blinds for 1 s.
 - **Phase 3 (45 %):** he loses the net; more power lunges (50 %) and the wooden dagger up close.
-- **15 %:** he yields, and the missio choice opens. Phase barks appear as subtitles.
+- **15 %:** he yields, and the missio choice opens (the decision is also sent as `content:missio`).
+  Phase barks appear as subtitles.
+- **The look:** no helmet, the white linen manica on the left arm and the bronze galerus over the
+  left shoulder on a sun-browned body, so he reads as a retiarius at a glance (`retiariusLook`).
 
 ### [design] choices beyond the GDD
 
@@ -321,14 +363,22 @@ poise 150, reaction 0.25 s, block 0.45 weapon-only, intervals of 1.6, 1.3 and 1.
 The night band of the v0.1 districts (docs/CONTENT.md §5.2 spawn bands) brings out grassator pairs
 at four street sites: two on the street under the Palatine (the Circus north side), one on the Vicus
 Tuscus south of its compitum, one on the road from the Porta Capena to the Colosseum. A site comes
-alive when it is night (19:30–05:30), the player has been playing for 90 s, nothing else is
-going on (no fight, no menu, no dialogue), the site is 55–130 m away and out of sight, it hasn't
-been used tonight, and no vigil stands within 20 m. The pair waits beside the street (`lean` or
-`stand`), steps out when the player comes within 14 m in sight ("You there. A word, friend."), and
-at 3 m makes its demand in the dialogue panel: pay `max(3, ⌈purse/4⌉)` denarii (never more than the
-purse) and they walk off, or refuse and fight. Walking away, drawing a blade, striking first or
-closing the panel counts as a refusal. At dawn unmet muggers slip away; far from the player
-(200 m) the encounter ends. One encounter at a time.
+alive when it is night (19:30 to first light at 06:10, §17.2), the player has been playing for 20 s
+and nothing has been going on for 20 s (no fight, no menu, no dialogue), the site is 40–170 m
+**ahead** of the player (within 60° of the way they are moving, or looking when standing) and out
+of sight (80 m or more off in the dark, or off to the side of the view), it hasn't been used
+tonight, and no vigil stands within 20 m. The pair waits beside the street (`lean` or `stand`) and
+steps out when the player comes within 14 m in sight ("You there. A word, friend."); only then is
+the street spent for the night. Face to face (3 m, or 5 m after 8 s) they make their demand in the
+dialogue panel: pay `max(3, ⌈purse/4⌉)` denarii (never more than the purse) and they walk off, or
+refuse and fight. Drawing a blade, striking first, walking off from the demand or closing the panel
+counts as a refusal. A mark who keeps more than 15 m away for 3 s is let go ("Run, then."), so the
+demand never pops up for muggers who can't reach you. A pair walked past without meeting (the
+player 15 m farther than their closest and 30 m off) slips away and frees the slot for the next
+street ahead. At first light unmet muggers slip away; far from the player (200 m) the encounter
+ends. One encounter at a time. `tests/combat-danger.test.ts` walks the golden path from the Porta
+Capena at 04:30 at 1.9, 3.0 and 4.4 m/s: each meets the pair on the street under the Palatine
+before first light.
 
 ## Verified (scripts/shot.mjs and Vitest)
 
@@ -359,6 +409,17 @@ closing the panel counts as a refusal. At dawn unmet muggers slip away; far from
   cudgel, a tiro's yield pose, the knockout blackout, the mugger's demand.
 - Runs in Chrome (Metal) without console errors. 41–62 draw calls in the arena.
   `?scene=arena&site=rome` fights inside the city at the Ludus Magnus.
+- **Review fixes (2026-10-04, in Rome with `?scene=rome&quick=1`):** two quest grassatores spawned
+  on the far side of the solid Porta Capena block notice the player at once and come round both
+  sides of it (one engages within 8 s); two light attacks at a passer-by whiff, a held power
+  attack assaults him, he kneels and the *Decide* prompt shows; a 3 m/s scripted walk from the
+  gate at 04:30 meets the muggers on the street under the Palatine at 05:16 with the demand face to
+  face; sprinting away from muggers who stepped out ends the encounter with no demand; a death on
+  Tiro wakes the player at the Temple of Aesculapius for a fifth of the purse.
+- **AC-08 measurement** (`tests/combat-nereus-bot.test.ts`): a scripted competent player (rudis and
+  scutum, skill 25, a tunic, no god mode; blocks 85 % of pokes, parries a quarter, dodges the net
+  and the sand, struggles free, one blow per opening after a 0.15 s reaction) wins 4 of 6 bouts on
+  Normal in 45–56 s (all three phases each time).
 
 ## Shared-file changes
 
@@ -390,9 +451,15 @@ On this branch:
   bruisers) is left to the NPC crew's vignettes and quest content; lit areas don't yet keep the
   muggers away (only a vigil within 20 m does).
 - **First-person view of the scutum.** The big shield covers much of the left of the screen in the
-  drawn stance in first person (the avatar module's pose).
-- **AC-08 fight length** (3–6 minutes) needs the owner's playtest. With god-mode light spam, Nereus
-  yields in about 30 s, but a real fight is mostly blocking and dodging his pokes (≈22 damage each
-  on Normal).
+  drawn stance in first person (the avatar module's pose; not changed here).
+- **AC-08 fight length** (3–6 minutes) is not met by a competent player: the bot above yields
+  Nereus in under a minute, because §13.2's stat block (300 HP, AR 7) against a rudis (≈ 12 a blow,
+  16 blows to the yield) gives an opening with every one of his pokes. More block skill, evasive
+  backsteps or a keep-away retiarius barely lengthened the bout in the bot's runs and made it
+  deadlier for a slower player, so they were left out. Reaching 3–6 minutes needs a design call:
+  more health with softer pokes, or weaker practice arms.
+- **Paths.** Without the NPC crew's `NavService` (not on main yet) fighters use the wall-follower,
+  which rounds convex obstacles (a gate block, a cart, a stall) but can still wander in a deep
+  U-shaped dead end until the stuck detector turns it round.
 - **Control presets.** The presets live in the game flow's settings; combat follows `blockToggle`,
   `powerHoldS` and `lockOnMode`. Aim assist is for ranged weapons, which the player can't use yet.

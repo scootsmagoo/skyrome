@@ -48,8 +48,19 @@ declare module '../core/Events' {
     'combat:favor': { favor: number; delta: number; reason: string };
     /** Lock-on target changed (null: released). */
     'combat:lock': { targetId: string | null };
+    /**
+     * The Aesculapian rescue (§6.12: Tiro, or no save to load): the player woke at the Temple of
+     * Aesculapius (`place`, null when the landmark isn't built: on the spot) for `fee` denarii.
+     */
+    'combat:rescued': { fee: number; place: string | null };
     /** The player chose what to do with a yielded foe. */
     'combat:yieldChoice': { actorId: string; choice: 'spare' | 'rob' | 'arrest' | 'kill'; purse?: number };
+    /**
+     * The missio of an arena bout was decided in combat's own prompt or with the sword (`spared`
+     * true = "Mitte!"). Declared identically by quest content (src/content/director.ts), which
+     * listens for it in lud-01.
+     */
+    'content:missio': { spared: boolean };
   }
 }
 

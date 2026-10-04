@@ -47,6 +47,11 @@ export interface SpawnRequest {
   name?: string;
   /** The named NPC this fighter is (its look, name, title, profile, essential flag). */
   npc?: NpcLike;
+  /**
+   * The stat block the caller wants (quest content: the mq-01 pair, named gladiators). It wins over
+   * the archetype's and the NPC definition's numbers; practice arms and `yieldAt` apply on top.
+   */
+  profile?: CombatProfile;
   opener?: Opener;
 }
 
@@ -88,6 +93,8 @@ export function resolveSpawn(req: SpawnRequest, items: ItemDb, questIndex = 0): 
   let profile = spec.profile(items, o);
   // A named NPC's own stat block (docs/CONTENT.md §5.2) replaces the archetype's numbers.
   if (req.npc?.combat) profile = practice({ ...profile, ...req.npc.combat, archetype: profile.archetype ?? req.npc.combat.archetype }, o);
+  // The caller's own stat block (content's profiles) wins over both.
+  if (req.profile) profile = practice({ ...profile, ...req.profile, archetype: req.profile.archetype ?? profile.archetype }, o);
   if (req.yieldAt !== undefined) profile = { ...profile, yieldAt: req.yieldAt };
   const nereus = spec.id === 'boss-nereus' || profile.archetype === 'boss-nereus';
   const tags = [...(req.tags ?? [])];

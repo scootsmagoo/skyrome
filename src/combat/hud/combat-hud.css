@@ -62,12 +62,17 @@
 .cb-favor.is-on { opacity: 1; }
 .cb-favor .label {
   font-family: var(--sr-display, serif);
-  font-size: 0.72rem;
+  font-size: 0.8rem;
+  font-weight: 700;
   letter-spacing: 0.18em;
-  color: var(--cb-gold);
+  color: #f6dc96;
   writing-mode: vertical-rl;
   transform: rotate(180deg);
-  text-shadow: var(--sr-shadow-text, 0 1px 2px #000);
+  /* Legible over bright stands and sand: a dark plate and a heavy shadow. */
+  padding: 0.5rem 0.2rem;
+  background: rgba(10, 7, 5, 0.62);
+  border-radius: 2px;
+  text-shadow: 0 0 3px #000, 0 1px 2px #000, 0 0 8px rgba(0, 0, 0, 0.9);
 }
 .cb-favor .col { display: flex; align-items: center; gap: 0.5rem; }
 .cb-favor .track {
@@ -92,7 +97,8 @@
   font-family: var(--sr-display, serif);
   font-size: 1.05rem;
   font-weight: 700;
-  text-shadow: var(--sr-shadow-text, 0 1px 2px #000);
+  color: #fff4dc;
+  text-shadow: 0 0 3px #000, 0 1px 2px #000;
 }
 .cb-favor .delta { position: absolute; right: 1.4rem; font-family: var(--sr-display, serif); font-size: 0.9rem; opacity: 0; transition: opacity 0.6s, transform 0.6s; }
 .cb-favor .delta.is-on { opacity: 1; transform: translateY(-0.4rem); transition-duration: 0.1s; }

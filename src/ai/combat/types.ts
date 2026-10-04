@@ -82,7 +82,7 @@ export interface TargetPerception {
   x: number;
   z: number;
   heading: number;
-  /** In line of sight now. */
+  /** Seen (line of sight) or close enough to be heard: the brain keeps track of where it is. */
   visible: boolean;
   /** Centre-to-centre distance at which the target's weapon reaches this NPC. */
   reach: number;
@@ -121,6 +121,12 @@ export interface Intent {
   move: { x: number; z: number };
   /** Heading to face, or null to keep. */
   face: number | null;
+  /**
+   * Where the movement is meant to lead (the target, its last known position), or null for moves
+   * without a destination (circling, retreating, fleeing). The system routes `move` around
+   * obstacles toward it (src/ai/combat/pathing.ts).
+   */
+  goal: { x: number; z: number } | null;
   guard: boolean;
   /** Try a timed parry now (elites, champions, bosses). */
   parry: boolean;
@@ -140,5 +146,5 @@ export interface Intent {
 }
 
 export function emptyIntent(): Intent {
-  return { move: { x: 0, z: 0 }, face: null, guard: false, parry: false, attack: null, special: null, shout: false, yield: false, flee: false };
+  return { move: { x: 0, z: 0 }, face: null, goal: null, guard: false, parry: false, attack: null, special: null, shout: false, yield: false, flee: false };
 }
