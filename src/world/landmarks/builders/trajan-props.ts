@@ -398,6 +398,80 @@ export function workClutter(b: MeshBuilder, at: THREE.Matrix4, seed = 1) {
   }
 }
 
+/**
+ * A seller's stall for the festival (front −z): trestle table under a striped awning on four
+ * poles, stocked either with laurel wreaths and garlands or with incense (boxes of frankincense,
+ * bowls, a little burning censer). Returns the local position of its oil lamp's flame.
+ */
+export function vendorStall(b: MeshBuilder, at: THREE.Matrix4, kind: 'garlands' | 'incense'): THREE.Vector3 {
+  const w = 2.0;
+  const d = 0.8;
+  const top = 0.85;
+  b.box('wood', w, 0.06, d, mul(at, T(0, top, 0)));
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.box('wood_dark', 0.06, top, 0.06, mul(at, T(sx * (w / 2 - 0.08), top / 2, sz * (d / 2 - 0.08))));
+  b.box('fabric_white', w + 0.04, 0.3, 0.02, mul(at, T(0, top - 0.17, -d / 2 - 0.01)), { castShadow: false });
+  // Awning: poles and a sloping striped canopy.
+  const yF = 2.15;
+  const yB = 2.45;
+  for (const sx of [-1, 1]) {
+    b.add(cylinderBetween(V(sx * 1.15, 0, -0.75), V(sx * 1.15, yF, -0.75), 0.03, 0.03, 5), 'wood_dark', at);
+    b.add(cylinderBetween(V(sx * 1.15, 0, 0.75), V(sx * 1.15, yB, 0.75), 0.03, 0.03, 5), 'wood_dark', at);
+  }
+  const n = 8;
+  for (let i = 0; i < n; i++) {
+    const x0 = -1.2 + (2.4 * i) / n;
+    const x1 = x0 + 2.4 / n;
+    const g = new THREE.BufferGeometry();
+    const P = [x0, yF, -0.85, x1, yF, -0.85, x1, yB, 0.85, x0, yF, -0.85, x1, yB, 0.85, x0, yB, 0.85];
+    const both = [...P, ...[0, 2, 1, 3, 5, 4].flatMap((k) => [P[k * 3], P[k * 3 + 1], P[k * 3 + 2]])];
+    g.setAttribute('position', new THREE.Float32BufferAttribute(both, 3));
+    g.computeVertexNormals();
+    b.add(g, i % 2 ? 'fabric_white' : kind === 'garlands' ? 'fabric_red' : 'fabric_blue', at, { castShadow: true });
+  }
+  if (kind === 'garlands') {
+    // Wreaths lying on the table and hanging from the front of the awning; a basket of laurel.
+    for (let i = 0; i < 5; i++) {
+      const wr = new THREE.TorusGeometry(0.16, 0.045, 5, 12);
+      wr.rotateX(Math.PI / 2);
+      wr.translate(-0.75 + i * 0.37, top + 0.06, (i % 2) * 0.22 - 0.1);
+      b.add(wr, 'foliage_broad', at, { castShadow: false });
+    }
+    for (let i = 0; i < 3; i++) {
+      const wr = new THREE.TorusGeometry(0.17, 0.04, 5, 12);
+      wr.translate(-0.7 + i * 0.7, yF - 0.3, -0.84);
+      b.add(wr, 'foliage_broad', at, { castShadow: false });
+    }
+    garland(b, at, V(-1.15, yF - 0.05, -0.8), V(1.15, yF - 0.05, -0.8), 0.25, 0.06, true, 7);
+    const basket = new THREE.CylinderGeometry(0.3, 0.24, 0.45, 9);
+    basket.translate(-1.5, 0.22, 0.2);
+    b.add(basket, 'wood', at);
+    const leaves = new THREE.SphereGeometry(0.3, 7, 4);
+    leaves.scale(1, 0.45, 1);
+    leaves.translate(-1.5, 0.47, 0.2);
+    b.add(leaves, 'foliage_broad', at, { castShadow: false });
+  } else {
+    for (let i = 0; i < 6; i++) b.box(i % 2 ? 'wood_dark' : 'wood', 0.22, 0.14, 0.18, mul(at, TRS(-0.8 + i * 0.3, top + 0.1, -0.1 + (i % 3) * 0.12, 0, i * 0.3, 0)), { castShadow: false });
+    for (let i = 0; i < 3; i++) {
+      const bowl = new THREE.CylinderGeometry(0.11, 0.06, 0.07, 8, 1, true);
+      bowl.translate(-0.4 + i * 0.4, top + 0.07, 0.25);
+      b.add(bowl, 'bronze', at, { castShadow: false });
+      const grains = new THREE.CylinderGeometry(0.1, 0.1, 0.02, 8);
+      grains.translate(-0.4 + i * 0.4, top + 0.09, 0.25);
+      b.add(grains, i === 1 ? 'plaster_cream' : 'terracotta', at, { castShadow: false });
+    }
+    for (let k = 0; k < 2; k++) b.box('wood', 0.5, 0.4, 0.4, mul(at, TRS(1.55, 0.2 + k * 0.4, 0.1, 0, k * 0.4, 0)), { collide: k === 0 });
+  }
+  // A clay lamp burning on the table (it is before dawn).
+  const lamp = V(kind === 'garlands' ? 0.85 : 0.75, top + 0.03, 0.22);
+  const body = new THREE.SphereGeometry(0.06, 8, 4);
+  body.scale(1, 0.45, 1.3);
+  body.translate(lamp.x, lamp.y + 0.02, lamp.z);
+  b.add(body, 'terracotta', at, { castShadow: false });
+  flame(b, mul(at, T(lamp.x, lamp.y + 0.04, lamp.z - 0.07)), 0.07, 0.02);
+  solidBox(b, at, 0, top / 2, 0, w, top, d);
+  return V(lamp.x, lamp.y + 0.09, lamp.z - 0.07);
+}
+
 /** A rolled rug/carpet path laid on the paving (thin strip, no collider). */
 export function carpet(b: MeshBuilder, at: THREE.Matrix4, w: number, l: number, mat: MaterialId = 'fabric_red') {
   b.box(mat, w, 0.012, l, mul(at, T(0, 0.006, 0)), { castShadow: false });

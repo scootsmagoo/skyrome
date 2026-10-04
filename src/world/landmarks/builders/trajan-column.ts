@@ -24,6 +24,8 @@ import { ProfileBuilder, T, TRS, cylinderBetween, gridSurface, lathe, linspace, 
 import { inscriptionPanel } from '../../../arch/common/inscription';
 import { friezeBand, reliefMaterial } from '../../../arch/common/relief';
 import { wall, type Opening } from '../../../arch/common/walls';
+import { Draw } from '../../../arch/fabric/draw';
+import { placeProp } from '../../../arch/props/props';
 import type { ColliderSpec, MeshBuilder } from '../../../gfx/MeshBuilder';
 import type { LandmarkBuilder, LandmarkContext, Spot } from '../types';
 import { LodChunks, boxMinMax, colonnadeColumn, farColumn, quad, solidBox, solidCyl } from './trajan-kit';
@@ -242,6 +244,23 @@ function court(ctx: LandmarkContext, b: MeshBuilder, chunks: LodChunks, F: THREE
   const wl = 2 * C.x + 1.0;
   wall(b, { length: wl, height: yRoof, thickness: 0.6, material: 'marble', openings: [{ kind: 'door', x: wl / 2, width: 2.0, height: 3.0, leaves: 'open', leafMaterial: 'bronze' }], detail: ctx.detail, collide: true }, mul(F, TRS(C.x + 0.5, 0, zb + 0.3, 0, Math.PI, 0)));
   for (const sx of [-1, 1]) boxMinMax(b, 'marble', F, Math.min(sx * C.x, sx * (C.x + 0.5)), 0, zc - 0.3, Math.max(sx * C.x, sx * (C.x + 0.5)), yRoof, zb + 0.6, { collide: true });
+  // Outer (NW) face: pilasters in pairs either side of the door, a socle, a band at the
+  // gallery floor and a cornice under the eaves, with a pedimented frame round the door.
+  {
+    const zo = zb + 0.6;
+    boxMinMax(b, 'marble_veined', F, -C.x - 0.5, 0, zo, C.x + 0.5, 0.45, zo + 0.08, { castShadow: false });
+    boxMinMax(b, 'marble', F, -C.x - 0.5, yG - 0.2, zo, C.x + 0.5, yG + 0.05, zo + 0.14, { castShadow: false });
+    boxMinMax(b, 'marble', F, -C.x - 0.7, yRoof - 0.45, zo, C.x + 0.7, yRoof - 0.1, zo + 0.32);
+    for (const x of divide(-C.x, C.x, 2.3)) {
+      if (Math.abs(x) < 1.6) continue;
+      boxMinMax(b, 'marble', F, x - 0.28, 0.45, zo, x + 0.28, yRoof - 0.45, zo + 0.12);
+    }
+    for (const sx of [-1, 1]) boxMinMax(b, 'marble_giallo', F, sx * 1.0 - 0.14, 0, zo, sx * 1.0 + 0.14, 3.15, zo + 0.1, { castShadow: false });
+    boxMinMax(b, 'marble_giallo', F, -1.3, 3.0, zo, 1.3, 3.3, zo + 0.14, { castShadow: false });
+    for (const sx of [-1, 1]) b.box('marble', 1.45, 0.14, 0.3, mul(F, TRS(sx * 0.62, 3.55, zo + 0.15, 0, 0, -sx * 0.32)));
+    lamps.add('torch', V(0, 0.53, -0.3), mul(F, TRS(1.7, 2.6, zo + 0.01, 0, Math.PI, 0)));
+    placeProp(new Draw(b, mul(F, TRS(1.7, 2.6, zo + 0.01, 0, Math.PI, 0))), 'torch_bracket', 0, 0, 0, 0);
+  }
   // Stair along the back wall from x = +stairX0 up to the landing near x = 0 (risers ≤ 0.2 m).
   const rise = yG;
   const nSteps = Math.ceil(rise / 0.2 - 1e-6);
@@ -384,13 +403,43 @@ function library(ctx: LandmarkContext, b: MeshBuilder, chunks: LodChunks, M: THR
   wall(b, { length: sideLen, height: H, thickness: t, material: 'brick', openings: hi2.filter((o) => o.x < sideLen - 1), detail: ctx.detail, collide: true }, mul(M, TRS(-hw + t / 2, 0, zWall, 0, -Math.PI / 2, 0)));
   wall(b, { length: sideLen, height: H, thickness: t, material: 'brick', openings: hi2.filter((o) => o.x < sideLen - 1), detail: ctx.detail, collide: true }, mul(M, TRS(hw - t / 2, 0, zBack, 0, Math.PI / 2, 0)));
   wall(b, { length: W, height: H, thickness: t, material: 'brick', detail: ctx.detail, collide: true }, mul(M, TRS(hw, 0, zBack - t / 2, 0, Math.PI, 0)));
+  // Outside, the brick is articulated like the Markets' facades: a travertine socle, pilasters,
+  // string courses at the gallery and window levels, and a corbelled cornice under the eaves.
+  for (const side of [-1, 1]) {
+    const xo = side * hw;
+    const xa = Math.min(xo, xo + side * 0.18);
+    const xb = Math.max(xo, xo + side * 0.18);
+    boxMinMax(b, 'travertine', M, Math.min(xo, xo + side * 0.06), 0, zWall, Math.max(xo, xo + side * 0.06), 0.5, zBack + 0.06, { castShadow: false });
+    for (const y of [yF + 4.4, 8.3]) boxMinMax(b, 'travertine', M, xa, y - 0.1, zWall, xb, y + 0.08, zBack + 0.18, { castShadow: false });
+    boxMinMax(b, 'brick', M, Math.min(xo, xo + side * 0.16), H - 0.6, zWall, Math.max(xo, xo + side * 0.16), H - 0.4, zBack + 0.16);
+    boxMinMax(b, 'travertine', M, Math.min(xo, xo + side * 0.3), H - 0.4, zWall, Math.max(xo, xo + side * 0.3), H - 0.1, zBack + 0.3);
+    for (const z of divide(zWall + 0.6, zBack - 0.4, 2.6)) boxMinMax(b, 'brick', M, Math.min(xo, xo + side * 0.12), 0.5, z - 0.3, Math.max(xo, xo + side * 0.12), H - 0.6, z + 0.3);
+  }
+  boxMinMax(b, 'travertine', M, -hw, 0, zBack, hw, 0.5, zBack + 0.06, { castShadow: false });
+  for (const y of [yF + 4.4, 8.3]) boxMinMax(b, 'travertine', M, -hw - 0.18, y - 0.1, zBack, hw + 0.18, y + 0.08, zBack + 0.18, { castShadow: false });
+  boxMinMax(b, 'brick', M, -hw, H - 0.6, zBack, hw, H - 0.4, zBack + 0.16);
+  boxMinMax(b, 'travertine', M, -hw - 0.3, H - 0.4, zBack, hw + 0.3, H - 0.1, zBack + 0.3);
+  for (const x of divide(-hw + 0.6, hw - 0.6, 2.9)) boxMinMax(b, 'brick', M, x - 0.3, 0.5, zBack, x + 0.3, H - 0.6, zBack + 0.12);
   // Marble revetment inside (the brick shows only outside).
   for (const [x0, z0, x1, z1] of [
     [-hw + t, zWall + t, -hw + t + 0.03, zBack - t],
     [hw - t - 0.03, zWall + t, hw - t, zBack - t],
     [-hw + t, zBack - t - 0.03, hw - t, zBack - t],
   ]) {
-    boxMinMax(b, 'marble', M, x0, yF, z0, x1, H - 1.4, z1, { castShadow: false });
+    boxMinMax(b, 'marble', M, x0, yF, z0, x1, 8.4, z1, { castShadow: false });
+  }
+  // Above it a stucco band round the high windows (left clear so they open into the hall).
+  boxMinMax(b, 'plaster_white', M, -hw + t, 8.4, zBack - t - 0.03, hw - t, H - 1.4, zBack - t, { castShadow: false });
+  for (const side of [-1, 1]) {
+    const zs = hi2.filter((o) => o.x < sideLen - 1).map((o) => (side < 0 ? zWall + o.x : zBack - o.x)).sort((a, c) => a - c);
+    let z = zWall + t;
+    const xi = side * (hw - t);
+    for (const zc of [...zs, zBack - t + 0.6]) {
+      const za = z;
+      const zb = Math.min(zBack - t, zc - 0.6);
+      if (zb > za + 0.01) boxMinMax(b, 'plaster_white', M, Math.min(xi, xi - side * 0.03), 8.4, za, Math.max(xi, xi - side * 0.03), H - 1.4, zb, { castShadow: false });
+      z = zc + 0.6;
+    }
   }
   // Coffered ceiling and gable roof (ridge along the depth).
   boxMinMax(b, 'wood_dark', M, -hw, H - 1.4, zWall, hw, H - 1.2, zBack, { castShadow: false });

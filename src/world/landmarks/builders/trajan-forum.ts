@@ -31,7 +31,7 @@ import { LodChunks, arcColliders, arcFloor, arcWall, beam, boxMinMax, colonnadeC
 import { PLAN, S, TRAJAN_INSCRIPTIONS, divide } from './trajan-layout';
 import { ashlarMaterial, coffersMaterial, sectileMaterial, slabPavingMaterial } from './trajan-materials';
 import { Lamps } from './trajan-lights';
-import { altar, banner, candelabrum, carpet, garland, grandstand, honorificStatue, ladder, statueBase, torchPole, tribunal, tripod, workClutter } from './trajan-props';
+import { altar, banner, candelabrum, carpet, garland, grandstand, honorificStatue, ladder, statueBase, torchPole, tribunal, tripod, vendorStall, workClutter } from './trajan-props';
 import { clipeus, dacianCaptive, figureBlock, horseStatue, signum } from './trajan-sculpture';
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -420,7 +420,15 @@ function square(ctx: LandmarkContext, main: MeshBuilder, spots: Spot[], lamps: L
   ladder(main, TRS(-X.stylEdge + 0.2, FORUM_Y.styl, 18.7, 0, Math.PI / 2, 0), 5.2, 0.9);
   workClutter(main, TRS(-(xEdge - 4.5), 0.03, -31, 0, 0.4, 0), 3);
   spots.push({ id: 'forum-work-chest', kind: 'container', position: V(-(xEdge - 4.5), 0.03, -31), heading: 0 });
-  // Vendors of garlands and incense just inside the gateway; guards at the opening.
+  // Vendors of garlands and incense just inside the gateway (their stalls face the way in);
+  // guards at the opening.
+  for (const [sx, kind] of [
+    [-1, 'garlands'],
+    [1, 'incense'],
+  ] as const) {
+    const at = TRS(sx * 5.3, 0.03, X.zGate + 6, 0, sx * (Math.PI / 2), 0);
+    lamps.add('lamp', vendorStall(main, at, kind), at);
+  }
   spots.push({ id: 'forum-vendor-garlands', kind: 'vendor', position: V(-6.5, 0.03, X.zGate + 6), heading: Math.PI / 2 });
   spots.push({ id: 'forum-vendor-incense', kind: 'vendor', position: V(6.5, 0.03, X.zGate + 6), heading: -Math.PI / 2 });
   for (const sx of [-1, 1]) spots.push({ id: `forum-guard-gate${sx < 0 ? 'ne' : 'sw'}`, kind: 'npc', position: V(sx * 6, 0.03, X.zGate + 1.8), heading: 0 });
