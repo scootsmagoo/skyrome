@@ -64,8 +64,13 @@ export class BuiltProbe {
     if (!v) {
       const cx = this.hm.minX + i * this.cell, cz = this.hm.minZ + j * this.cell;
       const g = this.hm.heightAt(cx, cz);
-      const hit = this.game.physics.groundHeight(cx, cz, g + 45, 46);
-      v = this.cells[k] = hit !== null && hit > g + 0.25 ? 2 : 1;
+      // The city fabric lays its streets and yards flush with the ground and streams them in
+      // later: it says itself which ground it dresses.
+      if (this.game.city?.coversGround(cx, cz)) v = this.cells[k] = 2;
+      else {
+        const hit = this.game.physics.groundHeight(cx, cz, g + 45, 46);
+        v = this.cells[k] = hit !== null && hit > g + 0.25 ? 2 : 1;
+      }
     }
     return v === 2;
   }
@@ -289,6 +294,7 @@ export function dressTerrain(game: Game, opts: DressOptions = {}): TerrainDressi
         if (r0 > 0.25) continue; // the densest rule plants ~0.4 per 25 m²: cull early
         const x = b.minX + (i + 0.15 + 0.7 * rnd(i, j, 1)) * step;
         const z = b.minZ + (j + 0.15 + 0.7 * rnd(i, j, 2)) * step;
+        if (game.city?.ownsTrees(x, z)) continue; // the city plants its own quarters
         const inp = terrain.inputAt(x, z);
         splatWeights(inp, w);
         const corridor = route.length > 1 ? Math.max(0, 1 - polyDist(route, x / S, z / S) / 110) * 0.8 : 0;

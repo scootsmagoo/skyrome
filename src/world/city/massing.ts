@@ -15,6 +15,7 @@ import { MATERIAL_BASE, type MaterialId } from '../../gfx/materialIds';
 import type { PlanBlock } from './plan';
 import { pointInPoly, polyBounds, type Pt } from './raster';
 import { blockTorches, type Torch } from './life';
+import { corridorFrontage, type FrontWall } from './frontage';
 
 export type HeightFn = (x: number, z: number) => number;
 
@@ -248,7 +249,10 @@ export function backLots(blk: PlanBlock, lots: LotPlan[], H: HeightFn): BackLot[
 
 export interface BlockLayout {
   opts: FillOptions;
+  /** Front lots: the filler's plan, with the corridor infill on the golden path (frontage.ts). */
   lots: LotPlan[];
+  /** Compound walls closing what the lots leave open of a corridor block's frontage. */
+  walls: FrontWall[];
   back: BackLot[];
   masses: LotMass[];
   trees: Pt[];
@@ -259,7 +263,10 @@ export interface BlockLayout {
 /** Lot plan, back buildings, massing and yard trees of a built block. */
 export function layoutBlock(blk: PlanBlock, H: HeightFn): BlockLayout {
   const base = blockFillOptions(blk, H);
-  const lots = planLots(blk.outline as Polygon, base);
+  let lots = planLots(blk.outline as Polygon, base);
+  let walls: FrontWall[] = [];
+  // The golden path keeps a closed street wall: piazzas become shops, gaps get shop rows or walls.
+  if (blk.corridor) ({ lots, walls } = corridorFrontage(blk, lots, blk.seed ^ 0xf00d));
   const masses: LotMass[] = [];
   for (const p of lots) {
     const m = lotMass(p, blk, H);
@@ -273,7 +280,18 @@ export function layoutBlock(blk: PlanBlock, H: HeightFn): BlockLayout {
   // The filler keeps its yard surface and yard props off the back buildings and the tree pits.
   const opts = blockFillOptions(blk, H, trees);
   for (const bl of back) opts.avoid!.push(obbCorners({ ...bl.obb, hu: bl.obb.hu + 0.3, hv: bl.obb.hv + 0.3 }) as Polygon);
-  return { opts, lots, back, masses, trees, torches: blockTorches(blk, lots, H) };
+  for (const w of walls) masses.push(wallMass(w, H));
+  return { opts, lots, walls, back, masses, trees, torches: blockTorches(blk, lots, H) };
+}
+
+/** Far stand-in of a compound wall (a 2.6 m slab with a low ridge for the coping). */
+function wallMass(w: FrontWall, H: HeightFn): LotMass {
+  const dx = w.b[0] - w.a[0], dz = w.b[1] - w.a[1];
+  const L = Math.hypot(dx, dz) || 1;
+  const u: Pt = [dx / L, dz / L], v: Pt = [-u[1], u[0]];
+  const c: Pt = [(w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2];
+  const ya = H(w.a[0], w.a[1]), yb = H(w.b[0], w.b[1]);
+  return { obb: { c, u, v, hu: L / 2, hv: 0.22 }, windows: [false, false, false, false], floorY: Math.max(ya, yb), base: Math.min(ya, yb) - 0.35, eave: Math.max(ya, yb) + 2.5, roof: 'gable', wall: 'plaster_cream' };
 }
 
 // ---------------------------------------------------------------- geometry

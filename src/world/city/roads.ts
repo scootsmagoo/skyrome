@@ -23,7 +23,7 @@ import { placeProp } from '../../arch/props/props';
 import type { MeshBuilder } from '../../gfx/MeshBuilder';
 import type { Polygon, Vec2 } from '../../arch/fabric/types';
 import { K } from './raster';
-import type { CityPlan, PlanRoad, PlanStreet, PlanPiazza } from './plan';
+import { inRects, rectsBounds, type Bounds, type CityPlan, type PlanRoad, type PlanStreet, type PlanPiazza } from './plan';
 import type { HeightFn } from './massing';
 import type { LampDef } from './life';
 
@@ -198,6 +198,10 @@ export interface StreetWork {
   spots: StreetSpotDef[];
   /** Road runs that got geometry (for the street graph: open / urban / rural). */
   runs: { road: number; s0: number; s1: number; ctx: string }[];
+  /** Parked carts (centre, heading along the road). */
+  carts: { x: number; z: number; heading: number }[];
+  /** The course of each stairway (road index → path of its flights, see stairProfile). */
+  stairPaths: Map<number, Vec2[]>;
 }
 
 /**
@@ -217,20 +221,27 @@ export function cellAdder(cells: Map<string, CellWork>, size: number, inArea: (x
   };
 }
 
-export function streetWork(plan: CityPlan, H: HeightFn, area: { minX: number; minZ: number; maxX: number; maxZ: number }, size = 128): StreetWork {
-  const inArea = (x: number, z: number) => x >= area.minX && x <= area.maxX && z >= area.minZ && z <= area.maxZ;
+export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[], size = 128): StreetWork {
+  const rects = Array.isArray(areas) ? areas : [areas];
+  const inArea = (x: number, z: number) => inRects(rects, x, z);
+  const area = rectsBounds(rects);
   const cells = new Map<string, CellWork>();
   const add = cellAdder(cells, size, inArea);
+  const addCell = cellAdder(cells, size, () => true);
   const spots: StreetSpotDef[] = [];
   const lamps: LampDef[] = [];
   const runs: StreetWork['runs'] = [];
+  const carts: StreetWork['carts'] = [];
+  const stairPaths = new Map<number, Vec2[]>();
 
   // ---- ground cover: packed earth over every urban scrap of ground the streets and yards leave
   // (raster margins beside the streets, landmark aprons, corners), so no terrain grass shows in town.
   for (let x = Math.floor(area.minX / size) * size; x < area.maxX; x += size) {
     for (let z = Math.floor(area.minZ / size) * size; z < area.maxZ; z += size) {
       const x0 = x, z0 = z;
-      add(x0 + size / 2, z0 + size / 2, (b) => groundCover(b, plan, H, x0, z0, size));
+      // Cells that overlap the area at all (the cover itself stops at the area's edge).
+      if (!rects.some((r) => r.minX < x0 + size && r.maxX > x0 && r.minZ < z0 + size && r.maxZ > z0)) continue;
+      addCell(x0 + size / 2, z0 + size / 2, (b) => groundCover(b, plan, H, x0, z0, size, inArea));
     }
   }
 
@@ -249,6 +260,17 @@ export function streetWork(plan: CityPlan, H: HeightFn, area: { minX: number; mi
   // ---- atlas roads
   plan.roads.forEach((road, ri) => {
     const L = lineLength(road.points);
+    if (road.style === 'stairs') {
+      // A flight of steps with a walkable grade from the street at its foot to the top (stairsRoad).
+      const sp = stairProfile(road.points, H);
+      stairPaths.set(ri, sp.path);
+      runs.push({ road: ri, s0: 0, s1: L, ctx: 'stairs' });
+      const mid = road.points[Math.floor(road.points.length / 2)];
+      // Where another road crosses the stairway, its parapets open onto the crossing.
+      const open = junctions.filter((j) => j.roads.includes(ri)).map((j) => ({ x: j.p[0], z: j.p[1], r: j.r + 0.6 }));
+      add(mid[0], mid[1], (bld) => stairsRoad(bld, road, sp, H, open));
+      return;
+    }
     // Arc-length intervals taken by junction squares.
     const cuts: [number, number][] = [];
     for (const j of junctions) {
@@ -341,6 +363,9 @@ export function streetWork(plan: CityPlan, H: HeightFn, area: { minX: number; mi
     const g = plan.grid;
     const bb = bounds(pl.polygon);
     const stalls: { p: Vec2; facing: number; kind: string }[] = [];
+    // Aisles from the middle of the square to the nearest streets around it, where the street
+    // graph links the square: no stall stands in them.
+    const aisles = marketAisles(plan, c, 3, 90);
     for (let x = bb.minX + 3; x < bb.maxX; x += 4.6) {
       for (let z = bb.minZ + 3; z < bb.maxZ; z += 4.6) {
         const p: Vec2 = [x + rng.range(-0.8, 0.8), z + rng.range(-0.8, 0.8)];
@@ -348,6 +373,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, area: { minX: number; mi
         // Clear ground only: no landmark, road or street under the stall or right around it.
         if ([[0, 0], [1.6, 0], [-1.6, 0], [0, 1.6], [0, -1.6]].some(([dx, dz]) => g.at(p[0] + dx, p[1] + dz) !== K.PLAZA)) continue;
         if (!rng.chance(0.5)) continue;
+        if (aisles.some(([a, b]) => distSegV(p, a, b) < 3.2)) continue;
         stalls.push({ p, facing: Math.atan2(c[0] - p[0], c[1] - p[1]), kind: rng.pick(['stall_fruit', 'stall_fish', 'stall_pottery', 'stall_cloth']) });
       }
     }
@@ -406,14 +432,19 @@ export function streetWork(plan: CityPlan, H: HeightFn, area: { minX: number; mi
         const t: Vec2 = [(z[0] - a[0]) / L, (z[1] - a[1]) / L], n: Vec2 = [-t[1], t[0]];
         const count = rng.int(2, 4);
         const seed = rng.int(0, 1e9);
+        const off = road.half + 1.8;
+        // Only where a cart can stand: open, level ground (not on another road, steps, a landmark).
+        const spots: [number, number][] = [];
+        for (let k = 0; k < count; k++) {
+          const x = a[0] + t[0] * (k * 5.5) + n[0] * off, zz = a[1] + t[1] * (k * 5.5) + n[1] * off;
+          if (cartGround(plan, H, x, zz, t) && inArea(x, zz)) spots.push([x, zz]);
+        }
+        for (const [x, zz] of spots) carts.push({ x, z: zz, heading: Math.atan2(t[0], t[1]) });
+        if (!spots.length) continue;
         add(a[0], a[1], (b) => {
           const r = new Rng(seed);
           const d = new Draw(b);
-          for (let k = 0; k < count; k++) {
-            const off = road.half + 1.8;
-            const x = a[0] + t[0] * (k * 5.5) + n[0] * off, zz = a[1] + t[1] * (k * 5.5) + n[1] * off;
-            placeProp(d, k % 2 ? 'handcart' : 'cart', x, H(x, zz), zz, Math.atan2(t[0], t[1]) + r.range(-0.2, 0.2), { rng: r });
-          }
+          spots.forEach(([x, zz], k) => placeProp(d, k % 2 ? 'handcart' : 'cart', x, H(x, zz), zz, Math.atan2(t[0], t[1]) + r.range(-0.2, 0.2), { rng: r }));
         }, 'detail');
       }
     }
@@ -489,7 +520,52 @@ export function streetWork(plan: CityPlan, H: HeightFn, area: { minX: number; mi
       if (amphorae) placeProp(d, 'amphora_stack', pz.r - 1.4, 0, 2.2, r.range(0, 6), { rng: r });
     }, 'detail');
   }
-  return { cells, junctions, spots, runs, lamps };
+  return { cells, junctions, spots, runs, lamps, carts, stairPaths };
+}
+
+/**
+ * Straight aisles from a square's middle to the nearest points of up to `count` different streets
+ * or roads within `maxD` m (the links the street graph makes from a plaza node).
+ */
+export function marketAisles(plan: CityPlan, c: Vec2, count: number, maxD: number): [Vec2, Vec2][] {
+  const cands: { p: Vec2; d: number; id: string }[] = [];
+  const lines: { id: string; pts: readonly Vec2[] }[] = [
+    ...plan.roads.filter((r) => r.style !== 'stairs').map((r) => ({ id: r.id, pts: r.points as Vec2[] })),
+    ...plan.streets.map((st) => ({ id: st.id, pts: st.points as Vec2[] })),
+  ];
+  for (const l of lines) {
+    const n = nearestOnPolyline(c, l.pts);
+    if (n.d <= maxD) cands.push({ p: n.p, d: n.d, id: l.id });
+  }
+  cands.sort((a, b) => a.d - b.d);
+  return cands.slice(0, count).map((x) => [c, x.p]);
+}
+
+function distSegV(p: Vec2, a: Vec2, b: Vec2): number {
+  const dx = b[0] - a[0], dz = b[1] - a[1];
+  const l2 = dx * dx + dz * dz;
+  const t = l2 > 0 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / l2)) : 0;
+  return Math.hypot(a[0] + dx * t - p[0], a[1] + dz * t - p[1]);
+}
+
+/** Ground classes a parked cart may stand on. */
+const CART_GROUND = new Set<number>([K.MARGIN, K.SCRAP, K.OUTSIDE, K.GARDEN, K.PLAZA]);
+
+/**
+ * Can a cart (≈ 3 × 1.6 m, along `t`) stand at (x, z)? Every corner on open ground of an allowed
+ * class, and the ground under it level within 0.4 m. Exported for tests.
+ */
+export function cartGround(plan: CityPlan, H: HeightFn, x: number, z: number, t: Vec2): boolean {
+  const n: Vec2 = [-t[1], t[0]];
+  let lo = Infinity, hi = -Infinity;
+  for (const [a, c] of [[0, 0], [1.6, 0.9], [1.6, -0.9], [-1.6, 0.9], [-1.6, -0.9]]) {
+    const px = x + t[0] * a + n[0] * c, pz = z + t[1] * a + n[1] * c;
+    if (!CART_GROUND.has(plan.grid.at(px, pz))) return false;
+    const y = H(px, pz);
+    lo = Math.min(lo, y);
+    hi = Math.max(hi, y);
+  }
+  return hi - lo < 0.4;
 }
 
 /** What a road runs through at a sample: 'skip' (inside a building), 'urban', 'open' or 'rural'. */
@@ -602,19 +678,54 @@ const COVER = new Set<number>([K.STREET, K.PIAZZA, K.SCRAP, K.FREE, K.AQUEDUCT, 
  */
 const PAVED = new Set<number>([K.MARGIN, K.ROAD]);
 
+/** Steepest grade (rise / run) at which the ground cover is still laid (cliffs keep their rock). */
+export const COVER_MAX_GRADE = 0.4;
+
 /**
  * Ground cover over the covered raster classes of one cell: packed earth over the town's scraps
- * and under the streets, cobbles on the landmark margins. Marching squares on the lattice of cell
- * centres: interior squares merge into runs of up to ~6 m, the boundary squares get the smooth
- * (45°) edge pieces, so the cover never shows the raster's staircase against the grass.
+ * and under the streets, cobbles on the landmark margins and, along the golden path, on the scraps
+ * and squares too. Not inside a block's outline (the block lays its own yard), not on slopes
+ * steeper than COVER_MAX_GRADE (no paving draped over a cliff) and not outside the detail area.
+ * Marching squares on the lattice of cell centres: interior squares merge into runs of up to
+ * ~6 m, the boundary squares get the smooth (45°) edge pieces, so the cover never shows the
+ * raster's staircase against the grass.
  */
-function groundCover(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: number, size: number) {
+function groundCover(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: number, size: number, inArea: (x: number, z: number) => boolean = () => true) {
+  const kinds = coverKinds(plan, x0, z0, size, inArea);
+  coverSet(b, plan, H, x0, z0, size, (i) => kinds.get(i) === 1, 'dirt', 0.04);
+  coverSet(b, plan, H, x0, z0, size, (i) => kinds.get(i) === 2, 'cobbles', 0.05);
+}
+
+/**
+ * What covers each raster cell of a street cell (and its 1-cell rim): 0 nothing, 1 packed earth,
+ * 2 cobbles. Exported for tests.
+ */
+export function coverKinds(plan: CityPlan, x0: number, z0: number, size: number, inArea: (x: number, z: number) => boolean = () => true): Map<number, number> {
   const g = plan.grid;
+  const out = new Map<number, number>();
   // Gravel and dirt roads keep earth edges; paved roads get cobbles up to the house fronts.
   const pavedRoad = (i: number) => plan.roads[g.owner[i] - 1_000_000]?.style === 'paved';
-  const paved = (i: number) => PAVED.has(g.cls[i]) && (g.cls[i] !== K.ROAD || pavedRoad(i));
-  coverSet(b, plan, H, x0, z0, size, (i) => COVER.has(g.cls[i]) || (g.cls[i] === K.ROAD && !pavedRoad(i)), 'dirt', 0.04);
-  coverSet(b, plan, H, x0, z0, size, paved, 'cobbles', 0.05);
+  const ix0 = Math.max(1, g.ix(x0) - 2), ix1 = Math.min(g.nx - 2, g.ix(x0 + size) + 2);
+  const iz0 = Math.max(1, g.iz(z0) - 2), iz1 = Math.min(g.nz - 2, g.iz(z0 + size) + 2);
+  const c2 = 2 * g.cell;
+  for (let iz = iz0; iz <= iz1; iz++) {
+    for (let ix = ix0; ix <= ix1; ix++) {
+      const i = iz * g.nx + ix;
+      const cls = g.cls[i];
+      const x = g.cx(ix), z = g.cz(iz);
+      let k = 0;
+      const block = cls === K.FREE && g.owner[i] >= 2_000_000 ? plan.blocks[g.owner[i] - 2_000_000] : null;
+      if (block && pointIn([x, z], block.outline as Vec2[])) k = 0;
+      else if (PAVED.has(cls) && (cls !== K.ROAD || pavedRoad(i))) k = 2;
+      else if (COVER.has(cls) || (cls === K.ROAD && !pavedRoad(i))) k = (cls === K.SCRAP || cls === K.PIAZZA || cls === K.FREE) && plan.corridor(x, z) ? 2 : 1;
+      if (k) {
+        const gx = (plan.hy[i + 1] - plan.hy[i - 1]) / c2, gz = (plan.hy[i + g.nx] - plan.hy[i - g.nx]) / c2;
+        if (gx * gx + gz * gz > COVER_MAX_GRADE * COVER_MAX_GRADE || !inArea(x, z)) k = 0;
+      }
+      if (k) out.set(i, k);
+    }
+  }
+  return out;
 }
 
 function coverSet(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: number, size: number, inSet: (i: number) => boolean, material: 'dirt' | 'cobbles', lift: number) {
@@ -678,20 +789,6 @@ function coverSet(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: n
 
 /** One piece of an atlas road (≤ 80 m) in its context (urban, open ground, rural, stairs). */
 function buildRoadPiece(b: MeshBuilder, road: PlanRoad, ctx: string, pts: Vec2[], H: HeightFn, capStart: boolean, capEnd: boolean) {
-  if (road.style === 'stairs') {
-    for (let k = 0; k + 1 < pts.length; k++) {
-      const a = pts[k], c = pts[k + 1];
-      // Flights of ~8 m with landings at the joints.
-      const L = Math.hypot(c[0] - a[0], c[1] - a[1]);
-      const n = Math.max(1, Math.ceil(L / 8));
-      for (let j = 0; j < n; j++) {
-        const p0: Vec2 = [a[0] + ((c[0] - a[0]) * j) / n, a[1] + ((c[1] - a[1]) * j) / n];
-        const p1: Vec2 = [a[0] + ((c[0] - a[0]) * (j + 1)) / n, a[1] + ((c[1] - a[1]) * (j + 1)) / n];
-        buildStairs(b, p0, p1, road.carriage, (x, z) => H(x, z) + 0.05, { material: 'travertine', riser: 0.17, parapet: 'tufa' });
-      }
-    }
-    return;
-  }
   const spec: StreetSpec = { points: pts, lift: LIFT.road, capStart, capEnd, steppingStones: [], seed: road.index };
   if (road.style === 'paved' && ctx === 'urban') {
     Object.assign(spec, { kind: 'paved', roadWidth: road.carriage, sidewalk: road.sidewalk, curb: 0.2 });
@@ -714,6 +811,169 @@ function buildMinorPiece(b: MeshBuilder, st: PlanStreet, pts: Vec2[], H: HeightF
   } else {
     buildStreet(b, { points: pts, kind: 'lane', roadWidth: st.width, roadMaterial: st.density > 0.85 ? 'dirt' : 'gravel', lift: LIFT.alley, seed: st.index }, H);
   }
+}
+
+// ---------------------------------------------------------------- stairs (scalae, gradus)
+
+/** Steepest grade of a flight (riser 0.2 m over a 0.3 m tread). */
+export const STAIR_MAX_GRADE = 0.66;
+
+export interface StairProfile {
+  /** The stairs' course (game m): the atlas line, extended down to the street at a foot on a slope. */
+  path: Vec2[];
+  /** Arc lengths along `path` of the profile samples, and the walking surface (game y) there. */
+  s: number[];
+  y: number[];
+}
+
+/**
+ * The walking surface of a flight of stairs along a polyline: the lowest profile that stays on or
+ * above the ground (+ 5 cm) and never climbs steeper than STAIR_MAX_GRADE. Where the atlas line
+ * starts or ends on a slope too steep for that (the Centum Gradus begins half-way up the Tarpeian
+ * cliff), the course is extended along its own direction (≤ 12 m) until the stairs reach the ground,
+ * so every flight starts at the street below and ends on the ground above. Pure.
+ */
+export function stairProfile(points: readonly Vec2[], H: HeightFn, maxGrade = STAIR_MAX_GRADE, ext = 12, ds = 0.5): StairProfile {
+  const pts = points.map((p) => [p[0], p[1]] as Vec2);
+  const n = pts.length;
+  const d0 = unitV(pts[0], pts[1]), d1 = unitV(pts[n - 1], pts[n - 2]);
+  // Extended course: E metres before the start and after the end.
+  const ext0: Vec2 = [pts[0][0] + d0[0] * ext, pts[0][1] + d0[1] * ext];
+  const ext1: Vec2 = [pts[n - 1][0] + d1[0] * ext, pts[n - 1][1] + d1[1] * ext];
+  const full: Vec2[] = [ext0, ...pts, ext1];
+  const L = lineLength(full);
+  const s: number[] = [], g: number[] = [];
+  const m = Math.max(2, Math.ceil(L / ds));
+  for (let i = 0; i <= m; i++) {
+    const si = (L * i) / m;
+    const p = pointAt(full, si);
+    s.push(si);
+    g.push(H(p[0], p[1]) + 0.05);
+  }
+  // Lowest profile ≥ ground with |slope| ≤ maxGrade: two passes of the slope-limited envelope.
+  const y = g.slice();
+  for (let i = 1; i <= m; i++) y[i] = Math.max(y[i], y[i - 1] - maxGrade * (s[i] - s[i - 1]));
+  for (let i = m - 1; i >= 0; i--) y[i] = Math.max(y[i], y[i + 1] - maxGrade * (s[i + 1] - s[i]));
+  // Trim the extensions to where the profile meets the ground (nothing to build beyond).
+  const sA = ext, sB = L - ext;
+  let i0 = s.findIndex((v) => v >= sA - 1e-6), i1 = s.length - 1 - [...s].reverse().findIndex((v) => v <= sB + 1e-6);
+  while (i0 > 0 && y[i0] - g[i0] > 0.03) i0--;
+  while (i1 < m && y[i1] - g[i1] > 0.03) i1++;
+  const s0 = s[i0], s1 = s[i1];
+  return { path: sliceLine(full, s0, s1), s: s.slice(i0, i1 + 1).map((v) => v - s0), y: y.slice(i0, i1 + 1) };
+}
+
+/** Walking height of a profile at arc length t. */
+export function profileAt(sp: StairProfile, t: number): number {
+  const { s, y } = sp;
+  if (t <= s[0]) return y[0];
+  if (t >= s[s.length - 1]) return y[y.length - 1];
+  let lo = 0, hi = s.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (s[mid] <= t) lo = mid;
+    else hi = mid;
+  }
+  const f = (t - s[lo]) / (s[hi] - s[lo] || 1);
+  return y[lo] + (y[hi] - y[lo]) * f;
+}
+
+/**
+ * An atlas stairway: travertine flights (≤ 4 m each, so they follow the profile's bends) on a
+ * tufa substructure down to the ground, low tufa parapets along both sides, and a smooth ramp
+ * collider under the step noses of every flight.
+ */
+function stairsRoad(b: MeshBuilder, road: PlanRoad, sp: StairProfile, H: HeightFn, open: { x: number; z: number; r: number }[] = []) {
+  const path = sp.path;
+  const L = lineLength(path);
+  const n = Math.max(1, Math.ceil(L / 4));
+  const opening = (x: number, z: number) => open.some((o) => Math.hypot(o.x - x, o.z - z) < o.r);
+  for (let k = 0; k < n; k++) {
+    const t0 = (L * k) / n, t1 = (L * (k + 1)) / n;
+    flight(b, pointAt(path, t0), pointAt(path, t1), profileAt(sp, t0), profileAt(sp, t1), road.carriage, H, 'travertine', 'tufa', opening);
+  }
+}
+
+/**
+ * One straight flight from a (walking height ya) to c (yc): steps standing on a solid base down to
+ * below the lowest ground under the flight, parapets, a ramp collider through the step noses and
+ * parapet colliders. Risers ≤ 0.2 m.
+ */
+function flight(b: MeshBuilder, a: Vec2, c: Vec2, ya: number, yc: number, width: number, H: HeightFn, mat: 'travertine' | 'tufa', parapet: 'tufa' | null, opening: (x: number, z: number) => boolean = () => false) {
+  const dx = c[0] - a[0], dz = c[1] - a[1];
+  const run = Math.hypot(dx, dz);
+  if (run < 0.05) return;
+  const yaw = Math.atan2(dx, dz);
+  const q = new THREE.Quaternion().setFromAxisAngle(UP, yaw);
+  const steps = Math.max(1, Math.ceil(Math.abs(yc - ya) / 0.2));
+  // The base reaches below the ground anywhere under the flight (it may stand proud of a slope).
+  let ground = Infinity;
+  const sx = Math.cos(yaw) * (width / 2), sz = -Math.sin(yaw) * (width / 2);
+  for (let i = 0; i <= 4; i++) {
+    const x = a[0] + (dx * i) / 4, z = a[1] + (dz * i) / 4;
+    ground = Math.min(ground, H(x, z), H(x + sx, z + sz), H(x - sx, z - sz));
+  }
+  const base = Math.min(ground, ya, yc) - 0.4;
+  for (let i = 0; i < steps; i++) {
+    const f0 = i / steps, f1 = (i + 1) / steps;
+    const top = ya + (yc - ya) * (yc > ya ? f1 : f0);
+    const mid = (f0 + f1) / 2;
+    b.add(BOX, mat, new THREE.Matrix4().compose(new THREE.Vector3(a[0] + dx * mid, (base + top) / 2, a[1] + dz * mid), q, new THREE.Vector3(width, top - base, run / steps + 0.01)));
+  }
+  if (parapet) {
+    for (const side of [-1, 1]) {
+      const ox = Math.cos(yaw) * (width / 2 + 0.15) * side, oz = -Math.sin(yaw) * (width / 2 + 0.15) * side;
+      const pieces = Math.max(1, Math.ceil(run / 1.5));
+      // Runs of parapet between openings, one collider each.
+      let r0 = -1;
+      for (let i = 0; i <= pieces; i++) {
+        const mid = (i + 0.5) / pieces;
+        const px = a[0] + dx * mid + ox, pz = a[1] + dz * mid + oz;
+        const solid = i < pieces && !opening(px, pz);
+        if (solid) {
+          const top = ya + (yc - ya) * mid + 0.9;
+          b.add(BOX, parapet, new THREE.Matrix4().compose(new THREE.Vector3(px, (top + base) / 2, pz), q, new THREE.Vector3(0.3, top - base, run / pieces + 0.01)));
+          if (r0 < 0) r0 = i;
+        } else if (r0 >= 0) {
+          const f0 = r0 / pieces, f1 = i / pieces, fm = (f0 + f1) / 2;
+          const y0 = ya + (yc - ya) * f0, y1 = ya + (yc - ya) * f1;
+          b.collider({ kind: 'box', center: new THREE.Vector3(a[0] + dx * fm + ox, (y0 + y1) / 2 + 0.45, a[1] + dz * fm + oz), half: new THREE.Vector3(0.15, Math.abs(y1 - y0) / 2 + 0.95, (run * (f1 - f0)) / 2), rotation: q.clone() });
+          r0 = -1;
+        }
+      }
+    }
+  }
+  // Ramp collider whose top passes through the step noses.
+  const pitch = Math.atan2(yc - ya, run);
+  const rq = q.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -pitch));
+  const thick = 0.3;
+  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(rq);
+  const center = new THREE.Vector3(a[0] + dx / 2, (ya + yc) / 2 + 0.02, a[1] + dz / 2).addScaledVector(up, -thick / 2);
+  b.collider({ kind: 'box', center, half: new THREE.Vector3(width / 2, thick / 2, Math.hypot(run, yc - ya) / 2 + 0.05), rotation: rq });
+}
+
+const BOX = new THREE.BoxGeometry(1, 1, 1);
+const UP = new THREE.Vector3(0, 1, 0);
+
+function unitV(a: Vec2, b: Vec2): Vec2 {
+  const x = a[0] - b[0], z = a[1] - b[1];
+  const l = Math.hypot(x, z) || 1;
+  return [x / l, z / l];
+}
+
+/** Point at arc length t along a polyline. */
+export function pointAt(pts: readonly Vec2[], t: number): Vec2 {
+  let acc = 0;
+  for (let k = 0; k + 1 < pts.length; k++) {
+    const a = pts[k], b = pts[k + 1];
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (acc + L >= t || k === pts.length - 2) {
+      const f = L > 0 ? Math.min(1, Math.max(0, (t - acc) / L)) : 0;
+      return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+    }
+    acc += L;
+  }
+  return [pts[0][0], pts[0][1]];
 }
 
 export type { PlanPiazza };

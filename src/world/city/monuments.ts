@@ -17,11 +17,11 @@ import { Rng } from '../../core/Rng';
 import { archway } from '../../arch/classical/arch';
 import { wall as ashlarWall } from '../../arch/common/walls';
 import type { Game } from '../../core/Game';
-import { MeshBuilder } from '../../gfx/MeshBuilder';
+import { MeshBuilder, type ColliderSpec } from '../../gfx/MeshBuilder';
 import type { MaterialId } from '../../gfx/materialIds';
 import type { Heightmap } from '../terrain/heightmap';
 import type { BatchPool } from './batches';
-import { offsetLine, type Bounds, type CityPlan, type PlanAqueduct, type PlanGate, type PlanWall } from './plan';
+import { offsetLine, type CityPlan, type PlanAqueduct, type PlanGate, type PlanWall } from './plan';
 import { K, type Pt } from './raster';
 import { addColliders, groundOffset } from './streamer';
 
@@ -36,10 +36,20 @@ const MATERIAL: Record<string, MaterialId> = {
   'aqua-traiana': 'brick',
 };
 
-export function buildMonuments(game: Game, plan: CityPlan, hm: Heightmap, pool: BatchPool, opts: { detailBounds: Bounds }) {
+/**
+ * Build every wall, gate and aqueduct into the pool. Colliders go to `opts.colliders` per ~120 m
+ * chunk (centre, radius, specs) when given, so they can exist only near the player; else to the
+ * physics world at once.
+ */
+export function buildMonuments(
+  game: Game,
+  plan: CityPlan,
+  hm: Heightmap,
+  pool: BatchPool,
+  opts: { inDetail: (x: number, z: number) => boolean; colliders?: (x: number, z: number, r: number, specs: ColliderSpec[]) => void },
+) {
   const H = (x: number, z: number) => hm.heightAt(x, z);
-  const db = opts.detailBounds;
-  const inDetail = (x: number, z: number) => x >= db.minX && x <= db.maxX && z >= db.minZ && z <= db.maxZ;
+  const inDetail = opts.inDetail;
   let pieces = 0;
   // Chunked builders (~120 m), so each chunk is one culling instance per material.
   const chunks = new Map<string, MeshBuilder>();
@@ -59,7 +69,10 @@ export function buildMonuments(game: Game, plan: CityPlan, hm: Heightmap, pool: 
     if (b.isEmpty) continue;
     const group = b.build(`city:mon:${k}`);
     pool.addGroup(group, { offset: groundOffset });
-    addColliders(game, b.colliders, { city: 'monuments' });
+    if (!b.colliders.length) continue;
+    const [ix, iz] = k.split(',').map(Number);
+    if (opts.colliders) opts.colliders((ix + 0.5) * 120, (iz + 0.5) * 120, 86, b.colliders.slice());
+    else addColliders(game, b.colliders, { city: 'monuments' });
   }
   return { pieces };
 }

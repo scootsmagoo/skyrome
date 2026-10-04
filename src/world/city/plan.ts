@@ -48,6 +48,11 @@ export interface PlanOptions {
   bounds?: Bounds;
   /** Blocks whose centroid lies inside get full detail (game m). Default: CORE_BOUNDS + 150 m real. */
   detailBounds?: Bounds;
+  /**
+   * Also detail the golden-path corridors (data.ts CORRIDORS) with this margin (REAL m) round
+   * them, so the way in from the spawn is never far massing. Default 150; null = core only.
+   */
+  corridorDetail?: number | null;
   /** Raster cell (game m). */
   cell?: number;
   seed?: number;
@@ -182,7 +187,12 @@ export interface CityPlan {
   bridges: { id: string; a: Pt; b: Pt; width: number }[];
   /** Open spaces / plazas (game polygons) for paving, markets and the street graph. */
   plazas: { id: string; polygon: Pt[]; kind: string }[];
+  /** The core detail rectangle (game m). */
   detailBounds: Bounds;
+  /** Every detail rectangle: the core and the corridors' boxes (game m). */
+  detailRects: Bounds[];
+  /** Inside the detail area (grown by `grow` m)? */
+  inDetail(x: number, z: number, grow?: number): boolean;
   mergeCell: number;
   /** Category of each atlas landmark (raster owner ids of LANDMARK / MARGIN / PLAZA cells index this). */
   landmarkCategory: string[];
@@ -201,6 +211,34 @@ const smooth = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 };
+
+/** The detail rectangles: the core, plus each golden-path corridor's box grown by `margin` real m. */
+export function detailArea(core: Bounds, margin: number | null): Bounds[] {
+  const out = [core];
+  if (margin === null) return out;
+  for (const c of CORRIDORS) {
+    const b = polyBounds(c.points as Pt[]);
+    const g = c.r + margin;
+    const r = { minX: (b.minX - g) * S, minZ: (b.minZ - g) * S, maxX: (b.maxX + g) * S, maxZ: (b.maxZ + g) * S };
+    // Only what sticks out of the core needs a rectangle of its own.
+    if (r.minX >= core.minX && r.maxX <= core.maxX && r.minZ >= core.minZ && r.maxZ <= core.maxZ) continue;
+    out.push(r);
+  }
+  return out;
+}
+
+export function inRects(rects: readonly Bounds[], x: number, z: number, grow = 0): boolean {
+  for (const b of rects) if (x >= b.minX - grow && x <= b.maxX + grow && z >= b.minZ - grow && z <= b.maxZ + grow) return true;
+  return false;
+}
+
+/** Bounding box of rectangles (grown). */
+export function rectsBounds(rects: readonly Bounds[], grow = 0): Bounds {
+  return {
+    minX: Math.min(...rects.map((b) => b.minX)) - grow, minZ: Math.min(...rects.map((b) => b.minZ)) - grow,
+    maxX: Math.max(...rects.map((b) => b.maxX)) + grow, maxZ: Math.max(...rects.map((b) => b.maxZ)) + grow,
+  };
+}
 
 export function scaleBounds(b: Bounds, grow = 0): Bounds {
   return { minX: (b.minX - grow) * S, minZ: (b.minZ - grow) * S, maxX: (b.maxX + grow) * S, maxZ: (b.maxZ + grow) * S };
@@ -231,6 +269,8 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
   const cell = opts.cell ?? 2;
   const bounds = opts.bounds ?? scaleBounds(atlas.CITY_BOUNDS);
   const detailBounds = opts.detailBounds ?? scaleBounds(atlas.CORE_BOUNDS, 150);
+  const detailRects = detailArea(detailBounds, opts.corridorDetail === undefined ? 150 : opts.corridorDetail);
+  const inDetail = (x: number, z: number, grow = 0) => inRects(detailRects, x, z, grow);
   const mergeCell = opts.mergeCell ?? 256;
   const seed = opts.seed ?? 113;
   const g = Grid.over(bounds, cell);
@@ -758,13 +798,14 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
       }
       const typical = ch.reg?.typical ?? [];
       const allowHorrea = !!ch.q?.horrea || ((typical.includes('warehouse') || typical.includes('horrea')) && ch.density > 0.6);
-      const detailed = centroid[0] >= detailBounds.minX && centroid[0] <= detailBounds.maxX && centroid[1] >= detailBounds.minZ && centroid[1] <= detailBounds.maxZ;
+      const detailed = inDetail(centroid[0], centroid[1]);
       const blk: PlanBlock = {
         id: `b${index}`, index, outline, holes, area: oa, centroid, radius,
         kind: garden ? 'garden' : 'built',
         region: ch.reg?.id ?? 'none', quarter: ch.q?.id ?? null,
         density: ch.density, wealth: ch.wealth, maxStoreys, allowHorrea,
-        yard: ch.q?.yard ?? (ch.wealth > 0.65 ? 'gravel' : ch.density > 0.8 ? 'dirt' : 'cobbles'),
+        // The golden path's yards are paved (no bare earth on the first walk of the game).
+        yard: ch.corridor ? 'cobbles' : ch.q?.yard ?? (ch.wealth > 0.65 ? 'gravel' : ch.density > 0.8 ? 'dirt' : 'cobbles'),
         frontEdges, sidewalk, detailed,
         cell: `${Math.floor(centroid[0] / mergeCell)},${Math.floor(centroid[1] / mergeCell)}`,
         seed: bseed, slope: sl, corridor: ch.corridor,
@@ -777,7 +818,7 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
   stats.blocks = blocks.length;
   stats.builtBlocks = blocks.filter((b) => b.kind === 'built').length;
   stats.totalMs = now() - t0;
-  return { grid: g, hy, region, roads, streets, blocks, piazzas, walls, gates, aqueducts, bridges: (atlas.BRIDGES ?? []).map((b) => ({ id: b.id, a: g2(b.a), b: g2(b.b), width: Math.max(3, b.width * S) })), plazas, detailBounds, mergeCell, landmarkCategory: atlas.LANDMARKS.map((l) => l.category), landmarkPolys: lmPolys.filter((l) => l.solid).map((l) => ({ index: l.index, id: l.lm.id, category: l.lm.category, poly: l.poly })), corridor: (x, z) => corridorAt(x, z).w > 0.5, stats };
+  return { grid: g, hy, region, roads, streets, blocks, piazzas, walls, gates, aqueducts, bridges: (atlas.BRIDGES ?? []).map((b) => ({ id: b.id, a: g2(b.a), b: g2(b.b), width: Math.max(3, b.width * S) })), plazas, detailBounds, detailRects, inDetail, mergeCell, landmarkCategory: atlas.LANDMARKS.map((l) => l.category), landmarkPolys: lmPolys.filter((l) => l.solid).map((l) => ({ index: l.index, id: l.lm.id, category: l.lm.category, poly: l.poly })), corridor: (x, z) => corridorAt(x, z).w > 0.5, stats };
 }
 
 // ---------------------------------------------------------------- small geometry

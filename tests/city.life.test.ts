@@ -8,7 +8,10 @@ import { describe, expect, it } from 'vitest';
 import * as atlas from '../src/data/atlas';
 import { CityLamps } from '../src/world/city/lamps';
 import { blockTorches, lifeWork, torchLamp, type LampDef } from '../src/world/city/life';
-import { layoutBlock } from '../src/world/city/massing';
+import { blockFillOptions, layoutBlock } from '../src/world/city/massing';
+import { frontClosure } from '../src/world/city/frontage';
+import { planLots } from '../src/arch/fabric/blockFiller';
+import { obbOverlap, polygonContainsOBB } from '../src/arch/fabric/polygon';
 import { buildStreetGraph } from '../src/world/city/network';
 import { scaleBounds } from '../src/world/city/plan';
 import { K, distToSeg, type Pt } from '../src/world/city/raster';
@@ -38,6 +41,30 @@ describe('golden path', () => {
     expect(cor.length).toBeGreaterThan(30);
     expect(cor.every((b) => b.kind === 'built')).toBe(true);
     for (const b of cor) expect(b.density).toBeGreaterThan(0.7);
+  });
+
+  it('closes the street wall of the corridor blocks (shop rows in the gaps, compound walls)', () => {
+    const cor = plan.blocks.filter((b) => b.corridor && b.kind === 'built');
+    let before = 0, after = 0;
+    for (const b of cor) {
+      const raw = planLots(b.outline as never, blockFillOptions(b, H));
+      const lay = layoutBlock(b, H);
+      const c = frontClosure(b, lay.lots, lay.walls);
+      before += frontClosure(b, raw, []);
+      after += c;
+      expect(c, b.id).toBeGreaterThan(0.75);
+      // No piazza lots on the street line, every infill lot inside the block clear of the others.
+      expect(lay.lots.some((l) => l.kind === 'piazza')).toBe(false);
+      const solid = lay.lots.filter((l) => l.kind !== 'alley');
+      for (const l of solid) {
+        expect(polygonContainsOBB(b.outline, l.obb, 0.05)).toBe(true);
+        for (const m of solid) if (m !== l) expect(obbOverlap(l.obb, m.obb, 0.05), `${l.id} ${m.id}`).toBe(false);
+      }
+      // The yards are paved.
+      expect(b.yard).toBe('cobbles');
+    }
+    expect(after / cor.length).toBeGreaterThan(0.9);
+    expect(after).toBeGreaterThan(before);
   });
 
   it('links the gate to the Forum on the street graph', () => {

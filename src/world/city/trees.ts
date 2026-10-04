@@ -239,6 +239,32 @@ export class TreeLayer {
     }
   }
 
+  /**
+   * Trunk colliders grouped in square cells of `cell` m: centre, radius and a maker for the specs
+   * (handed to ProximityColliders, so only the trees near the player have colliders).
+   */
+  trunkGroups(cell = 32): { x: number; z: number; r: number; specs: () => ColliderSpec[] }[] {
+    const cells = new Map<string, typeof this.trunks>();
+    for (const t of this.trunks) {
+      const k = `${Math.floor(t.x / cell)},${Math.floor(t.z / cell)}`;
+      const l = cells.get(k);
+      if (l) l.push(t);
+      else cells.set(k, [t]);
+    }
+    return [...cells.entries()].map(([k, list]) => {
+      const [ix, iz] = k.split(',').map(Number);
+      return {
+        x: (ix + 0.5) * cell, z: (iz + 0.5) * cell, r: cell * Math.SQRT1_2,
+        specs: () => list.map((t): ColliderSpec => ({ kind: 'cylinder', center: new THREE.Vector3(t.x, t.y + 1.5 * t.s, t.z), halfHeight: 1.5 * t.s, radius: t.r * t.s })),
+      };
+    });
+  }
+
+  /** Trunks as discs (game m) grown by a walker's radius and a margin, for keeping paths clear. */
+  trunkDiscs(): { x: number; z: number; r: number }[] {
+    return this.trunks.map((t) => ({ x: t.x, z: t.z, r: t.r * t.s + 0.55 }));
+  }
+
   /** Trunk colliders of the trees inside a rectangle (game m). */
   colliders(area?: { minX: number; minZ: number; maxX: number; maxZ: number }): ColliderSpec[] {
     const out: ColliderSpec[] = [];

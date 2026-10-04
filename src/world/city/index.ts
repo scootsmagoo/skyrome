@@ -7,8 +7,11 @@
  * → street work per cell (roads.ts) → walls / gates / aqueducts (monuments.ts) → trees and grass
  * → street graph (network.ts) → CityStreamer (lazy detail near the player).
  *
- * `extent: 'core'` builds detailed blocks and streets for the atlas core (+150 m) and far massing
- * for the rest of the city; `extent: 'city'` streams detail everywhere.
+ * `extent: 'core'` builds detailed blocks and streets for the atlas core (+150 m) and the golden-
+ * path corridors, and far massing for the rest of the city; `extent: 'city'` streams detail
+ * everywhere. Colliders of the far massing, the trees, walls and arcades exist only near the player
+ * (ProximityColliders). The city tells the terrain dressing which ground it dresses itself
+ * (`coversGround`, `ownsTrees`).
  */
 import * as THREE from 'three';
 import type { Game } from '../../core/Game';
@@ -21,16 +24,18 @@ import { WORLD_SCALE, toGame } from '../coords';
 import type { Heightmap } from '../terrain/heightmap';
 import { BatchPool } from './batches';
 import { renderBreakdown } from './debug';
-import { FlatSoup, blockFarGeometry, layoutBlock, ribbon } from './massing';
+import { FlatSoup, blockFarGeometry, layoutBlock, ribbon, type LotMass } from './massing';
 import { buildMonuments } from './monuments';
 import { buildStreetGraph, type StreetGraph } from './network';
-import { planCity, scaleBounds, type CityPlan } from './plan';
+import { inRects, planCity, rectsBounds, scaleBounds, type CityPlan } from './plan';
 import { K } from './raster';
 import { cellAdder, cellKey, streetWork } from './roads';
 import { CityLamps } from './lamps';
 import { lifeWork, torchFlames, torchLamp } from './life';
 import { CityStreamer, addColliders, type BlockRec, type CellRec } from './streamer';
 import type { ColliderSpec } from '../../gfx/MeshBuilder';
+import type { RAPIER } from '../../core/Physics';
+import { ProximityColliders, type ColliderHost } from './proximity';
 import { TreeLayer } from './trees';
 import { placeTrees } from './vegetation';
 
@@ -45,6 +50,17 @@ export interface CityService {
   blockSpots(blockId: string): Spot[] | null;
   /** Ground class at a game position (see raster.ts `K`). */
   classAt(x: number, z: number): number;
+  /**
+   * Does the city dress this ground itself (streets, squares, aprons, yards, blocks and walls, and
+   * in its detail area also the grass and trees of the open ground)? The terrain dressing
+   * (terrain/dress.ts) plants no grass, stones, kerbs or trees there. Landmark footprints and the
+   * river are left to their own builders.
+   */
+  coversGround(x: number, z: number): boolean;
+  /** Does the city plant the trees here (gardens, slopes and scraps of its regions)? */
+  ownsTrees(x: number, z: number): boolean;
+  /** Live city colliders near the player (debug / tests). */
+  colliders(): { massing: number; trees: number; monuments: number };
   /** Build everything due around a position now (after a teleport). */
   prime(pos: THREE.Vector3Like): void;
   stats: Record<string, number>;
@@ -74,8 +90,11 @@ export async function buildCity(
   const cityBounds = scaleBounds(atlas.CITY_BOUNDS);
   const detailBounds = opts.extent === 'city' ? cityBounds : scaleBounds(atlas.CORE_BOUNDS, 150);
 
-  // ---- 1. plan
-  const plan = planCity(atlas, hm, { detailBounds });
+  // ---- 1. plan (detail: the core + 150 m, and the golden-path corridors + 150 m round them)
+  const plan = planCity(atlas, hm, { detailBounds, corridorDetail: opts.extent === 'city' ? null : 150 });
+  // Where streets, ground cover and city grass exist: the detail area plus a 60 m fringe.
+  const areaRects = plan.detailRects.map((b) => ({ minX: b.minX - 60, minZ: b.minZ - 60, maxX: b.maxX + 60, maxZ: b.maxZ + 60 }));
+  const inDetail = (x: number, z: number) => inRects(areaRects, x, z);
   stats.planMs = performance.now() - T;
   report(0.2, 'Laying out the vici');
   await tick();
@@ -98,27 +117,23 @@ export async function buildCity(
     }
   }
   stats.massingMs = performance.now() - T - stats.planMs;
-  // Outside the detail area the massing is all there is: give its buildings box colliders, so
-  // nobody walks through the backdrop.
-  {
-    const t1 = performance.now();
-    const specs: ColliderSpec[] = [];
-    for (const r of blocks) {
-      if (r.blk.detailed || !r.layout) continue;
-      for (const m of r.layout.masses) {
-        const { c, u, hu, hv } = m.obb;
-        const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(-u[1], u[0]));
-        specs.push({ kind: 'box', center: new THREE.Vector3(c[0], (m.base + m.eave) / 2, c[1]), half: new THREE.Vector3(hu, (m.eave - m.base) / 2, hv), rotation: q });
-      }
-    }
-    addColliders(game, specs, { city: 'massing' });
-    stats.massingColliders = specs.length;
-    stats.massingCollidersMs = performance.now() - t1;
+  // Outside the detail area the massing is all there is: its buildings get box colliders, so
+  // nobody walks through the backdrop, but only near the player (ProximityColliders): thousands of
+  // colliders minutes away only cost Rapier time every step.
+  const host: ColliderHost<RAPIER.Collider> = {
+    add: (spec, owner) => addColliders(game, [spec], owner)[0],
+    remove: (c) => game.physics.removeCollider(c),
+  };
+  const massColliders = new ProximityColliders(host, { near: 80, far: 110 });
+  for (const r of blocks) {
+    if (r.blk.detailed || !r.layout || !r.layout.masses.length) continue;
+    const masses = r.layout.masses;
+    massColliders.add(r.blk.centroid[0], r.blk.centroid[1], r.blk.radius, () => masses.map((m) => massCollider(m)), { city: 'massing' });
   }
+  stats.massingColliderBlocks = massColliders.size;
 
   // ---- 3. streets: detailed work per cell in the detail area, far ribbons elsewhere
-  const inDetail = (x: number, z: number) => x >= detailBounds.minX - 60 && x <= detailBounds.maxX + 60 && z >= detailBounds.minZ - 60 && z <= detailBounds.maxZ + 60;
-  const work = streetWork(plan, H, { minX: detailBounds.minX - 60, minZ: detailBounds.minZ - 60, maxX: detailBounds.maxX + 60, maxZ: detailBounds.maxZ + 60 }, STREET_CELL);
+  const work = streetWork(plan, H, areaRects, STREET_CELL);
   // Street life: stalls, goods, benches, statues and trees on the landmark frontages, washing
   // lines over the lanes (built with the street cells).
   const life = lifeWork(plan, H, inDetail, cellAdder(work.cells, STREET_CELL, inDetail));
@@ -152,7 +167,12 @@ export async function buildCity(
   await tick();
 
   // ---- 4. walls, gates, aqueducts
-  const mon = buildMonuments(game, plan, hm, pool, { detailBounds });
+  // Wall, gate and arcade colliders near the player only (per ~120 m chunk).
+  const monColliders = new ProximityColliders(host, { near: 90, far: 125 });
+  const mon = buildMonuments(game, plan, hm, pool, {
+    inDetail: (x, z) => plan.inDetail(x, z),
+    colliders: (x, z, r, specs) => monColliders.add(x, z, r, () => specs, { city: 'monuments' }),
+  });
   stats.monuments = mon.pieces;
   report(0.65, 'Raising the aqueducts');
   await tick();
@@ -160,7 +180,7 @@ export async function buildCity(
   // ---- 5. trees and grass (vegetation materials clone the textured library materials)
   await whenTexturesLoaded().catch(() => {});
   const trees = new TreeLayer({ near: 45, far: 1000, thinFrom: 200, minKeep: 0.12 });
-  for (const sp of placeTrees(plan, cityBounds, hm.waterLevelY, 31, inDetail)) trees.add(sp.species, sp.x, H(sp.x, sp.z), sp.z, { scale: sp.scale });
+  for (const sp of placeTrees(plan, cityBounds, hm.waterLevelY, 31, inDetail, inDetail)) trees.add(sp.species, sp.x, H(sp.x, sp.z), sp.z, { scale: sp.scale });
   for (const sp of life.trees) trees.add(sp.species, sp.x, H(sp.x, sp.z), sp.z, { scale: sp.scale });
   const yardSpecies = ['fig', 'laurel', 'umbrella_pine', 'cypress', 'olive', 'fig'] as const;
   for (const r of blocks) {
@@ -168,12 +188,15 @@ export async function buildCity(
     r.layout.trees.forEach(([x, z], k) => trees.add(yardSpecies[(r.blk.seed + k) % yardSpecies.length], x, H(x, z), z, { scale: 0.7 + ((r.blk.seed >> (k + 3)) % 30) / 100 }));
   }
   game.scene.add(trees.build());
-  addColliders(game, trees.colliders({ minX: detailBounds.minX - 100, minZ: detailBounds.minZ - 100, maxX: detailBounds.maxX + 100, maxZ: detailBounds.maxZ + 100 }), { city: 'trees' });
+  // Trunk colliders near the player only (per 32 m cell of trees).
+  const treeColliders = new ProximityColliders(host, { near: 60, far: 85 });
+  for (const tg of trees.trunkGroups(32)) treeColliders.add(tg.x, tg.z, tg.r, tg.specs, { city: 'trees' });
   stats.trees = trees.total;
   const g = plan.grid;
-  const grass = new GrassField(detailBounds, {
+  const grass = new GrassField(rectsBounds(areaRects), {
     heightAt: H,
     mask: (x, z) => {
+      if (!inDetail(x, z)) return false;
       const c = g.at(x, z);
       // Not on the paved landmark margins, nor in the town's scraps along the golden path.
       return c === K.GARDEN || c === K.STEEP || c === K.OUTSIDE || (c === K.SCRAP && !plan.corridor(x, z)) || c === K.WALL || c === K.AQUEDUCT;
@@ -191,7 +214,13 @@ export async function buildCity(
     name: 'cityTrees',
     priority: 106,
     lateUpdate: () => {
-      trees.update(game.camera, game.world?.distanceScale ?? 1);
+      const scale = game.world?.distanceScale ?? 1;
+      trees.update(game.camera, scale);
+      // Colliders follow the player (the camera when there is none).
+      const who = (game as Game & { player?: { position: THREE.Vector3 } }).player?.position ?? game.camera.position;
+      massColliders.update(who);
+      treeColliders.update(who);
+      monColliders.update(who);
       // Lamplit windows in the far massing follow the sky's lamp factor.
       const sky = (game as Game & { sky?: { lampFactor?: number } }).sky;
       farMat.userData.uLamp.value = sky?.lampFactor ?? 0;
@@ -202,8 +231,11 @@ export async function buildCity(
   report(0.8, 'Planting the gardens');
   await tick();
 
-  // ---- 6. street graph
-  const graph = buildStreetGraph(plan, work, game, (x, z) => inDetail(x, z));
+  // ---- 6. street graph. Its links are checked against the static colliders (landmarks, bridges,
+  // quays, walls): Rapier only sees colliders in ray casts after a step, and nothing has stepped the
+  // world during the load yet (no bodies exist, so one step moves nothing).
+  game.physics.step(1 / 60);
+  const graph = buildStreetGraph(plan, work, game, (x, z) => inDetail(x, z), { obstacles: trees.trunkDiscs() });
   game.streets = graph;
   stats.graphNodes = graph.nodes.length;
 
@@ -215,20 +247,37 @@ export async function buildCity(
   stats.lamps = lamps.total;
 
   // ---- 8. streamer
-  const streamer = game.addSystem(new CityStreamer(game, pool, blocks, cells, H));
+  // Dev overrides: ?cityNear=<m>&cityMid=<m>&cityLow=<m>&cityFar=<m>&cityMidShadows=0.
+  const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
+  const num = (k: string) => (q.get(k) ? Number(q.get(k)) : undefined);
+  const streamer = game.addSystem(new CityStreamer(game, pool, blocks, cells, H, {
+    ...(num('cityNear') ? { nearR: num('cityNear') } : {}),
+    ...(num('cityMid') ? { midR: num('cityMid') } : {}),
+    ...(num('cityLow') ? { lowR: num('cityLow') } : {}),
+    ...(num('cityFar') ? { farMax: num('cityFar') } : {}),
+    ...(q.get('cityMidShadows') === '0' ? { midShadows: false } : {}),
+  }));
   const byId = new Map(blocks.map((b) => [b.blk.id, b]));
   const service: CityService = {
     plan, pool, streamer, lamps, trees, grass, stats,
     blockSpots: (id) => byId.get(id)?.spots ?? null,
     classAt: (x, z) => g.at(x, z),
-    prime: (p) => streamer.prime(new THREE.Vector3(p.x, p.y, p.z)),
+    coversGround: (x, z) => coversGround(plan, inDetail, x, z),
+    ownsTrees: (x, z) => ownsTrees(plan, inDetail, x, z),
+    prime: (p) => {
+      streamer.prime(new THREE.Vector3(p.x, p.y, p.z));
+      massColliders.update(p, 1, true);
+      treeColliders.update(p, 1, true);
+      monColliders.update(p, 1, true);
+    },
+    colliders: () => ({ massing: massColliders.live, trees: treeColliders.live, monuments: monColliders.live }),
   };
   game.city = service;
   // Build the detail around the expected spawn now, so the first frames do not pop.
   const spawn = opts.spawn ?? guessSpawn(atlas, H);
   if (spawn) {
     const t1 = performance.now();
-    streamer.prime(new THREE.Vector3(spawn.x, spawn.y, spawn.z));
+    service.prime(spawn);
     stats.primeMs = performance.now() - t1;
   }
   stats.totalMs = performance.now() - T;
@@ -319,6 +368,37 @@ float cityLit = 0.0;
 }
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
+
+/** Box collider of a far-massing building. */
+function massCollider(m: LotMass): ColliderSpec {
+  const { c, u, hu, hv } = m.obb;
+  const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(-u[1], u[0]));
+  return { kind: 'box', center: new THREE.Vector3(c[0], (m.base + m.eave) / 2, c[1]), half: new THREE.Vector3(hu, (m.eave - m.base) / 2, hv), rotation: q };
+}
+
+/** Ground the city dresses itself (see CityService.coversGround). */
+export function coversGround(plan: CityPlan, inDetail: (x: number, z: number) => boolean, x: number, z: number): boolean {
+  const g = plan.grid;
+  const i = g.index(x, z);
+  if (i < 0) return false;
+  const c = g.cls[i];
+  if (c === K.LANDMARK || c === K.WATER) return false;
+  // The detail area: streets, ground cover, the city's own grass and trees everywhere.
+  if (inDetail(x, z)) return true;
+  // Beyond it, what the far city stands on: blocks of massing, street ribbons, walls, the
+  // aqueducts' pier lines, fora.
+  return c === K.STREET || c === K.WALL || c === K.AQUEDUCT || c === K.PLAZA || (c === K.FREE && g.owner[i] >= 2_000_000);
+}
+
+/** Ground whose trees the city plants (placeTrees / yard trees): its regions, and all of the detail area. */
+export function ownsTrees(plan: CityPlan, inDetail: (x: number, z: number) => boolean, x: number, z: number): boolean {
+  const g = plan.grid;
+  const i = g.index(x, z);
+  if (i < 0) return false;
+  const c = g.cls[i];
+  if (c === K.LANDMARK || c === K.WATER) return false;
+  return c !== K.OUTSIDE || inDetail(x, z);
+}
 
 /** Street work is built per 128 m cell (one culling instance per material each). */
 const STREET_CELL = 128;

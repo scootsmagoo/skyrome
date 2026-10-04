@@ -2,8 +2,8 @@
  * CityStreamer: level of detail and lazy building for the city, run after the WorldRegistry.
  *
  * Every block always has its far stand-in (massing.ts) in the shared far batch. Blocks of the
- * detail area also get, built lazily (nearest first, one build every other frame) and dropped
- * again well beyond their range, the CityBlockFiller's levels:
+ * detail area also get, built lazily (nearest first) and dropped again well beyond their range,
+ * the CityBlockFiller's levels:
  *
  *   full  (interiors, props, colliders)        within `nearR`
  *   mid   (the street-facing exterior)         within `midR`
@@ -16,20 +16,25 @@
  * `cellR` of the camera and dropped beyond 1.5 × that.
  *
  * Distances are measured from the block's footprint (centroid distance minus most of its radius)
- * and scaled by the view-distance setting, like the registry's.
+ * and scaled by the view-distance setting, like the registry's. Build order and reach use the
+ * nearer of the camera and where it will be in two seconds (its velocity), so blocks ahead of a
+ * walker are ready before they are needed.
+ *
+ * A block level is built as a job of small units (fill.ts: the yard, each lot, each back insula,
+ * walls, torches), one unit per step, within a per-frame time budget: no frame pays for a whole
+ * block.
  */
 import * as THREE from 'three';
 import type { Game, System } from '../../core/Game';
 import type { RAPIER } from '../../core/Physics';
-import { fillBlock } from '../../arch/fabric/blockFiller';
-import { insula, MAX_BUILDING_HEIGHT } from '../../arch/fabric/insula';
-import type { Detail, Polygon, Spot } from '../../arch/fabric/types';
+import type { Spot } from '../../arch/fabric/types';
 import { MeshBuilder, type ColliderSpec } from '../../gfx/MeshBuilder';
-import type { BatchHandle, BatchPool } from './batches';
+import { BatchHandle, type BatchPool, type BatchRef } from './batches';
+import { fillUnits, type FillUnit } from './fill';
 import type { BlockLayout, HeightFn } from './massing';
 import type { PlanBlock } from './plan';
 import type { CellWork } from './roads';
-import { torchGroup } from './life';
+import { torchFlames } from './life';
 
 export type Level = 'full' | 'mid' | 'low';
 const LEVELS: Level[] = ['full', 'mid', 'low'];
@@ -44,6 +49,8 @@ export interface BlockRec {
   center: THREE.Vector3;
   /** Distance from the camera at the last evaluation. */
   d: number;
+  /** Build distance: the nearer of the camera's and its look-ahead point's. */
+  dp?: number;
 }
 
 export interface CellRec {
@@ -55,6 +62,18 @@ export interface CellRec {
   detail: { handle: BatchHandle; colliders: RAPIER.Collider[] } | null;
   far: BatchHandle | null;
   d: number;
+  dp?: number;
+}
+
+/** A block level being built unit by unit. */
+interface Job {
+  r: BlockRec;
+  level: Level;
+  it: Generator<FillUnit, void, void>;
+  refs: BatchRef[];
+  colliders: RAPIER.Collider[];
+  spots: Spot[];
+  ms: number;
 }
 
 export interface StreamerOptions {
@@ -65,8 +84,17 @@ export interface StreamerOptions {
   /** Street furniture / props of the cells. */
   detailR?: number;
   farMax?: number;
-  /** Max milliseconds of building per frame (one build always runs when something is due). */
+  /** Max milliseconds of building per frame (one step always runs when something is due). */
   budgetMs?: number;
+  /** Seconds of camera motion to look ahead when ordering builds. */
+  lookAhead?: number;
+  /** Do mid-level blocks cast shadows? */
+  midShadows?: boolean;
+  /**
+   * Triangle budget of the whole frame (game.stats): above `high` the mid level's shadows go off
+   * (the shadow pass is the city's dearest part), below `low` they come back.
+   */
+  shadowBudget?: { high: number; low: number };
 }
 
 const OFFSET_MATS = new Set(['paving_basalt', 'paving_travertine', 'cobbles', 'gravel', 'dirt', 'grass', 'dry_grass', 'sand', 'mud', 'mosaic']);
@@ -82,9 +110,13 @@ export class CityStreamer implements System {
   private o: Required<StreamerOptions>;
   private lastPos = new THREE.Vector3(Infinity, 0, 0);
   private prevCam = new THREE.Vector3(Infinity, 0, 0);
+  private vel = new THREE.Vector3();
+  private ahead = new THREE.Vector3();
+  private lastT = 0;
   private frame = 0;
-  /** Builds done so far and their cost (debug). */
-  builds = { full: 0, mid: 0, low: 0, cell: 0, ms: 0, fullMs: 0, midMs: 0, lowMs: 0, cellMs: 0 };
+  private job: Job | null = null;
+  /** Builds done so far and their cost (debug); `maxStepMs` is the longest single step. */
+  builds = { full: 0, mid: 0, low: 0, cell: 0, ms: 0, fullMs: 0, midMs: 0, lowMs: 0, cellMs: 0, units: 0, maxStepMs: 0 };
   /** Called when a block's full level is built (exact spots available). */
   onFull?: (rec: BlockRec) => void;
 
@@ -96,7 +128,8 @@ export class CityStreamer implements System {
     private readonly H: HeightFn,
     opts: StreamerOptions = {},
   ) {
-    this.o = { nearR: 30, midR: 85, lowR: 140, cellR: 230, detailR: 110, farMax: 3200, budgetMs: 6, ...opts };
+    this.o = { nearR: 30, midR: 85, lowR: 140, cellR: 230, detailR: 110, farMax: 3200, budgetMs: 5, lookAhead: 2, midShadows: true, shadowBudget: { high: 2.45e6, low: 2.0e6 }, ...opts };
+    if (!this.o.midShadows) pool.setShadows('mid', false);
   }
 
   private get scale() {
@@ -110,17 +143,22 @@ export class CityStreamer implements System {
   /** Build what the first frames need around `pos` right now (loading screen, teleports). */
   prime(pos: THREE.Vector3) {
     this.prevCam.copy(pos);
+    this.vel.set(0, 0, 0);
     this.evaluate(pos);
     const s = this.scale;
     const lim = { full: this.o.nearR * s, mid: this.o.midR * s, low: Math.min(this.o.lowR, 140) * s, cell: Math.min(this.o.cellR, 200) * s, detail: this.o.detailR * s };
     let guard = 0;
-    while (this.step(lim) && guard++ < 800);
+    while (this.step(lim) && guard++ < 8000);
     this.applyVisibility();
   }
 
   lateUpdate() {
     const cam = this.game.camera.position;
     this.frame++;
+    this.pool.sync();
+    const now = performance.now();
+    const dt = Math.min(0.25, Math.max(1e-3, (now - this.lastT) / 1000));
+    this.lastT = now;
     // A jump (teleport, loaded save, a new spawn): build what the new place needs right away
     // rather than streaming it in over the next seconds.
     if (cam.distanceToSquared(this.prevCam) > 80 * 80) {
@@ -128,28 +166,53 @@ export class CityStreamer implements System {
       this.prime(cam);
       return;
     }
+    // Smoothed camera velocity, for the look-ahead point.
+    this.vel.lerp(TMP.copy(cam).sub(this.prevCam).divideScalar(dt), 0.08);
     this.prevCam.copy(cam);
     if (cam.distanceToSquared(this.lastPos) > 4 || this.frame % 20 === 0) this.evaluate(cam);
-    // At most one build every other frame (a block takes 10–50 ms), unless something close is missing.
+    // Units of a few ms each, within the frame budget; at least one every other frame while
+    // something is due, every frame when something close is missing.
     let n = 0;
     if (this.frame % 2 === 0 || this.urgent()) {
       const t0 = performance.now();
       while (performance.now() - t0 < this.o.budgetMs || n === 0) {
+        const s0 = performance.now();
         if (!this.step()) break;
+        this.builds.maxStepMs = Math.max(this.builds.maxStepMs, performance.now() - s0);
         n++;
       }
     }
     if (n) this.evaluate(cam);
     this.applyVisibility();
+    if (this.frame % 30 === 0) this.shadowBudget();
+  }
+
+  /** Mid-level shadows follow the frame's triangle count (with hysteresis). */
+  private midShadowsOn = true;
+  private shadowBudget() {
+    if (!this.o.midShadows) return;
+    const tris = this.game.stats.triangles;
+    const { high, low } = this.o.shadowBudget;
+    if (this.midShadowsOn && tris > high) this.midShadowsOn = false;
+    else if (!this.midShadowsOn && tris < low) this.midShadowsOn = true;
+    else return;
+    this.pool.setShadows('mid', this.midShadowsOn);
   }
 
   private evaluate(pos: THREE.Vector3) {
     this.lastPos.copy(pos);
-    for (const r of this.blocks) r.d = Math.max(0, Math.hypot(r.center.x - pos.x, r.center.z - pos.z, (r.center.y - pos.y) * 0.5) - r.blk.radius * 0.8);
+    // Where the camera will be in `lookAhead` s (at most 40 m away).
+    const a = this.ahead.copy(this.vel).setY(0).multiplyScalar(this.o.lookAhead);
+    if (a.length() > 40) a.setLength(40);
+    a.add(pos);
+    for (const r of this.blocks) {
+      r.d = Math.max(0, Math.hypot(r.center.x - pos.x, r.center.z - pos.z, (r.center.y - pos.y) * 0.5) - r.blk.radius * 0.8);
+      const da = Math.max(0, Math.hypot(r.center.x - a.x, r.center.z - a.z, (r.center.y - pos.y) * 0.5) - r.blk.radius * 0.8);
+      r.dp = Math.min(r.d, da);
+    }
     for (const c of this.cells) {
-      const dx = Math.max(c.bounds.minX - pos.x, 0, pos.x - c.bounds.maxX);
-      const dz = Math.max(c.bounds.minZ - pos.z, 0, pos.z - c.bounds.maxZ);
-      c.d = Math.hypot(dx, dz, Math.max(0, Math.abs(pos.y - c.y) - 40));
+      c.d = cellDist(c, pos.x, pos.z, pos.y);
+      c.dp = Math.min(c.d, cellDist(c, a.x, a.z, pos.y));
     }
   }
 
@@ -159,6 +222,13 @@ export class CityStreamer implements System {
     for (const r of this.blocks) if (!r.levels.full && r.layout && r.blk.detailed && r.d < this.o.nearR * 0.6 * s) return true;
     for (const c of this.cells) if ((!c.near || (!c.detail && c.work.detail.length)) && c.d < 50 * s) return true;
     return false;
+  }
+
+  /** Is a block level due (not built, not being built, within reach)? */
+  private due(r: BlockRec, l: Level, lim?: Record<Level | 'cell' | 'detail', number>) {
+    if (r.levels[l] || (this.job && this.job.r === r && this.job.level === l)) return false;
+    const reach = lim?.[l] ?? this.radius(l) * 1.25 + 10;
+    return (r.dp ?? r.d) < reach;
   }
 
   /** Run evictions and the most urgent build. Returns false when nothing is due. */
@@ -172,50 +242,90 @@ export class CityStreamer implements System {
       if (c.near && c.d > this.o.cellR * 1.5 * s) this.dropCell(c);
       if (c.detail && c.d > this.o.detailR * 1.5 * s) this.dropDetail(c);
     }
+    // A job whose block went out of reach meanwhile is abandoned.
+    const job = this.job;
+    if (job && job.r.d > this.radius(job.level) * 1.35 + 16) this.abort();
+    const t0 = performance.now();
+    if (this.job) {
+      this.advance();
+      this.builds.ms += performance.now() - t0;
+      return true;
+    }
     let best: (() => void) | null = null, bp = Infinity;
     for (const r of this.blocks) {
       if (!r.layout || !r.blk.detailed) continue;
+      const d = r.dp ?? r.d;
       for (const l of LEVELS) {
-        if (r.levels[l]) continue;
-        const reach = lim?.[l] ?? this.radius(l) * 1.25 + 10;
-        if (r.d < reach && r.d + BIAS[l] < bp) {
-          bp = r.d + BIAS[l];
-          best = () => this.build(r, l);
+        if (d + BIAS[l] < bp && this.due(r, l, lim)) {
+          bp = d + BIAS[l];
+          best = () => this.start(r, l);
         }
       }
     }
     const cellLim = lim?.cell ?? this.o.cellR * s;
     const detailLim = lim?.detail ?? this.o.detailR * s;
     for (const c of this.cells) {
-      if (!c.near && c.d < cellLim && c.d - 40 < bp) { bp = c.d - 40; best = () => this.buildCell(c); }
-      if (!c.detail && c.work.detail.length && c.d < detailLim && c.d - 20 < bp) { bp = c.d - 20; best = () => this.buildDetail(c); }
+      const d = c.dp ?? c.d;
+      if (!c.near && d < cellLim && d - 40 < bp) { bp = d - 40; best = () => this.buildCell(c); }
+      if (!c.detail && c.work.detail.length && d < detailLim && d - 20 < bp) { bp = d - 20; best = () => this.buildDetail(c); }
     }
     if (!best) return false;
-    const t0 = performance.now();
     best();
     this.builds.ms += performance.now() - t0;
     return true;
   }
 
-  private build(r: BlockRec, l: Level) {
+  /** Start building a block level (and build its first unit). */
+  private start(r: BlockRec, l: Level) {
+    this.job = { r, level: l, it: fillUnits(r.blk, r.layout!, l, this.H), refs: [], colliders: [], spots: [], ms: 0 };
+    this.advance();
+  }
+
+  /** Build the job's next unit into the batches (hidden), or finish the level. */
+  private advance() {
+    const job = this.job!;
     const t0 = performance.now();
-    const out = fillLevel(r, l, this.H);
+    const { r, level: l } = job;
+    const next = job.it.next();
+    if (next.done) {
+      const handle = new BatchHandle(job.refs);
+      handle.visible = false; // every unit was added hidden
+      r.levels[l] = handle;
+      if (l === 'full') {
+        r.colliders = job.colliders;
+        r.spots = job.spots;
+        this.onFull?.(r);
+      }
+      this.builds[l]++;
+      this.builds[`${l}Ms`] += job.ms + performance.now() - t0;
+      this.job = null;
+      return;
+    }
+    const u = next.value;
+    const group = u.builder.build(`city:${r.blk.id}:${l}`);
+    // Wall torches: their flames go out by day (life.ts torchFlames).
+    if (u.torches) group.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh && m.name.endsWith(':glow_fire')) m.material = torchFlames();
+    });
     // The low level (beyond ~85 m) casts no shadows: the shadow pass is the expensive half there.
-    let handle = this.pool.addGroup(out.builder.build(`city:${r.blk.id}:${l}`), { offset: groundOffset, shadows: l !== 'low' });
-    // Wall torches (their flames go out by day, see life.ts torchFlames).
-    if (l !== 'low' && r.layout!.torches.length) {
-      const th = this.pool.addGroup(torchGroup(r.layout!.torches, `city:${r.blk.id}:torches`), { shadows: false });
-      handle = this.pool.handle([...handle.refs, ...th.refs]);
-    }
-    handle.setVisible(false);
-    r.levels[l] = handle;
-    if (l === 'full') {
-      r.colliders = addColliders(this.game, out.builder.colliders, { city: r.blk.id });
-      r.spots = out.spots;
-      this.onFull?.(r);
-    }
-    this.builds[l]++;
-    this.builds[`${l}Ms`] += performance.now() - t0;
+    const h = this.pool.addGroup(group, { offset: groundOffset, shadows: l !== 'low' && !u.torches, tag: l === 'mid' ? 'mid' : '' });
+    h.setVisible(false);
+    job.refs.push(...h.refs);
+    if (l === 'full' && u.builder.colliders.length) job.colliders.push(...addColliders(this.game, u.builder.colliders, { city: r.blk.id }));
+    for (const sp of u.spots) job.spots.push(sp);
+    this.builds.units++;
+    job.ms += performance.now() - t0;
+  }
+
+  /** Throw away a half-built level. */
+  private abort() {
+    const job = this.job;
+    if (!job) return;
+    new BatchHandle(job.refs).dispose();
+    for (const c of job.colliders) this.game.physics.removeCollider(c);
+    job.it.return();
+    this.job = null;
   }
 
   private drop(r: BlockRec, l: Level) {
@@ -317,22 +427,12 @@ export class CityStreamer implements System {
 }
 
 const Q = new THREE.Quaternion();
+const TMP = new THREE.Vector3();
 
-/** The CityBlockFiller's block at a detail level, plus the back insulae of the block's interior. */
-export function fillLevel(r: BlockRec, detail: Detail, H: HeightFn) {
-  const out = fillBlock(r.blk.outline as Polygon, { ...r.layout!.opts, detail });
-  for (const bl of r.layout!.back) {
-    const { c, u, v } = bl.obb;
-    const groundAt = (lx: number, lz: number) => H(c[0] + u[0] * lx + v[0] * lz, c[1] + u[1] * lx + v[1] * lz) - bl.floorY;
-    const ins = insula({
-      width: bl.width, depth: bl.depth, seed: bl.seed, storeys: bl.storeys, wealth: r.blk.wealth, groundAt,
-      sides: { left: true, right: true, back: true }, streetDressing: false, detail, maxHeight: MAX_BUILDING_HEIGHT,
-    });
-    const m = new THREE.Matrix4().makeTranslation(c[0], bl.floorY, c[1]).multiply(new THREE.Matrix4().makeRotationY(bl.rotationY));
-    out.builder.append(ins.builder, m);
-  }
-  if (detail !== 'full') out.builder.colliders.length = 0;
-  return out;
+function cellDist(c: CellRec, x: number, z: number, y: number) {
+  const dx = Math.max(c.bounds.minX - x, 0, x - c.bounds.maxX);
+  const dz = Math.max(c.bounds.minZ - z, 0, z - c.bounds.maxZ);
+  return Math.hypot(dx, dz, Math.max(0, Math.abs(y - c.y) - 40));
 }
 
 /** Register collider specs with physics and return the colliders (so they can be removed). */

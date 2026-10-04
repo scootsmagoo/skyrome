@@ -11,8 +11,15 @@
  *
  * Geometry added once can also be instanced many times (`instance`), which is how street props
  * are scattered.
+ *
+ * The batches draw with the pool's own copies of the library materials (kept in step with them
+ * by `sync`): three.js re-derives a material's program whenever the same material instance
+ * alternates between batched and plain meshes in a frame, which the landmarks' plain meshes would
+ * otherwise make it do for every shared material every frame. Instances are not depth-sorted
+ * (opaque static geometry), and batches whose geometry streamed out shrink again (`trim`).
  */
 import * as THREE from 'three';
+import { allMaterials } from '../../gfx/materials';
 
 export interface BatchRef {
   batch: Batch;
@@ -29,15 +36,37 @@ export class Batch {
   private reserved = 0;
   /** Geometry ids shared by many instances (props), keyed by the caller. */
   readonly shared = new Map<string, { geom: number; verts: number }>();
+  /** Family of geometry (BatchPool.get) and whether the batch casts shadows when allowed to. */
+  tag = '';
+  shadowCaster = false;
+
+  private readonly initialCap: number;
 
   constructor(material: THREE.Material, castShadow: boolean, name: string, verts = 8192, instances = 64) {
     this.vertCap = verts;
+    this.initialCap = verts;
     this.mesh = new THREE.BatchedMesh(instances, verts, verts, material);
     this.mesh.name = name;
     this.mesh.castShadow = castShadow;
     this.mesh.receiveShadow = true;
     // Culled per instance; the batch's own bounding sphere would go stale as geometry streams in.
     this.mesh.frustumCulled = false;
+    // Opaque static geometry: sorting every instance every pass costs more than the overdraw saves.
+    this.mesh.sortObjects = false;
+  }
+
+  /**
+   * Give memory back when most of the capacity is unused (geometry streamed out): compact and
+   * shrink to 1.25 × the live size. Returns true when it did (a copy of the live data).
+   */
+  trim(): boolean {
+    if (this.vertCap <= this.initialCap * 2 || this.live > this.vertCap * 0.6) return false;
+    const cap = Math.max(this.initialCap, Math.ceil(this.live * 1.35));
+    this.mesh.optimize();
+    this.reserved = this.live;
+    this.mesh.setGeometrySize(cap, cap);
+    this.vertCap = cap;
+    return true;
   }
 
   get liveVertices() {
@@ -56,8 +85,9 @@ export class Batch {
       this.reserved = this.live;
       if (this.mesh.unusedVertexCount >= n) return;
     }
-    // Grow by half (memory matters more than the occasional copy: the arrays stay in JS for updates).
-    const cap = Math.ceil(Math.max(this.vertCap * 1.5, (this.live + n) * 1.25));
+    // Grow by a quarter (memory matters more than the occasional copy: the arrays stay in JS for
+    // updates, and `trim` gives capacity back when the geometry streams out again).
+    const cap = Math.ceil(Math.max(this.vertCap * 1.25, (this.live + n) * 1.25));
     this.mesh.optimize();
     this.reserved = this.live;
     this.mesh.setGeometrySize(cap, cap);
@@ -142,28 +172,85 @@ export class BatchHandle {
 export class BatchPool {
   readonly group = new THREE.Group();
   private batches = new Map<string, Batch>();
-  /** Ground-hugging batches drawn with a polygon offset (roads, yards, plazas over the terrain). */
-  private offsetMats = new Set<THREE.Material>();
+  /** The pool's copies of library materials, keyed by source uuid (+ ':off' for the offset copy). */
+  private copies = new Map<string, { src: THREE.Material; copy: THREE.Material; version: number; offset: boolean }>();
+  private trimAt = 0;
 
   constructor(parent: THREE.Object3D, private readonly opts: PoolOptions = {}) {
     this.group.name = 'city:batches';
     parent.add(this.group);
   }
 
-  get(material: THREE.Material, castShadow: boolean, offset = false): Batch {
-    const key = `${material.uuid}|${castShadow ? 1 : 0}|${offset ? 1 : 0}`;
+  /**
+   * The batch for a material. `tag` keeps a family of geometry in batches of its own (the mid
+   * level's, whose shadows the streamer can switch off as a whole, see `setShadows`).
+   */
+  get(material: THREE.Material, castShadow: boolean, offset = false, tag = ''): Batch {
+    const key = `${material.uuid}|${castShadow ? 1 : 0}|${offset ? 1 : 0}|${tag}`;
     let b = this.batches.get(key);
     if (!b) {
-      b = new Batch(material, castShadow, `city:${material.name || 'mat'}${castShadow ? '' : ':ns'}${offset ? ':off' : ''}`, this.opts.verts);
-      if (offset) installOffset(b.mesh, material);
+      b = new Batch(this.own(material, offset), castShadow, `city:${material.name || 'mat'}${castShadow ? '' : ':ns'}${offset ? ':off' : ''}${tag ? `:${tag}` : ''}`, this.opts.verts);
+      b.tag = tag;
+      b.shadowCaster = castShadow;
+      if (castShadow && this.shadowsOff.has(tag)) b.mesh.castShadow = false;
       this.batches.set(key, b);
       this.group.add(b.mesh);
     }
     return b;
   }
 
+  private shadowsOff = new Set<string>();
+
+  /** Switch the shadows of every shadow-casting batch of a tag on or off. */
+  setShadows(tag: string, on: boolean) {
+    if (on) this.shadowsOff.delete(tag);
+    else this.shadowsOff.add(tag);
+    for (const b of this.batches.values()) if (b.tag === tag && b.shadowCaster) b.mesh.castShadow = on;
+  }
+
+  /**
+   * The material a batch draws with: for a library material, the pool's copy (with the polygon
+   * offset baked in for ground batches); the city's own materials (far massing, torch flames) as
+   * they are.
+   */
+  private own(src: THREE.Material, offset: boolean): THREE.Material {
+    const library = allMaterials().get(src.name as never) === src;
+    if (!library) {
+      // The city's own materials (far massing, torch flames) are drawn by the pool only.
+      if (offset) Object.assign(src, { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 });
+      return src;
+    }
+    const key = `${src.uuid}${offset ? ':off' : ''}`;
+    let c = this.copies.get(key);
+    if (!c) {
+      c = { src, copy: copyMaterial(src, offset), version: src.version, offset };
+      this.copies.set(key, c);
+    }
+    return c.copy;
+  }
+
+  /**
+   * Keep the copies in step with their library materials (textures arrive after creation, quality
+   * settings change maps), and now and then give unused batch capacity back. Call once a frame.
+   */
+  sync() {
+    for (const c of this.copies.values()) {
+      if (c.src.version === c.version) continue;
+      c.version = c.src.version;
+      refreshCopy(c.copy, c.src, c.offset);
+    }
+    // Every second, batches holding mostly dead capacity, ≤ ~400k live vertices copied per round.
+    if (++this.trimAt % 60 === 0) {
+      let copied = 0;
+      for (const b of this.batches.values()) {
+        if (copied > 400_000) break;
+        if (b.trim()) copied += b.liveVertices;
+      }
+    }
+  }
+
   /** Add every mesh of a MeshBuilder-built group (world-space geometry) as one instance each. */
-  addGroup(group: THREE.Object3D, opts: { offset?: boolean | ((material: THREE.Material) => boolean); shadows?: boolean } = {}): BatchHandle {
+  addGroup(group: THREE.Object3D, opts: { offset?: boolean | ((material: THREE.Material) => boolean); shadows?: boolean; tag?: string } = {}): BatchHandle {
     const refs: BatchRef[] = [];
     group.updateMatrixWorld(true);
     group.traverse((o) => {
@@ -171,7 +258,7 @@ export class BatchPool {
       if (!mesh.isMesh) return;
       const mat = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.Material;
       const off = typeof opts.offset === 'function' ? opts.offset(mat) : !!opts.offset;
-      const batch = this.get(mat, mesh.castShadow && opts.shadows !== false, off);
+      const batch = this.get(mat, mesh.castShadow && opts.shadows !== false, off, opts.tag);
       const g = mesh.geometry;
       if (!g.getAttribute('position')?.count) return;
       const im = mesh as THREE.InstancedMesh;
@@ -217,21 +304,24 @@ export class BatchPool {
 
 const IDENTITY = new THREE.Matrix4();
 
-/**
- * Draw a batch with a polygon offset toward the camera, without touching the shared library
- * material: the flag is a render state, so it is switched on just for this object's draw.
- */
-function installOffset(mesh: THREE.BatchedMesh, material: THREE.Material) {
-  const before = mesh.onBeforeRender.bind(mesh);
-  mesh.onBeforeRender = (renderer, scene, camera, geometry, mat, group) => {
-    before(renderer, scene, camera, geometry, mat, group);
-    material.polygonOffset = true;
-    material.polygonOffsetFactor = -1;
-    material.polygonOffsetUnits = -4;
-  };
-  mesh.onAfterRender = () => {
-    material.polygonOffset = false;
-    material.polygonOffsetFactor = 0;
-    material.polygonOffsetUnits = 0;
-  };
+/** A copy of a library material, shader patch included (three's copy() drops it). */
+function copyMaterial(src: THREE.Material, offset: boolean): THREE.Material {
+  const m = src.clone();
+  refreshCopy(m, src, offset);
+  return m;
 }
+
+function refreshCopy(m: THREE.Material, src: THREE.Material, offset: boolean) {
+  m.copy(src);
+  const s = src as THREE.Material & { defines?: Record<string, unknown> };
+  (m as THREE.Material & { defines?: Record<string, unknown> }).defines = s.defines ? { ...s.defines } : undefined;
+  m.onBeforeCompile = src.onBeforeCompile;
+  m.customProgramCacheKey = src.customProgramCacheKey;
+  m.userData = src.userData;
+  // Ground-hugging batches draw a little toward the camera, so they never fight the terrain.
+  m.polygonOffset = offset;
+  m.polygonOffsetFactor = offset ? -1 : 0;
+  m.polygonOffsetUnits = offset ? -4 : 0;
+  m.needsUpdate = true;
+}
+

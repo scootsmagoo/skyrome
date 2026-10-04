@@ -3,8 +3,9 @@
  * - horti and groves (GARDEN): umbrella pines and cypresses dominating, plane trees, laurels,
  *   oleanders, figs, in clumps with open lawns between;
  * - hill flanks too steep to build on (STEEP): pines, holm-oak-like laurels, olives, wild figs;
- * - the riverbanks: giant reeds at the water's edge, a few plane trees;
- * - the countryside outside the regions: scattered pines, olive groves, cypresses;
+ * - the riverbanks: giant reeds at the water's edge (the terrain dressing plants the bank trees);
+ * - the countryside outside the regions, in the detail area only (beyond it the terrain dressing
+ *   plants the countryside): scattered pines, olive groves, cypresses;
  * - leftover scraps of ground in the city: the odd fig or laurel.
  * Yard trees of the blocks come from the block layouts (massing.ts).
  */
@@ -32,7 +33,7 @@ const SCRAP: Mix = [['fig', 1], ['laurel', 1.2], ['cypress', 0.5], ['oleander', 
  * Tree spots over the plan inside `area` (game m). `step` is the sampling grid; each sample plants
  * at most one tree with a probability from the ground class and a clumping noise.
  */
-export function placeTrees(plan: CityPlan, area: { minX: number; minZ: number; maxX: number; maxZ: number }, waterY: number, seed = 31, lush?: (x: number, z: number) => boolean): TreeSpot[] {
+export function placeTrees(plan: CityPlan, area: { minX: number; minZ: number; maxX: number; maxZ: number }, waterY: number, seed = 31, lush?: (x: number, z: number) => boolean, countryside: (x: number, z: number) => boolean = () => true): TreeSpot[] {
   const g = plan.grid;
   const out: TreeSpot[] = [];
   const rng = new Rng(seed);
@@ -54,7 +55,7 @@ export function placeTrees(plan: CityPlan, area: { minX: number; minZ: number; m
       } else if (c === K.STEEP) {
         p = clump > 0.45 ? (rich ? 0.68 : 0.5) : rich ? 0.32 : 0.15;
         mix = STEEP;
-      } else if (c === K.OUTSIDE) {
+      } else if (c === K.OUTSIDE && countryside(jx, jz)) {
         p = clump > 0.58 ? 0.35 : 0.025;
         mix = RURAL;
       } else if (c === K.SCRAP) {
@@ -65,7 +66,6 @@ export function placeTrees(plan: CityPlan, area: { minX: number; minZ: number; m
       if (c === K.WATER) {
         const y = plan.hy[i];
         if (y > waterY - 0.15 && y < waterY + 1.6 && rng.chance(clump > 0.4 ? 0.6 : 0.25)) out.push({ species: 'reeds', x: jx, z: jz, scale: rng.range(0.8, 1.25) });
-        else if (y > waterY + 1.6 && rng.chance(0.08)) out.push({ species: 'plane', x: jx, z: jz, scale: rng.range(0.8, 1.05) });
         continue;
       }
       if (!mix || !rng.chance(p)) continue;
