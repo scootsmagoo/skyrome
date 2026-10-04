@@ -4,7 +4,8 @@
  *
  * Local frame: origin on the ground at the column axis, y up. Engaged columns and pilasters
  * stand against a wall in the plane z = 0 and project towards −z (the facade side).
- * Geometry is cached per spec, so a colonnade of 30 columns builds one column and copies it.
+ * Geometry is cached per spec and drawn instanced (MeshBuilder.instance): a colonnade of 30
+ * columns holds one column's vertices and draws in one call per material.
  */
 import * as THREE from 'three';
 import type { MeshBuilder } from '../../gfx/MeshBuilder';
@@ -184,6 +185,7 @@ function buildParts(spec: Required<Pick<ColumnSpec, 'order' | 'D' | 'detail' | '
   const y0 = dims.base;
   const y1 = dims.height - dims.capital;
 
+  if (detail === 'far') return buildFar(spec, dims);
   if (kind === 'pilaster') return buildPilaster(spec, dims);
 
   // Plinth and base.
@@ -218,6 +220,61 @@ function buildParts(spec: Required<Pick<ColumnSpec, 'order' | 'D' | 'detail' | '
   for (const piece of capitalPieces(order, { D, d: dims.d, height: dims.capital, detail, half })) {
     piece.geometry.translate(0, y1, 0);
     trim.push(piece);
+  }
+  return { shaft, trim, dims };
+}
+
+/**
+ * 'far' (LOD2): an 8-sided tapered prism on a slab plinth, with a frustum capital (flared for
+ * Corinthian/Composite, an echinus for Tuscan/Doric, a volute block for Ionic) under a slab
+ * abacus. 40–60 triangles; engaged columns use half the sides, pilasters are boxes.
+ */
+function buildFar(spec: { order: Order; D: number; kind: ColumnKind; base: boolean; plinth: boolean }, dims: ColumnDims): ColumnParts {
+  const { order, D, kind } = spec;
+  const shaft: Piece[] = [];
+  const trim: Piece[] = [];
+  const C = dims.capital;
+  const y1 = dims.height - C;
+  const yb = spec.base ? dims.base : 0;
+  const leafy = order === 'corinthian' || order === 'composite';
+  // Boxes in the column frame; `half` ones stand against the wall (z ∈ [−d, 0]).
+  const box = (list: Piece[], w: number, ya: number, yb2: number, d: number, half: boolean) => {
+    const g = new THREE.BoxGeometry(w, yb2 - ya, half ? d / 2 : d);
+    g.translate(0, (ya + yb2) / 2, half ? -d / 4 : 0);
+    list.push({ geometry: g, uv: 'box' });
+  };
+  if (kind === 'pilaster') {
+    const proj = D / 6;
+    if (spec.base) box(trim, D * 1.25, 0, yb, (proj + 0.2 * D) * 2, true);
+    box(shaft, D, yb - 0.01, y1 + 0.01, proj * 2, true);
+    box(trim, D * (leafy ? 1.3 : 1.2), y1, dims.height, (proj + 0.15 * D) * 2, true);
+    return { shaft, trim, dims };
+  }
+  const half = kind === 'engaged';
+  const t0 = half ? HALF_T0 : 0;
+  const tl = half ? HALF_T1 - HALF_T0 : Math.PI * 2;
+  const sides = half ? 4 : 8;
+  if (spec.base) box(trim, dims.plinth, 0, yb, half ? dims.plinth + 0.04 * D : dims.plinth, half);
+  // Shaft up to the capital (Tuscan/Doric: to the echinus, which then flares out).
+  const neck = leafy || order === 'ionic' ? 0 : C / 3;
+  const sh = new THREE.CylinderGeometry(dims.d / 2, D / 2, y1 + neck - yb + 0.01, sides, 1, true, t0, tl);
+  sh.translate(0, (yb + y1 + neck) / 2, 0);
+  shaft.push({ geometry: sh, uv: 'box' });
+  const frustum = (r0: number, r1: number, ya: number, yb2: number) => {
+    const g = new THREE.CylinderGeometry(r1, r0, yb2 - ya, sides, 1, true, t0, tl);
+    g.translate(0, (ya + yb2) / 2, 0);
+    trim.push({ geometry: g, uv: 'box' });
+  };
+  if (leafy) {
+    // The flared bell is the readable Corinthian cue at distance.
+    frustum(0.43 * D, 0.65 * D, y1, y1 + (C * 6) / 7);
+    box(trim, 1.4 * D, y1 + (C * 6) / 7, dims.height, 1.4 * D, half);
+  } else if (order === 'ionic') {
+    frustum(dims.d / 2, 0.55 * D, y1, y1 + C * 0.45);
+    box(trim, 1.45 * D, y1 + C * 0.3, dims.height, 1.05 * D, half);
+  } else {
+    frustum(dims.d / 2, 0.6 * D, y1 + neck, y1 + (C * 2) / 3);
+    box(trim, 1.2 * D, y1 + (C * 2) / 3, dims.height, 1.2 * D, half);
   }
   return { shaft, trim, dims };
 }
@@ -315,8 +372,10 @@ export function column(b: MeshBuilder, spec: ColumnSpec, at?: THREE.Matrix4): Co
   const mat = spec.material ?? 'marble';
   const trim = spec.trimMaterial ?? mat;
   const m = at ?? new THREE.Matrix4();
-  for (const p of parts.shaft) b.add(p.geometry, mat, m, { uv: p.uv });
-  for (const p of parts.trim) b.add(p.geometry, trim, m, { uv: p.uv });
+  // Instanced: one geometry per column spec and material for the whole program, however many
+  // columns stand in however many buildings.
+  const p0 = parts;
+  b.instance(`column|${key}|${mat}|${trim}`, () => [...p0.shaft.map((p) => ({ geometry: p.geometry, material: mat, uv: p.uv })), ...p0.trim.map((p) => ({ geometry: p.geometry, material: trim, uv: p.uv }))], m);
   if (spec.collide ?? kind === 'free') {
     const { dims } = parts;
     const c = new THREE.Vector3(0, dims.height / 2, 0).applyMatrix4(m);

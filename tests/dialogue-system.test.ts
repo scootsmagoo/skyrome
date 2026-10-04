@@ -81,6 +81,21 @@ describe('selection', () => {
     expect(dialogue.start('marcus', { dialogueId: 'low' })!.text).toBe('Low.');
   });
 
+  it('the dialogue an NpcDef names is sorted by priority with the others for that NPC (it wins only ties)', () => {
+    const override = defineDialogue({ id: 'quest-override', npcs: ['chosen'], priority: 100, start: () => 'x', nodes: { x: { text: 'The quest needs you.', end: true } } });
+    const tie = defineDialogue({ id: 'tie', npcs: ['chosen'], start: () => 'x', nodes: { x: { text: 'Tie.', end: true } } });
+    const below = defineDialogue({ id: 'below', npcs: ['chosen'], priority: -5, start: () => 'x', nodes: { x: { text: 'Below.', end: true } } });
+    const { dialogue } = setup([generic, tie, special, below, override]);
+    expect(dialogue.candidates('chosen').map((d) => d.id)).toEqual(['quest-override', 'special', 'tie', 'below', 'generic']);
+    expect(dialogue.start('chosen')!.dialogueId).toBe('quest-override');
+    // Without the override the named one wins the tie at priority 0.
+    const plain = setup([generic, tie, special, below]).dialogue;
+    expect(plain.start('chosen')!.dialogueId).toBe('special');
+    // A named dialogue that has nothing to say falls through to the next.
+    const mute = defineDialogue({ id: 'special', npcs: [], start: () => '', nodes: {} });
+    expect(setup([generic, tie, mute]).dialogue.start('chosen')!.dialogueId).toBe('tie');
+  });
+
   it('returns null when nobody has anything to say', () => {
     const { dialogue } = setup([silent]);
     expect(dialogue.start('marcus')).toBeNull();
