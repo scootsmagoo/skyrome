@@ -75,6 +75,8 @@ export interface CourtSpec {
   roofPitch?: number;
   /** Outer wall thickness (default 0.6). */
   wallT?: number;
+  /** Plinth where the terrain falls away (default: the wall material for brick, else the trim). */
+  plinthMat?: MaterialId;
   /** Skip the court floor (the caller paves it). */
   noFloor?: boolean;
   /** Prefix for spot ids. */
@@ -165,9 +167,12 @@ export function courtyardBuilding(spec: CourtSpec): CourtResult {
   }
   if (gmin < y0 - 0.05) {
     const pb = gmin - 0.4;
+    const pm = spec.plinthMat ?? (wallMat === 'brick' ? 'brick' : trim);
     for (const side of SIDES) {
       const { f, len } = sideFrame(d0, side, W / 2, D / 2);
-      f.span(trim, -0.05, pb, -0.06, len + 0.05, y0 + 0.02, t + 0.4, { collide: true });
+      f.span(pm, -0.05, pb, -0.06, len + 0.05, y0 + 0.02, t + 0.4, { collide: true });
+      // A travertine string course marks the floor level over a tall plinth.
+      if (y0 - pb > 1.2 && !low) f.span(trim, -0.1, y0 - 0.16, -0.12, len + 0.1, y0 + 0.02, 0.02);
     }
     // Platform collider under the floor.
     b.collider({ kind: 'box', center: new THREE.Vector3(0, (pb + y0) / 2 - 0.01, 0), half: new THREE.Vector3(W / 2, (y0 - pb) / 2, D / 2) });

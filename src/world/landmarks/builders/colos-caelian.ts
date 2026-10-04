@@ -27,7 +27,7 @@ import { inscriptionPanel } from '../../../arch/common/inscription';
 import { placeProp } from '../../../arch/props';
 import { Rng } from '../../../core/Rng';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
-import { flight, lodInstances, plantTrees, risers, span, type TreeSpot } from './colos-kit';
+import { addReadables, flight, lodInstances, plantTrees, risers, span, type TreeSpot } from './colos-kit';
 import { courtyardBuilding, palus } from './colos-court';
 import { waterSheetMaterial } from './colos-fountains';
 
@@ -265,7 +265,17 @@ function buildDolabella(ctx: LandmarkContext): LandmarkBuild {
     { id: 'dolabella-inscription', kind: 'inscription', position: new THREE.Vector3(0, 0.05, -5), heading: 0 },
     { id: 'dolabella-gate', kind: 'door', position: new THREE.Vector3(0, 0.05, 0), heading: 0 },
   ];
-  return { object: b.build('arch-dolabella'), colliders: b.colliders, spots, cullDistance: 900 };
+  const object = b.build('arch-dolabella');
+  addReadables(ctx.game, object, [
+    {
+      id: 'dolabella-inscription',
+      at: new THREE.Vector3(0, top + 0.5, -1.55),
+      reach: 6,
+      title: 'Arch of Dolabella',
+      text: 'P · CORNELIVS · P · F · DOLABELLA / C · IVNIVS · C · F · SILANVS · FLAMEN · MARTIAL / COS / EX · S · C / FACIVNDVM · CVRAVERVNT · IDEMQVE · PROBAVER\n\n*Publius Cornelius Dolabella, son of Publius, and Gaius Junius Silanus, son of Gaius, priest of Mars, consuls, saw to its building by decree of the Senate and likewise approved it.*\n\nThe consuls of the year 10 rebuilt the old Caelian gate in travertine. Nero later laid his aqueduct across its back; water runs over the heads of the people walking through.',
+    },
+  ]);
+  return { object, colliders: b.colliders, spots, cullDistance: 900 };
 }
 
 // ---------------------------------------------------------------- Castra Peregrina

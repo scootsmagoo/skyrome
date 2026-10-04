@@ -630,6 +630,49 @@ export function buildColosseum(ctx: LandmarkContext) {
     }
     // The ring-3 wall continues above the ground storey as a plain band (seen through the arches).
   }
+  // The shrine of Nemesis (Nemesis Augusta) in the inner ambulatory beside the Porta Triumphalis,
+  // where the fighters pass on their way to the sand: a marble aedicula, its bronze doors shut for
+  // the Lemuria, a little altar in front.
+  {
+    const t = L.centres[38];
+    const fr = oval.radialFrame(t, R3[1]); // +z towards the arena: the shrine stands at z < 0
+    const w = 1.9;
+    span(inner, 'marble', fr, -w / 2 - 0.1, 0, -0.62, w / 2 + 0.1, 0.28, 0.0, true, false);
+    span(inner, 'marble', fr, -w / 2, 0.28, -0.5, w / 2, 3.0, 0.0, true);
+    span(inner, 'bronze', fr, -0.48, 0.32, -0.52, 0.48, 2.1, -0.49, false, false);
+    span(inner, 'gilded_bronze', fr, -0.02, 0.32, -0.535, 0.02, 2.1, -0.52, false, false);
+    for (const sx of [-1, 1]) {
+      column(inner, { order: 'corinthian', D: 0.2, height: 2.2, material: 'marble_veined', trimMaterial: 'marble', detail: high ? 'low' : 'far', kind: 'engaged', collide: false }, fr.clone().multiply(new THREE.Matrix4().makeTranslation(sx * 0.72, 0.28, -0.5)));
+    }
+    span(inner, 'marble', fr, -w / 2 - 0.06, 2.48, -0.62, w / 2 + 0.06, 2.75, -0.45, false, false);
+    const ped = extrudePolygon([[-w / 2 - 0.06, 0], [w / 2 + 0.06, 0], [0, 0.42]], 0.2);
+    inner.add(ped, 'marble', fr.clone().multiply(new THREE.Matrix4().makeTranslation(0, 2.75, -0.45)));
+    span(inner, 'plaster_red', fr, -w / 2 - 0.4, 0.05, 0.0 - 0.012, w / 2 + 0.4, 3.1, 0.0 - 0.006, false, false);
+    if (high && typeof document !== 'undefined') {
+      inscriptionPanel(inner, { lines: ['Nemesi Aug Sacrum'], width: 1.5, height: 0.2, style: 'carved' }, fr.clone().multiply(new THREE.Matrix4().makeTranslation(0, 2.615, -0.63)), { depth: 0.01 });
+    }
+    // Altar with the morning's offerings (a wreath and a lamp).
+    span(inner, 'marble', fr, -0.3, 0, -1.25, 0.3, 0.92, -0.85, true);
+    span(inner, 'marble', fr, -0.34, 0.92, -1.29, 0.34, 1.0, -0.81, false, false);
+    if (high) {
+      const wreath = new THREE.TorusGeometry(0.13, 0.03, 4, 12);
+      wreath.rotateX(Math.PI / 2);
+      wreath.applyMatrix4(fr.clone().multiply(new THREE.Matrix4().makeTranslation(-0.08, 1.03, -1.05)));
+      inner.add(wreath, 'foliage_broad', undefined, { castShadow: false });
+      const lp = new THREE.Vector3().setFromMatrixPosition(fr.clone().multiply(new THREE.Matrix4().makeTranslation(0.12, 1.0, -1.02)));
+      placeProp(new Draw(inner), 'oil_lamp', lp.x, lp.y, lp.z, 0, { collide: false, rng: new Rng('nemesis') });
+    }
+    const sp = new THREE.Vector3().setFromMatrixPosition(fr.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0.05, -1.75)));
+    const [nx, nz] = oval.normal(t);
+    spots.push({ id: 'colos-nemeseum', kind: 'shrine', position: sp, heading: Math.atan2(-nx, -nz) });
+    readables.push({
+      id: 'colos-nemeseum',
+      at: new THREE.Vector3().setFromMatrixPosition(fr.clone().multiply(new THREE.Matrix4().makeTranslation(0, 2.615, -0.64))),
+      reach: 4,
+      title: 'Shrine of Nemesis',
+      text: 'NEMESI · AVG · SACRVM\n\n*Sacred to Nemesis Augusta.*\n\nThe goddess who weighs fortune and pays back pride. Fighters touch the altar on their way to the sand. The bronze doors are shut for the days of the Lemuria; a wreath and a cold lamp lie on the altar all the same.',
+    });
+  }
   // The underside of the summum seating over the third-storey inner ambulatory: seen from outside
   // through the arches of storeys III and ring 2 (the cavea itself is one-sided and hidden there).
   {

@@ -566,6 +566,30 @@ export function risers(height: number, target = 0.2): { count: number; rise: num
 }
 
 /**
+ * Entrance steps from the terrain up to a raised floor `y0` in front of a wall whose outer face is at
+ * z = zFront (front = −z): a straight flight centred on x, each step a solid block with a collider.
+ * Nothing when the ground there is within 15 cm of the floor.
+ */
+export function frontSteps(b: MeshBuilder, groundAt: (x: number, z: number) => number, x: number, zFront: number, y0: number, width: number, mat: MaterialId = 'travertine') {
+  const g = Math.min(groundAt(x, zFront - 1.5), groundAt(x - width / 2, zFront - 1.0), groundAt(x + width / 2, zFront - 1.0));
+  const drop = y0 - g;
+  if (drop < 0.15) return;
+  const { count, rise } = risers(drop, 0.2);
+  const run = 0.32;
+  const m = TY(x, g, zFront - count * run);
+  for (let i = 0; i < count; i++) span(b, mat, m, -width / 2, -0.4, i * run, width / 2, (i + 1) * rise, count * run, true, false);
+  // Sloping parapets either side of a tall flight.
+  if (drop > 0.9) {
+    const L = count * run;
+    const a = Math.atan2(drop, L);
+    for (const sx of [-1, 1]) {
+      const pm = m.clone().multiply(new THREE.Matrix4().makeTranslation(sx * (width / 2 + 0.15), drop / 2 + 0.2, L / 2)).multiply(new THREE.Matrix4().makeRotationX(-a));
+      b.box(mat, 0.3, 1.3, Math.hypot(drop, L) + 0.2, pm, { collide: true });
+    }
+  }
+}
+
+/**
  * Terrain-following paving for a ring band between ovals x0..x1 (segments round × rings across).
  * Heights come from `ground(lx, lz)` (relative to the pad) plus `lift`; never below `minY`.
  */

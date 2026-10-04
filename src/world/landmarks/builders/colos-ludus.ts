@@ -20,7 +20,7 @@ import { inscriptionPanel } from '../../../arch/common/inscription';
 import { placeProp } from '../../../arch/props';
 import { Rng } from '../../../core/Rng';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
-import { Oval, type ReadableSpec, addReadables, flight, ovalBand, ovalSweep, risers, solid, span, statueGeometry } from './colos-kit';
+import { Oval, type ReadableSpec, addReadables, flight, frontSteps, ovalBand, ovalSweep, risers, solid, span, statueGeometry } from './colos-kit';
 import { column } from '../../../arch/classical/column';
 import { complementRanges } from './colos-colosseum';
 import { courtyardBuilding, palus, weaponRack, type CourtSpec } from './colos-court';
@@ -581,12 +581,21 @@ function buildLudusMagnus(ctx: LandmarkContext): LandmarkBuild {
     const gz = res.inner.d / 2;
     if (high) {
       const rng = new Rng('ludus-graffiti');
-      for (let i = 0; i < 26; i++) {
-        const x = gx - 0.7 + rng.next() * 1.4;
-        const y = y0 + 1.2 + rng.next() * 0.75;
-        const len = 0.06 + rng.next() * 0.22;
-        const m = new THREE.Matrix4().makeTranslation(x, y, gz - 0.006).multiply(new THREE.Matrix4().makeRotationZ((rng.next() - 0.5) * 2.4));
-        b.box('plaster_dark', len, 0.012, 0.006, m, { castShadow: false });
+      // Five scratched 'lines' of short strokes, letter height ~6 cm, plus a net and a fish.
+      for (let row = 0; row < 5; row++) {
+        const y = y0 + 1.85 - row * 0.15;
+        const n = 10 + Math.floor(rng.next() * 8);
+        let x = gx - 0.6 + rng.next() * 0.15;
+        for (let i = 0; i < n; i++) {
+          const len = 0.03 + rng.next() * 0.05;
+          const m = new THREE.Matrix4().makeTranslation(x, y + (rng.next() - 0.5) * 0.02, gz - 0.004).multiply(new THREE.Matrix4().makeRotationZ(Math.PI / 2 + (rng.next() - 0.5) * 1.6));
+          b.box('plaster_dark', len, 0.005, 0.004, m, { castShadow: false });
+          x += 0.035 + rng.next() * 0.03;
+        }
+      }
+      for (let i = 0; i < 4; i++) {
+        b.box('plaster_dark', 0.22, 0.005, 0.004, new THREE.Matrix4().makeTranslation(gx + 0.45, y0 + 1.62 + i * 0.05, gz - 0.004), { castShadow: false });
+        b.box('plaster_dark', 0.005, 0.18, 0.004, new THREE.Matrix4().makeTranslation(gx + 0.36 + i * 0.06, y0 + 1.7, gz - 0.004), { castShadow: false });
       }
     }
     spots.push({ id: 'ludus-graffiti', kind: 'inscription', position: new THREE.Vector3(gx, y0 + 0.05, gz - 1.1), heading: 0 });
@@ -655,6 +664,7 @@ function buildSchool(ctx: LandmarkContext, o: SchoolOpts): LandmarkBuild {
   });
   const b = res.b;
   const spots = [...res.spots];
+  frontSteps(b, ctx.groundAt, 0, -D / 2, y0, o.yard === 'beasts' ? 4.2 : 3.6);
   const d = new Draw(b).at(0, y0, 0);
   const cw = res.court.w;
   const cd = res.court.d;

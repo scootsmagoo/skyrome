@@ -19,7 +19,7 @@ import { column } from '../../../arch/classical/column';
 import { placeProp } from '../../../arch/props';
 import { Rng } from '../../../core/Rng';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
-import { lodInstances, plantTrees, risers, span, type TreeSpot } from './colos-kit';
+import { frontSteps, lodInstances, plantTrees, risers, span, type TreeSpot } from './colos-kit';
 import { courtyardBuilding } from './colos-court';
 import { farCourt } from './colos-ludus';
 
@@ -36,17 +36,6 @@ function floorLevel(ctx: LandmarkContext, w: number, d: number): number {
       hi = Math.max(hi, g);
     }
   return hi - lo < 0.25 ? 0 : Math.max(0, hi) + 0.05;
-}
-
-/** Entrance steps from the terrain up to a raised floor in front of a side (front = −z). */
-function frontSteps(b: MeshBuilder, ctx: LandmarkContext, x: number, zFront: number, y0: number, width: number) {
-  const g = ctx.groundAt(x, zFront - 1.5);
-  const drop = y0 - g;
-  if (drop < 0.15) return;
-  const { count, rise } = risers(drop, 0.2);
-  const run = 0.32;
-  const m = T(x, g, zFront - count * run);
-  for (let i = 0; i < count; i++) span(b, 'travertine', m, -width / 2, -0.4, i * run, width / 2, (i + 1) * rise, count * run, true, false);
 }
 
 // ---------------------------------------------------------------- Castra Misenatium
@@ -82,7 +71,7 @@ function buildMisenatium(ctx: LandmarkContext): LandmarkBuild {
   const b = res.b;
   const d = new Draw(b).at(0, y0, 0);
   const spots = [...res.spots];
-  frontSteps(b, ctx, 0, -D / 2, y0, 4.2);
+  frontSteps(b, ctx.groundAt, 0, -D / 2, y0, 4.2);
   // The velarium yard: spare masts on trestles, spars, rope coils, canvas bales, a capstan.
   const cw = res.court.w;
   const cd = res.court.d;
@@ -143,7 +132,7 @@ function buildMoneta(ctx: LandmarkContext): LandmarkBuild {
   const b = res.b;
   const d = new Draw(b).at(0, y0, 0);
   const spots = [...res.spots];
-  frontSteps(b, ctx, 0, -D / 2, y0, 3.4);
+  frontSteps(b, ctx.groundAt, 0, -D / 2, y0, 3.4);
   // The anvil yard: anvils where the struck coins are hammered between dies, quench troughs,
   // stacks of blanks (flans) in baskets, and smoke from the furnace halls.
   if (high) {
@@ -192,7 +181,7 @@ function buildCuriae(ctx: LandmarkContext): LandmarkBuild {
   const b = res.b;
   const d = new Draw(b).at(0, y0, 0);
   const spots = [...res.spots];
-  frontSteps(b, ctx, 0, -D / 2, y0, 3.2);
+  frontSteps(b, ctx.groundAt, 0, -D / 2, y0, 3.2);
   // The archaic altar of the curiae, a sacred tree and boundary cippi.
   d.span('tufa', -1.4, 0, -1.0, 1.4, 1.1, 1.0, { collide: true });
   d.span('travertine', -1.6, 1.1, -1.2, 1.6, 1.3, 1.2);

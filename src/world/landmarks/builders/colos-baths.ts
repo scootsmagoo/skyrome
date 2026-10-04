@@ -29,7 +29,7 @@ import { placeProp } from '../../../arch/props';
 import { Rng } from '../../../core/Rng';
 import { bearingToRotationY } from '../../../core/math';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
-import { Oval, flight, lodInstances, ovalBand, ovalSweep, plantTrees, risers, solid, span, type TreeSpot } from './colos-kit';
+import { Oval, addReadables, flight, lodInstances, ovalBand, ovalSweep, plantTrees, risers, solid, span, type TreeSpot } from './colos-kit';
 import { stripWall } from './colos-court';
 import type { Opening } from '../../../arch/fabric';
 
@@ -374,6 +374,15 @@ function buildTrajanBlock(ctx: LandmarkContext, b: MeshBuilder, d: Draw, root: T
     inscriptionPanel(b, { lines: ['Imp Caesar Divi Nervae F Nerva Traianus Aug', 'Germ Dacicus Pont Max Trib Pot XIII Imp VI', 'Cos V P P Thermas Fecit'], width: 12.5, height: 1.15, style: 'bronze', sizes: [1, 0.85, 0.85] }, new THREE.Matrix4().makeTranslation(0, 8.6, zF - 4.85), { depth: 0.03 });
   }
   spots.push({ id: 'trajan-inscription', kind: 'inscription', position: new THREE.Vector3(0, 0.35, zF - 9), heading: 0 });
+  addReadables(ctx.game, root, [
+    {
+      id: 'trajan-inscription',
+      at: new THREE.Vector3(0, 8.6, zF - 4.9),
+      reach: 10,
+      title: 'Baths of Trajan',
+      text: 'IMP · CAESAR · DIVI · NERVAE · F · NERVA · TRAIANVS · AVG / GERM · DACICVS · PONT · MAX · TRIB · POT · XIII · IMP · VI / COS · V · P · P · THERMAS · FECIT\n\n*The Emperor Caesar Nerva Trajan Augustus, son of the deified Nerva, conqueror of the Germans and the Dacians, chief priest, in the thirteenth year of his tribunician power, six times hailed imperator, five times consul, father of his country, built these baths.*\n\nDedicated four years ago, in June of the year 109, over the buried wing of Nero\'s Golden House. Entry costs a quadrans, the smallest coin there is.',
+    },
+  ]);
   spots.push({ id: 'trajan-entrance', kind: 'door', position: new THREE.Vector3(0, 0.35, zF - 1), heading: 0 });
   spots.push({ id: 'trajan-doorkeeper', kind: 'npc', position: new THREE.Vector3(3.2, 0.35, zF - 1.5), heading: Math.PI });
   // ---- natatio (open-air pool) court
@@ -705,6 +714,25 @@ function buildBathsTitus(ctx: LandmarkContext): LandmarkBuild {
   for (const x of [-4.5, -1.5, 1.5, 4.5]) column(b, { order: 'corinthian', D: 0.65, height: 5.8, material: 'marble', detail: 'low', kind: 'free', collide: true }, new THREE.Matrix4().makeTranslation(x, 0.2, -hd - 3));
   d.span('marble', -5.5, 0, -hd - 4, 5.5, 0.2, -hd, { collide: true });
   d.span('marble', -5.3, 6.0, -hd - 3.7, 5.3, 7.1, -hd);
+  // Pediment and tiled roof over the porch, the dedication on the frieze. Reconstructed formula
+  // (no text survives): Titus' titulature of late AD 80, the year the baths opened with the
+  // amphitheatre — trib. pot. X, imp. XVII, cos. VIII.
+  const pedT = new THREE.ExtrudeGeometry(new THREE.Shape([new THREE.Vector2(-5.5, 0), new THREE.Vector2(5.5, 0), new THREE.Vector2(0, 1.5)]), { depth: 3.9, bevelEnabled: false });
+  d.geo(pedT, 'marble', 0, 7.1, -hd - 3.75);
+  roof(d.at(0, 0, -hd - 1.8), { kind: 'gable', w: 11.4, d: 4.2, y: 7.15, axis: 'z', pitch: 0.27, ridges: false });
+  if (high && typeof document !== 'undefined') {
+    inscriptionPanel(b, { lines: ['Imp Titus Caesar Divi F Vespasianus Aug', 'Pont Max Trib Pot X Imp XVII Cos VIII P P', 'Thermas Fecit'], width: 9.6, height: 0.82, style: 'bronze', sizes: [1, 0.85, 0.9] }, new THREE.Matrix4().makeTranslation(0, 6.55, -hd - 3.72), { depth: 0.02 });
+  }
+  spots.push({ id: 'titus-inscription', kind: 'inscription', position: new THREE.Vector3(0, 0.25, -hd - 8), heading: 0 });
+  addReadables(ctx.game, root, [
+    {
+      id: 'titus-inscription',
+      at: new THREE.Vector3(0, 6.55, -hd - 3.75),
+      reach: 8,
+      title: 'Baths of Titus',
+      text: 'IMP · TITVS · CAESAR · DIVI · F · VESPASIANVS · AVG / PONT · MAX · TRIB · POT · X · IMP · XVII · COS · VIII · P · P / THERMAS · FECIT\n\n*The Emperor Titus Caesar Vespasian Augustus, son of the deified Vespasian, chief priest, in the tenth year of his tribunician power, seventeen times hailed imperator, eight times consul, father of his country, built these baths.*\n\nBuilt in a hurry for the year the amphitheatre opened, thirty-three years ago; the broad steps on the far side run straight down to its plaza. Trajan\'s new baths up the hill have stolen most of the custom.',
+    },
+  ]);
   // Palaestrae either side (open courts with colonnades), ranges at the sides.
   for (const sx of [-1, 1]) {
     const xa = sx * 11;
