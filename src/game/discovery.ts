@@ -8,6 +8,7 @@
  *   tier 1   footprint radius + 30 m      tier 2  + 15 m      tier 3  + 6 m
  *   big      palaces, temples, circuses, arenas, gates, fora, baths, theatres, arches: + 20 m more
  *   gates    at least 22 m (the Porta Capena fires as you arrive)
+ *   fora     walled: on stepping inside (or ENCLOSURE_MARGIN from the outline), first in rank
  *   hills    within (slope + 50 m) of the plateau edge: from the valley floor below them
  *   valleys  the Circus valley and the Velabrum, on entering (10 m margin)
  */
@@ -15,7 +16,7 @@ import type { Game, System } from '../core/Game';
 import { LANDMARKS, type Hill, type Landmark } from '../data/atlas';
 import { WORLD_SCALE as K, toGame } from '../world/coords';
 import type { LandmarkData } from '../world/landmarks/types';
-import { NAMED_LOWLANDS, discoveryRadius, distanceToPolygon, hillOutline, isDiscoverable, lowlandOutline, namedHills } from './locations';
+import { NAMED_LOWLANDS, discoveryRadius, distanceToPolygon, footprintOutline, hillOutline, isDiscoverable, isEnclosure, lowlandOutline, namedHills } from './locations';
 
 const BIG = new Set(['palace', 'circus', 'amphitheatre', 'stadium', 'gate', 'forum', 'baths', 'theatre', 'odeum', 'arch', 'temple']);
 
@@ -27,19 +28,26 @@ export function sightRadius(lm: Landmark): number {
   return r;
 }
 
+/** How close (game m) to a walled forum's outline counts as having stepped in (its gateway). */
+export const ENCLOSURE_MARGIN = 3;
+
 export interface Sighting {
   id: string;
   /** Landmarks: the centre; hills: unused. */
   x: number;
   z: number;
-  /** Landmarks: sight radius around the centre; hills: margin around the plateau outline. */
+  /** Landmarks: sight radius around the centre; hills and fora: margin around the outline. */
   r: number;
   poly?: [number, number][];
+  /** A walled precinct (poly = its outline): ranks like a landmark, inside first. */
+  enclosure?: boolean;
 }
 
 export function landmarkSightings(list: readonly Landmark[] = LANDMARKS): Sighting[] {
   return list.filter(isDiscoverable).map((lm) => {
     const [x, z] = toGame(lm.center[0], lm.center[1]);
+    const poly = isEnclosure(lm) ? footprintOutline(lm) : undefined;
+    if (poly) return { id: lm.id, x, z, r: ENCLOSURE_MARGIN, poly, enclosure: true };
     return { id: lm.id, x, z, r: sightRadius(lm) };
   });
 }
@@ -74,7 +82,7 @@ export function nextSighting(x: number, z: number, list: readonly Sighting[], is
     if (isDiscovered(s.id)) continue;
     const d = s.poly ? distanceToPolygon(x, z, s.poly) : Math.hypot(s.x - x, s.z - z);
     if (d > s.r) continue;
-    const rank = s.poly ? 0.5 + d / (2 * s.r) : d / s.r;
+    const rank = s.poly && !s.enclosure ? 0.5 + d / (2 * s.r) : d / s.r;
     if (rank < bestRank) {
       bestRank = rank;
       best = s;

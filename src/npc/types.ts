@@ -51,6 +51,12 @@ export interface LocationDef {
   position: { x: number; y?: number; z: number };
   /** Radius for 'location:entered' and discovery. */
   radius: number;
+  /**
+   * Optional outline (game x/z) of a walled place: when set, being inside it (not within `radius`)
+   * is what counts, so long narrow precincts side by side don't claim each other's ground.
+   * `radius` still orders nested places (the smaller one is the inner one).
+   */
+  area?: readonly (readonly [number, number])[];
   /** Show on map / compass once discovered. */
   mapMarker?: 'temple' | 'forum' | 'baths' | 'arena' | 'market' | 'gate' | 'palace' | 'tavern' | 'shop' | 'dungeon' | 'landmark' | 'camp' | 'bridge' | 'house';
   /** Parent location (e.g. a spot inside a landmark). */

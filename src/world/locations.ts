@@ -33,6 +33,27 @@ export interface LocationRegistryOptions {
   interval?: number;
 }
 
+/**
+ * How far (m) a point is outside a location: beyond its radius, or outside its outline when it has
+ * one; zero or negative inside.
+ */
+function outside(d: LocationDef, pos: Pos): number {
+  if (!d.area) return Math.hypot(d.position.x - pos.x, d.position.z - pos.z) - d.radius;
+  const poly = d.area;
+  let inside = false;
+  let edge = Infinity;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [ax, az] = poly[j];
+    const [bx, bz] = poly[i];
+    if (bz > pos.z !== az > pos.z && pos.x < ((ax - bx) * (pos.z - bz)) / (az - bz) + bx) inside = !inside;
+    const dx = bx - ax;
+    const dz = bz - az;
+    const t = Math.max(0, Math.min(1, ((pos.x - ax) * dx + (pos.z - az) * dz) / (dx * dx + dz * dz || 1)));
+    edge = Math.min(edge, Math.hypot(ax + dx * t - pos.x, az + dz * t - pos.z));
+  }
+  return inside ? -edge : edge;
+}
+
 export class LocationRegistry implements System {
   readonly name = 'locations';
   readonly priority = 120;
@@ -90,10 +111,10 @@ export class LocationRegistry implements System {
     return best;
   }
 
-  /** Locations whose radius contains the point, innermost (smallest) first. */
+  /** Locations whose radius (or outline) contains the point, innermost (smallest) first. */
   containing(pos: Pos): LocationDef[] {
     return this.all()
-      .filter((d) => Math.hypot(d.position.x - pos.x, d.position.z - pos.z) <= d.radius)
+      .filter((d) => outside(d, pos) <= 0)
       .sort((a, b) => a.radius - b.radius);
   }
 
@@ -152,8 +173,8 @@ export class LocationRegistry implements System {
     // Exits first, with a margin.
     for (const id of [...this.inside]) {
       const d = this.defs.get(id);
-      const margin = d ? Math.max(1, d.radius * 0.05) : 0;
-      if (!d || Math.hypot(d.position.x - pos.x, d.position.z - pos.z) > d.radius + margin) {
+      const margin = d ? (d.area ? 1.5 : Math.max(1, d.radius * 0.05)) : 0;
+      if (!d || outside(d, pos) > margin) {
         this.inside.delete(id);
         if (!silent) this.events?.emit('location:exited', { locationId: id });
       }
