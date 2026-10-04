@@ -11,7 +11,9 @@ import { DANGER_SITES, isNight, muggerPrice, roadPoint, siteReady } from '../src
 import { adoptProfile, resolveSpawn } from '../src/combat/spawnSpec';
 import { ROADS } from '../src/data/atlas';
 import { TIMING } from '../src/combat/timing';
-import { combatProfileFor } from '../src/rpg/enemies';
+import { combatSettings } from '../src/combat/settings';
+import { DEFAULT_SETTINGS } from '../src/core/Settings';
+import { archetypeProfile, combatProfileFor } from '../src/rpg/enemies';
 import { addNpc, addPlayer, deaths, fakeEnv, items, makeCore, run } from './combat-fakes';
 
 describe('spawn requests in content words (src/content/director.ts)', () => {
@@ -205,3 +207,63 @@ describe('night muggers (§13.3)', () => {
     expect(siteReady({ ...base, dist: 100, facing: 0.95 })).toBe(true); // far off in the dark
   });
 });
+
+describe('shield fighters under a rain of blows (AC-07 [design])', () => {
+  it('a miles pressed by light-attack spam answers with shield bashes and blocks most of it', () => {
+    const env = fakeEnv(mulberry(5));
+    const core = makeCore(env);
+    const p = addPlayer(core, { z: 0, heading: 0 });
+    const m = addNpc(core, 'm', archetypeProfile('miles-urbanus', items), { ai: true, z: 1.3, rng: mulberry(9) });
+    core.engage(m, p);
+    const kinds = new Set<string>();
+    let last: unknown = null;
+    let blocked = 0;
+    let landed = 0;
+    run(core, 40, () => {
+      p.body.heading = Math.atan2(m.position.x - p.position.x, m.position.z - p.position.z);
+      p.vitals.set('health', p.vitals.health.max);
+      p.vitals.set('stamina', p.vitals.stamina.max);
+      m.vitals.set('health', m.vitals.health.max);
+      if (core.free(p)) core.startAttack(p, 'light');
+      if (m.action && m.action !== last) kinds.add(m.action.kind);
+      last = m.action;
+    });
+    for (const e of env.of('combat:hit') as { attackerId: string; blocked: boolean; parried: boolean; kind: string }[]) {
+      if (e.attackerId !== 'player') continue;
+      if (e.blocked || e.parried) blocked++;
+      else landed++;
+    }
+    expect(kinds.has('bash')).toBe(true);
+    expect(blocked / (blocked + landed)).toBeGreaterThanOrEqual(0.4);
+  });
+});
+
+describe('settings', () => {
+  it("follow the game flow's difficulty, power hold and lock-on over the older combat keys", () => {
+    const s = combatSettings({ ...DEFAULT_SETTINGS, difficulty: 'difficilis', combatDifficulty: 'tiro', powerHoldS: 0.5, lockOnMode: 'auto' } as never);
+    expect([s.difficulty, s.powerHold, s.lockOn, s.streetDanger]).toEqual(['difficilis', 0.5, 'auto', true]);
+    expect(combatSettings({ ...DEFAULT_SETTINGS, combatDifficulty: 'tiro', combatStreetDanger: false } as never)).toMatchObject({ difficulty: 'tiro', streetDanger: false });
+  });
+
+  it('standing up after a load keeps the pools the save restored', () => {
+    const core = makeCore();
+    const p = addPlayer(core);
+    core.knockout(p, null);
+    p.vitals.set('stamina', 12);
+    p.vitals.set('health', 40);
+    core.standUp(p);
+    expect([p.status, p.vitals.health.current, p.vitals.stamina.current]).toEqual(['active', 40, 12]);
+  });
+});
+
+/** A small seeded random source for the long duels. */
+function mulberry(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
