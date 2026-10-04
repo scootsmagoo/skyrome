@@ -51,6 +51,8 @@ export interface ContainerSpec {
   locked?: 'simplex' | 'mediocris';
   /** Waits for an interior cell: not placed in the street. */
   interior?: boolean;
+  /** Sits on a cart (the NPC module's props): the prompt only exists once the cart does. */
+  needs?: 'cart';
 }
 
 export interface ContainerStyle {
@@ -127,8 +129,8 @@ export const CONTAINERS: ContainerSpec[] = [
   unowned('ctn-instrumentum-juliae', 'instrumentum-abiectum', 'basilica-julia-gradus', 'loose.tool', { dx: -6, dz: 2 }),
   unowned('ctn-instrumentum-fori', 'instrumentum-abiectum', 'forum-trajan', 'loose.tool', { dx: 10, dz: 4 }),
   unowned('ctn-instrumentum-columnae', 'instrumentum-abiectum', 'column-trajan', 'loose.tool', { dx: 5, dz: 5 }),
-  unowned('ctn-fasciculus-plaustri', 'fasciculus', 'via-plaustrum', 'loose.bundle', { dx: 2, dz: 1 }),
-  unowned('ctn-fasciculus-carri', 'fasciculus', 'capena-extra', 'loose.bundle', { dx: 3, dz: -2 }),
+  unowned('ctn-fasciculus-plaustri', 'fasciculus', 'via-plaustrum', 'loose.bundle', { dx: 2, dz: 1, needs: 'cart' }),
+  unowned('ctn-fasciculus-carri', 'fasciculus', 'capena-extra', 'loose.bundle', { dx: 3, dz: -2, needs: 'cart' }),
   unowned('ctn-fasciculus-portus', 'fasciculus', 'portus-tiberinus', 'loose.bundle', { dx: 4, dz: 2 }),
   unowned('ctn-fasciculus-boarii', 'fasciculus', 'forum-boarium', 'loose.bundle', { dx: -6, dz: -2 }),
   unowned('ctn-fasciculus-circi', 'fasciculus', P(380, -8), 'loose.bundle'),
@@ -152,8 +154,8 @@ export const CONTAINERS: ContainerSpec[] = [
   { id: 'ctn-corbis-viae-2', kind: 'corbis-mercatoris', at: P(1135, -4), table: 'food', owner: 'vicus-tuscus', ownerName: 'a stallholder' },
   { id: 'ctn-corbis-viae-3', kind: 'corbis-mercatoris', at: P(1185, 5), table: 'food', owner: 'vicus-tuscus', ownerName: 'a stallholder' },
   ...COMPITA.map<ContainerSpec>((c) => ({ id: `ctn-arca-${c}`, kind: 'arca-compiti', at: c, dx: 1.2, dz: 0.4, table: 'shrine', owner: c, ownerName: 'the vicus' })),
-  { id: 'ctn-plaustrum-dromonis', kind: 'plaustrum', at: 'night-cart', dx: 2, dz: 0, table: 'amphora.wine', owner: 'npc-dromo', ownerName: 'Dromo’s master' },
-  { id: 'ctn-plaustrum-cornicis', kind: 'plaustrum', at: 'via-plaustrum', dx: -2, dz: 1, table: 'building.load', owner: 'npc-cornix', ownerName: 'Cornix' },
+  { id: 'ctn-plaustrum-dromonis', kind: 'plaustrum', at: 'capena-extra', dx: 5, dz: 2.5, table: 'amphora.wine', owner: 'npc-dromo', ownerName: 'Dromo’s master', needs: 'cart' },
+  { id: 'ctn-plaustrum-cornicis', kind: 'plaustrum', at: 'via-plaustrum', dx: -2, dz: 1, table: 'building.load', owner: 'npc-cornix', ownerName: 'Cornix', needs: 'cart' },
 
   // ---- owned, indoors (placed when the interior exists)
   { id: 'ctn-cista-primae', kind: 'cista-insulae', at: 'insula-nutans-cenaculum', table: 'chest.common', owner: 'npc-prima', ownerName: 'Iulia Prima', interior: true },

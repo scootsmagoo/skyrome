@@ -28,6 +28,7 @@ import { toGame } from '../world/coords';
 import type { BookView, ContainerView } from '../ui/types';
 import { CONTAINERS, CONTAINER_STYLES, STREET_CONTAINERS, routePoint, type ContainerSpec } from './containers';
 import { groundAt } from './director';
+import { syncAliases } from './places';
 import { lampSpecs, type LampSpec } from './lamps';
 import { SHRINES, type ShrineSpec } from './shrines';
 import { WALL_TEXTS, type WallText } from './texts';
@@ -282,7 +283,7 @@ function viewOf(rt: ContainerRuntime): ContainerView {
   };
 }
 
-function addContainer(game: Game, spec: ContainerSpec): { off: (() => void) | null; runtime: ContainerRuntime } | null {
+function addContainer(game: Game, spec: ContainerSpec, carts: Set<string>): { off: (() => void) | null; runtime: ContainerRuntime } | null {
   const style = CONTAINER_STYLES[spec.kind];
   const pos = point(game, spec.at, spec.dx ?? 0, spec.dz ?? 0, style.height);
   if (!pos) return null;
@@ -297,7 +298,7 @@ function addContainer(game: Game, spec: ContainerSpec): { off: (() => void) | nu
     label: () => style.label,
     detail: () => (spec.owner ? `Owned: ${spec.ownerName ?? 'someone'}` : rt.locked ? 'Locked' : null),
     illegal: () => !!spec.owner,
-    enabled: () => !rt.emptied,
+    enabled: () => !rt.emptied && (!spec.needs || (typeof spec.at === 'string' && carts.has(spec.at))),
     interact: (g) => {
       if (rt.locked && !rt.unlock()) {
         g.events.emit('rpg:notify', { text: spec.locked && !spec.key ? 'Locked. You have no way to open it.' : 'Locked. It needs a key.', kind: 'info' });
@@ -328,40 +329,71 @@ interface PropsModule {
 }
 const propsModules = import.meta.glob<PropsModule>('../npc/props.ts');
 
-/** Dromo's cart and mule at the stand outside the gate, pointing at the arch (when the props exist). */
-async function placeCart(game: Game, disposers: (() => void)[]) {
+interface CartSpec {
+  /** Place id the cart stands at (a container with `needs: 'cart'` is `at` the same id). */
+  at: string;
+  /** Where it points: a place id (the arch for Dromo's cart). */
+  facing?: string;
+  load: 'amphorae' | 'marble';
+  mule: boolean;
+  /** A wheel off and the whole thing canted (Cornix). */
+  broken?: boolean;
+  /** Offset from the place, game metres. */
+  dx: number;
+  dz: number;
+}
+
+/** Carts that stand still: Dromo's at the cart stand outside the gate, Cornix's with its wheel off. */
+const CARTS: CartSpec[] = [
+  { at: 'capena-extra', facing: 'courier-ambush', load: 'amphorae', mule: true, dx: 4, dz: 2 },
+  { at: 'via-plaustrum', load: 'marble', mule: false, broken: true, dx: -2, dz: 1 },
+];
+
+/** Place the standing carts (when the NPC module's props exist); the set holds the places that got one. */
+async function placeCarts(game: Game, disposers: (() => void)[], placed: Set<string>) {
   const load = Object.values(propsModules)[0];
-  const stand = placeXZ(game, 'night-cart', 4, 2);
-  const arch = placeXZ(game, 'courier-ambush');
-  if (!load || !stand || !arch || !game.scene) return;
+  if (!load || !game.scene) return;
+  let m: PropsModule;
   try {
-    const m = await load();
-    if (!m.makeCart) return;
-    const c = m.makeCart('amphorae');
-    const heading = Math.atan2(arch.x - stand.x, arch.z - stand.z);
-    const ground = groundAt(game, stand);
-    c.group.position.set(stand.x, ground.y, stand.z);
-    c.group.rotation.y = heading;
-    if (m.Quadruped) {
-      const mule = new m.Quadruped('mule');
-      mule.root.position.set(0, 0, 3.1);
-      c.group.add(mule.root);
-      disposers.push(() => mule.dispose());
-    }
-    game.scene.add(c.group);
-    // A static blocker the size of the bed, so the cart is a thing in the street and not a ghost.
-    if (game.physics?.addBox) {
-      const half = { x: 0.75, y: 0.75, z: 1.4 };
-      const center = { x: stand.x + Math.sin(heading) * 0.3, y: ground.y + 0.9, z: stand.z + Math.cos(heading) * 0.3 };
-      game.physics.addBox(center, half, heading);
-    }
-    if (game.lights?.request) {
-      const lamp = game.lights.request({ position: new THREE.Vector3(stand.x, ground.y + 1.8, stand.z).addScaledVector(new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading)), 1.2), intensity: 12, distance: 10, flicker: true, night: true });
-      disposers.push(() => lamp.remove());
-    }
-    disposers.push(() => c.group.removeFromParent());
+    m = await load();
   } catch (err) {
-    console.warn('[content] Dromo’s cart could not be placed', err);
+    console.warn('[content] the cart props could not be loaded', err);
+    return;
+  }
+  if (!m.makeCart) return;
+  for (const spec of CARTS) {
+    try {
+      const stand = placeXZ(game, spec.at, spec.dx, spec.dz);
+      if (!stand) continue;
+      const toward = spec.facing ? placeXZ(game, spec.facing) : null;
+      const heading = toward ? Math.atan2(toward.x - stand.x, toward.z - stand.z) : (hash(spec.at) % 628) / 100;
+      const ground = groundAt(game, stand);
+      const c = m.makeCart(spec.load);
+      c.group.position.set(stand.x, ground.y, stand.z);
+      c.group.rotation.y = heading;
+      if (spec.broken) {
+        c.group.rotation.z = 0.12;
+        if (c.wheels[0]) c.wheels[0].visible = false;
+      }
+      if (spec.mule && m.Quadruped) {
+        const mule = new m.Quadruped('mule');
+        mule.root.position.set(0, 0, 3.1);
+        c.group.add(mule.root);
+        disposers.push(() => mule.dispose());
+      }
+      game.scene.add(c.group);
+      disposers.push(() => c.group.removeFromParent());
+      // A static blocker the size of the bed, so the cart is a thing in the street and not a ghost.
+      game.physics?.addBox?.({ x: stand.x + Math.sin(heading) * 0.3, y: ground.y + 0.9, z: stand.z + Math.cos(heading) * 0.3 }, { x: 0.75, y: 0.75, z: 1.4 }, heading);
+      if (game.lights?.request) {
+        const at = new THREE.Vector3(stand.x + Math.sin(heading) * 1.2, ground.y + 1.8, stand.z + Math.cos(heading) * 1.2);
+        const lamp = game.lights.request({ position: at, intensity: 12, distance: 10, flicker: true, night: true });
+        disposers.push(() => lamp.remove());
+      }
+      placed.add(spec.at);
+    } catch (err) {
+      console.warn(`[content] the cart at ${spec.at} could not be placed`, err);
+    }
   }
 }
 
@@ -376,6 +408,10 @@ export function installContent(game: Game): ContentService {
     return !!off;
   };
 
+  // Keep the bible's aliases (castor-loculi, ludus-cavea…) on top of the world's own spots.
+  if (game.locations) syncAliases(game.locations);
+  const carts = new Set<string>();
+
   let shrines = 0;
   for (const s of SHRINES) if (keep(addShrine(game, s))) shrines++;
 
@@ -389,7 +425,7 @@ export function installContent(game: Game): ContentService {
   for (const spec of CONTAINERS) {
     // Interiors wait for their interior cell: the place must be registered for them (the world side does that).
     if (spec.interior && !(typeof spec.at === 'string' && game.locations?.get(`${spec.at}:interior`))) continue;
-    const placed = addContainer(game, spec);
+    const placed = addContainer(game, spec, carts);
     if (!placed) continue;
     keep(placed.off);
     if (street.has(spec.id)) ids.push(spec.id);
@@ -405,7 +441,7 @@ export function installContent(game: Game): ContentService {
     }
   }
   const disposers: (() => void)[] = [() => handles.forEach((h) => h.remove())];
-  void placeCart(game, disposers);
+  void placeCarts(game, disposers, carts);
 
   const service: ContentService = {
     shrines,
