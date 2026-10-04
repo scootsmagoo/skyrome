@@ -29,7 +29,7 @@ import { S, padY, spotAt, type CapSpot } from './capfora/frame';
 import { altar, box, figure, footing, groundMin, inscription, labrum, pedestalStatue, post, span, stairsToGround, terrace, trophy } from './capfora/ornament';
 import { forumPortico } from './capfora/portico';
 import { cliffFace } from './capfora/cliff';
-import { addLamp, brazier, lampstand, plantTrees, torch } from './capfora/life';
+import { addLamp, brazier, cellaLamps, lampstand, plantTrees, torch } from './capfora/life';
 import { PAINT, friezeRelief, paint } from './capfora/paint';
 import { capTemple, smallTemple } from './capfora/temple';
 
@@ -100,6 +100,7 @@ function buildJOM(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots: C
         span(bb, 'marble', jx - 2.2, y, zc - 2.0, jx + 2.2, y + 1.2, zc + 1.6, info.at, true);
         seatedDeity(bb, mul(info.at, TRS(jx, y + 1.2, zc, 0, 0, 0, 2.6)), { material: 'marble', throneMaterial: 'gilded_bronze', detail: info.detail });
         box(bb, 'gilded_bronze', jx + 1.05, y + 3.9, zc - 0.9, 0.6, 0.12, 0.12, info.at);
+        cellaLamps(ctx, bb, info.at, jx, y, zc - 3.2, 2.8);
         // Juno Regina and Minerva, standing.
         for (const [x, kind] of [
           [ux, 'draped'],

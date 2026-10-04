@@ -51,7 +51,21 @@ interface Pending {
 
 const pending = new WeakMap<object, Pending>();
 
+/** >0 while a builder runs a second time for its far stand-in: no trees, lamps or interactions. */
+let muted = 0;
+
+/** Run `fn` with the live side effects (trees, lamps, interactions) switched off. */
+export function withoutLife<T>(fn: () => T): T {
+  muted++;
+  try {
+    return fn();
+  } finally {
+    muted--;
+  }
+}
+
 function live(ctx: Pick<LandmarkContext, 'game'>): Game | null {
+  if (muted > 0) return null;
   const g = ctx.game as Game | undefined;
   return g && typeof (g as { addSystem?: unknown }).addSystem === 'function' && g.scene ? g : null;
 }
@@ -117,6 +131,14 @@ export function brazier(ctx: LandmarkContext, b: MeshBuilder, x: number, y: numb
 export function lampstand(ctx: LandmarkContext, b: MeshBuilder, x: number, y: number, z: number) {
   placeProp(new Draw(b), 'lampstand', x, y, z, 0);
   addLamp(ctx, x, y + 1.45, z, 'lamp');
+}
+
+/** Lampstands either side of a cult statue, in a temple frame `at` (point in that frame). */
+export function cellaLamps(ctx: LandmarkContext, b: MeshBuilder, at: THREE.Matrix4, x: number, y: number, z: number, half = 2.2) {
+  for (const sx of [-1, 1]) {
+    const p = new THREE.Vector3(x + sx * half, y, z).applyMatrix4(at);
+    lampstand(ctx, b, p.x, p.y, p.z);
+  }
 }
 
 /** "Read" interactions for every inscription spot that carries a text. */

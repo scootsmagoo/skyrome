@@ -34,7 +34,7 @@ import { altar, box, figure, footing, groundMin, inscription, span, stairsToGrou
 import { PAINT, paint } from './capfora/paint';
 import { forumPortico } from './capfora/portico';
 import { capTemple } from './capfora/temple';
-import { addLamp } from './capfora/life';
+import { addLamp, cellaLamps } from './capfora/life';
 import { Draw } from '../../../arch/fabric/draw';
 import { placeProp } from '../../../arch/props/props';
 
@@ -423,6 +423,7 @@ function buildMarsUltor(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, sp
         // The standards recovered from Parthia (20 BC), set up before the apse.
         for (const sx of [-1, 1]) for (let k = 0; k < 2; k++) standard(bb, mul(info.at, T(sx * (3.6 + k * 0.7), info.y, zc - 2.2 - k * 0.6)), 2.8, info.detail);
         span(bb, 'marble', -4.8, info.y, zc - 3.2, 4.8, info.y + 0.05, zc - 1.8, info.at);
+        cellaLamps(ctx, bb, info.at, 0, info.y, zc - 3.6, 5.6);
       },
     },
     m,

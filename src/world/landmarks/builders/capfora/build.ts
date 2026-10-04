@@ -6,7 +6,7 @@ import type * as THREE from 'three';
 import type { MeshBuilder } from '../../../../gfx/MeshBuilder';
 import type { LandmarkBuild, LandmarkContext } from '../../types';
 import type { CapSpot } from './frame';
-import { addReadables } from './life';
+import { addReadables, withoutLife } from './life';
 
 export type Detail = 'high' | 'low';
 
@@ -36,7 +36,7 @@ export function makeLandmark(ctx: LandmarkContext, make: (b: MeshBuilder, detail
   if (opts.far) {
     const fb = ctx.builder();
     if (typeof opts.far === 'function') opts.far(fb);
-    else make(fb, 'low', []);
+    else withoutLife(() => make(fb, 'low', []));
     far = fb.build(`${ctx.lm.id}:far`);
     far.traverse((o) => {
       (o as THREE.Mesh).castShadow = false;

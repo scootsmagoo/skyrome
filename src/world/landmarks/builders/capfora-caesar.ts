@@ -34,7 +34,7 @@ import { PAINT, friezeRelief, paint } from './capfora/paint';
 import { forumPortico } from './capfora/portico';
 import { tabernae } from './capfora/tabernae';
 import { capTemple } from './capfora/temple';
-import { brazier } from './capfora/life';
+import { brazier, cellaLamps } from './capfora/life';
 import { Draw } from '../../../arch/fabric/draw';
 import { placeProp } from '../../../arch/props/props';
 
@@ -298,6 +298,7 @@ function buildVenusGenetrix(ctx: LandmarkContext, b: MeshBuilder, detail: Detail
           span(bb, 'wood_dark', x - 0.05, info.y + 2.0, z - 1.3, x + 0.05, info.y + 4.0, z + 1.3, info.at);
           span(bb, paint(sx < 0 ? PAINT.redOchre : PAINT.blue, 0.9), x - sx * 0.06 - 0.01, info.y + 2.15, z - 1.15, x - sx * 0.06 + 0.01, info.y + 3.85, z + 1.15, info.at);
         }
+        cellaLamps(ctx, bb, info.at, 0, info.y, zc - 2.2, 4.4);
         // The corslet of British pearls on a stand.
         span(bb, 'marble', -3.1, info.y, zc - 1.0, -2.3, info.y + 1.0, zc - 0.2, info.at, true);
         box(bb, 'fabric_white', -2.7, info.y + 1.35, zc - 0.6, 0.45, 0.6, 0.25, info.at);

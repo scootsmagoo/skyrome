@@ -33,6 +33,7 @@ import { S, landmark, relMatrix, sharedFloor, spotAt, type CapSpot } from './cap
 import { box, figure, footing, friezeStrip, groundMin, inscription, span, stairsToGround } from './capfora/ornament';
 import { PAINT, friezeRelief, minervaRelief, paint } from './capfora/paint';
 import { capTemple } from './capfora/temple';
+import { cellaLamps } from './capfora/life';
 
 const FLOOR_ABOVE_PAD = 0.7; // clears the Templum Pacis pad that rises 0.6 m along the SE wall
 const floorY = (ctx: LandmarkContext) => sharedFloor(ctx, 'forum-nerva', FLOOR_ABOVE_PAD);
@@ -357,6 +358,7 @@ function buildMinerva(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spot
         sh.translate(-0.85, y + 1.0, zc + 0.3);
         bb.add(sh, 'gilded_bronze', info.at);
         box(bb, 'bronze', 0.5, y + 0.2, zc - 0.4, 0.25, 0.4, 0.25, info.at);
+        cellaLamps(ctx, bb, info.at, 0, info.y, zc - 2.0, 2.6);
       },
     },
     at,
