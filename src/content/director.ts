@@ -78,12 +78,16 @@ export function placePosition(game: Game, id: string): THREE.Vector3 | null {
   return groundAt(game, l.position);
 }
 
-/** A point on the ground (heightmap, then physics, then the given y). */
+/**
+ * A point at street level (heightmap, then a short physics probe from 2.5 m above it, then the given
+ * y). The probe is short on purpose: a long one would land on the roof of a building whose footprint
+ * covers the spot, and a prompt or an enemy would float up there.
+ */
 export function groundAt(game: Game, p: Vec3): THREE.Vector3 {
   let y = p.y ?? 0;
   const hm = (game as unknown as { heightmap?: { heightAt(x: number, z: number): number } }).heightmap;
   if (hm) y = hm.heightAt(p.x, p.z);
-  const ground = game.physics?.groundHeight?.(p.x, p.z, y + 60, 200);
+  const ground = game.physics?.groundHeight?.(p.x, p.z, y + 2.5, 6);
   if (typeof ground === 'number' && Number.isFinite(ground)) y = ground;
   return new THREE.Vector3(p.x, y + 0.05, p.z);
 }

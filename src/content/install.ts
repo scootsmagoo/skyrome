@@ -154,6 +154,8 @@ interface Stored {
   coins: number;
   emptied?: boolean;
   unlocked?: boolean;
+  /** The theft has been reported to the law (once per container). */
+  reported?: boolean;
 }
 
 /** The runtime of one container: deterministic loot, rolled on first use and kept in the world deltas. */
@@ -172,7 +174,7 @@ export class ContainerRuntime {
 
   private read(): Stored {
     const d = this.game.deltas?.get(this.spec.id) as Partial<Stored> | undefined;
-    if (d?.items) return { items: d.items.map((i) => ({ ...i })), coins: d.coins ?? 0, emptied: d.emptied, unlocked: d.unlocked };
+    if (d?.items) return { items: d.items.map((i) => ({ ...i })), coins: d.coins ?? 0, emptied: d.emptied, unlocked: d.unlocked, reported: d.reported };
     if (this.local) return this.local;
     const loot = rollLoot(this.spec.table, 1, new Rng(`ctn:${this.spec.id}`));
     return (this.local = { items: loot.items.map((i) => ({ ...i })), coins: loot.denarii });
@@ -182,7 +184,7 @@ export class ContainerRuntime {
     this.local = s;
     s.emptied = s.items.length === 0 && s.coins <= 0;
     if (this.game.deltas) {
-      this.game.deltas.merge(this.spec.id, { items: s.items, coins: s.coins, emptied: s.emptied, unlocked: s.unlocked });
+      this.game.deltas.merge(this.spec.id, { items: s.items, coins: s.coins, emptied: s.emptied, unlocked: s.unlocked, reported: s.reported });
       if (s.emptied) this.game.deltas.markLooted(this.spec.id);
     }
   }
@@ -218,17 +220,16 @@ export class ContainerRuntime {
     return this.read().coins;
   }
 
-  /** Take `count` of an item (or the coins, itemId 'denarii'). Stealing from an owned container is furtum if seen. */
+  /** Take `count` of an item (or the coins, itemId 'denarii'). Taking from an owned container is furtum if seen: once per container, for what it held. */
   take(itemId: string, count: number): number {
     const s = this.read();
     const inv = this.game.player?.inventory;
     if (!inv) return 0;
-    let value = 0;
+    if (this.spec.owner) this.report(s);
     let taken = 0;
     if (itemId === 'denarii') {
       taken = s.coins;
       inv.addDenarii(taken);
-      value = taken;
       s.coins = 0;
     } else {
       const row = s.items.find((i) => i.id === itemId);
@@ -237,17 +238,16 @@ export class ContainerRuntime {
       row.count -= taken;
       s.items = s.items.filter((i) => i.count > 0);
       inv.add(itemId, taken, { source: 'container', stolenFrom: this.spec.owner });
-      value = (this.game.items?.get(itemId)?.value ?? 0) * taken;
     }
     this.write(s);
-    if (this.spec.owner && value > 0) this.stealing(value);
     return taken;
   }
 
-  private stolen = 0;
-
-  private stealing(value: number) {
-    this.stolen += value;
+  /** The theft is booked once, on the first thing taken, for the value of everything inside (§14.1: twice that in bounty, by the crime table). */
+  private report(s: Stored) {
+    if (s.reported) return;
+    s.reported = true;
+    const value = s.coins + s.items.reduce((v, i) => v + (this.game.items?.get(i.id)?.value ?? 0) * i.count, 0);
     const pop = (this.game as unknown as { population?: { witnesses?(p: THREE.Vector3Like, r?: number): string[] } }).population;
     let witnesses: string[] = [];
     try {
@@ -255,7 +255,7 @@ export class ContainerRuntime {
     } catch {
       witnesses = [];
     }
-    this.game.crime?.commit('furtum', { witnessed: witnesses, victimId: this.spec.owner, value: this.stolen });
+    this.game.crime?.commit('furtum', { witnessed: witnesses, victimId: this.spec.owner, value });
   }
 
   takeAll() {

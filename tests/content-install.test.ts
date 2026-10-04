@@ -207,7 +207,13 @@ describe('containers', () => {
     expect(seen.views[0].owned).toBe(true);
     expect(seen.views[0].owner).toBe('Caunea');
     seen.views[0].takeAll();
-    expect(seen.rpg.crime.totalBounty()).toBeGreaterThan(0);
+    const bounty = seen.rpg.crime.totalBounty();
+    expect(bounty).toBeGreaterThan(0);
+    // One theft per container, however many things are taken from it.
+    const again = world(['npc-caunea']);
+    open(again, 'ctn-corbis-ficus');
+    for (const i of again.views[0].items()) again.views[0].take(i.itemId, 1);
+    expect(again.rpg.crime.totalBounty()).toBe(bounty);
     // What was taken is stolen goods (the arms dealer and the aedituus refuse them).
     const stolen = seen.rpg.inventory.count('panis', { stolen: true }) + seen.rpg.inventory.count('caseus', { stolen: true }) + seen.rpg.inventory.count('olivae', { stolen: true }) + seen.rpg.inventory.count('ficus', { stolen: true }) + seen.rpg.inventory.count('botulus', { stolen: true });
     expect(stolen).toBeGreaterThanOrEqual(0);
