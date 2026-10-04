@@ -283,18 +283,26 @@ export class BarterSystem {
     return { ok: true, price };
   }
 
-  /** Sell `count` items. Clean stacks first unless `stolenFrom` picks a stolen stack. */
+  /**
+   * Sell `count` items: clean copies, or with `stolenFrom` the copies stolen from that owner (one
+   * owner per sale; the UI lists stolen stacks by owner). Nothing changes hands unless exactly
+   * those copies leave the inventory.
+   */
   sell(npcId: string, itemId: string, count = 1, stolenFrom?: string): TradeResult {
     const m = this.merchant(npcId);
     if (!m) return { ok: false, price: 0, reason: 'not-merchant' };
+    count = Math.floor(count);
+    if (!(count > 0)) return { ok: false, price: 0, reason: 'not-owned' };
     const inv = this.deps.inventory;
     const stolen = !!stolenFrom;
-    if (inv.count(itemId, { stolen }) < count) return { ok: false, price: 0, reason: 'not-owned' };
+    const owner = stolenFrom || null;
+    // Count with the same filter remove() uses, so the check and the removal agree.
+    if (inv.count(itemId, { stolenFrom: owner }) < count) return { ok: false, price: 0, reason: 'not-owned' };
     const unit = this.sellPrice(npcId, itemId, stolen);
     if (unit === null) return { ok: false, price: 0, reason: 'refused' };
     const price = roundPrice(unit * count) || 0;
     if (m.denarii + 1e-9 < price) return { ok: false, price, reason: 'merchant-poor' };
-    inv.remove(itemId, count, { stolenFrom: stolenFrom ?? null, reason: 'sold' });
+    if (!inv.remove(itemId, count, { stolenFrom: owner, reason: 'sold' })) return { ok: false, price: 0, reason: 'not-owned' };
     inv.addDenarii(price);
     m.denarii -= price;
     const s = m.stock.find((x) => x.itemId === itemId);

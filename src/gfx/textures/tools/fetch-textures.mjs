@@ -29,7 +29,6 @@ mkdirSync(cache, { recursive: true });
 export const SOURCES = {
   marble: 'acg:Marble001',
   marble_veined: 'acg:Marble012',
-  travertine: 'acg:Concrete003',
   tufa: 'acg:Rock049',
   peperino: 'acg:Concrete025',
   basalt: 'acg:Rock050',

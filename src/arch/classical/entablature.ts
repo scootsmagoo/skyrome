@@ -57,6 +57,10 @@ function resolveDims(spec: EntablatureSpec): EntablatureDims {
 
 /** Architrave profile from the soffit up to the frieze face (x = 0 is the lowest fascia). */
 function architraveProfile(p: ProfileBuilder, A: number, fasciae: number, detail: Detail) {
+  if (detail === 'far') {
+    p.up(A);
+    return;
+  }
   const n = detail === 'high' ? 4 : 2;
   const crown = 0.18 * A;
   if (fasciae >= 3) {
@@ -80,6 +84,14 @@ function corniceProfile(p: ProfileBuilder, Cn: number, order: Order, detail: Det
   const x0 = p.x;
   const y0 = p.y;
   const bands = { dentilY: 0, dentilH: 0, dentilX: 0, modY: 0, modH: 0, modX: 0, soffitY: 0, soffitX: 0 };
+  if (detail === 'far') {
+    // A stepped bed and a deep corona: the cornice's shadow line is what reads at distance.
+    p.out(0.12 * Cn).up(0.3 * Cn).out((props.modillions ? 0.62 : 0.5) * Cn);
+    bands.soffitY = p.y - y0;
+    bands.soffitX = p.x - x0;
+    p.up(0.7 * Cn);
+    return bands;
+  }
   if (props.modillions) {
     p.cymaReversa(0.06 * Cn, 0.09 * Cn, n);
     bands.dentilY = p.y - y0;

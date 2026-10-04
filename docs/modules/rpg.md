@@ -66,7 +66,17 @@ Wired automatically: sprint stamina (8/s) and the "exhausted until 15" rule thro
 `PlayerController.canSprint/speedMultiplier`; heavy-armor penalties by the body piece; hourly
 checks (bounty lapse, overdue vows, Infamia recovery); vows ending with their quests; pending
 faction promotions on skill-ups; the gladiator's oath costing Infamia; cleanliness as a
-condition; autosaves on quest stages.
+condition; autosaves on quest stages; skipped time (`time:skipped`) running timed effects forward.
+
+**Skipping time (§14.10).** Every jump of the clock (sleep, wait, the baths, the Carcer, and the
+calendar's "Wait until…") goes through `skipTime()` in `src/rpg/clock.ts`, or `rpg.skipHours(h)`:
+the clock moves, then `time:skipped { hours }` fires and the sheet's timed effects (counted in
+real seconds) run forward by `hours × 3600 / timeScale`, expiring as if you had waited (no
+over-time healing or damage; sleep restores vitals itself). Don't call `time.advanceHours` for a jump.
+
+**New game.** `startNewGame` calls `save.resetAll()`: every registered saveable's `reset()` (the clock
+back to `save.newGameTime`, which is the time when the save system was created, world deltas, discovered places,
+and other modules' sections), play time 0, and no pending autosave. Then it applies the origin.
 
 ## Rules at a glance
 
@@ -94,7 +104,7 @@ armor, family, defender, block, mult })` applies type vs family, armor and the b
 - AR = Σ pieces × condition × (1 + armorSkill/250) × (1 + armor.class); reduction AR/(AR+120), max 60%; at least 1 damage.
 - The outermost torso piece (body, else padding) sets the family; the body piece's class sets heavy-armor penalties and the armor skill.
 - Block = base + (0.95 − base) × Shield/200, cap 0.90 (scutum 0.85 → 0.90); stamina max(4, 0.6 × raw × (1 − Shield/200)); Shield Wall −30% stamina per ally; parry windows by difficulty.
-- Poise: flinch ≥ 20% of max (player 35%), 0.4 s flinch immunity; a break staggers 0.8/1.5 s and refills, then 1.5 s of immunity; at most 2 staggers in 4 s; a riposte opens no new window.
+- Poise: flinch ≥ 20% of max (player 35%), 0.4 s flinch immunity; a break staggers 0.8/1.5 s and refills. While staggered only a riposte lands; it restaggers but opens no new window. 1.5 s of immunity follow the end of any stagger. At most 2 staggers in 4 s. Parries and guard breaks stagger through `staggerPoise`.
 - Difficulty: tiro / facilis / normalis / difficilis / herculea (`DIFFICULTY_V01` = the three v0.1 levels).
 - `fallDamage(h)`, `missioChance`, `addFavor`, `arenaPurse`, `isPracticeWeapon` (lusio: practice arms never kill).
 
@@ -134,14 +144,16 @@ the §6.14 tables.
 `-silvered`), uniques, practice arms (`rudis`, `tridens-lusorius`). Layered slots: `under`,
 `padding`, `body`, `cloak`, `legs`, `shins`, `arm`, `head`, `feet`, `neck`, `finger`, `mainHand`,
 `offHand`, `ammo`. Stacks by stolen owner and condition; two-handed rules; coins become denarii;
-quest items weigh nothing and can't be dropped; wear 1% per 100 damage; `use` for food, remedies
+quest items weigh nothing and can't be dropped; wear 1% per 100 damage, adding up below 1% per hit
+(the worn copy keeps its unrounded condition, which is saved); `use` for food, remedies
 (potion, bandage and food strength) and books; equip modifiers and flags (`dress.toga`,
 `dress.stola`, `dress.palla`, `amulet`, `hooded`…).
 
 **Economy (§7).** Money is denarii quantized to the quadrans (`formatDenarii`, HS style).
 `BarterSystem`: prices with every modifier inside the clamps (Σbuy, Σsell), so a sale never
 beats 0.86 × the buy price; disposition from Fama/10, traits and dialogue; market days, street-wise,
-Bilbilis, festivals; haggling once a day by vendor grade; fences; purses restock every 2 days;
+Bilbilis, festivals; haggling once a day by vendor grade; fences (`sell(npc, item, n, owner)` sells
+only that owner's stolen copies, and nothing changes hands unless they leave the inventory); purses restock every 2 days;
 Trade XP with same-day diminishing returns; repairs at the arms dealer or smith; Faenus Nauticum
 cargo loans rolled at investment time.
 
@@ -150,7 +162,8 @@ once branded), district Fama, cleanliness, sex, debt. `FactionSystem`: ranks gra
 (`promote`, `grantRank`, `reward.rank`) with skill gates that make a promotion wait; Fama ±100
 per faction; citizens-only, non-citizen caps, exclusive colors, oath Infamia. `CrimeSystem`
 (§14.1): city and Palatine ledgers, the GDD bounty table, unidentified crimes raising district
-alerts, pay/persuade/bribe/Carcer/asylum/flee/resist, ad ludum and the eques' fine, lapse,
+alerts, pay/persuade/bribe/Carcer/asylum/flee/resist (a guard's corruptibility is fixed by guard id,
+or for an unnamed guard rolled once per confrontation), ad ludum and the eques' fine, lapse,
 evidence chest, status crimes (`statusCrimeFor`). `resolveYield` applies spare/rob/arrest/kill.
 
 **Persuasion (§14.5, `checks.ts`).** p = clamp(0.05, 0.95, 0.50 + (skill + mods − DC)/100); DC tiers
@@ -183,7 +196,8 @@ and save/restore. `src/quests/content/_example.ts` is a complete example ("The S
 ## Dialogue (`src/dialogue/`)
 
 Dialogues are modules in `src/dialogue/content/*.ts` exporting `defineDialogue({ id, npcs, start,
-nodes, priority })`. Nodes have text (string or function), choices with `if`, `enabled`, `goto`,
+nodes, priority })`. For an NPC, the dialogues listing its id and the one its `NpcDef.dialogue` names
+are tried by priority, and the named one wins a tie. The `'*'` fallbacks come last. Nodes have text (string or function), choices with `if`, `enabled`, `goto`,
 `check` (skill, DC, approach, audience), `bribe` (amount or DC-priced), `once`, `effects`, `end`.
 `game.dialogue.start(npcId)` returns a UI view `{ npcId, speakerName, text, choices: [{ text,
 enabled, tag, kind }], canContinue, willEnd }`; then `choose(i)`, `advance()`, `end()`. Per-NPC memory
@@ -207,9 +221,11 @@ A save file is `{ format, saveVersion, generatorVersion, worldSeed, gameTime, me
 (`saveNew`, `manualSlots`), 3 rotating autosaves, 1 quicksave (input actions `quickSave` /
 `quickLoad`). Saving is blocked in combat, in dialogue and while falling (`addBlocker` adds more).
 Autosaves fire on quest stages (at most every 120 s, deferred until saving is allowed), every 10
-real minutes, and on `save:request` (emit it for sleep/wait and interior changes). Storage is
-IndexedDB with a localStorage fallback, every access in try/catch, and `navigator.storage.persist()`
-is requested. `exportSave` / `importSave` / `downloadSave` / `importFile` move JSON files.
+real minutes, and on `save:request` (emit it for sleep/wait and interior changes). An autosave
+picks its slot, saves and advances the rotation in one queued operation. Storage is IndexedDB with
+a localStorage fallback, every access in try/catch, and `navigator.storage.persist()` is requested.
+An IndexedDB write counts only when its transaction commits, so a quota abort falls back. The
+fallback holds a key only while its copy is the newest, so reads prefer it. `exportSave` / `importSave` / `downloadSave` / `importFile` move JSON files.
 Migrations are pure functions (`migrateV1toV2`, `registerMigration`) with fixtures in the tests.
 `game.deltas` keeps world deltas by stable id (`proceduralId(worldspace, cx, cz, generator, index)`);
 killed actors are recorded automatically.
@@ -223,21 +239,24 @@ Emitted: `rpg:notify` (HUD toasts: "+5 Pietas", "Crime witnessed: furtum (bounty
 `barter:trade`, `devotion:patron/invoked/act`, `standing:changed/cleanliness`,
 `quest:started/stage/objective/completed/failed`, `quest:tracked`, `dialogue:started/node/ended/check/service/attack`,
 `location:entered/exited/discovered`, `flag:changed`, `save:saved/loaded/error`, `delta:changed`.
-Listened to: `actor:killed`, `actor:yielded` (quests), `time:hour`, `save:request`.
+Listened to: `actor:killed`, `actor:yielded` (quests), `time:hour`, `time:skipped`, `save:request`.
 
 ## Integration notes for other modules
 
 - **Combat:** call `computeAttack` / `resolveHit` with `player.sheet` as stats and `difficultyMult`;
   apply `inventory.wear(slot, damage)`; on a bleed roll apply `sheet.applyCondition('cruentus')`
-  (the old id `cruor` is gone); track poise with `createPoise`/`applyPoiseDamage`/`tickPoise`; set
+  (the old id `cruor` is gone); track poise with `createPoise`/`applyPoiseDamage`/`tickPoise`
+  (pass `riposte: true` for ripostes, and stagger parried attackers with `staggerPoise`); set
   `sheet.vitals.inCombat` from the §6 predicate and `vitals.blocking` while guarding; award XP with
   `sheet.useSkill(skill, XP.blades.light)` etc.; use `resolveYield` for spare/rob/arrest/kill and
   `arena.ts` for favor and missio.
 - **AI / spawners:** build profiles with `combatProfileFor` or `archetypeProfile`; read
   `tokensCost`, `reactionS`, `speedMult`, `attackIntervalS`, `armorFamily`; roll loot with `rollLoot`.
 - **UI:** read `game.rpg` services; show `rpg:notify`; journal from `quests.list()`; dialogue from
-  `dialogue.onChange`; arrest dialogue from `crime.arrestOptions(ledger, guard)`.
-- **Calendar:** replace `rpg.hooks.templesClosed`, `festivalDiscount` and `vowMult`.
+  `dialogue.onChange`; arrest dialogue from `crime.arrestOptions(ledger, guard)` (pass the guard's id
+  when there is one).
+- **Calendar:** replace `rpg.hooks.templesClosed`, `festivalDiscount` and `vowMult`; make date
+  jumps with `rpg.skipHours(h)` so timers advance with them.
 - **World:** emit `save:request` on interior changes; record deltas in `game.deltas`.
 
 ## Not done yet, and where this differs from the GDD

@@ -5,6 +5,7 @@ import { NpcRegistry } from '../src/npc/registry';
 import type { NpcDef } from '../src/npc/types';
 import { playableOrigins } from '../src/rpg/data/origins';
 import { installRpg } from '../src/rpg/install';
+import { bathe, sleep, wait } from '../src/rpg/rest';
 import { canArrest, resolveYield } from '../src/rpg/yield';
 import { MemoryStorage } from '../src/save/storage';
 import { LocationRegistry } from '../src/world/locations';
@@ -224,6 +225,53 @@ describe('installRpg', () => {
     expect(rpg.sheet.modifier('damage.blades')).toBeCloseTo(0.1);
     fg.step(30, 1);
     expect(rpg.sheet.modifier('damage.blades')).toBe(0);
+  });
+
+  it('skipped time (sleep, wait, baths, the Carcer) runs timed effects forward with the clock (§14.10)', () => {
+    const fg = fakeGame();
+    const rpg = installRpg(fg.game, { storage: new MemoryStorage() });
+    const deps = { ...rpg, time: fg.game.time, events: fg.events };
+    const log = record(fg.events, ['effect:expired', 'time:skipped']);
+    const fullHealth = rpg.sheet.vitals.health.max;
+    rpg.sheet.applyCondition('injured');
+    rpg.sheet.applyCondition('benedictio-mars');
+    bathe(deps);
+    expect(rpg.sheet.hasCondition('lautus')).toBe(true);
+    expect(rpg.sheet.vitals.health.max).toBeCloseTo(fullHealth * 0.8);
+    // Waiting a whole day (no bed): the injury (a game day) and the 24-hour blessing run out
+    // (the hour in the baths counted too); lautus (12 game hours) ends on the sheet and in Standing alike.
+    wait(deps, 24);
+    expect(rpg.sheet.hasCondition('injured')).toBe(false);
+    expect(rpg.sheet.vitals.health.max).toBeCloseTo(fullHealth);
+    expect(rpg.sheet.hasCondition('benedictio-mars')).toBe(false);
+    expect(rpg.standing.cleanliness).toBe('normal');
+    expect(rpg.sheet.hasCondition('lautus')).toBe(false);
+    expect(log.map((l) => l.type)).toContain('effect:expired');
+    // A short wait runs a timer down without ending it; the new bed condition starts after the jump.
+    rpg.sheet.applyCondition('satur'); // 2 game hours
+    wait(deps, 1);
+    expect(rpg.sheet.hasCondition('satur')).toBe(true);
+    sleep(deps, 1, 'own');
+    expect(rpg.sheet.hasCondition('satur')).toBe(false);
+    expect(rpg.sheet.hasCondition('bene-quietus')).toBe(true);
+    // Sleeping in a bed cures an injury outright, however short the sleep (rest, §14.9).
+    rpg.sheet.applyCondition('injured');
+    sleep(deps, 2, 'rented');
+    expect(rpg.sheet.hasCondition('injured')).toBe(false);
+    expect(rpg.sheet.vitals.health.current).toBeCloseTo(fullHealth);
+    // The Carcer: days pass for the effects too.
+    rpg.sheet.applyCondition('benedictio-mars');
+    rpg.crime.commit('furtum', { witnessed: true, value: 10 });
+    expect(rpg.crime.goToJail()?.days).toBeGreaterThanOrEqual(1);
+    expect(rpg.sheet.hasCondition('benedictio-mars')).toBe(false);
+    // Other modules (the calendar's "Wait until…") use the same path.
+    rpg.sheet.applyCondition('satur');
+    const before = fg.game.time.totalHours;
+    rpg.skipHours(3);
+    expect(fg.game.time.totalHours).toBeCloseTo(before + 3);
+    expect(rpg.sheet.hasCondition('satur')).toBe(false);
+    rpg.skipHours(-5);
+    expect(fg.game.time.totalHours).toBeCloseTo(before + 3);
   });
 });
 

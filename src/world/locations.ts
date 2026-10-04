@@ -178,6 +178,13 @@ export class LocationRegistry implements System {
     return { discovered: [...this.discovered], visited: [...this.visited] };
   }
 
+  /** New game: nothing discovered or visited; where the player starts is entered (and discovered) normally. */
+  reset() {
+    this.restore(undefined);
+    this.silentNext = false;
+  }
+
+  /** Load: where the player already stands is marked entered without events (no "Discovered" toast on load). */
   restore(data: unknown) {
     const d = (data ?? {}) as { discovered?: string[]; visited?: string[] };
     this.discovered.clear();

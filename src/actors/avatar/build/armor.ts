@@ -94,10 +94,12 @@ export function armorTorsoPaint(ctx: Ctx, L: Levels, x: number, y: number, z: nu
     }
     case 'lorica-hamata':
     case 'lorica-squamata': {
-      // Down to the hips (the skirt overlay continues it below the waist).
-      if (y < L.waist - 0.03 * s) return null;
+      // Down to the hips. Below the waist the skirt overlay shows the mail; the body under it is
+      // painted the same (thin), so wherever the hips press through the skirt it is still mail.
+      if (y < L.crotch - 0.02 * s) return null;
       const scale = body.kind === 'lorica-squamata';
       const c = scale ? shade(metal, 1.0) : shade(metal, 0.85);
+      if (y < L.waist - 0.03 * s) return { color: c, surf: scale ? SURF.scale : SURF.mail, t: 0.004 * s };
       // Shoulder doubling (humeralia): a heavier band over the shoulders and upper chest.
       const doubling = y > L.chest + 0.05 * s;
       if (doubling && Math.abs(y - (L.chest + 0.05 * s)) < 0.004 * s) return { color: IRON_DARK, surf: ms, t: 0.018 * s };
@@ -410,6 +412,36 @@ interface HelmetParts {
   gap: number;
   color: THREE.Color;
   surf: Surf;
+  /**
+   * Below this height fraction the bowl stops following the head (which narrows into the jaw and
+   * neck) and drops as a slightly flaring skirt, like the closed back of a gladiator's helmet.
+   */
+  skirt?: number;
+}
+
+/** Push a point away from the head center (flattened vertically), as the bowl surface does. */
+function outFromHead(H: HeadFrame, p: THREE.Vector3, d: number) {
+  const n = p.clone().sub(H.c);
+  n.y *= 0.55;
+  return p.addScaledVector(n.normalize(), d);
+}
+
+/** A point of the bowl surface at height fraction yf: the head surface pushed out by d, or the skirt. */
+function bowlPoint(H: HeadFrame, skirt: number | undefined, yf: number, th: number, d: number): THREE.Vector3 {
+  if (skirt !== undefined && yf < skirt) {
+    const p = outFromHead(H, H.at(skirt, th, new THREE.Vector3(), true), d);
+    const drop = (skirt - yf) * H.H;
+    p.y -= drop;
+    p.x += Math.sin(th) * drop * 0.18;
+    p.z += Math.cos(th) * drop * 0.18;
+    return p;
+  }
+  return outFromHead(H, H.at(yf, th, new THREE.Vector3(), true), d);
+}
+
+/** The rolled lip at the bowl's rim (row 0 of bowl()): attachments weld to it. */
+function lipPoint(H: HeadFrame, parts: HelmetParts, th: number): THREE.Vector3 {
+  return bowlPoint(H, parts.skirt, parts.rim(th) - 0.012, th, parts.gap * H.hs * 1.15);
 }
 
 function vtx(p: THREE.Vector3, c: THREE.Color, s: Surf, w: Weights = HEAD): V {
@@ -420,12 +452,8 @@ function vtx(p: THREE.Vector3, c: THREE.Color, s: Surf, w: Weights = HEAD): V {
 function bowl(ctx: Ctx, H: HeadFrame, parts: HelmetParts, deco?: (th: number, yf: number, c: THREE.Color) => THREE.Color, bulge?: (th: number, yf: number) => number) {
   const { b } = ctx;
   const cols = ctx.hi ? 18 : 10;
-  const rows = ctx.hi ? 7 : 4;
-  const out = (p: THREE.Vector3, d: number) => {
-    const n = p.clone().sub(H.c);
-    n.y *= 0.55;
-    return p.addScaledVector(n.normalize(), d);
-  };
+  const rows = (ctx.hi ? 7 : 4) + (parts.skirt !== undefined ? (ctx.hi ? 3 : 1) : 0);
+  const out = (p: THREE.Vector3, d: number) => outFromHead(H, p, d);
   const g = b.grid(
     cols,
     rows + 1,
@@ -436,8 +464,7 @@ function bowl(ctx: Ctx, H: HeadFrame, parts: HelmetParts, deco?: (th: number, yf
       // j = 0 is the rolled lip (slightly lower and further out), then up to the crown.
       const t = j === 0 ? 0 : (j - 1) / (rows - 1);
       const yf = j === 0 ? r0 - 0.012 : lerp(r0, 0.995, Math.pow(t, 0.85));
-      const p = H.at(yf, th, new THREE.Vector3(), true);
-      out(p, parts.gap * H.hs * (j === 0 ? 1.15 : 1) + (bulge ? bulge(th, yf) * H.hs : 0));
+      const p = bowlPoint(H, parts.skirt, yf, th, parts.gap * H.hs * (j === 0 ? 1.15 : 1) + (bulge ? bulge(th, yf) * H.hs : 0));
       let c = parts.color.clone().multiplyScalar(j === 0 ? 0.75 : 0.92 + 0.12 * t);
       if (deco) c = deco(th, yf, c);
       v.x = p.x;
@@ -462,8 +489,7 @@ function bowl(ctx: Ctx, H: HeadFrame, parts: HelmetParts, deco?: (th: number, yf
     (i, j, v) => {
       const th = (i / cols) * Math.PI * 2;
       const r0 = parts.rim(th);
-      const p = H.at(r0 - (j === 0 ? 0.012 : -0.01), th, new THREE.Vector3(), true);
-      out(p, parts.gap * H.hs * (j === 0 ? 1.15 : 0.6));
+      const p = bowlPoint(H, parts.skirt, r0 - (j === 0 ? 0.012 : -0.01), th, parts.gap * H.hs * (j === 0 ? 1.15 : 0.6));
       const c = shade(parts.color, 0.45);
       v.x = p.x;
       v.y = p.y;
@@ -544,40 +570,49 @@ function buildHelmet(ctx: Ctx, H: HeadFrame, kind: HelmetKind, crestColor?: stri
       );
     }
   };
-  const neckGuard = (c: THREE.Color, s: Surf, depth: number, drop: number, width = 1.3) => {
+  /**
+   * Neck guard welded to the bowl's rolled lip, flaring back and down. Depth and drop taper to
+   * nothing at the ends so it melts into the rim instead of ending in points; the outer edge is
+   * turned down like a rolled bead.
+   */
+  const neckGuard = (parts: HelmetParts, depth: number, drop: number, width = 1.3) => {
+    const c = parts.color;
     plate(
       ctx,
-      8,
-      3,
+      12,
+      4,
       (u, v) => {
         const th = Math.PI + lerp(-width, width, u);
-        const p = H.at(0.42, th, new THREE.Vector3(), true);
+        const taper = Math.pow(Math.sin(u * Math.PI), 0.6);
+        const p = lipPoint(H, parts, th);
         const n = V3(Math.sin(th), 0, Math.cos(th));
-        p.addScaledVector(n, (0.016 + depth * v) * hs);
-        p.y -= drop * v * hs;
+        const vf = Math.min(1, v / 0.75);
+        p.addScaledVector(n, depth * vf * taper * hs);
+        p.y -= (drop * vf + (v > 0.75 ? 0.008 * (v - 0.75) / 0.25 : 0)) * taper * hs;
         return p;
       },
       (u) => {
         const th = Math.PI + lerp(-width, width, u);
-        return V3(Math.sin(th) * 0.5, 1, Math.cos(th) * 0.5).normalize();
+        return V3(Math.sin(th) * 0.45, 1, Math.cos(th) * 0.45).normalize();
       },
-      (u, v) => (v > 0.85 ? shade(c, 0.75) : shade(c, 0.95 + 0.08 * Math.sin(u * 12))),
-      s,
+      (u, v) => (v > 0.7 ? shade(c, 0.72) : shade(c, 0.96 + 0.06 * Math.sin(u * 12))),
+      parts.surf,
       () => HEAD,
-      0.003 * hs,
+      0.004 * hs,
     );
   };
-  const brim = (c: THREE.Color, s: Surf, width: number, droop: number) => {
+  /** Broad brim at height fraction yf, drooping at the sides and back (less over the visor). */
+  const brim = (c: THREE.Color, s: Surf, width: number, droop: number, yf = 0.66) => {
     plate(
       ctx,
       24,
       2,
       (u, v) => {
         const th = u * Math.PI * 2;
-        const p = H.at(0.66, th, new THREE.Vector3(), true);
+        const p = H.at(yf, th, new THREE.Vector3(), true);
         const n = V3(Math.sin(th), 0, Math.cos(th));
         p.addScaledVector(n, (0.018 + width * v) * hs);
-        p.y -= droop * v * hs * (0.6 + 0.4 * Math.abs(Math.cos(th)));
+        p.y -= droop * v * hs * (1 - 0.7 * Math.max(0, Math.cos(th)));
         return p;
       },
       () => V3(0, 1, 0),
@@ -587,39 +622,99 @@ function buildHelmet(ctx: Ctx, H: HeadFrame, kind: HelmetKind, crestColor?: stri
       0.003 * hs,
     );
   };
-  const grilleVisor = (c: THREE.Color, s: Surf, holes: 'grille' | 'eyes') => {
-    // A face plate over the face from the brow to the chin.
+  /**
+   * Face plate from the brow to the chin with two round grilled eye openings (Pompeii type): dark
+   * openings, a raised bead around each and crossed bars, all real geometry so they read at any
+   * distance and LOD. A low ridge runs down the middle of the face.
+   */
+  // The visor wraps the face from ear to ear and, below the cheekbones, drops straight like the
+  // closed back of the bowl (the same skirt), so visor and bowl meet without gaps.
+  const VISOR_W = 1.45;
+  const VISOR_TOP = 0.7;
+  const GLADIATOR_SKIRT = 0.42;
+  const visorPoint = (yf: number, th: number, d = 0) => bowlPoint(H, GLADIATOR_SKIRT, yf, th, (0.026 + d) * hs);
+  /** A round eye opening on a surface: dark hole, raised bead and (optionally) crossed grille bars. */
+  const eyeOpening = (surface: (yf: number, th: number, d: number) => THREE.Vector3, th0: number, y0: number, R: number, c: THREE.Color, s: Surf, bars: boolean) => {
+    const center = surface(y0, th0, 0.001);
+    const n = center.clone().sub(surface(y0, th0, -0.01)).normalize();
+    const up = V3(0, 1, 0).addScaledVector(n, -n.y).normalize();
+    const right = V3(0, 0, 0).crossVectors(up, n);
+    const at = (x: number, y: number, d: number) => center.clone().addScaledVector(right, x * hs).addScaledVector(up, y * hs).addScaledVector(n, d * hs);
+    // Opening: a dark disc just proud of the plate.
+    plate(ctx, ctx.hi ? 12 : 8, 1, (u, v) => at(Math.cos(u * Math.PI * 2) * R * v, Math.sin(u * Math.PI * 2) * R * v, 0.0012), () => n.clone(), () => srgb('#120e0b'), SURF.leather, () => HEAD, 0.001 * hs);
+    // Far away a dark opening is all that reads.
+    if (!ctx.hi) return;
+    // Raised bead around it.
     plate(
       ctx,
-      8,
-      8,
+      12,
+      2,
       (u, v) => {
-        const th = lerp(-1.25, 1.25, u);
-        const yf = lerp(0.04, 0.66, v);
-        const p = H.at(yf, th, new THREE.Vector3(), true);
-        const n = p.clone().sub(H.c);
-        n.y *= 0.3;
-        return p.addScaledVector(n.normalize(), 0.026 * hs);
+        const a = u * Math.PI * 2;
+        const r = R * (1 + v * 0.22) + 0.001;
+        return at(Math.cos(a) * r, Math.sin(a) * r, 0.002 + 0.0035 * Math.sin(v * Math.PI));
       },
+      () => n.clone(),
+      (u, v) => shade(c, 0.9 + 0.2 * Math.sin(v * Math.PI)),
+      s,
+      () => HEAD,
+      0.0015 * hs,
+    );
+    if (!bars) return;
+    // Crossed bars (three each way), standing off the opening.
+    for (const k of [-0.5, 0, 0.5]) {
+      const half = R * Math.sqrt(1 - k * k);
+      for (const vert of [true, false]) {
+        plate(
+          ctx,
+          1,
+          1,
+          (u, v) => {
+            const along = lerp(-half, half, v);
+            const across = k * R + (u - 0.5) * 0.0042;
+            return vert ? at(across, along, 0.0028) : at(along, across, 0.0034);
+          },
+          () => n.clone(),
+          () => shade(c, 0.85),
+          s,
+          () => HEAD,
+          0.0012 * hs,
+        );
+      }
+    }
+  };
+  /**
+   * Face plate from the brow to below the chin with two round grilled eye openings (Pompeii type):
+   * real geometry, so the grilles read at any distance and LOD. A low ridge runs down the middle.
+   */
+  const grilleVisor = (c: THREE.Color, s: Surf) => {
+    plate(
+      ctx,
+      10,
+      8,
+      (u, v) => visorPoint(lerp(0.04, VISOR_TOP, v), lerp(-VISOR_W, VISOR_W, u)),
       (u) => {
-        const th = lerp(-1.25, 1.25, u);
+        const th = lerp(-VISOR_W, VISOR_W, u);
         return V3(Math.sin(th), 0, Math.cos(th));
       },
-      (u, v) => {
-        const yf = lerp(0.04, 0.66, v);
-        const th = lerp(-1.25, 1.25, u);
-        const ex = Math.abs(Math.sin(th)) * 0.07;
-        const eye = gauss((ex - 0.031) / 0.02, 1) * gauss((yf - FEAT.eye) / 0.09, 1);
-        if (holes === 'grille') {
-          // Two round grilles over the eyes (dark mesh with bronze bars).
-          if (eye > 0.4) return Math.sin(u * 60) > 0.5 || Math.sin(v * 60) > 0.5 ? shade(c, 0.8) : srgb('#15110e');
-        } else if (eye > 0.75) return srgb('#0d0a08');
-        return u < 0.04 || u > 0.96 || v < 0.06 ? shade(c, 0.7) : shade(c, 1.0 - 0.08 * Math.abs(u - 0.5));
-      },
+      (u, v) => (u < 0.04 || u > 0.96 || v < 0.06 ? shade(c, 0.72) : shade(c, 1.04 - 0.1 * Math.abs(u - 0.5))),
       s,
       () => HEAD,
       0.003 * hs,
     );
+    // Central ridge.
+    plate(
+      ctx,
+      1,
+      6,
+      (u, v) => visorPoint(lerp(0.08, VISOR_TOP - 0.03, v), lerp(-0.035, 0.035, u), 0.004 * Math.sin(u * Math.PI)),
+      () => V3(0, 0, 1),
+      () => shade(c, 1.08),
+      s,
+      () => HEAD,
+      0.002 * hs,
+    );
+    for (const side of [1, -1]) eyeOpening(visorPoint, side * 0.42, FEAT.eye, 0.023, c, s, true);
   };
   const knob = (c: THREE.Color, s: Surf) => {
     const p = H.at(1, 0, new THREE.Vector3(), true);
@@ -653,10 +748,11 @@ function buildHelmet(ctx: Ctx, H: HeadFrame, kind: HelmetKind, crestColor?: stri
       const gallic = kind === 'imperial-gallic';
       const c = gallic ? (metal === 'bronze' ? BRONZE_C : IRON) : metal === 'iron' ? IRON : BRONZE_C;
       const s = c === IRON ? SURF.iron : SURF.bronze;
+      const parts: HelmetParts = { rim: (th) => lerp(0.68, 0.5, smooth(0.3, 1, Math.abs(Math.sin(th / 2)))) - (Math.abs(Math.sin(th)) > 0.9 ? 0.02 : 0), gap: 0.017, color: c, surf: s };
       bowl(
         ctx,
         H,
-        { rim: (th) => lerp(0.68, 0.5, smooth(0.3, 1, Math.abs(Math.sin(th / 2)))) - (Math.abs(Math.sin(th)) > 0.9 ? 0.02 : 0), gap: 0.017, color: c, surf: s },
+        parts,
         (th, yf, cc) => {
           // Embossed "eyebrows" and the Dacian-war cross bars.
           const front = Math.cos(th) > 0.6 && Math.abs(yf - 0.75) < 0.02 && Math.abs(Math.sin(th)) > 0.08;
@@ -683,7 +779,7 @@ function buildHelmet(ctx: Ctx, H: HeadFrame, kind: HelmetKind, crestColor?: stri
         () => HEAD,
         0.002 * hs,
       );
-      neckGuard(c, s, gallic ? 0.07 : 0.05, gallic ? 0.035 : 0.03);
+      neckGuard(parts, gallic ? 0.065 : 0.05, gallic ? 0.03 : 0.026);
       cheekGuards(c, s);
       knob(gallic ? BRASS : c, SURF.bronze);
       if (crestC) {
@@ -711,7 +807,8 @@ function buildHelmet(ctx: Ctx, H: HeadFrame, kind: HelmetKind, crestColor?: stri
     case 'praetorian-attic': {
       const c = metal === 'gilded' ? GOLD : BRONZE_C;
       const s = metal === 'gilded' ? SURF.gilded : SURF.bronze;
-      bowl(ctx, H, { rim: (th) => lerp(0.66, 0.46, smooth(0.3, 1, Math.abs(Math.sin(th / 2)))), gap: 0.017, color: c, surf: s });
+      const parts: HelmetParts = { rim: (th) => lerp(0.66, 0.46, smooth(0.3, 1, Math.abs(Math.sin(th / 2)))), gap: 0.017, color: c, surf: s };
+      bowl(ctx, H, parts);
       // Frontal diadem (stephane) rising to a peak.
       plate(
         ctx,
@@ -736,7 +833,7 @@ function buildHelmet(ctx: Ctx, H: HeadFrame, kind: HelmetKind, crestColor?: stri
         () => HEAD,
         0.002 * hs,
       );
-      neckGuard(c, s, 0.035, 0.02, 1.1);
+      neckGuard(parts, 0.035, 0.02, 1.1);
       cheekGuards(c, s);
       midCrest(crestC ?? srgb('#b3261e'), 0.11);
       break;
@@ -744,8 +841,34 @@ function buildHelmet(ctx: Ctx, H: HeadFrame, kind: HelmetKind, crestColor?: stri
     case 'vigiles-cap':
     case 'leather-cap': {
       const c = shade(LEATHER, kind === 'vigiles-cap' ? 1.05 : 0.95);
-      bowl(ctx, H, { rim: (th) => lerp(0.7, 0.55, smooth(0.3, 1, Math.abs(Math.sin(th / 2)))), gap: 0.012, color: c, surf: SURF.leather });
-      if (kind === 'vigiles-cap') brim(c, SURF.leather, 0.018, 0.006);
+      const parts: HelmetParts = { rim: (th) => lerp(0.7, 0.55, smooth(0.3, 1, Math.abs(Math.sin(th / 2)))), gap: 0.012, color: c, surf: SURF.leather };
+      bowl(ctx, H, parts);
+      if (kind === 'vigiles-cap') {
+        // A short leather peak turned down all round the rim (a flat disc would read as needles
+        // edge-on), thick enough to show its edge.
+        plate(
+          ctx,
+          ctx.hi ? 20 : 10,
+          2,
+          (u, v) => {
+            const th = u * Math.PI * 2;
+            const p = lipPoint(H, parts, th);
+            const n = V3(Math.sin(th), 0, Math.cos(th));
+            const w = 0.016 * (0.7 + 0.3 * Math.max(0, Math.cos(th)));
+            p.addScaledVector(n, w * v * hs);
+            p.y -= 0.012 * v * v * hs;
+            return p;
+          },
+          (u) => {
+            const th = u * Math.PI * 2;
+            return V3(Math.sin(th) * 0.6, 1, Math.cos(th) * 0.6).normalize();
+          },
+          (u, v) => (v > 0.7 ? shade(c, 0.78) : c),
+          SURF.leather,
+          () => HEAD,
+          0.004 * hs,
+        );
+      }
       break;
     }
     case 'pileus': {
@@ -759,9 +882,10 @@ function buildHelmet(ctx: Ctx, H: HeadFrame, kind: HelmetKind, crestColor?: stri
     case 'hoplomachus': {
       const c = metal === 'iron' ? IRON : BRONZE_C;
       const s = metal === 'iron' ? SURF.iron : SURF.bronze;
-      bowl(ctx, H, { rim: () => 0.63, gap: 0.02, color: c, surf: s });
-      brim(c, s, kind === 'murmillo' ? 0.05 : 0.035, kind === 'murmillo' ? 0.022 : 0.012);
-      grilleVisor(c, s, 'grille');
+      // The bowl comes down behind the visor and closes over the back of the head and the nape.
+      bowl(ctx, H, { rim: (th) => lerp(VISOR_TOP - 0.03, 0.1, smooth(1.0, 1.4, Math.abs(wrapPi(th)))), gap: 0.02, color: c, surf: s, skirt: GLADIATOR_SKIRT });
+      brim(c, s, kind === 'murmillo' ? 0.05 : 0.035, kind === 'murmillo' ? 0.022 : 0.012, VISOR_TOP);
+      grilleVisor(c, s);
       if (kind === 'murmillo') {
         // Tall fish-fin crest with a plume.
         midCrest(c, 0.1, 0.05, 0.95);
@@ -785,31 +909,39 @@ function buildHelmet(ctx: Ctx, H: HeadFrame, kind: HelmetKind, crestColor?: stri
       const c = metal === 'iron' ? IRON : BRONZE_C;
       const s = metal === 'iron' ? SURF.iron : SURF.bronze;
       // Smooth egg enclosing the whole head with tiny eye holes and a low fin.
+      const parts: HelmetParts = { rim: () => 0.02, gap: 0.026, color: c, surf: s, skirt: 0.36 };
+      const secBulge = (th: number, yf: number) => 0.006 * Math.max(0, Math.cos(th)) * gauss((yf - 0.35) / 0.25, 1);
       bowl(
         ctx,
         H,
-        { rim: () => 0.02, gap: 0.026, color: c, surf: s },
-        (th, yf, cc) => {
-          const ex = Math.sin(th) * 0.07;
-          const eye = Math.cos(th) > 0.7 && gauss((Math.abs(ex) - 0.03) / 0.01, 1) * gauss((yf - FEAT.eye) / 0.035, 1) > 0.5;
-          return eye ? srgb('#0b0907') : cc;
-        },
-        (th, yf) => 0.006 * Math.max(0, Math.cos(th)) * gauss((yf - 0.35) / 0.25, 1),
+        parts,
+        undefined,
+        (th, yf) => secBulge(th, yf),
       );
+      // Two small round eye holes (the secutor's only openings).
+      const shell = (yf: number, th: number, d: number) => bowlPoint(H, parts.skirt, yf, th, (parts.gap + secBulge(th, yf) + d) * hs);
+      for (const side of [1, -1]) eyeOpening(shell, side * 0.4, FEAT.eye, 0.0095, c, s, false);
       midCrest(c, 0.045);
-      neckGuard(c, s, 0.03, 0.03, 1.4);
+      neckGuard(parts, 0.03, 0.015, 1.2);
       break;
     }
     case 'provocator': {
       const c = metal === 'bronze' ? BRONZE_C : IRON;
       const s = c === IRON ? SURF.iron : SURF.bronze;
-      bowl(ctx, H, { rim: (th) => lerp(0.66, 0.5, smooth(0.3, 1, Math.abs(Math.sin(th / 2)))), gap: 0.018, color: c, surf: s });
-      grilleVisor(c, s, 'grille');
-      neckGuard(c, s, 0.05, 0.03);
+      // Legionary-style bowl closed down the sides and back behind the visor, with a neck guard.
+      const parts: HelmetParts = { rim: (th) => lerp(VISOR_TOP - 0.03, 0.2, smooth(1.0, 1.4, Math.abs(wrapPi(th)))), gap: 0.02, color: c, surf: s, skirt: GLADIATOR_SKIRT };
+      bowl(ctx, H, parts);
+      grilleVisor(c, s);
+      neckGuard(parts, 0.05, 0.026, 1.1);
       knob(c, s);
       break;
     }
   }
+}
+
+/** Angle wrapped to (-π, π]. */
+function wrapPi(a: number) {
+  return Math.atan2(Math.sin(a), Math.cos(a));
 }
 
 function feather(ctx: Ctx, H: HeadFrame, side: number, color: THREE.Color) {

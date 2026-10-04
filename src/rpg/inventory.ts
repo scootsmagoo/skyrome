@@ -39,13 +39,20 @@ export type UseHandler = (def: ItemDef, inv: InventoryImpl) => boolean;
 
 interface Equipped {
   itemId: string;
+  /** Condition to the percent: the key of the stack this copy comes from. */
   condition: number;
   stolenFrom?: string;
+  /**
+   * Unrounded condition (wear builds up below 1% per hit: 15 damage is 0.15%); saved with the
+   * inventory. The copy moves to another stack only when the rounded percent changes.
+   */
+  exact?: number;
 }
 
 const roundQ = roundQuadrans;
 /** Conditions are kept to the percent. */
-const normCond = (c: number | undefined) => Math.max(0, Math.min(1, Math.round((c ?? 1) * 100) / 100));
+const clamp01 = (c: number) => Math.max(0, Math.min(1, c));
+const normCond = (c: number | undefined) => clamp01(Math.round((c ?? 1) * 100) / 100);
 const condOf = (s: ItemStack) => s.condition ?? 1;
 
 export class InventoryImpl implements Inventory {
@@ -113,12 +120,18 @@ export class InventoryImpl implements Inventory {
     return this.overEncumbered ? CARRY.overSpeed : 1;
   }
 
-  count(itemId: string, opts: { stolen?: boolean } = {}): number {
+  /**
+   * How many of an item are carried. `stolen` true/false counts only stolen/clean stacks;
+   * `stolenFrom` counts exactly what remove() with the same filter would take (an owner's stolen
+   * stacks, or null for clean ones).
+   */
+  count(itemId: string, opts: { stolen?: boolean; stolenFrom?: string | null } = {}): number {
     let n = 0;
     for (const s of this._stacks) {
       if (s.itemId !== itemId) continue;
       if (opts.stolen === true && !s.stolenFrom) continue;
       if (opts.stolen === false && s.stolenFrom) continue;
+      if (opts.stolenFrom !== undefined && (s.stolenFrom ?? null) !== opts.stolenFrom) continue;
       n += s.count;
     }
     return n;
@@ -328,18 +341,27 @@ export class InventoryImpl implements Inventory {
     return out;
   }
 
-  /** Change the condition of the equipped copy in a slot by `delta` (wear: negative; repair: positive). */
+  /**
+   * Change the condition of the equipped copy in a slot by `delta` (wear: negative; repair:
+   * positive). Small changes add up in the copy's unrounded condition; the copy moves to another
+   * stack when the condition to the percent changes. Returns the condition to the percent.
+   */
   adjustCondition(slot: EquipSlot, delta: number): number | undefined {
     const e = this._equipped[slot];
-    if (!e || !delta) return e?.condition;
-    const to = normCond(e.condition + delta);
-    if (to === e.condition) return to;
+    if (!e || !delta || !Number.isFinite(delta)) return e?.condition;
+    const exact = clamp01((e.exact ?? e.condition) + delta);
+    const to = normCond(exact);
+    if (to === e.condition) {
+      e.exact = exact;
+      return to;
+    }
     const from = this._stacks.find((s) => sameCopy(e, s));
     if (!from) return e.condition;
     from.count--;
     this._stacks = this._stacks.filter((s) => s.count > 0);
     this.addToStack(e.itemId, 1, e.stolenFrom, to);
     e.condition = to;
+    e.exact = exact;
     this.changed();
     return to;
   }
@@ -473,7 +495,10 @@ export class InventoryImpl implements Inventory {
       const exact = this._stacks.find((s) => s.itemId === def.id && (e.condition === undefined || condOf(s) === normCond(e.condition)) && (e.stolenFrom === undefined || s.stolenFrom === e.stolenFrom));
       const stack = exact ?? this.bestStack(def.id);
       if (!stack) continue;
-      this._equipped[slot as EquipSlot] = { itemId: def.id, condition: condOf(stack), stolenFrom: stack.stolenFrom };
+      const cond = condOf(stack);
+      // The unrounded wear survives only on the very copy it belongs to.
+      const precise = typeof e.exact === 'number' && Number.isFinite(e.exact) && normCond(e.exact) === cond ? clamp01(e.exact) : undefined;
+      this._equipped[slot as EquipSlot] = { itemId: def.id, condition: cond, stolenFrom: stack.stolenFrom, ...(precise !== undefined ? { exact: precise } : {}) };
       this.sheet?.setModifierSource(`equip:${slot}`, def.equipModifiers);
       this.sheet?.setFlagSource(`equip:${slot}`, def.equipFlags);
     }

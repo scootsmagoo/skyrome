@@ -68,6 +68,8 @@ export class Actor {
   readonly currPos = new THREE.Vector3();
   private turnRate = 0;
   private lastHeading: number;
+  /** Consecutive fixed steps in which horizontal movement was blocked on the ground. */
+  private blockedSteps = 0;
 
   constructor(
     protected readonly game: Game,
@@ -138,15 +140,23 @@ export class Actor {
     this.grounded = controller.computedGrounded();
     // Bumped the ceiling while rising.
     if (wasRising && mv.y < desired.y * 0.5) v.y = 0;
-    // Hit a wall in the air: bleed the blocked component so we don't keep pushing into it.
-    // Not on the ground: while autostepping stairs or climbing a slope the KCC briefly returns
-    // much less horizontal movement, and bleeding then stalls the character at the first riser
-    // (tests/arch.stairs.test.ts). On the ground the KCC already stops us at real walls.
-    if (dt > 0 && !this.grounded) {
+    // Hit a wall: bleed the blocked component so we don't keep pushing into it (and so
+    // locomotionState() reports the speed we really move at). In the air at once; on the ground
+    // only once the block has lasted a few steps and the KCC isn't lifting us: on the first
+    // contact with a stair riser it returns almost no movement and steps up a frame later, and
+    // bleeding then would stall the character at the riser (tests/arch.stairs.test.ts drives
+    // this exact code). Never flip the direction: depenetration can report a small backward move.
+    if (dt > 0) {
       const ax = mv.x / dt;
       const az = mv.z / dt;
-      if (Math.abs(ax) < Math.abs(v.x) * 0.5) v.x = ax;
-      if (Math.abs(az) < Math.abs(v.z) * 0.5) v.z = az;
+      const bx = Math.abs(ax) < Math.abs(v.x) * 0.5;
+      const bz = Math.abs(az) < Math.abs(v.z) * 0.5;
+      const lifted = this.grounded && mv.y > 1e-4;
+      this.blockedSteps = (bx || bz) && !lifted ? this.blockedSteps + 1 : 0;
+      if (!this.grounded || this.blockedSteps >= 3) {
+        if (bx) v.x = Math.sign(v.x) * Math.max(0, ax * Math.sign(v.x));
+        if (bz) v.z = Math.sign(v.z) * Math.max(0, az * Math.sign(v.z));
+      }
     }
 
     const t = body.translation();
