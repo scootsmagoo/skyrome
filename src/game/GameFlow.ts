@@ -17,6 +17,7 @@ import type { UIManager } from '../ui/UIManager';
 import { LANDMARK_BY_ID } from '../data/atlas';
 import { toGame } from '../world/coords';
 import { spawnAtLandmark } from '../world/rome/buildRome';
+import { findSafeGround, openHeading, settleAfterTeleport } from '../world/safeGround';
 import { ROME_LATITUDE, julianDayForGame, solarDeclination, sunriseSunset } from '../world/sky/astronomy';
 import { ordinalOf, Calendar } from './calendar';
 import { defaultName, kitWorn, lookById, normalizeSpec, type CharacterSpec } from './character';
@@ -452,7 +453,20 @@ export class GameFlow implements System {
       const own = g.landmarks?.get(at)?.spots.find((q) => q.kind === 'spawn');
       if (own) return { position: own.position.clone().setY(own.position.y + 0.05), heading: own.heading ?? 0 };
       const s = spawnAtLandmark(g, at, 18);
-      if (s) return s;
+      if (s) {
+        // 18 m out along the facade can land on a structure, in a basin or boxed in: move to the
+        // nearest open, walkable street-level ground, still facing the landmark.
+        const safe =
+          findSafeGround(g, s.position, { maxRadius: 60, open: 10, openDirs: 8 }) ??
+          findSafeGround(g, s.position, { maxRadius: 60, open: 6, openDirs: 7 }) ??
+          findSafeGround(g, s.position, { maxRadius: 60 });
+        if (safe) {
+          // Face the landmark if it is in view, else the most open way (never a wall at arm's length).
+          const lm = g.landmarks?.get(at);
+          return { position: safe, heading: openHeading(g, safe, lm?.position ?? null) };
+        }
+        return s;
+      }
       console.warn(`[flow] unknown landmark "${at}" for &at=; spawning at the Porta Capena`);
     }
     const placed = g.landmarks?.get('porta-capena');
@@ -465,11 +479,31 @@ export class GameFlow implements System {
     return inside;
   }
 
+  /** Pause menu "I'm stuck": the nearest open, walkable street-level ground (not where you are). */
+  unstick() {
+    const g = this.game;
+    const p = g.player;
+    if (!p) return;
+    const here = p.position.clone();
+    const safe =
+      findSafeGround(g, here, { maxRadius: 30, excludeCenter: true }) ??
+      findSafeGround(g, here, { maxRadius: 120, excludeCenter: true, open: 2, openDirs: 5 });
+    if (!safe) {
+      this.ui.flash('No open ground nearby. Try loading your last save.');
+      return;
+    }
+    p.teleport(safe, p.heading);
+    settleAfterTeleport(g);
+    g.world?.refreshAll?.();
+    this.ui.notify('You find your feet on open ground.', 'info');
+  }
+
   /** Teleport, face the way the spawn faces, refresh culling and let a frame or two settle. */
   async spawnAt(spawn: { position: THREE.Vector3; heading: number }) {
     const g = this.game;
     const p = g.player;
     p.teleport(spawn.position, spawn.heading);
+    settleAfterTeleport(g);
     p.yaw = spawn.heading + Math.PI;
     p.pitch = -0.12;
     p.setViewMode('third');

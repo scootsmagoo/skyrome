@@ -227,6 +227,16 @@ function addPauseItems(flow: GameFlow) {
         void save.quickload();
       },
     }),
+    // A safety net for any geometry trap: back onto open ground nearby.
+    (ui, menu): PauseItem => ({
+      label: "I'm stuck",
+      latin: 'Haereo',
+      enabled: () => flow.state === 'playing' && !ui.isOpen('dialogue'),
+      run: () => {
+        menu.close();
+        flow.unstick();
+      },
+    }),
   );
 }
 

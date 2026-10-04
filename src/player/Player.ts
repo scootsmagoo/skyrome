@@ -34,6 +34,15 @@ export class Player extends Actor {
     this.yaw = heading + Math.PI;
   }
 
+  /**
+   * Teleports prime the city first: its building colliders exist only near the player, so landing
+   * somewhere new before they are built would put the player inside walls that appear a frame later.
+   */
+  override teleport(pos: THREE.Vector3Like, heading?: number) {
+    (this.game as Game & { city?: { prime?: (p: THREE.Vector3Like) => void } }).city?.prime?.(pos);
+    super.teleport(pos, heading);
+  }
+
   get eyeHeight() {
     return this.avatar?.eyeHeight ?? 1.62;
   }

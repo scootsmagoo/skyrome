@@ -63,6 +63,7 @@ The game is designed to be fully playable on a Mac trackpad, so every mouse acti
 | Action | Keys |
 |---|---|
 | Move · sprint · jump | W A S D · Shift · Space |
+| Climb | Push into a waist-high ledge to clamber up; Space at a ledge up to chest height mantles onto it |
 | Look | Trackpad or mouse (click to capture) · arrow keys |
 | First / third person | V (or scroll the third-person camera all the way in) |
 | Attack (hold for a power attack) · block | F or left click · Q or right click |
@@ -70,6 +71,8 @@ The game is designed to be fully playable on a Mac trackpad, so every mouse acti
 | Menus | Tab · I inventory · J journal · M map · K skills · Esc pause |
 | Walk · wait · swap camera shoulder | N · T · H |
 | Quicksave · quickload | P or F5 · L or F9 |
+| Use an item · invoke your god | 1–8 (healing first) · Z |
+| Stuck somewhere? | Esc → I'm stuck |
 | Check your trackpad and keys | `?scene=inputlab` |
 
 ## How it's made

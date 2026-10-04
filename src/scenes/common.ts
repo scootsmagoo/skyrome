@@ -5,6 +5,7 @@ import type { AvatarView } from '../actors/Actor';
 import { PlaceholderAvatar } from '../actors/PlaceholderAvatar';
 import type { Game } from '../core/Game';
 import { CameraRig } from '../player/CameraRig';
+import { ClimbSystem } from '../player/Climb';
 import { Player } from '../player/Player';
 import { PlayerController } from '../player/PlayerController';
 
@@ -20,6 +21,8 @@ export function setupPlayer(
   game.player = player;
   game.actors.add(player);
   game.addSystem(new PlayerController(game, player));
+  // Clamber up waist-high ledges, mantle with Space (GDD §4.2).
+  game.addSystem(new ClimbSystem(game));
   game.addSystem(new CameraRig(game, player));
   return player;
 }

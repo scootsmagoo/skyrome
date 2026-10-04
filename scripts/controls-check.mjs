@@ -140,27 +140,13 @@ async function runSuite(browser, browserName, preset) {
     return Math.hypot(b.x - a.x, b.z - a.z) / (ms / 1000);
   };
 
-  // Find an open, flat spot near the spawn: clear for 14 m in 8 directions at knee and chest height.
-  const spot = await ev(() => {
+  // An open, flat spot near the spawn (the game's own finder: primes the city's lazy colliders and
+  // rejects anywhere the body would overlap geometry), clear for 14 m all round, away from people.
+  const spot = await ev(async () => {
     const g = window.__skyrome.game;
-    const o = g.player.position;
-    for (let r = 0; r <= 160; r += 8) {
-      for (let a = 0; a < 16; a++) {
-        const x = o.x + Math.cos((a / 16) * Math.PI * 2) * r;
-        const z = o.z + Math.sin((a / 16) * Math.PI * 2) * r;
-        const y = g.physics.groundHeight(x, z, o.y + 60, 140);
-        if (y === null) continue;
-        let clear = true;
-        for (let d = 0; d < 8 && clear; d++) {
-          const dir = { x: Math.cos((d / 8) * Math.PI * 2), y: 0, z: Math.sin((d / 8) * Math.PI * 2) };
-          for (const h of [0.5, 1.3]) if (g.physics.raycast({ x, y: y + h, z }, dir, 14, 1)) clear = false;
-          const gy = g.physics.groundHeight(x + dir.x * 10, z + dir.z * 10, y + 20, 40);
-          if (gy === null || Math.abs(gy - y) > 1.2) clear = false;
-        }
-        if (clear && (g.actors?.near?.({ x, y, z }, 8).length ?? 0) === 0) return { x, y: y + 0.05, z };
-      }
-    }
-    return null;
+    const { findSafeGround } = await import('/src/world/safeGround.ts');
+    const p = findSafeGround(g, g.player.position, { maxRadius: 160, open: 14, openDirs: 8 });
+    return p ? { x: p.x, y: p.y, z: p.z } : null;
   });
   if (!spot) throw new Error('no open spot found near the Circus Maximus');
   await ev((s) => { window.__ctl = s; }, spot);
@@ -300,6 +286,59 @@ async function runSuite(browser, browserName, preset) {
     await wait(300);
     const c = await z();
     expect(b > a && c < b, `zoom ${a} → ${b} → ${c}`);
+  });
+
+  // ---------------------------------------------------------------- climbing
+  // Test ledges built on the open spot: a 0.7 m platform (clamber by pushing), a 1.3 m platform
+  // (Space mantles), a 2.4 m wall (too high: Space just jumps). Removed afterwards.
+  const ledge = async (h) => {
+    await ev((hh) => {
+      const g = window.__skyrome.game;
+      const s = window.__ctl;
+      window.__ledges?.forEach((c) => g.physics.removeCollider(c));
+      // A 4 m wide, 3 m deep block whose near face is 2 m north of the spot.
+      window.__ledges = [g.physics.addBox({ x: s.x, y: s.y + hh / 2 - 0.05, z: s.z - 2 - 1.5 }, { x: 2, y: hh / 2, z: 1.5 })];
+      g.physics.step(1e-4);
+    }, h);
+    await wait(100);
+  };
+  const dropLedges = () => ev(() => { const g = window.__skyrome.game; window.__ledges?.forEach((c) => g.physics.removeCollider(c)); window.__ledges = []; g.physics.step(1e-4); });
+  await check('clamber a 0.7 m ledge (push W)', async () => {
+    await ledge(0.7);
+    const a = await pos();
+    await hold(['KeyW'], 1500);
+    await wait(300);
+    const b = await pos();
+    await dropLedges();
+    expect(b.y - a.y > 0.6, `rose ${(b.y - a.y).toFixed(2)} m`);
+    return `+${(b.y - a.y).toFixed(2)} m`;
+  });
+  await check('mantle a 1.3 m ledge (Space)', async () => {
+    await ledge(1.3);
+    await k.down('KeyW');
+    await wait(500);
+    await k.press('Space');
+    await wait(900);
+    await k.up('KeyW');
+    await wait(200);
+    const b = await pos();
+    const a = { y: (await ev(() => window.__ctl.y)) };
+    await dropLedges();
+    expect(b.y - a.y > 1.2, `rose ${(b.y - a.y).toFixed(2)} m`);
+    return `+${(b.y - a.y).toFixed(2)} m`;
+  });
+  await check('no climbing a 2.4 m wall', async () => {
+    await ledge(2.4);
+    await k.down('KeyW');
+    await wait(500);
+    await k.press('Space');
+    await wait(1100);
+    await k.up('KeyW');
+    await wait(300);
+    const b = await pos();
+    const a = { y: (await ev(() => window.__ctl.y)) };
+    await dropLedges();
+    expect(b.y - a.y < 0.3, `ended ${(b.y - a.y).toFixed(2)} m up`);
   });
 
   // ---------------------------------------------------------------- talking
