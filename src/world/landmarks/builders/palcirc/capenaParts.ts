@@ -13,7 +13,7 @@
  *   Circus (the atlas has no road there; see the crew report).
  */
 import * as THREE from 'three';
-import type { Draw } from '../../../../arch/fabric/draw';
+import { Draw as DrawCls, type Draw } from '../../../../arch/fabric/draw';
 import { buildStreet } from '../../../../arch/fabric/streets';
 import { lacus } from '../../../../arch/fabric/fountain';
 import { compitalShrine } from '../../../../arch/fabric/shrines';
@@ -360,6 +360,8 @@ export function buildQuarter(ctx: LandmarkContext, b: MeshBuilder, d: Draw, spot
     });
     const m = new THREE.Matrix4().makeTranslation(cx, floor, cz).multiply(new THREE.Matrix4().makeRotationY(rot));
     b.append(out.builder, m);
+    // The fabric's 'mid' detail has no colliders: give the block a solid footprint instead.
+    if (!hi) new DrawCls(b, m).solid(-width / 2, -1.5, -lot.depth / 2, width / 2, out.height, lot.depth / 2);
     for (const s of out.spots) {
       const p = s.position.clone().applyMatrix4(m);
       const heading = s.facing + rot;

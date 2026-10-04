@@ -369,9 +369,18 @@ export function hutGeometry(d: Draw, rng: Rng, hi: boolean) {
   return { rx, rz, wallH, doorZ: dz };
 }
 
-function casaRomuli(ctx: LandmarkContext) {
-  const { b, d } = drawFor(ctx);
-  const spots = new Spots();
+/** Offset (local m) of the hut from the atlas point, clear of the Magna Mater's stair. */
+export const CASA_OFFSET: [number, number] = [8.5, 3.4];
+
+function casaRomuli(ctx0: LandmarkContext) {
+  const { b, d: d0 } = drawFor(ctx0);
+  const spots0 = new Spots();
+  // The atlas point lies on the axis at the foot of the Magna Mater's great stair: the hut stands
+  // a few metres aside, on the level ground by the cliff edge (see the crew report).
+  const OX = CASA_OFFSET[0], OZ = CASA_OFFSET[1];
+  const d = d0.at(OX, 0, OZ);
+  const ctx: LandmarkContext = { ...ctx0, groundAt: (x, z) => ctx0.groundAt(x + OX, z + OZ) };
+  const spots = { add: (id: string, kind: Parameters<Spots['add']>[1], x: number, y: number, z: number, h = 0) => spots0.add(id, kind, x + OX, y, z + OZ, h) };
   const rng = new Rng('casa-romuli');
   const hi = ctx.detail === 'high';
   // Levelled tufa bedrock platform (the postholes are cut into it), with a footing to the slope.
@@ -380,8 +389,10 @@ function casaRomuli(ctx: LandmarkContext) {
   rockPlinth(d, -3.6, -3.9, 3.6, 3.4, Math.min(g.min, 0) - 0.8, top, 1.6, 'rock');
   d.span('tufa', -3.4, top - 0.02, -3.7, 3.4, top + 0.03, 3.2);
   // Tufa outcrops on the cliff side (W and S) where the plateau breaks away.
-  rockBoulder(d, -4.4, g.min + 0.4, 0.5, 2.0, 2.4, 2.6, 7);
-  rockBoulder(d, -1.5, g.min + 0.3, 4.4, 2.4, 2.0, 1.8, 8);
+  // Tufa outcrops down the cliff to the west and south, where the plateau breaks away.
+  for (const [x, z, sx, sy, sz, seed] of [[-9.5, 0.5, 2.0, 2.4, 2.6, 7], [-7.0, 7.5, 2.4, 2.0, 1.8, 8], [-11.5, 5.5, 1.8, 1.6, 2.2, 9]] as const) {
+    rockBoulder(d0, x, ctx0.groundAt(x, z) + sy * 0.25, z, sx, sy, sz, seed);
+  }
   const hut = d.at(0, top + 0.03, 0);
   const H = hutGeometry(hut, rng, hi);
   // Colliders: wall ring as eight boxes leaving the doorway open.
@@ -415,17 +426,17 @@ function casaRomuli(ctx: LandmarkContext) {
   }
   // Marker stone and a small altar before the gate.
   d.span('travertine', 1.2, top, -fr - 0.75, 2.0, top + 0.9, -fr - 0.45, { collide: true });
-  inscriptionPanel(b, { lines: ['Casa Romuli'], width: 0.75, height: 0.28, style: 'carved' }, T4(1.6, top + 0.6, -fr - 0.77), { depth: 0.02, bodyMaterial: 'travertine' });
+  inscriptionPanel(b, { lines: ['Casa Romuli'], width: 0.75, height: 0.28, style: 'carved' }, T4(1.6 + OX, top + 0.6, -fr - 0.77 + OZ), { depth: 0.02, bodyMaterial: 'travertine' });
   d.span('tufa', -2.0, top, -fr - 0.8, -1.3, top + 0.85, -fr - 0.2, { collide: true });
   d.box('glow_fire', -1.65, top + 0.88, -fr - 0.5, 0.3, 0.04, 0.3);
   // Lamps for the night (the hearth fire never goes out).
-  requestLamps(ctx.game, landmarkToWorld(ctx), [{ position: new THREE.Vector3(0.4, top + 0.5, 0.3), color: 0xff8a3a, intensity: 4, distance: 5, flicker: 0.5, night: false, dayScale: 0, glow: 0.12 }]);
+  requestLamps(ctx0.game, landmarkToWorld(ctx0), [{ position: new THREE.Vector3(0.4 + OX, top + 0.5, 0.3 + OZ), color: 0xff8a3a, intensity: 4, distance: 5, flicker: 0.5, night: false, dayScale: 0, glow: 0.12 }]);
   spots.add('casa-romuli-titulus', 'inscription', 1.6, top, -fr - 1.6, 0);
   spots.add('casa-romuli-door', 'door', 0, top, H.doorZ - 1.4, 0);
   spots.add('casa-romuli-hut', 'shrine', 0, top, -fr - 0.6, 0);
   spots.add('casa-romuli-custodian', 'npc', -2.6, top, -fr - 2.2, 0.4);
   spots.add('casa-romuli-vista', 'vista', -6.0, Math.max(g.min, -1), 2.0, -Math.PI / 2 - 0.5);
-  return { object: b.build(ctx.lm.id), colliders: b.colliders, spots: spots.list, cullDistance: 900 };
+  return { object: b.build(ctx0.lm.id), colliders: b.colliders, spots: spots0.list, cullDistance: 900 };
 }
 
 // ---------------------------------------------------------------- Lupercal
