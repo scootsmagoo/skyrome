@@ -5,7 +5,10 @@
  * - The wall: a slightly battered face from below the river bed up to the quay top, dark wet
  *   peperino at the waterline, opus reticulatum above (brick-faced concrete on the Trajanic
  *   Emporium and the Transtiberim wharves), a travertine coping course standing 0.2 m proud.
- * - Paired travertine stairs down to a landing just above the water, every ~110 m.
+ * - Paired travertine stairs down to a landing just above the water, every ~110 m, and submerged
+ *   steps on from the landing to below a swimmer's feet, so the river can always be left there.
+ * - A low travertine parapet on the coping (open at the stair heads, bridge abutments and wherever
+ *   a landmark builds something out over the water), so falling in is a choice.
  * - Pierced travertine mooring blocks every ~14 m.
  * - Openings in the face (`gaps`): the arched outfall of the Cloaca Maxima, with three rings of
  *   peperino voussoirs and the dark culvert behind.
@@ -70,7 +73,131 @@ export const QUAY = {
   tread: 0.32,
   stairWidth: 2.0,
   landing: 2.4,
+  /** Submerged steps run on from the landing down to this far below the water (game m). */
+  wetDepth: 1.55,
+  /** Parapet on the coping: height above the coping and thickness (game m). */
+  parapet: 0.7,
+  parapetThick: 0.42,
 };
+
+/** A strip (REAL m, atlas frame) where the parapet stays open: a bridge and its abutment ramps. */
+export interface Corridor {
+  a: readonly [number, number];
+  b: readonly [number, number];
+  /** Half width (real m) of the open strip. */
+  half: number;
+}
+
+/** Open strips for the bridges: deck half width + 3 m, the line extended 12 m past both ends. */
+export function bridgeCorridors(bridges: readonly { a: readonly [number, number]; b: readonly [number, number]; width: number }[]): Corridor[] {
+  return bridges.map((br) => {
+    const dx = br.b[0] - br.a[0], dz = br.b[1] - br.a[1];
+    const l = Math.hypot(dx, dz) || 1;
+    const ex = (dx / l) * 12, ez = (dz / l) * 12;
+    return { a: [br.a[0] - ex, br.a[1] - ez], b: [br.b[0] + ex, br.b[1] + ez], half: br.width / 2 + 3 };
+  });
+}
+
+/** True when the REAL point (x, z) lies in one of the corridors. Pure. */
+export function inCorridor(corridors: readonly Corridor[], x: number, z: number): boolean {
+  for (const c of corridors) {
+    const dx = c.b[0] - c.a[0], dz = c.b[1] - c.a[1];
+    const l2 = dx * dx + dz * dz || 1;
+    const t = Math.min(1, Math.max(0, ((x - c.a[0]) * dx + (z - c.a[1]) * dz) / l2));
+    if (Math.hypot(c.a[0] + dx * t - x, c.a[1] + dz * t - z) < c.half) return true;
+  }
+  return false;
+}
+
+export interface QuayOptions {
+  /** Keep the parapet open over these strips (bridges). */
+  corridors?: readonly Corridor[];
+  /**
+   * True where something already stands out over the water at the wall (GAME x, z) — a
+   * landmark's own stairs, a crane platform: the parapet stays open there too.
+   */
+  occupied?: (x: number, z: number) => boolean;
+  /** No parapet at all. */
+  parapet?: boolean;
+}
+
+/**
+ * Paired flights from the coping down to a landing just above the water, then submerged steps on
+ * from the landing into the river, all solid travertine from the bed. `frame`: x along the bank,
+ * y up, z riverward, origin on the wall face at y = 0. Returns the landing (frame coordinates).
+ */
+export function stairsToWater(b: MeshBuilder, mat: MaterialId, frame: THREE.Matrix4, water: number, yBed: number, yCop: number): THREE.Vector3 {
+  const yLand = water + 0.25;
+  const rise = yCop - yLand;
+  const steps = Math.ceil(rise / QUAY.riser);
+  const riser = rise / steps;
+  const W = QUAY.stairWidth;
+  const y0 = yBed + 0.5;
+  // Landing (a solid travertine pier from the bed).
+  frameBox(b, mat, frame, 0, (y0 + yLand) / 2, W / 2, QUAY.landing, yLand - y0, W, true);
+  for (const dir of [-1, 1]) {
+    for (let k = 0; k < steps; k++) {
+      const yT = yLand + (k + 1) * riser;
+      const x = dir * (QUAY.landing / 2 + (k + 0.5) * QUAY.tread);
+      frameBox(b, mat, frame, x, (y0 + yT) / 2, W / 2, QUAY.tread + 0.01, yT - y0, W, true);
+    }
+  }
+  const ph = QUAY.parapet + 0.15, pt = 0.3;
+  const run = steps * QUAY.tread;
+  const slope = Math.atan2(rise, run);
+  const xEnd = QUAY.landing / 2 + run;
+  // Submerged steps along the whole front (landing and flights), down to below a swimmer's feet:
+  // whoever swims up to the stairs meets a step, and the first one, just awash, leads along to
+  // the landing.
+  const wet = Math.ceil((yLand - (water - QUAY.wetDepth)) / QUAY.riser);
+  for (let k = 0; k < wet; k++) {
+    const yT = yLand - (k + 1) * QUAY.riser;
+    const z = W + (k + 0.5) * QUAY.tread;
+    frameBox(b, mat, frame, 0, (y0 + yT) / 2, z, 2 * (xEnd + pt), yT - y0, QUAY.tread + 0.01, true);
+  }
+  // A parapet along each flight's river side, rising with it, and across its head (the way up
+  // turns onto the quay through the opening in the coping parapet).
+  // It starts a few steps up, so the landing stays open on the river side across its full width.
+  const skip = Math.min(run * 0.5, 3 * QUAY.tread);
+  for (const dir of [-1, 1]) {
+    const pr = run - skip, prise = rise * (pr / run);
+    const len = Math.hypot(pr, prise);
+    const cx = dir * (xEnd - pr / 2), cy = yCop - prise / 2 + ph / 2 + 0.1;
+    const lm = new THREE.Matrix4().makeRotationZ(dir * slope).setPosition(cx, cy, W - pt / 2).premultiply(frame);
+    b.box(mat, len, ph, pt, lm, { castShadow: true });
+    const rot = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().extractRotation(lm));
+    b.collider({ kind: 'box', center: new THREE.Vector3().setFromMatrixPosition(lm), half: new THREE.Vector3(len / 2, ph / 2, pt / 2), rotation: rot });
+    frameBox(b, mat, frame, dir * (xEnd + pt / 2), yCop + ph / 2, W / 2, pt, ph, W, true);
+  }
+  return new THREE.Vector3(0, yLand, W / 2);
+}
+
+/** Half span (game m, along the bank from the stair centre) of each flight's head: [inner, outer]. */
+export function stairHead(water: number, yCop: number): [number, number] {
+  const steps = Math.ceil((yCop - (water + 0.25)) / QUAY.riser);
+  const xTop = QUAY.landing / 2 + (steps - 0.5) * QUAY.tread;
+  return [xTop - 1.1, xTop + 0.45];
+}
+
+/**
+ * Parapet pieces between chainages along a wall: `open` intervals are left out. Pure: returns the
+ * kept intervals (pieces shorter than `min` are dropped).
+ */
+export function parapetPieces(s0: number, s1: number, open: readonly (readonly [number, number])[], min = 0.3): [number, number][] {
+  let pieces: [number, number][] = [[s0, s1]];
+  for (const [a, b] of open) {
+    const next: [number, number][] = [];
+    for (const [p, q] of pieces) {
+      if (b <= p || a >= q) next.push([p, q]);
+      else {
+        if (a > p) next.push([p, a]);
+        if (b < q) next.push([b, q]);
+      }
+    }
+    pieces = next;
+  }
+  return pieces.filter(([p, q]) => q - p >= min);
+}
 
 const m4 = new THREE.Matrix4();
 const q = new THREE.Quaternion();
@@ -93,7 +220,7 @@ export interface QuayBuild {
  * Build one quay. `heightAt` is the terrain (game m) for the wall top behind the coping.
  * Returns geometry in WORLD (game) space.
  */
-export function buildQuay(river: TerrainRiver, rq: ResolvedQuay, heightAt: (x: number, z: number) => number, S = WORLD_SCALE): QuayBuild {
+export function buildQuay(river: TerrainRiver, rq: ResolvedQuay, heightAt: (x: number, z: number) => number, S = WORLD_SCALE, opts: QuayOptions = {}): QuayBuild {
   const b = new MeshBuilder();
   const line = chain(river.centerline);
   const style = quayStyle(rq.quay.id);
@@ -120,12 +247,52 @@ export function buildQuay(river: TerrainRiver, rq: ResolvedQuay, heightAt: (x: n
   const stairAt: number[] = [];
   if (len > 40) {
     const k = Math.max(1, Math.round(len / QUAY.stairEvery));
+    // Clear of the gaps and of the bridges (shifted along the quay if need be).
+    const free = (s: number) => {
+      if (s < rq.s0 + 15 || s > rq.s1 - 15 || rq.gaps.some((g) => Math.abs(s - g.s) < g.half + 20)) return false;
+      for (const d of [-14, 0, 14]) {
+        const p = at(s + d, QUAY.faceOffset);
+        if (inCorridor(opts.corridors ?? [], p.x / S, p.z / S)) return false;
+      }
+      return true;
+    };
     for (let i = 0; i < k; i++) {
       const s = rq.s0 + (len * (i + 0.5)) / k;
-      if (!rq.gaps.some((g) => Math.abs(s - g.s) < g.half + 20)) stairAt.push(s);
+      const t = [0, 15, -15, 30, -30, 45, -45].map((d) => s + d).find(free);
+      if (t !== undefined) stairAt.push(t);
     }
   }
   const nearStair = (s: number) => stairAt.some((c) => Math.abs(s - c) < 12);
+  // The parapet stays open at the stair heads and over the gaps.
+  const [hIn, hOut] = stairHead(wl, yCop);
+  const open: [number, number][] = [];
+  for (const sc of stairAt) open.push([sc + hIn / S, sc + hOut / S], [sc - hOut / S, sc - hIn / S]);
+  for (const g of rq.gaps) open.push([g.s - g.half - 0.8, g.s + g.half + 0.8]);
+  const corridors = opts.corridors ?? [];
+  const parapetOpen = (s: number) => {
+    const c = at(s, QUAY.faceOffset);
+    if (inCorridor(corridors, c.x / S, c.z / S)) return true;
+    if (!opts.occupied) return false;
+    for (const out of [0.8, 1.8]) {
+      const o = at(s, QUAY.faceOffset - out / S);
+      if (opts.occupied(o.x, o.z)) return true;
+    }
+    return false;
+  };
+  /** A parapet piece on the coping between chainages p0 and p1. */
+  const parapet = (p0: number, p1: number) => {
+    const pa = at(p0, QUAY.faceOffset), pb = at(p1, QUAY.faceOffset);
+    const L = Math.hypot(pb.x - pa.x, pb.z - pa.z);
+    if (L < 0.2) return;
+    const off = QUAY.batter + 0.25;
+    const c = new THREE.Vector3((pa.x + pb.x) / 2 + pa.bx * off, yCop + QUAY.parapet / 2, (pa.z + pb.z) / 2 + pa.bz * off);
+    const rot = new THREE.Quaternion().setFromAxisAngle(yAxis, Math.atan2(-(pb.z - pa.z), pb.x - pa.x));
+    m4.compose(c, rot, new THREE.Vector3(1, 1, 1));
+    b.box(style.trim, L + 0.02, QUAY.parapet - 0.08, QUAY.parapetThick, m4.clone(), { castShadow: true });
+    m4.compose(c.clone().setY(yCop + QUAY.parapet - 0.04), rot, new THREE.Vector3(1, 1, 1));
+    b.box(style.trim, L + 0.06, 0.08, QUAY.parapetThick + 0.1, m4.clone(), { castShadow: true });
+    b.collider({ kind: 'box', center: c, half: new THREE.Vector3(L / 2 + 0.01, QUAY.parapet / 2, QUAY.parapetThick / 2), rotation: rot });
+  };
 
   // ---- the wall, segment by segment (face, waterline course, coping, top)
   const pos: number[] = [];
@@ -178,6 +345,7 @@ export function buildQuay(river: TerrainRiver, rq: ResolvedQuay, heightAt: (x: n
       rotation: q.clone(),
     });
     b.collider({ kind: 'box', center: new THREE.Vector3(mid.x, yc + 0.25, mid.z), half: new THREE.Vector3(cl / 2 + 0.02, 0.25, QUAY.copingDepth / 2), rotation: q.clone() });
+    if (opts.parapet !== false && !parapetOpen((sa + sb) / 2)) for (const [p0, p1] of parapetPieces(sa, sb, open)) parapet(p0, p1);
 
     // Mooring blocks (not on stairs): a pierced travertine block with its stone ring.
     const sm = (sa + sb) / 2;
@@ -202,22 +370,7 @@ export function buildQuay(river: TerrainRiver, rq: ResolvedQuay, heightAt: (x: n
     const X = new THREE.Vector3(side * f.tx, 0, side * f.tz);
     const Z = new THREE.Vector3(-f.bx, 0, -f.bz);
     const frame = new THREE.Matrix4().makeBasis(X, yAxis, Z).setPosition(f.x, 0, f.z);
-    const yLand = wl + 0.25;
-    const rise = yCop - yLand;
-    const steps = Math.ceil(rise / QUAY.riser);
-    const riser = rise / steps;
-    const W = QUAY.stairWidth;
-    const y0 = yBed + 0.5;
-    // Landing (a solid travertine pier from the bed).
-    frameBox(b, style.trim, frame, 0, (y0 + yLand) / 2, W / 2, QUAY.landing, yLand - y0, W, true);
-    for (const dir of [-1, 1]) {
-      for (let k = 0; k < steps; k++) {
-        const yT = yLand + (k + 1) * riser;
-        const x = dir * (QUAY.landing / 2 + (k + 0.5) * QUAY.tread);
-        frameBox(b, style.trim, frame, x, (y0 + yT) / 2, W / 2, QUAY.tread + 0.01, yT - y0, W, true);
-      }
-    }
-    landings.push(new THREE.Vector3(0, yLand, W / 2).applyMatrix4(frame));
+    landings.push(stairsToWater(b, style.trim, frame, wl, yBed, yCop).applyMatrix4(frame));
   }
 
   // ---- openings (the Cloaca Maxima outfall)
@@ -275,8 +428,10 @@ function geom(arr: number[]): THREE.BufferGeometry {
 
 /**
  * Tiber Island's travertine facing (the "stone ship", 1st c. BC): a wall all round the island
- * outline from the river bed to just above the island's ground, with a coping course.
- * `skip` points (real m) leave room for structures built elsewhere (the carved prow landmark).
+ * outline from the river bed to just above the island's ground, with a coping course and a low
+ * parapet, and a flight of stairs down to the water on each long side (so a swimmer can climb
+ * out). `skip` points (real m) leave room for structures built elsewhere (the carved prow
+ * landmark); the parapet also stays open over `corridors` (the bridges' abutments).
  */
 export function buildIslandFacing(
   outline: readonly (readonly [number, number])[],
@@ -284,8 +439,10 @@ export function buildIslandFacing(
   waterLevel: number,
   skip: readonly { at: readonly [number, number]; r: number }[] = [],
   S = WORLD_SCALE,
-): MeshBuilder {
-  const b = new MeshBuilder();
+  opts: { corridors?: readonly Corridor[]; stairs?: boolean; parapet?: boolean } = {},
+): MeshBuilder & { landings: THREE.Vector3[] } {
+  const b = new MeshBuilder() as MeshBuilder & { landings: THREE.Vector3[] };
+  b.landings = [];
   const n = outline.length;
   let cx = 0, cz = 0;
   for (const [x, z] of outline) {
@@ -293,38 +450,100 @@ export function buildIslandFacing(
     cz += z / n;
   }
   const yBed = (waterLevel - 4.6) * S;
+  const wl = waterLevel * S;
   const yTop = ground * S + 0.25;
+  const yCop = yTop + 0.2;
   // The face stands 6 m (real) outside the outline; the wall reaches back to 1 m outside it, so
   // its top covers the whole of the terrain's drop from the island ground to the river bed.
   const out = 6;
   const T = (out - 1) * S;
+  const corridors = opts.corridors ?? [];
   const skipped = (x: number, z: number) => skip.some((s) => Math.hypot(x - s.at[0], z - s.at[1]) < s.r);
+  // Outward edge normals, and one stair site per long side: the longest edge on each side of the
+  // island's long axis that is clear of the bridges and the prow.
+  const edges = [];
   for (let i = 0; i < n; i++) {
     const a = outline[i], c = outline[(i + 1) % n];
     const dx = c[0] - a[0], dz = c[1] - a[1];
     const L = Math.hypot(dx, dz);
-    if (L < 0.5) continue;
-    // Edge normal, flipped to point away from the island's centroid.
-    let nx = dz / L, nz = -dx / L;
+    let nx = dz / Math.max(L, 1e-6), nz = -dx / Math.max(L, 1e-6);
     const mx = (a[0] + c[0]) / 2 - cx, mz = (a[1] + c[1]) / 2 - cz;
     if (mx * nx + mz * nz < 0) {
       nx = -nx;
       nz = -nz;
     }
-    const steps = Math.max(1, Math.round(L / 4));
-    q.setFromAxisAngle(yAxis, Math.atan2(-dz, dx));
+    edges.push({ a, dx, dz, L, nx, nz, mx: (a[0] + c[0]) / 2, mz: (a[1] + c[1]) / 2 });
+  }
+  const [hIn, hOut] = stairHead(wl, yCop);
+  const stairs: { e: (typeof edges)[number]; open: [number, number][] }[] = [];
+  if (opts.stairs !== false) {
+    // Long axis from the outline's covariance (sign of the cross product picks the side).
+    let sxx = 0, sxz = 0, szz = 0;
+    for (const [x, z] of outline) {
+      sxx += (x - cx) ** 2;
+      sxz += (x - cx) * (z - cz);
+      szz += (z - cz) ** 2;
+    }
+    const ang = 0.5 * Math.atan2(2 * sxz, sxx - szz);
+    const ax = Math.cos(ang), az = Math.sin(ang);
+    for (const sgn of [1, -1]) {
+      let best: (typeof edges)[number] | null = null;
+      for (const e of edges) {
+        if (e.L * S < 2 * hOut + 1 || (ax * e.nz - az * e.nx) * sgn <= 0.5) continue;
+        const fx = e.mx + e.nx * out, fz = e.mz + e.nz * out;
+        if (skipped(fx, fz) || inCorridor(corridors, fx, fz)) continue;
+        if (corridors.some((c) => inCorridor([{ ...c, half: c.half + 20 }], fx, fz))) continue;
+        if (!best || e.L > best.L) best = e;
+      }
+      if (best) stairs.push({ e: best, open: [] });
+    }
+  }
+  for (const st of stairs) {
+    const e = st.e;
+    // Frame: x along the edge (right-handed with y up and z outward), on the face at mid-edge.
+    const Z = new THREE.Vector3(e.nx, 0, e.nz);
+    const X = new THREE.Vector3().crossVectors(yAxis, Z).normalize();
+    const frame = new THREE.Matrix4().makeBasis(X, yAxis, Z).setPosition((e.mx + e.nx * out) * S, 0, (e.mz + e.nz * out) * S);
+    b.landings.push(stairsToWater(b, 'travertine', frame, wl, yBed, yCop).applyMatrix4(frame));
+    // Openings in the parapet, as fractions along the edge (the edge runs along ±X).
+    const half = (e.L * S) / 2;
+    const along = (X.x * e.dx + X.z * e.dz) / e.L; // +1 when the edge runs along +X
+    for (const sg of [-1, 1]) {
+      const x0 = sg * hIn, x1 = sg * hOut;
+      const t0 = 0.5 + (along * Math.min(x0, x1)) / (2 * half), t1 = 0.5 + (along * Math.max(x0, x1)) / (2 * half);
+      st.open.push([Math.min(t0, t1), Math.max(t0, t1)]);
+    }
+  }
+  edges.forEach((e) => {
+    if (e.L < 0.5) return;
+    const steps = Math.max(1, Math.round(e.L / 4));
+    q.setFromAxisAngle(yAxis, Math.atan2(-e.dz, e.dx));
+    const open = stairs.find((st) => st.e === e)?.open ?? [];
     for (let k = 0; k < steps; k++) {
       const t = (k + 0.5) / steps;
-      const x = a[0] + dx * t + nx * out, z = a[1] + dz * t + nz * out;
+      const x = e.a[0] + e.dx * t + e.nx * out, z = e.a[1] + e.dz * t + e.nz * out;
       if (skipped(x, z)) continue;
-      const len = (L / steps) * S + 0.3;
-      const centre = new THREE.Vector3(x * S - nx * (T / 2), (yBed + yTop) / 2, z * S - nz * (T / 2));
+      const len = (e.L / steps) * S + 0.3;
+      const centre = new THREE.Vector3(x * S - e.nx * (T / 2), (yBed + yTop) / 2, z * S - e.nz * (T / 2));
       m4.compose(centre, q, new THREE.Vector3(1, 1, 1));
       b.box('travertine', len, yTop - yBed, T, m4.clone(), { collide: true, castShadow: true });
       // Coping, a little proud of the face.
-      m4.compose(new THREE.Vector3(x * S + nx * 0.08, yTop + 0.1, z * S + nz * 0.08), q, new THREE.Vector3(1, 1, 1));
+      m4.compose(new THREE.Vector3(x * S + e.nx * 0.08, yTop + 0.1, z * S + e.nz * 0.08), q, new THREE.Vector3(1, 1, 1));
       b.box('travertine', len, 0.2, 0.9, m4.clone(), { castShadow: true });
+      // Parapet pieces (open over the bridges and at the stair heads).
+      if (opts.parapet === false || inCorridor(corridors, x, z)) continue;
+      for (const [p0, p1] of parapetPieces(k / steps, (k + 1) / steps, open, 0.3 / (e.L * S))) {
+        const L = (p1 - p0) * e.L * S + (p0 <= 0 || p1 >= 1 ? 0.15 : 0.02);
+        const tm = (p0 + p1) / 2;
+        const px = (e.a[0] + e.dx * tm + e.nx * out) * S - e.nx * 0.1, pz = (e.a[1] + e.dz * tm + e.nz * out) * S - e.nz * 0.1;
+        const c = new THREE.Vector3(px, yCop + QUAY.parapet / 2, pz);
+        m4.compose(c, q, new THREE.Vector3(1, 1, 1));
+        b.box('travertine', L, QUAY.parapet - 0.08, QUAY.parapetThick, m4.clone(), { castShadow: true });
+        m4.compose(c.clone().setY(yCop + QUAY.parapet - 0.04), q, new THREE.Vector3(1, 1, 1));
+        b.box('travertine', L + 0.04, 0.08, QUAY.parapetThick + 0.1, m4.clone(), { castShadow: true });
+        b.collider({ kind: 'box', center: c, half: new THREE.Vector3(L / 2, QUAY.parapet / 2, QUAY.parapetThick / 2), rotation: q.clone() });
+      }
     }
-  }
+  });
   return b;
 }
