@@ -17,7 +17,7 @@ import { block, boulder as rockBoulder, gardenBed, openings, peristyle, pool, ro
 import { lion } from './palcirc/shapes';
 import { Spots, drawFor, gableRoof, groundRange, lowColumn, plantTrees, type TreeSpec } from './palcirc/util';
 import { requestLamps } from './palcirc/runtime';
-import { streetRow } from './palcirc/streetRow';
+import { streetRow, type PlacedLot } from './palcirc/streetRow';
 import type { Lamp } from './palcirc/capenaParts';
 import { fromHost, relLocal } from './palcirc/frames';
 import { CIRCUS } from './palcirc/circusLayout';
@@ -549,7 +549,18 @@ function lupercal(ctx: LandmarkContext) {
  * The Vicus Tuscus at the Lupercal (its local frame): a row of four blocks with shops on the hill
  * side of the street, from just past the corner with the street along the Circus northward, and a
  * compitum and a lacus on the corner.
+ *
+ * Two of the blocks are places of the content module (`src/content/places.ts` mirrors these spots
+ * over its fallbacks): the southern one is Tuccius the cooper's insula (`insula-tuccii`, the stair
+ * where Florus hammers his hoops and the Lemuria watch is kept), the northern one, a cracked and
+ * propped four-storey block of plaster over rubble, is the Leaning Insula (`insula-nutans` and its
+ * `-taberna`, `-scalae`, `-tectum`, `-cenaculum`). All of them are street-level spots on the
+ * sidewalk or at the doors: the upper floors have no way in, so the top floor's and Prima's flat's
+ * evidence is read from the street, under the crack that runs up the front.
  */
+export const TUCCII_LOT = 0;
+export const NUTANS_LOT = 3;
+
 function vicusTuscusCorner(ctx: LandmarkContext, b: MeshBuilder, d: Draw, spots: Spots, lamps: Lamp[], trees: TreeSpec[]) {
   const host = LANDMARK_BY_ID['lupercal'] as LandmarkData;
   const road = ROADS.find((r) => r.id === 'vicus-tuscus');
@@ -583,7 +594,7 @@ function vicusTuscusCorner(ctx: LandmarkContext, b: MeshBuilder, d: Draw, spots:
   // Property line just past the road's kerb (its basalt is 3 m wide) and a 1.6 m sidewalk.
   const off = 3.4;
   const start = 9;
-  streetRow(ctx, b, spots, lamps, {
+  const row = streetRow(ctx, b, spots, lamps, {
     a: [A[0] + n[0] * off + t[0] * start, A[1] + n[1] * off + t[1] * start],
     c: [C[0] + n[0] * off, C[1] + n[1] * off],
     n,
@@ -594,9 +605,13 @@ function vicusTuscusCorner(ctx: LandmarkContext, b: MeshBuilder, d: Draw, spots:
       { len: 12, depth: 10, storeys: 3, finish: 'plaster', plaster: 'plaster_ochre', bays: ['thermopolium', 'stair', 'wine', 'bakery'], gap: 3 },
       { len: 14, depth: 11, storeys: 4, finish: 'brick', bays: ['general', 'textile', 'stair', 'cobbler', 'pottery'], gap: 2.5 },
       { len: 12, depth: 10, storeys: 3, finish: 'plaster', plaster: 'plaster_cream', portico: true, bays: ['barber', 'stair', 'moneychanger', 'butcher'], gap: 3 },
-      { len: 13, depth: 10, storeys: 4, finish: 'brick', bays: ['smithy', 'stair', 'general', 'fullonica'] },
+      { len: 13, depth: 10, storeys: 4, finish: 'plaster', plaster: 'plaster_white', bays: ['cobbler', 'stair', 'general', 'fullonica'], open: true },
     ],
   });
+  for (const lot of row.lots) {
+    if (lot.index === TUCCII_LOT) tucciiHouse(spots, lot, row.rot);
+    else if (lot.index === NUTANS_LOT) leaningInsula(ctx, b, spots, lot, row.rot);
+  }
   // The corner: the compitum facing the street along the Circus, the lacus beside it.
   const ca: [number, number] = [A[0] + n[0] * (off + 2.5) + t[0] * 1.0, A[1] + n[1] * (off + 2.5) + t[1] * 1.0];
   const face = Math.atan2(n[0], n[1]); // frame −z (the front) toward the street (−n)
@@ -612,6 +627,67 @@ function vicusTuscusCorner(ctx: LandmarkContext, b: MeshBuilder, d: Draw, spots:
   const lp = lf.point(0, 0, -1.6);
   spots.add('lupercal-lacus', 'shrine', lp.x, lp.y, lp.z, face);
   trees.push({ species: 'plane', x: la[0] - t[0] * 5 + n[0] * 2, z: la[1] - t[1] * 5 + n[1] * 2, scale: 0.8, variant: 2 });
+}
+
+/** Tuccius the cooper's house: the street in front of its stair door, where Florus hammers his hoops. */
+function tucciiHouse(spots: Spots, lot: PlacedLot, rot: number) {
+  const door = lot.stair?.p ?? lot.front(0.5, 0.6);
+  spots.add('insula-tuccii', 'door', door.x, door.y, door.z, lot.stair?.heading ?? rot + Math.PI);
+}
+
+/**
+ * The Leaning Insula: plaster over rubble, a crack climbing the front between the cobbler's shop and
+ * the stair, two oak props under the stair's lintel, and the five places the quest uses on the
+ * sidewalk in front of it (the street is the only way in).
+ */
+function leaningInsula(ctx: LandmarkContext, b: MeshBuilder, spots: Spots, lot: PlacedLot, rot: number) {
+  const face = rot + Math.PI; // heading toward the street
+  const stair = lot.stair?.p ?? lot.front(0.5, 0.6);
+  const shop = lot.shops.find((s) => s.tag === 'cobbler') ?? lot.shops[0];
+  const at = (u: number, off: number) => lot.front(u, off);
+  const put = (id: string, kind: 'npc' | 'door', p: THREE.Vector3, heading = face) => spots.add(id, kind, p.x, p.y, p.z, heading);
+  // The crack climbs the front between the shop and the stair: its foot is the top floor's place (the
+  // evidence is read from the street), the far end of the frontage Prima's floor, the middle the house's.
+  const foot = shop ? stair.clone().add(shop.p).multiplyScalar(0.5) : stair.clone();
+  foot.add(new THREE.Vector3(Math.sin(face), 0, Math.cos(face)).multiplyScalar(0.6));
+  put('insula-nutans', 'npc', at(0.64, 1.15));
+  put('insula-nutans-scalae', 'door', stair, lot.stair?.heading ?? face);
+  put('insula-nutans-taberna', 'npc', shop?.p ?? at(0.2, 0.7), shop?.heading ?? face);
+  put('insula-nutans-tectum', 'npc', foot);
+  put('insula-nutans-cenaculum', 'npc', at(0.9, 1.1));
+
+  // Dressing, in the block's own frame (−z toward the street, y = 0 at its floor).
+  const d = new Draw(b, lot.m);
+  const inv = lot.m.clone().invert();
+  const rng = new Rng('insula-nutans');
+  const floor = lot.m.elements[13];
+  const zf = -lot.depth / 2;
+  const sx = stair.clone().applyMatrix4(inv).x;
+  const cx = shop ? shop.p.clone().applyMatrix4(inv).x : sx - 3.6;
+  // The crack: between the shop and the stair, from the sill of the shop to under the eaves, in short
+  // jags with a few spurs (the string courses, 7 cm proud, hide it where it crosses them).
+  const xb = (sx + cx) / 2;
+  const yTop = lot.height - 0.9;
+  let x = xb, y = 0.25;
+  while (y < yTop) {
+    const ny = Math.min(yTop, y + rng.range(0.55, 1.25));
+    const nx = xb + rng.range(-0.3, 0.3);
+    d.rod('black', { x, y, z: zf - 0.04 }, { x: nx, y: ny, z: zf - 0.04 }, 0.04, 4, { shadow: false });
+    if (rng.chance(0.45)) {
+      const sd = rng.chance(0.5) ? 1 : -1;
+      d.rod('black', { x: nx, y: ny, z: zf - 0.04 }, { x: nx + sd * rng.range(0.25, 0.55), y: ny + rng.range(0.2, 0.5), z: zf - 0.04 }, 0.025, 4, { shadow: false });
+    }
+    x = nx;
+    y = ny;
+  }
+  // Two oak props from the sidewalk to the lintel of the stair door, one bowed (a second beam across it).
+  for (const s of [-1, 1]) {
+    const px = sx + s * 1.05;
+    const foot = new THREE.Vector3(px, 0, zf - 1.35).applyMatrix4(lot.m);
+    const g0 = ctx.groundAt(foot.x, foot.z) - floor;
+    d.rod('wood', { x: px, y: g0, z: zf - 1.35 }, { x: px, y: 2.55, z: zf - 0.06 }, 0.085, 6);
+  }
+  d.rod('wood', { x: sx - 1.05, y: 1.3, z: zf - 0.72 }, { x: sx + 1.05, y: 1.5, z: zf - 0.72 }, 0.05, 5);
 }
 
 // ---------------------------------------------------------------- Adonaea (gardens)

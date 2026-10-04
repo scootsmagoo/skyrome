@@ -3,7 +3,9 @@
  * the fabric's insula kit, fronting a straight property line, each block floored at the highest
  * point of its frontage, with a paved sidewalk in front, a lamp at the door of every other shop,
  * and the shop and house doors as spots. Used where this module's landmarks stand on a street the
- * city filler does not reach (the Lupercal's corner of the Vicus Tuscus).
+ * city filler does not reach (the Lupercal's corner of the Vicus Tuscus). It also hands back each
+ * block's frame, stair door and shop fronts (`PlacedLot`), so a caller can give a block a name
+ * (the content's insulae) and dress it.
  */
 import * as THREE from 'three';
 import { Draw } from '../../../../arch/fabric/draw';
@@ -24,8 +26,29 @@ export interface RowLot {
   plaster?: MaterialId;
   portico?: boolean;
   bays?: BayKind[];
+  /** Every shop of the ground floor is open (enterable, with a front the spots can name). */
+  open?: boolean;
   /** Gap (an alley) after this lot. */
   gap?: number;
+}
+
+/** A block of the row as built: its frame (landmark-local), size, and the doors on the street. */
+export interface PlacedLot {
+  index: number;
+  /** Block frame (origin at the middle of its floor; local −z toward the street) and size. */
+  m: THREE.Matrix4;
+  width: number;
+  depth: number;
+  height: number;
+  /** Frontage span along the property line (m from `a`). */
+  t0: number;
+  t1: number;
+  /** The stair door (landmark-local spot, street level, facing the street), when there is one. */
+  stair?: { p: THREE.Vector3; heading: number };
+  /** The open shops' fronts, in order along the frontage. */
+  shops: { tag: string; p: THREE.Vector3; heading: number }[];
+  /** Street-level point on the frontage: `u` 0..1 along the block, `off` metres out from the property line (landmark-local). */
+  front(u: number, off: number): THREE.Vector3;
 }
 
 export interface RowSpec {
@@ -64,6 +87,7 @@ export function streetRow(ctx: LandmarkContext, b: MeshBuilder, spots: Spots, la
   const rot = Math.atan2(nx, nz);
   const lots = rowLots(spec);
   const used = lots.length ? lots[lots.length - 1].t1 : 0;
+  const placed: PlacedLot[] = [];
   // The sidewalk: a paved strip along the whole row, a step above the street.
   if (used > 0) {
     const sw: [number, number][] = [at(-0.5, 0.02), at(used + 0.5, 0.02), at(used + 0.5, -spec.sidewalk), at(-0.5, -spec.sidewalk)];
@@ -92,7 +116,7 @@ export function streetRow(ctx: LandmarkContext, b: MeshBuilder, spots: Spots, la
       portico: lot.portico,
       bays: lot.bays,
       balcony: i % 2 ? 'partial' : 'none',
-      openShopChance: 0.6,
+      openShopChance: lot.open ? 1 : 0.6,
       roof: 'hip',
       sides: { left: true, right: true, back: false },
       groundAt: (ix, iz) => {
@@ -104,14 +128,27 @@ export function streetRow(ctx: LandmarkContext, b: MeshBuilder, spots: Spots, la
     const m = new THREE.Matrix4().makeTranslation(cx, floor, cz).multiply(new THREE.Matrix4().makeRotationY(rot));
     b.append(out.builder, m);
     if (!hi) new Draw(b, m).solid(-w / 2, -1.5, -lot.depth / 2, w / 2, out.height, lot.depth / 2);
+    const pl: PlacedLot = {
+      index: i, m, width: w, depth: lot.depth, height: out.height, t0, t1, shops: [],
+      front: (u, off) => {
+        const [x, z] = at(t0 + w * u, -off);
+        return new THREE.Vector3(x, g(x, z), z);
+      },
+    };
     for (const sp of out.spots) {
       const p = sp.position.clone().applyMatrix4(m);
       const heading = sp.facing + rot;
-      if (sp.kind === 'shopDoor' && sp.tag && sp.tag !== 'stair') spots.add(`${spec.idPrefix}-shop-${i}-${sp.tag}`, sp.tag === 'thermopolium' ? 'vendor' : 'stall', p.x, p.y, p.z, heading);
-      else if (sp.kind === 'houseDoor' || sp.tag === 'stair') spots.add(`${spec.idPrefix}-door-${i}`, 'door', p.x, p.y, p.z, heading);
+      if (sp.kind === 'shopDoor' && sp.tag && sp.tag !== 'stair') {
+        spots.add(`${spec.idPrefix}-shop-${i}-${sp.tag}`, sp.tag === 'thermopolium' ? 'vendor' : 'stall', p.x, p.y, p.z, heading);
+        pl.shops.push({ tag: sp.tag, p, heading });
+      } else if (sp.kind === 'houseDoor' || sp.tag === 'stair') {
+        spots.add(`${spec.idPrefix}-door-${i}`, 'door', p.x, p.y, p.z, heading);
+        if (sp.tag === 'stair') pl.stair ??= { p, heading };
+      }
     }
+    placed.push(pl);
     const [lx, lz] = at(t0 + w * 0.3, -0.35);
     lamps.push({ position: new THREE.Vector3(lx, floor + 2.75, lz), color: 0xffa54f, intensity: 5, distance: 7, flicker: 0.25, night: true, glow: 0.14 });
   }
-  return { used, at, rot };
+  return { used, at, rot, lots: placed };
 }

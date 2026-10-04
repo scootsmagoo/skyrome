@@ -314,6 +314,22 @@ describe('palcirc walkability', () => {
     for (const id of ['spawn-capena', 'courier-ambush', 'night-cart']) expect(cap.spots?.some((s) => s.id === id), id).toBe(true);
   });
 
+  it('the Lupercal\'s Vicus Tuscus row is the Leaning Insula and Tuccius\' house of the content (src/content/places.ts WORLD_SPOTS)', () => {
+    const p = new Physics();
+    const built = germalusBuilders.find((x) => x.handles.includes('lupercal'))!.build(fakeCtx('lupercal', p));
+    const at = (id: string) => built.spots?.find((s) => s.id === id)?.position;
+    const ids = ['insula-nutans', 'insula-nutans-taberna', 'insula-nutans-scalae', 'insula-nutans-tectum', 'insula-nutans-cenaculum', 'insula-tuccii'];
+    for (const id of ids) expect(at(id), id).toBeTruthy();
+    // The places of one household stand on one frontage and apart from each other (people stand there).
+    const nutans = ids.slice(0, 5).map((id) => at(id)!);
+    for (let i = 0; i < nutans.length; i++) {
+      for (let j = i + 1; j < nutans.length; j++) expect(nutans[i].distanceTo(nutans[j]), `${ids[i]} / ${ids[j]}`).toBeGreaterThan(1.4);
+      expect(nutans[i].distanceTo(nutans[0]), ids[i]).toBeLessThan(8);
+    }
+    // The two houses are different blocks of the row.
+    expect(at('insula-tuccii')!.distanceTo(at('insula-nutans')!)).toBeGreaterThan(25);
+  });
+
   it('every palcirc builder also builds at low detail', () => {
     const p = new Physics();
     const all = [...circusBuilders, ...capenaBuilders, ...palaceBuilders, ...germalusBuilders];
