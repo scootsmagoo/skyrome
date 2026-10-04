@@ -479,10 +479,13 @@ export class CombatSystem implements System, PlayerCombatHost {
     const qi = opts.quest ? (this.questSpawns.get(opts.quest) ?? 0) : 0;
     if (opts.quest) this.questSpawns.set(opts.quest, qi + 1);
     const r = resolveSpawn({ ...opts, archetype: archetypeId, npc: npc ?? (opts.npc ? { id: opts.npc } : undefined) }, this.items, qi);
-    const id = opts.id ?? `${r.spec.id}-${++this.seq}`;
-    // Someone with this id is already here (a respawned quest foe): replace it.
+    let id = opts.id ?? `${r.spec.id}-${++this.seq}`;
+    // A fighter we spawned with this id is still here (a respawned quest foe): replace it. Someone
+    // else's actor has the id (a placed NPC): fight as a stand-in, `<id>~foe` (quest content
+    // matches either).
     const old = this.core.get(id);
-    if (old && !old.isPlayer) this.despawn(old);
+    if (old && !old.isPlayer && this.spawned.has(id)) this.despawn(old);
+    else if (game.actors.get(id) || old) id = `${id}~foe`;
     const app = r.appearance ?? randomAppearance(new Rng(opts.seed ?? id), r.spec.role);
     const vis = visualsFor(this.items, r.profile);
     const avatar = createHumanoid(app, { lod: opts.lod ?? 'auto', weapon: vis.weapon, shield: vis.shield });
