@@ -145,7 +145,8 @@ function roof(b: MeshBuilder, x0: number, x1: number, z0: number, z1: number, yE
 export function capTemple(b: MeshBuilder, spec: CapTempleSpec, at?: THREE.Matrix4): CapTempleResult {
   const L = templeLayout(spec);
   const m = at ?? new THREE.Matrix4();
-  const detail = spec.detail ?? 'high';
+  // The kit also knows 'far'; our extras only distinguish high and low.
+  const detail: 'high' | 'low' = spec.detail === 'low' || spec.detail === 'far' ? 'low' : 'high';
   const mat = spec.material ?? 'marble';
   const podMat = spec.podiumMaterial ?? 'travertine';
   const cellaMat = spec.cellaMaterial ?? mat;

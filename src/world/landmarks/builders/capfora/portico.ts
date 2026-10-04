@@ -207,7 +207,7 @@ export function forumPortico(b: MeshBuilder, spec: PorticoSpec, at: THREE.Matrix
         if (o.kind !== 'niche') continue;
         const sill = floorY + (o.sill ?? 1.2);
         const sc = Math.min(1.25, (o.height - o.width * 0.5) / 1.75);
-        figure(b, spec.nicheStatues, mul(at, TRS(o.x, sill, depth + 0.25, 0, 0, 0)), { scale: sc, material: spec.nicheStatueMaterial ?? 'bronze', detail });
+        figure(b, spec.nicheStatues, mul(at, TRS(o.x, sill, depth + 0.25, 0, 0, 0)), { scale: sc, material: spec.nicheStatueMaterial ?? 'bronze', detail: detail === 'high' ? 'high' : 'low' });
       }
     }
   }
