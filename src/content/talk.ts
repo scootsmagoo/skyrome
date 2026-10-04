@@ -69,24 +69,40 @@ export function rotate(c: DialogueContext, key: string, lines: readonly string[]
   return lines[n % lines.length];
 }
 
+/** The player's origin id (civis-suburanus, hispanus, veteranus, dacus…), or '' without a character. */
+export function origin(c: DialogueContext): string {
+  return c.game.standing?.origin ?? '';
+}
+
+/** The hour of day (0..24). */
+export function hourNow(c: DialogueContext): number {
+  return c.game.time?.hour ?? 12;
+}
+
 /**
- * Rumors that fit the moment: hooks for content still open come first, then the city's talk.
- * Deterministic per NPC (rotates through the list on each ask).
+ * Rumors that fit the moment (docs/CONTENT.md §8.1, "Rumours"): hooks for content still open come
+ * first, then the city's talk and the news of the day. Deterministic per NPC (rotates through the
+ * list on each ask).
  */
 export function rumors(c: DialogueContext): string[] {
   const out: string[] = [];
-  if (notStarted(c, 'misc-lemuria-fabae') && lemuriaWindow(c)) out.push('Old Gemellus in the Velabrum, the retired fuller? Every Lemuria his beans for the dead vanish before morning. He thinks his father’s ghost is angry with him. Poor old goat.');
-  if (notStarted(c, 'misc-insula-nutans')) out.push('Rufina the weaver says the Fulvian block on the Vicus Tuscus is coming down. She says it every month. This month I believe her.');
-  if (notStarted(c, 'misc-venus-cloacina')) out.push('Eros the money-changer swears he’s seen a man feeding the drain at the Cloacina shrine at dusk. Feeding it what? Ask him. He’ll tell you twice.');
-  if (notStarted(c, 'misc-meta-sudans-rixa')) out.push('The parmularii and the scutarii are at it again by the Meta Sudans. Thracian-lovers against murmillo-lovers. It’ll come to fists by noon.');
-  if (completed(c, 'mq-01-madida-capena') || running(c, 'mq-02-tabella')) out.push('A courier knifed at the Porta Capena before dawn, right in the road, they say. An imperial courier. The cohorts are pretending they didn’t notice.');
-  if (completed(c, 'lud-01-sacramentum')) out.push('They say a guest put Nereus the retiarius on his knees at the Ludus today. At practice, with a wooden sword, but still!');
+  if (notStarted(c, 'misc-lemuria-fabae') && lemuriaWindow(c)) out.push('Florus the cooper, in the Velabrum: every Lemuria he throws his beans for the dead and by cockcrow they’re gone. Hungry ghosts, he says. I say hungry neighbours.');
+  if (notStarted(c, 'misc-insula-nutans')) out.push('The insula by the Vicus Tuscus where the widow Prima lives? The wall is cracked from cellar to roof. The landlord’s man props it with oak and tells everyone to sleep easy. I sleep in the Subura.');
+  if (notStarted(c, 'misc-venus-cloacina')) out.push('Ianuarius, the drain man, says somebody has been lifting the grate at the little shrine of Venus Cloacina in the Forum. Ianuarius says it every month. This month he’s oiled the bolt.');
+  if (notStarted(c, 'misc-meta-sudans-rixa') && completed(c, 'lud-01-sacramentum')) out.push('Bassulus the butcher and Anicetus the tanner are shouting about shields by the Meta Sudans again. Big shield or small. It’ll come to fists before supper.');
+  if (stage(c, 'mq-02-tabella') === 'start' || completed(c, 'mq-01-madida-capena')) out.push('A courier knifed under the Capena arch before dawn. A soldier’s courier, they say. The urban cohorts are pretending they didn’t notice, which means somebody’s paid them.');
+  if (completed(c, 'lud-01-sacramentum')) out.push('They say a guest put Nereus on his knees at the Ludus today. With a wooden sword! Nereus! Thirty-one wins!');
   out.push(
-    'Tomorrow the emperor dedicates his Column. A hundred feet, with the whole Dacian war carved round it like a ribbon. They’re rededicating Venus Genetrix the same day.',
-    'The doors of Janus are open. Parthia. The recruiters are in the Forum and mules have doubled in price.',
+    'Tomorrow the emperor dedicates his Column. A hundred feet, with the whole Dacian war carved round it like a ribbon. They say the Forum will be shut to carts from the fourth hour.',
+    'The doors of Janus are open. Parthia. The recruiters are in the Forum and mule prices have doubled.',
+    'They say Hadrian is still in Athens, playing the Greek.',
+    'They say Tacitus is coming back from Asia to write us all into his book.',
+    'No letters from Pliny in Bithynia since the winter. That’s not like Pliny.',
+    'Lusius Quietus’ Moorish horsemen are camped on the Campus, they say, eating raw horse.',
+    'There’ll be games for the Column. Eighteen days, a hundred pairs. Or eight days and ten pairs. Someone’s lying.',
+    'The emperor walked through the Forum yesterday on his own feet, like a citizen. My cousin touched his cloak.',
     'No heir, and he’s nearly sixty. Everyone’s betting. Hadrian, says one; Servianus, says another. Me, I’m betting on the war.',
-    'The Pantheon is still a black shell behind the hoardings. Lightning, three years ago. Somebody should do something about that roof.',
-    'The emperor walks among the people, they say: no lictors pushing, no “Lord and God” like the last one. My cousin saw him buy figs.',
+    'The Pantheon is still a black shell behind hoardings. Lightning, years ago. Somebody should do something about that roof.',
   );
   return out;
 }

@@ -1,488 +1,420 @@
 /**
- * Dialogue for the v0.1 misc quests: the Meta Sudans brawl (Hilarus, Crispus and Bucco), Black
- * Beans (Gemellus, Chloe, Pomponia), the Leaning Insula (Rufina, Saturninus) and What Venus Hides
- * (Eros the money-changer, Mus the sewer-runner). Every quest has a Rhetoric route with the odds shown.
+ * Dialogue of the v0.1 misc quests (docs/CONTENT.md §3.3):
+ *   misc-meta-sudans-rixa   Bassulus and Anicetus (dlg-rixa)
+ *   misc-lemuria-fabae      Florus and Thallusa (dlg-fabae)
+ *   misc-insula-nutans      Prima, Callistus (dlg-nutans), Dento, the tenants
+ *   misc-venus-cloacina     Ianuarius (dlg-cloacina), the Rex Cloacae
+ * plus Antiochus and Moschus at the Column (v0.1-Could). Quests react to node ids:
+ *
+ *   npc-rixa     sideScutarii, sideParmularii, peace, cupThrown, walked
+ *   npc-fabae    lie, persuade, truth (Thallusa), florusLie, florusPersuaded, florusTold (Florus), offer (Florus)
+ *   npc-prima    offer
+ *   npc-callistus confronted, bribed
+ *   npc-dento    ordered
+ *   npc-nutans-tenants  warned
+ *   npc-ianuarius accept, done
+ *   npc-rex-cloacae  fight, leave
  */
-import { completed, lemuriaWindow, notStarted, objectiveDone, outcome, running, stage } from '../../content/talk';
-import { defineDialogue } from '../types';
+import { completed, female, lemuriaWindow, notStarted, outcome, questVar, rotate, running, stage } from '../../content/talk';
+import { person } from '../../content/people';
+import { defineDialogue, type DialogueContext } from '../types';
 
 const RIXA = 'misc-meta-sudans-rixa';
 const FABAE = 'misc-lemuria-fabae';
 const NUTANS = 'misc-insula-nutans';
-const VENUS = 'misc-venus-cloacina';
+const CLOACINA = 'misc-venus-cloacina';
 
-// ------------------------------------------------------------------ Brawl at the Fountain
+// ------------------------------------------------------------------ the fans at the Meta Sudans
 
-const hilarus = defineDialogue({
-  id: 'npc-hilarus',
-  npcs: ['npc-hilarus'],
+const bassulus = (c: DialogueContext) => c.npcId === 'npc-bassulus';
+
+const rixa = defineDialogue({
+  id: 'npc-rixa',
+  npcs: ['npc-bassulus', 'npc-anicetus'],
+  priority: 80,
   start: (c) => {
-    const o = outcome(c, RIXA);
-    if (o === 'won') return 'champion';
-    if (o === 'calmed') return 'talker';
-    if (o) return 'after';
-    return 'greet';
+    const s = stage(c, RIXA);
+    if (s === 'start') return 'n0';
+    if (s === 'rixa') return 'fighting';
+    return outcome(c, RIXA) ? 'after' : 'idle';
   },
   nodes: {
-    greet: {
-      text: 'Callinicus! The small shields for ever! (The old man grabs your arm.) You! You look like a person of taste. Tell these scutarii what a parmula is worth.',
+    n0: {
+      text: (c) =>
+        bassulus(c)
+          ? '(A big man in a blood-stained tunic, a painted rectangular shield tied round his arm.) You! You fought at the Ludus today. Tell this tanner the big shield wins. Scutarii!'
+          : '(A thin man in a brown tunic that stinks of the tannery, a little square shield painted on a board at his neck.) Don’t listen to the butcher. Tell him Auctus was robbed! Parmularii!',
       choices: [
-        { text: 'What is the argument?', goto: 'story' },
-        { text: 'Vale.', end: true },
+        { text: 'The big shield wins. Scutarii!', goto: 'sideScutarii' },
+        { text: 'Auctus was robbed. Parmularii!', goto: 'sideParmularii' },
+        { text: 'Both shields lost to me today. Drink to the winner, not the shield.', check: { skill: 'rhetoric', difficulty: 25, pass: 'peace', fail: 'cupThrown' } },
+        { text: 'Shut up, both of you, or I’ll show you how I won.', check: { skill: 'rhetoric', difficulty: 40, kind: 'intimidate', label: 'Intimidate', pass: 'peace', fail: 'cupThrown' } },
+        { text: 'Not my fight.', goto: 'walked' },
       ],
     },
-    story: {
-      text: 'Thirty years I have cheered the parmularii: the small-shield men, the thraeces. Under Domitian a man was thrown to the dogs in the arena for a joke about thraeces. Now we have the Best of Princes and I can say what I like! And those big oafs, the scutarii, say Ferox the murmillo will squash my Callinicus flat. Crispus there wants an apology. From me!',
-      choices: [
-        { text: 'I’ll talk to Crispus.', end: true },
-        { text: 'Leave me out of it.', end: true },
-      ],
-    },
-    champion: {
-      text: 'My champion! You should be on the sand yourself! Callinicus will hear of this!',
+    sideScutarii: { text: 'Ha! Then let’s teach them! Scutarii, to me!', effects: (c) => c.setFlag('rixa-side', 'scutarii'), end: true },
+    sideParmularii: { text: 'Ha! Then let’s teach them! Parmularii, to me!', effects: (c) => c.setFlag('rixa-side', 'parmularii'), end: true },
+    peace: {
+      speaker: 'player',
+      text: '(A pause. Then Bassulus laughs and slaps Anicetus on the back.) “The winner! Wine for the winner!”',
+      effects: (c) => {
+        c.game.factions?.addReputation('plebs', 3);
+        c.setFlag('rixa-outcome', 'peace');
+      },
       end: true,
     },
-    talker: {
-      text: 'You talked them round! With words! Thirty years, and nobody ever did that.',
+    cupThrown: {
+      text: 'Who asked you? (Someone throws a cup. The brawl starts around you.)',
+      effects: (c) => c.setFlag('rixa-side', bassulus(c) ? 'parmularii' : 'scutarii'),
       end: true,
     },
+    walked: { text: '(They shrug, spit on their hands and start without you.)', effects: (c) => c.setFlag('rixa-outcome', 'walked'), end: true },
+    fighting: { text: 'Get out of the way or get in it!', end: true },
     after: {
-      text: 'Ah, well. There are other games, and other fountains.',
+      text: (c) =>
+        c.flag('rixa-outcome') === 'won'
+          ? bassulus(c) ? 'Scutarius! Wine for the scutarius!' : 'The parmularii owe you a drink. And a cheer.'
+          : 'Big shield, small shield. It doesn’t matter. It’s Rome.',
+      end: true,
+    },
+    idle: {
+      text: (c) =>
+        bassulus(c)
+          ? rotate(c, 'bassulusIdle', ['Big shield, big heart! Scutarii!', 'A thraex is a rat with a hat.', 'The murmillo stands. The thraex runs. Which would you marry?'])
+          : rotate(c, 'anicetusIdle', ['Small shield, quick feet! Parmularii!', 'The murmillo is a fish in a pot. We eat fish.', 'Did you see Auctus today? Robbed, I tell you. Robbed!']),
       end: true,
     },
   },
 });
 
-const crispus = defineDialogue({
-  id: 'npc-crispus',
-  npcs: ['npc-crispus', 'npc-bucco'],
-  start: (c) => {
-    const s = stage(c, RIXA);
-    if (s === 'brawl') return 'fighting';
-    if (s === 'start' || s === 'choice') return 'square';
-    const o = outcome(c, RIXA);
-    if (o === 'won') return 'beaten';
-    if (o === 'calmed') return 'friend';
-    if (o === 'lost') return 'gloat';
-    if (o === 'assault') return 'afraid';
-    return notStarted(c, RIXA) ? 'square' : 'greet';
-  },
+/** After the brawl the watch arrives (dlg-rixa-law): Verecundus by day, Primigenius after sunset. */
+const rixaLaw = defineDialogue({
+  id: 'npc-rixa-law',
+  npcs: ['npc-verecundus', 'npc-primigenius'],
+  priority: 90,
+  start: (c) => (stage(c, RIXA) === 'after' ? 'law0' : ''),
   nodes: {
-    greet: {
-      text: 'Ferox the Gaul will flatten that little Thracian like a fig. Big shields, big men.',
-      end: true,
-    },
-    square: {
-      text: '(A big man in a blue tunic looms over you.) You with the old goat? Then you can apologise for him. Or we settle it the old way: fists. No blades. This is the Meta Sudans, not the arena.',
+    law0: {
+      text: 'Brawling at the Meta. In front of the amphitheatre. Who started it?',
       choices: [
-        { text: 'Fists, then.', goto: 'brawl' },
-        { text: 'Fight over gladiators? Save it for the games. I’ll buy the wine.', check: { skill: 'rhetoric', difficulty: 40, pass: 'calmed', fail: 'insulted' } },
-        { text: 'Look at me. Do you really want this?', check: { skill: 'rhetoric', difficulty: 40, kind: 'intimidate', pass: 'cowed', fail: 'scorned' } },
-        { text: 'Here, for the wine. All of you.', bribe: { amount: 3, goto: 'calmed' } },
-        { text: 'Not my fight.', end: true },
+        { text: 'I did.', if: (c) => !!c.flag('threw-first-punch'), goto: 'lawFine' },
+        { text: 'They did. Ask anyone.', if: (c) => !c.flag('threw-first-punch'), goto: 'lawClear' },
+        { text: 'Fans being fans, officer. Nobody’s hurt.', check: { skill: 'rhetoric', difficulty: 25, pass: 'lawClear', fail: 'lawFine' } },
       ],
     },
-    brawl: {
-      text: 'Hah! Bucco, the guest wants to dance! Come on, then!',
-      end: true,
-    },
-    insulted: {
-      text: 'You want to buy MY wine? I buy my own wine! Come here!',
-      end: true,
-    },
-    scorned: {
-      text: 'Do I want this? (He laughs.) Bucco! He’s asking if we want this!',
-      end: true,
-    },
-    calmed: {
-      text: '(Crispus scratches his head.) …Well. If you’re buying. Hilarus! The guest is buying! Ferox and Callinicus can settle it on the sand.',
-      end: true,
-    },
-    cowed: {
-      text: '(Crispus looks at your hands, and your face, and decides.) …Another day, Thracian-lover. Another day.',
-      end: true,
-    },
-    fighting: {
-      text: 'Talk later! Punch now!',
-      end: true,
-    },
-    beaten: {
-      text: '(Crispus is still wet to the waist.) Good fists. You should fight for the murmillones.',
-      end: true,
-    },
-    friend: {
-      text: 'My friend who buys the wine! Big shields for ever!',
-      end: true,
-    },
-    gloat: {
-      text: 'Ha! The guest who knelt! No hard feelings: your money bought a good round.',
-      end: true,
-    },
-    afraid: {
-      text: '(He backs away with his hands up.) Steel? Over a gladiator? You’re mad.',
-      end: true,
-    },
+    lawFine: { text: 'Ten denarii for the peace of the city. Pay, or walk with me.', end: true },
+    lawClear: { text: 'Fine. Go home. All of you.', end: true },
   },
 });
 
 // ------------------------------------------------------------------ Black Beans
 
-const gemellus = defineDialogue({
-  id: 'npc-fabius-gemellus',
-  npcs: ['npc-fabius-gemellus'],
+const florus = (c: DialogueContext) => c.npcId === 'npc-florus';
+
+const fabae = defineDialogue({
+  id: 'npc-fabae',
+  npcs: ['npc-florus', 'npc-thallusa'],
+  priority: 85,
   start: (c) => {
     const s = stage(c, FABAE);
-    if (s === 'truth') return objectiveDone(c, FABAE, 'chloe') ? 'decide' : 'waiting';
-    if (s) return 'waiting';
-    const o = outcome(c, FABAE);
-    if (o === 'exposed') return 'afterExposed';
-    if (o === 'appeased') return 'afterAppeased';
-    if (o === 'charity') return 'afterCharity';
-    return 'greet';
+    if (florus(c)) {
+      if (s === 'choice' && c.flag('fabae-decided')) return 'f0';
+      if (s === 'start' || s === 'watch' || s === 'choice') return 'waiting';
+      if (outcome(c, FABAE)) return 'florusAfter';
+      return 'offer';
+    }
+    if (s === 'choice') return 't0';
+    return outcome(c, FABAE) ? 'thallusaAfter' : 'thallusaIdle';
   },
   nodes: {
-    greet: {
-      text: '(An old man in a long-sleeved tunic is counting black beans into a dish, one at a time, his lips moving.) Not now. Not today. Do you know what day it is?',
+    // ---- Florus offers the job
+    offer: {
+      text: '(A stocky man with a cooper’s adze at his belt and the look of someone who has been robbed by the dead.) Every Lemuria, the same. I throw the beans, nine handfuls, over the shoulder, no looking back, and by dawn: gone. The ghosts have an appetite.',
       choices: [
-        { text: 'The Lemuria.', goto: 'trouble' },
-        { text: 'What’s wrong, grandfather?', goto: 'trouble' },
+        { text: 'Maybe it’s not ghosts.', goto: 'offer2' },
+        { text: 'Beans for the dead. How very pious.', goto: 'offer2' },
         { text: 'Vale.', end: true },
       ],
     },
-    trouble: {
-      text: 'Every year I do it right. Midnight. Barefoot. No knot on me. I wash my hands, I put the beans in my mouth and throw them behind me without looking back, nine times: “These I send; with these I redeem me and mine.” And every morning, every year, the beans are gone. Every one. My father’s shade is hungry and angry with me, and I don’t know what I have done.',
+    offer2: {
+      text: 'Gods! You think I don’t know? My wife says the dead are hungry. I want to know how hungry. Keep watch in my stairwell tonight after the midnight rite. I’ll pay you what a widow pays a priest.',
       choices: [
-        { text: 'I’ll keep watch at midnight.', if: (c) => lemuriaWindow(c), goto: 'accept' },
-        { text: 'Maybe the birds eat them.', goto: 'birds', once: true },
-        { text: 'Vale.', end: true },
+        { text: 'I’ll watch your stairwell.', goto: 'accept' },
+        { text: 'Not tonight.', end: true },
       ],
     },
-    birds: {
-      text: 'At midnight? In a courtyard with a roof over half of it? (He gives you a long look.) Birds.',
-      next: 'trouble',
-    },
-    accept: {
-      text: 'You would? (He presses a twist of cloth into your hand.) Then take these. At midnight, throw them behind you with me, and don’t look back. And watch.',
-      effects: (c) => c.giveItem('fabae-nigrae', 9),
-      end: true,
-    },
-    waiting: {
-      text: (c) => (stage(c, FABAE) === 'start' ? 'Midnight. In the courtyard. And don’t whistle.' : 'Did you see? Did you see them?'),
-      choices: [{ text: 'Not yet.', end: true }],
-    },
-    decide: {
-      text: '(He grabs your sleeve.) Well? Was it them? Was it my father?',
+    accept: { text: 'Then bless you. Come to my door before midnight. Bring your own bread; I’ve none to spare. The dead eat everything.', end: true },
+    waiting: { text: (c) => (stage(c, FABAE) === 'start' ? 'After the rite, citizen. Midnight. Nine handfuls, and then you watch.' : 'Well? Did you see?'), end: true },
+    // ---- Thallusa at the lean-to (dlg-fabae)
+    t0: {
+      speaker: 'npc',
+      text: 'Don’t tell the master. He’ll sell me, and they’ll starve before the Kalends. The dead don’t eat beans, citizen. The living do.',
       choices: [
-        { text: 'It was your slave girl, Chloe. She took the beans.', goto: 'exposed' },
-        { text: 'The shades took what was theirs. Your rite is answered.', check: { skill: 'rhetoric', difficulty: 25, kind: 'lie', label: 'Lie', pass: 'appeased', fail: 'doubt' } },
-        { text: 'The beans feed a starving widow under your stairs. Feed the living, and your dead will be content.', check: { skill: 'rhetoric', difficulty: 40, pass: 'charity', fail: 'angry' } },
+        { text: 'Your secret is safe.', goto: 'lie' },
+        { text: 'I’ll tell him the truth, but I’ll make him listen.', goto: 'persuade' },
+        { text: 'He’s your master. He has a right to know.', goto: 'truth' },
+        { text: '(Give her 5 denarii.)', enabled: (c) => c.denarii() >= 5, goto: 'gift', effects: (c) => { if (c.pay(5)) c.game.devotion?.gainPietas(5); } },
       ],
     },
-    doubt: {
-      text: '(He squints at you.) You’re lying. I can see it in your face. Tell me what you saw.',
+    gift: { text: '…For the children. Thank you. I’ll pray for you at every crossroads.', next: 't0' },
+    lie: { text: 'The gods see you.', effects: (c) => (c.setFlag('fabae', 'lie'), c.setFlag('fabae-decided', true)), end: true },
+    persuade: { text: 'Then may Mercury lend you his tongue.', effects: (c) => (c.setFlag('fabae', 'persuade'), c.setFlag('fabae-decided', true)), end: true },
+    truth: { speaker: 'player', text: '(She says nothing. She picks up the smallest child.)', effects: (c) => (c.setFlag('fabae', 'truth'), c.setFlag('fabae-decided', true)), end: true },
+    thallusaIdle: { text: (c) => rotate(c, 'thallusaIdle', ['Yes, master. No, master. The ghosts, master.', 'Little ones, eat slowly. Slowly, I said.']), end: true },
+    thallusaAfter: { text: 'The gods keep you. Come to the compitum, if you ever want to see a child eat bread.', end: true },
+    // ---- Florus, afterwards (the three endings)
+    f0: {
+      text: 'Well? Ghosts or thieves?',
       choices: [
-        { text: 'It was Chloe.', goto: 'exposed' },
-        { text: 'The beans feed a starving widow under your stairs. Feed the living, and your dead will be content.', check: { skill: 'rhetoric', difficulty: 40, pass: 'charity', fail: 'angry' } },
+        { text: 'Ghosts. Hungry ones. Throw more beans next year.', if: (c) => c.flag('fabae') === 'lie', goto: 'florusLie' },
+        { text: 'Your beans feed your slave’s grandchildren. Feed them on purpose, and the dead will thank you twice.', if: (c) => c.flag('fabae') === 'persuade', check: { skill: 'rhetoric', difficulty: 40, pass: 'florusPersuaded', fail: 'florusTold' } },
+        { text: 'Thallusa takes them for her grandchildren.', if: (c) => c.flag('fabae') === 'truth', goto: 'florusTold' },
       ],
     },
-    angry: {
-      text: 'A widow? Under MY stairs? Eating MY father’s beans? (He is shaking.) Tell me who took them.',
-      choices: [
-        { text: 'It was Chloe.', goto: 'exposed' },
-        { text: 'The shades took what was theirs.', check: { skill: 'rhetoric', difficulty: 25, kind: 'lie', label: 'Lie', pass: 'appeased', fail: 'doubt' } },
-      ],
-    },
-    exposed: {
-      text: 'Chloe? CHLOE! (He goes inside shouting. You hear a slap, and crying.) …Here. For your trouble. (He doesn’t look at you.)',
+    florusLie: { text: 'Gods! I knew it. Nine handfuls next year.', effects: (c) => (c.receive(5), c.game.devotion?.gainPietas(5)), end: true },
+    florusPersuaded: {
+      text: '…Pious, you mean? Feeding the living for the dead’s sake. My father would have liked that. He never fed anyone.',
+      effects: (c) => {
+        c.receive(15);
+        c.game.devotion?.gainPietas(10);
+        c.game.standing?.addFame('dist-velabrum-boarium', 5);
+        c.setFlag('florus-feeds-family', true);
+      },
       end: true,
     },
-    appeased: {
-      text: '(He sits down hard and laughs and cries at once.) They took them. They took them! Father… Thank you, stranger. Thank the gods.',
+    florusTold: {
+      text: 'My beans! For the dead! She’ll be on the auction block by the Nones— (He stops.) …No. Not in Lemuria. Not with my father listening.',
+      effects: (c) => {
+        c.receive(10);
+        if (c.flag('fabae') === 'truth') c.game.standing?.addFame('dist-velabrum-boarium', -5);
+      },
       end: true,
     },
-    charity: {
-      text: '(He is quiet for a long time.) …My father fed half the Velabrum in the bad year and never told my mother. A house that feeds the hungry for its dead has nothing to fear from them. Chloe! Bread, and the good blanket. Bring the old woman in.',
-      end: true,
-    },
-    afterExposed: {
-      text: '(He won’t meet your eyes.) The beans stay where I throw them, now.',
-      end: true,
-    },
-    afterAppeased: {
-      text: 'My father rests. I feel it in my knees. Thank you, friend.',
-      end: true,
-    },
-    afterCharity: {
-      text: 'Pomponia sleeps by my hearth now. She snores like a fuller’s mallet. My father would have laughed.',
-      end: true,
-    },
+    florusAfter: { text: (c) => rotate(c, 'florusAfter', ['Oak for wine, chestnut for oil, pine for fools.', 'My father haunts me. He haunted me alive, too.', 'Every Lemuria, the same. But this year I threw an extra handful.']), end: true },
   },
 });
 
-const chloe = defineDialogue({
-  id: 'npc-chloe',
-  npcs: ['npc-chloe'],
-  start: (c) => {
-    const s = stage(c, FABAE);
-    if (s === 'ghost' || s === 'truth') return objectiveDone(c, FABAE, 'chloe') ? 'again' : 'caught';
-    const o = outcome(c, FABAE);
-    if (o === 'exposed') return 'hurt';
-    if (o === 'appeased') return 'grateful';
-    if (o === 'charity') return 'glad';
-    return 'greet';
-  },
-  nodes: {
-    greet: {
-      text: 'Yes, domine? The master is inside.',
-      end: true,
-    },
-    caught: {
-      text: '(The girl freezes on the stairs with her hands full of black beans.) Please. Please don’t tell him.',
-      choices: [{ text: 'Who are the beans for?', goto: 'confess' }],
-    },
-    confess: {
-      text: 'For Pomponia. She sleeps under the stairs. Her son died in the fire at the Kalends and the landlord put her out. The master throws food to the dead every year while the living starve on his stairs. She thinks the dead bring it. I let her think it.',
-      choices: [
-        { text: 'I won’t tell him.', goto: 'promised' },
-        { text: 'That is for your master to decide.', end: true },
-      ],
-    },
-    promised: {
-      text: '(She nods, and runs up the stairs.)',
-      effects: (c) => c.setFlag('lemuria.promised', true),
-      end: true,
-    },
-    again: {
-      text: 'Please. She is old, and she has nobody.',
-      end: true,
-    },
-    hurt: {
-      text: '(There is a red mark on her cheek. She won’t look at you.)',
-      end: true,
-    },
-    grateful: {
-      text: '(She squeezes your hand quickly and goes back to her work.) Thank you.',
-      end: true,
-    },
-    glad: {
-      text: 'She’s inside, by the fire. The master sat with her all morning talking about his father.',
-      end: true,
-    },
-  },
-});
+// ------------------------------------------------------------------ the Leaning Insula
 
-const pomponia = defineDialogue({
-  id: 'npc-pomponia',
-  npcs: ['npc-pomponia'],
-  start: (c) => {
-    const s = stage(c, FABAE);
-    if (s === 'ghost' || s === 'truth' || outcome(c, FABAE) === 'charity') return 'beans';
-    return 'greet';
-  },
-  nodes: {
-    greet: {
-      text: 'Bless you, child. Have you a crust?',
-      choices: [
-        { text: 'Here, some bread.', if: (c) => c.hasItem('panis'), goto: 'fed', effects: (c) => (c.takeItem('panis'), c.changeDisposition(5)) },
-        { text: 'What do you find in the spring by the gate?', goto: 'spring', once: true },
-        { text: 'Vale.', end: true },
-      ],
-    },
-    fed: {
-      text: 'Bless you. Bless your house and your dead.',
-      end: true,
-    },
-    spring: {
-      text: 'In Mercury’s spring? Things people throw. Coins, sometimes, bless them. Lead, mostly: curses. Here, take this one, it’s no good to me. Somebody hates a carter.',
-      effects: (c) => c.giveItem('defixio-capena'),
-      end: true,
-    },
-    beans: {
-      text: '(The old woman is chewing slowly.) The kind ones bring them. Every ghost night. I never see them. But I know him.',
-      choices: [
-        { text: 'Who brings them?', goto: 'thumb' },
-        { text: 'Vale.', end: true },
-      ],
-    },
-    thumb: {
-      text: 'An old man. Crooked thumb, so. (She bends her own.) Smells of fuller’s earth, like the vats on the Vicus. He sets them on my step and says nothing. A kind old man.',
-      choices: [
-        { text: '(Say nothing.)', end: true },
-        { text: 'Gemellus’ father was a fuller.', goto: 'thumb2' },
-      ],
-    },
-    thumb2: {
-      text: 'Was he? (She smiles with three teeth.) Then it’s him. Of course it is.',
-      end: true,
-    },
-  },
-});
-
-// ------------------------------------------------------------------ The Leaning Insula
-
-const rufina = defineDialogue({
-  id: 'npc-rufina',
-  npcs: ['npc-rufina'],
+const prima = defineDialogue({
+  id: 'npc-prima',
+  npcs: ['npc-prima'],
+  priority: 80,
   start: (c) => {
     const s = stage(c, NUTANS);
-    if (s === 'warn') return 'warn';
-    if (s === 'evacuated') return 'gone';
-    if (s) return 'waiting';
-    const o = outcome(c, NUTANS);
-    if (o === 'fallen') return 'afterFallen';
-    if (o === 'shored') return 'afterShored';
-    return 'greet';
+    if (s && ['start', 'callistus', 'aedile', 'evacuate'].includes(s)) return `p-${s}`;
+    if (outcome(c, NUTANS) === 'done') return 'thanks';
+    if (outcome(c, NUTANS) === 'bribed' || outcome(c, NUTANS) === 'collapsed') return 'cursed';
+    return 'offer';
   },
   nodes: {
-    greet: {
-      text: '(A woman with a weaver’s calloused fingers is staring up at the front of her insula.) Do you hear it? Listen. It creaks. It never used to creak.',
+    offer: {
+      text: '(A slight woman in a blue-green tunic, a grey palla over her head, stands on the stair with a distaff and a look that could crack plaster.) Another crack. Sleep easy, says Callistus. I’ll sleep easy in my tomb. Children! Away from that wall!',
       choices: [
-        { text: 'What’s wrong with it?', goto: 'problem' },
+        { text: 'This wall is cracked?', goto: 'o1' },
         { text: 'Vale.', end: true },
       ],
     },
-    problem: {
-      text: 'The stairs have come away from the wall. There’s a crack in the shop below like a mouth. The back wall bulges, and Saturninus, the agent, plasters it over and says “Sleep soundly.” There’s a sour old poet who reads in the baths, Juvenal, who says exactly that: the agent patches the crack and tells you to sleep soundly with the ruin hanging over your head.',
+    o1: {
+      text: 'From the cellar to the roof. The floors slope. The props are oak and the oak is bowing. My husband built half the Forum; he couldn’t afford to live in a wall that stands. Callistus says it has been like this since Domitian. I say that’s exactly the trouble.',
       choices: [
-        { text: 'I’ll take a look.', goto: 'accept' },
-        { text: 'Vale.', end: true },
+        { text: 'Let me look.', goto: 'offerAccept' },
+        { text: 'It’s not my business.', end: true },
       ],
     },
-    accept: {
-      text: 'Would you? The stairwell, the shop, and the back wall. Look with fresh eyes, and tell me I’m a fool.',
+    offerAccept: { text: 'Then look. Find me something I can carry to the aediles. The ground-floor wall behind the taberna, the bowed prop on the stair, the crack in the top flat you can put a hand into. Find three, and I’ll find the nerve.', end: true },
+    'p-start': { text: 'The wall behind the taberna, the prop on the stair, the crack on the top floor. Three, and we have something to show. Please hurry; it’s getting worse.', end: true },
+    'p-callistus': { text: 'You found enough? Then take it to Callistus. He’ll laugh. Let him.', end: true },
+    'p-aedile': { text: 'Dento, the aediles’ man, in the Forum by the Rostra. He hates scandal more than he hates work. Tell him everything.', end: true },
+    'p-evacuate': { text: 'They won’t believe me. They won’t believe you. But they will move, if it’s dusk and the plaster’s coming down. Hurry!', end: true },
+    thanks: {
+      text: '(Her eyes are red but her voice is steady.) The back of the insula came down in the first watch, and nobody was under it. You did that. Take this: my husband’s fascinum. He wore it every day he worked on the Forum. It never helped. It might help you.',
+      effects: (c) => {
+        if (!c.flag('prima-fascinum')) {
+          c.giveItem('fascinum');
+          c.setFlag('prima-fascinum', true);
+        }
+      },
       end: true,
     },
-    waiting: {
-      text: 'Well? Am I a fool?',
-      choices: [{ text: 'Not yet.', end: true }],
-    },
-    warn: {
-      text: '(She reads your face.) He won’t, will he.',
+    cursed: { text: '(She turns her back. A child coughs, somewhere in the dust.)', end: true },
+  },
+});
+
+const callistus = defineDialogue({
+  id: 'npc-callistus',
+  npcs: ['npc-callistus'],
+  priority: 80,
+  start: (c) => (stage(c, NUTANS) === 'callistus' ? 'n0' : outcome(c, NUTANS) ? 'after' : 'idle'),
+  nodes: {
+    n0: {
+      text: 'Cracks? Every wall in Rome has cracks. It’s how you know it’s a wall. Sleep easy.',
       choices: [
-        { text: 'Get everyone out tonight. All of them.', goto: 'warned' },
-        { text: 'Not yet.', end: true },
+        { text: 'Fix it now, before you’re explaining corpses to the aediles.', check: { skill: 'rhetoric', difficulty: 40, pass: 'n1', fail: 'n2' } },
+        { text: 'Fix it, or I’ll fix you.', check: { skill: 'rhetoric', difficulty: 40, kind: 'intimidate', label: 'Intimidate', pass: 'n1', fail: 'n2' } },
+        { text: 'I’m taking this to the aediles.', goto: 'n3' },
       ],
     },
-    warned: {
-      text: 'Tonight. All of them. Gods, the family on the fourth floor have six children… I’ll go door to door. Thank you.',
-      end: true,
+    n1: { text: '…I’ll send for the builders. After the Ides. Possibly.', next: 'n3' },
+    n2: { text: 'Do. The aediles love a story.', next: 'n3' },
+    n3: {
+      text: 'Listen. Ten denarii, and you never climbed these stairs. The master is a senator; you don’t want to know which.',
+      choices: [
+        { text: '(Take the money.)', goto: 'bribed', effects: (c) => { c.receive(10); c.setFlag('nutans-bribed', true); } },
+        { text: 'Keep it.', goto: 'confronted' },
+      ],
     },
-    gone: {
-      text: 'They’re out, all of them. Now I stand here and listen to it creak, and pray it’s only my nerves.',
-      end: true,
-    },
-    afterFallen: {
-      text: 'We’re alive. My loom is under a ton of brick, and we’re alive. Keep that fascinum I gave you. You have earned the luck.',
-      end: true,
-    },
-    afterShored: {
-      text: 'It has stopped talking at night. I still listen.',
+    confronted: { text: 'Suit yourself. Nobody likes a hero. They get hurt at the wrong end of the stair.', end: true },
+    bribed: { text: 'A sensible person. Sleep easy.', end: true },
+    after: { text: (c) => (outcome(c, NUTANS) === 'bribed' ? 'Sleep easy. Sleep easy. The master is a senator.' : '(He looks past you, at the dust, and keeps walking.)'), end: true },
+    idle: {
+      text: (c) => rotate(c, 'callistusIdle', ['Sleep easy, sleep easy. The props are oak.', 'The rent is due on the Kalends. The repairs are due on the Greek Kalends.', 'The master is a senator. Senators don’t do walls.']),
       end: true,
     },
   },
 });
 
-const saturninus = defineDialogue({
-  id: 'npc-saturninus',
-  npcs: ['npc-saturninus'],
-  start: (c) => (stage(c, NUTANS) === 'agent' ? 'confront' : 'greet'),
+const dento = defineDialogue({
+  id: 'npc-dento',
+  npcs: ['npc-dento'],
+  priority: 80,
+  start: (c) => (stage(c, NUTANS) === 'aedile' ? 'report' : 'idle'),
   nodes: {
-    greet: {
-      text: 'Saturninus, agent for the owner of the Fulvian block. Flats to let from the Kalends of July. Bring your own props, ha!',
-      end: true,
-    },
-    confront: {
-      text: 'Cracks? Every wall in Rome has cracks. It’s called character. What do you want?',
+    report: {
+      text: (c) => `Short measure? … No. The Leaning Insula, you say. (He sighs like a man being asked to lift something.) I’ve eleven walls to inspect and a toga to keep clean. ${Number(questVar(c, NUTANS, 'evidence')) >= 4 ? 'You’ve brought … a good deal of evidence, citizen.' : 'What have you got?'}`,
       choices: [
-        { text: 'The stair has left the wall, the beam is propped on a ship’s mast, and someone plastered the party wall last week. When it falls the owner loses the rents, and you lose your head.', check: { skill: 'rhetoric', difficulty: 40, pass: 'agrees', fail: 'refuses' } },
-        { text: 'Shore it up today, or I come back for you when it falls.', check: { skill: 'rhetoric', difficulty: 40, kind: 'intimidate', pass: 'agrees', fail: 'refuses' } },
-        { text: 'Here are ten denarii. Buy the props.', bribe: { amount: 10, goto: 'agrees' } },
-        { text: 'Never mind.', end: true },
+        { text: 'The ground-floor wall is rubble with no bonding course. Cheap work. I’ve seen better in a pigsty.', if: (c) => !!c.flag('nutans-fabrica'), goto: 'ordered' },
+        { text: 'I’ve found more than three cracks, and the owner’s man tried to pay me off. Do you want that on your aedile’s tablet?', if: (c) => Number(questVar(c, NUTANS, 'evidence')) >= 4 && !c.flag('nutans-fabrica'), check: { skill: 'rhetoric', difficulty: 10, pass: 'ordered', fail: 'refused' } },
+        { text: 'It will fall on the public. The aediles answer for that.', if: (c) => Number(questVar(c, NUTANS, 'evidence')) < 4 && !c.flag('nutans-fabrica'), check: { skill: 'rhetoric', difficulty: 25, pass: 'ordered', fail: 'refused' } },
+        { text: 'The Prefect of the City has taken an interest in the insula. (A lie.)', check: { skill: 'rhetoric', difficulty: 40, kind: 'lie', label: 'Lie', pass: 'ordered', fail: 'refused' } },
+        { text: 'For the paperwork. (Bribe)', bribe: { amount: 5, goto: 'ordered' } },
       ],
     },
-    agrees: {
-      text: '(He sighs.) …Fine. Props. Timbers for the party wall. A builder I owe money to. And the third floor out for a few nights. The owner will have my hide.',
+    ordered: { text: '…All right, all right. I’ll see the order cut. Empty it before dark. The tenants won’t believe it; they never do. (He writes, grimacing.) If it falls down, it’s my aedile’s fault. If it’s my aedile’s fault, it’s mine.', effects: (c) => c.setFlag('dento-order', true), end: true },
+    refused: { text: 'It’s late, citizen, and a wall has never yet fallen on the day it was reported. Come back with something I can read.', end: true },
+    idle: {
+      text: (c) => rotate(c, 'dentoIdle', ['Short measure? Show me. No, show me with witnesses.', 'Taverns, brothels, weights and walls. The aediles do everything, and I do it for them.', 'If it falls down, it’s my aedile’s fault. If it’s my aedile’s fault, it’s mine.']),
       end: true,
     },
-    refuses: {
-      text: '(He laughs.) Every wall in Rome has cracks. Off you go.',
-      end: true,
+  },
+});
+
+/** The tenants who must be warned (the evacuation: four households, one of them Prima's own). */
+const tenants = defineDialogue({
+  id: 'npc-nutans-tenants',
+  npcs: ['npc-sutor-nutans', 'npc-senes-nutans', 'npc-syri-nutans'],
+  priority: 80,
+  start: (c) => (stage(c, NUTANS) === 'evacuate' ? (c.memory.warned ? 'gone' : c.npcId === 'npc-syri-nutans' ? 'syri' : 'warn') : 'idle'),
+  nodes: {
+    warn: {
+      text: (c) => (c.npcId === 'npc-sutor-nutans' ? '(A cobbler at his last, his mouth full of nails.) Out? Out of where? I’ve eleven pairs to finish by the Ludi. What wall?' : '(An old couple on the stair, a lamp and a bundle between them.) The aedile’s man says empty the building? Wife, did you hear? He says the wall will fall.'),
+      choices: [
+        { text: 'The aediles ordered it. Out, before dark.', if: (c) => !!c.flag('dento-order'), goto: 'warned' },
+        { text: 'It’s coming down. Take what matters and go.', check: { skill: 'rhetoric', difficulty: 10, pass: 'warned', fail: 'unconvinced' } },
+      ],
     },
+    unconvinced: { text: 'Every wall in Rome has a crack. I’m not leaving my last.', next: 'warn' },
+    syri: {
+      text: '(A man in a long striped tunic, his wife behind him, two children clinging to her skirts. He speaks little Latin and holds up both hands.) Wall? What wall? We stay.',
+      choices: [
+        { text: '(Point at the crack, then at the children, then at the street.) Out. Now.', check: { skill: 'rhetoric', difficulty: 10, pass: 'warned', fail: 'unconvinced2' } },
+        { text: '(Show him the aediles’ order.)', if: (c) => !!c.flag('dento-order'), goto: 'warned' },
+      ],
+    },
+    unconvinced2: { text: '(He shakes his head, but looks at the crack twice.) We… stay.', next: 'syri' },
+    warned: { text: '…All right. All right. Gods keep you.', effects: (c) => (c.memory.warned = true), end: true },
+    gone: { text: 'We’re going. Leave us.', end: true },
+    idle: { text: (c) => rotate(c, 'tenantIdle', ['The stairs are a bit steep, but you get used to them.', 'It creaks. Houses creak. Don’t they?', 'Mind the third step. It’s not a step so much as a suggestion.']), end: true },
   },
 });
 
 // ------------------------------------------------------------------ What Venus Hides
 
-const eros = defineDialogue({
-  id: 'npc-eros-nummularius',
-  npcs: ['npc-eros-nummularius'],
+const ianuarius = defineDialogue({
+  id: 'npc-ianuarius',
+  npcs: ['npc-ianuarius'],
+  priority: 80,
   start: (c) => {
-    const s = stage(c, VENUS);
-    if (s === 'packet') return c.hasItem('drachma-parthica') ? 'packet' : 'waiting';
-    if (s) return 'waiting';
-    if (completed(c, VENUS)) return 'after';
-    return 'greet';
+    const s = stage(c, CLOACINA);
+    if (s === 'cache') return 'd0';
+    if (s) return 'busy';
+    return completed(c, CLOACINA) ? 'after' : 'greet';
   },
   nodes: {
     greet: {
-      text: 'Honest weight! Asses for sesterces, sesterces for denarii, denarii for gold. Look at the scales, friend, not at me.',
+      text: '(A stocky man in leather leggings to the thigh with a long iron hook and a lantern.) The old lady’s been here since the kings. She’ll outlast the lot of us. Someone’s been lifting my grate. My grate!',
       choices: [
-        { text: 'Anything odd lately?', if: (c) => notStarted(c, VENUS), goto: 'odd' },
+        { text: 'Tell me about the grate.', goto: 'n0' },
         { text: 'Vale.', end: true },
       ],
     },
-    odd: {
-      text: '(He lowers his voice.) Twice now, at dusk, a thin young fellow comes out of nowhere by the shrine of Cloacina, the little round one, leans over the drain grate as if he’s praying, and drops something in. Nobody prays to a drain. I want to know what, and I am too fat to stand out there at night. Watch for me? There’s coin in it.',
+    n0: {
+      text: 'My grate! The one by the little Venus. Scratches on the iron, and the bolt oiled, and I never oil it. Someone’s using my lady as a front door.',
       choices: [
-        { text: 'I’ll watch.', goto: 'accept' },
-        { text: 'Not my business.', end: true },
+        { text: 'I’ll watch it tonight.', goto: 'accept' },
+        { text: 'What’s down there?', goto: 'n2' },
       ],
     },
+    n2: { text: 'The oldest drain in the world. Kings built it. Venus guards the gate. And lately, somebody’s kingdom.', next: 'n0' },
     accept: {
-      text: 'After dusk. Stand where you can see the grate. And whatever he drops, I want to see it first.',
+      text: 'Second watch is when the bath-thieves come home. Take my key if you go down. And a torch. The rats respect a torch.',
+      effects: (c) => {
+        if (!c.hasItem('clavis-cloacae')) c.giveItem('clavis-cloacae');
+        if (!c.hasItem('fax')) c.giveItem('fax', 2);
+      },
       end: true,
     },
-    waiting: {
-      text: 'After dusk, by the Cloacina. I’ll be at home by then, behind three locks.',
+    busy: { text: 'Mind the rats. And the king. They say there’s a king down there, can you imagine.', end: true },
+    after: { text: 'The old lady’s quiet. Bless you, whoever you are. Mind the grate when you pass.', end: true },
+    d0: {
+      text: 'You came up out of her mouth in one piece? Then she let you out. She doesn’t always.',
+      effects: (c) => {
+        if (!c.flag('cloacina-paid')) {
+          c.receive(30);
+          c.game.standing?.addFame('dist-forum-romanum', 10);
+          c.setFlag('cloacina-paid', true);
+        }
+      },
       end: true,
     },
-    packet: {
-      text: '(He weighs the coin on his fingertip, then on his scales, then bites it.) Parthian. An Arsacid drachm, King Osroes, good silver. With a war coming, nobody in Rome should be paid in this, and somebody under the Forum is. I’ll give you eight denarii for it, and no questions.',
+  },
+});
+
+const rex = defineDialogue({
+  id: 'npc-rex-cloacae',
+  npcs: ['npc-rex-cloacae'],
+  priority: 80,
+  start: () => 'n0',
+  nodes: {
+    n0: {
+      text: 'Welcome to my kingdom. Leave the way you came and keep your purse, or stay and lose both.',
       choices: [
-        { text: 'Done. Eight denarii.', goto: 'sold' },
-        { text: 'I’ll keep it.', goto: 'kept' },
-        { text: 'I know a man at the strongrooms who will want to see this.', if: (c) => running(c, 'mq-02-tabella') || completed(c, 'mq-02-tabella'), goto: 'toSilo' },
+        { text: 'You’ll hand over the stolen clothes and the king’s crown, or I’ll take them.', check: { skill: 'rhetoric', difficulty: 55, kind: 'intimidate', label: 'Intimidate', pass: 'leave', fail: 'fight' } },
+        { text: 'The curators want their drain back. Surrender, and you’ll live.', check: { skill: 'rhetoric', difficulty: 55, pass: 'leave', fail: 'fight' } },
+        { text: '(Draw steel.)', goto: 'fight' },
       ],
     },
-    sold: {
-      text: '(The coin vanishes into his belt.) And the lead token you can keep. REX. (He snorts.) The sewer-runners have a king. Of course they do.',
-      end: true,
-    },
-    kept: {
-      text: 'Then keep it out of sight. And the token too. REX: the sewer-runners have a king. Of course they do.',
-      end: true,
-    },
-    toSilo: {
-      text: 'Silo? (He goes pale.) Then I never saw it, and you never showed me. Good day.',
-      end: true,
-    },
-    after: {
-      text: 'My friend of the drain! Any more Parthian silver? No? Good. Keep it that way.',
-      end: true,
-    },
+    leave: { text: 'Above, Caesar. Below, me. Take the key and go, and tell the old lady I paid my rent.', effects: (c) => c.setFlag('rex-cloacae-fate', 'parleyed'), end: true },
+    fight: { text: 'Open the sluice and we’ll all go swimming!', effects: (c) => c.attack(), end: true },
   },
 });
 
-const mus = defineDialogue({
-  id: 'npc-mus',
-  npcs: ['npc-mus'],
-  start: () => 'snarl',
-  nodes: {
-    snarl: {
-      text: 'Back off! The Rex will have your eyes!',
-      end: true,
-    },
-  },
+// ------------------------------------------------------------------ the Column (v0.1-Could)
+
+const antiochus = person({
+  id: 'npc-antiochus',
+  greet: '(A slight man with marble dust in his grey-flecked curls and a drill bow.) Four hundred soldiers on that spiral, and one of them is my brother. Antiochus of Aphrodisias. Marble remembers everything. That’s the trouble with it.',
+  topics: [
+    { ask: 'You carved the frieze?', say: 'I carve faces. The master wants a hundred identical faces. The army didn’t have identical faces. Mine is a good one. It’s the third from the left on the fourth turn, and he is not going to survive the recut.' },
+    { ask: 'Your brother?', say: 'Philon. A carter, once. He joined the army to see the world and the world gave him a spear. He’s carved in the marble now, and the foreman wants him recut by dawn.', once: true },
+  ],
 });
 
-export default [hilarus, crispus, gemellus, chloe, pomponia, rufina, saturninus, eros, mus];
+const moschus = person({
+  id: 'npc-moschus',
+  greet: '(A heavy man with a chalk line and a mallet.) Recut by dawn. Those are the orders, and orders don’t have brothers. The dedication waits for no chisel.',
+  topics: [{ ask: 'What are you recutting?', say: 'A face. One of four hundred. Too individual, they say. Every face the same height, every shield the same size. That’s discipline. That’s Rome.' }],
+});
+
+
+export default [rixa, rixaLaw, fabae, prima, callistus, dento, tenants, ianuarius, rex, antiochus, moschus];

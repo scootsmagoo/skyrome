@@ -58,7 +58,7 @@ const npcs: NpcDef[] = [
     home: 'lanista',
     schedule: [
       { from: at('h2'), at: 'lanista', activity: 'work' }, // the office in the barracks block
-      { from: at('h6'), at: 'ludus-magnus', activity: 'travel' }, // offstage
+      { from: at('h6'), at: 'ludus-magnus', activity: 'sleep' }, // offstage
     ],
     dialogue: 'npc-celer',
     disposition: 'neutral',

@@ -96,6 +96,10 @@ export const LOOT_TABLES: LootTableDef[] = [
   { id: 'vigil', rolls: [0, 0], entries: [], denarii: { range: [0.5, 2] }, extras: [{ item: 'lucerna', chance: 0.6 }, { item: 'fascia', chance: 0.5 }, { item: 'hama', chance: 0.2 }] },
   { id: 'cloacarius', rolls: [0, 0], entries: [], denarii: { range: [0.25, 3] }, extras: [{ table: 'cloaca.silt', chance: 0.5 }, { item: 'fax', chance: 0.3 }, { item: 'tunica', chance: 0.2 }] },
   { id: 'sicarius', rolls: [0, 0], entries: [], denarii: { range: [10, 30] }, extras: [{ item: 'aconitum', chance: 0.4 }, { item: 'sica', chance: 0.6 }, { item: 'epistula-signata', chance: 0.1 }, { item: 'aureus', chance: 0.1 }] },
+  // ---- loose things on the street (the bible's "20 unowned loose props", §6.1): a coin in a basin, a dropped tool, a bundle on a cart
+  { id: 'loose.coin', rolls: [0, 0], entries: [], denarii: { range: [0.0625, 0.5] } },
+  { id: 'loose.tool', rolls: [1, 1], entries: [{ item: 'clavus', weight: 3, count: [1, 3] }, { item: 'malleus', weight: 1 }, { item: 'instrumentum-fabri', weight: 1 }, { item: 'ferrum', weight: 1 }] },
+  { id: 'loose.bundle', rolls: [1, 1], entries: [{ item: 'panis', weight: 3 }, { item: 'lucerna', weight: 2 }, { item: 'fascia', weight: 2 }, { item: 'tunica', weight: 1 }, { item: 'tali', weight: 1 }] },
   // pickpocket purses by class (v0.2, GDD §14.4)
   { id: 'purse.plebs', rolls: [1, 1], chanceNone: 0.3, denarii: { range: [0.25, 3] }, entries: [{ item: 'tali', weight: 1 }, { item: 'libum', weight: 1 }, { item: 'nugae', weight: 1 }] },
   { id: 'purse.mercator', rolls: [1, 1], chanceNone: 0.3, denarii: { range: [3, 15] }, entries: [{ item: 'tessera-collegii', weight: 2 }, { item: 'vasa-arretina', weight: 1 }, { item: 'tabula-cerata', weight: 2 }] },

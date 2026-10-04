@@ -9,6 +9,7 @@
  */
 import * as THREE from 'three';
 import type { Game } from '../core/Game';
+import type { CombatProfile } from '../rpg/types';
 import { festivalsOn } from './barks';
 
 declare module '../core/Events' {
@@ -20,6 +21,11 @@ declare module '../core/Events' {
      * cheers for the named actors ('courier-knifed', 'grassatores-flee', 'crowd-cheers'…).
      */
     'content:beat': { questId: string; beat: string; actors?: string[]; at?: string };
+    /**
+     * The missio of a lusio was decided (lud-01, bout 3): `spared` true = "Mitte!". The combat/arena
+     * side emits it when it runs its own yield prompt; the quest also offers the choice in dialogue.
+     */
+    'content:missio': { spared: boolean };
   }
 }
 
@@ -45,6 +51,11 @@ export interface SpawnOptions {
   hostile?: boolean;
   /** Owning quest id. */
   quest?: string;
+  /**
+   * The stat block the content wants (src/content/profiles.ts: the mq-01 tutorial pair, Mus, the
+   * named gladiators); combat may use it instead of the archetype's default tier.
+   */
+  profile?: CombatProfile;
 }
 
 type Vec3 = { x: number; y?: number; z: number };
@@ -101,6 +112,37 @@ export function spawnEnemy(game: Game, archetype: string, at: string | Vec3, opt
 /** True when an actor with this id exists in the world (the NPC/combat side spawned it). */
 export function actorExists(game: Game, id: string): boolean {
   return !!game.actors?.get?.(id);
+}
+
+/** Move an actor already in the world (an NPC the population module spawned) to a named place. */
+export function moveActor(game: Game, id: string, to: string | Vec3, offset: { x?: number; z?: number } = {}): boolean {
+  const actor = game.actors?.get?.(id);
+  if (!actor || typeof actor.teleport !== 'function') return false;
+  const base = typeof to === 'string' ? placePosition(game, to) : groundAt(game, to);
+  if (!base) return false;
+  actor.teleport({ x: base.x + (offset.x ?? 0), y: base.y, z: base.z + (offset.z ?? 0) });
+  return true;
+}
+
+interface PopulationLike {
+  get?(id: string): unknown;
+  kill?(npc: unknown): void;
+}
+
+/**
+ * A scripted death (Festus under the arch): the population module's `kill` when it has the NPC,
+ * so the body stays and the registry remembers; else just announce the death for the quests and
+ * the save. Always emits 'actor:killed' with the 'scripted' tag.
+ */
+export function scriptedDeath(game: Game, id: string, killerId?: string) {
+  const pop = (game as unknown as { population?: PopulationLike }).population;
+  const npc = pop?.get?.(id);
+  try {
+    if (npc && pop?.kill) pop.kill(npc);
+  } catch (err) {
+    console.error(`[content] scriptedDeath(${id}) failed`, err);
+  }
+  game.events.emit('actor:killed', { victimId: id, killerId, tags: ['scripted'] });
 }
 
 /**

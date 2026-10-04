@@ -5,7 +5,7 @@
  * man), What Venus Hides (Ianuarius of the drains, the Rex Cloacae) and the Face on the Column
  * (Antiochus the carver, Moschus the foreman).
  */
-import { at } from '../../content/hours';
+import { at, shift } from '../../content/hours';
 import { REX_CLOACAE_PROFILE, archetype } from '../../content/profiles';
 import type { NpcDef } from '../types';
 
@@ -124,6 +124,59 @@ const npcs: NpcDef[] = [
     barks: ['Another crack. Sleep easy, says Callistus. I’ll sleep easy in my tomb.', 'My husband built half the Forum. He couldn’t afford to live in a wall that stands.', 'Children! Away from that wall!'],
     tags: ['plebs', 'dignitas:civis'],
   },
+  // The other three households of the Leaning Insula (the evacuation counts four with Prima's): minor extras [G].
+  {
+    id: 'npc-sutor-nutans',
+    name: 'Felix the cobbler',
+    title: 'Cobbler, ground floor of the Leaning Insula',
+    home: 'insula-nutans-taberna',
+    schedule: shift('insula-nutans-taberna', 'work', 'h1', 'v2'),
+    dialogue: 'npc-nutans-tenants',
+    disposition: 'friendly',
+    appearance: {
+      sex: 'male', age: 'middle', build: 'stocky', height: 1.6, skin: '#b07d58',
+      hair: { style: 'receding', color: '#4a3424' }, beard: 'stubble',
+      garments: [{ kind: 'tunica-short', color: '#7a6248' }, { kind: 'apron', color: '#5a4632' }],
+      footwear: 'barefoot',
+    },
+    barks: ['Eleven pairs by the Ludi, and the lasts have all gone missing.', 'Mind the nails. I spit them, I don’t sweep them.', 'It creaks. Houses creak.'],
+    tags: ['plebs', 'faber', 'dignitas:libertus'],
+  },
+  {
+    id: 'npc-senes-nutans',
+    name: 'Fabia',
+    title: 'Old tenant of the Leaning Insula (with her husband)',
+    home: 'insula-nutans-scalae',
+    schedule: shift('insula-nutans-scalae', 'sit', 'h1', 'v2'),
+    dialogue: 'npc-nutans-tenants',
+    disposition: 'friendly',
+    appearance: {
+      sex: 'female', age: 'old', build: 'slight', height: 1.48, skin: '#ddb48f',
+      hair: { style: 'veiled', color: '#cfcbc4' },
+      garments: [{ kind: 'tunica-long', color: '#8e8a80' }, { kind: 'palla', color: '#7a6248' }],
+      footwear: 'soleae',
+    },
+    barks: ['Forty years on this stair, and it has never once been level.', 'Gnaeus! The lamp! Gnaeus, you old goat!', 'The third step is not a step so much as a suggestion.'],
+    tags: ['plebs', 'dignitas:civis'],
+  },
+  {
+    id: 'npc-syri-nutans',
+    name: 'Abdes',
+    title: 'Syrian tenant of the Leaning Insula',
+    home: 'insula-nutans-tectum',
+    schedule: shift('insula-nutans-tectum', 'stand', 'h1', 'v2'),
+    dialogue: 'npc-nutans-tenants',
+    disposition: 'friendly',
+    // A long striped tunic of the Orontes, little Latin; his wife and two children are with him.
+    appearance: {
+      sex: 'male', age: 'adult', build: 'average', height: 1.68, skin: '#b07d58',
+      hair: { style: 'curly-short', color: '#1b1612' }, beard: 'short',
+      garments: [{ kind: 'tunica-long', color: '#cc9a35', trim: '#6b3a6e' }],
+      footwear: 'soleae',
+    },
+    barks: ['Wall? What wall? We stay.', 'Antioch has wide streets. Rome has the stairs.', 'Good water, bad stairs. Everything comes with something.'],
+    tags: ['plebs', 'syrian', 'dignitas:peregrinus'],
+  },
   {
     id: 'npc-callistus',
     name: 'Callistus',
@@ -133,7 +186,7 @@ const npcs: NpcDef[] = [
       { from: at('h2'), at: 'insula-nutans', activity: 'work' }, // collects
       { from: at('h5'), at: 'tabernae-aemiliae', activity: 'talk' },
       { from: at('h8'), at: 'popina-vici-tusci', activity: 'drunk' },
-      { from: at('v1'), at: 'popina-vici-tusci', activity: 'travel' },
+      { from: at('v1'), at: 'popina-vici-tusci', activity: 'sleep' },
     ],
     dialogue: 'npc-callistus',
     disposition: 'neutral',
@@ -155,7 +208,7 @@ const npcs: NpcDef[] = [
       { from: at('h2'), at: 'rostra', activity: 'work' }, // by the aediles' tribunal
       { from: at('h6'), at: 'basilica-julia-gradus', activity: 'sit' },
       { from: at('h7'), at: 'rostra', activity: 'patrol', route: ['rostra', 'vicus-tuscus', 'forum-boarium', 'vicus-tuscus', 'rostra'] }, // markets and weights
-      { from: at('v1'), at: 'rostra', activity: 'travel' },
+      { from: at('v1'), at: 'rostra', activity: 'sleep' },
     ],
     dialogue: 'npc-dento',
     disposition: 'neutral',
@@ -178,7 +231,7 @@ const npcs: NpcDef[] = [
     schedule: [
       { from: at('h1'), at: 'shrine-venus-cloacina', activity: 'patrol', route: ['shrine-venus-cloacina', 'cloaca-grate-aemiliae', 'basilica-julia-gradus', 'cloaca-maxima-outlet', 'shrine-venus-cloacina'] }, // checks grates
       { from: at('h8'), at: 'popina-vici-tusci', activity: 'sit' },
-      { from: at('v1'), at: 'popina-vici-tusci', activity: 'travel' },
+      { from: at('v1'), at: 'popina-vici-tusci', activity: 'sleep' },
     ],
     dialogue: 'npc-ianuarius',
     disposition: 'friendly',

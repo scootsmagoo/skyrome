@@ -24,7 +24,8 @@ describe('installRpg', () => {
     expect(rpg.items.size).toBeGreaterThanOrEqual(80);
     // Unnamed citizens get the content's '*' dialogue (if any); either way nothing may throw.
     expect(() => (rpg.dialogue.start('anyone'), rpg.dialogue.end())).not.toThrow();
-    expect(rpg.quests.markers()).toEqual([]);
+    // The shipped main quest auto-starts with the new game and points at the gate; nothing else marks the map.
+    expect(rpg.quests.markers().map((m) => m.questId)).toEqual(['mq-01-madida-capena']);
     expect(() => fg.step(30)).not.toThrow();
     expect(fg.systems.map((s) => s.name).sort()).toEqual(['locations', 'rpg', 'save']);
   });

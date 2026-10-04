@@ -19,7 +19,7 @@ const npcs: NpcDef[] = [
       { from: at('h1'), at: 'taberna-armorum', activity: 'work' },
       { from: at('h6'), at: 'taberna-armorum', activity: 'sit' },
       { from: at('h8'), at: 'taberna-armorum', activity: 'work' },
-      { from: at('v1'), at: 'taberna-armorum', activity: 'travel' }, // home to the Carinae (offstage)
+      { from: at('v1'), at: 'taberna-armorum', activity: 'sleep' }, // home to the Carinae (offstage)
     ],
     dialogue: 'npc-euhodus',
     disposition: 'neutral',
@@ -110,7 +110,7 @@ const npcs: NpcDef[] = [
     home: 'tabernae-aemiliae',
     schedule: [
       { from: at('h2'), at: 'tabernae-aemiliae', activity: 'work' },
-      { from: at('h9'), at: 'tabernae-aemiliae', activity: 'travel' },
+      { from: at('h9'), at: 'tabernae-aemiliae', activity: 'sleep' },
     ],
     dialogue: 'npc-demetrius',
     disposition: 'neutral',
@@ -134,7 +134,7 @@ const npcs: NpcDef[] = [
     schedule: [
       { from: at('h1'), at: 'tabernae-aemiliae', activity: 'work' },
       { from: at('h8'), at: 'basilica-julia-gradus', activity: 'talk' },
-      { from: at('v1'), at: 'tabernae-aemiliae', activity: 'travel' },
+      { from: at('v1'), at: 'tabernae-aemiliae', activity: 'sleep' },
     ],
     dialogue: 'npc-tryphon',
     disposition: 'friendly',
@@ -157,7 +157,7 @@ const npcs: NpcDef[] = [
       { from: at('h2'), at: 'rostra', activity: 'stand' },
       { from: at('h6'), at: 'basilica-julia-gradus', activity: 'sit' },
       { from: at('h8'), at: 'rostra', activity: 'stand' },
-      { from: at('v1'), at: 'rostra', activity: 'travel' },
+      { from: at('v1'), at: 'rostra', activity: 'sleep' },
     ],
     dialogue: 'npc-cerdo',
     disposition: 'friendly',
@@ -254,7 +254,7 @@ const npcs: NpcDef[] = [
     title: 'Astrologer (mathematicus)',
     home: 'astrologi-circi',
     schedule: [
-      { from: at('v3'), at: 'astrologi-circi', activity: 'travel' },
+      { from: at('v3'), at: 'astrologi-circi', activity: 'sleep' },
       { from: at('h3'), at: 'astrologi-circi', activity: 'sit' },
       { from: at('v1'), at: 'astrologi-circi', activity: 'work' }, // stars by night
     ],
@@ -279,7 +279,7 @@ const npcs: NpcDef[] = [
     home: 'astrologi-circi',
     schedule: [
       { from: at('h2'), at: 'astrologi-circi', activity: 'sit' },
-      { from: at('v1'), at: 'astrologi-circi', activity: 'travel' },
+      { from: at('v1'), at: 'astrologi-circi', activity: 'sleep' },
     ],
     dialogue: 'npc-arruns',
     disposition: 'neutral',
@@ -373,7 +373,7 @@ const npcs: NpcDef[] = [
     schedule: [
       { from: at('h2'), at: 'tabernae-aemiliae', activity: 'work' },
       { from: at('h7'), at: 'basilica-aemilia', activity: 'talk' },
-      { from: at('h8'), at: 'tabernae-aemiliae', activity: 'travel' }, // home to the Esquiline (offstage)
+      { from: at('h8'), at: 'tabernae-aemiliae', activity: 'sleep' }, // home to the Esquiline (offstage)
     ],
     dialogue: 'npc-hermogenes',
     disposition: 'neutral',
@@ -397,7 +397,7 @@ const npcs: NpcDef[] = [
     schedule: [
       { from: at('h2'), at: 'taberna-vestiarii', activity: 'work' },
       { from: at('h11'), at: 'taberna-vestiarii', activity: 'sit' },
-      { from: at('v2'), at: 'taberna-vestiarii', activity: 'travel' }, // "We close early on some nights. Don't ask which."
+      { from: at('v2'), at: 'taberna-vestiarii', activity: 'sleep' }, // "We close early on some nights. Don't ask which."
     ],
     dialogue: 'npc-tychicus',
     disposition: 'neutral',

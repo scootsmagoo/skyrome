@@ -1,38 +1,90 @@
 /**
- * misc-insula-nutans "The Leaning Insula" (GDD §11.1, v0.1 Should). Misc quest on the Vicus Tuscus.
+ * misc-insula-nutans "The Leaning Insula" (docs/CONTENT.md §3.3.3; GDD §11.1; v0.1 Should). Misc
+ * quest, persuasion and investigation with a timed evacuation.
  *
- * Juvenal 3.190–196: "we live in a city propped up on slender poles… the agent patches the gaping
- * crack and tells us to sleep soundly with ruin hanging over our heads." Rufina, a weaver on the
- * third floor of the Fulvian block, says the walls are cracking and the agent shrugs. The player
- * examines three places (the stairwell, the ground-floor shop, the party wall), then confronts the
- * agent, Saturninus: persuaded, frightened or paid, he shores the block up; if he refuses, the
- * player warns the tenants to get out, and after nightfall the back wall comes down on an empty
- * house.
+ * Iulia Prima lives on the third floor of an insula on the Vicus Tuscus whose walls crack and whose
+ * floors slope; the landlord's man, Callistus, props it with oak and tells everyone to sleep easy.
  *
- *   start (examine 3) → agent → shored | warn → evacuated → fallen (after 21:00)
+ *   start     find proof the building is failing: three of the five signs (examine points)     → callistus
+ *   callistus confront Callistus: he offers ten denarii to forget it                           → aedile | bribed (fail)
+ *   aedile    report to the aediles' man, Dento, at the Rostra (Persuade, or Fabrica)         → evacuate
+ *   evacuate  warn four households before the first watch                                      → done
+ *   done      the back of the insula came down in the first watch and nobody was under it
+ *
+ * The signs, each an "Examine" point in the insula: the bulging ground-floor wall behind the taberna
+ * (a Fabrica 25 reading counts double), the bowed oak prop on the stair, the crack on the top floor
+ * you can put a hand into, and a coin that rolls the length of Prima's floor (the comic fourth; the
+ * bible's fifth is the Fabrica reading). At sunset (the first watch) the rear wall and the stair fall
+ * (a scripted beat). Households: Prima's own, the cobbler on the ground floor, the old couple on the
+ * stair and the Syrian family under the roof; with the aediles' order in hand (flag 'dento-order')
+ * the tenants go without a check.
  */
 import { beat, placeExamine, removeExamine } from '../../content/director';
-import { giveItem } from '../../content/questkit';
 import { defineQuest, type QuestContext } from '../types';
 
 export const QUEST_ID = 'misc-insula-nutans';
 
-/** Examine points: interactable id → objective, place and prompt. */
-const CRACKS = [
-  { id: 'nutans-scalae', objective: 'stair', at: 'insula-nutans-scalae', label: 'Cracked stair treads' },
-  { id: 'nutans-taberna', objective: 'shop', at: 'insula-nutans-taberna', label: 'Propped ceiling beam' },
-  { id: 'nutans-paries', objective: 'wall', at: 'insula-nutans-paries', label: 'Fresh plaster on the party wall' },
-] as const;
-
-function placeCracks(q: QuestContext) {
-  for (const c of CRACKS) if (!q.isObjectiveDone(c.objective)) placeExamine(q.game, { id: c.id, at: c.at, label: c.label });
+interface Sign {
+  id: string;
+  at: string;
+  label: string;
+  verb: string;
+  weight: number;
+  note: string;
 }
 
-function examined(q: QuestContext, objective: string) {
-  if (q.stage !== 'start') return;
-  const c = CRACKS.find((x) => x.objective === objective);
-  if (c) removeExamine(c.id);
-  q.completeObjective(objective);
+const SIGNS: Sign[] = [
+  { id: 'nutans-taberna', at: 'insula-nutans-taberna', label: 'The ground-floor wall', verb: 'Examine', weight: 1, note: 'The wall behind the taberna bulges like a stomach after a banquet. Rubble and mortar, and not a course of brick to hold it together.' },
+  { id: 'nutans-scalae', at: 'insula-nutans-scalae', label: 'The propped stair', verb: 'Examine', weight: 1, note: 'An oak prop under the stair, bowed in the middle. Someone has chalked a date on it and then another date, and then the word “soon”.' },
+  { id: 'nutans-tectum', at: 'insula-nutans-tectum', label: 'The crack in the top floor', verb: 'Examine', weight: 1, note: 'A crack in the plaster you can put your hand into. Daylight comes through it.' },
+  { id: 'nutans-cenaculum', at: 'insula-nutans-cenaculum', label: 'Prima’s floor', verb: 'Examine', weight: 1, note: 'You set down a coin. It rolls the whole length of the room, bumps the far wall, and does not come back.' },
+];
+
+const FOUND = 'found';
+
+function found(q: QuestContext): string[] {
+  const v = q.vars[FOUND];
+  return typeof v === 'string' && v ? v.split(',') : [];
+}
+
+function placeSigns(q: QuestContext) {
+  const done = found(q);
+  for (const s of SIGNS) if (!done.includes(s.id)) placeExamine(q.game, { id: s.id, at: s.at, verb: s.verb, label: s.label, height: 1.1 });
+}
+
+function clearSigns() {
+  for (const s of SIGNS) removeExamine(s.id);
+}
+
+function noteSign(q: QuestContext, id: string) {
+  const s = SIGNS.find((x) => x.id === id);
+  if (!s || q.stage !== 'start' || found(q).includes(id)) return;
+  q.vars[FOUND] = [...found(q), id].join(',');
+  q.notify(s.note);
+  let weight = s.weight;
+  // A smith's eye (Fabrica 25) reads the wall for what it is, and counts double.
+  if (id === 'nutans-taberna' && (q.game.player?.sheet?.skillLevel('fabrica') ?? 0) >= 25) {
+    weight = 2;
+    q.setFlag('nutans-fabrica', true);
+    q.notify('Rubble core, no bonding course: cheap work. You could say as much to a magistrate.');
+  }
+  q.vars.evidence = (Number(q.vars.evidence) || 0) + weight;
+  q.progress('evidence', weight);
+}
+
+function warnOnce(q: QuestContext, npcId: string) {
+  const warned = typeof q.vars.warnedList === 'string' ? q.vars.warnedList.split(',').filter(Boolean) : [];
+  if (warned.includes(npcId)) return;
+  q.vars.warnedList = [...warned, npcId].join(',');
+  q.progress('warn');
+}
+
+/** The first watch: the rear wall and stair fall. */
+function collapse(q: QuestContext) {
+  if (q.stage !== 'evacuate') return;
+  q.setFlag('nutans-collapsed', true);
+  beat(q.game, QUEST_ID, 'insula-collapses', { at: 'insula-nutans' });
+  q.setStage(q.isObjectiveDone('warn') ? 'done' : 'collapsed');
 }
 
 export default defineQuest({
@@ -40,88 +92,87 @@ export default defineQuest({
   title: 'The Leaning Insula',
   latin: 'Insula Nutans',
   category: 'misc',
-  giver: 'npc-rufina',
-  summary: 'A weaver on the Vicus Tuscus says her insula is cracking, and the landlord’s agent shrugs.',
+  giver: 'npc-prima',
+  summary: 'The walls of Iulia Prima’s insula crack and the floors slope, and the landlord’s man tells everyone to sleep easy.',
   stages: {
     start: {
-      journal: 'Rufina weaves on the third floor of the Fulvian block on the Vicus Tuscus. She says the walls have started to talk at night, creaking like a ship, and the cracks grow wider every week. The agent, Saturninus, plasters over them and tells the tenants to sleep soundly. She wants someone to look with fresh eyes before it falls on her loom, or on her.',
+      journal: 'Iulia Prima lives on the third floor of an insula on the Vicus Tuscus. The walls crack, the floors slope, and the landlord’s man, Callistus, props it all up with timber and tells everyone to sleep easy.',
+      objectives: [{ id: 'evidence', text: 'Find proof the building is failing', count: 3, target: { kind: 'location', id: 'insula-nutans' } }],
+      onEnter: (q) => placeSigns(q),
+      next: 'callistus',
+    },
+    callistus: {
+      journal: 'I took what I had found to Callistus.',
+      objectives: [{ id: 'confront', text: 'Confront Callistus', target: { kind: 'npc', id: 'npc-callistus' } }],
+      onEnter: () => clearSigns(),
+      next: 'aedile',
+    },
+    aedile: {
+      journal: 'The aediles answer for walls that fall on the public. Their man in the Forum is called Dento, and he hates scandal more than he hates work.',
+      objectives: [{ id: 'report', text: 'Report the building to the aediles’ man, Dento, by the Rostra', target: { kind: 'npc', id: 'npc-dento' } }],
+      next: 'evacuate',
+    },
+    evacuate: {
+      journal: 'Dento ordered the building emptied before dark. The tenants did not believe him either.',
       objectives: [
-        { id: 'stair', text: 'Examine the stairwell', target: { kind: 'location', id: 'insula-nutans-scalae' } },
-        { id: 'shop', text: 'Examine the ground-floor shop', target: { kind: 'location', id: 'insula-nutans-taberna' } },
-        { id: 'wall', text: 'Examine the party wall', target: { kind: 'location', id: 'insula-nutans-paries' } },
+        { id: 'warn', text: 'Get the tenants out before nightfall', count: 4, target: { kind: 'location', id: 'insula-nutans' } },
       ],
-      onEnter: placeCracks,
-      next: 'agent',
-    },
-    agent: {
-      journal: 'The stair treads have pulled a finger’s width away from the wall. In the shop the main ceiling beam is split and propped on an old ship’s mast. The party wall bulges like a sail, and someone has plastered over its crack, recently, in a hurry. Saturninus keeps his table in the ground-floor shop.',
-      objectives: [{ id: 'confront', text: 'Confront Saturninus, the owner’s agent', target: { kind: 'npc', id: 'npc-saturninus' } }],
-    },
-    warn: {
-      journal: 'Saturninus laughed at me. “Every wall in Rome has cracks. It’s called character.” If he won’t shore the block up, the tenants have to get out before it comes down.',
-      objectives: [{ id: 'warn', text: 'Warn Rufina to get the tenants out tonight', target: { kind: 'npc', id: 'npc-rufina' } }],
-      next: 'evacuated',
-    },
-    evacuated: {
-      journal: 'Rufina went door to door. By dusk the upper floors were empty: the tenants slept with cousins, in the porticoes and in the popina. Saturninus watched from his table and said they would all be back tomorrow, paying.',
-      objectives: [{ id: 'night', text: 'Wait for nightfall', optional: true }],
-    },
-    fallen: {
-      journal: 'In the second hour of the night the back wall of the Fulvian block came down into the alley with a noise like the end of the world. Nobody was inside. In the morning the vigiles were measuring the rubble and Saturninus was nowhere to be found.',
       onEnter: (q) => {
-        beat(q.game, QUEST_ID, 'insula-collapse', { at: 'insula-nutans-paries' });
-        q.giveReward({ denarii: 4, reputation: [{ faction: 'plebs', amount: 5 }] });
-        giveItem(q, 'fascinum');
+        if (q.flag('dento-order')) q.notify('Dento’s order will move most of them.');
+      },
+    },
+    done: {
+      journal: 'The back of the insula came down in the first watch, and nobody was under it. Callistus has not been seen since. Prima says her husband built half the Forum and never once a wall like that.',
+      onEnter: (q) => {
+        q.setFlag('callistus-fled', true);
+        q.giveReward({ denarii: 20, skillXp: ['rhetoric'] });
         q.game.standing?.addFame('dist-velabrum-boarium', 10);
-        q.setFlag('nutans.fallen', true);
       },
       end: 'complete',
     },
-    shored: {
-      journal: 'Saturninus gave in. By the afternoon a builder’s gang was wedging props under the beam and shoring the party wall with timbers, and the third floor slept at a cousin’s for a few nights. Rufina says the walls have stopped talking. I don’t think the building has stopped thinking about it.',
+    collapsed: {
+      journal: 'I was too slow. The back of the insula came down in the first watch, with people still inside. They are still digging. Prima will not look at me.',
+      onEnter: (q) => q.game.standing?.addFame('dist-velabrum-boarium', -5),
+      end: 'fail',
+    },
+    bribed: {
+      journal: 'I took Callistus’ ten denarii. In the first watch the back of the insula came down. They are still digging.',
       onEnter: (q) => {
-        q.giveReward({ denarii: 6, skillXp: ['rhetoric'] });
-        q.game.standing?.addFame('dist-velabrum-boarium', 5);
-        q.setFlag('nutans.shored', true);
+        q.game.standing?.addFame('dist-velabrum-boarium', -15);
+        q.game.devotion?.losePietas(10);
+        q.setFlag('nutans-bribed', true);
+        // The world side stages the collapse at the first watch (two tenants die, Prima curses the player by description).
+        q.setFlag('nutans-collapse-pending', true);
+        clearSigns();
       },
-      end: 'complete',
+      end: 'fail',
     },
   },
   triggers: {
     'dialogue:node': (q, e) => {
-      if (e.dialogueId === 'npc-rufina' && e.nodeId === 'accept') q.start();
+      if (e.dialogueId === 'npc-prima' && e.nodeId === 'offerAccept') q.start();
     },
   },
   on: {
     'content:interact': (q, e) => {
-      const c = CRACKS.find((x) => x.id === e.id);
-      if (c) examined(q, c.objective);
-    },
-    'location:entered': (q, e) => {
-      const c = CRACKS.find((x) => x.at === e.locationId);
-      if (c) examined(q, c.objective);
-    },
-    'save:loaded': (q) => {
-      if (q.stage === 'start') placeCracks(q);
+      if (e.id.startsWith('nutans-')) noteSign(q, e.id);
     },
     'dialogue:node': (q, e) => {
-      if (e.dialogueId === 'npc-saturninus' && q.stage === 'agent') {
-        if (e.nodeId === 'agrees') {
-          q.completeObjective('confront');
-          q.setStage('shored');
-        }
-        if (e.nodeId === 'refuses') {
-          q.completeObjective('confront');
-          q.setStage('warn');
-        }
+      if (e.dialogueId === 'npc-callistus' && q.stage === 'callistus') {
+        if (e.nodeId === 'confronted') q.completeObjective('confront');
+        if (e.nodeId === 'bribed') q.setStage('bribed');
       }
-      if (e.dialogueId === 'npc-rufina' && e.nodeId === 'warned' && q.stage === 'warn') q.completeObjective('warn');
+      if (e.dialogueId === 'npc-dento' && e.nodeId === 'ordered' && q.stage === 'aedile') q.completeObjective('report');
+      if (q.stage === 'evacuate') {
+        if (e.dialogueId === 'npc-nutans-tenants' && e.nodeId === 'warned') warnOnce(q, e.npcId);
+        if (e.dialogueId === 'npc-prima' && e.nodeId === 'p-evacuate') warnOnce(q, 'npc-prima');
+      }
     },
-    'time:hour': (q, e) => {
-      if (q.stage === 'evacuated' && (e.hour >= 21 || e.hour < 4)) {
-        q.completeObjective('night');
-        q.setStage('fallen');
-      }
+    'time:hour': (q) => {
+      if ((q.game.time?.hour ?? 0) >= 19.1) collapse(q);
+    },
+    'save:loaded': (q) => {
+      if (q.stage === 'start') placeSigns(q);
     },
   },
 });

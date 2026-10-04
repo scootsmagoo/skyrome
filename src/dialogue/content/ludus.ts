@@ -1,360 +1,318 @@
 /**
- * Dialogue for the Ludus Magnus (lud-01-sacramentum): the procurator (sign on as a paid guest or
- * swear the oath, the explicit crossroad of GDD §9.1), Glaucus the doctor (starts each practice
- * bout, trains Blades), Bassus at the armory (rudis plus scutum or parmula), Eudemus the medicus,
- * Nereus (missio), and the recruits Pullus and Callinicus.
- * Node ids the quest reacts to: procurator 'offer' / 'signedGuest' / 'signedOath' / 'paid'; Bassus
- * 'issueScutum' / 'issueParmula'; Glaucus 'fight1'…'fight3'; Nereus 'mitte' / 'iugula'; Eudemus 'patched'.
+ * The Ludus Magnus (docs/CONTENT.md §3.2.1, lud-01-sacramentum): Glaucus the doctor (sign on as a
+ * guest or swear the oath), Successus at the armory (kit), Asiaticus the referee (calls the three
+ * bouts), Auctus the thraex (the Mus topic), Nereus (after the bout, and the missio at its end),
+ * Hermippus the physician (patches you up and tells you to rest until the lamps are lit), the
+ * procurator Celer and the tiro Pullus. Node ids the quest reacts to:
+ *
+ *   npc-glaucus      n0 (offer; starts the quest), signedGuest, signedOath
+ *   npc-successus    issueScutum, issueParmula, issueOwn
+ *   npc-asiaticus    begin1, begin2, begin3
+ *   npc-auctus       mus (the clue; also completes mq-02 'ask')
+ *   npc-nereus       spared, struck (the missio choice)
+ *   npc-hermippus    patched
  */
-import { completed, female, objectiveDone, outcome, questVar, running, stage, treat } from '../../content/talk';
+import { completed, female, hourNow, outcome, questVar, rotate, running, stage, treat } from '../../content/talk';
+import { person } from '../../content/people';
 import { defineDialogue, type DialogueContext } from '../types';
 
 const LUD = 'lud-01-sacramentum';
-const signed = (c: DialogueContext) => objectiveDone(c, LUD, 'sign');
-const bout = (c: DialogueContext) => Number(questVar(c, LUD, 'bout')) || 0;
+const MQ2 = 'mq-02-tabella';
+const STAGES = ['start', 'kit', 'bout1', 'bout2', 'bout3', 'missio', 'done', 'done-half'];
+/** How far lud-01 has got (−1 before it starts; the end stages count as the last). */
+const reached = (c: DialogueContext, s: string) => {
+  const q = c.quest(LUD);
+  if (!q || (!q.running && !q.done)) return false;
+  return STAGES.indexOf(q.stage) >= STAGES.indexOf(s);
+};
+const boutOn = (c: DialogueContext) => Number(questVar(c, LUD, 'bout')) || 0;
 
-const procurator = defineDialogue({
-  id: 'npc-attius-celer',
-  npcs: ['npc-attius-celer'],
-  start: (c) => {
-    const s = stage(c, LUD);
-    if (s === 'purse') return 'purse';
-    if (s === 'start' && !signed(c)) return 'greet';
-    if (!running(c, LUD) && !completed(c, LUD)) return 'greet';
-    return 'busy';
-  },
-  nodes: {
-    greet: {
-      text: 'Sextus Attius Celer, procurator of the Ludus Magnus, the emperor’s school. If you came to gawp, the balconies cost an as. If you came to fight, you are a fool or you are broke.',
-      choices: [
-        { text: 'I want to fight.', goto: 'offer' },
-        { text: 'I’m looking for a man who hires knives.', goto: 'knives', once: true },
-        { text: 'Vale.', end: true },
-      ],
-    },
-    knives: {
-      text: 'Then you are in the wrong building, or the right one. Half the men in here could hire out a knife. Sign on and ask in the barracks. Nobody talks to tourists.',
-      choices: [
-        { text: 'Then I’ll sign on.', goto: 'offer' },
-        { text: 'Vale.', end: true },
-      ],
-    },
-    offer: {
-      text: (c) =>
-        `${female(c) ? 'A woman? It is legal, it is rare, and the crowd will either love you or eat you. Gladiatrices fill the benches. ' : ''}Two ways in. As a paid guest: practice bouts with practice arms, a purse by the crowd’s mood, and you walk out a free citizen with your good name. Or you swear the oath. “To be burned, bound, beaten and killed by the sword.” Then you belong to the school: better bouts, ranks, a share of the glory. And Infamia for life. No gold ring, ever, and decent people cross the street.`,
-      choices: [
-        { text: 'As a paid guest.', goto: 'signedGuest' },
-        { text: 'I’ll swear the oath. [Infamia +20; join the Ludus as a tiro; it blocks equestrian rank]', goto: 'oathConfirm' },
-        { text: 'Let me think about it.', end: true },
-      ],
-    },
-    oathConfirm: {
-      text: 'Say it after me, then. “Uri, vinciri, verberari, ferroque necari.” To be burned, bound, beaten and killed with the sword. There is no unsaying it.',
-      choices: [
-        { text: '“Uri, vinciri, verberari, ferroque necari.”', goto: 'signedOath', effects: (c) => void c.game.factions?.join('ludus-magnus') },
-        { text: 'No. As a guest.', goto: 'signedGuest' },
-      ],
-    },
-    signedGuest: {
-      text: 'A guest, then. Your name on the roll, your purse at the end. Bassus at the armory will give you a rudis and a shield. Glaucus will try to kill you with them. Don’t let him.',
-      effects: (c) => c.setFlag('lud.guest', true),
-      end: true,
-    },
-    signedOath: {
-      text: 'Then you are ours. Here: twenty denarii, the oath money. Spend it before Glaucus finds out you have it. Bassus at the armory, then Glaucus at the posts.',
-      effects: (c) => c.receive(20),
-      end: true,
-    },
-    busy: {
-      text: 'Bouts are Glaucus’ business; money is mine. Something to buy? Arena kit, at the emperor’s prices, which are not low.',
-      choices: [
-        { text: 'Show me your wares.', end: true, effects: (c) => c.openService('barter') },
-        { text: 'Vale.', end: true },
-      ],
-    },
-    purse: {
-      text: (c) => `(He counts on an abacus without looking at it.) Three bouts, ${questVar(c, LUD, 'spared') === true ? 'missio granted to the crowd’s liking, ' : ''}the balconies in a good mood. ${Number(questVar(c, LUD, 'losses')) > 0 ? 'Less the doctor’s time. ' : ''}Here is your purse. The armory wants its kit back.`,
-      choices: [{ text: 'My thanks.', goto: 'paid' }],
-    },
-    paid: {
-      text: 'Come back when there are real games. Guests who draw a crowd draw a purse.',
-      end: true,
-    },
-  },
-});
+// ------------------------------------------------------------------ Glaucus
 
 const glaucus = defineDialogue({
   id: 'npc-glaucus',
   npcs: ['npc-glaucus'],
+  priority: 80,
   start: (c) => {
-    const s = stage(c, LUD);
-    if (bout(c)) return 'fighting';
-    if (s === 'start') return 'notSigned';
-    if (s === 'armory') return 'noKit';
-    if (s === 'bout1') return 'ready1';
-    if (s === 'bout2') return 'ready2';
-    if (s === 'bout3') return 'ready3';
-    if (s === 'missio') return 'missioHint';
-    if (s === 'purse' || completed(c, LUD)) return 'after';
-    return 'greet';
+    const q = c.quest(LUD);
+    if (q?.done) return 'd0';
+    if (q?.running && q.stage !== 'start') return boutOn(c) ? 'fighting' : 'g0';
+    return 'n0';
   },
   nodes: {
-    greet: {
-      text: '(A grey-haired man with a face like a mended pot watches the recruits hack at the posts.) Glaucus. I teach men to die well, and some of them learn to live instead. What do you want?',
+    n0: {
+      text: 'Look at your feet. No, don’t look at them, I’m looking at them. You stand like a baker. What do you want, baker?',
       choices: [
-        { text: 'Teach me. [Training: Blades]', end: true, effects: (c) => c.openService('train') },
-        { text: 'Who are you?', goto: 'who', once: true },
+        { text: 'To fight.', goto: 'n1' },
+        { text: 'I’m looking for a man who fights with a curved blade.', if: (c) => stage(c, MQ2) === 'gratus', goto: 'n0b' },
+        { text: 'To fight. Does that bother you?', if: female, goto: 'n0f' },
+        { text: 'Just looking.', end: true },
+      ],
+    },
+    n0b: { text: 'Half my thraeces fight with a curved blade. Fight first, ask later; the ones who know won’t talk to a stranger.', next: 'n1' },
+    n0f: { text: 'Bother me? Domitian had women fighting by torchlight, and the crowd nearly tore the benches out. They’ll love you twice as fast and the matrons will hate you twice as hard. That’s your business. Fighting is mine.', next: 'n1' },
+    n1: {
+      text: 'Two ways onto my sand. Guest: you fight for a purse, you go home at night, you’re nobody’s. Or the oath: “to be burned, bound, beaten and killed by the sword.” Sworn men get ranks, and a name the crowd knows. And a stain that never washes out.',
+      choices: [
+        { text: 'As a guest.', goto: 'n2' },
+        { text: 'Tell me exactly what the oath costs.', goto: 'n3' },
+        { text: 'I’ll swear the oath.', goto: 'n4' },
+      ],
+    },
+    n2: { text: 'Sensible. Guests are paid three denarii a practice bout and they bleed the same. Go and see Successus.', next: 'signedGuest' },
+    signedGuest: { speaker: 'player', text: '(You are on the roll as a paid guest. The armory is at the far end of the courtyard.)', effects: (c) => c.setFlag('ludus-status', 'guest'), end: true },
+    n3: {
+      speaker: 'player',
+      text: 'SACRAMENTVM GLADIATORIVM — Swearing makes you an auctoratus: Infamia +20 at once (it never falls below 10 again), a bar to the equestrian ring while Infamia is above 20, and every public bout adds +2. In return: the Ludus ranks (tiro → rudiarius), the crowd’s recognition, better purses.',
+      next: 'n1',
+    },
+    n4: {
+      text: 'Then say it after me, and mean it: uri, vinciri, verberari, ferroque necari.',
+      choices: [
+        { text: '“Uri, vinciri, verberari, ferroque necari.”', goto: 'n5', effects: (c) => void c.game.factions?.join('ludus-magnus') },
+        { text: 'On second thought, as a guest.', goto: 'n2' },
+      ],
+    },
+    n5: { text: 'Welcome, tiro. Now you belong to the sand, and the sand belongs to Caesar. Successus will give you wood. Earn iron.', next: 'signedOath' },
+    signedOath: { speaker: 'player', text: '(You have sworn the gladiator’s oath. Infamia stains you for life.)', effects: (c) => c.setFlag('ludus-status', 'auctoratus'), end: true },
+    // ---- while the bouts are on
+    g0: { text: 'Successus has your kit. Then Asiaticus has your bout. Go.', end: true },
+    fighting: { text: 'Eyes on him, not on me!', end: true },
+    // ---- afterwards
+    d0: {
+      text: 'Again? Good. Not today. Your arms are lying to you; they say they’re fine.',
+      choices: [
+        { text: 'The man with the curved blade. Who?', if: (c) => stage(c, MQ2) === 'gratus' && !c.flag('clue-mus'), check: { skill: 'rhetoric', difficulty: 25, pass: 'd1', fail: 'd2' } },
+        { text: 'Train me.', end: true, effects: (c) => c.openService('train') },
+        { text: 'Farewell.', end: true },
+      ],
+    },
+    d1: { text: 'Ask Auctus about the Mouse. And don’t tell him I said so.', effects: (c) => c.setFlag('clue-mus', true), end: true },
+    d2: { text: 'I train fighters, not informers. Ask the thraeces yourself.', end: true },
+  },
+});
+
+// ------------------------------------------------------------------ Successus (kit and arena stock)
+
+const successus = defineDialogue({
+  id: 'npc-successus',
+  npcs: ['npc-successus'],
+  priority: 80,
+  start: (c) => (stage(c, LUD) === 'kit' ? 'k0' : 'hub'),
+  nodes: {
+    k0: {
+      text: 'One rudis, one shield, one signature. Bring them back or I’ll know. Which shield: the big curved scutum, or the little thraex parmula?',
+      choices: [
+        { text: 'The scutum.', goto: 'issueScutum' },
+        { text: 'The parmula.', goto: 'issueParmula' },
+        { text: 'I’ll bring my own shield.', if: (c) => !!c.game.player?.inventory?.equipped('offHand'), goto: 'issueOwn' },
+      ],
+    },
+    issueScutum: { text: '(He hands you a scarred wooden sword and a battered shield stamped LVD·MAG. He makes you sign for both.) That scutum has blocked more blows than you’ve thrown. Wood for practice, iron for Caesar.', end: true },
+    issueParmula: { text: '(He hands you a scarred wooden sword and a small square shield with the paint flaked off. He makes you sign for both.) The parmula doesn’t forgive a slow arm. Wood for practice, iron for Caesar.', end: true },
+    issueOwn: { text: 'Your own shield, then. The sword stays mine: real steel is refused at a lusio. Wood, or nothing.', end: true },
+    hub: {
+      text: (c) => rotate(c, '_hub', ['One rudis, one shield, one signature. Bring them back or I’ll know.', 'Wood for practice, iron for Caesar.', 'That scutum has blocked more blows than you’ve thrown.']),
+      choices: [
+        { text: 'What do you keep for sale?', if: (c) => completed(c, LUD) || !!c.game.player?.inventory?.count('rudis'), end: true, effects: (c) => c.openService('barter') },
         { text: 'Vale.', end: true },
       ],
     },
-    who: {
-      text: 'Thracian. Born by the Hebrus, sold at nine, on the sand at fifteen. Forty-two bouts. The emperor gave me the wooden sword at the Dacian triumph games, and now I teach his school to hold a shield.',
-      next: 'greet',
-    },
-    notSigned: {
-      text: 'Not on the roll, not on my sand. The procurator’s office is by the gate.',
-      end: true,
-    },
-    noKit: {
-      text: 'Practice arms only on my sand. Bassus at the armory. Go.',
-      end: true,
-    },
+  },
+});
+
+// ------------------------------------------------------------------ Asiaticus (the referee)
+
+const asiaticus = defineDialogue({
+  id: 'npc-asiaticus',
+  npcs: ['npc-asiaticus'],
+  priority: 80,
+  start: (c) => {
+    const s = stage(c, LUD);
+    if (s === 'bout1' || s === 'bout2' || s === 'bout3') {
+      if (boutOn(c)) return 'calls';
+      // After a refused missio the doctor keeps the player off the sand for an hour.
+      if (Number(questVar(c, LUD, 'retryAfter')) > (c.game.time?.totalHours ?? 0)) return 'rest';
+      return `ready${s.slice(4)}`;
+    }
+    if (s === 'kit') return 'needKit';
+    return 'hub';
+  },
+  nodes: {
     ready1: {
-      text: 'Pullus. A recruit, like you: good arms, no head. Practice arms knock you down, they don’t cut. Block, then hit him while his arm is out. Ready?',
-      choices: [
-        { text: 'Ready.', enabled: (c) => c.hasItem('rudis'), goto: 'fight1' },
-        { text: 'Teach me first. [Training: Blades]', end: true, effects: (c) => c.openService('train') },
-        { text: 'Not yet.', end: true },
-      ],
+      text: 'Pullus, a boy from Capua, against the guest! Practice arms! Parry with the shield, riposte on the beat, and dodge when you can’t parry. Lock on with X; the crowd likes a man who looks his enemy in the face.',
+      choices: [{ text: 'Ready.', goto: 'begin1' }, { text: 'One moment.', end: true }],
     },
     ready2: {
-      text: 'Callinicus. A thraex: the curved sica comes round your shield, low. His parmula is small and he makes it big. Don’t chase him. Ready?',
-      choices: [
-        { text: 'Ready.', enabled: (c) => c.hasItem('rudis'), goto: 'fight2' },
-        { text: 'Not yet.', end: true },
-      ],
+      text: 'Auctus the thraex! Eighteen wins! He fights low and he hooks round your shield: a block is not a wall. Dodge, circle, and mind the parmula.',
+      choices: [{ text: 'Ready.', goto: 'begin2' }, { text: 'One moment.', end: true }],
     },
     ready3: {
-      text: '(He hands you a scrap of papyrus.) A recruit wrote these notes. Read them. Then go and get netted. Nereus has won thirty-one times with real steel; with wood he’s worse, because he’s bored. Ready?',
-      effects: (c) => {
-        if (!c.memory.gaveNotes) {
-          c.memory.gaveNotes = true;
-          c.giveItem('libellus-tironis');
-        }
-      },
+      text: (c) => `Nereus! Retiarius! Victor of thirty-one! ${female(c) ? 'And the crowd has heard there is a woman on the sand today. ' : ''}Watch the net: when he twirls it, step aside. If it lands, keep your shield up and pull. When he drops to one knee, the sand will be silent. The crowd asks, and you decide.`,
+      choices: [{ text: 'Ready.', goto: 'begin3' }, { text: 'One moment.', end: true }],
+    },
+    begin1: { text: 'A horn! Shields up! The sand is hungry!', end: true },
+    begin2: { text: 'A horn! Step apart when I say, not before!', end: true },
+    begin3: { text: 'A horn! Fight!', end: true },
+    calls: { text: 'Step apart! Step apart, I said, or I’ll part you.', end: true },
+    rest: { text: 'The doctor says an hour. I say an hour. Sit, drink water, and try not to look at the net.', end: true },
+    needKit: { text: 'A guest without a rudis on my sand? Successus at the armory, quickly, and bring wood, not iron.', end: true },
+    hub: {
+      text: (c) => rotate(c, '_hub', ['Shields up! The sand is hungry!', 'A finger! He raises a finger! Ad digitum!', 'The crowd asks: Mitte! or Iugula? Today, it asks Mitte!']),
       choices: [
-        { text: 'Ready.', enabled: (c) => c.hasItem('rudis'), goto: 'fight3' },
-        { text: 'Not yet.', end: true },
-      ],
-    },
-    fight1: { text: 'Pullus! A guest for you. Begin!', end: true },
-    fight2: { text: 'Callinicus! Begin!', end: true },
-    fight3: { text: 'Nereus! Your guest. Begin!', end: true },
-    fighting: {
-      text: 'Fight! Don’t talk to me, talk to him!',
-      end: true,
-    },
-    missioHint: {
-      text: 'He’s asking. Look at the balconies, look at him, and decide. Your bout, your call.',
-      end: true,
-    },
-    after: {
-      text: (c) => {
-        if (outcome(c, LUD) === 'done' || stage(c, LUD) === 'purse') {
-          if (questVar(c, LUD, 'spared') === true) return 'You gave him missio. Good. The crowd will remember that, and so will he.';
-          if (questVar(c, LUD, 'spared') === false) return 'You’d have cut his throat with a wooden sword. The balconies loved it. I didn’t.';
-        }
-        return 'Still standing. That puts you ahead of most guests.';
-      },
-      choices: [
-        { text: 'Teach me. [Training: Blades]', end: true, effects: (c) => c.openService('train') },
-        { text: 'The knife-men at the Porta Capena were paid by a trainer with scarred arms.', if: (c) => !!(c.flag('mq01.trainerLead') || c.flag('mq01.festusLead')) || running(c, 'mq-02-tabella'), goto: 'lead', once: true },
+        { text: 'Teach me to hold a shield.', if: (c) => completed(c, LUD), end: true, effects: (c) => c.openService('train') },
         { text: 'Vale.', end: true },
       ],
     },
-    lead: {
-      text: '(He stops watching the posts.) Scarred like ladders? That’s half the trainers in Rome. But there’s one I threw out at the Kalends. Not one of mine: from the Dacian school next door. Came in to sell knives to my boys. If he hires grassatores, he does it on the Vicus Tuscus, in the Cockerel. (He goes back to the posts.) You didn’t hear it from me.',
-      effects: (c) => c.setFlag('lud01.lead', true),
+  },
+});
+
+// ------------------------------------------------------------------ Auctus (the thraex)
+
+const auctus = defineDialogue({
+  id: 'npc-auctus',
+  npcs: ['npc-auctus'],
+  priority: 80,
+  start: (c) => (reached(c, 'bout3') ? 'a0' : 'b0'),
+  nodes: {
+    b0: {
+      text: 'After the bout, stranger. I don’t talk to people I haven’t hit.',
+      choices: [
+        { text: 'A courier was knifed at the Capena Gate. Up from under, with a curved blade.', check: { skill: 'rhetoric', difficulty: 40, pass: 'mus', fail: 'b1' } },
+        { text: 'After the bout, then.', end: true },
+      ],
+    },
+    b1: { text: 'Hm. After the bout.', end: true },
+    a0: {
+      text: 'Good bout. You parry like a man who’s been hit a lot. That’s a compliment.',
+      choices: [
+        { text: 'A courier was knifed this morning with a stroke from below, a curved blade.', if: (c) => stage(c, MQ2) === 'gratus' || (!!c.flag('clue-curved-blade') && !c.flag('clue-mus')), goto: 'mus' },
+        { text: 'How do I beat Nereus?', goto: 'a1' },
+        { text: 'Farewell.', end: true },
+      ],
+    },
+    a1: { text: 'Don’t be where the net lands. If it lands on you, raise your shield and pull; he always follows with a big slow poke. And don’t let him make you run; the crowd hates a runner.', next: 'a0' },
+    mus: {
+      text: 'Up from under, like a thraex finishing a man on his knees? That’s our stroke. Nobody uses it in the street… except Dizas. The Mouse. Glaucus threw him out last winter for stealing a cloak from the Saniarium. Now he runs knife-men out of a burned taberna off the Vicus Tuscus.',
+      effects: (c) => c.setFlag('clue-mus', true),
       end: true,
     },
   },
 });
 
-const bassus = defineDialogue({
-  id: 'npc-bassus',
-  npcs: ['npc-bassus'],
-  start: (c) => {
-    const s = stage(c, LUD);
-    if (s === 'armory') return 'issue';
-    if (s && ['bout1', 'bout2', 'bout3'].includes(s) && !c.hasItem('rudis')) return 'reissue';
-    return 'greet';
-  },
-  nodes: {
-    issue: {
-      text: 'New guest? Rudis first. (He hands you a wooden sword worn smooth by a hundred hands.) It’s wood, but it will break your teeth. Now the shield. A scutum: the big curved one, slow and safe. Or a parmula: the little thraex square, quick and dangerous. Choose.',
-      choices: [
-        { text: 'The scutum.', goto: 'issueScutum' },
-        { text: 'The parmula.', goto: 'issueParmula' },
-      ],
-    },
-    reissue: {
-      text: 'Lost your kit at the gate? It came back to me. It always does. Scutum or parmula?',
-      choices: [
-        { text: 'The scutum.', goto: 'issueScutum' },
-        { text: 'The parmula.', goto: 'issueParmula' },
-      ],
-    },
-    issueScutum: {
-      text: 'Sensible. Sensible men live longer and bore the crowd. Bring it back with all its pieces.',
-      end: true,
-    },
-    issueParmula: {
-      text: 'Brave, or foolish. Same thing on the sand. Bring it back with all its pieces.',
-      end: true,
-    },
-    greet: {
-      text: 'Bassus, armory. Nothing leaves without my mark, and nothing comes back without a dent.',
-      choices: [
-        { text: 'What is the rudis for, really?', goto: 'rudis', once: true },
-        { text: 'Vale.', end: true },
-      ],
-    },
-    rudis: {
-      text: 'Practice, mostly. But when a man has fought long enough and well enough, the emperor hands him one in the arena, and then he is free. A wooden sword is the most valuable thing in this building.',
-      next: 'greet',
-    },
-  },
-});
-
-const eudemus = defineDialogue({
-  id: 'npc-eudemus',
-  npcs: ['npc-eudemus'],
-  start: (c) => (stage(c, LUD) === 'purse' && !c.memory.patchedFree ? 'free' : 'greet'),
-  nodes: {
-    free: {
-      text: 'Sit. Show me. (He probes, tuts and binds.) Nothing broken. Bruises like a painted wall. This one is on the emperor. Now rest until evening: wait somewhere quiet, and drink water, not wine.',
-      effects: (c) => {
-        c.memory.patchedFree = true;
-        treat(c);
-      },
-      next: 'patched',
-    },
-    greet: {
-      text: 'Eudemus, medicus of the school. I sew men up so that they can be cut again. You need something?',
-      choices: [
-        { text: 'Treat my wounds. [2 den.]', enabled: (c) => c.denarii() >= 2, goto: 'patched', effects: (c) => (c.pay(2), treat(c)) },
-        { text: 'I want bandages and remedies.', end: true, effects: (c) => c.openService('barter') },
-        { text: 'Where did you learn medicine?', goto: 'medicine', once: true },
-        { text: 'Vale.', end: true },
-      ],
-    },
-    medicine: {
-      text: 'Alexandria, then Pergamon, then here, because the emperor’s gladiators pay better than philosophers. Celsus says a surgeon needs a steady hand and a heart without pity. I have the hand.',
-      next: 'greet',
-    },
-    patched: {
-      text: 'There. Keep it clean. If it smells, come back.',
-      end: true,
-    },
-  },
-});
+// ------------------------------------------------------------------ Nereus
 
 const nereus = defineDialogue({
   id: 'npc-nereus',
   npcs: ['npc-nereus'],
+  priority: 80,
   start: (c) => {
-    const s = stage(c, LUD);
-    if (s === 'missio') return 'kneeling';
-    if (s === 'bout3' && bout(c)) return 'fighting';
-    if (questVar(c, LUD, 'spared') === true) return 'friendly';
-    if (questVar(c, LUD, 'spared') === false) return 'cold';
-    return 'greet';
+    const q = c.quest(LUD);
+    if (q?.running && q.stage === 'missio') return 'm0';
+    if (q?.done) return 'r0';
+    return 'idle';
   },
   nodes: {
-    kneeling: {
-      text: '(Nereus is down on one knee, his net trampled into the sand, one finger raised. The balconies roar, half “Mitte!”, half “Iugula!”. He looks up at you and waits.)',
+    // ---- the missio (a lusio: nobody dies, and the winner decides)
+    m0: {
+      speaker: 'player',
+      text: '(Nereus kneels on the sand, one finger raised, ad digitum. The benches are on their feet. Asiaticus lifts his staff and waits for you.)',
       choices: [
-        { text: '“Mitte!” Let him go. [Grant missio]', goto: 'mitte' },
-        { text: '“Iugula!” [Refuse missio]', goto: 'iugula' },
+        { text: 'Spare him. Mitte!', goto: 'spared' },
+        { text: 'Strike the yielded man.', goto: 'struck' },
       ],
     },
-    mitte: {
-      text: '(The balconies cheer. Nereus gets up slowly, picks up his net and touches it to his forehead in your direction.) Thirty-one and one. I will remember the one.',
-      effects: (c) => c.changeDisposition(10),
+    spared: {
+      text: (c) => (c.flag('lud01-favor') && Number(c.flag('lud01-favor')) >= 50 ? 'Mitte! Mitte! Mitte!' : 'Mitte! Mitte!') + ' (Nereus laughs and catches the hand you offer.) “Again, one day. With iron, if Caesar pays for it.”',
+      effects: (c) => {
+        c.game.devotion?.sparedYielded();
+        c.game.standing?.addFame('dist-vallis-colossei', 2);
+        c.game.factions?.addReputation('plebs', 2);
+        c.setFlag('nereus-spared', true);
+      },
       end: true,
     },
-    iugula: {
-      text: '(You raise the wooden sword. Glaucus is between you before it comes down.) “Practice arms, tiro! This is a lusio, not a butcher’s yard!” (Nereus looks at you for a long moment, and spits in the sand.)',
-      effects: (c) => c.changeDisposition(-10),
+    struck: {
+      text: '(Asiaticus’ staff is there before your blade is. The benches boo.) “In a lusio, citizen, nobody dies. Not today.”',
+      effects: (c) => {
+        c.game.factions?.addReputation('ludus-magnus', -5);
+        c.setFlag('nereus-spared', false);
+      },
       end: true,
     },
-    fighting: {
-      text: '(The net turns once, twice…)',
-      end: true,
-    },
-    greet: {
-      text: '(He doesn’t stop coiling the net.) Fish come to the net. You came to the Ludus. Same thing.',
+    // ---- after the bout (dlg-lud01-nereus)
+    r0: {
+      text: 'You blocked my net with your shield. Nobody does that. Everybody tries to run.',
       choices: [
-        { text: 'Thirty-one wins?', goto: 'wins', once: true },
-        { text: 'How do you beat a net?', goto: 'net', once: true },
-        { text: 'Vale.', end: true },
+        { text: 'You were holding back.', goto: 'r1' },
+        { text: 'Teach me the spear.', goto: 'r2' },
+        { text: 'Thirty-one wins. Why are you still here?', goto: 'r3' },
       ],
     },
-    wins: {
-      text: 'Thirty-one. Two missio. One I don’t talk about. The crowd loves a retiarius when he wins and hates him when he loses: no helmet, so they see your face either way.',
-      next: 'greet',
-    },
-    net: {
-      text: 'You don’t beat the net. You beat the man before he throws it. Watch the hand. Step on the second turn. (He smiles.) Or don’t, and I’ll see you on the ground.',
-      next: 'greet',
-    },
-    friendly: {
-      text: 'You. The guest who let me walk off. Come back when the Ludus fights for real; I’ll ask them to pair us.',
-      choices: [
-        { text: 'The knife-men at the Porta Capena: who hires them?', goto: 'lead', once: true },
-        { text: 'Vale.', end: true },
-      ],
-    },
-    lead: {
-      text: 'Ask at the Cockerel on the Vicus Tuscus. The grassatores drink there, and so does a big man from the Dacian school who isn’t welcome here any more. They sleep in the burned taberna down the street.',
-      effects: (c) => (c.setFlag('lud01.lead', true), c.setFlag('hideout.known', true)),
-      end: true,
-    },
-    cold: {
-      text: '(He turns his back on you and goes on coiling the net.)',
+    r1: { text: 'In a lusio? Of course. And so were you, I hope. If not, you have work to do.', next: 'r0' },
+    r2: { text: 'The trident is a spear that changed its mind three times. Come at the eighth hour.', effects: (c) => c.openService('train'), end: true },
+    r3: { text: 'Because the sand is the only place in Rome where everyone can see you’re good at something.', next: 'r0' },
+    idle: {
+      text: (c) => rotate(c, '_idle', ['The net has no edges. Only patience.', 'Thirty-one wins, and I still pray before each one.', 'I mend my nets in the evening. Come back when the sand has had its say.']),
       end: true,
     },
   },
 });
 
-const recruits = defineDialogue({
-  id: 'npc-ludus-gladiators',
-  npcs: ['npc-pullus', 'npc-callinicus'],
-  start: (c) => (c.npcId === 'npc-pullus' ? 'pullus' : 'callinicus'),
+// ------------------------------------------------------------------ Hermippus (the physician)
+
+const hermippus = defineDialogue({
+  id: 'npc-hermippus',
+  npcs: ['npc-hermippus'],
+  priority: 80,
+  start: (c) => (completed(c, LUD) && !c.flag('hermippus-patched') ? 'patch' : 'hub'),
   nodes: {
-    pullus: {
-      text: (c) => (objectiveDone(c, LUD, 'pullus') ? 'You hit like a mule kicks. No hard feelings. Ow.' : 'Pullus. Three weeks a tiro. My arm is lead. Glaucus says it will be iron by the Kalends, if I live.'),
+    patch: {
+      text: 'Lie down. You’ll be a hero tomorrow; today you’re a patient. (He sluices a cut with vinegar, binds a rib, and clucks over a bruise.) Rest till the lamps are lit. Doctor’s orders, and the doctor is me.',
+      effects: (c) => {
+        treat(c);
+        c.setFlag('hermippus-patched', true);
+        c.game.events.emit('rpg:notify', { text: 'Hermippus patches you up. Press T to wait until the lamps are lit.', kind: 'info' });
+      },
+      next: 'patched',
+    },
+    patched: { speaker: 'player', text: '(He sets a cup of watered wine in your hand.)', end: true },
+    hub: {
+      text: (c) => rotate(c, '_hub', ['Vinegar, honey and silence. Mostly silence.', 'The best wound is the one you stepped away from.', 'Lie down. You’ll be a hero tomorrow; today you’re a patient.']),
       choices: [
-        { text: 'Why did you sign the oath?', goto: 'pullusWhy', once: true },
+        { text: 'Treat my wounds. (2 den.)', enabled: (c) => c.denarii() >= 2, effects: (c) => { if (c.pay(2)) treat(c); }, goto: 'treated' },
+        { text: 'What do you sell?', end: true, effects: (c) => c.openService('barter') },
+        { text: 'Teach me. (Medicina)', end: true, effects: (c) => c.openService('train') },
         { text: 'Vale.', end: true },
       ],
     },
-    pullusWhy: {
-      text: 'Debts. My father’s, then mine. Here they feed you twice a day and nobody comes for the rent. And if I live five years, I walk out with a name. Who in the Subura has a name?',
-      end: true,
-    },
-    callinicus: {
-      text: (c) => (objectiveDone(c, LUD, 'callinicus') ? 'Low and round, I said. You listened. Most don’t.' : 'Callinicus, thraex. The parmularii at the Meta Sudans sing my name. Badly.'),
-      choices: [
-        { text: 'There’s a brawl brewing at the Meta Sudans over you.', if: (c) => running(c, 'misc-meta-sudans-rixa'), goto: 'rixa', once: true },
-        { text: 'Vale.', end: true },
-      ],
-    },
-    rixa: {
-      text: 'Over me? (He laughs.) Tell Hilarus to save his voice for the arena. And tell Crispus that Ferox is slow on the left.',
-      end: true,
-    },
+    treated: { text: '(He works quickly, with the air of a man who has seen worse before breakfast.) Done. Don’t thank me; thank Aesculapius, he sends the patients.', next: 'hub' },
   },
 });
 
-export default [procurator, glaucus, bassus, eudemus, nereus, recruits];
+// ------------------------------------------------------------------ the rest of the school
+
+const celer = person({
+  id: 'npc-celer',
+  greet: (c) => `(An heavy equestrian with a gold ring and a slave with tablets at his elbow.) Sextus Attius Celer, procurator of the Ludus Magnus, the emperor’s school. ${hourNow(c) < 12 ? 'Guests sign here' : 'Guests signed this morning'}. The sworn sign there. The dead sign nothing.`,
+  again: ['Each pair costs Caesar more than a ship. Fight like it.', 'The Column will want games. Games want men.', 'Quid vis? Money is my business; blood is Glaucus’.'],
+  topics: [
+    { ask: 'How does the school work?', say: 'Caesar owns the school and the men in it: the sworn, the slaves, the condemned. Paying guests are my idea and they pay for the benches. Everything is in pairs, citizen. Pairs of fighters, pairs of swords, pairs of accounts: what comes in and what goes out.' },
+    { ask: 'I’m looking for a man who hires knives.', say: 'Then you are in the wrong building, or the right one. Half the men in here could hire out a knife. Ask in the barracks. Nobody talks to tourists.', once: true },
+    { ask: 'Is it true Nereus has never been touched?', say: 'In pairs, I said. Thirty-one wins, and a scar for every one of them that he doesn’t show. The crowd prefers legends. I prefer accounts.' },
+  ],
+});
+
+const tirones = person({
+  id: 'npc-ludus-tirones',
+  npcs: ['npc-pullus'],
+  greet: '(A thin boy with a first beard and a wooden sword that is too big for him.) You’re the guest. Glaucus says I’m to hit you. I’m sorry in advance.',
+  again: ['My mother thinks I’m a baker.', 'Go easy. Not too easy. Medium.', 'Is it true they throw roses? Or is it just the bread?'],
+  topics: [
+    { ask: 'Why did you sell yourself to the school?', say: 'Debts. My father’s, then mine. Fifteen hundred sesterces and a year of sand, and then I’m a freeman with a name the crowd knows. Or I’m ash. Glaucus says ash is rare. I’d like to see the statistic.' },
+    { ask: 'Any advice for the bout?', say: 'Block early, strike when he’s tired, and don’t listen to the crowd. They’ll shout for me. They always shout for the one who’s losing.' },
+  ],
+});
+
+export default [glaucus, successus, asiaticus, auctus, nereus, hermippus, celer, tirones];
+

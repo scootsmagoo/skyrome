@@ -21,6 +21,7 @@
 import { LANDMARK_BY_ID, ROADS, BRIDGES, ISLANDS, GATES, type Landmark } from '../data/atlas';
 import type { LocationDef } from '../npc/types';
 import { elevToY, toGame, WORLD_SCALE } from '../world/coords';
+import { onPath } from './route';
 
 type Marker = NonNullable<LocationDef['mapMarker']>;
 
@@ -140,6 +141,7 @@ export const BIBLE_SPOTS: LocationDef[] = [
   spot('insula-tuccii', 'Insula of Tuccius the Cooper', [-55, 420], 8, { mapMarker: 'house' }),
   spot('excubitorium-velabri', 'Watch Post of the Vigiles, Velabrum', [-110, 300], 6, { latin: 'Excubitorium', mapMarker: 'camp', discoverable: true }),
   spot('compitum-velabri', 'Crossroads Shrine of the Velabrum', [-125, 355], 3, { mapMarker: 'temple', discoverable: true }),
+  spot('compitum-boarii', 'Crossroads Shrine of the Cattle Market', [-215, 445], 3, { parent: 'forum-boarium', mapMarker: 'temple', discoverable: true }),
   spot('lacus-velabri', 'Velabrum Basin', [-140, 375], 3),
   spot('fullonica-velabri', 'Fullery of the Velabrum', [-150, 320], 5, { latin: 'Fullonica', mapMarker: 'shop', discoverable: true }),
   spot('pistrinum-velabri', 'Bakery of the Velabrum', [-95, 395], 5, { latin: 'Pistrinum', mapMarker: 'shop', discoverable: true }),
@@ -209,6 +211,35 @@ export const CONTRACT_SPOTS: LocationDef[] = [
   alias('medicus', 'ludus-saniarium', 5),
 ];
 
+/**
+ * Street stations on the golden path (GDD §17.2, the owner's "bland corridor" feedback): the places
+ * where the dawn shift stands, from the gate to the Velabrum. Distances are real metres along
+ * src/content/route.ts, sides real metres to the right of the walking direction (the Circus is on
+ * the left). The ids are what src/npc/content/corridor.ts schedules refer to. [G] positions.
+ */
+function onRoute(id: string, name: string, d: number, side: number, radius: number, extra: Partial<LocationDef> = {}): LocationDef {
+  const [x, z] = onPath(d, side);
+  return { id, name, position: atReal(x, z), radius, discoverable: false, ...extra };
+}
+
+export const STREET_SPOTS: LocationDef[] = [
+  onRoute('capena-intus', 'Inside the Capena Gate', 34, 4, 5, { parent: 'porta-capena' }),
+  onRoute('capena-statio', 'Gate post of the Capena Gate', 60, -5, 5, { parent: 'porta-capena' }),
+  onRoute('via-scopator', 'The Street below the Palatine (sweepers)', 110, 3, 6),
+  onRoute('via-carbonarius', 'Charcoal stand on the Via Appia', 150, -3, 5),
+  onRoute('via-lucernarius', 'Lamp-seller on the Via Appia', 200, 4, 5),
+  onRoute('via-plaustrum', 'The broken cart', 255, 0, 6),
+  onRoute('circi-mimus', 'The mime’s corner at the Circus', 345, -4, 6),
+  onRoute('circi-ficus', 'Fig stall under the Circus arches', 380, -3, 5),
+  onRoute('circi-botularius', 'Sausage stand under the Circus arches', 405, -2, 5),
+  onRoute('circi-factiones', 'The Circus wall (the fans’ graffiti)', 470, -3, 6),
+  onRoute('schola-viae', 'The street school', 520, 4, 6),
+  onRoute('via-aquarius', 'Water stand below the Palatine', 560, -4, 5),
+  onRoute('via-capraria', 'The goat-milk corner', 660, 3, 6),
+  onRoute('via-augur', 'The augur’s post on the Palatine slope', 720, 10, 6),
+  onRoute('via-tusci-alta', 'The upper Vicus Tuscus', 1175, 4, 6),
+];
+
 /** Helper areas only the content uses. */
 export const CONTENT_SPOTS: LocationDef[] = [
   // mq-01: "If the player runs more than 40 m away, the grassatores give up" (CONTENT.md §3.1.1).
@@ -221,7 +252,7 @@ export const CONTENT_SPOTS: LocationDef[] = [
 ];
 
 /** Every location the content installs. */
-export const CONTENT_LOCATIONS: LocationDef[] = [...LANDMARK_LOCATIONS, ...BIBLE_SPOTS, ...FEATURE_LOCATIONS, ...CONTRACT_SPOTS, ...CONTENT_SPOTS];
+export const CONTENT_LOCATIONS: LocationDef[] = [...LANDMARK_LOCATIONS, ...BIBLE_SPOTS, ...FEATURE_LOCATIONS, ...CONTRACT_SPOTS, ...STREET_SPOTS, ...CONTENT_SPOTS];
 
 const KNOWN = new Set(CONTENT_LOCATIONS.map((l) => l.id));
 

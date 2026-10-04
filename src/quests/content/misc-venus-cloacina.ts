@@ -1,60 +1,50 @@
 /**
- * misc-venus-cloacina "What Venus Hides" (GDD §11.1, v0.1 Should). Misc quest in the Forum.
+ * misc-venus-cloacina "What Venus Hides" (docs/CONTENT.md §3.3.4, §5.3 boss-rex-cloacae; GDD §11.1,
+ * §12.4; v0.1 Should). Misc quest, sewer delve and boss.
  *
- * Eros, a money-changer under the porticus of the Basilica Aemilia, has twice seen a thin man come
- * out of nowhere at dusk by the little round shrine of Venus Cloacina (the Purifier, over the
- * Cloaca Maxima), lean over the drain grate as if to pray, and drop something in. The player
- * watches after dusk; a sewer-runner, Mus, comes up through the drain and fights or runs; the
- * packet under the grate holds a lead token stamped REX and a Parthian drachm. Eros knows the coin.
- * The token is the hook into the Cloaca (dun-cloaca-maxima, the Rex Cloacae: v0.2).
+ * Ianuarius, the public slave who looks after the drains, swears someone has been lifting the grate
+ * beside the little round shrine of Venus Cloacina in the Forum. After the second watch a bath-thief
+ * lifts it and drops a bundle of stolen clothes down. The delve itself belongs to the interior cell
+ * `dun-cloaca-maxima` (the world side builds it; it is v0.2 Must, "a 3-room form is enough" for
+ * v0.1). Until that interior exists the quest stages the gang's landing at the old lady's mouth, the
+ * outfall on the Tiber (`cloaca-maxima-outlet`, an atlas landmark): three cloacarii, then the Rex.
+ * When the world registers the place `dun-cloaca-maxima` the descent objective accepts that too.
  *
- *   start (watch after dusk) → runner (deal with Mus; search the grate) → packet (show Eros) → sold | kept | silo
+ *   start    watch the shrine after the second watch                              → descend
+ *   descend  go down into the Cloaca (the outfall, or the interior)              → rex
+ *   rex      three cloacarii, then Saturninus, the Rex Cloacae                    → cache
+ *   cache    search the Rex's cache (the Parthian drachm) and climb out           → done
+ *   done     report to Ianuarius
+ *
+ * The Rex yields at 0 (he fights to the end, he has nowhere to go) and surrenders if the sluice is
+ * opened first or the player talks him down (Persuade or Intimidate 55); the combat/world side
+ * reports those as 'actor:yielded'. His cache (`cista-regis-cloacae`) is a container the installer
+ * places at the landing.
  */
-import { fight, isDusk, placeExamine, removeExamine, say } from '../../content/director';
-import { addFoe, beatFoe, giveItem, takeItem } from '../../content/questkit';
-import type { ItemDef } from '../../rpg/types';
+import { beat, fight, hint, say, spawnEnemy } from '../../content/director';
+import { REX_CLOACAE_PROFILE } from '../../content/profiles';
+import { addFoe, beatFoe, beatenCount } from '../../content/questkit';
 import { defineQuest, type QuestContext } from '../types';
 
 export const QUEST_ID = 'misc-venus-cloacina';
+const GANG = ['cloaca-gang-a', 'cloaca-gang-b', 'cloaca-gang-c'] as const;
+const REX = ['npc-rex-cloacae', 'npc-rex-cloacae~foe'];
+const LANDING = 'cloaca-maxima-outlet';
 
-export const items: ItemDef[] = [
-  {
-    id: 'tessera-regis',
-    name: 'Lead Token Stamped REX',
-    latin: 'tessera plumbea',
-    type: 'misc',
-    weight: 0.02,
-    value: 0,
-    icon: '◆',
-    tags: ['token', 'quest-lead'],
-    description: 'A lead token the size of a thumbnail, stamped with a crude crown and the letters REX. It smells of the drain.',
-  },
-  {
-    id: 'drachma-parthica',
-    name: 'Parthian Drachm',
-    latin: 'drachma Parthica',
-    type: 'misc',
-    weight: 0.004,
-    value: 4,
-    stackable: true,
-    icon: '◆',
-    tags: ['valuable', 'foreign', 'quest-lead'],
-    description: 'A thin silver coin: on one side a king with a long beard and a tall tiara, on the other an archer seated on a throne, and Greek letters around him. Not money anyone in Rome should be paid in.',
-  },
-];
-
-const GRATE = { id: 'cloacina-grate', at: 'shrine-venus-cloacina', verb: 'Search', label: 'Drain grate', height: 0.4 };
-
-function searchGrate(q: QuestContext) {
-  if (q.stage !== 'runner' || q.isObjectiveDone('grate')) return;
-  removeExamine('cloacina-grate');
-  giveItem(q, 'tessera-regis');
-  giveItem(q, 'drachma-parthica');
-  q.completeObjective('grate');
-}
+const hour = (q: QuestContext) => q.game.time?.hour ?? 12;
+/** After the second watch begins and before it is nearly dawn. */
+const bathThievesAbout = (q: QuestContext) => hour(q) >= 21.55 || hour(q) < 2.45;
 
 function watched(q: QuestContext) {
-  if (q.stage === 'start' && isDusk(q.game) && q.game.locations?.isInside?.('shrine-venus-cloacina')) q.completeObjective('watch');
+  if (q.stage === 'start' && bathThievesAbout(q) && q.game.locations?.isInside?.('shrine-venus-cloacina')) {
+    beat(q.game, QUEST_ID, 'cloacarius-grate', { actors: ['cloaca-thief'], at: 'shrine-venus-cloacina' });
+    say(q.game, 'Ianuarius’ grate', '(Iron scrapes. A shape drops a bundle through the grate and climbs after it.)');
+    q.completeObjective('watch');
+  }
+}
+
+function descended(q: QuestContext) {
+  if (q.stage === 'descend') q.completeObjective('enter');
 }
 
 export default defineQuest({
@@ -62,85 +52,119 @@ export default defineQuest({
   title: 'What Venus Hides',
   latin: 'Quod Cloacina Celat',
   category: 'misc',
-  giver: 'npc-eros-nummularius',
-  summary: 'Someone drops things into the drain under the shrine of Venus Cloacina at dusk.',
+  giver: 'npc-ianuarius',
+  summary: 'Someone has been lifting the grate beside the shrine of Venus Cloacina, and the old drain has a king.',
   stages: {
     start: {
-      journal: 'Eros, a money-changer under the porticus of the Basilica Aemilia, says that twice now, at dusk, a thin young man has appeared by the little round shrine of Venus Cloacina, leaned over the drain grate as if to pray, and dropped something in. Eros wants to know what, and who. So, now, do I.',
-      objectives: [{ id: 'watch', text: 'Watch the shrine of Venus Cloacina after dusk', target: { kind: 'location', id: 'shrine-venus-cloacina' } }],
-      onEnter: watched,
-      next: 'runner',
+      journal: 'Ianuarius, a public slave who looks after the drains, swears someone has been lifting the grate beside the little shrine of Venus Cloacina, the Venus of the sewer, in the middle of the Forum.',
+      objectives: [{ id: 'watch', text: 'Watch the shrine of Venus Cloacina at night', target: { kind: 'location', id: 'shrine-venus-cloacina' } }],
+      onEnter: (q) => {
+        watched(q);
+        if (!bathThievesAbout(q)) hint(q.game, 'Press T to wait until the second watch, after about 21:30.');
+      },
+      next: 'descend',
     },
-    runner: {
-      journal: 'He came up out of the drain itself, through the grate behind the shrine: a thin young man black to the knees and smelling of the Cloaca. He saw me and went for his knife.',
+    descend: {
+      journal: 'Ianuarius gave me his key and a torch, and the blessing of “the old lady”, as he calls the Cloaca.',
+      objectives: [{ id: 'enter', text: 'Go down into the Cloaca Maxima', target: { kind: 'location', id: LANDING } }],
+      next: 'rex',
+    },
+    rex: {
+      journal: 'In a chamber where three drains meet, a man in a stolen toga sat on a throne of bath-house benches and called himself king.',
       objectives: [
-        { id: 'mus', text: 'Deal with the sewer-runner', optional: true, target: { kind: 'location', id: 'shrine-venus-cloacina' } },
-        { id: 'grate', text: 'Search under the drain grate', target: { kind: 'location', id: 'shrine-venus-cloacina' } },
+        { id: 'gang', text: 'Fight through the Rex’s lookouts', count: 3, target: { kind: 'location', id: LANDING } },
+        { id: 'boss', text: 'Defeat or outwit the Rex Cloacae', target: { kind: 'location', id: LANDING } },
       ],
       onEnter: (q) => {
-        say(q.game, 'Mus', 'Not for you! The Rex will hear of this!');
-        addFoe(q, 'foes', fight(q.game, 'npc-mus', 'cloacarius', 'shrine-venus-cloacina', { quest: QUEST_ID, tags: [QUEST_ID] }, { x: 2 }));
-        // Without a world to search in (dev scenes), the player finds the packet at once.
-        if (!placeExamine(q.game, GRATE)) searchGrate(q);
+        let spawned = 0;
+        GANG.forEach((id, i) => {
+          const f = spawnEnemy(q.game, 'cloacarius', LANDING, { id, name: 'Cloacarius', tags: [QUEST_ID, 'cloacarius'], quest: QUEST_ID }, { x: (i - 1) * 3, z: 4 });
+          addFoe(q, 'gang', f);
+          if (f) spawned++;
+        });
+        if (!spawned) {
+          // No combat module: the lookouts bolt and the king is alone.
+          q.notify('The lookouts bolt down the side drains.');
+          q.progress('gang', 3);
+          startBoss(q);
+        }
       },
-      next: 'packet',
+      next: 'cache',
     },
-    packet: {
-      journal: 'On a ledge under the grate, above the black water, lay a packet in waxed cloth: a lead token stamped with a crown and the letters REX, and a silver coin I didn’t know, a king with a long beard and a tall hat. Eros will know the coin.',
-      objectives: [{ id: 'eros', text: 'Show Eros what you found', target: { kind: 'npc', id: 'npc-eros-nummularius' } }],
+    cache: {
+      journal: 'His treasure was mostly other people’s clothes. Not all of it.',
+      objectives: [
+        { id: 'loot', text: 'Search the Rex’s cache', target: { kind: 'location', id: LANDING } },
+        { id: 'out', text: 'Report to Ianuarius', target: { kind: 'npc', id: 'npc-ianuarius' } },
+      ],
+      next: 'done',
     },
-    sold: {
-      journal: 'Eros weighed the coin, bit it, and paid me for it. “Parthian. An Arsacid drachm. With a war coming, nobody in Rome should be paid in this, and somebody under the Forum is.” He kept the coin. I kept the token. REX: the sewer-runners have a king.',
-      onEnter: (q) => q.giveReward({ denarii: 8 }),
-      end: 'complete',
-    },
-    kept: {
-      journal: 'Eros told me what it was, a Parthian drachm of King Osroes, and told me to keep it out of sight. With a war coming, nobody in Rome should be paid in Parthian silver, and somebody under the Forum is. And the token says REX: the sewer-runners have a king.',
-      onEnter: (q) => q.giveReward({ skillXp: ['mercatura'] }),
-      end: 'complete',
-    },
-    silo: {
-      journal: 'I took the coin and the token to Gavius Silo at the strongrooms. He turned the drachm over twice, and for the first time since I met him he looked worried. “Under the Forum,” he said. “Of course it is.” He paid me, and wrote something down.',
+    done: {
+      journal: 'Ianuarius counted his grates twice and pronounced the old lady satisfied.',
       onEnter: (q) => {
-        q.giveReward({ denarii: 20 });
-        q.setFlag('cloacina.silo', true);
+        q.giveReward({ skillXp: ['athletics'] });
       },
       end: 'complete',
     },
   },
   triggers: {
     'dialogue:node': (q, e) => {
-      if (e.dialogueId === 'npc-eros-nummularius' && e.nodeId === 'accept') q.start();
+      if (e.dialogueId === 'npc-ianuarius' && e.nodeId === 'accept') q.start();
     },
   },
   on: {
     'time:hour': (q) => watched(q),
     'location:entered': (q, e) => {
       if (e.locationId === 'shrine-venus-cloacina') watched(q);
-    },
-    'content:interact': (q, e) => {
-      if (e.id === 'cloacina-grate') searchGrate(q);
-    },
-    'save:loaded': (q) => {
-      if (q.stage === 'runner' && !q.isObjectiveDone('grate')) placeExamine(q.game, GRATE);
+      if (e.locationId === LANDING || e.locationId === 'dun-cloaca-maxima') descended(q);
     },
     'actor:killed': (q, e) => {
-      if (beatFoe(q, 'foes', e.victimId, ['npc-mus'])) q.completeObjective('mus');
+      if (q.stage !== 'rex') return;
+      if (beatFoe(q, 'gang', e.victimId, GANG)) {
+        q.progress('gang');
+        if (beatenCount(q, 'gang') >= 3) startBoss(q);
+        return;
+      }
+      if (REX.includes(e.victimId)) rexFell(q, 'killed');
     },
     'actor:yielded': (q, e) => {
-      if (beatFoe(q, 'foes', e.actorId, ['npc-mus'])) q.completeObjective('mus');
+      if (q.stage !== 'rex') return;
+      if (beatFoe(q, 'gang', e.actorId, GANG)) {
+        q.progress('gang');
+        if (beatenCount(q, 'gang') >= 3) startBoss(q);
+        return;
+      }
+      if (REX.includes(e.actorId)) rexFell(q, 'spared');
+    },
+    // The Rex's heap of stolen goods is a container (src/content/containers.ts, kind cista-regis-cloacae).
+    'content:opened': (q, e) => {
+      if (e.kind === 'cista-regis-cloacae') q.completeObjective('loot');
     },
     'dialogue:node': (q, e) => {
-      if (e.dialogueId === 'npc-eros-nummularius' && q.stage === 'packet' && ['sold', 'kept'].includes(e.nodeId)) {
-        if (e.nodeId === 'sold') takeItem(q, 'drachma-parthica');
-        q.completeObjective('eros');
-        q.setStage(e.nodeId);
-      }
-      if (e.dialogueId === 'npc-castor-contact' && e.nodeId === 'drachm' && q.stage === 'packet') {
-        takeItem(q, 'drachma-parthica');
-        q.completeObjective('eros');
-        q.setStage('silo');
+      if (e.dialogueId === 'npc-ianuarius' && e.nodeId === 'd0' && q.stage === 'cache') q.completeObjective('out');
+      if (e.dialogueId === 'npc-rex-cloacae' && e.nodeId === 'leave' && q.stage === 'rex') {
+        q.setFlag('rex-cloacae-fate', 'parleyed');
+        q.completeObjective('gang');
+        q.completeObjective('boss');
       }
     },
   },
 });
+
+/** The lookouts are down: the Rex stands up from his throne. */
+function startBoss(q: QuestContext) {
+  if (q.isObjectiveDone('boss') || q.vars.bossSpawned) return;
+  q.vars.bossSpawned = true;
+  say(q.game, 'Saturninus', 'Welcome to my kingdom. Mind the floor; it moves.');
+  const placed = fight(q.game, 'npc-rex-cloacae', 'cloacarius', LANDING, { quest: QUEST_ID, tags: [QUEST_ID, 'boss-rex-cloacae'], name: 'Saturninus · Rex Cloacae', boss: 'boss-rex-cloacae', profile: REX_CLOACAE_PROFILE }, { z: 8 });
+  if (!placed) {
+    q.notify('The Rex surrenders his crown of grate-iron without a fight.');
+    rexFell(q, 'spared');
+  }
+}
+
+function rexFell(q: QuestContext, fate: 'killed' | 'spared') {
+  q.setFlag('rex-cloacae-fate', fate);
+  q.completeObjective('gang');
+  q.completeObjective('boss');
+}

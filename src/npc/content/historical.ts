@@ -18,9 +18,9 @@ const npcs: NpcDef[] = [
       { from: at('h2'), at: 'rostra', activity: 'stand' }, // heckles the crier
       { from: at('h3'), at: 'basilica-julia-gradus', activity: 'sit' },
       { from: at('h7'), at: 'popina-vici-tusci', activity: 'sit' },
-      { from: at('h9'), at: 'baths-titus', activity: 'travel' }, // offstage
+      { from: at('h9'), at: 'baths-titus', activity: 'sleep' }, // offstage
       { from: at('v1'), at: 'popina-vici-tusci', activity: 'drunk' },
-      { from: at('v2'), at: 'popina-vici-tusci', activity: 'travel' }, // home to his third-floor cenaculum (offstage)
+      { from: at('v2'), at: 'popina-vici-tusci', activity: 'sleep' }, // home to his third-floor cenaculum (offstage)
     ],
     dialogue: 'npc-iuvenalis',
     disposition: 'neutral',
@@ -53,7 +53,7 @@ const npcs: NpcDef[] = [
       { from: at('h4'), at: 'officina-columnae', activity: 'talk' },
       { from: at('h7'), at: 'basilica-ulpia', activity: 'work' },
       { from: at('h10'), at: 'column-trajan', activity: 'work' },
-      { from: at('v1'), at: 'forum-trajan', activity: 'travel' }, // offstage, toward the Baths of Trajan
+      { from: at('v1'), at: 'forum-trajan', activity: 'sleep' }, // offstage, toward the Baths of Trajan
     ],
     dialogue: 'npc-apollodorus',
     disposition: 'neutral',
@@ -72,6 +72,13 @@ const npcs: NpcDef[] = [
     id: 'npc-traianus',
     name: 'Imperator Caesar Nerva Traianus Augustus',
     title: 'The Emperor',
+    home: 'domus-augustana',
+    // v0.1-Should (the bible's "Trajan on foot", 11 May h11): down from the palace along the Sacra Via to his forum and back by sunset.
+    schedule: [
+      { from: at('h11'), at: 'domus-augustana', activity: 'patrol', route: ['domus-augustana', 'arch-titus', 'forum-trajan', 'arch-titus', 'domus-augustana'] },
+      { from: at('v1'), at: 'domus-augustana', activity: 'sleep' },
+    ],
+    dialogue: 'npc-traianus',
     disposition: 'friendly',
     essential: true,
     // Never approachable: ≥ 25 m togate cordon, 24 lictors; overheard lines only (vignette vig-traianus).

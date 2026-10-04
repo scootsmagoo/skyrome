@@ -36,7 +36,7 @@ const npcs: NpcDef[] = [
     schedule: [
       { from: at('v3'), at: 'night-cart', activity: 'sleep' }, // under the cart
       { from: at('v4'), at: 'night-cart', activity: 'work' }, // the cart, mq-01
-      { from: at('h1'), at: 'caupona-carcerum', activity: 'sit' }, // tells the story all day
+      { from: at('h2'), at: 'caupona-carcerum', activity: 'sit' }, // tells the story all day (the bible's h1, an hour later so he is still at the cart when the player asks)
       { from: at('v1'), at: 'night-cart', activity: 'work' }, // the next load
     ],
     dialogue: 'npc-dromo',
@@ -57,8 +57,9 @@ const npcs: NpcDef[] = [
     home: 'castor-strongroom',
     schedule: [
       { from: at('v3'), at: 'castra-peregrina', activity: 'sleep' },
+      // The bible sends him back to the camp at h4; v0.1 keeps him at the vaults all day so that
+      // "ask Chrysippus for Gratus" works at any hour of the golden path, and at dusk (mq-02).
       { from: at('h1'), at: 'castor-strongroom', activity: 'work' }, // inspects the deposits
-      { from: at('h4'), at: 'castra-peregrina', activity: 'work' },
       { from: at('v1'), at: 'castor-strongroom', activity: 'work' }, // meets the player at dusk (mq-02)
       { from: at('v2'), at: 'castra-peregrina', activity: 'sleep' },
     ],
@@ -137,7 +138,8 @@ const npcs: NpcDef[] = [
       { from: at('v1'), at: 'taberna-collapsa', activity: 'guard' },
     ],
     dialogue: 'npc-mus',
-    disposition: 'hostile',
+    // Talks first (dlg-mus); the encounter turns him hostile (dialogue 'attack' effect).
+    disposition: 'neutral',
     // A thraex thrown out of the Ludus for theft: torn left ear, a brown hood, the curved sica.
     appearance: {
       sex: 'male', age: 'adult', build: 'slight', height: 1.61, skin: '#b07d58',

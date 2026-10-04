@@ -1,146 +1,194 @@
 /**
- * misc-meta-sudans-rixa "Brawl at the Fountain" (GDD §11.1, v0.1 Must; AC-09). Misc quest.
+ * misc-meta-sudans-rixa "Brawl at the Fountain" (docs/CONTENT.md §3.3.1; GDD §11.1, §6.9; v0.1 Must,
+ * AC-09). Misc quest, combat, non-lethal.
  *
- * By the Meta Sudans the fans of the small-shield fighters (parmularii, for the thraex Callinicus)
- * and of the big-shield fighters (scutarii, for Ferox the murmillo) are shouting nose to nose
- * (the factions are attested: Suet. Dom. 10; Mart. 9.68 [A]). It ends with words (a Rhetoric
- * check), with fists (a rixa is non-lethal by rule: knock out or make yield the two scutarii, §6.9),
- * or with the player yielding (lose a tenth of the purse, the fight ends). Drawing steel turns
- * the brawl into assault (crime 'vis') and fails the quest.
+ * By the Meta Sudans the murmillo fans (the scutarii, led by the butcher Bassulus) and the thraex
+ * fans (the parmularii, led by the tanner Anicetus) shout about the day's bouts (Suet. Dom. 10,
+ * Marcus Aurelius Med. 1.5 [A]). It starts on the way back from the Ludus, between the eleventh hour
+ * and the second watch, once lud-01 is done.
  *
- *   start → choice → brawl → won | lost        (or choice → calmed;  any brawl → assault on 'vis')
+ *   start   take a side, calm them (Rhetoric), or walk away                  → rixa | done-peace | done-walked
+ *   rixa    knock out or make yield the other side's three brawlers (fists)  → after | after (beaten)
+ *   after   the watch arrives: Verecundus before sunset, Primigenius after   → done
+ *
+ * A rixa is non-lethal by rule: fists and the caestus always knock out. Drawing a blade turns it into
+ * assault (crime 'vis', bounty 40) and fails the quest; so does killing anyone. If the player yields
+ * (Y) they lose a tenth of the purse and the fight ends. The first punch is the player's if they took
+ * a side (they egged it on); it is the other side's if the Rhetoric check failed and a cup flew.
+ * Without a combat module the brawl is over in a few punches.
  */
-import { fight, hint, say } from '../../content/director';
+import { beat, hint, say, spawnEnemy } from '../../content/director';
 import { addFoe, beatFoe, isPlayer } from '../../content/questkit';
 import { defineQuest, type QuestContext } from '../types';
 
 export const QUEST_ID = 'misc-meta-sudans-rixa';
-const SCUTARII = ['npc-crispus', 'npc-bucco'] as const;
 
-function startBrawl(q: QuestContext) {
-  if (q.stage === 'brawl' || q.done) return;
-  q.completeObjective('talk');
-  q.setStage('brawl');
+type Side = 'scutarii' | 'parmularii';
+const OTHER: Record<Side, Side> = { scutarii: 'parmularii', parmularii: 'scutarii' };
+/** The rival leader (a collegium bruiser with the caestus) and the two drunk toughs of each side. */
+const LEADER: Record<Side, string> = { scutarii: 'npc-bassulus', parmularii: 'npc-anicetus' };
+const TOUGHS: Record<Side, [string, string]> = { scutarii: ['rixa-scut-a', 'rixa-scut-b'], parmularii: ['rixa-parm-a', 'rixa-parm-b'] };
+
+function sideOf(q: QuestContext): Side {
+  return q.flag('rixa-side') === 'parmularii' ? 'parmularii' : 'scutarii';
+}
+
+function foeIds(q: QuestContext): string[] {
+  const o = OTHER[sideOf(q)];
+  return [LEADER[o], ...TOUGHS[o]];
+}
+
+function startBrawl(q: QuestContext, firstPunchIsPlayers: boolean) {
+  if (q.stage !== 'start') return;
+  q.setFlag('threw-first-punch', firstPunchIsPlayers);
+  q.completeObjective('choose');
+  q.setStage('rixa');
+}
+
+function lawOnTheWay(q: QuestContext) {
+  q.setStage('after');
 }
 
 export default defineQuest({
   id: QUEST_ID,
   title: 'Brawl at the Fountain',
-  latin: 'Rixa ad Metam Sudantem',
+  latin: 'Rixa ad Metam',
   category: 'misc',
-  giver: 'npc-hilarus',
-  summary: 'Fans of the thraeces and of the murmillones are about to come to blows at the Meta Sudans.',
+  giver: 'npc-bassulus',
+  summary: 'The fans of the murmillones and the thraeces are about to come to blows at the Meta Sudans.',
   stages: {
     start: {
-      journal: 'At the Meta Sudans, the sweating cone of a fountain below the Colossus, a knot of men was shouting about gladiators. An old man in a yellow tunic was the loudest.',
-      objectives: [{ id: 'talk', text: 'Find out what the shouting is about', target: { kind: 'npc', id: 'npc-hilarus' } }],
-      next: 'choice',
+      journal: 'At the Sweating Post the murmillo’s fans and the thraex’s fans were shouting about shields. Big ones or small ones. Then someone mentioned my bout.',
+      objectives: [{ id: 'choose', text: 'Talk to the fans', target: { kind: 'npc', id: 'npc-bassulus' } }],
     },
-    choice: {
-      journal: 'Hilarus is a parmularius: thirty years he has cheered the small-shield fighters, the thraeces. The scutarii, who cheer the big shields, say his Callinicus will be flattened by Ferox the Gaul. Their ringleader, a big man called Crispus, wants an apology or a fight.',
-      objectives: [{ id: 'settle', text: 'Settle it with Crispus: words or fists', target: { kind: 'npc', id: 'npc-crispus' } }],
-    },
-    brawl: {
-      journal: 'Crispus spat on his hands and his friend Bucco rolled up his sleeves. A rixa, then: fists only. Draw steel and it is assault.',
-      objectives: [{ id: 'down', text: 'Knock out or make yield the two scutarii (fists only)', count: 2, target: { kind: 'location', id: 'meta-sudans-ring' } }],
+    rixa: {
+      journal: 'Fists, not blades: a brawl is a brawl. Draw iron and it becomes assault.',
+      objectives: [{ id: 'ko', text: 'Knock out or make yield the other side’s brawlers', count: 3, target: { kind: 'location', id: 'meta-sudans' } }],
       onEnter: (q) => {
-        q.completeObjective('settle');
-        say(q.game, 'Crispus', 'Big shields, big men! Come on, then!');
+        const side = sideOf(q);
+        const other = OTHER[side];
+        say(q.game, other === 'scutarii' ? 'Bassulus' : 'Anicetus', other === 'scutarii' ? 'Big shields, big men! Come on, then!' : 'Small shields, quick feet! Come on, then!');
+        beat(q.game, QUEST_ID, 'brawl-start', { actors: [LEADER[side], LEADER[other]], at: 'meta-sudans' });
         let spawned = 0;
-        SCUTARII.forEach((id, i) => {
-          const actor = fight(q.game, id, 'ebrius-rixator', 'meta-sudans-ring', { brawl: true, quest: QUEST_ID, tags: [QUEST_ID, 'rixa'] }, { x: i ? 1.5 : -1.5, z: 2 });
-          addFoe(q, 'foes', actor);
-          if (actor) spawned++;
+        // The rival leader fights with the caestus; his two toughs are drunks with fists (non-lethal).
+        const leader = spawnEnemy(q.game, 'collegium-bruiser', 'meta-sudans', { id: LEADER[other], npc: LEADER[other], brawl: true, tags: [QUEST_ID, `rixa-${other}`], quest: QUEST_ID }, { x: 0, z: 3 });
+        addFoe(q, 'foes', leader);
+        if (leader) spawned++;
+        TOUGHS[other].forEach((id, i) => {
+          const f = spawnEnemy(q.game, 'ebrius-rixator', 'meta-sudans', { id, name: 'Drunken fan', brawl: true, tags: [QUEST_ID, `rixa-${other}`], quest: QUEST_ID }, { x: i ? 2.5 : -2.5, z: 3 });
+          addFoe(q, 'foes', f);
+          if (f) spawned++;
         });
-        if (spawned) {
-          hint(q.game, 'Sheathe your blade (R) and use your fists. Fists always knock out. Hold Y for a second to yield.');
-        } else {
+        // Two allies on the player's side, if they took one.
+        if (q.flag('rixa-outcome') !== 'walked') {
+          TOUGHS[side].forEach((id, i) => spawnEnemy(q.game, 'ebrius-rixator', 'meta-sudans', { id, name: 'Your fan', brawl: true, hostile: false, tags: [QUEST_ID, 'rixa-ally'], quest: QUEST_ID }, { x: i ? 2 : -2, z: -2 }));
+        }
+        if (spawned) hint(q.game, 'Sheathe your blade (R) and use your fists: fists always knock out. Drawing a blade turns this into assault. Hold Y for a second to yield.');
+        else {
           // No combat module in this build: the crowd breaks it up after a few punches.
-          q.notify('A few punches, a lot of shouting, and Crispus sits down hard in the fountain basin.');
-          q.progress('down', 2);
+          q.notify('A few punches, a lot of shouting, and the other side’s big man sits down hard in the fountain basin.');
+          q.progress('ko', 3);
         }
       },
-      next: 'won',
+      next: 'after',
     },
-    won: {
-      journal: 'Crispus sat in the fountain basin with water to his waist and laughed until he coughed. Bucco was asleep on the paving. The parmularii carried Hilarus round the Meta Sudans on their shoulders and pressed a share of the bets on me.',
+    after: {
+      journal: 'The watch arrived when it was over, as the watch always does.',
+      objectives: [{ id: 'law', text: 'Deal with the patrol', target: { kind: 'npc', id: 'npc-verecundus' } }],
       onEnter: (q) => {
-        q.giveReward({ denarii: 6, reputation: [{ faction: 'plebs', amount: 3 }], skillXp: ['brawling'] });
-        q.game.standing?.addFame('dist-vallis-colossei', 3);
-        q.setFlag('rixa.won', true);
+        q.setFlag('rixa-outcome', q.vars.beaten ? 'beaten' : 'won');
+      },
+      next: 'done',
+    },
+    done: {
+      journal: 'The winners bought me Falernian and told me I was a true scutarius (or a true parmularius). I have never had a cheaper friendship or a better one.',
+      onEnter: (q) => {
+        const beaten = q.flag('rixa-outcome') === 'beaten';
+        q.setFlag('rixa-outcome', beaten ? 'beaten' : 'won');
+        if (!beaten) {
+          q.giveReward({ items: [{ id: 'vinum-falernum' }], denarii: 5, skills: [{ id: 'brawling', amount: 12 }] });
+          q.game.standing?.addFame('dist-vallis-colossei', 5);
+        }
       },
       end: 'complete',
     },
-    calmed: {
-      journal: 'In the end nobody threw a punch. By the time I had finished, the parmularii and the scutarii were arguing about the price of wine instead, which is the same argument in a better mood.',
+    'done-peace': {
+      journal: 'Nobody hit anybody, and both sides went home disappointed. Rome has few greater achievements.',
       onEnter: (q) => {
-        q.giveReward({ reputation: [{ faction: 'plebs', amount: 5 }], skillXp: ['rhetoric'] });
-        q.game.standing?.addFame('dist-vallis-colossei', 5);
-        q.setFlag('rixa.calmed', true);
+        q.giveReward({ skills: [{ id: 'rhetoric', amount: 15 }] });
+        q.game.factions?.addReputation('plebs', 3);
       },
       end: 'complete',
     },
-    lost: {
-      journal: 'I went down on one knee and raised a hand. The scutarii cheered, took a tenth of my purse “for the wine” and bought the whole fountain a round, me included.',
-      onEnter: (q) => {
-        q.giveReward({ skillXp: ['brawling'] });
-        q.setFlag('rixa.lost', true);
-      },
+    'done-walked': {
+      journal: 'I left them to it. By the time I reached the Colossus the shouting had become something louder. I did not turn round.',
       end: 'complete',
     },
-    assault: {
-      journal: 'I drew steel in a fist fight. The crowd scattered screaming and someone ran for the soldiers. Whatever this was, it isn’t a brawl any more.',
+    fail: {
+      journal: 'Blood at a brawl. The fans scattered and the watch came looking for me.',
       end: 'fail',
     },
   },
   triggers: {
     'location:entered': (q, e) => {
-      if (e.locationId === 'meta-sudans-ring' || e.locationId === 'meta-sudans') q.start();
-    },
-    'dialogue:node': (q, e) => {
-      if (e.dialogueId === 'npc-hilarus' && e.nodeId === 'story') {
-        q.start();
-        q.completeObjective('talk');
-      }
-      if (e.dialogueId === 'npc-crispus' && (e.nodeId === 'brawl' || e.nodeId === 'insulted' || e.nodeId === 'scorned')) {
-        q.start();
-        startBrawl(q);
-      }
-      if (e.dialogueId === 'npc-crispus' && (e.nodeId === 'calmed' || e.nodeId === 'cowed')) {
-        q.start();
-        q.completeObjective('talk');
-        q.completeObjective('settle');
-        q.setStage('calmed');
-      }
+      const h = q.game.time?.hour ?? 12;
+      if (e.locationId === 'meta-sudans' && q.game.quests?.status('lud-01-sacramentum')?.completed && h >= 16.7 && h < 21.6) q.start();
     },
   },
   on: {
     'dialogue:node': (q, e) => {
-      if (e.dialogueId === 'npc-hilarus' && e.nodeId === 'story') q.completeObjective('talk');
-      if (e.dialogueId !== 'npc-crispus') return;
-      if (e.nodeId === 'brawl' || e.nodeId === 'insulted' || e.nodeId === 'scorned') startBrawl(q);
-      if ((e.nodeId === 'calmed' || e.nodeId === 'cowed') && (q.stage === 'start' || q.stage === 'choice')) {
-        q.completeObjective('talk');
-        q.completeObjective('settle');
-        q.setStage('calmed');
+      if (e.dialogueId === 'npc-rixa' && q.stage === 'start') {
+        if (e.nodeId === 'sideScutarii' || e.nodeId === 'sideParmularii') startBrawl(q, true);
+        if (e.nodeId === 'cupThrown') startBrawl(q, false);
+        if (e.nodeId === 'peace') {
+          q.completeObjective('choose');
+          q.setStage('done-peace');
+        }
+        if (e.nodeId === 'walked') {
+          q.completeObjective('choose');
+          q.setStage('done-walked');
+        }
+      }
+      if (e.dialogueId === 'npc-rixa-law' && q.stage === 'after') {
+        if (e.nodeId === 'lawFine') {
+          q.game.crime?.commit('rixa', { witnessed: true, identified: true });
+          q.completeObjective('law');
+        }
+        if (e.nodeId === 'lawClear') q.completeObjective('law');
+      }
+    },
+    // Leaving the valley with the watch unspoken to: they never saw the player. No fine.
+    'location:exited': (q, e) => {
+      if (q.stage === 'after' && e.locationId === 'meta-sudans') {
+        q.notify('You slip away before the patrol gets round the fountain.');
+        q.completeObjective('law');
       }
     },
     'actor:killed': (q, e) => {
-      if (q.stage !== 'brawl') return;
-      if (isPlayer(e.victimId)) return q.setStage('lost');
+      if (q.stage !== 'rixa') return;
+      if (isPlayer(e.victimId)) {
+        q.vars.beaten = true;
+        return lawOnTheWay(q);
+      }
       // Fists always knock out (§6.9); a death here means steel was drawn.
-      if (beatFoe(q, 'foes', e.victimId, SCUTARII)) {
-        if (e.tags?.includes('dead')) return q.setStage('assault');
-        q.progress('down');
+      if (beatFoe(q, 'foes', e.victimId, foeIds(q))) {
+        if (e.tags?.includes('dead')) return q.setStage('fail');
+        q.progress('ko');
       }
     },
     'actor:yielded': (q, e) => {
-      if (q.stage !== 'brawl') return;
-      if (isPlayer(e.actorId)) return q.setStage('lost');
-      if (beatFoe(q, 'foes', e.actorId, SCUTARII)) q.progress('down');
+      if (q.stage !== 'rixa') return;
+      if (isPlayer(e.actorId)) {
+        // Lose a tenth of the purse (§3.3.1) and the fight ends.
+        const inv = q.game.player?.inventory;
+        if (inv) inv.spendDenarii(Math.round(inv.denarii * 0.1 * 16) / 16);
+        q.vars.beaten = true;
+        return lawOnTheWay(q);
+      }
+      if (beatFoe(q, 'foes', e.actorId, foeIds(q))) q.progress('ko');
     },
     'crime:committed': (q, e) => {
-      if (q.stage === 'brawl' && (e.crime === 'vis' || e.crime === 'homicidium' || e.crime === 'caedes-supplicis')) q.setStage('assault');
+      if (q.stage === 'rixa' && (e.crime === 'vis' || e.crime === 'homicidium' || e.crime === 'caedes-supplicis')) q.setStage('fail');
     },
   },
 });

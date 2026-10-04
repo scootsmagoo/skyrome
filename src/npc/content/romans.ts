@@ -16,7 +16,7 @@ const npcs: NpcDef[] = [
     schedule: [
       { from: at('h2'), at: 'basilica-julia-gradus', activity: 'sitGround' },
       { from: at('h10'), at: 'popina-vici-tusci', activity: 'drunk' },
-      { from: at('v2'), at: 'popina-vici-tusci', activity: 'travel' },
+      { from: at('v2'), at: 'popina-vici-tusci', activity: 'sleep' },
     ],
     dialogue: 'npc-talarius',
     disposition: 'friendly',
@@ -37,7 +37,7 @@ const npcs: NpcDef[] = [
     home: 'porticus-margaritaria',
     schedule: [
       { from: at('h2'), at: 'porticus-margaritaria', activity: 'work' },
-      { from: at('v1'), at: 'porticus-margaritaria', activity: 'travel' },
+      { from: at('v1'), at: 'porticus-margaritaria', activity: 'sleep' },
     ],
     dialogue: 'npc-hilario',
     disposition: 'neutral',
@@ -58,7 +58,7 @@ const npcs: NpcDef[] = [
     schedule: [
       { from: at('h2'), at: 'colossus-sol', activity: 'wander' }, // with his gang
       { from: at('h8'), at: 'porticus-margaritaria', activity: 'sit' },
-      { from: at('v1'), at: 'porticus-margaritaria', activity: 'travel' },
+      { from: at('v1'), at: 'porticus-margaritaria', activity: 'sleep' },
     ],
     dialogue: 'npc-pusio',
     disposition: 'friendly',
@@ -80,7 +80,7 @@ const npcs: NpcDef[] = [
     schedule: [
       { from: at('h1'), at: 'forum-boarium', activity: 'work' }, // sales; two bruisers follow him
       { from: at('h7'), at: 'caupona-carcerum', activity: 'drunk' },
-      { from: at('h9'), at: 'caupona-carcerum', activity: 'travel' },
+      { from: at('h9'), at: 'caupona-carcerum', activity: 'sleep' },
     ],
     dialogue: 'npc-lurco',
     disposition: 'neutral',
