@@ -22,7 +22,7 @@ import {
   railing, roundBasin, spot, statueOnPedestal, tiledRoof, wallRun, type Detail, type Hints,
 } from './generic-common';
 import { liteColonnade } from './generic-civic-lib';
-import { lamp } from './generic-world';
+import { lamp, tree } from './generic-world';
 
 // ---------------------------------------------------------------- temples
 
@@ -280,8 +280,8 @@ function buildShrine(ctx: LandmarkContext): LandmarkBuild {
       for (let i = 0; i < n; i++) {
         const a = (i / n) * Math.PI * 2;
         const x = Math.cos(a) * w * 0.33, z = Math.sin(a) * dd * 0.33;
-        if (i % 3 === 0) cypress(d, x, g(x, z), z, 9 + ctx.rng.range(0, 3), detail);
-        else broadTree(d, x, g(x, z), z, 8 + ctx.rng.range(0, 3), detail, 'plane');
+        if (i % 3 === 0) tree(ctx, d, 'cypress', x, g(x, z), z, 9 + ctx.rng.range(0, 3));
+        else tree(ctx, d, 'plane', x, g(x, z), z, 8 + ctx.rng.range(0, 3));
       }
     }
     aedicula(d, -w * 0.25, g(-w * 0.25, dd * 0.25), dd * 0.25, 2.6, 'plaster_white', detail);
@@ -357,7 +357,7 @@ function buildMonument(ctx: LandmarkContext): LandmarkBuild {
     d.span('travertine', -2, 0, -1.5, 2, 1.0, 1.5, { collide: true });
     for (let i = 0; i < 8; i++) {
       const a = ((i + 0.5) / 8) * Math.PI * 2;
-      cypress(d, Math.cos(a) * (r + 2.2), 0, Math.sin(a) * (r + 2.2), 10, detail); // black poplars: tall and narrow
+      tree(ctx, d, 'cypress', Math.cos(a) * (r + 2.2), 0, Math.sin(a) * (r + 2.2), 10); // black poplars: tall and narrow
     }
     spots.push(spot(`${lm.id}:pyre`, 'shrine', 0, 0, -2.6, 0), spot(`${lm.id}:gate`, 'door', 0, 0, -dd / 2 - 0.5, 0));
     far.span('marble', -w / 2, 0, -dd / 2, w / 2, wh, dd / 2);
@@ -539,7 +539,7 @@ function buildTomb(ctx: LandmarkContext): LandmarkBuild {
   // (notes often mention a neighbouring drum tomb, so the more specific kinds win)
   if (lm.footprint.kind === 'circle' || (h.has('drum', 'round', 'tumulus') && !h.has('rock-cut', 'rock cut', 'columbarium', 'cylinders', 'kneading'))) {
     const R = Math.min(w, dd) / 2;
-    drumTomb(d, R, H, detail);
+    drumTomb(d, R, H, detail, ctx);
     spots.push(spot(`${lm.id}:door`, 'door', 0, 0, -R - 0.6, 0));
     far.cyl('travertine', 0, H * 0.3, 0, R, H * 0.6, 12);
     return finish(lm.id, d, spots, far);
@@ -625,7 +625,7 @@ export function pyramidTomb(d: Draw, side: number, H: number, mat: MaterialId, y
 }
 
 /** Drum tomb: travertine-faced cylinder with a cornice and a conical earth mound with cypresses. */
-export function drumTomb(d: Draw, R: number, H: number, detail: Detail) {
+export function drumTomb(d: Draw, R: number, H: number, detail: Detail, ctx: LandmarkContext) {
   const drumH = Math.min(H * 0.45, 12);
   const seg = detail === 'high' ? 32 : 16;
   d.cyl('travertine', 0, drumH / 2, 0, R, drumH, seg, { collide: true });
@@ -638,7 +638,7 @@ export function drumTomb(d: Draw, R: number, H: number, detail: Detail) {
     const a = (i / n) * Math.PI * 2;
     const r = R * 0.62;
     const y = drumH + 0.5 + (H * 0.85 - drumH - 0.5) * (1 - (r - R * 0.25) / (R - 0.2 - R * 0.25));
-    cypress(d, Math.cos(a) * r, y - 0.3, Math.sin(a) * r, Math.max(4, R * 0.4), detail);
+    tree(ctx, d, 'cypress', Math.cos(a) * r, y - 0.3, Math.sin(a) * r, Math.max(4, R * 0.4));
   }
   d.span('black', -0.9, 0, -R - 0.05, 0.9, 2.6, -R + 0.3);
   d.span('travertine', -1.3, 2.6, -R - 0.2, 1.3, 3.0, -R + 0.3);

@@ -22,6 +22,7 @@ import {
   T, V, altar, broadTree, cornice, dims, draw, farDraw, finish, flight, flightLength, hedge, inscription, mul, piercedWall, plinth, roundBasin, spot,
   statueOnPedestal, tiledRoof,
 } from './generic-common';
+import { tree } from './generic-world';
 import { liteColonnade } from './generic-civic-lib';
 import { curiaHall, gable, porch } from './generic-civic';
 import { aedicula, fittedTemple, fitTemple, templeMaterials } from './generic-sacred';
@@ -121,8 +122,18 @@ function buildVenusVictrix(ctx: LandmarkContext): LandmarkBuild {
     zs -= 0.5;
   }
   const y0 = seatAt(zs);
-  flight(d, 0, zs, stairW, y0, floorY, 'marble');
-  for (const sx of [-1, 1]) d.span('marble', sx * (stairW / 2 + 0.3) - 0.3, y0 - 0.5, zs, sx * (stairW / 2 + 0.3) + 0.3, floorY + 0.9, zFront, { collide: true });
+  const zTop = flight(d, 0, zs, stairW, y0, floorY, 'marble');
+  // Sloping marble parapets either side of the flight (the seats run up beside them), ending in
+  // pedestals at the foot and against the podium at the top.
+  const run = zTop - zs, rise = floorY - y0;
+  const len = Math.hypot(run, rise), pitch = Math.atan2(rise, run);
+  for (const sx of [-1, 1]) {
+    const x = sx * (stairW / 2 + 0.3);
+    d.box('marble', x, (y0 + floorY) / 2 + 0.55, (zs + zTop) / 2, 0.6, 1.1, len, { rx: -pitch, collide: true });
+    d.box('marble', x, (y0 + floorY) / 2 - 0.2, (zs + zTop) / 2, 0.5, 0.6, len, { rx: -pitch });
+    d.box('marble', x, y0 + 0.75, zs + 0.3, 0.9, 1.5, 0.9, { collide: true });
+    if (detail === 'high') statueOnPedestal(d, 'togate', x, y0 + 1.5, zs + 0.3, 0, 0.8, 'bronze', 'low', 0.05);
+  }
   // The temple: hexastyle prostyle Corinthian in marble, on a low podium of its own.
   const fit = fitTemple(w * 0.96, dd * 0.92, { order: 'corinthian', plan: 'prostyle', front: 6, material: 'marble', podiumMaterial: 'marble', cellaMaterial: 'marble', roofMaterial: 'gilded_bronze', podiumHeight: 0.66, detail, maxHighColumns: 10 });
   temple(d.b, fit.spec, mul(d.m, T(0, floorY, fit.offsetZ)));
@@ -185,7 +196,7 @@ function buildPorticusPompeiana(ctx: LandmarkContext): LandmarkBuild {
         for (let k = 0; k < nz; k++) {
           const x = x0 + (x1 - x0) * f;
           const z = z0 + ((z1 - z0) * (k + 0.5)) / nz;
-          broadTree(d, x, 0.05, z, 12 + rng.range(-1.5, 2), detail, 'plane');
+          tree(ctx, d, 'plane', x, 0.05, z, 12 + rng.range(-1.5, 2));
         }
       }
     }
@@ -222,7 +233,6 @@ function buildPorticusPompeiana(ctx: LandmarkContext): LandmarkBuild {
   far.span('plaster_cream', -w / 2, 0, -dd / 2, w / 2, wallTop, -dd / 2 + 1);
   far.span('plaster_cream', -w / 2, 0, -dd / 2, -w / 2 + 1, wallTop, dd / 2);
   far.span('plaster_cream', w / 2 - 1, 0, -dd / 2, w / 2, wallTop, dd / 2);
-  for (const sx of [-1, 1]) far.ellipsoid('foliage_broad', sx * gx * 0.55, 8, 0, gx * 0.4, 4, gz * 0.8, { seg: [8, 4] });
   return finish(lm.id, d, spots, far, 800);
 }
 

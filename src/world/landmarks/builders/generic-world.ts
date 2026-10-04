@@ -148,3 +148,10 @@ export function brazier(ctx: LandmarkContext, d: Draw, x: number, y: number, z: 
 }
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+
+const NATURAL_HEIGHT: Partial<Record<TreeSpecies, number>> = { umbrella_pine: 16.4, cypress: 12.4, plane: 16.9, olive: 4.8, laurel: 7.1, fig: 5.4, oleander: 2.2 };
+
+/** A real tree of about `height` metres (scaled from the species' natural size) — see `plant`. */
+export function tree(ctx: LandmarkContext, d: Draw, species: TreeSpecies, x: number, y: number, z: number, height: number) {
+  plant(ctx, d, species, x, y, z, height / (NATURAL_HEIGHT[species] ?? 10));
+}

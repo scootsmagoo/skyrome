@@ -17,6 +17,7 @@ import {
   T, V, broadTree, clearOf, cornice, cypress, dims, draw, farDraw, finish, groundRange, hedge, inscription, mul, obstacles, piercedWall, plinth, pool,
   roundBasin, spot, statueOnPedestal, tiledRoof, wallRun, type WallOpening,
 } from './generic-common';
+import { tree } from './generic-world';
 import { liteColonnade, liteColumnAt } from './generic-civic-lib';
 import { porch, thermae } from './generic-civic';
 import { tholos } from '../../../arch/classical/tholos';
@@ -133,10 +134,10 @@ function buildStagnum(ctx: LandmarkContext): LandmarkBuild {
   for (let i = 0; i < 8; i++) {
     const x = -w / 2 + 6 + i * ((w - 12) / 7), z = dd / 2 - 2.5;
     if (!free(x, z, 2)) continue;
-    if (i % 2) broadTree(d, x, g(x, z), z, 11, detail, 'plane');
+    if (i % 2) tree(ctx, d, 'plane', x, g(x, z), z, 11);
     else statueOnPedestal(d, 'togate', x, g(x, z), z, Math.PI, 1, 'bronze', 'low', 1.2);
   }
-  for (const z of [-bd * 0.3, bd * 0.3]) cypress(d, w / 2 - 2.5, g(w / 2 - 2.5, z), z, 11, 'low');
+  for (const z of [-bd * 0.3, bd * 0.3]) tree(ctx, d, 'cypress', w / 2 - 2.5, g(w / 2 - 2.5, z), z, 11);
   // The Euripus outlet: a sluice in the W kerb feeding a stone channel (the canal runs on to the river).
   const ex = -w / 2;
   d.span('travertine', ex, gr.min - 0.8, -1.8, -bw / 2 - k / 2, y + 0.5, -1.4, { collide: true });

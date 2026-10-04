@@ -27,6 +27,7 @@ import {
   T, TRS, V, altar, broadTree, cornice, dims, draw, farDraw, finish, hedge, inscription, mul, piercedWall, plinth, pool, ringRoof, roundBasin, spot,
   statueOnPedestal, tiledRoof, wallRun, type Detail, type WallOpening,
 } from './generic-common';
+import { tree } from './generic-world';
 import { liteColonnade, tabernae } from './generic-civic-lib';
 import { porch, quadriporticusGarden } from './generic-civic';
 import { fittedTemple } from './generic-sacred';
@@ -397,7 +398,7 @@ function buildVipsania(ctx: LandmarkContext): LandmarkBuild {
   const cz0 = zb + 0.8;
   d.span('gravel', -w / 2 + 1, -0.2, cz0, w / 2 - 1, 0.03, dd / 2 - 1);
   for (const [ax, az, bx, bz] of [[w / 2, cz0, w / 2, dd / 2], [w / 2, dd / 2, -w / 2, dd / 2], [-w / 2, dd / 2, -w / 2, cz0]] as const) wallRun(d, ax, az, bx, bz, 0, 4, 0.6, 'plaster_cream');
-  for (let i = 0; i < 5; i++) broadTree(d, -w / 2 + 6 + i * ((w - 12) / 4), 0.03, (cz0 + dd / 2) / 2, 10, detail, i % 2 ? 'plane' : 'pine');
+  for (let i = 0; i < 5; i++) tree(ctx, d, i % 2 ? 'plane' : 'umbrella_pine', -w / 2 + 6 + i * ((w - 12) / 4), 0.03, (cz0 + dd / 2) / 2, 10);
   hedge(d, -w / 2 + 2, cz0 + 2, w / 2 - 2, cz0 + 2.6, 0.03, 0.8);
   inscription(d, ['PORTICVS VIPSANIA'], 0, colH + 1.2, -dd / 2 + 0.4, 6, 0.6);
   spots.push(

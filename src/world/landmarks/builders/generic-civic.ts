@@ -33,7 +33,7 @@ import {
 } from './generic-common';
 import { courtyardRanges, hall, liteColonnade, liteColumnAt, tabernae, vaultedAisle } from './generic-civic-lib';
 import { liteArcade } from './generic-seating';
-import { wallTorch } from './generic-world';
+import { wallTorch, tree } from './generic-world';
 import { aedicula, fittedTemple, templeMaterials } from './generic-sacred';
 import { sacredGrove } from './generic-groves';
 
@@ -712,7 +712,7 @@ export function quadriporticusGarden(d: Draw, ctx: LandmarkContext, w: number, d
         const n = Math.max(2, Math.floor((cd - 6) / 7));
         for (let k = 0; k < n; k++) {
           const z = -cd / 2 + 3.5 + ((cd - 7) * k) / Math.max(1, n - 1);
-          for (const f of [0.3, 0.7]) broadTree(d, x0 + (x1 - x0) * f, 0.05, z, 11 + ctx.rng.range(-1.5, 1.5), detail, 'plane');
+          for (const f of [0.3, 0.7]) tree(ctx, d, 'plane', x0 + (x1 - x0) * f, 0.05, z, 11 + ctx.rng.range(-1.5, 1.5));
         }
       }
     }
@@ -1357,7 +1357,7 @@ export function gardenLayout(d: Draw, ctx: LandmarkContext, w: number, dd: numbe
     const x = -w * 0.4 + ((i % (nt / 2)) / (nt / 2 - 1)) * w * 0.8;
     const z = i < nt / 2 ? -3.6 : 3.6;
     if (!free(x, z, 2)) continue;
-    cypress(d, x, g(x, z), z, 11 + rng.range(-2, 3), 'low');
+    tree(ctx, d, 'cypress', x, g(x, z), z, 11 + rng.range(-2, 3));
   }
   spots.push(spot(`${lm.id}:gate`, 'door', 0, g(0, -dd / 2 - 1), -dd / 2 - 1, 0));
 }

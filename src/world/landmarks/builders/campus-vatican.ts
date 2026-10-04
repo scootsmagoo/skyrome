@@ -20,6 +20,7 @@ import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../t
 import {
   T, V, broadTree, clearOf, cypress, dims, draw, farDraw, finish, groundRange, inscription, mul, obstacles, plinth, spot, wallRun, type Detail,
 } from './generic-common';
+import { tree } from './generic-world';
 import { liteArcade, ribbonSlab, seating } from './generic-seating';
 import { arcadeStoreys, bowl, carceres, curvedPlinth, cutPath, localOf, spina } from './generic-venues';
 import { children, offsetLine, pathLength, type V3 } from './generic-common';
@@ -191,8 +192,8 @@ function buildNaumachiaAugusti(ctx: LandmarkContext): LandmarkBuild {
     const a = (i / trees) * Math.PI * 2 + rng.range(-0.05, 0.05);
     const x = Math.cos(a) * (rx + 7), z = Math.sin(a) * (rz + 7);
     if (!free(x, z, 3)) continue;
-    if (i % 3 === 0) cypress(d, x, g(x, z), z, 12, 'low');
-    else broadTree(d, x, g(x, z), z, rng.range(10, 14), 'low', i % 3 === 1 ? 'pine' : 'plane');
+    if (i % 3 === 0) tree(ctx, d, 'cypress', x, g(x, z), z, 12);
+    else tree(ctx, d, (i % 3 === 1 ? 'pine' : 'plane') === 'pine' ? 'umbrella_pine' : 'plane', x, g(x, z), z, rng.range(10, 14));
   }
   spots.push(spot(`${lm.id}:kerb`, 'vista', 0, g(0, -rz - 3), -rz - 3, 0), spot(`${lm.id}:grove`, 'shrine', rx + 7, g(rx + 7, 0), 0, -Math.PI / 2));
   return finish(lm.id, d, spots, undefined, 800);

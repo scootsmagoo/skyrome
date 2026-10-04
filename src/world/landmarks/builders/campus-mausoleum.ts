@@ -23,6 +23,7 @@ import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../t
 import {
   T, TRS, V, altar, broadTree, cypress, dims, draw, farDraw, finish, flight, flightLength, inscription, mul, plinth, spot, type Detail,
 } from './generic-common';
+import { tree } from './generic-world';
 
 // ---------------------------------------------------------------- relief textures (cached)
 
@@ -214,8 +215,8 @@ function buildMausoleum(ctx: LandmarkContext): LandmarkBuild {
     if (Math.sin(a) < -0.75) continue;
     const r = R + 7;
     const x = Math.cos(a) * r, z = Math.sin(a) * r;
-    if (i % 3 === 0) broadTree(d, x, g(x, z), z, 12, 'low', 'pine');
-    else cypress(d, x, g(x, z), z, 12, 'low');
+    if (i % 3 === 0) tree(ctx, d, 'umbrella_pine', x, g(x, z), z, 12);
+    else tree(ctx, d, 'cypress', x, g(x, z), z, 12);
   }
   spots.push(
     spot(`${lm.id}:door`, 'door', 0, 0.03, zf + dromos - 1.2, 0),
@@ -227,7 +228,7 @@ function buildMausoleum(ctx: LandmarkContext): LandmarkBuild {
   );
   // Far: the drum, a cone for the mound, the central drum.
   far.cyl('travertine', 0, drumH / 2, 0, R, drumH, 16);
-  far.cyl('foliage_cypress', 0, (yMound + moundTop) / 2, 0, R - 1, moundTop - yMound, 16, { rTop: Rc + 2 });
+  far.cyl('grass', 0, (yMound + moundTop) / 2, 0, R - 1, moundTop - yMound, 16, { rTop: Rc + 2 });
   far.cyl('travertine', 0, (moundTop + yTop) / 2, 0, Rc, yTop - moundTop, 12);
   far.box('bronze', 0, yTop + 2.5, 0, 1.2, 5, 1.2);
   return finish(lm.id, d, spots, far, 1000);
