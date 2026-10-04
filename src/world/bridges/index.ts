@@ -13,6 +13,7 @@ import type { Game } from '../../core/Game';
 import type * as Atlas from '../../data/atlas';
 import { MeshBuilder, registerColliders } from '../../gfx/MeshBuilder';
 import { WORLD_SCALE } from '../coords';
+import { riverReadables } from '../landmarks/builders/river-life';
 import type { Spot } from '../landmarks/types';
 import type { Heightmap } from '../terrain/heightmap';
 import { buildStoneBridge, buildTimberBridge } from './geometry';
@@ -59,7 +60,10 @@ export async function buildBridges(game: Game, atlas: typeof Atlas, hm: Heightma
   for (const br of atlas.BRIDGES) {
     if (opts.only && !opts.only.includes(br.id)) continue;
     try {
-      placed.set(br.id, buildOne(game, br, hm, waterY, river, hiB));
+      const pb = buildOne(game, br, hm, waterY, river, hiB);
+      placed.set(br.id, pb);
+      // The Fabricius inscriptions become "Read" interactions in the running game.
+      riverReadables(game, pb.spots);
     } catch (err) {
       console.error(`[bridges] failed to build ${br.id}`, err);
     }
