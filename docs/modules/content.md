@@ -9,22 +9,29 @@ it differs, this file says so.
 - Code: `src/quests/content/` (quests), `src/dialogue/content/` (conversations), `src/npc/content/` (NpcDefs),
   `src/content/` (places, hours, route, barks, vignettes, texts, containers, shrines, lamps, the installer
   and the service layer), `src/rpg/data/items/content.ts`, `quest.ts` and `loot.ts` (the bible's items and loot)
-- Tests: `tests/content.test.ts` (validity, the corridor), `tests/content-quests.test.ts` (a scripted
-  playthrough of every quest), `tests/content-install.test.ts`, `tests/content-services.test.ts`
+- Tests: `tests/content.test.ts` (validity, the corridor, no spot inside a building), `tests/content-quests.test.ts`
+  (a scripted playthrough of every quest), `tests/content-install.test.ts`, `tests/content-services.test.ts`,
+  `tests/content-world.test.ts` (the content placed in the real built world: every prompt focusable, nothing inside or
+  under a building, every schedule place at street level)
 - Third-party assets or libraries: none (every text is original, the bible labels all of them invented [G])
 
 ## How to try it (for the owner)
 
 1. `npm run dev`, open <http://127.0.0.1:5173/?scene=rome>, choose **New Game**.
-2. You stand outside the Porta Capena at 04:30 by a cart with lamps on it. Two seconds after you get control the
-   courier Festus starts talking (Tab leaves). Walk on to the gate: the fight, the dying courier, the tablet.
+2. You stand at the Porta Capena at 04:30 beside the night cart (its mule, Dromo, Festus, two lanterns). Two seconds
+   after you get control the courier Festus starts talking (Tab leaves). Walk on down the street: a dozen steps ahead
+   the knife-men come out of the dark, then the dying courier and the tablet. (Until the Porta Capena has its own
+   builder the gate is a solid block and the flow puts you just inside it; the scene is laid out there, in front of you.
+   With the builder its spots take over: the cart outside, the ambush under the arch.)
 3. Walk up the valley. The street is no longer empty: a beggar who held the line at Tapae, a vigil with a lantern, a
    street sweeper, a charcoal seller, a lamp seller, a carter with a wheel off, the shrine attendant, a mime, a fig
    seller, the fans of the Greens and the Blues chalking the Circus wall, a schoolmaster with three boys, an augur on
    the slope, goat-milk and water sellers, then the Velabrum and the Vicus Tuscus. **E** talks to any of them.
-4. Things to look at and do on the way: **E** at a crossroads shrine prays (+5 Pietas, the Lares favor); **E** at a
-   scratched wall or a painted board reads it; **E** at a slab, a crack in a wall, a bundle, a basket or a coin in a
-   basin searches it (66 of them; the owned ones are theft if somebody sees). Lamps glow along the whole way until dawn.
+4. Things to look at and do on the way, each one a thing you can see: **E** at a crossroads altar prays (+5 Pietas, the
+   Lares favor); **E** at graffiti scratched on a wall, a painted notice, a marble plaque, a notice board or a stele
+   reads it; **E** at a lifted slab, a crack stuffed with rags, a bundle, stacked amphorae, a basket on a crate, the
+   offering box beside the altar or a coin in a basin searches it (66 of them; the owned ones are theft if somebody
+   sees). Lanterns burn on wall brackets and posts (and the altars' fires) until dawn.
 5. At the Silver Pig (Chreste), the arms dealer (Euhodus) and the Temple of Castor (Philetus) "Show me your wares"
    opens the trading panel. The teachers (Glaucus, Nereus, Asiaticus, Hermippus, Zethus, Philetus) give lessons.
 6. The rest of the day: Castor's doors are shut for the Lemuria, the strongrooms are not; the Ludus Magnus
@@ -45,7 +52,7 @@ Dev switches: `?scene=rome&quick=1` (no menus), `&hour=5.5`, `&at=<landmark id>`
 | Quest helpers | `src/content/director.ts` (spawn, fight, examine points, scripted deaths, moving actors), `questkit.ts`, `profiles.ts` (stat blocks of Mus, Pullus, Auctus, Nereus, the Rex, the mq-01 pair) |
 | Texts and landmark things | `src/content/texts.ts` (the bible's T1 to T13, 9 more along the walk, the §8.4 signs; `bookViewFor`), `things.ts` (a note, inscription or vista at each of the 54 landmarks of the nine districts) |
 | Barks and vignettes | `src/content/barks.ts` (districts, archetypes, festivals, reactions), `vignettes.ts` (28 scenes with casts and lines) |
-| In the world | `src/content/install.ts` (`installContent`), `containers.ts`, `shrines.ts`, `lamps.ts`, `services.ts` |
+| In the world | `src/content/install.ts` (`installContent`), `ground.ts` (where things may stand: out of buildings, at street level, walls), `standins.ts` (the visible things), `containers.ts`, `shrines.ts`, `lamps.ts`, `services.ts` |
 | Items and loot | `src/rpg/data/items/content.ts`, `quest.ts`, `loot.ts` (the bible's §4 and §6) |
 
 `installContent(game)` is found and run by `src/game/optional.ts` (a two-line edit there: one `import.meta.glob`
@@ -61,8 +68,9 @@ there is a gap of more than about 130 m without a named person, and a second one
 
 | d (m) | Station | Who is there |
 |---|---|---|
-| 0 | cart stand (`capena-extra`) | Festus, Dromo, his cart and mule, a lantern |
+| 0 | the bible's cart stand outside the gate (`capena-extra`) | (the builder's cart, when it exists) |
 | 34 | inside the gate (`capena-intus`) | Capito, the old soldier |
+| 42 to 62 | the fallback opening (`spawn-capena`, `night-cart`, `courier-ambush`) | the player, Festus, Dromo, the cart and mule; the ambush |
 | 60 | gate post (`capena-statio`) | Valens (urban cohort, day), Crescens (vigil, night) |
 | 79 | `compitum-capenae` | Aufidia and her boy, the Lares altar, a honey cake for the shrine |
 | 110, 150, 200, 255 | sweepers, charcoal, lamps, the broken cart | Gaudens, Mancinus, Epagathus, Cornix |
@@ -74,7 +82,11 @@ there is a gap of more than about 130 m without a named person, and a second one
 | 1081 to 1262 | the Silver Pig, the perfumer, the head of the street, the Forum | Chreste, Fadia, Licinia, Cerdo, Dento, Juvenal, Philetus, Chrysippus, Gratus |
 
 Schedules use **`sleep` for "gone home"**: the population module does not spawn a sleeper, whereas `travel` would
-leave the NPC standing at the last place. Gratus stays at the vaults from the first hour to the second watch
+leave the NPC standing at the last place. They never name a solid building: a person who works at a temple, a basilica,
+the Rostra or the Meta Sudans stands at its door-side spot `<landmark>:front` (2.5 m before the façade, `FRONT_SPOTS`),
+so nobody spawns on a roof or a podium (the aedituus waits on Castor's steps). Mus's schedule names `mus-latebra`, a
+place that exists only while the player is on his trail (the hideout is known, or mq-02 sends them after him) and he
+has not been dealt with: the population module spawns nobody at an unknown place, so he is out of sight until then. Gratus stays at the vaults from the first hour to the second watch
 (the bible sends him to the camp at the fourth hour) so "ask for Gratus" works whenever the player arrives; Dromo
 stays at the cart until the second hour, so he can still be asked what he saw.
 
@@ -86,10 +98,10 @@ each through every stage by emitting what the engines emit ('dialogue:node', 'lo
 
 | Quest | Stages | Notes |
 |---|---|---|
-| `mq-01-madida-capena` (auto-start) | start, gate, ambush, dying, city, done | the cart conversation opens by itself on a new game; two tutorial thugs (`mq01-grassator-a/b` with the bible's stat block); Festus is knifed at the arch and dies after he gives the tablet (`scriptedDeath`); his body is a "Search" point (6 den. 3 as., pugio, the letter home); the hideout objective is hidden until a flag says it is known; ends at the Forum; reward Fama +5 in the Circus district |
+| `mq-01-madida-capena` (auto-start) | start, gate, ambush, dying, city, done | the cart conversation opens by itself on a new game; two tutorial thugs (`mq01-grassator-a/b` with the bible's stat block) at `capena-grassator-a/b`; Festus is knifed at the ambush and dies after he gives the tablet (`scriptedDeath`); walking on to the Forum while he is dying gives the tablet anyway (no soft-lock); his body is a "Search" point (6 den. 3 as., pugio, the letter home); the hideout objective is hidden until a flag says it is known; ends at the Forum; reward Fama +5 in the Circus district |
 | `mq-02-tabella` | start, loculi, gratus, mus, deliver, done-v01 | Philetus at the shut doors (the Lemuria rule, AC-18), Chrysippus ("there is no Gratus"), Gratus by day and at dusk; the clue "clue-mus" from Auctus, Glaucus or the street; the Mouse fights in the burned taberna or hands over the key; the satchel doubles the pay; "Tomorrow, the Column." |
 | `lud-01-sacramentum` | start, kit, bout1, bout2, bout3, missio, done | guest or oath (Infamia +20, a tiro); the armory stores the practice arms whenever you leave the Ludus; bouts start when you tell Asiaticus "Ready"; a lusio injury lasts one game hour; yielding to Nereus rolls the missio (favor); the choice after his yield is made in dialogue (or by `'content:missio'` if combat runs its own prompt); purse 30 den. × (1 + favor/100), half if spared; Hermippus patches you up and tells you to wait for the lamps |
-| `misc-meta-sudans-rixa` | start, rixa, after, done, done-peace, done-walked, fail | armed on the way back from the Ludus (between the 11th hour and the second watch); the other side's three brawlers (a bruiser with the caestus and two drunks); blade drawn or a death fails it; yielding costs a tenth of the purse; the watch asks who started it |
+| `misc-meta-sudans-rixa` | start, rixa, after, done, done-peace, done-walked, fail | armed on the way back from the Ludus (between the 11th hour and the second watch); the other side's three brawlers (its leader, already at the fountain, is engaged where he stands with `fight()`; two drunks are spawned) before the fountain (`meta-sudans:front`); blade drawn or a death fails it; yielding costs a tenth of the purse; the watch asks who started it |
 | `misc-lemuria-fabae` | start, watch, choice, done | the night of 11 May: the stair after midnight, Thallusa, the lean-to at the compitum, three endings; stealth ships later, so the tail is a matter of time and place |
 | `misc-insula-nutans` | start, callistus, aedile, evacuate, done, collapsed, bribed | four "Examine" signs (a smith's eye counts double), Callistus' bribe, Dento (Persuade, Lie, a bribe, or the Fabrica reading), four households warned before the first watch, then the wall falls |
 | `misc-venus-cloacina` | start, descend, rex, cache, done | the interior `dun-cloaca-maxima` belongs to the world side; until it exists the delve is staged at the outfall on the Tiber (`cloaca-maxima-outlet`): three cloacarii, then the Rex; the cache is a container |
@@ -134,14 +146,27 @@ lawFine, lawClear · `npc-fabae` accept, florusLie, florusPersuaded, florusTold 
 
 ## In the world (`installContent`)
 
+Everything placed goes through `src/content/ground.ts` first: a point inside the footprint of a building the world
+builds as solid masonry (or in the wall of an open court) is moved out of it; then, in the built world, the `Placer`
+takes the nearest point whose first surface under the sky is at street level (no roof, podium or wall top), out of the
+river, with nothing solid at body height and clear of what content already placed and of every spot where a schedule
+puts somebody (the NPCs stand there). Rapier's queries only see the colliders that existed at its last step, so
+`installContent` steps the physics a tenth of a millisecond first: everything was built behind the loading screen.
+Places buried in the world's geometry (the Subura's fallback block today) get nothing until they have a street.
+
+Every prompt has something to see (`src/content/standins.ts`, merged per 150 m cell into one mesh per material and
+registered with `placeAndRegister`, colliders included; ~210 things, a few dozen draw calls where the player is):
+
 | What | How |
 |---|---|
-| Shrines | 13 "Pray" points (the six compita, Vortumnus, Venus Cloacina, Juturna, Vulcan, the Lacus Curtius, Janus, Mercury's spring): `devotion.prayAtCompitum`, +5 Pietas once a day per shrine and the Lares favor, on the Lemuria too; Cloacina purifies, Juturna heals 10 HP and washes |
-| Texts | 42 "Read" points open the book reader: T3 to T13 (graffiti, playbill, fire notice, the altar of the Vicus Tuscus, the lost dog, the club's rules, 20 points in all), 9 more along the walk (the gate pier, Mercury's votive tablet, the litter tariff, the Circus chalk, the diviners' boards, two altars, the burned shop's notice, Vortumnus' base) and the §8.4 shop signs; the lampoon on the basilica steps is washed off at sunset |
-| Landmark things | 54 "Read" / "Look" points, one in front of the façade of every landmark of the nine v0.1 districts (AC-23): Tiberius' rebuilding of Castor's temple, the beaks of Antium on the Rostra, the Tullianum, the Menorah in Vespasian's Temple of Peace, Trajan's Column, the Circus' two hundred and fifty thousand seats, the bronze bull, the island shaped like a ship… all of them what a Roman of 113 could know |
-| Containers | 66 in the street (20+ unowned, owned ones are `furtum` if `population.witnesses` sees you), 13 more indoors waiting for their interiors; loot rolled once with a seed per container and kept in the world deltas; the Mouse's strongbox opens only with his key; the Rex's cache is a container the quest listens for |
-| Lamps | 68, flagged `night` so they light at dusk and go out one by one at dawn: the gate, shrines, stations, shops and one every ~45 m of the corridor |
-| Carts | when `src/npc/props.ts` exists (the NPC crew's), Dromo's cart and mule stand at the cart stand and Cornix's with a wheel off; their load containers only appear with the cart |
+| Shrines | 13 "Pray" points, each on an **altar** (kit `altar`; before the shrine when the shrine is a building, like the Lacus Curtius; the Porta Capena builder's spring is used as it is): `devotion.prayAtCompitum`, +5 Pietas once a day per shrine and the Lares favor, on the Lemuria too; Cloacina purifies, Juturna heals 10 HP and washes |
+| Texts | 42 "Read" points open the book reader: graffiti **scratched on a real wall**, notices **painted on it**, inscriptions on a **marble plaque**, shop signs on a **signboard** above the door; where the street has no building, several share a **stretch of plastered wall** of their own, else a **notice board**, a **stele** or a **scratched pier**. T3 to T13, 9 more along the walk and the §8.4 signs; the lampoon on the basilica steps is washed off at sunset |
+| Landmark things | 54 "Read" / "Look" points, a **stele** (inscription), a **notice board** (note) or a **herm** (vista) 2.5 m before the façade of every landmark of the nine v0.1 districts (AC-23), turned so the reader stands in the street |
+| Containers | 66 in the street, each a thing: a **lifted slab**, a **crack stuffed with rags** in a real wall (or a broken wall stub), a **bundle**, **stacked amphorae**, a **basket on a crate**, the **offering box on its stand** 1.7 m from the altar, a **basin** with the coin, a **mallet on a step**, silt heaps at the outfall; prompts sit on top of or in front of them, never inside. Owned ones are `furtum` if `population.witnesses` sees you; 13 more indoors wait for their interiors; loot rolled once with a seed per container and kept in the world deltas; the Mouse's strongbox opens only with his key |
+| Lamps | each burns in something: a **lantern on an iron bracket** where there is a wall, else a **lantern on a post**, or the **altar's fire** at the shrines; the street lamps along the corridor are hung only on walls (none over open ground); flagged `night`, lit at dusk, out one by one at dawn |
+| Carts | when `src/npc/props.ts` exists (the NPC crew's), Dromo's cart and mule at `night-cart` (beside the spawn) and Cornix's with a wheel off; their loads are searched from the cart's side once the cart exists; the Porta Capena builder's own cart replaces Dromo's |
+| World spots | the landmark builders' spots the content uses (`spawn-capena`, `night-cart`, `night-cart-driver`, `courier-ambush`, `capena-grassator-a/b`, `capena-mercury-spring`, `castor-strongroom`, the Ludus' gate, arena, lanista, armory and medicus; by id or `<landmark>:<id>`) are mirrored into `game.locations` (`mirrorLandmarkSpots`) and replace the fallbacks; the bible's aliases follow them (`capena-extra`, `castor-loculi`, `ludus-cavea`…), and `capena-fight-area` stays 40 m round the new ambush. `game.content.worldSpots` lists them |
+| People | on `game:started`: a New Game brings back the named NPCs the last game killed (Festus) and sends the opening's courier back to the cart; a load takes away whoever its world deltas say is dead (`syncNamedDeaths`); Mus's corner follows the story (`syncMusHideout`) |
 | Services | `services.ts` answers `'dialogue:service'`: **barter** (a BarterView over `game.barter`: stock, purses, §7.4 prices, stolen goods refused unless the merchant fences, whole-deal validation), **train** (§5.1 cost and caps), **repair**, **heal**, **rent** |
 
 New events (declared in `director.ts` and `install.ts`): `content:interact` (an examine point was used),
@@ -155,14 +180,19 @@ New events (declared in `director.ts` and `install.ts`): `content:interact` (an 
   `'actor:killed'` and `'actor:yielded'` by the spawned id: a knockout in a lusio is a `'actor:killed'`, a fleeing or yielding
   thug an `'actor:yielded'`. Practice arms never kill; a brawl is non-lethal and drawing a blade is `crime:committed` `vis`.
   Without a combat module every fight resolves on its own, so the thread stays playable.
-- **NPC life**: schedules use `sleep` for offstage. `scriptedDeath` calls `game.population.kill(npc)` and emits
-  `'actor:killed'`: the world deltas record the death, but the population module must also skip dead NPCs when it
-  respawns named people after a load and forget its dead ones (Festus) on a New Game from the title. Quests emit `'content:beat'` (`courier-knifed`, `mus-flees`, `courier-dying`,
+- **NPC life**: schedules use `sleep` for offstage and never name a solid building (`<landmark>:front`). `scriptedDeath`
+  calls `game.population.kill(npc)` and emits `'actor:killed'` (the world deltas record the death). Content keeps
+  `population.deadNamed` in step with the story on `game:started` (it clears it on a New Game, adds the save's dead on a
+  load, despawns a stale corpse or a moved Festus); the population module should still skip `deltas.isDead` ids when it
+  respawns named people, so this does not depend on content. Content claims the spots where schedules put people, so
+  its props never stand on them. Quests emit `'content:beat'` (`courier-knifed`, `mus-flees`, `courier-dying`,
   `grassatores-flee`, `bout-start`, `bout-stopped`, `brawl-start`, `cloacarius-grate`, `insula-collapses`) for scenes the NPC and
   combat sides may play; nothing depends on them.
-- **World**: the contract spots (`spawn-capena`, `courier-ambush`, `castor-strongroom`, `ludus-gate`, `ludus-arena-center`,
-  `lanista`, `armory`, `medicus`) and the bible's spots have fallback positions in `places.ts`; a spot the world registers with the
-  same id replaces them and `syncAliases` keeps the bible's alias ids on top. The interior cells `dun-taberna-collapsa`,
+- **World**: the contract spots (`spawn-capena`, `night-cart`, `courier-ambush`, `castor-strongroom`, `ludus-gate`,
+  `ludus-arena-center`, `lanista`, `armory`, `medicus`, plus `night-cart-driver`, `capena-grassator-a/b`, `capena-mercury-spring`)
+  have fallback positions in `places.ts`; when a landmark builder exposes a spot with the id (or `<landmark>:<id>`),
+  `installContent` mirrors it into `game.locations` and the bible's alias ids follow. The `subura` district anchor is built
+  as one solid block by the generic builder, which buries `fullonica-suburana` (T13 is not placed until it has a street). The interior cells `dun-taberna-collapsa`,
   `dun-cloaca-maxima` and the small interiors are the world side's; the quests work at their entrances today.
 - **UI**: the content opens `ui.openBook` (texts, things), `ui.openContainer` (containers) and `ui.openBarter` (trade, through `services.ts`); the dialogue panel is the flow's.
 - **Calendar**: `rpg.hooks.templesClosed` must be true on the Lemuria for the offering to be refused (the dialogue
@@ -172,6 +202,11 @@ New events (declared in `director.ts` and `install.ts`): `content:interact` (an 
 ## Differences from the bible
 
 - mq-01 starts on foot at the cart stand (there is no cart to climb down from): "dismount" is leaving the stand or talking to Festus.
+  Until the Porta Capena has a passage the stand and the ambush are inside the gate, where the flow spawns the player
+  (the bible has them outside and under the arch; the builder's spots restore that). Mus is not seen at the burned
+  taberna until the player is after him (the bible: he vanishes after the murder).
+- Spots the bible puts inside buildings built as solid blocks today (the strongrooms in Castor's podium, the steps of
+  the Basilica Julia) stand at the edge of the building on the same side.
 - Gratus stays at the vaults all day; Dromo leaves for the inn at the second hour, not the first.
 - Lud-01 has a `missio` stage between the yield and the purse (the arena's choice, in dialogue), and bouts are started by
   telling Asiaticus you are ready (the bible leaves the starter open).
@@ -189,3 +224,5 @@ New events (declared in `director.ts` and `install.ts`): `content:interact` (an 
   bible's lines; unifying them is the integrator's call.
 - Interiors: containers, the cista of Mus and the lockers wait for their rooms; the readable signs of indoor places
   are placed at the doorstep.
+- The stand-ins are procedural kit pieces and simple shapes (an altar, a stele, a board, lanterns): CC0 models from the
+  asset plan (`docs/research/assets-3d-plan.md`) can replace them one kind at a time in `standins.ts`.

@@ -780,6 +780,9 @@ async function placeCarts(ctx: Ctx, disposers: (() => void)[]) {
 
 // ------------------------------------------------------------------ people who come and go
 
+/** Named people quests move around (the opening's courier): reset to their home on a New Game. */
+const SCRIPTED_NPCS = ['npc-festus'];
+
 interface PopulationLike {
   deadNamed?: Set<string>;
   get?(id: string): { dead?: boolean } | undefined;
@@ -792,9 +795,23 @@ interface PopulationLike {
  * whoever died in it (the world deltas record deaths). The NPC module keeps its dead in
  * `deadNamed`; a corpse left from another game is removed so the person spawns again by schedule.
  */
-export function syncNamedDeaths(game: Game) {
+export function syncNamedDeaths(game: Game, kind: 'new' | 'load' | 'quick' = 'load') {
   const pop = (game as unknown as { population?: PopulationLike }).population;
   if (!pop) return;
+  // A New Game: the people the opening moves about (Festus, knifed down the street) start over
+  // where their day begins, so they are despawned and the population module spawns them afresh.
+  if (kind === 'new') {
+    for (const id of SCRIPTED_NPCS) {
+      const npc = pop.get?.(id);
+      if (npc && !npc.dead && !game.deltas?.isDead(id)) {
+        try {
+          pop.despawn?.(npc);
+        } catch (err) {
+          console.warn(`[content] could not reset ${id}`, err);
+        }
+      }
+    }
+  }
   const named = (id: string) => game.npcs?.has?.(id) ?? id.startsWith('npc-');
   const ids = new Set([...(pop.deadNamed ?? [])].filter(named));
   for (const def of game.npcs?.all?.() ?? []) if (game.deltas?.isDead(def.id)) ids.add(def.id);
@@ -911,8 +928,8 @@ export function installContent(game: Game): ContentService {
   const ev = game.events;
   if (ev?.on) {
     disposers.push(
-      ev.on('game:started', () => {
-        syncNamedDeaths(game);
+      ev.on('game:started', (e) => {
+        syncNamedDeaths(game, e.kind);
         syncMusHideout(game);
       }),
       ev.on('save:loaded', () => syncMusHideout(game)),

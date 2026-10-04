@@ -333,11 +333,18 @@ describe('the world’s spots and the people who come and go', () => {
     w.events.emit('game:started', { kind: 'new' });
     expect(pop.deadNamed.has('npc-festus')).toBe(false); // the population module will spawn him again
     expect(despawned).toEqual(['npc-festus']); // the corpse from the last game is gone
+    // Alive but left where the last opening moved him (down the street): a New Game sends him home.
+    npcs.set('npc-festus', { id: 'npc-festus', dead: false });
+    w.events.emit('game:started', { kind: 'new' });
+    expect(despawned).toEqual(['npc-festus', 'npc-festus']);
+    npcs.set('npc-festus', { id: 'npc-festus', dead: false });
+    w.events.emit('game:started', { kind: 'quick' });
+    expect(despawned).toHaveLength(2); // quick starts and loads leave him be
     // A save in which Mus died: he is taken away and stays dead.
     w.game.deltas!.merge('npc-mus', { dead: true });
     w.events.emit('game:started', { kind: 'load' });
     expect(pop.deadNamed.has('npc-mus')).toBe(true);
-    expect(despawned).toEqual(['npc-festus', 'npc-mus']);
+    expect(despawned).toEqual(['npc-festus', 'npc-festus', 'npc-mus']);
   });
 
   it('keeps Mus offstage until the player is on his trail, and gone once he is dealt with', () => {
