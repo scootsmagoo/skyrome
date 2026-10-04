@@ -2,7 +2,8 @@
   "name": "skyrome",
   "private": true,
   "version": "0.0.1",
-  "description": "An open-world RPG set in Trajan's Rome, AD 113 — runs in the browser.",
+  "description": "An open-world RPG set in Trajan's Rome, AD 113 \u2014 runs in the browser.",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
