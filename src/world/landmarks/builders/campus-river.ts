@@ -161,6 +161,24 @@ function horreaComplex(ctx: LandmarkContext, courts: number, title: string): Lan
 
 // ---------------------------------------------------------------- Monte Testaccio
 
+/**
+ * Pure: height (0..1 of the mound) at normalized elliptic radius r (0 centre, 1 foot) and angle a:
+ * a heap with three tidy terraces (the dump was built up in retained steps), a lumpy outline, and a
+ * flattened working top.
+ */
+export function testaccioHeight(r: number, a: number, lump: (a: number) => number): number {
+  const rr = r / lump(a);
+  if (rr >= 1) return 0;
+  const base = Math.pow(1 - rr * rr, 0.75);
+  // Terraces: hold the level for most of each band, then a steep retained face.
+  const steps = 3;
+  const t = base * steps;
+  const k = Math.floor(t);
+  const f = t - k;
+  const terr = (k + (f > 0.78 ? (f - 0.78) / 0.22 : 0)) / steps;
+  return Math.min(0.92, 0.25 * base + 0.75 * terr);
+}
+
 function buildTestaccio(ctx: LandmarkContext): LandmarkBuild {
   const { lm, detail } = ctx;
   const rng = ctx.rng.fork('testaccio');
@@ -168,68 +186,93 @@ function buildTestaccio(ctx: LandmarkContext): LandmarkBuild {
   const { w, d: dd } = dims(ctx);
   const spots: Spot[] = [];
   const rx = w / 2, rz = dd / 2;
-  const g0 = groundRange(ctx, -rx, -rz, rx, rz, 6);
-  // FLAG: its size in 113 is unknown; the research guesses 10–20 m, the atlas 8 m. ~10 m here.
+  // FLAG: its size in 113 is unknown (the atlas says 8 m); a modest heap of ~6 m game.
   const H = Math.max(6, lm.height * ctx.S);
-  const terraces = 5;
-  const segs = detail === 'high' ? 36 : 20;
-  // Irregular outline: a lumpy ellipse shared by all terraces (shrinking upward, drifting a little).
-  const lump = Array.from({ length: segs }, () => 1 + rng.range(-0.08, 0.08));
-  for (let k = 0; k < terraces; k++) {
-    const f = 1 - k * 0.17;
-    const y0 = g0.min - 0.8 + (k * H) / terraces;
-    const y1 = g0.min + ((k + 1) * H) / terraces;
-    const ox = rng.range(-1.5, 1.5) * k, oz = rng.range(-1, 1) * k;
-    const geo = new THREE.CylinderGeometry(1, 1, 1, segs, 1, false).toNonIndexed();
-    const pos = geo.getAttribute('position') as THREE.BufferAttribute;
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i), z = pos.getZ(i), y = pos.getY(i);
-      const a = Math.atan2(z, x);
-      const j = Math.round(((a + Math.PI) / (Math.PI * 2)) * segs) % segs;
-      const top = y > 0;
-      const rr = Math.hypot(x, z) * lump[j] * (top ? 0.94 : 1);
-      pos.setXYZ(i, ox + Math.cos(a) * rr * rx * f, top ? y1 : y0, oz + Math.sin(a) * rr * rz * f);
+  const lumps = Array.from({ length: 6 }, () => [rng.range(0, Math.PI * 2), rng.range(0.008, 0.02)] as const);
+  const lump = (a: number) => 1 + lumps.reduce((s, [p, amp], i) => s + amp * Math.sin((i + 2) * a + p), 0);
+  const g = (x: number, z: number) => ctx.groundAt(x, z);
+  // Polar grid mesh of the heap, draped on the ground at its foot.
+  const nr = detail === 'high' ? 18 : 10, na = detail === 'high' ? 64 : 32;
+  const pos: number[] = [];
+  const P = (ri: number, ai: number) => {
+    const r = ri / nr, a = (ai / na) * Math.PI * 2;
+    const x = Math.cos(a) * r * rx * 1.02, z = Math.sin(a) * r * rz * 1.02;
+    const n = (Math.sin(x * 1.7 + z * 0.9) + Math.sin(x * 0.6 - z * 2.1)) * 0.06;
+    return [x, g(x, z) - (ri === nr ? 0.15 : 0) + H * testaccioHeight(r, a, lump) + (ri < nr ? n : 0), z];
+  };
+  for (let ri = 0; ri < nr; ri++) {
+    for (let ai = 0; ai < na; ai++) {
+      const p00 = P(ri, ai), p01 = P(ri, ai + 1), p10 = P(ri + 1, ai), p11 = P(ri + 1, ai + 1);
+      pos.push(...p00, ...p01, ...p11, ...p00, ...p11, ...p10);
     }
-    geo.computeVertexNormals();
-    d.geo(geo, 'terracotta');
-    // Lime sprinkled on the treads in irregular sheets, sherd ridges where loads were tipped.
-    for (let i = 0; i < 4; i++) {
-      const a = rng.range(0, Math.PI * 2), r = f * rng.range(0.55, 0.85);
-      d.ellipsoid(i % 2 ? 'plaster_white' : 'concrete', ox + Math.cos(a) * rx * r, y1 + 0.02, oz + Math.sin(a) * rz * r, rng.range(2, 5), 0.06, rng.range(1.5, 3), { ry: rng.range(0, 3), seg: [8, 3] });
-    }
-    // Retaining courses of whole amphorae along the terrace edge (a dotted rim of necks).
-    if (detail === 'high') {
-      const n = Math.round((Math.PI * (rx * f + rz * f)) / 1.4);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.computeVertexNormals();
+  d.geo(geo, 'terracotta', 0, 0, 0, { uvScale: 1.2 });
+  // Colliders: stacked elliptical boxes following the terraces.
+  for (let k = 0; k < 6; k++) {
+    const r = 1 - k / 6;
+    const y = H * testaccioHeight(Math.max(0, r - 0.08), 0, () => 1);
+    for (const [sx, sz] of [[0.92, 0.42], [0.7, 0.72], [0.4, 0.92]]) d.solid(-rx * r * sx, g(0, 0) - 0.5, -rz * r * sz, rx * r * sx, g(0, 0) + y, rz * r * sz);
+  }
+  // Lime sprinkled over the fresh layers (against the smell), in irregular sheets on the treads.
+  for (let i = 0; i < 14; i++) {
+    const a = rng.range(0, Math.PI * 2), r = rng.range(0.15, 0.75);
+    const x = Math.cos(a) * rx * r, z = Math.sin(a) * rz * r;
+    const y = g(x, z) + H * testaccioHeight(r, a, lump);
+    d.ellipsoid(i % 3 ? 'plaster_white' : 'concrete', x, y + 0.03, z, rng.range(1.5, 4), 0.05, rng.range(1, 2.5), { ry: rng.range(0, 3), seg: [8, 3] });
+  }
+  // Retaining courses of whole amphorae laid neck-in along the terrace faces (a dotted rim).
+  if (detail === 'high') {
+    for (const level of [1, 2]) {
+      const rT = Math.sqrt(1 - Math.pow((level / 3) / 1, 4 / 3)); // where the base curve crosses the terrace
+      const n = Math.round((Math.PI * (rx + rz) * rT) / 0.9);
       for (let i = 0; i < n; i++) {
-        const a = (i / n) * Math.PI * 2 - Math.PI;
-        const j = Math.round(((a + Math.PI) / (Math.PI * 2)) * segs) % segs;
-        const x = ox + Math.cos(a) * rx * f * lump[j] * 0.97, z = oz + Math.sin(a) * rz * f * lump[j] * 0.97;
-        d.cyl('terracotta', x, y1 - 0.25, z, 0.17, 0.6, 5, { rx: Math.PI / 2, ry: -a + Math.PI / 2 });
+        const a = (i / n) * Math.PI * 2;
+        const r = rT * lump(a) * 0.985;
+        const x = Math.cos(a) * rx * r, z = Math.sin(a) * rz * r;
+        const y = g(x, z) + H * testaccioHeight(r - 0.03, a, lump);
+        d.cyl('roof_tile', x, y - 0.2, z, 0.2, 0.55, 5, { rx: Math.PI / 2, ry: -a + Math.PI / 2 });
       }
     }
-    for (const [sx, sz] of [[0.92, 0.5], [0.66, 0.82], [0.38, 0.95]]) d.solid(ox - rx * f * sx, y0, oz - rz * f * sz, ox + rx * f * sx, y1, oz + rz * f * sz);
   }
-  // A donkey ramp up the S face, fresh loads tipped at the top.
-  const top = g0.min + H;
-  // (from the foot at the E edge up westward along the S flank)
-  const run = rx * 0.7;
-  const rampL = Math.hypot(run, H);
-  d.box('dirt', rx * 0.55, g0.min + H / 2 - 0.2, rz * 0.72, rampL, 0.5, 3, { rz: -Math.atan2(H, run), collide: true });
+  // The donkey ramp: a beaten track climbing the S flank to the working top.
+  const steps = 14;
+  for (let i = 0; i < steps; i++) {
+    const t0 = i / steps, t1 = (i + 1) / steps;
+    const a0 = Math.PI * 0.35 + t0 * 1.2, a1 = Math.PI * 0.35 + t1 * 1.2;
+    const r0 = 1.02 - t0 * 0.72, r1 = 1.02 - t1 * 0.72;
+    const A = [Math.cos(a0) * rx * r0, Math.sin(a0) * rz * r0], B = [Math.cos(a1) * rx * r1, Math.sin(a1) * rz * r1];
+    const yA = g(A[0], A[1]) + H * testaccioHeight(r0, a0, lump) + 0.12, yB = g(B[0], B[1]) + H * testaccioHeight(r1, a1, lump) + 0.12;
+    const len = Math.hypot(B[0] - A[0], B[1] - A[1]);
+    d.box('dirt', (A[0] + B[0]) / 2, (yA + yB) / 2, (A[1] + B[1]) / 2, len + 0.3, 0.35, 2.6, { ry: Math.atan2(-(B[1] - A[1]), B[0] - A[0]), rz: Math.atan2(yB - yA, len), collide: true });
+  }
+  // The working top: fresh loads tipped and broken up, stacks of whole amphorae waiting, a cart.
+  const yt = g(0, 0) + H * testaccioHeight(0, 0, lump);
   for (let i = 0; i < 6; i++) {
-    const a = rng.range(0, Math.PI * 2);
-    const r = rng.range(0, 0.35);
-    d.ellipsoid('terracotta', Math.cos(a) * rx * r, top, Math.sin(a) * rz * r, rng.range(1.2, 2.4), rng.range(0.5, 0.9), rng.range(1, 2), { seg: [8, 4] });
+    const a = rng.range(0, Math.PI * 2), r = rng.range(0.05, 0.3);
+    d.ellipsoid('terracotta', Math.cos(a) * rx * r, yt - 0.1, Math.sin(a) * rz * r, rng.range(1.0, 2.2), rng.range(0.4, 0.8), rng.range(0.8, 1.6), { seg: [8, 4] });
   }
-  // At the foot: carts of empty amphorae come up from the Emporium; a lime pit.
+  placeProp(d, 'amphora_stack', 3, yt, -1.5, 0.4);
+  placeProp(d, 'amphora_stack', 4.4, yt, 0.2, 1.4);
+  placeProp(d, 'handcart', -2.5, yt, 1.0, 0.8);
+  // At the foot: carts of empty amphorae up from the Emporium, a lime pit, the overseer's shed.
   const fz = rz + 3;
-  placeProp(d, 'cart', -rx * 0.3, ctx.groundAt(-rx * 0.3, fz), fz, 0.3, { variant: 0 });
-  placeProp(d, 'amphora_stack', rx * 0.1, ctx.groundAt(rx * 0.1, fz), fz, 0);
-  placeProp(d, 'amphora_stack', rx * 0.1 + 2, ctx.groundAt(rx * 0.1 + 2, fz), fz + 0.5, 1);
-  d.span('plaster_white', -rx * 0.6 - 1.5, ctx.groundAt(-rx * 0.6, fz) - 0.2, fz - 1, -rx * 0.6 + 1.5, ctx.groundAt(-rx * 0.6, fz) + 0.05, fz + 1);
+  placeProp(d, 'cart', -rx * 0.3, g(-rx * 0.3, fz), fz, 0.3, { variant: 0 });
+  placeProp(d, 'amphora_stack', rx * 0.1, g(rx * 0.1, fz), fz, 0);
+  placeProp(d, 'amphora_stack', rx * 0.1 + 2, g(rx * 0.1 + 2, fz), fz + 0.5, 1);
+  d.span('plaster_white', -rx * 0.6 - 1.5, g(-rx * 0.6, fz) - 0.2, fz - 1, -rx * 0.6 + 1.5, g(-rx * 0.6, fz) + 0.05, fz + 1);
+  const sh = d.at(rx * 0.45, g(rx * 0.45, fz + 2), fz + 2);
+  sh.span('wood', -1.6, 0, -1.2, 1.6, 2.4, 1.2, { collide: true });
+  sh.span('black', -0.45, 0, -1.22, 0.45, 2.0, -1.18);
+  tiledRoof(sh, 'shed', 0, 0, 3.2, 2.4, 2.4, 'low', { pitchDeg: 14 });
   spots.push(
-    spot(`${lm.id}:ramp`, 'npc', rx * 0.95, ctx.groundAt(rx * 0.95, rz * 0.72), rz * 0.72, -Math.PI / 2),
-    spot(`${lm.id}:top`, 'vista', 0, top + 0.5, 0, 0),
-    spot(`${lm.id}:sherds`, 'container', rx * 0.1, ctx.groundAt(rx * 0.1, fz - 1.5), fz - 1.5, 0),
+    spot(`${lm.id}:ramp`, 'npc', Math.cos(Math.PI * 0.35) * rx, g(Math.cos(Math.PI * 0.35) * rx, Math.sin(Math.PI * 0.35) * rz), Math.sin(Math.PI * 0.35) * rz + 1, Math.PI),
+    spot(`${lm.id}:top`, 'vista', 0, yt + 0.3, 0, 0),
+    spot(`${lm.id}:smasher`, 'npc', 2, yt, 0, -Math.PI / 2),
+    spot(`${lm.id}:overseer`, 'npc', rx * 0.45, g(rx * 0.45, fz + 0.4), fz + 0.4, Math.PI),
+    spot(`${lm.id}:sherds`, 'container', rx * 0.1, g(rx * 0.1, fz - 1.5), fz - 1.5, 0),
   );
   return finish(lm.id, d, spots, undefined, 800);
 }
