@@ -226,6 +226,26 @@ export function courtyardRanges(d: Draw, x0: number, z0: number, x1: number, z1:
   wallRun(d, x0, z0 + t / 2, cx - gate / 2, z0 + t / 2, 0, H, t, mat);
   wallRun(d, cx + gate / 2, z0 + t / 2, x1, z0 + t / 2, 0, H, t, mat);
   d.span(mat, cx - gate / 2, Math.min(H - 0.5, 4.6), z0, cx + gate / 2, H, z0 + wing);
+  // The street face: a travertine gate frame, small high windows of the upper rooms all round,
+  // and a string course at the floor line, so the long blank walls read as buildings.
+  const gh = Math.min(H - 0.5, 4.6);
+  d.span('travertine', cx - gate / 2 - 0.45, 0, z0 - 0.12, cx - gate / 2, gh + 0.45, z0 + 0.05);
+  d.span('travertine', cx + gate / 2, 0, z0 - 0.12, cx + gate / 2 + 0.45, gh + 0.45, z0 + 0.05);
+  d.span('travertine', cx - gate / 2 - 0.6, gh, z0 - 0.18, cx + gate / 2 + 0.6, gh + 0.5, z0 + 0.05);
+  if (H > 5.5) {
+    const yw = Math.max(3.4, H * 0.55);
+    for (const [ax, az, bx, bz, nx, nz] of [[x0, z0, x1, z0, 0, -1], [x1, z1, x0, z1, 0, 1], [x0, z1, x0, z0, -1, 0], [x1, z0, x1, z1, 1, 0]] as const) {
+      const len = Math.hypot(bx - ax, bz - az);
+      const n = Math.floor(len / 3.6);
+      for (let i = 0; i < n; i++) {
+        const f = (i + 0.5) / n;
+        const x = ax + (bx - ax) * f, z = az + (bz - az) * f;
+        if (nz === -1 && Math.abs(x - cx) < gate / 2 + 1.2) continue;
+        d.box('black', x + nx * 0.02, yw + 0.55, z + nz * 0.02, nz ? 0.7 : 0.06, 1.1, nx ? 0.7 : 0.06);
+      }
+      d.box('travertine', (ax + bx) / 2 + nx * 0.06, yw - 0.6, (az + bz) / 2 + nz * 0.06, nz ? len : 0.14, 0.18, nx ? len : 0.14);
+    }
+  }
   wallRun(d, x1 - t / 2, z0, x1 - t / 2, z1, 0, H, t, mat);
   wallRun(d, x1, z1 - t / 2, x0, z1 - t / 2, 0, H, t, mat);
   wallRun(d, x0 + t / 2, z1, x0 + t / 2, z0, 0, H, t, mat);

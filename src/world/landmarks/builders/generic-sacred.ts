@@ -550,6 +550,31 @@ function buildTomb(ctx: LandmarkContext): LandmarkBuild {
     necropolis(ctx, d, w, dd, detail, spots);
     return finish(lm.id, d, spots);
   }
+  if (h.has('rock-cut', 'rock cut')) {
+    // Painted facade cut into the tufa slope: half-columns, niches with statues, a dark doorway.
+    const fh = Math.min(H, 7);
+    // The hillside the tomb is cut into: a tufa face, then a grassy slope falling away behind.
+    const top = fh + 3, zf = -dd / 2 + 1.5, zr = zf + 3;
+    d.span('tufa', -w / 2, -1, zf, w / 2, top, zr, { collide: true });
+    const zb = dd / 2 + top * 1.2;
+    const wedge = (x: number, y: number, z: number) => V(x, y, z);
+    d.poly('grass', [wedge(-w / 2, top, zr), wedge(w / 2, top, zr), wedge(w / 2, -1, zb), wedge(-w / 2, -1, zb)], { doubleSided: true });
+    for (const sx of [-1, 1]) d.poly('rock', [wedge(sx * w / 2, top, zr), wedge(sx * w / 2, -1, zb), wedge(sx * w / 2, -1, zr)], { doubleSided: true });
+    for (let k = 0; k < 4; k++) d.solid(-w / 2, -1, zr, w / 2, top * (1 - k / 4), zr + ((zb - zr) * (k + 1)) / 4);
+    tree(ctx, d, 'cypress', -w * 0.3, top * 0.7, zr + (zb - zr) * 0.3, 9);
+    tree(ctx, d, 'umbrella_pine', w * 0.25, top * 0.45, zr + (zb - zr) * 0.55, 11);
+    d.span('plaster_red', -w / 2 + 0.6, 0, -dd / 2 + 1.45, w / 2 - 0.6, fh * 0.45, -dd / 2 + 1.5);
+    d.span('peperino', -w / 2 + 0.4, fh * 0.45, -dd / 2 + 1.2, w / 2 - 0.4, fh * 0.52, -dd / 2 + 1.5);
+    const n = Math.max(3, Math.round(w / 3.5));
+    for (let i = 0; i <= n; i++) {
+      const x = -w / 2 + 1 + ((w - 2) * i) / n;
+      column(d.b, { order: 'tuscan', D: 0.45, height: fh * 0.45, material: 'peperino', kind: 'engaged', detail: 'low' }, mul(d.m, T(x, fh * 0.52, -dd / 2 + 1.5)));
+    }
+    d.span('black', -0.7, 0, -dd / 2 + 1.44, 0.7, 2.3, -dd / 2 + 1.46);
+    for (const x of [-w / 4, w / 4]) statueOnPedestal(d, 'togate', x, fh * 0.52, -dd / 2 + 1.0, 0, 0.9, 'peperino', detail, 0.2, 'peperino');
+    spots.push(spot(`${lm.id}:door`, 'door', 0, 0, -dd / 2 + 0.6, 0));
+    return finish(lm.id, d, spots);
+  }
   if (h.has('columbarium') || siting === 'underground') {
     // A small brick entrance house with a stair going down into the dark.
     const hw = Math.min(w, 6) / 2, hd = Math.min(dd, 5) / 2;
@@ -562,22 +587,6 @@ function buildTomb(ctx: LandmarkContext): LandmarkBuild {
     d.span('black', -0.8, -0.05, -hd + 0.6, 0.8, 0.02, hd - 0.6);
     inscription(d, [name.toUpperCase()], 0, 2.55, -hd - 0.22, 1.6, 0.4);
     spots.push(spot(`${lm.id}:door`, 'door', 0, 0, -hd - 0.6, 0), spot(`${lm.id}:inscription`, 'inscription', 0, 0, -hd - 1.2, 0));
-    return finish(lm.id, d, spots);
-  }
-  if (h.has('rock-cut', 'rock cut')) {
-    // Painted facade cut into the tufa slope: half-columns, niches with statues, a dark doorway.
-    const fh = Math.min(H, 7);
-    d.span('tufa', -w / 2, -1, -dd / 2 + 1.5, w / 2, fh + 3, dd / 2, { collide: true });
-    d.span('plaster_red', -w / 2 + 0.6, 0, -dd / 2 + 1.45, w / 2 - 0.6, fh * 0.45, -dd / 2 + 1.5);
-    d.span('peperino', -w / 2 + 0.4, fh * 0.45, -dd / 2 + 1.2, w / 2 - 0.4, fh * 0.52, -dd / 2 + 1.5);
-    const n = Math.max(3, Math.round(w / 3.5));
-    for (let i = 0; i <= n; i++) {
-      const x = -w / 2 + 1 + ((w - 2) * i) / n;
-      column(d.b, { order: 'tuscan', D: 0.45, height: fh * 0.45, material: 'peperino', kind: 'engaged', detail: 'low' }, mul(d.m, T(x, fh * 0.52, -dd / 2 + 1.5)));
-    }
-    d.span('black', -0.7, 0, -dd / 2 + 1.44, 0.7, 2.3, -dd / 2 + 1.46);
-    for (const x of [-w / 4, w / 4]) statueOnPedestal(d, 'togate', x, fh * 0.52, -dd / 2 + 1.0, 0, 0.9, 'peperino', detail, 0.2, 'peperino');
-    spots.push(spot(`${lm.id}:door`, 'door', 0, 0, -dd / 2 + 0.6, 0));
     return finish(lm.id, d, spots);
   }
   if (h.has('cylinders', 'kneading', 'baker')) {

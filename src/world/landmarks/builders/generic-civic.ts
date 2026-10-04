@@ -1152,7 +1152,11 @@ function buildCamp(ctx: LandmarkContext): LandmarkBuild {
     placeProp(d, 'vat', w / 2 - wing - 1.5, 0.04, 0, 0);
     placeProp(d, 'handcart', w / 2 - wing - 2, 0.04, -2.5, 0.3);
     for (let i = 0; i < 3; i++) d.box('wood', -w / 2 + wing + 0.4, 2.3, -1 + i * 0.7, 0.08, 4.6, 0.5, { rz: 0.12 });
-    spots.push(spot(`${lm.id}:gate`, 'door', 0, 0, -dd / 2 - 0.6, 0), spot(`${lm.id}:shrine`, 'shrine', 0, 0.04, cd - 2.6, 0), spot(`${lm.id}:watchman`, 'npc', 1.6, 0, -dd / 2 - 0.8, Math.PI), spot(`${lm.id}:buckets`, 'container', -w / 2 + wing + 1.6, 0.04, -dd / 2 + wing + 1.6, Math.PI));
+    // The watch keeps lamps burning all night at the gate; a painted notice of the cohort.
+    for (const sx of [-1, 1]) wallTorch(ctx, d, sx * 2.6, 3.0, -dd / 2 - 0.12, 0);
+    inscription(d, [h.has('vigiles') ? 'COHORS VIGILVM' : lm.latin.split('/')[0].trim()], 0, 5.6, -dd / 2 - 0.2, 4, 0.7, 0, 'painted');
+    placeProp(d, 'bench_masonry', 4.5, 0, -dd / 2 - 0.9, 0);
+    spots.push(spot(`${lm.id}:gate`, 'door', 0, 0, -dd / 2 - 0.6, 0), spot(`${lm.id}:shrine`, 'shrine', 0, 0.04, cd - 2.6, 0), spot(`${lm.id}:watchman`, 'npc', 1.6, 0, -dd / 2 - 0.8, Math.PI), spot(`${lm.id}:buckets`, 'container', -w / 2 + wing + 1.6, 0.04, -dd / 2 + wing + 1.6, Math.PI), spot(`${lm.id}:bench`, 'sit', 4.5, 0, -dd / 2 - 1.4, Math.PI));
     far.span('brick', -w / 2, 0, -dd / 2, w / 2, Math.min(H, 8), dd / 2);
     return finish(lm.id, d, spots, far);
   }
