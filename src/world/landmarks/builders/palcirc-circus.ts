@@ -6,7 +6,9 @@
 import * as THREE from 'three';
 import type { LandmarkBuilder, LandmarkContext } from '../types';
 import { CIRCUS, circusSection, ringPoint, totalStations } from './palcirc/circusLayout';
-import { buildFacade, buildGallery, buildStandsAll, buildTrack, circusGaps } from './palcirc/circus';
+import { buildFacade, buildGallery, buildSidewalk, buildStandsAll, buildTrack, circusGaps } from './palcirc/circus';
+import { facing, requestLamps } from './palcirc/runtime';
+import type { Lamp } from './palcirc/capenaParts';
 import { buildCarceres, buildSpina, buildTrackLines, circusFar } from './palcirc/circusParts';
 import { relById } from './palcirc/frames';
 import { Draw } from '../../../arch/fabric/draw';
@@ -20,7 +22,7 @@ import { triumphalArch } from '../../../arch/classical/arch';
 import { inscriptionPanel, paintedSign } from '../../../arch/common/inscription';
 import { LANDMARK_BY_ID } from '../../../data/atlas';
 import type { LandmarkData } from '../types';
-import { Spots, drawFor, footingRect, frameFrom } from './palcirc/util';
+import { Spots, drawFor, footingRect, frameFrom, landmarkToWorld } from './palcirc/util';
 
 function circus(ctx: LandmarkContext) {
   const { b } = drawFor(ctx);
@@ -34,6 +36,15 @@ function circus(ctx: LandmarkContext) {
   group.add(facade.group);
   buildGallery(group, b, sec, gaps, detail);
   buildTrack(b, ctx);
+  buildSidewalk(b, gaps, (x, z) => ctx.groundAt(x, z));
+  // Lamps at the dressed shops and the popinae (lit at dusk; the nearest get real lights).
+  const lamps: Lamp[] = [];
+  for (const dr of facade.dressed) {
+    if (dr.kind !== 'awning' && dr.kind !== 'cook') continue;
+    const p = new THREE.Vector3(0, 3.1, -0.45).applyMatrix4(facing(dr.bay.x, 0, dr.bay.z, dr.bay.nx, dr.bay.nz));
+    lamps.push({ position: p, color: 0xffa54f, intensity: dr.kind === 'cook' ? 7 : 5, distance: 8, flicker: 0.25, night: true, glow: 0.15 });
+  }
+  requestLamps(ctx.game, landmarkToWorld(ctx), lamps);
   const ob = relById('circus-maximus', 'obelisk-circus-maximus');
   buildSpina(b, ob.z, spots, detail);
   buildTrackLines(b, ob.z);

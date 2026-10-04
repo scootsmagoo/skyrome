@@ -28,6 +28,8 @@ import { buildStandsAll, circusGaps } from '../src/world/landmarks/builders/palc
 import { ringFrame } from '../src/world/landmarks/builders/palcirc/ring';
 import { relLocal, toHost, fromHost } from '../src/world/landmarks/builders/palcirc/frames';
 import { builders as capenaBuilders, capenaArcade } from '../src/world/landmarks/builders/palcirc-capena';
+import { PL, SQUARE, appiaTombs, quarterLots, tombHalf } from '../src/world/landmarks/builders/palcirc/capenaParts';
+import { augFacadePlan, augFaceZ } from '../src/world/landmarks/builders/palcirc/augFacade';
 import { builders as palaceBuilders, AUG } from '../src/world/landmarks/builders/palcirc-palace';
 import { builders as circusBuilders } from '../src/world/landmarks/builders/palcirc-circus';
 import { builders as germalusBuilders } from '../src/world/landmarks/builders/palcirc-germalus';
@@ -118,6 +120,60 @@ describe('Porta Capena arcade', () => {
     for (let i = 1; i < a.length; i++) expect(a[i].x0).toBeCloseTo(a[i - 1].x1, 6);
     // Arches spring above the gate block (6.6 m) so carts pass under the wide one.
     expect(wide.spring).toBeGreaterThan(6.6);
+  });
+});
+
+describe('Porta Capena surroundings', () => {
+  it('tombs line the Via Appia outside the gate without touching the road or each other', () => {
+    const tombs = appiaTombs();
+    expect(tombs.length).toBeGreaterThanOrEqual(12);
+    const boxes = tombs.map((t) => {
+      const [ha, hd] = tombHalf(t.kind);
+      const x0 = t.side * (PL + t.setback), x1 = t.side * (PL + t.setback + 2 * hd);
+      return { x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: t.z - ha, z1: t.z + ha };
+    });
+    for (const [i, a] of boxes.entries()) {
+      // Behind the property line, outside the gate, within the first ~160 m of the road.
+      expect(Math.min(Math.abs(a.x0), Math.abs(a.x1))).toBeGreaterThanOrEqual(PL);
+      expect(a.z1).toBeLessThan(-30);
+      expect(a.z0).toBeGreaterThan(-160);
+      for (const b of boxes.slice(i + 1)) {
+        const overlap = a.x0 < b.x1 && b.x0 < a.x1 && a.z0 < b.z1 && b.z0 < a.z1;
+        expect(overlap).toBe(false);
+      }
+    }
+    // Some carry inscriptions to read, some a lamp for the Lemuria.
+    expect(tombs.filter((t) => t.text).length).toBeGreaterThanOrEqual(6);
+    expect(tombs.some((t) => t.lamp)).toBe(true);
+  });
+
+  it('the gate quarter: blocks front the street behind the sidewalk and leave the square clear', () => {
+    const lots = quarterLots();
+    for (const [i, a] of lots.entries()) {
+      expect(a.z0).toBeGreaterThanOrEqual(SQUARE.z1);
+      expect(a.z1 - a.z0).toBeGreaterThan(8);
+      for (const b of lots.slice(i + 1)) if (a.side === b.side) expect(a.z1 <= b.z0 || b.z1 <= a.z0).toBe(true);
+    }
+    expect(PL).toBeGreaterThan(3.5);
+  });
+});
+
+describe('Domus Augustana facade plan', () => {
+  it('a concave segment meets the chord at its ends, with even bays, clear of the pad ramp', () => {
+    const p = augFacadePlan();
+    expect(augFaceZ(p, 0)).toBeCloseTo(p.front + p.sag, 6);
+    expect(augFaceZ(p, p.c - 1e-6)).toBeCloseTo(p.front, 3);
+    expect(augFaceZ(p, p.hw)).toBe(p.front);
+    const arc = p.bays.filter((b) => b.kind === 'arc');
+    for (const b of arc) {
+      expect(Math.abs(b.w - arc[0].w)).toBeLessThan(1e-6);
+      // Faces point toward the circle's centre, i.e. out of the palace (−z side).
+      expect(b.nz).toBeLessThan(0);
+    }
+    // The deepest point stays in front of where the pad's terrain ramp begins (z ≈ −72).
+    expect(p.front + p.sag).toBeLessThanOrEqual(-71.9);
+    // The colonnade's ends land inside the pavilions' inner faces.
+    expect(p.Rc * Math.cos(p.a0)).toBeLessThan(p.pav);
   });
 });
 
@@ -224,6 +280,47 @@ describe('palcirc walkability', () => {
     registerColliders({ physics: p } as unknown as Game, built.colliders);
     const end = walk(p, new THREE.Vector3(0, AUG.low + 1.0, -16.5), new THREE.Vector3(0, 0, 1), 4.4, 10);
     expect(end.y).toBeGreaterThan(AUG.up - 0.15);
+  });
+
+  it('Domus Augustana: from the forecourt into a taberna under the curved facade', () => {
+    const p = new Physics();
+    world(p);
+    const built = palaceBuilders.find((x) => x.handles.includes('domus-augustana'))!.build(fakeCtx('domus-augustana', p));
+    registerColliders({ physics: p } as unknown as Game, built.colliders);
+    const plan = augFacadePlan(AUG.front, AUG.hw);
+    const arc = plan.bays.filter((b) => b.kind === 'arc');
+    const bay = arc[Math.floor(arc.length / 2)];
+    // Flat test ground: the facade's foot is 14 m below the terrace; walk in on its left side.
+    const base = AUG.low - 14;
+    p.addBox(new THREE.Vector3(bay.x, base - 0.5, bay.z), new THREE.Vector3(30, 0.5, 30));
+    const tx = -bay.nz, tz = bay.nx; // along the facade (bay frame +x is the tangent)
+    const side = -0.7;
+    const start = new THREE.Vector3(bay.x + bay.nx * 5 + tx * side, base + 1.0, bay.z + bay.nz * 5 + tz * side);
+    const end = walk(p, start, new THREE.Vector3(-bay.nx, 0, -bay.nz), 2.5, 4);
+    const inward = (end.x - bay.x) * -bay.nx + (end.z - bay.z) * -bay.nz;
+    expect(inward).toBeGreaterThan(2.0);
+    expect(inward).toBeLessThan(1.2 + 3.8);
+  });
+
+  it('Domus Augustana: through the corridor from the sunken court to the gallery over the Circus', () => {
+    const p = new Physics();
+    world(p);
+    const built = palaceBuilders.find((x) => x.handles.includes('domus-augustana'))!.build(fakeCtx('domus-augustana', p));
+    registerColliders({ physics: p } as unknown as Game, built.colliders);
+    const plan = augFacadePlan(AUG.front, AUG.hw);
+    const end = walk(p, new THREE.Vector3(0.75, AUG.low + 1.0, -46.5), new THREE.Vector3(0, 0, -1), 3.5, 9);
+    // Past the gallery's back wall (radius Rb + 0.5 round the centre), onto the gallery floor.
+    expect(end.z).toBeLessThan(plan.zc + plan.Rb - 1.0);
+    expect(end.y).toBeGreaterThan(AUG.low - 0.3);
+  });
+
+  it('every palcirc builder also builds at low detail', () => {
+    const p = new Physics();
+    const all = [...circusBuilders, ...capenaBuilders, ...palaceBuilders, ...germalusBuilders];
+    for (const b of all) for (const id of b.handles) {
+      const built = b.build({ ...fakeCtx(id, p), detail: 'low' });
+      expect(built.colliders.length).toBeGreaterThan(0);
+    }
   });
 
   it('every palcirc builder runs in Node and emits spots inside a sane radius', () => {

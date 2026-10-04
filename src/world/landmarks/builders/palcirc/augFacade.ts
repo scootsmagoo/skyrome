@@ -171,15 +171,17 @@ function tabernaRoom(w: number, kind: 'shop' | 'wine' | 'shutters' | 'blind'): M
   d.poly('cobbles', [{ x: -w / 2, y: 0.02, z: z0 - T }, { x: -w / 2, y: 0.02, z: z1 }, { x: w / 2, y: 0.02, z: z1 }, { x: w / 2, y: 0.02, z: z0 - T }]);
   if (kind === 'shop') {
     // Counter, shelves of red-gloss ware and lamps, a loft.
-    d.span('plaster_red', -1.0, 0, z0 + 0.3, 1.1, 0.95, z0 + 0.8);
-    d.span('marble', -1.05, 0.95, z0 + 0.25, 1.15, 1.02, z0 + 0.85);
+    d.span('plaster_red', 0.15, 0, z0 + 0.3, 1.45, 0.95, z0 + 0.8);
+    d.span('plaster_red', 0.95, 0, z0 + 0.8, 1.45, 0.95, z0 + 1.8);
+    d.span('marble', 0.1, 0.95, z0 + 0.25, 1.5, 1.02, z0 + 0.85);
     d.span('wood', -w / 2 + 0.6, 1.5, z1 - 0.45, w / 2 - 0.1, 1.56, z1 - 0.05);
     for (let i = 0; i < 6; i++) d.cyl('terracotta', -1.4 + i * 0.5, 1.68, z1 - 0.25, 0.12, 0.24, 7, { rTop: 0.16 });
     d.span('wood_dark', -w / 2 + 0.5, 2.6, z0 + 1.8, w / 2, 2.75, z1);
   } else if (kind === 'wine') {
-    d.span('plaster_red', -1.2, 0, z0 + 0.3, 1.2, 0.95, z0 + 0.85);
-    d.span('marble', -1.25, 0.95, z0 + 0.25, 1.25, 1.02, z0 + 0.9);
-    for (const x of [-0.6, 0.1, 0.8]) d.cyl('black', x, 1.0, z0 + 0.57, 0.19, 0.05, 8);
+    d.span('plaster_red', 0.1, 0, z0 + 0.3, 1.5, 0.95, z0 + 0.85);
+    d.span('plaster_red', 1.0, 0, z0 + 0.85, 1.5, 0.95, z0 + 2.0);
+    d.span('marble', 0.05, 0.95, z0 + 0.25, 1.55, 1.02, z0 + 0.9);
+    for (const x of [0.45, 1.15]) d.cyl('black', x, 1.0, z0 + 0.57, 0.19, 0.05, 8);
     for (let i = 0; i < 5; i++) {
       d.cyl('terracotta', -1.5 + i * 0.6, 0.45, z1 - 0.4, 0.07, 0.75, 6, { rTop: 0.2, open: true });
       d.cyl('terracotta', -1.5 + i * 0.6, 0.95, z1 - 0.4, 0.2, 0.25, 6, { rTop: 0.05, open: true });
@@ -216,7 +218,8 @@ export function buildAugustanaFacade(
   const { c, R, zc, a0, a1, Rc, Rb, pav, hw } = plan;
   // Street level at the foot of the facade (a step above the lowest ground along it).
   const gf = groundRange(ctx, -hw - 2, o.front - 3, hw + 2, o.front + plan.sag + 0.5, 2);
-  const base = gf.min + 0.12;
+  // (At least 14 m of substructure, even on flat test ground.)
+  const base = Math.min(gf.min + 0.12, o.low - 14);
   const H = o.low - base;
   const hA = Math.max(6.0, H * 0.36);
   const hB = Math.max(5.0, H * 0.32);
@@ -271,7 +274,10 @@ export function buildAugustanaFacade(
       boxIn(bb, -w / 2, -w / 2 + 0.5, 0, ROOM_H, T, T + ROOM_D);
       boxIn(bb, -w / 2, w / 2, 0, ROOM_H, T + ROOM_D, T + ROOM_D + 0.5);
       if (use[i] === 'shutters') boxIn(bb, -1.5, 1.5, 0, 2.9, 0.9, 1.04);
-      else boxIn(bb, -1.05, 1.2, 0, 1.02, T + 0.25, T + 0.85);
+      else {
+        boxIn(bb, 0.05, 1.55, 0, 1.02, T + 0.25, T + 0.9);
+        boxIn(bb, 0.95, 1.55, 0, 1.02, T + 0.9, T + 2.0);
+      }
     }
   });
   // Solid substructure core behind the rooms, in slices across x (the face is curved).

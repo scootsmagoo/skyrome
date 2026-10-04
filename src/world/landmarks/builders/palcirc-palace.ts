@@ -13,11 +13,12 @@ import { column } from '../../../arch/classical/column';
 import { entablature, pediment } from '../../../arch/classical/entablature';
 import { armoredEmperor, togate } from '../../../arch/classical/statues';
 import { inscriptionPanel, paintedSign } from '../../../arch/common/inscription';
+import { buildPlaza } from '../../../arch/fabric/streets';
 import { placeProp } from '../../../arch/props/props';
 import { Rng } from '../../../core/Rng';
 import type { MaterialId } from '../../../gfx/materialIds';
 import type { LandmarkBuilder, LandmarkContext } from '../types';
-import { arcadeFace, block, gardenBed, openings, peristyle, pool, roofOver, shedTiles, stair, substructureFace, wallRing } from './palcirc/palace';
+import { arcadeFace, block, gardenBed, openings, peristyle, pool, roofOver, shedTiles, stair, substructureFace, terraceWall, wallRing } from './palcirc/palace';
 import { facing } from './palcirc/runtime';
 import type { MeshBuilder } from '../../../gfx/MeshBuilder';
 import { ringSector } from './palcirc/shapes';
@@ -197,7 +198,10 @@ function flavia(ctx: LandmarkContext) {
   const HW = 30, HD = 45.6;
   const fl = 0.6; // palace floor, three steps above the Area Palatina
   // Platform with footing (the SE strip dips toward the Augustana).
-  block(d, ctx, -HW, -HD + 3.6, HW, HD, fl, 'brick', { cornice: 'travertine' });
+  // (The SW corner is left out: the atlas puts the Temple of Apollo's terrace there.)
+  const CW = -19.5, CZ = 18;
+  block(d, ctx, -HW, -HD + 3.6, HW, CZ, fl, 'brick', { cornice: 'travertine' });
+  block(d, ctx, CW, CZ, HW, HD, fl, 'brick', { cornice: 'travertine' });
   // Front portico across the whole facade: giallo antico columns on a stylobate with steps.
   const pz = -HD + 3.6; // portico back line
   d.span('marble', -HW, 0, -HD, HW, fl, pz, { collide: true });
@@ -273,12 +277,13 @@ function flavia(ctx: LandmarkContext) {
   d.span('marble', -3, fl, tz0 - 0.4, 3, 7, tz0);
   d.span('black', -2, fl, tz0 - 0.42, 2, 6, tz0 - 0.38);
   for (const sx of [-1, 1]) {
-    const cxa = sx * 12, cxb = sx * (HW - 1.5);
+    const cxa = sx * 12, cxb = sx < 0 ? CW + 0.3 : HW - 1.5;
     const x0 = Math.min(cxa, cxb), x1 = Math.max(cxa, cxb);
     wallRing(d, x0, tz0, x1, tz1, fl, 7.5, 0.6, 'plaster_white');
     const mx = (x0 + x1) / 2, mz = (tz0 + tz1) / 2;
-    d.ellipsoid('marble', mx, fl + 0.05, mz, 5.0, 0.5, 9.0, { seg: [20, 4] });
-    d.ellipsoid('water', mx, fl + 0.38, mz, 4.6, 0.12, 8.6, { seg: [20, 3] });
+    const rx = Math.min(5.0, (x1 - x0) / 2 - 1.3);
+    d.ellipsoid('marble', mx, fl + 0.05, mz, rx, 0.5, 9.0, { seg: [20, 4] });
+    d.ellipsoid('water', mx, fl + 0.38, mz, rx - 0.4, 0.12, 8.6, { seg: [20, 3] });
     d.cyl('marble', mx, fl + 0.9, mz, 0.6, 1.2, 10);
     roofOver(d, x0, tz0, x1, tz0 + 2.5, 7.5, 0.3, 'roof_tile', 'plaster_white');
   }
@@ -289,6 +294,32 @@ function flavia(ctx: LandmarkContext) {
     roofOver(d, x0, -26, x1, tz0, 9, 0.34, 'roof_tile', 'plaster_white');
   }
   d.span('plaster_white', px0 - 3.4, fl, pz1 + 3.4, px1 + 3.4, 8, tz0, { collide: true });
+  // The Aula Regia's front over the portico roof: colossal marble pilasters, three great arched
+  // windows, the pediment with its raking cornice and gilded acroteria.
+  const fy0 = fl + colH + 2.7;
+  for (const x of [-ax + 0.5, -3.3, 3.3, ax - 0.5]) d.span('marble', x - 0.55, fy0, az0 - 0.3, x + 0.55, aH - 0.8, az0 + 0.02);
+  for (const x of [-6.4, 0, 6.4]) {
+    d.span('black', x - 1.25, fy0 + 0.9, az0 - 0.03, x + 1.25, aH - 3.6, az0 - 0.01);
+    d.cyl('black', x, aH - 3.6, az0 - 0.02, 1.25, 0.02, 10, { rx: Math.PI / 2 });
+    d.span('marble', x - 1.45, fy0 + 0.7, az0 - 0.2, x + 1.45, fy0 + 0.9, az0);
+  }
+  const gTop = aH + ax * Math.tan(0.36);
+  d.tris('marble', [-ax - 0.6, aH, az0 - 0.65, ax + 0.6, aH, az0 - 0.65, 0, gTop + 0.25, az0 - 0.65]);
+  for (const [x, y] of [[0, gTop + 0.25], [-ax - 0.3, aH], [ax + 0.3, aH]] as const) d.cyl('gilded_bronze', x, y + 0.9, az0 - 0.6, 0.32, 1.8, 8, { rTop: 0.08 });
+  armoredEmperor(b, new THREE.Matrix4().makeTranslation(0, gTop + 0.25, az0 - 0.2), { material: 'gilded_bronze', scale: 1.25, detail: 'low' });
+  // The Area Palatina: the paved square before the palace where the Clivus Palatinus arrives, with
+  // statue bases and two basins.
+  buildPlaza(b, [[-38, -HD - 1.0], [14, -HD - 1.0], [14, -76], [-38, -76]], (x, z) => ctx.groundAt(x, z), { material: 'paving_travertine', lift: 0.08, skirt: 0.4 });
+  for (const [x, z] of [[-30, -56], [-30, -68], [6, -56], [6, -68]] as const) {
+    const y = ctx.groundAt(x, z) + 0.08;
+    placeProp(d, 'statue_pedestal', x, y, z, 0, { variant: (x > 0 ? 1 : 0) + (z < -60 ? 1 : 0) });
+  }
+  for (const x of [-20, -4]) {
+    const z = -62, y = ctx.groundAt(x, z) + 0.08;
+    d.span('marble', x - 2.2, y, z - 1.4, x + 2.2, y + 0.55, z + 1.4, { collide: true });
+    d.span('water', x - 1.9, y + 0.3, z - 1.1, x + 1.9, y + 0.48, z + 1.1);
+  }
+  spots.add('area-palatina-fountain', 'shrine', -12, ctx.groundAt(-12, -62) + 0.08, -62, Math.PI / 2);
   // Trajan's statue before the portico with the honorific base.
   const sx0 = -14;
   d.span('marble', sx0 - 1.0, 0, -HD - 4.0, sx0 + 1.0, 2.0, -HD - 2.2, { collide: true });
@@ -319,12 +350,30 @@ function tiberiana(ctx: LandmarkContext) {
   const yF = Math.min(-2, gF.min - 0.5);
   d.span('concrete', -HW, Math.min(yW, yF), -HD, HW, -0.3, HD, { collide: true });
   d.solid(-HW, -0.3, -HD, HW, 0, HD);
-  arcadeFace(new Draw(b, new THREE.Matrix4().makeRotationY(-Math.PI / 2)), -HD, HD, HW, yW, 0, { dir: -1, bay: 4.4, tier: 6.4, mat: 'brick', trim: 'travertine', depth: 1.3 });
-  arcadeFace(d, -HW, HW, -HD, yF, 0, { dir: -1, bay: 4.4, tier: 6.4, mat: 'brick', trim: 'travertine', depth: 1.3 });
-  // Terrace parapets on the substructures.
-  d.span('travertine', -HW, 0, -HD, HW, 1.0, -HD + 0.5, { collide: true });
-  d.span('travertine', -HW, 0, -HD, -HW + 0.5, 1.0, HD, { collide: true });
-  d.span('paving_travertine', -HW, -0.05, -HD + 0.5, HW, 0.03, HD);
+  // Arcaded substructures over the Clivus Victoriae, out where the hillside has fallen to the road
+  // (W flank toward the Velabrum, the front behind the House of the Vestals and over the road to the
+  // Velia): the palace terrace is carried out to them, so the hill shows no bare cliff from the Forum.
+  const WX = -41, FZ = -50, D0: [number, number] = [WX, -40], D1: [number, number] = [-2, -48], EX = 44;
+  terraceWall(ctx, b, WX, 50, WX, D0[1], 0, { hi });
+  terraceWall(ctx, b, D0[0], D0[1], D1[0], D1[1], 0, { hi });
+  terraceWall(ctx, b, D1[0], D1[1], D1[0], FZ, 0, { hi });
+  terraceWall(ctx, b, D1[0], FZ, EX, FZ, 0, { hi });
+  terraceWall(ctx, b, EX, FZ, EX, -40, 0, { hi });
+  // Terrace fills (colliders) and their paving.
+  const deep = Math.min(yW, yF, -21);
+  d.solid(WX, deep, D0[1], -HW, 0, 50);
+  d.span('paving_travertine', WX, -0.05, D0[1], -HW, 0.03, 50);
+  d.solid(D1[0], deep, FZ, EX, 0, -HD);
+  d.span('paving_travertine', D1[0], -0.05, FZ, EX, 0.03, -HD);
+  for (let x = -31.5; x < D1[0] - 1e-6; x += 1.5) {
+    const xb = Math.min(D1[0], x + 1.5);
+    const zl = D0[1] + ((D1[1] - D0[1]) * (xb - D0[0])) / (D1[0] - D0[0]);
+    if (zl < -HD) {
+      d.solid(x, deep, zl, xb, 0, -HD);
+      d.span('paving_travertine', x, -0.05, zl, xb, 0.03, -HD);
+    }
+  }
+  d.span('paving_travertine', -HW, -0.05, -HD, HW, 0.03, HD);
   // Buildings round the great peristyle: two storeys of offices and quarters.
   const cx0 = -18, cx1 = 18, cz0 = -20, cz1 = 22;
   const wing = (x0: number, z0: number, x1: number, z1: number, h: number, mat: MaterialId) => {
@@ -353,10 +402,12 @@ function tiberiana(ctx: LandmarkContext) {
   gableRoof(d, gx - 2.2, gz - 2.6, gx + 2.2, gz + 2.6, 3.4, { axis: 'z', pitch: 0.4, over: 0.2, gables: 'brick' });
   // Trees in the garden.
   const trees: TreeSpec[] = [[-10, -12], [10, -12], [-10, 14], [10, 14], [-22, 30], [22, 30]].map(([x, z], i) => ({ species: i < 4 ? 'laurel' : 'umbrella_pine', x, z, y: 0, scale: i < 4 ? 0.9 : 1.1, variant: i % 3 }) as TreeSpec);
+  // A line of cypresses and pines along the W terrace: the palace's skyline over the Forum.
+  for (let k = 0; k < 8; k++) trees.push({ species: k % 3 === 1 ? 'umbrella_pine' : 'cypress', x: -37.5, z: -32 + k * 10.5, y: 0, scale: k % 3 === 1 ? 0.95 : 1.0, variant: k % 3 });
   for (const t of plantTrees(ctx, trees)) b.collider(t);
   spots.add('tiberiana-cryptoporticus', 'door', gx + 3.0, 0, gz, Math.PI / 2);
   spots.add('tiberiana-gate', 'door', HW - 3.0, 0, 0, Math.PI / 2);
-  spots.add('tiberiana-vista-forum', 'vista', -HW + 2, 0, -HD + 2, Math.atan2(-1, -1));
+  spots.add('tiberiana-vista-forum', 'vista', -39.2, 0, -37.5, Math.atan2(-1, -1));
   spots.add('tiberiana-clerk', 'npc', 0, 0, cz0 - 1.5, 0);
   spots.add('tiberiana-guard', 'npc', HW - 2.0, 0, 3.5, Math.PI / 2);
   spots.add('tiberiana-bench', 'sit', -12, 0, 0, Math.PI / 2);

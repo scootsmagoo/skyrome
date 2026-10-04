@@ -4,7 +4,8 @@
  * into a Draw frame in the landmark's local space (or a sub-frame).
  */
 import * as THREE from 'three';
-import type { Draw } from '../../../../arch/fabric/draw';
+import { Draw } from '../../../../arch/fabric/draw';
+import type { MeshBuilder } from '../../../../gfx/MeshBuilder';
 import type { MaterialId } from '../../../../gfx/materialIds';
 import type { LandmarkContext } from '../../types';
 import { archDoorWall, archWindowWall } from './shapes';
@@ -312,4 +313,39 @@ export function substructureFace(d: Draw, len: number, y0: number, y1: number, o
   d.span('marble', -len / 2, y1 + 0.85, -0.12, len / 2, y1 + 0.98, 0.32);
   if (hi) for (let x = -len / 2 + 0.2; x < len / 2 - 0.1; x += 0.34) d.cyl('marble', x, y1 + 0.48, 0.1, 0.07, 0.75, 5, { rTop: 0.05 });
   else d.span('marble', -len / 2, y1 + 0.1, 0.04, len / 2, y1 + 0.85, 0.16);
+}
+
+/**
+ * A terrace's outer retaining wall from (x0, z0) to (x1, z1) (face to the right of the direction,
+ * looking outward), split into pieces of about `piece` metres, each with a substructure facade from
+ * its own lowest ground up to the terrace at `top`, plus colliders (the wall and the balustrade).
+ * Pieces whose ground is already near the terrace are skipped. Returns how many were built.
+ */
+export function terraceWall(ctx: LandmarkContext, b: MeshBuilder, x0: number, z0: number, x1: number, z1: number, top = 0, opts: { hi?: boolean; piece?: number; minDrop?: number } = {}): number {
+  const L = Math.hypot(x1 - x0, z1 - z0);
+  const n = Math.max(1, Math.round(L / (opts.piece ?? 4.4)));
+  let built = 0;
+  for (let i = 0; i < n; i++) {
+    const ax = x0 + ((x1 - x0) * i) / n, az = z0 + ((z1 - z0) * i) / n;
+    const bx = x0 + ((x1 - x0) * (i + 1)) / n, bz = z0 + ((z1 - z0) * (i + 1)) / n;
+    const len = Math.hypot(bx - ax, bz - az);
+    const tx = (bx - ax) / len, tz = (bz - az) / len;
+    const nx = tz, nz = -tx;
+    const g = groundRange(ctx, Math.min(ax, bx) - 0.4 + nx * 0.6, Math.min(az, bz) - 0.4 + nz * 0.6, Math.max(ax, bx) + 0.4 + nx * 0.6, Math.max(az, bz) + 0.4 + nz * 0.6, 1.2);
+    if (g.min > top - (opts.minDrop ?? 1.0)) continue;
+    const f = new Draw(b, facingMatrix((ax + bx) / 2, 0, (az + bz) / 2, nx, nz));
+    substructureFace(f, len + 0.02, g.min - 0.8, top, { ground: g.min, hi: opts.hi ?? true, bay: 4.2 });
+    f.solid(-len / 2, g.min - 0.8, 0, len / 2, top, 1.0);
+    f.solid(-len / 2, top, -0.1, len / 2, top + 1.0, 0.3);
+    built++;
+  }
+  return built;
+}
+
+/** Matrix whose local −z faces (nx, nz), placed at (x, y, z) (same as runtime.facing, no scale). */
+function facingMatrix(x: number, y: number, z: number, nx: number, nz: number): THREE.Matrix4 {
+  const zAxis = new THREE.Vector3(-nx, 0, -nz).normalize();
+  const yAxis = new THREE.Vector3(0, 1, 0);
+  const xAxis = new THREE.Vector3().crossVectors(yAxis, zAxis).normalize();
+  return new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis).setPosition(x, y, z);
 }

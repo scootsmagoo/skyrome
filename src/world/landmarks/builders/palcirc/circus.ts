@@ -14,6 +14,8 @@
 import * as THREE from 'three';
 import { Draw } from '../../../../arch/fabric/draw';
 import { paintedSign } from '../../../../arch/common/inscription';
+import { velum } from '../../../../arch/fabric/awnings';
+import { placeProp } from '../../../../arch/props/props';
 import { MeshBuilder } from '../../../../gfx/MeshBuilder';
 import type { MaterialId } from '../../../../gfx/materialIds';
 import type { LandmarkContext } from '../../types';
@@ -138,7 +140,7 @@ function buildStands(b: MeshBuilder, sec: CircusSection, gaps: CircusGaps, detai
   // Cut faces at every gap edge.
   const outline: [number, number][] = [[0, 0], [0, sec.podium + 1.0], [sec.terrace[0], sec.podium + 1.0], [sec.terrace[0], sec.podium], ...sec.outline.slice(2)];
   for (const gap of G) {
-    for (const edge of [0, 1] as const) cutFace(b, gap.kind === 'tunnel' ? STONE : 'concrete', outline, gap, edge);
+    for (const edge of [0, 1] as const) cutFace(b, gap.kind === 'temple' ? 'concrete' : STONE, outline, gap, edge);
   }
   // Colliders: every tread is a solid band from the ground (or the shop ceiling, or the tunnel
   // ceiling) up to its surface.
@@ -366,15 +368,17 @@ function shopFit(w: number, kind: 'taberna' | 'shutters' | 'popina' | 'stair' | 
   const z0 = T;
   if (kind === 'taberna') {
     // L-shaped masonry counter with a marble top, amphorae and a shelf.
-    di.span('plaster_red', -0.9, 0, z0 + 0.25, 1.1, 0.95, z0 + 0.75);
-    di.span('marble', -0.95, 0.95, z0 + 0.2, 1.15, 1.02, z0 + 0.8);
+    di.span('plaster_red', -0.1, 0, z0 + 0.25, 1.5, 0.95, z0 + 0.75);
+    di.span('plaster_red', 1.0, 0, z0 + 0.75, 1.5, 0.95, z0 + 1.8);
+    di.span('marble', -0.15, 0.95, z0 + 0.2, 1.55, 1.02, z0 + 0.8);
     di.span('wood', -w / 2 + 0.6, 1.5, z0 + 3.0, w / 2 - 0.1, 1.56, z0 + 3.38);
     for (let i = 0; i < 2; i++) amphora(di, -0.6 + i * 0.9, 1.56, z0 + 3.18, 0.5);
     for (let i = 0; i < 2; i++) amphora(di, -1.2 + i * 0.5, 0, z0 + 2.6, 0.75);
   } else if (kind === 'popina') {
-    di.span('plaster_red', -1.2, 0, z0 + 0.3, 1.2, 0.95, z0 + 0.85);
-    di.span('marble', -1.25, 0.95, z0 + 0.25, 1.25, 1.02, z0 + 0.9);
-    for (const x of [-0.7, 0, 0.7]) di.cyl('black', x, 1.0, z0 + 0.57, 0.2, 0.05, 8);
+    di.span('plaster_red', 0.0, 0, z0 + 0.3, 1.55, 0.95, z0 + 0.85);
+    di.span('plaster_red', 1.05, 0, z0 + 0.85, 1.55, 0.95, z0 + 2.0);
+    di.span('marble', -0.05, 0.95, z0 + 0.25, 1.6, 1.02, z0 + 0.9);
+    for (const x of [0.4, 1.15]) di.cyl('black', x, 1.0, z0 + 0.57, 0.2, 0.05, 8);
     di.span('brick', w / 2 - 1.1, 0, z0 + 2.4, w / 2 - 0.1, 0.8, z0 + 3.3);
     di.box('glow_fire', w / 2 - 0.6, 0.86, z0 + 2.85, 0.5, 0.06, 0.5);
     di.cyl('bronze', w / 2 - 0.6, 0.95, z0 + 2.85, 0.22, 0.18, 8);
@@ -389,9 +393,9 @@ function shopFit(w: number, kind: 'taberna' | 'shutters' | 'popina' | 'stair' | 
     di.span('wood_dark', -w / 2 + 0.6, 2.64, z0 + 3.3, -w / 2 + 1.7, 4.4, z0 + 3.38);
   } else if (kind === 'blind') {
     // Walled-up arch with a small door (the pulvinar's service stair, the towers).
-    d.geo(archDoorWall(CIRCUS.span + 0.1, CIRCUS.shopCeiling + 0.02, 1.2, 1.7, 0.5, 6), 'brick', 0, 0, 0.45);
-    di.span('wood_dark', -0.6, 0, 0.62, 0.6, 2.3, 0.7);
-    di.span('black', -0.62, 0, 0.75, 0.62, 2.3, 0.78);
+    d.geo(archDoorWall(CIRCUS.span + 0.1, CIRCUS.shopCeiling + 0.02, 1.3, 1.75, 0.5, 6), 'travertine', 0, 0, 0.45);
+    di.span('bronze', -0.65, 0, 0.6, 0.65, 2.4, 0.68);
+    di.span('black', -0.66, 0, 0.75, 0.66, 2.4, 0.78);
   }
   return b;
 }
@@ -427,6 +431,8 @@ function bayUses(gaps: CircusGaps, bays: FacadeBay[]): BayUse[] {
 export interface FacadeResult {
   group: THREE.Group;
   uses: BayUse[];
+  /** Bays dressed with an awning or wares (lamps go there). */
+  dressed: { bay: FacadeBay; kind: string }[];
 }
 
 export function buildFacade(b: MeshBuilder, gaps: CircusGaps, detail: 'high' | 'low'): FacadeResult {
@@ -460,6 +466,31 @@ export function buildFacade(b: MeshBuilder, gaps: CircusGaps, detail: 'high' | '
       group.add(instanced(sb, `circus-sign-${i}`, pick.map((u) => facing(u.bay.x, 0, u.bay.z, u.bay.nx, u.bay.nz, u.bay.w / W))));
     }
   }
+  // Street dressing in front of the shops: striped awnings, wares on the sidewalk (high detail).
+  const dressed: { bay: FacadeBay; kind: string }[] = [];
+  if (detail === 'high') {
+    const shopsOut = uses.filter((u) => (u.kind === 'taberna' || u.kind === 'popina') && u.bay.side !== 2);
+    const awn: [MaterialId, MaterialId][] = [['fabric_white', 'fabric_red'], ['fabric_white', 'fabric_ochre'], ['fabric_white', 'fabric_blue']];
+    for (let v = 0; v < 3; v++) {
+      const ab = new MeshBuilder();
+      velum(new Draw(ab).at(0, 0, -0.35), CIRCUS.span + 0.5, 1.8, CIRCUS.shopCeiling - 0.35, awn[v]);
+      const pick = shopsOut.filter((_, j) => j % 2 === 0 && (j / 2) % 3 === v);
+      group.add(instanced(ab, `circus-awning-${v}`, pick.map((u) => facing(u.bay.x, 0, u.bay.z, u.bay.nx, u.bay.nz, u.bay.w / W))));
+      for (const u of pick) dressed.push({ bay: u.bay, kind: 'awning' });
+    }
+    const wares: [string, (dd: Draw) => void][] = [
+      ['wine', (dd) => { placeProp(dd, 'amphora_stack', 1.1, 0, -1.3, 0.2, { variant: 1 }); placeProp(dd, 'stool', -1.0, 0, -1.0, 0.5, { variant: 2 }); }],
+      ['goods', (dd) => { placeProp(dd, 'table', -0.6, 0, -1.25, 0.05, { variant: 1 }); placeProp(dd, 'basket', 0.9, 0, -1.1, 0.4, { variant: 0 }); placeProp(dd, 'basket', 1.3, 0, -1.4, 1.0, { variant: 2 }); }],
+      ['cook', (dd) => { placeProp(dd, 'brazier', 1.2, 0, -1.2, 0, { variant: 0 }); placeProp(dd, 'bench', -0.8, 0, -1.3, 0, { variant: 0 }); }],
+    ];
+    for (const [k, [name, make]] of wares.entries()) {
+      const wb = new MeshBuilder();
+      make(new Draw(wb));
+      const pick = shopsOut.filter((u, j) => (name === 'cook' ? u.kind === 'popina' : u.kind === 'taberna' && j % 4 === (k === 0 ? 1 : 3)));
+      group.add(instanced(wb, `circus-wares-${name}`, pick.map((u) => facing(u.bay.x, 0, u.bay.z, u.bay.nx, u.bay.nz))));
+      for (const u of pick) dressed.push({ bay: u.bay, kind: name });
+    }
+  }
   // Colliders: the solid facade above the arches, piers between arches, shop dividers, counters.
   const top = CIRCUS.height;
   const q = new THREE.Quaternion();
@@ -485,10 +516,27 @@ export function buildFacade(b: MeshBuilder, gaps: CircusGaps, detail: 'high' | '
     boxAt(bay, CIRCUS.span / 2, w / 2, 0, CIRCUS.shopCeiling, 0, T);
     if (u.kind === 'tunnel') continue;
     boxAt(bay, -w / 2, -w / 2 + 0.5, 0, CIRCUS.shopCeiling, T, T + 3.4);
-    if (u.kind === 'taberna') boxAt(bay, -0.95, 1.15, 0, 1.02, T + 0.2, T + 0.8);
-    if (u.kind === 'popina') boxAt(bay, -1.25, 1.25, 0, 1.02, T + 0.25, T + 0.9);
+    if (u.kind === 'taberna') {
+      boxAt(bay, -0.15, 1.55, 0, 1.02, T + 0.2, T + 0.8);
+      boxAt(bay, 1.0, 1.55, 0, 1.02, T + 0.8, T + 1.8);
+    }
+    if (u.kind === 'popina') {
+      boxAt(bay, -0.05, 1.6, 0, 1.02, T + 0.25, T + 0.9);
+      boxAt(bay, 1.05, 1.6, 0, 1.02, T + 0.9, T + 2.0);
+    }
     if (u.kind === 'shutters') boxAt(bay, -1.6, 0.4, 0, 2.9, 0.86, 1.0);
     if (u.kind === 'blind') boxAt(bay, -CIRCUS.span / 2, CIRCUS.span / 2, 0, CIRCUS.shopCeiling, 0.4, 1.0);
+  }
+  for (const dr of dressed) {
+    const bay = dr.bay;
+    if (dr.kind === 'awning') for (const sx of [-1, 1]) {
+      const m = facing(bay.x, 0, bay.z, bay.nx, bay.nz);
+      const c = new THREE.Vector3(sx * ((CIRCUS.span + 0.5) / 2 - 0.05), 1.6, -2.15).applyMatrix4(m);
+      b.collider({ kind: 'cylinder', center: c, halfHeight: 1.6, radius: 0.08 });
+    }
+    else if (dr.kind === 'wine') boxAt(bay, 0.5, 1.7, 0, 1.2, -1.9, -0.7);
+    else if (dr.kind === 'goods') boxAt(bay, -1.3, 0.1, 0, 0.8, -1.7, -0.8);
+    else if (dr.kind === 'cook') boxAt(bay, 0.8, 1.6, 0, 0.9, -1.6, -0.8);
   }
   // Closing piers at the ends of the curved-end opening (the Arch of Titus passage).
   const zc2 = curveZ();
@@ -505,7 +553,7 @@ export function buildFacade(b: MeshBuilder, gaps: CircusGaps, detail: 'high' | '
     pd.span(STONE, -0.8, 0, -0.42, 0.8, 0.6, T + 0.2);
     pd.span(STONE, -0.8, CIRCUS.height - 0.7, -0.5, 0.8, CIRCUS.height, T + 0.2);
   }
-  return { group, uses };
+  return { group, uses, dressed };
 }
 
 // ---------------------------------------------------------------- gallery colonnade
@@ -527,6 +575,83 @@ export function buildGallery(group: THREE.Group, b: MeshBuilder, sec: CircusSect
   }
   // A timber rail along the gallery's front edge.
   return ss.length;
+}
+
+// ---------------------------------------------------------------- sidewalk round the outside
+
+/**
+ * A raised travertine sidewalk (crepido) along the outer facade, with a curb, round the straights,
+ * the curve (open at the Arch of Titus passage) and the carceres' outer face.
+ */
+export function buildSidewalk(b: MeshBuilder, gaps: CircusGaps, ground: (x: number, z: number) => number) {
+  const u0 = CIRCUS.halfW - CIRCUS.track;
+  const u1 = u0 + 2.6;
+  const lift = 0.14;
+  const gap: RingGap = { kind: 'open', at: (u: number) => channelGap(gaps.channel[0], gaps.channel[1], u) ?? [0, 0], uMin: 0, uMax: u1 + 1 };
+  const G = [gap];
+  const yAt = (x: number, z: number) => Math.max(lift, ground(x, z) + 0.12);
+  const walk: number[] = [], curb: number[] = [], face: number[] = [];
+  const st = stations();
+  const q = new THREE.Quaternion();
+  const ax = new THREE.Vector3(0, 1, 0);
+  for (const [p0, p1] of pieces(G, (u0 + u1) / 2)) {
+    // Stations every ~3 m on the straights and every 3.75° on the curve.
+    const ss: number[] = [p0];
+    for (let s = p0; s < p1; ) {
+      const onCurve = s >= st.curveStart && s < st.curveEnd;
+      s = Math.min(p1, s + (onCurve ? (Math.PI / 48) * CIRCUS.track : 3));
+      ss.push(s);
+    }
+    for (let i = 0; i < ss.length - 1; i++) {
+      const A = ringPoint(ss[i], u0), B = ringPoint(ss[i + 1], u0);
+      const C = ringPoint(ss[i + 1], u1 - 0.3), D = ringPoint(ss[i], u1 - 0.3);
+      const E = ringPoint(ss[i + 1], u1), F = ringPoint(ss[i], u1);
+      const y = (p: { x: number; z: number }) => yAt(p.x, p.z);
+      const v = (p: { x: number; z: number }, dy = 0) => [p.x, y(p) + dy, p.z];
+      // Winding: outward is +u; viewed from above, A→D→C is counter-clockwise for increasing s on the +x straight.
+      walk.push(...v(A), ...v(D), ...v(C), ...v(A), ...v(C), ...v(B));
+      curb.push(...v(D, 0.01), ...v(F, 0.01), ...v(E, 0.01), ...v(D, 0.01), ...v(E, 0.01), ...v(C, 0.01));
+      face.push(F.x, y(F) + 0.01, F.z, E.x, y(E) + 0.01, E.z, E.x, y(E) - 0.45, E.z, F.x, y(F) + 0.01, F.z, E.x, y(E) - 0.45, E.z, F.x, y(F) - 0.45, F.z);
+      // Collider: one box per piece, at the higher of its ends.
+      const top = Math.max(y(A), y(B), y(E), y(F));
+      const m0 = ringPoint(ss[i], (u0 + u1) / 2), m1 = ringPoint(ss[i + 1], (u0 + u1) / 2);
+      const len = Math.hypot(m1.x - m0.x, m1.z - m0.z);
+      if (len < 0.05) continue;
+      q.setFromAxisAngle(ax, Math.atan2(-(m1.z - m0.z), m1.x - m0.x));
+      b.collider({ kind: 'box', center: new THREE.Vector3((m0.x + m1.x) / 2, (top - 0.6) / 2, (m0.z + m1.z) / 2), half: new THREE.Vector3(len / 2 + 0.03, (top + 0.6) / 2, (u1 - u0) / 2), rotation: q.clone() });
+    }
+  }
+  const add = (mat: MaterialId, pos: number[]) => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.computeVertexNormals();
+    // Make every face point up/outward whatever the winding (flip triangles whose normal points down).
+    const n = g.getAttribute('normal') as THREE.BufferAttribute;
+    const P = g.getAttribute('position') as THREE.BufferAttribute;
+    for (let t = 0; t < P.count; t += 3) {
+      if (n.getY(t) < -0.01) {
+        for (const k of [0, 1, 2]) n.setXYZ(t + k, -n.getX(t + k), -n.getY(t + k), -n.getZ(t + k));
+        const x1 = P.getX(t + 1), y1 = P.getY(t + 1), z1 = P.getZ(t + 1);
+        P.setXYZ(t + 1, P.getX(t + 2), P.getY(t + 2), P.getZ(t + 2));
+        P.setXYZ(t + 2, x1, y1, z1);
+      }
+    }
+    g.computeVertexNormals();
+    b.add(g, mat, undefined, { castShadow: false });
+  };
+  add('paving_travertine', walk);
+  add('travertine', curb);
+  b.add((() => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(face, 3)); g.computeVertexNormals(); return g; })(), 'travertine');
+  // The straights run on past the carceres front to the outer corners, and along the outer face.
+  const d = new Draw(b);
+  const zo = -CIRCUS.halfLen, zf = carceresFront();
+  const yc = Math.max(yAt(-CIRCUS.halfW, zo), yAt(CIRCUS.halfW, zo), yAt(0, zo - 2));
+  for (const s of [-1, 1]) {
+    const xa = s * CIRCUS.halfW, xb = s * (CIRCUS.halfW + 2.6);
+    d.span('paving_travertine', Math.min(xa, xb), yc - 0.4, zo - 2.6, Math.max(xa, xb), yc, zf, { collide: true });
+  }
+  d.span('paving_travertine', -CIRCUS.halfW, yc - 0.4, zo - 2.6, CIRCUS.halfW, yc, zo, { collide: true });
+  d.span('travertine', -CIRCUS.halfW - 2.6, yc - 0.5, zo - 2.62, CIRCUS.halfW + 2.6, yc + 0.01, zo - 2.3);
 }
 
 // ---------------------------------------------------------------- track

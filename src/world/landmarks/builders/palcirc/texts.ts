@@ -60,6 +60,46 @@ export const PALCIRC_INSCRIPTIONS: Record<string, InscriptionText> = {
     english: 'The plebeian aediles proclaim...',
     source: '[G] a whitewashed notice board (album) of the aediles, who kept their archive here.',
   },
+  'appia-tomb-0': {
+    latin: 'SISTE · VIATOR · ET · LEGE',
+    english: 'Stop, traveller, and read.',
+    source: '[G] the commonest appeal of Roman roadside epitaphs (e.g. CIL VI 11252 and many others); this schola bench is composed for the game.',
+  },
+  'appia-tomb-1': {
+    latin: 'D · M · C · IVLIO · FELICI · VIX · ANN · LXII · IVLIA · PRIMA · CONIVGI',
+    english: 'To the Spirits of the Dead. To Gaius Julius Felix, who lived 62 years. Julia Prima to her husband.',
+    source: '[G] composed in the standard formula (D M, vixit annos) of Rome\'s early 2nd-century epitaphs.',
+  },
+  'appia-tomb-2': {
+    latin: 'M · LICINIVS · EROS · PISTOR · SIBI · ET · SVIS',
+    english: 'Marcus Licinius Eros, baker, (made this) for himself and his family.',
+    source: '[G] a freedman tradesman\'s tomb in the manner of the baker Eurysaces\' (CIL VI 1958).',
+  },
+  'appia-tomb-3': {
+    latin: 'LIBERTORVM · FAMILIAE · STATILIAE',
+    english: '(The tomb) of the freedmen of the household of the Statilii.',
+    source: '[G] after the great columbarium of the Statilii Tauri (CIL VI 6213–6640), which lay by the Porta Maggiore.',
+  },
+  'appia-tomb-4': {
+    latin: 'CLAVDIAE · SECVNDAE · H · M · H · N · S',
+    english: 'To Claudia Secunda. This monument does not pass to the heir.',
+    source: '[G] with the standard clause hoc monumentum heredem non sequetur.',
+  },
+  'appia-tomb-5': {
+    latin: 'L · VALERIVS · L · F · PAL · RVFVS',
+    english: 'Lucius Valerius Rufus, son of Lucius, of the Palatine tribe.',
+    source: '[G] a citizen\'s name with filiation and voting tribe, as on 1st-century tombs.',
+  },
+  'appia-tomb-6': {
+    latin: 'DIS · MANIBVS · ANTONIAE · HELPIDI · VIX · ANN · XXIV',
+    english: 'To the Spirits of the Dead. To Antonia Helpis, who lived 24 years.',
+    source: '[G] composed in the standard formula.',
+  },
+  'appia-tomb-8': {
+    latin: 'COLLEGIVM · FABRVM · TIGNARIORVM',
+    english: 'The guild of the carpenters (builders).',
+    source: '[G] the collegium fabrum tignariorum is well attested in Rome; guilds kept burial houses for their members.',
+  },
   'domus-flavia-inscription': {
     latin: 'IMP · CAESARI · DIVI · NERVAE · F · NERVAE · TRAIANO · AVG · GERM · DACICO · PONT · MAX · TRIB · POT · XVII · IMP · VI · COS · VI · P · P',
     english: 'To the Imperator Caesar Nerva Traianus Augustus, son of the Deified Nerva, conqueror of Germany and Dacia, Pontifex Maximus, in his seventeenth year of tribunician power, hailed Imperator six times, consul six times, Father of his Country.',

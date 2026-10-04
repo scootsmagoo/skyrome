@@ -7,6 +7,11 @@
  * z, the city is at +z. The aqueduct arcade runs along x just outside the gate, from the Caelian
  * hillside (−x) over the gate to a terminal castellum (+x). mq-01 starts here at night: the spots
  * `spawn-capena`, `courier-ambush` and `night-cart` are for the quest.
+ *
+ * The surroundings (palcirc/capenaParts.ts) reach well beyond the gate's small footprint: the tombs
+ * along the Via Appia to z ≈ −160, the grove of the Camenae, and inside the gate a square and four
+ * blocks along the urban Via Appia, which is paved on to the streets by the Circus (z ≈ +96). The
+ * city filler should keep out of the local box x ∈ [−30, 30], z ∈ [−165, 100].
  */
 import * as THREE from 'three';
 import { Draw } from '../../../arch/fabric/draw';
