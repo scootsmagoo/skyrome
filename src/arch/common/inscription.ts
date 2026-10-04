@@ -38,6 +38,12 @@ export interface InscriptionSpec {
   pxPerMeter?: number;
   /** Draw a thin moulded border inside the panel edge. */
   border?: boolean;
+  /**
+   * Monumental inscriptions (arch attics, the column's pedestal) get their own full-resolution
+   * material. Everything else — labels, shop signs, notices — is packed into shared atlas pages
+   * per style: one material (one draw call per building) however many signs there are.
+   */
+  monumental?: boolean;
 }
 
 /** Roman orthography: upper case, U→V, J→I, optional interpuncts between words. */
@@ -164,13 +170,18 @@ function drawText(ctx: CanvasRenderingContext2D, spec: InscriptionSpec, w: numbe
   ctx.filter = 'none';
 }
 
-function render(spec: InscriptionSpec): Rendered {
-  const ppm = spec.pxPerMeter ?? 220;
-  const scale = Math.min(1, 2048 / Math.max(spec.width * ppm, spec.height * ppm));
-  const w = Math.max(16, Math.round(spec.width * ppm * scale));
-  const h = Math.max(16, Math.round(spec.height * ppm * scale));
+/** Texture size for a panel at `ppm` pixels per metre, capped at `max` px on the longer side. */
+export function panelPixels(spec: InscriptionSpec, ppm: number, max: number): { w: number; h: number } {
+  const scale = Math.min(1, max / Math.max(spec.width * ppm, spec.height * ppm));
+  return { w: Math.max(16, Math.round(spec.width * ppm * scale)), h: Math.max(16, Math.round(spec.height * ppm * scale)) };
+}
+
+let sharedCanvas: HTMLCanvasElement | null = null;
+
+function render(spec: InscriptionSpec, size = panelPixels(spec, spec.pxPerMeter ?? 220, 2048)): Rendered {
+  const { w, h } = size;
   const style = spec.style ?? 'carved';
-  const canvas = document.createElement('canvas');
+  const canvas = (sharedCanvas ??= document.createElement('canvas'));
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
@@ -278,7 +289,7 @@ function dataTex(data: Uint8ClampedArray, w: number, h: number, srgb: boolean) {
 
 const materials = new Map<string, THREE.MeshStandardMaterial>();
 
-/** A (cached) material carrying the rendered inscription. Browser only. */
+/** A unique full-resolution material for one (monumental) inscription. Cached by spec. */
 export function inscriptionMaterial(spec: InscriptionSpec): THREE.MeshStandardMaterial {
   const key = JSON.stringify(spec);
   let mat = materials.get(key);
@@ -311,6 +322,154 @@ export function inscriptionMaterial(spec: InscriptionSpec): THREE.MeshStandardMa
   return mat;
 }
 
+// ---------------------------------------------------------------- shared atlas pages
+
+/** Atlas page size (px). 1024² holds ~20 shop signs at the default densities. */
+export const ATLAS_PAGE = 1024;
+const PAD = 4;
+/** Pixel density per style in the atlas (signs are read at a few metres, not inches). */
+const ATLAS_PPM: Record<InscriptionStyle, number> = { carved: 200, bronze: 200, painted: 150 };
+
+/** Shelf packer state for one page. Pure. */
+export interface Shelves {
+  size: number;
+  x: number;
+  y: number;
+  rowH: number;
+}
+
+/** Place a w × h rectangle (padding included by the caller) on a page, or null when it is full. Pure. */
+export function shelfPack(st: Shelves, w: number, h: number): { x: number; y: number } | null {
+  if (w > st.size || h > st.size) return null;
+  if (st.x + w > st.size) {
+    st.y += st.rowH;
+    st.x = 0;
+    st.rowH = 0;
+  }
+  if (st.y + h > st.size) return null;
+  const at = { x: st.x, y: st.y };
+  st.x += w;
+  st.rowH = Math.max(st.rowH, h);
+  return at;
+}
+
+interface AtlasEntry {
+  spec: InscriptionSpec;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+interface AtlasPage {
+  style: InscriptionStyle;
+  shelves: Shelves;
+  entries: AtlasEntry[];
+  material: THREE.MeshStandardMaterial;
+  color?: Uint8ClampedArray;
+  normal?: Uint8ClampedArray;
+  arm?: Uint8ClampedArray;
+  textures: THREE.DataTexture[];
+}
+
+const pages: AtlasPage[] = [];
+const atlasCache = new Map<string, { page: AtlasPage; entry: AtlasEntry }>();
+
+function newPage(style: InscriptionStyle): AtlasPage {
+  const S = ATLAS_PAGE;
+  const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: style === 'painted' ? 0.85 : 1, metalness: style === 'bronze' ? 1 : 0 });
+  material.name = `inscriptions:${style}#${pages.filter((p) => p.style === style).length}`;
+  const page: AtlasPage = { style, shelves: { size: S, x: 0, y: 0, rowH: 0 }, entries: [], material, textures: [] };
+  if (typeof document !== 'undefined') {
+    // Painted dipinti are flat and evenly matte: colour only. Carved and bronze need relief and
+    // a roughness/metal map.
+    page.color = new Uint8ClampedArray(S * S * 4);
+    const tex = (d: Uint8ClampedArray, srgb: boolean) => {
+      const t = dataTex(d, S, S, srgb);
+      page.textures.push(t);
+      return t;
+    };
+    material.map = tex(page.color, true);
+    if (style !== 'painted') {
+      page.normal = new Uint8ClampedArray(S * S * 4);
+      page.arm = new Uint8ClampedArray(S * S * 4);
+      material.normalMap = tex(page.normal, false);
+      const arm = tex(page.arm, false);
+      material.roughnessMap = arm;
+      material.aoMap = arm;
+      if (style === 'bronze') material.metalnessMap = arm;
+    }
+  }
+  pages.push(page);
+  return page;
+}
+
+/** Copy a rendered panel into its page region, smearing its edge pixels into the padding. */
+function blit(page: AtlasPage, e: AtlasEntry, r: Rendered) {
+  const S = ATLAS_PAGE;
+  const copy = (dst: Uint8ClampedArray | undefined, src: Uint8ClampedArray) => {
+    if (!dst) return;
+    for (let y = -PAD; y < r.h + PAD; y++) {
+      const sy = Math.min(r.h - 1, Math.max(0, y));
+      const ty = e.y + PAD + y;
+      if (ty < 0 || ty >= S) continue;
+      for (let x = -PAD; x < r.w + PAD; x++) {
+        const sx = Math.min(r.w - 1, Math.max(0, x));
+        const tx = e.x + PAD + x;
+        if (tx < 0 || tx >= S) continue;
+        const si = (sy * r.w + sx) * 4;
+        const ti = (ty * S + tx) * 4;
+        dst[ti] = src[si];
+        dst[ti + 1] = src[si + 1];
+        dst[ti + 2] = src[si + 2];
+        dst[ti + 3] = src[si + 3];
+      }
+    }
+  };
+  copy(page.color, r.color);
+  copy(page.normal, r.normal);
+  copy(page.arm, r.arm);
+  for (const t of page.textures) t.needsUpdate = true;
+}
+
+let atlasRedrawQueued = false;
+
+/** The shared material and UV rectangle [u0, v0, u1, v1] for a (non-monumental) panel. */
+export function atlasEntry(spec: InscriptionSpec): { material: THREE.MeshStandardMaterial; uv: [number, number, number, number] } {
+  const style = spec.style ?? 'carved';
+  const key = JSON.stringify(spec);
+  let hit = atlasCache.get(key);
+  if (!hit) {
+    const { w, h } = panelPixels(spec, spec.pxPerMeter ?? ATLAS_PPM[style], ATLAS_PAGE - 2 * PAD);
+    let page = pages.find((p) => p.style === style && p.shelves.size > 0 && shelfFits(p.shelves, w + 2 * PAD, h + 2 * PAD));
+    page ??= newPage(style);
+    const at = shelfPack(page.shelves, w + 2 * PAD, h + 2 * PAD)!;
+    const entry: AtlasEntry = { spec, x: at.x, y: at.y, w, h };
+    page.entries.push(entry);
+    hit = { page, entry };
+    atlasCache.set(key, hit);
+    if (typeof document !== 'undefined') {
+      blit(page, entry, render(spec, { w, h }));
+      if (fontState !== 'ready' && !atlasRedrawQueued) {
+        // Redraw every atlas entry once the font arrives.
+        atlasRedrawQueued = true;
+        redraw.add(() => {
+          for (const p of pages) for (const e of p.entries) blit(p, e, render(e.spec, { w: e.w, h: e.h }));
+          atlasRedrawQueued = false;
+        });
+        loadInscriptionFont();
+      }
+    }
+  }
+  const { entry } = hit;
+  const S = ATLAS_PAGE;
+  return { material: hit.page.material, uv: [(entry.x + PAD) / S, (entry.y + PAD) / S, (entry.x + PAD + entry.w) / S, (entry.y + PAD + entry.h) / S] };
+}
+
+function shelfFits(st: Shelves, w: number, h: number): boolean {
+  return shelfPack({ ...st }, w, h) !== null;
+}
+
 /** Split a box into its −z face (front) and the other five faces. */
 function boxFaces(w: number, h: number, d: number) {
   const box = new THREE.BoxGeometry(w, h, d);
@@ -339,11 +498,23 @@ export function inscriptionPanel(b: MeshBuilder, spec: InscriptionSpec, at?: THR
   const { front, rest } = boxFaces(spec.width, spec.height, depth);
   front.translate(0, 0, depth / 2);
   rest.translate(0, 0, depth / 2);
-  b.add(front, inscriptionMaterial(spec), at, { uv: 'keep' });
+  if (spec.monumental) b.add(front, inscriptionMaterial(spec), at, { uv: 'keep' });
+  else {
+    // Remap the face's 0..1 UVs into the panel's rectangle on its atlas page.
+    const { material, uv: [u0, v0, u1, v1] } = atlasEntry(spec);
+    const uv = front.getAttribute('uv') as THREE.BufferAttribute;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, u0 + (u1 - u0) * uv.getX(i), v0 + (v1 - v0) * uv.getY(i));
+    b.add(front, material, at, { uv: 'keep' });
+  }
   b.add(rest, opts.bodyMaterial ?? ((spec.style ?? 'carved') === 'painted' ? 'plaster_white' : 'marble'), at);
 }
 
-/** A painted shop sign / notice (dipinto) on a thin whitewashed board. */
+/** A painted shop sign / notice (dipinto) on a thin whitewashed board. Shares atlas pages. */
 export function paintedSign(b: MeshBuilder, lines: string[], width: number, height: number, at?: THREE.Matrix4, opts: { ink?: string; ground?: string } = {}) {
   inscriptionPanel(b, { lines, width, height, style: 'painted', ink: opts.ink, ground: opts.ground, interpunct: false, sizes: lines.map((_, i) => (i === 0 ? 1 : 0.7)) }, at, { depth: 0.04 });
+}
+
+/** Atlas pages in use (for stats and tests). */
+export function inscriptionAtlasPages(): readonly { style: InscriptionStyle; entries: number; material: THREE.Material }[] {
+  return pages.map((p) => ({ style: p.style, entries: p.entries.length, material: p.material }));
 }

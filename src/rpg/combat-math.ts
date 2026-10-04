@@ -401,7 +401,9 @@ export interface PoiseState {
   max: number;
   /** Seconds until regeneration resumes. */
   delay: number;
-  /** Seconds of poise immunity left (the stagger plus 1.5 s after it). */
+  /** Seconds of stagger left (only a riposte lands a stagger meanwhile). */
+  stagger: number;
+  /** Seconds of poise immunity left: 1.5 s, starting when a stagger ends (§6.5 anti-loop rule 1). */
   immune: number;
   /** Seconds of flinch immunity left (0.4 s after any flinch). */
   flinchImmune: number;
@@ -414,7 +416,7 @@ export interface PoiseState {
 }
 
 export function createPoise(max: number, opts: { player?: boolean } = {}): PoiseState {
-  return { current: max, max, delay: 0, immune: 0, flinchImmune: 0, staggers: [], t: 0, player: !!opts.player };
+  return { current: max, max, delay: 0, stagger: 0, immune: 0, flinchImmune: 0, staggers: [], t: 0, player: !!opts.player };
 }
 
 /**
@@ -440,24 +442,22 @@ export interface PoiseResult {
 }
 
 /**
- * Apply poise damage (§6.5). Breaking poise staggers (0.8 s light, 1.5 s heavy) and refills it;
- * the victim then has 1.5 s of poise immunity after the stagger, and a third stagger within 4 s
- * only flinches. A hit that doesn't break poise flinches only at ≥ 20% of max (the player 35%),
- * with 0.4 s of flinch immunity after. `knockdown` attacks floor the target for 2 s; `riposte`
- * hits always stagger but open no new riposte window; `immune` (Labor) ignores it all.
+ * Apply poise damage (§6.5). Breaking poise staggers (0.8 s light, 1.5 s heavy) and refills it.
+ * While staggered only a riposte lands (the riposte window falls inside the stagger); when any
+ * stagger ends the victim has 1.5 s of poise immunity, and a third stagger within 4 s only
+ * flinches. A hit that doesn't break poise flinches only at ≥ 20% of max (the player 35%), with
+ * 0.4 s of flinch immunity after. `knockdown` attacks floor the target for 2 s; `riposte` hits
+ * always stagger (restaggering a staggered target) but open no new riposte window; `immune`
+ * (Labor) ignores it all.
  */
 export function applyPoiseDamage(state: PoiseState, amount: number, opts: { heavy?: boolean; knockdown?: boolean; immune?: boolean; riposte?: boolean } = {}): PoiseResult {
   const P = COMBAT.poise;
   const none: PoiseResult = { result: 'none', seconds: 0, riposteWindow: false };
   if (opts.immune || !(amount > 0) || state.immune > 0) return none;
+  if ((state.stagger ?? 0) > 0 && !opts.riposte) return none;
   state.delay = P.regenDelay;
   const recent = state.staggers.filter((t) => state.t - t < P.staggerWindow).length;
-  const stagger = (seconds: number, result: StaggerResult): PoiseResult => {
-    state.staggers.push(state.t);
-    state.current = state.max; // refilled when the stagger ends
-    state.immune = seconds + P.immunityAfterStagger;
-    return { result, seconds, riposteWindow: result === 'stagger' && !opts.riposte };
-  };
+  const stagger = (seconds: number, result: StaggerResult): PoiseResult => startStagger(state, seconds, result, !opts.riposte);
   if (recent < P.staggerLimit) {
     if (opts.knockdown) return stagger(P.knockdown, 'knockdown');
     state.current -= amount;
@@ -475,20 +475,63 @@ function flinch(state: PoiseState, forced: boolean): PoiseResult {
   return { result: 'flinch', seconds: 0, riposteWindow: false };
 }
 
-/** Advance poise timers; poise regenerates 15/s after 1.5 s without poise damage (immunity counts as none). */
+/**
+ * Stagger a target for `seconds` from outside applyPoiseDamage (a parry's 1.0 s, a guard break's
+ * 1.2 s): it counts toward the 2-in-4-s limit, only a riposte lands meanwhile, and the 1.5 s of
+ * immunity follow when it ends. Returns the stagger the target actually takes (a third within
+ * 4 s is only a flinch).
+ */
+export function staggerPoise(state: PoiseState, seconds: number, opts: { riposteWindow?: boolean } = {}): PoiseResult {
+  const P = COMBAT.poise;
+  if (state.staggers.filter((t) => state.t - t < P.staggerWindow).length >= P.staggerLimit) return flinch(state, true);
+  return startStagger(state, seconds, 'stagger', opts.riposteWindow ?? true);
+}
+
+function startStagger(state: PoiseState, seconds: number, result: StaggerResult, window: boolean): PoiseResult {
+  state.staggers.push(state.t);
+  state.current = state.max; // nothing breaks it again until the stagger ends; refilled for then
+  state.stagger = seconds;
+  state.immune = 0; // the immunity starts when this stagger ends
+  state.delay = COMBAT.poise.regenDelay;
+  return { result, seconds, riposteWindow: result === 'stagger' && window };
+}
+
+/**
+ * Advance poise timers: the stagger, then 1.5 s of poise immunity from its end; poise regenerates
+ * 15/s after 1.5 s without poise damage (staggered and immune time count as none).
+ */
 export function tickPoise(state: PoiseState, dt: number) {
+  const P = COMBAT.poise;
   state.t += dt;
   state.flinchImmune = Math.max(0, state.flinchImmune - dt);
-  state.staggers = state.staggers.filter((t) => state.t - t < COMBAT.poise.staggerWindow);
+  state.staggers = state.staggers.filter((t) => state.t - t < P.staggerWindow);
+  let left = dt;
+  if ((state.stagger ?? 0) > 0) {
+    const used = Math.min(left, state.stagger);
+    state.stagger -= used;
+    left -= used;
+    state.delay = Math.max(0, state.delay - used);
+    if (state.stagger > 1e-9) return;
+    state.stagger = 0;
+    state.current = state.max;
+    state.immune = P.immunityAfterStagger;
+  }
   if (state.immune > 0) {
-    state.immune = Math.max(0, state.immune - dt);
-    return;
+    const used = Math.min(left, state.immune);
+    state.immune -= used;
+    left -= used;
+    state.delay = Math.max(0, state.delay - used);
+    if (state.immune > 1e-9) return;
+    state.immune = 0;
   }
   if (state.delay > 0) {
-    state.delay = Math.max(0, state.delay - dt);
-    return;
+    const used = Math.min(left, state.delay);
+    state.delay -= used;
+    left -= used;
+    if (state.delay > 1e-9) return;
+    state.delay = 0;
   }
-  state.current = Math.min(state.max, state.current + COMBAT.poise.regen * dt);
+  state.current = Math.min(state.max, state.current + P.regen * left);
 }
 
 // ------------------------------------------------------------------ whole hits

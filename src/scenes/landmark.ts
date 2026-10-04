@@ -17,6 +17,7 @@ import { buildHeightmap } from '../world/terrain/heightmap';
 import { Terrain } from '../world/terrain/Terrain';
 import { landmarkPads, spawnAtLandmark } from '../world/rome/buildRome';
 import { installSky } from '../world/sky';
+import { buildWater } from '../world/water';
 import { setupPlayer } from './common';
 import type { SceneDef } from './types';
 
@@ -37,6 +38,7 @@ const scene: SceneDef = {
     const hm = buildHeightmap({ ...atlas, bounds: b } as any, { spacing: 2, pads: landmarkPads(atlas.CITY_BOUNDS) });
     game.heightmap = hm;
     game.terrain = new Terrain(game, hm);
+    await buildWater(game, atlas, hm);
     await buildLandmarks(game, atlas.LANDMARKS, hm, { only: ids, highDetailPriority: 3 });
     await whenTexturesLoaded().catch(() => {});
     const R = footprintRadius(lm) * 0.6;

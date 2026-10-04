@@ -93,6 +93,8 @@ export class SaveSystem implements System {
   calendarClamp: () => string | null = () => (this.game as { calendar?: { clamp?: string | null } }).calendar?.clamp ?? null;
   /** Result of navigator.storage.persist() (undefined until known or when unsupported). */
   persisted: boolean | undefined;
+  /** The clock a new game starts from: the game's time when the save system was created (scenes may change it). */
+  newGameTime: { totalHours: number; timeScale?: number } | null;
   private readonly saveables: { key: string; s: Saveable }[] = [];
   private readonly migrations = new Map<number, Migration>(Object.entries(MIGRATIONS).map(([k, m]) => [Number(k), m]));
   private readonly blockers: (() => string | null)[] = [];
@@ -111,6 +113,7 @@ export class SaveSystem implements System {
   ) {
     this.storage = opts.storage ?? createDefaultStorage();
     this.prefix = opts.prefix ?? 'skyrome.save.';
+    this.newGameTime = game.time ? { totalHours: game.time.totalHours, timeScale: game.time.timeScale } : null;
     if (opts.builtins !== false) this.registerBuiltins();
     // §14.13 autosave triggers.
     game.events.on('quest:stage', () => this.requestAutosave('quest'));
@@ -259,33 +262,60 @@ export class SaveSystem implements System {
     return { warnings };
   }
 
+  /**
+   * New game: every saveable back to its new-game state (reset() — the clock to newGameTime, world
+   * deltas, discovered places, and whatever other modules registered), play time back to 0 and the
+   * autosave timers restarted, with no autosave pending. Saves already on disk are untouched.
+   */
+  resetAll() {
+    this.game.dialogue?.end?.();
+    for (const { key, s } of this.saveables) {
+      try {
+        s.reset?.();
+      } catch (err) {
+        console.error(`[save] "${key}" failed to reset`, err);
+      }
+    }
+    this.playTime = 0;
+    this.lastAutosave = 0;
+    this.lastQuestAutosave = -Infinity;
+    this.pendingAutosave = null;
+  }
+
   // ---------------------------------------------------------------- slots (async)
 
   async save(slot: string, opts: { name?: string; kind?: SaveKind; force?: boolean } = {}): Promise<SaveResult> {
-    return this.serial(async () => {
-      const why = opts.force ? null : this.canSave() ? null : (this.whyNot() ?? 'cannot save right now');
-      if (why) return this.fail(slot, why);
-      const kind = opts.kind ?? kindOf(slot);
-      const file = this.snapshot({ slot, kind, name: opts.name });
-      let text: string;
-      try {
-        text = JSON.stringify(file);
-      } catch (err) {
-        return this.fail(slot, `could not serialize: ${String(err)}`);
-      }
-      file.meta.size = text.length;
-      try {
-        await this.storage.write(this.slotKey(slot), text);
-        const idx = await this.readIndex();
-        idx.slots[slot] = file.meta;
-        await this.writeIndex(idx);
-      } catch (err) {
-        return this.fail(slot, `storage error: ${String((err as Error)?.message ?? err)}`);
-      }
-      this.game.events.emit('save:saved', { slot, meta: file.meta });
-      this.game.events.emit('rpg:notify', { text: kind === 'quick' ? 'Quicksaved' : kind === 'auto' ? 'Autosaved' : 'Game saved', kind: 'save' });
-      return { ok: true, meta: file.meta };
-    });
+    return this.serial(() => this.saveNow(slot, opts));
+  }
+
+  /**
+   * Write a slot and its index entry. Runs inside serial(); `updateIndex` changes the index in the
+   * same read-modify-write (the autosave counter), so no other save can come in between.
+   */
+  private async saveNow(slot: string, opts: { name?: string; kind?: SaveKind; force?: boolean }, updateIndex?: (idx: SaveIndex) => void): Promise<SaveResult> {
+    const why = opts.force ? null : this.canSave() ? null : (this.whyNot() ?? 'cannot save right now');
+    if (why) return this.fail(slot, why);
+    const kind = opts.kind ?? kindOf(slot);
+    const file = this.snapshot({ slot, kind, name: opts.name });
+    let text: string;
+    try {
+      text = JSON.stringify(file);
+    } catch (err) {
+      return this.fail(slot, `could not serialize: ${String(err)}`);
+    }
+    file.meta.size = text.length;
+    try {
+      await this.storage.write(this.slotKey(slot), text);
+      const idx = await this.readIndex();
+      idx.slots[slot] = file.meta;
+      updateIndex?.(idx);
+      await this.writeIndex(idx);
+    } catch (err) {
+      return this.fail(slot, `storage error: ${String((err as Error)?.message ?? err)}`);
+    }
+    this.game.events.emit('save:saved', { slot, meta: file.meta });
+    this.game.events.emit('rpg:notify', { text: kind === 'quick' ? 'Quicksaved' : kind === 'auto' ? 'Autosaved' : 'Game saved', kind: 'save' });
+    return { ok: true, meta: file.meta };
   }
 
   async load(slot: string): Promise<LoadResult> {
@@ -317,21 +347,20 @@ export class SaveSystem implements System {
   /**
    * Save to the next rotating autosave slot. Quest-stage autosaves ('quest') come at most every
    * 120 s; the others (sleep, interiors, the 10-minute timer) go now. `force` skips every check.
+   * Choosing the slot, saving and advancing the rotation are one queued operation, so a save
+   * made meanwhile (F5 as an autosave finishes) can't lose the counter or its own index entry.
    */
   autosave(opts: { force?: boolean; reason?: string } = {}): Promise<SaveResult> {
     const quest = opts.reason === 'quest';
     if (!opts.force && quest && this.playTime - this.lastQuestAutosave < SAVE.questAutosaveInterval) return Promise.resolve({ ok: false, error: 'too soon' });
     if (quest) this.lastQuestAutosave = this.playTime;
-    const run = this.autosaving.then(async (): Promise<SaveResult> => {
-      const idx = await this.readIndex();
-      const slot = `auto${(idx.autoCounter % AUTOSAVE_SLOTS) + 1}`;
-      const r = await this.save(slot, { kind: 'auto', force: opts.force });
-      if (r.ok) {
-        this.lastAutosave = this.playTime;
-        const after = await this.readIndex();
-        after.autoCounter = idx.autoCounter + 1;
-        await this.writeIndex(after);
-      }
+    const run = this.serial(async (): Promise<SaveResult> => {
+      const counter = (await this.readIndex()).autoCounter;
+      const slot = `auto${(counter % AUTOSAVE_SLOTS) + 1}`;
+      const r = await this.saveNow(slot, { kind: 'auto', force: opts.force }, (idx) => {
+        idx.autoCounter = counter + 1;
+      });
+      if (r.ok) this.lastAutosave = this.playTime;
       return r;
     });
     this.autosaving = run.catch(() => {});
@@ -484,7 +513,10 @@ export class SaveSystem implements System {
     if (text) {
       try {
         const idx = JSON.parse(text) as SaveIndex;
-        if (idx && typeof idx.slots === 'object') return { ...blank, ...idx };
+        if (idx && idx.slots && typeof idx.slots === 'object') {
+          const n = Number(idx.autoCounter);
+          return { slots: idx.slots, autoCounter: Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0 };
+        }
       } catch {
         /* corrupt index: rebuild */
       }
@@ -550,6 +582,9 @@ export class SaveSystem implements System {
       load: (d) => {
         const t = d as { totalHours?: number; timeScale?: number } | undefined;
         if (t && typeof t.totalHours === 'number' && Number.isFinite(t.totalHours)) game.time.restore({ totalHours: t.totalHours, timeScale: t.timeScale });
+      },
+      reset: () => {
+        if (game.time && this.newGameTime) game.time.restore({ ...this.newGameTime });
       },
     });
     this.register('player', {

@@ -169,6 +169,32 @@ describe('BarterSystem', () => {
     expect(barter.merchant('receptator')!.stock).toEqual([]);
   });
 
+  it('selling stolen goods takes exactly that owner’s copies: no pay, no restock, no duplicate when they are not there', () => {
+    const { inventory, barter } = setup();
+    inventory.add('gladius', 1, { stolenFrom: 'npc-a' });
+    const purse = barter.merchant('receptator')!.denarii;
+    // The wrong owner: nothing is sold, however often it is tried.
+    for (let i = 0; i < 5; i++) expect(barter.sell('receptator', 'gladius', 1, 'npc-b')).toMatchObject({ ok: false, reason: 'not-owned' });
+    expect(inventory.denarii).toBe(0);
+    expect(inventory.count('gladius', { stolenFrom: 'npc-a' })).toBe(1);
+    expect(barter.merchant('receptator')!.denarii).toBe(purse);
+    expect(barter.merchant('receptator')!.stock).toEqual([]);
+    // Two owners' copies don't add up to two of one owner's.
+    inventory.add('gladius', 1, { stolenFrom: 'npc-b' });
+    expect(barter.sell('receptator', 'gladius', 2, 'npc-a').reason).toBe('not-owned');
+    expect(inventory.count('gladius')).toBe(2);
+    // A clean sale never takes stolen copies.
+    expect(barter.sell('armorum', 'gladius').reason).toBe('not-owned');
+    expect(barter.sell('receptator', 'gladius', 0, 'npc-a').ok).toBe(false);
+    // The right owner sells one, and only that copy leaves.
+    const r = barter.sell('receptator', 'gladius', 1, 'npc-a');
+    expect(r.ok).toBe(true);
+    expect(inventory.denarii).toBe(r.price);
+    expect(inventory.count('gladius', { stolenFrom: 'npc-a' })).toBe(0);
+    expect(inventory.count('gladius', { stolenFrom: 'npc-b' })).toBe(1);
+    expect(barter.merchant('receptator')!.stock).toEqual([{ itemId: 'gladius', count: 1 }]);
+  });
+
   it('disposition: Fama with the vendor’s faction / 10, origin traits and what happened in dialogue (±20); street-wise is a price term', () => {
     const { barter, factions, sheet } = setup();
     expect(barter.disposition('pistrix')).toBe(0);

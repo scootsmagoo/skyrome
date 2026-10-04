@@ -39,6 +39,13 @@ const SHAPES: Record<Exclude<ShieldModel, 'none'>, Shape> = {
   parmula: { w: 0.27, h: 0.31, wrap: 0.38, dome: 0, outline: 'rect', face: 0.065, boss: 0 },
 };
 
+/** Half width/height of a shield and how far its face stands in front of the grip (m). */
+export function shieldSize(model: ShieldModel): { w: number; h: number; face: number } {
+  if (model === 'none') return { w: 0, h: 0, face: 0 };
+  const sh = SHAPES[model];
+  return { w: sh.w, h: sh.h, face: sh.face };
+}
+
 const GOLD = srgb('#d6aa48');
 const BRONZE = srgb('#b08d4a');
 const IRON = srgb('#8b9096');

@@ -161,16 +161,21 @@ export class DialogueSystem {
     return this.defs.get(id);
   }
 
-  /** Candidate dialogues for an NPC: specific ones by priority, then '*' fallbacks by priority. */
+  /**
+   * Candidate dialogues for an NPC, in the order start() tries them: the ones for this NPC (those
+   * listing its id, and the one its NpcDef names) by priority — the named one wins a tie, so a
+   * higher-priority quest dialogue still takes over — then the '*' fallbacks by priority.
+   */
   candidates(npcId: string): DialogueDef[] {
-    const byPrio = (a: DialogueDef, b: DialogueDef) => (b.priority ?? 0) - (a.priority ?? 0);
-    const all = [...this.defs.values()];
-    const specific = all.filter((d) => d.npcs.includes(npcId)).sort(byPrio);
-    const generic = all.filter((d) => d.npcs.includes('*') && !d.npcs.includes(npcId)).sort(byPrio);
-    // An NPC def can name its dialogue explicitly; that one goes first.
     const named = this.game.npcs?.get(npcId)?.dialogue;
     const explicit = named ? this.defs.get(named) : undefined;
-    return [...(explicit ? [explicit] : []), ...specific.filter((d) => d !== explicit), ...generic.filter((d) => d !== explicit)];
+    const prio = (d: DialogueDef) => d.priority ?? 0;
+    // Stable sort: equal priorities keep registration order, after the named dialogue.
+    const order = (a: DialogueDef, b: DialogueDef) => prio(b) - prio(a) || Number(b === explicit) - Number(a === explicit);
+    const all = [...this.defs.values()];
+    const specific = all.filter((d) => d === explicit || d.npcs.includes(npcId)).sort(order);
+    const generic = all.filter((d) => d !== explicit && d.npcs.includes('*') && !d.npcs.includes(npcId)).sort(order);
+    return [...specific, ...generic];
   }
 
   hasDialogue(npcId: string) {
