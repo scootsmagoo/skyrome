@@ -472,6 +472,8 @@ export class NpcManager implements System {
     this.initialDone = false;
     this.floodT = 0;
     this.grid.resetFlood();
+    // Something happens soon after arriving somewhere new.
+    this.vignettes.nextAt = this.clock + 6 + this.rng.next() * 6;
     // The hour may have jumped: no stale night budget (carts!) for the next fixed step.
     this.budget = crowdBudget(this.game.time.hour, this.sun, this.district.density, this.density);
     this.districtAt = { x: Infinity, z: Infinity };
