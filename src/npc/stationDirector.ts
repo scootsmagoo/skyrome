@@ -27,6 +27,14 @@ export interface StationHost {
   block(x: number, z: number, r: number): void;
 }
 
+/** An empty marker in a piece of dressing's local space (where its lamp burns). */
+function lampAt(object: THREE.Object3D, x: number, y: number, z: number): THREE.Object3D {
+  const o = new THREE.Object3D();
+  o.position.set(x, y, z);
+  object.add(o);
+  return o;
+}
+
 /** People and dressing appear within this distance of a station (m). */
 const SPAWN_R = 85;
 /** …and are cleared beyond this one. */
@@ -161,6 +169,8 @@ export class StationDirector {
       case 'stall-pots':
         object = makeStall(d.kind === 'stall-food' ? 'food' : d.kind === 'stall-cloth' ? 'cloth' : 'pots');
         half = { x: 0.95, y: 0.45, z: 0.45 };
+        // An oil lamp on the stall, lit in the dark hours.
+        lamp = { at: lampAt(object, 0.55, 1.0, -0.2), req: { intensity: 4, distance: 6.5, flicker: 0.3, night: true, glow: 0.12 } };
         break;
       case 'table':
         object = makeTable();

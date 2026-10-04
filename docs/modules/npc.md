@@ -58,7 +58,7 @@ itself), `game.locations`, `game.dialogue`, `game.ui`, `game.audio`, `game.light
 | `npc/crowd/districts.ts` | Districts from the atlas lowlands and regions (and the Porta Capena), points of interest on landmark forecourts |
 | `npc/crowd/atlasLanes.ts` | Lanes from the atlas roads plus the Porta Capena connector |
 | `npc/crowd/stations.ts` | Station data (who stands where, when, with what dressing) and their geometry (pure) |
-| `npc/stationDirector.ts` | Mans stations near the player: dressing (collider, fire light), members at their posts, off duty, cleared when far |
+| `npc/stationDirector.ts` | Mans stations near the player: dressing (collider, fire or lamp light), members at their posts, off duty, cleared when far |
 | `npc/install.ts` | `installPopulation(game)` for the game flow (`&npcs=0` to skip) |
 | `npc/spots.ts` | Claimable activity spots: street spots, landmark forecourts, walls (lean spots, stand-in shops) |
 | `npc/barks.ts` | Bark tables (with the content bible's §8.1 lines) and the `BarkDirector` (rationing) |
@@ -322,7 +322,7 @@ Forum shots look across the square from the Rostra, 15 s after turning.
 | Where | People | In view / unoccluded | fps | CPU ms/frame (all systems) | NPC fixed step + update | Draw calls | Triangles |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Crowd scene, 09:30 | 65 + 2 named | 55 / 44 | 60 | 4.4 | 0.58 + 0.74 ms | 289 | 0.42 M |
-| Rome, spawn (Porta Capena), 04:30 | 27 (10 at stations, 6 vigiles, 1 cart) | 22 / 11 | 60 | 2.9–3.4 | 0.32 + 0.17 ms | 234–611 | 0.4–1.3 M |
+| Rome, spawn (Porta Capena), 04:30 | 27 (10 at stations, 6 vigiles, 1 cart) | 22 / 11 | 60 | 2.9–4.0 | 0.32 + 0.17 ms | 234–611 | 0.4–1.3 M |
 | Rome, Forum, 09:00 | 101–103 (7 at stations) | 41–42 / 30–32 | 60 | 5.3–5.8 | 1.0–1.2 + 0.06–0.16 ms | 415 | 0.93–0.96 M |
 | Rome, Forum, 09:00 (WebKit) | 96 | 31 | 60 | 6.0 | 1.1 + 0.25 ms | 413 | 0.96 M |
 | Rome, Forum, 14:00 | 73 | 20 / 14 | 60 | 4.3 | 1.0 + 0.03 ms | 355 | 0.77 M |
