@@ -157,22 +157,23 @@ scripts/       headless screenshot driver, controls and performance checks, atla
 
 ## Where things stand
 
+Updated 5 October 2026. The game is playable in the browser: walk the city, fight, switch views, take on the Ludus bouts.
+
 | Area | Status |
 |---|---|
-| Engine: loop, input, physics, first/third-person camera | ✅ Done |
-| Historical atlas, game design document, content bible (NPCs, quests, items) | ✅ Done (the content bible is a first draft, still under review) |
-| Procedural characters and animation | ✅ Done |
-| Materials, the classical architecture kit, city fabric kit | ✅ Done |
-| Sky, day and night, weather | ✅ Done |
-| Audio and music | ✅ Done (not yet wired into Rome) |
-| RPG rules, quest, dialogue and save engines | ✅ Done |
-| HUD and menus | ✅ Done |
-| Terrain and the Tiber (with swimming) | ✅ Done |
-| River district and the Tiber bridges | ✅ Done |
-| Boot flow: control presets, title, character creation, spawn | ✅ Done |
-| Forum, Capitoline, Imperial Fora, Trajan's Forum, Colosseum valley, Palatine and Circus, Campus Martius | 🚧 In progress |
-| City fabric across Rome (streets, insulae, walls, aqueducts, trees) | 🚧 In progress |
-| Combat and enemy AI · NPC crowds and schedules · v0.1 quests | 🚧 In progress |
+| Engine: loop, input (Mac trackpad, keyboard extensions like Vimium), physics, first/third-person camera | ✅ Done |
+| Historical atlas, game design document, content bible (NPCs, quests, items) | ✅ Done (the content bible is a first draft) |
+| Procedural characters, animation, materials, the classical architecture kit, city fabric | ✅ Done |
+| Sky, day and night, weather · audio and music | ✅ Done |
+| RPG rules, quests, dialogue, saves (F5/P quicksave, F9/L quickload) · HUD and menus | ✅ Done |
+| The city core: Forum, Velia, Colosseum valley, Palatine and Circus, Capitoline and Imperial Fora, river district, Campus Martius, terrain and the Tiber | ✅ Built (detail and density still growing) |
+| Combat: light chains, power attacks, block/parry/riposte, dodge, lock-on, aim assist; attack anyone | ✅ Done |
+| Gore: blood, and severed heads and limbs (Settings → Gameplay → Gore) | ✅ Done |
+| Crime and the watch: assault and murder bounties, guards, the arrest talk, the Carcer | ✅ Done |
+| Crowds with daily life, street muggers at night | ✅ Done (some NPCs still get stuck) |
+| The Ludus Magnus bouts with Nereus the retiarius (the first boss) | 🧪 Playable, balance under review |
+| v0.0 acceptance checks (the walk test, performance in the Forum, a 30-minute soak) | 🚧 Next |
+| The v0.1 "golden path": the 35-minute opening with four quests | 🚧 After that |
 
 ## Roadmap
 

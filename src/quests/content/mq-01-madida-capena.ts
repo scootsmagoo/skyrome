@@ -80,7 +80,16 @@ export default defineQuest({
       ],
       onEnter: (q) => {
         removeExamine(BODY.id); // a New Game from the title: the old courier's body is gone
-        hint(q.game, 'Walk with W (look with the arrow keys or the trackpad). Press E to talk to the courier. The compass at the top shows where to go.');
+        // The shareable build starts in the Forum, far from the gate: say where the story is.
+        const gate = q.game.landmarks?.get('porta-capena')?.position;
+        const p = q.game.player?.position;
+        const far = !!gate && !!p && Math.hypot(gate.x - p.x, gate.z - p.z) > 80;
+        hint(
+          q.game,
+          far
+            ? 'Click the view to look around (or use the arrow keys). W A S D to walk, Shift to sprint, F to fight. The story starts at the Porta Capena: the compass at the top points the way.'
+            : 'Walk with W (look with the arrow keys or the trackpad). Press E to talk to the courier. The compass at the top shows where to go.',
+        );
       },
       next: 'gate',
     },

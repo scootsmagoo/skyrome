@@ -27,6 +27,7 @@ import { lookById, outfitAppearance, type CharacterSpec } from './character';
 import { GameFlow, START_DATE, START_HOUR, TITLE_HOUR, type FlowOptions } from './GameFlow';
 import { registerAtlasLocations } from './locations';
 import { installOptionalModules } from './optional';
+import { shouldWelcome, showWelcome } from './welcome';
 import { guardUnload, registerMarkerResolvers, wireUi } from './wiring';
 
 /**
@@ -115,6 +116,8 @@ export async function startRome(game: Game, uiRoot: HTMLElement, params: RomePar
     await flow.quickStart();
     ui.block('loading', false);
     void loading.done();
+    // The shareable build's first view: a welcome card with the keys that matter.
+    if (params.at === PLAY_SPAWN && shouldWelcome(location.search)) void showWelcome(game, ui.root);
   } else {
     ui.block('loading', false);
     await flow.showTitle();
