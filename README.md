@@ -76,14 +76,23 @@ The game is designed to be fully playable on a Mac trackpad, so every mouse acti
 | Climb | Push into a waist-high ledge to clamber up; Space at a ledge up to chest height mantles onto it |
 | Look | Trackpad or mouse (click to capture) · arrow keys |
 | First / third person | V (or scroll the third-person camera all the way in) |
-| Attack (hold for a power attack) · block | F or left click · Q or right click |
+| Attack (hold for a power attack) · block | F or left click (with the weapon sheathed it draws and swings) · Q or right click |
 | Draw or sheathe a weapon · interact · sneak | R · E · C |
 | Menus | Tab · I inventory · J journal · M map · K skills · Esc pause |
 | Walk · wait · swap camera shoulder | N · T · H |
 | Quicksave · quickload | P or F5 · L or F9 |
 | Use an item · invoke your god | 1–8 (healing first) · Z |
+| Give up a fight (to the watch: the arrest talk) | Hold Y |
 | Stuck somewhere? | Esc → I'm stuck |
 | Check your trackpad and keys | `?scene=inputlab` |
+
+### Fighting and the law
+
+You can attack anyone, anywhere. Your swing turns toward the person nearest where you're aiming and steps in to reach them. Rome answers, as in *Skyrim*:
+
+- **Assault and murder.** Striking someone who wasn't your enemy is assault (a 40-denarius bounty). Killing them is murder (1,000) if anyone saw it.
+- **The guards.** Guards nearby fight you. With a bounty on your head, any guard who spots you walks up and says "Stop right there!". You can pay the fine, talk your way out, bribe him, go to the Carcer (days pass), or resist.
+- **A murderer** is attacked on sight. Hold **Y** to give yourself up.
 
 ### Keyboard extensions (Vimium and similar)
 

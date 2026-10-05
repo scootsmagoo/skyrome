@@ -48,11 +48,15 @@ import { StreetDanger } from './danger';
 import { adoptProfile, resolveSpawn, type NpcLike } from './spawnSpec';
 import { Combatant, type CombatView } from './Combatant';
 import { CombatCore, type CombatEnv, type Projectile } from './CombatCore';
-import { angleTo, dist2D } from './geometry';
+import { BODY, angleTo, dist2D } from './geometry';
 import { CombatHud, type CombatHudState } from './hud/CombatHud';
 import { PlayerCombat, type PlayerCombatHost } from './PlayerCombat';
 import { combatSettings, type CombatSettings } from './settings';
 import { TIMING } from './timing';
+
+const BODY_HAND = BODY.handDist;
+/** Aim assist: how far beyond reach (m) and how far off the facing it looks for whom to hit. */
+const ASSIST = { extra: 1.9, cone: 55 * DEG };
 import './events';
 
 declare module '../core/Game' {
@@ -191,6 +195,8 @@ export class CombatSystem implements System, PlayerCombatHost {
   surfaceAt: ((x: number, y: number, z: number) => Surface) | null = null;
   private yieldOffs = new Map<string, () => void>();
   private pendingChoice: { c: Combatant; at: number } | null = null;
+  /** People the player attacked who weren't enemies: when they kneel, no prompt pops up (E decides). */
+  private readonly assaultVictims = new Set<string>();
   private lastStruck: { c: Combatant; at: number } | null = null;
   private seq = 0;
   private cached: CombatSettings;
@@ -275,6 +281,7 @@ export class CombatSystem implements System, PlayerCombatHost {
       parryWindowOverride: () => this.cached.parryWindow,
       projectileVisual: (p, on) => this.projectileVisual(p, on),
       adoptNear: (c, r, o) => this.adoptNear(c, r, o.power),
+      assistTarget: (c, w) => this.assistTarget(c, w.reach),
       nav: this.navProbe(),
     };
   }
@@ -327,32 +334,74 @@ export class CombatSystem implements System, PlayerCombatHost {
 
   /**
    * People (humanoid actors) in front of `c` within `r` m who aren't combatants yet: adopt them so
-   * a deliberate blow can land. Essential and named people only for a power attack.
+   * the player's blow can land on them. Anyone can be struck; essential people are knocked down
+   * for a moment instead of dying (CombatCore's §6.9 rules).
    */
-  private adoptNear(c: Combatant, r: number, power: boolean): number {
+  private adoptNear(c: Combatant, r: number, _power: boolean): number {
     const game = this.game;
     if (!game.actors) return 0;
     let n = 0;
     for (const a of game.actors.near(c.position, r)) {
       if (n >= 3) break;
-      if (a === (game.player as unknown) || this.core.get(a.id)) continue;
-      if (!(a.avatar instanceof HumanoidAvatar) || (a as Actor & { dead?: boolean }).dead) continue;
+      if (!this.adoptable(a)) continue;
       if (Math.abs(angleTo(c.heading, a.position.x - c.position.x, a.position.z - c.position.z)) > 80 * DEG) continue;
-      if (!power && this.protectedActor(a)) continue;
-      const adopted = this.adoptActor(a);
-      if (adopted) {
-        this.adopted.set(adopted.id, this.core.now);
-        n++;
-      }
+      if (this.adoptForBlow(a)) n++;
     }
     return n;
   }
 
-  /** An essential or named NPC (a definition in game.npcs): struck only with a held power attack. */
-  private protectedActor(a: Actor): boolean {
-    const ext = a as Actor & { def?: NpcLike; essential?: boolean };
-    const def = (this.game.npcs?.get(a.id) as NpcLike | undefined) ?? ext.def;
-    return !!(ext.essential || def?.essential || this.game.npcs?.get(a.id));
+  /** A person who can be struck but isn't a combatant yet. */
+  private adoptable(a: Actor): boolean {
+    if (a === (this.game.player as unknown) || this.core.get(a.id)) return false;
+    return a.avatar instanceof HumanoidAvatar && !(a as Actor & { dead?: boolean }).dead;
+  }
+
+  private adoptForBlow(a: Actor): Combatant | null {
+    const adopted = this.adoptActor(a);
+    if (adopted) this.adopted.set(adopted.id, this.core.now);
+    return adopted ?? null;
+  }
+
+  /**
+   * Aim assist (who the player's attack is meant for): the lock target when it's within a few
+   * steps; else the person, foe or not, nearest the line of the swing within ±55° and a step or two
+   * beyond reach. Enemies on their feet are preferred, the kneeling least. The core turns the body
+   * to them and closes the gap over the wind-up, so a trackpad player needn't line up exactly.
+   */
+  private assistTarget(c: Combatant, reach: number): Combatant | null {
+    const R = BODY_HAND + reach + ASSIST.extra;
+    const lock = c.lockTarget;
+    if (lock && (lock.active || lock.status === 'yielded') && dist2D(lock.position, c.position) <= R + 1.5) return lock;
+    let best: Combatant | Actor | null = null;
+    let bestScore = Infinity;
+    const score = (x: number, z: number, radius: number, bias: number) => {
+      const dx = x - c.position.x;
+      const dz = z - c.position.z;
+      const d = Math.max(0, Math.hypot(dx, dz) - radius);
+      if (d > R) return Infinity;
+      const ang = Math.abs(angleTo(c.heading, dx, dz));
+      if (ang > ASSIST.cone) return Infinity;
+      return ang / ASSIST.cone + d / R + bias;
+    };
+    for (const o of this.core.list) {
+      if (o === c || !(o.active || o.status === 'yielded')) continue;
+      const bias = o.status === 'yielded' ? 0.8 : this.core.hostile(c, o) || o.target === c ? -0.4 : 0;
+      const s = score(o.position.x, o.position.z, o.body.radius, bias);
+      if (s < bestScore && this.lineOfSight(c, o)) {
+        best = o;
+        bestScore = s;
+      }
+    }
+    for (const a of this.game.actors?.near(c.position, R + 1) ?? []) {
+      if (!this.adoptable(a)) continue;
+      const s = score(a.position.x, a.position.z, a.body.radius, 0);
+      if (s < bestScore) {
+        best = a;
+        bestScore = s;
+      }
+    }
+    if (!best) return null;
+    return best instanceof Combatant ? best : this.adoptForBlow(best);
   }
 
   /** Actors adopted from other modules, and when (combat clock): idle ones are let go again. */
@@ -678,9 +727,18 @@ export class CombatSystem implements System, PlayerCombatHost {
     if (!actor || actor === (this.game.player as unknown)) return actor ? (this.playerC ?? undefined) : undefined;
     const existing = this.core.get(actor.id);
     if (existing) return existing;
-    const ext = actor as Actor & { def?: NpcLike; hostile?: boolean; essential?: boolean };
+    const ext = actor as Actor & { def?: NpcLike; hostile?: boolean; essential?: boolean; name?: unknown; role?: { guard?: boolean; archetype?: string } };
     const def = (this.game.npcs?.get(actor.id) as NpcLike | undefined) ?? ext.def;
-    const ad = adoptProfile(actor.id, this.items, { npc: def, hostile: ext.hostile ?? opts?.hostile, essential: ext.essential });
+    // The crowd's soldiers and vigiles are the watch (lawful: they answer for the city).
+    const role = ext.role;
+    const faction = role?.guard ? (role.archetype === 'vigil' ? 'vigiles' : role.archetype === 'praetorianus' ? 'praetoriani' : 'cohortes-urbanae') : undefined;
+    const ad = adoptProfile(actor.id, this.items, {
+      npc: def,
+      faction,
+      hostile: ext.hostile ?? opts?.hostile,
+      essential: ext.essential,
+      name: !def && typeof ext.name === 'string' ? ext.name : undefined,
+    });
     const profile = opts?.profile ?? (opts?.practice ? { ...ad.profile, weapon: 'rudis' } : ad.profile);
     const c = this.register(actor, {
       profile,
@@ -717,6 +775,16 @@ export class CombatSystem implements System, PlayerCombatHost {
 
   get active(): boolean {
     return this.core.playerInCombat;
+  }
+
+  /** Did the player start the current trouble (an assault on someone who wasn't an enemy)? */
+  get playerAggressor(): boolean {
+    return !!this.playerC?.aggressor;
+  }
+
+  /** The law has dealt with it (fine paid, jail served): the player is no longer the aggressor. */
+  clearAggressor() {
+    if (this.playerC) this.playerC.aggressor = false;
   }
 
   get difficulty() {
@@ -865,6 +933,9 @@ export class CombatSystem implements System, PlayerCombatHost {
     ev.on('combat:started', () => this.game.audio?.music?.setOverride('combat', 'combat', 10));
     ev.on('combat:ended', () => this.game.audio?.music?.setOverride('combat', null));
     ev.on('actor:yielded', (e) => this.onYielded(e.actorId, e.byId));
+    ev.on('combat:assault', (e) => {
+      if (e.attackerId === this.playerC?.id) this.assaultVictims.add(e.victimId);
+    });
     ev.on('combat:yieldChoice', (e) => this.onYieldChoice(e));
     ev.on('combat:bout', (e) => {
       if (e.phase !== 'end') return;
@@ -999,7 +1070,9 @@ export class CombatSystem implements System, PlayerCombatHost {
       });
       this.yieldOffs.set(c.id, off);
     }
-    this.pendingChoice = { c, at: this.game.elapsed + 1.2 };
+    // A foe who fought you gets the choice put to you; a passer-by you set upon just kneels (look
+    // at them and press E to decide).
+    if (!this.assaultVictims.has(c.id)) this.pendingChoice = { c, at: this.game.elapsed + 1.2 };
   }
 
   /** The §6.9 choice over a yielded foe, as a dialogue panel (arena: Mitte / Iugula). */
@@ -1326,6 +1399,12 @@ export class CombatSystem implements System, PlayerCombatHost {
     if (pc && t && pc.drawn && pc.active && !pc.stunned(this.core.now) && pc.action?.kind !== 'dodge') {
       p.heading = Math.atan2(t.position.x - p.position.x, t.position.z - p.position.z);
     }
+    // Aim assist: square up to the one the attack is meant for until the blow lands.
+    const aim = pc?.assist;
+    const act = pc?.action;
+    if (pc && aim && act && act.hitAt !== undefined && !act.resolved && pc.active && !pc.stunned(this.core.now) && aim.status !== 'dead') {
+      p.heading = Math.atan2(aim.position.x - p.position.x, aim.position.z - p.position.z);
+    }
     if (pc) pc.sneaking = !!p.sneaking;
     // A fallen player stays where it fell (the controller would turn the body with the keys).
     if (pc && pc.status !== 'active' && pc.status !== 'yielded') {
@@ -1356,9 +1435,11 @@ export class CombatSystem implements System, PlayerCombatHost {
     if (this.pendingChoice && g.elapsed >= this.pendingChoice.at) {
       const c = this.pendingChoice.c;
       this.pendingChoice = null;
-      // Open at once unless someone else is still attacking the player.
+      // Open at once unless someone else is still attacking the player, or the player is still
+      // swinging (then a moment after the last swing).
       const busy = this.core.list.some((o) => o.active && o.target === pc && o !== c);
-      if (!busy && c.status === 'yielded' && !g.ui?.top) this.openYieldChoice(c);
+      if (pc && this.core.now - pc.lastAttackAt < 1) this.pendingChoice = { c, at: g.elapsed + 0.5 };
+      else if (!busy && c.status === 'yielded' && !g.ui?.top) this.openYieldChoice(c);
     }
     for (let i = this.despawnAt.length - 1; i >= 0; i--) {
       if (g.elapsed >= this.despawnAt[i].at) {

@@ -53,11 +53,15 @@ export interface CombatEnv {
   /** Show or remove a projectile's visual. */
   projectileVisual?(p: Projectile, on: boolean): void;
   /**
-   * People in front of a player's deliberate blow (a power attack, a punch) who aren't combatants
-   * yet (the crowd, a shopkeeper): make them combatants so the blow can land (an assault, §14.1).
-   * Essential and named people only for a power attack. Returns how many were added.
+   * People in front of the player's blow who aren't combatants yet (the crowd, a shopkeeper): make
+   * them combatants so the blow can land (an assault, §14.1). Returns how many were added.
    */
   adoptNear?(c: Combatant, radius: number, o: { power: boolean }): number;
+  /**
+   * Aim assist for the player's attack: the person it is meant for (the lock, the foe, else whoever
+   * is nearest the line of the swing in a forgiving cone), adopted if need be; null for none.
+   */
+  assistTarget?(c: Combatant, weapon: WeaponStats): Combatant | null;
   /** The world's walls for the NPCs' steering (rays, the NPC crew's paths); none = open ground. */
   nav?: NavProbe;
 }
@@ -356,7 +360,10 @@ export class CombatCore {
     c.action = a;
     c.lastAttackAt = now;
     if (kind === 'light') c.lastChain = chain;
-    if (c.isPlayer) this.bout?.attacked();
+    if (c.isPlayer) {
+      this.bout?.attacked();
+      c.assist = kind === 'feint' ? null : (this.env.assistTarget?.(c, weapon) ?? null);
+    }
     this.playAttackClip(c, a);
     this.stepFor(c, a);
     if (power || kind === 'net') this.env.sfx(this.voice(c, 'grunt'), this.chest(c), 0.9);
@@ -404,7 +411,10 @@ export class CombatCore {
     };
     c.action = a;
     c.lastAttackAt = now;
-    if (c.isPlayer) this.bout?.attacked();
+    if (c.isPlayer) {
+      this.bout?.attacked();
+      c.assist = this.env.assistTarget?.(c, c.weapon) ?? null;
+    }
     this.playAttackClip(c, a, held);
     this.stepFor(c, a);
     this.env.sfx(this.voice(c, 'grunt'), this.chest(c), 0.9);
@@ -562,40 +572,31 @@ export class CombatCore {
       y0: Math.min(handY, pivot.y) - 0.95,
       y1: Math.max(handY, pivot.y) + 0.6,
     };
-    const hits: { o: Combatant; ang: number; hostile: boolean }[] = [];
-    // The player strikes someone who isn't an enemy only on purpose (§6.9, AC-22): a held power
-    // attack, or a punch (throwing the first punch starts a brawl). Those bystanders become
-    // combatants first; any other blow whiffs past them.
+    const hits: { o: Combatant; ang: number; rank: number }[] = [];
+    // The player's blows land on whoever they touch: anyone, anywhere (an attack on someone who
+    // wasn't an enemy is an assault, §14.1). People in reach who aren't combatants yet are adopted
+    // first so the blow can land. NPCs strike only their enemies (§6.1, AC-22).
     const power = a.kind === 'power';
-    const deliberate = c.isPlayer && !sweep && (power || c.weapon.class === 'unarmed');
-    if (deliberate) this.env.adoptNear?.(c, spec.handDist + spec.reach + 0.8, { power });
+    if (c.isPlayer) this.env.adoptNear?.(c, spec.handDist + spec.reach + 0.8, { power });
+    const aim = c.isPlayer ? (c.assist ?? c.lockTarget ?? c.target) : (c.lockTarget ?? c.target);
     for (const o of this.list) {
       if (o === c || o.status === 'dead' || o.status === 'fled' || o.status === 'ko') continue;
-      // A kneeling, yielded fighter is struck only on purpose: a power attack, or locked on him.
-      if (o.status === 'yielded' && !power && c.lockTarget !== o) continue;
       const hostile = this.hostile(c, o);
-      // NPCs strike only their enemies; a sweep strikes only hostiles (§6.1, AC-22).
-      if ((!c.isPlayer || sweep) && !hostile) continue;
-      // The player's ordinary blow never lands on a bystander; essential and named people
-      // (quest givers, the courier) only take a held power attack.
-      if (c.isPlayer && !hostile && c.lockTarget !== o && o.status !== 'yielded') {
-        if (!deliberate) continue;
-        if ((o.essential || o.named) && !power) continue;
-      }
+      if (!c.isPlayer && !hostile) continue;
+      const yielded = o.status === 'yielded';
+      // A sweep passes over the kneeling; the player's other blows take them only when they are
+      // what the attack was aimed at.
+      if (yielded && (sweep || (c.isPlayer && o !== aim))) continue;
       const p = o.position;
-      const ang = sweepCapsule(spec, { x: p.x, z: p.z, y0: p.y + 0.1, y1: p.y + o.body.height, r: o.body.radius });
+      const ang = sweepCapsule(spec, { x: p.x, z: p.z, y0: p.y + (yielded ? -0.3 : 0.1), y1: p.y + o.body.height, r: o.body.radius });
       if (ang < 0 || !this.sight(c, o)) continue;
-      hits.push({ o, ang, hostile });
+      // Preference: the one aimed at, then an enemy on its feet, then anyone else.
+      hits.push({ o, ang, rank: o === aim ? 0 : hostile ? 1 : 2 });
     }
     if (!hits.length) return [];
     if (sweep) return hits.map((h) => h.o);
-    const lock = c.lockTarget ?? c.target;
-    const locked = hits.find((h) => h.o === lock);
-    if (locked) return [locked.o];
-    // Never a bystander when an enemy is in the arc.
-    const pool = hits.some((h) => h.hostile) ? hits.filter((h) => h.hostile) : hits;
-    pool.sort((x, y) => x.ang - y.ang);
-    return [pool[0].o];
+    hits.sort((x, y) => x.rank - y.rank || x.ang - y.ang);
+    return [hits[0].o];
   }
 
   /** Resolve one blow from `att` on `def` (§6.2–6.5, §6.7, §6.9, §6.10). */
@@ -1352,10 +1353,27 @@ export class CombatCore {
       default:
         return;
     }
+    const w = Math.max(0.12, a.phases?.windup ?? 0.2);
+    // The player's aim assist: close the gap to the one the attack is meant for over the wind-up
+    // (up to a long step; a forward power attack lunges further), so a swing from a pace too far
+    // still lands, and stop short of walking into them.
+    const aim = c.isPlayer ? c.assist : null;
+    if (aim && m >= 0) {
+      const dx = aim.position.x - c.position.x;
+      const dz = aim.position.z - c.position.z;
+      const d = Math.hypot(dx, dz);
+      const reach = (a.kind === 'bash' ? 0.35 : (a.weapon ?? c.weapon).reach) * 0.75 + BODY.handDist + aim.body.radius;
+      const max = a.kind === 'power' && a.direction === 'forward' ? S.lunge + 0.5 : a.kind === 'power' || a.kind === 'sprint' ? 1.6 : 1.2;
+      const gap = Math.min(max, Math.max(0, d - reach));
+      if (d > 0.01 && gap > 0.02) {
+        const v = gap / w;
+        c.motion = { vx: (dx / d) * v, vz: (dz / d) * v, until: this.now + w, accel: 30 };
+      }
+      return;
+    }
     const t = this.preferredTarget(c);
     // Don't step into someone already at arm's length.
     if (m > 0 && t && dist2D(t.position, c.position) < c.body.radius + t.body.radius + 0.35) return;
-    const w = Math.max(0.12, a.phases?.windup ?? 0.2);
     const v = m / w;
     c.motion = { vx: Math.sin(c.heading) * v, vz: Math.cos(c.heading) * v, until: this.now + w, accel: 25 };
   }

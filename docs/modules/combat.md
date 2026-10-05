@@ -138,16 +138,35 @@ game.combat.danger.trigger('vicus-tuscus-south'); // stage a night mugging now
   faction (`vigiles` → a vigil, `cohortes-urbanae` → a miles), else it is a civilian who defends
   himself; its team is its faction. Adopted actors are driven by combat only while they fight, and
   their deaths are passed to `game.population.kill(actor)` when that exists.
-- **Bystanders are struck only on purpose** (§6.9, AC-22). An ordinary blow (a light attack, a
-  riposte, a bash, a sweep) never lands on someone who isn't an enemy: it whiffs past the crowd, the
-  courier, a passer-by beside a dodging mugger. A held **power attack** or a **punch** (the first
-  punch of a brawl) is deliberate: it adopts up to three humanoid actors in front within reach and
-  lands on whoever is there (an assault: `combat:assault`; a civilian yields at half health or
-  runs). Essential and named NPCs (a definition in `game.npcs`) take only a power attack. A blow on
-  a bystander gives no skill XP and no sneak bonus, unless the player was sneaking (C). Adopted
-  people idle for 30 s, or gone from the world, are let go again.
-- **Yields nobody decides.** A yield to the player opens the spare/rob/arrest/kill choice (the
-  prompt, and *Decide* with E while he kneels), also when the very first blow caused it. If nobody
+- **Anyone can be struck** (§14.1). The player's blows land on whoever they touch: a light attack,
+  a riposte, a bash, a sweep or a power attack, on a passer-by, a shopkeeper, the courier or the
+  watch. People in reach who aren't combatants yet are adopted first (up to three in front; the
+  crowd's soldiers and vigiles as the lawful watch). With an enemy in the swing, the enemy is struck
+  before a passer-by beside him; a kneeling, yielded person is struck only when the attack is aimed
+  at them. Essential NPCs are knocked down for a moment instead of dying. A blow on someone who
+  wasn't an enemy is an assault (`combat:assault`, the player becomes the aggressor), gives no skill
+  XP and no sneak bonus unless the player was sneaking (C), and a civilian yields at half health or
+  runs. NPCs strike only their enemies. Adopted people idle for 30 s, or gone from the world, are
+  let go again.
+- **Aim assist.** When the player attacks, the combat system picks who the blow is meant for: the
+  lock target when it's within a few steps; else the person, foe or not, nearest the line of the
+  swing within ±55° and up to 1.9 m beyond reach (enemies on their feet preferred, the kneeling
+  least). The body turns to them and steps in over the wind-up (up to 1.2 m, 1.6 m for a power or
+  sprint attack, more for a forward lunge), so a swing from a pace too far still lands.
+- **F with the weapon sheathed** draws it and swings as soon as it is out (one press).
+- **The law** (`src/game/law.ts`, GDD §14.1) answers. An assault is *vis* (40 den. bounty; the
+  victim always saw it); killing someone you assaulted, or one of the watch while you are the
+  aggressor, is *homicidium* (1,000) when someone saw it. Witnesses raise the alarm: the crowd
+  scatters and nearby guards fight you. With a bounty, a guard who sees you walks up ("Stop right
+  there!") and talks: pay the fine, a word (bounty under 200), a bribe (a corruptible guard, 200 or
+  less), the Carcer (days pass, you walk out at its door), or resist (+50 %, guards attack on
+  sight). Walking away from the talk is resisting; running from the guard adds 10 %. At 1,000 or
+  more guards attack on sight; hold Y while they fight you to give up into the same talk. The
+  condemnation *ad ludum* has no bouts yet, so a murderer serves the longest Carcer term instead.
+- **Yields nobody decides.** A foe who yields to the player gets the spare/rob/arrest/kill choice
+  put to the player (the prompt, a moment after the player's last swing), also when the very first
+  blow caused it. A passer-by the player set upon just kneels: look at them and press E (*Decide*)
+  for the same choice. If nobody
   decides, he gets up and goes about his business once the player is 40 m away or after 60 s
   (15 s when he didn't yield to the player); an adopted NPC goes back to its module, a spawned one
   leaves. Arena foes wait for the missio.

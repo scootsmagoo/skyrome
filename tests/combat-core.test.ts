@@ -159,51 +159,55 @@ describe('real swings: timeline, reach, hit frame', () => {
   });
 });
 
-describe('bystanders are struck only on purpose (§6.9, AC-22)', () => {
+describe("the player's blows land on anyone (§14.1 assault); NPCs strike only their enemies", () => {
   const civilian = () => ({ ...combatProfileFor('civilian', { kit: 0 }), health: 500, yieldAt: 0, fleeAt: 0 });
 
-  it("an ordinary blow whiffs past a passer-by; a held power attack lands (an assault)", () => {
+  it('an ordinary blow lands on a passer-by, and it is an assault', () => {
     const env = fakeEnv();
     const core = makeCore(env);
     const p = addPlayer(core);
     const civ = addNpc(core, 'baker', civilian(), { z: 1.2, team: 'npc:baker' });
     core.startAttack(p, 'light');
     run(core, 0.8);
-    expect(civ.vitals.health.current).toBe(500);
-    expect(env.of('combat:assault')).toEqual([]);
-    core.beginCharge(p);
-    run(core, 0.5);
-    core.releaseCharge(p);
-    run(core, 0.8);
     expect(civ.vitals.health.current).toBeLessThan(500);
     expect(env.of('combat:assault').length).toBe(1);
+    expect(p.aggressor).toBe(true);
   });
 
-  it('a miss on an enemy never clips the bystander beside him', () => {
+  it('with an enemy in the swing, the enemy is struck, not the passer-by beside him', () => {
     const core = makeCore();
     const p = addPlayer(core);
-    const civ = addNpc(core, 'baker', civilian(), { x: 0.3, z: 1.2, team: 'npc:baker' });
-    const thug = addNpc(core, 'thug', { ...combatProfileFor('thug', { kit: 0 }), health: 500, yieldAt: 0 }, { x: 0, z: 4 });
+    const civ = addNpc(core, 'baker', civilian(), { x: 0.35, z: 1.2, team: 'npc:baker' });
+    const thug = addNpc(core, 'thug', { ...combatProfileFor('thug', { kit: 0 }), health: 500, yieldAt: 0 }, { x: -0.35, z: 1.2 });
     core.engage(thug, p);
     core.startAttack(p, 'light');
     run(core, 0.8);
+    expect(thug.vitals.health.current).toBeLessThan(500);
     expect(civ.vitals.health.current).toBe(500);
   });
 
-  it('a punch is deliberate (the first punch of a brawl); an essential or named NPC takes only a power attack', () => {
+  it('named and essential people can be struck; an essential one is knocked out, never killed', () => {
     const core = makeCore();
-    const p = addPlayer(core, { weapon: 'fists' });
-    const civ = addNpc(core, 'drunk', civilian(), { z: 1.0, team: 'npc:drunk' });
+    const p = addPlayer(core);
+    const courier = addNpc(core, 'npc-festus', { ...civilian(), health: 4 }, { z: 1.0, team: 'npc:festus' });
+    courier.named = true;
+    courier.essential = true;
     core.startAttack(p, 'light');
     run(core, 0.8);
-    expect(civ.vitals.health.current).toBeLessThan(500);
-    const core2 = makeCore();
-    const p2 = addPlayer(core2, { weapon: 'fists' });
-    const courier = addNpc(core2, 'npc-festus', civilian(), { z: 1.0, team: 'npc:festus' });
-    courier.named = true;
-    core2.startAttack(p2, 'light');
-    run(core2, 0.8);
-    expect(courier.vitals.health.current).toBe(500);
+    expect(courier.vitals.health.current).toBeLessThan(4);
+    expect(courier.status).not.toBe('dead');
+  });
+
+  it("an NPC's blow never lands on someone who isn't its enemy", () => {
+    const core = makeCore();
+    const p = addPlayer(core);
+    // The thug faces the player (+z) with a passer-by right in front of him.
+    const thug = addNpc(core, 'thug', { ...combatProfileFor('thug', { kit: 0 }), health: 500, yieldAt: 0 }, { z: -3, heading: 0 });
+    const civ = addNpc(core, 'baker', civilian(), { z: -2, team: 'npc:baker' });
+    core.engage(thug, p);
+    core.startAttack(thug, 'light');
+    run(core, 1.2);
+    expect(civ.vitals.health.current).toBe(500);
   });
 });
 

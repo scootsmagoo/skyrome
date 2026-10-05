@@ -359,6 +359,34 @@ export class NpcManager implements System {
     return this.suppressGuards || (!!aggressor && this.questFighters.has(aggressor));
   }
 
+  /** A guard of the watch: the Urban Cohorts or the Vigiles (crowd role or named faction). */
+  isGuard(n: Npc): boolean {
+    return !!n.role?.guard || n.def?.faction === 'cohortes-urbanae' || n.def?.faction === 'vigiles';
+  }
+
+  private directed = new Set<Npc>();
+
+  /**
+   * Walk someone to a point for another module (a guard coming to arrest the player). The NPC is
+   * scripted until `undirect`; call again to move the goal. False when it can't be directed now
+   * (dead, fighting, talking, or in someone else's script).
+   */
+  direct(npc: Npc, x: number, z: number, speed: number, arrive = 1.5): boolean {
+    if (npc.dead || npc.isFighting() || npc.talking || (npc.scripted && !this.directed.has(npc))) return false;
+    if (!npc.scripted) {
+      npc.brain?.script(this.life);
+      this.directed.add(npc);
+    }
+    npc.brain?.scriptGo(x, z, speed, arrive);
+    return true;
+  }
+
+  /** Give a directed NPC back to normal life. */
+  undirect(npc: Npc) {
+    if (!this.directed.delete(npc)) return;
+    if (npc.scripted && !npc.dead) npc.brain?.release(this.life);
+  }
+
   /** Something alarming at a point (see the 'npc:alarm' event). */
   alarm(x: number, z: number, radius = 16, kind: 'fight' | 'crime' | 'danger' = 'fight', aggressor: Actor | null = null) {
     for (const n of this.near({ x, y: 0, z }, radius)) {
@@ -651,11 +679,13 @@ export class NpcManager implements System {
         this.alarm(e.x, e.z, e.radius ?? 16, e.kind ?? 'fight', a);
       }),
     );
-    // Crimes the RPG module records (assault, theft…) frighten bystanders near the player.
+    // Crimes the RPG module records (assault, theft…) frighten bystanders near the player, and the
+    // watch comes over (to arrest: game/law.ts has the talk). Violence is answered with force by
+    // the law module's own alarm, which names the player as the aggressor.
     this.offs.push(
       ev.on('crime:committed', (e) => {
         const p = this.game.player;
-        if (p && e.witnessed) this.alarm(p.position.x, p.position.z, 14, 'crime', p);
+        if (p && e.witnessed) this.alarm(p.position.x, p.position.z, 14, 'crime', null);
       }),
     );
   }
@@ -1875,10 +1905,12 @@ export class NpcManager implements System {
       for (const f of fighters) {
         if (seen.some((s) => Math.hypot(s.x - f.position.x, s.z - f.position.z) < 5)) continue;
         seen.push({ x: f.position.x, z: f.position.z });
-        // The aggressor guards go for: whoever is fighting that isn't the player; a quest's
-        // fighter first, so a scripted fight keeps the watch out of it.
+        // The aggressor guards go for: the player when the player started it (an assault);
+        // otherwise whoever is fighting that isn't the player, a quest's fighter first, so a
+        // scripted fight keeps the watch out of it.
         const near = (o: Actor) => o !== player && Math.hypot(o.position.x - f.position.x, o.position.z - f.position.z) < 8;
-        const foe = fighters.find((o) => near(o) && this.questFighters.has(o)) ?? fighters.find(near) ?? null;
+        const quest = fighters.find((o) => near(o) && this.questFighters.has(o));
+        const foe = quest ?? (combat.playerAggressor && combat.isInCombat(player) ? player : (fighters.find(near) ?? null));
         for (const n of this.near(f.position, 16)) {
           if (n === f || n.isFighting() || n.brain?.task?.kind === 'flee' || n.brain?.task?.kind === 'respond' || n.brain?.task?.kind === 'gawk') continue;
           n.brain?.alarm(this.life, f.position.x, f.position.z, 'fight', foe);

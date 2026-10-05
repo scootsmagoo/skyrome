@@ -211,6 +211,8 @@ export class Combatant {
   brawl = false;
   /** Struck first without provocation (lawful guards answer calls against it). */
   aggressor = false;
+  /** The player's aim assist: who the current attack is meant for (turned to and stepped toward). */
+  assist: Combatant | null = null;
   /** Nereus still has his net. */
   hasNet = false;
   /** Pila stuck in the shield (block mitigation −50 %). */

@@ -9,7 +9,7 @@
  *   Q                block, hold or toggle (§4.2 rule in guardInput.ts); every press is a parry try
  *   Space / Option   dodge (Space only in combat with a weapon drawn); WASD direction or a backstep
  *   X                tap: lock on / cycle; hold 0.5 s: release
- *   R                draw / sheathe (F or Q with the weapon sheathed draws it)
+ *   R                draw / sheathe (F with the weapon sheathed draws it and swings; Q draws it)
  *   hold Y 1 s       yield · hold E (arena) salute / take the crowd's gifts · hold F on a knocked-out
  *                    body: finish it · F or E while netted: struggle
  */
@@ -57,6 +57,8 @@ export class PlayerCombat {
   private holdEDone = false;
   private finishing: Combatant | null = null;
   private finishAt = -1;
+  /** F pressed with the weapon sheathed: swing as soon as it is out (game time of the press). */
+  private swingAfterDraw = -Infinity;
 
   constructor(private readonly host: PlayerCombatHost) {}
 
@@ -131,9 +133,11 @@ export class PlayerCombat {
         return;
       }
       if (!c.drawn) {
+        // One press draws and swings: the attack follows as soon as the weapon is out.
         core.setDrawn(c, true);
         this.host.suggestLock();
         this.attackDownAt = -1;
+        this.swingAfterDraw = t;
         return;
       }
       if (c.guardActive) {
@@ -180,6 +184,13 @@ export class PlayerCombat {
       else if (!core.startAttack(c, 'light') && !c.winded) this.bufferedAt = t;
       this.attackDownAt = -1;
       this.charging = false;
+    }
+    if (this.swingAfterDraw > -Infinity) {
+      if (t - this.swingAfterDraw > TIMING.draw + 0.6 || !c.drawn) this.swingAfterDraw = -Infinity;
+      else if (core.free(c)) {
+        core.startAttack(c, 'light');
+        this.swingAfterDraw = -Infinity;
+      }
     }
     if (this.bufferedAt > -Infinity) {
       if (t - this.bufferedAt > TIMING.buffer) this.bufferedAt = -Infinity;

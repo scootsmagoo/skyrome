@@ -376,9 +376,15 @@ export class CrimeSystem {
   /**
    * Submit to arrest: the Carcer (days pass, stolen goods confiscated, one random skill's progress
    * lost per day), the eques' double fine, or condemnation ad ludum, as sentence() says.
+   * `anySentence`: serve the Carcer whatever the sentence (the street arrest uses it while the
+   * condemnation ad ludum has no bouts to fight yet).
    */
-  goToJail(ledger = this.ledger, rng: { next(): number } = this.deps.rng ?? { next: Math.random }): { days: number; lostProgress: string[]; confiscated: ItemStack[] } | null {
-    if (this.bounty(ledger) <= 0 || this.sentence(ledger) !== 'carcer') return null;
+  goToJail(
+    ledger = this.ledger,
+    rng: { next(): number } = this.deps.rng ?? { next: Math.random },
+    opts: { anySentence?: boolean } = {},
+  ): { days: number; lostProgress: string[]; confiscated: ItemStack[] } | null {
+    if (this.bounty(ledger) <= 0 || (this.sentence(ledger) !== 'carcer' && !opts.anySentence)) return null;
     const days = this.jailDays(ledger);
     const confiscated = this.confiscate();
     skipTime(this.deps.time, this.deps.events, days * 24);

@@ -13,6 +13,8 @@ export interface CombatHook {
   /** Start a fight: `a` attacks `b`. */
   engage?(a: Actor, b: Actor): unknown;
   isInCombat?(a: Actor): boolean;
+  /** Did the player start the fight (an assault on someone who wasn't an enemy)? */
+  readonly playerAggressor?: boolean;
 }
 
 export function combatOf(game: Game): CombatHook | undefined {
