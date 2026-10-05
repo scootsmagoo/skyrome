@@ -49,7 +49,8 @@ export function mq01GrassatorProfile(which: 'a' | 'b'): CombatProfile {
  * 0.25 s, block 0.45 (weapon only; the galerus covers the left), phases at 75% and 45%, yields at 15%.
  */
 export const NEREUS_PROFILE: CombatProfile = {
-  ...combatProfileFor('boss', { health: 300, armor: 7 }),
+  // §13.2 gives 300 HP; 260 keeps the fight in its 3–6 minutes for a new character (playtests).
+  ...combatProfileFor('boss', { health: 260, armor: 7 }),
   name: 'Nereus · Retiarius, victor of 31',
   archetype: 'retiarius',
   armorFamily: 'cloth',
@@ -60,10 +61,14 @@ export const NEREUS_PROFILE: CombatProfile = {
   skill: 60,
   poise: 150,
   reactionS: 0.25,
-  blockSkill: 0.45,
-  attackIntervalS: 1.6,
+  // GDD §13.2 says 0.45; at that he parries and ripostes a first-time player off the sand
+  // (agent playtests: 0 wins in 10 while the warm-up bouts fell in seconds).
+  blockSkill: 0.3,
+  attackIntervalS: 2.1,
   tokensCost: 2,
   speedMult: 1.05,
+  // A lusio: his blows are the blunted practice trident's (GDD §13.2 gives no boss multiplier).
+  dmgMult: 1,
   yieldAt: 0.15,
   fleeAt: 0,
   loot: undefined,

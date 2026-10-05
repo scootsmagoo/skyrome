@@ -319,7 +319,7 @@ describe('NPCs', () => {
       'npc-iuvenalis', 'npc-apollodorus', 'npc-vestalis-maxima', 'npc-patron-vettius', 'npc-arruns', 'npc-zenon', 'npc-cerinthus', 'npc-philadelphus', 'npc-cerdo', 'npc-talarius', 'npc-lurco', 'npc-florus', 'npc-prima', 'npc-callistus',
     ];
     for (const id of cast) expect(npcIds.has(id), id).toBe(true);
-    expect(npcs.find((n) => n.id === 'npc-nereus')!.combat).toMatchObject({ health: 300, yieldAt: 0.15, weapon: 'tridens-lusorius', ranged: 'rete' });
+    expect(npcs.find((n) => n.id === 'npc-nereus')!.combat).toMatchObject({ health: 260, yieldAt: 0.15, weapon: 'tridens-lusorius', ranged: 'rete' });
     expect(npcs.find((n) => n.id === 'npc-iuvenalis')!.essential).toBe(true);
     // 15+ colourful Romans beyond the quest people (the street people and the historical figures)
     const colourful = npcs.filter((n) => n.tags?.some((t) => ['plebs', 'elite', 'servus', 'mendicus', 'otiosus', 'arena-fan', 'augur'].includes(t)));

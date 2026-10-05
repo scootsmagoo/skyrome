@@ -169,6 +169,20 @@ export function scriptedDeath(game: Game, id: string, killerId?: string) {
 export function fight(game: Game, npcId: string, archetype: string, at: string | Vec3, opts: Omit<SpawnOptions, 'id' | 'npc'> = {}, offset: { x?: number; z?: number } = {}): string | null {
   const c = combat(game);
   if (!c) return null;
+  // A staged fight (a boss, an arena bout) needs its fighter at the spot, with the boss's script
+  // and the bout's crowd: the NPC living in the world steps out while it plays them.
+  const staged = !!(opts.boss || opts.practice);
+  const pop = (game as unknown as { population?: { holdNamed?(id: string): () => void } }).population;
+  if (staged && actorExists(game, npcId) && pop?.holdNamed) {
+    const release = pop.holdNamed(npcId);
+    const id = spawnEnemy(game, archetype, at, { ...opts, id: npcId, npc: npcId }, offset);
+    if (!id) {
+      release();
+      return null;
+    }
+    releaseWhenGone(game, id, release);
+    return id;
+  }
   if (actorExists(game, npcId)) {
     if (c.engage) {
       try {
@@ -181,6 +195,17 @@ export function fight(game: Game, npcId: string, archetype: string, at: string |
     return spawnEnemy(game, archetype, at, { ...opts, id: `${npcId}~foe`, npc: npcId }, offset);
   }
   return spawnEnemy(game, archetype, at, { ...opts, id: npcId, npc: npcId }, offset);
+}
+
+/** Call `release` once the fighter `id` has left combat for good (despawned). */
+function releaseWhenGone(game: Game, id: string, release: () => void) {
+  const core = (game as unknown as { combat?: { core?: { get(id: string): unknown } } }).combat?.core;
+  if (!core) return release();
+  const timer = setInterval(() => {
+    if (core.get(id)) return;
+    clearInterval(timer);
+    release();
+  }, 2000);
 }
 
 /** Show a subtitle line (barks, shouts, the crowd) when a UI is listening. */

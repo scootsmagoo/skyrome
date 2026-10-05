@@ -359,6 +359,22 @@ export class NpcManager implements System {
     return this.suppressGuards || (!!aggressor && this.questFighters.has(aggressor));
   }
 
+  /** Named NPCs kept out of the world while someone else plays them (see `holdNamed`). */
+  private readonly held = new Set<string>();
+
+  /**
+   * Take a named NPC out of the world until the returned release is called (a staged fight's
+   * fighter plays them in the arena meanwhile); they come back at their schedule's place.
+   */
+  holdNamed(id: string): () => void {
+    this.held.add(id);
+    const n = this.byId.get(id);
+    if (n && !n.dead) this.despawn(n);
+    return () => {
+      this.held.delete(id);
+    };
+  }
+
   /** A guard of the watch: the Urban Cohorts or the Vigiles (crowd role or named faction). */
   isGuard(n: Npc): boolean {
     return !!n.role?.guard || n.def?.faction === 'cohortes-urbanae' || n.def?.faction === 'vigiles';
@@ -1870,7 +1886,7 @@ export class NpcManager implements System {
     const pp = this.game.player!.position;
     const reg = this.registry();
     for (const def of reg.all()) {
-      if (this.byId.has(def.id) || this.deadNamed.has(def.id)) continue;
+      if (this.byId.has(def.id) || this.deadNamed.has(def.id) || this.held.has(def.id)) continue;
       if (!def.schedule?.length && !def.home) continue;
       const e = activeScheduleEntry(def.schedule, this.game.time.hour);
       const at = e?.at ?? def.home;

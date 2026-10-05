@@ -508,7 +508,7 @@ describe('lud-01-sacramentum: The Oath', () => {
     // Bout 3: Nereus the boss. The player yields: the crowd (favor 30) refuses → the doctor stops it; an hour's rest.
     talk(w, 'npc-asiaticus', 'Ready.');
     close(w);
-    expect(w.spawned.at(-1)).toMatchObject({ archetype: 'retiarius', opts: { id: 'npc-nereus', boss: 'boss-nereus', practice: true, profile: { health: 300 } } });
+    expect(w.spawned.at(-1)).toMatchObject({ archetype: 'retiarius', opts: { id: 'npc-nereus', boss: 'boss-nereus', practice: true, profile: { health: 260 } } });
     Object.assign(w.game, { rng: { fork: () => ({ next: () => 0.99 }) } });
     yieldTo(w, 'player');
     expect(flag(w, 'lud01-favor')).toBe(30);

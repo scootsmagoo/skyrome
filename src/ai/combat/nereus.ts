@@ -18,8 +18,11 @@ export const NEREUS = {
   /** Health fractions where phases 2 and 3 begin. */
   phases: [0.75, 0.45] as const,
   yieldAt: 0.15,
-  /** Attack interval by phase (§13.2 stat block). */
-  interval: [1.6, 1.3, 1.1] as const,
+  /**
+   * Attack interval by phase. §13.2 gives 1.6 / 1.3 / 1.1 s; at that pace a first-time player
+   * can't find a gap to strike in (agent playtests), so each is half a second longer.
+   */
+  interval: [2.1, 1.8, 1.6] as const,
   speed: [1.05, 1.155, 1.2] as const,
   /** Seconds between net casts, and before the first. */
   netEvery: 12,

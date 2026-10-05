@@ -377,6 +377,9 @@ export class CombatSystem implements System, PlayerCombatHost {
     if (lock && (lock.active || lock.status === 'yielded') && dist2D(lock.position, c.position) <= R + 1.5) return lock;
     let best: Combatant | Actor | null = null;
     let bestScore = Infinity;
+    // In a fight (an enemy close by), the assist only steers at enemies: a swing at a foe who
+    // stepped back must not turn onto a spectator.
+    const fighting = this.core.list.some((o) => o !== c && o.active && (o.target === c || this.core.hostile(c, o)) && dist2D(o.position, c.position) < 8);
     const score = (x: number, z: number, radius: number, bias: number) => {
       const dx = x - c.position.x;
       const dz = z - c.position.z;
@@ -388,6 +391,7 @@ export class CombatSystem implements System, PlayerCombatHost {
     };
     for (const o of this.core.list) {
       if (o === c || !(o.active || o.status === 'yielded')) continue;
+      if (fighting && !(o.target === c || this.core.hostile(c, o))) continue;
       const bias = o.status === 'yielded' ? 0.8 : this.core.hostile(c, o) || o.target === c ? -0.4 : 0;
       const s = score(o.position.x, o.position.z, o.body.radius, bias);
       if (s < bestScore && this.lineOfSight(c, o)) {
@@ -395,7 +399,7 @@ export class CombatSystem implements System, PlayerCombatHost {
         bestScore = s;
       }
     }
-    for (const a of this.game.actors?.near(c.position, R + 1) ?? []) {
+    for (const a of fighting ? [] : (this.game.actors?.near(c.position, R + 1) ?? [])) {
       if (!this.adoptable(a)) continue;
       const s = score(a.position.x, a.position.z, a.body.radius, 0);
       if (s < bestScore) {
