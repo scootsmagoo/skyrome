@@ -21,7 +21,7 @@ export const ORIGINS: BackgroundDef[] = [
     description: 'Born in a Suburan tenement to plebeian citizens. You know every alley, every popina and every man who owes money.',
     skills: { rhetoric: 10, mercatura: 5, brawling: 5 },
     traitId: 'trait-street-wise', trait: 'Street-wise: the Subura’s and Velabrum’s lesser sights start revealed; −5% prices at plebeian vendors.', flags: ['trait-street-wise'],
-    kit: [{ id: 'tunica', equip: true }, { id: 'paenula', equip: true }, { id: 'calcei', equip: true }, { id: 'fustis', equip: true, condition: sig }],
+    kit: [{ id: 'tunica', equip: true }, { id: 'paenula', equip: true }, { id: 'calcei', equip: true }, { id: 'gladius', equip: true, condition: sig }, { id: 'fustis', condition: sig }],
     pack: TOGA,
     denarii: 60, hook: 'An aunt’s popina is being squeezed by a collegium.',
   },

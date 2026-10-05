@@ -5,6 +5,8 @@
 declare module '../core/Events' {
   interface GameEvents {
     /** A blow landed (or was blocked or parried). */
+    /** The player's swing reached its hit frame: `hits` people were struck (gore hacks at bodies on a miss). */
+    'combat:swing': { attackerId: string; power: boolean; hits: number; reach: number };
     'combat:hit': {
       attackerId: string;
       targetId: string;

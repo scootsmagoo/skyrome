@@ -182,6 +182,7 @@ function addSettingsRows(flow: GameFlow) {
     { kind: 'choice', key: 'difficulty', label: 'Difficulty', options: DIFFICULTY_CHOICES.map((d) => ({ value: d.value, label: d.label })), note: 'Damage dealt and taken, parry window' },
     { kind: 'choice', key: 'lockOnMode', label: 'Lock-on', options: [{ value: 'manual', label: 'Manual (X)' }, { value: 'suggest', label: 'Suggest' }, { value: 'auto', label: 'Auto' }] },
     { kind: 'choice', key: 'aimAssist', label: 'Aim assist (ranged)', options: [{ value: 'off', label: 'Off' }, { value: 'light', label: 'Light' }, { value: 'strong', label: 'Strong' }] },
+    { kind: 'choice', key: 'gore', label: 'Gore', options: [{ value: 'off', label: 'Off' }, { value: 'normal', label: 'Normal' }, { value: 'ultra', label: 'Ultra' }], note: 'Blood, and limbs and heads that come off' },
   ];
   SETTINGS_SECTIONS.unshift({ id: 'gameplay', label: 'Gameplay', latin: 'Ludus', rows: gameplay });
   const controls = SETTINGS_SECTIONS.find((s) => s.id === 'controls');

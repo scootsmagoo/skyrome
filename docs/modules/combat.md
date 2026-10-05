@@ -163,6 +163,16 @@ game.combat.danger.trigger('vicus-tuscus-south'); // stage a night mugging now
   sight). Walking away from the talk is resisting; running from the guard adds 10 %. At 1,000 or
   more guards attack on sight; hold Y while they fight you to give up into the same talk. The
   condemnation *ad ludum* has no bouts yet, so a murderer serves the longest Carcer term instead.
+- **Gore** (`src/combat/gore/`, Settings → Gameplay → Gore: *Ultra* by default, *Normal*, *Off*).
+  Every blow that draws blood sprays droplets and leaves splats (more for a blade than a club); the
+  dead bleed into a spreading pool. A killing cut with a blade takes off the head, an arm (at the
+  shoulder or the elbow) or a leg (at the hip or the knee): always on Ultra (a power attack often
+  two parts), sometimes on Normal; overheads and sweeps go for the head. The piece is the body's
+  own mesh baked in its pose (with what it held: the sword, the helmet), thrown off with physics;
+  both stumps get a flesh-and-bone cap and pump blood for a few seconds. On Ultra a swing that
+  strikes nobody alive but reaches a body hacks another part off it. The player is never
+  dismembered. `game.combat.gore.dismember(id, part)` takes a part off on demand (scripted
+  executions); `game.combat.gore.blood.burst(at, dir, n)` spills blood for any module.
 - **Yields nobody decides.** A foe who yields to the player gets the spare/rob/arrest/kill choice
   put to the player (the prompt, a moment after the player's last swing), also when the very first
   blow caused it. A passer-by the player set upon just kneels: look at them and press E (*Decide*)

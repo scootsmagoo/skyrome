@@ -45,6 +45,7 @@ import type { BoutOptions } from './ArenaBout';
 import { visualsFor, type EnemyOptions, type Opener } from './archetypes';
 import { Bodies } from './bodies';
 import { StreetDanger } from './danger';
+import { GoreSystem } from './gore/GoreSystem';
 import { adoptProfile, resolveSpawn, type NpcLike } from './spawnSpec';
 import { Combatant, type CombatView } from './Combatant';
 import { CombatCore, type CombatEnv, type Projectile } from './CombatCore';
@@ -208,6 +209,8 @@ export class CombatSystem implements System, PlayerCombatHost {
   readonly bodies: Bodies;
   /** Muggers in the streets at night (§13.3). */
   readonly danger: StreetDanger;
+  /** Blood and dismemberment (none in tests without a DOM). */
+  gore: GoreSystem | null = null;
   /** Is there any save to go back to (cached: the save list is async)? */
   private hasSave = false;
   /** When the Aesculapian rescue happens (game.elapsed), or −1. */
@@ -778,6 +781,11 @@ export class CombatSystem implements System, PlayerCombatHost {
   }
 
   /** Did the player start the current trouble (an assault on someone who wasn't an enemy)? */
+  /** The combat module's seeded random number (0..1). */
+  rngNext(): number {
+    return this.rng.next();
+  }
+
   get playerAggressor(): boolean {
     return !!this.playerC?.aggressor;
   }
@@ -1638,6 +1646,8 @@ export function installCombat(game: Game, opts: InstallCombatOptions = {}): Comb
   game.combat = sys;
   game.addSystem(sys);
   sys.attachHud();
+  // Blood and severed limbs (Settings → Gameplay → Gore); needs a scene with a canvas.
+  if (typeof document !== 'undefined') sys.gore = game.addSystem(new GoreSystem(game, sys.core, () => sys.rngNext()));
   // Dev: &danger=0 keeps the streets safe; &danger=<site id> stages that encounter just ahead of
   // you when the game starts (src/combat/danger.ts).
   const d = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('danger') : null;

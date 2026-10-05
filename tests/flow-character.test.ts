@@ -57,7 +57,7 @@ describe('dress follows the equipment (§8.2)', () => {
     const app = outfitAppearance(lookById('m-urbanus', 'male'), kitWorn('civis-suburanus', item));
     expect(app.garments.map((g) => g.kind)).toEqual(['tunica', 'paenula']);
     expect(app.footwear).toBe('calcei');
-    expect(app.weapon).toBe('fustis');
+    expect(app.weapon).toBe('gladius');
     expect(app.shield?.model).toBe('none');
     // The toga is in the pack, not worn.
     expect(app.garments.some((g) => g.kind === 'toga')).toBe(false);

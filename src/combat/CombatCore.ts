@@ -541,7 +541,9 @@ export class CombatCore {
     if (a.kind === 'feint') return;
     const weapon = a.weapon ?? c.weapon;
     this.env.sfx(weapon.speed >= 1.2 ? 'swing.fast' : weapon.speed >= 0.95 ? 'swing.medium' : 'swing.slow', this.chest(c), 0.8);
-    for (const t of this.sweepTargets(c, a, weapon)) this.applyHit(c, t, a, weapon);
+    const targets = this.sweepTargets(c, a, weapon);
+    for (const t of targets) this.applyHit(c, t, a, weapon);
+    if (c.isPlayer) this.env.emit('combat:swing', { attackerId: c.id, power: a.kind === 'power', hits: targets.length, reach: BODY.handDist + weapon.reach });
   }
 
   /** Who the swing touches: the hand-socket sweep (geometry.ts) against every capsule in reach. */
