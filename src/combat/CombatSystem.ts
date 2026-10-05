@@ -525,7 +525,8 @@ export class CombatSystem implements System, PlayerCombatHost {
       let m = prevSpeed();
       if (!c) return m;
       // §6.6: run ×0.85 in combat with a weapon drawn; slower while guarding or swinging [design].
-      if (c.drawn && this.core.playerInCombat) m *= 0.85;
+      // A sprint is a sprint, though: armed you can still run someone down.
+      if (c.drawn && this.core.playerInCombat && !this.game.player?.sprinting) m *= 0.85;
       if (c.guardActive) m *= 0.7;
       if (c.attacking()) m *= c.action?.kind === 'charge' ? 0.6 : 0.45;
       return m;

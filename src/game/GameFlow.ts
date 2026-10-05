@@ -518,6 +518,7 @@ export class GameFlow implements System {
 
   /** Hand control to the player. */
   enterPlay(kind: 'new' | 'load' | 'quick') {
+    if (kind === 'load') this.armOldSave();
     this.setState('playing');
     this.timings.spawnedAt = performance.now();
     if (this.timings.startPressedAt) this.timings.startToSpawnMs = Math.round(this.timings.spawnedAt - this.timings.startPressedAt);
@@ -529,6 +530,20 @@ export class GameFlow implements System {
       if (kind === 'new') this.guide.hints();
     }
     this.game.events.emit('game:started', { kind });
+  }
+
+  /**
+   * Saves from before the Subura-born started with a gladius: a character whose only weapon is the
+   * old club gets a gladius in hand (once: afterwards they own a blade).
+   */
+  private armOldSave() {
+    const inv = this.rpg.inventory;
+    const items = this.rpg.items;
+    if (inv.equipment.mainHand !== 'fustis') return;
+    if (inv.stacks.some((s) => items.get(s.itemId)?.weapon?.class === 'blade')) return;
+    inv.add('gladius', 1, { silent: true, source: 'start', condition: 0.9 });
+    inv.equip('gladius', { condition: 0.9 });
+    this.game.events.emit('ui:notify', { text: 'You carry a gladius now', kind: 'item' });
   }
 
   /** Agents and tests: no menus, the default (or given) character, spawn now. */

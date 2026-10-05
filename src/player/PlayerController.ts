@@ -7,7 +7,7 @@ import type { Player } from './Player';
 export const PLAYER_SPEEDS = {
   walk: 1.9,
   run: 4.4,
-  sprint: 7.0,
+  sprint: 7.4,
   sneak: 1.5,
   jump: 5.6,
   turnRate: 12, // rad/s for the body to face the move direction in third person

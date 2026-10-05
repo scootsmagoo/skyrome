@@ -32,7 +32,10 @@ export const AI_SPEEDS = {
   run: 4.4 * 0.85,
   walk: 1.9,
   circle: 1.5,
-  flee: 6,
+  /** Running away: a burst that fades to `fleeTired` over `fleeTire` seconds (the player can catch them). */
+  flee: 5.2,
+  fleeTired: 3.9,
+  fleeTire: 8,
 };
 
 /** The circle band (§6.13). */
@@ -112,8 +115,12 @@ export class CombatBrain {
 
   /** Force a state (scripts, the system: 'down' while knocked out, 'idle' when spared). */
   setState(s: BrainState) {
+    if (s === 'flee' && this.state !== 'flee') this.fleeFor = 0;
     this.state = s;
   }
+
+  /** Seconds spent running away (fleeing tires). */
+  private fleeFor = 0;
 
   /** Bring the next attack forward to `now + delay` (scripts: punishing an entangled target). */
   attackSoon(now: number, delay: number) {
@@ -169,7 +176,7 @@ export class CombatBrain {
     }
     const fleeAt = P.prefersFlee ? Math.max(P.fleeAt, P.yieldAt) : P.fleeAt;
     if (this.state !== 'flee' && fleeAt > 0 && hp <= fleeAt) {
-      this.state = 'flee';
+      this.setState('flee');
       I.flee = true;
       svc.releaseToken();
       return;
@@ -422,11 +429,14 @@ export class CombatBrain {
       }
       case 'flee': {
         if (!t) return;
+        this.fleeFor += dt;
+        const k = Math.min(1, this.fleeFor / AI_SPEEDS.fleeTire);
+        const run = (AI_SPEEDS.flee + (AI_SPEEDS.fleeTired - AI_SPEEDS.flee) * k) * speed;
         const dx = s.x - t.x;
         const dz = s.z - t.z;
         const d = Math.hypot(dx, dz) || 1;
-        m.x = (dx / d) * AI_SPEEDS.flee * speed;
-        m.z = (dz / d) * AI_SPEEDS.flee * speed;
+        m.x = (dx / d) * run;
+        m.z = (dz / d) * run;
         I.face = headingFromDir(dx, dz);
         return;
       }

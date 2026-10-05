@@ -72,7 +72,7 @@ The game is designed to be fully playable on a Mac trackpad, so every mouse acti
 
 | Action | Keys |
 |---|---|
-| Move · sprint · jump | W A S D · Shift · Space |
+| Move · sprint · jump | W A S D · Shift (on the Trackpad and Keyboard presets, tap once to sprint until you stop) · Space |
 | Climb | Push into a waist-high ledge to clamber up; Space at a ledge up to chest height mantles onto it |
 | Look | Trackpad or mouse (click to capture) · arrow keys |
 | First / third person | V (or scroll the third-person camera all the way in) |
