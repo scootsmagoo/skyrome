@@ -31,6 +31,19 @@ The game opens at dawn on 11 May 113 at the Porta Capena. Trajan's Forum and Col
 | ![The Forum Boarium with the Temple of Portunus and the round Temple of Hercules Victor](docs/images/forum-boarium.jpg) | ![Choosing mouse, trackpad or keyboard-only controls](docs/images/controls.jpg) |
 | *Walking into the Forum Boarium: discovery banner, compass, health bar* | *First launch: pick how you play (the trackpad preset is built for MacBooks)* |
 
+## Play it
+
+**https://scootsmagoo.github.io/skyrome/**
+
+The game opens straight into the Forum at mid-morning with a default character. There are no menus yet, and character creation is skipped while the game is being tested. Use desktop Chrome or Safari.
+
+- **Look around:** click into the view to capture the mouse (or use the arrow keys). Esc releases it and pauses.
+- **Move:** W A S D.
+- **Fight:** F attacks (hold it for a power attack), Q blocks, R draws your sword.
+- **Everything else:** see the controls below.
+
+The full flow (control presets, title, character creation, the dawn start at the Porta Capena) is at [`?menu=1`](https://scootsmagoo.github.io/skyrome/?menu=1). Every push to `main` redeploys the site, once the tests pass.
+
 ## Try it locally
 
 You need Node 22 or newer.
@@ -44,7 +57,7 @@ Then open one of these scenes. Click into the game to look around and press Esc 
 
 | Scene | URL | What it shows |
 |---|---|---|
-| The game | http://127.0.0.1:5173/ | Title over the city, character creation, and the start at the Porta Capena before dawn on 11 May AD 113. `&quick=1` skips the menus |
+| The game | http://127.0.0.1:5173/ | Straight into the Forum at 10:00 with the default character. `?menu=1` gives the title over the city, character creation and the start at the Porta Capena before dawn on 11 May AD 113; `?quick=1` skips the menus there |
 | The river district | http://127.0.0.1:5173/?scene=rome&at=temple-portunus | Drops you straight into Rome with no menus. The Forum Boarium, Tiber Island and the Theatre of Marcellus are fully built. `at=` takes any of the atlas's 208 landmark ids (e.g. `temple-aesculapius`, `theatre-marcellus`, `circus-maximus`, `column-trajan`, `pantheon`), but most landmarks outside the river district are still placeholder blocks |
 | Characters | http://127.0.0.1:5173/?scene=avatars | Procedural Romans and gladiators with code-authored animation. You're a legionary: R draws your sword, F attacks, Q blocks |
 | Architecture | http://127.0.0.1:5173/?scene=arch | The classical kit: orders, temples, arches, the amphitheatre arcade, the Column, domes, statues |

@@ -43,14 +43,25 @@ export interface RomeParams {
   character: Partial<CharacterSpec>;
 }
 
+/**
+ * A plain link (no options) is the shareable test build: no menus, the default character, in the
+ * Forum by the Rostra at mid-morning. `?menu=1` runs the full flow (control preset, title,
+ * character creation, the Porta Capena at dawn); `?quick=1` is the agents' quick start at the
+ * Porta Capena; `?at=<landmark>` spawns there.
+ */
+export const PLAY_SPAWN = 'rostra';
+export const PLAY_HOUR = 10;
+
 export function romeParams(search: string): RomeParams {
   const q = new URLSearchParams(search);
-  const at = q.get('at');
+  const menu = q.get('menu') === '1';
+  const plain = !menu && q.get('quick') !== '1' && !q.get('at');
+  const at = q.get('at') || (plain ? PLAY_SPAWN : null);
   const hour = q.get('hour');
   return {
-    quick: q.get('quick') === '1' || (!!at && q.get('menu') !== '1'),
+    quick: q.get('quick') === '1' || (!!at && !menu),
     at,
-    hour: hour !== null && hour !== '' && Number.isFinite(Number(hour)) ? Number(hour) : null,
+    hour: hour !== null && hour !== '' && Number.isFinite(Number(hour)) ? Number(hour) : plain ? PLAY_HOUR : null,
     extent: (q.get('extent') as RomeExtent) === 'city' ? 'city' : 'core',
     character: {
       origin: q.get('origin') ?? undefined,
