@@ -11,5 +11,7 @@ export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],
     environment: 'node',
+    // Some tests build whole districts; CI runners are a few times slower than a desktop Mac.
+    testTimeout: 30000,
   },
 } as any);
