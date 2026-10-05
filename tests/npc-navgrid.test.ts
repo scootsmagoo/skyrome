@@ -189,4 +189,45 @@ describe('PhysicsCellSampler', () => {
     s.sample(0, 10, out); // under the roof: ground is found below it (the ray starts at 5.5 m)
     expect(out.h).toBeCloseTo(0, 2);
   });
+
+  it('sees the street under a beam the ray starts inside, and under seating over a tunnel', () => {
+    const physics = new Physics();
+    physics.addBox({ x: 0, y: -0.5, z: 0 }, { x: 50, y: 0.5, z: 50 });
+    physics.addBox({ x: 0, y: 5.35, z: 0 }, { x: 6, y: 0.55, z: 0.4 }); // a gallery beam, 4.8–5.9 m
+    // Seating over a gate tunnel: the vault slab at 2.5 m, a seat block above it to 4 m.
+    physics.addBox({ x: 20, y: 2.64, z: 0 }, { x: 1.6, y: 0.14, z: 3 });
+    physics.addBox({ x: 20, y: 3.4, z: 0 }, { x: 0.5, y: 0.6, z: 0.2 });
+    physics.addBox({ x: 18.2, y: 1.4, z: 0 }, { x: 0.2, y: 1.4, z: 3 }); // tunnel walls
+    physics.addBox({ x: 21.8, y: 1.4, z: 0 }, { x: 0.2, y: 1.4, z: 3 });
+    physics.step(1 / 60);
+    const s = new PhysicsCellSampler(physics);
+    const out = { h: NaN, walkable: false };
+    s.sample(0, 0, out);
+    expect([+out.h.toFixed(2), out.walkable]).toEqual([0, true]);
+    s.sample(20, 0, out);
+    expect([+out.h.toFixed(2), out.walkable]).toEqual([0, true]);
+    s.sample(20, 1.5, out);
+    expect([+out.h.toFixed(2), out.walkable]).toEqual([0, true]);
+  });
+
+  it('keeps the top of a solid podium, and finds a doorway that misses the cell centre', () => {
+    const physics = new Physics();
+    physics.addBox({ x: 0, y: -0.5, z: 0 }, { x: 50, y: 0.5, z: 50 });
+    physics.addBox({ x: 10, y: 1.5, z: 0 }, { x: 3, y: 1.5, z: 3 }); // a podium, solid to the ground
+    // A wall along x with a 1.2 m doorway from z = 0.1 to 1.3 (a 1 m cell centred at z = 0.5 is
+    // inside it, one centred at z = 1.5 grazes the jamb).
+    physics.addBox({ x: -10, y: 1.5, z: -10.05 }, { x: 0.3, y: 1.5, z: 10.15 });
+    physics.addBox({ x: -10, y: 1.5, z: 11.3 }, { x: 0.3, y: 1.5, z: 10 });
+    physics.step(1 / 60);
+    const s = new PhysicsCellSampler(physics);
+    const out = { h: NaN, walkable: false };
+    s.sample(10, 0, out);
+    expect([+out.h.toFixed(2), out.walkable]).toEqual([3, true]);
+    s.sample(-10, 0.5, out);
+    expect(out.walkable).toBe(true);
+    s.sample(-10, 1.25, out);
+    expect(out.walkable).toBe(true);
+    s.sample(-10, 5, out); // in the wall
+    expect(out.walkable && Math.abs(out.h) < 0.5).toBe(false);
+  });
 });

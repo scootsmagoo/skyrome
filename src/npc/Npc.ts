@@ -200,6 +200,9 @@ export class Npc extends Actor implements Positioned {
     const nx = this.currPos.x + v.x * dt;
     const nz = this.currPos.z + v.z * dt;
     let y = floor(nx, nz);
+    // The grid keeps one floor per cell (street level under seating and galleries): someone up on
+    // the seats or a gallery keeps to the floor under their feet.
+    if (y !== null && Math.abs(y - this.currPos.y) > 1.2) y = null;
     if (y === null) {
       this.groundT -= dt;
       if (this.groundT <= 0 || this.groundY === null) {
