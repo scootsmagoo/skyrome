@@ -47,6 +47,7 @@ export class ActorBody implements CombatBody {
 
   /** A corpse or a knocked-out body: only the world collides with it. */
   setGhost(ghost: boolean) {
+    if (this.actor.disposed) return;
     this.actor.body.collider.setCollisionGroups(ghost ? groups(Layer.Debris, Layer.World) : this.groupsAlive);
   }
 

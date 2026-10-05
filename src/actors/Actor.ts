@@ -63,6 +63,11 @@ export class Actor {
   avatar: AvatarView | null = null;
   /** Set false to freeze locomotion (dead, in dialogue, scripted). */
   canMove = true;
+  /**
+   * Removed from the world: its physics body is gone, so nothing may move it again (a fallen
+   * fighter the crowd has cleared away can still be held by the combat module for a moment).
+   */
+  disposed = false;
 
   readonly prevPos = new THREE.Vector3();
   readonly currPos = new THREE.Vector3();
@@ -112,6 +117,7 @@ export class Actor {
    * Accelerates toward it, applies gravity/jump, and resolves collisions with the KCC.
    */
   locomote(wish: THREE.Vector3Like, dt: number, opts: { jump?: number; accel?: number; airAccel?: number } = {}) {
+    if (this.disposed) return;
     const v = this.velocity;
     if (!this.canMove) {
       wish = { x: 0, y: 0, z: 0 };
@@ -177,6 +183,7 @@ export class Actor {
   }
 
   teleport(pos: THREE.Vector3Like, heading?: number) {
+    if (this.disposed) return;
     this.body.body.setTranslation(
       { x: pos.x, y: pos.y + this.body.halfHeight + this.body.radius, z: pos.z },
       true,
@@ -217,6 +224,8 @@ export class Actor {
   }
 
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
     this.game.scene.remove(this.root);
     this.avatar?.dispose?.();
     this.game.physics.removeCharacter(this.body);

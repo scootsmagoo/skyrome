@@ -155,7 +155,7 @@ export class Npc extends Actor implements Positioned {
 
   /** Solid NPCs block the player (hostiles, fighters); crowd NPCs are soft. */
   setSolid(on: boolean) {
-    if (on === this.solid) return;
+    if (on === this.solid || this.disposed) return;
     this.solid = on;
     const filter = on ? Layer.World | Layer.Player | Layer.Npc : Layer.World;
     this.body.collider.setCollisionGroups(groups(Layer.Npc, filter));
@@ -191,6 +191,7 @@ export class Npc extends Actor implements Positioned {
    * by `floor(x, z)` (nav grid), refreshing it with a ray at most every 0.3 s otherwise.
    */
   glide(wish: THREE.Vector3Like, dt: number, floor: (x: number, z: number) => number | null) {
+    if (this.disposed) return;
     const v = this.velocity;
     const k = damp(8, dt);
     v.x += (wish.x - v.x) * k;
