@@ -18,7 +18,9 @@ const npcs: NpcDef[] = [
     home: 'meta-sudans:front',
     schedule: [
       { from: at('h8'), at: 'meta-sudans:front', activity: 'stand' },
-      { from: at('v1'), at: 'popina-vici-tusci', activity: 'drunk' },
+      // At the fountain through the first watch (the brawl's window, misc-meta-sudans-rixa, runs to
+      // 21:36); then to the Silver Pig.
+      { from: at('v2'), at: 'popina-vici-tusci', activity: 'drunk' },
     ],
     dialogue: 'npc-rixa',
     disposition: 'neutral',
@@ -40,7 +42,9 @@ const npcs: NpcDef[] = [
     home: 'meta-sudans:front',
     schedule: [
       { from: at('h8'), at: 'meta-sudans:front', activity: 'stand' },
-      { from: at('v1'), at: 'popina-vici-tusci', activity: 'drunk' },
+      // At the fountain through the first watch (the brawl's window, misc-meta-sudans-rixa, runs to
+      // 21:36); then to the Silver Pig.
+      { from: at('v2'), at: 'popina-vici-tusci', activity: 'drunk' },
     ],
     dialogue: 'npc-rixa',
     disposition: 'neutral',

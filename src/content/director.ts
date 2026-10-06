@@ -50,6 +50,8 @@ export interface SpawnOptions {
   yieldAt?: number;
   /** Hostile at once (default true). */
   hostile?: boolean;
+  /** Combat team (sides of a brawl: fighters on one team never strike each other). */
+  team?: string;
   /** Owning quest id. */
   quest?: string;
   /**

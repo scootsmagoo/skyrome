@@ -129,6 +129,8 @@ export class CombatCore {
   player: Combatant | null = null;
   /** The player is in combat until this time (the §6 predicate). */
   playerCombatUntil = -Infinity;
+  /** Who kept the player in combat lately (see tickCombatPredicate). */
+  private readonly recentFoes = new Set<Combatant>();
   /** Lock-on, set by the player's input (preferred target of sweeps). */
   private byId = new Map<string, Combatant>();
   private hostileTeams = new Set<string>();
@@ -1499,8 +1501,22 @@ export class CombatCore {
       if (c === p || !c.active || c.target !== p || !c.brain) continue;
       const s = c.brain.state;
       if (s === 'flee' || s === 'yield' || s === 'idle') continue;
-      if (dist2D(c.position, p.position) <= R.radius) this.playerCombatUntil = now + R.memory;
+      if (dist2D(c.position, p.position) <= R.radius) {
+        this.playerCombatUntil = now + R.memory;
+        this.recentFoes.add(c);
+      }
     }
+    // The memory is for foes who lost sight of the player and may come back. When every one of
+    // them is beaten (yielded, out cold, dead, fled), the fight is over now: the Ludus tells the
+    // player to wait (T) right after a bout, and that must work.
+    if (this.recentFoes.size && now < this.playerCombatUntil) {
+      let anyLeft = false;
+      for (const c of this.recentFoes) if (c.active && c.status === 'active' && this.list.includes(c)) anyLeft = true;
+      if (!anyLeft) {
+        this.playerCombatUntil = now;
+        this.recentFoes.clear();
+      }
+    } else if (now >= this.playerCombatUntil) this.recentFoes.clear();
     const inC = p.active && now < this.playerCombatUntil;
     if (!p.ownsVitals) p.vitals.inCombat = inC;
     if (inC !== this.wasInCombat) {

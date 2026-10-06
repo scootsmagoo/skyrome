@@ -703,7 +703,9 @@ export class CombatSystem implements System, PlayerCombatHost {
       voice: app.sex === 'female' ? 'f' : 'm',
     });
     if (steps) this.footsteps.set(id, () => steps.detach());
-    const team = opts.team ?? r.team;
+    // Told not to be hostile but of a hostile archetype (a quest's allies): not on the 'hostile'
+    // team, which is the player's enemy by definition.
+    const team = opts.team ?? (opts.hostile === false && r.team === 'hostile' ? `npc:${id}` : r.team);
     const c = this.register(actor, {
       profile: r.profile,
       team,

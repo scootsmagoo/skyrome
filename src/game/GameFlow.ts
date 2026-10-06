@@ -459,8 +459,10 @@ export class GameFlow implements System {
       if (s) {
         // 18 m out along the facade can land on a structure, in a basin or boxed in: move to the
         // nearest open, walkable street-level ground, still facing the landmark.
+        // Street level first (an open terrace or a podium top is "open" too, but no place to arrive).
         const safe =
-          findSafeGround(g, s.position, { maxRadius: 60, open: 10, openDirs: 8 }) ??
+          findSafeGround(g, s.position, { maxRadius: 60, open: 10, openDirs: 8, maxAboveTerrain: 1.5 }) ??
+          findSafeGround(g, s.position, { maxRadius: 60, open: 6, openDirs: 7, maxAboveTerrain: 1.5 }) ??
           findSafeGround(g, s.position, { maxRadius: 60, open: 6, openDirs: 7 }) ??
           findSafeGround(g, s.position, { maxRadius: 60 });
         if (safe) {
