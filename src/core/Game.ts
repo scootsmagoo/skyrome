@@ -16,6 +16,7 @@
  *   game.terrain = new Terrain(...);
  */
 import * as THREE from 'three';
+import { chooseGraphics } from './graphics';
 import { EventBus, type GameEvents } from './Events';
 import { GameTime } from './GameTime';
 import { Input } from './Input';
@@ -103,6 +104,8 @@ export class Game {
   private constructor(container: HTMLElement, opts: { seed?: number }) {
     this.container = container;
     this.settings = Settings.load();
+    // Graphics quality for this machine (Auto), before the renderer: antialiasing is fixed at creation.
+    this.gpu = chooseGraphics(this.settings).gpu;
     this.rng = new Rng(opts.seed ?? 113);
 
     this.renderer = new THREE.WebGLRenderer({

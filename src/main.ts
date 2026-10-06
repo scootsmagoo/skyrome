@@ -1,6 +1,7 @@
 import './styles.css';
 import { Game } from './core/Game';
 import { DebugOverlay } from './dev/DebugOverlay';
+import { GraphicsGovernor } from './core/graphics';
 import type { SceneDef } from './scenes/types';
 
 const sceneModules = import.meta.glob<{ default: SceneDef }>('./scenes/*.ts');
@@ -28,6 +29,7 @@ async function boot() {
   ui.className = 'ui-root';
   app.appendChild(ui);
   game.addSystem(new DebugOverlay(game, ui));
+  game.addSystem(new GraphicsGovernor(game));
 
   const mod = await sceneModules[`./scenes/${sceneName}.ts`]();
   await mod.default.setup(game, ui);

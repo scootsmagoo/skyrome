@@ -249,7 +249,9 @@ export class NpcManager implements System {
     this.crowdEnabled = opts.crowd ?? q.get('crowd') !== '0';
     this.namedEnabled = opts.named ?? true;
     const qd = Number(q.get('crowd'));
-    this.density = qd > 0 && qd <= 4 ? qd : (opts.density ?? 1);
+    this.density = qd > 0 && qd <= 4 ? qd : (opts.density ?? game.settings?.data.crowdDensity ?? 1);
+    // The graphics tier sets how full the streets are (core/graphics: Low 0.6, Medium 0.8).
+    if (!(qd > 0) && opts.density === undefined) game.settings?.onChange((d) => (this.density = d.crowdDensity ?? 1));
     this.maxCrowd = opts.maxCrowd ?? 110;
     this.useAtlas = opts.atlas ?? true;
     this.fixedDistrict = opts.district ?? null;

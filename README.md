@@ -121,13 +121,19 @@ Then open one of these scenes. Click into the game to look around and press Esc 
 
 Add `&debug` to any URL (or type `tdo` in the console) to show fps, draw calls, position, and the systems costing the most CPU each frame. Every link and console command in [Testing](#testing) works locally too.
 
-### Laptop running hot?
+### Slow computer, or a laptop running hot?
 
-The game is capped at 60 fps by default. Without the cap, a MacBook's 120 Hz screen would have it draw every frame twice as often, for no visible gain. To make it run cooler and quieter, open **Esc → Settings → Display** and do one or more of these:
+The game picks its graphics quality for your computer the first time it starts (**Esc → Settings → Display → Graphics quality: Auto**):
 
-- Set **Frame rate limit** to 30 fps. This roughly halves the work.
-- Lower **Render scale**.
-- Turn **Shadows** to Low.
+- **High:** Apple M-series Macs and computers with an NVIDIA or AMD graphics card.
+- **Medium:** recent built-in graphics (Intel Iris Xe, AMD Radeon laptop graphics). Lower resolution, cheaper shadows, a shorter view distance and fewer people on the streets.
+- **Low:** older built-in graphics, computers with 4 GB of memory or less, and browsers drawing without the graphics card. No shadows or glow, 30 fps.
+
+If the game still stutters, Auto steps down one level by itself and tells you. You can pick a level yourself, or change single rows; your choices stick. The console's `graphics` command shows which graphics card the game found and what it chose. The links [`?graphics=low`](https://scootsmagoo.github.io/skyrome/?graphics=low), `medium` and `high` set a level too, and [`?graphics=auto-reset`](https://scootsmagoo.github.io/skyrome/?graphics=auto-reset) goes back to Auto.
+
+**Still a slideshow?** Open `chrome://gpu` and look for "WebGL: Hardware accelerated". If it says *software* or *disabled*, the browser isn't using your graphics card (work computers sometimes have it turned off), and no setting in the game can make up for that. The game warns you when it detects this.
+
+To make it run cooler and quieter on any machine, set **Frame rate limit** to 30 fps (it roughly halves the work), lower **Render scale**, or turn **Shadows** to Low.
 
 The game also slows to a crawl on its own when its tab or window is in the background.
 

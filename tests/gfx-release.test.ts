@@ -24,8 +24,8 @@ describe('gfx/release', () => {
     const root = new THREE.Group();
     const stat = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());
     const dyn = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());
-    dyn.geometry.getAttribute('position').setUsage(THREE.DynamicDrawUsage);
-    dyn.geometry.getAttribute('normal').setUsage(THREE.DynamicDrawUsage);
+    (dyn.geometry.getAttribute('position') as THREE.BufferAttribute).setUsage(THREE.DynamicDrawUsage);
+    (dyn.geometry.getAttribute('normal') as THREE.BufferAttribute).setUsage(THREE.DynamicDrawUsage);
     const kept = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());
     kept.userData.keepCpu = true;
     root.add(stat, dyn, kept);

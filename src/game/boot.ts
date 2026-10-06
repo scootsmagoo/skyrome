@@ -127,6 +127,10 @@ export async function startRome(game: Game, uiRoot: HTMLElement, params: RomePar
     // The shareable build's first view: a welcome card with the keys that matter.
     if (params.at === PLAY_SPAWN && shouldWelcome(location.search)) void showWelcome(game, ui.root);
     if (params.fight) void startBout(game, params.fight);
+    if (game.gpu?.software) {
+      // The browser draws 3D on the CPU: no setting can make up for that.
+      setTimeout(() => game.events.emit('ui:notify', { text: 'Your browser isn’t using the graphics card (hardware acceleration is off), so the game will be slow. Turn it on in the browser’s settings and restart it.', kind: 'warning' }), 2500);
+    }
   } else {
     ui.block('loading', false);
     await flow.showTitle();

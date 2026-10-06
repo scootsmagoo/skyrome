@@ -9,6 +9,7 @@ import { DIFFICULTY, type Difficulty } from '../../rpg/data/tuning';
 import { ENEMY_IDS } from '../../combat/archetypes';
 import { FIGHTS, startBout } from '../../game/bouts';
 import { CommandTable, fuzzyFind, toggleArg } from './parse';
+import { applyChoice, type GraphicsChoice } from '../../core/graphics';
 
 /** Session cheats (not saved, like Bethesda's). The console re-applies them every frame. */
 export interface Cheats {
@@ -289,6 +290,23 @@ export function builtinCommands(): CommandTable<ConsoleCtx> {
         if (!v) return `Gore is ${(game.settings.data as { gore?: string }).gore ?? 'ultra'}. Choose off, normal or ultra.`;
         game.settings.set('gore' as never, v as never);
         return `Gore -> ${v}.`;
+      },
+    },
+    {
+      name: 'graphics',
+      aliases: ['gpu', 'quality'],
+      usage: '[auto|low|medium|high]',
+      help: 'Show the graphics card and quality tier, or change the tier',
+      run: ([t], { game }) => {
+        const choice = fuzzyFind(t ?? '', ['auto', 'low', 'medium', 'high']) as GraphicsChoice | null;
+        if (choice) applyChoice(game, choice);
+        const s = game.settings.data;
+        const gpu = game.gpu;
+        return [
+          `GPU: ${gpu?.name || 'unknown'}${gpu?.software ? ' (SOFTWARE: hardware acceleration is off)' : ''}`,
+          `Quality: ${s.graphics ?? 'auto'}${(s.graphics ?? 'auto') === 'auto' && s.graphicsApplied ? ` → ${s.graphicsApplied.tier} (by ${s.graphicsApplied.by === 'fps' ? 'frame rate' : 'graphics card'})` : ''}`,
+          `Render scale ${s.renderScale} · pixel ratio ≤ ${s.maxPixelRatio} · shadows ${s.shadows} · view ${s.viewDistance} m · ${s.maxFps || 'unlimited'} fps · crowd ×${s.crowdDensity ?? 1}`,
+        ];
       },
     },
     {

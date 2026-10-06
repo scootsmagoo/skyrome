@@ -26,6 +26,11 @@ export const SETTINGS_SECTIONS: { id: string; label: string; latin: string; rows
     label: 'Display',
     latin: 'Species',
     rows: [
+      {
+        kind: 'choice', key: 'graphics', label: 'Graphics quality',
+        options: [{ value: 'auto', label: 'Auto' }, { value: 'low', label: 'Low' }, { value: 'medium', label: 'Medium' }, { value: 'high', label: 'High' }],
+        note: 'Sets the rows below. Auto picks for this computer and steps down if the game stutters',
+      },
       { kind: 'slider', key: 'fov', label: 'Field of view', min: 55, max: 100, step: 1, format: (v) => `${v}°` },
       {
         kind: 'choice', key: 'maxFps', label: 'Frame rate limit',
@@ -36,6 +41,7 @@ export const SETTINGS_SECTIONS: { id: string; label: string; latin: string; rows
       { kind: 'slider', key: 'maxPixelRatio', label: 'Sharpness (pixel ratio cap)', min: 1, max: 2, step: 0.25, format: (v) => `${v.toFixed(2)}×` },
       { kind: 'choice', key: 'shadows', label: 'Shadows', options: [{ value: 'off', label: 'Off' }, { value: 'low', label: 'Low' }, { value: 'high', label: 'High' }] },
       { kind: 'slider', key: 'viewDistance', label: 'View distance', min: 300, max: 1500, step: 50, format: (v) => `${v} m` },
+      { kind: 'toggle', key: 'bloom', label: 'Glow (bloom)', invert: true, note: 'Sunlight and lamps bleed softly' },
       { kind: 'toggle', key: 'antialias', label: 'Antialiasing', note: 'Applies after restarting' },
     ],
   },
