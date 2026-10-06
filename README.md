@@ -172,7 +172,7 @@ Updated 5 October 2026. The game is playable in the browser: walk the city, figh
 | Crime and the watch: assault and murder bounties, guards, the arrest talk, the Carcer | ✅ Done |
 | Crowds with daily life, street muggers at night | ✅ Done (some NPCs still get stuck) |
 | The Ludus Magnus bouts with Nereus the retiarius (the first boss) | 🧪 Playable, balance under review |
-| v0.0 acceptance checks (the walk test, performance in the Forum, a 30-minute soak) | 🚧 Next |
+| v0.0 acceptance checks: landmarks, quickload, Forum performance, a 30-minute soak (`scripts/v00-check.mjs`, `scripts/soak.mjs`) | ✅ Pass · the walk to the Ludus still snags near the Colosseum; trackpad and Safari checks need a human |
 | The v0.1 "golden path": the 35-minute opening with four quests | 🚧 After that |
 
 ## Roadmap
