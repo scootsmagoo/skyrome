@@ -161,11 +161,12 @@ export const COMBAT = {
 
 /** §6.12 Difficulty. `taken` applies only to damage dealt to the player. */
 export const DIFFICULTY = {
+  // Normalis is Skyrim's Adept (blows land as written both ways); Difficilis is its Expert.
   tiro: { name: 'Tiro', dealt: 1.5, taken: 0.5, parryWindow: 0.4, tokens: 1 },
-  facilis: { name: 'Facilis', dealt: 1.25, taken: 1, parryWindow: 0.3, tokens: 2 },
-  normalis: { name: 'Normalis', dealt: 1, taken: 1.5, parryWindow: 0.2, tokens: 2 },
-  difficilis: { name: 'Difficilis', dealt: 0.85, taken: 2, parryWindow: 0.14, tokens: 3 },
-  herculea: { name: 'Herculea', dealt: 0.75, taken: 3, parryWindow: 0.1, tokens: 3 },
+  facilis: { name: 'Facilis', dealt: 1.25, taken: 0.75, parryWindow: 0.32, tokens: 2 },
+  normalis: { name: 'Normalis', dealt: 1, taken: 1, parryWindow: 0.26, tokens: 2 },
+  difficilis: { name: 'Difficilis', dealt: 0.85, taken: 1.5, parryWindow: 0.18, tokens: 3 },
+  herculea: { name: 'Herculea', dealt: 0.75, taken: 2.5, parryWindow: 0.12, tokens: 3 },
 } as const;
 export type Difficulty = keyof typeof DIFFICULTY;
 /** v0.1 ships three levels; facilis and herculea are Should (§6.12). */

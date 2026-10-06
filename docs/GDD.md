@@ -450,10 +450,10 @@ All numbers are Normal difficulty (`normalis`) unless marked. Timings are real s
 
 | Verb | Input | Stamina | Timing (gladius; scaled by weapon speed) |
 |---|---|---|---|
-| Light attack (3-hit chain) | Tap F | `5 + 2 × weapon kg` (gladius 7.4) | Wind-up 0.25, active 0.12, recovery 0.30; input buffer 0.25. The 3rd hit is ×1.25. |
+| Light attack (3-hit chain) | Tap F | Free for the player (§6.12); NPCs `5 + 2 × weapon kg` (gladius 7.4) | Wind-up 0.25, active 0.12, recovery 0.30 (the player's ×0.8 / ×0.85); input buffer 0.4. The 3rd hit is ×1.25. |
 | Power attack | Hold F ≥ 0.35 s; direction latched from WASD (below) | 3 × light (min 20) | Charge ×1.5 at 0.35 s, rising to ×2.0 at 0.8 s; auto-release at 1.0 s |
 | Block | Hold or toggle Q (toggle rule in §4.2) | 0 to hold; absorbing costs (§6.4) | Guard up 0.1 s |
-| Parry (timed block) | Press Q in the window before impact (in toggle mode a tap parries without changing the guard) | 0 | Window **0.20 s** (§6.12) |
+| Parry (timed block) | Press Q in the window before impact (in toggle mode a tap parries without changing the guard) | 0 | Window **0.26 s** (§6.12) |
 | Shield bash | F while blocking | 18 | 0.35 s; interrupts power wind-ups |
 | Dodge | Space while `inCombat` with a weapon drawn, or Option, + direction | 15 | 2.5 m over 0.3 s; i-frames 0.12 s; recovery 0.2 s; the third dodge within 1 s costs double |
 | Sprint attack | F while sprinting | light × 1.5 | ×1.3 damage, ×1.5 poise (momentum) |
@@ -540,7 +540,7 @@ These hit the targets of 3–5 hits for the unarmored and 6–10 for the armored
 | Stamina per absorbed hit | `max(4, 0.6 × raw × (1 − shieldSkill/200))` |
 | Guard break | At 0 stamina while blocking: stagger 1.2 s |
 | Missiles | Blocked with a scutum 100%, oval 90%, parma 70%, parmula 60%, no shield 0% (arrows can't be blocked with a sword) |
-| **Parry window** | Press block within **0.20 s before impact** (in toggle mode a tap parries without changing the guard, §4.2) (Tiro 0.40, Facilis 0.30, Difficilis 0.14, Herculea 0.10; `perk-shield-parry-plus` +0.06) |
+| **Parry window** | Press block within **0.26 s before impact** (in toggle mode a tap parries without changing the guard, §4.2) (Tiro 0.40, Facilis 0.32, Difficilis 0.18, Herculea 0.12; `perk-shield-parry-plus` +0.06) |
 | Parry effect | 0 damage, 0 stamina; the attacker loses 60% of max poise and staggers 1.0 s; opens a **0.8 s riposte window** (×2 damage, guaranteed stagger; a target ≤ 25% HP takes a finisher) |
 | Parrying power attacks | Only with a shield. A weapon-only parry of a power attack counts as a normal block. |
 | Unblockable attacks | Falx sweeps, net throws, beast charges and grapples, boss "red" attacks. **Dodge them.** They are telegraphed by a longer anticipation, a distinct grunt, and a brief cinnabar pulse on the screen edge (a HUD cue, not in-world magic). |
@@ -556,13 +556,13 @@ These hit the targets of 3–5 hits for the unarmored and 6–10 for the armored
 | **Anti-loop rules** | (1) When any stagger ends, the victim has **1.5 s of poise immunity** (it counts as "no poise damage", so regeneration starts after it). (2) A riposte's guaranteed stagger **never opens a new riposte window**. (3) At most **2 staggers on one target within 4 s**; a third qualifying hit only flinches. |
 | Flinch | A hit that doesn't break poise interrupts the victim's *light* wind-up only if its poise damage ≥ **20% of max for NPCs, 35% of max for the player**. A flinch never interrupts a block, a dodge or a recovery. After any flinch the victim has **0.4 s of flinch immunity**, so two attackers can't flinch-lock the player. Power wind-ups of heavy weapons and of bosses have **hyper-armor**. |
 | Knockdown | 2 s on the ground: shield `perk-shield-umbo`, pankration, bear charge, net |
-| **Hit-stop** | Light 0.05 s, power 0.08 s, parry, riposte or finisher 0.12 s. Time scale 0.1 during it. |
+| **Hit-stop** | Light 0.07 s, power 0.11 s, parry, riposte or finisher 0.15 s, at time scale 0.03; a killing blow by the player adds 0.55 s of slow motion easing back from ×0.25. With the camera kick, the hit marker and the knock-back (§6.5 feel, `TIMING.feel`). |
 | Camera shake | 0.02 / 0.05 / 0.08 m (light / power / finisher); toggleable |
 | NPC telegraphs | Minimum wind-ups (Normal): light 0.35 s, power 0.70 s, each with body anticipation and an audio cue |
 
 ### 6.6 Movement in combat
 
-Speeds (code: `PLAYER_SPEEDS`): walk 1.9, run 4.4, sprint 7.0, sneak 1.5 m/s. Backpedal ×0.7, strafe ×0.9, swim 1.4 (2.2 sprinting). While `inCombat` with a weapon drawn, run speed is ×0.85. **Jump apex target 1.0–1.2 m** (the code currently uses 5.6 m/s, about 1.6 m; tune it down). Mantle ledges up to 2.0 m.
+Speeds (code: `PLAYER_SPEEDS`): walk 1.9, run 4.4, sprint 7.0, sneak 1.5 m/s. Backpedal ×0.7, strafe ×0.9, swim 1.4 (2.2 sprinting). While `inCombat` with a weapon drawn, run speed is ×0.95 (×0.75 guarding, ×0.65 swinging: you keep moving through a fight). **Jump apex target 1.0–1.2 m** (the code currently uses 5.6 m/s, about 1.6 m; tune it down). Mantle ledges up to 2.0 m.
 
 **Stamina outside attacks:** sprint 8/s (heavy armor +25%), jump 5, mantle 10, fast swim 6/s, bow held at full draw 4/s after 1.5 s, sling whirl held 3/s, pilum or javelin throw 12. At 0 stamina you cannot attack, sprint or dodge until 15 has regenerated.
 
@@ -662,10 +662,12 @@ There is a reticle in both views, plus aim assist by control preset (§4.3). A d
 | ID | Name | Damage dealt | Damage taken | Parry window | Attack tokens | Death |
 |---|---|---|---|---|---|---|
 | `tiro` | Tiro (story) | ×1.5 | ×0.5 | 0.40 s | 1 | **Aesculapian rescue:** wake in the Temple of Aesculapius with −20% coin (people found you; no miracle) |
-| `facilis` | Facilis | ×1.25 | ×1.0 | 0.30 s | 2 | Reload |
-| `normalis` | Normalis (default) | ×1.0 | ×1.5 | 0.20 s | 2 | Reload |
-| `difficilis` | Difficilis | ×0.85 | ×2.0 | 0.14 s | 3 | Reload |
-| `herculea` | Herculea | ×0.75 | ×3.0 | 0.10 s | 3 | Reload |
+| `facilis` | Facilis | ×1.25 | ×0.75 | 0.32 s | 2 | Reload |
+| `normalis` | Normalis (default) | ×1.0 | ×1.0 | 0.26 s | 2 | Reload |
+| `difficilis` | Difficilis | ×0.85 | ×1.5 | 0.18 s | 3 | Reload |
+| `herculea` | Herculea | ×0.75 | ×2.5 | 0.12 s | 3 | Reload |
+
+Normalis is forgiving on purpose, like Skyrim's Adept (the owner's call, 2026-10-06): blows land as written both ways, the player's light swings cost no stamina, swing a little quicker (wind-up ×0.8, recovery ×0.85) and reach further and wider than an NPC's (+0.2 m, arc ×1.2), and presses are buffered 0.4 s.
 
 The parry window can be overridden on its own in Accessibility. **v0.1 ships three levels** (`tiro`, `normalis`, `difficilis`); `facilis` and `herculea` are Should.
 

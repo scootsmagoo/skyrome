@@ -48,7 +48,7 @@ import { StreetDanger } from './danger';
 import { GoreSystem } from './gore/GoreSystem';
 import { adoptProfile, resolveSpawn, type NpcLike } from './spawnSpec';
 import { Combatant, type CombatView } from './Combatant';
-import { CombatCore, type CombatEnv, type Projectile } from './CombatCore';
+import { CombatCore, type Blow, type CombatEnv, type Projectile } from './CombatCore';
 import { BODY, angleTo, dist2D } from './geometry';
 import { CombatHud, type CombatHudState } from './hud/CombatHud';
 import { PlayerCombat, type PlayerCombatHost } from './PlayerCombat';
@@ -177,10 +177,16 @@ export class CombatSystem implements System, PlayerCombatHost {
   private hud: CombatHud | null = null;
   private rig: CameraRig | null = null;
   private rng: Rng;
-  private hitStopUntil = -1;
-  private hitStopPrev = 1;
-  private shakeAmp = 0;
-  private shakeT = 0;
+  /** Time effects (hit-stop, a kill's slow motion), in real seconds (game.elapsed). */
+  private freezeUntil = -1;
+  private slowFrom = -1;
+  private slowUntil = -1;
+  private timeFx = false;
+  private baseTimeScale = 1;
+  /** Camera trauma 0..1 (shake ∝ trauma²) and the kick springs back from `rig.kick`. */
+  private trauma = 0;
+  private feelT = 0;
+  private readonly kick = { pitch: 0, yaw: 0, roll: 0, fov: 0 };
   private lockLostAt = -1;
   private downHeading: number | null = null;
   /** Which way the locked third-person camera turns off the line to the foe (+1 / −1). */
@@ -274,7 +280,7 @@ export class CombatSystem implements System, PlayerCombatHost {
       emit: (type, payload) => game.events.emit(type, payload),
       lineOfSight: (a, b) => this.lineOfSight(a, b),
       sfx: (id, position, volume) => game.events.emit('sfx', { id, position, volume }),
-      feedback: (kind) => this.feedback(kind),
+      feedback: (kind, blow) => this.feedback(kind, blow),
       cue: (kind, c) => this.cue(kind, c),
       night: () => {
         const h = game.time.hour;
@@ -427,19 +433,77 @@ export class CombatSystem implements System, PlayerCombatHost {
     return !hit || hit.distance > d - 0.35;
   }
 
-  /** Hit-stop (time scale 0.1 for 0.05–0.12 s) and camera shake for blows involving the player. */
-  private feedback(kind: 'light' | 'power' | 'heavy') {
+  /**
+   * The feel of a blow involving the player: hit-stop (the world nearly stops for a beat), a kill's
+   * slow motion, camera trauma (shake and roll), a kick (striking nods the view into the blow and
+   * punches the field of view in; being struck snaps it away from the attacker) and the hit marker.
+   */
+  private feedback(kind: 'light' | 'power' | 'heavy', blow?: Blow) {
     const S = this.cached;
-    if (S.hitStop) {
-      if (this.hitStopUntil < 0) this.hitStopPrev = this.game.timeScale;
-      this.game.timeScale = TIMING.hitStop.scale;
-      this.hitStopUntil = Math.max(this.hitStopUntil, this.game.elapsed + TIMING.hitStop[kind]);
-    }
+    const pc = this.playerC;
+    const dealt = !!blow && blow.att === pc;
+    const taken = !!blow && blow.def === pc && !blow.parried;
+    const blocked = !!blow?.blocked;
+    if (S.hitStop) this.freeze(blocked ? TIMING.hitStop.light * 0.6 : TIMING.hitStop[kind]);
+    if (dealt && blow?.kill && S.hitStop) this.slowMo(TIMING.feel.kill.seconds);
+    if (dealt) this.hud?.hitMarker(blow?.kill ? 'kill' : blocked ? 'blocked' : kind === 'light' ? 'hit' : 'power');
+    if (S.shake === 'off') return;
+    // First person moves the eye itself: a gentler share (and only the kick, by default).
     const first = this.game.player?.viewMode === 'first';
-    if (S.shake === 'on' || (S.shake === 'third' && !first)) {
-      this.shakeAmp = Math.max(this.shakeT > 0 ? this.shakeAmp : 0, TIMING.shake[kind]);
-      this.shakeT = 0.22;
+    const amp = first ? (S.shake === 'third' ? 0.35 : 0.6) : 1;
+    const F = TIMING.feel;
+    this.trauma = Math.min(1, this.trauma + F.trauma[kind] * (blocked ? 0.5 : 1) * amp);
+    if (!blow) return;
+    const kick = this.kick;
+    if (dealt && !blocked) {
+      kick.pitch -= F.nod[kind] * amp;
+      if (kind !== 'light' || blow.kill) kick.fov -= F.fovPunch * amp;
+    } else if (taken) {
+      // Away from the attacker: which side of the view the blow came from.
+      const p = this.game.player!;
+      const dx = blow.att.position.x - p.position.x;
+      const dz = blow.att.position.z - p.position.z;
+      const side = Math.sign(dx * Math.cos(p.yaw) - dz * Math.sin(p.yaw)) || 1;
+      const k = F.recoil * amp * (blocked ? 0.4 : kind === 'light' ? 0.7 : 1);
+      kick.yaw += side * k * 0.6;
+      kick.roll -= side * k * 0.5;
+      kick.pitch += k * 0.4;
     }
+  }
+
+  /** Hit-stop: the world nearly stops for `seconds` of real time. */
+  private freeze(seconds: number) {
+    this.beginTimeFx();
+    this.freezeUntil = Math.max(this.freezeUntil, this.game.elapsed + seconds);
+    this.game.timeScale = this.baseTimeScale * TIMING.hitStop.scale;
+  }
+
+  /** A kill's slow motion: after any hit-stop, ease from `feel.kill.scale` back to normal. */
+  private slowMo(seconds: number) {
+    this.beginTimeFx();
+    this.slowFrom = Math.max(this.game.elapsed, this.freezeUntil);
+    this.slowUntil = this.slowFrom + seconds;
+  }
+
+  private beginTimeFx() {
+    if (this.timeFx) return;
+    this.timeFx = true;
+    this.baseTimeScale = this.game.timeScale;
+  }
+
+  private stepTimeFx() {
+    if (!this.timeFx) return;
+    const t = this.game.elapsed;
+    let k = 1;
+    if (t < this.freezeUntil) k = TIMING.hitStop.scale;
+    else if (t < this.slowUntil) {
+      const u = (t - this.slowFrom) / Math.max(1e-3, this.slowUntil - this.slowFrom);
+      k = TIMING.feel.kill.scale + (1 - TIMING.feel.kill.scale) * u * u;
+    } else {
+      this.timeFx = false;
+      this.freezeUntil = this.slowUntil = -1;
+    }
+    this.game.timeScale = this.baseTimeScale * k;
   }
 
   private cue(kind: 'stamina' | 'unblockable' | 'blind' | 'entangled' | 'free', c: Combatant) {
@@ -528,11 +592,12 @@ export class CombatSystem implements System, PlayerCombatHost {
       const c = this.playerC;
       let m = prevSpeed();
       if (!c) return m;
-      // §6.6: run ×0.85 in combat with a weapon drawn; slower while guarding or swinging [design].
-      // A sprint is a sprint, though: armed you can still run someone down.
-      if (c.drawn && this.core.playerInCombat && !this.game.player?.sprinting) m *= 0.85;
-      if (c.guardActive) m *= 0.7;
-      if (c.attacking()) m *= c.action?.kind === 'charge' ? 0.6 : 0.45;
+      // §6.6: a little slower in combat with a weapon drawn, and while guarding or swinging, but
+      // never stuck in place (Skyrim-like: you keep moving through a fight). A sprint is a sprint:
+      // armed you can still run someone down.
+      if (c.drawn && this.core.playerInCombat && !this.game.player?.sprinting) m *= 0.95;
+      if (c.guardActive) m *= 0.75;
+      if (c.attacking()) m *= c.action?.kind === 'charge' ? 0.7 : 0.65;
       return m;
     };
     const prevSprint = pc.canSprint;
@@ -1624,17 +1689,33 @@ export class CombatSystem implements System, PlayerCombatHost {
 
   lateUpdate(dt: number) {
     const g = this.game;
-    if (this.hitStopUntil >= 0 && g.elapsed >= this.hitStopUntil) {
-      g.timeScale = this.hitStopPrev;
-      this.hitStopUntil = -1;
-    }
+    this.stepTimeFx();
     const rig = (this.rig ??= g.getSystem<CameraRig>('cameraRig') ?? null);
     if (rig) {
-      if (this.shakeT > 0) {
-        this.shakeT -= dt;
-        const a = this.shakeAmp * Math.max(0, this.shakeT / 0.22);
-        rig.shake.set((this.rng.next() - 0.5) * 2 * a, (this.rng.next() - 0.5) * 2 * a, (this.rng.next() - 0.5) * 2 * a);
-      } else if (rig.shake.lengthSq() > 0) rig.shake.set(0, 0, 0);
+      // Real time: the shake and the kicks play out at full speed through a hit-stop.
+      const rdt = Math.min(0.05, dt);
+      const F = TIMING.feel;
+      const kick = this.kick;
+      this.feelT += rdt;
+      this.trauma = Math.max(0, this.trauma - F.decay * rdt);
+      const a = this.trauma * this.trauma;
+      const t = this.feelT;
+      // Smooth noise (sums of sines), not white jitter: it reads as a jolt, not a buzz.
+      const n = (f: number, o: number) => Math.sin(t * f + o) * 0.6 + Math.sin(t * f * 1.73 + o * 2.1) * 0.4;
+      if (a > 0) rig.shake.set(n(31, 0) * a * F.shake, n(29, 1.7) * a * F.shake, n(27, 3.1) * a * F.shake);
+      else if (rig.shake.lengthSq() > 0) rig.shake.set(0, 0, 0);
+      // Kicks spring back to rest.
+      const back = Math.exp(-11 * rdt);
+      kick.pitch *= back;
+      kick.yaw *= back;
+      kick.roll *= back;
+      kick.fov *= Math.exp(-9 * rdt);
+      for (const k of ['pitch', 'yaw', 'roll'] as const) if (Math.abs(kick[k]) < 1e-4) kick[k] = 0;
+      if (Math.abs(kick.fov) < 0.01) kick.fov = 0;
+      rig.kick.pitch = kick.pitch;
+      rig.kick.yaw = kick.yaw;
+      rig.kick.roll = kick.roll + (a > 0 ? n(23, 4.2) * a * F.roll : 0);
+      rig.fovKick = kick.fov;
     }
   }
 

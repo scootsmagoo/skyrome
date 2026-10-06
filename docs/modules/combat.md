@@ -258,8 +258,8 @@ Absorbing a blow costs max(4, 0.6 × raw × (1 − Shield/200)) stamina, and at 
 breaks for 1.2 s. With three or more miles side by side, each gets +0.15 block (§6.13 formation).
 A stuck pilum halves a shield's block.
 
-**Parry and riposte.** Every block press opens the window (0.20 s on Normal, 0.40 Tiro, 0.30
-Facilis, 0.14 Difficilis, 0.10 Herculea, +0.06 with Practised Parry, or the accessibility
+**Parry and riposte.** Every block press opens the window (0.26 s on Normal, 0.40 Tiro, 0.32
+Facilis, 0.18 Difficilis, 0.12 Herculea, +0.06 with Practised Parry, or the accessibility
 override). A landed parry costs nothing: the attacker loses 60 % poise, staggers for 1.0 s and is
 open to a riposte for 0.8 s (×2, a guaranteed stagger that opens no new window; at 25 % health or
 less, a finisher). Weapon-only parries of power attacks count as blocks. Unblockable attacks (the
@@ -282,9 +282,15 @@ followed by 1.5 s of immunity, at most two staggers in 4 s. Heavy weapons (2 kg 
 bosses have hyper-armor in power wind-ups. The player's poise is 50, +12 in heavy body armor, +20
 with a shield raised, plus the old-wound and survivor traits.
 
-**Hit-stop and shake.** Blows involving the player set `game.timeScale` to 0.1 for 0.05 s (light),
-0.08 s (power) or 0.12 s (parry, riposte, finisher), restored on real time. `CameraRig.shake` gets
-0.02, 0.05 or 0.08 m, decaying over 0.22 s (in third person only by default).
+**The feel of a blow** (`CombatSystem.feedback`, numbers in `TIMING.hitStop` and `TIMING.feel`).
+Blows involving the player set `game.timeScale` to 0.03 for 0.07 s (light), 0.11 s (power) or
+0.15 s (parry, riposte, finisher), restored on real time; a killing blow by the player then eases
+back from ×0.25 over 0.55 s. Each blow adds camera trauma (shake = trauma² × 0.13 m and a roll,
+smooth noise, fading 1.8/s). Striking nods the view into the blow and punches the field of view in
+(power blows and kills); being struck snaps it away from the attacker (`CameraRig.kick`/`fovKick`).
+First person gets about a third of it. The hit marker flashes round the crosshair (red for a kill),
+a landed blow shoves its target back 0.3 m (power 0.8 m), and blade hits on or by the player get a
+body thump under the flesh sound.
 
 **Lock-on.** X picks the target nearest the screen centre within 15 m and ±35°, X again cycles left
 to right, and holding X for 0.5 s releases. The lock breaks at 20 m or after 2 s without sight.

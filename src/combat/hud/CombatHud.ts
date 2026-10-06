@@ -39,6 +39,8 @@ export class CombatHud {
   private favorDelta: HTMLElement;
   private chant: HTMLElement;
   private edge = el('div', 'cb-edge');
+  /** Four ticks round the crosshair that flash when the player's blow lands. */
+  private hitmark = el('div', 'cb-hitmark', el('i', 'tl'), el('i', 'tr'), el('i', 'bl'), el('i', 'br'));
   private blind = el('div', 'cb-blind');
   private dark = el('div', 'cb-dark');
   private netMesh = el('div', 'cb-netmesh');
@@ -105,7 +107,7 @@ export class CombatHud {
 
     // Sand and the net cover the world, not the HUD: that layer goes first, under the bars and compass.
     this.under = el('div', 'cb-hud', this.blind, this.netMesh, this.dark);
-    this.el = el('div', 'cb-hud', this.edge, this.lock, this.favor, this.net, this.hold, this.msg);
+    this.el = el('div', 'cb-hud', this.edge, this.hitmark, this.lock, this.favor, this.net, this.hold, this.msg);
     parent.prepend(this.under);
     parent.appendChild(this.el);
   }
@@ -117,6 +119,14 @@ export class CombatHud {
     void this.edge.offsetWidth;
     this.edge.classList.add('is-on');
     this.edgeT = 0.8;
+  }
+
+  /** Flash the hit marker: a landed blow ('hit'), a heavy one ('power'), a kill ('kill'), a blocked one ('blocked'). */
+  hitMarker(kind: 'hit' | 'power' | 'kill' | 'blocked') {
+    const m = this.hitmark;
+    m.className = 'cb-hitmark';
+    void m.offsetWidth;
+    m.classList.add('is-on', `is-${kind}`);
   }
 
   message(big: string, small = '', seconds = 3) {

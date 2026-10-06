@@ -13,16 +13,20 @@ import { ITEMS } from '../src/rpg/data/items';
 const melee = ITEMS.filter((i) => i.weapon && i.type === 'weapon' && !['bow', 'sling', 'thrown'].includes(i.weapon.class));
 
 describe('attack phases', () => {
-  it('a gladius (speed 1): wind-up 0.25, active 0.12, recovery 0.30 = 0.67 s', () => {
+  it('a gladius (speed 1): wind-up 0.25, active 0.12, recovery 0.30 = 0.67 s; the player swings quicker (0.20 + 0.12 + 0.255)', () => {
+    const n = attackPhases('light', 1, { npc: true, minWindup: 0 });
+    expect(n.active).toBeCloseTo(0.12, 6);
+    expect(n.recovery).toBeCloseTo(0.3, 6);
     const p = attackPhases('light', 1);
-    expect(p).toEqual({ windup: 0.25, active: 0.12, recovery: 0.3 });
-    expect(attackLength(p)).toBeCloseTo(0.67, 5);
+    expect(p.windup).toBeCloseTo(0.25 * TIMING.playerQuick.windup, 6);
+    expect(p.recovery).toBeCloseTo(0.3 * TIMING.playerQuick.recovery, 6);
+    expect(attackLength(p)).toBeCloseTo(0.2 + 0.12 + 0.255, 5);
   });
 
   it('every melee weapon: the player\'s hit frame is wind-up ÷ speed; NPCs never under the telegraph minimums', () => {
     for (const it of melee) {
       const s = it.weapon!.speed;
-      expect(attackPhases('light', s).windup).toBeCloseTo(0.25 / s, 6);
+      expect(attackPhases('light', s).windup).toBeCloseTo((0.25 / s) * TIMING.playerQuick.windup, 6);
       expect(attackPhases('power', s).windup).toBeCloseTo(0.15 / s, 6);
       expect(attackPhases('light', s, { npc: true }).windup).toBeGreaterThanOrEqual(TIMING.npcMinWindup.light);
       expect(attackPhases('power', s, { npc: true }).windup).toBeGreaterThanOrEqual(TIMING.npcMinWindup.power);
@@ -33,13 +37,16 @@ describe('attack phases', () => {
     const p = attackPhases('light', 1.3);
     const n = attackPhases('light', 1.3, { npc: true });
     expect(n.active).toBeCloseTo(p.active, 6);
-    expect(n.recovery).toBeCloseTo(p.recovery, 6);
+    expect(n.recovery).toBeCloseTo(0.3 / 1.3, 6);
+    expect(p.recovery).toBeCloseTo((0.3 / 1.3) * TIMING.playerQuick.recovery, 6);
     expect(n.windup).toBe(0.35);
   });
 
   it('bash 0.35 s, riposte 0.15 + 0.10 + 0.35, Nereus\' net twirl 0.8 s (and his follow-up ≥ 0.8)', () => {
     expect(attackLength(attackPhases('bash'))).toBeCloseTo(0.35, 6);
-    expect(attackPhases('riposte')).toEqual({ windup: 0.15, active: 0.1, recovery: 0.35 });
+    const r = attackPhases('riposte', 1, { npc: true });
+    expect([r.active, r.recovery]).toEqual([0.1, 0.35]);
+    expect(attackPhases('riposte').windup).toBeCloseTo(0.15 * TIMING.playerQuick.windup, 6);
     expect(attackPhases('net', 1, { npc: true }).windup).toBe(0.8);
     expect(attackPhases('power', 0.9, { npc: true, minWindup: 0.8 }).windup).toBeGreaterThanOrEqual(0.8);
   });

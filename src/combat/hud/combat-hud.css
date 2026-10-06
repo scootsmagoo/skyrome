@@ -137,6 +137,26 @@
   100% { opacity: 0; }
 }
 
+/* ---- hit marker: ticks round the crosshair when a blow lands */
+.cb-hitmark { position: absolute; left: 50%; top: 50%; width: 0; height: 0; opacity: 0; pointer-events: none; }
+.cb-hitmark i { position: absolute; width: 0.75rem; height: 2px; background: #f4ecd8; border-radius: 1px;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.8); }
+.cb-hitmark .tl { transform: translate(-1.15rem, -0.75rem) rotate(45deg); }
+.cb-hitmark .tr { transform: translate(0.4rem, -0.75rem) rotate(-45deg); }
+.cb-hitmark .bl { transform: translate(-1.15rem, 0.75rem) rotate(-45deg); }
+.cb-hitmark .br { transform: translate(0.4rem, 0.75rem) rotate(45deg); }
+.cb-hitmark.is-on { animation: cb-hitmark 0.22s ease-out; }
+.cb-hitmark.is-power.is-on { animation-duration: 0.32s; }
+.cb-hitmark.is-power i { width: 1rem; height: 3px; }
+.cb-hitmark.is-kill.is-on { animation-duration: 0.5s; }
+.cb-hitmark.is-kill i { width: 1.1rem; height: 3px; background: #e0473a; }
+.cb-hitmark.is-blocked i { background: #9aa4ad; }
+@keyframes cb-hitmark {
+  0% { opacity: 1; transform: scale(0.75); }
+  30% { opacity: 1; transform: scale(1.1); }
+  100% { opacity: 0; transform: scale(1.25); }
+}
+
 /* ---- sand in the eyes */
 .cb-blind {
   position: absolute;

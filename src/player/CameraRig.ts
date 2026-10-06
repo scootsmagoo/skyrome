@@ -51,6 +51,11 @@ export class CameraRig implements System {
   private currentDist: number;
   /** Extra camera shake offset (combat module writes here). */
   readonly shake = new THREE.Vector3();
+  /** Extra rotation on top of the view (radians; combat's hit kicks): pitch, yaw, roll. */
+  readonly kick = { pitch: 0, yaw: 0, roll: 0 };
+  /** Extra field of view (degrees; combat's punch-in on a heavy blow, negative = zoom in). */
+  fovKick = 0;
+  private fovBase = NaN;
   /** Lock-on framing (combat): the third-person camera pulls back to at least this distance (m); 0 = off. */
   framingDistance = 0;
   /** +1 over the right shoulder (default), −1 over the left. H swaps (GDD §4.4). */
@@ -135,10 +140,17 @@ export class CameraRig implements System {
       camera.position.copy(desired);
     }
     camera.position.add(this.shake);
+    // Kicks turn the view after it has been placed, so the orbit itself doesn't swing.
+    const k = this.kick;
+    if (k.pitch || k.yaw || k.roll) camera.rotation.set(p.pitch + k.pitch, p.yaw + k.yaw, k.roll, 'YXZ');
 
     const fovTarget = settings.data.fov + (p.sprinting ? CAMERA.fovSprintBoost : 0);
-    if (Math.abs(camera.fov - fovTarget) > 0.01) {
-      camera.fov = camera.fov + (fovTarget - camera.fov) * damp(6, dt);
+    if (!Number.isFinite(this.fovBase)) this.fovBase = camera.fov;
+    if (Math.abs(this.fovBase - fovTarget) > 0.01) this.fovBase += (fovTarget - this.fovBase) * damp(6, dt);
+    else this.fovBase = fovTarget;
+    const fov = this.fovBase + this.fovKick;
+    if (Math.abs(camera.fov - fov) > 0.001) {
+      camera.fov = fov;
       camera.updateProjectionMatrix();
     }
 

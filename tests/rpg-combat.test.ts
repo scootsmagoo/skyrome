@@ -65,14 +65,18 @@ describe('GDD §6.2 lethality check (pinned)', () => {
     expect(vsSoldier(computeAttack(p, gladius.weapon, { item: gladius, alt: true }))).toBeGreaterThanOrEqual(14);
   });
 
-  it('a sicarius (sica 11, skill 50, tier 1.15, Normalis ×1.5 → 23.7) kills a player in a tunic in 5 hits, in mail and helmet (AR 42) in 10', () => {
+  it('a sicarius (sica 11, skill 50, tier 1.15) on Difficilis (×1.5 → 23.7) kills a player in a tunic in 5 hits, in mail and helmet (AR 42) in 10; on Normalis (×1) in 7 and 15', () => {
     const sica = db.require('sica');
     const a = computeAttack(flatStats(50, 1.15), sica.weapon, { item: sica });
-    const mult = difficultyMult('normalis', false);
-    expect(a.damage * mult).toBeCloseTo(23.72, 1);
-    const hits = (armor: number, family: 'cloth' | 'mail') => timeToKill({ damagePerHit: resolveHit({ attack: a, armor, family, mult }).damage, interval: 1, health: 100 }).hits;
-    expect(hits(0, 'cloth')).toBe(5);
-    expect(hits(42, 'mail')).toBe(10);
+    const hits = (armor: number, family: 'cloth' | 'mail', mult: number) => timeToKill({ damagePerHit: resolveHit({ attack: a, armor, family, mult }).damage, interval: 1, health: 100 }).hits;
+    const hard = difficultyMult('difficilis', false);
+    expect(a.damage * hard).toBeCloseTo(23.72, 1);
+    expect(hits(0, 'cloth', hard)).toBe(5);
+    expect(hits(42, 'mail', hard)).toBe(10);
+    const normal = difficultyMult('normalis', false);
+    expect(a.damage * normal).toBeCloseTo(15.81, 1);
+    expect(hits(0, 'cloth', normal)).toBe(7);
+    expect(hits(42, 'mail', normal)).toBe(15);
   });
 });
 
@@ -332,13 +336,13 @@ describe('blocking and parrying (§6.4)', () => {
     expect(resolveBlock(t, { damage: 20, shield: scutum.shield, stamina: 100, ranged: true }).staminaCost).toBe(0);
   });
 
-  it('parry: 0.20 s window on Normalis (Tiro 0.40, Herculea 0.10, +0.06 with the perk); power attacks only with a shield', () => {
+  it('parry: 0.26 s window on Normalis (Tiro 0.40, Herculea 0.12, +0.06 with the perk); power attacks only with a shield', () => {
     const s = stats({});
-    expect(parryWindow(s)).toBeCloseTo(0.2);
-    expect(parryWindow(s, 'tiro')).toBeCloseTo(0.4);
-    expect(parryWindow(s, 'herculea')).toBeCloseTo(0.1);
-    s.grantPerk('perk-shield-parry-plus');
     expect(parryWindow(s)).toBeCloseTo(0.26);
+    expect(parryWindow(s, 'tiro')).toBeCloseTo(0.4);
+    expect(parryWindow(s, 'herculea')).toBeCloseTo(0.12);
+    s.grantPerk('perk-shield-parry-plus');
+    expect(parryWindow(s)).toBeCloseTo(0.32);
     expect(resolveParry({ attackerPoiseMax: 60, withShield: false })).toEqual({ parried: true, attackerPoiseLoss: 36, attackerStagger: 1, riposteWindow: 0.8 });
     expect(resolveParry({ attackerPoiseMax: 60, power: true, withShield: false }).parried).toBe(false);
     expect(resolveParry({ attackerPoiseMax: 60, power: true, withShield: true }).parried).toBe(true);
@@ -346,7 +350,8 @@ describe('blocking and parrying (§6.4)', () => {
 
   it('difficulty: the player deals ×dealt and takes ×taken; NPC against NPC ×1', () => {
     expect(difficultyMult('normalis', true)).toBe(1);
-    expect(difficultyMult('normalis', false)).toBe(1.5);
+    expect(difficultyMult('normalis', false)).toBe(1);
+    expect(difficultyMult('difficilis', false)).toBe(1.5);
     expect(difficultyMult('normalis', false, false)).toBe(1);
     expect(difficultyMult('tiro', false)).toBe(0.5);
     expect(difficultyMult('herculea', true)).toBe(0.75);
@@ -516,14 +521,14 @@ describe('enemy tiers (§6.11)', () => {
 });
 
 describe('time to kill across levels (TTK table in docs/modules/rpg.md)', () => {
-  it('level 1: thugs fall in 3–5 hits, armored soldiers in 6–10; a veteran kills the player in 3–5', () => {
+  it('level 1: thugs fall in 3–5 hits, armored soldiers in 6–10; a veteran kills the player in 6–9 (Normalis is forgiving)', () => {
     expect(duel(BUILDS[0], 'thug').hits).toBeGreaterThanOrEqual(3);
     expect(duel(BUILDS[0], 'thug').hits).toBeLessThanOrEqual(5);
     const miles = duel(BUILDS[0], 'miles');
     expect(miles.hits).toBeGreaterThanOrEqual(6);
     expect(miles.hits).toBeLessThanOrEqual(10);
-    expect(duel(BUILDS[0], 'veteran', 1).hitsToDie).toBeGreaterThanOrEqual(3);
-    expect(duel(BUILDS[0], 'veteran', 1).hitsToDie).toBeLessThanOrEqual(5);
+    expect(duel(BUILDS[0], 'veteran', 1).hitsToDie).toBeGreaterThanOrEqual(6);
+    expect(duel(BUILDS[0], 'veteran', 1).hitsToDie).toBeLessThanOrEqual(9);
   });
 
   it('level 10: thugs fall in ≤ 3 hits; soldiers and veterans in 6–10; the soldier needs ~10 on the player in mail', () => {

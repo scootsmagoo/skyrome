@@ -52,8 +52,9 @@ describe('§6.2 damage through the core', () => {
     expect(Math.ceil(70 / blow)).toBe(9);
   });
 
-  it('a sicarius (sica, skill 50, tier 1.15) on Normal: 23.7 a hit, 5 to drop a player in a tunic, 10 in mail and helmet', () => {
+  it('a sicarius (sica, skill 50, tier 1.15) on Difficilis: 23.7 a hit, 5 to drop a player in a tunic, 10 in mail and helmet', () => {
     const core = makeCore();
+    core.difficulty = 'difficilis';
     const p = addPlayer(core, { health: 1000 });
     const sic = addNpc(core, 'sicarius', combatProfileFor('veteran', { kit: 'sica' }));
     core.applyHit(sic, p, light(1));
@@ -212,11 +213,17 @@ describe("the player's blows land on anyone (§14.1 assault); NPCs strike only t
 });
 
 describe('stamina economy (§6.1, §6.4, §6.6)', () => {
-  it('light 5 + 2 × kg (gladius 7.4), power 3 × light (min 20), bash 18', () => {
+  it("the player's light swings are free (an NPC's: 5 + 2 × kg, gladius 7.4); power 3 × light (min 20), bash 18", () => {
     const core = makeCore();
     const p = addPlayer(core);
     core.startAttack(p, 'light');
-    expect(100 - p.vitals.stamina.current).toBeCloseTo(7.4, 5);
+    expect(100 - p.vitals.stamina.current).toBeCloseTo(0, 5);
+    const n = addNpc(core, 'n', combatProfileFor('thug', { kit: 0 }));
+    n.weapon = p.weapon;
+    n.weaponItem = p.weaponItem;
+    const before = n.vitals.stamina.current;
+    core.startAttack(n, 'light');
+    expect(before - n.vitals.stamina.current).toBeCloseTo(7.4, 5);
     run(core, 0.8);
     p.vitals.set('stamina', 100);
     core.beginCharge(p);
@@ -267,7 +274,7 @@ describe('stamina economy (§6.1, §6.4, §6.6)', () => {
     expect(p.guardActive).toBe(true);
     const before = p.vitals.stamina.current;
     core.applyHit(thug, p, light(1));
-    const raw = 10 * (1 + 15 / 200) * 0.9 * 1.5; // fustis × taken
+    const raw = 10 * (1 + 15 / 200) * 0.9 * 1; // fustis × taken (Normalis ×1)
     expect(before - p.vitals.stamina.current).toBeCloseTo(Math.max(4, 0.6 * raw * (1 - 25 / 200)), 3);
     p.vitals.set('stamina', 2);
     core.applyHit(thug, p, light(1));
@@ -304,16 +311,16 @@ describe('parry and riposte (§6.4, §4.2 window)', () => {
     expect(thug.riposteUntil).toBe(-Infinity);
   });
 
-  it('a press 0.22 s before impact is too early on Normal but parries on Tiro (0.40 s)', () => {
+  it('a press 0.30 s before impact is too early on Normal (0.26 s) but parries on Tiro (0.40 s)', () => {
     const a = setup();
     a.core.startAttack(a.thug, 'light');
-    run(a.core, 0.35 - 0.22);
+    run(a.core, 0.35 - 0.3);
     a.core.pressParry(a.p);
     run(a.core, 0.3);
     expect(a.env.of('combat:parry')).toHaveLength(0);
     const b = setup('tiro');
     b.core.startAttack(b.thug, 'light');
-    run(b.core, 0.35 - 0.22);
+    run(b.core, 0.35 - 0.3);
     b.core.pressParry(b.p);
     run(b.core, 0.3);
     expect(b.env.of('combat:parry')).toHaveLength(1);
@@ -580,6 +587,6 @@ describe('hit-stop and shake feedback (§6.5)', () => {
     t.riposteUntil = core.now + 1;
     core.applyHit(p, t, light(1));
     expect(env.feedbacks).toEqual(['light', 'power', 'heavy']);
-    expect(near(TIMING.hitStop.heavy, 0.12)).toBe(true);
+    expect(near(TIMING.hitStop.heavy, 0.15)).toBe(true);
   });
 });

@@ -37,13 +37,23 @@ import { BODY, angleTo, arcFor, dist2D, meleeRange, sweepCapsule } from './geome
 import { TIMING, attackLength, attackPhases, chargeFraction, clipSpeedFor, type AttackKind } from './timing';
 import './events';
 
+/** Who struck whom, for the feel of it (CombatSystem.feedback). */
+export interface Blow {
+  att: Combatant;
+  def: Combatant;
+  blocked?: boolean;
+  parried?: boolean;
+  /** The blow killed or knocked out its target. */
+  kill?: boolean;
+}
+
 /** Everything outside the rules: sight, sound, feedback, HUD cues, events, randomness. */
 export interface CombatEnv {
   emit<K extends keyof GameEvents>(type: K, payload: GameEvents[K]): void;
   lineOfSight(a: Combatant, b: Combatant): boolean;
   sfx(id: string, pos?: { x: number; y: number; z: number }, volume?: number): void;
-  /** Hit-stop and camera shake for a blow involving the player. */
-  feedback(kind: 'light' | 'power' | 'heavy'): void;
+  /** Hit-stop, camera kick and the hit marker for a blow involving the player. */
+  feedback(kind: 'light' | 'power' | 'heavy', blow?: Blow): void;
   /** HUD cues for the player: a refused stamina cost, an unblockable telegraph, sand, the net. */
   cue(kind: 'stamina' | 'unblockable' | 'blind' | 'entangled' | 'free', c: Combatant): void;
   night(): boolean;
@@ -540,7 +550,7 @@ export class CombatCore {
     if (a.kind === 'sandKick') return this.sandKick(c);
     if (a.kind === 'feint') return;
     const weapon = a.weapon ?? c.weapon;
-    this.env.sfx(weapon.speed >= 1.2 ? 'swing.fast' : weapon.speed >= 0.95 ? 'swing.medium' : 'swing.slow', this.chest(c), 0.8);
+    this.env.sfx(weapon.speed >= 1.2 ? 'swing.fast' : weapon.speed >= 0.95 ? 'swing.medium' : 'swing.slow', this.chest(c), c.isPlayer ? 1.1 : 0.8);
     const targets = this.sweepTargets(c, a, weapon);
     for (const t of targets) this.applyHit(c, t, a, weapon);
     if (c.isPlayer) this.env.emit('combat:swing', { attackerId: c.id, power: a.kind === 'power', hits: targets.length, reach: BODY.handDist + weapon.reach });
@@ -563,14 +573,16 @@ export class CombatCore {
       handDist = clamp((tmpB.x - pivot.x) * fx + (tmpB.z - pivot.z) * fz, BODY.minHand, BODY.maxHand);
       handY = tmpB.y;
     }
+    // The player's aim is forgiven a little: a longer reach and a wider arc than an NPC's.
+    const R = TIMING.playerReach;
     const spec = {
       x: pivot.x,
       y: pivot.y,
       z: pivot.z,
       heading: c.heading,
       handDist,
-      reach: a.kind === 'bash' ? 0.35 : weapon.reach,
-      arc,
+      reach: (a.kind === 'bash' ? 0.35 : weapon.reach) + (c.isPlayer ? R.extra : 0),
+      arc: c.isPlayer ? Math.min(arc * R.arc, R.maxArcDeg * DEG) : arc,
       y0: Math.min(handY, pivot.y) - 0.95,
       y1: Math.max(handY, pivot.y) + 0.6,
     };
@@ -671,7 +683,7 @@ export class CombatCore {
     if (atk.takedown && behind && def.human && (TIER_RANK[def.profile?.tier ?? 'thug'] ?? 9) <= TIER_RANK.veteran) {
       this.knockout(def, att);
       if (att.isPlayer) att.sheet?.useSkill('brawling', XP.brawling.knockout);
-      if (player) this.env.feedback('heavy');
+      if (player) this.env.feedback('heavy', { att, def, kill: true });
       return;
     }
 
@@ -728,10 +740,14 @@ export class CombatCore {
       } else if (pr.result === 'knockdown') this.knockdown(def, att);
       else if (pr.result === 'flinch') this.flinch(def, att, behind);
       else if (!hit.blocked && !def.action) def.view?.play(behind ? 'hitBack' : 'hitFront');
+      // A blow that lands shoves its target back a little (more for a power blow): the hit reads.
+      if (!hit.blocked && player && (stagger === 'none' || stagger === 'flinch')) this.push(def, att, power ? TIMING.steps.knockPower : TIMING.steps.knockLight, power ? 0.22 : 0.14);
     }
 
     if (!hit.blocked) {
-      this.env.sfx(atk.damageType === 'blunt' ? 'hit.punch' : 'hit.flesh', this.chest(def));
+      this.env.sfx(atk.damageType === 'blunt' ? 'hit.punch' : 'hit.flesh', this.chest(def), player ? 1.3 : 1);
+      // Weight under a blade blow the player is part of: a body thump, louder for a power blow.
+      if (player && atk.damageType !== 'blunt') this.env.sfx('hit.punch', this.chest(def), power ? 1.1 : 0.65);
       if (def.status === 'active') this.env.sfx(this.voice(def, 'pain'), this.chest(def), 0.8);
       if (def.isPlayer) {
         this.env.emit('ui:hit', { x: att.position.x, z: att.position.z });
@@ -745,7 +761,7 @@ export class CombatCore {
         else if (def.bleeds.length < 3) def.bleeds.push(now + 6);
       }
     }
-    if (player) this.env.feedback(finisher || riposte ? 'heavy' : power && !hit.blocked ? 'power' : 'light');
+    if (player) this.env.feedback(finisher || riposte ? 'heavy' : power && !hit.blocked ? 'power' : 'light', { att, def, blocked: hit.blocked, kill: outcome === 'dead' || outcome === 'ko' });
 
     if (att.isPlayer) {
       const xp = bystander ? null : this.attackXp(weapon, { power, riposte, sneak: unaware, bash: a.kind === 'bash' });
@@ -783,7 +799,7 @@ export class CombatCore {
     att.riposteUntil = now + window;
     def.view?.play('blockHit');
     this.env.sfx(def.shield ? 'block.shield' : 'clash.metal', this.chest(def));
-    if (att.isPlayer || def.isPlayer) this.env.feedback('heavy');
+    if (att.isPlayer || def.isPlayer) this.env.feedback('heavy', { att, def, parried: true });
     if (def.isPlayer) {
       def.sheet?.useSkill('shield', XP.shield.parry);
       if (this.bout?.foes.has(att.id)) this.bout.event('parry');
@@ -1608,7 +1624,9 @@ export class CombatCore {
   }
 
   private staminaCost(c: Combatant, weapon: WeaponStats, o: { power?: boolean; bash?: boolean; sprint?: boolean; none?: boolean }): number {
-    if (o.none) return 0;
+    // The player's light swings are free, as in Skyrim: stamina is for power attacks, bashes,
+    // sprint attacks, dodges and blocking.
+    if (o.none || (c.isPlayer && !o.power && !o.bash && !o.sprint)) return 0;
     return computeAttack(c.stats, weapon, { power: o.power, bash: o.bash, sprint: o.sprint, item: weapon === c.weapon ? c.weaponItem : undefined }).staminaCost;
   }
 

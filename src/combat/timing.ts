@@ -8,10 +8,14 @@ import { clamp } from '../core/math';
 export const TIMING = {
   /** Light attack: wind-up 0.25, active 0.12, recovery 0.30 (§6.1). */
   light: { windup: 0.25, active: 0.12, recovery: 0.3 },
-  /** A light press during an attack is remembered this long (§6.1 input buffer). */
-  buffer: 0.25,
+  /** A light press during an attack is remembered this long (§6.1 input buffer; generous, so mashing F chains). */
+  buffer: 0.4,
   /** The chain continues if the next light attack starts within this long after the last one ended. */
-  chainGap: 0.35,
+  chainGap: 0.45,
+  /** The player's own light, sprint and riposte swings are quicker than the table (× wind-up, × recovery). */
+  playerQuick: { windup: 0.8, recovery: 0.85 },
+  /** The player's swings reach this much further and sweep this much wider than an NPC's (forgiving aim). */
+  playerReach: { extra: 0.2, arc: 1.2, maxArcDeg: 160 },
   /** Power attack: hold ≥ 0.35 s (adjustable 0.2–0.6), auto-release at 1.0 s, then 0.15 to the hit and 0.45 recovery. */
   power: { hold: 0.35, autoRelease: 1.0, release: 0.15, recovery: 0.45 },
   /** Shield bash 0.12 + 0.08 + 0.15 = 0.35 s (§6.15). */
@@ -24,8 +28,8 @@ export const TIMING = {
   dodge: { move: 0.3, recovery: 0.2, distance: 2.5, iframes: 0.12, window: 1 },
   draw: 0.5,
   sheathe: 0.5,
-  /** The guard takes 0.1 s to come up (a parry needs only the press). */
-  guardUp: 0.1,
+  /** The guard takes 0.06 s to come up (a parry needs only the press). */
+  guardUp: 0.06,
   /** Toggle-block rule (§4.2): a press shorter than this is a parry attempt only. */
   togglePress: 0.18,
   /** NPC wind-ups are stretched to these telegraph minimums (§6.5, Normal; the bash [design]). */
@@ -44,10 +48,27 @@ export const TIMING = {
   holdKill: 1,
   /** Lock-on: acquire within 15 m and ±35° of the screen centre; break at 20 m or 2 s without sight (§6.1). */
   lock: { acquire: 15, cone: 35, breakDistance: 20, sightLost: 2, autoSuggest: 8 },
-  /** Hit-stop (§6.5): light 0.05, power 0.08, parry/riposte/finisher 0.12 s at time scale 0.1. */
-  hitStop: { light: 0.05, power: 0.08, heavy: 0.12, scale: 0.1 },
-  /** Camera shake (§6.5): 0.02 / 0.05 / 0.08 m. */
-  shake: { light: 0.02, power: 0.05, heavy: 0.08 },
+  /**
+   * Hit-stop (§6.5, made heavier so blows land): the world almost stops for light 0.07, power
+   * 0.11, parry/riposte/finisher 0.15 s.
+   */
+  hitStop: { light: 0.07, power: 0.11, heavy: 0.15, scale: 0.03 },
+  /**
+   * The camera's share of a blow: "trauma" 0..1 added per blow and fading at `decay`/s; the shake
+   * is trauma² × `shake` m and × `roll` rad. Striking nods the view into the blow and punches the
+   * field of view in (`fovPunch`° for a power blow); being struck snaps it away from the attacker.
+   */
+  feel: {
+    trauma: { light: 0.3, power: 0.55, heavy: 0.75 },
+    decay: 1.8,
+    shake: 0.13,
+    roll: 0.035,
+    nod: { light: 0.018, power: 0.035, heavy: 0.03 },
+    recoil: 0.06,
+    fovPunch: 4,
+    /** A killing blow: slow motion at this scale, easing back to normal over this long. */
+    kill: { scale: 0.25, seconds: 0.55 },
+  },
   /** A knockout lasts 60 game minutes = 3 real minutes (§6.9). */
   knockout: 180,
   /** The player comes to sooner [design]: the screen goes dark for this long (robbed in the street). */
@@ -55,7 +76,7 @@ export const TIMING = {
   /** inCombat: a hostile aware of the player within 40 m at any moment in the last 8 s (§6). */
   inCombat: { radius: 40, memory: 8 },
   /** Code displacement (no root motion, §6.15), metres over the clip's active part. */
-  steps: { light: 0.3, power: 0.5, lunge: 1.5, back: -1.5, riposte: 0.6, bash: 0.4, staggerShort: -0.5, staggerLong: -1, blockImpact: -0.2, knockdown: -1 },
+  steps: { light: 0.3, power: 0.5, lunge: 1.5, back: -1.5, riposte: 0.6, bash: 0.4, staggerShort: -0.5, staggerLong: -1, blockImpact: -0.2, knockdown: -1, knockLight: -0.3, knockPower: -0.8 },
   /** Stagger after a guard break (§6.4). */
   guardBreak: 1.2,
   /** Knocked down for 2 s (§6.5). */
@@ -103,6 +124,10 @@ export function attackPhases(kind: AttackKind, weaponSpeed = 1, opts: { npc?: bo
     case 'light':
     default:
       p = { windup: T.light.windup / s, active: T.light.active / s, recovery: T.light.recovery / s };
+  }
+  if (!opts.npc && (kind === 'light' || kind === 'sprint' || kind === 'riposte')) {
+    p.windup *= T.playerQuick.windup;
+    p.recovery *= T.playerQuick.recovery;
   }
   if (opts.npc) {
     if (kind === 'light' || kind === 'feint' || kind === 'sprint' || kind === 'riposte') p.windup = Math.max(p.windup, T.npcMinWindup.light);
