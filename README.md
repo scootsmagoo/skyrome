@@ -42,7 +42,59 @@ The game opens straight into the Forum at mid-morning with a default character. 
 - **Fight:** F attacks (hold it for a power attack), Q blocks, R draws your sword.
 - **Everything else:** see the controls below.
 
-The full flow (control presets, title, character creation, the dawn start at the Porta Capena) is at [`?menu=1`](https://scootsmagoo.github.io/skyrome/?menu=1). To jump straight into the boss fight with Nereus the retiarius, use [`?fight=nereus`](https://scootsmagoo.github.io/skyrome/?fight=nereus) (`pullus` and `auctus` are the two warm-up bouts). Every push to `main` redeploys the site, once the tests pass.
+Every push to `main` redeploys the site, once the tests pass. Hard-refresh (Cmd+Shift+R) to get the latest build.
+
+## Testing
+
+### Quick links
+
+| What | Link |
+|---|---|
+| The default start: the Forum at 10:00 | [scootsmagoo.github.io/skyrome](https://scootsmagoo.github.io/skyrome/) |
+| **Boss fight: Nereus the retiarius** (net, trident, crowd favor, missio) | [`?fight=nereus`](https://scootsmagoo.github.io/skyrome/?fight=nereus) |
+| Warm-up bout 1: Pullus, a nervous recruit | [`?fight=pullus`](https://scootsmagoo.github.io/skyrome/?fight=pullus) |
+| Warm-up bout 2: Auctus, a thraex who hooks round your shield | [`?fight=auctus`](https://scootsmagoo.github.io/skyrome/?fight=auctus) |
+| The Ludus Magnus on an ordinary day (no fight) | [`?at=ludus-magnus&hour=10`](https://scootsmagoo.github.io/skyrome/?at=ludus-magnus&hour=10) |
+| The Colosseum at night | [`?at=colosseum&hour=22`](https://scootsmagoo.github.io/skyrome/?at=colosseum&hour=22) |
+| The river district (the most finished part of the city) | [`?at=temple-portunus`](https://scootsmagoo.github.io/skyrome/?at=temple-portunus) |
+| The Pantheon (a construction site after the fire of 110) | [`?at=pantheon`](https://scootsmagoo.github.io/skyrome/?at=pantheon) |
+| The story start: the Porta Capena before dawn | [`?quick=1`](https://scootsmagoo.github.io/skyrome/?quick=1) |
+| The full flow: control presets, title, character creation | [`?menu=1`](https://scootsmagoo.github.io/skyrome/?menu=1) |
+| Show the welcome card again | [`?welcome=1`](https://scootsmagoo.github.io/skyrome/?welcome=1) |
+| Performance overlay (fps, draw calls, CPU per system) | [`?debug`](https://scootsmagoo.github.io/skyrome/?debug) |
+
+Options combine: `?at=` takes any landmark id (type `coc` in the console for the list), `&hour=` sets the hour (0–24) and `&origin=` the character's background (`civis-suburanus`, `hispanus`, `veteranus`, `dacus`).
+
+### The console
+
+Press **`** (the key left of 1) to open it, as in Skyrim. The game pauses while it's open. Enter runs a command, ↑ ↓ recall earlier ones, Tab completes, and ` or Esc closes it. Cheats last until you reload the page.
+
+| Command | What it does |
+|---|---|
+| `tgm` | God mode: no damage, endless stamina (type it again to turn it off) |
+| `tcl` | No-clip: fly through walls and floors (Space up, C down, Shift fast) |
+| `coc <place>` | Teleport to a landmark: `coc ludus`, `coc colosseum`, `coc forum`. `coc` alone lists them all |
+| `fight <name>` | Go to the Ludus and start a bout: `fight nereus`, `fight pullus`, `fight auctus` |
+| `spawn <enemy> [n]` | Enemies in front of you: `spawn grassator 3` (street thugs), `tiro`, `thraex`, `vigil` |
+| `kill` / `killall` | Kill whoever you're looking at / everyone fighting you |
+| `heal` | Full health and stamina; cures poison, disease and injuries |
+| `additem <item> [n]` | Add an item by id or name: `additem gladius`, `additem scutum`. `items` lists them |
+| `gold <n>` | Add denarii |
+| `sethour <h>` | Change the time of day (`set gamehour to 20` works too) |
+| `clearbounty` | Wipe your bounty; the watch stands down |
+| `difficulty <level>` | `tiro`, `facilis`, `normalis` (default), `difficilis`, `herculea` |
+| `gore <level>` | `off`, `normal`, `ultra` |
+| `tdo` | Performance overlay on/off |
+| `pos` | Print where you are |
+| `help` | Everything above, in the game |
+
+### Things to try
+
+- **Street fight:** from the default start, open the console, type `spawn grassator 3`, close it, press R to draw and F to swing. Add `tgm` first if you just want to watch the gore.
+- **The law:** hit a passer-by. They flee or fight back, the watch comes, and you can pay, talk, bribe, go to jail or resist. `clearbounty` resets it.
+- **The boss:** [`?fight=nereus`](https://scootsmagoo.github.io/skyrome/?fight=nereus). Sidestep when he twirls the net; if it catches you, mash F or E. Hold Q to block, tap it just before his blow lands to parry, then strike at once to riposte. Lost? Type `fight nereus` in the console for a rematch. Once you've beaten him the questline is finished, so reload the link to fight him again.
+- **Getting around fast:** `tcl` and Shift to fly over the city, or `coc` to jump between landmarks.
+- **Feel:** Esc → Settings → Gameplay has difficulty, gore, camera shake and hit-stop.
 
 ## Try it locally
 
@@ -67,7 +119,7 @@ Then open one of these scenes. Click into the game to look around and press Esc 
 | Sound | http://127.0.0.1:5173/?scene=audio | Procedural sound effects, ambience, and generative music in the ancient modes |
 | Landmark viewer | http://127.0.0.1:5173/?scene=landmark&id=colosseum&cam=aerial | One landmark on the real terrain, with framed camera views |
 
-Add `&debug` to any URL to show fps, draw calls, position, and the systems costing the most CPU each frame.
+Add `&debug` to any URL (or type `tdo` in the console) to show fps, draw calls, position, and the systems costing the most CPU each frame. Every link and console command in [Testing](#testing) works locally too.
 
 ### Laptop running hot?
 

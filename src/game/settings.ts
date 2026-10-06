@@ -120,7 +120,7 @@ export function guessPreset(env: { platform?: string; userAgent?: string; maxTou
  *   Controls "Defaults", which unsets the preset) writes every row it owns, including the ones the
  *   core settings pre-fill (look sensitivity 1, hold-to-block) that would otherwise disagree.
  * - Settings saved before `presetApplied` existed keep the player's rows if they picked a preset.
- * - A row reset to unset takes the preset's value; difficulty defaults to Normalis.
+ * - A row reset to unset takes the preset's value; difficulty defaults to Normalis, gore to Ultra.
  */
 export function settingsFixups(d: Partial<SettingsData>, guess: ControlPreset): Partial<SettingsData> {
   const preset = d.controlPreset ?? guess;
@@ -134,6 +134,8 @@ export function settingsFixups(d: Partial<SettingsData>, guess: ControlPreset): 
   }
   for (const [k, v] of Object.entries(vals)) if (cur[k] === undefined && !(k in out)) out[k] = v;
   if (d.difficulty === undefined) out.difficulty = 'normalis';
+  // Written out so Settings shows what the game does (an unset choice row shows its first option).
+  if (d.gore === undefined) out.gore = 'ultra';
   return out as Partial<SettingsData>;
 }
 

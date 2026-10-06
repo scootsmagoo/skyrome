@@ -183,6 +183,8 @@ function addSettingsRows(flow: GameFlow) {
     { kind: 'choice', key: 'lockOnMode', label: 'Lock-on', options: [{ value: 'manual', label: 'Manual (X)' }, { value: 'suggest', label: 'Suggest' }, { value: 'auto', label: 'Auto' }] },
     { kind: 'choice', key: 'aimAssist', label: 'Aim assist (ranged)', options: [{ value: 'off', label: 'Off' }, { value: 'light', label: 'Light' }, { value: 'strong', label: 'Strong' }] },
     { kind: 'choice', key: 'gore', label: 'Gore', options: [{ value: 'off', label: 'Off' }, { value: 'normal', label: 'Normal' }, { value: 'ultra', label: 'Ultra' }], note: 'Blood, and limbs and heads that come off' },
+    { kind: 'choice', key: 'combatShake', label: 'Camera shake', options: [{ value: 'third', label: 'Third person' }, { value: 'on', label: 'Always' }, { value: 'off', label: 'Off' }], note: 'The jolt when blows land (first person gets a gentler share)' },
+    { kind: 'toggle', key: 'combatHitStop', label: 'Hit-stop', invert: true, note: 'The world freezes for a beat when a blow lands; slow motion on a kill' },
   ];
   SETTINGS_SECTIONS.unshift({ id: 'gameplay', label: 'Gameplay', latin: 'Ludus', rows: gameplay });
   const controls = SETTINGS_SECTIONS.find((s) => s.id === 'controls');

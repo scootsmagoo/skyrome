@@ -241,10 +241,11 @@ describe('settings stay honest (AC-21)', () => {
     expect(w.controlPreset).toBe('trackpad');
     expect(w.presetApplied).toBe('trackpad');
     expect(w.difficulty).toBe('normalis');
+    expect(w.gore).toBe('ultra');
   });
 
   it('once applied, the player\'s own changes stay', () => {
-    const d = { ...DEFAULT_SETTINGS, ...presetValues('trackpad'), presetApplied: 'trackpad' as const, difficulty: 'tiro' as const, lookSensitivity: 2.2 };
+    const d = { ...DEFAULT_SETTINGS, ...presetValues('trackpad'), presetApplied: 'trackpad' as const, difficulty: 'tiro' as const, gore: 'normal' as const, lookSensitivity: 2.2 };
     expect(settingsFixups(d, 'trackpad')).toEqual({});
   });
 
@@ -265,12 +266,12 @@ describe('settings stay honest (AC-21)', () => {
   });
 
   it('keeps the rows of players who picked a preset before this existed', () => {
-    const d = { ...DEFAULT_SETTINGS, ...presetValues('trackpad'), presetPicked: true, lookSensitivity: 2.5, difficulty: 'difficilis' as const };
+    const d = { ...DEFAULT_SETTINGS, ...presetValues('trackpad'), presetPicked: true, lookSensitivity: 2.5, difficulty: 'difficilis' as const, gore: 'off' as const };
     expect(settingsFixups(d, 'mouse')).toEqual({ presetApplied: 'trackpad' });
   });
 
   it('a row reset to unset takes the preset value', () => {
     const d = { ...DEFAULT_SETTINGS, ...presetValues('keyboard'), presetApplied: 'keyboard' as const, difficulty: undefined, lockOnMode: undefined };
-    expect(settingsFixups(d, 'mouse')).toEqual({ lockOnMode: 'auto', difficulty: 'normalis' });
+    expect(settingsFixups(d, 'mouse')).toEqual({ lockOnMode: 'auto', difficulty: 'normalis', gore: 'ultra' });
   });
 });
