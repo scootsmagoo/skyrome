@@ -1507,11 +1507,12 @@ export class CombatCore {
       }
     }
     // The memory is for foes who lost sight of the player and may come back. When every one of
-    // them is beaten (yielded, out cold, dead, fled), the fight is over now: the Ludus tells the
+    // them is beaten (yielded, out cold, dead, fled) and still here, the fight is over now: the Ludus tells the
     // player to wait (T) right after a bout, and that must work.
     if (this.recentFoes.size && now < this.playerCombatUntil) {
       let anyLeft = false;
-      for (const c of this.recentFoes) if (c.active && c.status === 'active' && this.list.includes(c)) anyLeft = true;
+      // Gone from the fight (despawned, out of reach) isn't beaten: they may come back.
+      for (const c of this.recentFoes) if (!this.list.includes(c) || (c.active && c.status === 'active')) anyLeft = true;
       if (!anyLeft) {
         this.playerCombatUntil = now;
         this.recentFoes.clear();
