@@ -16,6 +16,7 @@
  * In Node (unit tests) materials stay flat: there is no DOM to load images with.
  */
 import * as THREE from 'three';
+import { releaseTextureAfterUpload } from './release';
 import { MATERIAL_BASE, type MaterialId } from './materialIds';
 import { MATERIAL_RECIPES, TEXTURE_STATS, repeatFor, roughnessFactor, tintFor, type MaterialRecipe, type TextureSetId } from './textures/catalog';
 import { generateProcedural, type ProcImage } from './textures/procedural';
@@ -186,16 +187,21 @@ function applyProcedural(m: THREE.MeshStandardMaterial, id: MaterialId, recipe: 
     };
     procTextures.set(key, tx);
   }
+  // The pixels are needed once, for the upload: then only the GPU's copy is kept (gfx/release).
+  const img = tx.img as { color?: Uint8ClampedArray | null; normal?: Uint8ClampedArray | null; arm?: Uint8ClampedArray | null };
   const color = tx.color.clone();
+  releaseTextureAfterUpload(color, () => (img.color = null));
   setRepeat(color, recipe);
   m.map = color;
   if (tx.normal) {
     m.normalMap = tx.normal.clone();
+    releaseTextureAfterUpload(m.normalMap, () => (img.normal = null));
     setRepeat(m.normalMap, recipe);
     m.normalScale.setScalar(recipe.normal ?? 1);
   }
   if (tx.arm) {
     const arm = tx.arm.clone();
+    releaseTextureAfterUpload(arm, () => (img.arm = null));
     setRepeat(arm, recipe);
     m.roughnessMap = arm;
     m.aoMap = arm;

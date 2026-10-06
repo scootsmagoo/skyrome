@@ -10,6 +10,7 @@
  *   placeAndRegister(game, group, b.colliders, position, rotationY);
  */
 import * as THREE from 'three';
+import { releaseGeometryAfterUpload } from './release';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Game } from '../core/Game';
 import { Layer } from '../core/Physics';
@@ -140,7 +141,7 @@ export class MeshBuilder {
       let merged = geoms.length === 1 ? geoms[0] : mergeGeometries(geoms, false);
       if (!merged) continue;
       if (opts.index) merged = mergeVertices(merged, 1e-4);
-      if (opts.releaseCpu) releaseAfterUpload(merged);
+      if (opts.releaseCpu) releaseGeometryAfterUpload(merged);
       merged.computeBoundingSphere();
       merged.computeBoundingBox();
       const mat = this.custom.get(material) ?? getMaterial(material as MaterialId);
@@ -214,17 +215,6 @@ function preparedInstance(key: string, make: () => InstancePart[]) {
   }
   instanceGeometry.set(key, prepared);
   return prepared;
-}
-
-/** Free a geometry's CPU-side vertex arrays once the renderer has uploaded them. */
-function releaseAfterUpload(g: THREE.BufferGeometry) {
-  g.computeBoundingSphere();
-  g.computeBoundingBox();
-  const free = function (this: THREE.BufferAttribute) {
-    (this as unknown as { array: ArrayLike<number> | null }).array = null;
-  };
-  for (const a of Object.values(g.attributes)) (a as THREE.BufferAttribute).onUpload(free);
-  g.index?.onUpload(free);
 }
 
 export function transformCollider(c: ColliderSpec, m: THREE.Matrix4): ColliderSpec {

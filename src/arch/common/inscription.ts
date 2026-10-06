@@ -13,6 +13,7 @@
  */
 import * as THREE from 'three';
 import type { MeshBuilder } from '../../gfx/MeshBuilder';
+import { releaseTextureAfterUpload } from '../../gfx/release';
 import type { MaterialId } from '../../gfx/materialIds';
 import { heightToNormal } from '../../gfx/textures/noise';
 
@@ -107,9 +108,11 @@ export function loadInscriptionFont(): Promise<void> {
       fontState = 'ready';
       for (const fn of redraw) fn();
       redraw.clear();
+      sealPages();
     })
     .catch((err) => {
       fontState = 'failed';
+      sealPages();
       console.warn('[inscription] font failed to load; using a fallback serif', err);
     });
   return fontPromise;
@@ -304,9 +307,10 @@ export function inscriptionMaterial(spec: InscriptionSpec): THREE.MeshStandardMa
   const apply = () => {
     const r = render(spec);
     const old = [mat!.map, mat!.normalMap, mat!.roughnessMap];
-    mat!.map = dataTex(r.color, r.w, r.h, true);
-    mat!.normalMap = dataTex(r.normal, r.w, r.h, false);
-    const arm = dataTex(r.arm, r.w, r.h, false);
+    // Each (re)draw makes fresh textures, so their pixels can go once uploaded (gfx/release).
+    mat!.map = releaseTextureAfterUpload(dataTex(r.color, r.w, r.h, true));
+    mat!.normalMap = releaseTextureAfterUpload(dataTex(r.normal, r.w, r.h, false));
+    const arm = releaseTextureAfterUpload(dataTex(r.arm, r.w, r.h, false));
     mat!.roughnessMap = arm;
     mat!.aoMap = arm;
     if (style === 'bronze') mat!.metalnessMap = arm;
@@ -370,6 +374,8 @@ interface AtlasPage {
   normal?: Uint8ClampedArray;
   arm?: Uint8ClampedArray;
   textures: THREE.DataTexture[];
+  /** No more panels go on this page: its pixels are dropped once the GPU has them. */
+  sealed?: boolean;
 }
 
 const pages: AtlasPage[] = [];
@@ -402,6 +408,29 @@ function newPage(style: InscriptionStyle): AtlasPage {
   }
   pages.push(page);
   return page;
+}
+
+/**
+ * Seal every atlas page but the newest of each style, and drop sealed pages' pixels once the GPU
+ * has them (≈ 4–12 MB a page). Only once the font is settled: its arrival redraws every page.
+ * A full page rarely takes another panel anyway; new ones go on the newest page.
+ */
+function sealPages() {
+  if (fontState !== 'ready' && fontState !== 'failed') return;
+  const newest = new Map<string, AtlasPage>();
+  for (const p of pages) newest.set(p.style, p);
+  for (const p of pages) {
+    if (p.sealed || newest.get(p.style) === p) continue;
+    p.sealed = true;
+    const drop = () => {
+      p.color = p.normal = p.arm = undefined;
+    };
+    for (const t of p.textures) {
+      releaseTextureAfterUpload(t, drop);
+      // One more upload (it may already be on the GPU) is what triggers the release.
+      t.needsUpdate = true;
+    }
+  }
 }
 
 /** Copy a rendered panel into its page region, smearing its edge pixels into the padding. */
@@ -441,8 +470,11 @@ export function atlasEntry(spec: InscriptionSpec): { material: THREE.MeshStandar
   let hit = atlasCache.get(key);
   if (!hit) {
     const { w, h } = panelPixels(spec, spec.pxPerMeter ?? ATLAS_PPM[style], ATLAS_PAGE - 2 * PAD);
-    let page = pages.find((p) => p.style === style && p.shelves.size > 0 && shelfFits(p.shelves, w + 2 * PAD, h + 2 * PAD));
-    page ??= newPage(style);
+    let page = pages.find((p) => p.style === style && !p.sealed && p.shelves.size > 0 && shelfFits(p.shelves, w + 2 * PAD, h + 2 * PAD));
+    if (!page) {
+      page = newPage(style);
+      sealPages();
+    }
     const at = shelfPack(page.shelves, w + 2 * PAD, h + 2 * PAD)!;
     const entry: AtlasEntry = { spec, x: at.x, y: at.y, w, h };
     page.entries.push(entry);

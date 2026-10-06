@@ -1,5 +1,6 @@
 /** Places every atlas landmark in the world using its builder (custom → category → fallback). */
 import * as THREE from 'three';
+import { releaseStaticMeshes } from '../../gfx/release';
 import type { Game } from '../../core/Game';
 import { Rng } from '../../core/Rng';
 import { bearingToRotationY } from '../../core/math';
@@ -120,6 +121,10 @@ export async function buildLandmarks(
     // Yield to the browser now and then so the loading screen can paint.
     if (i % 8 === 0) await new Promise((r) => setTimeout(r, 0));
   }
+  // Every landmark is built and baked: their static shapes now only need to reach the GPU once
+  // (~400 MB of vertex arrays freed after upload, gfx/release). After the loop, because builders
+  // share instance shapes and the far bakes read them.
+  for (const p of placed.values()) releaseStaticMeshes(p.object);
   return placed;
 }
 
