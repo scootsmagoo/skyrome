@@ -19,4 +19,10 @@ describe('romeParams (the boot options in the URL)', () => {
     expect(romeParams('?fight=Pullus')).toMatchObject({ fight: 1 });
     expect(romeParams('')).toMatchObject({ fight: null });
   });
+
+  it('part=castor starts at that checkpoint of the opening, at its place and hour', () => {
+    expect(romeParams('?part=castor')).toMatchObject({ quick: true, at: 'miliarium-aureum', hour: 8.5, part: 'castor' });
+    expect(romeParams('?part=brawl&hour=20')).toMatchObject({ at: 'meta-sudans', hour: 20, part: 'brawl' });
+    expect(romeParams('?part=nowhere')).toMatchObject({ part: null, at: PLAY_SPAWN });
+  });
 });

@@ -29,6 +29,7 @@ import { registerAtlasLocations } from './locations';
 import { installOptionalModules } from './optional';
 import { shouldWelcome, showWelcome } from './welcome';
 import { FIGHTS, startBout } from './bouts';
+import { applyCheckpoint, checkpoint } from './checkpoints';
 import { installConsole } from '../dev/console/Console';
 import { guardUnload, registerMarkerResolvers, wireUi } from './wiring';
 
@@ -46,6 +47,8 @@ export interface RomeParams {
   character: Partial<CharacterSpec>;
   /** `?fight=nereus` (or pullus, auctus): straight into that Ludus bout, for testing. */
   fight: number | null;
+  /** `?part=castor` etc.: straight into one portion of the opening (game/checkpoints). */
+  part: string | null;
 }
 
 /**
@@ -62,14 +65,16 @@ export function romeParams(search: string): RomeParams {
   const q = new URLSearchParams(search);
   const menu = q.get('menu') === '1';
   const fight = FIGHTS.indexOf((q.get('fight') ?? '').toLowerCase()) + 1 || null;
-  const plain = !menu && q.get('quick') !== '1' && !q.get('at') && !fight;
-  const at = q.get('at') || (fight ? 'ludus-magnus' : plain ? PLAY_SPAWN : null);
+  const part = checkpoint(q.get('part'));
+  const plain = !menu && q.get('quick') !== '1' && !q.get('at') && !fight && !part;
+  const at = q.get('at') || (part ? part.at : fight ? 'ludus-magnus' : plain ? PLAY_SPAWN : null);
   const hour = q.get('hour');
   return {
     quick: q.get('quick') === '1' || (!!at && !menu),
     at,
-    hour: hour !== null && hour !== '' && Number.isFinite(Number(hour)) ? Number(hour) : plain || fight ? PLAY_HOUR : null,
+    hour: hour !== null && hour !== '' && Number.isFinite(Number(hour)) ? Number(hour) : part ? part.hour : plain || fight ? PLAY_HOUR : null,
     fight,
+    part: part?.id ?? null,
     extent: (q.get('extent') as RomeExtent) === 'city' ? 'city' : 'core',
     character: {
       origin: q.get('origin') ?? undefined,
@@ -127,6 +132,8 @@ export async function startRome(game: Game, uiRoot: HTMLElement, params: RomePar
     // The shareable build's first view: a welcome card with the keys that matter.
     if (params.at === PLAY_SPAWN && shouldWelcome(location.search)) void showWelcome(game, ui.root);
     if (params.fight) void startBout(game, params.fight);
+    const cp = checkpoint(params.part);
+    if (cp) void applyCheckpoint(game, cp);
     if (game.gpu?.software) {
       // The browser draws 3D on the CPU: no setting can make up for that.
       setTimeout(() => game.events.emit('ui:notify', { text: 'Your browser isn’t using the graphics card (hardware acceleration is off), so the game will be slow. Turn it on in the browser’s settings and restart it.', kind: 'warning' }), 2500);

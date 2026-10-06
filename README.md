@@ -65,6 +65,32 @@ Every push to `main` redeploys the site, once the tests pass. Hard-refresh (Cmd+
 
 Options combine: `?at=` takes any landmark id (type `coc` in the console for the list), `&hour=` sets the hour (0–24) and `&origin=` the character's background (`civis-suburanus`, `hispanus`, `veteranus`, `dacus`).
 
+### Playing the opening (needs a human)
+
+A bot plays the whole 35-minute opening end to end (`node scripts/golden-path.mjs`), but it can't tell whether something is confusing, ugly, too easy or no fun. Each link below starts one part of the opening as if you had played up to it. Follow the compass, and note anything that feels wrong.
+
+| Part | Link | What to look for |
+|---|---|---|
+| 1. The Dripping Gate: the cart, the ambush, the dying courier | [`?quick=1`](https://scootsmagoo.github.io/skyrome/?quick=1) | Is it clear where to go and what to press? Does the two-man ambush feel fair? Do you get the tablet? |
+| 2. Into the city: up the Circus valley to the Forum | [`?part=city`](https://scootsmagoo.github.io/skyrome/?part=city) | Can you find the way with the compass alone? Any spots where you catch on a corner or get stuck? |
+| 3. The tablet: the Temple of Castor, the keeper, Gratus | [`?part=castor`](https://scootsmagoo.github.io/skyrome/?part=castor) | Is the keeper easy to find? Does Gratus's conversation make sense? |
+| 4. To the Ludus: who fights with a curved blade? | [`?part=ludus`](https://scootsmagoo.github.io/skyrome/?part=ludus) | The walk past the Colosseum to the Ludus Magnus; finding Auctus inside |
+| 5. The Oath: sign on, draw the practice arms, the first bout | [`?part=oath`](https://scootsmagoo.github.io/skyrome/?part=oath) | Is signing on with Glaucus and getting the kit from Successus clear? |
+| 6. The three bouts | [`?fight=pullus`](https://scootsmagoo.github.io/skyrome/?fight=pullus) · [`?fight=auctus`](https://scootsmagoo.github.io/skyrome/?fight=auctus) · [`?fight=nereus`](https://scootsmagoo.github.io/skyrome/?fight=nereus) | Too easy or too hard? Is the net readable? Does the crowd meter mean anything to you? |
+| 7. Evening: wait for dusk (T), then back past the Meta Sudans | [`?part=evening`](https://scootsmagoo.github.io/skyrome/?part=evening) | Does it tell you to wait, and does T work? Does the city look right at dusk? |
+| 8. The brawl at the fountain (fists only) | [`?part=brawl`](https://scootsmagoo.github.io/skyrome/?part=brawl) | Picking a side, then the fistfight with your fans beside you. Does drawing a blade (R) warn you? |
+| 9. The tablet delivered: “Tomorrow, the Column” | [`?part=deliver`](https://scootsmagoo.github.io/skyrome/?part=deliver) | Walk into the strongrooms after sunset and give Gratus the tablet. A satisfying end? |
+
+**Checks only a person can do**
+
+| Check | Link |
+|---|---|
+| The full start: control preset, title screen, character creation (4 origins), the Porta Capena before dawn | [`?menu=1`](https://scootsmagoo.github.io/skyrome/?menu=1) |
+| Trackpad and keyboard-only play: pick each preset at the start of `?menu=1`, then play part 1 | [`?menu=1`](https://scootsmagoo.github.io/skyrome/?menu=1) |
+| Mac input lab: the pointer-lock click never attacks, no zoom bursts from momentum scrolling, pinch never zooms the page | [`?scene=inputlab`](https://scootsmagoo.github.io/skyrome/?scene=inputlab) |
+| Safari: smooth in the Forum (open the console with ` and type `tdo` for the fps) | [the default start](https://scootsmagoo.github.io/skyrome/), in Safari |
+| A weaker computer: does Auto pick a sensible quality, and is it playable? (`graphics` in the console) | [the default start](https://scootsmagoo.github.io/skyrome/), on that computer |
+
 ### The console
 
 Press **`** (the key left of 1) to open it, as in Skyrim. The game pauses while it's open. Enter runs a command, ↑ ↓ recall earlier ones, Tab completes, and ` or Esc closes it. Cheats last until you reload the page.
