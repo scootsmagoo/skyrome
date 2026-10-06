@@ -69,7 +69,24 @@ function stashKit(q: QuestContext) {
   if (!held.length) return;
   for (const id of held) takeItem(q, id);
   q.vars.stash = held.join(',');
-  q.notify('At the gate the armory slave takes back the practice arms. Successus will have them ready when you return.');
+  rearmOwn(q);
+  q.notify('At the gate the armory slave takes back the practice arms, and you take up your own again. Successus will have his ready when you return.');
+}
+
+/**
+ * Back to the player's own arms once the practice ones are gone: what they held before the first
+ * bout (remembered by `equipKit`), else the first weapon they carry. Hands are never left empty.
+ */
+function rearmOwn(q: QuestContext) {
+  const inv = q.game.player?.inventory;
+  if (!inv) return;
+  const own = (v: unknown) => (typeof v === 'string' && v && !ISSUED.includes(v) && inv.count(v) ? v : null);
+  const main = own(q.vars.ownMain) ?? inv.list((d) => !!d.weapon && !ISSUED.includes(d.id))[0]?.def.id ?? null;
+  if (main && !inv.equipped('mainHand')) inv.equip(main);
+  const off = own(q.vars.ownOff);
+  if (off && !inv.equipped('offHand')) inv.equip(off);
+  q.vars.ownMain = '';
+  q.vars.ownOff = '';
 }
 
 function unstashKit(q: QuestContext) {
@@ -84,6 +101,11 @@ function unstashKit(q: QuestContext) {
 
 function equipKit(q: QuestContext) {
   const inv = q.game.player?.inventory;
+  // Remember the player's own arms (once), to give them back when the practice ones go.
+  const main = inv?.equipped('mainHand');
+  const off = inv?.equipped('offHand');
+  if (main && !ISSUED.includes(main) && !q.vars.ownMain) q.vars.ownMain = main;
+  if (off && !ISSUED.includes(off) && !q.vars.ownOff) q.vars.ownOff = off;
   if (inv?.count('rudis')) inv.equip('rudis');
   const shield = typeof q.vars.kit === 'string' ? q.vars.kit : '';
   if (shield && shield !== 'own' && inv?.count(shield)) inv.equip(shield);
