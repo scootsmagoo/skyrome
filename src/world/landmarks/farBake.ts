@@ -9,11 +9,13 @@
  * meshes later (an empty InstancedMesh at build time) are left alone: their bake would have holes.
  */
 import * as THREE from 'three';
-import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MATERIAL_BASE, MATERIAL_IDS, type MaterialId } from '../../gfx/materialIds';
 
 /** Full detail within this distance of a landmark's bounding sphere (m, × the view-distance scale). */
-export const LANDMARK_DETAIL_DISTANCE = 300;
+export const LANDMARK_DETAIL_DISTANCE = 220;
+/** The stand-in is simplified by snapping vertices to a grid this fine (m): sub-pixel beyond 200 m. */
+export const FAR_CELL = 0.5;
 
 /** Materials left out of the bake: emissive glows, painted/carved lettering, water. */
 const SKIP = /glow|inscription|water|window_glow|flame/i;
@@ -117,7 +119,7 @@ export function bakeLandmarkFar(root: THREE.Object3D, skip?: (o: THREE.Object3D)
   if (holes || !parts.length) return null;
   const merged = mergeGeometries(parts, false);
   if (!merged) return null;
-  const geometry = mergeVertices(merged, 1e-3);
+  const geometry = cluster(merged, FAR_CELL);
   geometry.computeBoundingSphere();
   geometry.computeBoundingBox();
   // The stand-in is drawn once uploaded and never read again on the CPU: free its arrays then.
@@ -132,4 +134,62 @@ export function bakeLandmarkFar(root: THREE.Object3D, skip?: (o: THREE.Object3D)
   mesh.matrixAutoUpdate = true;
   const triangles = (geometry.index ? geometry.index.count : geometry.getAttribute('position').count) / 3;
   return { mesh, triangles };
+}
+
+/**
+ * Vertex-clustering simplification (Rossignac–Borrel): snap every vertex to a `cell` grid, merge
+ * vertices that land in the same cell with the same colour, and drop the triangles that collapse.
+ * Column flutes, mouldings and steps melt into their mass; silhouettes stay. Input is non-indexed
+ * (position + sRGB byte colour); output is indexed.
+ */
+export function cluster(geo: THREE.BufferGeometry, cell: number): THREE.BufferGeometry {
+  const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+  const col = geo.getAttribute('color') as THREE.BufferAttribute;
+  const pa = pos.array as Float32Array;
+  const ca = col.array as Uint8Array;
+  const keyOf = new Map<string, number>();
+  const outP: number[] = [];
+  const outC: number[] = [];
+  const sum: number[] = [];
+  const count: number[] = [];
+  const remap = new Uint32Array(pos.count);
+  for (let i = 0; i < pos.count; i++) {
+    const qx = Math.round(pa[i * 3] / cell);
+    const qy = Math.round(pa[i * 3 + 1] / cell);
+    const qz = Math.round(pa[i * 3 + 2] / cell);
+    const key = `${qx},${qy},${qz},${ca[i * 3]},${ca[i * 3 + 1]},${ca[i * 3 + 2]}`;
+    let k = keyOf.get(key);
+    if (k === undefined) {
+      k = count.length;
+      keyOf.set(key, k);
+      sum.push(0, 0, 0);
+      count.push(0);
+      outC.push(ca[i * 3], ca[i * 3 + 1], ca[i * 3 + 2]);
+    }
+    // Each cluster sits at the mean of its vertices (keeps big flat faces where they were).
+    sum[k * 3] += pa[i * 3];
+    sum[k * 3 + 1] += pa[i * 3 + 1];
+    sum[k * 3 + 2] += pa[i * 3 + 2];
+    count[k]++;
+    remap[i] = k;
+  }
+  for (let k = 0; k < count.length; k++) outP.push(sum[k * 3] / count[k], sum[k * 3 + 1] / count[k], sum[k * 3 + 2] / count[k]);
+  const index: number[] = [];
+  const seen = new Set<string>();
+  for (let t = 0; t + 2 < pos.count; t += 3) {
+    const a = remap[t];
+    const b = remap[t + 1];
+    const c = remap[t + 2];
+    if (a === b || b === c || a === c) continue;
+    // The same triangle twice (two faces collapsed onto each other): keep one.
+    const s = [a, b, c].sort((x, y) => x - y).join(',');
+    if (seen.has(s)) continue;
+    seen.add(s);
+    index.push(a, b, c);
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(new Float32Array(outP), 3));
+  out.setAttribute('color', new THREE.BufferAttribute(new Uint8Array(outC), 3, true));
+  out.setIndex(count.length > 65535 ? new THREE.BufferAttribute(new Uint32Array(index), 1) : new THREE.BufferAttribute(new Uint16Array(index), 1));
+  return out;
 }

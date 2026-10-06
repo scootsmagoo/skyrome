@@ -108,6 +108,8 @@ export async function buildLandmarks(
         cullDistance: bake ? LANDMARK_DETAIL_DISTANCE : cull,
         far,
         farDistance: built.far ? 3000 : bake ? cull : undefined,
+        // A baked landmark counts half its radius: the far end of a big complex goes simple.
+        radiusWeight: bake ? 0.5 : undefined,
       });
       const spots = (built.spots ?? []).map((s) => ({ ...s, position: s.position.clone().applyMatrix4(obj.matrixWorld), heading: (s.heading ?? 0) + rotY }));
       placed.set(lm.id, { lm, object: obj, position: obj.position.clone(), rotationY: rotY, spots, builder: builder.handles[0] });

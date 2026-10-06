@@ -99,6 +99,16 @@ async function measure() {
   game.profile.clear();
   const cpu = [];
   const dirs = [];
+  // Frame intervals (rAF timestamps) for the median fps and the 1% low.
+  const gaps = [];
+  let lastTs = null;
+  let sampling = true;
+  const rafTick = (ts) => {
+    if (lastTs !== null) gaps.push(ts - lastTs);
+    lastTs = ts;
+    if (sampling) requestAnimationFrame(rafTick);
+  };
+  requestAnimationFrame(rafTick);
   const t0 = performance.now();
   let frameCount = 0;
   const yaw0 = p.yaw;
@@ -117,6 +127,31 @@ async function measure() {
     dirs.push({ draws, tris });
   }
   const elapsed = performance.now() - t0;
+  // The frame-rate figures come from a smooth pan (a full turn over ~6 s, as a player turns),
+  // not the 90° snaps above, which stream a whole new view in at once.
+  gaps.length = 0;
+  lastTs = null;
+  const spikes = [];
+  for (let f = 0; f < 360; f++) {
+    p.yaw = yaw0 + (f / 360) * Math.PI * 2;
+    await frames(1);
+    if (game.stats.cpuMs > 25) spikes.push(`${Math.round(game.stats.cpuMs)}ms[${[...game.lastTick].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => k + ' ' + Math.round(v)).join(', ')}]`);
+  }
+  sampling = false;
+  // Only frames the game drew count (the cap skips display refreshes): merge skipped gaps.
+  const drawn = [];
+  const cap = game.settings.data.maxFps;
+  let acc = 0;
+  for (const g of gaps) {
+    acc += g;
+    if (!cap || acc >= 1000 / cap - 2) {
+      drawn.push(acc);
+      acc = 0;
+    }
+  }
+  drawn.sort((a, b) => a - b);
+  const medianFps = drawn.length ? 1000 / drawn[Math.floor(drawn.length / 2)] : 0;
+  const low1 = drawn.length ? 1000 / drawn[Math.min(drawn.length - 1, Math.floor(drawn.length * 0.99))] : 0;
   p.yaw = yaw0;
 
   // GPU time per frame (timer queries around the game's render, where available).
@@ -191,6 +226,9 @@ async function measure() {
   game.profiling = false;
   return {
     fps: +((frameCount / elapsed) * 1000).toFixed(1),
+    medianFps: +medianFps.toFixed(1),
+    spikes: spikes.slice(0, 8),
+    low1Fps: +low1.toFixed(1),
     gpuMs,
     buffer: [canvas.width, canvas.height],
     cpuMean: +mean.toFixed(1),
@@ -213,6 +251,8 @@ async function measure() {
 function print(r) {
   console.log(`\n== ${r.view}  (boot ${(r.bootMs / 1000).toFixed(1)} s, player ${r.player.join(', ')})`);
   console.log(`  ${r.buffer.join('×')} · gpu ${r.gpuMs ? `${r.gpuMs.median} ms median / ${r.gpuMs.p90} p90` : 'n/a'}`);
+  console.log(`  median ${r.medianFps} fps · 1% low ${r.low1Fps} fps`);
+  if (r.spikes?.length) console.log(`  slow frames: ${r.spikes.join(' · ')}`);
   console.log(`  ${r.fps} fps · cpu ${r.cpuMean} ms mean / ${r.cpuP95} ms p95 · programs ${r.programs} · geo ${r.geometries} · tex ${r.textures} · heap ${r.heapMB} MB`);
   console.log(`  draws/tris by direction: ${r.dirs.map((d) => `${d.draws}/${(d.tris / 1e6).toFixed(2)}M`).join('  ')}`);
   console.log(`  meshes ${r.sceneMeshes} (${r.visibleMeshes} visible) · instances ${r.instances} · geometry ${r.geometryMB} MB`);

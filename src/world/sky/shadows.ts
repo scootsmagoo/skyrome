@@ -29,7 +29,7 @@ export interface ShadowPreset {
 
 export const SHADOW_PRESETS: Record<Exclude<ShadowQuality, 'off'>, ShadowPreset> = {
   low: { mode: 'single', mapSize: 1024, extent: 110, distance: 0, radius: 1.5 },
-  high: { mode: 'single', mapSize: 2048, extent: 150, distance: 0, radius: 2 },
+  high: { mode: 'single', mapSize: 2048, extent: 120, distance: 0, radius: 2 },
 };
 /** Alternative 'high' (selectable for comparison with ?shadowmode=cascade). */
 export const CASCADE_PRESET: ShadowPreset = { mode: 'cascade', mapSize: 2048, extent: 0, distance: 220, radius: 2 };

@@ -76,6 +76,8 @@ export class Game {
   /** Per-system CPU timing (ms per frame, smoothed). Off unless `profiling` is set (dev overlay, perf runs). */
   profiling = false;
   readonly profile = new Map<string, number>();
+  /** The last frame's CPU ms per system (while profiling): spikes, not averages. */
+  lastTick: Map<string, number> = new Map();
   private running = false;
   private accumulator = 0;
   private lastTime = 0;
@@ -279,6 +281,7 @@ export class Game {
       // Exponential smoothing per entry; entries not seen this frame decay toward zero.
       for (const [k, v] of this.profile) if (!tick!.has(k)) this.profile.set(k, v * 0.9);
       for (const [k, v] of tick!) this.profile.set(k, (this.profile.get(k) ?? v) * 0.9 + v * 0.1);
+      this.lastTick = tick!;
     }
     const info = this.renderer.info;
     this.stats.drawCalls = info.render.calls;

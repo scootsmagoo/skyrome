@@ -23,6 +23,11 @@ export interface WorldEntry {
   far?: THREE.Object3D;
   farDistance?: number;
   tags?: string[];
+  /**
+   * How much of the bounding sphere's radius counts toward "near" (1 = its whole surface). A big
+   * complex with a far stand-in uses less, so its far end goes simple when you're at the other.
+   */
+  radiusWeight?: number;
 }
 
 const box = new THREE.Box3();
@@ -45,7 +50,7 @@ export class WorldRegistry implements System {
   add(
     id: string,
     object: THREE.Object3D,
-    opts: { cullDistance?: number; far?: THREE.Object3D; farDistance?: number; tags?: string[]; parent?: THREE.Object3D } = {},
+    opts: { cullDistance?: number; far?: THREE.Object3D; farDistance?: number; tags?: string[]; parent?: THREE.Object3D; radiusWeight?: number } = {},
   ): WorldEntry {
     (opts.parent ?? this.game.scene).add(object);
     object.updateMatrixWorld(true);
@@ -59,6 +64,7 @@ export class WorldRegistry implements System {
       far: opts.far,
       farDistance: opts.farDistance,
       tags: opts.tags,
+      radiusWeight: opts.radiusWeight,
     };
     if (opts.far) (opts.parent ?? this.game.scene).add(opts.far);
     this.entries.push(entry);
@@ -101,7 +107,7 @@ export class WorldRegistry implements System {
 
   private evaluate(e: WorldEntry) {
     const cam = this.game.camera.position;
-    const d = Math.max(0, cam.distanceTo(e.sphere.center) - e.sphere.radius);
+    const d = Math.max(0, cam.distanceTo(e.sphere.center) - e.sphere.radius * (e.radiusWeight ?? 1));
     const near = d <= e.cullDistance * this.distanceScale;
     e.object.visible = near;
     if (e.far) e.far.visible = !near && d <= (e.farDistance ?? Infinity) * this.distanceScale;
