@@ -42,27 +42,34 @@ export interface RomeParams {
   hour: number | null;
   extent: RomeExtent;
   character: Partial<CharacterSpec>;
+  /** `?fight=nereus` (or pullus, auctus): straight into that Ludus bout, for testing. */
+  fight: number | null;
 }
 
 /**
  * A plain link (no options) is the shareable test build: no menus, the default character, in the
  * Forum by the Rostra at mid-morning. `?menu=1` runs the full flow (control preset, title,
  * character creation, the Porta Capena at dawn); `?quick=1` is the agents' quick start at the
- * Porta Capena; `?at=<landmark>` spawns there.
+ * Porta Capena; `?at=<landmark>` spawns there. `?fight=nereus` (or `pullus`, `auctus`) skips the
+ * Ludus questline up to that bout and starts it: the boss fight, one click away for testing.
  */
 export const PLAY_SPAWN = 'rostra';
 export const PLAY_HOUR = 10;
 
+export const FIGHTS = ['pullus', 'auctus', 'nereus'];
+
 export function romeParams(search: string): RomeParams {
   const q = new URLSearchParams(search);
   const menu = q.get('menu') === '1';
-  const plain = !menu && q.get('quick') !== '1' && !q.get('at');
-  const at = q.get('at') || (plain ? PLAY_SPAWN : null);
+  const fight = FIGHTS.indexOf((q.get('fight') ?? '').toLowerCase()) + 1 || null;
+  const plain = !menu && q.get('quick') !== '1' && !q.get('at') && !fight;
+  const at = q.get('at') || (fight ? 'ludus-magnus' : plain ? PLAY_SPAWN : null);
   const hour = q.get('hour');
   return {
     quick: q.get('quick') === '1' || (!!at && !menu),
     at,
-    hour: hour !== null && hour !== '' && Number.isFinite(Number(hour)) ? Number(hour) : plain ? PLAY_HOUR : null,
+    hour: hour !== null && hour !== '' && Number.isFinite(Number(hour)) ? Number(hour) : plain || fight ? PLAY_HOUR : null,
+    fight,
     extent: (q.get('extent') as RomeExtent) === 'city' ? 'city' : 'core',
     character: {
       origin: q.get('origin') ?? undefined,
@@ -118,10 +125,27 @@ export async function startRome(game: Game, uiRoot: HTMLElement, params: RomePar
     void loading.done();
     // The shareable build's first view: a welcome card with the keys that matter.
     if (params.at === PLAY_SPAWN && shouldWelcome(location.search)) void showWelcome(game, ui.root);
+    if (params.fight) void startBout(game, rpg, params.fight);
   } else {
     ui.block('loading', false);
     await flow.showTitle();
     void loading.done();
   }
   return flow;
+}
+
+/**
+ * Skip the Ludus questline (lud-01) to bout `n` and start it, as if the player had signed on, drawn
+ * the Ludus rudis and scutum and told Asiaticus to begin. The skipped stages ask for an autosave:
+ * let it finish (no saving in combat) and give the player a moment to look round the arena first.
+ */
+async function startBout(game: Game, rpg: { save: { idle(): Promise<void> } }, n: number) {
+  const quest = 'lud-01-sacramentum';
+  game.quests.start(quest, 'kit');
+  game.quests.setStage(quest, 'kit');
+  game.events.emit('dialogue:node', { npcId: 'npc-successus', dialogueId: 'npc-successus', nodeId: 'issueScutum' });
+  game.quests.setStage(quest, `bout${n}`);
+  await new Promise((r) => setTimeout(r, 1500));
+  await rpg.save.idle().catch(() => {});
+  game.events.emit('dialogue:node', { npcId: 'npc-asiaticus', dialogueId: 'npc-asiaticus', nodeId: `begin${n}` });
 }

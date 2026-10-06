@@ -2,13 +2,26 @@ import { describe, expect, it } from 'vitest';
 import { Mover } from '../src/ai/life/mover';
 import { NavGrid } from '../src/ai/life/navgrid';
 import { NavService } from '../src/ai/life/nav';
-import { DEFAULT_STEER, avoidance, seek, separation, steer, stuckAction, StuckMonitor, type SteerNeighbor, type Vec2 } from '../src/ai/life/steering';
+import { DEFAULT_STEER, MAX_SEPARATION_SPEED, avoidance, seek, separation, steer, stuckAction, StuckMonitor, type SteerNeighbor, type Vec2 } from '../src/ai/life/steering';
 import { Rng } from '../src/core/Rng';
 import { FakeWorld } from './npc-fakes';
 
 const v = (): Vec2 => ({ x: 0, z: 0 });
 
 describe('steering', () => {
+  it('people stacked on one spot split different ways, at a walk (the Ludus regulars ran off as one)', () => {
+    const at = { x: 525, z: 171, vx: 0, vz: 0, radius: 0.28, maxSpeed: 1.6 };
+    const stack: SteerNeighbor[] = [0, 1, 2, 3].map(() => ({ x: 525, z: 171, vx: 0, vz: 0, radius: 0.28, weight: 1 }));
+    const dirs = [11, 512, 873].map((seed) => {
+      const out = separation({ ...at, seed }, stack, DEFAULT_STEER, v());
+      expect(Math.hypot(out.x, out.z)).toBeLessThanOrEqual(MAX_SEPARATION_SPEED + 1e-9);
+      return Math.atan2(out.z, out.x);
+    });
+    expect(new Set(dirs.map((d) => d.toFixed(2))).size).toBe(3);
+    const w = steer({ ...at, seed: 11 }, v(), stack, DEFAULT_STEER, v());
+    expect(Math.hypot(w.x, w.z)).toBeLessThanOrEqual(MAX_SEPARATION_SPEED + 1e-9);
+  });
+
   it('seeks and arrives', () => {
     const o = seek(0, 0, 10, 0, 1.5, 2, v());
     expect(o.x).toBeCloseTo(1.5);

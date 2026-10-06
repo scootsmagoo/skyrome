@@ -42,7 +42,7 @@ The game opens straight into the Forum at mid-morning with a default character. 
 - **Fight:** F attacks (hold it for a power attack), Q blocks, R draws your sword.
 - **Everything else:** see the controls below.
 
-The full flow (control presets, title, character creation, the dawn start at the Porta Capena) is at [`?menu=1`](https://scootsmagoo.github.io/skyrome/?menu=1). Every push to `main` redeploys the site, once the tests pass.
+The full flow (control presets, title, character creation, the dawn start at the Porta Capena) is at [`?menu=1`](https://scootsmagoo.github.io/skyrome/?menu=1). To jump straight into the boss fight with Nereus the retiarius, use [`?fight=nereus`](https://scootsmagoo.github.io/skyrome/?fight=nereus) (`pullus` and `auctus` are the two warm-up bouts). Every push to `main` redeploys the site, once the tests pass.
 
 ## Try it locally
 

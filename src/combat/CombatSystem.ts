@@ -775,6 +775,13 @@ export class CombatSystem implements System, PlayerCombatHost {
     return !!c && this.core.isInCombat(c);
   }
 
+  /** Is this actor (or the player) fighting in a running arena bout? Spectators watch those calmly. */
+  inBout(a: string | Actor | Combatant): boolean {
+    const b = this.core.bout;
+    const c = this.get(a);
+    return !!b && !b.over && !!c && (c === this.playerC || b.foes.has(c.id));
+  }
+
   /** Does the combat system move this actor right now (the NPC module should leave it alone)? */
   isDriving(a: string | Actor | Combatant): boolean {
     const c = this.get(a);

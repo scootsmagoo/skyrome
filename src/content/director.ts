@@ -173,14 +173,17 @@ export function fight(game: Game, npcId: string, archetype: string, at: string |
   // and the bout's crowd: the NPC living in the world steps out while it plays them.
   const staged = !!(opts.boss || opts.practice);
   const pop = (game as unknown as { population?: { holdNamed?(id: string): () => void } }).population;
-  if (staged && actorExists(game, npcId) && pop?.holdNamed) {
-    const release = pop.holdNamed(npcId);
+  // Held whether or not they have spawned yet: a bout started right after loading must not see
+  // the resident appear a moment later beside the fighter playing them.
+  if (staged && pop?.holdNamed) {
+    const hold = pop.holdNamed(npcId);
     const id = spawnEnemy(game, archetype, at, { ...opts, id: npcId, npc: npcId }, offset);
     if (!id) {
-      release();
+      hold();
       return null;
     }
-    releaseWhenGone(game, id, release);
+    const clear = opts.practice ? clearFloor(game, at) : () => {};
+    releaseWhenGone(game, id, () => (hold(), clear()));
     return id;
   }
   if (actorExists(game, npcId)) {
@@ -195,6 +198,44 @@ export function fight(game: Game, npcId: string, archetype: string, at: string |
     return spawnEnemy(game, archetype, at, { ...opts, id: `${npcId}~foe`, npc: npcId }, offset);
   }
   return spawnEnemy(game, archetype, at, { ...opts, id: npcId, npc: npcId }, offset);
+}
+
+/** How far from the centre of an arena bout everyone else stands back (m). */
+export const BOUT_CLEAR_RADIUS = 10;
+
+interface CrowdLike {
+  resolveLocation?(id: string): { x: number; z: number } | null;
+  near?(p: { x: number; y: number; z: number }, r: number): { id: string; position: { x: number; z: number }; isFighting(): boolean }[];
+  direct?(npc: unknown, x: number, z: number, speed: number, arrive?: number): boolean;
+  undirect?(npc: unknown): void;
+  nav?: { snap(x: number, z: number, r?: number): { x: number; z: number } };
+}
+
+/**
+ * An arena bout clears the sand: everyone else within `BOUT_CLEAR_RADIUS` of the centre walks out
+ * to the ring's edge (straight away from the centre) and watches from there until the returned
+ * release lets them go back to their day. Without it the Ludus regulars drill right inside the
+ * fight, in the way of every swing.
+ */
+export function clearFloor(game: Game, at: string | Vec3): () => void {
+  const pop = (game as unknown as { population?: CrowdLike }).population;
+  const c = typeof at === 'string' ? pop?.resolveLocation?.(at) : at;
+  if (!pop?.near || !pop.direct || !c) return () => {};
+  const moved: unknown[] = [];
+  for (const n of pop.near({ x: c.x, y: 0, z: c.z }, BOUT_CLEAR_RADIUS)) {
+    if (n.isFighting()) continue;
+    let dx = n.position.x - c.x;
+    let dz = n.position.z - c.z;
+    const d = Math.hypot(dx, dz);
+    if (d < 0.5) (dx = 1), (dz = 0);
+    else (dx /= d), (dz /= d);
+    const r = BOUT_CLEAR_RADIUS + 1.5;
+    const to = pop.nav?.snap(c.x + dx * r, c.z + dz * r, 3) ?? { x: c.x + dx * r, z: c.z + dz * r };
+    if (pop.direct(n, to.x, to.z, 2.4, 0.8)) moved.push(n);
+  }
+  return () => {
+    for (const n of moved) pop.undirect?.(n);
+  };
 }
 
 /** Call `release` once the fighter `id` has left combat for good (despawned). */

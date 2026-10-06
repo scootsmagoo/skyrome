@@ -77,6 +77,8 @@ export class Npc extends Actor implements Positioned {
   /** Behaviour; assigned by the population manager. */
   brain: NpcBrain | null = null;
   readonly mover = new Mover();
+  /** A number of its own for steering (people standing on one spot split different ways). */
+  readonly steerSeed = seedOf(this.id);
   /**
    * Simulation tier: 'full' = character controller + steering (near the player); 'mid' = steering +
    * kinematic gliding on the nav-grid floor; 'cheap' = kinematic path following only (far away).
@@ -190,15 +192,23 @@ export class Npc extends Actor implements Positioned {
    * Cheap far-away movement: no character controller, no gravity. Follows the floor height given
    * by `floor(x, z)` (nav grid), refreshing it with a ray at most every 0.3 s otherwise.
    */
-  glide(wish: THREE.Vector3Like, dt: number, floor: (x: number, z: number) => number | null) {
+  glide(wish: THREE.Vector3Like, dt: number, floor: (x: number, z: number) => number | null, blocked?: (x: number, z: number) => boolean) {
     if (this.disposed) return;
     const v = this.velocity;
     const k = damp(8, dt);
     v.x += (wish.x - v.x) * k;
     v.z += (wish.z - v.z) * k;
     v.y = 0;
-    const nx = this.currPos.x + v.x * dt;
-    const nz = this.currPos.z + v.z * dt;
+    let nx = this.currPos.x + v.x * dt;
+    let nz = this.currPos.z + v.z * dt;
+    // No collisions here, so the nav grid is the wall: never step from open ground into a cell it
+    // knows is blocked (slide along the wall on one axis if that one is free). Someone already in
+    // a blocked cell (a seat, a station) may move freely to get out.
+    if (blocked && blocked(nx, nz) && !blocked(this.currPos.x, this.currPos.z)) {
+      if (!blocked(nx, this.currPos.z)) (nz = this.currPos.z), (v.z = 0);
+      else if (!blocked(this.currPos.x, nz)) (nx = this.currPos.x), (v.x = 0);
+      else (nx = this.currPos.x), (nz = this.currPos.z), (v.x = v.z = 0);
+    }
     let y = floor(nx, nz);
     // The grid keeps one floor per cell (street level under seating and galleries): someone up on
     // the seats or a gallery keeps to the floor under their feet.
@@ -251,4 +261,11 @@ export class Npc extends Actor implements Positioned {
     this.light = null;
     super.dispose();
   }
+}
+
+/** A stable number in [0, 1000) from an id (FNV-1a). */
+function seedOf(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
+  return (h >>> 0) % 1000;
 }

@@ -13,4 +13,10 @@ describe('romeParams (the boot options in the URL)', () => {
     expect(romeParams('?at=colosseum&hour=21')).toMatchObject({ quick: true, at: 'colosseum', hour: 21 });
     expect(romeParams('?at=colosseum&menu=1')).toMatchObject({ quick: false, at: 'colosseum' });
   });
+
+  it('fight=nereus goes straight to that Ludus bout', () => {
+    expect(romeParams('?fight=nereus')).toMatchObject({ quick: true, at: 'ludus-magnus', hour: PLAY_HOUR, fight: 3 });
+    expect(romeParams('?fight=Pullus')).toMatchObject({ fight: 1 });
+    expect(romeParams('')).toMatchObject({ fight: null });
+  });
 });

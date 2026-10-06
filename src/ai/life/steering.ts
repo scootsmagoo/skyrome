@@ -29,7 +29,15 @@ export interface SteerAgent {
   /** Body radius (m). */
   radius: number;
   maxSpeed: number;
+  /**
+   * A number of its own (e.g. a hash of its id): people standing exactly on top of each other
+   * split in different directions instead of all being pushed the same way.
+   */
+  seed?: number;
 }
+
+/** The separation push never exceeds this (m/s): a crowd squeezes people apart, it doesn't fling them. */
+export const MAX_SEPARATION_SPEED = 3;
 
 export interface SteerNeighbor {
   x: number;
@@ -92,14 +100,20 @@ export function separation(a: SteerAgent, ns: readonly SteerNeighbor[], p: Steer
     const d = Math.sqrt(d2);
     const k = (1 - d / reach) ** 2 * p.separation * n.weight;
     if (d < 1e-3) {
-      // Exactly on top of each other: split by a stable pseudo-random direction.
-      const ang = (a.x * 12.9898 + a.z * 78.233) % (Math.PI * 2);
+      // Exactly on top of each other: split by a direction of the agent's own (its seed), so a
+      // stack of people fans out; the position alone would push the whole stack the same way.
+      const ang = ((a.seed ?? 0) * 2.39996 + a.x * 12.9898 + a.z * 78.233) % (Math.PI * 2);
       out.x += Math.cos(ang) * k;
       out.z += Math.sin(ang) * k;
     } else {
       out.x += (dx / d) * k;
       out.z += (dz / d) * k;
     }
+  }
+  const m = hyp(out.x, out.z);
+  if (m > MAX_SEPARATION_SPEED) {
+    out.x *= MAX_SEPARATION_SPEED / m;
+    out.z *= MAX_SEPARATION_SPEED / m;
   }
   return out;
 }

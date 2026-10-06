@@ -234,6 +234,8 @@ export class NpcManager implements System {
   private readonly tmpCell = { x: 0, z: 0 };
   /** Floor height on the nav grid for gliders (one closure, not one per NPC per step). */
   private readonly gridFloor = (x: number, z: number) => (this.grid.walkable(x, z) ? this.grid.heightAt(x, z) : null);
+  /** A cell the nav grid knows is not walkable (unknown ground is not blocked). */
+  private readonly gridBlocked = (x: number, z: number) => !this.grid.walkable(x, z, true);
   /** The Lemuria phase and the temple rule for one game minute (`key`). */
   private readonly lemCache: { key: number; phase: 'day' | 'night' | null; shut: boolean | null } = { key: NaN, phase: null, shut: null };
   readonly wallProbe: WallProbe;
@@ -891,12 +893,13 @@ export class NpcManager implements System {
     const g = this.grid;
     if (!g.ready(loc.x, loc.z)) return null;
     const hm = this.game.heightmap;
-    const jitter = Math.min(4, loc.radius);
-    for (const [r, tries] of [[5, 4], [12, 2], [25, 1]] as const) {
+    // Several people share a spot (the Ludus regulars all drill at the arena centre): spread them.
+    const jitter = Math.max(2.5, Math.min(4, loc.radius));
+    for (const [r, tries] of [[5, 8], [12, 3], [25, 1]] as const) {
       for (let i = 0; i < tries; i++) {
         const j = i === 0 ? 0 : jitter;
         const c = g.nearestWalkable(loc.x + (this.rng.next() - 0.5) * j, loc.z + (this.rng.next() - 0.5) * j, r, { x: 0, z: 0 }, true);
-        if (!c || !g.reachable(c.x, c.z)) continue;
+        if (!c || !g.reachable(c.x, c.z) || this.occupied(c.x, c.z)) continue;
         const y = g.heightAt(c.x, c.z);
         if (y === null) continue;
         if (hm && Math.abs(y - hm.heightAt(c.x, c.z)) > NAMED_MAX_LIFT) continue;
@@ -904,6 +907,12 @@ export class NpcManager implements System {
       }
     }
     return null;
+  }
+
+  /** Someone already stands within 0.9 m of this point (spawns must not stack people). */
+  private occupied(x: number, z: number): boolean {
+    for (const n of this.list) if (!n.dead && Math.abs(n.position.x - x) < 0.9 && Math.abs(n.position.z - z) < 0.9) return true;
+    return false;
   }
 
   bark(npc: Npc, kind: BarkKind, urgent = false): boolean {
@@ -1403,6 +1412,7 @@ export class NpcManager implements System {
           ag.z = n.position.z;
           ag.vx = n.velocity.x;
           ag.vz = n.velocity.z;
+          ag.seed = n.steerSeed;
           ag.maxSpeed = Math.max(n.walkSpeed * 1.3, Math.sqrt(desired.x * desired.x + desired.z * desired.z));
           steer(ag, desired, ns, DEFAULT_STEER, steered);
           wx = steered.x;
@@ -1416,7 +1426,7 @@ export class NpcManager implements System {
       const tl = timed ? performance.now() : 0;
       if (timed) tSteer += tl - ts;
       if (n.sim === 'full') n.locomote(wish, dt);
-      else n.glide(wish, dt, this.gridFloor);
+      else n.glide(wish, dt, this.gridFloor, this.gridBlocked);
       if (timed) tLoco += performance.now() - tl;
       const st = n.mover.stuck.stuckTime;
       if (st > this.stats.maxStuck) this.stats.maxStuck = st;
@@ -1919,6 +1929,8 @@ export class NpcManager implements System {
       }
       const seen: { x: number; z: number }[] = [];
       for (const f of fighters) {
+        // An arena bout is a show: the Ludus watches it, nobody runs.
+        if (combat.inBout?.(f)) continue;
         if (seen.some((s) => Math.hypot(s.x - f.position.x, s.z - f.position.z) < 5)) continue;
         seen.push({ x: f.position.x, z: f.position.z });
         // The aggressor guards go for: the player when the player started it (an assault);
