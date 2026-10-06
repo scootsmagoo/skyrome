@@ -30,8 +30,8 @@ declare module './Settings' {
   interface SettingsData {
     /** Graphics quality: 'auto' (default) picks a tier for this machine; a tier fixes it. */
     graphics?: GraphicsChoice;
-    /** What Auto last applied, and for which GPU (so it re-detects on a new machine). */
-    graphicsApplied?: { tier: GraphicsTier; gpu: string; by: 'gpu' | 'fps' };
+    /** What Auto last applied, and for which GPU (so it re-detects on a new machine or a new classifier). */
+    graphicsApplied?: { tier: GraphicsTier; gpu: string; by: 'gpu' | 'fps'; v?: number };
     /** People on the streets, × the normal crowd (the population reads it). */
     crowdDensity?: number;
   }
@@ -59,20 +59,34 @@ export interface GpuInfo {
  */
 export function classifyGpu(gpu: GpuInfo, o: { memoryGb?: number; cores?: number } = {}): GraphicsTier {
   const n = gpu.name.toLowerCase();
+  // Chrome on Windows puts the PCI device id in the name: "AMD Radeon (TM) Graphics (0x000015E7)".
+  const dev = /\(0x0*([0-9a-f]{3,4})\)/.exec(n)?.[1];
   let tier: GraphicsTier;
   if (gpu.software || !n || /swiftshader|llvmpipe|softpipe|software|basic render|microsoft basic/.test(n)) tier = 'low';
-  // Discrete cards: NVIDIA, AMD Radeon RX/Pro/R9, Intel Arc.
-  else if (/nvidia|geforce|quadro|rtx|gtx|radeon (rx|pro|r9)|radeon\(tm\) (rx|pro)|intel.*arc\b|\barc a\d/.test(n)) tier = 'high';
+  // Discrete cards: NVIDIA, AMD Radeon RX/Pro/R9, Intel Arc A/B series.
+  else if (/nvidia|geforce|quadro|rtx|gtx|radeon (rx|pro|r9)|radeon\(tm\) (rx|pro)|arc\(tm\) [ab]\d|\barc [ab]\d/.test(n)) tier = 'high';
   // Apple silicon (Chrome says "Apple M1…", Safari only "Apple GPU").
   else if (/apple (m\d|gpu)/.test(n)) tier = 'high';
-  // Recent integrated graphics: Intel Iris Xe, AMD Radeon (Vega / RDNA) integrated, Apple's older AMD.
-  else if (/iris\(r\) xe|iris xe|radeon|amd/.test(n)) tier = 'medium';
-  // Older Intel (UHD, HD, Iris Plus), mobile GPUs and anything unknown.
+  // Strong integrated graphics: AMD RDNA 2/3 (680M, 780M, 890M…) and Intel's integrated Arc.
+  else if (/radeon \d{3}m|arc\(tm\) graphics|\barc graphics/.test(n) || (dev !== undefined && STRONG_AMD_IGPU.has(dev))) tier = 'medium';
+  // Everything else integrated is Low: AMD Vega-era "Radeon Graphics" (Ryzen 2000–5000), Intel
+  // Iris Xe, UHD and HD, mobile GPUs, and anything unknown. Windows draws WebGL through D3D11
+  // (ANGLE), where every draw call costs more than on a Mac.
   else tier = 'low';
   if (o.memoryGb !== undefined && o.memoryGb > 0 && o.memoryGb <= 4) tier = 'low';
   else if (tier === 'high' && o.cores !== undefined && o.cores > 0 && o.cores <= 4) tier = 'medium';
   return tier;
 }
+
+/**
+ * AMD integrated GPUs that AMD names just "Radeon Graphics" but are RDNA 2/3, 2–3× a Vega 8
+ * (PCI device ids, lower case): Rembrandt 680M/660M, Phoenix 780M/760M, Hawk Point, Strix Point
+ * 890M/880M, Strix Halo, Van Gogh (Steam Deck).
+ */
+const STRONG_AMD_IGPU = new Set(['1681', '15bf', '15c8', '1900', '1901', '150e', '1586', '163f']);
+
+/** Bumped when classifyGpu changes: Auto then chooses again (once) on machines it already rated. */
+export const CLASSIFIER_VERSION = 2;
 
 /** The GPU's name, through a throwaway WebGL context (null outside a browser). */
 export function detectGpu(): GpuInfo | null {
@@ -93,6 +107,8 @@ export function detectGpu(): GpuInfo | null {
   }
 }
 
+const RANK: Record<GraphicsTier, number> = { low: 0, medium: 1, high: 2 };
+
 /** One step down (null at the bottom). */
 export function lowerTier(t: GraphicsTier): GraphicsTier | null {
   return t === 'high' ? 'medium' : t === 'medium' ? 'low' : null;
@@ -103,10 +119,18 @@ export function graphicsWrites(d: Partial<SettingsData>, gpu: GpuInfo | null, en
   const choice = d.graphics ?? 'auto';
   if (choice !== 'auto') return null;
   const name = gpu?.name ?? '';
-  // Already chosen for this GPU (by its name or, after a step down, by the frame rate): keep it.
-  if (d.graphicsApplied && d.graphicsApplied.gpu === name) return null;
-  const tier = gpu ? classifyGpu(gpu, env) : 'high';
-  return { ...TIER_SETTINGS[tier], graphicsApplied: { tier, gpu: name, by: 'gpu' } };
+  const prev = d.graphicsApplied;
+  // Already chosen for this GPU by this classifier: keep it (the player's own row changes too).
+  if (prev && prev.gpu === name && (prev.v ?? 1) === CLASSIFIER_VERSION) return null;
+  let tier = gpu ? classifyGpu(gpu, env) : 'high';
+  let by: 'gpu' | 'fps' = 'gpu';
+  // The frame rate already stepped this machine down further: that stands.
+  if (prev && prev.gpu === name && prev.by === 'fps' && RANK[prev.tier] < RANK[tier]) {
+    tier = prev.tier;
+    by = 'fps';
+  }
+  if (prev && prev.gpu === name && prev.tier === tier) return { graphicsApplied: { ...prev, v: CLASSIFIER_VERSION } };
+  return { ...TIER_SETTINGS[tier], graphicsApplied: { tier, gpu: name, by, v: CLASSIFIER_VERSION } };
 }
 
 /**
@@ -185,7 +209,7 @@ export class GraphicsGovernor implements System {
     const next = lowerTier(cur);
     if (!next) return;
     for (const [k, v] of Object.entries(TIER_SETTINGS[next])) g.settings.set(k as keyof SettingsData, v as never);
-    g.settings.set('graphicsApplied', { tier: next, gpu: s.graphicsApplied?.gpu ?? '', by: 'fps' });
+    g.settings.set('graphicsApplied', { tier: next, gpu: s.graphicsApplied?.gpu ?? '', by: 'fps', v: CLASSIFIER_VERSION });
     g.events.emit('ui:notify', { text: `Graphics lowered to ${TIER_LABEL[next]} for a smoother game (Esc → Settings → Display).`, kind: 'info' });
   }
 }

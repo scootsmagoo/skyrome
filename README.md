@@ -126,8 +126,8 @@ Add `&debug` to any URL (or type `tdo` in the console) to show fps, draw calls, 
 The game picks its graphics quality for your computer the first time it starts (**Esc → Settings → Display → Graphics quality: Auto**):
 
 - **High:** Apple M-series Macs and computers with an NVIDIA or AMD graphics card.
-- **Medium:** recent built-in graphics (Intel Iris Xe, AMD Radeon laptop graphics). Lower resolution, cheaper shadows, a shorter view distance and fewer people on the streets.
-- **Low:** older built-in graphics, computers with 4 GB of memory or less, and browsers drawing without the graphics card. No shadows or glow, 30 fps.
+- **Medium:** the strongest built-in graphics (AMD Radeon 680M/780M/890M, Intel Arc). Lower resolution, cheaper shadows, a shorter view distance and fewer people on the streets.
+- **Low:** other built-in graphics (Ryzen 2000–5000 "Radeon Graphics", Intel Iris Xe, UHD and HD), computers with 4 GB of memory or less, and browsers drawing without the graphics card. No shadows or glow, 30 fps.
 
 If the game still stutters, Auto steps down one level by itself and tells you. You can pick a level yourself, or change single rows; your choices stick. The console's `graphics` command shows which graphics card the game found and what it chose. The links [`?graphics=low`](https://scootsmagoo.github.io/skyrome/?graphics=low), `medium` and `high` set a level too, and [`?graphics=auto-reset`](https://scootsmagoo.github.io/skyrome/?graphics=auto-reset) goes back to Auto.
 
