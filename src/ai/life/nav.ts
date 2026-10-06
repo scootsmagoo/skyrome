@@ -63,10 +63,19 @@ export class NavService {
       this.searches++;
       const p = streets.path(ax, az, bx, bz);
       if (p) {
-        // Walk to the first node through the grid when it is near.
-        if (grid && grid.ready(ax, az) && grid.ready(p[0].x, p[0].z) && !grid.lineWalkable(ax, az, p[0].x, p[0].z)) {
-          const lead = grid.findPath(ax, az, p[0].x, p[0].z, 3000);
-          if (lead) return [...lead, ...p.slice(1)];
+        // The street graph's straight lines can cut through a portico or a corner: lead through
+        // the grid to the farthest node it covers (it walks round what's in between), then on.
+        if (grid && grid.ready(ax, az)) {
+          let tries = 0;
+          for (let i = p.length - 1; i >= 0 && tries < 3; i--) {
+            if (!grid.ready(p[i].x, p[i].z)) continue;
+            const node = grid.nearestWalkable(p[i].x, p[i].z, 3);
+            if (!node) continue;
+            tries++;
+            if (grid.lineWalkable(ax, az, node.x, node.z)) return [{ x: node.x, z: node.z }, ...p.slice(i + 1)];
+            const lead = grid.findPath(ax, az, node.x, node.z, 6000);
+            if (lead) return [...lead, ...p.slice(i + 1)];
+          }
         }
         return p;
       }
