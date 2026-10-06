@@ -97,6 +97,7 @@ The game is designed to be fully playable on a Mac trackpad, so every mouse acti
 | Use an item · invoke your god | 1–8 (healing first) · Z |
 | Give up a fight (to the watch: the arrest talk) | Hold Y |
 | Stuck somewhere? | Esc → I'm stuck |
+| Console (testing) | <code>`</code> (left of 1): `tgm` god mode · `tcl` fly through walls · `coc ludus` teleport · `fight nereus` · `spawn grassator 3` · `killall` · `help` for the rest |
 | Check your trackpad and keys | `?scene=inputlab` |
 
 ### Fighting and the law

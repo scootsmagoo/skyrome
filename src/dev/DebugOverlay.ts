@@ -1,8 +1,14 @@
 /**
- * Toggle with ` (backquote): fps, draw calls, position, time, and the systems costing the most
+ * Toggled by the console's `tdo` (or `?debug` in the URL, or Settings → Show FPS): fps, draw calls, position, time, and the systems costing the most
  * CPU per frame (the game's per-system profiler runs while the overlay is shown).
  */
 import type { Game, System } from '../core/Game';
+
+declare module '../core/Game' {
+  interface Game {
+    debugOverlay?: DebugOverlay;
+  }
+}
 
 export class DebugOverlay implements System {
   readonly name = 'debugOverlay';
@@ -17,6 +23,14 @@ export class DebugOverlay implements System {
     parent.appendChild(this.el);
     this.visible = game.settings.data.showFps || new URLSearchParams(location.search).has('debug');
     this.el.style.display = this.visible ? '' : 'none';
+    game.debugOverlay = this;
+  }
+
+  /** Show or hide (the console's `tdo`). Returns the new state. */
+  toggle(on = !this.visible): boolean {
+    this.visible = on;
+    this.el.style.display = on ? '' : 'none';
+    return on;
   }
 
   /** The game's profiler runs exactly while the overlay is shown (or a perf script turned it on). */
@@ -28,11 +42,7 @@ export class DebugOverlay implements System {
   private profiledByMe = false;
 
   lateUpdate(dt: number) {
-    const { input, stats, time } = this.game;
-    if (input.pressed('debug')) {
-      this.visible = !this.visible;
-      this.el.style.display = this.visible ? '' : 'none';
-    }
+    const { stats, time } = this.game;
     this.syncProfiling();
     if (!this.visible) return;
     this.acc += dt;

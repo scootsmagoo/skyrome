@@ -5,7 +5,7 @@ Skyrome is a non-linear, Skyrim-style open-world action RPG set in Rome in AD 11
 Design docs: `docs/GDD.md` (game design), `docs/CONTENT.md` (NPCs, quests, items), `docs/ATLAS.md` with `src/data/atlas.ts` (historical map data), `docs/ARCHITECTURE.md` (code structure), and `docs/research/` (background research).
 
 ## Commands
-- `npm run dev`: dev server on http://127.0.0.1:5173. Pick a scene with `?scene=<name>` (files in `src/scenes/`) and turn on the stats overlay with `?debug`. The <code>`</code> key toggles the overlay too.
+- `npm run dev`: dev server on http://127.0.0.1:5173. Pick a scene with `?scene=<name>` (files in `src/scenes/`) and turn on the stats overlay with `?debug`. The console's `tdo` command toggles the overlay too.
 - `npm test`: Vitest, for pure logic in `tests/` and `src/**/*.test.ts`.
 - `npm run typecheck`: `tsc --noEmit`. It must stay clean.
 - `npm run build`: typecheck plus a production build into `dist/`.
@@ -13,6 +13,8 @@ Design docs: `docs/GDD.md` (game design), `docs/CONTENT.md` (NPCs, quests, items
 - `node scripts/perf.mjs [--views spawn,forum,circus,cavea,colosseum,pantheon] [--size 1512x860 --dpr 2]`: performance survey. For each viewpoint it reports the frame rate and CPU ms (mean and p95), GPU ms (timer queries), draw calls and triangles looking four ways, CPU per system, and memory. Run it before and after performance work and compare. `--size 1512x860 --dpr 2` approximates the owner's MacBook.
 - `node scripts/soak.mjs [--minutes 30] [--home 90]`: AC-20 soak. A bot wanders, fights and saves/loads for N minutes; it fails on a crash, a page error or more than 100 MB of heap growth after warm-up (it forces a real GC before each sample and logs geometry/collider counts).
 - `node scripts/shot.mjs --scene <name> [--steps '<json>'] [--name x.png] [--browser webkit]`: boots the game headless on the real GPU, runs scripted input, saves screenshots to `.shots/`, and prints console errors and frame stats. **Always verify visual work this way and look at the PNG with the Read tool.** Steps are described at the top of the script, for example `[{"hold":"KeyW","ms":1500},{"press":"KeyV"},{"eval":"game.player.position"},{"shot":"a.png"}]`. Each run starts its own Vite server on a free port, so parallel agents don't collide.
+
+- **The console** (`src/dev/console/`): <code>`</code> (the key left of 1) opens it over the paused game, as in Bethesda's games. `help` lists the commands: `tgm` (god mode), `tcl` (no-clip), `coc <place>`, `fight nereus`, `spawn <enemy> [n]`, `kill`/`killall`, `additem`, `gold`, `sethour`, `heal`, `clearbounty`, `difficulty`, `gore`, `tdo`. Scripts can call `game.console.exec('tgm on')`. Cheats last for the session only. `?fight=nereus` (or `pullus`, `auctus`) boots straight into that Ludus bout.
 
 ## Conventions (do not change without updating this file)
 - **Units and axes.** Meters, with +x east, +y up and +z **south** (north is −z). The time step is fixed at 60 Hz.

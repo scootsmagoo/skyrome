@@ -28,6 +28,8 @@ export class VitalsImpl implements Vitals {
   preventDeath?: () => boolean;
   /** Who dealt the last damage (for kill credit). */
   lastDamageSource?: string;
+  /** God mode (the console's `tgm`): no damage, and stamina is never spent or drained. */
+  invulnerable = false;
   regenRate: (id: ResourceId, v: VitalsImpl) => number;
   onDeath?: (source?: string) => void;
 
@@ -62,7 +64,7 @@ export class VitalsImpl implements Vitals {
   }
 
   damage(amount: number, source?: string): number {
-    if (this._dead || !(amount > 0)) return 0;
+    if (this._dead || !(amount > 0) || this.invulnerable) return 0;
     const r = this.res.health;
     const dealt = Math.min(r.current, amount);
     r.current -= dealt;
@@ -86,7 +88,7 @@ export class VitalsImpl implements Vitals {
   }
 
   spend(id: ResourceId, amount: number): boolean {
-    if (!(amount > 0)) return true;
+    if (!(amount > 0) || (this.invulnerable && id !== 'pietas')) return true;
     const r = this.res[id];
     if (r.current + 1e-9 < amount) return false;
     r.current = Math.max(0, r.current - amount);
@@ -95,7 +97,7 @@ export class VitalsImpl implements Vitals {
   }
 
   drain(id: ResourceId, amount: number): number {
-    if (!(amount > 0)) return 0;
+    if (!(amount > 0) || (this.invulnerable && id !== 'pietas')) return 0;
     if (id === 'health') return this.damage(amount);
     const r = this.res[id];
     const spent = Math.min(r.current, amount);

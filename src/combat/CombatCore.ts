@@ -800,7 +800,7 @@ export class CombatCore {
    */
   dealDamage(att: Combatant | null, def: Combatant, amount: number, o: { finisher?: boolean; weapon?: WeaponStats; bleed?: boolean } = {}): 'hit' | 'ko' | 'dead' | 'yield' | 'flee' {
     const v = def.vitals;
-    if (def.status === 'dead' || def.status === 'ko' || !(amount > 0)) return 'hit';
+    if (def.status === 'dead' || def.status === 'ko' || !(amount > 0) || v.invulnerable) return 'hit';
     const max = v.health.max;
     const hp = v.health.current;
     const yieldAt = def.brain?.profile.yieldAt ?? def.profile?.yieldAt ?? 0;
@@ -901,7 +901,7 @@ export class CombatCore {
   }
 
   knockout(def: Combatant, by: Combatant | null, seconds = def.isPlayer ? TIMING.playerKnockout : TIMING.knockout) {
-    if (def.status === 'dead' || def.status === 'ko') return;
+    if (def.status === 'dead' || def.status === 'ko' || def.vitals.invulnerable) return;
     const essential = def.essential && !def.isPlayer;
     const foes = def.isPlayer ? this.list.filter((o) => o.target === def).map((o) => o.id) : undefined;
     def.status = 'ko';
@@ -931,7 +931,7 @@ export class CombatCore {
   }
 
   kill(def: Combatant, by: Combatant | null) {
-    if (def.status === 'dead') return;
+    if (def.status === 'dead' || def.vitals.invulnerable) return;
     def.status = 'dead';
     // Dead by the rules even when the blow didn't take the last point (a refused missio, Hold F).
     if (!def.vitals.dead) def.vitals.damage(def.vitals.health.current + 1, by?.id);

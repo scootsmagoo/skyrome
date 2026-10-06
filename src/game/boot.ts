@@ -28,6 +28,8 @@ import { GameFlow, START_DATE, START_HOUR, TITLE_HOUR, type FlowOptions } from '
 import { registerAtlasLocations } from './locations';
 import { installOptionalModules } from './optional';
 import { shouldWelcome, showWelcome } from './welcome';
+import { FIGHTS, startBout } from './bouts';
+import { installConsole } from '../dev/console/Console';
 import { guardUnload, registerMarkerResolvers, wireUi } from './wiring';
 
 /**
@@ -55,8 +57,6 @@ export interface RomeParams {
  */
 export const PLAY_SPAWN = 'rostra';
 export const PLAY_HOUR = 10;
-
-export const FIGHTS = ['pullus', 'auctus', 'nereus'];
 
 export function romeParams(search: string): RomeParams {
   const q = new URLSearchParams(search);
@@ -110,6 +110,7 @@ export async function startRome(game: Game, uiRoot: HTMLElement, params: RomePar
   game.flow = flow;
   game.addSystem(flow);
   wireUi(game, ui, rpg, flow);
+  installConsole(game, ui);
   guardUnload(flow);
   await installOptionalModules(game);
   const spawn = flow.spawnPoint(params.quick ? params.at : null);
@@ -125,27 +126,11 @@ export async function startRome(game: Game, uiRoot: HTMLElement, params: RomePar
     void loading.done();
     // The shareable build's first view: a welcome card with the keys that matter.
     if (params.at === PLAY_SPAWN && shouldWelcome(location.search)) void showWelcome(game, ui.root);
-    if (params.fight) void startBout(game, rpg, params.fight);
+    if (params.fight) void startBout(game, params.fight);
   } else {
     ui.block('loading', false);
     await flow.showTitle();
     void loading.done();
   }
   return flow;
-}
-
-/**
- * Skip the Ludus questline (lud-01) to bout `n` and start it, as if the player had signed on, drawn
- * the Ludus rudis and scutum and told Asiaticus to begin. The skipped stages ask for an autosave:
- * let it finish (no saving in combat) and give the player a moment to look round the arena first.
- */
-async function startBout(game: Game, rpg: { save: { idle(): Promise<void> } }, n: number) {
-  const quest = 'lud-01-sacramentum';
-  game.quests.start(quest, 'kit');
-  game.quests.setStage(quest, 'kit');
-  game.events.emit('dialogue:node', { npcId: 'npc-successus', dialogueId: 'npc-successus', nodeId: 'issueScutum' });
-  game.quests.setStage(quest, `bout${n}`);
-  await new Promise((r) => setTimeout(r, 1500));
-  await rpg.save.idle().catch(() => {});
-  game.events.emit('dialogue:node', { npcId: 'npc-asiaticus', dialogueId: 'npc-asiaticus', nodeId: `begin${n}` });
 }

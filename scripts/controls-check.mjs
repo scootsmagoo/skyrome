@@ -435,6 +435,28 @@ async function runSuite(browser, browserName, preset) {
     await k.up('KeyD');
     expect(v < 0.3, `still moving at ${v.toFixed(2)} m/s after blur`);
   });
+  await check('console (`) tgm on/off', async () => {
+    await k.press('Backquote');
+    await wait(400);
+    expect((await top()) === 'console', `\` opened ${await top()}`);
+    expect(await ev(() => document.activeElement?.classList.contains('console-input')), 'the console input has no focus');
+    await k.type('tgm');
+    await k.press('Enter');
+    await wait(200);
+    expect(await ev(() => window.__skyrome.game.console.cheats.god && window.__skyrome.game.player.sheet.vitals.invulnerable), 'tgm did not turn god mode on');
+    expect((await top()) === 'console', `typing opened ${await top()}`);
+    await k.type('tgm');
+    await k.press('Enter');
+    await wait(200);
+    expect(await ev(() => !window.__skyrome.game.console.cheats.god && !window.__skyrome.game.player.sheet.vitals.invulnerable), 'tgm did not turn god mode off');
+    await k.press('Backquote');
+    await wait(500);
+    expect((await top()) === null, `\` left ${await top()} open`);
+    const a = await pos();
+    await hold(['KeyW'], 500);
+    const b = await pos();
+    expect(Math.hypot(b.x - a.x, b.z - a.z) > 0.5, 'W does not move after the console closed');
+  });
   await check('clock (hold O)', async () => {
     await k.down('KeyO');
     await wait(150);

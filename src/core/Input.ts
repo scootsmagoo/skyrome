@@ -64,7 +64,7 @@ export type Action =
   | 'pause'
   | 'quickSave'
   | 'quickLoad'
-  | 'debug';
+  | 'console';
 
 /** Binding codes are `KeyboardEvent.code` values plus `Mouse0..4`, `WheelUp`, `WheelDown`. */
 export type Bindings = Record<Action, string[]>;
@@ -118,7 +118,8 @@ export const DEFAULT_BINDINGS: Bindings = {
   // P and L because Apple keyboards send media keys on F5/F9 unless fn is held.
   quickSave: ['F5', 'KeyP'],
   quickLoad: ['F9', 'KeyL'],
-  debug: ['Backquote'],
+  // The console (tgm, coc, player.additem…): the key left of 1, as in Bethesda's games.
+  console: ['Backquote', 'IntlBackslash'],
 };
 
 /**
@@ -189,6 +190,7 @@ export function codeLabel(code: string): string {
     CapsLock: 'Caps Lock',
     Escape: 'Esc',
     Backquote: '`',
+    IntlBackslash: '§',
     Equal: '=',
     Minus: '-',
     ArrowLeft: '←',
@@ -699,7 +701,7 @@ const NON_GAMEPLAY: ReadonlySet<Action> = new Set<Action>([
   'pause',
   'quickSave',
   'quickLoad',
-  'debug',
+  'console',
 ]);
 
 function isGameplay(action: Action) {

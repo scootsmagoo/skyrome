@@ -26,6 +26,8 @@ export class Player extends Actor {
   zoom = 3.4;
   /** Walk instead of run (N, the walkToggle action). */
   walkMode = false;
+  /** The console's `tcl`: fly through walls (see PlayerController). */
+  noclip = false;
   /** While true the character faces the camera direction (weapon drawn, aiming, blocking). */
   combatStance = false;
 

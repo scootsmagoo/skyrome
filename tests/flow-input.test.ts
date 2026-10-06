@@ -154,7 +154,7 @@ describe('default bindings (GDD §4.2)', () => {
   });
 
   it('keeps the existing ids and never binds Cmd', () => {
-    for (const a of ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak', 'attack', 'block', 'readyWeapon', 'interact', 'toggleView', 'zoomIn', 'zoomOut', 'menu', 'pause', 'debug'] as Action[]) expect(b[a].length).toBeGreaterThan(0);
+    for (const a of ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak', 'attack', 'block', 'readyWeapon', 'interact', 'toggleView', 'zoomIn', 'zoomOut', 'menu', 'pause', 'console'] as Action[]) expect(b[a].length).toBeGreaterThan(0);
     for (const codes of Object.values(b)) for (const c of codes) expect(c).not.toMatch(/^Meta|^OS/);
   });
 

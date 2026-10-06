@@ -98,6 +98,7 @@ export class PlayerController implements System {
     const { input } = this.game;
     const p = this.player;
     const axes = input.moveAxes();
+    if (p.noclip) return this.fly(dt, axes);
     const yaw = this.inputYaw ?? p.yaw;
     fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw)); // camera forward (or the latched one)
     right.set(-fwd.z, 0, fwd.x); // camera right
@@ -132,6 +133,25 @@ export class PlayerController implements System {
     }
     p.locomote(wish, dt, { jump: this.jumpQueued ? PLAYER_SPEEDS.jump : 0, accel: override?.accel });
     this.jumpQueued = false;
+  }
+
+  /**
+   * No-clip (the console's `tcl`): fly where the camera looks, through walls and floors. Space
+   * rises, the sneak key sinks, sprint goes fast.
+   */
+  private fly(dt: number, axes: { x: number; z: number }) {
+    const { input } = this.game;
+    const p = this.player;
+    const cp = Math.cos(p.pitch);
+    fwd.set(-Math.sin(p.yaw) * cp, Math.sin(p.pitch), -Math.cos(p.yaw) * cp);
+    right.set(Math.cos(p.yaw), 0, -Math.sin(p.yaw));
+    wish.set(0, 0, 0).addScaledVector(right, axes.x).addScaledVector(fwd, -axes.z);
+    wish.y += (input.down('jump') ? 1 : 0) - (input.down('sneak') ? 1 : 0);
+    if (wish.lengthSq() > 1e-6) wish.normalize().multiplyScalar(input.down('sprint') ? 24 : 8);
+    p.sprinting = false;
+    p.heading = p.yaw + Math.PI;
+    this.jumpQueued = false;
+    p.fly(wish, dt);
   }
 
   /**

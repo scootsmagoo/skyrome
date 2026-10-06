@@ -200,6 +200,19 @@ export class Actor {
     this.root.position.copy(this.currPos);
   }
 
+  /**
+   * Move by `v` × `dt` straight through everything (no collisions, no gravity): the console's
+   * no-clip. The kinematic body follows, so the city still streams in around the actor.
+   */
+  fly(v: THREE.Vector3Like, dt: number) {
+    if (this.disposed) return;
+    this.prevPos.copy(this.currPos);
+    this.currPos.set(this.currPos.x + v.x * dt, this.currPos.y + v.y * dt, this.currPos.z + v.z * dt);
+    this.velocity.set(v.x, 0, v.z);
+    this.grounded = true;
+    this.body.body.setNextKinematicTranslation({ x: this.currPos.x, y: this.currPos.y + this.body.halfHeight + this.body.radius, z: this.currPos.z });
+  }
+
   /** Interpolate the visual root and drive the avatar. Call once per frame. */
   syncVisual(alpha: number, dt: number) {
     this.root.position.lerpVectors(this.prevPos, this.currPos, alpha);
