@@ -90,6 +90,8 @@ void main() {
 export const COMPOSITE_FRAG = /* glsl */ `
 uniform sampler2D tColor;
 uniform sampler2D tBloom;
+uniform sampler2D tAo;
+uniform float uAoOn;
 uniform float uBloom;
 uniform float uBloomOn;
 uniform float uVignette;
@@ -108,6 +110,8 @@ float hash(vec2 p) {
 }
 void main() {
   vec3 c = texture2D(tColor, vUv).rgb;
+  // Ambient occlusion (gfx/post/ao.ts), before the glow is added.
+  if (uAoOn > 0.5) c *= texture2D(tAo, vUv).r;
   // Bloom was built from exposed color; un-expose so tone mapping treats both alike.
   if (uBloomOn > 0.5) c += texture2D(tBloom, vUv).rgb * (uBloom / max(toneMappingExposure, 1e-4));
   #if TONEMAP == 0

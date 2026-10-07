@@ -7,7 +7,7 @@
  *
  *   node scripts/perf.mjs [--views spawn,forum,circus,colosseum,pantheon] [--browser webkit]
  *                         [--size 1280x720] [--dpr 2] [--fps 0] [--settle 5000] [--json out.json]
- *                         [--url <server>]
+ *                         [--url <server>] [--settings '{"ao":false}']
  *
  * `--dpr 2 --size 1512x860` approximates a MacBook's browser window. `--fps 60` measures with the
  * default frame cap instead of uncapped. GPU time comes from EXT_disjoint_timer_query_webgl2
@@ -62,6 +62,8 @@ try {
   for (const view of views) {
     const page = await browser.newPage({ viewport: { width: vw, height: vh }, deviceScaleFactor: dpr });
     const errors = [];
+    // Stored settings to start from (e.g. one feature off, to measure what it costs).
+    if (args.settings) await page.addInitScript((s) => localStorage.setItem('skyrome.settings.v1', s), String(args.settings));
     page.on('pageerror', (e) => errors.push(String(e?.message ?? e)));
     const [query, tp] = Array.isArray(VIEWS[view]) ? VIEWS[view] : [VIEWS[view], null];
     const url = `${baseUrl}?scene=rome&quick=1&hour=10&fps=${fpsCap}${query}`;

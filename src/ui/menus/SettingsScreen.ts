@@ -3,6 +3,7 @@
  * ↑↓ rows, ←→ adjust (Shift for big steps), Enter toggles, [ ] switch sections.
  */
 import { DEFAULT_SETTINGS, type SettingsData } from '../../core/Settings';
+import { aoDefault } from '../../core/graphics';
 import { BaseModal } from '../Modal';
 import type { UIManager } from '../UIManager';
 import { h, keycap, setChildren } from '../dom';
@@ -13,7 +14,7 @@ type Key = keyof SettingsData;
 export type SettingsRow = Row;
 type Row =
   | { kind: 'slider'; key: Key; label: string; min: number; max: number; step: number; format: (v: number) => string; note?: string; live?: (ui: UIManager) => string }
-  | { kind: 'toggle'; key: Key; label: string; note?: string; invert?: boolean }
+  | { kind: 'toggle'; key: Key; label: string; note?: string; invert?: boolean; read?: (d: SettingsData) => boolean }
   | { kind: 'choice'; key: Key; label: string; options: { value: unknown; label: string }[]; note?: string }
   | { kind: 'button'; label: string; note?: string; run: (ui: UIManager) => void };
 
@@ -42,6 +43,7 @@ export const SETTINGS_SECTIONS: { id: string; label: string; latin: string; rows
       { kind: 'choice', key: 'shadows', label: 'Shadows', options: [{ value: 'off', label: 'Off' }, { value: 'low', label: 'Low' }, { value: 'high', label: 'High' }] },
       { kind: 'slider', key: 'viewDistance', label: 'View distance', min: 300, max: 1500, step: 50, format: (v) => `${v} m` },
       { kind: 'toggle', key: 'bloom', label: 'Glow (bloom)', invert: true, note: 'Sunlight and lamps bleed softly' },
+      { kind: 'toggle', key: 'ao', label: 'Ambient occlusion', read: aoDefault, note: 'Soft shade where walls meet the ground' },
       { kind: 'toggle', key: 'antialias', label: 'Antialiasing', note: 'Applies after restarting' },
     ],
   },
@@ -89,6 +91,7 @@ export const SETTINGS_SECTIONS: { id: string; label: string; latin: string; rows
 
 /** Toggles stored as `undefined = on` (optional UI settings default to enabled). */
 function readToggle(data: SettingsData, row: Extract<Row, { kind: 'toggle' }>): boolean {
+  if (row.read) return row.read(data);
   const v = data[row.key];
   return row.invert ? v !== false : !!v;
 }

@@ -11,6 +11,8 @@
  * `game.post.enabled` or the `postfx` setting (when off, the renderer tone-maps directly).
  */
 import * as THREE from 'three';
+import { AO_BLUR_FRAG, AO_FRAG } from './ao';
+import { aoDefault } from '../../core/graphics';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import type { Game, System } from '../../core/Game';
 import { COMPOSITE_FRAG, DOWNSAMPLE_FRAG, POST_VERT, UPSAMPLE_FRAG } from './shaders';
@@ -27,6 +29,8 @@ declare module '../../core/Settings' {
     postfx?: boolean;
     /** Bloom on/off (default on). */
     bloom?: boolean;
+    /** Screen-space ambient occlusion (default: on for the High graphics tier). */
+    ao?: boolean;
   }
 }
 
@@ -61,6 +65,11 @@ export class PostFX implements System {
   readonly priority = 2000;
   enabled: boolean;
   bloomEnabled: boolean;
+  aoEnabled: boolean;
+  /** AO strength and reach (view-space metres). */
+  aoIntensity = 0.8;
+  aoRadius = 0.6;
+  aoFadeFar = 70;
   bloomStrength: number;
   bloomThreshold = 1.4;
   bloomKnee = 0.6;
@@ -89,6 +98,10 @@ export class PostFX implements System {
   private upMat: THREE.ShaderMaterial;
   private compMat: THREE.ShaderMaterial;
   private fxaaMat: THREE.ShaderMaterial;
+  private ao: THREE.WebGLRenderTarget;
+  private aoBlur: THREE.WebGLRenderTarget;
+  private aoMat: THREE.ShaderMaterial;
+  private aoBlurMat: THREE.ShaderMaterial;
   private size = new THREE.Vector2();
   private originalRender: () => void;
   private unsub: () => void;
@@ -100,6 +113,7 @@ export class PostFX implements System {
     const s = game.settings.data;
     this.enabled = s.postfx ?? true;
     this.bloomEnabled = s.bloom ?? true;
+    this.aoEnabled = aoDefault(s);
     this.bloomStrength = opts.bloom ?? 0.075;
     this.toneMap = opts.toneMapping ?? 'aces';
     this.msaa = opts.msaa ?? s.antialias;
@@ -107,6 +121,11 @@ export class PostFX implements System {
 
     const hdrOpts = { type: THREE.HalfFloatType, format: THREE.RGBAFormat, depthBuffer: true, stencilBuffer: false, colorSpace: THREE.LinearSRGBColorSpace };
     this.hdr = new THREE.WebGLRenderTarget(1, 1, { ...hdrOpts, samples: this.msaa ? 4 : 0 });
+    // The scene's own depth, kept as a texture for the AO pass (no extra scene render).
+    this.hdr.depthTexture = new THREE.DepthTexture(1, 1, THREE.FloatType);
+    const aoOpts = { type: THREE.UnsignedByteType, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
+    this.ao = new THREE.WebGLRenderTarget(1, 1, aoOpts);
+    this.aoBlur = new THREE.WebGLRenderTarget(1, 1, aoOpts);
     this.ldr = new THREE.WebGLRenderTarget(1, 1, { type: THREE.UnsignedByteType, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
     for (let i = 0; i < BLOOM_LEVELS; i++) {
       this.mips.push(
@@ -144,6 +163,26 @@ export class PostFX implements System {
       blending: THREE.AdditiveBlending,
       transparent: true,
     });
+    this.aoMat = new THREE.ShaderMaterial({
+      ...common,
+      name: 'AO',
+      uniforms: {
+        tDepth: { value: null },
+        uProj: { value: new THREE.Matrix4() },
+        uInvProj: { value: new THREE.Matrix4() },
+        uTexel: { value: new THREE.Vector2() },
+        uRadius: { value: 1 },
+        uIntensity: { value: 1 },
+        uFadeFar: { value: 160 },
+      },
+      fragmentShader: AO_FRAG,
+    });
+    this.aoBlurMat = new THREE.ShaderMaterial({
+      ...common,
+      name: 'AOBlur',
+      uniforms: { tAo: { value: null }, tDepth: { value: null }, uTexel: { value: new THREE.Vector2() }, uInvProj: { value: new THREE.Matrix4() } },
+      fragmentShader: AO_BLUR_FRAG,
+    });
     this.compMat = new THREE.ShaderMaterial({
       ...common,
       name: 'Composite',
@@ -151,6 +190,8 @@ export class PostFX implements System {
       uniforms: {
         tColor: { value: null },
         tBloom: { value: null },
+        tAo: { value: null },
+        uAoOn: { value: 0 },
         uBloom: { value: this.bloomStrength },
         uBloomOn: { value: 1 },
         uVignette: { value: 0.2 },
@@ -184,6 +225,7 @@ export class PostFX implements System {
     this.unsub = game.settings.onChange((d) => {
       this.enabled = d.postfx ?? true;
       this.bloomEnabled = d.bloom ?? true;
+      this.aoEnabled = aoDefault(d);
     });
   }
 
@@ -197,6 +239,8 @@ export class PostFX implements System {
   private resize(w: number, h: number) {
     this.hdr.setSize(w, h);
     this.ldr.setSize(w, h);
+    this.ao.setSize(Math.max(1, w >> 1), Math.max(1, h >> 1));
+    this.aoBlur.setSize(Math.max(1, w >> 1), Math.max(1, h >> 1));
     let mw = w, mh = h;
     for (const m of this.mips) {
       mw = Math.max(1, Math.floor(mw / 2));
@@ -235,7 +279,26 @@ export class PostFX implements System {
     renderer.autoClear = false;
     const exposure = renderer.toneMappingExposure;
 
-    // 2. Bloom chain.
+    // 2. Ambient occlusion at half resolution from the scene's depth, then an edge-keeping blur.
+    if (this.aoEnabled) {
+      const au = this.aoMat.uniforms;
+      au.tDepth.value = this.hdr.depthTexture;
+      au.uProj.value.copy(camera.projectionMatrix);
+      au.uInvProj.value.copy(camera.projectionMatrixInverse);
+      au.uTexel.value.set(1 / w, 1 / h);
+      au.uRadius.value = this.aoRadius;
+      au.uIntensity.value = this.aoIntensity;
+      au.uFadeFar.value = this.aoFadeFar;
+      this.pass(this.aoMat, this.ao);
+      const bu = this.aoBlurMat.uniforms;
+      bu.tAo.value = this.ao.texture;
+      bu.tDepth.value = this.hdr.depthTexture;
+      bu.uTexel.value.set(1 / this.ao.width, 1 / this.ao.height);
+      bu.uInvProj.value.copy(camera.projectionMatrixInverse);
+      this.pass(this.aoBlurMat, this.aoBlur);
+    }
+
+    // 2b. Bloom chain.
     const bloomOn = this.bloomEnabled && this.bloomStrength > 0;
     if (bloomOn) {
       const du = this.downMat.uniforms;
@@ -268,6 +331,8 @@ export class PostFX implements System {
     const cu = this.compMat.uniforms;
     cu.tColor.value = this.hdr.texture;
     cu.tBloom.value = this.mips[0].texture;
+    cu.tAo.value = this.aoBlur.texture;
+    cu.uAoOn.value = this.aoEnabled ? 1 : 0;
     cu.uBloom.value = this.bloomStrength / BLOOM_LEVELS;
     cu.uBloomOn.value = bloomOn ? 1 : 0;
     cu.uVignette.value = this.grade.vignette;
@@ -300,6 +365,10 @@ export class PostFX implements System {
     this.unsub();
     this.hdr.dispose();
     this.ldr.dispose();
+    this.ao.dispose();
+    this.aoBlur.dispose();
+    this.aoMat.dispose();
+    this.aoBlurMat.dispose();
     for (const m of this.mips) m.dispose();
     this.downMat.dispose();
     this.upMat.dispose();
