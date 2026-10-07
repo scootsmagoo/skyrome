@@ -5,12 +5,21 @@
  *
  *   node src/gfx/textures/tools/fetch-textures.mjs            # all sets
  *   node src/gfx/textures/tools/fetch-textures.mjs brick tufa # some sets
+ *   node src/gfx/textures/tools/fetch-textures.mjs --ktx2 [sets…] # compressed versions (below)
  *
  * Needs ImageMagick 7 (`magick`) and `unzip` on PATH. Writes:
  *   public/textures/<set>/color.jpg   1024², sRGB albedo
  *   public/textures/<set>/normal.jpg  1024², OpenGL (+Y) tangent-space normals
  *   public/textures/<set>/arm.jpg     512², R = ambient occlusion, G = roughness, B = 0
  *   src/gfx/textures/stats.gen.json   average linear albedo + roughness per set
+ *
+ * `--ktx2` (needs `basisu`, Basis Universal 2.x: `brew install basis_universal`) fetches the 2K
+ * sources and writes GPU-compressed versions next to the JPEGs, which it leaves alone:
+ *   color.ktx2   2048², ETC1S, sRGB      (~0.7–0.9 MB)
+ *   normal.ktx2  1024², ETC1S tuned for normal maps, linear (~0.25 MB)
+ *   arm.ktx2     512², ETC1S, linear, from arm.jpg
+ * and marks the set `ktx2: true` in stats.gen.json. All with mipmaps and flipped vertically (KTX2
+ * textures are never flipped on upload; the JPEGs are). The terrain still reads the JPEGs.
  *
  * Sources and licences are listed in docs/credits/classical.md. Everything here is CC0.
  */
@@ -51,7 +60,8 @@ export const SOURCES = {
   bark: 'ph:pine_bark',
 };
 
-const only = process.argv.slice(2);
+const KTX2 = process.argv.includes('--ktx2');
+const only = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const sets = Object.keys(SOURCES).filter((s) => !only.length || only.includes(s));
 
 const magick = (...args) => execFileSync('magick', args, { stdio: ['ignore', 'pipe', 'inherit'] }).toString().trim();
@@ -65,11 +75,12 @@ async function download(url, file) {
 }
 
 /** Returns local paths of { color, normal, rough?, ao?, arm? } for one source. */
-async function fetchSource(src) {
+async function fetchSource(src, res = '1k') {
   const [kind, id] = src.split(':');
+  const R = res.toUpperCase();
   if (kind === 'acg') {
-    const zip = await download(`https://ambientcg.com/get?file=${id}_1K-JPG.zip`, join(cache, `${id}_1K-JPG.zip`));
-    const dir = join(cache, `${id}_1K`);
+    const zip = await download(`https://ambientcg.com/get?file=${id}_${R}-JPG.zip`, join(cache, `${id}_${R}-JPG.zip`));
+    const dir = join(cache, `${id}_${R}`);
     if (!existsSync(dir)) execFileSync('unzip', ['-o', '-q', zip, '-d', dir]);
     const files = readdirSync(dir);
     const pick = (re) => {
@@ -80,12 +91,12 @@ async function fetchSource(src) {
   }
   const info = await (await fetch(`https://api.polyhaven.com/files/${id}`)).json();
   const url = (entry) => {
-    const f = entry?.['1k'];
+    const f = entry?.[res];
     return f ? (f.jpg ?? f.png).url : undefined;
   };
   const get = async (entry, name) => {
     const u = url(entry);
-    return u ? download(u, join(cache, `${id}_${name}${u.endsWith('.png') ? '.png' : '.jpg'}`)) : undefined;
+    return u ? download(u, join(cache, `${id}_${name}_${res}${u.endsWith('.png') ? '.png' : '.jpg'}`)) : undefined;
   };
   return {
     color: await get(info.Diffuse ?? info.diff_png, 'diff'),
@@ -93,6 +104,33 @@ async function fetchSource(src) {
     arm: await get(info.arm, 'arm'),
     rough: await get(info.Rough, 'rough'),
   };
+}
+
+const statsFile = join(root, 'src/gfx/textures/stats.gen.json');
+if (KTX2) {
+  const basisu = (...args) => execFileSync('basisu', args, { stdio: ['ignore', 'ignore', 'inherit'] });
+  const all = JSON.parse(readFileSync(statsFile, 'utf8'));
+  for (const set of sets) {
+    const f = await fetchSource(SOURCES[set], '2k');
+    if (!f.color || !f.normal) throw new Error(`${set}: missing 2k maps`);
+    const dir = join(outRoot, set);
+    const tmp = join(cache, `${set}-ktx2`);
+    mkdirSync(tmp, { recursive: true });
+    const png = (name) => join(tmp, `${name}.png`);
+    magick(f.color, '-resize', '2048x2048!', '-strip', png('color'));
+    magick(f.normal, '-resize', '1024x1024!', '-strip', png('normal'));
+    magick(join(dir, 'arm.jpg'), '-strip', png('arm'));
+    const common = ['-ktx2', '-etc1s', '-effort', '4', '-mipmap', '-y_flip'];
+    basisu(...common, '-quality', '65', png('color'), '-output_file', join(dir, 'color.ktx2'));
+    basisu(...common, '-quality', '90', '-linear', '-normal_map', png('normal'), '-output_file', join(dir, 'normal.ktx2'));
+    basisu(...common, '-quality', '90', '-linear', png('arm'), '-output_file', join(dir, 'arm.ktx2'));
+    all[set] = { ...all[set], ktx2: true };
+    const kb = (n) => Math.round(readFileSync(join(dir, n)).length / 1024);
+    console.log(set.padEnd(18), `color ${kb('color.ktx2')} KB · normal ${kb('normal.ktx2')} KB · arm ${kb('arm.ktx2')} KB`);
+  }
+  writeFileSync(statsFile, JSON.stringify(all, null, 2) + '\n');
+  console.log('wrote', statsFile);
+  process.exit(0);
 }
 
 const stats = {};
@@ -121,12 +159,11 @@ for (const set of sets) {
   // Average albedo in LINEAR space (what the shader multiplies) and average roughness (G of ARM).
   const avg = magick(color, '-colorspace', 'RGB', '-scale', '1x1!', '-format', '%[fx:r] %[fx:g] %[fx:b]', 'info:').split(' ').map(Number);
   const rough = Number(magick(arm, '-channel', 'G', '-separate', '-format', '%[fx:mean]', 'info:'));
-  stats[set] = { source: src, albedo: avg.map((v) => +v.toFixed(4)), roughness: +rough.toFixed(4) };
+  stats[set] = { ...(existsSync(join(dir, 'color.ktx2')) ? { ktx2: true } : {}), source: src, albedo: avg.map((v) => +v.toFixed(4)), roughness: +rough.toFixed(4) };
   console.log(set.padEnd(18), src.padEnd(28), stats[set].albedo.join(' '), stats[set].roughness);
 }
 
 // Merge with the existing stats file so partial runs keep the other entries.
-const statsFile = join(root, 'src/gfx/textures/stats.gen.json');
 const existing = existsSync(statsFile) ? JSON.parse(readFileSync(statsFile, 'utf8')) : {};
 const merged = { ...existing, ...stats };
 const sorted = Object.fromEntries(Object.keys(merged).sort().map((k) => [k, merged[k]]));

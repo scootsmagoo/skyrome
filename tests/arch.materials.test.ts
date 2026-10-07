@@ -40,8 +40,21 @@ describe('material catalog', () => {
     for (const id of ['reticulatum', 'travertine', 'fabric_red', 'mosaic', 'stucco_painted', 'gilded_bronze'] as const) expect(MATERIAL_RECIPES[id].proc, id).toBeTruthy();
   });
 
-  it('stays within the 18 MB texture budget', () => {
-    expect(dirSize(join(root, 'public/textures'))).toBeLessThan(18 * 1024 * 1024);
+  it('stays within the texture download budget', () => {
+    // A session downloads the compressed sets (KTX2) for the material library, plus the JPEGs of
+    // the terrain's ground layers; the other JPEGs are only a fallback if the KTX2 path fails.
+    const sizeOf = (ext: string) => {
+      let n = 0;
+      for (const set of readdirSync(join(root, 'public/textures'))) {
+        const dir = join(root, 'public/textures', set);
+        if (!statSync(dir).isDirectory()) continue;
+        for (const f of readdirSync(dir)) if (f.endsWith(ext)) n += statSync(join(dir, f)).size;
+      }
+      return n;
+    };
+    expect(sizeOf('.ktx2')).toBeLessThan(26 * 1024 * 1024);
+    expect(sizeOf('.jpg')).toBeLessThan(14 * 1024 * 1024);
+    expect(dirSize(join(root, 'public/textures'))).toBeLessThan(40 * 1024 * 1024);
   });
 
   it('tiles textures at real-world size', () => {

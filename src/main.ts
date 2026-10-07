@@ -2,6 +2,7 @@ import './styles.css';
 import { Game } from './core/Game';
 import { DebugOverlay } from './dev/DebugOverlay';
 import { GraphicsGovernor } from './core/graphics';
+import { enableCompressedTextures } from './gfx/materials';
 import type { SceneDef } from './scenes/types';
 
 const sceneModules = import.meta.glob<{ default: SceneDef }>('./scenes/*.ts');
@@ -24,6 +25,7 @@ async function boot() {
 
   const game = await Game.create(app, { seed: Number(params.get('seed') ?? 113) });
   window.__skyrome = { game, scene: sceneName, ready: false };
+  enableCompressedTextures(game.renderer);
 
   const ui = document.createElement('div');
   ui.className = 'ui-root';

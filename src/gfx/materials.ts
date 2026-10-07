@@ -5,6 +5,10 @@
  * - Photo sets (CC0, public/textures/<set>/{color,normal,arm}.jpg) start loading immediately. The
  *   material shows its flat MATERIAL_BASE colour until all three maps of the set have arrived,
  *   then switches to the textured version in one go (one shader recompile, no black flash).
+ *   Sets with a compressed version (stats `ktx2`) load public/textures/<set>/{color,normal,arm}.ktx2
+ *   instead once `enableCompressedTextures(renderer)` has run: Basis ETC1S, transcoded to the GPU's
+ *   own block format, so they stay compressed in video memory (2048² colour in about a quarter of
+ *   what a 1024² JPEG takes once decoded). Any failure falls back to the JPEGs.
  * - Procedural sets (fabric, mosaic, painted stucco, gilded bronze, …) are generated on the spot.
  * - Every texture is tiled at real-world size (see textures/catalog.ts: MeshBuilder's box UVs are
  *   one unit per 2 m), and the tint is normalised so the texture's average albedo matches the
@@ -16,6 +20,7 @@
  * In Node (unit tests) materials stay flat: there is no DOM to load images with.
  */
 import * as THREE from 'three';
+import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { releaseTextureAfterUpload } from './release';
 import { MATERIAL_BASE, type MaterialId } from './materialIds';
 import { MATERIAL_RECIPES, TEXTURE_STATS, repeatFor, roughnessFactor, tintFor, type MaterialRecipe, type TextureSetId } from './textures/catalog';
@@ -104,14 +109,68 @@ interface SetTextures {
 
 const setPromises = new Map<TextureSetId, Promise<SetTextures>>();
 const loader = hasDom ? new THREE.TextureLoader() : null;
+const baseUrl = (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
+let ktx2: KTX2Loader | null = null;
+const ktx2Failed = new Set<TextureSetId>();
+let ktx2Loaded = 0;
+
+/**
+ * Load the compressed (KTX2) photo sets from now on: the loader needs the renderer to know which
+ * block formats this GPU takes. Call before the first material is created. `?ktx2=0` keeps JPEGs.
+ */
+export function enableCompressedTextures(renderer: THREE.WebGLRenderer) {
+  if (ktx2 || !hasDom) return;
+  if (new URLSearchParams(location.search).get('ktx2') === '0') return;
+  ktx2 = new KTX2Loader().setTranscoderPath(`${baseUrl}basis/`).setWorkerLimit(2).detectSupport(renderer);
+}
 
 function textureUrl(set: TextureSetId, file: string): string {
-  const baseUrl = (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
   return `${baseUrl}textures/${set}/${file}`;
+}
+
+function loadKtx2Set(set: TextureSetId): Promise<SetTextures> {
+  const load = (file: string) =>
+    ktx2!.loadAsync(textureUrl(set, file)).then((t) => {
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.anisotropy = anisotropy;
+      return t as THREE.Texture;
+    });
+  return Promise.all([load('color.ktx2'), load('normal.ktx2'), load('arm.ktx2')]).then(([color, normal, arm]) => {
+    // The colour is encoded as sRGB, the data maps as linear (KTX2Loader reads it from the file).
+    color.colorSpace = THREE.SRGBColorSpace;
+    normal.colorSpace = arm.colorSpace = THREE.NoColorSpace;
+    // Every set there is has loaded: no more transcoding, so the workers (and their wasm heaps) go.
+    if (++ktx2Loaded === Object.values(TEXTURE_STATS).filter((st) => (st as { ktx2?: boolean }).ktx2).length) {
+      ktx2?.dispose();
+      ktx2 = null;
+    }
+    return { color, normal, arm };
+  });
+}
+
+/**
+ * Free a compressed texture's transcoded mip levels once the GPU has them. Clones share the level
+ * objects, so whichever clone uploads first frees them for all (they share one GL texture too).
+ */
+function releaseMipsAfterUpload(t: THREE.Texture) {
+  const c = t as THREE.CompressedTexture;
+  if (!c.isCompressedTexture) return;
+  c.onUpdate = () => {
+    for (const m of c.mipmaps) (m as { data: unknown }).data = null;
+  };
 }
 
 function loadSet(set: TextureSetId): Promise<SetTextures> {
   let p = setPromises.get(set);
+  if (!p && ktx2 && !ktx2Failed.has(set) && (TEXTURE_STATS[set] as { ktx2?: boolean } | undefined)?.ktx2) {
+    p = loadKtx2Set(set).catch((err) => {
+      console.warn(`[materials] compressed textures for ${set} failed; using JPEGs`, err);
+      setPromises.delete(set);
+      ktx2Failed.add(set);
+      return loadSet(set);
+    });
+    setPromises.set(set, p);
+  }
   if (!p) {
     const load = (file: string, srgb: boolean) =>
       new Promise<THREE.Texture>((resolve, reject) => {
@@ -140,7 +199,10 @@ function applyPhotoSet(m: THREE.MeshStandardMaterial, id: MaterialId, recipe: Ma
       const color = tx.color.clone();
       const normal = tx.normal.clone();
       const arm = tx.arm.clone();
-      for (const t of [color, normal, arm]) setRepeat(t, recipe);
+      for (const t of [color, normal, arm]) {
+        setRepeat(t, recipe);
+        releaseMipsAfterUpload(t);
+      }
       m.map = color;
       m.normalMap = normal;
       m.normalScale.setScalar(recipe.normal ?? 1);
