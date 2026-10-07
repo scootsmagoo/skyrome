@@ -10,6 +10,9 @@
  *   linen — finer, flatter weave
  *   hair  — strands flowing down from the crown
  *   leather / plate — faint grain, hammer marks
+ *   skin  — soft blotches and a little roughness variation
+ * Cloth also gets shading along the folds it hangs in, and cloth and skin a film of street dust
+ * toward the feet (bind-pose height; the avatar is built standing on y = 0).
  * Details fade out with distance (screen-space derivatives) so they never shimmer.
  *
  * Metals look best with `scene.environment` set (the sky module provides one); without it they
@@ -72,8 +75,22 @@ float avH = 0.0;
 float avTint = 1.0;
 float avRough = 0.0;
 float avBump = 0.0;
+float avDust = 0.0;
 {
   vec2 uv = av_uv();
+  bool avCloth = (avPat > 2.5 && avPat < 3.5) || (avPat > 4.5 && avPat < 5.5);
+  if (avCloth) {
+    // Folds: long soft creases running down (around the body's vertical axis), deeper low down
+    // where a tunic or toga hangs free.
+    float ang = atan(vRest.x, vRest.z);
+    float fold = av_noise(vec2(ang * 6.0, vRest.y * 1.1)) * 0.65 + av_noise(vec2(ang * 15.0, vRest.y * 2.3 + 7.0)) * 0.35;
+    float hang = 1.0 - smoothstep(0.7, 1.4, vRest.y);
+    avTint *= 1.0 - (0.08 + 0.1 * hang) * (1.0 - fold);
+  }
+  if (avCloth || (avPat > 7.5 && avPat < 8.5)) {
+    float top = 0.24 + 0.18 * av_noise(uv * 9.0);
+    avDust = (1.0 - smoothstep(0.02, top, vRest.y)) * 0.28;
+  }
   if (avPat > 0.5 && avPat < 1.5) {
     // Mail: staggered rings, ~7 mm.
     vec2 g = uv / 0.0075;
@@ -132,6 +149,13 @@ float avBump = 0.0;
     avTint = 0.88 + 0.2 * m;
     avH = m;
     avBump = 0.2;
+  } else if (avPat > 7.5 && avPat < 8.5) {
+    // Skin: soft blotches, a little shine where it is smoother.
+    float m = av_noise(uv * 22.0) * 0.6 + av_noise(uv * 70.0) * 0.4;
+    avTint = 0.95 + 0.1 * m;
+    avRough = (0.5 - m) * 0.12;
+    avH = m;
+    avBump = 0.04;
   } else if (avPat > 6.5 && avPat < 7.5) {
     // Plate: faint hammer marks and smudges.
     float m = av_noise(uv * 40.0) * 0.6 + av_noise(uv * 9.0) * 0.4;
@@ -154,7 +178,7 @@ export function avatarMaterial(): THREE.MeshStandardMaterial {
       .replace('#include <begin_vertex>', `#include <begin_vertex>\n${VERT_MAIN}`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${FRAG_PARS}`)
-      .replace('#include <color_fragment>', `#include <color_fragment>\n${FRAG_PATTERN}\ndiffuseColor.rgb *= avTint;`)
+      .replace('#include <color_fragment>', `#include <color_fragment>\n${FRAG_PATTERN}\ndiffuseColor.rgb *= avTint;\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.3, 0.25, 0.19), avDust);`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\nroughnessFactor = clamp(vSurf.x + avRough, 0.04, 1.0);`)
       .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>\nmetalnessFactor = vSurf.y;`)
       .replace(
@@ -163,7 +187,7 @@ export function avatarMaterial(): THREE.MeshStandardMaterial {
       )
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * vSurf.w * 3.0;`);
   };
-  m.customProgramCacheKey = () => 'skyrome-avatar-v2';
+  m.customProgramCacheKey = () => 'skyrome-avatar-v3';
   shared = m;
   return m;
 }

@@ -24,10 +24,10 @@ export interface Surf {
   emissive: number;
 }
 
-export const PATTERN = { none: 0, mail: 1, scale: 2, wool: 3, hair: 4, linen: 5, leather: 6, plate: 7 } as const;
+export const PATTERN = { none: 0, mail: 1, scale: 2, wool: 3, hair: 4, linen: 5, leather: 6, plate: 7, skin: 8 } as const;
 
 export const SURF = {
-  skin: { rough: 0.72, metal: 0, pattern: PATTERN.none, emissive: 0 },
+  skin: { rough: 0.72, metal: 0, pattern: PATTERN.skin, emissive: 0 },
   wool: { rough: 0.95, metal: 0, pattern: PATTERN.wool, emissive: 0 },
   linen: { rough: 0.88, metal: 0, pattern: PATTERN.linen, emissive: 0 },
   leather: { rough: 0.62, metal: 0, pattern: PATTERN.leather, emissive: 0 },
