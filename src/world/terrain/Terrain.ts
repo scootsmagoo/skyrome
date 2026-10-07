@@ -28,6 +28,7 @@ import { LAYER_COUNT, SPLAT_LAYERS, splatWeights, type SplatInput } from './spla
 import { buildTerrainData, decodeSdf, sampleChannel, WATER_OFFSET_RANGE, type TerrainData, type TerrainDataInputs } from './terrainData';
 import { createTerrainMaterial, defaultLayerUniforms, MAX_LOD_LEVELS, type TerrainUniforms } from './terrainMaterial';
 import { MATERIAL_RECIPES } from '../../gfx/textures/catalog';
+import { setWeatherGround } from '../../gfx/textures/shaderPatch';
 import { surfaceForWeights, type Surface } from './surface';
 
 export type { Surface } from './surface';
@@ -145,6 +146,8 @@ export class Terrain implements System {
     heightTex.magFilter = heightTex.minFilter = THREE.NearestFilter;
     heightTex.generateMipmaps = false;
     heightTex.needsUpdate = true;
+    // Walls read it too, for the grime at their feet.
+    setWeatherGround(heightTex, hm);
     const dataTex = (arr: Uint8Array) => {
       const t = new THREE.DataTexture(arr, hm.nx, hm.nz, THREE.RGBAFormat, THREE.UnsignedByteType);
       t.magFilter = THREE.LinearFilter;
@@ -343,6 +346,7 @@ export class Terrain implements System {
     this.game.scene.remove(this.group);
     this.geometry.dispose();
     this.material.dispose();
+    setWeatherGround(null, this.hm);
     for (const t of [this.uniforms.tHeight, this.uniforms.tDataA, this.uniforms.tDataB, this.uniforms.tAlbedo, this.uniforms.tSurface]) t.value.dispose();
   }
 }

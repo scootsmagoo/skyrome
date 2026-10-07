@@ -79,7 +79,7 @@ function createMaterial(id: MaterialId): THREE.Material {
   if (!hasDom) return m;
   if (recipe.set) applyPhotoSet(m, id, recipe, recipe.set);
   else if (recipe.proc) applyProcedural(m, id, recipe);
-  applyShaderPatch(m, { macro: recipe.macro, detile: recipe.detile, contrast: recipe.contrast, mean: recipe.set ? TEXTURE_STATS[recipe.set]?.albedo : undefined });
+  applyShaderPatch(m, { macro: recipe.macro, detile: recipe.detile, contrast: recipe.contrast, weather: recipe.weather, mean: recipe.set ? TEXTURE_STATS[recipe.set]?.albedo : undefined });
   return m;
 }
 

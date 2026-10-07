@@ -59,33 +59,35 @@ export interface MaterialRecipe {
   ao?: number;
   /** Albedo-map contrast around its mean (1 = as scanned). Photo sets only. */
   contrast?: number;
+  /** Weathering on walls: street grime at the foot, rain streaks (0 = off; ~1 for plaster). */
+  weather?: number;
 }
 
 export const MATERIAL_RECIPES: Record<MaterialId, MaterialRecipe> = {
   // stone
   // White marble's scanned veining is softened (contrast) so forms in shade read before the veins.
-  marble: { set: 'marble', tile: 2.4, normal: 0.6, macro: 0.05, contrast: 0.5 },
-  marble_veined: { set: 'marble_veined', tile: 2.4, normal: 0.6, macro: 0.05, contrast: 0.8 },
-  marble_giallo: { set: 'marble', tile: 2.0, normal: 0.6, macro: 0.08, contrast: 0.6 },
-  marble_pavonazzetto: { set: 'marble_veined', tile: 2.0, normal: 0.6, macro: 0.05, contrast: 0.9 },
+  marble: { set: 'marble', tile: 2.4, normal: 0.6, macro: 0.05, contrast: 0.5, weather: 0.35 },
+  marble_veined: { set: 'marble_veined', tile: 2.4, normal: 0.6, macro: 0.05, contrast: 0.8, weather: 0.35 },
+  marble_giallo: { set: 'marble', tile: 2.0, normal: 0.6, macro: 0.08, contrast: 0.6, weather: 0.35 },
+  marble_pavonazzetto: { set: 'marble_veined', tile: 2.0, normal: 0.6, macro: 0.05, contrast: 0.9, weather: 0.35 },
   porphyry: { proc: 'porphyry', tile: 0.8, macro: 0.04 },
   // Procedural ashlar travertine (laminae, voids along the bedding, hairline joints), drawn for a
   // 2.4 × 1.2 m repeat: two 0.6 m courses, smooth as in AD 113 (the pockmarks are medieval).
-  travertine: { proc: 'travertine', tile: [2.4, 1.2], normal: 0.4, macro: 0.09 },
-  tufa: { set: 'tufa', tile: 2.0, macro: 0.1 },
-  peperino: { set: 'peperino', tile: 1.6, macro: 0.08 },
-  basalt: { set: 'basalt', tile: 2.0, macro: 0.08 },
+  travertine: { proc: 'travertine', tile: [2.4, 1.2], normal: 0.4, macro: 0.09, weather: 0.7 },
+  tufa: { set: 'tufa', tile: 2.0, macro: 0.1, weather: 0.6 },
+  peperino: { set: 'peperino', tile: 1.6, macro: 0.08, weather: 0.6 },
+  basalt: { set: 'basalt', tile: 2.0, macro: 0.08, weather: 0.4 },
   rock: { set: 'rock', tile: 3.5, macro: 0.12, detile: true },
   // masonry / plaster
-  brick: { set: 'brick', tile: 1.1, macro: 0.08 },
-  reticulatum: { proc: 'reticulatum', tile: 0.85, macro: 0.08 },
-  concrete: { set: 'concrete', tile: 2.2, macro: 0.1 },
-  plaster_white: { set: 'plaster', tile: 2.5, macro: 0.06, normal: 0.8 },
-  plaster_cream: { set: 'plaster', tile: 2.5, macro: 0.07, normal: 0.8 },
-  plaster_ochre: { set: 'plaster', tile: 2.5, macro: 0.08, normal: 0.8 },
-  plaster_red: { set: 'plaster', tile: 2.5, macro: 0.08, normal: 0.8 },
-  plaster_dark: { set: 'plaster', tile: 2.5, macro: 0.06, normal: 0.8 },
-  stucco_painted: { proc: 'stucco', tile: [3.2, 3.2], macro: 0.04, normalize: false },
+  brick: { set: 'brick', tile: 1.1, macro: 0.08, weather: 0.6 },
+  reticulatum: { proc: 'reticulatum', tile: 0.85, macro: 0.08, weather: 0.6 },
+  concrete: { set: 'concrete', tile: 2.2, macro: 0.1, weather: 0.8 },
+  plaster_white: { set: 'plaster', tile: 2.5, macro: 0.06, normal: 0.8, weather: 1 },
+  plaster_cream: { set: 'plaster', tile: 2.5, macro: 0.07, normal: 0.8, weather: 1 },
+  plaster_ochre: { set: 'plaster', tile: 2.5, macro: 0.08, normal: 0.8, weather: 1 },
+  plaster_red: { set: 'plaster', tile: 2.5, macro: 0.08, normal: 0.8, weather: 0.9 },
+  plaster_dark: { set: 'plaster', tile: 2.5, macro: 0.06, normal: 0.8, weather: 0.6 },
+  stucco_painted: { proc: 'stucco', tile: [3.2, 3.2], macro: 0.04, normalize: false, weather: 0.8 },
   // roofs & metal
   roof_tile: { set: 'roof_tile', tile: 3.2, macro: 0.1 },
   gilded_bronze: { proc: 'gilded', tile: 1.2, normalize: false },
@@ -94,9 +96,9 @@ export const MATERIAL_RECIPES: Record<MaterialId, MaterialRecipe> = {
   lead: { proc: 'metal', tile: 1.5 },
   terracotta: { set: 'plaster', tile: 1.5, normal: 0.5, macro: 0.06, roughness: 0.8 },
   // wood & fabric
-  wood: { set: 'wood', tile: 1.8, macro: 0.08 },
-  wood_dark: { set: 'wood_dark', tile: 2.0, macro: 0.06 },
-  wood_painted: { set: 'wood', tile: 1.8, macro: 0.06 },
+  wood: { set: 'wood', tile: 1.8, macro: 0.08, weather: 0.4 },
+  wood_dark: { set: 'wood_dark', tile: 2.0, macro: 0.06, weather: 0.3 },
+  wood_painted: { set: 'wood', tile: 1.8, macro: 0.06, weather: 0.5 },
   fabric_white: { proc: 'fabric', tile: 0.6 },
   fabric_red: { proc: 'fabric', tile: 0.6 },
   fabric_purple: { proc: 'fabric', tile: 0.6 },
