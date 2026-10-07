@@ -7,6 +7,11 @@
  * so rotated / scaled instances all lean the same way. Grass can also shrink to nothing between
  * `fade[0]` and `fade[1]` meters from the camera (distance fade without transparency sorting).
  *
+ * Canopies (foliage_* materials, near LOD) are "leafy": toward the silhouette the surface is cut
+ * into leaf clumps (3D value noise in the tree's own frame, so it never swims), and both sides
+ * are drawn so the holes show the darker inside of the crown instead of the sky only. The fraying
+ * fades out with distance, where it would shimmer.
+ *
  * One material per (base id, profile) — cached, never per object.
  */
 import * as THREE from 'three';
@@ -32,6 +37,12 @@ export interface VegProfile {
 
 const cache = new Map<string, THREE.Material>();
 
+let leafyCanopies = true;
+/** Leafy canopies cost fill rate (two-sided, cut out): the Low graphics tier turns them off at boot. */
+export function setLeafyCanopies(on: boolean) {
+  leafyCanopies = on;
+}
+
 const HEAD = /* glsl */ `
 uniform float uVegTime;
 uniform float uVegWind;
@@ -41,6 +52,33 @@ uniform vec2 uVegFade;
 #ifdef VEG_HEADS
 attribute float aHead;
 #endif
+`;
+
+const LEAFY_VERT = /* glsl */ `
+#ifdef VEG_LEAFY
+  vLeafP = position;
+#endif
+`;
+
+const LEAFY_PARS = /* glsl */ `
+varying vec3 vLeafP;
+float leafHash( vec3 p ) { p = fract( p * 0.3183099 + 0.1 ); p *= 17.0; return fract( p.x * p.y * p.z * ( p.x + p.y + p.z ) ); }
+float leafNoise( vec3 x ) {
+  vec3 i = floor( x ), f = fract( x );
+  f = f * f * ( 3.0 - 2.0 * f );
+  return mix( mix( mix( leafHash( i ), leafHash( i + vec3( 1, 0, 0 ) ), f.x ), mix( leafHash( i + vec3( 0, 1, 0 ) ), leafHash( i + vec3( 1, 1, 0 ) ), f.x ), f.y ),
+              mix( mix( leafHash( i + vec3( 0, 0, 1 ) ), leafHash( i + vec3( 1, 0, 1 ) ), f.x ), mix( leafHash( i + vec3( 0, 1, 1 ) ), leafHash( i + vec3( 1, 1, 1 ) ), f.x ), f.y ), f.z );
+}
+`;
+
+const LEAFY_FRAG = /* glsl */ `
+{
+  // Fray the crown's silhouette into leaf clumps; the inside shows through, darker.
+  float lfRim = 1.0 - abs( dot( normal, normalize( vViewPosition ) ) );
+  float lfNear = smoothstep( 75.0, 35.0, length( vViewPosition ) );
+  float lfN = leafNoise( vLeafP * 4.5 ) * 0.75 + leafNoise( vLeafP * 11.0 + 3.1 ) * 0.25;
+  if ( lfN < ( lfRim * 1.25 - 0.32 ) * lfNear ) discard;
+}
 `;
 
 const SWAY = /* glsl */ `
@@ -85,13 +123,15 @@ const HEAD_COLOR = /* glsl */ `
  * colours already carry the albedo (far LODs).
  */
 export function vegMaterial(base: MaterialId | 'baked', p: VegProfile): THREE.Material {
-  const key = `${base}|${p.sway}|${p.flutter}|${p.fade?.join(',') ?? ''}|${p.doubleSide ? 1 : 0}|${p.heads ? 1 : 0}`;
+  const key = `${leafyCanopies ? 'L' : ''}${base}|${p.sway}|${p.flutter}|${p.fade?.join(',') ?? ''}|${p.doubleSide ? 1 : 0}|${p.heads ? 1 : 0}`;
   let m = cache.get(key);
   if (m) return m;
   const mat = base === 'baked' ? new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92 }) : (getMaterial(base) as THREE.MeshStandardMaterial).clone();
   mat.name = `veg:${key}`;
   mat.vertexColors = true;
-  if (p.doubleSide) mat.side = THREE.DoubleSide;
+  const leafy = leafyCanopies && base !== 'baked' && base.startsWith('foliage');
+  if (p.doubleSide || leafy) mat.side = THREE.DoubleSide;
+  if (leafy) mat.defines = { ...(mat.defines ?? {}), VEG_LEAFY: '' };
   if (p.fade) mat.defines = { ...(mat.defines ?? {}), VEG_FADE: '' };
   if (p.heads) mat.defines = { ...(mat.defines ?? {}), VEG_HEADS: '' };
   const sway = { value: p.sway }, flutter = { value: p.flutter }, fade = { value: new THREE.Vector2(...(p.fade ?? [0, 0])) };
@@ -102,11 +142,17 @@ export function vegMaterial(base: MaterialId | 'baked', p: VegProfile): THREE.Ma
     shader.uniforms.uVegFlutter = flutter;
     shader.uniforms.uVegFade = fade;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\n${HEAD}`)
-      .replace('#include <begin_vertex>', `#include <begin_vertex>\n${SWAY}`);
+      .replace('#include <common>', `#include <common>\n${HEAD}${leafy ? 'varying vec3 vLeafP;' : ''}`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\n${LEAFY_VERT}${SWAY}`);
+    if (leafy) {
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', `#include <common>\n${LEAFY_PARS}`)
+        .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>\n${LEAFY_FRAG}`)
+        .replace('#include <color_fragment>', '#include <color_fragment>\nif ( !gl_FrontFacing ) diffuseColor.rgb *= 0.75;');
+    }
     if (p.heads) shader.vertexShader = shader.vertexShader.replace('#include <color_vertex>', HEAD_COLOR);
   };
-  mat.customProgramCacheKey = () => `veg|${p.fade ? 1 : 0}|${p.heads ? 1 : 0}`;
+  mat.customProgramCacheKey = () => `veg|${p.fade ? 1 : 0}|${p.heads ? 1 : 0}|${leafy ? 1 : 0}`;
   cache.set(key, mat);
   m = mat;
   return m;
