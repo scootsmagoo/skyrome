@@ -20,6 +20,12 @@ export interface CompassItem {
   icon?: MapIconKind;
   discovered?: boolean;
   label?: string;
+  /** Quest: the tracked quest's next required objective (big, glowing, with its distance). */
+  primary?: boolean;
+  /** Ground height at the target, when known (the world marker floats over it). */
+  y?: number;
+  /** An NPC target (the world marker sits over a head, not a place). */
+  npc?: boolean;
 }
 
 export class Compass {
@@ -80,6 +86,10 @@ export class Compass {
         this.markerLayer.appendChild(el);
       }
       setClass(el, 'is-undiscovered', it.kind === 'location' && !it.discovered);
+      if (it.primary) {
+        const dist = el.querySelector('.dist');
+        if (dist) dist.textContent = formatDistance(Math.hypot(it.x - px, it.z - pz));
+      }
       el.style.transform = `translate3d(${cw(pos / 2)},0,0)`;
       el.style.opacity = String(it.kind === 'quest' ? 1 : edgeFade(pos));
     }
@@ -95,12 +105,20 @@ export class Compass {
     const cls = `hud-cmark ${it.kind}`;
     if (it.kind === 'enemy') return h('div', { class: cls });
     if (it.kind === 'quest') {
-      const el = h('div', { class: cls });
+      // The next step is unmistakable; optional objectives stay small and quiet.
+      const el = h('div', { class: `${cls} ${it.primary ? 'is-primary' : 'is-minor'}` });
       el.innerHTML = iconSvg(UI_ICONS.questMarker);
+      if (it.primary) el.appendChild(h('span', { class: 'dist' }));
       return el;
     }
     const el = h('div', { class: cls });
     el.innerHTML = iconSvg(LOCATION_ICONS[it.icon ?? 'landmark']);
     return el;
   }
+}
+
+/** "40 m", "350 m", "1.2 km" (game metres). */
+export function formatDistance(m: number): string {
+  if (m < 1000) return `${Math.max(1, Math.round(m / 5) * 5)} m`;
+  return `${(m / 1000).toFixed(1)} km`;
 }

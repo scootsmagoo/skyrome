@@ -31,6 +31,8 @@ declare module '../core/Settings' {
     /** 'auto' fades the resource bars when full; 'always' keeps them on screen. */
     hudBars?: 'auto' | 'always';
     crosshair?: boolean;
+    /** The objective tracker (top right): the tracked quest and what to do next (default on). */
+    objectiveTracker?: boolean;
     /** Player rebinds of core actions (merged over DEFAULT_BINDINGS). */
     bindings?: Partial<Bindings>;
     uiBindings?: Partial<Record<UiAction, string[]>>;

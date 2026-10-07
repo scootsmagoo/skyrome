@@ -15,6 +15,7 @@ import { BossBar, ResourceBar, TargetBar } from './Bars';
 import { Compass, type CompassItem } from './Compass';
 import { bearingOfDir, bearingTo, relativeBearing } from './compassMath';
 import { Banners, HitIndicator, Notifications, Subtitles } from './Feed';
+import { QUEST_GUIDE_CSS, QuestGuide, type GuideTarget } from './QuestGuide';
 import './hud.css';
 
 const dir = new THREE.Vector3();
@@ -36,6 +37,9 @@ export class Hud {
   readonly banners = new Banners();
   readonly subtitles = new Subtitles();
   readonly hits = new HitIndicator();
+  readonly guide = new QuestGuide();
+  /** The tracked quest's next required objective (refreshed with the compass markers). */
+  private guideTarget: GuideTarget | null = null;
 
   private crosshair: HTMLElement;
   private prompt: HTMLElement;
@@ -65,6 +69,7 @@ export class Hud {
     private readonly game: Game,
     private readonly sources: UISources,
   ) {
+    if (typeof document !== 'undefined' && !document.getElementById('hud-quest-guide')) document.head.appendChild(h('style', { id: 'hud-quest-guide' }, QUEST_GUIDE_CSS));
     this.crosshair = h('div', { class: 'hud-crosshair' }, h('i', { class: 'dot' }), h('i', { class: 'ring' }));
     this.promptName = h('div', { class: 'name' });
     this.promptKey = h('span', { class: 'sr-key' });
@@ -93,6 +98,8 @@ export class Hud {
       // Top center stacks instead of overlapping: compass, enemy bar, then banners.
       h('div', { class: 'hud-top' }, this.compass.el, this.target.el, this.banners.el),
       this.notes.el,
+      this.guide.marker,
+      this.guide.tracker,
       this.hits.el,
       this.crosshair,
       this.sneak,
@@ -150,6 +157,8 @@ export class Hud {
       this.items = this.collectMarkers(p.x, p.z);
     }
     this.compass.update(heading, p.x, p.z, this.items, !!game.settings.data.compassLatin);
+    const canvas = game.renderer.domElement;
+    this.guide.update(dt, this.guideTarget, cam, canvas.clientWidth || window.innerWidth, canvas.clientHeight || window.innerHeight, p, game.settings.data.objectiveTracker !== false);
 
     // ---- resource bars
     const vitals = sources.vitals?.() ?? null;
@@ -232,19 +241,30 @@ export class Hud {
     const map = s.map?.();
     let locations: MapLocation[] | null = null;
     const locs = () => (locations ??= map?.locations() ?? []);
+    this.guideTarget = null;
     if (log) {
       for (const q of log.quests()) {
         if (!q.tracked || q.state !== 'active') continue;
-        for (const o of q.objectives) {
-          if (o.done || !o.target) continue;
-          let pos = s.resolveTarget?.(o.target) ?? null;
-          if (!pos && o.target.kind === 'point') pos = { x: o.target.x, z: o.target.z };
-          if (!pos && o.target.kind === 'location') {
-            const id = o.target.id;
+        // The next step: the first required objective still open (else the first open one).
+        const open = q.objectives.filter((o) => !o.done && o.target);
+        const main = open.find((o) => !o.optional) ?? open[0];
+        for (const o of open) {
+          const t = o.target!;
+          let pos: { x: number; y?: number; z: number } | null = s.resolveTarget?.(t) ?? null;
+          if (!pos && t.kind === 'point') pos = { x: t.x, y: t.y, z: t.z };
+          if (!pos && t.kind === 'location') {
+            const id = t.id;
             const l = locs().find((x) => x.id === id);
             if (l) pos = { x: l.x, z: l.z };
           }
-          if (pos) out.push({ key: `q:${q.id}:${o.id}`, kind: 'quest', x: pos.x, z: pos.z });
+          if (!pos) continue;
+          const primary = o === main;
+          out.push({ key: `q:${q.id}:${o.id}:${primary ? 'p' : 'm'}`, kind: 'quest', x: pos.x, z: pos.z, primary });
+          if (primary && !this.guideTarget) {
+            const y = pos.y ?? this.game.heightmap?.heightAt(pos.x, pos.z) ?? 0;
+            const progress = o.count && o.count > 1 ? `${o.progress ?? 0} / ${o.count}` : undefined;
+            this.guideTarget = { questTitle: q.title, text: o.text, progress, x: pos.x, y, z: pos.z, npc: t.kind === 'npc' };
+          }
         }
       }
     }

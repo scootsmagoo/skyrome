@@ -81,6 +81,7 @@ export const SETTINGS_SECTIONS: { id: string; label: string; latin: string; rows
       { kind: 'toggle', key: 'subtitles', label: 'Subtitles', invert: true },
       { kind: 'choice', key: 'hudBars', label: 'Health bars', options: [{ value: 'auto', label: 'Auto' }, { value: 'always', label: 'Always' }] },
       { kind: 'toggle', key: 'crosshair', label: 'Crosshair', invert: true },
+      { kind: 'toggle', key: 'objectiveTracker', label: 'Objective tracker', invert: true, note: 'The current quest step in the top right corner' },
       { kind: 'toggle', key: 'showFps', label: 'Show frame rate' },
     ],
   },

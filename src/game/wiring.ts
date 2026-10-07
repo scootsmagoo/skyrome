@@ -62,7 +62,7 @@ export function registerMarkerResolvers(game: Game) {
 function resolver(game: Game) {
   return (t: MarkerTarget) => {
     const v = game.quests?.resolveTarget(t);
-    return v ? { x: v.x, z: v.z } : null;
+    return v ? { x: v.x, y: v.y, z: v.z } : null;
   };
 }
 

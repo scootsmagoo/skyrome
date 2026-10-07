@@ -456,7 +456,7 @@ export interface UISources {
   /** Extra compass markers (enemies in combat, companions). */
   compassMarkers?: () => CompassMarker[];
   /** Resolve a quest marker target to a position (NPC → its actor, location → its center). */
-  resolveTarget?: (t: MarkerTarget) => { x: number; z: number } | null;
+  resolveTarget?: (t: MarkerTarget) => { x: number; y?: number; z: number } | null;
   target?: () => TargetView | null;
   boss?: () => BossView | null;
   /** Sneak detection 0 (hidden) .. 1 (detected); null when unknown. */

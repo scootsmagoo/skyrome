@@ -145,6 +145,8 @@ export class QuestSystem {
   /** Saved states of quests whose definitions are missing (kept so they survive a resave). */
   private orphans: Record<string, QuestState> = {};
   private _tracked: string | null = null;
+  /** newGame() is starting the autoStart quests (they don't take the tracking from the main one). */
+  private autoStarting = false;
   private readonly resolvers = new Map<MarkerTarget['kind'], Resolver>();
 
   /**
@@ -216,7 +218,12 @@ export class QuestSystem {
     this.flags.clear();
     this._tracked = null;
     for (const id of this.defs.keys()) this.subscribe(id);
-    for (const d of this.defs.values()) if (d.autoStart) this.start(d.id);
+    this.autoStarting = true;
+    try {
+      for (const d of this.defs.values()) if (d.autoStart) this.start(d.id);
+    } finally {
+      this.autoStarting = false;
+    }
   }
 
   start(id: string, stage = 'start'): boolean {
@@ -235,7 +242,9 @@ export class QuestSystem {
     this.subscribe(id);
     this.game.events.emit('quest:started', { questId: id });
     this.notify(`Quest started: ${def.title}`);
-    if (!this._tracked || def.category === 'main') this.track(id);
+    // A new quest is the one the player follows now (as in Skyrim): it takes the compass, the
+    // world marker and the tracker. The quests a new game starts by itself leave the main one leading.
+    if (!this._tracked || def.category === 'main' || !this.autoStarting) this.track(id);
     this.enterStage(id, stage);
     return true;
   }
@@ -304,7 +313,10 @@ export class QuestSystem {
       this.game.events.emit('quest:failed', { questId: id });
       this.notify(`Quest failed: ${def.title}`);
     }
-    if (this._tracked === id) this.track(this.running()[0]?.id ?? null);
+    if (this._tracked === id) {
+      const rest = this.running();
+      this.track((rest.find((d) => d.category === 'main') ?? rest[0])?.id ?? null);
+    }
   }
 
   // ---------------------------------------------------------------- objectives
