@@ -7,7 +7,7 @@
  *
  *   node scripts/perf.mjs [--views spawn,forum,circus,colosseum,pantheon] [--browser webkit]
  *                         [--size 1280x720] [--dpr 2] [--fps 0] [--settle 5000] [--json out.json]
- *                         [--url <server>] [--settings '{"ao":false}']
+ *                         [--url <server>] [--settings '{"ao":false}'] [--query 'a=1&b=2']
  *
  * `--dpr 2 --size 1512x860` approximates a MacBook's browser window. `--fps 60` measures with the
  * default frame cap instead of uncapped. GPU time comes from EXT_disjoint_timer_query_webgl2
@@ -66,7 +66,7 @@ try {
     if (args.settings) await page.addInitScript((s) => localStorage.setItem('skyrome.settings.v1', s), String(args.settings));
     page.on('pageerror', (e) => errors.push(String(e?.message ?? e)));
     const [query, tp] = Array.isArray(VIEWS[view]) ? VIEWS[view] : [VIEWS[view], null];
-    const url = `${baseUrl}?scene=rome&quick=1&hour=10&fps=${fpsCap}${query}`;
+    const url = `${baseUrl}?scene=rome&quick=1&hour=10&fps=${fpsCap}${query}${args.query ? `&${args.query}` : ''}`;
     const t0 = Date.now();
     await page.goto(url, { waitUntil: 'load' });
     await page.waitForFunction(() => window.__skyrome?.ready || window.__skyrome?.error, null, { timeout: 120000, polling: 100 });
