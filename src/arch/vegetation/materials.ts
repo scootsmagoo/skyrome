@@ -76,8 +76,8 @@ const LEAFY_FRAG = /* glsl */ `
   // Fray the crown's silhouette into leaf clumps; the inside shows through, darker.
   float lfRim = 1.0 - abs( dot( normal, normalize( vViewPosition ) ) );
   float lfNear = smoothstep( 75.0, 35.0, length( vViewPosition ) );
-  float lfN = leafNoise( vLeafP * 4.5 ) * 0.75 + leafNoise( vLeafP * 11.0 + 3.1 ) * 0.25;
-  if ( lfN < ( lfRim * 1.25 - 0.32 ) * lfNear ) discard;
+  float lfN = leafNoise( vLeafP * 3.0 ) * 0.8 + leafNoise( vLeafP * 8.0 + 3.1 ) * 0.2;
+  if ( lfN < ( smoothstep( 0.55, 1.0, lfRim ) * 0.75 - 0.05 ) * lfNear ) discard;
 }
 `;
 

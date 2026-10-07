@@ -608,14 +608,11 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
         lab[i] = -1;
       }
     });
-    const steps: boolean[] = [];
-    for (let k = 0; k + 1 < pts.length; k++) {
-      const L = Math.hypot(pts[k + 1][0] - pts[k][0], pts[k + 1][1] - pts[k][1]);
-      const dy = Math.abs(hm.heightAt(pts[k + 1][0], pts[k + 1][1]) - hm.heightAt(pts[k][0], pts[k][1]));
-      // A flight only for a real climb: a short steep bit (under ~5 risers) stays a ramp, which
-      // walks fine and does not leave a stub of three steps standing in a lane.
-      steps.push(L > 0 && dy / L > 0.16 && dy >= 0.9);
-    }
+    // Minor streets never get flights: a straight flight laid between two points of a curved
+    // slope stood out of the ground (or into it), and stubs led nowhere where the lane beyond was
+    // not built. A steep lane is a ramp that follows the ground (the character climbs 50°); the
+    // atlas's own stairways (scalae) keep their steps (roads.ts stairsRoad).
+    const steps: boolean[] = pts.slice(1).map(() => false);
     streets.push({ id: `st${si}`, index: si, points: pts, width, kind, level, steps, density: ch.density, wealth: ch.wealth, corridor: ch.corridor });
     // Re-label the pieces.
     const pieces = splitCells(g, c.cells, (i) => lab[i] === c.id && cls[i] === K.FREE, mark, stamp);

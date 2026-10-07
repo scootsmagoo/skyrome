@@ -1305,17 +1305,39 @@ export function gardenLayout(d: Draw, ctx: LandmarkContext, w: number, dd: numbe
       }
     }
   }
-  // Walks: a cross of main allées and secondary paths, as gravel strips draped in segments.
+  // Walks: a cross of main allées and secondary paths, as strips draped on the ground every metre
+  // (flat 5 m boxes floated off the slope at one end and sank at the other).
   const strip = (ax: number, az: number, bx: number, bz: number, wd: number, mat: MaterialId = 'gravel') => {
     const len = Math.hypot(bx - ax, bz - az);
-    const n = Math.max(1, Math.round(len / 5));
     const ux = (bx - ax) / len, uz = (bz - az) / len;
-    for (let k = 0; k < n; k++) {
-      const cx = ax + ux * ((k + 0.5) * len) / n, cz = az + uz * ((k + 0.5) * len) / n;
-      if (!free(cx, cz, wd)) continue;
-      const y = g(cx, cz);
-      d.box(mat, cx, y - 0.1, cz, Math.abs(ux) * (len / n + 0.1) + Math.abs(uz) * wd, 0.3, Math.abs(uz) * (len / n + 0.1) + Math.abs(ux) * wd);
+    const nx = -uz * (wd / 2), nz = ux * (wd / 2);
+    const n = Math.max(1, Math.round(len));
+    const lift = 0.05;
+    const pos: number[] = [];
+    let run: [number, number, number, number, number, number][] = [];
+    const flush = () => {
+      for (let k = 0; k + 1 < run.length; k++) {
+        const [lx0, ly0, lz0, rx0, ry0, rz0] = run[k], [lx1, ly1, lz1, rx1, ry1, rz1] = run[k + 1];
+        pos.push(lx0, ly0, lz0, lx1, ly1, lz1, rx0, ry0, rz0, rx0, ry0, rz0, lx1, ly1, lz1, rx1, ry1, rz1);
+      }
+      run = [];
+    };
+    for (let k = 0; k <= n; k++) {
+      const cx = ax + ((bx - ax) * k) / n, cz = az + ((bz - az) * k) / n;
+      if (!free(cx, cz, wd / 2)) {
+        flush();
+        continue;
+      }
+      run.push([cx + nx, g(cx + nx, cz + nz) + lift, cz + nz, cx - nx, g(cx - nx, cz - nz) + lift, cz - nz]);
     }
+    flush();
+    if (!pos.length) return;
+    // Orient every triangle up.
+    for (let i = 0; i < pos.length; i += 9) {
+      const e1x = pos[i + 3] - pos[i], e1z = pos[i + 5] - pos[i + 2], e2x = pos[i + 6] - pos[i], e2z = pos[i + 8] - pos[i + 2];
+      if (e1z * e2x - e1x * e2z < 0) for (let c = 0; c < 3; c++) [pos[i + 3 + c], pos[i + 6 + c]] = [pos[i + 6 + c], pos[i + 3 + c]];
+    }
+    d.tris(mat, pos);
   };
   strip(-w / 2, 0, w / 2, 0, 5, 'paving_travertine');
   strip(0, -dd / 2, 0, dd / 2, 5, 'paving_travertine');

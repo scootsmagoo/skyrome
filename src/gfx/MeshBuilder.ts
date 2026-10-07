@@ -18,6 +18,7 @@ import { getMaterial } from './materials';
 import type { MaterialId } from './materialIds';
 import { boxProjectUVs } from './uv';
 import { separateCoplanar } from './coplanar';
+import { AUDIT, auditRecordBuild, currentAuditSource } from '../dev/audit/geomAudit';
 
 export type ColliderSpec =
   | { kind: 'box'; center: THREE.Vector3; half: THREE.Vector3; rotation?: THREE.Quaternion }
@@ -66,6 +67,8 @@ export class MeshBuilder {
   /** Instanced objects: key → placements (and how to make the parts, once). */
   private instances = new Map<string, { make: () => InstancePart[]; matrices: THREE.Matrix4[] }>();
   readonly colliders: ColliderSpec[] = [];
+  /** Prop base points (geometry audit only, ?audit). */
+  readonly auditProps: { kind: string; p: THREE.Vector3; src: string }[] = [];
 
   /**
    * Add geometry (it is cloned and transformed; the input is not modified). `material` is a
@@ -80,6 +83,7 @@ export class MeshBuilder {
     for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv') g.deleteAttribute(name);
     g.morphAttributes = {};
     g.userData.seq = ++seq;
+    if (AUDIT) g.userData.src = currentAuditSource();
     const key = `${this.materialKey(material)}|${opts.castShadow === false ? 0 : 1}`;
     const list = this.parts.get(key) ?? [];
     list.push(g);
@@ -166,6 +170,18 @@ export class MeshBuilder {
       mesh.receiveShadow = true;
       group.add(mesh);
     }
+    if (AUDIT) {
+      const audit: { geometry: THREE.BufferGeometry; material: string }[] = [];
+      for (const [key, geoms] of this.parts) for (const g of geoms) audit.push({ geometry: g, material: (this.custom.get(key.split('|')[0])?.name || key.split('|')[0]) });
+      for (const [key, { make, matrices }] of this.instances) {
+        for (const part of preparedInstance(key, make).values()) {
+          const flat = part.geometry.index ? part.geometry.toNonIndexed() : part.geometry;
+          const mat = typeof part.material === 'string' ? part.material : part.material.name;
+          for (const mm of matrices) audit.push({ geometry: flat.clone().applyMatrix4(mm), material: mat });
+        }
+      }
+      auditRecordBuild(name, group, audit, this.auditProps);
+    }
     return group;
   }
 
@@ -186,6 +202,7 @@ export class MeshBuilder {
       this.parts.set(key, list);
     }
     for (const c of other.colliders) this.colliders.push(matrix ? transformCollider(c, matrix) : c);
+    for (const p of other.auditProps) this.auditProps.push(matrix ? { ...p, p: p.p.clone().applyMatrix4(matrix) } : p);
     return this;
   }
 

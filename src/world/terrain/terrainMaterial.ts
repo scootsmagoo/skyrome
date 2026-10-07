@@ -49,6 +49,7 @@ export interface TerrainUniforms {
 
 const VERTEX_PARS = /* glsl */ `
 uniform highp sampler2D tHeight;
+uniform sampler2D tDataA;
 uniform vec4 uGrid;
 uniform vec2 uGridN;
 uniform vec2 uMorph[ ${MAX_LOD_LEVELS} ];
@@ -86,6 +87,17 @@ const VERTEX_TERRAIN = /* glsl */ `
   tXZ = min( tXZ, tMax );
   int tL1 = min( tL + 1, ${MAX_LOD_LEVELS - 1} );
   float tY = tHeightAt( tXZ ) - mix( uBias[ tL ], uBias[ tL1 ], tMorph ) - tSkirtV * uSkirt[ tL ];
+  {
+    // Under paved roads and building pads the terrain drops 9 cm out of sight: the floors, paving
+    // and roads laid there sit on the same heights, and where they meet the ground exactly the two
+    // fought (patches of grass or earth flickering through stone). Visual only: physics keeps the
+    // true heightfield.
+    vec2 tUVv = ( ( tXZ - uGrid.xy ) / uGrid.z + 0.5 ) / uGridN;
+    vec4 tDAv = textureLod( tDataA, tUVv, 0.0 );
+    float tRoadV = ( tDAv.b - 0.5 ) * ${(2 * SDF_RANGE).toFixed(1)};
+    float tPadV = ( tDAv.a - 0.5 ) * ${(2 * SDF_RANGE).toFixed(1)};
+    tY -= 0.09 * max( smoothstep( 0.75, -0.25, tRoadV ), smoothstep( 0.75, -0.25, tPadV ) );
+  }
   float tE = uGrid.z;
   float tHx = tHeightAt( tXZ + vec2( tE, 0.0 ) ) - tHeightAt( tXZ - vec2( tE, 0.0 ) );
   float tHz = tHeightAt( tXZ + vec2( 0.0, tE ) ) - tHeightAt( tXZ - vec2( 0.0, tE ) );

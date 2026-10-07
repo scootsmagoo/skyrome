@@ -14,6 +14,7 @@
  */
 import * as THREE from 'three';
 import { Rng } from '../../core/Rng';
+import { withAuditSource } from '../../dev/audit/geomAudit';
 import { buildPlaza, buildStairs, buildStreet, type StreetSpec } from '../../arch/fabric/streets';
 import { Draw } from '../../arch/fabric/draw';
 import { compitalShrine } from '../../arch/fabric/shrines';
@@ -59,6 +60,9 @@ const LIFT = { road: 0.07, junction: 0.1, vicus: 0.055, lane: 0.05, alley: 0.045
 
 /** Landmark categories a road stops at (it runs round them, not through them). */
 const SOLID = new Set(['temple', 'basilica', 'baths', 'palace', 'theatre', 'amphitheatre', 'stadium', 'library', 'curia', 'warehouse', 'prison', 'odeum', 'house', 'tomb']);
+
+/** Tag a work item's geometry with its source for the geometry audit (?audit). */
+const T = (tag: string, fn: (b: MeshBuilder) => void) => (b: MeshBuilder) => withAuditSource(tag, () => fn(b));
 
 export function cellKey(x: number, z: number, size: number) {
   return `${Math.floor(x / size)},${Math.floor(z / size)}`;
@@ -241,7 +245,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
       const x0 = x, z0 = z;
       // Cells that overlap the area at all (the cover itself stops at the area's edge).
       if (!rects.some((r) => r.minX < x0 + size && r.maxX > x0 && r.minZ < z0 + size && r.maxZ > z0)) continue;
-      addCell(x0 + size / 2, z0 + size / 2, (b) => groundCover(b, plan, H, x0, z0, size, inArea));
+      addCell(x0 + size / 2, z0 + size / 2, T('ground-cover', (b) => groundCover(b, plan, H, x0, z0, size, inArea)));
     }
   }
 
@@ -254,7 +258,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
       poly.push([j.p[0] + Math.cos(a) * j.r, j.p[1] + Math.sin(a) * j.r]);
     }
     const allRural = j.roads.every((r) => plan.roads[r].style !== 'paved');
-    add(j.p[0], j.p[1], (b) => buildPlaza(b, poly, H, { material: allRural ? 'gravel' : 'paving_basalt', lift: LIFT.junction, cell: 2.5, skirt: 0.35 }));
+    add(j.p[0], j.p[1], T(`junction:${j.id}`, (b) => buildPlaza(b, poly, H, { material: allRural ? 'gravel' : 'paving_basalt', lift: LIFT.junction, cell: 2.5, skirt: 0.35 })));
   }
 
   // ---- atlas roads
@@ -268,7 +272,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
       const mid = road.points[Math.floor(road.points.length / 2)];
       // Where another road crosses the stairway, its parapets open onto the crossing.
       const open = junctions.filter((j) => j.roads.includes(ri)).map((j) => ({ x: j.p[0], z: j.p[1], r: j.r + 0.6 }));
-      add(mid[0], mid[1], (bld) => stairsRoad(bld, road, sp, H, open));
+      add(mid[0], mid[1], T(`stairs-road:${road.id}`, (bld) => stairsRoad(bld, road, sp, H, open)));
       return;
     }
     // Arc-length intervals taken by junction squares.
@@ -310,7 +314,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
           if (pts.length < 2) return;
           const mid = pts[Math.floor(pts.length / 2)];
           const capStart = k === 0, capEnd = k === pieces.length - 1;
-          add(mid[0], mid[1], (bld) => buildRoadPiece(bld, road, c, pts, H, capStart, capEnd));
+          add(mid[0], mid[1], T(`road:${road.id}:${c}`, (bld) => buildRoadPiece(bld, road, c, pts, H, capStart, capEnd)));
         });
       }
     }
@@ -356,7 +360,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
         for (let j = 0; j < st.points.length - 1; j++) {
           if (segs[j].s0 < s0 - 1e-6 || segs[j].s1 > s1 + 1e-6) continue;
           const a = st.points[j], c = st.points[j + 1];
-          add((a[0] + c[0]) / 2, (a[1] + c[1]) / 2, (bld) => buildStairs(bld, a as Vec2, c as Vec2, Math.max(2.6, st.width - 0.4), (x, z) => H(x, z) + 0.04, { material: st.wealth > 0.5 ? 'travertine' : 'tufa', riser: 0.17, parapet: null }));
+          add((a[0] + c[0]) / 2, (a[1] + c[1]) / 2, T(`street-stairs:${st.id}`, (bld) => buildStairs(bld, a as Vec2, c as Vec2, Math.max(2.6, st.width - 0.4), (x, z) => H(x, z) + 0.04, { material: st.wealth > 0.5 ? 'travertine' : 'tufa', riser: 0.17, parapet: null })));
         }
         continue;
       }
@@ -367,7 +371,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
           const pts = sliceLine(st.points, p0, p1);
           if (pts.length < 2) return;
           const mid = pts[Math.floor(pts.length / 2)];
-          add(mid[0], mid[1], (bld) => buildMinorPiece(bld, st, pts, H, k2 === 0, k2 === pieces.length - 1));
+          add(mid[0], mid[1], T(`street:${st.id}:${st.kind}`, (bld) => buildMinorPiece(bld, st, pts, H, k2 === 0, k2 === pieces.length - 1)));
         });
       }
     }
@@ -520,14 +524,14 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
     const travertine = rng.chance(0.5);
     const amphorae = rng.chance(0.4);
     const seed = rng.int(0, 1e9);
-    add(pz.center[0], pz.center[1], (b) => {
+    add(pz.center[0], pz.center[1], T(`piazza:${pz.id}`, (b) => {
       const poly: Polygon = [];
       for (let k = 0; k < 14; k++) {
         const a = (k / 14) * Math.PI * 2;
         poly.push([pz.center[0] + Math.cos(a) * pz.r, pz.center[1] + Math.sin(a) * pz.r]);
       }
       buildPlaza(b, poly, H, { material: travertine ? 'paving_travertine' : 'cobbles', lift: LIFT.piazza, cell: 2.5, skirt: 0.3 });
-    });
+    }));
     add(pz.center[0], pz.center[1], (b) => {
       const r = new Rng(seed);
       const d = new Draw(b).at(pz.center[0], y, pz.center[1], rot);
@@ -735,6 +739,18 @@ export function coverKinds(plan: CityPlan, x0: number, z0: number, size: number,
       const x = g.cx(ix), z = g.cz(iz);
       let k = 0;
       const block = cls === K.FREE && g.owner[i] >= 2_000_000 ? plan.blocks[g.owner[i] - 2_000_000] : null;
+      // Only ground nothing else draws on: not a landmark's margin (the terrain paints its apron),
+      // not a piazza, and not the strip a road or street itself paves (overlapping surfaces showed
+      // as cobble patches over basalt and paving, and fought where they met).
+      if (cls === K.MARGIN || cls === K.PIAZZA) continue;
+      if (cls === K.ROAD) {
+        const road = plan.roads[g.owner[i] - 1_000_000];
+        if (road && nearestOnPolyline([x, z], road.points as Vec2[]).d < road.half + 0.4) continue;
+      }
+      if (cls === K.STREET) {
+        const st = plan.streets[g.owner[i]];
+        if (st && nearestOnPolyline([x, z], st.points as Vec2[]).d < st.width / 2 + 0.4) continue;
+      }
       if (block && pointIn([x, z], block.outline as Vec2[])) k = 0;
       else if (PAVED.has(cls) && (cls !== K.ROAD || pavedRoad(i))) k = 2;
       else if (COVER.has(cls) || (cls === K.ROAD && !pavedRoad(i))) k = (cls === K.SCRAP || cls === K.PIAZZA || cls === K.FREE) && plan.corridor(x, z) ? 2 : 1;
@@ -744,6 +760,10 @@ export function coverKinds(plan: CityPlan, x0: number, z0: number, size: number,
       }
       if (k) out.set(i, k);
     }
+  }
+  // Lone cells (no covered 4-neighbour) read as stray tiles: drop them.
+  for (const [i, k] of [...out]) {
+    if (![i - 1, i + 1, i - g.nx, i + g.nx].some((o) => out.get(o) === k)) out.delete(i);
   }
   return out;
 }
@@ -765,7 +785,9 @@ function coverSet(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: n
     const p0 = v(pts[0][0], pts[0][1]);
     for (let k = 1; k + 1 < pts.length; k++) pos.push(...p0, ...v(pts[k][0], pts[k][1]), ...v(pts[k + 1][0], pts[k + 1][1]));
   };
-  const maxRun = Math.max(1, Math.round(6 / c));
+  // One lattice square per quad: longer runs were draped only at their ends, and the ground bulged
+  // through them in between.
+  const maxRun = 1;
   // Only squares whose top-left lattice point lies in this cell (each square is emitted once).
   const sx0 = Math.max(ix0, g.ix(x0 + c / 2)), sz0 = Math.max(iz0, g.iz(z0 + c / 2));
   const sx1 = Math.min(ix1, g.ix(x0 + size + c / 2) - 1), sz1 = Math.min(iz1, g.iz(z0 + size + c / 2) - 1);

@@ -4,6 +4,7 @@ import { DebugOverlay } from './dev/DebugOverlay';
 import { GraphicsGovernor } from './core/graphics';
 import { enableCompressedTextures } from './gfx/materials';
 import { setLeafyCanopies } from './arch/vegetation/materials';
+import { AUDIT, analyzeArea, auditRecordCount } from './dev/audit/geomAudit';
 import type { SceneDef } from './scenes/types';
 
 const sceneModules = import.meta.glob<{ default: SceneDef }>('./scenes/*.ts');
@@ -27,6 +28,8 @@ async function boot() {
   const game = await Game.create(app, { seed: Number(params.get('seed') ?? 113) });
   window.__skyrome = { game, scene: sceneName, ready: false };
   enableCompressedTextures(game.renderer);
+  // Geometry audit hooks for scripts/crawl.mjs (?audit).
+  if (AUDIT) (window as unknown as { __audit: unknown }).__audit = { analyzeArea, auditRecordCount };
   {
     const s = game.settings.data;
     const tier = s.graphics && s.graphics !== 'auto' ? s.graphics : s.graphicsApplied?.tier;

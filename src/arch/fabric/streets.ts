@@ -108,10 +108,23 @@ export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn
       miter.push(Math.min(2, 1 / Math.max(0.5, cos)));
     } else miter.push(1);
   }
+  // Raised sidewalks ramp down to the roadway over the last metres of a capped end (a kerb
+  // ramp), instead of stopping in a 30 cm block that read as a slab floating at junctions.
+  const RAMP = 1.6;
+  const along: number[] = [0];
+  for (let i = 1; i < n; i++) along.push(along[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  const total = along[n - 1] || 1;
+  const raise = (i: number) => {
+    let f = 1;
+    if (spec.capStart ?? true) f = Math.min(f, along[i] / RAMP);
+    if (spec.capEnd ?? true) f = Math.min(f, (total - along[i]) / RAMP);
+    return Math.max(0, Math.min(1, f));
+  };
   const P = (i: number, k: number) => {
     const p = prof[k];
     const x = pts[i][0] + nor[i][0] * p.off * miter[i], z = pts[i][1] + nor[i][1] * p.off * miter[i];
-    return new THREE.Vector3(x, heightAt(x, z) + lift + p.y, z);
+    const y = paved && p.y === ch ? ch * raise(i) : p.y;
+    return new THREE.Vector3(x, heightAt(x, z) + lift + y, z);
   };
   const grid: THREE.Vector3[][] = [];
   for (let i = 0; i < n; i++) grid.push(prof.map((_, k) => P(i, k)));
@@ -144,7 +157,7 @@ export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn
     const cap = (i: number, sgn: number) => {
       for (const [k0, k1] of [[1, 3], [prof.length - 4, prof.length - 2]]) {
         const top0 = grid[i][k0], top1 = grid[i][k1];
-        const bot0 = top0.clone().setY(top0.y - ch - 0.6), bot1 = top1.clone().setY(top1.y - ch - 0.6);
+        const bot0 = top0.clone().setY(heightAt(top0.x, top0.z) + lift - 0.6), bot1 = top1.clone().setY(heightAt(top1.x, top1.z) + lift - 0.6);
         const nrm = new THREE.Vector3().subVectors(top1, top0).cross(new THREE.Vector3().subVectors(bot0, top0));
         const want = new THREE.Vector3(tan[i][0] * sgn, 0, tan[i][1] * sgn);
         const arr = byMat.get(sideMat)!;

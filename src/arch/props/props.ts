@@ -10,6 +10,7 @@
  * Variants: each kind has `PROP_VARIANTS` seeded variants; models are cached per (kind, variant).
  */
 import * as THREE from 'three';
+import { AUDIT, currentAuditSource } from '../../dev/audit/geomAudit';
 import { Rng, hashString } from '../../core/Rng';
 import { MeshBuilder, transformCollider, type ColliderSpec } from '../../gfx/MeshBuilder';
 import type { MaterialId } from '../../gfx/materialIds';
@@ -740,5 +741,6 @@ export function placeProp(d: Draw, kind: PropKind, x: number, y: number, z: numb
   if (o.rx) m.multiply(new THREE.Matrix4().makeRotationX(o.rx));
   if (o.scale && o.scale !== 1) m.multiply(new THREE.Matrix4().makeScale(o.scale, o.scale, o.scale));
   for (const p of model.parts) d.b.add(p.geometry, p.material, m, { uv: 'keep', castShadow: p.castShadow && d.flags.cast });
+  if (AUDIT) d.b.auditProps.push({ kind, p: new THREE.Vector3().setFromMatrixPosition(m), src: currentAuditSource() });
   if (o.collide !== false) for (const c of model.colliders) d.b.collider(transformCollider(c, m));
 }
