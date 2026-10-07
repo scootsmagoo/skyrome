@@ -5,8 +5,9 @@
  *   round a porticoed court that is almost filled by the practice arena (≈ 63 × 42 m real) with
  *   five rows of seats for spectators; triangular fountains in the four leftover corners, a tunnel
  *   stair towards the amphitheatre in the corner facing it. The v0.0 PLAYABLE ARENA: a clean sand
- *   ellipse inside a 2.8 m podium wall plus balustrade (unclimbable), two gates on the long axis,
- *   external stairs up to the stands. Spots: ludus-arena-center, ludus-gate, lanista, armory,
+ *   ellipse inside a 2.8 m podium wall plus balustrade (unclimbable), two gates on the long axis.
+ *   Four rows of seats (not five) and no external stairs, so a walk of ~1.5 m stays clear between
+ *   the stands and the portico all the way round (the court is barely wider than the stands). Spots: ludus-arena-center, ludus-gate, lanista, armory,
  *   medicus, spectator-1…16 and more.
  * - ludus-dacicus, ludus-gallicus: cells round a sanded practice yard with pali and weapon racks.
  * - ludus-matutinus: the beast-fighters' school, with cages and pens in the yard.
@@ -20,7 +21,7 @@ import { inscriptionPanel } from '../../../arch/common/inscription';
 import { placeProp } from '../../../arch/props';
 import { Rng } from '../../../core/Rng';
 import type { LandmarkBuild, LandmarkBuilder, LandmarkContext, Spot } from '../types';
-import { Oval, type ReadableSpec, addLamps, addReadables, flight, frontSteps, lampAt, ovalBand, ovalSweep, risers, solid, span, statueGeometry } from './colos-kit';
+import { Oval, type ReadableSpec, addLamps, addReadables, frontSteps, lampAt, ovalBand, ovalSweep, solid, span, statueGeometry } from './colos-kit';
 import { column } from '../../../arch/classical/column';
 import { complementRanges } from './colos-colosseum';
 import { courtyardBuilding, palus, weaponRack, type CourtSpec } from './colos-court';
@@ -33,11 +34,11 @@ export const LUDUS_ARENA = {
   b: 19.4,
   podium: 2.8,
   rail: 0.95,
-  walk: 1.3,
-  rows: 5,
+  walk: 1.1,
+  rows: 4,
   rise: 0.4,
   depth: 0.72,
-  topWalk: 1.1,
+  topWalk: 0.9,
   wallT: 0.4,
   gateW: 2.4,
   gateH: 2.5,
@@ -115,9 +116,8 @@ function ludusArena(ctx: LandmarkContext, b: MeshBuilder, spots: Spot[], readabl
     sweepRanges(new ProfileBuilder(x0 + A.depth, y).to(x0, y).build(), x0 + A.depth / 2, null, r % 2 ? 'marble' : 'travertine', col);
   }
   sweepRanges(new ProfileBuilder(xOut, top).to(xTop0, top).build(), xTop0, null, 'paving_travertine', col);
-  // Back wall (outer face of the stands) down to the court, cut at the gates (to 2.5 m) and the
-  // parapet above the top walk cut at the four stair landings.
-  const stairT = [Math.PI / 4, (3 * Math.PI) / 4, (5 * Math.PI) / 4, (7 * Math.PI) / 4];
+  // Back wall (outer face of the stands) down to the court, cut at the gates (to 2.5 m), and a
+  // continuous parapet above the top walk.
   const backCut = cutsAt(xWall, A.gateW / 2 + 0.1, gates);
   sweepRanges(new ProfileBuilder(xWall, 0).to(xWall, top).build(), xWall, backCut, 'brick');
   for (const t of gates) {
@@ -126,8 +126,7 @@ function ludusArena(ctx: LandmarkContext, b: MeshBuilder, spots: Spot[], readabl
     span(b, 'brick', fr, -A.gateW / 2 - 0.15, A.gateH, 0, A.gateW / 2 + 0.15, top, A.wallT + 0.02);
     span(b, 'travertine', fr, -A.gateW / 2 - 0.3, A.gateH, -0.06, A.gateW / 2 + 0.3, A.gateH + 0.25, 0.02);
   }
-  const parCut = cutsAt(xOut + A.wallT / 2, 0.75, stairT);
-  for (const r of parCut ?? []) {
+  for (const r of [{ t0: 0, t1: two }]) {
     const n = Math.max(2, Math.round(((r.t1 - r.t0) / two) * 48));
     b.add(ovalBand(oval, xOut, xWall, top, top + 1.0, r.t0, r.t1, n), 'brick', I);
     b.add(ovalBand(oval, xOut - 0.04, xWall + 0.04, top + 1.0, top + 1.08, r.t0, r.t1, n), 'travertine', I);
@@ -203,36 +202,6 @@ function ludusArena(ctx: LandmarkContext, b: MeshBuilder, spots: Spot[], readabl
       yy += A.rise;
     }
   }
-  // External stairs up the back wall to the top walk (as at Pompeii), tangential, at the diagonals.
-  const { count, rise } = risers(top, 0.2);
-  const run = 0.32;
-  const L = count * run;
-  stairT.forEach((t) => {
-    const [px, pz] = oval.point(t, xWall);
-    const [nx, nz] = oval.normal(t);
-    // Climb so that the foot lies towards the end of the long axis (clear of the court corners).
-    const tx = -nz;
-    const tz = nx;
-    const dir = -Math.sign(pz * tz) || 1;
-    const ux = tx * dir;
-    const uz = tz * dir;
-    const W = 1.4;
-    const off = W / 2 + 0.05;
-    // Stair frame: +z along the climb; origin at the foot centre; the landing is centred on t.
-    const cx = px + nx * off - ux * (L + 0.75);
-    const cz = pz + nz * off - uz * (L + 0.75);
-    const yaw = Math.atan2(ux, uz);
-    const m = new THREE.Matrix4().makeRotationY(yaw).setPosition(cx, 0, cz);
-    flight(b, 'travertine', m, 0, W, 0, 0, rise, run, count, true);
-    // Landing joining the top walk through the gap in the parapet (−x or +x is towards the wall).
-    const inward = dir > 0 ? -1 : 1;
-    span(b, 'travertine', m, inward < 0 ? -W / 2 - 1.0 : -W / 2, 0, L, inward < 0 ? W / 2 : W / 2 + 1.0, top, L + 1.5, true);
-    // Low parapet on the open side of the flight and landing.
-    const ang = Math.atan2(top, L);
-    const ox = -inward * (W / 2 + 0.08);
-    const pm = m.clone().multiply(new THREE.Matrix4().makeTranslation(ox, top / 2 + 0.45, L / 2)).multiply(new THREE.Matrix4().makeRotationX(-ang));
-    b.box('brick', 0.16, 0.9, Math.hypot(top, L), pm, { collide: true });
-  });
   // Arena floor.
   {
     const shape = new THREE.Shape();
@@ -258,7 +227,7 @@ function ludusArena(ctx: LandmarkContext, b: MeshBuilder, spots: Spot[], readabl
   const angDist = (t: number, c: number) => Math.abs(Math.atan2(Math.sin(t - c), Math.cos(t - c)));
   const blocked = (t: number) => gates.some((g) => angDist(t, g) < 0.3) || angDist(t, 0) < 0.36 || aisleT.some((a) => angDist(t, a) < 0.06);
   let si = 0;
-  for (const r of [0, 2, 4]) {
+  for (const r of [0, 2].filter((r) => r < A.rows)) {
     const x = A.walk + r * A.depth + A.depth / 2;
     const yy = P + (r + 1) * A.rise;
     const n = Math.round(oval.perimeter(x, 256) / 2.5);
@@ -274,7 +243,7 @@ function ludusArena(ctx: LandmarkContext, b: MeshBuilder, spots: Spot[], readabl
     const n = Math.round(oval.perimeter(x, 256) / 6);
     let k = 0;
     for (const t of oval.equalArc(n, x, 0.5)) {
-      if (blocked(t) || stairT.some((st) => angDist(t, st) < 0.12)) continue;
+      if (blocked(t)) continue;
       const [px, pz] = oval.point(t, x);
       const [nx, nz] = oval.normal(t);
       spots.push({ id: `spectator-standing-${++k}`, kind: 'npc', position: new THREE.Vector3(px, top + 0.02, pz), heading: Math.atan2(-nx, -nz) });
@@ -361,7 +330,7 @@ function ludusArena(ctx: LandmarkContext, b: MeshBuilder, spots: Spot[], readabl
     const masts: number[] = [];
     for (const t of oval.equalArc(26, xm, 0.5)) {
       const near = (c: number, w: number) => Math.abs(Math.atan2(Math.sin(t - c), Math.cos(t - c))) < w;
-      if (near(0, 0.32) || gates.some((g) => near(g, 0.42)) || stairT.some((s) => near(s, 0.14))) {
+      if (near(0, 0.32) || gates.some((g) => near(g, 0.42))) {
         masts.push(NaN);
         continue;
       }
@@ -445,7 +414,8 @@ function cornerFountain(b: MeshBuilder, x: number, z: number, sx: number, sz: nu
   b.add(water, 'water', undefined, { castShadow: false });
   // Spout pillar in the corner.
   span(b, 'marble', new THREE.Matrix4(), x - sx * 0.05, 0, z - sz * 0.05, x - sx * 0.6, 1.4, z - sz * 0.6, true);
-  b.collider({ kind: 'box', center: new THREE.Vector3(x - sx * leg / 3, 0.3, z - sz * leg / 3), half: new THREE.Vector3(leg / 3, 0.3, leg / 3) });
+  // Collider: the triangular rim itself (a square box left invisible walls and walk-in corners).
+  b.collider({ kind: 'trimesh', geometry: rim.clone() });
 }
 
 // ---------------------------------------------------------------- builders
@@ -530,17 +500,19 @@ function buildLudusMagnus(ctx: LandmarkContext): LandmarkBuild {
     const rng = new Rng('ludus-court');
     weaponRack(d, -4.5, 0, -res.inner.d / 2 + 0.9, 0);
     weaponRack(d, 4.5, 0, -res.inner.d / 2 + 0.9, 0);
-    for (const sx of [-1, 1]) placeProp(d, 'bench', sx * (res.court.w / 2 - 1.2), 0, 0, sx > 0 ? -Math.PI / 2 : Math.PI / 2, { rng });
-    const zg = -(LUDUS_ARENA.b + ludusReach()) - 1.6;
-    placeProp(d, 'trough', -3.2, 0, zg, Math.PI / 2, { rng });
-    placeProp(d, 'bench', 3.0, 0, zg + 0.2, -Math.PI / 2, { rng });
-    placeProp(d, 'amphora_tall', -3.0, 0, zg - 1.3, 0.4, { rng });
-    placeProp(d, 'amphora_tall', -2.6, 0, zg - 1.5, 1.6, { rng });
-    weaponRack(d, 3.6, 0, zg - 1.6, Math.PI / 2);
+    // Benches stand back under the portico (the court beside the stands is the way round).
+    for (const sx of [-1, 1]) placeProp(d, 'bench', sx * (res.court.w / 2 + 1.7), 0, 0, sx > 0 ? -Math.PI / 2 : Math.PI / 2, { rng });
+    // The fighters' corner, off the gate axis against the front portico, clear of the walk.
+    const zg = -res.court.d / 2 + 0.9;
+    placeProp(d, 'trough', -7.4, 0, zg, 0, { rng });
+    placeProp(d, 'bench', -4.6, 0, zg, 0, { rng });
+    placeProp(d, 'amphora_tall', -9.0, 0, zg - 0.2, 0.4, { rng });
+    placeProp(d, 'amphora_tall', -9.5, 0, zg + 0.2, 1.6, { rng });
+    weaponRack(d, 6.2, 0, zg, 0);
     // Pali in the court's free corners for the tirones' drill.
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) palus(d, sx * (res.court.w / 2 - 6.5), 0, sz * (res.court.d / 2 - 2.2));
   }
-  spots.push({ id: 'ludus-fighters-corner', kind: 'sit', position: d.point(3.0, 0.5, -(LUDUS_ARENA.b + ludusReach()) - 1.4), heading: -Math.PI / 2 });
+  spots.push({ id: 'ludus-fighters-corner', kind: 'sit', position: d.point(-4.6, 0.5, -res.court.d / 2 + 1.3), heading: Math.PI });
   // Tunnel stair down towards the amphitheatre in the front-left court corner (portico).
   {
     const tx = -res.inner.w / 2 + 1.4;

@@ -316,9 +316,26 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
     }
   });
 
-  // ---- minor streets
+  // ---- minor streets (each stops where it reaches a road or a piazza: drawn over them, its own
+  // surface and cobbled edges would show through theirs in patches)
   for (const st of plan.streets) {
     const L = lineLength(st.points);
+    const stCuts: [number, number][] = [];
+    {
+      let c0 = -1;
+      const step = 0.5;
+      for (let s = 0; s <= L + 1e-6; s += step) {
+        const p = pointAt(st.points, Math.min(s, L));
+        const k = plan.grid.at(p[0], p[1]);
+        const over = k === K.ROAD || k === K.PIAZZA;
+        if (over && c0 < 0) c0 = s;
+        if (!over && c0 >= 0) {
+          stCuts.push([c0, s - step * 0.5]);
+          c0 = -1;
+        }
+      }
+      if (c0 >= 0) stCuts.push([c0, L + 1]);
+    }
     // Runs of steps / no steps along the segments.
     let acc = 0;
     const segs = st.points.slice(0, -1).map((p, k) => {
@@ -343,13 +360,16 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
         }
         continue;
       }
-      const pieces = chunks(s0, s1, 80);
-      pieces.forEach(([p0, p1], k2) => {
-        const pts = sliceLine(st.points, p0, p1);
-        if (pts.length < 2) return;
-        const mid = pts[Math.floor(pts.length / 2)];
-        add(mid[0], mid[1], (bld) => buildMinorPiece(bld, st, pts, H, k2 === 0, k2 === pieces.length - 1));
-      });
+      for (const [c0, c1] of subtract([s0, s1], stCuts)) {
+        if (c1 - c0 < 0.8) continue;
+        const pieces = chunks(c0, c1, 80);
+        pieces.forEach(([p0, p1], k2) => {
+          const pts = sliceLine(st.points, p0, p1);
+          if (pts.length < 2) return;
+          const mid = pts[Math.floor(pts.length / 2)];
+          add(mid[0], mid[1], (bld) => buildMinorPiece(bld, st, pts, H, k2 === 0, k2 === pieces.length - 1));
+        });
+      }
     }
   }
 

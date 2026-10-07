@@ -612,7 +612,9 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
     for (let k = 0; k + 1 < pts.length; k++) {
       const L = Math.hypot(pts[k + 1][0] - pts[k][0], pts[k + 1][1] - pts[k][1]);
       const dy = Math.abs(hm.heightAt(pts[k + 1][0], pts[k + 1][1]) - hm.heightAt(pts[k][0], pts[k][1]));
-      steps.push(L > 0 && dy / L > 0.16);
+      // A flight only for a real climb: a short steep bit (under ~5 risers) stays a ramp, which
+      // walks fine and does not leave a stub of three steps standing in a lane.
+      steps.push(L > 0 && dy / L > 0.16 && dy >= 0.9);
     }
     streets.push({ id: `st${si}`, index: si, points: pts, width, kind, level, steps, density: ch.density, wealth: ch.wealth, corridor: ch.corridor });
     // Re-label the pieces.

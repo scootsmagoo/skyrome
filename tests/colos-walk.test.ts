@@ -159,29 +159,23 @@ describe('Ludus Magnus practice arena', () => {
     }
   });
 
-  it('external stairs reach the top walk of the stands', () => {
-    // Find a stair by probing: walk inward from outside the stands at a diagonal until on top.
-    const top = ludusTop();
-    let best = -Infinity;
-    for (const a of [Math.PI / 4, (3 * Math.PI) / 4, (5 * Math.PI) / 4, (7 * Math.PI) / 4]) {
-      const A = LUDUS_ARENA;
-      const R = ludusReach();
-      // Outer-ring point at parameter a and the tangent; try both climbing directions.
-      const nx0 = Math.cos(a) / (A.a);
-      const nz0 = Math.sin(a) / (A.b);
+  it('a fighter can walk all the way round the stands in the court', () => {
+    // A ring 0.9 m outside the stands' back wall, in 24 legs: every leg must be walkable end to end.
+    const A = LUDUS_ARENA;
+    const R = ludusReach() + 0.9;
+    const pt = (t: number) => {
+      const nx0 = Math.cos(t) / A.a, nz0 = Math.sin(t) / A.b;
       const nl = Math.hypot(nx0, nz0);
-      const nx = nx0 / nl;
-      const nz = nz0 / nl;
-      const px = A.a * Math.cos(a) + nx * (R + 0.75);
-      const pz = A.b * Math.sin(a) + nz * (R + 0.75);
-      for (const dir of [1, -1]) {
-        const ux = -nz * dir;
-        const uz = nx * dir;
-        const start = new THREE.Vector3(px - ux * 10, y0 + 0.05, pz - uz * 10);
-        const r = walk(p, start, 3.2, 8, new THREE.Vector3(ux, 0, uz));
-        best = Math.max(best, r.maxY - y0);
-      }
+      return new THREE.Vector3(A.a * Math.cos(t) + (nx0 / nl) * R, y0 + 0.05, A.b * Math.sin(t) + (nz0 / nl) * R);
+    };
+    const n = 24;
+    for (let i = 0; i < n; i++) {
+      const p0 = pt((i / n) * Math.PI * 2), p1 = pt(((i + 1) / n) * Math.PI * 2);
+      const len = p0.distanceTo(p1);
+      const r = walk(p, p0, 3.2, len / 3.2 + 0.6, p1.clone().sub(p0));
+      const got = Math.hypot(r.x - p0.x, r.z - p0.z);
+      expect(got, `leg ${i}`).toBeGreaterThan(len - 0.6);
+      expect(Math.abs(r.y - y0), `leg ${i}`).toBeLessThan(0.4);
     }
-    expect(best).toBeGreaterThan(top - 0.25);
   });
 });

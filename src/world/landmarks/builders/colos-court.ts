@@ -347,8 +347,10 @@ export function courtyardBuilding(spec: CourtSpec): CourtResult {
     for (const xx of [x0, x1]) fy.span(cwMat, xx - 0.15, 0, t, xx + 0.15, sh, R, { collide: true });
     fy.span('wood_dark', x0, sh - 0.25, t, x1, sh, R);
     fy.span(r.kind === 'shrine' ? 'mosaic' : 'paving_travertine', x0, 0, t, x1, 0.03, R);
-    fy.span(r.kind === 'medicus' ? 'plaster_white' : 'plaster_cream', x0, 0.03, t - 0.02, x1, sh - 0.25, t);
-    fy.span('plaster_red', x0, 0.03, t - 0.03, x1, 1.0, t - 0.02);
+    // Plaster on the back wall, standing 2 cm proud of the masonry (a shared face flickers), and the
+    // red dado 1 cm proud of the plaster.
+    fy.span(r.kind === 'medicus' ? 'plaster_white' : 'plaster_cream', x0 + 0.15, 0.03, t, x1 - 0.15, sh - 0.25, t + 0.02);
+    fy.span('plaster_red', x0 + 0.15, 0.03, t + 0.02, x1 - 0.15, 1.0, t + 0.03);
     const mid = (t + R) / 2;
     const deep = t + 0.45;
     const P2 = (x: number, z: number) => fy.point(x, 0.05, z);

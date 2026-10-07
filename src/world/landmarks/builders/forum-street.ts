@@ -107,11 +107,13 @@ export function tabernaeRow(p: Part, o: TabernaeOpts): number {
   const fy = gmax + (o.step ?? CREPIDO + 0.06);
   foundation(p, corners, fy, 'travertine', true);
   const fr = o.frame.at(0, fy - o.frame.m.elements[13], 0);
-  // party walls (the thin side walls of each room hide inside them) and the fascia beam
+  // party walls (the thin side walls of each room hide inside them) and the fascia beam. Their
+  // faces stand 2 cm back from the rooms' plaster (rooms start 0.3 m either side of a party wall),
+  // never in the same plane: coplanar faces flicker (z-fighting).
   for (let i = 0; i <= n; i++) {
     const x = i * o.bay;
     const edge = i === 0 || i === n;
-    const w = edge ? 0.45 : 0.6;
+    const w = edge ? 0.28 : 0.56;
     const xc = edge ? (i === 0 ? w / 2 : x - w / 2) : x;
     fr.box(wallMat, xc, (h + 0.5) / 2, o.depth / 2 - 0.1, w, h + 0.5, o.depth + 0.2, { collide: p.main });
   }

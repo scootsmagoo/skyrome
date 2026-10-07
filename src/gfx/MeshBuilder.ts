@@ -17,6 +17,7 @@ import { Layer } from '../core/Physics';
 import { getMaterial } from './materials';
 import type { MaterialId } from './materialIds';
 import { boxProjectUVs } from './uv';
+import { separateCoplanar } from './coplanar';
 
 export type ColliderSpec =
   | { kind: 'box'; center: THREE.Vector3; half: THREE.Vector3; rotation?: THREE.Quaternion }
@@ -47,6 +48,12 @@ export interface InstancePart {
  */
 const instanceGeometry = new Map<string, Map<string, { geometry: THREE.BufferGeometry; material: THREE.Material | MaterialId; castShadow: boolean }>>();
 
+/** Time spent separating coplanar faces (for profiling). */
+export const coplanarStats = { ms: 0, builds: 0 };
+
+/** Add order of every part (later parts win coplanar ties, see coplanar.ts). */
+let seq = 0;
+
 const tmpPos = new THREE.Vector3();
 const tmpQuat = new THREE.Quaternion();
 const tmpScale = new THREE.Vector3();
@@ -72,6 +79,7 @@ export class MeshBuilder {
     // Keep only the attributes every part shares so merging never fails.
     for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv') g.deleteAttribute(name);
     g.morphAttributes = {};
+    g.userData.seq = ++seq;
     const key = `${this.materialKey(material)}|${opts.castShadow === false ? 0 : 1}`;
     const list = this.parts.get(key) ?? [];
     list.push(g);
@@ -136,6 +144,13 @@ export class MeshBuilder {
         group.add(mesh);
       }
     }
+    // Coplanar faces of different materials would flicker: sink the losers first (coplanar.ts).
+    const all: { geometry: THREE.BufferGeometry; material: string; seq: number }[] = [];
+    for (const [key, geoms] of this.parts) for (const g of geoms) all.push({ geometry: g, material: key.split('|')[0], seq: g.userData.seq ?? 0 });
+    const t0 = performance.now();
+    separateCoplanar(all);
+    coplanarStats.ms += performance.now() - t0;
+    coplanarStats.builds++;
     for (const [key, geoms] of this.parts) {
       const [material, shadow] = key.split('|');
       let merged = geoms.length === 1 ? geoms[0] : mergeGeometries(geoms, false);
@@ -160,7 +175,14 @@ export class MeshBuilder {
     for (const [key, e] of other.instances) for (const mm of e.matrices) this.instance(key, e.make, matrix ? matrix.clone().multiply(mm) : mm);
     for (const [key, geoms] of other.parts) {
       const list = this.parts.get(key) ?? [];
-      for (const g of geoms) list.push(matrix ? g.clone().applyMatrix4(matrix) : g);
+      for (const g of geoms) {
+        if (!matrix) list.push(g);
+        else {
+          const c = g.clone().applyMatrix4(matrix);
+          c.userData.seq = g.userData.seq;
+          list.push(c);
+        }
+      }
       this.parts.set(key, list);
     }
     for (const c of other.colliders) this.colliders.push(matrix ? transformCollider(c, matrix) : c);
