@@ -29,7 +29,7 @@ const STREET_MARGIN = 0.9;
 /** Douglas–Peucker tolerance of block outlines (< STREET_MARGIN + half a cell, so they stay clear of the streets). */
 const OUTLINE_TOL = 1.5;
 
-export type PlanAtlas = Pick<typeof Atlas, 'ROADS' | 'WALLS' | 'GATES' | 'AQUEDUCTS' | 'REGIONS' | 'LANDMARKS' | 'RIVERS' | 'ISLANDS' | 'CORE_BOUNDS' | 'CITY_BOUNDS'> & Partial<Pick<typeof Atlas, 'BRIDGES'>>;
+export type PlanAtlas = Pick<typeof Atlas, 'ROADS' | 'WALLS' | 'GATES' | 'AQUEDUCTS' | 'REGIONS' | 'LANDMARKS' | 'RIVERS' | 'ISLANDS' | 'CORE_BOUNDS' | 'CITY_BOUNDS'> & Partial<Pick<typeof Atlas, 'BRIDGES' | 'DETAIL_REGIONS'>>;
 
 export interface HeightSource {
   heightAt(x: number, z: number): number;
@@ -213,8 +213,8 @@ const smooth = (a: number, b: number, x: number) => {
 };
 
 /** The detail rectangles: the core, plus each golden-path corridor's box grown by `margin` real m. */
-export function detailArea(core: Bounds, margin: number | null): Bounds[] {
-  const out = [core];
+export function detailArea(core: Bounds, margin: number | null, extra: readonly Bounds[] = []): Bounds[] {
+  const out = [core, ...extra];
   if (margin === null) return out;
   for (const c of CORRIDORS) {
     const b = polyBounds(c.points as Pt[]);
@@ -269,7 +269,9 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
   const cell = opts.cell ?? 2;
   const bounds = opts.bounds ?? scaleBounds(atlas.CITY_BOUNDS);
   const detailBounds = opts.detailBounds ?? scaleBounds(atlas.CORE_BOUNDS, 150);
-  const detailRects = detailArea(detailBounds, opts.corridorDetail === undefined ? 150 : opts.corridorDetail);
+  // The core, the regions built to the same detail (atlas.DETAIL_REGIONS), the golden-path corridors.
+  const extra = opts.corridorDetail === null ? [] : (atlas.DETAIL_REGIONS ?? []).map((r) => scaleBounds(r));
+  const detailRects = detailArea(detailBounds, opts.corridorDetail === undefined ? 150 : opts.corridorDetail, extra);
   const inDetail = (x: number, z: number, grow = 0) => inRects(detailRects, x, z, grow);
   const mergeCell = opts.mergeCell ?? 256;
   const seed = opts.seed ?? 113;

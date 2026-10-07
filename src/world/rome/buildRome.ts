@@ -95,7 +95,8 @@ export async function buildRome(game: Game, opts: BuildRomeOptions = {}) {
   const extent = opts.extent ?? 'core';
   // Terrain always covers the whole city (cheap) so distant hills frame the view.
   const bounds = atlas.CITY_BOUNDS;
-  const landmarkBounds = extent === 'core' ? expand(atlas.CORE_BOUNDS, 350) : atlas.CITY_BOUNDS;
+  // The core (+350 m) and the regions built to its detail (atlas.DETAIL_REGIONS).
+  const landmarkBounds = extent === 'core' ? union([expand(atlas.CORE_BOUNDS, 350), ...atlas.DETAIL_REGIONS.map((r) => expand(r, 100))]) : atlas.CITY_BOUNDS;
 
   report(0.02, 'Surveying the seven hills');
   await tick();
@@ -160,6 +161,10 @@ export function spawnAtLandmark(game: Game, id: string, forward = 0, side = 0): 
   game.physics.step(1 / 60);
   const ground = game.physics.groundHeight(x, z, y + 80, 200);
   return { position: new THREE.Vector3(x, (ground ?? y) + 0.05, z), heading: Math.atan2(gx - x, gz - z) };
+}
+
+function union(bs: { minX: number; maxX: number; minZ: number; maxZ: number }[]) {
+  return { minX: Math.min(...bs.map((b) => b.minX)), maxX: Math.max(...bs.map((b) => b.maxX)), minZ: Math.min(...bs.map((b) => b.minZ)), maxZ: Math.max(...bs.map((b) => b.maxZ)) };
 }
 
 function expand(b: { minX: number; maxX: number; minZ: number; maxZ: number }, m: number) {

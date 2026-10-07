@@ -2534,6 +2534,15 @@ export const CORE_BOUNDS: { minX: number; maxX: number; minZ: number; maxZ: numb
   note: 'First-playable core (~1.7 x 1.5 km real, ~1.0 x 0.9 km in game): Capitoline, Forum Romanum, Palatine, Colosseum valley with the Ludus Magnus and the W edge of the Baths of Trajan, Imperial Fora with Trajan\'s Forum and Markets, southern Subura, Circus Maximus to the Porta Capena, Velabrum, Forum Boarium and Holitorium, Tiber Island and the Theatre of Marcellus.',
 };
 
+/**
+ * Built to the core's detail beyond the core (real m): streets, insulae and landmarks stream in near
+ * the player like the core's. Transtiberim (Regio XIV) from the Tiber to the Janiculum crest, with
+ * Trajan's new aqueduct terminal and mills, the Naumachia of Augustus and the Grove of Furrina.
+ */
+export const DETAIL_REGIONS: { id: string; minX: number; maxX: number; minZ: number; maxZ: number; note: string }[] = [
+  { id: 'transtiberim', minX: -1760, maxX: -400, minZ: -150, maxZ: 1360, note: 'Regio XIV: the Transtiberim plain and the Janiculum slope up to the Aqua Traiana terminal.' },
+];
+
 export const CITY_BOUNDS: { minX: number; maxX: number; minZ: number; maxZ: number; note: string } = {
   minX: -3000, maxX: 2700, minZ: -2300, maxZ: 2100,
   note: 'Whole city eventually modelled (~5.7 x 4.4 km real): Vatican circus and Janiculum (W) to Porta Maggiore (E), Piazza del Popolo / Pincian gardens and the Castra Praetoria (N) to Monte Testaccio, the Pyramid of Cestius and the Tomb of the Scipios (S). No city wall bounds it in 113.',
