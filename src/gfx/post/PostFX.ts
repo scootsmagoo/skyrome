@@ -12,7 +12,8 @@
  */
 import * as THREE from 'three';
 import { AO_BLUR_FRAG, AO_FRAG } from './ao';
-import { aoDefault } from '../../core/graphics';
+import { SHAFT_BLUR_FRAG, SHAFT_MASK_FRAG } from './shafts';
+import { aoDefault, shaftsDefault } from '../../core/graphics';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import type { Game, System } from '../../core/Game';
 import { COMPOSITE_FRAG, DOWNSAMPLE_FRAG, POST_VERT, UPSAMPLE_FRAG } from './shaders';
@@ -31,6 +32,8 @@ declare module '../../core/Settings' {
     bloom?: boolean;
     /** Screen-space ambient occlusion (default: on for the High graphics tier). */
     ao?: boolean;
+    /** Sun shafts (default: on for the High graphics tier). */
+    sunShafts?: boolean;
   }
 }
 
@@ -102,6 +105,14 @@ export class PostFX implements System {
   private aoBlur: THREE.WebGLRenderTarget;
   private aoMat: THREE.ShaderMaterial;
   private aoBlurMat: THREE.ShaderMaterial;
+  private shaftA: THREE.WebGLRenderTarget;
+  private shaftB: THREE.WebGLRenderTarget;
+  private shaftMaskMat: THREE.ShaderMaterial;
+  private shaftBlurMat: THREE.ShaderMaterial;
+  shaftsEnabled: boolean;
+  /** Overall strength of the sun shafts. */
+  shaftStrength = 0.8;
+  private sunNdc = new THREE.Vector3();
   private size = new THREE.Vector2();
   private originalRender: () => void;
   private unsub: () => void;
@@ -114,6 +125,7 @@ export class PostFX implements System {
     this.enabled = s.postfx ?? true;
     this.bloomEnabled = s.bloom ?? true;
     this.aoEnabled = aoDefault(s);
+    this.shaftsEnabled = shaftsDefault(s);
     this.bloomStrength = opts.bloom ?? 0.075;
     this.toneMap = opts.toneMapping ?? 'aces';
     this.msaa = opts.msaa ?? s.antialias;
@@ -126,6 +138,9 @@ export class PostFX implements System {
     const aoOpts = { type: THREE.UnsignedByteType, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
     this.ao = new THREE.WebGLRenderTarget(1, 1, aoOpts);
     this.aoBlur = new THREE.WebGLRenderTarget(1, 1, aoOpts);
+    const shaftOpts = { type: THREE.HalfFloatType, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, wrapS: THREE.ClampToEdgeWrapping, wrapT: THREE.ClampToEdgeWrapping, colorSpace: THREE.LinearSRGBColorSpace };
+    this.shaftA = new THREE.WebGLRenderTarget(1, 1, shaftOpts);
+    this.shaftB = new THREE.WebGLRenderTarget(1, 1, shaftOpts);
     this.ldr = new THREE.WebGLRenderTarget(1, 1, { type: THREE.UnsignedByteType, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
     for (let i = 0; i < BLOOM_LEVELS; i++) {
       this.mips.push(
@@ -183,6 +198,18 @@ export class PostFX implements System {
       uniforms: { tAo: { value: null }, tDepth: { value: null }, uTexel: { value: new THREE.Vector2() }, uInvProj: { value: new THREE.Matrix4() } },
       fragmentShader: AO_BLUR_FRAG,
     });
+    this.shaftMaskMat = new THREE.ShaderMaterial({
+      ...common,
+      name: 'ShaftMask',
+      uniforms: { tColor: { value: null }, tDepth: { value: null }, uSun: { value: new THREE.Vector2() }, uAspect: { value: 1 } },
+      fragmentShader: SHAFT_MASK_FRAG,
+    });
+    this.shaftBlurMat = new THREE.ShaderMaterial({
+      ...common,
+      name: 'ShaftBlur',
+      uniforms: { tMask: { value: null }, uSun: { value: new THREE.Vector2() }, uDensity: { value: 0.9 } },
+      fragmentShader: SHAFT_BLUR_FRAG,
+    });
     this.compMat = new THREE.ShaderMaterial({
       ...common,
       name: 'Composite',
@@ -192,6 +219,8 @@ export class PostFX implements System {
         tBloom: { value: null },
         tAo: { value: null },
         uAoOn: { value: 0 },
+        tShafts: { value: null },
+        uShafts: { value: 0 },
         uBloom: { value: this.bloomStrength },
         uBloomOn: { value: 1 },
         uVignette: { value: 0.2 },
@@ -226,6 +255,7 @@ export class PostFX implements System {
       this.enabled = d.postfx ?? true;
       this.bloomEnabled = d.bloom ?? true;
       this.aoEnabled = aoDefault(d);
+      this.shaftsEnabled = shaftsDefault(d);
     });
   }
 
@@ -236,11 +266,33 @@ export class PostFX implements System {
     this.game.renderer.toneMapping = TONEMAP_RENDERER[t];
   }
 
+  /**
+   * How strong the shafts are this frame (0 = skip): the sun must be up, in front of the camera
+   * and not far off screen; strongest low in the sky; none indoors. Sets `sunNdc`.
+   */
+  private shaftAmount(): number {
+    const sky = (this.game as Game & { sky?: { sunDir: THREE.Vector3; indoor?: number } }).sky;
+    if (!sky) return 0;
+    const dir = sky.sunDir;
+    if (dir.y < -0.02) return 0;
+    const cam = this.game.camera;
+    this.sunNdc.copy(cam.position).addScaledVector(dir, 1000).project(cam);
+    if (this.sunNdc.z > 1) return 0;
+    const off = Math.max(Math.abs(this.sunNdc.x), Math.abs(this.sunNdc.y));
+    const onScreen = THREE.MathUtils.smoothstep(1.7, 1.0, off);
+    const low = 1 - 0.6 * THREE.MathUtils.smoothstep(0.25, 0.75, dir.y);
+    const rise = THREE.MathUtils.smoothstep(-0.02, 0.06, dir.y);
+    const indoor = 1 - Math.min(1, Math.max(0, sky.indoor ?? 0));
+    return this.shaftStrength * onScreen * low * rise * indoor;
+  }
+
   private resize(w: number, h: number) {
     this.hdr.setSize(w, h);
     this.ldr.setSize(w, h);
     this.ao.setSize(Math.max(1, w >> 1), Math.max(1, h >> 1));
     this.aoBlur.setSize(Math.max(1, w >> 1), Math.max(1, h >> 1));
+    this.shaftA.setSize(Math.max(1, w >> 2), Math.max(1, h >> 2));
+    this.shaftB.setSize(Math.max(1, w >> 2), Math.max(1, h >> 2));
     let mw = w, mh = h;
     for (const m of this.mips) {
       mw = Math.max(1, Math.floor(mw / 2));
@@ -298,6 +350,22 @@ export class PostFX implements System {
       this.pass(this.aoBlurMat, this.aoBlur);
     }
 
+    // 2a. Sun shafts at quarter resolution (only when the sun is up and in front of the camera).
+    const shafts = this.shaftsEnabled ? this.shaftAmount() : 0;
+    if (shafts > 0) {
+      const sun = { x: this.sunNdc.x * 0.5 + 0.5, y: this.sunNdc.y * 0.5 + 0.5 };
+      const mu = this.shaftMaskMat.uniforms;
+      mu.tColor.value = this.hdr.texture;
+      mu.tDepth.value = this.hdr.depthTexture;
+      mu.uSun.value.set(sun.x, sun.y);
+      mu.uAspect.value = w / Math.max(1, h);
+      this.pass(this.shaftMaskMat, this.shaftA);
+      const bu = this.shaftBlurMat.uniforms;
+      bu.tMask.value = this.shaftA.texture;
+      bu.uSun.value.set(sun.x, sun.y);
+      this.pass(this.shaftBlurMat, this.shaftB);
+    }
+
     // 2b. Bloom chain.
     const bloomOn = this.bloomEnabled && this.bloomStrength > 0;
     if (bloomOn) {
@@ -333,6 +401,8 @@ export class PostFX implements System {
     cu.tBloom.value = this.mips[0].texture;
     cu.tAo.value = this.aoBlur.texture;
     cu.uAoOn.value = this.aoEnabled ? 1 : 0;
+    cu.tShafts.value = this.shaftB.texture;
+    cu.uShafts.value = shafts;
     cu.uBloom.value = this.bloomStrength / BLOOM_LEVELS;
     cu.uBloomOn.value = bloomOn ? 1 : 0;
     cu.uVignette.value = this.grade.vignette;
@@ -374,5 +444,9 @@ export class PostFX implements System {
     this.upMat.dispose();
     this.compMat.dispose();
     this.fxaaMat.dispose();
+    this.shaftA.dispose();
+    this.shaftB.dispose();
+    this.shaftMaskMat.dispose();
+    this.shaftBlurMat.dispose();
   }
 }

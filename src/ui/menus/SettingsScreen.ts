@@ -3,7 +3,7 @@
  * ↑↓ rows, ←→ adjust (Shift for big steps), Enter toggles, [ ] switch sections.
  */
 import { DEFAULT_SETTINGS, type SettingsData } from '../../core/Settings';
-import { aoDefault } from '../../core/graphics';
+import { aoDefault, shaftsDefault } from '../../core/graphics';
 import { BaseModal } from '../Modal';
 import type { UIManager } from '../UIManager';
 import { h, keycap, setChildren } from '../dom';
@@ -44,6 +44,7 @@ export const SETTINGS_SECTIONS: { id: string; label: string; latin: string; rows
       { kind: 'slider', key: 'viewDistance', label: 'View distance', min: 300, max: 1500, step: 50, format: (v) => `${v} m` },
       { kind: 'toggle', key: 'bloom', label: 'Glow (bloom)', invert: true, note: 'Sunlight and lamps bleed softly' },
       { kind: 'toggle', key: 'ao', label: 'Ambient occlusion', read: aoDefault, note: 'Soft shade where walls meet the ground' },
+      { kind: 'toggle', key: 'sunShafts', label: 'Sun shafts', read: shaftsDefault, note: 'Rays of light past buildings and trees' },
       { kind: 'toggle', key: 'antialias', label: 'Antialiasing', note: 'Applies after restarting' },
     ],
   },
