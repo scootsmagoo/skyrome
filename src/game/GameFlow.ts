@@ -459,7 +459,8 @@ export class GameFlow implements System {
       const spots = lm ? (['vista', 'spawn', 'door'] as const).flatMap((k) => lm.spots.filter((q) => q.kind === k)) : [];
       for (const sp of spots) {
         const near = findSafeGround(g, sp.position, { maxRadius: 8, open: 4, openDirs: 6, maxAboveTerrain: 1.5 });
-        if (near && near.distanceTo(sp.position) < 6) return { position: near, heading: sp.kind === 'spawn' ? (sp.heading ?? 0) : openHeading(g, near, lm!.position) };
+        // A vista or spawn spot says which way to look; an entrance faces the building.
+        if (near && near.distanceTo(sp.position) < 6) return { position: near, heading: sp.kind !== 'door' && sp.heading !== undefined ? sp.heading : openHeading(g, near, lm!.position) };
       }
       // Else 18 m out along the facade.
       const s = spawnAtLandmark(g, at, 18);

@@ -42,6 +42,9 @@ export const QUARTERS: Quarter[] = [
   { id: 'portus', center: [-380, 300], r: 120, density: 0.85, wealth: 0.35, horrea: true, yard: 'cobbles' },
   // The Janiculum's lower slope: garden villas and vineyards above Transtiberim, not tenements.
   { id: 'janiculum-villas', center: [-1470, 480], r: 260, density: 0.35, wealth: 0.65, maxStoreys: 3, yard: 'gravel' },
+  // The Vatican plain: imperial gardens, tombs along the roads, brick kilns and the (notoriously
+  // bad) Vatican vineyards; suburban villas and farmsteads, not tenements.
+  { id: 'ager-vaticanus', center: [-2050, -950], r: 760, density: 0.25, wealth: 0.5, maxStoreys: 2, yard: 'gravel' },
   // Transtiberim: the multi-ethnic port quarter of tanners, potters, millers and sailors.
   { id: 'transtiberim', center: [-860, 560], r: 420, density: 0.85, wealth: 0.3, maxStoreys: 5, yard: 'dirt' },
   // Aventine top: aristocrats and old temples (Trajan's own house).

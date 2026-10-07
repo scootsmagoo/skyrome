@@ -2537,10 +2537,12 @@ export const CORE_BOUNDS: { minX: number; maxX: number; minZ: number; maxZ: numb
 /**
  * Built to the core's detail beyond the core (real m): streets, insulae and landmarks stream in near
  * the player like the core's. Transtiberim (Regio XIV) from the Tiber to the Janiculum crest, with
- * Trajan's new aqueduct terminal and mills, the Naumachia of Augustus and the Grove of Furrina.
+ * Trajan's new aqueduct terminal and mills, the Naumachia of Augustus and the Grove of Furrina; the
+ * Vatican plain (Ager Vaticanus) north of it.
  */
 export const DETAIL_REGIONS: { id: string; minX: number; maxX: number; minZ: number; maxZ: number; note: string }[] = [
   { id: 'transtiberim', minX: -1760, maxX: -400, minZ: -150, maxZ: 1360, note: 'Regio XIV: the Transtiberim plain and the Janiculum slope up to the Aqua Traiana terminal.' },
+  { id: 'ager-vaticanus', minX: -2750, maxX: -1380, minZ: -1720, maxZ: -150, note: 'The Vatican plain: the Circus of Gaius and Nero, the imperial gardens, the tombs of the Via Cornelia and Via Triumphalis, the Meta Romuli and the new Naumachia of Trajan.' },
 ];
 
 export const CITY_BOUNDS: { minX: number; maxX: number; minZ: number; maxZ: number; note: string } = {

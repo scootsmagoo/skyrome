@@ -253,6 +253,7 @@ Updated 5 October 2026. The game is playable in the browser: walk the city, figh
 | RPG rules, quests, dialogue, saves (F5/P quicksave, F9/L quickload) · HUD and menus | ✅ Done |
 | The city core: Forum, Velia, Colosseum valley, Palatine and Circus, Capitoline and Imperial Fora, river district, Campus Martius, terrain and the Tiber | ✅ Built (detail and density still growing) |
 | Across the Tiber: Trastevere's streets and tenements, garden villas up the Janiculum, Trajan's new aqueduct terminal and its mill race with water wheels, the overgrown Naumachia of Augustus | ✅ Built ([`?at=aqua-traiana-terminus`](https://scootsmagoo.github.io/skyrome/?at=aqua-traiana-terminus)) |
+| The Vatican plain: the Circus of Gaius and Nero, the imperial gardens, the tombs of the Via Cornelia, the Meta Romuli, Trajan's new naumachia | ✅ Built ([`?at=vatican-necropolis`](https://scootsmagoo.github.io/skyrome/?at=vatican-necropolis)) |
 | Combat: light chains, power attacks, block/parry/riposte, dodge, lock-on, aim assist; attack anyone | ✅ Done |
 | Gore: blood, and severed heads and limbs (Settings → Gameplay → Gore) | ✅ Done |
 | Crime and the watch: assault and murder bounties, guards, the arrest talk, the Carcer | ✅ Done |
