@@ -97,11 +97,15 @@ function createMaterial(id: MaterialId): THREE.Material {
 export const interiorLamp = { value: 0 };
 
 /**
- * The rooms behind the windows: black by day; at night about one room in three glows with warm
- * lamplight (picked per ~3.5 m cell of the city and storey, brighter low down where the lamp
- * stands), so the streets look lived in after dark.
+ * The rooms behind the windows, faked in the shader ("interior mapping"): the box behind a facade
+ * shows, through each window, a room with depth — a back wall with a painted dado and maybe a
+ * cupboard, partition walls, a floor and a beamed ceiling — darker toward the back. Box UVs are
+ * metres in the building's frame (x along the face, y up from the ground floor), so storeys line
+ * up with the insula's floors (`fabric/insula.ts`: ground storey ~4.3 m, then 3.05 m less 8 cm a
+ * storey from the third). At night about one room in three is lamplit.
  */
 function lamplitRooms(m: THREE.MeshStandardMaterial) {
+  m.defines = { ...(m.defines ?? {}), USE_UV: '' };
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uLamp = interiorLamp;
     shader.vertexShader = shader.vertexShader
@@ -118,18 +122,80 @@ function lamplitRooms(m: THREE.MeshStandardMaterial) {
   vRoomW = ( modelMatrix * rw ).xyz;
 }`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vRoomW;\nuniform float uLamp;\nfloat roomHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }')
+      .replace('#include <common>', `#include <common>
+varying vec3 vRoomW;
+uniform float uLamp;
+float roomHash( vec3 p ) { return fract( sin( dot( p, vec3( 127.1, 311.7, 74.7 ) ) ) * 43758.5453 ); }`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+float roomLit = 0.0;
+float roomLampK = 0.0;
+{
+  vec3 dx = dFdx( vRoomW ), dy = dFdy( vRoomW );
+  vec3 N = normalize( cross( dx, dy ) );
+  vec3 V = normalize( vRoomW - cameraPosition );
+  if ( dot( N, V ) > 0.0 ) N = -N;
+  if ( abs( N.y ) < 0.5 ) {
+    vec3 T = normalize( cross( vec3( 0.0, 1.0, 0.0 ), N ) );
+    vec2 lu = vUv * 2.0;
+    if ( dFdx( lu.x ) * dot( T, dx ) + dFdy( lu.x ) * dot( T, dy ) < 0.0 ) T = -T;
+    vec3 r = vec3( dot( V, T ), V.y, max( 1e-3, dot( V, -N ) ) );
+    // The storey this point is in.
+    float f0 = 0.0, f1 = 4.3;
+    if ( lu.y >= 4.3 ) {
+      f0 = 4.3;
+      float h = 3.05;
+      for ( int k = 1; k < 9; k++ ) {
+        if ( lu.y < f0 + h ) break;
+        f0 += h;
+        h = 3.05 - 0.08 * max( 0.0, float( k ) - 1.0 );
+      }
+      f1 = f0 + h;
+    }
+    const float CW = 7.0, D = 4.5;
+    float x0 = floor( lu.x / CW ) * CW;
+    float tx = abs( r.x ) < 1e-4 ? 1e4 : ( ( r.x > 0.0 ? x0 + CW : x0 ) - lu.x ) / r.x;
+    float ty = abs( r.y ) < 1e-4 ? 1e4 : ( ( r.y > 0.0 ? f1 - 0.25 : f0 ) - lu.y ) / r.y;
+    float tz = D / r.z;
+    float t = min( tx, min( ty, tz ) );
+    vec3 hp = vec3( lu.x, lu.y, 0.0 ) + r * t;
+    vec3 room = vec3( x0, f0, 0.0 );
+    float h1 = roomHash( room ), h2 = fract( h1 * 17.31 ), h3 = fract( h1 * 41.7 );
+    // Plaster in one of a few Roman colours; a darker painted dado below ~0.9 m.
+    vec3 wallC = h1 < 0.4 ? vec3( 0.62, 0.55, 0.44 ) : h1 < 0.65 ? vec3( 0.6, 0.42, 0.26 ) : h1 < 0.85 ? vec3( 0.55, 0.3, 0.24 ) : vec3( 0.48, 0.5, 0.42 );
+    vec3 dadoC = h2 < 0.5 ? vec3( 0.32, 0.12, 0.09 ) : vec3( 0.18, 0.15, 0.12 );
+    vec3 c;
+    float hy = hp.y - f0;
+    if ( t == ty ) {
+      if ( r.y < 0.0 ) {
+        // Floor: red signinum or planks.
+        c = h3 < 0.5 ? vec3( 0.36, 0.2, 0.15 ) : vec3( 0.3, 0.21, 0.13 ) * ( 0.85 + 0.15 * step( 0.5, fract( hp.x * 4.0 ) ) );
+      } else {
+        // Ceiling: boards with dark beams across.
+        c = mix( vec3( 0.26, 0.18, 0.12 ), vec3( 0.12, 0.08, 0.05 ), step( 0.78, fract( hp.x / 0.7 ) ) );
+      }
+    } else {
+      c = hy < 0.9 ? dadoC : wallC;
+      if ( t == tz ) {
+        // A cupboard or a shelf with jars against some back walls.
+        float cx = x0 + CW * ( 0.25 + 0.5 * h2 );
+        if ( h3 > 0.45 && abs( hp.x - cx ) < 0.55 && hy < 1.7 ) c = vec3( 0.2, 0.13, 0.08 ) * ( 0.8 + 0.2 * step( 0.5, fract( hy * 2.5 ) ) );
+      } else {
+        c *= 0.85;
+      }
+    }
+    // (Colours above are sRGB.) Daylight from the window: brighter near it, dim at the back.
+    c = pow( c, vec3( 2.2 ) );
+    float shade = 0.4 + 1.3 * exp( -hp.z * 0.6 );
+    diffuseColor.rgb = c * shade;
+    roomLit = step( h1 * 0.7 + h3 * 0.3, 0.33 );
+    roomLampK = mix( 1.0, 0.5, smoothstep( 0.0, 2.6, hy ) ) * ( 0.75 + 0.5 * h2 ) * ( 0.45 + 0.55 * exp( -hp.z * 0.3 ) );
+    roomLampK *= length( c ) * 3.0;
+  }
+}`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-if ( uLamp > 0.0 ) {
-  vec3 cell = floor( vRoomW / vec3( 3.5, 3.0, 3.5 ) );
-  float h = roomHash( cell );
-  float lit = step( h, 0.3 );
-  float fy = fract( vRoomW.y / 3.0 );
-  float glow = mix( 1.0, 0.45, smoothstep( 0.1, 0.9, fy ) ) * ( 0.7 + 0.6 * fract( h * 13.7 ) );
-  totalEmissiveRadiance += vec3( 1.0, 0.42, 0.12 ) * 0.42 * glow * lit * uLamp;
-}`);
+if ( uLamp > 0.0 ) totalEmissiveRadiance += vec3( 1.0, 0.42, 0.12 ) * 0.5 * roomLampK * roomLit * uLamp;`);
   };
-  m.customProgramCacheKey = () => 'skyrome-interior-v1';
+  m.customProgramCacheKey = () => 'skyrome-interior-v2';
 }
 
 /** Linear-space target colour for an id. */
