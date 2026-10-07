@@ -420,8 +420,13 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
   // 7. Aqueduct arcades (where the channel stands clear of the ground).
   const aqueducts: PlanAqueduct[] = [];
   for (const a of atlas.AQUEDUCTS) {
-    if (a.kind === 'underground' || SKIPPED_AQUEDUCTS.has(a.id)) continue;
+    if (a.kind === 'underground') continue;
     const pts = gpoly(a.points);
+    // Built by a landmark (the Janiculum mill race): keep its line clear of blocks, draw nothing.
+    if (SKIPPED_AQUEDUCTS.has(a.id)) {
+      for (let k = 0; k + 1 < pts.length; k++) g.fillBand([pts[k], pts[k + 1]], 9, K.AQUEDUCT, (c) => c === K.FREE || c === K.STEEP || c === K.OUTSIDE || c === K.GARDEN || c === K.MARGIN);
+      continue;
+    }
     const ys = a.channelElevation.map((e) => e * S);
     aqueducts.push({ id: a.id, name: a.name, points: pts, channelY: ys, kind: a.kind as 'arcade' | 'mixed' });
     for (let k = 0; k + 1 < pts.length; k++) {

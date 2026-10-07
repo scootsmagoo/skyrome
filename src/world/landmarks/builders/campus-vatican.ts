@@ -164,17 +164,36 @@ function buildNaumachiaAugusti(ctx: LandmarkContext): LandmarkBuild {
     const y = Math.min(g(x0, z0), g(x1, z1));
     wallRun(d, x0, z0, x1, z1, y - 0.6, y + rng.range(0.3, 0.9), 1.0, 'travertine', true);
   }
-  // Marshy pools where water still stands, reeds and mud round them.
-  for (let i = 0; i < 6; i++) {
-    const x = rng.range(-rx * 0.6, rx * 0.6), z = rng.range(-rz * 0.6, rz * 0.6);
-    if (!free(x, z, 12) || Math.hypot(x, z) < 22) continue;
+  // Marshy pools where water still stands (the Alsietina still runs in), reed beds and mud round
+  // them: the old basin floor is half marsh, half scrub. At 300 m across, it needs a lot of them.
+  const pools = detail === 'high' ? 16 : 9;
+  for (let i = 0; i < pools; i++) {
+    const x = rng.range(-rx * 0.75, rx * 0.75), z = rng.range(-rz * 0.75, rz * 0.75);
+    if (!free(x, z, 14) || Math.hypot(x, z) < 22) continue;
     const y = g(x, z);
-    const sx = rng.range(8, 18), sz = rng.range(6, 12);
-    d.ellipsoid('mud', x, y, z, sx + 1.5, 0.12, sz + 1.5, { seg: [12, 3] });
-    d.ellipsoid('water', x, y + 0.05, z, sx, 0.08, sz, { seg: [12, 3] });
-    for (let k = 0; k < 8; k++) {
-      const a = rng.range(0, Math.PI * 2);
-      d.cyl('dry_grass', x + Math.cos(a) * sx, y + 0.8, z + Math.sin(a) * sz, 0.3, 1.6, 4, { rTop: 0.05 });
+    const sx = rng.range(10, 26), sz = rng.range(7, 16);
+    d.ellipsoid('mud', x, y, z, sx + 2.5, 0.12, sz + 2.5, { seg: [14, 3] });
+    d.ellipsoid('water', x, y + 0.05, z, sx, 0.08, sz, { seg: [14, 3] });
+    const reeds = detail === 'high' ? 12 : 6;
+    for (let k = 0; k < reeds; k++) {
+      const a = rng.range(0, Math.PI * 2), f = rng.range(0.85, 1.15);
+      tree(ctx, d, 'reeds', x + Math.cos(a) * sx * f, y, z + Math.sin(a) * sz * f, rng.range(1.6, 2.6));
+    }
+  }
+  // Scrub over the dry floor in thickets: laurel, oleander and fig round an olive or a fig tree.
+  const thickets = detail === 'high' ? 34 : 16;
+  for (let i = 0; i < thickets; i++) {
+    const cx = rng.range(-rx * 0.85, rx * 0.85), cz = rng.range(-rz * 0.85, rz * 0.85);
+    if ((cx * cx) / (rx * rx) + (cz * cz) / (rz * rz) > 0.8 || Math.hypot(cx, cz) < 18) continue;
+    const r = rng.range(4, 10);
+    const n = detail === 'high' ? 8 : 4;
+    for (let k = 0; k < n; k++) {
+      const a = rng.range(0, Math.PI * 2), q = rng.range(0, r);
+      const x = cx + Math.cos(a) * q, z = cz + Math.sin(a) * q;
+      if (!free(x, z, 2)) continue;
+      const u = rng.next();
+      const sp = k === 0 ? (u < 0.6 ? 'olive' : 'fig') : u < 0.45 ? 'laurel' : u < 0.8 ? 'oleander' : 'fig';
+      tree(ctx, d, sp, x, g(x, z), z, k === 0 ? rng.range(5, 7.5) : rng.range(2.5, 5));
     }
   }
   // The island (where the fleets fought round it) with the stump of its pavilion and a bridge pier.

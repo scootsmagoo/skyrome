@@ -40,6 +40,10 @@ export const QUARTERS: Quarter[] = [
   // Riverside below the Aventine and the Emporium: warehouses and dockers.
   { id: 'emporium', center: [-780, 1250], r: 420, density: 0.8, wealth: 0.25, horrea: true, yard: 'dirt' },
   { id: 'portus', center: [-380, 300], r: 120, density: 0.85, wealth: 0.35, horrea: true, yard: 'cobbles' },
+  // The Janiculum's lower slope: garden villas and vineyards above Transtiberim, not tenements.
+  { id: 'janiculum-villas', center: [-1470, 480], r: 260, density: 0.35, wealth: 0.65, maxStoreys: 3, yard: 'gravel' },
+  // Transtiberim: the multi-ethnic port quarter of tanners, potters, millers and sailors.
+  { id: 'transtiberim', center: [-860, 560], r: 420, density: 0.85, wealth: 0.3, maxStoreys: 5, yard: 'dirt' },
   // Aventine top: aristocrats and old temples (Trajan's own house).
   { id: 'aventine', center: [-180, 1020], r: 300, density: 0.55, wealth: 0.8, maxStoreys: 4, yard: 'gravel' },
   // Caelian: quiet, wealthy, domus with gardens.
@@ -60,6 +64,9 @@ export const OPEN_SPACES: { id: string; kind: 'plaza' | 'grove'; polygon: readon
   // Area Capitolina and the Arx: temple precincts and the sacred groves ("inter duos lucos").
   { id: 'area-capitolina', kind: 'grove', polygon: [[-250, 120], [-220, 140], [-160, 125], [-125, 90], [-115, 50], [-120, 30], [-150, 20], [-175, -5], [-215, -12], [-245, 10], [-252, 45]] },
   { id: 'arx', kind: 'grove', polygon: [[-35, -180], [-60, -215], [-90, -220], [-120, -205], [-140, -160], [-130, -140], [-90, -95], [-60, -105], [-45, -120]] },
+  // The Janiculum crest round the Aqua Traiana's castellum and the head of the mill race: pines,
+  // cypresses and open ground, the city spread out below.
+  { id: 'janiculum-crest', kind: 'grove', polygon: [[-1780, 330], [-1700, 300], [-1600, 330], [-1560, 420], [-1580, 520], [-1660, 560], [-1760, 530], [-1800, 430]] },
 ];
 
 /** Atlas landmarks that are district anchors (areas full of ordinary houses), not buildings. */
