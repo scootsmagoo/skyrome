@@ -22,7 +22,9 @@ function sane(out: BuildingOutput, maxTris: number) {
   expect(n).toBeGreaterThan(500);
   expect(n).toBeLessThan(maxTris);
   for (const m of meshes) {
-    expect(MATERIAL_IDS).toContain(m.name.split(':')[1]);
+    // Library materials, or the shared atlas pages of painted notices (fabric/notices.ts).
+    const mat = m.name.split(':')[1];
+    if (mat !== 'inscriptions') expect(MATERIAL_IDS).toContain(mat);
     const pos = m.geometry.getAttribute('position');
     for (let i = 0; i < pos.count; i += 97) expect(Number.isFinite(pos.getX(i) + pos.getY(i) + pos.getZ(i))).toBe(true);
     expect(m.geometry.getAttribute('uv')).toBeTruthy();

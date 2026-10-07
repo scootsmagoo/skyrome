@@ -15,6 +15,7 @@ import { MeshBuilder } from '../../gfx/MeshBuilder';
 import type { MaterialId } from '../../gfx/materialIds';
 import { placeProp, stripedAwning } from '../props';
 import { Draw } from './draw';
+import { wallNotice } from './notices';
 import { roof } from './roof';
 import { aedicula } from './shrines';
 import { pickShopKind, shopFrontage, shopInterior, type ShopKind } from './shops';
@@ -202,6 +203,21 @@ export function insula(spec: InsulaSpec): BuildingOutput {
   cornice(F, trim, -W / 2, W / 2, eave);
   // Painted dado on the piers between the shop openings, following the sidewalk.
   if (finish === 'plaster') socleAndDado(F, -W / 2, W / 2, yMin, ground, { dado: dadoMat, skip: cut });
+  // Painted notices on the wall beside some stair doors (near detail only; own rng stream; not
+  // behind a portico, whose raised walk would hide them).
+  if (full && !portico) {
+    const nrng = rng.fork('notices');
+    for (const bay of bays) {
+      const o = bay.o;
+      if (bay.kind !== 'stair' || !o || !isCut(o) || !nrng.chance(0.55)) continue;
+      const left = nrng.chance(0.5);
+      const a = left ? bay.x0 + 0.2 : o.x1 + 0.3;
+      const b = left ? o.x0 - 0.3 : bay.x1 - 0.2;
+      // Eye height above the pavement actually in front of the wall (it can stand above the bay's base on a slope).
+      const street = Math.max(bay.yb, ground((a + b) / 2, zf - 0.6));
+      wallNotice(F, nrng, a, b, street + nrng.range(1.55, 1.85));
+    }
+  }
 
   // Shops / doors.
   for (const bay of bays) {
