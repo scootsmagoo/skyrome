@@ -11,6 +11,10 @@
  *   hair  — strands flowing down from the crown
  *   leather / plate — faint grain, hammer marks
  *   skin  — soft blotches and a little roughness variation
+ *   chest / back — bare male torsos: skin plus anatomy as bump detail (pectorals, collarbones,
+ *           abdominals and navel; spine and shoulder blades), placed by torso coordinates
+ *   face  — skin plus crisp painted features (lips, brows, lid creases, nostrils) placed by the
+ *           face coordinates the head builder stores in the metal/emissive channels
  * Cloth also gets shading along the folds it hangs in, and cloth and skin a film of street dust
  * toward the feet (bind-pose height; the avatar is built standing on y = 0).
  * Details fade out with distance (screen-space derivatives) so they never shimmer.
@@ -76,6 +80,7 @@ float avTint = 1.0;
 float avRough = 0.0;
 float avBump = 0.0;
 float avDust = 0.0;
+vec3 avTint3 = vec3(1.0);
 {
   vec2 uv = av_uv();
   bool avCloth = (avPat > 2.5 && avPat < 3.5) || (avPat > 4.5 && avPat < 5.5);
@@ -87,7 +92,7 @@ float avDust = 0.0;
     float hang = 1.0 - smoothstep(0.7, 1.4, vRest.y);
     avTint *= 1.0 - (0.08 + 0.1 * hang) * (1.0 - fold);
   }
-  if (avCloth || (avPat > 7.5 && avPat < 8.5)) {
+  if (avCloth || (avPat > 7.5 && avPat < 11.5)) {
     float top = 0.24 + 0.18 * av_noise(uv * 9.0);
     avDust = (1.0 - smoothstep(0.02, top, vRest.y)) * 0.28;
   }
@@ -156,6 +161,80 @@ float avDust = 0.0;
     avRough = (0.5 - m) * 0.12;
     avH = m;
     avBump = 0.04;
+  } else if (avPat > 8.5 && avPat < 9.5) {
+    // Face: skin, plus features painted from the face coordinates (see SkinBuilder PATTERN.face).
+    float m = av_noise(uv * 22.0) * 0.6 + av_noise(uv * 70.0) * 0.4;
+    avTint = 0.95 + 0.1 * m;
+    avRough = (0.5 - m) * 0.12;
+    avH = m;
+    avBump = 0.04;
+    float fu = vSurf.y * 2.0 - 1.0;
+    float fy = vSurf.w;
+    float au = abs(fu);
+    float aa = max(fwidth(fy), 0.0015);
+    // Lips: an upper lip with a cupid's bow, a fuller lower lip, a dark line between them.
+    float mouthY = 0.245;
+    float lx = clamp(au / 0.34, 0.0, 1.0);
+    float upTop = mouthY + 0.026 * (1.0 - lx * lx) - 0.006 * exp(-fu * fu / 0.004);
+    float loBot = mouthY - 0.034 * sqrt(max(0.0, 1.0 - lx * lx));
+    float inLip = smoothstep(loBot - aa, loBot + aa, fy) * smoothstep(upTop + aa, upTop - aa, fy) * smoothstep(0.37, 0.31, au);
+    avTint3 = mix(vec3(1.0), vec3(0.9, 0.64, 0.6), inLip);
+    float lipLine = exp(-pow((fy - mouthY + 0.002 * (1.0 - lx)) / max(0.0035, aa * 1.5), 2.0)) * smoothstep(0.38, 0.28, au);
+    avTint *= 1.0 - 0.5 * lipLine;
+    avRough -= 0.15 * inLip;
+    // Brows: an arch over each eye, thick at the inner end, tapering outward, with strands.
+    float bt = clamp((au - 0.14) / 0.6, 0.0, 1.0);
+    float browY = 0.628 + 0.022 * sin(bt * 2.7);
+    float browH = mix(0.016, 0.006, bt);
+    float inBrow = smoothstep(browH + aa, browH - aa, abs(fy - browY)) * smoothstep(0.11, 0.15, au) * smoothstep(0.78, 0.72, au);
+    float strands = av_noise(vec2(au * 110.0, fy * 25.0));
+    avTint3 *= mix(vec3(1.0), vec3(0.4, 0.35, 0.32), inBrow * (0.65 + 0.35 * strands));
+    // Soft shade in the eye sockets and under the nose; the crease of the upper lid; nostrils.
+    avTint *= 1.0 - 0.1 * exp(-pow((au - 0.44) / 0.24, 2.0) - pow((fy - 0.575) / 0.045, 2.0));
+    avTint *= 1.0 - 0.08 * exp(-fu * fu / 0.05 - pow((fy - 0.33) / 0.04, 2.0));
+    float ec = au - 0.44;
+    avTint *= 1.0 - 0.16 * exp(-pow((fy - 0.587 + 0.05 * ec * ec) / 0.006, 2.0)) * exp(-ec * ec / 0.04);
+    avTint *= 1.0 - 0.5 * exp(-pow((fy - 0.393) / 0.008, 2.0) - pow((au - 0.105) / 0.04, 2.0));
+  } else if (avPat > 9.5 && avPat < 11.5) {
+    // Bare torso: skin plus anatomy. Heights in metres-ish (bump 1 ≈ true slope).
+    float m = av_noise(uv * 22.0) * 0.6 + av_noise(uv * 70.0) * 0.4;
+    avTint = 0.95 + 0.1 * m;
+    avRough = (0.5 - m) * 0.12;
+    float fx = vSurf.y * 2.0 - 1.0;
+    float ty = vSurf.w;
+    float ax = abs(fx);
+    float h = 0.0;
+    if (avPat < 10.5) {
+      // Pectorals with a defined lower edge; breastbone groove; collarbones.
+      float pd = length(vec2((ax - 0.42) / 0.4, (ty - 0.76) / 0.17));
+      h += 0.009 * smoothstep(1.05, 0.45, pd) * smoothstep(0.6, 0.66, ty);
+      h -= 0.003 * exp(-fx * fx / 0.004) * smoothstep(0.45, 0.6, ty) * smoothstep(0.95, 0.85, ty);
+      h += 0.003 * exp(-pow((ty - 0.93 + 0.04 * ax) / 0.025, 2.0)) * smoothstep(0.08, 0.15, ax) * smoothstep(0.7, 0.55, ax);
+      // Abdominals: two columns either side of the midline, crossed by three shallow grooves.
+      float abs_ = exp(-pow((ax - 0.17) / 0.12, 2.0)) * smoothstep(0.02, 0.12, ty) * smoothstep(0.6, 0.5, ty);
+      float cross_ = exp(-pow((ty - 0.48) / 0.016, 2.0)) + exp(-pow((ty - 0.37) / 0.016, 2.0)) + exp(-pow((ty - 0.26) / 0.016, 2.0));
+      h += 0.004 * abs_ * (1.0 - 0.7 * cross_);
+      // Navel and nipples.
+      float nav = exp(-(fx * fx) / 0.002 - pow((ty - 0.14) / 0.02, 2.0));
+      h -= 0.004 * nav;
+      avTint *= 1.0 - 0.35 * nav;
+      float nip = exp(-pow((ax - 0.5) / 0.035, 2.0) - pow((ty - 0.67) / 0.018, 2.0));
+      avTint3 = mix(vec3(1.0), vec3(0.78, 0.62, 0.6), nip);
+      // Shade in the creases, so the forms read in flat light too.
+      float under = exp(-pow((ty - 0.6 - 0.05 * (ax - 0.42) * (ax - 0.42)) / 0.03, 2.0)) * exp(-pow((ax - 0.42) / 0.3, 2.0));
+      float mid = exp(-fx * fx / 0.003) * smoothstep(0.08, 0.2, ty) * smoothstep(0.9, 0.8, ty);
+      avTint *= 1.0 - 0.16 * under - 0.08 * mid - 0.06 * cross_ * exp(-pow((ax - 0.17) / 0.2, 2.0));
+    } else {
+      // Spine groove and shoulder blades.
+      h -= 0.004 * exp(-fx * fx / 0.004) * smoothstep(0.05, 0.2, ty) * smoothstep(1.0, 0.85, ty);
+      float sd = length(vec2((ax - 0.42) / 0.26, (ty - 0.74) / 0.18));
+      h += 0.006 * smoothstep(1.0, 0.4, sd);
+      float spine = exp(-fx * fx / 0.003) * smoothstep(0.05, 0.2, ty) * smoothstep(1.0, 0.85, ty);
+      float blade = exp(-pow((sd - 1.05) / 0.4, 2.0)) * smoothstep(0.8, 0.6, ty) * smoothstep(0.15, 0.3, ax);
+      avTint *= 1.0 - 0.12 * spine - 0.07 * blade;
+    }
+    avH = h;
+    avBump = 4.0;
   } else if (avPat > 6.5 && avPat < 7.5) {
     // Plate: faint hammer marks and smudges.
     float m = av_noise(uv * 40.0) * 0.6 + av_noise(uv * 9.0) * 0.4;
@@ -178,16 +257,16 @@ export function avatarMaterial(): THREE.MeshStandardMaterial {
       .replace('#include <begin_vertex>', `#include <begin_vertex>\n${VERT_MAIN}`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${FRAG_PARS}`)
-      .replace('#include <color_fragment>', `#include <color_fragment>\n${FRAG_PATTERN}\ndiffuseColor.rgb *= avTint;\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.3, 0.25, 0.19), avDust);`)
+      .replace('#include <color_fragment>', `#include <color_fragment>\n${FRAG_PATTERN}\ndiffuseColor.rgb *= avTint * avTint3;\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.3, 0.25, 0.19), avDust);`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\nroughnessFactor = clamp(vSurf.x + avRough, 0.04, 1.0);`)
-      .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>\nmetalnessFactor = vSurf.y;`)
+      .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>\nmetalnessFactor = (vPat < 2.5 || (vPat > 6.5 && vPat < 7.5)) ? vSurf.y : 0.0;`)
       .replace(
         '#include <normal_fragment_maps>',
         `#include <normal_fragment_maps>\nif (avBump > 0.0) { normal = av_perturb(-vViewPosition, normal, vec2(dFdx(avH), dFdy(avH)) * avBump, faceDirection); }`,
       )
-      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * vSurf.w * 3.0;`);
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * (vPat < 0.5 ? vSurf.w : 0.0) * 3.0;`);
   };
-  m.customProgramCacheKey = () => 'skyrome-avatar-v3';
+  m.customProgramCacheKey = () => 'skyrome-avatar-v5';
   shared = m;
   return m;
 }

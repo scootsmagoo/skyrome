@@ -24,7 +24,14 @@ export interface Surf {
   emissive: number;
 }
 
-export const PATTERN = { none: 0, mail: 1, scale: 2, wool: 3, hair: 4, linen: 5, leather: 6, plate: 7, skin: 8 } as const;
+/**
+ * `face` (fine heads only): skin whose metal and emissive channels carry the vertex's place on the
+ * face instead (across −1…1 → 0…1, and height 0 chin … 1 crown), so the material paints lips,
+ * brows, lid creases and nostrils per pixel. Only none/mail/scale/plate read metal, only none
+ * reads emissive. `chest` / `back` (bare male torsos) do the same with the torso: across −1…1 of
+ * the half-width at that height, and height 0 at the iliac crest … 1 at the top of the shoulders.
+ */
+export const PATTERN = { none: 0, mail: 1, scale: 2, wool: 3, hair: 4, linen: 5, leather: 6, plate: 7, skin: 8, face: 9, chest: 10, back: 11 } as const;
 
 export const SURF = {
   skin: { rough: 0.72, metal: 0, pattern: PATTERN.skin, emissive: 0 },

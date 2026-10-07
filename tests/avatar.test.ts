@@ -554,7 +554,9 @@ describe('geometry', () => {
       const hi = buildAvatarGeometry(app, 'high');
       const lo = buildAvatarGeometry(app, 'low');
       const armored = !!app.armor?.helmet || !!app.armor?.body;
-      expect(hi.triangles, role).toBeLessThan(armored ? 6500 : 5200);
+      // High detail is only used within ~35 m; the sculpted head (smooth face, painted features)
+      // takes ~2k more triangles than the first pass.
+      expect(hi.triangles, role).toBeLessThan(armored ? 9500 : 8400);
       expect(lo.triangles, role).toBeLessThan(armored ? 1800 : 1400);
     }
   });

@@ -8,7 +8,7 @@
  */
 import * as THREE from 'three';
 import { B, type Rig } from '../rig';
-import { SURF, mixW, type V, type Weights } from '../SkinBuilder';
+import { PATTERN, SURF, mixW, type V, type Weights } from '../SkinBuilder';
 import { MonotoneCurve } from '../anim/spline';
 import { clamp01, gauss, lerp, smooth, superellipse, type Ctx } from './common';
 import { paintArm, paintFoot, paintLeg, paintTorso, torsoEdges } from './garments';
@@ -122,9 +122,9 @@ export class TorsoProfile {
       [L.ribs, 0.148 * g.torso, 0.098 * lerp(g.belly, g.torso, 0.6), 0.09 * g.torso, 0, 2.5],
       [L.chest, 0.158 * g.torso, 0.106 * g.torso, 0.095 * g.torso, 0, 2.5],
       [L.armpit, 0.163 * lerp(g.torso, g.shoulders, 0.5), 0.098 * g.torso, 0.097 * g.torso, -0.006, 2.6],
-      [L.shoulder - 0.024 * s, 0.168 * g.shoulders, 0.08, 0.086, -0.012, 2.8],
-      [L.shTop, 0.15 * g.shoulders, 0.064, 0.076, -0.018, 2.6],
-      [L.trap, 0.112 * lerp(g.neck, g.shoulders, 0.5), 0.062 * g.neck, 0.074 * g.neck, -0.022, 2.3],
+      [L.shoulder - 0.024 * s, 0.178 * g.shoulders, 0.08, 0.088, -0.012, 2.8],
+      [L.shTop, 0.163 * g.shoulders, 0.066, 0.078, -0.018, 2.6],
+      [L.trap, 0.12 * lerp(g.neck, g.shoulders, 0.5), 0.062 * g.neck, 0.074 * g.neck, -0.022, 2.3],
       [L.neckBase, 0.064 * g.neck, 0.058 * g.neck, 0.06 * g.neck, -0.02, 2.0],
       [L.neckMid, 0.057 * g.neck, 0.052 * g.neck, 0.056 * g.neck, -0.016, 2.0],
       [L.neckTop, 0.052 * g.neck, 0.04 * g.neck, 0.052 * g.neck, -0.012, 2.0],
@@ -161,7 +161,7 @@ export function torsoPoint(ctx: Ctx, prof: TorsoProfile, L: Levels, y: number, t
       const bump = (gauss((Math.abs(x) - bx) / s, 0.045) * chestK) * 0.038 * g.bust * s;
       z += bump;
     } else {
-      z += gauss((Math.abs(x) - 0.06 * s) / s, 0.06) * gauss((y - L.chest - 0.02 * s) / s, 0.05) * 0.01 * g.torso * s;
+      z += gauss((Math.abs(x) - 0.06 * s) / s, 0.06) * gauss((y - L.chest - 0.02 * s) / s, 0.05) * 0.016 * g.torso * s;
     }
     // Belly for heavy builds.
     z += gauss((y - L.waist) / s, 0.08) * gauss(x / s, 0.12) * 0.03 * Math.max(0, g.belly - 1) * s;
@@ -249,6 +249,12 @@ export function buildTorso(ctx: Ctx, L: Levels, prof: TorsoProfile) {
       v.g = paint.color.g;
       v.b = paint.color.b;
       v.s = paint.surf;
+      // Bare male torsos carry torso coordinates for the material's anatomy (PATTERN.chest/back);
+      // all of the bare skin, so no triangle mixes coded and plain vertices (that streaks).
+      if (ctx.hi && paint.surf === SURF.skin && ctx.rig.sex === 'male') {
+        const sec = prof.at(y);
+        v.s = { rough: SURF.skin.rough, metal: 0.5 + 0.5 * Math.max(-1, Math.min(1, bx / sec.a)), pattern: bz - zc > 0 ? PATTERN.chest : PATTERN.back, emissive: clamp01((y - L.iliac) / (L.shTop - L.iliac)) };
+      }
       v.w = torsoWeights(ctx, L, v.x, y);
     },
     'auto',
@@ -291,7 +297,10 @@ function armRows(L: Levels, rig: Rig): { y: number; r: [number, number, number, 
     [yA + 0.026 * s, 0.027, 0.02, 0.028, 0.028],
     [yA + 0.034 * s, 0.01, 0.007, 0.01, 0.01],
   ];
-  return rows.map(([y, a, b, c, d]) => ({ y, r: [m(a), m(b), m(c), m(d)] as [number, number, number, number] }));
+  // Fuller than the first pass (which read as sticks): forearm ~28 cm round, upper arm ~32 cm;
+  // the wrist barely changes so the hand still joins cleanly.
+  const k = (y: number) => (y <= yW + 0.012 * s ? 1.06 : y <= yE - 0.012 * s ? lerp(1.12, 1.2, smooth(yW, yE - 0.05 * s, y)) : y <= yA - 0.03 * s ? 1.12 : y <= yA + 0.006 * s ? 1.06 : 1.02);
+  return rows.map(([y, a, b, c, d]) => ({ y, r: [m(a) * k(y), m(b) * k(y), m(c) * k(y), m(d) * k(y)] as [number, number, number, number] }));
 }
 
 function armWeights(L: Levels, side: 'L' | 'R', y: number): Weights {
@@ -335,7 +344,7 @@ export function buildArm(ctx: Ctx, L: Levels, sideSign: 1 | -1) {
   const cz = L.armZ;
   const topY = uniq[uniq.length - 1];
   // Dome: the top rings shift toward the body so the deltoid rounds over the shoulder.
-  const domeIn = (y: number) => smooth(L.shoulder - 0.01 * L.s, topY, y) * 0.012 * L.s;
+  const domeIn = (y: number) => smooth(L.shoulder - 0.01 * L.s, topY, y) * 0.018 * L.s;
   const g = b.grid(
     seg,
     uniq.length,
@@ -553,7 +562,9 @@ function legRows(L: Levels, rig: Rig) {
     [yH + 0.0 * s, 0.083 * th, 0.06 * th, 0.078, 0.088],
     [yH + 0.045 * s, 0.07 * th, 0.04 * th, 0.06, 0.07],
   ];
-  return rows.map(([y, a, b, c, d]) => ({ y, r: [m(a), m(b), m(c), m(d)] as [number, number, number, number] }));
+  // Fuller calves and thighs (the first pass read as sticks); the ankle barely changes.
+  const k = (y: number) => (y <= yA + 0.005 * s ? 1.04 : y <= yK - 0.03 * s ? lerp(1.08, 1.13, smooth(yA, yK - 0.14 * s, y)) : y <= yK + 0.015 * s ? 1.08 : y <= yH - 0.06 * s ? 1.06 : 1.0);
+  return rows.map(([y, a, b, c, d]) => ({ y, r: [m(a) * k(y), m(b) * k(y), m(c) * k(y), m(d) * k(y)] as [number, number, number, number] }));
 }
 
 function legWeights(L: Levels, side: 'L' | 'R', y: number): Weights {
