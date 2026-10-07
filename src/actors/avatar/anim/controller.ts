@@ -90,9 +90,9 @@ function drawDirection(name: string): -1 | 0 | 1 {
   return name.startsWith('drawWeapon') ? 1 : name.startsWith('sheathWeapon') ? -1 : 0;
 }
 /** How the body lies at the end of a clip that drops the kit. */
-const dropBody = (name: string): DropBody => (name === 'death:forward' ? 'front' : name === 'yield' ? 'kneel' : 'back');
+const dropBody = (name: string): DropBody => (name === 'death:forward' ? 'front' : name === 'yield' || name === 'cower' ? 'kneel' : 'back');
 /** Clips that take the whole body down (they also move a busy off hand). */
-const isFall = (name: string) => name.startsWith('death') || name === 'knockdown' || name === 'yield';
+const isFall = (name: string) => name.startsWith('death') || name === 'knockdown' || name === 'yield' || name === 'cower';
 
 /** Elbow poles (chest frame) for the bow hand at full draw (back, out, a little up) and the first-person weapon arm (down and out). */
 const BOW_POLE: readonly [number, number, number] = [-1, 0.1, -0.15];
@@ -761,13 +761,13 @@ export class AnimationController {
 
   private fullDeathW(): number {
     let w = 0;
-    for (const a of this.actions) if (a.name.startsWith('death') || a.name === 'knockdown' || a.name === 'yield') w = Math.max(w, a.w);
+    for (const a of this.actions) if (a.name.startsWith('death') || a.name === 'knockdown' || a.name === 'yield' || a.name === 'cower') w = Math.max(w, a.w);
     return w;
   }
 
   private fullOverride(): number {
     let w = 0;
-    for (const a of this.actions) if (a.info.mask === 'full' || a.name.startsWith('death') || a.name === 'yield') w = Math.max(w, a.w);
+    for (const a of this.actions) if (a.info.mask === 'full' || a.name.startsWith('death') || a.name === 'yield' || a.name === 'cower') w = Math.max(w, a.w);
     return Math.max(w, this.loopW * (this.idleLoop && this.idleLoop !== 'talk' && this.idleLoop !== 'cheer' && this.idleLoop !== 'drunk' ? 1 : 0));
   }
 

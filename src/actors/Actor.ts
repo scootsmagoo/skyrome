@@ -324,7 +324,9 @@ export type ActionClip =
   | 'cheer'
   | 'wave'
   | 'talk'
-  | 'yield';
+  | 'yield'
+  /** A civilian giving up: down on both knees, arms over the head. */
+  | 'cower';
 
 /** Loops an NPC can idle in (schedules). */
 export type IdleLoop = 'stand' | 'sit' | 'sitGround' | 'lean' | 'work' | 'sweep' | 'talk' | 'pray' | 'sleep' | 'cheer' | 'guard' | 'drunk';

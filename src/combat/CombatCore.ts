@@ -1036,7 +1036,8 @@ export class CombatCore {
     this.downed(c);
     c.drawn = false;
     c.action = { kind: 'kneel', start: this.now, end: Infinity, resolved: true };
-    c.view?.play('yield');
+    // Fighters ask for mercy the arena's way (on one knee, a hand raised); a civilian cowers.
+    c.view?.play(c.profile?.tier === 'civilian' ? 'cower' : 'yield');
     this.env.emit('actor:yielded', { actorId: c.id, byId: by?.id });
     const bout = this.bout;
     if (bout && bout.foes.has(c.id)) {

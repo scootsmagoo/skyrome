@@ -1028,9 +1028,57 @@ function gestures(stance: Stance): Record<string, ActionDef> {
       hold: true,
       fadeIn: 0.15,
     },
+    cower: {
+      def: {
+        name: 'cower',
+        duration: 1.3,
+        base: rest,
+        keys: [
+          k(0, rest),
+          k(0.3, { hipsPos: [0, -0.22, 0.04], hips: [14, 0, 0], spine: [16, 0, 0], thighL: [52, 4, 4], shinL: [60], thighR: [52, -4, -4], shinR: [60], upperArmL: [70, 20, 20, 0], forearmL: [90, 0], upperArmR: [70, 20, 20, 0], forearmR: [90, 0], head: [16, 0, 0] }),
+          k(0.65, COWER, undefined, true),
+          k(1.3, { ...COWER, head: [30, 6, 0] }, undefined, true),
+        ],
+      },
+      mask: 'full',
+      drop: { t: 0.25, what: 'shield' },
+      busy: true,
+      hold: true,
+      fadeIn: 0.12,
+    },
   };
   return out;
 }
+
+/** A civilian cowering: on both knees, hunched over, forearms crossed over the head, eyes down. */
+export const COWER: PoseSpec = {
+  hipsPos: [0, -0.5, 0.06],
+  hips: [20, 0, 0],
+  spine: [26, 0, 0],
+  chest: [20, 0, 0],
+  neck: [18, 0, 0],
+  head: [26, 0, 0],
+  thighL: [92, 8, 4],
+  shinL: [118],
+  footL: [-30, 0],
+  toeL: 30,
+  thighR: [92, -8, -4],
+  shinR: [118],
+  footR: [-30, 0],
+  toeR: 30,
+  shoulderL: [14, 0],
+  upperArmL: [128, 26, 34, 0],
+  forearmL: [128, 10],
+  handL: [10, 0, 0],
+  fingersL: 40,
+  indexL: 30,
+  shoulderR: [14, 0],
+  upperArmR: [128, 26, 34, 0],
+  forearmR: [128, 10],
+  handR: [10, 0, 0],
+  fingersR: 40,
+  indexR: 30,
+};
 
 /** Roman orans: arms raised forward and out, elbows bent, palms up; gaze lifted. */
 export const ORANS: PoseSpec = {

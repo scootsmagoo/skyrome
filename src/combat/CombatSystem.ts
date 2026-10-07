@@ -1678,7 +1678,11 @@ export class CombatSystem implements System, PlayerCombatHost {
       if (this.pendingChoice?.c === c || (g.ui?.isOpen?.('dialogue') && dist2D(c.position, pp) < 6)) continue;
       const mine = this.yieldOffs.has(c.id);
       const age = now - c.yieldedAt;
-      if (dist2D(c.position, pp) <= 40 && age <= (mine ? 60 : 15)) continue;
+      // A civilian stays down only a few seconds before scrambling up to run (20 s while the player
+      // stands over them with the spare / rob choice); a fighter longer.
+      const civ = c.profile?.tier === 'civilian';
+      const keep = civ ? (mine ? 20 : 6) : mine ? 60 : 15;
+      if (dist2D(c.position, pp) <= 40 && age <= keep) continue;
       this.yieldOffs.get(c.id)?.();
       this.yieldOffs.delete(c.id);
       this.core.releaseYielded(c);
