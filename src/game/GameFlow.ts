@@ -452,9 +452,16 @@ export class GameFlow implements System {
   spawnPoint(at: string | null = null): { position: THREE.Vector3; heading: number } {
     const g = this.game;
     if (at) {
-      // A landmark's own 'spawn' spot wins (18 m out along the facade can land inside a building).
-      const own = g.landmarks?.get(at)?.spots.find((q) => q.kind === 'spawn');
-      if (own) return { position: own.position.clone().setY(own.position.y + 0.05), heading: own.heading ?? 0 };
+      // The landmark's own standing points first: a vista, its spawn spot, an entrance. Each must
+      // be open street-level ground once the city has streamed in round it (a spot is planned
+      // from the landmark alone, and the city may have put a shop on it).
+      const lm = g.landmarks?.get(at);
+      const spots = lm ? (['vista', 'spawn', 'door'] as const).flatMap((k) => lm.spots.filter((q) => q.kind === k)) : [];
+      for (const sp of spots) {
+        const near = findSafeGround(g, sp.position, { maxRadius: 8, open: 4, openDirs: 6, maxAboveTerrain: 1.5 });
+        if (near && near.distanceTo(sp.position) < 6) return { position: near, heading: sp.kind === 'spawn' ? (sp.heading ?? 0) : openHeading(g, near, lm!.position) };
+      }
+      // Else 18 m out along the facade.
       const s = spawnAtLandmark(g, at, 18);
       if (s) {
         // 18 m out along the facade can land on a structure, in a basin or boxed in: move to the
