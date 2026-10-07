@@ -81,11 +81,55 @@ function createMaterial(id: MaterialId): THREE.Material {
     m.envMapIntensity = 0;
     return m;
   }
+  if (id === 'interior') {
+    m.envMapIntensity = 0;
+    lamplitRooms(m);
+    return m;
+  }
   if (!hasDom) return m;
   if (recipe.set) applyPhotoSet(m, id, recipe, recipe.set);
   else if (recipe.proc) applyProcedural(m, id, recipe);
   applyShaderPatch(m, { macro: recipe.macro, detile: recipe.detile, contrast: recipe.contrast, weather: recipe.weather, mean: recipe.set ? TEXTURE_STATS[recipe.set]?.albedo : undefined });
   return m;
+}
+
+/** 0 by day → 1 when the lamps are lit; the city sets it from the sky every frame. */
+export const interiorLamp = { value: 0 };
+
+/**
+ * The rooms behind the windows: black by day; at night about one room in three glows with warm
+ * lamplight (picked per ~3.5 m cell of the city and storey, brighter low down where the lamp
+ * stands), so the streets look lived in after dark.
+ */
+function lamplitRooms(m: THREE.MeshStandardMaterial) {
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uLamp = interiorLamp;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vRoomW;')
+      .replace('#include <project_vertex>', `#include <project_vertex>
+{
+  vec4 rw = vec4( transformed, 1.0 );
+  #ifdef USE_BATCHING
+    rw = batchingMatrix * rw;
+  #endif
+  #ifdef USE_INSTANCING
+    rw = instanceMatrix * rw;
+  #endif
+  vRoomW = ( modelMatrix * rw ).xyz;
+}`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vRoomW;\nuniform float uLamp;\nfloat roomHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }')
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+if ( uLamp > 0.0 ) {
+  vec3 cell = floor( vRoomW / vec3( 3.5, 3.0, 3.5 ) );
+  float h = roomHash( cell );
+  float lit = step( h, 0.3 );
+  float fy = fract( vRoomW.y / 3.0 );
+  float glow = mix( 1.0, 0.45, smoothstep( 0.1, 0.9, fy ) ) * ( 0.7 + 0.6 * fract( h * 13.7 ) );
+  totalEmissiveRadiance += vec3( 1.0, 0.42, 0.12 ) * 0.42 * glow * lit * uLamp;
+}`);
+  };
+  m.customProgramCacheKey = () => 'skyrome-interior-v1';
 }
 
 /** Linear-space target colour for an id. */

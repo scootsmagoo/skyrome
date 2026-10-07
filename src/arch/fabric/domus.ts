@@ -165,7 +165,7 @@ export function domus(spec: DomusSpec): BuildingOutput {
     wall(E, wallMat, a, c, yMin, hf, T);
     socle(E, -ft / 2, ft / 2);
   }
-  d.span('black', -W / 2 + T, upper ? 4.2 : 3.2, z0 + T + 0.01, W / 2 - T, hf, z1 - 0.01, { shadow: false });
+  d.span('interior', -W / 2 + T, upper ? 4.2 : 3.2, z0 + T + 0.01, W / 2 - T, hf, z1 - 0.01, { shadow: false });
   roof(d.at(0, 0, (z0 + z1) / 2), { kind: 'gable', w: W, d: ft, y: hf, axis: 'x', overhang: 0.5, wallMat, wallT: T, pitch: 0.36, ridges: !low });
 
   // ---- atrium block (compluviate roof over the impluvium)

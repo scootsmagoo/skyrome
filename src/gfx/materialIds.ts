@@ -61,6 +61,7 @@ export const MATERIAL_IDS = [
   'water',
   'mosaic', // floor mosaic
   'black', // dark openings (doorways, windows)
+  'interior', // the dark rooms behind upper windows (some lamplit at night)
   'glow_fire', // emissive (braziers, lamps)
 ] as const;
 
@@ -118,5 +119,6 @@ export const MATERIAL_BASE: Record<MaterialId, { color: number; roughness: numbe
   water: { color: 0x3d5f5a, roughness: 0.1 },
   mosaic: { color: 0xcdbb9a, roughness: 0.6 },
   black: { color: 0x0b0a09, roughness: 1 },
+  interior: { color: 0x0b0a09, roughness: 1 },
   glow_fire: { color: 0xffa040, roughness: 1, emissive: 0xff8a2a },
 };

@@ -380,13 +380,13 @@ export function insula(spec: InsulaSpec): BuildingOutput {
     const cx0 = -cw / 2 - T - 0.01, cx1 = cw / 2 + T + 0.01;
     const cz0 = ccz - cdp / 2 - T - 0.01, cz1 = ccz + cdp / 2 + T + 0.01;
     const y0 = G - 0.25;
-    d.span('black', -ix, y0, iz0, ix, eave, cz0, { shadow: false });
-    d.span('black', -ix, y0, cz1, ix, eave, iz1, { shadow: false });
-    d.span('black', -ix, y0, cz0, cx0, eave, cz1, { shadow: false });
-    d.span('black', cx1, y0, cz0, ix, eave, cz1, { shadow: false });
+    d.span('interior', -ix, y0, iz0, ix, eave, cz0, { shadow: false });
+    d.span('interior', -ix, y0, cz1, ix, eave, iz1, { shadow: false });
+    d.span('interior', -ix, y0, cz0, cx0, eave, cz1, { shadow: false });
+    d.span('interior', cx1, y0, cz0, ix, eave, cz1, { shadow: false });
     courtyardWalls(d, cw, cdp, ccz, n, floorY, G, eave, wallMat, courseMat, drng, shutterMat, low, full);
   } else {
-    d.span('black', -ix, G - 0.25, iz0, ix, eave, iz1, { shadow: false });
+    d.span('interior', -ix, G - 0.25, iz0, ix, eave, iz1, { shadow: false });
   }
   // Ground floor behind side/back barred windows.
   if (!spec.courtyard) {

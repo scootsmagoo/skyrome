@@ -16,7 +16,7 @@
 import * as THREE from 'three';
 import type { Game } from '../../core/Game';
 import type * as Atlas from '../../data/atlas';
-import { whenTexturesLoaded } from '../../gfx/materials';
+import { interiorLamp, whenTexturesLoaded } from '../../gfx/materials';
 import { GrassField } from '../../arch/vegetation/Grass';
 import { vegetation } from '../../arch/vegetation/system';
 import type { Spot } from '../../arch/fabric/types';
@@ -224,6 +224,7 @@ export async function buildCity(
       // Lamplit windows in the far massing follow the sky's lamp factor.
       const sky = (game as Game & { sky?: { lampFactor?: number } }).sky;
       farMat.userData.uLamp.value = sky?.lampFactor ?? 0;
+      interiorLamp.value = sky?.lampFactor ?? 0;
       // Wall torches burn from dusk to dawn only.
       torchFlames().visible = (sky?.lampFactor ?? 1) > 0.05;
     },

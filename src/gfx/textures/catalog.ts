@@ -124,6 +124,7 @@ export const MATERIAL_RECIPES: Record<MaterialId, MaterialRecipe> = {
   water: {},
   mosaic: { proc: 'mosaic', tile: 2.0, normalize: false, macro: 0.03 },
   black: {},
+  interior: {},
   glow_fire: {},
 };
 
