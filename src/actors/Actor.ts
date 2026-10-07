@@ -49,6 +49,10 @@ export interface ActorOptions {
 
 const GRAVITY = -20;
 const tmp = new THREE.Vector3();
+/** Highest ledge the step-up assist takes in stride (m): curbs, doorsteps, stairs. Not the 0.4 m seat rows of a cavea (its aisles are the way up) nor a plinth (clamber, Climb.ts). */
+const STEP_MAX = 0.3;
+const DOWN = { x: 0, y: -1, z: 0 };
+const UP = { x: 0, y: 1, z: 0 };
 
 export class Actor {
   readonly id: string;
@@ -75,6 +79,8 @@ export class Actor {
   private lastHeading: number;
   /** Consecutive fixed steps in which horizontal movement was blocked on the ground. */
   private blockedSteps = 0;
+  /** Consecutive grounded steps the move was stalled (the step-up assist waits for Rapier first). */
+  private stepStalls = 0;
 
   constructor(
     protected readonly game: Game,
@@ -141,9 +147,24 @@ export class Actor {
     // Respect collision groups, so a crowd NPC whose capsule ignores the player never blocks the
     // player's controller (GDD §14.7b: the player shoulders through crowds).
     controller.computeColliderMovement(collider, desired, undefined, collider.collisionGroups());
-    const mv = controller.computedMovement();
+    let mv: THREE.Vector3Like = controller.computedMovement();
     const wasRising = v.y > 0;
+    const wasGrounded = this.grounded;
     this.grounded = controller.computedGrounded();
+    // Rapier's own autostep often stalls a capsule at a curb (its round bottom meets the edge
+    // first): step up ourselves when pushing on the ground and blocked by a low ledge.
+    // Rapier gets the first frames (it steps stair risers smoothly a frame after contact).
+    if (wasGrounded && !wasRising && dt > 0) {
+      const want = Math.hypot(desired.x, desired.z);
+      const stalled = want > 0.004 && Math.hypot(mv.x, mv.z) < want * 0.6;
+      this.stepStalls = stalled ? this.stepStalls + 1 : 0;
+      const up = this.stepStalls >= 3 ? this.stepUp(desired) : null;
+      if (up) {
+        mv = up;
+        this.grounded = true;
+        this.stepStalls = 0;
+      }
+    } else this.stepStalls = 0;
     // Bumped the ceiling while rising.
     if (wasRising && mv.y < desired.y * 0.5) v.y = 0;
     // Hit a wall: bleed the blocked component so we don't keep pushing into it (and so
@@ -175,6 +196,34 @@ export class Actor {
 
     this.turnRate = (this.heading - this.lastHeading) / Math.max(dt, 1e-4);
     this.lastHeading = this.heading;
+  }
+
+  /**
+   * Step-up assist: the horizontal move has been mostly blocked for a few steps, and just ahead at
+   * foot level there is a flat top 9–30 cm up with headroom over it (a curb, a doorstep, a low stair): the move that
+   * lands on it, or null. Anything taller is a wall (climb or jump).
+   */
+  private stepUp(desired: THREE.Vector3Like): THREE.Vector3Like | null {
+    const want = Math.hypot(desired.x, desired.z);
+    const ph = this.game.physics;
+    const r = this.body.radius;
+    const dx = desired.x / want;
+    const dz = desired.z / want;
+    const feet = this.currPos;
+    const px = feet.x + dx * (r + 0.12);
+    const pz = feet.z + dz * (r + 0.12);
+    const from = feet.y + STEP_MAX + 0.06;
+    // From inside something taller the ray hits at once: rise > STEP_MAX, rejected below.
+    const top = ph.raycast({ x: px, y: from, z: pz }, DOWN, STEP_MAX + 0.12, Layer.World);
+    if (!top || top.normal.y < 0.75) return null;
+    const rise = top.point.y - feet.y;
+    // Under 9 cm the capsule's round bottom rides over by itself (and a wall's moulding is no step).
+    if (rise < 0.09 || rise > STEP_MAX) return null;
+    // Room for the whole body on top, and nothing low just past the edge.
+    const height = 2 * (this.body.halfHeight + r);
+    if (ph.raycast({ x: px, y: top.point.y + 0.03, z: pz }, UP, height, Layer.World)) return null;
+    if (ph.raycast({ x: feet.x, y: top.point.y + 0.1, z: feet.z }, { x: dx, y: 0, z: dz }, r + 0.2, Layer.World)) return null;
+    return { x: desired.x, y: rise + 0.01, z: desired.z };
   }
 
   /** Turn toward a heading at a maximum angular speed (rad/s). */

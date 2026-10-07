@@ -85,13 +85,15 @@ describe('atlas stairways', () => {
         const label = `${r.id} ${from === a ? 'up' : 'down'}`;
         expect(Math.hypot(res.x - to[0], res.z - to[1]), label).toBeLessThan(0.8);
         // On the steps all the way: never a climb or drop steeper than a flight (a scramble up the
-        // cliff beside the stairs, or a fall off them, would show here).
+        // cliff beside the stairs, or a fall off them, would show here: grade well over 1). The feet
+        // climb a flight riser by riser (the step-up assist, Actor.stepUp), so a 1 m window can hold
+        // one riser more than the flight's mean grade: +0.3, not a ramp's +0.15.
         const on = track.filter((q) => {
           const n = nearestOnPolyline([q.x, q.z], path);
           return n.d < r.carriage && n.s > 0.3 && n.s < polylineLen(path) - 0.3;
         });
         expect(on.length, label).toBeGreaterThan(20);
-        expect(steepest(on), label).toBeLessThan(STAIR_MAX_GRADE + 0.15);
+        expect(steepest(on), label).toBeLessThan(STAIR_MAX_GRADE + 0.3);
       }
     }, 60_000);
   }
