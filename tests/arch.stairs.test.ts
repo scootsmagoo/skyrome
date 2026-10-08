@@ -8,7 +8,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { cavea } from '../src/arch/classical/amphitheatre';
 import { temple } from '../src/arch/classical/temple';
 import { tholos } from '../src/arch/classical/tholos';
-import { stairs } from '../src/arch/common/stairs';
+import { stairs, wrappedSteps } from '../src/arch/common/stairs';
+import { Layer } from '../src/core/Physics';
 import { initPhysics } from '../src/core/Physics';
 import { MeshBuilder } from '../src/gfx/MeshBuilder';
 import { addColliders, makeWorld, walk } from './arch.walker';
@@ -29,6 +30,29 @@ describe('stairs are walkable (real Actor)', () => {
       const r = walk(w, { x: 0, y: 0.05, z: -2 }, [{ dir: [0, 1], seconds: 4 }]);
       expect(r.z).toBeGreaterThan(s.depth + 0.5);
       expect(r.y).toBeCloseTo(s.height, 1);
+    });
+  }
+
+  // Townsfolk: a 0.3 m capsule at a walk (1.3 m/s), up and back down.
+  const NPC = { radius: 0.3, layer: Layer.Npc };
+  for (const kind of ['flight', 'wrapped'] as const) {
+    it(`a walking NPC climbs and descends a ${kind} of steps`, () => {
+      const n = 7;
+      // A basilica's easy steps and a temple's steep ones.
+      for (const [rise, run] of [[0.2, 0.4], [0.228, 0.34]]) for (const speed of [0.8, 1.1, 1.4, 2]) {
+        const w = makeWorld();
+        const b = new MeshBuilder();
+        if (kind === 'flight') stairs(b, { width: 6, rise, run, count: n });
+        else wrappedSteps(b, { x0: -10, x1: 10, z0: n * run, z1: 20, rise, run, count: n, sides: { front: true, left: true, right: true } });
+        b.box('travertine', 6, n * rise, 10, new THREE.Matrix4().makeTranslation(0, (n * rise) / 2, n * run + 5), { collide: true });
+        addColliders(w.physics, b);
+        const r = walk(w, { x: 0.3, y: 0.05, z: -1.5 }, [{ to: [0.3, n * run + 2], seconds: 10, speed }, { to: [0.3, -1.5], seconds: 10, speed }], NPC);
+        const at = `${rise}/${run} at ${speed} m/s`;
+        expect(r.ends[0].y, `up ${at}`).toBeCloseTo(n * rise, 1);
+        expect(r.ends[0].z, `up ${at}`).toBeGreaterThan(n * run + 1.5);
+        expect(r.y, `down ${at}`).toBeLessThan(0.1);
+        expect(r.z, `down ${at}`).toBeLessThan(-1);
+      }
     });
   }
 

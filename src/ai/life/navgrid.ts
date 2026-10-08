@@ -33,6 +33,8 @@ export interface NavGridOptions {
   maxStep?: number;
 }
 
+/** Steepest flight of steps blended into a ramp (m of rise per m: a temple's 0.25 / 0.3). */
+const STAIR_PER_M = 0.85;
 const WALK = 1;
 const KNOWN = 2;
 const BLOCKED_DYN = 4; // marked by agents that got stuck there
@@ -245,6 +247,31 @@ export class NavGrid {
     return Number.isFinite(h) ? h : null;
   }
 
+  /**
+   * Floor height at a point blended between the four nearest cell centres, so a flight of steps
+   * reads as a ramp through its nosings instead of 1 m terraces. A neighbour that is unwalkable or
+   * more than a stair's rise per cell off (a podium edge, a wall top) doesn't count. Null like `heightAt`.
+   */
+  floorAt(x: number, z: number): number | null {
+    const c = this.cell;
+    const own = this.cellHeight(this.cellOf(x), this.cellOf(z));
+    if (!Number.isFinite(own)) return null;
+    const fx = x / c - 0.5;
+    const fz = z / c - 0.5;
+    const ix = Math.floor(fx);
+    const iz = Math.floor(fz);
+    const tx = fx - ix;
+    const tz = fz - iz;
+    const lim = STAIR_PER_M * c * Math.SQRT2;
+    const h = (i: number, k: number) => {
+      const v = this.cellHeight(i, k);
+      return this.cellState(i, k) === 1 && Number.isFinite(v) && Math.abs(v - own) <= lim ? v : own;
+    };
+    const a = h(ix, iz) + (h(ix + 1, iz) - h(ix, iz)) * tx;
+    const b = h(ix, iz + 1) + (h(ix + 1, iz + 1) - h(ix, iz + 1)) * tx;
+    return a + (b - a) * tz;
+  }
+
   /** Is the area around a point built (so paths there are meaningful)? */
   ready(x: number, z: number): boolean {
     return this.cellState(this.cellOf(x), this.cellOf(z)) !== -1;
@@ -265,8 +292,9 @@ export class NavGrid {
     if (this.cellState(bx, bz) !== 1) return false;
     const ha = this.cellHeight(ax, az);
     const hb = this.cellHeight(bx, bz);
-    if (Math.abs(ha - hb) > this.maxStep) return false;
-    if (ax !== bx && az !== bz) {
+    const diag = ax !== bx && az !== bz;
+    if (Math.abs(ha - hb) > this.maxStep && (diag || !this.onFlight(ax, az, bx, bz, ha, hb))) return false;
+    if (diag) {
       // Diagonal: don't cut corners of walls.
       if (this.cellState(bx, az) !== 1 || this.cellState(ax, bz) !== 1) return false;
       const h1 = this.cellHeight(bx, az);
@@ -274,6 +302,19 @@ export class NavGrid {
       if (Math.abs(ha - h1) > this.maxStep || Math.abs(ha - h2) > this.maxStep) return false;
     }
     return true;
+  }
+
+  /**
+   * A rise too big for one step between neighbours that is part of a flight of steps (a temple's
+   * stairs climb ~0.7 m per 1 m cell): the slope carries on past one end, where a ledge has
+   * level ground on both sides.
+   */
+  private onFlight(ax: number, az: number, bx: number, bz: number, ha: number, hb: number): boolean {
+    const lim = STAIR_PER_M * this.cell;
+    const dh = hb - ha;
+    if (Math.abs(dh) > lim) return false;
+    const on = (h: number, from: number) => Number.isFinite(h) && (h - from) * Math.sign(dh) >= 0.1 && Math.abs(h - from) <= lim;
+    return on(this.cellHeight(2 * bx - ax, 2 * bz - az), hb) || on(ha, this.cellHeight(2 * ax - bx, 2 * az - bz));
   }
 
   /**

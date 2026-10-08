@@ -81,6 +81,8 @@ export class Actor {
   private blockedSteps = 0;
   /** Consecutive grounded steps the move was stalled (the step-up assist waits for Rapier first). */
   private stepStalls = 0;
+  /** Fixed steps left to carry on level after a step-up, until the body is over the tread. */
+  private stepHold = 0;
 
   constructor(
     protected readonly game: Game,
@@ -137,7 +139,10 @@ export class Actor {
       v.y = opts.jump;
       this.grounded = false;
     } else if (this.grounded) {
-      v.y = -2; // keep pressed into the ground so slopes/steps snap
+      // Keep pressed into the ground so slopes/steps snap. Just after a step-up, carry on level
+      // instead (a hair up, so the controller's ground snap stays off): the round bottom is still
+      // on the edge, and pressing down would slide it back off the step at a walking pace.
+      v.y = this.stepHold > 0 ? 0.03 : -2;
     } else {
       v.y = Math.max(v.y + GRAVITY * dt, -55);
     }
@@ -151,6 +156,14 @@ export class Actor {
     const wasRising = v.y > 0;
     const wasGrounded = this.grounded;
     this.grounded = controller.computedGrounded();
+    if (this.stepHold > 0) {
+      this.stepHold--;
+      this.grounded = true;
+      // Over the tread now (floor right under the middle), or not walking on: back to normal.
+      const f = this.currPos;
+      const want = Math.hypot(desired.x, desired.z);
+      if (want < 0.002 || this.game.physics.raycast({ x: f.x + mv.x, y: f.y + mv.y + 0.05, z: f.z + mv.z }, DOWN, 0.12, Layer.World)) this.stepHold = 0;
+    }
     // Rapier's own autostep often stalls a capsule at a curb (its round bottom meets the edge
     // first): step up ourselves when pushing on the ground and blocked by a low ledge.
     // Rapier gets the first frames (it steps stair risers smoothly a frame after contact).
@@ -163,6 +176,7 @@ export class Actor {
         mv = up;
         this.grounded = true;
         this.stepStalls = 0;
+        this.stepHold = 24;
       }
     } else this.stepStalls = 0;
     // Bumped the ceiling while rising.

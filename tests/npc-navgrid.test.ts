@@ -27,6 +27,39 @@ describe('NavGrid', () => {
     expect(g.ready(200, 0)).toBe(false);
   });
 
+  it('blends the floor up a flight of steps, but not over a podium edge', () => {
+    const w = new FakeWorld();
+    // A flight climbing +x, 0.2 m per 0.4 m (cells see 0.4–0.6 m terraces), then a 1.5 m podium.
+    for (let k = 1; k <= 20; k++) w.pads.push({ x0: k * 0.4, z0: -5, x1: 30, z1: 5, h: k * 0.2 });
+    w.pads.push({ x0: -10, z0: 6, x1: 10, z1: 10, h: 1.5 });
+    const g = grid(w);
+    let prev = g.floorAt(1, 0)!;
+    for (let x = 1.1; x < 7; x += 0.1) {
+      const f = g.floorAt(x, 0)!;
+      // Steadily up, never a jump, and close to the real treads.
+      expect(f - prev).toBeGreaterThanOrEqual(-1e-6);
+      expect(f - prev).toBeLessThan(0.1);
+      expect(Math.abs(f - Math.floor(x / 0.4) * 0.2)).toBeLessThan(0.35);
+      prev = f;
+    }
+    // At the foot of the podium the floor stays on the street (no ramp up its 1.5 m face).
+    expect(g.floorAt(-5, 5.9)).toBeCloseTo(0, 5);
+    expect(g.floorAt(-5, 6.1)).toBeCloseTo(1.5, 5);
+  });
+
+  it('paths up a steep temple flight, but not up a lone ledge of the same height', () => {
+    const w = new FakeWorld();
+    // 0.228 / 0.34 steps up to a 3 m podium (x ≥ 4.4); 0.68 m between some cells.
+    for (let k = 1; k <= 13; k++) w.pads.push({ x0: k * 0.34, z0: -3, x1: 20, z1: 3, h: k * 0.228 });
+    // Elsewhere a 0.7 m terrace wall with level ground either side.
+    w.pads.push({ x0: -20, z0: 10, x1: 20, z1: 30, h: 0.7 });
+    const g = grid(w);
+    const up = g.findPath(-2.5, 0.5, 8.5, 0.5);
+    expect(up).not.toBeNull();
+    expect(g.lineWalkable(-2.5, 0.5, 8.5, 0.5)).toBe(true);
+    expect(g.lineWalkable(0.5, 8.5, 0.5, 12.5)).toBe(false);
+  });
+
   it('finds a straight path on open ground', () => {
     const g = grid(new FakeWorld());
     const p = g.findPath(0.5, 0.5, 20.5, 10.5);

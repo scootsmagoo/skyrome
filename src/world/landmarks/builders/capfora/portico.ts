@@ -26,6 +26,11 @@ import { box, caryatid, clipeus, coffers, figure, friezeStrip, span, type Figure
 
 export interface PorticoSpec {
   length: number;
+  /**
+   * Stop the front steps short at the start / end (x = 0 / L) where another portico's steps turn the
+   * corner: the value is how far in from that end the other portico's column line stands (null: no trim).
+   */
+  stepsShort?: [number | null, number | null];
   /** Column axes (z = 0) to the inner face of the back wall. */
   depth: number;
   order: Order;
@@ -102,7 +107,11 @@ export function forumPortico(b: MeshBuilder, spec: PorticoSpec, at: THREE.Matrix
     span(b, floorMat, 0, floorY - 0.04, -front, L, floorY, depth, at);
     const { count, rise } = stepCount(floorY, 0.2);
     const run = 0.36;
-    stairs(b, { width: L, rise, run, count, material: 'travertine' }, mul(at, T(L / 2, 0, -front - count * run)));
+    // Short by the other portico's steps: column line to the bottom of its flight.
+    const short = (k: number | null | undefined) => (k == null ? 0 : k + front + count * run);
+    const s0 = short(spec.stepsShort?.[0]);
+    const s1 = short(spec.stepsShort?.[1]);
+    stairs(b, { width: L - s0 - s1, rise, run, count, material: 'travertine' }, mul(at, T((L + s0 - s1) / 2, 0, -front - count * run)));
     if (g0 < -0.35) span(b, 'travertine', 0, g0, -front - count * run - 0.05, L, 0, -front, at);
   } else {
     span(b, floorMat, 0, g0, -front, L, 0.02, depth, at, true);

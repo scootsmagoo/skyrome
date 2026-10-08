@@ -14,7 +14,7 @@
 import * as THREE from 'three';
 import { archway } from '../../../arch/classical/arch';
 import { T, TRS } from '../../../arch/common/geom';
-import { stairs } from '../../../arch/common/stairs';
+import { stairs, wrappedSteps } from '../../../arch/common/stairs';
 import { Draw } from '../../../arch/fabric/draw';
 import { shopInterior, type ShopKind } from '../../../arch/fabric/shops';
 import { doorLeaves, plankShutters, wall as fwall, type Opening } from '../../../arch/fabric/wall';
@@ -42,10 +42,8 @@ function basilicaIulia(p: Part) {
   const run = 0.4;
   const Y = nSteps * rise;
   const sd = nSteps * run;
-  const st = { width: W, rise, run, count: nSteps, material: 'travertine' as MaterialId, collider: (p.main ? 'steps' : 'none') as 'steps' | 'none' };
-  stairs(b, st, T(0, 0, -hd));
-  stairs(b, { ...st, width: Dp - sd }, TRS(hw, 0, -hd + sd + (Dp - sd) / 2, 0, -Math.PI / 2, 0));
-  stairs(b, { ...st, width: Dp - sd }, TRS(-hw, 0, -hd + sd + (Dp - sd) / 2, 0, Math.PI / 2, 0));
+  // One set of steps wrapped round the front and both ends, turning at the corners.
+  wrappedSteps(b, { x0: -hw + sd, x1: hw - sd, z0: -hd + sd, z1: hd, rise, run, count: nSteps, sides: { front: true, left: true, right: true }, material: 'travertine', collide: p.main });
   const z0 = -hd + sd;
   // the raised floor stops at the back wall, whose shops open at street level
   const zBack = z0 + 8 * 3.05;

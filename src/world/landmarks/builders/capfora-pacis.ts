@@ -90,10 +90,10 @@ function buildPacis(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
   // corner columns stand where the colonnade lines meet.
   const sideL = zH - (-hz + dep);
   const zd = -hz + dep + sideL / 2; // the SW door (towards the Sacra Via)
-  forumPortico(b, { ...pSpec, length: sideL, openings: [], endColumns: true, endWalls: [false, false] }, mul(I, TRS(hx - dep, Y0, zH, 0, Math.PI / 2, 0)));
+  forumPortico(b, { ...pSpec, length: sideL, openings: [], endColumns: true, endWalls: [false, false], stepsShort: [dep, 0] }, mul(I, TRS(hx - dep, Y0, zH, 0, Math.PI / 2, 0)));
   forumPortico(
     b,
-    { ...pSpec, length: sideL, openings: [{ kind: 'door', x: sideL / 2, width: 4.0, height: 4.4, leaves: 'none' }], endColumns: true, endWalls: [false, false] },
+    { ...pSpec, length: sideL, openings: [{ kind: 'door', x: sideL / 2, width: 4.0, height: 4.4, leaves: 'none' }], endColumns: true, endWalls: [false, false], stepsShort: [0, dep] },
     mul(I, TRS(-hx + dep, Y0, -hz + dep, 0, -Math.PI / 2, 0)),
   );
   const pTop = Y0 + nw.wallTop;

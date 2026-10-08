@@ -51,10 +51,10 @@ export interface WalkResult {
   speed: number;
 }
 
-/** Walk a player-layer Actor along `legs`, stepping physics at 60 Hz exactly like the game. */
-export function walk(world: TestWorld, start: THREE.Vector3Like, legs: Leg[]): WalkResult {
+/** Walk an Actor (the player's capsule unless `body` says otherwise) along `legs`, stepping physics at 60 Hz exactly like the game. */
+export function walk(world: TestWorld, start: THREE.Vector3Like, legs: Leg[], body: { radius?: number; layer?: number } = {}): WalkResult {
   const { physics, game } = world;
-  const actor = new Actor(game, { id: 'walker', position: start, layer: Layer.Player });
+  const actor = new Actor(game, { id: 'walker', position: start, layer: body.layer ?? Layer.Player, radius: body.radius });
   physics.step(1 / 60);
   const dt = 1 / 60;
   const wish = new THREE.Vector3();

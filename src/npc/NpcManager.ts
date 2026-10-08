@@ -233,7 +233,7 @@ export class NpcManager implements System {
   private readonly ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 });
   private readonly tmpCell = { x: 0, z: 0 };
   /** Floor height on the nav grid for gliders (one closure, not one per NPC per step). */
-  private readonly gridFloor = (x: number, z: number) => (this.grid.walkable(x, z) ? this.grid.heightAt(x, z) : null);
+  private readonly gridFloor = (x: number, z: number) => (this.grid.walkable(x, z) ? this.grid.floorAt(x, z) : null);
   /** A cell the nav grid knows is not walkable (unknown ground is not blocked). */
   private readonly gridBlocked = (x: number, z: number) => !this.grid.walkable(x, z, true);
   /** The Lemuria phase and the temple rule for one game minute (`key`). */

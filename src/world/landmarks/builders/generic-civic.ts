@@ -785,8 +785,9 @@ function buildPortico(ctx: LandmarkContext): LandmarkBuild {
     inscription(d, ['DIVIS VESPASIANO ET TITO'], 0, q.colH + 2.7, -dd / 2 - 0.62, aw * 0.8, 1.1);
   }
   if (temples) {
-    // Twin small temples facing each other across the far end of the court.
-    const tw = Math.min(q.hw * 0.8, 10), td = Math.min(q.hd * 0.4, 16);
+    // Twin small temples facing each other across the far end of the court: each takes less than
+    // half the court's width, so their front steps stop ~4 m apart instead of running into each other.
+    const tw = Math.min(q.hd * 0.3, 10), td = Math.min(q.hw - 3, 16);
     for (const sx of [-1, 1]) {
       const f = d.at(sx * (q.hw - td / 2 - 1), 0.03, q.hd - tw / 2 - 2, sx * Math.PI / 2);
       const t = fittedTemple(f, tw, td, { order: 'corinthian', front: 4, plan: 'prostyle', ...templeMaterials(h), detail: 'low' }, `${lm.id}:t${sx}`, false);

@@ -38,11 +38,29 @@ export function stepCount(height: number, targetRise = 0.22): { count: number; r
   return { count, rise: height / count };
 }
 
+/** A built flight as the stair audit sees it: plan corners (bottom front L/R, back R/L) and heights. */
+export interface FlightRecord {
+  builder: MeshBuilder;
+  corners: [number, number][];
+  y0: number;
+  y1: number;
+}
+let recorder: ((f: FlightRecord) => void) | null = null;
+/** Tests: be told about every flight `stairs()` builds (null to stop). */
+export function recordFlights(fn: ((f: FlightRecord) => void) | null): void {
+  recorder = fn;
+}
+
 export function stairs(b: MeshBuilder, spec: StairsSpec, at?: THREE.Matrix4): StairsResult {
   const { width, rise, run, count } = spec;
   const mat = spec.material ?? 'travertine';
   const depth = run * count;
   const m = at ?? new THREE.Matrix4();
+  if (recorder) {
+    const p = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z).applyMatrix4(m);
+    const c = [p(-width / 2, 0, 0), p(width / 2, 0, 0), p(width / 2, 0, depth), p(-width / 2, 0, depth)];
+    recorder({ builder: b, corners: c.map((v) => [v.x, v.z]), y0: c[0].y, y1: p(0, rise * count, 0).y });
+  }
   const solid = spec.solid ?? true;
   const mode = spec.collider ?? 'steps';
   for (let i = 0; i < count; i++) {
@@ -69,4 +87,55 @@ export function stairs(b: MeshBuilder, spec: StairsSpec, at?: THREE.Matrix4): St
     b.collider({ kind: 'box', center: pos, half: new THREE.Vector3(width / 2, thick / 2, len / 2), rotation: q });
   }
   return { height: rise * count, depth };
+}
+
+export interface WrappedStepsSpec {
+  /** The platform the steps climb to (local x/z), its top at `rise * count`. */
+  x0: number;
+  x1: number;
+  z0: number;
+  z1: number;
+  rise: number;
+  run: number;
+  count: number;
+  /** Which sides have steps: front (−z), back (+z), left (−x), right (+x). */
+  sides: { front?: boolean; back?: boolean; left?: boolean; right?: boolean };
+  material?: MaterialId;
+  collide?: boolean;
+}
+
+/**
+ * Steps on several sides of a platform, wrapped round the corners as on a Roman podium: each step
+ * is one ring (or L, or U) at one height, so where the front flight meets an end flight the
+ * corner steps turn instead of two flights running into each other. Step i (0 = lowest) is a band
+ * `(count − i) · run` out from the platform, solid down to the ground.
+ */
+export function wrappedSteps(b: MeshBuilder, spec: WrappedStepsSpec, at?: THREE.Matrix4) {
+  const { rise, run, count, sides } = spec;
+  const mat = spec.material ?? 'travertine';
+  const m = at ?? new THREE.Matrix4();
+  const collide = spec.collide ?? true;
+  const box = (xa: number, xb: number, za: number, zb: number, top: number) => {
+    if (xb - xa < 1e-3 || zb - za < 1e-3) return;
+    b.box(mat, xb - xa, top, zb - za, m.clone().multiply(new THREE.Matrix4().makeTranslation((xa + xb) / 2, top / 2, (za + zb) / 2)), { collide });
+  };
+  for (let i = 0; i < count; i++) {
+    const out = (count - i) * run;
+    const inn = (count - i - 1) * run;
+    const top = (i + 1) * rise;
+    // This step's outline, and the next step's (the one it runs under).
+    const X0 = spec.x0 - (sides.left ? out : 0);
+    const X1 = spec.x1 + (sides.right ? out : 0);
+    const Z0 = spec.z0 - (sides.front ? out : 0);
+    const Z1 = spec.z1 + (sides.back ? out : 0);
+    const x0n = spec.x0 - (sides.left ? inn : 0);
+    const x1n = spec.x1 + (sides.right ? inn : 0);
+    const z0n = spec.z0 - (sides.front ? inn : 0);
+    const z1n = spec.z1 + (sides.back ? inn : 0);
+    // Front and back bands run the full width (corners included); the side bands fill between.
+    if (sides.front) box(X0, X1, Z0, z0n, top);
+    if (sides.back) box(X0, X1, z1n, Z1, top);
+    if (sides.left) box(X0, x0n, z0n, z1n, top);
+    if (sides.right) box(x1n, X1, z0n, z1n, top);
+  }
 }
