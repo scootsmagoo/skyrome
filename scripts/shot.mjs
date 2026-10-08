@@ -6,7 +6,8 @@
  *
  * Options:
  *   --scene <name>        scene to boot (?scene=); default: game default
- *   --query "<a=1&b=2>"   extra URL query
+ *   --query "<a=1&b=2>"   extra URL query (default: at=rostra&hour=10; `plain` = the plain link,
+ *                         i.e. the story's opening at the Porta Capena)
  *   --url <url>           use an already-running server instead of starting Vite
  *   --out <dir>           output dir for screenshots (default .shots)
  *   --name <file>         name of the final screenshot (default shot.png)
@@ -57,8 +58,15 @@ if (!baseUrl) {
   baseUrl = `http://127.0.0.1:${port}/`;
 }
 
-const q = new URLSearchParams(args.query ?? '');
+// No boot option given: the Forum at mid-morning (what every shot has used). `--query plain` boots
+// the plain link instead: the story's opening at the Porta Capena (docs/STORY.md).
+const plainLink = args.query === 'plain';
+const q = new URLSearchParams(plainLink ? '' : (args.query ?? ''));
 if (args.scene) q.set('scene', args.scene);
+if (!plainLink && !['at', 'quick', 'menu', 'part', 'fight'].some((k) => q.has(k)) && (q.get('scene') ?? 'rome') === 'rome') {
+  q.set('at', 'rostra');
+  if (!q.has('hour')) q.set('hour', '10');
+}
 const url = baseUrl + (baseUrl.includes('?') ? '&' : '?') + q.toString();
 
 const pw = await import('playwright');

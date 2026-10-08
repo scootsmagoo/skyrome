@@ -55,13 +55,11 @@ const npcs: NpcDef[] = [
     name: 'Aulus Vettulenus Gratus',
     title: 'Centurion of the frumentarii',
     home: 'castor-strongroom',
+    // Act I keeps him at the strongrooms day and night: by day he inspects the deposits (mq-02),
+    // at dusk he takes the tablet, and through the Lemuria night he waits for the key (mq-03).
     schedule: [
-      { from: at('v3'), at: 'castra-peregrina', activity: 'sleep' },
-      // The bible sends him back to the camp at h4; v0.1 keeps him at the vaults all day so that
-      // "ask Chrysippus for Gratus" works at any hour of the golden path, and at dusk (mq-02).
-      { from: at('h1'), at: 'castor-strongroom', activity: 'work' }, // inspects the deposits
-      { from: at('v1'), at: 'castor-strongroom', activity: 'work' }, // meets the player at dusk (mq-02)
-      { from: at('v2'), at: 'castra-peregrina', activity: 'sleep' },
+      { from: at('h1'), at: 'castor-strongroom', activity: 'stand' },
+      { from: at('v1'), at: 'castor-strongroom', activity: 'guard' },
     ],
     dialogue: 'npc-gratus',
     disposition: 'neutral',
@@ -155,5 +153,73 @@ const npcs: NpcDef[] = [
     tags: ['grassator', 'underworld', 'thraex', 'dun-taberna-collapsa'],
   },
 ];
+
+// ------------------------------------------------------------------ the Marii (mq-03)
+
+npcs.push(
+  {
+    id: 'npc-helpis',
+    name: 'Antonia Helpis',
+    title: 'Festus’ mother',
+    home: 'insula-mariorum',
+    schedule: [
+      { from: at('h1'), at: 'insula-mariorum', activity: 'work' },
+      { from: at('v1'), at: 'insula-mariorum', activity: 'stand' },
+    ],
+    dialogue: 'npc-helpis',
+    disposition: 'friendly',
+    essential: true,
+    // A freedwoman of fifty-eight, in a dark mourning palla over her stola.
+    appearance: {
+      sex: 'female', age: 'old', build: 'slight', height: 1.55, skin: '#c99a72',
+      hair: { style: 'veiled', color: '#8a8580' },
+      garments: [{ kind: 'stola', color: '#5e4a36' }, { kind: 'palla', color: '#2e2a26' }],
+      footwear: 'soleae',
+    },
+    barks: ['Mind the step. The lamps are Fuscus’ business; the step is mine.', 'Two boys, and the house was never quiet. Now listen to it.', 'Light a lamp for the dead, and keep one for the living.'],
+    tags: ['plebs', 'libertina', 'dignitas:civis'],
+  },
+  {
+    id: 'npc-marius-fuscus',
+    name: 'Gaius Marius Fuscus',
+    title: 'Lamp-maker, veteran',
+    home: 'insula-mariorum',
+    schedule: [
+      { from: at('h1'), at: 'insula-mariorum', activity: 'work' },
+      { from: at('v1'), at: 'insula-mariorum', activity: 'stand' },
+    ],
+    dialogue: 'npc-marius-fuscus',
+    disposition: 'neutral',
+    essential: true,
+    // A retired legionary of the Flavian wars: a soldier's back, lamp-black on his fingers.
+    appearance: {
+      sex: 'male', age: 'old', build: 'stocky', height: 1.66, skin: '#b07d58',
+      hair: { style: 'receding', color: '#c9c4bc' }, beard: 'short',
+      garments: [{ kind: 'tunica', color: '#6f5843' }, { kind: 'apron', color: '#3b2a1c' }],
+      footwear: 'soleae',
+    },
+    barks: ['Lamps, two for an as. They burn as long as anyone’s prayers.', 'Twenty-five years with the Fifth Macedonian, and now I make lamps. Better lamps than the legion made soldiers.', 'Tonight the dead walk. Mind your feet.'],
+    tags: ['plebs', 'veteranus', 'dignitas:civis'],
+  },
+  {
+    id: 'npc-gemellus',
+    name: 'Gaius Marius Gemellus',
+    title: 'Copyist',
+    home: 'gemellus-latebra',
+    schedule: [{ from: 0, at: 'gemellus-latebra', activity: 'sitGround' }],
+    dialogue: 'npc-gemellus',
+    disposition: 'friendly',
+    essential: true,
+    // Festus' twin: the same face, ink on his fingers, his brother's brown courier's cloak.
+    appearance: {
+      sex: 'male', age: 'adult', build: 'average', height: 1.68, skin: '#c99a72',
+      hair: { style: 'cropped', color: '#2a1d14' }, beard: 'stubble',
+      garments: [{ kind: 'tunica', color: '#d9d0bd' }, { kind: 'paenula', color: '#6b5236' }],
+      footwear: 'soleae',
+    },
+    barks: ['Don’t. Please.', 'I copy other men’s words. I don’t say my own.', 'Four. It was always four.'],
+    tags: ['plebs', 'librarius', 'dignitas:civis'],
+  },
+);
 
 export default npcs;

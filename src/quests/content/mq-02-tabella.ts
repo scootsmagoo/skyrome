@@ -1,41 +1,61 @@
 /**
- * mq-02-tabella "The Sealed Tablet" (docs/CONTENT.md §3.1.2; GDD §10.3 #2, §17.2 steps 3 and 5).
- * Main quest, v0.1 Must: deliver the dead courier's tablet to Gratus under the Temple of Castor.
- * It is the v0.1 form of mq-02-carcer, which continues from `deliver` into the arrest in v0.2.
+ * mq-02-tabella "The Sealed Tablet" (docs/STORY.md chapter 2; GDD §10.3 #2, §17.2 steps 3 and 5).
+ * Main quest: carry the dead courier's tablet to his centurion, find his killer, deliver at dusk.
+ * It is the short form of mq-02-carcer (the arrest comes in a later version).
  *
- *   start    go to the Temple of Castor (the cella is shut for the Lemuria, AC-18)   → loculi
- *   loculi   ask Chrysippus, keeper of the strongrooms, for Gratus                     → gratus
- *   gratus   Gratus wants the man with the curved blade: Auctus at the Ludus knows     → mus
- *   mus      come back after sunset (T waits); optionally face Mus in the burned taberna → deliver
- *   deliver  give Gratus the tablet; "Tomorrow, the Column."                           → done-v01
+ *   start    take the tablet to the strongrooms under the Temple of Castor (ask the keeper)  → gratus
+ *   gratus   Gratus hears how Festus died                                                   → ludus
+ *   ludus    "a curved blade, up from under: a thraex". Ask Glaucus at the Ludus Magnus      → mus
+ *   mus      Glaucus names Dizas, the Mouse: deal with him in the burned taberna             → satchel
+ *   satchel  take Festus' satchel back from Mus' strongbox                                   → dusk
+ *   dusk     bring Gratus the tablet after sunset                                            → done
+ *   done     Festus wrote in a cipher only his twin can read; the Lemuria night (mq-03)
  *
- * The hooks, all node ids and flags: npc-philetus 'strongrooms' / 'n2' (the doors are shut),
- * npc-chrysippus 'fetch', the flag 'clue-mus' (npc-auctus 'mus', npc-glaucus 'd1', the citizens'
- * gossip), npc-mus 'surrender' / 'dialogue:attack', npc-gratus 'delivered'. Gratus stays at the vaults
- * from the first hour to the second watch (the bible sends him back to camp at the fourth hour), so
- * "ask for Gratus" works whenever the player gets there.
+ * Hooks (node ids and flags): npc-chrysippus 'fetch', npc-gratus 'gratusDay' / 'delivered',
+ * npc-glaucus 'named' (flag 'clue-mus'; Auctus 'mus' and the street gossip set it too), npc-mus
+ * 'surrender' / 'tellAll' / 'dialogue:attack', the item 'quest-sacculum-festi'. Gratus keeps the
+ * strongrooms from the first hour through the night while the story needs him there.
  */
-import { fight, hint, isDusk, spawnEnemy } from '../../content/director';
+import { fight, hint, isDusk, placeExamine, removeExamine, say, spawnEnemy } from '../../content/director';
 import { MUS_PROFILE } from '../../content/profiles';
 import { addFoe, beatFoe } from '../../content/questkit';
+import { Rng } from '../../core/Rng';
+import { rollLoot } from '../../rpg/loot';
 import { defineQuest, type QuestContext } from '../types';
 
 export const QUEST_ID = 'mq-02-tabella';
-const VAULTS = ['castor-loculi', 'castor-strongroom'];
 const MUS = ['npc-mus', 'npc-mus~foe'];
 const KNIFEMEN = ['mq02-knife-a', 'mq02-knife-b'] as const;
 
-function arrived(q: QuestContext) {
-  q.completeObjective('castor');
-}
+const BODY = { id: 'festus-body', at: 'courier-ambush', verb: 'Search', label: 'Festus’ body', height: 0.5, offset: { x: -1.5 } };
 
-function atVaultsAtDusk(q: QuestContext): boolean {
-  return isDusk(q.game) && VAULTS.some((id) => !!q.game.locations?.isInside?.(id));
+function searchBody(q: QuestContext) {
+  if (q.isObjectiveDone('search')) return;
+  removeExamine(BODY.id);
+  const loot = rollLoot('body.npc-festus', 1, q.game.rng?.fork('body') ?? new Rng('body'));
+  const inv = q.game.player?.inventory;
+  for (const it of loot.items) inv?.add(it.id, it.count, { source: 'quest' });
+  if (loot.denarii) inv?.addDenarii(loot.denarii);
+  q.completeObjective('search');
 }
 
 function musFate(q: QuestContext, fate: 'killed' | 'spared' | 'fled') {
+  if (q.flag('mus-fate')) return;
   q.setFlag('mus-fate', fate);
+  // His strongbox key: thrown at you by a beaten man, or taken from a dead one's belt.
+  const inv = q.game.player?.inventory;
+  if (inv && !inv.count('clavis-cellae-muris')) {
+    if (fate === 'spared') say(q.game, 'Mus', 'Enough! The key, take the key! The bag’s in the box in the corner. Just let me go.');
+    if (fate !== 'fled') {
+      inv.add('clavis-cellae-muris', 1, { source: 'quest' });
+      if (fate === 'killed') q.notify('You take a key from Mus’ belt.');
+    }
+  }
   q.completeObjective('hideout');
+}
+
+function hasSatchel(q: QuestContext): boolean {
+  return !!q.game.player?.inventory?.count('quest-sacculum-festi');
 }
 
 export default defineQuest({
@@ -44,54 +64,61 @@ export default defineQuest({
   latin: 'Tabella Signata',
   category: 'main',
   giver: 'npc-festus',
-  summary: 'Deliver the dead courier’s sealed tablet to Gratus in the strongrooms under the Temple of Castor.',
+  summary: 'Carry the dead courier’s sealed tablet to his centurion, Gratus, under the Temple of Castor, and find the man who killed him.',
   stages: {
     start: {
-      journal: 'Festus’ last words sent me to the strongrooms under the Temple of Castor and Pollux, in the Forum, to a man called Gratus.',
-      objectives: [{ id: 'castor', text: 'Go to the Temple of Castor and Pollux', target: { kind: 'location', id: 'temple-castor-pollux' } }],
+      journal: 'Festus’ tablet was in my belt. His centurion, Gratus, keeps an office in the strongrooms under the Temple of Castor, in the Forum: up the valley of the Circus, under the palace, then through the Velabrum and along the Vicus Tuscus.',
+      objectives: [
+        { id: 'castor', text: 'Ask for Gratus at the strongrooms under the Temple of Castor, in the Forum', target: { kind: 'npc', id: 'npc-chrysippus' } },
+        { id: 'search', text: 'Search Festus’ body', optional: true, target: { kind: 'location', id: 'courier-ambush' } },
+      ],
       onEnter: (q) => {
-        if (q.game.locations?.isInside?.('temple-castor-pollux')) arrived(q);
+        placeExamine(q.game, BODY);
+        hint(q.game, 'Follow the gold marker to the Forum. J opens your journal, M the map.');
       },
-      next: 'loculi',
-    },
-    loculi: {
-      journal: 'The temple itself was shut for the Lemuria, the night of the restless dead, but the strongrooms in its podium open onto the street. Their keeper, Chrysippus, guards the door like a dog guards a bone.',
-      objectives: [{ id: 'chrysippus', text: 'Ask the keeper of the strongrooms for Gratus', target: { kind: 'npc', id: 'npc-chrysippus' } }],
       next: 'gratus',
     },
     gratus: {
-      journal: 'Gratus is a centurion of the frumentarii, the imperial couriers. He would not take the tablet. A dispatch like this, he said, is never carried across the Forum in daylight; I should keep it in my belt until dusk. Meanwhile he wanted to know who carries a curved blade and fights like a gladiator.',
-      objectives: [
-        { id: 'ludus', text: 'Go to the Ludus Magnus', optional: true, target: { kind: 'location', id: 'ludus-magnus' } },
-        { id: 'ask', text: 'Find out who fights with a curved blade', target: { kind: 'npc', id: 'npc-auctus' } },
-      ],
+      journal: 'The keeper of the strongrooms, Chrysippus, keeps his clients’ names to himself. But he knew the couriers’ seal on Festus’ tablet, a horseman with a raised spear, and he went into the back for Gratus.',
+      objectives: [{ id: 'talk', text: 'Tell Gratus how Festus died', target: { kind: 'npc', id: 'npc-gratus' } }],
+      onEnter: (q) => removeExamine(BODY.id),
+      next: 'ludus',
+    },
+    ludus: {
+      journal: 'Gratus is a centurion of the frumentarii, Caesar’s couriers. Only their own camp knew Festus’ road and his hour, so someone in the camp sold him. Gratus would not take the tablet in the Forum by daylight, where anyone might see: I was to keep it until after sunset. Meanwhile he wanted the killer’s name. A curved blade, a stroke up from under: that is how a thraex finishes a man. The Ludus Magnus trains the thraeces, and its chief trainer, Glaucus, knows them all.',
+      objectives: [{ id: 'ask', text: 'Ask Glaucus at the Ludus Magnus who fights with a curved blade', target: { kind: 'npc', id: 'npc-glaucus' } }],
       onEnter: (q) => {
         if (q.flag('clue-mus')) q.completeObjective('ask');
       },
       next: 'mus',
     },
     mus: {
-      journal: 'Auctus knew the stroke at once: “Up from under, like a thraex finishing a man on his knees.” He named Dizas, called the Mouse, a thraex thrown out of the Ludus for theft. He runs knife-men out of a burned taberna off the Vicus Tuscus. Gratus said to come back at dusk.',
-      objectives: [
-        { id: 'dusk', text: 'Return to the strongrooms of Castor after sunset', target: { kind: 'location', id: 'castor-loculi' } },
-        { id: 'hideout', text: 'Deal with Mus in the burned taberna', optional: true, target: { kind: 'location', id: 'taberna-collapsa' } },
-        { id: 'satchel', text: 'Recover Festus’ satchel', optional: true, target: { kind: 'item', id: 'quest-sacculum-festi' } },
-      ],
+      journal: 'Glaucus knew the stroke at once. Dizas, called the Mouse: a thraex of his until last winter, when he was thrown out for stealing from the infirmary. Now he runs knife-men out of a burned taberna off the Vicus Tuscus.',
+      objectives: [{ id: 'hideout', text: 'Find Mus in the burned taberna off the Vicus Tuscus', target: { kind: 'npc', id: 'npc-mus' } }],
       onEnter: (q) => {
         if (q.flag('mus-fate')) q.completeObjective('hideout');
-        if (q.game.player?.inventory?.count('quest-sacculum-festi')) q.completeObjective('satchel');
-        if (atVaultsAtDusk(q)) q.completeObjective('dusk');
-        else if (!isDusk(q.game)) hint(q.game, 'Press T to wait until the lamps are lit. The sun sets a little after 19:00.');
       },
-      next: 'deliver',
+      next: 'satchel',
     },
-    deliver: {
-      journal: 'Gratus was waiting by lamplight among the strongboxes.',
-      objectives: [{ id: 'give', text: 'Give the tablet to Gratus', target: { kind: 'npc', id: 'npc-gratus' } }],
-      next: 'done-v01',
+    satchel: {
+      journal: 'Mus was dealt with. Festus’ satchel would be in his strongbox, in the corner of the burned taberna, and his key would open it.',
+      objectives: [{ id: 'satchel', text: 'Open Mus’ strongbox with his key and take Festus’ satchel', target: { kind: 'location', id: 'taberna-collapsa' } }],
+      onEnter: (q) => {
+        if (hasSatchel(q)) q.completeObjective('satchel');
+        else hint(q.game, 'Mus’ key opens his strongbox. Look for it in the corner of the burned taberna.');
+      },
+      next: 'dusk',
     },
-    'done-v01': {
-      journal: 'Gratus broke the seal and swore softly. The tablet was written in Festus’ private cipher. “His brother would have the key,” he said, “and tomorrow is the Column.” I walked out into an empty Forum. Somewhere in the Velabrum a man was beating a bronze pot to drive the ghosts away. Tomorrow, the Column.',
+    dusk: {
+      journal: 'I had Festus’ satchel. In it, under a scraped wax tablet, was a silver coin with a bearded king in a tiara: Parthian money. Gratus had said to come back after sunset, when the Forum was empty.',
+      objectives: [{ id: 'give', text: 'Give Gratus the tablet after sunset, at the strongrooms of Castor', target: { kind: 'npc', id: 'npc-gratus' } }],
+      onEnter: (q) => {
+        if (!isDusk(q.game)) hint(q.game, 'The sun sets a little after 19:00. Press T to wait.');
+      },
+      next: 'done',
+    },
+    done: {
+      journal: 'Gratus broke the seal by lamplight and swore softly. The tablet was written in Festus’ own cipher, and only his twin brother, Gemellus, could read it. Gemellus had not been seen since the Ides of April. It was the night of the Lemuria, when the dead walk and families throw black beans to send them away. Festus’ family would be up at midnight, and I had promised him I would tell his mother.',
       onEnter: (q) => {
         q.setFlag('mq02-delivered', true);
         if (q.flag('mus-fate') === 'spared') q.setFlag('mus-informant', true);
@@ -105,47 +132,41 @@ export default defineQuest({
     },
   },
   on: {
-    'location:entered': (q, e) => {
-      if ((e.locationId === 'temple-castor-pollux' || e.locationId === 'castor-loculi') && q.stage === 'start') arrived(q);
-      if ((e.locationId === 'ludus-magnus' || e.locationId === 'ludus-gate') && q.stage === 'gratus') q.completeObjective('ludus');
-      if (VAULTS.includes(e.locationId) && q.stage === 'mus' && atVaultsAtDusk(q)) q.completeObjective('dusk');
-    },
-    'time:hour': (q) => {
-      if (q.stage === 'mus' && atVaultsAtDusk(q)) q.completeObjective('dusk');
-    },
     'dialogue:node': (q, e) => {
-      if (e.dialogueId === 'npc-philetus' && (e.nodeId === 'strongrooms' || e.nodeId === 'n2') && q.stage === 'start') {
-        arrived(q);
-      }
-      if (e.dialogueId === 'npc-chrysippus' && e.nodeId === 'fetch') q.completeObjective('chrysippus');
-      if (e.dialogueId === 'npc-auctus' && e.nodeId === 'mus') q.completeObjective('ask');
+      if (e.dialogueId === 'npc-chrysippus' && e.nodeId === 'fetch') q.completeObjective('castor');
+      if (e.dialogueId === 'npc-gratus' && e.nodeId === 'gratusDay') q.completeObjective('talk');
       if (e.dialogueId === 'npc-gratus' && e.nodeId === 'delivered') q.completeObjective('give');
-      if (e.dialogueId === 'npc-mus' && e.nodeId === 'surrender') {
-        q.setFlag('mus-fate', 'fled');
-        q.completeObjective('hideout');
-      }
+      if (e.dialogueId === 'npc-mus' && (e.nodeId === 'surrender' || e.nodeId === 'tellAll')) musFate(q, 'fled');
     },
     'flag:changed': (q, e) => {
-      if (e.name === 'clue-mus' && e.value === true && q.stage === 'gratus') q.completeObjective('ask');
+      if (e.name === 'clue-mus' && e.value === true && q.stage === 'ludus') q.completeObjective('ask');
     },
-    // The fight in the burned taberna: Mus and two knife-men (the dungeon's room 2 and room 3 in one).
+    // The fight in the burned taberna: Mus and two knife-men.
     'dialogue:attack': (q, e) => {
-      if (e.npcId !== 'npc-mus' || (q.stage !== 'mus' && q.stage !== 'deliver') || q.flag('mus-fate')) return;
+      if (e.npcId !== 'npc-mus' || q.flag('mus-fate')) return;
       addFoe(q, 'musfoes', fight(q.game, 'npc-mus', 'grassator', 'taberna-collapsa', { quest: QUEST_ID, tags: [QUEST_ID, 'mus'], name: 'Mus · the Mouse', yieldAt: 0.2, profile: MUS_PROFILE }));
       KNIFEMEN.forEach((id, i) => addFoe(q, 'musfoes', spawnEnemy(q.game, 'grassator', 'taberna-collapsa', { id, name: 'Knife-man', tags: [QUEST_ID, 'mus'], quest: QUEST_ID }, { x: i ? 3 : -3, z: 2 })));
     },
     'actor:killed': (q, e) => {
-      if (MUS.includes(e.victimId) && q.stage !== 'done-v01') musFate(q, 'killed');
+      if (MUS.includes(e.victimId)) musFate(q, 'killed');
       beatFoe(q, 'musfoes', e.victimId, KNIFEMEN);
     },
     'actor:yielded': (q, e) => {
       // Mus yields at 20% (GDD §6.9: spare, rob or kill is the combat module's prompt; sparing is the default).
-      if (MUS.includes(e.actorId) && q.stage !== 'done-v01') musFate(q, 'spared');
+      if (MUS.includes(e.actorId)) musFate(q, 'spared');
     },
     'item:added': (q, e) => {
       if (e.itemId === 'quest-sacculum-festi') q.completeObjective('satchel');
     },
+    'content:interact': (q, e) => {
+      if (e.id === BODY.id) searchBody(q);
+    },
+    'time:hour': (q) => {
+      if (q.stage === 'dusk' && isDusk(q.game) && q.game.locations?.isInside?.('castor-loculi')) hint(q.game, 'The lamps are lit. Gratus is waiting among the strongboxes.');
+    },
+    'save:loaded': (q) => {
+      if (q.stage === 'start' && !q.isObjectiveDone('search')) placeExamine(q.game, BODY);
+    },
   },
   rewards: { skills: [{ id: 'rhetoric', amount: 10 }] },
 });
-

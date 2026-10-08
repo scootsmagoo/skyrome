@@ -16,7 +16,7 @@
  *   ambient vignettes, talking (game.dialogue) with a generic fallback.
  */
 import * as THREE from 'three';
-import type { Actor } from '../actors/Actor';
+import type { Actor, IdleLoop } from '../actors/Actor';
 import type { Appearance } from '../actors/appearance';
 import { avatarLod } from '../actors/avatar/lod';
 import { randomAppearance, type AvatarRole } from '../actors/avatar/variants';
@@ -415,8 +415,28 @@ export class NpcManager implements System {
     return true;
   }
 
+  /**
+   * Hold someone in place in an idle loop for another module (a wounded man lying in the road:
+   * 'sleep'), facing `face` (null = as they are). Scripted until `undirect`.
+   */
+  pose(npc: Npc, loop: IdleLoop | null, face: number | null = null): boolean {
+    if (npc.dead || npc.talking || (npc.scripted && !this.directed.has(npc))) return false;
+    if (!npc.scripted) {
+      npc.brain?.script(this.life);
+      this.directed.add(npc);
+    }
+    npc.brain?.scriptStand(loop, face);
+    // Held in place: a man lying in the road isn't nudged along by the crowd.
+    npc.canMove = false;
+    this.posed.add(npc);
+    return true;
+  }
+
+  private posed = new Set<Npc>();
+
   /** Give a directed NPC back to normal life. */
   undirect(npc: Npc) {
+    if (this.posed.delete(npc) && !npc.dead) npc.canMove = true;
     if (!this.directed.delete(npc)) return;
     if (npc.scripted && !npc.dead) npc.brain?.release(this.life);
   }

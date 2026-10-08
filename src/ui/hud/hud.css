@@ -227,6 +227,7 @@
 }
 .hud-banner-card.location .title { font-size: min(2.75rem, 3.8vw); letter-spacing: 0.14em; }
 .hud-banner-card.quest-fail .label { color: var(--sr-bad); }
+.hud-banner-card.objective .title { font-size: min(1.75rem, 3vw); letter-spacing: 0.03em; text-transform: none; max-width: min(46rem, 80vw); line-height: 1.25; }
 .hud-banner-card .subtitle { font-style: italic; font-size: 1.22rem; color: var(--sr-ink-2); margin-top: 0.1rem; }
 .hud-banner-card .rule { margin-top: 0.25rem; }
 .hud-banner-card .rule svg { display: block; width: 13rem; height: 1.5rem; margin: 0 auto; color: var(--sr-gold-2); filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9)); }

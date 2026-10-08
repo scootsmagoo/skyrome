@@ -242,13 +242,11 @@ export default defineQuest({
       end: 'complete',
     },
   },
+  // Offered, never pressed: it starts when the player tells Glaucus they want to fight (the main
+  // quest's errand at the Ludus is separate and never needs it, docs/STORY.md).
   triggers: {
-    'location:entered': (q, e) => {
-      const h = q.game.time?.hour ?? 12;
-      if (e.locationId === 'ludus-magnus' && h >= 4.9 && h < 16.8) q.start();
-    },
     'dialogue:node': (q, e) => {
-      if (e.dialogueId === 'npc-glaucus' && e.nodeId === 'n0') q.start();
+      if (e.dialogueId === 'npc-glaucus' && (e.nodeId === 'n1' || e.nodeId === 'n0f')) q.start();
     },
   },
   on: {

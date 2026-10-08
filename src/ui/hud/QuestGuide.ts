@@ -22,6 +22,8 @@ export interface GuideTarget {
   y: number;
   z: number;
   npc: boolean;
+  /** The person to ride on: the HUD follows this actor's live position every frame. */
+  actorId?: string;
 }
 
 const v = new THREE.Vector3();

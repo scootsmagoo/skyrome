@@ -26,7 +26,7 @@ await server.listen();
 const { chromium } = await import('playwright');
 const browser = await chromium.launch({ headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-await page.goto(`http://127.0.0.1:${port}/?scene=rome&${args.query ?? ''}`);
+await page.goto(`http://127.0.0.1:${port}/?scene=rome&${args.query ?? 'at=rostra&hour=10'}`);
 await page.waitForFunction(() => window.__skyrome?.ready, null, { timeout: 120000, polling: 200 });
 await page.waitForTimeout(Number(args.wait ?? 15) * 1000);
 const cdp = await page.context().newCDPSession(page);

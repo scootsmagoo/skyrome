@@ -24,8 +24,10 @@ describe('installRpg', () => {
     expect(rpg.items.size).toBeGreaterThanOrEqual(80);
     // Unnamed citizens get the content's '*' dialogue (if any); either way nothing may throw.
     expect(() => (rpg.dialogue.start('anyone'), rpg.dialogue.end())).not.toThrow();
-    // The shipped main quest auto-starts with the new game and points at the gate; nothing else marks the map.
-    expect(rpg.quests.markers().map((m) => m.questId)).toEqual(['mq-01-madida-capena']);
+    // The shipped main quest auto-starts with the new game (its first step is a person: Festus, who
+    // has no marker without the NPC module); nothing else marks the map.
+    expect(rpg.quests.status('mq-01-madida-capena')?.running).toBe(true);
+    expect(rpg.quests.markers().every((m) => m.questId === 'mq-01-madida-capena')).toBe(true);
     expect(() => fg.step(30)).not.toThrow();
     expect(fg.systems.map((s) => s.name).sort()).toEqual(['locations', 'rpg', 'save']);
   });

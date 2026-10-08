@@ -1,7 +1,7 @@
 /**
  * The welcome card of the shareable test build: what this is, the keys that matter, where the
- * settings are. Shown once per browser (localStorage, best effort) over the first view of the
- * Forum; any key or a click closes it. Never shown to automation unless `?welcome=1`.
+ * settings are. Shown once per browser (localStorage, best effort) over the first view (the cart
+ * at the Porta Capena); any key or a click closes it. Never shown to automation unless `?welcome=1`.
  */
 import type { Game } from '../core/Game';
 import { h, keycap } from '../ui/dom';
@@ -63,7 +63,7 @@ export function showWelcome(game: Game, parent: HTMLElement): Promise<void> {
         h(
           'p',
           { class: 'welcome-text' },
-          'An early test build of Skyrome. You stand in the Forum on a May morning. Walk anywhere, talk to anyone, pick a fight (the watch will notice). The story starts at the Porta Capena: follow the compass.',
+          'An early test build of Skyrome. Rome, 11 May AD 113, an hour before dawn: you arrive on the last wine cart at the Porta Capena, beside a courier who keeps looking back down the road. Talk to anyone; the gold marker always shows your next step.',
         ),
         h(
           'div',

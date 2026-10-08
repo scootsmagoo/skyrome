@@ -78,6 +78,8 @@ export interface FlowOptions {
   hour?: number | null;
   /** Character for the quick start. */
   character?: Partial<CharacterSpec>;
+  /** The quick start plays the story's opening as a new game does (the plain link). */
+  story?: boolean;
   audio?: GameAudio;
 }
 
@@ -570,7 +572,7 @@ export class GameFlow implements System {
       console.error('[flow] quick start failed', err);
     }
     this.ui.block('loading', false);
-    this.enterPlay('quick');
+    this.enterPlay(this.opts.story ? 'new' : 'quick');
   }
 
   // ------------------------------------------------------------------ saves

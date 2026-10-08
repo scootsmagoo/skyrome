@@ -1,8 +1,10 @@
 /**
- * The golden-path bot (AC-15), run IN THE PAGE by scripts/golden-path.mjs. It plays the v0.1 quests
- * the way a player would: follows the tracked objective's marker on foot, talks to the NPC it
- * names and picks dialogue choices, fights whoever attacks it, and waits (T) when a stage needs the
- * evening. God mode is on (`tgm`): it tests the content, not its own swordplay.
+ * The golden-path bot (AC-15), run IN THE PAGE by scripts/golden-path.mjs. It plays Act I's
+ * chapters (docs/STORY.md: the gate, the tablet, the Lemuria) the way a player would: follows the
+ * tracked objective's marker on foot, talks to the NPC it names and picks dialogue choices, fights
+ * whoever attacks it, uses what the objective points at (a strongbox, a clue), and waits (T) when a
+ * stage needs the evening or midnight. God mode is on (`tgm`): it tests the content, not its own
+ * swordplay.
  *
  * Everything that would stop a player is logged in window.__gp: `snags` (a walk that jams, a
  * marker that can't be resolved, an NPC who isn't where the marker says, an objective that doesn't
@@ -11,7 +13,7 @@
 (() => {
   const game = window.__skyrome.game;
   const p = game.player;
-  const QUESTS = ['mq-01-madida-capena', 'mq-02-tabella', 'lud-01-sacramentum', 'misc-meta-sudans-rixa'];
+  const QUESTS = ['mq-01-madida-capena', 'mq-02-tabella', 'mq-03-lemuria'];
   const L = (window.__gp = { t0: performance.now(), events: [], snags: [], errors: [], talks: [], done: false, goal: null, walked: 0, teleports: 0, fights: 0 });
   const at = () => +((performance.now() - L.t0) / 1000).toFixed(1);
   const log = (...a) => L.events.push([at(), ...a]);
@@ -47,11 +49,7 @@
 
   /** The first required, active objective of the golden-path quests (in quest order). */
   function nextGoal() {
-    // The golden path does the Ludus (lud-01) before the evening at the strongrooms (mq-02 'mus').
-    // A brawl in progress comes first: walking off leaves it hanging.
-    let order = game.quests.status('mq-02-tabella')?.stage === 'mus' ? ['lud-01-sacramentum', ...QUESTS.filter((q) => q !== 'lud-01-sacramentum')] : QUESTS;
-    if (game.quests.status('misc-meta-sudans-rixa')?.running) order = ['misc-meta-sudans-rixa', ...order.filter((q) => q !== 'misc-meta-sudans-rixa')];
-    for (const id of order) {
+    for (const id of QUESTS) {
       if (!game.quests.status(id)?.running) continue;
       for (const o of game.quests.objectives(id)) {
         if (!o.active || o.done || o.optional || !o.target) continue;
@@ -213,15 +211,15 @@
         log('ALL DONE');
         return;
       }
-      let goal = nextGoal();
-      // Step 5 of the golden path: after the Ludus, wait for the evening; the brawl at the Meta
-      // Sudans is on the way back to the strongrooms (it only starts between 16:42 and 21:36).
-      const ms = game.quests.status('misc-meta-sudans-rixa');
+      const goal = nextGoal();
+      // Waits the story asks for: Gratus takes the tablet after sunset (mq-02 'give'); the rite
+      // is at midnight (mq-03 'wait', at the Marii's door).
       const h = game.time.hour;
-      if (goal && goal.obj === 'dusk' && (h < dusk && h > 5)) {
+      const until = goal?.obj === 'give' && h < dusk && h > 5 ? dusk : goal?.obj === 'wait' && goal.pos && dist(goal.pos) < 8 && h < 23.6 && h > 5 ? 23.7 : null;
+      if (goal && until !== null) {
         hold('KeyW', false);
         if (performance.now() < waitAgainAt) return;
-        const hours = Math.ceil(dusk - h);
+        const hours = Math.ceil(until - h);
         const r = game.ui?.sources?.wait?.(hours);
         // Refused (just after a fight the player still counts as in combat for a few seconds): retry.
         if (typeof r === 'string') {
@@ -234,13 +232,6 @@
           waitRefused = 0;
         }
         return;
-      }
-      if (goal && goal.quest === 'mq-02-tabella' && goal.obj === 'dusk' && !ms?.running && !ms?.done && game.quests.status('lud-01-sacramentum')?.completed && h >= 16.7 && h < 21.6) {
-        goal = { quest: 'misc-meta-sudans-rixa', obj: '(start)', text: 'the Meta Sudans (the brawl)', target: { kind: 'location', id: 'meta-sudans' }, pos: game.quests.resolveTarget({ kind: 'location', id: 'meta-sudans' }) };
-        if (goal.pos && dist(goal.pos) < 6) {
-          snag('brawl did not start at the Meta Sudans', `hour ${h.toFixed(2)}`);
-          teleportToward({ x: goal.pos.x + 3, z: goal.pos.z });
-        }
       }
       if (!goal) {
         idleFor += 0.1;
@@ -291,6 +282,27 @@
           return;
         }
         return walkTo(goal);
+      }
+      // A place with something to use there (Mus' strongbox, the clues at the Marii's door): use
+      // the nearest such thing within reach, as a player pressing E would.
+      if (d < 8 && (goal.obj === 'satchel' || goal.obj === 'clues' || goal.obj === 'search')) {
+        const want = goal.obj === 'satchel' ? (i) => /strongbox/i.test(i.label()) : goal.obj === 'clues' ? (i) => i.id.startsWith('content:clue-') : (i) => i.id === 'content:festus-body';
+        const items = [...(game.interactions?.items ?? [])].filter(want);
+        const it = items.sort((a, b) => dist(a.position()) - dist(b.position()))[0];
+        if (it) {
+          const ip = it.position();
+          if (dist(ip) > 2) return walkTo({ ...goal, pos: { x: ip.x, z: ip.z } });
+          hold('KeyW', false);
+          if (performance.now() - (L.usedAt ?? 0) > 1500) {
+            L.usedAt = performance.now();
+            log('use', it.label());
+            it.interact(game);
+            // A container opened: take everything (R in the container screen), as a player would.
+            game.ui?.top?.view?.takeAll?.();
+            game.ui?.closeAll?.();
+          }
+          return;
+        }
       }
       // A place: walk in; an objective that doesn't complete 8 s after arriving is a snag.
       if (d < 4) {

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * AC-15: a bot plays the v0.1 golden path (mq-01 → mq-02 → lud-01 → the Meta Sudans brawl → the
- * tablet delivered) from the Porta Capena at dawn, and reports every place a player would get stuck.
+ * AC-15: a bot plays Act I as built (docs/STORY.md: mq-01 the gate → mq-02 the tablet → mq-03 the
+ * Lemuria) from the Porta Capena at dawn, and reports every place a player would get stuck.
  * The bot is scripts/golden-bot.js.
  *
  *   node scripts/golden-path.mjs [--minutes 40] [--shots] [--query "origin=dacus"]
  *
  * Prints the quest timeline, the snags (jams, unresolved markers, missing NPCs, objectives that don't
- * complete) and page errors; exit code 1 unless all four quests complete.
+ * complete) and page errors; exit code 1 unless all three chapters complete.
  */
 import { createServer as createNetServer } from 'node:net';
 import { mkdirSync, readFileSync } from 'node:fs';
@@ -37,6 +37,8 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 const pageErrors = [];
 page.on('pageerror', (e) => pageErrors.push(String(e?.message ?? e)));
 page.on('console', (m) => m.type() === 'error' && pageErrors.push(`[console] ${m.text()}`));
+page.on('crash', () => console.log('PAGE CRASHED'));
+page.on('framenavigated', (f) => f === page.mainFrame() && console.log(`navigated: ${f.url()}`));
 await page.goto(`http://127.0.0.1:${port}/?scene=rome&quick=1&${args.query ?? ''}`);
 await page.waitForFunction(() => window.__skyrome?.ready, null, { timeout: 120000, polling: 200 });
 await page.waitForTimeout(3000);
@@ -49,7 +51,8 @@ while (Date.now() - t0 < minutes * 60000) {
   await page.waitForTimeout(5000);
   const s = await page.evaluate((from) => {
     const L = window.__gp;
-    const g = window.__skyrome.game;
+    const g = window.__skyrome?.game;
+    if (!L || !g) return { done: true, events: [], n: from, snags: 0, hour: '?', pos: [], lost: true };
     return { done: L.done, events: L.events.slice(from), n: L.events.length, snags: L.snags.length, hour: g.time.hour.toFixed(2), pos: g.player.position.toArray().map(Math.round) };
   }, seen);
   for (const e of s.events) {
@@ -64,7 +67,7 @@ const r = await page.evaluate(() => {
   const L = window.__gp;
   clearInterval(L.timer);
   const g = window.__skyrome.game;
-  const ids = ['mq-01-madida-capena', 'mq-02-tabella', 'lud-01-sacramentum', 'misc-meta-sudans-rixa'];
+  const ids = ['mq-01-madida-capena', 'mq-02-tabella', 'mq-03-lemuria'];
   return {
     seconds: Math.round((performance.now() - L.t0) / 1000),
     quests: ids.map((id) => `${id}: ${JSON.stringify(g.quests.status(id))}`),

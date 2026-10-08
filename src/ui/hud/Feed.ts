@@ -8,7 +8,7 @@ import { laurelRule } from '../motifs';
 
 export type NotifyKind = 'info' | 'item' | 'quest' | 'skill' | 'warning' | 'money';
 
-export type BannerKind = 'location' | 'quest-start' | 'quest-complete' | 'quest-fail' | 'level' | 'skill' | 'generic';
+export type BannerKind = 'location' | 'quest-start' | 'quest-complete' | 'quest-fail' | 'objective' | 'level' | 'skill' | 'generic';
 
 export interface BannerOptions {
   kind?: BannerKind;
@@ -19,6 +19,8 @@ export interface BannerOptions {
   /** Line under the title (English name, quest summary). */
   subtitle?: string;
   duration?: number;
+  /** Asked when its turn comes: true skips it (an objective already done by then). */
+  stale?: () => boolean;
 }
 
 const LABELS: Record<BannerKind, string> = {
@@ -26,6 +28,7 @@ const LABELS: Record<BannerKind, string> = {
   'quest-start': 'Quest started',
   'quest-complete': 'Quest completed',
   'quest-fail': 'Quest failed',
+  objective: 'Next',
   level: 'Level increased',
   skill: 'Skill increased',
   generic: '',
@@ -74,19 +77,35 @@ export class Notifications {
 }
 
 function bannerDuration(o: BannerOptions): number {
-  return o.duration ?? (o.kind === 'location' ? 4.2 : 3.6);
+  return o.duration ?? (o.kind === 'location' ? 4.2 : o.kind === 'objective' ? 5 : 3.6);
 }
+
+const QUEST_KINDS: readonly (BannerKind | undefined)[] = ['quest-start', 'quest-complete', 'quest-fail', 'objective'];
 
 export class Banners {
   readonly el = h('div', { class: 'hud-banner' });
   private queue: BannerOptions[] = [];
   private current: { opts: BannerOptions; t: number; el: HTMLElement } | null = null;
 
+  /**
+   * Quest news goes ahead of the places discovered on the way (a walk across the city can queue a
+   * row of them), in its own order; only the latest place waiting is kept.
+   */
   push(opts: BannerOptions) {
+    if (QUEST_KINDS.includes(opts.kind)) {
+      // Only the newest next step waits: an older one is out of date already.
+      if (opts.kind === 'objective') this.queue = this.queue.filter((q) => q.kind !== 'objective');
+      let i = 0;
+      while (i < this.queue.length && QUEST_KINDS.includes(this.queue[i].kind)) i++;
+      this.queue.splice(i, 0, opts);
+      return;
+    }
+    if (opts.kind === 'location') this.queue = this.queue.filter((q) => q.kind !== 'location');
     this.queue.push(opts);
   }
 
   update(dt: number) {
+    while (!this.current && this.queue.length && this.queue[0].stale?.()) this.queue.shift();
     if (!this.current && this.queue.length) {
       const opts = this.queue.shift()!;
       const kind = opts.kind ?? 'generic';

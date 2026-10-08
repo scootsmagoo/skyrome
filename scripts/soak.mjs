@@ -36,7 +36,7 @@ let crashed = false;
 page.on('crash', () => (crashed = true));
 
 const t0 = Date.now();
-await page.goto(`http://127.0.0.1:${port}/?scene=rome`, { waitUntil: 'load' });
+await page.goto(`http://127.0.0.1:${port}/?scene=rome&at=rostra&hour=10`, { waitUntil: 'load' });
 await page.waitForFunction(() => window.__skyrome?.ready, null, { timeout: 120000, polling: 200 });
 console.log(`booted in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
 

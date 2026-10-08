@@ -1,58 +1,49 @@
 /**
- * mq-01-madida-capena "The Dripping Gate" (docs/CONTENT.md §3.1.1; GDD §10.3 #1, §17.2 steps 1–2).
- * Main quest, v0.1 Must, auto-started with the new game at the Porta Capena, 11 May AD 113, 04:30.
+ * mq-01-madida-capena "The Dripping Gate" (docs/STORY.md chapter 1; GDD §10.3 #1, §17.2 steps 1–2).
+ * Main quest, auto-started with the new game at the Porta Capena, 11 May AD 113, 04:30.
  *
- *   start   climb down at the cart stand outside the gate, talk to Festus      → gate
- *   gate    walk through the Capena Gate (the arch drips)                      → ambush
- *   ambush  Mus knifes Festus and runs; fight the two grassatores              → dying
- *   dying   the courier presses his sealed tablet into your hand              → city
- *   city    up the Circus valley and through the Velabrum to the Forum         → done
- *   done    the Golden Milestone; mq-02-tabella begins
+ *   start   on the cart: Festus, a courier, is being followed and asks you to walk him in   → gate
+ *   gate    walk through the Capena Gate beside him                                         → ambush
+ *   ambush  a hooded man knifes Festus and runs off with his satchel; fight the other two   → dying
+ *   dying   Festus gives you his sealed tablet: Gratus, the strongrooms under Castor        → done
+ *   done    the chapter ends; mq-02-tabella takes the tablet on to the Forum
  *
- * What the player does where: V, R/F/Q are taught by the two tutorial thugs (the bible's pair: A
- * opens with a light chain, B waits three seconds, then a long power attack). The quest listens to
- * 'actor:killed' / 'actor:yielded' (a kill, a knockout or a yield counts), 'dialogue:node' (Festus:
- * cartEnd, dyingEnd; Dromo: sawIt; Capito, Chreste and the vigiles reveal the hideout through the
- * flag 'hideout-known'), 'location:entered' (the arch, the Forum), 'devotion:act' (a compitum) and
- * 'barter:trade' (the Silver Pig). Without a combat module (dev scenes, tests) the knife-men run off
- * when the player shouts and the thread stays playable.
+ * Nothing in the opening is random: Festus says he is followed before the knives come out, the
+ * killer is seen running off with the satchel, and the street muggers stay home while Act I's first
+ * night runs (combat/danger.ts). The tutorial pair (A: a light chain; B: waits three seconds, then a
+ * long power attack) teaches R/F/Q. The quest listens to 'actor:killed' / 'actor:yielded' (a kill,
+ * a knockout or a yield counts), 'dialogue:node' (Festus: cartEnd, dyingEnd; Dromo: sawIt) and
+ * 'location:entered' (the arch). Without combat or NPCs (dev scenes, tests) every step still
+ * completes from events alone.
  */
-import { beat, hint, moveActor, placeExamine, removeExamine, say, scriptedDeath, spawnEnemy, actorExists } from '../../content/director';
+import { actorExists, beat, hint, holdPose, moveActor, runner, say, scriptedDeath, spawnEnemy, walkTo } from '../../content/director';
 import { mq01GrassatorProfile } from '../../content/profiles';
-import { addFoe, beatFoe, beatenCount, giveItem, hasItem, isPlayer } from '../../content/questkit';
-import { Rng } from '../../core/Rng';
-import { rollLoot } from '../../rpg/loot';
+import { addFoe, beatFoe, giveItem, hasItem, isPlayer } from '../../content/questkit';
 import { defineQuest, type QuestContext } from '../types';
 
 export const QUEST_ID = 'mq-01-madida-capena';
 const GRASSATORES = ['mq01-grassator-a', 'mq01-grassator-b'] as const;
-/** Arriving at any of these means "in the Forum" (the bible asks for the Golden Milestone; the Forum around it counts). */
-const FORUM_PLACES = ['miliarium-aureum', 'rostra', 'temple-saturn', 'basilica-julia', 'basilica-aemilia', 'temple-castor-pollux', 'curia-julia', 'temple-vesta'];
-
-const BODY = { id: 'festus-body', at: 'courier-ambush', verb: 'Search', label: 'The courier’s body', height: 0.5, offset: { x: -1.5 } };
-
-function searchBody(q: QuestContext) {
-  if (q.isObjectiveDone('search')) return;
-  removeExamine(BODY.id);
-  const loot = rollLoot('body.npc-festus', 1, q.game.rng?.fork('body') ?? new Rng('body'));
-  const inv = q.game.player?.inventory;
-  for (const it of loot.items) inv?.add(it.id, it.count, { source: 'quest' });
-  if (loot.denarii) inv?.addDenarii(loot.denarii);
-  q.completeObjective('search');
-}
+/** Arriving at any of these means the player walked on without the courier's last words. */
+const FORUM_PLACES = ['miliarium-aureum', 'rostra', 'temple-saturn', 'basilica-julia', 'basilica-aemilia', 'temple-castor-pollux', 'curia-julia', 'temple-vesta', 'castor-loculi'];
 
 function giveTablet(q: QuestContext) {
   if (!hasItem(q, 'quest-tabella-signata')) giveItem(q, 'quest-tabella-signata');
 }
 
+/** Festus falls in the road and lies there, alive, until his last words. */
+function festusDown(q: QuestContext) {
+  holdPose(q.game, 'npc-festus', 'sleep');
+}
+
 /**
- * The courier dies without his last words (the player walked on, or could not reach him): the tablet
- * is the player's all the same (he pressed it on them as they fought), so the thread never stops here.
+ * The courier dies without his last words (the player walked on to the Forum): the tablet is the
+ * player's all the same (he pressed it on them as they fought), and the journal repeats what he
+ * said under the arch, so the thread never stops here.
  */
-function festusDiesUnheard(q: QuestContext, why: string) {
+function festusDiesUnheard(q: QuestContext) {
   if (q.stage !== 'dying') return;
   giveTablet(q);
-  q.notify(why);
+  q.notify('Festus died under the arch behind you. His sealed tablet is in your belt: he pushed it at you as he fell. “Gratus,” he had said. “Castor.”');
   q.setFlag('festus-dead', true);
   scriptedDeath(q.game, 'npc-festus', 'npc-mus');
   q.completeObjective('talk-dying');
@@ -69,48 +60,47 @@ export default defineQuest({
   latin: 'Madida Capena',
   category: 'main',
   giver: 'npc-festus',
-  summary: 'Rome, before dawn on 11 May 113. A courier was knifed beside me under the Porta Capena, and his sealed tablet is in my hands.',
+  summary: 'Rome, before dawn on 11 May 113. A courier who was being followed asked me to walk him through the Porta Capena. He was knifed beside me, and his sealed tablet is in my hands.',
   autoStart: true,
   stages: {
     start: {
-      journal: 'I came to Rome in the fourth watch of the night, on the last wine cart up the Appian Way. A courier called Festus shared the cart and the cold. Ahead of us the aqueduct arches dripped over the Capena Gate. At the cart stand outside the walls I climbed down to stretch my legs.',
-      objectives: [
-        { id: 'talk-festus', text: 'Talk to the courier', optional: true, target: { kind: 'npc', id: 'npc-festus' } },
-        { id: 'dismount', text: 'Leave the cart stand', target: { kind: 'location', id: 'courier-ambush' } },
-      ],
+      journal: 'I came to Rome in the last watch of the night, on a wine cart up the Appian Way. A courier called Festus shared the cart and the cold. Ahead of us the aqueduct arches dripped over the Capena Gate.',
+      objectives: [{ id: 'talk-festus', text: 'Talk to Festus, the courier', target: { kind: 'npc', id: 'npc-festus' } }],
       onEnter: (q) => {
-        removeExamine(BODY.id); // a New Game from the title: the old courier's body is gone
-        // The shareable build starts in the Forum, far from the gate: say where the story is.
+        // The shareable build may start far from the gate: say where the story is.
         const gate = q.game.landmarks?.get('porta-capena')?.position;
         const p = q.game.player?.position;
         const far = !!gate && !!p && Math.hypot(gate.x - p.x, gate.z - p.z) > 80;
         hint(
           q.game,
           far
-            ? 'Click the view to look around (or use the arrow keys). W A S D to walk, Shift to sprint, F to fight. The story starts at the Porta Capena: the compass at the top points the way.'
-            : 'Walk with W (look with the arrow keys or the trackpad). Press E to talk to the courier. The compass at the top shows where to go.',
+            ? 'Click the view to look around (or use the arrow keys). W A S D to walk, Shift to sprint. The story starts at the Porta Capena: follow the gold marker.'
+            : 'Walk with W A S D (look with the arrow keys or the trackpad). Press E to talk. The gold marker always shows your next step.',
         );
       },
       next: 'gate',
     },
     gate: {
-      journal: 'Festus walked ahead to stretch his legs. Under the arch the water fell like thin rain. “The gate weeps for every stranger,” he said.',
-      objectives: [{ id: 'walk-gate', text: 'Walk on into the city', target: { kind: 'location', id: 'courier-ambush' } }],
+      journal: 'Festus carried a sealed tablet for his centurion, and he was sure we had been followed since Bovillae: two riders who never passed the cart and never fell back. He asked me to walk through the gate with him. Two are harder to knife than one, he said.',
+      objectives: [{ id: 'walk-gate', text: 'Walk through the Capena Gate with Festus', target: { kind: 'location', id: 'courier-ambush' } }],
       onEnter: (q) => {
+        walkTo(q.game, 'npc-festus', 'courier-ambush', 1.2, { x: -1.5 });
         if (q.game.locations?.isInside?.('courier-ambush')) q.completeObjective('walk-gate');
       },
       next: 'ambush',
     },
     ambush: {
-      journal: 'Three men came out of the dark under the arch. One of them knifed Festus before he could draw. The other two came for me.',
+      journal: 'Under the dripping arch three men stepped out of the dark. A hooded man with a curved blade put his knife into Festus, snatched his satchel and ran off up the valley. The other two came for me. Whatever they wanted, it was not in the satchel.',
       objectives: [{ id: 'fight', text: 'Fight off the attackers', count: 2, target: { kind: 'location', id: 'courier-ambush' } }],
       onEnter: (q) => {
         q.setFlag('festus-dead', false);
-        moveActor(q.game, 'npc-festus', 'courier-ambush', { x: -1.5 });
+        if (!q.game.locations?.isInside?.('courier-ambush') || !actorExists(q.game, 'npc-festus')) moveActor(q.game, 'npc-festus', 'courier-ambush', { x: -1.5 });
+        festusDown(q);
         beat(q.game, QUEST_ID, 'courier-knifed', { actors: ['npc-festus', 'npc-mus'], at: 'courier-ambush' });
-        beat(q.game, QUEST_ID, 'mus-flees', { actors: ['npc-mus'], at: 'astrologi-circi' });
+        // The killer is seen: Mus, hooded, the sica in his hand, off up the valley with the satchel.
+        runner(q.game, 'grassator', 'courier-ambush', 'astrologi-circi', { id: 'mq01-hooded-man', npc: 'npc-mus', name: 'Hooded man' }, { x: 2, z: -2 });
         q.setFlag('mus-has-satchel', true);
-        say(q.game, 'Grassator', 'Hold him! Get the satchel!');
+        say(q.game, 'Hooded man', 'Got the bag! Finish it!');
         let spawned = 0;
         (['a', 'b'] as const).forEach((which, i) => {
           const id = GRASSATORES[i];
@@ -123,7 +113,8 @@ export default defineQuest({
           if (placed) spawned++;
         });
         if (spawned) {
-          hint(q.game, 'R readies your weapon, F attacks (hold for a power attack), Q blocks (tap it just before a blow lands to parry), V switches view, X locks on.');
+          setTimeout?.(() => q.stage === 'ambush' && say(q.game, 'Grassator', 'The tablet’s not in the bag! Kill the stranger, then search the soldier!'), 2200);
+          hint(q.game, 'R readies your weapon, F attacks (hold for a power attack), Q blocks (tap it just before a blow lands to parry), X locks on to a foe.');
         } else {
           // No combat module in this build: the knife-men run when the player shouts.
           say(q.game, 'You', 'Vigiles! Vigiles!');
@@ -134,104 +125,77 @@ export default defineQuest({
       next: 'dying',
     },
     dying: {
-      journal: 'Festus was still alive when I knelt beside him. He pushed a sealed tablet into my hand.',
+      journal: 'When the last of them was down, Festus was still breathing. He lay in the road under the arch with the water falling on his face.',
       objectives: [
-        { id: 'talk-dying', text: 'Speak to the dying courier', target: { kind: 'npc', id: 'npc-festus' } },
+        { id: 'talk-dying', text: 'Hear Festus’ last words', target: { kind: 'npc', id: 'npc-festus' } },
         { id: 'ask-dromo', text: 'Ask the carter what he saw', optional: true, target: { kind: 'npc', id: 'npc-dromo' } },
       ],
       onEnter: (q) => {
+        festusDown(q);
         beat(q.game, QUEST_ID, 'courier-dying', { actors: ['npc-festus'], at: 'courier-ambush' });
-        // No courier in the world to talk to (dev scenes, tests without NPCs): his dispatch is in his satchel.
+        // No courier in the world to talk to (dev scenes, tests without NPCs): his tablet is in his belt.
         if (!actorExists(q.game, 'npc-festus')) {
           giveTablet(q);
           q.notify('You take a sealed tablet from the dead courier’s belt.');
           q.setFlag('clue-curved-blade', true);
           q.completeObjective('talk-dying');
+          return;
         }
-      },
-      next: 'city',
-    },
-    city: {
-      journal: 'Festus died under the dripping arch with the sun coming up behind me. His last words sent me to the strongrooms under the Temple of Castor, in the Forum. The way led up the valley of the Circus, under the walls of the palace.',
-      objectives: [
-        { id: 'circus', text: 'Follow the valley past the Circus Maximus', optional: true, target: { kind: 'location', id: 'circus-maximus' } },
-        { id: 'forum', text: 'Reach the Forum and the Golden Milestone', target: { kind: 'location', id: 'miliarium-aureum' } },
-        { id: 'lares', text: 'Pray at a crossroads shrine on the way', optional: true, target: { kind: 'location', id: 'compitum-capenae' } },
-        { id: 'popina', text: 'Eat or drink at the Silver Pig on the Vicus Tuscus', optional: true, target: { kind: 'location', id: 'popina-vici-tusci' } },
-        { id: 'search', text: 'Search the courier’s body', optional: true, target: { kind: 'location', id: 'courier-ambush' } },
-        { id: 'hideout', text: 'Find the knife-men’s hideout', optional: true, hidden: true, target: { kind: 'location', id: 'taberna-collapsa' } },
-      ],
-      onEnter: (q) => {
-        if (q.game.locations?.isInside?.('miliarium-aureum')) q.completeObjective('forum');
-        if (q.game.locations?.isInside?.('circus-maximus')) q.completeObjective('circus');
-        if (q.flag('hideout-known')) q.reveal('hideout');
-        placeExamine(q.game, BODY);
-        hint(q.game, 'Your journal (J) tracks the tablet. Press M for the map.');
+        // He calls you over himself, a moment after the fight.
+        setTimeout?.(() => {
+          if (q.stage === 'dying' && !q.game.dialogue?.active && !q.isObjectiveDone('talk-dying')) q.game.dialogue?.start('npc-festus');
+        }, 1800);
       },
       next: 'done',
     },
     done: {
-      journal: 'I stood at the Golden Milestone, where they say every road in Italy ends. Mine had ended there too, for now. Festus’ tablet was still sealed in my belt.',
+      journal: 'Festus died under the dripping arch as the sky went grey behind me. His tablet was in my belt and his last words in my head. Gratus, his centurion, in the strongrooms under the Temple of Castor, in the Forum. Nobody else.',
       onEnter: (q) => {
-        removeExamine(BODY.id);
         q.game.standing?.addFame('dist-circus-maximus', 5);
       },
       end: 'complete',
     },
   },
   on: {
-    // "The cart dialogue opens by itself when the scene starts" (§3.1.1): a new game begins with Festus
-    // asking whether this is the first time in Rome. Quick starts (agents, tests) and loads stay quiet.
+    // "The cart dialogue opens by itself when the scene starts" (§3.1.1): a new game begins with
+    // Festus speaking first. Quick starts (agents, tests) and loads stay quiet.
     'game:started': (q, e) => {
       if (e.kind !== 'new' || q.stage !== 'start' || typeof setTimeout !== 'function') return;
-      setTimeout(() => {
-        // Still at the cart (or a step away from it) and not yet talked: Festus speaks first.
-        if ((q.stage === 'start' || q.stage === 'gate') && !q.game.dialogue?.active && !q.isObjectiveDone('talk-festus')) q.game.dialogue?.start('npc-festus');
-      }, 2500);
+      const open = () => {
+        // The shareable build's welcome card first (any key closes it).
+        if (typeof document !== 'undefined' && document.querySelector('.welcome-shade')) return void setTimeout(open, 700);
+        if (q.stage === 'start' && !q.game.dialogue?.active && !q.isObjectiveDone('talk-festus')) q.game.dialogue?.start('npc-festus');
+      };
+      setTimeout(open, 2500);
     },
     'dialogue:node': (q, e) => {
       if (e.dialogueId === 'npc-festus') {
-        if (e.nodeId === 'cartEnd') {
-          q.completeObjective('talk-festus');
-          q.completeObjective('dismount');
-        }
+        if (e.nodeId === 'cartEnd') q.completeObjective('talk-festus');
         if (e.nodeId === 'd1' && q.stage === 'dying') giveTablet(q);
         if (e.nodeId === 'dyingEnd' && q.stage === 'dying') {
-          q.completeObjective('talk-dying');
           q.setFlag('festus-dead', true);
           scriptedDeath(q.game, 'npc-festus', 'npc-mus');
+          q.completeObjective('talk-dying');
         }
       }
       if (e.dialogueId === 'npc-dromo' && e.nodeId === 'sawIt') q.completeObjective('ask-dromo');
     },
     'location:exited': (q, e) => {
-      if (q.stage === 'start' && (e.locationId === 'spawn-capena' || e.locationId === 'capena-extra')) q.completeObjective('dismount');
       // "If the player runs more than 40 m away, the grassatores give up": they have lost him.
       if (q.stage === 'ambush' && e.locationId === 'capena-fight-area') {
-        q.notify('The knife-men give up the chase. Back at the arch, a man is dying.');
+        q.notify('The knife-men give up the chase. Back at the arch, Festus is lying in the road.');
         beat(q.game, QUEST_ID, 'grassatores-flee', { actors: [...GRASSATORES], at: 'capena-fight-area' });
         ambushOver(q);
       }
-      // Walking off after beating one leaves the other gone (thugs flee at 15%).
-      if (q.stage === 'ambush' && e.locationId === 'courier-ambush' && beatenCount(q, 'foes') >= 1) ambushOver(q);
     },
     'location:entered': (q, e) => {
-      if ((q.stage === 'start' || q.stage === 'gate') && e.locationId === 'courier-ambush') {
-        q.completeObjective('dismount');
-        q.completeObjective('walk-gate');
+      // Walking off from the cart before talking: Festus comes along (he wants company).
+      if (q.stage === 'start' && e.locationId === 'courier-ambush') {
+        q.completeObjective('talk-festus');
       }
-      // Safety net: the player walked on into the city without the courier's last words.
-      if (q.stage === 'dying' && FORUM_PLACES.includes(e.locationId)) {
-        festusDiesUnheard(q, 'Festus died under the arch behind you. His sealed tablet is in your belt: he pressed it on you while you fought.');
-      }
-      if (q.stage === 'city') {
-        if (e.locationId === 'circus-maximus') q.completeObjective('circus');
-        if (FORUM_PLACES.includes(e.locationId)) q.completeObjective('forum');
-        if (e.locationId === 'taberna-collapsa') q.completeObjective('hideout');
-      }
-    },
-    'flag:changed': (q, e) => {
-      if (e.name === 'hideout-known' && e.value === true && q.stage === 'city') q.reveal('hideout');
+      if (q.stage === 'gate' && e.locationId === 'courier-ambush') q.completeObjective('walk-gate');
+      // Safety net: the player walked on to the Forum without the courier's last words.
+      if (q.stage === 'dying' && FORUM_PLACES.includes(e.locationId)) festusDiesUnheard(q);
     },
     'actor:killed': (q, e) => {
       if (q.stage === 'ambush' && beatFoe(q, 'foes', e.victimId, GRASSATORES)) q.progress('fight');
@@ -240,17 +204,8 @@ export default defineQuest({
     'actor:yielded': (q, e) => {
       if (q.stage === 'ambush' && beatFoe(q, 'foes', e.actorId, GRASSATORES)) q.progress('fight');
     },
-    'content:interact': (q, e) => {
-      if (e.id === BODY.id) searchBody(q);
-    },
-    'devotion:act': (q, e) => {
-      if (e.act === 'compitum') q.completeObjective('lares');
-    },
-    'barter:trade': (q, e) => {
-      if (e.npcId === 'npc-chreste' && e.kind === 'buy') q.completeObjective('popina');
-    },
     'save:loaded': (q) => {
-      if (q.stage === 'city' && !q.isObjectiveDone('search')) placeExamine(q.game, BODY);
+      if (q.stage === 'ambush' || q.stage === 'dying') festusDown(q);
     },
   },
   rewards: {},

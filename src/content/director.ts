@@ -54,6 +54,10 @@ export interface SpawnOptions {
   team?: string;
   /** Owning quest id. */
   quest?: string;
+  /** Attack hostiles on sight within this radius (0 = only when told). */
+  aggro?: number;
+  /** Call-for-help group (allies of a group join each other's fights). */
+  group?: string;
   /**
    * The stat block the content wants (src/content/profiles.ts: the mq-01 tutorial pair, Mus, the
    * named gladiators); combat may use it instead of the archetype's default tier.
@@ -145,6 +149,71 @@ export function moveActor(game: Game, id: string, to: string | Vec3, offset: { x
 interface PopulationLike {
   get?(id: string): unknown;
   kill?(npc: unknown): void;
+  direct?(npc: unknown, x: number, z: number, speed: number, arrive?: number): boolean;
+  undirect?(npc: unknown): void;
+  pose?(npc: unknown, loop: string | null, face?: number | null): boolean;
+}
+
+function population(game: Game): PopulationLike | undefined {
+  return (game as unknown as { population?: PopulationLike }).population;
+}
+
+/**
+ * Walk a named NPC (already in the world) to a place or point: Festus walking to the gate beside
+ * the player. They stay scripted until `release`. False when there is no such NPC about.
+ */
+export function walkTo(game: Game, npcId: string, to: string | Vec3, speed = 1.25, offset: { x?: number; z?: number } = {}): boolean {
+  const pop = population(game);
+  const npc = pop?.get?.(npcId);
+  if (!npc || !pop?.direct) return false;
+  const base = typeof to === 'string' ? placePosition(game, to) : groundAt(game, to);
+  if (!base) return false;
+  const p = streetPoint(game, { x: base.x + (offset.x ?? 0), y: base.y, z: base.z + (offset.z ?? 0) });
+  return pop.direct(npc, p.x, p.z, speed, 1.2);
+}
+
+/** Hold a named NPC in an idle loop where they are ('sleep' = lying on the ground, wounded). */
+export function holdPose(game: Game, npcId: string, loop: string | null): boolean {
+  const pop = population(game);
+  const npc = pop?.get?.(npcId);
+  return !!npc && !!pop?.pose?.(npc, loop, null);
+}
+
+/** Give a scripted NPC back to its own life. */
+export function release(game: Game, npcId: string) {
+  const pop = population(game);
+  const npc = pop?.get?.(npcId);
+  if (npc) pop?.undirect?.(npc);
+}
+
+interface RunnerCombat {
+  get?(id: string): { march?: { x: number; z: number; speed: number } | null; position: THREE.Vector3 } | undefined;
+  despawn?(c: unknown): void;
+}
+
+/**
+ * Someone who does a deed and runs (the hooded killer at the gate): a non-hostile fighter spawned
+ * at `from` who sprints to `to` and is gone when he gets there (or after `ttl` seconds). The
+ * player sees him go; he isn't a target. Returns false without a combat module.
+ */
+export function runner(game: Game, archetype: string, from: string | Vec3, to: string | Vec3, opts: Omit<SpawnOptions, 'hostile'>, offset: { x?: number; z?: number } = {}, ttl = 14): boolean {
+  // Nobody's ally and nobody's foe: he doesn't join the fight he leaves behind.
+  const id = spawnEnemy(game, archetype, from, { aggro: 0, group: `runner:${opts.id}`, team: `runner:${opts.id}`, ...opts, hostile: false }, offset);
+  const c = combat(game) as (CombatLike & RunnerCombat) | undefined;
+  const body = id ? c?.get?.(id) : undefined;
+  const goal = typeof to === 'string' ? placePosition(game, to) : groundAt(game, to);
+  if (!body || !goal) return false;
+  body.march = { x: goal.x, z: goal.z, speed: 5 };
+  const t0 = Date.now();
+  const tick = () => {
+    const b = c?.get?.(id!);
+    if (!b) return;
+    const there = Math.hypot(b.position.x - goal.x, b.position.z - goal.z) < 2.5;
+    if (there || Date.now() - t0 > ttl * 1000) c?.despawn?.(b);
+    else setTimeout(tick, 400);
+  };
+  if (typeof setTimeout === 'function') setTimeout(tick, 400);
+  return true;
 }
 
 /**

@@ -119,35 +119,39 @@ const setFlag = (w: World, name: string, v: number | string | boolean) => w.rpg.
 const objective = (w: World, q: string, id: string) => w.rpg.quests.objectives(q).find((o) => o.id === id);
 
 describe('mq-01-madida-capena: The Dripping Gate', () => {
-  it('starts at a new game; talk → gate → ambush → the dying courier → the Forum', () => {
+  it('starts at a new game; the cart talk sets up the danger → gate → ambush → Festus’ last words', () => {
     const w = world({ actors: ['npc-festus', 'npc-dromo'], interactions: true });
     const deaths = record(w.events, ['actor:killed']);
     expect(status(w, 'mq-01-madida-capena')).toMatchObject({ running: true, stage: 'start' });
     expect(w.rpg.quests.tracked).toBe('mq-01-madida-capena');
     expect(w.rpg.inventory.count('quest-tabella-signata')).toBe(0); // not in the starting pack
 
-    // On the cart: Festus, the twin, and "nobody stands in the drip".
+    // On the cart: Festus is a courier, he is being followed, and he asks for company.
     let v = talk(w, 'npc-festus');
     expect(v!.nodeId).toBe('n0');
     pick(w, 'First time.');
+    pick(w, 'You keep looking back down the road.');
+    expect(flag(w, 'festus-followed')).toBe(true);
     pick(w, 'Who’s waiting for you in Rome?');
     expect(flag(w, 'festus-mentioned-twin')).toBe(true);
-    v = pick(w, 'Rest. We’re nearly there.');
+    pick(w, 'We’re nearly at the gate.');
+    expect(w.rpg.dialogue.view!.text).toContain('Two are harder to knife than one');
+    v = pick(w, 'I’ll walk with you.');
     expect(v!.nodeId).toBe('cartEnd');
     close(w);
-    expect(objective(w, 'mq-01-madida-capena', 'talk-festus')!.done).toBe(true);
     expect(status(w, 'mq-01-madida-capena')!.stage).toBe('gate');
+    expect(objective(w, 'mq-01-madida-capena', 'walk-gate')!.text).toContain('with Festus');
 
-    // Under the arch the knife-men come: two tutorial thugs with the bible's stat block.
+    // Under the arch the knife-men come: two tutorial thugs, and the hooded killer who runs.
     goTo(w, 'courier-ambush');
     expect(status(w, 'mq-01-madida-capena')!.stage).toBe('ambush');
-    expect(w.spawned.map((s) => [s.archetype, s.opts.id])).toEqual([
-      ['grassator', 'mq01-grassator-a'],
-      ['grassator', 'mq01-grassator-b'],
+    expect(w.spawned.map((s) => [s.archetype, s.opts.id, s.opts.hostile])).toEqual([
+      ['grassator', 'mq01-hooded-man', false],
+      ['grassator', 'mq01-grassator-a', true],
+      ['grassator', 'mq01-grassator-b', true],
     ]);
-    expect(w.spawned[0].opts.profile).toMatchObject({ name: 'Grassator with a knife', health: 45 });
-    expect(w.spawned[1].opts.profile).toMatchObject({ name: 'Grassator with a cudgel' });
-    expect(w.moved).toEqual([expect.objectContaining({ id: 'npc-festus' })]); // Festus is knifed at the arch
+    expect(w.spawned[0].opts.npc).toBe('npc-mus'); // the man the player meets again in the taberna
+    expect(w.spawned[1].opts.profile).toMatchObject({ name: 'Grassator with a knife', health: 45 });
     expect(flag(w, 'mus-has-satchel')).toBe(true);
 
     yieldTo(w, 'mq01-grassator-a');
@@ -157,70 +161,53 @@ describe('mq-01-madida-capena: The Dripping Gate', () => {
     kill(w, 'mq01-grassator-b');
     expect(status(w, 'mq-01-madida-capena')!.stage).toBe('dying');
 
-    // Dromo saw the hooded fighter; Festus gives the tablet and dies.
+    // Dromo saw the hooded fighter; Festus gives the tablet, names Gratus and Castor, and dies.
     talk(w, 'npc-dromo', 'Did you see who did it?');
     close(w);
     expect(flag(w, 'clue-hooded-fighter')).toBe(true);
     expect(objective(w, 'mq-01-madida-capena', 'ask-dromo')!.done).toBe(true);
     deaths.length = 0;
-    talk(w, 'npc-festus', 'Who did this to you?', 'I’ll tell her myself.');
+    v = talk(w, 'npc-festus');
+    expect(v!.nodeId).toBe('d0');
+    while (w.rpg.dialogue.view && !w.rpg.dialogue.view.choices.length) w.rpg.dialogue.advance();
+    expect(w.rpg.dialogue.view!.text).toContain('strongrooms under the Temple of Castor');
+    pick(w, 'Who did this to you?');
+    pick(w, 'I’ll tell her myself.');
     close(w);
     expect(w.rpg.inventory.count('quest-tabella-signata')).toBe(1);
     expect(flag(w, 'clue-curved-blade')).toBe(true);
     expect(flag(w, 'promised-festus')).toBe(true);
-    expect(flag(w, 'festus-family-known')).toBe(true);
     expect(flag(w, 'festus-dead')).toBe(true);
     expect(deaths.some((d) => (d.e as { victimId: string }).victimId === 'npc-festus')).toBe(true);
-    expect(status(w, 'mq-01-madida-capena')!.stage).toBe('city');
+    expect(status(w, 'mq-01-madida-capena')).toMatchObject({ completed: true, stage: 'done' });
+    expect(lastJournal(w, 'mq-01-madida-capena')).toContain('Gratus');
 
-    // His body: a purse, his pugio and the letter home (T2).
+    // The next chapter takes over at once and is tracked; his body can be searched.
+    expect(status(w, 'mq-02-tabella')).toMatchObject({ running: true, stage: 'start' });
+    expect(w.rpg.quests.tracked).toBe('mq-02-tabella');
     const before = w.rpg.inventory.denarii;
-    const body = w.placed.find((p) => p.id === 'content:festus-body')!;
-    expect(body).toBeTruthy();
-    body.interact(w.game);
+    w.placed.find((p) => p.id === 'content:festus-body')!.interact(w.game);
     expect(w.rpg.inventory.count('quest-epistula-festi')).toBe(1);
     expect(w.rpg.inventory.count('pugio')).toBeGreaterThanOrEqual(1);
     expect(w.rpg.inventory.denarii).toBeCloseTo(before + 6.1875, 3);
-    expect(objective(w, 'mq-01-madida-capena', 'search')!.done).toBe(true);
-
-    // The way up the valley; the hideout stays hidden until somebody tells you.
-    expect(objective(w, 'mq-01-madida-capena', 'hideout')).toBeUndefined();
-    setFlag(w, 'hideout-known', true);
-    expect(objective(w, 'mq-01-madida-capena', 'hideout')).toBeTruthy();
-    goTo(w, 'circus-maximus');
-    w.rpg.devotion.prayAtCompitum('compitum-capenae');
-    w.events.emit('barter:trade', { npcId: 'npc-chreste', itemId: 'vinum', count: 1, price: 0.0625, kind: 'buy' });
-    for (const id of ['circus', 'lares', 'popina']) expect(objective(w, 'mq-01-madida-capena', id)!.done, id).toBe(true);
-    expect(status(w, 'mq-01-madida-capena')!.stage).toBe('city');
-
-    goTo(w, 'miliarium-aureum');
-    expect(status(w, 'mq-01-madida-capena')).toMatchObject({ completed: true, stage: 'done' });
-    expect(w.rpg.standing.fame('dist-circus-maximus')).toBe(5);
-    expect(status(w, 'mq-02-tabella')).toMatchObject({ running: true, stage: 'start' });
-    expect(w.placed.some((p) => p.id === 'content:festus-body')).toBe(false); // the vigiles' handcart took it away
+    expect(objective(w, 'mq-02-tabella', 'search')!.done).toBe(true);
     expect(unknownItems()).toEqual([]);
   });
 
   it('stays playable without combat or NPCs: the knife-men run, the tablet is taken from the belt', () => {
     const w = world({ combat: false });
     goTo(w, 'courier-ambush');
-    expect(status(w, 'mq-01-madida-capena')!.stage).toBe('city');
-    expect(w.rpg.inventory.count('quest-tabella-signata')).toBe(1);
-    goTo(w, 'temple-castor-pollux');
     expect(status(w, 'mq-01-madida-capena')!.completed).toBe(true);
-    expect(status(w, 'mq-02-tabella')!.stage).toBe('loculi'); // already at the temple when it begins
+    expect(w.rpg.inventory.count('quest-tabella-signata')).toBe(1);
+    expect(status(w, 'mq-02-tabella')!.stage).toBe('start');
   });
 
-  it('leaving the spot of the cart stand counts as climbing down; running 40 m off ends the fight', () => {
+  it('walking off to the gate counts as agreeing to go with Festus; running 40 m off ends the fight', () => {
     const w = world({ actors: ['npc-festus'] });
-    goTo(w, 'spawn-capena'); // the new game puts the player here
-    expect(objective(w, 'mq-01-madida-capena', 'dismount')!.done).toBe(false);
-    goTo(w, 'porta-capena');
-    expect(objective(w, 'mq-01-madida-capena', 'dismount')!.done).toBe(true);
     goTo(w, 'courier-ambush');
     expect(status(w, 'mq-01-madida-capena')!.stage).toBe('ambush');
     kill(w, 'mq01-grassator-a');
-    goTo(w, 'circus-maximus'); // far away: the other one gives up (the bible: 8 s; here at once)
+    goTo(w, 'circus-maximus'); // far away: the other one gives up
     expect(status(w, 'mq-01-madida-capena')!.stage).toBe('dying');
   });
 
@@ -252,19 +239,6 @@ describe('mq-01-madida-capena: The Dripping Gate', () => {
       expect(Math.hypot(s.x - spot.position.x, s.z - spot.position.z), which).toBeLessThan(1.5);
     }
   });
-
-  it('every dialogue line of the quest renders at every stage and the hideout is revealed by the street talk', () => {
-    const w = world({ actors: ['npc-festus'] });
-    setFlag(w, 'hideout-known', true);
-    goTo(w, 'courier-ambush');
-    kill(w, 'mq01-grassator-a');
-    kill(w, 'mq01-grassator-b');
-    goTo(w, 'miliarium-aureum');
-    // Primigenius' night talk and the citizens' gossip set the flag too; Chreste starts it from the popina.
-    const v = talk(w, 'npc-chreste', 'knife-men');
-    expect(v!.nodeId).toBe('hideoutRumour');
-    expect(flag(w, 'hideout-known')).toBe(true);
-  });
 });
 
 describe('mq-01: the opening conversation', () => {
@@ -295,7 +269,7 @@ describe('mq-01: the opening conversation', () => {
   });
 });
 
-/** A world where mq-01 is done (the no-combat path) and the player stands in the Forum. */
+/** A world where mq-01 is done (the no-combat path) and mq-02 has begun. */
 function afterArrival(o: WorldOptions = {}) {
   const w = world(o);
   w.rpg.quests.setStage('mq-01-madida-capena', 'done');
@@ -304,100 +278,92 @@ function afterArrival(o: WorldOptions = {}) {
 }
 
 describe('mq-02-tabella: The Sealed Tablet', () => {
-  it('Castor (shut for the Lemuria) → Chrysippus → Gratus → the Ludus clue → dusk → “Tomorrow, the Column.”', () => {
-    const w = afterArrival({ combat: false, actors: ['npc-gratus', 'npc-chrysippus', 'npc-philetus'] });
-    expect(w.game.time.date()).toMatchObject({ month: 4, day: 13 }); // a Lemuria day
+  it('Chrysippus (the seal) → Gratus explains → Glaucus names the Mouse → the taberna → the satchel → dusk → the cipher', () => {
+    const w = afterArrival({ combat: false, actors: ['npc-gratus', 'npc-chrysippus', 'npc-philetus', 'npc-glaucus', 'npc-mus'] });
     w.rpg.dialogue.rng = { next: () => 0.01 }; // every check passes
-    goTo(w, 'temple-castor-pollux');
-    expect(status(w, 'mq-02-tabella')!.stage).toBe('loculi');
+    w.rpg.inventory.add('quest-tabella-signata');
+    expect(objective(w, 'mq-02-tabella', 'castor')!.target).toEqual({ kind: 'npc', id: 'npc-chrysippus' });
 
-    // Philetus at the shut doors: the strongrooms are not the god's.
+    // Philetus at the shut doors only points the way.
     let v = talk(w, 'npc-philetus');
     expect(v!.nodeId).toBe('n0');
-    const pietas = w.rpg.sheet.vitals.get('pietas').current;
-    v = pick(w, 'strongrooms');
-    expect(v!.nodeId).toBe('strongrooms');
+    pick(w, 'strongrooms');
     close(w);
-    expect(w.rpg.sheet.vitals.get('pietas').current).toBe(pietas);
 
-    // Chrysippus: "There is no Gratus."
+    // Chrysippus guards his clients' names until he sees the couriers' seal.
     v = talk(w, 'npc-chrysippus');
     expect(v!.nodeId).toBe('n0');
-    pick(w, 'Neither. I’m looking for Gratus.');
-    pick(w, 'A courier sent me');
+    pick(w, 'looking for a man called Gratus');
+    expect(w.rpg.dialogue.view!.text).toContain('between them and me');
+    pick(w, 'Show him the seal');
     close(w);
     expect(status(w, 'mq-02-tabella')!.stage).toBe('gratus');
 
-    // Gratus by day: "keep it in your belt, go to the Ludus, come back after the lamps are lit."
-    w.rpg.inventory.add('quest-tabella-signata');
-    setFlag(w, 'clue-curved-blade', true);
+    // Gratus: the leak in the camp, not by daylight, the thraex's stroke, Glaucus.
     v = talk(w, 'npc-gratus');
     expect(v!.nodeId).toBe('day0');
-    pick(w, 'He said it was a curved blade.');
-    pick(w, 'I’ll go.');
+    pick(w, 'Dead. Knifed under the Capena Gate');
+    pick(w, 'A hooded one with a curved blade');
+    while (w.rpg.dialogue.view && !w.rpg.dialogue.view.choices.length) w.rpg.dialogue.advance();
+    expect(w.rpg.dialogue.view!.text).toContain('after sunset');
+    pick(w, 'And until sunset?');
+    expect(w.rpg.dialogue.view!.text).toContain('Ask for Glaucus');
+    pick(w, 'I’ll go to the Ludus.');
     close(w);
-    expect(w.rpg.inventory.count('quest-tabella-signata')).toBe(1);
-    expect(status(w, 'mq-02-tabella')!.stage).toBe('gratus');
-    goTo(w, 'ludus-magnus');
-    expect(objective(w, 'mq-02-tabella', 'ludus')!.done).toBe(true);
+    expect(w.rpg.inventory.count('quest-tabella-signata')).toBe(1); // he would not take it by day
+    expect(status(w, 'mq-02-tabella')!.stage).toBe('ludus');
+    expect(objective(w, 'mq-02-tabella', 'ask')!.target).toEqual({ kind: 'npc', id: 'npc-glaucus' });
 
-    // The clue: Auctus, after the bouts (here: the flag Glaucus or the street sets).
-    w.rpg.quests.restore({ states: { ...w.rpg.quests.serialize().states, 'lud-01-sacramentum': { status: 'running', stage: 'bout3', objectives: {}, vars: {}, journal: [] } } });
-    talk(w, 'npc-auctus', 'curved blade');
+    // Glaucus names Dizas at once: no bouts, no checks, and The Oath is not started by it.
+    v = talk(w, 'npc-glaucus');
+    expect(v!.nodeId).toBe('mq0');
+    pick(w, 'A courier was knifed');
     close(w);
     expect(flag(w, 'clue-mus')).toBe(true);
     expect(status(w, 'mq-02-tabella')!.stage).toBe('mus');
+    expect(status(w, 'lud-01-sacramentum')?.running ?? false).toBe(false);
 
-    // Not before the lamps are lit.
-    goTo(w, 'castor-loculi');
-    expect(objective(w, 'mq-02-tabella', 'dusk')!.done).toBe(false);
-    expect(talk(w, 'npc-gratus')!.nodeId).toBe('waiting');
-    close(w);
-    waitUntil(w, 19.5);
-    expect(objective(w, 'mq-02-tabella', 'dusk')!.done).toBe(true);
-    expect(status(w, 'mq-02-tabella')!.stage).toBe('deliver');
-
-    const before = w.rpg.inventory.denarii;
-    const xp = w.rpg.sheet.skillXp('rhetoric');
-    talk(w, 'npc-gratus', '(Give him the tablet.)');
-    pick(w, 'What does it say?');
-    pick(w, 'Until tomorrow.');
-    close(w);
-    expect(status(w, 'mq-02-tabella')).toMatchObject({ completed: true, stage: 'done-v01' });
-    expect(lastJournal(w, 'mq-02-tabella')).toContain('Tomorrow, the Column.');
-    expect(w.rpg.inventory.count('quest-tabella-signata')).toBe(0);
-    expect(w.rpg.inventory.count('quest-tessera-peregrina')).toBe(1);
-    expect(w.rpg.inventory.denarii).toBe(before + 25);
-    expect(w.rpg.sheet.skillXp('rhetoric')).toBeGreaterThan(xp);
-    expect(flag(w, 'mq02-delivered')).toBe(true);
-  });
-
-  it('the satchel pays double: Mus’ strongbox, the drachm and the 25 denarii', () => {
-    const w = afterArrival({ combat: false, actors: ['npc-gratus', 'npc-mus'] });
-    w.rpg.dialogue.rng = { next: () => 0.01 };
-    w.rpg.quests.setStage('mq-02-tabella', 'mus');
-    setFlag(w, 'clue-mus', true);
-    // Mus gives in to the right threat and hands over the key.
-    talk(w, 'npc-mus', 'Give me the satchel and run');
+    // The Mouse hands over his key; his strongbox holds the satchel.
+    talk(w, 'npc-mus', 'Hand over the courier’s satchel');
     close(w);
     expect(flag(w, 'mus-fate')).toBe('fled');
     expect(w.rpg.inventory.count('clavis-cellae-muris')).toBe(1);
-    expect(objective(w, 'mq-02-tabella', 'hideout')!.done).toBe(true);
-    // The strongbox: the satchel with the scraped tablet and the Parthian coin.
+    expect(status(w, 'mq-02-tabella')!.stage).toBe('satchel');
     w.rpg.inventory.add('quest-sacculum-festi');
-    expect(objective(w, 'mq-02-tabella', 'satchel')!.done).toBe(true);
-    waitUntil(w, 19.5);
-    goTo(w, 'castor-loculi');
-    const before = w.rpg.inventory.denarii;
-    w.rpg.inventory.add('quest-tabella-signata');
-    talk(w, 'npc-gratus', '(Give him the tablet.)');
-    pick(w, 'I found his satchel.');
-    pick(w, 'Until tomorrow.');
+    w.rpg.inventory.add('quest-drachma-parthica');
+    expect(status(w, 'mq-02-tabella')!.stage).toBe('dusk');
+
+    // Not before the lamps are lit.
+    expect(talk(w, 'npc-gratus')!.nodeId).toBe('notYet');
     close(w);
-    expect(w.rpg.inventory.denarii).toBe(before + 50);
+    waitUntil(w, 19.5);
+    const before = w.rpg.inventory.denarii;
+    talk(w, 'npc-gratus', '(Give him the tablet.)');
+    pick(w, 'I have his satchel.');
+    while (w.rpg.dialogue.view && !w.rpg.dialogue.view.choices.length) w.rpg.dialogue.advance();
+    expect(w.rpg.dialogue.view!.text).toContain('Take this');
+    pick(w, 'I’ll go to the Marii.');
+    close(w);
+    expect(status(w, 'mq-02-tabella')).toMatchObject({ completed: true, stage: 'done' });
+    expect(lastJournal(w, 'mq-02-tabella')).toContain('cipher');
+    expect(w.rpg.inventory.count('quest-tabella-signata')).toBe(0);
     expect(w.rpg.inventory.count('quest-sacculum-festi')).toBe(0);
+    expect(w.rpg.inventory.count('quest-tessera-peregrina')).toBe(1);
+    expect(w.rpg.inventory.denarii).toBe(before + 50);
     expect(flag(w, 'gratus-has-drachm')).toBe(true);
-    expect(w.rpg.standing.fame('dist-forum-romanum')).toBe(5);
+    expect(flag(w, 'mq02-delivered')).toBe(true);
+    expect(status(w, 'mq-03-lemuria')).toMatchObject({ running: true, stage: 'start' });
+    expect(w.rpg.quests.tracked).toBe('mq-03-lemuria');
+  });
+
+  it('Auctus can name the Mouse too, and the street gossip does', () => {
+    const w = afterArrival({ combat: false, actors: ['npc-auctus'] });
+    w.rpg.dialogue.rng = { next: () => 0.01 };
+    w.rpg.quests.setStage('mq-02-tabella', 'ludus');
+    talk(w, 'npc-auctus', 'Up from under');
+    close(w);
+    expect(flag(w, 'clue-mus')).toBe(true);
+    expect(status(w, 'mq-02-tabella')!.stage).toBe('mus');
   });
 
   it('Mus in the burned taberna: a fight with two knife-men; he yields (spared) or dies', () => {
@@ -407,10 +373,13 @@ describe('mq-02-tabella: The Sealed Tablet', () => {
     expect(w.rpg.dialogue.view).toBeNull(); // attack() ended the talk
     expect(w.engaged).toEqual(['npc-mus']);
     expect(w.spawned.map((s) => s.opts.id)).toEqual(['mq02-knife-a', 'mq02-knife-b']);
-    expect(w.spawned[0].opts.tags).toContain('mus');
     yieldTo(w, 'npc-mus');
     expect(flag(w, 'mus-fate')).toBe('spared');
-    expect(objective(w, 'mq-02-tabella', 'hideout')!.done).toBe(true);
+    expect(status(w, 'mq-02-tabella')!.stage).toBe('satchel');
+    // Beaten, he gives up the key.
+    talk(w, 'npc-mus');
+    close(w);
+    expect(w.rpg.inventory.count('clavis-cellae-muris')).toBe(1);
 
     const w2 = afterArrival({ actors: ['npc-mus'], engage: true });
     w2.rpg.quests.setStage('mq-02-tabella', 'mus');
@@ -444,6 +413,99 @@ describe('mq-02-tabella: The Sealed Tablet', () => {
   });
 });
 
+describe('mq-03-lemuria: Beans for the Dead', () => {
+  function lemuria(o: WorldOptions = {}) {
+    const w = afterArrival({ combat: false, interactions: true, actors: ['npc-helpis', 'npc-marius-fuscus', 'npc-gemellus', 'npc-gratus'], ...o });
+    w.rpg.quests.setStage('mq-02-tabella', 'done');
+    expect(status(w, 'mq-03-lemuria')!.stage).toBe('start');
+    return w;
+  }
+
+  it('the house → Helpis → the midnight rite → two clues → Gemellus’ key → warn Gratus → “Tomorrow, the Column.”', () => {
+    vi.useFakeTimers();
+    try {
+      const w = lemuria();
+      w.rpg.dialogue.rng = { next: () => 0.01 };
+      setFlag(w, 'promised-festus', true);
+      w.rpg.inventory.add('quest-epistula-festi');
+      waitUntil(w, 21);
+      goTo(w, 'insula-mariorum');
+      expect(status(w, 'mq-03-lemuria')!.stage).toBe('family');
+
+      let v = talk(w, 'npc-helpis');
+      expect(v!.nodeId).toBe('h0');
+      pick(w, 'He was carrying this. A letter to you.');
+      expect(w.rpg.inventory.count('quest-epistula-festi')).toBe(0);
+      pick(w, 'Festus’ tablet is written in a cipher');
+      pick(w, 'I’ll stay.');
+      close(w);
+      expect(status(w, 'mq-03-lemuria')!.stage).toBe('rite');
+
+      // Midnight: the rite plays out over some forty seconds, then the clues.
+      waitUntil(w, 23.5);
+      vi.advanceTimersByTime(45_000);
+      expect(status(w, 'mq-03-lemuria')!.stage).toBe('clues');
+      expect(w.placed.filter((p) => p.id.startsWith('content:clue-')).length).toBe(3);
+      w.placed.find((p) => p.id === 'content:clue-cloak')!.interact(w.game);
+      expect(status(w, 'mq-03-lemuria')!.stage).toBe('clues');
+      // Helpis tells where Gemellus works: that counts as the second clue.
+      talk(w, 'npc-helpis', 'Where would Gemellus hide');
+      close(w);
+      expect(status(w, 'mq-03-lemuria')!.stage).toBe('gemellus');
+      expect(w.placed.some((p) => p.id.startsWith('content:clue-'))).toBe(false);
+
+      // Gemellus: the letter is proof enough; the key, and the decoded message.
+      v = talk(w, 'npc-gemellus');
+      expect(v!.nodeId).toBe('g0');
+      pick(w, 'four is still the number');
+      expect(w.rpg.inventory.count('quest-clavis-cifrae')).toBe(1);
+      pick(w, 'Who was the man?');
+      expect(flag(w, 'gemellus-saw-forger')).toBe(true);
+      pick(w, 'What should I tell your mother?');
+      pick(w, 'That you’re alive.');
+      close(w);
+      expect(flag(w, 'gemellus-revealed')).toBe(true);
+      expect(status(w, 'mq-03-lemuria')!.stage).toBe('warn');
+      expect(w.rpg.inventory.count('quest-nuntius-festi')).toBe(1);
+
+      // Gratus: the high place is the Column.
+      const before = w.rpg.inventory.denarii;
+      v = talk(w, 'npc-gratus');
+      expect(v!.nodeId).toBe('warn0');
+      pick(w, 'Show him Festus’ message');
+      close(w);
+      expect(status(w, 'mq-03-lemuria')).toMatchObject({ completed: true, stage: 'done' });
+      expect(lastJournal(w, 'mq-03-lemuria')).toContain('Column');
+      expect(w.rpg.inventory.denarii).toBe(before + 40);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('the rite waits for midnight at the house; a threat gets the key too', () => {
+    vi.useFakeTimers();
+    try {
+      const w = lemuria();
+      w.rpg.dialogue.rng = { next: () => 0.01 };
+      w.rpg.quests.setStage('mq-03-lemuria', 'rite');
+      waitUntil(w, 23.5); // midnight, but the player is elsewhere
+      vi.advanceTimersByTime(45_000);
+      expect(status(w, 'mq-03-lemuria')!.stage).toBe('rite');
+      goTo(w, 'insula-mariorum');
+      vi.advanceTimersByTime(45_000);
+      expect(status(w, 'mq-03-lemuria')!.stage).toBe('clues');
+      for (const id of ['clue-beans', 'clue-ink']) w.placed.find((p) => p.id === `content:${id}`)!.interact(w.game);
+      expect(status(w, 'mq-03-lemuria')!.stage).toBe('gemellus');
+      talk(w, 'npc-gemellus', 'Give me the key');
+      close(w);
+      expect(w.rpg.inventory.count('quest-clavis-cifrae')).toBe(1);
+      expect(status(w, 'mq-03-lemuria')!.stage).toBe('warn');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('lud-01-sacramentum: The Oath', () => {
   function ludusWorld(o: WorldOptions = {}) {
     const w = world({ actors: ['npc-pullus'], engage: true, ...o });
@@ -455,8 +517,9 @@ describe('lud-01-sacramentum: The Oath', () => {
     const w = ludusWorld();
     const v = talk(w, 'npc-glaucus');
     expect(v!.nodeId).toBe('n0');
-    expect(status(w, 'lud-01-sacramentum')!.running).toBe(true); // talking to Glaucus starts it
-    pick(w, 'To fight.');
+    expect(status(w, 'lud-01-sacramentum')?.running ?? false).toBe(false); // a greeting starts nothing
+    pick(w, 'To fight on your sand.');
+    expect(status(w, 'lud-01-sacramentum')!.running).toBe(true); // asking to fight does
     const cost = w.rpg.dialogue.view!;
     expect(cost.choices.map((c) => c.text)).toContain('Tell me exactly what the oath costs.'); // the crossroad shows its price
     pick(w, 'As a guest.');
@@ -550,7 +613,7 @@ describe('lud-01-sacramentum: The Oath', () => {
   it('swearing the oath costs Infamia +20 and makes a tiro; a spared player is paid half and the quest ends', () => {
     const w = ludusWorld();
     w.rpg.quests.start('lud-01-sacramentum');
-    talk(w, 'npc-glaucus', 'To fight.', 'I’ll swear the oath.', 'Uri, vinciri');
+    talk(w, 'npc-glaucus', 'To fight on your sand.', 'I’ll swear the oath.', 'Uri, vinciri');
     close(w);
     expect(flag(w, 'ludus-status')).toBe('auctoratus');
     expect(w.rpg.standing.infamia).toBeGreaterThanOrEqual(20);
@@ -591,9 +654,12 @@ describe('lud-01-sacramentum: The Oath', () => {
     expect(w.rpg.inventory.count('parmula-ludi')).toBe(1);
   });
 
-  it('starts when the player walks in by day, and the arena’s own yield prompt can decide the missio', () => {
+  it('is only offered: walking in starts nothing, asking Glaucus to fight does; the arena’s own yield prompt can decide the missio', () => {
     const w = ludusWorld({ actors: [] });
     goTo(w, 'ludus-magnus');
+    expect(status(w, 'lud-01-sacramentum')?.running ?? false).toBe(false);
+    talk(w, 'npc-glaucus', 'To fight on your sand.');
+    w.rpg.dialogue.end();
     expect(status(w, 'lud-01-sacramentum')!.running).toBe(true);
     w.rpg.quests.setStage('lud-01-sacramentum', 'missio');
     w.events.emit('content:missio', { spared: false });
@@ -602,7 +668,7 @@ describe('lud-01-sacramentum: The Oath', () => {
 
   it('plays through without a combat module: the referee calls each bout on points', () => {
     const w = ludusWorld({ combat: false, actors: [] });
-    talk(w, 'npc-glaucus', 'To fight.', 'As a guest.');
+    talk(w, 'npc-glaucus', 'To fight on your sand.', 'As a guest.');
     close(w);
     talk(w, 'npc-successus', 'The scutum.');
     close(w);

@@ -242,9 +242,14 @@ export class QuestSystem {
     this.subscribe(id);
     this.game.events.emit('quest:started', { questId: id });
     this.notify(`Quest started: ${def.title}`);
-    // A new quest is the one the player follows now (as in Skyrim): it takes the compass, the
-    // world marker and the tracker. The quests a new game starts by itself leave the main one leading.
-    if (!this._tracked || def.category === 'main' || !this.autoStarting) this.track(id);
+    // A new quest takes the compass, the world marker and the tracker, except that a side quest
+    // never takes them from a running main quest (the story stays the thread the player follows;
+    // the journal tracks a side quest on request). Quests a new game starts by itself leave the
+    // main one leading.
+    const cur = this._tracked ? this.defs.get(this._tracked) : undefined;
+    const mainLeads = cur?.category === 'main' && this.states.get(cur.id)?.status === 'running';
+    if (!this._tracked || def.category === 'main' || (!this.autoStarting && !mainLeads)) this.track(id);
+    else if (mainLeads) this.notify(`${def.title}: open the Journal (J) to follow it instead`);
     this.enterStage(id, stage);
     return true;
   }

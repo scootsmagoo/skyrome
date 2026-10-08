@@ -139,6 +139,8 @@ export const BIBLE_SPOTS: LocationDef[] = [
   spot('caupona-carcerum', 'The Inn at the Starting Gates', [-175, 520], 6, { mapMarker: 'tavern', discoverable: true }),
   spot('popina-vici-tusci', 'The Silver Pig', [2, 215], 6, { latin: 'Ad Porcum Argenteum', mapMarker: 'tavern', discoverable: true }),
   spot('seplasia-vici-tusci', 'Fadia’s Perfumery', [18, 178], 4, { mapMarker: 'shop', discoverable: true }),
+  // Martial's bookseller Tryphon (4.72, 13.3), by the statue of Vertumnus at the Forum end (mq-03).
+  spot('taberna-tryphonis', 'Tryphon’s Bookshop', [24, 160], 4, { latin: 'Taberna Tryphonis', mapMarker: 'shop', discoverable: true }),
   spot('taberna-collapsa', 'The Burned Taberna', [-8, 262], 4, { mapMarker: 'dungeon', discoverable: true }),
   spot('taberna-collapsa-puteus', 'Light well of the burned taberna', [-20, 275], 3, { parent: 'taberna-collapsa' }),
   spot('compitum-vici-tusci', 'Crossroads Shrine of the Vicus Tuscus', [-33, 290], 3, { mapMarker: 'temple', discoverable: true }),
@@ -355,7 +357,10 @@ export const CONTENT_LOCATIONS: LocationDef[] = [...LANDMARK_LOCATIONS, ...BIBLE
  */
 export const MUS_HIDEOUT: LocationDef = { ...bible('taberna-collapsa'), id: 'mus-latebra', name: 'The Mouse’s corner', radius: 3, discoverable: false, mapMarker: undefined, parent: 'taberna-collapsa' };
 
-const KNOWN = new Set([...CONTENT_LOCATIONS.map((l) => l.id), MUS_HIDEOUT.id]);
+/** Gemellus' hiding place in Tryphon's back room: there only while mq-03 looks for him (install.ts). */
+export const GEMELLUS_HIDEOUT: LocationDef = { ...bible('taberna-tryphonis'), id: 'gemellus-latebra', name: 'Tryphon’s back room', radius: 3, discoverable: false, mapMarker: undefined, parent: 'taberna-tryphonis' };
+
+const KNOWN = new Set([...CONTENT_LOCATIONS.map((l) => l.id), MUS_HIDEOUT.id, GEMELLUS_HIDEOUT.id]);
 
 /** Every id content may target: content locations plus any atlas landmark. */
 export function isKnownPlace(id: string): boolean {

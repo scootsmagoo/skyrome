@@ -523,18 +523,33 @@ export class UIManager implements System {
     });
   }
 
-  /** New objectives of quests that just started/advanced appear as notifications. */
+  /**
+   * New objectives of quests that just started or advanced: the tracked quest's next step gets a
+   * banner in the middle of the screen ("Next: Ask Glaucus at the Ludus Magnus…"), the rest a note.
+   */
   private flushObjectives() {
     if (!this.pendingObjectives.size) return;
     const log = this.sources.quests?.();
     if (log) {
       for (const q of log.quests()) {
         if (!this.pendingObjectives.has(q.id) || q.state !== 'active') continue;
+        const open = q.objectives.filter((o) => !o.done);
+        const next = open.find((o) => !o.optional) ?? open[0];
         for (const o of q.objectives) {
           const key = `${q.id}:${o.id}`;
           if (o.done || this.shownObjectives.has(key)) continue;
           this.shownObjectives.add(key);
-          this.notify(o.text, 'quest');
+          if (q.tracked && o === next) {
+            const qid = q.id;
+            const oid = o.id;
+            const stale = () => {
+              const now = this.sources.quests?.()?.quests().find((x) => x.id === qid);
+              const ob = now?.objectives.find((x) => x.id === oid);
+              return !now || now.state !== 'active' || !now.tracked || !ob || ob.done;
+            };
+            this.banner({ kind: 'objective', title: o.text, subtitle: q.title, stale });
+          }
+          else this.notify(o.optional ? `${o.text} (optional)` : o.text, 'quest');
         }
       }
     }

@@ -156,6 +156,14 @@ export class Hud {
       this.markerTimer = 0.125;
       this.items = this.collectMarkers(p.x, p.z);
     }
+    // A marker on a person moves with them, not at the marker list's 8 Hz.
+    const gt = this.guideTarget;
+    const who = gt?.actorId ? game.actors?.get(gt.actorId) : undefined;
+    if (gt && who) {
+      gt.x = who.position.x;
+      gt.y = who.position.y;
+      gt.z = who.position.z;
+    }
     this.compass.update(heading, p.x, p.z, this.items, !!game.settings.data.compassLatin);
     const canvas = game.renderer.domElement;
     this.guide.update(dt, this.guideTarget, cam, canvas.clientWidth || window.innerWidth, canvas.clientHeight || window.innerHeight, p, game.settings.data.objectiveTracker !== false);
@@ -263,7 +271,7 @@ export class Hud {
           if (primary && !this.guideTarget) {
             const y = pos.y ?? this.game.heightmap?.heightAt(pos.x, pos.z) ?? 0;
             const progress = o.count && o.count > 1 ? `${o.progress ?? 0} / ${o.count}` : undefined;
-            this.guideTarget = { questTitle: q.title, text: o.text, progress, x: pos.x, y, z: pos.z, npc: t.kind === 'npc' };
+            this.guideTarget = { questTitle: q.title, text: o.text, progress, x: pos.x, y, z: pos.z, npc: t.kind === 'npc', actorId: t.kind === 'npc' ? t.id : undefined };
           }
         }
       }

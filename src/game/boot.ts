@@ -49,14 +49,18 @@ export interface RomeParams {
   fight: number | null;
   /** `?part=castor` etc.: straight into one portion of the opening (game/checkpoints). */
   part: string | null;
+  /** The plain link: no menus, but the story's own opening (the cart at the Porta Capena, Festus speaking first). */
+  story: boolean;
 }
 
 /**
- * A plain link (no options) is the shareable test build: no menus, the default character, in the
- * Forum by the Rostra at mid-morning. `?menu=1` runs the full flow (control preset, title,
- * character creation, the Porta Capena at dawn); `?quick=1` is the agents' quick start at the
- * Porta Capena; `?at=<landmark>` spawns there. `?fight=nereus` (or `pullus`, `auctus`) skips the
- * Ludus questline up to that bout and starts it: the boss fight, one click away for testing.
+ * A plain link (no options) is the shareable test build: no menus and the default character, but
+ * the story's real opening: the night cart at the Porta Capena, 11 May at 04:30, with the courier
+ * Festus talking first (docs/STORY.md). `?menu=1` runs the full flow (control preset, title,
+ * character creation, then the same opening); `?quick=1` is the agents' quick start at the Porta
+ * Capena (nobody talks first); `?at=<landmark>` spawns there (PLAY_SPAWN/PLAY_HOUR: the Forum at
+ * mid-morning, for `?at=rostra`). `?fight=nereus` (or `pullus`, `auctus`) skips the Ludus
+ * questline up to that bout and starts it: the boss fight, one click away for testing.
  */
 export const PLAY_SPAWN = 'rostra';
 export const PLAY_HOUR = 10;
@@ -67,12 +71,13 @@ export function romeParams(search: string): RomeParams {
   const fight = FIGHTS.indexOf((q.get('fight') ?? '').toLowerCase()) + 1 || null;
   const part = checkpoint(q.get('part'));
   const plain = !menu && q.get('quick') !== '1' && !q.get('at') && !fight && !part;
-  const at = q.get('at') || (part ? part.at : fight ? 'ludus-magnus' : plain ? PLAY_SPAWN : null);
+  const at = q.get('at') || (part ? part.at : fight ? 'ludus-magnus' : null);
   const hour = q.get('hour');
   return {
-    quick: q.get('quick') === '1' || (!!at && !menu),
+    quick: q.get('quick') === '1' || plain || (!!at && !menu),
+    story: plain,
     at,
-    hour: hour !== null && hour !== '' && Number.isFinite(Number(hour)) ? Number(hour) : part ? part.hour : plain || fight ? PLAY_HOUR : null,
+    hour: hour !== null && hour !== '' && Number.isFinite(Number(hour)) ? Number(hour) : part ? part.hour : fight ? PLAY_HOUR : null,
     fight,
     part: part?.id ?? null,
     extent: (q.get('extent') as RomeExtent) === 'city' ? 'city' : 'core',
@@ -110,7 +115,7 @@ export async function startRome(game: Game, uiRoot: HTMLElement, params: RomePar
   registerAtlasLocations(game);
   registerMarkerResolvers(game);
   const audio = installGameAudio(game);
-  const opts: FlowOptions = { quick: params.quick, at: params.at, hour: params.hour, character: params.character, audio };
+  const opts: FlowOptions = { quick: params.quick, story: params.story, at: params.at, hour: params.hour, character: params.character, audio };
   const flow = new GameFlow(game, ui, rpg, opts);
   game.flow = flow;
   game.addSystem(flow);
@@ -130,7 +135,7 @@ export async function startRome(game: Game, uiRoot: HTMLElement, params: RomePar
     ui.block('loading', false);
     void loading.done();
     // The shareable build's first view: a welcome card with the keys that matter.
-    if (params.at === PLAY_SPAWN && shouldWelcome(location.search)) void showWelcome(game, ui.root);
+    if (params.story && shouldWelcome(location.search)) void showWelcome(game, ui.root);
     if (params.fight) void startBout(game, params.fight);
     const cp = checkpoint(params.part);
     if (cp) void applyCheckpoint(game, cp);

@@ -4,7 +4,8 @@
  * by the street ahead of you; when you come near they step out and demand your purse ("Purse or
  * blood, friend"). Pay, and they melt back into the dark; refuse, walk on or draw steel, and it's a
  * fight (they flee at low health, §13.1). One encounter at a time, each street at most once a night
- * (counted once they step out), never while you are fighting, talking or in a menu, never in the
+ * (counted once they step out), never during the story's opening night (Act I, chapters 1–3),
+ * never while you are fighting, talking or in a menu, never in the
  * first 20 s of a game or the 20 s after a fight. A pair you walk past without meeting slips away
  * and frees the way for the next street.
  *
@@ -176,9 +177,19 @@ export class StreetDanger {
     return !flow || flow.state === 'playing';
   }
 
+  /**
+   * The opening night of the story (Act I, chapters 1–3: the gate, the tablet, the Lemuria): the
+   * muggers stay home, so every fight in it belongs to the story (docs/STORY.md rule 2).
+   */
+  private storyNight(): boolean {
+    const q = this.game.quests;
+    if (!q?.status) return false;
+    return ['mq-01-madida-capena', 'mq-02-tabella', 'mq-03-lemuria'].some((id) => !!q.status(id)?.running);
+  }
+
   private busy(): boolean {
     const g = this.game;
-    if (this.combat.core.playerInCombat || !this.playing()) return true;
+    if (this.combat.core.playerInCombat || !this.playing() || this.storyNight()) return true;
     if (g.ui?.top) return true;
     // Another fight nearby (a quest's, the watch's).
     return this.combat.core.list.some((c) => !c.isPlayer && c.active && !!c.target);

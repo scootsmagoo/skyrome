@@ -39,7 +39,7 @@ import type { BookView, ContainerView } from '../ui/types';
 import { CONTAINERS, CONTAINER_STYLES, STREET_CONTAINERS, routePoint, type ContainerKind, type ContainerSpec } from './containers';
 import { frontOf, Placer, pushOutOfFootprints, refreshQueries, solidLandmarkAt, type Spot, type WallHit } from './ground';
 import { lampSpecs, type LampSpec } from './lamps';
-import { MUS_HIDEOUT, mirrorLandmarkSpots, syncAliases } from './places';
+import { GEMELLUS_HIDEOUT, MUS_HIDEOUT, mirrorLandmarkSpots, syncAliases } from './places';
 import { projectOnPath, onPath } from './route';
 import { installServices } from './services';
 import { SHRINES, type ShrineSpec } from './shrines';
@@ -845,11 +845,17 @@ export function syncMusHideout(game: Game) {
   if (!loc) return;
   const flags = game.quests?.flags;
   const st = game.quests?.status?.('mq-02-tabella');
-  const hunting = !!st?.running && (st.stage === 'mus' || st.stage === 'deliver');
+  const hunting = !!st?.running && st.stage === 'mus';
   const want = !flags?.get('mus-fate') && (flags?.get('hideout-known') === true || hunting);
   const has = !!loc.get(MUS_HIDEOUT.id);
   if (want && !has) loc.add(MUS_HIDEOUT);
   else if (!want && has) loc.remove?.(MUS_HIDEOUT.id);
+  // Gemellus hides in Tryphon's back room from the Lemuria rite until he hands over the key (mq-03).
+  const m3 = game.quests?.status?.('mq-03-lemuria');
+  const hiding = !!m3?.running && (m3.stage === 'clues' || m3.stage === 'gemellus');
+  const hasG = !!loc.get(GEMELLUS_HIDEOUT.id);
+  if (hiding && !hasG) loc.add(GEMELLUS_HIDEOUT);
+  else if (!hiding && hasG) loc.remove?.(GEMELLUS_HIDEOUT.id);
 }
 
 /**
@@ -944,7 +950,7 @@ export function installContent(game: Game): ContentService {
         if (e.name === 'hideout-known' || e.name === 'mus-fate') syncMusHideout(game);
       }),
       ev.on('quest:stage', (e) => {
-        if (e.questId === 'mq-02-tabella') syncMusHideout(game);
+        if (e.questId === 'mq-02-tabella' || e.questId === 'mq-03-lemuria') syncMusHideout(game);
       }),
     );
   }

@@ -1,21 +1,22 @@
 /**
- * The main-quest thread of v0.1 (docs/CONTENT.md §3.1.1–§3.1.2): Festus on the cart, Festus
- * dying, the carter Dromo (mq-01); Philetus at the shut doors is in vendors.ts. Chrysippus, Gratus
- * (day and dusk), Mus in the burned taberna and the optio Verecundus (mq-02, and the law after the
- * brawl) follow. Quests react to node ids, not to texts:
+ * The main quest's people in Act I (docs/STORY.md): Festus on the cart and dying in the road, the
+ * carter Dromo, Chrysippus who keeps the strongrooms of Castor, Gratus (by day, at dusk and through
+ * the Lemuria night), Mus in the burned taberna, and the optio Verecundus. Each scene says plainly
+ * who wants what, why, and where to go next. Quests react to node ids, not to texts:
  *
- *   npc-festus      cartEnd (talk-festus), warned, dyingEnd (the tablet is his last gift)
+ *   npc-festus      cartEnd (talk-festus), d1 (the tablet), dyingEnd
  *   npc-dromo       sawIt (ask-dromo)
  *   npc-chrysippus  fetch (Gratus comes out)
- *   npc-gratus      gratusDay (the clue), dusk → delivered
- *   npc-mus         surrender, attack, tellAll
- *   npc-verecundus  lawFine / lawClear (misc-meta-sudans-rixa)
+ *   npc-gratus      gratusDay (mq-02 talk), delivered (mq-02 give), warnEnd (mq-03 warn)
+ *   npc-mus         surrender, tellAll, attack
+ *   npc-verecundus  report
  */
-import { completed, female, hourNow, origin, outcome, rotate, running, stage } from '../../content/talk';
+import { completed, dusk, origin, rotate, running, stage } from '../../content/talk';
 import { defineDialogue, type DialogueContext } from '../types';
 
 const MQ1 = 'mq-01-madida-capena';
 const MQ2 = 'mq-02-tabella';
+const MQ3 = 'mq-03-lemuria';
 
 // ------------------------------------------------------------------ Festus
 
@@ -27,13 +28,14 @@ const festus = defineDialogue({
     const s = stage(c, MQ1);
     if (s === 'dying') return 'd0';
     if (s === 'ambush') return 'fighting';
-    if (s === 'start' || s === 'gate') return c.memory.met ? 'again' : 'n0';
+    if (s === 'start') return c.memory.met ? 'again' : 'n0';
+    if (s === 'gate') return 'walking';
     return 'dead';
   },
   nodes: {
-    // ---- on the cart (dlg-mq01-festus-cart)
+    // ---- on the cart, before dawn
     n0: {
-      text: 'Awake? Good. The carter swears we’ll be through the gate before the cocks start. First time in Rome?',
+      text: '(A man in a travel-stained courier’s cloak sits up as the cart jolts.) Awake? Good. The carter swears we’ll be through the gate before the cocks start. First time in Rome?',
       effects: (c) => {
         c.memory.met = true;
       },
@@ -47,66 +49,85 @@ const festus = defineDialogue({
     },
     n1: { text: 'Then hold on to your purse and your hat. Rome takes both and says thank you.', next: 'n2' },
     n1s: { text: 'Then you know the rules better than I do. Don’t walk under windows after dark.', next: 'n2' },
-    n1v: { text: 'Then you’ll find it grown. A new forum, new baths, and a column with your whole war carved on it.', next: 'n2' },
+    n1v: { text: 'Then you’ll find it grown. A new forum, new baths, and a column with your whole war carved on it. They dedicate it tomorrow.', next: 'n2' },
     n1d: { speaker: 'player', text: '(Festus is quiet for a moment.)', next: 'n1d2' },
-    n1d2: { text: 'Then I won’t tell you about the column. You’ll see it soon enough. I’m sorry.', effects: (c) => c.changeDisposition(5), next: 'n2' },
+    n1d2: { text: 'Then I won’t tell you about the column they dedicate tomorrow. You’ll see it soon enough. I’m sorry.', effects: (c) => c.changeDisposition(5), next: 'n2' },
     n1h: { text: 'Corduba! The emperor’s own people. They’ll treat you like a cousin, and charge you like one.', next: 'n2' },
     n2: {
-      text: 'I carry letters for the imperial post. Don’t ask me what’s in them. I’m paid not to know.',
+      text: 'Festus. I ride for the imperial post: a frumentarius, a soldier who carries Caesar’s letters. (He glances back down the dark road, and not for the first time.)',
       choices: [
-        { text: 'Who do you carry them for?', once: true, goto: 'n3' },
-        { text: 'Is it dangerous work?', once: true, goto: 'n4' },
+        { text: 'What are you carrying?', once: true, goto: 'n3' },
+        { text: 'You keep looking back down the road.', once: true, goto: 'n4' },
         { text: 'Who’s waiting for you in Rome?', once: true, goto: 'n5' },
-        { text: 'Rest. We’re nearly there.', goto: 'cartEnd' },
+        { text: 'We’re nearly at the gate.', goto: 'ask' },
       ],
     },
-    n3: { text: 'For a camp on the Caelian. Men who read other men’s letters for a living. Tonight I’m only a tired soldier on a wine cart.', next: 'n2' },
-    n4: { text: 'On the road, no. Near home, sometimes. Rome is the only city where I sleep with my boots on.', next: 'n2' },
+    n3: {
+      text: '(He touches his belt, not the satchel on his shoulder.) A sealed tablet for my centurion. It came from the East by ship to Brundisium, and I’ve ridden nine days to have it here before the dedication. What’s in it is his business. I’m paid not to know.',
+      next: 'n2',
+    },
+    n4: {
+      text: 'Two riders. They joined the road at Bovillae and they’ve kept our pace ever since: never passed us, never fell behind. Men on good horses don’t trot behind a wine cart for twenty miles. Not unless they’re waiting for something.',
+      effects: (c) => c.setFlag('festus-followed', true),
+      next: 'n2',
+    },
     n5: {
-      text: 'My mother, my father, and my brother, if he’s ever home. My twin. He copies books in the Velabrum. People mix us up; he hates it.',
+      text: 'My mother and father, in the Velabrum. And my brother, if he’s ever home. My twin, Gemellus. He copies books, and people mix us up. He hates it.',
       effects: (c) => c.setFlag('festus-mentioned-twin', true),
       next: 'n2',
     },
-    again: {
-      text: 'The gate is just ahead, under the arches. Walk with me. I like to see a street before I step into it.',
+    ask: {
+      text: 'Then do me a favour. Walk through the gate with me. Two are harder to knife than one, and I’d rather not find out alone why those riders are so patient. There’s a denarius in it, and a cup of wine after.',
       choices: [
-        { text: 'What are you carrying?', goto: 'n2' },
+        { text: 'I’ll walk with you.', goto: 'cartEnd' },
+        { text: 'Keep your denarius. I’ll walk with you anyway.', goto: 'cartEnd', effects: (c) => c.changeDisposition(5) },
+      ],
+    },
+    again: {
+      text: 'The gate’s just ahead, under the aqueduct. Walk with me? I don’t like the road behind us.',
+      choices: [
+        { text: 'What are you carrying?', once: true, goto: 'n3' },
         { text: 'Let’s go.', goto: 'cartEnd' },
       ],
     },
-    cartEnd: { text: '(He nods at the dark arches ahead and walks on beside the cart.) Keep left, under the arch. Nobody stands in the drip.', end: true },
+    cartEnd: { text: '(He climbs down and loosens the knife at his belt.) Good. Keep to the left under the arch. Nobody stands in the drip.', end: true },
+    walking: { text: 'Stay close. Through the arch and we’re in the city, and as safe as anyone is in Rome.', end: true },
 
     // ---- in the road, under the arch (the knife-men are on you)
-    fighting: { text: '(The courier is on his knees, a hand pressed to his side.) Behind you!', end: true },
+    fighting: { speaker: 'player', text: '(Festus is down in the road, a hand pressed to his side.) “Behind you!”', end: true },
 
-    // ---- dying (dlg-mq01-festus-dying)
-    d0: { text: 'Stranger… no, don’t press it. It’s deep.', next: 'd1' },
+    // ---- dying
+    d0: { text: '(Festus lies in the road with water from the arch dripping on his face.) You’re alive. Good. Listen, I haven’t long.', next: 'd1' },
     d1: {
-      text: 'Take this. Sealed. The strongrooms under Castor’s temple, in the Forum. Ask for Gratus. Only Gratus.',
+      text: '(He pushes a sealed wax tablet into your hand.) Take it. They knew my road and my hour, and only my own camp knew those. So don’t take it to the camp.',
       effects: (c) => {
         if (!c.hasItem('quest-tabella-signata')) c.giveItem('quest-tabella-signata');
       },
+      next: 'd1b',
+    },
+    d1b: {
+      text: 'Gratus. My centurion. He keeps an office in the strongrooms under the Temple of Castor, in the Forum. Give it to him and to nobody else. Only Gratus.',
       choices: [
         { text: 'Who did this to you?', goto: 'd2' },
-        { text: 'I’ll take it to him.', goto: 'd3' },
         { text: 'Why trust me?', goto: 'd2b' },
+        { text: 'I’ll take it to Gratus.', goto: 'd3' },
       ],
     },
     d2: {
-      text: 'Hired knives. The one behind me fought like a gladiator. Curved blade. They took my satchel; let them have it. They didn’t get the tablet.',
+      text: 'The hooded one. A curved blade, once, up from under, the way gladiators finish a man. He grabbed my satchel and ran, the fool. There’s nothing in it but a spare tunic.',
       effects: (c) => c.setFlag('clue-curved-blade', true),
       next: 'd3',
     },
-    d2b: { text: 'Because you stayed. Everyone else in this city would have run.', next: 'd3' },
+    d2b: { text: 'Because you stayed. Anyone else in this city would have run.', next: 'd3' },
     d3: {
-      text: 'Tell my mother… tell her it was quick. Lie, if you have to. The Marii, behind the Vicus Tuscus, in the Velabrum.',
+      text: 'And my mother… The Marii, lamp-makers, in the Velabrum. Tell her it was quick. Lie, if you have to.',
       effects: (c) => c.setFlag('festus-family-known', true),
       choices: [
         { text: 'I’ll tell her myself.', goto: 'dyingEnd', effects: (c) => c.setFlag('promised-festus', true) },
         { text: 'Rest now.', goto: 'dyingEnd' },
       ],
     },
-    dyingEnd: { speaker: 'player', text: '(Festus does not answer. The water from the arch keeps falling on his face.)', end: true },
+    dyingEnd: { speaker: 'player', text: '(Festus does not answer. The water from the arch keeps falling on his face. Your next step is the Forum: Gratus, under the Temple of Castor.)', end: true },
 
     // ---- afterwards
     dead: { speaker: 'player', text: '(The courier is dead. Someone has put a coin in his mouth for the ferryman.)', end: true },
@@ -121,14 +142,14 @@ const dromo = defineDialogue({
   priority: 80,
   start: (c) => {
     const s = stage(c, MQ1);
-    if (s === 'dying' || s === 'city') return 'n0';
+    if (s === 'dying') return 'n0';
     if (s === 'ambush') return 'hiding';
     if (s === 'start' || s === 'gate') return 'night';
     return completed(c, MQ1) ? 'after' : 'greet';
   },
   nodes: {
     night: {
-      text: 'Last cart before dawn, and they give me marble for the Forum of Trajan! My axle sings like a Greek, Mehercle. (He jerks his chin at the courier.) That one rode with me from Bovillae. Paid in silver, said nothing. I don’t like men who say nothing.',
+      text: 'Last cart before dawn, and they give me marble for the Forum of Trajan! My axle sings like a Greek, Mehercle. (He jerks his chin at the courier.) That one rode with me from Bovillae and kept looking back the whole way. I don’t like a passenger who watches the road.',
       choices: [
         { text: 'Why is everything so wet?', goto: 'wet', once: true },
         { text: 'Why do the carts only come at night?', goto: 'carts', once: true },
@@ -143,18 +164,16 @@ const dromo = defineDialogue({
       choices: [
         { text: 'Did you see who did it?', goto: 'n1' },
         { text: 'Which way is the Forum?', goto: 'n2' },
-        { text: 'You should tell the watch.', goto: 'n3' },
         { text: 'Go home, Dromo.', end: true },
       ],
     },
     n1: {
-      text: 'Three of them. The one who did the knifing wore a hood and walked like a fighter, up on his toes. He took the soldier’s bag and ran toward the Circus.',
+      text: 'Three of them, waiting under the arch like they knew the hour. The one who did the knifing wore a hood and walked like a fighter, up on his toes. He took the soldier’s bag and ran up the valley, toward the Circus.',
       effects: (c) => c.setFlag('clue-hooded-fighter', true),
       next: 'sawIt',
     },
     sawIt: { text: '(He wipes his hands on his tunic.) That’s all I know. All of it. I swear by Mercury and by my mules.', next: 'n0' },
-    n2: { text: 'Up the valley, under the palace, Circus on your left. At the far end the Vicus Tuscus takes you straight into the Forum. You can’t miss it: it’s where all the shouting is.', next: 'n0' },
-    n3: { text: 'The watch? The watch will ask what a slave was doing out at… oh. Carts are allowed at night. Right. Still. I’ll have a drink first.', next: 'n0' },
+    n2: { text: 'Up the valley, under the palace, with the Circus on your left. At the far end the Vicus Tuscus takes you straight into the Forum. You can’t miss it: it’s where all the shouting is.', next: 'n0' },
     greet: { text: 'Out of the road, I’m resting. Carts by night, sleep by day. That’s the law.', end: true },
     after: {
       text: (c) => rotate(c, 'dromoAfter', ['(He’s drinking, and telling it for the fourth time.) …and the hooded one walked like a fighter! A fighter, I tell you!', 'A man died at the gate. Nobody’s mule will stop there now.', 'Wine for the Velabrum, lime for the Pantheon, and corpses for the gods. Busy night.']),
@@ -168,40 +187,42 @@ const dromo = defineDialogue({
 
 // ------------------------------------------------------------------ Chrysippus
 
+const showSeal = (c: DialogueContext) => c.hasItem('quest-tabella-signata');
+
 const chrysippus = defineDialogue({
   id: 'npc-chrysippus',
   npcs: ['npc-chrysippus'],
   priority: 70,
-  start: (c) => (stage(c, MQ2) === 'loculi' ? 'n0' : completed(c, MQ2) ? 'after' : 'idle'),
+  start: (c) => (stage(c, MQ2) === 'start' ? 'n0' : completed(c, MQ2) || running(c, MQ3) ? 'after' : 'idle'),
   nodes: {
     n0: {
-      text: 'Deposits on the left, withdrawals on the right. Which are you?',
+      text: '(A thin man with a ring of keys at his belt looks up from a ledger.) The strongrooms of Castor. Deposits on the left, withdrawals on the right. Which are you?',
       choices: [
-        { text: 'Neither. I’m looking for Gratus.', goto: 'n1' },
-        { text: '(Show him the seal.)', if: (c) => c.hasItem('quest-tabella-signata'), goto: 'n4' },
+        { text: 'I’m looking for a man called Gratus. A centurion.', goto: 'n1' },
+        { text: '(Show him the seal on Festus’ tablet.)', if: showSeal, goto: 'n4' },
       ],
     },
     n1: {
-      text: 'Gratus? There is no Gratus. There has never been a Gratus. Who sent you?',
+      text: 'Then you’re asking the wrong man. Who keeps a box down here, and who doesn’t, is between them and me. That’s what they pay me for.',
       choices: [
-        { text: 'A courier sent me, with his last breath. Fetch him.', check: { skill: 'rhetoric', difficulty: 25, pass: 'n2', fail: 'n3' } },
-        { text: 'Fetch him, or I’ll count your keys for you.', check: { skill: 'rhetoric', difficulty: 25, kind: 'intimidate', label: 'Intimidate', pass: 'n2', fail: 'n3' } },
+        { text: '(Show him the seal on Festus’ tablet.)', if: showSeal, goto: 'n4' },
+        { text: 'A courier was killed at the Capena Gate this morning. With his last breath he sent me to Gratus.', check: { skill: 'rhetoric', difficulty: 25, pass: 'n2', fail: 'n3' } },
         { text: 'For your trouble. (Bribe)', bribe: { amount: 6, goto: 'n2' } },
       ],
     },
-    n2: { text: '…Wait here. Touch nothing. Nothing!', next: 'fetch' },
-    n3: { text: 'Out. Out, before I call the—', next: 'n3b' },
-    n3b: { speaker: 'player', text: '(A door opens behind him. A grey-haired man in a soldier’s belt steps out.) “Who said Festus?”', next: 'fetch' },
-    n4: { speaker: 'player', text: '(Chrysippus goes white at the impression in the wax: a horseman with a raised spear.) “That’s… wait. Wait here.”', next: 'fetch' },
-    fetch: { speaker: 'player', text: '(The keeper hurries into the back, his keys jangling like a goat’s bells.)', end: true },
+    n2: { text: '(He looks at you for a long moment.) …Wait here. Touch nothing.', next: 'fetch' },
+    n3: { text: 'People die in Rome every morning, friend. Good day.', next: 'n3b' },
+    n3b: { speaker: 'player', text: '(A door opens behind him. A grey-haired man with a soldier’s belt steps out of the dark.) “Who said courier?”', next: 'fetch' },
+    n4: { speaker: 'player', text: '(Chrysippus looks at the wax: a horseman with a raised spear, the couriers’ seal. He goes pale.) “Wait here.”', next: 'fetch' },
+    fetch: { speaker: 'player', text: '(He hurries into the back, his keys jangling like a goat’s bells. Gratus is coming.)', end: true },
     after: {
-      text: 'Lockers by the month, a denarius a month, paid in advance. The keepers answer for the lockers, not for what is in them. Mind the step. Eleven steps. I counted them in the year of Nerva.',
+      text: 'Lockers by the month, a denarius a month, paid in advance. The keepers answer for the lockers, not for what’s in them. Mind the step. Eleven steps. I counted them in the year of Nerva.',
       choices: [
         { text: 'What is kept here?', goto: 'what', once: true },
         { text: 'Vale.', end: true },
       ],
     },
-    what: { text: 'Bankers’ cash. Widows’ wills. Men’s secrets they don’t want at home. The temple is shut. The money is not. Money never sleeps.', next: 'after' },
+    what: { text: 'Bankers’ cash. Widows’ wills. Men’s secrets they don’t want at home. The temple shuts for the Lemuria. The money doesn’t. Money never sleeps.', next: 'after' },
     idle: {
       text: 'Deposits on the left, withdrawals on the right, complaints to the gods. (He doesn’t look up from his ledger.) Eleven steps. Mind them.',
       end: true,
@@ -216,85 +237,139 @@ const gratus = defineDialogue({
   npcs: ['npc-gratus'],
   priority: 90,
   start: (c) => {
-    const s = stage(c, MQ2);
-    if (s === 'deliver') return c.hasItem('quest-tabella-signata') ? 'dusk0' : 'noTablet';
-    if (s === 'gratus') return 'day0';
-    if (s === 'mus') return 'waiting';
-    return completed(c, MQ2) ? 'after' : 'idle';
+    const s2 = stage(c, MQ2);
+    if (s2 === 'gratus') return 'day0';
+    if (s2 === 'ludus') return 'toLudus';
+    if (s2 === 'mus' || s2 === 'satchel') return 'toMus';
+    if (s2 === 'dusk') return !dusk(c) ? 'notYet' : c.hasItem('quest-tabella-signata') ? 'dusk0' : 'noTablet';
+    const s3 = stage(c, MQ3);
+    if (s3 === 'warn') return 'warn0';
+    if (s3) return 'waitKey';
+    return completed(c, MQ3) ? 'after' : 'idle';
   },
   nodes: {
-    // ---- daylight (dlg-mq02-gratus-day)
+    // ---- by day: Festus' news, and what to do about it
     day0: {
-      text: 'You have something of Festus’. Don’t take it out. Tell me how he died.',
+      text: '(A grey-haired man in a soldier’s belt comes out of the back, wiping ink from his fingers.) Chrysippus says you have something with Festus’ seal on it. Don’t take it out. Where’s Festus?',
+      choices: [{ text: 'Dead. Knifed under the Capena Gate before dawn. He sent me to you with his tablet.', goto: 'day1' }],
+    },
+    day1: {
+      text: '(He is quiet for a moment.) Nine days on the road, and they kill him at the gate. How?',
       choices: [
-        { text: 'Knifed under the Capena arch. Three men; one fought like a gladiator.', goto: 'day1' },
-        { text: 'He said it was a curved blade.', if: (c) => !!c.flag('clue-curved-blade'), goto: 'day1c' },
-        { text: 'Take the tablet and let me go.', goto: 'day2' },
+        { text: 'Three men were waiting under the arch. A hooded one with a curved blade stabbed him once, up from under, and ran off with his satchel.', goto: 'day2' },
+        { text: 'He said two riders had followed his cart since Bovillae.', if: (c) => !!c.flag('festus-followed'), once: true, goto: 'day1b' },
       ],
     },
-    day1: { text: 'A gladiator. In the Velabrum they hire the ones the Ludus throws out.', next: 'day3' },
-    day1c: { text: 'Curved. A sica. Then a thraex, or a man who learned from one.', effects: (c) => c.changeDisposition(5), next: 'day3' },
-    day2: { text: 'Not in daylight. A dispatch is never carried across the Forum by day. Keep it in your belt. Nobody looks twice at a stranger; everybody looks at me.', next: 'day3' },
+    day1b: { text: 'Then they knew he was coming, and from where. That makes it worse, not better. Go on: how did he die?', next: 'day1' },
+    day2: {
+      text: 'Waiting for him. Under the arch. At the very hour he came in. (He says the next part slowly.) Festus’ road and his hour were known in one place only: our camp, on the Caelian. Someone there sold him.',
+      next: 'day3',
+    },
     day3: {
-      text: 'Go to the Ludus Magnus, past the amphitheatre. Ask Glaucus, the doctor there, who uses that stroke. Prove yourself useful, and come back after the lamps are lit.',
+      text: 'So I can’t take that tablet from you here. Half the informers in Rome drink on these steps. If they see me take it, whoever paid for Festus knows it reached me. Keep it in your belt. Bring it back after sunset, when the Forum is empty and the lamps are lit.',
       choices: [
-        { text: 'Why should I do your work for you?', goto: 'day4' },
-        { text: 'I’ll go.', goto: 'gratusDay' },
+        { text: 'Who are you, exactly?', once: true, goto: 'who' },
+        { text: 'And until sunset?', goto: 'day4' },
       ],
     },
-    day4: { text: 'Because Festus trusted you, and he was a good judge of men. And because you’ll be paid.', next: 'gratusDay' },
-    gratusDay: { speaker: 'player', text: '(Gratus turns back toward the strongrooms without another word.)', end: true },
-    waiting: {
+    who: { text: 'Aulus Vettulenus Gratus, centurion of the frumentarii. Caesar’s couriers: we carry his letters, and sometimes we read other people’s. Festus was one of mine. The best rider in the camp.', next: 'day3' },
+    day4: {
+      text: 'Until sunset, do something for Festus. A curved blade, up from under: that’s how a thraex finishes a man on his knees. A gladiator’s stroke. The Ludus Magnus, the gladiator school beside the Amphitheatre, trains Caesar’s thraeces. Ask for Glaucus, their chief trainer. He knows every man who ever held a curved sword in this city. Get me a name.',
+      choices: [
+        { text: 'Why me?', goto: 'day5' },
+        { text: 'I’ll go to the Ludus.', goto: 'gratusDay' },
+      ],
+    },
+    day5: { text: 'Because nobody in Rome knows your face yet. Because you stayed with him when anyone else would have run. And because I’ll pay you.', next: 'gratusDay' },
+    gratusDay: { speaker: 'player', text: '(Gratus turns back into the dark of the strongrooms. Next: Glaucus, at the Ludus Magnus beside the Amphitheatre.)', end: true },
+
+    // ---- while you hunt
+    toLudus: { text: 'Not here, not now. The Ludus Magnus, past the Amphitheatre: ask for Glaucus. Come back after sunset.', end: true },
+    toMus: {
       text: (c) =>
-        hourNow(c) < 19
-          ? 'The lamps aren’t lit. Come back when they are, and bring it with you. (He nods toward the street.) Ask at the Ludus about that stroke, if you haven’t.'
-          : 'You’re early. Wait. Let the Forum empty first.',
+        c.hasItem('quest-sacculum-festi')
+          ? 'You have his satchel. Good. Keep it, and the tablet, until the lamps are lit.'
+          : 'The Mouse? Then find him before he hears you’re asking. And bring back what he took from Festus. After sunset, here.',
       end: true,
     },
-    // ---- dusk (dlg-mq02-gratus-dusk)
+    notYet: { text: 'The lamps aren’t lit. Wait until the Forum empties; I’ll be here. (Press T to wait until after sunset.)', end: true },
     noTablet: { text: 'Where is the tablet? …You didn’t lose it. Tell me you didn’t lose it.', end: true },
+
+    // ---- at dusk: the tablet
     dusk0: {
-      text: 'You came back. Most don’t. The tablet.',
+      text: 'You came back. Most don’t. Give it here.',
       choices: [{ text: '(Give him the tablet.)', goto: 'dusk1', effects: (c) => void c.takeItem('quest-tabella-signata') }],
     },
-    dusk1: { speaker: 'player', text: '(He checks the seal against the lamp, then breaks it.)', next: 'dusk2' },
+    dusk1: { speaker: 'player', text: '(He checks the seal against the lamp, breaks it, and reads. His face doesn’t change, which tells you something.)', next: 'dusk2' },
     dusk2: {
-      text: 'Festus’ own cipher. Of course. His brother would have the key, and his brother has been missing since the Ides of April.',
+      text: 'Addressed to our chief, Pudens, and written in Festus’ own cipher: letters that make no words. He didn’t trust the camp’s codes either. He was right not to.',
       choices: [
-        { text: 'I found his satchel. And the man who took it.', if: (c) => c.hasItem('quest-sacculum-festi'), goto: 'dusk3' },
-        { text: 'What does it say?', goto: 'dusk4' },
+        { text: 'I have his satchel. Mus had it, and there’s a coin in it you should see.', if: (c) => c.hasItem('quest-sacculum-festi'), goto: 'dusk2s' },
+        { text: 'Can you read it?', goto: 'dusk3' },
       ],
     },
-    dusk3: {
-      text: 'Mus. Dead or running, it comes to the same thing for now. (He turns the scraped tablet over, then the silver coin.) A Parthian drachm. In a Roman knife-man’s purse. (He looks at you for a long moment.)',
+    dusk2s: {
+      text: '(He turns the coin over under the lamp.) A drachm of King Osroes. Parthian silver, in a Roman knife-man’s bag. So that’s who paid for Festus. Or who paid the men who paid.',
       effects: (c) => {
         c.takeItem('quest-sacculum-festi');
+        c.takeItem('quest-drachma-parthica');
         c.receive(25);
         c.game.standing?.addFame('dist-forum-romanum', 5);
         c.setFlag('gratus-has-drachm', true);
       },
+      next: 'dusk3',
+    },
+    dusk3: {
+      text: 'No. Festus had a twin, Gemellus, a copyist. As boys they wrote each other notes in a cipher of their own, and Festus used it for anything he didn’t want the camp to read. Only Gemellus can read this. And Gemellus has been missing since the Ides of April.',
       next: 'dusk4',
     },
-    dusk4: { text: 'It says nothing until I have the key. But tomorrow is the Column, and Festus rode nine days to be here before it.', next: 'dusk5' },
+    dusk4: {
+      text: 'Tonight is the Lemuria. At midnight every family in Rome throws black beans to send its dead away, and Festus’ family will be up for it: the Marii, lamp-makers, in the Velabrum. Go to them. You promised him you’d tell his mother. And find out where his brother has gone. When you have the key, bring it here. I’ll wait all night.',
+      next: 'dusk5',
+    },
     dusk5: {
-      text: 'Take this token. Show it at the camp on the Caelian if you’re ever asked who you are. And take this, for the courier’s burial; see that his family get some of it.',
+      text: 'Take this: my token. It will get you into our camp on the Caelian when the time comes. And this, for Festus’ family. See that they get some of it.',
       effects: (c) => {
         c.giveItem('quest-tessera-peregrina');
         c.receive(25);
       },
       choices: [
         { text: 'I promised him I’d tell his mother.', if: (c) => !!c.flag('promised-festus'), goto: 'dusk6' },
-        { text: 'Until tomorrow.', goto: 'delivered' },
+        { text: 'I’ll go to the Marii.', goto: 'delivered' },
       ],
     },
-    dusk6: { text: 'Then keep your promise. Not tonight, though; tonight the Velabrum belongs to the dead.', next: 'delivered' },
-    delivered: { speaker: 'player', text: '(Gratus pinches out the lamp. “Tomorrow, the Column.”)', end: true },
+    dusk6: { text: 'Then keep your promise. Tonight of all nights.', next: 'delivered' },
+    delivered: { speaker: 'player', text: '(Gratus locks the tablet in a strongbox and turns the key. Next: the Marii’s house in the Velabrum.)', end: true },
+
+    // ---- the Lemuria night
+    waitKey: { text: 'Have you found the brother? Find Gemellus, find the key. The dedication is at dawn.', end: true },
+    warn0: {
+      text: 'You’re back, and you look like a man who’s read something. Well?',
+      choices: [{ text: '(Show him Festus’ message, read with Gemellus’ key.)', goto: 'warn1' }],
+    },
+    warn1: {
+      text: '(He reads it twice under the lamp.) “At the dedication, a bow in the high place.” Tomorrow Caesar dedicates his Column and stands at its foot before all Rome. The high place is the Column itself: there’s a viewing platform at the top, a hundred feet up.',
+      next: 'warn2',
+    },
+    warn2: {
+      text: (c) =>
+        c.flag('gratus-has-drachm')
+          ? '“Money from the East, through the Pepper Warehouses.” The same Parthian silver that paid your Mouse. Somebody on the Via Sacra is changing it into Roman knives.'
+          : '“Money from the East, through the Pepper Warehouses.” Parthian silver, changed into Roman knives somewhere on the Via Sacra.',
+      next: 'warn3',
+    },
+    warn3: {
+      text: 'I’ll have men on every roof around Trajan’s Forum, and two on the Column’s stair. And you: be in the Forum of Trajan at dawn. You’ve earned the right to see this through.',
+      next: 'warnEnd',
+    },
+    warnEnd: { speaker: 'player', text: '(Gratus pinches out the lamp. “Tomorrow, the Column.”)', end: true },
+
     // ---- around it
     idle: {
       text: (c) => rotate(c, 'gratusIdle', ['Walk on. If you need me you’ll know where.', 'Every seal in Rome tells a story. Most of them lie.', 'Daylight is for honest men and fools.', 'Festus was the best rider in the camp. Remember that, if anyone asks.']),
       end: true,
     },
-    after: { text: 'You again. If you’ve nothing to carry, walk on. Tomorrow will want everyone’s eyes. Festus was the best rider in the camp. Remember that, if anyone asks.', end: true },
+    after: { text: 'Tomorrow will want everyone’s eyes. Festus was the best rider in the camp. Remember that, if anyone asks.', end: true },
   },
 });
 
@@ -304,34 +379,39 @@ const mus = defineDialogue({
   id: 'npc-mus',
   npcs: ['npc-mus'],
   priority: 90,
-  start: (c) => (c.memory.beaten ? 'beaten' : 'n0'),
+  start: (c) => (c.memory.beaten || c.flag('mus-fate') ? 'beaten' : 'n0'),
   nodes: {
     n0: {
-      text: 'Who sent you? Glaucus? Tell him the Mouse still bites. Thirty-one bouts, and he threw me out for a cloak.',
+      text: '(A wiry man with a torn ear sits on an upturned amphora, a curved sica across his knees.) Who sent you? Glaucus? Tell him the Mouse still bites. Thirty-one bouts, and he threw me out for a cloak.',
       choices: [
-        { text: 'I want the courier’s satchel.', goto: 'n1' },
-        { text: 'Give me the satchel and run. Now.', check: { skill: 'rhetoric', difficulty: 25, kind: 'intimidate', label: 'Intimidate', pass: 'surrender', fail: 'attack' } },
-        { text: 'Someone paid you to kill a courier. Who?', check: { skill: 'rhetoric', difficulty: 40, pass: 'tellAll', fail: 'attack' } },
+        { text: 'You knifed a courier at the Capena Gate this morning. I was there.', goto: 'n1' },
+        { text: 'Hand over the courier’s satchel, and run while you still can.', check: { skill: 'rhetoric', difficulty: 25, kind: 'intimidate', label: 'Intimidate', pass: 'surrender', fail: 'attack' } },
+        { text: 'Somebody paid you for that courier. Who?', check: { skill: 'rhetoric', difficulty: 40, pass: 'tellAll', fail: 'attack' } },
         { text: '(Draw steel.)', goto: 'attack' },
       ],
     },
-    n1: { text: 'The bag? Useless. Wax and a foreign coin. Take it off my body, if you can.', next: 'attack' },
+    n1: { text: 'You? (He laughs and stands.) Then you saw how it’s done. The bag’s in my box, and the box is mine. Come and take it.', next: 'attack' },
     surrender: {
-      text: '…Take it. Take the key too. I was never here.',
+      text: '…All right! All right. (He throws you a key.) For the box in the corner. The bag’s in it. I was never here.',
       effects: (c) => {
-        c.giveItem('clavis-cellae-muris');
-        c.setFlag('mus-fate', 'fled');
+        if (!c.hasItem('clavis-cellae-muris')) c.giveItem('clavis-cellae-muris');
         c.memory.beaten = true;
       },
       end: true,
     },
     tellAll: {
-      text: 'A man with Syrian silver, at the Pepper Warehouses. He never gave a name; men like that never do. Now get out of my cellar.',
+      text: 'A man paid me in strange silver, at the Pepper Warehouses on the Via Sacra. He wanted the courier dead and his letters burned. He never gave a name; men like that never do. Now take the key and get out of my cellar.',
       effects: (c) => c.setFlag('clue-piperataria', true),
       next: 'surrender',
     },
     attack: { text: 'Up from under, then.', effects: (c) => c.attack(), end: true },
-    beaten: { text: '(Dizas sits against the wall with his hands up.) The mice eat what the lions leave. Go on. Take what’s yours.', end: true },
+    beaten: {
+      text: '(Dizas sits against the wall with his hands up.) The mice eat what the lions leave. Go on. The key’s yours, and the box with it.',
+      effects: (c) => {
+        if (!c.hasItem('clavis-cellae-muris')) c.giveItem('clavis-cellae-muris');
+      },
+      end: true,
+    },
   },
 });
 
@@ -351,7 +431,7 @@ const verecundus = defineDialogue({
         { text: 'Vale.', end: true },
       ],
     },
-    report: { text: '(He writes on a tablet without looking at you.) A courier. A soldier’s courier, they say. Not our business: his own officers took the body before the second hour. If you know something, citizen, keep it to yourself. That’s advice.', effects: (c) => c.setFlag('mq01-reported', true), next: 'idle' },
+    report: { text: '(He writes on a tablet without looking at you.) A courier. A soldier’s courier, they say. Not our business: his own people took the body before the second hour. If you know something, citizen, keep it to yourself. That’s advice.', effects: (c) => c.setFlag('mq01-reported', true), next: 'idle' },
     tomorrow: { text: 'The Column. The Forum of Trajan closed from dawn, double watches on every street, and every pickpocket in Italy here for the crowd. Watch your purse.', next: 'idle' },
   },
 });

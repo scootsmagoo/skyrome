@@ -5,7 +5,7 @@
  * Hermippus the physician (patches you up and tells you to rest until the lamps are lit), the
  * procurator Celer and the tiro Pullus. Node ids the quest reacts to:
  *
- *   npc-glaucus      n0 (offer; starts the quest), signedGuest, signedOath
+ *   npc-glaucus      n1 (the offer; starts the quest), signedGuest, signedOath; named (mq-02's clue)
  *   npc-successus    issueScutum, issueParmula, issueOwn
  *   npc-asiaticus    begin1, begin2, begin3
  *   npc-auctus       mus (the clue; also completes mq-02 'ask')
@@ -34,22 +34,40 @@ const glaucus = defineDialogue({
   npcs: ['npc-glaucus'],
   priority: 80,
   start: (c) => {
+    // The main quest first: Gratus sent the player for a name (mq-02 'ludus').
+    if (stage(c, MQ2) === 'ludus' && !c.flag('clue-mus')) return 'mq0';
     const q = c.quest(LUD);
     if (q?.done) return 'd0';
     if (q?.running && q.stage !== 'start') return boutOn(c) ? 'fighting' : 'g0';
     return 'n0';
   },
   nodes: {
+    // ---- mq-02: who fights with a curved blade?
+    mq0: {
+      text: '(A scarred, grey-haired Thracian with a long practice stick looks you up and down.) You stand like a baker. What does a baker want with my school?',
+      choices: [{ text: 'A courier was knifed at the Capena Gate this morning. A curved blade, one stroke up from under. Gratus of the frumentarii wants the man’s name.', goto: 'mq1' }],
+    },
+    mq1: {
+      text: 'Up from under. (He spits in the sand.) That’s how a thraex finishes a man on his knees, when the crowd shouts Iugula. Nobody uses it in the street. Nobody but Dizas.',
+      next: 'named',
+    },
+    named: {
+      text: 'Dizas, the Mouse. A thraex of mine until last winter: good feet, quick hands, and the hands went into everybody’s purse. I threw him out for stealing from the sick-room. Now he runs a crew of knife-men out of a burned-out taberna off the Vicus Tuscus, near the Velabrum.',
+      effects: (c) => c.setFlag('clue-mus', true),
+      next: 'mq2',
+    },
+    mq2: {
+      text: 'Go carefully. He fights better than he looks, and he looks like a rat. (He taps your chest with the stick.) And when you’re done with him, come back if you ever want to earn silver on my sand. I take paying guests.',
+      end: true,
+    },
     n0: {
       text: 'Look at your feet. No, don’t look at them, I’m looking at them. You stand like a baker. What do you want, baker?',
       choices: [
-        { text: 'To fight.', goto: 'n1' },
-        { text: 'I’m looking for a man who fights with a curved blade.', if: (c) => stage(c, MQ2) === 'gratus', goto: 'n0b' },
+        { text: 'To fight on your sand.', goto: 'n1' },
         { text: 'To fight. Does that bother you?', if: female, goto: 'n0f' },
         { text: 'Just looking.', end: true },
       ],
     },
-    n0b: { text: 'Half my thraeces fight with a curved blade. Fight first, ask later; the ones who know won’t talk to a stranger.', next: 'n1' },
     n0f: { text: 'Bother me? Domitian had women fighting by torchlight, and the crowd nearly tore the benches out. They’ll love you twice as fast and the matrons will hate you twice as hard. That’s your business. Fighting is mine.', next: 'n1' },
     n1: {
       text: 'Two ways onto my sand. Guest: you fight for a purse, you go home at night, you’re nobody’s. Or the oath: “to be burned, bound, beaten and killed by the sword.” Sworn men get ranks, and a name the crowd knows. And a stain that never washes out.',
@@ -82,13 +100,11 @@ const glaucus = defineDialogue({
     d0: {
       text: 'Again? Good. Not today. Your arms are lying to you; they say they’re fine.',
       choices: [
-        { text: 'The man with the curved blade. Who?', if: (c) => stage(c, MQ2) === 'gratus' && !c.flag('clue-mus'), check: { skill: 'rhetoric', difficulty: 25, pass: 'd1', fail: 'd2' } },
+        { text: 'The man with the curved blade. Who?', if: (c) => stage(c, MQ2) === 'ludus' && !c.flag('clue-mus'), goto: 'named' },
         { text: 'Train me.', end: true, effects: (c) => c.openService('train') },
         { text: 'Farewell.', end: true },
       ],
     },
-    d1: { text: 'Ask Auctus about the Mouse. And don’t tell him I said so.', effects: (c) => c.setFlag('clue-mus', true), end: true },
-    d2: { text: 'I train fighters, not informers. Ask the thraeces yourself.', end: true },
   },
 });
 
@@ -178,7 +194,7 @@ const auctus = defineDialogue({
     b0: {
       text: 'After the bout, stranger. I don’t talk to people I haven’t hit.',
       choices: [
-        { text: 'A courier was knifed at the Capena Gate. Up from under, with a curved blade.', check: { skill: 'rhetoric', difficulty: 40, pass: 'mus', fail: 'b1' } },
+        { text: 'A courier was knifed at the Capena Gate. Up from under, with a curved blade.', if: (c) => stage(c, MQ2) === 'ludus' && !c.flag('clue-mus'), check: { skill: 'rhetoric', difficulty: 25, pass: 'mus', fail: 'b1' } },
         { text: 'After the bout, then.', end: true },
       ],
     },
@@ -186,7 +202,7 @@ const auctus = defineDialogue({
     a0: {
       text: 'Good bout. You parry like a man who’s been hit a lot. That’s a compliment.',
       choices: [
-        { text: 'A courier was knifed this morning with a stroke from below, a curved blade.', if: (c) => stage(c, MQ2) === 'gratus' || (!!c.flag('clue-curved-blade') && !c.flag('clue-mus')), goto: 'mus' },
+        { text: 'A courier was knifed this morning with a stroke from below, a curved blade.', if: (c) => stage(c, MQ2) === 'ludus' && !c.flag('clue-mus'), goto: 'mus' },
         { text: 'How do I beat Nereus?', goto: 'a1' },
         { text: 'Farewell.', end: true },
       ],

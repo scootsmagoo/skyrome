@@ -2,7 +2,7 @@
 
 Skyrome is a non-linear, Skyrim-style open-world action RPG set in Rome in AD 113, under Trajan. It runs in the browser on TypeScript, Three.js r186, Rapier 0.21 (WASM physics) and Vite 8. Everything is procedural: architecture, characters, textures and audio are generated in code or come from CC0 sources. The owner is new to game development. AI agents do most of the building.
 
-Design docs: `docs/GDD.md` (game design), `docs/CONTENT.md` (NPCs, quests, items), `docs/ATLAS.md` with `src/data/atlas.ts` (historical map data), `docs/ARCHITECTURE.md` (code structure), and `docs/research/` (background research).
+Design docs: `docs/STORY.md` (the story as played: Act I chapter by chapter, and the rules the story keeps; it wins over the other docs where they differ), `docs/GDD.md` (game design), `docs/CONTENT.md` (NPCs, quests, items), `docs/ATLAS.md` with `src/data/atlas.ts` (historical map data), `docs/ARCHITECTURE.md` (code structure), and `docs/research/` (background research).
 
 ## Commands
 - `npm run dev`: dev server on http://127.0.0.1:5173. Pick a scene with `?scene=<name>` (files in `src/scenes/`) and turn on the stats overlay with `?debug`. The console's `tdo` command toggles the overlay too.

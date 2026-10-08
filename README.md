@@ -4,7 +4,7 @@
 
 It's built in the spirit of *Skyrim* and *Oblivion*: a city you can walk anywhere in, historical places you can visit, period quests, factions, street fights, gladiators and bosses. The fantasy is turned way down. There are no dragons or fireballs. The "supernatural" is limited to what a Roman would have believed: omens, curse tablets, mystery cults, and the ghost nights of the Lemuria. Nothing is ever clearly real.
 
-The game opens at dawn on 11 May 113 at the Porta Capena. Trajan's Forum and Column have just been dedicated. The Pantheon is a construction site after the fire of 110. The emperor is preparing to leave for the Parthian war. You arrive with the last night cart, a courier is knifed beside you, and you're left holding his sealed tablet.
+The game opens at dawn on 11 May 113 at the Porta Capena. Trajan's Column is to be dedicated tomorrow. The Pantheon is a construction site after the fire of 110. The emperor is preparing to leave for the Parthian war. You arrive with the last night cart, a courier is knifed beside you, and you're left holding his sealed tablet.
 
 ![The architecture gallery: triumphal arches, the Column, a temple, the amphitheatre arcade, a domed hall and the classical orders](docs/images/architecture.jpg)
 
@@ -35,7 +35,9 @@ The game opens at dawn on 11 May 113 at the Porta Capena. Trajan's Forum and Col
 
 **https://scootsmagoo.github.io/skyrome/**
 
-The game opens straight into the Forum at mid-morning with a default character. There are no menus yet, and character creation is skipped while the game is being tested. Use desktop Chrome or Safari.
+The game opens with the story: Rome, 11 May AD 113, an hour before dawn. You arrive on a wine cart at the Porta Capena beside a courier who keeps looking back down the road, and he starts talking. There are no menus and no character creation in this build. Use desktop Chrome or Safari.
+
+The gold marker (and the line under the compass) always shows your next step. A banner announces each new objective, and J opens the journal. The story so far is written up in [docs/STORY.md](docs/STORY.md).
 
 - **Look around:** click into the view to capture the mouse (or use the arrow keys). Esc releases it and pauses.
 - **Move:** W A S D.
@@ -50,7 +52,8 @@ Every push to `main` redeploys the site, once the tests pass. Hard-refresh (Cmd+
 
 | What | Link |
 |---|---|
-| The default start: the Forum at 10:00 | [scootsmagoo.github.io/skyrome](https://scootsmagoo.github.io/skyrome/) |
+| The default start: the story, at the Porta Capena before dawn | [scootsmagoo.github.io/skyrome](https://scootsmagoo.github.io/skyrome/) |
+| The Forum at 10:00, no story yet (just walking about) | [`?at=rostra&hour=10`](https://scootsmagoo.github.io/skyrome/?at=rostra&hour=10) |
 | **Boss fight: Nereus the retiarius** (net, trident, crowd favor, missio) | [`?fight=nereus`](https://scootsmagoo.github.io/skyrome/?fight=nereus) |
 | Warm-up bout 1: Pullus, a nervous recruit | [`?fight=pullus`](https://scootsmagoo.github.io/skyrome/?fight=pullus) |
 | Warm-up bout 2: Auctus, a thraex who hooks round your shield | [`?fight=auctus`](https://scootsmagoo.github.io/skyrome/?fight=auctus) |
@@ -58,28 +61,28 @@ Every push to `main` redeploys the site, once the tests pass. Hard-refresh (Cmd+
 | The Colosseum at night | [`?at=colosseum&hour=22`](https://scootsmagoo.github.io/skyrome/?at=colosseum&hour=22) |
 | The river district (the most finished part of the city) | [`?at=temple-portunus`](https://scootsmagoo.github.io/skyrome/?at=temple-portunus) |
 | The Pantheon (a construction site after the fire of 110) | [`?at=pantheon`](https://scootsmagoo.github.io/skyrome/?at=pantheon) |
-| The story start: the Porta Capena before dawn | [`?quick=1`](https://scootsmagoo.github.io/skyrome/?quick=1) |
 | The full flow: control presets, title, character creation | [`?menu=1`](https://scootsmagoo.github.io/skyrome/?menu=1) |
 | Show the welcome card again | [`?welcome=1`](https://scootsmagoo.github.io/skyrome/?welcome=1) |
 | Performance overlay (fps, draw calls, CPU per system) | [`?debug`](https://scootsmagoo.github.io/skyrome/?debug) |
 
 Options combine: `?at=` takes any landmark id (type `coc` in the console for the list), `&hour=` sets the hour (0–24) and `&origin=` the character's background (`civis-suburanus`, `hispanus`, `veteranus`, `dacus`).
 
-### Playing the opening (needs a human)
+### Playing the story (needs a human)
 
-A bot plays the whole 35-minute opening end to end (`node scripts/golden-path.mjs`), but it can't tell whether something is confusing, ugly, too easy or no fun. Each link below starts one part of the opening as if you had played up to it. Follow the compass, and note anything that feels wrong.
+A bot plays Act I end to end (`node scripts/golden-path.mjs`), but it can't tell whether something is confusing, ugly, too easy or no fun. Each link below starts one part as if you had played up to it. Follow the gold marker, and note anything that feels wrong.
 
 | Part | Link | What to look for |
 |---|---|---|
-| 1. The Dripping Gate: the cart, the ambush, the dying courier | [`?quick=1`](https://scootsmagoo.github.io/skyrome/?quick=1) | Is it clear where to go and what to press? Does the two-man ambush feel fair? Do you get the tablet? |
-| 2. Into the city: up the Circus valley to the Forum | [`?part=city`](https://scootsmagoo.github.io/skyrome/?part=city) | Can you find the way with the compass alone? Any spots where you catch on a corner or get stuck? |
-| 3. The tablet: the Temple of Castor, the keeper, Gratus | [`?part=castor`](https://scootsmagoo.github.io/skyrome/?part=castor) | Is the keeper easy to find? Does Gratus's conversation make sense? |
-| 4. To the Ludus: who fights with a curved blade? | [`?part=ludus`](https://scootsmagoo.github.io/skyrome/?part=ludus) | The walk past the Colosseum to the Ludus Magnus; finding Auctus inside |
-| 5. The Oath: sign on, draw the practice arms, the first bout | [`?part=oath`](https://scootsmagoo.github.io/skyrome/?part=oath) | Is signing on with Glaucus and getting the kit from Successus clear? |
-| 6. The three bouts | [`?fight=pullus`](https://scootsmagoo.github.io/skyrome/?fight=pullus) · [`?fight=auctus`](https://scootsmagoo.github.io/skyrome/?fight=auctus) · [`?fight=nereus`](https://scootsmagoo.github.io/skyrome/?fight=nereus) | Too easy or too hard? Is the net readable? Does the crowd meter mean anything to you? |
-| 7. Evening: wait for dusk (T), then back past the Meta Sudans | [`?part=evening`](https://scootsmagoo.github.io/skyrome/?part=evening) | Does it tell you to wait, and does T work? Does the city look right at dusk? |
-| 8. The brawl at the fountain (fists only) | [`?part=brawl`](https://scootsmagoo.github.io/skyrome/?part=brawl) | Picking a side, then the fistfight with your fans beside you. Does drawing a blade (R) warn you? |
-| 9. The tablet delivered: “Tomorrow, the Column” | [`?part=deliver`](https://scootsmagoo.github.io/skyrome/?part=deliver) | Walk into the strongrooms after sunset and give Gratus the tablet. A satisfying end? |
+| 1. The Dripping Gate: the cart, the ambush, the dying courier | [the default start](https://scootsmagoo.github.io/skyrome/) | Does Festus make you expect trouble? Is it clear why you're attacked, and who ran off? Do his last words tell you where to go? |
+| 2. The tablet to the Forum, up the Circus valley | [`?part=city`](https://scootsmagoo.github.io/skyrome/?part=city) | Can you find the way with the marker alone? Anywhere you get stuck? |
+| 3. The strongrooms of Castor: the keeper and Gratus | [`?part=castor`](https://scootsmagoo.github.io/skyrome/?part=castor) | Does the keeper's caginess make sense? Is it clear why Gratus won't take the tablet yet, and why he sends you to the Ludus? |
+| 4. The Ludus Magnus: Glaucus names the killer | [`?part=ludus`](https://scootsmagoo.github.io/skyrome/?part=ludus) | Does Glaucus answer straight? Is the gladiator side quest clearly optional? |
+| 5. The Mouse in the burned taberna, and Festus' satchel | [`?part=mouse`](https://scootsmagoo.github.io/skyrome/?part=mouse) | Fight, threaten or talk him round: do all three work? Is the strongbox easy to find? |
+| 6. After sunset: the tablet delivered, and the cipher | [`?part=deliver`](https://scootsmagoo.github.io/skyrome/?part=deliver) | Does the twist (a cipher only the twin can read) land? Is it clear where to go next? |
+| 7. The Lemuria: the family, the midnight rite, the clues | [`?part=lemuria`](https://scootsmagoo.github.io/skyrome/?part=lemuria) | Does the rite feel eerie? Does T get you to midnight? Are the clues findable? |
+| 8. The twin, and the warning to Gratus | [`?part=twin`](https://scootsmagoo.github.io/skyrome/?part=twin) | Does Gemellus's scene make sense? Is the end (“Tomorrow, the Column”) satisfying for now? |
+| Side quest: The Oath at the Ludus, then the three bouts | [`?part=oath`](https://scootsmagoo.github.io/skyrome/?part=oath) · [`?fight=nereus`](https://scootsmagoo.github.io/skyrome/?fight=nereus) | Is signing on clear? Too easy or too hard? Is the net readable? |
+| Side quest: the brawl at the fountain (fists only) | [`?part=brawl`](https://scootsmagoo.github.io/skyrome/?part=brawl) | Picking a side, then the fistfight. Does drawing a blade (R) warn you? |
 
 **Checks only a person can do**
 
@@ -88,7 +91,7 @@ A bot plays the whole 35-minute opening end to end (`node scripts/golden-path.mj
 | The full start: control preset, title screen, character creation (4 origins), the Porta Capena before dawn | [`?menu=1`](https://scootsmagoo.github.io/skyrome/?menu=1) |
 | Trackpad and keyboard-only play: pick each preset at the start of `?menu=1`, then play part 1 | [`?menu=1`](https://scootsmagoo.github.io/skyrome/?menu=1) |
 | Mac input lab: the pointer-lock click never attacks, no zoom bursts from momentum scrolling, pinch never zooms the page | [`?scene=inputlab`](https://scootsmagoo.github.io/skyrome/?scene=inputlab) |
-| Safari: smooth in the Forum (open the console with ` and type `tdo` for the fps) | [the default start](https://scootsmagoo.github.io/skyrome/), in Safari |
+| Safari: smooth in the Forum (open the console with ` and type `tdo` for the fps) | [`?at=rostra&hour=10`](https://scootsmagoo.github.io/skyrome/?at=rostra&hour=10), in Safari |
 | A weaker computer: does Auto pick a sensible quality, and is it playable? (`graphics` in the console) | [the default start](https://scootsmagoo.github.io/skyrome/), on that computer |
 
 ### The console
@@ -135,7 +138,7 @@ Then open one of these scenes. Click into the game to look around and press Esc 
 
 | Scene | URL | What it shows |
 |---|---|---|
-| The game | http://127.0.0.1:5173/ | Straight into the Forum at 10:00 with the default character. `?menu=1` gives the title over the city, character creation and the start at the Porta Capena before dawn on 11 May AD 113; `?quick=1` skips the menus there |
+| The game | http://127.0.0.1:5173/ | The story's opening with the default character: the cart at the Porta Capena before dawn on 11 May AD 113, the courier talking first. `?menu=1` adds the title over the city and character creation; `?quick=1` is the same start with nobody talking first (agents); `?at=rostra&hour=10` is the Forum at mid-morning |
 | The river district | http://127.0.0.1:5173/?scene=rome&at=temple-portunus | Drops you straight into Rome with no menus. The Forum Boarium, Tiber Island and the Theatre of Marcellus are fully built. `at=` takes any of the atlas's 208 landmark ids (e.g. `temple-aesculapius`, `theatre-marcellus`, `circus-maximus`, `column-trajan`, `pantheon`), but most landmarks outside the river district are still placeholder blocks |
 | Characters | http://127.0.0.1:5173/?scene=avatars | Procedural Romans and gladiators with code-authored animation. You're a legionary: R draws your sword, F attacks, Q blocks |
 | Architecture | http://127.0.0.1:5173/?scene=arch | The classical kit: orders, temples, arches, the amphitheatre arcade, the Column, domes, statues |
