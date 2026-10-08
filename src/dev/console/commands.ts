@@ -272,6 +272,18 @@ export function builtinCommands(): CommandTable<ConsoleCtx> {
       },
     },
     {
+      name: 'munus',
+      aliases: ['games'],
+      usage: '[next|lusio]',
+      help: 'The games in the Colosseum: today\'s show, or call the next pair now',
+      run: ([arg], { game }) => {
+        const m = game.munus;
+        if (!m) return 'No games in this build.';
+        if (arg === 'next' || arg === 'lusio') return m.nextBout(arg === 'lusio') ? `Next pair called. ${m.status()}` : 'Can\'t stage a bout now (no Colosseum or no combat).';
+        return m.status();
+      },
+    },
+    {
       name: 'clearbounty',
       aliases: ['paycrimegold', 'pardon'],
       help: 'Forget every bounty; the watch stands down',

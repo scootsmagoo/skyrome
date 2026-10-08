@@ -183,6 +183,8 @@ export class Combatant {
   action: Action | null = null;
   stun: { kind: StunKind; until: number } | null = null;
   motion: Motion | null = null;
+  /** Walk to a mark while not fighting (the arena's entrances and exits); cleared on arrival or engage. */
+  march: { x: number; z: number; speed: number; face?: number } | null = null;
   iframesUntil = -Infinity;
   dodges: number[] = [];
   /** At 0 stamina you cannot attack, sprint or dodge until 15 has regenerated (§6.6). */

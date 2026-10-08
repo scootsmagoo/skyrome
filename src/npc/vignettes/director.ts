@@ -17,6 +17,8 @@ export type VignetteHost = Omit<VignetteContext, 'cast' | 'release' | 'addObject
   addToScene(o: THREE.Object3D): void;
   /** No vignettes now (combat, dialogue, menus). */
   busy(): boolean;
+  /** No street scene is staged here (the arena sand, the stands: NpcManager's no-go areas). */
+  blocked?(x: number, z: number): boolean;
 };
 
 interface Run {
@@ -79,7 +81,7 @@ export class VignetteDirector {
     const run = { def: d, cast: new Set<Npc>(), objects: [] as THREE.Object3D[], ends: [] as (() => void)[] } as Run;
     run.ctx = this.contextFor(run);
     const plan = d.plan(run.ctx);
-    if (!plan) return false;
+    if (!plan || (!at && h.blocked?.(plan.x, plan.z))) return false;
     if (at) {
       plan.x = at.x;
       plan.z = at.z;

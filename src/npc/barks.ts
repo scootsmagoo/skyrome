@@ -40,10 +40,12 @@ const GREET: Table = {
   portitor: ['Anything to declare? Everything has a duty.', 'Goods in? Two and a half in the hundred.', 'Salve. Open the bundle, please.'],
   sortilega: ['Your palm, stranger? The Circus knows your fate.', 'Sit, sit. The stars are cheap today.', 'I see a long road behind you. And a short purse.'],
   argentarius: ['Change! Good silver, honest weight!', 'Denarii for sestertii, fair rates!', 'A loan, domine? Interest by the month.'],
+  rudis: ['Off the sand, citizen! The editor is watching.', 'Back to the stands with you.', 'Out of the way — this is a fight, not a promenade.'],
 };
 
 /** Overheard chatter. Generic lines first; role and district lines are mixed in. */
 const AMBIENT: Table = {
+  rudis: ['Feet! Watch his feet!', 'Break! Break, I said!', 'Clean, now. The editor wants a clean fight.', 'Up, up — he\'s not done yet.'],
   citizen: [
     'They say Caesar will march east before winter. Parthia, this time.',
     'Bread\'s gone up again. The baker swears it\'s the grain ships.',

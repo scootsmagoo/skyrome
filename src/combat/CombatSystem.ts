@@ -860,6 +860,8 @@ export class CombatSystem implements System, PlayerCombatHost {
   inBout(a: string | Actor | Combatant): boolean {
     const b = this.core.bout;
     const c = this.get(a);
+    // The games in the amphitheatre are a show too (src/arena: fighters tagged 'munus').
+    if (c?.tags.includes('munus')) return true;
     return !!b && !b.over && !!c && (c === this.playerC || b.foes.has(c.id));
   }
 

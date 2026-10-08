@@ -208,10 +208,12 @@ export class CombatCore {
     if (a.status !== 'active' && a.status !== 'yielded') return;
     if (a.target !== b) {
       a.target = b;
+      a.march = null;
       if (a.brain) a.driven = true;
     }
     if (!b.isPlayer && b.brain && !b.target && b.active) {
       b.target = a;
+      b.march = null;
       b.driven = true;
     }
   }
@@ -1131,6 +1133,10 @@ export class CombatCore {
       c.body.move(ZERO, dt, 30);
       return;
     }
+    if (c.march && !c.target && c.brain.state !== 'flee') {
+      this.marchStep(c, dt);
+      return;
+    }
     if (!c.target && c.brain.state !== 'flee') this.acquire(c);
     const b = c.brain;
     const I = b.tick(this.perceive(c), this.services(c), dt);
@@ -1177,6 +1183,28 @@ export class CombatCore {
         if (this.bout?.foes.has(c.id)) this.foeDown(c);
       }
     }
+  }
+
+  /** One step of a march order: walk to the mark (round what's in the way), then face its way. */
+  private marchStep(c: Combatant, dt: number) {
+    const m = c.march!;
+    const dx = m.x - c.position.x;
+    const dz = m.z - c.position.z;
+    const d = Math.hypot(dx, dz);
+    if (d < 0.35) {
+      c.body.move(ZERO, dt, 30);
+      if (m.face !== undefined) {
+        c.body.heading = approachAngle(c.body.heading, m.face, 5 * dt);
+        if (Math.abs(((c.body.heading - m.face + Math.PI * 3) % (Math.PI * 2)) - Math.PI) > 0.05) return;
+      }
+      c.march = null;
+      return;
+    }
+    const v = Math.min(m.speed, d * 2 + 0.3);
+    const wish = { x: (dx / d) * v, z: (dz / d) * v };
+    if (this.env.nav) this.follower(c).steer({ now: this.now, x: c.position.x, y: c.position.y, z: c.position.z, radius: c.body.radius, goal: { x: m.x, z: m.z }, wish, free: true });
+    c.body.heading = approachAngle(c.body.heading, Math.atan2(wish.x, wish.z), 6 * dt);
+    c.body.move(wish, dt);
   }
 
   /**

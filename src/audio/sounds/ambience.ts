@@ -7,7 +7,7 @@
  * traffic was banned by day (Lex Iulia Municipalis) — carts rumbling through the streets after dark.
  */
 import { Biquad, Brown, OnePole, Pink, Rand, SmoothNoise, TWO_PI, addMode, addNoiseBurst, alloc, makeSeamless, mixInto } from '../dsp/core';
-import { aulos, drumStroke } from '../dsp/instruments';
+import { aulos, brass, brassBody, drumStroke } from '../dsp/instruments';
 import { MODES, degreeToFreq, FINALS } from '../music/theory';
 import type { BakeContext, LoopDef, SoundDef } from './types';
 import { bubble, creak, grains, hump, strike, thump } from './util';
@@ -142,6 +142,71 @@ function bakeCrowd(c: BakeContext) {
   for (let i = 0; i < out.length; i++) out[i] += bp.process(pink.next()) * level * 1.2 * (0.7 + 0.3 * sw.step(1 / rate));
   grains(out, rate, rnd, 0, L + X, { density: 60, fLo: 1500, fHi: 5000, amp: level * 0.5, grain: [0.004, 0.012], env: () => 1 });
   return makeSeamless(out, rate, X);
+}
+
+/** The amphitheatre's stands: tens of thousands talking at once, a constant surf of voices. */
+function bakeArena(c: BakeContext) {
+  const { rate, rnd } = c;
+  const L = 12;
+  const X = 0.8;
+  const out = alloc(L + X, rate);
+  babble(out, rate, rnd, 46, [10, 90], L + X, 2600);
+  const pink = new Pink(rnd);
+  const bp = new Biquad().bandpass(360, 0.7, rate);
+  const sw = new SmoothNoise(rnd, 0.25);
+  let r = 0;
+  for (let i = 0; i < out.length; i++) r += out[i] * out[i];
+  const level = Math.sqrt(r / out.length);
+  for (let i = 0; i < out.length; i++) out[i] += bp.process(pink.next()) * level * 2.2 * (0.6 + 0.4 * sw.step(1 / rate));
+  return makeSeamless(out, rate, X);
+}
+
+/** A crowd roar: a swell of open-vowel shouts over a surge of noise, then dying away. */
+function bakeRoar(c: BakeContext) {
+  const { rate, rnd } = c;
+  const dur = rnd.range(2.6, 3.6);
+  const out = alloc(dur, rate);
+  for (let k = 0; k < 26; k++) {
+    const t = rnd.range(0, 0.35);
+    const ud = rnd.range(0.8, dur - t - 0.3);
+    const sex = rnd.chance(0.65) ? 'm' : 'f';
+    // Shouts: raised pitch, long open vowels.
+    const u = utterance({ sex, dur: ud, dull: rnd.range(0.2, 0.9), f0: (sex === 'm' ? 165 : 290) * rnd.range(0.85, 1.2), syllableRate: rnd.range(1.2, 2.2), liveliness: 0.3 }, rate, rnd);
+    mixInto(out, u, Math.round(t * rate), rnd.range(0.3, 0.8));
+  }
+  const pink = new Pink(rnd);
+  const bp = new Biquad().bandpass(700, 0.6, rate);
+  for (let i = 0; i < out.length; i++) out[i] += bp.process(pink.next()) * 0.5;
+  new Biquad().lowpass(3000, 0.6, rate).run(out);
+  const rise = 0.35 * rate;
+  for (let i = 0; i < out.length; i++) {
+    const t = i / rate;
+    out[i] *= Math.min(1, i / rise) * Math.pow(Math.max(0, 1 - Math.max(0, t - 0.6) / (dur - 0.6)), 1.6);
+  }
+  return out;
+}
+
+/** The cornu sounds for the next pair: a natural-horn call climbing the harmonics. */
+function bakeCornu(c: BakeContext) {
+  const { rate, rnd } = c;
+  const out = alloc(3.2, rate);
+  const f0 = rnd.range(92, 104);
+  const calls = [
+    [3, 4, 5, 6],
+    [4, 5, 6, 8],
+    [3, 5, 6, 5, 8],
+  ];
+  const h = rnd.pick(calls);
+  let t = 0.05;
+  h.forEach((n, i) => {
+    const last = i === h.length - 1;
+    const d = last ? 1.25 : rnd.pick([0.22, 0.3, 0.42]);
+    brass(out, rate, rnd, { t, freq: f0 * n, dur: d, dyn: last ? 1 : 0.85 }, { amp: 0.8 });
+    t += d + 0.05;
+  });
+  brassBody(out, rate);
+  for (let i = 0; i < out.length; i++) out[i] *= Math.min(1, (out.length - i) / (0.25 * rate));
+  return out;
 }
 
 function bakeCity(c: BakeContext) {
@@ -438,6 +503,7 @@ export const ambienceSounds: SoundDef[] = [
   { ...bed, id: 'bed.river', label: 'river bed', rate: 24000, expect: { centroid: [60, 2500] }, bake: (c) => bakeWater(c, 'river') },
   { ...bed, id: 'bed.wind', label: 'wind bed', rate: 22050, expect: { centroid: [60, 1500] }, bake: bakeWind },
   { ...bed, id: 'bed.crowd', label: 'crowd murmur bed', rate: 16000, expect: { centroid: [200, 2200] }, bake: bakeCrowd },
+  { ...bed, id: 'bed.arena', label: 'amphitheatre crowd bed', rate: 16000, expect: { centroid: [200, 2000] }, bake: bakeArena },
   { ...bed, id: 'bed.city', label: 'distant city bed', rate: 16000, expect: { centroid: [40, 1200] }, bake: bakeCity },
   { ...bed, id: 'bed.cicadas', label: 'cicadas bed', rate: 32000, expect: { centroid: [3500, 9000] }, bake: bakeCicadas },
   { ...bed, id: 'bed.crickets', label: 'crickets bed', rate: 32000, expect: { centroid: [2000, 6000] }, bake: bakeCrickets },
@@ -463,6 +529,8 @@ export const ambienceSounds: SoundDef[] = [
     bake: (c) => utterance({ sex: c.variant % 3 === 0 ? 'f' : 'm', dur: c.rnd.range(0.9, 2.2) }, c.rate, c.rnd),
   },
   { ...ev, id: 'amb.cart', label: 'cart passing (night)', variants: 3, gainDb: -10, maxVoices: 2, priority: 0.3, rate: 16000, spatial: { ref: 8, max: 100, rolloff: 1 }, expect: { dur: [5, 8] }, bake: bakeCart },
+  { ...ev, id: 'amb.roar', label: 'arena crowd roar', variants: 4, gainDb: -4, maxVoices: 2, priority: 0.7, rate: 16000, spatial: { ref: 30, max: 400, rolloff: 0.6 }, expect: { dur: [2.2, 3.6] }, bake: bakeRoar },
+  { ...ev, id: 'amb.cornu', label: 'cornu call (arena)', variants: 3, gainDb: -6, maxVoices: 1, priority: 0.7, rate: 22050, spatial: { ref: 25, max: 400, rolloff: 0.6 }, expect: { dur: [1.4, 3.2] }, bake: bakeCornu },
   { ...ev, id: 'amb.temple', label: 'temple music (distant)', variants: 3, gainDb: -12, maxVoices: 1, priority: 0.4, rate: 16000, spatial: { ref: 10, max: 120, rolloff: 1 }, expect: { dur: [6, 8.5] }, bake: bakeTemple },
 ];
 
@@ -471,6 +539,7 @@ export const ambienceLoops: LoopDef[] = [
   { id: 'fountain', label: 'fountain', group: 'Loops', bus: 'ambience', bed: 'bed.fountain', gainDb: -9, spatial: { ref: 2.5, max: 45, rolloff: 1 }, reverb: 0.2 },
   { id: 'river', label: 'river (Tiber)', group: 'Loops', bus: 'ambience', bed: 'bed.river', stereoBed: true, gainDb: -10 },
   { id: 'wind', label: 'wind (hills)', group: 'Loops', bus: 'ambience', bed: 'bed.wind', stereoBed: true, gainDb: -12 },
+  { id: 'arena', label: 'amphitheatre crowd', group: 'Loops', bus: 'ambience', bed: 'bed.arena', stereoBed: true, gainDb: -8, events: [{ sound: 'amb.chatter', rate: 0.3, dist: [2, 8] }] },
   {
     id: 'crowd',
     label: 'forum crowd',

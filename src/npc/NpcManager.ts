@@ -407,6 +407,31 @@ export class NpcManager implements System {
     if (npc.scripted && !npc.dead) npc.brain?.release(this.life);
   }
 
+  /** Places the ambient crowd keeps out of (arena sand, a school's court): no spawns or strolls there. */
+  private readonly noGo: ((x: number, z: number) => boolean)[] = [];
+
+  /** Keep the ambient crowd out of an area; returns the undo. */
+  addNoGo(test: (x: number, z: number) => boolean): () => void {
+    this.noGo.push(test);
+    this.spots.blocked ??= (x, z) => this.isNoGo(x, z);
+    return () => {
+      const i = this.noGo.indexOf(test);
+      if (i >= 0) this.noGo.splice(i, 1);
+    };
+  }
+
+  /** Is a point somewhere the ambient crowd stays out of? */
+  isNoGo(x: number, z: number): boolean {
+    for (const t of this.noGo) if (t(x, z)) return true;
+    return false;
+  }
+
+  /**
+   * More (or fewer) people about here than the district and hour say: a multiplier on the crowd
+   * target at the player's position (the games day around the Colosseum). Null = 1.
+   */
+  crowdBoost: ((x: number, z: number) => number) | null = null;
+
   /** Something alarming at a point (see the 'npc:alarm' event). */
   alarm(x: number, z: number, radius = 16, kind: 'fight' | 'crime' | 'danger' = 'fight', aggressor: Actor | null = null) {
     for (const n of this.near({ x, y: 0, z }, radius)) {
@@ -811,7 +836,7 @@ export class NpcManager implements System {
       // Stay on the street level: skip podium tops and roofs far above the terrain.
       const y = g.heightAt(p.x, p.z);
       if (y !== null && Math.abs(y - npc.position.y) > 3) continue;
-      if (!g.reachable(p.x, p.z)) continue;
+      if (!g.reachable(p.x, p.z) || this.isNoGo(p.x, p.z)) continue;
       // Not up a grassy hillside.
       if (this.steep(p.x, p.z, y)) continue;
       found++;
@@ -1105,6 +1130,7 @@ export class NpcManager implements System {
       addToScene: (o) => m.game.scene.add(o),
       pois: (x, z, r, k) => m.pois(x, z, r, k),
       busy: () => m.quiet() || !!m.talk || !!(m.game.player && combatOf(m.game)?.isInCombat?.(m.game.player)),
+      blocked: (x, z) => m.isNoGo(x, z),
     };
   }
 
@@ -1726,7 +1752,8 @@ export class NpcManager implements System {
       }
     }
     // At night the station people (vigiles' posts, drovers) count toward the ≤ 25 cap (AC-10).
-    const target = crowdTarget(b, this.maxCrowd, this.stations.count);
+    const boost = this.crowdBoost ? this.crowdBoost(pp.x, pp.z) : 1;
+    const target = Math.min(this.maxCrowd, Math.round(crowdTarget(b, this.maxCrowd, this.stations.count) * boost));
     const boosts = this.useAtlas ? poiBoosts(pp.x, pp.z) : {};
     let weights = roleWeights(this.district, this.game.time.hour, this.sun, boosts);
     // Escorted roles bring 1–4 people each: cap the groups so they don't swallow the budget.
@@ -1793,7 +1820,7 @@ export class NpcManager implements System {
       const slot = archetypeSlot(r.archetype, this.game.time.hour, this.sun);
       if ((slot.activity === 'work' || slot.activity === 'idle') && slot.place) {
         const s = this.spots.find(slot.place, pp.x, pp.z, 70, this.rng, pp.y);
-        if (s && Math.hypot(s.x - pp.x, s.z - pp.z) > 4) return { x: s.x, z: s.z, heading: s.face, spotPlaced: true };
+        if (s && Math.hypot(s.x - pp.x, s.z - pp.z) > 4 && !this.isNoGo(s.x, s.z)) return { x: s.x, z: s.z, heading: s.face, spotPlaced: true };
       }
     }
     const ahead = Math.atan2(this.look.x, this.look.z);
@@ -1840,7 +1867,7 @@ export class NpcManager implements System {
         z = c.z;
         const h = g.heightAt(x, z);
         if (h === null || Math.abs(h - terrain(x, z)) > 1.6) continue;
-        if (!g.reachable(x, z) || !this.isFree(x, h, z)) continue;
+        if (!g.reachable(x, z) || !this.isFree(x, h, z) || this.isNoGo(x, z)) continue;
         if (this.steep(x, z, h)) continue;
       } else continue;
       if (initial) return { x, z };
@@ -1872,7 +1899,7 @@ export class NpcManager implements System {
       const cz = c.z;
       const h = g.heightAt(cx, cz);
       const terrain = this.game.heightmap ? this.game.heightmap.heightAt(cx, cz) : pp.y;
-      if (h === null || Math.abs(h - terrain) > 1.6 || !g.reachable(cx, cz) || !this.isFree(cx, h, cz)) continue;
+      if (h === null || Math.abs(h - terrain) > 1.6 || !g.reachable(cx, cz) || !this.isFree(cx, h, cz) || this.isNoGo(cx, cz)) continue;
       let verdict: LaneSpawnVerdict = 'side';
       if (!initial) {
         const y = h + 1.2;

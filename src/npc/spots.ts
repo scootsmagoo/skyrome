@@ -46,6 +46,8 @@ const STREET_KIND: Record<string, PlaceKind> = {
 
 export class SpotIndex {
   spots: LifeSpot[] = [];
+  /** Spots in places the crowd keeps out of (NpcManager's no-go areas) are never handed out. */
+  blocked: ((x: number, z: number) => boolean) | null = null;
   private cx = Infinity;
   private cz = Infinity;
   private age = 0;
@@ -216,6 +218,7 @@ export class SpotIndex {
     const cand: [number, LifeSpot][] = [];
     for (const s of this.spots) {
       if (s.claimedBy || !kinds.includes(s.kind)) continue;
+      if (this.blocked?.(s.x, s.z)) continue;
       if (fromY !== undefined && s.y !== undefined && Math.abs(s.y - fromY) > maxRise) continue;
       const d = Math.hypot(s.x - x, s.z - z);
       if (d <= r) cand.push([d, s]);

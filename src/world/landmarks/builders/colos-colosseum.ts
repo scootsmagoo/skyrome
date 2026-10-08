@@ -184,6 +184,26 @@ export interface ColosseumLayout {
   numberOf(k: number): number;
 }
 
+/**
+ * Where the seating is cut (kept in step with buildCavea below): the boxes on the short axis, the
+ * vomitoria mouths and the aisles (scalaria). Each gap is a straight slot of half-width `hw` in the
+ * radial frame at parameter t, through rows of `tier` with row index < `rows`.
+ */
+export function caveaGaps(L: ColosseumLayout): { t: number; hw: number; tier: number; rows: number }[] {
+  const out: { t: number; hw: number; tier: number; rows: number }[] = [];
+  const two = Math.PI * 2;
+  for (const t of [Math.PI / 2, (3 * Math.PI) / 2]) out.push({ t, hw: 4.0, tier: 0, rows: 99 });
+  const vomT = (k: number) => L.centres[k];
+  for (const k of [10, 30, 50, 70, 5, 15, 25, 35, 45, 55, 65, 75]) out.push({ t: vomT(k), hw: 0.8, tier: 1, rows: 4 });
+  for (const k of [5, 10, 15, 25, 30, 35, 45, 50, 55, 65, 70, 75]) out.push({ t: vomT(k), hw: 0.8, tier: 2, rows: 4 });
+  for (let k = 2.5; k < 80; k += 5) {
+    const lo = Math.floor(k);
+    const t = (L.centres[lo] + (lo + 1 < 80 ? L.centres[lo + 1] : L.centres[0] + two)) / 2;
+    for (const tier of [0, 1, 2]) out.push({ t, hw: 0.5, tier, rows: 99 });
+  }
+  return out;
+}
+
 /** Bay index → carved entrance number. Axial bays 0/20/40/60 are unnumbered; I starts W of the S axis. */
 export function entranceNumber(k: number, n = COLOS.bays): number {
   const q = n / 4;
