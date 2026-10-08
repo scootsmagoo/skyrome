@@ -1365,8 +1365,10 @@ export class NpcManager implements System {
       }
       if (n.heldByCombat()) {
         // The combat module owns fighters' movement (and the yielded, cowering and knocked out:
-        // walked on by their schedule they slid along on their knees); keep them solid.
+        // walked on by their schedule they slid along on their knees); keep them solid. Those it
+        // doesn't drive stay at rest (a stale speed kept their legs walking under the kneel).
         n.setSolid(true);
+        if (!n.isFighting() && n.sim === 'full') n.locomote(ZERO, dt);
         continue;
       }
       const brain = n.brain!;

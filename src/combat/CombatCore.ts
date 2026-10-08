@@ -979,6 +979,8 @@ export class CombatCore {
 
   /** Common to death, knockout and yield: stop acting, give back tokens, drop out of fights. */
   private downed(c: Combatant) {
+    // Down on the spot: no skid from a run into the kneel, the fall or the heap.
+    c.body.halt?.();
     if (c.action?.kind === 'charge') c.view?.setCharge(0);
     c.action = null;
     c.stun = null;

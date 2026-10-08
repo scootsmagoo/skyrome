@@ -30,6 +30,8 @@ export interface CombatBody {
   move(wish: { x: number; z: number }, dt: number, accel?: number): void;
   /** Stop blocking the living (a corpse); and back. */
   setGhost?(ghost: boolean): void;
+  /** Stop dead (no glide): kill the body's velocity at once. */
+  halt?(): void;
   /** Current horizontal velocity (m/s). */
   velocity?(): { x: number; z: number };
 }

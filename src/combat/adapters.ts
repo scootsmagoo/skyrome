@@ -54,6 +54,11 @@ export class ActorBody implements CombatBody {
   velocity() {
     return { x: this.actor.velocity.x, z: this.actor.velocity.z };
   }
+
+  halt() {
+    if (this.actor.disposed) return;
+    this.actor.velocity.set(0, 0, 0);
+  }
 }
 
 /** Contract name → the avatar library's action name for timing lookups. */
