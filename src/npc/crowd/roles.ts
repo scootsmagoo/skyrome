@@ -31,7 +31,8 @@ export type CrowdRoleId =
   | 'carter'
   | 'torchbearer'
   | 'farmer'
-  | 'traveller';
+  | 'traveller'
+  | 'gladiator';
 
 export interface CrowdRole {
   id: CrowdRoleId;
@@ -98,6 +99,8 @@ export const CROWD_ROLES: Record<CrowdRoleId, CrowdRole> = {
   farmer: { id: 'farmer', label: 'Farmer', avatar: ['plebeian-man', 'plebeian-man', 'elderly', 'plebeian-woman'], archetype: 'rusticus', speed: [1.0, 1.3], prop: 'basket', propChance: 0.7, barks: 'farmer', gawks: true },
   // Travellers on the consular roads: arrivals with their bundles, muleteers, pilgrims, couriers.
   traveller: { id: 'traveller', label: 'Traveller', avatar: ['plebeian-man', 'freedman', 'greek', 'syrian', 'egyptian'], archetype: 'viator', speed: [1.15, 1.45], prop: 'sack', propChance: 0.75, barks: 'traveller', gawks: true },
+  // Gladiators of the schools in their practice kit (stations at the Ludus only).
+  gladiator: { id: 'gladiator', label: 'Gladiator', avatar: ['murmillo', 'thraex', 'secutor', 'hoplomachus', 'provocator', 'retiarius'], archetype: 'gladiator', speed: [1.15, 1.45], barks: 'gladiator', gawks: true, escortOnly: true },
   torchbearer: { id: 'torchbearer', label: 'Slave', avatar: ['slave'], archetype: 'servus-baiulus', speed: [1.0, 1.2], prop: 'torch', propChance: 1, barks: 'slave', escortOnly: true },
 };
 

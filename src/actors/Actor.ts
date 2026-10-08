@@ -329,7 +329,7 @@ export type ActionClip =
   | 'cower';
 
 /** Loops an NPC can idle in (schedules). */
-export type IdleLoop = 'stand' | 'sit' | 'sitGround' | 'lean' | 'work' | 'sweep' | 'talk' | 'pray' | 'sleep' | 'cheer' | 'guard' | 'drunk';
+export type IdleLoop = 'stand' | 'sit' | 'sitGround' | 'lean' | 'work' | 'sweep' | 'talk' | 'pray' | 'sleep' | 'cheer' | 'guard' | 'drunk' | 'drill';
 
 export interface PlayOptions {
   speed?: number;

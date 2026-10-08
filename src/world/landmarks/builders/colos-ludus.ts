@@ -510,7 +510,16 @@ function buildLudusMagnus(ctx: LandmarkContext): LandmarkBuild {
     placeProp(d, 'amphora_tall', -9.5, 0, zg + 0.2, 1.6, { rng });
     weaponRack(d, 6.2, 0, zg, 0);
     // Pali in the court's free corners for the tirones' drill.
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) palus(d, sx * (res.court.w / 2 - 6.5), 0, sz * (res.court.d / 2 - 2.2));
+    let pi = 0;
+    for (const sx of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        const px = sx * (res.court.w / 2 - 6.5);
+        const pz = sz * (res.court.d / 2 - 2.2);
+        palus(d, px, 0, pz);
+        // Where a tiro stands to cut at it: on the court side, facing the post.
+        spots.push({ id: `ludus-palus-${++pi}`, kind: 'npc', position: d.point(px - sx * 0.95, 0.05, pz), heading: sx > 0 ? Math.PI / 2 : -Math.PI / 2 });
+      }
+    }
   }
   spots.push({ id: 'ludus-fighters-corner', kind: 'sit', position: d.point(-4.6, 0.5, -res.court.d / 2 + 1.3), heading: Math.PI });
   // Tunnel stair down towards the amphitheatre in the front-left court corner (portico).

@@ -299,7 +299,7 @@ export class AnimationController {
     this.loopClip = loop ? idleLoopClip(loop) : null;
     this.loopW = 0;
     this.loopT = 0;
-    this.avatar.equipment.setLoopProp(loop === 'work' ? 'hammer' : loop === 'sweep' ? 'broom' : null);
+    this.avatar.equipment.setLoopProp(loop === 'work' ? 'hammer' : loop === 'sweep' ? 'broom' : loop === 'drill' ? 'rudis' : null);
   }
 
   setDead(dead: boolean) {

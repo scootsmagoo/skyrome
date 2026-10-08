@@ -157,6 +157,25 @@ const SLEEP: PoseSpec = {
 };
 
 /** The IdleLoop set. */
+/** Fighting guard: left foot forward, shield arm up and across, sword arm cocked by the hip. */
+const DRILL: PoseSpec = {
+  ...REST,
+  hipsPos: [0, -0.05, 0],
+  hips: [6, -8, 0],
+  spine: [6, 4, 0],
+  chest: [4, 6, 0],
+  neck: [0, 0, 0],
+  head: [-4, -4, 0],
+  upperArmL: [64, 24, 18, 0],
+  forearmL: [86, 30],
+  fingersL: 85,
+  upperArmR: [34, 30, -10, 0],
+  forearmR: [76, 0],
+  handR: [-10, 0, 0],
+  fingersR: 90,
+};
+const DRILL_FEET = { L: [0.1, 0.2, 0, 0, 10], R: [-0.1, -0.16, 0, 0, -26] };
+
 export function idleLoopDefs(): Record<IdleLoop, ClipDef> {
   const R = FEET_REST;
   return {
@@ -274,6 +293,23 @@ export function idleLoopDefs(): Record<IdleLoop, ClipDef> {
       loop: true,
       base: GUARD,
       keys: [k(0, GUARD, { L: [0.0, 0.0, 0, 0, 6], R: [0.0, 0.0, 0, 0, -6] }), k(3, { chest: [-4.2, 0, 0], shoulderL: [1, 0], shoulderR: [1, 0] }), k(6, GUARD)],
+    },
+    // A tiro at the palus (Vegetius 1.11): guard behind the shield, a cut from high right, back to
+    // guard, a thrust, a step — over and over, under the doctor's eye.
+    drill: {
+      name: 'loop:drill',
+      duration: 2.6,
+      loop: true,
+      base: DRILL,
+      keys: [
+        k(0, DRILL, DRILL_FEET),
+        k(0.5, { upperArmR: [150, 46, 12, 10], forearmR: [64, 0], chest: [-2, -22, 0], hips: [4, -14, 0], head: [-6, 10, 0] }),
+        k(0.78, { upperArmR: [72, -12, -18, 0], forearmR: [8, 0], handR: [16, 0, 0], chest: [8, 26, 0], hips: [6, 12, 0], hipsPos: [0, -0.06, 0.04], head: [4, -12, 0] }),
+        k(1.25, DRILL),
+        k(1.7, { upperArmR: [26, 26, -6, 0], forearmR: [100, 0], chest: [2, -8, 0], hipsPos: [0, -0.02, -0.03] }),
+        k(1.95, { upperArmR: [88, 4, 0, 0], forearmR: [4, 0], handR: [-60, 0, 0], chest: [8, 14, 0], hipsPos: [0, -0.07, 0.1], head: [2, -6, 0] }, { L: [0.1, 0.3, 0, 0, 10] }),
+        k(2.6, DRILL, DRILL_FEET),
+      ],
     },
     drunk: {
       name: 'loop:drunk',

@@ -14,7 +14,7 @@ import type { DayPhase } from './crowd/budget';
 import { activeStations, memberHeading, STATIONS, stationAnchor, stationPoint, type StationDef, type StationDressing, type StationMember } from './crowd/stations';
 import { STATION_SEEN_SPAWN } from './crowd/spawnRules';
 import type { Npc } from './Npc';
-import { makeBrazier, makeParkedCart, makeStall, makeTable } from './props';
+import { makeAltar, makeAmphorae, makeAnvil, makeBench, makeBrazier, makeCounter, makeMill, makeOven, makeParkedCart, makeScrollTable, makeStall, makeStool, makeTable, makeVats } from './props';
 
 export interface StationHost {
   readonly game: Game;
@@ -35,6 +35,12 @@ export interface StationHost {
   alive(npc: Npc): boolean;
   /** Mark nav-grid cells under dressing as blocked. */
   block(x: number, z: number, r: number): void;
+  /**
+   * Where a post really goes: the point itself when it is open ground, else the nearest open
+   * ground within `r` (null: none, the post is skipped; undefined: the nav grid isn't loaded there
+   * yet, ask again later). Authored offsets along a street can land in a shopfront.
+   */
+  settle?(x: number, z: number, r: number): { x: number; z: number } | null | undefined;
 }
 
 /** An empty marker in a piece of dressing's local space (where its lamp burns). */
@@ -62,6 +68,8 @@ interface Manned {
   members: (Npc | null)[];
   dressing: Placed[];
   active: boolean;
+  /** Settled member posts (null: no open ground there, never staffed). */
+  posts: ({ x: number; z: number } | null)[];
 }
 
 export class StationDirector {
@@ -96,7 +104,15 @@ export class StationDirector {
       if (!active.has(def.id)) continue;
       let m = this.manned.get(def.id);
       if (!m) {
-        m = { def, members: def.members.map(() => null), dressing: [], active: true };
+        const a = stationAnchor(def)!;
+        const settle = this.host.settle;
+        // Posts are settled before the dressing blocks its own ground.
+        if (settle && settle(a.x, a.z, 0) === undefined) continue;
+        const posts = def.members.map((mem) => {
+          const p = stationPoint(a, mem.out, mem.side);
+          return settle ? (settle(p.x, p.z, 2.2) ?? null) : p;
+        });
+        m = { def, members: def.members.map(() => null), dressing: [], active: true, posts };
         this.manned.set(def.id, m);
         this.dress(m);
       }
@@ -141,7 +157,8 @@ export class StationDirector {
       const cur = m.members[i];
       if (cur && this.host.alive(cur)) return;
       m.members[i] = null;
-      const p = stationPoint(a, mem.out, mem.side);
+      const p = m.posts[i];
+      if (!p) return;
       const y = this.host.floorY(p.x, p.z);
       if (y === null) return;
       const heading = memberHeading(a, m.def, mem);
@@ -157,20 +174,34 @@ export class StationDirector {
 
   private dress(m: Manned) {
     const a = stationAnchor(m.def);
-    if (!a || !m.def.dressing) return;
-    for (const d of m.def.dressing) {
+    if (!a) return;
+    for (const d of m.def.dressing ?? []) {
       const placed = this.place(d, a);
       if (placed) m.dressing.push(placed);
     }
+    // Stools under the seated (the sit loop's seat is ~0.3 m behind the post).
+    m.def.members.forEach((mem, i) => {
+      const p = m.posts[i];
+      if (!mem.seat || !p) return;
+      const h = memberHeading(a, m.def, mem);
+      const placed = this.placeAt('stool', p.x - Math.sin(h) * 0.3, p.z - Math.cos(h) * 0.3, h, false);
+      if (placed) m.dressing.push(placed);
+    });
   }
 
   private place(d: StationDressing, a: { x: number; z: number; ox: number; oz: number }): Placed | null {
+    const want = stationPoint(a, d.out, d.side);
+    const p = this.host.settle ? this.host.settle(want.x, want.z, 1.6) : want;
+    if (!p) return null;
+    return this.placeAt(d.kind, p.x, p.z, Math.atan2(a.ox, a.oz) + (d.turn ?? 0), true, d.out * 7.3 + d.side * 3.1);
+  }
+
+  private placeAt(kind: StationDressing['kind'], x: number, z: number, yaw: number, blocks = true, seed = 0): Placed | null {
     const h = this.host;
     const g = h.game;
-    const p = stationPoint(a, d.out, d.side);
+    const p = { x, z };
     const y = h.floorY(p.x, p.z);
     if (y === null) return null;
-    const yaw = Math.atan2(a.ox, a.oz) + (d.turn ?? 0);
     let object: THREE.Object3D;
     let light: Placed['light'] = null;
     let animate: Placed['animate'];
@@ -178,7 +209,7 @@ export class StationDirector {
     let lamp: { at: THREE.Object3D; req: Omit<Parameters<NonNullable<Game['lights']>['request']>[0], 'position'> } | null = null;
     // Collider half extents (x across, z along the piece's +Z) and height.
     let half = { x: 0.3, y: 0.5, z: 0.3 };
-    switch (d.kind) {
+    switch (kind) {
       case 'brazier': {
         const b = makeBrazier();
         object = b.group;
@@ -189,7 +220,7 @@ export class StationDirector {
       case 'stall-food':
       case 'stall-cloth':
       case 'stall-pots':
-        object = makeStall(d.kind === 'stall-food' ? 'food' : d.kind === 'stall-cloth' ? 'cloth' : 'pots');
+        object = makeStall(kind === 'stall-food' ? 'food' : kind === 'stall-cloth' ? 'cloth' : 'pots');
         half = { x: 0.95, y: 0.45, z: 0.45 };
         // An oil lamp on the stall, lit in the dark hours.
         lamp = { at: lampAt(object, 0.55, 1.0, -0.2), req: { intensity: 4, distance: 6.5, flicker: 0.3, night: true, glow: 0.12 } };
@@ -198,11 +229,61 @@ export class StationDirector {
         object = makeTable();
         half = { x: 0.58, y: 0.4, z: 0.32 };
         break;
+      case 'counter':
+        object = makeCounter();
+        half = { x: 1.1, y: 0.5, z: 0.4 };
+        lamp = { at: lampAt(object, -0.8, 1.15, -0.25), req: { intensity: 4, distance: 7, flicker: 0.3, night: true, glow: 0.15 } };
+        break;
+      case 'amphorae':
+        object = makeAmphorae();
+        half = { x: 0.95, y: 0.5, z: 0.3 };
+        break;
+      case 'scrolls':
+        object = makeScrollTable();
+        half = { x: 0.58, y: 0.4, z: 0.32 };
+        break;
+      case 'bench':
+        object = makeBench();
+        half = { x: 0.85, y: 0.25, z: 0.2 };
+        break;
+      case 'stool':
+        object = makeStool();
+        half = { x: 0.2, y: 0.25, z: 0.2 };
+        break;
+      case 'vats':
+        object = makeVats();
+        half = { x: 1.5, y: 0.3, z: 0.5 };
+        break;
+      case 'anvil':
+        object = makeAnvil();
+        half = { x: 0.35, y: 0.35, z: 0.25 };
+        break;
+      case 'oven': {
+        const o = makeOven();
+        object = o.group;
+        half = { x: 0.8, y: 0.75, z: 0.75 };
+        lamp = { at: o.fire, req: { intensity: 9, distance: 9, flicker: true, priority: 1.2, glow: 0.3 } };
+        break;
+      }
+      case 'mill': {
+        const mill = makeMill();
+        object = mill.group;
+        half = { x: 0.8, y: 0.6, z: 0.8 };
+        animate = mill.animate;
+        break;
+      }
+      case 'altar': {
+        const a = makeAltar();
+        object = a.group;
+        half = { x: 0.5, y: 0.45, z: 0.4 };
+        lamp = { at: a.flame, req: { intensity: 8, distance: 9, flicker: true, priority: 1.2, glow: 0.35 } };
+        break;
+      }
       case 'cart': {
-        const c = makeParkedCart(Math.abs(d.side) % 2 < 1 ? 'marble' : 'amphorae');
+        const c = makeParkedCart(Math.abs(seed) % 2 < 1 ? 'marble' : 'amphorae');
         object = c.group;
         half = { x: 0.75, y: 0.75, z: 1.6 };
-        let ph = Math.abs(d.out * 7.3 + d.side * 3.1);
+        let ph = Math.abs(seed);
         animate = (dt) => {
           ph += dt;
           // The mule shifts its weight and flicks its tail now and then.
@@ -219,8 +300,9 @@ export class StationDirector {
       object.updateMatrixWorld(true);
       light = g.lights.request({ position: lamp.at.getWorldPosition(new THREE.Vector3()), ...lamp.req });
     }
-    const colliders = [g.physics.addBox({ x: p.x, y: y + half.y, z: p.z }, half, yaw)];
-    h.block(p.x, p.z, Math.max(half.x, half.z) + 0.2);
+    // A seat stays clear of physics (its sitter stands where the collider would be).
+    const colliders = blocks ? [g.physics.addBox({ x: p.x, y: y + half.y, z: p.z }, half, yaw)] : [];
+    if (blocks) h.block(p.x, p.z, Math.max(half.x, half.z) + 0.2);
     return { object, colliders, light, animate };
   }
 

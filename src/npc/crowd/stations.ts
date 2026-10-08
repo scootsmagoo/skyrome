@@ -16,9 +16,26 @@ import { toGame, WORLD_SCALE } from '../../world/coords';
 import { laneAt } from '../../ai/life/lanes';
 import type { DayPhase } from './budget';
 import { atlasLanes } from './atlasLanes';
+import { TRADES } from './trades';
 import type { CrowdRoleId, PropKind } from './roles';
 
-export type DressingKind = 'brazier' | 'stall-food' | 'stall-cloth' | 'stall-pots' | 'table' | 'cart';
+export type DressingKind =
+  | 'brazier'
+  | 'stall-food'
+  | 'stall-cloth'
+  | 'stall-pots'
+  | 'table'
+  | 'cart'
+  | 'counter'
+  | 'amphorae'
+  | 'scrolls'
+  | 'bench'
+  | 'stool'
+  | 'vats'
+  | 'anvil'
+  | 'oven'
+  | 'mill'
+  | 'altar';
 
 export interface StationMember {
   role: CrowdRoleId;
@@ -34,6 +51,8 @@ export interface StationMember {
   label?: string;
   /** Bark table (overrides the role's). */
   barks?: string;
+  /** A stool is put under them (loop 'sit'): a barber's customer, a scribe. */
+  seat?: boolean;
 }
 
 export interface StationDressing {
@@ -55,6 +74,8 @@ export interface StationDef {
   /** Or at a real-metre point, 'out' along a compass bearing (degrees). */
   point?: readonly [number, number];
   bearing?: number;
+  /** Or on a landmark's own spot (a palus in the Ludus court, a room door): 'out' is the spot's heading. */
+  spot?: string;
   /** Phases of the day when the station is manned. */
   when: readonly DayPhase[];
   members: readonly StationMember[];
@@ -257,6 +278,8 @@ export const STATIONS: readonly StationDef[] = [
     ],
     dressing: [{ kind: 'brazier', out: 2.4, side: 5.2 }],
   },
+  // The city at work: shops, workshops, schools, the dole, the baths, the Ludus (trades.ts).
+  ...TRADES,
 ];
 
 export interface StationAnchor {
@@ -269,11 +292,24 @@ export interface StationAnchor {
 
 const anchors = new Map<string, StationAnchor | null>();
 
-/** Game-space anchor of a station (null if its landmark or lane is missing). */
+type SpotLookup = (id: string) => { x: number; z: number; heading: number } | null;
+let spotLookup: SpotLookup | null = null;
+
+/** How station `spot` anchors find landmark spots (NpcManager sets it from game.landmarks). */
+export function setStationSpots(fn: SpotLookup | null) {
+  spotLookup = fn;
+}
+
+/** Game-space anchor of a station (null if its landmark, lane or spot is missing). */
 export function stationAnchor(def: StationDef): StationAnchor | null {
   if (anchors.has(def.id)) return anchors.get(def.id)!;
   let a: StationAnchor | null = null;
-  if (def.landmark) {
+  if (def.spot) {
+    // Landmarks build after the NPC module: not cached until the spot exists.
+    const sp = spotLookup?.(def.spot);
+    if (!sp) return null;
+    a = { x: sp.x, z: sp.z, ox: Math.sin(sp.heading), oz: Math.cos(sp.heading) };
+  } else if (def.landmark) {
     const lm = atlas.LANDMARK_BY_ID[def.landmark];
     if (lm) {
       const [gx, gz] = toGame(lm.center[0], lm.center[1]);

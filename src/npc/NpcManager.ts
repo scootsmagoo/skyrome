@@ -35,7 +35,7 @@ import { DEFAULT_STEER, steer, type SteerAgent, type SteerNeighbor, type Vec2 } 
 import { StreetNav } from '../ai/life/streets';
 import { laneAt, type LaneSet } from '../ai/life/lanes';
 import { atlasLanes, cartLane } from './crowd/atlasLanes';
-import type { StationDef, StationMember } from './crowd/stations';
+import { setStationSpots, type StationDef, type StationMember } from './crowd/stations';
 import { StationDirector, type StationHost } from './stationDirector';
 import { BarkDirector, type BarkKind } from './barks';
 import { makeTask, NpcBrain, type LifeContext } from './brain';
@@ -287,6 +287,20 @@ export class NpcManager implements System {
     this.district = this.fixedDistrict ?? districtAt(0, 0);
     this.life = this.makeLife();
     this.vignettes = new VignetteDirector(VIGNETTES, this.makeVignetteHost());
+    // Stations on a landmark's own spots (the pali in the Ludus court, a workshop door).
+    const spotCache = new Map<string, { x: number; z: number; heading: number }>();
+    setStationSpots((id) => {
+      const hit = spotCache.get(id);
+      if (hit) return hit;
+      for (const p of game.landmarks?.values() ?? []) {
+        const sp = p.spots.find((x) => x.id === id);
+        if (!sp) continue;
+        const v = { x: sp.position.x, z: sp.position.z, heading: sp.heading ?? 0 };
+        spotCache.set(id, v);
+        return v;
+      }
+      return null;
+    });
     this.vignettes.enabled = opts.vignettes ?? q.get('vignettes') !== '0';
     this.carts = new CartDirector(this.makeCartHost());
     if (opts.carts === false) this.cartsEnabled = false;
@@ -499,7 +513,9 @@ export class NpcManager implements System {
     const y = this.floorY(x, z);
     if (y === null) return null;
     const avatarRole = this.rng.pick(role.avatar);
-    const app = opts.appearance ?? this.appearanceFor(avatarRole, this.rng.int(0, VARIANTS - 1), !!role.toga);
+    let app = opts.appearance ?? this.appearanceFor(avatarRole, this.rng.int(0, VARIANTS - 1), !!role.toga);
+    // Gladiators about the school wear their practice kit: no helmet, no shield, nothing in hand.
+    if (role.id === 'gladiator' && !opts.appearance) app = { ...app, armor: app.armor ? { ...app.armor, helmet: undefined } : undefined, weapon: undefined, shield: undefined };
     const label = role.id === 'foreigner' ? (FOREIGN_LABELS[avatarRole] ?? role.label) : role.id === 'citizen' && avatarRole === 'freedman' ? 'Freedman' : role.label;
     const npc = new Npc(this.game, {
       id: `cit-${++this.seq}`,
@@ -1191,6 +1207,12 @@ export class NpcManager implements System {
         if (!npc.scripted && !npc.talking) npc.brain.leave(m.life);
       },
       alive: (n) => m.byId.get(n.id) === n,
+      settle: (x, z, r) => {
+        const g = m.grid;
+        if (!g.ready(x, z)) return undefined;
+        if (g.walkable(x, z)) return { x, z };
+        return r > 0 ? g.nearestWalkable(x, z, r, { x: 0, z: 0 }) : { x, z };
+      },
       block: (x, z, r) => {
         for (let dz = -r; dz <= r; dz += 0.5) for (let dx = -r; dx <= r; dx += 0.5) if (dx * dx + dz * dz <= r * r) m.grid.block(x + dx, z + dz);
       },

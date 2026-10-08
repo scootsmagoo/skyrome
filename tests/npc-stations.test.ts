@@ -5,7 +5,7 @@ import { crowdBudget, crowdTarget, dayPhase, NIGHT_CAP, roleWeights } from '../s
 import { atlasLanes } from '../src/npc/crowd/atlasLanes';
 import { districtAt } from '../src/npc/crowd/districts';
 import { CROWD_ROLES } from '../src/npc/crowd/roles';
-import { activeStations, memberHeading, STATIONS, stationAnchor, stationPoint } from '../src/npc/crowd/stations';
+import { activeStations, memberHeading, setStationSpots, STATIONS, stationAnchor, stationPoint, type StationDef } from '../src/npc/crowd/stations';
 import { ARCHETYPES, isOut, sunTimes } from '../src/npc/schedules';
 import { toGame } from '../src/world/coords';
 
@@ -18,11 +18,24 @@ const spawn = { x: capX + Math.sin(th) * 16, z: capZ - Math.cos(th) * 16 };
 describe('stations', () => {
   it('all resolve to a place in Rome with valid roles', () => {
     for (const s of STATIONS) {
-      expect(stationAnchor(s), s.id).not.toBeNull();
+      // Spot-anchored stations wait for the landmarks (game.landmarks) to resolve.
+      if (s.spot) expect(s.spot, s.id).toMatch(/^[a-z0-9-]+$/);
+      else expect(stationAnchor(s), s.id).not.toBeNull();
       for (const m of s.members) expect(CROWD_ROLES[m.role], `${s.id} ${m.role}`).toBeDefined();
       if (s.landmark) expect(atlas.LANDMARK_BY_ID[s.landmark]).toBeDefined();
       expect(s.when.length).toBeGreaterThan(0);
     }
+  });
+
+  it('anchors on a landmark spot once the landmarks are built, facing along the spot', () => {
+    const def: StationDef = { id: 'st-test-spot', spot: 'test-spot', when: ['morning'], members: [{ role: 'gladiator', out: 1, side: 0, loop: 'drill' }] };
+    setStationSpots(null);
+    expect(stationAnchor(def)).toBeNull();
+    setStationSpots((id) => (id === 'test-spot' ? { x: 10, z: 20, heading: Math.PI / 2 } : null));
+    const a = stationAnchor(def)!;
+    expect(a.x).toBe(10);
+    expect(stationPoint(a, 1, 0).x).toBeCloseTo(11);
+    setStationSpots(null);
   });
 
   it('mans the Porta Capena at 04:30: the vigiles post, the cart stand and the farmers', () => {

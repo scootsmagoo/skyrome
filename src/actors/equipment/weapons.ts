@@ -11,7 +11,7 @@ import { SURF, type Surf } from '../avatar/SkinBuilder';
 import { srgb } from '../avatar/build/common';
 import { RigidBuilder, type Vec3 } from './geom';
 
-export type PropModel = 'cup' | 'hammer' | 'broom' | 'scabbard-gladius' | 'scabbard-spatha';
+export type PropModel = 'cup' | 'hammer' | 'broom' | 'rudis' | 'scabbard-gladius' | 'scabbard-spatha';
 
 const STEEL = srgb('#b7bcc2');
 const STEEL_DARK = srgb('#7d838a');
@@ -243,6 +243,12 @@ export function propGeometry(model: PropModel): THREE.BufferGeometry {
     case 'hammer':
       shaft(rb, -0.1, 0.25, 0.013, 0.015);
       rb.box([0, 0.27, 0.01], [0.018, 0.02, 0.06], STEEL_DARK, steel);
+      break;
+    case 'rudis':
+      // The wooden practice sword: a round grip, a stub guard and a flat blade.
+      shaft(rb, -0.09, 0.1, 0.016, 0.017, WOOD);
+      rb.box([0, 0.11, 0], [0.035, 0.011, 0.015], WOOD, SURF.paint);
+      rb.box([0, 0.38, 0], [0.025, 0.26, 0.009], srgb('#a07a4c'), SURF.paint);
       break;
     case 'broom':
       shaft(rb, -0.4, 0.95, 0.013, 0.013, WOOD);

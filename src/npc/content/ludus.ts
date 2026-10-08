@@ -12,9 +12,9 @@ import type { NpcDef, ScheduleEntry } from '../types';
 /** GDD §14.7 'gladiator' template. */
 function gladiatorDay(evening: ScheduleEntry['activity'] = 'sleep'): ScheduleEntry[] {
   return [
-    { from: at('h1'), at: 'ludus-arena-center', activity: 'work' },
+    { from: at('h1'), at: 'ludus-arena-center', activity: 'drill' },
     { from: at('h6'), at: 'ludus-cellae', activity: 'sit' },
-    { from: at('h8'), at: 'ludus-arena-center', activity: 'work' },
+    { from: at('h8'), at: 'ludus-arena-center', activity: 'drill' },
     { from: at('h10'), at: 'ludus-cellae', activity: 'sit' },
     { from: at('v1'), at: 'ludus-cellae', activity: evening },
   ];
@@ -29,9 +29,9 @@ const npcs: NpcDef[] = [
     rank: 'rudiarius',
     home: 'ludus-cellae',
     schedule: [
-      { from: at('h1'), at: 'ludus-arena-center', activity: 'work' }, // drills
+      { from: at('h1'), at: 'ludus-arena-center', activity: 'talk' }, // calls the drills
       { from: at('h6'), at: 'ludus-cellae', activity: 'sit' },
-      { from: at('h8'), at: 'ludus-arena-center', activity: 'work' },
+      { from: at('h8'), at: 'ludus-arena-center', activity: 'talk' },
       { from: at('h10'), at: 'ludus-cellae', activity: 'talk' },
       { from: at('v1'), at: 'ludus-cellae', activity: 'sleep' },
     ],
@@ -57,7 +57,7 @@ const npcs: NpcDef[] = [
     faction: 'ludus-magnus',
     home: 'lanista',
     schedule: [
-      { from: at('h2'), at: 'lanista', activity: 'work' }, // the office in the barracks block
+      { from: at('h2'), at: 'lanista', activity: 'talk' }, // the office in the barracks block
       { from: at('h6'), at: 'ludus-magnus', activity: 'sleep' }, // offstage
     ],
     dialogue: 'npc-celer',
@@ -80,7 +80,7 @@ const npcs: NpcDef[] = [
     faction: 'ludus-magnus',
     home: 'medicus',
     schedule: [
-      { from: at('h1'), at: 'medicus', activity: 'work' },
+      { from: at('h1'), at: 'medicus', activity: 'stand' },
       { from: at('v1'), at: 'medicus', activity: 'sleep' },
     ],
     dialogue: 'npc-hermippus',

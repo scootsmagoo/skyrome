@@ -515,3 +515,172 @@ export function makeParkedCart(load: 'amphorae' | 'marble'): { group: THREE.Grou
   c.group.add(mule.root);
   return { group: c.group, mule, lamp: c.lamp };
 }
+
+// ---------------------------------------------------------------- trades (station dressing)
+
+type Part = { g: THREE.BufferGeometry; m: THREE.Material; at: THREE.Matrix4 };
+
+/**
+ * A thermopolium counter (Pompeii's are the model): a masonry counter painted red with a marble
+ * top, three dolia sunk in it for hot food and wine, jugs and cups on the step behind. Customers
+ * stand at the front (+Z), the keeper behind (−Z).
+ */
+export function makeCounter(): THREE.Group {
+  return cachedDressing('counter', () => {
+    const m = M();
+    const parts: Part[] = [];
+    parts.push({ g: geo('counterBody', () => new THREE.BoxGeometry(2.1, 0.92, 0.7)), m: m.terracottaRed, at: mat4(0, 0.46, 0) });
+    parts.push({ g: geo('counterTop', () => new THREE.BoxGeometry(2.2, 0.06, 0.8)), m: m.marble, at: mat4(0, 0.95, 0) });
+    const mouth = geo('counterDolium', () => new THREE.CylinderGeometry(0.17, 0.17, 0.02, 10));
+    for (const x of [-0.65, 0, 0.65]) parts.push({ g: mouth, m: m.iron, at: mat4(x, 0.985, 0.04) });
+    // The stepped shelf behind for the jugs.
+    parts.push({ g: geo('counterStep', () => new THREE.BoxGeometry(1.4, 0.12, 0.22)), m: m.marble, at: mat4(0.3, 1.04, -0.28) });
+    const jug = geo('counterJug', () => lathe([[0, 0], [0.06, 0.01], [0.08, 0.08], [0.05, 0.16], [0.03, 0.2], [0, 0.2]], 8));
+    for (let i = 0; i < 5; i++) parts.push({ g: jug, m: i % 2 ? m.terracotta : m.bronze, at: mat4(-0.25 + i * 0.27, 1.1, -0.28) });
+    const cup = geo('stallCup', () => lathe([[0, 0], [0.04, 0], [0.06, 0.06], [0.06, 0.07], [0, 0.04]], 8));
+    for (let i = 0; i < 3; i++) parts.push({ g: cup, m: m.terracotta, at: mat4(-0.95 + i * 0.12, 0.98, 0.25) });
+    return mergeByMaterial(parts);
+  });
+}
+
+/** A heap of amphorae against a wall (wine and oil shops, the quays). */
+export function makeAmphorae(): THREE.Group {
+  return cachedDressing('amphorae', () => {
+    const m = M();
+    const parts: Part[] = [];
+    for (let i = 0; i < 6; i++) parts.push({ g: amphoraGeo(), m: i % 3 ? m.terracotta : m.terracottaRed, at: mat4(-0.75 + i * 0.3, 0.36, -0.05 * (i % 2), 0, 0, (i - 2.5) * 0.06) });
+    // A second row lying across them, necks out.
+    for (let i = 0; i < 4; i++) parts.push({ g: amphoraGeo(), m: m.terracotta, at: mat4(-0.5 + i * 0.32, 0.82, 0.05, 0, Math.PI / 2, 0) });
+    return mergeByMaterial(parts);
+  });
+}
+
+/** A bookseller's table (the Argiletum): scrolls in heaps and in a round capsa, a wax tablet. */
+export function makeScrollTable(): THREE.Group {
+  return cachedDressing('scrolls', () => {
+    const m = M();
+    const parts: Part[] = [];
+    parts.push({ g: geo('tableTop', () => new THREE.BoxGeometry(1.1, 0.05, 0.6)), m: m.wood, at: mat4(0, 0.76, 0) });
+    const leg = geo('tableLeg', () => new THREE.BoxGeometry(0.05, 0.74, 0.05));
+    for (const [x, z] of [[0.5, 0.25], [-0.5, 0.25], [0.5, -0.25], [-0.5, -0.25]]) parts.push({ g: leg, m: m.woodDark, at: mat4(x, 0.37, z) });
+    const roll = geo('scrollRoll', () => new THREE.CylinderGeometry(0.03, 0.03, 0.3, 7));
+    for (let i = 0; i < 9; i++) parts.push({ g: roll, m: m.papyrus, at: mat4(-0.4 + (i % 5) * 0.08, 0.81 + Math.floor(i / 5) * 0.055, -0.05, 0, 0, Math.PI / 2) });
+    parts.push({ g: geo('capsa', () => new THREE.CylinderGeometry(0.13, 0.13, 0.32, 10)), m: m.wicker, at: mat4(0.32, 0.95, -0.08) });
+    for (let i = 0; i < 4; i++) parts.push({ g: roll, m: m.papyrus, at: mat4(0.28 + (i % 2) * 0.07, 1.12, -0.11 + Math.floor(i / 2) * 0.07) });
+    parts.push({ g: geo('waxTablet', () => new THREE.BoxGeometry(0.22, 0.02, 0.16)), m: m.woodDark, at: mat4(0.05, 0.8, 0.16, 0.3) });
+    return mergeByMaterial(parts);
+  });
+}
+
+/** A plain wooden bench (schoolboys, waiting customers). */
+export function makeBench(): THREE.Group {
+  return cachedDressing('bench', () => {
+    const m = M();
+    const parts: Part[] = [];
+    parts.push({ g: geo('benchTop', () => new THREE.BoxGeometry(1.7, 0.06, 0.36)), m: m.wood, at: mat4(0, 0.43, 0) });
+    const leg = geo('benchLeg', () => new THREE.BoxGeometry(0.06, 0.4, 0.3));
+    for (const x of [-0.72, 0.72]) parts.push({ g: leg, m: m.woodDark, at: mat4(x, 0.2, 0) });
+    return mergeByMaterial(parts);
+  });
+}
+
+/** A stool (a barber's customer, a scribe). Seat 0.45 m high. */
+export function makeStool(): THREE.Group {
+  return cachedDressing('stool', () => {
+    const m = M();
+    const parts: Part[] = [];
+    parts.push({ g: geo('stoolSeat', () => new THREE.CylinderGeometry(0.2, 0.2, 0.05, 10)), m: m.wood, at: mat4(0, 0.43, 0) });
+    const leg = geo('stoolLeg', () => new THREE.CylinderGeometry(0.02, 0.025, 0.42, 5));
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      parts.push({ g: leg, m: m.woodDark, at: mat4(Math.cos(a) * 0.13, 0.21, Math.sin(a) * 0.13) });
+    }
+    return mergeByMaterial(parts);
+  });
+}
+
+/** A fuller's treading vats (fullonica): three low tubs with cloth soaking in them. */
+export function makeVats(): THREE.Group {
+  return cachedDressing('vats', () => {
+    const m = M();
+    const parts: Part[] = [];
+    const tub = geo('vatTub', () => lathe([[0.0, 0], [0.42, 0], [0.46, 0.42], [0.42, 0.42], [0.38, 0.06], [0.0, 0.06]], 12));
+    const water = geo('vatWater', () => new THREE.CylinderGeometry(0.4, 0.4, 0.02, 12));
+    for (const x of [-1.0, 0, 1.0]) {
+      parts.push({ g: tub, m: m.terracotta, at: mat4(x, 0, 0) });
+      parts.push({ g: water, m: x === 0 ? m.clothSaffron : m.sack, at: mat4(x, 0.3, 0) });
+    }
+    // Cloth hung to dry on a pole behind.
+    const pole = geo('stallPole', () => new THREE.CylinderGeometry(0.025, 0.025, 2.1, 5));
+    parts.push({ g: pole, m: m.woodDark, at: mat4(-1.4, 1.05, -0.7) }, { g: pole, m: m.woodDark, at: mat4(1.4, 1.05, -0.7) });
+    parts.push({ g: geo('vatRail', () => new THREE.CylinderGeometry(0.02, 0.02, 2.8, 5)), m: m.woodDark, at: mat4(0, 2.0, -0.7, 0, 0, Math.PI / 2) });
+    const sheet = geo('vatSheet', () => new THREE.BoxGeometry(0.8, 1.1, 0.02));
+    [m.clothAwning, m.clothRed, m.clothAwning].forEach((c, i) => parts.push({ g: sheet, m: c, at: mat4(-0.9 + i * 0.9, 1.43, -0.7) }));
+    return mergeByMaterial(parts);
+  });
+}
+
+/** A smith's anvil on its block, with a quench bucket. */
+export function makeAnvil(): THREE.Group {
+  return cachedDressing('anvil', () => {
+    const m = M();
+    const parts: Part[] = [];
+    parts.push({ g: geo('anvilBlock', () => new THREE.CylinderGeometry(0.22, 0.25, 0.5, 8)), m: m.woodDark, at: mat4(0, 0.25, 0) });
+    parts.push({ g: geo('anvilBody', () => new THREE.BoxGeometry(0.42, 0.2, 0.18)), m: m.iron, at: mat4(0, 0.6, 0) });
+    parts.push({ g: geo('anvilHorn', () => new THREE.ConeGeometry(0.07, 0.2, 6)), m: m.iron, at: mat4(0.3, 0.64, 0, 0, 0, -Math.PI / 2) });
+    parts.push({ g: geo('bucket', () => lathe([[0, 0], [0.15, 0], [0.17, 0.3], [0.15, 0.3], [0.13, 0.03], [0, 0.03]], 9)), m: m.wood, at: mat4(-0.55, 0, 0.1) });
+    return mergeByMaterial(parts);
+  });
+}
+
+/** A bread oven (furnus): a brick dome with a glowing mouth; `fire` is where its light goes. */
+export function makeOven(): { group: THREE.Group; fire: THREE.Object3D } {
+  const group = cachedDressing('oven', () => {
+    const m = M();
+    const parts: Part[] = [];
+    parts.push({ g: geo('ovenBase', () => new THREE.BoxGeometry(1.6, 0.8, 1.5)), m: m.terracottaRed, at: mat4(0, 0.4, 0) });
+    parts.push({ g: geo('ovenDome', () => new THREE.SphereGeometry(0.7, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2)), m: m.terracottaRed, at: mat4(0, 0.8, -0.05) });
+    parts.push({ g: geo('ovenMouth', () => new THREE.BoxGeometry(0.42, 0.32, 0.06)), m: m.fire, at: mat4(0, 0.98, 0.68) });
+    parts.push({ g: geo('ovenFlue', () => new THREE.CylinderGeometry(0.1, 0.12, 0.4, 6)), m: m.terracotta, at: mat4(0, 1.6, -0.2) });
+    return mergeByMaterial(parts);
+  });
+  const fire = new THREE.Object3D();
+  fire.position.set(0, 1.0, 0.85);
+  group.add(fire);
+  return { group, fire };
+}
+
+/**
+ * A Pompeian donkey mill (mola asinaria): the hourglass catillus turning on the conical meta,
+ * pushed round by a donkey on a wooden arm. `animate` turns it.
+ */
+export function makeMill(): { group: THREE.Group; animate: (dt: number) => void } {
+  const m = M();
+  const group = new THREE.Group();
+  const base = cachedDressing('millBase', () => {
+    const parts: Part[] = [];
+    parts.push({ g: geo('millPlinth', () => new THREE.CylinderGeometry(0.75, 0.8, 0.35, 12)), m: m.stone, at: mat4(0, 0.175, 0) });
+    parts.push({ g: geo('millMeta', () => new THREE.ConeGeometry(0.4, 0.75, 10)), m: m.iron, at: mat4(0, 0.72, 0) });
+    return mergeByMaterial(parts);
+  });
+  group.add(base);
+  const rotor = new THREE.Group();
+  const stone = mesh(geo('millCatillus', () => lathe([[0.42, 0], [0.3, 0.32], [0.26, 0.42], [0.3, 0.52], [0.42, 0.84], [0.0, 0.84]], 10)), m.iron);
+  stone.position.y = 0.42;
+  const arm = mesh(geo('millArm', () => new THREE.BoxGeometry(2.4, 0.08, 0.08)), m.woodDark);
+  arm.position.y = 0.88;
+  rotor.add(stone, arm);
+  const donkey = new Quadruped('mule');
+  donkey.root.scale.setScalar(0.82);
+  donkey.root.position.set(1.35, 0, 0);
+  donkey.root.rotation.y = Math.PI;
+  rotor.add(donkey.root);
+  group.add(rotor);
+  // A donkey's slow plod: about a turn every 9 seconds.
+  const animate = (dt: number) => {
+    rotor.rotation.y += dt * 0.7;
+    donkey.animate(dt, 0.9);
+  };
+  animate(0);
+  return { group, animate };
+}
