@@ -45,6 +45,7 @@ import type { BoutOptions } from './ArenaBout';
 import { visualsFor, type EnemyOptions, type Opener } from './archetypes';
 import { Bodies } from './bodies';
 import { StreetDanger } from './danger';
+import { RagdollSystem } from '../physics/ragdoll/RagdollSystem';
 import { GoreSystem } from './gore/GoreSystem';
 import { adoptProfile, resolveSpawn, type NpcLike } from './spawnSpec';
 import { Combatant, type CombatView } from './Combatant';
@@ -1747,6 +1748,8 @@ export function installCombat(game: Game, opts: InstallCombatOptions = {}): Comb
   sys.attachHud();
   // Blood and severed limbs (Settings → Gameplay → Gore); needs a scene with a canvas.
   if (typeof document !== 'undefined') sys.gore = game.addSystem(new GoreSystem(game, sys.core, () => sys.rngNext()));
+  // Active ragdolls for deaths, knockouts and knockdowns (physics/ragdoll).
+  if (typeof document !== 'undefined' && !game.ragdolls) game.addSystem(new RagdollSystem(game));
   // Dev: &danger=0 keeps the streets safe; &danger=<site id> stages that encounter just ahead of
   // you when the game starts (src/combat/danger.ts).
   const d = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('danger') : null;

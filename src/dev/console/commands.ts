@@ -137,7 +137,23 @@ export function builtinCommands(): CommandTable<ConsoleCtx> {
       run: (_a, { game }) => {
         const n = aimed(game);
         if (!n) return 'Nobody in front of you.';
+        if (game.player) game.ragdolls?.noteHit(n.id, game.player.position, true);
         return slay(game, n.id) ? `Killed ${n.name ?? n.id}.` : `Could not kill ${n.id}.`;
+      },
+    },
+    {
+      name: 'knock',
+      aliases: ['shove'],
+      help: 'Knock down whoever is in front of you (they sprawl, then get up)',
+      run: (_a, { game }) => {
+        const n = aimed(game);
+        const combat = game.combat;
+        if (!n || !combat || !game.player) return 'Nobody in front of you.';
+        const c = combat.core.get(n.id) ?? combat.adoptActor(n);
+        if (!c) return `Could not knock ${n.id}.`;
+        combat.core.knockdown(c, combat.playerC);
+        game.ragdolls?.noteHit(n.id, game.player.position, true, true);
+        return `Knocked down ${n.name ?? n.id}.`;
       },
     },
     {

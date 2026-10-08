@@ -278,6 +278,11 @@ export class HumanoidAvatar implements CombatAvatar {
     this.anim.setDead(dead);
   }
 
+  /** Dead or knocked out (see setDead). */
+  get isDead(): boolean {
+    return this.dead;
+  }
+
   lookAt(p: THREE.Vector3 | null) {
     this.anim.lookAt(p);
   }

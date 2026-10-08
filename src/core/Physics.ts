@@ -28,6 +28,7 @@ export const Layer = {
   Water: 1 << 5,
   Debris: 1 << 6, // small dynamic props
   CameraBlock: 1 << 7, // things the camera should not pass through but characters can (rare)
+  Ragdoll: 1 << 8, // active-ragdoll body parts (src/physics/ragdoll)
 } as const;
 export const ALL_LAYERS = 0xffff;
 
