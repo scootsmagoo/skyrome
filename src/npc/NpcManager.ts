@@ -1198,6 +1198,18 @@ export class NpcManager implements System {
       floorY: (x, z) => m.floorY(x, z),
       spawnMember: (def, mem, x, z, heading, from) => m.spawnStationMember(def, mem, x, z, heading, from),
       hiddenNear: (x, z, rMin, rMax) => m.hiddenNear(x, z, rMin, rMax),
+      commuteFrom: (x, z) => {
+        const pl = m.game.player?.position;
+        const doors = (m.streets()?.spotsNear(x, z, 45, 'houseDoor') ?? []).filter((d) => {
+          const dd = Math.hypot(d.x - x, d.z - z);
+          return dd > 8 && (!pl || Math.hypot(d.x - pl.x, d.z - pl.z) > 5) && m.grid.ready(d.x, d.z) && m.grid.reachable(d.x, d.z);
+        });
+        if (doors.length) {
+          const d = m.rng.pick(doors);
+          return { x: d.x, z: d.z };
+        }
+        return m.hiddenNear(x, z, 12, 32);
+      },
       dismiss: (npc, now) => {
         if (now || !npc.brain) {
           m.despawn(npc);

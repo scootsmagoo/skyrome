@@ -30,6 +30,8 @@ export interface StationHost {
   spawnMember(def: StationDef, m: StationMember, x: number, z: number, heading: number, from?: { x: number; z: number }): Npc | null;
   /** A walkable, reachable point within `rMin`–`rMax` of (x, z) that the camera can't see (or null). */
   hiddenNear?(x: number, z: number, rMin: number, rMax: number): { x: number; z: number } | null;
+  /** Where someone coming to work here sets out from: a house door nearby (or null). */
+  commuteFrom?(x: number, z: number): { x: number; z: number } | null;
   /** Send a member home (walk off, despawn) or remove it at once. */
   dismiss(npc: Npc, now: boolean): void;
   alive(npc: Npc): boolean;
@@ -70,12 +72,16 @@ interface Manned {
   active: boolean;
   /** Settled member posts (null: no open ground there, never staffed). */
   posts: ({ x: number; z: number } | null)[];
+  /** Opened by the clock with the player about: the staff walk in to work (until this time). */
+  commuteUntil: number;
 }
 
 export class StationDirector {
   enabled = true;
   readonly manned = new Map<string, Manned>();
   private t = 0;
+  private clock = 0;
+  private lastPhase: DayPhase | null = null;
   /** Spawn even in view (first fill after a teleport or the boot). */
   private eager = true;
 
@@ -93,11 +99,15 @@ export class StationDirector {
 
   update(dt: number) {
     for (const m of this.manned.values()) for (const d of m.dressing) d.animate?.(dt);
+    this.clock += dt;
     this.t -= dt;
     if (this.t > 0) return;
     this.t = 0.5;
     const pl = this.host.player;
     if (!pl || !this.enabled) return;
+    // The hour turned: stations opening now are staffed by people arriving for work.
+    const turned = this.lastPhase !== null && this.lastPhase !== this.host.phase && !this.eager;
+    this.lastPhase = this.host.phase;
     const active = new Set(activeStations(pl.x, pl.z, this.host.phase, SPAWN_R, this.defs).map((d) => d.id));
     // Man the active ones.
     for (const def of this.defs) {
@@ -112,7 +122,7 @@ export class StationDirector {
           const p = stationPoint(a, mem.out, mem.side);
           return settle ? (settle(p.x, p.z, 2.2) ?? null) : p;
         });
-        m = { def, members: def.members.map(() => null), dressing: [], active: true, posts };
+        m = { def, members: def.members.map(() => null), dressing: [], active: true, posts, commuteUntil: turned ? this.clock + 90 : 0 };
         this.manned.set(def.id, m);
         this.dress(m);
       }
@@ -162,6 +172,14 @@ export class StationDirector {
       const y = this.host.floorY(p.x, p.z);
       if (y === null) return;
       const heading = memberHeading(a, m.def, mem);
+      // Opening time: they come along the street from home, seen or not.
+      if (this.clock < m.commuteUntil && pl && Math.hypot(p.x - pl.x, p.z - pl.z) < 75) {
+        const c = this.host.commuteFrom?.(p.x, p.z);
+        if (c) {
+          m.members[i] = this.host.spawnMember(m.def, mem, p.x, p.z, heading, c);
+          return;
+        }
+      }
       const far = !pl || Math.hypot(p.x - pl.x, p.z - pl.z) >= STATION_SEEN_SPAWN;
       if (this.eager || far || !this.host.isSeen(p.x, y + 1.2, p.z)) {
         m.members[i] = this.host.spawnMember(m.def, mem, p.x, p.z, heading);
