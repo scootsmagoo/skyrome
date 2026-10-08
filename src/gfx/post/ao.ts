@@ -17,11 +17,12 @@ uniform vec2 uTexel;      // full-resolution texel of the depth buffer
 uniform float uRadius;    // view-space metres
 uniform float uIntensity;
 uniform float uFadeFar;   // metres: AO fades out toward here
+uniform float uReversed;  // 1 with a reversed depth buffer (NDC z = depth, far = 0)
 varying vec2 vUv;
 
 vec3 viewPos(vec2 uv) {
   float d = texture2D(tDepth, uv).x;
-  vec4 p = uInvProj * vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
+  vec4 p = uInvProj * vec4(uv * 2.0 - 1.0, uReversed > 0.5 ? d : d * 2.0 - 1.0, 1.0);
   return p.xyz / p.w;
 }
 
@@ -29,7 +30,7 @@ float ign(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00
 
 void main() {
   float d = texture2D(tDepth, vUv).x;
-  if (d >= 0.99999) { gl_FragColor = vec4(1.0); return; }
+  if (uReversed > 0.5 ? d <= 0.00001 : d >= 0.99999) { gl_FragColor = vec4(1.0); return; }
   vec3 P = viewPos(vUv);
   float dist = -P.z;
   if (dist > uFadeFar) { gl_FragColor = vec4(1.0); return; }
@@ -67,10 +68,11 @@ uniform sampler2D tAo;
 uniform sampler2D tDepth;
 uniform vec2 uTexel;      // AO texel
 uniform mat4 uInvProj;
+uniform float uReversed;
 varying vec2 vUv;
 float viewZ(vec2 uv) {
   float d = texture2D(tDepth, uv).x;
-  vec4 p = uInvProj * vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
+  vec4 p = uInvProj * vec4(uv * 2.0 - 1.0, uReversed > 0.5 ? d : d * 2.0 - 1.0, 1.0);
   return p.z / p.w;
 }
 void main() {

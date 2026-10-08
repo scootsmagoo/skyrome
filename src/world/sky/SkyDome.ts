@@ -6,6 +6,7 @@
  */
 import * as THREE from 'three';
 import type { Lighting } from './lighting';
+import { reversedDepth } from '../../gfx/depth';
 import { FULLSCREEN_VERT, LUT_FRAG, SKY_FRAG, SKY_VERT } from './skyShader';
 
 export const LUT_SIZE = { width: 192, height: 128 };
@@ -40,6 +41,7 @@ export class SkyDome {
   readonly envMesh: THREE.Mesh;
   readonly material: THREE.ShaderMaterial;
   readonly uniforms = {
+    uReversedDepth: reversedDepth,
     uSunLut: { value: null as THREE.Texture | null },
     uMoonLut: { value: null as THREE.Texture | null },
     uSunDir: { value: v3() },

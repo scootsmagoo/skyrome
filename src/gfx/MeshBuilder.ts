@@ -49,6 +49,86 @@ export interface InstancePart {
  */
 const instanceGeometry = new Map<string, Map<string, { geometry: THREE.BufferGeometry; material: THREE.Material | MaterialId; castShadow: boolean }>>();
 
+/** Props whose base is not meant to touch a surface (wall brackets, lamps on hooks, awnings). */
+const HUNG_PROPS = /torch|bracket|lamp|awning|sign|hang|shelf|garland|wreath|lantern|banner|sconce|velum/;
+
+/**
+ * Move each prop vertically onto the surface under its base: the highest up-facing face of the
+ * other geometry (or the ground) within 0.5 m below to 0.35 m above it (0.6 m above for the
+ * ground: props sunk into a slope). Props placed at one ground height on a slope, or at a floor
+ * height that was then lifted, floated or sank; this puts them down where they stand. Moves of
+ * under 3 cm are skipped. Pure geometry; the geometry is non-indexed (MeshBuilder.add).
+ */
+export function settleProps(props: { kind: string; base: THREE.Vector3; geoms: THREE.BufferGeometry[] }[], all: THREE.BufferGeometry[], ground: ((x: number, z: number) => number) | null) {
+  const live = props.filter((p) => !HUNG_PROPS.test(p.kind));
+  if (!live.length) return;
+  // Index up-facing triangles of everything near the props in 1 m cells.
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const p of live) {
+    x0 = Math.min(x0, p.base.x);
+    x1 = Math.max(x1, p.base.x);
+    z0 = Math.min(z0, p.base.z);
+    z1 = Math.max(z1, p.base.z);
+  }
+  const cells = new Map<number, { g: THREE.BufferGeometry; i: number }[]>();
+  const key = (ix: number, iz: number) => ix * 100003 + iz;
+  for (const g of all) {
+    const a = (g.getAttribute('position') as THREE.BufferAttribute | undefined)?.array as Float32Array | undefined;
+    if (!a) continue;
+    for (let i = 0; i + 8 < a.length; i += 9) {
+      const minX = Math.min(a[i], a[i + 3], a[i + 6]), maxX = Math.max(a[i], a[i + 3], a[i + 6]);
+      const minZ = Math.min(a[i + 2], a[i + 5], a[i + 8]), maxZ = Math.max(a[i + 2], a[i + 5], a[i + 8]);
+      if (maxX < x0 - 1 || minX > x1 + 1 || maxZ < z0 - 1 || minZ > z1 + 1) continue;
+      const ux = a[i + 3] - a[i], uy = a[i + 4] - a[i + 1], uz = a[i + 5] - a[i + 2];
+      const vx = a[i + 6] - a[i], vy = a[i + 7] - a[i + 1], vz = a[i + 8] - a[i + 2];
+      const ny = uz * vx - ux * vz;
+      const l = Math.hypot(uy * vz - uz * vy, ny, ux * vy - uy * vx);
+      if (l < 1e-6 || ny / l < 0.7) continue;
+      for (let ix = Math.floor(minX); ix <= Math.floor(maxX); ix++)
+        for (let iz = Math.floor(minZ); iz <= Math.floor(maxZ); iz++) {
+          const k = key(ix, iz);
+          let list = cells.get(k);
+          if (!list) cells.set(k, (list = []));
+          list.push({ g, i });
+        }
+    }
+  }
+  for (const p of live) {
+    const own = new Set(p.geoms);
+    const { x, y, z } = p.base;
+    let best = -Infinity;
+    for (const { g, i } of cells.get(key(Math.floor(x), Math.floor(z))) ?? []) {
+      if (own.has(g)) continue;
+      const a = (g.getAttribute('position') as THREE.BufferAttribute).array as Float32Array;
+      const ax = a[i], az = a[i + 2], bx = a[i + 3], bz = a[i + 5], cx = a[i + 6], cz = a[i + 8];
+      const d = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
+      if (Math.abs(d) < 1e-9) continue;
+      const l1 = ((bz - cz) * (x - cx) + (cx - bx) * (z - cz)) / d;
+      const l2 = ((cz - az) * (x - cx) + (ax - cx) * (z - cz)) / d;
+      const l3 = 1 - l1 - l2;
+      if (l1 < -1e-4 || l2 < -1e-4 || l3 < -1e-4) continue;
+      const sy = l1 * a[i + 1] + l2 * a[i + 4] + l3 * a[i + 7];
+      if (sy >= y - 0.5 && sy <= y + 0.35 && sy > best) best = sy;
+    }
+    if (best === -Infinity && ground) {
+      const gy = ground(x, z);
+      if (gy >= y - 0.5 && gy <= y + 0.6) best = gy;
+    }
+    if (best === -Infinity) continue;
+    const dy = best - y;
+    if (Math.abs(dy) < 0.03) continue;
+    for (const g of p.geoms) {
+      const pos = g.getAttribute('position') as THREE.BufferAttribute;
+      const a = pos.array as Float32Array;
+      for (let i = 1; i < a.length; i += 3) a[i] += dy;
+      pos.needsUpdate = true;
+      g.boundingBox = null;
+      g.boundingSphere = null;
+    }
+    p.base.y = best;
+  }
+}
+
 /** Time spent separating coplanar faces (for profiling). */
 export const coplanarStats = { ms: 0, builds: 0 };
 
@@ -69,6 +149,26 @@ export class MeshBuilder {
   readonly colliders: ColliderSpec[] = [];
   /** Prop base points (geometry audit only, ?audit). */
   readonly auditProps: { kind: string; p: THREE.Vector3; src: string }[] = [];
+  /**
+   * Ground height in this builder's frame (game y at x, z), when the owner knows it: props settle
+   * onto it where nothing else lies under them (see settleProps).
+   */
+  ground: ((x: number, z: number) => number) | null = null;
+  /** Props placed so far: their base point and the geometry they added (settled at build). */
+  readonly props: { kind: string; base: THREE.Vector3; geoms: THREE.BufferGeometry[] }[] = [];
+  /** Geometry added while a prop is being placed (beginProp … endProp). */
+  private capture: THREE.BufferGeometry[] | null = null;
+
+  /** Start recording a prop's geometry (props.ts placeProp). */
+  beginProp() {
+    this.capture = [];
+  }
+
+  /** Finish recording: the prop stands at `base` (its foot, in this builder's frame). */
+  endProp(kind: string, base: THREE.Vector3) {
+    if (this.capture?.length) this.props.push({ kind, base, geoms: this.capture });
+    this.capture = null;
+  }
 
   /**
    * Add geometry (it is cloned and transformed; the input is not modified). `material` is a
@@ -84,6 +184,7 @@ export class MeshBuilder {
     g.morphAttributes = {};
     g.userData.seq = ++seq;
     if (AUDIT) g.userData.src = currentAuditSource();
+    this.capture?.push(g);
     const key = `${this.materialKey(material)}|${opts.castShadow === false ? 0 : 1}`;
     const list = this.parts.get(key) ?? [];
     list.push(g);
@@ -148,6 +249,8 @@ export class MeshBuilder {
         group.add(mesh);
       }
     }
+    // Props stand on whatever is under them (paving, a floor, a table, the ground): see settleProps.
+    if (this.props.length) settleProps(this.props, [...this.parts.values()].flat(), this.ground);
     // Coplanar faces of different materials would flicker: sink the losers first (coplanar.ts).
     const all: { geometry: THREE.BufferGeometry; material: string; seq: number }[] = [];
     for (const [key, geoms] of this.parts) for (const g of geoms) all.push({ geometry: g, material: key.split('|')[0], seq: g.userData.seq ?? 0 });
@@ -189,6 +292,7 @@ export class MeshBuilder {
   append(other: MeshBuilder, matrix?: THREE.Matrix4): this {
     for (const [k, m] of other.custom) this.custom.set(k, m);
     for (const [key, e] of other.instances) for (const mm of e.matrices) this.instance(key, e.make, matrix ? matrix.clone().multiply(mm) : mm);
+    const moved = new Map<THREE.BufferGeometry, THREE.BufferGeometry>();
     for (const [key, geoms] of other.parts) {
       const list = this.parts.get(key) ?? [];
       for (const g of geoms) {
@@ -196,13 +300,26 @@ export class MeshBuilder {
         else {
           const c = g.clone().applyMatrix4(matrix);
           c.userData.seq = g.userData.seq;
+          moved.set(g, c);
           list.push(c);
         }
       }
       this.parts.set(key, list);
     }
+    for (const pr of other.props) {
+      if (!matrix) {
+        this.props.push(pr);
+        continue;
+      }
+      // One transformed base shared with the audit's record of the same prop.
+      const base = pr.base.clone().applyMatrix4(matrix);
+      const rec = other.auditProps.find((a) => a.p === pr.base);
+      if (rec) this.auditProps.push({ ...rec, p: base });
+      this.props.push({ kind: pr.kind, base, geoms: pr.geoms.map((g) => moved.get(g) ?? g) });
+    }
     for (const c of other.colliders) this.colliders.push(matrix ? transformCollider(c, matrix) : c);
-    for (const p of other.auditProps) this.auditProps.push(matrix ? { ...p, p: p.p.clone().applyMatrix4(matrix) } : p);
+    // Audit records of props are carried with the props below (sharing their settled base).
+    for (const p of other.auditProps) if (!matrix || !other.props.some((pr) => pr.base === p.p)) this.auditProps.push(matrix ? { ...p, p: p.p.clone().applyMatrix4(matrix) } : p);
     return this;
   }
 

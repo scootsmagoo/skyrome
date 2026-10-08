@@ -189,19 +189,20 @@ export class PostFX implements System {
         uRadius: { value: 1 },
         uIntensity: { value: 1 },
         uFadeFar: { value: 160 },
+        uReversed: { value: 0 },
       },
       fragmentShader: AO_FRAG,
     });
     this.aoBlurMat = new THREE.ShaderMaterial({
       ...common,
       name: 'AOBlur',
-      uniforms: { tAo: { value: null }, tDepth: { value: null }, uTexel: { value: new THREE.Vector2() }, uInvProj: { value: new THREE.Matrix4() } },
+      uniforms: { tAo: { value: null }, tDepth: { value: null }, uTexel: { value: new THREE.Vector2() }, uInvProj: { value: new THREE.Matrix4() }, uReversed: { value: 0 } },
       fragmentShader: AO_BLUR_FRAG,
     });
     this.shaftMaskMat = new THREE.ShaderMaterial({
       ...common,
       name: 'ShaftMask',
-      uniforms: { tColor: { value: null }, tDepth: { value: null }, uSun: { value: new THREE.Vector2() }, uAspect: { value: 1 } },
+      uniforms: { tColor: { value: null }, tDepth: { value: null }, uSun: { value: new THREE.Vector2() }, uAspect: { value: 1 }, uReversed: { value: 0 } },
       fragmentShader: SHAFT_MASK_FRAG,
     });
     this.shaftBlurMat = new THREE.ShaderMaterial({
@@ -322,6 +323,10 @@ export class PostFX implements System {
     renderer.setRenderTarget(this.hdr);
     renderer.render(scene, camera);
 
+    const reversed = renderer.capabilities.reversedDepthBuffer && renderer.state.buffers.depth.getReversed() ? 1 : 0;
+    this.aoMat.uniforms.uReversed.value = reversed;
+    this.aoBlurMat.uniforms.uReversed.value = reversed;
+    this.shaftMaskMat.uniforms.uReversed.value = reversed;
     const t0 = performance.now();
     const info = renderer.info;
     info.autoReset = false; // keep the scene's draw-call stats and add ours

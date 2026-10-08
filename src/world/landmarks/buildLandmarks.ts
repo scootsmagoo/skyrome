@@ -63,6 +63,13 @@ export async function buildLandmarks(
     const cos = Math.cos(rotY);
     const sin = Math.sin(rotY);
     const detail = (lm.priority ?? 3) <= (opts.highDetailPriority ?? 2) ? 'high' : 'low';
+    const groundLocal = (lx: number, lz: number) => {
+      if (!hm) return 0;
+      // local → world (rotation.y = rotY): x' = x cos + z sin, z' = -x sin + z cos
+      const wx = gx + lx * cos + lz * sin;
+      const wz = gz - lx * sin + lz * cos;
+      return hm.heightAt(wx, wz) - baseY;
+    };
     try {
       const built = builder.build({
         game,
@@ -70,14 +77,13 @@ export async function buildLandmarks(
         S: WORLD_SCALE,
         rng: new Rng(`landmark:${lm.id}`),
         detail,
-        builder: () => new MeshBuilder(),
-        groundAt: (lx, lz) => {
-          if (!hm) return 0;
-          // local → world (rotation.y = rotY): x' = x cos + z sin, z' = -x sin + z cos
-          const wx = gx + lx * cos + lz * sin;
-          const wz = gz - lx * sin + lz * cos;
-          return hm.heightAt(wx, wz) - baseY;
+        builder: () => {
+          // Props settle onto the ground in the landmark's frame (MeshBuilder.settleProps).
+          const mb = new MeshBuilder();
+          mb.ground = groundLocal;
+          return mb;
         },
+        groundAt: groundLocal,
       });
       const obj = built.object;
       obj.name = `landmark:${lm.id}`;

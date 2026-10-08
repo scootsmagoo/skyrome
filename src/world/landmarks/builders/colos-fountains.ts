@@ -219,7 +219,12 @@ function buildMetaSudans(ctx: LandmarkContext): LandmarkBuild {
     f.span('roof_tile', -3.78, 3.0, -0.14, 3.78, 3.16, 0.59);
     f.span('roof_tile', -3.78, 3.16, 0.06, 3.78, 3.3, 0.39);
     f.solid(-3.75, gmin - y - 0.4, -0.06, 3.75, 3.3, 0.51);
-    if (high) placeProp(f, 'bench_masonry', 0, 0, -0.65, 0, { rng: new Rng('album') });
+    if (high) {
+      // On the ground in front of the wall (the wall stands on the highest point of its base).
+      const rot = Math.atan2(dir.x, dir.y);
+      const bx = x - Math.sin(rot) * 0.65, bz = z - Math.cos(rot) * 0.65;
+      placeProp(f, 'bench_masonry', 0, ctx.groundAt(bx, bz) - y, -0.65, 0, { rng: new Rng('album') });
+    }
     if (high && typeof document !== 'undefined') {
       inscriptionPanel(
         b,

@@ -17,6 +17,7 @@
  */
 import * as THREE from 'three';
 import { chooseGraphics } from './graphics';
+import { reversedDepth } from '../gfx/depth';
 import { EventBus, type GameEvents } from './Events';
 import { GameTime } from './GameTime';
 import { Input } from './Input';
@@ -112,7 +113,12 @@ export class Game {
       antialias: this.settings.data.antialias,
       powerPreference: 'high-performance',
       stencil: false,
+      // Reversed-Z (where EXT_clip_control exists; otherwise three falls back): with the post
+      // chain's float depth target, depth precision is nearly even at every distance, so surfaces
+      // a few centimetres apart no longer flicker 100–300 m away.
+      reversedDepthBuffer: true,
     });
+    reversedDepth.value = this.renderer.state.buffers.depth.getReversed() ? 1 : 0;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;

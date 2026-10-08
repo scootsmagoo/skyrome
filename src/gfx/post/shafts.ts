@@ -12,10 +12,11 @@ uniform sampler2D tColor;
 uniform sampler2D tDepth;
 uniform vec2 uSun;      // sun position in uv
 uniform float uAspect;
+uniform float uReversed;
 varying vec2 vUv;
 void main() {
   float d = texture2D(tDepth, vUv).x;
-  float sky = step(0.99999, d);
+  float sky = uReversed > 0.5 ? step(d, 0.00001) : step(0.99999, d);
   vec2 dv = (vUv - uSun) * vec2(uAspect, 1.0);
   float near = exp(-dot(dv, dv) * 9.0);
   vec3 c = texture2D(tColor, vUv).rgb;

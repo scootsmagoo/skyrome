@@ -68,7 +68,9 @@ export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn
   };
   if (paved) {
     const cw = 0.32;
-    push(-hw - sw, -0.6);
+    // The outer edge is a bank sloping down to the ground (a vertical 30 cm face stood out as a
+    // slab where the street crosses open ground; along houses it runs under their walls).
+    push(-hw - sw - 0.55, -0.25);
     push(-hw - sw, ch, 'concrete', 'out');
     push(-hw - cw, ch, sideMat, 'up');
     push(-hw, ch, curbMat, 'up');
@@ -80,7 +82,7 @@ export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn
     push(hw, ch, curbMat, 'in');
     push(hw + cw, ch, curbMat, 'up');
     push(hw + sw, ch, sideMat, 'up');
-    push(hw + sw, -0.6, 'concrete', 'out');
+    push(hw + sw + 0.55, -0.25, 'concrete', 'out');
   } else {
     push(-hw - 0.05, -0.4);
     push(-hw, 0.0, roadMat, 'out');
@@ -312,7 +314,7 @@ export function buildPlaza(b: MeshBuilder, poly: Polygon, heightAt: HeightFn, o:
   if (skirt > 0) {
     const s: number[] = [];
     const paved = (p: Vec2) => pointInPolygon(p, poly) && !inHole(p);
-    const ring = (pts: Polygon) => {
+    const ring = (pts: Polygon, bevel: boolean) => {
       for (let i = 0; i < pts.length; i++) {
         const a = pts[i], c = pts[(i + 1) % pts.length];
         const len = Math.hypot(c[0] - a[0], c[1] - a[1]);
@@ -327,15 +329,21 @@ export function buildPlaza(b: MeshBuilder, poly: Polygon, heightAt: HeightFn, o:
           const right = paved([m[0] + nx * 0.05, m[1] + nz * 0.05]), left = paved([m[0] - nx * 0.05, m[1] - nz * 0.05]);
           if (right === left) continue;
           const t0 = v(p0[0], p0[1]), t1 = v(p1[0], p1[1]);
-          const b0 = [t0[0], t0[1] - skirt, t0[2]], b1 = [t1[0], t1[1] - skirt, t1[2]];
+          // A bevel out and down into the ground on the unpaved side (a vertical skirt left the
+          // paving's edge standing proud of the ground like a loose slab).
+          // (Around holes the skirt stays vertical: nothing may reach into a hole.)
+          const k2 = bevel ? skirt * 1.4 : 0;
+          const ox = (right ? -nx : nx) * k2, oz = (right ? -nz : nz) * k2;
+          const b0 = [t0[0] + ox, bevel ? heightAt(t0[0] + ox, t0[2] + oz) - 0.1 : t0[1] - skirt, t0[2] + oz];
+          const b1 = [t1[0] + ox, bevel ? heightAt(t1[0] + ox, t1[2] + oz) - 0.1 : t1[1] - skirt, t1[2] + oz];
           // Face the unpaved side: (t0, b0, t1) faces left of p0→p1, (t0, t1, b0) faces right.
           if (left) s.push(...t0, ...t1, ...b0, ...t1, ...b1, ...b0);
           else s.push(...t0, ...b0, ...t1, ...t1, ...b0, ...b1);
         }
       }
     };
-    ring(poly);
-    for (const h of holes) ring(ensurePositive(h));
+    ring(poly, true);
+    for (const h of holes) ring(ensurePositive(h), false);
     if (s.length) {
       const sg = new THREE.BufferGeometry();
       sg.setAttribute('position', new THREE.Float32BufferAttribute(s, 3));

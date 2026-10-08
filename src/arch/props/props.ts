@@ -740,7 +740,11 @@ export function placeProp(d: Draw, kind: PropKind, x: number, y: number, z: numb
   const m = d.m.clone().multiply(new THREE.Matrix4().makeTranslation(x, y, z)).multiply(new THREE.Matrix4().makeRotationY(rotY));
   if (o.rx) m.multiply(new THREE.Matrix4().makeRotationX(o.rx));
   if (o.scale && o.scale !== 1) m.multiply(new THREE.Matrix4().makeScale(o.scale, o.scale, o.scale));
+  const base = new THREE.Vector3().setFromMatrixPosition(m);
+  d.b.beginProp();
   for (const p of model.parts) d.b.add(p.geometry, p.material, m, { uv: 'keep', castShadow: p.castShadow && d.flags.cast });
-  if (AUDIT) d.b.auditProps.push({ kind, p: new THREE.Vector3().setFromMatrixPosition(m), src: currentAuditSource() });
+  d.b.endProp(kind, base);
+  // (The same vector: the audit sees where the prop ends up after MeshBuilder settles it.)
+  if (AUDIT) d.b.auditProps.push({ kind, p: base, src: currentAuditSource() });
   if (o.collide !== false) for (const c of model.colliders) d.b.collider(transformCollider(c, m));
 }

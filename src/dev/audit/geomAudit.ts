@@ -79,7 +79,7 @@ export function auditRecordBuild(name: string, group: THREE.Object3D, parts: { g
       const vx = a[i + 6] - a[i], vy = a[i + 7] - a[i + 1], vz = a[i + 8] - a[i + 2];
       const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
       const l = Math.hypot(nx, ny, nz);
-      if (l < 0.02 || ny / l < 0.6) continue; // up-facing, not tiny
+      if (l < 0.02 || ny / l < 0.85) continue; // walkable-flat (not bevels or banks), not tiny
       for (let k = 0; k < 9; k++) out.push(a[i + k]);
     }
   }

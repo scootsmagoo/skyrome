@@ -4,6 +4,7 @@
  * two cloud layers, horizon haze). The dome is drawn last among opaque objects at depth 1.0, so it
  * only shades pixels that no geometry covered.
  */
+import { FAR_PLANE } from '../../gfx/depth';
 import { ATMOSPHERE, LIGHT_STEPS, VIEW_STEPS } from './skyModel';
 
 const f = (v: number) => (Number.isInteger(v) ? v.toFixed(1) : String(v));
@@ -183,10 +184,11 @@ float fbm3(vec2 p) {
 
 export const SKY_VERT = /* glsl */ `
 varying vec3 vDir;
+uniform float uReversedDepth;
 void main() {
   vDir = position;
   vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  gl_Position = p.xyww;
+  gl_Position = ${FAR_PLANE};
 }
 `;
 

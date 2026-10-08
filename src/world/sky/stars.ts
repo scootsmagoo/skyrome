@@ -5,6 +5,7 @@
  */
 import * as THREE from 'three';
 import { DEG, eclipticToEquatorial, julianDay, obliquity } from './astronomy';
+import { FAR_PLANE, reversedDepth } from '../../gfx/depth';
 
 /** Years from AD 113 to J2000 × general precession in longitude (50.29″/yr). */
 export const PRECESSION_DEG = ((2000 - 113) * 50.29) / 3600;
@@ -158,6 +159,7 @@ attribute float aMag;
 uniform mat3 uStarMatrix;
 uniform float uStars;
 uniform float uPixelRatio;
+uniform float uReversedDepth;
 ${'' /* cloud functions are prepended by the caller */}
 varying vec3 vColor;
 void main() {
@@ -168,7 +170,7 @@ void main() {
   b *= ext * (1.0 - cloudOpacity(dir));
   vColor = aColor * b * 0.9;
   vec4 p = projectionMatrix * viewMatrix * vec4(dir, 0.0);
-  gl_Position = p.xyww;
+  gl_Position = ${FAR_PLANE};
   gl_PointSize = (2.0 + clamp(1.4 - aMag * 0.55, 0.0, 2.2)) * uPixelRatio;
   if (b < 0.002) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
 }
@@ -208,6 +210,7 @@ export function createBrightStars(domeUniforms: Record<string, THREE.IUniform>, 
   const mat = new THREE.ShaderMaterial({
     name: 'BrightStars',
     uniforms: {
+      uReversedDepth: reversedDepth,
       uStarMatrix: domeUniforms.uStarMatrix,
       uStars: domeUniforms.uStars,
       uCloudCover: domeUniforms.uCloudCover,
