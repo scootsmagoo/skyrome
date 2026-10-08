@@ -13,6 +13,8 @@ export interface CombatHook {
   /** Start a fight: `a` attacks `b`. */
   engage?(a: Actor, b: Actor): unknown;
   isInCombat?(a: Actor): boolean;
+  /** Does combat own this body now (fighting, yielded, knocked out)? Then nobody else moves it. */
+  holds?(a: Actor): boolean;
   /** Fighting in a running arena bout (a show, not a brawl: nobody flees it)? */
   inBout?(a: Actor): boolean;
   /** Did the player start the fight (an assault on someone who wasn't an enemy)? */

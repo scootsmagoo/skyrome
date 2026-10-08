@@ -838,6 +838,15 @@ export class CombatSystem implements System, PlayerCombatHost {
   }
 
   /** Is this actor fighting (default: the player, by the §6 inCombat predicate)? */
+  /**
+   * Does combat own this actor's body right now: fighting, kneeling in a yield (or cowering) or
+   * knocked out? Their own module must not walk them meanwhile (they slid along on their knees).
+   */
+  holds(a: string | Actor | Combatant): boolean {
+    const c = this.get(a);
+    return !!c && (this.core.isInCombat(c) || c.status === 'yielded' || c.status === 'ko');
+  }
+
   isInCombat(a?: string | Actor | Combatant): boolean {
     const c = a === undefined ? this.playerC : this.get(a);
     return !!c && this.core.isInCombat(c);

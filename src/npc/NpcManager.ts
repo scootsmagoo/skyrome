@@ -1363,8 +1363,9 @@ export class NpcManager implements System {
         if (n.sim === 'full') n.locomote(ZERO, dt);
         continue;
       }
-      if (n.isFighting()) {
-        // The combat module owns fighters' movement; keep them solid.
+      if (n.heldByCombat()) {
+        // The combat module owns fighters' movement (and the yielded, cowering and knocked out:
+        // walked on by their schedule they slid along on their knees); keep them solid.
         n.setSolid(true);
         continue;
       }

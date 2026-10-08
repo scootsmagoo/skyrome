@@ -155,6 +155,12 @@ export class Npc extends Actor implements Positioned {
     return !!combatOf(this.game)?.isInCombat?.(this);
   }
 
+  /** Combat owns the body (fighting, kneeling in a yield, cowering, knocked out): don't walk it. */
+  heldByCombat(): boolean {
+    const c = combatOf(this.game);
+    return !!(c?.holds ? c.holds(this) : c?.isInCombat?.(this));
+  }
+
   /** Solid NPCs block the player (hostiles, fighters); crowd NPCs are soft. */
   setSolid(on: boolean) {
     if (on === this.solid || this.disposed) return;
