@@ -101,6 +101,19 @@ export class RagdollSystem implements System {
     if (knockdown) this.knock.add(targetId);
   }
 
+  /**
+   * Knock someone off their feet outside a fight (a sprinting shoulder in the street): they
+   * sprawl away from `from` and get up again. False when they can't go down right now.
+   */
+  topple(actor: Actor, from: THREE.Vector3Like, hard = true): boolean {
+    const av = actor.avatar;
+    if (!(av instanceof HumanoidAvatar) || av.isDead || this.has(actor) || this.skip(actor, av)) return false;
+    this.noteHit(actor.id, from, hard);
+    av.play('knockdown', { speed: 2.75 / 2 });
+    this.start(actor, av, 'knockdown');
+    return this.live.has(actor);
+  }
+
   /** Is this actor's body in physics or a held ragdoll pose? */
   has(actor: Actor): boolean {
     return this.live.has(actor) || this.frozen.has(actor) || this.blends.has(actor);

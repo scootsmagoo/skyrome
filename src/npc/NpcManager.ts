@@ -1427,6 +1427,8 @@ export class NpcManager implements System {
       n.wish.copy(wish);
       const tl = timed ? performance.now() : 0;
       if (timed) tSteer += tl - ts;
+      // Sprawled on the ground (a ragdoll): stay put until up again.
+      if (this.game.ragdolls?.has(n)) wish.set(0, 0, 0);
       if (n.sim === 'full') n.locomote(wish, dt);
       else n.glide(wish, dt, this.gridFloor, this.gridBlocked);
       if (timed) tLoco += performance.now() - tl;
@@ -1461,6 +1463,11 @@ export class NpcManager implements System {
     n.velocity.x += ax * speed * 0.6;
     n.velocity.z += az * speed * 0.6;
     const sprint = !!this.game.player?.sprinting;
+    // A full sprint into someone (GTA-style) often takes them off their feet: a ragdoll sprawl.
+    if (sprint && speed > 5 && this.rng.chance(0.45) && this.game.ragdolls?.topple(n, { x: px, y: n.position.y, z: pz })) {
+      this.bark(n, 'shoved', true);
+      return;
+    }
     if (!n.humanoid.isBusy() && (sprint || this.rng.chance(0.08))) n.humanoid.play(sprint ? 'stagger' : 'hitBack');
     if (this.rng.chance(sprint ? 0.7 : 0.35)) this.bark(n, 'shoved', sprint);
   }
