@@ -174,6 +174,7 @@ The game is designed to be fully playable on a Mac trackpad, so every mouse acti
 | Look | Trackpad or mouse (click to capture) · arrow keys |
 | First / third person | V (or scroll the third-person camera all the way in) |
 | Attack (hold for a power attack) · block | F or left click (with the weapon sheathed it draws and swings) · Q or right click |
+| Lock on to an enemy | X (also on its own when you draw a weapon near one). While locked: X or ← → switch targets, hold X to let go; when your target falls, the lock moves to the next one fighting you |
 | Draw or sheathe a weapon · interact · sneak | R · E · C |
 | Menus | Tab · I inventory · J journal · M map · K skills · Esc pause |
 | Walk · wait · swap camera shoulder | N · T · H |
@@ -181,7 +182,7 @@ The game is designed to be fully playable on a Mac trackpad, so every mouse acti
 | Use an item · invoke your god | 1–8 (healing first) · Z |
 | Give up a fight (to the watch: the arrest talk) | Hold Y |
 | Stuck somewhere? | Esc → I'm stuck |
-| Console (testing) | <code>`</code> (left of 1): `tgm` god mode · `tcl` fly through walls · `coc ludus` teleport · `fight nereus` · `spawn grassator 3` · `killall` · `help` for the rest |
+| Console (testing) | <code>`</code> (left of 1): `tgm` god mode · `tcl` fly through walls · `coc ludus` teleport · `fight nereus` · `spawn grassator 3` · `killall` · `knock` (knock someone flat) · `help` for the rest |
 | Check your trackpad and keys | `?scene=inputlab` |
 
 ### Fighting and the law

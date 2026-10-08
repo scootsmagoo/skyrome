@@ -206,6 +206,10 @@ export class CombatSystem implements System, PlayerCombatHost {
   /** People the player attacked who weren't enemies: when they kneel, no prompt pops up (E decides). */
   private readonly assaultVictims = new Set<string>();
   private lastStruck: { c: Combatant; at: number } | null = null;
+  /** The last lock target (to move on when it goes down). */
+  private prevLock: Combatant | null = null;
+  /** When the player last struck each combatant (lock-on candidates). */
+  private struckAt = new WeakMap<Combatant, number>();
   private seq = 0;
   private cached: CombatSettings;
   /** Dev-scene settings that are never persisted (arena URL parameters). */
@@ -906,7 +910,10 @@ export class CombatSystem implements System, PlayerCombatHost {
     const out: { c: Combatant; a: number }[] = [];
     for (const c of this.core.list) {
       if (c === pc || !c.active) continue;
-      if (!this.core.hostile(pc, c) && c.target !== pc) continue;
+      // Enemies, anyone fighting the player, and anyone the player struck lately (a passer-by
+      // set upon is a fair target too).
+      const struck = this.struckAt.get(c);
+      if (!this.core.hostile(pc, c) && c.target !== pc && !(struck !== undefined && this.game.elapsed - struck < 8)) continue;
       const d = dist2D(c.position, pc.position);
       if (d > maxDist) continue;
       const a = angleTo(camYaw, c.position.x - cam.position.x, c.position.z - cam.position.z);
@@ -917,16 +924,21 @@ export class CombatSystem implements System, PlayerCombatHost {
     return out.sort((x, y) => Math.abs(x.a) - Math.abs(y.a)).map((x) => x.c);
   }
 
-  /** X tap: the target nearest the screen centre within 15 m and ±35° (§6.1). */
+  /**
+   * X tap: the target nearest the screen centre within 15 m and ±35° (§6.1); when nobody is
+   * there, the nearest one in any direction (a trackpad camera is hard to aim exactly).
+   */
   acquireLock(): boolean {
     const L = TIMING.lock;
-    const best = this.lockCandidates(L.acquire, L.cone * DEG)[0];
+    const pc = this.playerC;
+    let best = this.lockCandidates(L.acquire, L.cone * DEG)[0];
+    if (!best && pc) best = this.lockCandidates(L.acquire, null).sort((a, b) => dist2D(a.position, pc.position) - dist2D(b.position, pc.position))[0];
     if (best) this.setLock(best);
     return !!best;
   }
 
-  /** X tap while locked: the next target to the right (wrapping). */
-  cycleLock() {
+  /** X tap (or →) while locked: the next target to the right; ← the next to the left (wrapping). */
+  cycleLock(dir: 1 | -1 = 1) {
     const pc = this.playerC;
     if (!pc) return;
     const L = TIMING.lock;
@@ -939,12 +951,13 @@ export class CombatSystem implements System, PlayerCombatHost {
       .map((c) => ({ c, a: angleTo(camYaw, c.position.x - cam.position.x, c.position.z - cam.position.z) }))
       .sort((x, y) => y.a - x.a); // left → right on screen
     const i = sorted.findIndex((x) => x.c === pc.lockTarget);
-    this.setLock(sorted[(i + 1) % sorted.length].c);
+    this.setLock(sorted[(i + dir + sorted.length) % sorted.length].c);
   }
 
   setLock(t: Combatant | null) {
     const pc = this.playerC;
     if (!pc || pc.lockTarget === t) return;
+    if (t) this.prevLock = t;
     pc.lockTarget = t;
     this.lockLostAt = -1;
     this.game.events.emit('combat:lock', { targetId: t?.id ?? null });
@@ -961,10 +974,28 @@ export class CombatSystem implements System, PlayerCombatHost {
   private maintainLock() {
     const pc = this.playerC;
     const t = pc?.lockTarget;
-    if (!pc || !t) return;
+    if (!pc) return;
+    if (!t) {
+      // The lock went with a target that is down for good (the core clears it on a death or a
+      // knockout): hand it to the next one still fighting you. A lock let go of by hand, or
+      // dropped on a yield (the decision is pending), stays off.
+      const prev = this.prevLock;
+      if (prev && !prev.active && prev.status !== 'yielded') {
+        this.prevLock = null;
+        if (this.core.playerInCombat) this.acquireLock();
+      }
+      return;
+    }
     const L = TIMING.lock;
-    if (!t.active || !pc.active || dist2D(t.position, pc.position) > L.breakDistance) {
+    // A foe kneeling in a yield stays locked (the decision is yours); one who is down for good
+    // (dead, knocked out, fled) hands the lock to the next one still fighting you.
+    if (!pc.active || dist2D(t.position, pc.position) > L.breakDistance) {
       this.setLock(null);
+      return;
+    }
+    if (!t.active && t.status !== 'yielded') {
+      this.setLock(null);
+      if (this.core.playerInCombat) this.acquireLock();
       return;
     }
     if (this.core.sight(pc, t)) this.lockLostAt = -1;
@@ -1024,10 +1055,23 @@ export class CombatSystem implements System, PlayerCombatHost {
     ev.on('combat:hit', (e) => {
       if (e.attackerId === this.playerC?.id) {
         const c = this.core.get(e.targetId);
-        if (c) this.lastStruck = { c, at: this.game.elapsed };
+        if (c) {
+          this.lastStruck = { c, at: this.game.elapsed };
+          this.struckAt.set(c, this.game.elapsed);
+        }
       }
     });
-    ev.on('combat:started', () => this.game.audio?.music?.setOverride('combat', 'combat', 10));
+    ev.on('combat:started', () => {
+      this.game.audio?.music?.setOverride('combat', 'combat', 10);
+      // The first few fights: name the lock-on keys (live bindings).
+      const st = this.game.settings;
+      const n = st.data.combatLockHints ?? 0;
+      if (n < 3 && !this.playerC?.lockTarget) {
+        st.set('combatLockHints', n + 1);
+        const key = (a: 'lockOn' | 'lookLeft' | 'lookRight') => codeLabel(this.game.input.bindings[a]?.[0] ?? '?');
+        this.game.events.emit('ui:notify', { text: `Lock on: ${key('lockOn')}. While locked, ${key('lookLeft')} ${key('lookRight')} or ${key('lockOn')} switch targets; hold ${key('lockOn')} to let go.`, kind: 'info' });
+      }
+    });
     ev.on('combat:ended', () => this.game.audio?.music?.setOverride('combat', null));
     ev.on('actor:yielded', (e) => this.onYielded(e.actorId, e.byId));
     ev.on('combat:assault', (e) => {

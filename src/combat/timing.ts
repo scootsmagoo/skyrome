@@ -47,7 +47,7 @@ export const TIMING = {
   holdInteract: 0.6,
   holdKill: 1,
   /** Lock-on: acquire within 15 m and ±35° of the screen centre; break at 20 m or 2 s without sight (§6.1). */
-  lock: { acquire: 15, cone: 35, breakDistance: 20, sightLost: 2, autoSuggest: 8 },
+  lock: { acquire: 15, cone: 35, breakDistance: 25, sightLost: 4, autoSuggest: 8 },
   /**
    * Hit-stop (§6.5, made heavier so blows land): the world almost stops for light 0.07, power
    * 0.11, parry/riposte/finisher 0.15 s.

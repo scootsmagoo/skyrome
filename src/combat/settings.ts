@@ -9,6 +9,8 @@ declare module '../core/Settings' {
   interface SettingsData {
     /** §6.12 difficulty; v0.1 ships tiro, normalis and difficilis. Default normalis. */
     combatDifficulty?: Difficulty;
+    /** How many times the lock-on hint has been shown (it stops after a few fights). */
+    combatLockHints?: number;
     /** "Simple power" (§6.1): the power direction is the current movement, or overhead. */
     combatSimplePower?: boolean;
     /** Power-attack hold threshold in seconds, 0.2–0.6 (§4.3). Default 0.35. */

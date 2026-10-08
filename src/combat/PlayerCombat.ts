@@ -27,7 +27,7 @@ export interface PlayerCombatHost {
   settings(): CombatSettings;
   canJump(): boolean;
   acquireLock(): boolean;
-  cycleLock(): void;
+  cycleLock(dir?: 1 | -1): void;
   setLock(t: Combatant | null): void;
   suggestLock(): void;
   playerYield(): void;
@@ -226,6 +226,11 @@ export class PlayerCombat {
 
   private lockInput(t: number, c: Combatant) {
     const input = this.host.game.input;
+    // Locked on, the camera follows the target: the turn keys pick the next one left or right.
+    if (c.lockTarget) {
+      if (input.pressed('lookLeft')) this.host.cycleLock(-1);
+      if (input.pressed('lookRight')) this.host.cycleLock(1);
+    }
     if (input.pressed('lockOn')) {
       this.lockDownAt = t;
       this.lockReleased = false;
