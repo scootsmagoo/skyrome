@@ -537,8 +537,11 @@ export class NpcManager implements System {
     // Gladiators about the school wear their practice kit: no helmet, no shield, nothing in hand.
     if (role.id === 'gladiator' && !opts.appearance) app = { ...app, armor: app.armor ? { ...app.armor, helmet: undefined } : undefined, weapon: undefined, shield: undefined };
     const label = role.id === 'foreigner' ? (FOREIGN_LABELS[avatarRole] ?? role.label) : role.id === 'citizen' && avatarRole === 'freedman' ? 'Freedman' : role.label;
+    const id = `cit-${++this.seq}`;
+    // A new person: whatever the dialogue remembers of an earlier one with this id goes.
+    (this.game.dialogue as { forget?(id: string): void } | undefined)?.forget?.(id);
     const npc = new Npc(this.game, {
-      id: `cit-${++this.seq}`,
+      id,
       name: label,
       appearance: app,
       position: { x, y: y + 0.03, z },

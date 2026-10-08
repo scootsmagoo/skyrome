@@ -190,6 +190,11 @@ export class DialogueSystem {
     return this.session?.view ?? null;
   }
 
+  /** Forget everything about an NPC id (a new person in the crowd reuses an old id). */
+  forget(npcId: string) {
+    this.memory.delete(npcId);
+  }
+
   /** Saved per-NPC memory (created on demand). */
   memoryOf(npcId: string): Memory {
     let m = this.memory.get(npcId);
