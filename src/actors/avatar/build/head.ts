@@ -776,7 +776,7 @@ const VEIL_ROWS_HI = [1.0, 0.95, 0.88, 0.84, 0.78, 0.68, 0.6, 0.51, 0.39];
 const VEIL_ROWS_LO = [1.0, 0.94, 0.86, 0.78, 0.68, 0.555, 0.42];
 
 /** Palla (or toga) drawn over the head, or the Vestal's white suffibulum over the infula. */
-function buildVeil(ctx: Ctx, H: HeadFrame, L: Levels, style: HairStyle) {
+export function buildVeil(ctx: Ctx, H: HeadFrame, L: Levels, style: HairStyle) {
   const { b, app } = ctx;
   const hs = H.hs;
   const cloth = app.garments.find((g) => g.kind === 'palla') ?? app.garments.find((g) => g.kind === 'toga');

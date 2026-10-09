@@ -13,6 +13,7 @@
  */
 import * as THREE from 'three';
 import { srgb } from '../build/common';
+import { PAINT_BUMP, PAINT_COLOR, PAINT_PARS, PAINT_THIN } from './head/paintShader';
 
 const SKIN_PARS = /* glsl */ `
 varying vec3 vRest;
@@ -33,12 +34,54 @@ float sk_pores(vec3 p) {
 }
 `;
 
-function patchSkin(shader: THREE.WebGLProgramParametersWithUniforms) {
+/** Painted-face data (head/paint.ts builds it; every value is in the reference head's frame, see paintShader.ts). */
+export interface SkinPaint {
+  /** Identifies the material variant (same key, same look). */
+  key: string;
+  headJ: THREE.Vector3;
+  headK: number;
+  eye: THREE.Vector3;
+  /** mouth y, nose-tip y, nose-tip z, mouth half width */
+  face: THREE.Vector4;
+  /** chin y, head height, axis z, brow y */
+  head: THREE.Vector4;
+  /** ear x min, y bottom, y top, z max */
+  ear: THREE.Vector4;
+  brow: THREE.Color;
+  lip: THREE.Color;
+  /** beard colour and stubble amount */
+  stub: THREE.Vector4;
+  /** hairline fractions: front, temple, side, nape */
+  hairline: THREE.Vector4;
+  hairRoots: THREE.Color;
+  /** beard (0 none, 1 stubble, 2 short, 3 full), blush, age, scalp on */
+  misc: THREE.Vector4;
+  /** sex (0 male, 1 female), brow thickness */
+  look: THREE.Vector2;
+}
+
+function patchSkin(shader: THREE.WebGLProgramParametersWithUniforms, paint?: SkinPaint) {
+  if (paint) {
+    const u = shader.uniforms;
+    u.uHeadJ = { value: paint.headJ };
+    u.uHeadK = { value: paint.headK };
+    u.uEye = { value: paint.eye };
+    u.uFace = { value: paint.face };
+    u.uHead = { value: paint.head };
+    u.uEar = { value: paint.ear };
+    u.uBrowC = { value: paint.brow };
+    u.uLipC = { value: paint.lip };
+    u.uStubC = { value: paint.stub };
+    u.uHl = { value: paint.hairline };
+    u.uHlC = { value: paint.hairRoots };
+    u.uMisc = { value: paint.misc };
+    u.uLook = { value: paint.look };
+  }
   shader.vertexShader = shader.vertexShader
     .replace('#include <common>', '#include <common>\nvarying vec3 vRest;\nvarying vec3 vRestN;')
     .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRest = position;\nvRestN = normal;');
   shader.fragmentShader = shader.fragmentShader
-    .replace('#include <common>', '#include <common>\n' + SKIN_PARS)
+    .replace('#include <common>', '#include <common>\n' + SKIN_PARS + (paint ? PAINT_PARS : ''))
     // Wrap lighting in the direct term (a copy of three's RE_Direct_Physical with a scatter term).
     .replace(
       '#include <lights_physical_pars_fragment>',
@@ -49,6 +92,7 @@ function patchSkin(shader: THREE.WebGLProgramParametersWithUniforms) {
 		float rawNL = dot( geometryNormal, directLight.direction );
 		float wrap = saturate( ( rawNL + 0.5 ) / 1.5 ) * saturate( ( rawNL + 0.5 ) / 1.5 );
 		reflectedLight.directDiffuse += directLight.color * max( wrap - dotNL * dotNL, 0.0 ) * 0.42 * vec3( 1.0, 0.42, 0.28 ) * material.diffuseColor * RECIPROCAL_PI;
+		${paint ? PAINT_THIN : ''}
 	}`,
       ),
     )
@@ -63,7 +107,8 @@ function patchSkin(shader: THREE.WebGLProgramParametersWithUniforms) {
           float skAo = texture2D( aoMap, vAoMapUv ).r;
           diffuseColor.rgb *= mix(vec3(0.78, 0.52, 0.46), vec3(1.0), smoothstep(0.35, 0.95, skAo));
         #endif
-      }`,
+      }
+      ${paint ? PAINT_COLOR : ''}`,
     )
     .replace(
       '#include <normal_fragment_maps>',
@@ -83,20 +128,27 @@ function patchSkin(shader: THREE.WebGLProgramParametersWithUniforms) {
         vec3 grad = sign( det ) * ( dHx * r1 + dHy * r2 );
         normal = normalize( abs( det ) * normal - 0.0018 * fade * grad );
         roughnessFactor = clamp( roughnessFactor + (h - 0.5) * 0.12 * fade, 0.3, 1.0 );
-      }`,
+      }
+      ${paint ? PAINT_BUMP : ''}`,
     );
 }
 
 const skinCache = new Map<string, THREE.MeshStandardMaterial>();
+const painted: string[] = [];
+const PAINTED_MAX = 96;
 
 export interface SkinMaps {
   normal: THREE.Texture;
   ao: THREE.Texture;
 }
 
-/** Skin material for one LOD of a body (shared by everyone with that skin colour). */
-export function skinMaterial(key: string, color: string, maps: SkinMaps): THREE.MeshStandardMaterial {
-  const k = `${key}|${color}`;
+/**
+ * Skin material for one LOD of a body (shared by everyone with that skin colour). With a `paint` (the
+ * painted face of one appearance, see head/paint.ts) the material is that appearance's own variant; the
+ * shader program is shared, only the uniforms differ.
+ */
+export function skinMaterial(key: string, color: string, maps: SkinMaps, paint?: SkinPaint): THREE.MeshStandardMaterial {
+  const k = `${key}|${color}${paint ? '|' + paint.key : ''}`;
   let m = skinCache.get(k);
   if (!m) {
     m = new THREE.MeshStandardMaterial({
@@ -109,9 +161,18 @@ export function skinMaterial(key: string, color: string, maps: SkinMaps): THREE.
       aoMapIntensity: 1.6,
     });
     m.name = `skin:${k}`;
-    m.onBeforeCompile = patchSkin;
-    m.customProgramCacheKey = () => 'real-skin-v1';
+    m.onBeforeCompile = (s) => patchSkin(s, paint);
+    m.customProgramCacheKey = () => (paint ? 'real-skin-v2-paint' : 'real-skin-v1');
     skinCache.set(k, m);
+    if (paint) {
+      // Painted variants are per appearance: keep the newest PAINTED_MAX (a disposed one that is still on screen just re-uploads).
+      painted.push(k);
+      while (painted.length > PAINTED_MAX) {
+        const old = painted.shift()!;
+        skinCache.get(old)?.dispose();
+        skinCache.delete(old);
+      }
+    }
   }
   return m;
 }

@@ -5,6 +5,7 @@ import { GraphicsGovernor } from './core/graphics';
 import { enableCompressedTextures } from './gfx/materials';
 import { classicRequested, loadRealBodies } from './actors/avatar/real/RealBody';
 import { setLeafyCanopies } from './arch/vegetation/materials';
+import { setHairAlphaToCoverage } from './actors/avatar/real/head/hairConfig';
 import { AUDIT, analyzeArea, auditRecordCount } from './dev/audit/geomAudit';
 import type { SceneDef } from './scenes/types';
 
@@ -37,6 +38,7 @@ async function boot() {
     const s = game.settings.data;
     const tier = s.graphics && s.graphics !== 'auto' ? s.graphics : s.graphicsApplied?.tier;
     setLeafyCanopies(tier !== 'low');
+    setHairAlphaToCoverage(s.antialias !== false && tier !== 'low'); // hair cards: alpha-to-coverage needs the MSAA target
   }
 
   const ui = document.createElement('div');
