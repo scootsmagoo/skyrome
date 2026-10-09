@@ -10,9 +10,9 @@ import { probeEnd } from './audit';
 import { K, type Grid, type Pt } from './raster';
 
 /** Longest extension (game m, beyond the street's own band). */
-export const REACH = 24;
+export const REACH = 18;
 /** Longest extension of a lane that would otherwise be an island (both ends stop at nothing). */
-export const REACH_ISLAND = 60;
+export const REACH_ISLAND = 36;
 /** Ground an extension may cross. Walls, water and landmarks stop it; an aqueduct arcade opens a wider arch for it (monuments.ts leaves out piers standing in a street). */
 const PASS = new Set<number>([K.FREE, K.SCRAP, K.STEEP, K.MARGIN, K.GARDEN, K.PIAZZA, K.AQUEDUCT]);
 /** What it is looking for. */

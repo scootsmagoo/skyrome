@@ -597,7 +597,8 @@ function doorsOf(blockId: string, outline: readonly Vec2[], fronts: number[], si
 
 /**
  * Nodes with a single link that no spot, piazza or landmark door explains: link them to the
- * nearest other stretch of street within `maxD` that a person can walk to (second neighbours
+ * nearest other stretch of street within `maxD` (twice that for a road end: a road cut by a
+ * solid footprint is bridged round it) that a person can walk to (second neighbours
  * excluded, so a stub never links back onto its own street).
  */
 function closeDeadEnds(B: Builder, ok: (id: number, p: Vec2) => boolean, inArea: (x: number, z: number) => boolean, maxD: number) {
@@ -611,7 +612,7 @@ function closeDeadEnds(B: Builder, ok: (id: number, p: Vec2) => boolean, inArea:
       for (const f of frontier) for (const m of B.neighbourIds(f)) if (!own.has(m)) { own.add(m); next.push(m); }
       frontier = next;
     }
-    for (const hit of B.nearEdges(n.x, n.z, maxD, own, 8)) {
+    for (const hit of B.nearEdges(n.x, n.z, n.kind === 'road' ? maxD * 2 : maxD, own, 8)) {
       if (!inArea(hit.p[0], hit.p[1]) || !ok(n.id, hit.p)) continue;
       B.edge(n.id, B.split(hit.a, hit.b, hit.w, hit.p, 'junction'), Math.min(hit.w, 4));
       break;

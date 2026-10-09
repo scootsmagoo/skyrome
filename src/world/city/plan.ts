@@ -751,7 +751,7 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
       let center: Pt | null = null;
       for (const off of [r - 0.8, 0, -2, -3.5, -5.5]) {
         const c0: Pt = [pr.p[0] + pr.dir[0] * off, pr.p[1] + pr.dir[1] * off];
-        if (piazzas.some((q) => Math.hypot(q.center[0] - c0[0], q.center[1] - c0[1]) < q.r + r + 8)) break;
+        if (piazzas.some((q) => Math.hypot(q.center[0] - c0[0], q.center[1] - c0[1]) < q.r + r + 8)) continue;
         let ok = 0, bad = 0, tot = 0;
         g.scanSegment(c0, c0, r, (i) => {
           tot++;
