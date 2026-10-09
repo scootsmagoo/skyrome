@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { Forest } from '../src/arch/vegetation/Forest';
 import { GrassField } from '../src/arch/vegetation/Grass';
-import { noise3 } from '../src/arch/vegetation/geom';
-import { TREE_SPECIES, TREE_VARIANTS, makeTree } from '../src/arch/vegetation/species';
+import { leafCards, noise3 } from '../src/arch/vegetation/geom';
+import { TREE_SPECIES, TREE_VARIANTS, makeTree, type TreeSpecies } from '../src/arch/vegetation/species';
 
 function bounds(g: THREE.BufferGeometry) {
   g.computeBoundingBox();
@@ -96,7 +96,10 @@ describe('Forest LOD', () => {
     expect(f.nearCount).toBe(3);
     expect(f.farCount).toBe(5);
     const near = f.group.children.filter((c) => c.name === 'forest:umbrella_pine#0') as THREE.InstancedMesh[];
-    expect(near.map((m) => m.count).sort()).toEqual([2, 2, 5]);
+    // Bark, crown clumps and leaf cards at 2 near instances each, plus the far stand-in at 5.
+    expect(near.map((m) => m.count).sort()).toEqual([2, 2, 2, 5]);
+    expect(near.filter((m) => !m.castShadow).length).toBeGreaterThanOrEqual(2); // the cards and the far LOD
+    // (an InstancedMesh's shadow flag: the cards must not cast their quads' shadows)
     f.update(new THREE.Vector3(1000, 0, 0), true);
     expect(f.nearCount + f.farCount).toBe(0);
   });
@@ -158,5 +161,36 @@ describe('GrassField', () => {
     expect(full).toBeGreaterThan(3);
     g.update(new THREE.Vector3(0, 1.7, 0), 3);
     expect(g.cellCount).toBe(full);
+  });
+});
+
+describe('leaf cards', () => {
+  it('builds quads with uv, a per-card random and unit normals', () => {
+    const c = new THREE.Vector3(0, 5, 0), r = new THREE.Vector3(3, 2, 3);
+    const g = leafCards([{ center: c, radius: r }], c, r, { density: 1.5, size: [0.6, 0.9] }, 7);
+    const n = g.getAttribute('position').count;
+    expect(n).toBeGreaterThan(30);
+    expect(n % 6).toBe(0);
+    expect(g.getAttribute('uv').count).toBe(n);
+    expect(g.getAttribute('aLeaf').count).toBe(n);
+    for (let i = 0; i < n; i += 37) {
+      const l = Math.hypot(g.getAttribute('normal').getX(i), g.getAttribute('normal').getY(i), g.getAttribute('normal').getZ(i));
+      expect(l).toBeCloseTo(1, 3);
+      expect(g.getAttribute('uv').getY(i)).toBeGreaterThanOrEqual(0);
+      expect(g.getAttribute('uv').getY(i)).toBeLessThanOrEqual(1);
+    }
+    // Same inputs, same cards.
+    const h = leafCards([{ center: c, radius: r }], c, r, { density: 1.5, size: [0.6, 0.9] }, 7);
+    expect(h.getAttribute('position').array).toEqual(g.getAttribute('position').array);
+  });
+
+  it('crowns carry a card part per species, kinds matching their leaves', () => {
+    const kinds: Record<string, string> = { umbrella_pine: 'needle', cypress: 'needle', plane: 'broad', olive: 'olive', laurel: 'broad', fig: 'broad' };
+    for (const [sp, kind] of Object.entries(kinds)) {
+      const m = makeTree(sp as TreeSpecies, 0);
+      const card = m.near.find((p) => p.cards);
+      expect(card?.cards, sp).toBe(kind);
+      expect(card!.geometry.getAttribute('position').count).toBeGreaterThan(100);
+    }
   });
 });

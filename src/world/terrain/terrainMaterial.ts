@@ -244,6 +244,13 @@ const FRAGMENT_SPLAT = /* glsl */ `
   float tWet = 1.0 - smoothstep( 0.0, 0.35, tHw );
   tAlb *= 1.0 - 0.22 * tWet;
   tRoughness = mix( tRoughness, tRoughness * 0.45, tWet );
+  {
+    // Near-field grain: two octaves of fine noise, so the ground never reads as one smooth scan up close.
+    float tNear = 1.0 - smoothstep( 6.0, 38.0, tDist );
+    float tGr = tNoise( tP * 11.0 ) * 0.6 + tNoise( tP * 29.0 + 3.0 ) * 0.4;
+    tAlb *= 1.0 + 0.2 * tNear * ( tGr - 0.5 );
+    tRoughness = clamp( tRoughness + 0.12 * tNear * ( tGr - 0.5 ), 0.04, 1.0 );
+  }
   diffuseColor.rgb *= tAlb;
   if ( uDebugLod > 0.5 ) {
     vec3 tLc[ 6 ] = vec3[ 6 ]( vec3( 1.0, 0.2, 0.2 ), vec3( 1.0, 0.8, 0.2 ), vec3( 0.2, 1.0, 0.3 ), vec3( 0.2, 0.7, 1.0 ), vec3( 0.7, 0.3, 1.0 ), vec3( 1.0, 1.0, 1.0 ) );
@@ -267,7 +274,16 @@ export function createTerrainMaterial(u: TerrainUniforms): THREE.MeshStandardMat
       .replace('#include <common>', `#include <common>\n${FRAGMENT_PARS}`)
       .replace('#include <map_fragment>', FRAGMENT_SPLAT)
       .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = clamp( tRoughness, 0.04, 1.0 );')
-      .replace('#include <normal_fragment_maps>', 'normal = normalize( ( viewMatrix * vec4( tNW, 0.0 ) ).xyz );')
+      .replace(
+        '#include <normal_fragment_maps>',
+        `normal = normalize( ( viewMatrix * vec4( tNW, 0.0 ) ).xyz );
+        {
+          // Specular AA: widen the roughness by the screen-space variance of the detail normal.
+          vec3 tDx = dFdx( normal ), tDy = dFdy( normal );
+          float tVar = min( 0.5 * ( dot( tDx, tDx ) + dot( tDy, tDy ) ), 0.25 );
+          roughnessFactor = sqrt( clamp( roughnessFactor * roughnessFactor + tVar, 0.0, 1.0 ) );
+        }`,
+      )
       .replace(
         '#include <aomap_fragment>',
         `#include <aomap_fragment>
@@ -280,7 +296,7 @@ export function createTerrainMaterial(u: TerrainUniforms): THREE.MeshStandardMat
         }`,
       );
   };
-  m.customProgramCacheKey = () => 'skyrome-terrain-v2';
+  m.customProgramCacheKey = () => 'skyrome-terrain-v3';
   return m;
 }
 

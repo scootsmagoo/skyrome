@@ -61,32 +61,42 @@ export interface MaterialRecipe {
   contrast?: number;
   /** Weathering on walls: street grime at the foot, rain streaks (0 = off; ~1 for plaster). */
   weather?: number;
+  /** Detail-normal layer (the normal map again at ~5x, fading past ~18 m). Default 0.9 with a normal map. */
+  detail?: number;
+  /** Per-stone albedo mottling amplitude. Default 1.4 × macro. */
+  mottle?: number;
+  /** Polished, lightened traffic-wear patches on flat paving (0 = off). */
+  wear?: number;
+  /** Fine grain bump near the camera (0 = off; ~1 for rough stone and plaster). */
+  grain?: number;
+  /** Plaster lost in patches, showing the brick or tufa below (0 = off; needs `weather`). */
+  flake?: number;
 }
 
 export const MATERIAL_RECIPES: Record<MaterialId, MaterialRecipe> = {
   // stone
   // White marble's scanned veining is softened (contrast) so forms in shade read before the veins.
-  marble: { set: 'marble', tile: 2.4, normal: 0.6, macro: 0.05, contrast: 0.5, weather: 0.35 },
+  marble: { set: 'marble', tile: 2.4, normal: 0.6, macro: 0.05, contrast: 0.5, weather: 0.5, mottle: 0.1, grain: 0.25 },
   marble_veined: { set: 'marble_veined', tile: 2.4, normal: 0.6, macro: 0.05, contrast: 0.8, weather: 0.35 },
   marble_giallo: { set: 'marble', tile: 2.0, normal: 0.6, macro: 0.08, contrast: 0.6, weather: 0.35 },
   marble_pavonazzetto: { set: 'marble_veined', tile: 2.0, normal: 0.6, macro: 0.05, contrast: 0.9, weather: 0.35 },
   porphyry: { proc: 'porphyry', tile: 0.8, macro: 0.04 },
   // Procedural ashlar travertine (laminae, voids along the bedding, hairline joints), drawn for a
   // 2.4 × 1.2 m repeat: two 0.6 m courses, smooth as in AD 113 (the pockmarks are medieval).
-  travertine: { proc: 'travertine', tile: [2.4, 1.2], normal: 0.4, macro: 0.09, weather: 0.7 },
-  tufa: { set: 'tufa', tile: 2.0, macro: 0.1, weather: 0.6 },
-  peperino: { set: 'peperino', tile: 1.6, macro: 0.08, weather: 0.6 },
-  basalt: { set: 'basalt', tile: 2.0, macro: 0.08, weather: 0.4 },
-  rock: { set: 'rock', tile: 3.5, macro: 0.12, detile: true },
+  travertine: { proc: 'travertine', tile: [2.4, 1.2], normal: 0.4, macro: 0.09, weather: 0.7, grain: 0.5 },
+  tufa: { set: 'tufa', tile: 2.0, macro: 0.1, weather: 0.6, grain: 1 },
+  peperino: { set: 'peperino', tile: 1.6, macro: 0.08, weather: 0.6, grain: 1 },
+  basalt: { set: 'basalt', tile: 2.0, macro: 0.08, weather: 0.4, grain: 1 },
+  rock: { set: 'rock', tile: 3.5, macro: 0.12, detile: true, grain: 1.2 },
   // masonry / plaster
-  brick: { set: 'brick', tile: 1.1, macro: 0.08, weather: 0.6 },
+  brick: { set: 'brick', tile: 1.1, macro: 0.08, weather: 0.6, grain: 1 },
   reticulatum: { proc: 'reticulatum', tile: 0.85, macro: 0.08, weather: 0.6 },
-  concrete: { set: 'concrete', tile: 2.2, macro: 0.1, weather: 0.8 },
-  plaster_white: { set: 'plaster', tile: 2.5, macro: 0.06, normal: 0.45, weather: 1 },
-  plaster_cream: { set: 'plaster', tile: 2.5, macro: 0.07, normal: 0.45, weather: 1 },
-  plaster_ochre: { set: 'plaster', tile: 2.5, macro: 0.08, normal: 0.45, weather: 1 },
-  plaster_red: { set: 'plaster', tile: 2.5, macro: 0.08, normal: 0.45, weather: 0.9 },
-  plaster_dark: { set: 'plaster', tile: 2.5, macro: 0.06, normal: 0.45, weather: 0.6 },
+  concrete: { set: 'concrete', tile: 2.2, macro: 0.1, weather: 0.8, grain: 1 },
+  plaster_white: { set: 'plaster', tile: 2.5, macro: 0.06, normal: 0.45, weather: 1, grain: 0.8, flake: 1 },
+  plaster_cream: { set: 'plaster', tile: 2.5, macro: 0.07, normal: 0.45, weather: 1, grain: 0.8, flake: 1 },
+  plaster_ochre: { set: 'plaster', tile: 2.5, macro: 0.08, normal: 0.45, weather: 1, grain: 0.8, flake: 1 },
+  plaster_red: { set: 'plaster', tile: 2.5, macro: 0.08, normal: 0.45, weather: 0.9, grain: 0.8, flake: 1 },
+  plaster_dark: { set: 'plaster', tile: 2.5, macro: 0.06, normal: 0.45, weather: 0.6, grain: 0.8, flake: 0.7 },
   stucco_painted: { proc: 'stucco', tile: [3.2, 3.2], macro: 0.04, normalize: false, weather: 0.8 },
   // roofs & metal
   roof_tile: { set: 'roof_tile', tile: 3.2, macro: 0.1 },
@@ -105,9 +115,9 @@ export const MATERIAL_RECIPES: Record<MaterialId, MaterialRecipe> = {
   fabric_ochre: { proc: 'fabric', tile: 0.6 },
   fabric_blue: { proc: 'fabric', tile: 0.6 },
   // ground
-  paving_basalt: { set: 'paving_basalt', tile: 3.2, macro: 0.08 },
-  paving_travertine: { set: 'paving_travertine', tile: 4.5, macro: 0.07 },
-  cobbles: { set: 'cobbles', tile: 1.6, macro: 0.08 },
+  paving_basalt: { set: 'paving_basalt', tile: 3.2, macro: 0.08, wear: 1, grain: 0.7 },
+  paving_travertine: { set: 'paving_travertine', tile: 4.5, macro: 0.07, wear: 0.8, grain: 0.7 },
+  cobbles: { set: 'cobbles', tile: 1.6, macro: 0.08, wear: 1, grain: 0.7 },
   gravel: { set: 'gravel', tile: 2.2, macro: 0.08, detile: true },
   dirt: { set: 'dirt', tile: 2.5, macro: 0.12, detile: true },
   grass: { set: 'grass', tile: 2.6, macro: 0.14, detile: true },

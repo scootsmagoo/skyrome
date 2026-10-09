@@ -199,3 +199,102 @@ export function tintGeometry(g: THREE.BufferGeometry, r: number, gg: number, b: 
   for (let i = 0; i < c.count; i++) c.setXYZ(i, c.getX(i) * r, c.getY(i) * gg, c.getZ(i) * b);
   return g;
 }
+
+// ------------------------------------------------------------------ leaf cards
+
+export interface CardSpec {
+  center: THREE.Vector3;
+  radius: THREE.Vector3;
+}
+
+export interface CardOpts {
+  /** Cards per m² of the clump's ellipsoid surface. */
+  density: number;
+  /** Card width range (m); the height is a little more. */
+  size: [number, number];
+  /** Surface offset range as a fraction of the clump radius (1 = on the surface). */
+  reach?: [number, number];
+  /** 0..1: pull card directions toward the upper hemisphere (flat mats such as the pine's). */
+  upBias?: number;
+  tint?: [number, number, number];
+}
+
+/**
+ * Leaf cards: small quads standing on a clump's surface (tilted and rolled at random), carrying
+ * `uv` (0..1, the stem end at v = 0) and `aLeaf` (a per-card random for the shader's leaf pattern
+ * and tint). Normals are the soft crown normals (the clump's outward blended with the crown's
+ * outward and a lift), so the shell reads as one lit mass and not as flat cards. Vertex colours are
+ * the same baked crown AO as `clump`. Non-indexed, six vertices a card, counter-clockwise seen from
+ * the card's own face; use DoubleSide.
+ */
+export function leafCards(specs: CardSpec[], canopyCenter: THREE.Vector3, canopyRadius: THREE.Vector3, o: CardOpts, seed = 1): THREE.BufferGeometry {
+  const pos: number[] = [], nor: number[] = [], col: number[] = [], uv: number[] = [], leaf: number[] = [];
+  const tint = o.tint ?? [1, 1, 1];
+  const [r0, r1] = o.reach ?? [0.92, 1.12];
+  let s32 = (seed * 2654435761) >>> 0;
+  const rng = () => ((s32 = (Math.imul(s32, 1664525) + 1013904223) >>> 0) / 4294967296);
+  const dir = new THREE.Vector3(), p = new THREE.Vector3(), n = new THREE.Vector3(), cn = new THREE.Vector3(), q = new THREE.Vector3();
+  const nn = new THREE.Vector3(), tt = new THREE.Vector3(), bb = new THREE.Vector3(), ax = new THREE.Vector3();
+  const CORNERS: [number, number][] = [[-1, 0], [1, 0], [1, 1], [-1, 0], [1, 1], [-1, 1]];
+  for (const s of specs) {
+    // Knud Thomsen's approximation of an ellipsoid's surface area.
+    const a = s.radius.x, b = s.radius.y, c = s.radius.z;
+    const area = 4 * Math.PI * Math.pow((Math.pow(a * b, 1.6) + Math.pow(a * c, 1.6) + Math.pow(b * c, 1.6)) / 3, 1 / 1.6);
+    const count = Math.max(3, Math.round(area * o.density));
+    for (let i = 0; i < count; i++) {
+      dir.set(rng() * 2 - 1, rng() * 2 - 1, rng() * 2 - 1);
+      const l2 = dir.lengthSq();
+      if (l2 > 1 || l2 < 1e-3) { i--; continue; }
+      dir.normalize();
+      if (o.upBias) dir.y = dir.y * (1 - o.upBias) + o.upBias * Math.abs(dir.y);
+      dir.normalize();
+      // The underside is in deep shade and seen least: it gets fewer cards.
+      if (dir.y < -0.35 && rng() < 0.65) continue;
+      p.copy(dir).multiply(s.radius).multiplyScalar(r0 + (r1 - r0) * rng()).add(s.center);
+      // Soft normal: the clump's outward, the crown's outward, and a lift.
+      n.copy(dir).divide(s.radius).normalize();
+      cn.copy(p).sub(canopyCenter).divide(canopyRadius).normalize();
+      n.multiplyScalar(0.4).addScaledVector(cn, 0.45);
+      n.y += 0.25;
+      n.normalize();
+      // The card's own plane: the surface normal, tilted at random, then a random roll about it.
+      nn.copy(n);
+      nn.x += (rng() - 0.5) * 0.9;
+      nn.y += (rng() - 0.5) * 0.9;
+      nn.z += (rng() - 0.5) * 0.9;
+      nn.normalize();
+      ax.set(Math.abs(nn.y) < 0.9 ? 0 : 1, Math.abs(nn.y) < 0.9 ? 1 : 0, 0);
+      tt.crossVectors(ax, nn).normalize();
+      bb.crossVectors(nn, tt);
+      const roll = rng() * Math.PI * 2, cr = Math.cos(roll), sr = Math.sin(roll);
+      const tx = tt.x * cr + bb.x * sr, ty = tt.y * cr + bb.y * sr, tz = tt.z * cr + bb.z * sr;
+      const bx = nn.y * tz - nn.z * ty, by = nn.z * tx - nn.x * tz, bz = nn.x * ty - nn.y * tx;
+      const w = (o.size[0] + (o.size[1] - o.size[0]) * rng()) * 0.5;
+      const h = w * (2.1 + rng() * 0.4);
+      // AO from the position in the crown (as `clump`).
+      q.copy(p).sub(canopyCenter).divide(canopyRadius);
+      const hy = THREE.MathUtils.clamp(q.y * 0.5 + 0.5, 0, 1);
+      const outer = THREE.MathUtils.clamp(q.length(), 0, 1);
+      const ao = (0.42 + 0.5 * hy * hy + 0.2 * outer) * (0.9 + rng() * 0.2);
+      const leafId = rng();
+      // The stem end (v = 0) sits a little behind the point, the tip points along (bx, by, bz).
+      for (const [cx, cy] of CORNERS) {
+        const along = cy * h - h * 0.25;
+        pos.push(p.x + tx * cx * w + bx * along, p.y + ty * cx * w + by * along, p.z + tz * cx * w + bz * along);
+        nor.push(n.x, n.y, n.z);
+        col.push(ao * tint[0], ao * tint[1], ao * tint[2]);
+        uv.push((cx + 1) * 0.5, cy);
+        leaf.push(leafId);
+      }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('aLeaf', new THREE.Float32BufferAttribute(leaf, 1));
+  g.computeBoundingSphere();
+  g.computeBoundingBox();
+  return g;
+}
