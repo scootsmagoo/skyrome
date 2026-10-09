@@ -45,7 +45,7 @@ export const MUS_PROFILE: CombatProfile = archetype('grassator', { kit: 0 }, {
  */
 export const BITUS_PROFILE: CombatProfile = archetype('sagittarius', {}, {
   name: 'Bitus · Dacian archer', health: 45, stamina: 70, armor: 6, armorFamily: 'cloth', worn: [], weapon: 'sica', ranged: 'arcus',
-  shoot: { ammo: 6, interval: [1.6, 2.4], range: [3, 18], drawS: 0.9 },
+  shoot: { ammo: 6, interval: [1.6, 2.4], range: [2.2, 18], drawS: 0.9 },
   skill: 40, poise: 30, reactionS: 0.4, blockSkill: 0.1, aggression: 0.5, yieldAt: 0.25, fleeAt: 0, loot: 'body.npc-bitus',
 });
 

@@ -4,7 +4,8 @@
  * - `worldEdgeWalls`: four tall, thin, invisible box colliders just inside the heightmap grid, so
  *   nobody walks off the modelled land onto the collider-less apron (the land beyond is scenery).
  * - `SafetyNet`: if the player still ends up below the world (a crack, a glitch, a future bug),
- *   they are put back where they last stood on solid ground. Runs after the player controller.
+ *   they are put back where they last stood on solid ground, unless they are in an interior cell
+ *   built down there on purpose. Runs after the player controller.
  */
 import * as THREE from 'three';
 import type { Game, System } from '../../core/Game';
@@ -81,6 +82,10 @@ export class SafetyNet implements System {
     if (!p) return;
     const pos = p.position;
     if (pos.y < this.floorY) {
+      // Inside an interior cell built under the world (src/world/interiors: the Column's stair) the
+      // player is not lost.
+      const cells = (this.game as Game & { interiors?: { current(): string | null } }).interiors;
+      if (cells?.current()) return;
       this.rescue();
       return;
     }

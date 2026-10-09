@@ -344,6 +344,9 @@ export const CONTENT_SPOTS: LocationDef[] = [
   spot('insula-nutans-scalae', 'The propped stair', onRoad('vicus-tuscus', 357, 1.2), 2.5, { parent: 'insula-nutans' }),
   spot('insula-nutans-tectum', 'Top floor of the leaning insula', onRoad('vicus-tuscus', 354), 2.5, { parent: 'insula-nutans' }),
   spot('insula-nutans-cenaculum', 'Iulia Prima’s flat', onRoad('vicus-tuscus', 346, 1.2), 2.5, { parent: 'insula-nutans' }),
+  // mq-04: the Column's bronze door, in front of the facade at 2.55 m and 1.04 m to its left (COLUMN_LOCAL.door in
+  // world/landmarks/columnFrame.ts; the builder's `column-door` spot replaces it).
+  { id: 'column-door', name: 'The Column’s door', position: atLandmark('column-trajan', 2.55, -1.04), radius: 3, discoverable: false, parent: 'column-trajan' },
 ];
 
 /** Every location the content installs. */
@@ -395,6 +398,8 @@ export const WORLD_SPOTS: Record<string, { radius: number; name: string; also?: 
   'capena-grassator-b': { radius: 2, name: 'Where the second knife-man waits' },
   'capena-mercury-spring': { radius: 4, name: 'Mercury’s Spring', also: ['fons-mercurii'] },
   'castor-strongroom': { radius: 5, name: 'Strongrooms of Castor', also: ['castor-loculi'] },
+  // The Column's bronze door on the court side (trajan-column.ts, mq-04): where the dedication's post is, and the stair's entrance.
+  'column-door': { radius: 3, name: 'The Column’s door' },
   // The Forum builders' street-level places (forum-curia.ts, forum-velia.ts): the paving at the foot of the Curia's
   // stair, where the senators wait (the Chalcidicum above it is 1.7 m up), and the clothier's shop on the Vicus Tuscus.
   'curia-forecourt': { radius: 4, name: 'Before the Senate House', also: ['curia-julia:front'] },

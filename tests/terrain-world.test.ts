@@ -321,6 +321,12 @@ describe('the edge of the world', () => {
     net.fixedUpdate(DT);
     expect(rescued).toBe(1);
     expect(player.position.y).toBeGreaterThan(hm.heightAt(player.position.x, player.position.z) - 0.5);
+    // In an interior cell built under the world (the Column's stair), the net leaves them be.
+    (game as unknown as { interiors: { current(): string | null } }).interiors = { current: () => 'dun-columna' };
+    player.teleport({ x: 0, y: -120, z: 0 });
+    net.fixedUpdate(DT);
+    expect(rescued).toBe(1);
+    expect(player.position.y).toBeCloseTo(-120, 1);
   });
 });
 

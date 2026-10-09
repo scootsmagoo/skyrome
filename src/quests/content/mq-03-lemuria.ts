@@ -135,7 +135,6 @@ export default defineQuest({
       journal: 'Gratus read the message twice and said the high place was the Column itself. Tomorrow Caesar dedicates it, and stands at its foot before all Rome. He would put men on every roof, and I was to be in the Forum of Trajan at dawn. One thing still troubles me. Gemellus swore he never came nearer the house than the end of the street, and I believe him. Somebody gathered the beans from the doorstep, one by one. I did not ask Fuscus.',
       onEnter: (q) => {
         clearClues();
-        q.game.events.emit('ui:banner', { kind: 'generic', label: 'Act I continues', title: 'One Hundred Feet', subtitle: 'The dedication of the Column, 12 May, comes in a future update.', duration: 7 });
       },
       end: 'complete',
     },

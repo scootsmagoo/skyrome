@@ -43,7 +43,8 @@ describe('the profiles (docs/CONTENT.md §5.2)', () => {
     const b = BITUS_PROFILE;
     expect([b.health, b.stamina, b.armor, b.armorFamily, b.skill]).toEqual([45, 70, 6, 'cloth', 40]);
     expect([b.weapon, b.ranged, b.loot]).toEqual(['sica', 'arcus', 'body.npc-bitus']);
-    expect(b.shoot).toEqual({ ammo: 6, interval: [1.6, 2.4], range: [3, 18], drawS: 0.9 });
+    // Range from 2.2 m: on the Column's platform the player comes round the drum at 2.5–3.5 m.
+    expect(b.shoot).toEqual({ ammo: 6, interval: [1.6, 2.4], range: [2.2, 18], drawS: 0.9 });
     expect([b.reactionS, b.blockSkill, b.aggression, b.yieldAt]).toEqual([0.4, 0.1, 0.5, 0.25]);
   });
 

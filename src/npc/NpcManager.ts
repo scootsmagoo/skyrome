@@ -2111,6 +2111,9 @@ export class NpcManager implements System {
         const foe = quest ?? (combat.playerAggressor && combat.isInCombat(player) ? player : (fighters.find(near) ?? null));
         for (const n of this.near(f.position, 16)) {
           if (n === f || n.isFighting() || n.brain?.task?.kind === 'flee' || n.brain?.task?.kind === 'respond' || n.brain?.task?.kind === 'gawk') continue;
+          // A fight on another level (the Column's stair under the court, its platform above) is
+          // neither seen nor heard from the street.
+          if (Math.abs(n.position.y - f.position.y) > 4) continue;
           n.brain?.alarm(this.life, f.position.x, f.position.z, 'fight', foe);
         }
       }

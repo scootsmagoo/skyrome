@@ -136,7 +136,7 @@ describe('quests', () => {
         for (const o of s.objectives ?? []) {
           const t = o.target;
           if (!t) continue;
-          if (t.kind === 'location') expect(isKnownPlace(t.id), `${q.id}/${o.id} → place ${t.id}`).toBe(true);
+          if (t.kind === 'location') expect(isKnownPlace(t.id) || t.id.startsWith('interior:'), `${q.id}/${o.id} → place ${t.id}`).toBe(true);
           if (t.kind === 'npc') expect(npcIds.has(t.id), `${q.id}/${o.id} → npc ${t.id}`).toBe(true);
           if (t.kind === 'item') expect(itemIds.has(t.id), `${q.id}/${o.id} → item ${t.id}`).toBe(true);
         }
@@ -156,8 +156,9 @@ describe('quests', () => {
         ...all(/\bat: '([a-z0-9-]+)'/g, text),
         ...all(/fight\(q\.game,\s*[^,]+,\s*'[a-z-]+',\s*'([a-z0-9-]+)'/g, text),
       ];
-      // `dun-*` ids are interior cells: the world side registers them (docs/CONTENT.md §1.4).
-      for (const id of places) expect(isKnownPlace(id) || id.startsWith('dun-'), `${file}: place ${id}`).toBe(true);
+      // `dun-*` ids are interior cells: the world side registers them (docs/CONTENT.md §1.4). Markers
+      // `interior:<cell>:<spot>` are resolved by the interiors module (src/world/interiors).
+      for (const id of places) expect(isKnownPlace(id) || id.startsWith('dun-') || id.startsWith('interior:'), `${file}: place ${id}`).toBe(true);
       for (const id of all(/(?:giveItem|takeItem|hasItem)\(q, '([a-z0-9-]+)'/g, text)) expect(itemIds.has(id), `${file}: item ${id}`).toBe(true);
       const dlg = all(/dialogueId [!=]== '([a-z0-9-]+)'/g, text);
       for (const id of dlg) expect(dialogueById.has(id), `${file}: dialogue ${id}`).toBe(true);

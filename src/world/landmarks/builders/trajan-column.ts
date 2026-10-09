@@ -140,8 +140,12 @@ function pedestal(b: MeshBuilder, at: THREE.Matrix4, hi: boolean, spots: Spot[] 
   }
 }
 
-/** The column proper on top of the pedestal; returns the height of the statue's head. */
-function columnBody(b: MeshBuilder, at: THREE.Matrix4, hi: boolean): number {
+/**
+ * The column proper on top of the pedestal; returns the height of the statue's head. The rail, the
+ * statue drum and the gilded emperor go to `top` (the 'column-top' LOD chunk, which the stair cell
+ * hides while the player is on the platform); the shaft and capital stay in `b`.
+ */
+function columnBody(b: MeshBuilder, at: THREE.Matrix4, hi: boolean, top: MeshBuilder = b): number {
   const Hc = 29.78 * S;
   const D = 3.69 * S;
   const segs = hi ? 48 : 16;
@@ -193,20 +197,20 @@ function columnBody(b: MeshBuilder, at: THREE.Matrix4, hi: boolean): number {
     [hw, hw, -hw, hw],
     [-hw, hw, -hw, -hw],
   ]) {
-    b.add(cylinderBetween(V(ax, railY, az), V(cx, railY, cz), 0.025, 0.025, 4), 'bronze', at);
+    top.add(cylinderBetween(V(ax, railY, az), V(cx, railY, cz), 0.025, 0.025, 4), 'bronze', at);
     for (let k = 0; k < posts; k++) {
       const t = k / posts;
       const x = ax + (cx - ax) * t;
       const z = az + (cz - az) * t;
-      b.add(cylinderBetween(V(x, yTop, z), V(x, railY, z), 0.02, 0.02, 4), 'bronze', at);
+      top.add(cylinderBetween(V(x, yTop, z), V(x, railY, z), 0.02, 0.02, 4), 'bronze', at);
     }
   }
   // Drum-shaped statue base with its little dome, and the gilded emperor (≈ 4 m real).
   const sb = new ProfileBuilder(0.4 * D, yTop).up(0.08 * D).in(0.05 * D).up(0.28 * D).out(0.05 * D).up(0.06 * D).ovolo(0.04 * D, 0.06 * D, 3).to(0, yTop + 0.48 * D).build();
-  b.add(lathe(sb, { segments: segs }), 'marble', at);
+  top.add(lathe(sb, { segments: segs }), 'marble', at);
   const yS = yTop + 0.48 * D;
   const sc = (4 * S) / 1.85;
-  armoredEmperor(b, mul(at, T(0, yS, 0)), { material: 'gilded_bronze', scale: sc, detail: hi ? 'high' : 'low', plinth: false, spear: true });
+  armoredEmperor(top, mul(at, T(0, yS, 0)), { material: 'gilded_bronze', scale: sc, detail: hi ? 'high' : 'low', plinth: false, spear: true });
   solidCyl(b, at, 0, ys + shaftH / 2, 0, D / 2, shaftH);
   return yS + 1.85 * sc;
 }
@@ -573,10 +577,12 @@ export const builders: LandmarkBuilder[] = [
       // The column itself: near (full frieze, carved pedestal) / far (low) as one LOD.
       const at = mul(F, T(0, 0, COURT.colZ));
       const col = chunks.chunk('column', V(0, 10, COURT.colZ).applyMatrix4(F));
+      // The rail, statue drum and emperor: their own LOD, so the stair cell can hide them on the platform.
+      const top = chunks.chunk('column-top', V(0, 22, COURT.colZ).applyMatrix4(F));
       pedestal(col.near, at, hi, spots);
-      columnBody(col.near, at, hi);
+      columnBody(col.near, at, hi, top.near);
       pedestal(col.far, at, false, null);
-      columnBody(col.far, at, false);
+      columnBody(col.far, at, false, top.far);
       const lamps = new Lamps();
       court(ctx, b, chunks, F, spots, lamps);
       const colliders: ColliderSpec[] = [...b.colliders];
