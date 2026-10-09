@@ -20,6 +20,7 @@ import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import type { Appearance, Sex } from '../../appearance';
 import type { HumanoidAvatar } from '../HumanoidAvatar';
 import { B, computeRig, type Rig } from '../rig';
+import { addCorrectives, updateCorrectives } from './corrective';
 import { morphBody, type BodyArrays } from './morph';
 import { refRig } from './refs';
 import { eyeMaterial, IRIS_COLORS, skinMaterial } from './skin';
@@ -90,12 +91,20 @@ function arrays(mesh: THREE.SkinnedMesh): BodyArrays {
     }
   }
   const tan = geo.getAttribute('tangent');
+  // Pose-space corrective targets (relative deltas) by name, see corrective.ts.
+  const mp = geo.morphAttributes.position as THREE.BufferAttribute[] | undefined;
+  const mn = geo.morphAttributes.normal as THREE.BufferAttribute[] | undefined;
+  const dict = mesh.morphTargetDictionary;
+  const morphs = mp && dict
+    ? Object.entries(dict).map(([name, i]) => ({ name, delta: Float32Array.from(mp[i].array as ArrayLike<number>), normal: mn?.[i] ? Float32Array.from(mn[i].array as ArrayLike<number>) : undefined }))
+    : undefined;
   return {
     position: Float32Array.from(geo.getAttribute('position').array as ArrayLike<number>),
     normal: Float32Array.from(geo.getAttribute('normal').array as ArrayLike<number>),
     tangent: tan ? Float32Array.from(tan.array as ArrayLike<number>) : undefined,
     skinIndex: idx,
     skinWeight: wt,
+    morphs,
   };
 }
 
@@ -173,6 +182,7 @@ function buildGeometry(app: Appearance): RealGeometry {
     geo.setAttribute('skinWeight', new THREE.BufferAttribute(src.skinWeight as Float32Array, 4));
     geo.setIndex(new THREE.BufferAttribute(tpl.index[i], 1));
     geo.name = `real:${app.sex}:lod${i}`;
+    addCorrectives(geo, { app, rig, sex: app.sex, lod: i as 0 | 1 | 2, body: src });
     return geo;
   });
   // Eyes: morphed with the head bone; `eyeLocal` is the direction from the eye centre (pupil axis +z).
@@ -266,11 +276,13 @@ export class RealBody {
     if (lod === 1 && d > b * 1.05) lod = 2;
     else if (lod === 2 && d < b * 0.95) lod = 1;
     if (lod !== this.lod) this.setLod(lod);
+    if (lod === 0) updateCorrectives(this.avatar.mesh, this.avatar.bones);
   }
 
   setLod(lod: number) {
     this.lod = lod;
-    this.avatar.mesh.geometry = this.geo.lods[lod];
+    // A body with a limb cut off has its own geometry (combat/gore/dismemberReal.ts): keep it.
+    if (!this.avatar.mesh.userData.goreGeometry) this.avatar.mesh.geometry = this.geo.lods[lod];
     this.avatar.mesh.material = this.materials[lod];
     this.eyes.visible = lod < 2;
   }

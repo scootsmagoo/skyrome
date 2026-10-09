@@ -76,7 +76,8 @@ and does not prove. Per body: about 2 draw calls at LOD 0/1 (body, eyes), 1 at L
 - Bare bodies only (no clothes, hair, faces painted, helmets, gore): the bodies are anatomically unclothed, so
   wave 2 garments must land before this is the default.
 - Armpit webbing when the arm is raised far above the shoulder (cheer, bow draw): the bind pose collapses the
-  sculpt's open armpit (arms 22 degrees closer to the torso than sculpted). Needs a corrective (see wave 2).
+  sculpt's open armpit (arms 22 degrees closer to the torso than sculpted). Fixed in wave 2 by the pose-space
+  correctives below.
 - Fingers are rigid per bone group (4 fingers on `fingers`, index on `index`, thumb on the hand) and keep the
   sculpt's slight splay; grips look like blocks.
 - The head pivots at the game's mouth-level joint, not at the skull base.
@@ -133,3 +134,36 @@ the top) into the atlas; anything added to the GLB must keep the `<sex>_lodN` na
 - Finger bones (the rig has 2 per hand); toe bone split.
 - More bodies: HBM has stylized and other presets; an older and a child body (separate sculpts) instead of scaling.
 - Age and build as real blend shapes (the heavy and slight builds only scale girth today).
+
+## Wave 2: correctives, gore, age (C2c)
+
+**Shoulder/armpit correctives** (`real/corrective.ts`, `tools/characters/build_body.py` stage 5b). The pipeline
+solves, per side and for four sample poses (upper arm out sideways and forwards, 90 and 150 degrees), the shape that
+skinning the sculpt's own open-armpit A-pose to that pose gives, and stores the difference to the bind-pose
+skinning as glTF morph targets (position and normal deltas in bind space, so skin(bind + d) lands on the solved
+shape; `abd90L abd150L flex90L flex150L`, then R) on LOD 0 and 1. `addCorrectives` attaches the template's shared
+morph attributes to a LOD 0 body geometry (no per-appearance copy; the influences are scaled by `rig.s / ref.s`),
+`updateCorrectives` (called from `RealBody.update` at LOD 0) sets the 8 influences each frame from the upper-arm
+direction in the chest frame: elevation (0 hanging, 1 at 90, second target at 150) times the plane (sideways or
+forwards). Regenerate the GLBs with `npm run characters -- --no-bake` (about 5 s per sex; vertex order, UVs and
+textures stay identical, the bakes are only needed when the sculpt changes). Cost: one morph texture per drawn LOD 0
+geometry (8 targets x 6.8 k vertices x position and normal, about 1.7 MB on the GPU); LOD 1 and 2 have none (an
+armpit beyond 14 m is a few pixels).
+
+**Gore on the real body** (`combat/gore/dismemberReal.ts`, `cut.ts`, `stump.ts`). `sever()` branches on
+`isRealBody(avatar)` (UV and tangent attributes, no `surf`). The cut is a plane through the middle of a bone
+(`REAL_CUT` in `limbs.ts`: the upper arm and thigh halfway, forearm and shin halfway, the neck for the head), in the
+bind pose: `cutMesh` splits the triangles on the plane (attributes interpolated, UV seams welded so the rim chains
+into closed loops). The piece is baked in the current pose into a world-space mesh with position, normal, tangent and
+UV and the avatar's skin material (the baked maps still fit), the head piece takes the eyes, and whatever hangs from
+the collapsing child bone is copied. A wound cap (vertex-coloured dome with the bone end) closes the rim on both
+sides. The body gets its OWN geometry copy without the piece (`mesh.userData.goreGeometry`; `RealBody.setLod`
+leaves it alone) and a cap carried by the cut bone; the child bone collapses (so it also works if a LOD switch
+restores the shared geometry: the limb then folds into the stump). Own geometries and caps are freed when the
+avatar's root leaves the scene. Not carried: correctives (the severed body has none), skinned shell garments (they
+collapse with the bone, a sleeve folds to the stump).
+
+**Age.** Not started beyond what `computeRig` already does (child proportions and head size through the bone
+scales, thinner limbs and a belly for the old, `rig.stoop` for the animation layer). A real age blend wants two more
+shape keys in the pipeline (old: sagging, thinner torso and calves; child: rounder trunk, no adult musculature) and
+blending them in `morph.ts`; the extension point is `BodyArrays.morphs`.

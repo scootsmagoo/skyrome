@@ -11,6 +11,9 @@ Stages (see docs/modules/avatar-real.md):
   4. bake tangent-space normal and AO maps from hi onto each LOD (A-pose, UVs kept);
   5. pose: linear-blend-skin each LOD (and the eyes) into the game's bind pose, so that the joints are
      exactly the computeRig joints of the reference rig (rigs.json) and the arms hang straight down;
+  5b. pose-space correctives (armpit/shoulder): the shape the sculpt's own A-pose gives when the arm is raised,
+     minus what the bind-pose skinning gives (the bind pose closes the sculpt's open armpit); stored as shape
+     keys on each LOD, exported as glTF morph targets (src/actors/avatar/real/corrective.ts drives them);
   6. export one GLB (armature with the game's bone names, JOINTS_0/WEIGHTS_0, tangents) and the maps.
 
 Output: public/models/people/<sex>.glb, .cache/characters/<sex>_<lod>_{normal,ao}.png (then basisu).
@@ -166,6 +169,89 @@ def bone_transforms():
         Ft = frame(dt, sec_t)
         out[bone] = (Ft, np.array([kpar, kperp, kperp]), sh_, th)
     return out
+
+
+def pose_terms(P, W, bt):
+    """Per-bone A-pose -> bind-pose images of P (what apply_pose blends): list of (bone index, weights, [n, 3])."""
+    out = []
+    for i, bone in enumerate(BONES):
+        w = W[:, i]
+        m = w > 1e-5
+        if not m.any():
+            continue
+        Ft, k, sh_, th = bt[bone]
+        t = np.zeros_like(P)
+        t[m] = th + (((P[m] - sh_) @ FS[bone]) * k) @ Ft.T
+        out.append((i, w, t))
+    return out
+
+
+# Corrective samples: (name suffix, plane, degrees). 'abd' lifts the arm sideways, 'flex' forwards (game axes).
+CORR_POSES = [('abd90', 'abd', 90.0), ('abd150', 'abd', 150.0), ('flex90', 'flex', 90.0), ('flex150', 'flex', 150.0)]
+CORR_MAX = 0.10
+
+
+def rot_matrix(axis, ang):
+    axis = np.asarray(axis, dtype=np.float64)
+    axis /= np.linalg.norm(axis)
+    x, y, z = axis
+    c, s = math.cos(ang), math.sin(ang)
+    return np.array([[c + x * x * (1 - c), x * y * (1 - c) - z * s, x * z * (1 - c) + y * s],
+                     [y * x * (1 - c) + z * s, c + y * y * (1 - c), y * z * (1 - c) - x * s],
+                     [z * x * (1 - c) - y * s, z * y * (1 - c) + x * s, c + z * z * (1 - c)]])
+
+
+def corrective_deltas(P_A, W, bt):
+    """
+    Pose-space correctives in bind space: {name: [n, 3]}. For each side and sample pose (arm raised by R about
+    the upperArm joint): posed1 = bind-pose skinning (blend the A-pose images, then pose), posed2 = pose each
+    bone's image rigidly, then blend (the sculpt's own A-pose skinned to the same pose). The morph d satisfies
+    M d = posed2 - posed1 with M the blended pose matrix, so skin(bind + d) lands on posed2.
+    """
+    terms = pose_terms(P_A, W, bt)
+    Pb = np.zeros_like(P_A)
+    for i, w, t in terms:
+        Pb += w[:, None] * t
+    out = {}
+    for side in ('L', 'R'):
+        arm = [i for i, b in enumerate(BONES) if b.endswith(side) and PARENT_CHAIN_HAS(b, 'upperArm' + side)]
+        J = tgt_joint('upperArm' + side)
+        wa = W[:, arm].sum(1)
+        for name, plane, deg in CORR_POSES:
+            ang = math.radians(deg)
+            if plane == 'abd':  # game +Z axis = Blender -Y; the left arm goes out with +angle, the right with -angle
+                Rm = rot_matrix((0, -1, 0), ang if side == 'L' else -ang)
+            else:               # forward: game rotateX(-a) = Blender +X axis, -angle
+                Rm = rot_matrix((1, 0, 0), -ang)
+            rot = lambda X: J + (X - J) @ Rm.T
+            posed1 = Pb + wa[:, None] * (rot(Pb) - Pb)
+            posed2 = np.zeros_like(P_A)
+            for i, w, t in terms:
+                posed2 += w[:, None] * (rot(t) if i in arm else t)
+            delta = posed2 - posed1
+            M = np.eye(3)[None] + wa[:, None, None] * (Rm - np.eye(3))[None]
+            d = np.linalg.solve(M, delta[:, :, None])[:, :, 0]
+            ln = np.linalg.norm(d, axis=1)
+            d *= np.minimum(1.0, CORR_MAX / np.maximum(ln, 1e-9))[:, None]
+            d[(wa < 1e-3) | (wa > 1 - 1e-3)] = 0.0
+            out[name + side] = d
+    return out
+
+
+def PARENT_CHAIN_HAS(bone, ancestor):
+    while bone:
+        if bone == ancestor:
+            return True
+        bone = PARENT[bone]
+    return False
+
+
+def add_shape_keys(ob, P_bind, deltas):
+    """Shape keys (Basis = the bind pose now on the mesh, one key per corrective) -> glTF morph targets."""
+    ob.shape_key_add(name='Basis', from_mix=False)
+    for name, d in deltas.items():
+        key = ob.shape_key_add(name=name, from_mix=False)
+        key.data.foreach_set('co', (P_bind + d).astype(np.float32).ravel())
 
 
 def apply_pose(P, W, bt):
@@ -426,10 +512,15 @@ def main():
         b = base_of(bone)
         sec = UP if b in ('foot', 'toe') else FORWARD
         FS[bone] = frame(src_tail(bone) - src_joint(bone), sec)
-    for ob, Wl in zip(lods, LODW):
+    for li, (ob, Wl) in enumerate(zip(lods, LODW)):
         P = mesh_positions(ob)
-        set_positions(ob, apply_pose(P, Wl, bt))
+        deltas = corrective_deltas(P, Wl, bt) if li < 2 else {}
+        Pb = apply_pose(P, Wl, bt)
+        set_positions(ob, Pb)
         ob.data.update()
+        if deltas:
+            add_shape_keys(ob, Pb, deltas)
+            log(f'lod{li}: correctives', {k: round(float(np.linalg.norm(v, axis=1).max()), 3) for k, v in deltas.items()})
     # eyes: two UV spheres at the posed eye centres, rigid to the head
     eyes, eye_centers, eye_radius = make_eyes(bt)
 
@@ -697,7 +788,7 @@ def export_glb(garm, lods, eyes):
     kw = dict(filepath=path, export_format='GLB', use_selection=True, export_apply=False,
               export_skins=True, export_tangents=True, export_normals=True, export_texcoords=True,
               export_materials='NONE', export_image_format='NONE', export_yup=True,
-              export_animations=False, export_morph=False, export_cameras=False, export_lights=False,
+              export_animations=False, export_morph=True, export_morph_normal=True, export_morph_tangent=False, export_cameras=False, export_lights=False,
               export_all_influences=False)
     bpy.ops.export_scene.gltf(**kw)
     log('exported', path, os.path.getsize(path) // 1024, 'KB')

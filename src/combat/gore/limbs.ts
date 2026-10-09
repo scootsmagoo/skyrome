@@ -34,6 +34,23 @@ export const STUMP_RADIUS: Readonly<Record<Part, number>> = {
   shinR: 0.06,
 };
 
+/**
+ * Where a realistic body is cut (dismemberReal.ts): the cut plane crosses `bone` at the fraction `t` of
+ * its length (towards `child`), perpendicular to the bone, so a stump of the bone remains; `child` is
+ * the bone that collapses on the body (and takes whatever hangs from it).
+ */
+export const REAL_CUT: Readonly<Record<Part, { bone: BoneName; child: BoneName; t: number }>> = {
+  head: { bone: 'neck', child: 'head', t: 0.5 },
+  armL: { bone: 'upperArmL', child: 'forearmL', t: 0.55 },
+  armR: { bone: 'upperArmR', child: 'forearmR', t: 0.55 },
+  forearmL: { bone: 'forearmL', child: 'handL', t: 0.5 },
+  forearmR: { bone: 'forearmR', child: 'handR', t: 0.5 },
+  legL: { bone: 'thighL', child: 'shinL', t: 0.5 },
+  legR: { bone: 'thighR', child: 'shinR', t: 0.5 },
+  shinL: { bone: 'shinL', child: 'footL', t: 0.5 },
+  shinR: { bone: 'shinR', child: 'footR', t: 0.5 },
+};
+
 /** Bone indices of `bone` and everything below it. */
 export function subtree(bone: BoneName): Set<number> {
   const out = new Set<number>();

@@ -119,6 +119,8 @@ export interface BodyArrays {
   /** Four game-bone indices per vertex. */
   skinIndex: ArrayLike<number>;
   skinWeight: ArrayLike<number>;
+  /** Pose-space corrective targets baked in the GLB (reference pose, relative deltas, vec3), see corrective.ts. */
+  morphs?: { name: string; delta: Float32Array; normal?: Float32Array }[];
 }
 
 /** Morph `src` (reference pose) into `out` (same layout) for the target rig. */
