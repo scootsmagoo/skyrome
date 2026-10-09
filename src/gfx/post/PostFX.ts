@@ -102,7 +102,9 @@ export class PostFX implements System {
   private msaa: boolean;
   private lut: THREE.Data3DTexture;
   private lutData = new Uint8Array(LUT_SIZE ** 3 * 4);
-  private lutKey = '';
+  /** The grade numbers the LUT was last baked from (compared in place: no per-frame allocation). */
+  private readonly lutKey = new Float64Array(12).fill(NaN);
+  private readonly lutNow = new Float64Array(12);
   private hdr: THREE.WebGLRenderTarget;
   private ldr: THREE.WebGLRenderTarget;
   private mips: THREE.WebGLRenderTarget[] = [];
@@ -225,7 +227,7 @@ export class PostFX implements System {
     this.aoBlurMat = new THREE.ShaderMaterial({
       ...common,
       name: 'AOBlur',
-      uniforms: { tAo: { value: null }, tDepth: { value: null }, uTexel: { value: new THREE.Vector2() }, uInvProj: { value: new THREE.Matrix4() }, uReversed: { value: 0 } },
+      uniforms: { tAo: { value: null }, uTexel: { value: new THREE.Vector2() } },
       defines: { AO_BLUR_R: 2, AO_BLUR_STEP: '1.0' },
       fragmentShader: AO_BLUR_FRAG,
     });
@@ -312,18 +314,22 @@ export class PostFX implements System {
   /** Bake the grade into the LUT when any of its numbers changed. */
   private updateLut() {
     const g = this.grade;
-    const p: GradeLutParams = {
-      saturation: g.saturation,
-      shadowDesat: g.shadowDesat,
-      contrast: g.contrast,
-      toe: g.toe,
-      shadowTint: [g.shadowTint.r, g.shadowTint.g, g.shadowTint.b],
-      highlightTint: [g.highlightTint.r, g.highlightTint.g, g.highlightTint.b],
-    };
-    const key = JSON.stringify(p);
-    if (key === this.lutKey) return;
-    this.lutKey = key;
-    buildGradeLut(p, LUT_SIZE, this.lutData);
+    const k = this.lutNow;
+    k[0] = g.saturation; k[1] = g.shadowDesat; k[2] = g.contrast; k[3] = g.toe;
+    k[4] = g.shadowTint.r; k[5] = g.shadowTint.g; k[6] = g.shadowTint.b;
+    k[7] = g.highlightTint.r; k[8] = g.highlightTint.g; k[9] = g.highlightTint.b;
+    let same = true;
+    for (let i = 0; i < 10; i++) if (k[i] !== this.lutKey[i]) { same = false; break; }
+    if (same) return;
+    this.lutKey.set(k);
+    buildGradeLut({
+      saturation: k[0],
+      shadowDesat: k[1],
+      contrast: k[2],
+      toe: k[3],
+      shadowTint: [k[4], k[5], k[6]],
+      highlightTint: [k[7], k[8], k[9]],
+    }, LUT_SIZE, this.lutData);
     this.lut.needsUpdate = true;
   }
 
@@ -392,7 +398,6 @@ export class PostFX implements System {
 
     const reversed = renderer.capabilities.reversedDepthBuffer && renderer.state.buffers.depth.getReversed() ? 1 : 0;
     this.aoMat.uniforms.uReversed.value = reversed;
-    this.aoBlurMat.uniforms.uReversed.value = reversed;
     this.shaftMaskMat.uniforms.uReversed.value = reversed;
     const t0 = performance.now();
     const info = renderer.info;
@@ -422,9 +427,7 @@ export class PostFX implements System {
       this.pass(this.aoMat, this.ao);
       const bu = this.aoBlurMat.uniforms;
       bu.tAo.value = this.ao.texture;
-      bu.tDepth.value = this.hdr.depthTexture;
       bu.uTexel.value.set(1 / this.ao.width, 1 / this.ao.height);
-      bu.uInvProj.value.copy(camera.projectionMatrixInverse);
       this.pass(this.aoBlurMat, this.aoBlur);
     }
 

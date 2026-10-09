@@ -2,7 +2,7 @@
  * Screen-space ambient occlusion from the depth buffer alone (no extra scene pass): the darkening
  * where surfaces meet — wall feet, under cornices, inside doorways, between columns — that makes a
  * city read as solid. Alchemy-style estimator at half resolution (12 samples on a spiral, rotated
- * per pixel), normals rebuilt from depth, then a depth-aware 5×5 blur. It fades out with distance
+ * per pixel), normals rebuilt from depth, then a depth-aware (distance packed in the AO pass) 5×5 blur. It fades out with distance
  * (where the depth buffer gets coarse and AO stops reading anyway).
  *
  * The same pass also marches 10 steps toward the light through the depth buffer for screen-space
@@ -55,6 +55,14 @@ float contactShadow(vec3 P, vec3 N, float dist, float jitter) {
 }
 #endif
 
+// View distance packed into two 8-bit channels (0..DIST_MAX m, ~3 mm steps) so the blur needs no depth reads.
+const float DIST_MAX = 256.0;
+vec2 packDist(float dist) {
+  float v = clamp(dist / DIST_MAX, 0.0, 1.0) * 65535.0;
+  float hi = floor(v / 256.0);
+  return vec2(hi, v - hi * 256.0) / 255.0;
+}
+
 float ign(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
 
 void main() {
@@ -62,7 +70,8 @@ void main() {
   if (uReversed > 0.5 ? d <= 0.00001 : d >= 0.99999) { gl_FragColor = vec4(1.0); return; }
   vec3 P = viewPos(vUv);
   float dist = -P.z;
-  if (dist > uFadeFar) { gl_FragColor = vec4(1.0); return; }
+  vec2 zp = packDist(dist);
+  if (dist > uFadeFar) { gl_FragColor = vec4(1.0, 1.0, zp); return; }
   // Normal from the nearer of the two neighbours on each axis (no halos across silhouettes).
   vec3 px1 = viewPos(vUv + vec2(uTexel.x, 0.0)) - P, px0 = P - viewPos(vUv - vec2(uTexel.x, 0.0));
   vec3 py1 = viewPos(vUv + vec2(0.0, uTexel.y)) - P, py0 = P - viewPos(vUv - vec2(0.0, uTexel.y));
@@ -94,33 +103,27 @@ void main() {
     cs = mix(cs, 1.0, smoothstep(18.0, 36.0, dist));
   }
   #endif
-  gl_FragColor = vec4(ao, cs, 0.0, 1.0);
+  gl_FragColor = vec4(ao, cs, zp);
 }
 `;
 
 /** Depth-aware blur (5×5 on High; 3×3 at twice the spacing on Medium: AO_BLUR_R, AO_BLUR_STEP) of the half-resolution AO (keeps edges, kills the per-pixel noise). */
 export const AO_BLUR_FRAG = /* glsl */ `
 uniform sampler2D tAo;
-uniform sampler2D tDepth;
 uniform vec2 uTexel;      // AO texel
-uniform mat4 uInvProj;
-uniform float uReversed;
 varying vec2 vUv;
-float viewZ(vec2 uv) {
-  float d = texture2D(tDepth, uv).x;
-  vec4 p = uInvProj * vec4(uv * 2.0 - 1.0, uReversed > 0.5 ? d : d * 2.0 - 1.0, 1.0);
-  return p.z / p.w;
-}
+// The AO pass stores the view distance in .ba (see packDist), so this pass reads one texture only.
+float dist(vec4 t) { return (t.b * 255.0 * 256.0 + t.a * 255.0) / 65535.0 * 256.0; }
 void main() {
-  float z0 = viewZ(vUv);
+  vec4 c = texture2D(tAo, vUv);
+  float z0 = dist(c);
   vec2 sum = vec2(0.0);
   float wsum = 0.0;
   for (int y = -AO_BLUR_R; y <= AO_BLUR_R; y++) {
     for (int x = -AO_BLUR_R; x <= AO_BLUR_R; x++) {
-      vec2 uv = vUv + vec2(float(x), float(y)) * uTexel * AO_BLUR_STEP;
-      float z = viewZ(uv);
-      float w = 1.0 / (1.0 + abs(z - z0) * 8.0 / max(1.0, -z0 * 0.05));
-      sum += texture2D(tAo, uv).rg * w;
+      vec4 t = texture2D(tAo, vUv + vec2(float(x), float(y)) * uTexel * AO_BLUR_STEP);
+      float w = 1.0 / (1.0 + abs(dist(t) - z0) * 8.0 / max(1.0, z0 * 0.05));
+      sum += t.rg * w;
       wsum += w;
     }
   }
