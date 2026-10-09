@@ -164,6 +164,14 @@ function greeting(c: DialogueContext): string {
   return pronouns(p, vary(p, 'greet', L[p.mood] ?? L.all));
 }
 
+/** Once the Column is dedicated (mq-04 done): the omen of the hawk, as the city tells it. */
+function omenRumors(c: DialogueContext): string[] {
+  if (!completed(c, 'mq-04-columna')) return [];
+  const out = ['They say a hawk flew over the Column at the very moment. Good for the war, the augurs say.'];
+  if (['slave', 'poor'].includes(group(c))) out.push('A hawk. Yes. And a centurion fainted. In May. At the second hour.');
+  return out;
+}
+
 /** Things people of each kind hear first (then the city's talk, talk.ts). */
 function groupRumors(p: Persona): string[] {
   switch (groupOf(p)) {
@@ -249,7 +257,7 @@ const citizen = defineDialogue({
       ]),
     ),
     news: {
-      text: (c) => rotate(c, '_rumor', [...groupRumors(personaOf(c)), ...rumors(c)]),
+      text: (c) => rotate(c, '_rumor', [...groupRumors(personaOf(c)), ...omenRumors(c), ...rumors(c)]),
       choices: [
         { text: 'Anything else?', goto: 'news' },
         { text: 'Let’s talk about something else.', goto: 'more' },

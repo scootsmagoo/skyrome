@@ -366,7 +366,7 @@ describe('mq-02-tabella: The Sealed Tablet', () => {
     expect(status(w, 'mq-02-tabella')!.stage).toBe('mus');
   });
 
-  it('Mus in the burned taberna: a fight with two knife-men; he yields (spared) or dies', () => {
+  it('Mus in the burned taberna: a fight with two knife-men; a yield is provisional, the player decides (spare) or he dies', () => {
     const w = afterArrival({ actors: ['npc-mus'], engage: true });
     w.rpg.quests.setStage('mq-02-tabella', 'mus');
     talk(w, 'npc-mus', 'Draw steel.');
@@ -374,6 +374,9 @@ describe('mq-02-tabella: The Sealed Tablet', () => {
     expect(w.engaged).toEqual(['npc-mus']);
     expect(w.spawned.map((s) => s.opts.id)).toEqual(['mq02-knife-a', 'mq02-knife-b']);
     yieldTo(w, 'npc-mus');
+    expect(flag(w, 'mus-fate')).toBeUndefined(); // provisional: the player has not chosen yet
+    expect(status(w, 'mq-02-tabella')!.stage).toBe('mus');
+    w.events.emit('combat:yieldChoice', { actorId: 'npc-mus', choice: 'spare' });
     expect(flag(w, 'mus-fate')).toBe('spared');
     expect(status(w, 'mq-02-tabella')!.stage).toBe('satchel');
     // Beaten, he gives up the key.
@@ -386,6 +389,122 @@ describe('mq-02-tabella: The Sealed Tablet', () => {
     talk(w2, 'npc-mus', 'Draw steel.');
     kill(w2, 'npc-mus');
     expect(w2.rpg.dialogue.flags.get('mus-fate')).toBe('killed');
+  });
+
+  it('Mus: yield then kill is killed (the yield alone decides nothing)', () => {
+    const w = afterArrival({ actors: ['npc-mus'], engage: true });
+    w.rpg.quests.setStage('mq-02-tabella', 'mus');
+    talk(w, 'npc-mus', 'Draw steel.');
+    yieldTo(w, 'npc-mus');
+    expect(flag(w, 'mus-fate')).toBeUndefined();
+    w.events.emit('combat:yieldChoice', { actorId: 'npc-mus', choice: 'kill' });
+    expect(flag(w, 'mus-fate')).toBe('killed');
+    expect(status(w, 'mq-02-tabella')!.stage).toBe('satchel');
+  });
+
+  it('Mus: yield then a kill blow (actor:killed) is killed', () => {
+    const w = afterArrival({ actors: ['npc-mus'], engage: true });
+    w.rpg.quests.setStage('mq-02-tabella', 'mus');
+    talk(w, 'npc-mus', 'Draw steel.');
+    yieldTo(w, 'npc-mus');
+    kill(w, 'npc-mus');
+    expect(flag(w, 'mus-fate')).toBe('killed');
+  });
+
+  it('Mus: yield then spare, rob or arrest is spared; the key is his to give', () => {
+    for (const choice of ['spare', 'rob', 'arrest'] as const) {
+      const w = afterArrival({ actors: ['npc-mus'], engage: true });
+      w.rpg.quests.setStage('mq-02-tabella', 'mus');
+      talk(w, 'npc-mus', 'Draw steel.');
+      yieldTo(w, 'npc-mus');
+      w.events.emit('combat:yieldChoice', { actorId: 'npc-mus', choice });
+      expect(flag(w, 'mus-fate')).toBe('spared');
+      expect(w.rpg.inventory.count('clavis-cellae-muris')).toBe(1);
+    }
+  });
+
+  it('Mus: yield then walk out of the taberna is spared', () => {
+    const w = afterArrival({ actors: ['npc-mus'], engage: true });
+    w.rpg.quests.setStage('mq-02-tabella', 'mus');
+    goTo(w, 'taberna-collapsa');
+    talk(w, 'npc-mus', 'Draw steel.');
+    yieldTo(w, 'npc-mus');
+    expect(flag(w, 'mus-fate')).toBeUndefined();
+    goTo(w, 'circus-maximus'); // leaves the taberna with him yielded and undecided
+    expect(flag(w, 'mus-fate')).toBe('spared');
+    expect(status(w, 'mq-02-tabella')!.stage).toBe('satchel');
+  });
+
+  it('Mus: yield then step out of his corner into the taberna is spared; staying inside the taberna is not', () => {
+    const w = afterArrival({ actors: ['npc-mus'], engage: true });
+    w.rpg.quests.setStage('mq-02-tabella', 'mus');
+    // The corner (mus-latebra) is a conditional place, not in the test world: its exit is emitted directly.
+    goTo(w, 'taberna-collapsa');
+    talk(w, 'npc-mus', 'Draw steel.');
+    yieldTo(w, 'npc-mus');
+    expect(flag(w, 'mus-fate')).toBeUndefined();
+    w.events.emit('location:exited', { locationId: 'mus-latebra' }); // out of his corner, still in the taberna
+    expect(flag(w, 'mus-fate')).toBe('spared');
+  });
+
+  it('Mus: an exit event from the taberna while the player is still inside it leaves him undecided', () => {
+    const w = afterArrival({ actors: ['npc-mus'], engage: true });
+    w.rpg.quests.setStage('mq-02-tabella', 'mus');
+    goTo(w, 'taberna-collapsa');
+    talk(w, 'npc-mus', 'Draw steel.');
+    yieldTo(w, 'npc-mus');
+    w.events.emit('location:exited', { locationId: 'taberna-collapsa' }); // still inside: the handler checks the player's place
+    expect(flag(w, 'mus-fate')).toBeUndefined();
+    expect(status(w, 'mq-02-tabella')!.stage).toBe('mus');
+  });
+
+  it('Mus: a yielded Mus who gets up again (released by combat, no event) is not spared when the player walks out', () => {
+    const w = afterArrival({ actors: ['npc-mus'], engage: true });
+    w.rpg.quests.setStage('mq-02-tabella', 'mus');
+    goTo(w, 'taberna-collapsa');
+    talk(w, 'npc-mus', 'Draw steel.');
+    yieldTo(w, 'npc-mus');
+    // The combat core's live status: CombatCore.releaseYielded sets it back to 'active' and emits nothing.
+    let liveStatus = 'yielded';
+    (w.game.combat as unknown as Record<string, unknown>).core = { get: (id: string) => (id === 'npc-mus' ? { id, status: liveStatus } : undefined) };
+    liveStatus = 'active';
+    goTo(w, 'circus-maximus');
+    expect(flag(w, 'mus-fate')).toBeUndefined();
+    expect(w.rpg.inventory.count('clavis-cellae-muris')).toBe(0);
+  });
+
+  it('Mus: yield, then staying inside the taberna leaves him undecided', () => {
+    const w = afterArrival({ actors: ['npc-mus'], engage: true });
+    w.rpg.quests.setStage('mq-02-tabella', 'mus');
+    goTo(w, 'taberna-collapsa');
+    talk(w, 'npc-mus', 'Draw steel.');
+    yieldTo(w, 'npc-mus');
+    goTo(w, 'taberna-collapsa');
+    expect(flag(w, 'mus-fate')).toBeUndefined();
+    expect(status(w, 'mq-02-tabella')!.stage).toBe('mus');
+  });
+
+  it('Mus: a kill decided in the fight is not changed when the player walks out later', () => {
+    const w = afterArrival({ actors: ['npc-mus'], engage: true });
+    w.rpg.quests.setStage('mq-02-tabella', 'mus');
+    goTo(w, 'taberna-collapsa');
+    talk(w, 'npc-mus', 'Draw steel.');
+    yieldTo(w, 'npc-mus');
+    w.events.emit('combat:yieldChoice', { actorId: 'npc-mus', choice: 'kill' });
+    goTo(w, 'circus-maximus');
+    expect(flag(w, 'mus-fate')).toBe('killed');
+  });
+
+  it('Mus: a sparing decided in the fight is not changed when the player walks out later', () => {
+    const w = afterArrival({ actors: ['npc-mus'], engage: true });
+    w.rpg.quests.setStage('mq-02-tabella', 'mus');
+    goTo(w, 'taberna-collapsa');
+    talk(w, 'npc-mus', 'Draw steel.');
+    yieldTo(w, 'npc-mus');
+    w.events.emit('combat:yieldChoice', { actorId: 'npc-mus', choice: 'spare' });
+    goTo(w, 'circus-maximus');
+    expect(flag(w, 'mus-fate')).toBe('spared');
+    expect(w.rpg.inventory.count('clavis-cellae-muris')).toBe(1);
   });
 
   it('AC-18: Castor’s cella is shut on the Lemuria (the aedituus refuses) and open on a later day: an offering gives its blessing', () => {

@@ -46,3 +46,8 @@ export function entryAt(schedule: readonly ScheduleEntry[] | undefined, hour: nu
   for (const e of sorted) if (e.from <= hour) cur = e;
   return cur;
 }
+
+/** Hours forward from clock hour `now` to clock hour `target`, wrapping past midnight: 0 ≤ result < 24. */
+export function hoursUntil(target: number, now: number): number {
+  return (((target - now) % 24) + 24) % 24;
+}

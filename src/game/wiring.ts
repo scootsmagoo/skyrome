@@ -38,6 +38,8 @@ export function registerMarkerResolvers(game: Game) {
     return new THREE.Vector3(x, game.heightmap?.heightAt(x, z) ?? 0, z);
   };
   const location = (id: string) => {
+    const inside = game.interiors?.resolve(id);
+    if (inside) return inside;
     const l = game.locations?.get(id);
     if (l) return new THREE.Vector3(l.position.x, l.position.y ?? 0, l.position.z);
     const placed = game.landmarks?.get(id);

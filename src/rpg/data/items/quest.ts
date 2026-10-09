@@ -31,4 +31,7 @@ export const QUEST_ITEMS: ItemDef[] = [
   q('quest-epistula-patroni', 'The Patron’s Note', 'epistula', 'A sealed note from a patron’s house.', { icon: '✉', tags: ['letter', 'sealed'] }),
   q('quest-penna-corvi', 'Raven Feather', 'penna', 'A black feather: an invitation token.', { icon: '◆' }),
   q('quest-nardus-falsum', 'False Nard', 'nardus adulteratus', 'A flask of “nard” that smells of grass and lies.', { icon: '⚱', tags: ['evidence'] }),
+  // mq-04 (docs/design/mq-04-columna.md §2.1): the archer's token, and the arrow Crito takes from Gratus's shoulder.
+  q('quest-tessera-mucaporis', 'Bone Token', 'tessera ossea', 'A bone gaming token, scratched with a curved Dacian blade and the letters MVCAPOR.', { icon: '◆', tags: ['clue'] }),
+  q('quest-sagitta-dacica', 'Dacian Arrow', 'sagitta', 'Crito pulled it out of Gratus’s shoulder: barbed, the shaft painted with red bands. He gave it to you without a word.', { icon: '➶' }),
 ];

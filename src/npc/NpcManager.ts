@@ -327,6 +327,8 @@ export class NpcManager implements System {
    * at this hour (or its home). Null for unknown or dead NPCs.
    */
   positionOf(id: string): THREE.Vector3 | null {
+    const st = this.staged.get(id);
+    if (st && !this.deadNamed.has(id)) return new THREE.Vector3(st.x, this.byId.get(id)?.position.y ?? this.floorY(st.x, st.z) ?? 0, st.z);
     const n = this.byId.get(id);
     if (n) return n.position.clone();
     if (this.deadNamed.has(id)) return null;
@@ -439,6 +441,62 @@ export class NpcManager implements System {
     if (this.posed.delete(npc) && !npc.dead) npc.canMove = true;
     if (!this.directed.delete(npc)) return;
     if (npc.scripted && !npc.dead) npc.brain?.release(this.life);
+  }
+
+  /**
+   * Named NPCs content has staged at a point (`stage`): out of their schedule until `unstage`. The
+   * point is kept, so a staged NPC who despawns is put back there when they respawn.
+   */
+  private readonly staged = new Map<string, { x: number; z: number; heading: number; loop: IdleLoop | null }>();
+  /** The talk test a staged NPC's prompt had before staging (scripted NPCs fail the default one). */
+  private readonly stagedTalk = new WeakMap<Npc, NonNullable<Npc['interactable']['enabled']>>();
+
+  /**
+   * Put a named NPC at a point (x, z), out of their schedule, posed in `loop` (default 'stand')
+   * facing `heading`. Spawns them there when they are not in the world, else moves them there. They
+   * stay talkable. Points are used as given (the floor height comes from the nav grid or physics).
+   * False when there is no such NPC, they are dead or held by someone else, or there is no floor at
+   * the point; the stage is kept and retried by `updateNamed` while the NPC is wanted.
+   */
+  stage(id: string, x: number, z: number, heading = 0, loop: IdleLoop | null = 'stand'): boolean {
+    if (!this.registry().get(id) || this.deadNamed.has(id) || this.held.has(id)) return false;
+    const n = this.byId.get(id);
+    // A refused stage stores nothing, so `updateNamed` never applies it later.
+    if (n && !this.canStage(n)) return false;
+    const st = { x, z, heading, loop };
+    this.staged.set(id, st);
+    if (n) return this.applyStage(n, st);
+    const spawned = this.spawnNamed(this.registry().get(id)!, x, z, heading);
+    return !!spawned && this.applyStage(spawned, st);
+  }
+
+  /** Give a staged NPC back to their schedule: they walk on to their place from where they stand. */
+  unstage(id: string) {
+    this.staged.delete(id);
+    const n = this.byId.get(id);
+    if (!n) return;
+    const talk = this.stagedTalk.get(n);
+    if (talk) n.interactable.enabled = talk;
+    this.stagedTalk.delete(n);
+    this.undirect(n);
+  }
+
+  /** Would `pose` take this NPC now? (dead, talking, fighting, or scripted by someone else: no.) */
+  private canStage(n: Npc): boolean {
+    return !(n.dead || n.talking || n.isFighting() || (n.scripted && !this.directed.has(n)));
+  }
+
+  /** Put a staged NPC at their point (moving them if needed) and pose them there. */
+  private applyStage(n: Npc, st: { x: number; z: number; heading: number; loop: IdleLoop | null }): boolean {
+    // Check everything `pose` would refuse before moving anyone, so a failed stage changes nothing.
+    if (!this.canStage(n)) return false;
+    const y = this.floorY(st.x, st.z);
+    if (y === null) return false;
+    if (Math.hypot(n.position.x - st.x, n.position.z - st.z) > 0.3) n.teleport({ x: st.x, y: y + 0.03, z: st.z }, st.heading);
+    // A posed NPC is scripted, and the default prompt is off for scripted NPCs: keep Talk on.
+    if (!this.stagedTalk.has(n)) this.stagedTalk.set(n, n.interactable.enabled ?? (() => true));
+    n.interactable.enabled = () => !n.dead && !n.hostile && !n.isFighting();
+    return this.pose(n, st.loop, st.heading);
   }
 
   /** Places the ambient crowd keeps out of (arena sand, a school's court): no spawns or strolls there. */
@@ -617,6 +675,8 @@ export class NpcManager implements System {
     if (i < 0) return;
     this.list.splice(i, 1);
     this.byId.delete(npc.id);
+    this.directed.delete(npc);
+    this.posed.delete(npc);
     this.spots.release(npc.id);
     const block = this.workBlocks.get(npc.id);
     if (block) {
@@ -1756,7 +1816,8 @@ export class NpcManager implements System {
         this.workBlocks.get(n.id)!.removeFromParent();
         this.workBlocks.delete(n.id);
       }
-      if (n.scripted || n.talking || n.station) continue;
+      // A staged NPC is scripted but still goes when far off unseen: they are put back at their point on respawn.
+      if ((n.scripted && !this.staged.has(n.id)) || n.talking || n.station) continue;
       if (n.ambient) {
         // Far away, or a while out of view: recycle them where the player looks (they respawn just
         // outside the edges of the view and walk into it). Sooner when well behind the camera.
@@ -1991,8 +2052,21 @@ export class NpcManager implements System {
     if (!this.namedEnabled) return;
     const pp = this.game.player!.position;
     const reg = this.registry();
+    // Staged NPCs: back at their point when they have been let go, and spawned there when near.
+    for (const [id, st] of this.staged) {
+      if (this.deadNamed.has(id) || this.held.has(id)) continue;
+      const n = this.byId.get(id);
+      if (n) {
+        if (!n.talking && !n.scripted) this.applyStage(n, st);
+        continue;
+      }
+      const def = reg.get(id);
+      if (!def || Math.hypot(st.x - pp.x, st.z - pp.z) > NAMED_SPAWN) continue;
+      const sp = this.spawnNamed(def, st.x, st.z, st.heading);
+      if (sp) this.applyStage(sp, st);
+    }
     for (const def of reg.all()) {
-      if (this.byId.has(def.id) || this.deadNamed.has(def.id) || this.held.has(def.id)) continue;
+      if (this.byId.has(def.id) || this.deadNamed.has(def.id) || this.held.has(def.id) || this.staged.has(def.id)) continue;
       if (!def.schedule?.length && !def.home) continue;
       const e = activeScheduleEntry(def.schedule, this.game.time.hour);
       const at = e?.at ?? def.home;

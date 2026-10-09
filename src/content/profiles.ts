@@ -38,6 +38,22 @@ export const MUS_PROFILE: CombatProfile = archetype('grassator', { kit: 0 }, {
   skill: 35, poise: 50, reactionS: 0.4, blockSkill: 0.3, aggression: 0.7, yieldAt: 0.2, fleeAt: 0, dmgMult: 1, loot: 'body.npc-mus',
 });
 
+/**
+ * §5.2 (mq-04): Bitus, son of Dida, the Dacian archer on the Column. Six arrows from the bow
+ * (planted, a 0.9 s draw, 1.6–2.4 s apart, 3–18 m), then the sica; yields at 25%. Nowhere to run
+ * on the platform: no flight. The body holds the fixed table (the token, the drachms, his arms).
+ */
+export const BITUS_PROFILE: CombatProfile = archetype('sagittarius', {}, {
+  name: 'Bitus · Dacian archer', health: 45, stamina: 70, armor: 6, armorFamily: 'cloth', worn: [], weapon: 'sica', ranged: 'arcus',
+  shoot: { ammo: 6, interval: [1.6, 2.4], range: [3, 18], drawS: 0.9 },
+  skill: 40, poise: 30, reactionS: 0.4, blockSkill: 0.1, aggression: 0.5, yieldAt: 0.25, fleeAt: 0, loot: 'body.npc-bitus',
+});
+
+/** §5.2 (mq-04): the two knife-men left to hold the Column's stair: thugs with a sica who never yield (nor run). */
+export const DACIAN_KNIFE_PROFILE: CombatProfile = tier('thug', {
+  name: 'Dacian knife-man', health: 40, armor: 0, armorFamily: 'cloth', worn: ['tunica', 'bracae'], weapon: 'sica', yieldAt: 0, fleeAt: 0, loot: 'thug',
+});
+
 /** §5.2: the mq-01 tutorial pair (A opens with a light chain; B waits 3 s, then a long power wind-up). */
 export function mq01GrassatorProfile(which: 'a' | 'b'): CombatProfile {
   return archetype('grassator', { kit: which === 'a' ? 0 : 1 }, { name: which === 'a' ? 'Grassator with a knife' : 'Grassator with a cudgel', skill: 15, poise: 30, reactionS: 0.45, blockSkill: 0.15, aggression: 0.55, yieldAt: 0.25, fleeAt: 0.15 });

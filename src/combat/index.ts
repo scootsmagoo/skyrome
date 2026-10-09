@@ -6,7 +6,8 @@
  *   const thug = combat.spawnEnemy('grassator', pos, { engage: true });
  */
 export { installCombat, CombatSystem, type InstallCombatOptions, type RegisterOptions, type SpawnOptions } from './CombatSystem';
-export { CombatCore, nullEnv, PRACTICE_DAGGER, type CombatEnv, type Projectile } from './CombatCore';
+export { CombatCore, FALLBACK_BOW, nullEnv, PRACTICE_DAGGER, type CombatEnv, type Projectile } from './CombatCore';
+export { HEIGHT } from './geometry';
 export { Combatant, type CombatBody, type CombatView, type CombatantInit } from './Combatant';
 export { ArenaBout, type BoutOptions } from './ArenaBout';
 export { ENEMIES, ENEMY_IDS, enemySpec, nereusProfile, type EnemySpec, type EnemyOptions } from './archetypes';

@@ -75,7 +75,7 @@ export class GoreSystem implements System {
     return this.game.settings.data.gore ?? 'ultra';
   }
 
-  private onHit(e: { attackerId: string; targetId: string; damage: number; blocked: boolean; parried: boolean; power: boolean }) {
+  private onHit(e: { attackerId: string; targetId: string; damage: number; blocked: boolean; parried: boolean; power: boolean; kind?: string }) {
     const level = this.level;
     if (level === 'off' || e.blocked || e.parried || !(e.damage > 0)) return;
     const def = this.core.get(e.targetId);
@@ -99,8 +99,8 @@ export class GoreSystem implements System {
       const d = 0.4 + this.rng() * (e.power ? 1.6 : 1);
       this.blood.splat(def.position.x + dir.x * d + (this.rng() - 0.5) * 0.4, def.position.y + 0.3, def.position.z + dir.z * d + (this.rng() - 0.5) * 0.4, (blunt ? 0.25 : 0.35) + this.rng() * 0.35);
     }
-    // The killing blow (combat reports the hit after the death).
-    if (def.status === 'dead' && !def.isPlayer) this.killingBlow(def, att, e.power, level);
+    // The killing blow (combat reports the hit after the death); an arrow severs nothing.
+    if (def.status === 'dead' && !def.isPlayer && e.kind !== 'arrow') this.killingBlow(def, att, e.power, level);
   }
 
   private killingBlow(def: Combatant, att: Combatant, power: boolean, level: GoreLevel) {

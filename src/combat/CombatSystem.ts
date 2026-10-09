@@ -6,16 +6,20 @@
  *   game.combat.register(actor, {...})          make any actor a combatant (NPC module)
  *   game.combat.engage(a, b) / isInCombat(a)    start a fight / ask about one
  *   game.combat.startBout({ foes, lusio })      an arena bout with crowd favor (§6.10)
+ *   game.combat.shoot(from, to)                 a real arrow from a combatant (staged scenes)
+ *   game.combat.shootVisual(a, b, s, onArrive)  an arrow's flight only, no damage (staged scenes)
  *
  * It owns the player's combat input (PlayerCombat), lock-on and its camera framing, hit-stop
  * (game.timeScale) and camera shake (CameraRig.shake), the PlayerController hooks (Space dodges in
  * combat, motion overrides for dodges and steps, combat speed), the HUD sources (enemy bar, boss
  * bar, compass ticks, inCombat) plus the combat HUD overlay, combat music, the yield decision, and
- * the net's visuals. Rules live in CombatCore; timings in timing.ts.
+ * the visuals of the net and of arrows. Rules live in CombatCore; timings in timing.ts.
  */
 import * as THREE from 'three';
 import { Actor } from '../actors/Actor';
 import { createHumanoid, HumanoidAvatar } from '../actors/avatar/HumanoidAvatar';
+import { avatarMaterial } from '../actors/avatar/material';
+import { arrowGeometry } from '../actors/equipment/weapons';
 import { randomAppearance } from '../actors/avatar/variants';
 import { CombatBrain } from '../ai/combat/CombatBrain';
 import { NereusScript } from '../ai/combat/nereus';
@@ -50,7 +54,7 @@ import { GoreSystem } from './gore/GoreSystem';
 import { adoptProfile, resolveSpawn, type NpcLike } from './spawnSpec';
 import { Combatant, type CombatView } from './Combatant';
 import { CombatCore, type Blow, type CombatEnv, type Projectile } from './CombatCore';
-import { BODY, angleTo, dist2D } from './geometry';
+import { BODY, HEIGHT, angleTo, dist2D, dy } from './geometry';
 import { CombatHud, type CombatHudState } from './hud/CombatHud';
 import { PlayerCombat, type PlayerCombatHost } from './PlayerCombat';
 import { combatSettings, type CombatSettings } from './settings';
@@ -167,6 +171,26 @@ export interface EngageOptions {
 const tmp = new THREE.Vector3();
 const tmp2 = new THREE.Vector3();
 const rayDir = new THREE.Vector3();
+const UP = new THREE.Vector3(0, 1, 0);
+const arrowDir = new THREE.Vector3();
+const eye = new THREE.Vector3();
+/** The fixed step (core/Game FIXED_DT): an arrow is drawn between its last two steps. */
+const STEP = 1 / 60;
+/** Arrow mesh: nock to tip along +Y (arrowGeometry), drawn with the head at the arrow's point. */
+const ARROW_LEN = 0.75;
+
+/** A staged arrow's flight (shootVisual). */
+interface Flight {
+  mesh: THREE.Mesh;
+  from: THREE.Vector3;
+  to: THREE.Vector3;
+  t: number;
+  seconds: number;
+  /** Height of the arc at mid-flight (m). */
+  lift: number;
+  whoosh: boolean;
+  onArrive?: () => void;
+}
 
 export class CombatSystem implements System, PlayerCombatHost {
   readonly name = 'combat';
@@ -196,6 +220,10 @@ export class CombatSystem implements System, PlayerCombatHost {
   private drapeGeo: THREE.BufferGeometry;
   private ropeMat: THREE.LineBasicMaterial;
   private netVisuals = new Map<number, THREE.Object3D>();
+  /** Arrow meshes in flight (by projectile id), the spare ones, and staged flights. */
+  private arrowVisuals = new Map<number, THREE.Mesh>();
+  private arrowPool: THREE.Mesh[] = [];
+  private flights: Flight[] = [];
   private drapes = new Map<string, THREE.Object3D>();
   private spawned = new Map<string, Actor>();
   private footsteps = new Map<string, () => void>();
@@ -297,7 +325,19 @@ export class CombatSystem implements System, PlayerCombatHost {
       adoptNear: (c, r, o) => this.adoptNear(c, r, o.power),
       assistTarget: (c, w) => this.assistTarget(c, w.reach),
       nav: this.navProbe(),
+      worldHit: (ax, ay, az, bx, by, bz) => this.worldHit(ax, ay, az, bx, by, bz),
     };
+  }
+
+  /** Where an arrow's step a→b first meets the world (fraction 0..1), or null. */
+  private worldHit(ax: number, ay: number, az: number, bx: number, by: number, bz: number): number | null {
+    rayDir.set(bx - ax, by - ay, bz - az);
+    const L = rayDir.length();
+    if (L < 1e-6) return null;
+    rayDir.multiplyScalar(1 / L);
+    tmp2.set(ax, ay, az);
+    const hit = this.game.physics.raycast(tmp2, rayDir, L, Layer.World);
+    return hit ? Math.min(1, hit.distance / L) : null;
   }
 
   /**
@@ -357,7 +397,7 @@ export class CombatSystem implements System, PlayerCombatHost {
     let n = 0;
     for (const a of game.actors.near(c.position, r)) {
       if (n >= 3) break;
-      if (!this.adoptable(a)) continue;
+      if (!this.adoptable(a) || dy(a.position, c.position) > HEIGHT.melee) continue;
       if (Math.abs(angleTo(c.heading, a.position.x - c.position.x, a.position.z - c.position.z)) > 80 * DEG) continue;
       if (this.adoptForBlow(a)) n++;
     }
@@ -367,6 +407,8 @@ export class CombatSystem implements System, PlayerCombatHost {
   /** A person who can be struck but isn't a combatant yet. */
   private adoptable(a: Actor): boolean {
     if (a === (this.game.player as unknown) || this.core.get(a.id)) return false;
+    // Figures of a staged scene (src/content/tableau.ts: the emperor's party) never join a fight.
+    if ((a as Actor & { staged?: boolean }).staged) return false;
     return a.avatar instanceof HumanoidAvatar && !(a as Actor & { dead?: boolean }).dead;
   }
 
@@ -402,6 +444,7 @@ export class CombatSystem implements System, PlayerCombatHost {
     };
     for (const o of this.core.list) {
       if (o === c || !(o.active || o.status === 'yielded')) continue;
+      if (dy(o.position, c.position) > HEIGHT.melee) continue;
       if (fighting && !(o.target === c || this.core.hostile(c, o))) continue;
       const bias = o.status === 'yielded' ? 0.8 : this.core.hostile(c, o) || o.target === c ? -0.4 : 0;
       const s = score(o.position.x, o.position.z, o.body.radius, bias);
@@ -411,7 +454,7 @@ export class CombatSystem implements System, PlayerCombatHost {
       }
     }
     for (const a of fighting ? [] : (this.game.actors?.near(c.position, R + 1) ?? [])) {
-      if (!this.adoptable(a)) continue;
+      if (!this.adoptable(a) || dy(a.position, c.position) > HEIGHT.melee) continue;
       const s = score(a.position.x, a.position.z, a.body.radius, 0);
       if (s < bestScore) {
         best = a;
@@ -624,6 +667,8 @@ export class CombatSystem implements System, PlayerCombatHost {
     const p: CombatProfile = { ...o.profile, ...(o.loadout ?? {}) };
     const weaponItem = p.weapon ? this.items.get(p.weapon) : undefined;
     const shieldItem = p.shield ? this.items.get(p.shield) : undefined;
+    // An archer's bow (profile.ranged), for its arrows' speed and damage.
+    const rangedItem = p.shoot && p.ranged ? this.items.get(p.ranged) : undefined;
     const c = new Combatant({
       id: actor.id,
       body: new ActorBody(actor),
@@ -641,6 +686,8 @@ export class CombatSystem implements System, PlayerCombatHost {
       weapon: profileWeapon(p, this.items),
       shieldItem,
       shield: shieldItem?.shield,
+      rangedItem,
+      ranged: rangedItem?.weapon,
       armor: p.armor,
       family: p.armorFamily ?? 'cloth',
       poise: p.poise ?? 50,
@@ -917,7 +964,7 @@ export class CombatSystem implements System, PlayerCombatHost {
       const struck = this.struckAt.get(c);
       if (!this.core.hostile(pc, c) && c.target !== pc && !(struck !== undefined && this.game.elapsed - struck < 8)) continue;
       const d = dist2D(c.position, pc.position);
-      if (d > maxDist) continue;
+      if (d > maxDist || dy(c.position, pc.position) > HEIGHT.melee) continue;
       const a = angleTo(camYaw, c.position.x - cam.position.x, c.position.z - cam.position.z);
       if (cone !== null && Math.abs(a) > cone) continue;
       if (!this.core.sight(pc, c)) continue;
@@ -1349,9 +1396,53 @@ export class CombatSystem implements System, PlayerCombatHost {
     if (r.context === 'none') this.game.events.emit('ui:notify', { text: 'Nobody here accepts your surrender.', kind: 'warning' });
   }
 
+  // ------------------------------------------------------------------ arrows for staged scenes
+
+  /**
+   * A real arrow (scripted): `from`, a combatant, turns to `target` and looses at once at its chest
+   * (no draw, no arrow spent). It deals damage through the normal rules; a target who isn't a
+   * combatant yet (a staged NPC) is made one. False when either is missing or `from` is down.
+   */
+  shoot(from: string | Actor | Combatant, target: string | Actor | Combatant): boolean {
+    const c = this.get(from);
+    if (!c || !c.active) return false;
+    const t = this.get(target) ?? this.adoptActor(target);
+    if (!t || t === c || !t.active) return false;
+    if (!t.isPlayer && !this.spawned.has(t.id) && !this.adopted.has(t.id)) this.adopted.set(t.id, this.core.now);
+    this.core.shootNow(c, t);
+    return true;
+  }
+
+  /**
+   * An arrow's flight only (staged scenes, no damage): from `from` to `to` in `seconds` on a slight
+   * arc, turned along its path; `onArrive` runs when it gets there (the arrow is gone by then: the
+   * scene shows what it struck).
+   */
+  shootVisual(from: THREE.Vector3Like, to: THREE.Vector3Like, seconds: number, onArrive?: () => void): void {
+    const a = new THREE.Vector3(from.x, from.y, from.z);
+    const b = new THREE.Vector3(to.x, to.y, to.z);
+    const f: Flight = { mesh: this.arrowMesh(), from: a, to: b, t: 0, seconds: Math.max(0.05, seconds), lift: 0.04 * a.distanceTo(b), whoosh: false, onArrive };
+    this.flights.push(f);
+    this.game.camera.getWorldPosition(eye);
+    this.placeFlight(f);
+    this.game.events.emit('sfx', { id: 'bow.twang', position: { x: a.x, y: a.y, z: a.z } });
+  }
+
   // ------------------------------------------------------------------ visuals
 
   private projectileVisual(p: Projectile, on: boolean) {
+    if (p.kind === 'arrow') {
+      if (on) {
+        const m = this.arrowMesh();
+        this.arrowVisuals.set(p.id, m);
+        this.placeArrow(m, p, 1);
+      } else {
+        const m = this.arrowVisuals.get(p.id);
+        if (m) this.dropArrow(m);
+        this.arrowVisuals.delete(p.id);
+      }
+      return;
+    }
     if (on) {
       const net = new THREE.LineSegments(this.netGeo, this.ropeMat);
       net.position.set(p.x, p.y, p.z);
@@ -1366,8 +1457,81 @@ export class CombatSystem implements System, PlayerCombatHost {
     }
   }
 
-  private updateVisuals(dt: number) {
+  // One merged arrow (shaft, iron head, fletching: the bow's own nocked arrow) and the shared
+  // character material for every arrow; meshes are pooled.
+  private arrowMesh(): THREE.Mesh {
+    let m = this.arrowPool.pop();
+    if (!m) {
+      m = new THREE.Mesh(arrowGeometry(), avatarMaterial());
+      m.name = 'arrow';
+      m.castShadow = false;
+    }
+    this.game.scene.add(m);
+    return m;
+  }
+
+  private dropArrow(m: THREE.Mesh) {
+    m.removeFromParent();
+    this.arrowPool.push(m);
+  }
+
+  /**
+   * Put an arrow mesh with its head at `x, y, z`, along `dir` (unit). Thicker with distance from
+   * the eye, so a shaft a hundred feet up still reads (true size within 7 m).
+   */
+  private poseArrow(m: THREE.Mesh, x: number, y: number, z: number, dir: THREE.Vector3) {
+    m.quaternion.setFromUnitVectors(UP, dir);
+    m.position.set(x - dir.x * ARROW_LEN, y - dir.y * ARROW_LEN, z - dir.z * ARROW_LEN);
+    const k = clamp(eye.distanceTo(m.position) / 7, 1, 4);
+    m.scale.set(k, 1, k);
+  }
+
+  /** A flying arrow between its last two fixed steps (`alpha`); a stuck one where it struck. */
+  private placeArrow(m: THREE.Mesh, p: Projectile, alpha: number) {
+    const sp = Math.hypot(p.vx, p.vy, p.vz) || 1;
+    arrowDir.set(p.vx / sp, p.vy / sp, p.vz / sp);
+    const back = p.stuck ? 0 : (1 - alpha) * STEP;
+    this.poseArrow(m, p.x - p.vx * back, p.y - p.vy * back, p.z - p.vz * back, arrowDir);
+  }
+
+  /** A staged arrow at its point of flight: a straight line from → to raised by a slight arc. */
+  private placeFlight(f: Flight) {
+    const u = Math.min(1, f.t / f.seconds);
+    const a = f.from;
+    const b = f.to;
+    const rise = 4 * f.lift * u * (1 - u);
+    arrowDir.set(b.x - a.x, b.y - a.y + 4 * f.lift * (1 - 2 * u), b.z - a.z).normalize();
+    this.poseArrow(f.mesh, a.x + (b.x - a.x) * u, a.y + (b.y - a.y) * u + rise, a.z + (b.z - a.z) * u, arrowDir);
+  }
+
+  private updateVisuals(dt: number, alpha = 1) {
+    if (this.flights.length || this.arrowVisuals.size) this.game.camera.getWorldPosition(eye);
+    // Staged flights (shootVisual) run on the game clock; arrival hands over to the scene.
+    for (let i = this.flights.length - 1; i >= 0; i--) {
+      const f = this.flights[i];
+      f.t += dt;
+      if (!f.whoosh && f.t >= f.seconds * 0.7) {
+        f.whoosh = true;
+        this.game.events.emit('sfx', { id: 'arrow.whoosh', position: { x: f.to.x, y: f.to.y, z: f.to.z }, volume: 0.8 });
+      }
+      if (f.t < f.seconds) {
+        this.placeFlight(f);
+        continue;
+      }
+      this.flights.splice(i, 1);
+      this.dropArrow(f.mesh);
+      try {
+        f.onArrive?.();
+      } catch (err) {
+        console.error('[combat] shootVisual onArrive failed', err);
+      }
+    }
     for (const p of this.core.projectiles) {
+      if (p.kind === 'arrow') {
+        const m = this.arrowVisuals.get(p.id);
+        if (m) this.placeArrow(m, p, alpha);
+        continue;
+      }
       const v = this.netVisuals.get(p.id);
       if (!v) continue;
       v.position.set(p.x, p.y - 0.1, p.z);
@@ -1558,7 +1722,7 @@ export class CombatSystem implements System, PlayerCombatHost {
     this.core.fixedStep(dt);
   }
 
-  update(dt: number) {
+  update(dt: number, alpha = 1) {
     const pc = this.playerC;
     const g = this.game;
     if (pc) {
@@ -1606,7 +1770,7 @@ export class CombatSystem implements System, PlayerCombatHost {
     }
     this.housekeeping();
     this.danger.update();
-    this.updateVisuals(dt);
+    this.updateVisuals(dt, alpha);
   }
 
   /** Dead with combat handling the death: a moment of black, then the Aesculapian rescue. */

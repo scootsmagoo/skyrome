@@ -327,6 +327,12 @@ export interface CombatProfile {
   archetype?: string;
   /** Thrown or ranged backup: pilum, net, sling shot (rpg extension). */
   ranged?: string;
+  /**
+   * An archer (mq-04, opt-in): with arrows left and the target in sight between range[0] and
+   * range[1] m (default 3–22), it plants, draws for `drawS` and looses one at the chest of `ranged`
+   * (the bow item), then waits a random `interval` s; closer, or out of arrows, it fights with `weapon`.
+   */
+  shoot?: { ammo: number; interval: [number, number]; range: [number, number]; drawS: number };
   /** Worn item ids for the avatar and loot (rpg extension). */
   worn?: string[];
   /** Weapon coating, a poison condition id (rpg extension). */

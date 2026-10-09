@@ -4,7 +4,8 @@
  * It owns the combatants' action timelines (wind-up → hit → recovery), guards and parries,
  * dodges and i-frames, poise and staggers (with the §6.5 anti-loop rules from combat-math),
  * damage through src/rpg/combat-math (§6.2–6.4), knockouts, yields and flight (§6.9), attack
- * tokens and the AI brains (§6.13), Nereus' net, and the arena bout (§6.10). It knows nothing of
+ * tokens and the AI brains (§6.13), Nereus' net, arrows and archers (mq-04), height (a foe on
+ * another floor is out of reach), and the arena bout (§6.10). It knows nothing of
  * Three.js scenes, Rapier or the DOM: bodies and avatars come in through `CombatBody` /
  * `CombatView`, and everything else (sight lines, sound, hit-stop, HUD cues, events) through
  * `CombatEnv`. CombatSystem wires it into the Game; the tests drive it with fakes.
@@ -33,7 +34,7 @@ import { COMBAT, DIFFICULTY, STAMINA_COSTS, XP, type Difficulty } from '../rpg/d
 import type { ShieldStats, WeaponStats } from '../rpg/types';
 import { ArenaBout, type BoutOptions } from './ArenaBout';
 import { Combatant, type Action } from './Combatant';
-import { BODY, angleTo, arcFor, dist2D, meleeRange, sweepCapsule } from './geometry';
+import { BODY, HEIGHT, angleTo, arcFor, dist2D, dy, meleeRange, segmentCapsule, sweepCapsule } from './geometry';
 import { TIMING, attackLength, attackPhases, chargeFraction, clipSpeedFor, type AttackKind } from './timing';
 import './events';
 
@@ -74,6 +75,11 @@ export interface CombatEnv {
   assistTarget?(c: Combatant, weapon: WeaponStats): Combatant | null;
   /** The world's walls for the NPCs' steering (rays, the NPC crew's paths); none = open ground. */
   nav?: NavProbe;
+  /**
+   * Where a flying arrow's step from a to b first strikes the world: the fraction 0..1 along it, or
+   * null for a clear flight. None = open air (arrows fly on until their time runs out).
+   */
+  worldHit?(ax: number, ay: number, az: number, bx: number, by: number, bz: number): number | null;
 }
 
 export const nullEnv: CombatEnv = {
@@ -89,19 +95,33 @@ export const nullEnv: CombatEnv = {
 
 export interface Projectile {
   id: number;
-  kind: 'net';
+  kind: 'net' | 'arrow';
   owner: Combatant;
+  /** Position (the net's centre, the arrow's head) and velocity (m/s); nets fly level (vy 0). */
   x: number;
   y: number;
   z: number;
   vx: number;
+  vy: number;
   vz: number;
+  /** Seconds left in flight (a stuck arrow: until it is removed). */
   ttl: number;
   radius: number;
+  /** Arrows: the bow's base damage (its stats go through the normal damage formula); nets 0. */
+  damage: number;
+  /** Arrows: the bow (computeAttack's weapon). */
+  weapon?: WeaponStats;
+  /** Arrows: the one it was loosed at, struck even when not an enemy (a scripted shot). */
+  target?: Combatant | null;
+  /** Arrows: stuck in the world (no longer flying). */
+  stuck?: boolean;
   /** Combatants who dodged through it. */
   dodged: Set<string>;
   visual?: unknown;
 }
+
+/** A plain bow for an archer without a `ranged` item (the arcus's numbers). */
+export const FALLBACK_BOW: WeaponStats = { class: 'bow', skill: 'archery', damage: 16, damageType: 'thrust', speed: 1, reach: 0.5, stagger: 10, twoHanded: true };
 
 /** Nereus' wooden practice dagger (§13.2: 6 blunt, phase 3). */
 export const PRACTICE_DAGGER: WeaponStats = { class: 'blade', skill: 'blades', damage: 6, damageType: 'blunt', speed: 1.3, reach: 0.55, stagger: 6, practice: true };
@@ -115,6 +135,10 @@ const tmpA = new THREE.Vector3();
 const tmpB = new THREE.Vector3();
 /** A viewed attack resolves at its clip's onHit, or this long after the timeline's hit time. */
 const VIEW_GRACE = 0.05;
+/** The avatar's bowDraw clip reaches full draw at this time (speed 1). */
+const BOW_DRAW_CLIP = 0.9;
+/** What an arrow strikes with, for the hit path (no chain, power or direction). */
+const ARROW_ACTION: Action = { kind: 'shoot', start: 0, end: 0, resolved: true };
 const TIER_RANK: Record<string, number> = { civilian: 0, thug: 1, skirmisher: 1, bruiser: 2, miles: 3, veteran: 4, champion: 5, elite: 6, boss: 7 };
 const FRONT = 60 * DEG;
 
@@ -550,6 +574,7 @@ export class CombatCore {
 
   private resolve(c: Combatant, a: Action) {
     a.resolved = true;
+    if (a.kind === 'shoot') return this.release(c);
     if (a.kind === 'net') return this.throwNet(c);
     if (a.kind === 'sandKick') return this.sandKick(c);
     if (a.kind === 'feint') return;
@@ -606,6 +631,8 @@ export class CombatCore {
       // what the attack was aimed at.
       if (yielded && (sweep || (c.isPlayer && o !== aim))) continue;
       const p = o.position;
+      // Another floor (a turn of the stair above, a cell below): out of reach.
+      if (dy(p, c.position) > HEIGHT.melee) continue;
       const ang = sweepCapsule(spec, { x: p.x, z: p.z, y0: p.y + (yielded ? -0.3 : 0.1), y1: p.y + o.body.height, r: o.body.radius });
       if (ang < 0 || !this.sight(c, o)) continue;
       // Preference: the one aimed at, then an enemy on its feet, then anyone else.
@@ -617,8 +644,18 @@ export class CombatCore {
     return [hits[0].o];
   }
 
-  /** Resolve one blow from `att` on `def` (§6.2–6.5, §6.7, §6.9, §6.10). */
+  /** Resolve one blow from `att` on `def` (§6.2–6.5, §6.7, §6.9, §6.10); none across floors. */
   applyHit(att: Combatant, def: Combatant, a: Action, weapon: WeaponStats = a.weapon ?? att.weapon) {
+    if (dy(att.position, def.position) > HEIGHT.melee) return;
+    this.land(att, def, a, weapon, null);
+  }
+
+  /**
+   * A blow, or an arrow (`arrow` set): an arrow can't be parried, is blocked by a guard facing
+   * where it came from (±70°) and then stops dead (the guard pays the stamina of a light blow), and
+   * neither ripostes, takes down nor shoves.
+   */
+  private land(att: Combatant, def: Combatant, a: Action, weapon: WeaponStats, arrow: Projectile | null) {
     const now = this.now;
     const bout = this.bout;
     const player = att.isPlayer || def.isPlayer;
@@ -633,8 +670,8 @@ export class CombatCore {
       if (a.unblockable && def.isPlayer) bout?.event('dodge-unblockable');
       return;
     }
-    const toAtt = angleTo(def.heading, att.position.x - def.position.x, att.position.z - def.position.z);
-    const frontal = Math.abs(toAtt) <= FRONT;
+    const toAtt = arrow ? angleTo(def.heading, -arrow.vx, -arrow.vz) : angleTo(def.heading, att.position.x - def.position.x, att.position.z - def.position.z);
+    const frontal = Math.abs(toAtt) <= (arrow ? TIMING.arrow.blockArc * DEG : FRONT);
     const behind = Math.abs(toAtt) > 120 * DEG;
     const power = a.kind === 'power';
     const yieldedVictim = def.status === 'yielded';
@@ -642,6 +679,7 @@ export class CombatCore {
     // Parry (§6.4): a press in the window before impact, facing the blow.
     let parryAsBlock = false;
     if (
+      !arrow &&
       def.active &&
       !a.unblockable &&
       frontal &&
@@ -663,28 +701,30 @@ export class CombatCore {
     const blocking = def.active && !a.unblockable && frontal && (parryAsBlock || (def.guardActive && now - def.guardSince >= TIMING.guardUp));
 
     const unaware = !def.isPlayer && def.active && !def.target && (def.brain?.state ?? 'idle') === 'idle' && (!bystander || att.sneaking);
-    const riposte = def.riposteUntil > now && def.active;
+    const riposte = !arrow && def.riposteUntil > now && def.active;
     if (riposte) def.riposteUntil = -Infinity;
     const finisher = riposte && def.healthFrac() <= COMBAT.parry.finisherAtHealth;
     const soldier = def.profile?.tier === 'miles' || def.profile?.tier === 'elite';
-    const atk = computeAttack(att.stats, weapon, {
-      chain: a.chain,
-      power,
-      chargeSeconds: a.charge,
-      direction: a.direction ?? 'none',
-      sprint: a.sprint,
-      bash: a.kind === 'bash',
-      riposte,
-      sneak: unaware,
-      item: a.weapon ? undefined : att.weaponItem,
-      condition: a.weapon ? 1 : att.weaponCondition,
-      vsSoldier: soldier,
-      vsBeast: !def.human,
-      critRoll: this.env.rng(),
-    });
+    const atk = arrow
+      ? computeAttack(att.stats, weapon, { sneak: unaware, item: att.ranged === weapon ? att.rangedItem : undefined, vsSoldier: soldier, vsBeast: !def.human, critRoll: this.env.rng() })
+      : computeAttack(att.stats, weapon, {
+          chain: a.chain,
+          power,
+          chargeSeconds: a.charge,
+          direction: a.direction ?? 'none',
+          sprint: a.sprint,
+          bash: a.kind === 'bash',
+          riposte,
+          sneak: unaware,
+          item: a.weapon ? undefined : att.weaponItem,
+          condition: a.weapon ? 1 : att.weaponCondition,
+          vsSoldier: soldier,
+          vsBeast: !def.human,
+          critRoll: this.env.rng(),
+        });
 
     // Fists or a fustis from behind on an unaware human up to veteran: instant knockout (§6.7).
-    if (atk.takedown && behind && def.human && (TIER_RANK[def.profile?.tier ?? 'thug'] ?? 9) <= TIER_RANK.veteran) {
+    if (!arrow && atk.takedown && behind && def.human && (TIER_RANK[def.profile?.tier ?? 'thug'] ?? 9) <= TIER_RANK.veteran) {
       this.knockout(def, att);
       if (att.isPlayer) att.sheet?.useSkill('brawling', XP.brawling.knockout);
       if (player) this.env.feedback('heavy', { att, def, kill: true });
@@ -710,16 +750,18 @@ export class CombatCore {
         : undefined,
       mult: difficultyMult(this.difficulty, att.isPlayer, def.isPlayer),
     });
+    // A guarded arrow stops dead in the shield or on the blade.
+    if (arrow && hit.blocked) hit.damage = 0;
 
     if (hit.blocked) {
       def.vitals.drain('stamina', hit.blockStamina);
       if (hit.guardBroken) {
-        this.stagger(def, TIMING.guardBreak, att, 'guardBreak');
+        this.stagger(def, TIMING.guardBreak, arrow ? null : att, 'guardBreak');
         this.env.sfx('block.metal', this.chest(def));
       } else {
         def.view?.play('blockHit');
-        this.push(def, att, TIMING.steps.blockImpact, 0.15);
-        this.env.sfx(shield ? 'block.shield' : weapon.class === 'blade' || weapon.class === 'spear' ? 'clash.metal' : 'hit.punch', this.chest(def));
+        if (!arrow) this.push(def, att, TIMING.steps.blockImpact, 0.15);
+        this.env.sfx(arrow ? (shield ? 'arrow.impact.wood' : 'clash.metal') : shield ? 'block.shield' : weapon.class === 'blade' || weapon.class === 'spear' ? 'clash.metal' : 'hit.punch', this.chest(def));
       }
       if (def.isPlayer) {
         def.sheet?.useSkill('shield', XP.shield.block + XP.shield.perAbsorbed * Math.max(0, atk.damage - hit.damage));
@@ -739,19 +781,19 @@ export class CombatCore {
       const pr = applyPoiseDamage(def.poise, hit.poise, { heavy, immune, riposte });
       stagger = pr.result;
       if (pr.result === 'stagger') {
-        this.stagger(def, pr.seconds, att, 'stagger');
+        this.stagger(def, pr.seconds, arrow ? null : att, 'stagger');
         if (pr.riposteWindow) def.riposteUntil = now + COMBAT.parry.riposteWindow;
-      } else if (pr.result === 'knockdown') this.knockdown(def, att);
+      } else if (pr.result === 'knockdown') this.knockdown(def, arrow ? null : att);
       else if (pr.result === 'flinch') this.flinch(def, att, behind);
       else if (!hit.blocked && !def.action) def.view?.play(behind ? 'hitBack' : 'hitFront');
       // A blow that lands shoves its target back a little (more for a power blow): the hit reads.
-      if (!hit.blocked && player && (stagger === 'none' || stagger === 'flinch')) this.push(def, att, power ? TIMING.steps.knockPower : TIMING.steps.knockLight, power ? 0.22 : 0.14);
+      if (!arrow && !hit.blocked && player && (stagger === 'none' || stagger === 'flinch')) this.push(def, att, power ? TIMING.steps.knockPower : TIMING.steps.knockLight, power ? 0.22 : 0.14);
     }
 
     if (!hit.blocked) {
-      this.env.sfx(atk.damageType === 'blunt' ? 'hit.punch' : 'hit.flesh', this.chest(def), player ? 1.3 : 1);
+      this.env.sfx(arrow ? 'arrow.impact.flesh' : atk.damageType === 'blunt' ? 'hit.punch' : 'hit.flesh', this.chest(def), player ? 1.3 : 1);
       // Weight under a blade blow the player is part of: a body thump, louder for a power blow.
-      if (player && atk.damageType !== 'blunt') this.env.sfx('hit.punch', this.chest(def), power ? 1.1 : 0.65);
+      if (!arrow && player && atk.damageType !== 'blunt') this.env.sfx('hit.punch', this.chest(def), power ? 1.1 : 0.65);
       if (def.status === 'active') this.env.sfx(this.voice(def, 'pain'), this.chest(def), 0.8);
       if (def.isPlayer) {
         this.env.emit('ui:hit', { x: att.position.x, z: att.position.z });
@@ -770,7 +812,7 @@ export class CombatCore {
     if (att.isPlayer) {
       const xp = bystander ? null : this.attackXp(weapon, { power, riposte, sneak: unaware, bash: a.kind === 'bash' });
       if (xp) att.sheet?.useSkill(xp.skill, xp.amount);
-      if (!a.weapon) att.inventory?.wear('mainHand', hit.damage);
+      if (!a.weapon && !arrow) att.inventory?.wear('mainHand', hit.damage);
       if (bout && bout.foes.has(def.id)) {
         if (yieldedVictim) bout.event('strike-yielded');
         else if (finisher) bout.event('finisher');
@@ -788,7 +830,7 @@ export class CombatCore {
       }
       this.env.emit('combat:yieldChoice', { actorId: def.id, choice: 'kill' });
     }
-    this.env.emit('combat:hit', this.hitEvent(att, def, { kind: a.kind, damage: hit.damage, blocked: hit.blocked, power, riposte, finisher, sneak: unaware, stagger }));
+    this.env.emit('combat:hit', this.hitEvent(att, def, { kind: arrow ? 'arrow' : a.kind, damage: hit.damage, blocked: hit.blocked, power, riposte, finisher, sneak: unaware, stagger }));
     if (outcome === 'hit' && !def.isPlayer && def.active && def.target !== att) {
       const wasIdle = !def.target;
       this.engage(def, att);
@@ -899,7 +941,7 @@ export class CombatCore {
   /** A flinch interrupts only a light wind-up, never a block, a dodge or a recovery (§6.5). */
   private flinch(c: Combatant, by: Combatant, behind: boolean) {
     const a = c.action;
-    const lightish = a && (a.kind === 'light' || a.kind === 'riposte' || a.kind === 'sprint' || a.kind === 'feint') && c.inWindup(this.now);
+    const lightish = a && (a.kind === 'light' || a.kind === 'riposte' || a.kind === 'sprint' || a.kind === 'feint' || a.kind === 'shoot') && c.inWindup(this.now);
     if (lightish) {
       c.action = null;
       c.view?.setCharge(0);
@@ -1150,6 +1192,8 @@ export class CombatCore {
     if (I.shout && c.profile?.tier !== 'boss') this.callHelp(c);
     if (I.phase) this.env.emit('combat:phase', { actorId: c.id, phase: I.phase });
     if (c.target && !c.drawn && !c.action && b.state !== 'flee') this.setDrawn(c, true);
+    // An archer done shooting takes up its melee weapon again.
+    if (c.bowOut && b.state !== 'shoot' && !c.action) this.setBow(c, false);
     if (I.attack) this.npcAttack(c, I.attack, I.minWindup);
     if (I.special) this.npcSpecial(c, I.special);
     if (I.parry) this.pressParry(c);
@@ -1219,6 +1263,8 @@ export class CombatCore {
     let bestD = r;
     for (const o of this.list) {
       if (o === c || !o.active || !this.hostile(c, o)) continue;
+      // Not someone on another floor (a cell below the street, the next turn of a stair).
+      if (dy(o.position, c.position) > HEIGHT.aware) continue;
       const d = dist2D(o.position, c.position);
       if (d < bestD && (d <= hear || this.sight(c, o))) {
         best = o;
@@ -1269,6 +1315,7 @@ export class CombatCore {
     if (!this.free(c)) return;
     if (special === 'net' && c.hasNet) this.startAttack(c, 'net');
     else if (special === 'sandKick') this.startAttack(c, 'sandKick');
+    else if (special === 'shoot' && c.ammo > 0) this.startShot(c);
   }
 
   /** What an NPC brain sees this step. */
@@ -1301,6 +1348,7 @@ export class CombatCore {
     self.shield = !!c.shield;
     self.hasNet = c.hasNet;
     self.lastHitAt = c.lastHitAt;
+    self.ammo = c.ammo;
     if (t) {
       const ta = t.action;
       const tp: TargetPerception = (p.target ??= { id: '', x: 0, z: 0, heading: 0, visible: false, reach: 1, attacking: false, power: false, impactIn: Infinity, facingMe: false });
@@ -1309,8 +1357,12 @@ export class CombatCore {
       tp.x = t.position.x;
       tp.z = t.position.z;
       tp.heading = t.heading;
-      // Seen, or close enough to hear (an ambusher knows where you are): it keeps track.
-      tp.visible = d <= Math.max(TRACK, this.hearing.get(c.id) ?? 0) || this.sight(c, t);
+      tp.dy = t.position.y - c.position.y;
+      // Seen, or close enough to hear (an ambusher knows where you are): it keeps track. Not on
+      // another floor, though: nobody chases a foe through the floor.
+      tp.visible = Math.abs(tp.dy) <= HEIGHT.aware && (d <= Math.max(TRACK, this.hearing.get(c.id) ?? 0) || this.sight(c, t));
+      // An archer with arrows shoots at whatever it can see, above or below.
+      tp.los = c.brain?.profile.shoot && c.ammo > 0 ? this.sight(c, t) : undefined;
       tp.reach = meleeRange(t.weapon.reach, c.body.radius);
       tp.attacking = t.attacking();
       tp.power = ta?.kind === 'charge' || (ta?.kind === 'power' && t.inWindup(now));
@@ -1466,9 +1518,11 @@ export class CombatCore {
       y: from.y,
       z: from.z,
       vx: (ax / d) * N.speed,
+      vy: 0,
       vz: (az / d) * N.speed,
       ttl: (N.range + 0.8) / N.speed,
       radius: 0.55,
+      damage: 0,
       dodged: new Set(),
     };
     this.projectiles.push(p);
@@ -1491,10 +1545,162 @@ export class CombatCore {
     this.env.sfx('cloth.rustle', this.chest(t));
   }
 
+  // ------------------------------------------------------------------ arrows (mq-04)
+
+  /**
+   * An archer's shot at its target: planted, it draws for `drawS` (its profile's by default) in the
+   * bowDraw pose, the telegraph, and looses at the end of the draw (release). A stagger or a flinch
+   * in the draw spoils the shot. False if refused (busy, weapon not drawn).
+   */
+  startShot(c: Combatant, drawS = c.profile?.shoot?.drawS ?? TIMING.arrow.drawS): boolean {
+    if (!this.free(c) || !c.drawn) return false;
+    const now = this.now;
+    const A = TIMING.arrow;
+    const phases = { windup: drawS, active: A.release, recovery: A.recovery };
+    c.action = { kind: 'shoot', start: now, phases, hitAt: now + drawS, end: now + attackLength(phases), resolved: false, viewed: false };
+    c.lastAttackAt = now;
+    this.setBow(c, true);
+    c.view?.play('bowDraw', { speed: clamp(BOW_DRAW_CLIP / Math.max(0.1, drawS), 0.5, 2) });
+    return true;
+  }
+
+  /** A scripted shot: `c` turns to `t`, takes up the bow and looses at once (no draw, no arrow spent). */
+  shootNow(c: Combatant, t: Combatant): Projectile {
+    c.body.heading = headingTo(c.position, t.position);
+    this.setBow(c, true);
+    c.view?.play('bowRelease');
+    return this.loose(c, t);
+  }
+
+  /** The end of a draw: the arrow leaves the string, one fewer in the quiver. */
+  private release(c: Combatant) {
+    c.view?.play('bowRelease');
+    const t = c.target;
+    if (!t || !t.active) return;
+    this.loose(c, t);
+    c.ammo = Math.max(0, c.ammo - 1);
+  }
+
+  /**
+   * Loose an arrow from `c` at `t`'s chest now (the end of a draw; scripted shots call it
+   * directly), leading a moving target by a share of the flight and aimed up for the drop. It
+   * strikes whoever it meets first: `t`, or anyone hostile to `c`.
+   */
+  loose(c: Combatant, t: Combatant, o: { lead?: number } = {}): Projectile {
+    const A = TIMING.arrow;
+    const weapon = c.ranged ?? FALLBACK_BOW;
+    const speed = weapon.projectileSpeed ?? A.speed;
+    // From the bow, at chest height a little ahead of the body.
+    const from = this.chest(c);
+    from.x += Math.sin(c.heading) * 0.45;
+    from.y += 0.08;
+    from.z += Math.cos(c.heading) * 0.45;
+    const to = this.chest(t);
+    const v = t.body.velocity?.() ?? ZERO;
+    const lead = (o.lead ?? A.lead) * (Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z) / speed);
+    to.x += v.x * lead;
+    to.z += v.z * lead;
+    const ex = to.x - from.x;
+    const ey = to.y - from.y;
+    const ez = to.z - from.z;
+    const T = Math.max(0.05, Math.hypot(ex, ey, ez) / speed);
+    const p: Projectile = {
+      id: ++this.projectileSeq,
+      kind: 'arrow',
+      owner: c,
+      x: from.x,
+      y: from.y,
+      z: from.z,
+      // Straight at the mark over the flight time, raised by what gravity takes over it.
+      vx: ex / T,
+      vy: ey / T + 0.5 * A.gravity * T,
+      vz: ez / T,
+      ttl: A.ttl,
+      radius: A.radius,
+      damage: weapon.damage,
+      weapon,
+      target: t,
+      dodged: new Set(),
+    };
+    this.projectiles.push(p);
+    this.env.projectileVisual?.(p, true);
+    this.env.sfx('bow.twang', from);
+    return p;
+  }
+
+  /**
+   * One step of an arrow: flight under gravity, then the first body its path crosses before any
+   * wall (a capsule of 0.35 m from the feet to 1.8 m; a dodge's i-frames let it pass); a miss flies
+   * on until it strikes the world, sticks there a while, and goes. True when it is done.
+   */
+  private tickArrow(p: Projectile, dt: number): boolean {
+    p.ttl -= dt;
+    if (p.stuck || p.ttl <= 0) return p.ttl <= 0;
+    const now = this.now;
+    const ax = p.x;
+    const ay = p.y;
+    const az = p.z;
+    p.vy -= TIMING.arrow.gravity * dt;
+    const bx = ax + p.vx * dt;
+    const by = ay + p.vy * dt;
+    const bz = az + p.vz * dt;
+    const wall = this.env.worldHit?.(ax, ay, az, bx, by, bz) ?? null;
+    let first: Combatant | null = null;
+    let ft = wall ?? 1;
+    for (const o of this.list) {
+      if (o === p.owner || !o.active || p.dodged.has(o.id)) continue;
+      if (o !== p.target && !this.hostile(p.owner, o)) continue;
+      const q = o.position;
+      const t = segmentCapsule(ax, ay, az, bx, by, bz, { x: q.x, z: q.z, y0: q.y, y1: q.y + BODY.height, r: p.radius });
+      if (t < 0 || t > ft) continue;
+      if (now < o.iframesUntil) {
+        p.dodged.add(o.id);
+        if (o.isPlayer) this.bout?.event('dodge-unblockable');
+        continue;
+      }
+      first = o;
+      ft = t;
+    }
+    if (first) {
+      p.x = ax + (bx - ax) * ft;
+      p.y = ay + (by - ay) * ft;
+      p.z = az + (bz - az) * ft;
+      this.land(p.owner, first, ARROW_ACTION, p.weapon ?? FALLBACK_BOW, p);
+      return true;
+    }
+    if (wall !== null) {
+      p.x = ax + (bx - ax) * wall;
+      p.y = ay + (by - ay) * wall;
+      p.z = az + (bz - az) * wall;
+      p.stuck = true;
+      p.ttl = TIMING.arrow.stick;
+      this.env.sfx('arrow.impact.stone', { x: p.x, y: p.y, z: p.z }, 0.7);
+      return false;
+    }
+    p.x = bx;
+    p.y = by;
+    p.z = bz;
+    return false;
+  }
+
+  /** An archer's bow in hand (shooting) or its melee weapon (fighting close), on the avatar too. */
+  private setBow(c: Combatant, on: boolean) {
+    if (c.bowOut === on) return;
+    c.bowOut = on;
+    c.view?.setBow?.(on);
+  }
+
   private tickProjectiles(dt: number) {
     const now = this.now;
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
+      if (p.kind === 'arrow') {
+        if (this.tickArrow(p, dt)) {
+          this.projectiles.splice(i, 1);
+          this.env.projectileVisual?.(p, false);
+        }
+        continue;
+      }
       p.x += p.vx * dt;
       p.z += p.vz * dt;
       p.ttl -= dt;
@@ -1744,6 +1950,8 @@ export function clipFor(a: Pick<Action, 'kind' | 'chain'>): ActionClip {
       return 'attackLight3';
     case 'net':
       return 'throw';
+    case 'shoot':
+      return 'bowDraw';
     case 'sandKick':
       return 'pickup';
     default:

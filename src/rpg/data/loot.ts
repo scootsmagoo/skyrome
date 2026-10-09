@@ -116,4 +116,6 @@ export const LOOT_TABLES: LootTableDef[] = [
   },
   { id: 'body.npc-rex-cloacae', rolls: [0, 0], entries: [], denarii: { range: [12, 20] }, always: [{ item: 'gladius' }, { item: 'pugio' }, { item: 'thorax-coriaceus' }, { item: 'nugae' }] },
   { id: 'body.boss-suchus', rolls: [0, 0], entries: [], always: [{ item: 'corium', count: 2 }, { item: 'nugae' }] },
+  // mq-04 (docs/design/mq-04-columna.md §2.1): the archer on the Column platform.
+  { id: 'body.npc-bitus', rolls: [0, 0], entries: [], denarii: { range: [2, 2] }, always: [{ item: 'quest-tessera-mucaporis' }, { item: 'quest-drachma-parthica', count: 3 }, { item: 'sica' }, { item: 'arcus' }] },
 ];

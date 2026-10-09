@@ -7,16 +7,24 @@
  *   npc-festus      cartEnd (talk-festus), d1 (the tablet), dyingEnd
  *   npc-dromo       sawIt (ask-dromo)
  *   npc-chrysippus  fetch (Gratus comes out)
- *   npc-gratus      gratusDay (mq-02 talk), delivered (mq-02 give), warnEnd (mq-03 warn)
+ *   npc-gratus      gratusDay (mq-02 talk), delivered (mq-02 give), warnEnd (mq-03 warn),
+ *                   postEnd (mq-04 briefing), w0 (mq-04 wounded)
  *   npc-mus         surrender, tellAll, attack
  *   npc-verecundus  report
  */
-import { completed, dusk, origin, rotate, running, stage } from '../../content/talk';
-import { defineDialogue, type DialogueContext } from '../types';
+import { completed, dusk, hourNow, origin, rotate, running, stage } from '../../content/talk';
+import { defineDialogue, type DialogueChoice, type DialogueContext } from '../types';
 
 const MQ1 = 'mq-01-madida-capena';
 const MQ2 = 'mq-02-tabella';
 const MQ3 = 'mq-03-lemuria';
+const MQ4 = 'mq-04-columna';
+
+/** Gratus's questions are asked once each (saved in his memory); the hub choices hide once asked. */
+const asked = (key: string) => (c: DialogueContext) => !c.memory[`q:${key}`];
+const ask = (key: string) => (c: DialogueContext) => {
+  c.memory[`q:${key}`] = true;
+};
 
 // ------------------------------------------------------------------ Festus
 
@@ -232,11 +240,26 @@ const chrysippus = defineDialogue({
 
 // ------------------------------------------------------------------ Gratus
 
+/** The mq-04 briefing's questions (each asked once); the last one is the hook to the post. */
+const d12Choices: DialogueChoice[] = [
+  { text: 'What’s the plan?', if: asked('d12plan'), effects: ask('d12plan'), goto: 'd12plan' },
+  { text: 'Who else knows what the message said?', if: asked('d12who'), effects: ask('d12who'), goto: 'd12who' },
+  { text: 'What if the bow isn’t on the Column?', if: asked('d12else'), effects: ask('d12else'), goto: 'd12else' },
+  { text: 'Where do you want me?', goto: 'd12post' },
+];
+
 const gratus = defineDialogue({
   id: 'npc-gratus',
   npcs: ['npc-gratus'],
   priority: 90,
   start: (c) => {
+    // mq-04 (the Column): the briefing, the post, the wounded centurion, the aftermath.
+    const s4 = stage(c, MQ4);
+    if (s4 === 'dawn' || s4 === 'post') return 'd12a';
+    if (s4 === 'ceremony') return 'd12cer';
+    if (s4 === 'climb' || s4 === 'archer') return c.memory.w0said ? 'w0again' : 'w0';
+    if (s4 === 'aftermath' || s4 === 'aftermath-killed') return 'a0';
+    if (completed(c, MQ4)) return 'mq4after';
     const s2 = stage(c, MQ2);
     if (s2 === 'gratus') return 'day0';
     if (s2 === 'ludus') return 'toLudus';
@@ -248,6 +271,65 @@ const gratus = defineDialogue({
     return completed(c, MQ3) ? 'after' : 'idle';
   },
   nodes: {
+    // ---- the morning of 12 May (mq-04): the briefing, the post, the wounded centurion
+    d12a: {
+      text: 'You came. Good. Nobody in my camp slept, and I trust half of them.',
+      choices: d12Choices,
+    },
+    d12more: { text: 'Anything else?', choices: d12Choices },
+    d12plan: {
+      text: 'Men on both library roofs and in the gallery. The praetorians round Caesar, thirty paces deep: Similis wouldn’t let me nearer. Apollodorus had the Column’s door sealed with lead at first light, after his men swept the stair. There’s nobody up there but the statue.',
+      next: 'd12more',
+    },
+    d12who: {
+      text: 'You, me, Pudens: he’s my chief, the princeps of the Peregrini. And whoever sold Festus’s road. I told Pudens last night. He said, “Then let them shoot, and we’ll see who hands them the bow.” He has a sense of humour, Pudens.',
+      next: 'd12more',
+    },
+    d12else: {
+      text: 'Then I’m a fool on the wrong roof. The message said a high place. Look up. There’s nothing higher in Rome today.',
+      next: 'd12more',
+    },
+    d12post: {
+      text: 'Stand at the Column’s door. Nobody goes in or out. You know the faces of the Mouse’s kind now. If anything feels wrong, shout, and don’t wait for my leave.',
+      next: 'postEnd',
+    },
+    postEnd: { speaker: 'player', text: '(You take the centurion’s meaning.)', end: true },
+    d12cer: {
+      text: (c) => `Caesar comes at the second hour. Your post is the door.${hourNow(c) < 6 ? ' Wait. Watch. It’s early yet.' : ''}`,
+      end: true,
+    },
+    w0: {
+      text: 'On top. He’s on the top. The seal… Go! Alive if you can. I want the hand that paid him.',
+      effects: (c) => {
+        c.memory.w0said = true;
+      },
+      end: true,
+    },
+    w0again: {
+      speaker: 'npc-crito',
+      text: '(Crito looks up from his knees without letting go of the pressure.) He can’t talk. Go and do what he told you.',
+      end: true,
+    },
+    a0: {
+      text: 'Did you get him?',
+      choices: [
+        { text: 'He’s alive, and Pudens’s men have him.', if: (c) => c.flag('bitus-fate') === 'spared', once: true, goto: 'a1' },
+        { text: 'He’s dead.', if: (c) => c.flag('bitus-fate') === 'killed', once: true, goto: 'a2' },
+        { text: 'He wasn’t aiming at Caesar. He was aiming at you.', if: (c) => c.flag('bitus-fate') === 'spared' && !!c.flag('mq04-bitus-target'), once: true, goto: 'a3' },
+        { text: 'Rest.', end: true },
+      ],
+    },
+    a1: { text: 'Good. A dead man tells nothing.', end: true },
+    a2: { text: 'Then he can’t tell us who paid. Pity.', end: true },
+    a3: {
+      text: 'At me? … Then someone in my own camp told them which centurion was asking about pepper. Tell Pudens. Tell him exactly that.',
+      end: true,
+    },
+    mq4after: {
+      text: 'The Column is dedicated, and I am still on my feet. Pudens will send for you when he is ready. Walk on.',
+      end: true,
+    },
+
     // ---- by day: Festus' news, and what to do about it
     day0: {
       text: '(A grey-haired man in a soldier’s belt comes out of the back, wiping ink from his fingers.) Chrysippus says you have something with Festus’ seal on it. Don’t take it out. Where’s Festus?',

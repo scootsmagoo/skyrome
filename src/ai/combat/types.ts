@@ -5,7 +5,7 @@
  */
 import type { CombatProfile } from '../../rpg/types';
 
-export type BrainState = 'idle' | 'approach' | 'engage' | 'circle' | 'retreat' | 'flee' | 'yield' | 'search' | 'down';
+export type BrainState = 'idle' | 'approach' | 'engage' | 'circle' | 'retreat' | 'flee' | 'yield' | 'search' | 'down' | 'shoot';
 
 /** The §6.11 numbers the AI reads, plus behaviour switches derived from tier and archetype. */
 export interface BrainProfile {
@@ -29,7 +29,12 @@ export interface BrainProfile {
   prefersFlee?: boolean;
   /** Beasts never yield or retreat to regain stamina. */
   beast?: boolean;
+  /** An archer (CombatProfile.shoot): plants and shoots while it has arrows and the target is in range and sight. */
+  shoot?: { interval: [number, number]; range: [number, number]; drawS: number };
 }
+
+/** An archer's numbers when its profile's `shoot` leaves them out: range 3–22 m, 1.6–2.4 s between shots, a 0.9 s draw. */
+export const SHOOT_DEFAULTS = { range: [3, 22] as [number, number], interval: [1.6, 2.4] as [number, number], drawS: 0.9 };
 
 const FEINT_TIERS = new Set(['veteran', 'champion', 'elite', 'boss']);
 const PARRY_TIERS = new Set(['champion', 'elite', 'boss']);
@@ -50,6 +55,7 @@ export function brainProfileFrom(p: CombatProfile, extra: Partial<BrainProfile> 
     canFeint: FEINT_TIERS.has(p.tier),
     canParry: PARRY_TIERS.has(p.tier),
     beast: !!p.beast,
+    ...(p.shoot ? { shoot: { interval: p.shoot.interval ?? SHOOT_DEFAULTS.interval, range: p.shoot.range ?? SHOOT_DEFAULTS.range, drawS: p.shoot.drawS ?? SHOOT_DEFAULTS.drawS } } : {}),
     ...extra,
   };
 }
@@ -75,6 +81,8 @@ export interface SelfPerception {
   hasNet?: boolean;
   /** When it was last struck (combat clock), for the guard reaction to a blow. */
   lastHitAt?: number;
+  /** Arrows left (archers). */
+  ammo?: number;
 }
 
 export interface TargetPerception {
@@ -82,8 +90,15 @@ export interface TargetPerception {
   x: number;
   z: number;
   heading: number;
-  /** Seen (line of sight) or close enough to be heard: the brain keeps track of where it is. */
+  /**
+   * Seen (line of sight) or close enough to be heard: the brain keeps track of where it is. Never
+   * for a target more than 2.5 m above or below (another floor: no chasing it hand to hand).
+   */
   visible: boolean;
+  /** Height of the target's feet above this NPC's (m). */
+  dy?: number;
+  /** A clear line of sight whatever the height (archers only; absent for the rest). */
+  los?: boolean;
   /** Centre-to-centre distance at which the target's weapon reaches this NPC. */
   reach: number;
   /** Winding up or striking. */

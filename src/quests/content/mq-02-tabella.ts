@@ -39,19 +39,31 @@ function searchBody(q: QuestContext) {
   q.completeObjective('search');
 }
 
-function musFate(q: QuestContext, fate: 'killed' | 'spared' | 'fled') {
+function musFate(q: QuestContext, fate: 'killed' | 'spared' | 'fled', speak = true) {
   if (q.flag('mus-fate')) return;
   q.setFlag('mus-fate', fate);
   // His strongbox key: thrown at you by a beaten man, or taken from a dead one's belt.
   const inv = q.game.player?.inventory;
   if (inv && !inv.count('clavis-cellae-muris')) {
-    if (fate === 'spared') say(q.game, 'Mus', 'Enough! The key, take the key! The bag’s in the box in the corner. Just let me go.');
+    // Only said when the player chose to spare him in the fight (not when he was left behind).
+    if (fate === 'spared' && speak) say(q.game, 'Mus', 'Enough! The key, take the key! The bag’s in the box in the corner. Just let me go.');
     if (fate !== 'fled') {
       inv.add('clavis-cellae-muris', 1, { source: 'quest' });
       if (fate === 'killed') q.notify('You take a key from Mus’ belt.');
     }
   }
   q.completeObjective('hideout');
+}
+
+/**
+ * Is the fighter `id` still yielded? CombatCore.releaseYielded (he got up on his own, after the
+ * player wandered off or stood over him for too long) emits no event, so the live status is asked
+ * for. With no combat service to ask (tests, a bare world), the yield flag is trusted.
+ */
+function stillYielded(q: QuestContext, id: string): boolean {
+  const core = (q.game as unknown as { combat?: { core?: { get(id: string): { status?: string } | undefined } } }).combat?.core;
+  if (!core) return true;
+  return core.get(id)?.status === 'yielded';
 }
 
 function hasSatchel(q: QuestContext): boolean {
@@ -152,8 +164,27 @@ export default defineQuest({
       beatFoe(q, 'musfoes', e.victimId, KNIFEMEN);
     },
     'actor:yielded': (q, e) => {
-      // Mus yields at 20% (GDD §6.9: spare, rob or kill is the combat module's prompt; sparing is the default).
-      if (MUS.includes(e.actorId)) musFate(q, 'spared');
+      // Mus yields at 20% (GDD §6.9). Provisional: nothing is decided until the player chooses
+      // (combat:yieldChoice), kills him, or walks out of the hideout (location:exited below).
+      if (MUS.includes(e.actorId) && !q.flag('mus-fate')) {
+        q.vars.musYielded = true;
+        q.vars.musYieldedId = e.actorId;
+      }
+    },
+    'combat:yieldChoice': (q, e) => {
+      if (!MUS.includes(e.actorId)) return;
+      if (e.choice === 'kill') musFate(q, 'killed');
+      else musFate(q, 'spared');
+    },
+    'location:exited': (q, e) => {
+      // Leaving his corner, or the taberna, with him yielded and undecided: he is spared. Walking out
+      // of the corner into the taberna counts too; the taberna itself counts only once the player is out of it.
+      if (e.locationId !== 'taberna-collapsa' && e.locationId !== 'mus-latebra') return;
+      if (!q.vars.musYielded || q.flag('mus-fate')) return;
+      // Got up again (released by the combat module) before the player left: not spared.
+      if (!stillYielded(q, String(q.vars.musYieldedId))) return;
+      const inTaberna = !!q.game.locations?.isInside?.('taberna-collapsa');
+      if (e.locationId === 'mus-latebra' || !inTaberna) musFate(q, 'spared', false);
     },
     'item:added': (q, e) => {
       if (e.itemId === 'quest-sacculum-festi') q.completeObjective('satchel');

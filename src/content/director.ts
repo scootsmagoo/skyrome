@@ -8,6 +8,7 @@
  * 'actor:yielded', 'dialogue:node', 'location:entered', 'content:interact').
  */
 import * as THREE from 'three';
+import type { IdleLoop } from '../actors/Actor';
 import type { Game } from '../core/Game';
 import type { CombatProfile } from '../rpg/types';
 import { festivalsOn } from './barks';
@@ -114,6 +115,10 @@ export function groundAt(game: Game, p: Vec3): THREE.Vector3 {
  * 'retiarius'…) at a place id or point, `offset` meters east/south of it. Returns the actor id to
  * listen for (the spawned actor's own id when the combat side returns one), or null when nothing
  * could spawn (no combat module yet, unknown place).
+ *
+ * Note: `streetPoint` moves the foe to open street level, so a point in an interior or at height
+ * (the Column's platform, a spiral stair) is moved off it. Such content calls `spawnEnemyAt`, or
+ * `game.combat.spawnEnemy` directly with `opts.npc`, to place the foe where it stands.
  */
 export function spawnEnemy(game: Game, archetype: string, at: string | Vec3, opts: SpawnOptions, offset: { x?: number; z?: number } = {}): string | null {
   const c = combat(game);
@@ -126,6 +131,25 @@ export function spawnEnemy(game: Game, archetype: string, at: string | Vec3, opt
     return typeof actor?.id === 'string' ? actor.id : opts.id;
   } catch (err) {
     console.error(`[content] spawnEnemy(${archetype}) failed`, err);
+    return null;
+  }
+}
+
+/**
+ * An enemy at a world position exactly as given (no `streetPoint`, no offset): for foes on a
+ * platform, in an interior or on a stair, where the street snap would move them. Calls
+ * `game.combat.spawnEnemy` with a THREE.Vector3; `opts.npc` names the NPC definition (appearance,
+ * profile). Returns the actor id, or null without a combat module.
+ */
+export function spawnEnemyAt(game: Game, archetype: string, pos: Vec3, opts: SpawnOptions): string | null {
+  const c = combat(game);
+  if (!c?.spawnEnemy) return null;
+  const at = new THREE.Vector3(pos.x, pos.y ?? 0, pos.z);
+  try {
+    const actor = c.spawnEnemy(archetype, at, { hostile: true, ...opts }) as { id?: unknown } | null | undefined;
+    return typeof actor?.id === 'string' ? actor.id : opts.id;
+  } catch (err) {
+    console.error(`[content] spawnEnemyAt(${archetype}) failed`, err);
     return null;
   }
 }
@@ -152,6 +176,8 @@ interface PopulationLike {
   direct?(npc: unknown, x: number, z: number, speed: number, arrive?: number): boolean;
   undirect?(npc: unknown): void;
   pose?(npc: unknown, loop: string | null, face?: number | null): boolean;
+  stage?(id: string, x: number, z: number, heading?: number, loop?: string | null): boolean;
+  unstage?(id: string): void;
 }
 
 function population(game: Game): PopulationLike | undefined {
@@ -184,6 +210,24 @@ export function release(game: Game, npcId: string) {
   const pop = population(game);
   const npc = pop?.get?.(npcId);
   if (npc) pop?.undirect?.(npc);
+}
+
+/**
+ * Put a named NPC at a place or point, out of their schedule, posed in `loop` facing `heading`
+ * (Gratus in the Column court). Points are used as given: no `streetPoint`, since a stage can be a
+ * platform or a court. False when there is no population module or no such NPC or floor.
+ */
+export function stage(game: Game, npcId: string, at: string | Vec3, heading = 0, loop: IdleLoop | null = 'stand'): boolean {
+  const pop = population(game);
+  if (!pop?.stage) return false;
+  const p = typeof at === 'string' ? game.locations?.get(at)?.position : at;
+  if (!p) return false;
+  return pop.stage(npcId, p.x, p.z, heading, loop);
+}
+
+/** Give a staged NPC back to their schedule. */
+export function unstage(game: Game, npcId: string) {
+  population(game)?.unstage?.(npcId);
 }
 
 interface RunnerCombat {
@@ -404,8 +448,24 @@ export function isLemuriaMidnight(game: Game): boolean {
   return h >= 23 || h < 2;
 }
 
-/** Festival ids of the current calendar day (see barks.ts festivalsOn). */
+/** The calendar service (src/game/calendar.ts), when the flow has installed one. */
+interface CalendarLike {
+  clamp?: string | null;
+  festivals?(): { id: string }[];
+}
+
+/**
+ * Festival ids of the current calendar day. With the calendar: its date and the festivals in
+ * effect (the first elapsed day that shows a festival date); 'fest-columna-eve' while it is held on
+ * the eve of the Column (11 May). Without one (tests, fakes): the barks.ts table on game.time.
+ */
 export function todaysFestivals(game: Game): string[] {
+  const cal = (game as { calendar?: CalendarLike }).calendar;
+  if (cal?.festivals) {
+    const out = cal.festivals().map((f) => f.id);
+    if (cal.clamp === 'mq-04-columna') out.push('fest-columna-eve');
+    return out;
+  }
   const d = game.time?.date?.();
   return d ? festivalsOn(d.month, d.day) : [];
 }

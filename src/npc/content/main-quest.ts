@@ -63,7 +63,7 @@ const npcs: NpcDef[] = [
     ],
     dialogue: 'npc-gratus',
     disposition: 'neutral',
-    essential: true, // until mq-04 (wounded there, survives)
+    essential: true, // wounded by Bitus's arrow at the dedication (mq-04), but he survives
     appearance: {
       sex: 'male', age: 'middle', build: 'muscular', height: 1.7, skin: '#b07d58',
       hair: { style: 'cropped', color: '#8a8580' }, beard: 'none',

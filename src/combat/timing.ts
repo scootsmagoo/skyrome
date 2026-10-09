@@ -38,6 +38,14 @@ export const TIMING = {
   feintCancel: 0.4,
   /** Nereus' net (§6.8, §13.2): 0.8 s twirl, cast, 0.5 s recovery; 14 m/s, 6 m; entangles 3 s (bosses 1.5 s); −0.4 s per struggle press. */
   net: { windup: 0.8, release: 0.2, recovery: 0.5, speed: 14, range: 6, entangle: 3, entangleBoss: 1.5, perPress: 0.4, interval: 12, followUpWindup: 0.8 },
+  /**
+   * Arrows (mq-04): the draw is the profile's `shoot.drawS` (held in the bowDraw pose), then the
+   * release and a recovery. Flight: the bow's projectileSpeed (arcus 55 m/s, 40 without one),
+   * gravity, a body capsule of 0.35 m; a miss flies on for 2 s or until it strikes the world, where
+   * it sticks for 4 s. A guard facing the arrow (±70°) stops it; the shooter leads a moving target
+   * by this share of its flight. `drawS` is the draw when the profile gives none.
+   */
+  arrow: { release: 0.06, recovery: 0.45, speed: 40, gravity: 9.8, radius: 0.35, ttl: 2, stick: 4, blockArc: 70, lead: 0.5, drawS: 0.9 },
   /** Nereus' sand kick (phase 2): blinds for 1 s. */
   sandKick: { windup: 0.45, active: 0.1, recovery: 0.5, blind: 1, range: 2.6, interval: 9 },
   /** Hold Y for 1 s to yield; hold X 0.5 s to release a lock. */

@@ -20,6 +20,9 @@
  *   search    lost sight for 2 s: go to the last known position, search 20 s, then idle
  *   opener    scripted first exchanges (a light chain; a delayed, long power wind-up)
  *   bash      shield fighters pressed by a target who keeps swinging answer with the umbo [design]
+ *   shoot     archers (profile.shoot, mq-04): with arrows left and the target in sight and range,
+ *             plant, face it and draw (the system looses the arrow), then wait a random interval;
+ *             closer than the range, or out of arrows, fight hand to hand
  *
  * Bosses add a `BrainScript` (Nereus' net, phases). Pure logic: see ./types.ts.
  */
@@ -97,6 +100,8 @@ export class CombatBrain {
   private waitForOpening = false;
   private lastStruck = -Infinity;
   private gaveUp = false;
+  /** Archers: no new draw before this (combat clock). */
+  private nextShotAt = 0;
 
   constructor(
     public profile: BrainProfile,
@@ -190,6 +195,8 @@ export class CombatBrain {
       else if (now > this.searchUntil) this.state = 'idle';
       return;
     }
+    // An archer with arrows, and its target in sight and range, stands and shoots.
+    if (this.shooting(p, svc)) return;
     // A new foe it was told to fight (engaged, called for help) is placed where it is at that
     // moment, seen or not: that is where the search starts.
     if (t.id !== this.foeId) {
@@ -309,6 +316,53 @@ export class CombatBrain {
 
     this.preemptiveGuard(p);
     this.script?.decide(this, p, svc);
+  }
+
+  /**
+   * The archer's turn (profile.shoot): true while it shoots, false to fight hand to hand (no
+   * arrows left, the target out of sight, nearer than the range's minimum or beyond its maximum).
+   * Not yet shooting, it wants the target 0.75 m beyond the minimum, so it doesn't flip between bow
+   * and blade at the line. A draw under way is always finished.
+   */
+  private shooting(p: Perception, svc: BrainServices): boolean {
+    const S = this.profile.shoot;
+    const t = p.target;
+    if (!S || !t) return false;
+    const now = p.now;
+    // A draw under way is finished whatever happens (the system looses the arrow).
+    const drawing = this.state === 'shoot' && p.self.busy;
+    if (!drawing) {
+      if (!((p.self.ammo ?? 0) > 0) || !t.los) return false;
+      const d = Math.hypot(t.x - p.self.x, t.z - p.self.z, t.dy ?? 0);
+      const min = S.range[0] + (this.state === 'shoot' ? 0 : 0.75);
+      if (d < min || d > S.range[1]) return false;
+    }
+    const I = this.intent;
+    if (t.id !== this.foeId) {
+      this.foeId = t.id;
+      this.gaveUp = false;
+    }
+    this.lastSeen = now;
+    this.lastKnown.x = t.x;
+    this.lastKnown.z = t.z;
+    if (this.state !== 'shoot') {
+      this.state = 'shoot';
+      // A beat to aim on first sight: its reaction time.
+      this.nextShotAt = Math.max(this.nextShotAt, now + this.profile.reactionS);
+      this.reactive = this.powerGuard = false;
+    }
+    // Tokens are for hand-to-hand turns.
+    svc.releaseToken();
+    if (!this.shoutedStart) {
+      this.shoutedStart = true;
+      I.shout = true;
+    }
+    if (!drawing && p.self.canAct && now >= this.nextShotAt) {
+      I.special = 'shoot';
+      const [a, b] = S.interval;
+      this.nextShotAt = now + S.drawS + a + (b - a) * this.rng();
+    }
+    return true;
   }
 
   /** Pre-emptive guard spells: up for blockSkill × 0.6 of the time, in spells of 1–3 s. */
@@ -448,6 +502,8 @@ export class CombatBrain {
     const ux = dx / d;
     const uz = dz / d;
     I.face = headingFromDir(dx, dz);
+    // An archer plants where it stands to shoot (no allies' shuffle either).
+    if (this.state === 'shoot') return;
     this.goalPt.x = t.x;
     this.goalPt.z = t.z;
     switch (this.state) {

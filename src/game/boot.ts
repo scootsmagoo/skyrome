@@ -27,6 +27,7 @@ import { lookById, outfitAppearance, type CharacterSpec } from './character';
 import { GameFlow, START_DATE, START_HOUR, TITLE_HOUR, type FlowOptions } from './GameFlow';
 import { registerAtlasLocations } from './locations';
 import { installOptionalModules } from './optional';
+import { installInteriors } from '../world/interiors/install';
 import { shouldWelcome, showWelcome } from './welcome';
 import { FIGHTS, startBout } from './bouts';
 import { applyCheckpoint, checkpoint } from './checkpoints';
@@ -122,6 +123,7 @@ export async function startRome(game: Game, uiRoot: HTMLElement, params: RomePar
   wireUi(game, ui, rpg, flow);
   installConsole(game, ui);
   guardUnload(flow);
+  installInteriors(game);
   await installOptionalModules(game);
   const spawn = flow.spawnPoint(params.quick ? params.at : null);
   player.teleport(spawn.position, spawn.heading);

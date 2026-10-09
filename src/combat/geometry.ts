@@ -24,6 +24,66 @@ export const BODY = {
   height: 1.8,
 };
 
+/**
+ * Height (mq-04): combat was flat, so fighters on different turns of a spiral stair, or a cell
+ * under the street, could strike and chase each other through the floor.
+ */
+export const HEIGHT = {
+  /** A target more than this far above or below is out of melee reach (sweeps, blows, the aim assist, lock-on). */
+  melee: 1.6,
+  /** Acquired (aggro) and perceived for melee only within this vertically. */
+  aware: 2.5,
+};
+
+/** Vertical distance between two feet positions. */
+export function dy(a: { y: number }, b: { y: number }): number {
+  return Math.abs(a.y - b.y);
+}
+
+/**
+ * A moving point (an arrow's step from a to b) against a character capsule (a vertical cylinder of
+ * radius r from y0 to y1 at x, z). Returns the fraction 0..1 along a→b of the first contact, or -1.
+ * Swept, so a fast arrow (0.9 m a step) can't tunnel through a body.
+ */
+export function segmentCapsule(ax: number, ay: number, az: number, bx: number, by: number, bz: number, c: Capsule): number {
+  const dx = bx - ax;
+  const dz = bz - az;
+  const ox = ax - c.x;
+  const oz = az - c.z;
+  const qa = dx * dx + dz * dz;
+  const qb = 2 * (ox * dx + oz * dz);
+  const qc = ox * ox + oz * oz - c.r * c.r;
+  // The span of t where the point is within r of the axis (in plan).
+  let t0: number;
+  let t1: number;
+  if (qa < 1e-12) {
+    if (qc > 0) return -1;
+    t0 = 0;
+    t1 = 1;
+  } else {
+    const disc = qb * qb - 4 * qa * qc;
+    if (disc < 0) return -1;
+    const s = Math.sqrt(disc);
+    t0 = Math.max(0, (-qb - s) / (2 * qa));
+    t1 = Math.min(1, (-qb + s) / (2 * qa));
+    if (t0 > t1) return -1;
+  }
+  // Within that span, the first t whose height is between the feet and the top.
+  const yA = ay + (by - ay) * t0;
+  const yB = ay + (by - ay) * t1;
+  if (yA >= c.y0 && yA <= c.y1) return t0;
+  const vy = by - ay;
+  if (Math.abs(vy) < 1e-9) return -1;
+  // Entering through the top or the bottom face inside the span.
+  const edge = yA > c.y1 ? c.y1 : c.y0;
+  if ((yA > c.y1 && yB > c.y1) || (yA < c.y0 && yB < c.y0)) return -1;
+  return clamp01((edge - ay) / vy);
+}
+
+function clamp01(t: number) {
+  return t < 0 ? 0 : t > 1 ? 1 : t;
+}
+
 /** Arc widths in degrees by kind of stroke. */
 export const ARC = { thrust: 50, cut: 110, blunt: 100, overhead: 60, sweep: 140, bash: 90 } as const;
 

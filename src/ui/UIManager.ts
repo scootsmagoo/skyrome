@@ -329,6 +329,28 @@ export class UIManager implements System {
     setTimeout(() => el.remove(), 2500);
   }
 
+  /**
+   * A black veil over the view, for moving the player between places: resolves when fully dark
+   * (so the caller can teleport in the dark), then fades back in by itself. No DOM: resolves now.
+   */
+  fade(outS = 0.35, holdS = 0.1, inS = 0.45): Promise<void> {
+    if (typeof document === 'undefined') return Promise.resolve();
+    return new Promise((resolve) => {
+      const el = document.createElement('div');
+      el.style.cssText = `position:absolute;inset:0;background:#000;opacity:0;transition:opacity ${outS}s ease;pointer-events:auto;z-index:70`;
+      this.overlayLayer.appendChild(el);
+      requestAnimationFrame(() => (el.style.opacity = '1'));
+      setTimeout(() => {
+        resolve();
+        setTimeout(() => {
+          el.style.transition = `opacity ${inS}s ease`;
+          el.style.opacity = '0';
+          setTimeout(() => el.remove(), inS * 1000 + 50);
+        }, holdS * 1000);
+      }, outS * 1000 + 30);
+    });
+  }
+
   // ------------------------------------------------------------------ frame
 
   lateUpdate(dt: number) {

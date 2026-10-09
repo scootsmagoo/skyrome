@@ -58,6 +58,8 @@ export interface CombatView {
   shoulder(out: THREE.Vector3): boolean;
   /** Show or hide a carried net (the retiarius). */
   setNet?(on: boolean): void;
+  /** An archer takes up the bow (on) or its melee weapon again (off), if the avatar can swap. */
+  setBow?(on: boolean): void;
 }
 
 export type StunKind = 'flinch' | 'stagger' | 'knockdown' | 'guardBreak';
@@ -65,7 +67,8 @@ export type CombatStatus = 'active' | 'ko' | 'yielded' | 'dead' | 'fled';
 
 /** Something the combatant is doing on the combat clock. */
 export interface Action {
-  kind: AttackKind | 'charge' | 'dodge' | 'draw' | 'sheathe' | 'kneel';
+  /** 'shoot': an archer's draw (wind-up) and release (CombatCore.startShot). */
+  kind: AttackKind | 'shoot' | 'charge' | 'dodge' | 'draw' | 'sheathe' | 'kneel';
   start: number;
   end: number;
   /** Attacks: phases and the absolute hit time. */
@@ -124,6 +127,9 @@ export interface CombatantInit {
   weapon: WeaponStats;
   shieldItem?: ItemDef;
   shield?: ShieldStats;
+  /** The bow an archer shoots with (the profile's `ranged` item). */
+  rangedItem?: ItemDef;
+  ranged?: WeaponStats;
   armor: number;
   family: ArmorFamily;
   poise: number;
@@ -157,6 +163,13 @@ export class Combatant {
   weapon: WeaponStats;
   shieldItem?: ItemDef;
   shield?: ShieldStats;
+  /** The bow (absent: a plain bow's numbers, CombatCore's fallback). */
+  rangedItem?: ItemDef;
+  ranged?: WeaponStats;
+  /** Arrows left (archers: the profile's `shoot.ammo`). */
+  ammo = 0;
+  /** The bow is in hand (archers swap to the melee weapon to fight close). */
+  bowOut = false;
   weaponCondition = 1;
   shieldCondition = 1;
   armor: number;
@@ -262,6 +275,9 @@ export class Combatant {
     this.weapon = init.weapon;
     this.shieldItem = init.shieldItem;
     this.shield = init.shield;
+    this.rangedItem = init.rangedItem;
+    this.ranged = init.ranged;
+    this.ammo = init.profile?.shoot?.ammo ?? 0;
     this.armor = init.armor;
     this.family = init.family;
     this.basePoise = init.poise;

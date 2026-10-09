@@ -6,8 +6,10 @@
  * night vigil Primigenius. Trajan himself has no dialogue (§2.B: he is only ever overheard).
  */
 import { person } from '../../content/people';
-import { completed, female, hourNow, origin, rotate, running } from '../../content/talk';
+import { completed, female, hourNow, origin, rotate, running, stage } from '../../content/talk';
 import { defineDialogue } from '../types';
+
+const MQ4 = 'mq-04-columna';
 
 /** Juvenal's manner, paraphrased from Satire 3 (docs/research/society.md §7.7); he is drafting, never quoting. */
 const JUVENAL = [
@@ -70,6 +72,25 @@ const apollodorus = person({
     { ask: 'Will the Column stand?', say: 'It will outlive the emperor, the Senate and the people who sneer at the architect. A hundred feet of drums, a stair inside, a platform on top. It stands because I know how a thing stands.' },
     { ask: 'What do you think of the Forum of Trajan?', say: 'The finest forum in the world. The Basilica Ulpia with the apse, the libraries on either side, the Column between them. The rest of Rome has been building for eight hundred years. I built this in six. (He glances at the Quirinal.) I took half a hill away, you know.', once: true },
   ],
+  // mq-04 (12 May, the dedication): the door, while the Column is being sealed and guarded.
+  choices: [
+    {
+      text: 'What happened to the Column’s door?',
+      if: (c) => ['dawn', 'post'].includes(stage(c, MQ4) ?? '') && !c.flag('mq04-apollodorus-door'),
+      goto: 'door',
+    },
+  ],
+  nodes: {
+    door: {
+      text: 'The door? Sealed with lead at first light. Moschus did it himself. Before that the hoist gang were in the stair, taking down the last ropes. Dacians, most of them: they’re good with ropes. They came out, Moschus sealed it, and nobody has been in since.',
+      choices: [{ text: 'Did they all come out?', goto: 'door2' }],
+    },
+    door2: {
+      text: '…I assume so. I’m an architect, not a shepherd. Moschus counted. I think.',
+      effects: (c) => c.setFlag('mq04-apollodorus-door', true),
+      next: 'hub',
+    },
+  },
 });
 
 const vestalis = person({

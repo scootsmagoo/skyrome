@@ -14,6 +14,7 @@ import { temple } from '../src/arch/classical/temple';
 import { tholos } from '../src/arch/classical/tholos';
 import { apse, barrelVault, dome, exedra, rotunda } from '../src/arch/classical/vaults';
 import { stairs } from '../src/arch/common/stairs';
+import { spiralStairs } from '../src/arch/common/spiral';
 import { wall } from '../src/arch/common/walls';
 import { MeshBuilder } from '../src/gfx/MeshBuilder';
 
@@ -86,6 +87,12 @@ const cases: Case[] = [
     4,
   ],
   ['stairs', (b) => stairs(b, { width: 4, rise: 0.2, run: 0.34, count: 10 }), 200, 10],
+  [
+    'spiral stairs',
+    (b) => spiralStairs(b, { count: 185, rise: 0.19, stepsPerTurn: 18, innerR: 0.32, outerR: 1.35, landings: [{ after: 62, turns: 0.25 }, { after: 124, turns: 0.25 }] }),
+    8000,
+    185,
+  ],
 ];
 
 describe('generators build cleanly within budget', () => {

@@ -3,6 +3,7 @@
  */
 import * as THREE from 'three';
 import type { ActionClip, Actor, CombatAvatar } from '../actors/Actor';
+import type { WeaponModel } from '../actors/appearance';
 import { isCombatAvatar } from '../actors/Actor';
 import { HumanoidAvatar } from '../actors/avatar/HumanoidAvatar';
 import { actionInfo } from '../actors/avatar/anim/library';
@@ -69,6 +70,8 @@ function libName(clip: ActionClip): string {
 /** A CombatAvatar (the procedural humanoid, or any avatar implementing the contract). */
 export class AvatarCombatView implements CombatView {
   private netMeshes: THREE.Object3D[] | null = null;
+  /** What an archer carried before it took up the bow (to swap back to). */
+  private meleeModel: WeaponModel | null = null;
 
   constructor(readonly avatar: CombatAvatar) {}
 
@@ -120,6 +123,20 @@ export class AvatarCombatView implements CombatView {
     if (!s) return false;
     s.getWorldPosition(out);
     return Number.isFinite(out.x);
+  }
+
+  /** An archer: the bow in hand to shoot, its melee weapon again to fight close (humanoids only). */
+  setBow(on: boolean) {
+    const a = this.avatar;
+    if (!(a instanceof HumanoidAvatar)) return;
+    const now = a.equipment.weapon;
+    if (on && now !== 'bow') {
+      this.meleeModel = now;
+      a.setWeapon('bow');
+    } else if (!on && now === 'bow' && this.meleeModel) {
+      a.setWeapon(this.meleeModel);
+      this.meleeModel = null;
+    }
   }
 
   /** The retiarius' net rides in his off hand (Equipment adds a mesh named 'net'). */
