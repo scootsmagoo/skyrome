@@ -30,6 +30,7 @@ game.streets                    // street graph: nodes, edges, spots (see below)
 | `frontage.ts` | The golden path's closed street wall: piazza lots become shops, open stretches of a corridor block's frontage get shop rows (5–10 m deep) or a compound wall with a gate; `frontClosure` measures it. |
 | `fill.ts` | `fillUnits`: the kit's `fillBlock` (same lots, seeds and generators) as a sequence of small units — yard, each lot, yard dressing, each back insula, compound walls, torches — so no block costs one long frame. Kept in step with the kit by hand. |
 | `proximity.ts` | `ProximityColliders`: colliders that exist only near the player (far massing, trees, walls and aqueducts). |
+| `datum.ts` | The vertical datum: street `LIFT`s above the terrain, `FLOOR_LIFT`, and the per-edge `SIDEWALK` heights that follow from the kerb standard (`KERB` 0.15 m, `src/core/traversal.ts`), so street, plaza and house floor agree to the centimetre. |
 | `roads.ts` | Street work per 128 m cell: atlas roads by context (urban: basalt between curbs and sidewalks; open: flush paving; rural: basalt, gravel or dirt), the atlas stairways (`stairProfile`: a walking surface never steeper than 0.66 that reaches the ground at both ends, flights on a substructure, parapets open at road crossings), junction squares, minor streets (vici, lanes, alleys, flights of steps), ground cover (earth over the town's scraps, cobbles on landmark margins, road edges and the golden path's scraps; never inside a block's outline nor on grades over 0.4), piazzas with a lacus or a compital shrine, market stalls (with aisles to the streets) and cattle pens, parked carts at the city's edge (on level open ground only), awnings over market lanes. Surfaces are the cell's `items`, furniture its `detail`. |
 | `life.ts` | Street life: wall torches on shop fronts, landmark-frontage dressing (stalls, goods, amphorae, benches, statue bases, braziers, lampstands, shade trees), washing lines across dense lanes. |
 | `lamps.ts` | `CityLamps`: the city's torches and lamps as light-pool requests near the camera. |
@@ -55,7 +56,7 @@ is the landmark crews'), `GARDEN`, `WATER`, `STEEP`, `WALL`, `AQUEDUCT`, `PIAZZA
   contours (terraces) and streets up the fall line become flights of steps (grade > 16 %).
   Widths: vici 5.4–6 m, lanes 4.2 m, alleys 3.2 m.
 - **Blocks.** The remaining pieces are traced and simplified into property lines (outer edge of the
-  sidewalks), with per-edge frontage and sidewalk height (0.2 on atlas roads, 0.12 on streets).
+  sidewalks), with per-edge frontage and sidewalk height (`SIDEWALK` in `datum.ts`: 0.17 on atlas roads, 0.16 on vici, 0.04 flush with paving; a building's floor stands `FLOOR_LIFT` above it).
   Density and wealth come from the Augustan region, blended with `QUARTERS`; GDD §12.3: within
   150 m of a major landmark (Capitolium, Colosseum, Column, Colossus, Palatine, Basilica Ulpia,
   Circus) blocks stay at 2–4 storeys. Thin, poor or steep pieces may become gardens.

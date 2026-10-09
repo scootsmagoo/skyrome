@@ -20,9 +20,11 @@ import { Draw } from '../../arch/fabric/draw';
 import { compitalShrine } from '../../arch/fabric/shrines';
 import { lacus } from '../../arch/fabric/fountain';
 import { velum } from '../../arch/fabric/awnings';
-import { placeProp } from '../../arch/props/props';
+import { groundIn, placeProp } from '../../arch/props/props';
 import type { MeshBuilder } from '../../gfx/MeshBuilder';
 import type { Polygon, Vec2 } from '../../arch/fabric/types';
+import { KERB } from '../../core/traversal';
+import { LIFT } from './datum';
 import { K } from './raster';
 import { inRects, rectsBounds, type Bounds, type CityPlan, type PlanRoad, type PlanStreet, type PlanPiazza } from './plan';
 import type { HeightFn } from './massing';
@@ -54,9 +56,6 @@ export interface Junction {
   r: number;
   roads: number[];
 }
-
-/** Lifts above the terrain, so overlapping surfaces never fight (plus a polygon offset). */
-const LIFT = { road: 0.07, junction: 0.1, vicus: 0.055, lane: 0.05, alley: 0.045, piazza: 0.09 };
 
 /** Landmark categories a road stops at (it runs round them, not through them). */
 const SOLID = new Set(['temple', 'basilica', 'baths', 'palace', 'theatre', 'amphitheatre', 'stadium', 'library', 'curia', 'warehouse', 'prison', 'odeum', 'house', 'tomb']);
@@ -418,8 +417,11 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
         for (const st of list) {
           const y = H(st.p[0], st.p[1]);
           // Stall fronts (local −z) face the middle of the square.
-          placeProp(d, st.kind as 'stall_fruit', st.p[0], y, st.p[1], st.facing + Math.PI, { rng: r });
-          if (r.chance(0.5)) placeProp(d, r.pick(['basket', 'crate', 'amphora_stack', 'sack'] as const), st.p[0] + r.range(-1.6, 1.6), y, st.p[1] + r.range(-1.6, 1.6), r.range(0, 6), { rng: r });
+          placeProp(d, st.kind as 'stall_fruit', st.p[0], y, st.p[1], st.facing + Math.PI, { rng: r, ground: H });
+          if (r.chance(0.5)) {
+            const gx = st.p[0] + r.range(-1.6, 1.6), gz = st.p[1] + r.range(-1.6, 1.6);
+            placeProp(d, r.pick(['basket', 'crate', 'amphora_stack', 'sack'] as const), gx, H(gx, gz), gz, r.range(0, 6), { rng: r, ground: H });
+          }
         }
       }, 'detail');
     }
@@ -468,7 +470,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
         add(a[0], a[1], (b) => {
           const r = new Rng(seed);
           const d = new Draw(b);
-          spots.forEach(([x, zz], k) => placeProp(d, k % 2 ? 'handcart' : 'cart', x, H(x, zz), zz, Math.atan2(t[0], t[1]) + r.range(-0.2, 0.2), { rng: r }));
+          spots.forEach(([x, zz], k) => placeProp(d, k % 2 ? 'handcart' : 'cart', x, H(x, zz), zz, Math.atan2(t[0], t[1]) + r.range(-0.2, 0.2), { rng: r, ground: H }));
         }, 'detail');
       }
     }
@@ -535,13 +537,19 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
     add(pz.center[0], pz.center[1], (b) => {
       const r = new Rng(seed);
       const d = new Draw(b).at(pz.center[0], y, pz.center[1], rot);
+      // Props stand on the paving, which follows the terrain (local y of the surface at each spot).
+      const gnd = groundIn(d, (x, z) => H(x, z) + LIFT.piazza);
+      const on = (x: number, z: number) => gnd(x, z);
       if (pz.kind === 'lacus') {
         lacus(d.at(0, 0, 0.2, 0), r);
-        placeProp(d, 'lampstand', -1.9, 0, -1.5, 0, { variant: 0 });
+        placeProp(d, 'lampstand', -1.9, on(-1.9, -1.5), -1.5, 0, { variant: 0, ground: gnd });
       } else compitalShrine(d.at(0, 0, -0.6, 0), r);
-      if (bench) placeProp(d, 'bench_masonry', -(pz.r - 1.1), 0, 0.5, -Math.PI / 2, { variant: 0 });
-      if (stall) placeProp(d, 'stall', pz.r - 1.6, 0, -0.4, Math.PI, { rng: r });
-      if (amphorae) placeProp(d, 'amphora_stack', pz.r - 1.4, 0, 2.2, r.range(0, 6), { rng: r });
+      if (bench) placeProp(d, 'bench_masonry', -(pz.r - 1.1), on(-(pz.r - 1.1), 0.5), 0.5, -Math.PI / 2, { variant: 0, ground: gnd });
+      if (stall) placeProp(d, 'stall', pz.r - 1.6, on(pz.r - 1.6, -0.4), -0.4, Math.PI, { rng: r, ground: gnd });
+      if (amphorae) {
+        const ar = r.range(0, 6);
+        placeProp(d, 'amphora_stack', pz.r - 1.4, on(pz.r - 1.4, 2.2), 2.2, ar, { rng: r, ground: gnd });
+      }
     }, 'detail');
   }
   return { cells, junctions, spots, runs, lamps, carts, stairPaths };
@@ -833,7 +841,7 @@ function coverSet(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: n
 function buildRoadPiece(b: MeshBuilder, road: PlanRoad, ctx: string, pts: Vec2[], H: HeightFn, capStart: boolean, capEnd: boolean) {
   const spec: StreetSpec = { points: pts, lift: LIFT.road, capStart, capEnd, steppingStones: [], seed: road.index };
   if (road.style === 'paved' && ctx === 'urban') {
-    Object.assign(spec, { kind: 'paved', roadWidth: road.carriage, sidewalk: road.sidewalk, curb: 0.2 });
+    Object.assign(spec, { kind: 'paved', roadWidth: road.carriage, sidewalk: road.sidewalk, curb: KERB });
   } else if (road.style === 'paved' && ctx === 'open') {
     Object.assign(spec, { kind: 'lane', roadWidth: road.carriage + road.sidewalk, roadMaterial: 'paving_basalt' });
   } else if (road.style === 'paved') {
@@ -847,7 +855,7 @@ function buildRoadPiece(b: MeshBuilder, road: PlanRoad, ctx: string, pts: Vec2[]
 function buildMinorPiece(b: MeshBuilder, st: PlanStreet, pts: Vec2[], H: HeightFn, capStart: boolean, capEnd: boolean) {
   if (st.kind === 'vicus') {
     const sw = 0.85;
-    buildStreet(b, { points: pts, kind: 'paved', roadWidth: st.width - 2 * sw, sidewalk: sw, curb: 0.16, lift: LIFT.vicus, capStart, capEnd, steppingStones: [], seed: st.index }, H);
+    buildStreet(b, { points: pts, kind: 'paved', roadWidth: st.width - 2 * sw, sidewalk: sw, curb: KERB, lift: LIFT.vicus, capStart, capEnd, steppingStones: [], seed: st.index }, H);
   } else if (st.kind === 'lane') {
     buildStreet(b, { points: pts, kind: 'lane', roadWidth: st.width, roadMaterial: st.wealth > 0.45 ? 'paving_basalt' : 'cobbles', lift: LIFT.lane, seed: st.index }, H);
   } else {

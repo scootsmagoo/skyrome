@@ -22,6 +22,7 @@ import { MeshBuilder } from '../../gfx/MeshBuilder';
 import { getMaterial } from '../../gfx/materials';
 import type { MaterialId } from '../../gfx/materialIds';
 import type { TreeSpecies } from '../../arch/vegetation/species';
+import { FLOOR_LIFT, SIDEWALK } from './datum';
 import type { CityPlan, PlanBlock } from './plan';
 import { K, signedArea, type Pt } from './raster';
 
@@ -59,8 +60,8 @@ export function blockTorches(blk: PlanBlock, lots: LotPlan[], H: HeightFn): Torc
   const rng = new Rng(blk.seed ^ 0x70c4);
   for (const p of lots) {
     if (p.kind !== 'insula' && p.kind !== 'shops' && p.kind !== 'domus' && p.kind !== 'horrea') continue;
-    const sw = blk.sidewalk[p.edge] ?? 0.06;
-    let prob = blk.corridor ? 0.85 : sw >= 0.2 ? 0.55 : sw >= 0.12 ? 0.32 : 0.12;
+    const sw = blk.sidewalk[p.edge] ?? SIDEWALK.other;
+    let prob = blk.corridor ? 0.85 : sw >= SIDEWALK.road - 1e-6 ? 0.55 : sw >= SIDEWALK.street - 1e-6 ? 0.32 : 0.12;
     if (p.kind === 'domus' || p.kind === 'horrea') prob *= 0.5;
     if (!rng.chance(prob) || p.obb.hu < 2.2) continue;
     const { obb } = p;
@@ -68,7 +69,7 @@ export function blockTorches(blk: PlanBlock, lots: LotPlan[], H: HeightFn): Torc
     let floorY = -Infinity;
     for (let i = 0; i <= 4; i++) {
       const lx = -obb.hu + (2 * obb.hu * i) / 4;
-      floorY = Math.max(floorY, H(obb.c[0] + obb.u[0] * lx - obb.v[0] * (obb.hv + 0.4), obb.c[1] + obb.u[1] * lx - obb.v[1] * (obb.hv + 0.4)) + sw + 0.06);
+      floorY = Math.max(floorY, H(obb.c[0] + obb.u[0] * lx - obb.v[0] * (obb.hv + 0.4), obb.c[1] + obb.u[1] * lx - obb.v[1] * (obb.hv + 0.4)) + sw + FLOOR_LIFT);
     }
     const lx = (rng.chance(0.5) ? -1 : 1) * (obb.hu - 0.4);
     const x = obb.c[0] + obb.u[0] * lx - obb.v[0] * obb.hv, z = obb.c[1] + obb.u[1] * lx - obb.v[1] * obb.hv;
@@ -231,7 +232,7 @@ export function lifeWork(plan: CityPlan, H: HeightFn, inArea: (x: number, z: num
             const qy = H(q[0], q[1]) + 0.04;
             lamps.push({ x: q[0], y: qy + (brazier ? 0.85 : 1.42), z: q[1], kind: brazier ? 'stall' : 'fountain' });
             count(brazier ? 'brazier' : 'lampstand');
-            add(q[0], q[1], (bb) => placeProp(new Draw(bb), brazier ? 'brazier' : 'lampstand', q[0], qy, q[1], 0, { variant: 0 }));
+            add(q[0], q[1], (bb) => placeProp(new Draw(bb), brazier ? 'brazier' : 'lampstand', q[0], qy, q[1], 0, { variant: 0, ground: H }));
           }
         }
         if (item === 'stall') {
@@ -242,26 +243,26 @@ export function lifeWork(plan: CityPlan, H: HeightFn, inArea: (x: number, z: num
             const r = new Rng(seed);
             const d = new Draw(bb);
             // The stall's front (local −z) faces the street.
-            placeProp(d, 'stall', p[0], y, p[1], toStreet + Math.PI, { rng: r });
+            placeProp(d, 'stall', p[0], y, p[1], toStreet + Math.PI, { rng: r, ground: H });
             if (lit) placeProp(d, 'oil_lamp', p[0] + n[0] * 0.2, y + 0.93, p[1] + n[1] * 0.2, toStreet, { collide: false });
-            if (r.chance(0.6)) placeProp(d, r.pick(['basket', 'crate', 'sack', 'amphora_globular'] as const), p[0] - n[0] * 1.2 + t[0] * r.range(-0.9, 0.9), y, p[1] - n[1] * 1.2 + t[1] * r.range(-0.9, 0.9), r.range(0, 6), { rng: r, collide: false });
+            if (r.chance(0.6)) placeProp(d, r.pick(['basket', 'crate', 'sack', 'amphora_globular'] as const), p[0] - n[0] * 1.2 + t[0] * r.range(-0.9, 0.9), y, p[1] - n[1] * 1.2 + t[1] * r.range(-0.9, 0.9), r.range(0, 6), { rng: r, collide: false, ground: H });
           });
         } else if (item === 'goods' || item === 'amphorae') {
           spots.push({ id, kind: 'container', position: new THREE.Vector3(p[0] + n[0] * 1.1, y, p[1] + n[1] * 1.1), heading: toStreet + Math.PI, tag: item === 'amphorae' ? 'amphora_stack' : 'goods' });
           add(p[0], p[1], (bb) => {
             const r = new Rng(seed);
             const d = new Draw(bb);
-            if (item === 'amphorae') placeProp(d, r.chance(0.5) ? 'amphora_stack' : 'amphora_rack', p[0], y, p[1], toStreet + Math.PI, { rng: r });
+            if (item === 'amphorae') placeProp(d, r.chance(0.5) ? 'amphora_stack' : 'amphora_rack', p[0], y, p[1], toStreet + Math.PI, { rng: r, ground: H });
             else {
               const kinds: PropKind[] = ['crate', 'sack', 'basket', 'dolium', 'crate', 'sack'];
-              for (let i = 0; i < 4; i++) placeProp(d, r.pick(kinds), p[0] + t[0] * r.range(-1.3, 1.3) + n[0] * r.range(-0.6, 0.6), y, p[1] + t[1] * r.range(-1.3, 1.3) + n[1] * r.range(-0.6, 0.6), r.range(0, 6), { rng: r, collide: i < 2 });
+              for (let i = 0; i < 4; i++) placeProp(d, r.pick(kinds), p[0] + t[0] * r.range(-1.3, 1.3) + n[0] * r.range(-0.6, 0.6), y, p[1] + t[1] * r.range(-1.3, 1.3) + n[1] * r.range(-0.6, 0.6), r.range(0, 6), { rng: r, collide: i < 2, ground: H });
             }
           });
         } else if (item === 'bench') {
           spots.push({ id, kind: 'bench', position: new THREE.Vector3(p[0] - n[0] * 0.5, y, p[1] - n[1] * 0.5), heading: toStreet });
-          add(p[0], p[1], (bb) => placeProp(new Draw(bb), 'bench_masonry', p[0] - n[0] * 0.8, y, p[1] - n[1] * 0.8, toStreet + Math.PI, { variant: seed % 2 }));
+          add(p[0], p[1], (bb) => placeProp(new Draw(bb), 'bench_masonry', p[0] - n[0] * 0.8, y, p[1] - n[1] * 0.8, toStreet + Math.PI, { variant: seed % 2, ground: H }));
         } else if (item === 'statue') {
-          add(p[0], p[1], (bb) => placeProp(new Draw(bb), 'statue_pedestal', p[0] - n[0] * 0.6, y, p[1] - n[1] * 0.6, toStreet + Math.PI, { variant: seed % 3 }));
+          add(p[0], p[1], (bb) => placeProp(new Draw(bb), 'statue_pedestal', p[0] - n[0] * 0.6, y, p[1] - n[1] * 0.6, toStreet + Math.PI, { variant: seed % 3, ground: H }));
         }
       }
     }

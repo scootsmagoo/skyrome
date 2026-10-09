@@ -17,6 +17,7 @@ import type { Game } from '../../core/Game';
 import { Layer } from '../../core/Physics';
 import type { Vec2 } from '../../arch/fabric/types';
 import { toGame } from '../coords';
+import { FLOOR_LIFT } from './datum';
 import type { CityPlan } from './plan';
 import { K, distToPoly, pointInPoly, polyCentroid } from './raster';
 import type { StreetWork } from './roads';
@@ -584,7 +585,7 @@ function doorsOf(blockId: string, outline: readonly Vec2[], fronts: number[], si
       const t = (i + 0.5) / k;
       const x = a[0] + (b[0] - a[0]) * t + ox * 0.6, z = a[1] + (b[1] - a[1]) * t + oz * 0.6;
       const house = (seed + i + e) % 2 === 0 && i % 2 === 1;
-      emit({ id: `${blockId}:door${n++}`, kind: house ? 'houseDoor' : 'shopDoor', position: new THREE.Vector3(x, H(x, z) + (sidewalk[e] ?? 0), z), heading, block: blockId });
+      emit({ id: `${blockId}:door${n++}`, kind: house ? 'houseDoor' : 'shopDoor', position: new THREE.Vector3(x, H(x, z) + (sidewalk[e] ?? 0) + FLOOR_LIFT, z), heading, block: blockId });
     }
   }
 }

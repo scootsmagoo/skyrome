@@ -9,6 +9,7 @@
  * trimeshes, heightfields) is navigable the moment it has colliders. The sampler is an interface,
  * so tests run on a fake world.
  */
+import { NAV_MAX_STEP } from '../../core/traversal';
 
 export interface CellSample {
   /** Floor height (NaN when there is no floor). */
@@ -29,7 +30,7 @@ export interface NavGridOptions {
   chunkCells?: number;
   /** Chunks whose centre is within this radius of the focus are built (default 80 m). */
   radius?: number;
-  /** Highest step between neighbouring cells (default 0.55 m). */
+  /** Highest step between neighbouring cells (default NAV_MAX_STEP, what an Actor climbs: core/traversal.ts). */
   maxStep?: number;
 }
 
@@ -86,7 +87,7 @@ export class NavGrid {
     this.chunkCells = opts.chunkCells ?? 16;
     this.chunkSize = this.cell * this.chunkCells;
     this.radius = opts.radius ?? 80;
-    this.maxStep = opts.maxStep ?? 0.55;
+    this.maxStep = opts.maxStep ?? NAV_MAX_STEP;
   }
 
   // ---------------------------------------------------------------- building

@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import type { MeshBuilder } from '../../gfx/MeshBuilder';
 import type { MaterialId } from '../../gfx/materialIds';
 import { Rng } from '../../core/Rng';
+import { KERB } from '../../core/traversal';
 import { castsShadow } from './shadow';
 import { ensurePositive, polygonBounds, pointInPolygon, polylineLength, resamplePolyline, subtractPolygons } from './polygon';
 import type { HeightFn, Polygon, Vec2 } from './types';
@@ -52,7 +53,7 @@ export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn
   const paved = (spec.kind ?? 'paved') === 'paved';
   const rw = spec.roadWidth ?? (paved ? 5.0 : 3.2);
   const sw = paved ? spec.sidewalk ?? 1.8 : 0;
-  const ch = paved ? spec.curb ?? 0.3 : 0;
+  const ch = paved ? spec.curb ?? KERB : 0;
   const lift = spec.lift ?? 0.06;
   const roadMat = spec.roadMaterial ?? (paved ? 'paving_basalt' : 'gravel');
   const sideMat = spec.sidewalkMaterial ?? 'cobbles';

@@ -15,7 +15,10 @@ import { Rng, hashString } from '../../core/Rng';
 import { MeshBuilder, transformCollider, type ColliderSpec } from '../../gfx/MeshBuilder';
 import type { MaterialId } from '../../gfx/materialIds';
 import { Draw } from '../fabric/draw';
+import { groundProp } from './ground';
 import { lathe, sackGeometry } from './shapes';
+
+const UP = new THREE.Vector3(0, 1, 0);
 
 export const PROP_KINDS = [
   'amphora_globular', 'amphora_tall', 'amphora_stack', 'amphora_rack', 'dolium', 'crate', 'sack', 'basket',
@@ -732,12 +735,34 @@ export interface PlaceOpts {
   collide?: boolean;
   /** Extra tilt about X (e.g. amphorae leaning on a wall). */
   rx?: number;
+  /**
+   * Surface height at (x, z) in the same frame as the placement (see `groundIn`). The prop is then
+   * grounded on its footprint: it leans with the ground (capped, ground.ts) and sinks until no
+   * corner floats. `y` stays the caller's choice for the ground under the origin.
+   */
+  ground?: (x: number, z: number) => number;
+}
+
+/** A `PlaceOpts.ground` for a Draw frame from a world height function (the frame must only be translated and turned about Y). */
+export function groundIn(d: Draw, H: (x: number, z: number) => number): (x: number, z: number) => number {
+  const e = d.m.elements;
+  return (x, z) => H(e[0] * x + e[8] * z + e[12], e[2] * x + e[10] * z + e[14]) - e[13];
 }
 
 /** Merge a prop into a Draw's MeshBuilder at local (x, y, z) with yaw `rotY`. */
 export function placeProp(d: Draw, kind: PropKind, x: number, y: number, z: number, rotY = 0, o: PlaceOpts = {}) {
   const model = makeProp(kind, o.rng, o.variant);
-  const m = d.m.clone().multiply(new THREE.Matrix4().makeTranslation(x, y, z)).multiply(new THREE.Matrix4().makeRotationY(rotY));
+  let tilt: THREE.Matrix4 | null = null;
+  if (o.ground) {
+    const k = o.scale ?? 1;
+    const bb = model.bounds;
+    const g = groundProp(o.ground, x, z, rotY, { minX: bb.min.x * k, maxX: bb.max.x * k, minZ: bb.min.z * k, maxZ: bb.max.z * k });
+    y += g.dy;
+    if (Math.hypot(g.gx, g.gz) > 0.01) tilt = new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(UP, new THREE.Vector3(-g.gx, 1, -g.gz).normalize()));
+  }
+  const m = d.m.clone().multiply(new THREE.Matrix4().makeTranslation(x, y, z));
+  if (tilt) m.multiply(tilt);
+  m.multiply(new THREE.Matrix4().makeRotationY(rotY));
   if (o.rx) m.multiply(new THREE.Matrix4().makeRotationX(o.rx));
   if (o.scale && o.scale !== 1) m.multiply(new THREE.Matrix4().makeScale(o.scale, o.scale, o.scale));
   const base = new THREE.Vector3().setFromMatrixPosition(m);

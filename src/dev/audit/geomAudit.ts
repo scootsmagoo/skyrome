@@ -10,6 +10,8 @@
  *  - stacked:  two surfaces of different materials within 10 cm of each other (patches, flicker);
  *  - through:  the terrain at or above a paved surface (grass/dirt/gravel showing through paving);
  *  - lip:      a paved surface standing > 25 cm above the terrain at its open edge (floating slab);
+ *  - ledge:    a 3-12 cm step between two neighbouring walkable surfaces (a lip to trip on and a seam to
+ *              see; kerbs and stairs are taller, ride-over rises shorter);
  *  - deadend:  a small raised area that climbs (a flight) and links to nothing at its top;
  *  - floating / buried props: a prop's base above / below the surface under it.
  *
@@ -107,10 +109,14 @@ interface Surf {
 /** Materials steps are made of (not roofs, awnings, tables, foliage). */
 const STEPPY = /paving|cobbles|travertine|marble|tufa|peperino|concrete|brick|basalt|stone|rock/;
 
+/** Ledge band (m): shorter rises are ridden over, taller ones are kerbs and stairs. */
+const LEDGE_MIN = 0.03;
+const LEDGE_MAX = 0.12;
+
 const PAVED = /paving|cobbles|gravel|basalt|travertine|mosaic|concrete|tufa|peperino|marble|sand|dirt|mud|terracotta|brick/;
 
 export interface Finding {
-  kind: 'stacked' | 'through' | 'lip' | 'deadend' | 'floating' | 'buried';
+  kind: 'stacked' | 'through' | 'lip' | 'ledge' | 'deadend' | 'floating' | 'buried';
   key: string;
   cells: number;
   /** Worst depth (m): terrain above the surface (through), height (lip, floating). */
@@ -234,6 +240,21 @@ export function analyzeArea(cx: number, cz: number, radius: number, heightAt: (x
           note('lip', `${s.src}:${s.mat}`, x0 + (i + 0.5) * C, top[k], z0 + (j + 0.5) * C, h);
           break;
         }
+      }
+    }
+  // Ledges: a few centimetres between neighbouring walkable tops (mismatched lifts and datums).
+  for (let j = 0; j < n - 1; j++)
+    for (let i = 0; i < n - 1; i++) {
+      const k = j * n + i;
+      for (const o of [k + 1, k + n]) {
+        // Compare heights above the terrain, so a surface following a slope is not a ledge.
+        const d = Math.abs((top[k] - terr[k]) - (top[o] - terr[o]));
+        if (d < LEDGE_MIN || d >= LEDGE_MAX) continue;
+        const ak = topMat[k] === 'terrain', bk = topMat[o] === 'terrain';
+        if ((!ak && !PAVED.test(topMat[k])) || (!bk && !PAVED.test(topMat[o])) || (ak && bk)) continue;
+        const sa = ak ? 'terrain' : `${cells[k]![0].src}:${topMat[k]}`, sb = bk ? 'terrain' : `${cells[o]![0].src}:${topMat[o]}`;
+        if (sa === sb) continue;
+        note('ledge', [sa, sb].sort().join(' | '), x0 + (i + 0.5) * C, Math.max(top[k], top[o]), z0 + (j + 0.5) * C, d);
       }
     }
   // Dead-end flights: connected raised areas (≥ 0.3 m over the terrain, steps of ≤ 0.25 m) that
