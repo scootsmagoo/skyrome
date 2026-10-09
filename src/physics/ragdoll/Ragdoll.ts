@@ -62,6 +62,9 @@ interface Seg {
   body: RAPIER.RigidBody;
   /** Scalar inertia (kg m²) for the muscle gains. */
   inertia: number;
+  /** Capsule length overall and radius (m), to recompute the inertia when the mass changes. */
+  len: number;
+  radius: number;
   /** World rotation the animation wants this body at (set each frame). */
   target: THREE.Quaternion;
   /** Transforms at the last two fixed steps (render interpolation). */
@@ -84,6 +87,8 @@ const AXIS_X = new THREE.Vector3(1, 0, 0);
 
 /** Damping ratio of the muscles (their frequency is set per joint in drive). */
 const MUSCLE_ZETA = 0.9;
+/** A person's weight (kg) at the 1.75 m reference body. */
+export const RAGDOLL_KG = 72;
 const ANG_AXES = [RAPIER.JointAxis.AngX, RAPIER.JointAxis.AngY, RAPIER.JointAxis.AngZ];
 
 export class Ragdoll {
@@ -164,12 +169,24 @@ export class Ragdoll {
         joint: null,
         body,
         inertia: mass * (len * len / 12 + r * r / 4),
+        len,
+        radius: r,
         target: _q.clone(),
         prevP: _p.clone(),
         prevQ: _q.clone(),
         currP: _p.clone(),
         currQ: _q.clone(),
       });
+    }
+    // Bone-density capsules weigh in light (they are slimmer than a body): bring the whole to a
+    // person's weight, ~72 kg for the 1.75 m reference body (mass goes with the cube of the
+    // height, a little less).
+    const total = this.segs.reduce((m, s) => m + s.body.mass(), 0);
+    const k = (RAGDOLL_KG * Math.pow(scale, 2.5)) / total;
+    for (const s of this.segs) {
+      const col = s.body.collider(0);
+      col.setDensity(col.density() * k);
+      s.inertia = s.body.mass() * (s.len * s.len / 12 + s.radius * s.radius / 4);
     }
     // Muscle gains see everything a joint carries: the mass of the chain beyond it at the
     // distance of that chain's centre of mass (a spine holds up the chest, head and arms).
@@ -210,6 +227,11 @@ export class Ragdoll {
       s.joint = j;
       this.joints.push(j);
     }
+  }
+
+  /** Total mass of the bodies (kg). */
+  mass(): number {
+    return this.segs.reduce((m, s) => m + s.body.mass(), 0);
   }
 
   /** The pelvis body's position (the body's centre of mass, roughly). */

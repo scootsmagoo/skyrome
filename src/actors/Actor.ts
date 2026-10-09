@@ -333,6 +333,8 @@ export type ActionClip =
   | 'throw'
   | 'interact'
   | 'pickup'
+  /** A deep squat and a reach for something lying on the ground in front (a dropped load). */
+  | 'pickupGround'
   | 'drink'
   | 'pray'
   | 'cheer'

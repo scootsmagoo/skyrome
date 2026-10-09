@@ -28,6 +28,13 @@ declare module '../../core/Game' {
   }
 }
 
+declare module '../../core/Events' {
+  interface GameEvents {
+    /** Someone's body went over to physics (a death, a knockout or a knockdown). */
+    'ragdoll:down': { actor: Actor; mode: 'death' | 'knockdown' };
+  }
+}
+
 type Mode = 'death' | 'knockdown';
 
 interface Live {
@@ -240,6 +247,7 @@ export class RagdollSystem implements System {
       rag.impulse(chest, d, mag);
     }
     this.live.set(a, { actor: a, avatar: av, rag, mode, t: 0, still: 0 });
+    this.game.events.emit('ragdoll:down', { actor: a, mode });
   }
 
   /** A body at rest becomes a held pose; a corpse's actor moves to where it lies. */

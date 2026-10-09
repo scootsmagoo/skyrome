@@ -35,6 +35,7 @@ import type { ShieldStats, WeaponStats } from '../rpg/types';
 import { ArenaBout, type BoutOptions } from './ArenaBout';
 import { Combatant, type Action } from './Combatant';
 import { BODY, HEIGHT, angleTo, arcFor, dist2D, dy, meleeRange, segmentCapsule, sweepCapsule } from './geometry';
+import { floorsTarget } from './knockdown';
 import { TIMING, attackLength, attackPhases, chargeFraction, clipSpeedFor, type AttackKind } from './timing';
 import './events';
 
@@ -778,7 +779,9 @@ export class CombatCore {
     if (def.active && def.status === 'active') {
       const heavy = power || a.kind === 'bash' || a.kind === 'sprint';
       const immune = !!def.action?.hyperArmor && def.inWindup(now);
-      const pr = applyPoiseDamage(def.poise, hit.poise, { heavy, immune, riposte });
+      // A heavy blow that carries nearly the victim's whole poise floors them (combat/knockdown.ts).
+      const knockdown = floorsTarget({ heavy, blocked: hit.blocked, poiseDamage: hit.poise, poiseMax: def.poise.max, braced: def.inWindup(now), boss: !!def.boss, isPlayer: def.isPlayer });
+      const pr = applyPoiseDamage(def.poise, hit.poise, { heavy, immune, riposte, knockdown });
       stagger = pr.result;
       if (pr.result === 'stagger') {
         this.stagger(def, pr.seconds, arrow ? null : att, 'stagger');

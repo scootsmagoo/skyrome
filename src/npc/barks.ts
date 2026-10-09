@@ -10,7 +10,7 @@
 import type { Rng } from '../core/Rng';
 import type { DayPhase } from './crowd/budget';
 
-export type BarkKind = 'greet' | 'ambient' | 'shoved' | 'weapon' | 'flee' | 'gawk' | 'guard' | 'brushoff' | 'vendor' | 'crime' | 'sordidus' | 'lautus';
+export type BarkKind = 'greet' | 'ambient' | 'shoved' | 'dazed' | 'dropped' | 'weapon' | 'flee' | 'gawk' | 'guard' | 'brushoff' | 'vendor' | 'crime' | 'sordidus' | 'lautus';
 
 type Table = Record<string, readonly string[]>;
 
@@ -275,6 +275,10 @@ const SHOVED: readonly string[] = [
 ];
 const SHOVED_SLAVE: readonly string[] = ['Pardon, domine!', 'My fault, my fault.', 'Sorry, sir!'];
 
+/** Getting up after being knocked down, and a load lost on the ground. */
+const DAZED: readonly string[] = ['Ugh… my head.', 'Ow. Ow, ow.', 'Hercle, what hit me?', 'Did you see that? Madman!', 'Who runs like that in a crowd?', 'Ecastor, my back.'];
+const DROPPED: readonly string[] = ['My goods! Hold on.', 'Look at that mess.', 'All over the street!', 'Mine, mine — leave it be!'];
+
 const WEAPON: readonly string[] = [
   'Put that away! This is the Forum, not the arena!',
   "Watch! Watch! Somebody's drawn steel!",
@@ -356,6 +360,10 @@ export function barkLines(ctx: BarkContext): readonly string[] {
     }
     case 'shoved':
       return ctx.table === 'slave' ? SHOVED_SLAVE : SHOVED;
+    case 'dazed':
+      return DAZED;
+    case 'dropped':
+      return DROPPED;
     case 'weapon':
       return WEAPON;
     case 'flee':
