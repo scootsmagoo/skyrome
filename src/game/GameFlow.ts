@@ -78,7 +78,7 @@ export interface FlowOptions {
   hour?: number | null;
   /** Character for the quick start. */
   character?: Partial<CharacterSpec>;
-  /** The quick start plays the story's opening as a new game does (the plain link). */
+  /** The quick start plays the story's opening as a new game does (?story=1). */
   story?: boolean;
   audio?: GameAudio;
 }

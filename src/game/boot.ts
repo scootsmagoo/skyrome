@@ -51,17 +51,17 @@ export interface RomeParams {
   fight: number | null;
   /** `?part=castor` etc.: straight into one portion of the opening (game/checkpoints). */
   part: string | null;
-  /** The plain link: no menus, but the story's own opening (the cart at the Porta Capena, Festus speaking first). */
+  /** `?story=1`: no menus, but the story's own opening (the cart at the Porta Capena, Festus speaking first). */
   story: boolean;
 }
 
 /**
- * A plain link (no options) is the shareable test build: no menus and the default character, but
- * the story's real opening: the night cart at the Porta Capena, 11 May at 04:30, with the courier
- * Festus talking first (docs/STORY.md). `?menu=1` runs the full flow (control preset, title,
- * character creation, then the same opening); `?quick=1` is the agents' quick start at the Porta
- * Capena (nobody talks first); `?at=<landmark>` spawns there (PLAY_SPAWN/PLAY_HOUR: the Forum at
- * mid-morning, for `?at=rostra`). `?fight=nereus` (or `pullus`, `auctus`) skips the Ludus
+ * A plain link (no options) is the owner's test build: no menus, the default character, in the Forum
+ * at mid-morning (PLAY_SPAWN/PLAY_HOUR) with the opening skipped. `?story=1` plays the story's real
+ * opening instead: the night cart at the Porta Capena, 11 May at 04:30, with the courier Festus
+ * talking first (docs/STORY.md). `?menu=1` runs the full flow (control preset, title, character
+ * creation, then the same opening); `?quick=1` is the agents' quick start at the Porta Capena
+ * (nobody talks first); `?at=<landmark>` spawns there. `?fight=nereus` (or `pullus`, `auctus`) skips the Ludus
  * questline up to that bout and starts it: the boss fight, one click away for testing.
  */
 export const PLAY_SPAWN = 'rostra';
@@ -73,13 +73,16 @@ export function romeParams(search: string): RomeParams {
   const fight = FIGHTS.indexOf((q.get('fight') ?? '').toLowerCase()) + 1 || null;
   const part = checkpoint(q.get('part'));
   const plain = !menu && q.get('quick') !== '1' && !q.get('at') && !fight && !part;
-  const at = q.get('at') || (part ? part.at : fight ? 'ludus-magnus' : null);
+  const story = plain && q.get('story') === '1';
+  // The plain link drops the player in the Forum at mid-morning, past the opening.
+  const forum = plain && !story;
+  const at = q.get('at') || (part ? part.at : fight ? 'ludus-magnus' : forum ? PLAY_SPAWN : null);
   const hour = q.get('hour');
   return {
     quick: q.get('quick') === '1' || plain || (!!at && !menu),
-    story: plain,
+    story,
     at,
-    hour: hour !== null && hour !== '' && Number.isFinite(Number(hour)) ? Number(hour) : part ? part.hour : fight ? PLAY_HOUR : null,
+    hour: hour !== null && hour !== '' && Number.isFinite(Number(hour)) ? Number(hour) : part ? part.hour : fight || forum ? PLAY_HOUR : null,
     fight,
     part: part?.id ?? null,
     extent: (q.get('extent') as RomeExtent) === 'city' ? 'city' : 'core',

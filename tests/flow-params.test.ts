@@ -3,10 +3,14 @@ import { PLAY_HOUR, PLAY_SPAWN, romeParams } from '../src/game/boot';
 import { CHECKPOINTS, checkpoint } from '../src/game/checkpoints';
 
 describe('romeParams (the boot options in the URL)', () => {
-  it('a plain link plays the story’s opening without menus: the cart at the Porta Capena before dawn', () => {
-    expect(romeParams('')).toMatchObject({ quick: true, story: true, at: null, hour: null });
-    expect(romeParams('?scene=rome')).toMatchObject({ quick: true, story: true, at: null, hour: null });
+  it('a plain link starts in the Forum at mid-morning, past the opening', () => {
+    expect(romeParams('')).toMatchObject({ quick: true, story: false, at: PLAY_SPAWN, hour: PLAY_HOUR });
+    expect(romeParams('?scene=rome')).toMatchObject({ quick: true, story: false, at: PLAY_SPAWN, hour: PLAY_HOUR });
     expect(romeParams('?at=rostra')).toMatchObject({ quick: true, story: false, at: PLAY_SPAWN });
+  });
+
+  it('story=1 plays the story’s opening without menus: the cart at the Porta Capena before dawn', () => {
+    expect(romeParams('?story=1')).toMatchObject({ quick: true, story: true, at: null, hour: null });
   });
 
   it('menu=1 runs the full flow; quick=1 is the Porta Capena quick start', () => {
@@ -25,7 +29,8 @@ describe('romeParams (the boot options in the URL)', () => {
   it('part=castor starts at that checkpoint of the opening, at its place and hour', () => {
     expect(romeParams('?part=castor')).toMatchObject({ quick: true, at: 'miliarium-aureum', hour: 8.5, part: 'castor' });
     expect(romeParams('?part=brawl&hour=20')).toMatchObject({ at: 'meta-sudans', hour: 20, part: 'brawl' });
-    expect(romeParams('?part=nowhere')).toMatchObject({ part: null, at: null, story: true });
+    expect(romeParams('?part=nowhere')).toMatchObject({ part: null, at: PLAY_SPAWN, story: false });
+    expect(romeParams('?part=nowhere&story=1')).toMatchObject({ part: null, at: null, story: true });
   });
 });
 

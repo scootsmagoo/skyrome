@@ -6,8 +6,8 @@
  *
  * Options:
  *   --scene <name>        scene to boot (?scene=); default: game default
- *   --query "<a=1&b=2>"   extra URL query (default: at=rostra&hour=10; `plain` = the plain link,
- *                         i.e. the story's opening at the Porta Capena)
+ *   --query "<a=1&b=2>"   extra URL query (default: at=rostra&hour=10; `plain` = the story's
+ *                         opening at the Porta Capena, i.e. ?story=1)
  *   --url <url>           use an already-running server instead of starting Vite
  *   --out <dir>           output dir for screenshots (default .shots)
  *   --name <file>         name of the final screenshot (default shot.png)
@@ -59,9 +59,9 @@ if (!baseUrl) {
 }
 
 // No boot option given: the Forum at mid-morning (what every shot has used). `--query plain` boots
-// the plain link instead: the story's opening at the Porta Capena (docs/STORY.md).
+// the story's opening at the Porta Capena instead (?story=1, docs/STORY.md).
 const plainLink = args.query === 'plain';
-const q = new URLSearchParams(plainLink ? '' : (args.query ?? ''));
+const q = new URLSearchParams(plainLink ? 'story=1' : (args.query ?? ''));
 if (args.scene) q.set('scene', args.scene);
 if (!plainLink && !['at', 'quick', 'menu', 'part', 'fight'].some((k) => q.has(k)) && (q.get('scene') ?? 'rome') === 'rome') {
   q.set('at', 'rostra');
