@@ -53,12 +53,11 @@ describe('player-facing names (no atlas notes)', () => {
     expect(displayLatin('Tabularium', 'Tabularium')).toBeUndefined();
   });
 
-  it('keeps descriptive glosses on the map but drops research notes', () => {
-    expect(mapName('Domus Augustana (private palace)')).toBe('Domus Augustana (private palace)');
+  it('the map uses the same names as the banner (one name pipeline)', () => {
     expect(mapName('The Subura (district anchor)')).toBe('The Subura');
     expect(mapName("Site of Domitian's Colossal Horse")).toBe("Site of Domitian's Colossal Horse");
     expect(mapName('Naumachia of Augustus (site)')).toBe('Naumachia of Augustus');
-    expect(mapName('Pantheon of Agrippa (burned; rebuilding begins)')).toBe('Pantheon of Agrippa');
+    expect(mapName).toBe(displayName);
   });
 
   it('no registered location shows a parenthesis, a slash or a note', () => {

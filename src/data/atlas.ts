@@ -161,7 +161,7 @@ export interface Landmark {
 
 export const HILLS: Hill[] = [
   {
-    id: 'capitolium', name: 'Capitoline Hill: Capitolium', latin: 'Capitolium (Mons Capitolinus)', kind: 'hill', confidence: 'medium',
+    id: 'capitolium', name: 'Capitoline Hill', latin: 'Capitolium', kind: 'hill', confidence: 'medium',
     summit: 46, plateau: 40, slope: 60,
     outline: [[-250, 120], [-240, 135], [-220, 140], [-180, 135], [-160, 125], [-125, 90], [-115, 50], [-120, 30], [-150, 20], [-175, -5], [-215, -12], [-245, 10], [-252, 45]],
     cliffs: [
@@ -172,7 +172,7 @@ export const HILLS: Hill[] = [
     notes: 'S summit with the Temple of Jupiter O.M. (Platner: whole hill ~460 x 180 m, NNE-SSW). Summit 46-47 m (B). N edge pushed ~20 m north of the research contour so the 53 x 62 m temple podium sits on the plateau.',
   },
   {
-    id: 'arx', name: 'Capitoline Hill: Arx', latin: 'Arx', kind: 'hill', confidence: 'medium',
+    id: 'arx', name: 'The Arx', latin: 'Arx', kind: 'hill', confidence: 'medium',
     summit: 48, plateau: 40, slope: 60,
     outline: [[-35, -180], [-60, -215], [-90, -220], [-120, -205], [-130, -195], [-140, -160], [-130, -140], [-90, -95], [-80, -90], [-60, -105], [-45, -120]],
     cliffs: [
@@ -182,7 +182,7 @@ export const HILLS: Hill[] = [
     notes: 'N summit, citadel with Juno Moneta and the Auguraculum. Summit 48-49 m (Platner ~49).',
   },
   {
-    id: 'capitoline-asylum', name: 'Capitoline Hill: Asylum saddle', latin: 'Asylum (inter duos lucos)', kind: 'hill', confidence: 'low',
+    id: 'capitoline-asylum', name: 'Saddle Between the Summits', latin: 'Inter Duos Lucos', kind: 'hill', confidence: 'low',
     summit: 38, plateau: 36, slope: 55,
     outline: [[-120, 30], [-150, 20], [-175, -5], [-215, -12], [-218, -40], [-200, -80], [-165, -120], [-130, -140], [-90, -95], [-80, -90], [-68, -60], [-85, -20], [-105, 12]],
     notes: 'ADDED (not in the research appendix): without it the max() hill blend sags the saddle between the two summits to ~15 m. Saddle ~37 m (C); the Tabularium closes its E side.',
@@ -215,7 +215,7 @@ export const HILLS: Hill[] = [
     notes: 'Summit 46-47 m near S. Alessio (B). NE slope to the Circus ~30 %. "Aventinus Maior / Minor" are modern labels: in 113 both summits are simply the Aventine.',
   },
   {
-    id: 'aventine-minor', name: 'Lesser Aventine', latin: 'Aventinus (modern term: Aventinus Minor)', kind: 'hill', confidence: 'low',
+    id: 'aventine-minor', name: 'Lesser Aventine', latin: 'Aventinus Minor', kind: 'hill', confidence: 'low',
     summit: 40, plateau: 33, slope: 100,
     outline: [[-90, 1570], [-70, 1645], [40, 1755], [475, 1900], [510, 1890], [605, 1660], [560, 1490], [485, 1380], [470, 1260], [380, 1175], [250, 1185], [145, 1250], [75, 1255], [-60, 1375], [-15, 1420]],
     notes: 'S. Saba and S. Balbina, 40-41 m (C). S edge is a study-area cut at z=1900.',
@@ -227,19 +227,19 @@ export const HILLS: Hill[] = [
     notes: 'Ridge ~2 km W-E, 45 m at the W end rising to 50-54 toward the Lateran. Temple of Claudius platform on the NW lobe. E end (x=2700) is a study-area cut.',
   },
   {
-    id: 'oppius', name: 'Esquiline: Oppian', latin: 'Oppius', kind: 'hill', confidence: 'low',
+    id: 'oppius', name: 'Oppian Hill', latin: 'Oppius', kind: 'hill', confidence: 'low',
     summit: 51, plateau: 45, slope: 130,
     outline: [[660, -120], [675, -20], [740, 35], [790, 30], [890, 70], [900, 25], [925, 15], [1000, 80], [1090, 80], [1085, 140], [1300, 245], [1300, -330], [1110, -290], [980, -180], [830, -150], [720, -155]],
     notes: 'Baths of Trajan platform over Nero\'s Domus Aurea; the Carinae on the W slope, the Fagutal at the W tip. E edge x=1300 abuts the Esquiline plateau.',
   },
   {
-    id: 'cispius', name: 'Esquiline: Cispian', latin: 'Cispius', kind: 'hill', confidence: 'low',
+    id: 'cispius', name: 'Cispian Hill', latin: 'Cispius', kind: 'hill', confidence: 'low',
     summit: 56, plateau: 48, slope: 120,
     outline: [[915, -350], [920, -340], [940, -330], [1120, -310], [1145, -300], [1300, -330], [1500, -330], [1500, -900], [1450, -900], [1150, -760], [1025, -720], [1045, -670], [1045, -640], [945, -440]],
     notes: 'S. Maria Maggiore 56-57 m. The Clivus Suburanus climbs the Oppius-Cispius saddle.',
   },
   {
-    id: 'esquiline-plateau', name: 'Esquiline plateau', latin: 'Esquiliae', kind: 'hill', confidence: 'low',
+    id: 'esquiline-plateau', name: 'Esquiline Hill', latin: 'Esquiliae', kind: 'hill', confidence: 'low',
     summit: 57, plateau: 50, slope: 200,
     outline: [[1300, -130], [1470, -155], [1530, 20], [1595, 70], [1995, 10], [2170, 250], [2515, 250], [2345, -285], [2400, -700], [2485, -950], [2395, -1085], [2375, -1200], [1450, -1200], [1500, -900], [1500, -330], [1300, -330]],
     notes: 'Nearly flat beyond the agger: Horti Maecenatis, Lamiani, Spes Vetus. Continues E to Porta Maggiore.',
@@ -261,7 +261,7 @@ export const HILLS: Hill[] = [
     notes: 'Alta Semita runs along the crest to the Porta Collina. SW tip cut back for Trajan\'s Forum and Markets.',
   },
   {
-    id: 'pincian', name: 'Pincian Hill', latin: 'Collis Hortulorum (later: Pincius)', kind: 'hill', confidence: 'low',
+    id: 'pincian', name: 'Hill of Gardens', latin: 'Collis Hortulorum', kind: 'hill', confidence: 'low',
     summit: 58, plateau: 45, slope: 170,
     outline: [[-650, -2700], [-630, -2420], [-320, -2300], [-465, -2110], [-460, -1950], [20, -1330], [325, -1380], [560, -1985], [790, -1925], [890, -1690], [1100, -1900], [1100, -2700], [180, -2700], [15, -2500]],
     cliffs: [
@@ -405,7 +405,7 @@ export const HILLS: Hill[] = [
     notes: 'Terrain helper: the 53 m contour of the section-4 DEM inside the Esquiline zone, so the max() hill blend reaches real plateau heights. Not a separate hill.',
   },
   {
-    id: 'castra-plateau', name: 'Castra Praetoria plateau', latin: 'Campus Viminalis (sub aggere)', kind: 'hill', confidence: 'low',
+    id: 'castra-plateau', name: 'Viminal Field', latin: 'Campus Viminalis', kind: 'hill', confidence: 'low',
     summit: 62, plateau: 45, slope: 150,
     outline: [[2520, -1200], [2445, -1760], [2445, -1790], [2450, -1820], [2555, -2180], [2570, -2210], [2600, -2235], [2740, -2300], [2790, -2330], [2800, -2345], [2800, -2400], [1100, -2400], [1100, -1900], [1350, -1700], [1200, -1350], [1450, -1200]],
     notes: 'ADDED from the section-4 DEM: the plateau NE of the agger around the Castra Praetoria (56-62 m) was not covered by the research outlines. Edge = DEM 45 m contour (C).',
@@ -441,7 +441,7 @@ export const HILLS: Hill[] = [
     notes: 'Terrain helper: the 78 m contour of the section-4 DEM inside the Janiculum zone, so the max() hill blend reaches real plateau heights. Not a separate hill.',
   },
   {
-    id: 'janiculum-north', name: 'Janiculum north spur', latin: 'Ianiculum (pars septentrionalis)', kind: 'hill', confidence: 'low',
+    id: 'janiculum-north', name: 'Northern Janiculum', latin: 'Ianiculum', kind: 'hill', confidence: 'low',
     summit: 53.2, plateau: 30, slope: 100,
     outline: [[-2300, -880], [-2180, -990], [-1960, -1000], [-1860, -960], [-1830, -850], [-1830, -420], [-1880, -350], [-2300, -350]],
     notes: 'ADDED from the DEM: the ridge continuing N from the Janiculum toward the Vatican above the Lungara road. Edge = DEM 30 m contour (C).',
@@ -453,7 +453,7 @@ export const HILLS: Hill[] = [
     notes: 'Terrain helper: the 40 m contour of the section-4 DEM inside the Janiculum N zone, so the max() hill blend reaches real plateau heights. Not a separate hill.',
   },
   {
-    id: 'monteverde', name: 'Monteverde plateau', latin: '(ager trans Tiberim)', kind: 'hill', confidence: 'low',
+    id: 'monteverde', name: 'Transtiberine Plateau', latin: '(ager trans Tiberim)', kind: 'hill', confidence: 'low',
     summit: 80.5, plateau: 55, slope: 150,
     outline: [[-3200, 960], [-3110, 995], [-3030, 975], [-2905, 1110], [-2690, 750], [-2740, 1060], [-2695, 1190], [-2690, 1410], [-2650, 1490], [-2650, -265], [-2710, -75], [-3125, -170], [-3175, -330], [-3155, -500], [-3200, -500]],
     notes: 'ADDED from the DEM: the plateau W of the Janiculum crest (the research outline stopped at x=-2700). Edge = DEM 55 m contour (C).',
@@ -525,7 +525,7 @@ export const HILLS: Hill[] = [
     notes: 'Terrain helper: the 45 m contour of the section-4 DEM inside the Latin plateau zone, so the max() hill blend reaches real plateau heights. Not a separate hill.',
   },
   {
-    id: 'spes-vetus-rise', name: 'Rise of Ad Spem Veterem', latin: 'Spes Vetus', kind: 'hill', confidence: 'low',
+    id: 'spes-vetus-rise', name: 'Rise of Spes Vetus', latin: 'Spes Vetus', kind: 'hill', confidence: 'low',
     summit: 52, plateau: 42, slope: 120,
     outline: [[1525, 150], [1515, 270], [1550, 275], [1590, 265], [1605, 270], [1615, 290], [1610, 360], [1570, 410], [1560, 440], [1540, 460], [1530, 490], [1535, 530], [1560, 580], [1560, 600], [2800, 600], [2800, 150]],
     notes: 'ADDED from the DEM: the high ground between the Esquiline plateau and the Caelian toward Porta Maggiore, 42-52 m. Edge = DEM 42 m contour (C).',
@@ -594,12 +594,12 @@ export const ROADS: Road[] = [
   { id: 'vicus-longus', name: 'Long Street', latin: 'Vicus Longus', kind: 'vicus', width: 5, paving: 'basalt', confidence: 'low', points: [[218, -452], [899, -1045], [1010, -1110]] },
   { id: 'vicus-patricius', name: 'Patrician Street', latin: 'Vicus Patricius', kind: 'vicus', width: 5.5, paving: 'basalt', confidence: 'medium', points: [[715, -266], [976, -671], [1100, -830], [1300, -930], [1440, -990]] },
   { id: 'alta-semita', name: 'High Path', latin: 'Alta Semita', kind: 'street', width: 6, paving: 'basalt', confidence: 'medium', points: [[199, -427], [180, -700], [340, -865], [800, -1300], [1066, -1536], [1188, -1632]] },
-  { id: 'clivus-argentarius', name: 'Bankers\' Rise', latin: 'Clivus Argentarius (medieval name)', kind: 'clivus', width: 4.5, paving: 'basalt', confidence: 'medium', points: [[15, -38], [3, -62], [-45, -110], [-60, -180], [-80, -250], [-110, -310]] },
+  { id: 'clivus-argentarius', name: 'Rise Beside the Forum of Caesar', kind: 'clivus', width: 4.5, paving: 'basalt', confidence: 'medium', points: [[15, -38], [3, -62], [-45, -110], [-60, -180], [-80, -250], [-110, -310]] },
   { id: 'via-lata-via-flaminia', name: 'Broad Way / Flaminian Way', latin: 'Via Lata / Via Flaminia', kind: 'via', width: 10, paving: 'basalt', confidence: 'high', points: [[-110, -310], [-189, -478], [-292, -829], [-385, -1104], [-859, -2639], [-962, -2946], [-1300, -4056], [-1327, -4148], [-1430, -4700]] },
   { id: 'via-recta', name: 'Straight Street', latin: 'Via Recta', kind: 'via', width: 6, paving: 'basalt', confidence: 'medium', points: [[-1620, -875], [-1500, -878], [-1386, -881], [-985, -869], [-788, -880], [-649, -875], [-380, -880], [-309, -880]] },
   { id: 'via-appia', name: 'Appian Way', latin: 'Via Appia', kind: 'via', width: 8, paving: 'basalt', confidence: 'high', points: [[507, 955], [620, 1110], [891, 1361], [990, 1455], [1246, 1729], [1354, 1913], [1421, 2111], [1463, 2263], [1467, 2510], [1548, 2834], [1742, 2982], [2302, 3640]] },
   { id: 'via-latina', name: 'Latin Way', latin: 'Via Latina', kind: 'via', width: 7, paving: 'basalt', confidence: 'high', points: [[990, 1455], [998, 1466], [1117, 1528], [1438, 1741], [1600, 1830], [2199, 2067]] },
-  { id: 'via-labicana-praenestina', name: 'Labican and Praenestine Way (inner)', latin: 'Via Labicana / Via Praenestina', kind: 'via', width: 6, paving: 'basalt', confidence: 'low', points: [[1407, -354], [1600, -280], [2086, -69], [2100, -63], [2107, -73], [2457, 78], [2552, 126]] },
+  { id: 'via-labicana-praenestina', name: 'Inner Labican and Praenestine Way', latin: 'Via Labicana / Via Praenestina', kind: 'via', width: 6, paving: 'basalt', confidence: 'low', points: [[1407, -354], [1600, -280], [2086, -69], [2100, -63], [2107, -73], [2457, 78], [2552, 126]] },
   { id: 'via-tiburtina', name: 'Tiburtine Way', latin: 'Via Tiburtina', kind: 'via', width: 6, paving: 'basalt', confidence: 'low', points: [[1407, -354], [1950, -520], [2146, -541], [2400, -600]] },
   { id: 'via-nomentana', name: 'Nomentan Way', latin: 'Via Nomentana', kind: 'via', width: 6, paving: 'basalt', confidence: 'high', points: [[1188, -1632], [1403, -1850], [1640, -2059], [1655, -2063], [2692, -3006], [2713, -3032], [2792, -3190], [2989, -3419], [3104, -3568]] },
   { id: 'via-salaria', name: 'Salt Way', latin: 'Via Salaria', kind: 'via', width: 6, paving: 'basalt', confidence: 'medium', points: [[1188, -1632], [1196, -1657], [1139, -2014], [1150, -2300]] },
@@ -607,18 +607,18 @@ export const ROADS: Road[] = [
   { id: 'clivus-publicius', name: 'Publician Rise', latin: 'Clivus Publicius', kind: 'clivus', width: 4, paving: 'basalt', confidence: 'medium', points: [[-177, 595], [-172, 632], [-117, 731], [-130, 772], [-163, 806], [-115, 947]] },
   { id: 'vicus-armilustri', name: 'Street of the Armilustrium', latin: 'Vicus Armilustri', kind: 'vicus', width: 4, paving: 'basalt', confidence: 'low', points: [[-340, 913], [-254, 827], [-163, 806], [-120, 950], [-46, 1129]] },
   { id: 'clivus-scauri', name: 'Rise of Scaurus', latin: 'Clivus Scauri', kind: 'clivus', width: 4, paving: 'basalt', confidence: 'high', points: [[446, 662], [521, 676], [593, 687], [664, 698], [771, 718], [831, 744], [895, 771]] },
-  { id: 'road-between-palatine-and-caelian', name: 'Triumphal road (Porta Capena to the Colosseum)', latin: '(via triumphalis)', kind: 'street', width: 8, paving: 'basalt', confidence: 'medium', points: [[414, 809], [490, 459], [501, 432], [512, 330], [522, 290]] },
-  { id: 'via-aurelia', name: 'Aurelian Way', latin: 'Via Aurelia (vetus)', kind: 'via', width: 6, paving: 'basalt', confidence: 'medium', points: [[-490, 370], [-702, 361], [-843, 344], [-1166, 333], [-1350, 420], [-1512, 545], [-1700, 520], [-1896, 457], [-2148, 555], [-2229, 578], [-2295, 555], [-2424, 446], [-2579, 399], [-2809, 412], [-3033, 392], [-3649, 369], [-3846, 342], [-4000, 290]] },
-  { id: 'via-portuensis', name: 'Portus Way', latin: 'Via Portuensis (+ Via Campana)', kind: 'via', width: 6, paving: 'basalt', confidence: 'low', points: [[-490, 370], [-640, 620], [-875, 978], [-1183, 1313], [-1298, 1520], [-1356, 1685]] },
-  { id: 'trastevere-vatican-riverside-road', name: 'Riverside road to the Vatican (later Via della Lungara)', kind: 'street', width: 5, paving: 'gravel', confidence: 'low', points: [[-1390, 37], [-1466, -126], [-1770, -604], [-1815, -820], [-1719, -972]] },
+  { id: 'road-between-palatine-and-caelian', name: 'Triumphal Road, Capena Gate to the Colosseum', latin: 'Via Triumphalis', kind: 'street', width: 8, paving: 'basalt', confidence: 'medium', points: [[414, 809], [490, 459], [501, 432], [512, 330], [522, 290]] },
+  { id: 'via-aurelia', name: 'Aurelian Way', latin: 'Via Aurelia Vetus', kind: 'via', width: 6, paving: 'basalt', confidence: 'medium', points: [[-490, 370], [-702, 361], [-843, 344], [-1166, 333], [-1350, 420], [-1512, 545], [-1700, 520], [-1896, 457], [-2148, 555], [-2229, 578], [-2295, 555], [-2424, 446], [-2579, 399], [-2809, 412], [-3033, 392], [-3649, 369], [-3846, 342], [-4000, 290]] },
+  { id: 'via-portuensis', name: 'Portus Way', latin: 'Via Portuensis', kind: 'via', width: 6, paving: 'basalt', confidence: 'low', points: [[-490, 370], [-640, 620], [-875, 978], [-1183, 1313], [-1298, 1520], [-1356, 1685]] },
+  { id: 'trastevere-vatican-riverside-road', name: 'Riverside road to the Vatican', kind: 'street', width: 5, paving: 'gravel', confidence: 'low', points: [[-1390, 37], [-1466, -126], [-1770, -604], [-1815, -820], [-1719, -972]] },
   { id: 'via-triumphalis', name: 'Triumphal Way', latin: 'Via Triumphalis', kind: 'via', width: 5, paving: 'basalt', confidence: 'low', points: [[-1719, -972], [-1900, -1150], [-2150, -1500], [-2500, -2200], [-2913, -2833]] },
   { id: 'via-cornelia', name: 'Cornelian Way', latin: 'Via Cornelia', kind: 'via', width: 5, paving: 'basalt', confidence: 'low', points: [[-1719, -972], [-2000, -1035], [-2200, -1062], [-2450, -1065], [-2750, -1075], [-3600, -1150]] },
   { id: 'via-caelimontana', name: 'Caelian Way', latin: 'Via Caelimontana', kind: 'via', width: 5, paving: 'basalt', confidence: 'medium', points: [[895, 771], [931, 803], [995, 804], [1040, 790], [1148, 742], [1237, 684], [1360, 631], [1484, 590], [1568, 587]] },
-  { id: 'via-labicana-urbana', name: 'Labican road through the valley', latin: '(Via Labicana, urban stretch)', kind: 'street', width: 6, paving: 'basalt', confidence: 'low', points: [[522, 290], [562, 248], [580, 190], [700, 166], [760, 200], [828, 224], [852, 223], [1161, 307], [1452, 375], [1507, 372], [1574, 348], [2000, 200], [2540, 120]] },
-  { id: 'street-north-of-circus', name: 'Street below the Palatine (N side of the Circus)', kind: 'street', width: 5, paving: 'basalt', confidence: 'low', points: [[-180, 398], [-96, 471], [156, 657], [406, 840]] },
-  { id: 'street-south-of-circus', name: 'Street below the Aventine (S side of the Circus)', kind: 'street', width: 5, paving: 'basalt', confidence: 'low', points: [[-150, 640], [-70, 703], [-1, 773], [119, 855], [239, 949], [330, 990]] },
+  { id: 'via-labicana-urbana', name: 'Labican road through the valley', latin: 'Via Labicana', kind: 'street', width: 6, paving: 'basalt', confidence: 'low', points: [[522, 290], [562, 248], [580, 190], [700, 166], [760, 200], [828, 224], [852, 223], [1161, 307], [1452, 375], [1507, 372], [1574, 348], [2000, 200], [2540, 120]] },
+  { id: 'street-north-of-circus', name: 'Street below the Palatine, north of the Circus', kind: 'street', width: 5, paving: 'basalt', confidence: 'low', points: [[-180, 398], [-96, 471], [156, 657], [406, 840]] },
+  { id: 'street-south-of-circus', name: 'Street below the Aventine, south of the Circus', kind: 'street', width: 5, paving: 'basalt', confidence: 'low', points: [[-150, 640], [-70, 703], [-1, 773], [119, 855], [239, 949], [330, 990]] },
   { id: 'vicus-portae-raudusculanae', name: 'Valley road to the Porta Raudusculana', kind: 'street', width: 5, paving: 'basalt', confidence: 'low', points: [[400, 905], [354, 932], [180, 1110], [-20, 1325]] },
-  { id: 'vicus-piscinae-publicae', name: 'Lesser Aventine street (Piscina Publica)', latin: 'Vicus Piscinae Publicae', kind: 'vicus', width: 4, paving: 'dirt', confidence: 'low', points: [[-20, 1325], [61, 1490], [34, 1557], [88, 1641]] },
+  { id: 'vicus-piscinae-publicae', name: 'Street of the Public Pool', latin: 'Vicus Piscinae Publicae', kind: 'vicus', width: 4, paving: 'dirt', confidence: 'low', points: [[-20, 1325], [61, 1490], [34, 1557], [88, 1641]] },
   { id: 'aventine-wall-street', name: 'Street along the Aventine wall', kind: 'street', width: 4, paving: 'dirt', confidence: 'low', points: [[-20, 1360], [-76, 1364], [-232, 1345], [-260, 1324], [-280, 1260], [-314, 1219], [-368, 1182], [-427, 1173]] },
   { id: 'clivus-rocca-savella', name: 'Path up the Aventine river cliff', kind: 'path', width: 3, paving: 'dirt', confidence: 'low', points: [[-321, 624], [-293, 672], [-333, 762], [-264, 836]] },
   { id: 'street-velabrum-pons-aemilius', name: 'Street from the Velabrum to the Pons Aemilius', kind: 'street', width: 5, paving: 'basalt', confidence: 'medium', points: [[-60, 380], [-150, 368], [-260, 362], [-340, 352]] },
@@ -626,9 +626,9 @@ export const ROADS: Road[] = [
   { id: 'street-pons-fabricius', name: 'Street from the Pons Fabricius to the Circus Flaminius', kind: 'street', width: 4, paving: 'basalt', confidence: 'low', points: [[-486, 141], [-505, 90], [-520, 30]] },
   { id: 'street-pons-agrippae', name: 'Street from the Pons Agrippae into the Campus', kind: 'street', width: 5, paving: 'basalt', confidence: 'low', points: [[-1203, -121], [-1095, -195], [-985, -228], [-890, -212], [-760, -218], [-650, -225], [-576, -252]] },
   { id: 'street-botteghe-oscure', name: 'Campus street south of the Porticus Minucia', kind: 'street', width: 5, paving: 'basalt', confidence: 'low', points: [[-576, -252], [-352, -263], [-250, -280]] },
-  { id: 'street-subura-serpenti', name: 'Subura cross street (later Via dei Serpenti)', kind: 'vicus', width: 4, paving: 'basalt', confidence: 'low', points: [[549, -168], [435, -569], [402, -609]] },
+  { id: 'street-subura-serpenti', name: 'Subura cross street', kind: 'vicus', width: 4, paving: 'basalt', confidence: 'low', points: [[549, -168], [435, -569], [402, -609]] },
   { id: 'vicus-cuprius', name: 'Cyprian Street', latin: 'Vicus Cuprius', kind: 'vicus', width: 4, paving: 'basalt', confidence: 'low', points: [[400, 60], [480, -10], [600, -90], [700, -150]] },
-  { id: 'via-biberatica', name: 'Via Biberatica (Markets of Trajan)', latin: '(Via Biberatica, medieval name)', kind: 'street', width: 4, paving: 'basalt', confidence: 'low', points: [[95, -365], [125, -375], [160, -368], [190, -345], [205, -315]] },
+  { id: 'via-biberatica', name: 'Street by the Market Halls', kind: 'street', width: 4, paving: 'basalt', confidence: 'low', points: [[95, -365], [125, -375], [160, -368], [190, -345], [205, -315]] },
   { id: 'clivus-salutis', name: 'Rise of Salus', latin: 'Clivus Salutis', kind: 'clivus', width: 4, paving: 'basalt', confidence: 'low', points: [[-60, -830], [10, -815], [70, -800]] },
   { id: 'via-salaria-vetus', name: 'Old Salt Way', latin: 'Via Salaria Vetus', kind: 'via', width: 5, paving: 'basalt', confidence: 'low', points: [[1188, -1632], [900, -1750], [600, -1850], [332, -1867], [200, -2100]] },
   { id: 'via-praenestina-outer', name: 'Praenestine Way', latin: 'Via Praenestina', kind: 'via', width: 6, paving: 'basalt', confidence: 'medium', points: [[2552, 126], [2774, 109], [3304, 158], [3494, 153]] },
@@ -637,7 +637,7 @@ export const ROADS: Road[] = [
   { id: 'scalae-caci', name: 'Stairs of Cacus', latin: 'Scalae Caci', kind: 'stairs', width: 3, paving: 'steps', confidence: 'medium', points: [[42, 372], [18, 405], [-8, 440]] },
   { id: 'centum-gradus', name: 'Hundred Steps', latin: 'Centum Gradus', kind: 'stairs', width: 3, paving: 'steps', confidence: 'low', points: [[-140, 140], [-155, 118], [-170, 95]] },
   { id: 'gradus-monetae', name: 'Steps of Moneta', latin: 'Gradus Monetae', kind: 'stairs', width: 3, paving: 'steps', confidence: 'low', points: [[2, -80], [-30, -110], [-65, -135]] },
-  { id: 'insula-tiberina-street', name: 'Island street (Pons Fabricius to Pons Cestius)', kind: 'street', width: 4, paving: 'basalt', confidence: 'medium', points: [[-533, 195], [-552, 214], [-572, 241]] },
+  { id: 'insula-tiberina-street', name: 'Island street from the Fabrician to the Cestian Bridge', kind: 'street', width: 4, paving: 'basalt', confidence: 'medium', points: [[-533, 195], [-552, 214], [-572, 241]] },
   { id: 'street-pons-agrippae-transtiberim', name: 'Street from the Pons Agrippae to the riverside road', kind: 'street', width: 5, paving: 'gravel', confidence: 'low', points: [[-1276, -56], [-1330, -10], [-1390, 37]] },
   { id: 'street-pons-sublicius', name: 'Street from the Pons Sublicius to the Via Portuensis', kind: 'street', width: 4, paving: 'gravel', confidence: 'low', points: [[-450, 568], [-571, 505]] },
 ];
@@ -673,8 +673,8 @@ export const GATES: Gate[] = [
   { id: 'porta-raudusculana', name: 'Bronze Gate', latin: 'Porta Raudusculana', at: [-20, 1345], rotation: 200, state: 'obsolete gate; wall remains nearby', confidence: 'low' },
   { id: 'porta-lavernalis', name: 'Gate of Laverna', latin: 'Porta Lavernalis', at: [-430, 1280], rotation: 220, state: 'obsolete gate (site C)', confidence: 'low' },
   { id: 'porta-trigemina', name: 'Triple Gate', latin: 'Porta Trigemina', at: [-355, 640], rotation: 210, state: 'standing obsolete gate between the Aventine and the river; Via Ostiensis starts here', landmarkId: 'porta-trigemina', confidence: 'low' },
-  { id: 'porta-mugonia', name: 'Mugonian Gate (Palatine)', latin: 'Porta Mugonia', at: [318, 248], rotation: 60, state: 'archaic gate of the Palatine settlement; a name and a spot, no structure', confidence: 'low' },
-  { id: 'porta-romanula', name: 'Romanula Gate (Palatine)', latin: 'Porta Romanula', at: [25, 238], rotation: 300, state: 'archaic gate of the Palatine settlement at the foot of the Clivus Victoriae; no structure', confidence: 'low' },
+  { id: 'porta-mugonia', name: 'Mugonian Gate', latin: 'Porta Mugonia', at: [318, 248], rotation: 60, state: 'archaic gate of the Palatine settlement; a name and a spot, no structure', confidence: 'low' },
+  { id: 'porta-romanula', name: 'Romanula Gate', latin: 'Porta Romanula', at: [25, 238], rotation: 300, state: 'archaic gate of the Palatine settlement at the foot of the Clivus Victoriae; no structure', confidence: 'low' },
 ];
 
 export const AQUEDUCTS: Aqueduct[] = [
@@ -754,7 +754,7 @@ export const AQUEDUCTS: Aqueduct[] = [
 
 export const BRIDGES: Bridge[] = [
   { id: 'pons-mulvius', name: 'Mulvian Bridge', latin: 'Pons Mulvius', a: [-1415, -4667], b: [-1469, -4827], width: 8.75, arches: 6, length: 136, material: 'tufa and travertine', built: '109 BC (M. Aemilius Scaurus); earlier timber bridge', confidence: 'high', notes: 'Via Flaminia crossing ~4.7 km N of the Forum; 4 central spans ~18.5 m. Towers are later.' },
-  { id: 'pons-neronianus', name: 'Bridge of Nero', latin: 'Pons Neronianus (Triumphalis)', a: [-1620, -875], b: [-1719, -972], width: 8, arches: 5, length: 138, material: 'stone', built: 'Caligula or Nero (1st c. AD)', confidence: 'medium', notes: '4 piers (remains at ~(-1659,-912)); leads to the Vatican gardens. Ends set on the atlas banks (the Campus stretch of the river polygon is widened 10 m), hence 138 m. Upkeep in 113 uncertain.' },
+  { id: 'pons-neronianus', name: 'Bridge of Nero', latin: 'Pons Neronianus', a: [-1620, -875], b: [-1719, -972], width: 8, arches: 5, length: 138, material: 'stone', built: 'Caligula or Nero (1st c. AD)', confidence: 'medium', notes: '4 piers (remains at ~(-1659,-912)); leads to the Vatican gardens. Ends set on the atlas banks (the Campus stretch of the river polygon is widened 10 m), hence 138 m. Upkeep in 113 uncertain.' },
   { id: 'pons-agrippae', name: 'Bridge of Agrippa', latin: 'Pons Agrippae', a: [-1203, -121], b: [-1276, -56], width: 8, arches: 5, length: 100, material: 'stone (tufa, travertine)', built: 'Agrippa (late 1st c. BC), at the latest Claudius', confidence: 'low', notes: '4 piers found in 1887, ~160 m upstream of Ponte Sisto. NOT the Pons Aurelius (Severan).' },
   { id: 'pons-fabricius', name: 'Fabrician Bridge', latin: 'Pons Fabricius', a: [-486, 141], b: [-533, 195], width: 5.5, arches: 2, length: 62, material: 'tufa and peperino core, travertine arch rings, brick facing', built: '62 BC (L. Fabricius, curator viarum)', confidence: 'high', notes: 'Still standing: two 24.5 m arches with a flood opening through the central pier; inscription repeated on the parapets. b sits on the (8 m inset) island outline, where the island street starts.' },
   { id: 'pons-cestius', name: 'Cestian Bridge', latin: 'Pons Cestius', a: [-572, 241], b: [-597, 318], width: 8.2, arches: 3, length: 48, material: 'tufa and peperino, travertine facing', built: 'c. 62-27 BC (prob. L. Cestius, c. 46 BC)', confidence: 'high', notes: 'Central arch 23.65 m with small flanking arches. Island to Transtiberim.' },
@@ -871,7 +871,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'FLAG: the surviving brick drum is usually dated Severan. A 113 precursor or a mundus marker is plausible but not proven. Model it as a low round drum with marble veneer. It is a good hook for ambiguous \'ghost\' content.',
   },
   {
-    id: 'rostra', name: 'Rostra (Speakers\' Platform)', latin: 'Rostra Augusti', category: 'monument',
+    id: 'rostra', name: 'Rostra', latin: 'Rostra Augusti', category: 'monument',
     center: [22, -3], rotation: 116, footprint: { kind: 'rect', w: 24, d: 12 }, height: 4, baseElevation: 13,
     region: 'regio-viii', status113: 'complete', priority: 1, confidence: 'high',
     dates: '44-42 BC Caesar; Augustan rebuild',
@@ -879,7 +879,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'The front faces ESE down the Forum. Tufa core with marble revetment, a row of bronze ship rams (rostra) and a marble balustrade, crowded with honorific statues. The Columna Rostrata of Duilius (260 BC) stands nearby. Reach the top by stairs at the back (W). Height is the platform; honorific statues on top reach ~8 m.',
   },
   {
-    id: 'comitium-lapis-niger', name: 'Comitium and the Black Stone', latin: 'Comitium / Lapis Niger', category: 'shrine',
+    id: 'comitium-lapis-niger', name: 'Comitium and the Black Stone', latin: 'Comitium et Niger Lapis', category: 'shrine',
     center: [52, -18], rotation: 116, footprint: { kind: 'rect', w: 6, d: 5 }, height: 1, baseElevation: 12.8,
     region: 'regio-viii', status113: 'complete', statusNote: 'complete (paved over)', priority: 1, confidence: 'high',
     dates: 'archaic; black marble paving Sullan/Augustan',
@@ -919,7 +919,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Corinthian hexastyle prostyle (columns ~15 m). Space was so tight that the stair runs up between the columns. Frieze shows bucrania and priestly implements.',
   },
   {
-    id: 'temple-concord', name: 'Temple of Concord', latin: 'Aedes Concordiae (Augustae)', category: 'temple',
+    id: 'temple-concord', name: 'Temple of Concord', latin: 'Aedes Concordiae', category: 'temple',
     center: [-16, -42], rotation: 122, footprint: { kind: 'rect', w: 45, d: 40 }, height: 24, baseElevation: 13.5,
     region: 'regio-viii', status113: 'complete', priority: 1, confidence: 'high',
     dates: '121 BC (Opimius); rebuilt by Tiberius, dedicated AD 10',
@@ -927,7 +927,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'The cella is wider than it is deep (transverse), with the hexastyle pronaos projecting from the long front toward the Forum. Rich Corinthian marble with a threshold of polychrome marble. Transverse cella ~45 wide x 24 deep plus a ~34 x 14 hexastyle pronaos projecting from the middle of the long front; footprint is the overall envelope.',
   },
   {
-    id: 'tabularium', name: 'Tabularium (Record Office)', latin: 'Tabularium', category: 'other',
+    id: 'tabularium', name: 'Tabularium', latin: 'Tabularium', category: 'other',
     center: [-70, -40], rotation: 120, footprint: { kind: 'rect', w: 72, d: 40 }, height: 26, baseElevation: 14,
     region: 'regio-viii', status113: 'complete', siting: 'slope', priority: 1, confidence: 'high',
     dates: '78 BC (Q. Lutatius Catulus)',
@@ -959,7 +959,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'The long marble-stepped front faces NNE onto the Forum. Two-storey arcades of piers with Tuscan/Doric half-columns, five aisles, a central hall 82 x 18 m and a clerestory roof. Gaming grids are carved into the steps. The Lacus Servilius fountain (Agrippa\'s hydra; Sulla\'s display of proscribed heads) sits at its W corner (~-15,60), conf C.',
   },
   {
-    id: 'basilica-aemilia', name: 'Basilica Aemilia (Basilica Paulli)', latin: 'Basilica Aemilia', category: 'basilica',
+    id: 'basilica-aemilia', name: 'Basilica Aemilia', latin: 'Basilica Aemilia', category: 'basilica',
+    codexNote: 'Also called the Basilica Paulli after its rebuilder.',
     center: [145, -6], rotation: 213, footprint: { kind: 'rect', w: 100, d: 36 }, height: 24, baseElevation: 13,
     region: 'regio-viii', status113: 'complete', priority: 1, confidence: 'high',
     dates: '179 BC; rebuilt 14 BC and AD 22',
@@ -975,7 +976,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Faces WNW straight down the Forum toward the Capitol. Ionic (or Corinthian, FLAG) hexastyle on a high podium. A semicircular niche in the front platform holds the altar on the cremation spot.',
   },
   {
-    id: 'arch-augustus', name: 'Arch of Augustus (Parthian Arch)', latin: 'Arcus Augusti', category: 'arch',
+    id: 'arch-augustus', name: 'Arch of Augustus at the Forum', latin: 'Arcus Augusti', category: 'arch',
+    codexNote: 'Modern scholars call it the Parthian Arch, after the standards returned by Parthia in 20 BC.',
     center: [135, 83], rotation: 301, footprint: { kind: 'rect', w: 17, d: 5 }, height: 15, baseElevation: 13,
     region: 'regio-viii', status113: 'complete', priority: 1, confidence: 'medium',
     dates: '19 BC',
@@ -999,7 +1001,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'A trapezoidal paved area with a low parapet, an altar and a relief of Curtius on horseback. Add three planted trees and a bronze satyr (Marsyas) on a base in the open square.',
   },
   {
-    id: 'equus-domitiani-site', name: 'Site of Domitian\'s Colossal Horse', latin: 'Equus Domitiani (removed)', category: 'monument',
+    id: 'equus-domitiani-site', name: 'Site of Domitian\'s Colossal Horse', latin: 'Equus Domitiani', category: 'monument',
     center: [75, 30], rotation: 116, footprint: { kind: 'rect', w: 12, d: 6 }, height: 0.3, baseElevation: 13,
     region: 'regio-viii', status113: 'ruin', statusNote: 'removed (damnatio memoriae, AD 96)', priority: 1, confidence: 'medium',
     dates: 'set up AD 91',
@@ -1047,7 +1049,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Long axis WNW-ESE, entered from the W end beside the Temple of Vesta. Two-storey brick house with a colonnaded central court, three rectangular pools, a tablinum and dining and service wings. The rows of statues of Chief Vestals are mostly 3rd c. AD, so use few or none. Its W entrance end abuts the Temple of Vesta.',
   },
   {
-    id: 'domitianic-vestibule', name: 'Domitian\'s Palace Vestibule and Ramp', latin: 'Aula / Rampa Domitianea', category: 'palace',
+    id: 'domitianic-vestibule', name: 'Domitian\'s Palace Vestibule and Ramp', latin: 'Vestibulum Palatii', category: 'palace',
+    codexNote: 'Modern archaeologists call it the Aula and Rampa Domitianea; no ancient name for it is known.',
     center: [95, 165], rotation: 24, footprint: { kind: 'rect', w: 32, d: 25 }, height: 30, baseElevation: 13.5,
     region: 'regio-viii', status113: 'complete', priority: 1, confidence: 'high',
     dates: 'c. AD 90 (Domitian)',
@@ -1055,7 +1058,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Huge brick-faced concrete hall (once thought to be the Temple of Augustus) with a ramp of about 7 switchback flights climbing to the Domus Tiberiana level. A good controlled \'gate\' between the Forum and the Palatine zones. Footprint is the hall; the switchback ramp (~70 m) climbs S behind it to the Domus Tiberiana level (~45 m).',
   },
   {
-    id: 'porticus-margaritaria', name: 'Pearl-Sellers\' Arcade', latin: 'Porticus Margaritaria (? = \'Horrea Vespasiani\')', category: 'market',
+    id: 'porticus-margaritaria', name: 'Pearl-Sellers\' Arcade', latin: 'Porticus Margaritaria', category: 'market',
+    codexNote: 'Some scholars have equated it with the Horrea Vespasiani.',
     center: [285, 180], rotation: 24, footprint: { kind: 'rect', w: 66, d: 50 }, height: 12, baseElevation: 19,
     region: 'regio-viii', status113: 'complete', siting: 'slope', priority: 1, confidence: 'low',
     dates: 'Flavian',
@@ -1087,7 +1091,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Faces SSE (FLAG ±15) over the Area Capitolina toward its gate. Corinthian hexastyle of Pentelic marble on a huge podium, gilded roof tiles and doors, and a quadriga/biga group on the pediment. The precinct also holds the temples of Fides and Ops, Jupiter Feretrius (Romulus\' spolia opima) and Augustus\' marble temple of Jupiter Tonans (22 BC, near the gate, ~(-150,55), conf C), plus trophies and statues.',
   },
   {
-    id: 'asylum', name: 'The Asylum (saddle between the summits)', latin: 'Asylum / Inter duos lucos', category: 'shrine',
+    id: 'asylum', name: 'The Asylum', latin: 'Asylum', category: 'shrine',
     center: [-125, -60], rotation: 120, footprint: { kind: 'rect', w: 70, d: 60 }, height: 0, baseElevation: 37,
     region: 'regio-viii', status113: 'complete', siting: 'open', priority: 1, confidence: 'medium',
     dates: 'legendary (Romulus)',
@@ -1120,7 +1124,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'The S/SE cliff face of the Capitolium above the Vicus Iugarius and Forum Holitorium side. FLAG: exactly which stretch of cliff is debated. A strong vertical set-piece. Terrain feature: the cliff itself is HILLS[capitolium].cliffs[0]. This entry marks the execution ledge / viewpoint at the cliff top.',
   },
   {
-    id: 'carcer-tullianum', name: 'Prison and Tullianum', latin: 'Carcer Tullianum', category: 'prison',
+    id: 'carcer-tullianum', name: 'Prison and Tullianum', latin: 'Carcer et Tullianum', category: 'prison',
     center: [12, -70], rotation: 140, footprint: { kind: 'rect', w: 12, d: 11 }, height: 8, baseElevation: 14,
     region: 'regio-viii', status113: 'complete', priority: 1, confidence: 'high',
     dates: 'archaic; travertine facade 1st c. AD (FLAG: c. AD 21-40)',
@@ -1128,7 +1132,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'A trapezoidal upper chamber with a travertine facade on the Clivus Argentarius naming the consuls C. Vibius Rufinus and M. Cocceius Nerva (probably the emperor Nerva\'s grandfather). The lower Tullianum is a round, corbelled chamber reached only through a floor hole. NOTE: Christian \'Mamertine\' legends are later.',
   },
   {
-    id: 'insula-aracoeli', name: 'Insula of the Ara Coeli', latin: '(insula)', category: 'house',
+    id: 'insula-aracoeli', name: 'Tenement on the Capitoline Slope', latin: 'Insula ad Capitolium', category: 'house',
+    codexNote: 'The tenement is known as the Insula of the Ara Coeli, after the medieval church built over it. It has no recorded ancient name.',
     center: [-178, -171], rotation: 270, footprint: { kind: 'rect', w: 39, d: 32 }, height: 20, baseElevation: 18,
     region: 'regio-viii', status113: 'new', statusNote: 'new or not yet built (FLAG)', siting: 'slope', priority: 2, confidence: 'high',
     dates: '2nd c. AD',
@@ -1184,7 +1189,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Faces SW down the square. Corinthian octastyle peripteros sine postico in Luna marble (columns 17.7 m), an apse in the cella for Mars, Venus and Divus Julius, and a pediment with Mars at the centre. Its back is against the firewall.',
   },
   {
-    id: 'forum-nerva', name: 'Forum of Nerva (Passageway Forum)', latin: 'Forum Transitorium / Forum Nervae', category: 'forum',
+    id: 'forum-nerva', name: 'Forum of Nerva', latin: 'Forum Transitorium', category: 'forum',
+    codexNote: 'Called the Passageway Forum (Transitorium) because it lay on the thoroughfare from the Subura to the Forum.',
     center: [182, -83], rotation: 230, footprint: { kind: 'rect', w: 45, d: 170 }, height: 15, baseElevation: 15,
     region: 'regio-viii', status113: 'complete', priority: 1, confidence: 'high',
     dates: 'begun Domitian; dedicated AD 97 by Nerva',
@@ -1192,7 +1198,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'The axis runs NE-SW. Peperino walls with marble veneer and a \'colonnacce\' of columns set only 1.75 m from the wall, with a projecting entablature and figured frieze. The Cloaca runs beneath. Domitian\'s four-faced Janus probably stood here (FLAG). Centre and length from the OSM polygon (172 x 45 m, axis 50/230), which runs from behind the Basilica Aemilia to the back wall of the Temple of Minerva.',
   },
   {
-    id: 'temple-minerva-nerva', name: 'Temple of Minerva (Forum of Nerva)', latin: 'Aedes Minervae', category: 'temple',
+    id: 'temple-minerva-nerva', name: 'Temple of Minerva', latin: 'Aedes Minervae', category: 'temple',
     center: [232, -122], rotation: 230, footprint: { kind: 'rect', w: 22, d: 32 }, height: 25, baseElevation: 15,
     region: 'regio-iv', status113: 'complete', within: 'forum-nerva', priority: 1, confidence: 'high',
     dates: 'AD 97',
@@ -1209,7 +1215,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'A square garden court with water channels and rose beds in rows, porticoes of red granite columns, and the aedes (an apsed hall) in the middle of one side, flanked by library halls. FLAG on facing: assumed SE side facing NW (322). The Severan marble plan of Rome is NOT up yet (203-211); a Flavian predecessor map is possible. Its NW wall is shared with the SE flank of the Forum of Nerva.',
   },
   {
-    id: 'forum-trajan', name: 'Forum of Trajan', latin: 'Forum Traiani (Area Fori)', category: 'forum',
+    id: 'forum-trajan', name: 'Forum of Trajan', latin: 'Forum Traiani', category: 'forum',
     center: [78, -256], rotation: 140, footprint: { kind: 'rect', w: 120, d: 125 }, height: 15, baseElevation: 17.5,
     region: 'regio-viii', status113: 'new', statusNote: 'new (dedicated 1 Jan 112)', priority: 1, confidence: 'high',
     dates: 'AD 106-112 (Apollodorus of Damascus)',
@@ -1217,7 +1223,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Long axis 143/323: the entrance (SE) is next to the Forum of Augustus and the Basilica Ulpia closes the NW side. Porticoes of pavonazzetto columns with attics of standing Dacian captives, and big hemicycles on the NE and SW sides. The NE hemicycle backs onto the Markets. Axis 140/320 through the Column and the Equus base (OSM). Footprint: the court with its side porticoes, 120 m across between the portico back walls (OSM: the NE wall is 60 m from the axis; Platner: court 116 m wide), from the SE gateway wall to the Basilica Ulpia front (125 m). The two hemicycle exedrae project OUTSIDE the rect (~25 m per OSM, "45 m deep" per Platner): build them as extra semicircles on the NE and SW sides; the NE one nests inside the Great Hemicycle of the Markets across a street. Basilica, libraries, Column and Markets are separate landmarks.',
   },
   {
-    id: 'forum-trajan-gateway', name: 'Gateway of Trajan\'s Forum', latin: '(Arcus Traiani?)', category: 'arch',
+    id: 'forum-trajan-gateway', name: 'Gateway of Trajan\'s Forum', latin: 'Arcus Traiani', category: 'arch',
+    codexNote: 'A triumphal arch at the entrance is hypothesised from coins; no source describes it.',
     center: [116, -207], rotation: 140, footprint: { kind: 'rect', w: 30, d: 6 }, height: 18, baseElevation: 17.5,
     region: 'regio-viii', status113: 'new', within: 'forum-trajan', priority: 1, confidence: 'medium',
     dates: '112',
@@ -1250,7 +1257,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: '20 Carrara drums with a Tuscan capital. The door is in the pedestal (faces SE), and the pedestal is carved with heaps of Dacian arms. The top statue is Trajan in gilded bronze; FLAG: coins suggest an eagle was planned. It stands in a small court between the two libraries and is a perfect climbable set-piece. Height = pedestal 5.3 + column 29.8 (100 Roman feet) + gilded statue ~4 m. Door in the pedestal faces SE.',
   },
   {
-    id: 'bibliotheca-ulpia-east', name: 'Ulpian Library (NE)', latin: 'Bibliotheca Ulpia', category: 'library',
+    id: 'bibliotheca-ulpia-east', name: 'Ulpian Greek Library', latin: 'Bibliotheca Ulpia Graeca', category: 'library',
+    codexNote: 'Which of the two libraries held the Greek books and which the Latin is not recorded; this assignment is a convention.',
     center: [10, -371], rotation: 230, footprint: { kind: 'rect', w: 27, d: 20 }, height: 20, baseElevation: 17.5,
     region: 'regio-viii', status113: 'new', priority: 1, confidence: 'medium',
     dates: '112',
@@ -1258,7 +1266,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Rectangular hall with niches for book cupboards on two levels and a statue niche in the end wall, fronted by a columnar porch onto the court.',
   },
   {
-    id: 'bibliotheca-ulpia-west', name: 'Ulpian Library (SW)', latin: 'Bibliotheca Ulpia', category: 'library',
+    id: 'bibliotheca-ulpia-west', name: 'Ulpian Latin Library', latin: 'Bibliotheca Ulpia Latina', category: 'library',
     center: [-28, -343], rotation: 50, footprint: { kind: 'rect', w: 27, d: 20 }, height: 20, baseElevation: 17.5,
     region: 'regio-viii', status113: 'new', priority: 1, confidence: 'medium',
     dates: '112',
@@ -1266,13 +1274,13 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Mirror of bibliotheca-ulpia-east. NOTE: the Temple of Divus Traianus does NOT exist in 113 (Hadrianic). What lay NW of the column is debated, so leave an open colonnaded court.',
   },
   {
-    id: 'markets-trajan', name: 'Markets of Trajan', latin: '(Mercatus Traiani, modern name)', category: 'market',
+    id: 'markets-trajan', name: 'Market Halls of Trajan', latin: 'Tabernae Fori Traiani', category: 'market',
     center: [158, -330], rotation: 240, footprint: { kind: 'rect', w: 137, d: 60 }, height: 35, baseElevation: 17.5,
     region: 'regio-viii', status113: 'new', statusNote: 'new (c. 100-112)', siting: 'slope', priority: 1, confidence: 'high',
     dates: 'c. 100-112 (Apollodorus)',
     description: 'Multi-level brick complex climbing the cut face of the Quirinal: tiers of shops, halls and offices along stepped streets, with a great hemicycle facing Trajan\'s Forum.',
     builderNotes: 'The Great Hemicycle faces SW toward the forum\'s NE exedra, with 3 tiers of shops behind a brick facade with pilasters and pediments. The Great Hall upstairs has groin vaults. A great vertical, explorable stack. FLAG: function (shops or administration) is debated. rect = the block behind the Great Hemicycle, 137 x 60 m (the OSM complex is 137 x 78 m, long axis 156/336); the Hemicycle front and the forum\'s NE exedra that it wraps sit in the ~18 m strip between this rect and the forum rect, so build them there. Base is the forum-street level; the stack climbs the cut Quirinal face to ~45 m. Never flatten the terrain here.',
-    codexNote: 'Often called the world\'s first shopping mall, though whether it held shops or offices is debated. Its street\'s name, Via Biberatica, is medieval.',
+    codexNote: 'Often called the world\'s first shopping mall, though whether it held shops or offices is debated. Its street\'s name, Via Biberatica, is medieval. Today called the Markets of Trajan (Mercati di Traiano); the ancient name and purpose are unknown.',
   },
   {
     id: 'domus-tiberiana', name: 'Domus Tiberiana', latin: 'Domus Tiberiana', category: 'palace',
@@ -1283,7 +1291,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Arcaded substructures on the Clivus Victoriae face the Forum. Above is a large peristyle with a pool (9 x 26) in a court. Nero\'s cryptoporticus runs SE from about (232,283), stucco-vaulted with light slits, and makes a natural dungeon or secret passage. Footprint fitted to the OSM polygon (rel 1860920, a ~107 x 145-210 m parallelogram with long sides at 38-40 deg): 110 m across x 140 m along the 40 deg axis; the Clivus Victoriae runs below its N corner and NE side. Platform at ~46 m; its N and NW faces are arcaded substructure walls 20-30 m high dropping to the Clivus Victoriae (~20 m).',
   },
   {
-    id: 'domus-flavia', name: 'Flavian Palace (state wing)', latin: 'Domus Flavia', category: 'palace',
+    id: 'domus-flavia', name: 'Imperial Palace, State Halls', latin: 'Aula Regia', category: 'palace',
+    codexNote: 'Called the Domus Flavia by modern archaeologists; the name is a nineteenth-century label.',
     center: [185, 418], rotation: 42, footprint: { kind: 'rect', w: 100, d: 152 }, height: 33, baseElevation: 48,
     region: 'regio-x', status113: 'complete', priority: 1, confidence: 'high',
     dates: 'dedicated AD 92 (architect Rabirius)',
@@ -1291,7 +1300,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Front (NNE) faces the Area Palatina. Aula Regia (30.6 m span, timber-trussed coffered ceiling, colossal basalt statues in niches) flanked by the Basilica and Lararium. Central peristyle with an octagonal fountain-maze. Large triclinium (Cenatio Iovis) with oval nymphaea on each side.',
   },
   {
-    id: 'domus-augustana', name: 'Domus Augustana (private palace)', latin: 'Domus Augustana', category: 'palace',
+    id: 'domus-augustana', name: 'Domus Augustana', latin: 'Domus Augustana', category: 'palace',
     center: [226, 502], rotation: 222, footprint: { kind: 'rect', w: 72, d: 200 }, height: 40, baseElevation: 46,
     region: 'regio-x', status113: 'complete', siting: 'slope', priority: 1, confidence: 'high',
     dates: 'AD 92; ornamental Circus facade possibly Trajanic',
@@ -1299,7 +1308,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Upper peristyle (with a temple on an island in a pool) and lower peristyle 10 m down, its pool shaped in peltae. Two-storey rooms around it and a great concave exedra facade toward the Circus (faces SSW). Upper peristyle at ~46 m, lower peristyle ~10 m lower; the concave exedra facade drops ~35-40 m to the Circus valley. Height is measured from the Circus side. Width trimmed to 72 m to clear the Domus Flavia and the Palatine stadium.',
   },
   {
-    id: 'palatine-stadium', name: 'Palatine Stadium (Garden Hippodrome)', latin: 'Hippodromus Palatii', category: 'stadium',
+    id: 'palatine-stadium', name: 'Palace Hippodrome', latin: 'Hippodromus Palatii', category: 'stadium',
     center: [263, 560], rotation: 42, footprint: { kind: 'rect', w: 50, d: 160 }, height: 13, baseElevation: 36,
     region: 'regio-x', status113: 'complete', siting: 'slope', priority: 1, confidence: 'high',
     dates: 'Domitian',
@@ -1340,7 +1349,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Atrium and tablinum with three painted rooms; lead pipes are stamped IVLIA AVG. Long axis NW-SE (OSM rel 1860919: 40 x 23 m at 132 deg), entered from the NW.',
   },
   {
-    id: 'temple-magna-mater', name: 'Temple of the Great Mother (Cybele)', latin: 'Aedes Matris Magnae', category: 'temple',
+    id: 'temple-magna-mater', name: 'Temple of the Great Mother', latin: 'Aedes Matris Magnae', category: 'temple',
     center: [50, 341], rotation: 203, footprint: { kind: 'rect', w: 17, d: 33 }, height: 20, baseElevation: 43,
     region: 'regio-x', status113: 'complete', priority: 1, confidence: 'high',
     dates: '191 BC; rebuilt AD 3 (Augustus)',
@@ -1364,7 +1373,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Cave mouth at the SW foot of the Palatine near the later S. Anastasia, with an Augustan aedicula front and a bronze she-wolf group. LOCATION FLAG: the 2007 \'Lupercal\' under the House of Augustus is rejected by most scholars.',
   },
   {
-    id: 'adonaea', name: 'Gardens of Adonis', latin: 'Adonaea (?)', category: 'garden',
+    id: 'adonaea', name: 'Gardens of Adonis', latin: 'Adonaea', category: 'garden',
     center: [370, 355], rotation: 40, footprint: { kind: 'rect', w: 150, d: 110 }, height: 0, baseElevation: 46,
     region: 'regio-x', status113: 'complete', siting: 'open', priority: 2, confidence: 'low',
     dates: 'Domitianic (FLAG)',
@@ -1381,7 +1390,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Recently identified by excavation near the Meta Sudans: a sacred precinct with rooms. The rebuild date is uncertain.',
   },
   {
-    id: 'temple-jupiter-stator', name: 'Temple of Jupiter the Stayer', latin: 'Aedes Iovis Statoris (in Palatio)', category: 'temple',
+    id: 'temple-jupiter-stator', name: 'Temple of Jupiter the Stayer', latin: 'Aedes Iovis Statoris', category: 'temple',
     center: [320, 232], rotation: 300, footprint: { kind: 'rect', w: 20, d: 30 }, height: 15, baseElevation: 30,
     region: 'regio-x', status113: 'complete', siting: 'slope', priority: 2, confidence: 'low',
     dates: '294 BC',
@@ -1405,7 +1414,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'FLAG: what stood here in 113 is uncertain. Assume Neronian triple porticoes around a court, partly converted, with the Colossus inside. The Temple of Venus and Roma (121-135+) does NOT exist yet.',
   },
   {
-    id: 'colossus-sol', name: 'Colossus of Sol (formerly Nero)', latin: 'Colossus Solis / Neronis', category: 'monument',
+    id: 'colossus-sol', name: 'Colossus of Sol', latin: 'Colossus Solis', category: 'monument',
+    codexNote: 'Originally the colossus of Nero; Vespasian re-dedicated it to Sol. Hadrian moved it in 128.',
     center: [415, 175], rotation: 290, footprint: { kind: 'rect', w: 15, d: 15 }, height: 37, baseElevation: 29,
     region: 'regio-iv', status113: 'complete', within: 'velia-vestibule', priority: 1, confidence: 'low',
     dates: 'Nero (Zenodorus); rededicated to Sol by Vespasian',
@@ -1421,7 +1431,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Brick-and-concrete cone faced with marble, with niches and water flowing from the top into a round basin. It is a crossroads landmark for the Colosseum plaza.',
   },
   {
-    id: 'colosseum', name: 'Flavian Amphitheatre (Colosseum)', latin: 'Amphitheatrum Flavium', category: 'amphitheatre',
+    id: 'colosseum', name: 'Flavian Amphitheatre', latin: 'Amphitheatrum Flavium', category: 'amphitheatre',
+    codexNote: 'The name Colosseum comes from the colossus beside it and is medieval.',
     center: [660, 256], rotation: 19, footprint: { kind: 'ellipse', rx: 94, rz: 78 }, height: 48.5, baseElevation: 19.5,
     region: 'regio-iii', status113: 'complete', priority: 1, confidence: 'high',
     dates: 'begun c. 70-72; inaugurated AD 80; finished by Domitian',
@@ -1445,7 +1456,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'LOCATION FLAG: the Regionary catalogues put it in Regio III with the Ludus Magnus, while some modern sources say \'Caelian slopes\'. Unlocated: placed E of the Ludus Magnus and S of the Via Labicana, clear of the Baths of Trajan.',
   },
   {
-    id: 'ludus-matutinus', name: 'Morning School (beast fighters)', latin: 'Ludus Matutinus', category: 'camp',
+    id: 'ludus-matutinus', name: 'Morning School', latin: 'Ludus Matutinus', category: 'camp',
     center: [850, 395], rotation: 0, footprint: { kind: 'rect', w: 80, d: 60 }, height: 10, baseElevation: 24,
     region: 'regio-ii', status113: 'complete', priority: 2, confidence: 'low',
     dates: 'Domitian',
@@ -1461,7 +1472,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'LOCATION FLAG: Regio III, E of the Ludus Magnus. The Summum Choragium (stage-machinery store) was nearby too.',
   },
   {
-    id: 'moneta', name: 'Imperial Mint', latin: 'Moneta (Caesaris)', category: 'other',
+    id: 'moneta', name: 'Imperial Mint', latin: 'Moneta Caesaris', category: 'other',
     center: [1100, 345], rotation: 0, footprint: { kind: 'rect', w: 60, d: 40 }, height: 10, baseElevation: 26,
     region: 'regio-iii', status113: 'complete', priority: 2, confidence: 'low',
     dates: 'moved here by Domitian',
@@ -1485,7 +1496,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Axis NE-SW at 32 deg (the SW peribolos wall remains run at 121-123 deg, OSM; Platner says 30, it.wiki 36). Main entrance on the NE side (facade bearing 32), with the central block set against the NE wall; the caldarium projects SW toward the garden for afternoon sun. The enclosure is porticoed on 3 sides. rect = the PERIBOLOS, ~310 x 220 m (Platner: 280 x 210 excluding the exedral projections, 340 x 330 overall). Its SW side (the Sovrintendenza\'s "lato sud") has a library exedra at each end, the SW one (best preserved, Ø ~30, two tiers of book niches) at ~(795,5) and the SE one at ~(1050,158), and between them the great theatre-like hemicycle, which PROJECTS ~80 m outward (Platner) from the wall midpoint ~(912,100) to an apex ~(869,168) over the buried Domus Aurea pavilion; its lower level shows at today\'s Domus Aurea entrance. Build the hemicycle as an extra semicircular terrace outside the rect. The NE exedra remains lie on the N edge of the Colle Oppio park; an E-palaestra exedra survives at ~(1125,-23). Corners: N ~(897,-168), E ~(1160,-4), S ~(1043,182), W ~(780,18). The Porticus Liviae lies between the NE wall and the Clivus Suburanus; the Baths of Titus lie just W of the W corner; the Sette Sale cistern stands outside to the E. Sequence: natatio, frigidarium, tepidarium, caldarium, with symmetrical courts and palaestrae. Pad at ~48 m; the Domus Aurea wing lies under the SW wall and the hemicycle.',
   },
   {
-    id: 'domus-aurea-buried', name: 'Buried Golden House (Oppian wing)', latin: 'Domus Aurea', category: 'palace',
+    id: 'domus-aurea-buried', name: 'Buried Golden House', latin: 'Domus Aurea', category: 'palace',
     center: [880, 140], rotation: 180, footprint: { kind: 'rect', w: 250, d: 100 }, height: 11, baseElevation: 30,
     region: 'regio-iii', status113: 'ruin', statusNote: 'ruin (filled in as substructure, 104-109)', siting: 'underground', priority: 1, confidence: 'high',
     dates: 'Nero AD 64-68; burned 104',
@@ -1493,7 +1504,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Faces S (the lake valley). Octagonal domed room, long cryptoporticus (130 m) and the Volta Dorata. Fill reaches the vaults. A perfect underground dungeon. Add the Laocoon group as a mystery artifact (Pliny saw it \'in the house of Titus\').',
   },
   {
-    id: 'sette-sale', name: 'Seven Halls Cistern', latin: '(Sette Sale)', category: 'other',
+    id: 'sette-sale', name: 'Cistern of the Baths of Trajan', latin: 'Cisterna Thermarum Traiani', category: 'other',
+    codexNote: 'Known today as the Sette Sale (Seven Halls); the name is Italian and the cistern has no recorded ancient name.',
     center: [1247, -10], rotation: 0, footprint: { kind: 'rect', w: 40, d: 60 }, height: 10, baseElevation: 45,
     region: 'regio-iii', status113: 'new', statusNote: 'new (c. 104-109)', siting: 'slope', priority: 2, confidence: 'high',
     dates: 'Trajanic',
@@ -1509,7 +1521,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'A double colonnade around a garden with fountains, as shown on the Marble Plan. Platner: on the N slope of the Oppius, on the S side of the Clivus Suburanus between the street and the Baths of Trajan; entrance on the N, where a flight of steps 20 m wide leads down to the clivus. LOCATION FLAG: exact spot and facing approximate.',
   },
   {
-    id: 'temple-divus-claudius', name: 'Temple of Divus Claudius', latin: 'Templum Divi Claudii (Claudianum)', category: 'temple',
+    id: 'temple-divus-claudius', name: 'Temple of Divus Claudius', latin: 'Templum Divi Claudii', category: 'temple',
     center: [725, 537], rotation: 250, footprint: { kind: 'rect', w: 200, d: 180 }, height: 30, baseElevation: 45,
     region: 'regio-ii', status113: 'complete', statusNote: 'complete (completed by Vespasian)', priority: 2, confidence: 'medium',
     dates: 'begun AD 54 by Agrippina; Nero\'s nymphaeum; finished by Vespasian',
@@ -1517,7 +1529,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Hexastyle prostyle porch on the W side, facing WSW toward the Palatine (the W facing is from the Marble Plan). The platform is turned ~20 deg to follow the Via Claudia (OSM, 159-160 deg) along its E side: corners NW ~(606,474), NE ~(775,412), SE ~(843,600), SW ~(674,662); the SS. Giovanni e Paolo campanile stands on the SW substructures. The terrace is a garden of parallel shrub rows inside porticoes. The E face, along the Via Claudia, is a tiered nymphaeum wall fed by the Arcus Neroniani. The W retaining wall is travertine arcades. Visible from the Colosseum, so render it as a backdrop in P1. Footprint is the whole terrace platform (retaining walls 15+ m on the W and N); the temple (~40 x 60) stands in its middle facing W. Height = temple top above the platform.',
   },
   {
-    id: 'subura', name: 'The Subura (district anchor)', latin: 'Subura', category: 'other',
+    id: 'subura', name: 'The Subura', latin: 'Subura', category: 'other',
     center: [450, -300], rotation: 0, footprint: { kind: 'poly', points: [[200, -200], [330, -130], [520, -200], [700, -260], [760, -380], [900, -620], [820, -660], [640, -450], [520, -560], [380, -480], [250, -360]] }, height: 18, baseElevation: 22,
     region: 'regio-iv', status113: 'complete', siting: 'open', priority: 1, confidence: 'low',
     dates: '—',
@@ -1533,7 +1545,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Long axis 126/306; rot 306 = the carceres front faces WNW. 12 starting gates in a curved line at the WNW end and a semicircular E end with the Arch of Titus. The spina (euripus channel) carries metae, the 7 bronze eggs, Agrippa\'s 7 dolphin lap-counters and shrines. Three tiers of seats in marble and stone (the upper ones possibly timber), with a shopping arcade along the outside (fire risk). A small Temple of Sol is built into the Aventine-side stands near the finish line (~(15,755), conf C). rect: 621 m along the axis (127/307, fitted to the OSM park outline), 140 m wide. rotation 307 = the carceres front faces WNW; the curved end (with the Arch of Titus) is at the ESE back end. Arena slopes 11 (W) to 13.5 m (E).',
   },
   {
-    id: 'obelisk-circus-maximus', name: 'Obelisk of Ramesses II (Circus)', latin: 'Obeliscus Augusti in Circo', category: 'monument',
+    id: 'obelisk-circus-maximus', name: 'Obelisk of Augustus in the Circus Maximus', latin: 'Obeliscus Augusti in Circo', category: 'monument',
+    codexNote: 'Carved for Ramesses II, brought from Heliopolis by Augustus in 10 BC; Romans knew it as the obelisk of Augustus (Pliny, Natural History 36.71).',
     center: [60, 695], rotation: 307, footprint: { kind: 'rect', w: 4, d: 4 }, height: 28, baseElevation: 12,
     region: 'regio-xi', status113: 'complete', within: 'circus-maximus', priority: 1, confidence: 'medium',
     dates: 'erected 10 BC by Augustus',
@@ -1549,7 +1562,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'A temple-front box projecting from the N stands, opposite the finish line. LOCATION FLAG (assumed ~70 m WNW of centre, on the Palatine side).',
   },
   {
-    id: 'arch-titus-circus', name: 'Arch of Titus at the Circus Maximus', latin: 'Arcus Titi (in Circo Maximo)', category: 'arch',
+    id: 'arch-titus-circus', name: 'Arch of Titus at the Circus Maximus', latin: 'Arcus Titi in Circo Maximo', category: 'arch',
     center: [328, 900], rotation: 127, footprint: { kind: 'rect', w: 17, d: 15 }, height: 20, baseElevation: 13.5,
     region: 'regio-xi', status113: 'complete', within: 'circus-maximus', priority: 1, confidence: 'high',
     dates: 'AD 81',
@@ -1637,7 +1650,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Ionic tetrastyle pseudoperipteral: a free-standing porch 4 x 2 deep and engaged half-columns around the cella. Tufa and travertine, stuccoed white. It faces NORTH toward the Aemilian bridge approach and the port.',
   },
   {
-    id: 'temple-hercules-victor', name: 'Temple of Hercules Victor', latin: 'Aedes Herculis Victoris (Olivarii)', category: 'temple',
+    id: 'temple-hercules-victor', name: 'Temple of Hercules Victor', latin: 'Aedes Herculis Victoris', category: 'temple',
     center: [-299, 424], rotation: 90, footprint: { kind: 'circle', r: 7.4 }, height: 16, baseElevation: 9.5,
     region: 'regio-xi', status113: 'complete', priority: 1, confidence: 'high',
     dates: 'late 2nd c. BC; restored by Tiberius',
@@ -1654,7 +1667,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'A massive tufa platform-altar near the carceres, under the later S. Maria in Cosmedin. LOCATION conf B/C.',
   },
   {
-    id: 'cloaca-maxima-outlet', name: 'Outfall of the Great Drain', latin: 'Cloaca Maxima (ostium)', category: 'other',
+    id: 'cloaca-maxima-outlet', name: 'Outfall of the Great Drain', latin: 'Cloaca Maxima', category: 'other',
     center: [-343, 414], rotation: 250, footprint: { kind: 'rect', w: 6, d: 4 }, height: 4, baseElevation: 5,
     region: 'regio-xi', status113: 'complete', siting: 'slope', priority: 1, confidence: 'high',
     dates: 'archaic channel; vault 2nd/1st c. BC',
@@ -1686,7 +1699,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'An open market square with stalls. The Columna Lactaria is a single column near the temples, a poignant quest POI. Region IX (Platner: "in the ninth region of Augustus"), like its three temples and the Columna Lactaria.',
   },
   {
-    id: 'temple-janus-holitorium', name: 'Temple of Janus (Forum Holitorium)', latin: 'Aedes Iani (ad Theatrum Marcelli)', category: 'temple',
+    id: 'temple-janus-holitorium', name: 'Temple of Janus at the Vegetable Market', latin: 'Aedes Iani', category: 'temple',
     center: [-360, 135], rotation: 73, footprint: { kind: 'rect', w: 15, d: 26 }, height: 14, baseElevation: 11,
     region: 'regio-ix', status113: 'complete', statusNote: 'complete (restored AD 17)', priority: 1, confidence: 'medium',
     dates: '260 BC (Duilius); restored by Tiberius',
@@ -1718,7 +1731,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'rot 45 = curved cavea facade faces NE; the stage is on the SW side toward the river. Travertine facade of 2 arcaded orders (Doric, Ionic) plus a Corinthian attic, 41 bays. Scaenae frons with columns, and a velarium. rect = cavea (outer radius ~58 m) plus stage block; orchestra centre at (-425, 92). rotation 45 = the curved arcaded facade faces NE; the stage is the SW (back) side toward the river and the island.',
   },
   {
-    id: 'temple-apollo-sosianus', name: 'Temple of Apollo Sosianus', latin: 'Aedes Apollinis in Circo (Medici)', category: 'temple',
+    id: 'temple-apollo-sosianus', name: 'Temple of Apollo Sosianus', latin: 'Aedes Apollinis in Circo', category: 'temple',
+    codexNote: 'The name Apollo Sosianus is modern shorthand for the temple as rebuilt by Gaius Sosius; Livy (40.51.6) calls the earlier temple Apollo Medicus.',
     center: [-401, 18], rotation: 180, footprint: { kind: 'rect', w: 21, d: 36 }, height: 25, baseElevation: 12,
     region: 'regio-ix', status113: 'complete', priority: 1, confidence: 'high',
     dates: '431 BC; rebuilt from 34 BC by C. Sosius',
@@ -1726,7 +1740,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'It faces almost due SOUTH (Wikipedia). Corinthian hexastyle in Carrara marble with distinctive alternating narrow and wide flutes. It sits beside the N edge of the Theatre of Marcellus.',
   },
   {
-    id: 'temple-bellona', name: 'Temple of Bellona and the War Column', latin: 'Aedes Bellonae / Columna Bellica', category: 'temple',
+    id: 'temple-bellona', name: 'Temple of Bellona', latin: 'Aedes Bellonae', category: 'temple',
     center: [-370, 22], rotation: 185, footprint: { kind: 'rect', w: 18, d: 34 }, height: 20, baseElevation: 12,
     region: 'regio-ix', status113: 'complete', priority: 1, confidence: 'high',
     dates: '296 BC (Ap. Claudius Caecus)',
@@ -1782,7 +1796,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Covered portico (crypta) with an exedra and latrine. It lies E of the theatre on the Via delle Botteghe Oscure line.',
   },
   {
-    id: 'porticus-minucia-frumentaria', name: 'Minucian Portico (Grain Dole Hall)', latin: 'Porticus Minucia Frumentaria', category: 'portico',
+    id: 'porticus-minucia-frumentaria', name: 'Minucian Portico', latin: 'Porticus Minucia Frumentaria', category: 'portico',
     center: [-480, -318], rotation: 270, footprint: { kind: 'rect', w: 112, d: 80 }, height: 12, baseElevation: 13,
     region: 'regio-ix', status113: 'complete', priority: 2, confidence: 'low',
     dates: 'Claudian (?) building; older name',
@@ -1790,7 +1804,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'LOCATION FLAG (Coarelli): large porticus E of Largo Argentina around the Temple of the Nymphs (~(-466,-280)). The \'Porticus Minucia Vetus\' encloses the Largo Argentina temples. Big crowd-sim quest hub. rect kept clear of the Crypta Balbi, the Diribitorium and the street along its S side.',
   },
   {
-    id: 'largo-argentina-temples', name: 'Sacred Area (Temples A-D)', latin: 'Area Sacra (Porticus Minucia Vetus)', category: 'temple',
+    id: 'largo-argentina-temples', name: 'Four Temples of the Old Minucian Portico', latin: 'Porticus Minucia Vetus', category: 'temple',
+    codexNote: 'Modern visitors know it as the Area Sacra of Largo Argentina; the four temples (A to D) are identified only in part, with B as the Fortuna Huiusce Diei of Catulus.',
     center: [-620, -301], rotation: 90, footprint: { kind: 'rect', w: 100, d: 48 }, height: 15, baseElevation: 13,
     region: 'regio-ix', status113: 'complete', statusNote: 'complete (Domitianic paving after 80)', priority: 2, confidence: 'high',
     dates: '4th-1st c. BC',
@@ -1806,7 +1821,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'At the E end of the Porticus Pompeiana, just W behind Temple B. Pompey\'s statue was moved to a marble arch by the theatre. FLAG: later sources say it became a latrine. Ambiguous-ghost quest.',
   },
   {
-    id: 'porticus-pompeiana', name: 'Portico of Pompey (gardens)', latin: 'Porticus Pompeiana', category: 'garden',
+    id: 'porticus-pompeiana', name: 'Portico of Pompey', latin: 'Porticus Pompeiana', category: 'garden',
     center: [-748, -302], rotation: 90, footprint: { kind: 'rect', w: 135, d: 165 }, height: 12, baseElevation: 12.5,
     region: 'regio-ix', status113: 'complete', priority: 2, confidence: 'medium',
     dates: '55 BC',
@@ -1846,7 +1861,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Big central rotunda (Ø 25; the \'Arco della Ciambella\' remains at ~(-612,-481)) with halls and gardens. FLAG: the overall layout and centre are uncertain (±50 m). Supplied by the Aqua Virgo. The surviving rotunda wall (Arco della Ciambella) is at (-612,-481), in the E half of the footprint.',
   },
   {
-    id: 'pantheon', name: 'Pantheon of Agrippa (burned; rebuilding begins)', latin: 'Pantheum', category: 'temple',
+    id: 'pantheon', name: 'Pantheon of Agrippa', latin: 'Pantheum', category: 'temple',
     center: [-626, -669], rotation: 356, footprint: { kind: 'rect', w: 58, d: 84 }, height: 25, baseElevation: 12,
     region: 'regio-ix', status113: 'damaged', statusNote: 'damaged (lightning fire 110); reconstruction imminent (FLAG: start c. 114)', priority: 2, confidence: 'high',
     dates: '27-25 BC (Agrippa); restored by Domitian; burned 110; rebuilt c. 114-125',
@@ -1878,7 +1893,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'LOCATION FLAG: S of the Saepta. Render it as a huge roofless hall. Depth trimmed so it fits between the Saepta and the Porticus Minucia.',
   },
   {
-    id: 'iseum-campense', name: 'Sanctuary of Isis and Serapis', latin: 'Iseum et Serapeum Campense', category: 'temple',
+    id: 'iseum-campense', name: 'Isis Sanctuary of the Campus Martius', latin: 'Iseum Campense', category: 'temple',
     center: [-430, -600], rotation: 0, footprint: { kind: 'rect', w: 70, d: 220 }, height: 15, baseElevation: 12,
     region: 'regio-ix', status113: 'complete', statusNote: 'complete (rebuilt by Domitian after 80)', priority: 2, confidence: 'medium',
     dates: '43 BC/Caligula; Domitianic rebuild',
@@ -1919,7 +1934,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'ORIGINAL SITE on the W side of the Via Flaminia (under Palazzo Fiano), NOT the modern museum. The main stair entrance faces W. Painted reliefs (FLAG: paint colours conjectural).',
   },
   {
-    id: 'horologium-augusti', name: 'Sundial of Augustus', latin: 'Horologium (Solarium) Augusti', category: 'monument',
+    id: 'horologium-augusti', name: 'Sundial of Augustus', latin: 'Horologium Augusti', category: 'monument',
     center: [-525, -1125], rotation: 180, footprint: { kind: 'rect', w: 4, d: 4 }, height: 30, baseElevation: 11,
     region: 'regio-ix', status113: 'complete', statusNote: 'complete (meridian re-laid, FLAG)', priority: 2, confidence: 'medium',
     dates: '10 BC',
@@ -1951,7 +1966,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Aqueduct arch dressed as a triumphal arch, with the channel on top. LOCATION conf B/C.',
   },
   {
-    id: 'porticus-vipsania', name: 'Portico of Vipsania (Agrippa\'s World Map)', latin: 'Porticus Vipsania', category: 'portico',
+    id: 'porticus-vipsania', name: 'Portico of Vipsania', latin: 'Porticus Vipsania', category: 'portico',
     center: [-180, -720], rotation: 255, footprint: { kind: 'rect', w: 100, d: 60 }, height: 10, baseElevation: 14,
     region: 'regio-vii', status113: 'complete', priority: 2, confidence: 'low',
     dates: 'finished 7 BC',
@@ -1959,7 +1974,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'LOCATION FLAG. Show the map as a giant wall painting. A good navigation and lore device.',
   },
   {
-    id: 'temple-diana-aventine', name: 'Temple of Diana (Aventine)', latin: 'Aedes Dianae (Cornificiana)', category: 'temple',
+    id: 'temple-diana-aventine', name: 'Temple of Diana on the Aventine', latin: 'Aedes Dianae', category: 'temple',
     center: [-155, 1080], rotation: 315, footprint: { kind: 'rect', w: 35, d: 60 }, height: 22, baseElevation: 44,
     region: 'regio-xiii', status113: 'complete', priority: 2, confidence: 'low',
     dates: 'trad. Servius Tullius; rebuilt 36 BC (L. Cornificius)',
@@ -1967,7 +1982,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Octastyle dipteral per the Marble Plan (FLAG). A wall fragment survives near Via del Tempio di Diana. Facing unknown. The Temple of Minerva on the Aventine (guild of scribes and actors since Livius Andronicus) is unlocated somewhere nearby (conf C).',
   },
   {
-    id: 'temple-juno-regina-aventine', name: 'Temple of Juno Regina', latin: 'Aedes Iunonis Reginae (in Aventino)', category: 'temple',
+    id: 'temple-juno-regina-aventine', name: 'Temple of Juno Regina on the Aventine', latin: 'Aedes Iunonis Reginae', category: 'temple',
     center: [-370, 880], rotation: 45, footprint: { kind: 'rect', w: 20, d: 30 }, height: 16, baseElevation: 43,
     region: 'regio-xiii', status113: 'complete', priority: 3, confidence: 'low',
     dates: '392 BC (Camillus)',
@@ -1991,7 +2006,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'LOCATION and size FLAG. Small modern baths.',
   },
   {
-    id: 'emporium', name: 'Emporium (River Docks)', latin: 'Emporium', category: 'harbor',
+    id: 'emporium', name: 'Emporium', latin: 'Emporium', category: 'harbor',
     center: [-792, 1140], rotation: 317, footprint: { kind: 'rect', w: 500, d: 50 }, height: 4, baseElevation: 10,
     region: 'regio-xiii', status113: 'complete', siting: 'slope', priority: 2, confidence: 'medium',
     dates: '193 BC; imperial (incl. Trajanic) rebuilds',
@@ -2007,7 +2022,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Opus incertum; 50 aisles, each 8.3 m wide, in 4 stepped rows (294 pillars). Long side parallel to the Tiber, set back ~90 m from the quay. FLAG: some (Tucci) identify it as the Navalia (ship sheds).',
   },
   {
-    id: 'horrea-galbana', name: 'Warehouses of Galba', latin: 'Horrea Galbana (Sulpicia)', category: 'warehouse',
+    id: 'horrea-galbana', name: 'Warehouses of Galba', latin: 'Horrea Galbae', category: 'warehouse',
     center: [-740, 1460], rotation: 316, footprint: { kind: 'rect', w: 165, d: 145 }, height: 12, baseElevation: 10,
     region: 'regio-xiii', status113: 'complete', priority: 2, confidence: 'medium',
     dates: 'c. 108 BC; imperial since AD 68',
@@ -2015,7 +2030,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Long ranges of tabernae around courtyards. The tomb of Ser. Sulpicius Galba (cos. 108 BC) is in front. Horrea Lolliana ~(-830,1270), conf C.',
   },
   {
-    id: 'monte-testaccio', name: 'Mound of Potsherds', latin: '(Mons Testaceus, medieval name)', category: 'other',
+    id: 'monte-testaccio', name: 'Potsherd Heap of the Emporium', latin: 'Cumulus Testarum', category: 'other',
+    codexNote: 'Today called Monte Testaccio (medieval Mons Testaceus); the Romans left no name for the mound of broken oil amphorae.',
     center: [-735, 1820], rotation: 0, footprint: { kind: 'ellipse', rx: 70, rz: 45 }, height: 8, baseElevation: 9.5,
     region: 'regio-xiii', status113: 'under-construction', statusNote: 'under construction (active dump)', siting: 'open', priority: 3, confidence: 'low',
     dates: 'dumping from 1st c. AD (FLAG); bulk 140-250',
@@ -2047,7 +2063,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Terraced gardens with pavilions and the Turris Maecenatiana (FLAG location). Boundaries approximate. Gardens straddle the old agger; the Auditorium of Maecenas (1405,-158) is the fixed point. Boundaries approximate.',
   },
   {
-    id: 'auditorium-maecenas', name: 'Auditorium of Maecenas', latin: '(Auditorium Maecenatis)', category: 'other',
+    id: 'auditorium-maecenas', name: 'Garden Hall of Maecenas', latin: 'Cenatio Maecenatiana', category: 'other',
+    codexNote: 'Known today as the Auditorium of Maecenas; its ancient name and use (nymphaeum or banquet hall) are not recorded.',
     center: [1405, -158], rotation: 304, footprint: { kind: 'rect', w: 10.6, d: 30 }, height: 10, baseElevation: 52,
     region: 'regio-v', status113: 'complete', siting: 'slope', priority: 2, confidence: 'high',
     dates: 'late 1st c. BC',
@@ -2095,7 +2112,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Tufa gate in the agger; Servian wall remains are near the later Termini station.',
   },
   {
-    id: 'porta-collina', name: 'Colline Gate (and the Field of Wickedness)', latin: 'Porta Collina / Campus Sceleratus', category: 'gate',
+    id: 'porta-collina', name: 'Colline Gate', latin: 'Porta Collina', category: 'gate',
     center: [1188, -1632], rotation: 40, footprint: { kind: 'rect', w: 10, d: 8 }, height: 9, baseElevation: 59,
     region: 'regio-vi', status113: 'complete', statusNote: 'complete (obsolete Servian)', priority: 3, confidence: 'medium',
     dates: 'Servian',
@@ -2143,7 +2160,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Valley gardens with a domed pavilion (remains at ~(1037,-1714)), nymphaea and porticoes. NOTE: the \'Sallustian obelisk\' is probably later (FLAG). The Horti Luculliani (Pincian terraces, where Messalina was killed in 48) are at ~(-40,-1560), conf C.',
   },
   {
-    id: 'naumachia-augusti', name: 'Naumachia of Augustus (site)', latin: 'Naumachia Augusti', category: 'other',
+    id: 'naumachia-augusti', name: 'Naumachia of Augustus', latin: 'Naumachia Augusti', category: 'other',
     center: [-1120, 720], rotation: 0, footprint: { kind: 'rect', w: 536, d: 357 }, height: 0, baseElevation: 12,
     region: 'regio-xiv', status113: 'ruin', statusNote: 'ruin? (possibly filled with rubble after 80; FLAG)', siting: 'open', priority: 3, confidence: 'low',
     dates: '2 BC',
@@ -2159,7 +2176,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Riverside park along the Via Portuensis with the temple of Fors Fortuna at the 1st milestone (C).',
   },
   {
-    id: 'jewish-transtiberim', name: 'Jewish Quarter of Trastevere', latin: '(Transtiberim)', category: 'other',
+    id: 'jewish-transtiberim', name: 'Jewish Quarter Across the Tiber', latin: 'Trans Tiberim', category: 'other',
+    codexNote: 'The district is now called Trastevere (Italian for Trans Tiberim).',
     center: [-900, 500], rotation: 0, footprint: { kind: 'rect', w: 400, d: 300 }, height: 15, baseElevation: 12,
     region: 'regio-xiv', status113: 'complete', siting: 'open', priority: 3, confidence: 'low',
     dates: 'since 1st c. BC',
@@ -2167,7 +2185,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'DISTRICT ANCHOR (Philo, Legatio 155). Synagogue as a house-type building. Approximate.',
   },
   {
-    id: 'aqua-traiana-terminus', name: 'Aqua Traiana Terminal and Janiculum Mills', latin: 'Aqua Traiana (castellum)', category: 'aqueduct',
+    id: 'aqua-traiana-terminus', name: 'Aqua Traiana Terminal and Janiculum Mills', latin: 'Aqua Traiana', category: 'aqueduct',
     center: [-1690, 430], rotation: 90, footprint: { kind: 'rect', w: 20, d: 15 }, height: 10, baseElevation: 70,
     region: 'regio-xiv', status113: 'new', statusNote: 'new (dedicated 109)', priority: 3, confidence: 'low',
     dates: 'AD 109',
@@ -2191,7 +2209,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Original spot S of the later basilica (moved 1586). NOTE: the medieval legend that the ball holds Caesar\'s ashes is anachronistic.',
   },
   {
-    id: 'vatican-necropolis', name: 'Tombs of the Via Cornelia (Vatican)', latin: '(Vatican necropolis)', category: 'tomb',
+    id: 'vatican-necropolis', name: 'Tombs of the Via Cornelia', latin: 'Sepulcra Viae Corneliae', category: 'tomb',
+    codexNote: 'Known today as the Vatican necropolis.',
     center: [-2545, -1100], rotation: 180, footprint: { kind: 'rect', w: 400, d: 70 }, height: 5, baseElevation: 24,
     region: 'regio-xiv', status113: 'complete', statusNote: 'complete (early phase)', siting: 'open', priority: 3, confidence: 'medium',
     dates: '1st-4th c.',
@@ -2199,7 +2218,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'In 113 mostly simple graves and early tombs; the big brick mausolea are 2nd-3rd c. The \'Tropaion\' shrine is c. 160 and NOT yet built.',
   },
   {
-    id: 'meta-romuli', name: 'Vatican Pyramid', latin: 'Meta Romuli (medieval name)', category: 'tomb',
+    id: 'meta-romuli', name: 'Pyramid Tomb of the Vatican Fields', latin: 'Pyramis Vaticana', category: 'tomb',
+    codexNote: 'The Vatican Pyramid was called the Meta Romuli or Tomb of Romulus in the Middle Ages; it was demolished in 1499.',
     center: [-1722, -1115], rotation: 0, footprint: { kind: 'rect', w: 28, d: 28 }, height: 30, baseElevation: 14,
     region: 'regio-xiv', status113: 'complete', priority: 3, confidence: 'medium',
     dates: '1st c. BC/AD (FLAG)',
@@ -2223,7 +2243,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Riverside porticoes and terraces. The Pons Neronianus leads here.',
   },
   {
-    id: 'porta-maggiore', name: 'Claudian Aqueduct Arches (later Porta Maggiore)', latin: 'Arcus Claudii (Praenestina/Labicana)', category: 'aqueduct',
+    id: 'porta-maggiore', name: 'Claudian Aqueduct Arches', latin: 'Arcus Aquae Claudiae', category: 'aqueduct',
+    codexNote: 'The arches were later built into the Aurelian Wall as the Porta Maggiore.',
     center: [2540, 110], rotation: 120, footprint: { kind: 'rect', w: 32, d: 6 }, height: 24, baseElevation: 47,
     region: 'regio-v', status113: 'complete', statusNote: 'complete (restored 71 and 81)', priority: 3, confidence: 'high',
     dates: 'AD 52 (Claudius)',
@@ -2263,7 +2284,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Rectangular basin with a bronze many-headed hydra spout. Location C (gazetteer note).',
   },
   {
-    id: 'volcanal', name: 'Shrine of Vulcan', latin: 'Volcanal (Area Volcani)', category: 'shrine',
+    id: 'volcanal', name: 'Shrine of Vulcan', latin: 'Volcanal', category: 'shrine',
     center: [12, -20], rotation: 116, footprint: { kind: 'rect', w: 6, d: 5 }, height: 1.5, baseElevation: 13,
     region: 'regio-viii', status113: 'complete', priority: 1, confidence: 'medium',
     dates: 'archaic',
@@ -2287,7 +2308,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Open turf platform with a small hut; on the N edge of the Arx with a view over the Campus. Location C.',
   },
   {
-    id: 'temple-victoria', name: 'Temple of Victory (Palatine)', latin: 'Aedes Victoriae', category: 'temple',
+    id: 'temple-victoria', name: 'Temple of Victory on the Palatine', latin: 'Aedes Victoriae', category: 'temple',
     center: [76, 382], rotation: 225, footprint: { kind: 'rect', w: 19, d: 33 }, height: 16, baseElevation: 43,
     region: 'regio-x', status113: 'complete', priority: 2, confidence: 'medium',
     dates: '294 BC; restored',
@@ -2319,7 +2340,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Single column with a worn base among the market stalls. A poignant quest POI.',
   },
   {
-    id: 'island-prow', name: 'Prow of the Ship Island', latin: 'Insula Tiberina (navis)', category: 'monument',
+    id: 'island-prow', name: 'Prow of the Tiber Island', latin: 'Insula Tiberina', category: 'monument',
     center: [-440, 318], rotation: 118, footprint: { kind: 'rect', w: 12, d: 30 }, height: 6, baseElevation: 8,
     region: 'regio-xiv', status113: 'complete', siting: 'slope', priority: 1, confidence: 'medium',
     dates: '1st c. BC',
@@ -2327,7 +2348,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Travertine ship-hull facing at the ESE tip (left-branch side), with the staff-and-serpent relief and a carved ox-head. Prow vs. stern label is debated (D).',
   },
   {
-    id: 'island-obelisk', name: 'Obelisk of the Island (the mast)', latin: 'Obeliscus Insulae', category: 'monument',
+    id: 'island-obelisk', name: 'Obelisk of the Island', latin: 'Obeliscus Insulae', category: 'monument',
     center: [-545, 238], rotation: 0, footprint: { kind: 'rect', w: 3, d: 3 }, height: 14, baseElevation: 11,
     region: 'regio-xiv', status113: 'complete', priority: 1, confidence: 'low',
     dates: '1st c. BC?',
@@ -2335,7 +2356,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Short granite obelisk on a base in the island\'s central open space.',
   },
   {
-    id: 'temple-sol-circus', name: 'Temple of Sol in the Circus', latin: 'Aedes Solis (in Circo)', category: 'temple',
+    id: 'temple-sol-circus', name: 'Temple of Sol in the Circus', latin: 'Aedes Solis in Circo', category: 'temple',
     center: [25, 742], rotation: 37, footprint: { kind: 'rect', w: 12, d: 18 }, height: 12, baseElevation: 13,
     region: 'regio-xi', status113: 'complete', within: 'circus-maximus', priority: 2, confidence: 'low',
     dates: 'old',
@@ -2343,7 +2364,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Small temple front set into the seating tiers. Location C.',
   },
   {
-    id: 'temple-neptune-circus', name: 'Temple of Neptune (Circus Flaminius)', latin: 'Aedes Neptuni in Circo', category: 'temple',
+    id: 'temple-neptune-circus', name: 'Temple of Neptune at the Circus Flaminius', latin: 'Aedes Neptuni in Circo', category: 'temple',
     center: [-610, -118], rotation: 208, footprint: { kind: 'rect', w: 25, d: 40 }, height: 20, baseElevation: 12,
     region: 'regio-ix', status113: 'complete', priority: 2, confidence: 'low',
     dates: 'Republican; rebuilt c. 32 BC',
@@ -2351,7 +2372,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Mid-size temple facing the Circus Flaminius. Location C.',
   },
   {
-    id: 'temple-mars-in-circo', name: 'Temple of Mars (Circus Flaminius)', latin: 'Aedes Martis in Circo', category: 'temple',
+    id: 'temple-mars-in-circo', name: 'Temple of Mars at the Circus Flaminius', latin: 'Aedes Martis in Circo', category: 'temple',
     center: [-859, -103], rotation: 208, footprint: { kind: 'rect', w: 20, d: 35 }, height: 18, baseElevation: 12,
     region: 'regio-ix', status113: 'complete', priority: 2, confidence: 'low',
     dates: '132 BC (D. Iunius Brutus Callaicus)',
@@ -2359,7 +2380,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Mid-size temple facing the square. Location C.',
   },
   {
-    id: 'temple-castor-in-circo', name: 'Temple of Castor and Pollux (Circus Flaminius)', latin: 'Aedes Castoris in Circo Flaminio', category: 'temple',
+    id: 'temple-castor-in-circo', name: 'Temple of Castor in the Circus Flaminius', latin: 'Aedes Castoris in Circo Flaminio', category: 'temple',
     center: [-634, 16], rotation: 28, footprint: { kind: 'rect', w: 15, d: 25 }, height: 16, baseElevation: 11.5,
     region: 'regio-ix', status113: 'complete', priority: 2, confidence: 'low',
     dates: 'Republican',
@@ -2367,7 +2388,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Small temple with a transverse cella, facing the square (N). Location C.',
   },
   {
-    id: 'divorum', name: 'Porticus of the Deified', latin: 'Divorum (Porticus Divorum)', category: 'portico',
+    id: 'divorum', name: 'Portico of the Deified', latin: 'Porticus Divorum', category: 'portico',
     center: [-380, -385], rotation: 0, footprint: { kind: 'rect', w: 55, d: 200 }, height: 12, baseElevation: 13,
     region: 'regio-ix', status113: 'complete', priority: 2, confidence: 'low',
     dates: 'Domitian (after 80)',
@@ -2375,7 +2396,8 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Long colonnaded garden (N-S axis), two small temples facing each other at the S end, a triple arch at the N entrance. Location C.',
   },
   {
-    id: 'iseum-labicana', name: 'Sanctuary of Isis and Serapis (Regio III)', latin: 'Iseum et Serapeum (Regio III)', category: 'temple',
+    id: 'iseum-labicana', name: 'Isis Sanctuary of the Oppian', latin: 'Iseum Metellinum', category: 'temple',
+    codexNote: 'Regio III was named Isis et Serapis after this sanctuary (Regionary Catalogues).',
     center: [1425, 300], rotation: 8, footprint: { kind: 'rect', w: 40, d: 60 }, height: 14, baseElevation: 36,
     region: 'regio-iii', status113: 'complete', priority: 2, confidence: 'low',
     dates: 'Republican/Augustan',
@@ -2456,7 +2478,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Small house-type station with a lararium.',
   },
   {
-    id: 'arch-augustus-tiburtina', name: 'Arch of Augustus (Via Tiburtina)', latin: 'Arcus Augusti (Via Tiburtina)', category: 'arch',
+    id: 'arch-augustus-tiburtina', name: 'Arch of Augustus on the Tiburtine Way', latin: 'Arcus Augusti in Via Tiburtina', category: 'arch',
     center: [2146, -541], rotation: 100, footprint: { kind: 'rect', w: 15, d: 6 }, height: 12, baseElevation: 52,
     region: 'regio-v', status113: 'complete', priority: 3, confidence: 'high',
     dates: '5 BC; restored 79 (Titus)',
@@ -2464,7 +2486,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Single-bay travertine arch with the channel attic on top. Later absorbed into the Aurelian Porta Tiburtina.',
   },
   {
-    id: 'spes-vetus-castella', name: 'Ad Spem Veterem (aqueduct junction)', latin: 'Ad Spem Veterem', category: 'aqueduct',
+    id: 'spes-vetus-castella', name: 'Aqueduct Junction at Spes Vetus', latin: 'Ad Spem Veterem', category: 'aqueduct',
     center: [2490, 165], rotation: 0, footprint: { kind: 'rect', w: 60, d: 40 }, height: 10, baseElevation: 47,
     region: 'regio-v', status113: 'complete', priority: 3, confidence: 'low',
     dates: 'Republican-Claudian',
@@ -2504,7 +2526,7 @@ export const LANDMARKS: Landmark[] = [
     builderNotes: 'Grove with a spring and small altars. The later Syrian sanctuary building is NOT yet built.',
   },
   {
-    id: 'tarentum-altar', name: 'Altar of Dis and Proserpina (Tarentum)', latin: 'Ara Ditis et Proserpinae (Tarentum)', category: 'shrine',
+    id: 'tarentum-altar', name: 'Altar of Dis and Proserpina at the Tarentum', latin: 'Ara Ditis et Proserpinae', category: 'shrine',
     center: [-1300, -650], rotation: 0, footprint: { kind: 'rect', w: 12, d: 12 }, height: 0.5, baseElevation: 10,
     region: 'regio-ix', status113: 'complete', siting: 'underground', priority: 3, confidence: 'low',
     dates: 'Republican; used at the Secular Games (last 88)',
