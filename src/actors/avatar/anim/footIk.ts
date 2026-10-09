@@ -226,13 +226,13 @@ export class FootIk {
       this.level = level;
       // A staircase: find the treads ahead, and size the step in treads.
       // Cheap pre-test: known stairs rescan every tick; otherwise only when the feet stand at different heights
-      // (risers between them), and at most every 0.4 s so a plain slope costs nothing extra.
+      // (risers between them), and at most every 0.25 s so a plain slope costs nothing extra.
       this.scanIdle += interval;
       const uneven = this.feet[0].valid && this.feet[1].valid && Math.abs(this.feet[0].gy - this.feet[1].gy) > RISER_MIN * 0.7;
       let doScan = false;
       if (speed > 0.4 && this.stairGait && !level) {
         if (this.stairsFound) doScan = true;
-        else if (uneven && this.scanIdle >= 0.4) doScan = true;
+        else if (uneven && this.scanIdle >= 0.25) doScan = true;
       }
       if (doScan) this.scanIdle = 0;
       const stairsNow = doScan && this.scanTreads(probe, hcx, hcz, mx, mz, rootY);
