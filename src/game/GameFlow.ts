@@ -459,7 +459,10 @@ export class GameFlow implements System {
       // from the landmark alone, and the city may have put a shop on it).
       const lm = g.landmarks?.get(at);
       const spots = lm
-        ? [...lm.spots.filter((q) => q.id.endsWith('-arrival')), ...(['vista', 'spawn', 'door'] as const).flatMap((k) => lm.spots.filter((q) => q.kind === k))]
+        ? [
+            ...lm.spots.filter((q) => q.id.endsWith('-arrival')),
+            ...(['vista', 'spawn', 'door'] as const).flatMap((k) => lm.spots.filter((q) => q.kind === k)),
+          ]
         : [];
       for (const sp of spots) {
         const near = findSafeGround(g, sp.position, { maxRadius: 8, open: 4, openDirs: 6, maxAboveTerrain: 1.5 });

@@ -20,7 +20,6 @@ describe('street graph reachability', () => {
   it('has one dominant component holding nearly every node', () => {
     const total = graph.nodes.length;
     const share = comps[0].length / total;
-    console.log('REACH components', comps.length, 'nodes', total, 'largest', comps[0].length, 'share', share.toFixed(3), 'next sizes', comps.slice(1, 8).map((c) => c.length).join(','));
     expect(total).toBeGreaterThan(500);
     expect(share).toBeGreaterThan(0.9);
   });
@@ -31,7 +30,6 @@ describe('street graph reachability', () => {
     const rx = (core.maxX - core.minX) / 4, rz = (core.maxZ - core.minZ) / 4;
     const mid = graph.nodes.filter((n) => (n.kind === 'road' || n.kind === 'street') && Math.abs(n.x - cx) < rx && Math.abs(n.z - cz) < rz);
     const off = mid.filter((n) => !main.has(n.id));
-    console.log('REACH mid-core road/street nodes', mid.length, 'off the main network', off.length);
     expect(mid.length).toBeGreaterThan(100);
     expect(off.length / mid.length).toBeLessThan(0.05);
   });
