@@ -10,7 +10,7 @@ import { Draw } from '../src/arch/fabric/draw';
 import { buildStreet } from '../src/arch/fabric/streets';
 import { PROP_MAX_SLOPE, groundProp, placeProp } from '../src/arch/props';
 import { NavGrid } from '../src/ai/life/navgrid';
-import { AUTOSTEP_MAX, KERB, NAV_MAX_STEP, STEP_ASSIST_MAX, STEP_ASSIST_MIN, walkable } from '../src/core/traversal';
+import { AUTOSTEP_MAX, KERB, NAV_MAX_STEP, STEP_ASSIST_MAX, STEP_ASSIST_MIN } from '../src/core/traversal';
 import { MeshBuilder } from '../src/gfx/MeshBuilder';
 import { FLOOR_LIFT, LIFT, SIDEWALK, sidewalkTop } from '../src/world/city/datum';
 import type { HeightFn } from '../src/world/city/massing';
@@ -35,8 +35,6 @@ describe('the traversal contract', () => {
     expect(KERB).toBeLessThanOrEqual(STEP_ASSIST_MAX);
     expect(STEP_ASSIST_MAX).toBeLessThanOrEqual(AUTOSTEP_MAX);
     expect(NAV_MAX_STEP).toBeLessThanOrEqual(STEP_ASSIST_MAX);
-    expect(walkable(KERB)).toBe(true);
-    expect(walkable(STEP_ASSIST_MAX + 0.01)).toBe(false);
   });
 
   it('the NavGrid default is the contract, and it refuses a lone ledge the Actor could not climb', () => {

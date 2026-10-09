@@ -247,7 +247,8 @@ export function analyzeArea(cx: number, cz: number, radius: number, heightAt: (x
     for (let i = 0; i < n - 1; i++) {
       const k = j * n + i;
       for (const o of [k + 1, k + n]) {
-        const d = Math.abs(top[k] - top[o]);
+        // Compare heights above the terrain, so a surface following a slope is not a ledge.
+        const d = Math.abs((top[k] - terr[k]) - (top[o] - terr[o]));
         if (d < LEDGE_MIN || d >= LEDGE_MAX) continue;
         const ak = topMat[k] === 'terrain', bk = topMat[o] === 'terrain';
         if ((!ak && !PAVED.test(topMat[k])) || (!bk && !PAVED.test(topMat[o])) || (ak && bk)) continue;

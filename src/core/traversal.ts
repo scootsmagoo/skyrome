@@ -16,8 +16,3 @@ export const STEP_ASSIST_MIN = 0.09;
 export const AUTOSTEP_MAX = 0.45;
 export const AUTOSTEP_MIN_WIDTH = 0.15;
 export const NAV_MAX_STEP = STEP_ASSIST_MAX;
-
-/** Can an Actor walk up (or down) a ledge of `rise` metres without jumping or clambering? */
-export function walkable(rise: number): boolean {
-  return Math.abs(rise) <= STEP_ASSIST_MAX;
-}
