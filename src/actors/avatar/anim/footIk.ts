@@ -9,7 +9,10 @@
  *    just enough to clear a riser,
  *  - tilts a planted foot to the ground's slope.
  * The legs are re-solved analytically (two-bone, the knee keeps its bend plane), so a flat floor
- * leaves the pose untouched. Ground samples are kept in world height, so a foot that stays put
+ * leaves the pose untouched. On a staircase (found by scanning the treads ahead) the gait changes:
+ * the step is a whole number of treads, and each planted foot is latched to the middle of a tread
+ * and carried back with the ground, so the feet land one to a tread, not on a riser's edge and
+ * not sliding. Ground samples are kept in world height, so a foot that stays put
  * while the body climbs keeps its height; no rays are cast for a standing figure whose ground is
  * level. Allocation-free.
  */
@@ -40,6 +43,17 @@ const LOOKAHEAD = 0.06;
 /** Climbing: a step is shortened so the feet land about this far apart in height (m), but never below MIN_STRIDE of the baked stride. */
 const STEP_RISE = 0.3;
 const MIN_STRIDE = 0.62;
+/** Staircase scan: ground heights read along the way of walking from the hips, SCAN_N points SCAN_DC apart from SCAN_C0. */
+const SCAN_N = 10;
+const SCAN_C0 = -0.3;
+const SCAN_DC = 0.1;
+/** A height jump between two scan points at least this big is a riser. */
+const RISER_MIN = 0.07;
+/** Treads shorter or longer than this are not a staircase's (m). */
+const TREAD_MIN = 0.2;
+const TREAD_MAX = 0.55;
+/** Shortest stride on stairs, as a share of the baked step. */
+const STAIR_MIN_STRIDE = 0.4;
 
 const smooth = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -59,9 +73,13 @@ interface Foot {
   /** Effective offset this update (offset × planted × weight). */
   eff: number;
   planted: number;
+  /** Stairs: the foot is latched to a tread, at this coordinate along the way of walking (from the hips, carried back with the ground), and how much of the latch is applied. */
+  latched: boolean;
+  lat: number;
+  snap: number;
 }
 
-const newFoot = (): Foot => ({ gy: 0, nx: 0, ny: 1, nz: 0, valid: false, off: 0, eff: 0, planted: 0 });
+const newFoot = (): Foot => ({ gy: 0, nx: 0, ny: 1, nz: 0, valid: false, off: 0, eff: 0, planted: 0, latched: false, lat: 0, snap: 0 });
 
 // Scratch (module level: one avatar solves at a time).
 const sample: GroundSample = { y: 0, nx: 0, ny: 1, nz: 0 };
@@ -87,8 +105,24 @@ export class FootIk {
   /** Share of the baked stride in use (1 on the flat; less up and down a staircase). The controller scales its phase rate by it. */
   stride = 1;
   private strideGoal = 1;
+  /** Length of one baked step (m): the controller sets it, so a stair step can be sized in treads. */
+  baseStep = 0.75;
+  /** Staircase under the walker: 0..1 (smoothed), and its tread depth (m). */
+  stairs = 0;
+  tread = 0.3;
+  /** Treads per step chosen last (tests). */
+  treadsPerStep = 1;
+  /** The staircase gait on (off: the old shortened stride, for comparison). */
+  stairGait = true;
+  /** Riser position along the way of walking (from the hips, m), carried back as the body moves. */
+  private edge0 = 0;
+  private stairsFound = false;
+  private scans = 0;
+  private readonly scanH = new Float32Array(SCAN_N);
   private since = Math.random() * 0.05;
   private level = true;
+  /** Seconds since the last tread scan while no stairs are known (a slope would otherwise scan every tick). */
+  private scanIdle = 1;
   /** Ankle targets in the character's horizontal plane (the stride-scaled feet). */
   private readonly tx = new Float32Array(2);
   private readonly tz = new Float32Array(2);
@@ -101,6 +135,8 @@ export class FootIk {
     this.since = 0.05;
     this.active = false;
     this.stride = 1;
+    this.stairs = 0;
+    this.stairsFound = false;
   }
 
   /** Ground offsets (m, relative to the feet plane) of the left and right foot, for tests. */
@@ -140,14 +176,33 @@ export class FootIk {
     const hcx = (fk.p[B.thighL * 3] + fk.p[B.thighR * 3]) / 2;
     const hcz = (fk.p[B.thighL * 3 + 2] + fk.p[B.thighR * 3 + 2]) / 2;
     const cut = (1 - this.stride) * W;
+    const onStairs = this.stairs > 0.01 && speed > 0.4;
     for (let i = 0; i < 2; i++) {
       const fb = i === 0 ? B.footL : B.footR;
       const ax = fk.p[fb * 3];
       const az = fk.p[fb * 3 + 2];
       const c = (ax - hcx) * mx + (az - hcz) * mz;
-      this.tx[i] = ax - cut * c * mx;
-      this.tz[i] = az - cut * c * mz;
+      const cs = c * (1 - cut);
+      let shift = 0;
+      const f = this.feet[i];
+      if (onStairs) {
+        // A foot that comes down takes the middle of the nearest tread and stays there while the body passes.
+        if (f.planted > 0.5 && !f.latched) {
+          f.latched = true;
+          f.lat = this.nearestTread(cs);
+          const o = this.feet[1 - i];
+          // The other foot has this tread: this one takes the next one on its side of it.
+          if (o.latched && Math.abs(o.lat - f.lat) < this.tread * 0.5) f.lat += cs >= o.lat ? this.tread : -this.tread;
+        } else if (f.planted < 0.25) f.latched = false;
+        if (f.latched) f.lat -= speed * dt;
+        shift = Math.max(-0.22, Math.min(0.22, f.lat - cs)) * f.planted * f.snap * this.stairs;
+      } else f.latched = false;
+      f.snap += ((f.latched ? 1 : 0) - f.snap) * damp(f.latched ? 12 : 20, dt);
+      this.tx[i] = ax - cut * c * mx + shift * mx;
+      this.tz[i] = az - cut * c * mz + shift * mz;
     }
+    // The risers move back with the ground as the body goes forward.
+    this.edge0 -= speed * dt;
     if (due) {
       this.since = interval > 0 ? this.since % Math.max(interval, 1e-3) : 0;
       let level = true;
@@ -169,14 +224,32 @@ export class FootIk {
         if (f.valid && (Math.abs(f.gy - rootY) > 0.004 || f.ny < 0.995)) level = false;
       }
       this.level = level;
-      // Steep ground between the feet: the natural height gap at the baked stride says how far to shorten.
+      // A staircase: find the treads ahead, and size the step in treads.
+      // Cheap pre-test: known stairs rescan every tick; otherwise only when the feet stand at different heights
+      // (risers between them), and at most every 0.25 s so a plain slope costs nothing extra.
+      this.scanIdle += interval;
+      const uneven = this.feet[0].valid && this.feet[1].valid && Math.abs(this.feet[0].gy - this.feet[1].gy) > RISER_MIN * 0.7;
+      let doScan = false;
+      if (speed > 0.4 && this.stairGait && !level) {
+        if (this.stairsFound) doScan = true;
+        else if (uneven && this.scanIdle >= 0.25) doScan = true;
+      }
+      if (doScan) this.scanIdle = 0;
+      const stairsNow = doScan && this.scanTreads(probe, hcx, hcz, mx, mz, rootY);
+      this.stairsFound = stairsNow;
       const f0 = this.feet[0];
       const f1 = this.feet[1];
-      const span = Math.abs((this.tx[0] - this.tx[1]) * mx + (this.tz[0] - this.tz[1]) * mz);
-      if (speed > 0.4 && f0.valid && f1.valid) {
+      if (stairsNow) {
+        // One tread per step at any pace: the stride is cut to the tread depth, which also quickens the cadence.
+        this.treadsPerStep = 1;
+        this.strideGoal = Math.max(STAIR_MIN_STRIDE, Math.min(1, this.tread / this.baseStep));
+      } else if (speed > 0.4 && f0.valid && f1.valid) {
+        // Steep ground between the feet: the natural height gap at the baked stride says how far to shorten.
+        const span = Math.abs((this.tx[0] - this.tx[1]) * mx + (this.tz[0] - this.tz[1]) * mz);
         if (span > 0.3) this.strideGoal = Math.max(MIN_STRIDE, Math.min(1, STEP_RISE / Math.max(1e-3, Math.abs(f0.gy - f1.gy) / this.stride)));
       } else this.strideGoal = 1;
     }
+    this.stairs += ((this.stairsFound && speed > 0.4 ? 1 : 0) - this.stairs) * damp(6, dt);
     this.stride += (this.strideGoal - this.stride) * damp(5, dt);
     // Per foot: where the ground is now, and how planted the foot is.
     const rest = [J[B.footL * 3 + 1], J[B.footR * 3 + 1]];
@@ -211,6 +284,77 @@ export class FootIk {
     const D = this.drop;
     p.p[1] += D / legScale;
     for (let i = 0; i < 2; i++) this.solveLeg(p, rig, i === 0, rest[i], D);
+  }
+
+  /** The middle of the tread nearest to a position along the way of walking. */
+  private nearestTread(x: number): number {
+    const k = Math.round((x - this.edge0) / this.tread - 0.5);
+    return this.edge0 + (k + 0.5) * this.tread;
+  }
+
+  /**
+   * Read the ground ahead along the way of walking and look for evenly spaced risers (a flight of
+   * stairs). Sets `tread` and the risers' phase; false when there are fewer than two or they are uneven.
+   */
+  private scanTreads(probe: GroundProbe, hcx: number, hcz: number, mx: number, mz: number, rootY: number): boolean {
+    const H = this.scanH;
+    for (let i = 0; i < SCAN_N; i++) {
+      const c = SCAN_C0 + i * SCAN_DC;
+      H[i] = probe(hcx + c * mx, hcz + c * mz, sample) && Math.abs(sample.y - rootY) <= MAX_OFFSET + 0.3 ? sample.y : NaN;
+    }
+    this.rays += SCAN_N;
+    let n = 0;
+    let first = 0;
+    let last = 0;
+    let sign = 0;
+    for (let i = 0; i + 1 < SCAN_N; i++) {
+      const d = H[i + 1] - H[i];
+      if (!(Math.abs(d) >= RISER_MIN)) continue;
+      // Risers all go the same way, or it is a kerb, a ledge or a wall.
+      if (sign !== 0 && Math.sign(d) !== sign) return false;
+      sign = Math.sign(d);
+      const e = SCAN_C0 + (i + 0.5) * SCAN_DC;
+      if (n === 0) first = e;
+      else if (e - last < TREAD_MIN - SCAN_DC * 0.6) return false;
+      last = e;
+      n++;
+    }
+    if (n < 2) return false;
+    const tread = (last - first) / (n - 1);
+    if (tread < TREAD_MIN || tread > TREAD_MAX) return false;
+    // The first and the last riser are pinned down to a few cm by halving the interval they were seen in.
+    const e0 = this.refineEdge(probe, hcx, hcz, mx, mz, first);
+    const e1 = n > 2 ? this.refineEdge(probe, hcx, hcz, mx, mz, last) : last;
+    const t = (e1 - e0) / (n - 1);
+    if (t < TREAD_MIN || t > TREAD_MAX) return false;
+    const was = this.stairs > 0.3;
+    if (!was) this.tread = t;
+    else this.tread += (t - this.tread) * 0.4;
+    // Phase: the riser nearest to the old one, eased.
+    const d = e0 - this.edge0;
+    const wrap = d - Math.round(d / this.tread) * this.tread;
+    this.edge0 = was ? this.edge0 + wrap * 0.5 : e0;
+    this.scans++;
+    return true;
+  }
+
+  /** Bisect a riser seen between two scan points: a few rays, SCAN_DC / 16 resolution. */
+  private refineEdge(probe: GroundProbe, hcx: number, hcz: number, mx: number, mz: number, e: number): number {
+    let lo = e - SCAN_DC * 0.5;
+    let hi = e + SCAN_DC * 0.5;
+    const ylo = readAt(probe, hcx, hcz, mx, mz, lo);
+    const yhi = readAt(probe, hcx, hcz, mx, mz, hi);
+    this.rays += 2;
+    if (!(Math.abs(yhi - ylo) >= RISER_MIN)) return e;
+    for (let i = 0; i < 3; i++) {
+      const mid = (lo + hi) / 2;
+      const ym = readAt(probe, hcx, hcz, mx, mz, mid);
+      this.rays++;
+      // The riser is on the side whose height differs from the far end's.
+      if (Math.abs(ym - ylo) < Math.abs(ym - yhi)) lo = mid;
+      else hi = mid;
+    }
+    return (lo + hi) / 2;
   }
 
   private solveLeg(p: Pose, rig: Rig, left: boolean, restY: number, D: number) {
@@ -314,4 +458,8 @@ export class FootIk {
     qMul(qc, 0, qc, 0, qb, 0);
     p.q.set(qc, foot * 4);
   }
+}
+
+function readAt(probe: GroundProbe, hcx: number, hcz: number, mx: number, mz: number, c: number): number {
+  return probe(hcx + c * mx, hcz + c * mz, sample) ? sample.y : NaN;
 }

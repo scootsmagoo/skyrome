@@ -383,6 +383,9 @@ export type ActionClip =
   | 'blockHit'
   | 'hitFront'
   | 'hitBack'
+  /** A blow landing on the left / right side of the body. */
+  | 'hitLeft'
+  | 'hitRight'
   | 'stagger'
   | 'knockdown'
   | 'death'

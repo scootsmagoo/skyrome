@@ -21,6 +21,7 @@ import type { Appearance } from '../actors/appearance';
 import { avatarLod } from '../actors/avatar/lod';
 import { randomAppearance, type AvatarRole } from '../actors/avatar/variants';
 import type { Game, System } from '../core/Game';
+import { hitClipFor } from '../combat/geometry';
 import { headingFromDir } from '../core/math';
 import { ALL_LAYERS, groups, Layer, RAPIER } from '../core/Physics';
 import { Rng } from '../core/Rng';
@@ -1712,7 +1713,12 @@ export class NpcManager implements System {
       this.bark(n, 'shoved', true);
       return;
     }
-    if (!n.humanoid.isBusy() && (sprint || this.rng.chance(0.08))) n.humanoid.play(sprint ? 'stagger' : 'hitBack');
+    if (!n.humanoid.isBusy() && (sprint || this.rng.chance(0.08))) {
+      // The shove comes from the player: bumped on the side it came from (or from behind).
+      let side = Math.atan2(px - n.position.x, pz - n.position.z) - n.heading;
+      side = Math.atan2(Math.sin(side), Math.cos(side));
+      n.humanoid.play(sprint ? 'stagger' : hitClipFor(side));
+    }
     if (this.rng.chance(sprint ? 0.7 : 0.35)) this.bark(n, 'shoved', sprint);
   }
 
