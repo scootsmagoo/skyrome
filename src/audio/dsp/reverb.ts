@@ -5,7 +5,7 @@
  */
 import { Biquad, Rand } from './core';
 
-export type ReverbPreset = 'open' | 'street' | 'forum' | 'room' | 'hall' | 'temple' | 'cave' | 'music';
+export type ReverbPreset = 'open' | 'street' | 'forum' | 'room' | 'hall' | 'temple' | 'cave' | 'music' | 'arena' | 'baths' | 'stair';
 
 export interface ReverbSpec {
   /** Seconds to -60 dB. */
@@ -18,6 +18,12 @@ export interface ReverbSpec {
   early: readonly (readonly [number, number])[];
   /** Overall wet level for this space (applied by the engine's return gain). */
   wet: number;
+  /** How much longer the low end rings than the highs (a stone room keeps its bass). Default 1.5. */
+  lowMult?: number;
+  /** Seconds for the tail to fill in from sparse reflections to a dense wash. Default 0.05. */
+  density?: number;
+  /** Late discrete echoes (flutter between far walls): [delay s, gain]. */
+  echoes?: readonly (readonly [number, number])[];
 }
 
 export const REVERBS: Record<ReverbPreset, ReverbSpec> = {
@@ -35,6 +41,13 @@ export const REVERBS: Record<ReverbPreset, ReverbSpec> = {
   temple: { t60: 3.3, predelay: 0.03, brightStart: 6000, brightEnd: 1200, early: [[0.035, 0.3], [0.06, 0.25], [0.1, 0.15]], wet: 0.9 },
   // Cloaca, crypt, mithraeum: damp and dark.
   cave: { t60: 2.2, predelay: 0.012, brightStart: 3500, brightEnd: 800, early: [[0.012, 0.5], [0.025, 0.4], [0.04, 0.3]], wet: 0.85 },
+  // The Colosseum's bowl: open to the sky, so a short low tail, but the far side of the cavea throws
+  // back a distinct slap and the tiers flutter.
+  arena: { t60: 2.0, predelay: 0.02, brightStart: 6500, brightEnd: 1400, early: [[0.05, 0.35], [0.11, 0.3], [0.17, 0.22]], echoes: [[0.19, 0.5], [0.23, 0.3], [0.38, 0.22]], lowMult: 1.1, density: 0.1, wet: 0.65 },
+  // Thermae: tiled and plastered vaults over water, very bright and long.
+  baths: { t60: 3.0, predelay: 0.02, brightStart: 9000, brightEnd: 2800, early: [[0.02, 0.4], [0.037, 0.35], [0.06, 0.3], [0.09, 0.2]], lowMult: 1.2, density: 0.03, wet: 0.85 },
+  // A spiral stair in a column drum: a narrow stone tube, short and ringing, with a flutter.
+  stair: { t60: 1.5, predelay: 0.004, brightStart: 5500, brightEnd: 1500, early: [[0.007, 0.6], [0.014, 0.5], [0.021, 0.4], [0.034, 0.3]], echoes: [[0.052, 0.25], [0.088, 0.15]], lowMult: 1.3, density: 0.02, wet: 0.7 },
   // The non-diegetic music space: a warm, generous hall.
   music: { t60: 2.4, predelay: 0.02, brightStart: 7500, brightEnd: 2500, early: [[0.021, 0.3], [0.037, 0.25], [0.058, 0.18]], wet: 1 },
 };
@@ -49,6 +62,13 @@ export function impulseResponse(spec: ReverbSpec, rate: number, seed = 7): [Floa
     const lp = new Biquad();
     const p0 = Math.round(spec.predelay * rate);
     const n = len - p0;
+    // The low end: a slower-decaying, low-passed layer (stone rooms keep their bass).
+    const lowMult = spec.lowMult ?? 1.5;
+    const lowLp = new Biquad().lowpass(320, 0.7, rate);
+    const dens = spec.density ?? 0.05;
+    // The low layer and the sparse start change the measured decay: shorten the tail so a preset's
+    // t60 is what the room measures (checked with a backward-integrated decay).
+    const tMain = spec.t60 / (0.8 + 0.95 * (lowMult - 1));
     for (let i = 0; i < n; i++) {
       const t = i / rate;
       if ((i & 63) === 0) {
@@ -56,8 +76,13 @@ export function impulseResponse(spec: ReverbSpec, rate: number, seed = 7): [Floa
         lp.lowpass(spec.brightStart * Math.pow(spec.brightEnd / spec.brightStart, u), 0.6, rate);
       }
       // Build-up over the first few ms so the diffuse tail blooms rather than clicks.
-      const env = Math.pow(10, (-3 * t) / spec.t60) * Math.min(1, t / 0.012 + 0.15);
-      buf[p0 + i] = lp.process(rnd.bi()) * env;
+      const env = Math.pow(10, (-3 * t) / tMain) * Math.min(1, t / 0.012 + 0.15);
+      // Reflections arrive sparsely at first and fill in (a room's echo density grows with t²): a
+      // random gate, scaled to keep the energy, instead of noise that is dense from the first ms.
+      const p = Math.min(1, 0.12 + 0.88 * (t / dens) * (t / dens));
+      const gate = p >= 1 || rnd.next() < p ? 1 / Math.sqrt(p) : 0;
+      const low = lowLp.process(rnd.bi()) * Math.pow(10, (-3 * t) / (tMain * lowMult)) * 2.2;
+      buf[p0 + i] = lp.process(rnd.bi() * gate) * env + low * Math.min(1, t / 0.02);
     }
     // Early reflections, slightly different per ear: short smeared bursts (a wall is not a
     // perfect mirror) that stand clearly above the young diffuse tail.
@@ -66,6 +91,13 @@ export function impulseResponse(spec: ReverbSpec, rate: number, seed = 7): [Floa
       const bl = Math.round(0.003 * rate);
       const blp = new Biquad().lowpass(spec.brightStart * 0.8, 0.7, rate);
       for (let i = 0; i < bl && di + i < len; i++) buf[di + i] += blp.process(rnd.bi()) * g * 3 * (1 - i / bl);
+    }
+    // Late discrete echoes (arena, stair): a smeared burst per echo.
+    for (const [d, g] of spec.echoes ?? []) {
+      const di = Math.round(d * (ch ? 1.05 : 0.96) * rate);
+      const bl = Math.round(0.012 * rate);
+      const elp = new Biquad().lowpass(3200, 0.7, rate);
+      for (let i = 0; i < bl && di + i < len; i++) buf[di + i] += elp.process(rnd.bi()) * g * 3 * Math.sin((Math.PI * i) / bl);
     }
     // Normalize energy (Σh² = 0.3) so presets differ in length and colour, not raw level:
     // a broadband input comes back at roughly half its level.

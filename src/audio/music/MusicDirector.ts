@@ -182,7 +182,7 @@ export class Performer {
  * Tuned with tools/music/render-check.mjs so that exploring music sits near -31 dBFS RMS before the
  * music bus, combat a few dB above, and the 1-4 kHz band stays well under the low and mid bands.
  */
-const LEVELS = { harp: 1.65, oboe: 2.1, flute: 1.95, pad: 1.2, drum: 1.65, tambourine: 0.8, syrinxFallback: 0.3 };
+const LEVELS = { harp: 1.65, oboe: 1.85, flute: 1.95, pad: 1.0, drum: 1.5, tambourine: 0.8, syrinxFallback: 0.3 };
 /** The lowest notes the recorded oboe (B-flat 3) and flute (middle C) play; lower melody notes sound an octave up. */
 const LOWEST = { aulos: 233, syrinx: 250 };
 
@@ -301,7 +301,7 @@ export class WebAudioRack implements Rack {
  * above the point where recorded instruments only add hiss. This is what makes the music sit under
  * the world instead of cutting through it.
  */
-export const MUSIC_TONE = { highpass: 90, dipHz: 2300, dipDb: -4, lowpass: 4400, reverbLowpass: 3800 };
+export const MUSIC_TONE = { highpass: 100, shelfHz: 240, shelfDb: -3.5, dipHz: 2300, dipDb: -4, lowpass: 4400, reverbLowpass: 3800 };
 
 class MusicChain {
   readonly output: MusicOutput;
@@ -316,6 +316,12 @@ class MusicChain {
     hp.type = 'highpass';
     hp.frequency.value = MUSIC_TONE.highpass;
     hp.Q.value = 0.6;
+    // Half of the music's power sat under 250 Hz (harp bass, drum, pad): thin it so it sits under the
+    // world on laptop speakers without losing the body.
+    const shelf = make(ctx.createBiquadFilter());
+    shelf.type = 'lowshelf';
+    shelf.frequency.value = MUSIC_TONE.shelfHz;
+    shelf.gain.value = MUSIC_TONE.shelfDb;
     const dip = make(ctx.createBiquadFilter());
     dip.type = 'peaking';
     dip.frequency.value = MUSIC_TONE.dipHz;
@@ -325,7 +331,8 @@ class MusicChain {
     lp.type = 'lowpass';
     lp.frequency.value = MUSIC_TONE.lowpass;
     lp.Q.value = 0.6;
-    hp.connect(dip);
+    hp.connect(shelf);
+    shelf.connect(dip);
     dip.connect(lp);
     lp.connect(out.dry);
     const rlp = make(ctx.createBiquadFilter());

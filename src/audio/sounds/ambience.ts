@@ -522,6 +522,8 @@ export const ambienceSounds: SoundDef[] = [
   { ...bed, id: 'bed.crickets', label: 'crickets bed', rate: 32000, expect: { centroid: [2000, 6000] }, bake: bakeCrickets },
 
   { ...ev, id: 'amb.swifts', label: 'swifts screaming past', variants: 4, gainDb: -12, maxVoices: 3, priority: 0.3, spatial: { ref: 10, max: 90, rolloff: 1 }, expect: { dur: [1, 2.6], centroid: [3500, 9000] }, bake: bakeSwifts },
+  // The recorded birdsong cut into single calls (scripts/sfx/calls.mjs); the stand-in is a sparrow.
+  { ...ev, id: 'amb.birdcall', label: 'bird calls (cut from the dawn chorus)', variants: 5, gainDb: -13, maxVoices: 5, priority: 0.2, spatial: { ref: 5, max: 70, rolloff: 1 }, expect: { dur: [0.15, 2.6], centroid: [2000, 8000] }, bake: bakeSparrow },
   { ...ev, id: 'amb.sparrow', label: 'sparrow chirps', variants: 5, gainDb: -14, maxVoices: 4, priority: 0.2, spatial: { ref: 4, max: 50, rolloff: 1 }, expect: { dur: [0.15, 1.6], centroid: [2500, 8000] }, bake: bakeSparrow },
   { ...ev, id: 'amb.owl', label: 'scops owl', variants: 3, gainDb: -14, maxVoices: 2, priority: 0.3, rate: 24000, spatial: { ref: 8, max: 120, rolloff: 1 }, expect: { dur: [0.12, 0.4], centroid: [900, 1700] }, bake: (c) => bakeOwl(c, false) },
   { ...ev, id: 'amb.owl.little', label: 'little owl', variants: 2, gainDb: -14, maxVoices: 2, priority: 0.3, rate: 24000, spatial: { ref: 8, max: 120, rolloff: 1 }, expect: { dur: [0.25, 0.6] }, bake: (c) => bakeOwl(c, true) },
@@ -599,10 +601,9 @@ export const ambienceLoops: LoopDef[] = [
     label: 'birds (birdsong, sparrows, swifts)',
     group: 'Loops',
     bus: 'ambience',
-    bed: 'bed.birds',
-    stereoBed: true,
-    gainDb: -14,
+    // Single calls placed around the listener (a continuous recorded bed was a wall of birds).
     events: [
+      { sound: 'amb.birdcall', rate: 0.32, dist: [9, 48], height: [1.5, 14] },
       { sound: 'amb.sparrow', rate: 0.35, dist: [6, 25], height: [2, 8] },
       { sound: 'amb.swifts', rate: 0.05, dist: [20, 45], height: [15, 35], move: 14 },
     ],

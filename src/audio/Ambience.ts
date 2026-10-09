@@ -61,6 +61,11 @@ export class AmbienceDirector {
   altitude = { low: 12, high: 34 };
   /** Reverb when no zone asks for one. */
   defaultReverb: ReverbPreset = 'open';
+  /**
+   * A space the game puts the listener in regardless of zones (inside a temple, a bath hall, the
+   * Column's stair): zones are circles, buildings are not. Null: the strongest zone decides.
+   */
+  forcedReverb: ReverbPreset | null = null;
   /** Overrides for testing (the sound board's time slider). */
   hourOverride: number | null = null;
   monthOverride: number | null = null;
@@ -180,7 +185,7 @@ export class AmbienceDirector {
     const rz = this.reverbLatch.update(options((z) => z.reverb), step);
     const mz = this.musicLatch.update(options((z) => z.music), step);
     this.engine.prepareEnvironment(this.defaultReverb);
-    this.engine.setEnvironment(rz?.reverb ?? this.defaultReverb, 1.5);
+    this.engine.setEnvironment(this.forcedReverb ?? rz?.reverb ?? this.defaultReverb, 1.5);
     const req = mz?.music ?? null;
     if (req !== this.musicRequest) {
       this.musicRequest = req;
