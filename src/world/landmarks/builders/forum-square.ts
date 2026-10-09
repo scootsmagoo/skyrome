@@ -176,7 +176,7 @@ function rostra(p: Part) {
   p.spot('rostra-crowd', 'npc', 0, 0.06, z0 - 5, 0);
   // where a visitor arrives: in the square, well clear of the rams (their heads stand at eye
   // height 1.5 m out from the wall), looking at the platform and its crowd
-  p.spot('rostra-spawn', 'spawn', -4, 0.06, z0 - 8.5, Math.PI);
+  p.spot('rostra-arrival', 'spawn', -4, 0.06, z0 - 8.5, Math.PI);
 }
 
 // ---------------------------------------------------------------- umbilicus urbis and the mundus

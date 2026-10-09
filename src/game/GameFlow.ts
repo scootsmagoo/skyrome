@@ -454,11 +454,13 @@ export class GameFlow implements System {
   spawnPoint(at: string | null = null): { position: THREE.Vector3; heading: number } {
     const g = this.game;
     if (at) {
-      // The landmark's own standing points first: its spawn spot, a vista, an entrance. Each must
+      // The landmark's own standing points first: a spot named `*-arrival` (an explicit "arrive here"), a vista, its spawn spot, an entrance. Each must
       // be open street-level ground once the city has streamed in round it (a spot is planned
       // from the landmark alone, and the city may have put a shop on it).
       const lm = g.landmarks?.get(at);
-      const spots = lm ? (['spawn', 'vista', 'door'] as const).flatMap((k) => lm.spots.filter((q) => q.kind === k)) : [];
+      const spots = lm
+        ? [...lm.spots.filter((q) => q.id.endsWith('-arrival')), ...(['vista', 'spawn', 'door'] as const).flatMap((k) => lm.spots.filter((q) => q.kind === k))]
+        : [];
       for (const sp of spots) {
         const near = findSafeGround(g, sp.position, { maxRadius: 8, open: 4, openDirs: 6, maxAboveTerrain: 1.5 });
         // A vista or spawn spot says which way to look; an entrance faces the building.

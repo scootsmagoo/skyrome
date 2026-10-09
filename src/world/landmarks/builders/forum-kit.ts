@@ -925,7 +925,8 @@ let ramMat: THREE.Material | null = null;
 export function ramBronze(): THREE.Material {
   if (!ramMat) {
     const m = (getMaterial('bronze') as THREE.MeshStandardMaterial).clone();
-    m.color.set('#cdbf94');
+    m.color.set('#e6d6a6');
+    m.metalness = 0.45;
     m.roughness = 0.5;
     m.name = 'forum:ram-bronze';
     ramMat = m;
