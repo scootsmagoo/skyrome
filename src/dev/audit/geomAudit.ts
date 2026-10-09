@@ -113,7 +113,7 @@ const STEPPY = /paving|cobbles|travertine|marble|tufa|peperino|concrete|brick|ba
 const LEDGE_MIN = 0.03;
 const LEDGE_MAX = 0.12;
 
-const PAVED =/paving|cobbles|gravel|basalt|travertine|mosaic|concrete|tufa|peperino|marble|sand|dirt|mud|terracotta|brick/;
+const PAVED = /paving|cobbles|gravel|basalt|travertine|mosaic|concrete|tufa|peperino|marble|sand|dirt|mud|terracotta|brick/;
 
 export interface Finding {
   kind: 'stacked' | 'through' | 'lip' | 'ledge' | 'deadend' | 'floating' | 'buried';

@@ -57,7 +57,6 @@ export interface Junction {
   roads: number[];
 }
 
-
 /** Landmark categories a road stops at (it runs round them, not through them). */
 const SOLID = new Set(['temple', 'basilica', 'baths', 'palace', 'theatre', 'amphitheatre', 'stadium', 'library', 'curia', 'warehouse', 'prison', 'odeum', 'house', 'tomb']);
 
