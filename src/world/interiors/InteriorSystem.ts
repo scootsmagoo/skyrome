@@ -147,6 +147,7 @@ export class InteriorSystem implements System {
         this.game.interactions?.add(item);
       }
       this.built.set(id, { def, object, origin, spots: build.spots, colliders, doors });
+      def.afterPlace?.(this.game, object);
       return true;
     } catch (err) {
       console.error(`[interiors] failed to build ${id}`, err);

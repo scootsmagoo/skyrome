@@ -69,4 +69,6 @@ export interface InteriorDef {
   indoor?: number;
   onEnter?(game: Game): void;
   onExit?(game: Game): void;
+  /** After the built object is placed in the world (attach lamps, sounds: things that need world positions). */
+  afterPlace?(game: Game, object: THREE.Object3D): void;
 }
