@@ -33,7 +33,7 @@ Notes on the licences:
 
 | Strip | Rate | Length | m4a | mp3 |
 |---|---|---|---|---|
-| steps | 32000 Hz | 115.35 s | steps.m4a (1191 KB) | steps.mp3 |
+| steps | 32000 Hz | 120.47 s | steps.m4a (1239 KB) | steps.mp3 |
 | combat | 32000 Hz | 53.01 s | combat.m4a (583 KB) | combat.mp3 |
 | world | 32000 Hz | 27.39 s | world.m4a (280 KB) | world.mp3 |
 | ui | 32000 Hz | 5.84 s | ui.m4a (54 KB) | ui.mp3 |
@@ -49,14 +49,14 @@ Notes on the licences:
 
 | Sound id | Strip | Variants | Source files |
 |---|---|---|---|
-| step.stone.walk | steps | 7 | Fantozzi-StoneL1, Fantozzi-StoneR1, Fantozzi-StoneL2, Fantozzi-StoneR2, Fantozzi-StoneL3, Fantozzi-StoneR3, stone01 |
+| step.stone.walk | steps | 10 | Fantozzi-StoneL1, Fantozzi-StoneR1, Fantozzi-StoneL2, Fantozzi-StoneR2, Fantozzi-StoneL3, Fantozzi-StoneR3, stone01 |
 | step.stone.run | steps | = step.stone.walk | (same recordings) |
-| step.stone.sneak | steps | 7 | Fantozzi-StoneL1, Fantozzi-StoneR1, Fantozzi-StoneL2, Fantozzi-StoneR2, Fantozzi-StoneL3, Fantozzi-StoneR3, stone01 |
-| land.stone | steps | 5 | Fantozzi-StoneL1, Fantozzi-StoneR1, impactSoft_heavy_000, Fantozzi-StoneL2, Fantozzi-StoneR2, impactSoft_heavy_002, Fantozzi-StoneL3, Fantozzi-StoneR3, impactSoft_heavy_004, stone01, impactSoft_heavy_001 |
-| step.marble.walk | steps | 7 | Fantozzi-StoneL1, Fantozzi-StoneR1, Fantozzi-StoneL2, Fantozzi-StoneR2, Fantozzi-StoneL3, Fantozzi-StoneR3, stone01 |
+| step.stone.sneak | steps | 8 | Fantozzi-StoneL1, Fantozzi-StoneR1, Fantozzi-StoneL2, Fantozzi-StoneR2, Fantozzi-StoneL3, Fantozzi-StoneR3, stone01 |
+| land.stone | steps | 6 | Fantozzi-StoneL1, Fantozzi-StoneR1, impactSoft_heavy_000, Fantozzi-StoneL2, Fantozzi-StoneR2, impactSoft_heavy_002, Fantozzi-StoneL3, Fantozzi-StoneR3, impactSoft_heavy_004, stone01, impactSoft_heavy_001 |
+| step.marble.walk | steps | 10 | Fantozzi-StoneL1, Fantozzi-StoneR1, Fantozzi-StoneL2, Fantozzi-StoneR2, Fantozzi-StoneL3, Fantozzi-StoneR3, stone01 |
 | step.marble.run | steps | = step.marble.walk | (same recordings) |
-| step.marble.sneak | steps | 7 | Fantozzi-StoneL1, Fantozzi-StoneR1, Fantozzi-StoneL2, Fantozzi-StoneR2, Fantozzi-StoneL3, Fantozzi-StoneR3, stone01 |
-| land.marble | steps | 5 | Fantozzi-StoneL1, Fantozzi-StoneR1, impactSoft_heavy_000, Fantozzi-StoneL2, Fantozzi-StoneR2, impactSoft_heavy_002, Fantozzi-StoneL3, Fantozzi-StoneR3, impactSoft_heavy_004, stone01, impactSoft_heavy_001 |
+| step.marble.sneak | steps | 8 | Fantozzi-StoneL1, Fantozzi-StoneR1, Fantozzi-StoneL2, Fantozzi-StoneR2, Fantozzi-StoneL3, Fantozzi-StoneR3, stone01 |
+| land.marble | steps | 6 | Fantozzi-StoneL1, Fantozzi-StoneR1, impactSoft_heavy_000, Fantozzi-StoneL2, Fantozzi-StoneR2, impactSoft_heavy_002, Fantozzi-StoneL3, Fantozzi-StoneR3, impactSoft_heavy_004, stone01, impactSoft_heavy_001 |
 | step.cobbles.walk | steps | 8 | Fantozzi-StoneL1, sfx100v2_footstep_02, Fantozzi-StoneR1, sfx100v2_footstep_01, Fantozzi-StoneL2, Fantozzi-StoneR2, Fantozzi-StoneL3, Fantozzi-StoneR3, stone01, gravel*, footstep_concrete_003 |
 | step.cobbles.run | steps | = step.cobbles.walk | (same recordings) |
 | step.cobbles.sneak | steps | 8 | Fantozzi-StoneL1, sfx100v2_footstep_02, Fantozzi-StoneR1, sfx100v2_footstep_01, Fantozzi-StoneL2, Fantozzi-StoneR2, Fantozzi-StoneL3, Fantozzi-StoneR3, stone01, gravel*, footstep_concrete_003 |

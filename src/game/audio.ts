@@ -10,6 +10,7 @@ import type { Surface as TerrainSurface } from '../world/terrain/Terrain';
 import { footstepSound } from '../world/terrain/surface';
 import { L } from '../world/terrain/splat';
 import { WORLD_SCALE as K, toGame } from '../world/coords';
+import { footprintContains } from '../content/ground';
 
 /**
  * Terrain surface → footstep surface: the terrain module's own mapping (mud → dirt, gravel and
@@ -116,9 +117,14 @@ export function installGameAudio(game: Game): GameAudio {
   game.addSystem(new MusicDriver(game, audio));
 
   let handle: { detach(): void } | null = null;
+  // The Colosseum's arena floor is sand (the atlas gives it as 83 × 48 m inside a 188 × 156 m ellipse:
+  // the ellipse shrunk by 31.5 game m on both axes leaves about that).
+  const colosseum = atlas.LANDMARK_BY_ID['colosseum'];
+  const [arenaX, arenaZ] = colosseum ? toGame(colosseum.center[0], colosseum.center[1]) : [0, 0];
   const surfaceAt = (x: number, y: number, z: number): Surface => {
     const t = game.terrain;
     if (!t) return 'stone';
+    if (colosseum && Math.hypot(x - arenaX, z - arenaZ) < 30 && footprintContains(colosseum, x, z, -31.5)) return 'sand';
     const kind = t.surfaceAt(x, z);
     const off = y - t.heightAt(x, z);
     if (kind !== 'paved' || Math.abs(off) > 0.15) return groundSurface(kind, off);

@@ -39,11 +39,14 @@ const SOFTEN = 'lowpass=f=3300:p=1,highpass=f=60';
 const walkStone = [
   ...stoneSteps.map((s) => c(s)),
   c(KDD + 'stone01.ogg'),
+  // The same footfalls again a little heavier and duller, so the rotation does not repeat itself.
+  ...[0, 3, 5].map((i) => c(stoneSteps[i], { pitch: 0.96, fx: 'lowshelf=f=300:g=2,lowpass=f=6000' })),
 ];
 // Marble and travertine: harder and brighter, a touch higher and with a faint ring on the heel.
 const walkMarble = [
   ...stoneSteps.map((s, i) => c(s, { fx: 'highshelf=f=3500:g=5,lowshelf=f=250:g=-3', pitch: 1.04 + 0.03 * (i % 3) })),
   c(KDD + 'stone01.ogg', { fx: 'highshelf=f=3500:g=5', pitch: 1.1 }),
+  ...[1, 2, 4].map((i) => c(stoneSteps[i], { fx: 'highshelf=f=4500:g=6', pitch: 1.12 })),
 ];
 // Cobbles and basalt setts: heavy stone with grit under it (a layer of the gravel steps).
 const gritA = S100 + 'footstep_01.ogg';

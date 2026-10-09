@@ -49,10 +49,10 @@ export function scale(a, g) {
   return a;
 }
 
-export function rmsOf(a) {
+export function rmsOf(a, start = 0, end = a.length) {
   let s = 0;
-  for (let i = 0; i < a.length; i++) s += a[i] * a[i];
-  return Math.sqrt(s / Math.max(1, a.length));
+  for (let i = start; i < end; i++) s += a[i] * a[i];
+  return Math.sqrt(s / Math.max(1, end - start));
 }
 
 /** Spectral centroid (Hz) from a few windows (crude DFT via Goertzel-free FFT-less energy bands). */

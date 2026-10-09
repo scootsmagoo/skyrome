@@ -13,7 +13,7 @@
  * Everything that needs no browser (the manifest rules, cutting, trimming, levelling) is pure and
  * has unit tests; only `decodeStrip` and the fetching touch the platform.
  */
-import { fadeEdges, normalizeLoudness, normalizePeak, normalizeRms, peakOf, removeDc, trimTail } from './dsp/core';
+import { fadeEdges, normalizeLoudness, normalizePeak, peakOf, removeDc, rmsOf, trimTail } from './dsp/core';
 import { BED_RMS, ONESHOT_LOUDNESS, ONESHOT_PEAK } from './levels';
 
 export interface SampleGroup {
@@ -114,7 +114,14 @@ export function finishSample(buf: Float32Array, rate: number, kind: 'oneshot' | 
     for (let i = 0; i < buf.length; i++) m += buf[i];
     m /= Math.max(1, buf.length);
     for (let i = 0; i < buf.length; i++) buf[i] -= m;
-    normalizeRms(buf, BED_RMS, 0.95);
+    // To the bed RMS, but a sparse recording (birdsong: a few loud chirps in near silence) would need
+    // more gain than its peaks allow: scale it down to the peak limit instead of distorting it.
+    const r = rmsOf(buf);
+    const pk = peakOf(buf);
+    if (r > 1e-9) {
+      const g = Math.min(BED_RMS / r, 0.9 / Math.max(pk, 1e-9));
+      for (let i = 0; i < buf.length; i++) buf[i] *= g;
+    }
     return buf;
   }
   let out: Float32Array = new Float32Array(buf.subarray(onsetIndex(buf, rate)));

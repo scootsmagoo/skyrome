@@ -112,6 +112,12 @@ describe('cutting and levelling', () => {
     for (let i = 0; i < bed.length; i++) bed[i] = 0.05 * Math.sin(i * 0.2) + 0.2;
     const fixed = finishSample(bed, RATE, 'bed');
     expect(rmsOf(fixed)).toBeCloseTo(BED_RMS, 2);
+    // A sparse bed (one loud chirp in silence) keeps its peaks instead of being distorted to reach the RMS.
+    const sparse = new Float32Array(RATE * 2);
+    for (let i = 0; i < 400; i++) sparse[RATE + i] = 0.5 * Math.sin(i * 0.5);
+    const kept = finishSample(sparse, RATE, 'bed');
+    expect(peakOf(kept)).toBeLessThanOrEqual(0.9001);
+    expect(rmsOf(kept)).toBeLessThan(BED_RMS);
   });
 });
 
