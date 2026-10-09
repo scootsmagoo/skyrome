@@ -14,12 +14,18 @@
  *   &lod=low|auto                lineup mesh LOD
  *   &labels=0                    hide name labels
  *   &seed=<n>                    variation seed
+ *   &avatar=real|mix             realistic bodies (src/actors/avatar/real): all slots + player, or
+ *                                every second slot (the others stay procedural, for comparison)
+ *   &bodies=1                    with avatar=real: the lineup becomes bare men and women of several
+ *                                heights and builds (slots alternate sex; heights 1.50..1.95 m)
  */
 import * as THREE from 'three';
 import { Actor, type ActionClip, type IdleLoop, type LocomotionState } from '../actors/Actor';
 import { createHumanoid, type HumanoidAvatar } from '../actors/avatar/HumanoidAvatar';
 import { AVATAR_ROLES, isAvatarRole, randomAppearance, type AvatarRole } from '../actors/avatar/variants';
 import { avatarLod } from '../actors/avatar/lod';
+import { applyRealBody, loadRealBodies, updateRealBodies, type RealBody } from '../actors/avatar/real/RealBody';
+import type { Appearance, Build } from '../actors/appearance';
 import { warmUpAnimations } from '../actors/avatar/anim/library';
 import type { Game } from '../core/Game';
 import { Layer } from '../core/Physics';
@@ -193,7 +199,7 @@ interface Slot {
 const scene: SceneDef = {
   title: 'Avatars',
   description: 'Procedural humanoids: lineup, clips, crowd, first/third person',
-  setup(game, ui) {
+  async setup(game, ui) {
     const q = new URLSearchParams(location.search);
     const clip = q.get('clip');
     const freeze = q.has('freeze') ? Number(q.get('freeze')) : null;
@@ -260,7 +266,7 @@ const scene: SceneDef = {
     const civRoles: AvatarRole[] = ['plebeian-man', 'plebeian-woman', 'slave', 'freedman', 'merchant', 'elderly', 'patrician-man', 'matron', 'child', 'legionary', 'vigil', 'greek', 'syrian', 'egyptian', 'dacian'];
     for (let i = 0; i < crowdN; i++) {
       const r = rng.pick(civRoles);
-      const avatar = createHumanoid(randomAppearance(rng.fork(`crowd${i}`), r), { lod: 'auto' });
+      const avatar = createHumanoid(randomAppearance(rng.fork(`crowd${i}`), r), { lod: q.get('avatar') ? undefined : 'auto' });
       const actor = new Actor(game, { id: `crowd-${i}`, position: { x: rng.range(-30, 30), y: 0.05, z: rng.range(4, 40) }, heading: rng.range(-3, 3), layer: Layer.Npc, avatar });
       game.actors.add(actor);
       crowd.push({ actor, avatar, target: new THREE.Vector3(rng.range(-35, 35), 0, rng.range(2, 45)), speed: rng.chance(0.1) ? rng.range(3.5, 4.5) : rng.range(1.0, 1.6) });
@@ -431,7 +437,28 @@ const scene: SceneDef = {
         return sl.role;
       },
     };
-    (window as unknown as { __avatars: unknown }).__avatars = api;
+    // Realistic bodies (wave-1 prototype): swap the body mesh of lineup slots, keep the controller.
+    const realMode = q.get('avatar');
+    const reals: (RealBody | null)[] = slots.map(() => null);
+    if (realMode === 'real' || realMode === 'mix') {
+      await loadRealBodies(game.renderer);
+      const builds: Build[] = ['slight', 'average', 'stocky', 'muscular', 'heavy'];
+      slots.forEach((sl, i) => {
+        if (realMode === 'mix' && i % 2 === 0) return;
+        if (q.get('bodies') === '1') {
+          const app: Appearance = { ...sl.avatar.appearance, sex: i % 2 ? 'female' : 'male', age: 'adult', build: builds[Math.floor(i / 2) % 5], height: 1.5 + (i % 10) * 0.05 + (i < 10 ? 0 : 0.02) };
+          sl.avatar.setAppearance(app);
+          sl.avatar.setWeapon('none');
+          sl.avatar.setShield('none');
+          sl.avatar.setDrawn(false);
+        }
+        reals[i] = applyRealBody(sl.avatar);
+      });
+      for (const c of crowd) reals.push(applyRealBody(c.avatar));
+      reals.push(applyRealBody(playerAvatar));
+      game.addSystem({ name: 'realBodies', priority: 95, lateUpdate: () => updateRealBodies(game.camera) });
+    }
+    (window as unknown as { __avatars: unknown }).__avatars = { ...api, reals };
   },
 };
 export default scene;

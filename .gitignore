@@ -7,3 +7,5 @@ playwright-report/
 .shots/
 .vite/
 .claude/
+.cache/
+__pycache__/

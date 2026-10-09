@@ -1,0 +1,360 @@
+{
+ "bones": [
+  "hips",
+  "spine",
+  "chest",
+  "neck",
+  "head",
+  "shoulderL",
+  "upperArmL",
+  "forearmL",
+  "handL",
+  "fingersL",
+  "indexL",
+  "shoulderR",
+  "upperArmR",
+  "forearmR",
+  "handR",
+  "fingersR",
+  "indexR",
+  "thighL",
+  "shinL",
+  "footL",
+  "toeL",
+  "thighR",
+  "shinR",
+  "footR",
+  "toeR"
+ ],
+ "parent": {
+  "hips": null,
+  "spine": "hips",
+  "chest": "spine",
+  "neck": "chest",
+  "head": "neck",
+  "shoulderL": "chest",
+  "upperArmL": "shoulderL",
+  "forearmL": "upperArmL",
+  "handL": "forearmL",
+  "fingersL": "handL",
+  "indexL": "handL",
+  "shoulderR": "chest",
+  "upperArmR": "shoulderR",
+  "forearmR": "upperArmR",
+  "handR": "forearmR",
+  "fingersR": "handR",
+  "indexR": "handR",
+  "thighL": "hips",
+  "shinL": "thighL",
+  "footL": "shinL",
+  "toeL": "footL",
+  "thighR": "hips",
+  "shinR": "thighR",
+  "footR": "shinR",
+  "toeR": "footR"
+ },
+ "rigs": {
+  "male": {
+   "app": {
+    "sex": "male",
+    "age": "adult",
+    "build": "average",
+    "height": 1.75
+   },
+   "height": 1.75,
+   "s": 1,
+   "headH": 0.244,
+   "ankleH": 0.075,
+   "eyeHeight": 1.63898,
+   "g": {
+    "torso": 1,
+    "shoulders": 1,
+    "waist": 1,
+    "hips": 1,
+    "belly": 1,
+    "bust": 0,
+    "arm": 1,
+    "leg": 1,
+    "neck": 1
+   },
+   "joints": {
+    "hips": [
+     0,
+     0.94125,
+     0
+    ],
+    "spine": [
+     0,
+     1.03564,
+     -0.012
+    ],
+    "chest": [
+     0,
+     1.1999,
+     -0.018
+    ],
+    "neck": [
+     0,
+     1.421,
+     -0.022
+    ],
+    "head": [
+     0,
+     1.5548,
+     -0.005
+    ],
+    "shoulderL": [
+     0.025,
+     1.379,
+     -0.01
+    ],
+    "upperArmL": [
+     0.176,
+     1.387,
+     -0.018
+    ],
+    "forearmL": [
+     0.176,
+     1.06416,
+     -0.018
+    ],
+    "handL": [
+     0.176,
+     0.8105,
+     -0.018
+    ],
+    "fingersL": [
+     0.172,
+     0.7225,
+     -0.024
+    ],
+    "indexL": [
+     0.172,
+     0.7245,
+     0.004
+    ],
+    "shoulderR": [
+     -0.025,
+     1.379,
+     -0.01
+    ],
+    "upperArmR": [
+     -0.176,
+     1.387,
+     -0.018
+    ],
+    "forearmR": [
+     -0.176,
+     1.06416,
+     -0.018
+    ],
+    "handR": [
+     -0.176,
+     0.8105,
+     -0.018
+    ],
+    "fingersR": [
+     -0.172,
+     0.7225,
+     -0.024
+    ],
+    "indexR": [
+     -0.172,
+     0.7245,
+     0.004
+    ],
+    "thighL": [
+     0.088,
+     0.90125,
+     0
+    ],
+    "shinL": [
+     0.088,
+     0.4865,
+     0.004
+    ],
+    "footL": [
+     0.088,
+     0.075,
+     -0.006
+    ],
+    "toeL": [
+     0.088,
+     0.022,
+     0.135
+    ],
+    "thighR": [
+     -0.088,
+     0.90125,
+     0
+    ],
+    "shinR": [
+     -0.088,
+     0.4865,
+     0.004
+    ],
+    "footR": [
+     -0.088,
+     0.075,
+     -0.006
+    ],
+    "toeR": [
+     -0.088,
+     0.022,
+     0.135
+    ]
+   }
+  },
+  "female": {
+   "app": {
+    "sex": "female",
+    "age": "adult",
+    "build": "average",
+    "height": 1.62
+   },
+   "height": 1.62,
+   "s": 0.9257142857142858,
+   "headH": 0.2231902857142857,
+   "ankleH": 0.06942857142857144,
+   "eyeHeight": 1.5184484200000001,
+   "g": {
+    "torso": 0.94,
+    "shoulders": 0.89,
+    "waist": 0.84,
+    "hips": 1.1,
+    "belly": 1,
+    "bust": 1,
+    "arm": 0.84,
+    "leg": 0.96,
+    "neck": 0.82
+   },
+   "joints": {
+    "hips": [
+     0,
+     0.87133,
+     0
+    ],
+    "spine": [
+     0,
+     0.95943,
+     -0.01111
+    ],
+    "chest": [
+     0,
+     1.11238,
+     -0.01666
+    ],
+    "neck": [
+     0,
+     1.31812,
+     -0.02037
+    ],
+    "head": [
+     0,
+     1.44145,
+     -0.00463
+    ],
+    "shoulderL": [
+     0.02314,
+     1.27924,
+     -0.00926
+    ],
+    "upperArmL": [
+     0.145,
+     1.28665,
+     -0.01666
+    ],
+    "forearmL": [
+     0.145,
+     0.98629,
+     -0.01666
+    ],
+    "handL": [
+     0.145,
+     0.75029,
+     -0.01666
+    ],
+    "fingersL": [
+     0.1413,
+     0.67535,
+     -0.02222
+    ],
+    "indexL": [
+     0.1413,
+     0.67705,
+     0.0037
+    ],
+    "shoulderR": [
+     -0.02314,
+     1.27924,
+     -0.00926
+    ],
+    "upperArmR": [
+     -0.145,
+     1.28665,
+     -0.01666
+    ],
+    "forearmR": [
+     -0.145,
+     0.98629,
+     -0.01666
+    ],
+    "handR": [
+     -0.145,
+     0.75029,
+     -0.01666
+    ],
+    "fingersR": [
+     -0.1413,
+     0.67535,
+     -0.02222
+    ],
+    "indexR": [
+     -0.1413,
+     0.67705,
+     0.0037
+    ],
+    "thighL": [
+     0.09018,
+     0.8343,
+     0
+    ],
+    "shinL": [
+     0.09018,
+     0.45036,
+     0.0037
+    ],
+    "footL": [
+     0.09018,
+     0.06943,
+     -0.00555
+    ],
+    "toeL": [
+     0.09018,
+     0.02037,
+     0.12497
+    ],
+    "thighR": [
+     -0.09018,
+     0.8343,
+     0
+    ],
+    "shinR": [
+     -0.09018,
+     0.45036,
+     0.0037
+    ],
+    "footR": [
+     -0.09018,
+     0.06943,
+     -0.00555
+    ],
+    "toeR": [
+     -0.09018,
+     0.02037,
+     0.12497
+    ]
+   }
+  }
+ }
+}
