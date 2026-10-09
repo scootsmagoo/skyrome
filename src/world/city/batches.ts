@@ -19,6 +19,7 @@
  * (opaque static geometry), and batches whose geometry streamed out shrink again (`trim`).
  */
 import * as THREE from 'three';
+import { FastCull } from '../../gfx/fastCull';
 import { allMaterials } from '../../gfx/materials';
 
 export interface BatchRef {
@@ -35,14 +36,20 @@ export class Batch {
   private live = 0;
   private reserved = 0;
   /** Geometry ids shared by many instances (props), keyed by the caller. */
-  readonly shared = new Map<string, { geom: number; verts: number }>();
+  readonly shared = new Map<string, { geom: number; verts: number; sphere: THREE.Sphere }>();
+  /**
+   * The stored world spheres of the instances, which the per-instance frustum cull walks instead of
+   * three.js's matrix-and-sphere maths (gfx/fastCull.ts). Instances never move after they are placed.
+   */
+  readonly cull: FastCull;
+  private readonly _sphere = new THREE.Sphere();
   /** Family of geometry (BatchPool.get) and whether the batch casts shadows when allowed to. */
   tag = '';
   shadowCaster = false;
 
   private readonly initialCap: number;
 
-  constructor(material: THREE.Material, castShadow: boolean, name: string, verts = 8192, instances = 64) {
+  constructor(material: THREE.Material, castShadow: boolean, name: string, verts = 8192, instances = 64, private readonly growth = 1.25) {
     this.vertCap = verts;
     this.initialCap = verts;
     this.mesh = new THREE.BatchedMesh(instances, verts, verts, material);
@@ -53,6 +60,15 @@ export class Batch {
     this.mesh.frustumCulled = false;
     // Opaque static geometry: sorting every instance every pass costs more than the overdraw saves.
     this.mesh.sortObjects = false;
+    this.cull = new FastCull(this.mesh);
+    this.cull.install();
+  }
+
+  /** Remember an instance's world sphere (`local` is its geometry's, `matrix` its placement). */
+  private track(inst: number, local: THREE.Sphere, matrix?: THREE.Matrix4) {
+    const s = this._sphere.copy(local);
+    if (matrix) s.applyMatrix4(matrix);
+    this.cull.setSphere(inst, s.center.x, s.center.y, s.center.z, s.radius);
   }
 
   /**
@@ -87,7 +103,7 @@ export class Batch {
     }
     // Grow by a quarter (memory matters more than the occasional copy: the arrays stay in JS for
     // updates, and `trim` gives capacity back when the geometry streams out again).
-    const cap = Math.ceil(Math.max(this.vertCap * 1.25, (this.live + n) * 1.25));
+    const cap = Math.ceil(Math.max(this.vertCap * this.growth, (this.live + n) * this.growth));
     this.mesh.optimize();
     this.reserved = this.live;
     this.mesh.setGeometrySize(cap, cap);
@@ -110,6 +126,8 @@ export class Batch {
     if (matrix) this.mesh.setMatrixAt(inst, matrix);
     this.live += n;
     this.reserved += n;
+    if (!geometry.boundingSphere) geometry.computeBoundingSphere();
+    this.track(inst, geometry.boundingSphere!, matrix);
     return { batch: this, geom, inst, verts: n };
   }
 
@@ -120,7 +138,8 @@ export class Batch {
       const g = make();
       const n = g.getAttribute('position').count;
       this.ensure(n);
-      s = { geom: this.mesh.addGeometry(g), verts: n };
+      if (!g.boundingSphere) g.computeBoundingSphere();
+      s = { geom: this.mesh.addGeometry(g), verts: n, sphere: g.boundingSphere!.clone() };
       this.live += n;
       this.reserved += n;
       this.shared.set(key, s);
@@ -128,8 +147,75 @@ export class Batch {
     this.ensureInstances();
     const inst = this.mesh.addInstance(s.geom);
     this.mesh.setMatrixAt(inst, matrix);
+    this.track(inst, s.sphere, matrix);
     return { batch: this, geom: s.geom, inst, verts: 0 };
   }
+
+  /** Add a geometry that instances may use later (`place`), e.g. an LOD twin; returns its id. */
+  addGeometry(geometry: THREE.BufferGeometry): number {
+    const n = geometry.getAttribute('position').count;
+    this.ensure(n);
+    const geom = this.mesh.addGeometry(geometry);
+    this.live += n;
+    this.reserved += n;
+    return geom;
+  }
+
+  /** The id of a shape shared by many instances (made once under `key`; see `instance`). */
+  shape(key: string, make: () => THREE.BufferGeometry): number {
+    let s = this.shared.get(key);
+    if (!s) {
+      const g = make();
+      const n = g.getAttribute('position').count;
+      this.ensure(n);
+      if (!g.boundingSphere) g.computeBoundingSphere();
+      s = { geom: this.mesh.addGeometry(g), verts: n, sphere: g.boundingSphere!.clone() };
+      this.live += n;
+      this.reserved += n;
+      this.shared.set(key, s);
+    }
+    return s.geom;
+  }
+
+  /** One more instance of a geometry already in the batch (`sphere`: that geometry's bounds). */
+  place(geom: number, matrix: THREE.Matrix4, sphere: THREE.Sphere): BatchRef {
+    this.ensureInstances();
+    const inst = this.mesh.addInstance(geom);
+    this.mesh.setMatrixAt(inst, matrix);
+    this.track(inst, sphere, matrix);
+    return { batch: this, geom, inst, verts: 0 };
+  }
+
+  /**
+   * For a batch that is finished (nothing more will be added, moved or removed): shrink the
+   * buffers to the live size and let the vertex arrays go once uploaded, like a static mesh
+   * (gfx/release). `trim`, `ensure` and every add must not be used afterwards. The freed arrays
+   * cannot be uploaded again: a batch must not get `needsUpdate` set, and after a WebGL
+   * context loss it would upload nothing (the game has no context-loss handler; like any static
+   * mesh released by gfx/release, it needs a reload).
+   */
+  finish() {
+    if (this.live < this.vertCap) {
+      this.mesh.optimize();
+      this.mesh.setGeometrySize(Math.max(1, this.live), Math.max(1, this.live));
+      this.vertCap = Math.max(1, this.live);
+    }
+    // Per-geometry bounds are made on first use from the vertex arrays: make them all now.
+    const box = new THREE.Box3();
+    const sphere = new THREE.Sphere();
+    // Walk the whole id range (an inactive id returns null but later ids may be live).
+    for (let id = 0, n = (this.mesh as unknown as { _geometryCount: number })._geometryCount; id < n; id++) {
+      if (this.mesh.getBoundingBoxAt(id, box) !== null) this.mesh.getBoundingSphereAt(id, sphere);
+    }
+    const free = function (this: THREE.BufferAttribute) {
+      (this as unknown as { array: ArrayLike<number> | null }).array = null;
+    };
+    for (const a of Object.values(this.mesh.geometry.attributes)) (a as THREE.BufferAttribute).onUpload(free);
+    this.mesh.geometry.index?.onUpload(free);
+    this.finished = true;
+  }
+
+  finished = false;
 
   remove(ref: BatchRef) {
     if (ref.verts > 0) {
@@ -144,6 +230,12 @@ export class Batch {
 export interface PoolOptions {
   /** Initial vertex capacity per batch. */
   verts?: number;
+  /** Capacity growth factor when a batch fills (default 1.25). */
+  growth?: number;
+  /** Name of the pool's group and prefix of its batches' names (default 'city'). */
+  name?: string;
+  /** Give back unused capacity now and then (default true; a finished pool must not). */
+  trim?: boolean;
 }
 
 /** A set of instances added together (a block level, a street piece…), toggled and removed as one. */
@@ -177,7 +269,7 @@ export class BatchPool {
   private trimAt = 0;
 
   constructor(parent: THREE.Object3D, private readonly opts: PoolOptions = {}) {
-    this.group.name = 'city:batches';
+    this.group.name = opts.name ? `${opts.name}:batches` : 'city:batches';
     parent.add(this.group);
   }
 
@@ -189,7 +281,7 @@ export class BatchPool {
     const key = `${material.uuid}|${castShadow ? 1 : 0}|${offset ? 1 : 0}|${tag}`;
     let b = this.batches.get(key);
     if (!b) {
-      b = new Batch(this.own(material, offset), castShadow, `city:${material.name || 'mat'}${castShadow ? '' : ':ns'}${offset ? ':off' : ''}${tag ? `:${tag}` : ''}`, this.opts.verts);
+      b = new Batch(this.own(material, offset), castShadow, `${this.opts.name ?? 'city'}:${material.name || 'mat'}${castShadow ? '' : ':ns'}${offset ? ':off' : ''}${tag ? `:${tag}` : ''}`, this.opts.verts, 64, this.opts.growth);
       b.tag = tag;
       b.shadowCaster = castShadow;
       if (castShadow && this.shadowsOff.has(tag)) b.mesh.castShadow = false;
@@ -240,7 +332,7 @@ export class BatchPool {
       refreshCopy(c.copy, c.src, c.offset);
     }
     // Every second, batches holding mostly dead capacity, ≤ ~400k live vertices copied per round.
-    if (++this.trimAt % 60 === 0) {
+    if (this.opts.trim !== false && ++this.trimAt % 60 === 0) {
       let copied = 0;
       for (const b of this.batches.values()) {
         if (copied > 400_000) break;

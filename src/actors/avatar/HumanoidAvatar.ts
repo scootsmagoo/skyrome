@@ -17,6 +17,7 @@ import { acquireAvatarGeometry, appearanceKey, boneInverses, createBones, releas
 import { avatarMaterial } from './material';
 import { AnimationController } from './anim/controller';
 import { avatarLod } from './lod';
+import { SHADOW_PROXY_FROM, trackShadowProxy, untrackShadowProxy } from '../../gfx/shadowLod';
 import { Equipment } from '../equipment/Equipment';
 import type { LOD } from './build/common';
 import { RealBody, classicRequested, realBodiesReady, whenRealBodiesReady } from './real/RealBody';
@@ -40,7 +41,7 @@ export interface HumanoidOptions {
 }
 
 /** Beyond this distance (m) the body stops casting shadows (a full shadow-pass mesh for a few pixels). */
-const SHADOW_FAR = 40;
+const SHADOW_FAR = 28;
 /** Lazy low-LOD builds are spread out: at most one per this many milliseconds (all avatars). */
 const LOD_BUILD_INTERVAL_MS = 6;
 let lastLodBuild = -Infinity;
@@ -116,6 +117,7 @@ export class HumanoidAvatar implements CombatAvatar {
     this.castsShadow = opts.castShadow ?? true;
     this.mesh.castShadow = this.castsShadow;
     this.mesh.receiveShadow = true;
+    if (this.lodMode === 'auto' && this.castsShadow) trackShadowProxy(this.mesh);
     this.setBounds();
     this.root.add(this.mesh);
     this.createSockets();
@@ -166,6 +168,7 @@ export class HumanoidAvatar implements CombatAvatar {
     this.app = app;
     this.geoHigh = acquireAvatarGeometry(app, this.lodMode === 'low' ? 'low' : 'high');
     this.geoLow = null;
+    this.mesh.userData.shadowGeometry = null;
     releaseAvatarGeometry(geoHigh);
     if (oldLow) releaseAvatarGeometry(oldLow);
     this.afterRig(this.geoHigh.rig);
@@ -298,7 +301,9 @@ export class HumanoidAvatar implements CombatAvatar {
     if (this.lodMode !== 'auto') return;
     // Switch beyond 36 m, back within 34 m (no flicker for someone loitering at the boundary).
     const far = this.far ? d > 34 : d > 36;
-    if (far && !this.geoLow) {
+    // The low mesh also casts the shadow from SHADOW_PROXY_FROM on (gfx/shadowLod.ts); it is built
+    // 2 m early so the swap never waits on a build (12 m proxy start - 2 = 10 m).
+    if ((far || (this.castsShadow && d > SHADOW_PROXY_FROM - 2)) && !this.geoLow) {
       // Build the far mesh on first need, spread over frames when a crowd crosses at once.
       const now = performance.now();
       if (now - lastLodBuild < LOD_BUILD_INTERVAL_MS) return;
@@ -306,6 +311,7 @@ export class HumanoidAvatar implements CombatAvatar {
       this.geoLow = acquireAvatarGeometry(this.app, 'low');
     }
     this.far = far;
+    this.mesh.userData.shadowGeometry = this.geoLow?.geometry ?? null;
     const g = far ? this.geoLow!.geometry : this.geoHigh!.geometry;
     if (this.mesh.geometry !== g) this.mesh.geometry = g;
   }
@@ -423,6 +429,8 @@ export class HumanoidAvatar implements CombatAvatar {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    untrackShadowProxy(this.mesh);
+    this.mesh.userData.shadowGeometry = null;
     this.equipment.dispose();
     this.root.removeFromParent();
     // Materials are shared; geometry is cached per appearance and released here (the cache disposes

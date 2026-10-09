@@ -1,6 +1,8 @@
 /** Places every atlas landmark in the world using its builder (custom → category → fallback). */
 import * as THREE from 'three';
 import { releaseStaticMeshes } from '../../gfx/release';
+import { installStaticFreeze } from '../../gfx/freeze';
+import { installShadowLod, trackLandmarkShadow } from '../../gfx/shadowLod';
 import type { Game } from '../../core/Game';
 import { Rng } from '../../core/Rng';
 import { bearingToRotationY } from '../../core/math';
@@ -8,6 +10,8 @@ import { MeshBuilder, registerColliders } from '../../gfx/MeshBuilder';
 import { WORLD_SCALE, toGame } from '../coords';
 import type { Heightmap } from '../terrain/heightmap';
 import { LANDMARK_DETAIL_DISTANCE, bakeLandmarkFar } from './farBake';
+import { fillsAtRuntime, landmarkBatcherFor } from './landmarkBatch';
+import { landmarkLodStats } from './landmarkLod';
 import { builderFor } from './registry';
 import type { LandmarkData, Spot } from './types';
 
@@ -38,6 +42,8 @@ export interface BuildLandmarksOptions {
   onProgress?: (done: number, total: number, name: string) => void;
 }
 
+const OFF = new URLSearchParams(globalThis.location?.search ?? '').get('lodoff') ?? '';
+
 export async function buildLandmarks(
   game: Game,
   landmarks: readonly LandmarkData[],
@@ -46,6 +52,12 @@ export async function buildLandmarks(
 ): Promise<Map<string, PlacedLandmark>> {
   const placed = new Map<string, PlacedLandmark>();
   game.landmarks = placed;
+  // Unit tests build landmarks against a fake game without a renderer: no shadow or batch tricks there.
+  const perf = !!game.renderer && typeof game.addSystem === 'function';
+  if (perf) {
+    installShadowLod(game);
+    installStaticFreeze(game);
+  }
   const list = landmarks.filter((lm) => {
     if (opts.only && !opts.only.includes(lm.id)) return false;
     const b = opts.bounds;
@@ -111,13 +123,19 @@ export async function buildLandmarks(
         far.position.copy(obj.position);
         far.rotation.y = rotY;
       }
-      game.world.add(`landmark:${lm.id}`, obj, {
+      const entry = game.world.add(`landmark:${lm.id}`, obj, {
         cullDistance: bake ? LANDMARK_DETAIL_DISTANCE : cull,
         far,
         farDistance: built.far ? 3000 : bake ? cull : undefined,
         // A baked landmark counts half its radius: the far end of a big complex goes simple.
         radiusWeight: bake ? 0.5 : undefined,
       });
+      // Far from the camera the baked stand-in casts the shadow in place of the detailed meshes.
+      if (bake && perf) trackLandmarkShadow(obj, far!, entry.sphere);
+      // A static landmark's meshes join the shared batches (landmarkBatch.ts): a few draw calls for
+      // all of them, culled per piece, with coarser twins by distance. Ones whose instanced meshes
+      // fill in at runtime (the Colosseum, the Circus) manage their own meshes.
+      if (perf && !OFF.includes('batch') && !fillsAtRuntime(obj)) landmarkBatcherFor(game).add(obj);
       const spots = (built.spots ?? []).map((s) => ({ ...s, position: s.position.clone().applyMatrix4(obj.matrixWorld), heading: (s.heading ?? 0) + rotY }));
       placed.set(lm.id, { lm, object: obj, position: obj.position.clone(), rotationY: rotY, spots, builder: builder.handles[0] });
     } catch (err) {
@@ -131,6 +149,11 @@ export async function buildLandmarks(
   // (~400 MB of vertex arrays freed after upload, gfx/release). After the loop, because builders
   // share instance shapes and the far bakes read them.
   for (const p of placed.values()) releaseStaticMeshes(p.object);
+  if (perf && game.getSystem('landmarkBatch')) {
+    const b = landmarkBatcherFor(game);
+    b.finish();
+    console.info('[landmarks] batched', JSON.stringify(b.stats), 'lods', JSON.stringify(landmarkLodStats()));
+  }
   return placed;
 }
 
