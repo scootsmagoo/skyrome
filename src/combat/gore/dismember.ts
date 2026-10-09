@@ -13,7 +13,9 @@ import * as THREE from 'three';
 import type { HumanoidAvatar } from '../../actors/avatar/HumanoidAvatar';
 import { avatarMaterial } from '../../actors/avatar/material';
 import { B, PARENT } from '../../actors/avatar/rig';
-import { CUT_BONE, STUMP_RADIUS, partMask, partTriangles, subtree, type Part } from './limbs';
+import { severReal, isRealBody } from './dismemberReal';
+import { CUT_BONE, REAL_CUT, STUMP_RADIUS, partMask, partTriangles, subtree, type Part } from './limbs';
+import { fleshMaterials } from './stump';
 
 export interface SeveredPiece {
   /** The piece in world space, centred on its centroid. */
@@ -26,23 +28,20 @@ export interface SeveredPiece {
   bodyStump: THREE.Object3D;
 }
 
-let fleshGeo: THREE.BufferGeometry | null = null;
-let fleshMat: THREE.MeshStandardMaterial | null = null;
-let boneMat: THREE.MeshStandardMaterial | null = null;
 
 /**
  * A stump cap: a flattened dome of wet, dark flesh with the pale end of the bone in it, `r` m
  * across, its +Y out of the wound. Shared geometry and materials.
  */
 function stumpCap(r: number): THREE.Group {
-  fleshGeo ??= new THREE.SphereGeometry(1, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2);
-  fleshMat ??= new THREE.MeshStandardMaterial({ color: 0x3c0404, roughness: 0.3, metalness: 0, name: 'gore:flesh' });
-  boneMat ??= new THREE.MeshStandardMaterial({ color: 0xd8ccb0, roughness: 0.6, metalness: 0, name: 'gore:bone' });
+  const { flesh, bone, nub } = fleshMaterials();
   const g = new THREE.Group();
   g.name = 'gore:stump';
-  const f = new THREE.Mesh(fleshGeo, fleshMat);
+  const f = new THREE.Mesh(nub, flesh);
+  f.userData.sharedGeometry = true;
   f.scale.set(r, r * 0.3, r);
-  const b = new THREE.Mesh(fleshGeo, boneMat);
+  const b = new THREE.Mesh(nub, bone);
+  b.userData.sharedGeometry = true;
   b.scale.set(r * 0.32, r * 0.45, r * 0.32);
   g.add(f, b);
   return g;
@@ -57,7 +56,8 @@ const Y = new THREE.Vector3(0, 1, 0);
 
 /** Has this avatar lost this part already (its cut bone is collapsed)? */
 export function isSevered(avatar: HumanoidAvatar, part: Part): boolean {
-  return avatar.bones[B[CUT_BONE[part]]].scale.x < 0.01;
+  // The procedural body collapses the cut bone, the realistic one its child (its cut is mid-bone).
+  return avatar.bones[B[CUT_BONE[part]]].scale.x < 0.01 || avatar.bones[B[REAL_CUT[part].child]].scale.x < 0.01;
 }
 
 /**
@@ -66,6 +66,7 @@ export function isSevered(avatar: HumanoidAvatar, part: Part): boolean {
  */
 export function sever(avatar: HumanoidAvatar, part: Part): SeveredPiece | null {
   if (isSevered(avatar, part)) return null;
+  if (isRealBody(avatar)) return severReal(avatar, part);
   const cutName = CUT_BONE[part];
   const cut = avatar.bones[B[cutName]];
   const parent = avatar.bones[B[PARENT[cutName]!]];

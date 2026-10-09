@@ -261,8 +261,8 @@ export class GoreSystem implements System {
     pc.piece.group.removeFromParent();
     pc.piece.group.traverse((o) => {
       const m = o as THREE.Mesh;
-      // Stump caps share their geometry; the baked piece and equipment copies own theirs.
-      if (m.isMesh && m.parent?.name !== 'gore:stump') m.geometry.dispose();
+      // Stump caps share their nub geometry; the baked piece, its flesh cap and equipment copies own theirs.
+      if (m.isMesh && !m.userData.sharedGeometry) m.geometry.dispose();
     });
   }
 
