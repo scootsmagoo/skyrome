@@ -8,7 +8,11 @@ import { Biquad, adEnv, addMode, addNoiseBurst, alloc } from '../dsp/core';
 import type { BakeContext, SoundDef } from './types';
 import { bubble, click, grains, thump, whoosh } from './util';
 
-export const SURFACES = ['stone', 'dirt', 'grass', 'wood', 'gravel', 'water'] as const;
+/**
+ * stone is plain worked stone (steps, floors, flagstones), marble the bright polished kind
+ * (travertine fora, temple floors), cobbles the rough basalt of the roads.
+ */
+export const SURFACES = ['stone', 'marble', 'cobbles', 'dirt', 'grass', 'wood', 'gravel', 'sand', 'water'] as const;
 export type Surface = (typeof SURFACES)[number];
 export const GAITS = ['walk', 'run', 'sneak'] as const;
 export type Gait = (typeof GAITS)[number];
@@ -101,16 +105,20 @@ function stepWater(out: Float32Array, c: BakeContext, g: GaitShape, t: number, l
   }
 }
 
+// The synthesised steps stand in until the recordings (samples.ts) have loaded, or if they cannot.
 const RECIPE: Record<Surface, typeof stepStone> = {
   stone: stepStone,
+  marble: stepStone,
+  cobbles: stepStone,
   dirt: stepDirt,
   grass: stepGrass,
   wood: stepWood,
   gravel: stepGravel,
+  sand: stepGravel,
   water: stepWater,
 };
 
-const LENGTH: Record<Surface, number> = { stone: 0.3, dirt: 0.32, grass: 0.38, wood: 0.34, gravel: 0.38, water: 0.6 };
+const LENGTH: Record<Surface, number> = { stone: 0.3, marble: 0.3, cobbles: 0.32, dirt: 0.32, grass: 0.38, wood: 0.34, gravel: 0.38, sand: 0.38, water: 0.6 };
 
 function bakeStep(surface: Surface, gait: Gait, c: BakeContext): Float32Array {
   const g = GAIT[gait];
@@ -129,14 +137,18 @@ function bakeStep(surface: Surface, gait: Gait, c: BakeContext): Float32Array {
   return out;
 }
 
-const SURFACE_GAIN: Record<Surface, number> = { stone: 0, dirt: 0, grass: -2, wood: 0, gravel: -1, water: 0 };
+// Every variant is levelled to the same loudness, so these set how loud a surface is against another.
+const SURFACE_GAIN: Record<Surface, number> = { stone: 0, marble: 1, cobbles: 0, dirt: -1, grass: -4, wood: 0, gravel: -1, sand: -3, water: -1 };
 const GAIT_GAIN: Record<Gait, number> = { run: 0, walk: -3, sneak: -8 };
 const SURFACE_CENTROID: Record<Surface, [number, number]> = {
   stone: [500, 4000],
+  marble: [500, 4000],
+  cobbles: [500, 4000],
   dirt: [180, 2200],
   grass: [1200, 7000],
   wood: [180, 2500],
   gravel: [1200, 6500],
+  sand: [1200, 6500],
   water: [600, 4500],
 };
 

@@ -670,7 +670,7 @@ export class NpcManager implements System {
     const fs = this.game.audio?.footsteps;
     if (fs && typeof fs.attach === 'function') {
       const armored = npc.role?.id === 'soldier' || !!npc.def?.appearance.armor?.body;
-      this.footsteps.set(npc, fs.attach(npc, { surfaceAt: () => 'stone', gear: armored ? 'armor' : 'cloth', voice: npc.humanoid.appearance.sex === 'female' ? 'f' : 'm' }));
+      this.footsteps.set(npc, fs.attach(npc, { gear: armored ? 'armor' : 'cloth', voice: npc.humanoid.appearance.sex === 'female' ? 'f' : 'm' }));
     }
     this.stats.spawned++;
     this.game.events.emit('npc:spawned', { id: npc.id, ambient: npc.ambient });
