@@ -53,7 +53,6 @@ const RISER_MIN = 0.07;
 const TREAD_MIN = 0.2;
 const TREAD_MAX = 0.55;
 /** A stair step is taken at no more than this many steps a second (sets how many treads one step spans). */
-const STAIR_CADENCE = 2.4;
 /** Shortest stride on stairs, as a share of the baked step. */
 const STAIR_MIN_STRIDE = 0.4;
 
@@ -230,10 +229,9 @@ export class FootIk {
       const f0 = this.feet[0];
       const f1 = this.feet[1];
       if (stairsNow) {
-        const nat = Math.min(this.baseStep, speed / STAIR_CADENCE);
-        const k = Math.max(1, Math.round(nat / this.tread));
-        this.treadsPerStep = k;
-        this.strideGoal = Math.max(STAIR_MIN_STRIDE, Math.min(1, (k * this.tread) / this.baseStep));
+        // One tread per step at any pace: the stride is cut to the tread depth, which also quickens the cadence.
+        this.treadsPerStep = 1;
+        this.strideGoal = Math.max(STAIR_MIN_STRIDE, Math.min(1, this.tread / this.baseStep));
       } else if (speed > 0.4 && f0.valid && f1.valid) {
         // Steep ground between the feet: the natural height gap at the baked stride says how far to shorten.
         const span = Math.abs((this.tx[0] - this.tx[1]) * mx + (this.tz[0] - this.tz[1]) * mz);
@@ -333,14 +331,13 @@ export class FootIk {
   private refineEdge(probe: GroundProbe, hcx: number, hcz: number, mx: number, mz: number, e: number): number {
     let lo = e - SCAN_DC * 0.5;
     let hi = e + SCAN_DC * 0.5;
-    const read = (c: number) => (probe(hcx + c * mx, hcz + c * mz, sample) ? sample.y : NaN);
-    const ylo = read(lo);
-    const yhi = read(hi);
+    const ylo = readAt(probe, hcx, hcz, mx, mz, lo);
+    const yhi = readAt(probe, hcx, hcz, mx, mz, hi);
     this.rays += 2;
     if (!(Math.abs(yhi - ylo) >= RISER_MIN)) return e;
     for (let i = 0; i < 3; i++) {
       const mid = (lo + hi) / 2;
-      const ym = read(mid);
+      const ym = readAt(probe, hcx, hcz, mx, mz, mid);
       this.rays++;
       // The riser is on the side whose height differs from the far end's.
       if (Math.abs(ym - ylo) < Math.abs(ym - yhi)) lo = mid;
@@ -450,4 +447,8 @@ export class FootIk {
     qMul(qc, 0, qc, 0, qb, 0);
     p.q.set(qc, foot * 4);
   }
+}
+
+function readAt(probe: GroundProbe, hcx: number, hcz: number, mx: number, mz: number, c: number): number {
+  return probe(hcx + c * mx, hcz + c * mz, sample) ? sample.y : NaN;
 }

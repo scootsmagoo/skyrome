@@ -3,7 +3,7 @@ import { REF_RIG } from '../src/actors/avatar/anim/ik';
 import { Pose, REF_LEG, samplePhase } from '../src/actors/avatar/anim/clip';
 import { FootIk, type GroundProbe } from '../src/actors/avatar/anim/footIk';
 import { gaitClip } from '../src/actors/avatar/anim/library';
-import { hitClipFor } from '../src/combat/CombatCore';
+import { hitClipFor } from '../src/combat/geometry';
 
 describe('stair gait', () => {
   const legScale = (REF_RIG.thigh + REF_RIG.shin) / REF_LEG;
@@ -38,10 +38,10 @@ describe('stair gait', () => {
     expect(ik.stride).toBeLessThan(0.5);
   });
 
-  it('spans whole treads per step at a walking pace', () => {
+  it('still takes one tread per step at a walking pace', () => {
     const ik = walk(stairs, 1.6);
-    expect(ik.treadsPerStep).toBe(2);
-    expect(ik.stride).toBeCloseTo((2 * ik.tread) / 0.77, 1);
+    expect(ik.treadsPerStep).toBe(1);
+    expect(ik.stride).toBeCloseTo(ik.tread / 0.77, 1);
   });
 
   it('is not fooled by a single kerb or by flat ground', () => {

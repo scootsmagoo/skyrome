@@ -9,6 +9,7 @@
  * capsule (vertical cylinder of radius r between y0 and y1).
  */
 import { DEG, headingFromDir, wrapAngle } from '../core/math';
+import type { ActionClip } from '../actors/Actor';
 import type { DamageType } from '../rpg/types';
 
 /** Body dimensions shared by the hit test and the AI's spacing. */
@@ -191,4 +192,12 @@ export function powerDirection(heading: number, mx: number, mz: number): 'none' 
   if (a <= 50 * DEG) return 'forward';
   if (a >= 130 * DEG) return 'back';
   return 'sideways';
+}
+
+/** The reaction for a blow from `toAtt` (radians, + = the attacker is to the victim's left, 0 = ahead). */
+export function hitClipFor(toAtt: number): ActionClip {
+  const a = Math.abs(toAtt);
+  if (a <= 50 * DEG) return 'hitFront';
+  if (a > 130 * DEG) return 'hitBack';
+  return toAtt > 0 ? 'hitLeft' : 'hitRight';
 }

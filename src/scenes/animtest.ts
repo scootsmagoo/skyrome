@@ -2,7 +2,7 @@
  * Animation test course: a walker on real physics crosses a kerb, a flight of stairs and a slope,
  * filmed side-on, to check foot planting (anim/footIk.ts) and the secondary motion.
  *
- *   ?scene=animtest&role=legionary&speed=1.6&seed=3
+ *   ?scene=animtest&role=legionary&speed=1.6&seed=3[&avatar=real]
  *
  * Course along +x (the walker faces east, the camera looks north from the south side):
  * flat, a 0.15 m kerb (up at x=-4, down at x=-1), six 0.18 m stairs from x=1, a platform, then a 10 degree slope.
@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { Actor } from '../actors/Actor';
 import { createHumanoid, type HumanoidAvatar } from '../actors/avatar/HumanoidAvatar';
 import { warmUpAnimations } from '../actors/avatar/anim/library';
+import { applyRealBody, loadRealBodies, updateRealBodies } from '../actors/avatar/real/RealBody';
 import { avatarLod } from '../actors/avatar/lod';
 import { isAvatarRole, randomAppearance, type AvatarRole } from '../actors/avatar/variants';
 import { Layer } from '../core/Physics';
@@ -24,7 +25,7 @@ const stone = new THREE.MeshStandardMaterial({ color: 0xcdbfa4, roughness: 0.85 
 const scene: SceneDef = {
   title: 'Animation course',
   description: 'A walker crosses a kerb, stairs and a slope (foot IK, secondary motion, hit reactions)',
-  setup(game) {
+  async setup(game) {
     const q = new URLSearchParams(location.search);
     const role = (q.get('role') as AvatarRole) ?? 'legionary';
     const rng = new Rng(Number(q.get('seed') ?? 3));
@@ -70,6 +71,12 @@ const scene: SceneDef = {
     const avatar: HumanoidAvatar = createHumanoid(randomAppearance(rng.fork('walker'), isAvatarRole(role) ? role : 'legionary'));
     const walker = new Actor(game, { id: 'walker', position: { x: -9, y: 0.05, z: 0 }, heading: Math.PI / 2, layer: Layer.Npc, avatar });
     game.actors.add(walker);
+    // ?avatar=real: the realistic body (wave-1 prototype) on the same controller, to check feet on treads.
+    if (q.get('avatar') === 'real') {
+      await loadRealBodies(game.renderer);
+      applyRealBody(avatar);
+      game.addSystem({ name: 'realBodies', priority: 95, lateUpdate: () => updateRealBodies(game.camera) });
+    }
 
     const api = {
       walker,

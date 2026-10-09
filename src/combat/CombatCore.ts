@@ -34,7 +34,7 @@ import { COMBAT, DIFFICULTY, STAMINA_COSTS, XP, type Difficulty } from '../rpg/d
 import type { ShieldStats, WeaponStats } from '../rpg/types';
 import { ArenaBout, type BoutOptions } from './ArenaBout';
 import { Combatant, type Action } from './Combatant';
-import { BODY, HEIGHT, angleTo, arcFor, dist2D, dy, meleeRange, segmentCapsule, sweepCapsule } from './geometry';
+import { BODY, HEIGHT, angleTo, hitClipFor, arcFor, dist2D, dy, meleeRange, segmentCapsule, sweepCapsule } from './geometry';
 import { floorsTarget } from './knockdown';
 import { TIMING, attackLength, attackPhases, chargeFraction, clipSpeedFor, type AttackKind } from './timing';
 import './events';
@@ -1945,14 +1945,6 @@ export class CombatCore {
 }
 
 /** The avatar clip for an attack. */
-/** The reaction for a blow from `toAtt` (radians, + = the attacker is to the victim's left, 0 = ahead). */
-export function hitClipFor(toAtt: number): ActionClip {
-  const a = Math.abs(toAtt);
-  if (a <= 50 * DEG) return 'hitFront';
-  if (a > 130 * DEG) return 'hitBack';
-  return toAtt > 0 ? 'hitLeft' : 'hitRight';
-}
-
 export function clipFor(a: Pick<Action, 'kind' | 'chain'>): ActionClip {
   switch (a.kind) {
     case 'light':

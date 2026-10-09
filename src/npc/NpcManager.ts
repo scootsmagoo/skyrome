@@ -21,7 +21,7 @@ import type { Appearance } from '../actors/appearance';
 import { avatarLod } from '../actors/avatar/lod';
 import { randomAppearance, type AvatarRole } from '../actors/avatar/variants';
 import type { Game, System } from '../core/Game';
-import { hitClipFor } from '../combat/CombatCore';
+import { hitClipFor } from '../combat/geometry';
 import { headingFromDir } from '../core/math';
 import { ALL_LAYERS, groups, Layer, RAPIER } from '../core/Physics';
 import { Rng } from '../core/Rng';
