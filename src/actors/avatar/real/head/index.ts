@@ -87,7 +87,8 @@ const lerpOf = (n: number) => Math.round(n * 1000);
 
 export function buildHead(ctx: RealContext): RealHead {
   const { app, rig, sex } = ctx;
-  const H = headSurface(ctx.body, rig, sex);
+  // RealBody's context carries the body already morphed to this rig.
+  const H = headSurface(ctx.body, rig, sex, true);
   const helmet = app.armor?.helmet;
   const open = !!helmet && helmet.kind !== 'pileus' && !ENCLOSING.has(helmet.kind);
   const enclosed = !!helmet && ENCLOSING.has(helmet.kind);

@@ -39,7 +39,7 @@ import { paintBody, type TorsoMeasure } from './garments/paint';
 import { MeasuredProfile } from './garments/measured';
 import { assembleBody } from './garments/assemble';
 import { buildShells } from './garments/shells';
-import { buildHead } from './head/index';
+import { buildHead, type RealHead } from './head/index';
 import { addCorrectives, updateCorrectives } from './corrective';
 import type { RealContext } from './types';
 
@@ -53,6 +53,8 @@ export const REAL_LOD_DISTANCE = [9, 22, 55] as const;
 const EYE_LODS = 1;
 /** Triangle target of LOD 3. */
 const LOD3_TRIS = 300;
+/** LODs that wear the painted face (a per-appearance skin material). */
+const PAINT_LODS = 1;
 /** LODs drawn as skin + cloth with the realistic skin material; the others are one avatarMaterial draw. */
 const SPLIT_LODS = [true, false, false, false];
 /** Lazy LOD builds are spread out: at most one per this many milliseconds (all avatars). */
@@ -413,7 +415,10 @@ export class RealBody {
   private eyes: THREE.SkinnedMesh | null = null;
   private shells: THREE.SkinnedMesh | null = null;
   private headRoot: THREE.Group | null = null;
+  /** Skinned head objects (hair, headgear) bound to the avatar's skeleton on its root. */
+  private mountedSkinned: THREE.Object3D[] = [];
   private headObjects: THREE.Object3D[] = [];
+  private head: RealHead | null = null;
   private firstPerson = false;
   private disposed = false;
   private skinMats: THREE.Material[] = [];
@@ -428,7 +433,9 @@ export class RealBody {
 
   /** Hair, beards and head-gear from the head module; whether it supplies helmets decides the rigid pieces. */
   private makeHead() {
+    this.head?.dispose();
     const head = buildHead(context(this.entry, 0));
+    this.head = head;
     this.headObjects = head.objects;
     if (this.entry.headHelmets !== head.objects.length > 0) {
       // The flag shapes the rigid pieces baked into the LOD geometry: rebuild if it changed.
@@ -472,7 +479,9 @@ export class RealBody {
   private skin(lod: number): THREE.Material {
     const app = this.entry.app;
     const tpl = templates.get(app.sex)!;
-    return skinMaterial(`${app.sex}:${lod}`, app.skin, { normal: tpl.normalMaps[lod], ao: tpl.aoMaps[lod] });
+    // The painted face (brows, lips, stubble, age) only reads up close; farther out everyone shares one material.
+    const paint = lod <= PAINT_LODS && this.head ? this.head.skinPaint : undefined;
+    return skinMaterial(`${app.sex}:${lod}`, app.skin, { normal: tpl.normalMaps[lod], ao: tpl.aoMaps[lod] }, paint);
   }
 
   /** Eyes, shells, head objects: everything that rides on the avatar's skeleton. */
@@ -496,14 +505,36 @@ export class RealBody {
   private mountHead() {
     const av = this.avatar!;
     this.headRoot?.removeFromParent();
+    for (const o of this.mountedSkinned) o.removeFromParent();
+    this.mountedSkinned = [];
     const J = this.entry.rig.joints;
     const root = new THREE.Group();
     root.name = 'humanoid:head';
     root.position.set(-J[B.head * 3], -J[B.head * 3 + 1], -J[B.head * 3 + 2]);
-    for (const o of this.headObjects) root.add(o);
+    for (const o of this.headObjects) {
+      // Skinned head objects (hair, headgear: real/head) carry their own weights in the bind pose, like the
+      // eyes: they hang on the avatar's root and bind to its skeleton. Rigid ones ride the head bone.
+      if ((o as THREE.SkinnedMesh).isSkinnedMesh) {
+        const sm = o as THREE.SkinnedMesh;
+        sm.removeFromParent();
+        av.root.add(sm);
+        sm.updateMatrixWorld(true);
+        sm.bind(av.skeleton, new THREE.Matrix4());
+        // Cull on the geometry's body-sized sphere: one measured from the skinned pose goes stale when the
+        // person falls or ragdolls.
+        if (sm.geometry.boundingSphere) sm.boundingSphere = sm.geometry.boundingSphere.clone();
+        this.mountedSkinned.push(sm);
+      } else root.add(o);
+    }
     av.bone('head').add(root);
     this.headRoot = root;
-    root.visible = !this.firstPerson && this.lod < 3;
+    this.setHeadVisible(!this.firstPerson && this.lod < 3);
+  }
+
+  /** Show or hide everything the head carries (the group on the head bone and the skinned head objects). */
+  private setHeadVisible(on: boolean) {
+    if (this.headRoot) this.headRoot.visible = on;
+    for (const o of this.mountedSkinned) o.visible = on;
   }
 
   private applyShells() {
@@ -555,7 +586,8 @@ export class RealBody {
     mesh.material = this.material;
     mesh.updateMorphTargets();
     if (this.eyes) this.eyes.visible = lod < EYE_LODS && !this.firstPerson;
-    if (this.headRoot) this.headRoot.visible = !this.firstPerson && lod < 3;
+    this.head?.setLod(Math.min(lod, 2) as 0 | 1 | 2);
+    this.setHeadVisible(!this.firstPerson && lod < 3);
     this.applyShells();
     this.updateCorrectives();
   }
@@ -569,7 +601,7 @@ export class RealBody {
   setFirstPerson(on: boolean) {
     this.firstPerson = on;
     if (this.eyes) this.eyes.visible = !on && this.lod < EYE_LODS;
-    if (this.headRoot) this.headRoot.visible = !on && this.lod < 3;
+    this.setHeadVisible(!on && this.lod < 3);
   }
 
   /** A new look for the same avatar (clothes, armour, height...). Returns the new rig. */
@@ -595,6 +627,10 @@ export class RealBody {
     this.eyes?.removeFromParent();
     this.shells?.removeFromParent();
     this.headRoot?.removeFromParent();
+    for (const o of this.mountedSkinned) o.removeFromParent();
+    this.mountedSkinned = [];
+    this.head?.dispose();
+    this.head = null;
     release(this.entry);
   }
 }

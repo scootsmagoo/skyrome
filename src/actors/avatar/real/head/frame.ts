@@ -275,9 +275,13 @@ export class HeadSurface implements RealHeadFrame {
   /** The reference-pose measurement this surface was carried from. */
   readonly measure: HeadMeasure;
 
-  constructor(m: HeadMeasure, rig: Rig) {
+  /**
+   * `m` measured on the reference-pose body is carried to `rig` (scaled about the head joint). With
+   * `inRig` the measured body was already morphed to `rig` (RealBody's context), so it is used as is.
+   */
+  constructor(m: HeadMeasure, rig: Rig, inRig = false) {
     this.measure = m;
-    const ref = refRig(m.sex);
+    const ref = inRig ? rig : refRig(m.sex);
     const k = ref.headH > 1e-6 ? rig.headH / ref.headH : 1;
     this.k = k;
     const jr = (c: number) => ref.joints[B.head * 3 + c];
@@ -345,6 +349,6 @@ export class HeadSurface implements RealHeadFrame {
 }
 
 /** Head of one appearance from a context's body arrays (cached measurement). */
-export function headSurface(body: BodyArrays, rig: Rig, sex: 'male' | 'female'): HeadSurface {
-  return new HeadSurface(headMeasureOf(body, sex), rig);
+export function headSurface(body: BodyArrays, rig: Rig, sex: 'male' | 'female', inRig = false): HeadSurface {
+  return new HeadSurface(headMeasureOf(body, sex), rig, inRig);
 }
