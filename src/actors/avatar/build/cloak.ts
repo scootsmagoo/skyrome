@@ -34,8 +34,10 @@ function backClear(ctx: Ctx, prof: TorsoProfile, L: Levels, y: number) {
 function buildCape(ctx: Ctx, L: Levels, prof: TorsoProfile, color: THREE.Color, sagum: boolean) {
   const { b } = ctx;
   const s = L.s;
-  const cols = ctx.hi ? 14 : 8;
-  const rows = ctx.hi ? 8 : 5;
+  // A sampled (real-body) profile has real shoulder domes: more rows keep the cloth over them.
+  const real = !!prof.sample;
+  const cols = ctx.hi ? (real ? 24 : 14) : 8;
+  const rows = ctx.hi ? (real ? 16 : 8) : 5;
   const top = L.shTop + 0.008 * s;
   const hem = sagum ? L.knee + 0.14 * s : L.knee - 0.04 * s;
   const seed = ctx.rng.next() * 10;
@@ -142,8 +144,9 @@ function buildCape(ctx: Ctx, L: Levels, prof: TorsoProfile, color: THREE.Color, 
 function buildPaenula(ctx: Ctx, L: Levels, prof: TorsoProfile, color: THREE.Color) {
   const { b } = ctx;
   const s = L.s;
-  const cols = ctx.hi ? 20 : 10;
-  const rows = ctx.hi ? 7 : 4;
+  const real = !!prof.sample;
+  const cols = ctx.hi ? (real ? 32 : 20) : 10;
+  const rows = ctx.hi ? (real ? 13 : 7) : 4;
   const top = L.shTop - 0.004 * s;
   const hem = L.hip - 0.14 * s;
   const seed = ctx.rng.next() * 10;

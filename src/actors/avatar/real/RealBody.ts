@@ -36,7 +36,7 @@ import { refRig } from './refs';
 import { eyeMaterial, IRIS_COLORS, skinMaterial } from './skin';
 import { clusterDecimate } from './decimate';
 import { paintBody, type TorsoMeasure } from './garments/paint';
-import { MeasuredProfile } from './garments/profile';
+import { MeasuredProfile } from './garments/measured';
 import { assembleBody } from './garments/assemble';
 import { buildShells } from './garments/shells';
 import { buildHead } from './head/index';
