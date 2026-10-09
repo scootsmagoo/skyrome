@@ -50,7 +50,7 @@ export function buildRealSkirt(ctx: Ctx, L: Levels, bp: BodyProfile, sp: SkirtSp
   };
   const weights = (x: number, t: number, a: number): Weights => {
     // Thigh influence ramps in over the upper skirt so knees stay covered when they bend forward.
-    const wt = smooth(0.05, 0.65, t) * sp.legK;
+    const wt = smooth(0.05, sp.legK > 0.85 ? 0.4 : 0.65, t) * sp.legK;
     const lat = x / Math.max(a, 1e-3);
     // A wide blend across the front/back centre keeps the cloth closed between the legs.
     const wl = smooth(-0.75, 0.75, lat);
