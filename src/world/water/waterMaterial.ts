@@ -16,6 +16,7 @@
  *   angles a walker sees it at instead of turning into a blue-grey mirror.
  */
 import * as THREE from 'three';
+import { FOAM_PARS, foamUniforms } from './foam';
 
 export interface WaterUniforms {
   tHeight: { value: THREE.Texture | null };
@@ -186,6 +187,12 @@ const FRAGMENT_MAP = /* glsl */ `
     float wBand = ( 1.0 - smoothstep( 0.12, 0.8, wDepth ) ) * smoothstep( 0.5, 0.78, wNoise( wP * 2.4 - wFlow * uTime * 0.25 ) * 0.7 + wNoise( wP * 6.1 + 5.0 ) * 0.3 );
     wCol = mix( wCol, uSilt * 1.1, wBand * 0.55 * wFar );
   }
+  {
+    // Piers and the like (foam.ts): a white collar, a bow line and a streaky wake downstream.
+    float wNear = 1.0 - smoothstep( 90.0, 260.0, wDist );
+    vec2 wOf = wNear > 0.0 ? wObstacleFoam( wP, wFlow, uTime ) : vec2( 0.0 );
+    wCol = mix( wCol, vec3( 0.84, 0.84, 0.78 ), clamp( wOf.x * 0.92 + wOf.y * 0.6, 0.0, 1.0 ) * wNear );
+  }
   // Clear spring water (Agrippa's canal): dark and green over its masonry bed.
   wCol = mix( wCol, vec3( 0.075, 0.1, 0.07 ), vClear * 0.8 );
   diffuseColor.rgb = wCol;
@@ -214,18 +221,18 @@ export function createWaterMaterial(u: WaterUniforms): THREE.MeshStandardMateria
   m.name = 'water';
   m.envMapIntensity = 0.5;
   m.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, u);
+    Object.assign(shader.uniforms, u, foamUniforms);
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${VERTEX_PARS}`)
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFlow = aFlow;\nvClear = aClear;\nvWWorld = ( modelMatrix * vec4( position, 1.0 ) ).xyz;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\n${FRAGMENT_PARS}`)
+      .replace('#include <common>', `#include <common>\n${FRAGMENT_PARS}\n${FOAM_PARS}`)
       .replace('#include <map_fragment>', FRAGMENT_MAP)
       .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = mix( 0.34, 0.13, diffuseColor.a );')
       .replace('#include <normal_fragment_maps>', 'normal = normalize( ( viewMatrix * vec4( wNormal, 0.0 ) ).xyz );')
       .replace('#include <lights_fragment_end>', FRAGMENT_GLINT);
   };
-  m.customProgramCacheKey = () => 'skyrome-water-v4';
+  m.customProgramCacheKey = () => 'skyrome-water-v5';
   return m;
 }
 

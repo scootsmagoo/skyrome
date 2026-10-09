@@ -17,7 +17,7 @@ import { aoDefault, shaftsDefault } from '../../core/graphics';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import type { Game, System } from '../../core/Game';
 import { COMPOSITE_FRAG, DOWNSAMPLE_FRAG, POST_VERT, UPSAMPLE_FRAG } from './shaders';
-import { buildGradeLut, LUT_SIZE, type GradeLutParams } from './grade';
+import { buildGradeLutHalf, LUT_SIZE, type GradeLutParams } from './grade';
 
 declare module '../../core/Game' {
   interface Game {
@@ -101,7 +101,7 @@ export class PostFX implements System {
 
   private msaa: boolean;
   private lut: THREE.Data3DTexture;
-  private lutData = new Uint8Array(LUT_SIZE ** 3 * 4);
+  private lutData = new Uint16Array(LUT_SIZE ** 3 * 4);
   /** The grade numbers the LUT was last baked from (compared in place: no per-frame allocation). */
   private readonly lutKey = new Float64Array(12).fill(NaN);
   private readonly lutNow = new Float64Array(12);
@@ -178,7 +178,7 @@ export class PostFX implements System {
 
     this.lut = new THREE.Data3DTexture(this.lutData, LUT_SIZE, LUT_SIZE, LUT_SIZE);
     this.lut.format = THREE.RGBAFormat;
-    this.lut.type = THREE.UnsignedByteType;
+    this.lut.type = THREE.HalfFloatType;
     this.lut.minFilter = this.lut.magFilter = THREE.LinearFilter;
     this.lut.wrapS = this.lut.wrapT = this.lut.wrapR = THREE.ClampToEdgeWrapping;
     this.lut.generateMipmaps = false;
@@ -322,7 +322,7 @@ export class PostFX implements System {
     for (let i = 0; i < 10; i++) if (k[i] !== this.lutKey[i]) { same = false; break; }
     if (same) return;
     this.lutKey.set(k);
-    buildGradeLut({
+    buildGradeLutHalf({
       saturation: k[0],
       shadowDesat: k[1],
       contrast: k[2],
