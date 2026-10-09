@@ -8,3 +8,4 @@ playwright-report/
 .vite/
 .claude/
 .cache/
+__pycache__/
