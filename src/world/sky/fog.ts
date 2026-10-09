@@ -29,6 +29,8 @@ export const skyFogUniforms = {
   skyFogSunColor: { value: { x: 0, y: 0, z: 0, w: 0.012 } as SharedVec4 },
   /** x: base height (m) where density = fogDensity; y: max opacity (0 → 1). */
   skyFogParams: { value: { x: 0, y: 1, z: 0, w: 0 } as SharedVec4 },
+  /** rgb: the air's colour looking well above the horizon (sky in-scatter); w: how far rays that climb take it on (0 = off). */
+  skyFogUp: { value: { x: 0, y: 0, z: 0, w: 0 } as SharedVec4 },
 };
 
 const PARS_VERTEX = /* glsl */ `
@@ -55,6 +57,7 @@ const PARS_FRAGMENT = /* glsl */ `
   uniform vec4 skyFogSun;
   uniform vec4 skyFogSunColor;
   uniform vec4 skyFogParams;
+  uniform vec4 skyFogUp;
   #ifdef FOG_EXP2
     uniform float fogDensity;
   #else
@@ -87,10 +90,13 @@ const FRAGMENT = /* glsl */ `
     float skyFogDy = vFogRay.y * skyFogK;
     float skyFogOD = fogDensity * exp( - skyFogK * ( cameraPosition.y - skyFogParams.x ) ) * skyFogDist
       * ( abs( skyFogDy ) > 1e-4 ? ( 1.0 - exp( - skyFogDy ) ) / skyFogDy : 1.0 );
-    float fogFactor = ( 1.0 - exp( - skyFogOD ) ) * ( skyFogParams.y > 0.0 ? skyFogParams.y : 1.0 );
+    // Aerial perspective: red is extinguished a little faster than blue (far hills go blue), and
+    // rays that climb see the air take on the sky's colour above the horizon, not the haze band's.
+    vec3 fogFactor = ( 1.0 - exp( - skyFogOD * vec3( 1.1, 1.0, 0.9 ) ) ) * ( skyFogParams.y > 0.0 ? skyFogParams.y : 1.0 );
+    skyFogBase = mix( skyFogBase, skyFogUp.rgb, skyFogUp.w * smoothstep( 0.02, 0.55, skyFogDir.y ) );
     vec3 skyFogCol = skyFogBase + skyFogSunColor.rgb * pow( max( dot( skyFogDir, skyFogSun.xyz ), 0.0 ), max( skyFogSun.w, 1.0 ) );
   #else
-    float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
+    vec3 fogFactor = vec3( smoothstep( fogNear, fogFar, vFogDepth ) );
     vec3 skyFogCol = skyFogBase;
   #endif
   gl_FragColor.rgb = mix( gl_FragColor.rgb, skyFogCol, fogFactor );

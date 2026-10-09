@@ -17,6 +17,7 @@ import { aoDefault, shaftsDefault } from '../../core/graphics';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import type { Game, System } from '../../core/Game';
 import { COMPOSITE_FRAG, DOWNSAMPLE_FRAG, POST_VERT, UPSAMPLE_FRAG } from './shaders';
+import { buildGradeLut, LUT_SIZE, type GradeLutParams } from './grade';
 
 declare module '../../core/Game' {
   interface Game {
@@ -53,15 +54,20 @@ export interface PostOptions {
   msaa?: boolean;
 }
 
+/** The grade: baked into a 3D LUT (see grade.ts) whenever a value here changes. */
 export interface GradeParams {
   saturation: number;
+  /** How much saturation the deepest shadows give up (0..1). */
+  shadowDesat: number;
   contrast: number;
+  toe: number;
   shadowTint: THREE.Color;
   highlightTint: THREE.Color;
   vignette: number;
 }
 
 const BLOOM_LEVELS = 5;
+const DEFAULT_TONEMAP: ToneMap = 'neutral';
 
 export class PostFX implements System {
   readonly name = 'postfx';
@@ -70,19 +76,22 @@ export class PostFX implements System {
   bloomEnabled: boolean;
   aoEnabled: boolean;
   /** AO strength and reach (view-space metres). */
-  aoIntensity = 0.8;
-  aoRadius = 0.6;
+  aoIntensity = 0.9;
+  aoRadius = 0.5;
   aoFadeFar = 70;
   bloomStrength: number;
   bloomThreshold = 1.4;
   bloomKnee = 0.6;
   bloomRadius = 1;
   toneMap: ToneMap;
+  /** A warm Mediterranean grade: honeyed highlights, cool and slightly greyer shadows. */
   readonly grade: GradeParams = {
-    saturation: 1.04,
-    contrast: 0.06,
-    shadowTint: new THREE.Color(0.94, 0.99, 1.06),
-    highlightTint: new THREE.Color(1.05, 1.0, 0.93),
+    saturation: 1.06,
+    shadowDesat: 0.3,
+    contrast: 0.22,
+    toe: 0.012,
+    shadowTint: new THREE.Color(0.93, 0.99, 1.07),
+    highlightTint: new THREE.Color(1.07, 1.0, 0.9),
     vignette: 0.22,
   };
   /** Multiplier from the weather (rain is greyer). */
@@ -91,6 +100,9 @@ export class PostFX implements System {
   lastPostMs = 0;
 
   private msaa: boolean;
+  private lut: THREE.Data3DTexture;
+  private lutData = new Uint8Array(LUT_SIZE ** 3 * 4);
+  private lutKey = '';
   private hdr: THREE.WebGLRenderTarget;
   private ldr: THREE.WebGLRenderTarget;
   private mips: THREE.WebGLRenderTarget[] = [];
@@ -112,6 +124,10 @@ export class PostFX implements System {
   shaftsEnabled: boolean;
   /** Overall strength of the sun shafts. */
   shaftStrength = 0.8;
+  /** Contact shadows (inside the AO pass); on with High shadows. Strength follows the sun's shadow. */
+  contactEnabled = false;
+  private contactStrength = 0;
+  private contactLight = new THREE.Vector3();
   private sunNdc = new THREE.Vector3();
   private size = new THREE.Vector2();
   private originalRender: () => void;
@@ -127,7 +143,9 @@ export class PostFX implements System {
     this.aoEnabled = aoDefault(s);
     this.shaftsEnabled = shaftsDefault(s);
     this.bloomStrength = opts.bloom ?? 0.075;
-    this.toneMap = opts.toneMapping ?? 'aces';
+    // ?tm=aces|agx|neutral picks the tone mapper for this page load (A/B shots, bug reports).
+    const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('tm') : null;
+    this.toneMap = q === 'aces' || q === 'agx' || q === 'neutral' ? q : (opts.toneMapping ?? DEFAULT_TONEMAP);
     this.msaa = opts.msaa ?? s.antialias;
     game.renderer.toneMapping = TONEMAP_RENDERER[this.toneMap];
 
@@ -155,6 +173,14 @@ export class PostFX implements System {
         }),
       );
     }
+
+    this.lut = new THREE.Data3DTexture(this.lutData, LUT_SIZE, LUT_SIZE, LUT_SIZE);
+    this.lut.format = THREE.RGBAFormat;
+    this.lut.type = THREE.UnsignedByteType;
+    this.lut.minFilter = this.lut.magFilter = THREE.LinearFilter;
+    this.lut.wrapS = this.lut.wrapT = this.lut.wrapR = THREE.ClampToEdgeWrapping;
+    this.lut.generateMipmaps = false;
+    this.lut.unpackAlignment = 1;
 
     const common = { depthTest: false, depthWrite: false, vertexShader: POST_VERT };
     this.downMat = new THREE.ShaderMaterial({
@@ -190,13 +216,17 @@ export class PostFX implements System {
         uIntensity: { value: 1 },
         uFadeFar: { value: 160 },
         uReversed: { value: 0 },
+        uLightView: { value: new THREE.Vector3(0, 1, 0) },
+        uContactOn: { value: 0 },
       },
+      defines: { AO_SAMPLES: 12, CONTACT: 1 },
       fragmentShader: AO_FRAG,
     });
     this.aoBlurMat = new THREE.ShaderMaterial({
       ...common,
       name: 'AOBlur',
       uniforms: { tAo: { value: null }, tDepth: { value: null }, uTexel: { value: new THREE.Vector2() }, uInvProj: { value: new THREE.Matrix4() }, uReversed: { value: 0 } },
+      defines: { AO_BLUR_R: 2, AO_BLUR_STEP: '1.0' },
       fragmentShader: AO_BLUR_FRAG,
     });
     this.shaftMaskMat = new THREE.ShaderMaterial({
@@ -220,6 +250,7 @@ export class PostFX implements System {
         tBloom: { value: null },
         tAo: { value: null },
         uAoOn: { value: 0 },
+        uContact: { value: 0 },
         tShafts: { value: null },
         uShafts: { value: 0 },
         uBloom: { value: this.bloomStrength },
@@ -227,9 +258,7 @@ export class PostFX implements System {
         uVignette: { value: 0.2 },
         uAspect: { value: 1 },
         uSaturation: { value: 1 },
-        uContrast: { value: 0 },
-        uShadowTint: { value: new THREE.Color() },
-        uHighlightTint: { value: new THREE.Color() },
+        tLut: { value: this.lut },
         uTime: { value: 0 },
         toneMappingExposure: { value: 1 },
       },
@@ -250,6 +279,7 @@ export class PostFX implements System {
     this.quad.frustumCulled = false;
     this.scene.add(this.quad);
 
+    this.applyQuality(s);
     this.originalRender = game.renderFrame;
     game.renderFrame = () => this.render();
     this.unsub = game.settings.onChange((d) => {
@@ -257,7 +287,44 @@ export class PostFX implements System {
       this.bloomEnabled = d.bloom ?? true;
       this.aoEnabled = aoDefault(d);
       this.shaftsEnabled = shaftsDefault(d);
+      this.applyQuality(d);
     });
+  }
+
+  /** High shadows = the High tier's AO (12 samples) and contact shadows; otherwise 8 samples and none. */
+  private applyQuality(d: { shadows?: string }) {
+    const high = d.shadows === 'high';
+    const defs = this.aoMat.defines as Record<string, number | undefined>;
+    const samples = high ? 12 : 8;
+    if (defs.AO_SAMPLES !== samples || (defs.CONTACT === 1) !== high) {
+      defs.AO_SAMPLES = samples;
+      if (high) defs.CONTACT = 1;
+      else delete defs.CONTACT;
+      this.aoMat.needsUpdate = true;
+      const bd = this.aoBlurMat.defines as Record<string, number | string>;
+      bd.AO_BLUR_R = high ? 2 : 1;
+      bd.AO_BLUR_STEP = high ? '1.0' : '2.0';
+      this.aoBlurMat.needsUpdate = true;
+    }
+    this.contactEnabled = high;
+  }
+
+  /** Bake the grade into the LUT when any of its numbers changed. */
+  private updateLut() {
+    const g = this.grade;
+    const p: GradeLutParams = {
+      saturation: g.saturation,
+      shadowDesat: g.shadowDesat,
+      contrast: g.contrast,
+      toe: g.toe,
+      shadowTint: [g.shadowTint.r, g.shadowTint.g, g.shadowTint.b],
+      highlightTint: [g.highlightTint.r, g.highlightTint.g, g.highlightTint.b],
+    };
+    const key = JSON.stringify(p);
+    if (key === this.lutKey) return;
+    this.lutKey = key;
+    buildGradeLut(p, LUT_SIZE, this.lutData);
+    this.lut.needsUpdate = true;
   }
 
   setToneMapping(t: ToneMap) {
@@ -346,6 +413,12 @@ export class PostFX implements System {
       au.uRadius.value = this.aoRadius;
       au.uIntensity.value = this.aoIntensity;
       au.uFadeFar.value = this.aoFadeFar;
+      // Contact shadows march toward the key light, in view space; strength follows the sun's shadow.
+      const sky = this.game.sky;
+      const contact = this.contactEnabled && sky?.lighting ? sky.lighting.shadowIntensity * 0.6 : 0;
+      au.uContactOn.value = contact > 0.01 ? 1 : 0;
+      this.contactStrength = contact;
+      if (contact > 0.01) au.uLightView.value.copy(this.contactLight.copy(sky.shadows.dir).transformDirection(camera.matrixWorldInverse));
       this.pass(this.aoMat, this.ao);
       const bu = this.aoBlurMat.uniforms;
       bu.tAo.value = this.ao.texture;
@@ -406,16 +479,15 @@ export class PostFX implements System {
     cu.tBloom.value = this.mips[0].texture;
     cu.tAo.value = this.aoBlur.texture;
     cu.uAoOn.value = this.aoEnabled ? 1 : 0;
+    cu.uContact.value = this.contactStrength;
     cu.tShafts.value = this.shaftB.texture;
     cu.uShafts.value = shafts;
     cu.uBloom.value = this.bloomStrength / BLOOM_LEVELS;
     cu.uBloomOn.value = bloomOn ? 1 : 0;
     cu.uVignette.value = this.grade.vignette;
     cu.uAspect.value = w / Math.max(1, h);
-    cu.uSaturation.value = this.grade.saturation * this.weatherSaturation;
-    cu.uContrast.value = this.grade.contrast;
-    cu.uShadowTint.value.copy(this.grade.shadowTint);
-    cu.uHighlightTint.value.copy(this.grade.highlightTint);
+    cu.uSaturation.value = this.weatherSaturation;
+    this.updateLut();
     cu.uTime.value = this.game.elapsed;
     cu.toneMappingExposure.value = exposure;
     if (this.msaa) {
@@ -448,6 +520,7 @@ export class PostFX implements System {
     this.downMat.dispose();
     this.upMat.dispose();
     this.compMat.dispose();
+    this.lut.dispose();
     this.fxaaMat.dispose();
     this.shaftA.dispose();
     this.shaftB.dispose();
