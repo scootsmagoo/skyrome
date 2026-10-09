@@ -116,7 +116,8 @@ export async function buildRome(game: Game, opts: BuildRomeOptions = {}) {
 
   report(0.2, 'Laying the ground');
   await tick();
-  game.terrain = new Terrain(game, hm);
+  // Full resolution (2 m cells) to 150 m, not 205: the terrain was 10 % of the Forum's triangles (perf).
+  game.terrain = new Terrain(game, hm, { lod: { leafFactor: 2.4 } });
 
   const extraWeight = (opts.steps ?? []).reduce((s, x) => s + x.weight, 0);
   const lmShare = 0.55 / (1 + extraWeight);
