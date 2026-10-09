@@ -127,7 +127,6 @@ class MusicDriver implements System {
   private flow: MusicRequest | undefined;
   private lemuria: MusicRequest | null = null;
   private place: Place | null = null;
-  private space: Space | null = null;
   private cell: string | null = null;
   private roomMusic: MusicRequest | null = null;
 
@@ -173,16 +172,17 @@ class MusicDriver implements System {
     // Leave a place only a little beyond its edge, enter only well inside (no flapping on the threshold).
     if (place && !(footprintContains(place.lm, p.x, p.z, 1.5) && Math.abs(p.y - this.groundY(p.x, p.z, p.y)) < 12)) place = null;
     if (!place && !cell) place = this.placeAt(p.x, p.z, p.y);
-    if (place === this.place && cell === this.cell) return;
-    this.place = place;
-    this.cell = cell;
     const space = cell ? null : (place?.space ?? null);
-    const reverb = (cell && interiorReverb(cell)) || space?.reverb || null;
-    if (reverb) this.audio.prepareEnvironment(reverb);
-    this.audio.ambience.forcedReverb = reverb;
+    if (place !== this.place || cell !== this.cell) {
+      this.place = place;
+      this.cell = cell;
+      const reverb = (cell && interiorReverb(cell)) || space?.reverb || null;
+      if (reverb) this.audio.prepareEnvironment(reverb);
+      this.audio.ambience.forcedReverb = reverb;
+    }
+    // The music is re-read each time: a festival can begin or end while the player stands in the cella.
     const music = space?.music === 'temple' && templesShut(this.game) ? null : (space?.music ?? null);
     if (music !== this.roomMusic) this.audio.music.setOverride('room', (this.roomMusic = music), 1.5);
-    this.space = space;
   }
 
   private groundY(x: number, z: number, y: number) {
