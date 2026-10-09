@@ -31,7 +31,7 @@ Integration notes for the avatar (C2a):
 | File | Purpose |
 |---|---|
 | `frame.ts` | `measureHead`: polar radius table (26 rows chin to crown x 36 azimuths) from the head-weighted vertices (weight on `head` >= 0.5) of the reference pose; ears removed by a per-row ellipse fit (`earOut`, `earTop`, `earBottom` kept); crown closed into a dome. `HeadSurface`: the table carried to a rig (uniform scale `rig.headH / ref.headH` about the head joint, as morph.ts does), with `at(yf, th)` (the old HeadFrame contract), `normalAt`, `radius`. |
-| `hairTexture.ts` | One 512x1024 RGBA texture built once from a seed (no canvas): strand clump (alpha silhouette, per-strand tone), plait ridges, stipple fade. |
+| `hairTexture.ts` | One 512x1024 RGBA texture built once from a seed (no canvas): strand clump (alpha silhouette, per-strand tone), plait ridges, continuous fade noise (the material thresholds it against the vertex fade, so edges are density ramps that survive mip-mapping, not binary stipple). |
 | `hairMaterial.ts` | One `MeshStandardMaterial` for all hair: vertex colour x strand texture, alpha test + alpha-to-coverage, Kajiya-Kay highlight (two lobes, per-strand shift) along a `strand` vertex attribute carried through the skin, a little forward scatter. |
 | `cards.ts` | `HairBuilder`: ribbons (3 vertices across), tubes, per-vertex skin weights. |
 | `hair.ts` | Per `HairStyle`: scalp cap thinning out at the hairline, then cards. `cropped` (comb-forward fringe, shingled sides), `curly-short` (ribbon ringlets), `receding`, `long-tied` (tail down the neck), `bun`, `braided-crown` (plaited rings), `trajanic-tower` (tiered coil diadem and back knot), `veiled`/`vestal` (front hair under the veil). Under an open helmet: a short cap. |
@@ -41,10 +41,9 @@ Integration notes for the avatar (C2a):
 
 ## Measurements (M4 Max, headless Chromium, `?scene=avatars&avatar=real`)
 
-Hair triangles per head (LOD 0 / 1 / 2): cropped 3316 / 1356 / 456, curly-short 5224 / 1812 / 736, receding 2304 / 984 / 360,
-long-tied 2948 / 1392 / 660, bun 2546 / 996 / 556, braided-crown ~3000 / 1300 / 850, trajanic-tower ~4000 / 2000 / 1000,
-veiled/vestal 1584 / 624 / 264 (+ veil), beard short 1216 / 392 / 336, full 1960 / 584 / 416.
-A body is 11000 / 4000 / 1200. One extra draw call per head (hair+beard) and one for a helmet or veil.
+Hair triangles per head (LOD 0 / 1 / 2, re-measured after the fade rework): cropped 3316 / 1356 / 504, curly-short 5224 / 1812 / 784, receding 2304 / 984 / 408,
+long-tied 2948 / 1392 / 708, bun 2546 / 996 / 604, braided-crown 3136 / 1192 / 784, trajanic-tower 5914 / 2620 / 1256,
+veiled/vestal 1584 / 624 / 312 (+ veil), beard short 2264 / 584 / 496, full 3392 / 872 / 632 (a beard is the priciest part of a head: LOD 0 only near the camera).
 51 bodies (30-person crowd, lineup, player) from 9 m: 145 draws / 622 k triangles without heads, 194 / 681 k with.
 
 ## Known limits
@@ -52,6 +51,7 @@ A body is 11000 / 4000 / 1200. One extra draw call per head (hair+beard) and one
 - Hair is cards: no hair physics (a tail follows the head and neck bones only), no shadow casting from the cards.
 - The painted face is procedural per pixel: no pupils-to-lid interaction (no blinking), the mouth stays slightly open
   as sculpted. Faces are the two sculpts, varied only by paint and the rig's head scale.
-- Full beard: a cap with a 6 cm stipple ramp plus cards (reworked after review); hairline stipple still a little blocky. skinCache grows by one material per unique paint key (the program is shared): C2a's crowd cache should key on look.
+- Beards and hairlines: the cap fades through a density ramp (noise thresholded in hairMaterial.ts); card roots start inside the dense part of the cap so no flat card roots float over skin. A dark full beard still has a fairly hard outer silhouette along the jaw. Painted skin variants are trimmed FIFO beyond 96 (skin.ts); C2a's crowd cache should still key on look.
+- `hairConfig.ts` holds the alpha-to-coverage switch so main.ts does not import hair code at boot.
 - The helmets and veil are the wave-1 designs unchanged (a murmillo's visor is big on the real head).
 - In the avatars scene the pale patches on the cheek are the 60 m sun shadow map (see avatar-real.md), not the paint.

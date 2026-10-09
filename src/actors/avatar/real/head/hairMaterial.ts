@@ -10,19 +10,18 @@
  * The strand direction is a vertex attribute carried through the skin with the same matrix as the normal.
  */
 import * as THREE from 'three';
+import { hairAlphaToCoverage, onHairAlphaToCoverage } from './hairConfig';
 import { hairTexture } from './hairTexture';
 
-let mat: THREE.MeshStandardMaterial | null = null;
-let a2c = true;
+export { setHairAlphaToCoverage } from './hairConfig';
 
-/** Alpha-to-coverage needs a multisampled target: turn it off when the graphics tier has no MSAA. */
-export function setHairAlphaToCoverage(on: boolean) {
-  a2c = on;
+let mat: THREE.MeshStandardMaterial | null = null;
+onHairAlphaToCoverage(() => {
   if (mat) {
-    mat.alphaToCoverage = on;
+    mat.alphaToCoverage = hairAlphaToCoverage();
     mat.needsUpdate = true;
   }
-}
+});
 
 const VERT_PARS = /* glsl */ `
 attribute vec3 strand;
@@ -73,6 +72,17 @@ function patchHair(shader: THREE.WebGLProgramParametersWithUniforms) {
     .replace('#include <common>', '#include <common>\n' + FRAG_PARS)
     .replace('#include <lights_physical_pars_fragment>', THREE.ShaderChunk.lights_physical_pars_fragment.replace('vec3 irradiance = dotNL * directLight.color;', KK))
     .replace(
+      '#include <map_fragment>',
+      `#include <map_fragment>
+      #ifdef USE_MAP
+        if ( vMapUv.x > 0.75 ) {
+          // Fade region: threshold the noise against a density that falls with the vertex v.
+          float hTh = smoothstep( 0.0, 0.92, vMapUv.y ) * 0.95 + 0.02;
+          diffuseColor.a = clamp( ( diffuseColor.a - hTh ) * 5.0 + 0.5, 0.0, 1.0 );
+        }
+      #endif`,
+    )
+    .replace(
       '#include <color_fragment>',
       `#include <color_fragment>
       {
@@ -94,12 +104,12 @@ export function hairMaterial(): THREE.MeshStandardMaterial {
     map: hairTexture(),
     side: THREE.DoubleSide,
     alphaTest: 0.42,
-    alphaToCoverage: a2c,
+    alphaToCoverage: hairAlphaToCoverage(),
     roughness: 0.85,
     metalness: 0,
     envMapIntensity: 0.55,
   });
   mat.onBeforeCompile = patchHair;
-  mat.customProgramCacheKey = () => 'real-hair-v1';
+  mat.customProgramCacheKey = () => 'real-hair-v2';
   return mat;
 }

@@ -189,7 +189,8 @@ export function buildHair(inp: HairInput): { geometry: THREE.BufferGeometry; tri
       const th = lerp(o.thA ?? 0, o.thB ?? Math.PI * 2, (i + rng.next() * 0.9) / count(n));
       const a = Math.abs(Math.atan2(Math.sin(th), Math.cos(th)));
       if (o.skipFront && a < o.skipFront) continue;
-      const yf0 = Math.min(0.97, hl(th) + rng.range(o.above[0], o.above[1]));
+      // Roots sit in the dense part of the cap (above its 4 cm fading band), never on bare skin.
+      const yf0 = Math.min(0.97, hl(th) + (0.034 * hs) / H.H + rng.range(o.above[0], o.above[1]));
       const lenYf = (o.len * hs * rng.range(0.8, 1.3)) / H.H;
       const sw = rng.range(-0.08, 0.08);
       card((t) => ({ yf: yf0 - t * lenYf, th: th + sw * t, off: capT * 0.9 + 0.0012 * hs + o.lift * hs * t }), o.width * hs * rng.range(0.85, 1.25), jitter(0.18), { points: Math.min(M, 4) });
@@ -226,7 +227,7 @@ export function buildHair(inp: HairInput): { geometry: THREE.BufferGeometry; tri
       const aRoot = lerp(0.06, o.sides === false ? 1.9 : 2.5, Math.abs(u * 2 - (u < 0.5 ? 0 : 1)));
       const th0 = th0sign * aRoot;
       // Roots a little above the hairline, scattered, so its edge is soft.
-      const yf0 = Math.min(0.97, hl(th0) + rng.range(0.05, 0.17));
+      const yf0 = Math.min(0.97, hl(th0) + rng.range(0.14, 0.22));
       const tth = th0sign * Math.PI + (th0sign > 0 ? -1 : 1) * rng.range(0, 0.18);
       card(
         (t) => {

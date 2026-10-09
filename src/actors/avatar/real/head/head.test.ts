@@ -65,8 +65,19 @@ describe('hair texture', () => {
     expect(mid).toBeLessThan(0.9);
     expect(tip).toBeLessThan(mid);
     expect(cover(HAIR_UV.plait[0], HAIR_UV.plait[1], 0.5)).toBe(1);
-    expect(cover(HAIR_UV.fade[0], HAIR_UV.fade[1], 0.0)).toBeGreaterThan(0.9);
-    expect(cover(HAIR_UV.fade[0], HAIR_UV.fade[1], 0.95)).toBeLessThan(0.4);
+    // The fade region is noise that the material thresholds against a density rising with v.
+    const kept = (v: number) => {
+      const th = Math.min(1, Math.max(0, v / 0.92)) ** 2 * (3 - 2 * Math.min(1, Math.max(0, v / 0.92))) * 0.95 + 0.02;
+      let c = 0;
+      let n = 0;
+      for (let u = HAIR_UV.fade[0]; u < HAIR_UV.fade[1]; u += 1 / w) {
+        n++;
+        if (alpha(u, v) / 255 > th) c++;
+      }
+      return c / n;
+    };
+    expect(kept(0.0)).toBeGreaterThan(0.9);
+    expect(kept(0.95)).toBeLessThan(0.4);
   });
   it('is deterministic', () => {
     expect(Buffer.from(hairPixels(3)).equals(Buffer.from(hairPixels(3)))).toBe(true);

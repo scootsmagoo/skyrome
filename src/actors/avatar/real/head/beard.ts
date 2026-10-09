@@ -70,8 +70,10 @@ export function buildBeard(H: HeadSurface, style: BeardStyle, color: THREE.Color
         const yf = top - dTop / H.H;
         const edge = smooth(0, 0.014, dTop) * smooth(A, A - 0.25, a);
         const p = P(yf, th, thick * (0.25 + 0.75 * edge));
-        const fade = 0.9 * (1 - smooth(0.0, (full ? 0.058 : 0.026) * hs, dTop));
-        const fa = smooth(A - 0.05, A, a) * 0.8;
+        // Thins at the top edge, a little all over (so the cap is a dense stubble-to-beard, not a sheet), and again at its bottom rows.
+        const bot = j === R - 1 ? 0.8 : j === R - 2 ? 0.3 : 0;
+        const fade = Math.max(0.9 * (1 - smooth(0.0, (full ? 0.058 : 0.026) * hs, dTop)), 0.14, bot);
+        const fa = smooth(A - 0.3, A, a) * 0.85;
         c.copy(base).multiplyScalar(0.75 + 0.2 * Math.sin(th * 13 + yf * 40) * 0.5 + 0.1);
         b.vertex({ p, n: H.normalAt(Math.max(0.02, yf), th), u: lerp(HAIR_UV.fade[0], HAIR_UV.fade[1], i / (NC - 1)), v: Math.max(fade, fa), c, t: new THREE.Vector3(0, -1, 0) });
       }
@@ -92,7 +94,9 @@ export function buildBeard(H: HeadSurface, style: BeardStyle, color: THREE.Color
     const th = lerp(-A * 0.95, A * 0.95, (i + rng.next() * 0.8) / nCards);
     const a = Math.abs(th);
     const top = beardTop(a);
-    const yf0 = lerp(top + 0.02, 0.02, Math.pow(rng.next(), 0.7));
+    // Roots start inside the dense part of the cap (below its fading edge), never over bare skin.
+    const root = top - ((full ? 0.07 : 0.032) * hs) / H.H;
+    const yf0 = lerp(Math.max(root, 0.05), 0.02, Math.pow(rng.next(), 0.7));
     const front = 1 - smooth(0.2, 1.1, a);
     const len = (full ? 0.016 + 0.08 * front * rng.range(0.7, 1.1) + 0.024 * (1 - front) : 0.01 + 0.008 * rng.next()) * hs;
     const lenYf = len / H.H;

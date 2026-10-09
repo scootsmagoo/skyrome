@@ -80,7 +80,8 @@ class Cache<T extends { geometry: THREE.BufferGeometry }> {
 type Geo = { geometry: THREE.BufferGeometry; triangles: number } | null;
 const hairCache = new Cache<{ geometry: THREE.BufferGeometry; triangles: number }>(96);
 const gearCache = new Cache<{ geometry: THREE.BufferGeometry; triangles: number }>(48);
-const EMPTY = { geometry: new THREE.BufferGeometry(), triangles: 0 };
+// Cached for a look with no hair/gear. Its geometry is a throwaway per entry (never a shared object), so a trim can dispose it.
+const empty = () => ({ geometry: new THREE.BufferGeometry(), triangles: 0 });
 
 const lerpOf = (n: number) => Math.round(n * 1000);
 
@@ -118,12 +119,12 @@ export function buildHead(ctx: RealContext): RealHead {
   let hairMesh: THREE.SkinnedMesh | null = null;
   const setHairLod = (lod: 0 | 1 | 2) => {
     const key = hairKey(lod);
-    const got = hairCache.acquire(key, () => makeHair(lod) ?? EMPTY);
+    const got = hairCache.acquire(key, () => makeHair(lod) ?? empty());
     const prev = held.findIndex((h) => h.cache === hairCache);
     if (prev >= 0) hairCache.release(held[prev].key);
     if (prev >= 0) held[prev] = { cache: hairCache, key };
     else held.push({ cache: hairCache, key });
-    if (got.value === EMPTY || !got.value.triangles) {
+    if (!got.value.triangles) {
       if (hairMesh) hairMesh.visible = false;
       return;
     }
@@ -143,7 +144,7 @@ export function buildHead(ctx: RealContext): RealHead {
   if (helmet || veiled) {
     const got = gearCache.acquire(gearKey, () => {
       const g = buildGear(app, rig, H, ctx.lod);
-      return g ?? EMPTY;
+      return g ?? empty();
     });
     held.push({ cache: gearCache, key: gearKey });
     if (got.value.triangles) {

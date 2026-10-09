@@ -134,6 +134,8 @@ function patchSkin(shader: THREE.WebGLProgramParametersWithUniforms, paint?: Ski
 }
 
 const skinCache = new Map<string, THREE.MeshStandardMaterial>();
+const painted: string[] = [];
+const PAINTED_MAX = 96;
 
 export interface SkinMaps {
   normal: THREE.Texture;
@@ -162,6 +164,15 @@ export function skinMaterial(key: string, color: string, maps: SkinMaps, paint?:
     m.onBeforeCompile = (s) => patchSkin(s, paint);
     m.customProgramCacheKey = () => (paint ? 'real-skin-v2-paint' : 'real-skin-v1');
     skinCache.set(k, m);
+    if (paint) {
+      // Painted variants are per appearance: keep the newest PAINTED_MAX (a disposed one that is still on screen just re-uploads).
+      painted.push(k);
+      while (painted.length > PAINTED_MAX) {
+        const old = painted.shift()!;
+        skinCache.get(old)?.dispose();
+        skinCache.delete(old);
+      }
+    }
   }
   return m;
 }

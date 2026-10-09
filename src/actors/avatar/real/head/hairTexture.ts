@@ -6,7 +6,8 @@
  *                            tapering to separate tips toward v = 1: alpha is the card's silhouette,
  *                            rgb a per-strand tone;
  *   plait   (u 0.5 .. 0.75)  opaque twisted ridges for plaits, curls and coils;
- *   fade    (u 0.75 .. 1)    a stipple whose density falls from solid (v = 0) to sparse (v = 1), for the
+ *   fade    (u 0.75 .. 1)    continuous speckle noise in alpha; the material keeps the texels above a
+ *                            threshold that rises with v (solid at v = 0, sparse at v = 1), for the
  *                            edges of the scalp cap and the beard so they thin out like real hair.
  */
 import * as THREE from 'three';
@@ -109,16 +110,15 @@ export function hairPixels(seed = 7): Uint8Array {
     const v = y / (h - 1);
     for (let x = x3; x < w; x++) {
       const u = x - x3;
-      // Streaks (columns of 3 px) times speckle.
-      const col = hash(u, 11);
-      // Cells 64 rows tall: finer rows would be averaged away by the mip chain (v runs over a few cm).
-      const sp = hash(u, y >> 6);
-      const n = 0.4 * col + 0.6 * sp;
-      const keep = n > smooth(0.0, 0.92, v) * 0.95 + 0.02 ? 1 : 0;
+      // Continuous noise (streaks along v times speckle), NOT a binary stipple: hairMaterial.ts thresholds it
+      // against the vertex fade, so the edge is a smooth density ramp that survives mip-mapping.
+      const col = hash(u >> 1, 11);
+      const sp = (hash(u, y >> 3) + hash(u >> 1, (y >> 4) + 977)) * 0.5;
+      const n = 0.35 * col + 0.65 * sp;
       const o = (y * w + x) * 4;
-      const t = (0.82 + 0.18 * hash(u >> 1, y >> 6)) * 255;
+      const t = (0.82 + 0.18 * hash(u >> 1, y >> 5)) * 255;
       data[o] = data[o + 1] = data[o + 2] = t;
-      data[o + 3] = keep * 255;
+      data[o + 3] = Math.min(255, Math.max(0, (n * 1.6 - 0.3) * 255));
     }
   }
   return data;

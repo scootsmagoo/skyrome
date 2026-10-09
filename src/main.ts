@@ -4,7 +4,7 @@ import { DebugOverlay } from './dev/DebugOverlay';
 import { GraphicsGovernor } from './core/graphics';
 import { enableCompressedTextures } from './gfx/materials';
 import { setLeafyCanopies } from './arch/vegetation/materials';
-import { setHairAlphaToCoverage } from './actors/avatar/real/head/hairMaterial';
+import { setHairAlphaToCoverage } from './actors/avatar/real/head/hairConfig';
 import { AUDIT, analyzeArea, auditRecordCount } from './dev/audit/geomAudit';
 import type { SceneDef } from './scenes/types';
 
