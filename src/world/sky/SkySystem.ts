@@ -16,6 +16,7 @@ import type { Game, System } from '../../core/Game';
 import { damp } from '../../core/math';
 import { Rng } from '../../core/Rng';
 import { computeEphemeris, type SkyEphemeris } from './astronomy';
+import { BlobShadows } from './blobShadows';
 import { skyFogUniforms } from './fog';
 import { computeLighting, type Lighting } from './lighting';
 import { Rain } from './Rain';
@@ -70,6 +71,8 @@ export class SkySystem implements System {
   readonly shadows: ShadowRig;
   readonly weather: WeatherController;
   readonly rain: Rain;
+  /** Soft discs under characters (every tier). */
+  readonly blobs: BlobShadows;
   readonly hemi = new THREE.HemisphereLight(0xbfd8ff, 0x6b5a45, 0.3);
   readonly fog = new THREE.FogExp2(0xcfd8e0, 0.0012);
   /** Catalog stars (real constellations) drawn over the dome. */
@@ -125,14 +128,16 @@ export class SkySystem implements System {
     scene.background = null;
 
     this.shadows = new ShadowRig(scene, renderer);
-    this.shadows.setQuality(opts.shadows ?? game.settings.data.shadows, opts.shadowMode);
+    const sm = opts.shadowMode ?? ((new URLSearchParams(location.search).get('shadowmode') as ShadowMode | null) ?? undefined);
+    this.shadows.setQuality(opts.shadows ?? game.settings.data.shadows, sm);
     this.unsubSettings = game.settings.onChange((s) => {
-      if (s.shadows !== this.shadows.quality) this.shadows.setQuality(s.shadows, opts.shadowMode);
+      if (s.shadows !== this.shadows.quality) this.shadows.setQuality(s.shadows, sm);
     });
 
     this.env = new SkyEnvironment(renderer, this.dome);
     this.rain = new Rain(opts.rainDrops ?? 9000);
     scene.add(this.rain.mesh);
+    this.blobs = new BlobShadows(game);
 
     this.brightStars = createBrightStars(this.dome.uniforms, NOISE_GLSL + CLOUD_FUNCS_GLSL, renderer.getPixelRatio());
     scene.add(this.brightStars);
@@ -254,6 +259,8 @@ export class SkySystem implements System {
     _keyDir.set(L.keyDir.x, L.keyDir.y, L.keyDir.z);
     this.shadows.update(_keyDir, _camPos, _camDir);
 
+    this.blobs.update(L.shadowIntensity, L.daylight, inside);
+
     // --- Fog (shared uniforms reach every material).
     this.fog.color.setRGB(L.fogColor[0], L.fogColor[1], L.fogColor[2], THREE.LinearSRGBColorSpace);
     this.fog.density = L.fogDensity;
@@ -268,6 +275,11 @@ export class SkySystem implements System {
     fc.z = L.fogSunColor[2];
     fc.w = L.fogFalloff;
     skyFogUniforms.skyFogParams.value.x = L.fogBaseHeight;
+    const fu = skyFogUniforms.skyFogUp.value;
+    fu.x = L.fogUp[0];
+    fu.y = L.fogUp[1];
+    fu.z = L.fogUp[2];
+    fu.w = L.fogUpWeight;
 
     // --- Environment map (throttled).
     const envSig = [this.sunDir.x, this.sunDir.y, this.sunDir.z, this.moonDir.y, w.cloudCover, w.cloudDark, w.haze * 0.1, L.lampFactor];
@@ -326,6 +338,7 @@ export class SkySystem implements System {
     this.env.dispose();
     this.rain.mesh.removeFromParent();
     this.rain.dispose();
+    this.blobs.dispose();
     this.brightStars.removeFromParent();
     this.brightStars.geometry.dispose();
     (this.brightStars.material as THREE.Material).dispose();

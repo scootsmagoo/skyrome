@@ -83,8 +83,8 @@ void main() {
 `;
 
 /**
- * Final composite: scene + bloom → exposure + tone mapping → color grade (saturation, split
- * toning: warm highlights, cool shadows, gentle contrast) → vignette → sRGB → dither.
+ * Final composite: scene + bloom → exposure + tone mapping → vignette → sRGB → the grade, a 3D
+ * LUT built in code (saturation, split toning: warm highlights, cool shadows, contrast) → dither.
  * TONEMAP: 0 ACES, 1 AgX, 2 Neutral. With FXAA after it, alpha carries luma.
  */
 export const COMPOSITE_FRAG = /* glsl */ `
@@ -92,16 +92,15 @@ uniform sampler2D tColor;
 uniform sampler2D tBloom;
 uniform sampler2D tAo;
 uniform float uAoOn;
+uniform float uContact;     // strength of the contact shadows (green channel of tAo)
 uniform sampler2D tShafts;
 uniform float uShafts;
 uniform float uBloom;
 uniform float uBloomOn;
 uniform float uVignette;
 uniform float uAspect;
-uniform float uSaturation;
-uniform float uContrast;
-uniform vec3 uShadowTint;
-uniform vec3 uHighlightTint;
+uniform float uSaturation;   // the weather's (rain is greyer); the grade proper is in the LUT
+uniform highp sampler3D tLut;
 uniform float uTime;
 varying vec2 vUv;
 #include <tonemapping_pars_fragment>
@@ -113,7 +112,10 @@ float hash(vec2 p) {
 void main() {
   vec3 c = texture2D(tColor, vUv).rgb;
   // Ambient occlusion (gfx/post/ao.ts), before the glow is added.
-  if (uAoOn > 0.5) c *= texture2D(tAo, vUv).r;
+  if (uAoOn > 0.5) {
+    vec2 a = texture2D(tAo, vUv).rg;
+    c *= a.r * mix(1.0, a.g, uContact);
+  }
   if (uShafts > 0.0) c += texture2D(tShafts, vUv).rgb * uShafts;
   // Bloom was built from exposed color; un-expose so tone mapping treats both alike.
   if (uBloomOn > 0.5) c += texture2D(tBloom, vUv).rgb * (uBloom / max(toneMappingExposure, 1e-4));
@@ -126,14 +128,12 @@ void main() {
   #endif
   float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
   c = max(mix(vec3(l), c, uSaturation), 0.0);
-  // Split toning by luminance.
-  c *= mix(uShadowTint, uHighlightTint, smoothstep(0.05, 0.75, l));
-  // Gentle S-curve around mid grey (display-linear).
-  c = mix(c, c * c * (3.0 - 2.0 * c), uContrast);
   vec2 q = (vUv - 0.5) * vec2(uAspect, 1.0);
   c *= 1.0 - uVignette * smoothstep(0.25, 1.1, dot(q, q) * 1.9);
   c = clamp(c, 0.0, 1.0);
   vec3 s = sRGBTransferOETF(vec4(c, 1.0)).rgb;
+  // The grade (gfx/post/grade.ts): a 32^3 table over the encoded colour, sampled at texel centres.
+  s = texture(tLut, s * (31.0 / 32.0) + 0.5 / 32.0).rgb;
   s += (hash(gl_FragCoord.xy + fract(uTime) * 61.0) - 0.5) / 255.0;
   gl_FragColor = vec4(s, dot(s, vec3(0.299, 0.587, 0.114)));
 }
