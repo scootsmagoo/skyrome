@@ -786,6 +786,12 @@ export class CombatCore {
       } else if (pr.result === 'knockdown') this.knockdown(def, arrow ? null : att);
       else if (pr.result === 'flinch') this.flinch(def, att, behind);
       else if (!hit.blocked && !def.action) def.view?.play(behind ? 'hitBack' : 'hitFront');
+      // The body rocks away from the blow (an additive spring on top of the hit clip), left or right.
+      if (hit.damage > 0 || hit.blocked) {
+        const bx = arrow ? arrow.vx : def.position.x - att.position.x;
+        const bz = arrow ? arrow.vz : def.position.z - att.position.z;
+        def.view?.impact?.(bx, bz, (arrow ? 0.4 : power ? 1 : 0.65) * (hit.blocked ? 0.35 : 1) * (stagger === 'knockdown' ? 0.5 : 1));
+      }
       // A blow that lands shoves its target back a little (more for a power blow): the hit reads.
       if (!arrow && !hit.blocked && player && (stagger === 'none' || stagger === 'flinch')) this.push(def, att, power ? TIMING.steps.knockPower : TIMING.steps.knockLight, power ? 0.22 : 0.14);
     }

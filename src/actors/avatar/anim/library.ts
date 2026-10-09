@@ -103,7 +103,7 @@ export function airClips() {
 
 /** Bake everything up front (e.g. behind a loading screen) so the first use never hitches. */
 export function warmUpAnimations(stances: readonly Stance[] = STANCES) {
-  for (const g of Object.keys(GAITS) as GaitName[]) for (let d = 0; d < DIRECTIONS.length; d++) if (g !== 'sprint' && g !== 'turn' || d === 0) gaitClip(g, d);
+  for (const g of Object.keys(GAITS) as GaitName[]) for (let d = 0; d < DIRECTIONS.length; d++) if (g === 'turn' ? d === 0 : g === 'sprint' ? d === 0 || d === 1 || d === DIRECTIONS.length - 1 : true) gaitClip(g, d);
   for (const s of stances) {
     stanceIdleClip(s, false);
     stanceIdleClip(s, true);

@@ -10,7 +10,7 @@
  * AnimationController (anim/controller.ts); distant avatars update less often (see lod.ts).
  */
 import * as THREE from 'three';
-import type { ActionClip, CombatAvatar, IdleLoop, LocomotionState, PlayOptions, Stance } from '../Actor';
+import type { ActionClip, CombatAvatar, FootContactHandler, GroundProbe, IdleLoop, LocomotionState, PlayOptions, Stance } from '../Actor';
 import type { Appearance, ArmorLook, Garment, ShieldModel, WeaponModel } from '../appearance';
 import { B, BONES, localOffset, type BoneName, type Rig } from './rig';
 import { acquireAvatarGeometry, appearanceKey, boneInverses, createBones, releaseAvatarGeometry, type AvatarGeometry } from './buildAvatar';
@@ -45,6 +45,10 @@ export class HumanoidAvatar implements CombatAvatar {
   readonly skeleton: THREE.Skeleton;
   readonly anim: AnimationController;
   readonly equipment: Equipment;
+  /** Fired when a foot lands in a locomotion cycle (the contract is on AvatarView). */
+  onFootContact?: FootContactHandler;
+  /** Reads the ground under a foot for the foot IK (set by the Actor that carries this avatar). */
+  groundProbe?: GroundProbe;
   /** Body proportions (changes only through setAppearance). */
   rig: Rig;
   eyeHeight: number;
@@ -205,6 +209,10 @@ export class HumanoidAvatar implements CombatAvatar {
     // Action clocks and their events run every frame; only the pose sampling is throttled.
     this.anim.advance(dt);
     if (step > 0) {
+      // Planted feet and loose parts only where they can be seen (the LOD's full-rate zone).
+      const d = avatarLod.distance(this);
+      this.anim.near = d < avatarLod.near;
+      this.anim.viewDistance = d;
       this.anim.update(step, state);
       this.updateLod();
     }
@@ -285,6 +293,21 @@ export class HumanoidAvatar implements CombatAvatar {
 
   lookAt(p: THREE.Vector3 | null) {
     this.anim.lookAt(p);
+  }
+
+  /**
+   * A blow lands: the body rocks away from it and settles (additive, on top of the hit clip).
+   * (dx, dz) is the horizontal direction the blow travels in the world, strength 0..1.
+   */
+  hitImpulse(dx: number, dz: number, strength: number) {
+    const l = Math.hypot(dx, dz);
+    if (l < 1e-6 || this.disposed) return;
+    // The avatar's forward and left in the world (local +Z and +X) from its last world matrix.
+    const e = this.root.matrixWorld.elements;
+    const fx = e[8], fz = e[10], lx = e[0], lz = e[2];
+    const fl = Math.hypot(fx, fz) || 1;
+    const ll = Math.hypot(lx, lz) || 1;
+    this.anim.hitImpulse(((dx * fx + dz * fz) / (l * fl)), ((dx * lx + dz * lz) / (l * ll)), strength);
   }
 
   /** Camera pitch (radians, + up) for first-person arms and aiming. */

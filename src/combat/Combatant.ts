@@ -53,6 +53,8 @@ export interface CombatView {
   setBlocking(on: boolean): void;
   setCharge(c: number): void;
   setDead(dead: boolean): void;
+  /** A blow lands: (dx, dz) is the horizontal direction it travels in the world, strength 0..1 (the body rocks away from it). */
+  impact?(dx: number, dz: number, strength: number): void;
   /** World position of the weapon hand and of the shoulder pivot; false if unknown. */
   hand(out: THREE.Vector3): boolean;
   shoulder(out: THREE.Vector3): boolean;

@@ -25,6 +25,20 @@ export interface LocomotionState {
   turnRate: number;
 }
 
+/** Called when a foot lands in a locomotion cycle: which foot, the gait ('walk' | 'run' | 'sprint' | 'sneak') and the strength (0..1). */
+export type FootContactHandler = (side: 'L' | 'R', gait: string, strength: number) => void;
+
+/** The ground under a foot: world height and the surface normal in the avatar's frame. */
+export interface GroundSample {
+  y: number;
+  nx: number;
+  ny: number;
+  nz: number;
+}
+
+/** Reads the ground at a point in the avatar's frame (x to the left, z forward). False = none in reach. */
+export type GroundProbe = (lx: number, lz: number, out: GroundSample) => boolean;
+
 /** The visual side of an actor (procedural avatar, glTF model, or a placeholder). */
 export interface AvatarView {
   /** Positioned at the feet, facing +Z. Added under Actor.root. */
@@ -34,6 +48,13 @@ export interface AvatarView {
   setFirstPerson?(on: boolean): void;
   /** Eye height above the feet in meters (default 1.62). */
   eyeHeight?: number;
+  /**
+   * Foot contacts from the gait phase (0 = left foot lands, 0.5 = right), set by whoever listens
+   * (footstep audio). Fires only for avatars that animate their feet.
+   */
+  onFootContact?: FootContactHandler;
+  /** Set by the Actor: reads the ground under the avatar's feet (foot IK). */
+  groundProbe?: GroundProbe;
   dispose?(): void;
 }
 
@@ -51,6 +72,10 @@ const GRAVITY = -20;
 const tmp = new THREE.Vector3();
 /** Highest ledge the step-up assist takes in stride (m): curbs, doorsteps, stairs. Not the 0.4 m seat rows of a cavea (its aisles are the way up) nor a plinth (clamber, Climb.ts). */
 const STEP_MAX = 0.3;
+/** Step smoothing: a physical step of at least this much (m) eases the drawn height over STEP_EASE_TIME seconds, at this rate (1/s). */
+const STEP_EASE_MIN = 0.05;
+const STEP_EASE_TIME = 0.4;
+const STEP_EASE_RATE = 14;
 const DOWN = { x: 0, y: -1, z: 0 };
 const UP = { x: 0, y: 1, z: 0 };
 
@@ -83,6 +108,8 @@ export class Actor {
   private stepStalls = 0;
   /** Fixed steps left to carry on level after a step-up, until the body is over the tread. */
   private stepHold = 0;
+  /** Seconds left in which the visual height eases to the physical one after a step up or down (stairs, kerbs). */
+  private easeY = 0;
 
   constructor(
     protected readonly game: Game,
@@ -117,8 +144,30 @@ export class Actor {
       this.avatar.dispose?.();
     }
     this.avatar = view;
-    if (view) this.root.add(view.root);
+    if (view) {
+      this.root.add(view.root);
+      view.groundProbe = this.probeGround;
+    }
   }
+
+  /** Ground under a point of the avatar's frame, for foot IK (see anim/footIk.ts). */
+  private readonly probeGround: GroundProbe = (lx, lz, out) => {
+    const sin = Math.sin(this.heading);
+    const cos = Math.cos(this.heading);
+    const p = this.root.position;
+    // Local +Z is forward (sin, cos), local +X is to the left (cos, -sin).
+    const x = p.x + lx * cos + lz * sin;
+    const z = p.z - lx * sin + lz * cos;
+    const hit = this.game.physics.raycast({ x, y: p.y + 0.55, z }, DOWN, 1.1, Layer.World);
+    // Starting inside something (a ledge or wall beside the foot) is no ground.
+    if (!hit || hit.distance < 0.01) return false;
+    out.y = hit.point.y;
+    const n = hit.normal;
+    out.nx = n.x * cos - n.z * sin;
+    out.ny = n.y;
+    out.nz = n.x * sin + n.z * cos;
+    return true;
+  };
 
   /**
    * Fixed-step locomotion. `wish` is the desired horizontal velocity (m/s, y ignored).
@@ -210,6 +259,9 @@ export class Actor {
 
     this.turnRate = (this.heading - this.lastHeading) / Math.max(dt, 1e-4);
     this.lastHeading = this.heading;
+    // A riser lifts the body a hand's breadth in one step: let the visual rise over a few frames instead of popping.
+    const dy = this.currPos.y - this.prevPos.y;
+    if (wasGrounded && this.grounded && Math.abs(dy) > STEP_EASE_MIN && Math.abs(dy) < 0.45) this.easeY = STEP_EASE_TIME;
   }
 
   /**
@@ -258,6 +310,7 @@ export class Actor {
     });
     this.currPos.set(pos.x, pos.y, pos.z);
     this.prevPos.copy(this.currPos);
+    this.easeY = 0;
     this.velocity.set(0, 0, 0);
     if (heading !== undefined) this.heading = this.lastHeading = heading;
     this.root.position.copy(this.currPos);
@@ -278,7 +331,13 @@ export class Actor {
 
   /** Interpolate the visual root and drive the avatar. Call once per frame. */
   syncVisual(alpha: number, dt: number) {
+    const shownY = this.root.position.y;
     this.root.position.lerpVectors(this.prevPos, this.currPos, alpha);
+    if (this.easeY > 0) {
+      // Chase the physical height from where the figure was drawn last frame.
+      this.easeY -= dt;
+      this.root.position.y = shownY + (this.root.position.y - shownY) * (1 - Math.exp(-STEP_EASE_RATE * dt));
+    }
     this.root.rotation.y = this.heading;
     if (this.avatar) this.avatar.update(dt, this.locomotionState());
   }
@@ -371,6 +430,8 @@ export interface CombatAvatar extends AvatarView {
   getSocket(name: 'handR' | 'handL' | 'head' | 'chest' | 'hips' | 'back'): THREE.Object3D;
   /** Look-at target for the head (dialogue), or null. */
   lookAt?(worldPoint: THREE.Vector3 | null): void;
+  /** A blow lands: (dx, dz) is the horizontal world direction it travels, strength 0..1. The body rocks and settles. */
+  hitImpulse?(dx: number, dz: number, strength: number): void;
 }
 
 export function isCombatAvatar(v: AvatarView | null | undefined): v is CombatAvatar {
