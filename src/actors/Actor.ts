@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import type { Game } from '../core/Game';
 import { Layer, type CharacterBody } from '../core/Physics';
+import { STEP_ASSIST_MAX, STEP_ASSIST_MIN } from '../core/traversal';
 import { approachAngle, damp } from '../core/math';
 
 export interface LocomotionState {
@@ -50,7 +51,7 @@ export interface ActorOptions {
 const GRAVITY = -20;
 const tmp = new THREE.Vector3();
 /** Highest ledge the step-up assist takes in stride (m): curbs, doorsteps, stairs. Not the 0.4 m seat rows of a cavea (its aisles are the way up) nor a plinth (clamber, Climb.ts). */
-const STEP_MAX = 0.3;
+const STEP_MAX = STEP_ASSIST_MAX;
 const DOWN = { x: 0, y: -1, z: 0 };
 const UP = { x: 0, y: 1, z: 0 };
 
@@ -232,7 +233,7 @@ export class Actor {
     if (!top || top.normal.y < 0.75) return null;
     const rise = top.point.y - feet.y;
     // Under 9 cm the capsule's round bottom rides over by itself (and a wall's moulding is no step).
-    if (rise < 0.09 || rise > STEP_MAX) return null;
+    if (rise < STEP_ASSIST_MIN || rise > STEP_MAX) return null;
     // Room for the whole body on top, and nothing low just past the edge.
     const height = 2 * (this.body.halfHeight + r);
     if (ph.raycast({ x: px, y: top.point.y + 0.03, z: pz }, UP, height, Layer.World)) return null;

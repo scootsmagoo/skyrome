@@ -15,7 +15,7 @@ import * as THREE from 'three';
 import { Rng } from '../../core/Rng';
 import { MeshBuilder } from '../../gfx/MeshBuilder';
 import type { MaterialId } from '../../gfx/materialIds';
-import { placeProp } from '../../arch/props/props';
+import { groundIn, placeProp } from '../../arch/props/props';
 import { blockOutline, type LotPlan } from '../../arch/fabric/blockFiller';
 import { Draw } from '../../arch/fabric/draw';
 import { domus } from '../../arch/fabric/domus';
@@ -28,6 +28,7 @@ import { buildPlaza } from '../../arch/fabric/streets';
 import type { BuildingOutput, Detail, HeightFn, Polygon, Spot, SpotKind } from '../../arch/fabric/types';
 import type { FrontWall } from './frontage';
 import type { BlockLayout } from './massing';
+import { FLOOR_LIFT } from './datum';
 import type { PlanBlock } from './plan';
 import { drawTorches } from './life';
 
@@ -76,12 +77,12 @@ export function* fillUnits(blk: PlanBlock, layout: BlockLayout, detail: Detail, 
     let floorY = -Infinity;
     for (let i = 0; i <= 4; i++) {
       const [x, z] = toWorld(-obb.hu + (2 * obb.hu * i) / 4, -obb.hv - 0.4);
-      floorY = Math.max(floorY, H(x, z) + s + 0.06);
+      floorY = Math.max(floorY, H(x, z) + s + FLOOR_LIFT);
     }
     const groundAt = (lx: number, lz: number) => {
       const [x, z] = toWorld(lx, lz);
       const raise = lz < -obb.hv + 0.01 ? s : lx < -obb.hu + 0.01 && p.street.left >= 0 ? sidewalkOf(p.street.left) : lx > obb.hu - 0.01 && p.street.right >= 0 ? sidewalkOf(p.street.right) : 0;
-      return H(x, z) + 0.06 + raise - floorY;
+      return H(x, z) + FLOOR_LIFT + raise - floorY;
     };
     const m = new THREE.Matrix4().makeTranslation(obb.c[0], floorY, obb.c[1]).multiply(new THREE.Matrix4().makeRotationY(p.rotationY));
     const sides = { left: !p.party.left, right: !p.party.right, back: !p.party.back };
@@ -206,10 +207,11 @@ function piazza(b: MeshBuilder, p: LotPlan, H: HeightFn, rng: Rng, spots: Spot[]
     compitalShrine(d.at(0, 0, p.obb.hv * 0.4, Math.PI), rng);
     add('shrine', 0, p.obb.hv * 0.4 - 1.8, 0, 'compitum');
   }
+  const gnd = groundIn(d, (x, z) => H(x, z) + sw * 0.5 + 0.05);
   for (const s of [-1, 1]) {
     if (!rng.chance(0.7) || noProps) continue;
     const lx = s * (p.obb.hu - 1.2);
-    placeProp(d, 'bench_masonry', lx, 0, 0, s * Math.PI / 2, { variant: 0 });
+    placeProp(d, 'bench_masonry', lx, gnd(lx, 0), 0, s * Math.PI / 2, { variant: 0, ground: gnd });
     add('bench', lx - s * 0.5, 0, -s * Math.PI / 2);
   }
   for (const s of [-1, 1]) if (rng.chance(0.6)) add('tree', s * (p.obb.hu - 1.5), p.obb.hv - 1.5, 0, rng.pick(['pine', 'plane', 'cypress']));
@@ -238,7 +240,7 @@ function yardDressing(b: MeshBuilder, poly: Polygon, plans: LotPlan[], avoid: Po
     const y = H(x, z) + 0.03;
     if (k === 'tree') spots.push({ id: `${prefix}yard:tree${n}`, kind: 'tree', position: new THREE.Vector3(x, y, z), facing: 0, tag: rng.pick(['fig', 'olive', 'laurel', 'pine', 'cypress']) });
     else {
-      placeProp(d, k, x, y, z, rng.range(0, Math.PI * 2), { rng });
+      placeProp(d, k, x, y, z, rng.range(0, Math.PI * 2), { rng, ground: H });
       if (k === 'puteal') spots.push({ id: `${prefix}yard:well${n}`, kind: 'well', position: new THREE.Vector3(x + 0.9, y, z), facing: -Math.PI / 2 });
     }
     n++;

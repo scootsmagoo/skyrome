@@ -21,6 +21,7 @@ import type * as Atlas from '../../data/atlas';
 import { WORLD_SCALE } from '../coords';
 import { footprintPolygon, type P2 } from '../terrain/heightmap';
 import { CORRIDORS, DISTRICT_LANDMARKS, EXTRA_ROADS, OPEN_SPACES, QUARTERS, SIGHTLINE_LANDMARKS, SIGHTLINE_RADIUS, SKIPPED_AQUEDUCTS, WILD_LANDMARKS, type Quarter } from './data';
+import { SIDEWALK } from './datum';
 import { Grid, K, cleanRing, components, pointInPoly, polyBounds, polyCentroid, signedArea, simplifyRing, splitCells, traceLoops, type Pt } from './raster';
 
 const S = WORLD_SCALE;
@@ -778,7 +779,8 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
           else if (c === K.STREET) street++;
           else if (c === K.PIAZZA || c === K.PLAZA || c === K.MARGIN || c === K.AQUEDUCT) open++;
         }
-        const sw = road >= 2 ? 0.2 : street >= 2 ? 0.12 : road + street + open >= 2 ? 0.06 : 0.06;
+        // One datum per edge (datum.ts): the sidewalk of the street it fronts, else flush with the paving.
+        const sw = road >= 2 ? SIDEWALK.road : street >= 2 ? SIDEWALK.street : SIDEWALK.other;
         sidewalk.push(sw);
         if (L >= 6 && road + street + open >= 2) frontEdges.push(k);
       }

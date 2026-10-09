@@ -151,6 +151,23 @@ const wish = new THREE.Vector3();
 const desired: Vec2 = { x: 0, z: 0 };
 const steered: Vec2 = { x: 0, z: 0 };
 
+/** One entry of `NpcManager.stuckLog` (metres; `wall` = distance to a World hit ahead at 0.12 / 0.35 / 0.9 m above the feet). */
+export interface StuckRecord {
+  t: number;
+  id: string;
+  role: string;
+  district: string;
+  x: number;
+  y: number;
+  z: number;
+  seen: boolean;
+  /** Floor height 0.6 m ahead minus the feet (null: no floor). */
+  rise: number | null;
+  wall: (number | null)[];
+  /** NavGrid.canStep for the next cell ahead (null: same cell). */
+  planned: boolean | null;
+}
+
 export class NpcManager implements System {
   readonly name = 'npcs';
   /** After the player controller (-10) and before the actor system (50). */
@@ -1618,11 +1635,43 @@ export class NpcManager implements System {
     if (this.rng.chance(sprint ? 0.7 : 0.35)) this.bark(n, 'shoved', sprint);
   }
 
+  /** Every unstick, newest last (capped): where, in which district, and what the edge ahead looked like. */
+  readonly stuckLog: StuckRecord[] = [];
+
+  /** The stuck NPC's surroundings: floor rise 0.6 m ahead, the nearest wall at knee / shin / chest height, and whether the planner thought the step was fine. */
+  private logStuck(n: Npc, seen: boolean) {
+    const ph = this.game.physics;
+    const sx = Math.sin(n.heading), sz = Math.cos(n.heading);
+    const p = n.position;
+    const ax = p.x + sx * 0.6, az = p.z + sz * 0.6;
+    const fl = ph.groundHeight(ax, az, p.y + 0.6, 1.4);
+    const wall = (h: number) => ph.raycast({ x: p.x, y: p.y + h, z: p.z }, { x: sx, y: 0, z: sz }, 0.9, Layer.World)?.distance ?? null;
+    const g = this.grid;
+    const ca = { x: g.cellOf(p.x), z: g.cellOf(p.z) };
+    const cb = { x: g.cellOf(p.x + sx * g.cell), z: g.cellOf(p.z + sz * g.cell) };
+    const rec: StuckRecord = {
+      t: Math.round(this.clock),
+      id: n.id,
+      role: n.role?.id ?? n.def?.id ?? '',
+      district: districtAt(p.x, p.z).id,
+      x: Math.round(p.x * 10) / 10,
+      y: Math.round(p.y * 100) / 100,
+      z: Math.round(p.z * 10) / 10,
+      seen,
+      rise: fl === null ? null : Math.round((fl - p.y) * 100) / 100,
+      wall: [wall(0.12), wall(0.35), wall(0.9)],
+      planned: ca.x === cb.x && ca.z === cb.z ? null : g.canStep(ca.x, ca.z, cb.x, cb.z),
+    };
+    this.stuckLog.push(rec);
+    if (this.stuckLog.length > 400) this.stuckLog.shift();
+  }
+
   /** Last rung of the stuck ladder: put the NPC somewhere free (AC-22). */
   private unstick(n: Npc) {
     this.stats.unstuck++;
     const c = n.mover.corner();
     const seen = this.isSeen(n.position.x, n.position.y + 1, n.position.z);
+    this.logStuck(n, seen);
     this.grid.block(n.position.x + Math.sin(n.heading) * 0.8, n.position.z + Math.cos(n.heading) * 0.8);
     if (!seen && c) {
       // Out of sight: hop ahead to the next free cell on the path.
