@@ -404,7 +404,7 @@ export class AnimationController {
     if (this.dead && (this.holdingDeath() || clip !== 'death')) {
       if (clip === 'hitFront' || clip === 'hitBack' || clip === 'hitLeft' || clip === 'hitRight' || clip === 'stagger' || clip === 'knockdown' || clip === 'blockHit') {
         this.twitch = 1;
-        this.twitchDir = clip === 'hitBack' ? -1 : 1;
+        this.twitchDir = clip === 'hitBack' || clip === 'hitRight' ? -1 : 1;
       }
       opts?.onEnd?.(true);
       return;

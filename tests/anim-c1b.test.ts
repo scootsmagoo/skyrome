@@ -39,7 +39,7 @@ describe('stair gait', () => {
   });
 
   it('still takes one tread per step at a walking pace', () => {
-    const ik = walk(stairs, 1.6);
+    const ik = walk(stairs, 1.6, 240);
     expect(ik.treadsPerStep).toBe(1);
     expect(ik.stride).toBeCloseTo(ik.tread / 0.77, 1);
   });
