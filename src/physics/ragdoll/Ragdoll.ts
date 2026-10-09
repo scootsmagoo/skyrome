@@ -65,6 +65,12 @@ interface Seg {
   /** Capsule length overall and radius (m), to recompute the inertia when the mass changes. */
   len: number;
   radius: number;
+  /** The capsule's centre and unit axis in the body's frame, and its half cylinder length (for contacts with standing people). */
+  centre: THREE.Vector3;
+  axis: THREE.Vector3;
+  half: number;
+  /** An arm body (upper arm or forearm). */
+  arm: boolean;
   /** World rotation the animation wants this body at (set each frame). */
   target: THREE.Quaternion;
   /** Transforms at the last two fixed steps (render interpolation). */
@@ -85,6 +91,8 @@ const _w = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 const AXIS_X = new THREE.Vector3(1, 0, 0);
 
+/** No body part moves faster than this (m/s). */
+const MAX_SPEED = 16;
 /** Damping ratio of the muscles (their frequency is set per joint in drive). */
 const MUSCLE_ZETA = 0.9;
 /** A person's weight (kg) at the 1.75 m reference body. */
@@ -99,6 +107,15 @@ export class Ragdoll {
   strength = 1;
   /** Muscles stay at least this firm (stops joints folding into impossible shapes when limp). */
   floor = 0.04;
+  /** 0 … 1: the share of the body's weight held up by an unseen hand (a stumble stays on its feet; a fall has none). */
+  unload = 0;
+  /**
+   * Arms hang loose (a stumble's flail): their targets are the chest's own pose, i.e. straight
+   * down, whatever the animation does with them, and they are held at `armStrength` of the
+   * muscles so they swing with the blow instead of holding a pose.
+   */
+  armsLoose = false;
+  armStrength = 0.5;
   disposed = false;
 
   constructor(
@@ -171,6 +188,10 @@ export class Ragdoll {
         inertia: mass * (len * len / 12 + r * r / 4),
         len,
         radius: r,
+        centre: center.clone(),
+        axis: dir.clone().normalize(),
+        half,
+        arm: def.bone.startsWith('upperArm') || def.bone.startsWith('forearm'),
         target: _q.clone(),
         prevP: _p.clone(),
         prevQ: _q.clone(),
@@ -267,10 +288,78 @@ export class Ragdoll {
     best.body.applyImpulseAtPoint({ x: (dir.x / l) * magnitude, y: (dir.y / l) * magnitude, z: (dir.z / l) * magnitude }, { x: at.x, y: at.y, z: at.z }, true);
   }
 
+  /**
+   * Hold the body to a place and a drift (a stumbling person's capsule, which keeps walking): the
+   * pelvis is eased toward (x, z) travelling at (vx, vz); `gain` 0 … 1 is how much of the
+   * difference it closes each step. Only the pelvis, so the limbs still trail and flail.
+   */
+  tether(x: number, z: number, vx: number, vz: number, gain: number) {
+    const b = this.segs[0].body;
+    const t = b.translation();
+    const v = b.linvel();
+    const wantX = vx + (x - t.x) * 6;
+    const wantZ = vz + (z - t.z) * 6;
+    const m = this.mass() * gain;
+    b.applyImpulse({ x: (wantX - v.x) * m, y: 0, z: (wantZ - v.z) * m }, true);
+  }
+
+  /**
+   * Standing people are not bodies in this world (their capsules are kinematic and ignore the
+   * ragdoll layer), so the limbs are kept out of them by hand: each body's capsule is sampled at
+   * three points and any that sinks into the upright capsule at (cx, cz), between heights y0 and
+   * y1 and `radius` wide, is pushed out, and its speed into the capsule is bled off. The push is
+   * capped (no explosions) and sized by the body's mass. `(avx, avz)` is the person's own
+   * velocity. Returns the horizontal impulse (N s) the person feels back, along (outX, outZ).
+   */
+  collideCapsule(cx: number, cz: number, y0: number, y1: number, radius: number, avx: number, avz: number, out: THREE.Vector3): boolean {
+    let hit = false;
+    for (const s of this.segs) {
+      const t = s.body.translation();
+      const r = s.body.rotation();
+      _q.set(r.x, r.y, r.z, r.w);
+      for (let i = -1; i <= 1; i++) {
+        _v.copy(s.axis).multiplyScalar(i * s.half).add(s.centre).applyQuaternion(_q);
+        const px = t.x + _v.x;
+        const py = t.y + _v.y;
+        const pz = t.z + _v.z;
+        if (py < y0 - s.radius || py > y1 + s.radius) continue;
+        let dx = px - cx;
+        let dz = pz - cz;
+        const d = Math.hypot(dx, dz);
+        const reach = radius + s.radius;
+        if (d >= reach) continue;
+        if (d < 1e-4) {
+          // Dead centre: out the way the body is already moving.
+          const l = s.body.linvel();
+          dx = l.x || 1;
+          dz = l.z;
+        }
+        const dd = Math.hypot(dx, dz);
+        const nx = dx / dd;
+        const nz = dz / dd;
+        const l = s.body.linvel();
+        const into = (l.x - avx) * nx + (l.z - avz) * nz;
+        // Out of the overlap at a bounded speed, and no speed left into the person.
+        const dv = Math.min(2.2, (reach - d) * 12) + (into < 0 ? Math.min(4, -into) * 0.8 : 0);
+        const j = s.body.mass() * dv;
+        s.body.applyImpulse({ x: nx * j, y: 0, z: nz * j }, true);
+        out.x -= nx * j;
+        out.z -= nz * j;
+        hit = true;
+        break;
+      }
+    }
+    return hit;
+  }
+
   /** Read the animation's pose as the muscles' targets (call after the avatar updated its bones). */
   readTargets() {
     this.avatar.root.updateMatrixWorld(true);
     for (const s of this.segs) this.avatar.bones[s.bone].matrixWorld.decompose(_p, s.target, _s);
+    if (this.armsLoose) {
+      // Segments are listed parents first, so a forearm follows its upper arm which follows the chest.
+      for (const s of this.segs) if (s.arm && s.parent >= 0) s.target.copy(this.segs[s.parent].target);
+    }
   }
 
   /**
@@ -279,7 +368,10 @@ export class Ragdoll {
    * a joint carries, so a spine holding up the chest, head and arms is as firm as an elbow.
    */
   drive(dt: number) {
-    void dt;
+    if (this.unload > 0) {
+      // Weight taken off: an upward push of that share of m·g on every body.
+      for (const s of this.segs) s.body.applyImpulse({ x: 0, y: s.body.mass() * 9.81 * this.unload * dt, z: 0 }, false);
+    }
     const k = Math.max(this.floor, Math.min(1, this.strength));
     for (const s of this.segs) {
       if (s.parent < 0 || !s.joint) continue;
@@ -294,8 +386,9 @@ export class Ragdoll {
       const hz = s.def.bone === 'spine' || s.def.bone === 'chest' ? 7 : s.def.bone === 'head' ? 6 : 5;
       const wn = 2 * Math.PI * hz;
       // Force-based (N m / rad): scaled by everything the joint carries (s.inertia).
-      const stiff = wn * wn * k * s.inertia;
-      const damp = 2 * MUSCLE_ZETA * wn * Math.sqrt(k) * s.inertia;
+      const kk = this.armsLoose && s.arm ? Math.max(this.floor, k * this.armStrength) : k;
+      const stiff = wn * wn * kk * s.inertia;
+      const damp = 2 * MUSCLE_ZETA * wn * Math.sqrt(kk) * s.inertia;
       const raw = rawJoint(s.joint);
       const h = s.joint.handle;
       raw.jointConfigureMotorPosition(h, RAPIER.JointAxis.AngX, _q3.x * f, stiff, damp);
@@ -309,6 +402,10 @@ export class Ragdoll {
   /** After a physics step: keep the last two transforms for interpolation. */
   sample() {
     for (const s of this.segs) {
+      // No body flies faster than a thrown person can (a safety net against a bad contact).
+      const v = s.body.linvel();
+      const sp = Math.hypot(v.x, v.y, v.z);
+      if (sp > MAX_SPEED) s.body.setLinvel({ x: (v.x * MAX_SPEED) / sp, y: (v.y * MAX_SPEED) / sp, z: (v.z * MAX_SPEED) / sp }, true);
       s.prevP.copy(s.currP);
       s.prevQ.copy(s.currQ);
       const t = s.body.translation();

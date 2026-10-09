@@ -12,6 +12,7 @@ import { BED_RMS, ONESHOT_LOUDNESS, ONESHOT_PEAK } from './levels';
 import type { SampleSource } from './samples';
 import { ambienceLoops, ambienceSounds } from './sounds/ambience';
 import { combatSounds } from './sounds/combat';
+import { crockerySounds } from './sounds/crockery';
 import { foleySounds } from './sounds/foley';
 import { footstepSounds, landingSounds } from './sounds/footsteps';
 import { gearSounds } from './sounds/gear';
@@ -26,7 +27,7 @@ export const DEFAULT_BAKE_RATE = 32000;
 export const SOUNDS = new Map<string, SoundDef>();
 export const LOOPS = new Map<string, LoopDef>();
 
-for (const d of [...footstepSounds, ...landingSounds, ...gearSounds, ...combatSounds, ...vocalSounds, ...foleySounds, ...uiSounds, ...ambienceSounds]) {
+for (const d of [...footstepSounds, ...landingSounds, ...gearSounds, ...combatSounds, ...vocalSounds, ...foleySounds, ...crockerySounds, ...uiSounds, ...ambienceSounds]) {
   if (SOUNDS.has(d.id)) throw new Error(`[audio] duplicate sound id ${d.id}`);
   SOUNDS.set(d.id, d);
 }

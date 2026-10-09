@@ -18,10 +18,18 @@ import { Layer, RAPIER, groups } from '../core/Physics';
 import type { PropKind } from './crowd/roles';
 import type { Npc } from './Npc';
 import { attachProp, BUN_GEO, LOAF_GEO, makeBrokenAmphora } from './props';
+import { WineStains } from './spill';
 
 declare module '../core/Game' {
   interface Game {
     looseLoads?: LooseLoads;
+  }
+}
+
+declare module '../core/Events' {
+  interface GameEvents {
+    /** A load that came off its carrier hit the ground (or broke); bystanders look over. */
+    'load:fell': { kind: LoadKind; x: number; y: number; z: number; ownerId: string | null; broke: boolean };
   }
 }
 
@@ -31,14 +39,33 @@ export function isDetachable(kind: PropKind | undefined): kind is LoadKind {
   return kind === 'basket' || kind === 'amphora' || kind === 'sack' || kind === 'tray';
 }
 
-/** Loads and spilled bits kept in the world at once (the oldest go first) and how long (s). */
+/** Loads and spilled bits kept in the world at once (the oldest go first) and how long (s): the High tier's. */
 export const MAX_LOADS = 10;
 export const MAX_PIECES = 24;
 export const LOAD_LIFE = 150;
+
+/** The budget per graphics tier: loads, spilled bits (each a body in the physics step) and wine stains. */
+export const LOAD_BUDGET = {
+  low: { loads: 4, pieces: 8, stains: 2 },
+  medium: { loads: 7, pieces: 14, stains: 4 },
+  high: { loads: MAX_LOADS, pieces: MAX_PIECES, stains: 6 },
+} as const;
+export type LoadTier = keyof typeof LOAD_BUDGET;
+
+/** The chance that a stumble (not a fall) shakes the load off, by what is carried (a tall head load slips most). */
+export const SLIP_CHANCE: Record<LoadKind, number> = { amphora: 0.3, basket: 0.4, tray: 0.5, sack: 0.15 };
+
+/**
+ * Does an amphora landing at `speed` after falling from `before` (m/s) break? It must come down
+ * hard (a fall from the head onto stone is about 5–7 m/s) and then it usually does.
+ */
+export function breaks(before: number, after: number, roll: number): boolean {
+  return before > 3.5 && before - after > BREAK_DECEL && roll < BREAK_CHANCE;
+}
 const PIECE_LIFE = 50;
 /** Sudden slowing (m/s between two frames) that can break an amphora. */
-const BREAK_DECEL = 3;
-const BREAK_CHANCE = 0.55;
+const BREAK_DECEL = 2.5;
+const BREAK_CHANCE = 0.8;
 
 export interface LoosePiece {
   mesh: THREE.Object3D;
@@ -57,6 +84,8 @@ export interface LooseLoad {
   /** 'broken' (an amphora in shards) can't be picked up. */
   state: 'loose' | 'broken';
   speed: number;
+  /** Has hit the ground yet (bystanders were told). */
+  landed: boolean;
 }
 
 // ---------------------------------------------------------------- the recover task (pure)
@@ -141,11 +170,26 @@ export class LooseLoads {
   private readonly loads: LooseLoad[] = [];
   private readonly spilled: (LoosePiece & { born: number; load: LooseLoad | null })[] = [];
   private time = 0;
+  /** Loads, bits and stains kept at once (the graphics tier sets them). */
+  maxLoads = MAX_LOADS;
+  maxPieces = MAX_PIECES;
+  private stains: WineStains | null = null;
   constructor(
     private readonly game: Game,
     private readonly rng: () => number = Math.random,
   ) {
     game.looseLoads = this;
+    const g = game.settings?.data;
+    const tier = (g?.graphics && g.graphics !== 'auto' ? g.graphics : g?.graphicsApplied?.tier) as LoadTier | undefined;
+    const b = LOAD_BUDGET[tier ?? 'high'] ?? LOAD_BUDGET.high;
+    this.maxLoads = b.loads;
+    this.maxPieces = b.pieces;
+    this.stainBudget = b.stains;
+  }
+  private stainBudget: number = LOAD_BUDGET.high.stains;
+
+  get stainCount(): number {
+    return this.stains?.count ?? 0;
   }
 
   get count(): number {
@@ -202,12 +246,12 @@ export class LooseLoads {
     holder.add(obj);
     const kick = opts.kick ?? { x: 0, y: 0, z: 0 };
     const v = tmpV.set(npc.velocity.x + kick.x, 1.3 + kick.y + this.rng() * 0.8, npc.velocity.z + kick.z);
-    const load: LooseLoad = { kind, holder, body: null, owner: opts.recover ? npc : null, pieces: [], born: this.time, state: 'loose', speed: v.length() };
+    const load: LooseLoad = { kind, holder, body: null, owner: opts.recover ? npc : null, pieces: [], born: this.time, state: 'loose', speed: v.length(), landed: false };
     load.body = this.makeBody(centre, tmpQ, v, sp.shape(RAPIER).setMass(sp.kg), 0.5);
     this.loads.push(load);
     if (opts.recover) npc.lostLoad = load;
     for (const { c, p, q } of spillPoses) this.spill(load, c, p, q, v);
-    while (this.loads.length > MAX_LOADS) this.remove(this.loads[0]);
+    while (this.loads.length > this.maxLoads) this.remove(this.loads[0]);
     return load;
   }
 
@@ -240,7 +284,7 @@ export class LooseLoads {
     const piece = { mesh: m, body, born: this.time, load };
     this.spilled.push(piece);
     load.pieces.push(piece);
-    while (this.spilled.length > MAX_PIECES) this.removePiece(this.spilled[0]);
+    while (this.spilled.length > this.maxPieces) this.removePiece(this.spilled[0]);
   }
 
   private makeBody(at: THREE.Vector3Like, q: THREE.Quaternion, v: THREE.Vector3Like, shape: RAPIER.ColliderDesc, restitution: number): RAPIER.RigidBody | null {
@@ -281,9 +325,16 @@ export class LooseLoads {
       const lv = b.linvel();
       const speed = Math.hypot(lv.x, lv.y, lv.z);
       // An amphora that hits the ground hard enough may break.
-      if (l.kind === 'amphora' && l.speed - speed > BREAK_DECEL && l.speed > 4 && this.rng() < BREAK_CHANCE) this.shatter(l);
+      if (l.kind === 'amphora' && breaks(l.speed, speed, this.rng())) this.shatter(l);
+      else if (!l.landed && l.speed - speed > 1.5) {
+        l.landed = true;
+        this.game.events.emit('load:fell', { kind: l.kind, x: t.x, y: t.y, z: t.z, ownerId: l.owner?.id ?? null, broke: false });
+        // A thud on the street (a basket, sack or tray; the amphora's own is its crack).
+        if (l.kind !== 'amphora') this.game.events.emit('sfx', { id: 'body.fall', position: { x: t.x, y: t.y, z: t.z } });
+      }
       l.speed = speed;
     }
+    this.stains?.update(dt);
     for (let i = this.spilled.length - 1; i >= 0; i--) {
       const p = this.spilled[i];
       if (this.time - p.born > PIECE_LIFE) {
@@ -310,12 +361,33 @@ export class LooseLoads {
     const shell = makeBrokenAmphora();
     shell.position.set(0, 0, 0);
     l.holder.add(shell);
-    l.holder.position.set(at.x, ground + 0.005, at.z);
+    l.holder.position.set(at.x, ground + this.lift(at.x, at.z) + 0.005, at.z);
     l.holder.quaternion.setFromAxisAngle(UP, this.rng() * Math.PI * 2);
     l.holder.scale.set(1, 1, 1);
-    this.game.events.emit('sfx', { id: 'lock.break', position: { x: at.x, y: ground, z: at.z } });
+    const pos = { x: at.x, y: ground, z: at.z };
+    this.game.events.emit('sfx', { id: 'pot.break', position: pos });
+    // The wine runs out over the stones.
+    this.stain(at.x, ground, at.z);
+    this.game.events.emit('sfx', { id: 'wine.splash', position: pos });
+    // Bystanders are told once (the load may have been told already on its first bounce).
+    this.game.events.emit('load:fell', { kind: l.kind, x: at.x, y: ground, z: at.z, ownerId: l.owner?.id ?? null, broke: true });
+    l.landed = true;
     // Nothing left to come back for.
     this.abandon(l);
+  }
+
+  /** How far the drawn paving sits above the physics ground at (x, z) (world/city/roads.ts LIFT). */
+  private lift(x: number, z: number): number {
+    const city = (this.game as unknown as { city?: { coversGround?(x: number, z: number): boolean } }).city;
+    return city?.coversGround?.(x, z) ? 0.105 : 0;
+  }
+
+  /** A wine stain on the ground (drawn on the paving where the city covers the ground). */
+  private stain(x: number, y: number, z: number) {
+    if (!this.stains) {
+      this.stains = new WineStains(this.game.scene, this.stainBudget);
+    }
+    this.stains.add(x, y + this.lift(x, z), z, 1.1 + this.rng() * 0.7, this.rng() * Math.PI * 2);
   }
 
   private remove(l: LooseLoad) {
@@ -344,10 +416,13 @@ export class LooseLoads {
   clear() {
     while (this.loads.length) this.remove(this.loads[0]);
     while (this.spilled.length) this.removePiece(this.spilled[0]);
+    this.stains?.clear();
   }
 
   dispose() {
     this.clear();
+    this.stains?.dispose();
+    this.stains = null;
     if (this.game.looseLoads === this) this.game.looseLoads = undefined;
   }
 }

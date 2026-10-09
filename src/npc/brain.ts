@@ -293,6 +293,24 @@ export class NpcBrain {
     }
   }
 
+  /** Until when (manager clock) this NPC won't be distracted by another dropped load. */
+  private noticeUntil = 0;
+
+  /**
+   * Something fell or smashed at (x, z): stop, look at it for a moment and maybe say so. The idle
+   * runs out and the NPC takes up their day again. `loud` is a breakage (they look longer).
+   */
+  notice(ctx: LifeContext, x: number, z: number, loud: boolean) {
+    const npc = this.npc;
+    const k = this.task?.kind;
+    if (npc.dead || npc.talking || npc.scripted || npc.isFighting() || npc.lostLoad || ctx.now < this.noticeUntil || ctx.now < this.alarmUntil) return;
+    if (k === 'flee' || k === 'respond' || k === 'recover' || k === 'converse' || k === 'script') return;
+    this.noticeUntil = ctx.now + 5;
+    const face = Math.atan2(x - npc.position.x, z - npc.position.z);
+    this.setTask(task('idle', { loop: 'stand', face, until: ctx.now + 1.8 + ctx.rng.next() * 1.8 + (loud ? 1.5 : 0) }), ctx);
+    if (npc.role?.gawks && ctx.rng.chance(loud ? 0.5 : 0.25)) ctx.bark(npc, 'gawk');
+  }
+
   /** The manager reads and clears this to unstick the NPC (AC-22). */
   unstickRequested = false;
 
