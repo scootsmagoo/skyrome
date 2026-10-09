@@ -189,7 +189,10 @@ export class Batch {
   /**
    * For a batch that is finished (nothing more will be added, moved or removed): shrink the
    * buffers to the live size and let the vertex arrays go once uploaded, like a static mesh
-   * (gfx/release). `trim`, `ensure` and every add must not be used afterwards.
+   * (gfx/release). `trim`, `ensure` and every add must not be used afterwards. The freed arrays
+   * cannot be uploaded again: a batch must not get `needsUpdate` set, and after a WebGL
+   * context loss it would upload nothing (the game has no context-loss handler; like any static
+   * mesh released by gfx/release, it needs a reload).
    */
   finish() {
     if (this.live < this.vertCap) {

@@ -63,35 +63,6 @@ export class FastCull {
     return true;
   }
 
-  /**
-   * Whether any visible instance's sphere touches the camera's frustum (stops at the first). A mesh
-   * with none can be hidden for the frame: three.js would still bind its program and textures.
-   */
-  anyVisible(camera: THREE.Camera): boolean {
-    const m = this.mesh as unknown as BatchedInternals;
-    projView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(this.mesh.matrixWorld);
-    frustum.setFromProjectionMatrix(projView, camera.coordinateSystem, (camera as THREE.PerspectiveCamera & { reversedDepth?: boolean }).reversedDepth);
-    const p = frustum.planes;
-    const instances = m._instanceInfo;
-    const sp = this.spheres;
-    for (let i = 0, l = instances.length; i < l; i++) {
-      const info = instances[i];
-      if (!info.visible || !info.active) continue;
-      const o = i * 4;
-      const x = sp[o], y = sp[o + 1], z = sp[o + 2], r = -sp[o + 3];
-      let inside = true;
-      for (let k = 0; k < 6; k++) {
-        const pl = p[k];
-        if (pl.normal.x * x + pl.normal.y * y + pl.normal.z * z + pl.constant < r) {
-          inside = false;
-          break;
-        }
-      }
-      if (inside) return true;
-    }
-    return false;
-  }
-
   private cull(camera: THREE.Camera, geometry: THREE.BufferGeometry) {
     const m = this.mesh as unknown as BatchedInternals;
     const index = geometry.getIndex();

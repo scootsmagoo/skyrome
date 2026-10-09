@@ -232,6 +232,5 @@ describe('FastCull', () => {
     fast.setVisibleAt(want[0], false);
     fast.onBeforeRender(null as never, null as never, cam, box, mat, null as never);
     expect(ids(fast)).toEqual(want.slice(1));
-    expect(cull.anyVisible(cam)).toBe(true);
   });
 });
