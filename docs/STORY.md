@@ -83,13 +83,55 @@ This is the story as the player meets it. `docs/GDD.md` §10 is the design of th
    - MONE GRATVM: "Warn Gratus."
 
    The player warns Gratus at the strongrooms.
-6. **End of the playable story so far.**
+6. **End of chapter 3.**
    - Gratus: "A bow on the high place. Tomorrow Caesar stands at the foot of his Column, and the high place is the Column itself. I'll have men on every roof. Be in the Forum of Trajan at dawn."
-   - The journal closes the chapter. A banner says Act I continues with **One Hundred Feet** (the dedication of the Column, `mq-04`), which isn't built yet.
+   - The journal closes the chapter. Chapter 4 begins at once.
+
+## Chapter 4: One Hundred Feet (`mq-04-columna`)
+*Forum of Trajan, 12 May AD 113, from first light.*
+
+1. **Dawn.** The Forum is fuller than it was, and Trajan's daily walk is held. The Column's bronze door is sealed with lead.
+   - **Objective:** **Be in the Forum of Trajan at first light.** Before 05:30 the journal says to wait (T) until then.
+2. **Gratus's briefing.** Gratus stands in the Column court by the altar. He has moved his men onto the library roofs and into the gallery, and he has put the praetorians thirty paces deep round Caesar.
+   - **Objective:** **Speak to Gratus in the Column court.**
+   - Gratus: "Men on both library roofs and in the gallery." Apollodorus had the Column's door sealed with lead at first light, "after his men swept the stair." Nobody is up there but the statue.
+   - Gratus on who else knows: "Pudens: he's my chief." Pudens had told him, "Then let them shoot, and we'll see who hands them the bow."
+   - If the player asks what happens if the bow isn't on the Column: "Then I'm a fool on the wrong roof. The message said a high place. Look up. There's nothing higher in Rome today."
+   - Gratus gives the post: "Stand at the Column's door. Nobody goes in or out. … If anything feels wrong, shout, and don't wait for my leave."
+   - **Optional:** ask Apollodorus, the builder, about the door. He says the scaffold gang, Dacian captives, was in the stair before dawn taking down the last hoist ropes, and that his foreman sealed the door behind them. He assumes they all came out.
+3. **The ceremony.**
+   - **Objective:** **Take your post at the Column's door.** The ceremony starts when the player is at the door between 06:00 and 18:00. Earlier, Gratus says Caesar comes "at the second hour", and the journal says to wait.
+   - Caesar's party comes out onto the back steps of the Basilica Ulpia. Horns sound. The herald calls "Favete linguis!" ("Keep holy silence!") and reads the dedication from the pedestal. Trajan pours the libation at the altar.
+   - **Optional:** look at the seal on the door. The lead has been cut and pressed back together to look whole. Someone has been inside since dawn. Gratus sees the player looking and starts over. The arrow follows four seconds later. If the player never looks, Gratus walks over at about the time of the herald and the arrow comes when he is halfway there.
+4. **The arrow.**
+   - A figure stands up on the Column's platform: Bitus, small and high, with a bow. The arrow strikes Gratus in the shoulder and he falls.
+   - The court panics. A woman screams, the praetorians hurry Caesar back into the basilica, and the crowd scatters. Crito, Caesar's physician, kneels by Gratus.
+   - Gratus, from the ground: "On top. He's on the top. The seal… Go! Alive if you can. I want the hand that paid him."
+   - The Column's door opens.
+5. **The stair.**
+   - **Objective:** **Climb the Column: stop the archer.** The player goes in through the door into a vestibule and a small chamber under the court, then up 185 steps of spiral stair lit by slit windows.
+   - Two Dacian knife-men were left to hold the stair, one on each of the first two landings. They wait and fight when the player reaches them.
+   - **Optional:** the empty chamber under the court. It is a square room cut into the pedestal, with a marble shelf and nothing on it. The workmen call it the tomb. Nobody says whose.
+   - At the top a small bronze hatch opens onto the platform.
+6. **The archer.** The platform is a marble slab round the drum that carries Caesar's gilded statue, about a hundred feet over the Forum.
+   - Bitus starts on the far side of the drum, shoots up to six arrows (a shield blocks them), then fights with a sica. He yields at a quarter of his health.
+   - **Objective:** **Stop the archer.**
+   - Bitus, when asked: "Mucapor gave me the bow." The silver came from "a man with Syrian rings who smelled of pepper". Bitus, son of Dida, a captive from the hills above Sarmizegetusa, carried stone for this forum for six years. His target was "the centurion in the grey cloak, the one going about asking questions at the pepper house. Caesar, they said, is for later."
+   - Bitus on why: "Your stone says we lost. I wanted it to say one more thing."
+   - When he yields, the player chooses. **Spare** (or rob or arrest) and Bitus talks, then Pudens's men come up the stair and take him down. **Kill** and the body is searched: **optional objective "Search the archer"**.
+   - Either way the bone token scratched with MVCAPOR goes to the player: Bitus gives it up when asked who paid, or it is on his body.
+7. **Aftermath.**
+   - **Objective:** **Go down to Gratus.** Crito, by Gratus, says the arrow missed the great vessel by a finger: "He'll live, if he lies still, which he won't." Crito gives the player the Dacian arrow that came out of Gratus.
+   - **Objective:** **Speak to Pudens.** Pudens, chief of the couriers, is beside Gratus and Crito. He says: "Titus Aufidius Pudens. I keep the couriers, and the couriers keep the secrets." He reacts to Bitus's fate ("A live one talks" or, for a dead archer, "Dead men are poor company and worse witnesses"). He says Gratus will live, then gives the official story: "There was no arrow." A centurion was taken ill in the sun, and a hawk was seen over the Column. The player is to say it back.
+   - Pudens summons the player: "Come to the Castra Peregrina tomorrow, on the Caelian. Show the guard Gratus's token." He gives the player a ring that opens doors.
+   - **Rewards:** 80 denarii and skill XP in blades and athletics (the quest), and the couriers' ring and the Dacian arrow (given in conversation by Pudens and Crito).
+8. **Done.**
+   - Banner: "Act I continues" / **The Board**: "Pudens's offer, 13 May, comes in a future update."
+   - The calendar runs on to 13 May at the next midnight.
+   - Folk in the city carry a rumour about the omen at the Column.
 
 ## What comes next (designed, not built)
-- **mq-04 One Hundred Feet:** the dedication. An archer on the Column's platform wounds Gratus. Fight up the spiral stair, then spare or kill the Dacian shooter.
-- **mq-05 The Board:** Pudens, chief of the frumentarii, makes the player his deniable agent, and the conspiracy board opens (`GDD.md` §10.2).
+- **mq-05 The Board:** Pudens's offer at the Castra Peregrina, on the Caelian, on 13 May. He makes the player his deniable agent, and the conspiracy board opens (`GDD.md` §10.2).
 
 ## Side threads in reach of Act I
 - ***The Oath*** (Ludus Magnus): sign on as a guest and fight three practice bouts, the last against Nereus. It's offered by Glaucus, and it's optional.

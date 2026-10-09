@@ -49,6 +49,7 @@ Systems are sorted by `priority`. Some fixed points:
 | `src/gfx/` | Material ids and library, `MeshBuilder` (merges per material and collects colliders), UV projection, post-processing |
 | `src/arch/` | Procedural architecture: `classical/` (orders, temples, arches, arcades, basilicas, porticoes, domes), `fabric/` (insulae, domus, shops, city-block filler), `props/`, `vegetation/` |
 | `src/world/` | Coordinate conversion (`coords.ts`), world registry and culling, terrain, water, sky and lighting, landmarks, city layout |
+| `src/world/interiors/` | Interior cells: spaces bigger on the inside (the Column's stair and platform), built under or over the world and entered through doors with a fade (see `docs/modules/interiors.md`) |
 | `src/data/` | `atlas.ts`, Rome c. AD 113 in real meters (see `docs/ATLAS.md`) |
 | `src/rpg/` | Vitals, character sheet (skills, perks, levels), items, inventory, factions, crime, barter, loot |
 | `src/quests/`, `src/dialogue/`, `src/npc/` | Engines plus content folders |

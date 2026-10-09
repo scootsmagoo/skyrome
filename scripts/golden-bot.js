@@ -1,10 +1,12 @@
 /**
  * The golden-path bot (AC-15), run IN THE PAGE by scripts/golden-path.mjs. It plays Act I's
- * chapters (docs/STORY.md: the gate, the tablet, the Lemuria) the way a player would: follows the
- * tracked objective's marker on foot, talks to the NPC it names and picks dialogue choices, fights
- * whoever attacks it, uses what the objective points at (a strongbox, a clue), and waits (T) when a
- * stage needs the evening or midnight. God mode is on (`tgm`): it tests the content, not its own
- * swordplay.
+ * chapters (docs/STORY.md: the gate, the tablet, the Lemuria, the dedication) the way a player would:
+ * follows the tracked objective's marker on foot, talks to the NPC it names and picks dialogue
+ * choices, fights whoever attacks it, uses what the objective points at (a strongbox, a clue, the
+ * seal on the Column's door, a door), and waits (T) when a stage needs the evening, midnight or first
+ * light. Inside a cell (the Column's stair and platform) it walks the cell's route (game.interiors
+ * routeWorld) instead of the nav paths, which do not exist underground. God mode is on (`tgm`): it
+ * tests the content, not its own swordplay.
  *
  * Everything that would stop a player is logged in window.__gp: `snags` (a walk that jams, a
  * marker that can't be resolved, an NPC who isn't where the marker says, an objective that doesn't
@@ -13,7 +15,9 @@
 (() => {
   const game = window.__skyrome.game;
   const p = game.player;
-  const QUESTS = ['mq-01-madida-capena', 'mq-02-tabella', 'mq-03-lemuria'];
+  const MQ04 = 'mq-04-columna';
+  const BITUS = 'npc-bitus';
+  const QUESTS = ['mq-01-madida-capena', 'mq-02-tabella', 'mq-03-lemuria', MQ04];
   const L = (window.__gp = { t0: performance.now(), events: [], snags: [], errors: [], talks: [], done: false, goal: null, walked: 0, teleports: 0, fights: 0 });
   const at = () => +((performance.now() - L.t0) / 1000).toFixed(1);
   const log = (...a) => L.events.push([at(), ...a]);
@@ -29,6 +33,11 @@
   ev.on('ui:notify', (e) => log('notify', String(e.text).slice(0, 100)));
   ev.on('actor:killed', (e) => log('down', e.victimId, (e.tags ?? []).join(',')));
   ev.on('actor:yielded', (e) => log('yield', e.actorId));
+  ev.on('combat:yieldChoice', (e) => log('yield choice', e.actorId, e.choice));
+  // The talks' closing nodes (Gratus's postEnd, Bitus's bitusEnd, Pudens's summonsEnd) are logged as they fire.
+  ev.on('dialogue:node', (e) => /End$/.test(e.nodeId ?? '') && log('node', e.dialogueId, e.nodeId));
+  ev.on('interior:entered', (e) => log('cell in', e.id));
+  ev.on('interior:exited', (e) => log('cell out', e.id));
   ev.on('crime:committed', (e) => log('CRIME', e.crime ?? e.id ?? JSON.stringify(e).slice(0, 60)));
   window.addEventListener('error', (e) => L.errors.push(String(e.message)));
   void game.console?.exec('tgm on');
@@ -44,8 +53,20 @@
   };
   const face = (x, z) => (p.yaw = Math.atan2(-(x - p.position.x), -(z - p.position.z)));
   const dist = (a) => Math.hypot(a.x - p.position.x, a.z - p.position.z);
+  /** Distance in three dimensions (the stair's turns share their plan positions, so 2D is not enough inside a cell). */
+  const reach3 = (a) => Math.hypot(a.x - p.position.x, (a.y ?? p.position.y) - p.position.y, a.z - p.position.z);
+  /** The cell the player's feet are in (InteriorSystem), or null outside. */
+  const inCell = () => game.interiors?.current?.() ?? null;
+  const stageOf = (id) => game.quests.status(id)?.stage ?? '';
 
   // ------------------------------------------------------------------ goals
+
+  /** A goal's marker: the quest's own resolver, then the combat side for a foe who is not an actor yet. */
+  function goalOf(quest, obj, text, target) {
+    let pos = game.quests.resolveTarget(target);
+    if (!pos && target.kind === 'npc') pos = game.combat?.core?.get?.(target.id)?.position ?? null;
+    return { quest, obj, text, target, pos };
+  }
 
   /** The first required, active objective of the golden-path quests (in quest order). */
   function nextGoal() {
@@ -53,7 +74,13 @@
       if (!game.quests.status(id)?.running) continue;
       for (const o of game.quests.objectives(id)) {
         if (!o.active || o.done || o.optional || !o.target) continue;
-        return { quest: id, obj: o.id, text: o.text, target: o.target, pos: game.quests.resolveTarget(o.target) };
+        return goalOf(id, o.id, o.text, o.target);
+      }
+      // Every required objective is done but the stage has not moved on: Bitus is dead and the
+      // player is still on the platform. Leaving by the stair is what moves it on (the search is optional).
+      if (id === MQ04 && stageOf(id) === 'archer' && inCell() === 'columna-summa') {
+        const door = doorItem('door:columna-summa:down');
+        return { quest: id, obj: 'leave', text: 'Go down the stair', target: { kind: 'location', id: 'column-door' }, pos: door?.position() ?? null };
       }
     }
     return null;
@@ -66,6 +93,7 @@
   const WANT = /gratus|tablet|ready|begin|sign|guest|scutum|spare|mitte|curved|blade|mus\b|fight|bout|missio|deliver|here is|take it|courier|festus|strongroom|scutarii|murmill|join|side|yes|again/i;
   const visited = new Set();
   let talkT = 0;
+  let lastDialogue = null;
   function stepDialogue() {
     const d = game.dialogue;
     const v = d.view;
@@ -73,6 +101,8 @@
     if (performance.now() - talkT < 350) return;
     talkT = performance.now();
     const key = `${v.dialogueId}/${v.nodeId}`;
+    // The auto-opened talks (Gratus's wounded talk, Bitus's end) are logged by name, so the run shows they were driven.
+    if (v.dialogueId !== lastDialogue) (lastDialogue = v.dialogueId), log('dialogue', v.dialogueId);
     if (!v.choices.length) {
       L.talks.push(key);
       d.advance();
@@ -88,6 +118,28 @@
     d.choose(pick.i);
   }
 
+  /** The yield decision over Bitus (CombatSystem.openYieldChoice, a ChoiceView in a DialoguePanel): spare him. */
+  let choiceT = 0;
+  function stepChoice(panel) {
+    const view = panel.view;
+    if (view.ended) return void game.ui.close(panel);
+    if (performance.now() - choiceT < 350) return;
+    choiceT = performance.now();
+    const i = view.choices.findIndex((c) => !c.disabled && /spare|mitte/i.test(c.text));
+    if (i < 0) {
+      snag('yield choice without Spare', view.choices.map((c) => c.text).join(' | '));
+      return void view.end();
+    }
+    L.talks.push(`${view.npcId} → ${view.choices[i].text.slice(0, 40)}`);
+    view.choose(i);
+  }
+  /** Bitus kneeling with no decision panel open (the 1.2 s delay ran out while a dialogue was open): open it. */
+  function yieldedBitus() {
+    if (stageOf(MQ04) !== 'archer') return null;
+    const c = game.combat?.core?.get?.(BITUS);
+    return c && c.status === 'yielded' ? c : null;
+  }
+
   // ------------------------------------------------------------------ fights
 
   function foes() {
@@ -96,7 +148,12 @@
     if (!core || !pc) return [];
     // A player goes after the quest's own foes too (the brawl's rivals), not only whoever attacks.
     const questFoe = (c) => !!L.goal && (c.tags ?? []).includes(L.goal.quest) && !(c.tags ?? []).includes('rixa-ally');
-    return core.list.filter((c) => c !== pc && c.status === 'active' && (c.target === pc || core.hostile(c, pc) || questFoe(c)) && dist(c.position) < 25);
+    // Inside a cell the stair's other floors are out of reach: only foes within 2 m up or down.
+    const cell = inCell();
+    const floor = (c) => !cell || Math.abs(c.position.y - p.position.y) < 2;
+    // A foe the player spared is on the player's side again (CombatCore.decideYielded: team 'spared:<id>'): no swings at him.
+    const spared = (c) => String(c.team ?? '').startsWith('spared');
+    return core.list.filter((c) => c !== pc && c.status === 'active' && !spared(c) && (c.target === pc || core.hostile(c, pc) || questFoe(c)) && dist(c.position) < 25 && floor(c));
   }
   let swingT = 0;
   function fightStep(list) {
@@ -130,6 +187,7 @@
   let progressBest = Infinity;
   let arrivedAt = 0;
   let jamFrom = null;
+  /** Walk the nav path to goal.pos (outside any cell). */
   function walkTo(goal) {
     const target = goal.pos;
     const key = `${goal.quest}/${goal.obj}/${Math.round(target.x)},${Math.round(target.z)}`;
@@ -138,7 +196,40 @@
       path = Array.isArray(r) ? r.slice() : [{ x: target.x, z: target.z }];
       pathFor = key;
     }
-    while (path.length > 1 && dist(path[0]) < 1.5) path.shift();
+    follow(target, 1.5, () => teleportToward(target));
+  }
+  /**
+   * Inside a cell: the cell's route is the only way. From the route point nearest the player to the
+   * route point nearest the target (walking up or down the stair), then straight to the target.
+   */
+  function walkCell(cell, target, key) {
+    const route = game.interiors?.routeWorld?.(cell) ?? [];
+    if (key !== pathFor || !path || !path.length) {
+      if (!route.length) path = [{ x: target.x, y: target.y, z: target.z }];
+      else {
+        const i = nearest(route, p.position);
+        const j = nearest(route, target);
+        const seq = i <= j ? route.slice(i, j + 1) : route.slice(j, i + 1).reverse();
+        path = [...seq, target].map((v) => ({ x: v.x, y: v.y, z: v.z }));
+      }
+      pathFor = key;
+    }
+    follow(target, 0.7, () => teleportInCell(path[Math.min(1, path.length - 1)] ?? target));
+  }
+  function nearest(list, v) {
+    let best = 0;
+    let bd = Infinity;
+    list.forEach((w, k) => {
+      const d = (w.x - v.x) ** 2 + (w.y - v.y) ** 2 + (w.z - v.z) ** 2;
+      if (d < bd) ((bd = d), (best = k));
+    });
+    return best;
+  }
+  /** Face the next point of the path (popping those within `pop` m), hold W, and handle a jam. */
+  function follow(target, pop, unstuck) {
+    // Inside a cell a route point on another floor shares its plan position: pop only within 1.5 m of the player's height.
+    const reached = (w) => dist(w) < pop && (!inCell() || Math.abs((w.y ?? p.position.y) - p.position.y) < 1.5);
+    while (path.length > 1 && reached(path[0])) path.shift();
     const c = path[0] ?? target;
     face(c.x, c.z);
     const far = dist(target);
@@ -150,8 +241,8 @@
       progressT = performance.now();
     }
     if (performance.now() - progressT > 8000) {
-      snag('stuck', `${Math.round(far)} m from ${goal.text}`);
-      teleportToward(target);
+      snag('stuck', `${Math.round(far)} m from ${L.goal?.text ?? 'the marker'}`);
+      unstuck();
     }
     void progressBest;
     L.walked += Math.hypot(p.position.x - lastPos.x, p.position.z - lastPos.z);
@@ -174,6 +265,82 @@
     p.teleport({ x: g.x, y: y + 0.5, z: g.z });
     resetProgress();
   }
+  /** Put the player 5 m out from a place's centre, on the side they stand on (a walkable point by the nav snap). */
+  function stepAway(from) {
+    let dx = p.position.x - from.x;
+    let dz = p.position.z - from.z;
+    const len = Math.hypot(dx, dz);
+    if (len < 0.5) (dx = 1), (dz = 0);
+    else (dx /= len), (dz /= len);
+    const x = from.x + dx * 5;
+    const z = from.z + dz * 5;
+    const g = game.population?.nav?.snap?.(x, z, 8) ?? { x, z };
+    const y = game.heightmap?.heightAt(g.x, g.z) ?? p.position.y;
+    L.teleports++;
+    p.teleport({ x: g.x, y: y + 0.5, z: g.z });
+    resetProgress();
+  }
+  /** Inside a cell a jam moves the player to the next route point (the nav snap does not exist there). */
+  function teleportInCell(wp) {
+    L.teleports++;
+    p.teleport({ x: wp.x, y: (wp.y ?? p.position.y) + 0.3, z: wp.z });
+    resetProgress();
+  }
+
+  // ------------------------------------------------------------------ doors and examines
+
+  const doorItem = (id) => [...(game.interactions?.items ?? [])].find((i) => i.id === id) ?? null;
+  /** A usable door interaction (in reach-or-walkable: its point is known and it is enabled). */
+  function usableDoor(id) {
+    const it = doorItem(id);
+    if (!it || (it.enabled && !it.enabled())) return null;
+    const dp = it.position();
+    return dp && dp.y > -1000 ? it : null;
+  }
+  /**
+   * The door a goal needs: the Column's bronze door from the court (the climb's 'door' objective), the
+   * stair's door out (any marker outside the stair), the hatch up (the top of the stair), and the
+   * platform's door down (any marker outside the platform). Null: the goal walks to its own marker.
+   */
+  function doorFor(goal, cell) {
+    if (goal.quest !== MQ04) return null;
+    const outside = goal.target.kind === 'location' && !String(goal.target.id).startsWith('interior:');
+    if (cell === 'columna-summa') return outside ? 'door:columna-summa:down' : null;
+    if (cell === 'dun-columna') {
+      if (goal.target.id === 'interior:dun-columna:top') return 'door:dun-columna:up';
+      return outside ? 'door:dun-columna:out' : null;
+    }
+    if (!cell && goal.obj === 'door') return 'door:dun-columna:in';
+    return null;
+  }
+  /** Walk to a door and use it when within reach (the door's own reach is 1.8 m; the bot stops at 1.2 m). */
+  function walkDoor(goal, cell, it) {
+    const dp = it.position();
+    if (reach3(dp) < 1.2) {
+      hold('KeyW', false);
+      hold('ShiftLeft', false);
+      if (performance.now() - (L.usedAt ?? 0) > 1500) {
+        L.usedAt = performance.now();
+        log('door', it.id);
+        it.interact(game);
+      }
+      return;
+    }
+    if (cell) return walkCell(cell, { x: dp.x, y: dp.y, z: dp.z }, `door/${cell}/${it.id}`);
+    return walkTo({ ...goal, pos: { x: dp.x, z: dp.z } });
+  }
+  /** Use the nearest interaction whose id matches, if it is within reach (a seal, a strongbox, a clue). */
+  function useNear(match, reach) {
+    const it = [...(game.interactions?.items ?? [])].find((i) => match.test(i.id) && (!i.enabled || i.enabled()) && dist(i.position()) < reach);
+    if (!it) return false;
+    hold('KeyW', false);
+    if (performance.now() - (L.usedAt ?? 0) > 1500) {
+      L.usedAt = performance.now();
+      log('use', it.label());
+      it.interact(game);
+    }
+    return true;
+  }
 
   // ------------------------------------------------------------------ the loop
 
@@ -183,6 +350,13 @@
   const dusk = 19.4;
   let waitAgainAt = 0;
   let waitRefused = 0;
+  let lastCell = null;
+  let bitusWaitT = 0;
+  /** Spared Bitus is still on the platform (his talk, bitusEnd, opens 1.2 s after the choice; takeBitusDown removes him). */
+  const bitusHere = () => {
+    const c = game.combat?.core?.get?.(BITUS);
+    return !!c && (c.status === 'yielded' || String(c.team ?? '').startsWith('spared'));
+  };
   L.timer = setInterval(() => {
     try {
       if (L.done) return;
@@ -191,8 +365,22 @@
         hold('ShiftLeft', false);
         return stepDialogue();
       }
+      // Bitus's yield decision: its panel is not closed by the menu sweep below until it is answered.
+      const top = game.ui?.top;
+      if (top?.id === 'dialogue' && top.view && (top.view.npcId ?? '').split('~')[0] === BITUS) {
+        hold('KeyW', false);
+        return stepChoice(top);
+      }
+      if (!top && yieldedBitus()) {
+        hold('KeyW', false);
+        if (performance.now() - choiceT > 1500) {
+          choiceT = performance.now();
+          game.combat.openYieldChoice(yieldedBitus());
+        }
+        return;
+      }
       // Close any menu a notice or a level-up opened.
-      if (game.ui?.top && game.ui.top.id !== 'console') game.ui.closeAll?.();
+      if (top && top.id !== 'console') game.ui?.closeAll?.();
       const list = foes();
       if (list.length) {
         if (!L.inFight) (L.inFight = true), L.fights++, log('fight', list.map((c) => c.id).join(','));
@@ -203,6 +391,12 @@
         resetProgress();
         hold('KeyW', false);
       }
+      const cell = inCell();
+      if (cell !== lastCell) {
+        lastCell = cell;
+        log('cell', cell ?? 'outside');
+        resetProgress();
+      }
       const all = QUESTS.map((id) => game.quests.status(id));
       if (all.every((s) => s?.done)) {
         L.done = true;
@@ -211,11 +405,24 @@
         log('ALL DONE');
         return;
       }
+      // Spared Bitus's own talk (bitusEnd) opens on the platform 1.2 s after the choice. The bot waits up to 5 s
+      // for it, as a player who stays would, before the walk to the stair (which takes him down).
+      if (stageOf(MQ04) === 'aftermath' && cell === 'columna-summa' && !game.dialogue?.active && bitusHere()) {
+        hold('KeyW', false);
+        hold('ShiftLeft', false);
+        if (!bitusWaitT) (bitusWaitT = performance.now()), log('wait for Bitus talk');
+        if (performance.now() - bitusWaitT < 5000) return;
+      }
       const goal = nextGoal();
       // Waits the story asks for: Gratus takes the tablet after sunset (mq-02 'give'); the rite
-      // is at midnight (mq-03 'wait', at the Marii's door).
+      // is at midnight (mq-03 'wait', at the Marii's door); the Column's dedication needs first light
+      // (mq-04 'forum', before 05:30 or after 20:00) and the ceremony the hour from 06:00 (mq-04 'post').
       const h = game.time.hour;
-      const until = goal?.obj === 'give' && h < dusk && h > 5 ? dusk : goal?.obj === 'wait' && goal.pos && dist(goal.pos) < 8 && h < 23.6 && h > 5 ? 23.7 : null;
+      let until = goal?.obj === 'give' && h < dusk && h > 5 ? dusk : goal?.obj === 'wait' && goal.pos && dist(goal.pos) < 8 && h < 23.6 && h > 5 ? 23.7 : null;
+      if (goal && until === null && goal.quest === MQ04) {
+        if (goal.obj === 'forum' && (h < 5.5 || h >= 20)) until = h >= 20 ? 30 : 6;
+        else if (goal.obj === 'post' && h < 6 && goal.pos && dist(goal.pos) < 8) until = 6;
+      }
       if (goal && until !== null) {
         hold('KeyW', false);
         if (performance.now() < waitAgainAt) return;
@@ -234,8 +441,11 @@
         return;
       }
       if (!goal) {
-        idleFor += 0.1;
         hold('KeyW', false);
+        hold('ShiftLeft', false);
+        // The dedication runs on its own (the rite, the arrow): the stage moves on at the shot.
+        if (stageOf(MQ04) === 'ceremony') return;
+        idleFor += 0.1;
         if (idleFor > 20) {
           snag('no goal', QUESTS.map((id) => `${id}:${game.quests.status(id)?.stage ?? '-'}`).join(' '));
           idleFor = 0;
@@ -256,10 +466,14 @@
         L.done = true;
         return;
       }
-      const d = dist(goal.pos);
+      // The Column's seal (an examine on the bronze door, optional): look at it as the player stands the post.
+      // Once: the seal is looked at a single time (the quest guards on its flag).
+      if (goal.quest === MQ04 && goal.obj === 'post' && !L.sealUsed && useNear(/mq04-seal/, 2.4)) return void (L.sealUsed = true);
+      const d = cell ? reach3(goal.pos) : dist(goal.pos);
       if (goal.target.kind === 'npc') {
         const actor = game.actors?.get(goal.target.id);
-        if (d < 2.6 && actor) {
+        // Within 3.2 m: Gratus's body can stop the walk 2.6 m short (a jam 3 m out), so the talk reach is a little wider.
+        if (dist(goal.pos) < 3.2 && actor) {
           hold('KeyW', false);
           hold('ShiftLeft', false);
           face(actor.position.x, actor.position.z);
@@ -276,13 +490,18 @@
           }
           return;
         }
-        if (d < 6 && !actor) {
+        if (dist(goal.pos) < 6 && !actor) {
           snag('npc missing at marker', goal.target.id);
           teleportToward({ x: goal.pos.x + 2, z: goal.pos.z });
           return;
         }
+        if (cell) return walkCell(cell, goal.pos, `${gk}/${Math.round(goal.pos.x)},${Math.round(goal.pos.z)}`);
         return walkTo(goal);
       }
+      // A door on the way (the Column's bronze door, the stair's doors): walk to it and use it.
+      const doorId = doorFor(goal, cell);
+      const door = doorId ? usableDoor(doorId) : null;
+      if (door) return walkDoor(goal, cell, door);
       // A place with something to use there (Mus' strongbox, the clues at the Marii's door): use
       // the nearest such thing within reach, as a player pressing E would.
       if (d < 8 && (goal.obj === 'satchel' || goal.obj === 'clues' || goal.obj === 'search')) {
@@ -304,18 +523,23 @@
           return;
         }
       }
-      // A place: walk in; an objective that doesn't complete 8 s after arriving is a snag.
-      if (d < 4) {
+      // A place: walk in; an objective that doesn't complete 8 s after arriving is a snag. The Column's
+      // door is 3 m across: the bot stops at 2 m so the ceremony and the entry (radius 3) take.
+      const arriveR = cell ? 2 : goal.target.id === 'column-door' ? 2 : 4;
+      if (d < arriveR) {
         hold('KeyW', false);
         hold('ShiftLeft', false);
         if (!arrivedAt) arrivedAt = performance.now();
         else if (performance.now() - arrivedAt > 8000) {
           snag('arrived, objective still open', `${goal.target.id} (${d.toFixed(1)} m)`);
-          p.teleport({ x: goal.pos.x, y: (goal.pos.y ?? p.position.y) + 0.5, z: goal.pos.z });
+          // A place is entered on a step in: step out of it, then the walk goes back in (location:entered).
+          if (!cell && goal.target.kind === 'location') stepAway(goal.pos);
+          else p.teleport({ x: goal.pos.x, y: (goal.pos.y ?? p.position.y) + 0.5, z: goal.pos.z });
           arrivedAt = performance.now() + 30000;
         }
         return;
       }
+      if (cell) return walkCell(cell, goal.pos, `${gk}/${Math.round(goal.pos.x)},${Math.round(goal.pos.y)},${Math.round(goal.pos.z)}`);
       walkTo(goal);
     } catch (err) {
       L.errors.push(`bot: ${err?.message ?? err}`);

@@ -48,6 +48,7 @@ Design docs: `docs/STORY.md` (the story as played: Act I chapter by chapter, and
   - **Textures.** Photo sets load as KTX2/Basis (`public/textures/<set>/*.ktx2`, 2K colour) and stay compressed on the GPU; the JPEGs are the terrain's source and a fallback (`?ktx2=0`). Regenerate with `node src/gfx/textures/tools/fetch-textures.mjs --ktx2 [sets]` (needs `basisu`).
   - **Physics.** `Physics.step` drives Rapier's pipeline directly (rapier.js `World.step()` walks every collider after each step). Create and remove colliders only through the `Physics` and `World` API.
   - **NPC path failures.** These must back off, not re-plan at once: failing A* searches are the most expensive kind.
+- **Interiors.** Spaces bigger on the inside (the Column's stair) are cells in src/world/interiors (docs/modules/interiors.md): built on first use under or over the world, entered through door interactions with a fade; never teleport the player into one any other way than game.interiors.enter.
 - Keep modules self-contained under their own directory. Give pure logic unit tests. Match the surrounding code style: 2-space indent, single quotes, semicolons, and comment density similar to `src/core`.
 
 ## Working as a parallel agent

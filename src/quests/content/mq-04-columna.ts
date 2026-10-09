@@ -691,6 +691,9 @@ export default defineQuest({
       }
     },
     'interior:exited': (q, e) => {
+      // Out of the stair's door into the court: the player lands on the door's own spot, already
+      // inside its location, so 'location:entered' never fires for it.
+      if (e.id === 'dun-columna' && isAftermath(q.stage) && !q.game.interiors?.current?.()) q.completeObjective('down');
       if (e.id !== 'columna-summa' || q.stage !== 'archer') return;
       // Leaving the platform with him yielded and undecided: Pudens's men have him, so he is spared.
       if (!q.flag('bitus-fate') && q.vars.bitusYielded && stillYielded(q, BITUS)) decideFate(q, 'spared');

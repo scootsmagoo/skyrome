@@ -414,6 +414,20 @@ describe('mq-04-columna: One Hundred Feet', () => {
     expect(status(w, Q)!.stage).toBe('aftermath');
   });
 
+  it('coming out of the stair\'s door into the court completes "Go down to Gratus"', () => {
+    const w = archerWorld();
+    yieldTo(w, 'npc-bitus');
+    w.inside.delete('columna-summa');
+    w.events.emit('interior:exited', { id: 'columna-summa' });
+    expect(status(w, Q)!.stage).toBe('aftermath');
+    const down = () => w.rpg.quests.objectives(Q).find((o) => o.id === 'down');
+    expect(down()?.done).toBe(false);
+    // Down the stair and out of its door: the player lands on the door's own spot.
+    w.inside.delete('dun-columna');
+    w.events.emit('interior:exited', { id: 'dun-columna' });
+    expect(down()?.done).toBe(true);
+  });
+
   it('leaving the platform with Bitus yielded and undecided counts as spared', () => {
     const w = archerWorld();
     yieldTo(w, 'npc-bitus');

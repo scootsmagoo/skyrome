@@ -5,6 +5,8 @@
  */
 import type { Game } from '../core/Game';
 import { scriptedDeath } from '../content/director';
+import { dunColumna } from '../world/interiors/columna';
+import { worldToLocal } from '../world/interiors/InteriorSystem';
 
 export interface Checkpoint {
   id: string;
@@ -21,6 +23,7 @@ export interface Checkpoint {
 const MQ01 = 'mq-01-madida-capena';
 const MQ02 = 'mq-02-tabella';
 const MQ03 = 'mq-03-lemuria';
+const MQ04 = 'mq-04-columna';
 const LUD01 = 'lud-01-sacramentum';
 const TABLET = 'quest-tabella-signata';
 
@@ -52,6 +55,22 @@ function afterDelivery(game: Game) {
   game.player?.inventory?.remove(TABLET, 1);
   give(game, 'quest-tessera-peregrina');
   game.quests.setStage(MQ02, 'done');
+}
+
+/** Chapter 3 played: the message read, mq-03 done (which starts mq-04 at dawn), the eve of the dedication. */
+function afterLemuria(game: Game) {
+  afterDelivery(game);
+  game.quests.setStage(MQ03, 'done');
+  game.calendar?.stepToAnchor?.();
+  give(game, 'quest-nuntius-festi');
+}
+
+/** Put the player on the stair's top landing, through the cell's own entry (fade, then inside). */
+function atStairTop(game: Game) {
+  const top = game.interiors?.spot(dunColumna.id, 'top');
+  const origin = top ? dunColumna.origin(game) : null;
+  if (!origin || !top) return;
+  void game.interiors?.enter(dunColumna.id, worldToLocal(origin, top.position), top.heading - origin.rotY);
 }
 
 export const CHECKPOINTS: Checkpoint[] = [
@@ -116,6 +135,53 @@ export const CHECKPOINTS: Checkpoint[] = [
     setup: (game) => {
       afterDelivery(game);
       game.quests.setStage(MQ03, 'gemellus');
+    },
+  },
+  {
+    id: 'dedication',
+    label: 'The dedication: Gratus’ briefing in the Column court, then the ceremony',
+    at: 'forum-trajan',
+    hour: 6.5,
+    place: 'column-trajan',
+    setup: (game) => {
+      afterLemuria(game);
+      game.quests.setStage(MQ04, 'post');
+    },
+  },
+  {
+    id: 'column',
+    label: 'The Column’s door is open: climb the stair, the two knife-men on the landings',
+    at: 'column-trajan',
+    hour: 7.5,
+    place: 'column-door',
+    setup: (game) => {
+      afterLemuria(game);
+      game.quests.setStage(MQ04, 'climb');
+    },
+  },
+  {
+    id: 'summit',
+    label: 'At the top of the stair: out onto the platform to stop the archer',
+    at: 'column-trajan',
+    hour: 8,
+    setup: (game) => {
+      afterLemuria(game);
+      game.quests.setStage(MQ04, 'climb');
+      atStairTop(game);
+    },
+  },
+  {
+    id: 'aftermath',
+    label: 'After the archer: Bitus spared and taken down; Gratus in the court, Pudens’ summons',
+    at: 'column-trajan',
+    hour: 9,
+    place: 'column-trajan',
+    setup: (game) => {
+      afterLemuria(game);
+      game.quests.flags.set('columna-open', true);
+      game.quests.flags.set('bitus-fate', 'spared');
+      give(game, 'quest-tessera-mucaporis');
+      game.quests.setStage(MQ04, 'aftermath');
     },
   },
   {

@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 /**
  * AC-15: a bot plays Act I as built (docs/STORY.md: mq-01 the gate → mq-02 the tablet → mq-03 the
- * Lemuria) from the Porta Capena at dawn, and reports every place a player would get stuck.
+ * Lemuria → mq-04 the dedication of the Column) from the Porta Capena at dawn, and reports every
+ * place a player would get stuck.
  * The bot is scripts/golden-bot.js.
  *
  *   node scripts/golden-path.mjs [--minutes 40] [--shots] [--query "origin=dacus"]
  *
  * Prints the quest timeline, the snags (jams, unresolved markers, missing NPCs, objectives that don't
- * complete) and page errors; exit code 1 unless all three chapters complete.
+ * complete) and page errors; exit code 1 unless all four chapters complete.
  */
 import { createServer as createNetServer } from 'node:net';
 import { mkdirSync, readFileSync } from 'node:fs';
@@ -46,6 +47,8 @@ await page.addScriptTag({ content: bot });
 
 const t0 = Date.now();
 let seen = 0;
+let snagSeen = 0;
+let errorSeen = 0;
 let shot = 0;
 while (Date.now() - t0 < minutes * 60000) {
   await page.waitForTimeout(5000);
@@ -61,13 +64,19 @@ while (Date.now() - t0 < minutes * 60000) {
     if (args.shots && (e[1] === 'stage' || e[1] === 'completed')) await page.screenshot({ path: join(outDir, `gp-${String(shot++).padStart(2, '0')}-${e[2]}-${e[3] ?? ''}.png`) });
   }
   seen = s.n;
+  const snags = await page.evaluate((from) => window.__gp.snags.slice(from).map((x) => ({ ...x })), snagSeen);
+  for (const x of snags) console.log(`  ${String(x.t).padStart(6)} s  snag ${x.kind}: ${x.detail}  [${x.goal}] at ${x.pos.join(',')}`);
+  snagSeen += snags.length;
+  const errs = await page.evaluate((from) => window.__gp.errors.slice(from), errorSeen);
+  for (const x of errs) console.log(`  bot error: ${x}`);
+  errorSeen += errs.length;
   if (s.done) break;
 }
 const r = await page.evaluate(() => {
   const L = window.__gp;
   clearInterval(L.timer);
   const g = window.__skyrome.game;
-  const ids = ['mq-01-madida-capena', 'mq-02-tabella', 'mq-03-lemuria'];
+  const ids = ['mq-01-madida-capena', 'mq-02-tabella', 'mq-03-lemuria', 'mq-04-columna'];
   return {
     seconds: Math.round((performance.now() - L.t0) / 1000),
     quests: ids.map((id) => `${id}: ${JSON.stringify(g.quests.status(id))}`),
