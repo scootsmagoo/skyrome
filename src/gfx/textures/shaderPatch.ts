@@ -16,6 +16,7 @@
  *   streaks running down them. Only on steep faces (flat normal from screen derivatives, so it
  *   needs no extra varying). Strength per material via `skWeather`; the ground grid is shared and
  *   set once the terrain exists (`setWeatherGround`); before that only the streaks show.
+ *   The same block grows moss on the lowest metre and a half and a few columns of ivy up the wall.
  *
  * - SK_SPECAA: specular anti-aliasing. The roughness is widened by the screen-space variance of the
  *   shading normal (Tokuyoshi/Kaplanis), so a normal-mapped stone far away stops sparkling and the
@@ -156,6 +157,16 @@ const MAP_FRAGMENT = /* glsl */ `
     }
     #endif
     diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * vec3( 0.8, 0.95, 0.62 ), skDamp * smoothstep( 0.45, 0.8, skNoise( vSkWorld * 2.7 + 61.0 ) ) );
+    // Moss: soft green cushions on the lowest metre and a half of stone, thickest in the damp.
+    float skMo = skNoise( vSkWorld * vec3( 2.3, 3.1, 2.3 ) + 41.0 ) * 0.6 + skNoise( vSkWorld * 7.3 + 17.0 ) * 0.4;
+    float skMoK = smoothstep( 0.6, 0.72, skMo + 0.18 * skDamp ) * ( 1.0 - smoothstep( 0.2, 1.5, max( skH, 0.0 ) ) ) * skVert * skWeather * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
+    diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.12, 0.2, 0.06 ) * ( 0.7 + 0.8 * skNoise( vSkWorld * 31.0 ) ), skMoK * 0.7 );
+    // Ivy: a few columns of dark leaf clusters climbing the wall, ragged at the top, sparse at the edge.
+    float skIvC = smoothstep( 0.7, 0.8, skNoise( vec3( vSkWorld.x * 0.23 + vSkWorld.z * 0.21, 0.0, 5.0 ) ) );
+    float skIvTop = 2.2 + 4.0 * skNoise( vec3( vSkWorld.x * 0.5, 0.0, vSkWorld.z * 0.5 ) + 9.0 );
+    float skIvLeaf = skNoise( vSkWorld * 9.0 + 3.0 ) * 0.65 + skNoise( vSkWorld * 21.0 ) * 0.35;
+    float skIvK = skIvC * ( 1.0 - smoothstep( skIvTop * 0.55, skIvTop, max( skH, 0.0 ) ) ) * smoothstep( 0.38 + 0.2 * skIvC, 0.52, skIvLeaf ) * skVert * skWeather * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
+    diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.045, 0.1, 0.03 ) * ( 0.6 + 1.1 * skNoise( vSkWorld * 47.0 ) ), skIvK * 0.85 );
     // Rain streaks: narrow along the wall, long down it, patchy.
     vec2 skT = normalize( vec2( -skN.z, skN.x ) + 1e-5 );
     float skU = dot( vSkWorld.xz, skT );
