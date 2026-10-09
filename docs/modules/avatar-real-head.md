@@ -52,6 +52,6 @@ A body is 11000 / 4000 / 1200. One extra draw call per head (hair+beard) and one
 - Hair is cards: no hair physics (a tail follows the head and neck bones only), no shadow casting from the cards.
 - The painted face is procedural per pixel: no pupils-to-lid interaction (no blinking), the mouth stays slightly open
   as sculpted. Faces are the two sculpts, varied only by paint and the rig's head scale.
-- Beards look best when short; the full beard is a mask of cards with a visible stipple edge.
+- Full beard: a cap with a 6 cm stipple ramp plus cards (reworked after review); hairline stipple still a little blocky. skinCache grows by one material per unique paint key (the program is shared): C2a's crowd cache should key on look.
 - The helmets and veil are the wave-1 designs unchanged (a murmillo's visor is big on the real head).
 - In the avatars scene the pale patches on the cheek are the 60 m sun shadow map (see avatar-real.md), not the paint.

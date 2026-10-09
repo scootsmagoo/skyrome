@@ -95,6 +95,8 @@ export function buildHair(inp: HairInput): { geometry: THREE.BufferGeometry; tri
   const lodK = lod === 0 ? 1 : lod === 1 ? 0.5 : 0.2;
   const M = lod === 0 ? 6 : lod === 1 ? 4 : 3;
   const helmet = inp.helmet;
+  // Under a veil the hair stays flat: the cloth sits only ~11 mm off the scalp and sags between its rows.
+  const veilMode = style === 'veiled' || style === 'vestal';
   const effStyle: HairStyle = helmet ? 'cropped' : style;
 
   const jitter = (k = 0.12) => base.clone().multiplyScalar(1 + (rng.next() * 2 - 1) * k);
@@ -112,7 +114,10 @@ export function buildHair(inp: HairInput): { geometry: THREE.BufferGeometry; tri
   // ---------------------------------------------------------------- scalp cap
   {
     const NC = lod === 0 ? 56 : lod === 1 ? 36 : 24;
-    const R = lod === 0 ? 10 : lod === 1 ? 7 : 5;
+    // Rows packed into the stippled band above the hairline, so the ramp is not smeared over one big row.
+    const bandD = lod === 0 ? [0, 0.004, 0.01, 0.019, 0.03, 0.04] : [0, 0.007, 0.02, 0.04];
+    const nb = bandD.length;
+    const R = nb + (lod === 0 ? 4 : lod === 1 ? 3 : 2);
     const base0 = b.vertexCount;
     const c = new THREE.Color();
     for (let j = 0; j < R; j++)
@@ -120,15 +125,17 @@ export function buildHair(inp: HairInput): { geometry: THREE.BufferGeometry; tri
         const th = (i / NC) * Math.PI * 2;
         const h0 = hl(th);
         const s = j / (R - 1);
-        const yf = lerp(h0, 0.99, Math.pow(s, 1.35));
+        const yTop0 = h0 + (bandD[nb - 1] * hs) / H.H;
+        const yf = j < nb ? h0 + (bandD[j] * hs) / H.H : lerp(yTop0, 0.99, Math.pow((j - nb + 1) / (R - nb), 1.2));
         const dH = (yf - h0) * H.H;
         const off = capT * (0.3 + 0.7 * smooth(0, 0.016, dH)) * (1 + 0.1 * Math.sin(th * 11 + yf * 30));
         const p = P(yf, th, off);
         const n = H.normalAt(yf, th);
         // Stipple density by distance above the hairline: solid by about 22 mm.
-        const fade = 1 - smooth(0.0, 0.022, dH);
-        const u = lerp(HAIR_UV.fade[0], HAIR_UV.fade[1], (i * 2.7 + 0.5) % 1);
-        c.copy(base).multiplyScalar(0.6 + 0.22 * (0.5 + 0.5 * Math.sin(th * 19 + yf * 41)) + 0.06 * s);
+        const fade = 1 - smooth(0.0, 0.04 * hs, dH);
+        // Mirrored across the face so u is continuous (no seam, no smearing between columns).
+        const u = lerp(HAIR_UV.fade[0], HAIR_UV.fade[1], Math.abs((i / NC) * 2 - 1));
+        c.copy(base).multiplyScalar((0.6 + 0.22 * (0.5 + 0.5 * Math.sin(th * 19 + yf * 41)) + 0.06 * s) * (1 + 0.45 * fade));
         const tan = H.at(yf - 0.02, th).sub(H.at(yf + 0.02, th)).normalize();
         b.vertex({ p, n, u, v: fade, c, t: tan });
       }
@@ -225,7 +232,7 @@ export function buildHair(inp: HairInput): { geometry: THREE.BufferGeometry; tri
         (t) => {
           const s = smooth(0, 1, Math.pow(t, 0.85));
           const yf = lerp(yf0, o.target.yf, Math.pow(t, 1.25)) + 0.015 * Math.sin(t * Math.PI);
-          return { yf, th: lerp(th0, tth, s), off: capT * 0.8 + 0.004 * hs * Math.sin(t * Math.PI) };
+          return { yf, th: lerp(th0, tth, s), off: capT * 0.8 + (veilMode ? 0.0008 : 0.004) * hs * Math.sin(t * Math.PI) };
         },
         o.width * rng.range(0.85, 1.2),
         jitter(),

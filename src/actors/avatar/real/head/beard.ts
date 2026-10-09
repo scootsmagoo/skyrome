@@ -21,8 +21,8 @@ export const MOUTH = { line: 0.245, upperLip: 0.285, lowerLip: 0.205 } as const;
 
 /** Top edge (height fraction) of the beard at azimuth magnitude a (0 chin front ... 1.45 sideburn). */
 function beardTop(a: number): number {
-  if (a < 0.3) return 0.178;
-  if (a < 0.62) return lerp(0.178, 0.4, smooth(0.3, 0.62, a));
+  if (a < 0.3) return 0.2;
+  if (a < 0.62) return lerp(0.2, 0.4, smooth(0.3, 0.62, a));
   return lerp(0.4, 0.62, smooth(0.62, 1.45, a));
 }
 
@@ -49,8 +49,11 @@ export function buildBeard(H: HeadSurface, style: BeardStyle, color: THREE.Color
 
   // Cap.
   {
-    const NC = lod === 0 ? 33 : 21;
-    const R = lod === 0 ? 11 : 6;
+    const NC = lod === 0 ? 49 : 25;
+    // Rows packed into the fading top band (so the stipple ramp is not smeared over one big triangle row).
+    const band = [0, 0.004, 0.01, 0.019, 0.03, 0.043, 0.058].map((d) => d * (full ? 1 : 0.45) * hs);
+    const nb = lod === 0 ? band.length : 4;
+    const R = lod === 0 ? 16 : 8;
     const b0 = b.vertexCount;
     const c = new THREE.Color();
     for (let j = 0; j < R; j++)
@@ -58,17 +61,19 @@ export function buildBeard(H: HeadSurface, style: BeardStyle, color: THREE.Color
         const th = lerp(-A, A, i / (NC - 1));
         const a = Math.abs(th);
         const top = beardTop(a);
-        const s = j / (R - 1);
         // Down to the chin line, then below it at the front.
         const bottom = -below * (1 - smooth(0.2, 0.9, a)) / H.H;
-        const yf = lerp(top, bottom, Math.pow(s, 1.4));
-        const dTop = (top - yf) * H.H;
+        const total = (top - bottom) * H.H;
+        const bj = Math.min(j, nb - 1);
+        const bandD = lod === 0 ? band[bj] : band[bj * 2 > 6 ? 6 : bj * 2];
+        const dTop = j < nb ? Math.min(bandD, total) : lerp(bandD, total, Math.pow((j - nb + 1) / (R - nb), 1.2));
+        const yf = top - dTop / H.H;
         const edge = smooth(0, 0.014, dTop) * smooth(A, A - 0.25, a);
         const p = P(yf, th, thick * (0.25 + 0.75 * edge));
-        const fade = 1 - smooth(0.0, 0.012, dTop);
+        const fade = 0.9 * (1 - smooth(0.0, (full ? 0.058 : 0.026) * hs, dTop));
         const fa = smooth(A - 0.05, A, a) * 0.8;
         c.copy(base).multiplyScalar(0.75 + 0.2 * Math.sin(th * 13 + yf * 40) * 0.5 + 0.1);
-        b.vertex({ p, n: H.normalAt(Math.max(0.02, yf), th), u: lerp(HAIR_UV.fade[0], HAIR_UV.fade[1], (i * 0.37) % 1), v: Math.max(fade, fa), c, t: new THREE.Vector3(0, -1, 0) });
+        b.vertex({ p, n: H.normalAt(Math.max(0.02, yf), th), u: lerp(HAIR_UV.fade[0], HAIR_UV.fade[1], i / (NC - 1)), v: Math.max(fade, fa), c, t: new THREE.Vector3(0, -1, 0) });
       }
     for (let j = 0; j < R - 1; j++)
       for (let i = 0; i < NC - 1; i++) {

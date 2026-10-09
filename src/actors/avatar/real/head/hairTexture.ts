@@ -110,12 +110,13 @@ export function hairPixels(seed = 7): Uint8Array {
     for (let x = x3; x < w; x++) {
       const u = x - x3;
       // Streaks (columns of 3 px) times speckle.
-      const col = hash(u >> 1, 11);
-      const sp = hash(u, y >> 1);
-      const n = 0.55 * col + 0.45 * sp;
+      const col = hash(u, 11);
+      // Cells 64 rows tall: finer rows would be averaged away by the mip chain (v runs over a few cm).
+      const sp = hash(u, y >> 6);
+      const n = 0.4 * col + 0.6 * sp;
       const keep = n > smooth(0.0, 0.92, v) * 0.95 + 0.02 ? 1 : 0;
       const o = (y * w + x) * 4;
-      const t = (0.6 + 0.4 * hash(u >> 2, y >> 2)) * 255;
+      const t = (0.82 + 0.18 * hash(u >> 1, y >> 6)) * 255;
       data[o] = data[o + 1] = data[o + 2] = t;
       data[o + 3] = keep * 255;
     }
