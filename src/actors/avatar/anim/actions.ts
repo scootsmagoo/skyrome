@@ -607,6 +607,18 @@ function reactions(cls: WeaponClass, stance: Stance): Record<string, ActionDef> 
       k(0.55, pick(base), F),
     ],
   };
+  // A blow from the side: the torso twists and rolls away, the head snaps round, the near foot gives a half step.
+  const hitSide = (name: string, sg: number): ClipDef => ({
+    name,
+    duration: 0.55,
+    base,
+    keys: [
+      k(0, {}, F),
+      k(0.08, { chest: [-6, 16 * sg, 10 * sg], spine: [-3, 8 * sg, 5 * sg], neck: [-4, 10 * sg, 4 * sg], head: [-8, 22 * sg, 8 * sg], hipsPos: [0.03 * sg, -0.06, -0.02], hips: [0, 8 * sg, 0], shoulderL: [8, -8], shoulderR: [8, -8], upperArmL: [26, 34, 20, 0], upperArmR: [26, 34, 20, 0] }, F, true),
+      k(0.2, { chest: [-3, 6 * sg, 4 * sg], head: [-4, 8 * sg, 2 * sg] }, sg > 0 ? { R: [F.R[0] + 0.05, F.R[1], 0.04, 0, F.R[4]] } : { L: [F.L[0] - 0.05, F.L[1], 0.04, 0, F.L[4]] }),
+      k(0.55, pick(base), F),
+    ],
+  });
   const stagger: ClipDef = {
     name: 'stagger',
     duration: 1.15,
@@ -625,6 +637,8 @@ function reactions(cls: WeaponClass, stance: Stance): Record<string, ActionDef> 
     blockHit: { def: blockHit, mask: 'upper', busy: true, fadeIn: 0.04, fadeOut: 0.1 },
     hitFront: { def: hitFront, mask: 'auto', busy: true, fadeIn: 0.04 },
     hitBack: { def: hitBack, mask: 'auto', busy: true, fadeIn: 0.04 },
+    hitLeft: { def: hitSide('hitLeft', 1), mask: 'auto', busy: true, fadeIn: 0.04 },
+    hitRight: { def: hitSide('hitRight', -1), mask: 'auto', busy: true, fadeIn: 0.04 },
     stagger: { def: stagger, mask: 'full', busy: true, fadeIn: 0.06 },
   };
 }

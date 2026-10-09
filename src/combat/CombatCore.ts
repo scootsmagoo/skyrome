@@ -787,8 +787,8 @@ export class CombatCore {
         this.stagger(def, pr.seconds, arrow ? null : att, 'stagger');
         if (pr.riposteWindow) def.riposteUntil = now + COMBAT.parry.riposteWindow;
       } else if (pr.result === 'knockdown') this.knockdown(def, arrow ? null : att);
-      else if (pr.result === 'flinch') this.flinch(def, att, behind);
-      else if (!hit.blocked && !def.action) def.view?.play(behind ? 'hitBack' : 'hitFront');
+      else if (pr.result === 'flinch') this.flinch(def, att, toAtt);
+      else if (!hit.blocked && !def.action) def.view?.play(hitClipFor(toAtt));
       // The body rocks away from the blow (an additive spring on top of the hit clip), left or right.
       if (hit.damage > 0 || hit.blocked) {
         const bx = arrow ? arrow.vx : def.position.x - att.position.x;
@@ -948,15 +948,15 @@ export class CombatCore {
   }
 
   /** A flinch interrupts only a light wind-up, never a block, a dodge or a recovery (§6.5). */
-  private flinch(c: Combatant, by: Combatant, behind: boolean) {
+  private flinch(c: Combatant, by: Combatant, toAtt: number) {
     const a = c.action;
     const lightish = a && (a.kind === 'light' || a.kind === 'riposte' || a.kind === 'sprint' || a.kind === 'feint' || a.kind === 'shoot') && c.inWindup(this.now);
     if (lightish) {
       c.action = null;
       c.view?.setCharge(0);
       c.stun = { kind: 'flinch', until: this.now + 0.25 };
-      c.view?.play(behind ? 'hitBack' : 'hitFront');
-    } else if (!a && !c.guardActive) c.view?.play(behind ? 'hitBack' : 'hitFront');
+      c.view?.play(hitClipFor(toAtt));
+    } else if (!a && !c.guardActive) c.view?.play(hitClipFor(toAtt));
     void by;
   }
 
@@ -1945,6 +1945,14 @@ export class CombatCore {
 }
 
 /** The avatar clip for an attack. */
+/** The reaction for a blow from `toAtt` (radians, + = the attacker is to the victim's left, 0 = ahead). */
+export function hitClipFor(toAtt: number): ActionClip {
+  const a = Math.abs(toAtt);
+  if (a <= 50 * DEG) return 'hitFront';
+  if (a > 130 * DEG) return 'hitBack';
+  return toAtt > 0 ? 'hitLeft' : 'hitRight';
+}
+
 export function clipFor(a: Pick<Action, 'kind' | 'chain'>): ActionClip {
   switch (a.kind) {
     case 'light':

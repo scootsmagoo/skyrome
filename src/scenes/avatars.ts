@@ -35,7 +35,7 @@ import type { SceneDef } from './types';
 
 const IDLE_LOOPS: IdleLoop[] = ['stand', 'sit', 'sitGround', 'lean', 'work', 'sweep', 'talk', 'pray', 'sleep', 'cheer', 'guard', 'drunk'];
 const ACTIONS: ActionClip[] = [
-  'attackLight1', 'attackLight2', 'attackLight3', 'attackPower', 'bash', 'blockHit', 'hitFront', 'hitBack', 'stagger', 'knockdown', 'death',
+  'attackLight1', 'attackLight2', 'attackLight3', 'attackPower', 'bash', 'blockHit', 'hitFront', 'hitBack', 'hitLeft', 'hitRight', 'stagger', 'knockdown', 'death',
   'drawWeapon', 'sheathWeapon', 'bowDraw', 'bowRelease', 'throw', 'interact', 'pickup', 'drink', 'pray', 'cheer', 'wave', 'talk', 'yield',
 ];
 

@@ -402,7 +402,7 @@ export class AnimationController {
   play(clip: ActionClip, opts?: PlayOptions) {
     // A corpse stays down: nothing replaces the held death pose (a blow only jolts the body).
     if (this.dead && (this.holdingDeath() || clip !== 'death')) {
-      if (clip === 'hitFront' || clip === 'hitBack' || clip === 'stagger' || clip === 'knockdown' || clip === 'blockHit') {
+      if (clip === 'hitFront' || clip === 'hitBack' || clip === 'hitLeft' || clip === 'hitRight' || clip === 'stagger' || clip === 'knockdown' || clip === 'blockHit') {
         this.twitch = 1;
         this.twitchDir = clip === 'hitBack' ? -1 : 1;
       }
@@ -590,6 +590,7 @@ export class AnimationController {
       for (let i = 0; i < nGaits; i++) sEff += this.gaitW[i] * this.gaitS[i];
       // On a staircase the stride is shortened (footIk.ts), so the cycle runs quicker to keep the feet still.
       const stride = 1 + (this.footIk.stride - 1) * this.footIk.weight;
+      this.footIk.baseStep = Math.max(0.3, sEff * 0.5);
       const rate = sEff > 0.05 ? this.speedSm / (sEff * stride) : 1 / GAITS.walk.cycle;
       const p0 = this.phase;
       this.phase = (p0 + rate * dt) % 1;
