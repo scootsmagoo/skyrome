@@ -47,7 +47,7 @@ import { CROWD_ROLES, FOREIGN_LABELS, type CrowdRole, type CrowdRoleId } from '.
 import { crowdRoom, LANE_SPAWN, laneSpawnRing, laneSpawnVerdict, type LaneSpawnVerdict } from './crowd/spawnRules';
 import { combatOf, streetsOf } from './hooks';
 import { Npc } from './Npc';
-import { isDetachable, LooseLoads } from './loads';
+import { isDetachable, LooseLoads, SLIP_CHANCE, type LoadKind } from './loads';
 import { attachProp, makeWorkBlock } from './props';
 import { loadNpcContent, NpcRegistry } from './registry';
 import { activeScheduleEntry, archetypeSlot, sunTimes, type SunTimes } from './schedules';
@@ -850,10 +850,14 @@ export class NpcManager implements System {
       ev.on('ragdoll:down', (e) => {
         const n = this.byId.get(e.actor.id);
         if (!n || !isDetachable(n.prop?.kind)) return;
-        const alive = e.mode === 'knockdown' && !n.dead;
+        // A stumble loosens a load now and then (a tall one slips more easily); a fall always does.
+        if (e.mode === 'stumble' && !this.rng.chance(SLIP_CHANCE[n.prop!.kind as LoadKind] ?? 0.2)) return;
+        const alive = e.mode !== 'death' && !n.dead;
         this.loads.detach(n, { recover: alive });
         if (alive && this.rng.chance(0.7)) this.bark(n, 'dropped', true);
       }),
+      // A load hits the ground or an amphora breaks: those about glance over (and some say so).
+      ev.on('load:fell', (e) => this.noticeLoad(e.x, e.z, e.ownerId, e.broke)),
       ev.on('npc:alarm', (e) => {
         const a = e.aggressorId ? (this.game.actors.get(e.aggressorId) ?? null) : null;
         this.alarm(e.x, e.z, e.radius ?? 16, e.kind ?? 'fight', a);
@@ -1660,16 +1664,29 @@ export class NpcManager implements System {
     if (this.game.ragdolls?.has(n)) {
       n.wasDown = true;
       n.downUntil = Infinity;
+      // A stumble only breaks stride: no daze afterwards.
+      const mode = this.game.ragdolls.modeOf(n);
+      if (mode) n.wasStumble = mode === 'stumble';
       return true;
     }
     if (n.wasDown) {
       n.wasDown = false;
-      n.downUntil = this.clock + 0.8 + this.rng.next() * 0.9;
+      const stumble = n.wasStumble;
+      n.wasStumble = false;
+      n.downUntil = this.clock + (stumble ? 0.1 : 0.8 + this.rng.next() * 0.9);
       n.setLoop(null);
-      if (this.rng.chance(0.55)) this.bark(n, 'dazed');
+      if (!stumble && this.rng.chance(0.55)) this.bark(n, 'dazed');
       if (n.lostLoad && !n.scripted) brain.setTask(null, this.life);
     }
     return this.clock < n.downUntil;
+  }
+
+  /** Bystanders within earshot stop and look at where a load fell. */
+  private noticeLoad(x: number, z: number, ownerId: string | null, loud: boolean) {
+    for (const n of this.near({ x, y: 0, z }, loud ? 14 : 9)) {
+      if (n.id === ownerId || !n.brain) continue;
+      n.brain.notice(this.life, x, z, loud);
+    }
   }
 
   /** What stands against the player's body: build, age, load, bracing (topple.ts). */
@@ -1706,8 +1723,14 @@ export class NpcManager implements System {
       this.bark(n, 'shoved', true);
       return;
     }
+    if (out === 'stumble' && this.game.ragdolls?.stumble(n, { x: px, y: n.position.y, z: pz }, approach)) {
+      // Lurches and catches themselves (a partial ragdoll); a load on the head may slip.
+      this.game.events.emit('sfx', { id: 'hit.punch', position: { x: n.position.x, y: n.position.y + 1, z: n.position.z } });
+      this.bark(n, 'shoved', true);
+      return;
+    }
     if (out !== 'none') {
-      // A stumble (or a fall that could not go to physics): the staggering clip, a thump.
+      // A stumble that could not go to physics (too many bodies, first person): the staggering clip, a thump.
       if (!n.humanoid.isBusy()) n.humanoid.play('stagger');
       this.game.events.emit('sfx', { id: 'hit.punch', position: { x: n.position.x, y: n.position.y + 1, z: n.position.z } });
       this.bark(n, 'shoved', true);

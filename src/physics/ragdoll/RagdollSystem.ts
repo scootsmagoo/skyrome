@@ -9,6 +9,10 @@
  * - Knockdown (a heavy blow that floors someone alive): half-limp for about a second — the body
  *   sprawls the way the blow sent it — then the actor stands where it landed, and the pose blends
  *   back into the animation's getting-up over half a second.
+ * - Stumble (a shove too light to fell someone): the muscles stay firm and the stagger clip leads, a
+ *   share of the weight is held up and the pelvis is tethered to the walking capsule, so the body
+ *   lurches from the blow (chest and arms fling, the head snaps) and recovers on its feet. Nobody
+ *   is moved or turned; the pose blends back to the animation over a third of a second.
  * - A knockout ends (the avatar is no longer dead): the frozen pose blends back the same way.
  *
  * Whoever is first seen already dead (a corpse loaded with the game) keeps the animation's pose.
@@ -31,11 +35,11 @@ declare module '../../core/Game' {
 declare module '../../core/Events' {
   interface GameEvents {
     /** Someone's body went over to physics (a death, a knockout or a knockdown). */
-    'ragdoll:down': { actor: Actor; mode: 'death' | 'knockdown' };
+    'ragdoll:down': { actor: Actor; mode: 'death' | 'knockdown' | 'stumble' };
   }
 }
 
-type Mode = 'death' | 'knockdown';
+type Mode = 'death' | 'knockdown' | 'stumble';
 
 interface Live {
   actor: Actor;
@@ -64,6 +68,12 @@ interface Blend {
 /** How long a knockdown stays on the ground (s) before getting up, and the blend back. */
 const KNOCK_DOWN = 1.15;
 const BLEND = 0.5;
+/** A stumble: seconds in physics, and the blend back. */
+const STUMBLE = 0.8;
+const STUMBLE_BLEND = 0.3;
+/** Standing people's capsule: radius, feet-to-head height (m). */
+const STAND_R = 0.32;
+const STAND_H = 1.75;
 const RANGE = 45;
 
 export class RagdollSystem implements System {
@@ -78,6 +88,9 @@ export class RagdollSystem implements System {
   private seenDead = new WeakMap<Actor, boolean>();
   private lastHit = new Map<string, { from: THREE.Vector3; power: boolean; at: number }>();
   private knock = new Set<string>();
+  /** Impulse (N s) for the next stumble of each actor id. */
+  private stumbleKick = new Map<string, number>();
+  private readonly back = new THREE.Vector3();
   /**
    * Each nearby living avatar's pose at the end of the last frame (local bone rotations and the
    * hips' position): a death jumps the animation straight to the lying pose, so the body falls
@@ -121,15 +134,69 @@ export class RagdollSystem implements System {
     return this.live.has(actor);
   }
 
+  /**
+   * A shove that does not fell someone (a run into a crowd): they lurch and catch themselves,
+   * `approach` m/s from `from`. False when they can't go to physics right now.
+   */
+  stumble(actor: Actor, from: THREE.Vector3Like, approach: number): boolean {
+    const av = actor.avatar;
+    if (!(av instanceof HumanoidAvatar) || av.isDead || this.has(actor) || this.skip(actor, av)) return false;
+    if (this.live.size >= this.max) return false;
+    this.noteHit(actor.id, from, false);
+    this.stumbleKick.set(actor.id, Math.min(40, 8 + approach * 4.5));
+    // The muscles follow a light recoil from the side the shove came from (the body's lurch is the physics).
+    const front = (from.x - actor.position.x) * Math.sin(actor.heading) + (from.z - actor.position.z) * Math.cos(actor.heading) > 0;
+    av.play(front ? 'hitFront' : 'hitBack');
+    this.start(actor, av, 'stumble');
+    return this.live.has(actor);
+  }
+
+  /** How this actor is in physics right now (null when they are not). */
+  modeOf(actor: Actor): 'death' | 'knockdown' | 'stumble' | null {
+    return this.live.get(actor)?.mode ?? null;
+  }
+
   /** Is this actor's body in physics or a held ragdoll pose? */
   has(actor: Actor): boolean {
     return this.live.has(actor) || this.frozen.has(actor) || this.blends.has(actor);
   }
 
   fixedUpdate(dt: number) {
-    for (const l of this.live.values()) {
+    const live = this.live;
+    if (live.size === 0) return;
+    for (const l of live.values()) {
       l.rag.sample();
+      if (l.mode === 'stumble') {
+        const a = l.actor;
+        l.rag.tether(a.position.x, a.position.z, a.velocity.x, a.velocity.z, 0.35);
+      }
       l.rag.drive(dt);
+    }
+    this.collide();
+  }
+
+  /** Keep the limbs of everyone in physics out of the people standing around them. */
+  private collide() {
+    const actors = this.game.actors?.all();
+    if (!actors) return;
+    const back = this.back;
+    for (const l of this.live.values()) {
+      const c = l.rag.segs[0].body.translation();
+      for (let i = 0; i < actors.length; i++) {
+        const o = actors[i];
+        if (o === l.actor || (o as { disposed?: boolean }).disposed) continue;
+        const p = o.position;
+        if (Math.abs(p.x - c.x) > 1.6 || Math.abs(p.z - c.z) > 1.6) continue;
+        // The fallen are bodies too (or corpses): only people on their feet block.
+        if (this.has(o) || (o.avatar instanceof HumanoidAvatar && o.avatar.isDead)) continue;
+        back.set(0, 0, 0);
+        if (l.rag.collideCapsule(p.x, p.z, p.y, p.y + STAND_H, STAND_R, o.velocity.x, o.velocity.z, back)) {
+          // A body thrown against them shoves back (little: they are on their feet).
+          const k = 1 / 75;
+          o.velocity.x += back.x * k;
+          o.velocity.z += back.z * k;
+        }
+      }
     }
   }
 
@@ -163,10 +230,15 @@ export class RagdollSystem implements System {
       l.t += dt;
       if (l.mode !== 'death') l.rag.readTargets();
       if (l.mode === 'death') l.rag.strength = 0.55 * Math.exp(-l.t / 0.22);
-      else l.rag.strength = l.t < 0.25 ? 0.25 : 0.4;
+      else if (l.mode === 'stumble') {
+        // Firm from the first instant, a little looser while the blow lands, then firmer again.
+        l.rag.strength = l.t < 0.3 ? 0.6 : 0.9;
+        l.rag.unload = l.t < 0.3 ? 0.7 : 0.9;
+      } else l.rag.strength = l.t < 0.25 ? 0.25 : 0.4;
       l.rag.write(alpha);
       l.still = l.rag.motion() < 0.12 ? l.still + dt : 0;
-      if (l.mode === 'knockdown' && l.t >= KNOCK_DOWN) this.getUp(l.actor, l.avatar);
+      if (l.mode === 'stumble' && l.t >= STUMBLE) this.endStumble(l);
+      else if (l.mode === 'knockdown' && l.t >= KNOCK_DOWN) this.getUp(l.actor, l.avatar);
       else if (l.mode === 'death' && ((l.t > 1.2 && l.still > 0.4) || l.t > 7)) this.freeze(l);
     }
     for (const [a, f] of this.frozen) {
@@ -217,6 +289,7 @@ export class RagdollSystem implements System {
       for (const l of this.live.values()) if (!old || l.t > old.t) old = l;
       if (old) {
         if (old.mode === 'death') this.freeze(old);
+        else if (old.mode === 'stumble') this.endStumble(old);
         else this.getUp(old.actor, old.avatar);
       }
     }
@@ -243,11 +316,24 @@ export class RagdollSystem implements System {
       d.normalize();
       d.y = 0.25;
       const chest = rag.segs[2].body.translation();
-      const mag = mode === 'death' ? (hit.power ? 24 : 15) : hit.power ? 42 : 26;
+      const mag = mode === 'stumble' ? (this.stumbleKick.get(a.id) ?? 20) : mode === 'death' ? (hit.power ? 24 : 15) : hit.power ? 42 : 26;
+      this.stumbleKick.delete(a.id);
       rag.impulse(chest, d, mag);
+    }
+    if (mode === 'stumble') {
+      rag.armsLoose = true;
+      rag.readTargets();
     }
     this.live.set(a, { actor: a, avatar: av, rag, mode, t: 0, still: 0 });
     this.game.events.emit('ragdoll:down', { actor: a, mode });
+  }
+
+  /** A stumble is over: the pose blends back into the animation where the person stands. */
+  private endStumble(l: Live) {
+    const pose = poseOf(l.rag);
+    l.rag.dispose();
+    this.live.delete(l.actor);
+    this.blends.set(l.actor, { actor: l.actor, avatar: l.avatar, pose, t: 0, dur: STUMBLE_BLEND });
   }
 
   /** A body at rest becomes a held pose; a corpse's actor moves to where it lies. */

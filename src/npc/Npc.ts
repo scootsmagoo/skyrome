@@ -98,6 +98,8 @@ export class Npc extends Actor implements Positioned {
   /** Down or just up (the manager's downed state): the brain and the mover wait. Manager clock (s). */
   downUntil = 0;
   wasDown = false;
+  /** The fall that was just over was only a stumble (no daze). */
+  wasStumble = false;
   /** In a conversation with the player. */
   talking = false;
   dead = false;
