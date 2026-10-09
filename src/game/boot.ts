@@ -15,6 +15,7 @@ import type { Game } from '../core/Game';
 import { whenTexturesLoaded } from '../gfx/materials';
 import { Interactions } from '../interaction/Interactions';
 import { createHumanoid } from '../actors/avatar/HumanoidAvatar';
+import { classicRequested, loadRealBodies } from '../actors/avatar/real/RealBody';
 import { avatarLod } from '../actors/avatar/lod';
 import { installRpg } from '../rpg/install';
 import { setupPlayer } from '../scenes/common';
@@ -110,6 +111,8 @@ export async function startRome(game: Game, uiRoot: HTMLElement, params: RomePar
   // The player stands at the Porta Capena from the start (the creation stage is there too).
   loading.progress(0.92, 'Waking the city');
   const look = lookById('m-urbanus', 'male');
+  // The realistic bodies load beside the city build; every avatar from here on starts with one.
+  if (!classicRequested()) await loadRealBodies(game.renderer).catch(() => {});
   const player = setupPlayer(game, { x: 0, y: 30, z: 0 }, 0, createHumanoid(outfitAppearance(look, {})));
   avatarLod.viewer = game.camera;
   const rpg = installRpg(game, { newGame: false, systems: V01_SYSTEMS });

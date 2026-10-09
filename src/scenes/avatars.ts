@@ -14,17 +14,17 @@
  *   &lod=low|auto                lineup mesh LOD
  *   &labels=0                    hide name labels
  *   &seed=<n>                    variation seed
- *   &avatar=real|mix             realistic bodies (src/actors/avatar/real): all slots + player, or
- *                                every second slot (the others stay procedural, for comparison)
- *   &bodies=1                    with avatar=real: the lineup becomes bare men and women of several
- *                                heights and builds (slots alternate sex; heights 1.50..1.95 m)
+ *   &avatar=real|mix|classic     real (the default): realistic bodies (src/actors/avatar/real); mix: every
+ *                                second slot procedural, for comparison; classic: all procedural
+ *   &bodies=1                    the lineup becomes men and women of several heights and builds
+ *                                (slots alternate sex; heights 1.50..1.95 m)
  */
 import * as THREE from 'three';
 import { Actor, type ActionClip, type IdleLoop, type LocomotionState } from '../actors/Actor';
 import { createHumanoid, type HumanoidAvatar } from '../actors/avatar/HumanoidAvatar';
 import { AVATAR_ROLES, isAvatarRole, randomAppearance, type AvatarRole } from '../actors/avatar/variants';
 import { avatarLod } from '../actors/avatar/lod';
-import { applyRealBody, loadRealBodies, updateRealBodies, type RealBody } from '../actors/avatar/real/RealBody';
+import { loadRealBodies } from '../actors/avatar/real/RealBody';
 import type { Appearance, Build } from '../actors/appearance';
 import { warmUpAnimations } from '../actors/avatar/anim/library';
 import type { Game } from '../core/Game';
@@ -207,6 +207,8 @@ const scene: SceneDef = {
     const crowdN = Number(q.get('crowd') ?? 0);
     const drawnAll = q.get('drawn') === '1';
     const lod = (q.get('lod') as 'low' | 'auto' | null) ?? undefined;
+    if (q.get('avatar') !== 'classic') await loadRealBodies(game.renderer);
+    const mix = q.get('avatar') === 'mix';
     const rng = new Rng(Number(q.get('seed') ?? 113));
     const showLabels = q.get('labels') !== '0';
 
@@ -241,7 +243,7 @@ const scene: SceneDef = {
       const row = Math.floor(i / 10);
       const col = i % 10;
       const app = randomAppearance(rng.fork(`slot${i}`), role);
-      const avatar = createHumanoid(app, { lod });
+      const avatar = createHumanoid(app, { lod, body: mix && i % 2 === 0 ? 'classic' : 'real' });
       // The back row sits half a slot over, so its name labels fall between the front row's.
       const pos = { x: -8.1 + col * 1.8 + (row === 0 ? 0.9 : 0), y: 0.05, z: -3 + row * 3 };
       const actor = new Actor(game, { id: `slot-${i}`, position: pos, heading: 0, layer: Layer.Npc, avatar });
@@ -266,7 +268,7 @@ const scene: SceneDef = {
     const civRoles: AvatarRole[] = ['plebeian-man', 'plebeian-woman', 'slave', 'freedman', 'merchant', 'elderly', 'patrician-man', 'matron', 'child', 'legionary', 'vigil', 'greek', 'syrian', 'egyptian', 'dacian'];
     for (let i = 0; i < crowdN; i++) {
       const r = rng.pick(civRoles);
-      const avatar = createHumanoid(randomAppearance(rng.fork(`crowd${i}`), r), { lod: q.get('avatar') ? undefined : 'auto' });
+      const avatar = createHumanoid(randomAppearance(rng.fork(`crowd${i}`), r), { lod: 'auto' });
       const actor = new Actor(game, { id: `crowd-${i}`, position: { x: rng.range(-30, 30), y: 0.05, z: rng.range(4, 40) }, heading: rng.range(-3, 3), layer: Layer.Npc, avatar });
       game.actors.add(actor);
       crowd.push({ actor, avatar, target: new THREE.Vector3(rng.range(-35, 35), 0, rng.range(2, 45)), speed: rng.chance(0.1) ? rng.range(3.5, 4.5) : rng.range(1.0, 1.6) });
@@ -437,28 +439,18 @@ const scene: SceneDef = {
         return sl.role;
       },
     };
-    // Realistic bodies (wave-1 prototype): swap the body mesh of lineup slots, keep the controller.
-    const realMode = q.get('avatar');
-    const reals: (RealBody | null)[] = slots.map(() => null);
-    if (realMode === 'real' || realMode === 'mix') {
-      await loadRealBodies(game.renderer);
+    // Realistic bodies are the default; `&bodies=1` turns the lineup into bare-ish men and women of many sizes.
+    if (q.get('bodies') === '1') {
       const builds: Build[] = ['slight', 'average', 'stocky', 'muscular', 'heavy'];
       slots.forEach((sl, i) => {
-        if (realMode === 'mix' && i % 2 === 0) return;
-        if (q.get('bodies') === '1') {
-          const app: Appearance = { ...sl.avatar.appearance, sex: i % 2 ? 'female' : 'male', age: 'adult', build: builds[Math.floor(i / 2) % 5], height: 1.5 + (i % 10) * 0.05 + (i < 10 ? 0 : 0.02) };
-          sl.avatar.setAppearance(app);
-          sl.avatar.setWeapon('none');
-          sl.avatar.setShield('none');
-          sl.avatar.setDrawn(false);
-        }
-        reals[i] = applyRealBody(sl.avatar);
+        const app: Appearance = { ...sl.avatar.appearance, sex: i % 2 ? 'female' : 'male', age: 'adult', build: builds[Math.floor(i / 2) % 5], height: 1.5 + (i % 10) * 0.05 + (i < 10 ? 0 : 0.02) };
+        sl.avatar.setAppearance(app);
+        sl.avatar.setWeapon('none');
+        sl.avatar.setShield('none');
+        sl.avatar.setDrawn(false);
       });
-      for (const c of crowd) reals.push(applyRealBody(c.avatar));
-      reals.push(applyRealBody(playerAvatar));
-      game.addSystem({ name: 'realBodies', priority: 95, lateUpdate: () => updateRealBodies(game.camera) });
     }
-    (window as unknown as { __avatars: unknown }).__avatars = { ...api, reals };
+    (window as unknown as { __avatars: unknown }).__avatars = { ...api };
   },
 };
 export default scene;

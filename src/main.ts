@@ -3,6 +3,7 @@ import { Game } from './core/Game';
 import { DebugOverlay } from './dev/DebugOverlay';
 import { GraphicsGovernor } from './core/graphics';
 import { enableCompressedTextures } from './gfx/materials';
+import { classicRequested, loadRealBodies } from './actors/avatar/real/RealBody';
 import { setLeafyCanopies } from './arch/vegetation/materials';
 import { AUDIT, analyzeArea, auditRecordCount } from './dev/audit/geomAudit';
 import type { SceneDef } from './scenes/types';
@@ -28,6 +29,8 @@ async function boot() {
   const game = await Game.create(app, { seed: Number(params.get('seed') ?? 113) });
   window.__skyrome = { game, scene: sceneName, ready: false };
   enableCompressedTextures(game.renderer);
+  // Realistic bodies are the default: start loading now (the city builds meanwhile); avatars made before it ends upgrade on arrival.
+  if (!classicRequested()) loadRealBodies(game.renderer).catch((e) => console.error('real bodies failed to load, staying procedural', e));
   // Geometry audit hooks for scripts/crawl.mjs (?audit).
   if (AUDIT) (window as unknown as { __audit: unknown }).__audit = { analyzeArea, auditRecordCount };
   {

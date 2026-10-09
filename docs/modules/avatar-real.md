@@ -4,7 +4,8 @@ Wave-1 prototype of the realistic body: two sculpted bodies (CC0 Human Base Mesh
 game's own 25-bone skeleton, so `AnimationController`, sockets, IK, equipment and combat drive them
 unchanged. Opt-in: `?scene=avatars&avatar=real` (all slots), `avatar=mix` (every second slot, next to
 the procedural ones), `&bodies=1` (bare men and women of heights 1.50 to 1.95 m and all builds).
-The procedural avatar is still the default everywhere else. Nothing here is wired into the game yet.
+Since wave 2 (C2a) the realistic body is the default everywhere; `?avatar=classic` selects the procedural
+one (see "Wave 2: integration and painted garments" below).
 
 Files: `tools/characters/` (Blender pipeline), `src/actors/avatar/real/` (runtime),
 `public/models/people/{male,female}.glb`, `public/textures/people/*.ktx2` (about 11 MB all told).
@@ -133,3 +134,54 @@ the top) into the atlas; anything added to the GLB must keep the `<sex>_lodN` na
 - Finger bones (the rig has 2 per hand); toe bone split.
 - More bodies: HBM has stylized and other presets; an older and a child body (separate sculpts) instead of scaling.
 - Age and build as real blend shapes (the heavy and slight builds only scale girth today).
+
+
+## Wave 2: integration and painted garments (C2a)
+
+`HumanoidAvatar` takes `body: 'real' | 'classic'` (default `'real'`; `?avatar=classic` forces classic).
+`main.ts` starts `loadRealBodies` at boot and `startRome` awaits it before the first avatar, so every avatar of
+the game is real from the start. Scenes that create avatars earlier (or without the await) get a classic avatar
+that `upgradeToReal()` swaps over when the load ends. No `applyRealBody` / `updateRealBodies` any more: the avatar
+owns a `RealBody` (real/RealBody.ts) and picks its LOD in `updateLod` (`lod: 'low'` avatars stay at LOD 2 or lower).
+
+**Interface** (`real/types.ts`, verbatim from the plan): `buildShells` (garments/shells.ts, C2d), `buildHead`
+(head/index.ts, C2b), `addCorrectives` / `updateCorrectives` (corrective.ts, C2c). RealBody calls them as follows.
+- `buildHead(ctx)` once per avatar (LOD 0 arrays). Its `objects` are parented to the head bone inside a group that
+  cancels the head joint's offset, i.e. **they must be expressed in the character's bind-pose coordinates** (the same
+  space as `ctx.body` and `frame`), not in head-bone-local space. Hidden in first person and beyond LOD 2.
+  If it returns any object the procedural helmets are left out of the rigid pieces (it is then the head module's job).
+- `buildShells(ctx)` per LOD 0..2 (cached per appearance, shared by every avatar with it): the geometry is drawn by a
+  `SkinnedMesh` with avatarMaterial on the avatar's skeleton; `hide` drops body triangles with 2 of 3 vertices
+  hidden. When shells exist the procedural skirts, togas and cloaks are not built (only the belt and armour).
+- `addCorrectives(geometry, ctx)` per LOD 0..2 on a template-ordered temporary geometry (positions, normals, skin
+  attributes, no index); its `morphAttributes` are then carried onto the assembled geometry (appended copies take their
+  source vertex's offsets). `updateCorrectives(mesh, bones)` runs after each animation step at LOD <= 2.
+
+**LODs**: 0 (11 k triangles, < 9 m), 1 (4 k, < 22 m), 2 (1.2 k, < 55 m), 3 (about 300, beyond; vertex-cluster
+decimation of LOD 2 at load, `real/decimate.ts`, keeps the weights). LOD 0 is two draws (cloth + skin) plus the eyes;
+LOD 1 to 3 are one draw (avatarMaterial, skin as a colour; LOD 0 only has the eyes). Geometry is built per LOD on first
+need (at most one build per 5 ms), cached per appearance (`realKey`: sex, age, build, height, skin, garments,
+footwear, armour; 40 entries).
+
+**Painted garments** (`real/garments/`):
+- `paint.ts` evaluates the procedural rules (`paintTorso/Arm/Leg/Foot`, `armor*Paint`) at every vertex of the morphed
+  body: region by dominant bone, limb axes from the rig joints, the torso's centre line measured from the body. Output:
+  colour, surf (avatarMaterial's contract), thickness and `cloth`. Near garment borders the rule is sampled around the
+  vertex (+-3 cm) so the vertex's `cover` ramps with the distance to the true border.
+- `assemble.ts` builds the geometry. LOD 0: cloth group (copies of the cloth triangles' vertices, offset along the normal
+  by the thickness, plus the rigid pieces) and skin group (the body minus triangles wholly under cloth);
+  `clothMaterial.ts` discards cover < 0.5 (alpha-to-coverage with MSAA), so hems are smooth contours. Triangles
+  where garments meet get one material (the pattern id is flat per triangle). The first `count` vertices are always the template's.
+- Rigid pieces (`rigidPieces` in RealBody.ts) are the procedural builders run against a `MeasuredProfile`
+  (garments/profile.ts, the torso measured from the real body plus 1.8 cm): armour lames, galerus, cardiophylax,
+  scarf, helmets, belt and, until C2d's shells exist, skirts, togas, pallae, aprons and cloaks (`buildLowerGarments`,
+  `buildCloak`). Not built at LOD 3.
+- Skin keeps skin.ts (C2b's file): the skin group uses `skinMaterial`; nothing in it was changed.
+
+**Numbers** (M4 Max, 1512x860 @2x, `node scripts/perf.mjs --views forum,circus,colosseum`): the Forum's worst direction
+1260 draws / 3.63 M triangles (wave 1 classic: 1252 / 4.03 M); circus and Colosseum within 1 % of classic. LOD builds:
+about 1.7 ms each on average.
+
+**Known limits**: heads are bald until C2b's hair arrives; painted togas/stolas without shells wear the procedural lofts
+(fitted to the measured torso, a little loose at the hips); hems between two cloth garments are triangle-scale; the shadow
+map's self-shadowing of draped lofts on the painted cloth is visible at close range; hands are rigid blocks around a grip.
