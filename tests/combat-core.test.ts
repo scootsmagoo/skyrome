@@ -402,10 +402,10 @@ describe('poise and stagger (§6.5)', () => {
     expect(p.action?.kind).toBe('light');
   });
 
-  it('at most 2 staggers on one target within 4 s; poise immunity for 1.5 s after each', () => {
+  it('at most 2 staggers (a veteran: a thug would be floored by the power blows) on one target within 4 s; poise immunity for 1.5 s after each', () => {
     const core = makeCore();
     const p = addPlayer(core);
-    const t = addNpc(core, 't', { ...combatProfileFor('thug', { kit: 0 }), health: 5000, yieldAt: 0, fleeAt: 0 });
+    const t = addNpc(core, 't', { ...combatProfileFor('veteran', { kit: 0 }), health: 5000, yieldAt: 0, fleeAt: 0 });
     core.engage(t, p);
     const power: Action = { kind: 'power', start: 0, end: 1, resolved: true, charge: 0.8, direction: 'none' };
     let staggers = 0;

@@ -46,11 +46,13 @@ import { CROWD_ROLES, FOREIGN_LABELS, type CrowdRole, type CrowdRoleId } from '.
 import { crowdRoom, LANE_SPAWN, laneSpawnRing, laneSpawnVerdict, type LaneSpawnVerdict } from './crowd/spawnRules';
 import { combatOf, streetsOf } from './hooks';
 import { Npc } from './Npc';
+import { isDetachable, LooseLoads } from './loads';
 import { attachProp, makeWorkBlock } from './props';
 import { loadNpcContent, NpcRegistry } from './registry';
 import { activeScheduleEntry, archetypeSlot, sunTimes, type SunTimes } from './schedules';
 import { SpotIndex, type WallProbe } from './spots';
 import { EngineDialogueView } from './talkBridge';
+import { ToppleGate, type Resistor } from './topple';
 import type { NpcDef } from './types';
 import { VignetteDirector, type VignetteHost } from './vignettes/director';
 import { VIGNETTES } from './vignettes';
@@ -228,6 +230,10 @@ export class NpcManager implements System {
   private dialogueOpened = false;
   private weaponWarned = new Map<string, number>();
   private offs: (() => void)[] = [];
+  /** Shoves and sprints into people: resolved once per contact (topple.ts). */
+  private readonly topple = new ToppleGate();
+  /** Loads that fell off their carriers, lying about until fetched. */
+  readonly loads: LooseLoads;
   private registryFallback: NpcRegistry | null = null;
   private workBlocks = new Map<string, THREE.Object3D>();
   private readonly ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 });
@@ -278,6 +284,7 @@ export class NpcManager implements System {
       const l = Math.hypot(n.x, n.z) || 1;
       return { dist: hit.timeOfImpact, nx: n.x / l, nz: n.z / l };
     };
+    this.loads = new LooseLoads(game, () => this.rng.next());
     // No subtitles over the title, the creation screen or a loading fade.
     this.barks = new BarkDirector((text, speaker) => {
       if (!this.quiet()) game.events.emit('ui:subtitle', { text, speaker });
@@ -677,6 +684,7 @@ export class NpcManager implements System {
     this.byId.delete(npc.id);
     this.directed.delete(npc);
     this.posed.delete(npc);
+    this.topple.forget(npc.id);
     this.spots.release(npc.id);
     const block = this.workBlocks.get(npc.id);
     if (block) {
@@ -717,6 +725,7 @@ export class NpcManager implements System {
 
   /** Despawn everyone (scene change, tests). */
   clear() {
+    this.loads.clear();
     this.vignettes.stopAll();
     this.carts.clear();
     this.stations.clear();
@@ -818,6 +827,15 @@ export class NpcManager implements System {
       }),
       // A new game, a loaded save or the quick start: fill the place afresh for its hour.
       ev.on('game:started', () => this.relocate()),
+      // Someone goes down (a shove, a blow, a death): their load comes off and lands apart; the
+      // carrier of a knocked-down one fetches it once up again (a dead one's is left lying).
+      ev.on('ragdoll:down', (e) => {
+        const n = this.byId.get(e.actor.id);
+        if (!n || !isDetachable(n.prop?.kind)) return;
+        const alive = e.mode === 'knockdown' && !n.dead;
+        this.loads.detach(n, { recover: alive });
+        if (alive && this.rng.chance(0.7)) this.bark(n, 'dropped', true);
+      }),
       ev.on('npc:alarm', (e) => {
         const a = e.aggressorId ? (this.game.actors.get(e.aggressorId) ?? null) : null;
         this.alarm(e.x, e.z, e.radius ?? 16, e.kind ?? 'fight', a);
@@ -1515,6 +1533,16 @@ export class NpcManager implements System {
         continue;
       }
       const brain = n.brain!;
+      // Sprawled on the ground, then dazed for a moment: the brain, the mover and its stuck ladder
+      // wait (nobody is "stuck" lying down), and the person stays put.
+      if (this.downed(n, brain)) {
+        n.mover.stuck.reset(n.position.x, n.position.z);
+        wish.set(0, 0, 0);
+        n.wish.copy(wish);
+        if (n.sim === 'full') n.locomote(wish, dt);
+        else n.glide(wish, dt, this.gridFloor, this.gridBlocked);
+        continue;
+      }
       const tb = timed ? performance.now() : 0;
       brain.step(dt, this.life, desired);
       if (timed) tBrain += performance.now() - tb;
@@ -1545,7 +1573,10 @@ export class NpcManager implements System {
           if (dp < 4) {
             ns.push(this.neighbor(ns.length, pp.x, pp.z, pv.x, pv.z, 0.35, armed ? 4 : 2.2));
             // Shoulder-through: the player walking into someone shoves them aside (GDD §14.7b).
-            if (dp < 0.85 && pSpeed > 1 && (pv.x * -dpx + pv.z * -dpz) / (dp || 1) > 0.5) this.shove(n, pp.x, pp.z, pSpeed, dp);
+            if (dp < 0.85 && pSpeed > 1) {
+              const approach = (pv.x * -dpx + pv.z * -dpz) / (dp || 1);
+              if (approach > 0.5) this.shove(n, pp.x, pp.z, approach, dp);
+            }
           }
         }
         for (let k = 0; k < carts.length; k++) {
@@ -1603,14 +1634,64 @@ export class NpcManager implements System {
     return r;
   }
 
-  private shove(n: Npc, px: number, pz: number, speed: number, d: number) {
+  /**
+   * Is this NPC down (a ragdoll sprawl) or still dazed from it? On getting up they have a beat of
+   * daze and a word, then the brain takes over (and goes for a fallen load, if there is one).
+   */
+  private downed(n: Npc, brain: NpcBrain): boolean {
+    if (this.game.ragdolls?.has(n)) {
+      n.wasDown = true;
+      n.downUntil = Infinity;
+      return true;
+    }
+    if (n.wasDown) {
+      n.wasDown = false;
+      n.downUntil = this.clock + 0.8 + this.rng.next() * 0.9;
+      n.setLoop(null);
+      if (this.rng.chance(0.55)) this.bark(n, 'dazed');
+      if (n.lostLoad && !n.scripted) brain.setTask(null, this.life);
+    }
+    return this.clock < n.downUntil;
+  }
+
+  /** What stands against the player's body: build, age, load, bracing (topple.ts). */
+  private resistorOf(n: Npc): Resistor {
+    const app = n.humanoid.appearance;
+    const role = n.role;
+    const braced = !!role?.guard || n.hostile || n.talking || n.isFighting() || !!n.def?.appearance.armor?.body;
+    return { build: app.build, age: app.age, height: app.height, load: n.prop?.kind ?? null, braced, frail: !!role?.fragile };
+  }
+
+  /**
+   * The player's body meets an NPC's, closing at `approach` m/s. Each contact is resolved once
+   * (topple.ts): a brush shoulders them aside, a run makes them stumble, a hard sprint can floor
+   * them (a ragdoll sprawl; a load on the head or back falls apart from them). Later steps of the
+   * same contact only nudge.
+   */
+  private shove(n: Npc, px: number, pz: number, approach: number, d: number) {
     const ax = (n.position.x - px) / (d || 1);
     const az = (n.position.z - pz) / (d || 1);
-    n.velocity.x += ax * speed * 0.6;
-    n.velocity.z += az * speed * 0.6;
+    if (this.topple.cooling(n.id, this.clock)) {
+      n.velocity.x += ax * approach * 0.25;
+      n.velocity.z += az * approach * 0.25;
+      return;
+    }
     const sprint = !!this.game.player?.sprinting;
-    // A full sprint into someone (GTA-style) often takes them off their feet: a ragdoll sprawl.
-    if (sprint && speed > 5 && this.rng.chance(0.45) && this.game.ragdolls?.topple(n, { x: px, y: n.position.y, z: pz })) {
+    // Facing: 1 when they look at the player (they see it coming), -1 with their back turned.
+    const facing = Math.sin(n.heading) * -ax + Math.cos(n.heading) * -az;
+    const out = this.topple.resolve(n.id, this.clock, { approach, facing }, this.resistorOf(n), this.rng.next());
+    const push = out === 'none' ? 0.6 : out === 'stumble' ? 0.8 : 1;
+    n.velocity.x += ax * approach * push;
+    n.velocity.z += az * approach * push;
+    if (out === 'fall' && this.game.ragdolls?.topple(n, { x: px, y: n.position.y, z: pz }, approach > 5)) {
+      this.game.events.emit('sfx', { id: 'body.fall', position: { x: n.position.x, y: n.position.y + 0.3, z: n.position.z } });
+      this.bark(n, 'shoved', true);
+      return;
+    }
+    if (out !== 'none') {
+      // A stumble (or a fall that could not go to physics): the staggering clip, a thump.
+      if (!n.humanoid.isBusy()) n.humanoid.play('stagger');
+      this.game.events.emit('sfx', { id: 'hit.punch', position: { x: n.position.x, y: n.position.y + 1, z: n.position.z } });
       this.bark(n, 'shoved', true);
       return;
     }
@@ -1651,6 +1732,7 @@ export class NpcManager implements System {
 
   update(dt: number) {
     const tu = performance.now();
+    this.loads.update(dt);
     this.updateInner(dt);
     this.stats.msUpdate = this.stats.msUpdate * 0.95 + (performance.now() - tu) * 0.05;
   }
@@ -2180,6 +2262,7 @@ export class NpcManager implements System {
   dispose() {
     for (const off of this.offs) off();
     this.clear();
+    this.loads.dispose();
   }
 }
 

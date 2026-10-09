@@ -914,6 +914,28 @@ function gestures(stance: Stance): Record<string, ActionDef> {
       hit: 0.58,
       fadeIn: 0.15,
     },
+    pickupGround: {
+      def: {
+        name: 'pickupGround',
+        duration: 1.7,
+        base: rest,
+        keys: [
+          k(0, rest, R),
+          // Down into a squat over the feet, head tilted to the thing on the ground, hand reaching.
+          k(0.5, { hipsPos: [0, -0.52, -0.12], hips: [38, 0, 0], spine: [26, 0, 0], chest: [16, 0, 0], neck: [8, 0, 0], head: [12, 0, 0], thighL: [96, 8, 0], shinL: [112], footL: [-6, 0], thighR: [90, 6, 0], shinR: [116], footR: [-40, 0], shoulderR: [6, 10], upperArmR: [74, 8, -6, 0], forearmR: [12, 20], handR: [10, 0, 0], fingersR: 10, upperArmL: [34, 18, 0, 0], forearmL: [50, 0] }, { L: [0.06, 0.12, 0, 0, 8], R: [-0.06, -0.06, 0, -24, -12] }, true),
+          // The hand closes on it.
+          k(0.85, { fingersR: 78, indexR: 72, upperArmR: [78, 8, -6, 0] }, undefined, true),
+          // Lift it against the body and straighten.
+          k(1.2, { hipsPos: [0, -0.3, -0.06], hips: [26, 0, 0], spine: [14, 0, 0], chest: [8, 0, 0], neck: [0, 0, 0], head: [0, 0, 0], thighL: [60, 6, 0], shinL: [66], thighR: [56, 4, 0], shinR: [64], upperArmR: [40, 10, -10, 0], forearmR: [96, 20], fingersR: 70 }),
+          k(1.7, rest, R),
+        ],
+      },
+      mask: 'full',
+      keepShield: true,
+      busy: true,
+      hit: 0.85,
+      fadeIn: 0.15,
+    },
     drink: {
       def: {
         name: 'drink',
