@@ -134,7 +134,10 @@ void main() {
   vec3 s = sRGBTransferOETF(vec4(c, 1.0)).rgb;
   // The grade (gfx/post/grade.ts): a 32^3 table over the encoded colour, sampled at texel centres.
   s = texture(tLut, s * (31.0 / 32.0) + 0.5 / 32.0).rgb;
-  s += (hash(gl_FragCoord.xy + fract(uTime) * 61.0) - 0.5) / 255.0;
+  // Triangular dither (two uniform draws): the 8-bit output has no signal-correlated error left,
+  // so slow night gradients dissolve into noise instead of showing one-level steps.
+  vec2 dp = gl_FragCoord.xy + fract(uTime) * 61.0;
+  s += (hash(dp) + hash(dp + 17.37) - 1.0) / 255.0;
   gl_FragColor = vec4(s, dot(s, vec3(0.299, 0.587, 0.114)));
 }
 `;

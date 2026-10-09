@@ -74,6 +74,9 @@ export class SkySystem implements System {
   /** Soft discs under characters (every tier). */
   readonly blobs: BlobShadows;
   readonly hemi = new THREE.HemisphereLight(0xbfd8ff, 0x6b5a45, 0.3);
+  /** The sky's diffuse fill as spherical harmonics (Lighting.sh); replaces the hemisphere light in the scene. */
+  readonly probe = new THREE.LightProbe();
+  private useProbe = true;
   readonly fog = new THREE.FogExp2(0xcfd8e0, 0.0012);
   /** Catalog stars (real constellations) drawn over the dome. */
   readonly brightStars: THREE.Points;
@@ -123,7 +126,9 @@ export class SkySystem implements System {
     this.weather.auto = opts.autoWeather ?? true;
 
     scene.add(this.dome.mesh);
-    scene.add(this.hemi);
+    // The diffuse fill is the sky's spherical harmonics (`?fill=hemi` brings the old two-colour hemisphere light back for comparison).
+    this.useProbe = new URLSearchParams(typeof location === 'undefined' ? '' : location.search).get('fill') !== 'hemi';
+    scene.add(this.useProbe ? this.probe : this.hemi);
     scene.fog = this.fog;
     scene.background = null;
 
@@ -254,6 +259,12 @@ export class SkySystem implements System {
     this.hemi.groundColor.fromArray(L.hemiGround);
     const inside = THREE.MathUtils.clamp(this.indoor, 0, 1);
     this.hemi.intensity = (L.hemiIntensity + this.flash * 1.1) * (1 - 0.6 * inside);
+    if (this.useProbe) {
+      // Lightning lights the fill evenly (the SH's constant term), indoors it dims like the hemisphere did.
+      this.probe.sh.fromArray(L.sh);
+      this.probe.sh.coefficients[0].addScalar(this.flash * 1.1 * 1.1284); // uniform radiance L has c0 = L * sqrt(4 pi), and the hemisphere gave 1.1 * flash
+      this.probe.intensity = (1 - 0.6 * inside);
+    }
     game.camera.getWorldPosition(_camPos);
     game.camera.getWorldDirection(_camDir);
     _keyDir.set(L.keyDir.x, L.keyDir.y, L.keyDir.z);
@@ -343,6 +354,7 @@ export class SkySystem implements System {
     this.brightStars.geometry.dispose();
     (this.brightStars.material as THREE.Material).dispose();
     this.hemi.removeFromParent();
+    this.probe.removeFromParent();
     this.shadows.dispose();
   }
 }

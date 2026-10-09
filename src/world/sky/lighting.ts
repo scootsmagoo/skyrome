@@ -6,6 +6,7 @@
  */
 import type { Vec3 } from './astronomy';
 import { ATMOSPHERE, type AtmosParams, type RGB, inScatter, lightTransmittance, luminance, smoothstep, transmittanceToSpace } from './skyModel';
+import { CAP_WEIGHT, HORIZON_WEIGHT, RING_WEIGHT, SH_COUNT, irradianceSH, projectSH, type RadianceSample } from './skySH';
 import type { WeatherParams } from './weather';
 
 /** Top-of-atmosphere sun brightness: a white wall facing a noon sun reads ≈ 0.85 before exposure. */
@@ -35,6 +36,12 @@ export interface Lighting {
   hemiSky: RGB;
   hemiGround: RGB;
   hemiIntensity: number;
+  /**
+   * The same fill as third-order spherical harmonics (9 coefficients × RGB, radiance; see skySH.ts):
+   * sky gradient and its sunward warmth from above, ground bounce from below, blue night fill.
+   * A THREE.LightProbe takes it in place of the hemisphere light.
+   */
+  sh: Float32Array;
   /** Multiplier for scene.environmentIntensity. */
   envIntensity: number;
 
@@ -148,6 +155,61 @@ export function twilightGlow(sunY: number, out: RGB): RGB {
   return out;
 }
 
+/** Night fill colour (blue-grey moonlit air), unit luminance. */
+const NIGHT_FILL_COLOR: RGB = [0.62, 0.72, 1];
+
+/**
+ * The radiance samples behind `Lighting.sh`. Above the horizon each sample is the sky colour there
+ * (pulled toward the cloud deck when overcast, toward blue-grey at night), normalised to the mean
+ * sky luminance and compressed so a sun-side hot spot does not glare, then scaled to the fill level
+ * (`scale` = hemiIntensity / π and `skyLum` the old hemisphere colour's luminance, so an up-facing surface gets what the hemisphere light gave it).
+ * Below the horizon: the ground-bounce colour. The four horizon points carry both halves.
+ */
+function fillSamples(
+  sun: Vec3,
+  [zen, ringCols, horizon]: [RGB, RGB[], RGB[]],
+  ringDirs: readonly Vec3[],
+  effSky: RGB,
+  deck: RGB,
+  cloudy: number,
+  night: number,
+  ground: RGB,
+  scale: number,
+  skyLum: number,
+): RadianceSample[] {
+  const lumSky = Math.max(luminance(effSky), 1e-6);
+  const nightCol = NIGHT_FILL_COLOR;
+  const nl = luminance(nightCol);
+  // A sky direction's contribution: colour relative to the mean, softened, tinted for cloud and night.
+  const sky = (c: RGB, lift: number): RGB => {
+    const o: RGB = [0, 0, 0];
+    for (let i = 0; i < 3; i++) {
+      const eff = c[i] * (1 - cloudy) + deck[i] * cloudy;
+      let r = eff / lumSky;
+      r = 1 + (Math.min(r, 3) - 1) * 0.6;
+      r = r * (1 - night) + (nightCol[i] / nl) * night;
+      o[i] = Math.max(0, r) * scale * skyLum * lift;
+    }
+    return o;
+  };
+  const gr: RGB = [ground[0] * scale, ground[1] * scale, ground[2] * scale];
+  const out: RadianceSample[] = [];
+  out.push({ dir: { x: 0, y: 1, z: 0 }, color: sky(zen, 1), weight: CAP_WEIGHT });
+  out.push({ dir: { x: 0, y: -1, z: 0 }, color: gr, weight: CAP_WEIGHT });
+  for (let k = 0; k < 4; k++) {
+    const d = ringDirs[k];
+    out.push({ dir: d, color: sky(ringCols[k], 1), weight: RING_WEIGHT });
+    out.push({ dir: { x: d.x, y: -d.y, z: d.z }, color: gr, weight: RING_WEIGHT });
+  }
+  // Horizon points at azimuth 0, 90, 180 and 270° from the sun: half sky, half ground.
+  for (let k = 0; k < 4; k++) {
+    const d = horizonDir(sun, (k * Math.PI) / 2, 0);
+    const sk = sky(horizon[k], 1);
+    out.push({ dir: d, color: [(sk[0] + gr[0]) / 2, (sk[1] + gr[1]) / 2, (sk[2] + gr[2]) / 2], weight: HORIZON_WEIGHT });
+  }
+  return out;
+}
+
 export function computeLighting(inp: LightingInput, out?: Lighting): Lighting {
   const w = inp.weather;
   const atm: AtmosParams = { haze: w.haze, mieG: inp.mieG ?? 0.8 };
@@ -161,8 +223,13 @@ export function computeLighting(inp: LightingInput, out?: Lighting): Lighting {
   // --- Sky samples: zenith, a ring at 35°, the horizon sideways/toward the sun.
   const zen = skyColor({ x: 0, y: 1, z: 0 }, inp, atm, moonLight, [0, 0, 0]);
   const ring: RGB = [0, 0, 0];
+  const ringDirs: Vec3[] = [];
+  const ringCols: RGB[] = [];
   for (let k = 0; k < 4; k++) {
-    skyColor(horizonDir(sun, (k * Math.PI) / 2 + Math.PI / 4, 0.6), inp, atm, moonLight, tmp);
+    const rd = horizonDir(sun, (k * Math.PI) / 2 + Math.PI / 4, 0.6);
+    skyColor(rd, inp, atm, moonLight, tmp);
+    ringDirs.push(rd);
+    ringCols.push([tmp[0], tmp[1], tmp[2]]);
     ring[0] += tmp[0] / 4;
     ring[1] += tmp[1] / 4;
     ring[2] += tmp[2] / 4;
@@ -255,6 +322,16 @@ export function computeLighting(inp: LightingInput, out?: Lighting): Lighting {
   for (let i = 0; i < 3; i++) hemiSky[i] = hemiSky[i] * (1 - night) + [0.62, 0.72, 1][i] * night;
   const hemiIntensity = 0.07 * skyIrr + 0.35 * luminance(groundRad) * Math.PI + nightFill * Math.PI;
 
+  // --- The same fill as spherical harmonics: the sky's gradient (and sunward warmth) above, ground bounce below.
+  const sh = projectSH(
+    fillSamples(sun, [zen, ringCols, [toward, side, away, side]], ringDirs, effSky, deck, cloudy, night, hemiGround, hemiIntensity / Math.PI, luminance(hemiSky)),
+    out?.sh ?? new Float32Array(SH_COUNT * 3),
+  ) as Float32Array;
+  // Same brightness as the hemisphere light on an up-facing surface (the look is tuned to it); only the shape differs.
+  const eUp = luminance(irradianceSH(sh, { x: 0, y: 1, z: 0 }, tmp));
+  const eWant = hemiIntensity * luminance(hemiSky);
+  if (eUp > 1e-9) for (let i = 0; i < sh.length; i++) sh[i] *= eWant / eUp;
+
   // Milky veil of summer haze (multiple scattering the single-scattering LUT lacks).
   const hazeVeil = Math.min(0.5, Math.max(0, (w.haze - 3.5) / 25));
 
@@ -327,6 +404,7 @@ export function computeLighting(inp: LightingInput, out?: Lighting): Lighting {
   res.hemiSky = hemiSky;
   res.hemiGround = hemiGround;
   res.hemiIntensity = hemiIntensity;
+  res.sh = sh;
   res.envIntensity = 1;
   res.fogColor = fogColor;
   res.fogSunColor = fogSun;

@@ -74,3 +74,46 @@ export function buildGradeLut(p: GradeLutParams, size = LUT_SIZE, data = new Uin
       }
   return data;
 }
+
+/**
+ * The same table as half-float values (RGBA16F, 0..1 kept unrounded): an 8-bit table rounds every
+ * node to 1/255, and a dark gradient crossing a node boundary then changes slope there, which
+ * shows as a faint band in the night sky and in shade. Half precision near black is ~1e-5.
+ */
+export function buildGradeLutHalf(p: GradeLutParams, size = LUT_SIZE, data = new Uint16Array(size * size * size * 4), toHalf: (v: number) => number = floatToHalf): Uint16Array {
+  const tmp: [number, number, number] = [0, 0, 0];
+  const s = 1 / (size - 1);
+  const one = toHalf(1);
+  let i = 0;
+  for (let bi = 0; bi < size; bi++)
+    for (let gi = 0; gi < size; gi++)
+      for (let ri = 0; ri < size; ri++) {
+        gradeColor(ri * s, gi * s, bi * s, p, tmp);
+        data[i++] = toHalf(tmp[0]);
+        data[i++] = toHalf(tmp[1]);
+        data[i++] = toHalf(tmp[2]);
+        data[i++] = one;
+      }
+  return data;
+}
+
+const f32 = new Float32Array(1);
+const u32 = new Uint32Array(f32.buffer);
+
+/** IEEE half from a float in 0..1 (round to nearest; enough for table values). */
+export function floatToHalf(v: number): number {
+  f32[0] = v;
+  const x = u32[0];
+  const sign = (x >>> 16) & 0x8000;
+  const e = ((x >>> 23) & 0xff) - 127 + 15;
+  if (e <= 0) {
+    // Subnormal half (or zero).
+    if (e < -10) return sign;
+    const m = (x & 0x7fffff) | 0x800000;
+    const sh = 14 - e;
+    return sign | ((m + (1 << (sh - 1))) >> sh);
+  }
+  if (e >= 31) return sign | 0x7c00;
+  const r = (x & 0x7fffff) + 0x1000;
+  return r & 0x800000 ? sign | ((e + 1) << 10) : sign | (e << 10) | (r >> 13);
+}
