@@ -27,6 +27,7 @@ import { FootstepDriver, type FootstepOptions, type FootstepSource } from './Foo
 import { DEFAULT_SPATIAL, SOFT_CLIP_RANGE, airCutoff, distanceGain, distanceWetness, pickVariant, planVoice, sliderToGain, softClipCurve, type VoiceSlot } from './mix';
 import { MusicDirector } from './music/MusicDirector';
 import { musicSamples } from './music/samples';
+import { vsco } from './music/vsco';
 import { WorkerBaker } from './WorkerBaker';
 import type { BusName, LoopDef, LoopEvent, SoundDef, SpatialSpec } from './sounds/types';
 
@@ -115,7 +116,7 @@ export interface AudioStats {
   loops: number;
   loopsAudible: number;
   bakedMB: number;
-  /** Music samples held (lyre plucks, percussion), MB; bounded by the store's budget. */
+  /** Music samples held (the recorded instruments, plus any synthesised fallback), MB. */
   musicMB: number;
   music: string;
   reverb: ReverbPreset;
@@ -170,8 +171,8 @@ const CULL_GAIN = 0.0008;
 const MAKEUP_DB = 7;
 /** Sounds louder than this at the listener (est. linear gain) duck the music briefly. */
 const DUCK_ABOVE = 0.4;
-/** The music bus sits +6 dB hotter than its slider so the default (0.5) is clearly audible. */
-const MUSIC_TRIM = 2;
+/** The music bus follows its slider exactly (0 dB trim): the music is a quiet bed, and its instruments carry the level. */
+const MUSIC_TRIM = 1;
 
 export class AudioEngine implements System {
   readonly name = 'audio';
@@ -929,7 +930,7 @@ export class AudioEngine implements System {
       loops: this.loops.size,
       loopsAudible: audible,
       bakedMB: this.bufferBytes / 1048576,
-      musicMB: musicSamples.bytes / 1048576,
+      musicMB: (musicSamples.bytes + vsco.bytes) / 1048576,
       music: this.music.state,
       reverb: this.reverbPreset,
       sampleRate: this.ctx?.sampleRate ?? 0,
