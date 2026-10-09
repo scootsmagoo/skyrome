@@ -50,6 +50,11 @@ export interface StreetGraph {
   /** [a, b, width] — undirected. */
   edges: [number, number, number][];
   spots: StreetSpot[];
+  /**
+   * Single-link nodes in the area that nothing could join (a road that runs into a monument, a
+   * footprint or the Servian wall, a stairway's foot): deliberate termini, with the reason.
+   */
+  termini: { node: number; reason: 'stairs' | 'road' | 'street' }[];
   /** Nearest node to a position (within `maxDist`), or −1. */
   nearest(x: number, z: number, maxDist?: number): number;
   /** Neighbours of a node: [node, width][]. */
@@ -387,7 +392,7 @@ export function buildStreetGraph(
   work: StreetWork,
   game: Game | null,
   inArea: (x: number, z: number) => boolean,
-  opts: { probe?: LinkProbe; obstacles?: Obstacle[] } = {},
+  opts: { probe?: LinkProbe; obstacles?: Obstacle[]; /** Join loose ends to the nearest street (default true; false = the graph before the M3 rework, for the audit). */ deadEnds?: boolean } = {},
 ): StreetGraph {
   const B = new Builder();
   const g = plan.grid;
@@ -509,7 +514,8 @@ export function buildStreetGraph(
   }
   // Piazzas (on the street they open on).
   for (const pz of plan.piazzas) {
-    if (!inArea(pz.center[0], pz.center[1])) continue;
+    // A court at the very edge of the area has its street outside it (nothing to link to).
+    if (!inArea(pz.center[0], pz.center[1]) || !inArea(pz.junction[0], pz.junction[1])) continue;
     const id = B.node(pz.center[0], pz.center[1], 'piazza', 0.5);
     let linked = false;
     for (const hit of B.nearEdges(pz.junction[0], pz.junction[1], 12, new Set([id]), 4)) {
@@ -550,6 +556,11 @@ export function buildStreetGraph(
     }
   }
 
+  // Loose ends the snapping above missed (a road running into a landmark's apron, the foot of a
+  // stairway, a lane ending against a slope): the nearest walkable link, up to 30 m, to another
+  // street (never back onto its own neighbours).
+  if (opts.deadEnds !== false) closeDeadEnds(B, linkOk, inArea, 30);
+
   // Islands of streets that end on open ground (plazas, landmark aprons, slopes): a short path to
   // the nearest node of the main network.
   linkIslands(B, linkOk);
@@ -567,6 +578,10 @@ export function buildStreetGraph(
     });
   }
   graph.spots = spots;
+  for (const n of graph.nodes) {
+    if (n.kind === 'piazza' || n.kind === 'plaza' || n.kind === 'landmark' || graph.neighbours(n.id).length !== 1 || !inArea(n.x, n.z)) continue;
+    graph.termini.push({ node: n.id, reason: n.kind === 'stairs' ? 'stairs' : n.kind === 'road' ? 'road' : 'street' });
+  }
   return graph;
 }
 
@@ -586,6 +601,31 @@ function doorsOf(blockId: string, outline: readonly Vec2[], fronts: number[], si
       const x = a[0] + (b[0] - a[0]) * t + ox * 0.6, z = a[1] + (b[1] - a[1]) * t + oz * 0.6;
       const house = (seed + i + e) % 2 === 0 && i % 2 === 1;
       emit({ id: `${blockId}:door${n++}`, kind: house ? 'houseDoor' : 'shopDoor', position: new THREE.Vector3(x, H(x, z) + (sidewalk[e] ?? 0) + FLOOR_LIFT, z), heading, block: blockId });
+    }
+  }
+}
+
+/**
+ * Nodes with a single link that no spot, piazza or landmark door explains: link them to the
+ * nearest other stretch of street within `maxD` (twice that for a road end: a road cut by a
+ * solid footprint is bridged round it) that a person can walk to (second neighbours
+ * excluded, so a stub never links back onto its own street).
+ */
+function closeDeadEnds(B: Builder, ok: (id: number, p: Vec2) => boolean, inArea: (x: number, z: number) => boolean, maxD: number) {
+  for (const n of [...B.nodes]) {
+    if (n.kind === 'piazza' || n.kind === 'plaza' || n.kind === 'landmark' || B.neighbourIds(n.id).length !== 1 || !inArea(n.x, n.z)) continue;
+    // Its own street for three links back is no target.
+    const own = new Set<number>([n.id]);
+    let frontier = [n.id];
+    for (let k = 0; k < 3; k++) {
+      const next: number[] = [];
+      for (const f of frontier) for (const m of B.neighbourIds(f)) if (!own.has(m)) { own.add(m); next.push(m); }
+      frontier = next;
+    }
+    for (const hit of B.nearEdges(n.x, n.z, n.kind === 'road' ? maxD * 4 : maxD * 2, own, 8)) {
+      if (!inArea(hit.p[0], hit.p[1]) || !ok(n.id, hit.p)) continue;
+      B.edge(n.id, B.split(hit.a, hit.b, hit.w, hit.p, 'junction'), Math.min(hit.w, 4));
+      break;
     }
   }
 }
@@ -734,6 +774,7 @@ function finalize(B: Builder): StreetGraph {
     nodes,
     edges,
     spots: [],
+    termini: [],
     neighbours: (id) => adj[id] ?? [],
     nearest(x, z, maxDist = 100) {
       let best = -1, bd = maxDist;

@@ -22,6 +22,8 @@ import { WORLD_SCALE } from '../coords';
 import { footprintPolygon, type P2 } from '../terrain/heightmap';
 import { CORRIDORS, DISTRICT_LANDMARKS, EXTRA_ROADS, OPEN_SPACES, QUARTERS, SIGHTLINE_LANDMARKS, SIGHTLINE_RADIUS, SKIPPED_AQUEDUCTS, WILD_LANDMARKS, type Quarter } from './data';
 import { SIDEWALK } from './datum';
+import { probeEnd } from './audit';
+import { closeStubs } from './stubs';
 import { Grid, K, cleanRing, components, pointInPoly, polyBounds, polyCentroid, signedArea, simplifyRing, splitCells, traceLoops, type Pt } from './raster';
 
 const S = WORLD_SCALE;
@@ -61,6 +63,8 @@ export interface PlanOptions {
   mergeCell?: number;
   /** Streets added to the atlas roads (default data.ts EXTRA_ROADS). */
   extraRoads?: typeof EXTRA_ROADS;
+  /** Extend the minor-street stubs to the next street and open courts (default true; false = the pre-rework plan, for the audit). */
+  closeStubs?: boolean;
 }
 
 export type RoadStyle = 'paved' | 'rural' | 'gravel' | 'dirt' | 'stairs' | 'path';
@@ -624,6 +628,11 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
       queue.push({ id, cells: p, level: level + 1 });
     }
   }
+  // 8b. Stubs: streets the marcher stopped at a sliver, an apron or a slope reach the nearest
+  // road / street / square within 15 m; the ones with nothing in reach get a court (step 9).
+  const stubFix = opts.closeStubs === false ? { extended: 0, orphans: [] } : closeStubs(g, streets, STREET_MARGIN);
+  for (const s of streets) while (s.steps.length < s.points.length - 1) s.steps.push(false);
+  stats.stubsClosed = stubFix.extended;
   stats.streets = streets.length;
   stats.subdivideMs = now() - t0;
 
@@ -725,6 +734,41 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
       const facing = Math.atan2(-nrm[0], -nrm[1]);
       piazzas.push({ id: `pz${piazzas.length}`, center, r, kind, facing, junction: e.p });
     }
+  }
+  // Courts: a street with nothing within reach ends in a small square (a compital shrine or a
+  // lacus) straight ahead of it, so the lane stops somewhere (a wall, the river or a boundary
+  // is reason enough to stop without one).
+  {
+    const crng = new Rng(seed ^ 0xc0a7);
+    let courts = 0;
+    for (const o of stubFix.orphans) {
+      const s = streets[o.street];
+      const pr = probeEnd(g, s, o.end);
+      if (pr.beyond === K.OUTSIDE) continue;
+      const r = 4.2;
+      // Straight ahead of the end if the ground allows, else drawn back into the lane itself
+      // (a wall, the river or an arcade just beyond): no building, wall, river, pier or road
+      // under the disc.
+      let center: Pt | null = null;
+      for (const off of [r - 0.8, 0, -2, -3.5, -5.5]) {
+        const c0: Pt = [pr.p[0] + pr.dir[0] * off, pr.p[1] + pr.dir[1] * off];
+        if (piazzas.some((q) => Math.hypot(q.center[0] - c0[0], q.center[1] - c0[1]) < q.r + r + 8)) continue;
+        let ok = 0, bad = 0, tot = 0;
+        g.scanSegment(c0, c0, r, (i) => {
+          tot++;
+          const c = cls[i];
+          if (c === K.FREE || c === K.SCRAP || c === K.STEEP || c === K.MARGIN || c === K.GARDEN || (c === K.STREET && g.owner[i] === s.index)) ok++;
+          else bad++;
+        });
+        if (tot > 0 && bad === 0 && ok / tot >= 0.9) { center = c0; break; }
+      }
+      if (!center) continue;
+      g.scanSegment(center, center, r, (i) => { if (cls[i] === K.FREE || cls[i] === K.SCRAP || cls[i] === K.STEEP) cls[i] = K.PIAZZA; });
+      const kind: PlanPiazza['kind'] = crng.chance(0.5) ? 'lacus' : 'compitum';
+      piazzas.push({ id: `pz${piazzas.length}`, center, r, kind, facing: Math.atan2(-pr.dir[0], -pr.dir[1]), junction: pr.p });
+      courts++;
+    }
+    stats.courts = courts;
   }
   stats.piazzas = piazzas.length;
 
