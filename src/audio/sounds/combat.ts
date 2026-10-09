@@ -1,6 +1,5 @@
 /** Weapons and bodies: swings, clashes, blocks, hits, bows, slings, falls, draw/sheathe. */
 import { Biquad, TWO_PI, adEnv, addMode, addNoiseBurst, alloc } from '../dsp/core';
-import { pluck } from '../dsp/pluck';
 import type { BakeContext, SoundDef } from './types';
 import { BAR_RATIOS, click, grains, hump, strike, thump, whoosh } from './util';
 
@@ -136,13 +135,25 @@ function bakeBodyFall(c: BakeContext) {
 
 // ---------------------------------------------------------------- missiles
 
+/**
+ * A war bow let go: not a plucked guitar string but a short dry "thup-thwack". The loosed string
+ * snaps against the bracer and limb tips (a bright crack), the limbs shudder back to rest (a low
+ * knock whose pitch falls as the tension leaves) and the string rings for a fraction of a second,
+ * inharmonic and quickly damped by the wood it is coupled to.
+ */
 function bakeBowTwang(c: BakeContext) {
   const { rate, rnd } = c;
-  const out = alloc(0.6, rate);
-  const s = pluck(rnd.range(95, 140), rate, rnd, { seconds: 0.55, t60: 0.28, brightness: 0.55, pluckPos: 0.5, damping: 0.8, body: 'bow' });
-  for (let i = 0; i < s.length; i++) out[i] += s[i] * 0.9;
-  addNoiseBurst(out, rate, rnd, 0, { dur: 0.02, amp: 0.4, attack: 0.0003, t60: 0.008, bp: 2200, q: 1 }); // string slap on the bracer
-  addMode(out, rate, 0, rnd.range(260, 340), 0.25, 0.05); // limb knock
+  const out = alloc(0.42, rate);
+  const f = rnd.range(78, 104); // the limbs' low knock
+  addMode(out, rate, 0, f, 0.42, 0.11, { attack: 0.0015, glide: 0.86 });
+  addMode(out, rate, 0.003, f * 2.35, 0.22, 0.07, { attack: 0.001, glide: 0.92 });
+  addNoiseBurst(out, rate, rnd, 0, { dur: 0.05, amp: 0.2, attack: 0.001, t60: 0.03, lp: 420 }); // wood body of the thump
+  // The string: a few inharmonic partials that die fast and sag a little in pitch.
+  const sf = rnd.range(190, 250);
+  [[1, 1.1, 0.26], [2.07, 0.75, 0.19], [3.18, 0.5, 0.14], [4.4, 0.32, 0.1], [6.1, 0.2, 0.06]].forEach(([m, a, t]) => addMode(out, rate, 0.001, sf * m, a, t, { attack: 0.0008, glide: 0.97 }));
+  // The snap of string on bracer and the nock leaving the string.
+  addNoiseBurst(out, rate, rnd, 0.0005, { dur: 0.02, amp: 3.4, attack: 0.0003, t60: 0.007, bp: rnd.range(2400, 3400), q: 0.9 });
+  addNoiseBurst(out, rate, rnd, 0.006, { dur: 0.03, amp: 1.5, attack: 0.001, t60: 0.014, bp: 1500, q: 1.4 });
   return out;
 }
 
