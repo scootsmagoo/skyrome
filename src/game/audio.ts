@@ -8,6 +8,7 @@ import type { Game, System } from '../core/Game';
 import * as atlas from '../data/atlas';
 import type { Surface as TerrainSurface } from '../world/terrain/Terrain';
 import { footstepSound } from '../world/terrain/surface';
+import { L } from '../world/terrain/splat';
 import { WORLD_SCALE as K, toGame } from '../world/coords';
 
 /**
@@ -17,6 +18,19 @@ import { WORLD_SCALE as K, toGame } from '../world/coords';
  */
 export function footstepSurface(terrain: TerrainSurface | null, aboveGround: number): Surface {
   if (aboveGround > 0.15 || !terrain) return 'stone';
+  return footstepSound(terrain);
+}
+
+/**
+ * What a walker hears underfoot: the terrain's surface refined for the city. Paving is marble where
+ * the travertine layer is stronger (the fora) and cobbles where it is basalt (the roads); sand is its
+ * own sound; anything built above or below the terrain (steps, floors, bridges, interiors) is worked
+ * stone. `travertine` and `basalt` are the splat weights at the spot (only read for paving). Pure.
+ */
+export function groundSurface(terrain: TerrainSurface | null, offGround: number, travertine = 0, basalt = 0): Surface {
+  if (!terrain || Math.abs(offGround) > 0.15) return 'stone';
+  if (terrain === 'paved') return travertine > basalt ? 'marble' : 'cobbles';
+  if (terrain === 'sand') return 'sand';
   return footstepSound(terrain);
 }
 
@@ -105,8 +119,14 @@ export function installGameAudio(game: Game): GameAudio {
   const surfaceAt = (x: number, y: number, z: number): Surface => {
     const t = game.terrain;
     if (!t) return 'stone';
-    return footstepSurface(t.surfaceAt(x, z), y - t.heightAt(x, z));
+    const kind = t.surfaceAt(x, z);
+    const off = y - t.heightAt(x, z);
+    if (kind !== 'paved' || Math.abs(off) > 0.15) return groundSurface(kind, off);
+    const w = t.weightsAt(x, z);
+    return groundSurface(kind, off, w[L.travertine], w[L.basalt]);
   };
+  // Everyone's footsteps (the player's, the citizens', the combatants') read the same ground.
+  audio.footsteps.surfaceAt = surfaceAt;
   return {
     engine: audio,
     attachPlayer(sex, gear) {

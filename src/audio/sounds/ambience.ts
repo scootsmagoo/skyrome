@@ -492,6 +492,18 @@ function bakeTemple(c: BakeContext) {
   return out;
 }
 
+/** Stand-in for the recorded birdsong bed: sparrow chirps scattered over a loop. */
+function bakeBirdsBed(c: BakeContext) {
+  const { rate, rnd } = c;
+  const xf = 1;
+  const out = alloc(8 + xf, rate);
+  for (let i = 0; i < 16; i++) {
+    const chirp = bakeSparrow({ ...c, rnd: rnd.fork(`b${i}`) });
+    mixInto(out, chirp, Math.round(rnd.range(0, 8) * rate), rnd.range(0.2, 0.5));
+  }
+  return makeSeamless(out, rate, xf);
+}
+
 // ---------------------------------------------------------------- defs
 
 const bed = { bus: 'ambience' as const, kind: 'bed' as const, group: 'Ambience beds', variants: 1, maxVoices: 4 };
@@ -505,6 +517,7 @@ export const ambienceSounds: SoundDef[] = [
   { ...bed, id: 'bed.crowd', label: 'crowd murmur bed', rate: 16000, expect: { centroid: [200, 2200] }, bake: bakeCrowd },
   { ...bed, id: 'bed.arena', label: 'amphitheatre crowd bed', rate: 16000, expect: { centroid: [200, 2000] }, bake: bakeArena },
   { ...bed, id: 'bed.city', label: 'distant city bed', rate: 16000, expect: { centroid: [40, 1200] }, bake: bakeCity },
+  { ...bed, id: 'bed.birds', label: 'birdsong bed', rate: 32000, expect: { centroid: [2500, 9000] }, bake: bakeBirdsBed },
   { ...bed, id: 'bed.cicadas', label: 'cicadas bed', rate: 32000, expect: { centroid: [3500, 9000] }, bake: bakeCicadas },
   { ...bed, id: 'bed.crickets', label: 'crickets bed', rate: 32000, expect: { centroid: [2000, 6000] }, bake: bakeCrickets },
 
@@ -583,10 +596,12 @@ export const ambienceLoops: LoopDef[] = [
   { id: 'crickets', label: 'crickets (night)', group: 'Loops', bus: 'ambience', bed: 'bed.crickets', stereoBed: true, gainDb: -16 },
   {
     id: 'birds',
-    label: 'birds (sparrows, swifts)',
+    label: 'birds (birdsong, sparrows, swifts)',
     group: 'Loops',
     bus: 'ambience',
-    gainDb: 0,
+    bed: 'bed.birds',
+    stereoBed: true,
+    gainDb: -14,
     events: [
       { sound: 'amb.sparrow', rate: 0.35, dist: [6, 25], height: [2, 8] },
       { sound: 'amb.swifts', rate: 0.05, dist: [20, 45], height: [15, 35], move: 14 },
