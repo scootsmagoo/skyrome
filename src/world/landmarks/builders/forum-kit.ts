@@ -34,6 +34,7 @@ import { UV_METERS } from '../../../gfx/textures/catalog';
 import { MeshBuilder, type ColliderSpec } from '../../../gfx/MeshBuilder';
 import { placeProp } from '../../../arch/props';
 import type { MaterialId } from '../../../gfx/materialIds';
+import { getMaterial } from '../../../gfx/materials';
 import { ROADS } from '../../../data/atlas';
 import { toGame } from '../../coords';
 import type { LandmarkBuild, LandmarkContext, Spot } from '../types';
@@ -863,39 +864,71 @@ export function col(b: MeshBuilder, s: ColSpec, at: THREE.Matrix4) {
 export function shipRam(b: MeshBuilder, at: THREE.Matrix4, len = 1.4, mat: MaterialId | THREE.Material = ramBronze()) {
   const w = len * 0.4;
   const h = len * 0.5;
-  // socket: a four-sided frustum from the wall to the head, its section a rounded diamond
-  const sock = new THREE.CylinderGeometry(0.26, 0.5, 1, 6, 1);
-  sock.rotateY(Math.PI / 6);
+  // socket: an eight-sided frustum from the wall to the head, narrowing as it goes (the bronze
+  // wrapped the keel timber, so the section is a rounded diamond, taller than wide)
+  const sock = new THREE.CylinderGeometry(0.2, 0.5, 1, 8, 1);
+  sock.rotateY(Math.PI / 8);
   sock.rotateX(-Math.PI / 2);
-  sock.scale(w, h, len * 0.82);
-  sock.translate(0, 0, -len * 0.41);
+  sock.scale(w, h, len * 0.8);
+  sock.translate(0, 0, -len * 0.4);
   b.add(sock, mat, at);
   // the flange where the socket met the hull
-  const fl = new THREE.BoxGeometry(w * 1.05, h * 0.95, len * 0.05);
+  const fl = new THREE.BoxGeometry(w * 1.08, h * 1.0, len * 0.05);
   fl.translate(0, 0, -len * 0.025);
   b.add(fl, mat, at);
+  // two cast collars round the socket
+  for (const k of [0.32, 0.62]) {
+    const f = 1 - 0.55 * k;
+    const ring = new THREE.CylinderGeometry(0.5, 0.5, len * 0.035, 8, 1);
+    ring.rotateY(Math.PI / 8);
+    ring.rotateX(-Math.PI / 2);
+    ring.scale(w * (0.56 + 0.44 * f) * 1.06, h * (0.56 + 0.44 * f) * 1.06, 1);
+    ring.translate(0, 0, -len * k);
+    b.add(ring, mat, at);
+  }
   // the fore-deck cap: a wedge rising back to the wall
   const cap = new THREE.BoxGeometry(w * 0.55, h * 0.16, len * 0.62);
+  taperZ(cap, 0.35, 1);
   cap.rotateX(-0.22);
   cap.translate(0, h * 0.36, -len * 0.33);
   b.add(cap, mat, at);
-  // the head: three blades and the vertical plate
+  // the head: three blades, each wedge-shaped (broad at the root, thin at the edge), and the
+  // vertical plate that ran forward between them as a cutwater
   for (const y of [-0.26, 0, 0.26]) {
-    const fin = new THREE.BoxGeometry(w * 0.82, h * 0.09, len * 0.2);
-    fin.translate(0, y * h, -len * 0.9);
+    const fin = new THREE.BoxGeometry(w * 0.9, h * 0.1, len * 0.24);
+    taperZ(fin, 0.3, 0.35);
+    fin.translate(0, y * h, -len * 0.88);
     b.add(fin, mat, at);
   }
-  const plate = new THREE.BoxGeometry(w * 0.14, h * 0.74, len * 0.22);
-  plate.translate(0, 0, -len * 0.91);
+  const plate = new THREE.BoxGeometry(w * 0.14, h * 0.78, len * 0.3);
+  taperZ(plate, 0.6, 0.15);
+  plate.translate(0, 0, -len * 0.9);
   b.add(plate, mat, at);
 }
 
-let ramMat: THREE.MeshStandardMaterial | null = null;
-/** Dark patinated bronze for the rams. */
-export function ramBronze(): THREE.MeshStandardMaterial {
+/** Narrow a z-aligned box toward its −z face: x by `fx`, y by `fy` there (1 = unchanged). */
+function taperZ(g: THREE.BufferGeometry, fx: number, fy: number) {
+  const pos = g.getAttribute('position') as THREE.BufferAttribute;
+  g.computeBoundingBox();
+  const z0 = g.boundingBox!.min.z;
+  const zl = g.boundingBox!.max.z - z0;
+  for (let i = 0; i < pos.count; i++) {
+    const t = 1 - (pos.getZ(i) - z0) / zl; // 1 at the front (−z), 0 at the back
+    pos.setX(i, pos.getX(i) * (1 - (1 - fx) * t));
+    pos.setY(i, pos.getY(i) * (1 - (1 - fy) * t));
+  }
+  g.computeVertexNormals();
+}
+
+let ramMat: THREE.Material | null = null;
+/** Patinated bronze for the rams: the textured statuary bronze, cooled and dulled so it reads against marble. */
+export function ramBronze(): THREE.Material {
   if (!ramMat) {
-    ramMat = new THREE.MeshStandardMaterial({ color: '#6b5b3c', roughness: 0.45, metalness: 0.7 });
-    ramMat.name = 'forum:ram-bronze';
+    const m = (getMaterial('bronze') as THREE.MeshStandardMaterial).clone();
+    m.color.set('#cdbf94');
+    m.roughness = 0.5;
+    m.name = 'forum:ram-bronze';
+    ramMat = m;
   }
   return ramMat;
 }
