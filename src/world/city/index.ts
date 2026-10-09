@@ -13,6 +13,7 @@
  * (ProximityColliders). The city tells the terrain dressing which ground it dresses itself
  * (`coversGround`, `ownsTrees`).
  */
+import { FountainSpray, clearSpray } from './spray';
 import * as THREE from 'three';
 import type { Game } from '../../core/Game';
 import type * as Atlas from '../../data/atlas';
@@ -246,6 +247,8 @@ export async function buildCity(
   for (const l of work.lamps) lamps.add(l);
   for (const l of life.lamps) lamps.add(l);
   stats.lamps = lamps.total;
+  clearSpray();
+  game.addSystem(new FountainSpray(game));
 
   // ---- 8. streamer
   // Dev overrides: ?cityNear=<m>&cityMid=<m>&cityLow=<m>&cityFar=<m>&cityMidShadows=0.

@@ -55,7 +55,7 @@ export async function buildBridges(game: Game, atlas: typeof Atlas, hm: Heightma
   const S = WORLD_SCALE;
   const placed = new Map<string, PlacedBridge>();
   game.bridges = placed;
-  clearFoamObstacles(); // a rebuild (scene switch) must not stack duplicates
+  clearFoamObstacles('bridge'); // a rebuild (scene switch) must not stack duplicates
   const river = atlas.RIVERS[0];
   const waterY = Number.isFinite(hm.waterLevelY) ? hm.waterLevelY : river.waterLevel * S;
   const hiB = opts.highDetailBounds ?? DEFAULT_HIGH;
@@ -131,7 +131,7 @@ function buildOne(
   game.world.add(`bridge:${br.id}`, object, { cullDistance: detail === 'high' ? 1400 : 2200 });
   // The river breaks white round the piers (water/foam.ts).
   for (const o of pierObstacles({ x: ax, z: az }, { x: bx, z: bz }, layout.piers, br.width * S)) {
-    if (!addFoamObstacle(o)) console.warn('foam: obstacle cap reached, pier of ' + br.id + ' has no foam');
+    if (!addFoamObstacle(o, 'bridge')) console.warn('foam: obstacle cap reached, pier of ' + br.id + ' has no foam');
   }
   const yaw = Math.atan2(-uz, ux);
   const spots: Spot[] = localSpots.map((s) => ({

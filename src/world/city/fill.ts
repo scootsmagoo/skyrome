@@ -20,6 +20,7 @@ import { blockOutline, type LotPlan } from '../../arch/fabric/blockFiller';
 import { Draw } from '../../arch/fabric/draw';
 import { domus } from '../../arch/fabric/domus';
 import { lacus } from '../../arch/fabric/fountain';
+import { registerSpray } from './spray';
 import { horrea } from '../../arch/fabric/horrea';
 import { insula, MAX_BUILDING_HEIGHT } from '../../arch/fabric/insula';
 import { nearPolygon, obbCorners, pointInOBB, pointInPolygon, polygonBounds } from '../../arch/fabric/polygon';
@@ -202,6 +203,9 @@ function piazza(b: MeshBuilder, p: LotPlan, H: HeightFn, rng: Rng, spots: Spot[]
   const add = (kind: SpotKind, lx: number, lz: number, facing: number, tag?: string) =>
     spots.push({ id: `${p.id}:${kind}${spots.length}`, kind, position: d.point(lx, 0, lz), facing: facing + p.rotationY, tag });
   if (rng.chance(0.55)) {
+    // The jet lands 0.7 m in front of the spout pillar, at the water line (lacus frame is turned by π).
+    const jet = d.point(0, 0.74, p.obb.hv * 0.25 - 0.7);
+    registerSpray(p.id, jet.x, jet.y, jet.z);
     for (const s of lacus(d.at(0, 0, p.obb.hv * 0.25, Math.PI), rng)) add('fountain', -s.x, p.obb.hv * 0.25 - s.z, s.facing + Math.PI);
   } else {
     compitalShrine(d.at(0, 0, p.obb.hv * 0.4, Math.PI), rng);

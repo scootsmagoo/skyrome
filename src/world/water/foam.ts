@@ -30,22 +30,28 @@ export const foamUniforms = {
 };
 
 const list: FoamObstacle[] = [];
+/** Owner tag per entry (parallel to `list`), so a builder can drop only its own on a rebuild. */
+const owners: string[] = [];
 
 /** Add an obstacle (ignored past the cap). Returns whether it was taken. */
-export function addFoamObstacle(o: FoamObstacle): boolean {
+export function addFoamObstacle(o: FoamObstacle, owner = ''): boolean {
   if (list.length >= MAX_FOAM_OBSTACLES) return false;
   const i = list.length;
   list.push(o);
+  owners.push(owner);
   foamUniforms.uFoamA.value[i].set(o.x, o.z, o.dx, o.dz);
   foamUniforms.uFoamB.value[i].set(o.hl, o.hw, 0, 0);
   foamUniforms.uFoamCount.value = list.length;
   return true;
 }
 
-/** Forget every obstacle (tests, rebuilds). */
-export function clearFoamObstacles() {
+/** Forget obstacles: every one, or only those added with `owner` (a rebuild of that builder). */
+export function clearFoamObstacles(owner?: string) {
+  const keep = list.map((o, i) => ({ o, w: owners[i] })).filter((e) => owner !== undefined && e.w !== owner);
   list.length = 0;
+  owners.length = 0;
   foamUniforms.uFoamCount.value = 0;
+  for (const e of keep) addFoamObstacle(e.o, e.w);
 }
 
 export function foamObstacles(): readonly FoamObstacle[] {
