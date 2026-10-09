@@ -285,7 +285,7 @@ const LOCS: Loc[] = [
   ['horti-sallustiani', 'Gardens of Sallust', 'Horti Sallustiani', 800, -1750, 'garden', false, 'Imperial pleasure gardens: fountains, statues and shade.'],
   ['emporium', 'Emporium', 'Porticus Aemilia', -820, 1520, 'market', false, 'Wharves and warehouses where the ships from Ostia unload.'],
   ['pyramid', 'Pyramid of Cestius', 'Sepulcrum C. Cesti', -303, 1798, 'landmark', false, 'A magistrate’s tomb in the Egyptian fashion, built in 330 days.'],
-  ['excubitorium', 'Station of the Seventh Cohort', 'Excubitorium', -1200, 880, 'camp', false, 'Barracks of the vigiles who fight fires and patrol Trastevere by night.'],
+  ['excubitorium', 'Station of the Seventh Cohort', 'Excubitorium', -1200, 880, 'camp', false, 'Barracks of the vigiles who fight fires and patrol the far bank of the Tiber by night.'],
   ['tomb-appia', 'Tomb of the Freedmen', 'Columbarium', 1250, 2300, 'dungeon', false, 'A half-buried columbarium off the Via Appia. People say lamps burn there at night.'],
   ['temple-claudius', 'Temple of Divus Claudius', 'Templum Divi Claudii', 760, 610, 'temple', false, 'A vast terrace on the Caelian, with a fountain-front facing the Palatine.'],
   ['stadium-domitian', 'Stadium of Domitian', 'Stadium Domitiani', -951, -720, 'arena', false, 'Athletic games in the Greek style; foot races and wrestling.'],
