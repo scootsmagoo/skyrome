@@ -4,14 +4,17 @@
  * random reachable places, fighting a mugger every few minutes, quicksaving and loading — and
  * must not crash, log errors, or keep growing its memory (< 100 MB after a 5-minute warm-up).
  *
- *   node scripts/soak.mjs [--minutes 30] [--warmup 5] [--home 90]
+ *   node scripts/soak.mjs [--minutes 30] [--warmup 5] [--home 90] [--stuck stuck.json]
  *
  * --home R keeps the bot's goals within R m of where it started (separates leaks from the city
  * streaming in new districts).
  *
- * Chromium only (performance.memory). Prints a memory sample every minute and a verdict.
+ * --stuck FILE writes the NPC unstick log (position, district, edge ahead).
+ *
+ * Chromium only (performance.memory). Prints a memory sample every minute, the NPC stuck report and a verdict.
  */
 import { createServer as createNetServer } from 'node:net';
+import { writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -136,8 +139,28 @@ for (let m = 1; m <= minutes; m++) {
   samples.push({ m, ...s });
   console.log(`minute ${String(m).padStart(2)}: heap ${s.heap} MB · ${s.fps} fps · trips ${s.soak.trips} (stuck ${s.soak.stuckTrips}) · fights ${s.soak.fights} · saves ${s.soak.saves} loads ${s.soak.loads} · at ${s.pos.join(',')} · hp ${s.hp} · ${JSON.stringify(s.count)}`);
 }
+// NPC stuck report (NpcManager.stuckLog, one entry per unstick): where and against what.
+let stuck = null;
+if (!crashed) {
+  try {
+    stuck = await page.evaluate(() => {
+      const m = window.__skyrome.game.population;
+      return m ? { total: m.stats.unstuck, log: m.stuckLog } : null;
+    });
+  } catch {}
+}
 await browser.close();
 await server.close();
+if (stuck) {
+  const by = (f) => { const o = {}; for (const r of stuck.log) { const k = f(r); o[k] = (o[k] ?? 0) + 1; } return Object.entries(o).sort((a, b) => b[1] - a[1]); };
+  const bucket = (r) => (r.rise === null ? 'no floor ahead' : r.rise > 0.3 ? 'rise > 0.30' : r.rise > 0.09 ? 'rise 0.09-0.30' : r.rise < -0.3 ? 'drop > 0.30' : 'flat');
+  console.log(`NPC unsticks: ${stuck.total} total (${stuck.log.length} logged, ${(stuck.total / minutes).toFixed(1)} per minute)`);
+  console.log('  by district:', by((r) => r.district).slice(0, 8).map(([k, v]) => `${k} ${v}`).join(', '));
+  console.log('  by edge:', by(bucket).map(([k, v]) => `${k} ${v}`).join(', '));
+  console.log('  planner said the step ahead was fine:', by((r) => String(r.planned)).map(([k, v]) => `${k} ${v}`).join(', '));
+  console.log('  wall at knee height ahead:', stuck.log.filter((r) => r.wall[1] !== null).length, ' in view:', stuck.log.filter((r) => r.seen).length);
+  if (args.stuck) writeFileSync(resolve(root, String(args.stuck)), JSON.stringify(stuck, null, 1));
+}
 
 // Median of three minutes at each end: one sample can catch a burst of streaming.
 const median3 = (at) => {

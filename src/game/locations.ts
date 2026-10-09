@@ -3,8 +3,8 @@
  * entering its footprint radius fires 'location:discovered' (the flow's DiscoverySpotter also
  * discovers landmarks on sight, see discovery.ts), and the HUD shows the inscriptional Latin
  * name with the English one below. The named hills are regions too (Mons Palatinus…).
- * Atlas names carry research notes ('(district anchor)', 'Asylum / Inter duos lucos'); the
- * display helpers here keep them out of the player's sight. Pure mapping + registration helpers.
+ * Atlas names are clean (no research notes); the display helpers here are the one name pipeline
+ * for banner, map, compass and journal and strip any stray note. Pure mapping + registration helpers.
  */
 import type { Game } from '../core/Game';
 import { HILLS, LANDMARKS, LOWLANDS, type Hill, type Landmark } from '../data/atlas';
@@ -77,23 +77,23 @@ export function isDiscoverable(lm: Pick<Landmark, 'siting' | 'status113'>): bool
 
 // ------------------------------------------------------------------ display names
 
-/** Parenthetical notes that are research annotations, not part of any name. */
-const NOTE = /\s*\((?:[^()]*\b(?:anchor|removed|site|medieval|modern|later|burned|rebuilding)\b[^()]*|[^()]*\?[^()]*)\)/gi;
-
 /**
- * The English name for the banner, compass, journal, pause clock and saves: the atlas name
- * without parentheticals ('Rostra (Speakers' Platform)' → 'Rostra',
- * 'The Subura (district anchor)' → 'The Subura').
+ * The English name for the banner, compass, journal, pause clock, saves and map: the atlas name
+ * without parentheticals. The atlas names are already clean and unique (tests/names.test.ts); the
+ * stripping is a safety net so a stray research note can never reach the player.
  */
 export function displayName(name: string): string {
   const s = name.replace(/\s*\([^()]*\)/g, '').replace(/\s+/g, ' ').trim();
   return s || name;
 }
 
-/** The map label: keeps descriptive glosses ('Domus Augustana (private palace)'), drops notes. */
-export function mapName(name: string): string {
-  const s = name.replace(NOTE, '').replace(/\s+/g, ' ').trim();
-  return s || name;
+/** The map label: one name pipeline, so the map, banner, compass and journal always agree. */
+export const mapName = displayName;
+
+/** 'Before the Rostra', 'Before Trajan\'s Column': the article is dropped before a possessive. */
+export function beforeName(name: string): string {
+  const n = displayName(name);
+  return /^(?:The|[A-Z][a-z]+'s)\b/.test(n) ? `Before ${n.replace(/^The\b/, 'the')}` : `Before the ${n}`;
 }
 
 /**

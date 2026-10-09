@@ -25,6 +25,8 @@ describe('theory', () => {
 });
 
 function noteStats(events: TimedEvent[], seconds: number) {
+  // The set pieces (Seikilos, the Delphic hymn) are fixed tunes, not the state's own generated texture.
+  events = events.filter((e) => e.block.info.phrase !== 'seikilos' && e.block.info.phrase !== 'delphic');
   const mel = events.filter((e) => (e.part === 'melody' || e.part === 'answer') && !e.orn);
   const all = events.filter((e) => e.part !== 'drone');
   return { mel, perSec: all.length / seconds, melPerSec: mel.length / seconds };

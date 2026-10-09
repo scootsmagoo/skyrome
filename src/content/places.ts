@@ -21,6 +21,7 @@
 import { LANDMARK_BY_ID, ROADS, BRIDGES, ISLANDS, GATES, type Landmark } from '../data/atlas';
 import type { LocationDef } from '../npc/types';
 import { elevToY, toGame, WORLD_SCALE } from '../world/coords';
+import { beforeName, displayLatin, displayName } from '../game/locations';
 import { frontOf, pushOutOfFootprints } from './ground';
 import { onPath } from './route';
 
@@ -88,8 +89,8 @@ export function landmarkLocation(id: string, extra: Partial<LocationDef> = {}): 
   const radius = Math.max(8, Math.min(60, Math.max(h.w, h.d) + 6));
   return {
     id,
-    name: lm.name,
-    latin: lm.latin,
+    name: displayName(lm.name),
+    latin: displayLatin(lm.latin, displayName(lm.name)),
     position: { x: round1(x), y: round1(elevToY(lm.baseElevation ?? 13)), z: round1(z) },
     radius: Math.round(radius),
     mapMarker: MARKER_BY_CATEGORY[lm.category] ?? 'landmark',
@@ -161,9 +162,9 @@ export const BIBLE_SPOTS: LocationDef[] = [
   // The barracks (CONTENT.md has them at 885, 257): the built school has its stands there (4.8 m up),
   // so the fallback is the Ludus Magnus builder's own `ludus-cellae`, under the back portico of the court.
   { id: 'ludus-cellae', name: 'Ludus Barracks', position: atLandmark('ludus-magnus', -27.6, -6.5), radius: 8, discoverable: false, parent: 'ludus-magnus' },
-  spot('lectica-statio-forum', 'Litter Stand (Forum)', [62, 32], 4),
-  spot('lectica-statio-capena', 'Litter Stand (Capena Gate)', [492, 930], 4),
-  spot('lectica-statio-metae', 'Litter Stand (Meta Sudans)', [540, 300], 4),
+  spot('lectica-statio-forum', 'Litter Stand at the Forum', [62, 32], 4),
+  spot('lectica-statio-capena', 'Litter Stand at the Capena Gate', [492, 930], 4),
+  spot('lectica-statio-metae', 'Litter Stand at the Meta Sudans', [540, 300], 4),
   spot('statio-cohortium-urbanarum', 'Post of the Urban Cohorts', [30, -62], 6, { mapMarker: 'camp', discoverable: true }),
   // §1.2 — used by v0.1 people and quests (and the three ids src/rpg/data already references)
   spot('insula-mariorum', 'Insula of the Marii', [-82, 345], 8, { mapMarker: 'house', discoverable: true }),
@@ -251,7 +252,7 @@ function alias(id: string, of: string, radius?: number, extra: Partial<LocationD
 export const CAPENA_FALLBACK_SPAWN = 10;
 const gate = (forward: number, side: number) => atLandmark('porta-capena', forward, side);
 export const OPENING_SPOTS: LocationDef[] = [
-  { id: 'spawn-capena', name: 'Inside the Capena Gate (the night cart)', position: gate(-CAPENA_FALLBACK_SPAWN, 0), radius: 6, parent: 'porta-capena' },
+  { id: 'spawn-capena', name: 'Inside the Capena Gate, by the night cart', position: gate(-CAPENA_FALLBACK_SPAWN, 0), radius: 6, parent: 'porta-capena' },
   { id: 'night-cart', name: 'Dromo’s cart', position: gate(-14.5, -0.9), radius: 5, parent: 'porta-capena' },
   { id: 'night-cart-driver', name: 'Beside Dromo’s cart', position: gate(-14.5, 1.1), radius: 1.5, parent: 'porta-capena' },
   { id: 'night-cart-courier', name: 'Where Festus waits by the cart', position: gate(-12.4, 1.9), radius: 1.5, parent: 'porta-capena' },
@@ -297,7 +298,7 @@ export const FRONT_SPOTS: LocationDef[] = FRONT_LANDMARK_IDS.map((id) => {
   const lm = LANDMARK_BY_ID[id];
   const f = frontOf(lm, FRONT_OUT[id] ?? 2.5);
   const out = pushOutOfFootprints(f.x, f.z);
-  return { id: `${id}:front`, name: `Before the ${lm.name}`, position: { x: out.x, y: round1(elevToY(lm.baseElevation ?? 13)), z: out.z }, radius: 4, parent: id, discoverable: false };
+  return { id: `${id}:front`, name: beforeName(lm.name), position: { x: out.x, y: round1(elevToY(lm.baseElevation ?? 13)), z: out.z }, radius: 4, parent: id, discoverable: false };
 });
 
 /**
@@ -314,14 +315,14 @@ function onRoute(id: string, name: string, d: number, side: number, radius: numb
 export const STREET_SPOTS: LocationDef[] = [
   onRoute('capena-intus', 'Inside the Capena Gate', 34, 4, 5, { parent: 'porta-capena' }),
   onRoute('capena-statio', 'Gate post of the Capena Gate', 60, -5, 5, { parent: 'porta-capena' }),
-  onRoute('via-scopator', 'The Street below the Palatine (sweepers)', 110, 3, 6),
+  onRoute('via-scopator', 'The Street below the Palatine, sweepers\u2019 corner', 110, 3, 6),
   onRoute('via-carbonarius', 'Charcoal stand on the Via Appia', 150, -3, 5),
   onRoute('via-lucernarius', 'Lamp-seller on the Via Appia', 200, 4, 5),
   onRoute('via-plaustrum', 'The broken cart', 255, 0, 6),
   onRoute('circi-mimus', 'The mime’s corner at the Circus', 345, -4, 6),
   onRoute('circi-ficus', 'Fig stall under the Circus arches', 380, -3, 5),
   onRoute('circi-botularius', 'Sausage stand under the Circus arches', 405, -2, 5),
-  onRoute('circi-factiones', 'The Circus wall (the fans’ graffiti)', 470, -3, 6),
+  onRoute('circi-factiones', 'The Circus wall with the fans’ graffiti', 470, -3, 6),
   onRoute('schola-viae', 'The street school', 520, 4, 6),
   onRoute('via-aquarius', 'Water stand below the Palatine', 560, -4, 5),
   onRoute('via-capraria', 'The goat-milk corner', 660, 3, 6),
@@ -390,7 +391,7 @@ export function syncAliases(locations: { get(id: string): LocationDef | undefine
  * name the content gives them, and the content place each one also moves.
  */
 export const WORLD_SPOTS: Record<string, { radius: number; name: string; also?: string[] }> = {
-  'spawn-capena': { radius: 6, name: 'Outside the Capena Gate (the night cart)' },
+  'spawn-capena': { radius: 6, name: 'Outside the Capena Gate, by the night cart' },
   'night-cart': { radius: 5, name: 'Dromo’s cart', also: ['capena-extra', 'night-cart-courier'] },
   'night-cart-driver': { radius: 1.5, name: 'Beside Dromo’s cart' },
   'courier-ambush': { radius: 6, name: 'Under the dripping arch', also: ['capena-fight-area'] },

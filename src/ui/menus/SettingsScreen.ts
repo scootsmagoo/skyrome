@@ -55,7 +55,10 @@ export const SETTINGS_SECTIONS: { id: string; label: string; latin: string; rows
     rows: [
       { kind: 'slider', key: 'masterVolume', label: 'Master volume', min: 0, max: 1, step: 0.05, format: pct },
       { kind: 'slider', key: 'musicVolume', label: 'Music', min: 0, max: 1, step: 0.05, format: pct },
-      { kind: 'slider', key: 'sfxVolume', label: 'Effects', min: 0, max: 1, step: 0.05, format: pct },
+      { kind: 'slider', key: 'sfxVolume', label: 'Effects', min: 0, max: 1, step: 0.05, format: pct, note: 'Footsteps, weapons, doors' },
+      { kind: 'slider', key: 'ambienceVolume', label: 'Ambience', min: 0, max: 1, step: 0.05, format: pct, note: 'Crowds, birds, water, wind' },
+      { kind: 'slider', key: 'voiceVolume', label: 'Voices', min: 0, max: 1, step: 0.05, format: pct, note: 'Grunts, cries, calls' },
+      { kind: 'slider', key: 'uiVolume', label: 'Interface sounds', min: 0, max: 1, step: 0.05, format: pct },
     ],
   },
   {

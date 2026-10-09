@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import { Rng } from '../../core/Rng';
 import type { ColliderSpec } from '../../gfx/MeshBuilder';
-import { vegMaterial, type VegProfile } from './materials';
+import { leafCardsEnabled, vegMaterial, type VegProfile } from './materials';
 import { makeTree, TREE_VARIANTS, type TreeModel, type TreePart, type TreeSpecies, type WindKind } from './species';
 
 export const WIND: Record<WindKind, VegProfile> = {
@@ -87,9 +87,9 @@ export class Forest {
   }
 
   private mesh(part: TreePart, n: number, shadow: boolean): THREE.InstancedMesh {
-    const mat = vegMaterial(part.baked ? 'baked' : part.material, { ...WIND[part.wind], heads: part.heads });
+    const mat = vegMaterial(part.baked ? 'baked' : part.material, { ...WIND[part.wind], flutter: part.cards ? 0.06 : WIND[part.wind].flutter, heads: part.heads, card: part.cards });
     const m = new THREE.InstancedMesh(part.geometry, mat, n);
-    m.castShadow = shadow;
+    m.castShadow = shadow && !part.cards;
     m.receiveShadow = true;
     m.count = 0;
     // Hidden while empty: three still binds the program and uploads uniforms for an empty
@@ -109,7 +109,7 @@ export class Forest {
       box.expandByVector(new THREE.Vector3(b.model.radius * 1.3, 0, b.model.radius * 1.3));
       box.max.y += b.model.height * 1.3;
       const sphere = box.getBoundingSphere(new THREE.Sphere());
-      for (const part of b.model.near) b.near.push(this.mesh(part, n, this.shadow));
+      for (const part of b.model.near) if (!part.cards || leafCardsEnabled()) b.near.push(this.mesh(part, n, this.shadow));
       for (const part of b.model.far) b.far.push(this.mesh(part, n, false));
       for (const m of [...b.near, ...b.far]) {
         m.name = `forest:${key}`;

@@ -33,6 +33,7 @@ function M() {
     iron: m(0x3a3a3a, 0.6, 0.6),
     stone: m(0xcfc6b2, 0.85),
     terracottaRed: m(0x9a4a2e, 0.8),
+    terracottaShell: m(0xb5643c, 0.85, 0, { side: THREE.DoubleSide }),
     fruit: m(0xc0642a, 0.75),
     fruitGreen: m(0x7a8a3a, 0.75),
     clothRed: m(0x9e3a2a, 0.95),
@@ -194,6 +195,37 @@ export function attachProp(avatar: HumanoidAvatar, kind: PropKind): CarriedProp 
     update,
     dispose: () => object.removeFromParent(),
   };
+}
+
+/** Shared shapes of the things people carry, for loads that fall (see loads.ts): sphere/box sizes. */
+export const BUN_GEO = () => geo('bun', () => new THREE.SphereGeometry(0.05, 6, 4).scale(1, 0.6, 1));
+export const LOAF_GEO = () => geo('loaf', () => new THREE.SphereGeometry(0.08, 7, 5).scale(1.3, 0.6, 1));
+
+/**
+ * An amphora smashed on the ground: its foot and lower belly as a jagged shell, with shards
+ * around it. One mesh (one draw), standing on y = 0.
+ */
+export function makeBrokenAmphora(): THREE.Mesh {
+  const g = geo('amphoraBroken', () => {
+    // The foot up to a ragged rim (the lathe's seam is the break).
+    const shell = lathe([[0.0, 0.0], [0.03, 0.02], [0.1, 0.14], [0.15, 0.31], [0.15, 0.36], [0.13, 0.33], [0.11, 0.38], [0.09, 0.32]], 8);
+    const parts: THREE.BufferGeometry[] = [shell];
+    // Shards: flat slivers lying at random-looking, but fixed, spots and turns.
+    const spots: [number, number, number, number][] = [[0.28, 0.1, 0.5, 1], [-0.22, 0.2, 2.1, 0.8], [0.12, -0.3, 1.2, 0.9], [-0.3, -0.14, 0.2, 0.7], [0.05, 0.34, 2.8, 0.6], [0.36, -0.2, 1.7, 0.75]];
+    for (const [x, z, a, sc] of spots) {
+      const sh = new THREE.BoxGeometry(0.09 * sc, 0.012, 0.06 * sc);
+      sh.rotateY(a);
+      sh.rotateZ((x + z) * 0.4);
+      sh.translate(x, 0.012, z);
+      parts.push(sh);
+    }
+    const merged = mergeGeometries(parts.map((p) => (p.index ? p.toNonIndexed() : p)))!;
+    for (const p of parts) p.dispose();
+    return merged;
+  });
+  const o = mesh(g, M().terracottaShell);
+  o.castShadow = false;
+  return o;
 }
 
 // ---------------------------------------------------------------- vignette props

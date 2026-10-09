@@ -8,7 +8,7 @@ import type { Landmark } from '../data/atlas';
 import type { LocationDef } from '../npc/types';
 import type { MapDataSource, MapLabel, MapLandmark, MapLandmarkStyle, MapLine, MapLocation, MapQuestMarker, MapRiver, MapRoad, MapShape } from '../ui/types';
 import { WORLD_SCALE as K } from '../world/coords';
-import { displayLatin, iconFor, mapName } from './locations';
+import { displayLatin, displayName, iconFor, namedHills } from './locations';
 
 type P = readonly [number, number];
 const pts = (list: readonly P[]): [number, number][] => list.map(([x, z]) => [x * K, z * K]);
@@ -67,8 +67,8 @@ export function mapLandmarks(list: readonly Landmark[] = atlas.LANDMARKS): MapLa
     .filter((lm) => lm.siting !== 'underground')
     .map((lm) => ({
       id: lm.id,
-      name: mapName(lm.name),
-      latin: displayLatin(lm.latin, mapName(lm.name)),
+      name: displayName(lm.name),
+      latin: displayLatin(lm.latin, displayName(lm.name)),
       shapes: [landmarkShape(lm)],
       style: styleFor(lm.category),
       labelAt: { x: lm.center[0] * K, z: lm.center[1] * K },
@@ -92,10 +92,9 @@ function centroid(points: readonly P[]): { x: number; z: number } {
  */
 export function mapLabels(): MapLabel[] {
   const out: MapLabel[] = [];
-  for (const h of atlas.HILLS) {
-    if (h.kind === 'terrace' || h.parent) continue;
+  for (const h of namedHills()) {
     const c = centroid(h.outline);
-    out.push({ text: mapName(h.name).toUpperCase(), latin: displayLatin(h.latin, mapName(h.name)), x: c.x, z: c.z, kind: 'hill' });
+    out.push({ text: displayName(h.name).toUpperCase(), latin: displayLatin(h.latin, displayName(h.name)), x: c.x, z: c.z, kind: 'hill' });
   }
   const tiber = atlas.RIVERS.find((r) => r.id === 'tiber');
   if (tiber) {
@@ -141,10 +140,10 @@ export class AtlasMapSource implements MapDataSource {
   constructor(private readonly hooks: AtlasMapHooks = {}) {
     this.rivers = atlas.RIVERS.map((r) => ({ name: r.kind === 'canal' ? r.name : 'Tiberis', width: (r.width.reduce((a, b) => a + b, 0) / Math.max(1, r.width.length)) * K, points: pts(r.centerline) }));
     this.islands = atlas.ISLANDS.map((i) => ({ kind: 'poly', points: pts(i.outline) }) as MapShape);
-    this.roads = atlas.ROADS.map((r) => ({ name: r.latin ?? r.name, rank: r.kind === 'via' ? 'via' : 'street', points: pts(r.points) }) as MapRoad);
+    this.roads = atlas.ROADS.map((r) => ({ name: displayLatin(r.latin) ?? displayName(r.name), rank: r.kind === 'via' ? 'via' : 'street', points: pts(r.points) }) as MapRoad);
     this.walls = atlas.WALLS.filter((w) => w.state !== 'built-over').map((w) => ({ name: w.name, points: pts(w.points) }));
-    this.aqueducts = atlas.AQUEDUCTS.filter((a) => a.kind !== 'underground').map((a) => ({ name: a.latin, points: pts(a.points) }));
-    this.bridges = atlas.BRIDGES.map((b) => ({ name: b.latin, points: pts([b.a, b.b]) }));
+    this.aqueducts = atlas.AQUEDUCTS.filter((a) => a.kind !== 'underground').map((a) => ({ name: displayLatin(a.latin) ?? displayName(a.name), points: pts(a.points) }));
+    this.bridges = atlas.BRIDGES.map((b) => ({ name: displayLatin(b.latin) ?? displayName(b.name), points: pts([b.a, b.b]) }));
     this.landmarks = mapLandmarks();
     this.labels = mapLabels();
   }

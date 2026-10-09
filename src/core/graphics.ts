@@ -40,18 +40,18 @@ declare module './Settings' {
 /** The rows each tier writes. Antialiasing applies from the next launch. */
 export const TIER_SETTINGS: Record<GraphicsTier, Partial<SettingsData>> = {
   high: { renderScale: 1, maxPixelRatio: 1.5, shadows: 'high', viewDistance: 900, bloom: true, ao: true, sunShafts: true, antialias: true, maxFps: 60, crowdDensity: 1 },
-  medium: { renderScale: 0.85, maxPixelRatio: 1.25, shadows: 'low', viewDistance: 700, bloom: true, ao: false, sunShafts: false, antialias: true, maxFps: 60, crowdDensity: 0.8 },
+  medium: { renderScale: 0.85, maxPixelRatio: 1.25, shadows: 'low', viewDistance: 700, bloom: true, ao: true, sunShafts: false, antialias: true, maxFps: 60, crowdDensity: 0.8 },
   low: { renderScale: 0.75, maxPixelRatio: 1, shadows: 'off', viewDistance: 550, bloom: false, ao: false, sunShafts: false, antialias: false, maxFps: 30, crowdDensity: 0.6 },
 };
 
 /**
- * Ambient occlusion unless set: on for the High tier (or when no tier was chosen), off on
- * Medium/Low. Saves from before AO existed have a tier but no `ao` row.
+ * Ambient occlusion unless set: on for the High and Medium tiers (or when no tier was chosen), off
+ * on Low (Medium runs it with fewer samples and no contact shadows). Saves from before AO existed have a tier but no `ao` row.
  */
 export function aoDefault(s: { ao?: boolean; graphicsApplied?: { tier: string }; graphics?: string }): boolean {
   if (s.ao !== undefined) return s.ao;
   const tier = s.graphics && s.graphics !== 'auto' ? s.graphics : s.graphicsApplied?.tier;
-  return !tier || tier === 'high';
+  return !tier || tier !== 'low';
 }
 
 /** Sun shafts unless set: like ambient occlusion, on for High (or no tier chosen) only. */

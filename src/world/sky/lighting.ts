@@ -15,13 +15,13 @@ export const MOON_ILLUMINANCE = 0.24;
 /** The visible sky is brighter than physical single scattering suggests (multiple scattering, eye). */
 export const SKY_GAIN = 3.6;
 /** Night fill so moonless nights are dark but playable. */
-export const NIGHT_FILL = 0.035;
+export const NIGHT_FILL = 0.045;
 /** The moonlit sky is shown darker than the sunlit one (night vision is dim and blue-grey). */
 export const MOON_SKY_GAIN = 0.5;
 /** Sun disc radiance multiplier (HDR, feeds bloom). */
 export const SUN_DISC = 60;
 /** Exposure at noon, and the limits of eye adaptation. */
-export const EXPOSURE = { reference: 2.1, power: 0.42, min: 0.55, max: 2.5 };
+export const EXPOSURE = { reference: 2.1, power: 0.42, min: 0.55, max: 3 };
 
 export interface Lighting {
   /** Unit vector toward the key light (sun by day, moon by night). */
@@ -41,6 +41,9 @@ export interface Lighting {
   fogColor: RGB;
   fogSunColor: RGB;
   fogSunPower: number;
+  /** The air's colour looking well above the horizon (sky at ~35°, a touch milky), and how much of it rays that climb take on. */
+  fogUp: RGB;
+  fogUpWeight: number;
   /** Extinction at the base height, 1/m. */
   fogDensity: number;
   /** Height falloff of the fog density, 1/m. */
@@ -250,7 +253,7 @@ export function computeLighting(inp: LightingInput, out?: Lighting): Lighting {
   const nightFill = NIGHT_FILL * night * (1 - 0.4 * overcast);
   // Night fill is blue-grey moonlit air.
   for (let i = 0; i < 3; i++) hemiSky[i] = hemiSky[i] * (1 - night) + [0.62, 0.72, 1][i] * night;
-  const hemiIntensity = 0.12 * skyIrr + 0.35 * luminance(groundRad) * Math.PI + nightFill * Math.PI;
+  const hemiIntensity = 0.07 * skyIrr + 0.35 * luminance(groundRad) * Math.PI + nightFill * Math.PI;
 
   // Milky veil of summer haze (multiple scattering the single-scattering LUT lacks).
   const hazeVeil = Math.min(0.5, Math.max(0, (w.haze - 3.5) / 25));
@@ -285,6 +288,10 @@ export function computeLighting(inp: LightingInput, out?: Lighting): Lighting {
   const sunGlowMax = 2.2 * luminance(fogColor) + 0.02;
   const sg = luminance(fogSun);
   if (sg > sunGlowMax) for (let i = 0; i < 3; i++) fogSun[i] *= sunGlowMax / sg;
+  // Looking up through the air you see the sky's own colour, not the haze band at the horizon.
+  const fogUp: RGB = [0, 0, 0];
+  const ringL = luminance(ring);
+  for (let i = 0; i < 3; i++) fogUp[i] = ring[i] * (1 - veilFog * 0.5) + ringL * veilFog * 0.5;
   // Hearth smoke over the city at dawn and dusk, mist in the valleys around sunrise.
   const h = inp.hour;
   const smoke = Math.exp(-Math.pow((h - 7) / 1.4, 2)) * 0.55 + Math.exp(-Math.pow((h - 19.5) / 1.6, 2)) * 0.45;
@@ -324,6 +331,8 @@ export function computeLighting(inp: LightingInput, out?: Lighting): Lighting {
   res.fogColor = fogColor;
   res.fogSunColor = fogSun;
   res.fogSunPower = 9;
+  res.fogUp = fogUp;
+  res.fogUpWeight = 0.75 * (1 - cloudy);
   res.fogDensity = fogDensity;
   res.fogFalloff = fogFalloff;
   res.fogBaseHeight = 0;

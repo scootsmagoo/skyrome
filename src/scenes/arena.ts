@@ -198,7 +198,7 @@ const scene: SceneDef = {
       try {
         const audio = installAudio(game);
         audio.ambience.setBase({ city: 0.6, crowd: inRome ? 0.2 : 0.8 });
-        audio.footsteps.attach(player, { surfaceAt: () => (inRome ? 'gravel' : 'dirt'), spatial: false, voice: pApp.sex === 'female' ? 'f' : 'm', gear: 'armor' });
+        audio.footsteps.attach(player, { surfaceAt: () => (inRome ? 'sand' : 'dirt'), spatial: false, voice: pApp.sex === 'female' ? 'f' : 'm', gear: 'armor' });
       } catch {
         /* no audio in this browser */
       }

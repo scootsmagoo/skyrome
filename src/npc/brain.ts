@@ -22,6 +22,7 @@ import type { DayPhase } from './crowd/budget';
 import type { Npc } from './Npc';
 import { activeScheduleEntry, archetypeSlot, type ArchetypeSlot, type LifeActivity, type PlaceKind, type SunTimes } from './schedules';
 import type { LifeSpot, SpotIndex } from './spots';
+import { newRecover, recoverStep, type LooseLoad, type RecoverState } from './loads';
 
 /** World services a brain needs (provided by NpcManager; faked in tests). */
 export interface LifeContext {
@@ -62,7 +63,7 @@ export interface LifeContext {
   warp?(npc: Npc, x: number, z: number): boolean;
 }
 
-export type TaskKind = 'idle' | 'goto' | 'follow' | 'flee' | 'gawk' | 'respond' | 'leave' | 'converse' | 'script';
+export type TaskKind = 'idle' | 'goto' | 'follow' | 'flee' | 'gawk' | 'respond' | 'leave' | 'converse' | 'script' | 'recover';
 
 export interface Task {
   kind: TaskKind;
@@ -85,6 +86,9 @@ export interface Task {
   /** Danger source for flee/gawk/respond. */
   dangerX?: number;
   dangerZ?: number;
+  /** For 'recover': the fallen load being fetched and the progress of fetching it. */
+  load?: LooseLoad;
+  recover?: RecoverState;
 }
 
 const task = (kind: TaskKind, o: Partial<Task> = {}): Task => ({ kind, x: 0, z: 0, speed: 1.3, loop: null, face: null, until: Infinity, ...o });
@@ -200,6 +204,10 @@ export class NpcBrain {
         if (this.lastEvent === 'stuck') this.unstickRequested = true;
         return;
       }
+      case 'recover': {
+        this.stepRecover(t, dt, ctx, out);
+        return;
+      }
       case 'script': {
         // A vignette sets x/z/speed (moving) or loop/face (standing).
         if (npc.mover.active) {
@@ -237,6 +245,51 @@ export class NpcBrain {
         // Leaving people vanish as soon as nobody is looking.
         if (t.kind === 'leave' && npc.unseenFor > 1.5 && npc.distToPlayer > 25) ctx.despawn(npc);
       }
+    }
+  }
+
+  /**
+   * Fetch the load that fell off: walk to it, crouch, pick it up and put it on again (loads.ts has
+   * the timing). Gives up when it is gone, broken, out of reach or taking too long.
+   */
+  private stepRecover(t: Task, dt: number, ctx: LifeContext, out: Vec2) {
+    const npc = this.npc;
+    const loads = ctx.game.looseLoads;
+    const load = t.load;
+    const st = t.recover;
+    if (!load || !st || !loads) {
+      this.setTask(null, ctx);
+      return;
+    }
+    const lp = load.holder.position;
+    const dist = hyp(lp.x - npc.position.x, lp.z - npc.position.z);
+    const present = loads.has(load) && load.state === 'loose';
+    if (st.phase === 'walk') {
+      this.applyLoop(null);
+      if (!npc.mover.active || hyp(npc.mover.goalX - lp.x, npc.mover.goalZ - lp.z) > 0.6) npc.mover.setGoal(lp.x, lp.z, Math.max(1.2, npc.walkSpeed), 0.5);
+      this.lastEvent = npc.mover.update(dt, npc.position.x, npc.position.z, ctx.nav, out);
+      if (this.lastEvent === 'stuck') this.unstickRequested = true;
+    }
+    const stalled = this.lastEvent === 'arrived' || this.lastEvent === 'failed' || this.lastEvent === 'blocked';
+    const ev = recoverStep(st, dt, { dist, present, stalled: st.phase === 'walk' && stalled });
+    if (ev === 'crouch') {
+      npc.mover.clear();
+      out.x = out.z = 0;
+      npc.humanoid.play('pickupGround');
+    } else if (ev === 'grab') {
+      loads.collect(load, npc);
+    }
+    if (st.phase === 'crouch') {
+      out.x = out.z = 0;
+      this.applyLoop(null);
+      npc.turnToward(npc.headingTo(lp.x, lp.z), 6, dt);
+    } else if (st.phase === 'done') {
+      this.setTask(null, ctx);
+    } else if (st.phase === 'giveup') {
+      loads.abandon(load);
+      npc.mover.clear();
+      if (present && ctx.rng.chance(0.6)) ctx.bark(npc, 'dropped');
+      this.setTask(null, ctx);
     }
   }
 
@@ -308,6 +361,17 @@ export class NpcBrain {
   next(ctx: LifeContext) {
     const npc = this.npc;
     this.slotKey = this.scheduleKey(ctx);
+    if (npc.lostLoad) {
+      const l = npc.lostLoad;
+      // Their load lies on the ground: fetch it first (unless it is gone or far off).
+      const lp = l.holder.position;
+      if (ctx.game.looseLoads?.has(l) && l.state === 'loose' && hyp(lp.x - npc.position.x, lp.z - npc.position.z) < 30) {
+        this.activity = 'wander';
+        this.setTask(task('recover', { x: lp.x, z: lp.z, load: l, recover: newRecover(), until: ctx.now + 60 }), ctx);
+        return;
+      }
+      ctx.game.looseLoads?.abandon(l);
+    }
     if (npc.leader && !npc.leader.dead) {
       this.activity = 'follow';
       this.setTask(task('follow'), ctx);

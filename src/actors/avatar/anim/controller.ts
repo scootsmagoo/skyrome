@@ -17,6 +17,8 @@ import type { ActionClip, IdleLoop, LocomotionState, PlayOptions, Stance } from 
 import { B, BONE_COUNT, type BoneName } from '../rig';
 import { Pose, REF_LEG, bakeClip, blendMasked, blendPose, makeMask, sampleClip, samplePhase, toAnimationClip, type BoneMask, type CompiledClip } from './clip';
 import { GAITS, type GaitName } from './gait';
+import { FootIk } from './footIk';
+import { PART, SecondaryMotion, type Drive } from './secondary';
 import { actionInfo, airClips, blockClip, gaitClip, idleLoopClip, stanceIdleClip, type ActionInfo } from './library';
 import { qAxis, qMul } from './quat';
 import { ARM_LEFT, ARM_RIGHT, fistTo, fk, forwardKinematics, leftHandOnShaft } from './armIK';
@@ -24,6 +26,15 @@ import { BOW } from '../../equipment/weapons';
 import { ARM_L_NET, ARM_L_TORCH, FP_ARMS, hasShield, stanceArmMask, stancePose, weaponClass, type ArmMask } from './poses';
 import type { HumanoidAvatar } from '../HumanoidAvatar';
 import type { DropBody, OffHand } from '../../equipment/Equipment';
+
+/** Within this distance (m) of the viewer the avatar plants its feet on the ground and moves loosely (shared with lod.ts). */
+const NEAR_IK = 40;
+/** Seconds between ground samples for the feet by distance (m): close figures are watched, far ones are not. */
+const probeInterval = (d: number) => (d < 15 ? 1 / 30 : d < 28 ? 1 / 20 : 1 / 10);
+/** Foot-contact strength by gait (a heavy stride lands harder). */
+const CONTACT_STRENGTH: Record<string, number> = { sneak: 0.25, walk: 0.5, run: 0.8, sprint: 1 };
+/** Share of the loose-part springs by gait: a stride shakes the limbs more than standing. */
+const LOOSE_BY_GAIT = { idle: 0.55, walk: 0.7, run: 1, sprint: 1.25, sneak: 0.45 };
 
 interface Playing {
   name: string;
@@ -112,6 +123,10 @@ const FP_SWORD: FpView = { fist: [0.3, -0.21, 0.42], dir: [0.5, 0.75, 0.45] };
 /** Speed ladder (reference body, m/s). Between `walkTop` and `runAt` walk blends into run, etc. */
 export const SPEEDS = { walkAt: 1.1, walkTop: 2.2, runAt: 3.2, runTop: 4.8, sprintAt: 6.4 };
 
+/** The sprint cycle is baked for straight ahead and 45° either side. */
+const SPRINT_ARC = 45;
+const qEuler = new THREE.Euler();
+const qSwing = new THREE.Quaternion();
 const DEG = Math.PI / 180;
 const damp = (rate: number, dt: number) => 1 - Math.exp(-rate * dt);
 const approach = (cur: number, target: number, rate: number, dt: number) => cur + (target - cur) * damp(rate, dt);
@@ -195,6 +210,29 @@ export class AnimationController {
   private stoopW = 0;
   private rng = Math.random;
 
+  /** Set by the avatar each update: within NEAR_IK of the viewer (feet planted, loose parts springing). */
+  near = false;
+  /** Distance to the viewer (m), for the foot-probe rate. */
+  viewDistance = 0;
+  /** Foot IK and the secondary motion run only when these are on (tests and tools can switch them off). */
+  footIkEnabled = true;
+  secondaryEnabled = true;
+  readonly footIk = new FootIk();
+  readonly secondary = new SecondaryMotion();
+  /** Foot contacts fired so far (tests). */
+  contacts = 0;
+  private secW = 0;
+  private readonly drive: Drive = { af: 0, al: 0, au: 0, turn: 0 };
+  private prevVf = 0;
+  private prevVl = 0;
+  private prevVu = 0;
+  private haveVel = false;
+  private lastStrength = 0.5;
+  /** Social share of loose motion this update (gait-weighted, before the first-person cut). */
+  private looseGait = 0.55;
+  private socketBase = new Map<THREE.Object3D, THREE.Quaternion>();
+  private socketsMoved = false;
+
   // Pose buffers.
   private out = new Pose();
   private tmpA = new Pose();
@@ -209,6 +247,7 @@ export class AnimationController {
   private readonly gaitName: GaitName[] = ['walk', 'walk', 'walk', 'walk'];
   private readonly gaitW = [0, 0, 0, 0];
   private readonly gaitS = [0, 0, 0, 0];
+  private gaitCount = 0;
   private autoMask: BoneMask = makeMask({});
   private keepMask: BoneMask = makeMask({});
   private legScale = 1;
@@ -493,6 +532,7 @@ export class AnimationController {
     this.landT = Math.min(1, this.landT + dt / 0.38);
     this.idleT += dt;
     this.stanceFade = Math.min(1, this.stanceFade + dt / 0.25);
+    this.updateDrive(dt, s);
 
     // --- 1. stance idle (with a crossfade on stance/drawn changes, and the sneak crouch)
     const stanceClip = this.currentStanceClip();
@@ -528,7 +568,15 @@ export class AnimationController {
 
     // --- 2. locomotion
     const w = speedWeights(this.speedSm, this.sw);
+    // A sprint only runs straight ahead (the cycle has no sideways or backward versions): moving
+    // off the line of the body hands the weight to the run, which has all eight directions.
+    if (w[3] > 0) {
+      const keep = 1 - smooth(25, 60, Math.abs(this.dirSm));
+      w[2] += w[3] * (1 - keep);
+      w[3] *= keep;
+    }
     const moveW = 1 - w[0];
+    this.looseGait = w[0] * LOOSE_BY_GAIT.idle + w[1] * (LOOSE_BY_GAIT.walk + (LOOSE_BY_GAIT.sneak - LOOSE_BY_GAIT.walk) * this.sneakW) + w[2] * LOOSE_BY_GAIT.run + w[3] * LOOSE_BY_GAIT.sprint;
     let nGaits = 0;
     if (w[1] > 0) {
       if (this.sneakW < 0.99) nGaits = this.addGait(nGaits, 'walk', w[1] * (1 - this.sneakW));
@@ -536,11 +584,16 @@ export class AnimationController {
     }
     if (w[2] > 0) nGaits = this.addGait(nGaits, 'run', w[2]);
     if (w[3] > 0) nGaits = this.addGait(nGaits, 'sprint', w[3]);
+    this.gaitCount = nGaits;
     if (nGaits) {
       let sEff = 0;
       for (let i = 0; i < nGaits; i++) sEff += this.gaitW[i] * this.gaitS[i];
-      const rate = sEff > 0.05 ? this.speedSm / sEff : 1 / GAITS.walk.cycle;
-      this.phase = (this.phase + rate * dt) % 1;
+      // On a staircase the stride is shortened (footIk.ts), so the cycle runs quicker to keep the feet still.
+      const stride = 1 + (this.footIk.stride - 1) * this.footIk.weight;
+      const rate = sEff > 0.05 ? this.speedSm / (sEff * stride) : 1 / GAITS.walk.cycle;
+      const p0 = this.phase;
+      this.phase = (p0 + rate * dt) % 1;
+      if (s.grounded && moveW > 0.3 && !this.dead) this.footContacts(p0, this.phase, nGaits);
       let total = 0;
       for (let i = 0; i < nGaits; i++) {
         const gw = this.gaitW[i];
@@ -558,7 +611,9 @@ export class AnimationController {
     const turning = Math.abs(s.turnRate) > 0.9 && this.speedSm < 0.3 && s.grounded;
     this.turnW = approach(this.turnW, turning ? 1 : 0, 8, dt);
     if (this.turnW > 0.01) {
-      this.turnPhase = (this.turnPhase + dt * Math.min(1.6, 0.6 + Math.abs(s.turnRate) * 0.25) / GAITS.turn.cycle) % 1;
+      const t0 = this.turnPhase;
+      this.turnPhase = (t0 + dt * Math.min(1.6, 0.6 + Math.abs(s.turnRate) * 0.25) / GAITS.turn.cycle) % 1;
+      if (this.turnW > 0.5 && !this.dead) this.stepEdges(t0, this.turnPhase, 'walk', 0.18);
       samplePhase(gaitClip('turn', 0), this.turnPhase, this.tmpA);
       blendMasked(base, base, this.tmpA, this.turnW * (1 - moveW), LOWER);
     }
@@ -637,7 +692,189 @@ export class AnimationController {
 
     // --- 8. procedural
     this.procedural(dt, base, s);
+    this.groundFeet(dt, base, s);
     this.write(base);
+  }
+
+  // ------------------------------------------------------------------ foot contacts
+
+  /** Fire the foot contacts a gait phase passes between two updates (0 = left foot lands, 0.5 = right). */
+  private footContacts(p0: number, p1: number, nGaits: number) {
+    let best = 0;
+    let sum = 0;
+    let str = 0;
+    for (let i = 0; i < nGaits; i++) {
+      sum += this.gaitW[i];
+      str += this.gaitW[i] * CONTACT_STRENGTH[this.gaitName[i]];
+      if (this.gaitW[i] > this.gaitW[best]) best = i;
+    }
+    this.lastStrength = sum > 0 ? str / sum : 0.5;
+    this.stepEdges(p0, p1, this.gaitName[best], this.lastStrength);
+  }
+
+  /** The contacts between phases p0 and p1 (a forward step shorter than a cycle), earliest first. */
+  private stepEdges(p0: number, p1: number, gait: string, strength: number) {
+    const adv = (p1 - p0 + 1) % 1;
+    if (adv <= 0) return;
+    let tL = (1 - p0) % 1;
+    let tR = (0.5 - p0 + 1) % 1;
+    if (tL === 0) tL = 1;
+    if (tR === 0) tR = 1;
+    const l = tL <= adv;
+    const r = tR <= adv;
+    if (l && r) {
+      if (tL <= tR) {
+        this.contact('L', gait, strength);
+        this.contact('R', gait, strength);
+      } else {
+        this.contact('R', gait, strength);
+        this.contact('L', gait, strength);
+      }
+    } else if (l) this.contact('L', gait, strength);
+    else if (r) this.contact('R', gait, strength);
+  }
+
+  private contact(side: 'L' | 'R', gait: string, strength: number) {
+    this.contacts++;
+    if (this.near) this.secondary.footfall(strength, side === 'L' ? 1 : -1);
+    this.avatar.onFootContact?.(side, gait, strength);
+  }
+
+  // ------------------------------------------------------------------ secondary motion
+
+  /** The body's acceleration in its own frame (m/s², low-passed) and its turn rate: what loose parts trail. */
+  private updateDrive(dt: number, s: LocomotionState) {
+    const vf = s.forwardSpeed;
+    const vl = -s.strafeSpeed;
+    const vu = s.grounded ? 0 : Math.max(-10, Math.min(10, s.verticalSpeed));
+    const d = this.drive;
+    if (!this.haveVel || dt > 0.3 || dt <= 0) {
+      d.af = d.al = d.au = 0;
+    } else {
+      // A frame turning at w: a = dv/dt + w x v, so a circle at a steady speed still pulls sideways.
+      const af = (vf - this.prevVf) / dt - s.turnRate * vl;
+      const al = (vl - this.prevVl) / dt + s.turnRate * vf;
+      const au = (vu - this.prevVu) / dt;
+      // Physics steps at 60 Hz while frames may run faster: smooth, so the spikes between steps don't ring.
+      const k = damp(22, dt);
+      d.af += (Math.max(-30, Math.min(30, af)) - d.af) * k;
+      d.al += (Math.max(-30, Math.min(30, al)) - d.al) * k;
+      d.au += (Math.max(-30, Math.min(30, au)) - d.au) * k;
+    }
+    d.turn = s.turnRate;
+    this.prevVf = vf;
+    this.prevVl = vl;
+    this.prevVu = vu;
+    this.haveVel = true;
+  }
+
+  /** A blow at the avatar: `lf`/`ll` = the direction it travels in the avatar's frame (forward, left), strength 0..1. */
+  hitImpulse(lf: number, ll: number, strength: number) {
+    if (this.dead) return;
+    this.secondary.hit(lf, ll, strength);
+  }
+
+  private applySecondary(dt: number, p: Pose, free: number) {
+    const sec = this.secondary;
+    const want = this.near && this.secondaryEnabled && !this.firstPerson && !this.dead ? 1 : 0;
+    this.secW += (want - this.secW) * damp(want ? 6 : 12, dt);
+    if (this.secW < 0.003 && !want && sec.energy < 0.02) {
+      if (this.socketsMoved) this.restoreSockets();
+      return;
+    }
+    if (dt > 0.3) sec.reset();
+    sec.step(dt, this.drive, this.looseGait * this.secW);
+    // How much of the action clips owns the arms right now.
+    let act = 0;
+    for (const a of this.actions) if (a.info.mask !== 'full') act = Math.max(act, smooth(0, 1, a.w));
+    const arms = free * (1 - 0.85 * act);
+    // Hands that hold something flop less than free ones.
+    const offHolds = this.off || (this.drawn && hasShield(this.stance)) || this.avatar.equipment.twoHandGrip();
+    const kR = arms * (this.drawn ? 0.3 : 1);
+    const kL = arms * (offHolds ? 0.3 : this.togate && !this.drawn ? 0.4 : 1);
+    const pi = sec.pitch;
+    const ro = sec.roll;
+    const ya = sec.yaw;
+    const H = PART.head;
+    const hk = free * (1 - 0.5 * act);
+    this.addParent(p, B.head, 0, pi[H].x * hk);
+    this.addParent(p, B.head, 2, ro[H].x * hk);
+    this.addParent(p, B.head, 1, ya[H].x * hk);
+    // The neck takes a share, so the head does not hinge in the air.
+    this.addParent(p, B.neck, 0, pi[H].x * hk * 0.35);
+    this.addParent(p, B.neck, 1, ya[H].x * hk * 0.3);
+    this.add(p, B.forearmL, 0, pi[PART.forearmL].x * kL);
+    this.add(p, B.forearmR, 0, pi[PART.forearmR].x * kR);
+    this.add(p, B.handL, 0, pi[PART.handL].x * kL);
+    this.add(p, B.handR, 0, pi[PART.handR].x * kR);
+    this.addParent(p, B.upperArmL, 2, ro[PART.forearmL].x * kL * 0.5);
+    this.addParent(p, B.upperArmR, 2, ro[PART.forearmR].x * kR * 0.5);
+    this.addParent(p, B.handL, 2, ro[PART.handL].x * kL);
+    this.addParent(p, B.handR, 2, ro[PART.handR].x * kR);
+    // A blow rocks the torso, then it settles.
+    const hp = sec.hitPitch.x * free;
+    const hr = sec.hitRoll.x * free;
+    if (Math.abs(hp) > 0.01 || Math.abs(hr) > 0.01) {
+      this.addParent(p, B.hips, 0, hp * 0.2);
+      this.addParent(p, B.spine, 0, hp * 0.35);
+      this.addParent(p, B.chest, 0, hp * 0.4);
+      this.addParent(p, B.hips, 2, hr * 0.2);
+      this.addParent(p, B.spine, 2, hr * 0.35);
+      this.addParent(p, B.chest, 2, hr * 0.4);
+    }
+    const hh = sec.hitHead.x * free;
+    if (Math.abs(hh) > 0.01 || Math.abs(hr) > 0.01) {
+      this.addParent(p, B.neck, 0, hh * 0.5);
+      this.addParent(p, B.head, 0, hh * 0.5);
+      this.addParent(p, B.head, 2, hr * 0.25);
+    }
+    this.moveSockets(this.secW * free);
+  }
+
+  /** The carried kit swings about its grip: the sockets turn a little on top of their base orientation. */
+  private moveSockets(kitW: number) {
+    const av = this.avatar;
+    this.swingSocket(av.getSocket('gripR'), PART.kitR, kitW);
+    this.swingSocket(av.getSocket('gripL'), PART.kitL, kitW);
+    this.swingSocket(av.getSocket('shieldL'), PART.kitL, kitW);
+    for (const n of ['sheathR', 'sheathL', 'backShield', 'backWeapon'] as const) this.swingSocket(av.getSocket(n), PART.hang, kitW * 0.7);
+    this.socketsMoved = true;
+  }
+
+  private swingSocket(o: THREE.Object3D, part: number, w: number) {
+    let base = this.socketBase.get(o);
+    if (!base) {
+      base = o.quaternion.clone();
+      this.socketBase.set(o, base);
+    }
+    const sec = this.secondary;
+    qEuler.set(sec.pitch[part].x * w * DEG, sec.yaw[part].x * w * DEG, sec.roll[part].x * w * DEG);
+    qSwing.setFromEuler(qEuler);
+    o.quaternion.copy(qSwing).multiply(base);
+  }
+
+  private restoreSockets() {
+    for (const [o, q] of this.socketBase) o.quaternion.copy(q);
+    this.socketsMoved = false;
+  }
+
+  // ------------------------------------------------------------------ foot IK
+
+  /** Plant the feet on stairs, kerbs and slopes (see footIk.ts); only near the viewer, only where the avatar can probe. */
+  private groundFeet(dt: number, p: Pose, s: LocomotionState) {
+    const probe = this.avatar.groundProbe ?? null;
+    let want = 0;
+    if (this.footIkEnabled && this.near && probe && s.grounded && !this.dead && this.airW < 0.3) {
+      // Seated, sleeping or leaning figures, and falls, keep their authored feet.
+      want = 1;
+      if (this.idleLoop === 'sit' || this.idleLoop === 'sitGround' || this.idleLoop === 'sleep' || this.idleLoop === 'lean') want = 1 - smooth(0, 1, this.loopW);
+      want *= 1 - this.fullDeathW();
+    }
+    if (want <= 0 && this.footIk.weight <= 0.003) return;
+    const root = this.avatar.root;
+    root.updateWorldMatrix(true, false);
+    const rootY = root.matrixWorld.elements[13];
+    this.footIk.apply(p, this.avatar.rig, this.legScale, dt, want, probeInterval(this.viewDistance), probe, rootY, -s.strafeSpeed, s.forwardSpeed);
   }
 
   private addGait(n: number, g: GaitName, gw: number): number {
@@ -648,11 +885,8 @@ export class AnimationController {
   }
 
   private sampleGait(g: GaitName, out: Pose) {
-    const dir = g === 'sprint' || g === 'turn' ? 0 : this.dirSm;
-    if (g === 'sprint') {
-      samplePhase(gaitClip('sprint', 0), this.phase, out);
-      return;
-    }
+    // The turn steps have one direction; a sprint covers only the forward arc (45° each way).
+    const dir = g === 'turn' ? 0 : g === 'sprint' ? Math.max(-SPRINT_ARC, Math.min(SPRINT_ARC, this.dirSm)) : this.dirSm;
     // Neighbouring directions on the 45° wheel (DIRECTIONS[i] is i * 45° mod 360).
     const a = ((dir % 360) + 360) % 360;
     const i = Math.floor(a / 45) % 8;
@@ -839,6 +1073,9 @@ export class AnimationController {
       if (k > 0.01) this.fpHand(p, k, FP_SWORD);
     }
 
+    // Loose parts lag the body; the grip IK below then pulls a held weapon's hands back to it.
+    this.applySecondary(dt, p, free);
+
     // Two-handed weapons: the left hand rides the shaft (unless it carries a net/torch or gestures).
     const grip = this.avatar.equipment.twoHandGrip();
     let gw = grip && this.drawn && !this.off ? 1 - this.fullDeathW() : 0;
@@ -935,6 +1172,13 @@ export class AnimationController {
     for (let i = 0; i < BONE_COUNT; i++) bones[i].quaternion.set(q[i * 4], q[i * 4 + 1], q[i * 4 + 2], q[i * 4 + 3]);
     const ls = this.legScale;
     bones[0].position.set(this.restHips.x + p.p[0] * ls, this.restHips.y + p.p[1] * ls, this.restHips.z + p.p[2] * ls);
+  }
+
+  /** The locomotion cycles blended in the last update, with their weights (tests and debugging). */
+  gaitMix(): { gait: GaitName; w: number }[] {
+    const out: { gait: GaitName; w: number }[] = [];
+    for (let i = 0; i < this.gaitCount; i++) out.push({ gait: this.gaitName[i], w: this.gaitW[i] });
+    return out;
   }
 
   /** THREE.AnimationClip by name: an action ('attackLight1'), 'idle', a gait ('walk:0'), or a loop ('loop:sit'). */

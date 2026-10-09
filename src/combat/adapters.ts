@@ -111,6 +111,10 @@ export class AvatarCombatView implements CombatView {
     this.avatar.setDead(dead);
   }
 
+  impact(dx: number, dz: number, strength: number) {
+    this.avatar.hitImpulse?.(dx, dz, strength);
+  }
+
   hand(out: THREE.Vector3): boolean {
     const s = this.avatar.getSocket('handR');
     if (!s) return false;

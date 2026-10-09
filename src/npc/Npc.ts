@@ -18,6 +18,7 @@ import { groups, Layer } from '../core/Physics';
 import type { Interactable } from '../interaction/Interactions';
 import { Mover } from '../ai/life/mover';
 import type { Positioned } from '../ai/life/spatialHash';
+import type { LooseLoad } from './loads';
 import type { CarriedProp } from './props';
 import type { CrowdRole } from './crowd/roles';
 import type { NpcDef } from './types';
@@ -92,6 +93,11 @@ export class Npc extends Actor implements Positioned {
   unseenFor = 0;
   prop: CarriedProp | null = null;
   light: CarriedLight | null = null;
+  /** Their load, fallen off and lying about, that they mean to pick up again. */
+  lostLoad: LooseLoad | null = null;
+  /** Down or just up (the manager's downed state): the brain and the mover wait. Manager clock (s). */
+  downUntil = 0;
+  wasDown = false;
   /** In a conversation with the player. */
   talking = false;
   dead = false;
@@ -261,6 +267,8 @@ export class Npc extends Actor implements Positioned {
   }
 
   override dispose() {
+    if (this.lostLoad) this.game.looseLoads?.abandon(this.lostLoad);
+    this.lostLoad = null;
     this.prop?.dispose();
     this.prop = null;
     this.light?.remove();

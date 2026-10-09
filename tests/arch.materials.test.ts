@@ -47,14 +47,15 @@ describe('material catalog', () => {
       let n = 0;
       for (const set of readdirSync(join(root, 'public/textures'))) {
         const dir = join(root, 'public/textures', set);
-        if (!statSync(dir).isDirectory()) continue;
+        if (!statSync(dir).isDirectory() || set === 'people') continue;
         for (const f of readdirSync(dir)) if (f.endsWith(ext)) n += statSync(join(dir, f)).size;
       }
       return n;
     };
     expect(sizeOf('.ktx2')).toBeLessThan(26 * 1024 * 1024);
     expect(sizeOf('.jpg')).toBeLessThan(14 * 1024 * 1024);
-    expect(dirSize(join(root, 'public/textures'))).toBeLessThan(40 * 1024 * 1024);
+    // The character body maps (public/textures/people) have their own budget (docs/modules/avatar-real.md).
+    expect(dirSize(join(root, 'public/textures')) - dirSize(join(root, 'public/textures/people'))).toBeLessThan(40 * 1024 * 1024);
   });
 
   it('tiles textures at real-world size', () => {

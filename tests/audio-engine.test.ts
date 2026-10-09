@@ -148,14 +148,16 @@ describe('FootstepDriver', () => {
     expect(cadence(1.9)).toBeGreaterThan(1.8);
     expect(cadence(1.9)).toBeLessThan(2.3);
     expect(cadence(7)).toBeLessThanOrEqual(3.4);
-    const walk = runDriver([{ s: { speed: 1.9 }, seconds: 10 }]);
+    // (Layers such as the leather scuff come on top of the steps: count the steps.)
+    const stepsOf = (ids: string[]) => ids.filter((id) => id.startsWith('step.'));
+    const walk = stepsOf(runDriver([{ s: { speed: 1.9 }, seconds: 10 }]));
     expect(walk.length).toBeGreaterThanOrEqual(Math.floor(cadence(1.9) * 10) - 1);
     expect(walk.length).toBeLessThanOrEqual(Math.ceil(cadence(1.9) * 10) + 1);
     expect(walk.every((id) => id === 'step.stone.walk')).toBe(true);
-    const run = runDriver([{ s: { speed: 4.4 }, seconds: 10 }]);
+    const run = stepsOf(runDriver([{ s: { speed: 4.4 }, seconds: 10 }]));
     expect(run.length).toBeGreaterThan(walk.length);
     expect(run[0]).toBe('step.stone.run');
-    const sneak = runDriver([{ s: { speed: 1.5, sneaking: true }, seconds: 4 }], 'wood' as never);
+    const sneak = stepsOf(runDriver([{ s: { speed: 1.5, sneaking: true }, seconds: 4 }], 'wood' as never));
     expect(sneak[0]).toBe('step.wood.sneak');
   });
 
@@ -167,17 +169,17 @@ describe('FootstepDriver', () => {
       { s: { speed: 0, grounded: false, verticalSpeed: -7 }, seconds: 0.6 },
       { s: { speed: 0 }, seconds: 0.5 },
     ]);
-    expect(jump[0]).toBe('step.stone.run'); // push-off
+    expect(jump[0]).toBe('jump.push'); // push-off
     expect(jump).toContain('land.stone');
-    expect(jump.filter((id) => id.startsWith('step.')).length).toBe(1);
+    expect(jump.filter((id) => id.startsWith('step.')).length).toBe(0);
   });
 
   it('puts the trailing foot down once when stopping', () => {
     const steps = runDriver([
       { s: { speed: 1.9 }, seconds: 0.8 },
       { s: { speed: 0 }, seconds: 2 },
-    ]);
-    const moving = runDriver([{ s: { speed: 1.9 }, seconds: 0.8 }]);
+    ]).filter((id) => id.startsWith('step.'));
+    const moving = runDriver([{ s: { speed: 1.9 }, seconds: 0.8 }]).filter((id) => id.startsWith('step.'));
     expect(steps.length - moving.length).toBeLessThanOrEqual(1);
   });
 });

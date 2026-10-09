@@ -3,7 +3,7 @@
  * Geometry crawl: boots the game with the geometry audit on (`?audit`, src/dev/audit/geomAudit.ts),
  * walks the player to every landmark of the city (and along the opening's route), lets the city
  * stream in, and audits the ground around each stop for stacked surfaces of different materials,
- * terrain showing through paving, paving lips standing off the terrain, dead-end flights of steps
+ * terrain showing through paving, paving lips standing off the terrain, 3-12 cm ledges between walkable surfaces, dead-end flights of steps
  * and floating or buried props. Prints a ranked report by cause (what built it) and screenshots
  * the worst examples of each kind.
  *
@@ -91,7 +91,7 @@ try {
   }
   const finds = [...uniq.values()];
   // Report: per kind, the causes ranked by affected cells (0.5 m) / count.
-  const kinds = ['stacked', 'through', 'lip', 'deadend', 'floating', 'buried'];
+  const kinds = ['stacked', 'through', 'lip', 'ledge', 'deadend', 'floating', 'buried'];
   const cause = (key) => key.replace(/:[0-9a-f-]{6,}|\b\d+(\.\d+)?\b/g, '#');
   for (const kind of kinds) {
     const list = finds.filter((f) => f.kind === kind);

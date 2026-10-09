@@ -7,6 +7,7 @@
  */
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
+import { AUTOSTEP_MAX, AUTOSTEP_MIN_WIDTH } from './traversal';
 
 export type Rapier = typeof RAPIER;
 export { RAPIER };
@@ -250,7 +251,7 @@ export class Physics {
     controller.setUp({ x: 0, y: 1, z: 0 });
     controller.setMaxSlopeClimbAngle((50 * Math.PI) / 180);
     controller.setMinSlopeSlideAngle((40 * Math.PI) / 180);
-    controller.enableAutostep(opts.maxStep ?? 0.45, 0.15, false);
+    controller.enableAutostep(opts.maxStep ?? AUTOSTEP_MAX, AUTOSTEP_MIN_WIDTH, false);
     controller.enableSnapToGround(0.45);
     controller.setSlideEnabled(true);
     controller.setApplyImpulsesToDynamicBodies(true);

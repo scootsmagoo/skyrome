@@ -35,6 +35,7 @@ import type { ShieldStats, WeaponStats } from '../rpg/types';
 import { ArenaBout, type BoutOptions } from './ArenaBout';
 import { Combatant, type Action } from './Combatant';
 import { BODY, HEIGHT, angleTo, arcFor, dist2D, dy, meleeRange, segmentCapsule, sweepCapsule } from './geometry';
+import { floorsTarget } from './knockdown';
 import { TIMING, attackLength, attackPhases, chargeFraction, clipSpeedFor, type AttackKind } from './timing';
 import './events';
 
@@ -778,7 +779,9 @@ export class CombatCore {
     if (def.active && def.status === 'active') {
       const heavy = power || a.kind === 'bash' || a.kind === 'sprint';
       const immune = !!def.action?.hyperArmor && def.inWindup(now);
-      const pr = applyPoiseDamage(def.poise, hit.poise, { heavy, immune, riposte });
+      // A heavy blow that carries nearly the victim's whole poise floors them (combat/knockdown.ts).
+      const knockdown = floorsTarget({ heavy, blocked: hit.blocked, poiseDamage: hit.poise, poiseMax: def.poise.max, braced: def.inWindup(now), boss: !!def.boss, isPlayer: def.isPlayer });
+      const pr = applyPoiseDamage(def.poise, hit.poise, { heavy, immune, riposte, knockdown });
       stagger = pr.result;
       if (pr.result === 'stagger') {
         this.stagger(def, pr.seconds, arrow ? null : att, 'stagger');
@@ -786,6 +789,12 @@ export class CombatCore {
       } else if (pr.result === 'knockdown') this.knockdown(def, arrow ? null : att);
       else if (pr.result === 'flinch') this.flinch(def, att, behind);
       else if (!hit.blocked && !def.action) def.view?.play(behind ? 'hitBack' : 'hitFront');
+      // The body rocks away from the blow (an additive spring on top of the hit clip), left or right.
+      if (hit.damage > 0 || hit.blocked) {
+        const bx = arrow ? arrow.vx : def.position.x - att.position.x;
+        const bz = arrow ? arrow.vz : def.position.z - att.position.z;
+        def.view?.impact?.(bx, bz, (arrow ? 0.4 : power ? 1 : 0.65) * (hit.blocked ? 0.35 : 1) * (stagger === 'knockdown' ? 0.5 : 1));
+      }
       // A blow that lands shoves its target back a little (more for a power blow): the hit reads.
       if (!arrow && !hit.blocked && player && (stagger === 'none' || stagger === 'flinch')) this.push(def, att, power ? TIMING.steps.knockPower : TIMING.steps.knockLight, power ? 0.22 : 0.14);
     }

@@ -20,14 +20,16 @@ import type { Game, System } from '../core/Game';
 import { Layer } from '../core/Physics';
 import type { SettingsData } from '../core/Settings';
 import { AmbienceDirector } from './Ambience';
-import { LOOPS, SOUNDS, bakeRate, forget, getVariants, isBaked, requestBake, setBaker } from './bank';
+import { LOOPS, SOUNDS, bakeRate, forget, getVariants, isBaked, requestBake, setBaker, setSampleSource } from './bank';
 import { Rand, dbToGain } from './dsp/core';
 import { REVERBS, impulseResponse, type ReverbPreset } from './dsp/reverb';
-import { FootstepDriver, type FootstepOptions, type FootstepSource } from './FootstepDriver';
+import { FootstepDriver, type FootstepOptions, type FootstepSource, type Surface } from './FootstepDriver';
 import { DEFAULT_SPATIAL, SOFT_CLIP_RANGE, airCutoff, distanceGain, distanceWetness, pickVariant, planVoice, sliderToGain, softClipCurve, type VoiceSlot } from './mix';
 import { MusicDirector } from './music/MusicDirector';
 import { musicSamples } from './music/samples';
+import { vsco } from './music/vsco';
 import { WorkerBaker } from './WorkerBaker';
+import { SampleLibrary } from './samples';
 import type { BusName, LoopDef, LoopEvent, SoundDef, SpatialSpec } from './sounds/types';
 
 declare module '../core/Settings' {
@@ -115,11 +117,15 @@ export interface AudioStats {
   loops: number;
   loopsAudible: number;
   bakedMB: number;
-  /** Music samples held (lyre plucks, percussion), MB; bounded by the store's budget. */
+  /** Music samples held (the recorded instruments, plus any synthesised fallback), MB. */
   musicMB: number;
   music: string;
   reverb: ReverbPreset;
   sampleRate: number;
+  /** Recorded sounds: how many the manifest lists, the codec that decoded, PCM not yet uploaded (MB). */
+  recorded: number;
+  sampleFormat: string;
+  samplesHeldMB: number;
 }
 
 interface Voice extends VoiceSlot {
@@ -170,8 +176,10 @@ const CULL_GAIN = 0.0008;
 const MAKEUP_DB = 7;
 /** Sounds louder than this at the listener (est. linear gain) duck the music briefly. */
 const DUCK_ABOVE = 0.4;
-/** The music bus sits +6 dB hotter than its slider so the default (0.5) is clearly audible. */
-const MUSIC_TRIM = 2;
+/** The music bus follows its slider exactly (0 dB trim): the music is a quiet bed, and its instruments carry the level. */
+const MUSIC_TRIM = 1;
+/** Bus levels while someone is speaking to the player: the world steps back so the words stand out. */
+const DIALOGUE_DUCK: Partial<Record<BusName, number>> = { music: 0.7, ambience: 0.45, sfx: 0.6 };
 
 export class AudioEngine implements System {
   readonly name = 'audio';
@@ -222,6 +230,12 @@ export class AudioEngine implements System {
   private uploadQueue = new Set<string>();
   private bufferBytes = 0;
   private baker: WorkerBaker | null = null;
+  /** The recorded sounds (public/audio/sfx), null where the browser cannot decode them. */
+  samples: SampleLibrary | null = null;
+  /** One AudioBuffer per PCM array: aliased sounds (walk and run steps) share their recordings. */
+  private shared = new WeakMap<Float32Array, AudioBuffer>();
+  /** Fader per bus while a conversation is on (see duckForDialogue). */
+  private dialogueDuck = false;
   private analyser: AnalyserNode | null = null;
   private meterBuf: Float32Array<ArrayBuffer> | null = null;
   private lastVariant = new Map<string, number>();
@@ -239,14 +253,34 @@ export class AudioEngine implements System {
     this.music.isNight = () => game.time.isNight;
     this.installUnlock();
     this.offs.push(game.settings.onChange((s) => this.applySettings(s)));
+    const talk = (on: boolean) => {
+      this.dialogueDuck = on;
+      this.applySettings(game.settings.data, 0.25);
+    };
+    this.offs.push(game.events.on('dialogue:started', () => talk(true)), game.events.on('dialogue:ended', () => talk(false)));
     // Fire-and-forget requests never bake on the main thread, except critical sounds on first use.
     this.offs.push(game.events.on('sfx', (e) => void this.play(e.id, { ...e, ifReady: !isCritical(e.id) })));
     // Start the worker now (no gesture needed) and pre-bake every one-shot in the background, so
     // everything is ready by the time the player first clicks or presses a key.
     this.baker = WorkerBaker.create();
     setBaker(this.baker);
+    this.installSamples();
     // Without a worker, sounds bake on first use instead (pre-baking would stall the main thread).
     if (this.baker) this.prewarm();
+  }
+
+  /** Recordings first (decoded off the main thread), the synthesised sounds for anything they lack. */
+  private installSamples() {
+    const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
+    if (typeof fetch !== 'function' || typeof OfflineAudioContext === 'undefined' || q?.get('samples') === '0') return;
+    const base = (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
+    this.samples = new SampleLibrary(`${base}audio/sfx/`);
+    setSampleSource(this.samples);
+    const lib = this.samples;
+    void lib.prefetch(['steps', 'combat', 'world', 'ui']).then(() => {
+      // Upload every recorded one-shot as soon as its group is in (beds wait for their loop).
+      for (const id of lib.ids()) if (SOUNDS.get(id)?.kind === 'oneshot') this.prepare(id, false);
+    });
   }
 
   /** Queue every one-shot for background baking: the commonest first. */
@@ -468,10 +502,10 @@ export class AudioEngine implements System {
     if (this.ctx && this.irCache.has(preset)) this.space(preset);
   }
 
-  private applySettings(s: SettingsData) {
+  private applySettings(s: SettingsData, tc = 0.04) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    const set = (p: AudioParam, v: number) => p.setTargetAtTime(v, t, 0.04);
+    const set = (p: AudioParam, v: number) => p.setTargetAtTime(v, t, tc);
     set(this.master.gain, this.muted ? 0 : sliderToGain(s.masterVolume));
     const vols: Record<BusName, number> = {
       music: s.musicVolume,
@@ -481,8 +515,9 @@ export class AudioEngine implements System {
       ui: s.uiVolume ?? 0.75,
     };
     for (const b of BUSES) {
-      set(this.buses[b].gain, sliderToGain(vols[b]) * (b === 'music' ? MUSIC_TRIM : 1));
-      set(this.sends[b].gain, b === 'music' ? 0 : sliderToGain(vols[b]));
+      const duck = this.dialogueDuck ? DIALOGUE_DUCK[b] ?? 1 : 1;
+      set(this.buses[b].gain, sliderToGain(vols[b]) * (b === 'music' ? MUSIC_TRIM : 1) * duck);
+      set(this.sends[b].gain, b === 'music' ? 0 : sliderToGain(vols[b]) * duck);
     }
     this.hrtf = !!s.audioHrtf;
   }
@@ -568,6 +603,8 @@ export class AudioEngine implements System {
     this.baker?.dispose();
     this.baker = null;
     setBaker(null);
+    if (this.samples) setSampleSource(null);
+    this.samples = null;
     void this.ctx?.close().catch(() => {});
     this.ctx = null;
     this.buffers.clear();
@@ -678,9 +715,12 @@ export class AudioEngine implements System {
     if (!ctx) return null;
     const rate = bakeRate(def);
     const list = vars.map((d) => {
+      const had = this.shared.get(d);
+      if (had && had.sampleRate === rate) return had;
       const b = ctx.createBuffer(1, d.length, rate);
       b.getChannelData(0).set(d);
       this.bufferBytes += d.byteLength;
+      this.shared.set(d, b);
       return b;
     });
     this.buffers.set(def.id, list);
@@ -929,10 +969,13 @@ export class AudioEngine implements System {
       loops: this.loops.size,
       loopsAudible: audible,
       bakedMB: this.bufferBytes / 1048576,
-      musicMB: musicSamples.bytes / 1048576,
+      musicMB: (musicSamples.bytes + vsco.bytes) / 1048576,
       music: this.music.state,
       reverb: this.reverbPreset,
       sampleRate: this.ctx?.sampleRate ?? 0,
+      recorded: this.samples?.ids().length ?? 0,
+      sampleFormat: this.samples?.format ?? (this.samples ? 'loading' : 'off'),
+      samplesHeldMB: (this.samples?.heldBytes() ?? 0) / 1048576,
     };
   }
 
@@ -1227,12 +1270,18 @@ export class FootstepSystem {
   private drivers = new Set<FootstepDriver>();
   /** Drivers farther than this from the listener don't play (they keep their rhythm). */
   cullDistance = 40;
+  /** The ground under (x, y, z): set by the game (terrain and what is built on it); stone until then. */
+  surfaceAt: (x: number, y: number, z: number) => Surface = () => 'stone';
 
   constructor(private readonly engine: AudioEngine) {}
 
   attach(source: FootstepSource, opts: FootstepOptions = {}): FootstepDriver & { detach(): void } {
     const engine = this.engine;
     const cull = () => this.cullDistance;
+    // Without a lookup of its own a walker reads the ground the game installed (see game/audio.ts).
+    const surfaceAt = opts.surfaceAt ?? ((x: number, y: number, z: number) => this.surfaceAt(x, y, z));
+    // Nobody hears a step beyond the cull distance: skip even the ground lookup there.
+    const near = opts.near ?? ((p: { x: number; y: number; z: number }) => engine.distanceTo(p) <= cull() + 5);
     const d = new FootstepDriver(
       source,
       (id, o) => {
@@ -1240,9 +1289,12 @@ export class FootstepSystem {
         // Never bake on the main thread for a footstep: skip it if (rarely) not ready yet.
         engine.play(id, { ...o, ifReady: true });
       },
-      opts,
+      { ...opts, surfaceAt, near: opts.spatial === false ? undefined : near },
     ) as FootstepDriver & { detach(): void };
-    d.detach = () => this.drivers.delete(d);
+    d.detach = () => {
+      this.drivers.delete(d);
+      d.release();
+    };
     this.drivers.add(d);
     return d;
   }

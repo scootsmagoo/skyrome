@@ -14,7 +14,8 @@
 import { Rand } from '../dsp/core';
 import type { DrumStroke } from '../dsp/instruments';
 import { MODES, TRANSPOSITIONS, degreeToFreq, finalsFor, foldFinal, fourthOrFifthApart, type Mode, type ModeName } from './theory';
-import { STYLES, type DrumStyle, type LyreTexture, type MelodyInstrument, type MusicState, type Style } from './styles';
+import { setPieceBlock } from './setpieces';
+import { STYLES, type DrumStyle, type LyreTexture, type MelodyInstrument, type MusicState, type SetPieceId, type Style } from './styles';
 
 export type Part = 'melody' | 'answer' | 'lyre' | 'drum' | 'cymbal' | 'drone';
 
@@ -256,6 +257,12 @@ export class Composer {
   private piece: Piece | null = null;
   private pieceCount = 0;
   private pendingSilence = false;
+  /** Blocks already decided (a set piece and the silence after it), played before anything new. */
+  private queue: Block[] = [];
+  /** Set pieces performed so far (alternates the ids, and the harp-alone / with-flute passes). */
+  private setCount = 0;
+  /** A set piece has just been queued (no second one straight after it). */
+  private justSet = false;
 
   constructor(
     readonly state: Exclude<MusicState, 'silence'>,
@@ -267,6 +274,9 @@ export class Composer {
 
   /** The next block of music (a phrase, an intro/outro, or a silence between pieces). */
   next(): Block {
+    if (this.queue.length) return this.queue.shift()!;
+    const sp = this.style.setPieces;
+    if (sp && sp.start === 1 && sp.refresh === 1) return this.setPieceCycle(sp.ids[0]);
     if (this.pendingSilence && this.style.silence) {
       this.pendingSilence = false;
       const p = this.piece!;
@@ -274,9 +284,16 @@ export class Composer {
       this.piece = null;
       return { pulses: secs / p.spp, spp: p.spp, events: [{ t: 0, part: 'drone', vel: 0 }], kind: 'silence', info: this.info(p, 'silence') };
     }
-    if (!this.piece) this.piece = this.newPiece();
+    if (!this.piece) {
+      // A new piece: now and then a set piece instead (then the silence, in the states that have one).
+      const chance = sp && !this.justSet && (this.style.silence || this.pieceCount === 0) ? sp.start : 0;
+      this.justSet = false;
+      if (sp && chance > 0 && this.rnd.chance(chance)) return this.startSetPiece(sp.ids, !!this.style.silence);
+      this.piece = this.newPiece();
+    }
     const p = this.piece;
     if (p.pos >= p.plan.length) {
+      if (sp && !this.style.silence && this.rnd.chance(sp.refresh)) return this.startSetPiece(sp.ids, false, true);
       if (this.style.silence) {
         // Piece over: next call returns silence, then a new piece.
         this.pendingSilence = true;
@@ -287,6 +304,30 @@ export class Composer {
     }
     const kind = p.plan[p.pos++];
     return this.render(p, kind);
+  }
+
+  /** Queue a set piece (and, for states with silences, the silence after it) and return its first block. */
+  private startSetPiece(ids: readonly SetPieceId[], thenSilence: boolean, refreshPiece = false): Block {
+    const id = ids[this.setCount % ids.length];
+    this.setCount++;
+    this.justSet = true;
+    const b = setPieceBlock(id, 0, 1000 + this.setCount, this.style.velCap);
+    if (thenSilence) this.queue.push(this.silenceAfter(b));
+    if (refreshPiece && this.piece) this.refresh(this.piece);
+    return b;
+  }
+
+  private silenceAfter(b: Block): Block {
+    const secs = this.rnd.range(this.style.silence![0], this.style.silence![1]);
+    return { pulses: secs / b.spp, spp: b.spp, events: [{ t: 0, part: 'drone', vel: 0 }], kind: 'silence', info: { ...b.info, phrase: 'silence' } };
+  }
+
+  /** A set-piece state: the tune alone, the tune with the flute, a long silence, and again. */
+  private setPieceCycle(id: SetPieceId): Block {
+    const n = this.pieceCount++;
+    const phase = n % 3;
+    if (phase === 2) return this.silenceAfter(setPieceBlock(id, 0, n, this.style.velCap));
+    return setPieceBlock(id, phase, n, this.style.velCap);
   }
 
   private info(p: Piece, phrase: string): BlockInfo {
@@ -420,7 +461,10 @@ export class Composer {
     if (kind === 'outro' && s.drone) ev.push({ t: pulses - 0.01, part: 'drone', vel: 0 });
 
     ev.sort((a, b) => a.t - b.t);
-    for (const e of ev) e.t = Math.max(0, e.t);
+    for (const e of ev) {
+      e.t = Math.max(0, e.t);
+      e.vel = Math.min(e.vel, s.velCap);
+    }
     return { pulses, spp: p.spp, events: ev, kind: kind === 'A' || kind === 'A2' || kind === 'A3' || kind === 'B' ? 'phrase' : kind === 'rest' ? 'rest' : kind, cadence, info: this.info(p, kind) };
   }
 
@@ -452,18 +496,19 @@ export class Composer {
         }
         case 'arp': {
           const shape = rnd.pick([[0, 4, 7, 4], [0, 7, 4, 7], [0, 4, 9, 7], [0, 3, 7, 3]]);
-          const step = m === 6 ? 1 : 0.5;
+          const step = m === 6 || s.energy < 0.5 ? 1 : 0.5;
           for (let k = 0, t = 0; t < m - 1e-6; k++, t += step) pl(t0 + t, r + shape[k % shape.length], k % 2 ? 0.32 : 0.45, step * 2);
           break;
         }
         case 'strum': {
-          const hits = m === 6 ? [0, 3] : m === 3 ? [0, 2] : [0, 1.5, 3];
+          const hits = m === 6 ? [0, 3] : m === 3 ? [0, 2] : s.state === 'combat' ? [0, 2] : [0, 1.5, 3];
           for (const h of hits) [0, 4, 7].forEach((d, i) => pl(t0 + h + i * (0.018 / p.spp), r + d, h === 0 ? 0.55 : 0.4, m === 6 ? 2.5 : 1.2, 0.75));
           break;
         }
         case 'ostinato': {
           const fig = rnd.chance(0.7) ? [0, 1, 0, -1, 0, 1, 0, -2] : [0, 0, 1, 0, 0, 0, 1, -1];
-          for (let k = 0; k < m * 2; k++) pl(t0 + k * 0.5, fig[k % fig.length], k % 4 === 0 ? 0.5 : 0.32, 0.45, 0.35);
+          // One string a beat (the ostinato used to run in eighths: far too busy for a harp).
+          for (let k = 0; k < m; k++) pl(t0 + k, fig[(k * 2) % fig.length], k % 4 === 0 ? 0.5 : 0.32, 0.9, 0.35);
           break;
         }
         case 'drone':
@@ -547,7 +592,7 @@ export class Composer {
           if (rnd.chance(0.3)) ev.push({ t: t0 + (m === 6 ? 3 : 2), part: 'cymbal', cymbal: 'choke', vel: 0.3 });
           break;
         case 'processional':
-          d(t0, 'doum', 0.45);
+          if (b % 2 === 0) d(t0, 'doum', 0.45);
           if (b % 4 === 3) d(t0 + 2, 'doum', 0.3);
           break;
       }

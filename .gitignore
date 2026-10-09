@@ -1,4 +1,4 @@
-node_modules/
+node_modules
 dist/
 .DS_Store
 *.log
@@ -8,3 +8,4 @@ playwright-report/
 .vite/
 .claude/
 .cache/
+__pycache__/

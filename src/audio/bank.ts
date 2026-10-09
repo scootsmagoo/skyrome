@@ -8,27 +8,25 @@
  * result into AudioBuffers and then `forget`s the PCM here, so audio is held once.
  */
 import { Rand, fadeEdges, normalizeLoudness, normalizePeak, normalizeRms, peakOf, removeDc, trimTail } from './dsp/core';
+import { BED_RMS, ONESHOT_LOUDNESS, ONESHOT_PEAK } from './levels';
+import type { SampleSource } from './samples';
 import { ambienceLoops, ambienceSounds } from './sounds/ambience';
 import { combatSounds } from './sounds/combat';
 import { foleySounds } from './sounds/foley';
 import { footstepSounds, landingSounds } from './sounds/footsteps';
+import { gearSounds } from './sounds/gear';
 import type { LoopDef, SoundDef } from './sounds/types';
 import type { SampleSpec } from './music/sampleSpec';
 import { uiSounds } from './sounds/ui';
 import { vocalSounds } from './sounds/vocal';
 
+export { BED_RMS, ONESHOT_LOUDNESS, ONESHOT_PEAK };
 export const DEFAULT_BAKE_RATE = 32000;
-/** RMS that beds are normalized to before their mix gain. */
-export const BED_RMS = 0.16;
-/** Short-term (50 ms) RMS that one-shots are normalized to before their mix gain (≈ -14 dBFS). */
-export const ONESHOT_LOUDNESS = 0.2;
-/** Highest peak a baked one-shot may have. */
-export const ONESHOT_PEAK = 0.95;
 
 export const SOUNDS = new Map<string, SoundDef>();
 export const LOOPS = new Map<string, LoopDef>();
 
-for (const d of [...footstepSounds, ...landingSounds, ...combatSounds, ...vocalSounds, ...foleySounds, ...uiSounds, ...ambienceSounds]) {
+for (const d of [...footstepSounds, ...landingSounds, ...gearSounds, ...combatSounds, ...vocalSounds, ...foleySounds, ...uiSounds, ...ambienceSounds]) {
   if (SOUNDS.has(d.id)) throw new Error(`[audio] duplicate sound id ${d.id}`);
   SOUNDS.set(d.id, d);
 }
@@ -37,8 +35,23 @@ for (const l of ambienceLoops) {
   LOOPS.set(l.id, l);
 }
 
+/**
+ * Recorded sounds (see samples.ts). When installed, a sound the manifest has comes from its
+ * recording; everything else, and any recording that fails to load, is synthesised below.
+ */
+let sampleSource: SampleSource | null = null;
+
+export function setSampleSource(s: SampleSource | null) {
+  sampleSource = s;
+}
+
+export function currentSampleSource(): SampleSource | null {
+  return sampleSource;
+}
+
+/** Sample rate of a sound's PCM: the recording's if it loaded, else the synthesis rate. */
 export function bakeRate(def: SoundDef): number {
-  return def.rate ?? DEFAULT_BAKE_RATE;
+  return sampleSource?.rateOf(def.id) ?? def.rate ?? DEFAULT_BAKE_RATE;
 }
 
 const cache = new Map<string, Float32Array[]>();
@@ -47,7 +60,7 @@ export const bakeTimes = new Map<string, number>();
 
 /** Bake one variant (uncached). Applies the bank's level conventions. */
 export function bakeVariant(def: SoundDef, variant: number): Float32Array {
-  const rate = bakeRate(def);
+  const rate = def.rate ?? DEFAULT_BAKE_RATE;
   const rnd = new Rand(`${def.id}#${variant}`);
   let buf = def.bake({ rate, rnd, variant });
   let bad = 0;
@@ -85,6 +98,9 @@ export function getVariants(id: string): Float32Array[] | null {
   if (hit) return hit;
   const def = SOUNDS.get(id);
   if (!def) return null;
+  // A recorded sound that is still loading must not be stood in for by the synthesised one (the
+  // engine would keep the stand-in for good): the caller plays nothing yet.
+  if (sampleSource?.pending(id)) return null;
   const t0 = now();
   const list: Float32Array[] = [];
   for (let v = 0; v < def.variants; v++) list.push(bakeVariant(def, v));
@@ -113,6 +129,7 @@ export function clearBank() {
 /** Release one sound's PCM (it re-bakes deterministically if anyone asks again). */
 export function forget(id: string) {
   cache.delete(id);
+  sampleSource?.release?.(id);
 }
 
 /** An off-main-thread baker (the engine installs a Web Worker one). */
@@ -150,13 +167,29 @@ export function requestBake(id: string, urgent = true): Promise<Float32Array[] |
     if (urgent) baker?.promote?.(id);
     return inFlight;
   }
-  const job: Promise<Float32Array[] | null> = (baker
-    ? baker.bake(id, urgent).then((r) => {
-        bakeTimes.set(id, r.ms);
-        return r.variants;
-      })
-    : new Promise<Float32Array[] | null>((res) => setTimeout(() => res(getVariants(id)), 0))
-  )
+  const synth = (): Promise<Float32Array[] | null> =>
+    baker
+      ? baker.bake(id, urgent).then((r) => {
+          bakeTimes.set(id, r.ms);
+          return r.variants;
+        })
+      : new Promise<Float32Array[] | null>((res) => setTimeout(() => res(getVariants(id)), 0));
+  // A recording first (fetched and decoded off the main thread); the synthesis if there is none.
+  const recorded = (): Promise<Float32Array[] | null> => {
+    const src = sampleSource;
+    if (!src) return synth();
+    const t0 = now();
+    return src.ready
+      .then(() => (src.wants(id) ? src.load(id) : null))
+      .then((list) => {
+        if (list) {
+          bakeTimes.set(id, now() - t0);
+          return list;
+        }
+        return synth();
+      });
+  };
+  const job: Promise<Float32Array[] | null> = recorded()
     // A broken worker falls back to baking here, but only for urgent requests (a failed background
     // pre-bake must not turn into a burst of main-thread bakes); a disposed one just gives up.
     .catch((e: Error) => (e?.name === 'BakeCancelled' || !urgent ? null : getVariants(id)))
