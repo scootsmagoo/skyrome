@@ -33,7 +33,7 @@ export { UV_METERS, MATERIAL_RECIPES } from './textures/catalog';
 const cache = new Map<MaterialId, THREE.Material>();
 const pending = new Set<Promise<unknown>>();
 const hasDom = typeof document !== 'undefined' && typeof Image !== 'undefined';
-let anisotropy = 8;
+let anisotropy = 16;
 
 export function getMaterial(id: MaterialId): THREE.Material {
   let m = cache.get(id);
@@ -59,7 +59,7 @@ export async function whenTexturesLoaded(): Promise<void> {
   while (pending.size) await Promise.allSettled([...pending]);
 }
 
-/** Anisotropic filtering for textures created from now on (default 8; Three clamps to the GPU max). */
+/** Anisotropic filtering for textures created from now on (default 16; Three clamps to the GPU max). */
 export function setTextureAnisotropy(value: number) {
   anisotropy = value;
 }
@@ -89,7 +89,20 @@ function createMaterial(id: MaterialId): THREE.Material {
   if (!hasDom) return m;
   if (recipe.set) applyPhotoSet(m, id, recipe, recipe.set);
   else if (recipe.proc) applyProcedural(m, id, recipe);
-  applyShaderPatch(m, { macro: recipe.macro, detile: recipe.detile, contrast: recipe.contrast, weather: recipe.weather, mean: recipe.set ? TEXTURE_STATS[recipe.set]?.albedo : undefined });
+  const hasNormal = !!recipe.set || !!m.normalMap;
+  const metal = (base.metalness ?? 0) > 0.3;
+  applyShaderPatch(m, {
+    macro: recipe.macro,
+    detile: recipe.detile,
+    contrast: recipe.contrast,
+    weather: recipe.weather,
+    mean: recipe.set ? TEXTURE_STATS[recipe.set]?.albedo : undefined,
+    detail: hasNormal && !metal ? recipe.detail ?? 0.9 : 0,
+    mottle: recipe.proc === 'foliage' || metal ? 0 : recipe.mottle ?? (recipe.macro ?? 0) * 1.4,
+    wear: recipe.wear,
+    grain: recipe.grain,
+    flake: recipe.flake,
+  });
   return m;
 }
 

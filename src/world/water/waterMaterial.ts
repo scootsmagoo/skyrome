@@ -142,6 +142,11 @@ float wHash( vec2 p ) {
   p3 += dot( p3, p3.yzx + 33.33 );
   return fract( ( p3.x + p3.y ) * p3.z );
 }
+float wNoise( vec2 p ) {
+  vec2 i = floor( p ), f = fract( p );
+  vec2 u = f * f * ( 3.0 - 2.0 * f );
+  return mix( mix( wHash( i ), wHash( i + vec2( 1.0, 0.0 ) ), u.x ), mix( wHash( i + vec2( 0.0, 1.0 ) ), wHash( i + vec2( 1.0, 1.0 ) ), u.x ), u.y );
+}
 `;
 
 const FRAGMENT_MAP = /* glsl */ `
@@ -168,6 +173,19 @@ const FRAGMENT_MAP = /* glsl */ `
   float wEdge = 1.0 - smoothstep( 0.0, 0.16, wDepth );
   float wFoam = wEdge * smoothstep( 0.35, 0.75, wHash( floor( wP * 3.0 ) ) * 0.5 + 0.5 * ( wFlowN.x * 0.5 + 0.5 ) );
   wCol = mix( wCol, uSilt, wFoam * 0.6 );
+  {
+    // Silt eddies and streaks drawn out along the current (the river is not one flat tan sheet),
+    // and a broken, drifting scum band along the banks. All fade out with distance.
+    float wFar = 1.0 - smoothstep( 40.0, 380.0, wDist );
+    vec2 wDir = wFlow / max( length( wFlow ), 1e-3 );
+    vec2 wSt = vec2( dot( wP, wDir ) - uTime * 0.6 * length( wFlow ), dot( wP, vec2( - wDir.y, wDir.x ) ) );
+    float wStreak = wNoise( vec2( wSt.x * 0.05, wSt.y * 0.7 ) ) * 0.65 + wNoise( vec2( wSt.x * 0.13 + 4.0, wSt.y * 1.9 ) ) * 0.35;
+    float wEddy = wNoise( wP * 0.021 + vec2( uTime * 0.004, 0.0 ) ) * 0.6 + wNoise( wP * 0.067 + 11.0 ) * 0.4;
+    wCol *= 1.0 + wFar * ( 0.5 * ( wStreak - 0.5 ) );
+    wCol = mix( wCol, wCol * vec3( 1.16, 1.05, 0.84 ), wFar * smoothstep( 0.35, 0.75, wEddy ) * 0.7 );
+    float wBand = ( 1.0 - smoothstep( 0.12, 0.8, wDepth ) ) * smoothstep( 0.5, 0.78, wNoise( wP * 2.4 - wFlow * uTime * 0.25 ) * 0.7 + wNoise( wP * 6.1 + 5.0 ) * 0.3 );
+    wCol = mix( wCol, uSilt * 1.1, wBand * 0.55 * wFar );
+  }
   // Clear spring water (Agrippa's canal): dark and green over its masonry bed.
   wCol = mix( wCol, vec3( 0.075, 0.1, 0.07 ), vClear * 0.8 );
   diffuseColor.rgb = wCol;
@@ -207,7 +225,7 @@ export function createWaterMaterial(u: WaterUniforms): THREE.MeshStandardMateria
       .replace('#include <normal_fragment_maps>', 'normal = normalize( ( viewMatrix * vec4( wNormal, 0.0 ) ).xyz );')
       .replace('#include <lights_fragment_end>', FRAGMENT_GLINT);
   };
-  m.customProgramCacheKey = () => 'skyrome-water-v3';
+  m.customProgramCacheKey = () => 'skyrome-water-v4';
   return m;
 }
 

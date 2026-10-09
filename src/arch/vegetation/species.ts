@@ -14,7 +14,7 @@
 import * as THREE from 'three';
 import { Rng } from '../../core/Rng';
 import { MATERIAL_BASE, type MaterialId } from '../../gfx/materialIds';
-import { clump, mergeParts, noise3, taperedTube, tintGeometry, twoSided } from './geom';
+import { clump, leafCards, mergeParts, noise3, taperedTube, tintGeometry, twoSided, type CardSpec } from './geom';
 
 export const TREE_SPECIES = ['umbrella_pine', 'cypress', 'plane', 'olive', 'laurel', 'fig', 'oleander', 'reeds'] as const;
 export type TreeSpecies = (typeof TREE_SPECIES)[number];
@@ -34,7 +34,14 @@ export interface TreePart {
    * with one neutral white material. Far LODs use this to merge bark and foliage into one draw.
    */
   baked?: boolean;
+  /**
+   * Leaf cards (alpha-cut quads with a procedural leaf pattern in the shader): the pattern kind.
+   * Cast no shadow (the clumps under them do), and are dropped on the Low tier.
+   */
+  cards?: LeafKind;
 }
+
+export type LeafKind = 'broad' | 'olive' | 'needle';
 
 export interface TreeModel {
   species: TreeSpecies;
@@ -109,22 +116,28 @@ function umbrellaPine(r: Rng): Omit<TreeModel, 'species' | 'variant'> {
   // Canopy: a broad, nearly flat-topped mat of flattened clumps (gently domed), with a ragged
   // rim; the underside is flat and in deep shade.
   const clumps: THREE.BufferGeometry[] = [];
+  const cardSpecs: CardSpec[] = [];
   const nc = Math.round(R * R * 0.75);
   for (let i = 0; i < nc; i++) {
     const rr = R * Math.sqrt(r.next()) * 0.9, a = r.range(0, Math.PI * 2);
     const rn = rr / R;
     const y = yb + cd * (0.5 + 0.16 * (1 - rn * rn)) + r.range(-0.12, 0.12);
     const s = r.range(1.15, 1.75) * (R / 6.2);
-    clumps.push(clump({ center: V(cc.x + Math.cos(a) * rr, y, cc.z + Math.sin(a) * rr), radius: V(s, r.range(0.8, 1.1) * cd * 0.26, s * r.range(0.85, 1.15)), flatBottom: -0.3, seed: r.int(0, 9999), rough: 0.32 }, cc, crad));
+    const spec = { center: V(cc.x + Math.cos(a) * rr, y, cc.z + Math.sin(a) * rr), radius: V(s, r.range(0.8, 1.1) * cd * 0.26, s * r.range(0.85, 1.15)) };
+    clumps.push(clump({ ...spec, radius: spec.radius.clone().multiplyScalar(0.92), flatBottom: -0.3, seed: r.int(0, 9999), rough: 0.32 }, cc, crad));
+    cardSpecs.push(spec);
   }
   const ring = r.int(12, 16);
   for (let i = 0; i < ring; i++) {
     const a = (i / ring) * Math.PI * 2 + r.range(-0.12, 0.12);
     const rr = R * r.range(0.86, 1.0);
     const s = r.range(1.0, 1.5) * (R / 6.2);
-    clumps.push(clump({ center: V(cc.x + Math.cos(a) * rr, yb + cd * r.range(0.36, 0.5), cc.z + Math.sin(a) * rr), radius: V(s, cd * 0.22, s), flatBottom: -0.25, seed: r.int(0, 9999), rough: 0.35 }, cc, crad));
+    const spec = { center: V(cc.x + Math.cos(a) * rr, yb + cd * r.range(0.36, 0.5), cc.z + Math.sin(a) * rr), radius: V(s, cd * 0.22, s) };
+    clumps.push(clump({ ...spec, radius: spec.radius.clone().multiplyScalar(0.92), flatBottom: -0.25, seed: r.int(0, 9999), rough: 0.35 }, cc, crad));
+    cardSpecs.push(spec);
   }
   const foliage = mergeParts(clumps);
+  const needles = leafCards(cardSpecs, cc, crad, { density: 1.7, size: [0.95, 1.45], reach: [0.8, 1.06], upBias: 0.8 }, r.int(1, 9999));
   // Far LOD: a domed lens (about 0.3× as deep as it is wide) with a flattened, shaded underside —
   // a central dome ringed by five lobes, so the rim is scalloped like the real crown rather than a
   // ruled ellipse — on a trunk that keeps its full girth up to the split. Bark and foliage colours
@@ -137,7 +150,7 @@ function umbrellaPine(r: Rng): Omit<TreeModel, 'species' | 'variant'> {
   const farCanopy = bakeAlbedo(mergeParts(lobes), 'foliage_pine');
   const farTrunk = bakeAlbedo(taperedTube([V(0, -0.3, 0), split, cc.clone().setY(yb + cd * 0.3)], [r0 * 1.1, r0, r0 * 0.7], 5, () => 0.85), 'bark', [1.25, 1.1, 1.0]);
   return {
-    near: [{ geometry: barkGeo, material: 'bark', wind: 'tree' }, { geometry: foliage, material: 'foliage_pine', wind: 'tree' }],
+    near: [{ geometry: barkGeo, material: 'bark', wind: 'tree' }, { geometry: foliage, material: 'foliage_pine', wind: 'tree' }, { geometry: needles, material: 'foliage_pine', wind: 'tree', cards: 'needle' }],
     far: [{ geometry: mergeParts([farCanopy, farTrunk]), material: 'foliage_pine', wind: 'tree', baked: true }],
     height: H,
     trunkRadius: r0,
@@ -208,8 +221,24 @@ function cypressModel(r: Rng): Omit<TreeModel, 'species' | 'variant'> {
   const far = cypress(new Rng(seed), 'far');
   const H = (near.userData as { height: number }).height;
   const trunk = taperedTube([V(0, -0.3, 0), V(0, 1.0, 0)], [0.16, 0.13], 6, () => 0.6);
+  // Scale-leaf sprays over the flame: spheres stacked up the cone, cards on their surfaces.
+  const rmax = (near.userData as { r: number }).r;
+  const specs: CardSpec[] = [];
+  for (let i = 0; i < 16; i++) {
+    const t = (i + 0.5) / 16;
+    const prof = (0.62 + 0.38 * THREE.MathUtils.smoothstep(t, 0, 0.22)) * (t < 0.25 ? 1 : Math.pow((1 - t) / 0.75, 0.75));
+    const rr = rmax * prof * 0.95;
+    if (rr < 0.06) continue;
+    specs.push({ center: V(0, 0.5 + t * (H - 0.5), 0), radius: V(rr, (H / 16) * 0.8, rr) });
+  }
+  const crownC = V(0, H * 0.5, 0), crownR = V(rmax, H * 0.5, rmax);
+  const cards = leafCards(specs, crownC, crownR, { density: 4.5, size: [0.45, 0.7], reach: [0.82, 1.0] }, seed);
   return {
-    near: [{ geometry: mergeParts([near]), material: 'foliage_cypress', wind: 'tree' }, { geometry: mergeParts([trunk]), material: 'bark', wind: 'tree' }],
+    near: [
+      { geometry: mergeParts([near]), material: 'foliage_cypress', wind: 'tree' },
+      { geometry: mergeParts([trunk]), material: 'bark', wind: 'tree' },
+      { geometry: cards, material: 'foliage_cypress', wind: 'tree', cards: 'needle' },
+    ],
     far: [{ geometry: mergeParts([bakeAlbedo(far, 'foliage_cypress')]), material: 'foliage_cypress', wind: 'tree', baked: true }],
     height: H,
     trunkRadius: 0.2,
@@ -236,6 +265,8 @@ interface BroadSpec {
   tint: [number, number, number];
   twinTrunk?: boolean;
   gnarl?: number;
+  /** Leaf cards over the crown: the pattern, card width range and cards per m² of clump surface. */
+  leaf: { kind: LeafKind; size: [number, number]; density: number };
 }
 
 function broadleaf(r: Rng, s: BroadSpec): Omit<TreeModel, 'species' | 'variant'> {
@@ -255,18 +286,26 @@ function broadleaf(r: Rng, s: BroadSpec): Omit<TreeModel, 'species' | 'variant'>
     parts.push(tintGeometry(taperedTube(bend(split, end, 3, V(r.range(-1, 1) * g * 4, 0.3, r.range(-1, 1) * g * 4)), radii(3, s.trunkR * 0.55, 0.06), 5, () => 0.75), ...s.barkTint));
   }
   const clumps: THREE.BufferGeometry[] = [];
+  const cardSpecs: CardSpec[] = [];
   for (let i = 0; i < s.clumps; i++) {
     const dir = V(r.gauss(), r.gauss() * 0.8 + 0.15, r.gauss()).normalize();
     const dist = s.shell + (1 - s.shell) * Math.cbrt(r.next());
     const c = s.crownC.clone().add(dir.multiply(s.crownR).multiplyScalar(dist * 0.78));
     const cr = r.range(s.clumpR[0], s.clumpR[1]);
-    clumps.push(clump({ center: c, radius: V(cr, cr * r.range(0.75, 0.95), cr), seed: r.int(0, 9999), rough: 0.3 }, s.crownC, s.crownR, s.tint));
+    const rad = V(cr, cr * r.range(0.75, 0.95), cr);
+    clumps.push(clump({ center: c, radius: rad.clone().multiplyScalar(0.9), seed: r.int(0, 9999), rough: 0.3 }, s.crownC, s.crownR, s.tint));
+    cardSpecs.push({ center: c, radius: rad });
   }
+  const cards = leafCards(cardSpecs, s.crownC, s.crownR, { density: s.leaf.density, size: s.leaf.size, tint: s.tint }, r.int(1, 9999));
   // Far LOD: one lumpy crown on a trunk that keeps its girth to the split, colours baked (see pine).
   const far = bakeAlbedo(clump({ center: s.crownC, radius: s.crownR.clone().multiplyScalar(0.92), detail: 2, rough: 0.22, seed: 5 }, s.crownC, s.crownR, s.tint), s.foliage);
   const farTrunk = bakeAlbedo(taperedTube([V(0, -0.3, 0), split, s.crownC], [s.trunkR * 1.1, s.trunkR, s.trunkR * 0.6], 5, () => 0.8), 'bark', s.barkTint);
   return {
-    near: [{ geometry: mergeParts(parts), material: 'bark', wind: 'tree' }, { geometry: mergeParts(clumps), material: s.foliage, wind: 'tree' }],
+    near: [
+      { geometry: mergeParts(parts), material: 'bark', wind: 'tree' },
+      { geometry: mergeParts(clumps), material: s.foliage, wind: 'tree' },
+      { geometry: cards, material: s.foliage, wind: 'tree', cards: s.leaf.kind },
+    ],
     far: [{ geometry: mergeParts([far, farTrunk]), material: s.foliage, wind: 'tree', baked: true }],
     height: s.H,
     trunkRadius: s.trunkR,
@@ -280,6 +319,7 @@ function plane(r: Rng) {
     H, trunkR: r.range(0.42, 0.55), splitH: r.range(3.2, 4.8), limbs: r.int(3, 4),
     crownC: V(r.range(-0.6, 0.6), H * 0.64, r.range(-0.6, 0.6)), crownR: V(H * 0.36, H * 0.3, H * 0.36),
     clumps: r.int(24, 32), clumpR: [1.8, 2.8], shell: 0.45, barkTint: [1.45, 1.42, 1.25], foliage: 'foliage_broad', tint: [1, 1.02, 0.95],
+    leaf: { kind: 'broad', size: [0.9, 1.3], density: 1.5 },
   });
 }
 
@@ -289,6 +329,7 @@ function olive(r: Rng) {
     H, trunkR: r.range(0.22, 0.32), splitH: r.range(1.1, 1.7), limbs: r.int(4, 5),
     crownC: V(r.range(-0.4, 0.4), H * 0.62, r.range(-0.4, 0.4)), crownR: V(H * 0.5, H * 0.34, H * 0.5),
     clumps: r.int(14, 20), clumpR: [0.9, 1.4], shell: 0.55, barkTint: [1.05, 1.0, 0.95], foliage: 'foliage_olive', tint: [1.05, 1.08, 1.05], twinTrunk: true, gnarl: 0.18,
+    leaf: { kind: 'olive', size: [0.55, 0.85], density: 2.0 },
   });
 }
 
@@ -298,6 +339,7 @@ function laurel(r: Rng) {
     H, trunkR: r.range(0.15, 0.22), splitH: r.range(1.0, 1.6), limbs: 3,
     crownC: V(0, H * 0.55, 0), crownR: V(H * 0.28, H * 0.45, H * 0.28),
     clumps: r.int(16, 22), clumpR: [0.9, 1.3], shell: 0.2, barkTint: [0.9, 0.85, 0.8], foliage: 'foliage_broad', tint: [0.72, 0.78, 0.7],
+    leaf: { kind: 'broad', size: [0.6, 0.9], density: 1.8 },
   });
 }
 
@@ -307,6 +349,7 @@ function fig(r: Rng) {
     H, trunkR: r.range(0.18, 0.25), splitH: r.range(0.7, 1.1), limbs: 4,
     crownC: V(0, H * 0.6, 0), crownR: V(H * 0.55, H * 0.36, H * 0.55),
     clumps: r.int(14, 18), clumpR: [1.0, 1.5], shell: 0.4, barkTint: [1.3, 1.3, 1.25], foliage: 'foliage_broad', tint: [1.0, 1.08, 0.9], twinTrunk: true, gnarl: 0.08,
+    leaf: { kind: 'broad', size: [0.8, 1.15], density: 1.6 },
   });
 }
 
