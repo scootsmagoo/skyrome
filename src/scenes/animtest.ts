@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import { Actor } from '../actors/Actor';
 import { createHumanoid, type HumanoidAvatar } from '../actors/avatar/HumanoidAvatar';
 import { warmUpAnimations } from '../actors/avatar/anim/library';
-import { applyRealBody, loadRealBodies, updateRealBodies } from '../actors/avatar/real/RealBody';
+import { loadRealBodies } from '../actors/avatar/real/RealBody';
 import { avatarLod } from '../actors/avatar/lod';
 import { isAvatarRole, randomAppearance, type AvatarRole } from '../actors/avatar/variants';
 import { Layer } from '../core/Physics';
@@ -71,12 +71,9 @@ const scene: SceneDef = {
     const avatar: HumanoidAvatar = createHumanoid(randomAppearance(rng.fork('walker'), isAvatarRole(role) ? role : 'legionary'));
     const walker = new Actor(game, { id: 'walker', position: { x: -9, y: 0.05, z: 0 }, heading: Math.PI / 2, layer: Layer.Npc, avatar });
     game.actors.add(walker);
-    // ?avatar=real: the realistic body (wave-1 prototype) on the same controller, to check feet on treads.
-    if (q.get('avatar') === 'real') {
-      await loadRealBodies(game.renderer);
-      applyRealBody(avatar);
-      game.addSystem({ name: 'realBodies', priority: 95, lateUpdate: () => updateRealBodies(game.camera) });
-    }
+    // The realistic body is the default (?avatar=classic keeps the procedural one): wait for its meshes so
+    // the walker upgrades before the run starts.
+    if (q.get('avatar') !== 'classic') await loadRealBodies(game.renderer);
 
     const api = {
       walker,
