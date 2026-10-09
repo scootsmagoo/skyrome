@@ -657,7 +657,7 @@ export function buildLowerGarments(ctx: Ctx, L: Levels, prof: TorsoProfile) {
  * hanging across the front from the right hip to the left forearm) and the lacinia (the end hanging
  * from the left shoulder). Togate figures hold the sinus on the bent left forearm (see poses.ts).
  */
-function buildTogaDrape(ctx: Ctx, L: Levels, prof: TorsoProfile, skirt: SkirtSurface) {
+export function buildTogaDrape(ctx: Ctx, L: Levels, prof: TorsoProfile, skirt: SkirtSurface) {
   const o = ctx.outfit;
   const t = o.toga!;
   const s = L.s;

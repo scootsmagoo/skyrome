@@ -108,6 +108,8 @@ export class TorsoProfile {
   private czc: Curve;
   private cn: Curve;
   readonly ys: number[];
+  /** Replaces the superellipse surface (the realistic bodies sample their own mesh: real/garments). */
+  sample?: (y: number, theta: number) => [number, number];
   constructor(readonly ctx: Ctx, readonly L: Levels) {
     const { s } = L;
     const g = ctx.rig.g;
@@ -149,6 +151,7 @@ export class TorsoProfile {
 
 /** Surface point of the bare torso (before garments) at height y and angle theta (0 = +X, π/2 = front). */
 export function torsoPoint(ctx: Ctx, prof: TorsoProfile, L: Levels, y: number, theta: number): [number, number] {
+  if (prof.sample) return prof.sample(y, theta);
   const sec = prof.at(y);
   let [x, z] = superellipse(theta, sec.a, sec.bf, sec.bb, sec.n);
   const s = L.s;

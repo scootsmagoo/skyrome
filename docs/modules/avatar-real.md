@@ -133,3 +133,16 @@ the top) into the atlas; anything added to the GLB must keep the `<sex>_lodN` na
 - Finger bones (the rig has 2 per hand); toe bone split.
 - More bodies: HBM has stylized and other presets; an older and a child body (separate sculpts) instead of scaling.
 - Age and build as real blend shapes (the heavy and slight builds only scale girth today).
+
+## Shell garments (C2d, `real/garments/`)
+
+`buildShells(ctx)` (`shells.ts`) returns one skinned mesh (position, normal, color, surf, skinIndex, skinWeight) plus a
+`hide` mask per body vertex. `profile.ts` turns the morphed body into a polar silhouette table (radius per height slab and
+direction; core = torso and legs, wide = plus upper arms for cloaks). `skirt.ts` is the procedural skirt loft refitted to
+that table (tunic hems, stola with under-hem, toga skirt, pteruges, apron, palla wrap). The toga drape, belt and the cloaks
+(paenula, sagum, lacerna) run the original builders on a `TorsoProfile` whose `sample` hook (`body.ts`) answers from the real
+mesh; cloak vertices are pushed to at least 8 mm outside the silhouette. `hide` covers only the pelvis (hips/spine weights
+only): limbs can swing out of cloth in a stride and a hidden limb would vanish. `attach.ts` is the reference for adding the
+mesh to an avatar and dropping the covered triangles; the test bed does it with `?scene=avatars&avatar=real&shells=1`
+(`__avatars.dress(i, role, seed, patch)`). The belt is included in the shells; the integration may drop it if the painted
+garments draw their own.

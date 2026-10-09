@@ -18,6 +18,9 @@
  *                                every second slot (the others stay procedural, for comparison)
  *   &bodies=1                    with avatar=real: the lineup becomes bare men and women of several
  *                                heights and builds (slots alternate sex; heights 1.50..1.95 m)
+ *   &shells=1                    with avatar=real: shell garments (skirts, toga, palla, cloaks) over the
+ *                                real bodies (src/actors/avatar/real/garments); __avatars.dress(i, role,
+ *                                seed, patch) re-dresses slot i as a real body with shells
  */
 import * as THREE from 'three';
 import { Actor, type ActionClip, type IdleLoop, type LocomotionState } from '../actors/Actor';
@@ -25,6 +28,7 @@ import { createHumanoid, type HumanoidAvatar } from '../actors/avatar/HumanoidAv
 import { AVATAR_ROLES, isAvatarRole, randomAppearance, type AvatarRole } from '../actors/avatar/variants';
 import { avatarLod } from '../actors/avatar/lod';
 import { applyRealBody, loadRealBodies, updateRealBodies, type RealBody } from '../actors/avatar/real/RealBody';
+import { attachShells } from '../actors/avatar/real/garments/attach';
 import type { Appearance, Build } from '../actors/appearance';
 import { warmUpAnimations } from '../actors/avatar/anim/library';
 import type { Game } from '../core/Game';
@@ -440,6 +444,15 @@ const scene: SceneDef = {
     // Realistic bodies (wave-1 prototype): swap the body mesh of lineup slots, keep the controller.
     const realMode = q.get('avatar');
     const reals: (RealBody | null)[] = slots.map(() => null);
+    /** Shell garments over a real body: build them from its LOD 0 and hide the covered triangles. */
+    const shell = (r: RealBody) => {
+      const geo = (r as unknown as { geo: { lods: THREE.BufferGeometry[] } }).geo.lods[0];
+      const at = attachShells(r.avatar, geo);
+      if (!at) return null;
+      (r as unknown as { geo: { lods: THREE.BufferGeometry[] } }).geo.lods[0] = at.body;
+      r.setLod(0);
+      return at;
+    };
     if (realMode === 'real' || realMode === 'mix') {
       await loadRealBodies(game.renderer);
       const builds: Build[] = ['slight', 'average', 'stocky', 'muscular', 'heavy'];
@@ -453,12 +466,27 @@ const scene: SceneDef = {
           sl.avatar.setDrawn(false);
         }
         reals[i] = applyRealBody(sl.avatar);
+        if (q.get('shells') === '1') shell(reals[i]!);
       });
       for (const c of crowd) reals.push(applyRealBody(c.avatar));
       reals.push(applyRealBody(playerAvatar));
       game.addSystem({ name: 'realBodies', priority: 95, lateUpdate: () => updateRealBodies(game.camera) });
     }
-    (window as unknown as { __avatars: unknown }).__avatars = { ...api, reals };
+    /** Dress slot i as a real body in `role` (seeded) with shell garments; `patch` edits the appearance first. */
+    const dress = async (i: number, role: AvatarRole, seed = 1, patch: Partial<Appearance> = {}) => {
+      await loadRealBodies(game.renderer);
+      const sl = slots[i];
+      const av = createHumanoid({ ...randomAppearance(new Rng(seed), role), ...patch });
+      sl.actor.setAvatar(av);
+      sl.avatar = av;
+      sl.role = role;
+      sl.script = [];
+      reals[i]?.dispose();
+      reals[i] = applyRealBody(av);
+      const at = shell(reals[i]!);
+      return `${role}:${av.appearance.sex}: shell tris ${at ? at.mesh.geometry.index!.count / 3 : 0}, hidden body tris ${at?.hidden ?? 0}`;
+    };
+    (window as unknown as { __avatars: unknown }).__avatars = { ...api, reals, dress };
   },
 };
 export default scene;
