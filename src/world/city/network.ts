@@ -49,6 +49,11 @@ export interface StreetGraph {
   /** [a, b, width] — undirected. */
   edges: [number, number, number][];
   spots: StreetSpot[];
+  /**
+   * Single-link nodes in the area that nothing could join (a road that runs into a monument, a
+   * footprint or the Servian wall, a stairway's foot): deliberate termini, with the reason.
+   */
+  termini: { node: number; reason: 'stairs' | 'road' | 'street' }[];
   /** Nearest node to a position (within `maxDist`), or −1. */
   nearest(x: number, z: number, maxDist?: number): number;
   /** Neighbours of a node: [node, width][]. */
@@ -572,6 +577,10 @@ export function buildStreetGraph(
     });
   }
   graph.spots = spots;
+  for (const n of graph.nodes) {
+    if (n.kind === 'piazza' || n.kind === 'plaza' || n.kind === 'landmark' || graph.neighbours(n.id).length !== 1 || !inArea(n.x, n.z)) continue;
+    graph.termini.push({ node: n.id, reason: n.kind === 'stairs' ? 'stairs' : n.kind === 'road' ? 'road' : 'street' });
+  }
   return graph;
 }
 
@@ -612,7 +621,7 @@ function closeDeadEnds(B: Builder, ok: (id: number, p: Vec2) => boolean, inArea:
       for (const f of frontier) for (const m of B.neighbourIds(f)) if (!own.has(m)) { own.add(m); next.push(m); }
       frontier = next;
     }
-    for (const hit of B.nearEdges(n.x, n.z, n.kind === 'road' ? maxD * 2 : maxD, own, 8)) {
+    for (const hit of B.nearEdges(n.x, n.z, n.kind === 'road' ? maxD * 4 : maxD * 2, own, 8)) {
       if (!inArea(hit.p[0], hit.p[1]) || !ok(n.id, hit.p)) continue;
       B.edge(n.id, B.split(hit.a, hit.b, hit.w, hit.p, 'junction'), Math.min(hit.w, 4));
       break;
@@ -764,6 +773,7 @@ function finalize(B: Builder): StreetGraph {
     nodes,
     edges,
     spots: [],
+    termini: [],
     neighbours: (id) => adj[id] ?? [],
     nearest(x, z, maxDist = 100) {
       let best = -1, bd = maxDist;

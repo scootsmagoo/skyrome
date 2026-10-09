@@ -59,7 +59,13 @@ describe('street graph degree-1 nodes', () => {
     console.log('DEG1 before', before.length, 'after', after.length, JSON.stringify(after.map((n) => [n.kind, Math.round(n.x), Math.round(n.z)])));
     expect(before.length).toBeGreaterThan(50);
     // What is left: roads running into a monument, the Servian wall, a stairway's foot at a podium.
-    expect(after.length).toBeLessThanOrEqual(30);
+    expect(after.length).toBeLessThanOrEqual(24);
     expect(after.length).toBeLessThan(before.length * 0.5);
+    // Reconciled count (game plan, core): 95 before, 20 after the 120 m road reach; the 20 are
+    // all named termini (earlier reports said 24/25/23 for earlier reach settings).
+    const graph = buildStreetGraph(plan, work, null, inCore);
+    const named = new Set(graph.termini.map((t) => t.node));
+    for (const n of loose(graph)) expect(named.has(n.id)).toBe(true);
+    expect(graph.termini.some((t) => t.reason === 'stairs')).toBe(true);
   });
 });
