@@ -228,7 +228,8 @@ export class HumanoidAvatar implements CombatAvatar {
     if (this.lodMode !== 'auto') return;
     // Switch beyond 36 m, back within 34 m (no flicker for someone loitering at the boundary).
     const far = this.far ? d > 34 : d > 36;
-    // The low mesh also casts the shadow from SHADOW_PROXY_FROM on (gfx/shadowLod.ts).
+    // The low mesh also casts the shadow from SHADOW_PROXY_FROM on (gfx/shadowLod.ts); it is built
+    // 2 m early so the swap never waits on a build (12 m proxy start - 2 = 10 m).
     if ((far || (this.castsShadow && d > SHADOW_PROXY_FROM - 2)) && !this.geoLow) {
       // Build the far mesh on first need, spread over frames when a crowd crosses at once.
       const now = performance.now();

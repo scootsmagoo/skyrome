@@ -203,7 +203,10 @@ export class Batch {
     // Per-geometry bounds are made on first use from the vertex arrays: make them all now.
     const box = new THREE.Box3();
     const sphere = new THREE.Sphere();
-    for (let id = 0; this.mesh.getBoundingBoxAt(id, box) !== null; id++) this.mesh.getBoundingSphereAt(id, sphere);
+    // Walk the whole id range (an inactive id returns null but later ids may be live).
+    for (let id = 0, n = (this.mesh as unknown as { _geometryCount: number })._geometryCount; id < n; id++) {
+      if (this.mesh.getBoundingBoxAt(id, box) !== null) this.mesh.getBoundingSphereAt(id, sphere);
+    }
     const free = function (this: THREE.BufferAttribute) {
       (this as unknown as { array: ArrayLike<number> | null }).array = null;
     };

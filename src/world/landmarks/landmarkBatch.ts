@@ -276,7 +276,9 @@ function followVisibility(obj: THREE.Object3D, handle: BatchHandle) {
 
 /**
  * Whether a builder fills instanced meshes in at run time (an empty InstancedMesh at build time
- * outside tree groves): such a landmark runs its own LOD and keeps its meshes.
+ * outside tree groves): such a landmark runs its own LOD and keeps its meshes. A builder that
+ * fills a non-empty set later (count > 0 at build, mutated at run time) is NOT detected: it must
+ * set userData.noBatch on that mesh (see CLAUDE.md).
  */
 export function fillsAtRuntime(root: THREE.Object3D): boolean {
   let found = false;
