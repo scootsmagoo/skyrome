@@ -253,7 +253,7 @@ export function computeLighting(inp: LightingInput, out?: Lighting): Lighting {
   const nightFill = NIGHT_FILL * night * (1 - 0.4 * overcast);
   // Night fill is blue-grey moonlit air.
   for (let i = 0; i < 3; i++) hemiSky[i] = hemiSky[i] * (1 - night) + [0.62, 0.72, 1][i] * night;
-  const hemiIntensity = 0.12 * skyIrr + 0.35 * luminance(groundRad) * Math.PI + nightFill * Math.PI;
+  const hemiIntensity = 0.07 * skyIrr + 0.35 * luminance(groundRad) * Math.PI + nightFill * Math.PI;
 
   // Milky veil of summer haze (multiple scattering the single-scattering LUT lacks).
   const hazeVeil = Math.min(0.5, Math.max(0, (w.haze - 3.5) / 25));
