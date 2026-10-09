@@ -536,7 +536,7 @@ function crest(ctx: Ctx, H: HeadFrame, path: (t: number) => THREE.Vector3, up: (
   }
 }
 
-function buildHelmet(ctx: Ctx, H: HeadFrame, kind: HelmetKind, crestColor?: string, metal?: 'iron' | 'bronze' | 'gilded') {
+export function buildHelmet(ctx: Ctx, H: HeadFrame, kind: HelmetKind, crestColor?: string, metal?: 'iron' | 'bronze' | 'gilded') {
   const hs = H.hs;
   const base = metal === 'bronze' ? BRONZE_C : metal === 'gilded' ? GOLD : IRON;
   const surf: Surf = metal === 'iron' || (!metal && (kind === 'imperial-gallic' || kind === 'provocator')) ? SURF.iron : metal === 'gilded' ? SURF.gilded : SURF.bronze;

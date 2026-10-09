@@ -16,6 +16,7 @@
  *   &seed=<n>                    variation seed
  *   &avatar=real|mix             realistic bodies (src/actors/avatar/real): all slots + player, or
  *                                every second slot (the others stay procedural, for comparison)
+ *   &heads=1                     with avatar=real: hair, beards, painted faces, helmets, veils (real/head)
  *   &bodies=1                    with avatar=real: the lineup becomes bare men and women of several
  *                                heights and builds (slots alternate sex; heights 1.50..1.95 m)
  */
@@ -458,7 +459,14 @@ const scene: SceneDef = {
       reals.push(applyRealBody(playerAvatar));
       game.addSystem({ name: 'realBodies', priority: 95, lateUpdate: () => updateRealBodies(game.camera) });
     }
-    (window as unknown as { __avatars: unknown }).__avatars = { ...api, reals };
+    // &heads=1: hair, beards, painted faces, helmets and veils (real/head) on the real bodies; __avatars.heads.rebuild(i, patch) restyles one.
+    let headDev: unknown = null;
+    if (q.get('heads') === '1' && reals.some(Boolean)) {
+      const { attachHeads } = await import('../actors/avatar/real/head/devScene');
+      const list = [...slots.map((s) => s.avatar), ...crowd.map((c) => c.avatar), playerAvatar];
+      headDev = await attachHeads(list.map((a, i) => (reals[i] ? a : null)));
+    }
+    (window as unknown as { __avatars: unknown }).__avatars = { ...api, reals, heads: headDev };
   },
 };
 export default scene;
