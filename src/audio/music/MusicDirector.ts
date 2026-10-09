@@ -20,9 +20,7 @@
  */
 import type { DrumStroke } from '../dsp/instruments';
 import { Composer, type Block, type MusicEvent } from './composer';
-import { Aulos, Cymbala, Drone, Lyre, Syrinx, Tympanum, type MusicOutput } from './instruments';
-import { percussionSpecs } from './sampleSpec';
-import { musicSamples } from './samples';
+import { Cymbala, FLUTE, Lyre, OBOE, Pad, Reed, Syrinx, Tympanum, type MusicOutput } from './instruments';
 import { STYLES, type MelodyInstrument, type MusicState } from './styles';
 
 export type { MusicState } from './styles';
@@ -179,18 +177,29 @@ export class Performer {
 
 // ---------------------------------------------------------------- Web Audio rack
 
+/**
+ * Instrument gains (each recording is level-matched to about -25 dBFS RMS, so these are the mix).
+ * Tuned with tools/music/render-check.mjs so that exploring music sits near -31 dBFS RMS before the
+ * music bus, combat a few dB above, and the 1-4 kHz band stays well under the low and mid bands.
+ */
+const LEVELS = { harp: 1.65, oboe: 2.1, flute: 1.95, pad: 1.2, drum: 1.65, tambourine: 0.8, syrinxFallback: 0.3 };
+/** The lowest notes the recorded oboe (B-flat 3) and flute (middle C) play; lower melody notes sound an octave up. */
+const LOWEST = { aulos: 233, syrinx: 250 };
+
 /** Instruments for one performer, created lazily, all feeding one fader. */
 export class WebAudioRack implements Rack {
   private readonly out: GainNode;
   private readonly revOut: GainNode;
   private readonly o: MusicOutput;
   private readonly sync: boolean;
-  private aulos?: Aulos;
+  private oboe?: Reed;
+  private flute?: Reed;
+  /** The synthesised flute-like voice: stands in for either reed if its recordings cannot be loaded. */
   private syrinx?: Syrinx;
   private lyreInst?: Lyre;
   private tymp?: Tympanum;
   private cym?: Cymbala;
-  private droneInst?: Drone;
+  private pad?: Pad;
 
   constructor(
     dest: MusicOutput,
@@ -211,29 +220,46 @@ export class WebAudioRack implements Rack {
   }
 
   private get ly() {
-    return (this.lyreInst ??= new Lyre(this.o, this.state === 'combat' || this.state === 'tavern' ? 'kithara' : 'lyre', { gain: this.state === 'combat' ? 0.32 : 0.42, pan: -0.25, reverb: 0.4 }, this.sync));
+    return (this.lyreInst ??= new Lyre(this.o, this.state === 'combat' || this.state === 'tavern' ? 'kithara' : 'lyre', { gain: LEVELS.harp, pan: -0.25, reverb: 0.4 }, this.sync));
   }
   private get drums() {
-    return (this.tymp ??= new Tympanum(this.o, { gain: this.state === 'combat' ? 0.5 : 0.45, pan: 0.18, reverb: 0.3 }, this.sync));
+    return (this.tymp ??= new Tympanum(this.o, { gain: LEVELS.drum, pan: 0.18, reverb: 0.3 }, this.sync));
   }
   private get cymbals() {
-    return (this.cym ??= new Cymbala(this.o, { gain: 0.16, pan: 0.35, reverb: 0.4 }, this.sync));
+    return (this.cym ??= new Cymbala(this.o, { gain: LEVELS.tambourine, pan: 0.35, reverb: 0.4 }, this.sync));
+  }
+  private get oboeInst() {
+    return (this.oboe ??= new Reed(this.o, OBOE, { gain: LEVELS.oboe, pan: 0.15, reverb: 0.4 }));
+  }
+  private get fluteInst() {
+    return (this.flute ??= new Reed(this.o, FLUTE, { gain: LEVELS.flute, pan: -0.1, reverb: 0.5 }));
+  }
+  private get padInst() {
+    return (this.pad ??= new Pad(this.o, { gain: LEVELS.pad, pan: 0.05, reverb: 0.6 }));
   }
 
-  /** Request every sample the block plays (lyre notes, drum and cymbal strokes). */
+  /** Request every sample the block plays (harp notes, melody voices, the pad, drum and tambourine strokes). */
   prepare(b: Block): boolean {
     let ready = true;
     for (const e of b.events) {
       if (e.part === 'lyre') ready = this.ly.ready(e.freq!, e.bright ?? 0.55) && ready;
       else if (e.part === 'drum') ready = this.drums.ready(e.stroke ?? 'doum') && ready;
       else if (e.part === 'cymbal') ready = this.cymbals.ready(e.cymbal ?? 'choke') && ready;
+      else if (e.part === 'melody' || e.part === 'answer') {
+        const inst = e.part === 'melody' ? (b.info.melody ?? 'aulos') : (b.info.answer ?? 'syrinx');
+        ready = (inst === 'aulos' ? this.oboeInst : this.fluteInst).settled() && ready;
+      } else if (e.part === 'drone' && e.freq) ready = this.padInst.settled() && ready;
     }
     return ready;
   }
 
   melody(inst: MelodyInstrument, when: number, freq: number, dur: number, vel: number, legato: boolean, release: boolean) {
-    if (inst === 'aulos') (this.aulos ??= new Aulos(this.o, { gain: 0.24, pan: 0.15, reverb: 0.4 })).note(when, freq, dur, vel, legato, release);
-    else (this.syrinx ??= new Syrinx(this.o, { gain: 0.34, pan: -0.1, reverb: 0.5 })).note(when, freq, dur, vel, legato, release);
+    const reed = inst === 'aulos' ? this.oboeInst : this.fluteInst;
+    if (reed.loaded) {
+      let f = freq;
+      while (f < LOWEST[inst]) f *= 2;
+      reed.note(when, f, dur, vel, legato, release);
+    } else (this.syrinx ??= new Syrinx(this.o, { gain: LEVELS.syrinxFallback, pan: -0.1, reverb: 0.5 })).note(when, freq, dur, vel, legato, release);
   }
   lyre(when: number, freq: number, vel: number, dur: number, bright: number) {
     this.ly.play(when, freq, vel, dur, bright);
@@ -245,24 +271,73 @@ export class WebAudioRack implements Rack {
     this.cymbals.hit(when, kind, vel);
   }
   drone(when: number, freq: number | null, vel: number) {
-    if (!freq && !this.droneInst) return;
-    (this.droneInst ??= new Drone(this.o, { gain: 0.16, pan: 0.05, reverb: 0.5 })).set(when, freq, vel);
+    if (!freq && !this.pad) return;
+    this.padInst.set(when, freq, vel);
   }
   level(when: number, gain: number, seconds: number) {
     const wet = STYLES[this.state].reverb / 0.5;
-    for (const [g, v] of [[this.out.gain, gain], [this.revOut.gain, gain * wet]] as const) {
+    const trim = STYLES[this.state].level;
+    for (const [g, v] of [[this.out.gain, gain * trim], [this.revOut.gain, gain * trim * wet]] as const) {
       g.cancelScheduledValues(when);
       g.setValueAtTime(g.value, when);
       g.setTargetAtTime(v, when, Math.max(0.01, seconds / 3));
     }
   }
   dispose(when: number) {
-    for (const i of [this.aulos, this.syrinx, this.lyreInst, this.tymp, this.cym, this.droneInst]) i?.dispose(when);
+    for (const i of [this.oboe, this.flute, this.syrinx, this.lyreInst, this.tymp, this.cym, this.pad]) i?.dispose(when);
     const ms = Math.max(0, (when - this.o.ctx.currentTime) * 1000) + 800;
     setTimeout(() => {
       this.out.disconnect();
       this.revOut.disconnect();
     }, ms);
+  }
+}
+
+// ---------------------------------------------------------------- the music bus
+
+/**
+ * Tone shaping for everything the music plays, in front of the music bus and its hall reverb: a
+ * high-pass under the rumble, a dip where oboe, flute and harp pile up (about 2.4 kHz) and a low-pass
+ * above the point where recorded instruments only add hiss. This is what makes the music sit under
+ * the world instead of cutting through it.
+ */
+export const MUSIC_TONE = { highpass: 90, dipHz: 2300, dipDb: -4, lowpass: 4400, reverbLowpass: 3800 };
+
+class MusicChain {
+  readonly output: MusicOutput;
+  private readonly nodes: AudioNode[] = [];
+
+  constructor(out: MusicOutput) {
+    const ctx = out.ctx;
+    this.output = out;
+    if (typeof ctx.createBiquadFilter !== 'function') return; // test doubles have no audio graph
+    const make = <T extends AudioNode>(n: T): T => (this.nodes.push(n), n);
+    const hp = make(ctx.createBiquadFilter());
+    hp.type = 'highpass';
+    hp.frequency.value = MUSIC_TONE.highpass;
+    hp.Q.value = 0.6;
+    const dip = make(ctx.createBiquadFilter());
+    dip.type = 'peaking';
+    dip.frequency.value = MUSIC_TONE.dipHz;
+    dip.Q.value = 0.8;
+    dip.gain.value = MUSIC_TONE.dipDb;
+    const lp = make(ctx.createBiquadFilter());
+    lp.type = 'lowpass';
+    lp.frequency.value = MUSIC_TONE.lowpass;
+    lp.Q.value = 0.6;
+    hp.connect(dip);
+    dip.connect(lp);
+    lp.connect(out.dry);
+    const rlp = make(ctx.createBiquadFilter());
+    rlp.type = 'lowpass';
+    rlp.frequency.value = MUSIC_TONE.reverbLowpass;
+    rlp.Q.value = 0.5;
+    rlp.connect(out.rev);
+    this.output = { ctx, dry: hp, rev: rlp };
+  }
+
+  dispose() {
+    for (const n of this.nodes) n.disconnect();
   }
 }
 
@@ -286,6 +361,8 @@ const BASE_PRIORITY = 2;
 
 export class MusicDirector {
   private out: MusicOutput | null = null;
+  /** The tone shaping between the instruments and the music bus. */
+  private chain: MusicChain | null = null;
   private base: MusicRequest = 'silence';
   private overrides = new Map<string, { state: MusicRequest; priority: number }>();
   private current: Running | null = null;
@@ -316,12 +393,10 @@ export class MusicDirector {
 
   /** Connect to an audio context's music bus. Starts the real-time pump unless `offline`. */
   attach(out: MusicOutput, opts: { offline?: boolean } = {}) {
-    this.out = out;
-    if (!opts.offline) {
-      if (!this.timer) this.timer = setInterval(() => this.update(), 50);
-      // Percussion is shared by every style and small (≈2 MB): bake it all now, in the worker.
-      for (const spec of percussionSpecs()) musicSamples.get(out.ctx, spec);
-    }
+    this.chain?.dispose();
+    this.chain = new MusicChain(out);
+    this.out = this.chain.output;
+    if (!opts.offline && !this.timer) this.timer = setInterval(() => this.update(), 50);
     this.resolve(true);
   }
 
@@ -373,6 +448,10 @@ export class MusicDirector {
     for (const r of [this.current, ...this.fading]) r?.rack.dispose(t);
     this.current = null;
     this.fading = [];
+    // The racks release their own nodes shortly after `t`; the chain goes after them.
+    const chain = this.chain;
+    this.chain = null;
+    if (chain) setTimeout(() => chain.dispose(), 2500);
   }
 
   private resolveRequest(r: MusicRequest): MusicState {

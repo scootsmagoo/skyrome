@@ -12,6 +12,7 @@ import { dbToGain } from '../dsp/core';
 import { analyze, rmsEnvelope, seamRatio, toDb } from '../dsp/analysis';
 import { REVERBS, impulseResponse } from '../dsp/reverb';
 import { MusicDirector, WebAudioRack, type Rack } from '../music/MusicDirector';
+import { vsco } from '../music/vsco';
 import { MUSIC_STATES, type MusicState } from '../music/styles';
 import type { SoundDef } from '../sounds/types';
 
@@ -170,6 +171,7 @@ export async function renderMusic(state: Exclude<MusicState, 'silence'>, seconds
     return rack;
   };
   director.attach({ ctx, dry, rev }, { offline: true });
+  await vsco.loadAll(); // offline: the performer cannot wait for the recordings to arrive
   director.setState(state);
   director.pump(seconds);
   const t0 = performance.now();
