@@ -370,7 +370,8 @@ function addTextsAt(ctx: Ctx, site: string, texts: WallText[]): number {
 // ------------------------------------------------------------------ containers
 
 interface Stored {
-  items: { id: string; count: number }[];
+  /** `condition` (arms and armor, below 1) is kept for what the player stored, so it comes back as it went in. */
+  items: { id: string; count: number; condition?: number }[];
   coins: number;
   emptied?: boolean;
   unlocked?: boolean;
@@ -463,7 +464,7 @@ export class ContainerRuntime {
       taken = Math.min(count, row.count);
       row.count -= taken;
       s.items = s.items.filter((i) => i.count > 0);
-      inv.add(itemId, taken, { source: 'container', stolenFrom: this.spec.owner });
+      inv.add(itemId, taken, { source: 'container', stolenFrom: this.spec.owner, condition: row.condition });
     }
     this.write(s);
     return taken;
@@ -488,16 +489,29 @@ export class ContainerRuntime {
   store(itemId: string, count: number): number {
     const inv = this.game.player?.inventory;
     if (!this.spec.store || !inv) return 0;
-    // Only whole, honestly-owned goods: a worn blade would come out new, and stolen goods are marked.
-    const whole = inv.list((d, st) => d.id === itemId && !st.stolenFrom && (st.condition ?? 1) >= 1).filter((e) => !e.equipped).reduce((n, e) => n + e.stack.count, 0);
-    const n = Math.min(count, whole);
-    if (n <= 0 || !inv.remove(itemId, n, { reason: 'given' })) return 0;
+    // Only whole, honestly-owned goods that aren't worn (what the chest view offers), and exactly
+    // those stacks leave the pack, in the condition they were checked in: inv.remove alone would
+    // take a worn copy first and the chest would hand back a new one.
+    const stacks = inv.list((d, st) => d.id === itemId && !st.stolenFrom && (st.condition ?? 1) >= 1).filter((e) => !e.equipped);
+    let left = Math.min(count, stacks.reduce((n, e) => n + e.stack.count, 0));
+    const moved: { count: number; condition: number }[] = [];
+    for (const e of stacks) {
+      const k = Math.min(left, e.stack.count);
+      const condition = e.stack.condition ?? 1;
+      if (k <= 0 || !inv.remove(itemId, k, { stolenFrom: null, condition, reason: 'given' })) continue;
+      moved.push({ count: k, condition });
+      left -= k;
+    }
+    if (!moved.length) return 0;
     const s = this.read();
-    const row = s.items.find((i) => i.id === itemId);
-    if (row) row.count += n;
-    else s.items.push({ id: itemId, count: n });
+    for (const m of moved) {
+      const condition = m.condition < 1 ? m.condition : undefined;
+      const row = s.items.find((i) => i.id === itemId && i.condition === condition);
+      if (row) row.count += m.count;
+      else s.items.push(condition === undefined ? { id: itemId, count: m.count } : { id: itemId, count: m.count, condition });
+    }
     this.write(s);
-    return n;
+    return moved.reduce((n, m) => n + m.count, 0);
   }
 
   takeAll() {
