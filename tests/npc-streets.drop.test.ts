@@ -27,4 +27,14 @@ describe('StreetNav.drop', () => {
   it('refuses a point that is not near a node', () => {
     expect(graph().drop(20, 20)).toBe(false);
   });
+
+  it('puts a cut node back once its time is up', () => {
+    const s = graph();
+    s.drop(50, 0, 10);
+    s.restoreCut(50);
+    expect(s.dropped).toBe(1);
+    s.restoreCut(101);
+    expect(s.dropped).toBe(0);
+    expect(s.path(0, 0, 100, 0)!.map((p) => p.z)).toEqual([0, 0, 0, 0]);
+  });
 });

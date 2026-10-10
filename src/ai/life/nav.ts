@@ -61,6 +61,7 @@ export class NavService {
       if (this.used >= this.budget) return 'busy';
       this.used++;
       this.searches++;
+      streets.restoreCut(performance.now() / 1000);
       const p = streets.path(ax, az, bx, bz);
       if (p) {
         // The street graph's straight lines can cut through a portico or a corner: lead through
@@ -79,7 +80,7 @@ export class NavService {
             // node lies behind a building (the street graph is drawn, the grid reads the colliders).
             // Cut it out and route the long way round, once. (Near only: the flood covers the built grid, so a
             // far node whose way in leaves it would read as walled off wrongly.)
-            if (retry && Math.hypot(node.x - ax, node.z - az) < 30 && grid.reachable(ax, az) && !grid.reachable(node.x, node.z) && streets.drop(p[i].x, p[i].z)) return this.findPath(ax, az, bx, bz, false);
+            if (retry && Math.hypot(node.x - ax, node.z - az) < 30 && grid.reachable(ax, az) && !grid.reachable(node.x, node.z) && streets.drop(p[i].x, p[i].z, performance.now() / 1000)) return this.findPath(ax, az, bx, bz, false);
           }
         }
         return p;

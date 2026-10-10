@@ -382,8 +382,8 @@ export class Actor {
   /** Is the floor under the feet a slope people can stand on (not a cliff)? One ray; only asked of a standing actor that is sliding. */
   private walkableFloor(): boolean {
     const f = this.currPos;
-    const hit = this.game.physics.raycast({ x: f.x, y: f.y + 0.4, z: f.z }, DOWN, 1.0, Layer.World);
-    return !hit || hit.normal.y >= WALKABLE_NY;
+    const ny = this.game.physics.floorNormalY(f.x, f.y + 0.4, f.z, 1.0, Layer.World);
+    return ny === null || ny >= WALKABLE_NY;
   }
 
   /**

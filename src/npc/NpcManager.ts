@@ -171,6 +171,9 @@ export interface StuckRecord {
   planned: boolean | null;
 }
 
+/** Seconds a learned wall stays in the nav grid before it is tested again. */
+const LEARNED_WALL_S = 120;
+
 export class NpcManager implements System {
   readonly name = 'npcs';
   /** After the player controller (-10) and before the actor system (50). */
@@ -211,6 +214,8 @@ export class NpcManager implements System {
   wallCount = false;
   /** Learn walls the grid missed from contacts (`?wallfix=0` turns it off for A/B runs). */
   wallLearn = true;
+  /** Cells marked blocked by `learnWall`, oldest first; each lapses after LEARNED_WALL_S. */
+  private learned: { x: number; z: number; until: number }[] = [];
   readonly wall = { walking: 0, blocked: 0, episodes: 0, seconds: 0, log: [] as { id: string; x: number; z: number; goal: string; steps: number; why: string }[] };
   /** Ids of dead named NPCs (never respawned). */
   readonly deadNamed = new Set<string>();
@@ -1666,6 +1671,10 @@ export class NpcManager implements System {
    * longer, and after four the stuck ladder deals with it.
    */
   private learnWall(n: Npc, wish: THREE.Vector3, dt: number) {
+    if (this.learned.length && this.learned[0].until < this.clock) {
+      const w = this.learned.shift()!;
+      this.grid.unblock(w.x, w.z);
+    }
     if (n.wallFixes && this.clock > n.wallFixAt + 20) n.wallFixes = 0;
     const sp2 = wish.x * wish.x + wish.z * wish.z;
     if (sp2 < 0.36 || !n.mover.active) {
@@ -1682,7 +1691,11 @@ export class NpcManager implements System {
     n.slowRun = 0;
     if (!n.touchedWall()) return;
     const sp = Math.sqrt(sp2);
-    this.grid.block(n.currPos.x + (wish.x / sp) * 0.7, n.currPos.z + (wish.z / sp) * 0.7);
+    const bx = n.currPos.x + (wish.x / sp) * 0.7;
+    const bz = n.currPos.z + (wish.z / sp) * 0.7;
+    this.grid.block(bx, bz);
+    // A learned wall may be a false alarm (a shut door, a stall, a crowd's edge): it lapses.
+    this.learned.push({ x: bx, z: bz, until: this.clock + LEARNED_WALL_S });
     n.mover.replan();
     n.wallFixes++;
     n.wallFixAt = this.clock + 1.5 * n.wallFixes;

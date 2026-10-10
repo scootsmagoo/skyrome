@@ -394,6 +394,16 @@ export class NavGrid {
     this.version++;
   }
 
+  /** Undo `block` for a cell (a learned wall that was a false alarm: a door, a crowd). */
+  unblock(x: number, z: number) {
+    const ix = this.cellOf(x);
+    const iz = this.cellOf(z);
+    const c = this.chunkAt(ix, iz);
+    if (!c) return;
+    c.flags[this.idx(ix, iz)] &= ~BLOCKED_DYN;
+    this.version++;
+  }
+
   /** Can you step from cell a to its neighbour b (both walkable, step small enough)? */
   canStep(ax: number, az: number, bx: number, bz: number): boolean {
     if (this.cellState(bx, bz) !== 1) return false;

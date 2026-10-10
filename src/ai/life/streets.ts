@@ -231,16 +231,34 @@ export class StreetNav {
    * building: the grid reads the real colliders). Routes stop passing through it. Returns whether
    * a node within 3 m was cut.
    */
-  drop(x: number, z: number): boolean {
+  drop(x: number, z: number, at = 0): boolean {
     const n = this.nearest(x, z, 3);
     if (!n || !this.adj[n.i].length) return false;
     for (const e of this.adj[n.i]) {
       const back = this.adj[e.to];
       for (let k = back.length - 1; k >= 0; k--) if (back[k].to === n.i) back.splice(k, 1);
     }
+    const saved = this.adj[n.i].slice();
     this.adj[n.i].length = 0;
     this.dropped++;
+    this.cut.push({ i: n.i, edges: saved, at });
     return true;
+  }
+
+  /** Cut nodes, to put back once their time is up (the grid may have been wrong or unbuilt). */
+  private cut: { i: number; edges: { to: number; w: number; width: number }[]; at: number }[] = [];
+
+  /** Put back nodes cut more than `age` seconds before `now`. */
+  restoreCut(now: number, age = 90) {
+    while (this.cut.length && this.cut[0].at + age < now) {
+      const c = this.cut.shift()!;
+      this.adj[c.i].push(...c.edges);
+      for (const e of c.edges) {
+        const back = this.adj[e.to];
+        if (!back.some((b) => b.to === c.i)) back.push({ to: c.i, w: e.w, width: e.width });
+      }
+      this.dropped--;
+    }
   }
 
   /** Spots of a kind within `r` of a point, nearest first. */
