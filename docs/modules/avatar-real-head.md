@@ -99,4 +99,4 @@ fade is cut, the painted roots carry the edge). Curly-short curls lie closer to 
 
 Known limits: the lids are painted on the ball (the lid mesh itself does not move; at 0.5 m the closed lid is a smooth
 skin-coloured bulge with the lashes where the lids meet, which reads right); the gaze is the same for both eyes (no
-convergence); the Trajanic tower's curls (orbis comarum) are still flat coils; a full beard's lower edge is still hard.
+convergence); the Trajanic tower's curls (orbis comarum) are tighter snails now but still flat coils; a full beard's lower edge is still hard.

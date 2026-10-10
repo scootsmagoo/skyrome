@@ -360,7 +360,8 @@ export function buildHair(inp: HairInput): { geometry: THREE.BufferGeometry; tri
           const nrm = H.normalAt(yf, th);
           const axis = nrm.clone().add(new THREE.Vector3(0, 0.5, 0)).normalize();
           const centre = P(yf, th, R * 0.75 + r * 0.004 * hs);
-          coil(b, centre, axis, new THREE.Vector3(0, 1, 0), R, 1.5, 0.0048 * hs, base.clone().multiplyScalar(0.92 + 0.12 * rng.next()), lod, rng.range(0, 6.28), 3, 2.4, lod === 0 ? 9 : 7, lod === 0 ? 5 : 4);
+          // Tight snail curls (two turns of a thin lock), not one fat turn that reads as a "9".
+          coil(b, centre, axis, new THREE.Vector3(0, 1, 0), R, 2.1, 0.0037 * hs, base.clone().multiplyScalar(0.92 + 0.12 * rng.next()), lod, rng.range(0, 6.28), 3, 2.6, lod === 0 ? 8 : 6, 4);
         }
       }
       break;
