@@ -120,11 +120,21 @@ Still there: spots built against walls (an NPC arriving at a bench or a stall ru
 the puteal enclosure and statue bases in the Forum (the one NPC that kept walking into the corner at
 about (38, 16) went from 45 episodes a minute to 14), and a crowd packed in a narrow street.
 
-Stepwalk (240 walks, 60 street samples, seed 3, walk and run, both directions): stalls 28 before, 33
-after, but nearly all of them are the scanner's, not steps: of 28 before, 11 were walls, 11 starts inside
-something, 4 kerbs and 2 slanted walls; after, 16 walls, 13 embedded starts, 2 kerbs, 2 slanted. Real
-kerb stalls in the streets were rare to begin with (about 2 % of walks); the oblique-approach failures
-the synthetic test found are what the player met on diagonal crossings.
+Stepwalk, before and after measured in the same page (`node scripts/stepwalk.mjs --n 60 --seed 3 --ab`: 60 crossings,
+240 walks per variant, walk and run, both ways, each crossing walked with the step-up assist as it is and as it was,
+`Actor.legacyStep`, interleaved; 2026-10-10 on the merged phase 1-2 city):
+
+| | stalls | kerb | wall (the scanner's line ran into a rail or a wall) | embedded (started against geometry) | other |
+|---|---|---|---|---|---|
+| as it was | 43 | 4 | 21 | 16 | 2 |
+| as it is | 41 | 2 | 23 | 16 | 0 |
+
+The two kerb stalls left are one start (walk and run) at (319.7, 520.6) that never moves in either variant (something
+0.4 m ahead of the feet at the start: a scanner miss); the ones that went are two slanted crossings of a 0.13 m lip
+((-1305, -319) and (165, 448), 35 degrees off square) and two runs that slid along a lip at a slant. Steps were never the
+bulk of the stalls; the oblique crossings the synthetic test found are what changed. (The earlier report's "28 before,
+33 after" compared two runs on different days with no way to run the old controller; a replay on the old head gave
+15. These numbers come from one page and one set of crossings.)
 
 ## The golden-path bot
 

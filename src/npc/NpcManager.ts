@@ -1758,7 +1758,8 @@ export class NpcManager implements System {
     const w = this.wall;
     w.walking++;
     const moved = Math.hypot(n.currPos.x - n.prevPos.x, n.currPos.z - n.prevPos.z);
-    if (moved > sp * dt * 0.35 || !n.touchedWall()) {
+    const hit = moved > sp * dt * 0.35 ? null : n.touchedWall();
+    if (!hit) {
       n.wallRun = 0;
       return;
     }
@@ -1776,6 +1777,9 @@ export class NpcManager implements System {
           c ? `corner:${g.lineWalkable(n.currPos.x, n.currPos.z, c.x, c.z) ? 'clear' : 'WALLED'}@${Math.hypot(c.x - n.currPos.x, c.z - n.currPos.z).toFixed(1)}m` : 'nocorner',
           `path:${m.idx}/${m.path.length}`,
           `dg:${Math.hypot(m.goalX - n.currPos.x, m.goalZ - n.currPos.z).toFixed(1)}`,
+          // What it pushes into: a station's dressing (never learned), something that moves, or the built world.
+          `hit:${this.game.physics.ownerOf(hit) === STATION_PROP ? 'station' : this.movable(hit) ? 'moving' : 'static'}`,
+          `learned:${m.walls.n}`,
           n.brain?.task?.kind ?? 'notask',
         ].join(' ');
         w.log.push({ id: n.id, x: Math.round(n.currPos.x * 10) / 10, z: Math.round(n.currPos.z * 10) / 10, goal: `${m.goalX.toFixed(0)},${m.goalZ.toFixed(0)}`, steps: 6, why });
