@@ -122,6 +122,7 @@ the landmarks.
   stacks; braziers and bronze lampstands along the golden path. ~380 items in the core.
 - **Piazzas** at street junctions (~530 in the city): a lacus fountain (one every ~85 m) with a
   lampstand, or a compital shrine of the Lares with its lamp, benches, sometimes a stall.
+- **Grounding.** Frontage props (`life.ts`) are skipped where the ground falls more than 0.5 m along or across their 2.4 m footprint, and each prop of a cluster takes the height of the ground where it stands. Piazza fixtures: see `docs/modules/fabric.md` (Props, "Fixtures on slopes"). The geometry crawl (`node scripts/crawl.mjs`) audits every prop base exactly (not at the 0.5 m cell centre), with instanced builds placed at their instances, and tells apart a prop under the terrain outdoors (buried) from one on a floor inside a roofed building (the terrain showing through the walls: not a prop's fault).
 - **Washing** on lines across the lanes of the dense quarters, from facade to facade.
 - **CityLamps** asks the light pool (`game.lights`, sky module) for the lamps within 150 m of the
   camera (dropped beyond 195 m), re-evaluated every 12 frames or 8 m of movement: 40–90 requests

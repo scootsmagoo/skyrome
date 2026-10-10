@@ -33,7 +33,7 @@ function circus(ctx: LandmarkContext) {
   const gaps = circusGaps();
   const group = new THREE.Group();
   buildStandsAll(b, sec, gaps, detail);
-  const facade = buildFacade(b, gaps, detail);
+  const facade = buildFacade(b, gaps, detail, (x, z) => ctx.groundAt(x, z));
   group.add(facade.group);
   buildGallery(group, b, sec, gaps, detail);
   buildTrack(b, ctx);

@@ -95,6 +95,11 @@ lod.finish(); // merges the far stand-ins per cell; call again after adding more
 - `placeProp(draw, kind, x, y, z, rotY, { variant, scale, rx, collide })` merges a prop into a static builder. Use it for one-offs, which then cost no extra draw calls.
 - `new PropScatter().add(kind, pos, rotY, scale, { variant, collide })` and then `.build()` / `.colliders()` give one `InstancedMesh` per kind × variant × material. Use it for things repeated many times.
 - Wall-mounted props (`torch_bracket`, `signboard`, `waterspout`) have their origin on the wall face and project toward −z.
+- **Grounding (rework M5b).** Three layers keep props on what is under them; ask the surface, never the terrain, when a floor, a podium or a step is there.
+  - `placeProp(…, { ground })` fits the prop to the ground under its footprint (`ground.ts`), and the caller's `y` is only a lift over the ground at the origin: a `y` under the ground there is raised to it (a stall set at the lowest of three samples sank a metre into a Palatine slope). Give each prop the height of the ground where *it* stands, not of the cluster it belongs to.
+  - `MeshBuilder.settleProps` (at `build()`) then drops each prop onto the highest up-facing face of the builder's own geometry within 0.5 m under to 0.35 m over its base, or onto the terrain (`builder.ground`) where there is no face or the terrain lies up to 0.7 m above the face (a floor sunk below a rising bank, a quay yard at pad level). `oil_lamp`, torches, signs, awnings and shelves are hung, not settled; lampstands stand.
+  - `src/gfx/surfaceIndex.ts` is that query as a module: `SurfaceIndex` (a 1 m hash of the up-facing triangles, `heightAt(x, z, y, below, above)`) and `standingHeight(index, ground, x, z, y)`. `MeshBuilder.surfaceAt(x, z, y)` asks it while a builder is still building (floors in first, then the props that need to stand on podia, steps and floors); it is re-exported from `src/arch/props`.
+- **Fixtures on slopes.** A fountain basin or compital shrine is level and rigid: the city's piazzas (`world/city/roads.ts`, `fill.ts`) stand it on the ground a third of the way up its fall under a 2.8 m footprint and build none where the fall is over 0.8 m (a shrine hung over a cliff); benches, stalls and amphora stacks need about a metre of level ground (0.5 m of fall).
 
 ## Vegetation (`src/arch/vegetation`)
 

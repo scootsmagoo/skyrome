@@ -57,7 +57,7 @@ const GREET: Table = {
   lanius: ['Pork! Fresh this morning!', 'Tripe and sausage — cheap and filling.'],
   factio: ['Greens! The Greens! Prasina!', 'The Blues ride like old women.'],
   libelli: ['Today\'s card! Every pair, every name! An as!', 'Cushions for the stone seats! You\'ll thank me by the tenth pair!'],
-  nauta: ['Salve. We pull the awning over the whole Colosseum, you know. By hand.', 'Fleet of Misenum. Best sailors that never see the sea.'],
+  nauta: ['Salve. We pull the awning over the whole amphitheatre, you know. By hand.', 'Fleet of Misenum. Best sailors that never see the sea.'],
   balneator: ['A quadrans for the baths, citizen. Doors open at the eighth hour.', 'Leave your clothes with the capsarius — or lose them.'],
   botularius: ['Sausages! Hot sausages! Botuli!', 'Something to eat after the sweat room?'],
   piscator: ['Mullet from Ostia! Still wet!', 'Oysters from the Lucrine lake! Eel! Bream!'],

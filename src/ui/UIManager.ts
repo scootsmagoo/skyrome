@@ -501,7 +501,7 @@ export class UIManager implements System {
       const loc = this.sources.map?.()?.locations().find((l) => l.id === e.locationId);
       // Regions without a map marker (the hills) still carry a Latin name.
       const latin = loc?.latin ?? this.game.locations?.get(e.locationId)?.latin;
-      this.banner({ kind: 'location', title: latin ?? e.name, subtitle: latin && latin !== e.name ? e.name : undefined });
+      this.banner({ kind: 'location', title: latin ?? e.name, latin: !!latin, subtitle: latin && latin !== e.name ? e.name : undefined });
     });
     const questTitle = (id: string) => this.sources.quests?.()?.quests().find((q) => q.id === id);
     on('quest:started', (e) => {

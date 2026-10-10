@@ -20,6 +20,7 @@ import { boxProjectUVs } from './uv';
 import { UV_AUDIT, uvAuditRecord } from './uvstretch';
 import { separateCoplanar } from './coplanar';
 import { AUDIT, auditRecordBuild, currentAuditSource } from '../dev/audit/geomAudit';
+import { SurfaceIndex, standingHeight } from './surfaceIndex';
 
 export type ColliderSpec =
   | { kind: 'box'; center: THREE.Vector3; half: THREE.Vector3; rotation?: THREE.Quaternion }
@@ -51,71 +52,32 @@ export interface InstancePart {
 const instanceGeometry = new Map<string, Map<string, { geometry: THREE.BufferGeometry; material: THREE.Material | MaterialId; castShadow: boolean }>>();
 
 /** Props whose base is not meant to touch a surface (wall brackets, lamps on hooks, awnings). */
-const HUNG_PROPS = /torch|bracket|lamp|awning|sign|hang|shelf|garland|wreath|lantern|banner|sconce|velum/;
+const HUNG_PROPS = /torch|bracket|oil_lamp|awning|sign|hang|shelf|garland|wreath|lantern|banner|sconce|velum/;
 
 /**
  * Move each prop vertically onto the surface under its base: the highest up-facing face of the
  * other geometry (or the ground) within 0.5 m below to 0.35 m above it (0.6 m above for the
- * ground: props sunk into a slope). Props placed at one ground height on a slope, or at a floor
+ * ground: props sunk into a slope). The ground also wins over a face under the prop when it lies
+ * up to 0.7 m above that face (the face is buried). Props placed at one ground height on a slope, or at a floor
  * height that was then lifted, floated or sank; this puts them down where they stand. Moves of
  * under 3 cm are skipped. Pure geometry; the geometry is non-indexed (MeshBuilder.add).
  */
 export function settleProps(props: { kind: string; base: THREE.Vector3; geoms: THREE.BufferGeometry[] }[], all: THREE.BufferGeometry[], ground: ((x: number, z: number) => number) | null) {
   const live = props.filter((p) => !HUNG_PROPS.test(p.kind));
   if (!live.length) return;
-  // Index up-facing triangles of everything near the props in 1 m cells.
-  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  // Index the up-facing triangles of everything near the props (surfaceIndex.ts).
+  const bounds = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity };
   for (const p of live) {
-    x0 = Math.min(x0, p.base.x);
-    x1 = Math.max(x1, p.base.x);
-    z0 = Math.min(z0, p.base.z);
-    z1 = Math.max(z1, p.base.z);
+    bounds.minX = Math.min(bounds.minX, p.base.x);
+    bounds.maxX = Math.max(bounds.maxX, p.base.x);
+    bounds.minZ = Math.min(bounds.minZ, p.base.z);
+    bounds.maxZ = Math.max(bounds.maxZ, p.base.z);
   }
-  const cells = new Map<number, { g: THREE.BufferGeometry; i: number }[]>();
-  const key = (ix: number, iz: number) => ix * 100003 + iz;
-  for (const g of all) {
-    const a = (g.getAttribute('position') as THREE.BufferAttribute | undefined)?.array as Float32Array | undefined;
-    if (!a) continue;
-    for (let i = 0; i + 8 < a.length; i += 9) {
-      const minX = Math.min(a[i], a[i + 3], a[i + 6]), maxX = Math.max(a[i], a[i + 3], a[i + 6]);
-      const minZ = Math.min(a[i + 2], a[i + 5], a[i + 8]), maxZ = Math.max(a[i + 2], a[i + 5], a[i + 8]);
-      if (maxX < x0 - 1 || minX > x1 + 1 || maxZ < z0 - 1 || minZ > z1 + 1) continue;
-      const ux = a[i + 3] - a[i], uy = a[i + 4] - a[i + 1], uz = a[i + 5] - a[i + 2];
-      const vx = a[i + 6] - a[i], vy = a[i + 7] - a[i + 1], vz = a[i + 8] - a[i + 2];
-      const ny = uz * vx - ux * vz;
-      const l = Math.hypot(uy * vz - uz * vy, ny, ux * vy - uy * vx);
-      if (l < 1e-6 || ny / l < 0.7) continue;
-      for (let ix = Math.floor(minX); ix <= Math.floor(maxX); ix++)
-        for (let iz = Math.floor(minZ); iz <= Math.floor(maxZ); iz++) {
-          const k = key(ix, iz);
-          let list = cells.get(k);
-          if (!list) cells.set(k, (list = []));
-          list.push({ g, i });
-        }
-    }
-  }
+  const index = new SurfaceIndex(all, bounds);
   for (const p of live) {
-    const own = new Set(p.geoms);
     const { x, y, z } = p.base;
-    let best = -Infinity;
-    for (const { g, i } of cells.get(key(Math.floor(x), Math.floor(z))) ?? []) {
-      if (own.has(g)) continue;
-      const a = (g.getAttribute('position') as THREE.BufferAttribute).array as Float32Array;
-      const ax = a[i], az = a[i + 2], bx = a[i + 3], bz = a[i + 5], cx = a[i + 6], cz = a[i + 8];
-      const d = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
-      if (Math.abs(d) < 1e-9) continue;
-      const l1 = ((bz - cz) * (x - cx) + (cx - bx) * (z - cz)) / d;
-      const l2 = ((cz - az) * (x - cx) + (ax - cx) * (z - cz)) / d;
-      const l3 = 1 - l1 - l2;
-      if (l1 < -1e-4 || l2 < -1e-4 || l3 < -1e-4) continue;
-      const sy = l1 * a[i + 1] + l2 * a[i + 4] + l3 * a[i + 7];
-      if (sy >= y - 0.5 && sy <= y + 0.35 && sy > best) best = sy;
-    }
-    if (best === -Infinity && ground) {
-      const gy = ground(x, z);
-      if (gy >= y - 0.5 && gy <= y + 0.6) best = gy;
-    }
-    if (best === -Infinity) continue;
+    const best = standingHeight(index, ground, x, z, y, new Set(p.geoms));
+    if (best === null) continue;
     const dy = best - y;
     if (Math.abs(dy) < 0.03) continue;
     for (const g of p.geoms) {
@@ -191,6 +153,7 @@ export class MeshBuilder {
     const list = this.parts.get(key) ?? [];
     list.push(g);
     this.parts.set(key, list);
+    this.surfaceVersion++;
     return this;
   }
 
@@ -307,6 +270,7 @@ export class MeshBuilder {
         }
       }
       this.parts.set(key, list);
+      this.surfaceVersion++;
     }
     for (const pr of other.props) {
       if (!matrix) {
@@ -334,6 +298,25 @@ export class MeshBuilder {
 
   get isEmpty() {
     return this.parts.size === 0 && this.instances.size === 0;
+  }
+
+  private surfaceCache: { count: number; version: number; index: SurfaceIndex } | null = null;
+  private surfaceVersion = 0;
+
+  /**
+   * What a thing at (x, z) about height y would stand on, among what has been added so far (and
+   * `ground`, if set): the highest face within a step of y, or the terrain where it is higher. Null
+   * when nothing is near. For builders that place things on floors, podia and steps; the index is
+   * rebuilt when parts were added since the last query, so ask after the floors are in, not between
+   * every box.
+   */
+  surfaceAt(x: number, z: number, y: number): number | null {
+    let count = 0;
+    for (const geoms of this.parts.values()) count += geoms.length;
+    if (!this.surfaceCache || this.surfaceCache.count !== count || this.surfaceCache.version !== this.surfaceVersion) {
+      this.surfaceCache = { count, version: this.surfaceVersion, index: new SurfaceIndex([...this.parts.values()].flat()) };
+    }
+    return standingHeight(this.surfaceCache.index, this.ground, x, z, y);
   }
 
   /** Triangles that build() will draw (instances counted once per placement). */

@@ -8,4 +8,4 @@ export type { MenuTabId } from './menus/MenuShell';
 export type { BannerOptions, BannerKind, NotifyKind } from './hud/Feed';
 export * from './types';
 export * from './adapters';
-export { toInscription, romanHour, formatMoney } from './format';
+export { toInscription, toCapitals, romanHour, formatMoney } from './format';

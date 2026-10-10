@@ -15,6 +15,19 @@ export function toInscription(text: string, interpunct = true): string {
   return interpunct ? up.trim().split(/\s+/).join(' · ') : up;
 }
 
+/**
+ * The same capitals for a name that is not Latin ('Statue of Vortumnus', a place with no Latin
+ * line): upper case with the interpunct, English spelling kept. U → V is Latin's alone, and
+ * would turn 'Statue' into 'STATVE'.
+ */
+export function toCapitals(text: string, interpunct = true): string {
+  const up = text
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toUpperCase();
+  return interpunct ? up.trim().split(/\s+/).join(' · ') : up;
+}
+
 const ORDINALS = [
   'prima', 'secunda', 'tertia', 'quarta', 'quinta', 'sexta',
   'septima', 'octava', 'nona', 'decima', 'undecima', 'duodecima',

@@ -507,7 +507,29 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
     const at = (lx: number, lz: number): THREE.Vector3 =>
       // lz > 0 toward the street, lx to the right (seen facing the street).
       new THREE.Vector3(pz.center[0] + fwd[0] * lz + right[0] * lx, y, pz.center[1] + fwd[1] * lz + right[1] * lx);
-    if (pz.kind === 'lacus') {
+    // The basin or shrine is a level, rigid thing on a plaza that follows the terrain: it stands on
+    // the ground under its base a third of the way up its fall (the high side sinks in a little, the
+    // low side floats a little: the crawl's floating altars), and none is built where the square
+    // hangs on a bank (> 0.8 m of fall across its footprint). Local frame as below: x right, z toward the street's far side.
+    const fixZ = pz.kind === 'lacus' ? 0.2 : -0.6;
+    let fixLo = Infinity, fixHi = -Infinity;
+    for (const [sx, sz] of [[0, 0], [-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      const lx = sx * 1.4, lz = fixZ + sz * 1.4;
+      const g = H(pz.center[0] + Math.cos(rot) * lx + Math.sin(rot) * lz, pz.center[1] + Math.cos(rot) * lz - Math.sin(rot) * lx) + LIFT.piazza - y;
+      fixLo = Math.min(fixLo, g);
+      fixHi = Math.max(fixHi, g);
+    }
+    // (Any other piece of furniture needs about a metre of level ground round it too.)
+    const worldAt = (lx: number, lz: number): [number, number] => [pz.center[0] + Math.cos(rot) * lx + Math.sin(rot) * lz, pz.center[1] + Math.cos(rot) * lz - Math.sin(rot) * lx];
+    const level = (lx: number, lz: number, h = 1.2) => {
+      const g = (a: number, b: number) => { const [wx, wz] = worldAt(a, b); return H(wx, wz); };
+      return Math.abs(g(lx + h, lz) - g(lx - h, lz)) <= 0.5 && Math.abs(g(lx, lz + h) - g(lx, lz - h)) <= 0.5;
+    };
+    const fixture = fixHi - fixLo <= 0.8;
+    const fixY = fixture ? fixLo + 0.3 * (fixHi - fixLo) : 0;
+    if (!fixture) {
+      // (nothing stands on the slope: no spots or lamps for it either)
+    } else if (pz.kind === 'lacus') {
       spots.push({ id: `${pz.id}:fountain`, kind: 'fountain', position: at(0, 1.2 + 0.65), heading: pz.facing, tag: 'lacus' });
       spots.push({ id: `${pz.id}:fountain2`, kind: 'fountain', position: at(-1.25, 0.6), heading: pz.facing - Math.PI / 2, tag: 'lacus' });
       // A lampstand by the basin (the fountain is where the street gathers before dawn).
@@ -517,14 +539,14 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
       spots.push({ id: `${pz.id}:shrine`, kind: 'shrine', position: at(0, 1.6), heading: pz.facing + Math.PI, tag: 'compitum' });
       // The Lares' lamp burns on the shrine's altar.
       const lp = at(0, 0.6);
-      lamps.push({ x: lp.x, y: lp.y + 1.25, z: lp.z, kind: 'shrine' });
+      lamps.push({ x: lp.x, y: lp.y + 1.25 + fixY, z: lp.z, kind: 'shrine' });
     }
-    const bench = rng.chance(0.7);
+    const bench = rng.chance(0.7) && level(-(pz.r - 1.1), 0.5);
     if (bench) spots.push({ id: `${pz.id}:bench`, kind: 'bench', position: at(pz.r - 1.1, -0.5), heading: pz.facing - Math.PI / 2 });
-    const stall = rng.chance(0.35);
+    const stall = rng.chance(0.35) && level(pz.r - 1.6, -0.4, 1.5);
     if (stall) spots.push({ id: `${pz.id}:stall`, kind: 'stall', position: at(-pz.r + 1.6, 0.4), heading: pz.facing, tag: 'market' });
     const travertine = rng.chance(0.5);
-    const amphorae = rng.chance(0.4);
+    const amphorae = rng.chance(0.4) && level(pz.r - 1.4, 2.2);
     const seed = rng.int(0, 1e9);
     add(pz.center[0], pz.center[1], T(`piazza:${pz.id}`, (b) => {
       const poly: Polygon = [];
@@ -540,10 +562,10 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
       // Props stand on the paving, which follows the terrain (local y of the surface at each spot).
       const gnd = groundIn(d, (x, z) => H(x, z) + LIFT.piazza);
       const on = (x: number, z: number) => gnd(x, z);
-      if (pz.kind === 'lacus') {
-        lacus(d.at(0, 0, 0.2, 0), r);
+      if (pz.kind === 'lacus' && fixture) {
+        lacus(d.at(0, fixY, 0.2, 0), r);
         placeProp(d, 'lampstand', -1.9, on(-1.9, -1.5), -1.5, 0, { variant: 0, ground: gnd });
-      } else compitalShrine(d.at(0, 0, -0.6, 0), r);
+      } else if (fixture) compitalShrine(d.at(0, fixY, -0.6, 0), r);
       if (bench) placeProp(d, 'bench_masonry', -(pz.r - 1.1), on(-(pz.r - 1.1), 0.5), 0.5, -Math.PI / 2, { variant: 0, ground: gnd });
       if (stall) placeProp(d, 'stall', pz.r - 1.6, on(pz.r - 1.6, -0.4), -0.4, Math.PI, { rng: r, ground: gnd });
       if (amphorae) {

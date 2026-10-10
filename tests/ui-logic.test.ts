@@ -8,6 +8,7 @@ import {
   romanHour,
   skillCheckChance,
   smartQuotes,
+  toCapitals,
   toInscription,
 } from '../src/ui/format';
 import {
@@ -37,6 +38,9 @@ describe('format', () => {
     expect(toInscription('Iulius', false)).toBe('IVLIVS');
     expect(toInscription('Jupiter')).toBe('IVPITER');
     expect(toInscription('Rōma')).toBe('ROMA');
+    // An English name keeps its spelling: V for U is Latin's alone.
+    expect(toCapitals('Statue of Vortumnus')).toBe('STATUE · OF · VORTUMNUS');
+    expect(toCapitals('Mercury’s Spring', false)).toBe('MERCURY’S SPRING');
   });
   it('names Roman hours and night watches', () => {
     expect(romanHour(6).latin).toBe('Hora prima');

@@ -3,7 +3,7 @@
  * quest started/completed, level up), subtitles and the hit-direction indicator.
  */
 import { h } from '../dom';
-import { toInscription } from '../format';
+import { toCapitals, toInscription } from '../format';
 import { laurelRule } from '../motifs';
 
 export type NotifyKind = 'info' | 'item' | 'quest' | 'skill' | 'warning' | 'money';
@@ -12,8 +12,10 @@ export type BannerKind = 'location' | 'quest-start' | 'quest-complete' | 'quest-
 
 export interface BannerOptions {
   kind?: BannerKind;
-  /** Big line. Location banners render it in inscriptional capitals. */
+  /** Big line. Location banners render it in inscriptional capitals (V for U) when it is Latin. */
   title: string;
+  /** Location banners: false when the title is an English name (no Latin line): capitals, but no U → V. */
+  latin?: boolean;
   /** Small line above the title ('Quest started'); defaults per kind. */
   label?: string;
   /** Line under the title (English name, quest summary). */
@@ -110,7 +112,7 @@ export class Banners {
       const opts = this.queue.shift()!;
       const kind = opts.kind ?? 'generic';
       const label = opts.label ?? LABELS[kind];
-      const title = kind === 'location' ? toInscription(opts.title) : opts.title;
+      const title = kind === 'location' ? (opts.latin === false ? toCapitals(opts.title) : toInscription(opts.title)) : opts.title;
       const el = h(
         'div',
         { class: `hud-banner-card ${kind}` },

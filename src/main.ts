@@ -6,7 +6,7 @@ import { enableCompressedTextures } from './gfx/materials';
 import { classicRequested, loadRealBodies } from './actors/avatar/real/RealBody';
 import { setLeafyCanopies } from './arch/vegetation/materials';
 import { setHairAlphaToCoverage } from './actors/avatar/real/head/hairConfig';
-import { AUDIT, analyzeArea, auditRecordCount } from './dev/audit/geomAudit';
+import { AUDIT, analyzeArea, auditRecordCount, surfacesAt } from './dev/audit/geomAudit';
 import type { SceneDef } from './scenes/types';
 
 const sceneModules = import.meta.glob<{ default: SceneDef }>('./scenes/*.ts');
@@ -33,7 +33,7 @@ async function boot() {
   // Realistic bodies are the default: start loading now (the city builds meanwhile); avatars made before it ends upgrade on arrival.
   if (!classicRequested()) loadRealBodies(game.renderer).catch((e) => console.error('real bodies failed to load, staying procedural', e));
   // Geometry audit hooks for scripts/crawl.mjs (?audit).
-  if (AUDIT) (window as unknown as { __audit: unknown }).__audit = { analyzeArea, auditRecordCount };
+  if (AUDIT) (window as unknown as { __audit: unknown }).__audit = { analyzeArea, auditRecordCount, surfacesAt };
   {
     const s = game.settings.data;
     const tier = s.graphics && s.graphics !== 'auto' ? s.graphics : s.graphicsApplied?.tier;
