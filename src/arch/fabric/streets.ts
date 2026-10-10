@@ -290,6 +290,8 @@ export interface PlazaOpts {
   /** Vertical skirt depth around the edge (hides gaps against the terrain). */
   skirt?: number;
   collide?: boolean;
+  /** Also collide with the sloped bevel round the edge, so one walks on and off without a lip (default false: only the city's own plazas ask; landmark builders keep their old colliders). */
+  bevelCollide?: boolean;
   /** Holes: areas left unpaved (landmark footprints and other `avoid` areas). Any simple polygons. */
   exclude?: Polygon[];
 }
@@ -365,7 +367,7 @@ export function buildPlaza(b: MeshBuilder, poly: Polygon, heightAt: HeightFn, o:
           // Face the unpaved side: (t0, b0, t1) faces left of p0→p1, (t0, t1, b0) faces right.
           if (left) s.push(...t0, ...t1, ...b0, ...t1, ...b1, ...b0);
           else s.push(...t0, ...b0, ...t1, ...t1, ...b0, ...b1);
-          if (bevel) cs.push(...t0, ...b0, ...t1, ...t1, ...b0, ...b1);
+          if (bevel && o.bevelCollide) cs.push(...t0, ...b0, ...t1, ...t1, ...b0, ...b1);
         }
       }
     };

@@ -132,9 +132,14 @@ describe('roads and dead ends on the real plan', () => {
     const r = auditReach(graph, 0, 0), r0 = auditReach(g0, 0, 0);
     console.log('REACH FROM THE FORUM before', r0.reachable, '/', r0.nodes, r0.share.toFixed(3), 'after', r.reachable, '/', r.nodes, r.share.toFixed(3), 'islands', r.islands.map((i) => `${i.size}@${i.at}`).join(' '));
     expect(r.share).toBeGreaterThanOrEqual(r0.share);
-    expect(r.share).toBeGreaterThan(0.985);
-    // What is cut off is a lane or two between courts (the physics probe joins more in the game).
-    for (const i of r.islands) expect(i.size).toBeLessThanOrEqual(12);
+    // The plan asks for every node. A node is only left out when no walkable link (the raster probe
+    // used here; the game adds the physics probe) reaches the main network within 120 m: the few
+    // islands that remain are lanes walled in between courts. The test pins that set so it cannot grow:
+    // at most 4 islands, 5 nodes each, under 1% of the nodes. The NavGrid (what people walk) is separate:
+    // see tests/navgrid.links.test.ts and the in-game window.__streetAudit().
+    expect(r.share).toBeGreaterThan(0.99);
+    expect(r.islands.length).toBeLessThanOrEqual(4);
+    for (const i of r.islands) expect(i.size).toBeLessThanOrEqual(5);
     // The Forum and the places the story walks between are all on the one network.
     const comp = new Set<number>();
     const stack = [graph.nearest(0, 0, 200)];

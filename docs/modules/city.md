@@ -268,3 +268,9 @@ at shop fronts in the Velabrum and the Subura stops at the walls.
   the fallback gate has a passage (tiny change in `landmarks/builders/fallback.ts`).
 - `extent: 'city'` streams everywhere but has not been profiled across the whole city.
 - No NPCs here: `game.streets` and its spots are ready for the crowd module.
+
+### M5a review fixes
+
+- `linkIslands` (network.ts) now looks up to 120 m (was 60) for the main network, so the street graph is 99.3% reachable from the Forum; the four islands left (3 to 5 nodes, lanes walled in between courts) are pinned by `tests/city.roads.test.ts`.
+- `buildPlaza({ bevelCollide })` (default false): only the city's own plazas (roads.ts junctions and piazzas, fill.ts) collide with the walkable bevel. Landmark builders using `buildPlaza` keep their old colliders. `buildStreet` is used only by the city and the `fabric` demo scene.
+- The crawl's ledge test (`geomAudit.ts`) no longer counts a monotone ramp (apron, dropped kerb) as a ledge. The remaining new ledge cells are mostly the designed KERB step on roads that now pass the crawl stops (Via Labicana round the Colosseum).

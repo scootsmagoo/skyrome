@@ -248,8 +248,17 @@ export function analyzeArea(cx: number, cz: number, radius: number, heightAt: (x
       const k = j * n + i;
       for (const o of [k + 1, k + n]) {
         // Compare heights above the terrain, so a surface following a slope is not a ledge.
-        const d = Math.abs((top[k] - terr[k]) - (top[o] - terr[o]));
+        const hk = top[k] - terr[k], ho = top[o] - terr[o];
+        const d = Math.abs(hk - ho);
         if (d < LEDGE_MIN || d >= LEDGE_MAX) continue;
+        // A ramp is not a ledge: the surface keeps climbing the same way on both sides of the pair
+        // (an apron, a dropped kerb). A ledge is a step with level ground (or no ground) beyond it.
+        const dir = o - k, p = k - dir, q = o + dir;
+        if (p >= 0 && q < n * n && (dir !== 1 || (Math.floor(p / n) === Math.floor(k / n) && Math.floor(q / n) === Math.floor(o / n)))) {
+          const up = ho > hk ? 1 : -1;
+          const rp = (hk - (top[p] - terr[p])) * up, rq = ((top[q] - terr[q]) - ho) * up;
+          if (rp >= d * 0.6 && rq >= d * 0.6 && rp < LEDGE_MAX * 1.5 && rq < LEDGE_MAX * 1.5) continue;
+        }
         const ak = topMat[k] === 'terrain', bk = topMat[o] === 'terrain';
         if ((!ak && !PAVED.test(topMat[k])) || (!bk && !PAVED.test(topMat[o])) || (ak && bk)) continue;
         const sa = ak ? 'terrain' : `${cells[k]![0].src}:${topMat[k]}`, sb = bk ? 'terrain' : `${cells[o]![0].src}:${topMat[o]}`;
