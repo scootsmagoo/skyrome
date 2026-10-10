@@ -17,6 +17,7 @@
  */
 import * as THREE from 'three';
 import { avatarMaterial } from '../../material';
+import { B } from '../../rig';
 
 let cloth: THREE.MeshStandardMaterial | null = null;
 let shell: THREE.MeshStandardMaterial | null = null;
@@ -24,6 +25,7 @@ let shell: THREE.MeshStandardMaterial | null = null;
 /** Replaces avatarMaterial's cloth pattern (it runs right before `diffuseColor.rgb *= avTint * avTint3`). */
 const WEAVE = /* glsl */ `
 float rcSheen = 0.0;
+float rcAo = 1.0;
 // Derivatives are taken in uniform control flow (outside the pattern branch), then used inside it.
 vec2 rcUv = av_uv();
 vec2 rcGw = rcUv / 0.0028;
@@ -49,8 +51,76 @@ if (vPat > 2.5 && vPat < 3.5 || (vPat > 4.5 && vPat < 5.5)) {
 }
 `;
 
-/** After the lights: lit cloth brightens toward grazing angles. */
+/**
+ * Baked cloth (shell garments from the cloth simulation, garments/fit.ts; patterns 12 wool and 13 linen): the
+ * weave runs along the cloth's own threads (pattern coordinates), borders (the praetexta's purple, a stola's
+ * trim) are bands at a set distance from the bordered edge, the clavi run down the cloth, the turned hem's rim
+ * is a shade darker, and the baked occlusion (surf.y) shades the folds' creases. Runs after WEAVE.
+ */
+const BAKED = /* glsl */ `
+vec2 rbGw = vCloth.zw / 0.0028;
+vec2 rbGl = vCloth.zw / 0.0016;
+float rbFadeW = 1.0 - smoothstep(0.22, 0.65, length(fwidth(rbGw)));
+float rbFadeL = 1.0 - smoothstep(0.22, 0.65, length(fwidth(rbGl)));
+float rbAa = max(fwidth(vCloth.x) * 0.75, 0.0008);
+float rbAaC = max(fwidth(vClavus.x) * 0.75, 0.0006);
+if (vPat > 11.5 && vPat < 13.5) {
+  bool lin = vPat > 12.5;
+  vec2 g = lin ? rbGl : rbGw;
+  float fade = lin ? rbFadeL : rbFadeW;
+  float wx = sin(g.x * 6.2832);
+  float wy = sin(g.y * 6.2832);
+  float weave = wx * wy * 0.5 + 0.5;
+  float extra = lin ? av_noise(vec2(floor(g.x), floor(g.y) * 0.31)) : sin((g.x - g.y) * 3.1416) * 0.5 + 0.5;
+  avH = (weave * 0.8 + extra * 0.2) * fade;
+  avBump = lin ? 0.12 : 0.2;
+  float dye = av_noise(vCloth.zw * 7.0);
+  avTint = (0.985 + 0.03 * dye) * (1.0 - 0.03 * fade * (1.0 - weave));
+  avTint *= 1.0 - 0.32 * smoothstep(0.4, 0.8, dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114)));
+  float band = vTrim.w > 0.0 ? 1.0 - smoothstep(vTrim.w - rbAa, vTrim.w + rbAa, vCloth.x) : 0.0;
+  diffuseColor.rgb = mix(diffuseColor.rgb, vTrim.rgb, band);
+  float cl = step(1.5, vClavus.w) * (1.0 - smoothstep(vClavus.z - rbAaC, vClavus.z + rbAaC, abs(vClavus.x)));
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.078, 0.009, 0.04), cl);
+  avTint *= 1.0 - 0.14 * vSurf.w;
+  avDust = (1.0 - smoothstep(0.02, 0.24 + 0.18 * av_noise(vCloth.zw * 9.0), vRest.y)) * 0.24;
+  rcSheen = lin ? 0.5 : 0.32;
+  // Baked occlusion, never black: a vertex the simulation sandwiched between two layers bakes to 0, and a big
+  // decimated triangle would carry that dark corner out into the light.
+  rcAo = 0.3 + 0.7 * vSurf.y;
+}
+`;
+
+/**
+ * Legs inside long cloth (vertex shader, after skinning): a skirt vertex below the crotch is pushed out of the
+ * capsule round the thigh or shin at its height (axis and radius per vertex in `legs`, the bone matrices from
+ * the skeleton), so a striding leg presses the cloth forward instead of poking through it.
+ */
+const LEG_PUSH = /* glsl */ `
+#ifdef USE_SKINNING
+if (legs.z > 0.0) {
+  for (int k = 0; k < 2; k++) {
+    float side = k == 0 ? 1.0 : -1.0;
+    float bi = legs.w < 1.5 ? (k == 0 ? ${B.thighL}.0 : ${B.thighR}.0) : (k == 0 ? ${B.shinL}.0 : ${B.shinR}.0);
+    mat4 bm = bindMatrixInverse * getBoneMatrix(bi) * bindMatrix;
+    vec3 la = (bm * vec4(side * legs.x, position.y, legs.y, 1.0)).xyz;
+    vec3 ld = normalize(mat3(bm) * vec3(0.0, -1.0, 0.0));
+    vec3 lq = transformed - la;
+    float lt = clamp(dot(lq, ld), -0.12, 0.12);
+    vec3 lr = lq - ld * lt;
+    float lrl = length(lr);
+    if (lrl < legs.z && lrl > 1e-4) transformed += lr * (legs.z / lrl - 1.0);
+  }
+}
+#endif
+`;
+
+/** After the lights: lit cloth brightens toward grazing angles; baked occlusion darkens the creases. */
 const SHEEN = /* glsl */ `
+if (rcAo < 0.999) {
+  reflectedLight.indirectDiffuse *= rcAo;
+  reflectedLight.indirectSpecular *= rcAo;
+  reflectedLight.directDiffuse *= mix(1.0, rcAo, 0.5);
+}
 if (rcSheen > 0.0) {
   float rcRim = pow(1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0), 3.0);
   reflectedLight.directDiffuse *= 1.0 + rcRim * rcSheen;
@@ -69,9 +139,19 @@ const CLAVI = /* glsl */ `
 
 function patch(shader: { vertexShader: string; fragmentShader: string }, withCover: boolean) {
   shader.fragmentShader = shader.fragmentShader
-    .replace('diffuseColor.rgb *= avTint * avTint3;', `${WEAVE}\ndiffuseColor.rgb *= avTint * avTint3;`)
+    .replace('diffuseColor.rgb *= avTint * avTint3;', `${WEAVE}\n${withCover ? '' : BAKED}\ndiffuseColor.rgb *= avTint * avTint3;`)
     .replace('#include <aomap_fragment>', `#include <aomap_fragment>\n${SHEEN}`);
-  if (!withCover) return;
+  if (!withCover) {
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        '#include <common>\nattribute vec4 cloth;\nattribute vec4 trim;\nattribute vec4 clavus;\nattribute vec4 legs;\nvarying vec4 vCloth;\nvarying vec4 vTrim;\nvarying vec4 vClavus;',
+      )
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCloth = cloth;\nvTrim = trim;\nvClavus = clavus;')
+      .replace('#include <skinning_vertex>', `#include <skinning_vertex>\n${LEG_PUSH}`);
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vCloth;\nvarying vec4 vTrim;\nvarying vec4 vClavus;');
+    return;
+  }
   shader.vertexShader = shader.vertexShader
     .replace('#include <common>', '#include <common>\nattribute float cover;\nattribute vec4 clavus;\nvarying float vCover;\nvarying vec4 vClavus;')
     .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCover = cover;\nvClavus = clavus;');
@@ -92,16 +172,21 @@ function make(name: string, withCover: boolean): THREE.MeshStandardMaterial {
   m.copy(base);
   m.name = name;
   if (withCover) {
+    // Its alpha is the hem's coverage: it keeps it (avatarMaterial otherwise writes 0, the post chain's mark).
+    m.defines = { ...m.defines, AV_KEEP_ALPHA: '' };
     m.alphaToCoverage = true;
     m.polygonOffset = true;
     m.polygonOffsetFactor = -2;
     m.polygonOffsetUnits = -2;
+  } else {
+    // Baked cloth is a single sheet: its inside shows under hems, in the sinus and inside cloaks.
+    m.side = THREE.DoubleSide;
   }
   m.onBeforeCompile = (shader, renderer) => {
     base.onBeforeCompile(shader, renderer);
     patch(shader, withCover);
   };
-  m.customProgramCacheKey = () => `skyrome-${name}-v4`;
+  m.customProgramCacheKey = () => `skyrome-${name}-v6`;
   return m;
 }
 

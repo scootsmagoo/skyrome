@@ -264,9 +264,12 @@ export function avatarMaterial(): THREE.MeshStandardMaterial {
         '#include <normal_fragment_maps>',
         `#include <normal_fragment_maps>\nif (avBump > 0.0) { normal = av_perturb(-vViewPosition, normal, vec2(dFdx(avH), dFdy(avH)) * avBump, faceDirection); }`,
       )
-      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * (vPat < 0.5 ? vSurf.w : 0.0) * 3.0;`);
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * (vPat < 0.5 ? vSurf.w : 0.0) * 3.0;`)
+      // Alpha 0 marks characters for the post chain: screen-space AO neither darkens them nor is cast by them
+      // (gfx/post/ao.ts); their folds and creases carry their own shading. Materials that need alpha keep it.
+      .replace('#include <opaque_fragment>', '#include <opaque_fragment>\n#ifndef AV_KEEP_ALPHA\ngl_FragColor.a = 0.0;\n#endif');
   };
-  m.customProgramCacheKey = () => 'skyrome-avatar-v5';
+  m.customProgramCacheKey = () => 'skyrome-avatar-v6';
   shared = m;
   return m;
 }

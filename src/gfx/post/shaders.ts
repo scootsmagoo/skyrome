@@ -114,7 +114,9 @@ void main() {
   // Ambient occlusion (gfx/post/ao.ts), before the glow is added.
   if (uAoOn > 0.5) {
     vec2 a = texture2D(tAo, vUv).rg;
-    c *= a.r * mix(1.0, a.g, uContact);
+    // Draped cloth writes alpha 0 (real/garments/clothMaterial.ts): its folds carry their own baked occlusion,
+    // and the screen-space estimate smeared dark blotches over white wool.
+    c *= mix(1.0, a.r * mix(1.0, a.g, uContact), texture2D(tColor, vUv).a);
   }
   if (uShafts > 0.0) c += texture2D(tShafts, vUv).rgb * uShafts;
   // Bloom was built from exposed color; un-expose so tone mapping treats both alike.

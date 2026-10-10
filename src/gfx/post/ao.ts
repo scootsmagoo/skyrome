@@ -16,6 +16,8 @@
 
 export const AO_FRAG = /* glsl */ `
 uniform sampler2D tDepth;
+// The scene colour: alpha 0 marks characters (avatar materials), which neither take nor cast this AO.
+uniform sampler2D tMask;
 uniform mat4 uProj;
 uniform mat4 uInvProj;
 uniform vec2 uTexel;      // full-resolution texel of the depth buffer
@@ -88,6 +90,7 @@ void main() {
     float t = (float(i) + 0.5) / float(N_S);
     float a = rot + float(i) * 2.39996;
     vec2 o = vec2(cos(a), sin(a) * (uTexel.x / uTexel.y)) * rs * t;
+    if (texture2D(tMask, vUv + o).a < 0.5) continue;
     vec3 Q = viewPos(vUv + o);
     vec3 v = Q - P;
     float vv = dot(v, v);
@@ -95,6 +98,7 @@ void main() {
     occ += max(0.0, dot(v, N) - 0.012 * dist) / (vv + 0.01) * smoothstep(uRadius * uRadius * 4.0, 0.0, vv);
   }
   float ao = max(0.0, 1.0 - uIntensity * 2.0 * occ / float(N_S));
+  if (texture2D(tMask, vUv).a < 0.5) ao = 1.0;
   ao = mix(ao, 1.0, smoothstep(uFadeFar * 0.5, uFadeFar, dist));
   float cs = 1.0;
   #ifdef CONTACT

@@ -26,6 +26,7 @@ import { resolveOutfit } from '../../build/outfit';
 import type { Appearance } from '../../../appearance';
 import type { BodyArrays } from '../morph';
 import { armRelief, inToga, torsoRelief, type Relief } from './detail';
+import { bakedPlan } from './fit';
 
 export interface BodyPaint {
   /** Linear RGB per vertex. */
@@ -172,10 +173,16 @@ export interface PaintOptions {
   body: BodyArrays;
   /** Triangle index of the body: with it the smooth `cover` field is computed. */
   index?: ArrayLike<number>;
+  /** The body LOD: at LOD 0..2 garments baked as cloth shells (fit.ts) are not painted on the skin as well. */
+  lod?: number;
 }
 
-export function paintBody({ app, rig, body, index }: PaintOptions): BodyPaint {
-  const outfit = resolveOutfit(app);
+export function paintBody({ app, rig, body, index, lod }: PaintOptions): BodyPaint {
+  let outfit = resolveOutfit(app);
+  if (lod !== undefined && lod <= 2) {
+    const plan = bakedPlan({ app, rig, sex: app.sex, lod: lod as 0 | 1 | 2, body }, outfit);
+    if (plan.toga || plan.stola) outfit = { ...outfit, toga: plan.toga ? null : outfit.toga, stola: plan.stola ? null : outfit.stola };
+  }
   // The clavi are not painted on the vertices (see BodyPaint.clavus): paintTorso sees a tunic without them.
   const clavi = outfit.tunic?.clavi;
   const ctx: Ctx = makeCtx(rig, app, clavi ? { ...outfit, tunic: { ...outfit.tunic!, clavi: undefined } } : outfit, 'high');
@@ -211,6 +218,13 @@ export function paintBody({ app, rig, body, index }: PaintOptions): BodyPaint {
     if ((sideL || sideR) && body.position[v * 3 + 1] > L.armpit - 0.03 * rig.s) {
       const jb = sideL ? B.upperArmL : B.upperArmR;
       if (Math.hypot(body.position[v * 3] - J[jb * 3], body.position[v * 3 + 2] - J[jb * 3 + 2]) > 0.085 * rig.s) r = 'torso';
+    }
+    // The armpit's front and back folds and the inside of the arm beside the ribs: the arm rules end at the sleeve's
+    // hem there and left a notch of skin between the sleeve and the tunic's side. A tunic is cut wide under the arm.
+    if ((sideL || sideR) && r !== 'torso') {
+      const y = body.position[v * 3 + 1];
+      const jb = sideL ? B.upperArmL : B.upperArmR;
+      if (y > L.armpit - 0.11 * rig.s && y < L.armpit + 0.03 * rig.s && Math.abs(body.position[v * 3]) < Math.abs(J[jb * 3]) - 0.012 * rig.s) r = 'torso';
     }
     // The trapezius slope up to the neck too: the arm rules have no neckline, so cloth would run up the neck in spikes.
     if ((best === B.shoulderL || best === B.shoulderR) && body.position[v * 3 + 1] > L.shTop - 0.012 * rig.s && Math.abs(body.position[v * 3]) < L.armX * 0.85) r = 'torso';

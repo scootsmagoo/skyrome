@@ -17,6 +17,7 @@ import { resolveOutfit } from '../../build/outfit';
 import { SURF } from '../../SkinBuilder';
 import { avatarMaterial } from '../../material';
 import type { HeadSurface } from './frame';
+import { hasBaked } from '../garments/baked';
 
 const smooth01 = (a: number, b: number, x: number) => smooth(a, b, x);
 
@@ -80,6 +81,8 @@ export function buildGear(app: Appearance, rig: Rig, H: HeadSurface, lod: 0 | 1 
   const L = levels(rig);
   if (helmet) buildHelmet(ctx, frame, helmet.kind, helmet.crest, helmet.metal);
   else if (veiled) {
+    // A priest's veil is his toga drawn over the head: the baked toga velata (garments/fit.ts) when it exists.
+    if (style === 'veiled' && outfit.toga && hasBaked(app.sex, 'toga_velata', lod)) return null;
     buildVeil(ctx, frame, L, style);
     if (style === 'vestal') infula(ctx, H);
   }

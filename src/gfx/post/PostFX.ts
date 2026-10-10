@@ -211,6 +211,7 @@ export class PostFX implements System {
       name: 'AO',
       uniforms: {
         tDepth: { value: null },
+        tMask: { value: null },
         uProj: { value: new THREE.Matrix4() },
         uInvProj: { value: new THREE.Matrix4() },
         uTexel: { value: new THREE.Vector2() },
@@ -412,6 +413,7 @@ export class PostFX implements System {
     if (this.aoEnabled) {
       const au = this.aoMat.uniforms;
       au.tDepth.value = this.hdr.depthTexture;
+      au.tMask.value = this.hdr.texture;
       au.uProj.value.copy(camera.projectionMatrix);
       au.uInvProj.value.copy(camera.projectionMatrixInverse);
       au.uTexel.value.set(1 / w, 1 / h);
