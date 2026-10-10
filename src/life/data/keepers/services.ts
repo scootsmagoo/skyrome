@@ -64,11 +64,11 @@ export default defineLife({
       district: 'dist-vallis-colossei',
       station: 'st-thermae-titi',
       member: 0,
-      name: 'Eutychus',
+      name: 'Corinthus',
       title: 'Bath attendant',
       barks: ['A quadrans for the baths, citizen. Doors open at the eighth hour.', 'Leave your clothes with the capsarius, or lose them.'],
       talk: {
-        greet: '(A wiry freedman with a bronze strigil on a cord and a purse that clinks with quadrantes.) Eutychus, doorkeeper of the Baths of Titus. Small beside Trajan’s, and older, and the water is hotter. A quadrans, and the bell rings at the eighth hour.',
+        greet: '(A wiry freedman with a bronze strigil on a cord and a purse that clinks with quadrantes.) Corinthus, doorkeeper of the Baths of Titus. Small beside Trajan’s, and older, and the water is hotter. A quadrans, and the bell rings at the eighth hour.',
         again: ['A quadrans, citizen. The bell at the eighth hour.', 'The furnaces were lit at dawn. The caldarium is waiting.', 'Come in, come in. Mind the wet floor.'],
         topics: [
           { ask: 'Why the eighth hour?', say: 'Because the furnace-men need the morning to heat the water. The day’s business is for the morning; the bath is for after. Everyone knows it. The bell rings, the doors open, the whole Oppian comes down the hill.' },
@@ -84,7 +84,7 @@ export default defineLife({
       district: 'dist-vallis-colossei',
       station: 'st-thermae-traiani',
       member: 0,
-      name: 'Hilarus',
+      name: 'Philargyrus',
       title: 'Bath attendant',
       barks: ['Trajan’s baths, a quadrans! Bigger than anything in Rome!', 'Doors open at the eighth hour. Not before.'],
       talk: {

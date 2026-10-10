@@ -123,7 +123,7 @@ export default defineLife({
       district: 'dist-subura',
       station: 'st-subura-tonsor',
       member: 1,
-      name: 'Eutychus',
+      name: 'Anteros',
       title: 'Barber',
       barks: ['Shaves, trims, a quick hair! Come under the razor!', 'A barber knows everything. A good barber says nothing.'],
       talk: {
