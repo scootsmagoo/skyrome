@@ -8,7 +8,7 @@ PERF-mem crew. Goal: running the game must not leak or bloat memory, on a laptop
 - **Geometry (perf.mjs, Forum): 253.1 to 226.8 MB; `city:batches` 115.9 to 90.4 MB.** Textures 930 to 935 and geometries 1150 to 1191 are unchanged (the counts are what is alive in the scene).
 - **Four leaks found and fixed.** (1) Hair and headgear geometry orphaned by the cache that held it (about 45 a lap of teleports, never freed). (2) Spawned corpses never leaving (3 MB each, unbounded in one place). (3) `farBake`'s `onUpload` callback kept all 78 MB of the pre-merge parts alive (a V8 closure-context effect). (4) The city plan's scratch grids (35 MB) lived as long as the plan.
 - **30-minute soak (`scripts/leaks.mjs --phases soak --soak 30`): PASS.** Heap swings between 757 and 875 MB with the place the harness is at. Means of minutes 1 to 10, 11 to 20 and 21 to 30: 802, 822 and 823 MB (the first step is the avatar and hair caches filling), so about +20 MB then flat; the harness verdict is +40 MB from minute 5 to the end against the 100 MB limit.
-- **Every cycle phase is flat** after the fixes (table below): 8 laps of teleports, 20 interior enters and exits, 20 save/loads, 50 menu rounds, 20 fights, 24 hour changes, 6 Colosseum games.
+- **Every cycle phase is flat** after the fixes (table below): 8 laps of teleports, 20 interior enters and exits, 20 save/loads, 50 menu rounds, 50 fights, 24 hour changes, 6 Colosseum games. Fights needed two harness corrections, see "Fights, re-checked".
 
 ## Where the heap goes
 
@@ -41,7 +41,17 @@ The big retained arrays at the Forum before this work (boot snapshot, backings o
 3. **City plan scratch** (`src/world/city/plan.ts`). The same context effect: the plan returns closures (`inDetail`, `corridor`) from the function that holds four 8.6 MB scratch grids. They are `let` now and replaced by an empty array before the plan returns.
 4. **Terrain ground layers** (`src/world/terrain/groundTextures.ts`): the `DataArrayTexture`s are released after upload like every other CPU-side texture (45 MB).
 5. **City batch normals as bytes** (`src/world/city/batches.ts`): `Batch.add/instance/addGeometry/shape` run `packNormals`, which saves 9 of 12 normal bytes per vertex in the CPU copy and on the GPU. City batches 115.9 to 90.4 MB, geometry total 253.1 to 226.8 MB (perf.mjs). Every geometry a batch takes must come through those calls so the batch's attribute types match (a unit test checks it).
-6. **Corpse cap** (`src/combat/CombatSystem.ts`, `MAX_CORPSES = 12`). Spawned corpses stayed for 3 game days or until 160 m away. Each holds its own avatar, bones and gore pieces (about 3 MB). The farthest beyond 12 now leave. Before: 20 fights at one spot, heap +72 MB, 61 more combatants, 65 more textures. After: flat.
+6. **Corpse cap** (`src/combat/CombatSystem.ts`, `MAX_CORPSES = 12`). Spawned corpses stayed for 3 game days or until 160 m away. Each holds its own avatar, bones and gore pieces (about 3 MB). The farthest beyond 12 now leave, except corpses in view (within 45 m, in front of the camera), which stay up to `MAX_CORPSES_SEEN = 24` so none pops out in front of the player. Before: 20 fights at one spot, heap +72 MB, 61 more combatants, 65 more textures. After: flat.
+
+### Fights, re-checked
+
+A review re-ran the phase and it failed (10 cycles: geo +110, then heap +27 MB). Two causes, neither a leak in the game:
+
+1. **Warm-up.** Three corpses a cycle, cap 12: the corpse count (and its 3 MB each) only plateaus after four cycles, and the harness warmed up two. Fights now warm up six.
+2. **Guards.** `killall` in the city is murder; the crime system sends guards, and the wanted level climbs with every cycle (actors 15 to 35, plus their looks). The cycle now runs `pardon` first.
+3. **Geometry counter drift.** `renderer.info.memory.geometries` still creeps in a living city. The control phase `idle` (nothing but waiting five seconds a cycle) shows +93 geometries over 50 cycles with a flat heap: NPCs walk into view and their meshes first upload. The look caches (`looks` in the table, hair + gear + body) stay flat at 265 to 280, and orphans stay 0 to 9. So outside the lap-sampled teleport phase `geo` is judged with a 20 % band.
+
+After: 50 fights 853 to 882 MB (884 at cycle 25), actors flat, `looks` flat; 50 idle cycles 881 to 874 MB. Verdict PASS for both. New harness columns: `geoScene` (unique geometries in the scene), `looks` / `looksHeld` (cache entries and the ones a live actor holds).
 
 Smaller changes: `headCacheStats`/`headCacheGeometries`/`realCacheGeometries` debug exports (the probe uses them to tell cached geometry from orphans).
 
@@ -55,7 +65,7 @@ Smaller changes: `headCacheStats`/`headCacheGeometries`/`realCacheGeometries` de
 | Interior enter/exit (Column stair) | 20 | flat | 827 to 822 MB | flat |
 | Save, then load | 20 | flat | 828 to 831 MB | flat |
 | Menus, map, inventory, dialogue | 50 | 1078 to 1092 MB | 831 to 849 MB | flat |
-| Fights (spawn 3, killall, knock) | 20 | 1001 to 1073 MB, actors +61, textures +65, objects +2719 | 861 to 885 MB, actors 20 to 31 (corpse cap) | flat |
+| Fights (spawn 3, killall, knock) | 20 | 1001 to 1073 MB, actors +61, textures +65, objects +2719 | 853 to 882 MB over 50 cycles (plateau from cycle 5), actors flat | flat, see "Fights, re-checked" |
 | Day/night (sethour) | 24 | not run | 875 to 841 MB | flat |
 | Colosseum games (munus) | 6 | not run | 781 to 782 MB | flat |
 | Mixed soak, 30 min | 1 | not run | means per ten minutes 802, 822, 823 MB | PASS |
@@ -88,3 +98,8 @@ node scripts/memory.mjs                        # JS heap and the browser's own R
 ```
 
 A phase flags growth when the second half of its samples kept growing past 5 percent of the counter (heap: more than 1.5 MB a cycle), so streaming and the living world do not trip it. Teleports compare samples taken at the same place only. Never edit source while a run is in flight (Vite serves the new file to the next page load).
+
+## Notes from review
+
+- `packNormals` mutates the geometry it is given. Every caller of `Batch.add/addGeometry/instance/shape` hands the geometry over (the builder's geometry is disposed right after, or `prep` made a private one), so nothing keeps float normals; the contract is now written on those methods.
+- Releasing CPU pixels (terrain layers, 45 MB) means a WebGL context loss cannot re-upload them. The game has no context-restore path for any of its released data (city batches included), so a lost context needs a page reload; noted in `groundTextures.ts`.

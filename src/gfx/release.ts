@@ -55,7 +55,8 @@ export function releaseStaticMeshes(root: THREE.Object3D): number {
 /**
  * Store a static geometry's normals as normalized bytes (3 B a vertex instead of 12, CPU and GPU
  * alike). The error is under half a degree: invisible on stone. Skipped for dynamic normals and
- * ones already packed.
+ * ones already packed. Mutates `g` (replaces its normal attribute): call it only on a geometry whose
+ * owner is done with the float normals (batch intake: the builder's geometry is disposed afterwards).
  */
 export function packNormals(g: THREE.BufferGeometry): boolean {
   const n = g.getAttribute('normal') as THREE.BufferAttribute | undefined;

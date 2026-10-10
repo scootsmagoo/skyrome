@@ -55,7 +55,9 @@ function arrayTexture(data: Uint8Array, size: number, layers: number, srgb: bool
   t.anisotropy = mips ? 16 : 1;
   if (srgb) t.colorSpace = THREE.SRGBColorSpace;
   t.needsUpdate = true;
-  // 45 MB of layers the GPU holds once uploaded: nothing reads them on the CPU (gfx/release).
+  // 45 MB of layers the GPU holds once uploaded: nothing reads them on the CPU (gfx/release). Trade-off: after a
+  // WebGL context loss three.js would re-upload from the freed pixels; the game has no context-restore path
+  // (nothing else would survive one either: the city batches are freed the same way), so a lost context needs a reload.
   return releaseTextureAfterUpload(t);
 }
 

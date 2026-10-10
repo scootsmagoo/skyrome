@@ -117,7 +117,10 @@ export class Batch {
     m.setInstanceCount(Math.max(m.maxInstanceCount * 2, m.instanceCount + k));
   }
 
-  /** Add a geometry with one instance (identity matrix: the geometry is in world space). */
+  /**
+   * Add a geometry with one instance (identity matrix: the geometry is in world space). The batch takes the
+   * geometry over: its normals are repacked to bytes in place (every caller disposes or discards it after).
+   */
   add(geometry: THREE.BufferGeometry, matrix?: THREE.Matrix4): BatchRef {
     packNormals(geometry);
     const n = geometry.getAttribute('position').count;
@@ -154,7 +157,7 @@ export class Batch {
     return { batch: this, geom: s.geom, inst, verts: 0 };
   }
 
-  /** Add a geometry that instances may use later (`place`), e.g. an LOD twin; returns its id. */
+  /** Add a geometry that instances may use later (`place`), e.g. an LOD twin; returns its id. Takes the geometry over (normals packed in place). */
   addGeometry(geometry: THREE.BufferGeometry): number {
     packNormals(geometry);
     const n = geometry.getAttribute('position').count;

@@ -12,7 +12,7 @@
  * growing: heap slope below --heap-slope MB per cycle and every counter flat (counts compared
  * exactly, with a small allowance for streaming phases).
  *
- *   node scripts/leaks.mjs [--phases teleport,interior,saveload,menus,fights,daynight,munus,soak]
+ *   node scripts/leaks.mjs [--phases teleport,interior,saveload,menus,fights,idle,daynight,munus,soak]
  *                          [--scale 1]          multiply every cycle count (0.2 for a quick run)
  *                          [--soak 30]          minutes for the soak phase (not run unless named)
  *                          [--heap-slope 1.5]   MB a cycle the heap may grow before it is flagged
@@ -35,9 +35,9 @@ const scale = Number(args.scale ?? 1);
 const slope = Number(args['heap-slope'] ?? 1.5);
 const outDir = resolve(root, args.out ?? '.shots/leaks');
 mkdirSync(outDir, { recursive: true });
-const ALL = ['teleport', 'interior', 'saveload', 'menus', 'fights', 'daynight', 'munus'];
+const ALL = ['teleport', 'interior', 'saveload', 'menus', 'fights', 'idle', 'daynight', 'munus'];
 const phases = String(args.phases ?? ALL.join(',')).split(',').filter(Boolean);
-const N = { teleport: 48, interior: 20, saveload: 20, menus: 50, fights: 20, daynight: 24, munus: 6 };
+const N = { teleport: 48, interior: 20, saveload: 20, menus: 50, fights: 20, idle: 20, daynight: 24, munus: 6 };
 const cycles = (p) => Math.max(EVERY[p] ?? 4, Math.round((N[p] * scale) / (EVERY[p] ?? 1)) * (EVERY[p] ?? 1));
 
 const { createServer } = await import('vite');
@@ -144,6 +144,14 @@ async function sample() {
       window.__cachedUuids = new Set([...rb.realCacheGeometries(), ...hd.headCacheGeometries()].map((x) => x.uuid));
     });
   }
+  // Look caches (body, hair, gear): they fill toward their caps as new looks appear, which is growth that ends.
+  const looks = await page.evaluate(async () => {
+    const rb = await import('/src/actors/avatar/real/RealBody.ts');
+    const hd = await import('/src/actors/avatar/real/head/index.ts');
+    const b = rb.realCacheStats();
+    const h = hd.headCacheStats();
+    return { entries: b.entries + h.hair.entries + h.gear.entries, held: b.held + h.hair.held + h.gear.held };
+  });
   const dom = await cdp.send('Memory.getDOMCounters').catch(() => ({}));
   const s = await page.evaluate(() => {
     const g = window.__skyrome.game;
@@ -169,6 +177,7 @@ async function sample() {
       tex: info.memory.textures,
       prog: info.programs?.length ?? 0,
       mat: mats.size,
+      geoScene: geos.size,
       objects,
       orphanGeos,
       bodies: w.bodies.len(),
@@ -183,6 +192,8 @@ async function sample() {
       timeouts: h.timeouts.size,
     };
   });
+  s.looks = looks.entries;
+  s.looksHeld = looks.held;
   s.audioLive = audioLive;
   s.audioCtx = audioContexts;
   s.domNodes = dom.nodes ?? 0;
@@ -191,11 +202,12 @@ async function sample() {
   return s;
 }
 
-const KEYS = ['heap', 'geo', 'tex', 'prog', 'mat', 'objects', 'orphanGeos', 'bodies', 'colliders', 'actors', 'npcs', 'audioLive', 'domNodes', 'domAttached', 'listeners', 'docs', 'intervals', 'timeouts'];
+const KEYS = ['heap', 'geo', 'geoScene', 'looks', 'looksHeld', 'tex', 'prog', 'mat', 'objects', 'orphanGeos', 'bodies', 'colliders', 'actors', 'npcs', 'audioLive', 'domNodes', 'domAttached', 'listeners', 'docs', 'intervals', 'timeouts'];
 const results = [];
 // Teleports sample once a lap (12 places), always standing at the same place: what streams in
 // depends on where you are, so only same-place samples compare.
-const WARM = { teleport: 12 };
+// fights: the corpse cap (12) fills after four cycles of three, so warm up past it.
+const WARM = { teleport: 12, fights: 6 };
 const EVERY = { teleport: 12 };
 
 const ACTIVITIES = {
@@ -277,6 +289,9 @@ const ACTIVITIES = {
       const g = window.__skyrome.game;
       const tick = (ms) => new Promise((r) => setTimeout(r, ms));
       await g.console.exec('tgm on');
+      // Murders in the city send guards (a crime-system population that grows with the wanted level): a pardon
+      // keeps the cycle about corpses, ragdolls and gore, not about how many guards the harness provoked.
+      await g.console.exec('pardon');
       await g.console.exec('spawn grassator 3');
       await tick(2500);
       // Arrows and gore: the player shoots when a bow is ready; killall spawns ragdolls and pieces.
@@ -285,6 +300,10 @@ const ACTIVITIES = {
       await g.console.exec('knock');
       await tick(1000);
     });
+  },
+  // Control: nothing but the living world for as long as a fight cycle takes (is growth the activity's or the city's?).
+  async idle() {
+    await new Promise((r) => setTimeout(r, 5000));
   },
   async daynight(i) {
     await page.evaluate(async (i) => {
@@ -373,7 +392,11 @@ for (const phase of phases) {
       // The world is alive (NPCs come and go, the day moves), so counters drift a little: flag more than 5 %
       // (25 at least), and only when the second half kept growing. audioLive and listeners swing with GC
       // timing and open UI: wider bands.
-      const tol = k === 'audioLive' ? Math.max(150, first[k]) : k === 'listeners' ? Math.max(30, first[k] * 0.3) : Math.max(25, first[k] * 0.05);
+      // Uploaded geometries drift upward in a living city even with nothing happening (the idle control phase:
+      // about +90 over 50 five-second cycles as NPCs walk into view and their meshes first upload), so outside
+      // the lap-sampled teleport phase geo gets 20 %; the heap and the look caches are the real judges there.
+      const geoDrift = k === 'geo' && !EVERY[phase] ? Math.max(25, first[k] * 0.2) : 0;
+      const tol = geoDrift || k === 'audioLive' ? Math.max(150, first[k]) : k === 'listeners' ? Math.max(30, first[k] * 0.3) : Math.max(25, first[k] * 0.05);
       if (d2 > 0 && d1 > tol) grew.push(`${k} +${d1}`);
     }
     // Buffers made per cycle are real memory (a synthesized sound cached per hit would show here).

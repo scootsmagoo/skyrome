@@ -178,6 +178,9 @@ const eye = new THREE.Vector3();
 const STEP = 1 / 60;
 /** Spawned corpses kept in the world at once (the nearest; see housekeeping). */
 const MAX_CORPSES = 12;
+/** ...and the most when some are in view: a corpse the player is looking at (within 45 m, in front) stays until this many. */
+const MAX_CORPSES_SEEN = 24;
+const lookDir = new THREE.Vector3();
 /** Arrow mesh: nock to tip along +Y (arrowGeometry), drawn with the head at the arrow's point. */
 const ARROW_LEN = 0.75;
 
@@ -1875,7 +1878,7 @@ export class CombatSystem implements System, PlayerCombatHost {
     const pp = g.player?.position;
     if (!pp) return;
     this.releaseUndecided(pp);
-    const corpses: { c: Combatant; d: number }[] = [];
+    const corpses: { c: Combatant; d: number; seen: boolean }[] = [];
     for (const c of [...this.core.list]) {
       if (!this.spawned.has(c.id) || c.isPlayer) continue;
       const d = dist2D(c.position, pp);
@@ -1884,13 +1887,24 @@ export class CombatSystem implements System, PlayerCombatHost {
       if ((over && d > 30) || (corpse && d > 160) || (c.status === 'active' && !c.target && d > 220)) {
         this.bodies.remove(c.id);
         this.despawn(c);
-      } else if (corpse) corpses.push({ c, d });
+      } else if (corpse) corpses.push({ c, d, seen: false });
     }
     // Each corpse holds its own avatar, bones and gore pieces (about 3 MB): a long fight in one place
     // (the arena, a mugging street) keeps the nearest few and lets the farthest go, whatever 'bodies' says.
+    // One in view (near and in front of the camera) is kept longer so it does not vanish in front of the player.
     if (corpses.length > MAX_CORPSES) {
-      corpses.sort((a, b) => b.d - a.d);
-      for (let i = 0; i < corpses.length - MAX_CORPSES; i++) {
+      const cam = this.game.camera;
+      cam.getWorldPosition(eye);
+      cam.getWorldDirection(lookDir);
+      for (const k of corpses) {
+        k.seen = k.d < 45 && (k.c.position.x - eye.x) * lookDir.x + (k.c.position.z - eye.z) * lookDir.z > 0;
+      }
+      // Unseen first (farthest first), then seen ones (farthest first).
+      corpses.sort((a, b) => (a.seen === b.seen ? b.d - a.d : a.seen ? 1 : -1));
+      const unseen = corpses.reduce((n, k) => n + (k.seen ? 0 : 1), 0);
+      // Over the cap: drop unseen ones, and seen ones only past the larger cap.
+      const drop = Math.max(Math.min(corpses.length - MAX_CORPSES, unseen), corpses.length - MAX_CORPSES_SEEN);
+      for (let i = 0; i < drop; i++) {
         this.bodies.remove(corpses[i].c.id);
         this.despawn(corpses[i].c);
       }
