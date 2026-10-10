@@ -579,6 +579,16 @@ function release(e: Entry) {
   }
 }
 
+/** Every geometry the body cache owns (debug: scripts/leaks-probe.mjs). */
+export function realCacheGeometries(): THREE.BufferGeometry[] {
+  const out: THREE.BufferGeometry[] = [];
+  for (const e of cache.values()) {
+    out.push(e.eyes);
+    for (const l of e.lods) if (l) out.push(l.geometry, ...(l.shells ? [l.shells] : []));
+  }
+  return out;
+}
+
 /** Cache statistics (tests, debug). */
 export function realCacheStats() {
   let held = 0;

@@ -22,7 +22,10 @@ Integration notes for the avatar (C2a):
 - The painted face needs the body's LOD 0 material to be `skinMaterial(sex + ":0", app.skin, maps, head.skinPaint)`
   (one material per appearance, the shader program is shared). LOD 1 and 2 keep the unpainted material.
 - Hair geometry is cached per (sex, style, colour, beard, age, head size, height, LOD) and reference counted;
-  a unique head costs 2 to 5 ms to build.
+  a unique head costs 2 to 5 ms to build. `Cache.acquire` holds the entry before it trims: trimming first evicted
+  (and disposed) the newest entry whenever the map was full of held ones, so its release found nothing and every new
+  look past the cap leaked its uploaded hair geometry (about 45 a lap of 12 teleports; `tests/head-cache.test.ts`).
+  The map may exceed its cap while avatars hold the entries (the crowd is about 140 heads, the cap 96).
 - `setHairAlphaToCoverage(false)` for the tier without MSAA (main.ts calls it from the settings).
 - `head/devScene.ts` shows the whole recipe (it loads LOD 0 of both bodies itself for the arrays).
 

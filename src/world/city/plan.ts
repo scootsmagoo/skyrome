@@ -492,10 +492,12 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
   };
 
   const streets: PlanStreet[] = [];
-  const lab = new Int32Array(N).fill(-1);
-  const mark = new Int32Array(N);
-  const depthGrid = new Int32Array(N);
-  const bfsQueue = new Int32Array(N);
+  // Scratch grids for the street extraction below. `let`, because the plan's returned closures share
+  // this function's V8 context: left alone, these 4 x 8.6 MB would live as long as the plan does.
+  let lab = new Int32Array(N).fill(-1);
+  let mark = new Int32Array(N);
+  let depthGrid = new Int32Array(N);
+  let bfsQueue = new Int32Array(N);
   let stamp = 1;
   let nextId = 0;
   interface Comp { id: number; cells: Int32Array; level: number }
@@ -870,6 +872,7 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
   stats.blocks = blocks.length;
   stats.builtBlocks = blocks.filter((b) => b.kind === 'built').length;
   stats.totalMs = now() - t0;
+  lab = mark = depthGrid = bfsQueue = new Int32Array(0);
   return { grid: g, hy, region, roads, streets, blocks, piazzas, walls, gates, aqueducts, bridges: (atlas.BRIDGES ?? []).map((b) => ({ id: b.id, a: g2(b.a), b: g2(b.b), width: Math.max(3, b.width * S) })), plazas, detailBounds, detailRects, inDetail, mergeCell, landmarkCategory: atlas.LANDMARKS.map((l) => l.category), landmarkPolys: lmPolys.filter((l) => l.solid).map((l) => ({ index: l.index, id: l.lm.id, category: l.lm.category, poly: l.poly })), corridor: (x, z) => corridorAt(x, z).w > 0.5, stats };
 }
 

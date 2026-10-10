@@ -49,7 +49,7 @@ interface Entry<T> {
   value: T;
   refs: number;
 }
-class Cache<T extends { geometry: THREE.BufferGeometry }> {
+export class Cache<T extends { geometry: THREE.BufferGeometry }> {
   private map = new Map<string, Entry<T>>();
   constructor(private readonly max: number) {}
   acquire(key: string, make: () => T): { key: string; value: T } {
@@ -57,14 +57,27 @@ class Cache<T extends { geometry: THREE.BufferGeometry }> {
     if (!e) {
       e = { value: make(), refs: 0 };
       this.map.set(key, e);
-      this.trim();
     }
+    // Hold before trimming: with the map full of held entries the newest one is the only unheld entry,
+    // and trimming first evicted (and disposed) it before its caller had it. Its release then found
+    // nothing, so every new look past the cap leaked its uploaded hair geometry for good.
     e.refs++;
+    this.trim();
     return { key, value: e.value };
   }
   release(key: string) {
     const e = this.map.get(key);
     if (e) e.refs = Math.max(0, e.refs - 1);
+  }
+  /** The geometries the cache owns (scripts/leaks-probe.mjs tells orphans from cached ones with it). */
+  geometries() {
+    return [...this.map.values()].map((e) => e.value.geometry);
+  }
+  /** Entries, and how many are held by a live head (tests, scripts/leaks-probe.mjs). */
+  stats() {
+    let held = 0;
+    for (const e of this.map.values()) if (e.refs > 0) held++;
+    return { entries: this.map.size, held, max: this.max };
   }
   private trim() {
     if (this.map.size <= this.max) return;
@@ -83,6 +96,16 @@ const hairCache = new Cache<{ geometry: THREE.BufferGeometry; triangles: number 
 const gearCache = new Cache<{ geometry: THREE.BufferGeometry; triangles: number }>(48);
 // Cached for a look with no hair/gear. Its geometry is a throwaway per entry (never a shared object), so a trim can dispose it.
 const empty = () => ({ geometry: new THREE.BufferGeometry(), triangles: 0 });
+
+/** Hair and gear cache sizes (tests, debug). */
+export function headCacheStats() {
+  return { hair: hairCache.stats(), gear: gearCache.stats() };
+}
+
+/** Every geometry the hair and gear caches own (debug). */
+export function headCacheGeometries(): THREE.BufferGeometry[] {
+  return [...hairCache.geometries(), ...gearCache.geometries()];
+}
 
 const lerpOf = (n: number) => Math.round(n * 1000);
 

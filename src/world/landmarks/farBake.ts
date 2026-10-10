@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MATERIAL_BASE, MATERIAL_IDS, type MaterialId } from '../../gfx/materialIds';
+import { freeArray } from '../../gfx/release';
 
 /** Full detail within this distance of a landmark's bounding sphere (m, × the view-distance scale). */
 export const LANDMARK_DETAIL_DISTANCE = 220;
@@ -136,11 +137,8 @@ export function bakeLandmarkFar(root: THREE.Object3D, skip?: (o: THREE.Object3D)
   geometry.computeBoundingSphere();
   geometry.computeBoundingBox();
   // The stand-in is drawn once uploaded and never read again on the CPU: free its arrays then.
-  const free = function (this: THREE.BufferAttribute) {
-    (this as unknown as { array: ArrayLike<number> | null }).array = null;
-  };
-  for (const a of Object.values(geometry.attributes)) (a as THREE.BufferAttribute).onUpload(free);
-  geometry.index?.onUpload(free);
+  for (const a of Object.values(geometry.attributes)) (a as THREE.BufferAttribute).onUpload(freeArray);
+  geometry.index?.onUpload(freeArray);
   const mesh = new THREE.Mesh(geometry, landmarkFarMaterial());
   mesh.castShadow = false;
   mesh.receiveShadow = false;
