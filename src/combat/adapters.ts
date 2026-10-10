@@ -116,6 +116,7 @@ export class AvatarCombatView implements CombatView {
   }
 
   hand(out: THREE.Vector3): boolean {
+    (this.avatar as { syncWorld?: () => void }).syncWorld?.();
     const s = this.avatar.getSocket('handR');
     if (!s) return false;
     s.getWorldPosition(out);
@@ -123,6 +124,7 @@ export class AvatarCombatView implements CombatView {
   }
 
   shoulder(out: THREE.Vector3): boolean {
+    (this.avatar as { syncWorld?: () => void }).syncWorld?.();
     const s = this.avatar.getSocket('chest');
     if (!s) return false;
     s.getWorldPosition(out);
