@@ -11,6 +11,8 @@
  *   SLOPE_WALK_MAX_DEG the steepest slope (degrees) a character climbs AND stands on (no slide); steeper slides.
  *   NAV_MAX_STEP    the biggest height change the NPC planner (NavGrid) accepts between cells (the planner stays
  *                   well under what the assist takes, so a path never rests on the limit).
+ *   NAV_MAX_SLOPE_DEG the steepest terrain the planner walks on: the controller's slide angle (Physics.createCharacter).
+ *                   A bank steeper than that is no floor for a path, though people who stand on it stay put.
  *   Above STEP_ASSIST_MAX the player clambers (player/Climb.ts, from CLIMB.minRise 0.32 m), so no ledge is a dead zone
  *   (the 0.4 m seat rows of a cavea stay a clamber: its aisles are the way up).
  */
@@ -21,3 +23,4 @@ export const AUTOSTEP_MAX = 0.45;
 export const AUTOSTEP_MIN_WIDTH = 0.15;
 export const NAV_MAX_STEP = 0.3;
 export const SLOPE_WALK_MAX_DEG = 50;
+export const NAV_MAX_SLOPE_DEG = 40;

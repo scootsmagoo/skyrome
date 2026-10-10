@@ -210,11 +210,14 @@ export class StreetNav {
     return out.reverse();
   }
 
+  /** A node with a link (a cut node, or one the city left without a street, leads nowhere). */
+  private readonly linked = (n: StreetNode) => this.adj[n.i].length > 0;
+
   /** Waypoints (game x/z) from a point to a point along the streets, or null. */
   path(ax: number, az: number, bx: number, bz: number): { x: number; z: number }[] | null {
     if (this.empty) return null;
-    const a = this.nearest(ax, az, 120);
-    const b = this.nearest(bx, bz, 120);
+    const a = this.nearest(ax, az, 120, this.linked);
+    const b = this.nearest(bx, bz, 120, this.linked);
     if (!a || !b) return null;
     const r = this.route(a.i, b.i);
     if (!r) return null;
@@ -228,10 +231,11 @@ export class StreetNav {
 
   /**
    * Cut a node out of the graph: the walk found it unreachable (a street the city drew through a
-   * building: the grid reads the real colliders). Routes stop passing through it. Returns whether
-   * a node within 3 m was cut.
+   * building: the grid reads the real colliders). Routes stop passing through it until `restoreCut`
+   * finds the ground under it changed. `stamp`: what the nav grid there looked like (`NavGrid.areaStamp`).
+   * Returns whether a node within 3 m was cut.
    */
-  drop(x: number, z: number, at = 0): boolean {
+  drop(x: number, z: number, stamp = 0): boolean {
     const n = this.nearest(x, z, 3);
     if (!n || !this.adj[n.i].length) return false;
     for (const e of this.adj[n.i]) {
@@ -241,23 +245,35 @@ export class StreetNav {
     const saved = this.adj[n.i].slice();
     this.adj[n.i].length = 0;
     this.dropped++;
-    this.cut.push({ i: n.i, edges: saved, at });
+    this.cut.push({ i: n.i, edges: saved, stamp });
     return true;
   }
 
-  /** Cut nodes, to put back once their time is up (the grid may have been wrong or unbuilt). */
-  private cut: { i: number; edges: { to: number; w: number; width: number }[]; at: number }[] = [];
+  /** Cut nodes with their links and the grid stamp they were judged on. */
+  private cut: { i: number; edges: { to: number; w: number; width: number }[]; stamp: number }[] = [];
 
-  /** Put back nodes cut more than `age` seconds before `now`. */
-  restoreCut(now: number, age = 90) {
-    while (this.cut.length && this.cut[0].at + age < now) {
-      const c = this.cut.shift()!;
-      this.adj[c.i].push(...c.edges);
+  /**
+   * Put back the cut nodes whose ground has changed since (`stampAt` differs from the stamp they were cut
+   * with: the grid there was built again, refreshed with something new, or dropped). A link to a node that
+   * is still cut comes back with that node.
+   */
+  restoreCut(stampAt: (x: number, z: number) => number) {
+    for (let k = this.cut.length - 1; k >= 0; k--) {
+      const c = this.cut[k];
+      const n = this.nodes[c.i];
+      if (stampAt(n.x, n.z) === c.stamp) continue;
+      this.cut.splice(k, 1);
+      this.dropped--;
       for (const e of c.edges) {
+        const other = this.cut.find((o) => o.i === e.to);
+        if (other) {
+          other.edges.push({ to: c.i, w: e.w, width: e.width });
+          continue;
+        }
+        this.adj[c.i].push(e);
         const back = this.adj[e.to];
         if (!back.some((b) => b.to === c.i)) back.push({ to: c.i, w: e.w, width: e.width });
       }
-      this.dropped--;
     }
   }
 

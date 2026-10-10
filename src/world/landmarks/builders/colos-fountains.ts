@@ -196,11 +196,13 @@ function buildMetaSudans(ctx: LandmarkContext): LandmarkBuild {
     spots.push({ id: 'lacus-metae-2', kind: 'npc', position: f.point(stand[1].x, 0.05, stand[1].z), heading: Math.atan2(-dir.x, -dir.y) - Math.PI / 2 });
   }
   // A plastered notice wall (album) facing the fountain from the WSW, with the playbill for the
-  // games of 18 May painted on it (content T7), a masonry bench below.
+  // games of 18 May painted on it (content T7), a masonry bench below. It stands in the bend of the
+  // Via Sacra: at 260 degrees and Rb + 8.2 its north end stood 0.4 m into the road's edge and walkers
+  // turning the corner ran into it; here it keeps about 2.7 m clear of the road on both arms.
   {
-    const br = (260 * Math.PI) / 180;
+    const br = (248 * Math.PI) / 180;
     const dir = new THREE.Vector2(Math.sin(br), -Math.cos(br));
-    const R = Rb + 8.2;
+    const R = Rb + 9.4;
     const x = dir.x * R;
     const z = dir.y * R;
     let gmin = Infinity;

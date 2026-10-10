@@ -53,6 +53,8 @@ const BLOCKED_DYN = 4; // marked by agents that got stuck there
 const LINK_E = 8; // a wall between this cell and its east neighbour (the sampler's `link`)
 const LINK_S = 16; // ... and its south neighbour (+z)
 const OFF_SHIFT = 5; // bits 5-7: where in the cell a person fits (CellSample.off)
+/** The two links a cell owns: to its east and to its south neighbour. */
+const LINK_DIRS = [[1, 0, LINK_E], [0, 1, LINK_S]] as const;
 /** Offsets (m) of CellSample.off 0..4 from the cell centre. */
 const OFF_DX = [0, 0.3, -0.3, 0, 0];
 const OFF_DZ = [0, 0, 0, 0.3, -0.3];
@@ -72,6 +74,10 @@ interface Chunk {
   link: number;
   /** Its links have been tested at least once: before that a path may run through a thin wall, so `ready` says no. */
   lit: boolean;
+  /** `NavGrid.litSeq` when it was finished, links and all; a refresh that changes a cell gives it a new one. */
+  seq: number;
+  /** A refresh in progress changed a cell (height, walkability, a link). */
+  dirty: boolean;
 }
 
 /**
@@ -81,6 +87,8 @@ interface Chunk {
  */
 const OFF = 8192;
 const SPAN = 16384;
+/** Most cells one search keeps out of (`NavGrid.avoid`). */
+const MAX_AVOID = 8;
 const tmpPt = { x: 0, z: 0 };
 const key = (cx: number, cz: number) => (cx + 2048) * 4096 + (cz + 2048);
 
@@ -102,6 +110,8 @@ export class NavGrid {
   sampled = 0;
   /** Bumped whenever cells change (paths cached against an older version may be stale). */
   version = 0;
+  /** Counts chunks finished (links and all); each finished chunk keeps its number (`Chunk.seq`). */
+  private litSeq = 0;
 
   constructor(
     private readonly sampler: CellSampler,
@@ -147,7 +157,7 @@ export class NavGrid {
         const k = key(cx, cz);
         if (this.chunks.has(k)) continue;
         const n = this.chunkCells * this.chunkCells;
-        const c: Chunk = { cx, cz, h: new Float32Array(n).fill(NaN), flags: new Uint8Array(n), next: 0, d2, builtAt: 0, link: 0, lit: false };
+        const c: Chunk = { cx, cz, h: new Float32Array(n).fill(NaN), flags: new Uint8Array(n), next: 0, d2, builtAt: 0, link: 0, lit: false, seq: 0, dirty: false };
         this.chunks.set(k, c);
         this.queue.push(c);
       }
@@ -208,8 +218,11 @@ export class NavGrid {
         const ix = c.cx * this.chunkCells + (i % this.chunkCells);
         const iz = c.cz * this.chunkCells + Math.floor(i / this.chunkCells);
         this.sampler.sample((ix + 0.5) * this.cell, (iz + 0.5) * this.cell, this.sample);
+        const f = KNOWN | (this.sample.walkable && Number.isFinite(this.sample.h) ? WALK : 0) | (((this.sample.off ?? 0) & 7) << OFF_SHIFT);
+        // A refresh: did anything change (a block streamed in, a stall went up)? Links are compared when tested.
+        if (c.seq && ((c.flags[i] & ~(BLOCKED_DYN | LINK_E | LINK_S)) !== f || !(c.h[i] === this.sample.h || (c.h[i] !== c.h[i] && this.sample.h !== this.sample.h)))) c.dirty = true;
         c.h[i] = this.sample.h;
-        c.flags[i] = KNOWN | (this.sample.walkable && Number.isFinite(this.sample.h) ? WALK : 0) | (((this.sample.off ?? 0) & 7) << OFF_SHIFT);
+        c.flags[i] = f;
         done++;
       }
       if (c.next >= n) {
@@ -218,7 +231,11 @@ export class NavGrid {
         if (this.sampler.link) {
           c.link = 0;
           this.linkQueue.push(c);
-        } else c.lit = true;
+        } else {
+          if (!c.seq || c.dirty) c.seq = ++this.litSeq;
+          c.lit = true;
+          c.dirty = false;
+        }
         this.version++;
       }
     }
@@ -239,30 +256,41 @@ export class NavGrid {
     let done = 0;
     while (c.link < total && done < max) {
       const k = c.link++;
-      if (k < cc * cc) this.linkCell(x0 + (k % cc), z0 + Math.floor(k / cc));
-      else if (k < cc * cc + cc) this.linkCell(x0 - 1, z0 + (k - cc * cc));
-      else this.linkCell(x0 + (k - cc * cc - cc), z0 - 1);
+      if (k < cc * cc) this.linkCell(x0 + (k % cc), z0 + Math.floor(k / cc), c);
+      else if (k < cc * cc + cc) this.linkCell(x0 - 1, z0 + (k - cc * cc), c);
+      else this.linkCell(x0 + (k - cc * cc - cc), z0 - 1, c);
       done++;
     }
-    if (c.link >= total) c.lit = true;
+    if (c.link >= total) {
+      if (!c.seq || c.dirty) c.seq = ++this.litSeq;
+      c.lit = true;
+      c.dirty = false;
+    }
     return done;
   }
 
-  private linkCell(ix: number, iz: number) {
+  /** Test a cell's links (`building`: the chunk whose build asked; a neighbour's changed link gives that neighbour a new `seq`). */
+  private linkCell(ix: number, iz: number, building: Chunk) {
     const sampler = this.sampler;
     const c = this.chunkAt(ix, iz);
     if (!c || !sampler.link) return;
     const i = this.idx(ix, iz);
+    const was = c.flags[i] & (LINK_E | LINK_S);
     c.flags[i] &= ~(LINK_E | LINK_S);
-    if (this.cellState(ix, iz) !== 1) return;
-    const h = c.h[i];
-    const ce = this.cell;
-    for (const [dx, dz, bit] of [[1, 0, LINK_E], [0, 1, LINK_S]] as const) {
-      if (this.cellState(ix + dx, iz + dz) !== 1) continue;
-      const hn = this.cellHeight(ix + dx, iz + dz);
-      // A rise no step takes is a blocked step anyway; the wall test is for the links a walker could use.
-      if (Math.abs(hn - h) > this.maxStep + STAIR_PER_M * ce) continue;
-      if (!sampler.link((ix + 0.5) * ce, (iz + 0.5) * ce, h, (ix + dx + 0.5) * ce, (iz + dz + 0.5) * ce, hn)) c.flags[i] |= bit;
+    if (this.cellState(ix, iz) === 1) {
+      const h = c.h[i];
+      const ce = this.cell;
+      for (const [dx, dz, bit] of LINK_DIRS) {
+        if (this.cellState(ix + dx, iz + dz) !== 1) continue;
+        const hn = this.cellHeight(ix + dx, iz + dz);
+        // A rise no step takes is a blocked step anyway; the wall test is for the links a walker could use.
+        if (Math.abs(hn - h) > this.maxStep + STAIR_PER_M * ce) continue;
+        if (!sampler.link((ix + 0.5) * ce, (iz + 0.5) * ce, h, (ix + dx + 0.5) * ce, (iz + dz + 0.5) * ce, hn)) c.flags[i] |= bit;
+      }
+    }
+    if (c.seq && (c.flags[i] & (LINK_E | LINK_S)) !== was) {
+      if (c === building) c.dirty = true;
+      else c.seq = ++this.litSeq;
     }
   }
 
@@ -277,6 +305,14 @@ export class NavGrid {
   private linkFlag(ix: number, iz: number, bit: number): boolean {
     const c = this.chunkAt(ix, iz);
     return !!c && (c.flags[this.idx(ix, iz)] & bit) !== 0;
+  }
+
+  /** Sample the chunk under a point again (its cells stay readable meanwhile), as the background refresh does. */
+  resample(x: number, z: number) {
+    const c = this.chunkAt(this.cellOf(x), this.cellOf(z));
+    if (!c || c.next < this.chunkCells * this.chunkCells || this.queue.includes(c)) return;
+    c.next = 0;
+    this.queue.push(c);
   }
 
   /** Build everything queued now (tests, loading screens). */
@@ -384,7 +420,38 @@ export class NavGrid {
     return out;
   }
 
-  /** Mark a cell as blocked (an agent got stuck there; a cart parked). Cleared on rebuild. */
+  // ---------------------------------------------------------------- one walker's own walls
+
+  /** Cells (ix, iz pairs) the searches in progress keep out of: one walker's learned walls (`avoid`). */
+  private readonly avoidXZ = new Int32Array(2 * MAX_AVOID);
+  private avoidN = 0;
+
+  /**
+   * Keep the following searches and straight-walk tests out of the cells under these points (x, z pairs,
+   * `n` of them: one walker's learned walls, `LearnedWalls`), except the cells of the two ends of the walk
+   * (a wall learned on the cell one stands in or walks to would make every search fail). `null` ends it.
+   * Nobody else's searches see them: the cells stay as they are for everyone (`block` marks them for all).
+   */
+  avoid(pts: ArrayLike<number> | null, n = 0, ax = 0, az = 0, bx = 0, bz = 0) {
+    this.avoidN = 0;
+    if (!pts) return;
+    const sx = this.cellOf(ax), sz = this.cellOf(az), gx = this.cellOf(bx), gz = this.cellOf(bz);
+    for (let k = 0; k < n && this.avoidN < MAX_AVOID; k++) {
+      const ix = this.cellOf(pts[2 * k]), iz = this.cellOf(pts[2 * k + 1]);
+      if ((ix === sx && iz === sz) || (ix === gx && iz === gz)) continue;
+      this.avoidXZ[2 * this.avoidN] = ix;
+      this.avoidXZ[2 * this.avoidN + 1] = iz;
+      this.avoidN++;
+    }
+  }
+
+  private avoided(ix: number, iz: number): boolean {
+    const a = this.avoidXZ;
+    for (let k = 0; k < this.avoidN; k++) if (a[2 * k] === ix && a[2 * k + 1] === iz) return true;
+    return false;
+  }
+
+  /** Mark a cell as blocked for everyone (a station's stall or cart while it stands). Cleared on rebuild or by `unblock`. */
   block(x: number, z: number) {
     const ix = this.cellOf(x);
     const iz = this.cellOf(z);
@@ -394,7 +461,7 @@ export class NavGrid {
     this.version++;
   }
 
-  /** Undo `block` for a cell (a learned wall that was a false alarm: a door, a crowd). */
+  /** Undo `block` for a cell (the stall was taken down). */
   unblock(x: number, z: number) {
     const ix = this.cellOf(x);
     const iz = this.cellOf(z);
@@ -406,6 +473,7 @@ export class NavGrid {
 
   /** Can you step from cell a to its neighbour b (both walkable, step small enough)? */
   canStep(ax: number, az: number, bx: number, bz: number): boolean {
+    if (this.avoidN && this.avoided(bx, bz)) return false;
     if (this.cellState(bx, bz) !== 1) return false;
     const ha = this.cellHeight(ax, az);
     const hb = this.cellHeight(bx, bz);
@@ -557,6 +625,9 @@ export class NavGrid {
   private fqHead = 0;
   private floodOn = false;
   private floodCount = 0;
+  /** `litSeq` when the running flood started, and when the last finished one did. */
+  private floodLit = 0;
+  private doneLit = 0;
   /** Cells labelled reachable by the last finished flood (a handful: the origin is a rooftop or a closed room). */
   lastFloodSize = 0;
 
@@ -581,6 +652,7 @@ export class NavGrid {
   private startFlood(sx: number, sz: number, maxCells: number) {
     this.floodGen++;
     this.floodOn = true;
+    this.floodLit = this.litSeq;
     this.floodCount = 1;
     this.fq.length = 0;
     this.fqHead = 0;
@@ -624,6 +696,7 @@ export class NavGrid {
     if (this.fqHead >= q.length) {
       this.floodOn = false;
       this.doneGen = this.floodGen;
+      this.doneLit = this.floodLit;
       this.lastFloodSize = this.floodCount;
       q.length = 0;
       this.fqHead = 0;
@@ -652,6 +725,45 @@ export class NavGrid {
   reachable(x: number, z: number): boolean {
     if (!this.doneGen) return true;
     return this.stampOf(this.cellOf(x), this.cellOf(z)) >= this.doneGen;
+  }
+
+  /**
+   * Can the last flood's labels around a point be trusted? Every chunk within `r` m was finished
+   * (links and all) before that flood started. A chunk built later reads as unreachable until the
+   * next flood, though it may be open ground; so does one the walk to it crosses.
+   */
+  settled(x: number, z: number, r: number): boolean {
+    if (!this.doneGen) return false;
+    const cs = this.chunkSize;
+    const c0x = Math.floor((x - r) / cs), c1x = Math.floor((x + r) / cs);
+    const c0z = Math.floor((z - r) / cs), c1z = Math.floor((z + r) / cs);
+    for (let cz = c0z; cz <= c1z; cz++) {
+      for (let cx = c0x; cx <= c1x; cx++) {
+        const c = this.chunks.get(key(cx, cz));
+        if (!c || !c.lit || c.seq > this.doneLit || c.next < this.chunkCells * this.chunkCells) return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * A number that changes whenever the chunks within `r` m of a point change (built again, refreshed,
+   * dropped, the grid forgotten): 0 while any of them is missing. What was decided from the grid
+   * there (a street node cut off) is decided again when it changes.
+   */
+  areaStamp(x: number, z: number, r: number): number {
+    const cs = this.chunkSize;
+    const c0x = Math.floor((x - r) / cs), c1x = Math.floor((x + r) / cs);
+    const c0z = Math.floor((z - r) / cs), c1z = Math.floor((z + r) / cs);
+    let m = 0;
+    for (let cz = c0z; cz <= c1z; cz++) {
+      for (let cx = c0x; cx <= c1x; cx++) {
+        const c = this.chunks.get(key(cx, cz));
+        if (!c || !c.lit) return 0;
+        if (c.seq > m) m = c.seq;
+      }
+    }
+    return m;
   }
 
   // ---------------------------------------------------------------- A*

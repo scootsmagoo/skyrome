@@ -55,6 +55,8 @@ export interface StationHost {
   alive(npc: Npc): boolean;
   /** Mark nav-grid cells under dressing as blocked. */
   block(x: number, z: number, r: number): void;
+  /** Clear them again when the dressing is taken in. */
+  unblock?(x: number, z: number, r: number): void;
   /**
    * Where a post really goes: the point itself when it is open ground, else the nearest open
    * ground within `r` (null: none, the post is skipped; undefined: the nav grid isn't loaded there
@@ -76,11 +78,19 @@ const SPAWN_R = 85;
 /** …and are cleared beyond this one. */
 const CLEAR_R = 115;
 
+/**
+ * The owner of a station's dressing colliders (stalls, shutters, carts, banners): they come and go with the
+ * station's hours, so walkers never learn them as walls (NpcManager.learnWall).
+ */
+export const STATION_PROP = Object.freeze({ kind: 'station-prop' as const });
+
 interface Placed {
   object: THREE.Object3D;
   colliders: RAPIER.Collider[];
   light: { remove(): void } | null;
   animate?: (dt: number) => void;
+  /** The nav-grid cells it marked blocked. */
+  blocked?: { x: number; z: number; r: number };
 }
 
 interface Manned {
@@ -399,9 +409,10 @@ export class StationDirector {
       light = g.lights.request({ position: lamp.at.getWorldPosition(new THREE.Vector3()), ...lamp.req });
     }
     // A seat stays clear of physics (its sitter stands where the collider would be).
-    const colliders = blocks ? [g.physics.addBox({ x: p.x, y: y + half.y, z: p.z }, half, yaw)] : [];
-    if (blocks) h.block(p.x, p.z, Math.max(half.x, half.z) + 0.2);
-    return { object, colliders, light, animate };
+    const colliders = blocks ? [g.physics.addBox({ x: p.x, y: y + half.y, z: p.z }, half, yaw, { owner: STATION_PROP })] : [];
+    const blocked = blocks ? { x: p.x, z: p.z, r: Math.max(half.x, half.z) + 0.2 } : undefined;
+    if (blocked) h.block(blocked.x, blocked.z, blocked.r);
+    return { object, colliders, light, animate, blocked };
   }
 
   private undress(m: Manned) {
@@ -415,6 +426,7 @@ export class StationDirector {
       d.object.removeFromParent();
       for (const c of d.colliders) this.host.game.physics.removeCollider(c);
       d.light?.remove();
+      if (d.blocked) this.host.unblock?.(d.blocked.x, d.blocked.z, d.blocked.r);
     }
     list.length = 0;
   }

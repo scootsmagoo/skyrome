@@ -55,7 +55,7 @@ export interface StreetGraph {
    * footprint or the Servian wall, a stairway's foot): deliberate termini, with the reason.
    */
   termini: { node: number; reason: 'stairs' | 'road' | 'street' }[];
-  /** Nearest node to a position (within `maxDist`), or −1. */
+  /** Nearest node with a link to a position (within `maxDist`), or −1. */
   nearest(x: number, z: number, maxDist?: number): number;
   /** Neighbours of a node: [node, width][]. */
   neighbours(id: number): [number, number][];
@@ -199,6 +199,8 @@ class Builder {
   edges = new Map<string, [number, number, number]>();
   /** Edges along flights of steps (parapets on both sides: links join them only at their ends). */
   stairEdges = new Set<string>();
+  /** Road edges through a building's walls (the physics probe found no way along or beside them): nothing links onto them. */
+  walled = new Set<string>();
   private seg = new Map<string, { a: number; b: number; w: number }[]>();
   private nodeHash = new Map<string, number[]>();
   private adj = new Map<number, Set<number>>();
@@ -304,8 +306,8 @@ class Builder {
           const l2 = ex * ex + ez * ez;
           let t = l2 > 0 ? ((x - A.x) * ex + (z - A.z) * ez) / l2 : 0;
           t = Math.max(0, Math.min(1, t));
-          // Never onto a flight of steps (over its parapet): the stairs' own ends link outward.
-          if (this.stairEdges.has(keyOf(s.a, s.b))) continue;
+          // Never onto a flight of steps (over its parapet): the stairs' own ends link outward. Nor onto a road through a wall.
+          if (this.stairEdges.has(keyOf(s.a, s.b)) || this.walled.has(keyOf(s.a, s.b))) continue;
           const px = A.x + ex * t, pz = A.z + ez * t;
           const d = Math.hypot(px - x, pz - z);
           if (d <= maxD) out.push({ a: s.a, b: s.b, w: s.w, t, d, p: [px, pz] });
@@ -345,6 +347,39 @@ class Builder {
     return [...(this.adj.get(id) ?? [])];
   }
 
+  /** Remove the edge a–b (the nodes stay). Returns its width, or null when there was none. */
+  unedge(a: number, b: number): number | null {
+    const key = a < b ? `${a},${b}` : `${b},${a}`;
+    const e = this.edges.get(key);
+    if (!e) return null;
+    this.edges.delete(key);
+    this.stairEdges.delete(key);
+    this.link(a, b, false);
+    return e[2];
+  }
+
+  /** Are a and b connected (breadth-first over the links)? */
+  joined(a: number, b: number): boolean {
+    if (a === b) return true;
+    const seen = new Set([a]);
+    const q = [a];
+    for (let h = 0; h < q.length; h++) {
+      for (const m of this.adj.get(q[h]) ?? []) {
+        if (m === b) return true;
+        if (!seen.has(m)) (seen.add(m), q.push(m));
+      }
+    }
+    return false;
+  }
+
+  /** Nodes reachable from a, counting up to `max`. */
+  reach(a: number, max: number): number {
+    const seen = new Set([a]);
+    const q = [a];
+    for (let h = 0; h < q.length && seen.size < max; h++) for (const m of this.adj.get(q[h]) ?? []) if (!seen.has(m)) (seen.add(m), q.push(m));
+    return Math.min(seen.size, max);
+  }
+
   /** Insert a node on edge a–b at p (splitting it), returning the node. */
   split(a: number, b: number, w: number, p: Vec2, kind: NodeKind): number {
     const A = this.nodes[a], B = this.nodes[b];
@@ -353,11 +388,13 @@ class Builder {
     const n = this.node(p[0], p[1], kind, 0.3);
     const key = a < b ? `${a},${b}` : `${b},${a}`;
     const stairs = this.stairEdges.delete(key);
+    const wall = this.walled.delete(key);
     this.edges.delete(key);
     this.link(a, b, false);
     this.edge(a, n, w);
     this.edge(n, b, w);
     if (stairs) for (const [x, y] of [[a, n], [n, b]]) this.stairEdges.add(x < y ? `${x},${y}` : `${y},${x}`);
+    if (wall) for (const [x, y] of [[a, n], [n, b]]) this.walled.add(x < y ? `${x},${y}` : `${y},${x}`);
     return n;
   }
 
@@ -499,6 +536,9 @@ export function buildStreetGraph(
       if (!suspect || physics.clear([A.x, A.z], [C.x, C.z])) continue;
       const d = detour(physics, [A.x, A.z], [C.x, C.z]);
       if (d) B.split(a, b, w, d, B.nodes[a].kind === 'stairs' ? 'stairs' : 'road');
+      // No way beside it either: the road's line runs through a building's walls. Nothing links onto it; it is cut
+      // once the network is complete (below).
+      else B.walled.add(a < b ? `${a},${b}` : `${b},${a}`);
     }
   }
   // Snap loose ends onto the street they meet (the nearest walkable link).
@@ -565,6 +605,21 @@ export function buildStreetGraph(
   // the nearest node of the main network.
   linkIslands(B, linkOk);
 
+  // Road links through a building's walls (the Clivus Palatinus, bent round Jupiter Stator, ran through the walled
+  // court of the Porticus Margaritaria: a node in the court, its links through the walls; a route along them walks
+  // into brickwork). Each is cut when the network still joins its ends another way, or when the cut leaves only a
+  // lone node behind (a node with no link is never anyone's nearest); a cut that would split off a stretch of
+  // street is not made. A road end the cut leaves loose is joined to the nearest street a person can walk to.
+  const loose: number[] = [];
+  for (const key of B.walled) {
+    const [a, b] = key.split(',').map(Number);
+    const w = B.unedge(a, b);
+    if (w === null) continue;
+    if (!B.joined(a, b) && B.reach(a, 2) > 1 && B.reach(b, 2) > 1) B.edge(a, b, w);
+    else loose.push(a, b);
+  }
+  if (opts.deadEnds !== false && loose.length) closeDeadEnds(B, linkOk, inArea, 30, loose);
+
   // Spots: street furniture, and doors along the blocks of the detail area.
   const graph = finalize(B);
   const spots: StreetSpot[] = [];
@@ -611,8 +666,8 @@ function doorsOf(blockId: string, outline: readonly Vec2[], fronts: number[], si
  * solid footprint is bridged round it) that a person can walk to (second neighbours
  * excluded, so a stub never links back onto its own street).
  */
-function closeDeadEnds(B: Builder, ok: (id: number, p: Vec2) => boolean, inArea: (x: number, z: number) => boolean, maxD: number) {
-  for (const n of [...B.nodes]) {
+function closeDeadEnds(B: Builder, ok: (id: number, p: Vec2) => boolean, inArea: (x: number, z: number) => boolean, maxD: number, only?: readonly number[]) {
+  for (const n of only ? only.map((id) => B.nodes[id]) : [...B.nodes]) {
     if (n.kind === 'piazza' || n.kind === 'plaza' || n.kind === 'landmark' || B.neighbourIds(n.id).length !== 1 || !inArea(n.x, n.z)) continue;
     // Its own street for three links back is no target.
     const own = new Set<number>([n.id]);
@@ -783,6 +838,8 @@ function finalize(B: Builder): StreetGraph {
       for (let dx = -r; dx <= r; dx++)
         for (let dz = -r; dz <= r; dz++)
           for (const id of hash.get(`${kx + dx},${kz + dz}`) ?? []) {
+            // A node with no link (a road's cut through a building, a door nothing reaches) leads nowhere.
+            if (!adj[id].length) continue;
             const d = Math.hypot(nodes[id].x - x, nodes[id].z - z);
             if (d < bd) { bd = d; best = id; }
           }

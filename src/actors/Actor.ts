@@ -362,10 +362,14 @@ export class Actor {
     return { x: desired.x, y: rise + 0.01, z: desired.z };
   }
 
+  /** The collider of the last wall-like contact `wallNormal` found. */
+  private wallHit: RAPIER.Collider | null = null;
+
   /** Horizontal unit normal of the static wall-like surface the last `locomote` touched (pointing at the actor), or null. Allocates: only asked while stalled. */
   private wallNormal(): { x: number; z: number } | null {
     const c = this.body.controller;
     const n = c.numComputedCollisions();
+    this.wallHit = null;
     for (let i = 0; i < n; i++) {
       const col = c.computedCollision(i, hitScratch);
       if (!col?.collider || !col.normal1) continue;
@@ -374,6 +378,7 @@ export class Actor {
       if (hl < 0.35) continue;
       wallN.x = col.normal1.x / hl;
       wallN.z = col.normal1.z / hl;
+      this.wallHit = col.collider;
       return wallN;
     }
     return null;
@@ -387,11 +392,11 @@ export class Actor {
   }
 
   /**
-   * Did the last `locomote` push against a static (World layer) collider with a wall-like normal?
+   * The static (World layer) collider with a wall-like normal the last `locomote` pushed against, or null.
    * Debug and wall-learning use (NpcManager): it reads the controller's collision list, which allocates.
    */
-  touchedWall(): boolean {
-    return this.wallNormal() !== null;
+  touchedWall(): RAPIER.Collider | null {
+    return this.wallNormal() ? this.wallHit : null;
   }
 
   /** Turn toward a heading at a maximum angular speed (rad/s). */

@@ -9,6 +9,7 @@
  * progress — pick another goal), 'stuck' (2.5 s: the owner must unstick the agent now, e.g. snap
  * it to the next free cell out of view or drop the goal). Pure: no three.js, no physics.
  */
+import { LearnedWalls } from './learnedWalls';
 import type { NavService } from './nav';
 import { hyp, seek, stuckAction, StuckMonitor, type Vec2 } from './steering';
 
@@ -26,6 +27,8 @@ export class Mover {
   path: Vec2[] = [];
   idx = 0;
   readonly stuck = new StuckMonitor();
+  /** Walls this walker found the hard way (NpcManager): its own plans keep out of them for a while, nobody else's. */
+  readonly walls = new LearnedWalls();
   /** Lateral nudge while side-stepping (s left, direction ±1). */
   private sidestepT = 0;
   private sidestepDir = 1;
@@ -39,6 +42,9 @@ export class Mover {
   private lookT = 0;
   private walledPlans = 0;
   private sinceWalled = 0;
+  /** The corner at the last check, and the distance to it then. */
+  private lookC: Vec2 | null = null;
+  private lookD = Infinity;
 
   setGoal(x: number, z: number, speed: number, arrive = 0.6) {
     this.active = true;
@@ -55,6 +61,7 @@ export class Mover {
     this.lookT = 0.4;
     this.walledPlans = 0;
     this.sinceWalled = 0;
+    this.lookC = null;
     this.stuck.reset(this.lastX, this.lastZ);
   }
 
@@ -87,6 +94,7 @@ export class Mover {
     this.lastX = x;
     this.lastZ = z;
     out.x = out.z = 0;
+    if (this.walls.n) this.walls.tick(dt);
     if (!this.active) {
       this.stuck.reset(x, z);
       return 'none';
@@ -96,7 +104,7 @@ export class Mover {
       return 'arrived';
     }
     if (this.needPath) {
-      const p = nav.findPath(x, z, this.goalX, this.goalZ);
+      const p = nav.findPath(x, z, this.goalX, this.goalZ, true, this.walls);
       if (p === 'busy') {
         // Wait for a search slot, edging toward the goal meanwhile.
         this.waitT += dt;
@@ -138,7 +146,13 @@ export class Mover {
     if ((this.lookT -= dt) <= 0) {
       this.lookT = 0.4;
       const g = nav.grid;
-      if (this.walledReplan && g && this.walledPlans < 3 && this.sinceWalled > 1.5 && g.ready(x, z) && !g.lineClear(x, z, c.x, c.z)) {
+      // Still closing on the corner (0.25 m nearer than at the last look, or a new corner): not walled off, whatever the grid says.
+      const dC = hyp(c.x - x, c.z - z);
+      const closing = c !== this.lookC || dC < this.lookD - 0.25;
+      this.lookC = c;
+      this.lookD = dC;
+      // The same test the path was made with (`lineClear`: the body's width, NavGrid.smooth) and the corner skip above uses.
+      if (this.walledReplan && g && this.walledPlans < 3 && this.sinceWalled > 1.5 && !closing && g.ready(x, z) && !g.lineClear(x, z, c.x, c.z)) {
         this.walledPlans++;
         this.sinceWalled = 0;
         this.needPath = true;
