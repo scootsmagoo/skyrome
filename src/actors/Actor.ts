@@ -244,7 +244,25 @@ export class Actor {
       const bz = Math.abs(az) < Math.abs(v.z) * 0.5;
       const lifted = this.grounded && mv.y > 1e-4;
       this.blockedSteps = (bx || bz) && !lifted ? this.blockedSteps + 1 : 0;
-      if (!this.grounded || this.blockedSteps >= 3) {
+      // A wall at an angle: the body still slides along it at a good share of the push. Carry on
+      // at the velocity it really moves at at once (zeroing each axis separately stopped the player
+      // dead on any oblique wall: the x / z split of a slide has the wrong sign on one axis). Only
+      // for something taller than a step (a riser steps up a frame later and must not be bled),
+      // and only while a good share of the push still moves it: a push straight into a wall leaves
+      // almost nothing moving and takes the per-axis path below, after its few steps.
+      let slide = false;
+      if (this.grounded && (bx || bz) && dt > 0) {
+        const hv = Math.hypot(v.x, v.z);
+        const ha = Math.hypot(ax, az);
+        if (ha > 0.8 && ha > 0.35 * hv && ha < 0.9 * hv && ax * v.x + az * v.z > 0) {
+          const f = this.currPos;
+          slide = !!this.game.physics.raycast({ x: f.x, y: f.y + STEP_MAX + 0.3, z: f.z }, { x: v.x / hv, y: 0, z: v.z / hv }, this.body.radius + 0.25, Layer.World);
+        }
+      }
+      if (slide) {
+        v.x = ax;
+        v.z = az;
+      } else if (!this.grounded || this.blockedSteps >= 3) {
         if (bx) v.x = Math.sign(v.x) * Math.max(0, ax * Math.sign(v.x));
         if (bz) v.z = Math.sign(v.z) * Math.max(0, az * Math.sign(v.z));
       }

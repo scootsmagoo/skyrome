@@ -295,6 +295,28 @@ brazier 20 m away) must not be joined by the watch: mark the quest's enemies wit
 scene). Guards, vigiles and station watchmen then keep their posts and look on (`guard` loop,
 facing the fight) instead of calling `game.combat.engage`; bystanders still flee or gawk.
 
+## Knockdowns, fallen loads and the bump test
+
+- **The gate** (`topple.ts`): the player's momentum (75 kg x approach speed) against the NPC's resistance
+  (build, age, load, braced, facing, a +/-20% roll). A jog (4.4 m/s) staggers (a partial ragdoll or the
+  stagger clip) and never fells; a sprint (7.4 m/s) staggers most and fells some (more from behind, or a
+  slight, old or loaded one); a braced one (guard, soldier, someone fighting) mostly shrugs it off. Each
+  contact is resolved once, then 0.5 s (a brush) or 2.5 s (a stagger or fall) out of the gate.
+- **Bracing pushes back** (`NpcManager.shove`): a braced NPC gives only a quarter of the shove and the
+  runner loses 65% of their speed; a stagger costs the runner 30%, a brush 10%.
+- **Fallen loads** (`loads.ts`): on a fall (or a stagger that slips the load) the head/back/chest load
+  becomes its own `Layer.Debris` body, spills its loaves or buns, and an amphora that lands hard usually
+  breaks (a shell and a wine stain; nothing to fetch). The carrier gets up (a dazed beat), walks to a spot
+  `STAND_OFF` (0.4 m) short of the load, crouches (`pickupGround`: the hand meets the ground about 0.3 m
+  ahead of the feet), takes it **in the hand** at `PICKUP_AT`, and `seat`s it on the head, back or chest at
+  `SEAT_AT` while straightening up. If the crouch starts further than that (a crowd, a wall), they
+  shuffle up to it while going down. Giving up (45 s, out of reach, gone) or a new task (a fright) seats a
+  load still in the hand.
+- **Measuring**: `node scripts/bump.mjs [--n 20] [--roles citizen,porter,soldier] [--speeds run,sprint] [--load 1] [--log 1]`
+  runs the real player at posed NPCs in the Forum and tallies the gate's none / stumble / fall (20 bumps
+  each, 2026-10-10: jog citizens 0 falls, sprint citizens 4/20, sprint amphora carriers 3-7/20, soldiers 0
+  falls and 8-19/20 shrugged off).
+
 ## Vignettes (GDD §12.3; docs/CONTENT.md §8.3.1)
 
 Every 15–30 s by day (30–60 s at night; the first 6–12 s after arriving somewhere new), at most
