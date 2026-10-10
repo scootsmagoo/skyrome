@@ -35,6 +35,7 @@ import { SKILLS } from '../src/rpg/data/skills';
 import { VENDORS } from '../src/rpg/data/vendors';
 import { installRpg } from '../src/rpg/install';
 import { MemoryStorage } from '../src/save/storage';
+import { LIFE } from '../src/life/registry';
 import { fakeGame } from './rpg-fakes';
 
 const quests = loadQuestContent();
@@ -42,7 +43,8 @@ const dialogues = loadDialogueContent();
 const moduleItems = [...questModules(), ...dialogueModules()].flatMap((m) => m.items ?? []);
 const moduleNpcs = [...questModules(), ...dialogueModules()].flatMap((m) => m.npcs ?? []);
 const npcs: NpcDef[] = [...loadNpcContent(), ...moduleNpcs];
-const npcIds = new Set(npcs.map((n) => n.id));
+// Phase 2's keepers (src/life/data) are named NPCs too: quests give from and send the player to them.
+const npcIds = new Set([...npcs.map((n) => n.id), ...LIFE.keepers.map((k) => k.id)]);
 const itemIds = new Set([...ITEMS, ...moduleItems].map((d) => d.id));
 const skillIds = new Set(SKILLS.map((s) => s.id));
 const factionIds = new Set(FACTIONS.map((f) => f.id));
