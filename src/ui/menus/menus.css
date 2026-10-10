@@ -290,6 +290,7 @@
 .lg-line.via { border-top: 1px solid #5c4024; border-bottom: 1px solid #5c4024; background: #f0e2c0; height: 0.42rem; }
 .lg-line.river { background: #9db3a6; border-top: 1px solid #55736d; border-bottom: 1px solid #55736d; }
 .lg-line.wall { border-top: 2px dashed rgba(70, 40, 24, 0.75); height: 0; }
+.lg-line.route { background: #a3271c; height: 0.28rem; border-radius: 0.2rem; box-shadow: 0 0 0 1.5px rgba(252, 244, 222, 0.92); }
 .lg-line.aqua { border-top: 1px solid rgba(70, 50, 30, 0.8); height: 0; position: relative; }
 .lg-line.aqua::after { content: ''; position: absolute; left: 0; right: 0; top: -0.25rem; height: 0.5rem; background: repeating-linear-gradient(90deg, rgba(70, 50, 30, 0.8) 0 1px, transparent 1px 4px); }
 .lg-sub { font-family: var(--sr-display); font-size: 0.72rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--sr-parch-ink-3); border-top: 1px solid var(--sr-parch-line); padding-top: 0.5rem; margin-bottom: 0.25rem; }

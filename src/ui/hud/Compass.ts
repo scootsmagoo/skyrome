@@ -8,6 +8,7 @@ import { h, setClass } from '../dom';
 import { LOCATION_ICONS, UI_ICONS, iconSvg } from '../icons';
 import type { MapIconKind } from '../types';
 import { COMPASS_SPAN, bearingTo, cardinalLabels, compassPosition, edgeFade, relativeBearing } from './compassMath';
+import { pinnedSide } from './markerMath';
 
 /** A length of `f` compass widths. */
 const cw = (f: number) => `calc(var(--cw) * ${f.toFixed(5)})`;
@@ -33,6 +34,9 @@ export class Compass {
   private strip: HTMLElement;
   private markerLayer: HTMLElement;
   private pool = new Map<string, HTMLElement>();
+  /** The end a pinned quest marker rests at, kept while the target is about straight behind. */
+  private sides = new Map<string, -1 | 1>();
+  private seen = new Set<string>();
   private latin: boolean | null = null;
 
   constructor() {
@@ -66,18 +70,27 @@ export class Compass {
   }
 
   /** `heading` is the camera's compass bearing; `items` are already-resolved marker positions. */
-  update(heading: number, px: number, pz: number, items: readonly CompassItem[], latin: boolean) {
+  update(heading: number, px: number, pz: number, items: readonly CompassItem[], latin: boolean, py?: number) {
     if (this.latin !== latin) this.buildStrip(latin);
     // Strip position: bearing `heading` sits at the center (half a compass width).
     this.strip.style.transform = `translate3d(${cw(0.5 - (heading + 180) / COMPASS_SPAN)},0,0)`;
 
-    const seen = new Set<string>();
+    const seen = this.seen;
+    seen.clear();
     for (const it of items) {
       const rel = relativeBearing(heading, bearingTo(px, pz, it.x, it.z));
       let pos = compassPosition(rel, COMPASS_SPAN, it.kind === 'quest');
       if (pos === null) continue;
-      // A quest marker behind you rests just inside the end of the bar.
-      if (it.kind === 'quest') pos = Math.max(-0.95, Math.min(0.95, pos));
+      if (it.kind === 'quest') {
+        // A quest marker behind you rests just inside the end of the bar, the end nearer the turn;
+        // straight behind it stays where it was instead of flipping end to end with every step.
+        if (Math.abs(rel) > COMPASS_SPAN / 2) {
+          const side = pinnedSide(rel, this.sides.get(it.key) ?? 0);
+          this.sides.set(it.key, side);
+          pos = side;
+        } else this.sides.set(it.key, rel < 0 ? -1 : 1);
+        pos = Math.max(-0.95, Math.min(0.95, pos));
+      }
       seen.add(it.key);
       let el = this.pool.get(it.key);
       if (!el) {
@@ -88,7 +101,7 @@ export class Compass {
       setClass(el, 'is-undiscovered', it.kind === 'location' && !it.discovered);
       if (it.primary) {
         const dist = el.querySelector('.dist');
-        if (dist) dist.textContent = formatDistance(Math.hypot(it.x - px, it.z - pz));
+        if (dist) dist.textContent = formatDistance(Math.hypot(it.x - px, py === undefined || it.y === undefined ? 0 : it.y - py, it.z - pz));
       }
       el.style.transform = `translate3d(${cw(pos / 2)},0,0)`;
       el.style.opacity = String(it.kind === 'quest' ? 1 : edgeFade(pos));
@@ -97,6 +110,7 @@ export class Compass {
       if (!seen.has(key)) {
         el.remove();
         this.pool.delete(key);
+        this.sides.delete(key);
       }
     }
   }

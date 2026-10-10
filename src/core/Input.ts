@@ -60,6 +60,7 @@ export type Action =
   | 'inventory'
   | 'journal'
   | 'map'
+  | 'minimap'
   | 'skills'
   | 'pause'
   | 'quickSave'
@@ -113,6 +114,8 @@ export const DEFAULT_BINDINGS: Bindings = {
   inventory: ['KeyI'],
   journal: ['KeyJ'],
   map: ['KeyM'],
+  // B shows or hides the minimap (bottom left).
+  minimap: ['KeyB'],
   skills: ['KeyK'],
   pause: ['Escape'],
   // P and L because Apple keyboards send media keys on F5/F9 unless fn is held.

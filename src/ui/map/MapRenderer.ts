@@ -1,114 +1,28 @@
 /**
- * Parchment-style map renderer (Canvas 2D). Static terrain (hill shading, elevation tint,
- * contours) is computed once per data source and shared by every renderer (the map tab is rebuilt
- * each time the menu opens); everything else is vector-drawn on each redraw, so it stays crisp at
- * any zoom. Rendering is on demand (`requestRender`), not per frame.
+ * Parchment-style map renderer (Canvas 2D). The static layers (base.ts: terrain computed once per
+ * data source, water, the city's blocks and streets, roads, footprints) are shared with the
+ * minimap; this adds the quest route, labels, pins, the player and the scale bar. Everything is
+ * vector-drawn on each redraw, so it stays crisp at any zoom. Rendering is on demand
+ * (`requestRender`), not per frame.
  */
 import { toRoman } from '../../core/GameTime';
 import { drawIcon, LOCATION_ICONS, UI_ICONS } from '../icons';
-import { parchmentTile } from '../textures';
-import type { MapDataSource, MapLabel, MapLandmark, MapLocation, MapShape } from '../types';
-import { contourSegments, flatShade, heightRange, hillshade, sampleHeights } from './terrain';
-import { clampView, fitScale, niceScaleBar, rotateLocal, worldToScreen, zoomAt, type MapView } from './view';
+import type { MapDataSource, MapLabel, MapLocation, MapShape } from '../types';
+import { INK, INK_2, drawMapBase, terrainFor } from './base';
+import { drawRoute } from './route';
+import { clampView, fitScale, niceScaleBar, worldToScreen, zoomAt, type MapView } from './view';
 
-const INK = '#2e2013';
-const INK_2 = '#5d4529';
-const WATER = '#9db3a6';
-const WATER_EDGE = '#55736d';
-const LAND = '#e7d8b6';
 /** Roman pace (passus) in meters. */
 const PASSUS = 1.48;
-
-interface TerrainCache {
-  shade: HTMLCanvasElement;
-  tint: HTMLCanvasElement;
-  x0: number;
-  z0: number;
-  w: number;
-  h: number;
-  contours: Path2D;
-  index: Path2D;
-}
-
-/** Terrain per map source: building it samples ~160k heights (a ~200 ms stall), so do it once. */
-const TERRAIN = new WeakMap<MapDataSource, TerrainCache | null>();
-
-function terrainFor(d: MapDataSource): TerrainCache | null {
-  let t = TERRAIN.get(d);
-  if (t === undefined) {
-    t = buildTerrain(d);
-    TERRAIN.set(d, t);
-  }
-  return t;
-}
 
 /** Build a source's terrain ahead of time (UIManager does it behind the title/loading screen). */
 export function prewarmMapTerrain(d: MapDataSource) {
   terrainFor(d);
 }
 
-function buildTerrain(d: MapDataSource): TerrainCache | null {
-  if (!d.heightAt) return null;
-  const b = d.bounds;
-  const span = Math.max(b.maxX - b.minX, b.maxZ - b.minZ);
-  const cell = span / 420;
-  const gw = Math.ceil((b.maxX - b.minX) / cell) + 1;
-  const gh = Math.ceil((b.maxZ - b.minZ) / cell) + 1;
-  const grid = sampleHeights(d.heightAt.bind(d), b.minX, b.minZ, gw, gh, cell);
-  const [lo, hi] = heightRange(grid);
-  const shade = hillshade(grid, 315, 38, 2.4);
-  const flat = flatShade(38);
-
-  const shadeC = document.createElement('canvas');
-  shadeC.width = gw;
-  shadeC.height = gh;
-  const tintC = document.createElement('canvas');
-  tintC.width = gw;
-  tintC.height = gh;
-  const si = shadeC.getContext('2d')!.createImageData(gw, gh);
-  const ti = tintC.getContext('2d')!.createImageData(gw, gh);
-  for (let i = 0; i < gw * gh; i++) {
-    const s = shade[i] - flat;
-    const o = i * 4;
-    if (s < 0) {
-      si.data[o] = 74; si.data[o + 1] = 48; si.data[o + 2] = 24;
-      si.data[o + 3] = Math.min(150, -s * 420);
-    } else {
-      si.data[o] = 255; si.data[o + 1] = 250; si.data[o + 2] = 232;
-      si.data[o + 3] = Math.min(110, s * 300);
-    }
-    const t = hi > lo ? (grid.data[i] - lo) / (hi - lo) : 0;
-    ti.data[o] = 176; ti.data[o + 1] = 128; ti.data[o + 2] = 64;
-    ti.data[o + 3] = Math.max(0, t - 0.12) * 95;
-  }
-  shadeC.getContext('2d')!.putImageData(si, 0, 0);
-  tintC.getContext('2d')!.putImageData(ti, 0, 0);
-
-  const interval = d.contourInterval ?? 3;
-  const contours = new Path2D();
-  const index = new Path2D();
-  for (let lv = Math.ceil(lo / interval) * interval; lv < hi; lv += interval) {
-    const segs = contourSegments(grid, lv);
-    const isIndex = Math.round(lv / interval) % 5 === 0;
-    const p = isIndex ? index : contours;
-    for (let k = 0; k < segs.length; k += 4) {
-      p.moveTo(segs[k], segs[k + 1]);
-      p.lineTo(segs[k + 2], segs[k + 3]);
-    }
-  }
-  return { shade: shadeC, tint: tintC, x0: b.minX - cell / 2, z0: b.minZ - cell / 2, w: gw * cell, h: gh * cell, contours, index };
-}
-
-const STYLE: Record<MapLandmark['style'], { fill: string; stroke: string }> = {
-  temple: { fill: 'rgba(146, 58, 38, 0.42)', stroke: 'rgba(94, 32, 18, 0.9)' },
-  public: { fill: 'rgba(132, 96, 58, 0.34)', stroke: 'rgba(80, 56, 30, 0.85)' },
-  arena: { fill: 'rgba(122, 88, 56, 0.42)', stroke: 'rgba(78, 52, 28, 0.9)' },
-  palace: { fill: 'rgba(104, 60, 88, 0.34)', stroke: 'rgba(70, 36, 60, 0.85)' },
-  garden: { fill: 'rgba(108, 136, 72, 0.26)', stroke: 'rgba(78, 104, 52, 0.6)' },
-  monument: { fill: 'rgba(70, 48, 26, 0.85)', stroke: 'rgba(46, 32, 19, 1)' },
-  camp: { fill: 'rgba(96, 84, 64, 0.36)', stroke: 'rgba(62, 52, 36, 0.9)' },
-  domestic: { fill: 'rgba(132, 100, 64, 0.22)', stroke: 'rgba(90, 66, 40, 0.6)' },
-};
+/** The city's own blocks and streets fade in between these zooms (px per game m). */
+const FABRIC_FROM = 0.42;
+const FABRIC_FULL = 0.75;
 
 export class MapRenderer {
   readonly canvas = document.createElement('canvas');
@@ -117,12 +31,13 @@ export class MapRenderer {
   vw = 800;
   vh = 600;
   private dpr = 1;
-  private pattern: CanvasPattern | null = null;
   private raf = 0;
   /** Selected location id (gold ring + label). */
   selected: string | null = null;
   focusQuestId: string | null = null;
   latin = true;
+  /** Draw the quest route (Settings → Interface → Route on the maps). */
+  showRoute = true;
   /** Screen px kept clear on the right for overlay controls (zoom buttons). */
   rightInset = 90;
   minScale = 0.05;
@@ -202,158 +117,20 @@ export class MapRenderer {
   render() {
     const { ctx, view: v, dpr, data: d } = this;
     const s = v.scale;
-    const world = () => ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (this.vw / 2 - v.cx * s), dpr * (this.vh / 2 - v.cz * s));
-    const screen = () => ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const px = (n: number) => n / s; // screen px → world units
-
-    // Paper (world-anchored grain, constant on-screen size).
-    screen();
-    this.pattern ??= ctx.createPattern(parchmentTile(), 'repeat');
-    if (this.pattern) {
-      const [ox, oy] = worldToScreen(v, this.vw, this.vh, 0, 0);
-      this.pattern.setTransform(new DOMMatrix().translate(ox % 384, oy % 384));
-      ctx.fillStyle = this.pattern;
-    } else ctx.fillStyle = LAND;
-    ctx.fillRect(0, 0, this.vw, this.vh);
-
-    world();
-    const t = terrainFor(d);
-    if (t) {
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(t.tint, t.x0, t.z0, t.w, t.h);
-      ctx.drawImage(t.shade, t.x0, t.z0, t.w, t.h);
-      ctx.lineJoin = 'round';
-      ctx.strokeStyle = 'rgba(110, 76, 40, 0.22)';
-      ctx.lineWidth = px(0.8);
-      ctx.stroke(t.contours);
-      ctx.strokeStyle = 'rgba(110, 76, 40, 0.42)';
-      ctx.lineWidth = px(1.15);
-      ctx.stroke(t.index);
-    }
-
-    // Gardens first (under everything built).
-    for (const lm of d.landmarks) if (lm.style === 'garden') this.drawLandmark(lm, px);
-
-    // Water.
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    for (const r of d.rivers) {
-      const path = linePath(r.points);
-      ctx.strokeStyle = WATER_EDGE;
-      ctx.lineWidth = r.width + px(3);
-      ctx.stroke(path);
-      ctx.strokeStyle = WATER;
-      ctx.lineWidth = r.width;
-      ctx.stroke(path);
-      // Flow lines.
-      ctx.strokeStyle = 'rgba(240, 248, 240, 0.35)';
-      ctx.lineWidth = px(0.9);
-      ctx.setLineDash([px(10), px(14)]);
-      ctx.stroke(path);
-      ctx.setLineDash([]);
-    }
-    for (const isl of d.islands ?? []) {
-      const p = shapePath(isl);
-      ctx.fillStyle = LAND;
-      ctx.fill(p);
-      ctx.strokeStyle = WATER_EDGE;
-      ctx.lineWidth = px(1.4);
-      ctx.stroke(p);
-    }
-
-    // Aqueducts: a line with arch ticks.
-    for (const a of d.aqueducts ?? []) {
-      const p = linePath(a.points);
-      ctx.strokeStyle = 'rgba(70, 50, 30, 0.75)';
-      ctx.lineWidth = px(1.2);
-      ctx.stroke(p);
-      ctx.lineWidth = px(5);
-      ctx.setLineDash([px(1.2), px(4.5)]);
-      ctx.lineCap = 'butt';
-      ctx.stroke(p);
-      ctx.setLineDash([]);
-      ctx.lineCap = 'round';
-    }
-
-    // Roads: cased vias, thin streets.
-    for (const r of d.roads) {
-      if (r.rank !== 'street') continue;
-      ctx.strokeStyle = 'rgba(105, 76, 46, 0.5)';
-      ctx.lineWidth = px(Math.max(0.8, Math.min(2.2, 5 * s)));
-      ctx.stroke(linePath(r.points));
-    }
-    const viaW = Math.max(2.2, Math.min(7, 9 * s));
-    for (const r of d.roads) {
-      if (r.rank !== 'via') continue;
-      const p = linePath(r.points);
-      ctx.strokeStyle = 'rgba(92, 64, 36, 0.85)';
-      ctx.lineWidth = px(viaW + 1.6);
-      ctx.stroke(p);
-      ctx.strokeStyle = '#f0e2c0';
-      ctx.lineWidth = px(viaW);
-      ctx.stroke(p);
-    }
-
-    // Bridges.
-    for (const b of d.bridges ?? []) {
-      const p = linePath(b.points);
-      ctx.lineCap = 'butt';
-      ctx.strokeStyle = 'rgba(60, 40, 22, 0.95)';
-      ctx.lineWidth = px(Math.max(4, Math.min(9, 12 * s)) + 2);
-      ctx.stroke(p);
-      ctx.strokeStyle = '#efe0bd';
-      ctx.lineWidth = px(Math.max(4, Math.min(9, 12 * s)) - 1);
-      ctx.stroke(p);
-      ctx.lineCap = 'round';
-    }
-
-    // City walls.
-    for (const w of d.walls ?? []) {
-      const p = linePath(w.points);
-      ctx.strokeStyle = 'rgba(70, 40, 24, 0.55)';
-      ctx.lineWidth = px(2.2);
-      ctx.setLineDash([px(9), px(4)]);
-      ctx.stroke(p);
-      ctx.setLineDash([]);
-    }
-
-    // Built footprints.
-    for (const lm of d.landmarks) if (lm.style !== 'garden') this.drawLandmark(lm, px);
+    // Zoomed in, the city's real streets and blocks take over from the atlas's street lines.
+    const fabric = d.fabric ? Math.max(0, Math.min(1, (s - FABRIC_FROM) / (FABRIC_FULL - FABRIC_FROM))) : 0;
+    drawMapBase(ctx, d, v, this.vw, this.vh, dpr, { paper: true, roads: fabric > 0.5 ? 'vias' : 'all', fabric, contours: true });
 
     // ---------------------------------------------------------------- screen-space overlays
-    screen();
+    const route = this.showRoute ? (d.route?.() ?? null) : null;
+    if (route) {
+      ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (this.vw / 2 - v.cx * s), dpr * (this.vh / 2 - v.cz * s));
+      drawRoute(ctx, route, null, s, { width: 4.2, casing: 2.4 });
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
     this.drawLabels();
     this.drawMarkers();
     this.drawScaleBar();
-  }
-
-  private drawLandmark(lm: MapLandmark, px: (n: number) => number) {
-    const { ctx } = this;
-    const st = STYLE[lm.style];
-    for (const sh of lm.shapes) {
-      const p = shapePath(sh);
-      ctx.fillStyle = st.fill;
-      ctx.fill(p, 'evenodd');
-      ctx.strokeStyle = st.stroke;
-      ctx.lineWidth = px(lm.style === 'garden' ? 0.8 : 1);
-      if (lm.style === 'garden') ctx.setLineDash([px(3), px(3)]);
-      ctx.stroke(p);
-      ctx.setLineDash([]);
-      // Arenas and circuses get a pale floor.
-      if (lm.style === 'arena' && (sh.kind === 'ellipse' || sh.kind === 'stadium')) {
-        const inner: MapShape = sh.kind === 'ellipse' ? { ...sh, rx: sh.rx * 0.45, rz: sh.rz * 0.4 } : { ...sh, length: sh.length * 0.88, width: sh.width * 0.62 };
-        ctx.fillStyle = 'rgba(236, 220, 184, 0.9)';
-        ctx.fill(shapePath(inner));
-        ctx.stroke(shapePath(inner));
-        if (sh.kind === 'stadium') {
-          // The spina down the middle of a circus.
-          const sp = shapePath({ kind: 'rect', x: sh.x, z: sh.z, w: sh.length * 0.62, d: Math.max(px(2), sh.width * 0.06), rot: sh.rot ?? 0 });
-          ctx.fillStyle = st.stroke;
-          ctx.fill(sp);
-        }
-      }
-    }
   }
 
   private drawLabels() {
@@ -624,70 +401,6 @@ export class MapRenderer {
 }
 
 // ------------------------------------------------------------------ geometry helpers
-
-function linePath(points: [number, number][]): Path2D {
-  const p = new Path2D();
-  points.forEach(([x, z], i) => (i ? p.lineTo(x, z) : p.moveTo(x, z)));
-  return p;
-}
-
-export function shapePath(sh: MapShape): Path2D {
-  const p = new Path2D();
-  const poly = (pts: [number, number][]) => {
-    pts.forEach(([x, z], i) => (i ? p.lineTo(x, z) : p.moveTo(x, z)));
-    p.closePath();
-  };
-  const rot = (sh as { rot?: number }).rot ?? 0;
-  const local = (cx: number, cz: number, pts: [number, number][]) =>
-    pts.map(([lx, lz]) => {
-      const [rx, rz] = rotateLocal(lx, lz, rot);
-      return [cx + rx, cz + rz] as [number, number];
-    });
-  switch (sh.kind) {
-    case 'rect': {
-      const w = sh.w / 2;
-      const d = sh.d / 2;
-      poly(local(sh.x, sh.z, [[-w, -d], [w, -d], [w, d], [-w, d]]));
-      break;
-    }
-    case 'ellipse': {
-      const pts: [number, number][] = [];
-      for (let i = 0; i < 48; i++) {
-        const a = (i / 48) * Math.PI * 2;
-        pts.push([Math.cos(a) * sh.rx, Math.sin(a) * sh.rz]);
-      }
-      poly(local(sh.x, sh.z, pts));
-      break;
-    }
-    case 'stadium': {
-      const r = sh.width / 2;
-      const half = sh.length / 2 - r;
-      const pts: [number, number][] = [];
-      for (let i = 0; i <= 16; i++) {
-        const a = -Math.PI / 2 + (i / 16) * Math.PI;
-        pts.push([half + Math.cos(a) * r, Math.sin(a) * r]);
-      }
-      // The carceres end of a circus is straight.
-      pts.push([-half - r, r], [-half - r, -r]);
-      poly(local(sh.x, sh.z, pts));
-      break;
-    }
-    case 'halfDisc': {
-      // Flat side (scaena) faces local −z, i.e. the bearing `rot`; the curved cavea is behind.
-      const pts: [number, number][] = [];
-      for (let i = 0; i <= 24; i++) {
-        const a = (i / 24) * Math.PI;
-        pts.push([Math.cos(a) * sh.r, Math.sin(a) * sh.r]);
-      }
-      poly(local(sh.x, sh.z, pts));
-      break;
-    }
-    case 'poly':
-      poly(sh.points);
-      break;
-  }
-  return p;
-}
 
 function shapeCenter(sh: MapShape): { x: number; z: number } {
   if (sh.kind === 'poly') {

@@ -1,6 +1,7 @@
 /**
  * Map tab: the parchment map with a title cartouche, legend + discovered-places list, zoom
- * buttons and a card for the selected place (with Fast travel when the game provides it).
+ * buttons and a card for the selected place (with Fast travel when the game provides it). The
+ * quest route is drawn on it when Settings → Interface → Route on the maps is on.
  * Pointer: drag to pan, wheel/pinch to zoom, click a place. Keys: arrows/WASD pan, +/− zoom,
  * C centers on you, < > step through discovered places, F fast-travels, L toggles the legend.
  */
@@ -88,6 +89,7 @@ export class MapTab implements MenuTab {
       this.stage.replaceChildren(this.renderer.canvas);
     } else this.renderer.setData(this.data);
     this.renderer.latin = ui.game.settings.data.latinNames;
+    this.renderer.showRoute = ui.game.settings.data.routeOnMaps !== false;
     this.locs = this.data.locations().filter((l) => l.discovered).sort((a, b) => a.name.localeCompare(b.name));
     this.renderLegend();
     this.renderCard();
@@ -163,7 +165,16 @@ export class MapTab implements MenuTab {
       h(
         'div',
         { class: 'lg-body' },
-        h('div', { class: 'lg-grid' }, lineRow('via', 'Via (highway)'), lineRow('river', 'Tiber'), lineRow('wall', 'Servian wall'), lineRow('aqua', 'Aqueduct'), kinds.map(iconRow)),
+        h(
+          'div',
+          { class: 'lg-grid' },
+          this.renderer?.showRoute && this.data?.route?.() ? lineRow('route', 'Your route') : null,
+          lineRow('via', 'Via (highway)'),
+          lineRow('river', 'Tiber'),
+          lineRow('wall', 'Servian wall'),
+          lineRow('aqua', 'Aqueduct'),
+          kinds.map(iconRow),
+        ),
         h('div', { class: 'lg-sub' }, `Places discovered · ${this.locs.length} of ${all.length}`),
         h('div', { class: 'lg-places sr-scroll' }, placeRows),
       ),

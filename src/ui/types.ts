@@ -286,6 +286,30 @@ export interface MapQuestMarker {
   tracked: boolean;
 }
 
+/**
+ * The city's own street plan (the generated blocks, streets and squares the player walks), in
+ * game metres. Flat point lists: x0, z0, x1, z1, … The map draws it once zoomed in; the minimap
+ * always.
+ */
+export interface MapFabric {
+  /** Blocks (property lines); gardens are open green blocks. */
+  blocks: { pts: Float32Array; garden: boolean }[];
+  /** Streets and roads with their full surface width (game m). */
+  streets: { pts: Float32Array; width: number }[];
+  /** Paved squares and fora (closed outlines). */
+  plazas: { pts: Float32Array }[];
+}
+
+/**
+ * The quest route as the maps draw it (src/nav/QuestRoute.ts fits): legs per place, the first
+ * walked from `along` metres on. Only legs outside (cell null) are on the city maps.
+ */
+export interface MapRouteView {
+  readonly version: number;
+  readonly along: number;
+  readonly legs: readonly { readonly cell: string | null; readonly door: string | null; readonly line: { readonly pts: Float32Array; readonly n: number; readonly cum: Float32Array } }[];
+}
+
 export interface MapDataSource {
   /** Game-space extent of the map. */
   readonly bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
@@ -306,6 +330,10 @@ export interface MapDataSource {
   locations(): MapLocation[];
   player(): { x: number; z: number; bearing: number } | null;
   questMarkers(): MapQuestMarker[];
+  /** The city's blocks and streets (the same object every call; drawing caches on it). */
+  fabric?(): MapFabric | null;
+  /** The route to the tracked objective, when one is shown (Settings → Interface). */
+  route?(): MapRouteView | null;
 }
 
 // ------------------------------------------------------------------ dialogue

@@ -467,6 +467,23 @@ async function runSuite(browser, browserName, preset) {
     expect(vis && !after, `while held ${vis}, after ${after}`);
   });
 
+  await check('minimap toggle (B)', async () => {
+    const state = () => ev(() => {
+      const g = window.__skyrome.game;
+      return { on: g.settings.data.minimap !== false, shown: !!document.querySelector('.hud-minimap')?.classList.contains('is-on') };
+    });
+    const before = await state();
+    await k.press('KeyB');
+    await wait(250);
+    const mid = await state();
+    await k.press('KeyB');
+    await wait(250);
+    const after = await state();
+    expect(before.on && before.shown, `before: ${JSON.stringify(before)}`);
+    expect(!mid.on && !mid.shown, `after one press: ${JSON.stringify(mid)}`);
+    expect(after.on && after.shown, `after two presses: ${JSON.stringify(after)}`);
+  });
+
   // ---------------------------------------------------------------- items, saves
   await check('hotbar (1) uses a consumable', async () => {
     const id = await ev(async () => {
