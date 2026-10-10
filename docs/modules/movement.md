@@ -98,11 +98,14 @@ Fixes (switched off for A/B runs with `?wallfix=0` (2, 3) and `?navlow=0` (1), `
    never starts or ends on a node with no link (`StreetNav.path`). Until 2026-10-10 the cut lasted the session and could
    come from a chunk not yet built. `tests/npc-streets.drop.test.ts`.
 7. **Steep terrain is no floor** (`physicsSampler.ts`, `NAV_MAX_SLOPE_DEG` 40 in `core/traversal.ts`, the controller's
-   slide angle). A cell whose floor is the terrain's heightfield at more than 40 degrees is not walkable for the planner.
-   The grid let a rise of up to 0.85 m per cell through when the slope carries on (a flight of steps), and a smooth bank
-   looks the same: the Palatine's bank above the Via Nova at about (148, 118) runs at 45 to 60 degrees, and paths ran
-   along and up its foot, where the body catches on ground too steep to climb. Stairs and ramps are colliders of their
-   own (level treads), so only the heightfield counts. `?navslope=0` turns it off for A/B runs.
+   slide angle). A cell whose floor is bare terrain (within 5 cm of the heightmap) steeper than 40 degrees is not
+   walkable for the planner. The grid let a rise of up to 0.85 m per cell through when the slope carries on (a flight
+   of steps), and a smooth bank looks the same: the Palatine's bank above the Via Nova at about (148, 118) runs at 45 to
+   60 degrees, and paths ran along and up its foot, where the body catches on ground too steep to climb. Stairs and
+   ramps are colliders of their own (level treads), so only bare terrain counts. The slope comes from the heightmap 0.5 m
+   either side of the cell centre (four lookups, only for terrain cells); it agrees with the heightfield's own normal in
+   453 of the bank's 465 terrain cells, and a ray that returns the normal costs 2.2 µs against the floor ray's 1.4 µs.
+   `tests/npc-sampler.slope.test.ts`. `?navslope=0` turns it off for A/B runs.
 
 Measured (`scripts/npcwalls.mjs`, 60 s per zone after 12 s to fill, two runs each, fixes off with
 `?wallfix=0&navlow=0` against on; the crowd is random, so single runs swing a lot):

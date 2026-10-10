@@ -44,13 +44,18 @@ const CLEAR_TO = 1.75;
 /** `?navlinks=0` leaves every link open (the NavGrid before the thin-wall test, for A/B runs). */
 const LINKS_ON = typeof location === 'undefined' || new URLSearchParams(location.search).get('navlinks') !== '0';
 /**
- * Terrain steeper than this (the normal's y) is no floor for the planner: a bank (the Palatine's above the Via Nova at
+ * Terrain steeper than NAV_MAX_SLOPE_DEG is no floor for the planner: a bank (the Palatine's above the Via Nova at
  * about (148, 118) runs at 45 to 60 degrees) reads as cells with rises a flight of steps also has, and paths ran along
- * its foot, where the body catches on ground too steep to climb. Only the terrain's heightfield counts: stairs and
- * ramps are colliders of their own, their treads level. `?navslope=0` turns it off for A/B runs.
+ * its foot, where the body catches on ground too steep to climb. Only bare terrain counts (the floor found is the
+ * reference ground itself): stairs and ramps are colliders of their own, their treads level. The slope comes from the
+ * reference heights 0.5 m either side (four lookups: it agrees with the heightfield's own normal in 97 % of the cells
+ * of that bank, and a ray that returns the normal costs half as much again as the floor ray).
+ * `?navslope=0` turns it off for A/B runs.
  */
-const STEEP_NY = Math.cos((NAV_MAX_SLOPE_DEG * Math.PI) / 180);
+const STEEP_RISE = Math.tan((NAV_MAX_SLOPE_DEG * Math.PI) / 180);
 const SLOPE_ON = typeof location === 'undefined' || new URLSearchParams(location.search).get('navslope') !== '0';
+/** The floor is the reference ground itself (bare terrain) within this (m). */
+const ON_GROUND = 0.05;
 
 export class PhysicsCellSampler implements CellSampler {
   private readonly ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
@@ -84,7 +89,7 @@ export class PhysicsCellSampler implements CellSampler {
       return;
     }
     out.h = top.h;
-    const fit = top.inside || top.steep ? -1 : this.clear(x, top.h, z);
+    const fit = top.inside || this.steep(x, z, top.h) ? -1 : this.clear(x, top.h, z);
     out.walkable = fit >= 0;
     out.off = fit > 0 ? fit : 0;
     // A floor well above the street (seating, a gallery, a deck): when there is open, walkable
@@ -145,30 +150,39 @@ export class PhysicsCellSampler implements CellSampler {
     return false;
   }
 
+  /** Is the floor at (x, h, z) bare terrain steeper than NAV_MAX_SLOPE_DEG? */
+  private steep(x: number, z: number, h: number): boolean {
+    const ref = this.opts.refHeight;
+    if (!SLOPE_ON || !ref) return false;
+    const g = ref(x, z);
+    if (g === null || g === undefined || Math.abs(h - g) > ON_GROUND) return false;
+    const e = 0.5;
+    const hx = (ref(x + e, z) ?? g) - (ref(x - e, z) ?? g);
+    const hz = (ref(x, z + e) ?? g) - (ref(x, z - e) ?? g);
+    return hx * hx + hz * hz > (2 * e * STEEP_RISE) ** 2;
+  }
+
   /**
    * The first floor below `y` (searching `depth` down). A ray that starts inside something (an
    * overhead beam, a floor slab, a gallery, a massing box) continues from where it leaves it;
-   * `inside` is set when it never got out (a wall, solid to the floor); `steep` when the floor is
-   * terrain steeper than NAV_MAX_SLOPE_DEG.
+   * `inside` is set when it never got out (a wall, solid to the floor).
    */
-  private floorBelow(x: number, z: number, y: number): { h: number; inside: boolean; steep: boolean } | null {
+  private floorBelow(x: number, z: number, y: number): { h: number; inside: boolean } | null {
     const world = this.physics.world;
     const o = this.ray.origin;
     o.x = x;
     o.y = y;
     o.z = z;
     // A solid ray cast reports exactly 0 when it starts inside a shape.
-    let hit = world.castRayAndGetNormal(this.ray, this.depth, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, this.filter);
+    let hit = world.castRay(this.ray, this.depth, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, this.filter);
     for (let i = 0; i < 4 && hit && hit.timeOfImpact < INSIDE; i++) {
       const exit = world.castRay(this.ray, this.depth, false, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, this.filter);
       // Out through the far side (or, starting on a boundary between stacked blocks, a nudge).
       o.y -= exit && exit.timeOfImpact > 1e-3 ? exit.timeOfImpact + 0.02 : 0.03;
-      hit = world.castRayAndGetNormal(this.ray, this.depth, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, this.filter);
+      hit = world.castRay(this.ray, this.depth, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, this.filter);
     }
     if (!hit) return null;
-    const inside = hit.timeOfImpact < INSIDE;
-    const steep = SLOPE_ON && !inside && hit.normal.y < STEEP_NY && hit.collider.shapeType() === RAPIER.ShapeType.HeightField;
-    return { h: o.y - hit.timeOfImpact, inside, steep };
+    return { h: o.y - hit.timeOfImpact, inside: hit.timeOfImpact < INSIDE };
   }
 
   /**
