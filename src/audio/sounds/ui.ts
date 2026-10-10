@@ -137,12 +137,12 @@ const ui = { bus: 'ui' as const, kind: 'oneshot' as const, group: 'UI', reverb: 
 const sting = { bus: 'ui' as const, kind: 'oneshot' as const, group: 'Stingers', reverb: 0.35, maxVoices: 1, priority: 1 };
 
 export const uiSounds: SoundDef[] = [
-  { ...ui, id: 'ui.hover', label: 'hover tick', variants: 3, gainDb: -26, maxVoices: 2, priority: 0.2, expect: { dur: [0.005, 0.05] }, bake: bakeHover },
-  { ...ui, id: 'ui.click', label: 'click', variants: 3, gainDb: -18, maxVoices: 3, priority: 0.4, expect: { dur: [0.02, 0.12] }, bake: bakeClick },
-  { ...ui, id: 'ui.open', label: 'menu open', variants: 2, gainDb: -16, maxVoices: 2, priority: 0.5, expect: { dur: [0.15, 0.55] }, bake: (c) => bakeSwish(c, true) },
-  { ...ui, id: 'ui.close', label: 'menu close', variants: 2, gainDb: -17, maxVoices: 2, priority: 0.5, expect: { dur: [0.1, 0.5] }, bake: (c) => bakeSwish(c, false) },
-  { ...ui, id: 'ui.error', label: 'error', variants: 1, gainDb: -14, maxVoices: 1, priority: 0.5, expect: { dur: [0.1, 0.25] }, bake: bakeError },
-  { ...ui, id: 'ui.page', label: 'page turn', variants: 3, gainDb: -16, maxVoices: 2, priority: 0.4, expect: { dur: [0.15, 0.42] }, bake: bakePage },
+  { ...ui, id: 'ui.hover', label: 'hover tick', variants: 3, gainDb: -22, maxVoices: 2, priority: 0.2, expect: { dur: [0.005, 0.05] }, bake: bakeHover },
+  { ...ui, id: 'ui.click', label: 'click', variants: 3, gainDb: -13, maxVoices: 3, priority: 0.4, expect: { dur: [0.02, 0.12] }, bake: bakeClick },
+  { ...ui, id: 'ui.open', label: 'menu open', variants: 2, gainDb: -12, maxVoices: 2, priority: 0.5, expect: { dur: [0.15, 0.55] }, bake: (c) => bakeSwish(c, true) },
+  { ...ui, id: 'ui.close', label: 'menu close', variants: 2, gainDb: -13, maxVoices: 2, priority: 0.5, expect: { dur: [0.1, 0.5] }, bake: (c) => bakeSwish(c, false) },
+  { ...ui, id: 'ui.error', label: 'error', variants: 1, gainDb: -11, maxVoices: 1, priority: 0.5, expect: { dur: [0.1, 0.25] }, bake: bakeError },
+  { ...ui, id: 'ui.page', label: 'page turn', variants: 3, gainDb: -12, maxVoices: 2, priority: 0.4, expect: { dur: [0.15, 0.42] }, bake: bakePage },
   { ...sting, id: 'stinger.questStart', label: 'quest started (cornu)', variants: 2, gainDb: -9, expect: { dur: [1.2, 2.8], centroid: [200, 2500] }, bake: (c) => bakeCornu(c, 'start') },
   { ...sting, id: 'stinger.questComplete', label: 'quest complete (cornu)', variants: 2, gainDb: -9, expect: { dur: [1.6, 3.4], centroid: [200, 2500] }, bake: (c) => bakeCornu(c, 'complete') },
   { ...sting, id: 'stinger.questFail', label: 'quest failed', variants: 1, gainDb: -11, expect: { dur: [1.6, 2.8] }, bake: (c) => bakeCornu(c, 'fail') },

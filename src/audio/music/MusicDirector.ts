@@ -20,7 +20,7 @@
  */
 import type { DrumStroke } from '../dsp/instruments';
 import { Composer, type Block, type MusicEvent } from './composer';
-import { Cymbala, FLUTE, Lyre, OBOE, Pad, Reed, Syrinx, Tympanum, type MusicOutput } from './instruments';
+import { Cymbala, FLUTE, Lyre, OBOE, Pad, Reed, Tympanum, type MusicOutput } from './instruments';
 import { STYLES, type MelodyInstrument, type MusicState } from './styles';
 
 export type { MusicState } from './styles';
@@ -182,7 +182,7 @@ export class Performer {
  * Tuned with tools/music/render-check.mjs so that exploring music sits near -31 dBFS RMS before the
  * music bus, combat a few dB above, and the 1-4 kHz band stays well under the low and mid bands.
  */
-const LEVELS = { harp: 1.65, oboe: 1.85, flute: 1.95, pad: 1.0, drum: 1.5, tambourine: 0.8, syrinxFallback: 0.3 };
+const LEVELS = { harp: 1.65, oboe: 1.85, flute: 1.95, pad: 1.0, drum: 1.5, tambourine: 0.8 };
 /** The lowest notes the recorded oboe (B-flat 3) and flute (middle C) play; lower melody notes sound an octave up. */
 const LOWEST = { aulos: 233, syrinx: 250 };
 
@@ -194,8 +194,6 @@ export class WebAudioRack implements Rack {
   private readonly sync: boolean;
   private oboe?: Reed;
   private flute?: Reed;
-  /** The synthesised flute-like voice: stands in for either reed if its recordings cannot be loaded. */
-  private syrinx?: Syrinx;
   private lyreInst?: Lyre;
   private tymp?: Tympanum;
   private cym?: Cymbala;
@@ -255,11 +253,12 @@ export class WebAudioRack implements Rack {
 
   melody(inst: MelodyInstrument, when: number, freq: number, dur: number, vel: number, legato: boolean, release: boolean) {
     const reed = inst === 'aulos' ? this.oboeInst : this.fluteInst;
-    if (reed.loaded) {
-      let f = freq;
-      while (f < LOWEST[inst]) f *= 2;
-      reed.note(when, f, dur, vel, legato, release);
-    } else (this.syrinx ??= new Syrinx(this.o, { gain: LEVELS.syrinxFallback, pan: -0.1, reverb: 0.5 })).note(when, freq, dur, vel, legato, release);
+    // If this reed's recordings failed to load, the other one carries the line; with neither, it is silent.
+    const use = reed.loaded ? reed : (inst === 'aulos' ? this.fluteInst : this.oboeInst);
+    if (!use.loaded) return;
+    let f = freq;
+    while (f < LOWEST[use === this.oboeInst ? 'aulos' : 'syrinx']) f *= 2;
+    use.note(when, f, dur, vel, legato, release);
   }
   lyre(when: number, freq: number, vel: number, dur: number, bright: number) {
     this.ly.play(when, freq, vel, dur, bright);
@@ -284,7 +283,7 @@ export class WebAudioRack implements Rack {
     }
   }
   dispose(when: number) {
-    for (const i of [this.oboe, this.flute, this.syrinx, this.lyreInst, this.tymp, this.cym, this.pad]) i?.dispose(when);
+    for (const i of [this.oboe, this.flute, this.lyreInst, this.tymp, this.cym, this.pad]) i?.dispose(when);
     const ms = Math.max(0, (when - this.o.ctx.currentTime) * 1000) + 800;
     setTimeout(() => {
       this.out.disconnect();

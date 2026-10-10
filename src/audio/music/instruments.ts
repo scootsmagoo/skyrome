@@ -5,7 +5,8 @@
  *   to each note and darkened by a low-pass for soft notes. The old Karplus–Strong plucks remain as
  *   the fallback if the recordings cannot be loaded.
  * - Aulos and syrinx: a recorded oboe (played softly) and flute, looping their sustained part under an
- *   envelope with a delayed vibrato. The soft sine "syrinx" voice is the fallback.
+ *   envelope with a delayed vibrato. If the recordings cannot be loaded the reed stays silent (the
+ *   sine "syrinx" stand-in is gone: nothing in the music is an oscillator any more).
  * - The drone: a looping low string pad (the aulos' second pipe, reimagined as a soft bowed drone).
  * - Tympanum and cymbala: a recorded hand drum, congas and tambourine hits (VSCO 1/2 CE); the old
  *   baked strokes are the fallback.
@@ -30,16 +31,21 @@ export interface MusicOutput {
   rev: AudioNode;
 }
 
-let noise: AudioBuffer | null = null;
+const WAVE_N = 512;
+let wave: AudioBuffer | null = null;
 
-/** Looping white noise for breath (1 s, shared by every context: AudioBuffers aren't tied to one). */
-function noiseBuffer(ctx: BaseAudioContext): AudioBuffer {
-  if (noise) return noise;
-  const r = new Rand('breath');
-  noise = ctx.createBuffer(1, MUSIC_RATE, MUSIC_RATE);
-  const d = noise.getChannelData(0);
-  for (let i = 0; i < d.length; i++) d[i] = r.bi();
-  return noise;
+/**
+ * One cycle of a sine (512 samples, shared by every context: AudioBuffers aren't tied to one), looped
+ * by a buffer source at the vibrato rate. This is the only periodic wave in the music and it is
+ * never heard: it moves the pitch of recorded notes by a few cents. No OscillatorNode is created
+ * anywhere in the music (tests/audio-music-samples.test.ts checks the source).
+ */
+function vibratoWave(ctx: BaseAudioContext): AudioBuffer {
+  if (wave) return wave;
+  wave = ctx.createBuffer(1, WAVE_N, MUSIC_RATE);
+  const d = wave.getChannelData(0);
+  for (let i = 0; i < WAVE_N; i++) d[i] = Math.sin((2 * Math.PI * i) / WAVE_N);
+  return wave;
 }
 
 function makePanner(ctx: BaseAudioContext, pan: number): AudioNode {
@@ -201,7 +207,7 @@ export const FLUTE: ReedSpec = { group: 'flute', attack: [0.13, 0.07], release: 
 export class Reed extends Instrument {
   private readonly eq: BiquadFilterNode;
   private readonly lp: BiquadFilterNode;
-  private readonly lfo: OscillatorNode;
+  private readonly lfo: AudioBufferSourceNode;
   private lastEnd = -1;
 
   constructor(
@@ -222,8 +228,10 @@ export class Reed extends Instrument {
     this.lp.Q.value = 0.55;
     this.eq.connect(this.lp);
     this.lp.connect(this.input);
-    this.lfo = this.ctx.createOscillator();
-    this.lfo.frequency.value = spec.vibrato[0];
+    this.lfo = this.ctx.createBufferSource();
+    this.lfo.buffer = vibratoWave(this.ctx);
+    this.lfo.loop = true;
+    this.lfo.playbackRate.value = (spec.vibrato[0] * WAVE_N) / MUSIC_RATE;
     this.lfo.start(this.ctx.currentTime);
   }
 
@@ -286,83 +294,6 @@ export class Reed extends Instrument {
       this.eq.disconnect();
       this.lp.disconnect();
     }, ms);
-  }
-}
-
-// ---------------------------------------------------------------- syrinx
-
-export class Syrinx extends Instrument {
-  private readonly osc: OscillatorNode;
-  private readonly env: GainNode;
-  private readonly noiseEnv: GainNode;
-  private readonly bp: BiquadFilterNode;
-  private readonly noise: AudioBufferSourceNode;
-  private readonly h2: OscillatorNode;
-  private lastEnd = -1;
-
-  constructor(out: MusicOutput, opts = { gain: 0.45, pan: -0.1, reverb: 0.6 }) {
-    super(out, opts);
-    const ctx = this.ctx;
-    this.osc = ctx.createOscillator();
-    this.osc.type = 'sine';
-    this.h2 = ctx.createOscillator();
-    this.h2.type = 'sine';
-    const h2g = ctx.createGain();
-    h2g.gain.value = 0.1;
-    this.env = ctx.createGain();
-    this.env.gain.value = 0;
-    this.osc.connect(this.env);
-    this.h2.connect(h2g);
-    h2g.connect(this.env);
-    this.env.connect(this.input);
-    this.noise = ctx.createBufferSource();
-    this.noise.buffer = noiseBuffer(ctx);
-    this.noise.loop = true;
-    this.bp = ctx.createBiquadFilter();
-    this.bp.type = 'bandpass';
-    this.bp.Q.value = 7;
-    this.noiseEnv = ctx.createGain();
-    this.noiseEnv.gain.value = 0;
-    this.noise.connect(this.bp);
-    this.bp.connect(this.noiseEnv);
-    this.noiseEnv.connect(this.input);
-    const t = ctx.currentTime;
-    this.osc.start(t);
-    this.h2.start(t);
-    this.noise.start(t);
-  }
-
-  note(when: number, freq: number, dur: number, vel: number, legato: boolean, release: boolean) {
-    const slur = legato && when - this.lastEnd < 0.08;
-    const f = this.osc.frequency;
-    const f2 = this.h2.frequency;
-    if (slur) {
-      f.setTargetAtTime(freq, when, 0.025);
-      f2.setTargetAtTime(freq * 2, when, 0.025);
-    } else {
-      this.env.gain.setTargetAtTime(0, Math.max(this.lastEnd, when - 0.03), 0.008);
-      f.setValueAtTime(freq * 0.98, when);
-      f2.setValueAtTime(freq * 1.96, when);
-      f.setTargetAtTime(freq, when, 0.025);
-      f2.setTargetAtTime(freq * 2, when, 0.025);
-    }
-    this.bp.frequency.setValueAtTime(freq, when);
-    this.env.gain.setTargetAtTime(vel * 0.7, when, 0.035);
-    // Breathy "chiff" on the attack, then a softer breath that stays with the tone.
-    this.noiseEnv.gain.setTargetAtTime(vel * (slur ? 0.25 : 0.9), when, 0.006);
-    this.noiseEnv.gain.setTargetAtTime(vel * 0.22, when + 0.05, 0.04);
-    if (release) {
-      this.env.gain.setTargetAtTime(0, when + dur, 0.06);
-      this.noiseEnv.gain.setTargetAtTime(0, when + dur, 0.05);
-    }
-    this.lastEnd = when + dur;
-  }
-
-  override dispose(when: number) {
-    this.env.gain.setTargetAtTime(0, when, 0.05);
-    this.noiseEnv.gain.setTargetAtTime(0, when, 0.05);
-    for (const o of [this.osc, this.h2, this.noise]) o.stop(when + 0.4);
-    super.dispose(when + 0.4);
   }
 }
 

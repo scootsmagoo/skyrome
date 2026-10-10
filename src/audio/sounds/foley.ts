@@ -137,13 +137,13 @@ const base = { bus: 'sfx' as const, kind: 'oneshot' as const, group: 'Foley', sp
 
 export const foleySounds: SoundDef[] = [
   { ...base, id: 'cloth.rustle', label: 'cloth rustle', variants: 5, gainDb: -16, maxVoices: 4, priority: 0.2, randomRate: 0.08, expect: { dur: [0.15, 0.45], centroid: [1200, 6000] }, bake: bakeCloth },
-  { ...base, id: 'armor.jingle', label: 'armour jingle', variants: 5, gainDb: -16, maxVoices: 4, priority: 0.25, randomRate: 0.05, expect: { dur: [0.1, 0.6], centroid: [1500, 8000] }, bake: bakeArmor },
+  { ...base, id: 'armor.jingle', label: 'armour jingle', variants: 5, gainDb: -13, maxVoices: 4, priority: 0.25, randomRate: 0.05, expect: { dur: [0.1, 0.6], centroid: [1500, 8000] }, bake: bakeArmor },
   { ...base, id: 'coin.clink', label: 'coins (purse)', variants: 4, gainDb: -10, maxVoices: 3, priority: 0.6, expect: { dur: [0.1, 0.85], centroid: [1800, 8000] }, bake: bakeCoins },
   { ...base, id: 'door.open', label: 'door open', variants: 3, gainDb: -6, maxVoices: 3, priority: 0.7, reverb: 0.3, expect: { dur: [0.6, 1.35] }, bake: (c) => bakeDoor(c, true) },
   { ...base, id: 'door.close', label: 'door close', variants: 3, gainDb: -5, maxVoices: 3, priority: 0.7, reverb: 0.3, expect: { dur: [0.4, 0.85] }, bake: (c) => bakeDoor(c, false) },
   { ...base, id: 'chest.open', label: 'chest open', variants: 3, gainDb: -7, maxVoices: 2, priority: 0.7, expect: { dur: [0.3, 0.85] }, bake: (c) => bakeChest(c, true) },
   { ...base, id: 'chest.close', label: 'chest close', variants: 3, gainDb: -6, maxVoices: 2, priority: 0.7, expect: { dur: [0.1, 0.5] }, bake: (c) => bakeChest(c, false) },
-  { ...base, id: 'lock.click', label: 'lockpick click', variants: 6, gainDb: -12, maxVoices: 4, priority: 0.8, spatial: undefined, expect: { dur: [0.005, 0.15], centroid: [2500, 9000] }, bake: (c) => bakeLock('click', c) },
+  { ...base, id: 'lock.click', label: 'lockpick click', variants: 6, gainDb: -9, maxVoices: 4, priority: 0.8, spatial: undefined, expect: { dur: [0.005, 0.15], centroid: [2500, 9000] }, bake: (c) => bakeLock('click', c) },
   { ...base, id: 'lock.turn', label: 'lockpick turn', variants: 3, gainDb: -12, maxVoices: 2, priority: 0.8, spatial: undefined, expect: { dur: [0.1, 0.45] }, bake: (c) => bakeLock('turn', c) },
   { ...base, id: 'lock.break', label: 'lockpick break', variants: 3, gainDb: -10, maxVoices: 2, priority: 0.8, spatial: undefined, expect: { dur: [0.1, 0.6] }, bake: (c) => bakeLock('break', c) },
   { ...base, id: 'lock.open', label: 'lock opens', variants: 2, gainDb: -8, maxVoices: 2, priority: 0.8, spatial: undefined, expect: { dur: [0.05, 0.3] }, bake: (c) => bakeLock('open', c) },
