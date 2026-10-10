@@ -60,7 +60,7 @@ describe('street builder: aprons and dropped kerbs', () => {
     expect(topAt(b, 4.5, 30)).toBeCloseTo(top, 2);
     const out = topAt(b, 4.5 + 0.9, 30);
     expect(out).not.toBeNull();
-    expect(out!).toBeLessThan(0.02);
+    expect(out!).toBeLessThan(0.03);
     // And the way down is a ramp, never a step above the walk-over limit.
     let prev = topAt(b, 4.5, 30)!;
     for (let x = 4.6; x <= 5.4; x += 0.1) {
@@ -78,7 +78,7 @@ describe('street builder: aprons and dropped kerbs', () => {
     expect(topAt(b, 1.6, 30)).toBeGreaterThan(0.03);
     const out = topAt(b, 1.6 + 0.55, 30);
     expect(out).not.toBeNull();
-    expect(out!).toBeLessThan(0.02);
+    expect(out!).toBeLessThan(0.03);
   });
 
   it('drops the kerb where a street meets the road, on that side only', () => {

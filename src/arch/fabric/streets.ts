@@ -58,8 +58,8 @@ interface Strip { mat: MaterialId; expect: Expect }
 /** Width (m) of the walkable apron where a paved street's sidewalk meets the ground, and where a lane does. */
 const APRON = 0.9;
 const LANE_APRON = 0.6;
-/** An apron ends this far (m) above the ground, not under it: ground showing through the paving's edge is a flaw the crawl counts. */
-const APRON_FLUSH = 0.012;
+/** An apron ends this far (m) above the ground, not under it or flush: ground within 2 cm of the paving is a flaw the crawl counts (a lip of 2 cm rides over). */
+const APRON_FLUSH = 0.022;
 
 /** Builds a street into `b` (world coordinates). */
 export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn): StreetResult {
