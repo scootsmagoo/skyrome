@@ -126,22 +126,76 @@ function babble(out: Float32Array, rate: number, rnd: Rand, talkers: number, dis
   new Biquad().lowpass(lowpass, 0.6, rate).run(out);
 }
 
+/**
+ * A far-off crowd as a texture, not as talkers: speech-shaped noise (a stack of formant-region bands),
+ * each band swelling and fading on its own slow rhythm, so it has the ebb of a crowd but no voice,
+ * no syllable and no word in it. (The earlier bed mixed 18 synthetic talkers, and it read as a
+ * constant wall of babble; see docs/research/crowd-audio.md.) Voices now come from real pairs of NPCs.
+ */
+function humBed(out: Float32Array, rate: number, rnd: Rand, o: { lo: number; hi: number; bands: number; amp: number; lowpass: number; swell: number }) {
+  const n = out.length;
+  const ratio = Math.pow(o.hi / o.lo, 1 / Math.max(1, o.bands - 1));
+  const slow = new SmoothNoise(rnd, o.swell);
+  const env: SmoothNoise[] = [];
+  const bps: Biquad[] = [];
+  const pinks: Pink[] = [];
+  const tilt: number[] = [];
+  for (let k = 0; k < o.bands; k++) {
+    const fc = o.lo * Math.pow(ratio, k);
+    env.push(new SmoothNoise(rnd, rnd.range(0.35, 1.6)));
+    bps.push(new Biquad().bandpass(fc, 1.6, rate));
+    pinks.push(new Pink(rnd));
+    // Speech spectrum: most of the energy low, falling above ~700 Hz.
+    tilt.push(1 / (1 + (fc / 700) * (fc / 700)));
+  }
+  for (let i = 0; i < n; i++) {
+    const sw = 0.7 + 0.3 * slow.step(1 / rate);
+    let v = 0;
+    for (let k = 0; k < o.bands; k++) v += bps[k].process(pinks[k].next()) * (0.35 + 0.65 * Math.abs(env[k].step(1 / rate))) * tilt[k];
+    out[i] += v * o.amp * sw;
+  }
+  new Biquad().lowpass(o.lowpass, 0.6, rate).run(out);
+}
+
 function bakeCrowd(c: BakeContext) {
   const { rate, rnd } = c;
   const L = 12;
   const X = 0.8;
   const out = alloc(L + X, rate);
-  babble(out, rate, rnd, 18, [8, 45], L + X, 3600);
-  // A low murmur that fills the gaps between voices, and shuffling feet.
-  const pink = new Pink(rnd);
-  const bp = new Biquad().bandpass(420, 0.8, rate);
-  const sw = new SmoothNoise(rnd, 0.4);
-  let r = 0;
-  for (let i = 0; i < out.length; i++) r += out[i] * out[i];
-  const level = Math.sqrt(r / out.length);
-  for (let i = 0; i < out.length; i++) out[i] += bp.process(pink.next()) * level * 1.2 * (0.7 + 0.3 * sw.step(1 / rate));
-  grains(out, rate, rnd, 0, L + X, { density: 60, fLo: 1500, fHi: 5000, amp: level * 0.5, grain: [0.004, 0.012], env: () => 1 });
+  humBed(out, rate, rnd, { lo: 160, hi: 2200, bands: 9, amp: 0.7, lowpass: 1800, swell: 0.12 });
+  // A few shuffling steps in the gaps; nothing sharp.
+  grains(out, rate, rnd, 0, L + X, { density: 14, fLo: 900, fHi: 2600, amp: 0.015, grain: [0.006, 0.016], env: () => 1 });
   return makeSeamless(out, rate, X);
+}
+
+/**
+ * Two people talking, heard from a few metres: a short exchange of 2-4 turns, each a soft murmur
+ * with its own pitch and pace, a small silence between turns. Played at a real pair of NPCs.
+ * Dulled and slow so it reads as a conversation in passing, never as a speech.
+ */
+function bakeMurmur(c: BakeContext) {
+  const { rate, rnd } = c;
+  const pitches = c.variant % 4 === 0 ? (['f', 'f'] as const) : c.variant % 4 === 1 ? (['m', 'f'] as const) : (['m', 'm'] as const);
+  const turns = rnd.int(2, 4);
+  const parts: { u: Float32Array; at: number; gain: number }[] = [];
+  let t = 0.05;
+  for (let k = 0; k < turns; k++) {
+    const who = k % 2;
+    const d = who === 0 ? rnd.range(0.8, 1.6) : rnd.range(0.4, 1.2);
+    const u = utterance({ sex: pitches[who], dur: d, dull: rnd.range(0.55, 0.85), syllableRate: rnd.range(3.2, 4.4), liveliness: rnd.range(0.12, 0.22) }, rate, rnd);
+    parts.push({ u, at: t, gain: rnd.range(0.7, 1) });
+    t += d + rnd.range(0.12, 0.45);
+  }
+  const out = alloc(t + 0.2, rate);
+  for (const p of parts) mixInto(out, p.u, Math.round(p.at * rate), p.gain);
+  // Soft edges and a dark tone: this is a murmur, not a line of dialogue.
+  new Biquad().lowpass(1700, 0.6, rate).run(out);
+  const fade = Math.round(0.08 * rate);
+  for (let i = 0; i < fade; i++) {
+    out[i] *= i / fade;
+    out[out.length - 1 - i] *= i / fade;
+  }
+  return out;
 }
 
 /** The amphitheatre's stands: tens of thousands talking at once, a constant surf of voices. */
@@ -214,7 +268,8 @@ function bakeCity(c: BakeContext) {
   const L = 10;
   const X = 0.8;
   const out = alloc(L + X, rate);
-  babble(out, rate, rnd, 9, [35, 90], L + X, 1300);
+  // No talkers at all: a faint low hum of a big city (feet, far work), then the rumble.
+  humBed(out, rate, rnd, { lo: 110, hi: 900, bands: 6, amp: 0.4, lowpass: 900, swell: 0.1 });
   let r = 0;
   for (let i = 0; i < out.length; i++) r += out[i] * out[i];
   const level = Math.sqrt(r / out.length) || 0.01;
@@ -223,8 +278,8 @@ function bakeCity(c: BakeContext) {
   const sw = new SmoothNoise(rnd, 0.2);
   for (let i = 0; i < out.length; i++) out[i] += lp.process(br.next()) * level * 2 * (0.7 + 0.3 * sw.step(1 / rate));
   // Distant clatter: pots, tools, shutters.
-  for (const t of poisson(rnd, 1.5, L + X)) {
-    addNoiseBurst(out, rate, rnd, t, { dur: 0.02, amp: level * rnd.range(0.5, 2), attack: 0.0005, t60: 0.012, bp: rnd.range(900, 2500), q: 1.5 });
+  for (const t of poisson(rnd, 0.8, L + X)) {
+    addNoiseBurst(out, rate, rnd, t, { dur: 0.02, amp: level * rnd.range(0.5, 1.6), attack: 0.0005, t60: 0.012, bp: rnd.range(900, 2500), q: 1.5 });
   }
   return makeSeamless(out, rate, X);
 }
@@ -514,9 +569,9 @@ export const ambienceSounds: SoundDef[] = [
   { ...bed, id: 'bed.fountain', label: 'fountain bed', rate: 32000, expect: { centroid: [200, 4500] }, bake: (c) => bakeWater(c, 'fountain') },
   { ...bed, id: 'bed.river', label: 'river bed', rate: 24000, expect: { centroid: [60, 2500] }, bake: (c) => bakeWater(c, 'river') },
   { ...bed, id: 'bed.wind', label: 'wind bed', rate: 22050, expect: { centroid: [60, 1500] }, bake: bakeWind },
-  { ...bed, id: 'bed.crowd', label: 'crowd murmur bed', rate: 16000, expect: { centroid: [200, 2200] }, bake: bakeCrowd },
+  { ...bed, id: 'bed.crowd', label: 'far crowd hum bed', rate: 16000, expect: { centroid: [200, 2200] }, bake: bakeCrowd },
   { ...bed, id: 'bed.arena', label: 'amphitheatre crowd bed', rate: 16000, expect: { centroid: [200, 2000] }, bake: bakeArena },
-  { ...bed, id: 'bed.city', label: 'distant city bed', rate: 16000, expect: { centroid: [40, 1200] }, bake: bakeCity },
+  { ...bed, id: 'bed.city', label: 'distant city hum bed', rate: 16000, expect: { centroid: [40, 1200] }, bake: bakeCity },
   { ...bed, id: 'bed.birds', label: 'birdsong bed', rate: 32000, expect: { centroid: [2500, 9000] }, bake: bakeBirdsBed },
   { ...bed, id: 'bed.cicadas', label: 'cicadas bed', rate: 32000, expect: { centroid: [3500, 9000] }, bake: bakeCicadas },
   { ...bed, id: 'bed.crickets', label: 'crickets bed', rate: 32000, expect: { centroid: [2000, 6000] }, bake: bakeCrickets },
@@ -530,10 +585,11 @@ export const ambienceSounds: SoundDef[] = [
   { ...ev, id: 'amb.dog', label: 'dog barking (distant)', variants: 4, gainDb: -10, maxVoices: 2, priority: 0.3, rate: 22050, spatial: { ref: 15, max: 160, rolloff: 1 }, expect: { dur: [0.3, 2] }, bake: (c) => dogBarks(c.rate, c.rnd) },
   { ...ev, id: 'amb.hammer', label: 'workshop hammering', variants: 4, gainDb: -12, maxVoices: 3, priority: 0.3, spatial: { ref: 6, max: 120, rolloff: 1 }, expect: { dur: [1, 3.6] }, bake: bakeHammer },
   { ...ev, id: 'amb.calls', label: 'market call', variants: 6, gainDb: -12, maxVoices: 2, priority: 0.4, rate: 22050, spatial: { ref: 8, max: 120, rolloff: 1 }, expect: { dur: [0.4, 2.2], centroid: [300, 3000] }, bake: (c) => vendorCall(c.rnd.chance(0.75) ? 'm' : 'f', c.rate, c.rnd) },
+  // The old random-position babble: kept only for the amphitheatre loop. The city plays 'amb.murmur' at real pairs.
   {
     ...ev,
     id: 'amb.chatter',
-    label: 'nearby chatter',
+    label: 'nearby chatter (arena)',
     variants: 8,
     gainDb: -15,
     maxVoices: 4,
@@ -542,6 +598,19 @@ export const ambienceSounds: SoundDef[] = [
     spatial: { ref: 3, max: 50, rolloff: 1 },
     expect: { dur: [0.5, 2.4], centroid: [200, 3000] },
     bake: (c) => utterance({ sex: c.variant % 3 === 0 ? 'f' : 'm', dur: c.rnd.range(0.9, 2.2) }, c.rate, c.rnd),
+  },
+  {
+    ...ev,
+    id: 'amb.murmur',
+    label: 'two people talking (murmur)',
+    variants: 10,
+    gainDb: -17,
+    maxVoices: 3,
+    priority: 0.25,
+    rate: 22050,
+    spatial: { ref: 2.5, max: 22, rolloff: 1.3 },
+    expect: { dur: [1.2, 5], centroid: [200, 2200] },
+    bake: bakeMurmur,
   },
   { ...ev, id: 'amb.cart', label: 'cart passing (night)', variants: 3, gainDb: -10, maxVoices: 2, priority: 0.3, rate: 16000, spatial: { ref: 8, max: 100, rolloff: 1 }, expect: { dur: [5, 8] }, bake: bakeCart },
   { ...ev, id: 'amb.roar', label: 'arena crowd roar', variants: 4, gainDb: -4, maxVoices: 2, priority: 0.7, rate: 16000, spatial: { ref: 30, max: 400, rolloff: 0.6 }, expect: { dur: [2.2, 3.6] }, bake: bakeRoar },
@@ -562,11 +631,8 @@ export const ambienceLoops: LoopDef[] = [
     bus: 'ambience',
     bed: 'bed.crowd',
     stereoBed: true,
-    gainDb: -11,
-    events: [
-      { sound: 'amb.chatter', rate: 0.55, dist: [3, 12] },
-      { sound: 'amb.calls', rate: 0.05, dist: [12, 35] },
-    ],
+    // Driven by the number of people near the player (src/audio/CrowdLife.ts): soft and low.
+    gainDb: -16,
   },
   {
     id: 'market',
@@ -575,9 +641,8 @@ export const ambienceLoops: LoopDef[] = [
     bus: 'ambience',
     gainDb: 0,
     events: [
-      { sound: 'amb.calls', rate: 0.14, dist: [6, 28] },
-      { sound: 'coin.clink', rate: 0.06, dist: [3, 10], gainDb: -6 },
-      { sound: 'amb.chatter', rate: 0.3, dist: [3, 10] },
+      { sound: 'amb.calls', rate: 0.03, dist: [14, 34] },
+      { sound: 'coin.clink', rate: 0.05, dist: [3, 10], gainDb: -6 },
     ],
   },
   {
@@ -587,11 +652,11 @@ export const ambienceLoops: LoopDef[] = [
     bus: 'ambience',
     bed: 'bed.city',
     stereoBed: true,
-    gainDb: -12,
+    gainDb: -14,
     events: [
       { sound: 'amb.dog', rate: 0.012, dist: [40, 120] },
       { sound: 'amb.hammer', rate: 0.02, dist: [30, 90] },
-      { sound: 'amb.calls', rate: 0.015, dist: [40, 100] },
+      { sound: 'amb.calls', rate: 0.006, dist: [40, 100] },
     ],
   },
   { id: 'cicadas', label: 'cicadas (summer midday)', group: 'Loops', bus: 'ambience', bed: 'bed.cicadas', stereoBed: true, gainDb: -16 },
