@@ -88,7 +88,14 @@ itself), `game.locations`, `game.dialogue`, `game.ui`, `game.audio`, `game.light
   Neighbouring cells connect when the step is ≤ 0.55 m. A* (8-connected, octile) plus string-pulling
   gives paths around columns, statue bases and podia, and up temple steps. Whatever the landmark
   and city crews build is navigable as soon as it has colliders; stale chunks are re-sampled in the
-  background every ~30 s, and cells where someone got stuck are marked blocked. navcat was not
+  background every ~30 s, and cells where someone got stuck are marked blocked. **Thin walls (M5a):** a
+  wall thinner than a cell (the Regia's marble, a garden wall) stands between two centres that both read as
+  walkable, so after a chunk's cells are sampled the sampler tests the links to the east and south
+  neighbours (`CellSampler.link`: rays at knee and chest height along the link, on the centre line and 0.3 m
+  either side, so a doorway that misses the grid still counts); a walled link is closed in `canStep`
+  (both ways round a corner on a diagonal), and a chunk is `ready` only once its links are tested. The test
+  is a second phase of the chunk's build on the same per-frame budget. `?navlinks=0` leaves every link open
+  (A/B). navcat was not
   needed: the grid answers in microseconds for the distances crowds walk and reads the same
   colliders the characters collide with.
 - **Reachability.** An incremental flood from the player's cell labels where you can walk to;
@@ -409,6 +416,12 @@ inclusive, `sampleGait` ~160 MB, avatar module) and spawning (`spawnAmbient` ~39
 
 AC-22 in the Forum crowd at 09:00 with the player walking through it: longest no-progress 0.52 s
 over 30 s, no unsticks.
+
+## Walls (MOVE crew, 2026-10)
+
+See docs/modules/movement.md: the wall counter (`wallCount`, `scripts/npcwalls.mjs`), the nav clearance from step height,
+learning walls from contact (`learnWall`), `Mover` re-planning when the way to the corner closes, and `StreetNav.drop`.
+`?wallfix=0&navlow=0` switches them off for A/B runs.
 
 ## Shared-file changes
 

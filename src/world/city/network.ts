@@ -412,7 +412,7 @@ export function buildStreetGraph(
     const L = polylineLength(path);
     for (let t = 0; t <= L; t += 1) {
       const p = pointOn(path, t);
-      obstacles.push({ x: p[0], z: p[1], r: half, end: 2 });
+      obstacles.push({ x: p[0], z: p[1], r: half, end: half + 1 });
     }
   }
   const raster = rasterProbe(plan, obstacles);
@@ -650,15 +650,15 @@ function linkIslands(B: Builder, ok: (id: number, p: Vec2) => boolean) {
       for (const id of comp) {
         const n = B.nodes[id];
         const kx = Math.floor(n.x / 30), kz = Math.floor(n.z / 30);
-        for (let dx = -2; dx <= 2; dx++)
-          for (let dz = -2; dz <= 2; dz++)
+        for (let dx = -4; dx <= 4; dx++)
+          for (let dz = -4; dz <= 4; dz++)
             for (const m of hash.get(`${kx + dx},${kz + dz}`) ?? []) {
               const d = Math.hypot(m.x - n.x, m.z - n.z);
-              if (d < 60) pairs.push([id, m.id, d]);
+              if (d < 120) pairs.push([id, m.id, d]);
             }
       }
       pairs.sort((p, q) => p[2] - q[2]);
-      for (const [a, m] of pairs.filter(([a, m]) => !B.midStairs(a) && !B.midStairs(m)).slice(0, 12)) {
+      for (const [a, m] of pairs.filter(([a, m]) => !B.midStairs(a) && !B.midStairs(m)).slice(0, 40)) {
         if (main.has(a) || !ok(a, [B.nodes[m].x, B.nodes[m].z])) continue;
         B.edge(a, m, 2.5);
         linked++;

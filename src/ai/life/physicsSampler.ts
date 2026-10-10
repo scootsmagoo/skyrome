@@ -9,6 +9,7 @@
  * its gate tunnels, a gallery over a portico) is sampled at the ground beneath.
  */
 import { ALL_LAYERS, groups, Layer, RAPIER, type Physics } from '../../core/Physics';
+import { NAV_MAX_STEP } from '../../core/traversal';
 import type { CellSample, CellSampler } from './navgrid';
 
 export interface PhysicsSamplerOptions {
@@ -29,6 +30,19 @@ const UPPER = 1.8;
 const SUB_OFFSET = 0.3;
 /** A cast this short started inside a shape. */
 const INSIDE = 1e-4;
+/**
+ * The person-shaped clearance test starts this far above the floor (m) and ends at head height.
+ * Anything taller than the step-up assist climbs (NAV_MAX_STEP) is a wall to an NPC: it used to
+ * start at 0.5 m, so a 0.3 to 0.5 m barrier (a low wall, a trough, a stall counter, a fountain
+ * rim) read as open floor and the crowd walked into it. `?navlow=0` restores 0.5 for A/B runs.
+ */
+const CLEAR_FROM = typeof location !== 'undefined' && new URLSearchParams(location.search).get('navlow') === '0' ? 0.5 : NAV_MAX_STEP + 0.05;
+/** Link rays: heights above the floor (knee, chest) and offsets across the link (centre line, then either side). */
+const LINK_HEIGHTS = [CLEAR_FROM === 0.5 ? 0.7 : NAV_MAX_STEP + 0.15, 1.4];
+const LINK_SIDES = [0, SUB_OFFSET, -SUB_OFFSET];
+const CLEAR_TO = 1.75;
+/** `?navlinks=0` leaves every link open (the NavGrid before the thin-wall test, for A/B runs). */
+const LINKS_ON = typeof location === 'undefined' || new URLSearchParams(location.search).get('navlinks') !== '0';
 
 export class PhysicsCellSampler implements CellSampler {
   private readonly ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
@@ -46,8 +60,8 @@ export class PhysicsCellSampler implements CellSampler {
     private readonly opts: PhysicsSamplerOptions = {},
   ) {
     const r = opts.radius ?? 0.28;
-    // Spans 0.5 m (above autostep height) to 1.75 m above the floor.
-    this.capsule = new RAPIER.Capsule((1.25 - 2 * r) / 2, r);
+    // Spans CLEAR_FROM (just above what the step-up assist climbs) to 1.75 m above the floor.
+    this.capsule = new RAPIER.Capsule((CLEAR_TO - CLEAR_FROM - 2 * r) / 2, r);
     this.fallbackY = opts.fallbackY ?? 0;
     this.above = opts.above ?? 5.5;
     this.depth = opts.depth ?? 14;
@@ -62,7 +76,9 @@ export class PhysicsCellSampler implements CellSampler {
       return;
     }
     out.h = top.h;
-    out.walkable = !top.inside && this.clear(x, top.h, z);
+    const fit = top.inside ? -1 : this.clear(x, top.h, z);
+    out.walkable = fit >= 0;
+    out.off = fit > 0 ? fit : 0;
     // A floor well above the street (seating, a gallery, a deck): when there is open, walkable
     // street-level ground beneath it (a tunnel under the seats, a street under a gallery), the
     // crowd walks there. A solid podium or terrace fails the clearance test and keeps its top.
@@ -72,14 +88,53 @@ export class PhysicsCellSampler implements CellSampler {
       for (let k = 0; k < 4; k++) {
         const low = this.floorBelow(x, z, y);
         if (!low || low.inside || low.h < ref - 1) break;
-        if (low.h - ref <= UPPER && top.h - low.h > 1.9 && this.clear(x, low.h, z)) {
+        const lowFit = low.h - ref <= UPPER && top.h - low.h > 1.9 ? this.clear(x, low.h, z) : -1;
+        if (lowFit >= 0) {
           out.h = low.h;
           out.walkable = true;
+          out.off = lowFit;
           break;
         }
         y = low.h - 0.05;
       }
     }
+  }
+
+  private readonly linkRay = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 });
+
+  /**
+   * Is the way from one cell centre to the next free of a wall? Rays at knee and chest height along
+   * the link (following the floor), on the centre line and 0.3 m to either side (a doorway that does
+   * not line up with the grid must not read as a wall): the way is open when any one of the three
+   * lines is clear at both heights. A wall thinner than a cell between two centres blocks all three.
+   */
+  link(x0: number, z0: number, h0: number, x1: number, z1: number, h1: number): boolean {
+    if (!LINKS_ON) return true;
+    const dx = x1 - x0, dz = z1 - z0;
+    const L = Math.hypot(dx, dz);
+    const ux = dx / L, uz = dz / L;
+    const world = this.physics.world;
+    const ray = this.linkRay;
+    for (const side of LINK_SIDES) {
+      let clearLine = true;
+      for (const hh of LINK_HEIGHTS) {
+        const ox = x0 - uz * side, oz = z0 + ux * side;
+        const vx = x1 - uz * side - ox, vy = h1 - h0, vz = z1 + ux * side - oz;
+        const len = Math.hypot(vx, vy, vz);
+        ray.origin.x = ox;
+        ray.origin.y = h0 + hh;
+        ray.origin.z = oz;
+        ray.dir.x = vx / len;
+        ray.dir.y = vy / len;
+        ray.dir.z = vz / len;
+        if (world.castRay(ray, len, false, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, this.filter)) {
+          clearLine = false;
+          break;
+        }
+      }
+      if (clearLine) return true;
+    }
+    return false;
   }
 
   /**
@@ -109,16 +164,22 @@ export class PhysicsCellSampler implements CellSampler {
    * Room for a person standing on a floor at `h` (knee to head height clear) at the cell centre,
    * or failing that at one of four points a little off it: a gate or doorway that doesn't line up
    * with the grid (a rotated building) must not read as a wall because its jamb grazes a centre.
+   * Returns 0 for the centre, 1 to 4 for the offset that fits (CellSample.off: paths pass through
+   * that point, not the tight centre), -1 when nothing fits.
    */
-  private clear(x: number, h: number, z: number): boolean {
-    if (this.fits(x, h, z)) return true;
+  private clear(x: number, h: number, z: number): number {
+    if (this.fits(x, h, z)) return 0;
     const d = SUB_OFFSET;
-    return this.fits(x + d, h, z) || this.fits(x - d, h, z) || this.fits(x, h, z + d) || this.fits(x, h, z - d);
+    if (this.fits(x + d, h, z)) return 1;
+    if (this.fits(x - d, h, z)) return 2;
+    if (this.fits(x, h, z + d)) return 3;
+    if (this.fits(x, h, z - d)) return 4;
+    return -1;
   }
 
   private fits(x: number, h: number, z: number): boolean {
     this.pos.x = x;
-    this.pos.y = h + 0.5 + 1.25 / 2;
+    this.pos.y = h + CLEAR_FROM + (CLEAR_TO - CLEAR_FROM) / 2;
     this.pos.z = z;
     return !this.physics.world.intersectionWithShape(this.pos, this.rot, this.capsule, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, this.filter);
   }

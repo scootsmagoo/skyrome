@@ -66,6 +66,7 @@ describe('street graph degree-1 nodes', () => {
     const graph = buildStreetGraph(plan, work, null, inCore);
     const named = new Set(graph.termini.map((t) => t.node));
     for (const n of loose(graph)) expect(named.has(n.id)).toBe(true);
-    expect(graph.termini.some((t) => t.reason === 'stairs')).toBe(true);
+    // (M5a: a stairway's foot is joined to the street by a path of its own, so stairs termini are no longer required.)
+    expect(graph.termini.length).toBeGreaterThan(0);
   });
 });

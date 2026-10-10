@@ -185,16 +185,25 @@
   let stillFor = 0;
   let progressT = performance.now();
   let progressBest = Infinity;
+  let loopT = performance.now();
   let arrivedAt = 0;
   let jamFrom = null;
+  let pathAt = 0;
+  let pathLed = false;
   /** Walk the nav path to goal.pos (outside any cell). */
   function walkTo(goal) {
     const target = goal.pos;
     const key = `${goal.quest}/${goal.obj}/${Math.round(target.x)},${Math.round(target.z)}`;
-    if (key !== pathFor || !path || !path.length) {
-      const r = game.population?.nav?.findPath(p.position.x, p.position.z, target.x, target.z);
+    const nav = game.population?.nav;
+    // A path made while the nav grid was still being sampled (just after a teleport or a long walk) is the street graph's
+    // straight links, which cut corners and clip buildings: plan again, from here, once the grid knows the ground.
+    const stale = pathFor === key && !pathLed && nav?.gridReady?.(p.position.x, p.position.z) && performance.now() - pathAt > 1500;
+    if (key !== pathFor || !path || !path.length || stale) {
+      const r = nav?.findPath(p.position.x, p.position.z, target.x, target.z);
       path = Array.isArray(r) ? r.slice() : [{ x: target.x, z: target.z }];
       pathFor = key;
+      pathAt = performance.now();
+      pathLed = !!nav?.gridReady?.(p.position.x, p.position.z);
     }
     follow(target, 1.5, () => teleportToward(target));
   }
@@ -225,12 +234,33 @@
     });
     return best;
   }
+  /**
+   * A player steers round a stall or a corner the street graph's straight links cut; so does the bot: when the
+   * next waypoint is not in a straight walkable line from here (the NavGrid knows the colliders), lead through the
+   * grid to it (A*, as the crowd does). At most twice a second; outside cells only.
+   */
+  let steerT = 0;
+  function steerAround(pts) {
+    const grid = game.population?.nav?.grid;
+    if (!grid || inCell() || !pts.length || performance.now() - steerT < 500) return;
+    const c = pts[0];
+    if (dist(c) > 70 || !grid.ready(p.position.x, p.position.z) || !grid.ready(c.x, c.z)) return;
+    steerT = performance.now();
+    if ((grid.lineClear ?? grid.lineWalkable).call(grid, p.position.x, p.position.z, c.x, c.z)) return;
+    const lead = grid.findPath(p.position.x, p.position.z, c.x, c.z, 4000);
+    if (lead && lead.length) pts.unshift(...lead.filter((q) => Math.hypot(q.x - c.x, q.z - c.z) > 0.5));
+    // No way there on the grid, and the grid says that place is walled off from here (a street node drawn inside
+    // a wall or behind a building: the Ludus gate's, 2 m from the wall): a player would not walk into it; skip the point.
+    else if (!lead && pts.length > 1 && grid.reachable(p.position.x, p.position.z) && !grid.reachable(c.x, c.z)) pts.shift();
+  }
   /** Face the next point of the path (popping those within `pop` m), hold W, and handle a jam. */
   function follow(target, pop, unstuck) {
     // Inside a cell a route point on another floor shares its plan position: pop only within 1.5 m of the player's height.
     const reached = (w) => dist(w) < pop && (!inCell() || Math.abs((w.y ?? p.position.y) - p.position.y) < 1.5);
     while (path.length > 1 && reached(path[0])) path.shift();
+    steerAround(path);
     const c = path[0] ?? target;
+    L.wp = { x: Math.round(c.x), z: Math.round(c.z), n: path.length };
     face(c.x, c.z);
     const far = dist(target);
     hold('KeyW', true);
@@ -240,17 +270,33 @@
       jamFrom = p.position.clone();
       progressT = performance.now();
     }
-    if (performance.now() - progressT > 8000) {
-      snag('stuck', `${Math.round(far)} m from ${L.goal?.text ?? 'the marker'}`);
+    // A loop: moving, but the goal is no nearer than 3 m from the best so far for 20 s (a path that ping-pongs between two
+    // points at a wall's corner or a steep bank, each step under the 1.5 m a jam needs): the same snag.
+    if (far < progressBest - 3) {
+      progressBest = far;
+      loopT = performance.now();
+    }
+    const looped = performance.now() - loopT > 20000;
+    if (performance.now() - progressT > 8000 || looped) {
+      // What stands in the way: rays toward the next waypoint at foot, knee, waist and head, the floor under the feet.
+      const fx = c.x - p.position.x;
+      const fz = c.z - p.position.z;
+      const fl = Math.hypot(fx, fz) || 1;
+      const ahead = [0.08, 0.3, 0.7, 1.4].map((h) => {
+        const r = game.physics.raycast({ x: p.position.x, y: p.position.y + h, z: p.position.z }, { x: fx / fl, y: 0, z: fz / fl }, 3, 1);
+        return r ? +r.distance.toFixed(2) : '-';
+      });
+      const diag = `wp ${Math.round(c.x)},${Math.round(c.z)} ${fl.toFixed(1)}m ahead[${ahead.join(' ')}] grounded=${p.grounded}`;
+      snag('stuck', `${Math.round(far)} m from ${L.goal?.text ?? 'the marker'} :: ${diag}`);
       unstuck();
     }
-    void progressBest;
     L.walked += Math.hypot(p.position.x - lastPos.x, p.position.z - lastPos.z);
     lastPos = p.position.clone();
   }
   function resetProgress() {
     jamFrom = null;
     progressBest = Infinity;
+    loopT = performance.now();
     progressT = performance.now();
     path = null;
   }

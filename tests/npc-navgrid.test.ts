@@ -263,4 +263,36 @@ describe('PhysicsCellSampler', () => {
     s.sample(-10, 5, out); // in the wall
     expect(out.walkable && Math.abs(out.h) < 0.5).toBe(false);
   });
+
+  it('a cell whose centre is too tight but has room off-centre reports where, and paths pass through that point', () => {
+    const physics = new Physics();
+    physics.addBox({ x: 0, y: -0.5, z: 0 }, { x: 50, y: 0.5, z: 50 });
+    // A wall whose face is at x = 0.62: the 0.28 m body does not fit at the centre of the cell 0..1 (0.5 + 0.28 > 0.62), it does 0.3 m west.
+    physics.addBox({ x: 1.12, y: 1.5, z: 0 }, { x: 0.5, y: 1.5, z: 20 });
+    physics.step(1 / 60);
+    const s = new PhysicsCellSampler(physics);
+    const out: { h: number; walkable: boolean; off?: number } = { h: NaN, walkable: false };
+    s.sample(0.5, 0.5, out);
+    expect(out.walkable).toBe(true);
+    expect(out.off).toBe(2);
+    s.sample(-3.5, 0.5, out);
+    expect(out.off).toBe(0);
+    const g = new NavGrid(s, { radius: 20 });
+    g.setFocus(0, 0);
+    g.buildAll();
+    const p = g.cellPoint(0, 0, { x: 0, z: 0 });
+    expect(p.x).toBeCloseTo(0.2, 5);
+    expect(p.z).toBeCloseTo(0.5, 5);
+  });
+
+  it('a thin low barrier between two cells (0.5 m, a trough or a low wall) closes the link; a 0.2 m kerb does not', () => {
+    const physics = new Physics();
+    physics.addBox({ x: 0, y: -0.5, z: 0 }, { x: 50, y: 0.5, z: 50 });
+    physics.addBox({ x: 0.5, y: 0.25, z: 0 }, { x: 0.05, y: 0.25, z: 5 }); // 0.5 m high, 0.1 m thick
+    physics.addBox({ x: 10.5, y: 0.1, z: 0 }, { x: 0.05, y: 0.1, z: 5 }); // a 0.2 m kerb
+    physics.step(1 / 60);
+    const s = new PhysicsCellSampler(physics);
+    expect(s.link!(-0.5, 0, 0, 1.5, 0, 0)).toBe(false);
+    expect(s.link!(9.5, 0, 0, 11.5, 0, 0)).toBe(true);
+  });
 });

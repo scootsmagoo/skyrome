@@ -32,6 +32,13 @@ export interface StreetSpec {
   /** Close the sidewalk ends with a vertical face (default true). */
   capStart?: boolean;
   capEnd?: boolean;
+  /**
+   * Dropped kerbs (paved): where a street or lane meets this road, the sidewalk on `side` (+1 =
+   * the left normal's side, -1 = the other) ramps down to the carriageway over `w` m centred on
+   * arc length `s` (from the start of `points`), plus RAMP m of slope either side, so a walker
+   * crosses from the street to the road without a step.
+   */
+  dips?: { s: number; side: -1 | 1; w: number }[];
   /** Add trimesh colliders (default true). */
   collide?: boolean;
   seed?: number;
@@ -47,6 +54,12 @@ export interface StreetResult {
 type Expect = 'up' | 'in' | 'out';
 interface ProfilePt { off: number; y: number }
 interface Strip { mat: MaterialId; expect: Expect }
+
+/** Width (m) of the walkable apron where a paved street's sidewalk meets the ground, and where a lane does. */
+const APRON = 0.9;
+const LANE_APRON = 0.6;
+/** An apron ends this far (m) above the ground, not under it or flush: ground within 2 cm of the paving is a flaw the crawl counts (a lip of 2 cm rides over). */
+const APRON_FLUSH = 0.022;
 
 /** Builds a street into `b` (world coordinates). */
 export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn): StreetResult {
@@ -69,10 +82,11 @@ export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn
   };
   if (paved) {
     const cw = 0.32;
-    // The outer edge is a bank sloping down to the ground (a vertical 30 cm face stood out as a
-    // slab where the street crosses open ground; along houses it runs under their walls).
-    push(-hw - sw - 0.55, -0.25);
-    push(-hw - sw, ch, 'concrete', 'out');
+    // The outer edge is an apron sloping down to the ground over APRON m (a vertical 30 cm face stood
+    // out as a slab where the street crosses open ground; along houses it runs under their walls).
+    // It is walkable: a lip of 15-25 cm between the sidewalk and the ground caught pedestrians.
+    push(-hw - sw - APRON, -lift + APRON_FLUSH);
+    push(-hw - sw, ch, 'concrete', 'up');
     push(-hw - cw, ch, sideMat, 'up');
     push(-hw, ch, curbMat, 'up');
     push(-hw, 0, curbMat, 'in');
@@ -83,13 +97,14 @@ export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn
     push(hw, ch, curbMat, 'in');
     push(hw + cw, ch, curbMat, 'up');
     push(hw + sw, ch, sideMat, 'up');
-    push(hw + sw + 0.55, -0.25, 'concrete', 'out');
+    push(hw + sw + APRON, -lift + APRON_FLUSH, 'concrete', 'up');
   } else {
-    push(-hw - 0.05, -0.4);
-    push(-hw, 0.0, roadMat, 'out');
+    // A lane's edges run out to the ground in a walkable apron too (the old 5 cm edge was a step of the lane's lift).
+    push(-hw - LANE_APRON, -lift + APRON_FLUSH);
+    push(-hw, 0.0, roadMat, 'up');
     push(0, 0.05, roadMat, 'up');
     push(hw, 0.0, roadMat, 'up');
-    push(hw + 0.05, -0.4, roadMat, 'out');
+    push(hw + LANE_APRON, -lift + APRON_FLUSH, roadMat, 'up');
   }
 
   const pts = resamplePolyline(spec.points, 1.6);
@@ -117,16 +132,23 @@ export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn
   const along: number[] = [0];
   for (let i = 1; i < n; i++) along.push(along[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
   const total = along[n - 1] || 1;
-  const raise = (i: number) => {
+  const raise = (i: number, off: number) => {
     let f = 1;
     if (spec.capStart ?? true) f = Math.min(f, along[i] / RAMP);
     if (spec.capEnd ?? true) f = Math.min(f, (total - along[i]) / RAMP);
+    if (spec.dips) {
+      for (const d of spec.dips) {
+        if (d.side !== Math.sign(off)) continue;
+        // 0 inside the dip's flat, rising to 1 over RAMP m beyond its edge.
+        f = Math.min(f, (Math.abs(along[i] - d.s) - d.w / 2) / RAMP);
+      }
+    }
     return Math.max(0, Math.min(1, f));
   };
   const P = (i: number, k: number) => {
     const p = prof[k];
     const x = pts[i][0] + nor[i][0] * p.off * miter[i], z = pts[i][1] + nor[i][1] * p.off * miter[i];
-    const y = paved && p.y === ch ? ch * raise(i) : p.y;
+    const y = paved && p.y === ch ? ch * raise(i, p.off) : p.y;
     return new THREE.Vector3(x, heightAt(x, z) + lift + y, z);
   };
   const grid: THREE.Vector3[][] = [];
@@ -268,6 +290,8 @@ export interface PlazaOpts {
   /** Vertical skirt depth around the edge (hides gaps against the terrain). */
   skirt?: number;
   collide?: boolean;
+  /** Also collide with the sloped bevel round the edge, so one walks on and off without a lip (default false: only the city's own plazas ask; landmark builders keep their old colliders). */
+  bevelCollide?: boolean;
   /** Holes: areas left unpaved (landmark footprints and other `avoid` areas). Any simple polygons. */
   exclude?: Polygon[];
 }
@@ -312,8 +336,11 @@ export function buildPlaza(b: MeshBuilder, poly: Polygon, heightAt: HeightFn, o:
   b.add(g, mat, undefined, { castShadow: castsShadow(mat) });
   // Skirt along the outline and around the holes, facing away from the paved surface.
   const skirt = o.skirt ?? 0.4;
+  let bevelCol: THREE.BufferGeometry | null = null;
   if (skirt > 0) {
     const s: number[] = [];
+    // The bevel is walkable (a paving 7-12 cm proud of the ground was a lip to catch on): it joins the collider.
+    const cs: number[] = [];
     const paved = (p: Vec2) => pointInPolygon(p, poly) && !inHole(p);
     const ring = (pts: Polygon, bevel: boolean) => {
       for (let i = 0; i < pts.length; i++) {
@@ -340,6 +367,7 @@ export function buildPlaza(b: MeshBuilder, poly: Polygon, heightAt: HeightFn, o:
           // Face the unpaved side: (t0, b0, t1) faces left of p0→p1, (t0, t1, b0) faces right.
           if (left) s.push(...t0, ...t1, ...b0, ...t1, ...b1, ...b0);
           else s.push(...t0, ...b0, ...t1, ...t1, ...b0, ...b1);
+          if (bevel && o.bevelCollide) cs.push(...t0, ...b0, ...t1, ...t1, ...b0, ...b1);
         }
       }
     };
@@ -351,8 +379,15 @@ export function buildPlaza(b: MeshBuilder, poly: Polygon, heightAt: HeightFn, o:
       sg.computeVertexNormals();
       b.add(sg, mat, undefined, { castShadow: castsShadow(mat) });
     }
+    if (cs.length) {
+      bevelCol = new THREE.BufferGeometry();
+      bevelCol.setAttribute('position', new THREE.Float32BufferAttribute(cs, 3));
+    }
   }
-  if (o.collide ?? true) b.collider({ kind: 'trimesh', geometry: g });
+  if (o.collide ?? true) {
+    b.collider({ kind: 'trimesh', geometry: g });
+    if (bevelCol) b.collider({ kind: 'trimesh', geometry: bevelCol });
+  }
 }
 
 // ------------------------------------------------------------------ stairs

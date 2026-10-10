@@ -25,6 +25,7 @@ import { WORLD_SCALE, toGame } from '../coords';
 import type { Heightmap } from '../terrain/heightmap';
 import { BatchPool } from './batches';
 import { renderBreakdown } from './debug';
+import { auditReach, auditRoadEnds, summarizeRoadEnds } from './audit';
 import { FlatSoup, blockFarGeometry, layoutBlock, ribbon, type LotMass } from './massing';
 import { buildMonuments } from './monuments';
 import { buildStreetGraph, type StreetGraph } from './network';
@@ -92,7 +93,9 @@ export async function buildCity(
   const detailBounds = opts.extent === 'city' ? cityBounds : scaleBounds(atlas.CORE_BOUNDS, 150);
 
   // ---- 1. plan (detail: the core + 150 m, and the golden-path corridors + 150 m round them)
-  const plan = planCity(atlas, hm, { detailBounds, corridorDetail: opts.extent === 'city' ? null : 150 });
+  // ?detour=0: the atlas roads as they are, through the buildings (A/B for the M5a road work).
+  const detourRoads = typeof location === 'undefined' || new URLSearchParams(location.search).get('detour') !== '0';
+  const plan = planCity(atlas, hm, { detailBounds, corridorDetail: opts.extent === 'city' ? null : 150, detourRoads });
   // Where streets, ground cover and city grass exist: the detail area plus a 60 m fringe.
   const areaRects = plan.detailRects.map((b) => ({ minX: b.minX - 60, minZ: b.minZ - 60, maxX: b.maxX + 60, maxZ: b.maxZ + 60 }));
   const inDetail = (x: number, z: number) => inRects(areaRects, x, z);
@@ -289,8 +292,10 @@ export async function buildCity(
   stats.streets = plan.streets.length;
   console.info('[city]', JSON.stringify(Object.fromEntries(Object.entries({ ...plan.stats, ...stats }).map(([k, v]) => [k, Math.round(v)]))));
   report(1, 'The city wakes');
-  const w = window as unknown as { __city?: CityService; __cityBreakdown?: () => unknown };
+  const w = window as unknown as { __city?: CityService; __cityBreakdown?: () => unknown; __streetAudit?: () => unknown };
   w.__city = service;
+  // In-game audit: what the street graph reaches from the Forum, and the road ends that stop at nothing (M5a).
+  w.__streetAudit = () => ({ reach: auditReach(game.streets, 0, 0), roadEnds: summarizeRoadEnds(auditRoadEnds(plan)), dead: auditRoadEnds(plan).filter((e) => e.verdict === 'dead') });
   w.__cityBreakdown = () =>
     renderBreakdown(game, {
       terrain: () => (game.terrain ? [game.terrain.group] : []),

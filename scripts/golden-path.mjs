@@ -5,7 +5,7 @@
  * place a player would get stuck.
  * The bot is scripts/golden-bot.js.
  *
- *   node scripts/golden-path.mjs [--minutes 40] [--shots] [--query "origin=dacus"]
+ *   node scripts/golden-path.mjs [--minutes 40] [--shots] [--trace] [--query "origin=dacus"]   (--trace: position and distance to the goal every 5 s)
  *
  * Prints the quest timeline, the snags (jams, unresolved markers, missing NPCs, objectives that don't
  * complete) and page errors; exit code 1 unless all four chapters complete.
@@ -56,7 +56,7 @@ while (Date.now() - t0 < minutes * 60000) {
     const L = window.__gp;
     const g = window.__skyrome?.game;
     if (!L || !g) return { done: true, events: [], n: from, snags: 0, hour: '?', pos: [], lost: true };
-    return { done: L.done, events: L.events.slice(from), n: L.events.length, snags: L.snags.length, hour: g.time.hour.toFixed(2), pos: g.player.position.toArray().map(Math.round) };
+    return { done: L.done, events: L.events.slice(from), n: L.events.length, snags: L.snags.length, hour: g.time.hour.toFixed(2), pos: g.player.position.toArray().map(Math.round), goal: L.goal ? `wp ${L.wp ? L.wp.x + ',' + L.wp.z + ' (' + L.wp.n + ')' : '-'} ${L.goal.obj} ${Math.round(Math.hypot((L.goal.pos?.x ?? 0) - g.player.position.x, (L.goal.pos?.z ?? 0) - g.player.position.z))} m` : '' };
   }, seen);
   for (const e of s.events) {
     if (e[1] === 'notify') continue;
@@ -64,6 +64,7 @@ while (Date.now() - t0 < minutes * 60000) {
     if (args.shots && (e[1] === 'stage' || e[1] === 'completed')) await page.screenshot({ path: join(outDir, `gp-${String(shot++).padStart(2, '0')}-${e[2]}-${e[3] ?? ''}.png`) });
   }
   seen = s.n;
+  if (args.trace) console.log(`  trace ${Math.round((Date.now() - t0) / 1000)} s  at ${s.pos.join(',')}  hour ${s.hour}  ${s.goal ?? ''}`);
   const snags = await page.evaluate((from) => window.__gp.snags.slice(from).map((x) => ({ ...x })), snagSeen);
   for (const x of snags) console.log(`  ${String(x.t).padStart(6)} s  snag ${x.kind}: ${x.detail}  [${x.goal}] at ${x.pos.join(',')}`);
   snagSeen += snags.length;

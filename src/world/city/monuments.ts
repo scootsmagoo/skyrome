@@ -95,8 +95,8 @@ function buildWall(plan: CityPlan, w: PlanWall, H: (x: number, z: number) => num
       const p1: Pt = [a[0] + (b[0] - a[0]) * ((j + 1) / m), a[1] + (b[1] - a[1]) * ((j + 1) / m)];
       const mid: Pt = [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2];
       const c = g.at(mid[0], mid[1]);
-      // Nothing where the wall would block a road or street, or stands in the river.
-      if (c === K.ROAD || c === K.STREET || c === K.WATER || c === K.LANDMARK || c === K.PIAZZA) continue;
+      // Nothing where the wall would stand in the river or on a landmark.
+      if (c === K.WATER || c === K.LANDMARK) continue;
       let h = w.height;
       if (w.state === 'partial') {
         if (!rng.chance(0.62)) continue;
@@ -109,18 +109,71 @@ function buildWall(plan: CityPlan, w: PlanWall, H: (x: number, z: number) => num
         if (!(c === K.GARDEN || c === K.STEEP || c === K.MARGIN || c === K.OUTSIDE || c === K.SCRAP) || !rng.chance(0.35)) continue;
         h = rng.range(1.2, 2.6);
       }
-      const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) + 0.05;
-      const y0 = Math.min(H(p0[0], p0[1]), H(p1[0], p1[1]), H(mid[0], mid[1])) - 0.6;
-      const top = H(mid[0], mid[1]) + h;
-      const theta = Math.atan2(-dz, dx);
-      const at = new THREE.Matrix4().makeTranslation(p0[0], y0, p0[1]).multiply(new THREE.Matrix4().makeRotationY(theta));
-      const high = inDetail(mid[0], mid[1]);
-      ashlarWall(chunk(mid[0], mid[1]), { length: len, height: top - y0, thickness: w.thickness, material: 'tufa', courses: high ? 0.42 : undefined, collide: true, detail: high ? 'high' : 'low' }, at);
-      n++;
+      // Where a road or street crosses, the wall is breached exactly as wide as the way (the cells'
+      // class along the wall's line decides, every metre): a piece that overlaps the way is cut short
+      // at its edge, and the cut end is dressed as a jamb. (A whole piece skipped by its middle cell
+      // left either a half-width gap or a block of wall standing in the road.)
+      const runs = freeRuns(g, p0, p1);
+      for (const run of runs) {
+        const a0: Pt = [p0[0] + dx * run.s0, p0[1] + dz * run.s0];
+        const len = run.s1 - run.s0 + (run.s0 > 0 || run.s1 < L ? 0 : 0.05);
+        if (len < 1.2) continue;
+        const rmid: Pt = [a0[0] + dx * (len / 2), a0[1] + dz * (len / 2)];
+        const y0 = Math.min(H(a0[0], a0[1]), H(a0[0] + dx * len, a0[1] + dz * len), H(rmid[0], rmid[1])) - 0.6;
+        const top = H(rmid[0], rmid[1]) + h;
+        const theta = Math.atan2(-dz, dx);
+        const at = new THREE.Matrix4().makeTranslation(a0[0], y0, a0[1]).multiply(new THREE.Matrix4().makeRotationY(theta));
+        const high = inDetail(rmid[0], rmid[1]);
+        ashlarWall(chunk(rmid[0], rmid[1]), { length: len, height: top - y0, thickness: w.thickness, material: 'tufa', courses: high ? 0.42 : undefined, collide: true, detail: high ? 'high' : 'low' }, at);
+        n++;
+        // Jambs: a pier a little taller and wider than the wall where its end meets the way.
+        for (const side of [0, 1] as const) {
+          if (!(side === 0 ? run.openStart : run.openEnd)) continue;
+          if (w.state === 'built-over') continue;
+          const s = side === 0 ? run.s0 : run.s1 - 1.4;
+          const q: Pt = [p0[0] + dx * s + dx * 0.7, p0[1] + dz * s + dz * 0.7];
+          const jy0 = Math.min(H(q[0], q[1]), y0 + 0.6) - 0.6;
+          const hj = top - jy0 + 0.35;
+          chunk(q[0], q[1]).box('tufa', 1.4, hj, w.thickness + 0.5, new THREE.Matrix4().makeTranslation(q[0], jy0 + hj / 2, q[1]).multiply(new THREE.Matrix4().makeRotationY(theta)), { collide: true });
+        }
+      }
     }
   }
   if (w.agger) n += buildAgger(w, H, chunk);
   return n;
+}
+
+/** A stretch of a wall piece that stands clear of the roads and streets crossing it. */
+export interface FreeRun {
+  s0: number;
+  s1: number;
+  /** The run's start / end meets a road or street (a breach), not just the piece's own end. */
+  openStart: boolean;
+  openEnd: boolean;
+}
+
+/** Ways through a wall: ground the wall line must leave open. */
+const OPENING = new Set<number>([K.ROAD, K.STREET, K.PIAZZA]);
+
+/** Split the piece p0→p1 into the runs of its line (0.5 m samples) that are not on a road or street. */
+export function freeRuns(g: CityPlan['grid'], p0: Pt, p1: Pt): FreeRun[] {
+  const L = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+  const n = Math.max(1, Math.ceil(L * 2));
+  const runs: FreeRun[] = [];
+  let start = -1;
+  let openStart = false;
+  const open = (k: number) => OPENING.has(g.at(p0[0] + ((p1[0] - p0[0]) * k) / n, p0[1] + ((p1[1] - p0[1]) * k) / n));
+  for (let k = 0; k <= n; k++) {
+    const blocked = k < n ? open(k) : false;
+    if (!blocked && start < 0 && k < n) {
+      start = k;
+      openStart = k > 0;
+    } else if ((blocked || k === n) && start >= 0) {
+      runs.push({ s0: (start * L) / n, s1: (k * L) / n, openStart, openEnd: blocked });
+      start = -1;
+    }
+  }
+  return runs;
 }
 
 /** The agger: an earth bank behind the wall, its top a promenade (walkable trimesh). */

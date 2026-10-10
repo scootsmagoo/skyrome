@@ -223,6 +223,26 @@ export class StreetNav {
     return pts;
   }
 
+  /** Nodes cut off from the walk (see `drop`), for stats. */
+  dropped = 0;
+
+  /**
+   * Cut a node out of the graph: the walk found it unreachable (a street the city drew through a
+   * building: the grid reads the real colliders). Routes stop passing through it. Returns whether
+   * a node within 3 m was cut.
+   */
+  drop(x: number, z: number): boolean {
+    const n = this.nearest(x, z, 3);
+    if (!n || !this.adj[n.i].length) return false;
+    for (const e of this.adj[n.i]) {
+      const back = this.adj[e.to];
+      for (let k = back.length - 1; k >= 0; k--) if (back[k].to === n.i) back.splice(k, 1);
+    }
+    this.adj[n.i].length = 0;
+    this.dropped++;
+    return true;
+  }
+
   /** Spots of a kind within `r` of a point, nearest first. */
   spotsNear(x: number, z: number, r: number, kind?: string | ((s: StreetSpot) => boolean)): StreetSpot[] {
     const r2 = r * r;
