@@ -56,17 +56,31 @@ corner). The finding: a few NPCs and a few places make most of them, an NPC rubb
 a whole minute because every plan led through it; half of the episodes had the next path corner walled
 off from where the NPC stood.
 
-Fixes (each can be switched off for A/B with `?wallfix=0` and `?navlow=0`):
+Fixes (switched off for A/B runs with `?wallfix=0` (2, 3) and `?navlow=0` (1), `?navslope=0` (7)):
 
 1. **Clearance starts at step height** (`physicsSampler.ts`). The cell test used a person-shaped capsule
    from 0.5 m up, so a 0.3 to 0.5 m barrier (a low wall, a trough, a stall counter, a fountain rim)
    read as open floor; it starts at `NAV_MAX_STEP + 0.05` now, and the link rays between cells (thin
    walls) at `NAV_MAX_STEP + 0.15` instead of 0.7.
 2. **Learn walls from contact** (`NpcManager.learnWall`). A walking NPC that has hardly moved for a third of a
-   second while the controller reports a static wall-like contact marks the cell ahead blocked in the grid and plans
-   again; it backs off (1.5 s, 3 s, 4.5 s, then the stuck ladder) and the count resets after 20 quiet seconds.
+   second while the controller reports a static wall-like contact remembers the cell ahead as a wall of its own
+   (`Mover.walls`, `src/ai/life/learnedWalls.ts`: up to 4, each for 30 s) and plans again; it backs off (1.5 s, 3 s,
+   4.5 s, then the stuck ladder) and the count resets after 20 quiet seconds. Only that NPC's searches keep out of the
+   cell (`NavGrid.avoid`, through `NavService.findPath(…, walls)`); the shared grid is not touched. Until 2026-10-10 the
+   cell was marked blocked on the one shared grid (`NavGrid.block`) until its chunk was sampled again, so one NPC
+   pushing into a crowd's edge, a stall or shutters in a doorway closed the doorway for everybody. Colliders that come
+   and go are never learned: a station's dressing (stalls, shutters, carts, banners) carries the owner `STATION_PROP`
+   (`stationDirector.ts`), and anything on a body that is not fixed counts as moving. The stuck ladder's last rung
+   (`unstick`) remembers its wall the same way (it too used to block the shared grid). A station's own blocked cells
+   are cleared when its dressing is taken in (`StationHost.unblock`). `tests/npc-learned-walls.test.ts`: one walker's
+   wall in a doorway (a false alarm) leaves everybody else's path through it, and lapses.
 3. **Re-plan when the way closes** (`Mover`). Every 0.4 s the mover checks the line to its next corner on
-   the grid; a wall in the way (a shove, a sidestep, a corner) re-plans, at most 3 times per goal and 1.5 s apart.
+   the grid with `lineClear` (the test the path was made with, and the one the corner skip uses; it was `lineWalkable`
+   until 2026-10-10); a wall in the way (a shove, a sidestep, a corner) re-plans, at most 3 times per goal and 1.5 s
+   apart, unless the walker is still closing on that corner (0.25 m nearer than at the last look, or a new corner):
+   the grid's body-wide test is stricter than the body, and a re-plan that changes nothing costs a search. In the AC-22
+   crowd test over 40 seeds (40 walkers, 60 s): `lineWalkable` 5,356 searches, worst no-progress 3.62 s; plain
+   `lineClear` 7,213 searches, worst 4.13 s; `lineClear` while not closing 5,911 searches, worst 3.10 s (one seed).
 4. **Lines keep clear of walls** (`NavGrid.lineClear`). `lineWalkable` is the cell test along the line of centres; a
    body 0.6 m wide grazes a corner it passes. String-pulling, the straight-line shortcut in `NavService`, the
    mover's corner skipping and the bot's detours now use `lineClear` (the centre line and two lines 0.32 m to
@@ -75,8 +89,20 @@ Fixes (each can be switched off for A/B with `?wallfix=0` and `?navlow=0`):
    to one side used to count as walkable at its centre, so a path through it ran into the wall; the sampler now
    says which side, and paths pass through that point (`NavGrid.cellPoint`). The offset is stored in flag bits 5 to 7.
 6. **Street nodes behind buildings** (`StreetNav.drop`, `NavService.findPath`). When the walk to a street node
-   within 30 m is walled off from ground that is connected, the node is cut out of the street graph and the route is made
-   again (the city draws streets, the grid reads the colliders).
+   within 30 m is walled off from ground that is connected, the node is cut out of the NPCs' copy of the street graph and
+   the route is made again (the city draws streets, the grid reads the colliders). The verdict comes from the flood's
+   reachability labels, which are only trusted when every chunk within 24 m of both the walker and the node was finished
+   before that flood started (`NavGrid.settled`): a chunk built after the flood reads as walled off though it may be
+   open. A cut node comes back when the grid under it changes (`NavGrid.areaStamp`: a chunk's `seq` changes when it is
+   built, dropped, or sampled again with a different result; `StreetNav.restoreCut`), not after a time, and a route
+   never starts or ends on a node with no link (`StreetNav.path`). Until 2026-10-10 the cut lasted the session and could
+   come from a chunk not yet built. `tests/npc-streets.drop.test.ts`.
+7. **Steep terrain is no floor** (`physicsSampler.ts`, `NAV_MAX_SLOPE_DEG` 40 in `core/traversal.ts`, the controller's
+   slide angle). A cell whose floor is the terrain's heightfield at more than 40 degrees is not walkable for the planner.
+   The grid let a rise of up to 0.85 m per cell through when the slope carries on (a flight of steps), and a smooth bank
+   looks the same: the Palatine's bank above the Via Nova at about (148, 118) runs at 45 to 60 degrees, and paths ran
+   along and up its foot, where the body catches on ground too steep to climb. Stairs and ramps are colliders of their
+   own (level treads), so only the heightfield counts. `?navslope=0` turns it off for A/B runs.
 
 Measured (`scripts/npcwalls.mjs`, 60 s per zone after 12 s to fill, two runs each, fixes off with
 `?wallfix=0&navlow=0` against on; the crowd is random, so single runs swing a lot):
@@ -102,24 +128,37 @@ the synthetic test found are what the player met on diagonal crossings.
 `scripts/golden-bot.js` (the story bot) jammed in two ways that looked like obstacles: it followed a street node that sits
 inside a wall (the Ludus gate's, 2 m from the wall) and it ping-ponged between two waypoints at a steep bank
 (about (148, 118): the nav grid lets a path run along the foot of a bank where the body then catches).
-It now skips a waypoint the grid says is walled off, uses `lineClear` for its detours, and has a loop
+It skips a waypoint the grid says is walled off, but reports it (`snag walled waypoint`, since 2026-10-10: it used to
+skip quietly, which hid a street graph that leads into walls), uses `lineClear` for its detours, and has a loop
 detector (the goal no nearer than 3 m from the best for 20 s counts as the same snag as a jam, 8 s without 1.5 m of
 movement). `golden-path.mjs --trace` prints the position, the next waypoint and the distance to the goal every 5 s.
 
+The three places the bot used to be helped through are fixed where they are, not in the bot (2026-10-10, MOVE-finish):
+
+| place | what it was | fix |
+|---|---|---|
+| (148, 118) | the Palatine's bank above the Via Nova, 45 to 60 degrees: the grid took it for a flight of steps and paths ran along and up its foot | steep terrain is no floor for the planner (item 7 above) |
+| (299, 164) | the playbill wall at the Meta Sudans (3.3 m high, 7.5 m long) stood 0.4 m into the Via Sacra's edge in the inside of its bend | moved round to 248 degrees and 14.2 m from the fountain: 2.7 m clear of both arms of the road (`colos-fountains.ts`) |
+| (183, 113) | a street node in the walled court of the Porticus Margaritaria, the Clivus Palatinus's bend round Jupiter Stator, linked through the court's walls | the street graph cuts road links that run through walls (docs/modules/city.md) |
+
+Golden path, the same afternoon, both runs side by side on the same machine (the bot's "stuck" is wall-clock, so load
+counts): origin/main 12 snags, 12 teleports, among them all three places ((174, 130) heading for the node behind the
+porticus, (297, 164) at the playbill wall, (147, 118) on the bank); this branch: none of the three in either run
+(see the report for the full lists).
+
 ## Known gaps
 
-- Street links that do not exist: the golden-path bot's "stuck" snags at (176, 127), (190, 116) and
-  (299, 163) are a street node at (183, 113) behind a building; the grid's flood says it is unreachable
-  (`reachable` false) and a path with any budget fails, while the street graph has an edge into it. The
-  NPC planner now cuts such a node out (`StreetNav.drop`), the bot's plain "walk to the next waypoint" does not.
-  The city crew should check why that edge exists (`docs/modules/city.md`, the reach test).
-- Steep ground the grid calls walkable: at about (148, 118) and (299, 164) the road runs along a bank steeper than
-  the body climbs and the grid has no slope limit apart from the 0.85 m per metre it allows for flights of
-  steps; also at (299.5, 165) a 3 m high notice wall ("OB DEDICATIONEM COLVMNAE") stands 0.5 m from the road
-  edge and catches the path. The bot recovers (teleports 25 m on); a player walks round. A slope limit in
-  `NavGrid.canStep` for cells that are not on a flight would fix the first kind.
-- The stepwalk scanner reports lines that run through thin rails and starts that are inside geometry as stalls;
-  `scripts/stepwalk.mjs` classifies them but does not drop them.
+- Walled road links the street graph keeps for want of a way round: the Argiletum's through the Forum of Nerva at
+  (64, -25)-(84, -35) (the bot's snag at (67, -29) in every run, before and after), one in the Forum of Nerva's east end
+  at (153, -75)-(172, -81), one in the Emporium and one across water at (-274, 219). The NPC planner cuts such a node
+  when the walk finds it walled (`StreetNav.drop`); the city graph needs links through the buildings' real openings.
+- The Clivus Palatinus's bend still runs through the Porticus Margaritaria in the plan (docs/modules/city.md: fixing it
+  in `detourRoad` reshuffles every street in the city), so its pavement stops at the court's walls on both sides.
+- A ledge of exactly 0.3 m (the Porticus Margaritaria's plinth edge round its court, 11.4 to 11.7 m) is at the planner's
+  limit (`NAV_MAX_STEP` 0.3, heights stored as 32-bit floats: 0.3000002), so the grid reads the court as closed to the
+  street outside; the body steps it (the assist takes up to 0.33 m).
+- The stepwalk scanner still offers lines that run through thin rails and starts against geometry; `scripts/stepwalk.mjs`
+  classifies the stalls (`kerb` is the only kind that is a step failure) but does not drop them.
 
 ## Cost
 
