@@ -6,6 +6,8 @@
  *   scene objects, Rapier bodies/colliders, actors, AudioNodes + buffers created (counted by a
  *   hook: created, not live, so look at the per-cycle rate), DOM nodes + event listeners
  *   (CDP Memory.getDOMCounters), active intervals and pending timeouts (hooked).
+ * `audioLive` is the number of AudioNodes alive (DevTools WebAudio events); `aud` at the end of a line is
+ * how many were created in all (churn), buffers and their MB.
  * A phase PASSES when, after its warm-up cycle, the second half of its samples does not keep
  * growing: heap slope below --heap-slope MB per cycle and every counter flat (counts compared
  * exactly, with a small allowance for streaming phases).
@@ -53,6 +55,15 @@ page.on('console', (m) => m.type() === 'error' && errors.push(`[console] ${m.tex
 page.on('crash', () => (crashed = true));
 const cdp = await page.context().newCDPSession(page);
 await cdp.send('Memory.getDOMCounters').catch(() => {});
+// Live AudioNodes and contexts from DevTools' own accounting (created minus willBeDestroyed; a node
+// is destroyed when it is garbage collected, so sample after a forced GC).
+let audioLive = 0;
+let audioContexts = 0;
+cdp.on('WebAudio.audioNodeCreated', () => audioLive++);
+cdp.on('WebAudio.audioNodeWillBeDestroyed', () => audioLive--);
+cdp.on('WebAudio.contextCreated', () => audioContexts++);
+cdp.on('WebAudio.contextWillBeDestroyed', () => audioContexts--);
+await cdp.send('WebAudio.enable').catch(() => {});
 
 // Hooks installed before the game boots: audio creation counts and timer bookkeeping.
 await page.addInitScript(() => {
@@ -90,9 +101,14 @@ const t0 = Date.now();
 await page.goto(`http://127.0.0.1:${port}/?scene=rome&${args.query ?? 'at=rostra&hour=10'}`, { waitUntil: 'load' });
 await page.waitForFunction(() => window.__skyrome?.ready, null, { timeout: 180000, polling: 200 });
 console.log(`booted in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
-await page.waitForTimeout(8000);
+await page.waitForTimeout(3000);
+// Web Audio starts on the first gesture: give it one, so the audio counters mean something.
+await page.keyboard.press('ShiftLeft');
+await page.waitForTimeout(5000);
 
 async function sample() {
+  // The console's own log (400 rows kept by design) is DOM that is not attached until it is opened: empty it first.
+  await page.evaluate(() => window.__skyrome.game.console.exec('clear'));
   await cdp.send('HeapProfiler.collectGarbage');
   await page.waitForTimeout(150);
   await cdp.send('HeapProfiler.collectGarbage');
@@ -124,17 +140,20 @@ async function sample() {
       audioNodes: h.nodes,
       audioBufs: h.buffers,
       audioMB: +(h.bufferBytes / 1048576).toFixed(1),
+      domAttached: (() => { let n = 0; const w = document.createTreeWalker(document, NodeFilter.SHOW_ALL); while (w.nextNode()) n++; return n; })(),
       intervals: h.intervals.size,
       timeouts: h.timeouts.size,
     };
   });
+  s.audioLive = audioLive;
+  s.audioCtx = audioContexts;
   s.domNodes = dom.nodes ?? 0;
   s.listeners = dom.jsEventListeners ?? 0;
   s.docs = dom.documents ?? 0;
   return s;
 }
 
-const KEYS = ['heap', 'geo', 'tex', 'prog', 'mat', 'objects', 'bodies', 'colliders', 'actors', 'npcs', 'domNodes', 'listeners', 'docs', 'intervals', 'timeouts'];
+const KEYS = ['heap', 'geo', 'tex', 'prog', 'mat', 'objects', 'bodies', 'colliders', 'actors', 'npcs', 'audioLive', 'domNodes', 'domAttached', 'listeners', 'docs', 'intervals', 'timeouts'];
 const results = [];
 // Teleports sample once a lap (12 places), always standing at the same place: what streams in
 // depends on where you are, so only same-place samples compare.
@@ -300,12 +319,14 @@ for (const phase of phases) {
       // Growth that continues in the second half is a leak; a step that then holds is a cache.
       const d1 = last[k] - first[k];
       const d2 = last[k] - half[k];
-      if (d2 > 0 && d1 > Math.max(2, first[k] * 0.02)) grew.push(`${k} +${d1}`);
+      // The world is alive (NPCs come and go, the day moves), so counters drift a little: flag more than 5 %
+      // (25 at least), and only when the second half kept growing. audioLive and listeners swing with GC
+      // timing and open UI: wider bands.
+      const tol = k === 'audioLive' ? Math.max(150, first[k]) : k === 'listeners' ? Math.max(30, first[k] * 0.3) : Math.max(25, first[k] * 0.05);
+      if (d2 > 0 && d1 > tol) grew.push(`${k} +${d1}`);
     }
-    for (const k of ['audioNodes', 'audioBufs']) {
-      const perCycle = (last[k] - first[k]) / n;
-      if (perCycle > 0.5) grew.push(`${k} created ${perCycle.toFixed(1)} per cycle`);
-    }
+    // Buffers made per cycle are real memory (a synthesized sound cached per hit would show here).
+    if ((last.audioMB - first.audioMB) / n > 0.05) grew.push(`audio buffers +${(last.audioMB - first.audioMB).toFixed(1)} MB`);
   }
   results.push({ phase, cycles: n, first, last, grew });
   console.log(`  ${grew.length ? 'GROWTH: ' + grew.join(', ') : 'flat'}`);

@@ -176,6 +176,8 @@ const arrowDir = new THREE.Vector3();
 const eye = new THREE.Vector3();
 /** The fixed step (core/Game FIXED_DT): an arrow is drawn between its last two steps. */
 const STEP = 1 / 60;
+/** Spawned corpses kept in the world at once (the nearest; see housekeeping). */
+const MAX_CORPSES = 12;
 /** Arrow mesh: nock to tip along +Y (arrowGeometry), drawn with the head at the arrow's point. */
 const ARROW_LEN = 0.75;
 
@@ -1873,6 +1875,7 @@ export class CombatSystem implements System, PlayerCombatHost {
     const pp = g.player?.position;
     if (!pp) return;
     this.releaseUndecided(pp);
+    const corpses: { c: Combatant; d: number }[] = [];
     for (const c of [...this.core.list]) {
       if (!this.spawned.has(c.id) || c.isPlayer) continue;
       const d = dist2D(c.position, pp);
@@ -1881,6 +1884,15 @@ export class CombatSystem implements System, PlayerCombatHost {
       if ((over && d > 30) || (corpse && d > 160) || (c.status === 'active' && !c.target && d > 220)) {
         this.bodies.remove(c.id);
         this.despawn(c);
+      } else if (corpse) corpses.push({ c, d });
+    }
+    // Each corpse holds its own avatar, bones and gore pieces (about 3 MB): a long fight in one place
+    // (the arena, a mugging street) keeps the nearest few and lets the farthest go, whatever 'bodies' says.
+    if (corpses.length > MAX_CORPSES) {
+      corpses.sort((a, b) => b.d - a.d);
+      for (let i = 0; i < corpses.length - MAX_CORPSES; i++) {
+        this.bodies.remove(corpses[i].c.id);
+        this.despawn(corpses[i].c);
       }
     }
   }

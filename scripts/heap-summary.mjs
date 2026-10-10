@@ -15,12 +15,67 @@
 import { readFileSync, statSync } from 'node:fs';
 
 const file = process.argv[2];
+if (process.argv.includes('--diff')) {
+  const other = process.argv[process.argv.indexOf('--diff') + 1];
+  const a = loadAgg(file);
+  const b = loadAgg(other);
+  const rows = [];
+  for (const [k, v] of b) {
+    const o = a.get(k) ?? { size: 0, n: 0 };
+    rows.push([k, v.size - o.size, v.n - o.n]);
+  }
+  const gi = process.argv.indexOf('--grep');
+  if (gi > 0) {
+    const re = new RegExp(process.argv[gi + 1]);
+    for (let i = rows.length - 1; i >= 0; i--) if (!re.test(rows[i][0])) rows.splice(i, 1);
+  }
+  rows.sort((x, y) => (gi > 0 ? y[2] - x[2] : y[1] - x[1]));
+  const mb2 = (n) => (n / 1048576).toFixed(2).padStart(8);
+  console.log('Growth from the first snapshot to the second, by node type / name (self size, count):');
+  for (const r of rows.slice(0, 40)) console.log(`${mb2(r[1])} MB  ${String(r[2]).padStart(7)}  ${r[0]}`);
+  process.exit(0);
+}
+
+/** (type / name) -> { size, n } for one snapshot (reads the file whole; fine to 2 GB). */
+function loadAgg(f) {
+  const b = readFileSync(f);
+  const at = (s, from = 0) => b.indexOf(s, from);
+  const mEnd = at('"nodes":[');
+  const m = JSON.parse(b.toString('utf8', 0, mEnd).replace(/,\s*$/, '') + '}').snapshot;
+  const nf = m.meta.node_fields;
+  const ns = nf.length;
+  const nodes = new Uint32Array(m.node_count * ns);
+  let i = at('"nodes":[') + 9;
+  let k = 0;
+  let n = 0;
+  for (; ; i++) {
+    const c = b[i];
+    if (c >= 48 && c <= 57) n = n * 10 + (c - 48);
+    else {
+      nodes[k++] = n;
+      n = 0;
+      if (c === 93) break;
+    }
+  }
+  const strings = JSON.parse(b.toString('utf8', at('"strings":[') + 10).replace(/\}\s*$/, ''));
+  const types = m.meta.node_types[0];
+  const out = new Map();
+  for (let j = 0; j < m.node_count; j++) {
+    const key = `${types[nodes[j * ns + nf.indexOf('type')]]} / ${strings[nodes[j * ns + nf.indexOf('name')]] ?? '?'}`.slice(0, 120);
+    const e = out.get(key) ?? { size: 0, n: 0 };
+    e.size += nodes[j * ns + nf.indexOf('self_size')];
+    e.n++;
+    out.set(key, e);
+  }
+  return out;
+}
 const arg = (k, d) => (process.argv.includes('--' + k) ? Number(process.argv[process.argv.indexOf('--' + k) + 1]) : d);
 const topN = arg('top', 40);
 const ownersN = arg('owners', 0);
 const minMB = arg('min', 2);
-const args = { coarse: arg('coarse', 0), depth: arg('depth', 7), skip: arg('skip', 0) };
-if (!file) {
+const hasIdx = process.argv.indexOf('--has');
+const args = { has: hasIdx > 0 ? process.argv[hasIdx + 1] : '', coarse: arg('coarse', 0), depth: arg('depth', 7), skip: arg('skip', 0) };
+if (!file || file.startsWith('--')) {
   console.error('usage: node scripts/heap-summary.mjs file.heapsnapshot [--top n] [--owners n]');
   process.exit(1);
 }
@@ -140,6 +195,7 @@ if (ownersN) {
       parts.push(`${label(from[c])}${edgeLabel(via[c])}`);
       c = from[c];
     }
+    if (args.has && !parts.some((x) => x.includes(args.has))) continue;
     const key = (args.coarse ? parts.slice(args.skip ?? 0, args.coarse).map((x) => x.replace(/\[\d+\]|@\d+/g, '')) : parts).join(' <- ');
     const o = chains.get(key) ?? { n: 0, bytes: 0, max: 0 };
     o.n++;
