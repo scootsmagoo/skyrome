@@ -161,6 +161,7 @@ export function persuasionPoints(audience: Audience, i: PersuasionInputs): numbe
   if (f('dress.anulus-aureus') && audience === 'elite' && i.sex !== 'female') p += 10;
   if (f('dress.silvered') && audience === 'soldier') p += 5;
   if (f('ebrius') && plebs) p += 5;
+  if (f('tonsus')) p += 5;
   p += (i.fama ?? 0) / 10;
   const inf = i.infamia ?? 0;
   if (elite) p -= inf / 5;

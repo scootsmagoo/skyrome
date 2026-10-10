@@ -3,7 +3,8 @@
  * as stations (stations.ts) that are manned at their hours and walked away from when they end.
  *
  *  - Before dawn: bakers at their mills and ovens (Martial 12.57: the bakers and the
- *    schoolmasters won't let you sleep), clients queueing at a great man's door for the salutatio.
+ *    schoolmasters won't let you sleep). (The clients' salutatio at a patron's door on the Velia is a
+ *    life station, src/life: the old post at Pliny's shut house is gone, world-life.md Appendix A.1.)
  *  - Morning: sacrifices before the temples, schoolmasters under the awnings with their boys,
  *    barbers in the street, the grain dole at the Porticus Minucia, booksellers in the Argiletum,
  *    fullers treading cloth, smiths, scribes and letter-writers by the courts.
@@ -16,7 +17,6 @@
 import type { DayPhase } from './budget';
 import type { StationDef } from './stations';
 
-const DAWN: readonly DayPhase[] = ['predawn', 'salutatio'];
 const MORNING: readonly DayPhase[] = ['salutatio', 'morning'];
 const WORKDAY: readonly DayPhase[] = ['salutatio', 'morning', 'afternoon'];
 const SHOP: readonly DayPhase[] = ['salutatio', 'morning', 'midday', 'afternoon'];
@@ -269,22 +269,6 @@ export const TRADES: readonly StationDef[] = [
       { kind: 'brazier', out: -3.6, side: -1.4 },
     ],
   },
-  {
-    // The salutatio: clients in their togas at Pliny's door on the Esquiline before dawn, the
-    // doorkeeper letting them in one by one (Martial 3.36, Juvenal 1.95–126).
-    id: 'st-esquiline-salutatio',
-    landmark: 'domus-plinii',
-    gap: 2,
-    when: DAWN,
-    members: [
-      { role: 'attendant', out: 0.3, side: 0, loop: 'guard', face: 'out', prop: 'lantern', label: 'Doorkeeper', barks: 'ostiarius' },
-      { role: 'client', out: 1.4, side: -0.8, loop: 'stand', face: 'in', prop: null },
-      { role: 'client', out: 2.2, side: -0.4, loop: 'talk', face: 'in', prop: null },
-      { role: 'client', out: 2.4, side: 0.8, loop: 'talk', face: 2.4, prop: null },
-      { role: 'client', out: 3.2, side: 0.2, loop: 'stand', face: 'in', prop: null },
-    ],
-  },
-
   // ================================================================ the river: Velabrum, Boarium, Holitorium
   {
     // Smoked cheese of the Velabrum (Martial 11.52, 13.32).

@@ -5,6 +5,7 @@ import type { NpcDef } from '../src/npc/types';
 import { NpcRegistry } from '../src/npc/registry';
 import { BarterSystem, buyFactor, buyPrice, repairCost, roundPrice, sellFactor, sellPrice, tradeXp, type PriceContext } from '../src/rpg/barter';
 import { VENDORS } from '../src/rpg/data/vendors';
+import { VENDORS_LIFE } from '../src/rpg/data/vendors-life';
 import { ITEMS } from '../src/rpg/data/items';
 import { LOOT_TABLES } from '../src/rpg/data/loot';
 import { FactionSystem } from '../src/rpg/factions';
@@ -67,6 +68,7 @@ describe('barter formulas (GDD §7.4)', () => {
         buyMod: rng.range(-0.2, 1),
         sellMod: rng.range(-0.2, 1),
         buyDiscount: rng.range(-0.05, 1),
+        buyScale: rng.range(0.9, 1),
         sellBonus: rng.range(-0.05, 1),
       };
       expect(sellFactor(ctx)).toBeLessThanOrEqual(buyFactor(ctx) * 0.86);
@@ -115,7 +117,9 @@ describe('barter formulas (GDD §7.4)', () => {
     expect(VENDORS.argentarius).toMatchObject({ purse: 3000, grade: 'banker' });
     expect(VENDORS.receptator).toMatchObject({ purse: 400, fence: true });
     expect(VENDORS.popina).toMatchObject({ purse: 40, stall: true, plebeian: true });
-    expect(Object.keys(VENDORS).length).toBe(19);
+    // The 19 kinds of the GDD, plus the ones phase 2 adds (vendors-life.ts).
+    expect(VENDORS_LIFE.length).toBe(4); // margaritarius, vinarius, figulus, pannarius
+    expect(Object.keys(VENDORS).length).toBe(19 + 4);
   });
 });
 
@@ -219,16 +223,19 @@ describe('BarterSystem', () => {
     expect(barter.buyPrice('armorum', 'gladius-bilbilis')!).toBeLessThan(plain);
   });
 
-  it('market days (every 8th day): 0.10 off at stalls, and 0.10 more at every vendor with the Nundinae perk; festival discounts add', () => {
+  it('market days (every 8th day): 10% off the price at stalls, and 0.10 more at every vendor with the Nundinae perk; festival discounts add', () => {
     const { barter, sheet, setHours } = setup();
     expect(barter.isMarketDay()).toBe(false);
+    expect(barter.buyPrice('pistrix', 'patina')).toBe(roundPrice(0.5 * 1.55));
     setHours(7 * 24 + 9);
     expect(barter.isMarketDay()).toBe(true);
-    expect(barter.buyPrice('pistrix', 'patina')).toBe(roundPrice(0.5 * 1.45));
+    expect(barter.buyPrice('pistrix', 'patina')).toBe(roundPrice(0.5 * 1.55 * 0.9));
     expect(barter.buyPrice('armorum', 'gladius')).toBe(roundPrice(22 * 1.55));
     sheet.grantPerk('perk-mercatura-nundinae');
     expect(barter.buyPrice('armorum', 'gladius')).toBe(roundPrice(22 * 1.45));
-    expect(barter.buyPrice('pistrix', 'patina')).toBe(roundPrice(0.5 * 1.35));
+    expect(barter.buyPrice('pistrix', 'patina')).toBe(roundPrice(0.5 * 1.45 * 0.9));
+    // The stall discount stays inside the clamp: at the best skill the floor still holds.
+    expect(buyFactor({ mercatura: 100, disposition: 20, buyScale: 0.9 })).toBe(1.05);
     const fest = setup();
     (fest.barter as unknown as { deps: { festivalDiscount: () => number } }).deps.festivalDiscount = () => 0.1; // the Mercuralia
     expect(fest.barter.buyPrice('armorum', 'gladius')).toBe(roundPrice(22 * 1.45));

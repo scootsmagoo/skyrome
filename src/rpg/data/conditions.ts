@@ -8,6 +8,7 @@
  */
 import type { ConditionDef } from '../types';
 import { BLESSINGS } from './religio';
+import { LIFE_CONDITIONS } from './conditions-life';
 import { DEVOTION, STANDING } from './tuning';
 
 const DAY = DEVOTION.blessingSeconds;
@@ -45,5 +46,8 @@ const BASE_CONDITIONS: ConditionDef[] = [
   { id: 'defixus', kind: 'omen', name: 'Cursed', latin: 'defixus', description: 'You learned of a curse tablet against you and wore no amulet: −5% luck and −5 persuasion for 3 days. It works only because you believe it.', effects: [{ kind: 'modifier', target: 'luck', amount: -0.05, duration: 3 * DAY }, { kind: 'modifier', target: 'persuade.chance', amount: -0.05, duration: 3 * DAY }] },
 ];
 
-/** Every condition: injuries, poisons, states, diseases, omens, and the blessings of religio.ts. */
-export const CONDITIONS: ConditionDef[] = [...BASE_CONDITIONS, ...BLESSINGS];
+/**
+ * Every condition: injuries, poisons, states, diseases, omens, the blessings of religio.ts, and
+ * those of phase 2's services (tonsus, calefactus: ./conditions-life.ts).
+ */
+export const CONDITIONS: ConditionDef[] = [...BASE_CONDITIONS, ...BLESSINGS, ...LIFE_CONDITIONS];

@@ -26,7 +26,8 @@ export const LANDMARK_SHADOW_FROM = 24;
 /** Default distance (m) beyond which a mesh casts its `shadowGeometry`. */
 export const SHADOW_PROXY_FROM = 12;
 
-const meshes = new Set<THREE.Mesh>();
+/** Meshes with a shadow stand-in (an array: walked at every shadow render). */
+const meshes: THREE.Mesh[] = [];
 /** Systems that swap their own geometry for the shadow pass (landmark pieces in batches). */
 export interface ShadowHook {
   /** Called just before the shadow map renders, with the camera position. */
@@ -47,11 +48,12 @@ const farWasCasting: boolean[] = [];
 
 /** Let a mesh cast `mesh.userData.shadowGeometry` (when set) beyond `userData.shadowFrom` metres. */
 export function trackShadowProxy(mesh: THREE.Mesh) {
-  meshes.add(mesh);
+  if (!meshes.includes(mesh)) meshes.push(mesh);
 }
 
 export function untrackShadowProxy(mesh: THREE.Mesh) {
-  meshes.delete(mesh);
+  const k = meshes.indexOf(mesh);
+  if (k >= 0) meshes.splice(k, 1);
 }
 
 /** Register a hook run around every shadow-map render. */
@@ -88,7 +90,8 @@ function swapIn(camera: THREE.Camera) {
   const cx = e[12];
   const cy = e[13];
   const cz = e[14];
-  for (const m of meshes) {
+  for (let i = 0; i < meshes.length; i++) {
+    const m = meshes[i];
     const g = m.userData.shadowGeometry as THREE.BufferGeometry | null | undefined;
     if (!g || !m.castShadow || !m.visible || m.geometry === g) continue;
     const w = m.matrixWorld.elements;
@@ -106,7 +109,9 @@ function swapIn(camera: THREE.Camera) {
     // Only landmarks drawn in detail right now (a hidden one casts nothing; one past its cull
     // distance already shows the stand-in, which is not a caster).
     if (!l.object.visible || l.far.visible) continue;
-    const d = Math.hypot(l.sphere.center.x - cx, l.sphere.center.y - cy, l.sphere.center.z - cz) - l.sphere.radius;
+    const dx = l.sphere.center.x - cx, dy = l.sphere.center.y - cy, dz = l.sphere.center.z - cz;
+    // Math.sqrt, not Math.hypot: hypot allocates its arguments (the heap profile's top allocator).
+    const d = Math.sqrt(dx * dx + dy * dy + dz * dz) - l.sphere.radius;
     if (d < LANDMARK_SHADOW_FROM) continue;
     l.object.visible = false;
     hiddenRoots.push(l.object);

@@ -222,7 +222,7 @@ export const DEVOTION = {
 
 /**
  * §7.4 Barter. Every price modifier goes inside the clamps, summed as fractions:
- *   buy  = value × max(1.05, 1.60 − 0.50 × mercatura/100 − disposition/200 − Σbuy)
+ *   buy  = value × max(1.05, (1.60 − 0.50 × mercatura/100 − disposition/200 − Σbuy) × stall)
  *   sell = value × min(0.90, 0.35 + 0.35 × mercatura/100 + disposition/200 + Σsell)
  * which keeps sell ≤ buy × 0.86 for any skill and modifiers (no arbitrage).
  */
@@ -240,7 +240,7 @@ export const BARTER = {
   /** Fences pay this fraction of the normal sell price for stolen goods (perk-mercatura-fence: 0.7). */
   fenceMult: 0.5,
   fencePerkMult: 0.7,
-  /** Σbuy terms: market day at stall vendors (every 8th elapsed day), the Nundinae perk, street-wise at plebeian vendors, Bilbilis blades for the hispanus. */
+  /** Market day at stall vendors (every 8th elapsed day): 10% off the price (stall = 1 − marketDay, inside the clamp). Σbuy terms: the Nundinae perk, street-wise at plebeian vendors, Bilbilis blades for the hispanus. */
   nundinaeEvery: 8,
   marketDay: 0.1,
   nundinaePerk: 0.1,

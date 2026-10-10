@@ -21,6 +21,7 @@
 import * as THREE from 'three';
 import { FastCull } from '../../gfx/fastCull';
 import { allMaterials } from '../../gfx/materials';
+import { freeArray, packNormals } from '../../gfx/release';
 
 export interface BatchRef {
   batch: Batch;
@@ -60,6 +61,8 @@ export class Batch {
     this.mesh.frustumCulled = false;
     // Opaque static geometry: sorting every instance every pass costs more than the overdraw saves.
     this.mesh.sortObjects = false;
+    // Never moves (instances carry their own matrices): no per-frame matrix work (gfx/freeze.ts).
+    this.mesh.matrixAutoUpdate = false;
     this.cull = new FastCull(this.mesh);
     this.cull.install();
   }
@@ -116,8 +119,12 @@ export class Batch {
     m.setInstanceCount(Math.max(m.maxInstanceCount * 2, m.instanceCount + k));
   }
 
-  /** Add a geometry with one instance (identity matrix: the geometry is in world space). */
+  /**
+   * Add a geometry with one instance (identity matrix: the geometry is in world space). The batch takes the
+   * geometry over: its normals are repacked to bytes in place (every caller disposes or discards it after).
+   */
   add(geometry: THREE.BufferGeometry, matrix?: THREE.Matrix4): BatchRef {
+    packNormals(geometry);
     const n = geometry.getAttribute('position').count;
     this.ensure(n);
     this.ensureInstances();
@@ -136,6 +143,7 @@ export class Batch {
     let s = this.shared.get(key);
     if (!s) {
       const g = make();
+      packNormals(g);
       const n = g.getAttribute('position').count;
       this.ensure(n);
       if (!g.boundingSphere) g.computeBoundingSphere();
@@ -151,8 +159,9 @@ export class Batch {
     return { batch: this, geom: s.geom, inst, verts: 0 };
   }
 
-  /** Add a geometry that instances may use later (`place`), e.g. an LOD twin; returns its id. */
+  /** Add a geometry that instances may use later (`place`), e.g. an LOD twin; returns its id. Takes the geometry over (normals packed in place). */
   addGeometry(geometry: THREE.BufferGeometry): number {
+    packNormals(geometry);
     const n = geometry.getAttribute('position').count;
     this.ensure(n);
     const geom = this.mesh.addGeometry(geometry);
@@ -166,6 +175,7 @@ export class Batch {
     let s = this.shared.get(key);
     if (!s) {
       const g = make();
+      packNormals(g);
       const n = g.getAttribute('position').count;
       this.ensure(n);
       if (!g.boundingSphere) g.computeBoundingSphere();
@@ -207,11 +217,8 @@ export class Batch {
     for (let id = 0, n = (this.mesh as unknown as { _geometryCount: number })._geometryCount; id < n; id++) {
       if (this.mesh.getBoundingBoxAt(id, box) !== null) this.mesh.getBoundingSphereAt(id, sphere);
     }
-    const free = function (this: THREE.BufferAttribute) {
-      (this as unknown as { array: ArrayLike<number> | null }).array = null;
-    };
-    for (const a of Object.values(this.mesh.geometry.attributes)) (a as THREE.BufferAttribute).onUpload(free);
-    this.mesh.geometry.index?.onUpload(free);
+    for (const a of Object.values(this.mesh.geometry.attributes)) (a as THREE.BufferAttribute).onUpload(freeArray);
+    this.mesh.geometry.index?.onUpload(freeArray);
     this.finished = true;
   }
 
@@ -270,6 +277,7 @@ export class BatchPool {
 
   constructor(parent: THREE.Object3D, private readonly opts: PoolOptions = {}) {
     this.group.name = opts.name ? `${opts.name}:batches` : 'city:batches';
+    this.group.matrixAutoUpdate = false; // at the origin for good, like its batches
     parent.add(this.group);
   }
 

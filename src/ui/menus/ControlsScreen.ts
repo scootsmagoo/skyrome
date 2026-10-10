@@ -23,7 +23,7 @@ const LABELS: Record<AnyAction, string> = {
   shoulderSwap: 'Swap camera shoulder',
   toggleView: 'First / third person', lookLeft: 'Turn left', lookRight: 'Turn right', lookUp: 'Look up', lookDown: 'Look down',
   zoomIn: 'Camera closer', zoomOut: 'Camera farther', menu: 'Character menu', inventory: 'Inventory',
-  journal: 'Journal', map: 'Map', skills: 'Skills', pause: 'Pause menu', quickSave: 'Quick save', quickLoad: 'Quick load',
+  journal: 'Journal', map: 'Map', minimap: 'Minimap (show / hide)', skills: 'Skills', pause: 'Pause menu', quickSave: 'Quick save', quickLoad: 'Quick load',
   console: 'Console', wait: 'Wait', clock: 'Show the time (hold)',
 };
 
@@ -31,7 +31,7 @@ const GROUPS: { title: string; latin: string; actions: AnyAction[] }[] = [
   { title: 'Movement', latin: 'Iter', actions: ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'walkToggle', 'sneak'] },
   { title: 'Combat', latin: 'Pugna', actions: ['attack', 'block', 'dodge', 'parry', 'lockOn', 'readyWeapon', 'yield', 'invoke'] },
   { title: 'Camera', latin: 'Conspectus', actions: ['lookLeft', 'lookRight', 'lookUp', 'lookDown', 'zoomIn', 'zoomOut', 'toggleView', 'shoulderSwap'] },
-  { title: 'Actions & menus', latin: 'Res', actions: ['interact', 'menu', 'inventory', 'journal', 'map', 'skills', 'wait', 'clock', 'quickSave', 'quickLoad', 'pause', 'console'] },
+  { title: 'Actions & menus', latin: 'Res', actions: ['interact', 'menu', 'inventory', 'journal', 'map', 'minimap', 'skills', 'wait', 'clock', 'quickSave', 'quickLoad', 'pause', 'console'] },
   { title: 'Hotbar', latin: 'Promptuarium', actions: ['hotbar1', 'hotbar2', 'hotbar3', 'hotbar4', 'hotbar5', 'hotbar6', 'hotbar7', 'hotbar8'] },
 ];
 

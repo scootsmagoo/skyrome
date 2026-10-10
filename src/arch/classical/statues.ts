@@ -51,12 +51,19 @@ function crValue(vals: number[], s: number): number {
   return 0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
 }
 
+/** Catmull-Rom interpolation of a point list (crValue per axis, without building arrays: the boot calls it millions of times). */
 function crPoint(pts: THREE.Vector3[], s: number, out: THREE.Vector3): THREE.Vector3 {
-  return out.set(
-    crValue(pts.map((p) => p.x), s),
-    crValue(pts.map((p) => p.y), s),
-    crValue(pts.map((p) => p.z), s),
-  );
+  const n = pts.length;
+  const i = Math.min(n - 2, Math.max(0, Math.floor(s)));
+  const t = s - i;
+  const p0 = pts[Math.max(0, i - 1)];
+  const p1 = pts[i];
+  const p2 = pts[i + 1];
+  const p3 = pts[Math.min(n - 1, i + 2)];
+  const t2 = t * t;
+  const t3 = t2 * t;
+  const cr = (a: number, b: number, c: number, d: number) => 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+  return out.set(cr(p0.x, p1.x, p2.x, p3.x), cr(p0.y, p1.y, p2.y, p3.y), cr(p0.z, p1.z, p2.z, p3.z));
 }
 
 export interface LoftOptions {

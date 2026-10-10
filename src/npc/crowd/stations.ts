@@ -35,7 +35,11 @@ export type DressingKind =
   | 'anvil'
   | 'oven'
   | 'mill'
-  | 'altar';
+  | 'altar'
+  /** A shop's wooden shutters, put up while its keeper is away (src/life). */
+  | 'shutters'
+  /** A market-day banner on a pole (src/life). */
+  | 'banner';
 
 export interface StationMember {
   role: CrowdRoleId;
@@ -78,6 +82,8 @@ export interface StationDef {
   spot?: string;
   /** Phases of the day when the station is manned. */
   when: readonly DayPhase[];
+  /** Manned only on market days (the nundinae, every 8th day: barter.isMarketDay). */
+  marketDay?: boolean;
   members: readonly StationMember[];
   dressing?: readonly StationDressing[];
 }
@@ -86,7 +92,7 @@ const NIGHT: readonly DayPhase[] = ['night', 'predawn'];
 const DAY: readonly DayPhase[] = ['salutatio', 'morning', 'midday', 'afternoon'];
 const DAYLONG: readonly DayPhase[] = ['salutatio', 'morning', 'midday', 'afternoon', 'evening'];
 
-export const STATIONS: readonly StationDef[] = [
+const ALL: StationDef[] = [
   // ---------------------------------------------------------------- the Porta Capena (the spawn)
   // The gate faces 140° (out along the Via Appia); 'out' below is toward the Campagna, 'side' to
   // its right (south-west). The road is ~5 m wide, so posts keep |side| > 4 and leave the arch,
@@ -281,6 +287,24 @@ export const STATIONS: readonly StationDef[] = [
   // The city at work: shops, workshops, schools, the dole, the baths, the Ludus (trades.ts).
   ...TRADES,
 ];
+
+/** Every station: the authored ones, then any registered at runtime (registerStations). */
+export const STATIONS: readonly StationDef[] = ALL;
+
+/**
+ * Add stations defined elsewhere (src/life: a coppersmith's new post, the market-day stalls). The
+ * director walks STATIONS itself, so they are manned from the next update. Ids already present are
+ * skipped; returns how many were added.
+ */
+export function registerStations(defs: readonly StationDef[]): number {
+  let n = 0;
+  for (const d of defs) {
+    if (ALL.some((x) => x.id === d.id)) continue;
+    ALL.push(d);
+    n++;
+  }
+  return n;
+}
 
 export interface StationAnchor {
   x: number;

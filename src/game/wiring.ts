@@ -8,6 +8,8 @@ import * as THREE from 'three';
 import type { Game } from '../core/Game';
 import { bearingOf } from '../core/math';
 import { LANDMARK_BY_ID } from '../data/atlas';
+import { QuestRoute, type RouteGoal } from '../nav/QuestRoute';
+import { RouteTrail } from '../nav/RouteTrail';
 import type { MarkerTarget } from '../quests/types';
 import { effectiveArmorRating } from '../rpg/combat-math';
 import { CONDITIONS } from '../rpg/data/conditions';
@@ -110,7 +112,28 @@ export function wireUi(game: Game, ui: UIManager, rpg: RpgServices, flow: GameFl
       return { x: p.position.x, z: p.position.z, bearing: bearingOf(-Math.sin(p.yaw), -Math.cos(p.yaw)) };
     },
     questMarkers: () => questMarkersFrom(log, resolve),
+    // The city's own blocks and streets (drawn zoomed in, and on the minimap).
+    plan: () => game.city?.plan,
+    route: () => (game.settings.data.routeOnMaps !== false && game.questRoute?.legs.length ? game.questRoute : null),
   });
+
+  // The quest route: to the HUD's objective (the compass and the chevron's), for both maps and the
+  // trail on the ground (src/nav).
+  const goal: RouteGoal = { key: '', x: 0, y: 0, z: 0 };
+  game.questRoute ??= game.addSystem(
+    new QuestRoute(game, () => {
+      const o = ui.hud.objective;
+      if (!o) return null;
+      goal.key = o.key ?? `${o.questTitle}|${o.text}`;
+      goal.x = o.x;
+      goal.y = o.y;
+      goal.z = o.z;
+      goal.target = o.target;
+      return goal;
+    }),
+  );
+  // …and the same route as a faint trail on the ground (off by default).
+  if (!game.getSystem('routeTrail')) game.addSystem(new RouteTrail(game, game.questRoute));
 
   const saves = saveSlotsFrom(save, {
     save: async (slot) => {

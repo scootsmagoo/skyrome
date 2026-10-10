@@ -177,7 +177,24 @@ export interface PaintOptions {
   lod?: number;
 }
 
-export function paintBody({ app, rig, body, index, lod }: PaintOptions): BodyPaint {
+/** Paint a body now (all of `paintBodySteps` in one go). */
+export function paintBody(opts: PaintOptions): BodyPaint {
+  const it = paintBodySteps(opts);
+  for (;;) {
+    const r = it.next();
+    if (r.done) return r.value;
+  }
+}
+
+/** Vertices per step of `paintBodySteps` (a LOD 0 body is ~10 k: a few steps of 2–4 ms each). */
+const PAINT_STEP = 2048;
+
+/**
+ * The paint as a sequence of steps (it yields every PAINT_STEP vertices of its two long loops), so
+ * a LOD built ahead of need (RealBody `stepRealBuilds`) spreads it over frames: in one go it was
+ * the longest piece of a LOD 0 build, 10–25 ms (perf audit, October 2026).
+ */
+export function* paintBodySteps({ app, rig, body, index, lod }: PaintOptions): Generator<void, BodyPaint, void> {
   let outfit = resolveOutfit(app);
   if (lod !== undefined && lod <= 2) {
     const plan = bakedPlan({ app, rig, sex: app.sex, lod: lod as 0 | 1 | 2, body }, outfit);
@@ -278,7 +295,9 @@ export function paintBody({ app, rig, body, index, lod }: PaintOptions): BodyPai
 
   const seed = ctx.rng.next() * 10;
   const out: BodyPaint = { color: new Float32Array(n * 3), surf: new Uint8Array(n * 4), thick: new Float32Array(n), cloth: new Uint8Array(n), torso };
+  yield; // the regions and the torso measure: a step of their own
   for (let v = 0; v < n; v++) {
+    if (v % PAINT_STEP === PAINT_STEP - 1) yield;
     const paint = ruleAt(reg[v], body.position[v * 3], body.position[v * 3 + 1], body.position[v * 3 + 2]);
     const cloth = isCloth(paint);
     const color = paint ? paint.color : ctx.skin;
@@ -366,6 +385,8 @@ export function paintBody({ app, rig, body, index, lod }: PaintOptions): BodyPai
     frontier = next;
   }
   for (let v = 0; v < n; v++) {
+    // Vertices near a border probe the rules dozens of times each: smaller steps here.
+    if (v % (PAINT_STEP >> 2) === (PAINT_STEP >> 2) - 1) yield;
     const state = out.cloth[v];
     if (!near[v]) {
       cover[v] = state ? 0.5 + (0.5 * FAR) / RAMP : 0.5 - (0.5 * FAR) / RAMP;

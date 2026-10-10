@@ -11,6 +11,7 @@ import { BOOKS } from './books';
 import { CLOTHING, JEWELLERY } from './clothing';
 import { FOOD, INGREDIENTS, REMEDIES } from './consumables';
 import { CONTENT_ITEMS } from './content';
+import { LIFE_ITEMS } from './life';
 import { TOOLS } from './misc';
 import { QUEST_ITEMS } from './quest';
 import { AMMO, BASE_WEAPONS, UNIQUES, VARIANTS } from './weapons';
@@ -34,4 +35,6 @@ export const ITEMS: ItemDef[] = [
   ...CONTENT_ITEMS,
   ...QUEST_ITEMS,
   ...TEXT_ITEMS,
+  // Phase 2, the life of the city (src/life; the CITY VOICE crew fills ./life.ts).
+  ...LIFE_ITEMS,
 ];

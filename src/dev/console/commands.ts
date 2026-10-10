@@ -8,7 +8,7 @@ import type { Game } from '../../core/Game';
 import { DIFFICULTY, type Difficulty } from '../../rpg/data/tuning';
 import { ENEMY_IDS } from '../../combat/archetypes';
 import { FIGHTS, startBout } from '../../game/bouts';
-import { CommandTable, fuzzyFind, toggleArg } from './parse';
+import { CommandTable, fuzzyFind, toggleArg, type CommandDef } from './parse';
 import { applyChoice, type GraphicsChoice } from '../../core/graphics';
 import { textureCensus } from '../../gfx/textureCensus';
 
@@ -68,6 +68,19 @@ function slay(game: Game, id: string): boolean {
 
 function places(game: Game): string[] {
   return [...(game.landmarks?.keys() ?? [])].sort();
+}
+
+/** Commands added by other modules (src/life: `life`, `job`), in every console built before or after. */
+const extraCommands: CommandDef<ConsoleCtx>[] = [];
+let liveTable: CommandTable<ConsoleCtx> | null = null;
+
+/** Add console commands from another module (a name already registered is skipped). */
+export function registerCommands(...defs: CommandDef<ConsoleCtx>[]) {
+  for (const d of defs) {
+    if (extraCommands.some((x) => x.name === d.name)) continue;
+    extraCommands.push(d);
+    liveTable?.add(d);
+  }
 }
 
 export function builtinCommands(): CommandTable<ConsoleCtx> {
@@ -365,6 +378,9 @@ export function builtinCommands(): CommandTable<ConsoleCtx> {
       run: (_a, ctx) => ctx.clear(),
     },
   );
+  // Commands other modules registered (src/life: life, job).
+  t.add(...extraCommands);
+  liveTable = t;
   return t;
 }
 

@@ -5,6 +5,7 @@
  * the street-wise discount; `stall` vendors give the market-day discount.
  */
 import type { ItemType } from '../types';
+import { VENDORS_LIFE } from './vendors-life';
 
 export interface VendorKind {
   id: string;
@@ -45,5 +46,7 @@ export const VENDORS: Record<string, VendorKind> = Object.fromEntries(
     { id: 'mathematicus', name: 'Astrologer', purse: 50, buys: [], grade: 'stall' },
     { id: 'magus', name: 'Magus', purse: 50, buys: [], grade: 'stall' },
     { id: 'tonsor', name: 'Barber', purse: 20, buys: [], grade: 'stall', plebeian: true },
+    // Phase 2's kinds (the SHOPS crew's ./vendors-life.ts: margaritarius, vinarius).
+    ...VENDORS_LIFE,
   ] as VendorKind[]).map((v) => [v.id, v]),
 );

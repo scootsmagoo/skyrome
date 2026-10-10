@@ -2380,16 +2380,16 @@ Helmets, manicae and greaves add only AR and weight; the **body** piece sets the
 | `emplastrum` | Poultice | emplastrum | +40 HP over 10 s | 0.1 | 4 as. | M |
 | `collyrium` | Eye Salve | collyrium | cures `caecatus` | 0.05 | 4 as. | S |
 | `theriaca` | Theriac | theriaca | cures poison; −50% poison damage 1 game h | 0.15 | 15 | S |
-| `febrifugum` | Fever Draught | febrifugum | cures `febris` | 0.2 | 2 | — |
+| `febrifugum` | Fever Draught | febrifugum | cures `febris` | 0.2 | 28 as. | — |
 | `soporificum` | Soporific | soporificum | weapon coating, 3 hits: KO after 3 s | 0.1 | 10 | — |
 | `aconitum` | Aconite | aconitum | poison: 4 HP/s 10 s | 0.05 | 3 | — |
 | `cicuta` | Hemlock | cicuta | poison: −50% stamina regen 60 s | 0.05 | 2 | — |
 | `taxus` | Yew | taxus | poison: 2 HP/s 30 s | 0.05 | 2 | — |
-| `papaver` | Poppy | papaver | ingredient | 0.05 | 8 as. | — |
-| `mandragora` | Mandrake | mandragora | ingredient | 0.05 | 2 | — |
+| `papaver` | Poppy | papaver | ingredient | 0.05 | 12 as. | — |
+| `mandragora` | Mandrake | mandragora | ingredient | 0.05 | 3 | — |
 | `allium` | Garlic | allium | ingredient | 0.05 | 1 as. | 2 |
 | `acetum` | Vinegar | acetum | ingredient | 0.05 | 1 as. | 2 |
-| `myrrha` | Myrrh | myrrha | ingredient | 0.05 | 2 | 2 |
+| `myrrha` | Myrrh | myrrha | ingredient | 0.05 | 3 | 2 |
 | `absinthium` | Wormwood | absinthium | ingredient | 0.05 | 4 as. | 2 |
 | `helleborus` | Hellebore | helleborus | ingredient | 0.05 | 8 as. | — |
 | `ruta` | Rue | ruta | ingredient | 0.05 | 4 as. | 2 |

@@ -23,8 +23,8 @@ import * as THREE from 'three';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { releaseTextureAfterUpload } from './release';
 import { MATERIAL_BASE, type MaterialId } from './materialIds';
-import { MATERIAL_RECIPES, TEXTURE_STATS, repeatFor, roughnessFactor, tintFor, type MaterialRecipe, type TextureSetId } from './textures/catalog';
-import { generateProcedural, type ProcImage } from './textures/procedural';
+import { MATERIAL_RECIPES, TEXTURE_STATS, repeatFor, roughnessFactor, tintFor, type MaterialRecipe, type ProceduralId, type TextureSetId } from './textures/catalog';
+import { generateProcedural, prefetchProcedural, type ProcImage } from './textures/procedural';
 import { applyShaderPatch } from './textures/shaderPatch';
 import { applyUvCheck, uvCheckEnabled } from './uvcheck';
 
@@ -239,6 +239,19 @@ interface SetTextures {
 const setPromises = new Map<TextureSetId, Promise<SetTextures>>();
 const loader = hasDom ? new THREE.TextureLoader() : null;
 const baseUrl = (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
+let prefetched = false;
+
+/**
+ * The procedural sets the materials use, the ones the first landmarks need first (the worker
+ * generates them in this order, so the early ones arrive before they are asked for).
+ */
+function procIds(): ProceduralId[] {
+  const first: ProceduralId[] = ['travertine', 'slabs', 'stucco', 'reticulatum', 'bronze', 'gilded', 'metal', 'porphyry'];
+  const all = new Set<ProceduralId>();
+  for (const r of Object.values(MATERIAL_RECIPES) as MaterialRecipe[]) if (r.proc) all.add(r.proc);
+  return [...first.filter((id) => all.has(id)), ...[...all].filter((id) => !first.includes(id))];
+}
+
 let ktx2: KTX2Loader | null = null;
 const ktx2Failed = new Set<TextureSetId>();
 let ktx2Loaded = 0;
@@ -248,6 +261,11 @@ let ktx2Loaded = 0;
  * block formats this GPU takes. Call before the first material is created. `?ktx2=0` keeps JPEGs.
  */
 export function enableCompressedTextures(renderer: THREE.WebGLRenderer) {
+  // The boot's first texture work: the procedural sets start generating in a worker now.
+  if (hasDom && !prefetched && !(new URLSearchParams(location.search).get('lodoff') ?? '').includes('procworker')) {
+    prefetched = true;
+    prefetchProcedural(procIds());
+  }
   if (ktx2 || !hasDom) return;
   if (new URLSearchParams(location.search).get('ktx2') === '0') return;
   ktx2 = new KTX2Loader().setTranscoderPath(`${baseUrl}basis/`).setWorkerLimit(2).detectSupport(renderer);

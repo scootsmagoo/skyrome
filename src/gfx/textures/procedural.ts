@@ -635,6 +635,37 @@ const GENERATORS: Record<ProceduralId, (seed: number) => ProcImage> = {
 
 const cache = new Map<string, ProcImage>();
 
+/** Prefetch counters (debug, scripts/perf-boot.mjs): sets that arrived from the worker in time, and late ones. */
+export const procPrefetch = { requested: 0, arrived: 0, late: 0 };
+
+/**
+ * Generate these sets in a worker now, so the materials find them ready instead of computing them
+ * on the main thread during the boot (seed 1, the materials' seed). A set asked for before its
+ * pixels arrive is generated here as before and the worker's copy is dropped. No-op without
+ * workers (tests).
+ */
+export function prefetchProcedural(ids: readonly ProceduralId[]) {
+  if (typeof Worker === 'undefined' || !ids.length) return;
+  let worker: Worker;
+  try {
+    worker = new Worker(new URL('./proc.worker.ts', import.meta.url), { type: 'module' });
+  } catch {
+    return;
+  }
+  let left = ids.length;
+  procPrefetch.requested += ids.length;
+  worker.onmessage = (e: MessageEvent<{ id: ProceduralId; img?: ProcImage }>) => {
+    const key = `${e.data.id}:1`;
+    if (e.data.img && !cache.has(key)) {
+      cache.set(key, e.data.img);
+      procPrefetch.arrived++;
+    } else procPrefetch.late++;
+    if (--left === 0) worker.terminate();
+  };
+  worker.onerror = () => worker.terminate();
+  worker.postMessage(ids);
+}
+
 /** Generate (or fetch from cache) a procedural texture set. */
 export function generateProcedural(id: ProceduralId, seed = 1): ProcImage {
   const key = `${id}:${seed}`;

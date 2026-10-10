@@ -7,17 +7,32 @@
  *
  *   npc-glaucus      n1 (the offer; starts the quest), signedGuest, signedOath; named (mq-02's clue)
  *   npc-successus    issueScutum, issueParmula, issueOwn
- *   npc-asiaticus    begin1, begin2, begin3
+ *   npc-asiaticus    begin1, begin2, begin3; lusioBegin (job-ludus-lusio, the daily practice bout)
  *   npc-auctus       mus (the clue; also completes mq-02 'ask')
  *   npc-nereus       spared, struck (the missio choice)
  *   npc-hermippus    patched
+ *
+ * After lud-01 Asiaticus offers the daily practice bout (job-ludus-lusio, world-life §4.7), and
+ * Hermippus' talk carries the life lines of src/life/talk.ts (his mortar, when the CRAFT crew's
+ * bench is there).
  */
 import { completed, female, hourNow, outcome, questVar, rotate, running, stage, treat } from '../../content/talk';
 import { person } from '../../content/people';
+import { lusioFoe } from '../../life/jobs/lusio';
+import { jobKey } from '../../life/jobs/defineJob';
+import { jobRuntime, lifeChoices } from '../../life/talk';
 import { defineDialogue, type DialogueContext } from '../types';
 
 const LUD = 'lud-01-sacramentum';
 const MQ2 = 'mq-02-tabella';
+const LUSIO = 'job-ludus-lusio';
+
+/** Why the practice bout can't be had now (shown on the disabled choice), or '' when it can. */
+const lusioWhy = (c: DialogueContext) => {
+  const rt = jobRuntime(LUSIO);
+  if (!rt || rt.offerable(c.game)) return '';
+  return (c.game.life?.store.today(jobKey(LUSIO)) ?? 0) > 0 ? 'One bout a day for guests.' : 'Only in drill hours.';
+};
 const STAGES = ['start', 'kit', 'bout1', 'bout2', 'bout3', 'missio', 'done', 'done-half'];
 /** How far lud-01 has got (−1 before it starts; the end stages count as the last). */
 const reached = (c: DialogueContext, s: string) => {
@@ -152,9 +167,16 @@ const asiaticus = defineDialogue({
       return `ready${s.slice(4)}`;
     }
     if (s === 'kit') return 'needKit';
+    // The daily practice bout (after lud-01): the call, then "Ready."; while it runs, the bout.
+    if (c.quest(LUSIO)?.running) return Number(questVar(c, LUSIO, 'bout')) ? 'calls' : 'lusio';
     return 'hub';
   },
   nodes: {
+    lusio: {
+      text: (c) => `${lusioFoe(c.game.time?.dayIndex ?? 0).call}, against the guest! Practice arms, and the crowd decides the purse. Show them something worth paying for.`,
+      choices: [{ text: 'Ready.', goto: 'lusioBegin' }, { text: 'One moment.', end: true }],
+    },
+    lusioBegin: { text: 'A horn! Shields up! The sand is hungry!', end: true },
     ready1: {
       text: 'Pullus, a boy from Capua, against the guest! Practice arms! Parry with the shield, riposte on the beat, and dodge when you can’t parry. Lock on with X; the crowd likes a man who looks his enemy in the face.',
       choices: [{ text: 'Ready.', goto: 'begin1' }, { text: 'One moment.', end: true }],
@@ -176,6 +198,16 @@ const asiaticus = defineDialogue({
     hub: {
       text: (c) => rotate(c, '_hub', ['Shields up! The sand is hungry!', 'A finger! He raises a finger! Ad digitum!', 'The crowd asks: Mitte! or Iugula? Today, it asks Mitte!']),
       choices: [
+        {
+          text: (c) => {
+            const why = lusioWhy(c);
+            return `Put me on the sand. (A practice bout)${why ? ` — ${why}` : ''}`;
+          },
+          if: (c) => completed(c, LUD) && !!c.game.life && !!jobRuntime(LUSIO) && !c.quest(LUSIO)?.running,
+          enabled: (c) => !!jobRuntime(LUSIO)?.offerable(c.game),
+          effects: (c) => c.startQuest(LUSIO),
+          goto: 'lusio',
+        },
         { text: 'Teach me to hold a shield.', if: (c) => completed(c, LUD), end: true, effects: (c) => c.openService('train') },
         { text: 'Vale.', end: true },
       ],
@@ -277,6 +309,8 @@ const nereus = defineDialogue({
 
 // ------------------------------------------------------------------ Hermippus (the physician)
 
+const hermippusLife = lifeChoices('npc-hermippus');
+
 const hermippus = defineDialogue({
   id: 'npc-hermippus',
   npcs: ['npc-hermippus'],
@@ -299,10 +333,13 @@ const hermippus = defineDialogue({
         { text: 'Treat my wounds. (2 den.)', enabled: (c) => c.denarii() >= 2, effects: (c) => { if (c.pay(2)) treat(c); }, goto: 'treated' },
         { text: 'What do you sell?', end: true, effects: (c) => c.openService('barter') },
         { text: 'Teach me. (Medicina)', end: true, effects: (c) => c.openService('train') },
+        // His mortar and anything else the life of the city gives him (src/life/talk.ts).
+        ...hermippusLife.choices,
         { text: 'Vale.', end: true },
       ],
     },
     treated: { text: '(He works quickly, with the air of a man who has seen worse before breakfast.) Done. Don’t thank me; thank Aesculapius, he sends the patients.', next: 'hub' },
+    ...hermippusLife.nodes,
   },
 });
 

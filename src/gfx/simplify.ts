@@ -117,7 +117,8 @@ export function simplifyByGrid(src: THREE.BufferGeometry, cell: readonly [number
       P[j * 3 + 2] = sums[o + 2] * w;
     }
     if (N) {
-      const l = Math.hypot(sums[o + 3], sums[o + 4], sums[o + 5]) || 1;
+      const sx = sums[o + 3], sy = sums[o + 4], sz = sums[o + 5];
+      const l = Math.sqrt(sx * sx + sy * sy + sz * sz) || 1; // not Math.hypot: it allocates
       N[j * 3] = sums[o + 3] / l;
       N[j * 3 + 1] = sums[o + 4] / l;
       N[j * 3 + 2] = sums[o + 5] / l;

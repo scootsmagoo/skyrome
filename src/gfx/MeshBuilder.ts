@@ -102,6 +102,28 @@ const tmpPos = new THREE.Vector3();
 const tmpQuat = new THREE.Quaternion();
 const tmpScale = new THREE.Vector3();
 
+/**
+ * Weld the meshes under `root` whose welding was put off (`build(name, { index: 'later' })`, or a
+ * geometry with `userData.weld`), now that they are known to stay. Returns how many.
+ */
+export function weldLater(root: THREE.Object3D): number {
+  let n = 0;
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    const g = mesh.isMesh ? mesh.geometry : null;
+    const w = g?.userData.weld as { tolerance: number; releaseCpu?: boolean } | undefined;
+    if (!g || !w || !(g.getAttribute('position')?.array as ArrayLike<number> | null)) return;
+    const welded = mergeVertices(g, w.tolerance);
+    welded.boundingSphere = g.boundingSphere;
+    welded.boundingBox = g.boundingBox;
+    if (w.releaseCpu) releaseGeometryAfterUpload(welded);
+    mesh.geometry = welded;
+    g.dispose();
+    n++;
+  });
+  return n;
+}
+
 export class MeshBuilder {
   private parts = new Map<string, THREE.BufferGeometry[]>();
   private shadow = new Map<string, boolean>();
@@ -194,10 +216,13 @@ export class MeshBuilder {
   /**
    * Merge into a Group with one Mesh per material (plus one InstancedMesh per instanced key and
    * material). Options: `index` welds identical vertices of the merged geometry (smooth lathes
-   * and sweeps share most of theirs); `releaseCpu` drops the vertex arrays from the JS heap once
-   * they are on the GPU (only for static scenery nobody raycasts: colliders are separate).
+   * and sweeps share most of theirs); 'later' only marks them, for `weldLater` once the owner
+   * knows which meshes it keeps (the landmarks' batches take most of them non-indexed anyway,
+   * and three.js's mergeVertices was ~1 s of the boot); `releaseCpu` drops the vertex arrays from
+   * the JS heap once they are on the GPU (only for static scenery nobody raycasts: colliders are
+   * separate).
    */
-  build(name = 'built', opts: { index?: boolean; releaseCpu?: boolean } = {}): THREE.Group {
+  build(name = 'built', opts: { index?: boolean | 'later'; releaseCpu?: boolean } = {}): THREE.Group {
     const group = new THREE.Group();
     group.name = name;
     for (const [key, { make, matrices }] of this.instances) {
@@ -227,7 +252,8 @@ export class MeshBuilder {
       const [material, shadow] = key.split('|');
       let merged = geoms.length === 1 ? geoms[0] : mergeGeometries(geoms, false);
       if (!merged) continue;
-      if (opts.index) merged = mergeVertices(merged, 1e-4);
+      if (opts.index === 'later') merged.userData.weld = { tolerance: 1e-4, releaseCpu: !!opts.releaseCpu };
+      else if (opts.index) merged = mergeVertices(merged, 1e-4);
       if (opts.releaseCpu) releaseGeometryAfterUpload(merged);
       merged.computeBoundingSphere();
       merged.computeBoundingBox();

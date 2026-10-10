@@ -26,17 +26,19 @@ export const REMEDIES: ItemDef[] = [
   remedy('emplastrum', 'Poultice', 'emplastrum', 0.1, 4 * AS, [hot(40, 10)], 'A plaster of herbs and honey: +40 health over 10 s.'),
   remedy('collyrium', 'Eye Salve', 'collyrium', 0.05, 4 * AS, [{ kind: 'cure', target: 'state:caecatus', amount: 1 }], 'A stick of eye salve stamped with the oculist’s name. Cures blindness from sand or smoke.'),
   remedy('theriaca', 'Theriac', 'theriaca', 0.15, 15, [{ kind: 'cure', target: 'poison', amount: 1 }, { kind: 'flag', target: 'poison.resist', amount: 1, duration: 180 }], 'Andromachus’ antidote of sixty-four ingredients (also sold as Mithridatium): cures poison and halves it for a game hour.'),
-  remedy('febrifugum', 'Fever Draught', 'febrifugum', 0.2, 2, [{ kind: 'cure', target: 'disease:febris', amount: 1 }], 'A bitter draught of willow and wormwood. Cures the fever.'),
+  remedy('febrifugum', 'Fever Draught', 'febrifugum', 0.2, 28 * AS, [{ kind: 'cure', target: 'disease:febris', amount: 1 }], 'A bitter draught of willow and wormwood. Cures the fever.'),
   remedy('soporificum', 'Soporific', 'soporificum', 0.1, 10, [], 'Poppy and mandragora, to coat a weapon: for 3 hits, a struck target up to elite collapses after 3 s.', ['weapon-coating']),
 ];
 
+// The dear drugs (poppy, mandrake, myrrh) are priced so that a remedy made from them at the mortar
+// sells back for a modest margin at most (docs/design/world-life.md §4.6; tests/life-economy.test.ts).
 export const INGREDIENTS: ItemDef[] = [
   ...[
-    ['papaver', 'Poppy', 'papaver', 8 * AS, 'Dried poppy heads, scored for their milk.'],
-    ['mandragora', 'Mandrake', 'mandragora', 2, 'A forked root given before surgery.'],
+    ['papaver', 'Poppy', 'papaver', 12 * AS, 'Dried poppy heads, scored for their milk.'],
+    ['mandragora', 'Mandrake', 'mandragora', 3, 'A forked root given before surgery.'],
     ['allium', 'Garlic', 'allium', AS, 'Pliny lists sixty-one remedies made from garlic.'],
     ['acetum', 'Vinegar', 'acetum', AS, 'Sour wine vinegar — the base of posca and of many remedies.'],
-    ['myrrha', 'Myrrh', 'myrrha', 2, 'Arabian resin for wounds and embalming.'],
+    ['myrrha', 'Myrrh', 'myrrha', 3, 'Arabian resin for wounds and embalming.'],
     ['absinthium', 'Wormwood', 'absinthium', 4 * AS, 'Steeped in wine against worms and sea-sickness.'],
     ['helleborus', 'Hellebore', 'helleborus', 8 * AS, 'Black hellebore: a purge for madness, a poison for the careless.'],
     ['ruta', 'Rue', 'ruta', 4 * AS, 'A bitter herb against poison and the evil eye.'],

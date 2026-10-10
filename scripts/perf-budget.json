@@ -1,0 +1,21 @@
+{
+  "note": "Budgets for scripts/perf-budget.mjs (Chromium, 1280x720, ?fps=0). From the October 2026 audit's interleaved runs on a busy machine (docs/research/perf-audit-2026-10.md): timings x 1.3, draws and triangles x 1.15, slow frames at least 6. Regenerate with --write-budget only for a change meant to cost more or less, and say why in your report.",
+  "tiers": {
+    "high": {
+      "views": {
+        "forum": { "cpuMean": 16.5, "cpuP95": 27, "renderSubmit": 8.8, "draws": 1060, "triangles": 3000000, "slowFrames": 9, "bootMs": 28000 },
+        "colosseum": { "cpuMean": 9.5, "cpuP95": 19.6, "renderSubmit": 5.7, "draws": 1120, "triangles": 2350000, "slowFrames": 6, "bootMs": 26700 },
+        "spawn": { "cpuMean": 15.9, "cpuP95": 23.8, "renderSubmit": 7.4, "draws": 1400, "triangles": 2920000, "slowFrames": 9, "bootMs": 27600 }
+      },
+      "idle": { "pausedDrawShare": 0.15, "titleFps": 32 }
+    },
+    "medium": {
+      "views": {
+        "forum": { "cpuMean": 9.9, "cpuP95": 12.1, "renderSubmit": 5.3, "draws": 1000, "triangles": 2740000, "slowFrames": 6, "bootMs": 20900 },
+        "colosseum": { "cpuMean": 9, "cpuP95": 14.8, "renderSubmit": 5.3, "draws": 1120, "triangles": 2230000, "slowFrames": 6, "bootMs": 22200 },
+        "spawn": { "cpuMean": 11.3, "cpuP95": 17.4, "renderSubmit": 5.5, "draws": 1280, "triangles": 2600000, "slowFrames": 6, "bootMs": 24100 }
+      },
+      "idle": { "pausedDrawShare": 0.15, "titleFps": 32 }
+    }
+  }
+}

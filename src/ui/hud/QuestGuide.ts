@@ -10,9 +10,13 @@
 import * as THREE from 'three';
 import { h, setClass, setText } from '../dom';
 import { UI_ICONS, iconSvg } from '../icons';
+import type { MarkerTarget } from '../../quests/types';
 import { formatDistance } from './Compass';
+import { placeMarker, screenMarker, type MarkerBox } from './markerMath';
 
 export interface GuideTarget {
+  /** Which objective this is (`q:<quest>:<objective>`): the quest route replans when it changes. */
+  key?: string;
   questTitle: string;
   text: string;
   /** Counted objectives: "2 / 3". */
@@ -24,9 +28,13 @@ export interface GuideTarget {
   npc: boolean;
   /** The person to ride on: the HUD follows this actor's live position every frame. */
   actorId?: string;
+  /** The objective's marker target (the quest route reads it to find interior cells). */
+  target?: MarkerTarget;
 }
 
 const v = new THREE.Vector3();
+/** Room kept clear at the screen edges (px): the compass on top, the bars and the minimap below. */
+const BOX: MarkerBox = { left: 46, right: 46, top: 74, bottom: 110 };
 
 export class QuestGuide {
   readonly marker: HTMLElement;
@@ -35,12 +43,16 @@ export class QuestGuide {
   private trackTitle: HTMLElement;
   private trackText: HTMLElement;
   private trackDist: HTMLElement;
+  private chevron: HTMLElement;
   private alpha = 0;
+  private place = screenMarker();
+  private angle = 0;
 
   constructor() {
     this.markerDist = h('div', { class: 'dist' });
     const chevron = h('div', { class: 'chev' });
     chevron.innerHTML = iconSvg(UI_ICONS.questMarker);
+    this.chevron = chevron;
     this.marker = h('div', { class: 'hud-qmark' }, chevron, this.markerDist);
     this.trackTitle = h('div', { class: 'title' });
     this.trackText = h('div', { class: 'text' });
@@ -50,14 +62,15 @@ export class QuestGuide {
     this.tracker = h('div', { class: 'hud-tracker' }, this.trackTitle, h('div', { class: 'line' }, mark, this.trackText, this.trackDist));
   }
 
-  update(dt: number, target: GuideTarget | null, cam: THREE.Camera, viewW: number, viewH: number, player: { x: number; z: number }, trackerOn: boolean) {
+  update(dt: number, target: GuideTarget | null, cam: THREE.Camera, viewW: number, viewH: number, player: { x: number; y?: number; z: number }, trackerOn: boolean) {
     setClass(this.tracker, 'is-on', !!target && trackerOn);
     if (!target) {
       this.alpha = 0;
       this.marker.style.opacity = '0';
       return;
     }
-    const d = Math.hypot(target.x - player.x, target.z - player.z);
+    // In 3D: a landing up a stair is "1 m" away on the plan but a dozen metres up.
+    const d = Math.hypot(target.x - player.x, player.y === undefined ? 0 : target.y - player.y, target.z - player.z);
     const dist = formatDistance(d);
     setText(this.trackTitle, target.questTitle);
     setText(this.trackText, target.progress ? `${target.text} (${target.progress})` : target.text);
@@ -66,21 +79,22 @@ export class QuestGuide {
 
     // Over a head (NPC) or well above a place; a little higher far away so it clears roofs.
     const lift = target.npc ? 2.35 : 3 + Math.min(12, d * 0.04);
-    v.set(target.x, target.y + lift, target.z).project(cam);
-    const behind = v.z > 1;
-    let sx = (v.x * 0.5 + 0.5) * viewW;
-    let sy = (-v.y * 0.5 + 0.5) * viewH;
-    if (behind) {
-      // Behind the camera the projection is mirrored: put it on the nearer bottom side instead.
-      sx = viewW - sx;
-      sy = viewH;
+    // Camera space, not the projected depth: with the reversed depth buffer a point behind the
+    // camera projects to z < 0, so `project().z > 1` never caught it and the marker showed a target
+    // behind you mirrored straight ahead (markerMath.ts has the story).
+    v.set(target.x, target.y + lift, target.z).applyMatrix4(cam.matrixWorldInverse);
+    const pm = cam.projectionMatrix.elements;
+    const at = placeMarker(this.place, v.x, v.y, v.z, pm[0], pm[5], pm[8], pm[9], viewW, viewH, BOX);
+    setClass(this.marker, 'is-edge', at.edge);
+    // On the edge the chevron turns to point the way (a target behind points left or right).
+    const angle = Math.round(at.angle);
+    if (angle !== this.angle) {
+      this.angle = angle;
+      const svg = this.chevron.firstElementChild as HTMLElement | null;
+      if (svg) svg.style.transform = angle ? `rotate(${angle}deg)` : '';
     }
-    // Off screen: ride the edge, so it always points the way.
-    const m = 46;
-    const edge = behind || sx < m || sx > viewW - m || sy < m * 1.6 || sy > viewH - m * 2.4;
-    sx = Math.max(m, Math.min(viewW - m, sx));
-    sy = Math.max(m * 1.6, Math.min(viewH - m * 2.4, sy));
-    setClass(this.marker, 'is-edge', edge);
+    const sx = at.x;
+    const sy = at.y;
     // Once you are there (a few metres), it fades: the prompt or the arrival takes over.
     const want = d < 3.5 ? 0 : d < 7 ? (d - 3.5) / 3.5 : 1;
     this.alpha += (want - this.alpha) * Math.min(1, dt * 6);
@@ -96,7 +110,7 @@ export const QUEST_GUIDE_CSS = `
   opacity: 0; transform-origin: 50% 100%; will-change: transform; z-index: 4; }
 .hud-qmark .chev { width: 2.1rem; height: 2.1rem; color: var(--sr-gold, #d6b46a);
   filter: drop-shadow(0 0 6px rgba(255, 196, 80, 0.9)) drop-shadow(0 1px 1px rgba(0, 0, 0, 0.9)); animation: hud-qmark-bob 1.6s ease-in-out infinite; }
-.hud-qmark .chev svg { width: 100%; height: 100%; }
+.hud-qmark .chev svg { width: 100%; height: 100%; transition: transform 0.15s; }
 .hud-qmark .dist { font-family: var(--sr-display); font-size: 0.82rem; letter-spacing: 0.06em; color: #f5e6c4;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95), 0 0 6px rgba(0, 0, 0, 0.7); margin-top: 0.1rem; }
 .hud-qmark.is-edge .chev { animation: none; opacity: 0.9; }

@@ -98,13 +98,11 @@ export function heightToNormal(height: Float32Array, w: number, h: number, stren
       const xp = (x + 1) % w;
       const dx = (height[y * w + xp] - height[y * w + xm]) * 0.5 * strength;
       const dy = (height[yp + x] - height[ym + x]) * 0.5 * strength;
-      let nx = -dx;
-      let ny = -dy;
-      let nz = 1;
-      const len = Math.hypot(nx, ny, nz);
-      nx /= len;
-      ny /= len;
-      nz /= len;
+      // 1 / length (Math.sqrt: Math.hypot allocates, and this runs per pixel of every map at boot).
+      const inv = 1 / Math.sqrt(dx * dx + dy * dy + 1);
+      const nx = -dx * inv;
+      const ny = -dy * inv;
+      const nz = inv;
       const i = (y * w + x) * 4;
       out[i] = (nx * 0.5 + 0.5) * 255;
       out[i + 1] = (ny * 0.5 + 0.5) * 255;

@@ -6,6 +6,11 @@
  * People appear at a post that is out of sight, or in plain view while it is still far away
  * (≥ 45 m, a few pixels tall), so a stall up an open street is staffed long before the player gets
  * there. Closer and in view, they walk in from somewhere out of sight nearby instead.
+ *
+ * Shops with a keeper (src/life, docs/modules/life.md): the host names the keeper who stands at a
+ * member's post (`keeperFor`), a station whose keeper is dead stays shut (`shut`), and while a
+ * keeper's station is off duty with the player about its stall stays out and the shutters go up
+ * (`closedDressing`). Market-day stations are manned only on the nundinae (`marketDay`).
  */
 import * as THREE from 'three';
 import type { Game } from '../core/Game';
@@ -14,7 +19,7 @@ import type { DayPhase } from './crowd/budget';
 import { activeStations, memberHeading, STATIONS, stationAnchor, stationPoint, type StationDef, type StationDressing, type StationMember } from './crowd/stations';
 import { STATION_SEEN_SPAWN } from './crowd/spawnRules';
 import type { Npc } from './Npc';
-import { makeAltar, makeAmphorae, makeAnvil, makeBench, makeBrazier, makeCounter, makeMill, makeOven, makeParkedCart, makeScrollTable, makeStall, makeStool, makeTable, makeVats } from './props';
+import { makeAltar, makeAmphorae, makeAnvil, makeBanner, makeBench, makeBrazier, makeCounter, makeMill, makeOven, makeParkedCart, makeScrollTable, makeShutters, makeStall, makeStool, makeTable, makeVats } from './props';
 
 export interface StationHost {
   readonly game: Game;
@@ -25,9 +30,22 @@ export interface StationHost {
   floorY(x: number, z: number): number | null;
   /**
    * Spawn a station member for its post at (x, z): standing there, or at `from` (out of sight
-   * nearby), from where it walks to the post.
+   * nearby), from where it walks to the post. With `keeper`, that named NPC (src/life) stands there
+   * instead of an ambient member.
    */
-  spawnMember(def: StationDef, m: StationMember, x: number, z: number, heading: number, from?: { x: number; z: number }): Npc | null;
+  spawnMember(def: StationDef, m: StationMember, x: number, z: number, heading: number, from?: { x: number; z: number }, keeper?: string | null): Npc | null;
+  /** The named keeper who stands at this member's post (src/life), or null for an ambient member. */
+  keeperFor?(def: StationDef, member: number): string | null;
+  /** Shut although its hours say open (src/life: its keeper is dead). */
+  shut?(def: StationDef): boolean;
+  /**
+   * The dressing put up while a keeper's station is off duty and the player is near (src/life: the
+   * shutters); the station's own dressing stays out with it. Null for an ordinary station, whose
+   * dressing is taken in once nobody sees it.
+   */
+  closedDressing?(def: StationDef): readonly StationDressing[] | null;
+  /** A market day (the nundinae): `marketDay` stations are manned only then. */
+  marketDay?(): boolean;
   /** A walkable, reachable point within `rMin`–`rMax` of (x, z) that the camera can't see (or null). */
   hiddenNear?(x: number, z: number, rMin: number, rMax: number): { x: number; z: number } | null;
   /** Where someone coming to work here sets out from: a house door nearby (or null). */
@@ -69,6 +87,9 @@ interface Manned {
   def: StationDef;
   members: (Npc | null)[];
   dressing: Placed[];
+  /** A keeper's station off duty: the shutters (closedDressing) are up. */
+  closed: Placed[];
+  shut: boolean;
   active: boolean;
   /** Settled member posts (null: no open ground there, never staffed). */
   posts: ({ x: number; z: number } | null)[];
@@ -108,32 +129,29 @@ export class StationDirector {
     // The hour turned: stations opening now are staffed by people arriving for work.
     const turned = this.lastPhase !== null && this.lastPhase !== this.host.phase && !this.eager;
     this.lastPhase = this.host.phase;
-    const active = new Set(activeStations(pl.x, pl.z, this.host.phase, SPAWN_R, this.defs).map((d) => d.id));
-    // Man the active ones.
+    const active = new Set(activeStations(pl.x, pl.z, this.host.phase, SPAWN_R, this.defs).filter((d) => this.onDuty(d)).map((d) => d.id));
+    // Man the active ones; a keeper's shut station nearby keeps its stall, shuttered.
     for (const def of this.defs) {
-      if (!active.has(def.id)) continue;
-      let m = this.manned.get(def.id);
-      if (!m) {
-        const a = stationAnchor(def)!;
-        const settle = this.host.settle;
-        // Posts are settled before the dressing blocks its own ground.
-        if (settle && settle(a.x, a.z, 0) === undefined) continue;
-        const posts = def.members.map((mem) => {
-          const p = stationPoint(a, mem.out, mem.side);
-          return settle ? (settle(p.x, p.z, 2.2) ?? null) : p;
-        });
-        m = { def, members: def.members.map(() => null), dressing: [], active: true, posts, commuteUntil: turned ? this.clock + 90 : 0 };
-        this.manned.set(def.id, m);
-        this.dress(m);
+      if (active.has(def.id)) {
+        const m = this.ensure(def, turned);
+        if (!m) continue;
+        if (m.shut) {
+          // Opening time: the shutters come down and the keeper walks in to work.
+          this.unshut(m);
+          if (turned) m.commuteUntil = this.clock + 90;
+        }
+        m.active = true;
+        this.fill(m);
+      } else if (this.keeperPost(def, pl, SPAWN_R)) {
+        const m = this.ensure(def, false);
+        if (m && !m.active && !m.shut) this.shutUp(m);
       }
-      m.active = true;
-      this.fill(m);
     }
     // Close the others: off duty (walk away) or far (clear).
     for (const [id, m] of [...this.manned]) {
       const a = stationAnchor(m.def);
       const far = !a || Math.hypot(a.x - pl.x, a.z - pl.z) > CLEAR_R;
-      const onDuty = m.def.when.includes(this.host.phase);
+      const onDuty = this.onDuty(m.def);
       if (far) {
         for (const n of m.members) if (n && this.host.alive(n)) this.host.dismiss(n, true);
         this.undress(m);
@@ -142,7 +160,10 @@ export class StationDirector {
         m.active = false;
         for (const n of m.members) if (n && this.host.alive(n)) this.host.dismiss(n, false);
         m.members.fill(null);
+        if (this.keeperPost(m.def, pl, CLEAR_R)) this.shutUp(m);
       } else if (!onDuty && !m.active) {
+        // A keeper's post keeps its stall and shutters while the player is about.
+        if (m.shut) continue;
         // Off duty: take the dressing in once nobody sees it.
         if (m.dressing.length && !m.dressing.some((d) => this.host.isSeen(d.object.position.x, d.object.position.y + 0.8, d.object.position.z))) {
           this.undress(m);
@@ -151,6 +172,56 @@ export class StationDirector {
       }
     }
     this.eager = false;
+  }
+
+  /** Open now: its hours, its market day, and not shut for good. */
+  private onDuty(def: StationDef): boolean {
+    if (!def.when.includes(this.host.phase)) return false;
+    if (def.marketDay && !this.host.marketDay?.()) return false;
+    return !this.host.shut?.(def);
+  }
+
+  /** A keeper's station (closedDressing not null) within `r` of the player. */
+  private keeperPost(def: StationDef, pl: { x: number; z: number }, r: number): boolean {
+    if (!this.host.closedDressing || this.host.closedDressing(def) == null) return false;
+    const a = stationAnchor(def);
+    return !!a && Math.hypot(a.x - pl.x, a.z - pl.z) <= r;
+  }
+
+  /** The station's record, created (posts settled, dressing out) on first use; null until its ground is loaded. */
+  private ensure(def: StationDef, turned: boolean): Manned | null {
+    let m = this.manned.get(def.id);
+    if (m) return m;
+    const a = stationAnchor(def);
+    if (!a) return null;
+    const settle = this.host.settle;
+    // Posts are settled before the dressing blocks its own ground.
+    if (settle && settle(a.x, a.z, 0) === undefined) return null;
+    const posts = def.members.map((mem) => {
+      const p = stationPoint(a, mem.out, mem.side);
+      return settle ? (settle(p.x, p.z, 2.2) ?? null) : p;
+    });
+    m = { def, members: def.members.map(() => null), dressing: [], closed: [], shut: false, active: false, posts, commuteUntil: turned ? this.clock + 90 : 0 };
+    this.manned.set(def.id, m);
+    this.dress(m);
+    return m;
+  }
+
+  /** Put the shutters up (the keeper has gone home, or is dead). */
+  private shutUp(m: Manned) {
+    m.shut = true;
+    const a = stationAnchor(m.def);
+    if (!a) return;
+    for (const d of this.host.closedDressing?.(m.def) ?? []) {
+      const placed = this.place(d, a);
+      if (placed) m.closed.push(placed);
+    }
+  }
+
+  /** Take the shutters down: the station opens. */
+  private unshut(m: Manned) {
+    m.shut = false;
+    this.unplace(m.closed);
   }
 
   /**
@@ -172,21 +243,22 @@ export class StationDirector {
       const y = this.host.floorY(p.x, p.z);
       if (y === null) return;
       const heading = memberHeading(a, m.def, mem);
+      const keeper = this.host.keeperFor?.(m.def, i) ?? null;
       // Opening time: they come along the street from home, seen or not.
       if (this.clock < m.commuteUntil && pl && Math.hypot(p.x - pl.x, p.z - pl.z) < 75) {
         const c = this.host.commuteFrom?.(p.x, p.z);
         if (c) {
-          m.members[i] = this.host.spawnMember(m.def, mem, p.x, p.z, heading, c);
+          m.members[i] = this.host.spawnMember(m.def, mem, p.x, p.z, heading, c, keeper);
           return;
         }
       }
       const far = !pl || Math.hypot(p.x - pl.x, p.z - pl.z) >= STATION_SEEN_SPAWN;
       if (this.eager || far || !this.host.isSeen(p.x, y + 1.2, p.z)) {
-        m.members[i] = this.host.spawnMember(m.def, mem, p.x, p.z, heading);
+        m.members[i] = this.host.spawnMember(m.def, mem, p.x, p.z, heading, undefined, keeper);
         return;
       }
       if (from === undefined) from = this.host.hiddenNear?.(p.x, p.z, 6, 24) ?? null;
-      if (from) m.members[i] = this.host.spawnMember(m.def, mem, p.x, p.z, heading, from);
+      if (from) m.members[i] = this.host.spawnMember(m.def, mem, p.x, p.z, heading, from, keeper);
     });
   }
 
@@ -297,6 +369,14 @@ export class StationDirector {
         lamp = { at: a.flame, req: { intensity: 8, distance: 9, flicker: true, priority: 1.2, glow: 0.35 } };
         break;
       }
+      case 'shutters':
+        object = makeShutters();
+        half = { x: 1.15, y: 0.85, z: 0.15 };
+        break;
+      case 'banner':
+        object = makeBanner();
+        half = { x: 0.2, y: 1.5, z: 0.2 };
+        break;
       case 'cart': {
         const c = makeParkedCart(Math.abs(seed) % 2 < 1 ? 'marble' : 'amphorae');
         object = c.group;
@@ -325,12 +405,18 @@ export class StationDirector {
   }
 
   private undress(m: Manned) {
-    for (const d of m.dressing) {
+    this.unplace(m.dressing);
+    this.unplace(m.closed);
+    m.shut = false;
+  }
+
+  private unplace(list: Placed[]) {
+    for (const d of list) {
       d.object.removeFromParent();
       for (const c of d.colliders) this.host.game.physics.removeCollider(c);
       d.light?.remove();
     }
-    m.dressing.length = 0;
+    list.length = 0;
   }
 
   clear() {

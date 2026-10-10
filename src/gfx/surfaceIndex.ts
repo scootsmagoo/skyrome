@@ -46,7 +46,8 @@ export class SurfaceIndex {
         const ux = a[i + 3] - a[i], uy = a[i + 4] - a[i + 1], uz = a[i + 5] - a[i + 2];
         const vx = a[i + 6] - a[i], vy = a[i + 7] - a[i + 1], vz = a[i + 8] - a[i + 2];
         const ny = uz * vx - ux * vz;
-        const l = Math.hypot(uy * vz - uz * vy, ny, ux * vy - uy * vx);
+        const nx = uy * vz - uz * vy, nz = ux * vy - uy * vx;
+        const l = Math.sqrt(nx * nx + ny * ny + nz * nz); // not Math.hypot: it allocates
         if (l < 1e-6 || ny / l < MIN_UP) continue;
         for (let ix = Math.floor(minX); ix <= Math.floor(maxX); ix++) {
           for (let iz = Math.floor(minZ); iz <= Math.floor(maxZ); iz++) {

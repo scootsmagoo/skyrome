@@ -60,6 +60,12 @@ export class Interactions implements System {
     if (this.focus === i) this.setFocus(null);
   }
 
+  /** The registered interactable with this id (a module taking over another's prompt), or undefined. */
+  get(id: string): Interactable | undefined {
+    for (const i of this.items) if (i.id === id) return i;
+    return undefined;
+  }
+
   lateUpdate() {
     const { camera, input, physics } = this.game;
     const player = this.game.player;

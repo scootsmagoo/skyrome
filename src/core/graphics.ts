@@ -207,7 +207,8 @@ export class GraphicsGovernor implements System {
   lateUpdate(dt: number) {
     const g = this.game;
     const s = g.settings.data;
-    if (!this.enabled || (s.graphics ?? 'auto') !== 'auto' || g.paused || (typeof document !== 'undefined' && document.hidden)) return;
+    // Not while a menu or a frame-rate cap (the title's 30 fps, Game.capFps) holds the rate down.
+    if (!this.enabled || (s.graphics ?? 'auto') !== 'auto' || g.paused || g.capped || (typeof document !== 'undefined' && document.hidden)) return;
     if (this.settle > 0) {
       this.settle -= dt;
       return;

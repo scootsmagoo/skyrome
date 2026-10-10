@@ -6,7 +6,7 @@
 import * as atlas from '../data/atlas';
 import type { Landmark } from '../data/atlas';
 import type { LocationDef } from '../npc/types';
-import type { MapDataSource, MapLabel, MapLandmark, MapLandmarkStyle, MapLine, MapLocation, MapQuestMarker, MapRiver, MapRoad, MapShape } from '../ui/types';
+import type { MapDataSource, MapFabric, MapLabel, MapLandmark, MapLandmarkStyle, MapLine, MapLocation, MapQuestMarker, MapRiver, MapRoad, MapRouteView, MapShape } from '../ui/types';
 import { WORLD_SCALE as K } from '../world/coords';
 import { displayLatin, displayName, iconFor, namedHills } from './locations';
 
@@ -109,6 +109,32 @@ export function mapLabels(): MapLabel[] {
   return out;
 }
 
+/** The parts of the city plan (src/world/city/plan.ts) the map draws, in game metres. */
+export interface PlanLike {
+  blocks: readonly { outline: readonly (readonly [number, number])[]; kind: string }[];
+  streets: readonly { points: readonly (readonly [number, number])[]; width: number }[];
+  roads: readonly { points: readonly (readonly [number, number])[]; half: number }[];
+  plazas: readonly { polygon: readonly (readonly [number, number])[] }[];
+}
+
+const flat = (pts: readonly (readonly [number, number])[]) => {
+  const out = new Float32Array(pts.length * 2);
+  pts.forEach(([x, z], i) => {
+    out[i * 2] = x;
+    out[i * 2 + 1] = z;
+  });
+  return out;
+};
+
+/** The city's blocks, streets and squares as map fabric (pure). Roads count as streets at their full width. */
+export function fabricFromPlan(plan: PlanLike): MapFabric {
+  return {
+    blocks: plan.blocks.map((b) => ({ pts: flat(b.outline), garden: b.kind === 'garden' })),
+    streets: [...plan.roads.map((r) => ({ pts: flat(r.points), width: r.half * 2 })), ...plan.streets.map((s) => ({ pts: flat(s.points), width: s.width }))],
+    plazas: plan.plazas.map((p) => ({ pts: flat(p.polygon) })),
+  };
+}
+
 export interface AtlasMapHooks {
   heightAt?: (x: number, z: number) => number;
   /** Registered locations (game.locations.all()) and whether each is discovered. */
@@ -116,6 +142,10 @@ export interface AtlasMapHooks {
   isDiscovered?: (id: string) => boolean;
   player?: () => { x: number; z: number; bearing: number } | null;
   questMarkers?: () => MapQuestMarker[];
+  /** The city plan, once the city is built. */
+  plan?: () => PlanLike | null | undefined;
+  /** The quest route, when it is shown. */
+  route?: () => MapRouteView | null;
 }
 
 /** MapDataSource over the atlas. Build once and return the same object (terrain shading caches on it). */
@@ -136,6 +166,7 @@ export class AtlasMapSource implements MapDataSource {
   readonly landmarks: MapLandmark[];
   readonly labels: MapLabel[];
   private locCache: { at: number; list: MapLocation[] } = { at: -1, list: [] };
+  private fabricCache: { plan: unknown; fabric: MapFabric | null } = { plan: null, fabric: null };
 
   constructor(private readonly hooks: AtlasMapHooks = {}) {
     this.rivers = atlas.RIVERS.map((r) => ({ name: r.kind === 'canal' ? r.name : 'Tiberis', width: (r.width.reduce((a, b) => a + b, 0) / Math.max(1, r.width.length)) * K, points: pts(r.centerline) }));
@@ -182,5 +213,16 @@ export class AtlasMapSource implements MapDataSource {
 
   questMarkers(): MapQuestMarker[] {
     return this.hooks.questMarkers?.() ?? [];
+  }
+
+  /** The same object for as long as the plan is (the renderers cache their paths on it). */
+  fabric(): MapFabric | null {
+    const plan = this.hooks.plan?.() ?? null;
+    if (plan !== this.fabricCache.plan) this.fabricCache = { plan, fabric: plan ? fabricFromPlan(plan) : null };
+    return this.fabricCache.fabric;
+  }
+
+  route(): MapRouteView | null {
+    return this.hooks.route?.() ?? null;
   }
 }

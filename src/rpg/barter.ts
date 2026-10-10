@@ -1,15 +1,16 @@
 /**
  * Barter (docs/GDD.md §7.3–7.4): price formulas (pure) and merchant state (game.barter).
  *
- *   buy  = value × max(1.05, 1.60 − 0.50 × mercatura/100 − disposition/200 − Σbuy)
+ *   buy  = value × max(1.05, (1.60 − 0.50 × mercatura/100 − disposition/200 − Σbuy) × stall)
  *   sell = value × min(0.90, 0.35 + 0.35 × mercatura/100 + disposition/200 + Σsell)
  *   fence: stolen goods sell at sell × 0.5 (Receptator perk × 0.7); other vendors refuse them
  *
  * Every modifier goes inside the clamps (nothing multiplies the price after them), so a vendor
  * never buys for more than 0.86 × what it sells for. Σbuy = price.buy + street-wise 0.05 at
- * plebeian vendors + Bilbilis blades 0.20 for the hispanus + market day 0.10 at stalls + the
- * Nundinae perk 0.10 + festival discounts + haggle (+0.10 / −0.05); Σsell = price.sell + haggle
- * (+0.10). Disposition (−20…+20) carries Fama (/10), origin traits, gifts and threats.
+ * plebeian vendors + Bilbilis blades 0.20 for the hispanus + the Nundinae perk 0.10 + festival
+ * discounts + haggle (+0.10 / −0.05); Σsell = price.sell + haggle (+0.10). `stall` is 0.9 at a stall
+ * vendor on a market day (10% off the price, docs/design/world-life.md §4.3), else 1; it too sits
+ * inside the clamp. Disposition (−20…+20) carries Fama (/10), origin traits, gifts and threats.
  */
 import type { EventBus, GameEvents } from '../core/Events';
 import { clamp } from '../core/math';
@@ -31,8 +32,10 @@ export interface PriceContext {
   /** price.buy / price.sell modifiers (blessings, patrons, omens). */
   buyMod?: number;
   sellMod?: number;
-  /** Further Σbuy terms (market day, traits, festival, haggle). */
+  /** Further Σbuy terms (traits, festival, haggle, the Nundinae perk). */
   buyDiscount?: number;
+  /** A share of the price, inside the clamp: 0.9 at a stall on a market day (10% off). Default 1. */
+  buyScale?: number;
   /** Further Σsell terms (haggle). */
   sellBonus?: number;
   /** The vendor is a fence (receptator). */
@@ -50,7 +53,8 @@ export function roundPrice(d: number): number {
 const disp = (ctx: PriceContext) => clamp(ctx.disposition ?? 0, -BARTER.dispositionMax, BARTER.dispositionMax);
 
 export function buyFactor(ctx: PriceContext): number {
-  return Math.max(BARTER.buyFloor, BARTER.buyBase - BARTER.buyMerc * (ctx.mercatura / 100) - disp(ctx) / 200 - (ctx.buyMod ?? 0) - (ctx.buyDiscount ?? 0));
+  const f = BARTER.buyBase - BARTER.buyMerc * (ctx.mercatura / 100) - disp(ctx) / 200 - (ctx.buyMod ?? 0) - (ctx.buyDiscount ?? 0);
+  return Math.max(BARTER.buyFloor, f * (ctx.buyScale ?? 1));
 }
 
 export function sellFactor(ctx: PriceContext): number {
@@ -191,7 +195,8 @@ export class BarterSystem {
     const m = npcId ? this.merchants.get(npcId) : undefined;
     const haggle = m?.haggle && m.haggle.day === this.day() ? m.haggle : undefined;
     let buy = haggle?.buy ?? 0;
-    if (this.isMarketDay() && vendor?.stall) buy += BARTER.marketDay;
+    // Market day at a stall: 10% off the price (still inside the clamp, so no arbitrage).
+    const buyScale = this.isMarketDay() && vendor?.stall ? 1 - BARTER.marketDay : 1;
     if (this.isMarketDay() && sheet.hasFlag('perk-mercatura-nundinae')) buy += BARTER.nundinaePerk;
     if (vendor?.plebeian && sheet.hasFlag('trait-street-wise')) buy += BARTER.streetWise;
     if (def?.tags?.includes('bilbilis') && sheet.hasFlag('trait-caesars-countryman')) buy += BARTER.bilbilis;
@@ -202,6 +207,7 @@ export class BarterSystem {
       buyMod: sheet.modifier('price.buy'),
       sellMod: sheet.modifier('price.sell'),
       buyDiscount: buy,
+      buyScale,
       sellBonus: haggle?.sell ?? 0,
       fence: !!npc?.services?.includes('fence') || !!vendor?.fence,
       fencePerk: sheet.hasFlag('perk-mercatura-fence'),

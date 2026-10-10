@@ -3,6 +3,14 @@ import * as THREE from 'three';
 import type { Game, System } from '../core/Game';
 import type { Actor } from './Actor';
 import { avatarLod } from './avatar/lod';
+import { stepRealBuilds } from './avatar/real/RealBody';
+
+/**
+ * Milliseconds a frame for the avatars' LOD builds made ahead of need (a stage at least while any
+ * is queued): a person walking up builds their detailed body over a few frames, not in one 15–25 ms
+ * hitch (perf audit, October 2026).
+ */
+const BUILD_BUDGET_MS = 3;
 
 declare module '../core/Game' {
   interface Game {
@@ -57,5 +65,8 @@ export class ActorSystem implements System {
     // The animation LOD tests each avatar against this frame's view frustum.
     avatarLod.beginFrame();
     for (const a of this.list) a.syncVisual(alpha, dt);
+    const t0 = performance.now();
+    stepRealBuilds(BUILD_BUDGET_MS);
+    this.game.backgroundMs += performance.now() - t0;
   }
 }

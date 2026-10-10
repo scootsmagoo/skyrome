@@ -210,10 +210,13 @@ export interface Welded {
 
 export function weldGroups(position: ArrayLike<number>, n: number): Welded {
   const group = new Int32Array(n);
-  const keys = new Map<string, number>();
+  // Numeric keys (exact while every coordinate is within ±3.2 m of the origin, as a body's are), string keys
+  // otherwise: the strings were a good part of a LOD build (perf audit 2026-10).
+  const keys = new Map<number | string, number>();
   let count = 0;
   for (let v = 0; v < n; v++) {
-    const key = `${Math.round(position[v * 3] * 2e4)},${Math.round(position[v * 3 + 1] * 2e4)},${Math.round(position[v * 3 + 2] * 2e4)}`;
+    const qx = Math.round(position[v * 3] * 2e4), qy = Math.round(position[v * 3 + 1] * 2e4), qz = Math.round(position[v * 3 + 2] * 2e4);
+    const key = qx > -65536 && qx < 65536 && qy > -65536 && qy < 65536 && qz > -65536 && qz < 65536 ? ((qx + 65536) * 131072 + (qy + 65536)) * 131072 + (qz + 65536) : `${qx},${qy},${qz}`;
     let g = keys.get(key);
     if (g === undefined) {
       g = count++;
@@ -232,14 +235,13 @@ export function geometricNormals(position: ArrayLike<number>, index: ArrayLike<n
     const e1x = position[b * 3] - position[a * 3], e1y = position[b * 3 + 1] - position[a * 3 + 1], e1z = position[b * 3 + 2] - position[a * 3 + 2];
     const e2x = position[c * 3] - position[a * 3], e2y = position[c * 3 + 1] - position[a * 3 + 1], e2z = position[c * 3 + 2] - position[a * 3 + 2];
     const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
-    for (const v of [a, b, c]) {
-      out[v * 3] += nx;
-      out[v * 3 + 1] += ny;
-      out[v * 3 + 2] += nz;
-    }
+    out[a * 3] += nx; out[a * 3 + 1] += ny; out[a * 3 + 2] += nz;
+    out[b * 3] += nx; out[b * 3 + 1] += ny; out[b * 3 + 2] += nz;
+    out[c * 3] += nx; out[c * 3 + 1] += ny; out[c * 3 + 2] += nz;
   }
   for (let v = 0; v < n; v++) {
-    const l = Math.hypot(out[v * 3], out[v * 3 + 1], out[v * 3 + 2]) || 1;
+    const x = out[v * 3], y = out[v * 3 + 1], z = out[v * 3 + 2];
+    const l = Math.sqrt(x * x + y * y + z * z) || 1; // not Math.hypot: it allocates
     out[v * 3] /= l;
     out[v * 3 + 1] /= l;
     out[v * 3 + 2] /= l;
@@ -269,7 +271,8 @@ export function smoothNormals(w: Welded, normal: ArrayLike<number>, index: Array
       }
     }
     for (let g = 0; g < ng; g++) {
-      const l = Math.hypot(acc[g * 3], acc[g * 3 + 1], acc[g * 3 + 2]) || 1;
+      const x = acc[g * 3], y = acc[g * 3 + 1], z = acc[g * 3 + 2];
+      const l = Math.sqrt(x * x + y * y + z * z) || 1;
       acc[g * 3] /= l;
       acc[g * 3 + 1] /= l;
       acc[g * 3 + 2] /= l;
@@ -295,22 +298,20 @@ export function relitClothNormals(pos: Float32Array, nor: Float32Array, tris: Ar
     const e1x = pos[b * 3] - pos[a * 3], e1y = pos[b * 3 + 1] - pos[a * 3 + 1], e1z = pos[b * 3 + 2] - pos[a * 3 + 2];
     const e2x = pos[c * 3] - pos[a * 3], e2y = pos[c * 3 + 1] - pos[a * 3 + 1], e2z = pos[c * 3 + 2] - pos[a * 3 + 2];
     const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
-    for (const v of [a, b, c]) {
-      const k = g(v) * 3;
-      acc[k] += nx;
-      acc[k + 1] += ny;
-      acc[k + 2] += nz;
-    }
+    const ka = g(a) * 3, kb = g(b) * 3, kc = g(c) * 3;
+    acc[ka] += nx; acc[ka + 1] += ny; acc[ka + 2] += nz;
+    acc[kb] += nx; acc[kb + 1] += ny; acc[kb + 2] += nz;
+    acc[kc] += nx; acc[kc + 1] += ny; acc[kc + 2] += nz;
   }
   for (let j = 0; j < source.length; j++) {
     const v = base + j;
     const k = w.group[source[j]] * 3;
-    const l = Math.hypot(acc[k], acc[k + 1], acc[k + 2]);
+    const l = Math.sqrt(acc[k] * acc[k] + acc[k + 1] * acc[k + 1] + acc[k + 2] * acc[k + 2]);
     if (l < 1e-12) continue;
     let x = nor[v * 3] * 0.5 + (acc[k] / l) * 0.5;
     let y = nor[v * 3 + 1] * 0.5 + (acc[k + 1] / l) * 0.5;
     let z = nor[v * 3 + 2] * 0.5 + (acc[k + 2] / l) * 0.5;
-    const m = Math.hypot(x, y, z) || 1;
+    const m = Math.sqrt(x * x + y * y + z * z) || 1;
     x /= m;
     y /= m;
     z /= m;

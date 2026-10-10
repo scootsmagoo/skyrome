@@ -170,7 +170,7 @@ export class FootIk {
     if (!due && still && this.level && Math.abs(this.drop) < 0.002) return;
     forwardKinematics(p, rig, legScale);
     // Steps shorten on a staircase: the ankles' travel along the way of walking is scaled about the hips.
-    const speed = Math.hypot(vx, vz);
+    const speed = Math.sqrt(vx * vx + vz * vz);
     const mx = speed > 0.4 ? vx / speed : 0;
     const mz = speed > 0.4 ? vz / speed : 0;
     const hcx = (fk.p[B.thighL * 3] + fk.p[B.thighR * 3]) / 2;
@@ -374,11 +374,11 @@ export class FootIk {
     const e = f.eff;
     let ty = ay + e * f.planted;
     if (e > 0) ty = Math.max(ty, restY + e);
-    const l1 = Math.hypot(kx - hx, ky - hy, kz - hz);
-    const l2 = Math.hypot(oax - kx, (ay + D) - ky, oaz - kz);
+    const l1 = Math.sqrt(sq(kx - hx) + sq(ky - hy) + sq(kz - hz));
+    const l2 = Math.sqrt(sq(oax - kx) + sq((ay + D) - ky) + sq(oaz - kz));
     // Reach: no further than the straightened leg, no closer than a deep fold.
     let dx = ax - hx, dy = ty - hy, dz = az - hz;
-    let d = Math.hypot(dx, dy, dz);
+    let d = Math.sqrt(dx * dx + dy * dy + dz * dz);
     const maxD = (l1 + l2) * 0.9995;
     const minD = Math.abs(l1 - l2) + 0.05;
     const dc = Math.min(maxD, Math.max(minD, d));
@@ -389,7 +389,7 @@ export class FootIk {
     const ux = dx / d, uy = dy / d, uz = dz / d;
     // The knee keeps bending the way it did: pole = the old knee offset, made perpendicular to the new axis.
     let ox = oax - hx, oy = ay + D - hy, oz = oaz - hz;
-    const ol = Math.hypot(ox, oy, oz) || 1;
+    const ol = Math.sqrt(ox * ox + oy * oy + oz * oz) || 1;
     ox /= ol;
     oy /= ol;
     oz /= ol;
@@ -398,7 +398,7 @@ export class FootIk {
     px -= ox * along0;
     py -= oy * along0;
     pz -= oz * along0;
-    let pl = Math.hypot(px, py, pz);
+    let pl = Math.sqrt(px * px + py * py + pz * pz);
     if (pl < 1e-3) {
       // A straight leg: the knee bends forward of the hips.
       gq[0] = Q[B.hips * 4];
@@ -415,7 +415,7 @@ export class FootIk {
     px -= ux * dot;
     py -= uy * dot;
     pz -= uz * dot;
-    pl = Math.hypot(px, py, pz) || 1;
+    pl = Math.sqrt(px * px + py * py + pz * pz) || 1;
     px /= pl;
     py /= pl;
     pz /= pl;
@@ -436,9 +436,9 @@ export class FootIk {
     p.q.set(qd, thigh * 4);
     // Shin: the old lower-leg direction (carried by the thigh swing) onto knee -> target.
     qRotate(vv, 0, qa, 0, oax - kx, ay + D - ky, oaz - kz);
-    const s0l = Math.hypot(vv[0], vv[1], vv[2]) || 1;
+    const s0l = Math.sqrt(vv[0] * vv[0] + vv[1] * vv[1] + vv[2] * vv[2]) || 1;
     const sx = (hx + dx) - nkx, sy = (hy + dy) - nky, sz = (hz + dz) - nkz;
-    const s1l = Math.hypot(sx, sy, sz) || 1;
+    const s1l = Math.sqrt(sx * sx + sy * sy + sz * sz) || 1;
     qFromUnitVectors(qd, 0, vv[0] / s0l, vv[1] / s0l, vv[2] / s0l, sx / s1l, sy / s1l, sz / s1l);
     // World shin = Rs * Rt * old; local = inv(new world thigh) * that.
     qMul(qe, 0, qd, 0, qa, 0);
@@ -462,4 +462,9 @@ export class FootIk {
 
 function readAt(probe: GroundProbe, hcx: number, hcz: number, mx: number, mz: number, c: number): number {
   return probe(hcx + c * mx, hcz + c * mz, sample) ? sample.y : NaN;
+}
+
+/** x² (footIk avoids Math.hypot, which allocates: perf audit 2026-10). */
+function sq(x: number) {
+  return x * x;
 }

@@ -33,6 +33,14 @@ declare module '../core/Settings' {
     crosshair?: boolean;
     /** The objective tracker (top right): the tracked quest and what to do next (default on). */
     objectiveTracker?: boolean;
+    /** The round minimap in the bottom-left corner (default on; the Minimap key toggles it). */
+    minimap?: boolean;
+    /** The minimap keeps north up instead of turning with the view (default off). */
+    minimapNorthUp?: boolean;
+    /** The quest route on the minimap and the big map (default on). */
+    routeOnMaps?: boolean;
+    /** The quest route as a faint trail on the ground ahead (default off). */
+    routeInWorld?: boolean;
     /** Player rebinds of core actions (merged over DEFAULT_BINDINGS). */
     bindings?: Partial<Bindings>;
     uiBindings?: Partial<Record<UiAction, string[]>>;

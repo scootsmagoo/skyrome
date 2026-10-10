@@ -191,13 +191,15 @@ export class InventoryImpl implements Inventory {
 
   /**
    * Remove items. Without `stolenFrom`, clean stacks go first, then stolen; worse condition first;
-   * the equipped copy goes last. Returns false (removing nothing) if there aren't enough.
+   * the equipped copy goes last. `condition` takes only copies in exactly that condition (a chest
+   * stores the stacks it checked). Returns false (removing nothing) if there aren't enough.
    */
-  remove(itemId: string, count = 1, opts: { stolenFrom?: string | null; reason?: GameEvents['item:removed']['reason'] } = {}): boolean {
+  remove(itemId: string, count = 1, opts: { stolenFrom?: string | null; condition?: number; reason?: GameEvents['item:removed']['reason'] } = {}): boolean {
     count = Math.floor(count);
     if (count <= 0) return true;
+    const cond = opts.condition === undefined ? undefined : normCond(opts.condition);
     const pool = this._stacks
-      .filter((s) => s.itemId === itemId && (opts.stolenFrom === undefined || (s.stolenFrom ?? null) === opts.stolenFrom))
+      .filter((s) => s.itemId === itemId && (opts.stolenFrom === undefined || (s.stolenFrom ?? null) === opts.stolenFrom) && (cond === undefined || condOf(s) === cond))
       .sort((a, b) => Number(!!a.stolenFrom) - Number(!!b.stolenFrom) || condOf(a) - condOf(b));
     if (pool.reduce((n, s) => n + s.count, 0) < count) return false;
     const worn = Object.values(this._equipped).filter((e): e is Equipped => !!e && e.itemId === itemId);

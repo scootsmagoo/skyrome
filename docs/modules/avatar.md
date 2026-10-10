@@ -116,6 +116,12 @@ oldest unheld entries are evicted and their GPU buffers disposed. Held geometry 
 `avatarCacheStats()` reports the counts; `clearAvatarCache()` disposes everything unheld (e.g. when
 leaving a region). Always dispose avatars you drop (Actor.dispose and Actor.setAvatar do).
 
+**Bone rotations are quaternions only.** `createBones` turns off three.js's quaternion → Euler sync on every bone
+(`quaternion._onChange`): the crowd's pose writes made it rebuild and decompose a matrix per bone per pose (~0.4 ms a
+frame in the Forum, perf audit 2026-10). Write `bone.quaternion`; `bone.rotation` is not kept in step (writing it still
+updates the quaternion, but its other angles are stale). The animation code also avoids `Math.hypot`, which allocates
+(it was the game's biggest source of garbage).
+
 ### Animation LOD (`lod.ts`) and the flat bone path (`flatSkeleton.ts`)
 
 `avatarLod.viewer = game.camera` once (the scene or game sets it); `ActorSystem.update` calls
