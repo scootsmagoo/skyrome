@@ -41,6 +41,6 @@ export default defineLife({
     // ---- the Capitol, the Palatine and the Porta Capena: the high and the far
     { id: 'rum.districts.capitol-geese', kind: 'talk', districts: ['dist-capitolium'], text: 'The sacred geese on the Capitol have been fed on barley and given the good seats. Somebody says they knew the Gauls were coming. Somebody else says they knew about the dinner.', period: 'The Capitoline geese (Livy 5.47) [A]' },
     { id: 'rum.districts.palatine-guards', kind: 'talk', districts: ['dist-palatium'], text: 'Men of the Guard on the Palatine ask your business three times and your father’s name once. Give the name, and do not say you were only looking at the view.' },
-    { id: 'rum.districts.capena-tombs', kind: 'talk', districts: ['dist-porta-capena'], text: 'The carts come in through the Capena after dark, loaded with stone for the tombs on the Appian Way. Whoever sleeps by that gate sleeps badly, and then he is ready for the funerals of the ninth hour.', period: 'Night carts by day ban (Tabula Heracleensis) [A]' },
+    { id: 'rum.districts.capena-tombs', kind: 'talk', districts: ['dist-porta-capena'], text: 'The carts come in through the Capena after dark, loaded with stone for the tombs on the Appian Way. Whoever sleeps by that gate sleeps badly, and the mourners who come past at dawn are never quiet about it.', period: 'Night carts by day ban (Tabula Heracleensis) [A]' },
   ],
 });
