@@ -58,6 +58,8 @@ interface Strip { mat: MaterialId; expect: Expect }
 /** Width (m) of the walkable apron where a paved street's sidewalk meets the ground, and where a lane does. */
 const APRON = 0.9;
 const LANE_APRON = 0.6;
+/** An apron ends this far (m) above the ground, not under it: ground showing through the paving's edge is a flaw the crawl counts. */
+const APRON_FLUSH = 0.012;
 
 /** Builds a street into `b` (world coordinates). */
 export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn): StreetResult {
@@ -83,7 +85,7 @@ export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn
     // The outer edge is an apron sloping down to the ground over APRON m (a vertical 30 cm face stood
     // out as a slab where the street crosses open ground; along houses it runs under their walls).
     // It is walkable: a lip of 15-25 cm between the sidewalk and the ground caught pedestrians.
-    push(-hw - sw - APRON, -lift);
+    push(-hw - sw - APRON, -lift + APRON_FLUSH);
     push(-hw - sw, ch, 'concrete', 'up');
     push(-hw - cw, ch, sideMat, 'up');
     push(-hw, ch, curbMat, 'up');
@@ -95,14 +97,14 @@ export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn
     push(hw, ch, curbMat, 'in');
     push(hw + cw, ch, curbMat, 'up');
     push(hw + sw, ch, sideMat, 'up');
-    push(hw + sw + APRON, -lift, 'concrete', 'up');
+    push(hw + sw + APRON, -lift + APRON_FLUSH, 'concrete', 'up');
   } else {
     // A lane's edges run out to the ground in a walkable apron too (the old 5 cm edge was a step of the lane's lift).
-    push(-hw - LANE_APRON, -lift - 0.02);
+    push(-hw - LANE_APRON, -lift + APRON_FLUSH);
     push(-hw, 0.0, roadMat, 'up');
     push(0, 0.05, roadMat, 'up');
     push(hw, 0.0, roadMat, 'up');
-    push(hw + LANE_APRON, -lift - 0.02, roadMat, 'up');
+    push(hw + LANE_APRON, -lift + APRON_FLUSH, roadMat, 'up');
   }
 
   const pts = resamplePolyline(spec.points, 1.6);

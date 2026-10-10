@@ -140,7 +140,7 @@ export function closeRoadEnds(g: Grid, roads: EndRoad[], dead: { road: number; e
         const hit = (c === K.ROAD && g.owner[i] !== own) || c === K.STREET || c === K.PLAZA || c === K.PIAZZA || c === K.LANDMARK;
         if (hit) {
           // A building: stop at its apron, not inside it.
-          const s = c === K.LANDMARK ? prev : t;
+          const s = c === K.LANDMARK ? prev - road.half - 0.5 : t;
           const score = s + Math.abs(deg) * 0.08;
           if (s >= 2 && score < bestScore) { bestScore = score; best = [a[0] + dx * s, a[1] + dz * s]; }
           break;

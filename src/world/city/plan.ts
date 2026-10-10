@@ -25,7 +25,7 @@ import { SIDEWALK } from './datum';
 import { auditRoadEnds, probeEnd } from './audit';
 import { closeRoadEnds, closeStubs } from './stubs';
 import { BLOCKING, CUT_MIN, blockerGap, detourRoad, repairJoints, revertSplitting, roadJoints, type Detour } from './detour';
-import { Grid, K, cleanRing, components, pointInPoly, polyBounds, polyCentroid, signedArea, simplifyRing, splitCells, traceLoops, type Pt } from './raster';
+import { Grid, K, cleanRing, components, distToPoly, pointInPoly, polyBounds, polyCentroid, signedArea, simplifyRing, splitCells, traceLoops, type Pt } from './raster';
 
 const S = WORLD_SCALE;
 /** Raster margin on each side of a minor street's surface (the block outline never reaches the street). */
@@ -392,10 +392,14 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
   };
   // (A building that stands inside a forum or an open square — the temple at the end of the Forum of Nerva, Venus Genetrix in the
   // Forum of Caesar — is part of that precinct's own layout: the roads there are the landmark crews' streets, not bent.)
+  const forums = lmPolys.filter((l) => l.lm.category === 'forum').map((l) => l.poly);
   const inPrecinct = (poly: Pt[]) => {
     const c = polyCentroid(poly);
-    return plazas.some((pl) => pointInPoly(c[0], c[1], pl.polygon));
+    const near = (pg: readonly Pt[]) => pointInPoly(c[0], c[1], pg) || poly.some((q) => pointInPoly(q[0], q[1], pg)) || distToPoly(c[0], c[1], pg) < 15;
+    return plazas.some((pl) => near(pl.polygon)) || forums.some(near);
   };
+  // Ground a way round a building should avoid when it has the choice: a bank (the slope), a square's paving, a wall band.
+  const hard = (x: number, z: number) => (g.at(x, z) === K.PLAZA || g.at(x, z) === K.WALL ? 1 : slopeAt(x, z));
   const blockers = lmPolys.filter((l) => l.solid && BLOCKING.has(l.lm.category) && !inPrecinct(l.poly)).map((l) => ({ id: l.lm.id, poly: l.poly, gap: blockerGap(l.poly, slopeAt) }));
   const atlasRoads = [...atlas.ROADS, ...(opts.extraRoads ?? EXTRA_ROADS)].filter((r) => r.points.length >= 2).map((r) => ({ r, d: roadDims(r), pts: gpoly(r.points) }));
   if (opts.detourRoads !== false) {
@@ -407,7 +411,7 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
     const dets = new Map<number, Detour[]>();
     atlasRoads.forEach((a, i) => {
       if (a.r.kind === 'stairs') return;
-      const bent = detourRoad(a.pts, blockers, a.d.carriage / 2 + a.d.sidewalk, joints.filter((j) => j.i === i || j.j === i).map((j) => j.p), CUT_MIN, slopeAt);
+      const bent = detourRoad(a.pts, blockers, a.d.carriage / 2 + a.d.sidewalk, joints.filter((j) => j.i === i || j.j === i).map((j) => j.p), CUT_MIN, hard);
       if (!bent.detours.length) return;
       a.pts = bent.points;
       dets.set(i, bent.detours);
@@ -542,6 +546,8 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
     if (cor.c && cor.w > 0) {
       density = Math.max(density, density + (cor.c.density - density) * cor.w);
       wealth += (cor.c.wealth - wealth) * cor.w;
+      // A corridor block is packed (the blend alone left a block at the corridor's edge, where the weight is 0.5, at 0.54).
+      if (cor.w > 0.5) density = Math.max(density, 0.72);
     }
     return { reg, density, wealth, q: w > 0.5 ? q : null, corridor: cor.w > 0.5 };
   };

@@ -25,7 +25,7 @@ import type { MeshBuilder } from '../../gfx/MeshBuilder';
 import type { Polygon, Vec2 } from '../../arch/fabric/types';
 import { KERB } from '../../core/traversal';
 import { LIFT } from './datum';
-import { K } from './raster';
+import { K, distToPoly, polyBounds, pointInPoly } from './raster';
 import { inRects, rectsBounds, type Bounds, type CityPlan, type PlanRoad, type PlanStreet, type PlanPiazza } from './plan';
 import type { HeightFn } from './massing';
 import type { LampDef } from './life';
@@ -708,6 +708,9 @@ function edgeDist(p: Vec2, poly: readonly Vec2[]): number {
   return d;
 }
 
+/** Landmark categories that pave a ring round themselves (their builders lay the apron out to the pad), and how far (m). */
+const PAVED_ROUND = new Set(['amphitheatre', 'circus', 'theatre', 'odeum', 'stadium', 'baths']);
+const PAVED_RING = 14;
 const COVER = new Set<number>([K.STREET, K.PIAZZA, K.SCRAP, K.FREE, K.AQUEDUCT, K.WALL]);
 /**
  * Paved: landmark margins (the walkable apron round a monument, where the stalls stand) and the
@@ -745,6 +748,10 @@ export function coverKinds(plan: CityPlan, x0: number, z0: number, size: number,
   const ix0 = Math.max(1, g.ix(x0) - 2), ix1 = Math.min(g.nx - 2, g.ix(x0 + size) + 2);
   const iz0 = Math.max(1, g.iz(z0) - 2), iz1 = Math.min(g.nz - 2, g.iz(z0 + size) + 2);
   const c2 = 2 * g.cell;
+  // The monumental buildings pave a ring round themselves well past their footprint (the Colosseum's pad, the Circus'
+  // plaza): earth laid there stacks on their paving and fights it (the crawl's 'colosseum paving | ground cover').
+  const paved = plan.landmarkPolys.filter((l) => PAVED_ROUND.has(l.category)).map((l) => ({ poly: l.poly, b: polyBounds(l.poly) })).filter(({ b }) => b.maxX + PAVED_RING > x0 && b.minX - PAVED_RING < x0 + size && b.maxZ + PAVED_RING > z0 && b.minZ - PAVED_RING < z0 + size);
+  const nearPaved = (x: number, z: number) => paved.some(({ poly, b }) => x > b.minX - PAVED_RING && x < b.maxX + PAVED_RING && z > b.minZ - PAVED_RING && z < b.maxZ + PAVED_RING && (pointInPoly(x, z, poly) || distToPoly(x, z, poly) < PAVED_RING));
   for (let iz = iz0; iz <= iz1; iz++) {
     for (let ix = ix0; ix <= ix1; ix++) {
       const i = iz * g.nx + ix;
@@ -756,6 +763,7 @@ export function coverKinds(plan: CityPlan, x0: number, z0: number, size: number,
       // not a piazza, and not the strip a road or street itself paves (overlapping surfaces showed
       // as cobble patches over basalt and paving, and fought where they met).
       if (cls === K.MARGIN || cls === K.PIAZZA) continue;
+      if (paved.length && nearPaved(x, z)) continue;
       if (cls === K.ROAD) {
         const road = plan.roads[g.owner[i] - 1_000_000];
         if (road && nearestOnPolyline([x, z], road.points as Vec2[]).d < road.half + 0.4) continue;

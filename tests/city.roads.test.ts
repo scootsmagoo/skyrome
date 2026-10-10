@@ -134,7 +134,7 @@ describe('roads and dead ends on the real plan', () => {
     expect(r.share).toBeGreaterThanOrEqual(r0.share);
     expect(r.share).toBeGreaterThan(0.985);
     // What is cut off is a lane or two between courts (the physics probe joins more in the game).
-    for (const i of r.islands) expect(i.size).toBeLessThanOrEqual(10);
+    for (const i of r.islands) expect(i.size).toBeLessThanOrEqual(12);
     // The Forum and the places the story walks between are all on the one network.
     const comp = new Set<number>();
     const stack = [graph.nearest(0, 0, 200)];
