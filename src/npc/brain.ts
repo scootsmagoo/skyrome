@@ -408,12 +408,18 @@ export class NpcBrain {
       this.setTask(task('follow'), ctx);
       return;
     }
-    if (npc.def) {
-      this.nextNamed(ctx);
-      return;
-    }
+    // A station post comes first: a shop's keeper (src/life) is named but stands where the station puts them.
     if (npc.station) {
       this.toPost(ctx);
+      return;
+    }
+    if (npc.def) {
+      // A keeper with the shop shut has no schedule of their own: they go home.
+      if (!npc.def.schedule?.length && !npc.def.home && npc.def.tags?.includes('keeper')) {
+        this.leave(ctx);
+        return;
+      }
+      this.nextNamed(ctx);
       return;
     }
     const role = npc.role;

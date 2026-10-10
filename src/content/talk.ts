@@ -2,7 +2,8 @@
  * Helpers for dialogue content: quest-state queries in one call, the physician's treatment, the
  * player's sex for framing (§3.7), and the rumor mill that popina keepers, barbers and passers-by
  * draw on. Rumors point at the content that is open: a quest not yet started, a place not yet
- * visited, tomorrow's Column, the war.
+ * visited, tomorrow's Column, the war — and one of the day's picks from phase 2's rumour pool
+ * (src/life, game.life.rumours) for the district you stand in, which the citizens' news hears too.
  */
 import type { DialogueContext } from '../dialogue/types';
 import { isDusk, templesShut } from './director';
@@ -96,6 +97,10 @@ export function rumors(c: DialogueContext): string[] {
   if (notStarted(c, 'misc-meta-sudans-rixa') && completed(c, 'lud-01-sacramentum')) out.push('Bassulus the butcher and Anicetus the tanner are shouting about shields by the Meta Sudans again. Big shield or small. It’ll come to fists before supper.');
   if (stage(c, 'mq-02-tabella') === 'start' || completed(c, 'mq-01-madida-capena')) out.push('A courier knifed under the Capena arch before dawn. A soldier’s courier, they say. The urban cohorts are pretending they didn’t notice, which means somebody’s paid them.');
   if (completed(c, 'lud-01-sacramentum')) out.push('They say a guest put Nereus on his knees at the Ludus today. With a wooden sword! Nereus! Thirty-one wins!');
+  // Phase 2's rumour pool (src/life): one of today's talk rumours for the district you stand in.
+  const life = c.game.life;
+  const pooled = life?.rumours({ district: life.districtHere() ?? undefined, kind: 'talk' }, 1)[0];
+  if (pooled) out.push(pooled.text);
   out.push(
     'Tomorrow the emperor dedicates his Column. A hundred feet, with the whole Dacian war carved round it like a ribbon. They say the Forum will be shut to carts from the fourth hour.',
     'The doors of Janus are open. Parthia. The recruiters are in the Forum and mule prices have doubled.',

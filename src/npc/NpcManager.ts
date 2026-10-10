@@ -36,7 +36,7 @@ import { DEFAULT_STEER, steer, type SteerAgent, type SteerNeighbor, type Vec2 } 
 import { StreetNav } from '../ai/life/streets';
 import { laneAt, type LaneSet } from '../ai/life/lanes';
 import { atlasLanes, cartLane } from './crowd/atlasLanes';
-import { setStationSpots, type StationDef, type StationMember } from './crowd/stations';
+import { setStationSpots, type StationDef, type StationDressing, type StationMember } from './crowd/stations';
 import { StationDirector, type StationHost } from './stationDirector';
 import { BarkDirector, type BarkKind } from './barks';
 import { makeTask, NpcBrain, type LifeContext } from './brain';
@@ -153,6 +153,18 @@ const tmpV2 = new THREE.Vector3();
 const wish = new THREE.Vector3();
 const desired: Vec2 = { x: 0, z: 0 };
 const steered: Vec2 = { x: 0, z: 0 };
+
+/** What the life module (src/life) tells the stations and the markers about shops with keepers. */
+export interface StationLife {
+  /** The named keeper at this member's post, or null for an ambient member. */
+  keeperFor(def: StationDef, member: number): string | null;
+  /** Shut for good (its keeper is dead). */
+  shut(def: StationDef): boolean;
+  /** Shutters while off duty with the player near; null for a station without a keeper. */
+  closedDressing(def: StationDef): readonly StationDressing[] | null;
+  /** A keeper's post (game x, z), or null for anyone else. */
+  postOf(npcId: string): { x: number; z: number } | null;
+}
 
 /** One entry of `NpcManager.stuckLog` (metres; `wall` = distance to a World hit ahead at 0.12 / 0.35 / 0.9 m above the feet). */
 export interface StuckRecord {
@@ -337,6 +349,13 @@ export class NpcManager implements System {
 
   cartsEnabled = true;
 
+  /**
+   * Shops with keepers (src/life, docs/modules/life.md): who stands at which station post, which
+   * stations are shut, their shutters, market days, and where a keeper's post is (quest markers on
+   * a keeper who is not in the world). Null without the life module.
+   */
+  stationLife: StationLife | null = null;
+
   // ---------------------------------------------------------------- queries
 
   get(id: string): Npc | undefined {
@@ -359,6 +378,8 @@ export class NpcManager implements System {
     if (this.deadNamed.has(id)) return null;
     const def = this.registry().get(id);
     if (!def) return null;
+    const post = !def.schedule?.length && !def.home ? this.stationLife?.postOf(id) : null;
+    if (post) return new THREE.Vector3(post.x, this.floorY(post.x, post.z) ?? this.game.heightmap?.heightAt(post.x, post.z) ?? 0, post.z);
     const e = activeScheduleEntry(def.schedule, this.game.time.hour);
     const at = e?.at ?? def.home;
     const loc = at ? this.resolveLocation(at) : null;
@@ -1319,7 +1340,11 @@ export class NpcManager implements System {
       },
       isSeen: (x, y, z) => m.isSeen(x, y, z),
       floorY: (x, z) => m.floorY(x, z),
-      spawnMember: (def, mem, x, z, heading, from) => m.spawnStationMember(def, mem, x, z, heading, from),
+      spawnMember: (def, mem, x, z, heading, from, keeper) => m.spawnStationMember(def, mem, x, z, heading, from, keeper),
+      keeperFor: (def, i) => m.stationLife?.keeperFor(def, i) ?? null,
+      shut: (def) => m.stationLife?.shut(def) ?? false,
+      closedDressing: (def) => m.stationLife?.closedDressing(def) ?? null,
+      marketDay: () => m.game.barter?.isMarketDay() ?? false,
       hiddenNear: (x, z, rMin, rMax) => m.hiddenNear(x, z, rMin, rMax),
       commuteFrom: (x, z) => {
         const pl = m.game.player?.position;
@@ -1356,11 +1381,31 @@ export class NpcManager implements System {
 
   /**
    * A station member for its post at (x, z): the role's look, the station's prop, label and loop.
-   * Spawned at `from` (out of sight nearby) it walks to the post first.
+   * Spawned at `from` (out of sight nearby) it walks to the post first. With `keeper` (src/life) the
+   * post is that named NPC's: nobody stands there while they are dead, held or somewhere else.
    */
-  private spawnStationMember(def: StationDef, mem: StationMember, x: number, z: number, heading: number, from?: { x: number; z: number }): Npc | null {
+  private spawnStationMember(def: StationDef, mem: StationMember, x: number, z: number, heading: number, from?: { x: number; z: number }, keeper?: string | null): Npc | null {
     const sx = from?.x ?? x;
     const sz = from?.z ?? z;
+    if (keeper) {
+      const kd = this.registry().get(keeper);
+      if (!kd || this.deadNamed.has(keeper) || this.held.has(keeper) || this.staged.has(keeper)) return null;
+      // Still about (walking home when the shop opened again): back to the post.
+      const cur = this.byId.get(keeper);
+      if (cur) {
+        if (cur.dead || cur.scripted || (cur.station && cur.station.id !== def.id)) return null;
+        cur.station = { id: def.id, x, z, face: heading, loop: mem.loop };
+        if (!cur.talking) cur.brain?.next(this.life);
+        return cur;
+      }
+      const k = this.spawnNamed(kd, sx, sz, from ? Math.atan2(x - sx, z - sz) : heading);
+      if (!k) return null;
+      if (mem.prop) this.giveProp(k, mem.prop);
+      if (mem.barks && !kd.barks?.length) k.barkTable = mem.barks;
+      k.station = { id: def.id, x, z, face: heading, loop: mem.loop };
+      k.brain?.next(this.life);
+      return k;
+    }
     const n = this.spawnAmbient(mem.role, sx, sz, from ? Math.atan2(x - sx, z - sz) : heading, { escorts: false, noProp: mem.prop !== undefined });
     if (!n) return null;
     if (mem.prop) this.giveProp(n, mem.prop);
