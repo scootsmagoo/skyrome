@@ -122,6 +122,11 @@ export class InteriorSystem implements System {
     return this.defs.get(id);
   }
 
+  /** Every registered def (the quest route walks their doors). */
+  all(): InteriorDef[] {
+    return [...this.defs.values()];
+  }
+
   /** Build the cell once (its object, colliders and inside doors). False if it cannot be built yet. */
   ensure(id: string): boolean {
     if (this.built.has(id)) return true;
@@ -176,7 +181,11 @@ export class InteriorSystem implements System {
   /** The cell whose local bounds hold the player's feet (3D), or null. */
   current(): string | null {
     const p = this.game.player?.position;
-    if (!p) return null;
+    return p ? this.cellAt(p) : null;
+  }
+
+  /** The cell whose local bounds hold a world point (3D), or null. */
+  cellAt(p: Vec3): string | null {
     for (const def of this.defs.values()) {
       const origin = this.built.get(def.id)?.origin ?? def.origin(this.game);
       if (!origin) continue;

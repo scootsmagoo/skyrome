@@ -39,9 +39,11 @@ The interaction id is `door:<door.id>`, so `dun-columna:in` becomes `door:dun-co
 | --- | --- |
 | `register(def)` | Adds a def (once per id). Outside doors become interactions. |
 | `get(id)` | The def, if registered. |
+| `all()` | Every registered def (the quest route walks their doors: docs/modules/nav.md). |
 | `ensure(id)` | Builds the cell once: object, colliders, inside doors, `afterPlace`. False if it cannot be built yet. Build errors are logged and the cell is skipped. |
 | `dispose(id?)` | Removes a built cell (object, colliders, doors). With no id, removes all cells and the outside doors. |
 | `current()` | The id of the cell whose bounds hold the player's feet, or `null`. |
+| `cellAt(point)` | The id of the cell whose bounds hold a world point, or `null`. |
 | `isInside(id)` | `current() === id`. |
 | `toWorld(id, local)` | A local point in the world. Works before the cell is built. |
 | `spot(id, spotId)` | A named spot in the world: `{ position, heading }`. Builds the cell if needed. |

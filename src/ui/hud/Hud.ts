@@ -16,6 +16,7 @@ import { Compass, type CompassItem } from './Compass';
 import { bearingOfDir, bearingTo, relativeBearing } from './compassMath';
 import { Banners, HitIndicator, Notifications, Subtitles } from './Feed';
 import { QUEST_GUIDE_CSS, QuestGuide, type GuideTarget } from './QuestGuide';
+import { MINIMAP_CSS, Minimap } from './minimap/Minimap';
 import './hud.css';
 
 const dir = new THREE.Vector3();
@@ -38,8 +39,11 @@ export class Hud {
   readonly subtitles = new Subtitles();
   readonly hits = new HitIndicator();
   readonly guide = new QuestGuide();
+  readonly minimap: Minimap;
   /** The tracked quest's next required objective (refreshed with the compass markers). */
   private guideTarget: GuideTarget | null = null;
+  /** The door on the way, when the objective is in another place (reused). */
+  private readonly doorTarget: GuideTarget = { questTitle: '', text: '', x: 0, y: 0, z: 0, npc: false };
 
   private crosshair: HTMLElement;
   private prompt: HTMLElement;
@@ -69,7 +73,8 @@ export class Hud {
     private readonly game: Game,
     private readonly sources: UISources,
   ) {
-    if (typeof document !== 'undefined' && !document.getElementById('hud-quest-guide')) document.head.appendChild(h('style', { id: 'hud-quest-guide' }, QUEST_GUIDE_CSS));
+    if (typeof document !== 'undefined' && !document.getElementById('hud-quest-guide')) document.head.appendChild(h('style', { id: 'hud-quest-guide' }, QUEST_GUIDE_CSS + MINIMAP_CSS));
+    this.minimap = new Minimap(game, sources);
     this.crosshair = h('div', { class: 'hud-crosshair' }, h('i', { class: 'dot' }), h('i', { class: 'ring' }));
     this.promptName = h('div', { class: 'name' });
     this.promptKey = h('span', { class: 'sr-key' });
@@ -98,6 +103,7 @@ export class Hud {
       // Top center stacks instead of overlapping: compass, enemy bar, then banners.
       h('div', { class: 'hud-top' }, this.compass.el, this.target.el, this.banners.el),
       this.notes.el,
+      this.minimap.el,
       this.guide.marker,
       this.guide.tracker,
       this.hits.el,
@@ -112,6 +118,30 @@ export class Hud {
       this.barWrap.stamina,
       this.hint,
     );
+  }
+
+  /** What the compass and the chevron point at: the objective, or the door on the quest route's way to it. */
+  private lead(gt: GuideTarget | null): GuideTarget | null {
+    const r = this.game.questRoute;
+    const leg = gt && r && r.legs.length > 1 ? r.legs[0] : null;
+    if (!gt || !r || !leg || !leg.door || leg.cell !== r.place || !leg.line.n) return gt;
+    const k = (leg.line.n - 1) * 3;
+    const d = this.doorTarget;
+    d.key = gt.key;
+    d.questTitle = gt.questTitle;
+    d.text = gt.text;
+    d.progress = gt.progress;
+    d.target = gt.target;
+    d.x = leg.line.pts[k];
+    d.z = leg.line.pts[k + 2];
+    const y = leg.line.pts[k + 1];
+    d.y = Number.isNaN(y) ? (this.game.heightmap?.heightAt(d.x, d.z) ?? 0) : y;
+    return d;
+  }
+
+  /** The tracked quest's next required objective (live position for a person), or null. */
+  get objective(): Readonly<GuideTarget> | null {
+    return this.guideTarget;
   }
 
   setVisible(v: boolean) {
@@ -164,9 +194,27 @@ export class Hud {
       gt.y = who.position.y;
       gt.z = who.position.z;
     }
-    this.compass.update(heading, p.x, p.z, this.items, !!game.settings.data.compassLatin);
+    // Behind a door (an interior, or out of one): the compass and the chevron lead to the door first.
+    const shown = this.lead(gt);
+    if (shown !== gt) {
+      for (const it of this.items) {
+        if (it.kind !== 'quest' || !it.primary) continue;
+        it.x = shown!.x;
+        it.y = shown!.y;
+        it.z = shown!.z;
+      }
+    }
+    this.compass.update(heading, p.x, p.z, this.items, !!game.settings.data.compassLatin, p.y);
+    // ---- minimap (its key shows or hides it; Settings → Interface has the rest)
+    if (game.input.pressed('minimap')) {
+      const on = !this.minimap.enabled;
+      game.settings.set('minimap', on);
+      game.events.emit('ui:notify', { text: on ? 'Minimap shown' : 'Minimap hidden', kind: 'info' });
+    }
+    setClass(this.el, 'has-minimap', this.minimap.enabled);
+    this.minimap.update(dt, heading, p.x, p.y, p.z, shown, this.items, this.visible);
     const canvas = game.renderer.domElement;
-    this.guide.update(dt, this.guideTarget, cam, canvas.clientWidth || window.innerWidth, canvas.clientHeight || window.innerHeight, p, game.settings.data.objectiveTracker !== false);
+    this.guide.update(dt, shown, cam, canvas.clientWidth || window.innerWidth, canvas.clientHeight || window.innerHeight, p, game.settings.data.objectiveTracker !== false);
 
     // ---- resource bars
     const vitals = sources.vitals?.() ?? null;
@@ -267,11 +315,11 @@ export class Hud {
           }
           if (!pos) continue;
           const primary = o === main;
-          out.push({ key: `q:${q.id}:${o.id}:${primary ? 'p' : 'm'}`, kind: 'quest', x: pos.x, z: pos.z, primary });
+          out.push({ key: `q:${q.id}:${o.id}:${primary ? 'p' : 'm'}`, kind: 'quest', x: pos.x, y: pos.y, z: pos.z, primary });
           if (primary && !this.guideTarget) {
             const y = pos.y ?? this.game.heightmap?.heightAt(pos.x, pos.z) ?? 0;
             const progress = o.count && o.count > 1 ? `${o.progress ?? 0} / ${o.count}` : undefined;
-            this.guideTarget = { questTitle: q.title, text: o.text, progress, x: pos.x, y, z: pos.z, npc: t.kind === 'npc', actorId: t.kind === 'npc' ? t.id : undefined };
+            this.guideTarget = { key: `q:${q.id}:${o.id}`, questTitle: q.title, text: o.text, progress, x: pos.x, y, z: pos.z, npc: t.kind === 'npc', actorId: t.kind === 'npc' ? t.id : undefined, target: t };
           }
         }
       }
