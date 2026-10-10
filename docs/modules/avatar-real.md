@@ -383,3 +383,24 @@ The garments (male / female):
   canvas Safari would composite alpha 0 as black), and the AO pass neither darkens alpha-0 pixels nor counts them as
   occluders (`gfx/post/ao.ts`, `shaders.ts`); their own occlusion is baked.
 - The head module's veil is left out when a baked toga velata exists (`head/gear.ts`, one line).
+- Armpit notches on tunic-only bodies (`paint.ts`): the armpit's front and back folds and the inside of the arm beside
+  the ribs (upper-arm vertices inward of the arm's axis, from 11 cm below the armpit up) take the torso's rules, so
+  the tunic runs on under the arm instead of stopping at the sleeve's hem.
+
+**Budget** (triangles per garment at LOD 0 / 1 / 2, including the hem rims; `baked.test.ts` holds them under
+4500 / 2400 / 520): toga 3753 / 2005 / 420, toga velata 3820 / 2003 / 459, knee tunic 2656 / 1417 / 299, short
+2377 / 1299 / 260, long 3001 / 1581 / 339 (woman's 3044 / 1600 / 339), stola 3404 / 1840 / 380, palla 3144-3157 / 1680-1709 /
+360, paenula 3032 / 1612 / 359, sagum 2693 / 1489 / 320, lacerna 2925 / 1580 / 340. Triangles of an inner layer lying
+under an outer one are dropped (about 100 of the toga's wrap). LOD 0 is drawn within 9 m only, so the Forum's totals
+did not move (`perf.mjs --views forum`, procedural against baked: 899/2.58M 711/2.13M 725/2.12M 805/2.25M draws/triangles
+against 897/2.58M 713/2.12M 719/2.09M 796/2.22M; geometry +6 MB; the GLBs are 1.5 MB + 0.5 MB). Binding all garments at
+load costs about 0.4 s (spread between frames); a person's LOD 0 fit about 1.7 ms (LOD 1 0.8, LOD 2 0.15).
+
+**Known limits** (C3a-2): a sprint still lifts the back calf out below a long hem (it shows in the under-tunic's painted
+colour) and a knee at full stride can dent a stola's front; the cloth is skinned drape, with no secondary motion (the
+sinus swings with the hips); the toga has no separate umbo pouch; the lacinia and the palla's end hang as crumpled
+bands; the stola reads as straight organ-pipe folds; tunic skirts flare a little at the sides where the simulation had
+the arms swung out; beyond 55 m (LOD 3) the painted body garments return (a toga becomes white legs), as before; women's
+togas and cloaks and men's stolas stay procedural (no role wears them); the shadow pass does not push the cloth out of the
+legs. A simulation is chaotic: a small change to garments.py can change a drape completely (it is deterministic for the
+same inputs), so look at the `--preview` renders after every change.
