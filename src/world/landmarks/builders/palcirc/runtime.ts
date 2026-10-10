@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import type { Game, System } from '../../../../core/Game';
 import type { MeshBuilder } from '../../../../gfx/MeshBuilder';
 import type { LightRequest } from '../../../lights/LightPool';
+import { AUDIT, auditInstanced } from '../../../../dev/audit/geomAudit';
 
 /**
  * Turns every per-material mesh of `b` into an InstancedMesh with the given instance matrices
@@ -29,6 +30,7 @@ export function instanced(b: MeshBuilder, name: string, matrices: THREE.Matrix4[
     im.computeBoundingSphere();
     g.add(im);
   }
+  if (AUDIT) auditInstanced(name, g, matrices);
   return g;
 }
 

@@ -125,3 +125,49 @@ copies of the Capena spawn now agree.
   reachable from this session).
 - The unnamed lowlands, walls and aqueducts could be run through the same test if they ever get labels.
 - Terrace parentheticals could move to an `id` convention if they are ever exposed.
+
+## M5b re-audit (rework wave 3, 2026-10-10)
+
+Every name the player can see was read again: the 197 landmarks (English, Latin, and the Latin as the
+banner prints it: `toInscription` upper-cases and turns U to V and J to I, so "Basilica Iulia" reads
+BASILICA · IVLIA; every Latin line is stored with I and U and the banner is the only place the
+convention lives, so the lines stay consistent), the named hills and valleys, every road, gate, bridge
+and aqueduct label on the map, `places.ts` and `locations.ts` spots, and the player-facing lines in
+`src/content`, `src/npc`, `src/dialogue` and `src/quests` that mention a place. Method and honesty as
+in the first audit: judged from Platner and Ashby, the Regionary Catalogues and LTUR as remembered; no
+page was fetched this time, so each change below is a correction of an anachronism the repository's
+own rules call out, not a new claim of attestation.
+
+### Changed
+
+| Where | Was | Now | Why |
+|---|---|---|---|
+| landmark `aqua-traiana-terminus` | Aqua Traiana Terminal and Janiculum Mills | Terminus of Trajan's Aqueduct | The atlas' own note says the excavated Janiculum mills are mostly later; the aqueduct (AD 109) is what is certain. "Terminal" is modern usage |
+| road `via-aurelia` Latin | Via Aurelia Vetus | Via Aurelia | "Vetus" distinguishes it from the Via Aurelia Nova, which is Caracalla's (after AD 113) |
+| road `road-between-palatine-and-caelian` | Triumphal Road, Capena Gate to the Colosseum | Triumphal Road, Capena Gate to the Amphitheatre | "Colosseum" is a medieval name; the same word was also in `combat/danger.ts` ("the road to the Colosseum"), a sailor's bark ("the whole Colosseum") and two district names |
+| bark, danger spot, district names | Colosseum | amphitheatre (district: "Amphitheatre valley", Latin Vallis Amphitheatri was already there) | same |
+
+### Read and left, with the reason
+
+- "Basilica Paulli" in content spots, dialogue and builders against "Basilica Aemilia" on the banner:
+  Pliny (NH 36.102) says Paulli; the atlas `codexNote` says both. Left as is; the banner and map agree.
+- "Basilica Argentaria" (Bankers' Hall): the name is attested only in the 4th-century catalogues. The
+  building (a Trajanic hall by the Forum of Caesar) is a hypothesis. Flag for wave 4; not changed.
+- "Domus Augustana", "Domus Flavia" (already moved to "Imperial Palace, State Halls"), "Pons
+  Neronianus" and "Aventinus Minor": plausible, not provable for 113; left, as in the first audit.
+- "Via Salaria Vetus": the Old Salt Way is the Via Salaria itself (the "Nova" is later, Hadrianic or
+  after); left.
+- "Via Triumphalis" is the Latin of two roads (the Vatican one and the valley road between the Palatine
+  and the Caelian): the second is a conjecture, noted here, not changed.
+- Region names (Porta Capena, Isis et Serapis, Templum Pacis, Palatium...) are the Regionary
+  headings, 4th century; they are used only as out-of-world labels (the atlas says so).
+- Nothing built after AD 113 appears: no Aurelian Walls, Venus and Roma, Hadrian's Mausoleum, Arch of
+  Constantine, Baths of Caracalla or Diocletian. The Pantheon reads "burned; rebuilding begins".
+- Lines in `talk.ts`, `barks.ts` and the folk topics that name places (Capitol, Pantheon under
+  hoardings, "lime for the Pantheon", Hadrian in Athens) are consistent with 113 (the Pantheon burned in 110; Hadrian was archon at Athens in 112).
+
+### Tests
+
+`tests/names.test.ts` now also reads every road, gate, bridge and aqueduct label: no later names
+(Colosseum, Coliseum, "Aurelia Vetus", "Aurelia Nova", Rocca, Botteghe, Mills, Aurelian Wall,
+Trastevere), no Italian, no notes.

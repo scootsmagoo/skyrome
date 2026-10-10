@@ -36,7 +36,7 @@ export const DANGER_SITES: DangerSite[] = [
   { id: 'circus-north-capena', where: 'the street under the Palatine', road: 'street-north-of-circus', t: 0.78 },
   { id: 'circus-north-velabrum', where: 'the street under the Palatine', road: 'street-north-of-circus', t: 0.3 },
   { id: 'vicus-tuscus-south', where: 'the Vicus Tuscus', road: 'vicus-tuscus', t: 0.72 },
-  { id: 'capena-colosseum', where: 'the road to the Colosseum', road: 'road-between-palatine-and-caelian', t: 0.45 },
+  { id: 'capena-colosseum', where: 'the road to the amphitheatre', road: 'road-between-palatine-and-caelian', t: 0.45 },
 ];
 
 /** The muggers' night: dusk to first light (docs/GDD.md §17.2: dawn breaks at 06:10 on the first morning). */

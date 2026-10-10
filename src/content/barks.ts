@@ -41,7 +41,7 @@ export const DISTRICTS: { id: DistrictId; name: string; latin: string; anchors: 
   { id: 'dist-palatium', name: 'Palatine', latin: 'Palatium', anchors: ['domus-flavia', 'domus-augustana', 'domus-tiberiana', 'casa-romuli', 'temple-apollo-palatinus', 'temple-magna-mater'] },
   { id: 'dist-fora-imperialia', name: 'Imperial Fora', latin: 'Fora Caesarum', anchors: ['forum-trajan', 'basilica-ulpia', 'column-trajan', 'markets-trajan', 'forum-augustus', 'forum-caesar', 'forum-nerva', 'templum-pacis'] },
   { id: 'dist-velia', name: 'Velia and the upper Sacra Via', latin: 'Velia', anchors: ['arch-titus', 'colossus-sol', 'velia-vestibule', 'horrea-piperataria', 'porticus-margaritaria'] },
-  { id: 'dist-vallis-colossei', name: 'Colosseum valley', latin: 'Vallis Amphitheatri', anchors: ['colosseum', 'meta-sudans', 'ludus-magnus', 'baths-titus', 'curiae-veteres'] },
+  { id: 'dist-vallis-colossei', name: 'Amphitheatre valley', latin: 'Vallis Amphitheatri', anchors: ['colosseum', 'meta-sudans', 'ludus-magnus', 'baths-titus', 'curiae-veteres'] },
   { id: 'dist-circus-maximus', name: 'Circus Maximus and the Porta Capena', latin: 'Circus Maximus', anchors: ['circus-maximus', 'obelisk-circus-maximus', 'pulvinar', 'arch-titus-circus', 'porta-capena'] },
   { id: 'dist-velabrum-boarium', name: 'Velabrum and the Forum Boarium', latin: 'Velabrum', anchors: ['forum-boarium', 'temple-portunus', 'temple-hercules-victor', 'ara-maxima', 'horrea-agrippiana', 'portus-tiberinus', 'sant-omobono-temples'] },
   { id: 'dist-forum-holitorium', name: 'Forum Holitorium and the Tiber Island', latin: 'Forum Holitorium', anchors: ['forum-holitorium', 'theatre-marcellus', 'temple-aesculapius', 'temple-janus-holitorium', 'temple-spes'] },

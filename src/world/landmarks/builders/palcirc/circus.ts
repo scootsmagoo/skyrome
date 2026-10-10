@@ -467,7 +467,7 @@ export interface FacadeResult {
   dressed: { bay: FacadeBay; kind: string }[];
 }
 
-export function buildFacade(b: MeshBuilder, gaps: CircusGaps, detail: 'high' | 'low'): FacadeResult {
+export function buildFacade(b: MeshBuilder, gaps: CircusGaps, detail: 'high' | 'low', ground?: (x: number, z: number) => number): FacadeResult {
   const group = new THREE.Group();
   group.name = 'circus-facade';
   const bays = [...facadeBays([gaps.channel[0], gaps.channel[1]]), ...carceresFaceBays()];
@@ -527,7 +527,10 @@ export function buildFacade(b: MeshBuilder, gaps: CircusGaps, detail: 'high' | '
       const wb = new MeshBuilder();
       make(new Draw(wb));
       const pick = shopsOut.filter((u, j) => (name === 'cook' ? u.kind === 'popina' : u.kind === 'taberna' && j % 4 === (k === 0 ? 1 : 3)));
-      add(wb, `circus-wares-${name}`, pick.map((u) => facing(u.bay.x, 0, u.bay.z, u.bay.nx, u.bay.nz)));
+      // The wares stand on the sidewalk, which follows the ground (buildSidewalk's yAt), not on the
+      // pad level: where the ground climbs they sat under the paving (the crawl's buried props).
+      const onWalk = (u: { bay: FacadeBay }) => (ground ? Math.max(0.14, ground(u.bay.x + u.bay.nx * 1.2, u.bay.z + u.bay.nz * 1.2) + 0.12) : 0);
+      add(wb, `circus-wares-${name}`, pick.map((u) => facing(u.bay.x, onWalk(u), u.bay.z, u.bay.nx, u.bay.nz)));
       for (const u of pick) dressed.push({ bay: u.bay, kind: name });
     }
   }

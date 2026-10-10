@@ -209,12 +209,17 @@ export function lifeWork(plan: CityPlan, H: HeightFn, inArea: (x: number, z: num
         // Level ground only (stalls on a 1:5 slope would float).
         const h0 = H(p[0] - t[0] * 1.2, p[1] - t[1] * 1.2), h1 = H(p[0] + t[0] * 1.2, p[1] + t[1] * 1.2);
         if (Math.abs(h1 - h0) > 0.5) continue;
+        // ...and across the frontage too: a stall or a pile of goods backed into a Palatine slope
+        // sank a metre into it (the crawl's buried props), and a prop's origin sits at the lowest of
+        // the samples below, so the three heights must agree to a hand's breadth.
+        const hb = H(p[0] - n[0] * 1.3, p[1] - n[1] * 1.3), hf = H(p[0] + n[0] * 1.1, p[1] + n[1] * 1.1);
+        if (Math.abs(hf - hb) > 0.5) continue;
         const corridor = plan.corridor(p[0], p[1]);
         const item = rng.weighted(mix(lm.category, corridor));
         if (item === 'none') continue;
         remember(p);
         count(item);
-        const y = Math.min(h0, h1, H(p[0], p[1])) + 0.04;
+        const y = H(p[0], p[1]) + 0.04; // (placeProp fits each prop to the ground under its footprint)
         const toStreet = Math.atan2(n[0], n[1]);
         const id = `${lm.id}:life${j}_${k}`;
         if (item === 'tree') {
@@ -245,7 +250,11 @@ export function lifeWork(plan: CityPlan, H: HeightFn, inArea: (x: number, z: num
             // The stall's front (local −z) faces the street.
             placeProp(d, 'stall', p[0], y, p[1], toStreet + Math.PI, { rng: r, ground: H });
             if (lit) placeProp(d, 'oil_lamp', p[0] + n[0] * 0.2, y + 0.93, p[1] + n[1] * 0.2, toStreet, { collide: false });
-            if (r.chance(0.6)) placeProp(d, r.pick(['basket', 'crate', 'sack', 'amphora_globular'] as const), p[0] - n[0] * 1.2 + t[0] * r.range(-0.9, 0.9), y, p[1] - n[1] * 1.2 + t[1] * r.range(-0.9, 0.9), r.range(0, 6), { rng: r, collide: false, ground: H });
+            if (r.chance(0.6)) {
+              const kind = r.pick(['basket', 'crate', 'sack', 'amphora_globular'] as const);
+              const gx = p[0] - n[0] * 1.2 + t[0] * r.range(-0.9, 0.9), gz = p[1] - n[1] * 1.2 + t[1] * r.range(-0.9, 0.9);
+              placeProp(d, kind, gx, H(gx, gz) + 0.04, gz, r.range(0, 6), { rng: r, collide: false, ground: H });
+            }
           });
         } else if (item === 'goods' || item === 'amphorae') {
           spots.push({ id, kind: 'container', position: new THREE.Vector3(p[0] + n[0] * 1.1, y, p[1] + n[1] * 1.1), heading: toStreet + Math.PI, tag: item === 'amphorae' ? 'amphora_stack' : 'goods' });
@@ -255,7 +264,12 @@ export function lifeWork(plan: CityPlan, H: HeightFn, inArea: (x: number, z: num
             if (item === 'amphorae') placeProp(d, r.chance(0.5) ? 'amphora_stack' : 'amphora_rack', p[0], y, p[1], toStreet + Math.PI, { rng: r, ground: H });
             else {
               const kinds: PropKind[] = ['crate', 'sack', 'basket', 'dolium', 'crate', 'sack'];
-              for (let i = 0; i < 4; i++) placeProp(d, r.pick(kinds), p[0] + t[0] * r.range(-1.3, 1.3) + n[0] * r.range(-0.6, 0.6), y, p[1] + t[1] * r.range(-1.3, 1.3) + n[1] * r.range(-0.6, 0.6), r.range(0, 6), { rng: r, collide: i < 2, ground: H });
+              for (let i = 0; i < 4; i++) {
+                // (each at the height of the ground where it stands, not of the cluster's middle)
+                const kind = r.pick(kinds);
+                const gx = p[0] + t[0] * r.range(-1.3, 1.3) + n[0] * r.range(-0.6, 0.6), gz = p[1] + t[1] * r.range(-1.3, 1.3) + n[1] * r.range(-0.6, 0.6);
+                placeProp(d, kind, gx, H(gx, gz) + 0.04, gz, r.range(0, 6), { rng: r, collide: i < 2, ground: H });
+              }
             }
           });
         } else if (item === 'bench') {

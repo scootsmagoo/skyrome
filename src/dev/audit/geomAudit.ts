@@ -61,7 +61,7 @@ interface Record {
 const records = new Map<string, Record>();
 
 /** Hung or wall-mounted props: no surface under them is expected. */
-const HUNG = /torch|bracket|lamp|awning|sign|hang|shelf|garland|wreath|lantern|banner|sconce/;
+const HUNG = /torch|bracket|oil_lamp|awning|sign|hang|shelf|garland|wreath|lantern|banner|sconce/;
 
 /** Called by MeshBuilder.build (audit only). */
 export function auditRecordBuild(name: string, group: THREE.Object3D, parts: { geometry: THREE.BufferGeometry; material: string }[], props: PropRec[]) {
@@ -94,6 +94,33 @@ export function auditRecordBuild(name: string, group: THREE.Object3D, parts: { g
   records.set(name, { name, group, faces, props: props.filter((p) => !HUNG.test(p.kind)) });
 }
 
+/**
+ * An instanced build (a part drawn many times, palcirc `instanced`): its faces and props were
+ * recorded in the template's own frame, so they are replaced by one copy per instance matrix
+ * (the landmark's local frame) and hang from `group`, which the landmark adds to its own.
+ */
+export function auditInstanced(name: string, group: THREE.Object3D, matrices: readonly THREE.Matrix4[]) {
+  const r = records.get(name);
+  if (!r) return;
+  const v = new THREE.Vector3();
+  const props: PropRec[] = [];
+  const faces: FaceSet[] = [];
+  for (const mm of matrices) {
+    for (const p of r.props) props.push({ ...p, p: p.p.clone().applyMatrix4(mm) });
+  }
+  for (const f of r.faces) {
+    const up = new Float32Array(f.up.length * matrices.length);
+    matrices.forEach((mm, k) => {
+      for (let i = 0; i < f.up.length; i += 3) {
+        v.set(f.up[i], f.up[i + 1], f.up[i + 2]).applyMatrix4(mm);
+        up.set([v.x, v.y, v.z], k * f.up.length + i);
+      }
+    });
+    faces.push({ mat: f.mat, src: f.src, up });
+  }
+  records.set(name, { name, group, faces, props });
+}
+
 export function auditRecordCount() {
   return records.size;
 }
@@ -124,6 +151,55 @@ export interface Finding {
   at: [number, number, number];
 }
 
+/** The world-space copy of a face set (cached; groups do not move after placement), transformed by `m` on first use. */
+function worldOf(f: FaceSet, m: THREE.Matrix4) {
+  if (f.world) return;
+  const a = new THREE.Vector3();
+  const w = new Float32Array(f.up.length);
+  let bx0 = Infinity, bx1 = -Infinity, bz0 = Infinity, bz1 = -Infinity;
+  for (let i = 0; i < w.length; i += 3) {
+    a.set(f.up[i], f.up[i + 1], f.up[i + 2]).applyMatrix4(m);
+    w[i] = a.x;
+    w[i + 1] = a.y;
+    w[i + 2] = a.z;
+    bx0 = Math.min(bx0, a.x);
+    bx1 = Math.max(bx1, a.x);
+    bz0 = Math.min(bz0, a.z);
+    bz1 = Math.max(bz1, a.z);
+  }
+  f.world = w;
+  f.box = [bx0, bx1, bz0, bz1];
+}
+
+/**
+ * Every walkable-flat surface (up-facing triangle) over the point (x, z): its height, material and
+ * the build that made it, highest first. For debugging a floating or buried prop from the console
+ * (`__audit.surfacesAt(x, z)`) and for the prop check below, which is exact at the prop's base.
+ */
+export function surfacesAt(x: number, z: number): { y: number; mat: string; src: string }[] {
+  const out: { y: number; mat: string; src: string }[] = [];
+  const m = new THREE.Matrix4();
+  for (const r of records.values()) {
+    m.copy(r.group?.matrixWorld ?? new THREE.Matrix4());
+    for (const f of r.faces) {
+      worldOf(f, m);
+      const [fx0, fx1, fz0, fz1] = f.box!;
+      if (x < fx0 || x > fx1 || z < fz0 || z > fz1) continue;
+      const t = f.world!;
+      for (let i = 0; i < t.length; i += 9) {
+        const d = (t[i + 5] - t[i + 8]) * (t[i] - t[i + 6]) + (t[i + 6] - t[i + 3]) * (t[i + 2] - t[i + 8]);
+        if (Math.abs(d) < 1e-9) continue;
+        const l1 = ((t[i + 5] - t[i + 8]) * (x - t[i + 6]) + (t[i + 6] - t[i + 3]) * (z - t[i + 8])) / d;
+        const l2 = ((t[i + 8] - t[i + 2]) * (x - t[i + 6]) + (t[i] - t[i + 6]) * (z - t[i + 8])) / d;
+        const l3 = 1 - l1 - l2;
+        if (l1 < -1e-6 || l2 < -1e-6 || l3 < -1e-6) continue;
+        out.push({ y: l1 * t[i + 1] + l2 * t[i + 4] + l3 * t[i + 7], mat: f.mat, src: f.src || r.name });
+      }
+    }
+  }
+  return out.sort((p, q) => q.y - p.y);
+}
+
 export function analyzeArea(cx: number, cz: number, radius: number, heightAt: (x: number, z: number) => number): Finding[] {
   const C = 0.5;
   const n = Math.ceil((radius * 2) / C);
@@ -139,25 +215,10 @@ export function analyzeArea(cx: number, cz: number, radius: number, heightAt: (x
       if (Math.abs(w.x - cx) < radius - 2 && Math.abs(w.z - cz) < radius - 2) props.push({ ...p, src: p.src || r.name, w });
     }
     for (const f of r.faces) {
-      if (!f.world) {
-        const w = new Float32Array(f.up.length);
-        let bx0 = Infinity, bx1 = -Infinity, bz0 = Infinity, bz1 = -Infinity;
-        for (let i = 0; i < w.length; i += 3) {
-          a.set(f.up[i], f.up[i + 1], f.up[i + 2]).applyMatrix4(m);
-          w[i] = a.x;
-          w[i + 1] = a.y;
-          w[i + 2] = a.z;
-          bx0 = Math.min(bx0, a.x);
-          bx1 = Math.max(bx1, a.x);
-          bz0 = Math.min(bz0, a.z);
-          bz1 = Math.max(bz1, a.z);
-        }
-        f.world = w;
-        f.box = [bx0, bx1, bz0, bz1];
-      }
+      worldOf(f, m);
       const [fx0, fx1, fz0, fz1] = f.box!;
       if (fx1 < x0 || fx0 > x0 + n * C || fz1 < z0 || fz0 > z0 + n * C) continue;
-      const t = f.world;
+      const t = f.world!;
       const src = f.src || r.name;
       for (let i = 0; i < t.length; i += 9) {
         a.set(t[i], t[i + 1], t[i + 2]);
@@ -297,16 +358,28 @@ export function analyzeArea(cx: number, cz: number, radius: number, heightAt: (x
       tally.set(k, f);
     }
   }
-  // Props: base against the surface under it.
+  // Props: base against the surface under it, exact at the base point (not at the cell centre: a
+  // prop on the edge of a plaza or a kerb is judged by what lies under it).
   for (const p of props) {
-    const i = Math.floor((p.w.x - x0) / C), j = Math.floor((p.w.z - z0) / C);
-    if (i < 0 || j < 0 || i >= n || j >= n) continue;
-    const k = j * n + i;
-    const below = (cells[k] ?? []).filter((s) => s.y <= p.w.y + 0.05).map((s) => s.y);
-    const ground = Math.max(terr[k], ...below);
+    if (p.w.x < x0 || p.w.z < z0 || p.w.x > x0 + n * C || p.w.z > z0 + n * C) continue;
+    const terrain = heightAt(p.w.x, p.w.z);
+    const here = surfacesAt(p.w.x, p.w.z);
+    // (a prop a hand's breadth into its support, a basket sunk into a crate's top, still stands on it)
+    const below = here.filter((s) => s.y <= p.w.y + 0.15).map((s) => s.y);
+    const ground = Math.max(terrain, ...below);
     const gap = p.w.y - ground;
-    if (gap > 0.12) note('floating', `${p.src}:${p.kind}`, p.w.x, p.w.y, p.w.z, gap);
-    else if (gap < -0.25 && terr[k] - p.w.y > 0.25) note('buried', `${p.src}:${p.kind}`, p.w.x, p.w.y, p.w.z);
+    // A prop resting on another (a basket on a crate, a sack on a pile) has a round or tilted top under
+    // it, which the flat-face surfaces above do not record: another base close under it is its support.
+    const onProp = () => props.some((q) => q !== p && Math.hypot(q.w.x - p.w.x, q.w.z - p.w.z) < 0.8 && q.w.y < p.w.y && q.w.y > p.w.y - 1.2);
+    if (gap > 0.12 && !onProp()) note('floating', `${p.src}:${p.kind}`, p.w.x, p.w.y, p.w.z, gap);
+    else if (gap < -0.25 && terrain - p.w.y > 0.25 && terrain - p.w.y < 2) {
+      // (More than 2 m under the terrain is a dock below a quay or a pit, not a burial.)
+      // Indoors (a floor under it and a ceiling or roof over it) the terrain is the building's
+      // problem (hill showing through its walls), not the prop's.
+      const floor = below.some((y) => Math.abs(y - p.w.y) < 0.15);
+      const roofed = here.some((s) => s.y > p.w.y + 1.8 && s.y < p.w.y + 9);
+      if (!(floor && roofed)) note('buried', `${p.src}:${p.kind}`, p.w.x, p.w.y, p.w.z, terrain - p.w.y);
+    }
   }
   return [...tally.values()];
 }

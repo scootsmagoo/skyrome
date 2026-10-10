@@ -26,6 +26,8 @@ export interface Grounding {
   /** Ground gradient the prop leans with (rise per metre, after the cap), in the caller's x / z. */
   gx: number;
   gz: number;
+  /** The surface height under the prop's origin, as `ground` reports it (so a caller can tell if its own y lay under it). */
+  origin: number;
   /** Worst gap between the prop's base and the ground under a footprint corner (m, + = floating). */
   worstGap: number;
 }
@@ -45,7 +47,7 @@ export function groundProp(ground: (x: number, z: number) => number, x: number, 
   const gOrigin = ground(x, z);
   const gs = pts.map(([px, pz]) => ground(px, pz));
   const gm = ground(mx, mz);
-  if (!Number.isFinite(gOrigin) || !Number.isFinite(gm) || gs.some((g) => !Number.isFinite(g))) return { dy: 0, gx: 0, gz: 0, worstGap: 0 };
+  if (!Number.isFinite(gOrigin) || !Number.isFinite(gm) || gs.some((g) => !Number.isFinite(g))) return { dy: 0, gx: 0, gz: 0, origin: Number.isFinite(gOrigin) ? gOrigin : -Infinity, worstGap: 0 };
   const mean = (gs[0] + gs[1] + gs[2] + gs[3] + gm) / 5;
   // Least squares g = mean + gx dx + gz dz over the corners (the centre has dx = dz = 0).
   let sxx = 0, sxz = 0, szz = 0, sxg = 0, szg = 0;
@@ -76,5 +78,5 @@ export function groundProp(ground: (x: number, z: number) => number, x: number, 
   const y0 = plane(x, z) + sink;
   let worstGap = 0;
   for (let i = 0; i < 4; i++) worstGap = Math.max(worstGap, plane(pts[i][0], pts[i][1]) + sink - gs[i]);
-  return { dy: y0 - gOrigin, gx, gz, worstGap };
+  return { dy: y0 - gOrigin, gx, gz, origin: gOrigin, worstGap };
 }

@@ -49,7 +49,7 @@ const DISTRICTS: readonly DistrictDef[] = [
   },
   {
     id: 'dist-vallis-colossei',
-    name: 'Colosseum valley',
+    name: 'Amphitheatre valley',
     lowlands: ['colosseum-valley', 'labicana-valley-west'],
     density: 0.85,
     weights: { citizen: 10, 'citizen-woman': 4, porter: 3, merchant: 4, artisan: 2, soldier: 2, idler: 3, beggar: 1, child: 3, elder: 1, foreigner: 3 },

@@ -4,7 +4,7 @@
  * Latin line that is Latin. Research and citations: docs/research/names-audit.md.
  */
 import { describe, expect, it } from 'vitest';
-import { HILLS, LANDMARKS, ROADS } from '../src/data/atlas';
+import { AQUEDUCTS, BRIDGES, GATES, HILLS, LANDMARKS, ROADS } from '../src/data/atlas';
 import { CONTENT_LOCATIONS, FRONT_SPOTS, WORLD_SPOTS } from '../src/content/places';
 import { atlasLocations, displayLatin, displayName, hillLocation, lowlandLocations, namedHills } from '../src/game/locations';
 import { AtlasMapSource, mapLabels, mapLandmarks } from '../src/game/mapSource';
@@ -122,5 +122,38 @@ describe('name pipeline', () => {
     }
     const src = new AtlasMapSource();
     for (const r of src.roads) expect(r.name, r.name).not.toMatch(/[()?]/);
+  });
+});
+
+describe('roads, gates, bridges and aqueducts (M5b audit)', () => {
+  /** Later names and labels that must not reach the map or the in-world lines. */
+  const LATER = ['Colosseum', 'Coliseum', 'Aurelia Vetus', 'Aurelia Nova', 'Rocca', 'Botteghe', 'Mills', 'Aurelian Wall', 'Trastevere'];
+  const all = [
+    ...ROADS.map((r) => ['road ' + r.id, r.name, r.latin ?? ''] as const),
+    ...GATES.map((g) => ['gate ' + g.id, g.name, g.latin] as const),
+    ...BRIDGES.map((b) => ['bridge ' + b.id, b.name, b.latin] as const),
+    ...AQUEDUCTS.filter((a) => a.kind !== 'underground').map((a) => ['aqueduct ' + a.id, a.name, a.latin] as const),
+  ];
+
+  it('no later name or label appears in a road, gate, bridge or aqueduct name', () => {
+    for (const [id, en, la] of all) {
+      for (const bad of LATER) {
+        expect(en, `${id}: "${en}"`).not.toContain(bad);
+        expect(la, `${id}: "${la}"`).not.toContain(bad);
+      }
+    }
+  });
+
+  it('their Latin is not Italian and carries no notes once displayed', () => {
+    for (const [id, , la] of all) {
+      expect(la, id).not.toMatch(ITALIAN);
+      expect(displayLatin(la) ?? '', id).not.toMatch(/[()?]/);
+    }
+  });
+
+  it('the entries renamed in the audit read as the ancient ones', () => {
+    expect(ROADS.find((r) => r.id === 'via-aurelia')?.latin).toBe('Via Aurelia');
+    expect(ROADS.find((r) => r.id === 'road-between-palatine-and-caelian')?.name).not.toMatch(/Colosseum/);
+    expect(LANDMARKS.find((l) => l.id === 'aqua-traiana-terminus')?.name).not.toMatch(/Mills/);
   });
 });

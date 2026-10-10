@@ -202,19 +202,36 @@ function piazza(b: MeshBuilder, p: LotPlan, H: HeightFn, rng: Rng, spots: Spot[]
   const d = new Draw(b, new THREE.Matrix4().makeTranslation(c[0], y, c[1]).multiply(new THREE.Matrix4().makeRotationY(p.rotationY)));
   const add = (kind: SpotKind, lx: number, lz: number, facing: number, tag?: string) =>
     spots.push({ id: `${p.id}:${kind}${spots.length}`, kind, position: d.point(lx, 0, lz), facing: facing + p.rotationY, tag });
-  if (rng.chance(0.55)) {
-    // The jet lands 0.7 m in front of the spout pillar, at the water line (lacus frame is turned by π).
-    const jet = d.point(0, 0.74, p.obb.hv * 0.25 - 0.7);
-    registerSpray(p.id, jet.x, jet.y, jet.z);
-    for (const s of lacus(d.at(0, 0, p.obb.hv * 0.25, Math.PI), rng)) add('fountain', -s.x, p.obb.hv * 0.25 - s.z, s.facing + Math.PI);
-  } else {
-    compitalShrine(d.at(0, 0, p.obb.hv * 0.4, Math.PI), rng);
-    add('shrine', 0, p.obb.hv * 0.4 - 1.8, 0, 'compitum');
-  }
   const gnd = groundIn(d, (x, z) => H(x, z) + sw * 0.5 + 0.05);
+  // A fixture is a level, rigid thing standing on a draped plaza: it stands on the ground under its
+  // base a third of the way up its fall (the high side sinks in a little, the low side floats a
+  // little: the crawl's floating altars), and a square draped over a steep bank (more than 0.8 m of
+  // fall across the fixture's own footprint) gets none (a shrine hung over a cliff).
+  const fixture = (zc: number, half: number): number | null => {
+    let lo = Infinity, hi = -Infinity;
+    for (const [sx, sz] of [[0, 0], [-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      const g = gnd(sx * half, zc + sz * half);
+      lo = Math.min(lo, g);
+      hi = Math.max(hi, g);
+    }
+    return hi - lo > 0.8 ? null : lo + 0.3 * (hi - lo);
+  };
+  const fz = p.obb.hv * 0.25, sz = p.obb.hv * 0.4;
+  const fountain = rng.chance(0.55);
+  const yFix = fountain ? fixture(fz, 1.4) : fixture(sz, 1.4);
+  if (yFix !== null && fountain) {
+    // The jet lands 0.7 m in front of the spout pillar, at the water line (lacus frame is turned by π).
+    const jet = d.point(0, 0.74 + yFix, fz - 0.7);
+    registerSpray(p.id, jet.x, jet.y, jet.z);
+    for (const s of lacus(d.at(0, yFix, fz, Math.PI), rng)) add('fountain', -s.x, fz - s.z, s.facing + Math.PI);
+  } else if (yFix !== null) {
+    compitalShrine(d.at(0, yFix, sz, Math.PI), rng);
+    add('shrine', 0, sz - 1.8, 0, 'compitum');
+  }
   for (const s of [-1, 1]) {
     if (!rng.chance(0.7) || noProps) continue;
     const lx = s * (p.obb.hu - 1.2);
+    if (Math.abs(gnd(lx + 1.2, 0) - gnd(lx - 1.2, 0)) > 0.5 || Math.abs(gnd(lx, 1.2) - gnd(lx, -1.2)) > 0.5) continue; // not into a bank
     placeProp(d, 'bench_masonry', lx, gnd(lx, 0), 0, s * Math.PI / 2, { variant: 0, ground: gnd });
     add('bench', lx - s * 0.5, 0, -s * Math.PI / 2);
   }

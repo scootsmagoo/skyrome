@@ -757,7 +757,9 @@ export function placeProp(d: Draw, kind: PropKind, x: number, y: number, z: numb
     const k = o.scale ?? 1;
     const bb = model.bounds;
     const g = groundProp(o.ground, x, z, rotY, { minX: bb.min.x * k, maxX: bb.max.x * k, minZ: bb.min.z * k, maxZ: bb.max.z * k });
-    y += g.dy;
+    // The caller's y may lie under the ground at the origin (a stall set at the lowest of three
+    // samples on a slope): a grounded prop never starts below the ground it stands on.
+    y += g.dy + Math.max(0, g.origin - y);
     if (Math.hypot(g.gx, g.gz) > 0.01) tilt = new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(UP, new THREE.Vector3(-g.gx, 1, -g.gz).normalize()));
   }
   const m = d.m.clone().multiply(new THREE.Matrix4().makeTranslation(x, y, z));
