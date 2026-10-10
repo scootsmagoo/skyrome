@@ -160,6 +160,10 @@ const MAP_FRAGMENT = /* glsl */ `
     // Rising damp: the lowest handspan stays wet and dark, with a green-black bloom where it is shaded.
     float skDamp = ( 1.0 - smoothstep( 0.02, 0.18 + 0.22 * skNoise( vec3( vSkWorld.x * 1.9, 0.0, vSkWorld.z * 1.9 ) + 23.0 ), max( skH, 0.0 ) ) ) * skVert * skWeather * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
     diffuseColor.rgb *= 1.0 - 0.38 * skDamp;
+    // Contact grime: a tight dark line where wall meets ground, with splash flecks just above it.
+    float skCon = ( 1.0 - smoothstep( 0.0, 0.07 + 0.05 * skNoise( vec3( vSkWorld.x * 3.1, 0.0, vSkWorld.z * 3.1 ) + 47.0 ), max( skH, 0.0 ) ) ) * skVert * skWeather * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
+    float skSpl = smoothstep( 0.55, 0.75, skNoise( vSkWorld * 23.0 + 5.0 ) ) * ( 1.0 - smoothstep( 0.05, 0.45, max( skH, 0.0 ) ) ) * skVert * skWeather * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
+    diffuseColor.rgb *= ( 1.0 - 0.45 * skCon ) * ( 1.0 - 0.3 * skSpl );
     #ifdef SK_FLAKE
     {
       // Plaster lost to weather: ragged patches, most of them low on the wall, show the brick or tufa below.
@@ -353,5 +357,5 @@ export function applyShaderPatch(
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n#ifdef SK_WEAR\nroughnessFactor *= 1.0 - 0.25 * skWearK;\n#endif\n#ifdef SK_PUDDLE\nroughnessFactor = mix( roughnessFactor, 0.07, skPuddleK );\n#endif\n#ifdef SK_FLAKE\nroughnessFactor = mix( roughnessFactor, 0.95, skFlakeK );\n#endif')
       .replace('#include <normal_fragment_maps>', normalFragmentMaps());
   };
-  material.customProgramCacheKey = () => 'skyrome-macro-v6';
+  material.customProgramCacheKey = () => 'skyrome-macro-v7';
 }

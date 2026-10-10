@@ -102,3 +102,8 @@ builds every landmark these builders handle at both detail levels and checks bud
 - Not done: step and kerb edge wear. A shader cannot see a tread's edge (box-projected UVs carry no
   edge distance, and batching drops extra attributes), so it needs geometry (a worn nosing strip in
   `stairs()`); wall-base grime already exists as `weather` (grime band, damp, moss).
+
+### Edge wear and contact grime (R4a, review pass)
+- `treadWear()` in `src/arch/common/stairs.ts` (called by `stairs()` and `wrappedSteps()`): per tread, a pale polished `marble` lip along the nosing (skipped on marble steps) and a dark `dirt` line where the tread meets the next riser. Two shared quads per tread (4 mm lift, no collider, box UVs so no stretch). Cost: 4 triangles per step.
+- `SK_WEATHER` (shaderPatch.ts, cache key v7) gained a tight dark contact line where a wall meets the ground plus splash flecks within 0.45 m of it, on top of the existing grime band, damp and moss.
+- Not done: kerb edge wear (no kerb builder exists; kerbs are street-paving boxes).
