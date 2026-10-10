@@ -13,6 +13,7 @@
 import * as THREE from 'three';
 import { MATERIAL_BASE, type MaterialId } from '../../gfx/materialIds';
 import { MATERIAL_RECIPES, TEXTURE_STATS, roughnessFactor, tintFor } from '../../gfx/textures/catalog';
+import { releaseTextureAfterUpload } from '../../gfx/release';
 
 export interface GroundTextures {
   albedo: THREE.DataArrayTexture;
@@ -54,7 +55,8 @@ function arrayTexture(data: Uint8Array, size: number, layers: number, srgb: bool
   t.anisotropy = mips ? 16 : 1;
   if (srgb) t.colorSpace = THREE.SRGBColorSpace;
   t.needsUpdate = true;
-  return t;
+  // 45 MB of layers the GPU holds once uploaded: nothing reads them on the CPU (gfx/release).
+  return releaseTextureAfterUpload(t);
 }
 
 /** 1×1 layers in the palette colours (flat normal, base roughness). */

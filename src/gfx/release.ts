@@ -10,7 +10,13 @@
  */
 import * as THREE from 'three';
 
-const freeArray = function (this: THREE.BufferAttribute) {
+/**
+ * The `onUpload` callback that drops an attribute's array. Module level on purpose: V8 gives every
+ * closure created in one function the same context, so a copy made inside a builder would keep
+ * that builder's locals (the 78 MB of pre-merge parts in `farBake`) alive for as long as the
+ * geometry lives. Import this one instead of writing a new `function (this) { ... }`.
+ */
+export const freeArray = function (this: THREE.BufferAttribute) {
   (this as unknown as { array: ArrayLike<number> | null }).array = null;
 };
 
