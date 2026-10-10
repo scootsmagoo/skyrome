@@ -78,6 +78,13 @@ export class Npc extends Actor implements Positioned {
   /** Behaviour; assigned by the population manager. */
   brain: NpcBrain | null = null;
   readonly mover = new Mover();
+  /** Consecutive fixed steps pushing into a wall (NpcManager.wallCount). */
+  wallRun = 0;
+  /** Consecutive fixed steps asked to walk but hardly moving (wall learning, NpcManager.learnWall). */
+  slowRun = 0;
+  /** Wall-learning back-off: how many times it has re-planned round a wall, and the earliest clock time for the next. */
+  wallFixes = 0;
+  wallFixAt = 0;
   /** A number of its own for steering (people standing on one spot split different ways). */
   readonly steerSeed = seedOf(this.id);
   /**

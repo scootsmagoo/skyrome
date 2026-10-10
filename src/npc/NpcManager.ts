@@ -202,7 +202,16 @@ export class NpcManager implements System {
   clock = 0;
   /** Nav-grid cells sampled per frame. */
   buildBudget = 260;
-  readonly stats = { spawned: 0, despawned: 0, unstuck: 0, full: 0, mid: 0, cheap: 0, visible: 0, seen: 0, maxStuck: 0, pathSearches: 0, ms: 0, msBrain: 0, msSteer: 0, msLoco: 0, msUpdate: 0 };
+  readonly stats = { spawned: 0, despawned: 0, unstuck: 0, full: 0, mid: 0, cheap: 0, visible: 0, seen: 0, maxStuck: 0, wallLearned: 0, pathSearches: 0, ms: 0, msBrain: 0, msSteer: 0, msLoco: 0, msUpdate: 0 };
+  /**
+   * Wall count (debug: set `game.population.wallCount = true`): counts the fixed steps
+   * in which a walking full-sim NPC pushed into a static collider and barely moved, and the
+   * episodes (a run of such steps) with where they happened. See docs/modules/npc.md.
+   */
+  wallCount = false;
+  /** Learn walls the grid missed from contacts (`?wallfix=0` turns it off for A/B runs). */
+  wallLearn = true;
+  readonly wall = { walking: 0, blocked: 0, episodes: 0, seconds: 0, log: [] as { id: string; x: number; z: number; goal: string; steps: number; why: string }[] };
   /** Ids of dead named NPCs (never respawned). */
   readonly deadNamed = new Set<string>();
   private byId = new Map<string, Npc>();
@@ -271,6 +280,7 @@ export class NpcManager implements System {
     const q = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
     this.rng = opts.seed !== undefined ? new Rng(opts.seed) : game.rng.fork('npc');
     this.crowdEnabled = opts.crowd ?? q.get('crowd') !== '0';
+    this.wallLearn = q.get('wallfix') !== '0';
     this.namedEnabled = opts.named ?? true;
     const qd = Number(q.get('crowd'));
     this.density = qd > 0 && qd <= 4 ? qd : (opts.density ?? game.settings?.data.crowdDensity ?? 1);
@@ -1630,6 +1640,10 @@ export class NpcManager implements System {
       if (this.game.ragdolls?.has(n)) wish.set(0, 0, 0);
       if (n.sim === 'full') n.locomote(wish, dt);
       else n.glide(wish, dt, this.gridFloor, this.gridBlocked);
+      if (n.sim === 'full') {
+        if (this.wallLearn) this.learnWall(n, wish, dt);
+        if (this.wallCount) this.probeWall(n, wish, dt);
+      }
       if (timed) tLoco += performance.now() - tl;
       const st = n.mover.stuck.stuckTime;
       if (st > this.stats.maxStuck) this.stats.maxStuck = st;
@@ -1641,6 +1655,75 @@ export class NpcManager implements System {
     }
     if (this.cartsEnabled) this.carts.update(dt, this.budget.carts);
     this.stats.ms = this.stats.ms * 0.95 + (performance.now() - t0) * 0.05;
+  }
+
+  /**
+   * Wall learning: an NPC asked to walk that has hardly moved for a third of a second, pushing into
+   * a static collider, has found a wall the nav grid did not know (a thin or low wall, a corner a
+   * cell was too generous with). Mark the cell ahead as blocked, plan again from here, and back off
+   * if it keeps happening (CLAUDE.md: path failures back off): each re-plan on the same NPC waits
+   * longer, and after four the stuck ladder deals with it.
+   */
+  private learnWall(n: Npc, wish: THREE.Vector3, dt: number) {
+    if (n.wallFixes && this.clock > n.wallFixAt + 20) n.wallFixes = 0;
+    const sp2 = wish.x * wish.x + wish.z * wish.z;
+    if (sp2 < 0.36 || !n.mover.active) {
+      n.slowRun = 0;
+      return;
+    }
+    const mx = n.currPos.x - n.prevPos.x;
+    const mz = n.currPos.z - n.prevPos.z;
+    if (mx * mx + mz * mz > sp2 * dt * dt * 0.1225) {
+      n.slowRun = 0;
+      return;
+    }
+    if (++n.slowRun !== 20 || this.clock < n.wallFixAt || n.wallFixes >= 4) return;
+    n.slowRun = 0;
+    if (!n.touchedWall()) return;
+    const sp = Math.sqrt(sp2);
+    this.grid.block(n.currPos.x + (wish.x / sp) * 0.7, n.currPos.z + (wish.z / sp) * 0.7);
+    n.mover.replan();
+    n.wallFixes++;
+    n.wallFixAt = this.clock + 1.5 * n.wallFixes;
+    this.stats.wallLearned++;
+  }
+
+  /** Wall probe: this step, was a walking NPC pushing into a wall (see `wallCount`)? */
+  private probeWall(n: Npc, wish: THREE.Vector3, dt: number) {
+    const sp = Math.hypot(wish.x, wish.z);
+    if (sp < 0.6 || !n.mover.active) {
+      n.wallRun = 0;
+      return;
+    }
+    const w = this.wall;
+    w.walking++;
+    const moved = Math.hypot(n.currPos.x - n.prevPos.x, n.currPos.z - n.prevPos.z);
+    if (moved > sp * dt * 0.35 || !n.touchedWall()) {
+      n.wallRun = 0;
+      return;
+    }
+    w.blocked++;
+    if (++n.wallRun === 6) {
+      w.episodes++;
+      if (w.log.length < 200) {
+        const g = this.grid;
+        const m = n.mover;
+        const c = m.corner();
+        // Why: what the nav grid thought of the cell it stands in, the goal and the way to the next corner.
+        const why = [
+          `here:${g.walkable(n.currPos.x, n.currPos.z) ? 'walk' : 'BLOCKED'}`,
+          `goal:${g.walkable(m.goalX, m.goalZ) ? 'walk' : 'BLOCKED'}`,
+          c ? `corner:${g.lineWalkable(n.currPos.x, n.currPos.z, c.x, c.z) ? 'clear' : 'WALLED'}@${Math.hypot(c.x - n.currPos.x, c.z - n.currPos.z).toFixed(1)}m` : 'nocorner',
+          `path:${m.idx}/${m.path.length}`,
+          `dg:${Math.hypot(m.goalX - n.currPos.x, m.goalZ - n.currPos.z).toFixed(1)}`,
+          n.brain?.task?.kind ?? 'notask',
+        ].join(' ');
+        w.log.push({ id: n.id, x: Math.round(n.currPos.x * 10) / 10, z: Math.round(n.currPos.z * 10) / 10, goal: `${m.goalX.toFixed(0)},${m.goalZ.toFixed(0)}`, steps: 6, why });
+      }
+    } else if (n.wallRun > 6 && w.log.length) {
+      const last = w.log[w.log.length - 1];
+      if (last.id === n.id) last.steps = n.wallRun;
+    }
   }
 
   /** Pooled neighbour record number `i`, filled in. */

@@ -9,6 +9,7 @@
  * its gate tunnels, a gallery over a portico) is sampled at the ground beneath.
  */
 import { ALL_LAYERS, groups, Layer, RAPIER, type Physics } from '../../core/Physics';
+import { STEP_ASSIST_MAX } from '../../core/traversal';
 import type { CellSample, CellSampler } from './navgrid';
 
 export interface PhysicsSamplerOptions {
@@ -33,6 +34,14 @@ const INSIDE = 1e-4;
 const LINK_HEIGHTS = [0.7, 1.4];
 const LINK_SIDES = [0, SUB_OFFSET, -SUB_OFFSET];
 /** `?navlinks=0` leaves every link open (the NavGrid before the thin-wall test, for A/B runs). */
+/**
+ * The person-shaped clearance test starts this far above the floor (m) and ends at head height.
+ * Anything taller than the step-up assist climbs (STEP_ASSIST_MAX) is a wall to an NPC: it used to
+ * start at 0.5 m, so a 0.3 to 0.5 m barrier (a low wall, a trough, a stall counter, a fountain
+ * rim) read as open floor and the crowd walked into it. `?navlow=0` restores 0.5 for A/B runs.
+ */
+const CLEAR_FROM = typeof location !== 'undefined' && new URLSearchParams(location.search).get('navlow') === '0' ? 0.5 : STEP_ASSIST_MAX + 0.05;
+const CLEAR_TO = 1.75;
 const LINKS_ON = typeof location === 'undefined' || new URLSearchParams(location.search).get('navlinks') !== '0';
 
 export class PhysicsCellSampler implements CellSampler {
@@ -51,8 +60,8 @@ export class PhysicsCellSampler implements CellSampler {
     private readonly opts: PhysicsSamplerOptions = {},
   ) {
     const r = opts.radius ?? 0.28;
-    // Spans 0.5 m (above autostep height) to 1.75 m above the floor.
-    this.capsule = new RAPIER.Capsule((1.25 - 2 * r) / 2, r);
+    // Spans CLEAR_FROM (just above what the step-up assist climbs) to 1.75 m above the floor.
+    this.capsule = new RAPIER.Capsule((CLEAR_TO - CLEAR_FROM - 2 * r) / 2, r);
     this.fallbackY = opts.fallbackY ?? 0;
     this.above = opts.above ?? 5.5;
     this.depth = opts.depth ?? 14;
@@ -160,7 +169,7 @@ export class PhysicsCellSampler implements CellSampler {
 
   private fits(x: number, h: number, z: number): boolean {
     this.pos.x = x;
-    this.pos.y = h + 0.5 + 1.25 / 2;
+    this.pos.y = h + CLEAR_FROM + (CLEAR_TO - CLEAR_FROM) / 2;
     this.pos.z = z;
     return !this.physics.world.intersectionWithShape(this.pos, this.rot, this.capsule, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, this.filter);
   }

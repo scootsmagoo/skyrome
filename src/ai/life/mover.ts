@@ -49,6 +49,14 @@ export class Mover {
     this.stuck.reset(this.lastX, this.lastZ);
   }
 
+  /** Plan again from where the agent stands (a wall the grid did not know about was found): the next update searches. */
+  replan() {
+    if (!this.active) return;
+    this.needPath = true;
+    this.path = [];
+    this.idx = 0;
+  }
+
   clear() {
     this.active = false;
     this.path = [];

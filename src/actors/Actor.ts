@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import type { Game } from '../core/Game';
 import { Layer, type CharacterBody } from '../core/Physics';
-import { STEP_ASSIST_MAX, STEP_ASSIST_MIN } from '../core/traversal';
+import { SLOPE_WALK_MAX_DEG, STEP_ASSIST_MAX, STEP_ASSIST_MIN } from '../core/traversal';
 import { approachAngle, damp } from '../core/math';
 
 export interface LocomotionState {
@@ -77,6 +77,12 @@ const STEP_MAX = STEP_ASSIST_MAX;
 const STEP_EASE_MIN = 0.05;
 const STEP_EASE_TIME = 0.4;
 const STEP_EASE_RATE = 14;
+/** A standing actor (no wish, slower than this, m/s) moving less than PLANT_MOVE (m per step) is held still. */
+const PLANT_SPEED = 0.15;
+const PLANT_MOVE = 0.004;
+const PLANT_SLIDE = 0.03;
+const WALKABLE_NY = Math.cos((SLOPE_WALK_MAX_DEG * Math.PI) / 180);
+const planted = { x: 0, y: 0, z: 0 };
 const DOWN = { x: 0, y: -1, z: 0 };
 const UP = { x: 0, y: 1, z: 0 };
 
@@ -268,6 +274,21 @@ export class Actor {
       }
     }
 
+    // Standing still on the ground stays planted: the kinematic controller turns the small downward
+    // push into a sideways slide on any slope over its 40 degree limit, and depenetration noise is
+    // not a step. A standing actor that the controller moves a little (under 0.03 m a step) is held
+    // still when the floor under it is a slope people walk up (SLOPE_WALK_MAX_DEG); on a cliff it slides.
+    if (this.grounded && wish.x === 0 && wish.z === 0 && v.x * v.x + v.z * v.z < PLANT_SPEED * PLANT_SPEED) {
+      const slid = mv.x * mv.x + mv.z * mv.z;
+      if (slid < PLANT_MOVE * PLANT_MOVE || (slid < PLANT_SLIDE * PLANT_SLIDE && this.walkableFloor())) {
+        planted.x = 0;
+        // Down along the slope is part of the slide too: keep a lift (depenetration), drop a sink.
+        planted.y = mv.y > 0 || mv.y < -0.025 ? mv.y : 0;
+        planted.z = 0;
+        mv = planted;
+        v.x = v.z = 0;
+      }
+    }
     const t = body.translation();
     const nx = t.x + mv.x;
     const ny = t.y + mv.y;
@@ -309,6 +330,28 @@ export class Actor {
     if (ph.raycast({ x: px, y: top.point.y + 0.03, z: pz }, UP, height, Layer.World)) return null;
     if (ph.raycast({ x: feet.x, y: top.point.y + 0.1, z: feet.z }, { x: dx, y: 0, z: dz }, r + 0.2, Layer.World)) return null;
     return { x: desired.x, y: rise + 0.01, z: desired.z };
+  }
+
+  /** Is the floor under the feet a slope people can stand on (not a cliff)? One ray; only asked of a standing actor that is sliding. */
+  private walkableFloor(): boolean {
+    const f = this.currPos;
+    const hit = this.game.physics.raycast({ x: f.x, y: f.y + 0.4, z: f.z }, DOWN, 1.0, Layer.World);
+    return !hit || hit.normal.y >= WALKABLE_NY;
+  }
+
+  /**
+   * Did the last `locomote` push against a static (World layer) collider with a wall-like normal?
+   * Debug use (NpcManager's wall probe): it reads the controller's collision list, which allocates.
+   */
+  touchedWall(): boolean {
+    const c = this.body.controller;
+    const n = c.numComputedCollisions();
+    for (let i = 0; i < n; i++) {
+      const col = c.computedCollision(i);
+      if (!col?.collider || !col.normal1) continue;
+      if ((col.collider.collisionGroups() >>> 16) & Layer.World && Math.abs(col.normal1.y) < 0.5) return true;
+    }
+    return false;
   }
 
   /** Turn toward a heading at a maximum angular speed (rad/s). */
