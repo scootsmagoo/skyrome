@@ -47,7 +47,7 @@ export default defineLife({
         greet: '(A broad-shouldered woman in a straw hat, her stall lined with pots of honey and rounds of white cheese.) You’re in luck, it’s market day. I walked in from the farm in the dark, so I’ll not be dragged down in the price.',
         topics: [
           { ask: 'You come from the country?', say: 'Twelve miles. We come in for the nundinae and go home at the sixth hour, and then it is eight days of work before the next. The city is loud, dirty and very good for selling honey. I do not stay a moment longer than I have to.' },
-          { ask: 'Why every eighth day?', say: 'It has always been so. Eight days on the farm, and the ninth in town: the nundinae. Ask the oldest man in my village why, and he says because his father said so. The law says courts are shut and markets open. That is all I need to know.' },
+          { ask: 'Why every eighth day?', say: 'It has always been so. Eight days on the farm, and the ninth in town: the nundinae. Ask the oldest man in my village why, and he says because his father said so. On the ninth day I go to town, and I sell. That is all I need to know.' },
           { ask: 'How is the honey?', say: 'The bees have been at the thyme this year. Dark, strong, and slightly bitter at the back of the tongue. The city likes it sweeter, so I mix some lighter in for the Palatine. For you, it is the strong. Try it.' },
         ],
         news: 'What news from the country roads?',
