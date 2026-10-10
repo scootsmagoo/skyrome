@@ -2,10 +2,11 @@
  * The mortar's recipes (docs/design/world-life.md §4.6): remedies from the herbs the druggist and
  * the greengrocer sell. The gain is Medicina XP and having the remedy when it is needed; the
  * economy rule (tests/life-economy.test.ts) keeps selling a craft back from beating its inputs by
- * more than 2×, so a few recipes need more of an expensive input than the first table drew.
+ * more than 2×, so a few recipes need more of an expensive input than the first table drew, and
+ * the 30-day simulation keeps the dear remedies (soporific, theriac, fever draught) at about 1.2-1.3×
+ * the value of their inputs (the herb prices in rpg/data/items/consumables.ts are set for that).
  *
- * rec.mortar.fascia (linen into bandages) waits in `_pending-fascia.ts`: its `linteum` is an item
- * the CITY VOICE crew adds; rename the file when it lands.
+ * rec.mortar.fascia (linen into bandages) is in `mortar-fascia.ts`.
  */
 import { defineLife } from '../../types';
 

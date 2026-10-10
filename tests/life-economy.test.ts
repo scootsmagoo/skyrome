@@ -8,7 +8,6 @@
 import { describe, expect, it } from 'vitest';
 import { Rng } from '../src/core/Rng';
 import { craftXp, inputCostBest, SELL_BACK_MAX, sellBackBest } from '../src/life/craft/rules';
-import pendingFascia from '../src/life/data/recipes/_pending-fascia';
 import { LIFE } from '../src/life/registry';
 import { canLay, settle, type Bet } from '../src/life/wager/betRules';
 import { bankSpent, playRound, type Dicer } from '../src/life/wager/taliRules';
@@ -21,21 +20,19 @@ import type { Recipe } from '../src/life/types';
 
 const DEF = new Map<string, ItemDef>(ITEMS.map((d) => [d.id, d]));
 const value = (id: string) => DEF.get(id)?.value ?? 0;
-// The held-out fascia recipe is checked too, with a plausible price for its linen (the item comes later).
-const LINTEUM = 2 / 16;
-const valueOf = (id: string) => (id === 'linteum' ? LINTEUM : value(id));
-const RECIPES: Recipe[] = [...LIFE.recipes, ...(pendingFascia.recipes ?? [])];
+const valueOf = value;
+const RECIPES: Recipe[] = LIFE.recipes;
 
 // The best any player ever does: Mercatura 100, disposition +20, market day, haggled.
 const BEST: PriceContext = { mercatura: 100, disposition: 20, buyDiscount: 0.5, sellBonus: 0.5 };
 const WORST: PriceContext = { mercatura: 0, disposition: 0 };
 
 describe('the mortar economy', () => {
-  it('has the recipes the design lists (the fascia waits for its linen)', () => {
+  it('has the recipes the design lists', () => {
     expect(LIFE.recipes.map((r) => r.id).sort()).toEqual(
-      ['rec.mortar.collyrium', 'rec.mortar.emplastrum', 'rec.mortar.febrifugum', 'rec.mortar.posca', 'rec.mortar.soporificum', 'rec.mortar.theriaca'].sort(),
+      ['rec.mortar.collyrium', 'rec.mortar.emplastrum', 'rec.mortar.fascia', 'rec.mortar.febrifugum', 'rec.mortar.posca', 'rec.mortar.soporificum', 'rec.mortar.theriaca'].sort(),
     );
-    expect(pendingFascia.recipes?.[0].id).toBe('rec.mortar.fascia');
+    expect(value('linteum')).toBeGreaterThan(0);
   });
 
   it('no recipe sells back for more than 2× its inputs at the best prices', () => {

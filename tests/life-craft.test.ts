@@ -41,8 +41,8 @@ describe('the rules of the bench', () => {
     expect(craftXp(2)).toBe(20);
   });
 
-  it('the mortar has the six recipes of the data, in a ladder from 0 to 55', () => {
-    expect(mortar.map((r) => r.minLevel)).toEqual([0, 10, 20, 30, 40, 55]);
+  it('the mortar has the seven recipes of the data, in a ladder from 0 to 55', () => {
+    expect(mortar.map((r) => r.minLevel)).toEqual([0, 0, 10, 20, 30, 40, 55]);
     for (const r of mortar) expect(r.skill).toBe('medicina');
   });
 });

@@ -1,8 +1,6 @@
 /**
- * rec.mortar.fascia: linen torn into bandages (docs/design/world-life.md §4.6). HELD OUT of the game
- * by the leading '_' (registry.ts leaves such files out) because its input `linteum` is an item the
- * CITY VOICE crew adds in src/rpg/data/items/life.ts, and validateLife would reject the unknown id.
- * When `linteum` exists, rename this file to `mortar-fascia.ts` (nothing else changes).
+ * rec.mortar.fascia: linen torn into bandages (docs/design/world-life.md §4.6). Its `linteum` is the
+ * CITY VOICE crew's item (src/rpg/data/items/life.ts), sold by the Subura fuller.
  */
 import { defineLife } from '../../types';
 
