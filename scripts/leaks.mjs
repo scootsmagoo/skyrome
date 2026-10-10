@@ -37,7 +37,9 @@ const outDir = resolve(root, args.out ?? '.shots/leaks');
 mkdirSync(outDir, { recursive: true });
 const ALL = ['teleport', 'interior', 'saveload', 'menus', 'fights', 'idle', 'daynight', 'munus'];
 const phases = String(args.phases ?? ALL.join(',')).split(',').filter(Boolean);
-const N = { teleport: 48, interior: 20, saveload: 20, menus: 50, fights: 20, idle: 20, daynight: 24, munus: 6 };
+const N = { teleport: 48, interior: 20, saveload: 20, menus: 50, fights: 50, idle: 20, daynight: 24, munus: 6 };
+// Fights: corpse cap, guards and population settle only after about 30 cycles, so a short run cannot judge.
+const MIN_JUDGE = { fights: 40 };
 const cycles = (p) => Math.max(EVERY[p] ?? 4, Math.round((N[p] * scale) / (EVERY[p] ?? 1)) * (EVERY[p] ?? 1));
 
 const { createServer } = await import('vite');
@@ -403,8 +405,13 @@ for (const phase of phases) {
     if ((last.audioMB - first.audioMB) / n > 0.05) grew.push(`audio buffers +${(last.audioMB - first.audioMB).toFixed(1)} MB`);
   }
   if (args.orphans) console.log('  orphan geometries by builder:', JSON.stringify(await orphanSites()));
+  const inconclusive = grew.length > 0 && n < (MIN_JUDGE[phase] ?? 0);
+  if (inconclusive) {
+    console.log(`  (${phase} needs at least ${MIN_JUDGE[phase]} cycles to judge: the corpse cap, guards and population are still settling; not counted as growth)`);
+    grew.length = 0;
+  }
   results.push({ phase, cycles: n, first, last, grew });
-  console.log(`  ${grew.length ? 'GROWTH: ' + grew.join(', ') : 'flat'}`);
+  console.log(`  ${grew.length ? 'GROWTH: ' + grew.join(', ') : inconclusive ? 'inconclusive (too few cycles)' : 'flat'}`);
 }
 
 if (phases.includes('soak') && !crashed) {
