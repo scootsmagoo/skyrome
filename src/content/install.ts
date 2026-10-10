@@ -406,7 +406,8 @@ export class ContainerRuntime {
 
   private write(s: Stored) {
     if (!this.game.deltas) this.local = s;
-    s.emptied = s.items.length === 0 && s.coins <= 0;
+    // A storage chest (spec.store) is never "emptied" for good: the player keeps putting things in.
+    s.emptied = !this.spec.store && s.items.length === 0 && s.coins <= 0;
     if (this.game.deltas) {
       this.game.deltas.merge(this.spec.id, { items: s.items, coins: s.coins, emptied: s.emptied, unlocked: s.unlocked, reported: s.reported });
       if (s.emptied) this.game.deltas.markLooted(this.spec.id);
@@ -414,6 +415,7 @@ export class ContainerRuntime {
   }
 
   get emptied(): boolean {
+    if (this.spec.store) return false;
     return this.game.deltas?.isLooted(this.spec.id) === true || this.read().emptied === true;
   }
 
@@ -482,6 +484,22 @@ export class ContainerRuntime {
     this.game.crime?.commit('furtum', { witnessed: witnesses, victimId: this.spec.owner, value });
   }
 
+  /** Put `count` of an item from the player's pack into a storage chest (spec.store). Returns how many went in. */
+  store(itemId: string, count: number): number {
+    const inv = this.game.player?.inventory;
+    if (!this.spec.store || !inv) return 0;
+    // Only whole, honestly-owned goods: a worn blade would come out new, and stolen goods are marked.
+    const whole = inv.list((d, st) => d.id === itemId && !st.stolenFrom && (st.condition ?? 1) >= 1).reduce((n, e) => n + e.stack.count, 0);
+    const n = Math.min(count, whole);
+    if (n <= 0 || !inv.remove(itemId, n, { reason: 'given' })) return 0;
+    const s = this.read();
+    const row = s.items.find((i) => i.id === itemId);
+    if (row) row.count += n;
+    else s.items.push({ id: itemId, count: n });
+    this.write(s);
+    return n;
+  }
+
   takeAll() {
     for (const c of this.contents()) this.take(c.id, c.count);
     if (this.coins() > 0) this.take('denarii', 1);
@@ -496,6 +514,16 @@ function viewOf(rt: ContainerRuntime): ContainerView {
     owner: rt.spec.ownerName,
     owned: !!rt.spec.owner,
     items: () => rt.contents().map((c) => ({ itemId: c.id, def: c.def, count: c.count })),
+    // A storage chest also shows the player's pack and takes things (spec.store).
+    ...(rt.spec.store
+      ? {
+          playerItems: () => (rt.game.player?.inventory?.list((d, st) => !d.questItem && !st.stolenFrom && (st.condition ?? 1) >= 1) ?? []).filter((e) => !e.equipped).map((e) => ({ itemId: e.def.id, def: e.def, count: e.stack.count })),
+          store: (itemId: string, count: number) => {
+            rt.store(itemId, count);
+            changed();
+          },
+        }
+      : {}),
     take: (itemId, count) => {
       rt.take(itemId, count);
       changed();
