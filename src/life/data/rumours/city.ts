@@ -8,7 +8,7 @@ import { defineLife } from '../../types';
 
 export default defineLife({
   rumours: [
-    { id: 'rum.city.water-cold', kind: 'talk', text: 'The Aqua Traiana came down the Janiculum last month, and the whole Aventine says it tastes of stone. Give it a season. Everything tastes of stone until you are thirsty.', period: 'Aqueduct of Trajan, opened 109 [A]' },
+    { id: 'rum.city.water-cold', kind: 'talk', text: 'The Aqua Traiana has been running down from the Janiculum for four years, and some of the Aventine still says it tastes of stone. Everything tastes of stone until you are thirsty.', period: 'Aqueduct of Trajan, opened 109 [A]' },
     { id: 'rum.city.dacian-gold', kind: 'talk', text: 'Dacian gold is everywhere now. The moneychangers at the Basilica weigh it twice and smile once. Somebody made a fortune on the Danube, and it was not the soldiers.', period: 'Dacian war booty in circulation after 106 [P]' },
     { id: 'rum.city.eastern-king', kind: 'talk', text: 'The Parthian king will not stop sending letters to the Emperor, and the Emperor is said to be packing for the East. Do not buy a cloak for a journey. Wait till they tell you where to march.', period: 'Parthian succession disputes, 111–113 [A]', weight: 0.6 },
     { id: 'rum.city.bread-dear', kind: 'talk', text: 'Bread is dear again. The bakers blame the grain fleet, the grain fleet blames the weather, and the weather blames nobody, which is the only honest thing said in this city all month.' },
