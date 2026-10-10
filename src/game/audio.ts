@@ -13,6 +13,7 @@ import { L } from '../world/terrain/splat';
 import { WORLD_SCALE as K, toGame } from '../world/coords';
 import { footprintContains } from '../content/ground';
 import { templesShut, todaysFestivals } from '../content/director';
+import { CrowdLife, type PeopleSource } from '../audio/CrowdLife';
 import { bridgeFloor, categorySpace, flowMusic, interiorFloor, interiorReverb, landmarkFloor, lemuriaMusic, nearSegment, type Space } from '../audio/places';
 
 /**
@@ -230,7 +231,7 @@ export interface GameAudio {
 
 export function installGameAudio(game: Game): GameAudio {
   const audio = installAudio(game);
-  audio.ambience.setBase({ city: 0.8, birds: 0.6, swifts: 0.6, wind: 0.35, crickets: 0.8, owl: 0.6, carts: 0.6, dogs: 0.35, cicadas: 0.5 });
+  audio.ambience.setBase({ city: 0.6, birds: 0.6, swifts: 0.6, wind: 0.35, crickets: 0.8, owl: 0.6, carts: 0.6, dogs: 0.35, cicadas: 0.5 });
   // Game y of the valley floors (~8) and of the hilltops (~28).
   audio.ambience.altitude = { low: 10, high: 30 };
   for (const [id, layer, volume, reverb] of ZONES) {
@@ -240,7 +241,9 @@ export function installGameAudio(game: Game): GameAudio {
     const fp = lm.footprint;
     const r = fp.kind === 'rect' ? Math.min(fp.w, fp.d) / 2 : fp.kind === 'ellipse' ? Math.min(fp.rx, fp.rz) : fp.kind === 'circle' ? fp.r : 40;
     const radius = Math.max(layer === 'fountain' ? 4 : 18, Math.min(120, r * K));
-    audio.ambience.addZone({ name: id, center: { x, y: 0, z }, radius, fade: layer === 'fountain' ? 10 : undefined, layers: [{ id: layer, volume }], reverb: reverb ?? undefined });
+    // The 'crowd' zones only set the reverb space: the crowd hum and the voices follow the people who
+    // are really there (CrowdLife), not the place's name.
+    audio.ambience.addZone({ name: id, center: { x, y: 0, z }, radius, fade: layer === 'fountain' ? 10 : undefined, layers: layer === 'crowd' ? [] : [{ id: layer, volume }], reverb: reverb ?? undefined });
   }
   // The Tiber: a chain of river zones along the core's stretch.
   const tiber = atlas.RIVERS.find((r) => r.id === 'tiber');
@@ -254,6 +257,7 @@ export function installGameAudio(game: Game): GameAudio {
   }
   audio.music.setState('explore');
   game.addSystem(new MusicDriver(game, audio));
+  game.addSystem(new CrowdLife(game, audio, () => (game as Game & { population?: PeopleSource }).population));
 
   let handle: { detach(): void } | null = null;
   // The Colosseum's arena floor is sand (the atlas gives it as 83 × 48 m inside a 188 × 156 m ellipse:

@@ -36,8 +36,9 @@ export const DAY_CURVES: Record<string, (h: number) => number> = {
   // Crickets and owls own the night.
   crickets: (h) => trapezoid(h, 19.5, 21, 4, 5.5),
   owl: (h) => trapezoid(h, 20.5, 22, 3.5, 5),
-  // The crowd: up at dawn, a lull at the midday siesta, thinning after dark.
-  crowd: (h) => Math.max(0.1, trapezoid(h, 5.5, 8, 19.5, 22.5) * (1 - 0.3 * trapezoid(h, 12.5, 13.5, 14.5, 15.5))),
+  // The crowd hum: up at dawn, a lull at the midday siesta, near silence after dark (the NPC count
+  // already thins too; see CrowdLife).
+  crowd: (h) => Math.max(0.03, trapezoid(h, 5.5, 8, 19.5, 22.5) * (1 - 0.3 * trapezoid(h, 12.5, 13.5, 14.5, 15.5))),
   market: (h) => Math.max(trapezoid(h, 6, 8, 12.5, 14), trapezoid(h, 15, 16, 18.5, 20) * 0.5),
   city: (h) => 0.35 + 0.65 * trapezoid(h, 5.5, 7.5, 20, 22.5),
   // Wheeled traffic was banned in daylight (Lex Iulia Municipalis): carts rumble at night.
