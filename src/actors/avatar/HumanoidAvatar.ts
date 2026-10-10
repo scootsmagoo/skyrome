@@ -293,7 +293,7 @@ export class HumanoidAvatar implements CombatAvatar {
     let posed = step > 0;
     if (posed) {
       // Planted feet and loose parts only where they can be seen (the LOD's full-rate zone).
-      this.anim.near = d < avatarLod.ikNear;
+      this.anim.near = d < avatarLod.near;
       this.anim.viewDistance = d;
       this.anim.update(step, state);
       this.updateLod();
