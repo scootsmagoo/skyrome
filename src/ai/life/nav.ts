@@ -42,7 +42,7 @@ export class NavService {
     if (d < 0.3) return [{ x: bx, z: bz }];
     if (grid && grid.ready(ax, az) && grid.ready(bx, bz)) {
       // Cheap first: a clear straight line needs no search.
-      if (grid.lineWalkable(ax, az, bx, bz)) return [{ x: bx, z: bz }];
+      if (grid.lineClear(ax, az, bx, bz)) return [{ x: bx, z: bz }];
       // Walled off from where we stand (the reachability labels): no search can succeed, and a
       // failing search is the most expensive kind.
       if (grid.reachable(ax, az) && !grid.reachable(bx, bz)) {
@@ -72,7 +72,7 @@ export class NavService {
             const node = grid.nearestWalkable(p[i].x, p[i].z, 3);
             if (!node) continue;
             tries++;
-            if (grid.lineWalkable(ax, az, node.x, node.z)) return [{ x: node.x, z: node.z }, ...p.slice(i + 1)];
+            if (grid.lineClear(ax, az, node.x, node.z)) return [{ x: node.x, z: node.z }, ...p.slice(i + 1)];
             const lead = grid.findPath(ax, az, node.x, node.z, 6000);
             if (lead) return [...lead, ...p.slice(i + 1)];
             // Walled off from where we stand while we are on ground that is connected: this street

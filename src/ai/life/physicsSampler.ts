@@ -76,7 +76,9 @@ export class PhysicsCellSampler implements CellSampler {
       return;
     }
     out.h = top.h;
-    out.walkable = !top.inside && this.clear(x, top.h, z);
+    const fit = top.inside ? -1 : this.clear(x, top.h, z);
+    out.walkable = fit >= 0;
+    out.off = fit > 0 ? fit : 0;
     // A floor well above the street (seating, a gallery, a deck): when there is open, walkable
     // street-level ground beneath it (a tunnel under the seats, a street under a gallery), the
     // crowd walks there. A solid podium or terrace fails the clearance test and keeps its top.
@@ -86,9 +88,11 @@ export class PhysicsCellSampler implements CellSampler {
       for (let k = 0; k < 4; k++) {
         const low = this.floorBelow(x, z, y);
         if (!low || low.inside || low.h < ref - 1) break;
-        if (low.h - ref <= UPPER && top.h - low.h > 1.9 && this.clear(x, low.h, z)) {
+        const lowFit = low.h - ref <= UPPER && top.h - low.h > 1.9 ? this.clear(x, low.h, z) : -1;
+        if (lowFit >= 0) {
           out.h = low.h;
           out.walkable = true;
+          out.off = lowFit;
           break;
         }
         y = low.h - 0.05;
@@ -160,11 +164,17 @@ export class PhysicsCellSampler implements CellSampler {
    * Room for a person standing on a floor at `h` (knee to head height clear) at the cell centre,
    * or failing that at one of four points a little off it: a gate or doorway that doesn't line up
    * with the grid (a rotated building) must not read as a wall because its jamb grazes a centre.
+   * Returns 0 for the centre, 1 to 4 for the offset that fits (CellSample.off: paths pass through
+   * that point, not the tight centre), -1 when nothing fits.
    */
-  private clear(x: number, h: number, z: number): boolean {
-    if (this.fits(x, h, z)) return true;
+  private clear(x: number, h: number, z: number): number {
+    if (this.fits(x, h, z)) return 0;
     const d = SUB_OFFSET;
-    return this.fits(x + d, h, z) || this.fits(x - d, h, z) || this.fits(x, h, z + d) || this.fits(x, h, z - d);
+    if (this.fits(x + d, h, z)) return 1;
+    if (this.fits(x - d, h, z)) return 2;
+    if (this.fits(x, h, z + d)) return 3;
+    if (this.fits(x, h, z - d)) return 4;
+    return -1;
   }
 
   private fits(x: number, h: number, z: number): boolean {

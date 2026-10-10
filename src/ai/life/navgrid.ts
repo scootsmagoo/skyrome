@@ -16,6 +16,11 @@ export interface CellSample {
   h: number;
   /** A standing person fits (no wall/column between knee and head height). */
   walkable: boolean;
+  /**
+   * Where in the cell the person fits when the centre is too tight (a wall grazes it): 0 the centre,
+   * 1 a little east (+x), 2 west, 3 south (+z), 4 north. Paths pass through that point, not the centre.
+   */
+  off?: number;
 }
 
 export interface CellSampler {
@@ -47,6 +52,10 @@ const KNOWN = 2;
 const BLOCKED_DYN = 4; // marked by agents that got stuck there
 const LINK_E = 8; // a wall between this cell and its east neighbour (the sampler's `link`)
 const LINK_S = 16; // ... and its south neighbour (+z)
+const OFF_SHIFT = 5; // bits 5-7: where in the cell a person fits (CellSample.off)
+/** Offsets (m) of CellSample.off 0..4 from the cell centre. */
+const OFF_DX = [0, 0.3, -0.3, 0, 0];
+const OFF_DZ = [0, 0, 0, 0.3, -0.3];
 
 interface Chunk {
   cx: number;
@@ -72,6 +81,7 @@ interface Chunk {
  */
 const OFF = 8192;
 const SPAN = 16384;
+const tmpPt = { x: 0, z: 0 };
 const key = (cx: number, cz: number) => (cx + 2048) * 4096 + (cz + 2048);
 
 export class NavGrid {
@@ -199,7 +209,7 @@ export class NavGrid {
         const iz = c.cz * this.chunkCells + Math.floor(i / this.chunkCells);
         this.sampler.sample((ix + 0.5) * this.cell, (iz + 0.5) * this.cell, this.sample);
         c.h[i] = this.sample.h;
-        c.flags[i] = KNOWN | (this.sample.walkable && Number.isFinite(this.sample.h) ? WALK : 0);
+        c.flags[i] = KNOWN | (this.sample.walkable && Number.isFinite(this.sample.h) ? WALK : 0) | (((this.sample.off ?? 0) & 7) << OFF_SHIFT);
         done++;
       }
       if (c.next >= n) {
@@ -365,6 +375,15 @@ export class NavGrid {
     return this.cellState(ix, iz) !== -1 && !!this.chunkAt(ix, iz)?.lit;
   }
 
+  /** The point to walk through in a cell: its centre, or where a person fits when the centre is too tight. */
+  cellPoint(ix: number, iz: number, out: { x: number; z: number }) {
+    const c = this.chunkAt(ix, iz);
+    const o = c ? (c.flags[this.idx(ix, iz)] >> OFF_SHIFT) & 7 : 0;
+    out.x = (ix + 0.5) * this.cell + (OFF_DX[o] ?? 0);
+    out.z = (iz + 0.5) * this.cell + (OFF_DZ[o] ?? 0);
+    return out;
+  }
+
   /** Mark a cell as blocked (an agent got stuck there; a cart parked). Cleared on rebuild. */
   block(x: number, z: number) {
     const ix = this.cellOf(x);
@@ -424,8 +443,9 @@ export class NavGrid {
           if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
           if (this.cellState(cx + dx, cz + dz) !== 1) continue;
           if (reachableOnly && this.doneGen && this.stampOf(cx + dx, cz + dz) < this.doneGen) continue;
-          const px = (cx + dx + 0.5) * this.cell;
-          const pz = (cz + dz + 0.5) * this.cell;
+          const pt = this.cellPoint(cx + dx, cz + dz, tmpPt);
+          const px = pt.x;
+          const pz = pt.z;
           const d = (px - x) ** 2 + (pz - z) ** 2;
           if (d < best) {
             best = d;
@@ -483,6 +503,30 @@ export class NavGrid {
       if (!this.canStep(px, pz, ix, iz)) return false;
     }
     return true;
+  }
+
+  /**
+   * `lineWalkable` for a body: the straight walk also stays clear of walls to either side (the
+   * centre line of cell centres can graze a wall's corner, and a person is 0.6 m wide: a path
+   * string-pulled along it walked into the corner and ping-ponged there). The offset lines start
+   * and end 0.5 m in, so someone already hugging a wall is not refused; a short walk is not
+   * checked sideways.
+   */
+  lineClear(ax: number, az: number, bx: number, bz: number, half = 0.32): boolean {
+    if (!this.lineWalkable(ax, az, bx, bz)) return false;
+    const dx = bx - ax;
+    const dz = bz - az;
+    const len = Math.hypot(dx, dz);
+    if (len < 1.6) return true;
+    const ux = dx / len;
+    const uz = dz / len;
+    const x0 = ax + ux * 0.5;
+    const z0 = az + uz * 0.5;
+    const x1 = bx - ux * 0.5;
+    const z1 = bz - uz * 0.5;
+    const px = -uz * half;
+    const pz = ux * half;
+    return this.lineWalkable(x0 + px, z0 + pz, x1 + px, z1 + pz) && this.lineWalkable(x0 - px, z0 - pz, x1 - px, z1 - pz);
   }
 
   /** Is a disc of `r` metres around a point walkable (for carts, groups)? */
@@ -675,7 +719,8 @@ export class NavGrid {
     const cells: { x: number; z: number }[] = [];
     let k = goal;
     while (k !== start) {
-      cells.push({ x: (Math.floor(k / SPAN) - OFF + 0.5) * c, z: ((k % SPAN) - OFF + 0.5) * c });
+      const pt = this.cellPoint(Math.floor(k / SPAN) - OFF, (k % SPAN) - OFF, { x: 0, z: 0 });
+      cells.push(pt);
       k = came.get(k)!;
     }
     cells.reverse();
@@ -693,7 +738,7 @@ export class NavGrid {
     while (i < pts.length) {
       let j = pts.length - 1;
       // Farthest visible point (check a handful from the end for speed, then step back).
-      while (j > i && !this.lineWalkable(fromX, fromZ, pts[j].x, pts[j].z)) j--;
+      while (j > i && !this.lineClear(fromX, fromZ, pts[j].x, pts[j].z)) j--;
       out.push(pts[j]);
       fromX = pts[j].x;
       fromZ = pts[j].z;

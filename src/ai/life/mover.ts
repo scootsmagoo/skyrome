@@ -122,7 +122,7 @@ export class Mover {
         const dn = hyp(n.x - x, n.z - z);
         const seg = hyp(n.x - c.x, n.z - c.z);
         if (dn >= seg) break;
-        if (nav.grid && nav.grid.ready(x, z) && !nav.grid.lineWalkable(x, z, n.x, n.z)) break;
+        if (nav.grid && nav.grid.ready(x, z) && !nav.grid.lineClear(x, z, n.x, n.z)) break;
       }
       this.idx++;
       c = this.path[this.idx];
