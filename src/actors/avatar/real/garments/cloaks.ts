@@ -71,8 +71,8 @@ function cape(ctx: Ctx, L: Levels, bp: BodyProfile, color: THREE.Color, sagum: b
     return w;
   };
   slab(ctx, {
-    us: ticks(ctx.hi ? 33 : 11),
-    vs: ticks(ctx.hi ? 12 : 5, ctx.hi ? [0.025, 0.05, 0.08, 0.12, 0.97] : [0.04]),
+    us: ticks(ctx.hi ? 25 : 11),
+    vs: ticks(ctx.hi ? 9 : 5, ctx.hi ? [0.03, 0.07, 0.11, 0.97] : [0.04]),
     thick: T * 0.5,
     back: ctx.hi,
     hint: (p) => new THREE.Vector3(p.x, 0, p.z - bp.centre(Math.min(p.y, yMax))).normalize(),

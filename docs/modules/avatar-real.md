@@ -232,3 +232,50 @@ collapse with the bone, a sleeve folds to the stump).
 scales, thinner limbs and a belly for the old, `rig.stoop` for the animation layer). A real age blend wants two more
 shape keys in the pipeline (old: sagging, thinner torso and calves; child: rounder trunk, no adult musculature) and
 blending them in `morph.ts`; the extension point is `BodyArrays.morphs`.
+
+## Wave 3: cloth up close (C3a, `real/garments/`)
+
+What changed, in the order a garment is made:
+
+- **Borders** (`paint.ts`). `cover` is now a signed-distance field, not a blurred indicator: each vertex within five
+  mesh rings of a cloth/skin change probes the garment rule around it (rings out to 9 cm, bisected), so the 0.5 contour
+  that `clothMaterial` cuts at lies on the true hem, neckline or sleeve edge as a straight line across the (large)
+  triangles. Values are not clamped (a far corner pulls the contour of a big triangle into place). Torso/arm
+  assignment: the trapezius, the shoulder blade and the chest beside the arm take the torso rules (the arm rules have no
+  neckline and left holes and spikes), and a palla is dropped from the painted rules (it is drapery now).
+- **Layer** (`assemble.ts`). The cloth layer lifts along a *smoothed, seam-welded* normal (`smoothNormals`), thins to a
+  3 mm lip at its border (so a hem lies on the skin instead of standing as a wall) and its copies never follow the
+  `head` bone (a collar that turns with the head looked ragged). Cloth copies are re-lit from the displaced surface
+  (`relitClothNormals`), so folds painted as thickness shade as folds.
+- **Folds** (`folds.ts`, `detail.ts`). Pure maths: `ridge` (rounded crest between creases), `foldPhase` (leaning,
+  drifting), `foldDepth` (growing toward the hem). `detail.ts` gives the painted toga, palla, stola and the toga's
+  left-arm sleeve their relief as extra layer thickness plus a shade: pleats parallel to the sash across the front,
+  vertical pillars from the left shoulder down the back, the stola's close vertical pleats.
+- **Skirts** (`skirt.ts`). Cloth that hangs: a ring never falls inside the body shape up to 27 cm above it, so skirts
+  drop clear of the belly and hips; pillar folds, a scalloped hem (longest on a crest), a rolled hem and a crisp
+  two-row trim edge (the toga praetexta's purple band, the stola's trim).
+- **Drapery** (`drape.ts`). `slab()` is a cloth sheet with a rim (edge thickness) and an optional back face, rows and
+  columns spaced unevenly. The toga's balteus (pleated band with the umbo swelling), sinus (with a rolled lip at the top
+  and the trim down its lower edge) and the front and back lacinia are slabs laid on the body profile; a palla is the
+  same drapery, shorter. The senators' purple border on a magistrate's or boy's toga is on the sinus edge and the
+  lacinia's outer edge.
+- **Cloaks** (`cloaks.ts`). The lacerna, sagum and paenula hang from the neck base over the wide profile (upper arms
+  included), with pillar folds and a scalloped, thick hem. The procedural `buildCloak` is no longer used by the real
+  bodies.
+- **Material** (`clothMaterial.ts`). `realClothMaterial` (the body's cloth group, with the cover cut and a darker
+  band inside the border plus a faint stitch line) and `realShellMaterial` (shell garments; `RealBody.applyShells`
+  uses it): avatarMaterial with the blotchy mottling replaced by a plain weave (wool 2.8 mm with a twill hint, linen
+  1.6 mm with slubs) as height bump and thread shade, a whisper of dye variation, the very brightest albedos eased
+  down so white wool keeps its folds, and a rim sheen (wool 0.32, linen 0.5) on the lit light. Weave, bump and sheen
+  fade with `fwidth` of the weave coordinates like the skin pores.
+- Clavi (narrow equestrian, broad senatorial) are painted by `paintTorso`'s existing stripe; belts are
+  `buildBelt` (unchanged).
+
+Budget (shell triangles per person at LOD 0, mean over six seeds per role, before to after): plebeian man 1259 to
+1593, patrician (toga) 1224 to 1216, matron 1190 to 1316, slave 852 to 864, priest 1224 to 1404, merchant (paenula)
+2100 to 3000, Dacian (sagum) 2100 to 3000. The body's cloth group is unchanged.
+
+Known limits: the toga's front is still smoother than a real one (the pleats are subtle at 3 m); the sinus and the
+palla are separate sheets that meet the skirt with a visible edge at some angles; the shoulder of a short sleeve
+still shows a slightly jagged contour where the sculpt's armpit web is a very large triangle; walking in a toga at
+speed leaves the sinus swinging as one piece.

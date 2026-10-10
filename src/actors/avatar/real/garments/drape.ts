@@ -189,8 +189,8 @@ export function buildTogaDrapery({ ctx, L, bp, skirt, skirtBack, palla }: TogaPa
   const bw = (u: number) => 0.058 * s * (0.62 + 0.38 * smooth(0, 0.3, u)) * (1 + 0.5 * Math.exp(-Math.pow((u - 0.5) / 0.16, 2))) + 0.012 * s * smooth(0.7, 1, u);
   const chestW = (y: number): Weights => (y > L.chest ? [B.chest, 1] : y > L.waist ? [B.chest, 0.4, B.spine, 0.6] : [B.spine, 0.4, B.hips, 0.6]);
   slab(ctx, {
-    us: ticks(ctx.hi ? 13 : 6),
-    vs: ticks(ctx.hi ? 6 : 3),
+    us: ticks(ctx.hi ? 11 : 6),
+    vs: ticks(ctx.hi ? 5 : 3),
     thick: 0.007 * s,
     hint: front,
     at: (u, v) => {
@@ -231,8 +231,8 @@ export function buildTogaDrapery({ ctx, L, bp, skirt, skirtBack, palla }: TogaPa
   const trimV = trim ? (0.045 * s) / (sagK * s + 0.04 * s) : 0;
   const sinusFolds = 5;
   slab(ctx, {
-    us: ticks(ctx.hi ? 15 : 7),
-    vs: ticks(ctx.hi ? 6 : 3, [0.05, 0.11, ...(trim ? [1 - trimV - 0.004, 1 - trimV + 0.004] : [])]),
+    us: ticks(ctx.hi ? 11 : 7),
+    vs: ticks(ctx.hi ? 5 : 3, [0.06, ...(trim ? [1 - trimV - 0.004, 1 - trimV + 0.004] : [])]),
     thick: 0.007 * s,
     back: ctx.hi,
     hint: front,
@@ -258,8 +258,8 @@ export function buildTogaDrapery({ ctx, L, bp, skirt, skirtBack, palla }: TogaPa
   const laciniaW = (v: number): Weights => (v < 0.25 ? [B.chest, 1] : v < 0.55 ? [B.chest, 0.3, B.hips, 0.7] : [B.hips, 0.6, B.thighL, 0.4]);
   const colEdge = trim ? [0.76, 0.78] : [];
   slab(ctx, {
-    us: ticks(ctx.hi ? 13 : 4, colEdge),
-    vs: ticks(ctx.hi ? 10 : 4),
+    us: ticks(ctx.hi ? 8 : 4, colEdge),
+    vs: ticks(ctx.hi ? 8 : 4),
     thick: 0.007 * s,
     hint: front,
     at: (u, v) => {
@@ -278,8 +278,8 @@ export function buildTogaDrapery({ ctx, L, bp, skirt, skirtBack, palla }: TogaPa
     weights: (u, v) => laciniaW(v),
   });
   slab(ctx, {
-    us: ticks(ctx.hi ? 13 : 4),
-    vs: ticks(ctx.hi ? 11 : 4),
+    us: ticks(ctx.hi ? 8 : 4),
+    vs: ticks(ctx.hi ? 8 : 4),
     thick: 0.007 * s,
     hint: backDir,
     at: (u, v) => {

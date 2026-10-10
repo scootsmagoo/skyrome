@@ -34,7 +34,7 @@ export function buildRealSkirt(ctx: Ctx, L: Levels, bp: BodyProfile, sp: SkirtSp
   const { b } = ctx;
   const s = L.s;
   const folded = sp.folds > 0 && sp.foldAmp > 0;
-  const seg = ctx.hi ? Math.max(32, Math.round(sp.folds * 4.5)) : 12;
+  const seg = ctx.hi ? Math.min(34, Math.max(24, Math.round(sp.folds * 4))) : 12;
   const seed = ctx.rng.next() * 10;
   const yTop = bp.top - 0.2 * s;
   const H = Math.max(0.05, sp.top - sp.hem);
@@ -105,8 +105,8 @@ export function buildRealSkirt(ctx: Ctx, L: Levels, bp: BodyProfile, sp: SkirtSp
       // A crisp trim edge: one row just inside the band, one just outside.
       const te = trimH / H;
       tl.push(1 - te + 0.0025 / H, 1 - te - 0.0025 / H);
-    } else tl.push(0.955);
-    for (const t of [0.9, 0.8, 0.67, 0.52, 0.36, 0.18, 0]) if (t < tl[tl.length - 1] - 0.04) tl.push(t);
+    } else tl.push(0.95);
+    for (const t of [0.86, 0.72, 0.52, 0.27, 0]) if (t < tl[tl.length - 1] - 0.04) tl.push(t);
     if (tl[tl.length - 1] !== 0) tl.push(0);
   } else {
     const n = ctx.hi ? 7 : 4;
@@ -149,7 +149,7 @@ export function buildRealSkirt(ctx: Ctx, L: Levels, bp: BodyProfile, sp: SkirtSp
   );
   // Inner lining for the lower part so the hem never looks hollow from below. Its first row sits at the hem's
   // height, a cloth-thickness inside the outer edge.
-  const innerRows = ctx.hi ? 3 : 2;
+  const innerRows = 2;
   const inner = shade(sp.color, 0.55);
   b.grid(
     seg,

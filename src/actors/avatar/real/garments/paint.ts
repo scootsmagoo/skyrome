@@ -198,7 +198,7 @@ export function paintBody({ app, rig, body, index }: PaintOptions): BodyPaint {
     const sideR = best === B.shoulderR || best === B.upperArmR;
     if ((sideL || sideR) && body.position[v * 3 + 1] > L.armpit - 0.03 * rig.s) {
       const jb = sideL ? B.upperArmL : B.upperArmR;
-      if (Math.hypot(body.position[v * 3] - J[jb * 3], body.position[v * 3 + 2] - J[jb * 3 + 2]) > 0.095 * rig.s) r = 'torso';
+      if (Math.hypot(body.position[v * 3] - J[jb * 3], body.position[v * 3 + 2] - J[jb * 3 + 2]) > 0.085 * rig.s) r = 'torso';
     }
     // The trapezius slope up to the neck too: the arm rules have no neckline, so cloth would run up the neck in spikes.
     if ((best === B.shoulderL || best === B.shoulderR) && body.position[v * 3 + 1] > L.shTop - 0.012 * rig.s && Math.abs(body.position[v * 3]) < L.armX * 0.85) r = 'torso';
@@ -287,7 +287,10 @@ export function paintBody({ app, rig, body, index }: PaintOptions): BodyPaint {
   const cover = new Float32Array(n);
   const s = rig.s;
   const RAMP = 0.025 * s;
-  const radii = [0.003, 0.007, 0.012, 0.018, 0.026].map((r) => r * s);
+  // The probes reach far: the posed sculpt has large triangles (the armpit web), and the cover interpolated across
+  // one is only right when its corners carry the true signed distance, not a value saturated at the ramp's edge.
+  const radii = [0.003, 0.007, 0.012, 0.018, 0.026, 0.04, 0.06, 0.09].map((r) => r * s);
+  const FAR = radii[radii.length - 1];
   const DIRS = 8;
   const near = new Uint8Array(n);
   let frontier: number[] = [];
@@ -300,7 +303,7 @@ export function paintBody({ app, rig, body, index }: PaintOptions): BodyPaint {
       }
     }
   }
-  for (let ring = 0; ring < 3; ring++) {
+  for (let ring = 0; ring < 5; ring++) {
     const next: number[] = [];
     for (const v of frontier)
       for (let j = adj.start[v]; j < adj.start[v + 1]; j++) {
@@ -315,7 +318,7 @@ export function paintBody({ app, rig, body, index }: PaintOptions): BodyPaint {
   for (let v = 0; v < n; v++) {
     const state = out.cloth[v];
     if (!near[v]) {
-      cover[v] = state;
+      cover[v] = state ? 0.5 + (0.5 * FAR) / RAMP : 0.5 - (0.5 * FAR) / RAMP;
       continue;
     }
     // The region whose rule applies here: a skin-region vertex beside cloth borrows its cloth neighbour's.
@@ -328,7 +331,7 @@ export function paintBody({ app, rig, body, index }: PaintOptions): BodyPaint {
         }
       }
       if (rg === 'skin') {
-        cover[v] = state;
+        cover[v] = state ? 0.5 + (0.5 * FAR) / RAMP : 0.5 - (0.5 * FAR) / RAMP;
         continue;
       }
     }
@@ -336,7 +339,7 @@ export function paintBody({ app, rig, body, index }: PaintOptions): BodyPaint {
     const y = body.position[v * 3 + 1];
     const z = body.position[v * 3 + 2];
     const probe = (dx: number, dy: number) => (isCloth(ruleAt(rg, x + dx, y + dy, z)) ? 1 : 0);
-    let dist = RAMP;
+    let dist = FAR;
     for (let k = 0; k < radii.length; k++) {
       let best = Infinity;
       for (let d = 0; d < DIRS; d++) {
@@ -353,11 +356,12 @@ export function paintBody({ app, rig, body, index }: PaintOptions): BodyPaint {
         best = Math.min(best, (lo + hi) / 2);
       }
       if (best < Infinity) {
-        dist = Math.min(RAMP, best);
+        dist = best;
         break;
       }
     }
-    cover[v] = Math.min(1, Math.max(0, 0.5 + (0.5 * (state ? dist : -dist)) / RAMP));
+    // Unclamped: a corner far inside or outside still pulls the contour of a big triangle to the right place.
+    cover[v] = 0.5 + (0.5 * (state ? dist : -dist)) / RAMP;
   }
   // A painted cloth vertex stays just inside the cut: thin straps and sleeve ends must not erode away.
   for (let v = 0; v < n; v++) if (out.cloth[v] && cover[v] < 0.52) cover[v] = 0.52;

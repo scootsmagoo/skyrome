@@ -67,7 +67,7 @@ function patch(shader: { vertexShader: string; fragmentShader: string }, withCov
     .replace(
       '#include <color_fragment>',
       // The edge band: darker just inside the border, with a faint stitched line about a centimetre in.
-      '#include <color_fragment>\ndiffuseColor.a = smoothstep(0.44, 0.56, vCover);\nfloat rcEdge = 1.0 - 0.2 * (1.0 - smoothstep(0.5, 0.64, vCover)) - 0.07 * exp(-pow((vCover - 0.7) / 0.025, 2.0));',
+      '#include <color_fragment>\ndiffuseColor.a = smoothstep(0.44, 0.56, vCover);\nfloat rcEdge = 1.0 - 0.2 * (1.0 - smoothstep(0.5, 0.64, vCover)) - 0.07 * exp(-((vCover - 0.7) / 0.025) * ((vCover - 0.7) / 0.025));',
     )
     .replace('diffuseColor.rgb *= avTint * avTint3;', 'diffuseColor.rgb *= avTint * avTint3 * rcEdge;');
 }
