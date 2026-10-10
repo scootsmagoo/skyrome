@@ -53,6 +53,11 @@ export interface ContainerSpec {
   interior?: boolean;
   /** Sits on a cart (the NPC module's props): the prompt only exists once the cart does. */
   needs?: 'cart';
+  /**
+   * A chest the player keeps things in (phase 2, src/life): it takes items as well as giving them,
+   * and is never "emptied" for good. Its contents persist in the world deltas like any other.
+   */
+  store?: boolean;
 }
 
 export interface ContainerStyle {
@@ -115,6 +120,12 @@ export const CONTAINERS: ContainerSpec[] = [
   unowned('ctn-silt-2', 'silt-niche', 'cloaca-maxima-outlet', 'cloaca.silt', { dx: 0, dz: 7 }),
   unowned('ctn-silt-3', 'silt-niche', 'cloaca-maxima-outlet', 'cloaca.silt', { dx: 3, dz: 6 }),
   unowned('ctn-cista-regis', 'cista-regis-cloacae', 'cloaca-maxima-outlet', 'cista-regis-cloacae', { dx: 0, dz: 10 }),
+
+  // ---- the player's own (phase 2): the chest by the rented pallet behind the Silver Pig
+  // (act.silver-pig.pallet, src/life/data/activities/pallet.ts). Nobody's, so keeping things in it is no
+  // crime. The few coins the last lodger left are its only loot. TODO(key): once clavis-pergulae exists
+  // (items/life.ts, CITY VOICE) add `key: 'clavis-pergulae'` so it opens only for the pallet's tenant.
+  unowned('ctn-cista-pergulae', 'cista-insulae', 'popina-vici-tusci', 'loose.coin', { dx: 3, dz: 6, store: true }),
 
   // ---- loose things on the street (§6.1: the 20 "loose props" that keep AC-23 at 40 without crime)
   unowned('ctn-moneta-mercurii', 'moneta-in-fonte', 'fons-mercurii', 'loose.coin', { dx: 1, dz: 1 }),
