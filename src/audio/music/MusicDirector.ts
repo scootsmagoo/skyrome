@@ -489,7 +489,7 @@ export class MusicDirector {
     const fromCombat = prev === 'combat';
     if (this.current) {
       const c = this.current;
-      const out = toCombat ? 1.2 : prev !== 'silence' ? STYLES[prev as Exclude<MusicState, 'silence'>].fadeOut : 1;
+      const out = toCombat ? 2.2 : prev !== 'silence' ? STYLES[prev as Exclude<MusicState, 'silence'>].fadeOut : 1;
       c.end = now + out;
       c.performer.stopAt = now + out;
       c.rack.level(now, 0, out);

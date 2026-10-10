@@ -185,7 +185,7 @@ export const landingSounds: SoundDef[] = SURFACES.map(
     group: 'Footsteps',
     bus: 'sfx',
     kind: 'oneshot',
-    variants: 3,
+    variants: 4,
     gainDb: -6 + SURFACE_GAIN[surface],
     maxVoices: 4,
     priority: 0.5,

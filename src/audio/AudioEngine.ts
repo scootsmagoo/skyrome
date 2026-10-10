@@ -978,6 +978,7 @@ export class AudioEngine implements System {
    * mono sums. Used by scripts/sfx/mixcheck.mjs to report loudness and spectra of the real mix. Not for
    * play: it runs script processors (deprecated, but the only portable raw-PCM tap).
    */
+  // DEBUG-ONLY measurement tap (scripts/sfx/mixcheck.mjs); never called at play time.
   capture(seconds: number): Promise<{ rate: number; out: Float32Array; buses: Record<string, Float32Array> }> {
     const ctx = this.ctx;
     if (!ctx) return Promise.reject(new Error('audio not started'));

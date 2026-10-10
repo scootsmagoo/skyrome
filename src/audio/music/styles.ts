@@ -164,7 +164,7 @@ export const STYLES: Record<Exclude<MusicState, 'silence'>, Style> = {
     velCap: 0.72,
     level: 0.76,
     reverb: 0.3,
-    fadeIn: 1.2,
+    fadeIn: 2.6,
     fadeOut: 4,
   },
   tavern: {

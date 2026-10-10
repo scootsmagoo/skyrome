@@ -38,7 +38,7 @@ let wave: AudioBuffer | null = null;
  * One cycle of a sine (512 samples, shared by every context: AudioBuffers aren't tied to one), looped
  * by a buffer source at the vibrato rate. This is the only periodic wave in the music and it is
  * never heard: it moves the pitch of recorded notes by a few cents. No OscillatorNode is created
- * anywhere in the music (tests/audio-music-samples.test.ts checks the source).
+ * anywhere in the music (tests/audio-music-nosynth.test.ts checks the source).
  */
 function vibratoWave(ctx: BaseAudioContext): AudioBuffer {
   if (wave) return wave;
