@@ -260,6 +260,8 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
     add(j.p[0], j.p[1], T(`junction:${j.id}`, (b) => buildPlaza(b, poly, H, { material: allRural ? 'gravel' : 'paving_basalt', lift: LIFT.junction, cell: 2.5, skirt: 0.35 })));
   }
 
+  // ---- where the minor streets meet the atlas roads: the road's sidewalk drops to the carriageway there (a dropped kerb)
+  const mouths = streetMouths(plan);
   // ---- atlas roads
   plan.roads.forEach((road, ri) => {
     const L = lineLength(road.points);
@@ -313,7 +315,8 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
           if (pts.length < 2) return;
           const mid = pts[Math.floor(pts.length / 2)];
           const capStart = k === 0, capEnd = k === pieces.length - 1;
-          add(mid[0], mid[1], T(`road:${road.id}:${c}`, (bld) => buildRoadPiece(bld, road, c, pts, H, capStart, capEnd)));
+          const dips = (mouths.get(ri) ?? []).filter((m) => m.s > p0 - m.w && m.s < p1 + m.w).map((m) => ({ s: m.s - p0, side: m.side, w: m.w }));
+          add(mid[0], mid[1], T(`road:${road.id}:${c}`, (bld) => buildRoadPiece(bld, road, c, pts, H, capStart, capEnd, dips)));
         });
       }
     }
@@ -521,7 +524,9 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
     }
     const bench = rng.chance(0.7);
     if (bench) spots.push({ id: `${pz.id}:bench`, kind: 'bench', position: at(pz.r - 1.1, -0.5), heading: pz.facing - Math.PI / 2 });
-    const stall = rng.chance(0.35);
+    // (Not on a slope: the stall's poles stand on the paving, which follows the ground, and a bank under it leaves one side hanging.)
+    const hs = [H(pz.center[0] + pz.r, pz.center[1]), H(pz.center[0] - pz.r, pz.center[1]), H(pz.center[0], pz.center[1] + pz.r), H(pz.center[0], pz.center[1] - pz.r)];
+    const stall = rng.chance(0.35) && Math.max(...hs) - Math.min(...hs) < 0.6;
     if (stall) spots.push({ id: `${pz.id}:stall`, kind: 'stall', position: at(-pz.r + 1.6, 0.4), heading: pz.facing, tag: 'market' });
     const travertine = rng.chance(0.5);
     const amphorae = rng.chance(0.4);
@@ -837,11 +842,42 @@ function coverSet(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: n
   b.add(geo, material, undefined, { castShadow: false });
 }
 
+/**
+ * Where a minor street ends on an atlas road: per road index, the arc length along the road, the
+ * side the street comes in on (+1 = left normal) and its width. The street stops at the road's
+ * band; the road drops its kerb there (buildStreet `dips`).
+ */
+export function streetMouths(plan: CityPlan): Map<number, { s: number; side: -1 | 1; w: number }[]> {
+  const out = new Map<number, { s: number; side: -1 | 1; w: number }[]>();
+  for (const st of plan.streets) {
+    if (st.points.length < 2 || st.steps.some(Boolean)) continue;
+    for (const e of [st.points[0], st.points[st.points.length - 1]]) {
+      let best: { ri: number; n: ReturnType<typeof nearestOnPolyline> } | null = null;
+      for (const road of plan.roads) {
+        if (road.style !== 'paved') continue;
+        const n = nearestOnPolyline(e, road.points);
+        if (n.d > road.half + st.width / 2 + 2.5) continue;
+        if (!best || n.d < best.n.d) best = { ri: road.index, n };
+      }
+      if (!best) continue;
+      const rd = plan.roads[best.ri].points;
+      const a = rd[best.n.seg], b = rd[best.n.seg + 1];
+      const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      const tx = (b[0] - a[0]) / L, tz = (b[1] - a[1]) / L;
+      const side = (e[0] - best.n.p[0]) * -tz + (e[1] - best.n.p[1]) * tx >= 0 ? 1 : -1;
+      const list = out.get(best.ri) ?? [];
+      list.push({ s: best.n.s, side, w: Math.max(2.4, st.width - 0.6) });
+      out.set(best.ri, list);
+    }
+  }
+  return out;
+}
+
 /** One piece of an atlas road (≤ 80 m) in its context (urban, open ground, rural, stairs). */
-function buildRoadPiece(b: MeshBuilder, road: PlanRoad, ctx: string, pts: Vec2[], H: HeightFn, capStart: boolean, capEnd: boolean) {
+function buildRoadPiece(b: MeshBuilder, road: PlanRoad, ctx: string, pts: Vec2[], H: HeightFn, capStart: boolean, capEnd: boolean, dips: { s: number; side: -1 | 1; w: number }[]) {
   const spec: StreetSpec = { points: pts, lift: LIFT.road, capStart, capEnd, steppingStones: [], seed: road.index };
   if (road.style === 'paved' && ctx === 'urban') {
-    Object.assign(spec, { kind: 'paved', roadWidth: road.carriage, sidewalk: road.sidewalk, curb: KERB });
+    Object.assign(spec, { kind: 'paved', roadWidth: road.carriage, sidewalk: road.sidewalk, curb: KERB, dips });
   } else if (road.style === 'paved' && ctx === 'open') {
     Object.assign(spec, { kind: 'lane', roadWidth: road.carriage + road.sidewalk, roadMaterial: 'paving_basalt' });
   } else if (road.style === 'paved') {

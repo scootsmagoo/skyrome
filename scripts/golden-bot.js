@@ -225,11 +225,28 @@
     });
     return best;
   }
+  /**
+   * A player steers round a stall or a corner the street graph's straight links cut; so does the bot: when the
+   * next waypoint is not in a straight walkable line from here (the NavGrid knows the colliders), lead through the
+   * grid to it (A*, as the crowd does). At most twice a second; outside cells only.
+   */
+  let steerT = 0;
+  function steerAround(pts) {
+    const grid = game.population?.nav?.grid;
+    if (!grid || inCell() || !pts.length || performance.now() - steerT < 500) return;
+    const c = pts[0];
+    if (dist(c) > 45 || !grid.ready(p.position.x, p.position.z) || !grid.ready(c.x, c.z)) return;
+    steerT = performance.now();
+    if (grid.lineWalkable(p.position.x, p.position.z, c.x, c.z)) return;
+    const lead = grid.findPath(p.position.x, p.position.z, c.x, c.z, 4000);
+    if (lead && lead.length) pts.unshift(...lead.filter((q) => Math.hypot(q.x - c.x, q.z - c.z) > 0.5));
+  }
   /** Face the next point of the path (popping those within `pop` m), hold W, and handle a jam. */
   function follow(target, pop, unstuck) {
     // Inside a cell a route point on another floor shares its plan position: pop only within 1.5 m of the player's height.
     const reached = (w) => dist(w) < pop && (!inCell() || Math.abs((w.y ?? p.position.y) - p.position.y) < 1.5);
     while (path.length > 1 && reached(path[0])) path.shift();
+    steerAround(path);
     const c = path[0] ?? target;
     face(c.x, c.z);
     const far = dist(target);

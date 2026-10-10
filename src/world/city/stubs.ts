@@ -2,7 +2,8 @@
  * Closing the minor-street stubs (pure, runs inside planCity after the subdivision): a street the
  * marcher stopped at a sliver, a landmark apron, a slope foot or a garden is extended, straight,
  * to the nearest ROAD / foreign STREET / PIAZZA / PLAZA within REACH m, across ground a lane may
- * cross (open leftovers, aprons, slopes, an aqueduct arcade). A lane that would otherwise be an
+ * cross (open leftovers, aprons, slopes, an aqueduct arcade, a Servian wall band: a lane ends at the
+ * wall only when nothing is beyond it). A lane that would otherwise be an
  * island (both ends stop at nothing) reaches up to REACH_ISLAND. Where nothing is within reach
  * the end is returned as an orphan, for the piazza pass to open a court there. Deterministic.
  */
@@ -13,12 +14,12 @@ import { K, type Grid, type Pt } from './raster';
 export const REACH = 18;
 /** Longest extension of a lane that would otherwise be an island (both ends stop at nothing). */
 export const REACH_ISLAND = 36;
-/** Ground an extension may cross. Walls, water and landmarks stop it; an aqueduct arcade opens a wider arch for it (monuments.ts leaves out piers standing in a street). */
-const PASS = new Set<number>([K.FREE, K.SCRAP, K.STEEP, K.MARGIN, K.GARDEN, K.PIAZZA, K.AQUEDUCT]);
+/** Ground an extension may cross. Water and landmarks stop it; an aqueduct arcade opens a wider arch for it (monuments.ts leaves out piers standing in a street) and a Servian wall a breach with jambs (monuments.ts). */
+const PASS = new Set<number>([K.FREE, K.SCRAP, K.STEEP, K.MARGIN, K.GARDEN, K.PIAZZA, K.AQUEDUCT, K.WALL]);
 /** What it is looking for. */
 const TARGET = new Set<number>([K.ROAD, K.STREET, K.PLAZA, K.PIAZZA]);
 /** Ground an extension turns into street. */
-const STAMP = new Set<number>([K.FREE, K.SCRAP, K.STEEP, K.AQUEDUCT]);
+const STAMP = new Set<number>([K.FREE, K.SCRAP, K.STEEP, K.AQUEDUCT, K.WALL]);
 
 export interface StubStreet {
   index: number;
