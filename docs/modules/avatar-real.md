@@ -279,3 +279,177 @@ cloth) on LOD 3 (`farHead`).
 **Cost** (Forum at 10:00, M4 Max, in-page timing of `updateCorrectives`): 0.6 microseconds per LOD 0 avatar per frame
 (was 0.07: correctives only), 0.025 per far avatar (unchanged; far avatars skip the face and hands). Draws and triangles
 unchanged (900 / 2.58 M in the worst direction, 898 / 2.58 M before).
+
+## Wave 3: cloth up close (C3a, `real/garments/`)
+
+What changed, in the order a garment is made:
+
+- **Borders** (`paint.ts`). `cover` is now a signed-distance field, not a blurred indicator: each vertex within five
+  mesh rings of a cloth/skin change probes the garment rule around it (rings out to 9 cm, bisected), so the 0.5 contour
+  that `clothMaterial` cuts at lies on the true hem, neckline or sleeve edge as a straight line across the (large)
+  triangles. Values are not clamped (a far corner pulls the contour of a big triangle into place). Torso/arm
+  assignment: the trapezius, the shoulder blade and the chest beside the arm take the torso rules (the arm rules have no
+  neckline and left holes and spikes), and a palla is dropped from the painted rules (it is drapery now).
+- **Layer** (`assemble.ts`). The cloth layer lifts along a *smoothed, seam-welded* normal (`smoothNormals`), thins to a
+  3 mm lip at its border (so a hem lies on the skin instead of standing as a wall) and its copies never follow the
+  `head` bone (a collar that turns with the head looked ragged). Cloth copies are re-lit from the displaced surface
+  (`relitClothNormals`), so folds painted as thickness shade as folds.
+- **Folds** (`folds.ts`, `detail.ts`). Pure maths: `ridge` (rounded crest between creases), `foldPhase` (leaning,
+  drifting), `foldDepth` (growing toward the hem). `detail.ts` gives the painted toga, palla, stola and the toga's
+  left-arm sleeve their relief as extra layer thickness plus a shade: pleats parallel to the sash across the front,
+  vertical pillars from the left shoulder down the back, the stola's close vertical pleats.
+- **Skirts** (`skirt.ts`). Cloth that hangs: a ring never falls inside the body shape up to 27 cm above it, so skirts
+  drop clear of the belly and hips; pillar folds, a scalloped hem (longest on a crest), a rolled hem and a crisp
+  two-row trim edge (the toga praetexta's purple band, the stola's trim).
+- **Drapery** (`drape.ts`). `slab()` is a cloth sheet with a rim (edge thickness) and an optional back face, rows and
+  columns spaced unevenly; each quad is wound against the sheet's surface normal (one sign per sheet, voted against the
+  hint), not by one winding for the whole grid. The toga is ONE mantle (`buildTogaDrapery`): a ring round the torso
+  slit under the right arm, whose top edge is the toga's line (neck base over the left shoulder and the back down to the
+  right armpit, in front the balteus diagonal from the left shoulder to the right hip) and whose hem swings low in front
+  (the sinus, with the praetexta's purple band along it, and a rolled lip and umbo swell along the diagonal) and a
+  little at the back. It hangs over the wide profile on the left (over the arm) and the body profile on the right (the
+  bare arm), stays outside the skirt (`radiusAt`, sampled either side of each column: a crest between two columns must
+  not poke through) and takes the skirt's thigh weights below the waist (without them a stride or the idle stance moved
+  the skirt through the mantle: holes in the hem).
+- **Palla** (`cloaks.ts`, `buildRealPalla`). One continuous shawl: the cape builder with a thigh-length hem, the border
+  along it, a wide span (it comes round over the arms) and no fibula. It replaces the toga-style sash and pouch (two
+  hard-edged slabs) of the first pass. Over a tunic the stola's painted straps are dropped (thinner than the sculpt's
+  vertex spacing, they painted as red spikes up the shoulders) and the stola's top edge is a soft colour band.
+- **Cloaks** (`cloaks.ts`). The lacerna, sagum and paenula hang from the neck base over the wide profile (upper arms
+  included), with pillar folds and a scalloped, thick hem. The procedural `buildCloak` is no longer used by the real
+  bodies.
+- **Material** (`clothMaterial.ts`). `realClothMaterial` (the body's cloth group, with the cover cut and a darker
+  band inside the border plus a faint stitch line) and `realShellMaterial` (shell garments; `RealBody.applyShells`
+  uses it): avatarMaterial with the blotchy mottling replaced by a plain weave (wool 2.8 mm with a twill hint, linen
+  1.6 mm with slubs) as height bump and thread shade, a whisper of dye variation, the very brightest albedos eased
+  down so white wool keeps its folds, and a rim sheen (wool 0.32, linen 0.5) on the lit light. Weave, bump and sheen
+  fade with `fwidth` of the weave coordinates like the skin pores.
+- **Clavi** (narrow equestrian 2.6 cm, broad senatorial 5 cm). Painted on the body's vertices they came out ragged (a
+  stripe narrower than the vertex spacing), so `paintBody` hands `paintTorso` a tunic without clavi and writes a
+  `clavus` vec4 per vertex instead (bind-pose x, stripe centre, half width, flag 2 where the tunic shows: not under
+  the painted toga, not under armour). `assembleBody` copies it onto the cloth copies (with the copied vertex's own x)
+  and `realClothMaterial` draws the stripe per pixel from the interpolated x: crisp lines at any triangle size.
+  A geometry without the attribute reads w = 1 and draws nothing. The stripe ends at the belt (the tunic skirt shell
+  carries none). Belts are `buildBelt` (unchanged).
+
+Folds, review pass 2: the toga mantle's pillar folds are added AFTER the clamp to the skirt's surface (before, the
+clamp flattened them below the waist, which is why the mantle read as a smooth sack), 11 folds over 44 columns, depth
+0.08 body heights, fading toward the slit edges, with vertex shade 0.26..1 on the crests; the toga skirt has 12 folds
+(depth 0.05), the stola 14 (0.016), the palla 10 over 20 columns. Long skirts (legK > 0.85) also take shin weights
+over their lower half (up to 0.75 at the hem), so a back-swung calf is more often under the cloth.
+
+Budget (shell triangles per person at LOD 0, mean over six seeds per role; original pre-C3a numbers in brackets):
+patrician (toga) 1436 [1224], matron 1648 [1190], priest 1684 [1224], plebeian man 1209, slave 864, merchant (paenula)
+and Dacian (sagum) 1848 [2100]. Measured in the game via the shells geometry's index count. The body's cloth group is unchanged.
+Forum crowd (`perf.mjs --views forum`): triangles per direction identical to within noise (2.57M/2.11M/2.13M/2.27M
+against 2.57M/2.13M/2.13M/2.26M); GPU/CPU ms differ run to run with the shared GPU.
+
+Known limits: the toga's front is still smoother than a real wool toga (folds read at 1.5 to 8 m but are soft); a
+sharp stride still pushes a calf (painted in the skirt's colour) out of the toga's skirt; a tunic-only back shows
+skin notches at the armpits; the shoulder of a short sleeve
+still shows a slightly jagged contour where the sculpt's armpit web is a very large triangle; walking in a toga at
+speed leaves the sinus swinging as one piece.
+
+## Wave 3: baked cloth (C3a-2, `real/garments/{baked,bind,fit}.ts`, `tools/characters/garments.py`)
+
+Two rounds of procedural fold maths topped out (the toga read as a smooth sheet, a plaster bib), so the draped
+garments are now made the way games make cloth folds: **simulated offline, baked, fitted at runtime**.
+
+**Offline** (`node tools/characters/garments.mjs [male|female] [--only=toga,stola] [--preview]`, Blender 5.1, about 10
+minutes; one garment: `Blender -b --python tools/characters/garments.py -- male --only=toga --preview`):
+- The collider is the game's own reference body (`public/models/people/<sex>.glb`, LOD 0, already in the bind pose). An
+  arm the cloth passes under is swung out of the way first (the bind pose has the arms against the torso): both for
+  skirts, the right one for the toga.
+- Each garment is a flat **pattern** in metres (a grid, u across, v down from its top edge) whose flat shape is the
+  cloth's rest shape (`rest_shape_key`), laid loosely round the body in folds (`Pleats`: folds of uneven width so they
+  look gathered by hand) and **pinned** where it is fixed: a skirt's belt line, the toga's line over the left
+  shoulder, a cloak's neckline and the sagum's fibula. Skirts are cut as cones (lightly gathered at the belt, about 1.7
+  times the belt at the hem), the toga's mantle as a fan (the toga is a segment of a circle: 1.35 times wider at the
+  hem than along its top line).
+- Blender's cloth solver settles it under gravity with body and self collision; wool (`wool`, toga/palla/cloaks: heavy,
+  bending 15, broad folds), light wool (`wool_light`, lacerna, paenula), tunic wool and linen (stola: finer folds). A
+  few volume-keeping Laplacian passes take out the solver's grid-scale crinkles (the big folds stay).
+- **Layers**: a garment worn over another is simulated over that one's settled cloth (`UNDER`: cloaks and the male
+  palla over the knee tunic, the female palla over the stola), so they never cross; fitted to any body both keep their
+  offsets from the skin, so they stay apart.
+- Then: per-vertex ambient occlusion ray-traced against body and cloth (48 rays, both faces), collapse-decimation to
+  three LODs, a turned rim along every hem (LOD 0 and 1), and one GLB per sex (`public/models/garments/<sex>.glb`, meshes
+  `<id>_lod<k>`, TEXCOORD_0 = pattern metres, TEXCOORD_1 = (distance to the bordered edge, AO), TEXCOORD_2 = (part id,
+  rim)). `--preview` writes workbench renders to `.cache/garments/` (look at them: a sim can swing or fold differently
+  after a small change).
+
+The garments (male / female):
+
+| id | what | pinned | parts |
+|---|---|---|---|
+| `toga` | Imperial toga: the lower wrap to the instep; the mantle hung from the toga line (over the left shoulder, down across the back to under the right arm, back up across the chest), its front free between the right hip and the left shoulder so it sags into the **sinus**; over the left arm; to the calves behind (a lacinia hanging down the front from the left shoulder is in the script, off: `--set=lacinia=1`) | the toga line (not its front), the wrap's waist | 0 wrap, 1 mantle |
+| `toga_velata` | the same toga **capite velato** (priests, sacrificants): the line runs from the left shoulder up beside the cheek, over the brow, down the right side of the head to the right shoulder, then across the chest; the hood falls over the head and down the back, the right shoulder is covered | the line round the face and across the chest | 0 wrap, 1 mantle |
+| `tunic_short/knee/long` | the tunic below the belt (cone cut) and the kolpos falling over the belt | belt line, the kolpos's top | 0 skirt, 1 kolpos |
+| `stola` (f) | high-belted under the bust to the instep (linen, fine folds), a short bodice and two straps | belt, bodice top, straps | 0 skirt, 1 bodice, 2 straps |
+| `palla` (m, f) | a wool mantle round both shoulders and the back, over the upper arms, with its end down over the left arm | the line round the shoulders | 1 mantle, 2 end |
+| `paenula` | the bell cloak (a circle and a half of wool, flare 2.6) to the knees, its hood lying on the back | neckline | 1 bell, 2 hood |
+| `sagum`, `lacerna` | a rectangle round the shoulders pinned at the right shoulder, open down the right side (lacerna longer and lighter) | the line from the fibula round the neck back to it | 1 |
+
+**Runtime** (`baked.ts`: library and cache; `bind.ts`: pure maths, tested in `bind.test.ts`; `fit.ts`: rules and fit):
+- `loadRealBodies` also loads the two GLBs and hands `baked.ts` the body templates (one hook in RealBody).
+- **Binding**, once per (sex, garment, LOD) on first use: every garment vertex is bound to the reference body of the
+  same LOD at its nearest surface point (triangle + barycentrics, uniform-grid search), as a distance along the body's
+  smooth (interpolated) normal plus a small tangential rest.
+- **Fit** per appearance: re-evaluated on `ctx.body` (already morphed: never morph it again): the anchor moves with the
+  skin, the offset turns with the skin's normal (shortest rotation from the bind normal), so cloth that lay 2 cm off a
+  belly lies 2 cm off a heavier one; the displacement of cloth hanging far from the body (hems, the sinus, cloak tails)
+  is relaxed over the garment mesh (8 passes, fading in from 3 to 16 cm off the skin) so neighbouring anchors on
+  different limbs cannot tear it.
+- **Weights**: the body's weights at each anchor, handed up the parent chain to the bones the garment may follow
+  (`SPECS[id].bones`: a toga follows the left upper arm, not the right; a cloak both upper arms, not the forearms),
+  smoothed over the garment, then below the hips blended into the **skirt rule** (hips, the thigh on its side, the shins
+  near the hem of long skirts; `skirtRule`): skirt parts from their belt down, drapery over the legs from the crotch down
+  with the rule of the skirt it hangs over (a cloak or a man's palla the knee tunic's, a woman's palla the stola's, the
+  toga's mantle its wrap's), so the two layers move alike and the inner one never strides through the outer.
+- **Legs inside long cloth** (`legs` attribute + the shell material's vertex shader): each skirt vertex below the crotch
+  knows the leg axis and radius at its height (measured on the person's body); after skinning it is pushed out of the
+  posed thigh or shin capsule of both legs (bone matrices from the skeleton), so a stride presses the cloth forward
+  instead of poking through it. Outer layers keep more clearance (a toga's mantle 3.2 cm, cloaks 3.5 cm, skirts 1.2 cm)
+  so a leg pushing both never presses them into one surface.
+- **Hide** (per reference body vertex, cached): a vertex whose bones the garment follows closely is hidden when a ray
+  out along its normal and four tilted ones all hit the cloth within 9 to 12 cm (hems and necklines fail a tilted
+  probe and stay visible); long skirts also hide the thighs down to 16 cm above the hem (the leg push keeps them under
+  the cloth).
+- **Colours**: per vertex garment colour; `trim` = border colour and band width, drawn per pixel at a distance from the
+  bordered edge (`cloth.x`): the praetexta's purple 6 cm along the toga's hem, the lacinia's edge; stola and tunic
+  trims along their hems. **Clavi** continue down the tunic skirt along the cloth (pattern u, from where the cloth leaves
+  the belt: they run into the folds). The baked occlusion (`surf.y`) shades the indirect light fully and the direct
+  light by 60 % (the shadow map cannot resolve folds); the hem's rim is a shade darker; the weave runs along the
+  cloth's threads (pattern coordinates). Shell material: DoubleSide (single sheets).
+- Paint: at LOD 0 to 2 the body no longer paints a toga or stola that is baked (it paints the tunic under it);
+  LOD 3 keeps the painted garments. `?cloth=procedural` turns the baked cloth off (A/B).
+- **Dark smears on light cloth** (the priest at the Lacus Curtius): the post chain's screen-space AO, darkening every
+  fold and casting halos from cloth edges onto the tunic and skin. Characters now write alpha 0 into the HDR target
+  (avatarMaterial, so classic avatars, real LOD 1 to 3 bodies, shells, head gear; the body's A2C cloth keeps its alpha)
+  while the post chain renders the scene (`AO_MARK`, a shared uniform PostFX sets around that one render: straight to the
+  canvas Safari would composite alpha 0 as black), and the AO pass neither darkens alpha-0 pixels nor counts them as
+  occluders (`gfx/post/ao.ts`, `shaders.ts`); their own occlusion is baked.
+- The head module's veil is left out when a baked toga velata exists (`head/gear.ts`, one line).
+- Armpit notches on tunic-only bodies (`paint.ts`): the armpit's front and back folds and the inside of the arm beside
+  the ribs (upper-arm vertices inward of the arm's axis, from 11 cm below the armpit up) take the torso's rules, so
+  the tunic runs on under the arm instead of stopping at the sleeve's hem.
+
+**Budget** (triangles per garment at LOD 0 / 1 / 2, including the hem rims on LOD 0 and 1; `baked.test.ts` holds them
+under 4500 / 2400 / 520): toga 3920 / 1905 / 420, toga velata 4336 / 2055 / 460, knee tunic 2928 / 1417 / 299, short 2626 /
+1299 / 260, long 3344 / 1581 / 339 (woman's 3284 / 1600 / 339), stola 3860 / 1840 / 380, palla 3344-3392 / 1753-1773 / 359,
+paenula 3168 / 1612 / 359, sagum 2756 / 1520 / 320, lacerna 3020 / 1580 / 340 (C3a's procedural shells: about 1440 for a
+toga, 1650 for a matron, 1850 with a cloak, at LOD 0 and 1). LOD 0 keeps its hems at nearly full resolution (they
+decimate last); `--relod` rebuilds the LODs from the kept simulation without simulating again. Triangles of an inner layer lying
+under an outer one are dropped (about 100 of the toga's wrap). LOD 0 is drawn within 9 m only, so the Forum's totals
+did not move (`perf.mjs --views forum`, procedural against baked: 899/2.58M 711/2.13M 725/2.12M 805/2.25M draws/triangles
+against 897/2.58M 713/2.12M 719/2.09M 796/2.22M; geometry +6 MB; the GLBs are 1.5 MB + 0.5 MB). Binding all garments at
+load costs about 0.4 s (spread between frames); a person's LOD 0 fit about 1.7 ms (LOD 1 0.8, LOD 2 0.15).
+
+**Known limits** (C3a-2): a sprint still lifts the back calf out below a long hem (it shows in the under-tunic's painted
+colour) and a knee at full stride can dent a stola's front; the cloth is skinned drape, with no secondary motion (the
+sinus swings with the hips); the toga has no separate umbo pouch and no lacinia (simulated, it crumpled into a ragged band and was left out); the
+palla's end hangs as a crumpled band; the sagum bulges forward over the belly; the stola reads as straight organ-pipe folds; tunic skirts flare a little at the sides where the simulation had
+the arms swung out; beyond 55 m (LOD 3) the painted body garments return (a toga becomes white legs), as before; women's
+togas and cloaks and men's stolas stay procedural (no role wears them); the shadow pass does not push the cloth out of the
+legs. A simulation is chaotic: a small change to garments.py can change a drape completely (it is deterministic for the
+same inputs), so look at the `--preview` renders after every change.

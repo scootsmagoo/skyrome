@@ -18,6 +18,7 @@
  * vertex each appended copy came from (-1 for rigid pieces).
  */
 import * as THREE from 'three';
+import { B } from '../../rig';
 import type { BodyPaint } from './paint';
 
 export interface AssembleInput {
@@ -122,15 +123,21 @@ export function assembleBody(inp: AssembleInput): Assembled {
   const si = new Uint16Array(total * 4);
   const sw = new Float32Array(total * 4);
   const cov = cover ? new Float32Array(total).fill(1) : null;
+  const clv = cover && paint.clavus ? new Float32Array(total * 4) : null;
   const tan = inp.tangent ? new Float32Array(total * 4) : null;
   const uv = inp.uv ? new Float32Array(total * 2) : null;
 
+  // The layer is lifted along a smoothed normal: the sculpt's own normals wobble from vertex to vertex, and a
+  // few millimetres of lift along them would show as a ragged contour at every border.
+  const welded = weldGroups(inp.position, n);
+  const lift = smoothNormals(welded, geometricNormals(inp.position, I, n), I, n);
   const copyVertex = (dst: number, v: number, pv: number, offset: number, sv = pv) => {
     const nx = inp.normal[v * 3], ny = inp.normal[v * 3 + 1], nz = inp.normal[v * 3 + 2];
-    pos[dst * 3] = inp.position[v * 3] + nx * offset;
+    const lx = lift[v * 3], ly = lift[v * 3 + 1], lz = lift[v * 3 + 2];
+    pos[dst * 3] = inp.position[v * 3] + lx * offset;
     // Soles stay on the ground: no offset into the floor from downward-facing surfaces.
-    pos[dst * 3 + 1] = inp.position[v * 3 + 1] + (ny < -0.5 ? 0 : ny * offset);
-    pos[dst * 3 + 2] = inp.position[v * 3 + 2] + nz * offset;
+    pos[dst * 3 + 1] = inp.position[v * 3 + 1] + (ly < -0.5 ? 0 : ly * offset);
+    pos[dst * 3 + 2] = inp.position[v * 3 + 2] + lz * offset;
     nor[dst * 3] = nx;
     nor[dst * 3 + 1] = ny;
     nor[dst * 3 + 2] = nz;
@@ -139,7 +146,8 @@ export function assembleBody(inp: AssembleInput): Assembled {
     col[dst * 3 + 2] = paint.color[pv * 3 + 2];
     for (let k = 0; k < 4; k++) {
       surf[dst * 4 + k] = paint.surf[sv * 4 + k];
-      si[dst * 4 + k] = inp.skinIndex[v * 4 + k];
+      // Cloth never follows the head: its neckline would swing with every turn of the head (a ragged collar).
+      si[dst * 4 + k] = dst >= n && inp.skinIndex[v * 4 + k] === B.head ? B.neck : inp.skinIndex[v * 4 + k];
       sw[dst * 4 + k] = inp.skinWeight[v * 4 + k];
     }
     if (tan && inp.tangent) for (let k = 0; k < 4; k++) tan[dst * 4 + k] = inp.tangent[v * 4 + k];
@@ -152,9 +160,17 @@ export function assembleBody(inp: AssembleInput): Assembled {
   for (let j = 0; j < source.length; j++) {
     const v = source[j];
     const p = paintFrom[j];
-    copyVertex(n + j, v, p, Math.max(MIN_CLOTH, paint.thick[p]), surfFrom[j]);
+    // The layer thins to a lip of MIN_CLOTH at its border: a hem lying on the skin, not a standing wall.
+    const full = Math.max(MIN_CLOTH, paint.thick[p]);
+    const k = cover ? Math.min(1, Math.max(0, (cover[v] - 0.52) / 0.48)) : 1;
+    copyVertex(n + j, v, p, MIN_CLOTH + (full - MIN_CLOTH) * k * k * (3 - 2 * k), surfFrom[j]);
     cov![n + j] = cover![v];
+    if (clv) {
+      for (let k = 1; k < 4; k++) clv[(n + j) * 4 + k] = paint.clavus![p * 4 + k];
+      clv[(n + j) * 4] = inp.position[v * 3];
+    }
   }
+  if (cover) relitClothNormals(pos, nor, clothIndex, source, n, welded);
   const index: number[] = [];
   const groups: { start: number; count: number; materialIndex: number }[] = [];
   if (cover) {
@@ -176,6 +192,7 @@ export function assembleBody(inp: AssembleInput): Assembled {
   g.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4));
   g.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
   if (cov) g.setAttribute('cover', new THREE.BufferAttribute(cov, 1));
+  if (clv) g.setAttribute('clavus', new THREE.BufferAttribute(clv, 4));
   if (tan) g.setAttribute('tangent', new THREE.BufferAttribute(tan, 4));
   if (uv) g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   g.setIndex(total > 65535 ? new THREE.Uint32BufferAttribute(index, 1) : new THREE.Uint16BufferAttribute(index, 1));
@@ -183,6 +200,124 @@ export function assembleBody(inp: AssembleInput): Assembled {
   const src = new Int32Array(source.length + rn).fill(-1);
   src.set(source);
   return { geometry: g, count: n, source: src, split: !!cover, triangles: index.length / 3 };
+}
+
+/** Vertices at the same place (UV seams) share a group. */
+export interface Welded {
+  group: Int32Array;
+  count: number;
+}
+
+export function weldGroups(position: ArrayLike<number>, n: number): Welded {
+  const group = new Int32Array(n);
+  const keys = new Map<string, number>();
+  let count = 0;
+  for (let v = 0; v < n; v++) {
+    const key = `${Math.round(position[v * 3] * 2e4)},${Math.round(position[v * 3 + 1] * 2e4)},${Math.round(position[v * 3 + 2] * 2e4)}`;
+    let g = keys.get(key);
+    if (g === undefined) {
+      g = count++;
+      keys.set(key, g);
+    }
+    group[v] = g;
+  }
+  return { group, count };
+}
+
+/** Area-weighted normals of the triangles round each vertex (the surface as it is, not as the sculpt shaded it). */
+export function geometricNormals(position: ArrayLike<number>, index: ArrayLike<number>, n: number): Float32Array {
+  const out = new Float32Array(n * 3);
+  for (let i = 0; i < index.length; i += 3) {
+    const a = index[i], b = index[i + 1], c = index[i + 2];
+    const e1x = position[b * 3] - position[a * 3], e1y = position[b * 3 + 1] - position[a * 3 + 1], e1z = position[b * 3 + 2] - position[a * 3 + 2];
+    const e2x = position[c * 3] - position[a * 3], e2y = position[c * 3 + 1] - position[a * 3 + 1], e2z = position[c * 3 + 2] - position[a * 3 + 2];
+    const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
+    for (const v of [a, b, c]) {
+      out[v * 3] += nx;
+      out[v * 3 + 1] += ny;
+      out[v * 3 + 2] += nz;
+    }
+  }
+  for (let v = 0; v < n; v++) {
+    const l = Math.hypot(out[v * 3], out[v * 3 + 1], out[v * 3 + 2]) || 1;
+    out[v * 3] /= l;
+    out[v * 3 + 1] /= l;
+    out[v * 3 + 2] /= l;
+  }
+  return out;
+}
+
+/**
+ * Vertex normals averaged with their neighbours' (two passes) and renormalised. Welded vertices keep one
+ * normal, so a layer lifted along it never cracks open at a UV seam.
+ */
+export function smoothNormals(w: Welded, normal: ArrayLike<number>, index: ArrayLike<number>, n: number): Float32Array {
+  const { group, count: ng } = w;
+  let cur = new Float32Array(ng * 3);
+  for (let v = 0; v < n; v++) for (let c = 0; c < 3; c++) cur[group[v] * 3 + c] += normal[v * 3 + c];
+  for (let pass = 0; pass < 2; pass++) {
+    const acc = Float32Array.from(cur);
+    for (let i = 0; i < index.length; i += 3) {
+      for (let k = 0; k < 3; k++) {
+        const a = group[index[i + k]];
+        const b = group[index[i + ((k + 1) % 3)]];
+        if (a === b) continue;
+        for (let c = 0; c < 3; c++) {
+          acc[a * 3 + c] += cur[b * 3 + c] * 0.5;
+          acc[b * 3 + c] += cur[a * 3 + c] * 0.5;
+        }
+      }
+    }
+    for (let g = 0; g < ng; g++) {
+      const l = Math.hypot(acc[g * 3], acc[g * 3 + 1], acc[g * 3 + 2]) || 1;
+      acc[g * 3] /= l;
+      acc[g * 3 + 1] /= l;
+      acc[g * 3 + 2] /= l;
+    }
+    cur = acc;
+  }
+  const out = new Float32Array(n * 3);
+  for (let v = 0; v < n; v++) for (let c = 0; c < 3; c++) out[v * 3 + c] = cur[group[v] * 3 + c];
+  return out;
+}
+
+/**
+ * Light the cloth copies from the surface they now form: each copy's normal becomes half the sculpt's, half the
+ * area-weighted normal of the displaced triangles around its (welded) source vertex, so folds painted as layer
+ * thickness (detail.ts) shade as folds.
+ */
+export function relitClothNormals(pos: Float32Array, nor: Float32Array, tris: ArrayLike<number>, source: ArrayLike<number>, base: number, w: Welded) {
+  const acc = new Float32Array(w.count * 3);
+  const g = (i: number) => w.group[source[i - base]];
+  for (let i = 0; i < tris.length; i += 3) {
+    const a = tris[i], b = tris[i + 1], c = tris[i + 2];
+    if (a < base || b < base || c < base) continue;
+    const e1x = pos[b * 3] - pos[a * 3], e1y = pos[b * 3 + 1] - pos[a * 3 + 1], e1z = pos[b * 3 + 2] - pos[a * 3 + 2];
+    const e2x = pos[c * 3] - pos[a * 3], e2y = pos[c * 3 + 1] - pos[a * 3 + 1], e2z = pos[c * 3 + 2] - pos[a * 3 + 2];
+    const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
+    for (const v of [a, b, c]) {
+      const k = g(v) * 3;
+      acc[k] += nx;
+      acc[k + 1] += ny;
+      acc[k + 2] += nz;
+    }
+  }
+  for (let j = 0; j < source.length; j++) {
+    const v = base + j;
+    const k = w.group[source[j]] * 3;
+    const l = Math.hypot(acc[k], acc[k + 1], acc[k + 2]);
+    if (l < 1e-12) continue;
+    let x = nor[v * 3] * 0.5 + (acc[k] / l) * 0.5;
+    let y = nor[v * 3 + 1] * 0.5 + (acc[k + 1] / l) * 0.5;
+    let z = nor[v * 3 + 2] * 0.5 + (acc[k + 2] / l) * 0.5;
+    const m = Math.hypot(x, y, z) || 1;
+    x /= m;
+    y /= m;
+    z /= m;
+    nor[v * 3] = x;
+    nor[v * 3 + 1] = y;
+    nor[v * 3 + 2] = z;
+  }
 }
 
 function pushRigid(index: number[], rigid: THREE.BufferGeometry, base: number) {

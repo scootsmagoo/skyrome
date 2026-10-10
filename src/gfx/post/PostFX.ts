@@ -11,7 +11,7 @@
  * `game.post.enabled` or the `postfx` setting (when off, the renderer tone-maps directly).
  */
 import * as THREE from 'three';
-import { AO_BLUR_FRAG, AO_FRAG } from './ao';
+import { AO_BLUR_FRAG, AO_FRAG, AO_MARK } from './ao';
 import { SHAFT_BLUR_FRAG, SHAFT_MASK_FRAG } from './shafts';
 import { aoDefault, shaftsDefault } from '../../core/graphics';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
@@ -211,6 +211,7 @@ export class PostFX implements System {
       name: 'AO',
       uniforms: {
         tDepth: { value: null },
+        tMask: { value: null },
         uProj: { value: new THREE.Matrix4() },
         uInvProj: { value: new THREE.Matrix4() },
         uTexel: { value: new THREE.Vector2() },
@@ -392,9 +393,11 @@ export class PostFX implements System {
     const w = this.size.x, h = this.size.y;
     if (this.hdr.width !== w || this.hdr.height !== h) this.resize(w, h);
 
-    // 1. Scene into HDR.
+    // 1. Scene into HDR (characters mark themselves with alpha 0 for the AO pass, see AO_MARK).
     renderer.setRenderTarget(this.hdr);
+    AO_MARK.value = this.aoEnabled ? 1 : 0;
     renderer.render(scene, camera);
+    AO_MARK.value = 0;
 
     const reversed = renderer.capabilities.reversedDepthBuffer && renderer.state.buffers.depth.getReversed() ? 1 : 0;
     this.aoMat.uniforms.uReversed.value = reversed;
@@ -412,6 +415,7 @@ export class PostFX implements System {
     if (this.aoEnabled) {
       const au = this.aoMat.uniforms;
       au.tDepth.value = this.hdr.depthTexture;
+      au.tMask.value = this.hdr.texture;
       au.uProj.value.copy(camera.projectionMatrix);
       au.uInvProj.value.copy(camera.projectionMatrixInverse);
       au.uTexel.value.set(1 / w, 1 / h);

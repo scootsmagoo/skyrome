@@ -23,7 +23,7 @@ import type { Appearance, Sex } from '../../appearance';
 import type { HumanoidAvatar } from '../HumanoidAvatar';
 import { B, BONES, computeRig, type Rig } from '../rig';
 import { avatarMaterial } from '../material';
-import { realClothMaterial } from './garments/clothMaterial';
+import { realClothMaterial, realShellMaterial } from './garments/clothMaterial';
 import { levels } from '../build/body';
 import { buildArmorPieces } from '../build/armor';
 import { buildBelt, buildLowerGarments } from '../build/garments';
@@ -45,6 +45,7 @@ import { paintBody, type TorsoMeasure } from './garments/paint';
 import { MeasuredProfile } from './garments/measured';
 import { assembleBody } from './garments/assemble';
 import { buildShells } from './garments/shells';
+import { loadBakedGarments } from './garments/baked';
 import { buildHead, type RealHead } from './head/index';
 import { addCorrectives, updateCorrectives } from './corrective';
 import type { RealContext } from './types';
@@ -133,6 +134,8 @@ export function loadRealBodies(renderer: THREE.WebGLRenderer): Promise<void> {
       }),
     );
     for (const [sex, tpl] of loaded) templates.set(sex, tpl);
+    // Baked cloth (garments/baked.ts), bound to these templates on first use.
+    await loadBakedGarments(gltf, baseUrl, (sex, lod) => (lod < MAP_LODS && templates.get(sex) ? { body: templates.get(sex)!.lods[lod], index: templates.get(sex)!.index[lod] } : null));
     ktx2.dispose();
     for (const cb of readyListeners.splice(0)) cb();
   })();
@@ -307,7 +310,7 @@ function buildLod(e: Entry, lod: number): LodData {
   const tpl = templates.get(e.app.sex)!;
   const body = morphedBody(e, lod);
   const split = SPLIT_LODS[lod];
-  const paint = paintBody({ app: e.app, rig: e.rig, body, index: split ? tpl.index[lod] : undefined });
+  const paint = paintBody({ app: e.app, rig: e.rig, body, index: split ? tpl.index[lod] : undefined, lod });
   let shells: ReturnType<typeof buildShells> = null;
   if (lod <= 2) shells = buildShells(context(e, lod as 0 | 1 | 2));
   const a = assembleBody({
@@ -635,7 +638,7 @@ export class RealBody {
       return;
     }
     if (!this.shells) {
-      this.shells = new THREE.SkinnedMesh(g, avatarMaterial());
+      this.shells = new THREE.SkinnedMesh(g, realShellMaterial());
       this.shells.name = 'humanoid:shells';
       this.shells.castShadow = av.mesh.castShadow;
       this.shells.receiveShadow = true;

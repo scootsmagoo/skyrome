@@ -25,6 +25,8 @@ import { paintArm, paintFoot, paintLeg, paintTorso } from '../../build/garments'
 import { resolveOutfit } from '../../build/outfit';
 import type { Appearance } from '../../../appearance';
 import type { BodyArrays } from '../morph';
+import { armRelief, inToga, torsoRelief, type Relief } from './detail';
+import { bakedPlan } from './fit';
 
 export interface BodyPaint {
   /** Linear RGB per vertex. */
@@ -37,6 +39,12 @@ export interface BodyPaint {
   cloth: Uint8Array;
   /** Smooth cloth coverage per vertex (0 skin ... 1 cloth); present when the triangle index was given. */
   cover?: Float32Array;
+  /**
+   * The clavi: vec4 per vertex (bind-pose x, stripe centre |x|, stripe half width, 2 where the tunic shows, else 0; a missing attribute reads 1). The
+   * material draws the stripes per pixel from x, so they are crisp lines however big the triangles are (painted on
+   * the vertices a 2 cm stripe came out ragged). Absent when the outfit has no clavi.
+   */
+  clavus?: Float32Array;
   /** The torso as measured on this body (garment lofts are fitted to it). */
   torso: TorsoMeasure;
 }
@@ -137,24 +145,6 @@ function measureTorso(body: BodyArrays, torso: Uint8Array, rig: Rig): TorsoMeasu
   };
 }
 
-/** The cloth indicator smoothed over the mesh edges, so its contour runs smoothly across triangles. */
-function smoothField(field: Float32Array, index: ArrayLike<number>, adj: Adjacency): Float32Array {
-  const n = field.length;
-  const out = new Float32Array(n);
-  for (let v = 0; v < n; v++) {
-    const a = adj.start[v];
-    const b = adj.start[v + 1];
-    if (a === b) {
-      out[v] = field[v];
-      continue;
-    }
-    let sum = 0;
-    for (let j = a; j < b; j++) sum += field[adj.list[j]];
-    out[v] = 0.5 * field[v] + (0.5 * sum) / (b - a);
-  }
-  return out;
-}
-
 interface Adjacency {
   start: Uint32Array;
   list: Uint32Array;
@@ -183,12 +173,26 @@ export interface PaintOptions {
   body: BodyArrays;
   /** Triangle index of the body: with it the smooth `cover` field is computed. */
   index?: ArrayLike<number>;
+  /** The body LOD: at LOD 0..2 garments baked as cloth shells (fit.ts) are not painted on the skin as well. */
+  lod?: number;
 }
 
-export function paintBody({ app, rig, body, index }: PaintOptions): BodyPaint {
-  const outfit = resolveOutfit(app);
-  const ctx: Ctx = makeCtx(rig, app, outfit, 'high');
+export function paintBody({ app, rig, body, index, lod }: PaintOptions): BodyPaint {
+  let outfit = resolveOutfit(app);
+  if (lod !== undefined && lod <= 2) {
+    const plan = bakedPlan({ app, rig, sex: app.sex, lod: lod as 0 | 1 | 2, body }, outfit);
+    if (plan.toga || plan.stola) outfit = { ...outfit, toga: plan.toga ? null : outfit.toga, stola: plan.stola ? null : outfit.stola };
+  }
+  // The clavi are not painted on the vertices (see BodyPaint.clavus): paintTorso sees a tunic without them.
+  const clavi = outfit.tunic?.clavi;
+  const ctx: Ctx = makeCtx(rig, app, clavi ? { ...outfit, tunic: { ...outfit.tunic!, clavi: undefined } } : outfit, 'high');
+  // A palla is built as drapery shells (shells.ts, drape.ts): the torso and the arm are painted with what lies under it.
+  const bodyCtx: Ctx = outfit.palla && !outfit.toga ? { ...ctx, outfit: { ...outfit, palla: null } } : ctx;
   const L = levels(rig);
+  // A stola's straps are thinner than the sculpt's vertex spacing (they paint as red spikes up the shoulders and the
+  // back): over a tunic the stola simply ends at the armpit and the tunic shows above it.
+  const strapless: Ctx = outfit.stola && outfit.tunic ? { ...bodyCtx, outfit: { ...bodyCtx.outfit, stola: null } } : bodyCtx;
+  const stolaTop = L.armpit + 0.03 * rig.s;
   const J = rig.joints;
   const n = body.position.length / 3;
   const reg: Region[] = new Array(n);
@@ -207,6 +211,23 @@ export function paintBody({ app, rig, body, index }: PaintOptions): BodyPaint {
     let r = REGION[best];
     // Collar and deltoid vertices that the shoulder bone owns but that sit over the ribs belong to the torso.
     if ((best === B.shoulderL || best === B.shoulderR) && Math.abs(body.position[v * 3]) < L.armX * 0.55) r = 'torso';
+    // The shoulder blade and the chest beside the arm: shoulder / upper-arm vertices well off the arm's axis are torso
+    // (the arm rules would leave them bare below a short sleeve, a hole in the back).
+    const sideL = best === B.shoulderL || best === B.upperArmL;
+    const sideR = best === B.shoulderR || best === B.upperArmR;
+    if ((sideL || sideR) && body.position[v * 3 + 1] > L.armpit - 0.03 * rig.s) {
+      const jb = sideL ? B.upperArmL : B.upperArmR;
+      if (Math.hypot(body.position[v * 3] - J[jb * 3], body.position[v * 3 + 2] - J[jb * 3 + 2]) > 0.085 * rig.s) r = 'torso';
+    }
+    // The armpit's front and back folds and the inside of the arm beside the ribs: the arm rules end at the sleeve's
+    // hem there and left a notch of skin between the sleeve and the tunic's side. A tunic is cut wide under the arm.
+    if ((sideL || sideR) && r !== 'torso') {
+      const y = body.position[v * 3 + 1];
+      const jb = sideL ? B.upperArmL : B.upperArmR;
+      if (y > L.armpit - 0.11 * rig.s && y < L.armpit + 0.03 * rig.s && Math.abs(body.position[v * 3]) < Math.abs(J[jb * 3]) - 0.012 * rig.s) r = 'torso';
+    }
+    // The trapezius slope up to the neck too: the arm rules have no neckline, so cloth would run up the neck in spikes.
+    if ((best === B.shoulderL || best === B.shoulderR) && body.position[v * 3 + 1] > L.shTop - 0.012 * rig.s && Math.abs(body.position[v * 3]) < L.armX * 0.85) r = 'torso';
     // The neck and the jaw (head bone) below the chin line take the torso rules too: the garments' necklines are
     // heights, and the dominant bone changes raggedly across the neck.
     if (best === B.head && body.position[v * 3 + 1] < L.chin) r = 'torso';
@@ -227,7 +248,15 @@ export function paintBody({ app, rig, body, index }: PaintOptions): BodyPaint {
   const ruleAt = (r: Region, x: number, y: number, z: number): Paint | null => {
     if (r === 'torso') {
       const zc = torso.at(y).zc;
-      return paintTorso(ctx, L, x, y, z, Math.atan2((z - zc) * 1.6, x));
+      const th = Math.atan2((z - zc) * 1.6, x);
+      if (strapless === bodyCtx || y < stolaTop - 0.02 * rig.s) return paintTorso(bodyCtx, L, x, y, z, th);
+      if (y >= stolaTop + 0.02 * rig.s) return paintTorso(strapless, L, x, y, z, th);
+      // The stola's top edge: a soft band of a few centimetres (a sharp colour step between vertices would saw-tooth).
+      const lo = paintTorso(bodyCtx, L, x, y, z, th);
+      const hi = paintTorso(strapless, L, x, y, z, th);
+      if (!lo || !hi) return lo ?? hi;
+      const k = Math.min(1, Math.max(0, (y - (stolaTop - 0.02 * rig.s)) / (0.04 * rig.s)));
+      return { ...lo, color: lo.color.clone().lerp(hi.color, k * k * (3 - 2 * k)) };
     }
     if (r === 'armL' || r === 'armR' || r === 'legL' || r === 'legR') {
       const sign = r.endsWith('L') ? 1 : -1;
@@ -236,7 +265,7 @@ export function paintBody({ app, rig, body, index }: PaintOptions): BodyPaint {
       const lat = (x - axis[0]) * sign;
       const fz = z - axis[1];
       const th = Math.atan2(fz, lat);
-      return r.startsWith('arm') ? paintArm(ctx, L, side, y, th, Math.hypot(lat, fz), false) : paintLeg(ctx, L, side, y, th, false);
+      return r.startsWith('arm') ? paintArm(bodyCtx, L, side, y, th, Math.hypot(lat, fz), false) : paintLeg(ctx, L, side, y, th, false);
     }
     if (r === 'footL' || r === 'footR') {
       const sign = r.endsWith('L') ? 1 : -1;
@@ -247,49 +276,145 @@ export function paintBody({ app, rig, body, index }: PaintOptions): BodyPaint {
   };
   const isCloth = (p: Paint | null) => !!p && p.surf !== SURF.skin && p.t >= 0;
 
+  const seed = ctx.rng.next() * 10;
   const out: BodyPaint = { color: new Float32Array(n * 3), surf: new Uint8Array(n * 4), thick: new Float32Array(n), cloth: new Uint8Array(n), torso };
   for (let v = 0; v < n; v++) {
     const paint = ruleAt(reg[v], body.position[v * 3], body.position[v * 3 + 1], body.position[v * 3 + 2]);
     const cloth = isCloth(paint);
     const color = paint ? paint.color : ctx.skin;
     const surf: Surf = paint ? paint.surf : SURF.skin;
-    out.color[v * 3] = color.r;
-    out.color[v * 3 + 1] = color.g;
-    out.color[v * 3 + 2] = color.b;
+    let shade = 1;
+    let thick = cloth ? paint!.t : 0;
+    if (cloth) {
+      // Draped cloth gets coherent folds (detail.ts): extra thickness and a matching shade.
+      let rel: Relief | null = null;
+      const px = body.position[v * 3];
+      const py = body.position[v * 3 + 1];
+      const pz = body.position[v * 3 + 2];
+      if (reg[v] === 'torso') rel = torsoRelief(outfit, L, px, py, pz, seed);
+      else if (reg[v] === 'armL') {
+        axisAt(J, chains.armL, py, axis);
+        rel = armRelief(outfit, L, 'L', py, Math.atan2(pz - axis[1], px - axis[0]), seed);
+      }
+      if (rel) {
+        shade = rel.shade;
+        thick = Math.max(0.002, thick + rel.thick);
+      }
+    }
+    out.color[v * 3] = color.r * shade;
+    out.color[v * 3 + 1] = color.g * shade;
+    out.color[v * 3 + 2] = color.b * shade;
     out.surf[v * 4] = Math.round(surf.rough * 255);
     out.surf[v * 4 + 1] = Math.round(surf.metal * 255);
     out.surf[v * 4 + 2] = surf.pattern;
     out.surf[v * 4 + 3] = Math.round(surf.emissive * 255);
-    out.thick[v] = cloth ? paint!.t : 0;
+    out.thick[v] = thick;
     out.cloth[v] = cloth ? 1 : 0;
+  }
+  if (clavi && !outfit.armor.body) {
+    const clv = new Float32Array(n * 4);
+    const w = (clavi === 'wide' ? 0.05 : 0.026) * rig.s;
+    for (let v = 0; v < n; v++) {
+      if (reg[v] !== 'torso' || !out.cloth[v]) continue;
+      const x = body.position[v * 3];
+      const y = body.position[v * 3 + 1];
+      // Not where the toga is painted over the tunic.
+      if (y <= L.crotch || y >= L.neckBase || (outfit.toga && inToga(L, x, y, body.position[v * 3 + 2]))) continue;
+      clv[v * 4] = x;
+      clv[v * 4 + 1] = 0.07 * rig.s;
+      clv[v * 4 + 2] = w / 2;
+      clv[v * 4 + 3] = 2;
+    }
+    out.clavus = clv;
   }
   if (!index) return out;
 
-  // Cover: the cloth indicator, refined at the borders by sampling the rule around each border vertex.
+  // Cover: a signed-distance field to the true garment border. Each vertex within a few mesh rings of a
+  // cloth/skin change finds its distance to the border by probing the rule around it (the nearest probe that
+  // flips the answer, refined by bisection); cover = 0.5 + d / (2 RAMP), so the 0.5 contour the material cuts at
+  // lies on the border itself (a straight line across the triangles, not a saw-tooth of vertices).
   const adj = adjacency(n, index);
-  const field = Float32Array.from(out.cloth);
+  const cover = new Float32Array(n);
   const s = rig.s;
-  // Wide enough to reach across a mesh edge (2 to 3 cm): the share of cloth ramps with the distance to the border.
-  const offs = [-0.03, -0.015, -0.006, 0.006, 0.015, 0.03];
+  const RAMP = 0.025 * s;
+  // The probes reach far: the posed sculpt has large triangles (the armpit web), and the cover interpolated across
+  // one is only right when its corners carry the true signed distance, not a value saturated at the ramp's edge.
+  const radii = [0.003, 0.007, 0.012, 0.018, 0.026, 0.04, 0.06, 0.09].map((r) => r * s);
+  const FAR = radii[radii.length - 1];
+  const DIRS = 8;
+  const near = new Uint8Array(n);
+  let frontier: number[] = [];
   for (let v = 0; v < n; v++) {
-    const a = adj.start[v];
-    const b = adj.start[v + 1];
-    let border = false;
-    for (let j = a; j < b; j++) if (out.cloth[adj.list[j]] !== out.cloth[v]) { border = true; break; }
-    if (!border || reg[v] === 'skin') continue;
+    for (let j = adj.start[v]; j < adj.start[v + 1]; j++) {
+      if (out.cloth[adj.list[j]] !== out.cloth[v]) {
+        near[v] = 1;
+        frontier.push(v);
+        break;
+      }
+    }
+  }
+  for (let ring = 0; ring < 5; ring++) {
+    const next: number[] = [];
+    for (const v of frontier)
+      for (let j = adj.start[v]; j < adj.start[v + 1]; j++) {
+        const w = adj.list[j];
+        if (!near[w]) {
+          near[w] = 1;
+          next.push(w);
+        }
+      }
+    frontier = next;
+  }
+  for (let v = 0; v < n; v++) {
+    const state = out.cloth[v];
+    if (!near[v]) {
+      cover[v] = state ? 0.5 + (0.5 * FAR) / RAMP : 0.5 - (0.5 * FAR) / RAMP;
+      continue;
+    }
+    // The region whose rule applies here: a skin-region vertex beside cloth borrows its cloth neighbour's.
+    let rg = reg[v];
+    if (rg === 'skin') {
+      for (let j = adj.start[v]; j < adj.start[v + 1]; j++) {
+        if (reg[adj.list[j]] !== 'skin') {
+          rg = reg[adj.list[j]];
+          break;
+        }
+      }
+      if (rg === 'skin') {
+        cover[v] = state ? 0.5 + (0.5 * FAR) / RAMP : 0.5 - (0.5 * FAR) / RAMP;
+        continue;
+      }
+    }
     const x = body.position[v * 3];
     const y = body.position[v * 3 + 1];
     const z = body.position[v * 3 + 2];
-    let c = out.cloth[v];
-    for (const d of offs) {
-      c += isCloth(ruleAt(reg[v], x, y + d * s, z)) ? 1 : 0;
-      c += isCloth(ruleAt(reg[v], x + d * s, y, z)) ? 1 : 0;
+    const probe = (dx: number, dy: number) => (isCloth(ruleAt(rg, x + dx, y + dy, z)) ? 1 : 0);
+    let dist = FAR;
+    for (let k = 0; k < radii.length; k++) {
+      let best = Infinity;
+      for (let d = 0; d < DIRS; d++) {
+        const ax = Math.cos((d / DIRS) * Math.PI * 2);
+        const ay = Math.sin((d / DIRS) * Math.PI * 2);
+        if (probe(ax * radii[k], ay * radii[k]) === state) continue;
+        let lo = k > 0 ? radii[k - 1] : 0;
+        let hi = radii[k];
+        for (let it = 0; it < 4; it++) {
+          const mid = (lo + hi) / 2;
+          if (probe(ax * mid, ay * mid) === state) lo = mid;
+          else hi = mid;
+        }
+        best = Math.min(best, (lo + hi) / 2);
+      }
+      if (best < Infinity) {
+        dist = best;
+        break;
+      }
     }
-    field[v] = c / (1 + offs.length * 2);
+    // Unclamped: a corner far inside or outside still pulls the contour of a big triangle to the right place.
+    cover[v] = 0.5 + (0.5 * (state ? dist : -dist)) / RAMP;
   }
-  const cover = smoothField(field, index, adj);
-  // A painted cloth vertex never drops below the cut: thin straps and sleeve ends must not erode away.
-  for (let v = 0; v < n; v++) if (out.cloth[v] && cover[v] < 0.55) cover[v] = 0.55;
+  // A painted cloth vertex stays just inside the cut: thin straps and sleeve ends must not erode away.
+  for (let v = 0; v < n; v++) if (out.cloth[v] && cover[v] < 0.52) cover[v] = 0.52;
   out.cover = cover;
   void isTorso;
   return out;

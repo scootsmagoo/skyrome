@@ -81,4 +81,24 @@ describe('real-body shell garments', () => {
       expect(r).toBeGreaterThan(bp.radius(y, Math.atan2(p.getZ(i) - bp.centre(y), p.getX(i))) - 0.002);
     }
   });
+
+  it('the toga mantle and the palla clear the body, stay finite and keep the triangle budget', () => {
+    for (const [role, max] of [['patrician-man', 1700], ['matron', 1900]] as const) {
+      const app = randomAppearance(new Rng(5), role);
+      const { rig, body } = fakeBody(app);
+      const out = buildShells({ app, rig, sex: app.sex, lod: 0, body });
+      expect(out, role).not.toBeNull();
+      const g = out!.geometry;
+      expect(g.index!.count / 3, role).toBeLessThan(max);
+      const p = g.getAttribute('position');
+      const bp = new BodyProfile(body, rig, false);
+      for (let i = 0; i < p.count; i++) {
+        expect(Number.isFinite(p.getX(i) + p.getY(i) + p.getZ(i))).toBe(true);
+        const y = p.getY(i);
+        if (y > bp.top - 0.12 || y < 0.9 * rig.s) continue;
+        const r = Math.hypot(p.getX(i), p.getZ(i) - bp.centre(y));
+        expect(r).toBeGreaterThan(bp.radius(y, Math.atan2(p.getZ(i) - bp.centre(y), p.getX(i))) - 0.002);
+      }
+    }
+  });
 });

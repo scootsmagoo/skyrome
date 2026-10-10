@@ -15,15 +15,17 @@
  */
 import * as THREE from 'three';
 import { B } from '../../rig';
-import { SURF, type Weights } from '../../SkinBuilder';
+import { SURF } from '../../SkinBuilder';
 import { TorsoProfile, levels, type Levels } from '../../build/body';
-import { makeCtx, srgb, lerp, type Ctx } from '../../build/common';
-import { resolveOutfit, type Cloth } from '../../build/outfit';
+import { makeCtx, srgb, type Ctx } from '../../build/common';
+import { resolveOutfit } from '../../build/outfit';
 import { armorSkirtOverlay } from '../../build/armor';
-import { buildBelt, buildTogaDrape, tubeAlong, type SkirtSpec } from '../../build/garments';
-import { buildCloak } from '../../build/cloak';
+import { buildBelt, type SkirtSpec } from '../../build/garments';
 import { BodyProfile, ARM_BONES, HEAD_BONES, boneWeight } from './profile';
 import { buildRealSkirt, type SkirtCover } from './skirt';
+import { buildTogaDrapery } from './drape';
+import { buildRealCloak, buildRealPalla } from './cloaks';
+import { bakedPlan, fitBaked, type FittedGarment } from './fit';
 import type { BuildShells, RealContext } from '../types';
 
 /** The torso profile of the procedural builders, answering from the real body's silhouette. */
@@ -50,6 +52,8 @@ function profiles(ctx: RealContext) {
 
 export const buildShells: BuildShells = (rc) => {
   const outfit = resolveOutfit(rc.app);
+  // Garments baked by cloth simulation (fit.ts) replace their procedural shells; the rest stay procedural.
+  const plan = bakedPlan(rc, outfit);
   const ctx = makeCtx(rc.rig, rc.app, outfit, rc.lod >= 2 ? 'low' : 'high');
   const L = levels(rc.rig);
   const pr = profiles(rc);
@@ -64,9 +68,9 @@ export const buildShells: BuildShells = (rc) => {
   const o = outfit;
   const s = L.s;
   const legK = { short: 0.7, knee: 0.66, long: 0.64 };
-  if (o.toga) {
+  if (o.toga && !plan.toga) {
     const t = o.toga;
-    const surface = skirt({
+    const built = buildRealSkirt(ctx, L, bp, {
       top: L.waist + 0.02 * s,
       hem: L.ankle + 0.02 * s,
       color: t.color,
@@ -74,27 +78,33 @@ export const buildShells: BuildShells = (rc) => {
       surf: SURF.wool,
       flare: 0.07 * s,
       legK: 0.92,
-      folds: 9,
-      foldAmp: 0.012 * s,
+      folds: 12,
+      foldAmp: 0.05 * s,
       thickness: 0.015 * s,
       hemTilt: (th) => 0.06 * s * Math.max(0, -Math.cos(th)) * Math.max(0, Math.sin(th) + 0.3),
     });
-    buildTogaDrape(ctx, L, prof, surface);
+    covers.push(built.cover);
+    pr.wide ??= new BodyProfile(rc.body, rc.rig, true);
+    buildTogaDrapery({ ctx, L, bp, wide: pr.wide, skirtR: built.radiusAt });
+  } else if (o.toga) {
+    // Baked toga.
   } else if (o.stola) {
-    skirt({
-      top: L.waist + 0.04 * s,
-      hem: L.ankle + 0.03 * s,
-      color: o.stola.color,
-      trim: o.stola.trim,
-      surf: SURF.wool,
-      flare: 0.06 * s,
-      legK: 0.94,
-      folds: 12,
-      foldAmp: 0.008 * s,
-      thickness: 0.01 * s,
-      under: o.tunic ? { color: o.tunic.color, drop: 0.022 * s } : undefined,
-    });
-  } else if (o.tunic) {
+    if (!plan.stola) {
+      skirt({
+        top: L.waist + 0.04 * s,
+        hem: L.ankle + 0.03 * s,
+        color: o.stola.color,
+        trim: o.stola.trim,
+        surf: SURF.wool,
+        flare: 0.06 * s,
+        legK: 0.94,
+        folds: 14,
+        foldAmp: 0.016 * s,
+        thickness: 0.01 * s,
+        under: o.tunic ? { color: o.tunic.color, drop: 0.022 * s } : undefined,
+      });
+    }
+  } else if (o.tunic && !plan.tunic) {
     const hem = o.tunic.hem === 'short' ? L.hemShort : o.tunic.hem === 'knee' ? L.hemKnee : L.hemLong;
     skirt({
       overlay: armorSkirtOverlay(ctx, L),
@@ -125,7 +135,6 @@ export const buildShells: BuildShells = (rc) => {
       strips: srgb('#2e2016'),
     });
   }
-  if (o.palla && !o.toga) pallaWrap(ctx, L, prof, o.palla, skirt);
   if (o.apron && o.tunic) {
     skirt({
       top: L.waist,
@@ -143,56 +152,97 @@ export const buildShells: BuildShells = (rc) => {
   buildBelt(ctx, L, prof);
   let cloakFrom = 0;
   let cloakTo = 0;
-  if (o.cloak) {
-    // Cloaks hang over the shoulders and the upper arms: they ride the wide silhouette.
+  const procPalla = !!o.palla && !o.toga && !plan.palla;
+  const procCloak = !!o.cloak && !plan.cloak;
+  if (procCloak || procPalla) {
+    // Cloaks and the palla hang over the shoulders and the upper arms: they ride the wide silhouette.
     pr.wide ??= new BodyProfile(rc.body, rc.rig, true);
     cloakFrom = ctx.b.vertexCount;
-    buildCloak(ctx, L, new RealProfile(ctx, L, pr.wide));
+    if (procPalla) buildRealPalla(ctx, L, pr.wide);
+    if (procCloak) buildRealCloak(ctx, L, pr.wide);
     cloakTo = ctx.b.vertexCount;
   }
-  if (ctx.b.vertexCount === 0) return null;
-  const geometry = ctx.b.build();
-  if (cloakTo > cloakFrom) {
-    keepOutside(geometry, pr.wide!, cloakFrom, cloakTo, 0.008 * s);
-    geometry.computeVertexNormals();
+  const baked = plan.ids.length ? fitBaked(rc, plan, outfit) : null;
+  if (ctx.b.vertexCount === 0 && !baked?.garments.length) return null;
+  const proc = ctx.b.vertexCount ? ctx.b.build() : null;
+  if (proc && cloakTo > cloakFrom) {
+    keepOutside(proc, pr.wide!, cloakFrom, cloakTo, 0.008 * s);
+    proc.computeVertexNormals();
   }
+  const geometry = mergeShells(proc, baked?.garments ?? []);
   geometry.name = `real:shells:${rc.sex}:lod${rc.lod}`;
   geometry.computeBoundingSphere();
-  return { geometry, hide: coverMask(rc, bp, covers, s) };
+  const hide = coverMask(rc, bp, covers, s);
+  if (baked) for (let v = 0; v < hide.length; v++) hide[v] |= baked.hide[v];
+  return { geometry, hide };
 };
 
-/** The palla draped around the hips and over the left shoulder (matrons), when there is no toga. */
-function pallaWrap(ctx: Ctx, L: Levels, prof: RealProfile, p: Cloth, skirt: (sp: SkirtSpec) => unknown) {
-  const s = L.s;
-  skirt({
-    top: L.waist + 0.03 * s,
-    hem: L.knee - 0.06 * s,
-    color: p.color,
-    trim: p.trim,
-    surf: SURF.wool,
-    flare: 0.075 * s,
-    legK: 0.45,
-    folds: 8,
-    foldAmp: 0.012 * s,
-    thickness: 0.02 * s,
-    hemTilt: (th) => 0.1 * s * (0.5 + 0.5 * Math.cos(th)),
-  });
-  const pts: { p: THREE.Vector3; w: Weights }[] = [];
-  const N = ctx.hi ? 8 : 5;
-  for (let i = 0; i < N; i++) {
-    const k = i / (N - 1);
-    const x = lerp(0.13 * s, -0.17 * s, k);
-    const y = lerp(L.shoulder + 0.01 * s, L.waist + 0.02 * s, k);
-    // The band crosses the chest from the left shoulder to the right hip, 3 cm off the real skin.
-    const th = Math.PI / 2 - Math.asin(Math.max(-0.98, Math.min(0.98, x / Math.max(0.1, prof.bp.section(y).a))));
-    const [bx, bz] = prof.bp.point(y, th);
-    const zc = prof.bp.centre(y);
-    const r = Math.hypot(bx, bz - zc) || 1;
-    const out = (r + 0.03 * s) / r;
-    pts.push({ p: new THREE.Vector3(bx * out, y, zc + (bz - zc) * out), w: y > L.chest ? [B.chest, 1] : [B.spine, 0.6, B.chest, 0.4] });
+/**
+ * One geometry for the procedural pieces and the fitted baked garments, in the shell material's layout (see
+ * fit.ts): the procedural vertices get neutral cloth/trim/clavus/legs values (their patterns ignore them).
+ */
+export function mergeShells(proc: THREE.BufferGeometry | null, garments: FittedGarment[]): THREE.BufferGeometry {
+  const pn = proc ? proc.getAttribute('position').count : 0;
+  let n = pn;
+  let ni = proc ? proc.index!.count : 0;
+  for (const g of garments) {
+    n += g.count;
+    ni += g.index.length;
   }
-  pts.unshift({ p: new THREE.Vector3(0.14 * s, L.shTop + 0.02 * s, -0.03 * s), w: [B.chest, 0.6, B.shoulderL, 0.4] });
-  tubeAlong(ctx, pts, 0.03 * s, p.color, p.trim);
+  const position = new Float32Array(n * 3);
+  const normal = new Float32Array(n * 3);
+  const color = new Float32Array(n * 3);
+  const surf = new Uint8Array(n * 4);
+  const skinIndex = new Uint8Array(n * 4);
+  const skinWeight = new Float32Array(n * 4);
+  const cloth = new Float32Array(n * 4);
+  const trim = new Float32Array(n * 4);
+  const clavus = new Float32Array(n * 4);
+  const legs = new Float32Array(n * 4);
+  const index = n > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
+  let vo = 0;
+  let io = 0;
+  if (proc) {
+    position.set(proc.getAttribute('position').array as Float32Array);
+    normal.set(proc.getAttribute('normal').array as Float32Array);
+    color.set(proc.getAttribute('color').array as Float32Array);
+    surf.set(proc.getAttribute('surf').array as Uint8Array);
+    skinIndex.set(proc.getAttribute('skinIndex').array as Uint8Array);
+    skinWeight.set(proc.getAttribute('skinWeight').array as Float32Array);
+    for (let i = 0; i < pn; i++) cloth[i * 4] = 9;
+    index.set(proc.index!.array as ArrayLike<number>);
+    vo = pn;
+    io = proc.index!.count;
+    proc.dispose();
+  }
+  for (const g of garments) {
+    position.set(g.position, vo * 3);
+    normal.set(g.normal, vo * 3);
+    color.set(g.color, vo * 3);
+    surf.set(g.surf, vo * 4);
+    skinIndex.set(g.skinIndex, vo * 4);
+    skinWeight.set(g.skinWeight, vo * 4);
+    cloth.set(g.cloth, vo * 4);
+    trim.set(g.trim, vo * 4);
+    clavus.set(g.clavus, vo * 4);
+    legs.set(g.legs, vo * 4);
+    for (let k = 0; k < g.index.length; k++) index[io + k] = g.index[k] + vo;
+    vo += g.count;
+    io += g.index.length;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(position, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(normal, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(color, 3));
+  geo.setAttribute('surf', new THREE.BufferAttribute(surf, 4, true));
+  geo.setAttribute('skinIndex', new THREE.BufferAttribute(skinIndex, 4));
+  geo.setAttribute('skinWeight', new THREE.BufferAttribute(skinWeight, 4));
+  geo.setAttribute('cloth', new THREE.BufferAttribute(cloth, 4));
+  geo.setAttribute('trim', new THREE.BufferAttribute(trim, 4));
+  geo.setAttribute('clavus', new THREE.BufferAttribute(clavus, 4));
+  geo.setAttribute('legs', new THREE.BufferAttribute(legs, 4));
+  geo.setIndex(new THREE.BufferAttribute(index, 1));
+  return geo;
 }
 
 /**
