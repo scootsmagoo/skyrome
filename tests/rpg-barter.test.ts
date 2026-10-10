@@ -117,7 +117,8 @@ describe('barter formulas (GDD §7.4)', () => {
     expect(VENDORS.receptator).toMatchObject({ purse: 400, fence: true });
     expect(VENDORS.popina).toMatchObject({ purse: 40, stall: true, plebeian: true });
     // The 19 kinds of the GDD, plus the ones phase 2 adds (vendors-life.ts).
-    expect(Object.keys(VENDORS).length).toBe(19 + VENDORS_LIFE.length);
+    expect(VENDORS_LIFE.length).toBe(4); // margaritarius, vinarius, figulus, pannarius
+    expect(Object.keys(VENDORS).length).toBe(19 + 4);
   });
 });
 

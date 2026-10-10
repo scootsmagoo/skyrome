@@ -81,7 +81,7 @@ export default defineLife({
         topics: [
           { ask: 'Where does the wine come from?', say: 'The house wine? The hills behind Tibur, in a cart, at night. The better one comes up the river from Ostia in amphorae with a Spanish stamp. The Falernian comes with a story. I tell it for free.' },
           { ask: 'Busy street.', say: 'The Subura never sleeps, and when it does it snores. By day the carts may not come in, so the porters carry everything, and by night the carts come in and nobody sleeps. Good for wine.' },
-          { ask: 'Why Hedone?', say: 'It is Greek for pleasure, and it was not my choice. My master gave it to me and my freedom followed. I kept the name. Nobody forgets a wine-seller called Pleasure, and nobody trusts a man who is called Dolour.' },
+          { ask: 'Why Hedone?', say: 'It is Greek for pleasure, and it was not my choice. My master gave it to me and my freedom followed. I kept the name. Nobody forgets a wine-seller called Pleasure, and a man called Pleasure pours a kinder cup than one called Sorrow.' },
         ],
         news: 'What’s the word in the Subura?',
       },
