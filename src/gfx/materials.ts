@@ -87,8 +87,8 @@ function createMaterial(id: MaterialId): THREE.Material {
     return m;
   }
   if (!hasDom) return m;
-  if (recipe.set) applyPhotoSet(m, id, recipe, recipe.set);
-  else if (recipe.proc) applyProcedural(m, id, recipe);
+  if (recipe.proc) applyProcedural(m, id, recipe);
+  else if (recipe.set) applyPhotoSet(m, id, recipe, recipe.set);
   const hasNormal = !!recipe.set || !!m.normalMap;
   const metal = (base.metalness ?? 0) > 0.3;
   applyShaderPatch(m, {
@@ -96,7 +96,7 @@ function createMaterial(id: MaterialId): THREE.Material {
     detile: recipe.detile,
     contrast: recipe.contrast,
     weather: recipe.weather,
-    mean: recipe.set ? TEXTURE_STATS[recipe.set]?.albedo : undefined,
+    mean: recipe.set && !recipe.proc ? TEXTURE_STATS[recipe.set]?.albedo : undefined,
     detail: hasNormal && !metal ? recipe.detail ?? 0.9 : 0,
     mottle: recipe.proc === 'foliage' || metal ? 0 : recipe.mottle ?? (recipe.macro ?? 0) * 1.4,
     wear: recipe.wear,

@@ -109,7 +109,7 @@ describe('procedural textures', () => {
   });
 
   it('every generator produces sane images', () => {
-    for (const id of ['fabric', 'mosaic', 'stucco', 'gilded', 'bronze', 'metal', 'porphyry', 'reticulatum', 'travertine', 'foliage'] as const) {
+    for (const id of ['fabric', 'mosaic', 'stucco', 'gilded', 'bronze', 'metal', 'porphyry', 'reticulatum', 'travertine', 'foliage', 'slabs'] as const) {
       const img = generateProcedural(id);
       expect(img.color.length).toBe(img.size * img.size * 4);
       for (const a of img.albedo) {

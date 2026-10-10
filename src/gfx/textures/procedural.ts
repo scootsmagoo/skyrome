@@ -469,6 +469,137 @@ function travertine(seed: number): ProcImage {
   return img.finish(2.0);
 }
 
+/**
+ * Forum paving as laid in the Augustan and Flavian square: big rectangular travertine slabs in
+ * running bond, tight dark joints, a tone of their own per slab (some warmer, some greyer), a
+ * polished walking-lane where the crowds pass, a few chipped edges, hairline cracks, a repair slab
+ * of another stone, and one slab with a carved band of lettering. Designed for a 6 x 6 m repeat
+ * (five courses of about 1.2 m, slabs 1.5-2.6 m long, so 1 px is 4 mm).
+ */
+function slabs(seed: number): ProcImage {
+  const S = 1536;
+  const M = 6; // metres per repeat
+  const PX = S / M;
+  const img = new Img(S);
+  const rnd = prng(seed + 7);
+  // Courses: heights near 1.2 m summing to 6; slabs per course with staggered head joints.
+  const rows: { y0: number; y1: number; heads: number[] }[] = [];
+  {
+    const hs = Array.from({ length: 5 }, () => 0.85 + rnd() * 0.3);
+    const tot = hs.reduce((a, b) => a + b, 0);
+    let y = 0;
+    for (const h of hs) {
+      const hh = (h / tot) * M;
+      const n = rnd() < 0.55 ? 3 : 2 + (rnd() < 0.5 ? 1 : 0);
+      const ws = Array.from({ length: n }, () => 0.75 + rnd() * 0.5);
+      const wt = ws.reduce((a, b) => a + b, 0);
+      const off = rnd() * M;
+      const heads: number[] = [];
+      let x = off;
+      for (const w of ws) {
+        heads.push(x % M);
+        x += (w / wt) * M;
+      }
+      heads.sort((a, b) => a - b);
+      rows.push({ y0: y, y1: y + hh, heads });
+      y += hh;
+    }
+  }
+  // Per-slab parameters, indexed by (row, slab).
+  const slabAt = rows.map((r, ri) =>
+    r.heads.map((_, si) => ({
+      tone: (hash2(ri, si, seed + 1) - 0.5) * 0.07,
+      warm: hash2(ri, si, seed + 2),
+      grey: hash2(ri, si, seed + 5) < 0.07 ? 1 : hash2(ri, si, seed + 3) < 0.15 ? 0.4 : 0,
+      polish: hash2(ri, si, seed + 4),
+      crack: hash2(ri, si, seed) < 0.05 ? 1 : 0,
+      chip: hash2(ri, si, seed + 6),
+    })),
+  );
+  const blotch = fbm2D(seed + 11, 5, 4, 0.55);
+  const lamina = fbm2D(seed + 12, 3, 4, 0.5, 14);
+  const fine = fbm2D(seed + 13, 90, 2);
+  const lane = fbm2D(seed + 14, 3, 3, 0.5);
+  const edgeN = fbm2D(seed + 15, 40, 2);
+  const crackN = fbm2D(seed + 16, 18, 3, 0.5);
+  const cream = hexRgb(0xe6dcc6);
+  const warmC = hexRgb(0xdcc9a2);
+  const greyC = hexRgb(0xc9c4b6);
+  const dirt = hexRgb(0x7d725d);
+  // The carved band: one slab (course 1, its slab 0) gets two incised rules and a line of blocky letters.
+  const lettering = (row: number, slab: number, lx: number, ly: number, w: number, h: number) => {
+    if (row !== 1 || slab !== 0) return 0;
+    const cy = h * 0.5;
+    const band = Math.abs(ly - cy);
+    if (Math.abs(band - h * 0.3) < 1.3 && lx > w * 0.08 && lx < w * 0.92) return 0.6; // rules
+    if (band < h * 0.17 && lx > w * 0.1 && lx < w * 0.9) {
+      const gw = PX * 0.2;
+      const gx = Math.floor((lx - w * 0.1) / gw);
+      const inGlyph = ((lx - w * 0.1) % gw) / gw;
+      if (hash2(gx, 3, seed) > 0.28 && inGlyph > 0.15 && inGlyph < 0.8) {
+        const stroke = hash2(gx, 9, seed);
+        const yy = (ly - cy) / (h * 0.17);
+        // a stem with serifs or arms: I, T, L, F-like marks
+        const bar = (stroke < 0.34 && Math.abs(yy) > 0.78) || (stroke >= 0.34 && stroke < 0.67 && yy < -0.78) || (stroke >= 0.67 && (yy > 0.78 || Math.abs(yy) < 0.14));
+        if (Math.abs(inGlyph - 0.48) < 0.1 || (bar && inGlyph > 0.25 && inGlyph < 0.72)) return 0.8;
+      }
+    }
+    return 0;
+  };
+  for (let y = 0; y < S; y++) {
+    const v = y / S;
+    const wy = v * M;
+    const ri = rows.findIndex((r) => wy >= r.y0 && wy < r.y1);
+    const row = rows[ri];
+    for (let x = 0; x < S; x++) {
+      const u = x / S;
+      const wx = u * M;
+      // Which slab: the last head joint at or before wx (wrapping from the final one).
+      let si = row.heads.length - 1;
+      let xs = row.heads[si] - M;
+      for (let i = 0; i < row.heads.length; i++)
+        if (row.heads[i] <= wx) {
+          si = i;
+          xs = row.heads[i];
+        }
+      const xe = si + 1 < row.heads.length ? row.heads[si + 1] : row.heads[0] + M;
+      const sp = slabAt[ri][si];
+      // Distance to the slab's edges in px, with a slightly wandering arris.
+      const wob = (edgeN(u, v) - 0.5) * 2.2 + (fine(u, v) - 0.5) * 1.2;
+      const dEdge = Math.min((wx - xs) * PX, (xe - wx) * PX, (wy - row.y0) * PX, (row.y1 - wy) * PX) + wob;
+      const joint = smooth(2.8, 0.8, dEdge);
+      const chipped = sp.chip > 0.7 ? smooth(6, 1.5, dEdge) * smooth(0.45, 0.7, edgeN(u * 2.1, v * 2.1)) * 0.55 : 0;
+      const lx = (wx - xs) * PX;
+      const ly = (wy - row.y0) * PX;
+      const w = (xe - xs) * PX;
+      const h = (row.y1 - row.y0) * PX;
+      const bl = blotch(u, v);
+      const lam = lamina(u, v);
+      const fn = fine(u, v);
+      let rgb = mixRgb(cream, warmC, smooth(0.3, 0.8, sp.warm) * 0.4 + (bl - 0.5) * 0.3);
+      rgb = mixRgb(rgb, greyC, sp.grey * 0.5 + smooth(0.55, 0.8, bl) * 0.15);
+      // Polished lane: lighter and smoother in the slabs people cross.
+      const traffic = smooth(0.45, 0.72, lane(u, v)) * smooth(0.25, 0.8, sp.polish);
+      const k = 1 + sp.tone + (lam - 0.5) * 0.06 + (fn - 0.5) * 0.05 + traffic * 0.05;
+      rgb = [rgb[0] * k, rgb[1] * k, rgb[2] * k];
+      // Dirt gathers in the joints and along chipped arrises.
+      rgb = mixRgb(rgb, dirt, Math.max(joint * 0.75, chipped * 0.5));
+      const letter = lettering(ri, si, lx, ly, w, h);
+      if (letter > 0) rgb = mixRgb(rgb, dirt, 0.55 * letter);
+      let crack = 0;
+      if (sp.crack > 0) {
+        const c = Math.abs(crackN(u, v) - 0.5);
+        crack = smooth(0.006, 0.001, c) * smooth(0, 14, dEdge) * smooth(0.18, 0.3, bl);
+        rgb = mixRgb(rgb, dirt, crack * 0.6);
+      }
+      const hgt = fn * 0.18 + lam * 0.1 - joint * 1.4 - chipped * 0.6 - crack * 0.7 - letter * 0.7 + traffic * 0.05;
+      const rough = 0.84 - traffic * 0.22 + (fn - 0.5) * 0.1 + joint * 0.06;
+      img.set(x, y, rgb, hgt, rough, 1 - joint * 0.5 - crack * 0.3 - chipped * 0.2);
+    }
+  }
+  return img.finish(2.2);
+}
+
 /** Leaf clusters for foliage cards/blobs: dark interiors, lit leaf edges. */
 function foliage(seed: number): ProcImage {
   const S = 256;
@@ -499,6 +630,7 @@ const GENERATORS: Record<ProceduralId, (seed: number) => ProcImage> = {
   reticulatum,
   foliage,
   travertine,
+  slabs,
 };
 
 const cache = new Map<string, ProcImage>();

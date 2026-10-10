@@ -38,7 +38,7 @@ export type TextureSetId =
   | 'bark';
 
 /** Canvas generators in procedural.ts. */
-export type ProceduralId = 'fabric' | 'mosaic' | 'stucco' | 'gilded' | 'bronze' | 'metal' | 'porphyry' | 'reticulatum' | 'travertine' | 'foliage';
+export type ProceduralId = 'fabric' | 'mosaic' | 'stucco' | 'gilded' | 'bronze' | 'metal' | 'porphyry' | 'reticulatum' | 'travertine' | 'foliage' | 'slabs';
 
 export interface MaterialRecipe {
   set?: TextureSetId;
@@ -116,7 +116,9 @@ export const MATERIAL_RECIPES: Record<MaterialId, MaterialRecipe> = {
   fabric_blue: { proc: 'fabric', tile: 0.6 },
   // ground
   paving_basalt: { set: 'paving_basalt', tile: 3.2, macro: 0.08, wear: 1, grain: 0.7 },
-  paving_travertine: { set: 'paving_travertine', tile: 4.5, macro: 0.07, wear: 0.8, grain: 0.7 },
+  // `set` stays for the terrain's ground layer; the material itself is the procedural slab paving
+  // (6 m repeat) whose polish and wear are drawn per slab, so no streaky shader wear.
+  paving_travertine: { set: 'paving_travertine', proc: 'slabs', tile: 6, normal: 0.7, macro: 0.05, mottle: 0.05, grain: 0.5 },
   cobbles: { set: 'cobbles', tile: 1.6, macro: 0.08, wear: 1, grain: 0.7 },
   gravel: { set: 'gravel', tile: 2.2, macro: 0.08, detile: true },
   dirt: { set: 'dirt', tile: 2.5, macro: 0.12, detile: true },
