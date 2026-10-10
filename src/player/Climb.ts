@@ -25,8 +25,8 @@ declare module '../core/Events' {
 }
 
 export const CLIMB = {
-  /** Rises the step-up already handles stay with it (Physics autostep is 0.45 m). */
-  minRise: 0.42,
+  /** Rises the step-up already handles (STEP_ASSIST_MAX 0.3 m, and a hair over) stay with it: a clamber starts just above, so no ledge height is left without a way up. */
+  minRise: 0.32,
   /** Highest ledge a clamber (just pushing) goes up. */
   clamberMax: 0.8,
   /** Highest ledge a Space mantle goes up. */

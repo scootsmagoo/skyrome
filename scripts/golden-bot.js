@@ -266,7 +266,16 @@
       progressT = performance.now();
     }
     if (performance.now() - progressT > 8000) {
-      snag('stuck', `${Math.round(far)} m from ${L.goal?.text ?? 'the marker'}`);
+      // What stands in the way: rays toward the next waypoint at foot, knee, waist and head, the floor under the feet.
+      const fx = c.x - p.position.x;
+      const fz = c.z - p.position.z;
+      const fl = Math.hypot(fx, fz) || 1;
+      const ahead = [0.08, 0.3, 0.7, 1.4].map((h) => {
+        const r = game.physics.raycast({ x: p.position.x, y: p.position.y + h, z: p.position.z }, { x: fx / fl, y: 0, z: fz / fl }, 3, 1);
+        return r ? +r.distance.toFixed(2) : '-';
+      });
+      const diag = `wp ${Math.round(c.x)},${Math.round(c.z)} ${fl.toFixed(1)}m ahead[${ahead.join(' ')}] grounded=${p.grounded}`;
+      snag('stuck', `${Math.round(far)} m from ${L.goal?.text ?? 'the marker'} :: ${diag}`);
       unstuck();
     }
     void progressBest;

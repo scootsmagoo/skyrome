@@ -7,7 +7,7 @@
  */
 import * as THREE from 'three';
 import type { Game } from '../core/Game';
-import { Layer, type CharacterBody } from '../core/Physics';
+import { Layer, RAPIER, type CharacterBody } from '../core/Physics';
 import { SLOPE_WALK_MAX_DEG, STEP_ASSIST_MAX, STEP_ASSIST_MIN } from '../core/traversal';
 import { approachAngle, damp } from '../core/math';
 
@@ -83,6 +83,8 @@ const PLANT_MOVE = 0.004;
 const PLANT_SLIDE = 0.03;
 const WALKABLE_NY = Math.cos((SLOPE_WALK_MAX_DEG * Math.PI) / 180);
 const planted = { x: 0, y: 0, z: 0 };
+const wallN = { x: 0, z: 0 };
+const hitScratch = new RAPIER.CharacterCollision();
 const DOWN = { x: 0, y: -1, z: 0 };
 const UP = { x: 0, y: 1, z: 0 };
 
@@ -115,6 +117,8 @@ export class Actor {
   private stepStalls = 0;
   /** Fixed steps left to carry on level after a step-up, until the body is over the tread. */
   private stepHold = 0;
+  /** Fixed steps to wait before the step-up assist looks again after finding nothing to step onto (a wall: the rays cost). */
+  private stepCool = 0;
   /** Seconds left in which the visual height eases to the physical one after a step up or down (stairs, kerbs). */
   private easeY = 0;
 
@@ -225,9 +229,20 @@ export class Actor {
     // Rapier gets the first frames (it steps stair risers smoothly a frame after contact).
     if (wasGrounded && !wasRising && dt > 0) {
       const want = Math.hypot(desired.x, desired.z);
-      const stalled = want > 0.004 && Math.hypot(mv.x, mv.z) < want * 0.6;
+      // Stalled: the move came out short of the push. Along the push is not enough: at a slant the
+      // controller slides the body along a ledge's face at most of the push, so it never "stalls"
+      // and the body ran along a kerb it could have stepped onto. Short in the push's own direction
+      // counts too (a slide along a wall counts, and the step-up looks at the contact to tell a ledge from a wall).
+      const along = want > 0.004 ? (mv.x * desired.x + mv.z * desired.z) / want : 0;
+      let stalled = want > 0.004 && (Math.hypot(mv.x, mv.z) < want * 0.6 || along < want * 0.85);
+      // A glancing push along a low lip barely slows the body, but a wall-like contact that opposes the push is a ledge to look at.
+      if (!stalled && want > 0.004 && along < want * 0.985) {
+        const n = this.wallNormal();
+        stalled = !!n && n.x * desired.x + n.z * desired.z < -0.1 * want;
+      }
       this.stepStalls = stalled ? this.stepStalls + 1 : 0;
-      const up = this.stepStalls >= 3 ? this.stepUp(desired) : null;
+      if (this.stepCool > 0) this.stepCool--;
+      const up = this.stepStalls >= 3 && this.stepCool === 0 ? this.stepUp(desired) : null;
       if (up) {
         mv = up;
         this.grounded = true;
@@ -310,11 +325,26 @@ export class Actor {
    * lands on it, or null. Anything taller is a wall (climb or jump).
    */
   private stepUp(desired: THREE.Vector3Like): THREE.Vector3Like | null {
-    const want = Math.hypot(desired.x, desired.z);
+    const r = this.stepUpFrom(desired, desired.x, desired.z);
+    if (r) return r;
+    // A slant: the ledge's face is not square to the push. Look straight into the face the controller touched.
+    const n = this.wallNormal();
+    if (n) {
+      const rr = this.stepUpFrom(desired, -n.x, -n.z);
+      if (rr) return rr;
+    }
+    this.stepCool = 8;
+    return null;
+  }
+
+  /** The step-up test with the ledge looked for along (lx, lz); the move itself is `desired`. */
+  private stepUpFrom(desired: THREE.Vector3Like, lx: number, lz: number): THREE.Vector3Like | null {
+    const want = Math.hypot(lx, lz);
+    if (want < 1e-6) return null;
     const ph = this.game.physics;
     const r = this.body.radius;
-    const dx = desired.x / want;
-    const dz = desired.z / want;
+    const dx = lx / want;
+    const dz = lz / want;
     const feet = this.currPos;
     const px = feet.x + dx * (r + 0.12);
     const pz = feet.z + dz * (r + 0.12);
@@ -324,12 +354,29 @@ export class Actor {
     if (!top || top.normal.y < 0.75) return null;
     const rise = top.point.y - feet.y;
     // Under 9 cm the capsule's round bottom rides over by itself (and a wall's moulding is no step).
-    if (rise < STEP_ASSIST_MIN || rise > STEP_MAX) return null;
+    if (rise < STEP_ASSIST_MIN || rise > STEP_MAX + 0.03) return null;
     // Room for the whole body on top, and nothing low just past the edge.
     const height = 2 * (this.body.halfHeight + r);
     if (ph.raycast({ x: px, y: top.point.y + 0.03, z: pz }, UP, height, Layer.World)) return null;
     if (ph.raycast({ x: feet.x, y: top.point.y + 0.1, z: feet.z }, { x: dx, y: 0, z: dz }, r + 0.2, Layer.World)) return null;
     return { x: desired.x, y: rise + 0.01, z: desired.z };
+  }
+
+  /** Horizontal unit normal of the static wall-like surface the last `locomote` touched (pointing at the actor), or null. Allocates: only asked while stalled. */
+  private wallNormal(): { x: number; z: number } | null {
+    const c = this.body.controller;
+    const n = c.numComputedCollisions();
+    for (let i = 0; i < n; i++) {
+      const col = c.computedCollision(i, hitScratch);
+      if (!col?.collider || !col.normal1) continue;
+      if (!((col.collider.collisionGroups() >>> 16) & Layer.World)) continue;
+      const hl = Math.hypot(col.normal1.x, col.normal1.z);
+      if (hl < 0.35) continue;
+      wallN.x = col.normal1.x / hl;
+      wallN.z = col.normal1.z / hl;
+      return wallN;
+    }
+    return null;
   }
 
   /** Is the floor under the feet a slope people can stand on (not a cliff)? One ray; only asked of a standing actor that is sliding. */
@@ -341,17 +388,10 @@ export class Actor {
 
   /**
    * Did the last `locomote` push against a static (World layer) collider with a wall-like normal?
-   * Debug use (NpcManager's wall probe): it reads the controller's collision list, which allocates.
+   * Debug and wall-learning use (NpcManager): it reads the controller's collision list, which allocates.
    */
   touchedWall(): boolean {
-    const c = this.body.controller;
-    const n = c.numComputedCollisions();
-    for (let i = 0; i < n; i++) {
-      const col = c.computedCollision(i);
-      if (!col?.collider || !col.normal1) continue;
-      if ((col.collider.collisionGroups() >>> 16) & Layer.World && Math.abs(col.normal1.y) < 0.5) return true;
-    }
-    return false;
+    return this.wallNormal() !== null;
   }
 
   /** Turn toward a heading at a maximum angular speed (rad/s). */

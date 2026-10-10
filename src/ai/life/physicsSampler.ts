@@ -9,7 +9,7 @@
  * its gate tunnels, a gallery over a portico) is sampled at the ground beneath.
  */
 import { ALL_LAYERS, groups, Layer, RAPIER, type Physics } from '../../core/Physics';
-import { STEP_ASSIST_MAX } from '../../core/traversal';
+import { NAV_MAX_STEP } from '../../core/traversal';
 import type { CellSample, CellSampler } from './navgrid';
 
 export interface PhysicsSamplerOptions {
@@ -36,11 +36,11 @@ const LINK_SIDES = [0, SUB_OFFSET, -SUB_OFFSET];
 /** `?navlinks=0` leaves every link open (the NavGrid before the thin-wall test, for A/B runs). */
 /**
  * The person-shaped clearance test starts this far above the floor (m) and ends at head height.
- * Anything taller than the step-up assist climbs (STEP_ASSIST_MAX) is a wall to an NPC: it used to
+ * Anything taller than the step-up assist climbs (NAV_MAX_STEP) is a wall to an NPC: it used to
  * start at 0.5 m, so a 0.3 to 0.5 m barrier (a low wall, a trough, a stall counter, a fountain
  * rim) read as open floor and the crowd walked into it. `?navlow=0` restores 0.5 for A/B runs.
  */
-const CLEAR_FROM = typeof location !== 'undefined' && new URLSearchParams(location.search).get('navlow') === '0' ? 0.5 : STEP_ASSIST_MAX + 0.05;
+const CLEAR_FROM = typeof location !== 'undefined' && new URLSearchParams(location.search).get('navlow') === '0' ? 0.5 : NAV_MAX_STEP + 0.05;
 const CLEAR_TO = 1.75;
 const LINKS_ON = typeof location === 'undefined' || new URLSearchParams(location.search).get('navlinks') !== '0';
 
