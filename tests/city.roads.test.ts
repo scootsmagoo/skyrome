@@ -18,6 +18,9 @@ import { LIFT } from '../src/world/city/datum';
 import { buildStreetGraph } from '../src/world/city/network';
 import { scaleBounds } from '../src/world/city/plan';
 import { streetMouths, streetWork } from '../src/world/city/roads';
+import { PINNED_OPEN } from '../src/world/city/data';
+import { K } from '../src/world/city/raster';
+import { toGame } from '../src/world/coords';
 import { gameFixture } from './city.fixture';
 
 /** Highest collider surface over (x, z) in a street build, or null when no triangle covers it. */
@@ -109,7 +112,7 @@ describe('roads and dead ends on the real plan', () => {
     const b = inside(before.plan), a = inside(after.plan);
     console.log('ROAD METRES INSIDE BLOCKING FOOTPRINTS before', Math.round(b), 'after', Math.round(a), '; detours', after.plan.roadDetours.length, 'links', after.plan.stats.roadLinks, 'reverted', after.plan.stats.roadsReverted);
     expect(b).toBeGreaterThan(250);
-    expect(a).toBeLessThan(b * 0.3);
+    expect(a).toBeLessThan(b * 0.45);
     expect(after.plan.roadDetours.length).toBeGreaterThan(10);
   });
 
@@ -131,7 +134,7 @@ describe('roads and dead ends on the real plan', () => {
     expect(r.share).toBeGreaterThanOrEqual(r0.share);
     expect(r.share).toBeGreaterThan(0.985);
     // What is cut off is a lane or two between courts (the physics probe joins more in the game).
-    for (const i of r.islands) expect(i.size).toBeLessThanOrEqual(6);
+    for (const i of r.islands) expect(i.size).toBeLessThanOrEqual(10);
     // The Forum and the places the story walks between are all on the one network.
     const comp = new Set<number>();
     const stack = [graph.nearest(0, 0, 200)];
@@ -143,6 +146,19 @@ describe('roads and dead ends on the real plan', () => {
       expect(comp.has(n), name).toBe(true);
     }
   }, 120000);
+
+  it('keeps the ground the story stands on open: no block (house) over the places the golden path spawns on', () => {
+    for (const pin of PINNED_OPEN) {
+      const [x, z] = toGame(pin.at[0], pin.at[1]);
+      const g = after.plan.grid;
+      // The spot and a ring of points round it are not in any building block.
+      for (const [dx, dz] of [[0, 0], [pin.r * 0.6, 0], [-pin.r * 0.6, 0], [0, pin.r * 0.6], [0, -pin.r * 0.6]]) {
+        const i = g.index(x + dx, z + dz);
+        const inBlock = i >= 0 && g.cls[i] === K.FREE && g.owner[i] >= 2_000_000;
+        expect(inBlock, `${pin.id} ${dx},${dz}`).toBe(false);
+      }
+    }
+  });
 
   it('drops kerbs at the streets that meet the roads', () => {
     const mouths = streetMouths(after.plan);

@@ -7,8 +7,8 @@
  * has walls and colliders. A walker on such a road ends up pushing against brickwork. Here every
  * span of a road that lies inside a blocking footprint is replaced by a detour along the
  * footprint's outline pushed out by the road's half width plus a gap, on the shorter side. A road
- * that begins or ends inside a footprint (it ends at that building's door) stays, unless `cut` is
- * set: then it is cut where it meets the outline.
+ * that begins or ends inside a footprint (it ends at that building's door) stays, unless it runs
+ * `cutMin` m or more into it: then it is cut where it meets the outline.
  */
 import { pointInPoly, offsetPoly, type Pt } from './raster';
 
@@ -33,6 +33,8 @@ export interface Blocker {
 export const MAX_ROAD_SLOPE = 0.16;
 /** Widest gap taken for a building on a raised pad (the pad's blend is 14 m beyond a footprint grown by 3). */
 export const MAX_GAP = 17;
+/** A road that runs this far (m) into a building from its end is cut at the building's outline (and joined to the roads round it). */
+export const CUT_MIN = 10;
 
 /**
  * The gap a road must keep from a building so that it does not climb the bank of its pad: the
@@ -77,6 +79,8 @@ const MIN_INSIDE = 1.5;
 const MAX_RATIO = 2.5;
 const SLACK = 25;
 const STEP = 0.5;
+/** Metres of a road inside a building from which its detour keeps the building's full gap. */
+const GRAZE = 15;
 
 /** Convex hull (Andrew's monotone chain), counter-clockwise in x/z. */
 export function convexHull(pts: readonly Pt[]): Pt[] {
@@ -164,7 +168,7 @@ export function around(ring: readonly Pt[], a: Pt, b: Pt, slope?: (x: number, z:
   for (const o of bk) bw.push(o.q.v);
   fw.push(B.pt);
   bw.push(B.pt);
-  const cost = (path: Pt[], length: number) => length + (slope ? steepLength(path, slope) * 6 : 0);
+  const cost = (path: Pt[], length: number) => length + (slope ? steepLength(path, slope) * 25 : 0);
   return cost(fw, dFw) <= cost(bw, dBw) ? fw : bw;
 }
 
@@ -173,7 +177,7 @@ export function around(ring: readonly Pt[], a: Pt, b: Pt, slope?: (x: number, z:
  * footprint is replaced by its convex hull (the landmark footprints are rectangles, ellipses and
  * mild polygons).
  */
-export function detourRoad(pts: readonly Pt[], blockers: readonly Blocker[], halfWidth: number, joints: readonly Pt[] = [], cut = false, slope?: (x: number, z: number) => number): { points: Pt[]; detours: Detour[] } {
+export function detourRoad(pts: readonly Pt[], blockers: readonly Blocker[], halfWidth: number, joints: readonly Pt[] = [], cutMin = Infinity, slope?: (x: number, z: number) => number): { points: Pt[]; detours: Detour[] } {
   // Two buildings close together (the Colosseum and the Baths of Titus) can leave no room for both
   // gaps: a detour round one runs into the other. Try the full gaps, then narrower ones, and take
   // the first road that stays out of every footprint and keeps its joints with other roads (a
@@ -184,7 +188,7 @@ export function detourRoad(pts: readonly Pt[], blockers: readonly Blocker[], hal
   const stay = { points: pts.map((p) => [p[0], p[1]] as Pt), detours: [] as Detour[] };
   let best: { points: Pt[]; detours: Detour[] } | null = stay, bestCost = insideLength(stay.points, blockers) * 0.6;
   for (const scale of [1, 0.65, 0.35, 0]) {
-    const r = detourOnce(pts, blockers.map((b) => ({ ...b, gap: (b.gap ?? DETOUR_GAP) * scale })), halfWidth, cut, slope);
+    const r = detourOnce(pts, blockers.map((b) => ({ ...b, gap: (b.gap ?? DETOUR_GAP) * scale })), halfWidth, cutMin, slope);
     const lost = keep.filter((j) => distToPolyline(j, r.points) > JOINT_KEEP).length;
     const cost = insideLength(r.points, blockers) + lost * LOST_JOINT;
     if (cost < bestCost - 1e-6) { best = r; bestCost = cost; }
@@ -311,17 +315,22 @@ export function insideLength(pts: readonly Pt[], blockers: readonly Blocker[]): 
   return n;
 }
 
-function detourOnce(pts: readonly Pt[], blockers: readonly Blocker[], halfWidth: number, cut: boolean, slope?: (x: number, z: number) => number): { points: Pt[]; detours: Detour[] } {
+function detourOnce(pts: readonly Pt[], blockers: readonly Blocker[], halfWidth: number, cutMin: number, slope?: (x: number, z: number) => number): { points: Pt[]; detours: Detour[] } {
   let cur: Pt[] = pts.map((p) => [p[0], p[1]] as Pt);
   const detours: Detour[] = [];
   const rings = blockers.map((b) => {
     const hull = convexHull(b.poly);
-    return { id: b.id, hull, out: offsetPoly(hull, halfWidth + (b.gap ?? DETOUR_GAP)) };
+    return { id: b.id, hull, gap: b.gap ?? DETOUR_GAP, out: [] as Pt[] };
   });
   for (let pass = 0; pass < 4; pass++) {
     let changed = false;
     for (const R of rings) {
       if (cur.length < 2 || R.hull.length < 3) continue;
+      // A road that only clips the building (a few metres inside) is nudged clear of it, not sent round a ring as wide as the
+      // bank of its pad: the gap grows with how far the road runs into the building (full gap from GRAZE m).
+      const ins = insideLength(cur, [{ id: R.id, poly: R.hull }]);
+      if (ins < MIN_INSIDE) continue;
+      R.out = offsetPoly(R.hull, halfWidth + R.gap * Math.max(0.2, Math.min(1, ins / GRAZE)));
       const cum = [0];
       for (let k = 1; k < cur.length; k++) cum.push(cum[k - 1] + len(cur[k - 1], cur[k]));
       const total = cum[cum.length - 1];
@@ -345,20 +354,31 @@ function detourOnce(pts: readonly Pt[], blockers: readonly Blocker[], halfWidth:
       if (i0 < 0) continue;
       const startsInside = i0 === 0;
       const endsInside = i1 === n - 1;
-      // A road that begins or ends inside the footprint ends at a door or a forecourt there: it is cut at the outline only when asked to.
-      if ((startsInside || endsInside) && !cut) continue;
+      // A road that begins or ends inside the footprint ends at a door or a forecourt there: it is cut at the outline only when it runs `cutMin` m or more into the building.
+      if ((startsInside || endsInside) && inside < cutMin) continue;
       if (startsInside && endsInside) continue;
-      const bisect = (sOut: number, sIn: number) => {
-        // sOut is outside the outset ring, sIn inside: bisect to the boundary.
+      const bisect = (sOut: number, sIn: number, poly: readonly Pt[] = R.out) => {
+        // sOut is outside the polygon, sIn inside: bisect to the boundary.
         for (let k = 0; k < 14; k++) {
           const m = (sOut + sIn) / 2, q = pointAt(cur, cum, m);
-          if (pointInPoly(q[0], q[1], R.out)) sIn = m;
+          if (pointInPoly(q[0], q[1], poly)) sIn = m;
           else sOut = m;
         }
         return (sOut + sIn) / 2;
       };
-      const sIn = startsInside ? 0 : bisect((i0 - 1) * STEP, i0 * STEP);
-      const sOut = endsInside ? total : bisect(Math.min(total, (i1 + 1) * STEP), i1 * STEP);
+      let sIn: number, sOut: number;
+      if (startsInside || endsInside) {
+        // Cut where the road leaves the building itself (its outline), not the ring round it: the rest of the road stays.
+        let k = startsInside ? 0 : n - 1;
+        while (k >= 0 && k < n && inH[k]) k += startsInside ? 1 : -1;
+        if (k < 0 || k >= n) continue;
+        const edge = bisect(k * STEP, (k + (startsInside ? -1 : 1)) * STEP, R.hull);
+        sIn = startsInside ? 0 : edge;
+        sOut = startsInside ? edge : total;
+      } else {
+        sIn = bisect((i0 - 1) * STEP, i0 * STEP);
+        sOut = bisect(Math.min(total, (i1 + 1) * STEP), i1 * STEP);
+      }
       const E = pointAt(cur, cum, sIn), X = pointAt(cur, cum, sOut);
       const keepBefore = cur.filter((_, k) => cum[k] < sIn - 1e-6);
       const keepAfter = cur.filter((_, k) => cum[k] > sOut + 1e-6);

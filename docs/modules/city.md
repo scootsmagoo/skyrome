@@ -165,17 +165,25 @@ to the street). Exact spots of the detailed buildings (counters, stairs, yard we
 ## Roads, kerbs and dead ends (M5a)
 
 - **Roads round buildings.** The atlas roads are historical centrelines; the landmarks stand on their
-  own footprints, so 20 roads ran through a temple, a camp, the Colosseum's pad or a warehouse
+  own footprints, so 15 roads ran through a temple, a camp, the Colosseum's pad or a warehouse
   (345 m of road inside blocking footprints; the bot's first stuck point, Via Nova through the Horrea
-  Agrippiana, was one). `planCity` now bends each such span round the building (`detour.ts`;
-  `?detour=0` is the old plan for A/B). Not touched: arches, gates, fora, harbours, porticoes (walked
-  through), a road that begins or ends inside a footprint (it ends at that building's door), and
-  roads whose bend would split the network. A bend that breaks a junction gets a short link road
-  (`plan.stats.roadLinks`).
+  Agrippiana, was one). `planCity` bends each such span round the building (`detour.ts`; `?detour=0`
+  is the old plan for A/B): 345 m become 123 m. The ring is the footprint's convex hull pushed out by
+  the road's half width plus a gap (5 m, wider past the bank of a raised pad: `blockerGap`, shrunk for a
+  road that only clips the building: it grows to full at 15 m inside); the side is the shorter one unless
+  it climbs a bank (the Colosseum's way round is the south side, 246 m, because the corridor between it and the Baths of
+  Titus is a cliff); a road that runs 10 m or more into a building from its end is cut at the outline
+  and joined to the roads round it. Left alone: arches, gates, fora, harbours, porticoes (walked
+  through), buildings inside a forum or an open square (the roads there are the landmark crews'
+  streets), grazes of under 1.5 m, and a road whose bend would split the network (`revertSplitting`).
+  A bend that breaks a junction gets a short link road (`plan.stats.roadLinks`).
+- **Pinned open ground** (`data.ts` PINNED_OPEN): the burned taberna (Mus and his knife-men) and the Marii's house
+  (Festus' mother) are left open (`K.SCRAP`) whatever the street layout does: bending a road reshuffles the streets
+  nearby, and a spawn inside a house wall is a fight that never starts (it happened: the Mus fight took 40 s and never ended).
 - **Road ends.** `closeRoadEnds` (runs after the streets are planned) carries every atlas road that
   stopped in the open on to the next road, street, square or building within 45 m; a stairway whose
   foot lands behind a block gets a path to the street (the Scalae Caci's foot was walled in).
-  `auditRoadEnds` lists the ends: 0 'dead' ends (5 before).
+  `auditRoadEnds` lists the ends: 0 'dead' ends (5 before). In game: `window.__streetAudit()` (reach from the Forum, road ends by verdict).
 - **Servian wall.** A road or street that meets a standing wall passes through it: the wall line
   is sampled every half metre and each piece is cut exactly where the plan raster says ROAD /
   STREET / PIAZZA (`freeRuns`, monuments.ts), the cut ends dressed as tufa jambs. Streets whose
@@ -188,9 +196,10 @@ to the street). Exact spots of the detailed buildings (counters, stairs, yard we
   ground-cover surface runs out to the ground in a *walkable* slope (0.9 m, 0.6 m, and the plaza's
   0.3-0.4 m bevel, now in the collider): the crawl's 3–12 cm ledges at paving edges were a collider
   step against the terrain.
-- **Reachability.** `tests/city.roads.test.ts`: from the Forum node 99.4 % of the street graph
-  (98.3 % before), the leftovers are three lanes between two courts; the Ludus Magnus, Colosseum,
-  Porta Capena, Trajan's Forum and the Porta Carmentalis are on the main network.
+- **Reachability.** `tests/city.roads.test.ts`: from the Forum node 99.6 % of the street graph
+  (98.3 % before), the leftovers are two lanes between courts; the Ludus Magnus, Colosseum,
+  Porta Capena, Trajan's Forum and the Porta Carmentalis are on the main network. (In game 67 landmark door nodes
+  have no street link, and the street router's nearest node to a destination can be one of them: known, see the report.)
 
 ## Walls, gates and aqueducts
 

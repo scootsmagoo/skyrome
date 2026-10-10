@@ -51,18 +51,20 @@ describe('detourRoad', () => {
     expect(r.points[r.points.length - 1]).toEqual([15, 10]);
   });
 
-  it('cuts a road that ends inside the building at its outline when asked', () => {
-    const r = detourRoad([[-40, 10], [15, 10]], [box], 4, [], true);
+  it('cuts a road that ends inside the building at its outline when it runs far enough in', () => {
+    const r = detourRoad([[-40, 10], [15, 10]], [box], 4, [], 0);
     expect(r.detours[0].kind).toBe('end');
     const last = r.points[r.points.length - 1];
-    expect(last[0]).toBeLessThan(-3.5);
-    expect(last[0]).toBeGreaterThan(-4.5);
+    // Cut at the building's own outline (x = 0), the rest of the road stays.
+    expect(last[0]).toBeLessThan(0.1);
+    expect(last[0]).toBeGreaterThan(-0.6);
   });
 
   it('cuts a road that starts inside the building', () => {
-    const r = detourRoad([[15, 10], [60, 10]], [box], 4, [], true);
+    const r = detourRoad([[15, 10], [60, 10]], [box], 4, [], 0);
     expect(r.detours[0].kind).toBe('start');
-    expect(r.points[0][0]).toBeGreaterThan(33.5);
+    expect(r.points[0][0]).toBeGreaterThan(29.9);
+    expect(r.points[0][0]).toBeLessThan(30.6);
   });
 
   it('handles two buildings in a row', () => {

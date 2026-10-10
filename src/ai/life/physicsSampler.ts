@@ -32,6 +32,8 @@ const INSIDE = 1e-4;
 /** Link rays: heights above the floor (knee, chest) and offsets across the link (centre line, then either side). */
 const LINK_HEIGHTS = [0.7, 1.4];
 const LINK_SIDES = [0, SUB_OFFSET, -SUB_OFFSET];
+/** `?navlinks=0` leaves every link open (the NavGrid before the thin-wall test, for A/B runs). */
+const LINKS_ON = typeof location === 'undefined' || new URLSearchParams(location.search).get('navlinks') !== '0';
 
 export class PhysicsCellSampler implements CellSampler {
   private readonly ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
@@ -94,6 +96,7 @@ export class PhysicsCellSampler implements CellSampler {
    * lines is clear at both heights. A wall thinner than a cell between two centres blocks all three.
    */
   link(x0: number, z0: number, h0: number, x1: number, z1: number, h1: number): boolean {
+    if (!LINKS_ON) return true;
     const dx = x1 - x0, dz = z1 - z0;
     const L = Math.hypot(dx, dz);
     const ux = dx / L, uz = dz / L;

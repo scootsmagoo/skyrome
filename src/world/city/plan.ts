@@ -20,11 +20,11 @@ import { Rng, hash2 } from '../../core/Rng';
 import type * as Atlas from '../../data/atlas';
 import { WORLD_SCALE } from '../coords';
 import { footprintPolygon, type P2 } from '../terrain/heightmap';
-import { CORRIDORS, DISTRICT_LANDMARKS, EXTRA_ROADS, OPEN_SPACES, QUARTERS, SIGHTLINE_LANDMARKS, SIGHTLINE_RADIUS, SKIPPED_AQUEDUCTS, WILD_LANDMARKS, type Quarter } from './data';
+import { CORRIDORS, DISTRICT_LANDMARKS, EXTRA_ROADS, OPEN_SPACES, PINNED_OPEN, QUARTERS, SIGHTLINE_LANDMARKS, SIGHTLINE_RADIUS, SKIPPED_AQUEDUCTS, WILD_LANDMARKS, type Quarter } from './data';
 import { SIDEWALK } from './datum';
 import { auditRoadEnds, probeEnd } from './audit';
 import { closeRoadEnds, closeStubs } from './stubs';
-import { BLOCKING, blockerGap, detourRoad, repairJoints, revertSplitting, roadJoints, type Detour } from './detour';
+import { BLOCKING, CUT_MIN, blockerGap, detourRoad, repairJoints, revertSplitting, roadJoints, type Detour } from './detour';
 import { Grid, K, cleanRing, components, pointInPoly, polyBounds, polyCentroid, signedArea, simplifyRing, splitCells, traceLoops, type Pt } from './raster';
 
 const S = WORLD_SCALE;
@@ -390,7 +390,13 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
     const gx = (hy[i + 1] - hy[i - 1]) / (2 * cell), gz = (hy[i + nx] - hy[i - nx]) / (2 * cell);
     return Math.hypot(gx, gz);
   };
-  const blockers = lmPolys.filter((l) => l.solid && BLOCKING.has(l.lm.category)).map((l) => ({ id: l.lm.id, poly: l.poly, gap: blockerGap(l.poly, slopeAt) }));
+  // (A building that stands inside a forum or an open square — the temple at the end of the Forum of Nerva, Venus Genetrix in the
+  // Forum of Caesar — is part of that precinct's own layout: the roads there are the landmark crews' streets, not bent.)
+  const inPrecinct = (poly: Pt[]) => {
+    const c = polyCentroid(poly);
+    return plazas.some((pl) => pointInPoly(c[0], c[1], pl.polygon));
+  };
+  const blockers = lmPolys.filter((l) => l.solid && BLOCKING.has(l.lm.category) && !inPrecinct(l.poly)).map((l) => ({ id: l.lm.id, poly: l.poly, gap: blockerGap(l.poly, slopeAt) }));
   const atlasRoads = [...atlas.ROADS, ...(opts.extraRoads ?? EXTRA_ROADS)].filter((r) => r.points.length >= 2).map((r) => ({ r, d: roadDims(r), pts: gpoly(r.points) }));
   if (opts.detourRoads !== false) {
     // A road through a building (the atlas centrelines are historical, the buildings stand on their
@@ -401,7 +407,7 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
     const dets = new Map<number, Detour[]>();
     atlasRoads.forEach((a, i) => {
       if (a.r.kind === 'stairs') return;
-      const bent = detourRoad(a.pts, blockers, a.d.carriage / 2 + a.d.sidewalk, joints.filter((j) => j.i === i || j.j === i).map((j) => j.p), false, slopeAt);
+      const bent = detourRoad(a.pts, blockers, a.d.carriage / 2 + a.d.sidewalk, joints.filter((j) => j.i === i || j.j === i).map((j) => j.p), CUT_MIN, slopeAt);
       if (!bent.detours.length) return;
       a.pts = bent.points;
       dets.set(i, bent.detours);
@@ -681,6 +687,11 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
   // road / street / square within 15 m; the ones with nothing in reach get a court (step 9).
   const stubFix = opts.closeStubs === false ? { extended: 0, orphans: [] } : closeStubs(g, streets, STREET_MARGIN);
 
+  // Ground the story stands on stays open (no house on the spot where Mus waits), whatever the streets did.
+  for (const pin of PINNED_OPEN) {
+    const c = g2(pin.at);
+    g.fillBand([c, c], pin.r, K.SCRAP, (v) => v === K.FREE);
+  }
   stats.roadEnds = 0;
   // A road that ends in the open (the atlas stops some at a hill's top or a gate that is gone) is carried on to the next road, street, square or building (after the streets are planned: the audit counts them).
   if (opts.detourRoads !== false) {
