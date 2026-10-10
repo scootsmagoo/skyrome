@@ -263,4 +263,15 @@ describe('PhysicsCellSampler', () => {
     s.sample(-10, 5, out); // in the wall
     expect(out.walkable && Math.abs(out.h) < 0.5).toBe(false);
   });
+
+  it('a thin low barrier between two cells (0.5 m, a trough or a low wall) closes the link; a 0.2 m kerb does not', () => {
+    const physics = new Physics();
+    physics.addBox({ x: 0, y: -0.5, z: 0 }, { x: 50, y: 0.5, z: 50 });
+    physics.addBox({ x: 0.5, y: 0.25, z: 0 }, { x: 0.05, y: 0.25, z: 5 }); // 0.5 m high, 0.1 m thick
+    physics.addBox({ x: 10.5, y: 0.1, z: 0 }, { x: 0.05, y: 0.1, z: 5 }); // a 0.2 m kerb
+    physics.step(1 / 60);
+    const s = new PhysicsCellSampler(physics);
+    expect(s.link!(-0.5, 0, 0, 1.5, 0, 0)).toBe(false);
+    expect(s.link!(9.5, 0, 0, 11.5, 0, 0)).toBe(true);
+  });
 });

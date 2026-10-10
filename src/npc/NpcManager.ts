@@ -28,6 +28,7 @@ import { Rng } from '../core/Rng';
 import * as atlas from '../data/atlas';
 import { toGame } from '../world/coords';
 import { dateOfOrdinal, festivalsOn } from '../game/calendar';
+import { Mover } from '../ai/life/mover';
 import { NavGrid } from '../ai/life/navgrid';
 import { NavService } from '../ai/life/nav';
 import { PhysicsCellSampler } from '../ai/life/physicsSampler';
@@ -281,6 +282,7 @@ export class NpcManager implements System {
     this.rng = opts.seed !== undefined ? new Rng(opts.seed) : game.rng.fork('npc');
     this.crowdEnabled = opts.crowd ?? q.get('crowd') !== '0';
     this.wallLearn = q.get('wallfix') !== '0';
+    Mover.walledReplan = this.wallLearn;
     this.namedEnabled = opts.named ?? true;
     const qd = Number(q.get('crowd'));
     this.density = qd > 0 && qd <= 4 ? qd : (opts.density ?? game.settings?.data.crowdDensity ?? 1);

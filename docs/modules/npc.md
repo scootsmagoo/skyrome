@@ -417,6 +417,12 @@ inclusive, `sampleGait` ~160 MB, avatar module) and spawning (`spawnAmbient` ~39
 AC-22 in the Forum crowd at 09:00 with the player walking through it: longest no-progress 0.52 s
 over 30 s, no unsticks.
 
+## Walls (MOVE crew, 2026-10)
+
+See docs/modules/movement.md: the wall counter (`wallCount`, `scripts/npcwalls.mjs`), the nav clearance from step height,
+learning walls from contact (`learnWall`), `Mover` re-planning when the way to the corner closes, and `StreetNav.drop`.
+`?wallfix=0&navlow=0` switches them off for A/B runs.
+
 ## Shared-file changes
 
 - `src/actors/Actor.ts`: `locomote` passes the collider's own collision groups to

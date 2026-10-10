@@ -36,7 +36,7 @@ export class NavService {
     return !!this.grid && this.grid.ready(x, z);
   }
 
-  findPath(ax: number, az: number, bx: number, bz: number): PathResult {
+  findPath(ax: number, az: number, bx: number, bz: number, retry = true): PathResult {
     const grid = this.grid;
     const d = Math.hypot(bx - ax, bz - az);
     if (d < 0.3) return [{ x: bx, z: bz }];
@@ -75,6 +75,11 @@ export class NavService {
             if (grid.lineWalkable(ax, az, node.x, node.z)) return [{ x: node.x, z: node.z }, ...p.slice(i + 1)];
             const lead = grid.findPath(ax, az, node.x, node.z, 6000);
             if (lead) return [...lead, ...p.slice(i + 1)];
+            // Walled off from where we stand while we are on ground that is connected: this street
+            // node lies behind a building (the street graph is drawn, the grid reads the colliders).
+            // Cut it out and route the long way round, once. (Near only: the flood covers the built grid, so a
+            // far node whose way in leaves it would read as walled off wrongly.)
+            if (retry && Math.hypot(node.x - ax, node.z - az) < 30 && grid.reachable(ax, az) && !grid.reachable(node.x, node.z) && streets.drop(p[i].x, p[i].z)) return this.findPath(ax, az, bx, bz, false);
           }
         }
         return p;

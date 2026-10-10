@@ -15,6 +15,8 @@ import { hyp, seek, stuckAction, StuckMonitor, type Vec2 } from './steering';
 export type MoverEvent = 'none' | 'arrived' | 'failed' | 'blocked' | 'stuck';
 
 export class Mover {
+  /** Re-plan when the way to the corner closes (NpcManager sets it from `?wallfix=0`, for A/B runs). */
+  static walledReplan = true;
   active = false;
   goalX = 0;
   goalZ = 0;
@@ -33,6 +35,10 @@ export class Mover {
   private lastZ = 0;
   /** Seconds spent waiting for a path search slot. */
   private waitT = 0;
+  /** Seconds to the next check that the way to the corner is still open, and re-plans made because it was not. */
+  private lookT = 0;
+  private walledPlans = 0;
+  private sinceWalled = 0;
 
   setGoal(x: number, z: number, speed: number, arrive = 0.6) {
     this.active = true;
@@ -46,6 +52,9 @@ export class Mover {
     this.replanned = false;
     this.sidestepT = 0;
     this.waitT = 0;
+    this.lookT = 0.4;
+    this.walledPlans = 0;
+    this.sinceWalled = 0;
     this.stuck.reset(this.lastX, this.lastZ);
   }
 
@@ -121,6 +130,20 @@ export class Mover {
     if (!c) {
       this.clear();
       return 'arrived';
+    }
+    // The way to the corner can close behind a shove or a sidestep (a wall or a corner between here and
+    // the corner the path was made for): plan again, a few times per goal and not in a rush (a
+    // search that fails is the most expensive kind, so this backs off like the other failures).
+    this.sinceWalled += dt;
+    if ((this.lookT -= dt) <= 0) {
+      this.lookT = 0.4;
+      const g = nav.grid;
+      if (Mover.walledReplan && g && this.walledPlans < 3 && this.sinceWalled > 1.5 && g.ready(x, z) && !g.lineWalkable(x, z, c.x, c.z)) {
+        this.walledPlans++;
+        this.sinceWalled = 0;
+        this.needPath = true;
+        return 'none';
+      }
     }
     const last = this.idx === this.path.length - 1;
     seek(x, z, c.x, c.z, this.speed, last ? Math.max(1.2, this.arrive * 2) : 0, out);

@@ -30,10 +30,6 @@ const UPPER = 1.8;
 const SUB_OFFSET = 0.3;
 /** A cast this short started inside a shape. */
 const INSIDE = 1e-4;
-/** Link rays: heights above the floor (knee, chest) and offsets across the link (centre line, then either side). */
-const LINK_HEIGHTS = [0.7, 1.4];
-const LINK_SIDES = [0, SUB_OFFSET, -SUB_OFFSET];
-/** `?navlinks=0` leaves every link open (the NavGrid before the thin-wall test, for A/B runs). */
 /**
  * The person-shaped clearance test starts this far above the floor (m) and ends at head height.
  * Anything taller than the step-up assist climbs (NAV_MAX_STEP) is a wall to an NPC: it used to
@@ -41,7 +37,11 @@ const LINK_SIDES = [0, SUB_OFFSET, -SUB_OFFSET];
  * rim) read as open floor and the crowd walked into it. `?navlow=0` restores 0.5 for A/B runs.
  */
 const CLEAR_FROM = typeof location !== 'undefined' && new URLSearchParams(location.search).get('navlow') === '0' ? 0.5 : NAV_MAX_STEP + 0.05;
+/** Link rays: heights above the floor (knee, chest) and offsets across the link (centre line, then either side). */
+const LINK_HEIGHTS = [CLEAR_FROM === 0.5 ? 0.7 : NAV_MAX_STEP + 0.15, 1.4];
+const LINK_SIDES = [0, SUB_OFFSET, -SUB_OFFSET];
 const CLEAR_TO = 1.75;
+/** `?navlinks=0` leaves every link open (the NavGrid before the thin-wall test, for A/B runs). */
 const LINKS_ON = typeof location === 'undefined' || new URLSearchParams(location.search).get('navlinks') !== '0';
 
 export class PhysicsCellSampler implements CellSampler {
