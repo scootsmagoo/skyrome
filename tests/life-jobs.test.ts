@@ -293,9 +293,13 @@ describe('the handover (deliveries where the person’s own talk has no life lin
     game.dialogue.end();
   });
 
-  it('steps aside for a keeper, whose own talk carries the deliveries', async () => {
+  it('steps aside for a keeper, whose own talk carries the deliveries and the jobs it lists', async () => {
     const { game, life } = await world(9);
     finishOpening(game);
+    // Thallus lists the porter's job: his own talk offers it.
+    expect(jobRuntime(PORTER)!.offerable(game)).toBe(true);
+    expect(game.dialogue.start('keeper-portus-tabularius')?.dialogueId).toBe('keeper-portus-tabularius');
+    game.dialogue.end();
     game.quests.start(PORTER);
     life.open('act.portus.amphorae');
     expect(game.dialogue.start('keeper-portus-horrearius')?.dialogueId).toBe('keeper-portus-horrearius');
