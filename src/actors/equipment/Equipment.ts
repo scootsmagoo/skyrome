@@ -493,6 +493,7 @@ export class Equipment {
     // The right hand's grip, in the bow's frame (matrices of this avatar only, so a stale parent
     // transform cancels out).
     this.avatar.root.updateMatrixWorld(true);
+    this.avatar.syncWorld();
     const p = _v.setFromMatrixPosition(this.avatar.getSocket('gripR').matrixWorld);
     bow.worldToLocal(p);
     // The string can only come back toward the archer, near the bow's center line.

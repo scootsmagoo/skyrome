@@ -7,7 +7,8 @@
  *   avatar.play('attackLight1', { onHit: () => combat.resolve(), onEnd: (interrupted) => {} });
  *
  * One SkinnedMesh (one draw call), plus attached weapon/shield meshes. Animation runs in
- * AnimationController (anim/controller.ts); distant avatars update less often (see lod.ts).
+ * AnimationController (anim/controller.ts); distant avatars update less often and use the flat
+ * bone path (see lod.ts and flatSkeleton.ts).
  */
 import * as THREE from 'three';
 import type { ActionClip, CombatAvatar, FootContactHandler, GroundProbe, IdleLoop, LocomotionState, PlayOptions, Stance } from '../Actor';
@@ -17,6 +18,7 @@ import { acquireAvatarGeometry, appearanceKey, boneInverses, createBones, releas
 import { avatarMaterial } from './material';
 import { AnimationController } from './anim/controller';
 import { avatarLod } from './lod';
+import { FlatSkeleton } from './flatSkeleton';
 import { SHADOW_PROXY_FROM, trackShadowProxy, untrackShadowProxy } from '../../gfx/shadowLod';
 import { Equipment } from '../equipment/Equipment';
 import type { LOD } from './build/common';
@@ -77,6 +79,10 @@ export class HumanoidAvatar implements CombatAvatar {
   private firstPerson = false;
   private dead = false;
   private disposed = false;
+  /** The flat bone path used while the avatar is far away (flatSkeleton.ts). */
+  private readonly flat: FlatSkeleton;
+  /** Holders of the full-rate stock path (ragdoll, gore, scenes that drive the bones themselves). */
+  private holds = 0;
   /** Whether the body casts shadows at all (it stops beyond SHADOW_FAR). */
   private readonly castsShadow: boolean;
 
@@ -121,6 +127,7 @@ export class HumanoidAvatar implements CombatAvatar {
     this.setBounds();
     this.root.add(this.mesh);
     this.createSockets();
+    this.flat = new FlatSkeleton(this.skeleton, this.mesh, this.root, [...this.sockets.values()]);
     this.anim = new AnimationController(this);
     this.equipment = new Equipment(this, {
       weapon: opts.weapon ?? app.weapon ?? 'none',
@@ -181,6 +188,8 @@ export class HumanoidAvatar implements CombatAvatar {
   /** Adopt a new rig: when the proportions changed the joints move and the mesh is re-bound to them. */
   private afterRig(rig: Rig) {
     const moved = rig.joints.some((v, i) => Math.abs(v - this.rig.joints[i]) > 1e-6);
+    // The joints and sockets move: back to the stock path until the next update re-enters the flat one.
+    if (moved) this.flat.leave();
     this.rig = rig;
     this.eyeHeight = rig.eyeHeight;
     if (moved) {
@@ -275,19 +284,50 @@ export class HumanoidAvatar implements CombatAvatar {
 
   update(dt: number, state: LocomotionState) {
     if (this.disposed) return;
-    const step = avatarLod.step(this, dt);
+    // Fighters, the dead, whoever else writes the bones: the full rate on the stock path.
+    const full = this.holds > 0 || this.dead || this.firstPerson || this.anim.wantsFullRate;
+    const step = avatarLod.step(this, dt, full);
+    const d = avatarLod.distance(this);
     // Action clocks and their events run every frame; only the pose sampling is throttled.
     this.anim.advance(dt);
-    if (step > 0) {
+    let posed = step > 0;
+    if (posed) {
       // Planted feet and loose parts only where they can be seen (the LOD's full-rate zone).
-      const d = avatarLod.distance(this);
-      this.anim.near = d < avatarLod.near;
+      this.anim.near = d < avatarLod.ikNear;
       this.anim.viewDistance = d;
       this.anim.update(step, state);
       this.updateLod();
       this.real?.updateCorrectives();
     }
     this.equipment.update(dt);
+    // Far away (with 2 m of hysteresis): bone matrices in one flat pass, only when the pose changed.
+    // After the equipment, which may put gear on the sockets.
+    if (!full && avatarLod.flat(this.flat.active ? d + 2 : d)) {
+      if (!this.flat.active) {
+        this.flat.enter();
+        posed = true;
+      }
+      if (posed) this.flat.tick();
+      this.flat.updateAttached();
+    } else if (this.flat.active) this.flat.leave();
+  }
+
+  /**
+   * Hold the avatar at the full rate on the stock bone path (`on`), or release one hold. Ragdolls,
+   * gore and anything else that writes or reads the bones' world matrices itself holds the avatar
+   * for as long as it does.
+   */
+  holdFull(on: boolean) {
+    this.holds = Math.max(0, this.holds + (on ? 1 : -1));
+    if (on) this.flat.leave();
+  }
+
+  /**
+   * Make the bones' and sockets' world matrices current for a caller about to read them outside the
+   * render walk (`root.updateMatrixWorld` alone leaves a far avatar's bones stale).
+   */
+  syncWorld() {
+    this.flat.syncWorld();
   }
 
   private updateLod() {
@@ -432,6 +472,7 @@ export class HumanoidAvatar implements CombatAvatar {
     untrackShadowProxy(this.mesh);
     this.mesh.userData.shadowGeometry = null;
     this.equipment.dispose();
+    this.flat.dispose();
     this.root.removeFromParent();
     // Materials are shared; geometry is cached per appearance and released here (the cache disposes
     // it once nobody holds it and it ages out). The bone texture is ours.
