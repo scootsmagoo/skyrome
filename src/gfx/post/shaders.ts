@@ -22,7 +22,7 @@ uniform float uExposure;
 varying vec2 vUv;
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 vec3 prefilter(vec3 c) {
-  c = min(c * uExposure, vec3(4000.0));
+  c = any(isnan(c)) || any(isinf(c)) ? vec3(4000.0) : min(c * uExposure, vec3(4000.0));
   float br = max(c.r, max(c.g, c.b));
   float rq = clamp(br - uThreshold + uKnee, 0.0, 2.0 * uKnee);
   rq = rq * rq / (4.0 * uKnee + 1e-4);
@@ -109,8 +109,13 @@ float hash(vec2 p) {
   p3 += dot(p3, p3.yzx + 33.33);
   return fract((p3.x + p3.y) * p3.z);
 }
+// A half-float overflow (the sun disc times a hot exposure) or a NaN from a shader upstream must
+// not reach the tone mapper: ACES(inf) is NaN and shows as a black speck in the middle of a glare.
+vec3 finite3(vec3 v) {
+  return any(isnan(v)) || any(isinf(v)) ? vec3(4000.0) : min(v, vec3(4000.0));
+}
 void main() {
-  vec3 c = texture2D(tColor, vUv).rgb;
+  vec3 c = finite3(texture2D(tColor, vUv).rgb);
   // Ambient occlusion (gfx/post/ao.ts), before the glow is added.
   if (uAoOn > 0.5) {
     vec2 a = texture2D(tAo, vUv).rg;
@@ -118,7 +123,7 @@ void main() {
   }
   if (uShafts > 0.0) c += texture2D(tShafts, vUv).rgb * uShafts;
   // Bloom was built from exposed color; un-expose so tone mapping treats both alike.
-  if (uBloomOn > 0.5) c += texture2D(tBloom, vUv).rgb * (uBloom / max(toneMappingExposure, 1e-4));
+  if (uBloomOn > 0.5) c += finite3(texture2D(tBloom, vUv).rgb) * (uBloom / max(toneMappingExposure, 1e-4));
   #if TONEMAP == 0
     c = ACESFilmicToneMapping(c);
   #elif TONEMAP == 1

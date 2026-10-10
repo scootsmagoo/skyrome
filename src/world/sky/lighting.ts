@@ -15,6 +15,12 @@ export const SUN_ILLUMINANCE = 3.4;
 export const MOON_ILLUMINANCE = 0.24;
 /** The visible sky is brighter than physical single scattering suggests (multiple scattering, eye). */
 export const SKY_GAIN = 3.6;
+/**
+ * How much of the sky's colour contrast the diffuse fill keeps (1 = all). Shade on a clear day is
+ * lit by the whole sky and the warm walls around it, not by the zenith's deep blue alone: at 0.6 a
+ * basalt street in shade read cyan-blue (the "bluish ramp" by the Pons Aemilius).
+ */
+export const SKY_FILL_CONTRAST = 0.42;
 /** Night fill so moonless nights are dark but playable. */
 export const NIGHT_FILL = 0.045;
 /** The moonlit sky is shown darker than the sunlit one (night vision is dim and blue-grey). */
@@ -186,7 +192,7 @@ function fillSamples(
     for (let i = 0; i < 3; i++) {
       const eff = c[i] * (1 - cloudy) + deck[i] * cloudy;
       let r = eff / lumSky;
-      r = 1 + (Math.min(r, 3) - 1) * 0.6;
+      r = 1 + (Math.min(r, 3) - 1) * SKY_FILL_CONTRAST;
       r = r * (1 - night) + (nightCol[i] / nl) * night;
       o[i] = Math.max(0, r) * scale * skyLum * lift;
     }

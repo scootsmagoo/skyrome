@@ -214,6 +214,18 @@ streaming step is ~13 ms); the 75 s Velabrum walk has no stops. The 14 steepest 
 graph and 45 sampled plaza / landmark links are walked to the end by the player; walking straight
 at shop fronts in the Velabrum and the Subura stops at the walls.
 
+## Facades (R4b, 2026-10)
+
+Plaster and brick fronts share one library material per colour, so their variety comes from the
+shader (`src/gfx/textures/shaderPatch.ts`, `SK_FACADE`, on every weathered plaster material and on
+brick): each ~11 m stretch of wall and each wall plane has its own coat (lightness, warm-cool and
+yellow-green slide), faded chalky paint above ~3.5 m, and tall damp stains. Weathering patterns (plaster
+flaking, moss, ivy, rain streaks) are now laid in planar wall coordinates (metres along the wall, metres
+up) via `skNoise2`/`skWc`: the old 3D lattice noise shears with height, which tilted every patch about
+30 degrees and read as slashes and camouflage. Specular AA (`SK_SPECAA`) is in every patched library
+material, which the city batches copy (`BatchPool.copyMaterial` keeps `defines` and `onBeforeCompile`).
+The far massing material is flat-shaded (no normal variance), so it needs none.
+
 ## Known gaps
 
 - Block interiors are the filler's (shops, stairwells, yards); the far massing has no interiors.

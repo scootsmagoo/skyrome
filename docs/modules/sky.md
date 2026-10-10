@@ -222,6 +222,27 @@ weather changes (~0.3 ms each time).
 - Save/load: `sky.weather.serialize()` / `restore()`; after a time skip call `sky.invalidate()` (big
   jumps of game time are detected automatically).
 
+### R4b (2026-10): light, air and plants
+
+- **Aerial perspective.** The fog already is height fog with in-scatter toward the sun; the extinction
+  now runs per channel at (1.22, 1.0, 0.8) (was 1.1, 1.0, 0.9), so far blocks lose red first and tint
+  toward the sky faster. Distant hills and insulae soften and cool without a flat grey veil.
+- **Shade is not cyan.** `SKY_FILL_CONTRAST` (0.42, was a literal 0.6) keeps less of the sky's colour
+  contrast in the diffuse fill, the environment bake (`uEnvMode` in `skyShader.ts`) blends the lower
+  sky 60 % toward the sunlit ground colour (walls and ground, not clear sky, light the sides), and the
+  grade's shadow tint is (0.96, 0.995, 1.04) with `shadowDesat` 0.42. This was the "bluish ramp": the
+  basalt cobbles of the Pons Aemilius approach ramp (and every basalt street in shade) read blue-grey
+  (shade RGB 87,99,110 became about 93,98,102).
+- **Golden hour grade.** `PostFX.lateUpdate` leans the highlight tint toward honey and lifts saturation
+  as the sun gets low (`goldenHour()` in `grade.ts`: stepped in twelfths so the LUT is re-baked about
+  a dozen times over an evening, not every frame).
+- **Night banding: checked, not present.** The composite's half-float grade LUT plus triangular
+  dither leaves an 8x-stretched crop of the 22:00 sky as smooth noise with no steps (see the report's
+  crops). Black specks in the middle of a glare (an inf or NaN from a half-float overflow reaching ACES)
+  are stopped by `finite3()` in the composite and the bloom prefilter.
+- Facade weathering and the foliage cards are in `docs/modules/fabric.md` and
+  `src/gfx/textures/shaderPatch.ts` (SK_FACADE, planar wall noise).
+
 ## Known issues / next steps
 
 - No rain occlusion: streaks and wetness ignore roofs unless `sky.indoor` is set. A top-down "rain

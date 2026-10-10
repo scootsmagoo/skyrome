@@ -74,6 +74,14 @@ float skGroundAt( vec2 xz ) {
 float skNoise( vec3 x ) {
   return texture2D( skNoiseTex, vec2( x.x + x.y * 0.6180339, x.z + x.y * 0.4142136 ) * ( 1.0 / 32.0 ) ).r;
 }
+// Planar variant (no shear): for patterns laid on a wall in (along-wall, up) coordinates, where the
+// 3D shear above would tilt every blotch by ~30 degrees and read as slashes and camouflage.
+float skNoise2( vec2 p ) {
+  return texture2D( skNoiseTex, p * ( 1.0 / 32.0 ) ).r;
+}
+float skHash2( vec2 p ) {
+  return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 );
+}
 `;
 
 const VERTEX_WORLD = /* glsl */ `
@@ -151,6 +159,10 @@ const MAP_FRAGMENT = /* glsl */ `
 {
   vec3 skN = normalize( cross( dFdx( vSkWorld ), dFdy( vSkWorld ) ) );
   float skVert = 1.0 - smoothstep( 0.35, 0.75, abs( skN.y ) );
+  // Wall coordinates (metres along the wall, metres up) on steep faces, the ground plane elsewhere.
+  vec2 skT = normalize( vec2( -skN.z, skN.x ) + 1e-5 );
+  float skU = dot( vSkWorld.xz, skT );
+  vec2 skWc = skVert > 0.5 ? vec2( skU, vSkWorld.y ) : vSkWorld.xz;
   {  // (no branch: skNoise samples a texture, whose mips need uniform control flow)
     // Grime: up to ~0.6–1.6 m above the street, with a ragged top edge.
     float skH = skGroundGrid.w > 0.0 ? vSkWorld.y - skGroundAt( vSkWorld.xz ) : 100.0;
@@ -167,32 +179,48 @@ const MAP_FRAGMENT = /* glsl */ `
     #ifdef SK_FLAKE
     {
       // Plaster lost to weather: ragged patches, most of them low on the wall, show the brick or tufa below.
-      float skFl = skNoise( vSkWorld * vec3( 1.3, 1.7, 1.3 ) + 83.0 ) * 0.6 + skNoise( vSkWorld * 4.1 + 29.0 ) * 0.4;
+      float skFl = skNoise2( skWc * vec2( 1.3, 1.7 ) + 83.0 ) * 0.6 + skNoise2( skWc * 4.1 + 29.0 ) * 0.4;
       float skFlLow = 1.0 - smoothstep( 0.0, 2.4, max( skH, 0.0 ) );
-      float skFlT = 0.78 - 0.14 * skFlLow - 0.03 * skFlake;
+      float skFlT = 0.87 - 0.16 * skFlLow - 0.03 * skFlake;
       skFlakeK = smoothstep( skFlT, skFlT + 0.03, skFl ) * skVert * min( skFlake, 1.0 );
       float skFlRim = smoothstep( skFlT - 0.05, skFlT, skFl ) * ( 1.0 - skFlakeK ) * skVert;
-      vec3 skUnder = mix( vec3( 0.3, 0.13, 0.085 ), vec3( 0.27, 0.25, 0.22 ), smoothstep( 0.3, 0.7, skNoise( vSkWorld * 2.1 + 3.0 ) ) );
-      skUnder *= 0.9 + 0.7 * skNoise( vSkWorld * 19.0 );
+      vec3 skUnder = mix( vec3( 0.34, 0.2, 0.14 ), vec3( 0.3, 0.28, 0.25 ), smoothstep( 0.3, 0.7, skNoise2( skWc * 2.1 + 3.0 ) ) );
+      skUnder *= 0.9 + 0.7 * skNoise2( skWc * 19.0 );
       diffuseColor.rgb = mix( diffuseColor.rgb * ( 1.0 - 0.3 * skFlRim ), skUnder, skFlakeK );
     }
     #endif
-    diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * vec3( 0.8, 0.95, 0.62 ), skDamp * smoothstep( 0.45, 0.8, skNoise( vSkWorld * 2.7 + 61.0 ) ) );
+    diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * vec3( 0.8, 0.95, 0.62 ), skDamp * smoothstep( 0.45, 0.8, skNoise2( skWc * 2.7 + 61.0 ) ) );
     // Moss: soft green cushions on the lowest metre and a half of stone, thickest in the damp.
-    float skMo = skNoise( vSkWorld * vec3( 2.3, 3.1, 2.3 ) + 41.0 ) * 0.6 + skNoise( vSkWorld * 7.3 + 17.0 ) * 0.4;
-    float skMoK = smoothstep( 0.6, 0.72, skMo + 0.18 * skDamp ) * ( 1.0 - smoothstep( 0.2, 1.5, max( skH, 0.0 ) ) ) * skVert * skWeather * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
-    diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.12, 0.2, 0.06 ) * ( 0.7 + 0.8 * skNoise( vSkWorld * 31.0 ) ), skMoK * 0.7 );
+    float skMo = skNoise2( skWc * vec2( 2.3, 3.1 ) + 41.0 ) * 0.6 + skNoise2( skWc * 7.3 + 17.0 ) * 0.4;
+    float skMoK = smoothstep( 0.58, 0.82, skMo + 0.18 * skDamp ) * ( 1.0 - smoothstep( 0.2, 1.5, max( skH, 0.0 ) ) ) * skVert * skWeather * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
+    diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.12, 0.2, 0.06 ) * ( 0.7 + 0.8 * skNoise2( skWc * 31.0 ) ), skMoK * 0.55 );
     // Ivy: a few columns of dark leaf clusters climbing the wall, ragged at the top, sparse at the edge.
-    float skIvC = smoothstep( 0.7, 0.8, skNoise( vec3( vSkWorld.x * 0.23 + vSkWorld.z * 0.21, 0.0, 5.0 ) ) );
+    float skIvC = smoothstep( 0.78, 0.86, skNoise( vec3( vSkWorld.x * 0.23 + vSkWorld.z * 0.21, 0.0, 5.0 ) ) );
     float skIvTop = 2.2 + 4.0 * skNoise( vec3( vSkWorld.x * 0.5, 0.0, vSkWorld.z * 0.5 ) + 9.0 );
-    float skIvLeaf = skNoise( vSkWorld * 9.0 + 3.0 ) * 0.65 + skNoise( vSkWorld * 21.0 ) * 0.35;
-    float skIvK = skIvC * ( 1.0 - smoothstep( skIvTop * 0.55, skIvTop, max( skH, 0.0 ) ) ) * smoothstep( 0.38 + 0.2 * skIvC, 0.52, skIvLeaf ) * skVert * skWeather * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
-    diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.045, 0.1, 0.03 ) * ( 0.6 + 1.1 * skNoise( vSkWorld * 47.0 ) ), skIvK * 0.85 );
+    float skIvLeaf = skNoise2( skWc * 13.0 + 3.0 ) * 0.6 + skNoise2( skWc * 31.0 ) * 0.4;
+    float skIvK = skIvC * ( 1.0 - smoothstep( skIvTop * 0.55, skIvTop, max( skH, 0.0 ) ) ) * smoothstep( 0.46 + 0.1 * skIvC, 0.6, skIvLeaf ) * skVert * skWeather * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
+    diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.045, 0.1, 0.03 ) * ( 0.6 + 1.1 * skNoise2( skWc * 47.0 ) ), skIvK * 0.7 );
+    #ifdef SK_FACADE
+    {
+      // Each ~11 m stretch of wall (and each wall plane) was last painted on its own day: its own
+      // lightness and a slide along the warm-cool and yellow-green axes, so a street of one plaster
+      // id is still a street of many colours.
+      vec2 skCell = vec2( floor( skU / 11.0 ), floor( dot( vSkWorld.xz, skN.xz ) / 2.5 ) );
+      float skH1 = skHash2( skCell + 3.1 ), skH2 = skHash2( skCell * 1.7 + 9.3 ), skH3 = skHash2( skCell * 2.3 + 41.0 );
+      vec3 skCoat = vec3( 1.0 + 0.16 * ( skH2 - 0.5 ) + 0.07 * ( skH3 - 0.5 ), 1.0 + 0.07 * ( skH3 - 0.5 ), 1.0 - 0.18 * ( skH2 - 0.5 ) - 0.05 * ( skH3 - 0.5 ) );
+      diffuseColor.rgb *= skCoat * ( 0.86 + 0.26 * skH1 );
+      // Faded, chalky paint high up where the sun and rain reach (and a ragged edge between coats).
+      float skFade = smoothstep( 3.5, 11.0, max( skH, 0.0 ) ) * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 ) * skVert;
+      float skLum = dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
+      diffuseColor.rgb = mix( diffuseColor.rgb, vec3( skLum ) * 1.1 + 0.02, 0.22 * skFade * ( 0.5 + skNoise2( skWc * 0.4 + 5.0 ) ) );
+      // Damp stains: tall, soft, pale-edged blots of water that ran down from a gutter or sill.
+      float skSt = smoothstep( 0.56, 0.82, skNoise2( skWc * vec2( 0.55, 0.16 ) + 13.0 ) * 0.7 + skNoise2( skWc * vec2( 2.1, 0.5 ) + 3.0 ) * 0.3 );
+      diffuseColor.rgb *= 1.0 - 0.3 * skSt * skVert * skWeather;
+    }
+    #endif
     // Rain streaks: narrow along the wall, long down it, patchy.
-    vec2 skT = normalize( vec2( -skN.z, skN.x ) + 1e-5 );
-    float skU = dot( vSkWorld.xz, skT );
-    float skS = smoothstep( 0.4, 0.75, skNoise( vec3( skU * 2.2, vSkWorld.y * 0.15, 7.0 ) ) );
-    skS *= 0.4 + skNoise( vec3( skU * 0.25, vSkWorld.y * 0.06, 11.0 ) );
+    float skS = smoothstep( 0.4, 0.75, skNoise2( vec2( skU * 2.2, vSkWorld.y * 0.15 + 7.0 ) ) );
+    skS *= 0.4 + skNoise2( vec2( skU * 0.25, vSkWorld.y * 0.06 + 11.0 ) );
     diffuseColor.rgb *= 1.0 - min( 0.8, 0.42 * skS * skVert * skWeather );
   }
 }
@@ -320,6 +348,8 @@ export function applyShaderPatch(
     ...(puddle > 0 ? { SK_PUDDLE: '' } : {}),
     ...(grain > 0 ? { SK_GRAIN: '' } : {}),
     ...(flake > 0 && weather > 0 ? { SK_FLAKE: '' } : {}),
+    // Plaster and brick fronts get their own coats of paint, fade and stains.
+    ...(weather > 0 && (flake > 0 || material.name === 'brick') ? { SK_FACADE: '' } : {}),
   };
   const uniform = { value: macro };
   const contrastU = { value: contrast };
@@ -357,5 +387,5 @@ export function applyShaderPatch(
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n#ifdef SK_WEAR\nroughnessFactor *= 1.0 - 0.25 * skWearK;\n#endif\n#ifdef SK_PUDDLE\nroughnessFactor = mix( roughnessFactor, 0.07, skPuddleK );\n#endif\n#ifdef SK_FLAKE\nroughnessFactor = mix( roughnessFactor, 0.95, skFlakeK );\n#endif')
       .replace('#include <normal_fragment_maps>', normalFragmentMaps());
   };
-  material.customProgramCacheKey = () => 'skyrome-macro-v7';
+  material.customProgramCacheKey = () => 'skyrome-macro-v8';
 }
