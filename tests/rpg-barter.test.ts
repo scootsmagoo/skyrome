@@ -5,6 +5,7 @@ import type { NpcDef } from '../src/npc/types';
 import { NpcRegistry } from '../src/npc/registry';
 import { BarterSystem, buyFactor, buyPrice, repairCost, roundPrice, sellFactor, sellPrice, tradeXp, type PriceContext } from '../src/rpg/barter';
 import { VENDORS } from '../src/rpg/data/vendors';
+import { VENDORS_LIFE } from '../src/rpg/data/vendors-life';
 import { ITEMS } from '../src/rpg/data/items';
 import { LOOT_TABLES } from '../src/rpg/data/loot';
 import { FactionSystem } from '../src/rpg/factions';
@@ -115,7 +116,9 @@ describe('barter formulas (GDD §7.4)', () => {
     expect(VENDORS.argentarius).toMatchObject({ purse: 3000, grade: 'banker' });
     expect(VENDORS.receptator).toMatchObject({ purse: 400, fence: true });
     expect(VENDORS.popina).toMatchObject({ purse: 40, stall: true, plebeian: true });
-    expect(Object.keys(VENDORS).length).toBe(19);
+    // The 19 kinds of the GDD, plus the ones phase 2 adds (vendors-life.ts).
+    expect(VENDORS_LIFE.length).toBe(4); // margaritarius, vinarius, figulus, pannarius
+    expect(Object.keys(VENDORS).length).toBe(19 + 4);
   });
 });
 
