@@ -92,6 +92,11 @@ const said = new Map<string, string>();
 let turn = 0;
 
 export function installLifeBench(game: Game) {
+  // A new Game starts with a clean bench (the module-level maps would outlive it).
+  said.clear();
+  turn = 0;
+  // The card asks for the states several times a render; they are worked out once per opening and per making.
+  const cache = new Map<string, { recipe: Recipe; state: MakeState; line: string }[]>();
   const site = (owner: string): Site => SITES[owner] ?? DEFAULT_SITE;
   const recipes = (): Recipe[] => (game.life?.data.recipes ?? []).filter((r) => r.bench === 'mortar');
   const itemName = (id: string) => game.items?.get(id)?.name.toLowerCase() ?? id;
@@ -103,11 +108,17 @@ export function installLifeBench(game: Game) {
   const allowed = (owner: string) => passes(site(owner).allow, game);
   const poor = (owner: string) => (game.player?.inventory?.denarii ?? 0) + 1e-9 < site(owner).fee;
 
-  const states = (owner: string) =>
-    recipes().map((recipe) => {
-      const state = makeState(recipe, have());
-      return { recipe, state, line: state.ok ? '' : whyNot(state, itemName) };
-    });
+  const states = (owner: string) => {
+    let list = cache.get(owner);
+    if (!list) {
+      list = recipes().map((recipe) => {
+        const state = makeState(recipe, have());
+        return { recipe, state, line: state.ok ? '' : whyNot(state, itemName) };
+      });
+      cache.set(owner, list);
+    }
+    return list;
+  };
 
   const make = (recipeId: string, owner: string): { ok: boolean; text: string } => {
     const r = recipes().find((x) => x.id === recipeId);
@@ -125,6 +136,7 @@ export function installLifeBench(game: Game) {
     skipTime(game.time, game.events, r.hours);
     inv.add(r.output.item, r.output.count, { source: 'craft' });
     if (r.skill) sheet?.useSkill(r.skill, r.xp);
+    cache.clear();
     game.events.emit('life:crafted', { recipe: r.id, item: r.output.item, count: r.output.count });
     dimScreen(game);
     const out = game.items?.get(r.output.item)?.name ?? r.output.item;
@@ -137,6 +149,7 @@ export function installLifeBench(game: Game) {
   game.lifeCraft = {
     open: (owner) => {
       said.delete(owner);
+      cache.clear();
       return !!game.dialogue?.start(`bench:${owner}`, { name: site(owner).name, dialogueId: DIALOGUE });
     },
     make,

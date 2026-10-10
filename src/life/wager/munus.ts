@@ -53,6 +53,9 @@ const pending = new Map<string, 0 | 1>();
 let said = '';
 
 export function installLifeBets(game: Game) {
+  // A new Game starts with no half-made bet (the module-level state would outlive it).
+  pending.clear();
+  said = '';
   const closedWhy = (): string | null => {
     if (!gamesToday(game)) return 'No games today: the arena rests, and so does my tablet.';
     const phase = gamesPhase(game);

@@ -24,14 +24,14 @@ export default defineLife({
       talk: {
         greet: '(A thin freedman squats over a ring scratched in the paving, four knucklebones clicking in his fist.) Evening. We play Augustus’s way, so nobody can say the old man’s rules were not good enough for him. Deal yourself in, or move along; the draught is bad for the bones.',
         topics: [
-          { ask: 'What are the rules?', say: 'Four bones each, thrown in turn. A dog (the one) or a senio (the six) costs you a stake into the middle for each bone that shows it. Venus, four different faces, takes the pot. The god Augustus himself wrote it to Tiberius, so it is practically law. Practically.' },
+          { ask: 'What are the rules?', say: 'Four bones each, thrown in turn. A dog (the one) or a senio (the six) costs you a stake into the middle for each bone that shows it. Venus, four different faces, takes the pot. The god Augustus is said to have played by the same scheme and boasted of it in a letter to Tiberius, so it is practically law. Practically. (We play for asses, not denarii; I am a poor man.)' },
           { ask: 'What about the watch?', say: 'The vigiles walk by with their buckets and look at the sky. Dice are against the law. So we are not dicing; we are praying to the bones. But if one of them stops and stares, the bones go in the sleeve and you never saw me.' },
           { ask: 'Does anyone ever win?', say: 'Venus comes about once in twenty-six throws, and there are three of us throwing. Do the sum. Then do the other sum, the one where I am a poor man.' },
         ],
         news: 'Heard anything on the Vicus Longus?',
       },
       closed: [],
-      period: 'Dice under the lamps of a popina: Juvenal 8.172–176 [A]; Augustus’s rules, Suetonius Aug. 71 [A]; tolerated but illegal: Martial 4.14, 5.84 [A]',
+      period: 'Dice under the lamps of a popina: Juvenal 8.172–176 [A]; dog/six pays in, Venus takes the pot: Suetonius Aug. 71 [A]; tolerated but illegal: Martial 4.14, 5.84 [A]',
     },
     {
       id: 'keeper-forum-aleator',
@@ -51,7 +51,7 @@ export default defineLife({
         news: 'What’s the talk on the steps?',
       },
       closed: [],
-      period: 'Gaming boards scratched into the steps of the Basilica Julia [A, the Forum Romanum]; Augustus’s rules, Suetonius Aug. 71 [A]',
+      period: 'Gaming boards scratched into the steps of the Basilica Julia [A, the Forum Romanum]; dog/six pays in, Venus takes the pot: Suetonius Aug. 71 [A]',
     },
     {
       id: 'keeper-colos-libellio',

@@ -3,9 +3,11 @@
  * conversation panel. The rules are Augustus's own (taliRules.ts); one choice is one round, and the
  * dicers throw by themselves. The stake is 1 to 4 asses a die (the wager's stakes, choices 1 to 4).
  *
- *  - The table's bank (wager.bank, denarii a game day): once the player is up by that much today the
- *    table says "Enough of your luck for one day", and a pot is paid only as far as the bank allows.
- *  - The watch: no game with a guard or a vigil within `watchRadius` (18 m) of the table, and the
+ *  - The table's bank (wager.bank, denarii a game day) caps WINNINGS only: once the player is up by that
+ *    much today the table says "Enough of your luck for one day", and a pot is paid only as far as the
+ *    bank allows. Losses are not capped; the player can always walk away (and a throw needs the coin
+ *    to cover four stakes, so a sitting never leaves the purse below zero).
+ *  - The watch: no game with a guard or a vigil within `watchRadius` of the table (18 m in the Subura, 9 m on the Forum steps), and the
  *    bones go up a sleeve if one walks up mid-game. Gambling was illegal and tolerated (Martial 4.14).
  *  - No cheating in phase 2.
  *
@@ -58,6 +60,8 @@ const hashOf = (s: string) => {
 };
 
 export function installLifeTali(game: Game) {
+  // A new Game starts with no sittings (the module-level map would outlive it).
+  sittings.clear();
   const rng = game.rng ? game.rng.fork('tali') : new Rng('tali');
   const wagerOf = (owner: string): WagerDef | undefined => {
     const id = game.life?.keeper(owner)?.wager;
