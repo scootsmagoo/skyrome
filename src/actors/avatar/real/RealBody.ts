@@ -23,7 +23,7 @@ import type { Appearance, Sex } from '../../appearance';
 import type { HumanoidAvatar } from '../HumanoidAvatar';
 import { B, computeRig, type Rig } from '../rig';
 import { avatarMaterial } from '../material';
-import { realClothMaterial } from './garments/clothMaterial';
+import { realClothMaterial, realShellMaterial } from './garments/clothMaterial';
 import { levels } from '../build/body';
 import { buildArmorPieces } from '../build/armor';
 import { buildBelt, buildLowerGarments } from '../build/garments';
@@ -546,7 +546,7 @@ export class RealBody {
       return;
     }
     if (!this.shells) {
-      this.shells = new THREE.SkinnedMesh(g, avatarMaterial());
+      this.shells = new THREE.SkinnedMesh(g, realShellMaterial());
       this.shells.name = 'humanoid:shells';
       this.shells.castShadow = av.mesh.castShadow;
       this.shells.receiveShadow = true;

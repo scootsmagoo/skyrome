@@ -15,15 +15,16 @@
  */
 import * as THREE from 'three';
 import { B } from '../../rig';
-import { SURF, type Weights } from '../../SkinBuilder';
+import { SURF } from '../../SkinBuilder';
 import { TorsoProfile, levels, type Levels } from '../../build/body';
-import { makeCtx, srgb, lerp, type Ctx } from '../../build/common';
-import { resolveOutfit, type Cloth } from '../../build/outfit';
+import { makeCtx, srgb, type Ctx } from '../../build/common';
+import { resolveOutfit } from '../../build/outfit';
 import { armorSkirtOverlay } from '../../build/armor';
-import { buildBelt, buildTogaDrape, tubeAlong, type SkirtSpec } from '../../build/garments';
-import { buildCloak } from '../../build/cloak';
+import { buildBelt, type SkirtSpec } from '../../build/garments';
 import { BodyProfile, ARM_BONES, HEAD_BONES, boneWeight } from './profile';
 import { buildRealSkirt, type SkirtCover } from './skirt';
+import { buildTogaDrapery } from './drape';
+import { buildRealCloak } from './cloaks';
 import type { BuildShells, RealContext } from '../types';
 
 /** The torso profile of the procedural builders, answering from the real body's silhouette. */
@@ -56,9 +57,11 @@ export const buildShells: BuildShells = (rc) => {
   const bp = pr.core;
   const prof = new RealProfile(ctx, L, bp);
   const covers: SkirtCover[] = [];
+  let lastSkirt: ReturnType<typeof buildRealSkirt> | null = null;
   const skirt = (sp: SkirtSpec) => {
     const built = buildRealSkirt(ctx, L, bp, sp);
     covers.push(built.cover);
+    lastSkirt = built;
     return built.surface;
   };
   const o = outfit;
@@ -66,7 +69,7 @@ export const buildShells: BuildShells = (rc) => {
   const legK = { short: 0.7, knee: 0.66, long: 0.64 };
   if (o.toga) {
     const t = o.toga;
-    const surface = skirt({
+    const built = buildRealSkirt(ctx, L, bp, {
       top: L.waist + 0.02 * s,
       hem: L.ankle + 0.02 * s,
       color: t.color,
@@ -74,12 +77,13 @@ export const buildShells: BuildShells = (rc) => {
       surf: SURF.wool,
       flare: 0.07 * s,
       legK: 0.92,
-      folds: 9,
-      foldAmp: 0.012 * s,
+      folds: 8,
+      foldAmp: 0.04 * s,
       thickness: 0.015 * s,
       hemTilt: (th) => 0.06 * s * Math.max(0, -Math.cos(th)) * Math.max(0, Math.sin(th) + 0.3),
     });
-    buildTogaDrape(ctx, L, prof, surface);
+    covers.push(built.cover);
+    buildTogaDrapery({ ctx, L, bp, skirt: built.surface, skirtBack: built.back });
   } else if (o.stola) {
     skirt({
       top: L.waist + 0.04 * s,
@@ -125,7 +129,11 @@ export const buildShells: BuildShells = (rc) => {
       strips: srgb('#2e2016'),
     });
   }
-  if (o.palla && !o.toga) pallaWrap(ctx, L, prof, o.palla, skirt);
+  // The palla: the toga's drapery, shorter, over the stola's (or the long tunic's) skirt.
+  if (o.palla && !o.toga) {
+    const base = lastSkirt as ReturnType<typeof buildRealSkirt> | null;
+    if (base) buildTogaDrapery({ ctx, L, bp, skirt: base.surface, skirtBack: base.back, palla: true });
+  }
   if (o.apron && o.tunic) {
     skirt({
       top: L.waist,
@@ -147,7 +155,7 @@ export const buildShells: BuildShells = (rc) => {
     // Cloaks hang over the shoulders and the upper arms: they ride the wide silhouette.
     pr.wide ??= new BodyProfile(rc.body, rc.rig, true);
     cloakFrom = ctx.b.vertexCount;
-    buildCloak(ctx, L, new RealProfile(ctx, L, pr.wide));
+    buildRealCloak(ctx, L, pr.wide);
     cloakTo = ctx.b.vertexCount;
   }
   if (ctx.b.vertexCount === 0) return null;
@@ -160,40 +168,6 @@ export const buildShells: BuildShells = (rc) => {
   geometry.computeBoundingSphere();
   return { geometry, hide: coverMask(rc, bp, covers, s) };
 };
-
-/** The palla draped around the hips and over the left shoulder (matrons), when there is no toga. */
-function pallaWrap(ctx: Ctx, L: Levels, prof: RealProfile, p: Cloth, skirt: (sp: SkirtSpec) => unknown) {
-  const s = L.s;
-  skirt({
-    top: L.waist + 0.03 * s,
-    hem: L.knee - 0.06 * s,
-    color: p.color,
-    trim: p.trim,
-    surf: SURF.wool,
-    flare: 0.075 * s,
-    legK: 0.45,
-    folds: 8,
-    foldAmp: 0.012 * s,
-    thickness: 0.02 * s,
-    hemTilt: (th) => 0.1 * s * (0.5 + 0.5 * Math.cos(th)),
-  });
-  const pts: { p: THREE.Vector3; w: Weights }[] = [];
-  const N = ctx.hi ? 8 : 5;
-  for (let i = 0; i < N; i++) {
-    const k = i / (N - 1);
-    const x = lerp(0.13 * s, -0.17 * s, k);
-    const y = lerp(L.shoulder + 0.01 * s, L.waist + 0.02 * s, k);
-    // The band crosses the chest from the left shoulder to the right hip, 3 cm off the real skin.
-    const th = Math.PI / 2 - Math.asin(Math.max(-0.98, Math.min(0.98, x / Math.max(0.1, prof.bp.section(y).a))));
-    const [bx, bz] = prof.bp.point(y, th);
-    const zc = prof.bp.centre(y);
-    const r = Math.hypot(bx, bz - zc) || 1;
-    const out = (r + 0.03 * s) / r;
-    pts.push({ p: new THREE.Vector3(bx * out, y, zc + (bz - zc) * out), w: y > L.chest ? [B.chest, 1] : [B.spine, 0.6, B.chest, 0.4] });
-  }
-  pts.unshift({ p: new THREE.Vector3(0.14 * s, L.shTop + 0.02 * s, -0.03 * s), w: [B.chest, 0.6, B.shoulderL, 0.4] });
-  tubeAlong(ctx, pts, 0.03 * s, p.color, p.trim);
-}
 
 /**
  * Body vertices covered by a skirt: the pelvis (hips and spine weights only) between a hand's breadth above
