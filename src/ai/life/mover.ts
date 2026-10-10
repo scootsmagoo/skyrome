@@ -16,7 +16,7 @@ export type MoverEvent = 'none' | 'arrived' | 'failed' | 'blocked' | 'stuck';
 
 export class Mover {
   /** Re-plan when the way to the corner closes (NpcManager sets it from `?wallfix=0`, for A/B runs). */
-  static walledReplan = true;
+  walledReplan = true;
   active = false;
   goalX = 0;
   goalZ = 0;
@@ -138,7 +138,7 @@ export class Mover {
     if ((this.lookT -= dt) <= 0) {
       this.lookT = 0.4;
       const g = nav.grid;
-      if (Mover.walledReplan && g && this.walledPlans < 3 && this.sinceWalled > 1.5 && g.ready(x, z) && !g.lineWalkable(x, z, c.x, c.z)) {
+      if (this.walledReplan && g && this.walledPlans < 3 && this.sinceWalled > 1.5 && g.ready(x, z) && !g.lineWalkable(x, z, c.x, c.z)) {
         this.walledPlans++;
         this.sinceWalled = 0;
         this.needPath = true;

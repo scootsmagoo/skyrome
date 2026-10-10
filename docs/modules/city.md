@@ -181,6 +181,7 @@ to the street). Exact spots of the detailed buildings (counters, stairs, yard we
 - **Pinned open ground** (`data.ts` PINNED_OPEN): the burned taberna (Mus and his knife-men) and the Marii's house
   (Festus' mother) are left open (`K.SCRAP`) whatever the street layout does: bending a road reshuffles the streets
   nearby, and a spawn inside a house wall is a fight that never starts (it happened: the Mus fight took 40 s and never ended).
+  This is a story pin: the two points ([-8,262] and [-82,345]) are content-specific and must move with the story's spawns.
 - **Road ends.** `closeRoadEnds` (runs after the streets are planned) carries every atlas road that
   stopped in the open on to the next road, street, square or building within 45 m; a stairway whose
   foot lands behind a block gets a path to the street (the Scalae Caci's foot was walled in).
