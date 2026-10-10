@@ -257,3 +257,50 @@ export function deformTable(hands: readonly (HandMeasure | null)[], parts: HandP
   if (jaw) for (const [v, w] of jaw.weights) if (!out.has(v)) out.set(v, { ch: DEFORM_CHANNEL.jaw, p1: jaw.hinge, bone1: B.head, w1: w });
   return out;
 }
+
+/**
+ * The shader's deformation on the CPU (the reference for tests; keep in step with DEFORM_VERTEX_PARS).
+ * `a0`, `a1`: the vertex's two attributes; `prm`: the 16 parameter floats. Returns the moved point.
+ */
+export function deformPoint(p: ArrayLike<number>, a0: ArrayLike<number>, a1: ArrayLike<number>, prm: ArrayLike<number>): [number, number, number] {
+  let q: [number, number, number] = [p[0], p[1], p[2]];
+  if (a0[3] > -0.5) return q;
+  const code = -a0[3];
+  const ch = Math.floor(code + 1e-4);
+  const w1 = Math.min(1, Math.max(0, (code - ch) / 0.99));
+  const P1 = [a0[0], a0[1], a0[2]];
+  const P2 = [a1[0], a1[1], a1[2]];
+  const w2 = a1[3];
+  const rot = (c: number[], k: number[], a: number) => {
+    const v = [q[0] - c[0], q[1] - c[1], q[2] - c[2]];
+    const cs = Math.cos(a);
+    const sn = Math.sin(a);
+    const kv = [k[1] * v[2] - k[2] * v[1], k[2] * v[0] - k[0] * v[2], k[0] * v[1] - k[1] * v[0]];
+    const d = (k[0] * v[0] + k[1] * v[1] + k[2] * v[2]) * (1 - cs);
+    q = [c[0] + v[0] * cs + kv[0] * sn + k[0] * d, c[1] + v[1] * cs + kv[1] * sn + k[1] * d, c[2] + v[2] * cs + kv[2] * sn + k[2] * d];
+  };
+  const unit = (v: number[]) => {
+    const l = Math.hypot(v[0], v[1], v[2]) || 1;
+    return [v[0] / l, v[1] / l, v[2] / l];
+  };
+  const cross = (a: number[], b: number[]) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  if (ch > 6.5) {
+    rot(P1, [1, 0, 0], prm[PRM.jaw] * w1);
+    return q;
+  }
+  const side = ch < 3.5 ? 1 : -1;
+  const c = ch < 3.5 ? ch : ch - 3;
+  const h = PRM.hand[side > 0 ? 0 : 1];
+  const palm = [-side, 0, 0];
+  if (c < 2.5) {
+    const pip = prm[h + (c < 1.5 ? 0 : 1)];
+    const k = unit(cross([P2[0] - P1[0], P2[1] - P1[1], P2[2] - P1[2]], palm));
+    rot(P2, k, pip * 0.75 * w2);
+    rot(P1, k, pip * w1);
+  } else {
+    const k = unit(cross(unit([P2[0] - P1[0], P2[1] - P1[1], P2[2] - P1[2]]), unit([palm[0], palm[1], palm[2] - 0.8])));
+    rot(P2, k, prm[h + 3] * w2);
+    rot(P1, [0, -side, 0], prm[h + 2] * w1);
+  }
+  return q;
+}

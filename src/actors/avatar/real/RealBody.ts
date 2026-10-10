@@ -506,6 +506,8 @@ export class RealBody {
   readonly face = new FaceDriver();
   private lookTarget: THREE.Vector3 | null = null;
   private lastFaceT = -1;
+  /** The face and hands were driven last frame (LOD 0). */
+  private alive = true;
 
   /** `lod`: the LOD to build now (the avatar picks the right one once it knows its distance). */
   constructor(app: Appearance, lod = 2) {
@@ -572,8 +574,6 @@ export class RealBody {
   attach(avatar: HumanoidAvatar) {
     this.avatar = avatar;
     bodies.set(avatar, this);
-    // The bone texture carries the face and hand parameters in a spare slot (real/deform.ts).
-    paramsOf(avatar.skeleton);
     this.eyes = new THREE.SkinnedMesh(this.entry.eyes, this.eyeMaterial());
     this.eyes.name = 'humanoid:eyes';
     this.eyes.castShadow = false;
@@ -693,8 +693,12 @@ export class RealBody {
     const av = this.avatar;
     if (!av) return;
     if (this.lod <= 2) updateCorrectives(av.mesh, av.bones);
-    const params = paramsOf(av.skeleton);
     const near = this.lod === 0;
+    // Faces and hands only move at LOD 0 (the skin shader that bends them and the eyes are only there):
+    // farther out, one last pass hands the bones back their plain curl and zeroes the parameters.
+    if (!near && !this.alive) return;
+    this.alive = near;
+    const params = paramsOf(av.skeleton);
     // Which hands hold something (a handle to wrap) and which are empty (a fist).
     const eq = av.equipment as HumanoidAvatar['equipment'] | undefined;
     const drawn = !!eq && eq.inHand && !eq.droppedItems;
@@ -702,7 +706,7 @@ export class RealBody {
     const heldL = !!eq && ((drawn && (!!eq.shieldObject || !!eq.twoHandGrip())) || !!eq.offHand());
     this.hands.update(av.bones, params, near, heldL, heldR);
     const now = performance.now() / 1000;
-    const dt = this.lastFaceT < 0 ? 0 : Math.min(0.1, Math.max(0, now - this.lastFaceT));
+    const dt = this.lastFaceT < 0 || !near ? 0 : Math.min(0.1, Math.max(0, now - this.lastFaceT));
     this.lastFaceT = now;
     if (near && !this.firstPerson) {
       this.aimEyes(av);

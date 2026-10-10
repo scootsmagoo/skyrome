@@ -256,8 +256,9 @@ const EYE_COLOR = /* glsl */ `
   // Lids, in the head's frame.
   float az = atan(e.x * vEyeSide, e.z);
   float el = asin(clamp(e.y, -1.0, 1.0));
-  float up = ey_table(az, true) + min(vEyePrm.z, 0.0) * 0.45 + 0.015;
-  float lo = ey_table(az, false) - 0.015;
+  // A touch inside the measured opening: the ball also pokes through gaps in the coarse lid mesh there.
+  float up = ey_table(az, true) + min(vEyePrm.z, 0.0) * 0.45 - 0.03;
+  float lo = ey_table(az, false) + 0.01;
   float meet = mix(lo, up, 0.32);
   float upB = mix(up, meet, blink);
   float loB = mix(lo, meet, blink);
@@ -274,7 +275,7 @@ const EYE_COLOR = /* glsl */ `
   float front = step(0.0, g.z);
   float ang = atan(g.y, g.x);
   float streak = ey_noise(vec2(ang * 7.0, d * 9.0)) * 0.6 + ey_noise(vec2(ang * 19.0, d * 3.0)) * 0.4;
-  vec3 sclera = vec3(0.8, 0.76, 0.71) * (0.9 + 0.1 * ey_noise(e.xy * 14.0));
+  vec3 sclera = vec3(0.74, 0.69, 0.64) * (0.9 + 0.1 * ey_noise(e.xy * 14.0));
   sclera = mix(sclera, vec3(0.78, 0.45, 0.4), 0.2 * smoothstep(0.55, 1.0, d) * ey_noise(e.xy * 30.0));
   vec3 iris = uIris * (0.55 + 0.9 * streak);
   iris = mix(iris, uIris * 1.5 + vec3(0.12, 0.08, 0.0), smoothstep(0.34, 0.2, d) * 0.6);
@@ -324,8 +325,8 @@ function patchEye(shader: THREE.WebGLProgramParametersWithUniforms, look: { iris
       `{
         // Catchlight: the bright sky reflected in the tear film (a soft window above and in front).
         vec3 rv = reflect( - normalize( vViewPosition ), normalize( normal ) );
-        vec3 sky = normalize( vec3( -0.25, 0.75, 0.6 ) );
-        float cl = pow( max( dot( rv, sky ), 0.0 ), 180.0 );
+        vec3 sky = normalize( vec3( -0.22, 0.38, 0.9 ) );
+        float cl = pow( max( dot( rv, sky ), 0.0 ), 220.0 );
         outgoingLight += vec3( 0.9, 0.92, 1.0 ) * cl * 0.55 * ( 1.0 - eyLid );
       }
       #include <opaque_fragment>`,

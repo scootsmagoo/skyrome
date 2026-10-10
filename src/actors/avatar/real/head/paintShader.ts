@@ -163,9 +163,10 @@ export const PAINT_COLOR = /* glsl */ `
     float fy = (q.y - uHead.w - 0.018) / 0.0105;
     float fz = smoothstep(uEye.z - 0.04, uEye.z - 0.02, q.z) * smoothstep(0.046, 0.024, ax) * smoothstep(-0.2, 0.3, fy) * smoothstep(5.2, 3.2, fy);
     float wob = pt_noise(vec2(q.x * 60.0, fy * 1.5)) - 0.5;
-    float lines = pt_line(fract(fy + wob * 0.5) - 0.5, 0.075, aa / 0.0105) * fz;
-    tint *= 1.0 - 0.1 * uMisc.z * lines;
-    skPaintH -= 0.7 * uMisc.z * lines;
+    // Soft furrows (wide, shallow): a thin bumped line reads as a scar, not a wrinkle.
+    float lines = pt_line(fract(fy + wob * 0.5) - 0.5, 0.12, 0.08 + aa / 0.0105) * fz;
+    tint *= 1.0 - 0.08 * uMisc.z * lines;
+    skPaintH -= 0.3 * uMisc.z * lines;
     float cf = pt_line(sin(atan(q.y - uEye.y + 0.002, ax - ex - 0.021) * 8.0), 0.35, 0.2) * exp(-pow((ax - ex - 0.03) / 0.012, 2.0) - pow((q.y - uEye.y) / 0.016, 2.0)) * fr;
     tint *= 1.0 - 0.08 * uMisc.z * cf;
   }
