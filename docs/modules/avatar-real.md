@@ -161,8 +161,15 @@ owns a `RealBody` (real/RealBody.ts) and picks its LOD in `updateLod` (`lod: 'lo
 **LODs**: 0 (11 k triangles, < 9 m), 1 (4 k, < 22 m), 2 (1.2 k, < 55 m), 3 (about 300, beyond; vertex-cluster
 decimation of LOD 2 at load, `real/decimate.ts`, keeps the weights). LOD 0 is two draws (cloth + skin) plus the eyes;
 LOD 1 to 3 are one draw (avatarMaterial, skin as a colour; LOD 0 only has the eyes). Geometry is built per LOD on first
-need (at most one build per 5 ms), cached per appearance (`realKey`: sex, age, build, height, skin, garments,
-footwear, armour; 40 entries).
+need, cached per appearance (`realKey`: sex, age, build, height, skin, garments, footwear, armour; 40 entries). Builds
+are spread out (perf audit, October 2026): within 1.15 × a finer LOD's distance that LOD is built ahead in stages
+(`buildLodSteps`: the painted body in steps of 2 k vertices, `paintBodySteps`; the shells; the rigid pieces; the
+assembly; the rest), one stage at a time by `stepRealBuilds` (3 ms a
+frame, from `ActorSystem.update`), and a switch to a finer LOD waits for it down to 0.7 × its distance (then builds at
+once). A LOD 0 build was one 15–25 ms frame; now its biggest stages are the shells and the assembly (~6–12 ms). After any switch that built
+something, no avatar switches for 24 ms counted from the end of that build, so two builds never share a frame (the old
+5 ms gap was counted from the start, and a 20 ms build let the next one start in the same frame). A staged build of an
+entry that was evicted or reset meanwhile (`Entry.version`) is thrown away.
 
 **Painted garments** (`real/garments/`):
 - `paint.ts` evaluates the procedural rules (`paintTorso/Arm/Leg/Foot`, `armor*Paint`) at every vertex of the morphed

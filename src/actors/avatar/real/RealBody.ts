@@ -41,7 +41,7 @@ import { HandDriver } from '../anim/hands';
 import { FaceDriver } from '../anim/face';
 import { clusterDecimate, REAL_HEAD_CELL } from './decimate';
 import { handParts, measureHand, reshapeHand, type HandMeasure, type HandParts } from './handShape';
-import { paintBody, type TorsoMeasure } from './garments/paint';
+import { paintBodySteps, type TorsoMeasure } from './garments/paint';
 import { MeasuredProfile } from './garments/measured';
 import { assembleBody } from './garments/assemble';
 import { buildShells } from './garments/shells';
@@ -64,8 +64,18 @@ const LOD3_TRIS = 300;
 const PAINT_LODS = 1;
 /** LODs drawn as skin + cloth with the realistic skin material; the others are one avatarMaterial draw. */
 const SPLIT_LODS = [true, false, false, false];
-/** Lazy LOD builds are spread out: at most one per this many milliseconds (all avatars). */
-const BUILD_INTERVAL_MS = 5;
+/**
+ * Lazy LOD builds are spread out (all avatars): after a switch that built something (a body LOD,
+ * hair) no avatar switches for this many milliseconds, counted from the END of that build, so two
+ * 10–20 ms builds never land in one frame (perf audit 2026-10: they did, 30–40 ms frames).
+ */
+const BUILD_INTERVAL_MS = 24;
+/** A switch that took longer than this built something. */
+const BUILT_MS = 2;
+/** The next finer LOD is built ahead (in stages) from this fraction of its distance... */
+const PREBUILD_REACH = 1.15;
+/** ...and a switch to it waits for that build down to this fraction (then it builds at once). */
+const WAIT_UNTIL = 0.7;
 
 interface Template {
   lods: BodyArrays[];
@@ -248,11 +258,13 @@ interface Entry {
   refs: number;
   /** Whether a head module supplies the helmets (the rigid pieces then leave them out). */
   headHelmets: boolean;
+  /** Bumped whenever `lods` is reset: a staged build begun before that is thrown away. */
+  version: number;
 }
 
 const cache = new Map<string, Entry>();
 /** LOD builds so far and their total time (ms), for the perf survey and the debug overlay. */
-export const buildStats = { lods: 0, ms: 0 };
+export const buildStats = { lods: 0, ms: 0, stageMax: { morph: 0, paint: 0, shells: 0, rigid: 0, assemble: 0, finish: 0 } };
 const MAX_ENTRIES = 40;
 let lastBuild = -Infinity;
 
@@ -305,14 +317,61 @@ function rigidPieces(e: Entry, lod: number, shells: boolean, torso: TorsoMeasure
   return ctx.b.build();
 }
 
+/** Build a LOD now (all its stages in one go). */
 function buildLod(e: Entry, lod: number): LodData {
-  const t0 = performance.now();
+  const it = buildLodSteps(e, lod);
+  for (;;) {
+    const r = it.next();
+    if (r.done) return r.value;
+  }
+}
+
+/**
+ * A LOD build in stages (the painted body, the shells, the assembly, the rest), so a staged build
+ * (`prebuild`, run a stage at a time by `stepRealBuilds`) never costs one frame the whole 15–25 ms
+ * of LOD 0.
+ */
+function* buildLodSteps(e: Entry, lod: number): Generator<void, LodData, void> {
+  let ms = 0;
+  let t0 = performance.now();
+  // The time of the stage that just ended (the longest of each kind is kept for the perf scripts).
+  const stage = (kind: keyof typeof buildStats.stageMax) => {
+    const now = performance.now();
+    const d = now - t0;
+    ms += d;
+    if (d > buildStats.stageMax[kind]) buildStats.stageMax[kind] = d;
+    t0 = now;
+  };
   const tpl = templates.get(e.app.sex)!;
   const body = morphedBody(e, lod);
   const split = SPLIT_LODS[lod];
-  const paint = paintBody({ app: e.app, rig: e.rig, body, index: split ? tpl.index[lod] : undefined, lod });
+  stage('morph');
+  yield;
+  t0 = performance.now();
+  // The paint yields every few thousand vertices: each of its steps is a step of this build.
+  const paintSteps = paintBodySteps({ app: e.app, rig: e.rig, body, index: split ? tpl.index[lod] : undefined, lod });
+  let painted = paintSteps.next();
+  while (!painted.done) {
+    stage('paint');
+    yield;
+    t0 = performance.now();
+    painted = paintSteps.next();
+  }
+  const paint = painted.value;
+  stage('paint');
+  yield;
+  t0 = performance.now();
   let shells: ReturnType<typeof buildShells> = null;
-  if (lod <= 2) shells = buildShells(context(e, lod as 0 | 1 | 2));
+  if (lod <= 2) {
+    shells = buildShells(context(e, lod as 0 | 1 | 2));
+    stage('shells');
+    yield;
+    t0 = performance.now();
+  }
+  const rigid = rigidPieces(e, lod, !!shells, paint.torso);
+  stage('rigid');
+  yield;
+  t0 = performance.now();
   const a = assembleBody({
     position: body.position,
     normal: body.normal,
@@ -324,8 +383,11 @@ function buildLod(e: Entry, lod: number): LodData {
     paint,
     hide: shells?.hide ?? null,
     split,
-    rigid: rigidPieces(e, lod, !!shells, paint.torso),
+    rigid,
   });
+  stage('assemble');
+  yield;
+  t0 = performance.now();
   const geo = a.geometry;
   geo.name = `real:${e.app.sex}:lod${lod}`;
   if (lod <= 2) applyCorrectives(geo, a, context(e, lod as 0 | 1 | 2));
@@ -338,9 +400,65 @@ function buildLod(e: Entry, lod: number): LodData {
   }
   geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, e.rig.height * 0.5, 0), e.rig.height * 1.15);
   if (shells) shells.geometry.boundingSphere = geo.boundingSphere.clone();
+  stage('finish');
   buildStats.lods++;
-  buildStats.ms += performance.now() - t0;
+  buildStats.ms += ms;
   return { geometry: geo, split, triangles: a.triangles, shells: shells?.geometry ?? null };
+}
+
+/** A LOD being built a stage per step ahead of need. */
+interface StagedBuild {
+  e: Entry;
+  lod: number;
+  version: number;
+  it: Generator<void, LodData, void>;
+}
+const staged: StagedBuild[] = [];
+
+/** Queue a staged build of an entry's LOD (no-op if it is built or queued already). */
+function prebuild(e: Entry, lod: number) {
+  if (e.lods[lod]) return;
+  for (const j of staged) if (j.e === e && j.lod === lod && j.version === e.version) return;
+  staged.push({ e, lod, version: e.version, it: buildLodSteps(e, lod) });
+}
+
+/** Keep a finished staged build if its entry still wants it; otherwise free it. */
+function settle(j: StagedBuild, d: LodData) {
+  if (cache.get(j.e.key) === j.e && j.version === j.e.version && !j.e.lods[j.lod]) {
+    j.e.lods[j.lod] = d;
+    return;
+  }
+  d.geometry.dispose();
+  d.shells?.dispose();
+}
+
+/**
+ * Run queued LOD builds for about `budgetMs` (one stage at least while any is queued). Called once
+ * a frame (ActorSystem). Returns how many builds finished.
+ */
+export function stepRealBuilds(budgetMs: number): number {
+  const t0 = performance.now();
+  let done = 0;
+  while (staged.length) {
+    const j = staged[0];
+    if (cache.get(j.e.key) !== j.e || j.version !== j.e.version || j.e.lods[j.lod]) {
+      staged.shift(); // evicted, reset or built meanwhile
+      continue;
+    }
+    const r = j.it.next();
+    if (r.done) {
+      staged.shift();
+      settle(j, r.value);
+      done++;
+    }
+    if (performance.now() - t0 >= budgetMs) break;
+  }
+  return done;
+}
+
+/** Staged builds waiting (debug, tests). */
+export function stagedBuilds(): number {
+  return staged.length;
 }
 
 /**
@@ -430,7 +548,7 @@ function buildEntry(app: Appearance): Entry {
   eg.setIndex(new THREE.BufferAttribute(tpl.eyeIndex, 1));
   eg.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, rig.height * 0.5, 0), rig.height * 1.15);
   rig.eyeHeight = ey;
-  return { key: realKey(app), app, rig, eyes: eg, eyeY: ey, body: new Array(REAL_LODS).fill(null), lods: new Array(REAL_LODS).fill(null), refs: 0, headHelmets: false };
+  return { key: realKey(app), app, rig, eyes: eg, eyeY: ey, body: new Array(REAL_LODS).fill(null), lods: new Array(REAL_LODS).fill(null), refs: 0, headHelmets: false, version: 0 };
 }
 
 function acquire(app: Appearance): Entry {
@@ -532,6 +650,7 @@ export class RealBody {
       // The flag shapes the rigid pieces baked into the LOD geometry: rebuild if it changed.
       this.entry.headHelmets = head.objects.length > 0;
       this.entry.lods.fill(null);
+      this.entry.version++;
     }
   }
 
@@ -550,7 +669,18 @@ export class RealBody {
   private ensure(lod: number): LodData {
     let d = this.entry.lods[lod];
     if (!d) {
-      d = buildLod(this.entry, lod);
+      // A staged build of it under way: finish it now rather than starting over.
+      const k = staged.findIndex((j) => j.e === this.entry && j.lod === lod && j.version === this.entry.version);
+      if (k >= 0) {
+        const j = staged.splice(k, 1)[0];
+        for (;;) {
+          const r = j.it.next();
+          if (r.done) {
+            d = r.value;
+            break;
+          }
+        }
+      } else d = buildLod(this.entry, lod);
       this.entry.lods[lod] = d;
     }
     return d;
@@ -659,13 +789,20 @@ export class RealBody {
     while (lod < 3 && d > T[lod] * 1.05) lod++;
     while (lod > 0 && d < T[lod - 1] * 0.95) lod--;
     lod = Math.max(lod, Math.min(minLod, 3));
+    // Nearing the next finer level: have it built ahead, a stage a frame (stepRealBuilds).
+    const finer = this.lod - 1;
+    if (finer >= Math.min(minLod, 3) && finer >= 0 && d < T[finer] * PREBUILD_REACH) prebuild(this.entry, finer);
     if (lod === this.lod) return false;
-    if (!this.entry.lods[lod]) {
-      const now = performance.now();
-      if (now - lastBuild < BUILD_INTERVAL_MS) return false;
-      lastBuild = now;
+    // A finer level still being built: keep this one meanwhile, unless the viewer is already close.
+    if (lod < this.lod && !this.entry.lods[lod] && d > T[lod] * WAIT_UNTIL) {
+      prebuild(this.entry, lod);
+      return false;
     }
+    const now = performance.now();
+    if (now - lastBuild < BUILD_INTERVAL_MS) return false;
     this.setLod(lod);
+    const end = performance.now();
+    if (end - now > BUILT_MS) lastBuild = end;
     return true;
   }
 

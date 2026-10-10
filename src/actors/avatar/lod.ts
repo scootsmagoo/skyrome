@@ -97,7 +97,8 @@ export class AvatarLod {
     if (this.viewer) {
       const e = a.root.matrixWorld.elements;
       const ve = this.viewer.matrixWorld.elements;
-      d = Math.hypot(e[12] - ve[12], e[13] - ve[13], e[14] - ve[14]);
+      const dx = e[12] - ve[12], dy = e[13] - ve[13], dz = e[14] - ve[14];
+      d = Math.sqrt(dx * dx + dy * dy + dz * dz); // not Math.hypot: it allocates (perf audit 2026-10)
     }
     s.dist = d;
     const wasVisible = s.visible;

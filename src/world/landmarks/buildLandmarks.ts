@@ -6,7 +6,7 @@ import { installShadowLod, trackLandmarkShadow } from '../../gfx/shadowLod';
 import type { Game } from '../../core/Game';
 import { Rng } from '../../core/Rng';
 import { bearingToRotationY } from '../../core/math';
-import { MeshBuilder, registerColliders } from '../../gfx/MeshBuilder';
+import { MeshBuilder, registerColliders, weldLater } from '../../gfx/MeshBuilder';
 import { WORLD_SCALE, toGame } from '../coords';
 import type { Heightmap } from '../terrain/heightmap';
 import { LANDMARK_DETAIL_DISTANCE, bakeLandmarkFar } from './farBake';
@@ -136,6 +136,10 @@ export async function buildLandmarks(
       // all of them, culled per piece, with coarser twins by distance. Ones whose instanced meshes
       // fill in at runtime (the Colosseum, the Circus) manage their own meshes.
       if (perf && !OFF.includes('batch') && !fillsAtRuntime(obj)) landmarkBatcherFor(game).add(obj);
+      // What stays a mesh of its own (not batched; a builder's far mesh kept) is welded now: the
+      // builders leave it to here, as the batches and the far bake take their meshes unwelded.
+      weldLater(obj);
+      if (far && !bake) weldLater(far);
       const spots = (built.spots ?? []).map((s) => ({ ...s, position: s.position.clone().applyMatrix4(obj.matrixWorld), heading: (s.heading ?? 0) + rotY }));
       placed.set(lm.id, { lm, object: obj, position: obj.position.clone(), rotationY: rotY, spots, builder: builder.handles[0] });
     } catch (err) {

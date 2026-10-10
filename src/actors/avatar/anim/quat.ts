@@ -50,7 +50,8 @@ export function qNlerp(out: QArr, oo: number, a: QArr, ao: number, b: QArr, bo: 
   const y = ay + (by - ay) * t;
   const z = az + (bz - az) * t;
   const w = aw + (bw - aw) * t;
-  const l = 1 / (Math.hypot(x, y, z, w) || 1);
+  // Math.sqrt, not Math.hypot: hypot allocates (the crowd's animation was the game's top allocator).
+  const l = 1 / (Math.sqrt(x * x + y * y + z * z + w * w) || 1);
   out[oo] = x * l;
   out[oo + 1] = y * l;
   out[oo + 2] = z * l;
@@ -96,7 +97,7 @@ export function qFromUnitVectors(out: QArr, o: number, ax: number, ay: number, a
     y = az * bx - ax * bz;
     z = ax * by - ay * bx;
   }
-  const l = 1 / Math.hypot(x, y, z, r);
+  const l = 1 / Math.sqrt(x * x + y * y + z * z + r * r);
   out[o] = x * l;
   out[o + 1] = y * l;
   out[o + 2] = z * l;

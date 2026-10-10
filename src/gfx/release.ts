@@ -60,7 +60,7 @@ export function packNormals(g: THREE.BufferGeometry): boolean {
     const x = src[i];
     const y = src[i + 1];
     const z = src[i + 2];
-    const l = Math.hypot(x, y, z) || 1;
+    const l = Math.sqrt(x * x + y * y + z * z) || 1; // not Math.hypot: it allocates
     out[i] = Math.round((x / l) * 127);
     out[i + 1] = Math.round((y / l) * 127);
     out[i + 2] = Math.round((z / l) * 127);

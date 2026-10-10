@@ -50,6 +50,19 @@ export interface FrameStats {
 
 export const FIXED_DT = 1 / 60;
 const MAX_SUBSTEPS = 5;
+/** The title and character creation run at this frame rate (Game.capFps). */
+const MENU_FPS = 30;
+
+/**
+ * The frame rate the loop runs at (0 = uncapped): `?fps=` when given (measuring), else the lowest of
+ * the player's setting and the caps in force (pure, unit-tested).
+ */
+export function frameCap(override: number | undefined, own: number, caps: Iterable<number>): number {
+  if (override !== undefined) return override;
+  let cap = own > 0 ? own : Infinity;
+  for (const c of caps) if (c > 0 && c < cap) cap = c;
+  return Number.isFinite(cap) ? cap : 0;
+}
 
 export class Game {
   readonly container: HTMLElement;
@@ -69,6 +82,12 @@ export class Game {
   elapsed = 0;
   /** When true, fixed/update systems don't run (menus); lateUpdate and rendering continue. */
   paused = false;
+  /**
+   * Milliseconds of deferrable background work done so far this frame (city streaming, avatar LOD
+   * builds). Such work adds what it spent and skips its big steps once another one has had the
+   * frame, so two 10 ms jobs never stack into one 30 ms frame. Reset at the start of every frame.
+   */
+  backgroundMs = 0;
   /** Multiplier on simulated time (hit-stop, slow-mo). */
   timeScale = 1;
   /** Draws the frame. Post-processing (src/gfx/post) replaces this. */
@@ -89,6 +108,16 @@ export class Game {
   private lastRenderAt = 0;
   private lastShadowAt = -Infinity;
   private nextFrameAt = 0;
+  /** Frame-rate caps by reason (`capFps`): the title at 30 fps and so on. */
+  private readonly caps = new Map<string, number>();
+  /** Something changed that the next paused or idle frame must draw (`invalidate`). */
+  private redraw = true;
+  /** When the scene was last drawn, and the view it was drawn from (paused frames redraw only on change). */
+  private lastDrawAt = -Infinity;
+  private readonly drawnView = new Float64Array(14);
+  private readonly view = new Float64Array(14);
+  /** Paused frames that drew nothing, and frames drawn (the idle checks in scripts/perf-budget.mjs). */
+  readonly drawStats = { skipped: 0, drawn: 0 };
   /** Minimum time between shadow-map renders (ms); 0 = every frame. */
   shadowIntervalMs = 1000 / 30;
   /** `?fps=N` overrides the frame-rate setting for this page load (0 = uncapped; perf runs). */
@@ -131,6 +160,10 @@ export class Game {
 
     this.camera = new THREE.PerspectiveCamera(this.settings.data.fov, 1, 0.08, 4000);
     this.scene.add(this.camera);
+    // The scene root never moves. Left to update itself it flags its world matrix dirty every frame,
+    // which forces three.js to recompute the world matrix of every object in the scene, frozen or
+    // not (gfx/freeze.ts).
+    this.scene.matrixAutoUpdate = false;
 
     this.input = new Input(this.canvas);
     this.input.sensitivity = 0.0022 * this.settings.data.lookSensitivity;
@@ -140,6 +173,31 @@ export class Game {
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
+    // A setting can change the picture without moving the camera (exposure, effects): draw again.
+    this.settings.onChange(() => this.invalidate());
+    // The title and character creation circle a slow camera over the city: 30 fps is plenty there.
+    this.events.on('flow:state', ({ state }) => this.capFps('menu', state === 'title' || state === 'creation' ? MENU_FPS : null));
+  }
+
+  /**
+   * Cap the frame rate for a reason (null lifts it): the loop runs at the lowest of these and
+   * settings.maxFps. `?fps=` (measuring) overrides them all.
+   */
+  capFps(reason: string, fps: number | null) {
+    if (fps === null) this.caps.delete(reason);
+    else this.caps.set(reason, fps);
+  }
+
+  /** A cap below the player's own frame-rate setting is on (the graphics governor ignores such frames). */
+  get capped(): boolean {
+    const own = this.settings.data.maxFps;
+    for (const v of this.caps.values()) if (own <= 0 || v < own) return true;
+    return false;
+  }
+
+  /** The picture changed in a way the camera does not show: the next paused or idle frame draws. */
+  invalidate() {
+    this.redraw = true;
   }
 
   addSystem<T extends System>(system: T): T {
@@ -165,31 +223,49 @@ export class Game {
     const loop = (now: number) => {
       if (!this.running) return;
       this.rafId = requestAnimationFrame(loop);
-      // Idle throttling: when the window is in the background or unfocused (and the mouse isn't
-      // captured) the world freezes and we redraw only twice a second; with a menu open we cap
-      // at ~30 fps. Keeps an idle tab from heating the machine. Automation (navigator.webdriver)
-      // always runs at full rate so headless screenshots and tests are unaffected.
+      // Idle: when the window is in the background or unfocused (and the mouse isn't captured) the
+      // world freezes and the last frame stays on screen; it is drawn again only when something
+      // asks for it (a resize clears the canvas), at most twice a second. With a menu open the loop
+      // runs at ~30 fps and draws only when the view changed (see frame). Keeps an idle tab from
+      // heating the machine. Automation (navigator.webdriver) is never idle, so headless
+      // screenshots and tests are unaffected.
       const idle = this.isIdle();
-      const minGap = idle ? 500 : this.paused ? 32 : 0;
-      if (minGap > 0 && now - this.lastRenderAt < minGap) return;
-      // Frame cap (settings.maxFps): render on a fixed schedule and skip the display refreshes in
-      // between, so a 60 fps cap draws every other frame of a 120 Hz display and averages 60 on a
-      // 144 Hz one. 1.5 ms of slack absorbs rAF jitter; a slow frame never causes a catch-up burst.
-      const cap = this.fpsOverride ?? this.settings.data.maxFps;
-      if (cap > 0 && !idle) {
+      if (idle) {
+        this.lastTime = now; // no simulated time passes while idle
+        if (this.redraw && now - this.lastRenderAt >= 500) {
+          this.lastRenderAt = now;
+          this.redraw = false;
+          this.renderFrame();
+        }
+        return;
+      }
+      if (this.paused && now - this.lastRenderAt < 32) return;
+      // Frame cap (settings.maxFps and capFps): render on a fixed schedule and skip the display
+      // refreshes in between, so a 60 fps cap draws every other frame of a 120 Hz display and
+      // averages 60 on a 144 Hz one. 1.5 ms of slack absorbs rAF jitter; a slow frame never causes
+      // a catch-up burst.
+      const cap = frameCap(this.fpsOverride, this.settings.data.maxFps, this.caps.values());
+      if (cap > 0) {
         const interval = 1000 / cap;
         if (now < this.nextFrameAt - 1.5) return;
         this.nextFrameAt = Math.max(this.nextFrameAt + interval, now);
       }
       this.lastRenderAt = now;
-      if (idle) {
-        this.lastTime = now; // no simulated time passes while idle
-        this.renderer.render(this.scene, this.camera);
-        return;
-      }
       this.frame(now);
     };
     this.rafId = requestAnimationFrame(loop);
+  }
+
+  /** Did the camera move (or its lens or the canvas change) since the last drawn frame? Fills `view`. */
+  private viewMoved(): boolean {
+    const c = this.camera;
+    const v = this.view;
+    v[0] = c.position.x; v[1] = c.position.y; v[2] = c.position.z;
+    v[3] = c.quaternion.x; v[4] = c.quaternion.y; v[5] = c.quaternion.z; v[6] = c.quaternion.w;
+    v[7] = c.fov; v[8] = c.aspect; v[9] = c.near; v[10] = c.far; v[11] = c.zoom;
+    v[12] = this.canvas.width; v[13] = this.canvas.height;
+    for (let i = 0; i < 14; i++) if (v[i] !== this.drawnView[i]) return true;
+    return false;
   }
 
   /** True when nobody is playing: background tab, or an unfocused window without pointer lock. */
@@ -209,6 +285,7 @@ export class Game {
   }
 
   resize() {
+    this.invalidate();
     const w = this.container.clientWidth || window.innerWidth;
     const h = this.container.clientHeight || window.innerHeight;
     const ratio = Math.min(window.devicePixelRatio || 1, this.settings.data.maxPixelRatio) * this.settings.data.renderScale;
@@ -222,6 +299,7 @@ export class Game {
 
   private frame(now: number) {
     const cpuStart = performance.now();
+    this.backgroundMs = 0;
     let dt = (now - this.lastTime) / 1000;
     this.lastTime = now;
     if (!(dt > 0)) dt = 0;
@@ -272,6 +350,20 @@ export class Game {
       else { const t0 = performance.now(); s.lateUpdate(dt); time(s.name, t0); }
     }
 
+    // A paused world (menus, dialogue, the console) looks the same from frame to frame: draw only
+    // when the view moved, something called invalidate(), or once a second just in case.
+    const moved = this.viewMoved();
+    const draw = !this.paused || this.redraw || moved || now - this.lastDrawAt > 1000;
+    if (!draw) {
+      this.drawStats.skipped++;
+      this.stats.cpuMs = performance.now() - cpuStart;
+      this.input.endFrame();
+      return;
+    }
+    this.redraw = false;
+    this.lastDrawAt = now;
+    this.drawnView.set(this.view);
+    this.drawStats.drawn++;
     // Shadow maps re-render at most every `shadowIntervalMs` (≈30 Hz): the shadow pass is about a
     // third of the GPU frame, and a one-frame-old shadow is invisible at a 60 fps cap. The shadow
     // matrices only change when the map re-renders, so a skipped frame stays consistent.

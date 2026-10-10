@@ -73,9 +73,22 @@ export function bakeLandmarkFar(root: THREE.Object3D, skip?: (o: THREE.Object3D)
     if (!pos || !(pos.array as ArrayLike<number> | null)) return; // arrays already freed after upload
     const n = pos.count;
     const p = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) {
-      v.fromBufferAttribute(pos, i).applyMatrix4(toRoot);
-      p[i * 3] = v.x; p[i * 3 + 1] = v.y; p[i * 3 + 2] = v.z;
+    const src32 = pos.array instanceof Float32Array && pos.itemSize === 3 && !pos.normalized && pos.array.length === n * 3 ? pos.array : null;
+    if (src32) {
+      // Plain floats: the matrix applied inline (the per-vertex accessors were a good part of the bake).
+      const e = toRoot.elements;
+      for (let i = 0; i < n * 3; i += 3) {
+        const x = src32[i], y = src32[i + 1], z = src32[i + 2];
+        const w = 1 / (e[3] * x + e[7] * y + e[11] * z + e[15]);
+        p[i] = (e[0] * x + e[4] * y + e[8] * z + e[12]) * w;
+        p[i + 1] = (e[1] * x + e[5] * y + e[9] * z + e[13]) * w;
+        p[i + 2] = (e[2] * x + e[6] * y + e[10] * z + e[14]) * w;
+      }
+    } else {
+      for (let i = 0; i < n; i++) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(toRoot);
+        p[i * 3] = v.x; p[i * 3 + 1] = v.y; p[i * 3 + 2] = v.z;
+      }
     }
     const c = colorOf(mesh, material).convertLinearToSRGB();
     const r = Math.round(c.r * 255), g = Math.round(c.g * 255), b = Math.round(c.b * 255);
@@ -140,15 +153,18 @@ export function bakeLandmarkFar(root: THREE.Object3D, skip?: (o: THREE.Object3D)
  * Vertex-clustering simplification (Rossignac–Borrel): snap every vertex to a `cell` grid, merge
  * vertices that land in the same cell with the same colour, and drop the triangles that collapse.
  * Column flutes, mouldings and steps melt into their mass; silhouettes stay. Input is non-indexed
- * (position + sRGB byte colour); output is indexed.
+ * (position + sRGB byte colour); output is indexed. Keys are numbers, not strings (it ran for
+ * ~0.5 s of the boot with string keys; the output is the same).
  */
 export function cluster(geo: THREE.BufferGeometry, cell: number): THREE.BufferGeometry {
   const pos = geo.getAttribute('position') as THREE.BufferAttribute;
   const col = geo.getAttribute('color') as THREE.BufferAttribute;
   const pa = pos.array as Float32Array;
   const ca = col.array as Uint8Array;
-  const keyOf = new Map<string, number>();
-  const outP: number[] = [];
+  // Grid cell → its first cluster; clusters of other colours in the same cell chain on `next`.
+  const firstInCell = new Map<number, number>();
+  const next: number[] = [];
+  const rgb: number[] = [];
   const outC: number[] = [];
   const sum: number[] = [];
   const count: number[] = [];
@@ -157,11 +173,20 @@ export function cluster(geo: THREE.BufferGeometry, cell: number): THREE.BufferGe
     const qx = Math.round(pa[i * 3] / cell);
     const qy = Math.round(pa[i * 3 + 1] / cell);
     const qz = Math.round(pa[i * 3 + 2] / cell);
-    const key = `${qx},${qy},${qz},${ca[i * 3]},${ca[i * 3 + 1]},${ca[i * 3 + 2]}`;
-    let k = keyOf.get(key);
-    if (k === undefined) {
+    const key = cellKey(qx, qy, qz);
+    const c = (ca[i * 3] << 16) | (ca[i * 3 + 1] << 8) | ca[i * 3 + 2];
+    let k = firstInCell.get(key) ?? -1;
+    let last = -1;
+    while (k >= 0 && rgb[k] !== c) {
+      last = k;
+      k = next[k];
+    }
+    if (k < 0) {
       k = count.length;
-      keyOf.set(key, k);
+      if (last >= 0) next[last] = k;
+      else firstInCell.set(key, k);
+      next.push(-1);
+      rgb.push(c);
       sum.push(0, 0, 0);
       count.push(0);
       outC.push(ca[i * 3], ca[i * 3 + 1], ca[i * 3 + 2]);
@@ -173,23 +198,49 @@ export function cluster(geo: THREE.BufferGeometry, cell: number): THREE.BufferGe
     count[k]++;
     remap[i] = k;
   }
-  for (let k = 0; k < count.length; k++) outP.push(sum[k * 3] / count[k], sum[k * 3 + 1] / count[k], sum[k * 3 + 2] / count[k]);
+  const outP = new Float32Array(count.length * 3);
+  for (let k = 0; k < count.length; k++) {
+    outP[k * 3] = sum[k * 3] / count[k];
+    outP[k * 3 + 1] = sum[k * 3 + 1] / count[k];
+    outP[k * 3 + 2] = sum[k * 3 + 2] / count[k];
+  }
   const index: number[] = [];
-  const seen = new Set<string>();
+  // Triangles kept so far, by their two smallest corners → chain of third corners.
+  const firstTri = new Map<number, number>();
+  const triZ: number[] = [];
+  const triNext: number[] = [];
   for (let t = 0; t + 2 < pos.count; t += 3) {
     const a = remap[t];
     const b = remap[t + 1];
     const c = remap[t + 2];
     if (a === b || b === c || a === c) continue;
     // The same triangle twice (two faces collapsed onto each other): keep one.
-    const s = [a, b, c].sort((x, y) => x - y).join(',');
-    if (seen.has(s)) continue;
-    seen.add(s);
+    const lo = Math.min(a, b, c);
+    const hi = Math.max(a, b, c);
+    const mid = a + b + c - lo - hi;
+    const key = lo * 67108864 + mid; // 2^26: cluster counts stay far below it
+    let j = firstTri.get(key) ?? -1;
+    let last = -1;
+    while (j >= 0 && triZ[j] !== hi) {
+      last = j;
+      j = triNext[j];
+    }
+    if (j >= 0) continue;
+    j = triZ.length;
+    triZ.push(hi);
+    triNext.push(-1);
+    if (last >= 0) triNext[last] = j;
+    else firstTri.set(key, j);
     index.push(a, b, c);
   }
   const out = new THREE.BufferGeometry();
-  out.setAttribute('position', new THREE.BufferAttribute(new Float32Array(outP), 3));
+  out.setAttribute('position', new THREE.BufferAttribute(outP, 3));
   out.setAttribute('color', new THREE.BufferAttribute(new Uint8Array(outC), 3, true));
   out.setIndex(count.length > 65535 ? new THREE.BufferAttribute(new Uint32Array(index), 1) : new THREE.BufferAttribute(new Uint16Array(index), 1));
   return out;
+}
+
+/** A grid cell's integer coordinates as one number (exact for |q| < 65536 on each axis). */
+function cellKey(qx: number, qy: number, qz: number): number {
+  return ((qx + 65536) * 131072 + (qy + 65536)) * 131072 + (qz + 65536);
 }

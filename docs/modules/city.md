@@ -35,7 +35,7 @@ game.streets                    // street graph: nodes, edges, spots (see below)
 | `life.ts` | Street life: wall torches on shop fronts, landmark-frontage dressing (stalls, goods, amphorae, benches, statue bases, braziers, lampstands, shade trees), washing lines across dense lanes. |
 | `lamps.ts` | `CityLamps`: the city's torches and lamps as light-pool requests near the camera. |
 | `streamer.ts` | `CityStreamer`: lazy LOD for blocks and street cells (below), block levels built as jobs of `fillUnits`, look-ahead, the mid-level shadow budget. |
-| `batches.ts` | `BatchPool`: every static city mesh lives in a few dozen `BatchedMesh`es (one per material × shadow × ground offset × tag), so the city costs ~100–130 draw calls whatever is built. The batches draw with the pool's own copies of the library materials (no program thrash with the landmarks' plain meshes), unsorted, and give capacity back when geometry streams out (`trim`). |
+| `batches.ts` | `BatchPool`: every static city mesh lives in a few dozen `BatchedMesh`es (one per material × shadow × ground offset × tag), so the city costs ~100–130 draw calls whatever is built. The batches draw with the pool's own copies of the library materials (no program thrash with the landmarks' plain meshes), unsorted, and give capacity back when geometry streams out (`trim`). They are culled per instance by `gfx/fastCull.ts`: each pass keeps its own draw list (the indirect texture is re-uploaded only when the pass's instance list changed), and a batch with nothing in view is left out of the main pass before three.js walks the scene. Their matrices are frozen (they never move). |
 | `monuments.ts` | Servian wall stretches and the agger promenade, gates that are not landmarks, aqueduct arcades along `channelElevation`. |
 | `trees.ts` | `TreeLayer`: instanced trees per species × variant, near / far models by distance, culled per 96 m cell. |
 | `vegetation.ts` | Where trees grow: horti and groves, hill flanks, riverbanks (reeds), countryside, scraps; lusher inside the core. |
@@ -86,9 +86,16 @@ is the landmark crews'), `GARDEN`, `WATER`, `STEEP`, `WALL`, `AQUEDUCT`, `PIAZZA
 | street furniture | Fountains, shrines, stalls, carts, awnings, frontage life, washing lines | to 110 m |
 
 Blocks are built lazily, nearest first (a missing full level next to the player first), and dropped
-again beyond 1.35 × their range + 16 m. A level is a job of small units (`fill.ts`): one unit per
-step, as many steps as fit a 5 ms budget per frame (at least one every other frame while something
-is due), so the longest step is ~5–13 ms instead of a 20–60 ms block. Build order and reach use the
+again beyond 1.35 × their range + 16 m. A level is a job of small units (`fill.ts`), each taken in
+two steps: generating it (the procedural architecture, up to ~15 ms for a big insula) and
+committing it (meshes into the batches, colliders: ~2–4 ms). A street cell's items run in 3 ms
+slices, then a commit step. The big steps (generating, starting a job) run every other frame and
+only when no other background work had the frame (`game.backgroundMs`: an avatar's staged LOD
+build), the small ones every frame; more steps run while the next one's expected cost (a running
+average per kind, `stepCost`) still fits the 5 ms budget. Something close and missing (`urgent`)
+lifts the every-other-frame rule. So the longest frame of streaming is one unit's generation
+(perf audit, October 2026: it was a unit plus its commit plus a whole cell, 15–21 ms; the Forum's
+pan went from 8 slow frames to 1–2). Build order and reach use the
 nearer of the camera and where it will be in 2 s, so blocks ahead of a walker are ready first. A
 coarser built level stands in while a finer one is being built. Outside the detail area only the
 far massing exists; its buildings get box colliders within 80 m of the player (`ProximityColliders`,
