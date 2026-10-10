@@ -7,6 +7,8 @@ import * as THREE from 'three';
 import { Rng } from '../../../../core/Rng';
 import type { BeardStyle } from '../../../appearance';
 import type { HeadSurface } from './frame';
+import type { BodyArrays } from '../morph';
+import { B } from '../../rig';
 import { HairBuilder } from './cards';
 import { HAIR_UV } from './hairTexture';
 
@@ -26,7 +28,65 @@ function beardTop(a: number): number {
   return lerp(0.4, 0.62, smooth(0.62, 1.45, a));
 }
 
-export function buildBeard(H: HeadSurface, style: BeardStyle, color: THREE.Color, rng: Rng, lod: 0 | 1 | 2): { geometry: THREE.BufferGeometry; triangles: number } | null {
+/**
+ * The face's own skin near the beard (head-weighted vertices of the body, in the same frame as H): the
+ * beard is laid on it rather than on the head's polar table, which is the outermost silhouette and stands
+ * a centimetre off the jaw and the cheeks.
+ */
+function skinSnap(body: BodyArrays | undefined, H: HeadSurface) {
+  if (!body) return null;
+  const pts: number[] = [];
+  const nrm: number[] = [];
+  const pos = body.position;
+  const top = H.chin + 0.7 * H.H;
+  for (let v = 0; v < pos.length / 3; v++) {
+    let w = 0;
+    for (let k = 0; k < 4; k++) if (body.skinIndex[v * 4 + k] === B.head) w += body.skinWeight[v * 4 + k];
+    const y = pos[v * 3 + 1];
+    if (w < 0.3 || y > top || y < H.chin - 0.06 * H.hs || pos[v * 3 + 2] < H.cz - 0.03 * H.hs) continue;
+    pts.push(pos[v * 3], y, pos[v * 3 + 2]);
+    nrm.push(body.normal[v * 3], body.normal[v * 3 + 1], body.normal[v * 3 + 2]);
+  }
+  if (pts.length < 30) return null;
+  const n = pts.length / 3;
+  const best = [0, 0, 0, 0];
+  const bd = [0, 0, 0, 0];
+  /** The skin point under p (inverse-distance blend of the four nearest vertices) pushed out by `off` along its normal. */
+  return (p: THREE.Vector3, off: number): THREE.Vector3 => {
+    bd.fill(Infinity);
+    for (let i = 0; i < n; i++) {
+      const d = (pts[i * 3] - p.x) ** 2 + (pts[i * 3 + 1] - p.y) ** 2 + (pts[i * 3 + 2] - p.z) ** 2;
+      if (d >= bd[3]) continue;
+      let k = 3;
+      while (k > 0 && bd[k - 1] > d) {
+        bd[k] = bd[k - 1];
+        best[k] = best[k - 1];
+        k--;
+      }
+      bd[k] = d;
+      best[k] = i;
+    }
+    let sw = 0;
+    const q = new THREE.Vector3();
+    const qn = new THREE.Vector3();
+    for (let k = 0; k < 4; k++) {
+      const w = 1 / (Math.sqrt(bd[k]) + 1e-4);
+      const i = best[k];
+      q.x += pts[i * 3] * w;
+      q.y += pts[i * 3 + 1] * w;
+      q.z += pts[i * 3 + 2] * w;
+      qn.x += nrm[i * 3] * w;
+      qn.y += nrm[i * 3 + 1] * w;
+      qn.z += nrm[i * 3 + 2] * w;
+      sw += w;
+    }
+    q.divideScalar(sw);
+    qn.normalize();
+    return q.addScaledVector(qn, off);
+  };
+}
+
+export function buildBeard(H: HeadSurface, style: BeardStyle, color: THREE.Color, rng: Rng, lod: 0 | 1 | 2, body?: BodyArrays): { geometry: THREE.BufferGeometry; triangles: number } | null {
   if (style === 'none' || style === 'stubble') return null;
   const hs = H.hs;
   const full = style === 'full';
@@ -38,8 +98,10 @@ export function buildBeard(H: HeadSurface, style: BeardStyle, color: THREE.Color
   const below = (full ? 0.05 : 0.0) * hs;
   const A = 1.45;
 
+  const snap = skinSnap(body, H);
   const P = (yf: number, th: number, off: number) => {
-    if (yf >= 0) return H.at(yf, th).addScaledVector(H.normalAt(yf, th), off);
+    // On the skin itself where it is measured (the jaw, chin and cheeks), else on the head's surface table.
+    if (yf >= 0) return snap ? snap(H.at(yf, th), off + 0.0012 * hs) : H.at(yf, th).addScaledVector(H.normalAt(yf, th), off);
     // Below the chin the beard hangs on, jutting forward a little.
     const p = H.at(0, th).addScaledVector(H.normalAt(0.02, th), off);
     p.y += yf * H.H;

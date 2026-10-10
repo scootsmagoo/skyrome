@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import { hairAlphaToCoverage, onHairAlphaToCoverage } from './hairConfig';
 import { hairTexture } from './hairTexture';
+import { patchDeform } from '../deform';
 
 export { setHairAlphaToCoverage } from './hairConfig';
 
@@ -55,7 +56,8 @@ const KK = `vec3 irradiance = dotNL * directLight.color;
 	}`;
 
 function patchHair(shader: THREE.WebGLProgramParametersWithUniforms) {
-  shader.vertexShader = shader.vertexShader
+  // A beard follows the jaw (real/deform.ts); hair without the attribute stays put.
+  shader.vertexShader = patchDeform(shader.vertexShader)
     .replace('#include <common>', '#include <common>\n' + VERT_PARS)
     .replace(
       '#include <defaultnormal_vertex>',
@@ -76,9 +78,11 @@ function patchHair(shader: THREE.WebGLProgramParametersWithUniforms) {
       `#include <map_fragment>
       #ifdef USE_MAP
         if ( vMapUv.x > 0.75 ) {
-          // Fade region: threshold the noise against a density that falls with the vertex v.
-          float hTh = smoothstep( 0.0, 0.92, vMapUv.y ) * 0.95 + 0.02;
-          diffuseColor.a = clamp( ( diffuseColor.a - hTh ) * 5.0 + 0.5, 0.0, 1.0 );
+          // Fade region: threshold the noise against a density that falls with the vertex v. The noise's
+          // cells are a few millimetres across on a head, so the sparse end is cut off rather than left as
+          // lone square specks on the forehead (the painted root stipple on the skin carries the thin edge).
+          float hTh = smoothstep( 0.0, 0.92, vMapUv.y ) * 0.62 + 0.02;
+          diffuseColor.a = clamp( ( diffuseColor.a - hTh ) * 5.0 + 0.5, 0.0, 1.0 ) * smoothstep( 0.97, 0.8, vMapUv.y );
         }
       #endif`,
     )
@@ -110,6 +114,6 @@ export function hairMaterial(): THREE.MeshStandardMaterial {
     envMapIntensity: 0.55,
   });
   mat.onBeforeCompile = patchHair;
-  mat.customProgramCacheKey = () => 'real-hair-v2';
+  mat.customProgramCacheKey = () => 'real-hair-v4';
   return mat;
 }

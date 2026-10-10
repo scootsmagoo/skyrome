@@ -197,25 +197,26 @@ export function buildHair(inp: HairInput): { geometry: THREE.BufferGeometry; tri
     }
   };
 
-  // Curl: a ringlet, a ribbon wound on a short helix standing out of the scalp.
-  const curl = (yf: number, th: number, size: number, color: THREE.Color, turns = 1.5) => {
+  // Curl: a tight lock wound close against the scalp (a low helix, facing out), so a head of them reads as
+  // a dense, bumpy mass of curls rather than ringlets standing up like coils.
+  const curl = (yf: number, th: number, size: number, color: THREE.Color, turns = 1.7) => {
     const p0 = P(yf, th, capT * 0.5);
     const nrm = H.normalAt(yf, th);
     const tanA = H.at(yf, th + 0.05).sub(H.at(yf, th - 0.05)).normalize();
     const tanB = new THREE.Vector3().crossVectors(nrm, tanA).normalize();
     const path: THREE.Vector3[] = [];
     const radial: THREE.Vector3[] = [];
-    const steps = lod === 0 ? 11 : 7;
+    const steps = lod === 0 ? 10 : 7;
     const phase = rng.next() * 6.28;
     for (let i = 0; i < steps; i++) {
       const t = i / (steps - 1);
       const a = phase + t * turns * Math.PI * 2;
-      const r = size * (0.62 + 0.38 * Math.sin(t * Math.PI * 0.9 + 0.3));
+      const r = size * (0.55 + 0.45 * Math.sin(t * Math.PI * 0.9 + 0.3));
       const dir = tanA.clone().multiplyScalar(Math.cos(a)).addScaledVector(tanB, Math.sin(a));
-      path.push(p0.clone().addScaledVector(nrm, size * (0.2 + 1.5 * t)).addScaledVector(dir, r));
-      radial.push(dir.addScaledVector(nrm, 0.35).normalize());
+      path.push(p0.clone().addScaledVector(nrm, size * (0.15 + 0.55 * t)).addScaledVector(dir, r));
+      radial.push(dir.multiplyScalar(0.45).add(nrm).normalize());
     }
-    b.ribbon(path, (t) => size * 1.05 * (1 - 0.55 * t), (_t, i) => radial[i], color, { lift: 0.3, shade: (t) => 0.7 + 0.45 * t });
+    b.ribbon(path, (t) => size * 0.9 * (1 - 0.45 * t), (_t, i) => radial[i], color, { lift: 0.25, shade: (t) => 0.62 + 0.5 * t });
   };
 
   /** Smoothed-back hair: from the front hairline over the sides to a gathering point at the back. */
@@ -266,14 +267,14 @@ export function buildHair(inp: HairInput): { geometry: THREE.BufferGeometry; tri
     case 'curly-short': {
       meridianCards(16, { yf0: [0.85, 0.99], thA: 0, thB: Math.PI * 2, width: 0.024 * hs, over: 0.01, swirl: 0.2 });
       shingles(40, { above: [0.0, 0.1], width: 0.014, len: 0.022, lift: 0.004 });
-      const n = count(86);
+      const n = count(110);
       for (let i = 0; i < n; i++) {
         const th = rng.range(0, Math.PI * 2);
         const a = Math.abs(Math.atan2(Math.sin(th), Math.cos(th)));
         const y0 = hl(th) + 0.012;
         const yf = lerp(y0, 0.985, Math.pow(rng.next(), 0.8));
         if (a < 0.9 && yf < y0 + 0.03) continue;
-        curl(yf, th, 0.0072 * hs * rng.range(0.85, 1.3), jitter(0.2));
+        curl(yf, th, 0.0058 * hs * rng.range(0.8, 1.25), jitter(0.2));
       }
       break;
     }

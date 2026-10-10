@@ -67,7 +67,7 @@ export const PAINT_COLOR = /* glsl */ `
   float bag = exp(-pow((ax - ex) / 0.018, 2.0) - pow((q.y - (uEye.y - 0.017)) / 0.006, 2.0)) * fr;
   tint *= 1.0 - (0.07 + 0.1 * uMisc.z) * bag;
   float noseW = exp(-pow(ax / 0.011, 2.0) - pow((q.y - uFace.y) / 0.014, 2.0)) * smoothstep(uFace.z - 0.025, uFace.z - 0.008, q.z);
-  col = mix(col, col * vec3(1.06, 0.88, 0.84), noseW * 0.7);
+  col = mix(col, col * vec3(1.04, 0.92, 0.89), noseW * 0.5);
   float philtrum = exp(-pow(q.x / 0.0045, 2.0) - pow((q.y - (uFace.y - 0.016)) / 0.007, 2.0)) * fr;
   tint *= 1.0 - 0.07 * philtrum;
 
@@ -204,8 +204,9 @@ export const PAINT_COLOR = /* glsl */ `
     float ear = smoothstep(uEar.x - 0.006, uEar.x + 0.004, ax) * smoothstep(uEar.y - 0.01, uEar.y + 0.01, q.y) * smoothstep(uEar.z + 0.012, uEar.z - 0.012, q.y) * smoothstep(uEar.w + 0.015, uEar.w - 0.005, q.z);
     float nose = exp(-pow(length(vec3(q.x / 1.2, q.y - uFace.y - 0.002, (q.z - uFace.z + 0.004) / 1.5)) / 0.0105, 2.0));
     float wings = exp(-pow((ax - 0.014) / 0.006, 2.0) - pow((q.y - uFace.y) / 0.008, 2.0)) * smoothstep(uFace.z - 0.03, uFace.z - 0.01, q.z) * 0.8;
-    skThin = clamp(ear + max(nose, wings), 0.0, 1.0) * inHead;
-    col = mix(col, col * vec3(1.12, 0.84, 0.78), skThin * 0.4);
+    skThin = clamp(ear + 0.6 * max(nose, wings), 0.0, 1.0) * inHead;
+    // A little warmer where the skin is thin (a strong shift makes a painted, sunburnt nose).
+    col = mix(col, col * vec3(1.08, 0.9, 0.86), clamp(ear + 0.4 * max(nose, wings), 0.0, 1.0) * inHead * 0.35);
   }
 
   diffuseColor.rgb = col * tint;

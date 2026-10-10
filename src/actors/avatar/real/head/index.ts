@@ -18,7 +18,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { Rng, hashString } from '../../../../core/Rng';
 import type { Appearance } from '../../../appearance';
 import { srgb } from '../../build/common';
-import { buildBeard } from './beard';
+import { buildBeard, MOUTH } from './beard';
+import { beardJawAttributes, jawHinge } from './faceRig';
 import { buildGear, ENCLOSING, gearMesh } from './gear';
 import { buildHair } from './hair';
 import { hairMaterial } from './hairMaterial';
@@ -103,11 +104,20 @@ export function buildHead(ctx: RealContext): RealHead {
     if (enclosed) return null;
     const rng = new Rng(hashString(hairKey(lod)));
     const hair = buildHair({ H, style: app.hair.style, color, rng, lod, helmet: open, age: app.age });
-    const beard = buildBeard(H, beardStyle, color, rng.fork('beard'), lod);
+    const beard = buildBeard(H, beardStyle, color, rng.fork('beard'), lod, ctx.body);
     const parts = [hair?.geometry, beard?.geometry].filter((g): g is THREE.BufferGeometry => !!g);
     if (!parts.length) return null;
     const geometry = parts.length === 1 ? parts[0] : mergeGeometries(parts, false)!;
     if (parts.length > 1) parts.forEach((p) => p.dispose());
+    if (beard) {
+      // The beard rides the jaw when the mouth opens (real/deform.ts, the hair material reads the same slot).
+      const k = H.kRef;
+      const jaw = beardJawAttributes(geometry.getAttribute('position').array, H.chin + MOUTH.line * H.H, H.cz, jawHinge(H.ears, H.eyes[0].y, H.cz, k), k);
+      if (jaw) {
+        geometry.setAttribute('aDef0', new THREE.BufferAttribute(jaw.a0, 4));
+        geometry.setAttribute('aDef1', new THREE.BufferAttribute(jaw.a1, 4));
+      }
+    }
     const h = rig.height;
     geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, h * 0.5, 0), h * 1.15);
     return { geometry, triangles: (hair?.triangles ?? 0) + (beard?.triangles ?? 0) };

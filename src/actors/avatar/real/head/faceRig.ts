@@ -32,13 +32,40 @@ function headWeight(body: BodyArrays, v: number) {
   return w;
 }
 
+/** The jaw's hinge: in front of the ear canal, a little below it (x = 0; `k` scales the offsets with the head). */
+export function jawHinge(earY: number, eyeY: number, cz: number, k = 1): [number, number, number] {
+  return [0, Math.min(earY, eyeY - 0.02 * k) - 0.012 * k, cz + 0.004 * k];
+}
+
+/**
+ * A beard follows the jaw: per-vertex jaw weights for hair/beard geometry (everything below the mouth line
+ * in front of the ears; the moustache and the scalp stay), as the deformation attributes of real/deform.ts.
+ */
+export function beardJawAttributes(position: ArrayLike<number>, mouthY: number, cz: number, hinge: readonly number[], k = 1): { a0: Float32Array; a1: Float32Array } | null {
+  const n = position.length / 3;
+  const a0 = new Float32Array(n * 4);
+  const a1 = new Float32Array(n * 4);
+  let any = false;
+  for (let v = 0; v < n; v++) {
+    const y = position[v * 3 + 1];
+    const z = position[v * 3 + 2];
+    const w = smooth(mouthY + 0.002 * k, mouthY - 0.01 * k, y) * smooth(cz - 0.01 * k, cz + 0.03 * k, z);
+    if (w <= 0.01) continue;
+    a0[v * 4] = hinge[0];
+    a0[v * 4 + 1] = hinge[1];
+    a0[v * 4 + 2] = hinge[2];
+    a0[v * 4 + 3] = -(7 + Math.min(0.99, w * 0.99));
+    any = true;
+  }
+  return any ? { a0, a1 } : null;
+}
+
 /** The lower jaw of a head (reference pose). `m`: the head's measurement on the same body. */
 export function measureJaw(body: BodyArrays, m: HeadMeasure): JawRig {
   const H = m.crown - m.chin;
   const mouthY = m.chin + MOUTH.line * H;
   const half = m.sex === 'female' ? 0.0238 : 0.0252;
-  // Hinge: in front of the ear canal, a little below it.
-  const hinge: [number, number, number] = [0, Math.min(m.earY, m.eyeY - 0.02) - 0.012, m.cz + 0.004];
+  const hinge = jawHinge(m.earY, m.eyeY, m.cz);
   const lipZ = m.noseTip.z - 0.012;
   const weights = new Map<number, number>();
   const pos = body.position;
