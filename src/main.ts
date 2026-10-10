@@ -33,7 +33,11 @@ async function boot() {
   // Realistic bodies are the default: start loading now (the city builds meanwhile); avatars made before it ends upgrade on arrival.
   if (!classicRequested()) loadRealBodies(game.renderer).catch((e) => console.error('real bodies failed to load, staying procedural', e));
   // Geometry audit hooks for scripts/crawl.mjs (?audit).
-  if (AUDIT) (window as unknown as { __audit: unknown }).__audit = { analyzeArea, auditRecordCount, surfacesAt };
+  if (AUDIT) {
+    (window as unknown as { __audit: unknown }).__audit = { analyzeArea, auditRecordCount, surfacesAt };
+    // Collision-against-visuals hooks for scripts/audit/collision.mjs (loaded on demand: dev only).
+    import('./dev/audit/collisionAudit').then((m) => m.installCollisionAudit(() => game));
+  }
   {
     const s = game.settings.data;
     const tier = s.graphics && s.graphics !== 'auto' ? s.graphics : s.graphicsApplied?.tier;

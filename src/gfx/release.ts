@@ -17,8 +17,16 @@ import * as THREE from 'three';
  * geometry lives. Import this one instead of writing a new `function (this) { ... }`.
  */
 export const freeArray = function (this: THREE.BufferAttribute) {
+  if (KEEP_CPU) return;
   (this as unknown as { array: ArrayLike<number> | null }).array = null;
 };
+
+/**
+ * `?audit` keeps every CPU copy: the collision audit (src/dev/audit/collisionAudit.ts) reads the
+ * drawn triangles back to compare them with the colliders. Memory goes up by a few hundred MB;
+ * nothing else changes. Never set in a normal game.
+ */
+const KEEP_CPU = typeof location !== 'undefined' && new URLSearchParams(location.search).has('audit');
 
 /** Free a geometry's vertex arrays once uploaded (its bounds are computed first, while they exist). */
 export function releaseGeometryAfterUpload(g: THREE.BufferGeometry) {
