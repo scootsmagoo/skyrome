@@ -8,7 +8,8 @@
  * loculi); npc-chreste 'hideoutRumour' (mq-01: reveals the knife-men's hideout).
  */
 import { person } from '../../content/people';
-import { completed, female, rotate, rumor, shut, stage, treat } from '../../content/talk';
+import { completed, rotate, rumor, shut, stage, treat } from '../../content/talk';
+import { lifeChoices } from '../../life/talk';
 import { defineDialogue, type DialogueContext } from '../types';
 
 const MQ2 = 'mq-02-tabella';
@@ -25,6 +26,9 @@ const euhodus = person({
     { ask: 'What is the Ludus Magnus like?', say: 'Practice arms are wood. They’re wood because real arms cost money and the emperor is a careful man. But when a gladiator buys his freedom, his first purchase is always a real sword. They come here. I sharpen the dreams.', once: true },
   ],
   trade: { ask: 'Show me your wares.', service: 'barter' },
+  // Mending (life data: services/vendors.ts). Nothing else of the phase 2 life reaches him.
+  choices: [...lifeChoices('npc-euhodus').choices],
+  nodes: { ...lifeChoices('npc-euhodus').nodes },
   persuade: {
     ask: 'Surely a friend of the Ludus gets a better price.',
     dc: 25,
@@ -36,6 +40,12 @@ const euhodus = person({
 });
 
 // ------------------------------------------------------------------ Chreste (the Silver Pig)
+
+/** The chest's key (CITY VOICE's items/life.ts); given only once that item exists. */
+const PALLET_KEY = 'clavis-pergulae';
+
+/** The pallet is rented while today is no later than the day in `pallet-until`. */
+const palletRented = (c: DialogueContext) => Number(c.flag('pallet-until') ?? -1) >= c.game.time.dayIndex;
 
 const chreste = defineDialogue({
   id: 'npc-chreste',
@@ -54,6 +64,9 @@ const chreste = defineDialogue({
       choices: [
         { text: 'What are you serving?', end: true, effects: (c) => c.openService('barter') },
         { text: 'What’s the word on the street?', goto: 'news' },
+        // The pallet behind the Pig (life: act.silver-pig.pallet): 2 den. for 30 days; `pallet-until` is the last day.
+        { text: 'Have you a bed to let? (A pallet out back, 2 den. for 30 days.)', if: (c) => !palletRented(c), enabled: (c) => c.denarii() >= 2, goto: 'pallet', effects: (c) => { if (c.pay(2)) { c.setFlag('pallet-until', c.game.time.dayIndex + 30); if (c.game.items?.get(PALLET_KEY) && !c.hasItem(PALLET_KEY)) c.giveItem(PALLET_KEY); } } },
+        { text: 'About that pallet of mine…', if: palletRented, goto: 'palletHeld' },
         { text: 'You must hear everything here. Anything about the courier killed at the Porta Capena?', if: (c) => completed(c, 'mq-01-madida-capena') || !!c.flag('festus-dead'), goto: 'courier', once: true },
         { text: 'Hear anything about knife-men in the Velabrum?', goto: 'hideoutRumour', once: true },
         { text: 'A cup on the house for a traveller?', check: { skill: 'rhetoric', difficulty: 25, pass: 'free', fail: 'notFree' }, once: true },
@@ -61,6 +74,8 @@ const chreste = defineDialogue({
       ],
     },
     news: { text: (c) => rumor(c), next: 'hub' },
+    pallet: { text: '(She counts the coins into her apron without looking at them.) The pallet is in the lean-to behind the kitchen, by the oven, where it’s warm. The chest beside it is yours too, lid and all. Thirty days. Don’t bring a dog. Don’t bring a woman I haven’t met. And if the vigiles ask, you are my cousin from Ostia.', next: 'hub' },
+    palletHeld: { text: (c) => { const n = Math.max(0, Number(c.flag('pallet-until') ?? 0) - c.game.time.dayIndex); return `You’re paid up ${n > 1 ? `for another ${n} days` : n === 1 ? 'for tomorrow too' : 'to the end of today'}, citizen, and not a day over. Round the back, past the oven. Mind what you leave in the chest.`; }, next: 'hub' },
     courier: {
       text: 'A courier at the gate, before dawn. I heard it from the carter, who heard it from his mule. Dromo’s telling it at the Starting Gates by now, with a few more knives. They say it was gladiators. I say it was men who needed a purse. Same thing.',
       next: 'hub',
@@ -158,7 +173,17 @@ const tryphon = person({
     { ask: 'Have you seen a lost dog? A Molossian bitch.', say: 'Hilara! The aedile’s man’s bitch? Her notice is on the pier outside, twenty sesterces to whoever brings her to me. She answers to nothing. If you find her, bring her. If you can’t, bring me an excuse.' },
   ],
   news: 'What’s the gossip?',
+  // A haircut or a shave (life data: services/vendors.ts), free once Hilara is home.
+  choices: [...lifeChoices('npc-tryphon').choices],
+  nodes: { ...lifeChoices('npc-tryphon').nodes },
 });
+
+/** Three of today's cries in the crier's own voice (src/life rumours of kind 'cry'; the day picks them). */
+function crierNews(c: DialogueContext): string {
+  const cries = c.game.life?.rumours({ kind: 'cry' }, 3) ?? [];
+  if (!cries.length) return '(He clears his throat and takes a breath for a shout, then lets it go.) Nothing today worth a breath. The streets are quiet, and so, for once, am I.';
+  return `(He draws himself up, fills his chest, and cries to the empty air.)\n\n${cries.map((r) => r.text).join('\n\n')}`;
+}
 
 const cerdo = person({
   id: 'npc-cerdo',
@@ -166,6 +191,9 @@ const cerdo = person({
   again: ['Hear, Quirites! A bronze pot has walked out of a shop in the Vicus Tuscus. Sixty-five sesterces for its return, more for the thief!', 'Lost: a Molossian bitch answering to Hilara. She answers to nothing. Reward.', 'Tomorrow, the gods willing, Caesar dedicates his column. The Forum will be closed to carts from the fourth hour.', 'The Lemures walk tonight! The temples are shut! The taverns are not!'],
   topics: [{ ask: 'What are you announcing today?', say: 'The Column! Tomorrow, the first hour, Caesar and the Senate and the whole city. A hundred feet of marble, and the war carved on it like a ribbon. And a lost dog. People care more about the dog.' }],
   news: 'Anything I should know?',
+  // The crier reads the day's cries (life: the 'cry' rumours), three of them.
+  choices: [{ text: 'Cry the news for me.', goto: 'cries' }],
+  nodes: { cries: { text: (c) => crierNews(c), next: 'hub' } },
 });
 
 const zethus = defineDialogue({
@@ -215,13 +243,14 @@ const cerinthus = defineDialogue({
         c.memory.met = true;
       },
       choices: [
-        { text: 'Wash my tunic. (4 as.)', if: (c) => c.game.standing?.cleanliness === 'sordidus', enabled: (c) => c.denarii() >= 0.25, goto: 'washed', effects: (c) => { if (c.pay(0.25)) c.game.standing?.setCleanliness('normal'); } },
+        // Laundry for 3 as (life data: services/vendors.ts).
+        ...lifeChoices('npc-cerinthus').choices,
         { text: 'What do you buy?', end: true, effects: (c) => c.openService('barter') },
         { text: 'What’s in the vats?', goto: 'vats', once: true },
         { text: 'Vale.', end: true },
       ],
     },
-    washed: { text: '(He takes the tunic, dunks it, treads it, hangs it, and hands you a damp but remarkably clean one.) There. Smells like rain on a good day.', next: 'hub' },
+    ...lifeChoices('npc-cerinthus').nodes,
     vats: { text: 'Stale urine, fuller’s earth, soda, and a secret I will not tell. Rome sends me its dirt, and I send it back in white. Somebody has to wash the senators.', next: 'hub' },
   },
 });
@@ -238,17 +267,15 @@ const zenon = defineDialogue({
         c.memory.met = true;
       },
       choices: [
-        { text: 'Cast my nativity. (10 den.)', enabled: (c) => c.denarii() >= 10, goto: 'cast', effects: (c) => void c.pay(10) },
+        // The nativity, 12 as, once a day (life data: services/vendors.ts).
+        ...lifeChoices('npc-zenon').choices,
         { text: 'A cheap leaf of predictions. (1 as.)', enabled: (c) => c.denarii() >= 1 / 16, goto: 'leaf', effects: (c) => { if (c.pay(1 / 16)) c.giveItem('tabella-mathematici'); } },
         { text: 'Is it true the stars rule us?', goto: 'rule', once: true },
         { text: 'What will happen tomorrow?', goto: 'tomorrow', once: true },
         { text: 'Vale.', end: true },
       ],
     },
-    cast: {
-      text: (c) => (female(c) ? 'A woman born under Venus rising in the second house: you will be loved, envied and misquoted. The Moon stands in your tenth house; a rise, or a fall. I’m not sure which. It’s quite visible.' : 'Mars in the third house: you will be stubborn and brave. Jupiter in the sixth: you will be forgiven. Saturn in the eighth: a journey, a loss, a letter. I’d say watch the letters.') + ' (He pockets your denarii with a flourish.) Confidence is half the horoscope.',
-      next: 'hub',
-    },
+    ...lifeChoices('npc-zenon').nodes,
     leaf: { text: '(He tears a papyrus leaf from a stack and presses it into your hand.) For one as, the heavens’ cheapest advice. Don’t lend fire to a neighbour on the ghost nights.', next: 'hub' },
     rule: { text: 'The stars incline; they do not compel. (He looks over his shoulder.) Mostly. The moment I say otherwise, the Prefect of the City takes an interest. There are mathematici in exile on the islands for saying less.', next: 'hub' },
     tomorrow: { text: 'Tomorrow? The sun is in Taurus, the Moon is fast, and the emperor is going to dedicate a very tall column. I could cast the day for him, but I’m not mad.', next: 'hub' },
@@ -277,11 +304,14 @@ const arruns = defineDialogue({
       },
       choices: [
         { text: 'Read the liver. (2 den.)', enabled: (c) => c.denarii() >= 2, goto: 'read', effects: (c) => void c.pay(2) },
+        // The day's omen, 1 den., once a day (life data: services/vendors.ts).
+        ...lifeChoices('npc-arruns').choices,
         { text: 'Why do you read the liver and not the stars?', goto: 'why', once: true },
         { text: 'Vale.', end: true },
       ],
     },
     read: { text: (c) => haruspicy(c), next: 'hub' },
+    ...lifeChoices('npc-arruns').nodes,
     why: { text: 'The stars are Chaldaean arithmetic, a foreign sum with a foreign answer. My people read the god’s own handwriting on the entrails. Slow, honest, and a little messy. (He wipes his fingers on the cloak.) The Senate still consults us. The Senate has never consulted a Chaldaean.', next: 'hub' },
   },
 });
