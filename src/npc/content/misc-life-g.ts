@@ -78,7 +78,7 @@ const npcs: NpcDef[] = [
       garments: [{ kind: 'tunica', color: '#ece4d0' }, { kind: 'lacerna', color: '#6b5a3c' }],
       footwear: 'calcei',
     },
-    barks: ['Weights and measures, by order of the aediles! Short measure is a fine, and the fine is half to the informer.', 'The album is public. The archive is not.', 'No, the aediles do not discuss the price of fish.'],
+    barks: ['Weights and measures, by order of the aediles! Short measure is a fine, and the fine is a tenth to the informer.', 'The album is public. The archive is not.', 'No, the aediles do not discuss the price of fish.'],
     tags: ['plebs', 'official', 'dignitas:civis'],
   },
   ...(['a', 'b', 'c'] as const).map(
@@ -124,7 +124,7 @@ const npcs: NpcDef[] = [
       garments: [{ kind: 'tunica-short', color: '#a8947a' }, { kind: 'apron', color: '#d8cfba' }],
       footwear: 'barefoot',
     },
-    barks: ['The Lord brought me to the god’s house on a hurdle. The god sent me out on my feet.', 'Forty years of other men’s dinners. I would like to eat one of mine.', 'I am well. I keep telling them I am well.'],
+    barks: ['The god brought me to the god’s house on a hurdle. The god sent me out on my feet.', 'Forty years of other men’s dinners. I would like to eat one of mine.', 'I am well. I keep telling them I am well.'],
     tags: ['servus', 'pious', 'syrian'],
   },
   {

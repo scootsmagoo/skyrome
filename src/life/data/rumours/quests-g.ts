@@ -65,7 +65,7 @@ export default defineLife({
       boards: ['board-ceres', 'board-forum'],
       hook: 'misc-mercuralia',
       latin: 'MERCATORES · IDIBVS · MAIIS · AD · AQVAM · MERCVRII',
-      text: 'The plebeian aediles remind merchants: on the Ides of May to the spring of Mercury. Measures will be proved by the aediles’ clerk at the Temple of Ceres. A false measure is a fine, and half the fine is the informer’s.',
+      text: 'The plebeian aediles remind merchants: on the Ides of May to the spring of Mercury. Measures will be proved by the aediles’ clerk at the Temple of Ceres. A false measure is a fine, and a tenth of the fine is the informer’s.',
       period: 'The aediles policed markets and measures [A]; painted edicta [A, Pompeii]',
     },
     {

@@ -54,7 +54,7 @@ const BRIDGEHEAD = { x: -294, z: 79.8 };
 export const items: ItemDef[] = [
   {
     id: AMULET, name: 'Daos’ Syrian Amulet', latin: 'amuletum Syrium', type: 'misc', slot: 'neck', weight: 0.05, value: 0, questItem: true, icon: '◎', equipFlags: ['amulet'],
-    description: 'A little disc of black stone on a cord, cut with a many-rayed god of the Orontes whom Daos calls only “the Lord”. He wore it through the fever. Worn, it turns aside a bad omen and a curse tablet.',
+    description: 'A little disc of black stone on a cord, cut with a many-rayed god of the Orontes whom Daos calls only “the god”. He wore it through the fever. Worn, it turns aside a bad omen and a curse tablet.',
     tags: ['amulet'],
   },
 ];
@@ -153,7 +153,7 @@ export default defineQuest({
       },
     },
     done: {
-      journal: 'Daos wept, which embarrassed us both, and then he took the little black stone off his neck and put it in my hand. “For the road,” he said. “The Lord keeps what he is given.” I wear it on a cord. He was cooking again, he said, but for himself.',
+      journal: 'Daos wept, which embarrassed us both, and then he took the little black stone off his neck and put it in my hand. “For the road,” he said. “The god keeps what he is given.” I wear it on a cord. He was cooking again, he said, but for himself.',
       onEnter: (q) => {
         q.game.devotion?.gainPietas(5);
         q.giveReward({ items: [{ id: AMULET }], reputation: [{ faction: 'plebs', amount: 3 }], skills: [{ id: 'rhetoric', amount: 10 }] });

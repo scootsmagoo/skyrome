@@ -326,7 +326,7 @@ const clerk = defineDialogue({
             : 'You returned the measure. It was true. That, in my trade, is the best news there is.',
       end: true,
     },
-    mIdle: { text: (c) => rotate(c, 'mIdle', ['Weights and measures by order of the aediles. Short measure is a fine; the fine is half to the informer.', 'The album is public. The archive is not.']), end: true },
+    mIdle: { text: (c) => rotate(c, 'mIdle', ['Weights and measures by order of the aediles. Short measure is a fine; the fine is a tenth to the informer.', 'The album is public. The archive is not.']), end: true },
   },
 });
 
@@ -440,19 +440,19 @@ const daos = defineDialogue({
       next: 'd0',
     },
     dAccept: {
-      text: 'The Lord keep you. Philo, the temple attendant, remembers me being brought. Cleon sleeps in the porch and saw the master’s men leave. Bato, the carter who brought me, drives from the bridge. Two will do, they say; three would be better.',
+      text: 'The god keep you. Philo, the temple attendant, remembers me being brought. Cleon sleeps in the porch and saw the master’s men leave. Bato, the carter who brought me, drives from the bridge. Two will do, they say; three would be better.',
       end: true,
     },
     dWait: {
       text: (c) => {
         const n = proofs(c).length;
-        return n >= 3 ? 'Three of them! The Lord has a good memory. The steward comes at the third hour.' : n === 2 ? 'Two have spoken. Three would frighten the steward more. But the third hour is the third hour.' : n === 1 ? 'One. Good. Philo, Cleon, Bato: any two.' : 'Philo at the temple door, Cleon in the porch, Bato at the bridge. Any two will do.';
+        return n >= 3 ? 'Three of them! The god has a good memory. The steward comes at the third hour.' : n === 2 ? 'Two have spoken. Three would frighten the steward more. But the third hour is the third hour.' : n === 1 ? 'One. Good. Philo, Cleon, Bato: any two.' : 'Philo at the temple door, Cleon in the porch, Bato at the bridge. Any two will do.';
       },
       end: true,
     },
     dFight: { text: 'Go! Please! Fists only, citizen, I cannot bury another friend.', end: true },
     dFree: {
-      text: '(You tell him. He sits quite still, as if the news were a hot plate and he had been told to carry it. Then he takes the black stone from his neck and presses it into your hand.) The Lord keeps what he is given. And now I will cook for myself. I do not know yet what I like.',
+      text: '(You tell him. He sits quite still, as if the news were a hot plate and he had been told to carry it. Then he takes the black stone from his neck and presses it into your hand.) The god keeps what he is given. And now I will cook for myself. I do not know yet what I like.',
       end: true,
     },
     dAfter: { text: (c) => rotate(c, 'dAfter', ['I cooked an egg this morning. For myself. I did not know I liked eggs.', 'The god’s house gave me my life, and you gave me my name.']), end: true },
