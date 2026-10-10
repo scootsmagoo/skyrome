@@ -633,6 +633,10 @@ describe('the offers: every quest has a rumour and a notice that go once the que
     for (const q of HOOKS) {
       const picks = (where: { board?: string; kind?: 'talk' | 'cry' | 'notice' }) => mill.pick(where, 50).filter((r) => r.hook === q).map((r) => r.id);
       const board = LIFE.rumours.find((r) => r.hook === q && r.kind === 'notice')!.boards![0];
+      // A board shows at most 2 hooks a day and other crews' offers share it, so a missed offer
+      // comes back on another day (§4.11): within a market week it is told.
+      let days = 0;
+      while (!picks({ board }).length && days++ < 8) fg.game.time.advanceHours(24);
       expect(picks({ board }), `${q} on ${board}`).not.toEqual([]);
       rpg.quests.start(q);
       for (const r of hooked.filter((x) => x.hook === q)) expect(mill.allowed(r), `${r.id} after the start`).toBe(false);

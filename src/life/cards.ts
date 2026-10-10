@@ -24,7 +24,7 @@ import { streetsOf } from '../npc/hooks';
 import { toGame } from '../world/coords';
 import { inHours, passes, questDone, questNotStarted } from './gates';
 import { hash32, OPENING } from './rumours';
-import { optionChoices, RESULT_NODE, resultNode, setResult } from './talk';
+import { jobRuntime, optionChoices, RESULT_NODE, resultNode, setResult } from './talk';
 import type { ActivityDef, OptionDef, RumourDef } from './types';
 
 /** Things are registered within this distance of the player (m). */
@@ -341,7 +341,11 @@ export class Cards {
               text: 'Note it down.',
               if: (c) => {
                 const n = notice();
-                return !!n?.hook && questDone(c.game, OPENING) && questNotStarted(c.game, n.hook);
+                if (!n?.hook || !questDone(c.game, OPENING) || !questNotStarted(c.game, n.hook)) return false;
+                // A job's notice is noted down only while its giver could offer it (its hours, the
+                // daily cap): starting it here must not skip the job's own offer rules.
+                const job = jobRuntime(n.hook);
+                return !job || job.offerable(c.game);
               },
               effects: (c) => {
                 const n = notice();

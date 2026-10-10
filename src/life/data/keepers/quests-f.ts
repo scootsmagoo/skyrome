@@ -349,25 +349,7 @@ export default defineLife({
       period: 'Curse tablets (defixiones) against bath thieves survive from Bath in Britain, and were put in graves [A, outside Rome]; the Via Appia lined with tombs [A]',
     },
   ],
-
-  // ---------------------------------------------------------------- the bonuses of the quest
-  // Nothing else here: the notices and rumours are in ../rumours/quests-f.ts.
-  services: [
-    // Tryphon the barber: Hilara's offer and her return, as life lines in his talk (the SERVICES
-    // crew's lifeChoices spread). The quest also has its own dialogue for the return, so it works
-    // either way (src/dialogue/content/misc-life-f.ts).
-    {
-      npc: 'npc-tryphon',
-      services: [
-        {
-          id: 'hilara-offer',
-          text: 'About the lost dog, Hilara…',
-          gate: { questDone: OPENING, questNotStarted: 'misc-hilara' },
-          effects: [{ kind: 'startQuest', quest: 'misc-hilara' }],
-          result: 'Twenty sesterces. The aedile’s man will pay it himself: he is half out of his mind. She’s a big bitch, she has a bronze bulla, and she hasn’t answered to her name since the day she ran. Ask at the Circus, they keep dogs and lose them.',
-        },
-      ],
-    },
-  ],
+  // Tryphon's offer of the Hilara reward is a life line in his one ServiceSet, with his haircuts
+  // (../services/vendors.ts): one set per NPC. The notices and rumours are in ../rumours/quests-f.ts.
 });
 

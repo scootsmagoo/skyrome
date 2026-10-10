@@ -43,6 +43,16 @@ export default defineLife({
     {
       npc: 'npc-tryphon',
       services: [
+        // QUESTS I (misc-hilara): his offer of the reward for the lost dog. One ServiceSet per NPC
+        // (lifeChoices reads the first), so it sits here with his razor. The return is the quest's
+        // own dialogue (src/dialogue/content/misc-life-f.ts).
+        {
+          id: 'hilara-offer',
+          text: 'About the lost dog, Hilara…',
+          gate: { questDone: 'mq-01-madida-capena', questNotStarted: 'misc-hilara' },
+          effects: [{ kind: 'startQuest', quest: 'misc-hilara' }],
+          result: 'Twenty sesterces. The aedile’s man will pay it himself: he is half out of his mind. She’s a big bitch, she has a bronze bulla, and she hasn’t answered to her name since the day she ran. Ask at the Circus, they keep dogs and lose them.',
+        },
         {
           id: 'haircut',
           text: 'A haircut',
