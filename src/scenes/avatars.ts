@@ -351,6 +351,7 @@ const scene: SceneDef = {
         const a = (photo.angle * Math.PI) / 180 + s.actor.heading;
         if (photo.bone >= 0) {
           // Frame a bone from a direction (angle around, elevation up), e.g. a hand close-up.
+          s.avatar.syncWorld?.();
           const p = s.avatar.bones[photo.bone].getWorldPosition(tmp);
           const e = (photo.elev * Math.PI) / 180;
           game.camera.position.set(p.x + Math.sin(a) * Math.cos(e) * photo.dist, p.y + Math.sin(e) * photo.dist, p.z + Math.cos(a) * Math.cos(e) * photo.dist);

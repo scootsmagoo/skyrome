@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import type { Game, System } from '../core/Game';
 import type { Actor } from './Actor';
+import { avatarLod } from './avatar/lod';
 
 declare module '../core/Game' {
   interface Game {
@@ -12,6 +13,8 @@ declare module '../core/Game' {
 export class ActorSystem implements System {
   readonly name = 'actors';
   readonly priority = 50;
+  /** The animation LOD (toggle `lod.disabled` at runtime for A/B runs). */
+  readonly lod = avatarLod;
   private list: Actor[] = [];
   private byId = new Map<string, Actor>();
 
@@ -51,6 +54,8 @@ export class ActorSystem implements System {
   }
 
   update(dt: number, alpha: number) {
+    // The animation LOD tests each avatar against this frame's view frustum.
+    avatarLod.beginFrame();
     for (const a of this.list) a.syncVisual(alpha, dt);
   }
 }

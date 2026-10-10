@@ -449,6 +449,14 @@ export class AnimationController {
     }
   }
 
+  /**
+   * Must the avatar animate at the full rate whatever its distance (lod.ts)? Dead bodies, drawn
+   * weapons, blocking, any action playing or fading, and someone looking at a target (talking).
+   */
+  get wantsFullRate(): boolean {
+    return this.dead || this.drawn || this.blocking || this.actions.length > 0 || this.lookTarget !== null;
+  }
+
   isBusy(): boolean {
     for (const a of this.actions) if (!a.fading && a.info.busy) return true;
     return false;

@@ -157,6 +157,8 @@ export function severReal(avatar: HumanoidAvatar, part: Part): SeveredPiece | nu
   const childBone = avatar.bones[B[cfg.child]];
   if (childBone.scale.x < 0.01) return null;
   const mesh = avatar.mesh;
+  // A cut body keeps the stock bone path for good (the pieces and the stump read the world matrices).
+  avatar.holdFull(true);
   avatar.root.updateMatrixWorld(true);
   mesh.skeleton.update();
   const geo = mesh.geometry;

@@ -10,6 +10,7 @@ import { ENEMY_IDS } from '../../combat/archetypes';
 import { FIGHTS, startBout } from '../../game/bouts';
 import { CommandTable, fuzzyFind, toggleArg } from './parse';
 import { applyChoice, type GraphicsChoice } from '../../core/graphics';
+import { textureCensus } from '../../gfx/textureCensus';
 
 /** Session cheats (not saved, like Bethesda's). The console re-applies them every frame. */
 export interface Cheats {
@@ -116,6 +117,17 @@ export function builtinCommands(): CommandTable<ConsoleCtx> {
       aliases: ['debug', 'fps'],
       help: 'Debug overlay: fps, draw calls, position, CPU per system',
       run: (_a, { game }) => (game.debugOverlay ? `Debug overlay -> ${onOff(game.debugOverlay.toggle())}` : 'No debug overlay in this build.'),
+    },
+    {
+      name: 'tex',
+      aliases: ['textures'],
+      help: 'Where the GPU textures come from (material maps, bone textures, BatchedMesh data)',
+      run: (_a, { game }) => {
+        const c = textureCensus(game.scene, game.renderer);
+        return [
+          `${c.total} textures: ${c.materialMaps} material maps, ${c.boneTextures} bone textures, ${c.batchedTextures} for ${c.batchedMeshes} BatchedMeshes (${c.tinyBatches} hold 8 instances or fewer), ${c.other} other.`,
+        ];
+      },
     },
     {
       name: 'heal',

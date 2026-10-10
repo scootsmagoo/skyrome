@@ -608,7 +608,9 @@ describe('animation LOD', () => {
       farT += s;
     }
     expect(nearT).toBeCloseTo(2, 5);
-    expect(farUpdates).toBeLessThan(30);
+    // 200 m out and in view: 15 Hz (about 30 of 120 frames, plus the first sample).
+    expect(farUpdates).toBeLessThan(36);
+    expect(farUpdates).toBeGreaterThan(20);
     expect(farT).toBeGreaterThan(1.7);
   });
 });

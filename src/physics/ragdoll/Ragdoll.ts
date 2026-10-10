@@ -125,6 +125,8 @@ export class Ragdoll {
   ) {
     const w = physics.world;
     const scale = avatar.rig.height / 1.75;
+    // The ragdoll reads and writes the bones itself: the avatar stays on the stock, full-rate path meanwhile.
+    avatar.holdFull(true);
     avatar.root.updateMatrixWorld(true);
     const bones = avatar.bones;
     const worldPos = (b: number, out = new THREE.Vector3()) => out.setFromMatrixPosition(bones[b].matrixWorld);
@@ -437,6 +439,7 @@ export class Ragdoll {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    this.avatar.holdFull(false);
     const w = this.physics.world;
     for (const j of this.joints) w.removeImpulseJoint(j, false);
     for (const s of this.segs) w.removeRigidBody(s.body);

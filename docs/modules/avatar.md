@@ -116,11 +116,42 @@ oldest unheld entries are evicted and their GPU buffers disposed. Held geometry 
 `avatarCacheStats()` reports the counts; `clearAvatarCache()` disposes everything unheld (e.g. when
 leaving a region). Always dispose avatars you drop (Actor.dispose and Actor.setAvatar do).
 
-### Animation LOD (`lod.ts`)
+### Animation LOD (`lod.ts`) and the flat bone path (`flatSkeleton.ts`)
 
-`avatarLod.viewer = game.camera` once (the scene or game sets it). Within 40 m avatars animate every
-frame. They update at 30 Hz to 80 m, 15 Hz to 150 m and 8 Hz beyond, accumulating the skipped
-time. Each avatar gets a random phase offset, so the reduced-rate updates spread across frames.
+`avatarLod.viewer = game.camera` once (the scene or game sets it); `ActorSystem.update` calls
+`avatarLod.beginFrame()` (the view frustum) each frame. Pose sampling:
+
+| Where | Pose rate |
+|---|---|
+| within `near` = 25 m | every frame |
+| 25 to `mid` = 40 m, in view | 30 Hz |
+| beyond 40 m, in view | 15 Hz |
+| beyond 25 m and out of the frustum | 8 Hz |
+| anyone who `wantsFullRate` (dead, weapon drawn, blocking, any action playing or fading, looking at a target), has a `holdFull` hold, or is in first person | every frame, at any distance |
+
+The skipped time accumulates, each avatar has a random phase, the first update always samples, and an
+avatar coming into view refreshes at once. Action clocks and their events (`advance`) run every frame.
+Foot IK and loose parts (`anim.near`) stay on to 40 m (`ikNear`).
+
+Beyond `flatFrom` = 10 m (2 m hysteresis) the avatar uses the **flat bone path**: its bones and empty
+sockets get `matrixAutoUpdate`/`matrixWorldAutoUpdate` off; on a pose update (`FlatSkeleton.tick`) it
+composes the local matrices, multiplies the chain once into "model space" (relative to the body mesh)
+and writes the skin matrices from that; the skinned meshes are switched to the detached bind mode, so
+the skin matrices do not depend on where the avatar stands, and the frames between pose updates cost
+nothing for the bones (`skeleton.update` only flags the texture). While nothing hangs on a bone or
+socket the hips are also taken out of the mesh's child list (`pruned`), so neither the scene walk nor
+the renderer visits the 38 empty bone and socket objects. Anything carried (a weapon, a head load, a
+sheathed sword) is found through `childadded` events on the bones and sockets; the carrying bones get a
+fresh world matrix every frame (`updateAttached`), so gear stays exactly in place (checked in the game
+to 1e-14 against the stock path, skin matrices to 4e-6).
+
+What a flat avatar does NOT keep: `bone.matrixWorld` (stale). Callers that read it outside the render
+walk call `avatar.syncWorld()` (the bow nock does), and code that writes or cuts bones holds the avatar
+at the full rate on the stock path with `avatar.holdFull(true)` (released with `false`): the ragdoll for
+its lifetime, gore for good once a limb is cut.
+
+`?lodoff=anim` (or `game.actors.lod.disabled = true` at runtime, for A/B in one session) turns the
+whole thing off: every avatar at the full rate on the stock path.
 
 ## How it works
 
@@ -314,6 +345,10 @@ For screenshots, `window.__avatars` exposes:
 - `treadmill(slot, speed, dirDeg, sneak)`
 
 ## Shared-file changes
+
+C3c (crowd CPU): `ActorSystem` (frustum per frame, `lod`), `Equipment` (one `syncWorld()` call before the
+bow nock), `Ragdoll` (`holdFull`), `combat/gore/dismember*.ts` (`holdFull`), `dev/console/commands.ts`
+(`tex`).
 
 `src/actors/appearance.ts` gained two additive, optional fields: `GarmentKind` `'braccae'`
 (trousers, worn by Dacians and Germans on Trajan's Column) and `Garment.sleeves` (tunic sleeve
