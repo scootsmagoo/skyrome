@@ -36,7 +36,6 @@ import { SKILLS } from '../src/rpg/data/skills';
 import { VENDORS } from '../src/rpg/data/vendors';
 import { installRpg } from '../src/rpg/install';
 import { MemoryStorage } from '../src/save/storage';
-import { LIFE } from '../src/life/registry';
 import { fakeGame } from './rpg-fakes';
 
 const quests = loadQuestContent();
