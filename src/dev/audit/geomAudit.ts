@@ -125,6 +125,41 @@ export function auditRecordCount() {
   return records.size;
 }
 
+/**
+ * Every recorded build's walkable-flat faces in world space, with its name, material and source
+ * (the street-fit audit, streetFit.ts, reads the landmarks' paving and floors through this).
+ * `skip` leaves out builds by name (the city's own, which that audit rebuilds itself).
+ */
+export function auditFaceSets(skip?: RegExp): { name: string; mat: string; src: string; world: Float32Array; box: [number, number, number, number] }[] {
+  const out: { name: string; mat: string; src: string; world: Float32Array; box: [number, number, number, number] }[] = [];
+  const m = new THREE.Matrix4();
+  for (const r of records.values()) {
+    if (skip?.test(r.name)) continue;
+    m.copy(r.group?.matrixWorld ?? new THREE.Matrix4());
+    for (const f of r.faces) {
+      worldOf(f, m);
+      out.push({ name: r.name, mat: f.mat, src: f.src || r.name, world: f.world!, box: f.box! });
+    }
+  }
+  return out;
+}
+
+/** Every recorded prop base in world space (see auditFaceSets). */
+export function auditPropBases(skip?: RegExp): { name: string; kind: string; src: string; x: number; y: number; z: number }[] {
+  const out: { name: string; kind: string; src: string; x: number; y: number; z: number }[] = [];
+  const m = new THREE.Matrix4();
+  const w = new THREE.Vector3();
+  for (const r of records.values()) {
+    if (skip?.test(r.name)) continue;
+    m.copy(r.group?.matrixWorld ?? new THREE.Matrix4());
+    for (const p of r.props) {
+      w.copy(p.p).applyMatrix4(m);
+      out.push({ name: r.name, kind: p.kind, src: p.src || r.name, x: w.x, y: w.y, z: w.z });
+    }
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------- analysis
 
 interface Surf {
