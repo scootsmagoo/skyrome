@@ -1,8 +1,10 @@
 /**
  * Street vignettes: a scuffle, a dog stealing a sausage, a pot thrown from a window, a thief
- * running through the crowd, a hawker with a tray.
+ * running through the crowd (catchable once the opening is done: "Fur!"), a hawker with a tray
+ * the player can buy from.
  */
 import * as THREE from 'three';
+import type { Interactable } from '../../interaction/Interactions';
 import { Quadruped, makePot, makeSausage, makeShards } from '../props';
 import type { Npc } from '../Npc';
 import { anchorAhead, arc, faceTo, hiddenPoint, onlookers, recruit, stand, walk, walkAll } from './kit';
@@ -256,6 +258,22 @@ export const fallingPot: VignetteDef = {
 
 // ---------------------------------------------------------------- thief (Fur!)
 
+/** The opening (mq-01-madida-capena): before it is done a thief can't be caught (STORY rule 2). */
+const OPENING = 'mq-01-madida-capena';
+/** Close enough to grab the thief (m); a swing at him lands within this (m), roughly in front. */
+const CATCH_R = 1.7;
+const SWING_R = 2.4;
+/** Walk this far from the victim with the purse and it's kept (m). */
+const KEEP_R = 25;
+
+/**
+ * A thief snatches a purse and runs (world-life §4.9 "Fur!"). Once the opening is done he can be
+ * caught: close in on him, or swing at him, and he goes down on one knee (the yield pose) and gives
+ * the purse up — E on him takes it. Returning it to the victim (E on them) earns 2–6 asses and Fama
+ * +1 with the plebs; walking off with it is theft (furtum) if anyone sees. The thief is out of the
+ * combat module's reach (`staged`, as a tableau's figures are): the blow that catches him isn't an
+ * assault on a passer-by. Before the opening he simply gets away, as he always did.
+ */
 export const thief: VignetteDef = {
   id: 'thief',
   when: 'day',
@@ -273,6 +291,24 @@ export const thief: VignetteDef = {
     if (!fur) return;
     ctx.cast(fur);
     fur.name = 'Thief';
+    const catchable = !!ctx.game.quests?.status(OPENING)?.done;
+    let swung = false;
+    if (catchable) {
+      const staged = fur as Npc & { staged?: boolean };
+      staged.staged = true;
+      ctx.onEnd(() => {
+        staged.staged = false;
+      });
+      // The player's swing at him (the combat module can't strike a staged figure: this is the hit).
+      const off = ctx.game.events.on('combat:swing', (e) => {
+        const p = ctx.game.player;
+        if (!p || e.attackerId !== p.id) return;
+        const dx = fur.position.x - p.position.x;
+        const dz = fur.position.z - p.position.z;
+        if (Math.hypot(dx, dz) <= SWING_R + e.reach && Math.cos(Math.atan2(dx, dz) - p.heading) > 0.5) swung = true;
+      });
+      ctx.onEnd(off);
+    }
     yield* walkAll(ctx, [
       [victim, plan.x, plan.z, 1.3],
       [fur, plan.x + 1, plan.z + 0.5, 1.3],
@@ -287,23 +323,170 @@ export const thief: VignetteDef = {
     fur.brain?.scriptGo(far.x, far.z, 5.2);
     ctx.say(victim, 'Fur! Fur! Stop, thief! My purse!');
     victim.humanoid.play('hitFront');
-    yield 1;
-    victim.brain?.scriptGo(far.x, far.z, 3.2);
+    // From the first stride he can be caught (after the opening): grabbed, or a swing at him (a
+    // swing before he stole anything doesn't count).
+    swung = false;
+    const caught = () => catchable && (swung || near(ctx, fur, CATCH_R));
+    const t0 = ctx.now;
+    yield () => caught() || ctx.now - t0 > 1;
     const guard = ctx.free(plan.x, plan.z, 40, isGuard)[0];
-    if (guard) {
-      ctx.cast(guard);
-      ctx.say(guard, 'Hold there! You!');
-      guard.brain?.scriptGo(far.x, far.z, 4.6);
+    if (!caught()) {
+      victim.brain?.scriptGo(far.x, far.z, 3.2);
+      if (guard) {
+        ctx.cast(guard);
+        ctx.say(guard, 'Hold there! You!');
+        guard.brain?.scriptGo(far.x, far.z, 4.6);
+      }
+    } else if (guard) ctx.cast(guard);
+    if (!catchable) {
+      yield 4;
+      victim.brain?.scriptStand('talk', null);
+      ctx.say(victim, ctx.rng.pick(GONE));
+      yield 6;
+      return;
     }
-    yield 4;
-    victim.brain?.scriptStand('talk', null);
-    ctx.say(victim, ctx.rng.pick(['Gone. Gods curse him, gone.', 'Homo trium litterarum! A man of three letters — F, U, R!']));
-    yield 6;
+    yield () => caught() || !!fur.brain?.arrived || ctx.now - t0 > 15;
+    if (!caught()) {
+      // He got away.
+      victim.brain?.scriptStand('talk', null);
+      ctx.say(victim, ctx.rng.pick(GONE));
+      yield 6;
+      return;
+    }
+    yield* purseBack(ctx, fur, victim, guard);
   },
 };
 
+const GONE = ['Gone. Gods curse him, gone.', 'Homo trium litterarum! A man of three letters — F, U, R!'];
+
+/** The thief is caught: he gives up the purse, and the player gives it back or keeps it. */
+function* purseBack(ctx: VignetteContext, fur: Npc, victim: Npc, guard: Npc | undefined): Generator<Cue, void, unknown> {
+  const g = ctx.game;
+  const ia = g.interactions;
+  const toPlayer = (n: Npc) => faceTo(n, ctx.player.x, ctx.player.z);
+  stand(fur, null, toPlayer(fur));
+  fur.humanoid.play('yield');
+  ctx.say(fur, ctx.rng.pick(['Mercy! Take it, take it, it’s all there!', 'Don’t hit me! Here! Here’s the purse!', 'All right! All right! I only found it!']));
+  if (guard) guard.brain?.scriptGo(fur.position.x + 1.4, fur.position.z, 4.6);
+  victim.brain?.scriptGo(fur.position.x - 1.6, fur.position.z + 0.6, 3.2);
+  // E on the kneeling thief: take back the purse.
+  let taken = false;
+  const at = new THREE.Vector3();
+  const take: Interactable = {
+    id: 'fur:purse',
+    position: () => at.set(fur.position.x, fur.position.y + 0.7, fur.position.z),
+    reach: 2.6,
+    verb: () => 'Take back the purse',
+    label: () => 'Thief',
+    interact: () => {
+      taken = true;
+    },
+  };
+  ia?.add(take);
+  ctx.onEnd(() => ia?.remove(take));
+  const t0 = ctx.now;
+  yield () => taken || ctx.now - t0 > 30 || !near(ctx, fur, KEEP_R);
+  ia?.remove(take);
+  // Up and away: with the watch if it came, else at a run.
+  const away = ctx.snap(fur.position.x + (fur.position.x - ctx.player.x) * 6, fur.position.z + (fur.position.z - ctx.player.z) * 6, 8) ?? { x: fur.position.x + 20, z: fur.position.z };
+  fur.humanoid.play('interact');
+  if (guard) {
+    ctx.say(guard, 'I’ll take him. To the vigiles with you, furcifer!');
+    fur.brain?.scriptGo(away.x, away.z, 1.5);
+    guard.brain?.scriptGo(away.x + 0.8, away.z, 1.5);
+  } else {
+    fur.brain?.scriptGo(away.x, away.z, 5.2);
+  }
+  if (!taken) {
+    victim.brain?.scriptStand('talk', null);
+    ctx.say(victim, 'You had him! And you let him go with my purse!');
+    yield 5;
+    return;
+  }
+  // The purse: 1–2 denarii, in asses.
+  const purse = Math.round((1 + ctx.rng.next()) * 16) / 16;
+  g.events.emit('rpg:notify', { text: `You took back the purse (${Math.round(purse * 16)} asses). Give it back to its owner, or keep it.`, kind: 'item' });
+  yield 1;
+  victim.brain?.scriptGo(ctx.player.x + 1.2, ctx.player.z + 0.4, 2.6, 0.9);
+  const tv = ctx.now;
+  yield () => !!victim.brain?.arrived || ctx.now - tv > 12;
+  stand(victim, 'talk', toPlayer(victim));
+  ctx.say(victim, 'My purse! You caught him! Is it… may I have it?');
+  // E on the victim: give it back. Walking away with it is keeping it.
+  let returned = false;
+  let settled = false;
+  const at2 = new THREE.Vector3();
+  const give: Interactable = {
+    id: 'fur:return',
+    position: () => at2.set(victim.position.x, victim.position.y + 1.1, victim.position.z),
+    reach: 3,
+    verb: () => 'Return the purse',
+    label: () => victim.name,
+    interact: () => {
+      returned = true;
+    },
+  };
+  const keep = () => {
+    if (settled) return;
+    settled = true;
+    keepPurse(ctx, victim, purse);
+  };
+  ia?.add(give);
+  ctx.onEnd(() => {
+    ia?.remove(give);
+    keep();
+  });
+  const t1 = ctx.now;
+  yield () => returned || !near(ctx, victim, KEEP_R) || ctx.now - t1 > 90;
+  ia?.remove(give);
+  if (!returned) {
+    keep();
+    yield 3;
+    return;
+  }
+  settled = true;
+  // 2–6 asses for the trouble, and the street remembers.
+  const as = 2 + Math.floor(ctx.rng.next() * 5);
+  g.player?.inventory?.addDenarii(as / 16);
+  g.factions?.addReputation('plebs', 1);
+  victim.humanoid.play('interact');
+  ctx.say(victim, ctx.rng.pick(['Gratias! The gods see an honest man, and so do I. Here, for your trouble.', 'All of it, every as! Here, take something for your legs.']));
+  ctx.sfx('coin.clink', victim.position);
+  g.events.emit('rpg:notify', { text: `${victim.name} gave you ${as} asses for your trouble. (Fama with the plebs +1)`, kind: 'item' });
+  yield 4;
+}
+
+function near(ctx: VignetteContext, n: Npc, r: number): boolean {
+  return Math.hypot(n.position.x - ctx.player.x, n.position.z - ctx.player.z) < r;
+}
+
+/** The player walked off with the purse: theirs, and a theft if anyone saw (furtum). */
+function keepPurse(ctx: VignetteContext, victim: Npc, purse: number) {
+  const g = ctx.game;
+  g.player?.inventory?.addDenarii(purse);
+  const p = g.player?.position;
+  const seen = p ? (g.population?.witnesses(p, 22) ?? []) : [];
+  if (seen.length) {
+    g.crime?.commit('furtum', { witnessed: seen, victimId: victim.id, value: purse, district: g.locations?.current()?.id });
+    ctx.say(victim, 'Thief! He’s kept my purse! He’s no better than the other one!');
+  }
+  g.events.emit('rpg:notify', { text: `You kept the purse: ${Math.round(purse * 16)} asses.${seen.length ? ' Someone saw.' : ''}`, kind: seen.length ? 'warning' : 'item' });
+}
+
 // ---------------------------------------------------------------- hawker
 
+/** What a hawker carries on the tray (world-life §4.9): one ware a walk, an as apiece. */
+const WARES = [
+  { item: 'libum', label: 'Honey cakes', cry: 'Honey cakes! Still warm, an as apiece!' },
+  { item: 'lupini', label: 'Lupins', cry: 'Lupins! Hot salted lupins, an as a handful!' },
+  { item: 'cicer', label: 'Hot chickpeas', cry: 'Hot chickpeas! Lupins! An as a cone!' },
+] as const;
+
+/**
+ * A hawker with a tray cries his wares and sells to passers-by; the player can buy too, one click
+ * on the tray (Buy, an as), as at the Palatine and Circus counters. He lingers while the player is
+ * near (up to 40 s) before moving on.
+ */
 export const hawker: VignetteDef = {
   id: 'hawker',
   when: 'day',
@@ -317,10 +500,40 @@ export const hawker: VignetteDef = {
     const v = recruit(ctx, plan.x, plan.z, 30, (n) => n.role?.id === 'merchant' && n.prop?.kind === 'tray', 'merchant');
     if (!v) return;
     v.name = 'Hawker';
+    const ware = WARES[Math.floor(ctx.rng.next() * WARES.length)];
     yield* walk(ctx, v, plan.x, plan.z, 1.3);
+    // Stuck on the way (behind a wall, in a doorway): no crying wares nobody can reach.
+    if (Math.hypot(v.position.x - plan.x, v.position.z - plan.z) > 3) return;
     stand(v, 'talk', faceTo(v, ctx.player.x, ctx.player.z));
-    ctx.say(v, ctx.rng.pick(['Hot chickpeas! Lupins! An as a handful!', 'Fresh bread, still warm!', 'Figs from Tusculum! Sweet as honey!', 'Sulphur matches! Who needs a light?']));
+    ctx.say(v, ware.cry);
     ctx.sfx('amb.calls', v.position);
+    // The tray: one click buys one.
+    const g = ctx.game;
+    const price = () => g.items?.get(ware.item)?.value ?? 1 / 16;
+    const asses = () => Math.max(1, Math.round(price() * 16));
+    const at = new THREE.Vector3();
+    const tray: Interactable = {
+      id: 'hawker:buy',
+      position: () => at.set(v.position.x + Math.sin(v.heading) * 0.45, v.position.y + 1.05, v.position.z + Math.cos(v.heading) * 0.45),
+      reach: 2.8,
+      verb: () => 'Buy',
+      label: () => `${ware.label} (hawker)`,
+      detail: () => `${asses()} ${asses() === 1 ? 'as' : 'asses'}`,
+      interact: () => {
+        const inv = g.player?.inventory;
+        if (!inv) return;
+        if (!inv.spendDenarii(price())) {
+          g.events.emit('rpg:notify', { text: 'You cannot afford it.', kind: 'warning' });
+          return;
+        }
+        inv.add(ware.item, 1, { source: 'barter' });
+        v.humanoid.play('interact');
+        ctx.sfx('coin.clink', v.position);
+        ctx.say(v, ctx.rng.pick(['Gratias! Eat it hot.', 'One for you, and the gods bless your belly.', 'An as well spent, friend.']));
+      },
+    };
+    g.interactions?.add(tray);
+    ctx.onEnd(() => g.interactions?.remove(tray));
     const buyers = ctx.free(plan.x, plan.z, 16, (n) => n.role?.id !== 'senator' && n.role?.id !== 'vestal').slice(0, 2).map((b) => ctx.cast(b));
     const spots = arc(plan.x, plan.z, v.heading, 1.2, buyers.length, 1.4);
     buyers.forEach((b, i) => b.brain?.scriptGo(spots[i].x, spots[i].z, 1.2));
@@ -335,6 +548,10 @@ export const hawker: VignetteDef = {
     ctx.sfx('coin.clink', v.position);
     yield 2;
     for (const b of buyers) ctx.release(b);
+    // He stays while the player is about (a customer is a customer).
+    const t0 = ctx.now;
+    yield () => !near(ctx, v, 9) || ctx.now - t0 > 40;
+    g.interactions?.remove(tray);
     ctx.say(v, 'Gratias! Come back tomorrow!');
     yield 3;
   },
