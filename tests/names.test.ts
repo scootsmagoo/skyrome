@@ -4,7 +4,7 @@
  * Latin line that is Latin. Research and citations: docs/research/names-audit.md.
  */
 import { describe, expect, it } from 'vitest';
-import { AQUEDUCTS, BRIDGES, GATES, HILLS, LANDMARKS, ROADS } from '../src/data/atlas';
+import { AQUEDUCTS, BRIDGES, GATES, HILLS, LANDMARKS, LOWLANDS, ROADS } from '../src/data/atlas';
 import { CONTENT_LOCATIONS, FRONT_SPOTS, WORLD_SPOTS } from '../src/content/places';
 import { atlasLocations, displayLatin, displayName, hillLocation, lowlandLocations, namedHills } from '../src/game/locations';
 import { AtlasMapSource, mapLabels, mapLandmarks } from '../src/game/mapSource';
@@ -141,6 +141,12 @@ describe('roads, gates, bridges and aqueducts (M5b audit)', () => {
         expect(en, `${id}: "${en}"`).not.toContain(bad);
         expect(la, `${id}: "${la}"`).not.toContain(bad);
       }
+    }
+  });
+
+  it('no later name appears in a lowland name', () => {
+    for (const l of LOWLANDS) {
+      for (const bad of LATER) expect(l.name, l.id).not.toContain(bad);
     }
   });
 

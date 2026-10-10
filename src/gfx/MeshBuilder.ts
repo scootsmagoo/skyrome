@@ -151,6 +151,7 @@ export class MeshBuilder {
     const list = this.parts.get(key) ?? [];
     list.push(g);
     this.parts.set(key, list);
+    this.surfaceVersion++;
     return this;
   }
 
@@ -267,6 +268,7 @@ export class MeshBuilder {
         }
       }
       this.parts.set(key, list);
+      this.surfaceVersion++;
     }
     for (const pr of other.props) {
       if (!matrix) {
@@ -296,7 +298,8 @@ export class MeshBuilder {
     return this.parts.size === 0 && this.instances.size === 0;
   }
 
-  private surfaceCache: { count: number; index: SurfaceIndex } | null = null;
+  private surfaceCache: { count: number; version: number; index: SurfaceIndex } | null = null;
+  private surfaceVersion = 0;
 
   /**
    * What a thing at (x, z) about height y would stand on, among what has been added so far (and
@@ -308,8 +311,8 @@ export class MeshBuilder {
   surfaceAt(x: number, z: number, y: number): number | null {
     let count = 0;
     for (const geoms of this.parts.values()) count += geoms.length;
-    if (!this.surfaceCache || this.surfaceCache.count !== count) {
-      this.surfaceCache = { count, index: new SurfaceIndex([...this.parts.values()].flat()) };
+    if (!this.surfaceCache || this.surfaceCache.count !== count || this.surfaceCache.version !== this.surfaceVersion) {
+      this.surfaceCache = { count, version: this.surfaceVersion, index: new SurfaceIndex([...this.parts.values()].flat()) };
     }
     return standingHeight(this.surfaceCache.index, this.ground, x, z, y);
   }

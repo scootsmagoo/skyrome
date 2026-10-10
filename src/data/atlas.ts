@@ -551,7 +551,7 @@ export const LOWLANDS: Lowland[] = [
   { id: 'trajan-forum', name: 'Forum of Trajan', elevation: 17.5, polygon: [[-60, -430], [90, -470], [200, -330], [150, -230], [20, -200], [-80, -290]], notes: '17-18 m on the ground cut out of the Capitoline-Quirinal saddle (C).' },
   { id: 'subura', name: 'Subura (lower)', elevation: 21, polygon: [[200, -200], [330, -130], [520, -200], [600, -240], [560, -420], [520, -560], [380, -480], [250, -360]], notes: '20-22 m in the SW (C). Split from the research polygon so the upper valley can rise.' },
   { id: 'subura-upper', name: 'Subura (upper valleys)', elevation: 28, polygon: [[600, -240], [700, -260], [760, -380], [900, -620], [820, -660], [640, -450], [560, -420]], notes: 'Rising to 28-32 at the heads of the Vicus Longus and Vicus Patricius valleys (C).' },
-  { id: 'colosseum-valley', name: 'Colosseum valley', elevation: 19, polygon: [[440, 260], [450, 170], [560, 120], [760, 150], [850, 250], [800, 380], [600, 420], [480, 380]], notes: 'Site of Nero\'s lake, 18-20 m (C); rises ESE along the Via Labicana valley to 28-32 at ~(1300, 350).' },
+  { id: 'colosseum-valley', name: 'Valley of the Flavian Amphitheatre', elevation: 19, polygon: [[440, 260], [450, 170], [560, 120], [760, 150], [850, 250], [800, 380], [600, 420], [480, 380]], notes: 'Site of Nero\'s lake, 18-20 m (C); rises ESE along the Via Labicana valley to 28-32 at ~(1300, 350).' },
   { id: 'velia-north-slope', name: 'Velia north slope (Horrea Piperataria)', elevation: 20, polygon: [[265, 45], [330, 0], [420, -20], [520, 20], [470, 110], [360, 150], [300, 120]], notes: 'ADDED: gentle slope from the Forum (13) up to the Velia ridge (28-30); DEM 18-23 (C).' },
   { id: 'labicana-valley-west', name: 'Labicana valley (west)', elevation: 21, polygon: [[800, 180], [1000, 210], [1010, 440], [800, 400]], notes: 'ADDED: valley E of the Colosseum (Ludus Magnus), rising from 19 to ~24 (DEM, C).' },
   { id: 'labicana-valley-mid', name: 'Labicana valley (middle)', elevation: 26, polygon: [[1000, 210], [1250, 250], [1260, 450], [1010, 440]], notes: 'ADDED: Moneta, Castra Misenatium area, DEM 24-30 (C).' },
@@ -780,7 +780,7 @@ export const REGIONS: Region[] = [
   },
   {
     id: 'regio-iii', number: 3, name: 'Isis et Serapis', latin: 'Regio III', density: 0.75, wealth: 0.55,
-    character: 'Entertainment and spectacle: the Colosseum, gladiator schools, the Baths of Titus and of Trajan, the Porticus Liviae, the Moneta, the Misenum sailors\' camp; insulae for staff and fans.',
+    character: 'Entertainment and spectacle: the Flavian Amphitheatre, gladiator schools, the Baths of Titus and of Trajan, the Porticus Liviae, the Moneta, the Misenum sailors\' camp; insulae for staff and fans.',
     typical: ['insula', 'taberna', 'popina', 'barracks', 'baths', 'workshop'],
     polygon: [[480, 140], [520, 30], [560, -150], [640, -330], [900, -260], [1100, -290], [1300, -330], [1350, 0], [1480, 240], [1470, 370], [1300, 420], [1000, 350], [700, 330], [560, 400], [480, 300]],
   },
@@ -1111,7 +1111,7 @@ export const LANDMARKS: Landmark[] = [
     center: [-100, -150], rotation: 180, footprint: { kind: 'rect', w: 20, d: 30 }, height: 16, baseElevation: 47,
     region: 'regio-viii', status113: 'complete', priority: 1, confidence: 'medium',
     dates: 'vowed 345, dedicated 344 BC (L. Furius Camillus)',
-    description: 'Temple of Juno the Warner on the citadel. Juno\'s sacred geese, descendants of the flock that woke the defenders when the Gauls climbed the cliff in 390 BC, are still kept on the Capitol at public expense. The mint, which takes its name moneta from the goddess, stood beside it until Domitian moved it near the Colosseum.',
+    description: 'Temple of Juno the Warner on the citadel. Juno\'s sacred geese, descendants of the flock that woke the defenders when the Gauls climbed the cliff in 390 BC, are still kept on the Capitol at public expense. The mint, which takes its name moneta from the goddess, stood beside it until Domitian moved it near the Flavian Amphitheatre.',
     builderNotes: 'On the Arx under the later S. Maria in Aracoeli. Facing unknown, assumed S toward the Asylum (FLAG). Add the goose pen and the Auguraculum (augurs\' observation platform, ~(-60,-184)) nearby. The temple is 46 years younger than the geese episode (Livy 7.28), so the 390 BC flock was not in this precinct.',
     codexNote: 'English "money" and "mint" both come from Moneta.',
   },
@@ -1444,7 +1444,7 @@ export const LANDMARKS: Landmark[] = [
     center: [875, 285], rotation: 289, footprint: { kind: 'rect', w: 85, d: 110 }, height: 12, baseElevation: 20,
     region: 'regio-iii', status113: 'remodeled', statusNote: 'remodeled (Trajanic rebuild, FLAG: may be in progress)', priority: 1, confidence: 'high',
     dates: 'Domitian; Trajanic rebuild (floor raised ~1.5 m)',
-    description: 'Barracks and practice arena of the imperial gladiators. A tunnel runs under the street straight into the Colosseum.',
+    description: 'Barracks and practice arena of the imperial gladiators. A tunnel runs under the street straight into the Flavian Amphitheatre.',
     builderNotes: 'A small elliptical arena with 9 rows of seats (~3,000 spectators) inside a porticoed courtyard of cells on 2-3 storeys, with triangular fountains at the corners. Not exactly aligned with the Colosseum. Tunnel from its SW corner. Long axis 109/289, parallel to the Colosseum (OSM fit of the excavated N half). Rotation 289 = the end facing the Colosseum, where the tunnel leaves.',
   },
   {
@@ -1468,7 +1468,7 @@ export const LANDMARKS: Landmark[] = [
     center: [1150, 260], rotation: 0, footprint: { kind: 'rect', w: 100, d: 80 }, height: 10, baseElevation: 30,
     region: 'regio-iii', status113: 'complete', priority: 2, confidence: 'low',
     dates: 'Flavian (FLAG)',
-    description: 'Barracks of the fleet detachment from Misenum who rig the Colosseum\'s vast sun awning.',
+    description: 'Barracks of the fleet detachment from Misenum who rig the Amphitheatre\'s vast sun awning.',
     builderNotes: 'LOCATION FLAG: Regio III, E of the Ludus Magnus. The Summum Choragium (stage-machinery store) was nearby too.',
   },
   {
@@ -1476,7 +1476,7 @@ export const LANDMARKS: Landmark[] = [
     center: [1100, 345], rotation: 0, footprint: { kind: 'rect', w: 60, d: 40 }, height: 10, baseElevation: 26,
     region: 'regio-iii', status113: 'complete', priority: 2, confidence: 'low',
     dates: 'moved here by Domitian',
-    description: 'The imperial mint, moved by Domitian from the Capitol to near the Colosseum, where Trajan\'s coins are struck by gangs of slave and freedman workers.',
+    description: 'The imperial mint, moved by Domitian from the Capitol to near the Flavian Amphitheatre, where Trajan\'s coins are struck by gangs of slave and freedman workers.',
     builderNotes: 'LOCATION FLAG: a 1st-c. building under S. Clemente is one candidate. Workshop halls with furnaces, guarded storerooms and an anvil yard. Good heist-quest target.',
   },
   {
@@ -1484,7 +1484,7 @@ export const LANDMARKS: Landmark[] = [
     center: [755, 100], rotation: 0, footprint: { kind: 'rect', w: 105, d: 120 }, height: 25, baseElevation: 38,
     region: 'regio-iii', status113: 'complete', priority: 1, confidence: 'medium',
     dates: 'AD 80',
-    description: 'Quickly built baths dedicated with the Colosseum, looking down over its plaza from the Oppian.',
+    description: 'Quickly built baths dedicated with the Flavian Amphitheatre, looking down over its plaza from the Oppian.',
     builderNotes: 'Platner: same orientation as the Domus Aurea, ~105 x 120 m; facade and main entrance on the N side; on the S side a wide flight of steps leads down to the paved Colosseum plaza 18 m below. Caldarium toward the S. No natatio. Just W of the W corner of the Baths of Trajan; the modern Via delle Terme di Tito runs over the site (it.wiki puts the baths at ~(783,119)).',
   },
   {
@@ -2401,7 +2401,7 @@ export const LANDMARKS: Landmark[] = [
     center: [1425, 300], rotation: 8, footprint: { kind: 'rect', w: 40, d: 60 }, height: 14, baseElevation: 36,
     region: 'regio-iii', status113: 'complete', priority: 2, confidence: 'low',
     dates: 'Republican/Augustan',
-    description: 'Egyptian sanctuary of Isis and Serapis in the Third Region, by the road east from the Colosseum.',
+    description: 'Egyptian sanctuary of Isis and Serapis in the Third Region, by the road east from the Flavian Amphitheatre.',
     builderNotes: 'Small temple in a walled court with Egyptian statuary. OSM has remains labelled Tempio di Iside a via Labicana here; identification C. Out-of-world: the 4th-c. catalogue name of Regio III, "Isis et Serapis", comes from this sanctuary; nobody calls the region that in 113.',
   },
   {
