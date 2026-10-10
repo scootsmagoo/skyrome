@@ -9,18 +9,18 @@
  *
  *   start      (a notice read first) talk to Eutychus                                   → curator
  *   curator    tell the curator; he asks for the mould quietly                            → lucrio
- *   lucrio     find Lucrio at the dice table in the evening: persuade him (Rhetoric 40),
+ *   lucrio     find Pothinus at the dice table in the evening: persuade him (Rhetoric 40),
  *              stake him at tali, or follow him home                                      → yard | follow
- *   follow     follow Lucrio to his yard                                                  → yard
+ *   follow     follow Pothinus to his yard                                                  → yard
  *   yard       take the moulds (forma-tesserarum); theft if someone sees                  → choose
- *   choose     give them to the curator (20 den., Fama plebs +5; Lucrio is taken away), or
+ *   choose     give them to the curator (20 den., Fama plebs +5; Pothinus is taken away), or
  *              sell them to Crispina the fence if she exists (30 den., Infamia +5; the
  *              false tokens are still about)                                              → done-curator | done-sold
  *
  * Offered by: the curator's notice on board-subura, a talk rumour and Eutychus himself (src/life/data
  * rumours/quests-g.ts). Never takes the tracker from a running main quest (QuestSystem.start).
  *
- * Flags: tess-scene (the scene at the dole was shown), tess-consent (Lucrio told where the moulds are:
+ * Flags: tess-scene (the scene at the dole was shown), tess-consent (Pothinus told where the moulds are:
  * taking them is no theft), tess-lucrio-taken, tokens-still-about (read by a rumour).
  */
 import { between } from '../../content/hours';
@@ -114,7 +114,7 @@ function hold(q: QuestContext, id: string) {
   q.game.population?.holdNamed?.(id);
 }
 
-/** Lucrio is taken away: out of the world, and kept out through a reload (the trigger below). */
+/** Pothinus is taken away: out of the world, and kept out through a reload (the trigger below). */
 function takeLucrio(q: QuestContext) {
   q.setFlag('tess-lucrio-taken', true);
   hold(q, LUCRIO);
@@ -128,7 +128,7 @@ export default defineQuest({
   giver: CURATOR,
   summary: 'Someone is selling false lead tokens for the grain dole. The curator would like the mould found, quietly.',
   // Deliberate deviation from the design: repeatable keeps the triggers live after the end, so they keep
-  // Lucrio out of the world once he has been taken away (holdNamed is not saved). Nothing restarts the quest.
+  // Pothinus out of the world once he has been taken away (holdNamed is not saved). Nothing restarts the quest.
   repeatable: true,
   stages: {
     start: {
@@ -137,17 +137,17 @@ export default defineQuest({
       next: 'curator',
     },
     curator: {
-      journal: 'Eutychus had paid six denarii for his token to a man with a lead-stained thumb who dices in the Subura after dark. They call him Lucrio. The curator of the dole turned him away without a hearing, but I thought he would want to know.',
+      journal: 'Eutychus had paid six denarii for his token to a man with a lead-stained thumb who dices in the Subura after dark. They call him Pothinus. The curator of the dole turned him away without a hearing, but I thought he would want to know.',
       objectives: [{ id: 'curator', text: 'Tell the curator of the dole (mornings, at the Porticus Minucia)', target: { kind: 'npc', id: CURATOR } }],
       next: 'lucrio',
     },
     lucrio: {
       journal: 'The curator could not be seen to ask, so he asked me, quietly: find the mould, and bring it to him. Twenty denarii and the thanks of every citizen who ever queued for grain.',
-      objectives: [{ id: 'find', text: 'Find Lucrio at the dice table in the Subura (evenings)', target: { kind: 'npc', id: LUCRIO } }],
+      objectives: [{ id: 'find', text: 'Find Pothinus at the dice table in the Subura (evenings)', target: { kind: 'npc', id: LUCRIO } }],
     },
     follow: {
       journal: 'I said nothing and watched him throw. When his lamp burned low he pocketed the dice and got up, and I went after him.',
-      objectives: [{ id: 'follow', text: 'Follow Lucrio home', target: { kind: 'npc', id: LUCRIO } }],
+      objectives: [{ id: 'follow', text: 'Follow Pothinus home', target: { kind: 'npc', id: LUCRIO } }],
       onEnter: (q) => {
         // He walks to his yard; with nobody to walk, the way there is enough.
         if (!walkTo(q.game, LUCRIO, 'lucrio-yard', 1.5)) q.setFlag('tess-follow-fallback', true);
@@ -169,7 +169,7 @@ export default defineQuest({
       onEnter: () => removeExamine('tess-moulds'),
     },
     'done-curator': {
-      journal: 'I gave the moulds to the curator. He broke them on the step with a mallet, one half and then the other, and had Lucrio taken away from the dice before the next watch. The dole will be clean for a month, he said. I did not ask about the month after.',
+      journal: 'I gave the moulds to the curator. He broke them on the step with a mallet, one half and then the other, and had Pothinus taken away from the dice before the next watch. The dole will be clean for a month, he said. I did not ask about the month after.',
       onEnter: (q) => {
         takeItem(q, MOULDS);
         takeLucrio(q);
@@ -202,7 +202,7 @@ export default defineQuest({
       if (e.dialogueId === 'dlg-tess-eutychus' && e.nodeId === 'eAccept' && !q.done) q.start('curator');
       // The curator, spoken to first by someone who knows (a notice) is handled while running.
     },
-    // Lucrio stays gone after a reload.
+    // Pothinus stays gone after a reload.
     'save:loaded': (q) => {
       if (q.flag('tess-lucrio-taken')) hold(q, LUCRIO);
     },
@@ -235,7 +235,7 @@ export default defineQuest({
     'location:entered': (q, e) => {
       if (e.locationId === 'lucrio-yard' && q.stage === 'follow') q.completeObjective('follow');
     },
-    // The examine point in the yard: the moulds, and a theft if someone sees (unless Lucrio said where they were).
+    // The examine point in the yard: the moulds, and a theft if someone sees (unless Pothinus said where they were).
     'content:interact': (q, e) => {
       if (e.id !== 'tess-moulds' || q.stage !== 'yard') return;
       giveItem(q, MOULDS);
@@ -245,7 +245,7 @@ export default defineQuest({
       }
       q.completeObjective('moulds');
     },
-    // Killed at the table, Lucrio still leaves a way to his yard.
+    // Killed at the table, Pothinus still leaves a way to his yard.
     'actor:killed': (q, e) => {
       if (e.victimId === LUCRIO && (q.stage === 'lucrio' || q.stage === 'follow')) {
         q.notify('Among his things: a pass-key and the address of a yard behind the lead-workers’ row.');

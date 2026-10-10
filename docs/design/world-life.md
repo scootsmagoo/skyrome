@@ -563,15 +563,17 @@ There is one bench: the **mortar**, for remedies (medicina). It is at:
 
 The bench card lists the recipes. Ones the player can make are enabled. Ones without the inputs are disabled with "You need …". Ones above the player's skill are greyed with "Medicina 20". Making one passes time, uses the inputs, gives XP and fires `life:crafted`.
 
-| Recipe | Inputs | Makes | Medicina | Hours | Where the inputs come from |
-|---|---|---|---|---|---|
-| `rec.mortar.fascia` | linteum* ×1 | fascia ×2 | 0 | 0.25 | Fuller |
-| `rec.mortar.posca` | acetum ×1, aqua ×1 | posca ×2 | 0 | 0.25 | Oil-seller, a fountain |
-| `rec.mortar.emplastrum` | mel, salvia, acetum | emplastrum ×3 | 10 | 0.5 | Cheese-seller, greengrocer |
-| `rec.mortar.collyrium` | ruta, acetum, mel | collyrium ×2 | 20 | 0.5 | Greengrocer |
-| `rec.mortar.febrifugum` | absinthium ×2, vinum, mel | febrifugum ×1 | 30 | 1 | Greengrocer, wine-seller |
-| `rec.mortar.soporificum` | papaver, mandragora | soporificum ×1 | 40 | 1 | Spice dealer |
-| `rec.mortar.theriaca` | myrrha, papaver, mel, ruta, allium, vinum-falernum | theriaca ×1 | 55 | 2 | Spice dealer and others |
+| Recipe | Inputs | Makes | Medicina | Hours | XP | Where the inputs come from |
+|---|---|---|---|---|---|---|
+| `rec.mortar.fascia` | linteum ×1 | fascia ×2 | 0 | 0.25 | 20 | Subura fuller |
+| `rec.mortar.posca` | acetum ×1, aqua ×1 | posca ×2 | 0 | 0.25 | 20 | Oil-seller or vintner (acetum), a fountain (aqua) |
+| `rec.mortar.emplastrum` | mel ×1, salvia ×1, acetum ×1 | emplastrum ×3 | 10 | 0.5 | 15 | Cheese-seller (mel), greengrocer (salvia), oil-seller or vintner (acetum) |
+| `rec.mortar.collyrium` | ruta ×1, acetum ×1, mel ×1 | collyrium ×2 | 20 | 0.5 | 15 | Greengrocer, oil-seller or vintner, cheese-seller |
+| `rec.mortar.febrifugum` | absinthium ×2, vinum ×1, mel ×2 | febrifugum ×1 | 30 | 1 | 15 | Greengrocer, wine-seller, cheese-seller |
+| `rec.mortar.soporificum` | papaver ×3, mandragora ×2 | soporificum ×1 | 40 | 1 | 10 | Spice dealer |
+| `rec.mortar.theriaca` | myrrha ×3, papaver ×2, mel ×2, ruta ×2, allium ×2, vinum-falernum ×2 | theriaca ×1 | 55 | 2 | 20 | Spice dealer, cheese-seller, greengrocer, wine-seller |
+
+The table follows `src/life/data/recipes/mortar.ts` and `mortar-fascia.ts`; the counts were raised from the first draft so that selling a craft back stays within the economy rule below.
 
 The recipes are simplified [G]; remedy-making itself is attested (Celsus book 5, Pliny *NH* 20) [A]. Fountains get a second option, "Fill a flask", which gives `aqua`. **Economy rule:** selling a craft back recovers its inputs plus a modest margin at most. The gain is XP and having the remedy when it is needed. A 30-day simulation test enforces this (§5.4). The crafting perks stay hidden. Do not flip `V01_SYSTEMS` in phase 2.
 
@@ -620,13 +622,13 @@ All six are offers found by walking about. They use `defineQuest` (`category: 'm
 - **Place:** the Baths of Titus, Crispina's doorway, the tombs on the Via Appia outside the Porta Capena.
 - **Hook:** bathing without the tip can cost the player their cloak. The quest starts on `life:option` with `detail.stolen`. There is also a rumour: "a cloak a day goes from the Titus."
 - **Steps:**
-  1. Ask Sabinus, the cloakroom attendant (*capsarius*; QUESTS I's own NPC, at the baths' side door h8 to h11). He shrugs.
+  1. Ask Nicanor, the cloakroom attendant (*capsarius*; QUESTS I's own NPC, at the baths' side door h8 to h11). He shrugs.
   2. At the next bathing hour, watch the cloakroom door (T to wait). A slave leaves with a bundle. Follow him (`walkTo`) to Crispina.
-  3. Crispina sells him out: Sabinus brings her one a day.
+  3. Crispina sells him out: Nicanor brings her one a day.
   4. Choose one:
-     - (a) Confront Sabinus: Rhetoric DC 40, or a fistfight. The cloak comes back, plus 5 den.
+     - (a) Confront Nicanor: Rhetoric DC 40, or a fistfight. The cloak comes back, plus 5 den.
      - (b) Report him to an officer of the vigiles at their night post. The prefect of the watch heard cases against *capsarii* who stole clothes at the baths (Digest 1.15.3.5) [A]. The cloak comes back, plus 8 den.
-     - (c) Have a curse tablet (`defixio`) written and push it into a tomb's libation pipe outside the Porta Capena. Three days later Sabinus is sick with a fever and the cloak hangs on the player's peg again. Nobody says why.
+     - (c) Have a curse tablet (`defixio`) written and push it into a tomb's libation pipe outside the Porta Capena. Three days later Nicanor is sick with a fever and the cloak hangs on the player's peg again. Nobody says why.
 - **Reward:** the cloak, 5 or 8 den., or the ambiguous ending.
 - **History:** curse tablets against bath thieves survive from Bath in Britain [A, outside Rome]. Curse tablets were put in graves [A].
 
@@ -639,9 +641,9 @@ All six are offers found by walking about. They use `defineQuest` (`category: 'm
 - **Steps:**
   1. Eutychus paid 6 den. "to a man with a lead-stained thumb who dices in the Subura".
   2. The curator of the dole (`keeper-minucia-curator`, `st-minucia-frumentatio` 0) quietly asks the player to find the mould.
-  3. At the dice table in the evening, find Lucrio. Persuade him, stake him at tali, or follow him home.
+  3. At the dice table in the evening, find Pothinus. Persuade him, stake him at tali, or follow him home.
   4. Take the moulds (`forma-tesserarum`, a quest item) from his yard. It is theft if someone sees.
-  5. Choose: give the moulds to the curator (20 den., Fama plebs +5; Lucrio is taken away), or sell them to Crispina if she exists (30 den., Infamia +5; a later rumour says the false tokens are still about).
+  5. Choose: give the moulds to the curator (20 den., Fama plebs +5; Pothinus is taken away), or sell them to Crispina if she exists (30 den., Infamia +5; a later rumour says the false tokens are still about).
 - **History:** the dole by token [A/P]. The forgery is invented [G].
 
 **Q5. Mercury's Water (`misc-mercuralia`), QUESTS II.**

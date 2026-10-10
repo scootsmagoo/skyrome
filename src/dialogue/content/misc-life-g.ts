@@ -40,7 +40,7 @@ const MOULDS = 'forma-tesserarum';
 const MEASURE = 'mensura-aedilicia';
 
 const opened = (c: DialogueContext) => completed(c, OPENING);
-/** Throws lost at Lucrio's table today (the count starts again with each game day). */
+/** Throws lost at Pothinus's table today (the count starts again with each game day). */
 const lostToday = (c: DialogueContext): number => (c.memory._lostDay === c.game.time.dayIndex ? Number(c.memory._lost) || 0 : 0);
 const proofs = (c: DialogueContext): string[] => {
   const v = questVar(c, SERVUS, 'proofs');
@@ -77,7 +77,7 @@ const eutychus = defineDialogue({
       next: 'e0',
     },
     eWho: {
-      text: 'A man at the dice in the Subura, by the popina on the Argiletum, after dark. A thumb as grey as a lead pipe. They call him Lucrio. He said he had a cousin on the list who could not collect, a good price for a quick sale. I am a fool.',
+      text: 'A man at the dice in the Subura, by the popina on the Argiletum, after dark. A thumb as grey as a lead pipe. They call him Pothinus. He said he had a cousin on the list who could not collect, a good price for a quick sale. I am a fool.',
       next: 'e0',
     },
     eAccept: {
@@ -93,7 +93,7 @@ const eutychus = defineDialogue({
       text: (c) =>
         stage(c, TESS) === 'curator'
           ? 'Have you spoken to the curator? He sits at the dole in the morning. Talk low.'
-          : 'Lucrio, at the dice, in the Subura. After dark. May the gods keep your purse closed.',
+          : 'Pothinus, at the dice, in the Subura. After dark. May the gods keep your purse closed.',
       end: true,
     },
     eThanks: {
@@ -143,10 +143,10 @@ const curator = defineDialogue({
     },
     cWhy: { text: 'Because the aediles also ask where my own accounts are kept. A man in my office has to be above question. Find me the mould, and I can be above it.', next: 'c0' },
     cAccept: {
-      text: 'Lucrio, they say. A lead-worker who dices in the Subura after dark. Do not frighten him; a frightened man melts his moulds. Bring them to me and I will break them where he can hear it.',
+      text: 'Pothinus, they say. A lead-worker who dices in the Subura after dark. Do not frighten him; a frightened man melts his moulds. Bring them to me and I will break them where he can hear it.',
       end: true,
     },
-    cWait: { text: 'The mould, citizen. Lucrio, in the Subura, at night. Do not come here with anything else.', end: true },
+    cWait: { text: 'The mould, citizen. Pothinus, in the Subura, at night. Do not come here with anything else.', end: true },
     cChoose: {
       text: '(He looks at your hands.) Well?',
       choices: [
@@ -155,7 +155,7 @@ const curator = defineDialogue({
       ],
     },
     cGive: {
-      text: '(He turns the grey halves over, sets one on the step and breaks it with his heel, then the other. He counts out twenty denarii into your palm.) The dole will be clean for a month. Lucrio will not be at the dice tonight, nor any night. You were never here.',
+      text: '(He turns the grey halves over, sets one on the step and breaks it with his heel, then the other. He counts out twenty denarii into your palm.) The dole will be clean for a month. Pothinus will not be at the dice tonight, nor any night. You were never here.',
       end: true,
     },
     cAfter: { text: (c) => rotate(c, 'cAfter', ['The tokens are hard and sharp again. Good.', 'You were never here. Quite right.']), end: true },
@@ -163,7 +163,7 @@ const curator = defineDialogue({
   },
 });
 
-// ------------------------------------------------------------------ Forged Tokens: Lucrio and the fence
+// ------------------------------------------------------------------ Forged Tokens: Pothinus and the fence
 
 const lucrio = defineDialogue({
   id: 'dlg-tess-lucrio',
@@ -206,8 +206,8 @@ const lucrio = defineDialogue({
     lThrow: {
       text: (c) =>
         c.memory._win
-          ? '(Four bones in the lamp: a one, a three, a four, a six. Venus! Lucrio stares at the cup, then at you, and for a moment nobody at the table breathes.)'
-          : '(Dogs. Two of them. Lucrio rakes the pot with a grin.) The gods love a loser, friend. Another?',
+          ? '(Four bones in the lamp: a one, a three, a four, a six. Venus! Pothinus stares at the cup, then at you, and for a moment nobody at the table breathes.)'
+          : '(Dogs. Two of them. Pothinus rakes the pot with a grin.) The gods love a loser, friend. Another?',
       choices: [
         { text: 'You owe me a word.', if: (c) => !!c.memory._win, goto: 'lStakeWin' },
         { text: 'Another time.', if: (c) => !c.memory._win, end: true },

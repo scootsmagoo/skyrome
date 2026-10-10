@@ -11,7 +11,8 @@
  *            `job:<job>:<step>`); { reach } on entering a location; { use } on an activity's option
  *   goods    a step's `give` is handed over as the step starts; what is left is taken back at the end
  *   daily    counted in the life save when the job starts (`store.today('job:<id>')`); offers stop
- *            at `def.daily`, and nothing is offered before the opening is done (STORY rule 2)
+ *            at `def.daily`, and nothing is offered before the opening is done
+ *            (STORY rule 3: side threads are offers; rule 2: the opening is left alone)
  *   variant  picked by the day the job starts (the same all day and through a save), kept for the
  *            whole job, past midnight too
  *   expiry   `limitHours` after the start, or the next `until` Roman hour (the bread round's h3);

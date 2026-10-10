@@ -5,7 +5,7 @@
  *
  *  - Weighted picks without replacement by an exponential race on a hash of (day, place, rumour):
  *    a rumour that drops out (its quest started) leaves the others where they were.
- *  - A hooked rumour (it offers a quest or job) shows only once mq-01 is done (STORY rule 2) and
+ *  - A hooked rumour (it offers a quest or job) shows only once mq-01 is done (STORY rule 3, rule 2) and
  *    only until its quest has started; a board shows at most 2 hooks a day.
  *  - Picks are cached for the game hour and dropped whenever a quest or flag changes.
  */
@@ -15,7 +15,7 @@ import { districtAt } from '../npc/crowd/districts';
 import { passes, questDone, questNotStarted } from './gates';
 import type { RumourDef, RumourKind } from './types';
 
-/** The opening (STORY rule 2): no hooks before it is done. */
+/** The opening (STORY rules 2 and 3): no hooks before it is done. */
 export const OPENING = 'mq-01-madida-capena';
 
 export interface RumourWhere {

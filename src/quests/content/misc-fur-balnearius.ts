@@ -4,19 +4,19 @@
  *
  * Bathing at the Baths of Titus without the tip can cost the player their cloak (rest.bathe's 15 %,
  * src/life/effects.ts): the quest starts on 'life:option' with `detail.stolen` once mq-02 is done, or
- * from a hooked notice or rumour before the player has lost anything. Sabinus is the capsarius, the
+ * from a hooked notice or rumour before the player has lost anything. Nicanor is the capsarius, the
  * cloakroom attendant at the baths' side door (13:10–16:45); the prefect of the watch heard cases
  * against capsarii who stole clothes at the baths (Digest 1.15.3.5) [A]; curse tablets against bath
  * thieves survive from Bath in Britain, and were put in graves [A, outside Rome].
  *
- *   start     ask Sabinus, who shrugs                                               → watch
+ *   start     ask Nicanor, who shrugs                                               → watch
  *   watch     at the next bathing hour (9th to 11th) be at the cloakroom door; a slave comes out with a
  *             bundle                                                                  → follow
- *   follow    follow him to Crispina's doorway; she tells who sends the cloaks: Sabinus, one a day → choose
- *   choose    (a) confront Sabinus: Rhetoric DC 40, or fists (stage fight)     → done-confront (5 den.)
+ *   follow    follow him to Crispina's doorway; she tells who sends the cloaks: Nicanor, one a day → choose
+ *   choose    (a) confront Nicanor: Rhetoric DC 40, or fists (stage fight)     → done-confront (5 den.)
  *             (b) report him to the optio of the vigiles at the night post       → done-report (8 den.)
  *             (c) have a curse tablet (defixio) written and push it into a tomb's libation pipe
- *                 outside the Porta Capena (stage curse): three days later Sabinus is sick and the
+ *                 outside the Porta Capena (stage curse): three days later Nicanor is sick and the
  *                 cloak hangs on the player's peg again; nobody says why                → done-curse
  *
  * (a) and (b) bring the cloak back (the player's own, or a spare if the quest began from a notice).
@@ -118,12 +118,12 @@ export default defineQuest({
   summary: 'A cloak a day goes from the pegs at the Baths of Titus.',
   stages: {
     start: {
-      journal: 'Cloaks go missing from the pegs at the Baths of Titus, a cloak a day, they say. Sabinus the capsarius keeps the cloakroom at the baths’ side door. He was the man to ask.',
-      objectives: [{ id: 'ask', text: 'Ask Sabinus, the cloakroom attendant (side door, 8th to 11th hour)', target: { kind: 'npc', id: SABINUS } }],
+      journal: 'Cloaks go missing from the pegs at the Baths of Titus, a cloak a day, they say. Nicanor the capsarius keeps the cloakroom at the baths’ side door. He was the man to ask.',
+      objectives: [{ id: 'ask', text: 'Ask Nicanor, the cloakroom attendant (side door, 8th to 11th hour)', target: { kind: 'npc', id: SABINUS } }],
       next: 'watch',
     },
     watch: {
-      journal: 'Sabinus shrugged. He said the pegs were the pegs and the gods looked after them. But someone was carrying cloaks out of that door, and I meant to see who. At the next bathing hour I would stand by the cloakroom door and wait (T).',
+      journal: 'Nicanor shrugged. He said the pegs were the pegs and the gods looked after them. But someone was carrying cloaks out of that door, and I meant to see who. At the next bathing hour I would stand by the cloakroom door and wait (T).',
       objectives: [{ id: 'door', text: 'Watch the cloakroom door at the Baths of Titus (9th to 11th hour)', target: { kind: 'location', id: DOOR } }],
       next: 'follow',
     },
@@ -145,16 +145,16 @@ export default defineQuest({
       next: 'choose',
     },
     choose: {
-      journal: 'Crispina told me where the cloaks go: Sabinus sends her one a day, never more. A confrontation, the vigiles, or a god. I had three roads to choose from.',
-      objectives: [{ id: 'deal', text: 'Deal with Sabinus: confront him, report him to the vigiles, or have a curse tablet written', target: { kind: 'npc', id: SABINUS } }],
+      journal: 'Crispina told me where the cloaks go: Nicanor sends her one a day, never more. A confrontation, the vigiles, or a god. I had three roads to choose from.',
+      objectives: [{ id: 'deal', text: 'Deal with Nicanor: confront him, report him to the vigiles, or have a curse tablet written', target: { kind: 'npc', id: SABINUS } }],
       onEnter: (q) => {
         tidy(q);
         placePipe(q.game, q);
       },
     },
     fight: {
-      journal: 'I told Sabinus I would have my cloak back, and not by asking. He put up his hands as a man does who has never fought for anything.',
-      objectives: [{ id: 'ko', text: 'Knock Sabinus down, or make him yield (fists)', target: { kind: 'npc', id: SABINUS } }],
+      journal: 'I told Nicanor I would have my cloak back, and not by asking. He put up his hands as a man does who has never fought for anything.',
+      objectives: [{ id: 'ko', text: 'Knock Nicanor down, or make him yield (fists)', target: { kind: 'npc', id: SABINUS } }],
       onEnter: (q) => {
         removePipe();
         const id = fight(q.game, SABINUS, 'ebrius-rixator', DOOR, { brawl: true, tags: [QUEST_ID], quest: QUEST_ID }, { x: 0, z: 1.5 });
@@ -162,7 +162,7 @@ export default defineQuest({
       },
     },
     curse: {
-      journal: 'I had Sabinus’s name and Mercury’s scratched on a lead tablet and pushed it into the libation pipe of a tomb outside the Porta Capena. Nothing happened. Nothing is supposed to happen for a while.',
+      journal: 'I had Nicanor’s name and Mercury’s scratched on a lead tablet and pushed it into the libation pipe of a tomb outside the Porta Capena. Nothing happened. Nothing is supposed to happen for a while.',
       objectives: [{ id: 'wait', text: 'Wait three days (T)' }],
       onEnter: (q) => {
         removePipe();
@@ -171,7 +171,7 @@ export default defineQuest({
       },
     },
     'done-confront': {
-      journal: 'Sabinus gave the cloak back, white to the lips, and five denarii from his own pouch on top of it, so that I would say nothing to anyone. I said nothing. I walked out of the Titus in my own cloak.',
+      journal: 'Nicanor gave the cloak back, white to the lips, and five denarii from his own pouch on top of it, so that I would say nothing to anyone. I said nothing. I walked out of the Titus in my own cloak.',
       onEnter: (q) => {
         returnCloak(q);
         q.giveReward({ denarii: 5 });
@@ -179,7 +179,7 @@ export default defineQuest({
       end: 'complete',
     },
     'done-report': {
-      journal: 'The optio wrote it all down on a wax tablet and sent two of his men round to the Titus. They came back with the cloak, and eight denarii that the prefect of the watch had Sabinus pay for the trouble. They say he is cleaning latrines now.',
+      journal: 'The optio wrote it all down on a wax tablet and sent two of his men round to the Titus. They came back with the cloak, and eight denarii that the prefect of the watch had Nicanor pay for the trouble. They say he is cleaning latrines now.',
       onEnter: (q) => {
         returnCloak(q);
         q.giveReward({ denarii: 8 });
@@ -187,7 +187,7 @@ export default defineQuest({
       end: 'complete',
     },
     'done-curse': {
-      journal: 'Three days later I heard that Sabinus was in his bed with a fever, and when I went by the Titus my cloak was hanging on my peg as if it had never been gone. Nobody said why. I did not ask.',
+      journal: 'Three days later I heard that Nicanor was in his bed with a fever, and when I went by the Titus my cloak was hanging on my peg as if it had never been gone. Nobody said why. I did not ask.',
       onEnter: (q) => {
         returnCloak(q);
         q.setFlag('bath-curse-ending', true);

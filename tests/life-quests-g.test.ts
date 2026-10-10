@@ -180,14 +180,14 @@ describe('misc-tesserae-falsae: Forged Tokens', () => {
     expect(subs[0]).toBe('Curator of the dole');
     expect(status(w, TESS)?.running ?? false).toBe(false); // a scene is not an acceptance
     talk(w, 'npc-eutychus-libertus', 'Who sold it to you?');
-    expect(w.rpg.dialogue.view!.text).toContain('Lucrio');
+    expect(w.rpg.dialogue.view!.text).toContain('Pothinus');
     pick(w, 'I’ll find out');
     expect(status(w, TESS)).toMatchObject({ running: true, stage: 'curator' });
     expect(w.rpg.inventory.count('tessera-falsa')).toBe(1);
     expect(w.rpg.quests.tracked).toBe(MAIN); // never takes the tracker from the main quest
   });
 
-  it('persuade Lucrio → the yard → the curator: 20 den., Fama plebs +5, Lucrio is taken away (through a reload)', () => {
+  it('persuade Pothinus → the yard → the curator: 20 den., Fama plebs +5, Pothinus is taken away (through a reload)', () => {
     const w = world();
     toLucrio(w);
     expect(status(w, TESS)).toMatchObject({ running: true, stage: 'lucrio' });
@@ -225,7 +225,7 @@ describe('misc-tesserae-falsae: Forged Tokens', () => {
     expect(talk(w, 'npc-eutychus-libertus')!.text).toContain('four denarii');
   });
 
-  it('stake Lucrio at tali: lose twice and the table closes; win once and he talks', () => {
+  it('stake Pothinus at tali: lose twice and the table closes; win once and he talks', () => {
     const w = world();
     toLucrio(w);
     fail(w);
@@ -254,7 +254,7 @@ describe('misc-tesserae-falsae: Forged Tokens', () => {
     expect(flag(w, 'tess-consent')).toBe(true);
   });
 
-  it('follow Lucrio home, take the moulds with a witness about: theft, then sell them to Crispina (30 den., Infamia +5, the tokens stay about)', () => {
+  it('follow Pothinus home, take the moulds with a witness about: theft, then sell them to Crispina (30 den., Infamia +5, the tokens stay about)', () => {
     const w = world();
     toLucrio(w);
     talk(w, 'npc-lucrio-plumbarius', 'Say nothing');
@@ -278,11 +278,11 @@ describe('misc-tesserae-falsae: Forged Tokens', () => {
     expect(w.rpg.inventory.denarii).toBe(before + 30);
     expect(w.rpg.standing.infamia).toBeGreaterThan(infamia);
     expect(flag(w, 'tokens-still-about')).toBe(true);
-    expect(w.held).toEqual([]); // Lucrio is still at his dice
+    expect(w.held).toEqual([]); // Pothinus is still at his dice
     expect(talk(w, 'npc-eutychus-libertus')!.text).toContain('still about');
   });
 
-  it('an unseen theft is no crime; killing Lucrio still leaves the way to the yard', () => {
+  it('an unseen theft is no crime; killing Pothinus still leaves the way to the yard', () => {
     const w = world();
     toLucrio(w);
     kill(w, 'npc-lucrio-plumbarius', ['dead']);

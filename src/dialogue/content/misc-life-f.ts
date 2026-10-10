@@ -150,32 +150,32 @@ const optio = person({
       next: 'hub',
     },
     reportSabinus: {
-      text: 'A capsarius at the Titus. Sabinus, would that be? Mm. We’ve had that name before. The prefect likes a case like this: he can be stern and tidy at once. Tell me all of it, slowly.',
+      text: 'A capsarius at the Titus. Nicanor, would that be? Mm. We’ve had that name before. The prefect likes a case like this: he can be stern and tidy at once. Tell me all of it, slowly.',
       next: 'reportSabinusDone',
     },
     reportSabinusDone: {
-      text: '(He writes it all down on a wax tablet and sends two of his men to the Titus. They are back within the hour with a hooded cloak, still smelling of the baths, and a pouch.) The cloak. And eight denarii that the prefect has Sabinus pay for the trouble, by my authority. He’ll not be a capsarius much longer.',
+      text: '(He writes it all down on a wax tablet and sends two of his men to the Titus. They are back within the hour with a hooded cloak, still smelling of the baths, and a pouch.) The cloak. And eight denarii that the prefect has Nicanor pay for the trouble, by my authority. He’ll not be a capsarius much longer.',
       next: 'hub',
     },
   },
 });
 
-// ------------------------------------------------------------------ Sabinus, the capsarius
+// ------------------------------------------------------------------ Nicanor, the capsarius
 
 const sabinus = person({
   id: 'npc-sabinus-capsarius',
   greet: (c) =>
     c.flag('bath-curse-ending')
       ? '(A grey, sweating man in a rumpled tunic, propped against the doorpost with a blanket round him. He looks at you as one looks at something that might not be there.) The cloakroom is… I’m not well. A fever. Three days. Don’t come near.'
-      : '(A slight man in a clean tunic, a ring of wooden pegs and tickets hanging from his belt.) Sabinus, capsarius. Cloaks, tunics, sandals, an as for the peg, and the gods watch over the rest. Tip the man at the door, citizen. It’s only an as.',
+      : '(A slight man in a clean tunic, a ring of wooden pegs and tickets hanging from his belt.) Nicanor, capsarius. Cloaks, tunics, sandals, an as for the peg, and the gods watch over the rest. Tip the man at the door, citizen. It’s only an as.',
   topics: [
     { ask: 'Do you like the baths?', say: 'It’s a job. Warm, at least, and nobody throws things at the cloakroom. A man could have worse.' },
-    { ask: 'You look unwell, Sabinus.', if: (c) => !!c.flag('bath-curse-ending'), say: '(He pulls the blanket tighter, though the sun is warm.) A fever. Three days of it, and I couldn’t tell you why. I’ve done nothing, nothing, I swear to Mercury. Do you think it was something I ate? It must have been something I ate.' },
+    { ask: 'You look unwell, Nicanor.', if: (c) => !!c.flag('bath-curse-ending'), say: '(He pulls the blanket tighter, though the sun is warm.) A fever. Three days of it, and I couldn’t tell you why. I’ve done nothing, nothing, I swear to Mercury. Do you think it was something I ate? It must have been something I ate.' },
     { ask: 'Anything lost and found?', say: 'Lost and found? Citizen, this is Rome. Found is a thing that happens to other people.' },
   ],
   choices: [
     {
-      text: 'Cloaks go missing from your pegs, Sabinus.',
+      text: 'Cloaks go missing from your pegs, Nicanor.',
       if: (c) => inStage(c, BATH, 'start'),
       goto: 'sabShrug',
     },
@@ -198,7 +198,7 @@ const sabinus = person({
       choices: [
         { text: 'The vigiles will want to know. Tell me, and I’ll hear you.', check: { skill: 'rhetoric', difficulty: 40, kind: 'persuade', label: 'Confront', pass: 'sabConfesses', fail: 'sabDenies' } },
         { text: 'I’ll have my cloak back, and not by asking.', goto: 'sabFight' },
-        { text: 'Never mind, Sabinus.', goto: 'hub' },
+        { text: 'Never mind, Nicanor.', goto: 'hub' },
       ],
     },
     sabDenies: {

@@ -1,7 +1,7 @@
 /**
  * People of the QUESTS II crew's side quests (docs/design/world-life.md §4.8 Q4-Q6):
  *
- *   Forged Tokens (misc-tesserae-falsae)    Eutychus the freedman, Lucrio the lead-worker
+ *   Forged Tokens (misc-tesserae-falsae)    Eutychus the freedman, Pothinus the lead-worker
  *   Mercury's Water (misc-mercuralia)       the aediles' clerk, three merchants at the spring
  *   Free by the God's Hand (misc-servus-aesculapii)
  *                                           Daos, the temple attendant Philo, the patient Cleon, the carter
@@ -40,7 +40,7 @@ const npcs: NpcDef[] = [
   },
   {
     id: 'npc-lucrio-plumbarius',
-    name: 'Lucrio',
+    name: 'Pothinus',
     title: 'Lead-worker, dicer',
     home: 'lucrio-yard',
     schedule: [

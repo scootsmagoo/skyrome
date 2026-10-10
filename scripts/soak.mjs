@@ -4,7 +4,14 @@
  * random reachable places, fighting a mugger every few minutes, quicksaving and loading — and
  * must not crash, log errors, or keep growing its memory (< 100 MB after a 5-minute warm-up).
  *
- *   node scripts/soak.mjs [--minutes 30] [--warmup 5] [--home 90] [--stuck stuck.json]
+ *   node scripts/soak.mjs [--minutes 30] [--warmup 5] [--home 90] [--stuck stuck.json] [--die-every 0]
+ *
+ * The bot survives dying: it notices the player is dead (the muggers it fights are real), logs
+ * it, and recovers within a tenth of a second, before the game's own 3 s death flow can put up
+ * its "Mortuus es" box: the Aesculapian rescue (heal, fifth of the purse, wake on the Tiber
+ * Island), then a teleport back to where the run started so the next trips go on as before. If
+ * that box is up anyway (a death during a load), it presses Load/Yes. --die-every M kills the
+ * player every M minutes to exercise this (default 0 = off).
  *
  * --home R keeps the bot's goals within R m of where it started (separates leaks from the city
  * streaming in new districts).
@@ -23,6 +30,7 @@ const args = parseArgs(process.argv.slice(2));
 const minutes = Number(args.minutes ?? 30);
 const warmup = Number(args.warmup ?? 5);
 const home = Number(args.home ?? 0);
+const dieEvery = Number(args['die-every'] ?? 0);
 
 const { createServer } = await import('vite');
 const port = await freePort();
@@ -33,7 +41,10 @@ const browser = await chromium.launch({ headless: true, args: ['--use-angle=meta
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(`[pageerror] ${String(e?.message ?? e)}`));
-page.on('console', (m) => m.type() === 'error' && errors.push(`[console] ${m.text()}`));
+page.on('console', (m) => {
+  if (m.type() === 'error') errors.push(`[console] ${m.text()}`);
+  else if (m.text().startsWith('[soak]')) console.log(m.text());
+});
 const cdp = await page.context().newCDPSession(page);
 let crashed = false;
 page.on('crash', () => (crashed = true));
@@ -44,10 +55,11 @@ await page.waitForFunction(() => window.__skyrome?.ready, null, { timeout: 12000
 console.log(`booted in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
 
 // The bot, in the page.
-await page.evaluate((home) => {
+await page.evaluate(([home, dieEvery]) => {
   const game = window.__skyrome.game;
   const p = game.player;
-  const s = (window.__soak = { trips: 0, fights: 0, saves: 0, loads: 0, minFps: 99, stuckTrips: 0 });
+  const s = (window.__soak = { trips: 0, fights: 0, saves: 0, loads: 0, minFps: 99, stuckTrips: 0, deaths: 0, recovered: 0, deathLog: [] });
+  const t00 = performance.now();
   let goal = null;
   let since = performance.now();
   let lastFight = performance.now();
@@ -55,6 +67,8 @@ await page.evaluate((home) => {
   let lastPos = p.position.clone();
   let still = 0;
   const start = p.position.clone();
+  const startYaw = p.yaw;
+  let lastDie = performance.now();
   const pick = () => {
     const g = game.population?.nav?.grid;
     for (let i = 0; i < 20; i++) {
@@ -72,6 +86,33 @@ await page.evaluate((home) => {
   setInterval(() => {
     const now = performance.now();
     s.minFps = Math.min(s.minFps, game.stats.fps || 99);
+    // Death: log, recover, carry on. (The mugger fight below can kill the player for real.)
+    const vit = p.sheet.vitals;
+    if (dieEvery && now - lastDie > dieEvery * 60000 && !vit.dead && game.flow?.state === 'playing') {
+      lastDie = now;
+      vit.damage(1e9, 'soak-test');
+    }
+    if (vit.dead) {
+      const at = p.position.toArray().map(Math.round).join(',');
+      const box = document.querySelector('.confirm-btns button');
+      if (box) {
+        // The death box is up (the flow got there first): Load, or Title when there is no save.
+        box.click();
+        s.deathLog.push({ min: Math.round((now - t00) / 600) / 100, at, how: 'box:' + box.textContent });
+      } else if (game.flow?.state === 'playing' && game.combat?.rescue) {
+        s.deaths++;
+        game.combat.rescue();
+        game.input.simulate('KeyF', false);
+        if (home) p.teleport(start, startYaw);
+        goal = null;
+        still = 0;
+        s.recovered++;
+        s.deathLog.push({ min: Math.round((now - t00) / 600) / 100, at, how: 'rescue' });
+        console.log(`[soak] player died at ${at}; rescued (${s.deaths} so far)`);
+      }
+      return;
+    }
+    if (game.flow && game.flow.state !== 'playing') return; // loading, spawning: nothing to steer
     // A fight every ~3 minutes: a mugger right ahead, fought with F until it drops.
     const foe = game.combat?.core.get('soak-foe');
     if (foe && foe.active) {
@@ -109,7 +150,7 @@ await page.evaluate((home) => {
     const c = Array.isArray(path) ? (path.find((q) => Math.hypot(q.x - p.position.x, q.z - p.position.z) > 1.2) ?? goal) : goal;
     p.yaw = Math.atan2(-(c.x - p.position.x), -(c.z - p.position.z));
   }, 100);
-}, home);
+}, [home, dieEvery]);
 
 const samples = [];
 const sample = async () => {
@@ -137,7 +178,7 @@ for (let m = 1; m <= minutes; m++) {
     break;
   }
   samples.push({ m, ...s });
-  console.log(`minute ${String(m).padStart(2)}: heap ${s.heap} MB · ${s.fps} fps · trips ${s.soak.trips} (stuck ${s.soak.stuckTrips}) · fights ${s.soak.fights} · saves ${s.soak.saves} loads ${s.soak.loads} · at ${s.pos.join(',')} · hp ${s.hp} · ${JSON.stringify(s.count)}`);
+  console.log(`minute ${String(m).padStart(2)}: heap ${s.heap} MB · ${s.fps} fps · trips ${s.soak.trips} (stuck ${s.soak.stuckTrips}) · fights ${s.soak.fights} · saves ${s.soak.saves} loads ${s.soak.loads} · deaths ${s.soak.deaths} (recovered ${s.soak.recovered}) · at ${s.pos.join(',')} · hp ${s.hp} · ${JSON.stringify(s.count)}`);
 }
 // NPC stuck report (NpcManager.stuckLog, one entry per unstick): where and against what.
 let stuck = null;

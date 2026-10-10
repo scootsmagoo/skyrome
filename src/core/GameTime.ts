@@ -85,6 +85,11 @@ export class GameTime {
     }
   }
 
+  /** Game hours from now until the clock next reads `hour` (0..24): 0 when it already does, never negative. */
+  hoursUntil(hour: number): number {
+    return (((hour - this.hour) % 24) + 24) % 24;
+  }
+
   /** Hour of day, 0..24 (fractional). */
   get hour(): number { return ((this.totalHours % 24) + 24) % 24; }
   /** Whole days since the start date. */

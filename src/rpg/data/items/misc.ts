@@ -16,7 +16,7 @@ export const TOOLS: ItemDef[] = [
   misc('tessera-theatralis', 'Theatre Token', 'tessera theatralis', 0.01, AS, 'A bone token for a seat at the theatre.'),
   misc('tali', 'Knucklebones', 'tali', 0.05, 4 * AS, 'Four sheep’s knucklebones. Dice games are illegal outside the Saturnalia.'),
   misc('fritillus', 'Dice Cup', 'fritillus', 0.1, 4 * AS, 'A turned-wood dice cup.'),
-  misc('piper', 'Black Pepper', 'piper nigrum', 0.33, 4, 'A libra of black pepper from India, stored in the Horrea Piperataria.', { tags: ['valuable', 'spice'] }),
+  misc('piper', 'Black Pepper', 'piper nigrum', 0.33, 4, 'A libra of black pepper from India, the dearest spice on any stall in the city.', { tags: ['valuable', 'spice'] }),
   misc('piper-album', 'White Pepper', 'piper album', 0.33, 7, 'A libra of white pepper.', { tags: ['valuable', 'spice'] }),
   misc('piper-longum', 'Long Pepper', 'piper longum', 0.33, 15, 'A libra of long pepper, the dearest kind (Pliny NH 12.28).', { tags: ['valuable', 'spice'] }),
   misc('argentum', 'Silver Plate', 'argentum', 0.6, 40, 'A silver dish chased with olive branches.', { tags: ['valuable'] }),
