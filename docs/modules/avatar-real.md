@@ -356,7 +356,9 @@ The garments (male / female):
 - **Weights**: the body's weights at each anchor, handed up the parent chain to the bones the garment may follow
   (`SPECS[id].bones`: a toga follows the left upper arm, not the right; a cloak both upper arms, not the forearms),
   smoothed over the garment, then below the hips blended into the **skirt rule** (hips, the thigh on its side, the shins
-  near the hem of long skirts; `skirtRule`), fully for skirt parts, partly (70 to 85 %) for drapery hanging over the legs.
+  near the hem of long skirts; `skirtRule`): skirt parts from their belt down, drapery over the legs from the crotch down
+  with the rule of the skirt it hangs over (a cloak or a man's palla the knee tunic's, a woman's palla the stola's, the
+  toga's mantle its wrap's), so the two layers move alike and the inner one never strides through the outer.
 - **Legs inside long cloth** (`legs` attribute + the shell material's vertex shader): each skirt vertex below the crotch
   knows the leg axis and radius at its height (measured on the person's body); after skinning it is pushed out of the
   posed thigh or shin capsule of both legs (bone matrices from the skeleton), so a stride presses the cloth forward
@@ -375,7 +377,9 @@ The garments (male / female):
 - Paint: at LOD 0 to 2 the body no longer paints a toga or stola that is baked (it paints the tunic under it);
   LOD 3 keeps the painted garments. `?cloth=procedural` turns the baked cloth off (A/B).
 - **Dark smears on light cloth** (the priest at the Lacus Curtius): the post chain's screen-space AO, darkening every
-  fold and casting halos from cloth edges onto the tunic and skin. Characters now write alpha 0 (avatarMaterial; the
-  body's A2C cloth keeps its alpha), and the AO pass neither darkens alpha-0 pixels nor counts them as occluders
-  (`gfx/post/ao.ts`, `shaders.ts`); their own occlusion is baked.
+  fold and casting halos from cloth edges onto the tunic and skin. Characters now write alpha 0 into the HDR target
+  (avatarMaterial, so classic avatars, real LOD 1 to 3 bodies, shells, head gear; the body's A2C cloth keeps its alpha)
+  while the post chain renders the scene (`AO_MARK`, a shared uniform PostFX sets around that one render: straight to the
+  canvas Safari would composite alpha 0 as black), and the AO pass neither darkens alpha-0 pixels nor counts them as
+  occluders (`gfx/post/ao.ts`, `shaders.ts`); their own occlusion is baked.
 - The head module's veil is left out when a baked toga velata exists (`head/gear.ts`, one line).

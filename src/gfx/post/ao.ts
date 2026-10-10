@@ -14,6 +14,13 @@
  * Medium (Settings → Display → Ambient occlusion).
  */
 
+/**
+ * 1 while the scene renders into the post chain's HDR target: character materials then write alpha 0 there, their
+ * mark for this pass (they neither take nor cast screen-space AO). Everywhere else (straight to the canvas) they
+ * keep alpha 1: Safari composites a canvas pixel of alpha 0 as black.
+ */
+export const AO_MARK = { value: 0 };
+
 export const AO_FRAG = /* glsl */ `
 uniform sampler2D tDepth;
 // The scene colour: alpha 0 marks characters (avatar materials), which neither take nor cast this AO.

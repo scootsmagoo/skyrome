@@ -186,7 +186,7 @@ function make(name: string, withCover: boolean): THREE.MeshStandardMaterial {
     base.onBeforeCompile(shader, renderer);
     patch(shader, withCover);
   };
-  m.customProgramCacheKey = () => `skyrome-${name}-v6`;
+  m.customProgramCacheKey = () => `skyrome-${name}-v7`;
   return m;
 }
 

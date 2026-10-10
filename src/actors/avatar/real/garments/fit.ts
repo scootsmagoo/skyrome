@@ -21,7 +21,7 @@ import { refRig } from '../refs';
 import type { BodyArrays } from '../morph';
 import type { RealContext } from '../types';
 import { fitGarment, type WeightPolicy } from './bind';
-import { boundGarment, hasBaked, registerGarmentRules, type BakedId, type BakedMesh, type GarmentRules } from './baked';
+import { boundGarment, coveredVertices, hasBaked, registerGarmentRules, type BakedId, type BakedMesh, type GarmentRules } from './baked';
 
 /** Pattern ids of the baked cloth in the avatar material's surf contract (see clothMaterial.ts). */
 export const PATTERN_BAKED_WOOL = 12;
@@ -127,7 +127,7 @@ const SPECS: Record<BakedId, Spec> = {
     bones: [...TORSO, 'neck', 'shoulderL', 'upperArmL', ...LEG_BONES],
     passes: 6,
     // Part 0 is the lower wrap (a skirt from the waist); every other part hangs free below the crotch.
-    skirt: (L) => ({ top: L.waist, hem: L.hemLong, legK: 0.58, shinK: 0.35, parts: [0], below: L.crotch, strength: 0.85 }),
+    skirt: (L) => ({ top: L.waist, hem: L.hemLong, legK: 0.58, shinK: 0.35, parts: [0], below: L.crotch, strength: 1 }),
     hide: ['hips', 'spine', 'chest', 'shoulderL', 'upperArmL', 'thighL', 'thighR', 'shinL', 'shinR'],
     hideMax: 0.12,
     hideAboveHem: (L) => 0.16 * L.s,
@@ -141,7 +141,7 @@ const SPECS: Record<BakedId, Spec> = {
     // The drape from the head also covers the right shoulder and upper arm.
     bones: [...TORSO, 'neck', 'head', 'shoulderL', 'upperArmL', 'shoulderR', 'upperArmR', ...LEG_BONES],
     passes: 6,
-    skirt: (L) => ({ top: L.waist, hem: L.hemLong, legK: 0.58, shinK: 0.35, parts: [0], below: L.crotch, strength: 0.85 }),
+    skirt: (L) => ({ top: L.waist, hem: L.hemLong, legK: 0.58, shinK: 0.35, parts: [0], below: L.crotch, strength: 1 }),
     hide: ['hips', 'spine', 'chest', 'shoulderL', 'upperArmL', 'thighL', 'thighR', 'shinL', 'shinR'],
     hideMax: 0.12,
     hideAboveHem: (L) => 0.16 * L.s,
@@ -154,7 +154,9 @@ const SPECS: Record<BakedId, Spec> = {
     rough: 0.94,
     bones: [...TORSO, 'neck', 'shoulderL', 'shoulderR', 'upperArmL', 'upperArmR', 'forearmL', ...LEG_BONES],
     passes: 6,
-    skirt: (L) => ({ top: L.hip, hem: L.hemLong, legK: 0.5, shinK: 0, below: L.crotch, strength: 0.7 }),
+    // Below the hips an outer layer moves exactly like the skirt it hangs over (the stola's rule for a woman, the
+    // tunic's for a man): with weaker leg weights the skirt underneath strode through it.
+    skirt: (L, sex) => (sex === 'female' ? { top: L.chest - 0.045 * L.s, hem: L.hemLong, legK: 0.62, shinK: 0.4, below: L.crotch, strength: 1 } : { top: L.belt, hem: L.hemKnee, legK: 0.6, shinK: 0, below: L.crotch, strength: 1 }),
     hide: ['spine', 'chest'],
     hideMax: 0.1,
     legs: true,
@@ -166,7 +168,7 @@ const SPECS: Record<BakedId, Spec> = {
     rough: 0.95,
     bones: [...TORSO, 'neck', 'shoulderL', 'shoulderR', 'upperArmL', 'upperArmR', ...LEG_BONES],
     passes: 8,
-    skirt: (L) => ({ top: L.hip, hem: L.hemKnee, legK: 0.45, shinK: 0, below: L.crotch, strength: 0.7 }),
+    skirt: (L) => ({ top: L.belt, hem: L.hemKnee, legK: 0.6, shinK: 0, below: L.crotch, strength: 1 }),
     hide: ['spine', 'chest'],
     hideMax: 0.12,
     legs: true,
@@ -178,7 +180,7 @@ const SPECS: Record<BakedId, Spec> = {
     rough: 0.95,
     bones: [...TORSO, 'neck', 'shoulderL', 'shoulderR', 'upperArmL', 'upperArmR', ...LEG_BONES],
     passes: 8,
-    skirt: (L) => ({ top: L.hip, hem: L.hemKnee, legK: 0.45, shinK: 0, below: L.crotch, strength: 0.7 }),
+    skirt: (L) => ({ top: L.belt, hem: L.hemKnee, legK: 0.6, shinK: 0, below: L.crotch, strength: 1 }),
     hide: [],
     hideMax: 0.1,
     legs: true,
@@ -190,7 +192,7 @@ const SPECS: Record<BakedId, Spec> = {
     rough: 0.92,
     bones: [...TORSO, 'neck', 'shoulderL', 'shoulderR', 'upperArmL', 'upperArmR', ...LEG_BONES],
     passes: 8,
-    skirt: (L) => ({ top: L.hip, hem: L.hemKnee, legK: 0.45, shinK: 0.2, below: L.crotch, strength: 0.7 }),
+    skirt: (L) => ({ top: L.belt, hem: L.hemKnee, legK: 0.6, shinK: 0, below: L.crotch, strength: 1 }),
     hide: [],
     hideMax: 0.1,
     legs: true,
@@ -379,7 +381,17 @@ export function fitBaked(rc: RealContext, plan: BakedPlan, outfit: Outfit = reso
     const count = m.position.length / 3;
     const position = new Float32Array(count * 3);
     const normal = new Float32Array(count * 3);
-    fitGarment(bg.binding, rc.body, bg.bodyIndex, { position, normal });
+    // A cloak worn over body armour stands off it: the armour's plates sit a few centimetres out from the skin.
+    let extra: Float32Array | undefined;
+    if (outfit.armor.body && (id === 'sagum' || id === 'lacerna' || id === 'paenula' || id === 'palla')) {
+      extra = new Float32Array(count);
+      const lo = L.hip - 0.06 * s;
+      for (let i = 0; i < count; i++) {
+        const y = m.position[i * 3 + 1] * (rc.rig.height / refRig(rc.sex).height);
+        extra[i] = 0.035 * s * Math.min(1, Math.max(0, (y - lo) / (0.12 * s)));
+      }
+    }
+    fitGarment(bg.binding, rc.body, bg.bodyIndex, { position, normal }, undefined, extra);
     for (let v = 0; v < n; v++) if (bg.hide[v]) hide[v] = 1;
     // Colours.
     const cloth = id.startsWith('tunic') ? outfit.tunic : id.startsWith('toga') ? outfit.toga : id === 'stola' ? outfit.stola : id === 'palla' ? outfit.palla : outfit.cloak;
@@ -442,10 +454,29 @@ export function fitBaked(rc: RealContext, plan: BakedPlan, outfit: Outfit = reso
       trim,
       clavus,
       legs: legsA,
-      index: Uint32Array.from(m.index),
+      index: visibleTriangles(m.index, layerMask(rc, plan, id)),
     });
   }
   return { garments, hide };
+}
+
+/** The layers worn over a garment of the plan (garments.py's UNDER table), or its own outer parts. */
+function layerMask(rc: RealContext, plan: BakedPlan, id: BakedId): Uint8Array | null {
+  if (id === 'toga' || id === 'toga_velata') return coveredVertices(rc.sex, id, rc.lod, [], 1);
+  const over = plan.ids.filter((o) => (id.startsWith('tunic') && o !== id && (o === 'paenula' || o === 'sagum' || o === 'lacerna' || o === 'palla')) || (id === 'stola' && o === 'palla'));
+  return over.length ? coveredVertices(rc.sex, id, rc.lod, over) : null;
+}
+
+/** The triangles not wholly under another layer. */
+function visibleTriangles(index: ArrayLike<number>, covered: Uint8Array | null): Uint32Array {
+  if (!covered) return Uint32Array.from(index);
+  const out: number[] = [];
+  for (let t = 0; t < index.length; t += 3) {
+    const a = index[t], b = index[t + 1], c = index[t + 2];
+    if (covered[a] && covered[b] && covered[c]) continue;
+    out.push(a, b, c);
+  }
+  return Uint32Array.from(out);
 }
 
 /** Per vertex: distance along the cloth (pattern u) to the nearest of the four clavi. */

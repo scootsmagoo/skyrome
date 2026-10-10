@@ -23,6 +23,7 @@
  * still read through their vertex color because metalness tops out below 1 for iron.
  */
 import * as THREE from 'three';
+import { AO_MARK } from '../../gfx/post/ao';
 
 let shared: THREE.MeshStandardMaterial | null = null;
 let flame: THREE.ShaderMaterial | null = null;
@@ -252,11 +253,12 @@ export function avatarMaterial(): THREE.MeshStandardMaterial {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0 });
   m.name = 'avatar';
   m.onBeforeCompile = (shader) => {
+    shader.uniforms.avMark = AO_MARK;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${VERT_PARS}`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>\n${VERT_MAIN}`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\n${FRAG_PARS}`)
+      .replace('#include <common>', `#include <common>\nuniform float avMark;\n${FRAG_PARS}`)
       .replace('#include <color_fragment>', `#include <color_fragment>\n${FRAG_PATTERN}\ndiffuseColor.rgb *= avTint * avTint3;\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.3, 0.25, 0.19), avDust);`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\nroughnessFactor = clamp(vSurf.x + avRough, 0.04, 1.0);`)
       .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>\nmetalnessFactor = (vPat < 2.5 || (vPat > 6.5 && vPat < 7.5)) ? vSurf.y : 0.0;`)
@@ -265,11 +267,12 @@ export function avatarMaterial(): THREE.MeshStandardMaterial {
         `#include <normal_fragment_maps>\nif (avBump > 0.0) { normal = av_perturb(-vViewPosition, normal, vec2(dFdx(avH), dFdy(avH)) * avBump, faceDirection); }`,
       )
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * (vPat < 0.5 ? vSurf.w : 0.0) * 3.0;`)
-      // Alpha 0 marks characters for the post chain: screen-space AO neither darkens them nor is cast by them
-      // (gfx/post/ao.ts); their folds and creases carry their own shading. Materials that need alpha keep it.
-      .replace('#include <opaque_fragment>', '#include <opaque_fragment>\n#ifndef AV_KEEP_ALPHA\ngl_FragColor.a = 0.0;\n#endif');
+      // Alpha 0 marks characters for the post chain (only while it renders the scene: AO_MARK): screen-space AO
+      // neither darkens them nor is cast by them (gfx/post/ao.ts); their folds and creases carry their own shading.
+      // Materials that need alpha keep it.
+      .replace('#include <opaque_fragment>', '#include <opaque_fragment>\n#ifndef AV_KEEP_ALPHA\ngl_FragColor.a *= 1.0 - avMark;\n#endif');
   };
-  m.customProgramCacheKey = () => 'skyrome-avatar-v6';
+  m.customProgramCacheKey = () => 'skyrome-avatar-v7';
   shared = m;
   return m;
 }

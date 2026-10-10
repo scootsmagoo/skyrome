@@ -432,7 +432,7 @@ const SOFT_PASSES = 8;
 
 /**
  * Evaluate a binding on a body with the same triangles (morphed): fitted positions and normals.
- * `scratch` (3n floats) avoids an allocation per fit.
+ * `scratch` (3n floats) avoids an allocation per fit; `extra` adds distance along the skin's normal per vertex.
  */
 export function fitGarment(
   b: Binding,
@@ -440,6 +440,7 @@ export function fitGarment(
   index: ArrayLike<number>,
   out: { position: Float32Array; normal: Float32Array },
   scratch = new Float32Array(b.n * 3),
+  extra?: Float32Array,
 ) {
   const bp = body.position;
   const nn = new Float32Array(3);
@@ -455,7 +456,8 @@ export function fitGarment(
     lerpNormal(body.normal, index, t, u, v, nn, 0);
     const n0x = b.n0[i * 3], n0y = b.n0[i * 3 + 1], n0z = b.n0[i * 3 + 2];
     rotateBetween(n0x, n0y, n0z, nn[0], nn[1], nn[2], b.tan[i * 3], b.tan[i * 3 + 1], b.tan[i * 3 + 2], out.position, i * 3);
-    const o = b.off[i];
+    // `extra`: more distance off the skin for this vertex (a cloak worn over armour).
+    const o = b.off[i] + (extra ? extra[i] : 0);
     const x = bp[a] * w + bp[bb] * u + bp[c] * v + nn[0] * o + out.position[i * 3];
     const y = bp[a + 1] * w + bp[bb + 1] * u + bp[c + 1] * v + nn[1] * o + out.position[i * 3 + 1];
     const z = bp[a + 2] * w + bp[bb + 2] * u + bp[c + 2] * v + nn[2] * o + out.position[i * 3 + 2];

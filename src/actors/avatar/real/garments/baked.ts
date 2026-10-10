@@ -181,3 +181,43 @@ export function boundGarment(sex: Sex, id: BakedId, lod: number, rules: GarmentR
   bound.set(k, b);
   return b;
 }
+
+// ------------------------------------------------------------------------------------------------ layers
+
+const covered = new Map<string, Uint8Array>();
+
+/**
+ * Vertices of a garment (or of its inner parts) lying well under another layer: a ray out along the vertex normal
+ * and four tilted ones all meet the outer cloth within 6 cm. Their triangles are dropped from the inner layer: they
+ * cannot be seen, and decimating the two layers apart lets a chord of the outer cloth dip under a fold of the inner
+ * one (a patch of the toga's wrap showed through its mantle). `outer` lists other garments worn over this one;
+ * `outerParts` instead takes this garment's own parts at or above that id (the toga's mantle over its wrap).
+ */
+export function coveredVertices(sex: Sex, id: BakedId, lod: number, outer: BakedId[], outerParts?: number): Uint8Array | null {
+  const k = `${key(sex, id, lod)}|${outer.join(',')}|${outerParts ?? ''}`;
+  let c = covered.get(k);
+  if (c) return c;
+  const inner = meshes.get(key(sex, id, lod));
+  if (!inner) return null;
+  const pos: number[] = [];
+  const idx: number[] = [];
+  const add = (m: BakedMesh, keepTri: (t: number) => boolean) => {
+    const base = pos.length / 3;
+    for (let i = 0; i < m.position.length; i++) pos.push(m.position[i]);
+    for (let t = 0; t < m.index.length / 3; t++) if (keepTri(t)) idx.push(base + m.index[t * 3], base + m.index[t * 3 + 1], base + m.index[t * 3 + 2]);
+  };
+  if (outerParts !== undefined) add(inner, (t) => inner.part[inner.index[t * 3]] >= outerParts);
+  for (const o of outer) {
+    const m = meshes.get(key(sex, o, lod));
+    if (m) add(m, () => true);
+  }
+  if (!idx.length) return null;
+  const grid = new TriGrid(new Float32Array(pos), idx, 0.04);
+  c = coverMask({ position: inner.position, normal: inner.normal, index: inner.index }, grid, {
+    maxDist: 0.06,
+    tilt: 0.5,
+    eligible: (v) => !inner.rim[v] && (outerParts === undefined || inner.part[v] < outerParts),
+  });
+  covered.set(k, c);
+  return c;
+}

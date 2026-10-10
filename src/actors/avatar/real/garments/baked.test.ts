@@ -12,7 +12,7 @@ import { B, computeRig } from '../../rig';
 import { morphBody, type BodyArrays } from '../morph';
 import { refRig } from '../refs';
 import { TriGrid, fitGarment } from './bind';
-import { boundGarment, hasBaked, loadBakedGarments, type BakedId } from './baked';
+import { boundGarment, coveredVertices, hasBaked, loadBakedGarments, type BakedId } from './baked';
 import { bakedPlan, fitBaked, rulesFor } from './fit';
 
 const root = new URL('../../../../../', import.meta.url).pathname;
@@ -154,6 +154,20 @@ describe('fitting baked garments to people', () => {
         expect(inside / g.count, `${g.id} vertices inside the body`).toBeLessThan(0.03);
       }
     });
+
+  it('inner layers lose only what lies close under an outer one', () => {
+    for (const [sex, id, outer, parts] of [
+      ['male', 'toga', [], 1],
+      ['male', 'tunic_knee', ['paenula'], undefined],
+      ['female', 'stola', ['palla'], undefined],
+    ] as const) {
+      const c = coveredVertices(sex, id, 0, [...outer], parts)!;
+      const n = c.reduce((a, x) => a + x, 0);
+      expect(n, `${sex} ${id}`).toBeGreaterThan(0);
+      // Never the outer parts themselves, and never most of the garment.
+      expect(n, `${sex} ${id}`).toBeLessThan(c.length * 0.6);
+    }
+  });
 
   it('a binding fitted back onto its own reference body returns the baked cloth', () => {
     const tpl = bodies.get('male')!;
