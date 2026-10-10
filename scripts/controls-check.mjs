@@ -397,7 +397,7 @@ async function runSuite(browser, browserName, preset) {
         return f && f.id === t.id ? f.label?.() ?? f.id : null;
       });
     }
-    if (!placed && !focus) return 'no one to talk to nearby: skipped';
+    if (!placed && !focus) expect(false, 'no stationary talker found nearby (the Forum should always have some)');
     expect(!!focus, `no interaction focus near ${placed} (3 tries)`);
     await k.press('KeyE');
     await wait(500);

@@ -97,6 +97,8 @@ await page.evaluate(([home, dieEvery]) => {
       const box = document.querySelector('.confirm-btns button');
       if (box) {
         // The death box is up (the flow got there first): Load, or Title when there is no save.
+        s.deaths++;
+        s.recovered++;
         box.click();
         s.deathLog.push({ min: Math.round((now - t00) / 600) / 100, at, how: 'box:' + box.textContent });
       } else if (game.flow?.state === 'playing' && game.combat?.rescue) {
