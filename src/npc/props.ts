@@ -716,3 +716,41 @@ export function makeMill(): { group: THREE.Group; animate: (dt: number) => void 
   animate(0);
   return { group, animate };
 }
+
+/**
+ * A shop's shutters (src/life: put up while the keeper is away): vertical boards slotted into a
+ * stone sill and held by two battens and a bar with a lock, as on the tabernae of Pompeii and
+ * Herculaneum (the grooved thresholds survive). 2.2 m wide, 1.7 m tall; the street side is +Z.
+ * Four materials, so four draw calls.
+ */
+export function makeShutters(): THREE.Group {
+  return cachedDressing('shutters', () => {
+    const m = M();
+    const parts: Part[] = [];
+    parts.push({ g: geo('shutterSill', () => new THREE.BoxGeometry(2.3, 0.08, 0.3)), m: m.stone, at: mat4(0, 0.04, 0) });
+    const board = geo('shutterBoard', () => new THREE.BoxGeometry(0.235, 1.6, 0.04));
+    for (let i = 0; i < 9; i++) parts.push({ g: board, m: i % 3 === 1 ? m.wood : m.woodDark, at: mat4(-0.98 + i * 0.245, 0.88, 0, 0, 0, (i % 4 - 1.5) * 0.004) });
+    const batten = geo('shutterBatten', () => new THREE.BoxGeometry(2.2, 0.1, 0.05));
+    parts.push({ g: batten, m: m.wood, at: mat4(0, 0.42, 0.04) }, { g: batten, m: m.wood, at: mat4(0, 1.38, 0.04) });
+    parts.push({ g: geo('shutterBar', () => new THREE.BoxGeometry(2.0, 0.06, 0.06)), m: m.iron, at: mat4(0, 0.95, 0.08) });
+    parts.push({ g: geo('shutterLock', () => new THREE.BoxGeometry(0.1, 0.12, 0.05)), m: m.iron, at: mat4(0.25, 0.95, 0.12) });
+    return mergeByMaterial(parts);
+  });
+}
+
+/**
+ * A market-day banner (src/life, the nundinae stalls): a dyed cloth with a saffron border hanging
+ * from a crossbar on a 3 m pole. The cloth faces +Z.
+ */
+export function makeBanner(): THREE.Group {
+  return cachedDressing('banner', () => {
+    const m = M();
+    const parts: Part[] = [];
+    parts.push({ g: geo('bannerPole', () => new THREE.CylinderGeometry(0.035, 0.045, 3.1, 6)), m: m.woodDark, at: mat4(0, 1.55, 0) });
+    parts.push({ g: geo('bannerBar', () => new THREE.CylinderGeometry(0.02, 0.02, 0.95, 5)), m: m.woodDark, at: mat4(0.42, 2.95, 0, 0, 0, Math.PI / 2) });
+    parts.push({ g: geo('bannerCloth', () => new THREE.BoxGeometry(0.8, 1.15, 0.02)), m: m.clothRed, at: mat4(0.45, 2.32, 0) });
+    parts.push({ g: geo('bannerHem', () => new THREE.BoxGeometry(0.8, 0.09, 0.025)), m: m.clothSaffron, at: mat4(0.45, 1.78, 0) });
+    parts.push({ g: geo('bannerBase', () => new THREE.CylinderGeometry(0.2, 0.24, 0.12, 8)), m: m.woodDark, at: mat4(0, 0.06, 0) });
+    return mergeByMaterial(parts);
+  });
+}

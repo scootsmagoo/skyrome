@@ -29,7 +29,7 @@ export type BayKind = ShopKind | 'closed';
 
 /** What the fascia of each trade says (Latin shop signs). */
 const SIGNS: Record<ShopKind, string[]> = {
-  thermopolium: ['Thermopolium'],
+  thermopolium: ['Popina'], // the word of AD 113 (world-life Appendix A.2), not 'thermopolium'
   bakery: ['Pistrinum'],
   fullonica: ['Fullonica'],
   cobbler: ['Sutor'],

@@ -269,7 +269,8 @@ export class Hud {
     if (this.clockVisible) {
       const rh = romanHour(game.time.hour);
       setText(this.clockHour, `${rh.latin} · ${formatClock(game.time.hour)}`);
-      setText(this.clockDate, game.time.formatRoman());
+      // Market days (the nundinae, every 8th day) are named on the date line (world-life.md §4.3).
+      setText(this.clockDate, game.barter?.isMarketDay() ? `${game.time.formatRoman()} · Nundinae` : game.time.formatRoman());
       setText(this.clockPlace, sources.currentLocation?.() ?? '');
     }
 

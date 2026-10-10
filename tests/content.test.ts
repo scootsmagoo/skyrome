@@ -16,6 +16,7 @@ import { isSolidLandmark, solidLandmarkAt } from '../src/content/ground';
 import { SPAWN_INSIDE } from '../src/game/GameFlow';
 import { GOLDEN_PATH_LENGTH, onPath, projectOnPath } from '../src/content/route';
 import { thingPoint } from '../src/content/install';
+import { LIFE } from '../src/life/registry';
 import { SHRINES } from '../src/content/shrines';
 import { THINGS } from '../src/content/things';
 import { ALL_WALL_TEXTS, TEXT_ITEMS, WALL_TEXTS } from '../src/content/texts';
@@ -42,7 +43,10 @@ const dialogues = loadDialogueContent();
 const moduleItems = [...questModules(), ...dialogueModules()].flatMap((m) => m.items ?? []);
 const moduleNpcs = [...questModules(), ...dialogueModules()].flatMap((m) => m.npcs ?? []);
 const npcs: NpcDef[] = [...loadNpcContent(), ...moduleNpcs];
-const npcIds = new Set(npcs.map((n) => n.id));
+// Phase 2: keepers (src/life) are named people too, and quest modules export their own places.
+const npcIds = new Set([...npcs.map((n) => n.id), ...LIFE.keepers.map((k) => k.id)]);
+const questPlaces = new Set(questModules().flatMap((m) => m.locations ?? []).map((l) => l.id));
+const knownPlace = (id: string) => isKnownPlace(id) || questPlaces.has(id);
 const itemIds = new Set([...ITEMS, ...moduleItems].map((d) => d.id));
 const skillIds = new Set(SKILLS.map((s) => s.id));
 const factionIds = new Set(FACTIONS.map((f) => f.id));
@@ -136,7 +140,7 @@ describe('quests', () => {
         for (const o of s.objectives ?? []) {
           const t = o.target;
           if (!t) continue;
-          if (t.kind === 'location') expect(isKnownPlace(t.id) || t.id.startsWith('interior:'), `${q.id}/${o.id} → place ${t.id}`).toBe(true);
+          if (t.kind === 'location') expect(knownPlace(t.id) || t.id.startsWith('interior:'), `${q.id}/${o.id} → place ${t.id}`).toBe(true);
           if (t.kind === 'npc') expect(npcIds.has(t.id), `${q.id}/${o.id} → npc ${t.id}`).toBe(true);
           if (t.kind === 'item') expect(itemIds.has(t.id), `${q.id}/${o.id} → item ${t.id}`).toBe(true);
         }
@@ -158,7 +162,7 @@ describe('quests', () => {
       ];
       // `dun-*` ids are interior cells: the world side registers them (docs/CONTENT.md §1.4). Markers
       // `interior:<cell>:<spot>` are resolved by the interiors module (src/world/interiors).
-      for (const id of places) expect(isKnownPlace(id) || id.startsWith('dun-') || id.startsWith('interior:'), `${file}: place ${id}`).toBe(true);
+      for (const id of places) expect(knownPlace(id) || id.startsWith('dun-') || id.startsWith('interior:'), `${file}: place ${id}`).toBe(true);
       for (const id of all(/(?:giveItem|takeItem|hasItem)\(q, '([a-z0-9-]+)'/g, text)) expect(itemIds.has(id), `${file}: item ${id}`).toBe(true);
       const dlg = all(/dialogueId [!=]== '([a-z0-9-]+)'/g, text);
       for (const id of dlg) expect(dialogueById.has(id), `${file}: dialogue ${id}`).toBe(true);
@@ -274,14 +278,14 @@ describe('NPCs', () => {
 
   it('live in known places, with schedules in order and patrol routes of known places', () => {
     for (const n of npcs) {
-      if (n.home) expect(isKnownPlace(n.home), `${n.id} home ${n.home}`).toBe(true);
+      if (n.home) expect(knownPlace(n.home), `${n.id} home ${n.home}`).toBe(true);
       let prev = -1;
       for (const e of n.schedule ?? []) {
-        expect(isKnownPlace(e.at), `${n.id} schedule ${e.at}`).toBe(true);
+        expect(knownPlace(e.at), `${n.id} schedule ${e.at}`).toBe(true);
         expect(e.from, `${n.id} schedule order`).toBeGreaterThan(prev);
         expect(e.from).toBeLessThan(24);
         prev = e.from;
-        for (const r of e.route ?? []) expect(isKnownPlace(r), `${n.id} route ${r}`).toBe(true);
+        for (const r of e.route ?? []) expect(knownPlace(r), `${n.id} route ${r}`).toBe(true);
         if (e.activity === 'patrol') expect(e.route?.length, `${n.id} patrol route`).toBeGreaterThan(1);
       }
     }
@@ -378,7 +382,7 @@ describe('items and texts', () => {
     expect(WALL_TEXTS.length).toBeGreaterThanOrEqual(20);
     expect(ALL_WALL_TEXTS.length).toBeGreaterThanOrEqual(30);
     for (const w of ALL_WALL_TEXTS) {
-      expect(isKnownPlace(w.at), `${w.id} at ${w.at}`).toBe(true);
+      expect(knownPlace(w.at), `${w.id} at ${w.at}`).toBe(true);
       expect(w.source.length, w.id).toBeGreaterThan(5);
     }
   });
@@ -501,7 +505,7 @@ describe('the golden path is populated', () => {
   it('lights it: lamps at the gate, the shrines, the stations and the shops, and every ~45 m of street', () => {
     const lamps = lampSpecs();
     expect(lamps.length).toBeGreaterThanOrEqual(60);
-    for (const l of lamps) if (typeof l.at === 'string') expect(isKnownPlace(l.at), `lamp at ${l.at}`).toBe(true);
+    for (const l of lamps) if (typeof l.at === 'string') expect(knownPlace(l.at), `lamp at ${l.at}`).toBe(true);
     const along = lamps.filter((l) => typeof l.at !== 'string').map((l) => (l.at as { d: number }).d);
     for (let d = 100; d < GOLDEN_PATH_LENGTH - 100; d += 20) expect(Math.min(...along.map((x) => Math.abs(x - d))), `a lamp near d=${d}`).toBeLessThanOrEqual(30);
   });
@@ -514,7 +518,7 @@ describe('street containers, shrines and texts', () => {
     const ids = CONTAINERS.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const c of CONTAINERS) {
-      if (typeof c.at === 'string') expect(isKnownPlace(c.at), `${c.id} at ${c.at}`).toBe(true);
+      if (typeof c.at === 'string') expect(knownPlace(c.at), `${c.id} at ${c.at}`).toBe(true);
       else expect(Math.abs(c.at.side), c.id).toBeLessThanOrEqual(10);
       expect(lootTable(c.table), `${c.id} table ${c.table}`).toBeTruthy();
       if (c.key) expect(itemIds.has(c.key), `${c.id} key`).toBe(true);
@@ -531,7 +535,7 @@ describe('street containers, shrines and texts', () => {
     const ids = SHRINES.map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const id of ['compitum-capenae', 'compitum-circi', 'compitum-vici-tusci', 'compitum-velabri', 'compitum-boarii', 'compitum-acili']) expect(ids, id).toContain(id);
-    for (const s of SHRINES) expect(isKnownPlace(s.id), s.id).toBe(true);
+    for (const s of SHRINES) expect(knownPlace(s.id), s.id).toBe(true);
   });
 });
 
