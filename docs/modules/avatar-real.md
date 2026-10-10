@@ -335,7 +335,7 @@ The garments (male / female):
 
 | id | what | pinned | parts |
 |---|---|---|---|
-| `toga` | Imperial toga: the lower wrap to the instep; the mantle hung from the toga line (over the left shoulder, down across the back to under the right arm, back up across the chest), its front free between the right hip and the left shoulder so it sags into the **sinus**; over the left arm; to the calves behind; the **lacinia** hanging down the front from the left shoulder | the toga line (not its front), the wrap's waist | 0 wrap, 1 mantle, 2 lacinia |
+| `toga` | Imperial toga: the lower wrap to the instep; the mantle hung from the toga line (over the left shoulder, down across the back to under the right arm, back up across the chest), its front free between the right hip and the left shoulder so it sags into the **sinus**; over the left arm; to the calves behind (a lacinia hanging down the front from the left shoulder is in the script, off: `--set=lacinia=1`) | the toga line (not its front), the wrap's waist | 0 wrap, 1 mantle |
 | `toga_velata` | the same toga **capite velato** (priests, sacrificants): the line runs from the left shoulder up beside the cheek, over the brow, down the right side of the head to the right shoulder, then across the chest; the hood falls over the head and down the back, the right shoulder is covered | the line round the face and across the chest | 0 wrap, 1 mantle |
 | `tunic_short/knee/long` | the tunic below the belt (cone cut) and the kolpos falling over the belt | belt line, the kolpos's top | 0 skirt, 1 kolpos |
 | `stola` (f) | high-belted under the bust to the instep (linen, fine folds), a short bodice and two straps | belt, bodice top, straps | 0 skirt, 1 bodice, 2 straps |
@@ -387,10 +387,12 @@ The garments (male / female):
   the ribs (upper-arm vertices inward of the arm's axis, from 11 cm below the armpit up) take the torso's rules, so
   the tunic runs on under the arm instead of stopping at the sleeve's hem.
 
-**Budget** (triangles per garment at LOD 0 / 1 / 2, including the hem rims; `baked.test.ts` holds them under
-4500 / 2400 / 520): toga 3753 / 2005 / 420, toga velata 3820 / 2003 / 459, knee tunic 2656 / 1417 / 299, short
-2377 / 1299 / 260, long 3001 / 1581 / 339 (woman's 3044 / 1600 / 339), stola 3404 / 1840 / 380, palla 3144-3157 / 1680-1709 /
-360, paenula 3032 / 1612 / 359, sagum 2693 / 1489 / 320, lacerna 2925 / 1580 / 340. Triangles of an inner layer lying
+**Budget** (triangles per garment at LOD 0 / 1 / 2, including the hem rims on LOD 0 and 1; `baked.test.ts` holds them
+under 4500 / 2400 / 520): toga 3920 / 1905 / 420, toga velata 4336 / 2055 / 460, knee tunic 2928 / 1417 / 299, short 2626 /
+1299 / 260, long 3344 / 1581 / 339 (woman's 3284 / 1600 / 339), stola 3860 / 1840 / 380, palla 3344-3392 / 1753-1773 / 359,
+paenula 3168 / 1612 / 359, sagum 2756 / 1520 / 320, lacerna 3020 / 1580 / 340 (C3a's procedural shells: about 1440 for a
+toga, 1650 for a matron, 1850 with a cloak, at LOD 0 and 1). LOD 0 keeps its hems at nearly full resolution (they
+decimate last); `--relod` rebuilds the LODs from the kept simulation without simulating again. Triangles of an inner layer lying
 under an outer one are dropped (about 100 of the toga's wrap). LOD 0 is drawn within 9 m only, so the Forum's totals
 did not move (`perf.mjs --views forum`, procedural against baked: 899/2.58M 711/2.13M 725/2.12M 805/2.25M draws/triangles
 against 897/2.58M 713/2.12M 719/2.09M 796/2.22M; geometry +6 MB; the GLBs are 1.5 MB + 0.5 MB). Binding all garments at
@@ -398,8 +400,8 @@ load costs about 0.4 s (spread between frames); a person's LOD 0 fit about 1.7 m
 
 **Known limits** (C3a-2): a sprint still lifts the back calf out below a long hem (it shows in the under-tunic's painted
 colour) and a knee at full stride can dent a stola's front; the cloth is skinned drape, with no secondary motion (the
-sinus swings with the hips); the toga has no separate umbo pouch; the lacinia and the palla's end hang as crumpled
-bands; the stola reads as straight organ-pipe folds; tunic skirts flare a little at the sides where the simulation had
+sinus swings with the hips); the toga has no separate umbo pouch and no lacinia (simulated, it crumpled into a ragged band and was left out); the
+palla's end hangs as a crumpled band; the sagum bulges forward over the belly; the stola reads as straight organ-pipe folds; tunic skirts flare a little at the sides where the simulation had
 the arms swung out; beyond 55 m (LOD 3) the painted body garments return (a toga becomes white legs), as before; women's
 togas and cloaks and men's stolas stay procedural (no role wears them); the shadow pass does not push the cloth out of the
 legs. A simulation is chaotic: a small change to garments.py can change a drape completely (it is deterministic for the

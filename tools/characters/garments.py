@@ -49,6 +49,10 @@ TAG = next((a.split('=', 1)[1] for a in A if a.startswith('--tag=')), '')
 NO_EXPORT = '--no-export' in A
 KEEP = '--keep' in A
 EXPORT_ONLY = '--export-only' in A
+# --relod: rebuild the LODs (and rims) from the settled cloth kept in .cache/garments/<sex>_<id>.blend, no simulation.
+RELOD = '--relod' in A
+KIND = {'toga': 'wool', 'toga_velata': 'wool', 'palla': 'wool', 'paenula': 'wool_light', 'sagum': 'wool', 'lacerna': 'wool_light',
+        'stola': 'linen', 'tunic_short': 'tunic', 'tunic_knee': 'tunic', 'tunic_long': 'tunic'}
 RES = SET.get('res', 0.012)
 OUT = os.path.join(ROOT, 'public', 'models', 'garments')
 WORK = os.path.join(ROOT, '.cache', 'garments')
@@ -332,7 +336,7 @@ class Cloth:
 
 MATERIALS = {
     # Heavy wool (toga, palla, cloaks): broad soft folds.
-    'wool': dict(mass=0.3, tension=22, compression=22, shear=8, bending=15, air=6.0, damping=12, thick=0.006, smooth=4),
+    'wool': dict(mass=0.3, tension=22, compression=22, shear=8, bending=15, air=6.0, damping=12, thick=0.006, smooth=7),
     # The toga's lower wrap: the same wool, hanging in long soft pipes.
     'wool_wrap': dict(mass=0.4, tension=22, compression=22, shear=8, bending=4, air=3.0, damping=12, thick=0.006, smooth=3),
     # Light wool (lacerna).
@@ -499,19 +503,54 @@ def set_attr_uv(ob, layer, comp, values):
             uv.data[li].uv = (c[0], values[lp.vertex_index])
 
 
-def decimate_copy(ob, name, tris):
+def decimate_copy(ob, name, tris, keep_hems=1.0):
+    """Collapse-decimate a copy of `ob` to about `tris` triangles; boundary vertices (hems) weighted to go last."""
     me = ob.data.copy()
     o2 = bpy.data.objects.new(name, me)
     bpy.context.scene.collection.objects.link(o2)
     cur = sum(len(p.vertices) - 2 for p in me.polygons)
     if tris < cur:
+        bnd = set()
+        bm = bmesh.new()
+        bm.from_mesh(me)
+        for e in bm.edges:
+            if e.is_boundary:
+                bnd.add(e.verts[0].index)
+                bnd.add(e.verts[1].index)
+        bm.free()
+        g = o2.vertex_groups.new(name='hem')
+        g.add(list(bnd), 1.0, 'REPLACE')
+        ratio = tris / cur
+        for _ in range(5):
+            d = o2.modifiers.new('Dec', 'DECIMATE')
+            d.decimate_type = 'COLLAPSE'
+            d.ratio = ratio
+            d.use_collapse_triangulate = True
+            if keep_hems > 0:
+                # Hems decimate last: a collapsed boundary turns a clean edge into a saw.
+                d.vertex_group = 'hem'
+                d.invert_vertex_group = True
+                d.vertex_group_factor = keep_hems * 10.0
+            dg = bpy.context.evaluated_depsgraph_get()
+            ev = o2.evaluated_get(dg)
+            got = len(ev.to_mesh().polygons)
+            ev.to_mesh_clear()
+            o2.modifiers.clear()
+            if got <= tris * 1.06:
+                break
+            ratio *= tris / got
         d = o2.modifiers.new('Dec', 'DECIMATE')
         d.decimate_type = 'COLLAPSE'
-        d.ratio = tris / cur
+        d.ratio = ratio
         d.use_collapse_triangulate = True
+        if keep_hems > 0:
+            d.vertex_group = 'hem'
+            d.invert_vertex_group = True
+            d.vertex_group_factor = keep_hems * 10.0
         dg = bpy.context.evaluated_depsgraph_get()
         me2 = bpy.data.meshes.new_from_object(o2.evaluated_get(dg))
         o2.modifiers.clear()
+        o2.vertex_groups.clear()
         o2.data = me2
     triangulate(o2)
     return o2
@@ -1112,8 +1151,8 @@ def toga(body, velata=False):
         lc = drape_piece(body, 'lacinia', 2, lac, lambda sf: (1.18 - 0.1 * sf) * s, hull, gather=1.15, flare=1.25, clear=0.05, pleat=0.07, seed=5,
                          slope=1.2, extra_out=lambda sf: (0.0, -6.0, 0.0))
         lc.border = lambda u, v, lc=lc: u
-        if not velata:
-            # (Under a veil the drape from the head covers where it would hang.)
+        if not velata and SET.get('lacinia', 0) > 0:
+            # (Left out: crumpled into a ragged band, it spoilt the left side; the mantle already falls there.)
             cl.add(lc)
         return cl, dict(kind='wool', frames=240, abduct={} if velata else {'R': 45}, pin_stiffness=3.0, inflate_head=0.012 if velata else 0.0)
 
@@ -1358,6 +1397,21 @@ def join(objs, name):
     return ob
 
 
+def make_lods(sim, gname, kind):
+    """LOD 0..2 by collapse decimation of the settled cloth (hems decimated last), turned rims on LOD 0 and 1."""
+    lods = []
+    tris = LOD_TRIS.get(gname, (3000, 1500, 400))
+    thick = MATERIALS[kind]['thick']
+    for k, t in enumerate(tris):
+        o = decimate_copy(sim, f'{gname}_lod{k}', t, keep_hems=SET.get('keep_hems', 0.15) if k == 0 else 0.0)
+        if k < 2:
+            add_rim(o, thick)
+        o.data.validate()  # drops the sim's pin weights (the mesh no longer has vertex groups)
+        lods.append(o)
+        log(f'  lod{k}: {len(o.data.polygons)} triangles, {len(o.data.vertices)} vertices')
+    return lods
+
+
 def build_garment(sex, gname):
     body = Body(sex)
     global UNDER_PTS
@@ -1419,16 +1473,8 @@ def build_garment(sex, gname):
     for o in under:
         bpy.data.objects.remove(o, do_unlink=True)
     set_attr_uv(sim, 'attr', 1, ao)
-    lods = []
-    tris = LOD_TRIS.get(gname, (3000, 1500, 400))
-    thick = MATERIALS[kind]['thick']
-    for k, t in enumerate(tris):
-        o = decimate_copy(sim, f'{gname}_lod{k}', t)
-        if k < 2:
-            add_rim(o, thick)
-        o.data.validate()  # drops the sim's pin weights (the mesh no longer has vertex groups)
-        lods.append(o)
-        log(f'  lod{k}: {len(o.data.polygons)} triangles, {len(o.data.vertices)} vertices')
+    sim['kind'] = kind
+    lods = make_lods(sim, gname, kind)
     if PREVIEW:
         for o in lods:
             o.hide_render = True
@@ -1458,7 +1504,23 @@ def main():
     built in parallel processes with --keep and merged afterwards with --export-only."""
     for sex in SEXES:
         names = [g for g in GARMENTS[sex] if not ONLY or g in ONLY]
-        if not EXPORT_ONLY:
+        if RELOD:
+            for g in names:
+                p = os.path.join(WORK, f'{sex}_{g}.blend')
+                if not os.path.exists(p):
+                    continue
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                with bpy.data.libraries.load(p) as (src, dst):
+                    dst.objects = [n for n in src.objects if n == f'{g}_hi']
+                hi = dst.objects[0]
+                bpy.context.scene.collection.objects.link(hi)
+                log(f'{sex}/{g}: LODs again')
+                lods = make_lods(hi, g, hi.get('kind', KIND[g]))
+                tmp = p + '.tmp.blend'
+                bpy.ops.wm.save_as_mainfile(filepath=tmp)
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                os.replace(tmp, p)
+        elif not EXPORT_ONLY:
             for g in names:
                 lods, hi = build_garment(sex, g)
                 if NO_EXPORT:
