@@ -210,14 +210,17 @@ export class StreetNav {
     return out.reverse();
   }
 
-  /** A node with a link (a cut node, or one the city left without a street, leads nowhere). */
-  private readonly linked = (n: StreetNode) => this.adj[n.i].length > 0;
+  /** Not a node cut out by `drop` (a route never starts or ends on one: it would find no way out). */
+  private readonly notCut = (n: StreetNode) => !this.cut.length || !this.cut.some((c) => c.i === n.i);
 
-  /** Waypoints (game x/z) from a point to a point along the streets, or null. */
+  /**
+   * Waypoints (game x/z) from a point to a point along the streets, or null. (A node the city left without a
+   * link can still be the nearest: no route then, and the caller heads straight there, as it always has.)
+   */
   path(ax: number, az: number, bx: number, bz: number): { x: number; z: number }[] | null {
     if (this.empty) return null;
-    const a = this.nearest(ax, az, 120, this.linked);
-    const b = this.nearest(bx, bz, 120, this.linked);
+    const a = this.nearest(ax, az, 120, this.notCut);
+    const b = this.nearest(bx, bz, 120, this.notCut);
     if (!a || !b) return null;
     const r = this.route(a.i, b.i);
     if (!r) return null;
