@@ -646,7 +646,7 @@ All six are offers found by walking about. They use `defineQuest` (`category: 'm
 
 **Q5. Mercury's Water (`misc-mercuralia`), QUESTS II.**
 - **Place:** Mercury's spring by the Porta Capena (a quest location); the aediles' clerk by the Temple of Ceres; a new oil-dealer's post at the Forum Boarium (`st-life-boarium-olearius`).
-- **When:** offered from 10 May. During Act I that means through the existing Fadia topic, a notice and a cry. It plays out on **15 May**, which can only be reached after mq-04, once the date runs. If missed, it is offered again a year later (GDD §11.1).
+- **When:** offered from 11 May (the start of the game, matching §5.4). During Act I that means through the existing Fadia topic, a notice and a cry. It plays out on **15 May**, which can only be reached after mq-04, once the date runs. If missed, it is offered again a year later (GDD §11.1).
 - **Steps:**
   1. From dawn to h3, merchants come to the spring with jars and laurel. The player can do the rite: "Dip a laurel and sprinkle yourself" (1 as) gives religio XP 25 and Pietas +2.
   2. Overhear the oil-dealer Lucius Septimius praying hardest to wash away "the short measure". Ovid's merchant asks Mercury to forgive his past lies and bless his future ones (*Fasti* 5.673–692) [A].

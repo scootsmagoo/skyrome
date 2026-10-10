@@ -109,6 +109,8 @@ function doleScene(q: QuestContext) {
 
 /** Keep a named NPC out of the world (the population module's holdNamed; a no-op without it). */
 function hold(q: QuestContext, id: string) {
+  // Deliberately unguarded and the release is dropped: the hold is permanent, and a load may have rebuilt
+  // the population, so it is taken again on every save:loaded. Repeat holds of one id only stack harmlessly.
   q.game.population?.holdNamed?.(id);
 }
 
@@ -125,7 +127,8 @@ export default defineQuest({
   category: 'misc',
   giver: CURATOR,
   summary: 'Someone is selling false lead tokens for the grain dole. The curator would like the mould found, quietly.',
-  // Triggers stay live after the end: they keep Lucrio out of the world once he has been taken away.
+  // Deliberate deviation from the design: repeatable keeps the triggers live after the end, so they keep
+  // Lucrio out of the world once he has been taken away (holdNamed is not saved). Nothing restarts the quest.
   repeatable: true,
   stages: {
     start: {

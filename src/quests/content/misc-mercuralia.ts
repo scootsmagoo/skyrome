@@ -210,7 +210,8 @@ export default defineQuest({
       // The merchants go home at the third hour.
       if (!springHours(q)) clearScene(q);
     },
-    // ... or when the player walks away from the water: Septimius is wanted at his stall.
+    // ... or when the player walks away after the overhearing: Septimius is wanted at his stall. While the
+    // stage is still 'spring' the cast stays put, so a short step out of the crowd does not undo the scene.
     'location:exited': (q, e) => {
       if (e.locationId === CROWD && q.stage !== 'spring') clearScene(q);
     },
