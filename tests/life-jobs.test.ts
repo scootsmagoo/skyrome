@@ -449,3 +449,34 @@ describe('a step whose person isn’t in the game', () => {
     expect(expireJobs(game)).toBe(0);
   });
 });
+
+describe('a job’s notice on a board', () => {
+  it('is noted down only while the giver could offer the job (the board skips none of its rules)', async () => {
+    const { game, rpg, life } = await world(12);
+    finishOpening(game);
+    /** Open the Subura board on a day its card shows the bread round's notice; the notice's choices. */
+    const noticeChoices = () => {
+      for (let d = 0; d < 24; d++) {
+        if (life.open('act.subura.board')) {
+          const i = rpg.dialogue.view!.choices.findIndex((c) => c.text.startsWith('“The baker'));
+          if (i >= 0) return rpg.dialogue.choose(i)!.choices.map((c) => c.text);
+          rpg.dialogue.end();
+        }
+        game.time.advanceHours(24);
+      }
+      return null;
+    };
+    // At noon the bread round isn't offered (v4 to h1): the notice can be read, not noted down.
+    const noon = noticeChoices();
+    expect(noon).not.toBeNull();
+    expect(noon).not.toContain('Note it down.');
+    rpg.dialogue.end();
+    // At the fourth watch the baker would offer it, and so does his notice.
+    game.time.advanceHours((3.5 - game.time.hour + 24) % 24);
+    expect(offerable(game, jobRuntime(BREAD)!.def)).toBe(true);
+    const night = noticeChoices();
+    expect(night).toContain('Note it down.');
+    rpg.dialogue.choose(0);
+    expect(game.quests.status(BREAD)?.running).toBe(true);
+  });
+});
