@@ -488,6 +488,8 @@ export function realBodyOf(avatar: unknown): RealBody | undefined {
 }
 
 export class RealBody {
+  /** Faces and hands move (A/B switch for measuring: `avatar.real.constructor.faces = false` in the console). */
+  static faces = true;
   private entry: Entry;
   private lod: number;
   private avatar: HumanoidAvatar | null = null;
@@ -693,7 +695,7 @@ export class RealBody {
     const av = this.avatar;
     if (!av) return;
     if (this.lod <= 2) updateCorrectives(av.mesh, av.bones);
-    const near = this.lod === 0;
+    const near = this.lod === 0 && RealBody.faces;
     // Faces and hands only move at LOD 0 (the skin shader that bends them and the eyes are only there):
     // farther out, one last pass hands the bones back their plain curl and zeroes the parameters.
     if (!near && !this.alive) return;

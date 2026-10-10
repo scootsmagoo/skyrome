@@ -15,7 +15,7 @@
  * Deformation (the skin material at LOD 0): two vertex attributes say which joint chain a vertex follows,
  * with the pivots in the bind pose and the weights (`aDef0` = pivot 1 and -(channel + 0.99 weight), stored
  * negative so a geometry without the attribute (read as w = 1) stays still; `aDef1` = pivot 2 and weight 2). Channels: 1 to 3 the left fingers, index and thumb, 4 to 6 the right, 7 the jaw. A finger
- * bends at its middle joint (pivot 1) and its end joint (pivot 2, 0.7 of the middle's angle); the thumb
+ * bends at its middle joint (pivot 1) and its end joint (pivot 2, 0.75 of the middle's angle); the thumb
  * swings about its base (pivot 1) toward the palm and bends at its end joint (pivot 2); the jaw turns
  * about its hinge (pivot 1) around the x axis. The knuckles stay with the bones (anim/hands.ts).
  */

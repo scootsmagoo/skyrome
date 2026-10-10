@@ -33,7 +33,7 @@ avatar.dispose();                 // when the NPC despawns (Actor.dispose/setAva
 
 // NPC schedules:
 avatar.setIdleLoop('sit');        // 'stand' | 'sit' | 'sitGround' | 'lean' | 'work' | 'sweep' | 'talk' | 'pray' | 'sleep' | 'cheer' | 'guard' | 'drunk'
-avatar.lookAt(otherHead);         // head/neck track a world point (dialogue)
+avatar.lookAt(otherHead);         // head/neck (and the eyes of a real body) track a world point; kept by reference, so a point the caller moves is followed
 ```
 
 For the player, pass the avatar to `setupPlayer(game, pos, heading, avatar)`. First person works
@@ -184,6 +184,28 @@ axis lines up with a direction); a few correction passes keep the grip within ab
 - The first-person sword hand (see below).
 
 Swords and spears sit diagonally in the fist (`WEAPON_INFO.gripTilt`), the way real grips do.
+
+**Hands and faces of the realistic bodies (wave 3, C3b).** After each animation step the real body
+(`RealBody.updateCorrectives`, called from `HumanoidAvatar.update`) runs two small drivers at LOD 0:
+
+- `anim/hands.ts` (`HandDriver`): the clips curl each hand with one angle per finger bone, authored for the
+  old block hand. It is shared out over the knuckle (the bone, rewritten), the middle and the end joints
+  (bent in the skin shader, `real/deform.ts`). Holding something (weapon or shield in hand, torch, net,
+  two-handed grip) the knuckles open up and the middle joints close so the fingers wrap the handle; an empty
+  hand closes into a fist; a negative curl straightens the relaxed curl of the bind pose. The thumb swings over
+  the fingers. A pose the animation did not refresh is not remapped twice (it remembers what it wrote).
+- `anim/face.ts` (`FaceDriver`): blinks every 2 to 6 s (about 130 ms, an occasional double blink, a blink
+  with big eye jumps; every face on its own clock), the jaw while speaking (`speak(text)`: a syllable per
+  vowel group at about 4.5 a second, pauses at word gaps and punctuation), and the gaze (toward the look-at
+  target in the head's frame within limits, idle glances otherwise). `debugBlink` / `debugJaw` hold a value
+  for screenshots.
+
+Who speaks: `real/faces.ts` (`installFaces(game)`, from boot.ts) gives every subtitle (`ui:subtitle`: barks,
+guards, the director's lines) to the nearest person of that name within 30 m, and every NPC dialogue line
+(`game.dialogue.onChange`) to that NPC; the jaw rests when the player answers or leaves.
+
+Look-at: `AnimationController.lookAt` keeps the point by reference (it used to copy it once, so a head
+turned toward where the player had been when the look began); `NpcManager` moves the point every frame.
 
 `onHit` fires at the impact time and `onEnd(interrupted)` fires on completion or replacement.
 Action clocks and their events run every frame (`AnimationController.advance`), also for distant

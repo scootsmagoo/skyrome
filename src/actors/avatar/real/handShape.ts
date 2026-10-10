@@ -12,8 +12,8 @@
  *   reshapeHand   unsplays the fingers into a gentle fan, bakes a relaxed cascade (each finger a little
  *                 more curled than the last, at the knuckle, the middle and the end joint), lays the thumb
  *                 along the index finger and re-weights the fingers to their own bones;
- *   handDeform    per-vertex data for the grip in the shader (real/deform.ts): which finger, the middle and
- *                 end joints' pivots and how much of each joint a vertex follows.
+ *   handPlans     where the joints end up (the pivots of the grip in the shader, real/deform.ts); the
+ *                 reshape also records which digit each vertex belongs to (HandParts).
  *
  * Coordinates: character space of the reference rig (+x = the figure's left, +y up, +z forward). The
  * palms face the thighs (left palm -x) and the thumbs point forward (+z) in the bind pose.

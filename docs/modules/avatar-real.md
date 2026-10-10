@@ -80,7 +80,7 @@ and does not prove. Per body: about 2 draw calls at LOD 0/1 (body, eyes), 1 at L
   sculpt's open armpit (arms 22 degrees closer to the torso than sculpted). Fixed in wave 2 by the pose-space
   correctives below.
 - Fingers are rigid per bone group (4 fingers on `fingers`, index on `index`, thumb on the hand) and keep the
-  sculpt's slight splay; grips look like blocks.
+  sculpt's slight splay; grips look like blocks. *(Fixed in wave 3, see "Wave 3: hands and faces" below.)*
 - The head pivots at the game's mouth-level joint, not at the skull base.
 - Skin has no albedo painting (one tint plus blotches); ears and nose have no back-lighting term (no thickness map).
 - Ages: `child` and `old` only scale the adult mesh (no proportions, no wrinkles).
@@ -232,3 +232,50 @@ collapse with the bone, a sleeve folds to the stump).
 scales, thinner limbs and a belly for the old, `rig.stoop` for the animation layer). A real age blend wants two more
 shape keys in the pipeline (old: sagging, thinner torso and calves; child: rounder trunk, no adult musculature) and
 blending them in `morph.ts`; the extension point is `BodyArrays.morphs`.
+
+
+## Wave 3: hands and faces (C3b)
+
+**Why the hands were rigid and splayed.** Measured on the GLB: the sculpt's fingers fan out over 11 cm at the tips
+(index 38 degrees forward, little finger 10 degrees back), the thumb stands 45 degrees off the palm, the fingers are
+straight, and the weights are wrong (the middle finger is on `index`, the ring finger half on `index`). The curl
+poses (anim/poses.ts) then rotated those straight, fanned blocks at the knuckle only.
+
+**The relaxed hand** (`real/handShape.ts`, at load, every template LOD before LOD 3 is made):
+- `measureHand` finds the four fingers on LOD 0: components of the hand below the knuckle line (vertices welded across
+  UV seams), an axis per finger by PCA, the knuckle at the centre of the finger where it leaves the palm, its length
+  and radius; the thumb's tip (farthest forward) and a base by the wrist.
+- `reshapeHand` gives each vertex to its nearest finger (so fingers part cleanly at the webs) and re-poses them:
+  a gentle fan about the hand's own line (+5, +1, -3, -7 degrees), knuckles evenly spaced, a relaxed cascade baked in
+  (knuckle 0/3/6/10, middle joint 20/25/29/33, end joint 10/13/15/17 degrees from index to little finger), the thumb
+  laid along the index finger (22 degrees from it) and turned 18 degrees in front of the palm with its joints a little
+  bent; normals and tangents turn with them. Weights: the index finger on `index`, the other three on `fingers`
+  (blending into `hand` over the knuckle), the thumb and palm on `hand`. It records which digit each vertex is and
+  where along it (`HandParts`), for the grip.
+
+**Moving joints without bones** (`real/deform.ts`). The rig has 25 bones and no room for more, and morph targets would
+cost about 3 MB per LOD 0 geometry. Instead:
+- a parameter channel: three.js sizes a skeleton's bone texture to 12 x 12 texels (36 matrices), so slot 25 is free.
+  `paramsOf(skeleton)` is a 16-float view of it (jaw, blinks, gaze, each hand's middle-joint curls and thumb), written
+  by RealBody every frame at LOD 0 and read by every skinned material on that skeleton with `getBoneMatrix(25.0)`;
+- two vertex attributes on the LOD 0 body (`aDef0`, `aDef1`: pivots in the bind pose, channel and weights; the code is
+  stored negative so a geometry without them, read as w = 1, stays still) say which chain a vertex follows: finger
+  middle and end joints (pivots at the placed joints, carried to each rig like the vertices), the thumb (swing about
+  its base, its end joint), the jaw (about its hinge). `patchDeform` adds the bend to a skinned standard material's
+  vertex shader before skinning (position, normal, tangent); the skin material and the hair material (beards ride the
+  jaw) use it. `deformPoint` is the same maths on the CPU for the tests. Cost: 32 bytes per LOD 0 vertex, nothing
+  per frame beyond 16 floats in a texture three uploads anyway.
+- **Contract for whoever changes the skeleton update (C3c):** keep the bone texture at least 26 matrices and do not
+  overwrite floats 400..415 of `skeleton.boneMatrices`; RealBody sets `boneTexture.needsUpdate` when it writes them.
+
+**Face** (head/faceRig.ts, see avatar-real-head.md): the jaw's vertices and hinge and the lid opening, measured once per
+template. Blinks and gaze are drawn by the eye shader; the jaw bends the skin (and a beard) in the vertex shader.
+
+**LOD 3 heads**: `clusterDecimate` takes a per-bone cell scale; the head uses `REAL_HEAD_CELL` (0.45), so it keeps a
+skull, ears, a face and a chin (56 triangles instead of a 10-triangle wedge, at the same 300 for the body). The far mesh
+has no hair (head objects stop at LOD 2), so RealBody paints the crown in the hair's colour (a helmet's metal, a veil's
+cloth) on LOD 3 (`farHead`).
+
+**Cost** (Forum at 10:00, M4 Max, in-page timing of `updateCorrectives`): 0.6 microseconds per LOD 0 avatar per frame
+(was 0.07: correctives only), 0.025 per far avatar (unchanged; far avatars skip the face and hands). Draws and triangles
+unchanged (900 / 2.58 M in the worst direction, 898 / 2.58 M before).

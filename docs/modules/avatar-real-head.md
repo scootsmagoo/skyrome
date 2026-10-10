@@ -49,9 +49,54 @@ veiled/vestal 1584 / 624 / 312 (+ veil), beard short 2264 / 584 / 496, full 3392
 ## Known limits
 
 - Hair is cards: no hair physics (a tail follows the head and neck bones only), no shadow casting from the cards.
-- The painted face is procedural per pixel: no pupils-to-lid interaction (no blinking), the mouth stays slightly open
-  as sculpted. Faces are the two sculpts, varied only by paint and the rig's head scale.
+- Faces are the two sculpts, varied only by paint and the rig's head scale. (Blinks, the jaw and the eyes' gaze
+  came in wave 3, below.)
 - Beards and hairlines: the cap fades through a density ramp (noise thresholded in hairMaterial.ts); card roots start inside the dense part of the cap so no flat card roots float over skin. A dark full beard still has a fairly hard outer silhouette along the jaw. Painted skin variants are trimmed FIFO beyond 96 (skin.ts); C2a's crowd cache should still key on look.
 - `hairConfig.ts` holds the alpha-to-coverage switch so main.ts does not import hair code at boot.
 - The helmets and veil are the wave-1 designs unchanged (a murmillo's visor is big on the real head).
 - In the avatars scene the pale patches on the cheek are the 60 m sun shadow map (see avatar-real.md), not the paint.
+
+
+## Wave 3 (C3b): faces alive, eyes, beards
+
+**The paint was in the wrong place for most people (fixed).** Since wave 2 the head is measured on the body already
+morphed to the rig, but `measureHead` still used the reference eye centres and `makeSkinPaint` subtracted the
+REFERENCE head joint from in-rig heights. Everyone not 1.75 m (man) or 1.62 m (woman) had the lips, nose, brows and
+hairline painted centimetres off: a short woman got the hair-root stipple over her whole upper face (the "dark mask"),
+men their lip line on the chin. Now `measureHead(body, sex, rig)` carries the reference eyes into the rig, `HeadSurface`
+has `kRef` (the head's scale against the reference, whatever it was measured on), and the paint is relative to the
+rig's head joint in the reference head's metres. A test morphs both bodies to 1.45 and 1.92 m and checks the paint
+lands within 4 mm of the reference.
+
+Paint polish: the hair roots are a fine stipple over a few millimetres at the hairline (no blotches); forehead lines
+are soft furrows; the nose is less red; the inside of the mouth is dark and matte (seen when the jaw opens).
+
+**faceRig.ts** (measured once per body template, reference pose):
+- `measureJaw`: the vertices below the mouth line (the line drops toward the jaw line beside the mouth, so the cheeks
+  stay), the chin, the jaw's underside and the lower half of the mouth's inside, with their weights; the hinge in front
+  of the ear canal (`jawHinge`).
+- `measureLids`: rays from the eye's centre through the face's triangles give, across the eye (azimuth -70 to +70
+  degrees), the elevations of the upper and lower lid edges (the male eye opens from about +18 to -35 degrees on its
+  axis; corners closed).
+- `beardJawAttributes`: the same jaw for beard cards (below the mouth line, in front of the ears; the moustache stays).
+
+**Eyes** (real/skin.ts `eyeMaterial(iris, skin, lids, key)`, a `MeshPhysicalMaterial`):
+- lids painted on the eyeball from the lid table: above the upper edge / below the lower one the ball is lid skin,
+  so a blink lowers the upper edge to meet the lower one (which rises a little); the upper lid follows the eyes down;
+- the shadow of the upper lid and lashes on the top of the ball, darker corners, a lash fringe along the upper edge
+  (denser outward) and a faint lower one;
+- the iris and pupil turn with the gaze (the lids stay with the head);
+- a clear coat (the tear film) over a slightly rough sclera, a catchlight from the sky, matte lid skin.
+Blink and gaze come from the avatar's parameter slot (real/deform.ts); a baked head piece (gore) keeps open eyes.
+
+**Beards**: the cap and cards are laid on the face's own skin (the four nearest head vertices of the morphed body,
+pushed out along their normals) instead of the head's polar table, which is the outermost silhouette and left the beard
+a centimetre off the jaw like a slab. They ride the jaw (`aDef0` on the hair geometry; the hair material carries the
+deformation).
+
+**Hair**: the stipple at the cap's edge no longer leaves lone square specks on the forehead (the sparse end of the
+fade is cut, the painted roots carry the edge). Curly-short curls lie closer to the scalp, smaller and denser.
+
+Known limits: the lids are painted on the ball (the lid mesh itself does not move; at 0.5 m the closed lid is a smooth
+skin-coloured bulge with the lashes where the lids meet, which reads right); the gaze is the same for both eyes (no
+convergence); the Trajanic tower's curls (orbis comarum) are still flat coils; a full beard's lower edge is still hard.
