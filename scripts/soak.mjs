@@ -94,6 +94,7 @@ await page.evaluate(([home, dieEvery]) => {
     }
     if (vit.dead) {
       const at = p.position.toArray().map(Math.round).join(',');
+      // Only reached while the player is dead, so this is the death box ('Mortuus es'), not any confirm.
       const box = document.querySelector('.confirm-btns button');
       if (box) {
         // The death box is up (the flow got there first): Load, or Title when there is no save.

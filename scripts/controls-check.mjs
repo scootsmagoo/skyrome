@@ -366,9 +366,12 @@ async function runSuite(browser, browserName, preset) {
     await wait(700);
     const after = new Map((await talkers()).map((t) => [t.id, t]));
     const still = before.filter((t) => { const u = after.get(t.id); return u && Math.hypot(u.x - t.x, u.z - t.z) < 0.03 && Math.abs(u.y - t.y) < 0.03; });
+    const MAXTRY = 6;
+    let tries = 0;
     let placed = null;
     let focus = null;
-    for (let attempt = 0; attempt < Math.min(4, still.length) && !focus; attempt++) {
+    for (let attempt = 0; attempt < Math.min(MAXTRY, still.length) && !focus; attempt++) {
+      tries++;
       const want = still[attempt].id;
       placed = await ev((id) => {
         const g = window.__skyrome.game;
@@ -398,10 +401,14 @@ async function runSuite(browser, browserName, preset) {
       });
     }
     if (!placed && !focus) expect(false, 'no stationary talker found nearby (the Forum should always have some)');
-    expect(!!focus, `no interaction focus near ${placed} (3 tries)`);
-    await k.press('KeyE');
-    await wait(500);
-    const t1 = await top();
+    expect(!!focus, `no interaction focus near ${placed} (${tries} tries)`);
+    // E can land in the frame the target changes tier; press again (up to 3 times) while focus holds.
+    let t1 = null;
+    for (let e = 0; e < 3 && t1 !== 'dialogue'; e++) {
+      await k.press('KeyE');
+      await wait(500);
+      t1 = await top();
+    }
     expect(t1 === 'dialogue', `E opened ${t1}`);
     const moving = await ev(() => window.__skyrome.game.input.enabled);
     expect(!moving, 'gameplay input still enabled in dialogue');
