@@ -10,7 +10,6 @@
  * seats stay 1:1.
  */
 import * as THREE from 'three';
-import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { LANDMARK_BY_ID, LANDMARKS, ROADS } from '../../../data/atlas';
 import { Draw } from '../../../arch/fabric/draw';
 import { roof as tileRoof } from '../../../arch/fabric/roof';
@@ -534,7 +533,7 @@ export function finish(name: string, d: Draw, spots: Spot[] = [], far?: Draw, cu
  * heap for the whole city otherwise): nothing raycasts landmark meshes (colliders are separate),
  * and `bakeFar` reads the arrays synchronously, before the first upload.
  */
-export const NEAR_BUILD = { index: true, releaseCpu: true } as const;
+export const NEAR_BUILD = { index: 'later', releaseCpu: true } as const; // welded by buildLandmarks, if not batched
 
 /** Landmarks below this many triangles get their own near mesh, baked, as the far stand-in... */
 const AUTO_FAR_MAX = 30000;
@@ -601,11 +600,12 @@ export function bakeFar(obj: THREE.Object3D, name: string): THREE.Mesh {
       }
     }
   });
-  let geo = new THREE.BufferGeometry();
+  const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('color', new THREE.BufferAttribute(new Uint8Array(col), 3, true));
   // No normals (flat shading from derivatives): vertices weld across faces, ~10 bytes a triangle.
-  if (pos.length) geo = mergeVertices(geo, 1e-3);
+  // Welded by buildLandmarks only if this mesh is kept (most are re-baked by farBake.ts).
+  if (pos.length) geo.userData.weld = { tolerance: 1e-3 };
   geo.computeBoundingSphere();
   const out = new THREE.Mesh(geo, farMaterial());
   out.name = name;

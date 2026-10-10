@@ -21,8 +21,12 @@
  * walker are ready before they are needed.
  *
  * A block level is built as a job of small units (fill.ts: the yard, each lot, each back insula,
- * walls, torches), one unit per step, within a per-frame time budget: no frame pays for a whole
- * block.
+ * walls, torches) within a per-frame time budget: no frame pays for a whole block. Each unit takes
+ * two steps, generating it (the procedural architecture: up to ~15 ms for a big insula) and
+ * committing it (meshes into the batches, colliders: ~2–4 ms), and a street cell is built a few
+ * items per step: a frame never pays for more than one big piece. The budget loop starts another
+ * step only when the time it expects that step to take (a running average per kind) still fits
+ * (perf audit, October 2026).
  */
 import * as THREE from 'three';
 import type { Game, System } from '../../core/Game';
@@ -74,7 +78,24 @@ interface Job {
   colliders: RAPIER.Collider[];
   spots: Spot[];
   ms: number;
+  /** A unit generated in the last step, committed in the next. */
+  pending: FillUnit | null;
 }
+
+/** A street cell's surfaces ('near') or props ('detail') being built a few items per step. */
+interface CellJob {
+  c: CellRec;
+  kind: 'near' | 'detail';
+  b: MeshBuilder;
+  /** The next item to run (all run: the next step commits). */
+  next: number;
+  ms: number;
+}
+
+/** Milliseconds of a cell's items per step (at least one item runs). */
+const CELL_SLICE_MS = 3;
+/** Kinds of step, for the running cost averages the budget loop plans with. */
+type StepKind = 'gen:full' | 'gen:mid' | 'gen:low' | 'commit' | 'cell' | 'start';
 
 export interface StreamerOptions {
   nearR?: number;
@@ -115,6 +136,9 @@ export class CityStreamer implements System {
   private lastT = 0;
   private frame = 0;
   private job: Job | null = null;
+  private cellJob: CellJob | null = null;
+  /** Running average ms per kind of step (what the budget loop expects the next step to cost). */
+  readonly stepCost: Record<StepKind, number> = { 'gen:full': 8, 'gen:mid': 6, 'gen:low': 2, commit: 2, cell: CELL_SLICE_MS, start: 6 };
   /** Builds done so far and their cost (debug); `maxStepMs` is the longest single step. */
   builds = { full: 0, mid: 0, low: 0, cell: 0, ms: 0, fullMs: 0, midMs: 0, lowMs: 0, cellMs: 0, units: 0, maxStepMs: 0 };
   /** Called when a block's full level is built (exact spots available). */
@@ -148,7 +172,7 @@ export class CityStreamer implements System {
     const s = this.scale;
     const lim = { full: this.o.nearR * s, mid: this.o.midR * s, low: Math.min(this.o.lowR, 140) * s, cell: Math.min(this.o.cellR, 200) * s, detail: this.o.detailR * s };
     let guard = 0;
-    while (this.step(lim) && guard++ < 8000);
+    while (this.step(lim) && guard++ < 20000);
     this.applyVisibility();
   }
 
@@ -172,16 +196,25 @@ export class CityStreamer implements System {
     if (cam.distanceToSquared(this.lastPos) > 4 || this.frame % 20 === 0) this.evaluate(cam);
     // Units of a few ms each, within the frame budget; at least one every other frame while
     // something is due, every frame when something close is missing.
+    // The big steps (generating a unit, starting a job) every other frame and only when no other
+    // background work (avatar builds: game.backgroundMs) had this frame, or every frame when
+    // something close is missing; the small ones (committing, a slice of a cell) every frame. One
+    // step at least, more while the next one's expected cost still fits the budget.
     let n = 0;
-    if (this.frame % 2 === 0 || this.urgent()) {
-      const t0 = performance.now();
-      while (performance.now() - t0 < this.o.budgetMs || n === 0) {
-        const s0 = performance.now();
-        if (!this.step()) break;
-        this.builds.maxStepMs = Math.max(this.builds.maxStepMs, performance.now() - s0);
-        n++;
-      }
+    const big = this.urgent() || (this.frame % 2 === 0 && this.game.backgroundMs < 2);
+    const t0 = performance.now();
+    for (;;) {
+      const kind = this.nextKind();
+      if (!big && kind !== 'commit' && kind !== 'cell') break;
+      if (n > 0 && performance.now() - t0 + this.stepCost[kind] > this.o.budgetMs) break;
+      const s0 = performance.now();
+      if (!this.step()) break;
+      const ms = performance.now() - s0;
+      this.stepCost[kind] += (ms - this.stepCost[kind]) * 0.2;
+      this.builds.maxStepMs = Math.max(this.builds.maxStepMs, ms);
+      n++;
     }
+    this.game.backgroundMs += performance.now() - t0;
     if (n) this.evaluate(cam);
     this.applyVisibility();
     if (this.frame % 30 === 0) this.shadowBudget();
@@ -206,8 +239,11 @@ export class CityStreamer implements System {
     if (a.length() > 40) a.setLength(40);
     a.add(pos);
     for (const r of this.blocks) {
-      r.d = Math.max(0, Math.hypot(r.center.x - pos.x, r.center.z - pos.z, (r.center.y - pos.y) * 0.5) - r.blk.radius * 0.8);
-      const da = Math.max(0, Math.hypot(r.center.x - a.x, r.center.z - a.z, (r.center.y - pos.y) * 0.5) - r.blk.radius * 0.8);
+      // Math.sqrt, not Math.hypot (which allocates): every block, often every frame.
+      const dy = (r.center.y - pos.y) * 0.5;
+      const x0 = r.center.x - pos.x, z0 = r.center.z - pos.z, x1 = r.center.x - a.x, z1 = r.center.z - a.z;
+      r.d = Math.max(0, Math.sqrt(x0 * x0 + z0 * z0 + dy * dy) - r.blk.radius * 0.8);
+      const da = Math.max(0, Math.sqrt(x1 * x1 + z1 * z1 + dy * dy) - r.blk.radius * 0.8);
       r.dp = Math.min(r.d, da);
     }
     for (const c of this.cells) {
@@ -224,6 +260,14 @@ export class CityStreamer implements System {
     return false;
   }
 
+  /** What the next step will do (for its expected cost). */
+  private nextKind(): StepKind {
+    const job = this.job;
+    if (job) return job.pending ? 'commit' : `gen:${job.level}`;
+    if (this.cellJob) return this.cellJob.next >= this.cellItems(this.cellJob).length ? 'commit' : 'cell';
+    return 'start';
+  }
+
   /** Is a block level due (not built, not being built, within reach)? */
   private due(r: BlockRec, l: Level, lim?: Record<Level | 'cell' | 'detail', number>) {
     if (r.levels[l] || (this.job && this.job.r === r && this.job.level === l)) return false;
@@ -236,29 +280,40 @@ export class CityStreamer implements System {
     const s = this.scale;
     for (const r of this.blocks) {
       // Dropped a little beyond their build reach (hysteresis), so hidden levels do not pile up in memory.
-      for (const l of LEVELS) if (r.levels[l] && r.d > this.radius(l) * 1.35 + 16) this.drop(r, l);
+      for (let k = 0; k < LEVELS.length; k++) {
+        const l = LEVELS[k];
+        if (r.levels[l] && r.d > this.radius(l) * 1.35 + 16) this.drop(r, l);
+      }
     }
     for (const c of this.cells) {
       if (c.near && c.d > this.o.cellR * 1.5 * s) this.dropCell(c);
       if (c.detail && c.d > this.o.detailR * 1.5 * s) this.dropDetail(c);
     }
-    // A job whose block went out of reach meanwhile is abandoned.
+    // A job whose block (or cell) went out of reach meanwhile is abandoned.
     const job = this.job;
     if (job && job.r.d > this.radius(job.level) * 1.35 + 16) this.abort();
+    const cj = this.cellJob;
+    if (cj && cj.c.d > (cj.kind === 'near' ? this.o.cellR : this.o.detailR) * 1.5 * s) this.cellJob = null;
     const t0 = performance.now();
-    if (this.job) {
-      this.advance();
+    if (this.job || this.cellJob) {
+      if (this.job) this.advance();
+      else this.advanceCell();
       this.builds.ms += performance.now() - t0;
       return true;
     }
-    let best: (() => void) | null = null, bp = Infinity;
+    // The most urgent build (no closures: this runs every frame something is due).
+    let bestBlock: BlockRec | null = null, bestLevel: Level = 'full';
+    let bestCell: CellRec | null = null, bestKind: 'near' | 'detail' = 'near';
+    let bp = Infinity;
     for (const r of this.blocks) {
       if (!r.layout || !r.blk.detailed) continue;
       const d = r.dp ?? r.d;
-      for (const l of LEVELS) {
+      for (let k = 0; k < LEVELS.length; k++) {
+        const l = LEVELS[k];
         if (d + BIAS[l] < bp && this.due(r, l, lim)) {
           bp = d + BIAS[l];
-          best = () => this.start(r, l);
+          bestBlock = r;
+          bestLevel = l;
         }
       }
     }
@@ -266,25 +321,32 @@ export class CityStreamer implements System {
     const detailLim = lim?.detail ?? this.o.detailR * s;
     for (const c of this.cells) {
       const d = c.dp ?? c.d;
-      if (!c.near && d < cellLim && d - 40 < bp) { bp = d - 40; best = () => this.buildCell(c); }
-      if (!c.detail && c.work.detail.length && d < detailLim && d - 20 < bp) { bp = d - 20; best = () => this.buildDetail(c); }
+      if (!c.near && d < cellLim && d - 40 < bp) { bp = d - 40; bestCell = c; bestKind = 'near'; bestBlock = null; }
+      if (!c.detail && c.work.detail.length && d < detailLim && d - 20 < bp) { bp = d - 20; bestCell = c; bestKind = 'detail'; bestBlock = null; }
     }
-    if (!best) return false;
-    best();
+    if (bestBlock) this.start(bestBlock, bestLevel);
+    else if (bestCell) this.startCell(bestCell, bestKind);
+    else return false;
     this.builds.ms += performance.now() - t0;
     return true;
   }
 
-  /** Start building a block level (and build its first unit). */
+  /** Start building a block level (and generate its first unit). */
   private start(r: BlockRec, l: Level) {
-    this.job = { r, level: l, it: fillUnits(r.blk, r.layout!, l, this.H), refs: [], colliders: [], spots: [], ms: 0 };
+    this.job = { r, level: l, it: fillUnits(r.blk, r.layout!, l, this.H), refs: [], colliders: [], spots: [], ms: 0, pending: null };
     this.advance();
   }
 
-  /** Build the job's next unit into the batches (hidden), or finish the level. */
+  /** One step of the job: commit the unit generated last step, or generate the next, or finish. */
   private advance() {
     const job = this.job!;
     const t0 = performance.now();
+    if (job.pending) {
+      this.commit(job, job.pending);
+      job.pending = null;
+      job.ms += performance.now() - t0;
+      return;
+    }
     const { r, level: l } = job;
     const next = job.it.next();
     if (next.done) {
@@ -301,7 +363,13 @@ export class CityStreamer implements System {
       this.job = null;
       return;
     }
-    const u = next.value;
+    job.pending = next.value;
+    job.ms += performance.now() - t0;
+  }
+
+  /** Put a generated unit into the batches (hidden) and register its colliders and spots. */
+  private commit(job: Job, u: FillUnit) {
+    const { r, level: l } = job;
     const group = u.builder.build(`city:${r.blk.id}:${l}`);
     // Wall torches: their flames go out by day (life.ts torchFlames).
     if (u.torches) group.traverse((o) => {
@@ -315,7 +383,6 @@ export class CityStreamer implements System {
     if (l === 'full' && u.builder.colliders.length) job.colliders.push(...addColliders(this.game, u.builder.colliders, { city: r.blk.id }));
     for (const sp of u.spots) job.spots.push(sp);
     this.builds.units++;
-    job.ms += performance.now() - t0;
   }
 
   /** Throw away a half-built level. */
@@ -338,39 +405,43 @@ export class CityStreamer implements System {
     }
   }
 
-  private buildCell(c: CellRec) {
-    const t0 = performance.now();
-    const b = new MeshBuilder();
-    for (const item of c.work.items) {
-      try {
-        item(b);
-      } catch (err) {
-        console.warn('[city] street item failed', c.work.key, err);
-      }
-    }
-    const handle = this.pool.addGroup(b.build(`city:cell:${c.work.key}`), { offset: groundOffset });
-    handle.setVisible(false);
-    const colliders = addColliders(this.game, b.colliders, { city: c.work.key });
-    c.near = { handle, colliders };
-    this.builds.cell++;
-    this.builds.cellMs += performance.now() - t0;
+  private cellItems(j: CellJob) {
+    return j.kind === 'near' ? j.c.work.items : j.c.work.detail;
   }
 
-  private buildDetail(c: CellRec) {
+  /** Start building a cell's surfaces or props (and run its first items). */
+  private startCell(c: CellRec, kind: 'near' | 'detail') {
+    this.cellJob = { c, kind, b: new MeshBuilder(), next: 0, ms: 0 };
+    this.advanceCell();
+  }
+
+  /** Run the cell job's items for a few milliseconds, or, when all have run, commit the cell. */
+  private advanceCell() {
+    const j = this.cellJob!;
+    const { c, b } = j;
     const t0 = performance.now();
-    const b = new MeshBuilder();
-    for (const item of c.work.detail) {
-      try {
-        item(b);
-      } catch (err) {
-        console.warn('[city] street prop failed', c.work.key, err);
-      }
+    const items = this.cellItems(j);
+    if (j.next < items.length) {
+      do {
+        try {
+          items[j.next](b);
+        } catch (err) {
+          console.warn(j.kind === 'near' ? '[city] street item failed' : '[city] street prop failed', c.work.key, err);
+        }
+        j.next++;
+      } while (j.next < items.length && performance.now() - t0 < CELL_SLICE_MS);
+      j.ms += performance.now() - t0;
+      return;
     }
-    const handle = this.pool.addGroup(b.build(`city:props:${c.work.key}`), { offset: groundOffset });
+    const name = j.kind === 'near' ? `city:cell:${c.work.key}` : `city:props:${c.work.key}`;
+    const handle = this.pool.addGroup(b.build(name), { offset: groundOffset });
     handle.setVisible(false);
-    c.detail = { handle, colliders: addColliders(this.game, b.colliders, { city: c.work.key }) };
+    const colliders = addColliders(this.game, b.colliders, { city: c.work.key });
+    if (j.kind === 'near') c.near = { handle, colliders };
+    else c.detail = { handle, colliders };
+    this.cellJob = null;
     this.builds.cell++;
-    this.builds.cellMs += performance.now() - t0;
+    this.builds.cellMs += j.ms + performance.now() - t0;
   }
 
   private dropDetail(c: CellRec) {
@@ -389,7 +460,8 @@ export class CityStreamer implements System {
 
   /** The level a block should show at its distance, falling back to whatever is built. */
   private shownLevel(r: BlockRec): Level | null {
-    const want = LEVELS.findIndex((l) => r.d < this.radius(l));
+    let want = -1;
+    for (let k = 0; k < LEVELS.length; k++) if (r.d < this.radius(LEVELS[k])) { want = k; break; }
     if (want < 0) return null;
     // The wanted level, else a finer one already built, else a coarser one.
     if (r.levels[LEVELS[want]]) return LEVELS[want];
@@ -432,7 +504,8 @@ const TMP = new THREE.Vector3();
 function cellDist(c: CellRec, x: number, z: number, y: number) {
   const dx = Math.max(c.bounds.minX - x, 0, x - c.bounds.maxX);
   const dz = Math.max(c.bounds.minZ - z, 0, z - c.bounds.maxZ);
-  return Math.hypot(dx, dz, Math.max(0, Math.abs(y - c.y) - 40));
+  const dy = Math.max(0, Math.abs(y - c.y) - 40);
+  return Math.sqrt(dx * dx + dz * dz + dy * dy);
 }
 
 /** Register collider specs with physics and return the colliders (so they can be removed). */

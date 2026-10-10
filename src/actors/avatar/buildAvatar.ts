@@ -147,12 +147,20 @@ function build(app: Appearance, lod: LOD, key: string): AvatarGeometry {
 }
 
 /** Bone hierarchy in the bind pose (identity rotations; positions are local offsets). */
+/** A bone's quaternion change callback: no Euler sync (see createBones). */
+function skipEulerSync() {}
+
 export function createBones(rig: Rig): THREE.Bone[] {
   const bones = BONES.map((name) => {
     const b = new THREE.Bone();
     b.name = name;
     const [x, y, z] = localOffset(rig, name);
     b.position.set(x, y, z);
+    // Bones are posed through their quaternions; three.js would turn every write back into the
+    // Euler `rotation` (a matrix build and decomposition per bone per pose: ~0.4 ms a frame for the
+    // Forum's crowd, perf audit 2026-10). Nothing reads a bone's Euler, so it is not kept in step:
+    // write `quaternion`, never read `rotation`.
+    b.quaternion._onChange(skipEulerSync);
     return b;
   });
   BONES.forEach((name, i) => {

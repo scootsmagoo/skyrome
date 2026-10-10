@@ -126,29 +126,38 @@ export class LandmarkBatcher implements System, ShadowHook {
     const pos = flat.getAttribute('position') as THREE.BufferAttribute;
     const n = pos.count;
     g = new THREE.BufferGeometry();
-    const P = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) {
-      P[i * 3] = pos.getX(i);
-      P[i * 3 + 1] = pos.getY(i);
-      P[i * 3 + 2] = pos.getZ(i);
+    // Plain float arrays are copied (or taken over, from a fresh non-indexed copy) in one go; the
+    // per-vertex accessors were ~0.5 s of the boot.
+    const pa = floats(pos, 3);
+    let P: Float32Array;
+    if (pa) P = flat === src ? pa.slice() : pa;
+    else {
+      P = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) {
+        P[i * 3] = pos.getX(i);
+        P[i * 3 + 1] = pos.getY(i);
+        P[i * 3 + 2] = pos.getZ(i);
+      }
     }
     g.setAttribute('position', new THREE.BufferAttribute(P, 3));
     if (!flat.getAttribute('normal')) flat.computeVertexNormals();
     const nor = flat.getAttribute('normal') as THREE.BufferAttribute;
     const N = new Int8Array(n * 3);
+    const na = floats(nor, 3);
     for (let i = 0; i < n; i++) {
-      const x = nor.getX(i);
-      const y = nor.getY(i);
-      const z = nor.getZ(i);
-      const l = Math.hypot(x, y, z) || 1;
+      const x = na ? na[i * 3] : nor.getX(i);
+      const y = na ? na[i * 3 + 1] : nor.getY(i);
+      const z = na ? na[i * 3 + 2] : nor.getZ(i);
+      const l = Math.sqrt(x * x + y * y + z * z) || 1;
       N[i * 3] = Math.round((x / l) * 127);
       N[i * 3 + 1] = Math.round((y / l) * 127);
       N[i * 3 + 2] = Math.round((z / l) * 127);
     }
     g.setAttribute('normal', new THREE.BufferAttribute(N, 3, true));
     const uv = flat.getAttribute('uv') as THREE.BufferAttribute | undefined;
-    const U = new Float32Array(n * 2);
-    if (uv) for (let i = 0; i < n; i++) { U[i * 2] = uv.getX(i); U[i * 2 + 1] = uv.getY(i); }
+    const ua = uv ? floats(uv, 2) : null;
+    const U = ua ? (flat === src ? ua.slice() : ua) : new Float32Array(n * 2);
+    if (uv && !ua) for (let i = 0; i < n; i++) { U[i * 2] = uv.getX(i); U[i * 2 + 1] = uv.getY(i); }
     g.setAttribute('uv', new THREE.BufferAttribute(U, 2));
     if (flat !== src) flat.dispose();
     this.prepared.set(src, g);
@@ -246,7 +255,9 @@ export class LandmarkBatcher implements System, ShadowHook {
   enter(cx: number, cy: number, cz: number) {
     for (const e of this.entries) {
       if (e.level >= 1) continue; // already a twin
-      if (Math.hypot(e.center.x - cx, e.center.y - cy, e.center.z - cz) - e.radius < SHADOW_TWIN_FROM) continue;
+      const dx = e.center.x - cx, dy = e.center.y - cy, dz = e.center.z - cz;
+      // Math.sqrt, not Math.hypot (which allocates): ~3 k entries, 30 times a second.
+      if (Math.sqrt(dx * dx + dy * dy + dz * dz) - e.radius < SHADOW_TWIN_FROM) continue;
       e.batch.setGeometryIdAt(e.inst, e.shadow);
       this.swapped.push(e);
     }
@@ -256,6 +267,13 @@ export class LandmarkBatcher implements System, ShadowHook {
     for (const e of this.swapped) e.batch.setGeometryIdAt(e.inst, e.geoms[e.level]);
     this.swapped.length = 0;
   }
+}
+
+/** The attribute's array when it is a plain, tightly packed Float32Array of `size` (else null). */
+function floats(a: THREE.BufferAttribute, size: number): Float32Array | null {
+  const arr = a.array as unknown;
+  if (!(arr instanceof Float32Array) || a.itemSize !== size || a.normalized || (a as unknown as { isInterleavedBufferAttribute?: boolean }).isInterleavedBufferAttribute) return null;
+  return arr.length === a.count * size ? arr : null;
 }
 
 /**

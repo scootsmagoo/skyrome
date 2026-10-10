@@ -60,6 +60,8 @@ export class Batch {
     this.mesh.frustumCulled = false;
     // Opaque static geometry: sorting every instance every pass costs more than the overdraw saves.
     this.mesh.sortObjects = false;
+    // Never moves (instances carry their own matrices): no per-frame matrix work (gfx/freeze.ts).
+    this.mesh.matrixAutoUpdate = false;
     this.cull = new FastCull(this.mesh);
     this.cull.install();
   }
@@ -270,6 +272,7 @@ export class BatchPool {
 
   constructor(parent: THREE.Object3D, private readonly opts: PoolOptions = {}) {
     this.group.name = opts.name ? `${opts.name}:batches` : 'city:batches';
+    this.group.matrixAutoUpdate = false; // at the origin for good, like its batches
     parent.add(this.group);
   }
 
