@@ -116,7 +116,8 @@ export default defineLife({
 - The keeper is an NpcDef `keeper-subura-vinarius` (no home, no schedule) tagged `keeper` and
   `vendor:vinarius`; barter keys the shop by that id. `trade` defaults to "Show me your wares." and the
   daily haggle comes with it. Trade and services show only while the shop is open.
-- New vendor kinds go in `src/rpg/data/vendors-life.ts` (`VENDORS_LIFE`).
+- New vendor kinds go in `src/rpg/data/vendors-life.ts` (`VENDORS_LIFE`: `margaritarius`, `vinarius`, and the
+  market-day stall kinds `figulus` and `pannarius`). A `stall` kind takes 10% off its prices on market days.
 - A new post: `station: { id: 'st-life-tuscus-aerarius', lane: 'vicus-tuscus', at: 0.42, when: [...],
   members: [{ role: 'artisan', out: 3.4, side: 0, loop: 'work', face: 'in', prop: null, label: 'Coppersmith' }],
   dressing: [{ kind: 'anvil', out: 2.9, side: 0 }] }` (the StationDef shape of crowd/stations.ts).

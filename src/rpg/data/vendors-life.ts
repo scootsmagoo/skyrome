@@ -1,7 +1,8 @@
 /**
  * Vendor kinds phase 2 adds (docs/design/world-life.md §4.2, the SHOPS crew): `margaritarius`
  * (buys jewellery), `vinarius`, and two stall kinds for the market-day potter and cloth-seller
- * (stalls take the market-day discount: BARTER.marketDay, 0.10, comes off the buy factor in barter.ts). vendors.ts merges this into VENDORS.
+ * (stalls take the market-day discount: 10% off the price, barter.ts). vendors.ts merges this into
+ * VENDORS.
  */
 import type { VendorKind } from './vendors';
 

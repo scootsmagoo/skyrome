@@ -496,7 +496,7 @@ On every 8th elapsed day (`barter.isMarketDay()`), four keepers with `marketDay`
 - a dealer in cheap pottery and lamps;
 - a cloth-seller with tunics.
 
-The crier calls the market (a 'cry' rumour from CITY VOICE), the HUD date reads "· Nundinae", and the existing stall discount applies (BARTER.marketDay, 0.10, is taken off the buy factor, so a 35/64 price becomes about 33/64, roughly 6% off the price). The nundinae came every 8 days, and country people came into town for them [A].
+The crier calls the market (a 'cry' rumour from CITY VOICE), the HUD date reads "· Nundinae", and the existing 10% stall discount applies. The nundinae came every 8 days, and country people came into town for them [A].
 
 ### 4.4 Services
 
@@ -772,7 +772,7 @@ node scripts/shot.mjs --query "at=<landmark>&hour=<h>" --steps '[{"eval":"game.c
 **B. SHOPS**
 1. All 19 keepers are reachable with `life goto`. One screenshot per district at an open hour shows the keeper and the dressing, and three barter-panel screenshots show stock.
 2. At night, three shuttered posts are shown in screenshots, with the right "opens at" line.
-3. Market day: advance with `game.time.advanceHours(24*k)` to the next nundinae. Four extra stalls and banners appear at the Forum Boarium (screenshot), a market-day stall's buy price drops by the existing 0.10 buy-factor term (eval; roughly 5-6% off the price). Vendor kinds added beyond §4.2: figulus and pannarius (market-day stalls), and the HUD date reads "· Nundinae".
+3. Market day: advance with `game.time.advanceHours(24*k)` to the next nundinae. Four extra stalls and banners appear at the Forum Boarium (screenshot), a market-day stall's buy price is 10% lower (eval), and the HUD date reads "· Nundinae".
 
 **C. SERVICES**
 1. Baths of Titus at h8: "Bathe" sets `game.standing.cleanliness === 'lautus'`, adds 1 game hour and costs 1/64 den. At h7 the attendant refuses and nothing is charged.
