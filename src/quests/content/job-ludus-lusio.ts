@@ -11,7 +11,8 @@
  *   lost    the doctor stops it: the Saniarium, injured for one game hour (runtime.ts heals it), no purse
  *
  * Without a combat module Asiaticus calls the bout on points (a win at the starting favor), as he
- * does in lud-01. Given up after three game hours if the guest never steps onto the sand.
+ * does in lud-01. Given up after three game hours if the guest never steps onto the sand; the clock
+ * stops while the bout is on (`hold`), so a long fight is never failed halfway.
  *
  * The offer and the "Ready." are Asiaticus' own lines (his hub and the lusio node), not the generic
  * life lines of src/life/talk.ts: a lifeChoices spread in his talk would end the 'ready' step
@@ -138,6 +139,11 @@ export default defineJob(
     // The arena pays a win's purse at the horn; the school pays a draw, or a bout called on points.
     pay: (q) => (q.vars.draw ? LUSIO_DRAW : q.vars.arena ? 0 : Math.round(arenaPurse(LUSIO_PURSE, Number(q.vars.favor) || 0))),
     end: returnKit,
+    // The fight is on: no clock. A bout that is gone (a load, the fights reset) lets the clock run again.
+    hold: (g) => {
+      const b = g.combat?.core?.bout;
+      return g.quests?.state(JOB_ID)?.stage === 'bout' && !!b && !b.over;
+    },
     done: 'Asiaticus raised his staff to the benches and called the bout. The purse was counted into my hand in front of everyone.',
     failed: 'I never stepped onto the sand, and Asiaticus gave my bout to someone who did.',
   },

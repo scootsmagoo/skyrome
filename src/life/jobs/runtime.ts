@@ -7,7 +7,7 @@
  *    read it. Goods tagged 'carry:<prop>' are shown on the player in the third person (the amphora
  *    on the back, the bread basket on the head) with the crowd's own cached prop meshes.
  *  - The sportula: an option taken at the patron's door is remembered for today, so his doorkeeper
- *    can offer the letter (job-cliens-epistula) only after the morning greeting.
+ *    can offer the letter (job-cliens-epistula) only after the morning greeting; a toast says so.
  *  - The practice bout's injury lasts one game hour, as lud-01's does (job-ludus-lusio sets the
  *    hour in the life save as 'lusio-cure').
  *
@@ -18,6 +18,7 @@ import type { Game, System } from '../../core/Game';
 import type { PropKind } from '../../npc/crowd/roles';
 import { attachProp, type CarriedProp } from '../../npc/props';
 import type { PlayerController } from '../../player/PlayerController';
+import { jobRuntimes } from '../talk';
 import { expireJobs } from './defineJob';
 
 /** The porter's gait under an amphora (a multiplier on the player's speed). */
@@ -36,7 +37,8 @@ class JobsSystem implements System {
   /** The player carries something heavy (read by the controller hooks). */
   burdened = false;
   private t = 0;
-  private hooked = false;
+  /** The controller whose hooks carry the burden (a new controller is hooked again). */
+  private hooked: PlayerController | null = null;
   private heavy: string[] | null = null;
   private carried: { id: string; prop: PropKind }[] | null = null;
   private shown: { item: string; prop: CarriedProp; avatar: unknown } | null = null;
@@ -47,7 +49,8 @@ class JobsSystem implements System {
     this.t -= dt;
     if (this.t > 0) return;
     this.t = 0.5;
-    if (!this.hooked) this.hook();
+    const pc = this.game.getSystem?.<PlayerController>('playerController');
+    if (pc && pc !== this.hooked) this.hook(pc);
     expireJobs(this.game);
     const inv = this.game.player?.inventory;
     this.heavy ??= this.tagged('heavy');
@@ -65,11 +68,9 @@ class JobsSystem implements System {
     return (this.game.items?.all() ?? []).filter((d) => d.tags?.includes(tag)).map((d) => d.id);
   }
 
-  /** Slow the player under a heavy load: compose the controller's hooks (once it exists). */
-  private hook() {
-    const pc = this.game.getSystem?.<PlayerController>('playerController');
-    if (!pc) return;
-    this.hooked = true;
+  /** Slow the player under a heavy load: compose the controller's hooks (once per controller). */
+  private hook(pc: PlayerController) {
+    this.hooked = pc;
     const speed = pc.speedMultiplier;
     pc.speedMultiplier = () => (this.burdened ? speed() * BURDEN_SPEED : speed());
     const sprint = pc.canSprint;
@@ -102,9 +103,17 @@ export function installJobs(game: Game) {
   const sys = new JobsSystem(game);
   game.addSystem(sys);
   const store = () => game.life?.store;
-  // The morning greeting at the patron's door (whatever its option is called): the letter may follow.
+  // The morning greeting at the patron's door (whatever its option is called): the letter may follow,
+  // and the doorkeeper says so.
   game.events.on('life:option', (e) => {
-    if ((e.owner === PATRON_DOOR || e.owner.startsWith('act.velia.')) && !e.option.startsWith('job:')) store()?.addToday(SPORTULA);
+    if ((e.owner !== PATRON_DOOR && !e.owner.startsWith('act.velia.')) || e.option.startsWith('job:')) return;
+    if (store()?.today(SPORTULA)) return;
+    store()?.addToday(SPORTULA);
+    for (const rt of jobRuntimes()) {
+      if (rt.def.giver !== PATRON_DOOR || !rt.offerable(game)) continue;
+      const who = game.npcs?.name(PATRON_DOOR) ?? 'The doorkeeper';
+      game.events.emit('rpg:notify', { text: `${who} at the door has an errand for a client: ${rt.def.title}.`, kind: 'quest' });
+    }
   });
   // A practice bout's injury lasts an hour (lud-01's rule for a lusio).
   game.events.on('time:hour', () => {

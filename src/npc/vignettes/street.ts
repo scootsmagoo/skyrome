@@ -412,9 +412,9 @@ function* purseBack(ctx: VignetteContext, fur: Npc, victim: Npc, guard: Npc | un
   yield () => !!victim.brain?.arrived || ctx.now - tv > 12;
   stand(victim, 'talk', toPlayer(victim));
   ctx.say(victim, 'My purse! You caught him! Is it… may I have it?');
-  // E on the victim: give it back. Walking away with it is keeping it.
+  // E on the victim: give it back. Walking away with it is keeping it; dithering, the owner takes it
+  // back. A scene torn down (a load, a teleport, the owner gone) settles nothing: no coins, no crime.
   let returned = false;
-  let settled = false;
   const at2 = new THREE.Vector3();
   const give: Interactable = {
     id: 'fur:return',
@@ -426,25 +426,24 @@ function* purseBack(ctx: VignetteContext, fur: Npc, victim: Npc, guard: Npc | un
       returned = true;
     },
   };
-  const keep = () => {
-    if (settled) return;
-    settled = true;
-    keepPurse(ctx, victim, purse);
-  };
   ia?.add(give);
-  ctx.onEnd(() => {
-    ia?.remove(give);
-    keep();
-  });
+  ctx.onEnd(() => ia?.remove(give));
+  // (The director lets a wait run at most 45 s.)
   const t1 = ctx.now;
-  yield () => returned || !near(ctx, victim, KEEP_R) || ctx.now - t1 > 90;
+  yield () => returned || !near(ctx, victim, KEEP_R) || ctx.now - t1 > 40;
   ia?.remove(give);
-  if (!returned) {
-    keep();
+  if (!returned && !near(ctx, victim, KEEP_R)) {
+    keepPurse(ctx, victim, purse);
     yield 3;
     return;
   }
-  settled = true;
+  if (!returned) {
+    victim.humanoid.play('interact');
+    ctx.say(victim, ctx.rng.pick(['Well? It’s mine. Give it here!', 'That’s my purse you’re weighing. Thank you!']));
+    g.events.emit('rpg:notify', { text: `${victim.name} took the purse back out of your hand.`, kind: 'info' });
+    yield 3;
+    return;
+  }
   // 2–6 asses for the trouble, and the street remembers.
   const as = 2 + Math.floor(ctx.rng.next() * 5);
   g.player?.inventory?.addDenarii(as / 16);

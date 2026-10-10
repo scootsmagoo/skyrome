@@ -69,6 +69,19 @@ export default defineJob(
   },
   {
     until: 'h3',
+    // Chreste and Dama speak from hand-written dialogues: what they say as the bread arrives.
+    talk: {
+      steps: {
+        chreste: {
+          hail: '(Vibia Chreste lifts the cloth and sniffs.) Fortunatus’ bread, and still warm? Give it here before the early drinkers smell it.',
+          thanks: '(She counts the loaves twice.) All there. Go on, then: Dama is waiting for his, and he whines when it’s cold.',
+        },
+        dama: {
+          hail: '(Dama lifts the cloth and breathes in.) Still warm. Fortunatus is learning.',
+          thanks: '(He takes the basket and counts coins into your hand.) The baker’s money, and a loaf from me. Bakers and innkeepers settle among themselves.',
+        },
+      },
+    },
     done: 'Dama took the last basket while it was still warm and paid me what the baker owed me: six asses and a loaf. Bakers and innkeepers settle among themselves.',
     failed: 'The third hour came and the bread was cold. Nobody pays for yesterday’s bread, and Fortunatus would not pay for today’s.',
   },

@@ -8,6 +8,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Game } from '../src/core/Game';
 import { defineJob, expireJobs, jobKey, offerable, variantFor } from '../src/life/jobs/defineJob';
+import { HANDOVER } from '../src/life/jobs/handover';
 import { BURDEN_SPEED, PATRON_DOOR, SPORTULA } from '../src/life/jobs/runtime';
 import { installLife, type LifeService } from '../src/life/install';
 import { jobRuntime, lifeChoices } from '../src/life/talk';
@@ -78,9 +79,9 @@ describe('defineJob', () => {
 
   it('with variants, start is an opening and every variant has its own stages', () => {
     const q = quest(LETTER);
-    expect(Object.keys(q.stages)).toEqual(['start', 'v0:deliver', 'v1:deliver', 'v2:deliver', 'done', 'failed']);
+    expect(Object.keys(q.stages)).toEqual(['start', 'v0:philetus', 'v1:zethus', 'v2:dama', 'done', 'failed']);
     expect(q.stages.start.objectives).toBeUndefined();
-    expect(q.stages['v1:deliver'].objectives?.[0].target).toEqual({ kind: 'npc', id: 'npc-zethus' });
+    expect(q.stages['v1:zethus'].objectives?.[0].target).toEqual({ kind: 'npc', id: 'npc-zethus' });
   });
 
   it('picks the same variant all day, and more than one over the days', () => {
@@ -103,11 +104,12 @@ describe('defineJob', () => {
     const st = game.quests.state(LETTER)!;
     const day = game.time.dayIndex;
     expect(st.vars.variant).toBe(variantFor(LETTER, day, 3));
-    expect(st.stage).toBe(`v${st.vars.variant}:deliver`);
+    const stage = `v${st.vars.variant}:${['philetus', 'zethus', 'dama'][Number(st.vars.variant)]}`;
+    expect(st.stage).toBe(stage);
     expect(game.player.inventory.count('quest-epistula-patroni')).toBe(1);
     game.time.advanceHours(4);
     expect(game.time.dayIndex).toBe(day + 1);
-    expect(game.quests.state(LETTER)!.stage).toBe(`v${st.vars.variant}:deliver`);
+    expect(game.quests.state(LETTER)!.stage).toBe(stage);
     expect(life.store.today(jobKey(LETTER))).toBe(0);
   });
 });
@@ -150,6 +152,20 @@ describe('the porter (E2)', () => {
     expect(rt.offerable(game)).toBe(false);
     game.time.advanceHours(24);
     expect(rt.offerable(game)).toBe(true);
+  });
+
+  it('a new player controller carries the burden too', async () => {
+    const { game, life, step, systems } = await world(9);
+    finishOpening(game);
+    game.quests.start(PORTER);
+    life.open('act.portus.amphorae');
+    step(31);
+    const i = systems.findIndex((s) => s.name === 'playerController');
+    const fresh = { name: 'playerController', priority: -10, canSprint: () => true, speedMultiplier: () => 1 };
+    systems[i] = fresh as never;
+    step(31);
+    expect(fresh.speedMultiplier()).toBeCloseTo(BURDEN_SPEED, 6);
+    expect(fresh.canSprint()).toBe(false);
   });
 
   it('nothing is offered before the opening is done', async () => {
@@ -220,6 +236,107 @@ describe('the bread round (E3)', () => {
   });
 });
 
+/** Talk to a person and pick choices by their text (what the conversation panel does). */
+function talk(game: Game, npcId: string) {
+  const ds = game.dialogue;
+  const v0 = ds.start(npcId);
+  return {
+    first: v0,
+    get view() {
+      return ds.view;
+    },
+    pick(re: RegExp) {
+      const i = ds.view?.choices.findIndex((c) => re.test(c.text)) ?? -1;
+      if (i < 0) throw new Error(`no choice ${re} in ${JSON.stringify(ds.view?.choices.map((c) => c.text))}`);
+      return ds.choose(i);
+    },
+  };
+}
+
+describe('the handover (deliveries where the person’s own talk has no life lines)', () => {
+  it('the bread round runs through Chreste’s and Dama’s own conversations, and pays', async () => {
+    const { game, life } = await world(3.5);
+    finishOpening(game);
+    const inv = game.player.inventory;
+    const money = inv.denarii;
+    game.quests.start(BREAD);
+    life.open('act.subura.popina-panis');
+    // Chreste: the handover takes the conversation while her basket is due.
+    const c = talk(game, 'npc-chreste');
+    expect(c.first?.dialogueId).toBe(HANDOVER);
+    expect(c.first?.text).toMatch(/Fortunatus’ bread/);
+    c.pick(/^Here: Basket of Bread\. \(The Bread Round\)$/);
+    expect(game.dialogue.view?.text).toMatch(/counts the loaves twice/);
+    // "Something else." goes on into her own conversation.
+    c.pick(/^Something else/);
+    expect(game.dialogue.view?.dialogueId).toBe('npc-chreste');
+    game.dialogue.end();
+    // Nothing more is due with her: her own talk again.
+    expect(game.dialogue.start('npc-chreste')?.dialogueId).toBe('npc-chreste');
+    game.dialogue.end();
+    // E on Dama opens his own dialogue by name (NpcManager.talkTo): the handover takes over from it.
+    game.dialogue.start('npc-dama', { dialogueId: 'npc-dama' });
+    game.events.emit('npc:talk', { npcId: 'npc-dama', dialogue: true });
+    expect(game.dialogue.view?.dialogueId).toBe(HANDOVER);
+    game.dialogue.end();
+    const d = talk(game, 'npc-dama');
+    expect(d.first?.dialogueId).toBe(HANDOVER);
+    d.pick(/^Here: Basket of Bread/);
+    expect(game.quests.status(BREAD)?.completed).toBe(true);
+    expect(inv.denarii - money).toBeCloseTo(6 * AS, 6);
+    d.pick(/^Vale/);
+    expect(game.dialogue.active).toBe(false);
+    // Nothing due: E on Dama stays in his own talk.
+    game.dialogue.start('npc-dama', { dialogueId: 'npc-dama' });
+    game.events.emit('npc:talk', { npcId: 'npc-dama', dialogue: true });
+    expect(game.dialogue.view?.dialogueId).toBe('npc-dama');
+    game.dialogue.end();
+  });
+
+  it('steps aside for a keeper, whose own talk carries the deliveries', async () => {
+    const { game, life } = await world(9);
+    finishOpening(game);
+    game.quests.start(PORTER);
+    life.open('act.portus.amphorae');
+    expect(game.dialogue.start('keeper-portus-horrearius')?.dialogueId).toBe('keeper-portus-horrearius');
+    game.dialogue.end();
+  });
+
+  it('offers a keeper’s job that the keeper’s data doesn’t list, and stops once it is taken', async () => {
+    const errand = defineJob(
+      {
+        id: 'job-test-errand',
+        title: 'A Test Errand',
+        summary: 'Carry a loaf to Dama for the storekeeper.',
+        giver: 'keeper-portus-horrearius',
+        offer: {},
+        daily: 1,
+        pay: AS,
+        steps: [{ id: 'dama', text: 'Bring Dama a loaf', target: { kind: 'npc', id: 'npc-dama' }, done: { deliver: { item: 'panis', count: 1, to: 'npc-dama' } }, give: [{ item: 'panis', count: 1 }], journal: 'Daphnus sent me to Dama with a loaf.' }],
+        period: '[G]',
+      },
+      { talk: { offer: 'You. Carry a loaf to Dama for me?', taken: () => 'To Dama, then. Mind it.' } },
+    );
+    const { game } = await world(9);
+    game.quests.register(errand);
+    finishOpening(game);
+    const k = talk(game, 'keeper-portus-horrearius');
+    expect(k.first?.dialogueId).toBe(HANDOVER);
+    expect(k.first?.text).toBe('You. Carry a loaf to Dama for me?');
+    k.pick(/^I’ll do it\. \(A Test Errand\)$/);
+    expect(game.dialogue.view?.text).toBe('To Dama, then. Mind it.');
+    expect(game.quests.status('job-test-errand')?.running).toBe(true);
+    k.pick(/^Something else/);
+    expect(game.dialogue.view?.dialogueId).toBe('keeper-portus-horrearius');
+    game.dialogue.end();
+    expect(game.dialogue.start('keeper-portus-horrearius')?.dialogueId).toBe('keeper-portus-horrearius');
+    game.dialogue.end();
+    const d = talk(game, 'npc-dama');
+    d.pick(/^Here: Bread\. \(A Test Errand\)$|^Here: .*\(A Test Errand\)$/);
+    expect(game.quests.status('job-test-errand')?.completed).toBe(true);
+  });
+});
+
 describe('the patron’s letter', () => {
   it('is offered on odd days after the sportula, once mq-02 is done', async () => {
     const { game, life } = await world(5.5);
@@ -271,6 +388,21 @@ describe('the practice bout (E4)', () => {
     expect(rt.offerable(game)).toBe(false);
     // lud-01 is untouched by it.
     expect(game.quests.status('lud-01-sacramentum')?.completed).toBe(true);
+  });
+
+  it('the clock stops while the bout is on, and runs again once it is over', async () => {
+    const { game, rpg } = await world(9);
+    finishOpening(game);
+    const now = game.time.totalHours;
+    rpg.quests.restore({ states: { [LUSIO]: { status: 'running', stage: 'bout', objectives: {}, vars: { until: now + 0.5, bout: 1 }, journal: [] } } });
+    const bout = { over: false };
+    (game as unknown as { combat: unknown }).combat = { core: { bout } };
+    game.time.advanceHours(1);
+    expect(expireJobs(game)).toBe(0);
+    expect(game.quests.state(LUSIO)?.status).toBe('running');
+    bout.over = true;
+    expect(expireJobs(game)).toBe(1);
+    expect(game.quests.state(LUSIO)?.status).toBe('failed');
   });
 
   it('is not offered outside drill hours', async () => {

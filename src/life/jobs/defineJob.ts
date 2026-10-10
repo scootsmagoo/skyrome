@@ -15,7 +15,10 @@
  *   variant  picked by the day the job starts (the same all day and through a save), kept for the
  *            whole job, past midnight too
  *   expiry   `limitHours` after the start, or the next `until` Roman hour (the bread round's h3);
- *            runtime.ts checks it at 2 Hz and the job fails cleanly with a journal line
+ *            runtime.ts checks it at 2 Hz and the job fails cleanly with a journal line; `hold`
+ *            stops the clock (the practice bout while the fight is on)
+ *   talk     where a recipient's or a keeper giver's own talk lacks the life lines, handover.ts
+ *            takes the conversation while a delivery or an offer is due, with the job's `talk` lines
  *
  * A step whose person isn't in this build (another crew's keeper not merged yet) or is dead, or
  * whose activity or place doesn't exist, is skipped, so a job never waits for someone who won't come.
@@ -46,6 +49,32 @@ export interface JobExt {
   on?: QuestDef['on'];
   /** Runs as the job ends in 'done' or 'failed' (give back what was lent). */
   end?: (q: QuestContext) => void;
+  /** The clock stops while this holds (the practice bout on the sand): expiry waits for it. */
+  hold?: (game: Game) => boolean;
+  /** What people say where their own talk has no life lines (handover.ts). */
+  talk?: JobTalk;
+}
+
+/**
+ * The job's lines in the handover conversation (handover.ts): the conversation of a person whose
+ * own talk doesn't carry the life lines (a hand-written dialogue without the `lifeChoices` spread,
+ * a keeper whose data doesn't list the job).
+ */
+export interface JobTalk {
+  /** The giver's hail as they offer the job. */
+  offer?: string;
+  /** What the giver says as the job is taken (the day's errand). */
+  taken?: (game: Game) => string;
+  /** By step id: the recipient's greeting as the goods arrive, and their thanks. */
+  steps?: Record<string, { hail: string; thanks: string }>;
+}
+
+/** Each job's extras by id (expiry holds, handover lines). */
+const EXTS = new Map<string, JobExt>();
+
+/** A job's extras (handover.ts reads its lines). */
+export function jobExt(id: string): JobExt | undefined {
+  return EXTS.get(id);
 }
 
 /** The life store key of a job's starts today. */
@@ -175,6 +204,7 @@ export function defineJob(def: JobDef, ext: JobExt = {}): QuestDef {
     ),
   };
 
+  EXTS.set(def.id, ext);
   registerJob({
     def,
     step: (game) => {
@@ -207,6 +237,8 @@ export function expireJobs(game: Game): number {
     if (st?.status !== 'running') continue;
     const until = st.vars.until;
     if (typeof until !== 'number' || now < until) continue;
+    // A bout on the sand isn't stopped by the clock; it is failed once it is over (or gone).
+    if (EXTS.get(rt.def.id)?.hold?.(game)) continue;
     if (quests.get(rt.def.id)?.stages.failed) quests.setStage(rt.def.id, 'failed');
     else quests.fail(rt.def.id);
     n++;

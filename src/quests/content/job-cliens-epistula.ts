@@ -18,22 +18,37 @@ export const JOB_ID = 'job-cliens-epistula';
 /** The catalogue's sealed note from a patron's house (src/rpg/data/items/quest.ts). */
 export const LETTER = 'quest-epistula-patroni';
 
-/** The day's recipient, and what the walk is worth (asses, by distance from the Velia). */
-const ROUTES: { npc: string; text: string; journal: string; pay: number }[] = [
+/**
+ * The day's recipient, and what the walk is worth (asses, by distance from the Velia). `hail` and
+ * `thanks` are said where the recipient's own talk has no life lines (src/life/jobs/handover.ts).
+ */
+const ROUTES: { id: string; npc: string; who: string; text: string; journal: string; pay: number; hail: string; thanks: string }[] = [
   {
+    id: 'philetus',
     npc: 'npc-philetus',
+    who: 'Philetus, who keeps the Temple of Castor in the Forum',
+    hail: '(Philetus sees the seal before he sees you.) The house of Vettius Rufinus? For me? Give it here, carefully: that is a senator’s wax, not yours.',
+    thanks: '(He turns the letter over twice and does not open it in front of you.) It came whole. Take this for your legs; the house said you would be owed it.',
     text: 'Carry the letter to Philetus at the Temple of Castor',
     journal: 'The letter was for Marcus Pomponius Philetus, who keeps the Temple of Castor in the Forum.',
     pay: 4,
   },
   {
+    id: 'zethus',
     npc: 'npc-zethus',
+    who: 'Zethus, the magistrate of the Vicus Tuscus, at its crossroads shrine',
+    hail: '(Zethus squints at the seal.) Rufinus’ ring. I know it. For the magistrate of the street, or for Zethus the freedman? Both, I expect.',
+    thanks: '(He tucks it into his belt with the wax unbroken.) Arrived, and whole. Here: the house pays its errands, and I pay for the house.',
     text: 'Carry the letter to Zethus, magistrate of the Vicus Tuscus',
     journal: 'The letter was for Marcus Lucretius Zethus, the magistrate of the Vicus Tuscus, who keeps its crossroads shrine.',
     pay: 6,
   },
   {
+    id: 'dama',
     npc: 'npc-dama',
+    who: 'Dama, at the Inn at the Starting Gates by the Circus',
+    hail: '(Dama wipes his hands on his apron before he will touch it.) A letter? For me? From a senator’s house? Either I’m in luck or I’m in trouble.',
+    thanks: '(He holds it at arm’s length, unopened, and counts some asses into your hand.) For the walk. I’ll read it sitting down. Whatever it says, it says it to me.',
     text: 'Carry the letter to Dama at the Inn at the Starting Gates',
     journal: 'The letter was for Lucius Novius Dama, who keeps the inn by the starting gates of the Circus. A long walk for a short letter.',
     pay: 8,
@@ -42,7 +57,7 @@ const ROUTES: { npc: string; text: string; journal: string; pay: number }[] = [
 
 const variants: JobStep[][] = ROUTES.map((r) => [
   {
-    id: 'deliver',
+    id: r.id,
     text: r.text,
     target: { kind: 'npc', id: r.npc },
     done: { deliver: { item: LETTER, count: 1, to: r.npc } },
@@ -70,6 +85,14 @@ export default defineJob(
   {
     intro: 'After the morning greeting the doorkeeper at Vettius Rufinus’ house gave me a sealed letter to carry for his master, and the name of the man waiting for it.',
     pay: (q) => (ROUTES[Number(q.vars.variant) || 0]?.pay ?? 4) * AS,
+    talk: {
+      offer: '(The doorkeeper holds up a folded tablet, tied with thread and sealed in red wax.) You there. The master has a letter that wants carrying, and you have legs. The man it is for pays a few asses for the walk. Well?',
+      taken: (g) => {
+        const r = ROUTES[Number(g.quests?.state(JOB_ID)?.vars.variant) || 0] ?? ROUTES[0];
+        return `(The letter is pressed into your hand.) For ${r.who}. Mind the seal: it is the master’s wax, not yours.`;
+      },
+      steps: Object.fromEntries(ROUTES.map((r) => [r.id, { hail: r.hail, thanks: r.thanks }])),
+    },
     done: 'I handed over the letter with its seal unbroken, and the fee came with it, as the doorkeeper had promised: a client’s errand, a client’s wage.',
     failed: 'Night fell with the patron’s letter still undelivered, and a slave of the house came to take it back from me without a word.',
   },
