@@ -16,6 +16,8 @@
  *                          [--scale 1]          multiply every cycle count (0.2 for a quick run)
  *                          [--soak 30]          minutes for the soak phase (not run unless named)
  *                          [--heap-slope 1.5]   MB a cycle the heap may grow before it is flagged
+ *                          [--orphans]          also count geometries uploaded to the GPU, no longer in the scene, in no cache and never
+ *                                               disposed (a leak three.js cannot see), and print where they were built
  *                          [--snapshot <phase>] write .shots/leaks/<phase>-{before,after}.heapsnapshot
  *                          [--out .shots/leaks] [--json file] [--query "at=rostra&hour=10"]
  *
@@ -102,6 +104,29 @@ await page.goto(`http://127.0.0.1:${port}/?scene=rome&${args.query ?? 'at=rostra
 await page.waitForFunction(() => window.__skyrome?.ready, null, { timeout: 180000, polling: 200 });
 console.log(`booted in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
 await page.waitForTimeout(3000);
+if (args.orphans) {
+  await page.evaluate(() => {
+    const g = window.__skyrome.game;
+    const ED = Object.getPrototypeOf(Object.getPrototypeOf(Object.getPrototypeOf(g.scene)));
+    const tracked = (window.__tracked = new Set());
+    const BG = g.scene.children.find((o) => o.geometry)?.geometry.constructor;
+    const sa = BG.prototype.setAttribute;
+    BG.prototype.setAttribute = function (n, a) {
+      if (!this.__where) this.__where = (new Error().stack || '').split('\n').slice(2).filter((l) => /\/src\//.test(l)).slice(0, 3).map((l) => l.replace(/^.*\/src\//, '').replace(/\?t=\d+/, '').replace(/\)$/, '')).join(' < ');
+      return sa.call(this, n, a);
+    };
+    const add = ED.addEventListener;
+    const rem = ED.removeEventListener;
+    ED.addEventListener = function (t) {
+      if (t === 'dispose' && this.isBufferGeometry) tracked.add(this);
+      return add.apply(this, arguments);
+    };
+    ED.removeEventListener = function (t) {
+      if (t === 'dispose' && this.isBufferGeometry) tracked.delete(this);
+      return rem.apply(this, arguments);
+    };
+  });
+}
 // Web Audio starts on the first gesture: give it one, so the audio counters mean something.
 await page.keyboard.press('ShiftLeft');
 await page.waitForTimeout(5000);
@@ -112,6 +137,13 @@ async function sample() {
   await cdp.send('HeapProfiler.collectGarbage');
   await page.waitForTimeout(150);
   await cdp.send('HeapProfiler.collectGarbage');
+  if (args.orphans) {
+    await page.evaluate(async () => {
+      const rb = await import('/src/actors/avatar/real/RealBody.ts');
+      const hd = await import('/src/actors/avatar/real/head/index.ts');
+      window.__cachedUuids = new Set([...rb.realCacheGeometries(), ...hd.headCacheGeometries()].map((x) => x.uuid));
+    });
+  }
   const dom = await cdp.send('Memory.getDOMCounters').catch(() => ({}));
   const s = await page.evaluate(() => {
     const g = window.__skyrome.game;
@@ -124,6 +156,11 @@ async function sample() {
       if (o.material) for (const m of Array.isArray(o.material) ? o.material : [o.material]) mats.add(m.uuid);
       if (o.geometry) geos.add(o.geometry.uuid);
     });
+    let orphanGeos = 0;
+    if (window.__tracked) {
+      const cached = window.__cachedUuids ?? new Set();
+      for (const geo of window.__tracked) if (!geos.has(geo.uuid) && !cached.has(geo.uuid)) orphanGeos++;
+    }
     const w = g.physics.world;
     const h = window.__leakHooks;
     return {
@@ -133,6 +170,7 @@ async function sample() {
       prog: info.programs?.length ?? 0,
       mat: mats.size,
       objects,
+      orphanGeos,
       bodies: w.bodies.len(),
       colliders: w.colliders.len(),
       actors: g.combat?.core.list.length ?? 0,
@@ -153,7 +191,7 @@ async function sample() {
   return s;
 }
 
-const KEYS = ['heap', 'geo', 'tex', 'prog', 'mat', 'objects', 'bodies', 'colliders', 'actors', 'npcs', 'audioLive', 'domNodes', 'domAttached', 'listeners', 'docs', 'intervals', 'timeouts'];
+const KEYS = ['heap', 'geo', 'tex', 'prog', 'mat', 'objects', 'orphanGeos', 'bodies', 'colliders', 'actors', 'npcs', 'audioLive', 'domNodes', 'domAttached', 'listeners', 'docs', 'intervals', 'timeouts'];
 const results = [];
 // Teleports sample once a lap (12 places), always standing at the same place: what streams in
 // depends on where you are, so only same-place samples compare.
@@ -269,6 +307,18 @@ const ACTIVITIES = {
   },
 };
 
+async function orphanSites() {
+  return page.evaluate(() => {
+    const g = window.__skyrome.game;
+    const geos = new Set();
+    g.scene.traverse((o) => o.geometry && geos.add(o.geometry.uuid));
+    const cached = window.__cachedUuids ?? new Set();
+    const by = {};
+    for (const geo of window.__tracked ?? []) if (!geos.has(geo.uuid) && !cached.has(geo.uuid)) by[geo.__where ?? '?'] = (by[geo.__where ?? '?'] ?? 0) + 1;
+    return Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  });
+}
+
 async function snapshot(name) {
   const file = resolve(outDir, `${name}.heapsnapshot`);
   const ws = createWriteStream(file);
@@ -308,12 +358,13 @@ for (const phase of phases) {
     }
   }
   if (args.snapshot === phase) await snapshot(`${phase}-after`);
-  const first = rows[0];
+  // Lap-sampled phases compare same-place samples only: the warm-up lap itself still streams in.
+  const first = EVERY[phase] && rows.length > 2 ? rows[1] : rows[0];
   const last = rows[rows.length - 1];
   const half = rows[Math.floor(rows.length / 2)];
   const grew = [];
   if (first && last) {
-    const hs = (last.heap - first.heap) / n;
+    const hs = (last.heap - first.heap) / (EVERY[phase] && rows.length > 2 ? n - EVERY[phase] : n);
     if (hs > slope && last.heap > half.heap) grew.push(`heap +${(last.heap - first.heap).toFixed(0)} MB (${hs.toFixed(2)} MB/cycle)`);
     for (const k of KEYS.slice(1)) {
       // Growth that continues in the second half is a leak; a step that then holds is a cache.
@@ -328,6 +379,7 @@ for (const phase of phases) {
     // Buffers made per cycle are real memory (a synthesized sound cached per hit would show here).
     if ((last.audioMB - first.audioMB) / n > 0.05) grew.push(`audio buffers +${(last.audioMB - first.audioMB).toFixed(1)} MB`);
   }
+  if (args.orphans) console.log('  orphan geometries by builder:', JSON.stringify(await orphanSites()));
   results.push({ phase, cycles: n, first, last, grew });
   console.log(`  ${grew.length ? 'GROWTH: ' + grew.join(', ') : 'flat'}`);
 }

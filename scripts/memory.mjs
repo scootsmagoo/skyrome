@@ -33,9 +33,13 @@ const cdp = await page.context().newCDPSession(page);
 await cdp.send('HeapProfiler.collectGarbage');
 await page.waitForTimeout(1500);
 const heap = await page.evaluate(() => Math.round(performance.memory.usedJSHeapSize / 1048576));
-// Resident memory of Chromium's renderer and GPU processes (macOS/Linux ps; KB).
-const rows = execSync('ps -axo rss=,command=').toString().split('\n');
-const sum = (re) => Math.round(rows.filter((r) => /ms-playwright/i.test(r) && re.test(r)).reduce((s, r) => s + Number(r.trim().split(/\s+/)[0] || 0), 0) / 1024);
+// Resident memory of this browser's renderer and GPU processes (macOS/Linux ps; KB). Only the process
+// tree of the browser launched here: other agents' or windows' Chromiums on the machine are not counted.
+const bcdp = await browser.newBrowserCDPSession();
+const { processInfo } = await bcdp.send('SystemInfo.getProcessInfo');
+const table = execSync('ps -axo pid=,ppid=,rss=,command=').toString().split('\n').map((l) => l.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+(.*)$/)).filter(Boolean).map((m) => ({ pid: +m[1], ppid: +m[2], rss: +m[3], cmd: m[4] }));
+const mine = new Set(processInfo.map((p) => p.id));
+const sum = (re) => Math.round(table.filter((r) => mine.has(r.pid) && re.test(r.cmd)).reduce((s2, r) => s2 + r.rss, 0) / 1024);
 const renderer = sum(/--type=renderer/);
 const gpu = sum(/--type=gpu-process/);
 console.log(`JS heap ${heap} MB · page process ${renderer} MB · GPU process ${gpu} MB · total ${renderer + gpu} MB`);

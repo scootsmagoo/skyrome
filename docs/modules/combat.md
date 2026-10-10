@@ -314,7 +314,9 @@ events tell the quest (lud-01 stops the bout; the rixa is lost).
 **Bodies (§6.14, `bodies.ts`).** A dead NPC is a container: E (*Search*) opens the UI's container
 panel. It holds its weapon and shield (never practice arms or fists), each worn piece with a 50 %
 chance, and a roll of its tier's loot table with coin, rolled the first time it is opened. Bodies
-last 3 game days; spawned corpses leave the world once searched-out and far away (160 m).
+last 3 game days; spawned corpses leave the world once searched-out and far away (160 m). At most
+`MAX_CORPSES` (12) spawned corpses stay at once: past that the farthest go (each holds its own avatar and
+gore pieces, about 3 MB; before the cap 20 fights in one place grew the heap by 170 MB).
 
 **Arena (§6.10, `ArenaBout.ts`).** Favor starts at 30 (+10 with plebs Fama over 30). It rises for
 a parry (+6), a riposte or finisher (+8), a power hit (+3), dodging an unblockable (+4) and a
