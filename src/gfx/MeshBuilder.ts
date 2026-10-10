@@ -17,6 +17,7 @@ import { Layer } from '../core/Physics';
 import { getMaterial } from './materials';
 import type { MaterialId } from './materialIds';
 import { boxProjectUVs } from './uv';
+import { UV_AUDIT, uvAuditRecord } from './uvstretch';
 import { separateCoplanar } from './coplanar';
 import { AUDIT, auditRecordBuild, currentAuditSource } from '../dev/audit/geomAudit';
 
@@ -182,6 +183,7 @@ export class MeshBuilder {
     // Keep only the attributes every part shares so merging never fails.
     for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv') g.deleteAttribute(name);
     g.morphAttributes = {};
+    if (UV_AUDIT) uvAuditRecord(g, typeof material === 'string' ? material : material.name, (opts.uv ?? 'box') === 'box' ? opts.uvScale ?? 2 : 2);
     g.userData.seq = ++seq;
     if (AUDIT) g.userData.src = currentAuditSource();
     this.capture?.push(g);
@@ -354,6 +356,7 @@ function preparedInstance(key: string, make: () => InstancePart[]) {
     if ((part.uv ?? 'box') === 'box' || !g.getAttribute('uv')) g = boxProjectUVs(g, part.uvScale ?? 2);
     for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv') g.deleteAttribute(name);
     g.morphAttributes = {};
+    if (UV_AUDIT) uvAuditRecord(g, typeof part.material === 'string' ? part.material : part.material.name, (part.uv ?? 'box') === 'box' ? part.uvScale ?? 2 : 2);
     const castShadow = part.castShadow !== false;
     const mk = `${typeof part.material === 'string' ? part.material : `#${part.material.uuid}`}|${castShadow ? 1 : 0}`;
     const l = lists.get(mk) ?? { geoms: [], material: part.material, castShadow };

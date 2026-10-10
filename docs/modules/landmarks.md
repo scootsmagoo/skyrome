@@ -65,3 +65,45 @@ builds every landmark these builders handle at both detail levels and checks bud
   the Scipios mentioning a columbarium) can pick the wrong form; the more specific test comes first.
 - Atlas footprints of the Theatre of Balbus and the Crypta Balbi touch; their roof and wall overlap
   by under 0.6 m.
+
+## Surfaces and UV audit (R4a, wave 3)
+
+- **Forum paving** (`paving_travertine`): a procedural slab texture (`slabs` in
+  `src/gfx/textures/procedural.ts`, 6 m repeat at 1024², about 6 mm per pixel): five courses of
+  1.5-2.6 m slabs in running bond, tight dark joints, a tone and warmth of its own per slab, a
+  polished walk-lane, chipped arrises, the odd hairline crack, one repair slab of greyer stone and
+  one slab with a carved band of lettering. The recipe keeps `set: 'paving_travertine'` only
+  because the terrain's ground layer reads it; `createMaterial` prefers `proc` when both are set.
+  The streaky shader `wear` is off for it (the polish is drawn per slab). Generation costs about
+  0.4 s on the main thread at boot (same class as `travertine`).
+- **`boxProjectUVs`** (`src/gfx/uv.ts`) now picks the projection plane from each triangle's own
+  geometry, with the sign of the shading normal. Before, it used the summed vertex normals, so a
+  fluted shaft or lathe moulding whose smooth normals disagreed with its facets was projected at a
+  grazing angle (stretch up to 460x on column shafts, 25x on capitals). The worst case is now the
+  box-projection limit of 1.73 (a facet whose normal sits on the cube diagonal).
+- **`?uvcheck=1`** (`src/gfx/uvcheck.ts`): every material becomes a checker whose squares are 1 m
+  with a 0.25 m grid and an "F" for orientation, tinted per material id. Square, 1 m squares mean
+  correct world-scale UVs; bars, diamonds or smears mean stretching. Terrain and avatars are
+  not covered.
+- **`?uvaudit=1`** (`src/gfx/uvstretch.ts`, hooked in `MeshBuilder.add` and instance parts): measures
+  the singular values of the UV-to-surface map per triangle while the world builds and totals the
+  stretched area (> 1.8x) per material and builder call site. Read it in the page with
+  `window.__uvAudit(40)`, e.g. `node scripts/shot.mjs --query "at=rostra&hour=10&uvaudit=1" --wait 8000
+  --steps '[{"eval":"JSON.stringify(window.__uvAudit(40))"}]'`. Call sites are the first two stack
+  frames outside gfx/ and the Draw helper (line numbers are of the Vite-transformed module, so use
+  the function names). Known leftovers: custom-texture materials with their own 0..1 UVs (obelisk
+  faces, soot fans, relief quads, numerals) are expected to show up and are not stone tiling.
+- **Street wetness** (`puddle` in `MaterialRecipe`, `SK_PUDDLE` in `shaderPatch.ts`): world-space
+  damp darker patches, small glassy puddles (roughness 0.07, normal flattened) and dung/oil
+  smudges on flat faces of basalt, cobbles, dirt, gravel and mud (and a little on travertine).
+  `?puddle=0` switches it off for A/B shots.
+- Stretched roofs fixed at the source: the tholos roof and Forum of the Vesta roof, and the
+  Boarium round temple, no longer use `uv: 'keep'` lathe UVs (6x stretch on roof_tile).
+- Not done: step and kerb edge wear. A shader cannot see a tread's edge (box-projected UVs carry no
+  edge distance, and batching drops extra attributes), so it needs geometry (a worn nosing strip in
+  `stairs()`); wall-base grime already exists as `weather` (grime band, damp, moss).
+
+### Edge wear and contact grime (R4a, review pass)
+- `treadWear()` in `src/arch/common/stairs.ts` (called by `stairs()` and `wrappedSteps()`): per tread, a pale polished `marble` lip along the nosing (skipped on marble steps) and a dark `dirt` line where the tread meets the next riser. Two shared quads per tread (4 mm lift, no collider, box UVs so no stretch). Cost: 4 triangles per step.
+- `SK_WEATHER` (shaderPatch.ts, cache key v7) gained a tight dark contact line where a wall meets the ground plus splash flecks within 0.45 m of it, on top of the existing grime band, damp and moss.
+- Not done: kerb edge wear (no kerb builder exists; kerbs are street-paving boxes).

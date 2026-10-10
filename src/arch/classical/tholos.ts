@@ -181,7 +181,7 @@ export function tholos(b: MeshBuilder, spec: TholosSpec, at?: THREE.Matrix4): Th
   const roofR = R + ent.projection + 0.15;
   const rise = roofR * Math.tan(pitch);
   const roofProf = new ProfileBuilder(0.02, yTop + rise).to(roofR, yTop - 0.05).build();
-  b.add(lathe({ pts: [...roofProf.pts].reverse(), smooth: roofProf.smooth }, { segments: segs }), spec.roofMaterial ?? 'roof_tile', m, { uv: 'keep' });
+  b.add(lathe({ pts: [...roofProf.pts].reverse(), smooth: roofProf.smooth }, { segments: segs }), spec.roofMaterial ?? 'roof_tile', m);
   const under = new ProfileBuilder(roofR, yTop - 0.15).to(0.02, yTop + rise - 0.15).build();
   b.add(lathe({ pts: [...under.pts].reverse(), smooth: under.smooth }, { segments: segs }), 'wood_dark', m, { castShadow: false });
   // Finial.

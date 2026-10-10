@@ -148,7 +148,7 @@ function roundTemple(b: MeshBuilder, spec: RoundTempleSpec) {
   const roofR = R + ent.projection + 0.15;
   const rr = roofR * Math.tan(pitch);
   const roofProf = new ProfileBuilder(0.02, yTop + rr).to(roofR, yTop - 0.05).build();
-  b.add(lathe({ pts: [...roofProf.pts].reverse(), smooth: roofProf.smooth }, { segments: segs }), spec.roofMaterial, undefined, { uv: 'keep' });
+  b.add(lathe({ pts: [...roofProf.pts].reverse(), smooth: roofProf.smooth }, { segments: segs }), spec.roofMaterial, undefined);
   const under = new ProfileBuilder(roofR, yTop - 0.15).to(0.02, yTop + rr - 0.15).build();
   b.add(lathe({ pts: [...under.pts].reverse(), smooth: under.smooth }, { segments: segs }), 'wood_dark', undefined, { castShadow: false });
   const fin = new ProfileBuilder(0.0, yTop + rr - 0.05).to(0.35, yTop + rr - 0.05).up(0.12).to(0.12, yTop + rr + 0.3).ovolo(0.16, 0.25, 4).to(0, yTop + rr + 0.75).build();

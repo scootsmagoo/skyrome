@@ -38,7 +38,7 @@ export type TextureSetId =
   | 'bark';
 
 /** Canvas generators in procedural.ts. */
-export type ProceduralId = 'fabric' | 'mosaic' | 'stucco' | 'gilded' | 'bronze' | 'metal' | 'porphyry' | 'reticulatum' | 'travertine' | 'foliage';
+export type ProceduralId = 'fabric' | 'mosaic' | 'stucco' | 'gilded' | 'bronze' | 'metal' | 'porphyry' | 'reticulatum' | 'travertine' | 'foliage' | 'slabs';
 
 export interface MaterialRecipe {
   set?: TextureSetId;
@@ -71,6 +71,8 @@ export interface MaterialRecipe {
   grain?: number;
   /** Plaster lost in patches, showing the brick or tufa below (0 = off; needs `weather`). */
   flake?: number;
+  /** Damp patches, clear puddles and smudges on flat ground (0 = off; ~1 for streets). */
+  puddle?: number;
 }
 
 export const MATERIAL_RECIPES: Record<MaterialId, MaterialRecipe> = {
@@ -115,15 +117,17 @@ export const MATERIAL_RECIPES: Record<MaterialId, MaterialRecipe> = {
   fabric_ochre: { proc: 'fabric', tile: 0.6 },
   fabric_blue: { proc: 'fabric', tile: 0.6 },
   // ground
-  paving_basalt: { set: 'paving_basalt', tile: 3.2, macro: 0.08, wear: 1, grain: 0.7 },
-  paving_travertine: { set: 'paving_travertine', tile: 4.5, macro: 0.07, wear: 0.8, grain: 0.7 },
-  cobbles: { set: 'cobbles', tile: 1.6, macro: 0.08, wear: 1, grain: 0.7 },
-  gravel: { set: 'gravel', tile: 2.2, macro: 0.08, detile: true },
-  dirt: { set: 'dirt', tile: 2.5, macro: 0.12, detile: true },
+  paving_basalt: { set: 'paving_basalt', tile: 3.2, macro: 0.08, wear: 1, grain: 0.7, puddle: 1 },
+  // `set` stays for the terrain's ground layer; the material itself is the procedural slab paving
+  // (6 m repeat) whose polish and wear are drawn per slab, so no streaky shader wear.
+  paving_travertine: { set: 'paving_travertine', proc: 'slabs', tile: 6, normal: 0.7, macro: 0.05, mottle: 0.05, grain: 0.5, puddle: 0.25 },
+  cobbles: { set: 'cobbles', tile: 1.6, macro: 0.08, wear: 1, grain: 0.7, puddle: 1 },
+  gravel: { set: 'gravel', tile: 2.2, macro: 0.08, detile: true, puddle: 0.5 },
+  dirt: { set: 'dirt', tile: 2.5, macro: 0.12, detile: true, puddle: 0.8 },
   grass: { set: 'grass', tile: 2.6, macro: 0.14, detile: true },
   dry_grass: { set: 'dry_grass', tile: 2.2, macro: 0.12, detile: true },
   sand: { set: 'sand', tile: 1.8, macro: 0.08, detile: true },
-  mud: { set: 'mud', tile: 1.5, macro: 0.1, detile: true },
+  mud: { set: 'mud', tile: 1.5, macro: 0.1, detile: true, puddle: 1 },
   // nature
   bark: { set: 'bark', tile: 1.4, macro: 0.06 },
   foliage_pine: { proc: 'foliage', tile: 1.2, macro: 0.12 },

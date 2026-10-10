@@ -16,6 +16,32 @@ import * as THREE from 'three';
 import type { MeshBuilder } from '../../gfx/MeshBuilder';
 import type { MaterialId } from '../../gfx/materialIds';
 
+/** One flat quad shared by every wear strip (add() clones it). */
+const STRIP = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+const STRIP_LIFT = 0.004;
+
+/**
+ * Wear on a tread: a pale polished lip along the nosing (where feet and sandals scuff it) and a dark
+ * line of dirt where the tread meets the next riser. Two quads per tread, no collider; `xa..xb` and
+ * `za..zb` are the tread's local extent, `nose` the side the nosing is on (-1 = low z, +1 high z, 0 = none).
+ */
+export function treadWear(b: MeshBuilder, mat: MaterialId, m: THREE.Matrix4, xa: number, xb: number, za: number, zb: number, top: number, nose: -1 | 1, alongX = false): void {
+  const w = alongX ? zb - za : xb - xa;
+  const d = alongX ? xb - xa : zb - za;
+  if (w < 0.3 || d < 0.2) return;
+  const lip = Math.min(0.07, d * 0.25);
+  const joint = Math.min(0.05, d * 0.18);
+  const strip = (off: number, width: number, material: MaterialId) => {
+    // off = distance from the nosing edge into the tread; width of the strip across the run.
+    const c = alongX ? (nose < 0 ? xa + off : xb - off) : nose < 0 ? za + off : zb - off;
+    const t = new THREE.Matrix4().makeTranslation(alongX ? c : (xa + xb) / 2, top + STRIP_LIFT, alongX ? (za + zb) / 2 : c);
+    const sc = new THREE.Matrix4().makeScale(alongX ? width : w, 1, alongX ? w : width);
+    b.add(STRIP, material, m.clone().multiply(t).multiply(sc));
+  };
+  if (mat !== 'marble') strip(lip / 2, lip, 'marble');
+  strip(d - joint / 2, joint, 'dirt');
+}
+
 export interface StairsSpec {
   width: number;
   rise: number;
@@ -70,6 +96,7 @@ export function stairs(b: MeshBuilder, spec: StairsSpec, at?: THREE.Matrix4): St
     const h = rise;
     const local = new THREE.Matrix4().makeTranslation(0, y0 + h / 2, (z0 + z1) / 2);
     b.box(mat, width, h, z1 - z0, m.clone().multiply(local), { collide: mode === 'steps' });
+    treadWear(b, mat, m, -width / 2, width / 2, z0, z0 + run, y0 + h, -1);
   }
   if (mode === 'ramp') {
     // A slab whose top passes through the step nosings.
@@ -133,9 +160,9 @@ export function wrappedSteps(b: MeshBuilder, spec: WrappedStepsSpec, at?: THREE.
     const z0n = spec.z0 - (sides.front ? inn : 0);
     const z1n = spec.z1 + (sides.back ? inn : 0);
     // Front and back bands run the full width (corners included); the side bands fill between.
-    if (sides.front) box(X0, X1, Z0, z0n, top);
-    if (sides.back) box(X0, X1, z1n, Z1, top);
-    if (sides.left) box(X0, x0n, z0n, z1n, top);
-    if (sides.right) box(x1n, X1, z0n, z1n, top);
+    if (sides.front) { box(X0, X1, Z0, z0n, top); treadWear(b, mat, m, X0, X1, Z0, z0n, top, -1); }
+    if (sides.back) { box(X0, X1, z1n, Z1, top); treadWear(b, mat, m, X0, X1, z1n, Z1, top, 1); }
+    if (sides.left) { box(X0, x0n, z0n, z1n, top); treadWear(b, mat, m, X0, x0n, z0n, z1n, top, -1, true); }
+    if (sides.right) { box(x1n, X1, z0n, z1n, top); treadWear(b, mat, m, x1n, X1, z0n, z1n, top, 1, true); }
   }
 }

@@ -156,7 +156,7 @@ function vesta(p: Part) {
   const rise2 = roofR * Math.tan(pitch);
   const ventR = 0.45;
   const roofProf = new ProfileBuilder(ventR, yTop + rise2 - ventR * Math.tan(pitch)).to(roofR, yTop - 0.05).build();
-  b.add(lathe({ pts: [...roofProf.pts].reverse(), smooth: roofProf.smooth }, { segments: segs }), 'bronze', undefined, { uv: 'keep' });
+  b.add(lathe({ pts: [...roofProf.pts].reverse(), smooth: roofProf.smooth }, { segments: segs }), 'bronze', undefined);
   const under = new ProfileBuilder(roofR, yTop - 0.15).to(ventR, yTop + rise2 - ventR * Math.tan(pitch) - 0.15).build();
   b.add(lathe({ pts: [...under.pts].reverse(), smooth: under.smooth }, { segments: segs }), 'wood_dark');
   // the vent: a little lantern of posts under a cap, smoke-blackened

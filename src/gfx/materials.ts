@@ -26,6 +26,7 @@ import { MATERIAL_BASE, type MaterialId } from './materialIds';
 import { MATERIAL_RECIPES, TEXTURE_STATS, repeatFor, roughnessFactor, tintFor, type MaterialRecipe, type TextureSetId } from './textures/catalog';
 import { generateProcedural, type ProcImage } from './textures/procedural';
 import { applyShaderPatch } from './textures/shaderPatch';
+import { applyUvCheck, uvCheckEnabled } from './uvcheck';
 
 export { applyDefaultEnvironment } from './textures/environment';
 export { UV_METERS, MATERIAL_RECIPES } from './textures/catalog';
@@ -87,8 +88,12 @@ function createMaterial(id: MaterialId): THREE.Material {
     return m;
   }
   if (!hasDom) return m;
-  if (recipe.set) applyPhotoSet(m, id, recipe, recipe.set);
-  else if (recipe.proc) applyProcedural(m, id, recipe);
+  if (uvCheckEnabled() && id !== 'water' && id !== 'glow_fire') {
+    applyUvCheck(m, id);
+    return m;
+  }
+  if (recipe.proc) applyProcedural(m, id, recipe);
+  else if (recipe.set) applyPhotoSet(m, id, recipe, recipe.set);
   const hasNormal = !!recipe.set || !!m.normalMap;
   const metal = (base.metalness ?? 0) > 0.3;
   applyShaderPatch(m, {
@@ -96,12 +101,13 @@ function createMaterial(id: MaterialId): THREE.Material {
     detile: recipe.detile,
     contrast: recipe.contrast,
     weather: recipe.weather,
-    mean: recipe.set ? TEXTURE_STATS[recipe.set]?.albedo : undefined,
+    mean: recipe.set && !recipe.proc ? TEXTURE_STATS[recipe.set]?.albedo : undefined,
     detail: hasNormal && !metal ? recipe.detail ?? 0.9 : 0,
     mottle: recipe.proc === 'foliage' || metal ? 0 : recipe.mottle ?? (recipe.macro ?? 0) * 1.4,
     wear: recipe.wear,
     grain: recipe.grain,
     flake: recipe.flake,
+    puddle: recipe.puddle,
   });
   return m;
 }
