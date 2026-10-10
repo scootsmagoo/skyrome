@@ -67,7 +67,14 @@ Fixes (each can be switched off for A/B with `?wallfix=0` and `?navlow=0`):
    again; it backs off (1.5 s, 3 s, 4.5 s, then the stuck ladder) and the count resets after 20 quiet seconds.
 3. **Re-plan when the way closes** (`Mover`). Every 0.4 s the mover checks the line to its next corner on
    the grid; a wall in the way (a shove, a sidestep, a corner) re-plans, at most 3 times per goal and 1.5 s apart.
-4. **Street nodes behind buildings** (`StreetNav.drop`, `NavService.findPath`). When the walk to a street node
+4. **Lines keep clear of walls** (`NavGrid.lineClear`). `lineWalkable` is the cell test along the line of centres; a
+   body 0.6 m wide grazes a corner it passes. String-pulling, the straight-line shortcut in `NavService`, the
+   mover's corner skipping and the bot's detours now use `lineClear` (the centre line and two lines 0.32 m to
+   either side, starting and ending 0.5 m in so someone hugging a wall is not refused).
+5. **Cells remember where a person fits** (`CellSample.off`). A cell whose centre is too tight but has room 0.3 m
+   to one side used to count as walkable at its centre, so a path through it ran into the wall; the sampler now
+   says which side, and paths pass through that point (`NavGrid.cellPoint`). The offset is stored in flag bits 5 to 7.
+6. **Street nodes behind buildings** (`StreetNav.drop`, `NavService.findPath`). When the walk to a street node
    within 30 m is walled off from ground that is connected, the node is cut out of the street graph and the route is made
    again (the city draws streets, the grid reads the colliders).
 
@@ -90,6 +97,15 @@ something, 4 kerbs and 2 slanted walls; after, 16 walls, 13 embedded starts, 2 k
 kerb stalls in the streets were rare to begin with (about 2 % of walks); the oblique-approach failures
 the synthetic test found are what the player met on diagonal crossings.
 
+## The golden-path bot
+
+`scripts/golden-bot.js` (the story bot) jammed in two ways that looked like obstacles: it followed a street node that sits
+inside a wall (the Ludus gate's, 2 m from the wall) and it ping-ponged between two waypoints at a steep bank
+(about (148, 118): the nav grid lets a path run along the foot of a bank where the body then catches).
+It now skips a waypoint the grid says is walled off, uses `lineClear` for its detours, and has a loop
+detector (the goal no nearer than 3 m from the best for 20 s counts as the same snag as a jam, 8 s without 1.5 m of
+movement). `golden-path.mjs --trace` prints the position, the next waypoint and the distance to the goal every 5 s.
+
 ## Known gaps
 
 - Street links that do not exist: the golden-path bot's "stuck" snags at (176, 127), (190, 116) and
@@ -97,5 +113,16 @@ the synthetic test found are what the player met on diagonal crossings.
   (`reachable` false) and a path with any budget fails, while the street graph has an edge into it. The
   NPC planner now cuts such a node out (`StreetNav.drop`), the bot's plain "walk to the next waypoint" does not.
   The city crew should check why that edge exists (`docs/modules/city.md`, the reach test).
+- Steep ground the grid calls walkable: at about (148, 118) and (299, 164) the road runs along a bank steeper than
+  the body climbs and the grid has no slope limit apart from the 0.85 m per metre it allows for flights of
+  steps; also at (299.5, 165) a 3 m high notice wall ("OB DEDICATIONEM COLVMNAE") stands 0.5 m from the road
+  edge and catches the path. The bot recovers (teleports 25 m on); a player walks round. A slope limit in
+  `NavGrid.canStep` for cells that are not on a flight would fix the first kind.
 - The stepwalk scanner reports lines that run through thin rails and starts that are inside geometry as stalls;
   `scripts/stepwalk.mjs` classifies them but does not drop them.
+
+## Cost
+
+`NpcManager` at the Forum, 28 full-sim NPCs against 23, mean of ten 2 s samples after 20 s: locomote 1.25 ms against 1.35 ms (before),
+steer 0.09 / 0.08, brain 0.11 / 0.08, whole step 1.46 / 1.52 ms: no measurable cost. A* searches in the first 35 s: 212 with 468 failures
+against 2011 with 2235 failures before (the failing searches are the expensive kind; `lineClear` and the clearance fixes make far fewer plans fail).
