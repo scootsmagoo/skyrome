@@ -920,6 +920,8 @@ export function sweepCell(key: string, o: { blocks?: boolean; maxFindings?: numb
       if (minGap > 0.03) {
         add('fixturesFloating');
         findings.push({ kind: 'fixture-floating', src, mat: MATS[e.mat], x: at[0], y: at[1], z: at[2], v: minGap, len: 1, note: `nothing of it touches (lowest ${minGap.toFixed(2)}, highest ${maxGap.toFixed(2)} m)` });
+      } else if (maxGap > 1.5) {
+        add('fixturesUpperLevel'); // a balcony, gallery or awning frame: held up by the building, not a fit defect
       } else if (maxGap > 0.08) {
         add('fixturesEdgeInAir');
         findings.push({ kind: 'fixture-edge-in-air', src, mat: MATS[e.mat], x: at[0], y: at[1], z: at[2], v: maxGap, len: 1, note: `its base stands ${maxGap.toFixed(2)} m over the ground at one side` });
@@ -932,7 +934,10 @@ export function sweepCell(key: string, o: { blocks?: boolean; maxFindings?: numb
       add('props:landmark');
       const g = groundAt(lp.x, lp.z, lp.y + 0.12);
       const gap = lp.y - g;
-      if (gap > 0.06) {
+      // A base more than 1.5 m up stands on an upper floor or terrace the face records do not hold: counted, not reported.
+      if (gap > 1.5) {
+        add('lmPropsUpperLevel');
+      } else if (gap > 0.06) {
         add('lmPropsFloating');
         findings.push({ kind: 'prop-floating', src: `lm:${lp.name}`, mat: lp.kind, x: lp.x, y: lp.y, z: lp.z, v: gap, len: 1, note: `landmark ${lp.kind} (${lp.src}): base ${gap.toFixed(2)} m over the ground` });
       } else if (gap < -0.15 && -gap < 2) {
