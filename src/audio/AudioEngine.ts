@@ -174,6 +174,8 @@ const CULL_GAIN = 0.0008;
  * passes -0.2 dBFS, even with every slider at 100 %. Measured with `meter()` in the audio scene.
  */
 const MAKEUP_DB = 7;
+/** A dip on the ambience bus where the crowd and city beds crowd the mix (see buildGraph). */
+const AMBIENCE_MUD = { hz: 480, q: 0.7, db: -3.5 };
 /** Sounds louder than this at the listener (est. linear gain) duck the music briefly. */
 const DUCK_ABOVE = 0.4;
 /** The music bus follows its slider exactly (0 dB trim): the music is a quiet bed, and its instruments carry the level. */
@@ -414,7 +416,17 @@ export class AudioEngine implements System {
     this.musicDuck.connect(this.master);
     for (const b of BUSES) {
       const g = ctx.createGain();
-      g.connect(b === 'music' ? this.musicDuck : this.master);
+      if (b === 'ambience') {
+        // The crowd and city beds pile half of the mix's energy into one octave (355-710 Hz, measured
+        // in the Forum by scripts/sfx/mixcheck.mjs): a mild cut there lets the voices, steps and air above it through.
+        const mud = ctx.createBiquadFilter();
+        mud.type = 'peaking';
+        mud.frequency.value = AMBIENCE_MUD.hz;
+        mud.Q.value = AMBIENCE_MUD.q;
+        mud.gain.value = AMBIENCE_MUD.db;
+        g.connect(mud);
+        mud.connect(this.master);
+      } else g.connect(b === 'music' ? this.musicDuck : this.master);
       this.buses[b] = g;
       const s = ctx.createGain();
       s.connect(this.envIn);
@@ -958,6 +970,49 @@ export class AudioEngine implements System {
     const glueDb = reduction(this.glue);
     const limiterDb = reduction(this.limiter);
     return { peakDb: db(peak), rmsDb: db(Math.sqrt(sum / b.length)), reductionDb: glueDb + limiterDb, glueDb, limiterDb };
+  }
+
+  /**
+   * Debug/measurement: record `seconds` of the final output (after glue, limiter and clipper) and of
+   * each bus's dry feed (post-fader, before the master; reverb returns are not in the bus feeds), as
+   * mono sums. Used by scripts/sfx/mixcheck.mjs to report loudness and spectra of the real mix. Not for
+   * play: it runs script processors (deprecated, but the only portable raw-PCM tap).
+   */
+  // DEBUG-ONLY measurement tap (scripts/sfx/mixcheck.mjs); never called at play time.
+  capture(seconds: number): Promise<{ rate: number; out: Float32Array; buses: Record<string, Float32Array> }> {
+    const ctx = this.ctx;
+    if (!ctx) return Promise.reject(new Error('audio not started'));
+    const rate = ctx.sampleRate;
+    const total = Math.round(seconds * rate);
+    const taps: [string, AudioNode][] = [['out', this.clipper], ...BUSES.map((b): [string, AudioNode] => [b, this.buses[b]])];
+    const bufs = new Map<string, Float32Array>();
+    return new Promise((resolve) => {
+      let done = 0;
+      for (const [name, node] of taps) {
+        const data = new Float32Array(total);
+        bufs.set(name, data);
+        let at = 0;
+        const sp = ctx.createScriptProcessor(4096, 1, 1);
+        sp.onaudioprocess = (e) => {
+          const inp = e.inputBuffer.getChannelData(0);
+          const n = Math.min(inp.length, total - at);
+          if (n > 0) data.set(inp.subarray(0, n), at);
+          at += Math.max(0, n);
+          if (at >= total && sp.onaudioprocess) {
+            sp.onaudioprocess = null;
+            node.disconnect(sp);
+            sp.disconnect();
+            if (++done === taps.length) {
+              const out = bufs.get('out')!;
+              bufs.delete('out');
+              resolve({ rate, out, buses: Object.fromEntries(bufs) });
+            }
+          }
+        };
+        node.connect(sp);
+        sp.connect(ctx.destination);
+      }
+    });
   }
 
   stats(): AudioStats {

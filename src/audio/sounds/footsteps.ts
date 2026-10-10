@@ -138,7 +138,10 @@ function bakeStep(surface: Surface, gait: Gait, c: BakeContext): Float32Array {
 }
 
 // Every variant is levelled to the same loudness, so these set how loud a surface is against another.
-const SURFACE_GAIN: Record<Surface, number> = { stone: 0, marble: 1, cobbles: 0, dirt: -1, grass: -4, wood: 0, gravel: -1, sand: -3, water: -1 };
+// Set from the October 2026 audit (scripts/sfx/audit.mjs: K-weighted loudest 200 ms of each toned
+// recording plus this gain): walking on every surface lands within 1.5 dB of the street set (stone
+// -29.3, basalt -29.5 LUFS effective), the soft ones (grass, sand, dirt, wood) about 1 dB under it.
+const SURFACE_GAIN: Record<Surface, number> = { stone: 0, marble: -0.5, cobbles: 0.5, dirt: 2, grass: 5.5, wood: 3.5, gravel: 1, sand: 0.5, water: 0 };
 const GAIT_GAIN: Record<Gait, number> = { run: 0, walk: -3, sneak: -8 };
 const SURFACE_CENTROID: Record<Surface, [number, number]> = {
   stone: [500, 4000],
@@ -182,7 +185,7 @@ export const landingSounds: SoundDef[] = SURFACES.map(
     group: 'Footsteps',
     bus: 'sfx',
     kind: 'oneshot',
-    variants: 3,
+    variants: 4,
     gainDb: -6 + SURFACE_GAIN[surface],
     maxVoices: 4,
     priority: 0.5,

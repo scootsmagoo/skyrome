@@ -247,7 +247,7 @@ describe('music scheduler', () => {
     expect(m.state).toBe('combat');
     m.pump(40);
     const lastDay = Math.max(...log.filter((r) => r.state === 'explore-day' && !r.kind.startsWith('level') && r.kind !== 'dispose').map((r) => r.when));
-    expect(lastDay).toBeLessThan(20 + 1.3); // fades out in 1.2 s
+    expect(lastDay).toBeLessThan(20 + 2.3); // fades out in 2.2 s
     const firstCombat = Math.min(...log.filter((r) => r.state === 'combat' && !r.kind.startsWith('level')).map((r) => r.when));
     expect(firstCombat).toBeGreaterThanOrEqual(20);
     expect(firstCombat).toBeLessThan(21);

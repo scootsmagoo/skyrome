@@ -3,7 +3,19 @@ import { bridgeFloor, categorySpace, flowMusic, interiorFloor, interiorReverb, l
 import { REVERBS, impulseResponse } from '../src/audio/dsp/reverb';
 import { MUSIC_STATES, STYLES } from '../src/audio/music/styles';
 import { Composer } from '../src/audio/music/composer';
-import { footstepSurface, groundSurface } from '../src/game/audio';
+import { footstepSurface, groundSurface, isWading } from '../src/game/audio';
+
+describe('wading', () => {
+  it('shallow water over the bed splashes; dry land and swimming depth do not', () => {
+    expect(isWading(0.3, 0)).toBe(true);
+    expect(isWading(0.9, 0.1)).toBe(true);
+    expect(isWading(-Infinity, 0)).toBe(false);
+    expect(isWading(0.01, 0)).toBe(false);
+    expect(isWading(2, 0)).toBe(false);
+    // Standing on a quay or a deck above the water is not wading.
+    expect(isWading(0.5, 1.2)).toBe(false);
+  });
+});
 
 describe('floors by place', () => {
   it('temples, basilicas and baths are marble; store-rooms and huts are boards', () => {

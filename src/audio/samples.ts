@@ -14,6 +14,7 @@
  * has unit tests; only `decodeStrip` and the fetching touch the platform.
  */
 import { fadeEdges, normalizeLoudness, normalizePeak, peakOf, removeDc, rmsOf, trimTail } from './dsp/core';
+import { applyTone } from './sampleTone';
 import { BED_RMS, ONESHOT_LOUDNESS, ONESHOT_PEAK } from './levels';
 
 export interface SampleGroup {
@@ -275,7 +276,7 @@ export class SampleLibrary implements SampleSource {
     for (const [id, e] of Object.entries(m.sounds)) {
       if (e.group !== name || !e.clips) continue;
       const kind = e.kind ?? 'oneshot';
-      own.set(id, cutClips(strip, g.rate, e.clips, kind).map((c) => finishSample(c, g.rate, kind)));
+      own.set(id, cutClips(strip, g.rate, e.clips, kind).map((c) => finishSample(kind === 'oneshot' ? applyTone(c, g.rate, id) : c, g.rate, kind)));
     }
     for (const [id, e] of Object.entries(m.sounds)) {
       const list = e.alias ? own.get(e.alias) : own.get(id);

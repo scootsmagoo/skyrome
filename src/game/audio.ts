@@ -38,6 +38,15 @@ export function groundSurface(terrain: TerrainSurface | null, offGround: number,
   return footstepSound(terrain);
 }
 
+/**
+ * Is a walker on the bed of a river or pond, with water around the ankles to the waist? `depth` is
+ * the water surface minus the ground (game m, negative on dry land), `offGround` the feet above the
+ * ground. Deeper than a metre they swim, which has its own sounds. Pure.
+ */
+export function isWading(depth: number, offGround: number): boolean {
+  return depth > 0.04 && depth < 1.1 && Math.abs(offGround) <= 0.3;
+}
+
 /** Crowds and markets by atlas landmark: [id, layer, volume, reverb]. */
 const ZONES: [string, 'crowd' | 'market' | 'fountain', number, 'forum' | 'street' | 'open' | null][] = [
   ['forum-romanum', 'crowd', 1, 'forum'],
@@ -263,6 +272,8 @@ export function installGameAudio(game: Game): GameAudio {
     // Marble in the temples and basilicas, boards in the store-rooms and on timber bridges.
     const built = off > -1.5 ? builtFloor(x, z, off) : null;
     if (built) return built;
+    // Wading: the river bed under shallow water splashes (the terrain has no water layer of its own).
+    if (isWading(game.water?.depthAt(x, z) ?? -Infinity, off)) return 'water';
     if (kind !== 'paved' || Math.abs(off) > 0.15) return groundSurface(kind, off);
     const w = t.weightsAt(x, z);
     return groundSurface(kind, off, w[L.travertine], w[L.basalt]);
