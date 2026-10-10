@@ -171,7 +171,11 @@ activities: [
 - One option and no intro: E runs it at once with a toast (the fountain). Otherwise E opens a card in
   the conversation panel: the intro (a list rotates), the options, Leave.
 - A board lists 2–4 of today's notices for its id (at most 2 hooks); a hooked notice offers "Note it
-  down", which starts the quest (journal only while the main quest runs).
+  down", which starts the quest (journal only while the main quest runs). A job's notice is noted down
+  only while its giver could offer it (the job's hours and daily cap). Notices put their Latin above the
+  English: the conversation panel keeps line breaks (`white-space: pre-line`).
+- Each side quest's own crew writes its notices and rumours (rumours/quests-f.ts, quests-g.ts); the
+  CITY VOICE notices hook only jobs. A missed offer comes back on another day (2 hooks a board a day).
 - `at` kinds: `{ place: '<location/landmark/landmark spot id>', dx?, dz? }`, `{ landmarkSpot: 'lm:spot'
   or 'spot', replaces?: '<interactable id>' }`, `{ streetSpots: 'fountain', max? }`, `{ station, dressing }`.
 - The board spots' Read ids: capfora builders use `capfora:<landmark>:<spot>` (the Subura's is
