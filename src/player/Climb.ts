@@ -13,6 +13,7 @@
  */
 import * as THREE from 'three';
 import type { Game, System } from '../core/Game';
+import { Actor } from '../actors/Actor';
 import { Layer } from '../core/Physics';
 import { findLedge, mantlePose, type Ledge } from '../world/water/swim';
 import type { Player } from './Player';
@@ -151,7 +152,8 @@ export class ClimbSystem implements System {
       // A steep face or a roof pitch is a wall, not a ledge: report it as too high to climb.
       return hit.normal.y < CLIMB.minNormalY ? Infinity : hit.point.y;
     };
-    const ledge = findLedge(probe, pos.x, pos.z, dir.x, dir.z, pos.y + CLIMB.minRise, maxTop);
+    // (`Actor.legacyStep`, A/B runs only: the clamber as it was, from 0.42 m.)
+    const ledge = findLedge(probe, pos.x, pos.z, dir.x, dir.z, pos.y + (Actor.legacyStep ? 0.42 : CLIMB.minRise), maxTop);
     if (!ledge) return null;
     if (platform) {
       const lip = probe(ledge.x - dir.x * 0.45, ledge.z - dir.z * 0.45);

@@ -250,8 +250,12 @@
     const lead = grid.findPath(p.position.x, p.position.z, c.x, c.z, 4000);
     if (lead && lead.length) pts.unshift(...lead.filter((q) => Math.hypot(q.x - c.x, q.z - c.z) > 0.5));
     // No way there on the grid, and the grid says that place is walled off from here (a street node drawn inside
-    // a wall or behind a building: the Ludus gate's, 2 m from the wall): a player would not walk into it; skip the point.
-    else if (!lead && pts.length > 1 && grid.reachable(p.position.x, p.position.z) && !grid.reachable(c.x, c.z)) pts.shift();
+    // a wall or behind a building): a player would not walk into it; skip the point, but report it (a snag, so a
+    // street graph that leads into walls shows in the run instead of being worked round quietly).
+    else if (!lead && pts.length > 1 && grid.reachable(p.position.x, p.position.z) && !grid.reachable(c.x, c.z)) {
+      snag('walled waypoint', `${Math.round(c.x)},${Math.round(c.z)} is walled off from here (street graph)`);
+      pts.shift();
+    }
   }
   /** Face the next point of the path (popping those within `pop` m), hold W, and handle a jam. */
   function follow(target, pop, unstuck) {

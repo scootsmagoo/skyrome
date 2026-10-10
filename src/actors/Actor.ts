@@ -73,6 +73,8 @@ const GRAVITY = -20;
 const tmp = new THREE.Vector3();
 /** Highest ledge the step-up assist takes in stride (m): curbs, doorsteps, stairs. Not the 0.4 m seat rows of a cavea (its aisles are the way up) nor a plinth (clamber, Climb.ts). */
 const STEP_MAX = STEP_ASSIST_MAX;
+/** STEP_ASSIST_MIN before the step-over work (`Actor.legacyStep`). */
+const LEGACY_STEP_MIN = 0.09;
 /** Step smoothing: a physical step of at least this much (m) eases the drawn height over STEP_EASE_TIME seconds, at this rate (1/s). */
 const STEP_EASE_MIN = 0.05;
 const STEP_EASE_TIME = 0.4;
@@ -88,7 +90,17 @@ const hitScratch = new RAPIER.CharacterCollision();
 const DOWN = { x: 0, y: -1, z: 0 };
 const UP = { x: 0, y: 1, z: 0 };
 
+/** `?stepold=1`: the step-up assist as it was before the MOVE crew's step-over work (for A/B runs: scripts/stepwalk.mjs --ab). */
+const LEGACY_STEP = typeof location !== 'undefined' && new URLSearchParams(location.search).get('stepold') === '1';
+
 export class Actor {
+  /**
+   * The step-up assist as it was before (A/B only, `?stepold=1` or set at runtime): stalled only when the move came out
+   * under 60 % of the push, the ledge looked for along the push only, from 9 cm, no wait after a miss; the clamber
+   * (player/Climb.ts) from 0.42 m.
+   */
+  static legacyStep = LEGACY_STEP;
+
   readonly id: string;
   readonly root = new THREE.Group();
   readonly body: CharacterBody;
@@ -233,16 +245,17 @@ export class Actor {
       // controller slides the body along a ledge's face at most of the push, so it never "stalls"
       // and the body ran along a kerb it could have stepped onto. Short in the push's own direction
       // counts too (a slide along a wall counts, and the step-up looks at the contact to tell a ledge from a wall).
+      const legacy = Actor.legacyStep;
       const along = want > 0.004 ? (mv.x * desired.x + mv.z * desired.z) / want : 0;
-      let stalled = want > 0.004 && (Math.hypot(mv.x, mv.z) < want * 0.6 || along < want * 0.85);
+      let stalled = want > 0.004 && (Math.hypot(mv.x, mv.z) < want * 0.6 || (!legacy && along < want * 0.85));
       // A glancing push along a low lip barely slows the body, but a wall-like contact that opposes the push is a ledge to look at.
-      if (!stalled && want > 0.004 && along < want * 0.985) {
+      if (!legacy && !stalled && want > 0.004 && along < want * 0.985) {
         const n = this.wallNormal();
         stalled = !!n && n.x * desired.x + n.z * desired.z < -0.1 * want;
       }
       this.stepStalls = stalled ? this.stepStalls + 1 : 0;
       if (this.stepCool > 0) this.stepCool--;
-      const up = this.stepStalls >= 3 && this.stepCool === 0 ? this.stepUp(desired) : null;
+      const up = this.stepStalls >= 3 && this.stepCool === 0 ? (legacy ? this.stepUpFrom(desired, desired.x, desired.z) : this.stepUp(desired)) : null;
       if (up) {
         mv = up;
         this.grounded = true;
@@ -353,8 +366,8 @@ export class Actor {
     const top = ph.raycast({ x: px, y: from, z: pz }, DOWN, STEP_MAX + 0.12, Layer.World);
     if (!top || top.normal.y < 0.75) return null;
     const rise = top.point.y - feet.y;
-    // Under 9 cm the capsule's round bottom rides over by itself (and a wall's moulding is no step).
-    if (rise < STEP_ASSIST_MIN || rise > STEP_MAX + 0.03) return null;
+    // Under 5 cm the capsule's round bottom rides over by itself (and a wall's moulding is no step).
+    if (Actor.legacyStep ? rise < LEGACY_STEP_MIN || rise > STEP_MAX : rise < STEP_ASSIST_MIN || rise > STEP_MAX + 0.03) return null;
     // Room for the whole body on top, and nothing low just past the edge.
     const height = 2 * (this.body.halfHeight + r);
     if (ph.raycast({ x: px, y: top.point.y + 0.03, z: pz }, UP, height, Layer.World)) return null;

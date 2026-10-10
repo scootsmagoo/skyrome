@@ -6,6 +6,7 @@
  */
 import * as THREE from 'three';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { Actor } from '../src/actors/Actor';
 import { Layer, initPhysics } from '../src/core/Physics';
 import { STEP_ASSIST_MAX } from '../src/core/traversal';
 import { makeWorld, walk } from './arch.walker';
@@ -40,6 +41,17 @@ describe('a lone ledge is stepped onto', () => {
   it('an NPC at a walk takes kerbs and paving lips (up to 0.2 m)', () => {
     const failed = [0.05, 0.1, 0.15, 0.2].filter((h) => !crosses(h, 1.3, 0, { radius: 0.3, layer: Layer.Npc }));
     expect(failed).toEqual([]);
+  });
+
+  it('the A/B switch (Actor.legacyStep, `?stepold=1`) brings back the old misses at a slant', () => {
+    Actor.legacyStep = true;
+    try {
+      // Before the step-over work a walk at 60 degrees left everything from 8 cm unclimbed.
+      expect(heights.filter((h) => !crosses(h, SPEEDS.walk, 60)).length).toBeGreaterThan(0);
+    } finally {
+      Actor.legacyStep = false;
+    }
+    expect(heights.filter((h) => !crosses(h, SPEEDS.walk, 60))).toEqual([]);
   });
 
   // The dead zone between the step-up assist and the clamber: print what happens there.
