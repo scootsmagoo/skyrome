@@ -18,11 +18,9 @@ export const LIFE_CONDITIONS: ConditionDef[] = [
     name: 'Groomed',
     latin: 'tonsus',
     description: 'Fresh from the barber: hair cut, chin smooth. +5 persuasion for a game day.',
-    // The `tonsus` flag is the +5 persuasion (checks.ts persuasionPoints reads it); the small
-    // modifier gives the same lift to the chance rolls that read `persuade.chance`.
+    // The `tonsus` flag is the +5 persuasion (checks.ts persuasionPoints reads it).
     effects: [
       { kind: 'flag', target: 'tonsus', amount: 1, duration: DAY },
-      { kind: 'modifier', target: 'persuade.chance', amount: 0.05, duration: DAY },
     ],
   },
   {

@@ -91,7 +91,7 @@ export default defineLife({
         greet: '(A big man in a damp tunic with a bunch of towels over his shoulder.) The Baths of Trajan, citizen! Apollodorus built them, the Emperor opened them, and I keep the door. A quadrans. The bell rings at the eighth hour.',
         again: ['A quadrans, and the bell rings at the eighth hour.', 'Libraries, lecture halls, gardens. And a bath, if you must.', 'Go in, go in. Don’t stand in the doorway like a statue.'],
         topics: [
-          { ask: 'They say these baths are the largest ever built.', say: 'Largest in the world, I’d say, and I’ve asked sailors. Halls like temples, a pool you could sail a boat on, gardens and libraries. And Apollodorus, who made it, stands somewhere in the Forum with his drawings and says nothing.' },
+          { ask: 'They say these baths are the largest ever built.', say: 'Largest in the world, I’d say, and I’ve asked sailors. Halls like temples, a pool you could sail a boat on, gardens and libraries. And the man who designed it must be proud, if a builder is ever proud.' },
           { ask: 'Do you ever get tired of the crowds?', say: 'Every day at the eighth hour I think: this is the end of me. Then they’re inside, and it’s quiet, and I sit on the step and eat a lupin. The crowd is a weather, citizen. It passes.' },
         ],
         news: 'Anything new in the baths?',
@@ -120,12 +120,12 @@ export default defineLife({
       member: 0,
       name: 'Syrus',
       title: 'Doorkeeper',
-      barks: ['Wait your turn, citizen. The master receives at dawn.', 'Names, please. Clients on the left.'],
+      barks: ['Wait your turn, citizen. The master receives in the first hours. In a toga.', 'Names, please. Clients on the left.'],
       talk: {
-        greet: '(A broad, tired slave in a plain tunic stands in the doorway with a wax tablet and a stylus.) The house of Gaius Vettius Rufinus, senator. The master receives his friends at dawn, in a toga. Names on the tablet, clients on the left, no pushing.',
+        greet: '(A broad, tired slave in a plain tunic stands in the doorway with a wax tablet and a stylus.) The house of Gaius Vettius Rufinus, senator. The master receives his friends in the first hours of the day, in a toga. Names on the tablet, clients on the left, no pushing.',
         again: ['The master receives at dawn. In a toga.', 'Names on the tablet. No pushing.', 'He sees everyone, in the end. Some end later than others.'],
         topics: [
-          { ask: 'What do clients get for their trouble?', say: 'The dole. A hundred quadrantes, in a little basket, if the master is generous. Some masters give a dinner instead, and the clients eat worse than the slaves. Ours gives the money. He is fair. He is also never up before the second hour.' },
+          { ask: 'What do clients get for their trouble?', say: 'The dole. A hundred quadrantes, in a little basket, if the master is generous. Some masters give a dinner instead, and the clients eat worse than the slaves. Ours gives the money. He is fair. He is also never seen after the second hour.' },
           { ask: 'Do you ever tire of the queue?', say: 'Every dawn. They come in their good togas, patched at the hem, and they look at me as if I held the key to Elysium. I hold a tablet. I check names. I let the right ones through.' },
           { ask: 'What is the master like?', say: 'You will see him in the atrium, if you wait. He sits, he nods, he does not speak much to the lower clients. The senator’s way. Do not stare at him.' },
         ],
@@ -136,7 +136,7 @@ export default defineLife({
           id: 'salutatio',
           text: 'Wait in the queue and greet the patron',
           daily: true,
-          gate: { hours: [{ from: 'h1', to: 'h3' }] },
+          gate: { hours: [{ from: 'h1', to: 'h2' }] },
           needs: { gate: { wearing: ['toga', 'toga-fina', 'stola', 'stola-fina'] }, why: 'You are not dressed for a salutatio.' },
           effects: [
             { kind: 'hours', hours: 1 },

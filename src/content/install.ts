@@ -489,7 +489,7 @@ export class ContainerRuntime {
     const inv = this.game.player?.inventory;
     if (!this.spec.store || !inv) return 0;
     // Only whole, honestly-owned goods: a worn blade would come out new, and stolen goods are marked.
-    const whole = inv.list((d, st) => d.id === itemId && !st.stolenFrom && (st.condition ?? 1) >= 1).reduce((n, e) => n + e.stack.count, 0);
+    const whole = inv.list((d, st) => d.id === itemId && !st.stolenFrom && (st.condition ?? 1) >= 1).filter((e) => !e.equipped).reduce((n, e) => n + e.stack.count, 0);
     const n = Math.min(count, whole);
     if (n <= 0 || !inv.remove(itemId, n, { reason: 'given' })) return 0;
     const s = this.read();

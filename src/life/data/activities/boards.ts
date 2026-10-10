@@ -10,7 +10,7 @@
  *  - board-subura: the compitum board of the Subura (capfora-nerva, spot 'notice')
  *  - board-forum:  the herald's painted notice in the Forum of Caesar (spot 'praeco-notice')
  *  - board-ceres:  the aediles' album on the podium of the Temple of Ceres (spot 'temple-ceres-album')
- *  - board-meta:   the games-programme wall at the Meta Sudans (spot 'meta-sudans-playbill')
+ *  - board-meta (the builder's own playbill text prompt beside it is a different interactable and stays):   the games-programme wall at the Meta Sudans (spot 'meta-sudans-playbill')
  */
 import { defineLife } from '../../types';
 
