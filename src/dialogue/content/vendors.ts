@@ -74,8 +74,8 @@ const chreste = defineDialogue({
       ],
     },
     news: { text: (c) => rumor(c), next: 'hub' },
-    pallet: { text: '(She counts the coins into her apron without looking at them.) The pallet is in the lean-to behind the kitchen, by the oven, where it’s warm. The chest beside it is yours too, and here is the key. Thirty days. Don’t bring a dog. Don’t bring a woman I haven’t met. And if the vigiles ask, you are my cousin from Ostia.', next: 'hub' },
-    palletHeld: { text: (c) => { const n = Math.max(0, Number(c.flag('pallet-until') ?? 0) - c.game.time.dayIndex); return `You’re paid up ${n > 1 ? `for another ${n} days` : n === 1 ? 'for tomorrow too' : 'to the end of today'}, citizen, and not a day over. Round the back, past the oven. Keep the key.`; }, next: 'hub' },
+    pallet: { text: '(She counts the coins into her apron without looking at them.) The pallet is in the lean-to behind the kitchen, by the oven, where it’s warm. The chest beside it is yours too, lid and all. Thirty days. Don’t bring a dog. Don’t bring a woman I haven’t met. And if the vigiles ask, you are my cousin from Ostia.', next: 'hub' },
+    palletHeld: { text: (c) => { const n = Math.max(0, Number(c.flag('pallet-until') ?? 0) - c.game.time.dayIndex); return `You’re paid up ${n > 1 ? `for another ${n} days` : n === 1 ? 'for tomorrow too' : 'to the end of today'}, citizen, and not a day over. Round the back, past the oven. Mind what you leave in the chest.`; }, next: 'hub' },
     courier: {
       text: 'A courier at the gate, before dawn. I heard it from the carter, who heard it from his mule. Dromo’s telling it at the Starting Gates by now, with a few more knives. They say it was gladiators. I say it was men who needed a purse. Same thing.',
       next: 'hub',

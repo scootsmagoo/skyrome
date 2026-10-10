@@ -20,18 +20,20 @@ export default defineLife({
       // Rented until the day in `pallet-until` (the flag counts game days, Chreste's dialogue sets it).
       gate: { if: (game) => Number(game.quests?.flags.get('pallet-until') ?? -1) >= game.time.dayIndex },
       intro: [
-        'A straw pallet in the lean-to behind the Silver Pig, under a roof of old amphora-sherds and sailcloth. It smells of wine lees and warm dust. Beside it stands the chest Chreste lent you, with a key that fits.',
-        'Your corner behind the kitchen: a blanket, a pallet, a chest with a lock. The wall on the other side is the oven, and it is warm.',
+        'A straw pallet in the lean-to behind the Silver Pig, under a roof of old amphora-sherds and sailcloth. It smells of wine lees and warm dust. Beside it stands the chest Chreste lent you.',
+        'Your corner behind the kitchen: a blanket, a pallet, a chest to keep your things in. The wall on the other side is the oven, and it is warm.',
       ],
       options: [
         {
           id: 'sleep-dawn',
+          needs: { gate: { hours: [{ from: 'v1', to: 'h1' }] }, why: 'You are not tired; the pallet is for the night.' },
           text: 'Sleep until dawn',
           effects: [{ kind: 'sleep', bed: 'own', until: 'h1' }],
           result: 'You wake with the first cart in the street and the smell of the morning’s bread. Well rested.',
         },
         {
           id: 'sleep-mid',
+          needs: { gate: { hours: [{ from: 'v1', to: 'h6' }] }, why: 'It is past the sixth hour; the pallet is for the night.' },
           text: 'Sleep until the sixth hour',
           effects: [{ kind: 'sleep', bed: 'own', until: 'h6' }],
           result: 'You sleep through the noise of the market and wake at the hour when the shadows are shortest. Well rested.',
