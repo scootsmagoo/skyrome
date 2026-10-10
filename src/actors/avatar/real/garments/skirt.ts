@@ -27,6 +27,8 @@ export interface BuiltSkirt {
   surface: SkirtSurface;
   /** Back surface (z) at (x, y), for drapery laid over the back. */
   back: SkirtSurface;
+  /** Radius of the outer surface from the body's centre line at height y in direction th (0 above the top edge). */
+  radiusAt: (th: number, y: number) => number;
   cover: SkirtCover;
 }
 
@@ -60,7 +62,7 @@ export function buildRealSkirt(ctx: Ctx, L: Levels, bp: BodyProfile, sp: SkirtSp
     // The cloth's own fullness: more at the back, and in front of long skirts so strides stay covered.
     const front = sp.hem < L.knee ? 0.04 * s * Math.sin(Math.PI * Math.min(1, t * 1.3)) * Math.max(0, sn) : 0;
     const rh = ridgeAt(th, t);
-    let r = hangRadius(y, th) + sp.thickness + sp.flare * (sn < 0 ? 1.25 : sn > 0 ? 1.1 : 1) * flareK + front;
+    let r = hangRadius(y, th) + sp.thickness + sp.flare * lerp(1.25, 1.1, smooth(-0.35, 0.35, sn)) * flareK + front;
     // Folds only ever push outwards from the base radius, and the hem rolls.
     if (folded) r += sp.foldAmp * foldDepth(th, t, seed) * rh * 1.5;
     if (!sp.strips) r += 0.006 * s * smooth(0.975, 1, t);
@@ -231,5 +233,10 @@ export function buildRealSkirt(ctx: Ctx, L: Levels, bp: BodyProfile, sp: SkirtSp
     }
     return best;
   };
-  return { surface, back, cover: { top: sp.top, hem: hemAt } };
+  const radiusAt = (th: number, y: number) => {
+    if (y > sp.top) return 0;
+    const t = Math.min(1, Math.max(0, (sp.top - y) / Math.max(1e-3, sp.top - hemAt(th))));
+    return ringRadius(th, y, t, false).r;
+  };
+  return { surface, back, radiusAt, cover: { top: sp.top, hem: hemAt } };
 }

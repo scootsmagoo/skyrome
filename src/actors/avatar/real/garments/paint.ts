@@ -174,6 +174,10 @@ export function paintBody({ app, rig, body, index }: PaintOptions): BodyPaint {
   // A palla is built as drapery shells (shells.ts, drape.ts): the torso and the arm are painted with what lies under it.
   const bodyCtx: Ctx = outfit.palla && !outfit.toga ? { ...ctx, outfit: { ...outfit, palla: null } } : ctx;
   const L = levels(rig);
+  // A stola's straps are thinner than the sculpt's vertex spacing (they paint as red spikes up the shoulders and the
+  // back): over a tunic the stola simply ends at the armpit and the tunic shows above it.
+  const strapless: Ctx = outfit.stola && outfit.tunic ? { ...bodyCtx, outfit: { ...bodyCtx.outfit, stola: null } } : bodyCtx;
+  const stolaTop = L.armpit + 0.03 * rig.s;
   const J = rig.joints;
   const n = body.position.length / 3;
   const reg: Region[] = new Array(n);
@@ -222,7 +226,15 @@ export function paintBody({ app, rig, body, index }: PaintOptions): BodyPaint {
   const ruleAt = (r: Region, x: number, y: number, z: number): Paint | null => {
     if (r === 'torso') {
       const zc = torso.at(y).zc;
-      return paintTorso(bodyCtx, L, x, y, z, Math.atan2((z - zc) * 1.6, x));
+      const th = Math.atan2((z - zc) * 1.6, x);
+      if (strapless === bodyCtx || y < stolaTop - 0.02 * rig.s) return paintTorso(bodyCtx, L, x, y, z, th);
+      if (y >= stolaTop + 0.02 * rig.s) return paintTorso(strapless, L, x, y, z, th);
+      // The stola's top edge: a soft band of a few centimetres (a sharp colour step between vertices would saw-tooth).
+      const lo = paintTorso(bodyCtx, L, x, y, z, th);
+      const hi = paintTorso(strapless, L, x, y, z, th);
+      if (!lo || !hi) return lo ?? hi;
+      const k = Math.min(1, Math.max(0, (y - (stolaTop - 0.02 * rig.s)) / (0.04 * rig.s)));
+      return { ...lo, color: lo.color.clone().lerp(hi.color, k * k * (3 - 2 * k)) };
     }
     if (r === 'armL' || r === 'armR' || r === 'legL' || r === 'legR') {
       const sign = r.endsWith('L') ? 1 : -1;

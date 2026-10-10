@@ -13,20 +13,9 @@ import { SURF, mixW, type Weights } from '../../SkinBuilder';
 import { lerp, shade, smooth, srgb, type Ctx } from '../../build/common';
 import type { Levels } from '../../build/body';
 import { ellipsoid } from '../../build/garments';
-import { slab, ticks } from './drape';
+import { hangFrom, slab, ticks } from './drape';
 import { foldDepth, foldPhase, ridge } from './folds';
 import type { BodyProfile } from './profile';
-
-/** Radius of the cloth that hangs from the shoulders: the largest body radius between y and the shoulders (relaxing). */
-function hangFrom(bp: BodyProfile, y: number, top: number, th: number, yMax: number): number {
-  let r = bp.radius(Math.min(y, yMax), th);
-  for (let k = 1; k <= 6; k++) {
-    const yy = lerp(y, top, k / 6);
-    if (yy > top) break;
-    r = Math.max(r, bp.radius(Math.min(yy, yMax), th) * (1 - 0.01 * k));
-  }
-  return r;
-}
 
 export function buildRealCloak(ctx: Ctx, L: Levels, wide: BodyProfile) {
   const c = ctx.outfit.cloak;
@@ -35,23 +24,66 @@ export function buildRealCloak(ctx: Ctx, L: Levels, wide: BodyProfile) {
   else cape(ctx, L, wide, c.color, c.kind === 'sagum');
 }
 
-function cape(ctx: Ctx, L: Levels, bp: BodyProfile, color: THREE.Color, sagum: boolean) {
+/**
+ * The palla: a matron's mantle, a great rectangle of fine wool worn over the stola. It hangs from both shoulders
+ * and over the upper arms to the thigh, open at the front, in the cape's folds with the border along its hem
+ * (one continuous sheet: no seams, nothing that floats off the body).
+ */
+export function buildRealPalla(ctx: Ctx, L: Levels, wide: BodyProfile) {
+  const p = ctx.outfit.palla;
+  if (!p) return;
+  const s = L.s;
+  cape(ctx, L, wide, p.color, false, {
+    hem: L.crotch + 0.02 * s,
+    folds: 12,
+    amp: 0.03 * s,
+    thick: 0.0045 * s,
+    spanLow: 2.0,
+    flare: 0.06,
+    trim: p.trim ?? null,
+    fibula: false,
+    cols: 17,
+    gap0: 0.02,
+  });
+}
+
+interface CapeOpts {
+  hem?: number;
+  folds?: number;
+  amp?: number;
+  thick?: number;
+  /** Half-width (rad round the back) of the lower rows; the top always wraps the shoulders. */
+  spanLow?: number;
+  /** Flare of the hang away from the body at the hem, in body heights. */
+  flare?: number;
+  trim?: THREE.Color | null;
+  fibula?: boolean;
+  /** Columns round the body (high detail). */
+  cols?: number;
+  /** Gap over the shoulders, in body heights. */
+  gap0?: number;
+}
+
+function cape(ctx: Ctx, L: Levels, bp: BodyProfile, color: THREE.Color, sagum: boolean, opt: CapeOpts = {}) {
   const s = L.s;
   const seed = ctx.rng.next() * 10;
   const top = L.neckBase - 0.012 * s;
-  const hem = sagum ? L.knee + 0.14 * s : L.knee - 0.04 * s;
+  const hem = opt.hem ?? (sagum ? L.knee + 0.14 * s : L.knee - 0.04 * s);
   const yMax = bp.top - 0.05 * s;
-  const folds = sagum ? 11 : 13;
-  const amp = (sagum ? 0.026 : 0.02) * s;
-  const T = (sagum ? 0.012 : 0.008) * s;
+  const folds = opt.folds ?? (sagum ? 11 : 13);
+  const amp = opt.amp ?? (sagum ? 0.026 : 0.02) * s;
+  const T = opt.thick ?? (sagum ? 0.012 : 0.008) * s;
+  const flare = opt.flare ?? 0.085;
+  const trim = opt.trim ?? null;
+  const trimV = trim ? 0.92 : 2;
   // Columns sweep from the left shoulder, round the back, to the right shoulder: th = -PI/2 - a * span.
-  const span = (v: number) => lerp(1.95, 1.2 + 0.1 * (sagum ? 1 : 0), smooth(0.05, 0.4, v));
+  const span = (v: number) => lerp(1.95, opt.spanLow ?? 1.2 + 0.1 * (sagum ? 1 : 0), smooth(0.05, 0.4, v));
   const pt = (u: number, v: number) => {
     const a = 2 * u - 1;
     const th = -Math.PI / 2 - a * span(v);
     const y = lerp(top, hem, v) - (v > 0.97 ? 0.012 * s * (1 - ridge(foldPhase(th, 1, folds, seed))) : 0);
     // Over the shoulders it hugs the body; lower down it hangs behind, flaring toward the hem.
-    const gap = 0.012 * s + 0.085 * s * Math.pow(v, 1.15);
+    const gap = (opt.gap0 ?? 0.012) * s + flare * s * Math.pow(v, 1.15);
     let r = hangFrom(bp, y, top, th, yMax) + gap;
     r += amp * foldDepth(th, v, seed) * ridge(foldPhase(th, v, folds, seed)) * smooth(0.06, 0.3, v);
     return new THREE.Vector3(r * Math.cos(th), y, bp.centre(Math.min(y, yMax)) + r * Math.sin(th));
@@ -71,8 +103,8 @@ function cape(ctx: Ctx, L: Levels, bp: BodyProfile, color: THREE.Color, sagum: b
     return w;
   };
   slab(ctx, {
-    us: ticks(ctx.hi ? 25 : 11),
-    vs: ticks(ctx.hi ? 9 : 5, ctx.hi ? [0.03, 0.07, 0.11, 0.97] : [0.04]),
+    us: ticks(ctx.hi ? opt.cols ?? 21 : 11),
+    vs: ticks(ctx.hi ? 9 : 5, [...(ctx.hi ? [0.03, 0.07, 0.11, 0.97] : [0.04]), ...(trim ? [trimV - 0.003, trimV + 0.003] : [])]),
     thick: T * 0.5,
     back: ctx.hi,
     hint: (p) => new THREE.Vector3(p.x, 0, p.z - bp.centre(Math.min(p.y, yMax))).normalize(),
@@ -83,11 +115,13 @@ function cape(ctx: Ctx, L: Levels, bp: BodyProfile, color: THREE.Color, sagum: b
     surf: SURF.wool,
     color: (u, v) => {
       const th = -Math.PI / 2 - (2 * u - 1) * span(v);
+      if (trim && v > trimV) return shade(trim, 0.7 + 0.3 * ridge(foldPhase(th, v, folds, seed)));
       return shade(color, 0.62 + 0.38 * ridge(foldPhase(th, v, folds, seed)) - 0.06 * smooth(0.9, 1, v));
     },
     at: pt,
     weights,
   });
+  if (opt.fibula === false) return;
   // Fibula on the right shoulder.
   const th = Math.PI / 2 + 0.75;
   const y = L.shTop - 0.005 * s;

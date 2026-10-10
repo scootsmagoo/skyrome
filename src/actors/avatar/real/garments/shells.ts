@@ -24,7 +24,7 @@ import { buildBelt, type SkirtSpec } from '../../build/garments';
 import { BodyProfile, ARM_BONES, HEAD_BONES, boneWeight } from './profile';
 import { buildRealSkirt, type SkirtCover } from './skirt';
 import { buildTogaDrapery } from './drape';
-import { buildRealCloak } from './cloaks';
+import { buildRealCloak, buildRealPalla } from './cloaks';
 import type { BuildShells, RealContext } from '../types';
 
 /** The torso profile of the procedural builders, answering from the real body's silhouette. */
@@ -57,11 +57,9 @@ export const buildShells: BuildShells = (rc) => {
   const bp = pr.core;
   const prof = new RealProfile(ctx, L, bp);
   const covers: SkirtCover[] = [];
-  let lastSkirt: ReturnType<typeof buildRealSkirt> | null = null;
   const skirt = (sp: SkirtSpec) => {
     const built = buildRealSkirt(ctx, L, bp, sp);
     covers.push(built.cover);
-    lastSkirt = built;
     return built.surface;
   };
   const o = outfit;
@@ -83,7 +81,8 @@ export const buildShells: BuildShells = (rc) => {
       hemTilt: (th) => 0.06 * s * Math.max(0, -Math.cos(th)) * Math.max(0, Math.sin(th) + 0.3),
     });
     covers.push(built.cover);
-    buildTogaDrapery({ ctx, L, bp, skirt: built.surface, skirtBack: built.back });
+    pr.wide ??= new BodyProfile(rc.body, rc.rig, true);
+    buildTogaDrapery({ ctx, L, bp, wide: pr.wide, skirtR: built.radiusAt });
   } else if (o.stola) {
     skirt({
       top: L.waist + 0.04 * s,
@@ -129,11 +128,6 @@ export const buildShells: BuildShells = (rc) => {
       strips: srgb('#2e2016'),
     });
   }
-  // The palla: the toga's drapery, shorter, over the stola's (or the long tunic's) skirt.
-  if (o.palla && !o.toga) {
-    const base = lastSkirt as ReturnType<typeof buildRealSkirt> | null;
-    if (base) buildTogaDrapery({ ctx, L, bp, skirt: base.surface, skirtBack: base.back, palla: true });
-  }
   if (o.apron && o.tunic) {
     skirt({
       top: L.waist,
@@ -151,11 +145,12 @@ export const buildShells: BuildShells = (rc) => {
   buildBelt(ctx, L, prof);
   let cloakFrom = 0;
   let cloakTo = 0;
-  if (o.cloak) {
-    // Cloaks hang over the shoulders and the upper arms: they ride the wide silhouette.
+  if (o.cloak || (o.palla && !o.toga)) {
+    // Cloaks and the palla hang over the shoulders and the upper arms: they ride the wide silhouette.
     pr.wide ??= new BodyProfile(rc.body, rc.rig, true);
     cloakFrom = ctx.b.vertexCount;
-    buildRealCloak(ctx, L, pr.wide);
+    if (o.palla && !o.toga) buildRealPalla(ctx, L, pr.wide);
+    if (o.cloak) buildRealCloak(ctx, L, pr.wide);
     cloakTo = ctx.b.vertexCount;
   }
   if (ctx.b.vertexCount === 0) return null;

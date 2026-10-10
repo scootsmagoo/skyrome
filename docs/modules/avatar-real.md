@@ -255,10 +255,19 @@ What changed, in the order a garment is made:
   drop clear of the belly and hips; pillar folds, a scalloped hem (longest on a crest), a rolled hem and a crisp
   two-row trim edge (the toga praetexta's purple band, the stola's trim).
 - **Drapery** (`drape.ts`). `slab()` is a cloth sheet with a rim (edge thickness) and an optional back face, rows and
-  columns spaced unevenly. The toga's balteus (pleated band with the umbo swelling), sinus (with a rolled lip at the top
-  and the trim down its lower edge) and the front and back lacinia are slabs laid on the body profile; a palla is the
-  same drapery, shorter. The senators' purple border on a magistrate's or boy's toga is on the sinus edge and the
-  lacinia's outer edge.
+  columns spaced unevenly; each quad is wound against the sheet's surface normal (one sign per sheet, voted against the
+  hint), not by one winding for the whole grid. The toga is ONE mantle (`buildTogaDrapery`): a ring round the torso
+  slit under the right arm, whose top edge is the toga's line (neck base over the left shoulder and the back down to the
+  right armpit, in front the balteus diagonal from the left shoulder to the right hip) and whose hem swings low in front
+  (the sinus, with the praetexta's purple band along it, and a rolled lip and umbo swell along the diagonal) and a
+  little at the back. It hangs over the wide profile on the left (over the arm) and the body profile on the right (the
+  bare arm), stays outside the skirt (`radiusAt`, sampled either side of each column: a crest between two columns must
+  not poke through) and takes the skirt's thigh weights below the waist (without them a stride or the idle stance moved
+  the skirt through the mantle: holes in the hem).
+- **Palla** (`cloaks.ts`, `buildRealPalla`). One continuous shawl: the cape builder with a thigh-length hem, the border
+  along it, a wide span (it comes round over the arms) and no fibula. It replaces the toga-style sash and pouch (two
+  hard-edged slabs) of the first pass. Over a tunic the stola's painted straps are dropped (thinner than the sculpt's
+  vertex spacing, they painted as red spikes up the shoulders) and the stola's top edge is a soft colour band.
 - **Cloaks** (`cloaks.ts`). The lacerna, sagum and paenula hang from the neck base over the wide profile (upper arms
   included), with pillar folds and a scalloped, thick hem. The procedural `buildCloak` is no longer used by the real
   bodies.
@@ -271,9 +280,11 @@ What changed, in the order a garment is made:
 - Clavi (narrow equestrian, broad senatorial) are painted by `paintTorso`'s existing stripe; belts are
   `buildBelt` (unchanged).
 
-Budget (shell triangles per person at LOD 0, mean over six seeds per role, before to after): plebeian man 1259 to
-1593, patrician (toga) 1224 to 1216, matron 1190 to 1316, slave 852 to 864, priest 1224 to 1404, merchant (paenula)
-2100 to 3000, Dacian (sagum) 2100 to 3000. The body's cloth group is unchanged.
+Budget (shell triangles per person, mean over six seeds per role, review pass 1 to final; the original pre-C3a numbers
+are in the first pass's report): patrician (toga) 1216 to 1310, matron 1316 to 1492, priest 1404 to 1498, plebeian man 1279
+to 1209, merchant (paenula) and Dacian (sagum) 2056 to 1848 (columns trimmed). The body's cloth group is unchanged.
+Forum crowd (`perf.mjs --views forum`): triangles per direction identical to within noise (2.57M/2.11M/2.13M/2.27M
+against 2.57M/2.13M/2.13M/2.26M); GPU/CPU ms differ run to run with the shared GPU.
 
 Known limits: the toga's front is still smoother than a real one (the pleats are subtle at 3 m); the sinus and the
 palla are separate sheets that meet the skirt with a visible edge at some angles; the shoulder of a short sleeve
