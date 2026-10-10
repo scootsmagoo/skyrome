@@ -460,3 +460,26 @@ the arms swung out; beyond 55 m (LOD 3) the painted body garments return (a toga
 togas and cloaks and men's stolas stay procedural (no role wears them); the shadow pass does not push the cloth out of the
 legs. A simulation is chaotic: a small change to garments.py can change a drape completely (it is deterministic for the
 same inputs), so look at the `--preview` renders after every change.
+
+## Cloth polish (hems, the palla, arms)
+
+- **Ragged toga hems.** Not decimation: the hem is kept at the simulation's own 12 mm grid at LOD 0 (hems decimate
+  last), and the sawtooth was in the simulated cloth itself (`toga_hi`: 38 of 460 hem vertices turned by more than 60
+  degrees; LOD 0 45), because the solver leaves every free edge crinkled at grid scale and `relax()` keeps boundaries
+  fixed. `smooth_hems()` (garments.py) now runs a 1D Laplacian along each boundary loop before `relax()` (12 passes,
+  top edges of the pattern left alone, the first interior ring following half-way), on a fresh simulation and once on
+  a kept one under `--relod` (`hi['hems']`). The turned rim is a little thicker than the cloth (`MATERIALS[kind]['rim']`:
+  wool 9 mm, light wool 7, tunic 6, linen 5) so a hem reads as a rolled edge.
+- **The palla's ropey end.** The separate hanging "end" piece (a narrow strip simulated beside the arm, part 2) crumpled
+  into a band against the mantle; the palla is one piece now, cut long on the left (0.92 of the body scale at the figure's
+  left, 0.42 in front) so the mantle itself hangs from the shoulder over the left arm to mid-thigh. 2908 / 1493 / 359
+  triangles (man), 2876 / 1485 / 359 (woman).
+- **Arms through the cloth.** The cloth beside an arm carries weights blended between chest and arm, so the idle's bent
+  elbow pushed the under-tunic's sleeve through a palla (and could through a toga's mantle). `fit.ts` gives those
+  vertices (from the wrist up to the shoulder, outboard of the shoulder joint) an arm capsule in the `legs` attribute
+  (codes 3/4 left upper arm/forearm, 5/6 right; `Spec.arms`: 'left' for the togas, 'both' for the palla and the cloaks),
+  measured on the person's body like the legs, and the shell shader's push handles it after skinning.
+
+Before/after: `.shots/before` and `.shots/after` of the char-fable worktree (toga, matron, priest from four sides at
+1.5 and 3 m, hem and arm close-ups).
+

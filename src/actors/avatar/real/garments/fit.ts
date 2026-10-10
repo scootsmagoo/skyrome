@@ -68,6 +68,8 @@ interface Spec {
   hideAboveHem?: (L: Levels, sex: Sex) => number;
   /** Legs push the cloth (vertices below the crotch). */
   legs: boolean;
+  /** Arms push the cloth beside them too (the left arm under a toga's mantle, both under a cloak or palla). */
+  arms?: 'left' | 'both';
   /**
    * Clearance (m at s = 1) the legs keep from this cloth, by part: outer layers (a toga's mantle over its
    * wrap, a cloak over a tunic) keep more, so a leg pushing both never presses them into one surface.
@@ -132,6 +134,7 @@ const SPECS: Record<BakedId, Spec> = {
     hideMax: 0.12,
     hideAboveHem: (L) => 0.16 * L.s,
     legs: true,
+    arms: 'left',
     clear: (part) => (part === 0 ? 0.012 : 0.032),
     band: 0.06,
   },
@@ -146,6 +149,7 @@ const SPECS: Record<BakedId, Spec> = {
     hideMax: 0.12,
     hideAboveHem: (L) => 0.16 * L.s,
     legs: true,
+    arms: 'left',
     clear: (part) => (part === 0 ? 0.012 : 0.032),
     band: 0.06,
   },
@@ -160,6 +164,7 @@ const SPECS: Record<BakedId, Spec> = {
     hide: ['spine', 'chest'],
     hideMax: 0.1,
     legs: true,
+    arms: 'both',
     clear: () => 0.035,
     band: 0.03,
   },
@@ -172,6 +177,7 @@ const SPECS: Record<BakedId, Spec> = {
     hide: ['spine', 'chest'],
     hideMax: 0.12,
     legs: true,
+    arms: 'both',
     clear: () => 0.035,
     band: 0,
   },
@@ -184,6 +190,7 @@ const SPECS: Record<BakedId, Spec> = {
     hide: [],
     hideMax: 0.1,
     legs: true,
+    arms: 'both',
     clear: () => 0.035,
     band: 0,
   },
@@ -196,6 +203,7 @@ const SPECS: Record<BakedId, Spec> = {
     hide: [],
     hideMax: 0.1,
     legs: true,
+    arms: 'both',
     clear: () => 0.035,
     band: 0,
   },
@@ -351,6 +359,56 @@ function measureLegs(body: BodyArrays, rig: Rig) {
   return { dy, r: out };
 }
 
+/** Arm radius per height (2 cm slabs) from the wrist up to the shoulder, measured on the morphed body (cached per body). */
+const armCache = new WeakMap<Float32Array, ReturnType<typeof measureArms>>();
+function armRadii(body: BodyArrays, rig: Rig) {
+  let r = armCache.get(body.position);
+  if (!r) {
+    r = measureArms(body, rig);
+    armCache.set(body.position, r);
+  }
+  return r;
+}
+
+function measureArms(body: BodyArrays, rig: Rig) {
+  const J = rig.joints;
+  const top = J[B.upperArmL * 3 + 1] + 0.06;
+  const dy = 0.02;
+  const n = Math.ceil(top / dy) + 2;
+  const r = new Float32Array(n);
+  const count = body.position.length / 3;
+  for (let v = 0; v < count; v++) {
+    let w = 0;
+    for (let q = 0; q < 4; q++) {
+      const b = body.skinIndex[v * 4 + q];
+      if (b === B.upperArmL || b === B.forearmL || b === B.upperArmR || b === B.forearmR) w += body.skinWeight[v * 4 + q];
+    }
+    if (w < 0.5) continue;
+    const x = body.position[v * 3];
+    const y = body.position[v * 3 + 1];
+    const z = body.position[v * 3 + 2];
+    armAxis(rig, y, axisTmp);
+    const d = Math.hypot(Math.abs(x) - axisTmp[0], z - axisTmp[1]);
+    const i = Math.min(n - 1, Math.max(0, Math.round(y / dy)));
+    if (d > r[i]) r[i] = d;
+  }
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) out[i] = Math.max(r[Math.max(0, i - 1)], r[i], r[Math.min(n - 1, i + 1)]);
+  return { dy, r: out };
+}
+
+/** The arm axis (|x|, z) at height y in the bind pose (the arms hang straight: shoulder to elbow to wrist). */
+function armAxis(rig: Rig, y: number, out: Float32Array) {
+  const J = rig.joints;
+  const elbowY = J[B.forearmL * 3 + 1];
+  const a = y > elbowY ? B.forearmL : B.handL;
+  const b = y > elbowY ? B.upperArmL : B.forearmL;
+  const ya = J[a * 3 + 1];
+  const t = Math.min(1, Math.max(0, (y - ya) / Math.max(1e-3, J[b * 3 + 1] - ya)));
+  out[0] = Math.abs(J[a * 3]) + (Math.abs(J[b * 3]) - Math.abs(J[a * 3])) * t;
+  out[1] = J[a * 3 + 2] + (J[b * 3 + 2] - J[a * 3 + 2]) * t;
+}
+
 /** The leg axis (|x|, z) at height y (hip joint to knee to ankle, averaged over both legs), written into out. */
 function legAxis(rig: Rig, y: number, out: Float32Array) {
   const J = rig.joints;
@@ -373,6 +431,7 @@ export function fitBaked(rc: RealContext, plan: BakedPlan, outfit: Outfit = reso
   const L = levels(rc.rig);
   const s = rc.rig.s;
   let legs: ReturnType<typeof legRadii> | null = null;
+  let arms: ReturnType<typeof armRadii> | null = null;
   for (const id of plan.ids) {
     const bg = boundGarment(rc.sex, id, rc.lod, rulesFor(id, rc.sex));
     if (!bg) continue;
@@ -439,6 +498,31 @@ export function fitBaked(rc: RealContext, plan: BakedPlan, outfit: Outfit = reso
         legsA[i * 4 + 1] = axisTmp[1];
         legsA[i * 4 + 2] = legs.r[k] * 1.08 + (spec.clear ? spec.clear(m.part[i]) : 0.016) * s;
         legsA[i * 4 + 3] = y > L.knee + 0.04 * s ? 1 : 2;
+      }
+    }
+    if (spec.arms) {
+      // Cloth beside an arm (from the wrist up to the shoulder, outboard of the shoulder joint) is pushed out of
+      // the upper arm's or forearm's capsule after skinning: the cloth was simulated with the arms hanging, and
+      // a bent elbow came through a palla or a toga's mantle. Codes 3/4 = left upper arm/forearm, 5/6 = right.
+      arms ??= armRadii(rc.body, rc.rig);
+      const J = rc.rig.joints;
+      const wrist = J[B.handL * 3 + 1];
+      const shoulder = J[B.upperArmL * 3 + 1];
+      const elbow = J[B.forearmL * 3 + 1];
+      const inboard = Math.abs(J[B.upperArmL * 3]) - 0.07 * s;
+      for (let i = 0; i < count; i++) {
+        const x = position[i * 3];
+        const y = position[i * 3 + 1];
+        if (y <= L.crotch || y < wrist || y > shoulder + 0.03 * s) continue;
+        const side = x >= 0 ? 1 : -1;
+        if (spec.arms === 'left' && side < 0) continue;
+        if (Math.abs(x) < inboard) continue;
+        armAxis(rc.rig, y, axisTmp);
+        const k = Math.min(arms.r.length - 1, Math.max(0, Math.round(y / arms.dy)));
+        legsA[i * 4] = axisTmp[0];
+        legsA[i * 4 + 1] = axisTmp[1];
+        legsA[i * 4 + 2] = arms.r[k] * 1.1 + (spec.clear ? spec.clear(m.part[i]) : 0.016) * s;
+        legsA[i * 4 + 3] = (y > elbow ? 3 : 4) + (side > 0 ? 0 : 2);
       }
     }
     garments.push({

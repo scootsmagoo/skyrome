@@ -336,15 +336,15 @@ class Cloth:
 
 MATERIALS = {
     # Heavy wool (toga, palla, cloaks): broad soft folds.
-    'wool': dict(mass=0.3, tension=22, compression=22, shear=8, bending=15, air=6.0, damping=12, thick=0.006, smooth=7),
+    'wool': dict(mass=0.3, tension=22, compression=22, shear=8, bending=15, air=6.0, damping=12, thick=0.006, smooth=7, rim=0.009),
     # The toga's lower wrap: the same wool, hanging in long soft pipes.
-    'wool_wrap': dict(mass=0.4, tension=22, compression=22, shear=8, bending=4, air=3.0, damping=12, thick=0.006, smooth=3),
+    'wool_wrap': dict(mass=0.4, tension=22, compression=22, shear=8, bending=4, air=3.0, damping=12, thick=0.006, smooth=3, rim=0.009),
     # Light wool (lacerna).
-    'wool_light': dict(mass=0.25, tension=20, compression=20, shear=7, bending=8, air=6.0, damping=12, thick=0.004, smooth=3),
+    'wool_light': dict(mass=0.25, tension=20, compression=20, shear=7, bending=8, air=6.0, damping=12, thick=0.004, smooth=3, rim=0.007),
     # Light wool / wool blend (tunics).
-    'tunic': dict(mass=0.3, tension=16, compression=16, shear=5, bending=0.6, air=1.2, damping=8, thick=0.004, smooth=2),
+    'tunic': dict(mass=0.3, tension=16, compression=16, shear=5, bending=0.6, air=1.2, damping=8, thick=0.004, smooth=2, rim=0.006),
     # Linen (stola): fine folds.
-    'linen': dict(mass=0.28, tension=16, compression=16, shear=5, bending=0.35, air=1.0, damping=8, thick=0.003, smooth=1),
+    'linen': dict(mass=0.28, tension=16, compression=16, shear=5, bending=0.35, air=1.0, damping=8, thick=0.003, smooth=1, rim=0.005),
 }
 
 
@@ -429,6 +429,63 @@ def triangulate(ob):
     bmesh.ops.triangulate(bm, faces=bm.faces[:])
     bm.to_mesh(ob.data)
     bm.free()
+
+
+def smooth_hems(ob, passes=12, pull=0.5):
+    """Smooth the free edges along themselves. The solver leaves every hem row crinkled at grid scale (a 12 mm
+    zigzag with 60-degree turns at one vertex in ten), and relax() keeps boundaries where they are, so the toga
+    and the palla came into the game with sawtooth, torn-looking hems. A 1D Laplacian along each boundary loop
+    takes the zigzag out and keeps the folds (their wavelength is many grid steps); the first interior ring
+    follows half-way so the hem does not fold under the cloth beside it. Top edges of the pattern (v = 0: the
+    pinned lines, the sinus) are left alone."""
+    if passes <= 0:
+        return
+    me = ob.data
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bm.verts.ensure_lookup_table()
+    pat = bm.loops.layers.uv.get('pattern')
+    top = set()
+    if pat is not None:
+        for f in bm.faces:
+            for l in f.loops:
+                if l[pat].uv[1] < 1e-6:
+                    top.add(l.vert.index)
+    nbr = {}
+    for e in bm.edges:
+        if e.is_boundary:
+            a, b = e.verts
+            nbr.setdefault(a.index, []).append(b.index)
+            nbr.setdefault(b.index, []).append(a.index)
+    co = np.array([v.co[:] for v in bm.verts])
+    idx = [i for i, n in nbr.items() if len(n) == 2 and i not in top]
+    if not idx:
+        bm.free()
+        return
+    I = np.array(idx)
+    A = np.array([nbr[i][0] for i in idx])
+    B = np.array([nbr[i][1] for i in idx])
+    before = co[I].copy()
+    for _ in range(passes):
+        mid = (co[A] + co[B]) * 0.5
+        co[I] += (mid - co[I]) * pull
+    delta = co[I] - before
+    moved = dict(zip(idx, delta))
+    # The ring next to the hem follows half of its neighbours' mean move.
+    ring = {}
+    for i in idx:
+        for e in bm.verts[i].link_edges:
+            j = e.other_vert(bm.verts[i]).index
+            if j not in nbr:
+                ring.setdefault(j, []).append(moved[i])
+    for j, ds in ring.items():
+        co[j] += np.mean(ds, axis=0) * 0.5
+    for v in bm.verts:
+        v.co = co[v.index]
+    bm.to_mesh(me)
+    bm.free()
+    me.update()
+    log(f'  hems: {len(idx)} edge vertices smoothed, mean move {np.mean(np.linalg.norm(delta, axis=1)) * 1000:.1f} mm')
 
 
 def relax(ob, passes):
@@ -1242,7 +1299,9 @@ def stola(body):
 
 def palla(body):
     """The palla: a wide wool mantle round the shoulders (over both, the back and the upper arms), shorter in front
-    where it hangs over the bust, with its end hanging from the left shoulder down over the left arm."""
+    where it hangs over the bust, and long down the left side, where its end hangs from the shoulder over the
+    left arm to mid-thigh. One piece: a separate hanging end (simulated as a narrow strip beside the arm) crumpled
+    into a ropey band against the mantle, so the mantle itself is cut long over the arm."""
     L = body.L
     s = body.s
     J = body.J
@@ -1266,7 +1325,8 @@ def palla(body):
     loop = Curve(body, keys, closed=True, out=0.012)
     arms = np.ones(len(body.co), dtype=bool)
     hull = Hull(body, arms)
-    lens = periodic({0: 0.52, 60: 0.48, 90: 0.42, 120: 0.48, 180: 0.52, 230: 0.7, 270: 0.78, 310: 0.7})
+    # Azimuth: 0 = the figure's left, 90 = front, 180 = right, 270 = back. Long over the left arm, short in front.
+    lens = periodic({0: 0.92, 30: 0.8, 60: 0.52, 90: 0.42, 120: 0.48, 180: 0.52, 230: 0.7, 270: 0.78, 310: 0.74, 340: 0.88})
 
     def length(sf):
         p = loop.at(sf * loop.L)
@@ -1277,12 +1337,6 @@ def palla(body):
     pc = drape_piece(body, 'mantle', 1, loop, length, hull, gather=1.04, flare=1.6, clear=0.03, pleat=0.09, seed=13)
     pc.border = lambda u, v, pc=pc: max(0.0, pc.length(u) - v)
     cl.add(pc)
-    end_keys = [(shx * 0.55, yc(neck) - 0.02, neck + 0.0 * s), (shx * 0.95, yc(neck) - 0.02, neck - 0.04 * s), (shx * 1.2, yc(neck), neck - 0.08 * s)]
-    end = Curve(body, end_keys, closed=False, out=0.045)
-    ec = drape_piece(body, 'end', 2, end, lambda sf: 0.85 * s, hull, gather=1.0, flare=1.0, clear=0.05, pleat=0.09, seed=8,
-                     slope=1.2, extra_out=lambda sf: (0.4, -1.0, 0.0))
-    ec.border = lambda u, v, ec=ec: max(0.0, ec.length(u) - v)
-    cl.add(ec)
     return cl, dict(kind='wool', frames=220, pin_stiffness=3.0)
 
 
@@ -1401,7 +1455,8 @@ def make_lods(sim, gname, kind):
     """LOD 0..2 by collapse decimation of the settled cloth (hems decimated last), turned rims on LOD 0 and 1."""
     lods = []
     tris = LOD_TRIS.get(gname, (3000, 1500, 400))
-    thick = MATERIALS[kind]['thick']
+    # The turned hem is a little thicker than the cloth: a rolled wool edge reads as an edge, not a cut.
+    thick = MATERIALS[kind].get('rim', MATERIALS[kind]['thick'])
     for k, t in enumerate(tris):
         o = decimate_copy(sim, f'{gname}_lod{k}', t, keep_hems=SET.get('keep_hems', 0.15) if k == 0 else 0.0)
         if k < 2:
@@ -1463,6 +1518,7 @@ def build_garment(sex, gname):
         bpy.data.objects.remove(o, do_unlink=True)
     triangulate(sim)
     sim.data.validate()
+    smooth_hems(sim, int(SET.get('hems', 12)))
     relax(sim, int(SET.get('smooth', MATERIALS[kind].get('smooth', 0))))
     log(f'  ambient occlusion on {len(sim.data.vertices)} vertices')
     # Occluded by the cloth and the body as simulated (an arm swung out of the way does not shade the cloth:
@@ -1474,6 +1530,7 @@ def build_garment(sex, gname):
         bpy.data.objects.remove(o, do_unlink=True)
     set_attr_uv(sim, 'attr', 1, ao)
     sim['kind'] = kind
+    sim['hems'] = 1
     lods = make_lods(sim, gname, kind)
     if PREVIEW:
         for o in lods:
@@ -1515,6 +1572,9 @@ def main():
                 hi = dst.objects[0]
                 bpy.context.scene.collection.objects.link(hi)
                 log(f'{sex}/{g}: LODs again')
+                if not hi.get('hems'):
+                    smooth_hems(hi, int(SET.get('hems', 12)))
+                    hi['hems'] = 1
                 lods = make_lods(hi, g, hi.get('kind', KIND[g]))
                 tmp = p + '.tmp.blend'
                 bpy.ops.wm.save_as_mainfile(filepath=tmp)
