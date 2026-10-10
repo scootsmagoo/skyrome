@@ -1,0 +1,119 @@
+Route audit, 2026-10-10T22:43:27.215Z  phases: objectives  time scale 3
+street graph: 8148 nodes, 8770 edges, 14 components (largest 7699, 163, 45, 29, 19), 100 termini; nav grid on
+objectives: 103 with markers, 0 unresolved ()
+
+== objectives: 6 jobs
+  objective  mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/ streets   526 m  aborted    48 s  jump:wall blocked:wall off-line blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall
+  objective  mq 02-tabella/castor ← mq-01-madida-capena/talk-dyin streets   725 m  arrived    51 s  jump:wall
+  objective  mq 02-tabella/search ← mq-02-tabella/castor          streets   723 m  arrived    43 s  jump:wall
+  objective  mq 02-tabella/ask ← mq-02-tabella/talk               streets   648 m  arrived    43 s  blocked:wall blocked:wall jump:low blocked:wall blocked:wall line-through×1
+  objective  mq 02-tabella/hideout ← mq-02-tabella/ask            streets   723 m  arrived    39 s  blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall line-through×2
+  objective  mq 02-tabella/give ← mq-02-tabella/satchel           streets   118 m  arrived     6 s  
+
+== totals
+{
+ "jobs": 6,
+ "byKind": {
+  "objective": 6
+ },
+ "outcomes": {
+  "aborted": 1,
+  "arrived": 5
+ },
+ "planStatus": {
+  "streets": 6
+ },
+ "walkedRoutes": 0,
+ "routeMetres": 3464,
+ "simSeconds": 547.4,
+ "recoveries": 22,
+ "replans": 0,
+ "incidents": {
+  "needs a jump/mantle": 4,
+  "blocked": 22,
+  "off-line": 1,
+  "climb": 4,
+  "route line: drop -1.16": 1,
+  "route line: through 2.2": 11,
+  "route line: drop -7.64": 1,
+  "route line: drop -1.17": 1,
+  "route line: drop -1.15": 1,
+  "route line: drop -6.5": 1,
+  "route line: steep 2.63": 1,
+  "route line: drop -9": 2,
+  "route line: drop -9.17": 1,
+  "route line: steep 3.89": 2,
+  "route line: steep 0.94": 1,
+  "route line: drop -1.06": 1,
+  "route line: drop -1.09": 1,
+  "route line: ledge 0.5": 3,
+  "route line: ledge 0.46": 3,
+  "route line: drop -9.24": 1,
+  "route line: steep 3.81": 1,
+  "route line: drop -9.19": 1,
+  "route line: wall 2.65": 1,
+  "route line: wall 2.86": 1,
+  "route line: wall 2.92": 1,
+  "route line: steep 3.07": 1,
+  "route line: ledge 1.03": 1,
+  "route line: ledge 0.76": 4,
+  "route line: ledge 0.51": 1,
+  "route line: steep 1.49": 1
+ },
+ "minutes": 6,
+ "jobsWithBlock": 3,
+ "objectiveJobsWithBlock": 3,
+ "places": 20,
+ "placesBySeverity": {
+  "blocker": 6,
+  "major": 8,
+  "minor": 6
+ }
+}
+
+== worst places (by severity and how many routes meet them)
+  1. [blocker] 175.8,11.5,127.0  Pearl-Sellers' Arcade (20 m, Regio X Palatium)  routes 2 (quest 2)  blocked (wall)×3  part graph
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk: wall hit landmark:porticus-margaritaria @1.4 m 0.38 m     cls road
+  2. [blocker] 183.3,11.7,113.4  Pearl-Sellers' Arcade (13 m, Regio VIII Forum Romanum)  routes 2 (quest 2)  blocked (wall)×2  part graph
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk: wall hit landmark:porticus-margaritaria @1.4 m 0.38 m     cls landmark
+  3. [blocker] 522.7,12.0,197.6  Great Gladiatorial School (27 m, Regio III Isis et Serapis)  routes 2 (quest 2)  blocked (wall)×2  part lead-out/lead-in
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk: wall hit landmark:ludus-magnus @1.4 m 0.38 m     cls landmark
+  4. [blocker] -81.0,7.5,305.8  The Inn at the Starting Gates (25 m, Regio XI Circus Maximus)  routes 1 (quest 1)  blocked (wall)×13, off-line×1  part lead-out
+       e.g. mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/talk-dying: wall hit city:b414 @1.4 m 0.38 m     cls free
+  5. [blocker] 510.2,13.5,199.8  Great Gladiatorial School (32 m, Regio III Isis et Serapis)  routes 1 (quest 1)  needs a jump/mantle (low)×1, blocked (wall)×1, climb (mantle 0.88 m)×1  part graph
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk: wall hit city:3,1 @1.4 m 0.37 m     cls margin
+  6. [blocker] 97.6,10.4,95.4  Rise of Victory (2 m, Regio VIII Forum Romanum)  routes 1 (quest 1)  blocked (wall)×1  part graph
+       e.g. mq 02-tabella/hideout ← mq-02-tabella/ask: wall hit city:0,0 @1.4 m 1 m  rise 0.83   cls road
+  7. [major] 281.7,7.9,545.4  Crossroads Shrine by the Capena Gate (4 m, Regio XI Circus Maximus)  routes 3 (quest 3)  needs a jump/mantle (wall)×2, climb (mantle 1.11 m)×2, climb (mantle 1.14 m)×1  part graph
+       e.g. mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/talk-dying: wall hit unknown @1 m 0.38 m  rise 1.11 near shrine:compitum-capenae (Crossroads shrine by the Capena Gate) 0.2 m  cls road
+  8. [major] 178.6,11.7,121.1  Pearl-Sellers' Arcade (15 m, Regio X Palatium)  routes 2 (quest 2)  route line: drop -9×1, route line: through 2.2×1, route line: drop -9.19×1  part graph
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk:   owner landmark:porticus-margaritaria   len 0.4 cls landmark
+  9. [major] 184.0,11.7,113.5  Pearl-Sellers' Arcade (14 m, Regio VIII Forum Romanum)  routes 2 (quest 2)  route line: through 2.2×2, route line: drop -9.17×1, route line: steep 3.89×1, route line: drop -9×1, route line: steep 3.81×1  part graph
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk:   owner landmark:porticus-margaritaria   len 2.7 cls landmark
+ 10. [major] -81.2,7.5,306.8  The Inn at the Starting Gates (18 m, Regio XI Circus Maximus)  routes 1 (quest 1)  route line: through 2.2×1, route line: drop -7.64×1  part lead-out
+       e.g. mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/talk-dying:   owner terrain   len 0.4 cls free
+ 11. [major] 287.3,8.2,552.3  Crossroads Shrine by the Capena Gate (6 m, Regio XI Circus Maximus)  routes 1 (quest 1)  needs a jump/mantle (wall)×1  part graph
+       e.g. mq 02-tabella/search ← mq-02-tabella/castor: wall hit unknown @1 m 0.38 m  rise 1.14 near shrine:compitum-capenae (Crossroads shrine by the Capena Gate) 0.2 m  cls road
+ 12. [major] 306.0,9.7,576.2  Under the dripping arch (2 m, Regio I Porta Capena)  routes 1 (quest 1)  route line: drop -6.5×1, route line: steep 2.63×1  part lead-out
+       e.g. mq 02-tabella/search ← mq-02-tabella/castor:   owner city:2,4   len 0.5 cls road
+ 13. [major] 207.2,17.2,125.9  Arch of Titus (2 m, Regio X Palatium)  routes 1 (quest 1)  route line: drop -9.24×1, route line: steep 3.89×1  part graph
+       e.g. mq 02-tabella/hideout ← mq-02-tabella/ask:   owner city:1,0   len 0.5 cls road
+ 14. [major] 95.7,16.1,97.2  Rise of Victory (4 m, Regio VIII Forum Romanum)  routes 1 (quest 1)  route line: wall 2.65×1, route line: wall 2.86×1, route line: wall 2.92×1, route line: steep 3.07×1, route line: ledge 1.03×1, route line: ledge 0.76×4, route line: ledge 0.51×1, route line: steep 1.49×1  part graph
+       e.g. mq 02-tabella/hideout ← mq-02-tabella/ask:   owner terrain   len 0.5 cls road
+ 15. [minor] 284.2,7.9,548.5  Crossroads Shrine by the Capena Gate (2 m, Regio XI Circus Maximus)  routes 3 (quest 3)  route line: drop -1.16×1, route line: drop -1.17×1, route line: drop -1.15×1  part graph
+       e.g. mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/talk-dying:   owner landmark:porta-capena   len 0.4 cls road
+ 16. [minor] 302.2,12.6,161.1  Sweating Turning-Post Fountain (12 m, Regio III Isis et Serapis)  routes 2 (quest 2)  route line: steep 0.94×1, route line: ledge 0.5×3, route line: ledge 0.46×3  part graph
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk:      len 2 cls road
+ 17. [minor] 510.3,12.4,199.4  Great Gladiatorial School (32 m, Regio III Isis et Serapis)  routes 2 (quest 2)  route line: drop -1.06×1, route line: drop -1.09×1, route line: through 2.2×1  part graph/lead-out/lead-in
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk:   owner city:3,1   len 0.5 cls margin
+ 18. [minor] 519.0,12.0,195.8  Great Gladiatorial School (26 m, Regio III Isis et Serapis)  routes 2 (quest 2)  route line: through 2.2×4  part lead-out/lead-in
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk:   owner landmark:ludus-magnus   len 1.3 cls landmark
+ 19. [minor] 547.0,12.0,187.5  Ludus Barracks (2 m, Regio III Isis et Serapis)  routes 1 (quest 1)  route line: through 2.2×1  part lead-in
+       e.g. mq 02-tabella/hideout ← mq-02-tabella/ask:   owner landmark:ludus-magnus   len 1 cls landmark
+ 20. [minor] 2.9,8.4,152.2  The Burned Taberna (9 m, Regio X Palatium)  routes 1 (quest 1)  route line: through 2.2×1  part lead-out
+       e.g. mq 02-tabella/hideout ← mq-02-tabella/ask:   owner city:b613   len 1.4 cls free
+  shot .shots/routes/01-blocked-176_127.png
+  shot .shots/routes/02-blocked-183_113.png
+  shot .shots/routes/03-blocked-523_198.png
+
+wrote scripts/audit/out/smoke.json (0.06 MB), 3 screenshots; 6 min
