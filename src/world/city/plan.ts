@@ -22,8 +22,8 @@ import { WORLD_SCALE } from '../coords';
 import { footprintPolygon, type P2 } from '../terrain/heightmap';
 import { CORRIDORS, DISTRICT_LANDMARKS, EXTRA_ROADS, OPEN_SPACES, QUARTERS, SIGHTLINE_LANDMARKS, SIGHTLINE_RADIUS, SKIPPED_AQUEDUCTS, WILD_LANDMARKS, type Quarter } from './data';
 import { SIDEWALK } from './datum';
-import { probeEnd } from './audit';
-import { closeStubs } from './stubs';
+import { auditRoadEnds, probeEnd } from './audit';
+import { closeRoadEnds, closeStubs } from './stubs';
 import { BLOCKING, blockerGap, detourRoad, repairJoints, revertSplitting, roadJoints, type Detour } from './detour';
 import { Grid, K, cleanRing, components, pointInPoly, polyBounds, polyCentroid, signedArea, simplifyRing, splitCells, traceLoops, type Pt } from './raster';
 
@@ -401,7 +401,7 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
     const dets = new Map<number, Detour[]>();
     atlasRoads.forEach((a, i) => {
       if (a.r.kind === 'stairs') return;
-      const bent = detourRoad(a.pts, blockers, a.d.carriage / 2 + a.d.sidewalk, joints.filter((j) => j.i === i || j.j === i).map((j) => j.p));
+      const bent = detourRoad(a.pts, blockers, a.d.carriage / 2 + a.d.sidewalk, joints.filter((j) => j.i === i || j.j === i).map((j) => j.p), false, slopeAt);
       if (!bent.detours.length) return;
       a.pts = bent.points;
       dets.set(i, bent.detours);
@@ -680,6 +680,22 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
   // 8b. Stubs: streets the marcher stopped at a sliver, an apron or a slope reach the nearest
   // road / street / square within 15 m; the ones with nothing in reach get a court (step 9).
   const stubFix = opts.closeStubs === false ? { extended: 0, orphans: [] } : closeStubs(g, streets, STREET_MARGIN);
+
+  stats.roadEnds = 0;
+  // A road that ends in the open (the atlas stops some at a hill's top or a gate that is gone) is carried on to the next road, street, square or building (after the streets are planned: the audit counts them).
+  if (opts.detourRoads !== false) {
+    const dead = auditRoadEnds({ grid: g, roads, gates, landmarkPolys: lmPolys.filter((l) => l.solid).map((l) => ({ index: l.index, id: l.lm.id, category: l.lm.category, poly: l.poly })) })
+      .filter((e) => e.verdict === 'dead')
+      .map((e) => ({ road: e.index, end: e.end }));
+    const closed = closeRoadEnds(g, roads, dead, roadable);
+    stats.roadEnds = closed.extended;
+    // The way on from a stairway's foot or head: a plain path of its own.
+    for (const l of closed.links) {
+      const from = roads[l.road];
+      roads.push({ id: `${from.id}~path`, index: roads.length, name: `${from.name} path`, kind: 'path', style: 'path', points: l.points, carriage: 2.4, sidewalk: 0, half: 1.2 });
+    }
+  }
+
   for (const s of streets) while (s.steps.length < s.points.length - 1) s.steps.push(false);
   stats.stubsClosed = stubFix.extended;
   stats.streets = streets.length;

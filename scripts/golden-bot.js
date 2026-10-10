@@ -187,14 +187,22 @@
   let progressBest = Infinity;
   let arrivedAt = 0;
   let jamFrom = null;
+  let pathAt = 0;
+  let pathLed = false;
   /** Walk the nav path to goal.pos (outside any cell). */
   function walkTo(goal) {
     const target = goal.pos;
     const key = `${goal.quest}/${goal.obj}/${Math.round(target.x)},${Math.round(target.z)}`;
-    if (key !== pathFor || !path || !path.length) {
-      const r = game.population?.nav?.findPath(p.position.x, p.position.z, target.x, target.z);
+    const nav = game.population?.nav;
+    // A path made while the nav grid was still being sampled (just after a teleport or a long walk) is the street graph's
+    // straight links, which cut corners and clip buildings: plan again, from here, once the grid knows the ground.
+    const stale = pathFor === key && !pathLed && nav?.gridReady?.(p.position.x, p.position.z) && performance.now() - pathAt > 1500;
+    if (key !== pathFor || !path || !path.length || stale) {
+      const r = nav?.findPath(p.position.x, p.position.z, target.x, target.z);
       path = Array.isArray(r) ? r.slice() : [{ x: target.x, z: target.z }];
       pathFor = key;
+      pathAt = performance.now();
+      pathLed = !!nav?.gridReady?.(p.position.x, p.position.z);
     }
     follow(target, 1.5, () => teleportToward(target));
   }
@@ -235,7 +243,7 @@
     const grid = game.population?.nav?.grid;
     if (!grid || inCell() || !pts.length || performance.now() - steerT < 500) return;
     const c = pts[0];
-    if (dist(c) > 45 || !grid.ready(p.position.x, p.position.z) || !grid.ready(c.x, c.z)) return;
+    if (dist(c) > 70 || !grid.ready(p.position.x, p.position.z) || !grid.ready(c.x, c.z)) return;
     steerT = performance.now();
     if (grid.lineWalkable(p.position.x, p.position.z, c.x, c.z)) return;
     const lead = grid.findPath(p.position.x, p.position.z, c.x, c.z, 4000);

@@ -75,6 +75,46 @@ describe('Servian wall crossings on the real plan', () => {
     expect(breaches).toBeGreaterThan(0);
   });
 
+  it('opens the wall wherever an atlas road crosses a standing stretch of it (a gate or a breach)', () => {
+    const inter = (a: Pt, b: Pt, c: Pt, d: Pt): Pt | null => {
+      const r = [b[0] - a[0], b[1] - a[1]], q = [d[0] - c[0], d[1] - c[1]];
+      const den = r[0] * q[1] - r[1] * q[0];
+      if (Math.abs(den) < 1e-9) return null;
+      const t = ((c[0] - a[0]) * q[1] - (c[1] - a[1]) * q[0]) / den;
+      const u = ((c[0] - a[0]) * r[1] - (c[1] - a[1]) * r[0]) / den;
+      return t < 0 || t > 1 || u < 0 || u > 1 ? null : [a[0] + r[0] * t, a[1] + r[1] * t];
+    };
+    let crossings = 0, closed = 0;
+    for (const road of plan.roads) {
+      for (const w of plan.walls) {
+        if (w.state === 'built-over') continue;
+        for (let i = 0; i + 1 < road.points.length; i++) {
+          for (let k = 0; k + 1 < w.points.length; k++) {
+            const x = inter(road.points[i], road.points[i + 1], w.points[k], w.points[k + 1]);
+            if (!x) continue;
+            // The cell must be a way (the planner stamped the road there, unless a landmark's own gate stands on it).
+            const c = g.at(x[0], x[1]);
+            if (c === K.LANDMARK) continue;
+            crossings++;
+            const a = w.points[k], b = w.points[k + 1];
+            const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+            const m = Math.max(1, Math.round(L / 7));
+            const along = Math.hypot(x[0] - a[0], x[1] - a[1]);
+            const j = Math.min(m - 1, Math.floor((along / L) * m));
+            const p0: Pt = [a[0] + ((b[0] - a[0]) * j) / m, a[1] + ((b[1] - a[1]) * j) / m];
+            const p1: Pt = [a[0] + ((b[0] - a[0]) * (j + 1)) / m, a[1] + ((b[1] - a[1]) * (j + 1)) / m];
+            const s = Math.hypot(x[0] - p0[0], x[1] - p0[1]);
+            // No wall stands on the road's centre line.
+            if (!freeRuns(g, p0, p1).some((r) => s > r.s0 + 0.01 && s < r.s1 - 0.01)) closed++;
+          }
+        }
+      }
+    }
+    console.log('WALL CROSSINGS BY ATLAS ROADS', crossings, 'open', closed);
+    expect(crossings).toBeGreaterThan(5);
+    expect(closed).toBe(crossings);
+  });
+
   it('leaves no lane stopping at a Servian wall with open ground beyond it', () => {
     const ends = auditStreetEnds(plan).filter((e) => e.verdict === 'stub' && e.beyond === K.WALL);
     // A lane may end at the wall where there is nothing but country behind it; the planner now carries

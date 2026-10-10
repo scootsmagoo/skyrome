@@ -30,7 +30,9 @@ game.streets                    // street graph: nodes, edges, spots (see below)
 | `frontage.ts` | The golden path's closed street wall: piazza lots become shops, open stretches of a corridor block's frontage get shop rows (5–10 m deep) or a compound wall with a gate; `frontClosure` measures it. |
 | `fill.ts` | `fillUnits`: the kit's `fillBlock` (same lots, seeds and generators) as a sequence of small units — yard, each lot, yard dressing, each back insula, compound walls, torches — so no block costs one long frame. Kept in step with the kit by hand. |
 | `proximity.ts` | `ProximityColliders`: colliders that exist only near the player (far massing, trees, walls and aqueducts). |
+| `detour.ts` | Pure geometry: atlas roads bent round the solid buildings they run through (`detourRoad`, convex hull of the footprint pushed out by the road's half width + a gap that widens past the bank of a raised pad: `blockerGap`), joints between roads kept (`roadJoints`, `repairJoints` adds a short link road where a detour broke one, `revertSplitting` puts a road back if bending it would still split the network). |
 | `datum.ts` | The vertical datum: street `LIFT`s above the terrain, `FLOOR_LIFT`, and the per-edge `SIDEWALK` heights that follow from the kerb standard (`KERB` 0.15 m, `src/core/traversal.ts`), so street, plaza and house floor agree to the centimetre. |
+| `audit.ts` / `stubs.ts` | Pure audits over the plan: street-end stubs (`auditStreetEnds`), where each atlas road ends and what it meets (`auditRoadEnds`: road / street / gate / building / plaza / edge / water / dead), street-graph reachability from the Forum (`auditReach`). `stubs.ts` closes the stubs (`closeStubs`, may cross a wall band) and carries a road end that stops in the open on to the next road, street, square or building (`closeRoadEnds`; a stairway's foot gets a path of its own). In game: `window.__streetAudit()`. |
 | `roads.ts` | Street work per 128 m cell: atlas roads by context (urban: basalt between curbs and sidewalks; open: flush paving; rural: basalt, gravel or dirt), the atlas stairways (`stairProfile`: a walking surface never steeper than 0.66 that reaches the ground at both ends, flights on a substructure, parapets open at road crossings), junction squares, minor streets (vici, lanes, alleys, flights of steps), ground cover (earth over the town's scraps, cobbles on landmark margins, road edges and the golden path's scraps; never inside a block's outline nor on grades over 0.4), piazzas with a lacus or a compital shrine, market stalls (with aisles to the streets) and cattle pens, parked carts at the city's edge (on level open ground only), awnings over market lanes. Surfaces are the cell's `items`, furniture its `detail`. |
 | `life.ts` | Street life: wall torches on shop fronts, landmark-frontage dressing (stalls, goods, amphorae, benches, statue bases, braziers, lampstands, shade trees), washing lines across dense lanes. |
 | `lamps.ts` | `CityLamps`: the city's torches and lamps as light-pool requests near the camera. |
@@ -160,11 +162,41 @@ to the street). Exact spots of the detailed buildings (counters, stairs, yard we
 `game.city.blockSpots(id)` once a block's full level is built. The core forms one connected network
 (> 95 % of nodes; tested), and the Porta Capena is connected to the Forum.
 
+## Roads, kerbs and dead ends (M5a)
+
+- **Roads round buildings.** The atlas roads are historical centrelines; the landmarks stand on their
+  own footprints, so 20 roads ran through a temple, a camp, the Colosseum's pad or a warehouse
+  (345 m of road inside blocking footprints; the bot's first stuck point, Via Nova through the Horrea
+  Agrippiana, was one). `planCity` now bends each such span round the building (`detour.ts`;
+  `?detour=0` is the old plan for A/B). Not touched: arches, gates, fora, harbours, porticoes (walked
+  through), a road that begins or ends inside a footprint (it ends at that building's door), and
+  roads whose bend would split the network. A bend that breaks a junction gets a short link road
+  (`plan.stats.roadLinks`).
+- **Road ends.** `closeRoadEnds` (runs after the streets are planned) carries every atlas road that
+  stopped in the open on to the next road, street, square or building within 45 m; a stairway whose
+  foot lands behind a block gets a path to the street (the Scalae Caci's foot was walled in).
+  `auditRoadEnds` lists the ends: 0 'dead' ends (5 before).
+- **Servian wall.** A road or street that meets a standing wall passes through it: the wall line
+  is sampled every half metre and each piece is cut exactly where the plan raster says ROAD /
+  STREET / PIAZZA (`freeRuns`, monuments.ts), the cut ends dressed as tufa jambs. Streets whose
+  course ends at the wall band are carried through it to the street beyond (`stubs.ts`); atlas
+  gates (not landmarks) keep their arch. Lanes that ended at a wall: 12 before, 3 now.
+- **Dropped kerbs.** Where a minor street ends on a paved atlas road (`streetMouths`), the road's
+  sidewalk on that side ramps down to the carriageway over the street's width plus 1.6 m either
+  side (`StreetSpec.dips`): no kerb to step over at a lane mouth.
+- **Aprons.** The edge of a paved street's sidewalk, of a lane, and of every plaza / junction /
+  ground-cover surface runs out to the ground in a *walkable* slope (0.9 m, 0.6 m, and the plaza's
+  0.3-0.4 m bevel, now in the collider): the crawl's 3–12 cm ledges at paving edges were a collider
+  step against the terrain.
+- **Reachability.** `tests/city.roads.test.ts`: from the Forum node 99.4 % of the street graph
+  (98.3 % before), the leftovers are three lanes between two courts; the Ludus Magnus, Colosseum,
+  Porta Capena, Trajan's Forum and the Porta Carmentalis are on the main network.
+
 ## Walls, gates and aqueducts
 
 Servian wall stretches from the atlas in Grotta Oscura tufa ashlar: gaps where `partial`, broken
 tops where `ruinous`, low stubs in open ground where `built-over`; nothing where the wall would
-block a road or street. The Esquiline agger is an earth bank with a walkable promenade. Gates that
+block a road or street (breached as wide as the way, with jambs: see M5a above). The Esquiline agger is an earth bank with a walkable promenade. Gates that
 are not landmarks become obsolete single arches (or two broken piers). Aqueduct arcades follow the
 atlas `channelElevation`: piers and arches with the covered channel on top, a solid wall where the
 channel runs low, nothing underground; piers that would stand in a road are left out.

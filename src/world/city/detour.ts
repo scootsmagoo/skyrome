@@ -130,8 +130,23 @@ function nearestOnRing(ring: readonly Pt[], p: Pt): { edge: number; pt: Pt } {
   return { edge, pt };
 }
 
-/** The way round a ring from a to b (the ring's vertices between them), on the shorter side. */
-export function around(ring: readonly Pt[], a: Pt, b: Pt): Pt[] {
+/** Length of a polyline's stretches on ground steeper than `limit` (rise per metre), sampled every 2 m. */
+export function steepLength(pts: readonly Pt[], slope: (x: number, z: number) => number, limit = MAX_ROAD_SLOPE * 1.5): number {
+  let n = 0;
+  for (let k = 0; k + 1 < pts.length; k++) {
+    const a = pts[k], b = pts[k + 1];
+    const L = len(a, b);
+    const m = Math.max(1, Math.ceil(L / 2));
+    for (let i = 0; i < m; i++) if (slope(a[0] + ((b[0] - a[0]) * (i + 0.5)) / m, a[1] + ((b[1] - a[1]) * (i + 0.5)) / m) > limit) n += L / m;
+  }
+  return n;
+}
+
+/**
+ * The way round a ring from a to b (the ring's vertices between them): the shorter side, or, when a
+ * `slope` is given, the side with less of its length on steep ground (a bank of a raised pad) first.
+ */
+export function around(ring: readonly Pt[], a: Pt, b: Pt, slope?: (x: number, z: number) => number): Pt[] {
   const n = ring.length;
   const cum = [0];
   for (let i = 1; i <= n; i++) cum.push(cum[i - 1] + len(ring[i - 1], ring[i % n]));
@@ -149,7 +164,8 @@ export function around(ring: readonly Pt[], a: Pt, b: Pt): Pt[] {
   for (const o of bk) bw.push(o.q.v);
   fw.push(B.pt);
   bw.push(B.pt);
-  return dFw <= dBw ? fw : bw;
+  const cost = (path: Pt[], length: number) => length + (slope ? steepLength(path, slope) * 6 : 0);
+  return cost(fw, dFw) <= cost(bw, dBw) ? fw : bw;
 }
 
 /**
@@ -157,7 +173,7 @@ export function around(ring: readonly Pt[], a: Pt, b: Pt): Pt[] {
  * footprint is replaced by its convex hull (the landmark footprints are rectangles, ellipses and
  * mild polygons).
  */
-export function detourRoad(pts: readonly Pt[], blockers: readonly Blocker[], halfWidth: number, joints: readonly Pt[] = [], cut = false): { points: Pt[]; detours: Detour[] } {
+export function detourRoad(pts: readonly Pt[], blockers: readonly Blocker[], halfWidth: number, joints: readonly Pt[] = [], cut = false, slope?: (x: number, z: number) => number): { points: Pt[]; detours: Detour[] } {
   // Two buildings close together (the Colosseum and the Baths of Titus) can leave no room for both
   // gaps: a detour round one runs into the other. Try the full gaps, then narrower ones, and take
   // the first road that stays out of every footprint and keeps its joints with other roads (a
@@ -168,7 +184,7 @@ export function detourRoad(pts: readonly Pt[], blockers: readonly Blocker[], hal
   const stay = { points: pts.map((p) => [p[0], p[1]] as Pt), detours: [] as Detour[] };
   let best: { points: Pt[]; detours: Detour[] } | null = stay, bestCost = insideLength(stay.points, blockers) * 0.6;
   for (const scale of [1, 0.65, 0.35, 0]) {
-    const r = detourOnce(pts, blockers.map((b) => ({ ...b, gap: (b.gap ?? DETOUR_GAP) * scale })), halfWidth, cut);
+    const r = detourOnce(pts, blockers.map((b) => ({ ...b, gap: (b.gap ?? DETOUR_GAP) * scale })), halfWidth, cut, slope);
     const lost = keep.filter((j) => distToPolyline(j, r.points) > JOINT_KEEP).length;
     const cost = insideLength(r.points, blockers) + lost * LOST_JOINT;
     if (cost < bestCost - 1e-6) { best = r; bestCost = cost; }
@@ -295,7 +311,7 @@ export function insideLength(pts: readonly Pt[], blockers: readonly Blocker[]): 
   return n;
 }
 
-function detourOnce(pts: readonly Pt[], blockers: readonly Blocker[], halfWidth: number, cut: boolean): { points: Pt[]; detours: Detour[] } {
+function detourOnce(pts: readonly Pt[], blockers: readonly Blocker[], halfWidth: number, cut: boolean, slope?: (x: number, z: number) => number): { points: Pt[]; detours: Detour[] } {
   let cur: Pt[] = pts.map((p) => [p[0], p[1]] as Pt);
   const detours: Detour[] = [];
   const rings = blockers.map((b) => {
@@ -350,7 +366,7 @@ function detourOnce(pts: readonly Pt[], blockers: readonly Blocker[], halfWidth:
       if (startsInside) { mid = [X]; kind = 'start'; }
       else if (endsInside) { mid = [E]; kind = 'end'; }
       else {
-        mid = around(R.out, E, X);
+        mid = around(R.out, E, X, slope);
         kind = 'around';
         const dl = mid.reduce((s, q, k) => (k ? s + len(mid[k - 1], q) : 0), 0);
         if (dl > (sOut - sIn) * MAX_RATIO + SLACK) continue;

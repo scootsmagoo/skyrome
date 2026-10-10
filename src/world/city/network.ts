@@ -412,7 +412,7 @@ export function buildStreetGraph(
     const L = polylineLength(path);
     for (let t = 0; t <= L; t += 1) {
       const p = pointOn(path, t);
-      obstacles.push({ x: p[0], z: p[1], r: half, end: 2 });
+      obstacles.push({ x: p[0], z: p[1], r: half, end: half + 1 });
     }
   }
   const raster = rasterProbe(plan, obstacles);

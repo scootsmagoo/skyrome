@@ -25,6 +25,7 @@ import { WORLD_SCALE, toGame } from '../coords';
 import type { Heightmap } from '../terrain/heightmap';
 import { BatchPool } from './batches';
 import { renderBreakdown } from './debug';
+import { auditReach, auditRoadEnds, summarizeRoadEnds } from './audit';
 import { FlatSoup, blockFarGeometry, layoutBlock, ribbon, type LotMass } from './massing';
 import { buildMonuments } from './monuments';
 import { buildStreetGraph, type StreetGraph } from './network';
@@ -291,8 +292,10 @@ export async function buildCity(
   stats.streets = plan.streets.length;
   console.info('[city]', JSON.stringify(Object.fromEntries(Object.entries({ ...plan.stats, ...stats }).map(([k, v]) => [k, Math.round(v)]))));
   report(1, 'The city wakes');
-  const w = window as unknown as { __city?: CityService; __cityBreakdown?: () => unknown };
+  const w = window as unknown as { __city?: CityService; __cityBreakdown?: () => unknown; __streetAudit?: () => unknown };
   w.__city = service;
+  // In-game audit: what the street graph reaches from the Forum, and the road ends that stop at nothing (M5a).
+  w.__streetAudit = () => ({ reach: auditReach(game.streets, 0, 0), roadEnds: summarizeRoadEnds(auditRoadEnds(plan)), dead: auditRoadEnds(plan).filter((e) => e.verdict === 'dead') });
   w.__cityBreakdown = () =>
     renderBreakdown(game, {
       terrain: () => (game.terrain ? [game.terrain.group] : []),
