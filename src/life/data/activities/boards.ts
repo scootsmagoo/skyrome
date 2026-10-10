@@ -10,7 +10,8 @@
  *  - board-subura: the compitum board of the Subura (capfora-nerva, spot 'notice')
  *  - board-forum:  the herald's painted notice in the Forum of Caesar (spot 'praeco-notice')
  *  - board-ceres:  the aediles' album on the podium of the Temple of Ceres (spot 'temple-ceres-album')
- *  - board-meta (the builder's own playbill text prompt beside it is a different interactable and stays):   the games-programme wall at the Meta Sudans (spot 'meta-sudans-playbill')
+ *  - board-meta:   the games-programme wall at the Meta Sudans (spot 'meta-sudans-playbill'); its
+ *                  reading spot sits on the wall's raised footing, so the board reaches the street
  */
 import { defineLife } from '../../types';
 
@@ -53,6 +54,8 @@ export default defineLife({
       name: 'The games-wall at the Meta Sudans',
       verb: 'Read the notices',
       at: { landmarkSpot: 'meta-sudans-playbill', replaces: 'colos:meta-sudans-playbill' },
+      // The reading spot is on the footing, ~1.4 m above the street where people stand: reach it from there.
+      reach: 3.6,
       gate: AFTER_OPENING,
       intro: 'Where the crowd for the amphitheatre goes by, a whitewashed stretch of wall carries the programme and everything else that people want a crowd to read.',
       board: 'board-meta',

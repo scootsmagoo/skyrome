@@ -382,7 +382,10 @@ export class Cards {
 
 /** The first words of a notice, for its choice: "A grey she-ass, branded on the left haunch…". */
 export function headline(text: string): string {
-  const first = text.split(/(?<=[.!?:;])\s/)[0];
+  const parts = text.split(/(?<=[.!?:;])\s/);
+  let first = parts[0];
+  // A one-word lead ("Lost:") says nothing on its own: run on into the next clause.
+  for (let i = 1; first.length < 20 && i < parts.length; i++) first = `${first} ${parts[i]}`;
   if (first.length <= 52) return first.replace(/[.:;]$/, '');
   const cut = first.slice(0, 50);
   return `${cut.slice(0, Math.max(20, cut.lastIndexOf(' ')))}…`;

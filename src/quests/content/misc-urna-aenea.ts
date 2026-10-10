@@ -66,7 +66,7 @@ export default defineQuest({
       journal: 'A bronze pot, the big one for the dyers’ vats, had walked out of Primus the coppersmith’s shop in the Vicus Tuscus. Sixty-five sesterces for the pot and twenty more for the thief, said the notice. His apprentice Felix had been minding the front when it went.',
       objectives: [
         { id: 'felix', text: 'Question Felix, the coppersmith’s apprentice', target: { kind: 'npc', id: FELIX } },
-        { id: 'dice', text: 'Hear what the dicers at the Silver Pig say (optional)', target: { kind: 'npc', id: CNAEUS }, optional: true },
+        { id: 'dice', text: 'Hear what the dicers at the Silver Pig say', target: { kind: 'npc', id: CNAEUS }, optional: true },
       ],
       next: 'fence',
     },

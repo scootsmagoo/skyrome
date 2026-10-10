@@ -235,6 +235,8 @@ describe('cards and talk', () => {
     expect(notices.length).toBeLessThanOrEqual(4);
     rpg.dialogue.end();
     expect(headline('A grey she-ass, branded on the left haunch, went astray by the Subura fountain. Whoever brings her…')).toMatch(/…$/);
+    // A one-word lead runs on into its clause.
+    expect(headline('Lost: a Molossian bitch named Hilara, with a bronze bulla at her neck.')).toBe('Lost: a Molossian bitch named Hilara, with a…');
   });
 });
 

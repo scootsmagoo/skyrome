@@ -161,8 +161,9 @@ const demetrius = person({
     { ask: 'Any advice for a fighter?', say: 'Clean the cut before you bind it, and don’t listen to the man who says to pour in oil. That is a cook’s idea of medicine.' },
   ],
   trade: { ask: 'Show me your remedies.', service: 'barter' },
-  choices: [{ text: 'Treat my wounds. (2 den.)', enabled: (c) => c.denarii() >= 2, goto: 'healed', effects: (c) => { if (c.pay(2)) treat(c); } }],
-  nodes: { healed: { text: '(He works with a quick, dry competence.) There. Don’t thank me; thank Aesculapius. He sends the patients.', next: 'hub' } },
+  // His mortar (world-life §4.6: an as a use) comes in through the life lines.
+  choices: [{ text: 'Treat my wounds. (2 den.)', enabled: (c) => c.denarii() >= 2, goto: 'healed', effects: (c) => { if (c.pay(2)) treat(c); } }, ...lifeChoices('npc-demetrius').choices],
+  nodes: { healed: { text: '(He works with a quick, dry competence.) There. Don’t thank me; thank Aesculapius. He sends the patients.', next: 'hub' }, ...lifeChoices('npc-demetrius').nodes },
 });
 
 const tryphon = person({

@@ -3,6 +3,8 @@
  * worked examples are clean against the world's ids, and a broken fixture reports every planted
  * error. The quests phase 2 adds (jobs and the six side quests) pass the same history lint.
  */
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DISTRICTS as BARK_DISTRICTS } from '../src/content/barks';
 import { dialogueModules } from '../src/dialogue/DialogueSystem';
@@ -44,6 +46,14 @@ describe('life data', () => {
     // The examples ('_' files) stay out of the game's data.
     expect(LIFE.keepers.some((k) => k.id.startsWith('keeper-example'))).toBe(false);
     expect(LIFE.activities.some((a) => a.id.startsWith('act.example'))).toBe(false);
+  });
+
+  it('every ServiceSet reaches its person: a hand-written dialogue spreads their lifeChoices', () => {
+    // A ServiceSet does nothing until the person's own conversation splices in lifeChoices(npc)
+    // (§3.3 "Services for existing NPCs"); a missing spread hides the services, the bench or the job.
+    const dir = join(__dirname, '../src/dialogue/content');
+    const src = readdirSync(dir).filter((f) => f.endsWith('.ts')).map((f) => readFileSync(join(dir, f), 'utf8')).join('\n');
+    for (const s of LIFE.services) expect(src.includes(`lifeChoices('${s.npc}'`), s.npc).toBe(true);
   });
 
   it('the worked examples are clean, with the real data', () => {
