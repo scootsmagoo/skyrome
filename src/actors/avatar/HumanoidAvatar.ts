@@ -373,6 +373,7 @@ export class HumanoidAvatar implements CombatAvatar {
 
   lookAt(p: THREE.Vector3 | null) {
     this.anim.lookAt(p);
+    this.real?.lookAt(p);
   }
 
   /**

@@ -376,7 +376,8 @@ export class AnimationController {
   }
 
   lookAt(p: THREE.Vector3 | null) {
-    this.lookTarget = p ? (this.lookTarget ?? new THREE.Vector3()).copy(p) : null;
+    // Kept by reference: callers (Npc.lookAtPoint) move the point every frame and the head follows it.
+    this.lookTarget = p;
   }
 
   /** Resolve a contract clip name to a concrete variant for the current stance/state. */

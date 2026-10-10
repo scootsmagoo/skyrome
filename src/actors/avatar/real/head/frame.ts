@@ -55,8 +55,25 @@ const smooth01 = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
-/** Measure a body's head from its head-weighted vertices (weight on the head bone >= 0.5). */
-export function measureHead(body: BodyArrays, sex: 'male' | 'female'): HeadMeasure {
+/**
+ * Where the reference eye centres land on a body morphed to `rig` (the head bone's morph: a uniform scale
+ * `rig.headH / ref.headH` about the head joint plus the joint's move). Without a rig: the reference eyes.
+ */
+export function eyeCentreIn(sex: 'male' | 'female', rig?: Rig): { x: number; y: number; z: number } {
+  const e = REF_EYES[sex];
+  if (!rig) return e;
+  const ref = refRig(sex);
+  const k = ref.headH > 1e-6 ? rig.headH / ref.headH : 1;
+  const J = (r: Rig, c: number) => r.joints[B.head * 3 + c];
+  return { x: e.x * k, y: J(rig, 1) + k * (e.y - J(ref, 1)), z: J(rig, 2) + k * (e.z - J(ref, 2)) };
+}
+
+/**
+ * Measure a body's head from its head-weighted vertices (weight on the head bone >= 0.5). `rig`: the body is
+ * already morphed to this rig (RealBody's context), so the reference landmarks (eyes) are carried into it too;
+ * without it the body is the reference pose.
+ */
+export function measureHead(body: BodyArrays, sex: 'male' | 'female', rig?: Rig): HeadMeasure {
   const n = body.position.length / 3;
   const pos = body.position;
   const head: number[] = [];
@@ -85,13 +102,14 @@ export function measureHead(body: BodyArrays, sex: 'male' | 'female'): HeadMeasu
   // Chin: the lowest point of the front of the jaw (the throat below it is not the head).
   let chin = Infinity;
   const noseTip = new THREE.Vector3(0, 0, -Infinity);
-  const eye = REF_EYES[sex];
+  const eye = eyeCentreIn(sex, rig);
+  const ks = rig ? rig.headH / refRig(sex).headH : 1;
   for (const i of head) {
     const x = pos[i * 3];
     const y = pos[i * 3 + 1];
     const z = pos[i * 3 + 2];
     if (z > cz + 0.03 && Math.abs(x) < 0.03) chin = Math.min(chin, y);
-    if (Math.abs(x) < 0.02 && y < eye.y + 0.01 && y > eye.y - 0.075 && z > noseTip.z) noseTip.set(x, y, z);
+    if (Math.abs(x) < 0.02 * ks && y < eye.y + 0.01 * ks && y > eye.y - 0.075 * ks && z > noseTip.z) noseTip.set(x, y, z);
   }
   if (!isFinite(chin)) chin = yMin;
   const H = Math.max(1e-3, crown - chin);
@@ -236,11 +254,11 @@ export function measureHead(body: BodyArrays, sex: 'male' | 'female'): HeadMeasu
 
 const measures = new WeakMap<BodyArrays, HeadMeasure>();
 
-/** `measureHead` cached per body arrays object. */
-export function headMeasureOf(body: BodyArrays, sex: 'male' | 'female'): HeadMeasure {
+/** `measureHead` cached per body arrays object (a morphed body always belongs to the same rig). */
+export function headMeasureOf(body: BodyArrays, sex: 'male' | 'female', rig?: Rig): HeadMeasure {
   let m = measures.get(body);
   if (!m) {
-    m = measureHead(body, sex);
+    m = measureHead(body, sex, rig);
     measures.set(body, m);
   }
   return m;
@@ -260,8 +278,10 @@ export class HeadSurface implements RealHeadFrame {
   /** Chin-to-crown (m) and the scale against the old procedural head. */
   readonly H: number;
   readonly hs: number;
-  /** Scale of the reference head to this one. */
+  /** Scale applied to the measurement (1 when it was taken on a body already morphed to the rig). */
   readonly k: number;
+  /** Scale of the REFERENCE head to this one (rig.headH / ref.headH), whatever the measurement was taken on. */
+  readonly kRef: number;
   /** Axis of the table: x is 0, z is `cz`. */
   readonly cz: number;
   readonly earOut: number;
@@ -284,6 +304,8 @@ export class HeadSurface implements RealHeadFrame {
     const ref = inRig ? rig : refRig(m.sex);
     const k = ref.headH > 1e-6 ? rig.headH / ref.headH : 1;
     this.k = k;
+    const r0 = refRig(m.sex);
+    this.kRef = r0.headH > 1e-6 ? rig.headH / r0.headH : 1;
     const jr = (c: number) => ref.joints[B.head * 3 + c];
     const jt = (c: number) => rig.joints[B.head * 3 + c];
     const Y = (y: number) => jt(1) + k * (y - jr(1));
@@ -350,5 +372,5 @@ export class HeadSurface implements RealHeadFrame {
 
 /** Head of one appearance from a context's body arrays (cached measurement). */
 export function headSurface(body: BodyArrays, rig: Rig, sex: 'male' | 'female', inRig = false): HeadSurface {
-  return new HeadSurface(headMeasureOf(body, sex), rig, inRig);
+  return new HeadSurface(headMeasureOf(body, sex, inRig ? rig : undefined), rig, inRig);
 }

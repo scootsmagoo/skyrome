@@ -21,7 +21,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import type { Appearance, Sex } from '../../appearance';
 import type { HumanoidAvatar } from '../HumanoidAvatar';
-import { B, computeRig, type Rig } from '../rig';
+import { B, BONES, computeRig, type Rig } from '../rig';
 import { avatarMaterial } from '../material';
 import { realClothMaterial } from './garments/clothMaterial';
 import { levels } from '../build/body';
@@ -29,12 +29,18 @@ import { buildArmorPieces } from '../build/armor';
 import { buildBelt, buildLowerGarments } from '../build/garments';
 import { buildCloak } from '../build/cloak';
 import { headFrame } from '../build/head';
-import { makeCtx } from '../build/common';
+import { makeCtx, srgb } from '../build/common';
 import { resolveOutfit } from '../build/outfit';
 import { morphBody, type BodyArrays } from './morph';
 import { refRig } from './refs';
-import { eyeMaterial, IRIS_COLORS, skinMaterial } from './skin';
-import { clusterDecimate } from './decimate';
+import { eyeMaterial, IRIS_COLORS, skinMaterial, type EyeLids } from './skin';
+import { deformAttributes, deformTable, paramsOf, type DeformVertex } from './deform';
+import { measureJaw, measureLids } from './head/faceRig';
+import { headMeasureOf } from './head/frame';
+import { HandDriver } from '../anim/hands';
+import { FaceDriver } from '../anim/face';
+import { clusterDecimate, REAL_HEAD_CELL } from './decimate';
+import { handParts, measureHand, reshapeHand, type HandMeasure, type HandParts } from './handShape';
 import { paintBody, type TorsoMeasure } from './garments/paint';
 import { MeasuredProfile } from './garments/measured';
 import { assembleBody } from './garments/assemble';
@@ -70,6 +76,13 @@ interface Template {
   eyeCenters: THREE.Vector3[];
   normalMaps: THREE.Texture[];
   aoMaps: THREE.Texture[];
+  /** The measured hands (left, right) in the reference pose, and which digit each vertex of LOD 0..2 belongs to. */
+  hands: (HandMeasure | null)[];
+  handParts: HandParts[];
+  /** LOD 0 vertices that bend in the shader (fingers, thumbs, jaw: real/deform.ts). */
+  deform: Map<number, DeformVertex>;
+  /** The eye opening (head/faceRig.ts), for the eye shader's lids. */
+  lids: EyeLids;
 }
 
 const templates = new Map<Sex, Template>();
@@ -116,7 +129,7 @@ export function loadRealBodies(renderer: THREE.WebGLRenderer): Promise<void> {
           normalMaps.push(await tex(`n${i}`));
           aoMaps.push(await tex(`ao${i}`));
         }
-        return [sex, extract(g.scene, normalMaps, aoMaps)] as const;
+        return [sex, extract(g.scene, normalMaps, aoMaps, sex)] as const;
       }),
     );
     for (const [sex, tpl] of loaded) templates.set(sex, tpl);
@@ -151,7 +164,7 @@ function arrays(mesh: THREE.SkinnedMesh): BodyArrays {
   };
 }
 
-function extract(scene: THREE.Object3D, normalMaps: THREE.Texture[], aoMaps: THREE.Texture[]): Template {
+function extract(scene: THREE.Object3D, normalMaps: THREE.Texture[], aoMaps: THREE.Texture[], sex: Sex): Template {
   scene.updateMatrixWorld(true);
   const find = (suffix: string) => {
     let found: THREE.SkinnedMesh | null = null;
@@ -170,8 +183,19 @@ function extract(scene: THREE.Object3D, normalMaps: THREE.Texture[], aoMaps: THR
     uv.push(Float32Array.from(m.geometry.getAttribute('uv').array as ArrayLike<number>));
     index.push((m.geometry.index!.array as Uint16Array).slice());
   }
+  // The hands, re-posed once for every LOD (handShape.ts): measured on LOD 0, the LODs share the bind pose.
+  const hands: (HandMeasure | null)[] = [measureHand(lods[0], index[0], refRig(sex), 1), measureHand(lods[0], index[0], refRig(sex), -1)];
+  const partsByLod: HandParts[] = [];
+  for (let i = 0; i < MAP_LODS; i++) {
+    const parts = handParts(lods[i].position.length / 3);
+    for (const h of hands) if (h) reshapeHand(lods[i], h, refRig(sex), parts);
+    partsByLod.push(parts);
+  }
   // LOD 3: decimated from LOD 2 (no maps, so no UVs or tangents).
-  const d = clusterDecimate(lods[2], index[2], LOD3_TRIS);
+  // Half-size cells on the head keep its silhouette (a skull and a chin, not a wedge).
+  const cells = new Array<number>(BONES.length).fill(1);
+  cells[B.head] = REAL_HEAD_CELL;
+  const d = clusterDecimate(lods[2], index[2], LOD3_TRIS, cells);
   lods.push({ position: d.position, normal: d.normal, skinIndex: d.skinIndex, skinWeight: d.skinWeight });
   index.push(d.index);
   const em = find('eyes');
@@ -188,7 +212,14 @@ function extract(scene: THREE.Object3D, normalMaps: THREE.Texture[], aoMaps: THR
   }
   c[0].divideScalar(n[0]);
   c[1].divideScalar(n[1]);
-  return { lods, uv, index, eyes, eyeIndex: (em.geometry.index!.array as Uint16Array).slice(), eyeCenters: c, normalMaps, aoMaps };
+  // The face's moving parts: the jaw and the lids (head/faceRig.ts), measured on LOD 0.
+  let eyeR = 0;
+  for (let i = 0; i < eyes.position.length / 3; i++)
+    if (eyes.position[i * 3] > 0) eyeR = Math.max(eyeR, Math.hypot(eyes.position[i * 3] - c[0].x, eyes.position[i * 3 + 1] - c[0].y, eyes.position[i * 3 + 2] - c[0].z));
+  const lids = measureLids(lods[0], index[0], c[0].toArray(), eyeR, 1);
+  const jaw = measureJaw(lods[0], headMeasureOf(lods[0], sex));
+  const deform = deformTable(hands, partsByLod[0], jaw);
+  return { lods, uv, index, eyes, eyeIndex: (em.geometry.index!.array as Uint16Array).slice(), eyeCenters: c, normalMaps, aoMaps, hands, handParts: partsByLod, deform, lids };
 }
 
 // ---------------------------------------------------------------- per-appearance geometry
@@ -295,11 +326,49 @@ function buildLod(e: Entry, lod: number): LodData {
   const geo = a.geometry;
   geo.name = `real:${e.app.sex}:lod${lod}`;
   if (lod <= 2) applyCorrectives(geo, a, context(e, lod as 0 | 1 | 2));
+  if (lod === 3) farHead(geo, e);
+  if (split) {
+    // Fingers, thumbs and jaw bend in the skin shader (real/deform.ts); appended cloth copies stay still.
+    const d = deformAttributes(tpl.deform, geo.getAttribute('position').count, refRig(e.app.sex), e.rig);
+    geo.setAttribute('aDef0', new THREE.BufferAttribute(d.a0, 4));
+    geo.setAttribute('aDef1', new THREE.BufferAttribute(d.a1, 4));
+  }
   geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, e.rig.height * 0.5, 0), e.rig.height * 1.15);
   if (shells) shells.geometry.boundingSphere = geo.boundingSphere.clone();
   buildStats.lods++;
   buildStats.ms += performance.now() - t0;
   return { geometry: geo, split, triangles: a.triangles, shells: shells?.geometry ?? null };
+}
+
+/**
+ * LOD 3 has no hair or headgear (the head objects stop at LOD 2): paint the crown of the head in the hair's
+ * colour (or the helmet's metal, or the veil's cloth) so a far crowd keeps its dark heads and helmets.
+ */
+function farHead(geo: THREE.BufferGeometry, e: Entry) {
+  const app = e.app;
+  const veil = app.hair.style === 'veiled' || app.hair.style === 'vestal';
+  if (app.hair.style === 'bald' && !app.armor?.helmet) return;
+  const hex = app.armor?.helmet ? '#7d7b76' : veil ? app.garments.find((g) => g.kind === 'palla' || g.kind === 'toga')?.color ?? '#d8d0bf' : app.hair.color;
+  const c = srgb(hex);
+  const pos = geo.getAttribute('position');
+  const col = geo.getAttribute('color');
+  const si = geo.getAttribute('skinIndex');
+  const sw = geo.getAttribute('skinWeight');
+  const r = e.rig;
+  const chin = r.height - r.headH;
+  const jz = r.joints[B.head * 3 + 2];
+  // A cap (helmet), or hair that comes down further at the back and sides than over the brow.
+  const low = app.armor?.helmet ? 0.62 : veil ? 0.45 : 0.36;
+  for (let v = 0; v < pos.count; v++) {
+    let w = 0;
+    for (let k = 0; k < 4; k++) if (si.getComponent(v, k) === B.head) w += sw.getComponent(v, k);
+    if (w < 0.5) continue;
+    const yf = (pos.getY(v) - chin) / r.headH;
+    const front = Math.min(1, Math.max(0, (pos.getZ(v) - jz + 0.03 * r.s) / (0.11 * r.s)));
+    const line = low + (0.8 - low) * front * front;
+    if (yf < line) continue;
+    col.setXYZ(v, c.r, c.g, c.b);
+  }
 }
 
 /**
@@ -408,6 +477,16 @@ function irisFor(app: Appearance): string {
   return pool[h % pool.length];
 }
 
+const tmpM = new THREE.Matrix4();
+const tmpV = new THREE.Vector3();
+/** The real body of each avatar (for the face director: who is speaking). */
+const bodies = new WeakMap<HumanoidAvatar, RealBody>();
+
+/** The realistic body of an avatar, if it has one. */
+export function realBodyOf(avatar: unknown): RealBody | undefined {
+  return bodies.get(avatar as HumanoidAvatar);
+}
+
 export class RealBody {
   private entry: Entry;
   private lod: number;
@@ -422,6 +501,11 @@ export class RealBody {
   private firstPerson = false;
   private disposed = false;
   private skinMats: THREE.Material[] = [];
+  /** Hands that grip and faces that blink, talk and look (anim/hands.ts, anim/face.ts). */
+  private readonly hands = new HandDriver();
+  readonly face = new FaceDriver();
+  private lookTarget: THREE.Vector3 | null = null;
+  private lastFaceT = -1;
 
   /** `lod`: the LOD to build now (the avatar picks the right one once it knows its distance). */
   constructor(app: Appearance, lod = 2) {
@@ -487,7 +571,10 @@ export class RealBody {
   /** Eyes, shells, head objects: everything that rides on the avatar's skeleton. */
   attach(avatar: HumanoidAvatar) {
     this.avatar = avatar;
-    this.eyes = new THREE.SkinnedMesh(this.entry.eyes, eyeMaterial(irisFor(this.entry.app)));
+    bodies.set(avatar, this);
+    // The bone texture carries the face and hand parameters in a spare slot (real/deform.ts).
+    paramsOf(avatar.skeleton);
+    this.eyes = new THREE.SkinnedMesh(this.entry.eyes, this.eyeMaterial());
     this.eyes.name = 'humanoid:eyes';
     this.eyes.castShadow = false;
     avatar.root.add(this.eyes);
@@ -592,14 +679,74 @@ export class RealBody {
     this.updateCorrectives();
   }
 
-  /** Drive the corrective shapes from the current pose (call after the animation updated the bones). */
+  /** Iris, lid skin and the template's lid opening. */
+  private eyeMaterial(): THREE.Material {
+    const app = this.entry.app;
+    return eyeMaterial(irisFor(app), app.skin, templates.get(app.sex)!.lids, app.sex);
+  }
+
+  /**
+   * After the animation updated the bones: the corrective shapes, then the hands (the knuckle curl shared
+   * out over the finger joints) and the face (blinks, jaw, gaze) at LOD 0.
+   */
   updateCorrectives() {
     const av = this.avatar;
-    if (av && this.lod <= 2) updateCorrectives(av.mesh, av.bones);
+    if (!av) return;
+    if (this.lod <= 2) updateCorrectives(av.mesh, av.bones);
+    const params = paramsOf(av.skeleton);
+    const near = this.lod === 0;
+    // Which hands hold something (a handle to wrap) and which are empty (a fist).
+    const eq = av.equipment as HumanoidAvatar['equipment'] | undefined;
+    const drawn = !!eq && eq.inHand && !eq.droppedItems;
+    const heldR = drawn && !!eq!.weaponObject;
+    const heldL = !!eq && ((drawn && (!!eq.shieldObject || !!eq.twoHandGrip())) || !!eq.offHand());
+    this.hands.update(av.bones, params, near, heldL, heldR);
+    const now = performance.now() / 1000;
+    const dt = this.lastFaceT < 0 ? 0 : Math.min(0.1, Math.max(0, now - this.lastFaceT));
+    this.lastFaceT = now;
+    if (near && !this.firstPerson) {
+      this.aimEyes(av);
+      this.face.update(dt, params);
+    } else FaceDriver.clear(params);
+    if (av.skeleton.boneTexture) av.skeleton.boneTexture.needsUpdate = true;
+  }
+
+  /** The eyes toward the head's look-at target (in the head's frame, from between the eyes). */
+  private aimEyes(av: HumanoidAvatar) {
+    const t = this.lookTarget;
+    if (!t) {
+      this.face.lookAt(null);
+      return;
+    }
+    const head = av.bones[B.head];
+    const J = this.entry.rig.joints;
+    tmpM.copy(head.matrixWorld).invert();
+    tmpV.copy(t).applyMatrix4(tmpM);
+    // Head-bone space has the bind pose's axes; the eyes sit above and in front of the joint.
+    const dx = tmpV.x;
+    const dy = tmpV.y - (this.entry.eyeY - J[B.head * 3 + 1]);
+    const dz = tmpV.z - (0.085 * this.entry.rig.s - J[B.head * 3 + 2]);
+    const yaw = Math.atan2(dx, dz);
+    if (Math.abs(yaw) > 1.4) {
+      this.face.lookAt(null);
+      return;
+    }
+    this.face.lookAt(yaw, Math.atan2(dy, Math.hypot(dx, dz)));
+  }
+
+  /** The point the head turns to (the avatar's look-at; a live reference: it is read every frame). */
+  lookAt(p: THREE.Vector3 | null) {
+    this.lookTarget = p;
+  }
+
+  /** Move the jaw to a spoken line (subtitles, dialogue). */
+  speak(text: string) {
+    this.face.speak(text);
   }
 
   setFirstPerson(on: boolean) {
     this.firstPerson = on;
+    if (on && this.avatar) FaceDriver.clear(paramsOf(this.avatar.skeleton));
     if (this.eyes) this.eyes.visible = !on && this.lod < EYE_LODS;
     this.setHeadVisible(!on && this.lod < 3);
   }
@@ -613,7 +760,7 @@ export class RealBody {
     this.makeHead();
     if (av) {
       this.eyes!.geometry = this.entry.eyes;
-      this.eyes!.material = eyeMaterial(irisFor(app));
+      this.eyes!.material = this.eyeMaterial();
       this.mountHead();
     }
     // Keep the LOD in use; the geometry is built now (the look just changed, there is no old mesh to keep).
@@ -624,6 +771,7 @@ export class RealBody {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    if (this.avatar && bodies.get(this.avatar) === this) bodies.delete(this.avatar);
     this.eyes?.removeFromParent();
     this.shells?.removeFromParent();
     this.headRoot?.removeFromParent();

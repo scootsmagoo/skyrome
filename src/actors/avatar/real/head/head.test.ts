@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import { Rng } from '../../../../core/Rng';
 import type { Appearance, BeardStyle, HairStyle } from '../../../appearance';
 import { computeRig } from '../../rig';
-import { REAL_REFS } from '../refs';
+import { REAL_REFS, refRig } from '../refs';
+import { morphBody, type BodyArrays } from '../morph';
 import { buildBeard } from './beard';
 import { buildGear } from './gear';
 import { buildHair } from './hair';
@@ -198,6 +199,27 @@ describe('buildHead', () => {
       expect(p.face.y).toBeGreaterThan(p.face.x);
       expect(p.head.w).toBeGreaterThan(p.eye.y);
       expect(p.misc.x).toBe(sex === 'male' ? 3 : 0);
+    }
+  });
+  it('paints the face at the same place on a body morphed to a shorter or taller rig (reference-head frame)', () => {
+    for (const sex of ['male', 'female'] as const) {
+      const base = loadBody(sex);
+      const refApp = appFor(sex);
+      const refPaint = makeSkinPaint(refApp, headSurface(base, refRig(sex), sex), refRig(sex), false);
+      for (const height of [1.45, 1.92]) {
+        const app = appFor(sex, { height });
+        const rig = computeRig(app);
+        const out = { position: new Float32Array(base.position.length), normal: new Float32Array(base.normal.length) };
+        morphBody(base, refRig(sex), rig, out);
+        const body: BodyArrays = { ...base, position: out.position, normal: out.normal };
+        // RealBody measures the morphed body (inRig): the paint must not depend on that.
+        const p = makeSkinPaint(app, headSurface(body, rig, sex, true), rig, false);
+        expect(p.headK).toBeCloseTo(rig.headH / refRig(sex).headH, 4);
+        expect(p.headJ.y).toBeCloseTo(rig.joints[4 * 3 + 1], 5);
+        for (const [a, b] of [[p.eye, refPaint.eye], [p.face, refPaint.face], [p.head, refPaint.head]] as const)
+          for (const c of ['x', 'y', 'z'] as const) expect(Math.abs(a[c] - b[c]), `${sex} ${height} ${c}`).toBeLessThan(0.004);
+        expect(Math.abs(p.head.w - refPaint.head.w)).toBeLessThan(0.004);
+      }
     }
   });
   it('different people get different paint keys, the same person the same', () => {

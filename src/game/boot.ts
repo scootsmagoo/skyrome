@@ -16,6 +16,7 @@ import { whenTexturesLoaded } from '../gfx/materials';
 import { Interactions } from '../interaction/Interactions';
 import { createHumanoid } from '../actors/avatar/HumanoidAvatar';
 import { classicRequested, loadRealBodies } from '../actors/avatar/real/RealBody';
+import { installFaces } from '../actors/avatar/real/faces';
 import { avatarLod } from '../actors/avatar/lod';
 import { installRpg } from '../rpg/install';
 import { setupPlayer } from '../scenes/common';
@@ -131,6 +132,7 @@ export async function startRome(game: Game, uiRoot: HTMLElement, params: RomePar
   guardUnload(flow);
   installInteriors(game);
   await installOptionalModules(game);
+  installFaces(game);
   const spawn = flow.spawnPoint(params.quick ? params.at : null);
   player.teleport(spawn.position, spawn.heading);
   player.yaw = spawn.heading + Math.PI;

@@ -26,6 +26,7 @@ uniform vec4 uMisc;     // beard (0 none, 1 stubble, 2 short, 3 full), blush, ag
 uniform vec2 uLook;     // sex (0 male, 1 female), brow thickness
 float skThin = 0.0;
 float skPaintH = 0.0;
+float skCavity = 0.0;
 float pt_noise(vec2 p) { return sk_noise(vec3(p, 0.37)); }
 float pt_line(float d, float w, float aa) { return 1.0 - smoothstep(w - aa, w + aa, abs(d)); }
 float pt_hairline(float a) {
@@ -91,6 +92,17 @@ export const PAINT_COLOR = /* glsl */ `
     tint *= 1.0 - 0.1 * exp(-pow(mx / 0.016, 2.0) - pow((my + lipL + 0.0045) / 0.0042, 2.0)) * fr;
     tint *= 1.0 - 0.18 * exp(-pow((abs(mx) - hw) / 0.0032, 2.0) - pow(my / 0.0035, 2.0)) * fr;
     skPaintH -= 0.5 * line * fr;
+  }
+
+  // ---- inside the mouth (seen when the jaw opens): dark and red, facing away from the light
+  {
+    float behind = smoothstep(uFace.z - 0.016, uFace.z - 0.026, q.z);
+    float inward = smoothstep(0.35, 0.05, vRestN.z);
+    float mouthBox = smoothstep(uFace.w + 0.004, uFace.w - 0.004, ax) * smoothstep(0.022, 0.012, abs(q.y - uFace.x));
+    float cavity = behind * inward * mouthBox * fr;
+    col = mix(col, vec3(0.16, 0.035, 0.03), cavity);
+    tint *= 1.0 - 0.6 * cavity * smoothstep(uFace.z - 0.02, uFace.z - 0.05, q.z);
+    skCavity = cavity;
   }
 
   // ---- eyes: lid line, lashes, crease
@@ -175,12 +187,15 @@ export const PAINT_COLOR = /* glsl */ `
     col = mix(col, uStubC.rgb * 0.8, zone * dots * amount * 0.65);
   }
 
-  // ---- hair roots above the hairline darken the scalp (the hair cap thins out over it)
+  // ---- hair roots above the hairline darken the scalp (the hair cap thins out over it): fine root stipple
+  // over a few millimetres, densest under the hair, never blotches on the forehead.
   if (uMisc.w > 0.5) {
-    float h = pt_hairline(az);
-    float s = smoothstep(h - 0.035, h + 0.02, yf);
-    float jag = sk_noise(vec3(az * 30.0, yf * 60.0, q.x * 80.0));
-    col = mix(col, uHlC, s * (0.55 + 0.25 * jag));
+    float h = pt_hairline(az) + 0.012 * (sk_noise(vec3(az * 14.0, 3.7, 0.0)) - 0.5);
+    float s = smoothstep(h - 0.006, h + 0.035, yf);
+    float fine = sk_noise(q * 1500.0) * 0.6 + sk_noise(q * 650.0 + 3.1) * 0.4;
+    // Sub-pixel stipple fades to its mean (no shimmer at a distance).
+    float roots = mix(0.5, smoothstep(0.4, 0.72, fine), smoothstep(0.0012, 0.0005, aa));
+    col = mix(col, uHlC, s * (0.25 + 0.5 * roots) * smoothstep(0.0, 0.25, s + roots * 0.2));
   }
 
   // ---- thin skin: the ears and the nose let the light through
@@ -215,4 +230,11 @@ export const PAINT_BUMP = /* glsl */ `
   vec3 pgrad = sign( pdet ) * ( pdHx * pr1 + pdHy * pr2 );
   normal = normalize( abs( pdet ) * normal - 0.0022 * pgrad );
 }
+`;
+
+/** After the physical material is set up: the inside of the mouth reflects (almost) nothing. */
+export const PAINT_SPEC = /* glsl */ `
+material.specularColor *= 1.0 - 0.9 * skCavity;
+material.specularColorBlended *= 1.0 - 0.9 * skCavity;
+material.specularF90 *= 1.0 - 0.9 * skCavity;
 `;

@@ -7,7 +7,6 @@ import * as THREE from 'three';
 import type { Appearance } from '../../../appearance';
 import { B, type Rig } from '../../rig';
 import { mixC, shade, srgb } from '../../build/common';
-import { refRig } from '../refs';
 import type { SkinPaint } from '../skin';
 import type { HeadSurface } from './frame';
 import { hairlineYf } from './hair';
@@ -17,10 +16,14 @@ const r2 = (x: number) => Math.round(x * 100) / 100;
 
 export function makeSkinPaint(app: Appearance, H: HeadSurface, rig: Rig, helmet: boolean): SkinPaint {
   const m = H.measure;
-  const ref = refRig(m.sex);
-  const jy = ref.joints[B.head * 3 + 1];
-  const jz = ref.joints[B.head * 3 + 2];
-  const Href = m.crown - m.chin;
+  // Every feature relative to THIS rig's head joint, in the reference head's metres (the shader divides by
+  // headK = kRef). H holds the measured head carried into the rig (in-rig eyes, nose, chin, ears).
+  const jy = rig.joints[B.head * 3 + 1];
+  const jz = rig.joints[B.head * 3 + 2];
+  const K = H.kRef;
+  const ry = (y: number) => (y - jy) / K;
+  const rz = (z: number) => (z - jz) / K;
+  const Href = H.H / K;
   const female = m.sex === 'female';
   const skin = srgb(app.skin);
   const hair = srgb(app.hair.color);
@@ -35,15 +38,16 @@ export function makeSkinPaint(app: Appearance, H: HeadSurface, rig: Rig, helmet:
   const roots = shade(hair, 0.42);
   bw.copy(hair);
   const hl = (deg: number) => hairlineYf(style, (deg * Math.PI) / 180, H);
-  const skullX = H.radii.x / H.k;
+  const skullX = H.radii.x / K;
+  const eye = H.eyes[0];
   const paint: SkinPaint = {
     key: '',
     headJ: new THREE.Vector3(rig.joints[B.head * 3], rig.joints[B.head * 3 + 1], rig.joints[B.head * 3 + 2]),
-    headK: H.k,
-    eye: new THREE.Vector3(m.eyeX, m.eyeY - jy, m.eyeZ - jz),
-    face: new THREE.Vector4(m.chin + MOUTH.line * Href - jy, m.noseTip.y - jy, m.noseTip.z - jz, female ? 0.0238 : 0.0252),
-    head: new THREE.Vector4(m.chin - jy, Href, m.cz - jz, m.eyeY + 0.075 * Href - jy),
-    ear: new THREE.Vector4(skullX + 0.001, m.earBottom - jy, m.earTop - jy, m.cz - jz + 0.035),
+    headK: K,
+    eye: new THREE.Vector3(eye.x / K, ry(eye.y), rz(eye.z)),
+    face: new THREE.Vector4(ry(H.chin + MOUTH.line * H.H), ry(H.noseTip.y), rz(H.noseTip.z), female ? 0.0238 : 0.0252),
+    head: new THREE.Vector4(ry(H.chin), Href, rz(H.cz), ry(eye.y + 0.075 * H.H)),
+    ear: new THREE.Vector4(skullX + 0.001, ry(H.earBottom), ry(H.earTop), rz(H.cz) + 0.035),
     brow,
     lip,
     stub: new THREE.Vector4(bw.r, bw.g, bw.b, stubAmt),
@@ -54,7 +58,7 @@ export function makeSkinPaint(app: Appearance, H: HeadSurface, rig: Rig, helmet:
   };
   paint.key = [
     m.sex,
-    H.k.toFixed(4),
+    K.toFixed(4),
     app.skin,
     app.hair.color,
     beard,
