@@ -17,7 +17,7 @@ import { aoDefault, shaftsDefault } from '../../core/graphics';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import type { Game, System } from '../../core/Game';
 import { COMPOSITE_FRAG, DOWNSAMPLE_FRAG, POST_VERT, UPSAMPLE_FRAG } from './shaders';
-import { buildGradeLutHalf, LUT_SIZE, type GradeLutParams } from './grade';
+import { buildGradeLutHalf, goldenHour, LUT_SIZE, type GradeLutParams } from './grade';
 
 declare module '../../core/Game' {
   interface Game {
@@ -87,10 +87,10 @@ export class PostFX implements System {
   /** A warm Mediterranean grade: honeyed highlights, cool and slightly greyer shadows. */
   readonly grade: GradeParams = {
     saturation: 1.06,
-    shadowDesat: 0.3,
+    shadowDesat: 0.42,
     contrast: 0.22,
     toe: 0.012,
-    shadowTint: new THREE.Color(0.93, 0.99, 1.07),
+    shadowTint: new THREE.Color(0.96, 0.995, 1.04),
     highlightTint: new THREE.Color(1.07, 1.0, 0.9),
     vignette: 0.22,
   };
@@ -508,6 +508,14 @@ export class PostFX implements System {
 
   lateUpdate() {
     this.weatherSaturation = this.game.sky?.weatherParams.saturation ?? 1;
+    // Golden hour: the grade's highlights lean toward honey and the colour deepens as the sun gets
+    // low (a stepped value, so the LUT is re-baked a dozen times over the evening, not every frame).
+    const L = this.game.sky?.lighting;
+    const sunY = L && !L.keyIsMoon ? L.keyDir.y : -1;
+    const gold = goldenHour(sunY, L ? L.keyIntensity : 0);
+    const g = this.grade;
+    g.highlightTint.setRGB(1.07 + 0.07 * gold, 1.0 - 0.01 * gold, 0.9 - 0.1 * gold);
+    g.saturation = 1.06 + 0.07 * gold;
   }
 
   dispose() {

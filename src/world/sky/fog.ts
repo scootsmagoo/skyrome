@@ -92,7 +92,7 @@ const FRAGMENT = /* glsl */ `
       * ( abs( skyFogDy ) > 1e-4 ? ( 1.0 - exp( - skyFogDy ) ) / skyFogDy : 1.0 );
     // Aerial perspective: red is extinguished a little faster than blue (far hills go blue), and
     // rays that climb see the air take on the sky's colour above the horizon, not the haze band's.
-    vec3 fogFactor = ( 1.0 - exp( - skyFogOD * vec3( 1.1, 1.0, 0.9 ) ) ) * ( skyFogParams.y > 0.0 ? skyFogParams.y : 1.0 );
+    vec3 fogFactor = ( 1.0 - exp( - skyFogOD * vec3( 1.22, 1.0, 0.8 ) ) ) * ( skyFogParams.y > 0.0 ? skyFogParams.y : 1.0 );
     skyFogBase = mix( skyFogBase, skyFogUp.rgb, skyFogUp.w * smoothstep( 0.02, 0.55, skyFogDir.y ) );
     vec3 skyFogCol = skyFogBase + skyFogSunColor.rgb * pow( max( dot( skyFogDir, skyFogSun.xyz ), 0.0 ), max( skyFogSun.w, 1.0 ) );
   #else

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildGradeLut, buildGradeLutHalf, floatToHalf, gradeColor, LUT_SIZE, linearToSrgb, srgbToLinear, type GradeLutParams } from './grade';
+import { buildGradeLut, buildGradeLutHalf, floatToHalf, goldenHour, gradeColor, LUT_SIZE, linearToSrgb, srgbToLinear, type GradeLutParams } from './grade';
 
 const NEUTRAL: GradeLutParams = { saturation: 1, shadowDesat: 0, contrast: 0, toe: 0, shadowTint: [1, 1, 1], highlightTint: [1, 1, 1] };
 const GRADE: GradeLutParams = { saturation: 1.1, shadowDesat: 0.3, contrast: 0.22, toe: 0.012, shadowTint: [0.93, 0.99, 1.07], highlightTint: [1.07, 1, 0.9] };
@@ -66,5 +66,17 @@ describe('grade LUT', () => {
     const k = (1 + 8 + 64) * 4 + 1;
     expect(Math.abs(fromHalf(half[k]) - exact)).toBeLessThan(2e-4);
     expect(Math.abs(byte[k] / 255 - exact)).toBeLessThanOrEqual(0.5 / 255 + 1e-9);
+  });
+});
+
+describe('golden hour', () => {
+  it('is 0 at noon and at night, 1 at the horizon, and stepped in twelfths', () => {
+    expect(goldenHour(0.9, 3)).toBe(0);
+    expect(goldenHour(-0.4, 0.1)).toBe(0);
+    expect(goldenHour(0.02, 1.2)).toBeGreaterThan(0.9);
+    const mid = goldenHour(0.2, 1.7);
+    expect(mid).toBeGreaterThan(0.3);
+    expect(mid).toBeLessThan(1);
+    expect(Math.abs(mid * 12 - Math.round(mid * 12))).toBeLessThan(1e-9);
   });
 });

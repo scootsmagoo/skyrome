@@ -365,18 +365,22 @@ function oleander(r: Rng): Omit<TreeModel, 'species' | 'variant'> {
     const top = V(Math.cos(a) * H * 0.35, H * r.range(0.6, 0.85), Math.sin(a) * H * 0.35);
     stems.push(taperedTube(bend(V(Math.cos(a) * 0.08, -0.1, Math.sin(a) * 0.08), top, 2, V(0, 0, 0)), [0.035, 0.028, 0.015], 4, () => 0.7));
   }
+  const cardSpecs: CardSpec[] = [];
   for (let i = 0; i < 11; i++) {
     const dir = V(r.gauss(), r.gauss() * 0.6 + 0.2, r.gauss()).normalize();
     const c = cc.clone().add(dir.multiply(cr).multiplyScalar(0.6));
     const s = r.range(0.45, 0.7);
-    clumps.push(clump({ center: c, radius: V(s, s * 0.85, s), seed: r.int(0, 9999), rough: 0.35 }, cc, cr, [0.8, 0.88, 0.78]));
+    clumps.push(clump({ center: c, radius: V(s * 0.8, s * 0.7, s * 0.8), seed: r.int(0, 9999), rough: 0.35 }, cc, cr, [0.62, 0.7, 0.6]));
+    cardSpecs.push({ center: c, radius: V(s, s * 0.85, s) });
   }
+  // Lance-shaped leaves in whorls over the crown: the clumps are only the dark inside.
+  const cards = leafCards(cardSpecs, cc, cr, { density: 4.2, size: [0.4, 0.58], tint: [0.8, 0.9, 0.78], reach: [0.95, 1.2] }, r.int(1, 9999));
   // Flowers: small clusters on the crown surface; aHead = 1 lets the instance colour tint them.
   const flowers: THREE.BufferGeometry[] = [];
-  for (let i = 0; i < 34; i++) {
+  for (let i = 0; i < 48; i++) {
     const dir = V(r.gauss(), Math.abs(r.gauss()) * 0.8 + 0.2, r.gauss()).normalize();
     const c = cc.clone().add(dir.multiply(cr).multiplyScalar(r.range(0.85, 1.05)));
-    const f = clump({ center: c, radius: V(0.12, 0.08, 0.12), detail: 0, rough: 0.2, seed: i }, cc, cr, [1.6, 1.6, 1.6]);
+    const f = clump({ center: c, radius: V(0.085, 0.06, 0.085), detail: 0, rough: 0.2, seed: i }, cc, cr, [1.6, 1.6, 1.6]);
     f.setAttribute('aHead', new THREE.Float32BufferAttribute(new Float32Array(f.getAttribute('position').count).fill(1), 1));
     flowers.push(f);
   }
@@ -385,6 +389,7 @@ function oleander(r: Rng): Omit<TreeModel, 'species' | 'variant'> {
     near: [
       { geometry: mergeParts(stems), material: 'bark', wind: 'shrub' },
       { geometry: mergeParts(clumps), material: 'foliage_broad', wind: 'shrub' },
+      { geometry: cards, material: 'foliage_broad', wind: 'shrub', cards: 'olive' },
       { geometry: fl, material: 'fabric_white', wind: 'shrub', heads: true },
     ],
     far: [],

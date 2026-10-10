@@ -9,9 +9,11 @@ import type { Draw } from '../fabric/draw';
 import { noise3 } from './geom';
 
 const leafBase = mergeVertices(new THREE.IcosahedronGeometry(1, 0).deleteAttribute('normal').deleteAttribute('uv'));
+/** Cheaper lumps for long hedges (8 triangles instead of 20). */
+const leafBaseLow = mergeVertices(new THREE.OctahedronGeometry(1, 0).deleteAttribute('normal').deleteAttribute('uv'));
 
-function leafClump(x: number, y: number, z: number, sx: number, sy: number, sz: number, seed: number): THREE.BufferGeometry {
-  const g = leafBase.clone();
+function leafClump(x: number, y: number, z: number, sx: number, sy: number, sz: number, seed: number, low = false): THREE.BufferGeometry {
+  const g = (low ? leafBaseLow : leafBase).clone();
   const p = g.getAttribute('position') as THREE.BufferAttribute;
   for (let i = 0; i < p.count; i++) {
     const k = 0.8 + noise3(p.getX(i) * 2 + seed, p.getY(i) * 2, p.getZ(i) * 2, seed) * 0.45;
@@ -56,16 +58,46 @@ export function vineCanopy(d: Draw, w: number, l: number, y: number, rng: Rng) {
   }
 }
 
-/** Clipped box hedge from (x0, z0) to (x1, z1), height h, slightly lumpy. */
+/**
+ * Clipped box hedge from (x0, z0) to (x1, z1), height h: a dark core wrapped in a skin of small
+ * leaf lumps (about 25 cm, jittered) laid over its top, sides and ends, so the silhouette and the
+ * shading read as clipped foliage instead of one lumpy block.
+ */
 export function hedge(d: Draw, x0: number, z0: number, x1: number, z1: number, h: number, seed = 1) {
   const w = Math.abs(x1 - x0), l = Math.abs(z1 - z0);
-  const g = new THREE.BoxGeometry(w, h, l, Math.max(1, Math.round(w * 2)), 2, Math.max(1, Math.round(l * 2)));
-  const p = g.getAttribute('position') as THREE.BufferAttribute;
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-    const k = (noise3(x * 2.3, y * 2.3, z * 2.3, seed) - 0.5) * 0.08;
-    p.setXYZ(i, x * (1 + k / Math.max(0.3, w)), y + (y > 0 ? k : 0), z * (1 + k / Math.max(0.3, l)));
+  const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+  let s32 = (Math.imul(seed + 7, 2654435761) >>> 0) || 1;
+  const rnd = () => ((s32 = (Math.imul(s32, 1664525) + 1013904223) >>> 0) / 4294967296);
+  const parts: THREE.BufferGeometry[] = [];
+  const core = new THREE.BoxGeometry(Math.max(0.1, w - 0.28), h * 0.82, Math.max(0.1, l - 0.28));
+  core.translate(cx, h * 0.41, cz);
+  parts.push(core);
+  // About 25 cm lumps on a short hedge; a long one gets bigger lumps so it stays near 60 of
+  // them (8 triangles each): the landmark builders have triangle budgets.
+  const area = 2 * h * (w + l) + w * l;
+  const step = Math.max(0.26, Math.sqrt(area / 60));
+  const lump = (x: number, y: number, z: number) => {
+    const r = step * (0.62 + rnd() * 0.3);
+    parts.push(leafClump(x, y, z, r, r * (0.8 + rnd() * 0.2), r, Math.floor(rnd() * 999), true));
+  };
+  const nx = Math.max(1, Math.round(w / step)), nz = Math.max(1, Math.round(l / step)), ny = Math.max(1, Math.round(h / step));
+  // Top (slightly domed), sides along x, ends along z.
+  for (let i = 0; i <= nx; i++) for (let k = 0; k <= nz; k++) {
+    const u = i / nx - 0.5, v = k / nz - 0.5;
+    lump(cx + u * (w - 0.12) + (rnd() - 0.5) * 0.08, h - 0.1 + rnd() * 0.05, cz + v * (l - 0.12) + (rnd() - 0.5) * 0.08);
   }
-  g.computeVertexNormals();
-  d.geo(g, 'foliage_broad', (x0 + x1) / 2, h / 2, (z0 + z1) / 2, { uvScale: 1 });
+  for (let j = 0; j < ny; j++) {
+    const y = 0.08 + (j + 0.5) * ((h - 0.18) / ny);
+    for (let i = 0; i <= nx; i++) {
+      const x = cx + (i / nx - 0.5) * (w - 0.12);
+      lump(x + (rnd() - 0.5) * 0.08, y, z0 < z1 ? z0 + 0.1 : z1 + 0.1);
+      lump(x + (rnd() - 0.5) * 0.08, y, z0 < z1 ? z1 - 0.1 : z0 - 0.1);
+    }
+    for (let k = 1; k < nz; k++) {
+      const z = cz + (k / nz - 0.5) * (l - 0.12);
+      lump(x0 < x1 ? x0 + 0.1 : x1 + 0.1, y, z + (rnd() - 0.5) * 0.08);
+      lump(x0 < x1 ? x1 - 0.1 : x0 - 0.1, y, z + (rnd() - 0.5) * 0.08);
+    }
+  }
+  d.geo(mergeGeometries(parts.map((g) => (g.index ? g.toNonIndexed() : g)).map((g) => { g.deleteAttribute('uv'); return g; }), false)!, 'foliage_broad', 0, 0, 0, { uvScale: 1 });
 }

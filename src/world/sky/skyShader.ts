@@ -406,7 +406,12 @@ void main() {
   float band = 1.0 - smoothstep(-0.02, uHorizonBand, dir.y);
   vec3 fog = fogAt(dir);
   col = mix(col, fog, band * band);
-  if (uEnvMode > 0.5) col = mix(col, uGroundColor, smoothstep(0.0, -0.08, dir.y));
+  if (uEnvMode > 0.5) {
+    // Diffuse light from the sides is half walls and ground, not clear sky: the lower sky of the
+    // environment takes on the sunlit ground's warm colour, so shade is not a flat cyan-blue.
+    col = mix(col, uGroundColor * 1.25, 0.6 * ( 1.0 - smoothstep(0.02, 0.7, dir.y) ) * smoothstep(-0.08, 0.0, dir.y));
+    col = mix(col, uGroundColor, smoothstep(0.0, -0.08, dir.y));
+  }
   col += uFlash * vec3(0.55, 0.6, 0.75) * (0.4 + 0.6 * up);
 
   gl_FragColor = vec4(col, 1.0);

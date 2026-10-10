@@ -11,6 +11,7 @@ import { Rng } from '../../core/Rng';
 import { MeshBuilder } from '../../gfx/MeshBuilder';
 import type { MaterialId } from '../../gfx/materialIds';
 import { placeProp } from '../props';
+import { hedge as boxHedge } from '../vegetation/decor';
 import { Draw } from './draw';
 import { roof } from './roof';
 import { pickShopKind, shopFrontage, shopInterior, type ShopKind } from './shops';
@@ -265,10 +266,7 @@ export function domus(spec: DomusSpec): BuildingOutput {
     d.span('cobbles', -pw / 2, -0.12, gz - pdd / 2, pw / 2, 0.0, gz + pdd / 2);
     d.span('dirt', -gw / 2 + 0.25, -0.1, gz - gd / 2 + 0.25, gw / 2 - 0.25, 0.04, gz + gd / 2 - 0.25);
     // Box hedges framing beds, a basin in the centre.
-    const hedge = (x0: number, z0: number, x1: number, z1: number) => {
-      d.span('foliage_broad', x0, 0.04, z0, x1, 0.55, z1);
-      d.span('foliage_broad', x0 + 0.05, 0.55, z0 + 0.05, x1 - 0.05, 0.62, z1 - 0.05, { shadow: false });
-    };
+    const hedge = (x0: number, z0: number, x1: number, z1: number) => boxHedge(d, x0, z0, x1, z1, 0.62, Math.round(x0 * 7 + z0 * 13));
     const gx = gw / 2 - 0.6, gzz = gd / 2 - 0.6;
     if (gx > 1.5 && gzz > 1.5 && !low) {
       hedge(-gx, gz - gzz, -0.9, gz - gzz + 0.4);

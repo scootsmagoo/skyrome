@@ -117,3 +117,13 @@ export function floatToHalf(v: number): number {
   const r = (x & 0x7fffff) + 0x1000;
   return r & 0x800000 ? sign | ((e + 1) << 10) : sign | (e << 10) | (r >> 13);
 }
+
+/**
+ * How golden the light is, 0..1 in twelfths: 0 at midday and at night, 1 with the sun on the
+ * horizon and still shining (`keyIntensity` > 0.67). Stepped so the LUT it feeds is re-baked a
+ * dozen times over an evening instead of every frame.
+ */
+export function goldenHour(sunY: number, keyIntensity: number): number {
+  const g = (1 - smooth(0.04, 0.5, sunY)) * smooth(-0.04, 0.03, sunY) * Math.min(1, Math.max(0, keyIntensity) * 1.5);
+  return Math.round(12 * g) / 12;
+}
