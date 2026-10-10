@@ -25,7 +25,7 @@ import type { MeshBuilder } from '../../gfx/MeshBuilder';
 import type { Polygon, Vec2 } from '../../arch/fabric/types';
 import { KERB } from '../../core/traversal';
 import { LIFT } from './datum';
-import { K } from './raster';
+import { K, distToPoly, polyBounds, pointInPoly } from './raster';
 import { inRects, rectsBounds, type Bounds, type CityPlan, type PlanRoad, type PlanStreet, type PlanPiazza } from './plan';
 import type { HeightFn } from './massing';
 import type { LampDef } from './life';
@@ -257,9 +257,11 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
       poly.push([j.p[0] + Math.cos(a) * j.r, j.p[1] + Math.sin(a) * j.r]);
     }
     const allRural = j.roads.every((r) => plan.roads[r].style !== 'paved');
-    add(j.p[0], j.p[1], T(`junction:${j.id}`, (b) => buildPlaza(b, poly, H, { material: allRural ? 'gravel' : 'paving_basalt', lift: LIFT.junction, cell: 2.5, skirt: 0.35 })));
+    add(j.p[0], j.p[1], T(`junction:${j.id}`, (b) => buildPlaza(b, poly, H, { material: allRural ? 'gravel' : 'paving_basalt', lift: LIFT.junction, cell: 2.5, skirt: 0.35, bevelCollide: true })));
   }
 
+  // ---- where the minor streets meet the atlas roads: the road's sidewalk drops to the carriageway there (a dropped kerb)
+  const mouths = streetMouths(plan);
   // ---- atlas roads
   plan.roads.forEach((road, ri) => {
     const L = lineLength(road.points);
@@ -313,7 +315,8 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
           if (pts.length < 2) return;
           const mid = pts[Math.floor(pts.length / 2)];
           const capStart = k === 0, capEnd = k === pieces.length - 1;
-          add(mid[0], mid[1], T(`road:${road.id}:${c}`, (bld) => buildRoadPiece(bld, road, c, pts, H, capStart, capEnd)));
+          const dips = (mouths.get(ri) ?? []).filter((m) => m.s > p0 - m.w && m.s < p1 + m.w).map((m) => ({ s: m.s - p0, side: m.side, w: m.w }));
+          add(mid[0], mid[1], T(`road:${road.id}:${c}`, (bld) => buildRoadPiece(bld, road, c, pts, H, capStart, capEnd, dips)));
         });
       }
     }
@@ -554,7 +557,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
         const a = (k / 14) * Math.PI * 2;
         poly.push([pz.center[0] + Math.cos(a) * pz.r, pz.center[1] + Math.sin(a) * pz.r]);
       }
-      buildPlaza(b, poly, H, { material: travertine ? 'paving_travertine' : 'cobbles', lift: LIFT.piazza, cell: 2.5, skirt: 0.3 });
+      buildPlaza(b, poly, H, { material: travertine ? 'paving_travertine' : 'cobbles', lift: LIFT.piazza, cell: 2.5, skirt: 0.3, bevelCollide: true });
     }));
     add(pz.center[0], pz.center[1], (b) => {
       const r = new Rng(seed);
@@ -725,6 +728,9 @@ function edgeDist(p: Vec2, poly: readonly Vec2[]): number {
   return d;
 }
 
+/** Landmark categories that pave a ring round themselves (their builders lay the apron out to the pad), and how far (m). */
+const PAVED_ROUND = new Set(['amphitheatre', 'circus', 'theatre', 'odeum', 'stadium', 'baths']);
+const PAVED_RING = 14;
 const COVER = new Set<number>([K.STREET, K.PIAZZA, K.SCRAP, K.FREE, K.AQUEDUCT, K.WALL]);
 /**
  * Paved: landmark margins (the walkable apron round a monument, where the stalls stand) and the
@@ -762,6 +768,10 @@ export function coverKinds(plan: CityPlan, x0: number, z0: number, size: number,
   const ix0 = Math.max(1, g.ix(x0) - 2), ix1 = Math.min(g.nx - 2, g.ix(x0 + size) + 2);
   const iz0 = Math.max(1, g.iz(z0) - 2), iz1 = Math.min(g.nz - 2, g.iz(z0 + size) + 2);
   const c2 = 2 * g.cell;
+  // The monumental buildings pave a ring round themselves well past their footprint (the Colosseum's pad, the Circus'
+  // plaza): earth laid there stacks on their paving and fights it (the crawl's 'colosseum paving | ground cover').
+  const paved = plan.landmarkPolys.filter((l) => PAVED_ROUND.has(l.category)).map((l) => ({ poly: l.poly, b: polyBounds(l.poly) })).filter(({ b }) => b.maxX + PAVED_RING > x0 && b.minX - PAVED_RING < x0 + size && b.maxZ + PAVED_RING > z0 && b.minZ - PAVED_RING < z0 + size);
+  const nearPaved = (x: number, z: number) => paved.some(({ poly, b }) => x > b.minX - PAVED_RING && x < b.maxX + PAVED_RING && z > b.minZ - PAVED_RING && z < b.maxZ + PAVED_RING && (pointInPoly(x, z, poly) || distToPoly(x, z, poly) < PAVED_RING));
   for (let iz = iz0; iz <= iz1; iz++) {
     for (let ix = ix0; ix <= ix1; ix++) {
       const i = iz * g.nx + ix;
@@ -773,6 +783,7 @@ export function coverKinds(plan: CityPlan, x0: number, z0: number, size: number,
       // not a piazza, and not the strip a road or street itself paves (overlapping surfaces showed
       // as cobble patches over basalt and paving, and fought where they met).
       if (cls === K.MARGIN || cls === K.PIAZZA) continue;
+      if (paved.length && nearPaved(x, z)) continue;
       if (cls === K.ROAD) {
         const road = plan.roads[g.owner[i] - 1_000_000];
         if (road && nearestOnPolyline([x, z], road.points as Vec2[]).d < road.half + 0.4) continue;
@@ -859,11 +870,42 @@ function coverSet(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: n
   b.add(geo, material, undefined, { castShadow: false });
 }
 
+/**
+ * Where a minor street ends on an atlas road: per road index, the arc length along the road, the
+ * side the street comes in on (+1 = left normal) and its width. The street stops at the road's
+ * band; the road drops its kerb there (buildStreet `dips`).
+ */
+export function streetMouths(plan: CityPlan): Map<number, { s: number; side: -1 | 1; w: number }[]> {
+  const out = new Map<number, { s: number; side: -1 | 1; w: number }[]>();
+  for (const st of plan.streets) {
+    if (st.points.length < 2 || st.steps.some(Boolean)) continue;
+    for (const e of [st.points[0], st.points[st.points.length - 1]]) {
+      let best: { ri: number; n: ReturnType<typeof nearestOnPolyline> } | null = null;
+      for (const road of plan.roads) {
+        if (road.style !== 'paved') continue;
+        const n = nearestOnPolyline(e, road.points);
+        if (n.d > road.half + st.width / 2 + 2.5) continue;
+        if (!best || n.d < best.n.d) best = { ri: road.index, n };
+      }
+      if (!best) continue;
+      const rd = plan.roads[best.ri].points;
+      const a = rd[best.n.seg], b = rd[best.n.seg + 1];
+      const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      const tx = (b[0] - a[0]) / L, tz = (b[1] - a[1]) / L;
+      const side = (e[0] - best.n.p[0]) * -tz + (e[1] - best.n.p[1]) * tx >= 0 ? 1 : -1;
+      const list = out.get(best.ri) ?? [];
+      list.push({ s: best.n.s, side, w: Math.max(2.4, st.width - 0.6) });
+      out.set(best.ri, list);
+    }
+  }
+  return out;
+}
+
 /** One piece of an atlas road (≤ 80 m) in its context (urban, open ground, rural, stairs). */
-function buildRoadPiece(b: MeshBuilder, road: PlanRoad, ctx: string, pts: Vec2[], H: HeightFn, capStart: boolean, capEnd: boolean) {
+function buildRoadPiece(b: MeshBuilder, road: PlanRoad, ctx: string, pts: Vec2[], H: HeightFn, capStart: boolean, capEnd: boolean, dips: { s: number; side: -1 | 1; w: number }[]) {
   const spec: StreetSpec = { points: pts, lift: LIFT.road, capStart, capEnd, steppingStones: [], seed: road.index };
   if (road.style === 'paved' && ctx === 'urban') {
-    Object.assign(spec, { kind: 'paved', roadWidth: road.carriage, sidewalk: road.sidewalk, curb: KERB });
+    Object.assign(spec, { kind: 'paved', roadWidth: road.carriage, sidewalk: road.sidewalk, curb: KERB, dips });
   } else if (road.style === 'paved' && ctx === 'open') {
     Object.assign(spec, { kind: 'lane', roadWidth: road.carriage + road.sidewalk, roadMaterial: 'paving_basalt' });
   } else if (road.style === 'paved') {

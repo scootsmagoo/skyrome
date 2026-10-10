@@ -20,11 +20,12 @@ import { Rng, hash2 } from '../../core/Rng';
 import type * as Atlas from '../../data/atlas';
 import { WORLD_SCALE } from '../coords';
 import { footprintPolygon, type P2 } from '../terrain/heightmap';
-import { CORRIDORS, DISTRICT_LANDMARKS, EXTRA_ROADS, OPEN_SPACES, QUARTERS, SIGHTLINE_LANDMARKS, SIGHTLINE_RADIUS, SKIPPED_AQUEDUCTS, WILD_LANDMARKS, type Quarter } from './data';
+import { CORRIDORS, DISTRICT_LANDMARKS, EXTRA_ROADS, OPEN_SPACES, PINNED_OPEN, QUARTERS, SIGHTLINE_LANDMARKS, SIGHTLINE_RADIUS, SKIPPED_AQUEDUCTS, WILD_LANDMARKS, type Quarter } from './data';
 import { SIDEWALK } from './datum';
-import { probeEnd } from './audit';
-import { closeStubs } from './stubs';
-import { Grid, K, cleanRing, components, pointInPoly, polyBounds, polyCentroid, signedArea, simplifyRing, splitCells, traceLoops, type Pt } from './raster';
+import { auditRoadEnds, probeEnd } from './audit';
+import { closeRoadEnds, closeStubs } from './stubs';
+import { BLOCKING, CUT_MIN, blockerGap, detourRoad, repairJoints, revertSplitting, roadJoints, type Detour } from './detour';
+import { Grid, K, cleanRing, components, distToPoly, pointInPoly, polyBounds, polyCentroid, signedArea, simplifyRing, splitCells, traceLoops, type Pt } from './raster';
 
 const S = WORLD_SCALE;
 /** Raster margin on each side of a minor street's surface (the block outline never reaches the street). */
@@ -65,6 +66,8 @@ export interface PlanOptions {
   extraRoads?: typeof EXTRA_ROADS;
   /** Extend the minor-street stubs to the next street and open courts (default true; false = the pre-rework plan, for the audit). */
   closeStubs?: boolean;
+  /** Bend the atlas roads round solid footprints they run through (default true; false = the plan before M5a, for the audit). */
+  detourRoads?: boolean;
 }
 
 export type RoadStyle = 'paved' | 'rural' | 'gravel' | 'dirt' | 'stairs' | 'path';
@@ -205,6 +208,8 @@ export interface CityPlan {
   landmarkPolys: { index: number; id: string; category: string; poly: Pt[] }[];
   /** On the golden path (data.ts CORRIDORS)? Game coordinates. */
   corridor(x: number, z: number): boolean;
+  /** Atlas roads that ran through a solid footprint and were bent round it or cut at it (detour.ts), by road id. */
+  roadDetours: { road: string; detour: Detour }[];
   stats: Record<string, number>;
 }
 
@@ -375,10 +380,64 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
   // 5. Atlas roads.
   const roads: PlanRoad[] = [];
   const roadable = (c: number) => c === K.FREE || c === K.STEEP || c === K.OUTSIDE || c === K.GARDEN || c === K.MARGIN || c === K.PLAZA;
-  [...atlas.ROADS, ...(opts.extraRoads ?? EXTRA_ROADS)].forEach((r) => {
-    if (r.points.length < 2) return;
-    const d = roadDims(r);
-    const pts = gpoly(r.points);
+  const roadDetours: CityPlan['roadDetours'] = [];
+  let roadLinks = 0;
+  const slopeAt = (x: number, z: number) => {
+    const i = g.index(x, z);
+    if (i < 0) return 0;
+    const ix = i % nx, iz = (i - ix) / nx;
+    if (ix < 1 || iz < 1 || ix >= nx - 1 || iz >= g.nz - 1) return 0;
+    const gx = (hy[i + 1] - hy[i - 1]) / (2 * cell), gz = (hy[i + nx] - hy[i - nx]) / (2 * cell);
+    return Math.hypot(gx, gz);
+  };
+  // (A building that stands inside a forum or an open square — the temple at the end of the Forum of Nerva, Venus Genetrix in the
+  // Forum of Caesar — is part of that precinct's own layout: the roads there are the landmark crews' streets, not bent.)
+  const forums = lmPolys.filter((l) => l.lm.category === 'forum').map((l) => l.poly);
+  const inPrecinct = (poly: Pt[]) => {
+    const c = polyCentroid(poly);
+    const near = (pg: readonly Pt[]) => pointInPoly(c[0], c[1], pg) || poly.some((q) => pointInPoly(q[0], q[1], pg)) || distToPoly(c[0], c[1], pg) < 15;
+    return plazas.some((pl) => near(pl.polygon)) || forums.some(near);
+  };
+  // Ground a way round a building should avoid when it has the choice: a bank (the slope), a square's paving, a wall band.
+  const hard = (x: number, z: number) => (g.at(x, z) === K.PLAZA || g.at(x, z) === K.WALL ? 1 : slopeAt(x, z));
+  const blockers = lmPolys.filter((l) => l.solid && BLOCKING.has(l.lm.category) && !inPrecinct(l.poly)).map((l) => ({ id: l.lm.id, poly: l.poly, gap: blockerGap(l.poly, slopeAt) }));
+  const atlasRoads = [...atlas.ROADS, ...(opts.extraRoads ?? EXTRA_ROADS)].filter((r) => r.points.length >= 2).map((r) => ({ r, d: roadDims(r), pts: gpoly(r.points) }));
+  if (opts.detourRoads !== false) {
+    // A road through a building (the atlas centrelines are historical, the buildings stand on their
+    // own footprints) goes round it, keeping its joints with the other roads (detour.ts).
+    const origPts = atlasRoads.map((a) => a.pts);
+    const joints = roadJoints(origPts);
+    const changed: number[] = [];
+    const dets = new Map<number, Detour[]>();
+    atlasRoads.forEach((a, i) => {
+      if (a.r.kind === 'stairs') return;
+      const bent = detourRoad(a.pts, blockers, a.d.carriage / 2 + a.d.sidewalk, joints.filter((j) => j.i === i || j.j === i).map((j) => j.p), CUT_MIN, hard);
+      if (!bent.detours.length) return;
+      a.pts = bent.points;
+      dets.set(i, bent.detours);
+      changed.push(i);
+    });
+    // Roads that met inside a building, or in a span a detour replaced, are joined again by a short link.
+    const links = repairJoints(atlasRoads.map((a) => a.pts), joints, blockers);
+    // A bend that still leaves the network split (a road's only way in was through the building) is undone.
+    const now = [...atlasRoads.map((a) => a.pts), ...links.map((l) => l.points)];
+    const reverted = new Set(revertSplitting(origPts, now, changed));
+    for (const i of reverted) atlasRoads[i].pts = origPts[i];
+    atlasRoads.forEach((a, i) => {
+      if (!changed.includes(i) || reverted.has(i)) return;
+      for (const dt of dets.get(i)!) roadDetours.push({ road: a.r.id, detour: dt });
+    });
+    for (const l of links) {
+      if (reverted.has(l.i) || reverted.has(l.j)) continue;
+      const A = atlasRoads[l.i], B = atlasRoads[l.j];
+      const narrow = A.d.carriage <= B.d.carriage ? A : B;
+      atlasRoads.push({ r: { ...narrow.r, id: `${A.r.id}~${B.r.id}`, name: `${A.r.name} link`, kind: 'street', points: [] } as (typeof atlasRoads)[number]['r'], d: narrow.d, pts: l.points });
+      roadLinks++;
+    }
+    stats.roadsReverted = reverted.size;
+  }
+  stats.roadLinks = roadLinks;
+  atlasRoads.forEach(({ r, d, pts }) => {
     const road: PlanRoad = { id: r.id, index: roads.length, name: r.name, kind: r.kind, style: d.style, points: pts, carriage: d.carriage, sidewalk: d.sidewalk, half: d.carriage / 2 + d.sidewalk };
     roads.push(road);
     g.fillBand(pts, road.half + 0.7, K.ROAD, roadable, 1_000_000 + road.index);
@@ -487,6 +546,8 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
     if (cor.c && cor.w > 0) {
       density = Math.max(density, density + (cor.c.density - density) * cor.w);
       wealth += (cor.c.wealth - wealth) * cor.w;
+      // A corridor block is packed (the blend alone left a block at the corridor's edge, where the weight is 0.5, at 0.54).
+      if (cor.w > 0.5) density = Math.max(density, 0.72);
     }
     return { reg, density, wealth, q: w > 0.5 ? q : null, corridor: cor.w > 0.5 };
   };
@@ -631,6 +692,27 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
   // 8b. Stubs: streets the marcher stopped at a sliver, an apron or a slope reach the nearest
   // road / street / square within 15 m; the ones with nothing in reach get a court (step 9).
   const stubFix = opts.closeStubs === false ? { extended: 0, orphans: [] } : closeStubs(g, streets, STREET_MARGIN);
+
+  // Ground the story stands on stays open (no house on the spot where Mus waits), whatever the streets did.
+  for (const pin of PINNED_OPEN) {
+    const c = g2(pin.at);
+    g.fillBand([c, c], pin.r, K.SCRAP, (v) => v === K.FREE);
+  }
+  stats.roadEnds = 0;
+  // A road that ends in the open (the atlas stops some at a hill's top or a gate that is gone) is carried on to the next road, street, square or building (after the streets are planned: the audit counts them).
+  if (opts.detourRoads !== false) {
+    const dead = auditRoadEnds({ grid: g, roads, gates, landmarkPolys: lmPolys.filter((l) => l.solid).map((l) => ({ index: l.index, id: l.lm.id, category: l.lm.category, poly: l.poly })) })
+      .filter((e) => e.verdict === 'dead')
+      .map((e) => ({ road: e.index, end: e.end }));
+    const closed = closeRoadEnds(g, roads, dead, roadable);
+    stats.roadEnds = closed.extended;
+    // The way on from a stairway's foot or head: a plain path of its own.
+    for (const l of closed.links) {
+      const from = roads[l.road];
+      roads.push({ id: `${from.id}~path`, index: roads.length, name: `${from.name} path`, kind: 'path', style: 'path', points: l.points, carriage: 2.4, sidewalk: 0, half: 1.2 });
+    }
+  }
+
   for (const s of streets) while (s.steps.length < s.points.length - 1) s.steps.push(false);
   stats.stubsClosed = stubFix.extended;
   stats.streets = streets.length;
@@ -870,7 +952,7 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
   stats.blocks = blocks.length;
   stats.builtBlocks = blocks.filter((b) => b.kind === 'built').length;
   stats.totalMs = now() - t0;
-  return { grid: g, hy, region, roads, streets, blocks, piazzas, walls, gates, aqueducts, bridges: (atlas.BRIDGES ?? []).map((b) => ({ id: b.id, a: g2(b.a), b: g2(b.b), width: Math.max(3, b.width * S) })), plazas, detailBounds, detailRects, inDetail, mergeCell, landmarkCategory: atlas.LANDMARKS.map((l) => l.category), landmarkPolys: lmPolys.filter((l) => l.solid).map((l) => ({ index: l.index, id: l.lm.id, category: l.lm.category, poly: l.poly })), corridor: (x, z) => corridorAt(x, z).w > 0.5, stats };
+  return { grid: g, hy, region, roads, streets, blocks, piazzas, walls, gates, aqueducts, bridges: (atlas.BRIDGES ?? []).map((b) => ({ id: b.id, a: g2(b.a), b: g2(b.b), width: Math.max(3, b.width * S) })), plazas, detailBounds, detailRects, inDetail, mergeCell, landmarkCategory: atlas.LANDMARKS.map((l) => l.category), landmarkPolys: lmPolys.filter((l) => l.solid).map((l) => ({ index: l.index, id: l.lm.id, category: l.lm.category, poly: l.poly })), corridor: (x, z) => corridorAt(x, z).w > 0.5, roadDetours, stats };
 }
 
 // ---------------------------------------------------------------- small geometry

@@ -58,6 +58,18 @@ export const QUARTERS: Quarter[] = [
 ];
 
 /**
+ * Ground the story stands on: the places where an actor of the golden path spawns or waits on the
+ * street side, not inside a landmark (the burned taberna where Mus and his knife-men wait, the Marii's
+ * house where Festus' mother is). Real m, radius in game m. The planner leaves each as open ground
+ * (no block, so no house stands on the spot) whatever the streets round it do: the street layout
+ * moves when a road is bent, and a spawn inside a house wall is a fight that never starts.
+ */
+export const PINNED_OPEN: { id: string; at: P2; r: number }[] = [
+  { id: 'taberna-collapsa', at: [-8, 262], r: 8 },
+  { id: 'insula-mariorum', at: [-82, 345], r: 8 },
+];
+
+/**
  * Open spaces with no insulae (polygons in REAL m): the Forum basin and the open ground of the
  * imperial fora. Landmarks stand inside them; the rest is paving for the landmark crews.
  */

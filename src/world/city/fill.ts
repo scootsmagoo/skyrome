@@ -196,7 +196,7 @@ export function compoundWall(d: Draw, w: FrontWall, H: HeightFn, wealth: number,
 /** Small square in a gap of the frontage (the kit's `piazza`, kept identical). */
 function piazza(b: MeshBuilder, p: LotPlan, H: HeightFn, rng: Rng, spots: Spot[], sw: number, noProps = false) {
   const corners = obbCorners(p.obb);
-  buildPlaza(b, corners, (x, z) => H(x, z) + sw * 0.5, { material: rng.chance(0.5) ? 'paving_travertine' : 'cobbles', lift: 0.05 });
+  buildPlaza(b, corners, (x, z) => H(x, z) + sw * 0.5, { material: rng.chance(0.5) ? 'paving_travertine' : 'cobbles', lift: 0.05, bevelCollide: true });
   const c = p.obb.c;
   const y = H(c[0], c[1]) + sw * 0.5 + 0.05;
   const d = new Draw(b, new THREE.Matrix4().makeTranslation(c[0], y, c[1]).multiply(new THREE.Matrix4().makeRotationY(p.rotationY)));

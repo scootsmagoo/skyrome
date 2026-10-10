@@ -29,6 +29,11 @@ const UPPER = 1.8;
 const SUB_OFFSET = 0.3;
 /** A cast this short started inside a shape. */
 const INSIDE = 1e-4;
+/** Link rays: heights above the floor (knee, chest) and offsets across the link (centre line, then either side). */
+const LINK_HEIGHTS = [0.7, 1.4];
+const LINK_SIDES = [0, SUB_OFFSET, -SUB_OFFSET];
+/** `?navlinks=0` leaves every link open (the NavGrid before the thin-wall test, for A/B runs). */
+const LINKS_ON = typeof location === 'undefined' || new URLSearchParams(location.search).get('navlinks') !== '0';
 
 export class PhysicsCellSampler implements CellSampler {
   private readonly ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
@@ -80,6 +85,43 @@ export class PhysicsCellSampler implements CellSampler {
         y = low.h - 0.05;
       }
     }
+  }
+
+  private readonly linkRay = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 });
+
+  /**
+   * Is the way from one cell centre to the next free of a wall? Rays at knee and chest height along
+   * the link (following the floor), on the centre line and 0.3 m to either side (a doorway that does
+   * not line up with the grid must not read as a wall): the way is open when any one of the three
+   * lines is clear at both heights. A wall thinner than a cell between two centres blocks all three.
+   */
+  link(x0: number, z0: number, h0: number, x1: number, z1: number, h1: number): boolean {
+    if (!LINKS_ON) return true;
+    const dx = x1 - x0, dz = z1 - z0;
+    const L = Math.hypot(dx, dz);
+    const ux = dx / L, uz = dz / L;
+    const world = this.physics.world;
+    const ray = this.linkRay;
+    for (const side of LINK_SIDES) {
+      let clearLine = true;
+      for (const hh of LINK_HEIGHTS) {
+        const ox = x0 - uz * side, oz = z0 + ux * side;
+        const vx = x1 - uz * side - ox, vy = h1 - h0, vz = z1 + ux * side - oz;
+        const len = Math.hypot(vx, vy, vz);
+        ray.origin.x = ox;
+        ray.origin.y = h0 + hh;
+        ray.origin.z = oz;
+        ray.dir.x = vx / len;
+        ray.dir.y = vy / len;
+        ray.dir.z = vz / len;
+        if (world.castRay(ray, len, false, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, this.filter)) {
+          clearLine = false;
+          break;
+        }
+      }
+      if (clearLine) return true;
+    }
+    return false;
   }
 
   /**

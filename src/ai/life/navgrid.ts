@@ -21,6 +21,12 @@ export interface CellSample {
 export interface CellSampler {
   /** Sample the cell centred on (x, z). Write into `out`. */
   sample(x: number, z: number, out: CellSample): void;
+  /**
+   * Is the way between two walkable cell centres (floor heights h0, h1) open? A wall thinner than a
+   * cell can stand between two centres that both read as walkable: the cell test alone sends a
+   * path straight through it. Optional: a sampler without it leaves every link open.
+   */
+  link?(x0: number, z0: number, h0: number, x1: number, z1: number, h1: number): boolean;
 }
 
 export interface NavGridOptions {
@@ -39,6 +45,8 @@ const STAIR_PER_M = 0.85;
 const WALK = 1;
 const KNOWN = 2;
 const BLOCKED_DYN = 4; // marked by agents that got stuck there
+const LINK_E = 8; // a wall between this cell and its east neighbour (the sampler's `link`)
+const LINK_S = 16; // ... and its south neighbour (+z)
 
 interface Chunk {
   cx: number;
@@ -51,6 +59,10 @@ interface Chunk {
   d2: number;
   /** `builds` counter when it was (last) finished. */
   builtAt: number;
+  /** Link-test progress (one step per cell, `linkSteps`); starts once all its cells are sampled. */
+  link: number;
+  /** Its links have been tested at least once: before that a path may run through a thin wall, so `ready` says no. */
+  lit: boolean;
 }
 
 /**
@@ -70,6 +82,8 @@ export class NavGrid {
   maxStep: number;
   private chunks = new Map<number, Chunk>();
   private queue: Chunk[] = [];
+  /** Chunks sampled and waiting for their link tests (nearest first). */
+  private linkQueue: Chunk[] = [];
   private focusX = 0;
   private focusZ = 0;
   private hasFocus = false;
@@ -123,7 +137,7 @@ export class NavGrid {
         const k = key(cx, cz);
         if (this.chunks.has(k)) continue;
         const n = this.chunkCells * this.chunkCells;
-        const c: Chunk = { cx, cz, h: new Float32Array(n).fill(NaN), flags: new Uint8Array(n), next: 0, d2, builtAt: 0 };
+        const c: Chunk = { cx, cz, h: new Float32Array(n).fill(NaN), flags: new Uint8Array(n), next: 0, d2, builtAt: 0, link: 0, lit: false };
         this.chunks.set(k, c);
         this.queue.push(c);
       }
@@ -162,7 +176,22 @@ export class NavGrid {
         this.queue.push(stale);
       }
     }
-    while (done < maxCells && this.queue.length) {
+    const linkTotal = this.chunkCells * this.chunkCells + 2 * this.chunkCells;
+    while (done < maxCells && (this.queue.length || this.linkQueue.length)) {
+      // Link tests of a sampled chunk first: it is usable (`ready`) as soon as they are done.
+      if (this.linkQueue.length) {
+        const lc = this.linkQueue[0];
+        if (this.chunks.get(key(lc.cx, lc.cz)) !== lc) {
+          this.linkQueue.shift();
+          continue;
+        }
+        done += this.linkSteps(lc, maxCells - done);
+        if (lc.link >= linkTotal) {
+          this.linkQueue.shift();
+          this.version++;
+        }
+        continue;
+      }
       const c = this.queue[0];
       while (c.next < n && done < maxCells) {
         const i = c.next++;
@@ -176,6 +205,10 @@ export class NavGrid {
       if (c.next >= n) {
         this.queue.shift();
         c.builtAt = this.builds;
+        if (this.sampler.link) {
+          c.link = 0;
+          this.linkQueue.push(c);
+        } else c.lit = true;
         this.version++;
       }
     }
@@ -183,10 +216,63 @@ export class NavGrid {
     return done;
   }
 
+  /**
+   * Link testing is the second phase of a chunk's build, on the same budget: once all its cells are
+   * sampled, every walkable cell's links to its east and south neighbours are tested, then the links
+   * into the chunk from the cells just west and north of it (built earlier). A neighbour not known
+   * yet leaves the link open (its own chunk tests it when it finishes). Returns the steps done.
+   */
+  private linkSteps(c: Chunk, max: number): number {
+    const cc = this.chunkCells;
+    const total = cc * cc + 2 * cc;
+    const x0 = c.cx * cc, z0 = c.cz * cc;
+    let done = 0;
+    while (c.link < total && done < max) {
+      const k = c.link++;
+      if (k < cc * cc) this.linkCell(x0 + (k % cc), z0 + Math.floor(k / cc));
+      else if (k < cc * cc + cc) this.linkCell(x0 - 1, z0 + (k - cc * cc));
+      else this.linkCell(x0 + (k - cc * cc - cc), z0 - 1);
+      done++;
+    }
+    if (c.link >= total) c.lit = true;
+    return done;
+  }
+
+  private linkCell(ix: number, iz: number) {
+    const sampler = this.sampler;
+    const c = this.chunkAt(ix, iz);
+    if (!c || !sampler.link) return;
+    const i = this.idx(ix, iz);
+    c.flags[i] &= ~(LINK_E | LINK_S);
+    if (this.cellState(ix, iz) !== 1) return;
+    const h = c.h[i];
+    const ce = this.cell;
+    for (const [dx, dz, bit] of [[1, 0, LINK_E], [0, 1, LINK_S]] as const) {
+      if (this.cellState(ix + dx, iz + dz) !== 1) continue;
+      const hn = this.cellHeight(ix + dx, iz + dz);
+      // A rise no step takes is a blocked step anyway; the wall test is for the links a walker could use.
+      if (Math.abs(hn - h) > this.maxStep + STAIR_PER_M * ce) continue;
+      if (!sampler.link((ix + 0.5) * ce, (iz + 0.5) * ce, h, (ix + dx + 0.5) * ce, (iz + dz + 0.5) * ce, hn)) c.flags[i] |= bit;
+    }
+  }
+
+  /** Is the link from cell a to its axial neighbour b free of a thin wall? */
+  private linkOpen(ax: number, az: number, bx: number, bz: number): boolean {
+    if (bx > ax) return !this.linkFlag(ax, az, LINK_E);
+    if (bx < ax) return !this.linkFlag(bx, bz, LINK_E);
+    if (bz > az) return !this.linkFlag(ax, az, LINK_S);
+    return !this.linkFlag(bx, bz, LINK_S);
+  }
+
+  private linkFlag(ix: number, iz: number, bit: number): boolean {
+    const c = this.chunkAt(ix, iz);
+    return !!c && (c.flags[this.idx(ix, iz)] & bit) !== 0;
+  }
+
   /** Build everything queued now (tests, loading screens). */
   buildAll(limit = 1e7) {
     let total = 0;
-    while (this.queue.length && total < limit) total += this.build(4096);
+    while ((this.queue.length || this.linkQueue.length) && total < limit) total += this.build(4096);
     return total;
   }
 
@@ -199,7 +285,7 @@ export class NavGrid {
   }
 
   get pending() {
-    return this.queue.length;
+    return this.queue.length + this.linkQueue.length;
   }
 
   get chunkCount() {
@@ -275,7 +361,8 @@ export class NavGrid {
 
   /** Is the area around a point built (so paths there are meaningful)? */
   ready(x: number, z: number): boolean {
-    return this.cellState(this.cellOf(x), this.cellOf(z)) !== -1;
+    const ix = this.cellOf(x), iz = this.cellOf(z);
+    return this.cellState(ix, iz) !== -1 && !!this.chunkAt(ix, iz)?.lit;
   }
 
   /** Mark a cell as blocked (an agent got stuck there; a cart parked). Cleared on rebuild. */
@@ -301,8 +388,10 @@ export class NavGrid {
       const h1 = this.cellHeight(bx, az);
       const h2 = this.cellHeight(ax, bz);
       if (Math.abs(ha - h1) > this.maxStep || Math.abs(ha - h2) > this.maxStep) return false;
+      // Both ways round the corner must be free of a thin wall.
+      return this.linkOpen(ax, az, bx, az) && this.linkOpen(bx, az, bx, bz) && this.linkOpen(ax, az, ax, bz) && this.linkOpen(ax, bz, bx, bz);
     }
-    return true;
+    return this.linkOpen(ax, az, bx, bz);
   }
 
   /**

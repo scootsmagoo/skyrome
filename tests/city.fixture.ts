@@ -19,13 +19,13 @@ export function cityFixture() {
 
 const box = (b: { minX: number; maxX: number; minZ: number; maxZ: number }, m = 0) => ({ minX: b.minX - m, maxX: b.maxX + m, minZ: b.minZ - m, maxZ: b.maxZ + m });
 let gameHm: Heightmap | null = null;
-const gamePlans = new Map<boolean, CityPlan>();
+const gamePlans = new Map<string, CityPlan>();
 
 /**
  * The plan exactly as the game builds it (buildRome + buildCity, core extent): the whole
- * CITY_BOUNDS raster. Heavy, built lazily; `closeStubs: false` is the plan before the M3 rework.
+ * CITY_BOUNDS raster. Heavy, built lazily; `closeStubs: false` is the plan before the M3 rework, `detourRoads: false` the one before the M5a road detours.
  */
-export function gameFixture(closeStubs = true) {
+export function gameFixture(closeStubs = true, detourRoads = true) {
   if (!gameHm) {
     const lb = [box(atlas.CORE_BOUNDS, 350), ...atlas.DETAIL_REGIONS.map((r) => box(r, 100))];
     const landmarkBounds = {
@@ -34,10 +34,11 @@ export function gameFixture(closeStubs = true) {
     };
     gameHm = buildHeightmap({ ...atlas, bounds: atlas.CITY_BOUNDS } as never, { spacing: 2, pads: landmarkPads(landmarkBounds) });
   }
-  let plan = gamePlans.get(closeStubs);
+  const pk = `${closeStubs}:${detourRoads}`;
+  let plan = gamePlans.get(pk);
   if (!plan) {
-    plan = planCity(atlas, gameHm, { detailBounds: scaleBounds(atlas.CORE_BOUNDS, 150), corridorDetail: 150, closeStubs });
-    gamePlans.set(closeStubs, plan);
+    plan = planCity(atlas, gameHm, { detailBounds: scaleBounds(atlas.CORE_BOUNDS, 150), corridorDetail: 150, closeStubs, detourRoads });
+    gamePlans.set(pk, plan);
   }
   return { hm: gameHm, plan };
 }
