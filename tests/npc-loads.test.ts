@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { floorsTarget, type KnockdownCase } from '../src/combat/knockdown';
-import { isDetachable, newRecover, PICKUP_AT, PICKUP_TIME, REACH, RECOVER_TIMEOUT, recoverStep, type RecoverEvent } from '../src/npc/loads';
+import { isDetachable, newRecover, PICKUP_AT, PICKUP_TIME, REACH, RECOVER_TIMEOUT, recoverStep, SEAT_AT, STAND_OFF, type RecoverEvent } from '../src/npc/loads';
 
 const DT = 1 / 60;
 
@@ -28,12 +28,27 @@ describe('recover task', () => {
   it('walks to the load, crouches, grabs it once, and is done', () => {
     const { s, events, t } = run({ dist: 5 });
     expect(s.phase).toBe('done');
-    expect(events.map((e) => e[1])).toEqual(['crouch', 'grab']);
+    expect(events.map((e) => e[1])).toEqual(['crouch', 'grab', 'seat']);
     // Grab comes PICKUP_AT after the crouch begins, and the whole thing ends PICKUP_TIME after.
     const [crouchT] = events[0];
     expect(events[1][0] - crouchT).toBeGreaterThanOrEqual(PICKUP_AT - 0.03);
     expect(events[1][0] - crouchT).toBeLessThan(PICKUP_AT + 0.05);
     expect(t - crouchT).toBeGreaterThanOrEqual(PICKUP_TIME - 0.03);
+  });
+
+  it('holds the load in the hand after the grab and seats it on the way up, before the clip ends', () => {
+    const { events, s } = run({ dist: 0.3 });
+    const [crouchT] = events[0];
+    const seat = events.find((e) => e[1] === 'seat')!;
+    expect(seat[0] - crouchT).toBeGreaterThanOrEqual(SEAT_AT - 0.03);
+    expect(seat[0] - crouchT).toBeLessThan(PICKUP_TIME);
+    expect(SEAT_AT).toBeGreaterThan(PICKUP_AT);
+    expect(s.seated).toBe(true);
+  });
+
+  it('stands a hand away from the load (the clip reaches ~0.3 m ahead of the feet), inside the crouch reach', () => {
+    expect(STAND_OFF).toBeGreaterThan(0.25);
+    expect(STAND_OFF).toBeLessThan(REACH);
   });
 
   it('crouches at once when the load is within reach', () => {
@@ -52,14 +67,14 @@ describe('recover task', () => {
 
   it('finishes the grab even if the load is removed by the pickup itself', () => {
     const { s, events } = run({ dist: 0.2, presentUntil: PICKUP_AT + 0.01 });
-    expect(events.map((e) => e[1])).toEqual(['crouch', 'grab']);
+    expect(events.map((e) => e[1])).toEqual(['crouch', 'grab', 'seat']);
     expect(s.phase).toBe('done');
   });
 
   it('gives up when the way is blocked well short of it, but reaches from nearly there', () => {
     expect(run({ dist: 9, stalledAt: 1 }).s.phase).toBe('giveup');
     const near = run({ dist: REACH * 1.5, stalledAt: 0 });
-    expect(near.events.map((e) => e[1])).toEqual(['crouch', 'grab']);
+    expect(near.events.map((e) => e[1])).toEqual(['crouch', 'grab', 'seat']);
   });
 
   it('gives up after the timeout', () => {

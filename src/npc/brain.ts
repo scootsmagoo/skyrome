@@ -22,7 +22,7 @@ import type { DayPhase } from './crowd/budget';
 import type { Npc } from './Npc';
 import { activeScheduleEntry, archetypeSlot, type ArchetypeSlot, type LifeActivity, type PlaceKind, type SunTimes } from './schedules';
 import type { LifeSpot, SpotIndex } from './spots';
-import { newRecover, recoverStep, type LooseLoad, type RecoverState } from './loads';
+import { newRecover, recoverStep, STAND_OFF, type LooseLoad, type RecoverState } from './loads';
 
 /** World services a brain needs (provided by NpcManager; faked in tests). */
 export interface LifeContext {
@@ -116,6 +116,8 @@ export class NpcBrain {
   /** Replace the current task (releases claimed spots). */
   setTask(t: Task | null, ctx: LifeContext) {
     if (this.task?.spot && this.task.spot !== t?.spot) ctx.spots.release(this.npc.id);
+    // A load still in the hand when the recover task ends (a fright, a fight) goes where it is carried.
+    if (this.task?.kind === 'recover' && t?.kind !== 'recover') ctx.game.looseLoads?.seat(this.npc);
     this.task = t;
     this.arrived = false;
     this.applyLoop(null);
@@ -266,7 +268,11 @@ export class NpcBrain {
     const present = loads.has(load) && load.state === 'loose';
     if (st.phase === 'walk') {
       this.applyLoop(null);
-      if (!npc.mover.active || hyp(npc.mover.goalX - lp.x, npc.mover.goalZ - lp.z) > 0.6) npc.mover.setGoal(lp.x, lp.z, Math.max(1.2, npc.walkSpeed), 0.5);
+      // Walk to a spot a hand's reach short of it (the clip's hand meets the ground ~0.3 m ahead of the feet).
+      const k = dist > 0.01 ? Math.max(0, dist - STAND_OFF) / dist : 0;
+      const gx = npc.position.x + (lp.x - npc.position.x) * k;
+      const gz = npc.position.z + (lp.z - npc.position.z) * k;
+      if (!npc.mover.active || hyp(npc.mover.goalX - gx, npc.mover.goalZ - gz) > 0.6) npc.mover.setGoal(gx, gz, Math.max(1.2, npc.walkSpeed), 0.25);
       this.lastEvent = npc.mover.update(dt, npc.position.x, npc.position.z, ctx.nav, out);
       if (this.lastEvent === 'stuck') this.unstickRequested = true;
     }
@@ -278,9 +284,16 @@ export class NpcBrain {
       npc.humanoid.play('pickupGround');
     } else if (ev === 'grab') {
       loads.collect(load, npc);
+    } else if (ev === 'seat') {
+      loads.seat(npc);
     }
     if (st.phase === 'crouch') {
       out.x = out.z = 0;
+      // Stopped short (a crowd, a wall): shuffle up to it while going down, so the hand reaches it.
+      if (st.crouchT < 0.6 && dist > STAND_OFF + 0.12) {
+        out.x = ((lp.x - npc.position.x) / dist) * 0.8;
+        out.z = ((lp.z - npc.position.z) / dist) * 0.8;
+      }
       this.applyLoop(null);
       npc.turnToward(npc.headingTo(lp.x, lp.z), 6, dt);
     } else if (st.phase === 'done') {

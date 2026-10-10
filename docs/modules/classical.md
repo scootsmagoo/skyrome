@@ -166,7 +166,10 @@ vertices, 39 MB on the GPU and 5 MB in the JS heap (high).
   reversing the direction). Bleeding at once on the ground stalled the autostep at the first
   riser, so nobody could climb stairs; never bleeding made a blocked actor report full running
   speed. `tests/arch.stairs.test.ts` drives the real Actor for both (stairs climb; pushing into
-  a wall reports ~0 speed).
+  a wall reports ~0 speed). A body that still slides along a wall at a good share of its push
+  (0.8 m/s and over a third of it) takes its real velocity at once (the per-axis bleed alone
+  zeroed the wrong component on an oblique wall and stopped the player dead:
+  `tests/player-slide.test.ts`).
 - `src/scenes/arch.ts` creates a `WorldRegistry` when the game has none (scene-local), so the
   amphitheatre's far shell swaps in beyond 180 m.
 

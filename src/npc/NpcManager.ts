@@ -1714,10 +1714,19 @@ export class NpcManager implements System {
     const sprint = !!this.game.player?.sprinting;
     // Facing: 1 when they look at the player (they see it coming), -1 with their back turned.
     const facing = Math.sin(n.heading) * -ax + Math.cos(n.heading) * -az;
-    const out = this.topple.resolve(n.id, this.clock, { approach, facing }, this.resistorOf(n), this.rng.next());
-    const push = out === 'none' ? 0.6 : out === 'stumble' ? 0.8 : 1;
+    const res = this.resistorOf(n);
+    const out = this.topple.resolve(n.id, this.clock, { approach, facing }, res, this.rng.next());
+    // A braced one (a guard, a soldier, someone fighting) stands their ground: they give little
+    // and the runner is the one who bounces off, losing most of their speed.
+    const push = res.braced && out !== 'fall' ? 0.25 : out === 'none' ? 0.6 : out === 'stumble' ? 0.8 : 1;
     n.velocity.x += ax * approach * push;
     n.velocity.z += az * approach * push;
+    const pl = this.game.player;
+    if (pl && out !== 'fall') {
+      const keep = res.braced ? 0.35 : out === 'stumble' ? 0.7 : 0.9;
+      pl.velocity.x *= keep;
+      pl.velocity.z *= keep;
+    }
     if (out === 'fall' && this.game.ragdolls?.topple(n, { x: px, y: n.position.y, z: pz }, approach > 5)) {
       this.game.events.emit('sfx', { id: 'body.fall', position: { x: n.position.x, y: n.position.y + 0.3, z: n.position.z } });
       this.bark(n, 'shoved', true);

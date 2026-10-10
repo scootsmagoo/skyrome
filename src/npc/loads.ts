@@ -91,10 +91,14 @@ export interface LooseLoad {
 // ---------------------------------------------------------------- the recover task (pure)
 
 /** Metres from the load at which the carrier crouches for it. */
-export const REACH = 0.8;
+export const REACH = 0.6;
+/** Where the carrier stands from the load's centre (m) when they crouch: the clip's hand meets the ground about 0.3 m ahead of the feet. */
+export const STAND_OFF = 0.4;
 /** The ground-reach clip ('pickupGround') length (s) and the moment the hand closes on the load. */
 export const PICKUP_TIME = 1.7;
 export const PICKUP_AT = 0.85;
+/** The moment (s into the clip) the load goes from the hand to where it is carried (the clip is straightening up). */
+export const SEAT_AT = 1.4;
 /** Give up on a load after this long (s). */
 export const RECOVER_TIMEOUT = 45;
 
@@ -106,6 +110,7 @@ export interface RecoverState {
   t: number;
   crouchT: number;
   grabbed: boolean;
+  seated: boolean;
 }
 
 export interface RecoverInput {
@@ -117,9 +122,9 @@ export interface RecoverInput {
   stalled: boolean;
 }
 
-export type RecoverEvent = 'none' | 'crouch' | 'grab';
+export type RecoverEvent = 'none' | 'crouch' | 'grab' | 'seat';
 
-export const newRecover = (): RecoverState => ({ phase: 'walk', t: 0, crouchT: 0, grabbed: false });
+export const newRecover = (): RecoverState => ({ phase: 'walk', t: 0, crouchT: 0, grabbed: false, seated: false });
 
 /** Advance the recover task by `dt`; the event says what the brain must do now. */
 export function recoverStep(s: RecoverState, dt: number, i: RecoverInput): RecoverEvent {
@@ -144,6 +149,10 @@ export function recoverStep(s: RecoverState, dt: number, i: RecoverInput): Recov
   if (!s.grabbed && s.crouchT >= PICKUP_AT) {
     s.grabbed = true;
     return 'grab';
+  }
+  if (s.grabbed && !s.seated && s.crouchT >= SEAT_AT) {
+    s.seated = true;
+    return 'seat';
   }
   if (s.crouchT >= PICKUP_TIME) s.phase = 'done';
   return 'none';
@@ -255,15 +264,41 @@ export class LooseLoads {
     return load;
   }
 
-  /** The carrier takes the load back (the brain calls it at the moment the hand closes). */
+  /**
+   * The carrier takes the load into the hand (the brain calls it at the moment the hand closes);
+   * `seat` then puts it back where it is carried once they have straightened up.
+   */
   collect(load: LooseLoad, npc: Npc): boolean {
     if (!this.has(load) || load.state !== 'loose' || npc.dead) return false;
     npc.prop?.dispose();
-    npc.prop = attachProp(npc.humanoid, load.kind);
+    const prop = attachProp(npc.humanoid, load.kind);
+    npc.prop = prop;
+    // In the hand for now (the socket the prop was made for is kept for `seat`).
+    const o = prop.object;
+    this.home.set(npc, { parent: o.parent, pos: o.position.clone(), quat: o.quaternion.clone() });
+    const hand = npc.humanoid.getSocket('handR');
+    if (hand && o.parent) {
+      hand.add(o);
+      o.position.set(0, 0, 0.1);
+      o.quaternion.identity();
+    }
     if (npc.lostLoad === load) npc.lostLoad = null;
     this.game.events.emit('sfx', { id: 'item.pickup', position: { x: load.holder.position.x, y: load.holder.position.y, z: load.holder.position.z } });
     this.remove(load);
     return true;
+  }
+
+  private readonly home = new WeakMap<Npc, { parent: THREE.Object3D | null; pos: THREE.Vector3; quat: THREE.Quaternion }>();
+
+  /** The load goes from the hand to the head, back or chest it is carried on. */
+  seat(npc: Npc) {
+    const h = this.home.get(npc);
+    const o = npc.prop?.object;
+    this.home.delete(npc);
+    if (!h || !o || !h.parent) return;
+    h.parent.add(o);
+    o.position.copy(h.pos);
+    o.quaternion.copy(h.quat);
   }
 
   /** The carrier gave up (or went away): the load stays where it is until its time is up. */
