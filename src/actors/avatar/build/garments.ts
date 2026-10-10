@@ -86,8 +86,13 @@ export function paintTorso(ctx: Ctx, L: Levels, x: number, y: number, z: number,
     const t = o.tunic;
     let c = t.color;
     if (t.clavi) {
-      const w = (t.clavi === 'wide' ? 0.04 : 0.014) * s;
-      if (Math.abs(Math.abs(x) - 0.07 * s) < w / 2 && y > L.crotch) c = t.trim ?? srgb('#4f1838');
+      // Broad (senators, ~5 cm) or narrow (equites, ~2.4 cm); a soft edge, because a stripe narrower than the
+      // body's vertex spacing painted hard comes out ragged.
+      const w = (t.clavi === 'wide' ? 0.05 : 0.026) * s;
+      if (y > L.crotch) {
+        const f = 1 - smooth(w * 0.3, w * 0.75, Math.abs(Math.abs(x) - 0.07 * s));
+        if (f > 0) c = mixC(c, t.trim ?? srgb('#4f1838'), f);
+      }
     }
     // Blousing over the belt (kolpos) and a soft shadow under it.
     let thick = 0.006 * s;

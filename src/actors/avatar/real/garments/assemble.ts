@@ -123,6 +123,7 @@ export function assembleBody(inp: AssembleInput): Assembled {
   const si = new Uint16Array(total * 4);
   const sw = new Float32Array(total * 4);
   const cov = cover ? new Float32Array(total).fill(1) : null;
+  const clv = cover && paint.clavus ? new Float32Array(total * 4) : null;
   const tan = inp.tangent ? new Float32Array(total * 4) : null;
   const uv = inp.uv ? new Float32Array(total * 2) : null;
 
@@ -164,6 +165,10 @@ export function assembleBody(inp: AssembleInput): Assembled {
     const k = cover ? Math.min(1, Math.max(0, (cover[v] - 0.52) / 0.48)) : 1;
     copyVertex(n + j, v, p, MIN_CLOTH + (full - MIN_CLOTH) * k * k * (3 - 2 * k), surfFrom[j]);
     cov![n + j] = cover![v];
+    if (clv) {
+      for (let k = 1; k < 4; k++) clv[(n + j) * 4 + k] = paint.clavus![p * 4 + k];
+      clv[(n + j) * 4] = inp.position[v * 3];
+    }
   }
   if (cover) relitClothNormals(pos, nor, clothIndex, source, n, welded);
   const index: number[] = [];
@@ -187,6 +192,7 @@ export function assembleBody(inp: AssembleInput): Assembled {
   g.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4));
   g.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
   if (cov) g.setAttribute('cover', new THREE.BufferAttribute(cov, 1));
+  if (clv) g.setAttribute('clavus', new THREE.BufferAttribute(clv, 4));
   if (tan) g.setAttribute('tangent', new THREE.BufferAttribute(tan, 4));
   if (uv) g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   g.setIndex(total > 65535 ? new THREE.Uint32BufferAttribute(index, 1) : new THREE.Uint16BufferAttribute(index, 1));

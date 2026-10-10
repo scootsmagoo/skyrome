@@ -80,7 +80,10 @@ export function buildRealSkirt(ctx: Ctx, L: Levels, bp: BodyProfile, sp: SkirtSp
     const lat = x / Math.max(a, 1e-3);
     // A wide blend across the front/back centre keeps the cloth closed between the legs.
     const wl = smooth(-0.75, 0.75, lat);
-    const w: Weights = [B.hips, 1 - wt, B.thighL, wt * wl, B.thighR, wt * (1 - wl)];
+    // A long skirt's lower part also follows the shins a little, so a back-swung calf stays under the cloth.
+    const ws = sp.legK > 0.85 ? 0.75 * smooth(0.35, 0.95, t) : 0;
+    const w: Weights = [B.hips, 1 - wt, B.thighL, wt * wl * (1 - ws), B.thighR, wt * (1 - wl) * (1 - ws)];
+    if (ws > 0) w.push(B.shinL, wt * wl * ws, B.shinR, wt * (1 - wl) * ws);
     if (t < 0.2) return mixW([B.spine, 0.3, B.hips, 0.7], w, smooth(0, 0.2, t));
     return w;
   };

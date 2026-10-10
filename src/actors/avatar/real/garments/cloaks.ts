@@ -35,14 +35,15 @@ export function buildRealPalla(ctx: Ctx, L: Levels, wide: BodyProfile) {
   const s = L.s;
   cape(ctx, L, wide, p.color, false, {
     hem: L.crotch + 0.02 * s,
-    folds: 12,
-    amp: 0.03 * s,
+    folds: 10,
+    amp: 0.045 * s,
     thick: 0.0045 * s,
     spanLow: 2.0,
     flare: 0.06,
     trim: p.trim ?? null,
     fibula: false,
-    cols: 17,
+    cols: 20,
+    rows: 5,
     gap0: 0.02,
   });
 }
@@ -60,6 +61,8 @@ interface CapeOpts {
   fibula?: boolean;
   /** Columns round the body (high detail). */
   cols?: number;
+  /** Rows down the hang (high detail). */
+  rows?: number;
   /** Gap over the shoulders, in body heights. */
   gap0?: number;
 }
@@ -71,7 +74,7 @@ function cape(ctx: Ctx, L: Levels, bp: BodyProfile, color: THREE.Color, sagum: b
   const hem = opt.hem ?? (sagum ? L.knee + 0.14 * s : L.knee - 0.04 * s);
   const yMax = bp.top - 0.05 * s;
   const folds = opt.folds ?? (sagum ? 11 : 13);
-  const amp = opt.amp ?? (sagum ? 0.026 : 0.02) * s;
+  const amp = opt.amp ?? (sagum ? 0.036 : 0.03) * s;
   const T = opt.thick ?? (sagum ? 0.012 : 0.008) * s;
   const flare = opt.flare ?? 0.085;
   const trim = opt.trim ?? null;
@@ -104,7 +107,7 @@ function cape(ctx: Ctx, L: Levels, bp: BodyProfile, color: THREE.Color, sagum: b
   };
   slab(ctx, {
     us: ticks(ctx.hi ? opt.cols ?? 21 : 11),
-    vs: ticks(ctx.hi ? 9 : 5, [...(ctx.hi ? [0.03, 0.07, 0.11, 0.97] : [0.04]), ...(trim ? [trimV - 0.003, trimV + 0.003] : [])]),
+    vs: ticks(ctx.hi ? opt.rows ?? 9 : 5, [...(ctx.hi ? [0.03, 0.07, 0.11, 0.97] : [0.04]), ...(trim ? [trimV - 0.003, trimV + 0.003] : [])]),
     thick: T * 0.5,
     back: ctx.hi,
     hint: (p) => new THREE.Vector3(p.x, 0, p.z - bp.centre(Math.min(p.y, yMax))).normalize(),
@@ -116,7 +119,7 @@ function cape(ctx: Ctx, L: Levels, bp: BodyProfile, color: THREE.Color, sagum: b
     color: (u, v) => {
       const th = -Math.PI / 2 - (2 * u - 1) * span(v);
       if (trim && v > trimV) return shade(trim, 0.7 + 0.3 * ridge(foldPhase(th, v, folds, seed)));
-      return shade(color, 0.62 + 0.38 * ridge(foldPhase(th, v, folds, seed)) - 0.06 * smooth(0.9, 1, v));
+      return shade(color, 0.4 + 0.6 * ridge(foldPhase(th, v, folds, seed)) - 0.06 * smooth(0.9, 1, v));
     },
     at: pt,
     weights,

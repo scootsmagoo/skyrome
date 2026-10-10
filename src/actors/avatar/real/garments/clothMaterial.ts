@@ -24,11 +24,16 @@ let shell: THREE.MeshStandardMaterial | null = null;
 /** Replaces avatarMaterial's cloth pattern (it runs right before `diffuseColor.rgb *= avTint * avTint3`). */
 const WEAVE = /* glsl */ `
 float rcSheen = 0.0;
+// Derivatives are taken in uniform control flow (outside the pattern branch), then used inside it.
+vec2 rcUv = av_uv();
+vec2 rcGw = rcUv / 0.0028;
+vec2 rcGl = rcUv / 0.0016;
+float rcFadeW = 1.0 - smoothstep(0.22, 0.65, length(fwidth(rcGw)));
+float rcFadeL = 1.0 - smoothstep(0.22, 0.65, length(fwidth(rcGl)));
 if (vPat > 2.5 && vPat < 3.5 || (vPat > 4.5 && vPat < 5.5)) {
   bool lin = vPat > 4.5;
-  vec2 rcUv = av_uv();
-  vec2 g = rcUv / (lin ? 0.0016 : 0.0028);
-  float fade = 1.0 - smoothstep(0.22, 0.65, length(fwidth(g)));
+  vec2 g = lin ? rcGl : rcGw;
+  float fade = lin ? rcFadeL : rcFadeW;
   float wx = sin(g.x * 6.2832);
   float wy = sin(g.y * 6.2832);
   float weave = wx * wy * 0.5 + 0.5;
@@ -53,23 +58,32 @@ if (rcSheen > 0.0) {
 }
 `;
 
+/** The clavi: stripes drawn per pixel from the bind-pose x (a vertex attribute), so they are crisp lines. */
+const CLAVI = /* glsl */ `
+{
+  float rcAa = max(fwidth(vClavus.x) * 0.75, 0.0006);
+  float rcCl = step(1.5, vClavus.w) * (1.0 - smoothstep(vClavus.z - rcAa, vClavus.z + rcAa, abs(abs(vClavus.x) - vClavus.y)));
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.078, 0.009, 0.04) * (0.9 + 0.1 * avTint), rcCl);
+}
+`;
+
 function patch(shader: { vertexShader: string; fragmentShader: string }, withCover: boolean) {
   shader.fragmentShader = shader.fragmentShader
     .replace('diffuseColor.rgb *= avTint * avTint3;', `${WEAVE}\ndiffuseColor.rgb *= avTint * avTint3;`)
     .replace('#include <aomap_fragment>', `#include <aomap_fragment>\n${SHEEN}`);
   if (!withCover) return;
   shader.vertexShader = shader.vertexShader
-    .replace('#include <common>', '#include <common>\nattribute float cover;\nvarying float vCover;')
-    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCover = cover;');
+    .replace('#include <common>', '#include <common>\nattribute float cover;\nattribute vec4 clavus;\nvarying float vCover;\nvarying vec4 vClavus;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCover = cover;\nvClavus = clavus;');
   shader.fragmentShader = shader.fragmentShader
-    .replace('#include <common>', '#include <common>\nvarying float vCover;')
+    .replace('#include <common>', '#include <common>\nvarying float vCover;\nvarying vec4 vClavus;')
     .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (vCover < 0.44) discard;')
     .replace(
       '#include <color_fragment>',
       // The edge band: darker just inside the border, with a faint stitched line about a centimetre in.
       '#include <color_fragment>\ndiffuseColor.a = smoothstep(0.44, 0.56, vCover);\nfloat rcEdge = 1.0 - 0.2 * (1.0 - smoothstep(0.5, 0.64, vCover)) - 0.07 * exp(-((vCover - 0.7) / 0.025) * ((vCover - 0.7) / 0.025));',
     )
-    .replace('diffuseColor.rgb *= avTint * avTint3;', 'diffuseColor.rgb *= avTint * avTint3 * rcEdge;');
+    .replace('diffuseColor.rgb *= avTint * avTint3;', `diffuseColor.rgb *= avTint * avTint3 * rcEdge;\n${CLAVI}`);
 }
 
 function make(name: string, withCover: boolean): THREE.MeshStandardMaterial {
@@ -87,7 +101,7 @@ function make(name: string, withCover: boolean): THREE.MeshStandardMaterial {
     base.onBeforeCompile(shader, renderer);
     patch(shader, withCover);
   };
-  m.customProgramCacheKey = () => `skyrome-${name}-v2`;
+  m.customProgramCacheKey = () => `skyrome-${name}-v4`;
   return m;
 }
 

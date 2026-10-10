@@ -188,7 +188,7 @@ export function buildTogaDrapery({ ctx, L, bp, wide, skirtR }: TogaParts) {
   const seed = ctx.rng.next() * 10;
   const trim = t.trim ?? null;
   const yMax = wide.top - 0.05 * s;
-  const folds = 9;
+  const folds = 11;
   const GAP = 0.2;
   const topNeck = L.neckBase - 0.012 * s;
   const th0 = Math.PI + GAP / 2;
@@ -218,7 +218,6 @@ export function buildTogaDrapery({ ctx, L, bp, wide, skirtR }: TogaParts) {
     const gap = 0.02 * s + 0.05 * s * Math.pow(v, 1.1);
     let r = hang + gap;
     // Pillar folds that lean as they fall; the front chest gets the umbo's swell along the diagonal edge.
-    r += 0.052 * s * foldDepth(th, v, seed) * ridge(foldPhase(th, v, folds, seed)) * smooth(0.02, 0.2, v);
     r += 0.022 * s * smooth(0, 0.25, sn) * Math.exp(-Math.pow((v - 0.14) / 0.1, 2));
     // The rolled top lip of the diagonal edge.
     r += 0.01 * s * smooth(-0.1, 0.4, sn) * Math.exp(-Math.pow(v / 0.035, 2));
@@ -226,6 +225,9 @@ export function buildTogaDrapery({ ctx, L, bp, wide, skirtR }: TogaParts) {
     // (a crest of the skirt between two columns must not poke through either: sample a little to both sides.)
     const sr = Math.max(skirtR(th, y), skirtR(th - 0.1, y), skirtR(th + 0.1, y));
     r = lerp(r, Math.max(r, sr + 0.026 * s), smooth(0.05, 0.3, v));
+    // The pillar folds ride on top of the skirt's surface (below the waist the cloth lies on it, so they must be
+    // added after the clamp or the skirt would flatten them).
+    r += 0.08 * s * foldDepth(th, v, seed) * ridge(foldPhase(th, v, folds, seed)) * smooth(0.02, 0.2, v) * smooth(0, 0.08, u) * smooth(1, 0.92, u);
     const zc = bp.centre(Math.min(y, yMax));
     const p = new THREE.Vector3(r * c, y, zc + r * sn);
     return p;
@@ -247,8 +249,8 @@ export function buildTogaDrapery({ ctx, L, bp, wide, skirtR }: TogaParts) {
     return w;
   };
   slab(ctx, {
-    us: ticks(ctx.hi ? 30 : 12),
-    vs: ticks(ctx.hi ? 10 : 5, [0.04, 0.12, ...(trim ? [1 - trimV - 0.004, 1 - trimV + 0.004] : [])]),
+    us: ticks(ctx.hi ? 44 : 16),
+    vs: ticks(ctx.hi ? 7 : 5, [0.04, 0.12, ...(trim ? [1 - trimV - 0.004, 1 - trimV + 0.004] : [])]),
     thick: 0.006 * s,
     // The mantle lies on the body: its inside is never seen (the rim closes the edge), so no back face.
     hint: (p) => new THREE.Vector3(p.x, 0, p.z - bp.centre(Math.min(p.y, yMax))).normalize(),
@@ -262,7 +264,7 @@ export function buildTogaDrapery({ ctx, L, bp, wide, skirtR }: TogaParts) {
       const sn = Math.sin(th);
       const c = Math.cos(th);
       if (trim && ((v > 1 - trimV && sn > -0.1) || (v < 0.03 && sn > 0.2 && c < 0.5))) return shade(trim, 0.8 + 0.2 * ridge(foldPhase(th, v, folds, seed)));
-      return shade(t.color, 0.5 + 0.5 * ridge(foldPhase(th, v, folds, seed)) - 0.05 * smooth(0.9, 1, v));
+      return shade(t.color, 0.26 + 0.74 * Math.pow(ridge(foldPhase(th, v, folds, seed)), 1.3) - 0.05 * smooth(0.9, 1, v));
     },
     at: pt,
     weights,

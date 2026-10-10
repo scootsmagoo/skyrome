@@ -277,16 +277,28 @@ What changed, in the order a garment is made:
   1.6 mm with slubs) as height bump and thread shade, a whisper of dye variation, the very brightest albedos eased
   down so white wool keeps its folds, and a rim sheen (wool 0.32, linen 0.5) on the lit light. Weave, bump and sheen
   fade with `fwidth` of the weave coordinates like the skin pores.
-- Clavi (narrow equestrian, broad senatorial) are painted by `paintTorso`'s existing stripe; belts are
-  `buildBelt` (unchanged).
+- **Clavi** (narrow equestrian 2.6 cm, broad senatorial 5 cm). Painted on the body's vertices they came out ragged (a
+  stripe narrower than the vertex spacing), so `paintBody` hands `paintTorso` a tunic without clavi and writes a
+  `clavus` vec4 per vertex instead (bind-pose x, stripe centre, half width, flag 2 where the tunic shows: not under
+  the painted toga, not under armour). `assembleBody` copies it onto the cloth copies (with the copied vertex's own x)
+  and `realClothMaterial` draws the stripe per pixel from the interpolated x: crisp lines at any triangle size.
+  A geometry without the attribute reads w = 1 and draws nothing. The stripe ends at the belt (the tunic skirt shell
+  carries none). Belts are `buildBelt` (unchanged).
 
-Budget (shell triangles per person, mean over six seeds per role, review pass 1 to final; the original pre-C3a numbers
-are in the first pass's report): patrician (toga) 1216 to 1310, matron 1316 to 1492, priest 1404 to 1498, plebeian man 1279
-to 1209, merchant (paenula) and Dacian (sagum) 2056 to 1848 (columns trimmed). The body's cloth group is unchanged.
+Folds, review pass 2: the toga mantle's pillar folds are added AFTER the clamp to the skirt's surface (before, the
+clamp flattened them below the waist, which is why the mantle read as a smooth sack), 11 folds over 44 columns, depth
+0.08 body heights, fading toward the slit edges, with vertex shade 0.26..1 on the crests; the toga skirt has 12 folds
+(depth 0.05), the stola 14 (0.016), the palla 10 over 20 columns. Long skirts (legK > 0.85) also take shin weights
+over their lower half (up to 0.75 at the hem), so a back-swung calf is more often under the cloth.
+
+Budget (shell triangles per person at LOD 0, mean over six seeds per role; original pre-C3a numbers in brackets):
+patrician (toga) 1436 [1224], matron 1648 [1190], priest 1684 [1224], plebeian man 1209, slave 864, merchant (paenula)
+and Dacian (sagum) 1848 [2100]. Measured in the game via the shells geometry's index count. The body's cloth group is unchanged.
 Forum crowd (`perf.mjs --views forum`): triangles per direction identical to within noise (2.57M/2.11M/2.13M/2.27M
 against 2.57M/2.13M/2.13M/2.26M); GPU/CPU ms differ run to run with the shared GPU.
 
-Known limits: the toga's front is still smoother than a real one (the pleats are subtle at 3 m); the sinus and the
-palla are separate sheets that meet the skirt with a visible edge at some angles; the shoulder of a short sleeve
+Known limits: the toga's front is still smoother than a real wool toga (folds read at 1.5 to 8 m but are soft); a
+sharp stride still pushes a calf (painted in the skirt's colour) out of the toga's skirt; a tunic-only back shows
+skin notches at the armpits; the shoulder of a short sleeve
 still shows a slightly jagged contour where the sculpt's armpit web is a very large triangle; walking in a toga at
 speed leaves the sinus swinging as one piece.

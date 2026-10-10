@@ -63,6 +63,24 @@ describe('assembleBody', () => {
     for (let j = 0; j < a.source.length; j++) expect(cov.getX(8 + j)).toBeCloseTo(s.paint.cover![a.source[j]], 6);
   });
 
+  it('the clavus attribute reaches the cloth copies with the copied vertex\'s own x', () => {
+    const s = strip();
+    s.paint.clavus = new Float32Array(8 * 4);
+    for (let v = 4; v < 8; v++) s.paint.clavus.set([9, 0.07, 0.02, 2], v * 4);
+    const a = assembleBody({ ...s, split: true });
+    const clv = a.geometry.getAttribute('clavus');
+    expect(clv).toBeTruthy();
+    for (let j = 0; j < a.source.length; j++) {
+      const v = a.source[j];
+      expect(clv.getX(8 + j)).toBeCloseTo(s.position[v * 3], 6);
+      // Copies take the paint of a cloth vertex (a border vertex borrows its neighbour's).
+      expect(clv.getY(8 + j)).toBeCloseTo(0.07, 6);
+    }
+    // Without clavi there is no attribute (the shader must never see one by default).
+    const none = assembleBody({ ...strip(), split: true });
+    expect(none.geometry.getAttribute('clavus')).toBeUndefined();
+  });
+
   it('skin triangles wholly under cloth are dropped', () => {
     const s = strip();
     s.paint.cover = Float32Array.from([0, 0, 0.2, 0.2, 1, 1, 1, 1]);

@@ -25,7 +25,7 @@ import { paintArm, paintFoot, paintLeg, paintTorso } from '../../build/garments'
 import { resolveOutfit } from '../../build/outfit';
 import type { Appearance } from '../../../appearance';
 import type { BodyArrays } from '../morph';
-import { armRelief, torsoRelief, type Relief } from './detail';
+import { armRelief, inToga, torsoRelief, type Relief } from './detail';
 
 export interface BodyPaint {
   /** Linear RGB per vertex. */
@@ -38,6 +38,12 @@ export interface BodyPaint {
   cloth: Uint8Array;
   /** Smooth cloth coverage per vertex (0 skin ... 1 cloth); present when the triangle index was given. */
   cover?: Float32Array;
+  /**
+   * The clavi: vec4 per vertex (bind-pose x, stripe centre |x|, stripe half width, 2 where the tunic shows, else 0; a missing attribute reads 1). The
+   * material draws the stripes per pixel from x, so they are crisp lines however big the triangles are (painted on
+   * the vertices a 2 cm stripe came out ragged). Absent when the outfit has no clavi.
+   */
+  clavus?: Float32Array;
   /** The torso as measured on this body (garment lofts are fitted to it). */
   torso: TorsoMeasure;
 }
@@ -170,7 +176,9 @@ export interface PaintOptions {
 
 export function paintBody({ app, rig, body, index }: PaintOptions): BodyPaint {
   const outfit = resolveOutfit(app);
-  const ctx: Ctx = makeCtx(rig, app, outfit, 'high');
+  // The clavi are not painted on the vertices (see BodyPaint.clavus): paintTorso sees a tunic without them.
+  const clavi = outfit.tunic?.clavi;
+  const ctx: Ctx = makeCtx(rig, app, clavi ? { ...outfit, tunic: { ...outfit.tunic!, clavi: undefined } } : outfit, 'high');
   // A palla is built as drapery shells (shells.ts, drape.ts): the torso and the arm are painted with what lies under it.
   const bodyCtx: Ctx = outfit.palla && !outfit.toga ? { ...ctx, outfit: { ...outfit, palla: null } } : ctx;
   const L = levels(rig);
@@ -288,6 +296,22 @@ export function paintBody({ app, rig, body, index }: PaintOptions): BodyPaint {
     out.surf[v * 4 + 3] = Math.round(surf.emissive * 255);
     out.thick[v] = thick;
     out.cloth[v] = cloth ? 1 : 0;
+  }
+  if (clavi && !outfit.armor.body) {
+    const clv = new Float32Array(n * 4);
+    const w = (clavi === 'wide' ? 0.05 : 0.026) * rig.s;
+    for (let v = 0; v < n; v++) {
+      if (reg[v] !== 'torso' || !out.cloth[v]) continue;
+      const x = body.position[v * 3];
+      const y = body.position[v * 3 + 1];
+      // Not where the toga is painted over the tunic.
+      if (y <= L.crotch || y >= L.neckBase || (outfit.toga && inToga(L, x, y, body.position[v * 3 + 2]))) continue;
+      clv[v * 4] = x;
+      clv[v * 4 + 1] = 0.07 * rig.s;
+      clv[v * 4 + 2] = w / 2;
+      clv[v * 4 + 3] = 2;
+    }
+    out.clavus = clv;
   }
   if (!index) return out;
 

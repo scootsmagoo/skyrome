@@ -75,8 +75,8 @@ export const buildShells: BuildShells = (rc) => {
       surf: SURF.wool,
       flare: 0.07 * s,
       legK: 0.92,
-      folds: 8,
-      foldAmp: 0.04 * s,
+      folds: 12,
+      foldAmp: 0.05 * s,
       thickness: 0.015 * s,
       hemTilt: (th) => 0.06 * s * Math.max(0, -Math.cos(th)) * Math.max(0, Math.sin(th) + 0.3),
     });
@@ -92,8 +92,8 @@ export const buildShells: BuildShells = (rc) => {
       surf: SURF.wool,
       flare: 0.06 * s,
       legK: 0.94,
-      folds: 12,
-      foldAmp: 0.008 * s,
+      folds: 14,
+      foldAmp: 0.016 * s,
       thickness: 0.01 * s,
       under: o.tunic ? { color: o.tunic.color, drop: 0.022 * s } : undefined,
     });
