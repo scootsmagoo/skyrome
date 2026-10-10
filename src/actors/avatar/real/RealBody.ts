@@ -622,6 +622,8 @@ export class RealBody {
   /** Faces and hands move (A/B switch for measuring: `avatar.real.constructor.faces = false` in the console). */
   static faces = true;
   private entry: Entry;
+  /** The avatar's own look: entries are shared by body key (no hair, beard, eyes), so the head is built from this. */
+  private look: Appearance;
   private lod: number;
   private avatar: HumanoidAvatar | null = null;
   private eyes: THREE.SkinnedMesh | null = null;
@@ -645,6 +647,7 @@ export class RealBody {
   /** `lod`: the LOD to build now (the avatar picks the right one once it knows its distance). */
   constructor(app: Appearance, lod = 2) {
     this.entry = acquire(app);
+    this.look = app;
     this.lod = lod;
     this.makeHead();
     this.ensure(lod);
@@ -653,7 +656,7 @@ export class RealBody {
   /** Hair, beards and head-gear from the head module; whether it supplies helmets decides the rigid pieces. */
   private makeHead() {
     this.head?.dispose();
-    const head = buildHead(context(this.entry, 0));
+    const head = buildHead({ ...context(this.entry, 0), app: this.look });
     this.head = head;
     this.headObjects = head.objects;
     if (this.entry.headHelmets !== head.objects.length > 0) {
@@ -833,7 +836,7 @@ export class RealBody {
 
   /** Iris, lid skin and the template's lid opening. */
   private eyeMaterial(): THREE.Material {
-    const app = this.entry.app;
+    const app = this.look;
     return eyeMaterial(irisFor(app), app.skin, templates.get(app.sex)!.lids, app.sex);
   }
 
@@ -911,6 +914,7 @@ export class RealBody {
   setAppearance(app: Appearance): Rig {
     const old = this.entry;
     this.entry = acquire(app);
+    this.look = app;
     release(old);
     const av = this.avatar;
     this.makeHead();

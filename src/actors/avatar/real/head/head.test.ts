@@ -46,7 +46,7 @@ function check(geo: THREE.BufferGeometry, rigHeight: number) {
 }
 
 describe('hair texture', () => {
-  it('has solid roots, tapering strands, an opaque plait and a stipple that thins out', () => {
+  it('has solid roots, tapering strands, a dense curl clump, an opaque plait and a continuous fade', () => {
     const px = hairPixels();
     const { w, h } = HAIR_TEX;
     const alpha = (u: number, v: number) => px[(Math.floor(v * (h - 1)) * w + Math.floor(u * (w - 1))) * 4 + 3];
@@ -65,25 +65,45 @@ describe('hair texture', () => {
     expect(mid).toBeGreaterThan(0.2);
     expect(mid).toBeLessThan(0.9);
     expect(tip).toBeLessThan(mid);
+    // Curls: dense in the middle of the clump, nothing at its rim.
+    const cm = (HAIR_UV.curl[0] + HAIR_UV.curl[1]) / 2;
+    expect(cover(cm - 0.06, cm + 0.06, 0.5)).toBeGreaterThan(0.7);
+    expect(cover(HAIR_UV.curl[0], HAIR_UV.curl[1], 0.01)).toBe(0);
     expect(cover(HAIR_UV.plait[0], HAIR_UV.plait[1], 0.5)).toBe(1);
-    // The fade region is noise that the material thresholds against a density rising with v.
-    const kept = (v: number) => {
-      const th = Math.min(1, Math.max(0, v / 0.92)) ** 2 * (3 - 2 * Math.min(1, Math.max(0, v / 0.92))) * 0.95 + 0.02;
-      let c = 0;
-      let n = 0;
-      for (let u = HAIR_UV.fade[0]; u < HAIR_UV.fade[1]; u += 1 / w) {
+    // The fade region is continuous noise (the material thresholds it against the vertex's density): a full
+    // range of values, few texels pinned at either end.
+    let n = 0;
+    let sum = 0;
+    let ends = 0;
+    for (let v = 0.05; v < 0.95; v += 0.05)
+      for (let u = HAIR_UV.fade[0]; u < HAIR_UV.fade[1]; u += 2 / w) {
+        const a = alpha(u, v);
         n++;
-        if (alpha(u, v) / 255 > th) c++;
+        sum += a;
+        if (a === 0 || a === 255) ends++;
       }
-      return c / n;
-    };
-    expect(kept(0.0)).toBeGreaterThan(0.9);
-    expect(kept(0.95)).toBeLessThan(0.4);
+    expect(sum / n / 255).toBeGreaterThan(0.3);
+    expect(sum / n / 255).toBeLessThan(0.7);
+    expect(ends / n).toBeLessThan(0.5);
   });
   it('is deterministic', () => {
     expect(Buffer.from(hairPixels(3)).equals(Buffer.from(hairPixels(3)))).toBe(true);
   });
 });
+
+/** Hair triangles per head (LOD 0 / 1 / 2) before the curl rework: no style may cost more than it did. */
+const BUDGET: Record<Exclude<HairStyle, 'bald'>, [number, number, number]> = {
+  cropped: [3316, 1356, 504],
+  'curly-short': [5752, 2148, 904],
+  receding: [2304, 984, 408],
+  'long-tied': [2948, 1392, 708],
+  bun: [2546, 996, 604],
+  'braided-crown': [3136, 1192, 784],
+  'trajanic-tower': [5794, 2908, 1368],
+  veiled: [1584, 624, 312],
+  vestal: [1584, 624, 312],
+};
+const BEARD_BUDGET: Record<'short' | 'full', [number, number, number]> = { short: [2288, 584, 496], full: [3404, 872, 632] };
 
 describe('hair and beards on the real heads', () => {
   for (const sex of ['male', 'female'] as const) {
@@ -106,8 +126,7 @@ describe('hair and beards on the real heads', () => {
         if (style !== 'bald') {
           expect(tris[0]).toBeGreaterThan(tris[1]);
           expect(tris[1]).toBeGreaterThanOrEqual(tris[2]);
-          // A full head of hair is a few thousand triangles at most.
-          expect(tris[0], `${sex} ${style} ${tris.join('/')}`).toBeLessThan(6000);
+          for (let k = 0; k < 3; k++) expect(tris[k], `${sex} ${style} lod ${k}: ${tris.join('/')}`).toBeLessThanOrEqual(BUDGET[style][k]);
         }
       });
     }
@@ -118,14 +137,17 @@ describe('hair and beards on the real heads', () => {
       const app = appFor('male');
       const rig = computeRig(app);
       const H = headSurface(loadBody('male'), rig, 'male');
-      const b = buildBeard(H, beard, new THREE.Color(0.1, 0.05, 0.02), new Rng(2), 0);
-      if (beard === 'stubble') expect(b).toBeNull();
-      else {
-        expect(b).not.toBeNull();
-        const bb = check(b!.geometry, rig.height);
-        // A beard hangs from the jaw: it reaches below the chin only when full.
-        if (beard === 'full') expect(bb.min.y).toBeLessThan(H.chin);
-        expect(bb.max.y).toBeLessThan(H.crown - 0.05);
+      for (const lod of [0, 1, 2] as const) {
+        const b = buildBeard(H, beard, new THREE.Color(0.1, 0.05, 0.02), new Rng(2), lod);
+        if (beard === 'stubble') expect(b).toBeNull();
+        else {
+          expect(b).not.toBeNull();
+          const bb = check(b!.geometry, rig.height);
+          // A beard hangs from the jaw: it reaches below the chin only when full.
+          if (beard === 'full') expect(bb.min.y).toBeLessThan(H.chin);
+          expect(bb.max.y).toBeLessThan(H.crown - 0.05);
+          expect(b!.triangles, `${beard} lod ${lod}`).toBeLessThanOrEqual(BEARD_BUDGET[beard as 'short' | 'full'][lod]);
+        }
       }
     });
   }

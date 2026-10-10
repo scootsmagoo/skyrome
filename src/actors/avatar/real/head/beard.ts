@@ -134,10 +134,12 @@ export function buildBeard(H: HeadSurface, style: BeardStyle, color: THREE.Color
         const p = P(yf, th, thick * (0.25 + 0.75 * edge));
         // Thins at the top edge, a little all over (so the cap is a dense stubble-to-beard, not a sheet), and again at its bottom rows.
         const bot = j === R - 1 ? 0.8 : j === R - 2 ? 0.3 : 0;
-        const fade = Math.max(0.9 * (1 - smooth(0.0, (full ? 0.058 : 0.026) * hs, dTop)), 0.14, bot);
+        // Dense a little sooner below the top edge (the streaky fade reads as bare cheeks when it is long).
+        const fade = Math.max(0.9 * (1 - smooth(0.0, (full ? 0.04 : 0.022) * hs, dTop)), 0.06, bot);
         const fa = smooth(A - 0.3, A, a) * 0.85;
         c.copy(base).multiplyScalar(0.75 + 0.2 * Math.sin(th * 13 + yf * 40) * 0.5 + 0.1);
-        b.vertex({ p, n: H.normalAt(Math.max(0.02, yf), th), u: lerp(HAIR_UV.fade[0], HAIR_UV.fade[1], i / (NC - 1)), v: Math.max(fade, fa), c, t: new THREE.Vector3(0, -1, 0) });
+        // u across the beard, v down it (the streaks run with the hair); the density is the vertex's own.
+        b.vertex({ p, n: H.normalAt(Math.max(0.02, yf), th), u: lerp(HAIR_UV.fade[0], HAIR_UV.fade[1], i / (NC - 1)), v: j / (R - 1), c, t: new THREE.Vector3(0, -1, 0), f: Math.max(fade, fa) });
       }
     for (let j = 0; j < R - 1; j++)
       for (let i = 0; i < NC - 1; i++) {

@@ -26,11 +26,14 @@ onHairAlphaToCoverage(() => {
 
 const VERT_PARS = /* glsl */ `
 attribute vec3 strand;
+attribute float fade;
 varying vec3 vStrand;
+varying float vFade;
 `;
 
 const FRAG_PARS = /* glsl */ `
 varying vec3 vStrand;
+varying float vFade;
 vec3 hrT = vec3(0.0, 1.0, 0.0);
 vec3 hrCol = vec3(1.0);
 float hrShift = 0.0;
@@ -68,6 +71,7 @@ function patchHair(shader: THREE.WebGLProgramParametersWithUniforms) {
           objStrand = ( skinMatrix * vec4( objStrand, 0.0 ) ).xyz;
         #endif
         vStrand = normalize( normalMatrix * objStrand );
+        vFade = fade;
       }`,
     );
   shader.fragmentShader = shader.fragmentShader
@@ -78,11 +82,14 @@ function patchHair(shader: THREE.WebGLProgramParametersWithUniforms) {
       `#include <map_fragment>
       #ifdef USE_MAP
         if ( vMapUv.x > 0.75 ) {
-          // Fade region: threshold the noise against a density that falls with the vertex v. The noise's
-          // cells are a few millimetres across on a head, so the sparse end is cut off rather than left as
-          // lone square specks on the forehead (the painted root stipple on the skin carries the thin edge).
-          float hTh = smoothstep( 0.0, 0.92, vMapUv.y ) * 0.62 + 0.02;
-          diffuseColor.a = clamp( ( diffuseColor.a - hTh ) * 5.0 + 0.5, 0.0, 1.0 ) * smoothstep( 0.97, 0.8, vMapUv.y );
+          // Fade region (scalp and beard caps): keep the streaks whose value is above the vertex's bareness, with
+          // a soft threshold, so a hairline thins out as wisps that alpha-to-coverage dithers, not as a stipple
+          // of dots. The cap is the root layer under the cards: a shade darker.
+          diffuseColor.a = smoothstep( vFade - 0.22, vFade + 0.22, diffuseColor.a ) * ( 1.0 - smoothstep( 0.93, 1.0, vFade ) );
+          diffuseColor.rgb *= 0.8;
+        } else if ( vMapUv.x < 0.5 ) {
+          // Strand and curl cards: dark at the root (v = 0), a touch lighter toward the tips.
+          diffuseColor.rgb *= mix( 0.58, 1.0, smoothstep( 0.0, 0.45, vMapUv.y ) ) * ( 1.0 + 0.1 * vMapUv.y );
         }
       #endif`,
     )
@@ -114,6 +121,6 @@ export function hairMaterial(): THREE.MeshStandardMaterial {
     envMapIntensity: 0.55,
   });
   mat.onBeforeCompile = patchHair;
-  mat.customProgramCacheKey = () => 'real-hair-v4';
+  mat.customProgramCacheKey = () => 'real-hair-v5';
   return mat;
 }

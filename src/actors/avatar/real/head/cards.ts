@@ -2,7 +2,8 @@
  * Accumulates the geometry of hair: ribbons ("cards": three vertices across, curved along a path),
  * tubes (plaits, curls, coils) and scalp-cap grids, all skinned to the head bone (or blended down the neck
  * for a tail). One BufferGeometry results, with the attributes the hair material wants:
- * position, normal, uv (hairTexture.ts regions), color, strand (direction root -> tip), skinIndex, skinWeight.
+ * position, normal, uv (hairTexture.ts regions), color, strand (direction root -> tip), fade (0 solid ... 1 bare:
+ * the density the material keeps of the fade region's streaks), skinIndex, skinWeight.
  */
 import * as THREE from 'three';
 import { B } from '../../rig';
@@ -20,6 +21,8 @@ export interface VertexIn {
   c: THREE.Color;
   t: THREE.Vector3;
   w?: readonly number[];
+  /** Bareness of the fade region at this vertex (0 solid, 1 bare); ignored by the other regions. */
+  f?: number;
 }
 
 export class HairBuilder {
@@ -28,6 +31,7 @@ export class HairBuilder {
   private uvs: number[] = [];
   private col: number[] = [];
   private str: number[] = [];
+  private fad: number[] = [];
   private si: number[] = [];
   private sw: number[] = [];
   private idx: number[] = [];
@@ -46,6 +50,7 @@ export class HairBuilder {
     this.uvs.push(a.u, a.v);
     this.col.push(a.c.r, a.c.g, a.c.b);
     this.str.push(a.t.x, a.t.y, a.t.z);
+    this.fad.push(a.f ?? 0);
     const w = a.w ?? HEAD_W;
     for (let k = 0; k < 8; k += 2) {
       this.si.push(w[k] ?? 0);
@@ -140,7 +145,8 @@ export class HairBuilder {
         p.copy(path[i]).addScaledVector(o, r);
         const sh = opts.shade ? opts.shade(t, a) : 0.7 + 0.35 * Math.sin(a + t * 3);
         c.copy(color).multiplyScalar(sh);
-        this.vertex({ p, n: o, u: region[0] + (s / segs) * (region[1] - region[0]), v: (t * (opts.vRepeat ?? 1)) % 1, c, t: tan, w: wts });
+        // v runs along the tube unwrapped (the texture repeats in v).
+        this.vertex({ p, n: o, u: region[0] + (s / segs) * (region[1] - region[0]), v: t * (opts.vRepeat ?? 1), c, t: tan, w: wts });
       }
     }
     for (let i = 0; i < n - 1; i++)
@@ -166,6 +172,7 @@ export class HairBuilder {
     g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uvs, 2));
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
     g.setAttribute('strand', new THREE.Float32BufferAttribute(this.str, 3));
+    g.setAttribute('fade', new THREE.Float32BufferAttribute(this.fad, 1));
     g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(this.si, 4));
     g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(this.sw, 4));
     const n = this.vertexCount;

@@ -1,8 +1,12 @@
 /**
- * Hair for the realistic heads: a thin scalp cap that thins out at the hairline (stipple fade region of the
- * hair texture), then cards, tubes and curls on top, per HairStyle. Everything is placed through the measured
- * HeadSurface (frame.ts), so it follows the skull of every body, and is skinned to the head bone (a tail
- * blends into the neck and chest). Deterministic per appearance (seeded by the caller).
+ * Hair for the realistic heads: a thin scalp cap that thins out at the hairline (the fade region of the hair
+ * texture, thresholded per vertex), then cards, tubes and curl clumps on top, per HairStyle. Everything is
+ * placed through the measured HeadSurface (frame.ts), so it follows the skull of every body, and is skinned to
+ * the head bone (a tail blends into the neck and chest). Deterministic per appearance (seeded by the caller).
+ *
+ * Curls are never geometry: a curl is a small card of the curl-clump texture (hairTexture.ts) bulging off
+ * the scalp, and a head of curls is a few hundred of them overlapping in two layers, so it reads as a dense,
+ * soft mass. Buns and the Trajanic knot are `knot()`: rings of plait with the braid's bumps.
  *
  * Detail by LOD (ctx.lod): 0 = full, 1 = about half the cards, 2 = the cap and a few cards.
  */
@@ -86,6 +90,10 @@ export function hairlineYf(style: HairStyle, a: number, H: HeadSurface): number 
   return lerp(sideA, nape, smooth(112, 150, d));
 }
 
+/** Plait crossings per metre of tube (the texture holds 12 per repeat). */
+const PLAIT_PITCH = 1 / 0.013;
+const plaitRepeat = (length: number) => (length * PLAIT_PITCH) / 12;
+
 export function buildHair(inp: HairInput): { geometry: THREE.BufferGeometry; triangles: number } | null {
   const { H, style, rng, lod } = inp;
   if (style === 'bald') return null;
@@ -98,6 +106,7 @@ export function buildHair(inp: HairInput): { geometry: THREE.BufferGeometry; tri
   // Under a veil the hair stays flat: the cloth sits only ~11 mm off the scalp and sags between its rows.
   const veilMode = style === 'veiled' || style === 'vestal';
   const effStyle: HairStyle = helmet ? 'cropped' : style;
+  const curly = effStyle === 'curly-short';
 
   const jitter = (k = 0.12) => base.clone().multiplyScalar(1 + (rng.next() * 2 - 1) * k);
   const hl = (th: number) => {
@@ -110,11 +119,13 @@ export function buildHair(inp: HairInput): { geometry: THREE.BufferGeometry; tri
     return p;
   };
   const capT = ({ cropped: 0.0055, 'curly-short': 0.009, receding: 0.004, 'long-tied': 0.006, bun: 0.005, 'braided-crown': 0.005, 'trajanic-tower': 0.006, veiled: 0.0035, vestal: 0.0035, bald: 0 } as Record<HairStyle, number>)[effStyle] * hs * (helmet ? 0.5 : 1);
+  // Thinning on top: a receding head shows scalp through the hair of its crown, an old one a little everywhere.
+  const thinTop = effStyle === 'receding' ? 0.5 : inp.age === 'old' ? 0.22 : 0;
 
   // ---------------------------------------------------------------- scalp cap
   {
     const NC = lod === 0 ? 56 : lod === 1 ? 36 : 24;
-    // Rows packed into the stippled band above the hairline, so the ramp is not smeared over one big row.
+    // Rows packed into the fading band above the hairline, so the ramp is not smeared over one big row.
     const bandD = lod === 0 ? [0, 0.004, 0.01, 0.019, 0.03, 0.04] : [0, 0.007, 0.02, 0.04];
     const nb = bandD.length;
     const R = nb + (lod === 0 ? 4 : lod === 1 ? 3 : 2);
@@ -124,20 +135,22 @@ export function buildHair(inp: HairInput): { geometry: THREE.BufferGeometry; tri
       for (let i = 0; i < NC; i++) {
         const th = (i / NC) * Math.PI * 2;
         const h0 = hl(th);
-        const s = j / (R - 1);
         const yTop0 = h0 + (bandD[nb - 1] * hs) / H.H;
         const yf = j < nb ? h0 + (bandD[j] * hs) / H.H : lerp(yTop0, 0.99, Math.pow((j - nb + 1) / (R - nb), 1.2));
         const dH = (yf - h0) * H.H;
         const off = capT * (0.3 + 0.7 * smooth(0, 0.016, dH)) * (1 + 0.1 * Math.sin(th * 11 + yf * 30));
         const p = P(yf, th, off);
         const n = H.normalAt(yf, th);
-        // Stipple density by distance above the hairline: solid by about 22 mm.
-        const fade = 1 - smooth(0.0, 0.04 * hs, dH);
-        // Mirrored across the face so u is continuous (no seam, no smearing between columns).
+        // Density by distance above the hairline: solid by about 25 mm; thinner on top where the style says so.
+        let fade = 1 - smooth(0.0, 0.03 * hs, dH);
+        if (thinTop > 0) fade = Math.max(fade, thinTop * smooth(0.84, 0.95, yf) * (0.7 + 0.3 * Math.cos(th)));
+        // u mirrored across the face so it is continuous (no seam); v runs up the meridian (hairline to crown).
         const u = lerp(HAIR_UV.fade[0], HAIR_UV.fade[1], Math.abs((i / NC) * 2 - 1));
-        c.copy(base).multiplyScalar((0.6 + 0.22 * (0.5 + 0.5 * Math.sin(th * 19 + yf * 41)) + 0.06 * s) * (1 + 0.45 * fade));
+        const v = clamp01((yf - h0) / Math.max(0.05, 1 - h0));
+        // Thin hair over skin reads lighter: the edge brightens a little.
+        c.copy(base).multiplyScalar((0.8 + 0.16 * (0.5 + 0.5 * Math.sin(th * 19 + yf * 41))) * (1 + 0.15 * fade));
         const tan = H.at(yf - 0.02, th).sub(H.at(yf + 0.02, th)).normalize();
-        b.vertex({ p, n, u, v: fade, c, t: tan });
+        b.vertex({ p, n, u, v, c, t: tan, f: fade });
       }
     for (let j = 0; j < R - 1; j++)
       for (let i = 0; i < NC; i++) {
@@ -150,7 +163,7 @@ export function buildHair(inp: HairInput): { geometry: THREE.BufferGeometry; tri
       }
     // Crown fan.
     const top = P(1, 0, capT);
-    const ti = b.vertex({ p: top, n: new THREE.Vector3(0, 1, 0), u: HAIR_UV.fade[0] + 0.1, v: 0, c: base.clone().multiplyScalar(0.9), t: new THREE.Vector3(0, -1, 0) });
+    const ti = b.vertex({ p: top, n: new THREE.Vector3(0, 1, 0), u: HAIR_UV.fade[0] + 0.1, v: 1, c: base.clone().multiplyScalar(0.85), t: new THREE.Vector3(0, -1, 0), f: thinTop * 0.9 });
     for (let i = 0; i < NC; i++) b.tri(ti, base0 + (R - 1) * NC + ((i + 1) % NC), base0 + (R - 1) * NC + i);
   }
 
@@ -189,34 +202,53 @@ export function buildHair(inp: HairInput): { geometry: THREE.BufferGeometry; tri
       const th = lerp(o.thA ?? 0, o.thB ?? Math.PI * 2, (i + rng.next() * 0.9) / count(n));
       const a = Math.abs(Math.atan2(Math.sin(th), Math.cos(th)));
       if (o.skipFront && a < o.skipFront) continue;
-      // Roots sit in the dense part of the cap (above its 4 cm fading band), never on bare skin.
-      const yf0 = Math.min(0.97, hl(th) + (0.034 * hs) / H.H + rng.range(o.above[0], o.above[1]));
+      // Roots sit in the dense part of the cap (above its fading band), never on bare skin.
+      const yf0 = Math.min(0.97, hl(th) + (0.03 * hs) / H.H + rng.range(o.above[0], o.above[1]));
       const lenYf = (o.len * hs * rng.range(0.8, 1.3)) / H.H;
       const sw = rng.range(-0.08, 0.08);
       card((t) => ({ yf: yf0 - t * lenYf, th: th + sw * t, off: capT * 0.9 + 0.0012 * hs + o.lift * hs * t }), o.width * hs * rng.range(0.85, 1.25), jitter(0.18), { points: Math.min(M, 4) });
     }
   };
 
-  // Curl: a tight lock wound close against the scalp (a low helix, facing out), so a head of them reads as
-  // a dense, bumpy mass of curls rather than ringlets standing up like coils.
-  const curl = (yf: number, th: number, size: number, color: THREE.Color, turns = 1.7) => {
-    const p0 = P(yf, th, capT * 0.5);
+  /**
+   * A clump of curls: one card of the curl texture, `size` across, bulging off the scalp at (yf, th). `tilt`
+   * raises its far end (0 lying flat ... 1 standing), `dir` turns it about the normal (radians from the
+   * around-the-head direction; the card's root is at its first end), `out` lifts the whole card.
+   */
+  const curlCard = (yf: number, th: number, size: number, color: THREE.Color, o: { tilt?: number; dir?: number; out?: number } = {}) => {
+    const tilt = o.tilt ?? 0.2;
+    const p0 = P(yf, th, capT * 0.6 + (o.out ?? 0));
     const nrm = H.normalAt(yf, th);
     const tanA = H.at(yf, th + 0.05).sub(H.at(yf, th - 0.05)).normalize();
     const tanB = new THREE.Vector3().crossVectors(nrm, tanA).normalize();
-    const path: THREE.Vector3[] = [];
-    const radial: THREE.Vector3[] = [];
-    const steps = lod === 0 ? 10 : 7;
-    const phase = rng.next() * 6.28;
-    for (let i = 0; i < steps; i++) {
-      const t = i / (steps - 1);
-      const a = phase + t * turns * Math.PI * 2;
-      const r = size * (0.55 + 0.45 * Math.sin(t * Math.PI * 0.9 + 0.3));
-      const dir = tanA.clone().multiplyScalar(Math.cos(a)).addScaledVector(tanB, Math.sin(a));
-      path.push(p0.clone().addScaledVector(nrm, size * (0.15 + 0.55 * t)).addScaledVector(dir, r));
-      radial.push(dir.multiplyScalar(0.45).add(nrm).normalize());
-    }
-    b.ribbon(path, (t) => size * 0.9 * (1 - 0.45 * t), (_t, i) => radial[i], color, { lift: 0.25, shade: (t) => 0.62 + 0.5 * t });
+    const dir = o.dir ?? rng.next() * Math.PI * 2;
+    const d = tanA.clone().multiplyScalar(Math.cos(dir)).addScaledVector(tanB, Math.sin(dir));
+    const path = [
+      p0.clone().addScaledVector(d, -size * 0.5),
+      p0.clone().addScaledVector(nrm, size * (0.2 + 0.3 * tilt)),
+      p0.clone().addScaledVector(d, size * 0.5).addScaledVector(nrm, size * 0.9 * tilt),
+    ];
+    const n0 = nrm.clone().addScaledVector(d, -0.35).normalize();
+    const n2 = nrm.clone().addScaledVector(d, 0.35 + 0.6 * tilt).normalize();
+    const nrms = [n0, nrm, n2];
+    b.ribbon(path, () => size, (_t, i) => nrms[i], color, { region: HAIR_UV.curl, lift: 0.3, v1: 0.995, shade: (t) => 0.8 + 0.3 * t });
+  };
+
+  /** Curl clumps over a region of the cap: `n` lying ones, then `nUp` standing ones for a bumpy silhouette. */
+  const curlMass = (n: number, nUp: number, size: number, o: { front?: number } = {}) => {
+    const place = (tilt: [number, number], out: number) => {
+      const th = rng.range(0, Math.PI * 2);
+      const a = Math.abs(Math.atan2(Math.sin(th), Math.cos(th)));
+      const y0 = hl(th) + 0.012;
+      const yf = lerp(y0, 0.985, Math.pow(rng.next(), 0.8));
+      // Not down on the brow in front.
+      if (a < (o.front ?? 0.9) && yf < y0 + 0.025) return;
+      // Clumps at the hairline lie flat (a standing one at the nape floats off the neck).
+      const k = smooth(0, 0.07, yf - y0);
+      curlCard(yf, th, size * rng.range(0.8, 1.25), jitter(0.2), { tilt: rng.range(tilt[0], tilt[1]) * k, out: out * k });
+    };
+    for (let i = 0; i < count(n); i++) place([0.05, 0.3], 0);
+    for (let i = 0; i < count(nUp); i++) place([0.35, 0.6], 0.003 * hs);
   };
 
   /** Smoothed-back hair: from the front hairline over the sides to a gathering point at the back. */
@@ -265,16 +297,12 @@ export function buildHair(inp: HairInput): { geometry: THREE.BufferGeometry; tri
       break;
     }
     case 'curly-short': {
-      meridianCards(16, { yf0: [0.85, 0.99], thA: 0, thB: Math.PI * 2, width: 0.024 * hs, over: 0.01, swirl: 0.2 });
-      shingles(40, { above: [0.0, 0.1], width: 0.014, len: 0.022, lift: 0.004 });
-      const n = count(110);
-      for (let i = 0; i < n; i++) {
-        const th = rng.range(0, Math.PI * 2);
-        const a = Math.abs(Math.atan2(Math.sin(th), Math.cos(th)));
-        const y0 = hl(th) + 0.012;
-        const yf = lerp(y0, 0.985, Math.pow(rng.next(), 0.8));
-        if (a < 0.9 && yf < y0 + 0.03) continue;
-        curl(yf, th, 0.0058 * hs * rng.range(0.8, 1.25), jitter(0.2));
+      // A dense mass of small tight curls: two layers of clumps over the cap, a fringe of them at the brow.
+      curlMass(170, 120, 0.019 * hs);
+      for (let i = 0; i < count(26); i++) {
+        const th = rng.range(-1.1, 1.1);
+        const yf = hl(th) + rng.range(0.005, 0.03);
+        curlCard(yf, th, 0.017 * hs * rng.range(0.85, 1.2), jitter(0.2), { tilt: rng.range(0.15, 0.4), dir: -Math.PI / 2 + rng.range(-0.5, 0.5) });
       }
       break;
     }
@@ -308,7 +336,7 @@ export function buildHair(inp: HairInput): { geometry: THREE.BufferGeometry; tri
         const t = k / 7;
         core.push(new THREE.Vector3(top.x, top.y - t * len * 0.92, top.z - 0.012 * hs - Math.sin(t * Math.PI) * 0.014 * hs - t * 0.028 * hs));
       }
-      b.tube(core, (t) => 0.015 * hs * (1 - 0.55 * t), 6, jitter(0.1).multiplyScalar(0.85), { weights: tailW, region: HAIR_UV.plait, vRepeat: 2 });
+      b.tube(core, (t) => 0.015 * hs * (1 - 0.55 * t), 6, jitter(0.1).multiplyScalar(0.85), { weights: tailW, region: HAIR_UV.plait, vRepeat: plaitRepeat(len * 0.92) });
       const band: THREE.Vector3[] = [];
       for (let k = 0; k < 10; k++) {
         const a = (k / 9) * Math.PI * 2;
@@ -319,8 +347,8 @@ export function buildHair(inp: HairInput): { geometry: THREE.BufferGeometry; tri
     }
     case 'bun': {
       const tie = { yf: 0.44, th: Math.PI };
-      flowCards(42, { target: tie, width: 0.028 * hs });
-      coil(b, P(tie.yf, tie.th, 0.008 * hs), new THREE.Vector3(0, 0.15, -1).normalize(), new THREE.Vector3(0, 1, 0), 0.03 * hs, 2.4, 0.0125 * hs, base.clone().multiplyScalar(0.95), lod, 0, 6, 3.4);
+      flowCards(40, { target: tie, width: 0.028 * hs });
+      knot(b, P(tie.yf, tie.th, 0.004 * hs), new THREE.Vector3(0, 0.15, -1).normalize(), new THREE.Vector3(0, 1, 0), 0.03 * hs, 0.0125 * hs, base.clone().multiplyScalar(0.95), lod, rng);
       break;
     }
     case 'braided-crown': {
@@ -335,34 +363,50 @@ export function buildHair(inp: HairInput): { geometry: THREE.BufferGeometry; tri
       for (let ring = 0; ring < 2; ring++) {
         const path: THREE.Vector3[] = [];
         const np = lod === 0 ? 48 : 28;
+        const r0 = (0.0085 + ring * 0.001) * hs;
         for (let k = 0; k <= np; k++) {
           const th = (k / np) * Math.PI * 2;
-          path.push(P(ringY(th) + ring * 0.04 - 0.01, th, (0.0058 + ring * 0.0025) * hs));
+          path.push(P(ringY(th) + ring * 0.05 - 0.012, th, r0 * 0.75 + ring * 0.002 * hs));
         }
-        b.tube(path, () => 0.0066 * hs, lod === 0 ? 6 : 4, jitter(0.08).multiplyScalar(1.15), { region: HAIR_UV.plait, vRepeat: 18, shade: (t, a) => 0.75 + 0.35 * Math.sin(a + t * 40) });
+        let L = 0;
+        for (let k = 1; k < path.length; k++) L += path[k].distanceTo(path[k - 1]);
+        const bumps = Math.round(L * PLAIT_PITCH);
+        // The braid's bumps: the tube swells once per crossing.
+        b.tube(path, (t) => r0 * (0.84 + 0.16 * Math.sin(t * bumps * Math.PI * 2)), lod === 0 ? 6 : 4, jitter(0.08).multiplyScalar(1.1), {
+          region: HAIR_UV.plait,
+          vRepeat: bumps / 12,
+          shade: (_t, a) => 0.8 + 0.25 * Math.sin(a + 0.6),
+        });
       }
       break;
     }
     case 'trajanic-tower': {
-      // Elaborate Flavian-Trajanic coiffure: hair swept back into a coil, and a tiered diadem of
-      // coiled curls (orbis comarum) from temple to temple over the forehead.
+      // Elaborate Flavian-Trajanic coiffure: hair swept back into a plaited knot, and a tiered diadem of
+      // tight curls (orbis comarum) from temple to temple over the forehead, standing taller row by row.
       const tie = { yf: 0.7, th: Math.PI };
       flowCards(34, { target: tie, width: 0.027 * hs });
-      coil(b, P(tie.yf, tie.th, 0.008 * hs), new THREE.Vector3(0, 0.3, -1).normalize(), new THREE.Vector3(0, 1, 0), 0.034 * hs, 2.6, 0.0125 * hs, base.clone().multiplyScalar(0.95), lod, 0, 6, 3.4);
+      knot(b, P(tie.yf, tie.th, 0.004 * hs), new THREE.Vector3(0, 0.3, -1).normalize(), new THREE.Vector3(0, 1, 0), 0.034 * hs, 0.0125 * hs, base.clone().multiplyScalar(0.95), lod, rng);
       const rows = lod === 2 ? 1 : 3;
+      const size = 0.017 * hs;
+      // A bed of lying clumps so no scalp shows between the raised ones.
+      const bed = count(rows === 1 ? 16 : 56);
+      for (let i = 0; i < bed; i++) {
+        const th = rng.range(-1.4, 1.4);
+        const yf = rng.range(0.79, 0.96);
+        curlCard(yf, th, size * rng.range(0.9, 1.3), jitter(0.15), { tilt: rng.range(0.05, 0.2) });
+      }
       for (let r = 0; r < rows; r++) {
-        const nr = (lod === 0 ? 9 : 7) - r;
-        for (let i = 0; i < nr; i++) {
-          const t = (i + 0.5) / nr;
-          const th = lerp(-1.3 + r * 0.12, 1.3 - r * 0.12, t);
-          const yf = 0.81 + r * 0.058 + 0.012 * (1 - Math.pow(Math.abs(t - 0.5) * 2, 2));
-          const R = (0.0108 - r * 0.0006) * hs;
-          const nrm = H.normalAt(yf, th);
-          const axis = nrm.clone().add(new THREE.Vector3(0, 0.5, 0)).normalize();
-          const centre = P(yf, th, R * 0.75 + r * 0.004 * hs);
-          // Tight snail curls (two turns of a thin lock), not one fat turn that reads as a "9".
-          coil(b, centre, axis, new THREE.Vector3(0, 1, 0), R, 2.1, 0.0037 * hs, base.clone().multiplyScalar(0.92 + 0.12 * rng.next()), lod, rng.range(0, 6.28), 3, 2.6, lod === 0 ? 8 : 6, 4);
-        }
+        const nr = Math.max(7, Math.round((15 - r * 2) * (lod === 0 ? 1 : lod === 1 ? 0.75 : 0.5)));
+        for (let pass = 0; pass < 2; pass++)
+          for (let i = 0; i < nr; i++) {
+            const t = (i + 0.5 * pass + 0.25) / nr;
+            if (t > 1) continue;
+            const th = lerp(-1.38 + r * 0.1, 1.38 - r * 0.1, t) + rng.range(-0.04, 0.04);
+            const yf = 0.8 + r * 0.05 + 0.012 * (1 - Math.pow(Math.abs(t - 0.5) * 2, 2)) + rng.range(-0.008, 0.008);
+            // Higher rows are raised a little more, leaning out over the lower ones: a tiered mass, not a fence.
+            const tilt = 0.22 + r * 0.1 + rng.range(-0.06, 0.06);
+            curlCard(yf, th, size * rng.range(0.9, 1.2), jitter(0.15), { tilt, dir: -Math.PI / 2 + rng.range(-0.7, 0.7), out: (0.001 + r * 0.0035 + pass * 0.002) * hs });
+          }
       }
       break;
     }
@@ -383,24 +427,33 @@ export function buildHair(inp: HairInput): { geometry: THREE.BufferGeometry; tri
 }
 
 /**
- * A flat coil of plait (a bun, a knot, an "orbis comarum" curl): an Archimedean spiral in the plane
- * facing `axis`, winding in toward a dome. `up` orients the spiral's start.
+ * A knot of plaited hair (a bun, the Trajanic nodus): two rings of plait around `axis`, the inner one a
+ * little proud, and a small dome closing the middle; the tubes swell once per braid crossing. `up` orients
+ * the rings' seam.
  */
-function coil(b: HairBuilder, centre: THREE.Vector3, axis: THREE.Vector3, up: THREE.Vector3, R: number, turns: number, tubeR: number, color: THREE.Color, lod: number, phase = 0, vRepeat = 5, dome = 1.1, perTurn = lod === 0 ? 22 : 14, segs = lod === 0 ? 6 : 4) {
+function knot(b: HairBuilder, centre: THREE.Vector3, axis: THREE.Vector3, up: THREE.Vector3, R: number, tubeR: number, color: THREE.Color, lod: number, rng: Rng) {
   const side = new THREE.Vector3().crossVectors(up, axis).normalize();
   const upN = new THREE.Vector3().crossVectors(axis, side).normalize();
-  const np = Math.round(perTurn * turns);
-  const path: THREE.Vector3[] = [];
-  for (let k = 0; k <= np; k++) {
-    const t = k / np;
-    const a = phase + t * turns * Math.PI * 2;
-    const r = R * (1 - 0.82 * t);
-    path.push(centre.clone().addScaledVector(side, Math.cos(a) * r).addScaledVector(upN, Math.sin(a) * r).addScaledVector(axis, tubeR * dome * Math.sin(Math.min(1, t) * Math.PI * 0.5)));
-  }
-  b.tube(path, (t) => tubeR * (0.85 + 0.3 * Math.sin(Math.min(1, t * 1.2) * Math.PI)) * (1 - 0.25 * t), segs, color, {
-    region: HAIR_UV.plait,
-    vRepeat,
-    capEnd: true,
-    shade: (t, a) => (0.9 - 0.25 * t) * (0.78 + 0.3 * Math.sin(a)),
-  });
+  const ring = (r: number, tr: number, lift: number, np: number, segs: number, phase: number) => {
+    const path: THREE.Vector3[] = [];
+    for (let k = 0; k <= np; k++) {
+      const a = phase + (k / np) * Math.PI * 2;
+      path.push(centre.clone().addScaledVector(side, Math.cos(a) * r).addScaledVector(upN, Math.sin(a) * r).addScaledVector(axis, lift));
+    }
+    const L = Math.PI * 2 * r;
+    const bumps = Math.max(4, Math.round(L * PLAIT_PITCH));
+    b.tube(path, (t) => tr * (0.85 + 0.15 * Math.sin(t * bumps * Math.PI * 2)), segs, color, {
+      region: HAIR_UV.plait,
+      vRepeat: bumps / 12,
+      shade: (_t, a) => 0.82 + 0.25 * Math.sin(a + 0.5),
+    });
+  };
+  const np0 = lod === 0 ? 32 : lod === 1 ? 20 : 12;
+  const np1 = lod === 0 ? 20 : lod === 1 ? 12 : 8;
+  const segs = lod === 0 ? 6 : 4;
+  ring(R - tubeR * 0.9, tubeR, tubeR * 0.9, np0, segs, rng.next() * 6.28);
+  ring((R - tubeR * 0.9) * 0.48, tubeR * 0.78, tubeR * 1.5, np1, segs, rng.next() * 6.28);
+  // The middle: a short tube along the axis capped like a button.
+  const cap: THREE.Vector3[] = [centre.clone().addScaledVector(axis, tubeR * 0.9), centre.clone().addScaledVector(axis, tubeR * 2.0)];
+  b.tube(cap, (t) => tubeR * (0.9 - 0.5 * t), lod === 0 ? 8 : 6, color.clone().multiplyScalar(0.9), { region: HAIR_UV.plait, vRepeat: 0.25, capEnd: true });
 }
