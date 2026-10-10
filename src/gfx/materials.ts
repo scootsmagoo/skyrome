@@ -26,6 +26,7 @@ import { MATERIAL_BASE, type MaterialId } from './materialIds';
 import { MATERIAL_RECIPES, TEXTURE_STATS, repeatFor, roughnessFactor, tintFor, type MaterialRecipe, type TextureSetId } from './textures/catalog';
 import { generateProcedural, type ProcImage } from './textures/procedural';
 import { applyShaderPatch } from './textures/shaderPatch';
+import { applyUvCheck, uvCheckEnabled } from './uvcheck';
 
 export { applyDefaultEnvironment } from './textures/environment';
 export { UV_METERS, MATERIAL_RECIPES } from './textures/catalog';
@@ -87,6 +88,10 @@ function createMaterial(id: MaterialId): THREE.Material {
     return m;
   }
   if (!hasDom) return m;
+  if (uvCheckEnabled() && id !== 'water' && id !== 'glow_fire') {
+    applyUvCheck(m, id);
+    return m;
+  }
   if (recipe.proc) applyProcedural(m, id, recipe);
   else if (recipe.set) applyPhotoSet(m, id, recipe, recipe.set);
   const hasNormal = !!recipe.set || !!m.normalMap;
@@ -102,6 +107,7 @@ function createMaterial(id: MaterialId): THREE.Material {
     wear: recipe.wear,
     grain: recipe.grain,
     flake: recipe.flake,
+    puddle: recipe.puddle,
   });
   return m;
 }

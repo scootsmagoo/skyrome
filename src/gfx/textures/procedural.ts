@@ -474,10 +474,10 @@ function travertine(seed: number): ProcImage {
  * running bond, tight dark joints, a tone of their own per slab (some warmer, some greyer), a
  * polished walking-lane where the crowds pass, a few chipped edges, hairline cracks, a repair slab
  * of another stone, and one slab with a carved band of lettering. Designed for a 6 x 6 m repeat
- * (five courses of about 1.2 m, slabs 1.5-2.6 m long, so 1 px is 4 mm).
+ * (five courses of about 1.2 m, slabs 1.5-2.6 m long, so 1 px is 6 mm).
  */
 function slabs(seed: number): ProcImage {
-  const S = 1536;
+  const S = 1024;
   const M = 6; // metres per repeat
   const PX = S / M;
   const img = new Img(S);

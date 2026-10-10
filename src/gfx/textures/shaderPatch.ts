@@ -48,6 +48,8 @@ uniform float skMottle;
 uniform float skWear;
 uniform float skGrain;
 uniform float skFlake;
+uniform float skPuddle;
+float skPuddleK = 0.0;
 float skWearK = 0.0;
 float skFlakeK = 0.0;
 #ifdef SK_WEATHER
@@ -130,6 +132,21 @@ const MAP_FRAGMENT = /* glsl */ `
   diffuseColor.rgb *= 1.0 + 0.2 * skWearK - 0.05 * ( 1.0 - skP ) * skFlat * skWear;
 }
 #endif
+#ifdef SK_PUDDLE
+{
+  // Street wetness: damp darker patches where water stands after rain, and small clear puddles in
+  // the hollows (darker, glassy, flat), with a few dung and oil smudges. World-space, flat faces only.
+  vec3 skPn = normalize( cross( dFdx( vSkWorld ), dFdy( vSkWorld ) ) );
+  float skPf = smoothstep( 0.8, 0.96, abs( skPn.y ) );
+  float skPh = skNoise( vec3( vSkWorld.x * 0.13, 0.0, vSkWorld.z * 0.13 ) + 37.0 ) * 0.62 + skNoise( vec3( vSkWorld.x * 0.41, 0.0, vSkWorld.z * 0.41 ) + 5.0 ) * 0.38;
+  float skDampP = smoothstep( 0.44, 0.6, skPh ) * skPf * skPuddle;
+  skPuddleK = smoothstep( 0.6, 0.64, skPh ) * skPf * skPuddle;
+  float skSm = smoothstep( 0.72, 0.8, skNoise( vSkWorld * 2.1 + 53.0 ) * 0.7 + skNoise( vSkWorld * 6.7 + 3.0 ) * 0.3 ) * skPf * skPuddle;
+  diffuseColor.rgb *= 1.0 - 0.4 * skDampP - 0.3 * skPuddleK - 0.35 * skSm;
+  diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * vec3( 0.9, 0.85, 0.75 ), skDampP * 0.5 );
+  skPuddleK = max( skPuddleK, skDampP * 0.35 );
+}
+#endif
 #ifdef SK_WEATHER
 {
   vec3 skN = normalize( cross( dFdx( vSkWorld ), dFdy( vSkWorld ) ) );
@@ -192,6 +209,9 @@ function normalFragmentMaps(): string {
     mapN.xy *= normalScale;`,
   );
   return `${c}
+#ifdef SK_PUDDLE
+  normal = normalize( mix( normal, nonPerturbedNormal, skPuddleK ) );
+#endif
 #ifdef SK_GRAIN
 {
   // Fine grain bump from world-space noise (no tangent frame needed): derivative bump mapping.
@@ -212,6 +232,9 @@ function normalFragmentMaps(): string {
 }
 #endif`;
 }
+
+/** `?puddle=0` switches the street wetness off, for A/B shots. */
+const NO_PUDDLE = typeof location !== 'undefined' && new URLSearchParams(location.search).get('puddle') === '0';
 
 let noiseTex: THREE.DataTexture | null = null;
 
@@ -267,7 +290,7 @@ export function setWeatherGround(tex: THREE.Texture | null, g: { minX: number; m
  */
 export function applyShaderPatch(
   material: THREE.MeshStandardMaterial,
-  opts: { macro?: number; detile?: boolean; contrast?: number; mean?: readonly number[]; weather?: number; detail?: number; mottle?: number; wear?: number; grain?: number; flake?: number },
+  opts: { macro?: number; detile?: boolean; contrast?: number; mean?: readonly number[]; weather?: number; detail?: number; mottle?: number; wear?: number; grain?: number; flake?: number; puddle?: number },
 ) {
   const macro = opts.macro ?? 0;
   const weather = opts.weather ?? 0;
@@ -276,6 +299,7 @@ export function applyShaderPatch(
   const wear = opts.wear ?? 0;
   const grain = opts.grain ?? 0;
   const flake = opts.flake ?? 0;
+  const puddle = NO_PUDDLE ? 0 : opts.puddle ?? 0;
   // SK_DETILE and SK_CONTRAST only act inside USE_MAP, so they are safe before the map loads.
   const detile = !!opts.detile;
   const contrast = opts.contrast !== undefined && opts.contrast < 1 && opts.mean ? opts.contrast : 1;
@@ -289,6 +313,7 @@ export function applyShaderPatch(
     ...(detailV > 0 ? { SK_DETAIL: '' } : {}),
     ...(mottle > 0 ? { SK_MOTTLE: '' } : {}),
     ...(wear > 0 ? { SK_WEAR: '' } : {}),
+    ...(puddle > 0 ? { SK_PUDDLE: '' } : {}),
     ...(grain > 0 ? { SK_GRAIN: '' } : {}),
     ...(flake > 0 && weather > 0 ? { SK_FLAKE: '' } : {}),
   };
@@ -301,6 +326,7 @@ export function applyShaderPatch(
   const wearU = { value: wear };
   const grainU = { value: grain };
   const flakeU = { value: flake };
+  const puddleU = { value: puddle };
   material.userData.skMacro = uniform;
   material.userData.skWeather = weatherU;
   material.onBeforeCompile = (shader) => {
@@ -314,6 +340,7 @@ export function applyShaderPatch(
     shader.uniforms.skWear = wearU;
     shader.uniforms.skGrain = grainU;
     shader.uniforms.skFlake = flakeU;
+    shader.uniforms.skPuddle = puddleU;
     shader.uniforms.skGround = GROUND.tex;
     shader.uniforms.skGroundGrid = GROUND.grid;
     shader.uniforms.skGroundN = GROUND.n;
@@ -323,8 +350,8 @@ export function applyShaderPatch(
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${NOISE}`)
       .replace('#include <map_fragment>', MAP_FRAGMENT)
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n#ifdef SK_WEAR\nroughnessFactor *= 1.0 - 0.25 * skWearK;\n#endif\n#ifdef SK_FLAKE\nroughnessFactor = mix( roughnessFactor, 0.95, skFlakeK );\n#endif')
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n#ifdef SK_WEAR\nroughnessFactor *= 1.0 - 0.25 * skWearK;\n#endif\n#ifdef SK_PUDDLE\nroughnessFactor = mix( roughnessFactor, 0.07, skPuddleK );\n#endif\n#ifdef SK_FLAKE\nroughnessFactor = mix( roughnessFactor, 0.95, skFlakeK );\n#endif')
       .replace('#include <normal_fragment_maps>', normalFragmentMaps());
   };
-  material.customProgramCacheKey = () => 'skyrome-macro-v5';
+  material.customProgramCacheKey = () => 'skyrome-macro-v6';
 }

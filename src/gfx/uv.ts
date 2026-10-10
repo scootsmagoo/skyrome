@@ -14,13 +14,25 @@ export function boxProjectUVs(geometry: THREE.BufferGeometry, metersPerTile = 2,
   const uv = new Float32Array(pos.count * 2);
   const p = new THREE.Vector3();
   const n = new THREE.Vector3();
+  const p0 = new THREE.Vector3();
+  const p1 = new THREE.Vector3();
+  const p2 = new THREE.Vector3();
+  const gn = new THREE.Vector3();
   const nm = matrix ? new THREE.Matrix3().getNormalMatrix(matrix) : null;
   const s = 1 / metersPerTile;
   for (let i = 0; i < pos.count; i += 3) {
-    // Face normal from the first vertex normal of the triangle (flat enough for architecture).
+    // The plane to project on follows the triangle's own geometry (so no triangle is ever seen at
+    // a grazing angle, which stretched fluted shafts and lathe mouldings by 20x), with the sign
+    // of the shading normals (which way the surface faces).
     n.set(0, 0, 0);
     for (let k = 0; k < 3; k++) n.x += nor.getX(i + k), n.y += nor.getY(i + k), n.z += nor.getZ(i + k);
     if (nm) n.applyMatrix3(nm);
+    p0.fromBufferAttribute(pos, i);
+    p1.fromBufferAttribute(pos, i + 1);
+    p2.fromBufferAttribute(pos, i + 2);
+    if (matrix) p0.applyMatrix4(matrix), p1.applyMatrix4(matrix), p2.applyMatrix4(matrix);
+    gn.subVectors(p1, p0).cross(p2.sub(p0));
+    if (gn.lengthSq() > 1e-12) n.copy(gn.dot(n) < 0 ? gn.negate() : gn);
     const ax = Math.abs(n.x), ay = Math.abs(n.y), az = Math.abs(n.z);
     for (let k = 0; k < 3; k++) {
       p.fromBufferAttribute(pos, i + k);
