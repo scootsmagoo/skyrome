@@ -157,7 +157,17 @@ function islandProw(ctx: LandmarkContext) {
   }
   // Deck over the whole tip inside the facing (closed by the chord between its ends), so the
   // tip reads as a ship's deck.
-  buildPlaza(b, face, () => h1 - 0.02, { material: 'paving_travertine', collide: true, lift: 0, cell: 1.5, skirt: 3 });
+  // buildPlaza's collider now carries the 4 m bevel that runs down to the ground (phase 4b B9: the
+  // bevel was drawn at 6.7 over ground at 5.3 with nothing under it, so the player stood 1.4 m
+  // below the picture at the chord). Plus a 0.6 m prism under the deck itself: a flat sheet is a
+  // thin target for ray and capsule queries.
+  buildPlaza(b, face, () => h1 - 0.02, { material: 'paving_travertine', collide: true, bevelCollide: true, lift: 0, cell: 1.5, skirt: 3 });
+  {
+    const prism = extrudePolygon(face.map(([x, z]) => [x, -z] as V2), 0.6);
+    prism.rotateX(-Math.PI / 2);
+    prism.translate(0, h1 - 0.02, 0);
+    b.collider({ kind: 'trimesh', geometry: prism });
+  }
   void inner;
   // The stem: the sharpest point of the facing gets a projecting stem post and a beak moulding.
   let tipI = 0;
@@ -222,7 +232,6 @@ function islandProw(ctx: LandmarkContext) {
     spot('island-prow:relief', 'inscription', (ra[0] + rb[0]) / 2 - unit[relI][0], h1 - 0.02, (ra[1] + rb[1]) / 2 - unit[relI][1], rAng),
   ];
   void inscriptionPanel;
-  void extrudePolygon;
   riverLife(ctx, spots);
   return { object: b.build(lm.id), colliders: b.colliders, spots };
 }

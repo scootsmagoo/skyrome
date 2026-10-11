@@ -36,12 +36,14 @@ function buildEmporium(ctx: LandmarkContext): LandmarkBuild {
   const spots: Spot[] = [];
   const edge = Math.min(...[-0.35, -0.15, 0, 0.15, 0.35].map((f) => ctx.groundAt(w * f, -dd / 2 - 4)));
   const drop = Math.min(4, Math.max(2.2, -edge + 0.8));
-  quay(d, ctx, w, dd, spots, far, { drop, cranes: 5, sheds: true, depth: dd * 0.58 });
-  // Ramps for carts at both ends, from the water's edge up to the wharf.
+  const cols = quay(d, ctx, w, dd, spots, far, { drop, cranes: 5, sheds: true, depth: dd * 0.58 });
+  // Ramps for carts at both ends, from the water's edge up to the wharf (only where the embankment falls).
   for (const sx of [-1, 1]) {
     const x = sx * (w / 2 - 4);
-    const len = drop / Math.tan(0.2);
-    d.box('travertine', x, -drop / 2 - 0.2, -dd / 2 + len / 2 * Math.cos(0.2) - 1, 5, 0.6, len, { rx: 0.2, collide: true });
+    const c = cols.find((k) => x >= k.x0 && x <= k.x1);
+    if (!c || c.drop <= 0) continue;
+    const len = c.drop / Math.tan(0.2);
+    d.box('travertine', x, c.top - c.drop / 2 - 0.2, -dd / 2 + len / 2 * Math.cos(0.2) - 1, 5, 0.6, len, { rx: 0.2, collide: true });
   }
   // The marble landing: big blocks and column shafts of coloured stone on timber sleepers.
   const marbles: MaterialId[] = ['marble', 'marble_giallo', 'marble_pavonazzetto', 'marble_veined', 'porphyry'];
@@ -49,25 +51,30 @@ function buildEmporium(ctx: LandmarkContext): LandmarkBuild {
   for (let i = 0; i < (detail === 'high' ? 26 : 10); i++) {
     const x = -w * 0.18 + rng.range(-w * 0.12, w * 0.12), z = rng.range(mz0, mz1);
     const m = marbles[i % marbles.length];
+    const gz = ctx.groundAt(x, z); // on the wharf's own level
     if (i % 4 === 0) {
-      d.box('wood_dark', x - 1.6, 0.12, z, 0.3, 0.24, 1.2);
-      d.box('wood_dark', x + 1.6, 0.12, z, 0.3, 0.24, 1.2);
-      d.cyl(m, x, 0.24 + 0.4, z, 0.4, rng.range(4.5, 7), 12, { rz: Math.PI / 2, collide: false });
-      d.solid(x - 3, 0, z - 0.45, x + 3, 1.05, z + 0.45);
+      d.box('wood_dark', x - 1.6, gz + 0.12, z, 0.3, 0.24, 1.2);
+      d.box('wood_dark', x + 1.6, gz + 0.12, z, 0.3, 0.24, 1.2);
+      d.cyl(m, x, gz + 0.24 + 0.4, z, 0.4, rng.range(4.5, 7), 12, { rz: Math.PI / 2, collide: false });
+      d.solid(x - 3, gz - 0.2, z - 0.45, x + 3, gz + 1.05, z + 0.45);
     } else {
       const bw = rng.range(1.2, 2.4), bh = rng.range(0.8, 1.4), bl = rng.range(1, 1.6);
-      d.box(m, x, bh / 2 + 0.02, z, bw, bh, bl, { ry: rng.range(-0.3, 0.3), collide: true });
+      d.box(m, x, gz + bh / 2 + 0.02, z, bw, bh, bl, { ry: rng.range(-0.3, 0.3), collide: true });
     }
   }
-  spots.push(spot(`${lm.id}:marble`, 'npc', -w * 0.18, 0.02, mz0 - 1.5, 0));
-  // The harbour office (statio) with the tariff board.
+  spots.push(spot(`${lm.id}:marble`, 'npc', -w * 0.18, ctx.groundAt(-w * 0.18, mz0 - 1.5) + 0.1, mz0 - 1.5, 0));
+  // The harbour office (statio) with the tariff board, on its own floor.
   const sx0 = w * 0.12;
-  const f = d.at(sx0, 0.02, -dd / 2 + dd * 0.4);
+  const sz0 = -dd / 2 + dd * 0.4;
+  let sg = -Infinity;
+  for (const dx of [-5, 0, 5]) for (const dz of [-3, 0, 3]) sg = Math.max(sg, ctx.groundAt(sx0 + dx, sz0 + dz));
+  const f = d.at(sx0, sg + 0.05, sz0);
+  if (sg - ctx.groundAt(sx0, sz0) > 0.1) d.span('brick', sx0 - 5, sg - 1.5, sz0 - 3, sx0 + 5, sg + 0.04, sz0 + 3, { collide: true });
   hall(f, -5, -3, 5, 3, { mat: 'brick', height: 4.6, roof: 'hip', doors: 1, detail, windowRows: 0, dado: 'plaster_red' });
   inscriptionPanel(f.b, { lines: ['STATIO PORTVS', 'VECTIGAL QVADRAGESIMAE'], width: 3.4, height: 0.9, style: 'painted', interpunct: false }, mul(f.m, T(0, 3.6, -3.06)), { depth: 0.04 });
   spots.push(
-    spot(`${lm.id}:statio`, 'npc', sx0 + 1.2, 0.02, -dd / 2 + dd * 0.4 - 4, Math.PI),
-    spot(`${lm.id}:tariff`, 'inscription', sx0, 0.02, -dd / 2 + dd * 0.4 - 4.5, 0),
+    spot(`${lm.id}:statio`, 'npc', sx0 + 1.2, sg + 0.1, sz0 - 4, Math.PI),
+    spot(`${lm.id}:tariff`, 'inscription', sx0, sg + 0.1, sz0 - 4.5, 0),
   );
   return finish(lm.id, d, spots, far, 1000);
 }

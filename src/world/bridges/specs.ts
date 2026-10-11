@@ -18,6 +18,12 @@ export interface BridgeStyle extends BridgeArchSpec {
   abutmentHerms?: boolean;
   /** Deck height above the water for timber trestles (game m). */
   deckAbove?: number;
+  /**
+   * Approach grade (rise/run) beyond the arcade. Set where a ramp at the usual 0.19 would run far
+   * past the atlas end into the bank street (phase 4b B6): the approach becomes a flight of steps
+   * (risers 0.18 m) that lands within a few metres of the atlas end.
+   */
+  stairGrade?: number;
   note: string;
 }
 
@@ -46,6 +52,7 @@ export const BRIDGE_STYLES: Record<string, BridgeStyle> = {
     riseRatio: 0.36,
     body: 'peperino',
     trim: 'travertine',
+    stairGrade: 0.55,
     note: 'Mid-1st c. BC; island to the Transtiberim.',
   },
   'pons-aemilius': {

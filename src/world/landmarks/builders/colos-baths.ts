@@ -188,7 +188,15 @@ function buildBathsTrajan(ctx: LandmarkContext): LandmarkBuild {
     [-EW, ED - wallT, -hemiOpen, ED],
     [hemiOpen, ED - wallT, EW, ED],
   ] as const) {
-    d.span('brick', x0, -1.5, z0, x1, wallH, z1, { collide: true });
+    // Down to the lowest ground along (and 1 m outside) the wall: on the Oppian's slope the footing
+    // used to hang up to 0.6 m over the hillside below the platform (phase 4b B10).
+    let gLo = -1;
+    const nsamp = Math.max(1, Math.ceil(Math.max(x1 - x0, z1 - z0) / 3));
+    for (let i = 0; i <= nsamp; i++) {
+      const sxp = x0 + ((x1 - x0) * i) / nsamp, szp = z0 + ((z1 - z0) * i) / nsamp;
+      for (const [ox, oz] of [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]] as const) gLo = Math.min(gLo, ctx.groundAt(sxp + ox, szp + oz));
+    }
+    d.span('brick', x0, Math.min(-1.5, gLo - 0.5), z0, x1, wallH, z1, { collide: true });
     d.span('travertine', x0 - 0.1, wallH, z0 - 0.1, x1 + 0.1, wallH + 0.25, z1 + 0.1);
   }
   // Side gates in the enclosure (east and west).
@@ -234,8 +242,50 @@ function buildBathsTrajan(ctx: LandmarkContext): LandmarkBuild {
   // ---- libraries (exedrae) in the SW corners
   for (const sx of [-1, 1]) {
     const lx = sx * (EW - 18);
-    apse(b, { radius: 9, height: 10, thickness: 1.2, material: 'brick', domeMaterial: 'concrete', niches: high ? 9 : 0, detail: 'low', collide: true }, new THREE.Matrix4().makeTranslation(lx, 0, ED - wallT));
-    d.span('paving_travertine', lx - 9, -0.1, ED - wallT - 2, lx + 9, 0.08, ED + 6);
+    const az = ED - wallT; // the apse's chord; the half-drum bulges +z, out of the enclosure
+    // Substructure (phase 4b B10): the exedrae stand on the lip of the pad over the Oppian's
+    // slope, 14 m above the hillside at the east one. A brick half-drum under each apse, a block
+    // under its paving, from the lowest ground − 0.5 up to the floor, with the collider to match;
+    // the paving no longer reaches past the terrace (it overhung the slope with nothing under it).
+    let gy = 0;
+    for (let i = 0; i <= 10; i++) for (let j = 0; j <= 6; j++) gy = Math.min(gy, ctx.groundAt(lx - 10.6 + (21.2 * i) / 10, az - 2 + (12.8 * j) / 6));
+    gy -= 0.5;
+    const drumR = 10.5;
+    const drumH = 0.07 - gy;
+    {
+      const drum = new THREE.CylinderGeometry(drumR, drumR, drumH, high ? 32 : 12, 1, false, -Math.PI / 2, Math.PI);
+      drum.translate(lx, gy + drumH / 2, az);
+      b.add(drum, 'brick', I(), { castShadow: true });
+      b.collider({ kind: 'cylinder', center: new THREE.Vector3(lx, gy + drumH / 2, az), halfHeight: drumH / 2, radius: drumR - 0.3 });
+      d.span('brick', lx - 10.6, gy, az - 2, lx + 10.6, 0.07, az + 0.2, { collide: true });
+      // Travertine string course at the floor and pilaster strips down the tall face.
+      const course = new THREE.CylinderGeometry(drumR + 0.12, drumR + 0.12, 0.3, high ? 32 : 12, 1, false, -Math.PI / 2, Math.PI);
+      course.translate(lx, -0.3, az);
+      b.add(course, 'travertine', I());
+      if (high && gy < -4) {
+        for (let k = 0; k <= 8; k++) {
+          const a = -Math.PI / 2 + (Math.PI * k) / 8;
+          const px = lx + Math.sin(a) * (drumR + 0.1), pz = az + Math.cos(a) * (drumR + 0.1);
+          d.box('brick', px, (gy + 0.6 - 0.5) / 2, pz, 0.9, -0.5 - gy - 0.6, 0.5, { ry: a });
+        }
+      }
+    }
+    apse(b, { radius: 9, height: 10, thickness: 1.2, material: 'brick', domeMaterial: 'concrete', niches: high ? 9 : 0, detail: 'low', collide: true }, new THREE.Matrix4().makeTranslation(lx, 0, az));
+    d.span('paving_travertine', lx - 9, -0.1, az - 2, lx + 9, 0.08, az + 0.05);
+    {
+      // The apse's own floor: a half-disc inside its wall (the drum's collider carries it).
+      const shape = new THREE.Shape();
+      shape.moveTo(9, 0);
+      for (let i = 1; i <= 32; i++) {
+        const a = (i / 32) * Math.PI;
+        shape.lineTo(Math.cos(a) * 9, -Math.sin(a) * 9);
+      }
+      shape.lineTo(9, 0);
+      const fg = new THREE.ShapeGeometry(shape, 1);
+      fg.rotateX(-Math.PI / 2);
+      fg.translate(lx, 0.08, az);
+      b.add(fg, 'paving_travertine', I(), { castShadow: false });
+    }
     // Book cupboards (armaria) in two tiers along the curve are the niches; a desk and a statue.
     if (high) {
       placeProp(d, 'table_marble', lx, 0.08, ED + 2.5, 0, { rng: new Rng('lib' + sx) });
@@ -332,8 +382,14 @@ function buildHemicycle(ctx: LandmarkContext, b: MeshBuilder, d: Draw, root: THR
     const { m: cm, len } = oval.chordFrame(ta, tb, xw + wallT / 2);
     const fr = m.clone().multiply(cm);
     const mid = (ta + tb) / 2;
-    const [px, pz] = oval.point(mid, xw + wallT);
-    const gy = Math.min(0, g(px, pz)) - 0.5;
+    // The lowest ground under the whole chord and 1.5 m outside it (a 2.3 m chord on the Oppian's
+    // slope used to stand up to 0.6 m over the ground at its downhill end: phase 4b B10).
+    let gLow = 0;
+    for (const tt of [ta, mid, tb]) for (const rx of [xw, xw + wallT, xw + wallT + 1.5]) {
+      const [qx, qz] = oval.point(tt, rx);
+      gLow = Math.min(gLow, g(qx, qz));
+    }
+    const gy = gLow - 0.5;
     span(b, 'brick', fr, -0.05, gy, -wallT / 2, len + 0.05, top + 1.1, wallT / 2, true);
     span(b, 'travertine', fr, -0.1, top + 1.1, -wallT / 2 - 0.1, len + 0.1, top + 1.3, wallT / 2 + 0.1, false, false);
     // Buttress at each chord start (outside) where the wall is tall.
@@ -571,6 +627,9 @@ function frigidarium(ctx: LandmarkContext, b: MeshBuilder, d: Draw, root: THREE.
   for (const x of [x0 + 1.1, -8, 8, x1 - 1.1]) {
     for (const z of [z0 + 1.2, z1 - 1.2]) {
       cmats.push(new THREE.Matrix4().makeTranslation(x, 0.08, z));
+      // A core under each base up to the shaft's foot, so the shaft does not start in the air (the
+      // instanced column's torus base is not a face the structures audit counts as support).
+      d.span('marble', x - 0.45, 0.0, z - 0.45, x + 0.45, 0.62, z + 0.45);
       b.collider({ kind: 'cylinder', center: new THREE.Vector3(x, colH / 2, z), halfHeight: colH / 2, radius: 0.65 });
       d.span('marble', x - 1.0, colH + 0.08, z - 1.0, x + 1.0, ys, z + 1.0);
     }

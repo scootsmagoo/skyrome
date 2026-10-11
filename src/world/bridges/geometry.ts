@@ -24,6 +24,8 @@ export interface BridgeBuildInput {
   /** Walkable deck width between the parapets (game m). */
   width: number;
   ground: (u: number) => number;
+  /** Lowest ground across the body's width at u (the foot of the masonry); defaults to `ground`. */
+  foot?: (u: number) => number;
   waterY: number;
   /** Atlas length between the ends (game m). */
   length: number;
@@ -33,6 +35,8 @@ export interface BridgeBuildInput {
 const PARAPET_T = 0.38;
 const PARAPET_H = 1.08;
 const PAVE = 0.12;
+/** Runs steeper than this (rise/run) are drawn and collided as steps. */
+const STAIR_GRADE = 0.3;
 
 /** Spots in the bridge frame. */
 export interface BridgeSpotLocal {
@@ -69,14 +73,21 @@ export function buildStoneBridge(b: MeshBuilder, frame: THREE.Matrix4, inp: Brid
   const d = new Draw(b, frame);
   const half = width / 2 + PARAPET_T;
   const deck = L.deck;
-  const topOfBody = (u: number) => deckAt(deck, u) - PAVE;
+  // Under a flight of steps the body stands almost to the tread tops (its sides would otherwise sink
+  // 0.12 m under a bank that rises to the deck there).
+  const topOfBody = (u: number) => {
+    const y = deckAt(deck, u);
+    const g = Math.max(Math.abs(deckAt(deck, u + 0.5) - y), Math.abs(y - deckAt(deck, u - 0.5))) / 0.5;
+    // (and within 2 m of an end, where the body meets the bank)
+    return y - (g > STAIR_GRADE || Math.min(u - L.start, L.end - u) < 2 ? 0.03 : PAVE);
+  };
   const step = hi ? 1 : 2;
 
   // ---- elevation outline (counter-clockwise does not matter: THREE.Shape normalises it)
   const outline: V2[] = [];
   for (let u = L.start; u < L.end; u += step) outline.push([u, topOfBody(u)]);
   outline.push([L.end, topOfBody(L.end)]);
-  const footAt = (u: number) => Math.min(ground(u), inp.waterY) - 0.7;
+  const footAt = (u: number) => Math.min((inp.foot ?? ground)(u), inp.waterY) - 0.7;
   // Down the B end, then back along the bottom: abutment B, arches and piers, abutment A.
   const [a0, a1] = L.arcade;
   for (let u = L.end; u > a1 + 0.01; u -= step) outline.push([u, footAt(u)]);
@@ -158,9 +169,29 @@ export function buildStoneBridge(b: MeshBuilder, frame: THREE.Matrix4, inp: Brid
   for (let i = 0; i < runs.length - 1; i++) {
     const [u0, y0] = runs[i];
     const [u1, y1] = runs[i + 1];
-    slopedBox(d, 'paving_basalt', u0, y0, u1, y1, -width / 2, width / 2, PAVE + 0.02);
-    // Walking surface collider (thick so fast players never tunnel), whole body width.
-    slopedBox(d, 'paving_basalt', u0, y0, u1, y1, -half, half, 0.6, { collide: true, over: 0.3, visible: false });
+    if (Math.abs(y1 - y0) / Math.max(1e-6, u1 - u0) > STAIR_GRADE) {
+      // A flight of steps (phase 4b B6): risers of at most 0.18 m, each tread a collider box from
+      // its own height down to the foot of the run, so it can be stepped up and never tunnelled.
+      const n = Math.max(1, Math.ceil(Math.abs(y1 - y0) / 0.18));
+      const dir = Math.sign(y1 - y0) || 1;
+      const run = (u1 - u0) / n;
+      for (let k = 0; k < n; k++) {
+        const ua = u0 + run * k;
+        const ub = ua + run;
+        // The tread's top: the line's height at its UPHILL end (so every tread sits on or above the sloped body).
+        const top = dir > 0 ? y0 + (y1 - y0) * ((k + 1) / n) : y0 + (y1 - y0) * (k / n);
+        // 0.5 m deep: the body under the flight carries the rest (a tread box as tall as the whole run
+        // read as a wall whose foot hangs over the bank).
+        // The lowest tread of a flight goes down to the ground at its foot.
+        const footTread = k === (dir > 0 ? 0 : n - 1);
+        const base = footTread ? Math.min(top - 0.5, (inp.foot ?? ground)(dir > 0 ? ua : ub) - 0.1) : top - 0.5;
+        d.box('paving_basalt', (ua + ub) / 2, (top + base) / 2, 0, run + 0.02, top - base, width, { collide: true });
+      }
+    } else {
+      slopedBox(d, 'paving_basalt', u0, y0, u1, y1, -width / 2, width / 2, PAVE + 0.02);
+      // Walking surface collider (thick so fast players never tunnel), whole body width.
+      slopedBox(d, 'paving_basalt', u0, y0, u1, y1, -half, half, 0.6, { collide: true, over: 0.3, visible: false });
+    }
     for (const side of [-1, 1]) {
       const v0 = side > 0 ? width / 2 : -half;
       const v1 = side > 0 ? half : -width / 2;
@@ -181,14 +212,15 @@ export function buildStoneBridge(b: MeshBuilder, frame: THREE.Matrix4, inp: Brid
     const [u1, y1] = runs[i + 1];
     if (u1 > a0 && u0 < a1) continue;
     const lo = Math.min(footAt(u0), footAt(u1));
-    const top = Math.min(y0, y1) - 0.6;
+    const top = Math.min(y0, y1) - (Math.abs(y1 - y0) / Math.max(1e-6, u1 - u0) > STAIR_GRADE ? 0.1 : 0.6);
     if (top - lo > 0.2) d.solid(u0, lo, -half, u1, top, half);
   }
   // End posts where the parapets stop.
   for (const [u, dir] of [[L.start, 1], [L.end, -1]] as const) {
     const y = deckAt(deck, u + dir * 0.3);
     for (const side of [-1, 1]) {
-      d.box(style.trim, u + dir * 0.35, y + 0.65, side * (width / 2 + PARAPET_T / 2), 0.7, 1.3 + 0.1, PARAPET_T + 0.14, { collide: true });
+      // Feet 0.5 m under the deck, so a post at a flight of steps stands in the ground.
+      d.box(style.trim, u + dir * 0.35, y + 0.45, side * (width / 2 + PARAPET_T / 2), 0.7, 1.9, PARAPET_T + 0.14, { collide: true });
       if (hi) d.box(style.trim, u + dir * 0.35, y + 1.36, side * (width / 2 + PARAPET_T / 2), 0.8, 0.12, PARAPET_T + 0.24);
     }
   }

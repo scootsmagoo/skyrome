@@ -92,7 +92,7 @@ function buildSaepta(ctx: LandmarkContext): LandmarkBuild {
     d.span('stucco_painted', Math.min(x, x - sx * 0.04), 3.2, -dd / 2 + shopD + 3, Math.max(x, x - sx * 0.04), 5.0, dd / 2 - shopD - 3);
   }
   // Court: travertine paving, the old voting barriers (pontes) in lanes, statues, stalls.
-  d.span('paving_travertine', -hw, -0.2, -hd, hw, 0.04, hd);
+  d.span('paving_travertine', -hw, -0.2, -hd, hw, 0.02, hd);
   const lanes = 6;
   for (let i = 1; i < lanes; i++) {
     const x = -hw + (i * 2 * hw) / lanes;

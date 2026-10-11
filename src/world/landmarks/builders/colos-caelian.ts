@@ -129,8 +129,16 @@ function buildClaudianum(ctx: LandmarkContext): LandmarkBuild {
         }
       }
       // Basin at the foot.
-      d.span('marble', xa, gy + 0.6, Z1 + 0.2, xb, gy + 1.05, Z1 + 2.4, { collide: true });
-      d.span('water', xa + 0.2, gy + 0.95, Z1 + 0.4, xb - 0.2, gy + 0.97, Z1 + 2.2);
+      // The basin reaches 2.4 m out from the wall, over ground that keeps falling: it stands on a block
+      // down to the lowest ground under it (phase 4b: its underside hung up to 2.7 m over the slope).
+      const gb = Math.min(gy, minGround(ctx, xa, Z1 + 1.4, xb, Z1 + 1.4, 3) - 0.6, minGround(ctx, xa, Z1 + 2.4, xb, Z1 + 2.4, 3) - 0.6);
+      // Its rim stands over the highest ground under it, so the hillside never pokes through the floor.
+      let gHi = -Infinity;
+      for (const zz of [Z1 + 0.2, Z1 + 1.3, Z1 + 2.4]) for (const xx of [xa, (xa + xb) / 2, xb]) gHi = Math.max(gHi, ctx.groundAt(xx, zz));
+      const rim = Math.max(gy + 1.05, gHi + 0.1);
+      d.span('travertine', xa, gb, Z1 + 0.2, xb, rim - 0.45, Z1 + 2.4, { collide: true });
+      d.span('marble', xa, rim - 0.45, Z1 + 0.2, xb, rim, Z1 + 2.4, { collide: true });
+      d.span('water', xa + 0.2, rim - 0.1, Z1 + 0.4, xb - 0.2, rim - 0.08, Z1 + 2.2);
     }
     d.span('travertine', X0 - 0.2, wallTop - 0.1, Z1 - 1.6, X1 + 0.2, wallTop + 0.1, Z1 + 0.4);
   }

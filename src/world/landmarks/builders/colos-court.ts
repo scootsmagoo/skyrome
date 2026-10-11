@@ -412,7 +412,13 @@ export function courtyardBuilding(spec: CourtSpec): CourtResult {
       }
     }
   }
-  if (!spec.noFloor) d0.span(spec.floor ?? 'dirt', -wc / 2, y0 - 0.1, -dc / 2, wc / 2, y0 + 0.04, dc / 2);
+  if (!spec.noFloor) {
+    // The ranges' ground floor too (phase 4b: the platform collider stood 1.1 m above the terrain
+    // under the halls with no floor drawn on it, the Mint's invisible ledge): one slab under the
+    // whole footprint, tucked 0.3 m into the walls, 2 cm below the room, portico and court floors.
+    d0.span(spec.floor ?? 'dirt', -W / 2 + t / 2, y0 - 0.1, -D / 2 + t / 2, W / 2 - t / 2, y0 + 0.02, D / 2 - t / 2);
+    d0.span(spec.floor ?? 'dirt', -wc / 2, y0 - 0.1, -dc / 2, wc / 2, y0 + 0.04, dc / 2);
+  }
 
   // ---- ring roof over ranges and portico
   roof(d0.at(0, 0, 0), {

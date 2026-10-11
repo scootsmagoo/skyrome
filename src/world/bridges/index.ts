@@ -100,7 +100,7 @@ export function bridgeLayoutFor(br: Atlas.Bridge, hm: Heightmap, river: Atlas.Ri
     S,
     arches: style,
     deckAbove: style.deckAbove,
-    grade: style.kind === 'timber' ? 0.16 : 0.19,
+    grade: style.stairGrade ?? (style.kind === 'timber' ? 0.16 : 0.19),
   });
   return { ax, az, bx, bz, length, ux, uz, ground, style, layout, waterY };
 }
@@ -123,7 +123,17 @@ function buildOne(
   const zh = new THREE.Vector3(-uz, 0, ux);
   const frame = new THREE.Matrix4().makeBasis(xh, yh, zh).setPosition(ax, 0, az);
   const b = new MeshBuilder();
-  const input = { layout, style, width: br.width * S, ground, waterY, length, detail } as const;
+  // The masonry's foot is the lowest ground across the body (a bank can fall away sideways, as at
+  // Tiber Island's landing, and the side face would hang over the slope).
+  const wide = (br.width * S) / 2 + 0.4;
+  const foot = (u: number): number => {
+    const g = ground(u);
+    if (!hm.heightAt) return g;
+    const x = ax + ux * u, z = az + uz * u;
+    if (x < hm.minX || x > hm.maxX || z < hm.minZ || z > hm.maxZ) return g;
+    return Math.min(g, hm.heightAt(x - uz * wide, z + ux * wide), hm.heightAt(x + uz * wide, z - ux * wide));
+  };
+  const input = { layout, style, width: br.width * S, ground, foot, waterY, length, detail } as const;
   const localSpots = style.kind === 'timber' ? buildTimberBridge(b, frame, input) : buildStoneBridge(b, frame, input);
   const object = b.build(`bridge:${br.id}`);
   object.updateMatrixWorld(true);
