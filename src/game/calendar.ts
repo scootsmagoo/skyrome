@@ -30,6 +30,7 @@ export interface DateAnchor {
 /** §10.3 date anchors (main-quest set pieces only). */
 export const ANCHORS: DateAnchor[] = [
   { quest: 'mq-04-columna', month: 4, day: 12, label: 'the dedication of the Column' },
+  { quest: 'mq-05-tabula', month: 4, day: 13, label: 'Pudens’s offer' },
   { quest: 'mq-10-penus-vestae', month: 5, day: 9, label: 'the Vestalia' },
   { quest: 'mq-11-cucurbitae', month: 6, day: 6, label: 'the Ludi Apollinares' },
   { quest: 'mq-12-volcanalia', month: 7, day: 23, label: 'the Volcanalia' },

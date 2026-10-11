@@ -117,7 +117,7 @@ export const CONTENT_LANDMARK_IDS = [
   'temple-castor-pollux', 'temple-vesta', 'atrium-vestae', 'regia', 'carcer-tullianum', 'horrea-agrippiana', 'horrea-piperataria',
   'arch-titus', 'colossus-sol', 'velia-vestibule', 'porticus-margaritaria', 'meta-sudans', 'colosseum', 'ludus-magnus', 'baths-titus',
   'forum-trajan', 'column-trajan', 'basilica-ulpia', 'equus-traiani', 'domus-augustana', 'castra-peregrina', 'castra-praetoria',
-  'statio-vigiles-v', 'temple-aesculapius',
+  'statio-vigiles-v', 'temple-aesculapius', 'arch-dolabella',
 ] as const;
 
 /** Landmarks whose trigger radius the content widens (the Golden Milestone stands for the Forum). */
@@ -348,6 +348,13 @@ export const CONTENT_SPOTS: LocationDef[] = [
   // mq-04: the Column's bronze door, in front of the facade at 2.55 m and 1.04 m to its left (COLUMN_LOCAL.door in
   // world/landmarks/columnFrame.ts; the builder's `column-door` spot replaces it).
   { id: 'column-door', name: 'The Column’s door', position: atLandmark('column-trajan', 2.55, -1.04), radius: 3, discoverable: false, parent: 'column-trajan' },
+  // mq-05: the Castra Peregrina's front gate and the principia's rooms (builders/colos-caelian.ts; the builder's spots
+  // replace these). Camp frame: the front gate 37.5 m before the centre, the principia 21 m behind it.
+  { id: 'peregrina-gate-front', name: 'Gate of the Castra Peregrina', position: atLandmark('castra-peregrina', 37.5, 0), radius: 5, discoverable: false, parent: 'castra-peregrina' },
+  { id: 'peregrina-principia-gate', name: 'Gate of the principia', position: atLandmark('castra-peregrina', -10, 0), radius: 4, discoverable: false, parent: 'castra-peregrina' },
+  { id: 'peregrina-commander', name: 'Pudens’s office', position: atLandmark('castra-peregrina', -21, 10.5), radius: 4, discoverable: false, parent: 'castra-peregrina' },
+  { id: 'peregrina-valetudinarium', name: 'The camp’s infirmary', position: atLandmark('castra-peregrina', -16, -10.5), radius: 3, discoverable: false, parent: 'castra-peregrina' },
+  { id: 'peregrina-carcer', name: 'The camp’s cell', position: atLandmark('castra-peregrina', -16, 10.5), radius: 3, discoverable: false, parent: 'castra-peregrina' },
 ];
 
 /** Every location the content installs. */
@@ -418,6 +425,12 @@ export const WORLD_SPOTS: Record<string, { radius: number; name: string; also?: 
   'insula-nutans-tectum': { radius: 2.5, name: 'Top floor of the leaning insula' },
   'insula-nutans-cenaculum': { radius: 2.5, name: 'Iulia Prima’s flat' },
   'insula-tuccii': { radius: 8, name: 'Insula of Tuccius the Cooper' },
+  // The Castra Peregrina (builders/colos-caelian.ts, mq-05): the front gate, the principia's gate and three of its rooms.
+  'peregrina-gate-front': { radius: 5, name: 'Gate of the Castra Peregrina' },
+  'peregrina-principia-gate': { radius: 4, name: 'Gate of the principia' },
+  'peregrina-commander': { radius: 4, name: 'Pudens’s office' },
+  'peregrina-valetudinarium': { radius: 3, name: 'The camp’s infirmary' },
+  'peregrina-carcer': { radius: 3, name: 'The camp’s cell' },
   armory: { radius: 5, name: 'Ludus Armory', also: ['ludus-armamentarium'] },
   medicus: { radius: 5, name: 'Ludus Infirmary', also: ['ludus-saniarium'] },
 };

@@ -28,6 +28,7 @@ import { statusLine } from './character';
 import type { GameFlow } from './GameFlow';
 import { withGuide } from './guide';
 import { AtlasMapSource } from './mapSource';
+import { boardView } from './board/board';
 import { DIFFICULTY_CHOICES, PRESETS } from './settings';
 import { missingY, standingY, walkableNear } from '../nav/heights';
 
@@ -182,6 +183,8 @@ export function wireUi(game: Game, ui: UIManager, rpg: RpgServices, flow: GameFl
       if (!r.ok) return r.reason === 'trespassing' ? 'You cannot wait while trespassing.' : 'You cannot wait with enemies nearby.';
     },
     quitToTitle: () => flow.quitToTitle(),
+    // The conspiracy board (mq-05): what the player carries and the saved flags.
+    board: () => boardView({ hasItem: (id) => inventory.count(id) > 0, flag: (name) => game.quests.flags.get(name) }),
     // The combat crew's views, when installed (code defensively: built in parallel).
     target: () => (game as Game & { combat?: { targetView?: () => ReturnType<NonNullable<UIManager['sources']['target']>> } }).combat?.targetView?.() ?? null,
     boss: () => (game as Game & { combat?: { bossView?: () => ReturnType<NonNullable<UIManager['sources']['boss']>> } }).combat?.bossView?.() ?? null,

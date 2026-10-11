@@ -128,12 +128,14 @@ This is the story as the player meets it. `docs/GDD.md` §10 is the design of th
    - Pudens summons the player: "Come to the Castra Peregrina tomorrow, on the Caelian. Show the guard Gratus's token." He gives the player a ring that opens doors.
    - **Rewards:** 80 denarii and skill XP in blades and athletics (the quest), and the couriers' ring and the Dacian arrow (given in conversation by Pudens and Crito).
 8. **Done.**
-   - Banner: "Act I continues" / **The Board**: "Pudens's offer, 13 May, comes in a future update."
+   - Banner: "Act I continues" / **The Board**: "Pudens waits at the Castra Peregrina, on the Caelian, on 13 May." Chapter 5 begins at once.
    - The calendar runs on to 13 May at the next midnight.
    - Folk in the city carry a rumour about the omen at the Column.
 
-## Chapter 5: The Board (`mq-05-tabula`) *(written, not built yet)*
+## Chapter 5: The Board (`mq-05-tabula`)
 *The Caelian, 13 May AD 113, the day after the Column.*
+
+*How to reach it:* play on from Chapter 4, or start from `?part=camp` (the morning after, by the Colosseum) or `?part=board` (inside the camp, at Pudens's door).
 
 **What this chapter does.** It answers the player's big question after the Column: *what was all that, and what happens now?* Pudens explains it in plain words. The arrow was a rehearsal: the real blow is meant for Caesar when he leaves for the East in the autumn. The couriers' camp leaks, so Pudens can't use his own men. He hires the player as his outsider and shows them the board: four groups of plotters, three faces in each, and the clues the player already carries pinned under them. Act I ends there.
 
@@ -146,24 +148,24 @@ This is the story as the player meets it. `docs/GDD.md` §10 is the design of th
 | "A man with Syrian rings who smelled of pepper" | Mus (Ch. 2) and Bitus (Ch. 4) | **The Eastern Gold** |
 | The bone token scratched MVCAPOR | Bitus (Ch. 4) | **The Dacian Blades** |
 
-1. **The summons.** The calendar has run on to 13 May.
+1. **The summons.** The chapter starts as soon as Chapter 4 ends, on 12 May. The calendar steps on to 13 May at the next midnight.
    - **Objective:** **Go to the Castra Peregrina on the Caelian.** The marker leads past the Colosseum, up the slope of the Caelian, and under the Arch of Dolabella, where Nero's aqueduct crosses the street. The camp's gate is just beyond.
-   - The journal: "Pudens had named the place out loud, in a forum full of people. Anyone could have heard him."
-   - Pudens sees visitors from first light until dark. At night the gate guard says, "The chief sees nobody after dark. Come at first light," and the journal says to wait.
+   - The journal: "He had named the place out loud, in a forum full of people. Anyone could have heard him."
+   - Pudens said *tomorrow*, and the camp sees visitors from first light on 13 May until dark. Come too early (still 12 May) and the gate guard says, "The chief's still in the Forum, cleaning up after the Column. Come back tomorrow, at first light." At night he says, "The chief sees nobody after dark. Come at first light." A hint says to wait (T).
 2. **The follower.** This fight is set up before it starts.
-   - On the slope below the arch, a water-carrier stops the player: "Friend, the man in the dark cloak has been walking where you walk since the Colosseum. Mind yourself under the arch."
-   - **Objective:** **You are being followed.** The marker rides on the man in the dark cloak, a sicarius. The player can turn and face him, or walk on.
-   - Either way he strikes under the Arch of Dolabella. His blade is poisoned: a cut keeps hurting for a few seconds. He fights to the death.
-   - **Objective:** **Search the sicarius.** He carries a few coins and a small **wax tablet**. Written on it: "THE NEW ONE. CAELIAN. BEFORE THE CAMP." The wax is red, and there's a horseman with a spear stamped on the frame: the couriers' own tablets.
+   - As the player nears the camp (by the Arch of Dolabella, or from any other side), a water-carrier stops them: "Friend, the man in the dark cloak has been walking where you walk since the Colosseum. Mind yourself under the arch."
+   - **Objective:** **You are being followed.** The marker rides on the man in the dark cloak, a sicarius, a dozen paces behind.
+   - He closes in and attacks. His blade is poisoned: a cut keeps hurting for a few seconds. He fights to the death.
+   - **Objective:** **Search the man in the dark cloak.** He carries a few coins, his knife and a small **wax tablet**. Written on it: "THE NEW ONE. CAELIAN. BEFORE THE CAMP." The wax is red, and there's a horseman with a spear stamped on the frame: the couriers' own tablets.
 3. **The gate.**
-   - **Objective:** **Get into the camp.** A soldier on the gate stops the player. Showing Gratus's token or Pudens's ring opens the gate. A player who has lost both can still talk their way in, but it's harder without the token.
-   - A courier, **Mardonius**, is on the gate. He walks the player across the yard, friendly and talkative, and asks what the archer said on the Column. The player can tell him or not. (He is one of the plotters, in the Eastern Gold. Nothing in this chapter says so. In Act II, a player who told him finds the plotters knew it.)
-4. **Gratus** *(optional).* He's in the camp's infirmary, already up, with his arm strapped to his chest.
+   - **Objective:** **Get into the camp: show the guard Gratus's token.** A soldier on the gate stops the player. Showing Gratus's token or Pudens's ring opens the gate. A player who has lost both can still talk their way in, but it's harder without the token. (A player who just walks past him into the principia is in too.)
+   - The guard calls a courier, **Mardonius**, who is lounging by the gate. He is friendly and talkative, and asks what the archer said on the Column. The player can tell him or not. Then he points the way: Pudens's office, across the court, the door on the right. (He is one of the plotters, in the Eastern Gold. Nothing in this chapter says so. In Act II, a player who told him finds the plotters knew it.)
+4. **Gratus** *(optional).* He's in the camp's infirmary, off the principia's court, already up, with his arm strapped to his chest.
    - **Objective (optional):** **Visit Gratus in the infirmary.**
    - Gratus: "Crito said lie still. Crito isn't the one they shot."
    - On what Pudens wants: "He'll offer you work, and he'll make it sound like a favour. It isn't one. Take it anyway: you're in this already, and it's safer to be in it with him."
    - On the camp: "Festus's road was sold from inside these walls. I still don't know by whom. Don't tell anyone here more than you tell me."
-5. **Pudens.** He's in the commander's office off the camp's courtyard, with a bowl of figs on the table.
+5. **Pudens.** He's in the commander's office off the principia's court, with a bowl of figs on the table.
    - **Objective:** **Speak to Pudens.**
    - **The tablet** (if the player shows him the sicarius's tablet): Pudens turns it over and goes quiet. "That's my wax. Somebody in this camp sent that knife after you, and wrote it on my own tablets." That's why he needs the player: "My men talk to each other. You talk to nobody. Nobody knows your face, and the ones who do, you just killed." If the player didn't search the sicarius, Pudens says the same thing about Festus instead: "Festus's road was known only in this camp, and someone sold it."
    - **What the arrow was:** "Your Dacian told you himself. The centurion was for now; Caesar is for later. 'Later' means October, when Caesar rides out for the East and all of Rome lines the road to watch him go. That's when they'll try."
@@ -173,18 +175,20 @@ This is the story as the player meets it. `docs/GDD.md` §10 is the design of th
      - "Why not tell Caesar?" → "And tell him what? That I can't keep my own camp clean? Bring me names, then we tell him."
      - "What's in it for me?" → money now, and "a friend in the one office in Rome that hears everything".
      - "Not yet" → "Take your time. Rome isn't going anywhere, and neither are they." The quest waits. Speaking to him again picks it up.
-   - **Objective:** **Accept Pudens's offer.**
+   - **Objective:** **Accept Pudens's offer** (it appears once he has made it).
 6. **The board.** Pudens unlocks a chest and spreads its wax tablets across the table: the board. Nobody else in the camp has seen it.
-   - **Objective:** **Look at the board.** The board screen opens. It has four columns, one for each group of plotters, and each has three faces, all hidden:
+   - **Objective:** **Look at the board** (on his table: press E). The journal opens at its new **Board** page. It lists the four groups of plotters, and each has three faces, all hidden. Under each are the clues pinned to it and Pudens's word on where to start:
      - **The Purse:** the money men. Pinned under it, the scraped tablet. Pudens: "Half a name isn't a name. But '…NARIVS AVIT…' buys grain for the army, and a man who sells grain for a war wants the war."
      - **The Eastern Gold:** where the Parthian silver comes in. Pinned under it, the drachm and "Syrian rings, smelled of pepper". Pudens: "The Pepper Warehouses, on the Sacred Way. Gratus was asking questions there. That's why they shot him."
      - **The Dacian Blades:** the knives. Pinned under it, the MVCAPOR token. Pudens: "Mucapor. A fighter's name. Ask at the Dacian school, by the Colosseum."
-       - If the player spared Bitus, Pudens adds: "Your archer is in my cells, and he's talking. Go and see him, if you want." *(optional)* Bitus tells the player where Mucapor trains and that he "laughs with his whole face, and fights with a sickle as long as your arm".
+       - If the player spared Bitus, the board says he is in the cells, and Pudens says so when asked: "Your archer is in my cell, across the court. He's talking. Go and see him, if you want." *(optional objective)* Bitus tells the player where Mucapor trains and that he "laughs with his whole face, and fights with a sickle as long as your arm".
      - **The Toga:** empty. Pudens: "Someone knew where Caesar would stand and where the praetorians would be. Someone high. I've nothing on him yet."
+   - Below the four groups: **In the camp**: the leak, and the knife-man's tablet.
    - Pudens sums it up: "Four groups, three men in each. Unmask enough of them to break three groups, and we'll know enough to stop October. Start wherever you like."
 7. **Done.**
    - **Rewards:** 100 denarii (Pudens's advance) and skill XP in rhetoric.
-   - The board stays in the journal. Opening it shows what the player knows, any time.
+   - The board stays in the journal (J, then the Board page). Opening it shows what the player knows, any time.
+   - A spared Bitus stays in the cell.
    - Banner: "End of Act I" / **The Board**: "Act II comes in a future update."
    - The calendar runs on freely from here. Nothing waits for a date until Act II.
 

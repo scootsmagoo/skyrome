@@ -34,11 +34,14 @@ describe('festivals read the calendar (mq-04 §3.10)', () => {
     expect(cal.stepToAnchor()).toBe(true);
     expect(cal.date()).toEqual({ year: 113, month: 4, day: 12 });
     const game = gameWith(cal);
-    expect(cal.clamp).toBeNull();
+    // 12 May is also the eve of Pudens's offer (mq-05, 13 May): the date holds there…
+    expect(cal.clamp).toBe('mq-05-tabula');
     expect(todaysFestivals(game)).toEqual(['fest-columna']);
     expect(templesShut(game)).toBe(false);
-    // The next elapsed day the calendar moves on to 13 May (the Lemuria), with no eve.
     cal.sync(1);
+    expect(cal.date()).toEqual({ year: 113, month: 4, day: 12 });
+    // …until mq-05 steps onto 13 May (the Lemuria) at the first midnight.
+    expect(cal.stepToAnchor()).toBe(true);
     expect(cal.date()).toEqual({ year: 113, month: 4, day: 13 });
     expect(todaysFestivals(game)).toEqual(['fest-lemuria']);
     expect(templesShut(game)).toBe(true);

@@ -17,10 +17,11 @@ const npcs: NpcDef[] = [
     // The frumentarii are not a joinable faction (yet): like Gratus, Pudens has none.
     home: 'castra-peregrina',
     // CONTENT §2.A: work through the morning, sit at noon, back to work, asleep from the second watch.
+    // His office is the principia's commander's room (mq-05 talks to him there).
     schedule: [
-      { from: at('h1'), at: 'castra-peregrina', activity: 'work' },
-      { from: at('h7'), at: 'castra-peregrina', activity: 'sit' },
-      { from: at('h9'), at: 'castra-peregrina', activity: 'work' },
+      { from: at('h1'), at: 'peregrina-commander', activity: 'work' },
+      { from: at('h7'), at: 'peregrina-commander', activity: 'sit' },
+      { from: at('h9'), at: 'peregrina-commander', activity: 'work' },
       { from: at('v2'), at: 'castra-peregrina', activity: 'sleep' },
     ],
     dialogue: 'npc-pudens',

@@ -5,13 +5,14 @@
  * who kneels by Gratus on the stair and in the court. Quests react to node ids, not to texts:
  *
  *   npc-bitus    bitusEnd (the archer is taken down)
- *   npc-pudens   summonsEnd (the summons to the Castra Peregrina; the quest completes)
+ *   npc-pudens   summonsEnd (the summons to the Castra Peregrina; the quest completes); mq-05's nodes are in tabula.ts
  *   npc-crito    c0 (climb), c1 (aftermath: gives quest-sagitta-dacica once)
  *
  * Gratus's morning and wounded lines are in main-quest.ts (postEnd, w0).
  */
 import { female, hourNow, stage } from '../../content/talk';
 import { defineDialogue, type DialogueContext } from '../types';
+import { PUDENS_TABULA, pudensTabulaStart } from './tabula';
 
 const MQ4 = 'mq-04-columna';
 
@@ -92,7 +93,9 @@ const pudens = defineDialogue({
   priority: 90,
   start: (c) => {
     const s = stage(c, MQ4);
-    return s === 'aftermath' || s === 'aftermath-killed' ? 'p0' : 'pout';
+    if (s === 'aftermath' || s === 'aftermath-killed') return 'p0';
+    // mq-05 (the Castra Peregrina, docs/STORY.md chapter 5): the offer and the board.
+    return pudensTabulaStart(c) ?? 'pout';
   },
   nodes: {
     p0: {
@@ -142,7 +145,8 @@ const pudens = defineDialogue({
       next: 'summonsEnd',
     },
     summonsEnd: { speaker: 'player', text: '(Pudens turns back to the litter where Gratus lies.)', end: true },
-    // Outside mq-04 (Pudens is only staged during the aftermath).
+    ...PUDENS_TABULA,
+    // Outside mq-04 and mq-05.
     pout: { text: (c) => `Tomorrow, ${term(c)}. The Castra Peregrina.`, end: true },
   },
 });

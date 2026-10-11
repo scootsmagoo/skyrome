@@ -1,21 +1,23 @@
 /**
  * Journal tab: a parchment book. Left page lists quests (Active / Completed) or Notes; right page
  * shows the selected quest's journal entries and objectives. T toggles compass tracking,
- * M shows the quest on the map, ←→ switch Active / Completed / Notes.
+ * M shows the quest on the map, ←→ switch Active / Completed / Notes (and the Board, once Pudens
+ * has shown it: the four cells of plotters on the left, a cell's members, clues and lead on the right).
  */
 import type { QuestCategory } from '../../quests/types';
 import type { UIManager } from '../UIManager';
 import { h, keycap, richText, setChildren } from '../dom';
 import { paragraphs } from '../format';
 import { NavList } from '../nav';
-import type { NoteView, QuestLogView, QuestView } from '../types';
+import type { BoardPageView, NoteView, QuestLogView, QuestView } from '../types';
 import { emptyState, type Hint, type MenuTab } from './MenuShell';
 
-type Page = 'active' | 'completed' | 'notes';
+type Page = 'active' | 'completed' | 'notes' | 'board';
 const PAGES: { id: Page; label: string }[] = [
   { id: 'active', label: 'Active' },
   { id: 'completed', label: 'Completed' },
   { id: 'notes', label: 'Notes' },
+  { id: 'board', label: 'Board' },
 ];
 
 const CATEGORY: Record<QuestCategory, string> = {
@@ -36,6 +38,7 @@ export class JournalTab implements MenuTab {
   private page: Page = 'active';
   private quests: QuestView[] = [];
   private notes: NoteView[] = [];
+  private board: BoardPageView | null = null;
   private list = new NavList({ onSelect: () => this.renderRight(), onActivate: () => this.activate() });
   private pageTabs = h('div', { class: 'jr-pages' });
   private listEl = h('div', { class: 'jr-list sr-scroll' });
@@ -79,14 +82,25 @@ export class JournalTab implements MenuTab {
 
   onKey(e: KeyboardEvent): boolean {
     if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
-      const i = PAGES.findIndex((p) => p.id === this.page);
-      const next = PAGES[(i + (e.code === 'ArrowLeft' ? -1 : 1) + PAGES.length) % PAGES.length].id;
+      const pages = this.pages();
+      const i = pages.findIndex((p) => p.id === this.page);
+      const next = pages[(i + (e.code === 'ArrowLeft' ? -1 : 1) + pages.length) % pages.length].id;
       this.setPage(next);
       return true;
     }
     if (e.code === 'KeyT' && !e.repeat) return this.toggleTrack(), true;
     if (e.code === 'KeyM' && !e.repeat && this.currentQuest()?.state === 'active') return this.showOnMap(), true;
     return this.list.handleKey(e);
+  }
+
+  /** Open the Board page (Pudens shows the board, mq-05). */
+  showBoard() {
+    this.setPage('board');
+  }
+
+  /** The pages there are: the Board only once it is open. */
+  private pages() {
+    return PAGES.filter((p) => p.id !== 'board' || !!this.board);
   }
 
   private setPage(p: Page) {
@@ -97,7 +111,7 @@ export class JournalTab implements MenuTab {
   }
 
   private currentQuest(): QuestView | undefined {
-    if (this.page === 'notes') return undefined;
+    if (this.page === 'notes' || this.page === 'board') return undefined;
     const id = this.list.selected?.dataset.id;
     return this.quests.find((q) => q.id === id);
   }
@@ -109,13 +123,28 @@ export class JournalTab implements MenuTab {
       return;
     }
     if (!this.el.contains(this.book)) this.el.replaceChildren(this.book);
+    this.board = this.ui.sources.board?.() ?? null;
+    if (this.page === 'board' && !this.board) this.page = 'active';
     setChildren(
       this.pageTabs,
-      PAGES.map((p) => h('span', { class: `jr-pagetab${p.id === this.page ? ' is-active' : ''}`, on: { click: () => this.setPage(p.id) } }, p.label)),
+      this.pages().map((p) => h('span', { class: `jr-pagetab${p.id === this.page ? ' is-active' : ''}`, on: { click: () => this.setPage(p.id) } }, p.label)),
     );
     const rows: HTMLElement[] = [];
     const children: HTMLElement[] = [];
-    if (this.page === 'notes') {
+    if (this.page === 'board') {
+      for (const c of this.board?.cells ?? []) {
+        const row = h(
+          'div',
+          { class: `sr-row jr-row${c.broken ? ' failed' : ''}`, dataset: { id: c.id } },
+          h('i', { class: 'mark' }),
+          h('span', { class: 'title' }, c.title),
+          h('span', { class: 'meta' }, `${c.members.filter((m) => m.unmasked).length}/3`),
+        );
+        rows.push(row);
+        children.push(row);
+      }
+      if (this.board) children.push(h('div', { class: 'jr-board-count' }, `Groups broken: ${this.board.broken} of the ${this.board.needed} needed`));
+    } else if (this.page === 'notes') {
       this.notes = log.notes();
       for (const n of this.notes) {
         const row = h('div', { class: 'sr-row jr-row note', dataset: { id: n.id } }, h('span', { class: 'title' }, n.title), n.meta ? h('span', { class: 'meta' }, n.meta) : null);
@@ -153,6 +182,7 @@ export class JournalTab implements MenuTab {
   private renderRight() {
     const id = this.list.selected?.dataset.id ?? null;
     this.selectedKey = id;
+    if (this.page === 'board') return this.renderCell(id);
     if (this.page === 'notes') {
       const n = this.notes.find((x) => x.id === id);
       if (!n) return setChildren(this.rightEl, h('div', { class: 'jr-blank' }, 'Letters and books you read are kept here.'));
@@ -200,7 +230,34 @@ export class JournalTab implements MenuTab {
     (this.ui.top as { renderFooter?: () => void } | undefined)?.renderFooter?.();
   }
 
+  /** A cell of the board: who they are, the three faces, the clues pinned under them, Pudens's lead. */
+  private renderCell(id: string | null) {
+    const c = this.board?.cells.find((x) => x.id === id);
+    if (!c) return setChildren(this.rightEl, h('div', { class: 'jr-blank' }, 'Select a group of plotters.'));
+    const faces = c.members.map((m) =>
+      h('li', { class: `jr-face${m.unmasked ? ' unmasked' : ''}` }, h('span', { class: 'jr-face-mask' }, m.unmasked ? m.name.charAt(0) : '?'), h('span', { class: 'jr-face-name' }, m.name, m.role ? h('span', { class: 'jr-face-role' }, `, ${m.role}`) : null)),
+    );
+    const clues = c.clues.map((x) => h('li', { class: 'jr-clue' }, h('b', null, x.title), ': ', x.text));
+    const notes = (this.board?.notes ?? []).map((x) => h('li', { class: 'jr-clue' }, h('b', null, x.title), ': ', x.text));
+    setChildren(
+      this.rightEl,
+      h('div', { class: 'jr-title' }, c.title),
+      h('div', { class: 'jr-latin' }, c.latin),
+      h('div', { class: 'jr-meta' }, c.blurb),
+      h('div', { class: 'jr-ornament' }),
+      h('ul', { class: 'jr-faces' }, faces),
+      h('div', { class: 'jr-objhead' }, 'What we have'),
+      clues.length ? h('ul', { class: 'jr-clues' }, clues) : h('div', { class: 'jr-blank' }, 'Nothing yet.'),
+      h('div', { class: 'jr-objhead' }, 'Where to start'),
+      h('p', { class: 'jr-entry current jr-lead' }, `Pudens: “${c.lead}”`),
+      notes.length ? h('div', { class: 'jr-objhead' }, 'In the camp') : null,
+      notes.length ? h('ul', { class: 'jr-clues' }, notes) : null,
+    );
+    (this.ui.top as { renderFooter?: () => void } | undefined)?.renderFooter?.();
+  }
+
   private activate() {
+    if (this.page === 'board') return;
     if (this.page === 'notes') {
       const n = this.notes.find((x) => x.id === this.list.selected?.dataset.id);
       if (n) this.ui.openBook(n.open());

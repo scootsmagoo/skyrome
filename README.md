@@ -18,7 +18,7 @@ The story opens before dawn on 11 May 113 at the Porta Capena. Trajan's Column i
 > - A minimap and a quest route along the streets.
 >
 > **Still rough:**
-> - The story stops after the Column. Chapter 5, *The Board*, is designed but not built.
+> - The story stops at the end of Act I: Pudens shows you the conspiracy board, and Act II is designed but not built.
 > - Nobody speaks aloud. Dialogue is text, and voices are wordless grunts and cries.
 > - The Column is the only building you can go inside.
 > - NPCs still rub against benches, stalls and statue bases.
@@ -184,7 +184,9 @@ A bot plays all four chapters end to end (`node scripts/golden-path.mjs`; its la
 | 9. The dedication: Gratus' briefing in the Column court, then the ceremony | [`?part=dedication`](https://scootsmagoo.github.io/skyrome/?part=dedication) | Is the plan clear (roofs, gallery, the door)? Does the ceremony read as a scene, and is it clear where to stand? |
 | 10. The Column's door is open: the stair and its two knife-men | [`?part=column`](https://scootsmagoo.github.io/skyrome/?part=column) | Does the stair feel like a climb? Is the next landing always on screen? Do the men on the landings fight fair? |
 | 11. The top of the stair: the archer on the platform | [`?part=summit`](https://scootsmagoo.github.io/skyrome/?part=summit) | Is the platform readable from the hatch? Does Bitus's yield panel make the choice (spare or kill) clear? |
-| 12. After the archer: Gratus in the court, Pudens's summons | [`?part=aftermath`](https://scootsmagoo.github.io/skyrome/?part=aftermath) | Is it clear who to go to next? Does Pudens's omen land, and do Bitus's fate and Gratus's wound read in the scene? Is the "Act I continues" banner a fair place to stop? |
+| 12. After the archer: Gratus in the court, Pudens's summons | [`?part=aftermath`](https://scootsmagoo.github.io/skyrome/?part=aftermath) | Is it clear who to go to next? Does Pudens's omen land, and do Bitus's fate and Gratus's wound read in the scene? |
+| 13. The morning after: up the Caelian to the Castra Peregrina, and the man following you | [`?part=camp`](https://scootsmagoo.github.io/skyrome/?part=camp) | Does the water-carrier's warning set up the fight? Is the tablet on the body clearly a clue? Is the gate clear? |
+| 14. Inside the camp: Pudens's offer and the board | [`?part=board`](https://scootsmagoo.github.io/skyrome/?part=board) | Does Pudens explain it all plainly (the arrow, October, the leak, why you)? Is the board easy to read (J, then the Board page)? Is "End of Act I" a fair place to stop? |
 | Side quest: The Oath at the Ludus, then the three bouts | [`?part=oath`](https://scootsmagoo.github.io/skyrome/?part=oath) · [`?fight=nereus`](https://scootsmagoo.github.io/skyrome/?fight=nereus) | Is signing on clear? Too easy or too hard? Is the net readable? |
 | Side quest: the brawl at the fountain (fists only) | [`?part=brawl`](https://scootsmagoo.github.io/skyrome/?part=brawl) | Picking a side, then the fistfight. Does drawing a blade (R) warn you? |
 
@@ -458,14 +460,15 @@ scripts/       screenshot driver, story bot, performance budget, leak and soak h
 
 ## Where things stand
 
-Updated 10 October 2026, one week after the first commit. The four main quests of Act I play from start to finish, and the city around them is lived in.
+Updated 11 October 2026. Act I's five chapters play from start to finish, ending with the conspiracy board, and the city around them is lived in.
 
 | Area | Status |
 |---|---|
 | Engine: loop, input (Mac trackpad, keyboard extensions like Vimium), physics, first/third-person camera | ✅ Done |
 | Historical atlas, game design document, content bible (NPCs, quests, items) | ✅ Done (the content bible is a first draft) |
-| The story: Act I's four chapters, from the Porta Capena to the top of Trajan's Column | ✅ Playable end to end (the bot finishes all four) · 🧪 needs human playtesting |
-| Chapter 5, *The Board* (13 May), and Acts II and III | 🚧 Designed, not built |
+| The story: Act I's five chapters, from the Porta Capena to the top of Trajan's Column and Pudens's board | ✅ Playable end to end (the bot finishes all five) · 🧪 needs human playtesting |
+| Chapter 5, *The Board* (13 May): the follower on the Caelian, the Castra Peregrina, Pudens's offer and the conspiracy board (a Board page in the journal) | 🧪 New, playable, needs human playtesting |
+| Acts II and III | 🚧 Designed, not built |
 | Side quests (11) and jobs (4) | 🧪 New, playable, pacing and balance under review |
 | City life: about two dozen shops and 4 market-day stalls with hours, baths, barber, laundry, fountains, a pallet and chest, the salutatio, 4 notice boards, the crier, rumours, dice, bets on the games, the mortar bench | 🧪 New, playable, needs play |
 | Navigation: compass and quest marker (fixed), minimap, quest route on the maps, optional trail on the ground | ✅ Done |
@@ -501,7 +504,7 @@ The full plan is in the [Game Design Document](docs/GDD.md) (§17–§18). The v
 |---|---|---|---|
 | v0.0 | *Prima Lux-alpha* | The Forum, the Velia and the Colosseum valley. Street fights and the Ludus Magnus arena with the first boss (Nereus the retiarius). First and third person. Quicksave | ✅ Done |
 | v0.1 | *Prima Lux* | The whole Rome core (Capitoline, Palatine, the Imperial Fora with Trajan's Forum, Circus Maximus, Forum Boarium, Tiber Island). Character creation, crowds with daily schedules, 4 quests, vendors, inventory, journal, map, saves, day and night. The "golden path" | ✅ Largely in: the four quests, the core, vendors and the rest are playable. **← now: playtesting and polish** |
-| v0.2 | *Columna* | Act I of the main quest complete. The Cloaca Maxima and the Carcer. Crime and bounty, stealth, lockpicking, pickpocketing, all 10 origins | 🚧 Partly: the Column chapter, crime and bounty are in. Four of the ten origins are playable (the other six are shown locked). Chapter 5 and the rest of Act I come next |
+| v0.2 | *Columna* | Act I of the main quest complete. The Cloaca Maxima and the Carcer. Crime and bounty, stealth, lockpicking, pickpocketing, all 10 origins | 🚧 Partly: Act I's story is in, through Chapter 5 and the board, with crime and bounty. Four of the ten origins are playable (the other six are shown locked). The Cloaca, the Carcer, stealth, locks and pickpocketing come next |
 | v0.3 | *Vigiliae* | The Subura and the Caelian. The Vigiles (fire brigade) and Urban Cohorts questlines. Fires and rooftops | The Subura's streets, shops and dice are in; the questlines are not |
 | v0.4 | *Harena* | The Colosseum interior and hypogeum, the full gladiator career, chariot racing in the Circus | Games and betting at the Colosseum are in, seen from outside; the interior is not |
 | v0.5 | *Urbs* | The whole city as one streamed world: Campus Martius, the Baths of Trajan over Nero's buried Golden House, the Aventine, Trastevere | The whole city already streams as one world; filling it in continues |
@@ -510,9 +513,10 @@ The full plan is in the [Game Design Document](docs/GDD.md) (§17–§18). The v
 | Later | | Ostia and Trajan's new harbor at Portus, the Via Appia and the Alban Hills, Tibur, then the provinces | |
 
 What comes next, in order:
-1. **A playtest** of the city life and the side quests.
-2. **Phase 3**, a second performance pass: shrinking memory, a cheaper city draw, and the soak bot learning to survive dying.
-3. **Chapter 5, *The Board*.**
+1. **A playtest** of the city life, the side quests and Chapter 5.
+2. **Act II**: the four groups of plotters on the board (`mq-06` to `mq-09`), each with two ways in.
+
+Done since this list was written: phase 3 (the second performance pass), phase 4 (solid ground) and Chapter 5, *The Board*.
 
 ## Documentation
 

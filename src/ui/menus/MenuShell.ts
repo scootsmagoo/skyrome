@@ -146,6 +146,12 @@ export class MenuShell extends BaseModal {
     map.focusQuest(questId);
   }
 
+  /** Switch to the journal's Board page (Pudens shows the board, mq-05). */
+  showBoard() {
+    this.show('journal');
+    (this.getTab('journal') as JournalTab).showBoard();
+  }
+
   /** Re-pull data for the visible tab (sources changed). */
   refresh() {
     if (this.ui) this.show(this.current, true);

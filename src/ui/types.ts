@@ -502,4 +502,23 @@ export interface UISources {
   wait?: (hours: number) => void | string | false;
   /** Pause menu → Quit to Title. */
   quitToTitle?: () => void;
+  /** The conspiracy board (the journal's Board page); null until Pudens has shown it. */
+  board?: () => BoardPageView | null;
+}
+
+/** The conspiracy board (src/game/board): four cells of three hidden members, with pinned clues. */
+export interface BoardPageView {
+  cells: {
+    id: string;
+    title: string;
+    latin: string;
+    blurb: string;
+    members: { id: string; unmasked: boolean; name: string; role: string | null }[];
+    clues: { id: string; title: string; text: string }[];
+    lead: string;
+    broken: boolean;
+  }[];
+  notes: { id: string; title: string; text: string }[];
+  broken: number;
+  needed: number;
 }

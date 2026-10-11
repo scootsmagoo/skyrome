@@ -360,6 +360,9 @@ function buildPeregrina(ctx: LandmarkContext): LandmarkBuild {
       { id: 'principia', spotId: 'peregrina-principia', side: 'back', at: 0, width: 6, kind: 'shrine', spotKind: 'shrine' },
       { id: 'tablets', spotId: 'peregrina-tablets', side: 'left', at: 0, width: 5, kind: 'office', spotKind: 'container' },
       { id: 'commander', spotId: 'peregrina-commander', side: 'right', at: 0, width: 5, kind: 'office' },
+      // mq-05 (docs/STORY.md chapter 5): the infirmary where Gratus mends, and the cell that holds a spared archer.
+      { id: 'valetudinarium', spotId: 'peregrina-valetudinarium', side: 'back', at: 6, width: 5, kind: 'medicus' },
+      { id: 'carcer', spotId: 'peregrina-carcer', side: 'right', at: 5.2, width: 3.4, kind: 'cell', spotKind: 'npc' },
     ],
     floor: 'paving_travertine',
     detail: ctx.detail,

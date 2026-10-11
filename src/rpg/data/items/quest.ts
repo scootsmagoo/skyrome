@@ -34,4 +34,6 @@ export const QUEST_ITEMS: ItemDef[] = [
   // mq-04 (docs/design/mq-04-columna.md §2.1): the archer's token, and the arrow Crito takes from Gratus's shoulder.
   q('quest-tessera-mucaporis', 'Bone Token', 'tessera ossea', 'A bone gaming token, scratched with a curved Dacian blade and the letters MVCAPOR.', { icon: '◆', tags: ['clue'] }),
   q('quest-sagitta-dacica', 'Dacian Arrow', 'sagitta', 'Crito pulled it out of Gratus’s shoulder: barbed, the shaft painted with red bands. He gave it to you without a word.', { icon: '➶' }),
+  // mq-05 (docs/STORY.md chapter 5): what the sicarius under the Arch of Dolabella carried.
+  q('quest-tabula-sicarii', 'The Knife-Man’s Tablet', 'tabella', 'A small wax tablet from the man in the dark cloak. Scratched in the wax: THE NEW ONE. CAELIAN. BEFORE THE CAMP. The wax is red, and a horseman with a spear is stamped on the frame: the couriers’ own tablets.', { icon: '▭', tags: ['clue'] }),
 ];
