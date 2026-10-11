@@ -245,7 +245,10 @@ ground cover) is built as a `Sheet` (`arch/fabric/streets.ts`) and written by `e
 - **One surface per place.** `PavingIndex` holds every surface's footprint and rank
   (`RANK`: road > junction > piazza > vicus > lane > alley > ground cover; equal ranks: the
   first registered wins). A road or street piece registers what it draws (`streetFootprint`: the quads
-  between its own cross-sections, so pieces of one street meet exactly at bends), a flight of steps its
+  between its own cross-sections, so pieces of one street meet exactly at bends; a road piece that would
+  lap over itself, where the road comes back on itself closer than its own width (a hairpin, `unlap`: the
+  Clivus Palatinus under the Palatine), is split half way round the turn, so its later leg is cut round the
+  earlier one like any other street of its rank; minor streets' U-turns are left whole), a flight of steps its
   flights, a junction or piazza its polygon; only surfaces that are built (their
   item's point in the area) are registered. A surface is cut exactly (convex subtraction) inside the
   convex pieces of every surface that outranks it, so nothing is paved twice. Between two streets of one
