@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import * as atlas from '../src/data/atlas';
-import { RIM_MIN, RIM_SINK, Sheet, buildStreet, emitSheet, inConv, makeConv } from '../src/arch/fabric/streets';
+import { RIM_MIN, RIM_SINK, Sheet, buildConformPlaza, buildStreet, emitSheet, inConv, makeConv } from '../src/arch/fabric/streets';
 import { KERB } from '../src/core/traversal';
 import { MeshBuilder } from '../src/gfx/MeshBuilder';
 import { auditReach, auditRoadEnds, summarizeRoadEnds } from '../src/world/city/audit';
@@ -295,6 +295,47 @@ describe('one surface per place: the paving index (phase 4b)', () => {
     // The outside corner of the bend (the mitre) is covered by the road's pieces.
     const pieces = pave.convs(20, -3, 23, 0, pave.order(lane), lane);
     expect(pieces.some((c) => inConv(c, 21.6, -1.6))).toBe(true);
+  });
+
+  it('cuts a street of the same rank by the core only (its apron does not cut), another rank by the whole footprint', () => {
+    const pave = new PavingIndex();
+    const sq = (x0: number, x1: number): [number, number][] => [[x0, -5], [x1, -5], [x1, 5], [x0, 5]];
+    // A vicus whose core reaches x = 4 and its apron x = 5, registered first (it wins its rank).
+    const a = pave.addPieces(RANK.vicus, [sq(-5, 5)], [sq(-5, 4)]);
+    const b = pave.addPieces(RANK.vicus, [sq(4.5, 12)], [sq(5.5, 12)]);
+    const alley = pave.addPieces(RANK.alley, [sq(4.5, 12)], [sq(5, 12)]);
+    const at = (id: number, x: number) => pave.convs(x - 0.01, -0.01, x + 0.01, 0.01, pave.order(id), id, true).some((c) => inConv(c, x, 0));
+    // In a's apron (4 < x < 5): the other vicus is not cut, the alley is.
+    expect(at(b, 4.7)).toBe(false);
+    expect(at(alley, 4.7)).toBe(true);
+    // In a's core both are.
+    expect(at(b, 3.5)).toBe(true);
+    // Ground cover (no `cores`) is cut by the whole footprint.
+    expect(pave.convs(4.69, -0.01, 4.71, 0.01, 0).some((c) => inConv(c, 4.7, 0))).toBe(true);
+  });
+});
+
+describe('plaza bevels (phase 4b)', () => {
+  it('bevels every stretch of a rim with bare ground beyond it, not where other paving goes on', () => {
+    const flat = () => 0;
+    const b = new MeshBuilder();
+    const poly: [number, number][] = [[-6, -6], [6, -6], [6, 6], [-6, 6]];
+    // Paving beyond the middle of the south edge only (|x| < 2, z < -6).
+    const paved = (x: number, z: number) => Math.abs(x) < 2 && z < -6;
+    buildConformPlaza(b, poly, flat, { lift: 0.1, bevel: 0.45, paved });
+    const tops: number[][] = [];
+    for (const geoms of b.parts.values())
+      for (const g of geoms) {
+        const p = g.getAttribute('position');
+        for (let i = 0; i < p.count; i++) tops.push([p.getX(i), p.getY(i), p.getZ(i)]);
+      }
+    const reach = (x0: number, x1: number) => Math.min(...tops.filter(([x, , z]) => x >= x0 && x <= x1 && z < -6.01).map(([, , z]) => z));
+    // The corners of the south edge are bevelled out to the ground (once one test per edge left them raw)...
+    expect(reach(-6, -3)).toBeLessThan(-6.4);
+    expect(reach(3, 6)).toBeLessThan(-6.4);
+    expect(tops.some(([x, y, z]) => x === -6 && z < -6.4 && y < 0.03)).toBe(true);
+    // ...the stretch with paving beyond is not.
+    expect(tops.some(([x, , z]) => Math.abs(x) < 1 && z < -6.01)).toBe(false);
   });
 });
 

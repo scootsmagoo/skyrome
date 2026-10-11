@@ -198,6 +198,15 @@ function chunks(s0: number, s1: number, max: number): [number, number][] {
  * rank the one registered first). A surface is cut away inside every surface that outranks it, so
  * no place is paved twice (the 4a audit's 845k double-paved cells), and ground cover never lies on
  * paving or inside a block's outline.
+ *
+ * Between two streets of one rank (road and road, vicus and vicus) a street's aprons (the strips that
+ * slope from its sidewalk or carriageway down to the ground) cut nothing: where one overlaps the
+ * other street both are laid and the higher shows, so the two meet without a step (an apron over the
+ * other's carriageway reads as a kerb ramp). Cut at the other's apron, a sidewalk 22 cm up stopped
+ * against its foot (a fifth of street-fit's 12-30 cm lips between streets). Between ranks the whole
+ * footprint cuts: laying both there doubled the paving (two kinds of street a few centimetres apart),
+ * and a vicus's apron runs down over the mouth of an alley, which has no dropped kerb. Ground cover
+ * is cut by the whole footprint, aprons too.
  */
 export const RANK = { cover: 0, block: 1, alley: 2, lane: 3, vicus: 4, piazza: 5, junction: 6, road: 7 } as const;
 
@@ -214,6 +223,8 @@ interface PaveShape {
   maxZ: number;
   /** Given convex pieces (a street's drawn footprint), instead of the band or polygon of `pts`. */
   pieces?: Conv[];
+  /** The part of `pieces` that cuts the other streets (without the aprons); default all of it. */
+  core?: Conv[];
 }
 
 /** The footprints of every street surface of the city (2D), bucketed for point queries. */
@@ -239,9 +250,10 @@ export class PavingIndex {
   }
 
   /** Registers a surface by its convex pieces (a street's drawn footprint, streets.ts streetFootprint); returns its id. */
-  addPieces(rank: number, polys: readonly Vec2[][]): number {
+  addPieces(rank: number, polys: readonly Vec2[][], corePolys?: readonly Vec2[][]): number {
     const id = this.shapes.length;
     const pieces = polys.filter((q) => q.length >= 3).map((q) => makeConv(q));
+    const core = corePolys?.filter((q) => q.length >= 3).map((q) => makeConv(q));
     let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
     for (const c of pieces) {
       minX = Math.min(minX, c.minX);
@@ -249,7 +261,7 @@ export class PavingIndex {
       minZ = Math.min(minZ, c.minZ);
       maxZ = Math.max(maxZ, c.maxZ);
     }
-    const s: PaveShape = { id, order: rank * 1e6 + (1e6 - 1 - id), pts: [], w: 0, poly: true, minX, minZ, maxX, maxZ, pieces };
+    const s: PaveShape = { id, order: rank * 1e6 + (1e6 - 1 - id), pts: [], w: 0, poly: true, minX, minZ, maxX, maxZ, pieces, core };
     this.shapes.push(s);
     if (pieces.length) this.bucket(s);
     return id;
@@ -328,13 +340,17 @@ export class PavingIndex {
     return out;
   }
 
-  /** The convex pieces, overlapping the box, of every surface that outranks `order` (never `self`). */
-  convs(minX: number, minZ: number, maxX: number, maxZ: number, order: number, self = -1): Conv[] {
+  /**
+   * The convex pieces, overlapping the box, of every surface that outranks `order` (never `self`):
+   * with `cores`, only the cores (no aprons) of those of its own rank.
+   */
+  convs(minX: number, minZ: number, maxX: number, maxZ: number, order: number, self = -1, cores = false): Conv[] {
     const B = PavingIndex.B;
     const out: Conv[] = [];
     let seen: Set<number> | null = null;
     const bx0 = Math.floor(minX / B), bx1 = Math.floor(maxX / B), bz0 = Math.floor(minZ / B), bz1 = Math.floor(maxZ / B);
     const many = bx0 !== bx1 || bz0 !== bz1;
+    const rank = Math.floor(order / 1e6);
     for (let bz = bz0; bz <= bz1; bz++)
       for (let bx = bx0; bx <= bx1; bx++) {
         const l = this.buckets.get((bz + 32768) * 65536 + bx + 32768);
@@ -347,7 +363,8 @@ export class PavingIndex {
             if (seen.has(id)) continue;
             seen.add(id);
           }
-          for (const c of this.piecesOf(s)) if (c.maxX >= minX && c.minX <= maxX && c.maxZ >= minZ && c.minZ <= maxZ) out.push(c);
+          const core = cores && Math.floor(s.order / 1e6) === rank ? s.core : null;
+          for (const c of core ?? this.piecesOf(s)) if (c.maxX >= minX && c.minX <= maxX && c.maxZ >= minZ && c.minZ <= maxZ) out.push(c);
         }
       }
     return out;
@@ -503,7 +520,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
   /** Conform options of the surface registered as `id`: cut where an outranking surface lies. */
   const conformOf = (id: number): ConformOpts => {
     const order = pave.order(id);
-    return { cut: (a, b, c, d) => pave.convs(a, b, c, d, order, id), ground, drop };
+    return { cut: (a, b, c, d) => pave.convs(a, b, c, d, order, id, true), ground, drop };
   };
 
   // ---- ground cover: packed earth over every urban scrap of ground the streets and yards leave
@@ -607,7 +624,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
           const dips = (mouths.get(ri) ?? []).filter((m) => m.s > p0 - m.w && m.s < p1 + m.w).map((m) => ({ s: m.s - p0, side: m.side, w: m.w }));
           // Registered by what it draws (the same cross-sections), so what it outranks is cut round it exactly.
           const spec = roadPieceSpec(road, c, pts, capStart, capEnd, dips, {}, c === 'open' && besideSquare(plan, pts, (road.carriage + road.sidewalk) / 2 + LANE_APRON + 0.6));
-          const id = inArea(mid[0], mid[1]) ? pave.addPieces(RANK.road, streetFootprint(spec)) : -1;
+          const id = inArea(mid[0], mid[1]) ? pave.addPieces(RANK.road, streetFootprint(spec), streetFootprint(spec, true)) : -1;
           if (id >= 0) capped.push({ id, spec });
           add(mid[0], mid[1], T(`road:${road.id}:${c}`, (bld) => buildStreet(bld, { ...spec, conform: conformOf(id) }, H)));
         });
@@ -668,7 +685,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
           const mid = pts[Math.floor(pts.length / 2)];
           const capStart = k2 === 0 || !pieceBuilt(st.points, pieces[k2 - 1]), capEnd = k2 === pieces.length - 1 || !pieceBuilt(st.points, pieces[k2 + 1]);
           const spec = minorPieceSpec(st, pts, capStart, capEnd, {});
-          const id = inArea(mid[0], mid[1]) ? pave.addPieces(RANK[st.kind], streetFootprint(spec)) : -1;
+          const id = inArea(mid[0], mid[1]) ? pave.addPieces(RANK[st.kind], streetFootprint(spec), streetFootprint(spec, true)) : -1;
           if (id >= 0) capped.push({ id, spec });
           add(mid[0], mid[1], T(`street:${st.id}:${st.kind}`, (bld) => buildStreet(bld, { ...spec, conform: conformOf(id) }, H)));
         });
@@ -875,8 +892,11 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
       }
     }, 'detail');
   }
-  // ---- end aprons: a capped end with no other surface beyond it runs out to the ground (its
-  // footprint grows by the apron, so what it outranks is cut round that too).
+  // ---- end aprons: a capped end with bare ground beyond it (all of it, or right beyond its middle) runs out to the ground (its
+  // footprint grows by the apron, so what it outranks is cut round that too; where another surface
+  // lies beyond, the apron is cut away under it or runs down over it). Tested right at the end: a
+  // street that stopped short of a road's apron left a strip of bare ground and a 12 cm edge. (Not
+  // its corners alone: a road's end inside a junction square's circle reaches past it there.)
   for (const { id, spec } of capped) {
     const P = spec.points;
     if (P.length < 2) continue;
@@ -886,8 +906,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
     const open = (p: Vec2, q: Vec2) => {
       const dx = p[0] - q[0], dz = p[1] - q[1], l = Math.hypot(dx, dz) || 1;
       const tx = dx / l, tz = dz / l, nx = -tz, nz = tx;
-      for (const f of [0.3, 0.8]) for (const o of [-0.6, 0, 0.6]) if (pave.any(p[0] + tx * A * f + nx * reach * o, p[1] + tz * A * f + nz * reach * o, id)) return false;
-      return true;
+      return !pave.any(p[0] + tx * A * 0.15, p[1] + tz * A * 0.15, id) || [0.3, 0.8].every((f) => [-0.6, 0, 0.6].every((o) => !pave.any(p[0] + tx * A * f + nx * reach * o, p[1] + tz * A * f + nz * reach * o, id)));
     };
     const start = (spec.capStart ?? true) && open(P[0], P[1]);
     const end = (spec.capEnd ?? true) && open(P[P.length - 1], P[P.length - 2]);

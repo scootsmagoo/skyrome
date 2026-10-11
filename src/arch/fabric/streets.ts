@@ -97,8 +97,11 @@ export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn
     // The outer edge is an apron sloping down to the ground over APRON m (a vertical 30 cm face stood
     // out as a slab where the street crosses open ground; along houses it runs under their walls).
     // It is walkable: a lip of 15-25 cm between the sidewalk and the ground caught pedestrians.
+    // A city street's apron is the sidewalk's paving running down (a band of its own, under a metre
+    // wide, read as patchwork: the surface census's slivers and seams).
+    const apronMat: MaterialId = spec.conform ? sideMat : 'concrete';
     push(-hw - sw - APRON, -lift + APRON_FLUSH);
-    push(-hw - sw, ch, 'concrete', 'up');
+    push(-hw - sw, ch, apronMat, 'up');
     push(-hw - cw, ch, sideMat, 'up');
     push(-hw, ch, curbMat, 'up');
     push(-hw, 0, curbMat, 'in');
@@ -110,7 +113,7 @@ export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn
     push(hw, ch, curbMat, 'in');
     push(hw + cw, ch, curbMat, 'up');
     push(hw + sw, ch, sideMat, 'up');
-    push(hw + sw + APRON, -lift + APRON_FLUSH, 'concrete', 'up');
+    push(hw + sw + APRON, -lift + APRON_FLUSH, apronMat, 'up');
   } else {
     // A lane's edges run out to the ground in a walkable apron too (the old 5 cm edge was a step of the lane's lift).
     const apronMat = spec.apronMaterial ?? roadMat;
@@ -313,10 +316,11 @@ function streetFrame(spec: StreetSpec): { pts: Vec2[]; nor: Vec2[]; miter: numbe
  * quad between its outer edges (aprons included), or its two triangles where the quad folds (a sharp
  * bend). The same cross-sections buildStreet draws, so a surface cut round it meets it exactly.
  */
-export function streetFootprint(spec: StreetSpec): Vec2[][] {
+export function streetFootprint(spec: StreetSpec, core = false): Vec2[][] {
   const paved = (spec.kind ?? 'paved') === 'paved';
   const hw = (spec.roadWidth ?? (paved ? 5.0 : 3.2)) / 2;
-  const reach = paved ? hw + (spec.sidewalk ?? 1.8) + APRON : hw + LANE_APRON;
+  // The core: the carriageway and the sidewalks, without the aprons that slope down to the ground.
+  const reach = core ? (paved ? hw + (spec.sidewalk ?? 1.8) : hw) : paved ? hw + (spec.sidewalk ?? 1.8) + APRON : hw + LANE_APRON;
   const { pts, nor, miter } = streetFrame(spec);
   const side = (i: number, s: number): Vec2 => [pts[i][0] + nor[i][0] * s * reach * miter[i], pts[i][1] + nor[i][1] * s * reach * miter[i]];
   const out: Vec2[][] = [];
@@ -325,8 +329,8 @@ export function streetFootprint(spec: StreetSpec): Vec2[][] {
     const l = side(i, -1), r = side(i, 1);
     out.push([l, r, [r[0] + tx, r[1] + tz], [l[0] + tx, l[1] + tz]]);
   };
-  if (spec.conform && (spec.capStart ?? true) && spec.apronStart) end(0, -1);
-  if (spec.conform && (spec.capEnd ?? true) && spec.apronEnd) end(pts.length - 1, 1);
+  if (!core && spec.conform && (spec.capStart ?? true) && spec.apronStart) end(0, -1);
+  if (!core && spec.conform && (spec.capEnd ?? true) && spec.apronEnd) end(pts.length - 1, 1);
   for (let i = 0; i + 1 < pts.length; i++) {
     const q: Vec2[] = [side(i, -1), side(i + 1, -1), side(i + 1, 1), side(i, 1)];
     let sign = 0, convex = true;
@@ -1279,6 +1283,9 @@ export interface ConformPlazaOpts extends ConformOpts {
   paved?: ((x: number, z: number) => boolean) | null;
 }
 
+/** A plaza's rim is tested for ground beyond it (and bevelled) in stretches of at most this (m). */
+const BEVEL_STEP = 0.75;
+
 export function buildConformPlaza(b: MeshBuilder, poly: Polygon, heightAt: HeightFn, o: ConformPlazaOpts = {}): SheetStats {
   const mat = o.material ?? 'paving_travertine';
   const lift = o.lift ?? 0.07;
@@ -1291,32 +1298,59 @@ export function buildConformPlaza(b: MeshBuilder, poly: Polygon, heightAt: Heigh
     cz += p[1] / n;
   }
   const c = sheet.v(cx, cz, lift);
-  const rim = poly.map((p) => sheet.v(p[0], p[1], lift));
-  for (let i = 0; i < n; i++) sheet.tri(c, rim[i], rim[(i + 1) % n], mat);
-  // Bevels on the edges that meet the ground, and wedges between two bevels.
+  // Bevels where the ground lies beyond the rim, tested in stretches of at most BEVEL_STEP (one test
+  // per edge left a junction's edge raw where a road took its middle): an edge is split only where
+  // that changes along it, into runs with a bevel and runs without.
   const open = (x: number, z: number) => !(o.paved?.(x, z) || inCut(o.cut, x, z));
-  const outer: (SV | null)[][] = rim.map(() => [null, null]);
+  const ring: SV[] = [];
+  const edgeOf: number[] = [];
+  const bevelled: boolean[] = [];
+  const nrm: [number, number][] = [];
   for (let i = 0; i < n; i++) {
-    const a = rim[i], e = rim[(i + 1) % n];
-    const L = Math.hypot(e.x - a.x, e.z - a.z);
-    if (L < 1e-6) continue;
-    let nx = (e.z - a.z) / L, nz = -(e.x - a.x) / L;
-    if (nx * (cx - a.x) + nz * (cz - a.z) > 0) {
+    const a = poly[i], e = poly[(i + 1) % n];
+    const L = Math.hypot(e[0] - a[0], e[1] - a[1]);
+    let nx = L > 1e-9 ? (e[1] - a[1]) / L : 0, nz = L > 1e-9 ? -(e[0] - a[0]) / L : 0;
+    if (nx * (cx - a[0]) + nz * (cz - a[1]) > 0) {
       nx = -nx;
       nz = -nz;
     }
-    const mx = (a.x + e.x) / 2, mz = (a.z + e.z) / 2;
-    if (!open(mx + nx * (w * 0.5 + 0.1), mz + nz * (w * 0.5 + 0.1))) continue;
-    const a2 = sheet.v(a.x + nx * w, a.z + nz * w, APRON_FLUSH), e2 = sheet.v(e.x + nx * w, e.z + nz * w, APRON_FLUSH);
-    const col = o.bevelCollide ?? true;
+    nrm.push([nx, nz]);
+    if (L < 1e-6) continue;
+    const m = Math.max(1, Math.ceil(L / BEVEL_STEP));
+    const d = w * 0.5 + 0.1;
+    let prev: boolean | null = null;
+    for (let j = 0; j < m; j++) {
+      const t = (j + 0.5) / m;
+      const op = open(a[0] + (e[0] - a[0]) * t + nx * d, a[1] + (e[1] - a[1]) * t + nz * d);
+      if (op === prev) continue;
+      prev = op;
+      ring.push(sheet.v(a[0] + ((e[0] - a[0]) * j) / m, a[1] + ((e[1] - a[1]) * j) / m, lift));
+      edgeOf.push(i);
+      bevelled.push(op);
+    }
+  }
+  const N = ring.length;
+  for (let k = 0; k < N; k++) sheet.tri(c, ring[k], ring[(k + 1) % N], mat);
+  const col = o.bevelCollide ?? true;
+  const outerOf = new Map<string, SV>();
+  const outer = (k: number, i: number) => {
+    const key = `${k % N}:${i}`;
+    let v = outerOf.get(key);
+    if (!v) outerOf.set(key, (v = sheet.v(ring[k % N].x + nrm[i][0] * w, ring[k % N].z + nrm[i][1] * w, APRON_FLUSH)));
+    return v;
+  };
+  for (let k = 0; k < N; k++) {
+    if (!bevelled[k]) continue;
+    const a = ring[k], e = ring[(k + 1) % N], i = edgeOf[k];
+    const a2 = outer(k, i), e2 = outer(k + 1, i);
     sheet.tri(a, a2, e2, mat, col);
     sheet.tri(a, e2, e, mat, col);
-    outer[i][1] = a2;
-    outer[(i + 1) % n][0] = e2;
   }
-  for (let i = 0; i < n; i++) {
-    const [p, q] = outer[i];
-    if (p && q) sheet.tri(rim[i], p, q, mat, o.bevelCollide ?? true);
+  // Wedges between two bevels at a corner.
+  for (let k = 0; k < N; k++) {
+    const pk = (k + N - 1) % N;
+    if (edgeOf[pk] === edgeOf[k] || !bevelled[pk] || !bevelled[k]) continue;
+    sheet.tri(ring[k], outer(k, edgeOf[pk]), outer(k, edgeOf[k]), mat, col);
   }
   return emitSheet(b, sheet, o);
 }
