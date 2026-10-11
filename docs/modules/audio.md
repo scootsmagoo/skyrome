@@ -1,11 +1,11 @@
 # Audio module
 
-Everything you hear in Skyrome is generated in code: footsteps, swords, voices, doors, birds, crowds, and the music. There are no sound files. Each sound is a small recipe (noise, filters, struck resonances, plucked strings, a formant voice) that is "baked" into audio once, the first time it is needed, and then played back cheaply through Web Audio.
+Most of what you hear in Skyrome is CC0 recordings: footsteps, weapons, doors, birds, the crowd beds and the music's instruments (`public/audio/**/CREDITS.md`). The rest is generated in code: voices, bow and sling, the stingers, the fire, wind, city and insect beds, the reverb, and a stand-in for every recording until it has loaded. Each synthesised sound is a small recipe (noise, filters, struck resonances, plucked strings, a formant voice) that is "baked" into audio once, the first time it is needed, and then played back cheaply through Web Audio.
 
 - Code: `src/audio/` (engine, director, bank, DSP, sounds, music, debug tools)
 - Test bench: `src/scenes/audio.ts`, opened with `?scene=audio`
 - Tests: `tests/audio-*.test.ts`
-- Third-party assets: none (see `docs/credits/audio.md`)
+- Third-party assets: CC0 recordings in `public/audio/sfx/` and `public/audio/music/` (see `docs/credits/audio.md` and the `CREDITS.md` beside them)
 
 ## How to listen (for the owner)
 

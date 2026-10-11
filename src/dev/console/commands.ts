@@ -292,8 +292,12 @@ export function builtinCommands(): CommandTable<ConsoleCtx> {
       run: ([h], { game }) => {
         const hour = Number(h);
         if (!Number.isFinite(hour) || hour < 0 || hour > 24) return `It is ${game.time.hour.toFixed(2)}h. sethour <0-24> changes it.`;
-        game.time.advanceHours((((hour - game.time.hour) % 24) + 24) % 24);
-        return `It is now ${game.time.formatModern()}.`;
+        // Forward to the next time the clock reads that hour (the elapsed-day count never goes back).
+        game.time.advanceHours(game.time.hoursUntil(hour));
+        // The calendar follows the day count once per frame; catch it up so the answer is the real date.
+        game.calendar?.sync(game.time.dayIndex);
+        const held = game.calendar?.clamp;
+        return `It is now ${game.time.formatModern()}.${held ? ` (The date is held on the eve of ${held}; days still pass.)` : ''}`;
       },
     },
     {

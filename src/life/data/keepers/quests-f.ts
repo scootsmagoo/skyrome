@@ -286,7 +286,7 @@ export default defineLife({
             next: 'hub',
           },
           bundleAsk: {
-            text: '(She doesn’t even pretend.) A slave. From the Titus. With a bundle. Yes, citizen. Sabinus brings me one a day; a good cloak, in good wool, never more than one, because a man who takes two is a fool. I give him a fair half. If you say my name to him I’ll say yours to the prefect of the watch.',
+            text: '(She doesn’t even pretend.) A slave. From the Titus. With a bundle. Yes, citizen. Nicanor brings me one a day; a good cloak, in good wool, never more than one, because a man who takes two is a fool. I give him a fair half. If you say my name to him I’ll say yours to the prefect of the watch.',
             next: 'bundleTold',
           },
           bundleTold: {

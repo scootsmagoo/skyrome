@@ -5,7 +5,7 @@
  *
  *   misc-hilara          Fuscus, stable-lad at the Inn at the Starting Gates
  *   misc-urna-aenea      Cnaeus the dicer at the Silver Pig; the optio of the vigiles (also Q3)
- *   misc-fur-balnearius  Sabinus the capsarius at the Baths of Titus; the slave he sends out with a
+ *   misc-fur-balnearius  Nicanor the capsarius at the Baths of Titus; the slave he sends out with a
  *                        bundle (no schedule: the quest stages him)
  * (Onesimus, who writes curse tablets among the tombs outside the Porta Capena, is a keeper: src/life/data/keepers/quests-f.ts)
  */
@@ -81,7 +81,7 @@ const npcs: NpcDef[] = [
   // ---------------------------------------------------------------- misc-fur-balnearius
   {
     id: 'npc-sabinus-capsarius',
-    name: 'Sabinus',
+    name: 'Nicanor',
     title: 'Cloakroom attendant (capsarius)',
     home: 'baths-titus:front',
     schedule: [
@@ -96,7 +96,7 @@ const npcs: NpcDef[] = [
       garments: [{ kind: 'tunica', color: '#bdb097' }],
       footwear: 'soleae',
     },
-    combat: archetype('ebrius-rixator', { kit: 0 }, { name: 'Sabinus' }),
+    combat: archetype('ebrius-rixator', { kit: 0 }, { name: 'Nicanor' }),
     barks: ['Cloaks, tunics, sandals, an as for the peg!', 'I watch your things as I watch my own. Better, in fact.', 'Tip the man at the door, citizen. It’s only an as.'],
     tags: ['plebs', 'balnea'],
   },

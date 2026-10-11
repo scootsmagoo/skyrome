@@ -353,7 +353,7 @@ describe('The Bath Thief', () => {
     w.events.emit('life:option', { owner: 'keeper-example', option: 'bathe', detail: { stolen: 'paenula' } });
     expect(status(w, BATH)?.stage).toBe('start');
     expect(w.rpg.quests.tracked).toBe('mq-03-lemuria');
-    // Sabinus shrugs; at the bathing hour the slave comes out; Crispina names the sender.
+    // Nicanor shrugs; at the bathing hour the slave comes out; Crispina names the sender.
     talk(w, 'npc-sabinus-capsarius', 'Cloaks go missing');
     close(w);
     expect(status(w, BATH)?.stage).toBe('watch');

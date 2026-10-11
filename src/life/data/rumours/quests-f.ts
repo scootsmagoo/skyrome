@@ -87,7 +87,7 @@ export default defineLife({
       kind: 'talk',
       gate: { flag: 'bath-curse-ending' },
       weight: 3,
-      text: 'Sabinus, the cloakroom man at the Titus, has a fever. Three days in his bed, shaking like a wet dog and calling for somebody called Mercury. Somebody must have prayed hard.',
+      text: 'Nicanor, the cloakroom man at the Titus, has a fever. Three days in his bed, shaking like a wet dog and calling for somebody called Mercury. Somebody must have prayed hard.',
       period: 'Curse tablets (defixiones) sent against bath thieves [A, outside Rome]; the result is left to the reader [G]',
     },
   ],

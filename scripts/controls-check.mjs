@@ -348,34 +348,67 @@ async function runSuite(browser, browserName, preset) {
 
   // ---------------------------------------------------------------- talking
   await check('talk (E) · leave (Tab)', async () => {
-    // Crowd walkers move on; try up to three people, nearest first, and re-aim each time.
+    // Why this used to be flaky: every crowd walker has a "Talk" interactable, and the old check took
+    // the nearest one, teleported next to it and pressed E half a second later. A walker covers
+    // ~0.65 m in that time (and may despawn or swap simulation tier when the player lands), so the
+    // aim ray, the 2.6 m reach or the focus itself was sometimes gone and E opened nothing. Now:
+    // find talkers that did not move over 700 ms (people standing, sitting, shopkeepers), go to the
+    // nearest, and check again after landing, right before E, that the same person is still there.
+    const talkers = () => ev(() => {
+      const g = window.__skyrome.game;
+      const p = g.player.position;
+      return [...(g.interactions?.items ?? [])]
+        .filter((i) => /talk/i.test(i.verb?.() ?? '') && (!i.enabled || i.enabled()))
+        .map((i) => { const q = i.position(); return { id: i.id, x: q.x, y: q.y, z: q.z, d: Math.hypot(q.x - p.x, q.z - p.z) }; })
+        .sort((a, b) => a.d - b.d);
+    });
+    const before = await talkers();
+    await wait(700);
+    const after = new Map((await talkers()).map((t) => [t.id, t]));
+    const still = before.filter((t) => { const u = after.get(t.id); return u && Math.hypot(u.x - t.x, u.z - t.z) < 0.03 && Math.abs(u.y - t.y) < 0.03; });
+    const MAXTRY = 6;
+    let tries = 0;
     let placed = null;
     let focus = null;
-    for (let attempt = 0; attempt < 3 && !focus; attempt++) {
-      placed = await ev((skip) => {
+    for (let attempt = 0; attempt < Math.min(MAXTRY, still.length) && !focus; attempt++) {
+      tries++;
+      const want = still[attempt].id;
+      placed = await ev((id) => {
         const g = window.__skyrome.game;
-        const p = g.player.position;
-        const list = [...(g.interactions?.items ?? [])].filter((i) => /talk/i.test(i.verb?.() ?? '') && (!i.enabled || i.enabled()));
-        list.sort((a, b) => a.position().distanceTo(p) - b.position().distanceTo(p));
-        const it = list[skip];
+        const it = [...(g.interactions?.items ?? [])].find((i) => i.id === id);
         if (!it) return null;
         const q = it.position();
         const gy = g.physics.groundHeight(q.x, q.z + 1.6, q.y + 10, 30);
         if (gy === null) return null;
+        window.__talkAt = { id, x: q.x, z: q.z };
         g.player.teleport({ x: q.x, y: gy + 0.05, z: q.z + 1.6 }, Math.PI);
         g.player.yaw = 0;
         g.player.pitch = -0.2;
         return it.label?.() ?? it.id;
-      }, attempt);
-      if (!placed) break;
-      await wait(300);
-      focus = await ev(() => window.__skyrome.game.interactions?.focus?.label?.() ?? null);
+      }, want);
+      if (!placed) continue;
+      await wait(400);
+      // Still the same, still-standing person, and the interaction focus is on them.
+      focus = await ev(() => {
+        const g = window.__skyrome.game;
+        const t = window.__talkAt;
+        const it = [...(g.interactions?.items ?? [])].find((i) => i.id === t.id);
+        if (!it || (it.enabled && !it.enabled())) return null;
+        const q = it.position();
+        if (Math.hypot(q.x - t.x, q.z - t.z) > 0.15) return null;
+        const f = g.interactions?.focus;
+        return f && f.id === t.id ? f.label?.() ?? f.id : null;
+      });
     }
-    if (!placed && !focus) return 'no one to talk to nearby: skipped';
-    expect(!!focus, `no interaction focus near ${placed} (3 tries)`);
-    await k.press('KeyE');
-    await wait(500);
-    const t1 = await top();
+    if (!placed && !focus) expect(false, 'no stationary talker found nearby (the Forum should always have some)');
+    expect(!!focus, `no interaction focus near ${placed} (${tries} tries)`);
+    // E can land in the frame the target changes tier; press again (up to 3 times) while focus holds.
+    let t1 = null;
+    for (let e = 0; e < 3 && t1 !== 'dialogue'; e++) {
+      await k.press('KeyE');
+      await wait(500);
+      t1 = await top();
+    }
     expect(t1 === 'dialogue', `E opened ${t1}`);
     const moving = await ev(() => window.__skyrome.game.input.enabled);
     expect(!moving, 'gameplay input still enabled in dialogue');

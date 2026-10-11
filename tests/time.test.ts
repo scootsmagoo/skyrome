@@ -31,4 +31,18 @@ describe('Roman calendar', () => {
     expect(t.date().month).toBe(5);
     expect(t.date().day).toBe(1);
   });
+  it('hoursUntil finds the next time the clock reads an hour, keeping the day count', () => {
+    const t = new GameTime(new EventBus(), { year: 113, month: 4, day: 11 }, 14);
+    t.advanceHours(3 * 24);
+    const before = t.dayIndex;
+    expect(t.hoursUntil(14)).toBeCloseTo(0, 5);
+    expect(t.hoursUntil(10.5)).toBeCloseTo(20.5, 5);
+    t.advanceHours(t.hoursUntil(10.5));
+    expect(t.hour).toBeCloseTo(10.5, 5);
+    expect(t.dayIndex).toBe(before + 1);
+    expect(t.date().day).toBe(15);
+    expect(t.hoursUntil(24)).toBeCloseTo(13.5, 5);
+    t.advanceHours(t.hoursUntil(10.5));
+    expect(t.dayIndex).toBe(before + 1);
+  });
 });

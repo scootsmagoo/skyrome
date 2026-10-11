@@ -24,6 +24,8 @@ This is the story as the player meets it. `docs/GDD.md` §10 is the design of th
 ## Chapter 1: The Dripping Gate (`mq-01-madida-capena`)
 *Porta Capena, 11 May, 04:30.*
 
+*How to reach it:* the plain game link now starts in the Forum at 10:00 with the opening skipped; this chapter plays from `?story=1` (or a new game from the title menu, `?menu=1`).
+
 1. **The cart.** The player rides in on the last night wine-cart. The courier Festus shares the cart and opens the conversation by himself. He says:
    - he carries a sealed dispatch for his centurion;
    - two riders have kept pace with the cart since Bovillae, never passing and never falling back;
