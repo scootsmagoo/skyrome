@@ -18,6 +18,7 @@
 import type { Game, System } from '../core/Game';
 import '../rpg/events';
 import { SAVE } from '../rpg/data/tuning';
+import { findSafeGround } from '../world/safeGround';
 import { EntityDeltas } from './deltas';
 import { createDefaultStorage } from './storage';
 import type { LoadResult, Saveable, SaveFile, SaveKind, SaveMeta, SaveResult, SaveStorage } from './types';
@@ -592,14 +593,15 @@ export class SaveSystem implements System {
         const p = game.player;
         if (!p) return null;
         const pos = p.position;
-        return { position: [pos.x, pos.y, pos.z], heading: p.heading, yaw: p.yaw, pitch: p.pitch, viewMode: p.viewMode, zoom: p.zoom };
+        return { position: [pos.x, pos.y, pos.z], heading: p.heading, yaw: p.yaw, pitch: p.pitch, viewMode: p.viewMode, zoom: p.zoom, terrain: game.heightmap?.profile };
       },
       load: (d) => {
         const p = game.player;
-        const s = d as { position?: number[]; heading?: number; yaw?: number; pitch?: number; viewMode?: 'first' | 'third'; zoom?: number } | null;
+        const s = d as { position?: number[]; heading?: number; yaw?: number; pitch?: number; viewMode?: 'first' | 'third'; zoom?: number; terrain?: string } | null;
         if (!p || !s || !Array.isArray(s.position) || s.position.length !== 3 || !s.position.every(Number.isFinite)) return;
         const [x, y, z] = s.position;
         p.teleport({ x, y, z }, finite(s.heading));
+        regroundAfterLoad(game, s.terrain);
         if (finite(s.yaw) !== undefined) p.yaw = s.yaw!;
         if (finite(s.pitch) !== undefined) p.pitch = s.pitch!;
         if (finite(s.zoom) !== undefined) p.zoom = s.zoom!;
@@ -611,6 +613,27 @@ export class SaveSystem implements System {
     game.deltas = deltas;
     this.register('entityDeltas', { save: () => deltas.serialize(), load: (d) => deltas.restore(d), reset: () => deltas.restore(undefined) });
   }
+}
+
+/**
+ * Terrain profiles (docs/design/solid-ground.md §3): a save made on another ground (one with no
+ * `terrain` was made on v1), or whose feet are more than 1 m off whatever is under them, is put
+ * back on safe ground near its x, z. An interior cell keeps its own floors.
+ */
+export function regroundAfterLoad(game: Game, saved: unknown) {
+  const p = game.player, hm = game.heightmap, physics = game.physics;
+  if (!p || !hm || !physics) return;
+  const pos = p.position;
+  if (game.interiors?.cellAt(pos)) return;
+  const moved = (saved === 'v2' ? 'v2' : 'v1') !== hm.profile;
+  const terrainY = hm.heightAt(pos.x, pos.z);
+  // (Swimming is not off the ground: the river keeps its swimmer.)
+  const wet = (game.water?.depthAt(pos.x, pos.z) ?? 0) > 0.3;
+  const off = terrainY > pos.y + 1 || (!wet && physics.groundHeight(pos.x, pos.z, pos.y + 1, 2) === null);
+  if (!moved && !off) return;
+  const to = findSafeGround(game, { x: pos.x, y: Math.max(pos.y, terrainY), z: pos.z });
+  if (to) p.teleport(to);
+  else if (terrainY > pos.y) p.teleport({ x: pos.x, y: terrainY + 0.05, z: pos.z });
 }
 
 function kindOf(slot: string): SaveKind {

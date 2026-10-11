@@ -33,7 +33,8 @@ triangles.
 | File | What |
 | --- | --- |
 | `src/world/terrain/profile.ts` | The terrain profile (`v1` / `v2`, default `v2`): `terrainProfile()`, `setTerrainProfile()`, `?terrain=`, `SKYROME_TERRAIN`. See "One ground" below. |
-| `src/world/terrain/heightmap.ts` | Atlas → height grid (pure). Hills, lowlands, the river valley, canals, quays, islands, roads leveled crosswise, building pads. Keeps the vector `features` for the renderer and the water. |
+| `src/world/terrain/heightmap.ts` | Atlas → height grid (pure). Hills, lowlands, the river valley, canals, quays, islands, roads leveled crosswise, building pads; v1 and v2 stamping (see Terrain profiles). Keeps the vector `features` (and v2's `retaining`) for the renderer, the water and the city. |
+| `src/world/terrain/regrade.ts` | The least cut and fill that keeps a profile under a grade (pure). |
 | `src/world/terrain/riverbanks.ts` | Where the Tiber's banks are stone quays in AD 113 (`TIBER_QUAYS`), river chainage/side queries (`chain`, `footOn`), a segment index for fast nearest-segment queries. |
 | `src/world/terrain/terrainData.ts` | Per-sample shader data (pure): normals, road and pad signed-distance fields, pad kind, urban wear, garden lushness, canal water level. |
 | `src/world/terrain/romeInputs.ts` | Atlas → splat inputs: region density, garden polygons, pad kind by landmark category, trodden tracks (`desirePaths`: the worn track from the Porta Capena, round the gate, to the head of the triumphal road — the atlas has no road there). |
@@ -111,8 +112,7 @@ Choosing: `?terrain=v1` in the game URL (same build, for A/B shots: `scripts/aud
 terrain=v1`), `SKYROME_TERRAIN=v1` for Node tools, `setTerrainProfile('v1')` or
 `buildHeightmap(src, { profile: 'v1' })` in tests. Under v1 the heights, the patch and `heightAt`
 are byte-identical to before the switch (`tests/terrain-oneground.test.ts` checks their hashes).
-The grid itself is the same in both profiles for now; the gentler-hills changes (G1b: roads over
-pads, eased flanks, capped road grades) will change v2's heights only.
+v2's grid differs too: the gentler hills (G1b, below) change v2's heights only.
 
 The quadtree's cracks and morphs do not depend on the diagonal: skirts hang from the patch's
 perimeter edges, which neither diagonal touches, and a fully morphed patch (odd vertices onto
@@ -123,6 +123,65 @@ vertices, as before; at rest every vertex sits on a grid sample.
 The city plan samples `heightAt` at its 2 m cell centres, which under v2 lie on the b–c diagonal
 ((h10 + h01) / 2 rather than the four-corner mean), so the city re-plans a little between the
 profiles (block ids and counts change; content uses coordinates).
+
+## Gentler hills (v2's heights, G1b; docs/design/solid-ground.md §3 items 2–5)
+
+Besides one ground, v2 changes the heights (all in `heightmap.ts` unless named; v1 keeps
+today's, byte-identical):
+- **Stamp order natural → pads → roads** (`stampV2`). Pads blend over
+  `padMarginV2` = max(given, 1 + 2.6·|dh|) real m, at most 60 (dh: the pad's height over the
+  natural ground at its corners and 7 and 14 m out), as an eased-linear bank (`easedLinear`, the
+  flanks' shape: top grade 1.25 × the mean, about 26°); where blends
+  overlap, the nearer pad leads (weights over distance²), so one pad's long bank never buries a
+  neighbour. Near an atlas cliff a pad keeps its given margin (the cliff stays a barrier). A pad
+  that v2 moves carries `elevationV2` (the Porticus Margaritaria: 'mean', unpinned; the record
+  override is `terrainLandmarks()` in buildRome.ts, read by its pad and its builder alike).
+- **Roads last, capped at 25 % per 4 m.** Each road's natural profile is smoothed and regraded to
+  `ROAD_GRADE_TARGET` (21 %, under the 25 % cap so the 3.3 m grid's interpolation stays inside it)
+  by the least cut and fill (`regrade.ts`, the W6 helper). A level core of at least
+  `ROAD_CORE_MIN` real m each side (a grid cell, so the centreline reads only the road), then
+  eased banks of `ROAD_BANK_PER_M` × the cut or fill (≥ 6 m, ≤ 60 m), the cut read at the
+  centreline and again where the bank would end on either side until the run covers the ground it
+  meets there (a road cut into the foot of a rising pad blend or flank no longer gets a 6 m bank
+  against 8 m of ground: that made the 100 %+ banks the minor streets crossed beside the Baths of
+  Titus, the Ludus Matutinus and under the Palatine). Inside a landmark's own
+  footprint (`TerrainPad.grow`: the pad polygon minus its +3 m grow) the pad wins: a road is pinned
+  where it runs through one or through an earlier road's core (`holdToFixed`), pulled toward the
+  level of a footprint its band grazes (as far as the cap allows), and where two footprints on its
+  line cannot be joined at the cap (`relaxPins`) or a graze is out of reach, its level core paves
+  over the footprint's edge. A road's banks leave an earlier road's core and shoulder alone.
+  Flights of steps (`paving: 'steps'`) keep their climb and v1's 6 m banks, but a flight beside an
+  earlier road's core stays within `STEP_BESIDE_ROAD_GRADE` (0.45) × the gap of that road's level:
+  its banks may not touch the road, so the Gradus Monetae stood as a 4 m wall along the Clivus
+  Argentarius (the live climb of the Capitoline stalled on it).
+- **Eased-linear flanks** (`easedLinear`): the top grade is 1.25 × the mean (smoothstep: 1.5 ×);
+  the steep designed flanks get longer runs (`V2_FLANK_RUN`: capitolium 71, arx 64, palatine-t34
+  53 real m). Plateaus and feet stay where they are. `node scripts/audit/g1b-flanks.mjs` prints each
+  hill's designed top grade under the profile (`grades.mjs` designMaxDeg uses v1's shape).
+- **Cliffs end 15 real m short of a road's band** (`clipCliff`, `CLIFF_ROAD_CLEAR`; flights of
+  steps keep theirs). `Terrain.ts` gives the far apron's landform the roads too, so it agrees.
+- **Tiber Island landings: off** (`ISLAND_LANDING` = 0). §3 item 5 asked for the island's edge
+  flattened in the bridge corridors; a 6 m landing past the outline did that, but the bridges fit
+  their arcade to the wet channel (`src/world/bridges/layout.ts`), so under the Pons Cestius the
+  landing filled the first arch (shot `after/g1b/v2/rc2-island-edge.jpg` of the first G1b pass).
+  The 70° "bank" W6 measured there is the island's ship-like facing under that arch, where nobody
+  walks; the walk from the deck onto the island is L-EAST's ramps. The corridor code stays for a
+  landing that L-EAST's abutment can meet.
+- **The water stays put**: in the river's channel and banks (to 16 m past the edge), the quays
+  and the canal, v2 keeps v1's roads and pads over the same natural ground, so the water's edge
+  does not move (`tests/terrain-v2.test.ts`).
+- **`hm.features.retaining`** (`retainingRuns`): every stretch of atlas-road edge where the ground
+  within 8 real m is steeper than 38° (drops into the river left out), in game m with the road's
+  surface and the ground 8 m out (above the road: a cut; below: a fill). The city builds retaining
+  walls along them (STREETS). Empty under v1.
+- **Saves** store the profile (`player.terrain`); a save from another profile (or none: v1), or
+  with the feet more than 1 m off whatever is under them, is put back on `findSafeGround` near its
+  x, z on load (`SaveSystem.ts`). Interiors and swimmers are left alone.
+
+Helpers (offline, seconds): `scripts/audit/g1b-roads.mjs [--plan]` (every atlas road's steepest
+4 m on its atlas line and the plan's line), `g1b-profile.mjs <road> [--plan]` (one road, metre by
+metre, with the pads it passes), `g1b-spot.mjs <x> <z>` (the grid round a point, its pads and
+roads), `g1b-flanks.mjs`.
 
 ## Rendering
 

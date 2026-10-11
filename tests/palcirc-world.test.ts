@@ -106,7 +106,7 @@ function walkLocal(id: string, a: [number, number, number], legs: [number, numbe
 beforeAll(async () => {
   await initPhysics();
   const bounds = { minX: -420, maxX: 720, minZ: 60, maxZ: 1260 };
-  hm = buildHeightmap({ ...atlas, bounds } as never, { spacing: 2, pads: landmarkPads(atlas.CITY_BOUNDS) });
+  hm = buildHeightmap({ ...atlas, bounds } as never, { spacing: 2, pads: landmarkPads(atlas.CITY_BOUNDS), profile: 'v1' }); // G1b: v1's ground until this crew re-fits its spots to v2 (docs/design/solid-ground.md §3, Tests)
   world = makeWorld(false);
   const game = world.game as Game & { heightmap: Heightmap };
   game.heightmap = hm;
