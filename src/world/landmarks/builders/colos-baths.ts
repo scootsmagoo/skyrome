@@ -234,8 +234,50 @@ function buildBathsTrajan(ctx: LandmarkContext): LandmarkBuild {
   // ---- libraries (exedrae) in the SW corners
   for (const sx of [-1, 1]) {
     const lx = sx * (EW - 18);
-    apse(b, { radius: 9, height: 10, thickness: 1.2, material: 'brick', domeMaterial: 'concrete', niches: high ? 9 : 0, detail: 'low', collide: true }, new THREE.Matrix4().makeTranslation(lx, 0, ED - wallT));
-    d.span('paving_travertine', lx - 9, -0.1, ED - wallT - 2, lx + 9, 0.08, ED + 6);
+    const az = ED - wallT; // the apse's chord; the half-drum bulges +z, out of the enclosure
+    // Substructure (phase 4b B10): the exedrae stand on the lip of the pad over the Oppian's
+    // slope, 14 m above the hillside at the east one. A brick half-drum under each apse, a block
+    // under its paving, from the lowest ground − 0.5 up to the floor, with the collider to match;
+    // the paving no longer reaches past the terrace (it overhung the slope with nothing under it).
+    let gy = 0;
+    for (let i = 0; i <= 10; i++) for (let j = 0; j <= 6; j++) gy = Math.min(gy, ctx.groundAt(lx - 10.6 + (21.2 * i) / 10, az - 2 + (12.8 * j) / 6));
+    gy -= 0.5;
+    const drumR = 10.5;
+    const drumH = 0.07 - gy;
+    {
+      const drum = new THREE.CylinderGeometry(drumR, drumR, drumH, high ? 32 : 12, 1, false, -Math.PI / 2, Math.PI);
+      drum.translate(lx, gy + drumH / 2, az);
+      b.add(drum, 'brick', I(), { castShadow: true });
+      b.collider({ kind: 'cylinder', center: new THREE.Vector3(lx, gy + drumH / 2, az), halfHeight: drumH / 2, radius: drumR - 0.3 });
+      d.span('brick', lx - 10.6, gy, az - 2, lx + 10.6, 0.07, az + 0.2, { collide: true });
+      // Travertine string course at the floor and pilaster strips down the tall face.
+      const course = new THREE.CylinderGeometry(drumR + 0.12, drumR + 0.12, 0.3, high ? 32 : 12, 1, false, -Math.PI / 2, Math.PI);
+      course.translate(lx, -0.3, az);
+      b.add(course, 'travertine', I());
+      if (high && gy < -4) {
+        for (let k = 0; k <= 8; k++) {
+          const a = -Math.PI / 2 + (Math.PI * k) / 8;
+          const px = lx + Math.sin(a) * (drumR + 0.1), pz = az + Math.cos(a) * (drumR + 0.1);
+          d.box('brick', px, (gy + 0.6 - 0.5) / 2, pz, 0.9, -0.5 - gy - 0.6, 0.5, { ry: a });
+        }
+      }
+    }
+    apse(b, { radius: 9, height: 10, thickness: 1.2, material: 'brick', domeMaterial: 'concrete', niches: high ? 9 : 0, detail: 'low', collide: true }, new THREE.Matrix4().makeTranslation(lx, 0, az));
+    d.span('paving_travertine', lx - 9, -0.1, az - 2, lx + 9, 0.08, az + 0.05);
+    {
+      // The apse's own floor: a half-disc inside its wall (the drum's collider carries it).
+      const shape = new THREE.Shape();
+      shape.moveTo(9, 0);
+      for (let i = 1; i <= 32; i++) {
+        const a = (i / 32) * Math.PI;
+        shape.lineTo(Math.cos(a) * 9, -Math.sin(a) * 9);
+      }
+      shape.lineTo(9, 0);
+      const fg = new THREE.ShapeGeometry(shape, 1);
+      fg.rotateX(-Math.PI / 2);
+      fg.translate(lx, 0.08, az);
+      b.add(fg, 'paving_travertine', I(), { castShadow: false });
+    }
     // Book cupboards (armaria) in two tiers along the curve are the niches; a desk and a statue.
     if (high) {
       placeProp(d, 'table_marble', lx, 0.08, ED + 2.5, 0, { rng: new Rng('lib' + sx) });
