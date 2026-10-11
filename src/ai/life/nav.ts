@@ -7,9 +7,13 @@
  * Searches are rationed per fixed step so a crowd re-planning at once can't spike a frame:
  * a caller that gets 'busy' simply asks again next step.
  */
+import type { LearnedWalls } from './learnedWalls';
 import type { NavGrid } from './navgrid';
 import type { StreetNav } from './streets';
 import type { Vec2 } from './steering';
+
+/** A street node is judged walled off only from labels the flood made with the grid around it (and the walker) built: this far. */
+const SETTLED_R = 24;
 
 export type PathResult = Vec2[] | null | 'busy';
 
@@ -36,7 +40,25 @@ export class NavService {
     return !!this.grid && this.grid.ready(x, z);
   }
 
-  findPath(ax: number, az: number, bx: number, bz: number, retry = true): PathResult {
+  /**
+   * A path from a to b. `avoid`: the walker's own learned walls, which this search keeps out of
+   * (nobody else's searches see them).
+   */
+  findPath(ax: number, az: number, bx: number, bz: number, retry = true, avoid: LearnedWalls | null = null): PathResult {
+    const grid = this.grid;
+    if (!grid || !avoid || !avoid.n) return this.search(ax, az, bx, bz, retry);
+    grid.avoid(avoid.xz, avoid.n, ax, az, bx, bz);
+    try {
+      return this.search(ax, az, bx, bz, retry);
+    } finally {
+      grid.avoid(null);
+    }
+  }
+
+  /** The chunk stamp under a street node (a cut node comes back when it changes). */
+  private readonly stampAt = (x: number, z: number) => (this.grid ? this.grid.areaStamp(x, z, 0) : 0);
+
+  private search(ax: number, az: number, bx: number, bz: number, retry: boolean): PathResult {
     const grid = this.grid;
     const d = Math.hypot(bx - ax, bz - az);
     if (d < 0.3) return [{ x: bx, z: bz }];
@@ -61,6 +83,8 @@ export class NavService {
       if (this.used >= this.budget) return 'busy';
       this.used++;
       this.searches++;
+      // Nodes cut out earlier come back once the grid under them has changed (built again, refreshed with something new, dropped).
+      if (streets.dropped) streets.restoreCut(this.stampAt);
       const p = streets.path(ax, az, bx, bz);
       if (p) {
         // The street graph's straight lines can cut through a portico or a corner: lead through
@@ -77,9 +101,11 @@ export class NavService {
             if (lead) return [...lead, ...p.slice(i + 1)];
             // Walled off from where we stand while we are on ground that is connected: this street
             // node lies behind a building (the street graph is drawn, the grid reads the colliders).
-            // Cut it out and route the long way round, once. (Near only: the flood covers the built grid, so a
-            // far node whose way in leaves it would read as walled off wrongly.)
-            if (retry && Math.hypot(node.x - ax, node.z - az) < 30 && grid.reachable(ax, az) && !grid.reachable(node.x, node.z) && streets.drop(p[i].x, p[i].z)) return this.findPath(ax, az, bx, bz, false);
+            // Cut it out and route the long way round, once. Near only, and only from labels the flood
+            // made with the grid round both ends built: a chunk built after the flood reads as walled
+            // off though it may be open (the flood covers the built grid). The cut lasts until the grid
+            // under the node changes (`restoreCut`).
+            if (retry && Math.hypot(node.x - ax, node.z - az) < 30 && grid.reachable(ax, az) && !grid.reachable(node.x, node.z) && grid.settled(ax, az, SETTLED_R) && grid.settled(node.x, node.z, SETTLED_R) && streets.drop(p[i].x, p[i].z, this.stampAt(p[i].x, p[i].z))) return this.search(ax, az, bx, bz, false);
           }
         }
         return p;

@@ -420,8 +420,10 @@ over 30 s, no unsticks.
 ## Walls (MOVE crew, 2026-10)
 
 See docs/modules/movement.md: the wall counter (`wallCount`, `scripts/npcwalls.mjs`), the nav clearance from step height,
-learning walls from contact (`learnWall`), `Mover` re-planning when the way to the corner closes, and `StreetNav.drop`.
-`?wallfix=0&navlow=0` switches them off for A/B runs.
+learning walls from contact (`learnWall`: each NPC's own, `Mover.walls`, 30 s; never a station's dressing), `Mover`
+re-planning when the way to the corner closes, `StreetNav.drop` (judged on a settled grid, undone when the grid there
+changes) and steep terrain (over 40 degrees) being no floor for the planner.
+`?wallfix=0&navlow=0&navslope=0` switches them off for A/B runs.
 
 ## Shared-file changes
 

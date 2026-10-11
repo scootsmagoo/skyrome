@@ -162,7 +162,20 @@ benches, carts, tree trunks: built later, near the player) and the side of a sta
 (static colliders: landmarks, bridges, quays) walks the link in 0.5 m steps — at most 0.4 m up or
 down per step, nothing at knee or chest height, headroom above. Nodes standing inside a collider
 (a road crossing inside a monument) move to the nearest free spot, and atlas roads that run into a
-monument's pier (the line misses the arch's passage) get a detour node. Market stalls leave aisles
+monument's pier (the line misses the arch's passage) get a detour node. A road link the physics probe finds no way
+along or beside (its line runs through a building's walls: the Clivus Palatinus, bent round Jupiter Stator, ran through the
+walled court of the Porticus Margaritaria, a node in the court at (183, 113) and its links through the walls) takes no
+other link onto it, and once the network is complete it is cut when that leaves a lone node (no link) or the network
+joins its ends another way at most 2.5 times as long plus 60 m; otherwise it stays (the graph has no better way: the
+Argiletum's link through the Forum of Nerva at (64, -25)-(84, -35), whose way round is 950 m; the NPC planner cuts such a
+node when the walk finds it walled, `StreetNav.drop`). Core, 2026-10-10: 10 walled links, 6 cut (the lone nodes in the
+Porticus Margaritaria's court, at Jupiter Stator's corner and in Trajan's Markets), 4 kept (`game.streets.walledLinks`).
+`nearest` never answers with a node that has no link (a cut-off node, a door nothing reaches). The root cause of the
+Clivus Palatinus's node is the plan: `detourRoad` picks the side of Jupiter Stator whose way round crosses the Porticus
+Margaritaria, a precinct building it does not bend round. Keeping detours out of precinct buildings moves that road to the
+east side, but any change to a road reshuffles every minor street and block in the city (1,283 of 1,773 streets and
+1,479 of 1,816 blocks changed: the plan's subdivision shares one random sequence), so it is left for a pass that also
+re-checks the story's pins and the life module's posts. Market stalls leave aisles
 toward the streets the square links to. Spot kinds: `shopDoor`, `houseDoor` (along block frontages, one every
 ~12 m), `fountain`, `shrine`, `stall`, `bench`, `container` (amphora stacks and goods: GDD §12.3
 street-level containers). `heading` is the way someone using the spot faces (a shopkeeper looks out

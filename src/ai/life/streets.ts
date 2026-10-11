@@ -210,11 +210,17 @@ export class StreetNav {
     return out.reverse();
   }
 
-  /** Waypoints (game x/z) from a point to a point along the streets, or null. */
+  /** Not a node cut out by `drop` (a route never starts or ends on one: it would find no way out). */
+  private readonly notCut = (n: StreetNode) => !this.cut.length || !this.cut.some((c) => c.i === n.i);
+
+  /**
+   * Waypoints (game x/z) from a point to a point along the streets, or null. (A node the city left without a
+   * link can still be the nearest: no route then, and the caller heads straight there, as it always has.)
+   */
   path(ax: number, az: number, bx: number, bz: number): { x: number; z: number }[] | null {
     if (this.empty) return null;
-    const a = this.nearest(ax, az, 120);
-    const b = this.nearest(bx, bz, 120);
+    const a = this.nearest(ax, az, 120, this.notCut);
+    const b = this.nearest(bx, bz, 120, this.notCut);
     if (!a || !b) return null;
     const r = this.route(a.i, b.i);
     if (!r) return null;
@@ -228,19 +234,50 @@ export class StreetNav {
 
   /**
    * Cut a node out of the graph: the walk found it unreachable (a street the city drew through a
-   * building: the grid reads the real colliders). Routes stop passing through it. Returns whether
-   * a node within 3 m was cut.
+   * building: the grid reads the real colliders). Routes stop passing through it until `restoreCut`
+   * finds the ground under it changed. `stamp`: what the nav grid there looked like (`NavGrid.areaStamp`).
+   * Returns whether a node within 3 m was cut.
    */
-  drop(x: number, z: number): boolean {
+  drop(x: number, z: number, stamp = 0): boolean {
     const n = this.nearest(x, z, 3);
     if (!n || !this.adj[n.i].length) return false;
     for (const e of this.adj[n.i]) {
       const back = this.adj[e.to];
       for (let k = back.length - 1; k >= 0; k--) if (back[k].to === n.i) back.splice(k, 1);
     }
+    const saved = this.adj[n.i].slice();
     this.adj[n.i].length = 0;
     this.dropped++;
+    this.cut.push({ i: n.i, edges: saved, stamp });
     return true;
+  }
+
+  /** Cut nodes with their links and the grid stamp they were judged on. */
+  private cut: { i: number; edges: { to: number; w: number; width: number }[]; stamp: number }[] = [];
+
+  /**
+   * Put back the cut nodes whose ground has changed since (`stampAt` differs from the stamp they were cut
+   * with: the grid there was built again, refreshed with something new, or dropped). A link to a node that
+   * is still cut comes back with that node.
+   */
+  restoreCut(stampAt: (x: number, z: number) => number) {
+    for (let k = this.cut.length - 1; k >= 0; k--) {
+      const c = this.cut[k];
+      const n = this.nodes[c.i];
+      if (stampAt(n.x, n.z) === c.stamp) continue;
+      this.cut.splice(k, 1);
+      this.dropped--;
+      for (const e of c.edges) {
+        const other = this.cut.find((o) => o.i === e.to);
+        if (other) {
+          other.edges.push({ to: c.i, w: e.w, width: e.width });
+          continue;
+        }
+        this.adj[c.i].push(e);
+        const back = this.adj[e.to];
+        if (!back.some((b) => b.to === c.i)) back.push({ to: c.i, w: e.w, width: e.width });
+      }
+    }
   }
 
   /** Spots of a kind within `r` of a point, nearest first. */

@@ -156,11 +156,26 @@
     return core.list.filter((c) => c !== pc && c.status === 'active' && !spared(c) && (c.target === pc || core.hostile(c, pc) || questFoe(c)) && dist(c.position) < 25 && floor(c));
   }
   let swingT = 0;
+  /** The closest the fight has come to its foe, and when (a foe behind a wall that never comes round is a jam too). */
+  let fightBest = Infinity;
+  let fightBestT = 0;
+  let fightFoe = null;
   function fightStep(list) {
     const pc = game.combat.playerC;
     const t = list.sort((a, b) => dist(a.position) - dist(b.position))[0];
     face(t.position.x, t.position.z);
     const d = dist(t.position);
+    // Neither side gets nearer for 15 s (the bot only faces its foe and walks: a wall between them holds both): a snag,
+    // reported like a walking jam, and the bot steps round to the foe's side.
+    if (t !== fightFoe || d < fightBest - 1) (fightFoe = t), (fightBest = d), (fightBestT = performance.now());
+    else if (d > 2.6 && performance.now() - fightBestT > 15000) {
+      snag('fight jam', `${t.id} ${d.toFixed(1)} m away for 15 s at ${Math.round(t.position.x)},${Math.round(t.position.z)}`);
+      const g = game.population?.nav?.snap?.(t.position.x, t.position.z, 4) ?? { x: t.position.x, z: t.position.z };
+      L.teleports++;
+      p.teleport({ x: g.x, y: (game.heightmap?.heightAt(g.x, g.z) ?? p.position.y) + 0.5, z: g.z });
+      fightBestT = performance.now();
+      return;
+    }
     hold('KeyW', d > 2.2);
     hold('ShiftLeft', false);
     // A brawl is fought with fists (drawing a blade turns it into assault): never draw then.
@@ -250,8 +265,12 @@
     const lead = grid.findPath(p.position.x, p.position.z, c.x, c.z, 4000);
     if (lead && lead.length) pts.unshift(...lead.filter((q) => Math.hypot(q.x - c.x, q.z - c.z) > 0.5));
     // No way there on the grid, and the grid says that place is walled off from here (a street node drawn inside
-    // a wall or behind a building: the Ludus gate's, 2 m from the wall): a player would not walk into it; skip the point.
-    else if (!lead && pts.length > 1 && grid.reachable(p.position.x, p.position.z) && !grid.reachable(c.x, c.z)) pts.shift();
+    // a wall or behind a building): a player would not walk into it; skip the point, but report it (a snag, so a
+    // street graph that leads into walls shows in the run instead of being worked round quietly).
+    else if (!lead && pts.length > 1 && grid.reachable(p.position.x, p.position.z) && !grid.reachable(c.x, c.z)) {
+      snag('walled waypoint', `${Math.round(c.x)},${Math.round(c.z)} is walled off from here (street graph)`);
+      pts.shift();
+    }
   }
   /** Face the next point of the path (popping those within `pop` m), hold W, and handle a jam. */
   function follow(target, pop, unstuck) {

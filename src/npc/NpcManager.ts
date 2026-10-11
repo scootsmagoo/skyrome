@@ -37,7 +37,7 @@ import { StreetNav } from '../ai/life/streets';
 import { laneAt, type LaneSet } from '../ai/life/lanes';
 import { atlasLanes, cartLane } from './crowd/atlasLanes';
 import { setStationSpots, type StationDef, type StationDressing, type StationMember } from './crowd/stations';
-import { StationDirector, type StationHost } from './stationDirector';
+import { STATION_PROP, StationDirector, type StationHost } from './stationDirector';
 import { BarkDirector, type BarkKind } from './barks';
 import { makeTask, NpcBrain, type LifeContext } from './brain';
 import { CartDirector, type CartHost } from './carts';
@@ -1387,6 +1387,9 @@ export class NpcManager implements System {
       block: (x, z, r) => {
         for (let dz = -r; dz <= r; dz += 0.5) for (let dx = -r; dx <= r; dx += 0.5) if (dx * dx + dz * dz <= r * r) m.grid.block(x + dx, z + dz);
       },
+      unblock: (x, z, r) => {
+        for (let dz = -r; dz <= r; dz += 0.5) for (let dx = -r; dx <= r; dx += 0.5) if (dx * dx + dz * dz <= r * r) m.grid.unblock(x + dx, z + dz);
+      },
     };
   }
 
@@ -1706,9 +1709,12 @@ export class NpcManager implements System {
   /**
    * Wall learning: an NPC asked to walk that has hardly moved for a third of a second, pushing into
    * a static collider, has found a wall the nav grid did not know (a thin or low wall, a corner a
-   * cell was too generous with). Mark the cell ahead as blocked, plan again from here, and back off
-   * if it keeps happening (CLAUDE.md: path failures back off): each re-plan on the same NPC waits
-   * longer, and after four the stuck ladder deals with it.
+   * cell was too generous with). It remembers the cell ahead as a wall of its own (`Mover.walls`:
+   * its plans keep out of it for LEARNED_WALL_S, nobody else's do, so a false alarm never closes a
+   * doorway for the crowd), plans again from here, and backs off if it keeps happening (CLAUDE.md:
+   * path failures back off): each re-plan on the same NPC waits longer, and after four the stuck
+   * ladder deals with it. Things that come and go (a station's stall, shutters, a cart) are never
+   * learned: the stuck ladder walks round them.
    */
   private learnWall(n: Npc, wish: THREE.Vector3, dt: number) {
     if (n.wallFixes && this.clock > n.wallFixAt + 20) n.wallFixes = 0;
@@ -1725,13 +1731,21 @@ export class NpcManager implements System {
     }
     if (++n.slowRun !== 20 || this.clock < n.wallFixAt || n.wallFixes >= 4) return;
     n.slowRun = 0;
-    if (!n.touchedWall()) return;
+    const wall = n.touchedWall();
+    if (!wall || this.movable(wall)) return;
     const sp = Math.sqrt(sp2);
-    this.grid.block(n.currPos.x + (wish.x / sp) * 0.7, n.currPos.z + (wish.z / sp) * 0.7);
+    n.mover.walls.add(n.currPos.x + (wish.x / sp) * 0.7, n.currPos.z + (wish.z / sp) * 0.7);
     n.mover.replan();
     n.wallFixes++;
     n.wallFixAt = this.clock + 1.5 * n.wallFixes;
     this.stats.wallLearned++;
+  }
+
+  /** A collider that comes and goes (a station's dressing) or moves (on a body that is not fixed): never a learned wall. */
+  private movable(c: RAPIER.Collider): boolean {
+    if (this.game.physics.ownerOf(c) === STATION_PROP) return true;
+    const b = c.parent();
+    return !!b && !b.isFixed();
   }
 
   /** Wall probe: this step, was a walking NPC pushing into a wall (see `wallCount`)? */
@@ -1744,7 +1758,8 @@ export class NpcManager implements System {
     const w = this.wall;
     w.walking++;
     const moved = Math.hypot(n.currPos.x - n.prevPos.x, n.currPos.z - n.prevPos.z);
-    if (moved > sp * dt * 0.35 || !n.touchedWall()) {
+    const hit = moved > sp * dt * 0.35 ? null : n.touchedWall();
+    if (!hit) {
       n.wallRun = 0;
       return;
     }
@@ -1762,6 +1777,9 @@ export class NpcManager implements System {
           c ? `corner:${g.lineWalkable(n.currPos.x, n.currPos.z, c.x, c.z) ? 'clear' : 'WALLED'}@${Math.hypot(c.x - n.currPos.x, c.z - n.currPos.z).toFixed(1)}m` : 'nocorner',
           `path:${m.idx}/${m.path.length}`,
           `dg:${Math.hypot(m.goalX - n.currPos.x, m.goalZ - n.currPos.z).toFixed(1)}`,
+          // What it pushes into: a station's dressing (never learned), something that moves, or the built world.
+          `hit:${this.game.physics.ownerOf(hit) === STATION_PROP ? 'station' : this.movable(hit) ? 'moving' : 'static'}`,
+          `learned:${m.walls.n}`,
           n.brain?.task?.kind ?? 'notask',
         ].join(' ');
         w.log.push({ id: n.id, x: Math.round(n.currPos.x * 10) / 10, z: Math.round(n.currPos.z * 10) / 10, goal: `${m.goalX.toFixed(0)},${m.goalZ.toFixed(0)}`, steps: 6, why });
@@ -1920,7 +1938,9 @@ export class NpcManager implements System {
     const c = n.mover.corner();
     const seen = this.isSeen(n.position.x, n.position.y + 1, n.position.z);
     this.logStuck(n, seen);
-    this.grid.block(n.position.x + Math.sin(n.heading) * 0.8, n.position.z + Math.cos(n.heading) * 0.8);
+    // What it was stuck on is a wall of its own (`Mover.walls`), not the crowd's: a shove or a crowd can
+    // pin someone anywhere, and a cell marked for everyone could close a doorway.
+    n.mover.walls.add(n.position.x + Math.sin(n.heading) * 0.8, n.position.z + Math.cos(n.heading) * 0.8);
     if (!seen && c) {
       // Out of sight: hop ahead to the next free cell on the path.
       const p = this.grid.nearestWalkable(c.x, c.z, 3) ?? c;

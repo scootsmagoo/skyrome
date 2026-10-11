@@ -303,6 +303,18 @@ export class Physics {
     return hit ? hit.point.y : null;
   }
 
+  private readonly downRay = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
+
+  /** Normal.y of the surface straight below a point, or null when nothing is hit. Reuses its ray and builds no vectors. */
+  floorNormalY(x: number, y: number, z: number, maxDist: number, filterLayers: number = ALL_LAYERS): number | null {
+    const o = this.downRay.origin;
+    o.x = x;
+    o.y = y;
+    o.z = z;
+    const hit = this.world.castRayAndGetNormal(this.downRay, maxDist, true, undefined, groups(ALL_LAYERS, filterLayers));
+    return hit ? hit.normal.y : null;
+  }
+
   /** All colliders whose shapes intersect a sphere. */
   overlapSphere(center: THREE.Vector3Like, radius: number, filterLayers: number = ALL_LAYERS) {
     const out: { collider: RAPIER.Collider; owner: unknown }[] = [];

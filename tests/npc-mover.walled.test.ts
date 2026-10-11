@@ -6,7 +6,7 @@ import type { NavService } from '../src/ai/life/nav';
 function fakeNav(open: { value: boolean }) {
   const calls = { search: 0 };
   const nav = {
-    grid: { ready: () => true, lineWalkable: () => open.value },
+    grid: { ready: () => true, lineClear: () => open.value },
     findPath: () => {
       calls.search++;
       return [{ x: 5, z: 0 }, { x: 10, z: 0 }];
@@ -36,5 +36,21 @@ describe('Mover: the way to the corner closes', () => {
     expect(calls.search).toBeGreaterThanOrEqual(2);
     expect(calls.search).toBeLessThanOrEqual(5);
     expect(events).toBeGreaterThanOrEqual(0);
+  });
+
+  it('does not plan again while the walker is still closing on its corner (the grid can be stricter than the body)', () => {
+    const open = { value: false };
+    const { nav, calls } = fakeNav(open);
+    const m = new Mover();
+    m.setGoal(10, 0, 1.3);
+    const out = { x: 0, z: 0 };
+    // Walking toward the corner at (5, 0) at 1.3 m/s: the grid says walled, but the walker gets nearer each look.
+    let x = 0;
+    for (let i = 0; i < 60 * 3; i++) {
+      m.update(1 / 60, x, 0, nav, out);
+      x += out.x / 60;
+    }
+    expect(x).toBeGreaterThan(3);
+    expect(calls.search).toBe(1);
   });
 });

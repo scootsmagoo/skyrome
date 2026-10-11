@@ -4,7 +4,10 @@
  * with the REAL player controller (simulated W key, walk and run) and records every stall.
  *
  *   node scripts/stepwalk.mjs [--n 40] [--seed 1] [--modes walk,run] [--area x,z,r] [--json out.json]
- *                             [--query "at=rostra&hour=10"] [--minrise 0.06] [--maxrise 0.46]
+ *                             [--query "at=rostra&hour=10"] [--minrise 0.06] [--maxrise 0.46] [--ab]
+ *
+ * --ab walks every crossing twice in the same page, with the step-up assist as it is and as it was
+ * before the step-over work (Actor.legacyStep, `?stepold=1`), interleaved, and reports both.
  *
  * How: it picks random street-graph edges (game.streets, inside the area: default the whole
  * map), teleports there so the city builds around it, and scans lines across the street (and
@@ -35,6 +38,7 @@ const opts = {
   // Replay: "sx,sz,dx,dz,len;..." (the start and direction a STALL line prints) instead of random street samples.
   lines: args.lines ? String(args.lines).split(';').map((l) => l.split(',').map(Number)) : null,
   verbose: !!args.verbose,
+  variants: args.ab ? ['new', 'old'] : ['new'],
 };
 
 const { createServer } = await import('vite');
@@ -134,10 +138,27 @@ const report = await page.evaluate(async (o) => {
   }
 
   const tests = [];
-  const result = { lines: 0, walks: 0, stalls: [], byMode: {}, byRise: {}, edgesTried: 0 };
+  const result = { lines: 0, edgesTried: 0, v: {} };
+  for (const v of o.variants) result.v[v] = { walks: 0, stalls: [], byMode: {}, byRise: {}, setupMisses: 0 };
   const speeds = { walk: 1.9, run: 4.4, sprint: 7.4 };
+  // The Actor class (Player extends it): its static `legacyStep` switches the old step-up assist on.
+  let ActorClass = p.constructor;
+  while (ActorClass && !Object.prototype.hasOwnProperty.call(ActorClass, 'legacyStep')) ActorClass = Object.getPrototypeOf(ActorClass);
 
-  async function walkLine(c, mode, back) {
+  /** Walk a crossing both ways in every mode, once per variant of the step-up assist. */
+  async function walkAll(c) {
+    for (const mode of o.modes) {
+      for (const back of [false, true]) {
+        for (const variant of o.variants) {
+          if (ActorClass) ActorClass.legacyStep = variant === 'old';
+          await walkLine(c, mode, back, result.v[variant]);
+        }
+      }
+    }
+    if (ActorClass) ActorClass.legacyStep = false;
+  }
+
+  async function walkLine(c, mode, back, result) {
     const A = back ? c.b : c.a;
     const B = back ? c.a : c.b;
     const dx = (B.x - A.x) / c.len;
@@ -150,7 +171,7 @@ const report = await page.evaluate(async (o) => {
     // where it was put (fell, or was pushed) is a harness miss, not a stall.
     await wait(450);
     if (Math.abs(p.position.y - A.g.y) > 0.3 || Math.hypot(p.position.x - A.x, p.position.z - A.z) > 0.5) {
-      result.setupMisses = (result.setupMisses ?? 0) + 1;
+      result.setupMisses++;
       return;
     }
     const key = 'KeyW';
@@ -214,10 +235,7 @@ const report = await page.evaluate(async (o) => {
       if (o.verbose) result.scans = (result.scans ?? []).concat([found.length]);
       for (const c of found) {
         tests.push(c);
-        for (const mode of o.modes) {
-          await walkLine(c, mode, false);
-          await walkLine(c, mode, true);
-        }
+        await walkAll(c);
       }
     }
     result.tests = tests.length;
@@ -254,10 +272,7 @@ const report = await page.evaluate(async (o) => {
     found.sort((u, v) => v.ledges.length - u.ledges.length);
     const c = found[0];
     tests.push(c);
-    for (const mode of o.modes) {
-      await walkLine(c, mode, false);
-      await walkLine(c, mode, true);
-    }
+    await walkAll(c);
   }
   result.tests = tests.length;
   return result;
@@ -267,9 +282,27 @@ await browser.close();
 await server.close();
 
 const pct = (x) => (x.n ? `${x.stalls}/${x.n} (${((100 * x.stalls) / x.n).toFixed(0)}%)` : '0/0');
-console.log(`stepwalk: ${report.tests} crossings from ${report.lines} street samples, ${report.walks} walks (${report.setupMisses ?? 0} start misses skipped)`);
-for (const [k, v] of Object.entries(report.byMode)) console.log(`  mode ${k.padEnd(9)} stalls ${pct(v)}`);
-for (const [k, v] of Object.entries(report.byRise).sort()) console.log(`  highest rise ${k.padEnd(10)} stalls ${pct(v)}`);
-for (const s of report.stalls) console.log(`  STALL ${s.mode}${s.back ? ' back' : ''} ${s.outcome} at ${s.at.join(',')} progress ${s.progress}/${s.len} ledge ${JSON.stringify(s.ledge)} diag ${JSON.stringify(s.diag)} line ${s.start[0]},${s.start[1]},${s.dir[0]},${s.dir[1]},${s.len} rises ${s.rises.slice(0, 6).join('/')}`);
+/**
+ * What stopped the walker, from the rays in front of its feet (0.05, 0.2, 0.4, 0.8 m up, 1.2 m reach): `kerb` when only
+ * the feet are blocked (a low ledge: a real step failure); `wall` when the rays at knee or waist height hit too (the
+ * scanner's line was not clear: a rail, a wall, a bench); `embedded` when that tall thing is within 0.4 m and the walker
+ * never got going (it started inside or against geometry); `other` when nothing is in front (a slope, a hole).
+ */
+function classify(s) {
+  const [f0, f1, f2, f3] = s.diag.ahead;
+  const tall = [f2, f3].filter((d) => d !== null);
+  if (tall.length) return s.progress < 0.3 && Math.min(...tall) < 0.4 ? 'embedded' : 'wall';
+  if (f0 !== null || f1 !== null) return 'kerb';
+  return 'other';
+}
+console.log(`stepwalk: ${report.tests} crossings from ${report.lines} street samples`);
+for (const [name, r] of Object.entries(report.v)) {
+  const kinds = {};
+  for (const s of r.stalls) kinds[(s.kind = classify(s))] = (kinds[s.kind] ?? 0) + 1;
+  console.log(`\n[${name === 'old' ? 'step-up assist as it was (Actor.legacyStep)' : 'step-up assist as it is'}] ${r.walks} walks (${r.setupMisses} start misses skipped), stalls ${r.stalls.length}: ${Object.entries(kinds).map(([k, n]) => `${k} ${n}`).join(', ') || 'none'}`);
+  for (const [k, v] of Object.entries(r.byMode)) console.log(`  mode ${k.padEnd(9)} stalls ${pct(v)}`);
+  for (const [k, v] of Object.entries(r.byRise).sort()) console.log(`  highest rise ${k.padEnd(10)} stalls ${pct(v)}`);
+  for (const s of r.stalls) console.log(`  STALL ${s.kind} ${s.mode}${s.back ? ' back' : ''} ${s.outcome} at ${s.at.join(',')} progress ${s.progress}/${s.len} ledge ${JSON.stringify(s.ledge)} diag ${JSON.stringify(s.diag)} line ${s.start[0]},${s.start[1]},${s.dir[0]},${s.dir[1]},${s.len} rises ${s.rises.slice(0, 6).join('/')}`);
+}
 if (errors.length) console.log('page errors:', errors.slice(0, 5));
 if (args.json) writeFileSync(resolve(root, String(args.json)), JSON.stringify(report, null, 1));
