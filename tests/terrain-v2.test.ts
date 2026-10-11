@@ -24,6 +24,7 @@ import {
   RETAIN_DEG,
   signedDistance,
   type Heightmap,
+  type TerrainRoad,
   type TerrainSource,
 } from '../src/world/terrain/heightmap';
 import { chain, footOn } from '../src/world/terrain/riverbanks';
@@ -91,14 +92,14 @@ describe('v2 shapes (pure)', () => {
 
   it('a cliff ends CLIFF_ROAD_CLEAR m short of a road band; flights of steps keep it', () => {
     const cliff = { a: [0, 0] as const, b: [100, 0] as const };
-    const road = { id: 'r', width: 6, paving: 'basalt', points: [[50, -40], [50, 40]] as [number, number][] };
+    const road: TerrainRoad = { id: 'r', width: 6, paving: 'basalt', points: [[50, -40], [50, 40]] };
     const parts = clipCliff(cliff, [road]);
     expect(parts.length).toBe(2);
     const gap = 3 + CLIFF_ROAD_CLEAR;
     expect(parts[0].b[0]).toBeLessThanOrEqual(50 - gap + 1);
     expect(parts[0].b[0]).toBeGreaterThan(50 - gap - 2);
     expect(parts[1].a[0]).toBeGreaterThanOrEqual(50 + gap - 1);
-    expect(clipCliff(cliff, [{ ...road, paving: 'steps' }])).toEqual([cliff]);
+    expect(clipCliff(cliff, [{ ...road, paving: 'steps' as const }])).toEqual([cliff]);
   });
 
   it('regrade makes the least cut and fill under the grade', () => {
@@ -141,10 +142,10 @@ describe('the city under v2', () => {
     const v1 = city('v1'), v2 = city('v2');
     expect(v1.profile).toBe('v1');
     expect(v2.profile).toBe('v2');
-    expect(v1.features.retaining).toEqual([]);
-    expect(v2.features.retaining.length).toBeGreaterThan(10);
+    expect(v1.features!.retaining).toEqual([]);
+    expect(v2.features!.retaining.length).toBeGreaterThan(10);
     const lim = Math.tan((RETAIN_DEG * Math.PI) / 180);
-    for (const run of v2.features.retaining) {
+    for (const run of v2.features!.retaining) {
       expect(run.points.length).toBeGreaterThanOrEqual(2);
       expect(atlas.ROADS.some((r) => r.id === run.road && r.paving !== 'steps')).toBe(true);
       for (const p of run.points) expect(p.grade).toBeGreaterThan(lim);
