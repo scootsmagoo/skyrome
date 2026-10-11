@@ -26,8 +26,6 @@ export interface GridLike {
   lineWalkable(ax: number, az: number, bx: number, bz: number): boolean;
   /** `lineWalkable` for a body (clear of walls to either side): the leads use it when the grid has it. */
   lineClear?(ax: number, az: number, bx: number, bz: number): boolean;
-  /** Is the cell at (x, z) open floor? (Links are judged only between open cells when the grid has it.) */
-  walkable?(x: number, z: number): boolean;
   findPath(ax: number, az: number, bx: number, bz: number, maxExpand?: number): { x: number; z: number }[] | null;
 }
 
@@ -305,11 +303,13 @@ export function lineOk(grid: GridLike, ax: number, az: number, bx: number, bz: n
   return grid.lineClear ? grid.lineClear(ax, az, bx, bz) : grid.lineWalkable(ax, az, bx, bz);
 }
 
-/** A link the grid can judge: both ends and its middle built, both ends open floor, not too long. */
+/**
+ * A link the grid can judge: both ends and its middle built, not too long. (A node standing in a wall is judged too:
+ * its line is blocked, and the way round starts from the open cell beside it, `findPath`; none, and the link is cut.)
+ */
 export function judged(grid: GridLike, ax: number, az: number, bx: number, bz: number): boolean {
   if (Math.hypot(bx - ax, bz - az) > PLAN.linkMax) return false;
-  if (!grid.ready(ax, az) || !grid.ready(bx, bz) || !grid.ready((ax + bx) / 2, (az + bz) / 2)) return false;
-  return !grid.walkable || (grid.walkable(ax, az) && grid.walkable(bx, bz));
+  return grid.ready(ax, az) && grid.ready(bx, bz) && grid.ready((ax + bx) / 2, (az + bz) / 2);
 }
 
 /**

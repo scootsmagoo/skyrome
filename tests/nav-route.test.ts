@@ -249,7 +249,6 @@ describe('planner', () => {
     let round: { x: number; z: number }[] | null = [{ x: 50, z: 6 }, { x: 60, z: 0 }];
     const grid: GridLike = {
       ready: () => true,
-      walkable: () => true,
       lineWalkable: (ax, az, bx, bz) => !blocked(ax, az, bx, bz),
       findPath: (ax, az, bx, bz) => (blocked(ax, az, bx, bz) ? round : [{ x: bx, z: bz }]),
     };
@@ -351,7 +350,7 @@ describe('QuestRoute (replanning and back-off)', () => {
   it('replans once when the nav grid round the objective is first built', () => {
     const { game } = fakeGame(gridGraph(10, 10));
     let built = false;
-    const grid: GridLike = { ready: (x) => built || x < 40, walkable: () => true, lineWalkable: () => false, findPath: () => null };
+    const grid: GridLike = { ready: (x) => built || x < 40, lineWalkable: () => false, findPath: () => null };
     (game as unknown as { population: unknown }).population = { grid };
     const r = new QuestRoute(game, () => goalAt(178, 181));
     run(r, 1);
