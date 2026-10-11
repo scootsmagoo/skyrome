@@ -51,12 +51,13 @@ export function buildSpina(b: MeshBuilder, obeliskZ: number, spots: Spots, detai
   for (const [a, c] of solids) {
     if (a > cur + 0.5) basin(d, cur, a, hw, H);
     d.span('marble', -hw, 0, a, hw, H, c, { collide: true });
-    d.span(STONE, -hw - 0.12, H, a, hw + 0.12, H + 0.15, c);
+    d.span(STONE, -hw - 0.12, H, a, hw + 0.12, H + 0.15, c, { collide: true });
     cur = c;
   }
   if (z1 > cur + 0.5) basin(d, cur, z1, hw, H);
-  // Base moulding all round (a plinth band), then the metae beyond each end.
-  d.span(STONE, -hw - 0.15, 0, z0 - 0.15, hw + 0.15, 0.3, z1 + 0.15);
+  // Base moulding all round (a plinth band), then the metae beyond each end. The band and the
+  // copings are solid: drawn wider and higher than the walls, they were stood in, not on.
+  d.span(STONE, -hw - 0.15, 0, z0 - 0.15, hw + 0.15, 0.3, z1 + 0.15, { collide: true });
   meta(d, z0, -1, spots, 'meta-secunda');
   meta(d, z1, 1, spots, 'meta-prima');
   for (const it of items) {
@@ -85,8 +86,8 @@ function basin(d: Draw, a: number, c: number, hw: number, H: number) {
   // Side walls, end walls, floor and water.
   d.span('marble', -hw, 0, a, -hw + 0.45, H, c, { collide: true });
   d.span('marble', hw - 0.45, 0, a, hw, H, c, { collide: true });
-  d.span(STONE, -hw - 0.12, H, a, -hw + 0.5, H + 0.15, c);
-  d.span(STONE, hw - 0.5, H, a, hw + 0.12, H + 0.15, c);
+  d.span(STONE, -hw - 0.12, H, a, -hw + 0.5, H + 0.15, c, { collide: true });
+  d.span(STONE, hw - 0.5, H, a, hw + 0.12, H + 0.15, c, { collide: true });
   d.span('concrete', -hw + 0.45, 0, a, hw - 0.45, 0.35, c, { collide: true });
   d.span('water', -hw + 0.45, 0.35, a, hw - 0.45, H - 0.25, c);
   // Little bridges across the euripus every ~12 m.
