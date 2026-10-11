@@ -8,10 +8,12 @@
    "scope": "fast",
    "desc": "npx tsc --noEmit -p . errors",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 0,
+   "gate": 0,
    "target": 0,
-   "owner": "all"
+   "owner": "all",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "units.full.typecheckErrors",
@@ -22,7 +24,8 @@
    "today": null,
    "gate": null,
    "target": 0,
-   "owner": "all"
+   "owner": "all",
+   "note": "not measurable from the 4a outputs: the first full run (gate.mjs --tier full --record, by the lead) records it"
   },
   {
    "id": "units.fast.testFailures",
@@ -30,10 +33,12 @@
    "scope": "fast",
    "desc": "npx vitest run failures",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 0,
+   "gate": 0,
    "target": 0,
-   "owner": "all"
+   "owner": "all",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "units.full.testFailures",
@@ -44,7 +49,8 @@
    "today": null,
    "gate": null,
    "target": 0,
-   "owner": "all"
+   "owner": "all",
+   "note": "not measurable from the 4a outputs: the first full run (gate.mjs --tier full --record, by the lead) records it"
   },
   {
    "id": "grades.fast.wayCellsOver38",
@@ -52,10 +58,12 @@
    "scope": "fast",
    "desc": "way cells (atlas roads + precincts) steeper than 38 degrees",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 1684,
+   "gate": 1684,
    "target": 0,
-   "owner": "GROUND"
+   "owner": "GROUND",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "grades.full.wayCellsOver38",
@@ -66,7 +74,8 @@
    "today": null,
    "gate": null,
    "target": 0,
-   "owner": "GROUND"
+   "owner": "GROUND",
+   "note": "not measurable from the 4a outputs: the first full run (gate.mjs --tier full --record, by the lead) records it"
   },
   {
    "id": "grades.fast.atlasRoadsOver25pct",
@@ -74,10 +83,12 @@
    "scope": "fast",
    "desc": "atlas roads whose steepest 4 m is over 25 %",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 21,
+   "gate": 21,
    "target": 0,
-   "owner": "GROUND"
+   "owner": "GROUND",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "grades.full.atlasRoadsOver25pct",
@@ -89,7 +100,8 @@
    "gate": 21,
    "target": 0,
    "owner": "GROUND",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "grades.fast.atlasRoadsOver84pct",
@@ -97,10 +109,12 @@
    "scope": "fast",
    "desc": "atlas roads whose steepest 4 m is over 84 % (40 degrees)",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 6,
+   "gate": 6,
    "target": 0,
-   "owner": "GROUND"
+   "owner": "GROUND",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "grades.full.atlasRoadsOver84pct",
@@ -112,7 +126,8 @@
    "gate": 6,
    "target": 0,
    "owner": "GROUND",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "grades.fast.minorStreetsOver58pct",
@@ -120,10 +135,12 @@
    "scope": "fast",
    "desc": "minor streets over 58 % per 4 m",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 55,
+   "gate": 55,
    "target": 0,
-   "owner": "STREETS"
+   "owner": "STREETS",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "grades.full.minorStreetsOver58pct",
@@ -134,7 +151,8 @@
    "today": null,
    "gate": null,
    "target": 0,
-   "owner": "STREETS"
+   "owner": "STREETS",
+   "note": "not measurable from the 4a outputs: the first full run (gate.mjs --tier full --record, by the lead) records it"
   },
   {
    "id": "grades.fast.minorStreetsOver45pct",
@@ -142,10 +160,12 @@
    "scope": "fast",
    "desc": "minor streets over 45 % per 4 m",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 150,
+   "gate": 150,
    "target": 15,
-   "owner": "STREETS"
+   "owner": "STREETS",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "grades.full.minorStreetsOver45pct",
@@ -157,7 +177,8 @@
    "gate": 150,
    "target": 15,
    "owner": "STREETS",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "grades.fast.minorStreetsOver84pct",
@@ -165,10 +186,12 @@
    "scope": "fast",
    "desc": "minor streets over 84 % per 4 m",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 13,
+   "gate": 13,
    "target": 0,
-   "owner": "STREETS"
+   "owner": "STREETS",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "grades.full.minorStreetsOver84pct",
@@ -180,7 +203,8 @@
    "gate": 13,
    "target": 0,
    "owner": "STREETS",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "grades.fast.designedFlankTopDeg",
@@ -188,10 +212,12 @@
    "scope": "fast",
    "desc": "top grade of the steepest designed hill flank (degrees)",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 41,
+   "gate": 41,
    "target": 30,
-   "owner": "GROUND"
+   "owner": "GROUND",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "grades.full.designedFlankTopDeg",
@@ -203,7 +229,8 @@
    "gate": 41,
    "target": 30,
    "owner": "GROUND",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "grades.fast.easiestWayUpMaxDeg",
@@ -211,10 +238,12 @@
    "scope": "fast",
    "desc": "hardest hill's easiest way up (surface degrees)",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 31.8,
+   "gate": 31.8,
    "target": 15,
-   "owner": "GROUND"
+   "owner": "GROUND",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "grades.full.easiestWayUpMaxDeg",
@@ -226,7 +255,8 @@
    "gate": 31.8,
    "target": 15,
    "owner": "GROUND",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "grades.fast.walkableOver40Pct",
@@ -234,10 +264,12 @@
    "scope": "fast",
    "desc": "walkable ground over 40 degrees (%)",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 0.53,
+   "gate": 0.53,
    "target": 0.35,
-   "owner": "GROUND"
+   "owner": "GROUND",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "grades.full.walkableOver40Pct",
@@ -249,7 +281,8 @@
    "gate": 0.53,
    "target": 0.35,
    "owner": "GROUND",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "street-fit.fast.lipCells30",
@@ -257,10 +290,12 @@
    "scope": "fast",
    "desc": "lip cells of 30 cm or more",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 1934,
+   "gate": 1934,
    "target": 0,
-   "owner": "STREETS"
+   "owner": "STREETS",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "street-fit.full.lipCells30",
@@ -272,7 +307,8 @@
    "gate": 1948,
    "target": 0,
    "owner": "STREETS",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "street-fit.fast.lipCells12",
@@ -280,10 +316,12 @@
    "scope": "fast",
    "desc": "lip cells of 12 cm or more",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 16787,
+   "gate": 16787,
    "target": 800,
-   "owner": "STREETS"
+   "owner": "STREETS",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "street-fit.full.lipCells12",
@@ -295,7 +333,8 @@
    "gate": 16888,
    "target": 800,
    "owner": "STREETS",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "street-fit.fast.openEdgeOver3cmM",
@@ -303,10 +342,12 @@
    "scope": "fast",
    "desc": "open paving edge floating over 3 cm, all kinds (m)",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 26255.1,
+   "gate": 26255.1,
    "target": 1000,
-   "owner": "STREETS"
+   "owner": "STREETS",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "street-fit.full.openEdgeOver3cmM",
@@ -318,7 +359,8 @@
    "gate": 26272.3,
    "target": 1000,
    "owner": "STREETS",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "street-fit.fast.openEdgeOver8cmM",
@@ -326,10 +368,12 @@
    "scope": "fast",
    "desc": "open paving edge floating over 8 cm (m)",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 4020,
+   "gate": 4020,
    "target": 0,
-   "owner": "STREETS"
+   "owner": "STREETS",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "street-fit.full.openEdgeOver8cmM",
@@ -341,7 +385,8 @@
    "gate": 4033.6,
    "target": 0,
    "owner": "STREETS",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "street-fit.fast.faceFloatOver10cm",
@@ -349,10 +394,12 @@
    "scope": "fast",
    "desc": "kerb and paving face-float clusters over 0.1 m",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 68,
+   "gate": 68,
    "target": 0,
-   "owner": "STREETS"
+   "owner": "STREETS",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "street-fit.full.faceFloatOver10cm",
@@ -364,7 +411,8 @@
    "gate": 30,
    "target": 0,
    "owner": "STREETS",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "street-fit.fast.doublePavingCells",
@@ -372,10 +420,12 @@
    "scope": "fast",
    "desc": "double-paving cells",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 842314,
+   "gate": 842314,
    "target": 50000,
-   "owner": "STREETS"
+   "owner": "STREETS",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "street-fit.full.doublePavingCells",
@@ -387,7 +437,8 @@
    "gate": 844789,
    "target": 50000,
    "owner": "STREETS",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "street-fit.fast.terrainThroughCells",
@@ -395,10 +446,12 @@
    "scope": "fast",
    "desc": "terrain-through cells",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 34717,
+   "gate": 34717,
    "target": 3000,
-   "owner": "STREETS"
+   "owner": "STREETS",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "street-fit.full.terrainThroughCells",
@@ -410,7 +463,8 @@
    "gate": 34722,
    "target": 3000,
    "owner": "STREETS",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "street-fit.fast.kerbstonesOnCityPaving",
@@ -418,10 +472,12 @@
    "scope": "fast",
    "desc": "dressing kerbstones on city paving",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 59,
+   "gate": 59,
    "target": 0,
-   "owner": "STREETS"
+   "owner": "STREETS",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "street-fit.full.kerbstonesOnCityPaving",
@@ -433,7 +489,8 @@
    "gate": 59,
    "target": 0,
    "owner": "STREETS",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "street-fit.fast.zfightCells",
@@ -441,9 +498,11 @@
    "scope": "fast",
    "desc": "z-fight cells",
    "direction": "max",
-   "today": null,
-   "gate": null,
-   "owner": "STREETS"
+   "today": 35379,
+   "gate": 35379,
+   "owner": "STREETS",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "street-fit.full.zfightCells",
@@ -454,7 +513,8 @@
    "today": 35416,
    "gate": 35416,
    "owner": "STREETS",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "street-fit.fast.propsFloating",
@@ -462,10 +522,12 @@
    "scope": "fast",
    "desc": "block props floating",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 2409,
+   "gate": 2409,
    "target": 300,
-   "owner": "FABRIC"
+   "owner": "FABRIC",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "street-fit.full.propsFloating",
@@ -477,7 +539,8 @@
    "gate": 2409,
    "target": 300,
    "owner": "FABRIC",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "street-fit.fast.propsSunk",
@@ -485,10 +548,12 @@
    "scope": "fast",
    "desc": "block props sunk",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 271,
+   "gate": 271,
    "target": 50,
-   "owner": "FABRIC"
+   "owner": "FABRIC",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "street-fit.full.propsSunk",
@@ -500,7 +565,8 @@
    "gate": 271,
    "target": 50,
    "owner": "FABRIC",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "street-fit.fast.propFootInAirOver30cm",
@@ -508,10 +574,12 @@
    "scope": "fast",
    "desc": "props with a foot in the air over 0.3 m",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 83,
+   "gate": 83,
    "target": 0,
-   "owner": "FABRIC"
+   "owner": "FABRIC",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "street-fit.full.propFootInAirOver30cm",
@@ -523,7 +591,8 @@
    "gate": 20,
    "target": 0,
    "owner": "FABRIC",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "routes.fast.objectiveFail",
@@ -531,10 +600,12 @@
    "scope": "fast",
    "desc": "guide + objective routes that FAIL",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 1,
+   "gate": 1,
    "target": 0,
-   "owner": "ROUTES"
+   "owner": "ROUTES",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "routes.full.objectiveFail",
@@ -546,7 +617,8 @@
    "gate": 4,
    "target": 0,
    "owner": "ROUTES",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "routes.fast.objectiveBlocked",
@@ -554,10 +626,12 @@
    "scope": "fast",
    "desc": "guide + objective routes BLOCKED",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 9,
+   "gate": 9,
    "target": 0,
-   "owner": "ROUTES"
+   "owner": "ROUTES",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "routes.full.objectiveBlocked",
@@ -569,7 +643,8 @@
    "gate": 33,
    "target": 0,
    "owner": "ROUTES",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "routes.fast.objectiveSnags",
@@ -577,10 +652,12 @@
    "scope": "fast",
    "desc": "guide + objective routes needing a jump or climb (snags)",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 4,
+   "gate": 4,
    "target": 3,
-   "owner": "ROUTES"
+   "owner": "ROUTES",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "routes.full.objectiveSnags",
@@ -592,7 +669,8 @@
    "gate": 7,
    "target": 3,
    "owner": "ROUTES",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "routes.full.leadOutBlocked",
@@ -604,7 +682,8 @@
    "gate": 208,
    "target": 0,
    "owner": "ROUTES",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "routes.full.allBlocked",
@@ -616,7 +695,8 @@
    "gate": 334,
    "target": 20,
    "owner": "ROUTES",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "routes.full.tourAborted",
@@ -628,7 +708,8 @@
    "gate": 10,
    "target": 0,
    "owner": "ROUTES",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "routes.full.timeouts",
@@ -640,7 +721,8 @@
    "gate": 1,
    "target": 0,
    "owner": "ROUTES",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "routes.full.swims",
@@ -652,7 +734,8 @@
    "gate": 9,
    "target": 0,
    "owner": "ROUTES",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "routes.full.targetsNoHeight",
@@ -664,7 +747,8 @@
    "gate": 17,
    "target": 0,
    "owner": "ROUTES",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "routes.full.sweepEdgesFlagged",
@@ -676,7 +760,8 @@
    "gate": 367,
    "target": 90,
    "owner": "ROUTES",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "routes.full.sweepThroughSolid",
@@ -688,7 +773,8 @@
    "gate": 246,
    "target": 20,
    "owner": "ROUTES",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "routes-places.fast.edgelessNodes",
@@ -696,10 +782,12 @@
    "scope": "fast",
    "desc": "street-graph nodes with no edge",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 154,
+   "gate": 154,
    "target": 0,
-   "owner": "ROUTES"
+   "owner": "ROUTES",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "routes-places.full.edgelessNodes",
@@ -711,7 +799,8 @@
    "gate": 154,
    "target": 0,
    "owner": "ROUTES",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "routes-places.fast.noStreetRoute",
@@ -719,10 +808,12 @@
    "scope": "fast",
    "desc": "places with no street route from the Forum",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 100,
+   "gate": 100,
    "target": 0,
-   "owner": "ROUTES"
+   "owner": "ROUTES",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "routes-places.full.noStreetRoute",
@@ -734,7 +825,8 @@
    "gate": 100,
    "target": 0,
    "owner": "ROUTES",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "routes-places.fast.placesOver30mFromNode",
@@ -742,10 +834,12 @@
    "scope": "fast",
    "desc": "places more than 30 m from a street node",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 181,
+   "gate": 181,
    "target": 10,
-   "owner": "ROUTES"
+   "owner": "ROUTES",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "routes-places.full.placesOver30mFromNode",
@@ -757,7 +851,8 @@
    "gate": 181,
    "target": 10,
    "owner": "ROUTES",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "collision.fast.fallthrough",
@@ -765,10 +860,12 @@
    "scope": "fast",
    "desc": "fall-through defects",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 0,
+   "gate": 0,
    "target": 0,
-   "owner": "L-EAST,L-WEST"
+   "owner": "L-EAST,L-WEST",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "collision.full.fallthrough",
@@ -780,7 +877,8 @@
    "gate": 13,
    "target": 0,
    "owner": "L-EAST,L-WEST",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "collision.fast.lips10cm",
@@ -788,10 +886,12 @@
    "scope": "fast",
    "desc": "collider lips of 10 cm or more",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 78,
+   "gate": 78,
    "target": 100,
-   "owner": "STREETS"
+   "owner": "STREETS",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "collision.full.lips10cm",
@@ -802,7 +902,8 @@
    "today": null,
    "gate": null,
    "target": 100,
-   "owner": "STREETS"
+   "owner": "STREETS",
+   "note": "not measurable from the 4a outputs: the first full run (gate.mjs --tier full --record, by the lead) records it"
   },
   {
    "id": "collision.fast.cracks",
@@ -810,10 +911,12 @@
    "scope": "fast",
    "desc": "cracks between collider pieces",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 12,
+   "gate": 12,
    "target": 20,
-   "owner": "STREETS"
+   "owner": "STREETS",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "collision.full.cracks",
@@ -824,7 +927,8 @@
    "today": null,
    "gate": null,
    "target": 20,
-   "owner": "STREETS"
+   "owner": "STREETS",
+   "note": "not measurable from the 4a outputs: the first full run (gate.mjs --tier full --record, by the lead) records it"
   },
   {
    "id": "collision.fast.invisibleCityBoxNothingDrawn",
@@ -832,10 +936,12 @@
    "scope": "fast",
    "desc": "city lot boxes with nothing drawn (invisible walls)",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 33,
+   "gate": 33,
    "target": 50,
-   "owner": "FABRIC"
+   "owner": "FABRIC",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "collision.full.invisibleCityBoxNothingDrawn",
@@ -846,7 +952,8 @@
    "today": null,
    "gate": null,
    "target": 50,
-   "owner": "FABRIC"
+   "owner": "FABRIC",
+   "note": "not measurable from the 4a outputs: the first full run (gate.mjs --tier full --record, by the lead) records it"
   },
   {
    "id": "collision.fast.embeddedCityBox",
@@ -854,10 +961,12 @@
    "scope": "fast",
    "desc": "embedded city boxes",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 26,
+   "gate": 26,
    "target": 100,
-   "owner": "FABRIC"
+   "owner": "FABRIC",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "collision.full.embeddedCityBox",
@@ -868,7 +977,8 @@
    "today": null,
    "gate": null,
    "target": 100,
-   "owner": "FABRIC"
+   "owner": "FABRIC",
+   "note": "not measurable from the 4a outputs: the first full run (gate.mjs --tier full --record, by the lead) records it"
   },
   {
    "id": "collision.fast.circusGhostWallProbes",
@@ -876,10 +986,12 @@
    "scope": "fast",
    "desc": "ghost-wall probes at the Circus",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 8,
+   "gate": 8,
    "target": 0,
-   "owner": "L-WEST"
+   "owner": "L-WEST",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "collision.full.circusGhostWallProbes",
@@ -890,7 +1002,8 @@
    "today": null,
    "gate": null,
    "target": 0,
-   "owner": "L-WEST"
+   "owner": "L-WEST",
+   "note": "not measurable from the 4a outputs: the first full run (gate.mjs --tier full --record, by the lead) records it"
   },
   {
    "id": "collision.fast.tarpeianGhostProbes",
@@ -898,10 +1011,12 @@
    "scope": "fast",
    "desc": "ghost probes at the Tarpeian Rock and Carmental Gate",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 0,
+   "gate": 0,
    "target": 20,
-   "owner": "L-WEST"
+   "owner": "L-WEST",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "collision.full.tarpeianGhostProbes",
@@ -912,7 +1027,8 @@
    "today": null,
    "gate": null,
    "target": 20,
-   "owner": "L-WEST"
+   "owner": "L-WEST",
+   "note": "not measurable from the 4a outputs: the first full run (gate.mjs --tier full --record, by the lead) records it"
   },
   {
    "id": "collision.fast.ghostOnDeckProbes",
@@ -920,10 +1036,12 @@
    "scope": "fast",
    "desc": "ghost probes on the River Port deck",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 1,
+   "gate": 1,
    "target": 0,
-   "owner": "L-EAST"
+   "owner": "L-EAST",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "collision.full.ghostOnDeckProbes",
@@ -934,7 +1052,8 @@
    "today": null,
    "gate": null,
    "target": 0,
-   "owner": "L-EAST"
+   "owner": "L-EAST",
+   "note": "not measurable from the 4a outputs: the first full run (gate.mjs --tier full --record, by the lead) records it"
   },
   {
    "id": "collision.fast.terrainMaxDiffM",
@@ -942,10 +1061,12 @@
    "scope": "fast",
    "desc": "max |physics - drawn| on bare ground (m)",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 0.339,
+   "gate": 0.339,
    "target": 0.01,
-   "owner": "GROUND"
+   "owner": "GROUND",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "collision.full.terrainMaxDiffM",
@@ -957,7 +1078,8 @@
    "gate": 1.194,
    "target": 0.01,
    "owner": "GROUND",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "collision.fast.terrainDrawnDiagonalPct",
@@ -965,10 +1087,12 @@
    "scope": "fast",
    "desc": "bare-ground samples where physics matches the drawn diagonal (%)",
    "direction": "min",
-   "today": null,
-   "gate": null,
+   "today": 0,
+   "gate": 0,
    "target": 100,
-   "owner": "GROUND"
+   "owner": "GROUND",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "collision.full.terrainDrawnDiagonalPct",
@@ -980,7 +1104,8 @@
    "gate": 0,
    "target": 100,
    "owner": "GROUND",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "collision.fast.bareGroundOver4cm",
@@ -988,10 +1113,12 @@
    "scope": "fast",
    "desc": "bare-ground float or sink probes over 4 cm",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 428,
+   "gate": 428,
    "target": 0,
-   "owner": "GROUND"
+   "owner": "GROUND",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "collision.full.bareGroundOver4cm",
@@ -1002,7 +1129,8 @@
    "today": null,
    "gate": null,
    "target": 0,
-   "owner": "GROUND"
+   "owner": "GROUND",
+   "note": "not measurable from the 4a outputs: the first full run (gate.mjs --tier full --record, by the lead) records it"
   },
   {
    "id": "structures.fast.stretches06NotAllowlisted",
@@ -1010,10 +1138,12 @@
    "scope": "fast",
    "desc": "structure stretches of 0.6 m or more not on the allowlist",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 191,
+   "gate": 191,
    "target": 0,
-   "owner": "L-WEST,L-EAST,FABRIC"
+   "owner": "L-WEST,L-EAST,FABRIC",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "structures.full.stretches06NotAllowlisted",
@@ -1024,7 +1154,8 @@
    "today": null,
    "gate": null,
    "target": 0,
-   "owner": "L-WEST,L-EAST,FABRIC"
+   "owner": "L-WEST,L-EAST,FABRIC",
+   "note": "not measurable from the 4a outputs: the first full run (gate.mjs --tier full --record, by the lead) records it"
   },
   {
    "id": "structures.fast.colosseumCaveaStretches",
@@ -1032,10 +1163,12 @@
    "scope": "fast",
    "desc": "Colosseum cavea stretches of 0.3 m or more (raw, ignoring the allowlist)",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 24,
+   "gate": 24,
    "target": 0,
-   "owner": "L-EAST"
+   "owner": "L-EAST",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "structures.full.colosseumCaveaStretches",
@@ -1046,7 +1179,8 @@
    "today": null,
    "gate": null,
    "target": 0,
-   "owner": "L-EAST"
+   "owner": "L-EAST",
+   "note": "not measurable from the 4a outputs: the first full run (gate.mjs --tier full --record, by the lead) records it"
   },
   {
    "id": "structures.fast.wallAqueductStretches03",
@@ -1054,10 +1188,12 @@
    "scope": "fast",
    "desc": "wall and aqueduct stretches floating 0.3 m or more",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 16,
+   "gate": 16,
    "target": 0,
-   "owner": "FABRIC"
+   "owner": "FABRIC",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "structures.full.wallAqueductStretches03",
@@ -1069,7 +1205,8 @@
    "gate": 33,
    "target": 0,
    "owner": "FABRIC",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "structures.fast.landmarkTerrainInFloorWorstM",
@@ -1077,10 +1214,12 @@
    "scope": "fast",
    "desc": "worst terrain-in-floor depth in a landmark (m)",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 7.49,
+   "gate": 7.49,
    "target": 0,
-   "owner": "L-WEST,L-EAST"
+   "owner": "L-WEST,L-EAST",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "structures.full.landmarkTerrainInFloorWorstM",
@@ -1091,7 +1230,8 @@
    "today": null,
    "gate": null,
    "target": 0,
-   "owner": "L-WEST,L-EAST"
+   "owner": "L-WEST,L-EAST",
+   "note": "not measurable from the 4a outputs: the first full run (gate.mjs --tier full --record, by the lead) records it"
   },
   {
    "id": "structures.fast.landmarkFloating06",
@@ -1099,10 +1239,12 @@
    "scope": "fast",
    "desc": "landmark stretches floating 0.6 m or more",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 27,
+   "gate": 27,
    "target": 0,
-   "owner": "L-WEST,L-EAST"
+   "owner": "L-WEST,L-EAST",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "structures.full.landmarkFloating06",
@@ -1113,7 +1255,8 @@
    "today": null,
    "gate": null,
    "target": 0,
-   "owner": "L-WEST,L-EAST"
+   "owner": "L-WEST,L-EAST",
+   "note": "not measurable from the 4a outputs: the first full run (gate.mjs --tier full --record, by the lead) records it"
   },
   {
    "id": "structures.fast.riverTerrainInFloor",
@@ -1121,10 +1264,12 @@
    "scope": "fast",
    "desc": "river masonry terrain-in-floor stretches",
    "direction": "max",
-   "today": null,
-   "gate": null,
+   "today": 52,
+   "gate": 52,
    "target": 0,
-   "owner": "L-EAST"
+   "owner": "L-EAST",
+   "recorded": "2026-10-11",
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
   },
   {
    "id": "structures.full.riverTerrainInFloor",
@@ -1135,7 +1280,8 @@
    "today": null,
    "gate": null,
    "target": 0,
-   "owner": "L-EAST"
+   "owner": "L-EAST",
+   "note": "not measurable from the 4a outputs: the first full run (gate.mjs --tier full --record, by the lead) records it"
   },
   {
    "id": "structures.full.buildingsFloating01",
@@ -1147,7 +1293,8 @@
    "gate": 294,
    "target": 30,
    "owner": "FABRIC",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "structures.full.buildingsFloating025",
@@ -1158,7 +1305,8 @@
    "today": null,
    "gate": null,
    "target": 0,
-   "owner": "FABRIC"
+   "owner": "FABRIC",
+   "note": "not measurable from the 4a outputs: the first full run (gate.mjs --tier full --record, by the lead) records it"
   },
   {
    "id": "structures.full.buildingsBuriedOpening",
@@ -1170,7 +1318,8 @@
    "gate": 388,
    "target": 40,
    "owner": "FABRIC",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "structures.full.buriedOpeningStretches035",
@@ -1181,7 +1330,8 @@
    "today": null,
    "gate": null,
    "target": 0,
-   "owner": "FABRIC"
+   "owner": "FABRIC",
+   "note": "not measurable from the 4a outputs: the first full run (gate.mjs --tier full --record, by the lead) records it"
   },
   {
    "id": "structures.full.buildingsTerrainInFloor",
@@ -1192,7 +1342,8 @@
    "today": null,
    "gate": null,
    "target": 20,
-   "owner": "FABRIC"
+   "owner": "FABRIC",
+   "note": "not measurable from the 4a outputs: the first full run (gate.mjs --tier full --record, by the lead) records it"
   },
   {
    "id": "structures.full.terrainInFloorWorstM",
@@ -1203,7 +1354,8 @@
    "today": null,
    "gate": null,
    "target": 0.15,
-   "owner": "FABRIC"
+   "owner": "FABRIC",
+   "note": "not measurable from the 4a outputs: the first full run (gate.mjs --tier full --record, by the lead) records it"
   },
   {
    "id": "structures.full.farBoxesOver10cm",
@@ -1215,7 +1367,8 @@
    "gate": 16,
    "target": 0,
    "owner": "FABRIC",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "structures.full.farBoxesDrawnL2",
@@ -1227,7 +1380,8 @@
    "gate": 329,
    "target": 20,
    "owner": "FABRIC",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "structures.full.lowDetailFloatingSamples",
@@ -1239,7 +1393,8 @@
    "gate": 588,
    "target": 60,
    "owner": "FABRIC",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "structures.full.lowDetailSunkSamples",
@@ -1251,7 +1406,8 @@
    "gate": 427,
    "target": 40,
    "owner": "FABRIC",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "surface.full.holes",
@@ -1263,7 +1419,8 @@
    "gate": 3100,
    "target": 300,
    "owner": "STREETS",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "surface.full.slivers",
@@ -1275,7 +1432,8 @@
    "gate": 14461,
    "target": 3000,
    "owner": "STREETS",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "surface.full.patchworkMean",
@@ -1287,7 +1445,8 @@
    "gate": 42.7,
    "target": 30,
    "owner": "STREETS",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "surface.full.patchworkWorst",
@@ -1299,7 +1458,8 @@
    "gate": 180.8,
    "target": 90,
    "owner": "STREETS",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "surface.full.settlePopping",
@@ -1311,7 +1471,8 @@
    "gate": 1,
    "target": 0,
    "owner": "LOOK",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "surface.full.travertineRepeatRatio",
@@ -1323,7 +1484,8 @@
    "gate": 2.5,
    "target": 1.25,
    "owner": "LOOK",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "surface.full.cobblesBasaltRepeatRatio",
@@ -1335,7 +1497,8 @@
    "gate": 2,
    "target": 1.3,
    "owner": "LOOK",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "surface.full.textureChurnEvents",
@@ -1347,7 +1510,8 @@
    "gate": 16,
    "target": 0,
    "owner": "LOOK",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "grades-live.full.climbsUp",
@@ -1359,7 +1523,8 @@
    "gate": 18,
    "target": 27,
    "owner": "GROUND",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   },
   {
    "id": "grades-live.full.gradeStalls",
@@ -1371,8 +1536,10 @@
    "gate": 1,
    "target": 0,
    "owner": "GROUND",
-   "recorded": "2026-10-11"
+   "recorded": "2026-10-11",
+   "source": "phase 4a outputs (2026-10-10), reduced by gate.mjs --reduce-only; the first full run re-baselines"
   }
  ],
- "recordedAt": "2026-10-11T01:44:16.272Z"
+ "recordedAt": "2026-10-11T01:57:56.874Z",
+ "_scopes": "fast = the story's places and routes (about 9 minutes quiet); full = the whole city (about 3 hours). Full-scope numbers are the 4a ones until the lead records a full run."
 }
