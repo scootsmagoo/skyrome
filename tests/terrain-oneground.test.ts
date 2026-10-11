@@ -135,13 +135,18 @@ function cityHm(profile: TerrainProfile) {
 }
 
 describe('terrain profile switch', () => {
+  // The suite may itself run under SKYROME_TERRAIN=v1: put it back afterwards.
+  const envBefore = process.env.SKYROME_TERRAIN;
   afterEach(() => {
-    setTerrainProfile(null);
     delete (globalThis as { location?: unknown }).location;
-    delete process.env.SKYROME_TERRAIN;
+    if (envBefore === undefined) delete process.env.SKYROME_TERRAIN;
+    else process.env.SKYROME_TERRAIN = envBefore;
+    setTerrainProfile(null);
   });
 
   it('defaults to v2; the URL, the environment and setTerrainProfile choose', () => {
+    delete process.env.SKYROME_TERRAIN;
+    setTerrainProfile(null);
     expect(DEFAULT_TERRAIN_PROFILE).toBe('v2');
     expect(terrainProfile()).toBe('v2');
     (globalThis as { location?: unknown }).location = { search: '?scene=rome&terrain=v1' };
