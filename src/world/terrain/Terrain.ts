@@ -19,6 +19,7 @@ import type { Game, System } from '../../core/Game';
 import * as atlas from '../../data/atlas';
 import { WORLD_SCALE } from '../coords';
 import { makeNaturalElevation, type Heightmap } from './heightmap';
+import { drawnDiagonal, terrainProfile, type TerrainProfile } from './profile';
 import { buildApron, farHeight, type ApronOptions } from './apron';
 import { flatGroundTextures, loadGroundTextures, type GroundTextures } from './groundTextures';
 import { PATCH_STRIDE, TerrainQuadtree, type QuadtreeOptions } from './quadtree';
@@ -70,16 +71,25 @@ function layerTiles(): number[] {
   });
 }
 
-/** The shared P×P grid patch with skirts: position = (gx, skirt 0|1, gz). */
-export function patchGeometry(P: number): THREE.InstancedBufferGeometry {
+/**
+ * The shared P×P grid patch with skirts: position = (gx, skirt 0|1, gz). Each cell (a at (i, j), b
+ * at (i+1, j), c at (i, j+1), d at (i+1, j+1)) is split along the profile's diagonal: b–c under v2,
+ * the one Rapier's heightfield uses and `Heightmap.heightAt` interpolates on, so what is drawn is
+ * what is stood on; a–d under v1. A fully morphed patch (odd vertices onto their even neighbours)
+ * is the next level's patch with the same diagonal, and the skirts hang from the perimeter edges,
+ * which neither diagonal touches.
+ */
+export function patchGeometry(P: number, profile: TerrainProfile = terrainProfile()): THREE.InstancedBufferGeometry {
   const n = P + 1;
   const pos: number[] = [];
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) pos.push(i, 0, j);
   const idx: number[] = [];
+  const bc = drawnDiagonal(profile) === 'bc';
   for (let j = 0; j < P; j++) {
     for (let i = 0; i < P; i++) {
       const a = j * n + i, b = a + 1, c = a + n, d = c + 1;
-      idx.push(a, c, d, a, d, b);
+      if (bc) idx.push(a, c, b, b, c, d);
+      else idx.push(a, c, d, a, d, b);
     }
   }
   // Perimeter traversed so that (p_k, p_k+1, s_k) faces outward on every edge.
@@ -103,6 +113,32 @@ export function patchGeometry(P: number): THREE.InstancedBufferGeometry {
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setIndex(idx);
   return g;
+}
+
+/** One physics chunk of the grid: `Physics.addHeightfield`'s arguments. */
+export interface HeightfieldChunk {
+  minX: number;
+  minZ: number;
+  sizeX: number;
+  sizeZ: number;
+  segX: number;
+  segZ: number;
+  heights: Float32Array;
+}
+
+/** The grid cut into heightfield chunks of n × n samples (sharing their edge samples), as the terrain's colliders. */
+export function* heightfieldChunks(hm: Heightmap, n: number): Generator<HeightfieldChunk> {
+  const step = n - 1;
+  for (let cz = 0; cz < hm.nz - 1; cz += step) {
+    for (let cx = 0; cx < hm.nx - 1; cx += step) {
+      const sx = Math.min(n, hm.nx - cx);
+      const sz = Math.min(n, hm.nz - cz);
+      if (sx < 2 || sz < 2) continue;
+      const h = new Float32Array(sx * sz);
+      for (let z = 0; z < sz; z++) for (let x = 0; x < sx; x++) h[z * sx + x] = hm.heights[(cz + z) * hm.nx + cx + x];
+      yield { minX: hm.minX + cx * hm.spacing, minZ: hm.minZ + cz * hm.spacing, sizeX: (sx - 1) * hm.spacing, sizeZ: (sz - 1) * hm.spacing, segX: sx - 1, segZ: sz - 1, heights: h };
+    }
+  }
 }
 
 export class Terrain implements System {
@@ -193,7 +229,7 @@ export class Terrain implements System {
 
     // ---- the instanced patch mesh
     const P = this.quadtree.patchQuads;
-    this.geometry = patchGeometry(P);
+    this.geometry = patchGeometry(P, hm.profile);
     this.trisPerPatch = (this.geometry.index!.count / 3) | 0;
     const maxPatches = Math.ceil((hm.nx - 1) / P) * Math.ceil((hm.nz - 1) / P) + 16;
     this.patchAttr = new THREE.InstancedBufferAttribute(new Float32Array(maxPatches * PATCH_STRIDE), PATCH_STRIDE);
@@ -258,17 +294,8 @@ export class Terrain implements System {
   }
 
   private addColliders(n: number) {
-    const hm = this.hm;
-    const step = n - 1;
-    for (let cz = 0; cz < hm.nz - 1; cz += step) {
-      for (let cx = 0; cx < hm.nx - 1; cx += step) {
-        const sx = Math.min(n, hm.nx - cx);
-        const sz = Math.min(n, hm.nz - cz);
-        if (sx < 2 || sz < 2) continue;
-        const h = new Float32Array(sx * sz);
-        for (let z = 0; z < sz; z++) for (let x = 0; x < sx; x++) h[z * sx + x] = hm.heights[(cz + z) * hm.nx + cx + x];
-        this.game.physics.addHeightfield(hm.minX + cx * hm.spacing, hm.minZ + cz * hm.spacing, (sx - 1) * hm.spacing, (sz - 1) * hm.spacing, sx - 1, sz - 1, h, { owner: this });
-      }
+    for (const c of heightfieldChunks(this.hm, n)) {
+      this.game.physics.addHeightfield(c.minX, c.minZ, c.sizeX, c.sizeZ, c.segX, c.segZ, c.heights, { owner: this });
     }
   }
 
