@@ -1206,7 +1206,9 @@ function buildCavea(ctx: LandmarkContext, L: ColosseumLayout, cav: MeshBuilder, 
       if (r.tier === 3) continue; // the summum is reached from its own vomitoria
       const d = (r.x1 - r.x0) / 2;
       // local z = −x (radial outward is −z)
-      span(cav, r.tier === 0 ? 'marble' : 'travertine', fr, -W / 2, r.yPrev, -(r.x0), W / 2, (r.yPrev + r.y) / 2, -(r.x0 - d), true, false);
+      // Down to the ground, not just to the row's own level: the seating between aisles is one-sided
+      // sweeps, and a half step hanging 4.5 m over the arena floor was visible from below (phase 4b).
+      span(cav, r.tier === 0 ? 'marble' : 'travertine', fr, -W / 2, 0, -(r.x0), W / 2, (r.yPrev + r.y) / 2, -(r.x0 - d), true, false);
     }
     for (const w of sec.walks) {
       if (w.tier === 0 || w.tier === 3) continue;
@@ -1215,7 +1217,7 @@ function buildCavea(ctx: LandmarkContext, L: ColosseumLayout, cav: MeshBuilder, 
       const run = 0.34;
       for (let i = 0; i < count; i++) {
         const z0 = -(w.wallX - (count - i) * run);
-        span(cav, 'travertine', fr, -W / 2, w.y, z0, W / 2, w.y + (i + 1) * rise, -(w.wallX + 0.01), true, false);
+        span(cav, 'travertine', fr, -W / 2, 0, z0, W / 2, w.y + (i + 1) * rise, -(w.wallX + 0.01), true, false);
       }
     }
   }
@@ -1232,13 +1234,15 @@ function buildCavea(ctx: LandmarkContext, L: ColosseumLayout, cav: MeshBuilder, 
     const lintelTop = rowsHere[3].y; // flush with the cut fourth row's tread
     const lintel = Math.min(y0 + 2.75, lintelTop - 0.2);
     // Cheeks (side parapets) and lintel.
+    // The cheeks stand on the ground (the cut rows beside them are one-sided sweeps, so a cheek that
+    // began at the balteus hung over the arena floor), and the mouth's floor on a solid block.
     for (const sx of [-1, 1]) {
-      span(cav, 'marble', fr, sx * hw, y0, -xFront, sx * (hw + 0.35), lintelTop + 0.45, -xBack, true);
+      span(cav, 'marble', fr, sx * hw, 0, -xFront, sx * (hw + 0.35), lintelTop + 0.45, -xBack, true);
     }
     span(cav, 'marble', fr, -hw, lintel, -xFront, hw, lintelTop, -xBack, true);
     if (!walkable) {
       span(cav, 'black', fr, -hw, y0, -(xBack - 0.05), hw, lintelTop, -(xBack + 0.4), true, false);
-      span(cav, 'concrete', fr, -hw, y0 - 0.05, -xFront, hw, y0, -xBack, false, false);
+      span(cav, 'concrete', fr, -hw, 0, -xFront, hw, y0, -xBack, true, false);
       return;
     }
     // Walkable: a passage from ring 3 at ground level climbing to the balteus.

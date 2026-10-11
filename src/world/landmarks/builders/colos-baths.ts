@@ -627,6 +627,9 @@ function frigidarium(ctx: LandmarkContext, b: MeshBuilder, d: Draw, root: THREE.
   for (const x of [x0 + 1.1, -8, 8, x1 - 1.1]) {
     for (const z of [z0 + 1.2, z1 - 1.2]) {
       cmats.push(new THREE.Matrix4().makeTranslation(x, 0.08, z));
+      // A core under each base up to the shaft's foot, so the shaft does not start in the air (the
+      // instanced column's torus base is not a face the structures audit counts as support).
+      d.span('marble', x - 0.45, 0.0, z - 0.45, x + 0.45, 0.62, z + 0.45);
       b.collider({ kind: 'cylinder', center: new THREE.Vector3(x, colH / 2, z), halfHeight: colH / 2, radius: 0.65 });
       d.span('marble', x - 1.0, colH + 0.08, z - 1.0, x + 1.0, ys, z + 1.0);
     }
