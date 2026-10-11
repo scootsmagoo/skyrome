@@ -1151,6 +1151,9 @@ export function coverKinds(plan: CityPlan, x0: number, z0: number, size: number,
   return out;
 }
 
+/** Ground cover lies a few centimetres over the ground (its rim RIM_MIN): it follows it to 4 mm, or the ground would show through. */
+const COVER_TOL = 0.004;
+
 /**
  * Ground-cover patches of fewer lattice points are slivers and are left out: the raster is 2 m, so
  * the marching squares round one point lay a 2 m² diamond (under 3 m²), round two about 4 m².
@@ -1230,7 +1233,7 @@ function coverSet(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: n
     const xa = X(sx0), xb = X(sx1 + 1), za = Z(sz0), zb = Z(sz1 + 1);
     const onB = (p: SV, q: SV) => (Math.abs(p.x - q.x) < 1e-6 && (Math.abs(p.x - xa) < 1e-6 || Math.abs(p.x - xb) < 1e-6)) || (Math.abs(p.z - q.z) < 1e-6 && (Math.abs(p.z - za) < 1e-6 || Math.abs(p.z - zb) < 1e-6));
     const order = RANK.alley * 1e6 - 1;
-    if (sheet.tris.length) emitSheet(b, sheet, { cut: (a, c, d, e) => pave!.convs(a, c, d, e, order), ground, rim: Math.max(lift - RIM_SINK, RIM_MIN), drop, skirts: false, seam: onB, collide: false });
+    if (sheet.tris.length) emitSheet(b, sheet, { cut: (a, c, d, e) => pave!.convs(a, c, d, e, order), ground, tol: COVER_TOL, rim: Math.max(lift - RIM_SINK, RIM_MIN), drop, skirts: false, seam: onB, collide: false });
     return;
   }
   if (!pos.length) return;
