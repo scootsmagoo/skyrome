@@ -238,14 +238,22 @@ ground cover) is built as a `Sheet` (`arch/fabric/streets.ts`) and written by `e
   edges only. A conformed street has cross-sections every 3.2 m (`CONFORM_STEP`), at its own bends and
   where its kerbs ramp; its crown is two planes. City-wide (skirts included): 1.02 M triangles (0.91 M
   before), the largest gap 2.1 cm; `node scripts/audit/streets-cells.mjs --all` (and `--by-src`,
-  `--edges`, `--holes`, `--probe x,z` to look at one place offline).
+  `--edges`, `--holes`, `--probe x,z` to look at one place offline; `--lips` counts street-fit's raster
+  lips between the street surfaces and the drawn ground, by pair and material with `--mats`, and flags
+  those beside a surface steeper than 45°, which street-fit's raster takes for a wall: the steep clivi
+  under G1a's ground). `scripts/audit/streets-probe.mjs --at x,z` is street-fit's spot check in the game.
 - **One surface per place.** `PavingIndex` holds every surface's footprint and rank
   (`RANK`: road > junction > piazza > vicus > lane > alley > ground cover; equal ranks: the
   first registered wins). A road or street piece registers what it draws (`streetFootprint`: the quads
   between its own cross-sections, so pieces of one street meet exactly at bends), a flight of steps its
   flights, a junction or piazza its polygon; only surfaces that are built (their
   item's point in the area) are registered. A surface is cut exactly (convex subtraction) inside the
-  convex pieces of every surface that outranks it, so nothing is paved twice; ground cover never lies on
+  convex pieces of every surface that outranks it, so nothing is paved twice. Between two streets of one
+  rank (road and road, vicus and vicus) only the core cuts (carriageway and sidewalks, `streetFootprint(spec,
+  true)`): an apron overlapping the other street is laid with it and the higher shows, so they meet
+  without a step (cut at the other's apron, a sidewalk 22 cm up stopped at that apron's foot). Between
+  ranks the whole footprint cuts (laying both doubled the paving, and a vicus's apron runs down over an
+  alley's mouth, which has no dropped kerb). Ground cover never lies on
   paving (blocks are left to the cover's own raster: cut exactly at their outlines it bared the ground
   between a house front and the street). The cut's points are shared per place, and the T-junctions it leaves
   (a vertex on a neighbour's edge or a kerb face's foot) are split out, so every edge meets vertex to
@@ -266,9 +274,13 @@ ground cover) is built as a `Sheet` (`arch/fabric/streets.ts`) and written by `e
   top at the low end: a 2.8 m invisible wall).
 - **Edges.** Out of town a basalt road meets the grass in a 0.6 m dirt shoulder; an open road across
   paving (the Via Sacra in the Forum) ends in a travertine edge course, across open ground in a dirt
-  shoulder (`apronMaterial`, by the plan's PLAZA ground beside the piece). A capped end
-  with no other surface beyond it runs out to the ground in an end apron (`apronStart`/`apronEnd`,
-  decided once every surface is registered); a piece whose neighbour piece is not built (the edge of
+  shoulder (`apronMaterial`, by the plan's PLAZA ground beside the piece). A city street's apron is its
+  sidewalk paving running down (a concrete band under a metre wide read as patchwork). A capped end
+  with bare ground beyond it (all of it, or right beyond its middle: a street that stopped short of a
+  road's apron left a strip of ground and a 12 cm edge) runs out to the ground in an end apron
+  (`apronStart`/`apronEnd`, decided once every surface is registered). A junction's or piazza's rim is
+  bevelled in stretches of at most 0.75 m (`BEVEL_STEP`) wherever ground lies beyond (one test per edge
+  left an edge raw where a road took its middle). A piece whose neighbour piece is not built (the edge of
   the detail area) is capped there. `plan.drop` mirrors terrainData's road, pad and quay fields.
 - **Steep streets.** `trimSteepStreets` (plan.ts, after the stubs are closed) ends a minor street
   where its grade over 4 m passes 44 % (`STREET_MAX_GRADE`) or the ground under it is steeper than
