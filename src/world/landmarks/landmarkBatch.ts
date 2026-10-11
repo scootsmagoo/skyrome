@@ -23,6 +23,7 @@ import { BatchHandle, BatchPool, type Batch, type BatchRef } from '../city/batch
 import { addShadowHook, type ShadowHook } from '../../gfx/shadowLod';
 import { CHUNK_CELL, CHUNK_MIN_RADIUS, CHUNK_MIN_TRIANGLES, splitByCells } from './chunking';
 import { PIECE_FROM, SHADOW_TWIN_FROM, pieceTwin, shapeTwins } from './landmarkLod';
+import { lodScale } from '../../gfx/lodScale';
 
 /** Hysteresis (m) around each LOD distance. */
 const BAND = 6;
@@ -234,12 +235,14 @@ export class LandmarkBatcher implements System, ShadowHook {
     const n = this.entries.length;
     if (!n) return;
     const cam = this.game.camera.position;
+    // The tier's LOD scale (gfx/lodScale.ts): twins come in sooner on Medium and Low.
+    const k = 1 / lodScale.value;
     // A quarter of the entries a frame is plenty at walking speed (and a teleport settles in four).
     const batch = Math.max(64, Math.ceil(n / 4));
     for (let i = 0; i < batch && i < n; i++) {
       this.cursor = (this.cursor + 1) % n;
       const e = this.entries[this.cursor];
-      const d = cam.distanceTo(e.center) - e.radius;
+      const d = (cam.distanceTo(e.center) - e.radius) * k;
       let level = e.level;
       while (level < e.geoms.length - 1 && d > e.from[level + 1] + BAND) level++;
       while (level > 0 && d < e.from[level] - BAND) level--;
@@ -253,11 +256,12 @@ export class LandmarkBatcher implements System, ShadowHook {
   // ---- ShadowHook: beyond SHADOW_TWIN_FROM the shadow map sees each entry's first twin.
 
   enter(cx: number, cy: number, cz: number) {
+    const from = SHADOW_TWIN_FROM * lodScale.value;
     for (const e of this.entries) {
       if (e.level >= 1) continue; // already a twin
       const dx = e.center.x - cx, dy = e.center.y - cy, dz = e.center.z - cz;
       // Math.sqrt, not Math.hypot (which allocates): ~3 k entries, 30 times a second.
-      if (Math.sqrt(dx * dx + dy * dy + dz * dz) - e.radius < SHADOW_TWIN_FROM) continue;
+      if (Math.sqrt(dx * dx + dy * dy + dz * dz) - e.radius < from) continue;
       e.batch.setGeometryIdAt(e.inst, e.shadow);
       this.swapped.push(e);
     }

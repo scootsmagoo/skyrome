@@ -18,6 +18,7 @@ import * as THREE from 'three';
 import type { Game, System } from '../../core/Game';
 import { GlowSprites } from './GlowSprites';
 import { dayLightScale, flicker, lampLevel, seed01, selectLights, type Candidate } from './logic';
+import { sessionQuality } from '../../core/graphics';
 
 declare module '../../core/Game' {
   interface Game {
@@ -131,7 +132,8 @@ export class LightPool implements System {
     private readonly game: Game,
     opts: LightPoolOptions = {},
   ) {
-    const n = opts.count ?? 8;
+    // Eight real lights, four on the Low tier (every lit shader pays per pool light; core/graphics.ts).
+    const n = opts.count ?? (game.settings ? sessionQuality(game.settings.data).pointLights : 8);
     for (let i = 0; i < n; i++) {
       const light = new THREE.PointLight(0xffffff, 0, 10, 2);
       light.name = `poolLight${i}`;

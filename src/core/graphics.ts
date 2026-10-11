@@ -34,15 +34,43 @@ declare module './Settings' {
     graphicsApplied?: { tier: GraphicsTier; gpu: string; by: 'gpu' | 'fps'; v?: number };
     /** People on the streets, × the normal crowd (the population reads it). */
     crowdDensity?: number;
+    /**
+     * Level-of-detail distances × this (people's body, hair and animation levels, their shadows,
+     * landmark twins and shadow stand-ins: gfx/lodScale.ts). Unset: the tier's (`lodScaleDefault`).
+     */
+    lodScale?: number;
   }
 }
 
 /** The rows each tier writes. Antialiasing applies from the next launch. */
 export const TIER_SETTINGS: Record<GraphicsTier, Partial<SettingsData>> = {
-  high: { renderScale: 1, maxPixelRatio: 1.5, shadows: 'high', viewDistance: 900, bloom: true, ao: true, sunShafts: true, antialias: true, maxFps: 60, crowdDensity: 1 },
-  medium: { renderScale: 0.85, maxPixelRatio: 1.25, shadows: 'low', viewDistance: 700, bloom: true, ao: true, sunShafts: false, antialias: true, maxFps: 60, crowdDensity: 0.8 },
-  low: { renderScale: 0.75, maxPixelRatio: 1, shadows: 'off', viewDistance: 550, bloom: false, ao: false, sunShafts: false, antialias: false, maxFps: 30, crowdDensity: 0.6 },
+  high: { renderScale: 1, maxPixelRatio: 1.5, shadows: 'high', viewDistance: 900, bloom: true, ao: true, sunShafts: true, antialias: true, maxFps: 60, crowdDensity: 1, lodScale: 1 },
+  medium: { renderScale: 0.85, maxPixelRatio: 1.25, shadows: 'low', viewDistance: 700, bloom: true, ao: true, sunShafts: false, antialias: true, maxFps: 60, crowdDensity: 0.8, lodScale: 0.75 },
+  low: { renderScale: 0.75, maxPixelRatio: 1, shadows: 'off', viewDistance: 550, bloom: false, ao: false, sunShafts: false, antialias: false, maxFps: 30, crowdDensity: 0.6, lodScale: 0.55 },
 };
+
+/** The tier in force: the one chosen, or the one Auto applied (null: none yet, the defaults = High). */
+export function tierOf(s: { graphics?: string; graphicsApplied?: { tier: string } }): GraphicsTier | null {
+  const t = s.graphics && s.graphics !== 'auto' ? s.graphics : s.graphicsApplied?.tier;
+  return t === 'low' || t === 'medium' || t === 'high' ? t : null;
+}
+
+/** The level-of-detail scale unless set: the tier's (saves from before the row existed have only a tier). */
+export function lodScaleDefault(s: { lodScale?: number; graphics?: string; graphicsApplied?: { tier: string } }): number {
+  if (s.lodScale !== undefined && s.lodScale > 0) return s.lodScale;
+  return TIER_SETTINGS[tierOf(s) ?? 'high'].lodScale ?? 1;
+}
+
+/**
+ * Things a tier fixes for the whole session (read once at startup; a change applies from the next
+ * launch, like antialiasing): the light pool's real PointLights (every lit shader carries one
+ * light term per pool light) and the near-field material detail (the detail normal layer and the
+ * grain bump of gfx/textures/shaderPatch.ts, which only show within 18 m).
+ */
+export function sessionQuality(s: { graphics?: string; graphicsApplied?: { tier: string } }): { pointLights: number; nearDetail: boolean } {
+  const low = tierOf(s) === 'low';
+  return { pointLights: low ? 4 : 8, nearDetail: !low };
+}
 
 /**
  * Ambient occlusion unless set: on for the High and Medium tiers (or when no tier was chosen), off

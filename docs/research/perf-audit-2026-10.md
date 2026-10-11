@@ -1,6 +1,7 @@
 # Performance audit: frame CPU, hitches, idle, boot, garbage (October 2026)
 
 > **Status:** phase 1 of the living-city plan (`docs/design/living-city-2026-10.md`), crew PERF-cpu, 2026-10-10.
+> Phase 3's GPU and tier pass (crew P3-GPU) is the last section, "Phase 3".
 > **Machine:** the owner's M4 Max, Chromium headless with ANGLE/Metal (Playwright), 1280×720 unless noted.
 > **Caveat:** several agents shared the CPU and GPU during these runs (load average 7 to 14). Absolute
 > milliseconds are higher and noisier than on an idle machine. Every claim below rests on one of two kinds
@@ -274,3 +275,207 @@ boot at 30 s. The gate warns when the load average is over ¾ of the cores. Re-r
 - **GPU:** measure the post chain at the owner's real resolution on a quiet machine. AO at quarter
   resolution, or fewer bloom levels on Medium, are the candidates.
 - **The HUD:** `Hud.update` costs about 0.17 ms a frame.
+
+## Phase 3: a cheaper frame for a laptop that runs hot (P3-GPU, 2026-10-10)
+
+> **Base:** `d47f573` (phases 1 and 2 live). **Machine:** the same M4 Max, shared with three to six other
+> agents' headless browsers for the whole session: load average 8 to 50, and the GPU 30 to 99 % busy
+> with their work before a run started (`ioreg`'s "Device Utilization %"). Counts are exact; CPU
+> milliseconds are best-of-N of interleaved runs; GPU milliseconds are only trusted as ratios inside one
+> page (below).
+
+### What the owner gets
+
+- **A fifth to a quarter less GPU work per frame on High, the same picture.** On a sunny day eight unlit
+  point lights were shaded on every pixel: the light pool keeps eight PointLights in the scene (so a lamp
+  never recompiles a shader) and three.js evaluated the full lighting model for each of them, times a
+  colour of zero. They now cost nothing. With the other changes below, the Forum's frame takes 21 to 28 %
+  less GPU time at the MacBook's resolution and 18 % less at 1280×720, measured in one page with all of
+  this switched off and on.
+- **Distant people are lighter.** Everyone who first appeared 22 m away or more kept their full-detail
+  hair (3–8 k triangles of alpha-tested cards) until their level of detail next changed: about 330 k of
+  the Forum's 2.2 M triangles. Their hair now starts at the body's level.
+- **A sixth less CPU for the frame and its render submit** in the Forum on High (median of seven
+  alternated pairs of boots; 15 % less render submit on Medium), with fewer draw calls on every tier.
+- **The shadow pass costs about half the CPU** (Forum, High: ~2.1 → 1.1–1.3 ms a pass at similar load,
+  `perf-probe.mjs`; it runs at 30 Hz).
+- **Medium and Low are genuinely lighter** (table below): people, their shadows and landmark twins
+  switch to their coarser versions sooner, Medium's shadow box shrank to 80 m, and Low runs four pool
+  lights and no near-field material detail.
+- **Tools**: GPU timing that survives a shared machine (`perf-probe.mjs --gpu-bench / --gpu-ab`), a draw
+  and triangle census per scene group (`--census`), same-camera A/B screenshots with a pixel diff
+  (`scripts/ab-shot.mjs`), the budget gate for all three tiers with an optional GPU check.
+
+### Measuring the GPU on a shared machine
+
+`EXT_disjoint_timer_query_webgl2` works in headless Chromium on Metal, but every timer there is
+inflated by whatever else the GPU runs, and ANGLE times a query's command buffers from when they are
+queued. Three lessons:
+- **One timer per step is wrong.** Timing each post pass with its own query (ANGLE flushes at every
+  query boundary) gave a 35 ms frame whose bloom alone took 11 ms. The same frame drawn four times
+  inside one query reads 5–9 ms.
+- **Queries in flight together, or behind the game's own frames, read long.** The bench waits for an
+  idle queue (`gl.finish`) and for each result before the next query.
+- **Only ratios inside one page hold up.** Between two boots the base frame moved from 6 to 34 ms as the
+  other agents' load came and went. `--gpu-ab` measures a switch in trials of off, on, on, off (each
+  query four draws of the same frame), so both sides of a pair see about the same load, and reports
+  the median of the per-trial ratios. Shader switches recompile once and then flip a program-cache key.
+
+A sanity check of the method: Medium's render scale (0.85, 28 % fewer pixels) reads −14 to −30 % (four
+runs); hiding every landmark batch −24 %.
+
+### What the frame spends, and what changed
+
+The census (`perf-probe.mjs --census`, Forum, High, before) of one frame: 699 main-pass draws, of which
+the people were 300 (body, cloth shells, hair cards, eyes up close, gear) and 0.55 M of 1.5–2.2 M
+triangles; the landmark batches 84 draws (0.66 M); the city batches 36; trees and groves about 100;
+the content stand-ins 44; phase 2's station dressing (stalls, tables, banners, shutters: unnamed groups)
+32 draws and 1 k triangles. The shadow pass: 342 draw calls a pass, 125 of them people.
+
+| Change | Where | Effect (Forum, High) |
+|---|---|---|
+| Dark point lights skip the lighting model (a light whose colour is zero; a pixel beyond a light's range) | `src/gfx/chunkPatches.ts` (three's `lights_fragment_begin`, patched before the first compile) | GPU frame −18 to −31 % at 2268×1290 (four runs), −16 % at 1280×720; identical pixels (`ab-shot --switch lightskip`: at the dither's noise floor) |
+| Hair starts at the body's level of detail | `RealBody.makeHead`, `buildHead(ctx, hairLod)` | main-pass triangles 2.16 → 1.97 M; hair 239 k → 75 k; GPU −3 % at 720p; heads 22–55 m away show LOD 2 hair (the cap and a few cards) as designed |
+| One depth material per kind of caster in the shadow pass | `src/gfx/shadowLod.ts` | three.js looked the shared depth program up 43 times a pass (a body, then its sword; a batch, then a person): now 0; ~0.13–0.18 ms a frame |
+| Batches with nothing in the shadow view skip the shadow pass | `src/gfx/fastCull.ts` `precullShadow` | 342 → 269 shadow draw calls a pass (lmbatch 100 → 48, city 49 → 10: empty multi-draws that still switched program and uploaded uniforms) |
+| People culled as a whole before the scene walk | `fastCull.ts` `cullAsWhole`, from `ActorSystem.add` | render −0.27 ms in one-page A/B (the walk −0.15, main −0.10: shells are `frustumCulled = false`, so 9–11 out-of-view draws went too) |
+| People outside the shadow camera, or past where their body stops casting (28 m), leave the shadow pass | `fastCull.ts` `precullShadow` (the `casts` test of `cullAsWhole`) | ~20 fewer shadow draws a pass (their gear: 42 → 29); the swords, helmets and shields of people 28–78 m away no longer throw shadows with no body under them (`ab-shot --switch rootcull`: 0.002–0.018 % of pixels) |
+| Content stand-ins batched | `src/content/standins.ts` (`content:batches`) | 44 → ~10 main draws, 33 → ~10 shadow draws |
+| One world frustum for every batch at the origin | `fastCull.ts` `planesFor` | no matrix product and plane set-up per batch per pass |
+| AO reads the character mask only for samples that occlude | `src/gfx/post/ao.ts` | up to 12 fewer 8-byte reads per AO pixel; identical pixels |
+
+Measured and dropped:
+- **Sorting the opaque list by shader program** (with the program cached on the material): render
+  +0.27 ms, as phase 1 found. The sort costs more than the switches it saves.
+- **Branching around the near-field material detail** (the grain bump and the detail normal map fade
+  out by 9 and 18 m but are still computed): the derivatives inside a branch make it not bit-exact at
+  silhouettes, and a texture fetch inside a non-uniform branch needs explicit gradients. Left for a
+  quieter machine to price; the Low tier drops both instead.
+- **A static shadow cache** (static casters rendered when the shadow box moves, people on top at 30 Hz):
+  the box follows the camera's look direction, so it moves while turning; most of the pass is people
+  anyway. ("Cascades updated less often when the sun barely moves" does not apply: High and Medium use
+  one map, and the light direction already moves in 0.03° steps.)
+- **Merging post passes**: the AO blur folded into the composite would run its 25 taps at full
+  resolution instead of half; bloom and shafts share nothing. The AO pass's reads were cut instead.
+- **Culling the world registry's groups as a whole** (landmark groups, dressing tiles and stand-in cells
+  out of view hidden for the walk, like the people): −0.01 ms. Their meshes are few, and three.js's own
+  test per mesh is cheap; the people were the deep trees.
+- **Overdraw from foliage cards and transparent layers**: hiding every alpha-tested mesh, or every
+  transparent one, moved the GPU frame by less than the noise (the Forum has 4 transparent draws and
+  about 20 alpha-tested ones); the hair's overdraw went with its level-of-detail fix.
+
+### Tiers
+
+`TIER_SETTINGS` gained `lodScale` (High 1, Medium 0.75, Low 0.55, `src/gfx/lodScale.ts`): every
+level-of-detail distance is multiplied by it. People (body and hair levels 9/22/55 m → 7/17/41 on
+Medium, 5/12/30 on Low; the animation rates, the flat bone path, foot IK, where shadows stop), landmark
+twins and their shadow twins, and the shadow stand-ins. The shadow preset Medium uses ('low') went from a
+110 m box to 80 m at 1024² (7.8 cm texels instead of 10.7; about half the casters). Low, from the next
+launch: 4 pool lights instead of 8 and no near-field material detail (`sessionQuality`). Saves from
+before the row take their tier's scale (`lodScaleDefault`).
+
+The tiers on this branch, Forum (the owner's MacBook resolution for the GPU, 1280×720 for the rest):
+
+| | High | Medium | Low |
+|---|---:|---:|---:|
+| Draw calls (most in any direction, both passes) | 911–935 | 728–737 | 520–533 |
+| Triangles | 2.52 M | 1.95 M | 1.31 M |
+| Shadow pass | 3072², 100 m, people to 28 m | 1024², 80 m, people to 21 m | none |
+| Render submit (median of 4 boots; best) | 6.9 ms (4.5) | 5.4 ms (4.8) | 3.6 ms (3.4) |
+| Frame CPU (median of 4 boots; best) | 14.3 ms (9.5) | 10.3 ms (8.9) | 7.1 ms (6.6) |
+| GPU, the tier's rendering rows in a High page (one-page A/B, 2268×1290) | — | −38 % | −58 % |
+| Frames a second (the cap) | 60 | 60 | 30 |
+
+The GPU row applies the tier's render scale, pixel ratio, shadows, AO, bloom, shafts and LOD scale in a
+page booted at High: it leaves out what needs a new page (Low's lack of MSAA, its four lights) or time
+(the smaller crowd and the shorter view distance), all of which make the lower tiers cheaper still. Low
+also draws half as many frames.
+
+### Phase 2's world life
+
+- **Station dressing** (stalls, tables, counters, benches, banners, shutters: `npc/stationDirector.ts`,
+  unnamed groups in the scene): 32 main and 26 shadow draws in the Forum, 1 k triangles. They move and
+  animate (shutters, the mill, the mule), so they stay plain meshes.
+- **Keepers** are people: they count with the crowd.
+- **Content stand-ins** (the things behind prompts): 44 draws in the Forum, now batched.
+- **Interactables** draw nothing of their own.
+
+### Before and after
+
+**GPU, High, Forum, in one page** (`perf-probe.mjs --gpu-ab 'phase 3 off'`: the light patch, the hair
+levels, the AO reads and the shadow and people culls all switched back off; the median of 15 paired
+trials, each four draws of the same frame per timer query):
+
+| Resolution | Runs: old frame ÷ new frame | GPU time saved |
+|---|---|---|
+| 1512×860 at DPR 2 (2268×1290, the MacBook) | 1.272, 1.396, 1.280 | 21 %, 28 %, 22 % |
+| 1280×720 | 1.216, 1.217 | 18 %, 18 % |
+
+The other GPU benches of the session (the frame in separate boots, the budget gate's `--gpu`) moved by
+2–4× with the other agents' load and are not quoted.
+
+**CPU, base `d47f573` against this branch**, the Forum with boots alternated base/new four times per tier
+(seven for High)
+(`perf-budget.mjs --views forum`, one run each; median of the per-pair ratios, and the best run):
+
+| Tier | Render submit | Frame CPU | Draws | Triangles |
+|---|---|---|---|---|
+| High (seven pairs) | −16 % (best 4.3 → 4.1 ms) | −16 % (best 9.0 → 8.6 ms) | 965–976 → 911–935 | 2.77 → 2.52 M |
+| Medium | −15 % (best 5.4 → 4.8 ms) | −10 % (best 9.9 → 8.9 ms) | 878–886 → 728–737 | 2.46 → 1.95 M |
+| Low | −5 % (best 3.6 → 3.4 ms) | −5 % (best 7.1 → 6.6 ms) | 591–600 → 520–533 | 1.73 → 1.31 M |
+
+All three views, best of two interleaved sessions (`perf-budget.mjs --repeat 2`, load 9 to 38; the
+first session's branch did not yet cull people as a whole):
+
+| Tier, view | Frame CPU | Render submit | Draws | Triangles |
+|---|---|---|---|---|
+| High, Forum | 14.0 → 11.9 ms | 7.1 → 5.9 ms | 974 → 912 | 2.77 → 2.52 M |
+| High, Colosseum | 8.5 → 6.3 | 4.8 → 3.7 | 985 → 916 | 2.00 → 1.96 M |
+| High, Porta Capena | 14.6 → 13.3 | 6.6 → 5.9 | 1212 → 1165 | 2.59 → 2.56 M |
+| Medium, Forum | 8.8 → 9.8 | 4.8 → 5.5 | 885 → 732 | 2.46 → 1.95 M |
+| Medium, Colosseum | 7.1 → 7.3 | 4.4 → 4.5 | 958 → 885 | 1.87 → 1.76 M |
+| Medium, Porta Capena | 10.0 → 9.8 | 4.7 → 4.9 | 1105 → 1055 | 2.27 → 2.04 M |
+| Low, Forum | 9.3 → 9.2 | 4.8 → 4.6 | 600 → 531 | 1.73 → 1.31 M |
+| Low, Colosseum | 5.6 → 7.1 | 3.3 → 4.2 | 775 → 756 | 1.35 → 1.36 M |
+| Low, Porta Capena | 8.7 → 8.3 | 4.1 → 4.0 | 797 → 772 | 1.50 → 1.40 M |
+
+The Medium and Low timings of the sessions went the wrong way in places while every count went down:
+those runs met the load at its worst (load 16 to 38, a boot of 41 s). The alternated pairs above, a
+minute apart, are the fairer comparison; one-page A/B in a Medium page priced each change there too
+(render: the people cull −0.41 ms, the shadow pre-cull −0.36, the LOD scale −0.18, the depth materials
+−0.10).
+
+**The target of 4 ms of render submit in the Forum on High was not reached.** In the quietest window of
+the session (load 6 to 15) three more alternated pairs gave the base 4.3, 5.7 and 6.5 ms and this
+branch 4.1, 4.8 and 4.1 ms, and the gate with `--repeat 2` measured 5.3 ms (base) against 4.1 and 4.6
+(this branch): over all seven High pairs the median saving is 16 % of render submit and 16 % of frame
+CPU. What is left is mostly people (see "Next"). In the same quiet window the gate's GPU number (720p,
+one boot each) read 7.6, 7.5 and 7.0 ms for the base's three views and 4.1–5.2, 4.4–6.1 and 5.4–5.6 for
+this branch's: the cross-boot GPU comparison, for once readable, agrees with the in-page one.
+
+**The gate** (`scripts/perf-budget.json`) has budgets for all three tiers now, from these runs: High's
+tightened (Forum render submit 8.8 → 7.7 ms, CPU 16.5 → 15.4, triangles 3.0 → 2.9 M; Colosseum 5.7 →
+4.8 ms), Medium's counts tightened (Forum draws 1000 → 850, triangles 2.74 → 2.25 M) and a few of its
+timings loosened to what the alternated runs measured (Forum render submit 5.3 → 6.0 ms, CPU 9.9 →
+10.8 ms, two boot times: phase 2's world life had already taken the base to 5.4–7.4 ms of render
+submit there), Low's new. `--gpu` checks a GPU budget
+(× 1.95 of a contended measurement: it catches a doubling, not 10 %).
+
+**Other checks of this branch:** `npx vitest run` (all green), `tsc --noEmit`, the golden path (all four
+chapters, the known movement snags), an 8-minute soak (heap +12 MB, no errors), the leak harness
+(teleport and day/night flat; fights flat over 10 cycles, which the harness calls inconclusive; 50 idle
+cycles flat, as on the base), `npm run check:controls`
+(one failure, the known flaky WebKit "talk (E)" check, which passed 3 of 3 on a rerun on both builds),
+and WebKit renders the patched shaders.
+
+### Next
+
+- **People are still 40 % of render submit** (one-page A/B: −2 ms of 5–6 when hidden: 316 main draws,
+  126 shadow draws). Hair, cloth shells and body are three draws per person to 55 m. A merged LOD 2
+  (shells baked into the body; hair as a cap) would make the 22–55 m band one draw.
+- **The point-light uniforms**: every program switch re-sends the eight pool lights (32 uniforms with
+  a cache compare each, 175 switches a frame). Fewer programs, or a smaller pool, would cut it.
+- **Near-field detail**: branch the grain and the detail normal layer out beyond 9 and 18 m with
+  explicit gradients, priced on a quiet machine.
+- **The post chain at the MacBook's resolution** (AO, bloom, composite: 1–2.5 ms of a 7–9 ms frame): AO
+  from a half-resolution depth copy.

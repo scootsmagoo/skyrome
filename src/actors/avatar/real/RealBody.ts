@@ -653,7 +653,10 @@ export class RealBody {
   /** Hair, beards and head-gear from the head module; whether it supplies helmets decides the rigid pieces. */
   private makeHead() {
     this.head?.dispose();
-    const head = buildHead(context(this.entry, 0));
+    // The head is measured on the full-detail body, but its hair starts at the body's own level: a body
+    // made at LOD 2 (everyone who appears 22 m away or more) kept full-detail hair until its LOD next
+    // changed (phase 3 perf audit: 330 k of the Forum's 2.2 M triangles were such hair).
+    const head = buildHead(context(this.entry, 0), Math.min(this.lod, 2) as 0 | 1 | 2);
     this.head = head;
     this.headObjects = head.objects;
     if (this.entry.headHelmets !== head.objects.length > 0) {

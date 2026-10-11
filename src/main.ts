@@ -3,6 +3,10 @@ import { Game } from './core/Game';
 import { DebugOverlay } from './dev/DebugOverlay';
 import { GraphicsGovernor } from './core/graphics';
 import { enableCompressedTextures } from './gfx/materials';
+import { installChunkPatches } from './gfx/chunkPatches';
+import { installLodScale } from './gfx/lodScale';
+import { setNearMaterialDetail } from './gfx/textures/shaderPatch';
+import { sessionQuality } from './core/graphics';
 import { classicRequested, loadRealBodies } from './actors/avatar/real/RealBody';
 import { setLeafyCanopies } from './arch/vegetation/materials';
 import { setHairAlphaToCoverage } from './actors/avatar/real/head/hairConfig';
@@ -29,6 +33,11 @@ async function boot() {
 
   const game = await Game.create(app, { seed: Number(params.get('seed') ?? 113) });
   window.__skyrome = { game, scene: sceneName, ready: false };
+  // Before the first material compiles: cheaper shared shader chunks (gfx/chunkPatches.ts).
+  installChunkPatches();
+  installLodScale(game);
+  // The Low tier's materials go without the near-field detail layers (from the next launch on).
+  setNearMaterialDetail(sessionQuality(game.settings.data).nearDetail);
   enableCompressedTextures(game.renderer);
   // Realistic bodies are the default: start loading now (the city builds meanwhile); avatars made before it ends upgrade on arrival.
   if (!classicRequested()) loadRealBodies(game.renderer).catch((e) => console.error('real bodies failed to load, staying procedural', e));

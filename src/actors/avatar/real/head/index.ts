@@ -109,7 +109,11 @@ export function headCacheGeometries(): THREE.BufferGeometry[] {
 
 const lerpOf = (n: number) => Math.round(n * 1000);
 
-export function buildHead(ctx: RealContext): RealHead {
+/**
+ * `hairLod`: the hair's level to start with (default the context's). RealBody builds the head from
+ * the full-detail body measure but starts the hair at the level of the body it wears.
+ */
+export function buildHead(ctx: RealContext, hairLod: 0 | 1 | 2 = ctx.lod): RealHead {
   const { app, rig, sex } = ctx;
   // RealBody's context carries the body already morphed to this rig.
   const H = headSurface(ctx.body, rig, sex, true);
@@ -172,7 +176,7 @@ export function buildHead(ctx: RealContext): RealHead {
     } else hairMesh.geometry = got.value.geometry;
     hairMesh.visible = true;
   };
-  setHairLod(ctx.lod);
+  setHairLod(hairLod);
 
   // Helmet, veil, infula.
   if (helmet || veiled) {

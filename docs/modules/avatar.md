@@ -135,6 +135,16 @@ updates the quaternion, but its other angles are stale). The animation code also
 | beyond 25 m and out of the frustum | 8 Hz |
 | anyone who `wantsFullRate` (dead, weapon drawn, blocking, any action playing or fading, looking at a target), has a `holdFull` hold, or is in first person | every frame, at any distance |
 
+The distances are the High tier's: `step` divides the measured distance by the tier's LOD scale
+(`gfx/lodScale.ts`; Medium 0.75, Low 0.55), so everything that reads `distance()` (these rates, the
+flat path, foot IK, the real body's and hair's LOD, where shadows stop) comes sooner on cheaper tiers.
+A person out of view is left out of three.js's scene walk as a whole (`cullAsWhole` in
+`gfx/fastCull.ts`, registered by `ActorSystem.add`: a 4.5 m sphere 1 m above the feet), so their bones
+and meshes are not visited and tested one by one. In the shadow pass a person is left out when the
+sphere is outside the shadow camera, or when their body has stopped casting (beyond 28 m × the LOD
+scale): what they carry stopped casting with it (swords and helmets used to throw shadows with no
+body under them).
+
 The skipped time accumulates, each avatar has a random phase, the first update always samples, and an
 avatar coming into view refreshes at once. Action clocks and their events (`advance`) run every frame.
 Foot IK and loose parts (`anim.near`) stay on to 40 m (`ikNear`).

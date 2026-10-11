@@ -21,7 +21,21 @@
  *    culls with the light's frustum) and after the frame.
  *  - Nothing is allocated per frame.
  *
- * `?lodoff=precull` and `?lodoff=passlists` switch the two off for A/B runs.
+ * And one from phase 3: a batch with no instance in the shadow camera's view stops casting for that
+ * shadow pass (`precullShadow`, run as the shadow map starts). three.js's shadow walk still drew it,
+ * with nothing in its list: a program switch, its uniforms and bindings for an empty multi-draw,
+ * about a third of the city batches' shadow draws in the Forum.
+ *
+ * The same pre-cull also takes whole scene subtrees out of the main walk by one sphere each
+ * (`cullAsWhole`: the people, registered by ActorSystem). three.js tests every mesh of a person
+ * against the view on its own and walks all their nodes (bones, sockets, the head group) even when
+ * the person is behind the camera. In the shadow pass such a subtree is left out when its sphere is
+ * outside every shadow camera, or when its `casts()` says no (a person beyond the distance where
+ * their body stops casting: their sword and helmet stopped casting too, instead of throwing shadows
+ * with no body).
+ *
+ * `?lodoff=precull`, `?lodoff=passlists`, `?lodoff=shadowprecull` and `?lodoff=rootcull` switch these
+ * off for A/B runs.
  *
  * The sphere must contain the instance in every geometry it can show (LOD twins are smaller than
  * the original, so the original's sphere does). Written against three r186's BatchedMesh fields;
@@ -43,22 +57,78 @@ interface BatchedInternals {
 
 const frustum = new THREE.Frustum();
 const projView = new THREE.Matrix4();
+/** The last camera's world-space frustum and the matrices it was made from (shared by every batch at the origin). */
+const worldFrustum = new THREE.Frustum();
+const worldKey = new Float64Array(32);
+let worldCam: THREE.Camera | null = null;
+
+/**
+ * The planes to cull `mesh`'s instances with for `camera`. Batches sit at the origin, so all of
+ * them share one world-space frustum per camera and pass (made again only when the camera's
+ * matrices changed); a mesh elsewhere gets its own.
+ */
+function planesFor(camera: THREE.Camera, mesh: THREE.Object3D): THREE.Plane[] {
+  const reversed = (camera as THREE.PerspectiveCamera & { reversedDepth?: boolean }).reversedDepth;
+  if (!isIdentity(mesh.matrixWorld.elements)) {
+    projView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(mesh.matrixWorld);
+    frustum.setFromProjectionMatrix(projView, camera.coordinateSystem, reversed);
+    return frustum.planes;
+  }
+  const p = camera.projectionMatrix.elements, v = camera.matrixWorldInverse.elements;
+  let same = worldCam === camera;
+  for (let i = 0; same && i < 16; i++) same = worldKey[i] === p[i] && worldKey[16 + i] === v[i];
+  if (!same) {
+    projView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    worldFrustum.setFromProjectionMatrix(projView, camera.coordinateSystem, reversed);
+    for (let i = 0; i < 16; i++) {
+      worldKey[i] = p[i];
+      worldKey[16 + i] = v[i];
+    }
+    worldCam = camera;
+  }
+  return worldFrustum.planes;
+}
+
+function isIdentity(e: ArrayLike<number>): boolean {
+  return e[0] === 1 && e[5] === 1 && e[10] === 1 && e[15] === 1 && e[1] === 0 && e[2] === 0 && e[3] === 0 && e[4] === 0 && e[6] === 0 && e[7] === 0 && e[8] === 0 && e[9] === 0 && e[11] === 0 && e[12] === 0 && e[13] === 0 && e[14] === 0;
+}
 const OFF = new URLSearchParams(globalThis.location?.search ?? '').get('lodoff') ?? '';
 /** Runtime switches for A/B runs (scripts/perf-probe.mjs imports this module and flips them). */
-export const fastCullSwitches = { precull: !OFF.includes('precull'), passLists: !OFF.includes('passlists') };
+export const fastCullSwitches = { precull: !OFF.includes('precull'), passLists: !OFF.includes('passlists'), shadowPrecull: !OFF.includes('shadowprecull'), rootCull: !OFF.includes('rootcull') };
 
 /** Every installed cull, for the scene hook's pre-cull (an array: iterated every frame). */
 const all: FastCull[] = [];
 /** Batches hidden for the current main-pass walk (shown again before the shadow pass). */
 const hidden: THREE.Object3D[] = [];
+/** Scene children culled as a whole: a sphere `lift` m above the origin, `radius` m; `casts` false: no shadow at all. */
+const roots: { object: THREE.Object3D; radius: number; lift: number; casts: (() => boolean) | null }[] = [];
+/** Subtrees left out of the current shadow pass (shown again after it). */
+const shadowHidden: THREE.Object3D[] = [];
+
+/**
+ * Cull `object` (a child of the scene) as a whole in the main pass: hidden for three.js's walk when
+ * the sphere `radius` m around the point `lift` m above its origin is out of view (shown again for
+ * the shadow pass and after the frame). The sphere must hold everything below the object.
+ */
+export function cullAsWhole(object: THREE.Object3D, radius: number, lift = 0, casts: (() => boolean) | null = null) {
+  if (!roots.some((r) => r.object === object)) roots.push({ object, radius, lift, casts });
+}
+
+export function stopCullingAsWhole(object: THREE.Object3D) {
+  const k = roots.findIndex((r) => r.object === object);
+  if (k >= 0) roots.splice(k, 1);
+}
+
+/** Batches that cast nothing in the current shadow pass (their castShadow is back on after it). */
+const noCast: THREE.Object3D[] = [];
 const hookedScenes = new WeakSet<THREE.Object3D>();
 const hookedRenderers = new WeakSet<THREE.WebGLRenderer>();
 /** The main pass under way (set by the scene hook, cleared after the frame). */
 let passToken = 0;
 let passCamera: THREE.Camera | null = null;
 
-/** Counters for the probe scripts: indirect-texture uploads, culls, batches skipped as empty. */
-export const fastCullStats = { uploads: 0, culls: 0, skipped: 0 };
+/** Counters for the probe scripts: indirect-texture uploads, culls, batches skipped as empty (main pass, shadow pass), subtrees culled whole. */
+export const fastCullStats = { uploads: 0, culls: 0, skipped: 0, shadowSkipped: 0, rootsCulled: 0 };
 
 export class FastCull {
   private spheres = new Float32Array(64 * 4);
@@ -146,6 +216,34 @@ export class FastCull {
     return (material as THREE.MeshBasicMaterial).wireframe || (camera as THREE.ArrayCamera).isArrayCamera || !this.mesh.perObjectFrustumCulled;
   }
 
+  /**
+   * Is any visible instance inside `camera`'s view? (Stops at the first one; the shadow pre-cull.)
+   * A mesh three.js culls itself (see `stock`) counts as in view.
+   */
+  anyInView(camera: THREE.Camera): boolean {
+    if (this.stock(this.mesh.material as THREE.Material, camera)) return true;
+    const m = this.mesh as unknown as BatchedInternals;
+    const p = planesFor(camera, this.mesh);
+    const instances = m._instanceInfo;
+    const sp = this.spheres;
+    for (let i = 0, l = instances.length; i < l; i++) {
+      const info = instances[i];
+      if (!info.visible || !info.active) continue;
+      const o = i * 4;
+      const x = sp[o], y = sp[o + 1], z = sp[o + 2], r = -sp[o + 3];
+      let inside = true;
+      for (let k = 0; k < 6; k++) {
+        const n = p[k].normal;
+        if (n.x * x + n.y * y + n.z * z + p[k].constant < r) {
+          inside = false;
+          break;
+        }
+      }
+      if (inside) return true;
+    }
+    return false;
+  }
+
   /** Main pass, before the scene walk: cull now; true when nothing is in view. */
   precull(camera: THREE.Camera): boolean {
     if (this.stock(this.mesh.material as THREE.Material, camera)) return false;
@@ -205,9 +303,7 @@ export class FastCull {
     const m = this.mesh as unknown as BatchedInternals;
     const index = geometry.getIndex();
     const bytes = index === null ? 1 : (index.array as ArrayBufferView & { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-    projView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(this.mesh.matrixWorld);
-    frustum.setFromProjectionMatrix(projView, camera.coordinateSystem, (camera as THREE.PerspectiveCamera & { reversedDepth?: boolean }).reversedDepth);
-    const p = frustum.planes;
+    const p = planesFor(camera, this.mesh);
     const instances = m._instanceInfo;
     const geometries = m._geometryInfo;
     const starts = m._multiDrawStarts;
@@ -281,6 +377,7 @@ function hookScene(scene: THREE.Object3D, renderer: THREE.WebGLRenderer) {
           fastCullStats.skipped++;
         }
       }
+      if (fastCullSwitches.rootCull && roots.length) cullRoots(scene, camera);
     } as THREE.Object3D['onBeforeRender'];
     scene.onAfterRender = function (this: THREE.Scene, r, s, camera, geometry, material, group) {
       showHidden();
@@ -295,9 +392,89 @@ function hookScene(scene: THREE.Object3D, renderer: THREE.WebGLRenderer) {
     // The shadow pass walks the scene itself: what the main view could not see may cast into it.
     sm.render = (lights, s, camera) => {
       showHidden();
-      render(lights, s, camera);
+      if (fastCullSwitches.shadowPrecull && sm.enabled && (sm.autoUpdate || sm.needsUpdate) && lights.length > 0) precullShadow(lights, s, camera);
+      try {
+        render(lights, s, camera);
+      } finally {
+        for (const o of noCast) o.castShadow = true;
+        noCast.length = 0;
+        for (const o of shadowHidden) o.visible = true;
+        shadowHidden.length = 0;
+      }
     };
   }
+}
+
+/** Hide the registered subtrees whose sphere is out of `camera`'s view (shown again with the batches). */
+function cullRoots(scene: THREE.Object3D, camera: THREE.Camera) {
+  const p = planesFor(camera, scene);
+  for (let i = 0; i < roots.length; i++) {
+    const { object, radius, lift } = roots[i];
+    if (object.parent === null) {
+      // Gone from the world (a person disposed without leaving the registry): let it go.
+      roots[i] = roots[roots.length - 1];
+      roots.pop();
+      i--;
+      continue;
+    }
+    if (!object.visible || object.parent !== scene) continue;
+    const e = object.matrixWorld.elements;
+    if (sphereInView(p, e[12], e[13] + lift, e[14], radius)) continue;
+    object.visible = false;
+    hidden.push(object);
+    fastCullStats.rootsCulled++;
+  }
+}
+
+type ShadowLight = THREE.Light & { shadow?: THREE.LightShadow & { updateMatrices(light: THREE.Light, camera?: THREE.Camera): void } };
+
+/**
+ * Before a shadow pass: batches with no instance in any shadow camera's view stop casting for it
+ * (their castShadow comes back after the pass). Only for plain one-view shadows (directional and
+ * spot lights): point-light cubes and cascades keep three.js's own walk.
+ */
+function precullShadow(lights: ShadowLight[], scene: THREE.Object3D, camera: THREE.Camera) {
+  for (const l of lights) {
+    const sh = l.shadow;
+    if (!sh || (l as THREE.PointLight).isPointLight || sh.getViewportCount() !== 1) return;
+  }
+  // The same matrices three.js is about to compute for the pass (it does this again, harmlessly).
+  for (const l of lights) l.shadow!.updateMatrices(l, camera);
+  for (let i = 0; i < all.length; i++) {
+    const c = all[i];
+    const mesh = c.mesh;
+    if (!mesh.castShadow || !mesh.visible || !inScene(mesh, scene)) continue;
+    let any = false;
+    for (let k = 0; k < lights.length && !any; k++) any = c.anyInView(lights[k].shadow!.camera);
+    if (any) continue;
+    mesh.castShadow = false;
+    noCast.push(mesh);
+    fastCullStats.shadowSkipped++;
+  }
+  if (!fastCullSwitches.rootCull) return;
+  for (let i = 0; i < roots.length; i++) {
+    const { object, radius, lift, casts } = roots[i];
+    if (!object.visible || object.parent !== scene) continue;
+    let out = casts !== null && !casts();
+    if (!out) {
+      const e = object.matrixWorld.elements;
+      const x = e[12], y = e[13] + lift, z = e[14];
+      out = true;
+      for (let k = 0; k < lights.length && out; k++) out = !sphereInView(planesFor(lights[k].shadow!.camera, scene), x, y, z, radius);
+    }
+    if (!out) continue;
+    object.visible = false;
+    shadowHidden.push(object);
+  }
+}
+
+/** Is the sphere at (x, y, z) of radius `r` inside (or crossing) all six planes? */
+function sphereInView(p: THREE.Plane[], x: number, y: number, z: number, r: number): boolean {
+  for (let k = 0; k < 6; k++) {
+    const n = p[k].normal;
+    if (n.x * x + n.y * y + n.z * z + p[k].constant < -r) return false;
+  }
+  return true;
 }
 
 function showHidden() {

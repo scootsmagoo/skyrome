@@ -2,10 +2,12 @@
 /**
  * Render-submit probe: where the CPU time of a frame's render goes, and what a switch saves.
  *
- *   node scripts/perf-probe.mjs [--view forum] [--frames 90] [--rounds 3] [--size 1280x720]
+ *   node scripts/perf-probe.mjs [--view forum] [--frames 90] [--rounds 3] [--size 1280x720] [--dpr 1]
  *                               [--graphics high|medium|low] [--query 'a=1'] [--ab default|none|'name=js;;name'] (switches split on ';;')
  *                               [--json out.json] [--browser webkit]
- *                               [--gpu] [--glcount] [--cpuprofile <ms> [--pan] [--top n] [--match <re>] [--callers <fn>]]
+ *                               [--gpu [--gpu-post] [--gpu-detail]] [--gpu-bench] [--gpu-ab default|'name=js;;name']
+ *                               [--reps 4] [--trials 25] [--settle-frames 3]
+ *                               [--census] [--glcount] [--cpuprofile <ms> [--pan] [--top n] [--match <re>] [--callers <fn>]]
  *
  * It boots one view (the views of perf.mjs: spawn, forum, circus, cavea, colosseum, pantheon),
  * profiles every frame with hooks around three.js's own steps, and prints the mean ms of:
@@ -22,6 +24,19 @@
  * the fairest comparison while other agents share the machine) and prints the delta per step.
  * A switch is `name=<js>` where the js runs in the page with `game` and `on` (true to switch the
  * thing off) and must undo itself when `on` is false. `--ab default` runs the built-in list.
+ *
+ * `--size 1512x860 --dpr 2` approximates the owner's MacBook (the game caps the pixel ratio at 1.5).
+ *
+ * GPU: `--gpu` times live frames with timer queries (shadow, scene, post; `--gpu-detail` per pass,
+ * which ANGLE's flush at each query inflates); `--gpu-post` repeats it with each post effect off.
+ * `--gpu-bench` is the steadier number: the view drawn `--reps` times inside one timer query, best
+ * of `--trials` (frame, scene, post, one shadow pass). `--gpu-ab` runs the bench with switches
+ * OFF/ON in one page, like `--ab`, and prints the median of the paired differences (`--gpu-ab
+ * default`: GPU_AB, the post effects, the point lights, the shadow pass and scene groups). Other
+ * programs on the GPU (other agents' browsers) add time to every number: compare the ratios, use
+ * many trials, and check the machine's GPU load first (ioreg's "Device Utilization %").
+ * Pass `--ab none` to skip the CPU switches. `--census` counts the draws of a frame by pass,
+ * top-level scene group, kind of object and material.
  */
 import { createServer as createNetServer } from 'node:net';
 import { writeFileSync } from 'node:fs';
@@ -66,24 +81,127 @@ const DEFAULT_AB = {
   'old: no sealed walks': `const f = game.getSystem('staticFreeze'); if (f) f.switches.seal = !on;`,
   'old: no pre-cull': 'const m = window.__probeMods?.fastCull; if (m) m.fastCullSwitches.precull = !on;',
   'old: shared pass lists': 'const m = window.__probeMods?.fastCull; if (m) m.fastCullSwitches.passLists = !on;',
+  // The opaque list sorted by shader program first (fewer program switches, each of which re-sends
+  // the light uniforms), with the program id cached on the material.
+  'sort by program': `const r = game.renderer; const props = r.properties;
+    const pg = (m) => { let v = m.__pg; if (v === undefined || m.__pgv !== m.version) { const p = props.get(m).currentProgram; v = p ? p.id : 0; if (v) { m.__pg = v; m.__pgv = m.version; } } return v; };
+    r.setOpaqueSort(on ? (a, b) => a.groupOrder - b.groupOrder || a.renderOrder - b.renderOrder || pg(a.material) - pg(b.material) || a.material.id - b.material.id || a.z - b.z || a.id - b.id : null);`,
+  // Phase 3's CPU fixes switched back off.
+  'old: no shadow pre-cull': 'const m = window.__probeMods?.fastCull; if (m) m.fastCullSwitches.shadowPrecull = !on;',
+  'old: no root cull': 'const m = window.__probeMods?.fastCull; if (m) m.fastCullSwitches.rootCull = !on;',
+  // The tier's level-of-detail scale back at 1 (High's distances) in a Medium or Low page.
+  'lod scale 1': 'const m = window.__probeMods?.lodScale; if (m) { game.__lodScale ??= m.lodScale.value; m.lodScale.value = on ? 1 : game.__lodScale; }',
+  'old: one depth material': 'const m = window.__probeMods?.shadowLod; if (m) m.shadowLodSwitches.kindDepth = !on;',
 };
+
+/** Built-in GPU switches (`--gpu-ab default`): post passes, lights and scene groups. */
+const GPU_AB = {
+  'no ao': postFlag('aoEnabled'),
+  'no contact': postFlag('contactEnabled'),
+  'no bloom': postFlag('bloomEnabled'),
+  'no shafts': postFlag('shaftsEnabled'),
+  // The light pool's eight PointLights out of the scene (three recompiles without them).
+  'no point lights': `for (const c of game.scene.children) if (/^poolLight/.test(c.name)) c.visible = !on;`,
+  'no shadow pass': DEFAULT_AB['no shadow pass'],
+  'hide actors': DEFAULT_AB['hide actors'],
+  'hide grass/forest/trees': DEFAULT_AB['hide grass/forest/trees'],
+  'hide terrain-dressing': DEFAULT_AB['hide terrain-dressing'],
+  'hide city:batches': DEFAULT_AB['hide city:batches'],
+  'hide lmbatch': DEFAULT_AB['hide lmbatch'],
+  'hide water': DEFAULT_AB['hide water'],
+  'hide transparent': hideWhere('m.transparent'),
+  'hide hair': hideWhere("m.name === 'real-hair'"),
+  'hide alpha-tested': hideWhere('m.alphaTest > 0'),
+  // Textures the passes would upload mid-pass (bone textures, batch draw lists) uploaded before the
+  // shadow pass instead: on Metal (ANGLE) an upload inside a render pass may split it.
+  'preupload': `const r = game.renderer; const sm = r.shadowMap;
+    if (!game.__preup) {
+      game.__preup = { on: false, orig: sm.render };
+      sm.render = function (...a) {
+        if (game.__preup.on) {
+          const rl = r.renderLists.get(game.scene, 0);
+          for (const list of [rl.opaque, rl.transparent]) for (const it of list) {
+            const o = it.object;
+            if (o.isSkinnedMesh && o.skeleton.boneTexture && o.skeleton.boneTexture.version > 0) r.initTexture(o.skeleton.boneTexture);
+            if (o.isBatchedMesh && o._indirectTexture) r.initTexture(o._indirectTexture);
+          }
+        }
+        return game.__preup.orig.apply(this, a);
+      };
+    }
+    game.__preup.on = on;`,
+  // gfx/chunkPatches.ts's dark-point-light skip undone: the chunk restored and every material
+  // recompiled (a cache-key suffix, since three.js keys programs without the chunk text).
+  'lightskip off': `const T = window.__probeThree; const sp = window.__probeMods?.chunkPatches; const sc = T && T.ShaderChunk;
+    if (sc && sp?.originalChunks?.lights_fragment_begin) game.__ls ??= { patched: sc.lights_fragment_begin, orig: sp.originalChunks.lights_fragment_begin, wrapped: new WeakSet() };
+    if (game.__ls) {
+      sc.lights_fragment_begin = on ? game.__ls.orig : game.__ls.patched;
+      game.__lsTag = on ? ':noskip' : '';
+      game.scene.traverse((o) => {
+        const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+        for (const m of ms) {
+          if (!game.__ls.wrapped.has(m)) { const k = m.customProgramCacheKey; m.customProgramCacheKey = function () { return k.call(this) + (game.__lsTag ?? ''); }; game.__ls.wrapped.add(m); }
+          m.needsUpdate = true;
+        }
+      });
+    }`,
+  // Every head's hair at LOD 0, as heads made 22 m away or more had it before phase 3.
+  'hairlod off': `for (const a of game.actors.all()) { const rb = a.avatar?.real; if (rb?.head) rb.head.setLod(on ? 0 : Math.min(rb.lod, 2)); }`,
+  // The AO pass reading the character mask for all twelve samples again (before phase 3).
+  'ao mask always': `const m = game.post?.aoMat; if (m && (m.defines.AO_MASK_ALWAYS === 1) !== on) { if (on) m.defines.AO_MASK_ALWAYS = 1; else delete m.defines.AO_MASK_ALWAYS; m.needsUpdate = true; }`,
+  // A cheaper tier's rows applied in this page (core/graphics.ts TIER_SETTINGS), except what needs a
+  // new page or time to show: antialiasing (fixed when the renderer is made), the crowd and the view
+  // distance (they stream), the frame cap. Give LODs time: --settle-frames 12.
+  'tier medium': tierSwitch('medium'),
+  'tier low': tierSwitch('low'),
+  // Fill rate: the frame at Medium's render scale.
+  'render scale 0.85': `game.__probeRs ??= game.settings.data.renderScale; game.settings.set('renderScale', on ? 0.85 : game.__probeRs);`,
+};
+
+// All of phase 3's GPU changes undone at once: the before/after of the pass in one page.
+GPU_AB['phase 3 off'] = [GPU_AB['lightskip off'], GPU_AB['hairlod off'], GPU_AB['ao mask always'], DEFAULT_AB['old: no shadow pre-cull'], DEFAULT_AB['old: one depth material'], DEFAULT_AB['old: no root cull']].map((js) => `{ ${js} }`).join('\n');
+DEFAULT_AB['phase 3 off'] = GPU_AB['phase 3 off'];
+
+/** Hide every visible mesh whose (single) material `m` matches (and show them again). */
+function hideWhere(cond) {
+  return `game.__probeHid ??= new Map(); const key = ${JSON.stringify(cond)};
+    if (on && !game.__probeHid.has(key)) { const list = []; game.scene.traverse((o) => { const m = o.material; if (o.visible && m && !Array.isArray(m) && (${cond})) { o.visible = false; list.push(o); } }); game.__probeHid.set(key, list); }
+    else if (!on) { for (const o of game.__probeHid.get(key) ?? []) o.visible = true; game.__probeHid.delete(key); }`;
+}
+
+function tierSwitch(tier) {
+  return `const g = window.__probeMods?.graphics; if (g) {
+    const skip = new Set(['antialias', 'crowdDensity', 'viewDistance', 'maxFps']);
+    const rows = Object.entries(g.TIER_SETTINGS[${JSON.stringify(tier)}]).filter(([k]) => !skip.has(k));
+    game.__tierOrig ??= Object.fromEntries(rows.map(([k]) => [k, game.settings.data[k]]));
+    for (const [k, v] of rows) { const want = on ? v : game.__tierOrig[k]; if (game.settings.data[k] !== want) game.settings.set(k, want); }
+  }`;
+}
+
+function postFlag(k) {
+  return `const p = game.post; if (p) { p.__orig ??= {}; p.__orig.${k} ??= p.${k}; p.${k} = on ? false : p.__orig.${k}; }`;
+}
 
 function hideGroups(re) {
   return `const r = new RegExp(${JSON.stringify(re)}); game.__probeHidden ??= new Map();
     for (const c of game.scene.children) if (r.test(c.name)) {
-      if (on) { game.__probeHidden.set(c, c.visible); c.visible = false; }
+      if (on) { if (!game.__probeHidden.has(c)) game.__probeHidden.set(c, c.visible); c.visible = false; }
       else if (game.__probeHidden.has(c)) { c.visible = game.__probeHidden.get(c); game.__probeHidden.delete(c); }
     }`;
 }
 
-function parseAb(s) {
-  if (!s || s === 'default') return DEFAULT_AB;
+function parseAb(s, builtIn = DEFAULT_AB) {
+  if (!s || s === true || s === 'default') return builtIn;
   if (s === 'none') return {};
   const out = {};
   for (const part of String(s).split(';;')) {
     const i = part.indexOf('=');
     if (i > 0) out[part.slice(0, i).trim()] = part.slice(i + 1);
-    else if (DEFAULT_AB[part.trim()]) out[part.trim()] = DEFAULT_AB[part.trim()];
+    else {
+      const js = builtIn[part.trim()] ?? DEFAULT_AB[part.trim()] ?? GPU_AB[part.trim()];
+      if (js) out[part.trim()] = js;
+      else console.warn(`unknown switch: ${part.trim()}`);
+    }
   }
   return out;
 }
@@ -105,7 +223,7 @@ const launchArgs = browserName === 'chromium'
 const browser = await pw[browserName].launch({ headless: true, args: launchArgs });
 const out = { view, graphics: args.graphics ?? 'high', base: null, ab: [] };
 try {
-  const page = await browser.newPage({ viewport: { width: vw, height: vh } });
+  const page = await browser.newPage({ viewport: { width: vw, height: vh }, deviceScaleFactor: Number(args.dpr ?? 1) });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e?.message ?? e)));
   const [query, tp] = Array.isArray(VIEWS[view]) ? VIEWS[view] : [VIEWS[view] ?? '', null];
@@ -127,6 +245,7 @@ try {
     // GPU ms per pass (EXT_disjoint_timer_query_webgl2; Chromium): shadow map, scene, post. With
     // --gpu-post the post passes are switched off one at a time to price each.
     const states = args['gpu-post'] ? ['base', 'no ao', 'no bloom', 'no shafts', 'no contact', 'base'] : ['base'];
+    await page.evaluate((src) => { window.__gpuPassesFn = (0, eval)(`(${src})`); }, gpuPasses.toString());
     for (const st of states) {
       await page.evaluate((st) => {
         const p = window.__skyrome.game.post;
@@ -138,10 +257,76 @@ try {
         if (st === 'no shafts') p.shaftsEnabled = false;
         if (st === 'no contact') p.contactEnabled = false;
       }, st);
-      const g = await page.evaluate(gpuPasses, 60);
-      console.log(`GPU (${st}): total ${g?.total} = shadow ${g?.shadowPerFrame} (${g?.shadowPerPass}/pass) + scene ${g?.scene} + post ${g?.post}`);
+      const g = await page.evaluate(([n, d]) => window.__gpuPassesFn(n, d), [Number(args['gpu-frames'] ?? 60), !!args['gpu-detail']]);
+      printGpu(st, g);
       (out.gpuStates ??= []).push({ state: st, ...g });
     }
+  }
+  if (args['gpu-bench'] || args['gpu-ab']) {
+    // GPU bench: the view drawn `--reps` times per timer query, best of `--trials` (see gpuBench).
+    const reps = Number(args.reps ?? 4), trials = Number(args.trials ?? 25), settleFrames = Number(args['settle-frames'] ?? 3);
+    const base = await page.evaluate(gpuBench, { js: null, reps, trials, settleFrames });
+    out.gpuBench = base?.off ?? null;
+    if (base?.off) console.log(`\nGPU bench (best of ${trials}, ${reps} draws a query): frame ${base.off.frame.toFixed(2)} ms (median ${base.off.frameMed.toFixed(2)}) = scene ${base.off.scene.toFixed(2)} + post ${base.off.post.toFixed(2)}; shadow pass ${base.off.shadow.toFixed(2)} ms (${(base.off.shadow / 2).toFixed(2)} a frame at 30 Hz)`);
+    if (args['gpu-ab']) console.log('switches (ON = the thing off): median of the paired ON - OFF differences over the trials, and of the ratios');
+    if (args['gpu-ab']) {
+      const sw = parseAb(args['gpu-ab'], GPU_AB);
+      out.gpuAb = [];
+      for (const [name, js] of Object.entries(sw)) {
+        const r = await page.evaluate(gpuBench, { js, reps, trials, settleFrames });
+        r.name = name;
+        out.gpuAb.push(r);
+        printGpuAb(r);
+      }
+    }
+  }
+  if (args.census) {
+    // Draws per frame by top-level scene group, kind of object and material, per pass (main/shadow).
+    out.census = await page.evaluate(async (n) => {
+      const game = window.__skyrome.game;
+      const r = game.renderer;
+      const top = (o) => { let p = o; while (p.parent && p.parent !== game.scene) p = p.parent; return p.parent ? (p.name || p.type) : '(scene)'; };
+      const rows = new Map();
+      let pass = 'main';
+      const sm = r.shadowMap;
+      const smRender = sm.render;
+      let shadowPasses = 0;
+      sm.render = function (lights, sc, cam) {
+        if (sc === game.scene && sm.enabled && (sm.autoUpdate || sm.needsUpdate) && lights.length > 0) shadowPasses++;
+        pass = 'shadow';
+        try { return smRender.call(this, lights, sc, cam); } finally { pass = 'main'; }
+      };
+      const rbd = r.renderBufferDirect;
+      r.renderBufferDirect = function (camera, scene, geometry, material, object, group) {
+        if (scene === game.scene || (pass === 'shadow' && scene === null)) {
+          const kind = object.isBatchedMesh ? 'batched' : object.isInstancedMesh ? 'instanced' : object.isSkinnedMesh ? 'skinned' : object.isPoints ? 'points' : object.isLine ? 'line' : object.isSprite ? 'sprite' : 'mesh';
+          const key = `${pass}|${top(object).replace(/^actor:.*/, 'actor:*').replace(/^content:standins:.*/, 'content:standins:*').replace(/:[0-9a-f-]{6,}$/i, '')}|${kind}|${material.type}${material.transparent ? '+T' : ''}${material.alphaTest > 0 ? '+A' : ''}${material.side === 2 ? '+2S' : ''}`;
+          const row = rows.get(key) ?? { draws: 0, sub: 0, inst: 0, tris: 0 };
+          row.draws++;
+          if (object.isBatchedMesh) row.sub += object._multiDrawCount ?? 0;
+          if (object.isInstancedMesh) row.inst += object.count;
+          rows.set(key, row);
+          const t0 = r.info.render.triangles;
+          const res = rbd.call(this, camera, scene, geometry, material, object, group);
+          row.tris += r.info.render.triangles - t0;
+          return res;
+        }
+        return rbd.call(this, camera, scene, geometry, material, object, group);
+      };
+      await new Promise((res) => { let i = 0; const f = () => (++i >= n ? res() : requestAnimationFrame(f)); requestAnimationFrame(f); });
+      sm.render = smRender;
+      r.renderBufferDirect = rbd;
+      // Main-pass rows per frame, shadow rows per shadow pass.
+      const per = (k) => (k.startsWith('shadow|') ? Math.max(1, shadowPasses) : n);
+      return [...rows].map(([k, v]) => [k, +(v.draws / per(k)).toFixed(1), +(v.sub / per(k)).toFixed(0), +(v.inst / per(k)).toFixed(0), Math.round(v.tris / per(k))]).sort((a, b) => b[1] - a[1]);
+    }, 30);
+    const tot = {};
+    for (const [k, d, , , t] of out.census) { const p = k.split('|')[0]; tot[p] ??= { draws: 0, tris: 0 }; tot[p].draws += d; tot[p].tris += t; }
+    console.log(`\ndraws per frame by pass | top-level group | kind | material (T transparent, A alpha test, 2S double-sided): draws, triangles (sub-draws, instances); totals ${JSON.stringify(tot)} (main: per frame; shadow: per shadow pass)`);
+    const row = ([k, d, sub, inst, t]) => console.log(`  ${String(d).padStart(6)}  ${(t / 1000).toFixed(0).padStart(5)} k tris  ${k}${sub ? `  (${sub} sub)` : ''}${inst ? `  (${inst} inst)` : ''}`);
+    out.census.slice(0, Number(args.top ?? 60)).forEach(row);
+    console.log('  by triangles:');
+    [...out.census].sort((a, b) => b[4] - a[4]).slice(0, 25).forEach(row);
   }
   if (args.glcount) {
     // WebGL calls per frame by name (wraps the context's methods for a few frames).
@@ -220,8 +405,14 @@ try {
 if (args.json) writeFileSync(resolve(root, args.json), JSON.stringify(out, null, 2));
 process.exit(0);
 
-/** In the page: GPU ms per pass over `n` frames (timer queries). */
-async function gpuPasses(n) {
+/**
+ * In the page: GPU ms per pass over `n` live frames (EXT_disjoint_timer_query_webgl2): `shadow`,
+ * `scene` and `post`. With `detail` one timer per step: `opaque` (sky, opaque and transmissive
+ * lists), `transparent`, `resolve` (the MSAA blit into the HDR textures), then each post pass by
+ * its material's name (AO, AOBlur, ShaftMask, ShaftBlur, BloomDown, BloomUp, Composite, FXAA).
+ * Shared-GPU noise and ANGLE's flush at every query make these rough: compare with --gpu-ab.
+ */
+async function gpuPasses(n, detail = false) {
   const game = window.__skyrome.game;
   const r = game.renderer;
   const gl = r.getContext();
@@ -229,7 +420,21 @@ async function gpuPasses(n) {
   if (!ext) return null;
   const pending = [];
   let open = null;
-  const begin = (pass) => { if (open) gl.endQuery(ext.TIME_ELAPSED_EXT); const q = gl.createQuery(); gl.beginQuery(ext.TIME_ELAPSED_EXT, q); open = { q, pass }; pending.push(open); };
+  let inMain = false;
+  let frame = 0;
+  // Coarse by default (shadow, scene, post): every query boundary makes ANGLE flush its command
+  // buffer, which on Metal inflates short passes several times over (--gpu-detail shows them anyway).
+  const SCENE = new Set(['opaque', 'transparent', 'resolve']);
+  const group = (pass) => (detail || pass === 'shadow' ? pass : SCENE.has(pass) ? 'scene' : 'post');
+  const begin = (raw) => {
+    const pass = group(raw);
+    if (open?.pass === pass) return;
+    if (open) gl.endQuery(ext.TIME_ELAPSED_EXT);
+    const q = gl.createQuery();
+    gl.beginQuery(ext.TIME_ELAPSED_EXT, q);
+    open = { q, pass, frame };
+    pending.push(open);
+  };
   const end = () => { if (open) { gl.endQuery(ext.TIME_ELAPSED_EXT); open = null; } };
   const sm = r.shadowMap;
   const smRender = sm.render;
@@ -238,29 +443,177 @@ async function gpuPasses(n) {
     const will = sm.enabled && (sm.autoUpdate || sm.needsUpdate) && lights.length > 0;
     if (will) begin('shadow');
     smRender.call(this, lights, sc, cam);
-    begin('scene');
+    if (will) begin('opaque');
   };
-  const rf = game.renderFrame;
-  game.renderFrame = () => { begin('scene'); rf(); end(); };
+  const rbd = r.renderBufferDirect;
+  r.renderBufferDirect = function (camera, scene, geometry, material, object, group) {
+    if (inMain && detail && open?.pass === 'opaque' && material.transparent) begin('transparent');
+    return rbd.call(this, camera, scene, geometry, material, object, group);
+  };
+  const blit = gl.blitFramebuffer;
+  gl.blitFramebuffer = function (...a) {
+    if (inMain && detail && open?.pass !== 'resolve') begin('resolve');
+    return blit.apply(this, a);
+  };
   const after = game.scene.onAfterRender;
-  game.scene.onAfterRender = function (...a) { after.apply(this, a); begin('post'); };
+  game.scene.onAfterRender = function (...a) { after.apply(this, a); inMain = false; begin('post'); };
+  const post = game.post;
+  const pass = post?.pass;
+  if (post) post.pass = function (mat, target) { begin(mat.name || 'post'); return pass.call(this, mat, target); };
+  const rf = game.renderFrame;
+  game.renderFrame = () => { inMain = true; begin('opaque'); rf(); end(); inMain = false; frame++; };
   await new Promise((res) => { let i = 0; const f = () => (++i >= n ? res() : requestAnimationFrame(f)); requestAnimationFrame(f); });
   sm.render = smRender;
-  game.renderFrame = rf;
+  r.renderBufferDirect = rbd;
+  delete gl.blitFramebuffer;
+  if (gl.blitFramebuffer !== blit) gl.blitFramebuffer = blit;
   game.scene.onAfterRender = after;
+  if (post) post.pass = pass;
+  game.renderFrame = rf;
   await new Promise((res) => setTimeout(res, 200));
-  const sum = { shadow: 0, scene: 0, post: 0 };
-  const cnt = { shadow: 0, scene: 0, post: 0 };
-  let frames = 0;
+  const disjoint = gl.getParameter(ext.GPU_DISJOINT_EXT);
+  const sum = {};
+  let shadowN = 0;
   for (const p of pending) {
     let k = 0;
     while (!gl.getQueryParameter(p.q, gl.QUERY_RESULT_AVAILABLE) && k++ < 50) await new Promise((res) => setTimeout(res, 5));
-    if (gl.getQueryParameter(p.q, gl.QUERY_RESULT_AVAILABLE)) { sum[p.pass] += gl.getQueryParameter(p.q, gl.QUERY_RESULT) / 1e6; cnt[p.pass]++; }
+    if (gl.getQueryParameter(p.q, gl.QUERY_RESULT_AVAILABLE)) {
+      sum[p.pass] = (sum[p.pass] ?? 0) + gl.getQueryParameter(p.q, gl.QUERY_RESULT) / 1e6;
+      if (p.pass === 'shadow') shadowN++;
+    }
     gl.deleteQuery(p.q);
-    if (p.pass === 'post') frames++;
   }
-  const f = Math.max(1, frames);
-  return { frames, shadowPerPass: +(sum.shadow / Math.max(1, cnt.shadow)).toFixed(2), shadowPerFrame: +(sum.shadow / f).toFixed(2), scene: +(sum.scene / f).toFixed(2), post: +(sum.post / f).toFixed(2), total: +((sum.shadow + sum.scene + sum.post) / f).toFixed(2) };
+  const f = Math.max(1, frame);
+  const passes = {};
+  for (const [k, v] of Object.entries(sum)) passes[k] = +(v / f).toFixed(3);
+  const g = (k) => sum[k] ?? 0;
+  const sceneMs = g('scene') + g('opaque') + g('transparent') + g('resolve');
+  let postMs = 0;
+  for (const [k, v] of Object.entries(sum)) if (!['shadow', 'scene', 'opaque', 'transparent', 'resolve'].includes(k)) postMs += v;
+  return {
+    frames: frame,
+    disjoint: !!disjoint,
+    shadowPerPass: +(g('shadow') / Math.max(1, shadowN)).toFixed(2),
+    shadowPerFrame: +(g('shadow') / f).toFixed(2),
+    scene: +(sceneMs / f).toFixed(2),
+    post: +(postMs / f).toFixed(2),
+    total: +((g('shadow') + sceneMs + postMs) / f).toFixed(2),
+    passes,
+  };
+}
+
+/**
+ * In the page: the GPU ms of drawing the current view, with a switch off and on. Each measurement
+ * draws the view `reps` times inside ONE timer query (no idle gaps between draws, one flush), on
+ * an idle queue (gl.finish first), and waits for its result before the next one: ANGLE on Metal
+ * times a query's command buffers from when they are queued, so queries in flight together, or
+ * behind the game's own frames, read long. A trial measures the sides in the order off, on, on,
+ * off, re-applying the switch before each query (switches must be idempotent; one that recompiles
+ * shaders is warmed first), so a drift in the machine's load cancels out. Per side: `frame` (the
+ * frame without its shadow pass), `shadow` (one shadow-map render: frame with it minus without),
+ * `scene` (the scene pass alone into the HDR target, MSAA resolve included) and `post` (frame
+ * minus scene). The result keeps each side's best trial and the median of the per-trial
+ * differences and ratios.
+ */
+async function gpuBench({ js, reps, trials, settleFrames = 3 }) {
+  const game = window.__skyrome.game;
+  const r = game.renderer;
+  const gl = r.getContext();
+  const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+  if (!ext) return null;
+  const sm = r.shadowMap;
+  const fn = js ? new Function('game', 'on', js) : null;
+  const time = async (side, draw) => {
+    if (fn) await fn(game, side === 'on');
+    gl.finish();
+    const q = gl.createQuery();
+    gl.beginQuery(ext.TIME_ELAPSED_EXT, q);
+    for (let i = 0; i < reps; i++) draw();
+    gl.endQuery(ext.TIME_ELAPSED_EXT);
+    gl.flush();
+    let k = 0;
+    while (!gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE) && k++ < 500) await new Promise((res) => setTimeout(res, 1));
+    const ok = gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE) && !gl.getParameter(ext.GPU_DISJOINT_EXT);
+    const v = ok ? gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6 / reps : NaN;
+    gl.deleteQuery(q);
+    return v;
+  };
+  const frame = (shadow) => () => {
+    sm.autoUpdate = false;
+    sm.needsUpdate = shadow;
+    game.renderFrame();
+  };
+  const sceneOnly = () => {
+    sm.autoUpdate = false;
+    sm.needsUpdate = false;
+    r.setRenderTarget(game.post?.enabled ? game.post.hdr : null);
+    r.render(game.scene, game.camera);
+    r.setRenderTarget(null);
+  };
+  const frames = async (n) => { for (let k = 0; k < n; k++) await new Promise((res) => requestAnimationFrame(res)); };
+  if (fn) {
+    // Warm both sides (shader compiles, render-target sizes) before anything is timed.
+    for (const on of [true, false]) {
+      await fn(game, on);
+      await frames(settleFrames + 2);
+      frame(true)();
+      sceneOnly();
+    }
+  }
+  const order = fn ? ['off', 'on', 'on', 'off'] : ['off'];
+  const runs = { off: [], on: [] };
+  for (let t = 0; t < trials; t++) {
+    const acc = { off: { frame: 0, shadow: 0, scene: 0, n: 0 }, on: { frame: 0, shadow: 0, scene: 0, n: 0 } };
+    for (const side of order) {
+      if (fn) { await fn(game, side === 'on'); frame(true)(); } // the shadow map and uploads for this side, untimed
+      const f = await time(side, frame(false));
+      const sh = await time(side, frame(true));
+      const sc = await time(side, sceneOnly);
+      const a = acc[side];
+      a.frame += f; a.shadow += sh - f; a.scene += sc; a.n++;
+    }
+    for (const side of fn ? ['off', 'on'] : ['off']) {
+      const a = acc[side];
+      if (a.n && Number.isFinite(a.frame) && Number.isFinite(a.shadow) && Number.isFinite(a.scene)) runs[side].push({ frame: a.frame / a.n, shadow: a.shadow / a.n, scene: a.scene / a.n, post: (a.frame - a.scene) / a.n });
+      else runs[side].push(null);
+    }
+  }
+  if (fn) { await fn(game, false); await frames(settleFrames); }
+  // Trials where either side failed are dropped from both.
+  const keep = runs.off.map((x, i) => x && (!fn || runs.on[i]));
+  for (const side of ['off', 'on']) runs[side] = runs[side].filter((_, i) => keep[i]);
+  const keys = ['frame', 'shadow', 'scene', 'post'];
+  const med = (a) => { const v = a.filter((x) => Number.isFinite(x)).sort((x, y) => x - y); return v.length ? v[v.length >> 1] : NaN; };
+  const min = (a) => Math.min(...a.filter((x) => Number.isFinite(x)));
+  const out = { programs: r.info.programs?.length ?? 0, trials: runs.off.length };
+  for (const side of fn ? ['off', 'on'] : ['off']) {
+    const rs = runs[side];
+    out[side] = { frame: +min(rs.map((x) => x.frame)).toFixed(3), scene: +min(rs.map((x) => x.scene)).toFixed(3), shadow: +Math.max(0, med(rs.map((x) => x.shadow))).toFixed(3), post: +Math.max(0, med(rs.map((x) => x.post))).toFixed(3), frameMed: +med(rs.map((x) => x.frame)).toFixed(3) };
+  }
+  if (fn && runs.on.length) {
+    out.delta = {};
+    out.ratio = {};
+    for (const k of keys) {
+      out.delta[k] = +med(runs.on.map((x, i) => x[k] - runs.off[i][k])).toFixed(3);
+      out.ratio[k] = +med(runs.on.map((x, i) => x[k] / runs.off[i][k])).toFixed(3);
+    }
+  }
+  return out;
+}
+
+function printGpu(label, g) {
+  if (!g) { console.log(`GPU (${label}): no timer queries`); return; }
+  const parts = Object.entries(g.passes).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v.toFixed(2)}`).join(' · ');
+  console.log(`GPU (${label}): total ${g.total} = shadow ${g.shadowPerFrame} (${g.shadowPerPass}/pass) + scene ${g.scene} + post ${g.post}${g.disjoint ? ' [disjoint]' : ''}`);
+  console.log(`  ${parts}`);
+}
+
+function printGpuAb(r) {
+  const f = (v) => (v > 0 ? '+' : '') + v.toFixed(2);
+  if (!r?.delta) { console.log(`${String(r?.name).padEnd(26)} GPU: no timer queries`); return; }
+  const d = r.delta;
+  const pct = (k) => `${f((r.ratio[k] - 1) * 100)} %`;
+  console.log(`${r.name.padEnd(26)} GPU frame ${f(d.frame)} ms (${pct('frame')}) · scene ${f(d.scene)} (${pct('scene')}) · post ${f(d.post)} · shadow pass ${f(d.shadow)}   [off: frame ${r.off.frame.toFixed(2)} (median ${r.off.frameMed.toFixed(2)}) = scene ${r.off.scene.toFixed(2)} + post ${r.off.post.toFixed(2)}, shadow ${r.off.shadow.toFixed(2)}/pass; ${r.trials} trials]`);
 }
 
 /** In the page: hooks around three.js's render steps (once). */
@@ -271,6 +624,10 @@ async function install(sampleSrc) {
   // The game's own modules (same URLs as the app's imports, so the same instances): runtime switches.
   window.__probeMods = {};
   try { window.__probeMods.fastCull = await import('/src/gfx/fastCull.ts'); } catch {}
+  try { window.__probeMods.chunkPatches = await import('/src/gfx/chunkPatches.ts'); } catch {}
+  try { window.__probeMods.shadowLod = await import('/src/gfx/shadowLod.ts'); } catch {}
+  try { window.__probeMods.graphics = await import('/src/core/graphics.ts'); } catch {}
+  try { window.__probeMods.lodScale = await import('/src/gfx/lodScale.ts'); } catch {}
   // three.js itself, the very module instance the game uses (Vite's optimized dependency URL).
   try {
     const url = performance.getEntriesByType('resource').map((e) => e.name).find((n) => /\/deps\/three\.js(\?|$)/.test(n));

@@ -102,12 +102,15 @@ lightning. Events:
 
 | Quality | Technique | Map | Coverage | Texel |
 | --- | --- | --- | --- | --- |
-| low | single map following the camera | 1024² | 110 m box | 10.7 cm |
-| high (default) | single map following the camera | 2048² | 150 m box | 7.3 cm |
+| low (the Medium tier) | single map following the camera | 1024² | 80 m box (110 m before phase 3) | 7.8 cm |
+| high (default) | single map following the camera | 3072² | 100 m box | 3.3 cm |
 | `shadowmode=cascade` | three r186 native `SunLight`, 2 cascades | 2 × 2048² | 220 m | ≈ 7.7 cm near, ≈ 25 cm far |
 
-The single map's box is pushed ~42 m ahead of the camera and **snapped to whole texels in light
-space** (no shimmer when walking). The light **direction** moves in ~0.03° steps rather than every
+The single map's box is pushed 28 % of its side ahead of the camera and **snapped to whole texels in
+light space** (no shimmer when walking). Medium's 80 m box holds about half the casters of the old
+110 m one (the shadow pass costs the CPU as much as on High otherwise); shadows end about 60 m ahead.
+The shadow pass itself is trimmed by `gfx/shadowLod.ts` (stand-ins, one depth material per kind of
+caster) and `gfx/fastCull.ts` (batches with nothing in the shadow view skip it); see CLAUDE.md. The light **direction** moves in ~0.03° steps rather than every
 frame, because a sub-texel jump is invisible and the grid stays stable in between.
 
 **Single vs cascades (measured, dev scene, M4 Max, 1080p):** cascades cost +0.09–0.18 ms/frame, +29
@@ -127,8 +130,11 @@ const h = game.lights.request({ position, color?, intensity?: 12, distance?: 12,
 h.setPosition(p); h.setEnabled(false); h.setIntensity(i); h.setColor(c); h.level; h.alive; h.remove();
 ```
 
-- Exactly `count` (8) PointLights live in the scene forever, at intensity 0 when unused. **Adding or
-  removing lamps never recompiles shaders.**
+- Exactly `count` (8; 4 on the Low tier, `sessionQuality` in core/graphics.ts, from the next launch)
+  PointLights live in the scene forever, at intensity 0 when unused. **Adding or removing lamps never
+  recompiles shaders.** A dark pool light costs (almost) nothing: `gfx/chunkPatches.ts` skips a point
+  light whose colour is zero, and the lighting model wherever its fall-off is zero. Before that, the
+  eight dark lights of a sunny day were about a fifth to a third of the frame's GPU time.
 - Every 0.1 s the nearest/most important requests get the real lights (score = distance² / priority²,
   with a 25 % hysteresis bonus for incumbents). Swaps fade out and in over ~0.17 s.
 - Every request also draws an additive glow sprite (one instanced draw for all of them), which is the
