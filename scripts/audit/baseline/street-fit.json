@@ -1,0 +1,2237 @@
+{
+ "lens": "street-fit",
+ "note": "Phase 4a baseline (2026-10-10): counts plus the top 100 clusters. Refreshed only by the lead.",
+ "source": "scripts/audit/street-fit.mjs, 2026-10-10 sweep of 227 cells",
+ "counts": {
+  "totals": {
+   "streetCells": 8571096,
+   "doublePavingCells": 844789,
+   "zfightCells": 35416,
+   "lipCells": 89526,
+   "lipCells05": 61981,
+   "lipCells12": 16888,
+   "props:block": 26141,
+   "propsFootInAir": 6659,
+   "propsTerrainThroughFloor": 2870,
+   "edgeSamples": 881640,
+   "edgeBins": 21761,
+   "throughCells": 34722,
+   "kerbstones": 879,
+   "props:street": 1429,
+   "fixtures": 5664,
+   "fixturesEdgeInAir": 201,
+   "propsFloating": 2409,
+   "fixturesFloating": 886,
+   "face-bottomBins": 361,
+   "lipCells30": 1948,
+   "propsSunk": 271,
+   "props:landmark": 1609,
+   "propsOnProps": 35,
+   "kerbstonesOnCityPaving": 59,
+   "fixturesUpperLevel": 31,
+   "lmPropsFloating": 42,
+   "lmPropsUpperLevel": 84,
+   "lmPropsSunk": 3,
+   "cells": 227,
+   "droppedFindings": 45853
+  },
+  "bySrc": {
+   "ground-cover": {
+    "edgeLen": 42524.5,
+    "float03": 10827,
+    "float08": 480.8,
+    "float15": 17.3
+   },
+   "street:alley": {
+    "edgeLen": 49849.1,
+    "float03": 2810.8,
+    "float08": 507.4,
+    "float15": 54.8
+   },
+   "road:rural": {
+    "edgeLen": 3995.5,
+    "float03": 2239.6,
+    "float08": 394.9,
+    "float15": 115.2
+   },
+   "street:lane": {
+    "edgeLen": 26030.2,
+    "float03": 1533.6,
+    "float08": 307.4,
+    "float15": 41.7
+   },
+   "piazza": {
+    "edgeLen": 31283.2,
+    "float03": 1957.1,
+    "float08": 256.8,
+    "float15": 175.5
+   },
+   "street:vicus": {
+    "edgeLen": 48098.8,
+    "float03": 4104.5,
+    "float08": 713.8,
+    "float15": 132.9
+   },
+   "road:urban": {
+    "edgeLen": 16015.3,
+    "float03": 1619.8,
+    "float08": 670.5,
+    "float15": 171.7
+   },
+   "road:open": {
+    "edgeLen": 3245,
+    "float03": 1111.3,
+    "float08": 681.4,
+    "float15": 124.9
+   },
+   "junction": {
+    "edgeLen": 2218.6,
+    "float03": 68.6,
+    "float08": 20.6,
+    "float15": 13
+   }
+  },
+  "causes": [
+   {
+    "cause": "double-paving|street:vicus||",
+    "places": 2603,
+    "extent": 189435,
+    "worst": 0.15,
+    "example": {
+     "x": -470.13,
+     "y": 6.28,
+     "z": 585.38,
+     "place": "emporium",
+     "note": "piazza + street:vicus: street:st336:vicus over piazza:pz561 (0.141 m apart)"
+    }
+   },
+   {
+    "cause": "double-paving|street:alley||",
+    "places": 2055,
+    "extent": 103978,
+    "worst": 0.15,
+    "example": {
+     "x": -1014.88,
+     "y": 6.38,
+     "z": -604.63,
+     "place": "meta-romuli",
+     "note": "piazza + street:alley: street:st1141:alley over piazza:pz678 (0.128 m apart)"
+    }
+   },
+   {
+    "cause": "lip|ground-cover||ground-cover over terrain",
+    "places": 1897,
+    "extent": 28969,
+    "worst": 0.523,
+    "example": {
+     "x": 211.38,
+     "y": 16.44,
+     "z": 93.5,
+     "place": "arch-titus",
+     "note": "ground-cover over terrain (ground-cover | terrain)"
+    }
+   },
+   {
+    "cause": "double-paving|road:urban||",
+    "places": 1028,
+    "extent": 80476,
+    "worst": 0.15,
+    "example": {
+     "x": 321.63,
+     "y": 12.78,
+     "z": 592.13,
+     "place": "spawn-capena",
+     "note": "lm + road:urban: road:via-appia:urban over lm:porta-capena (0.122 m apart)"
+    }
+   },
+   {
+    "cause": "double-paving|ground-cover||",
+    "places": 2126,
+    "extent": 74854,
+    "worst": 0.15,
+    "example": {
+     "x": -561.88,
+     "y": 5.42,
+     "z": 819.38,
+     "place": "porticus-aemilia",
+     "note": "block + ground-cover: ground-cover over block:b20 (0.137 m apart)"
+    }
+   },
+   {
+    "cause": "double-paving|piazza||",
+    "places": 468,
+    "extent": 66992,
+    "worst": 0.148,
+    "example": {
+     "x": -87.88,
+     "y": 8.59,
+     "z": -149.63,
+     "place": "tomb-bibulus",
+     "note": "piazza + street:alley: piazza:pz640 over street:st885:alley (0.112 m apart)"
+    }
+   },
+   {
+    "cause": "double-paving|street:lane||",
+    "places": 1170,
+    "extent": 61993,
+    "worst": 0.15,
+    "example": {
+     "x": -541.63,
+     "y": 6.36,
+     "z": 649.88,
+     "place": "emporium",
+     "note": "piazza + street:lane: street:st337:lane over piazza:pz562 (0.119 m apart)"
+    }
+   },
+   {
+    "cause": "lip|road:rural||road:rural over terrain",
+    "places": 224,
+    "extent": 8625,
+    "worst": 0.586,
+    "example": {
+     "x": -1077,
+     "y": 14.02,
+     "z": -507.13,
+     "place": "janiculum-north",
+     "note": "road:rural over terrain (road:trastevere-vatican-riverside-road:rural | terrain)"
+    }
+   },
+   {
+    "cause": "terrain-through|piazza||",
+    "places": 700,
+    "extent": 16151,
+    "worst": 0.297,
+    "example": {
+     "x": -941.88,
+     "y": 35.89,
+     "z": 244.13,
+     "place": "aqua-traiana-terminus"
+    }
+   },
+   {
+    "cause": "double-paving|block||",
+    "places": 1512,
+    "extent": 31320,
+    "worst": 0.15,
+    "example": {
+     "x": -1409.13,
+     "y": 7.07,
+     "z": -951.88,
+     "place": "naumachia-traiani",
+     "note": "block + street:alley: block:b1219 over street:st1182:alley (0.100 m apart)"
+    }
+   },
+   {
+    "cause": "lip|piazza||piazza over terrain",
+    "places": 651,
+    "extent": 7275,
+    "worst": 0.587,
+    "example": {
+     "x": -267.25,
+     "y": 21.25,
+     "z": 538.63,
+     "place": "temple-juno-regina-aventine",
+     "note": "piazza over terrain (piazza:pz555 | terrain)"
+    }
+   },
+   {
+    "cause": "lip|street:vicus||street:vicus over terrain",
+    "places": 337,
+    "extent": 5864,
+    "worst": 0.594,
+    "example": {
+     "x": 486.63,
+     "y": 17.17,
+     "z": 261,
+     "place": "ludus-matutinus",
+     "note": "street:vicus over terrain (street:st611:vicus | terrain)"
+    }
+   },
+   {
+    "cause": "lip|street:alley||street:alley over terrain",
+    "places": 454,
+    "extent": 5782,
+    "worst": 0.587,
+    "example": {
+     "x": -1217,
+     "y": 29.08,
+     "z": -112.88,
+     "place": "janiculum-north",
+     "note": "street:alley over terrain (street:st1030:alley | terrain)"
+    }
+   },
+   {
+    "cause": "double-paving|road:open||",
+    "places": 62,
+    "extent": 22669,
+    "worst": 0.149,
+    "example": {
+     "x": -12.88,
+     "y": 8.17,
+     "z": -7.88,
+     "place": "temple-vespasian-titus",
+     "note": "lm + road:open: road:clivus-capitolinus:open over lm:miliarium-aureum (0.118 m apart)"
+    }
+   },
+   {
+    "cause": "lip|road:urban||road:urban over terrain",
+    "places": 268,
+    "extent": 4454,
+    "worst": 0.595,
+    "example": {
+     "x": -21.25,
+     "y": 12.5,
+     "z": -64.13,
+     "place": "gradus-monetae",
+     "note": "road:urban over terrain (road:clivus-argentarius:urban | terrain)"
+    }
+   },
+   {
+    "cause": "edge-float|ground-cover||",
+    "places": 1325,
+    "extent": 6893.8,
+    "worst": 0.36,
+    "example": {
+     "x": 111.88,
+     "y": 27.19,
+     "z": -286,
+     "place": "markets-trajan"
+    }
+   },
+   {
+    "cause": "lip|street:lane||street:lane over terrain",
+    "places": 245,
+    "extent": 3548,
+    "worst": 0.6,
+    "example": {
+     "x": -1098.38,
+     "y": 29.78,
+     "z": 38.5,
+     "place": "aqua-traiana-terminus",
+     "note": "street:lane over terrain (street:st1025:lane | terrain)"
+    }
+   },
+   {
+    "cause": "lip|road:open||road:open over terrain",
+    "places": 110,
+    "extent": 3581,
+    "worst": 0.571,
+    "example": {
+     "x": 303.75,
+     "y": 12.61,
+     "z": 157.88,
+     "place": "meta-sudans:front",
+     "note": "road:open over terrain (road:via-sacra:open | terrain)"
+    }
+   },
+   {
+    "cause": "edge-float|street:vicus||",
+    "places": 462,
+    "extent": 2461.5,
+    "worst": 0.732,
+    "example": {
+     "x": -1089.76,
+     "y": 30.26,
+     "z": 49.89,
+     "place": "aqua-traiana-terminus"
+    }
+   },
+   {
+    "cause": "terrain-through|ground-cover||",
+    "places": 96,
+    "extent": 6190,
+    "worst": 0.234,
+    "example": {
+     "x": 200.88,
+     "y": 15.81,
+     "z": 94.13,
+     "place": "horrea-piperataria"
+    }
+   },
+   {
+    "cause": "lip|piazza||piazza over block",
+    "places": 330,
+    "extent": 3749,
+    "worst": 0.303,
+    "example": {
+     "x": 494,
+     "y": 11.98,
+     "z": 88.13,
+     "place": "domus-aurea-buried",
+     "note": "piazza over block (piazza:pz626 | block:b834)"
+    }
+   },
+   {
+    "cause": "double-paving|landmark:porta-capena||",
+    "places": 36,
+    "extent": 7663,
+    "worst": 0.148,
+    "example": {
+     "x": 386.63,
+     "y": 12.82,
+     "z": 664.13,
+     "place": "temple-honos-virtus",
+     "note": "ground-cover + lm: lm:porta-capena over ground-cover (0.110 m apart)"
+    }
+   },
+   {
+    "cause": "terrain-through|street:alley||",
+    "places": 104,
+    "extent": 3533,
+    "worst": 0.299,
+    "example": {
+     "x": -1053.38,
+     "y": 34.89,
+     "z": 101.13,
+     "place": "aqua-traiana-terminus"
+    }
+   },
+   {
+    "cause": "edge-float|road:rural||",
+    "places": 143,
+    "extent": 1481.6,
+    "worst": 0.668,
+    "example": {
+     "x": 55.21,
+     "y": 15.89,
+     "z": 127.07,
+     "place": "horrea-agrippiana"
+    }
+   },
+   {
+    "cause": "edge-float|street:alley||",
+    "places": 458,
+    "extent": 1747.3,
+    "worst": 0.461,
+    "example": {
+     "x": -1205.03,
+     "y": 29.37,
+     "z": -97.06,
+     "place": "janiculum-north"
+    }
+   },
+   {
+    "cause": "double-paving|road:rural||",
+    "places": 77,
+    "extent": 4663,
+    "worst": 0.149,
+    "example": {
+     "x": -311.63,
+     "y": 7.21,
+     "z": 320.38,
+     "place": "pons-sublicius",
+     "note": "block + road:rural: road:street-pons-sublicius:rural over block:b366 (0.140 m apart)"
+    }
+   },
+   {
+    "cause": "terrain-through|road:rural||",
+    "places": 59,
+    "extent": 1863,
+    "worst": 0.299,
+    "example": {
+     "x": 174.13,
+     "y": 22.75,
+     "z": 145.13,
+     "place": "temple-jupiter-stator"
+    }
+   },
+   {
+    "cause": "edge-float|street:lane||",
+    "places": 241,
+    "extent": 1054.4,
+    "worst": 0.5,
+    "example": {
+     "x": -1097.98,
+     "y": 29.48,
+     "z": 38.69,
+     "place": "aqua-traiana-terminus"
+    }
+   },
+   {
+    "cause": "lip|block||block over street:alley",
+    "places": 221,
+    "extent": 873,
+    "worst": 0.6,
+    "example": {
+     "x": -1157.5,
+     "y": 26.66,
+     "z": -347.63,
+     "place": "janiculum-north",
+     "note": "block over street:alley (block:b981 | street:st950:alley)"
+    }
+   },
+   {
+    "cause": "edge-float|road:urban||",
+    "places": 214,
+    "extent": 1064.6,
+    "worst": 0.49,
+    "example": {
+     "x": 619.2,
+     "y": 28.63,
+     "z": -448.62,
+     "place": "cispius"
+    }
+   },
+   {
+    "cause": "prop-floating|block|basket|",
+    "places": 396,
+    "extent": 428,
+    "worst": 1.178,
+    "example": {
+     "x": -992.01,
+     "y": 40.87,
+     "z": 360.45,
+     "place": "aqua-traiana-terminus",
+     "note": "block basket: no foot touches (lowest 1.18 m, highest foot 1.44 m)"
+    }
+   },
+   {
+    "cause": "prop-floating|block|amphora_tall|",
+    "places": 501,
+    "extent": 523,
+    "worst": 0.955,
+    "example": {
+     "x": 40.11,
+     "y": 13.05,
+     "z": -325.67,
+     "place": "bibliotheca-ulpia-east",
+     "note": "block amphora_tall: no foot touches (lowest 0.95 m, highest foot 1.00 m)"
+    }
+   },
+   {
+    "cause": "edge-float|piazza||",
+    "places": 211,
+    "extent": 965.8,
+    "worst": 0.5,
+    "example": {
+     "x": -971,
+     "y": 29.37,
+     "z": 199.45,
+     "place": "aqua-traiana-terminus"
+    }
+   },
+   {
+    "cause": "lip|block||block over street:vicus",
+    "places": 252,
+    "extent": 788,
+    "worst": 0.594,
+    "example": {
+     "x": -940.13,
+     "y": 9.08,
+     "z": -19.25,
+     "place": "aqua-traiana-terminus",
+     "note": "block over street:vicus (block:b1043 | street:st1001:vicus)"
+    }
+   },
+   {
+    "cause": "lip|piazza||piazza over street:alley",
+    "places": 254,
+    "extent": 1660,
+    "worst": 0.273,
+    "example": {
+     "x": -937,
+     "y": 29.25,
+     "z": 242.63,
+     "place": "aqua-traiana-terminus",
+     "note": "piazza over street:alley (piazza:pz662 | street:st1033:alley)"
+    }
+   },
+   {
+    "cause": "double-paving|landmark:circus-maximus||",
+    "places": 56,
+    "extent": 3805,
+    "worst": 0.116,
+    "example": {
+     "x": -108.63,
+     "y": 7.34,
+     "z": 360.13,
+     "place": "aediles-clerk",
+     "note": "lm + road:open: lm:circus-maximus over road:clivus-publicius:open (0.111 m apart)"
+    }
+   },
+   {
+    "cause": "lip|block||block over ground-cover",
+    "places": 264,
+    "extent": 745,
+    "worst": 0.574,
+    "example": {
+     "x": -963,
+     "y": 15.48,
+     "z": 21.88,
+     "place": "aqua-traiana-terminus",
+     "note": "block over ground-cover (block:b1094 | ground-cover)"
+    }
+   },
+   {
+    "cause": "prop-foot-in-air|block|amphora_stack|",
+    "places": 880,
+    "extent": 1055,
+    "worst": 0.393,
+    "example": {
+     "x": -590.42,
+     "y": 7.03,
+     "z": 21.7,
+     "place": "temple-mars-in-circo",
+     "note": "block amphora_stack: a foot 0.39 m over the ground"
+    }
+   },
+   {
+    "cause": "double-paving|junction||",
+    "places": 22,
+    "extent": 3078,
+    "worst": 0.134,
+    "example": {
+     "x": 304.13,
+     "y": 9.7,
+     "z": 570.13,
+     "place": "capena-grassator-b",
+     "note": "junction + lm: junction:j20 over lm:porta-capena (0.050 m apart)"
+    }
+   },
+   {
+    "cause": "prop-floating|block|bench_masonry|",
+    "places": 296,
+    "extent": 310,
+    "worst": 1.254,
+    "example": {
+     "x": -315.7,
+     "y": 23.78,
+     "z": 632.92,
+     "place": "armilustrium",
+     "note": "block bench_masonry: no foot touches (lowest 1.25 m, highest foot 2.04 m)"
+    }
+   }
+  ]
+ },
+ "clusters": [
+  {
+   "kind": "face-float",
+   "src": "road:clivus-victoriae:open",
+   "mat": "paving_basalt",
+   "x": 80.71,
+   "y": 14.39,
+   "z": 106.07,
+   "v": 0.591,
+   "len": 28.83,
+   "n": 10,
+   "place": {
+    "id": "clivus-victoriae",
+    "d": 21
+   },
+   "severity": "major",
+   "score": 3.808
+  },
+  {
+   "kind": "face-float",
+   "src": "piazza:pz586",
+   "mat": "cobbles",
+   "x": 88.75,
+   "y": 11.82,
+   "z": 350.67,
+   "v": 0.713,
+   "len": 19.75,
+   "n": 8,
+   "place": {
+    "id": "domus-augustana:front",
+    "d": 6
+   },
+   "severity": "major",
+   "score": 3.802
+  },
+  {
+   "kind": "lip",
+   "src": "street:st611:vicus",
+   "x": 486.63,
+   "y": 17.17,
+   "z": 261,
+   "v": 0.578,
+   "len": 78,
+   "n": 7,
+   "place": {
+    "id": "ludus-matutinus",
+    "d": 34
+   },
+   "severity": "major",
+   "score": 3.573
+  },
+  {
+   "kind": "face-float",
+   "src": "piazza:pz587",
+   "mat": "paving_travertine",
+   "x": 113.11,
+   "y": 10.03,
+   "z": 371.92,
+   "v": 0.669,
+   "len": 17.5,
+   "n": 8,
+   "place": {
+    "id": "street-north-of-circus",
+    "d": 30
+   },
+   "severity": "major",
+   "score": 3.358
+  },
+  {
+   "kind": "lip",
+   "src": "street:st1050:vicus",
+   "x": -1087,
+   "y": 20.3,
+   "z": -429.88,
+   "v": 0.464,
+   "len": 95,
+   "n": 12,
+   "place": {
+    "id": "janiculum-north",
+    "d": 124
+   },
+   "severity": "major",
+   "score": 3.166
+  },
+  {
+   "kind": "lip",
+   "src": "road:clivus-victoriae:open",
+   "x": 120.75,
+   "y": 18.44,
+   "z": 114.63,
+   "v": 0.531,
+   "len": 71,
+   "n": 6,
+   "place": {
+    "id": "clivus-victoriae",
+    "d": 29
+   },
+   "severity": "major",
+   "score": 3.132
+  },
+  {
+   "kind": "lip",
+   "src": "road:via-sacra:open",
+   "x": 303.75,
+   "y": 12.61,
+   "z": 157.88,
+   "v": 0.566,
+   "len": 56,
+   "n": 7,
+   "place": {
+    "id": "meta-sudans:front",
+    "d": 9
+   },
+   "severity": "major",
+   "score": 2.965
+  },
+  {
+   "kind": "lip",
+   "src": "lm:horrea-agrippiana",
+   "x": 10.13,
+   "y": 8.48,
+   "z": 124,
+   "v": 0.597,
+   "len": 49,
+   "n": 3,
+   "place": {
+    "id": "taberna-vestiarii",
+    "d": 3
+   },
+   "severity": "major",
+   "score": 2.925
+  },
+  {
+   "kind": "lip",
+   "src": "road:trastevere-vatican-riverside-road:rural",
+   "x": -1077,
+   "y": 14.02,
+   "z": -507.13,
+   "v": 0.56,
+   "len": 55,
+   "n": 8,
+   "place": {
+    "id": "janiculum-north",
+    "d": 152
+   },
+   "severity": "major",
+   "score": 2.907
+  },
+  {
+   "kind": "face-float",
+   "src": "road:clivus-victoriae:open",
+   "mat": "paving_basalt",
+   "x": 104.36,
+   "y": 11.03,
+   "z": 100.6,
+   "v": 0.98,
+   "len": 5.74,
+   "n": 4,
+   "place": {
+    "id": "clivus-victoriae",
+    "d": 8
+   },
+   "severity": "major",
+   "score": 2.817
+  },
+  {
+   "kind": "lip",
+   "src": "street:st616:alley",
+   "x": 463.38,
+   "y": 19.51,
+   "z": 238,
+   "v": 0.572,
+   "len": 48,
+   "n": 6,
+   "place": {
+    "id": "ludus-matutinus",
+    "d": 47
+   },
+   "severity": "major",
+   "score": 2.774
+  },
+  {
+   "kind": "lip",
+   "src": "street:st263:vicus",
+   "x": -313,
+   "y": 20.81,
+   "z": 590.63,
+   "v": 0.576,
+   "len": 44,
+   "n": 7,
+   "place": {
+    "id": "temple-juno-regina-aventine",
+    "d": 110
+   },
+   "severity": "major",
+   "score": 2.675
+  },
+  {
+   "kind": "lip",
+   "src": "road:clivus-capitolinus:rural",
+   "x": -61.13,
+   "y": 12.69,
+   "z": 42.5,
+   "v": 0.525,
+   "len": 52,
+   "n": 6,
+   "place": {
+    "id": "temple-jupiter-tonans",
+    "d": 30
+   },
+   "severity": "major",
+   "score": 2.65
+  },
+  {
+   "kind": "lip",
+   "src": "road:vicus-patricius:rural",
+   "x": 526.75,
+   "y": 14.88,
+   "z": -307.13,
+   "v": 0.462,
+   "len": 67,
+   "n": 6,
+   "place": {
+    "id": "viminal",
+    "d": 158
+   },
+   "severity": "major",
+   "score": 2.647
+  },
+  {
+   "kind": "lip",
+   "src": "road:vicus-patricius:rural",
+   "x": 490.75,
+   "y": 11.92,
+   "z": -251.13,
+   "v": 0.443,
+   "len": 71,
+   "n": 6,
+   "place": {
+    "id": "fullonica-suburana",
+    "d": 156
+   },
+   "severity": "major",
+   "score": 2.613
+  },
+  {
+   "kind": "lip",
+   "src": "road:vicus-patricius:rural",
+   "x": 548.75,
+   "y": 17.05,
+   "z": -341.13,
+   "v": 0.443,
+   "len": 69,
+   "n": 6,
+   "place": {
+    "id": "cispius",
+    "d": 140
+   },
+   "severity": "major",
+   "score": 2.576
+  },
+  {
+   "kind": "lip",
+   "src": "street:st1038:alley",
+   "x": -1114.88,
+   "y": 29.52,
+   "z": 17.25,
+   "v": 0.587,
+   "len": 39,
+   "n": 7,
+   "place": {
+    "id": "aqua-traiana-terminus",
+    "d": 261
+   },
+   "severity": "major",
+   "score": 2.566
+  },
+  {
+   "kind": "lip",
+   "src": "road:via-sacra:urban",
+   "x": 201.75,
+   "y": 14.32,
+   "z": 100.38,
+   "v": 0.59,
+   "len": 38,
+   "n": 4,
+   "place": {
+    "id": "arch-titus",
+    "d": 26
+   },
+   "severity": "major",
+   "score": 2.546
+  },
+  {
+   "kind": "face-float",
+   "src": "piazza:pz628",
+   "mat": "cobbles",
+   "x": 613.4,
+   "y": 18.44,
+   "z": 111.29,
+   "v": 0.428,
+   "len": 23.6,
+   "n": 9,
+   "place": {
+    "id": "ludus-dacicus",
+    "d": 83
+   },
+   "severity": "major",
+   "score": 2.495
+  },
+  {
+   "kind": "lip",
+   "src": "road:clivus-victoriae:open",
+   "x": 39.75,
+   "y": 10.34,
+   "z": 143.13,
+   "v": 0.457,
+   "len": 60,
+   "n": 6,
+   "place": {
+    "id": "horrea-agrippiana",
+    "d": 29
+   },
+   "severity": "major",
+   "score": 2.478
+  },
+  {
+   "kind": "lip",
+   "src": "street:st1040:lane",
+   "x": -1220.38,
+   "y": 29.16,
+   "z": -117.5,
+   "v": 0.573,
+   "len": 38,
+   "n": 4,
+   "place": {
+    "id": "janiculum-north",
+    "d": 318
+   },
+   "severity": "major",
+   "score": 2.473
+  },
+  {
+   "kind": "lip",
+   "src": "street:st904:vicus",
+   "x": 661.5,
+   "y": 29.45,
+   "z": -191.88,
+   "v": 0.545,
+   "len": 42,
+   "n": 6,
+   "place": {
+    "id": "lacus-orphei",
+    "d": 8
+   },
+   "severity": "major",
+   "score": 2.472
+  },
+  {
+   "kind": "lip",
+   "src": "block:b279",
+   "x": -105.63,
+   "y": 21.23,
+   "z": 489.25,
+   "v": 0.456,
+   "len": 59,
+   "n": 4,
+   "place": {
+    "id": "armilustrium",
+    "d": 115
+   },
+   "severity": "major",
+   "score": 2.452
+  },
+  {
+   "kind": "lip",
+   "src": "piazza:pz663",
+   "x": -975.38,
+   "y": 30.2,
+   "z": 195.25,
+   "v": 0.568,
+   "len": 38,
+   "n": 5,
+   "place": {
+    "id": "aqua-traiana-terminus",
+    "d": 74
+   },
+   "severity": "major",
+   "score": 2.451
+  },
+  {
+   "kind": "lip",
+   "src": "road:trastevere-vatican-riverside-road:rural",
+   "x": -1063.25,
+   "y": 8.09,
+   "z": -528.88,
+   "v": 0.488,
+   "len": 51,
+   "n": 6,
+   "place": {
+    "id": "meta-romuli",
+    "d": 143
+   },
+   "severity": "major",
+   "score": 2.44
+  },
+  {
+   "kind": "lip",
+   "src": "street:st1030:alley",
+   "x": -1217,
+   "y": 29.08,
+   "z": -112.88,
+   "v": 0.544,
+   "len": 41,
+   "n": 4,
+   "place": {
+    "id": "janiculum-north",
+    "d": 322
+   },
+   "severity": "major",
+   "score": 2.438
+  },
+  {
+   "kind": "lip",
+   "src": "road:trastevere-vatican-riverside-road:rural",
+   "x": -1083.13,
+   "y": 16.51,
+   "z": -497.25,
+   "v": 0.549,
+   "len": 40,
+   "n": 4,
+   "place": {
+    "id": "janiculum-north",
+    "d": 142
+   },
+   "severity": "major",
+   "score": 2.431
+  },
+  {
+   "kind": "lip",
+   "src": "piazza:pz660",
+   "x": -1161.38,
+   "y": 29.51,
+   "z": -41.25,
+   "v": 0.587,
+   "len": 35,
+   "n": 6,
+   "place": {
+    "id": "aqua-traiana-terminus",
+    "d": 334
+   },
+   "severity": "major",
+   "score": 2.431
+  },
+  {
+   "kind": "lip",
+   "src": "road:clivus-argentarius:urban",
+   "x": -21.25,
+   "y": 12.5,
+   "z": -64.13,
+   "v": 0.595,
+   "len": 34,
+   "n": 5,
+   "place": {
+    "id": "gradus-monetae",
+    "d": 4
+   },
+   "severity": "major",
+   "score": 2.429
+  },
+  {
+   "kind": "lip",
+   "src": "road:via-nova:open",
+   "x": 180.75,
+   "y": 15.4,
+   "z": 128.88,
+   "v": 0.5,
+   "len": 48,
+   "n": 9,
+   "place": {
+    "id": "temple-jupiter-stator",
+    "d": 15
+   },
+   "severity": "major",
+   "score": 2.425
+  },
+  {
+   "kind": "lip",
+   "src": "lm:porticus-margaritaria",
+   "x": 182.63,
+   "y": 12.28,
+   "z": 89.75,
+   "v": 0.577,
+   "len": 36,
+   "n": 3,
+   "place": {
+    "id": "porticus-margaritaria",
+    "d": 22
+   },
+   "severity": "major",
+   "score": 2.423
+  },
+  {
+   "kind": "lip",
+   "src": "street:st798:lane",
+   "x": 411.25,
+   "y": 11.97,
+   "z": 83.13,
+   "v": 0.567,
+   "len": 37,
+   "n": 7,
+   "place": {
+    "id": "baths-titus",
+    "d": 48
+   },
+   "severity": "major",
+   "score": 2.414
+  },
+  {
+   "kind": "lip",
+   "src": "lm:basilica-aemilia",
+   "x": 60.5,
+   "y": 9.14,
+   "z": -17.88,
+   "v": 0.523,
+   "len": 42,
+   "n": 3,
+   "place": {
+    "id": "janus-geminus",
+    "d": 8
+   },
+   "severity": "major",
+   "score": 2.373
+  },
+  {
+   "kind": "lip",
+   "src": "lm:aqua-traiana-terminus",
+   "x": -1009.5,
+   "y": 42.38,
+   "z": 253.13,
+   "v": 0.36,
+   "len": 87,
+   "n": 5,
+   "place": {
+    "id": "aqua-traiana-terminus",
+    "d": 7
+   },
+   "severity": "major",
+   "score": 2.35
+  },
+  {
+   "kind": "lip",
+   "src": "road:trastevere-vatican-riverside-road:rural",
+   "x": -1071,
+   "y": 11.33,
+   "z": -516.63,
+   "v": 0.528,
+   "len": 40,
+   "n": 5,
+   "place": {
+    "id": "meta-romuli",
+    "d": 157
+   },
+   "severity": "major",
+   "score": 2.338
+  },
+  {
+   "kind": "lip",
+   "src": "road:vicus-patricius:rural",
+   "x": 468.75,
+   "y": 11.06,
+   "z": -217.13,
+   "v": 0.408,
+   "len": 66,
+   "n": 5,
+   "place": {
+    "id": "fullonica-suburana",
+    "d": 118
+   },
+   "severity": "major",
+   "score": 2.32
+  },
+  {
+   "kind": "lip",
+   "src": "road:clivus-victoriae:open",
+   "x": 67.63,
+   "y": 12.75,
+   "z": 117.75,
+   "v": 0.493,
+   "len": 45,
+   "n": 6,
+   "place": {
+    "id": "domitianic-vestibule",
+    "d": 22
+   },
+   "severity": "major",
+   "score": 2.315
+  },
+  {
+   "kind": "lip",
+   "src": "piazza:pz555",
+   "x": -267.25,
+   "y": 21.25,
+   "z": 538.63,
+   "v": 0.537,
+   "len": 36,
+   "n": 6,
+   "place": {
+    "id": "temple-juno-regina-aventine",
+    "d": 46
+   },
+   "severity": "major",
+   "score": 2.255
+  },
+  {
+   "kind": "prop-floating",
+   "src": "block:b269",
+   "mat": "amphora_globular",
+   "x": -337.95,
+   "y": 17.97,
+   "z": 731.53,
+   "v": 0.992,
+   "len": 2,
+   "n": 2,
+   "place": {
+    "id": "porta-lavernalis",
+    "d": 88
+   },
+   "severity": "major",
+   "score": 2.245
+  },
+  {
+   "kind": "lip",
+   "src": "street:st1473:vicus",
+   "x": 111.75,
+   "y": 15.09,
+   "z": -219.13,
+   "v": 0.467,
+   "len": 47,
+   "n": 5,
+   "place": {
+    "id": "markets-trajan",
+    "d": 27
+   },
+   "severity": "major",
+   "score": 2.241
+  },
+  {
+   "kind": "lip",
+   "src": "road:alta-semita:urban",
+   "x": 112.75,
+   "y": 29.16,
+   "z": -302.13,
+   "v": 0.45,
+   "len": 50,
+   "n": 5,
+   "place": {
+    "id": "markets-trajan",
+    "d": 106
+   },
+   "severity": "major",
+   "score": 2.227
+  },
+  {
+   "kind": "lip",
+   "src": "road:vicus-patricius:rural",
+   "x": 511.13,
+   "y": 13.5,
+   "z": -283,
+   "v": 0.393,
+   "len": 65,
+   "n": 5,
+   "place": {
+    "id": "viminal",
+    "d": 169
+   },
+   "severity": "major",
+   "score": 2.218
+  },
+  {
+   "kind": "lip",
+   "src": "street:st355:vicus",
+   "x": -988.25,
+   "y": 37.22,
+   "z": 405.63,
+   "v": 0.575,
+   "len": 30,
+   "n": 5,
+   "place": {
+    "id": "aqua-traiana-terminus",
+    "d": 150
+   },
+   "severity": "major",
+   "score": 2.205
+  },
+  {
+   "kind": "lip",
+   "src": "street:st1032:vicus",
+   "x": -993.88,
+   "y": 29.42,
+   "z": 170.5,
+   "v": 0.594,
+   "len": 28,
+   "n": 4,
+   "place": {
+    "id": "aqua-traiana-terminus",
+    "d": 90
+   },
+   "severity": "major",
+   "score": 2.2
+  },
+  {
+   "kind": "face-float",
+   "src": "road:clivus-victoriae:open",
+   "mat": "paving_basalt",
+   "x": 65.89,
+   "y": 15.95,
+   "z": 121.93,
+   "v": 0.948,
+   "len": 3.74,
+   "n": 3,
+   "place": {
+    "id": "domitianic-vestibule",
+    "d": 25
+   },
+   "severity": "major",
+   "score": 2.2
+  },
+  {
+   "kind": "prop-floating",
+   "src": "block:b1539",
+   "mat": "amphora_globular",
+   "x": 100.08,
+   "y": 23.75,
+   "z": -256.3,
+   "v": 0.97,
+   "len": 2,
+   "n": 2,
+   "place": {
+    "id": "markets-trajan",
+    "d": 59
+   },
+   "severity": "major",
+   "score": 2.195
+  },
+  {
+   "kind": "lip",
+   "src": "street:st1023:vicus",
+   "x": -1228.88,
+   "y": 29.42,
+   "z": -127.25,
+   "v": 0.57,
+   "len": 30,
+   "n": 6,
+   "place": {
+    "id": "janiculum-north",
+    "d": 308
+   },
+   "severity": "major",
+   "score": 2.185
+  },
+  {
+   "kind": "lip",
+   "src": "street:st1454:vicus",
+   "x": 215.88,
+   "y": 28.28,
+   "z": -397.75,
+   "v": 0.569,
+   "len": 30,
+   "n": 4,
+   "place": {
+    "id": "arae-incendii-neroniani",
+    "d": 131
+   },
+   "severity": "major",
+   "score": 2.182
+  },
+  {
+   "kind": "lip",
+   "src": "piazza:pz587",
+   "x": 115.13,
+   "y": 9.02,
+   "z": 374.75,
+   "v": 0.542,
+   "len": 33,
+   "n": 3,
+   "place": {
+    "id": "street-north-of-circus",
+    "d": 29
+   },
+   "severity": "major",
+   "score": 2.179
+  },
+  {
+   "kind": "lip",
+   "src": "road:vicus-patricius:rural",
+   "x": 562.75,
+   "y": 18.45,
+   "z": -363.13,
+   "v": 0.372,
+   "len": 69,
+   "n": 6,
+   "place": {
+    "id": "cispius",
+    "d": 133
+   },
+   "severity": "major",
+   "score": 2.163
+  },
+  {
+   "kind": "lip",
+   "src": "road:vicus-patricius:rural",
+   "x": 498.5,
+   "y": 12.5,
+   "z": -263.38,
+   "v": 0.424,
+   "len": 53,
+   "n": 5,
+   "place": {
+    "id": "fullonica-suburana",
+    "d": 170
+   },
+   "severity": "major",
+   "score": 2.161
+  },
+  {
+   "kind": "prop-floating",
+   "src": "block:b269",
+   "mat": "crate",
+   "x": -341.01,
+   "y": 16.61,
+   "z": 734.37,
+   "v": 0.937,
+   "len": 2,
+   "n": 2,
+   "place": {
+    "id": "porta-lavernalis",
+    "d": 90
+   },
+   "severity": "major",
+   "score": 2.12
+  },
+  {
+   "kind": "lip",
+   "src": "street:st1029:alley",
+   "x": -1202,
+   "y": 29.09,
+   "z": -93.88,
+   "v": 0.553,
+   "len": 30,
+   "n": 8,
+   "place": {
+    "id": "janiculum-north",
+    "d": 341
+   },
+   "severity": "major",
+   "score": 2.12
+  },
+  {
+   "kind": "lip",
+   "src": "road:clivus-victoriae:rural",
+   "x": 53.5,
+   "y": 16.65,
+   "z": 129.63,
+   "v": 0.523,
+   "len": 33,
+   "n": 6,
+   "place": {
+    "id": "horrea-agrippiana",
+    "d": 25
+   },
+   "severity": "major",
+   "score": 2.103
+  },
+  {
+   "kind": "lip",
+   "src": "ground-cover",
+   "x": -19.5,
+   "y": 23.68,
+   "z": -107.38,
+   "v": 0.523,
+   "len": 33,
+   "n": 4,
+   "place": {
+    "id": "auguraculum",
+    "d": 17
+   },
+   "severity": "major",
+   "score": 2.103
+  },
+  {
+   "kind": "lip",
+   "src": "street:st800:lane",
+   "x": 411.88,
+   "y": 15.84,
+   "z": 53,
+   "v": 0.471,
+   "len": 40,
+   "n": 4,
+   "place": {
+    "id": "baths-titus",
+    "d": 42
+   },
+   "severity": "major",
+   "score": 2.085
+  },
+  {
+   "kind": "lip",
+   "src": "street:st1031:vicus",
+   "x": -1157.5,
+   "y": 28.97,
+   "z": -37.38,
+   "v": 0.55,
+   "len": 29,
+   "n": 5,
+   "place": {
+    "id": "aqua-traiana-terminus",
+    "d": 328
+   },
+   "severity": "major",
+   "score": 2.073
+  },
+  {
+   "kind": "edge-float",
+   "src": "road:trastevere-vatican-riverside-road:rural",
+   "mat": "gravel",
+   "x": -1069.28,
+   "y": 10.43,
+   "z": -519.3,
+   "v": 0.577,
+   "len": 12.38,
+   "n": 9,
+   "place": {
+    "id": "meta-romuli",
+    "d": 154
+   },
+   "severity": "major",
+   "score": 2.03
+  },
+  {
+   "kind": "lip",
+   "src": "street:st1025:lane",
+   "x": -1098.38,
+   "y": 29.78,
+   "z": 38.5,
+   "v": 0.6,
+   "len": 23,
+   "n": 5,
+   "place": {
+    "id": "aqua-traiana-terminus",
+    "d": 235
+   },
+   "severity": "major",
+   "score": 2.014
+  },
+  {
+   "kind": "prop-floating",
+   "src": "block:b275",
+   "mat": "bench_masonry",
+   "x": -315.7,
+   "y": 23.78,
+   "z": 632.92,
+   "v": 1.254,
+   "len": 1,
+   "n": 1,
+   "place": {
+    "id": "armilustrium",
+    "d": 140
+   },
+   "severity": "major",
+   "score": 2.006
+  },
+  {
+   "kind": "lip",
+   "src": "road:clivus-victoriae:open",
+   "x": 129.63,
+   "y": 24.55,
+   "z": 125.75,
+   "v": 0.489,
+   "len": 34,
+   "n": 5,
+   "place": {
+    "id": "clivus-victoriae",
+    "d": 44
+   },
+   "severity": "major",
+   "score": 1.996
+  },
+  {
+   "kind": "lip",
+   "src": "junction:j10",
+   "x": -84,
+   "y": 13.48,
+   "z": 80.63,
+   "v": 0.577,
+   "len": 24,
+   "n": 6,
+   "place": {
+    "id": "tarpeian-rock",
+    "d": 21
+   },
+   "severity": "major",
+   "score": 1.979
+  },
+  {
+   "kind": "lip",
+   "src": "road:clivus-argentarius:open",
+   "x": 3.25,
+   "y": 8.47,
+   "z": -33.88,
+   "v": 0.227,
+   "len": 155,
+   "n": 9,
+   "place": {
+    "id": "carcer-tullianum",
+    "d": 9
+   },
+   "severity": "major",
+   "score": 1.978
+  },
+  {
+   "kind": "face-float",
+   "src": "piazza:pz586",
+   "mat": "cobbles",
+   "x": 95.37,
+   "y": 14.89,
+   "z": 355.3,
+   "v": 0.513,
+   "len": 10.12,
+   "n": 3,
+   "place": {
+    "id": "domus-augustana:front",
+    "d": 8
+   },
+   "severity": "major",
+   "score": 1.958
+  },
+  {
+   "kind": "lip",
+   "src": "road:vicus-patricius:urban",
+   "x": 618.88,
+   "y": 28.56,
+   "z": -448.75,
+   "v": 0.419,
+   "len": 44,
+   "n": 4,
+   "place": {
+    "id": "cispius",
+    "d": 151
+   },
+   "severity": "major",
+   "score": 1.946
+  },
+  {
+   "kind": "lip",
+   "src": "lm:temple-divus-augustus",
+   "x": 12.75,
+   "y": 8.11,
+   "z": 103.13,
+   "v": 0.212,
+   "len": 171,
+   "n": 9,
+   "place": {
+    "id": "seplasia-vici-tusci",
+    "d": 4
+   },
+   "severity": "major",
+   "score": 1.941
+  },
+  {
+   "kind": "face-float",
+   "src": "road:clivus-victoriae:urban",
+   "mat": "paving_basalt",
+   "x": 83.05,
+   "y": 19.43,
+   "z": 106,
+   "v": 0.421,
+   "len": 14.73,
+   "n": 7,
+   "place": {
+    "id": "clivus-victoriae",
+    "d": 19
+   },
+   "severity": "major",
+   "score": 1.939
+  },
+  {
+   "kind": "lip",
+   "src": "junction:j16",
+   "x": -26,
+   "y": 20.42,
+   "z": -73.88,
+   "v": 0.588,
+   "len": 22,
+   "n": 5,
+   "place": {
+    "id": "gradus-monetae",
+    "d": 11
+   },
+   "severity": "major",
+   "score": 1.931
+  },
+  {
+   "kind": "lip",
+   "src": "piazza:pz626",
+   "x": 488.75,
+   "y": 21.18,
+   "z": 86.88,
+   "v": 0.549,
+   "len": 25,
+   "n": 6,
+   "place": {
+    "id": "domus-aurea-buried",
+    "d": 39
+   },
+   "severity": "major",
+   "score": 1.922
+  },
+  {
+   "kind": "lip",
+   "src": "road:vicus-patricius:rural",
+   "x": 534.5,
+   "y": 15.61,
+   "z": -319.13,
+   "v": 0.366,
+   "len": 56,
+   "n": 5,
+   "place": {
+    "id": "cispius",
+    "d": 151
+   },
+   "severity": "major",
+   "score": 1.917
+  },
+  {
+   "kind": "edge-float",
+   "src": "street:st1035:vicus",
+   "mat": "concrete",
+   "x": -1089.76,
+   "y": 30.26,
+   "z": 49.89,
+   "v": 0.732,
+   "len": 6.85,
+   "n": 7,
+   "place": {
+    "id": "aqua-traiana-terminus",
+    "d": 221
+   },
+   "severity": "major",
+   "score": 1.916
+  },
+  {
+   "kind": "face-float",
+   "src": "road:clivus-capitolinus:rural",
+   "mat": "paving_basalt",
+   "x": -66.87,
+   "y": 16,
+   "z": 45.17,
+   "v": 0.618,
+   "len": 6.62,
+   "n": 4,
+   "place": {
+    "id": "temple-jupiter-tonans",
+    "d": 26
+   },
+   "severity": "major",
+   "score": 1.908
+  },
+  {
+   "kind": "lip",
+   "src": "road:vicus-patricius:rural",
+   "x": 520.5,
+   "y": 14.29,
+   "z": -297.38,
+   "v": 0.419,
+   "len": 42,
+   "n": 3,
+   "place": {
+    "id": "viminal",
+    "d": 162
+   },
+   "severity": "major",
+   "score": 1.901
+  },
+  {
+   "kind": "lip",
+   "src": "road:clivus-palatinus:urban",
+   "x": 193.25,
+   "y": 14.97,
+   "z": 122.63,
+   "v": 0.452,
+   "len": 36,
+   "n": 4,
+   "place": {
+    "id": "arch-titus",
+    "d": 16
+   },
+   "severity": "major",
+   "score": 1.898
+  },
+  {
+   "kind": "prop-floating",
+   "src": "block:b395",
+   "mat": "basket",
+   "x": -992.01,
+   "y": 40.87,
+   "z": 360.45,
+   "v": 1.178,
+   "len": 1,
+   "n": 1,
+   "place": {
+    "id": "aqua-traiana-terminus",
+    "d": 105
+   },
+   "severity": "major",
+   "score": 1.885
+  },
+  {
+   "kind": "lip",
+   "src": "street:st1035:vicus",
+   "x": -1091.75,
+   "y": 29.83,
+   "z": 47.13,
+   "v": 0.534,
+   "len": 25,
+   "n": 4,
+   "place": {
+    "id": "aqua-traiana-terminus",
+    "d": 225
+   },
+   "severity": "major",
+   "score": 1.869
+  },
+  {
+   "kind": "lip",
+   "src": "road:alta-semita:urban",
+   "x": 111,
+   "y": 29.98,
+   "z": -325.88,
+   "v": 0.443,
+   "len": 36,
+   "n": 4,
+   "place": {
+    "id": "markets-trajan",
+    "d": 129
+   },
+   "severity": "major",
+   "score": 1.861
+  },
+  {
+   "kind": "edge-float",
+   "src": "road:trastevere-vatican-riverside-road:rural",
+   "mat": "gravel",
+   "x": -1077.02,
+   "y": 13.92,
+   "z": -507.04,
+   "v": 0.505,
+   "len": 13.45,
+   "n": 10,
+   "place": {
+    "id": "janiculum-north",
+    "d": 152
+   },
+   "severity": "major",
+   "score": 1.852
+  },
+  {
+   "kind": "lip",
+   "src": "block:b406",
+   "x": -220.38,
+   "y": 9.88,
+   "z": 425,
+   "v": 0.551,
+   "len": 23,
+   "n": 4,
+   "place": {
+    "id": "porta-trigemina",
+    "d": 42
+   },
+   "severity": "major",
+   "score": 1.85
+  },
+  {
+   "kind": "lip",
+   "src": "block:b1043",
+   "x": -940.13,
+   "y": 9.08,
+   "z": -19.25,
+   "v": 0.473,
+   "len": 31,
+   "n": 2,
+   "place": {
+    "id": "aqua-traiana-terminus",
+    "d": 287
+   },
+   "severity": "major",
+   "score": 1.843
+  },
+  {
+   "kind": "face-float",
+   "src": "road:clivus-victoriae:urban",
+   "mat": "paving_basalt",
+   "x": 75.41,
+   "y": 14.64,
+   "z": 112.07,
+   "v": 0.475,
+   "len": 10.46,
+   "n": 4,
+   "place": {
+    "id": "domitianic-vestibule",
+    "d": 23
+   },
+   "severity": "major",
+   "score": 1.843
+  },
+  {
+   "kind": "face-float",
+   "src": "piazza:pz658",
+   "mat": "cobbles",
+   "x": -1014.83,
+   "y": 32.29,
+   "z": 147.27,
+   "v": 0.472,
+   "len": 10.55,
+   "n": 3,
+   "place": {
+    "id": "aqua-traiana-terminus",
+    "d": 111
+   },
+   "severity": "major",
+   "score": 1.84
+  },
+  {
+   "kind": "face-float",
+   "src": "piazza:pz662",
+   "mat": "paving_travertine",
+   "x": -935.35,
+   "y": 30.97,
+   "z": 247.05,
+   "v": 0.469,
+   "len": 10.57,
+   "n": 7,
+   "place": {
+    "id": "aqua-traiana-terminus",
+    "d": 79
+   },
+   "severity": "major",
+   "score": 1.83
+  },
+  {
+   "kind": "edge-float",
+   "src": "street:st355:vicus",
+   "mat": "concrete",
+   "x": -986.82,
+   "y": 36.57,
+   "z": 406.88,
+   "v": 0.546,
+   "len": 11.17,
+   "n": 6,
+   "place": {
+    "id": "aqua-traiana-terminus",
+    "d": 151
+   },
+   "severity": "major",
+   "score": 1.825
+  },
+  {
+   "kind": "lip",
+   "src": "road:clivus-suburanus:urban",
+   "x": 595.63,
+   "y": 24.29,
+   "z": -143,
+   "v": 0.492,
+   "len": 28,
+   "n": 5,
+   "place": {
+    "id": "porticus-liviae",
+    "d": 38
+   },
+   "severity": "major",
+   "score": 1.822
+  },
+  {
+   "kind": "edge-float",
+   "src": "road:trastevere-vatican-riverside-road:rural",
+   "mat": "gravel",
+   "x": -1083.21,
+   "y": 16.55,
+   "z": -497.23,
+   "v": 0.525,
+   "len": 12.02,
+   "n": 11,
+   "place": {
+    "id": "janiculum-north",
+    "d": 142
+   },
+   "severity": "major",
+   "score": 1.82
+  },
+  {
+   "kind": "lip",
+   "src": "road:alta-semita:urban",
+   "x": 107.5,
+   "y": 32.19,
+   "z": -376.38,
+   "v": 0.431,
+   "len": 35,
+   "n": 4,
+   "place": {
+    "id": "markets-trajan",
+    "d": 179
+   },
+   "severity": "major",
+   "score": 1.785
+  },
+  {
+   "kind": "lip",
+   "src": "piazza:pz588",
+   "x": -8.75,
+   "y": 10.03,
+   "z": 224.88,
+   "v": 0.318,
+   "len": 64,
+   "n": 6,
+   "place": {
+    "id": "insula-nutans-taberna",
+    "d": 23
+   },
+   "severity": "major",
+   "score": 1.781
+  },
+  {
+   "kind": "prop-floating",
+   "src": "block:b556",
+   "mat": "crate",
+   "x": 583.53,
+   "y": 26.34,
+   "z": 580.62,
+   "v": 1.112,
+   "len": 1,
+   "n": 1,
+   "place": {
+    "id": "castra-peregrina",
+    "d": 65
+   },
+   "severity": "major",
+   "score": 1.779
+  },
+  {
+   "kind": "lip",
+   "src": "road:clivus-victoriae:open",
+   "x": 107,
+   "y": 11,
+   "z": 102.13,
+   "v": 0.349,
+   "len": 53,
+   "n": 5,
+   "place": {
+    "id": "clivus-victoriae",
+    "d": 11
+   },
+   "severity": "major",
+   "score": 1.779
+  },
+  {
+   "kind": "face-float",
+   "src": "piazza:pz661",
+   "mat": "cobbles",
+   "x": -995.29,
+   "y": 30.92,
+   "z": 170.87,
+   "v": 0.545,
+   "len": 7.39,
+   "n": 4,
+   "place": {
+    "id": "aqua-traiana-terminus",
+    "d": 89
+   },
+   "severity": "major",
+   "score": 1.778
+  },
+  {
+   "kind": "face-float",
+   "src": "street:st611:vicus",
+   "mat": "concrete",
+   "x": 485.73,
+   "y": 16.05,
+   "z": 259.9,
+   "v": 0.426,
+   "len": 12.03,
+   "n": 7,
+   "place": {
+    "id": "ludus-matutinus",
+    "d": 33
+   },
+   "severity": "major",
+   "score": 1.773
+  },
+  {
+   "kind": "face-float",
+   "src": "junction:j10",
+   "mat": "paving_basalt",
+   "x": -88.29,
+   "y": 11.05,
+   "z": 83.6,
+   "v": 0.484,
+   "len": 9.07,
+   "n": 6,
+   "place": {
+    "id": "tarpeian-rock",
+    "d": 20
+   },
+   "severity": "major",
+   "score": 1.749
+  },
+  {
+   "kind": "prop-floating",
+   "src": "block:b269",
+   "mat": "basket",
+   "x": -340.51,
+   "y": 16.61,
+   "z": 733.87,
+   "v": 0.772,
+   "len": 2,
+   "n": 2,
+   "place": {
+    "id": "porta-lavernalis",
+    "d": 89
+   },
+   "severity": "major",
+   "score": 1.747
+  },
+  {
+   "kind": "edge-float",
+   "src": "street:st904:vicus",
+   "mat": "concrete",
+   "x": 661.5,
+   "y": 29.45,
+   "z": -191.96,
+   "v": 0.539,
+   "len": 10.51,
+   "n": 7,
+   "place": {
+    "id": "lacus-orphei",
+    "d": 8
+   },
+   "severity": "major",
+   "score": 1.747
+  },
+  {
+   "kind": "lip",
+   "src": "road:clivus-victoriae:open",
+   "x": 51.5,
+   "y": 17.39,
+   "z": 133.63,
+   "v": 0.571,
+   "len": 19,
+   "n": 2,
+   "place": {
+    "id": "horrea-agrippiana",
+    "d": 26
+   },
+   "severity": "major",
+   "score": 1.742
+  },
+  {
+   "kind": "lip",
+   "src": "lm:forum-nerva",
+   "x": 155.38,
+   "y": 9.7,
+   "z": -76,
+   "v": 0.447,
+   "len": 30,
+   "n": 4,
+   "place": {
+    "id": "temple-minerva-nerva",
+    "d": 16
+   },
+   "severity": "major",
+   "score": 1.714
+  },
+  {
+   "kind": "lip",
+   "src": "ground-cover",
+   "x": 211.38,
+   "y": 16.44,
+   "z": 93.5,
+   "v": 0.345,
+   "len": 50,
+   "n": 5,
+   "place": {
+    "id": "arch-titus",
+    "d": 32
+   },
+   "severity": "major",
+   "score": 1.708
+  },
+  {
+   "kind": "face-float",
+   "src": "piazza:pz626",
+   "mat": "paving_travertine",
+   "x": 491.91,
+   "y": 14.66,
+   "z": 90.07,
+   "v": 0.484,
+   "len": 8.63,
+   "n": 6,
+   "place": {
+    "id": "domus-aurea-buried",
+    "d": 37
+   },
+   "severity": "major",
+   "score": 1.706
+  },
+  {
+   "kind": "lip",
+   "src": "piazza:pz661",
+   "x": -997.75,
+   "y": 29.56,
+   "z": 166.13,
+   "v": 0.497,
+   "len": 24,
+   "n": 5,
+   "place": {
+    "id": "aqua-traiana-terminus",
+    "d": 93
+   },
+   "severity": "major",
+   "score": 1.704
+  }
+ ]
+}

@@ -11,7 +11,7 @@ import { sessionQuality } from './core/graphics';
 import { classicRequested, loadRealBodies } from './actors/avatar/real/RealBody';
 import { setLeafyCanopies } from './arch/vegetation/materials';
 import { setHairAlphaToCoverage } from './actors/avatar/real/head/hairConfig';
-import { AUDIT, analyzeArea, auditRecordCount, surfacesAt } from './dev/audit/geomAudit';
+import { AUDIT, analyzeArea, analyzeFeet, auditFacesNear, auditForget, auditOwnerOf, auditOwners, auditRecordCount, auditRecordNames, surfacesAt, topSurfaceGrid } from './dev/audit/geomAudit';
 import type { SceneDef } from './scenes/types';
 
 const sceneModules = import.meta.glob<{ default: SceneDef }>('./scenes/*.ts');
@@ -46,7 +46,11 @@ async function boot() {
   // Realistic bodies are the default: start loading now (the city builds meanwhile); avatars made before it ends upgrade on arrival.
   if (!classicRequested()) loadRealBodies(game.renderer).catch((e) => console.error('real bodies failed to load, staying procedural', e));
   // Geometry audit hooks for scripts/crawl.mjs (?audit).
-  if (AUDIT) (window as unknown as { __audit: unknown }).__audit = { analyzeArea, auditRecordCount, surfacesAt };
+  if (AUDIT) {
+    (window as unknown as { __audit: unknown }).__audit = { analyzeArea, analyzeFeet, auditFacesNear, auditForget, auditOwnerOf, auditOwners, auditRecordCount, auditRecordNames, surfacesAt, topSurfaceGrid };
+    // Collision-against-visuals hooks for scripts/audit/collision.mjs (loaded on demand: dev only).
+    import('./dev/audit/collisionAudit').then((m) => m.installCollisionAudit(() => game));
+  }
   {
     const s = game.settings.data;
     const tier = s.graphics && s.graphics !== 'auto' ? s.graphics : s.graphicsApplied?.tier;

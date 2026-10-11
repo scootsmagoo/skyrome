@@ -275,7 +275,7 @@ export class MeshBuilder {
           for (const mm of matrices) audit.push({ geometry: flat.clone().applyMatrix4(mm), material: mat });
         }
       }
-      auditRecordBuild(name, group, audit, this.auditProps);
+      auditRecordBuild(name, group, audit, this.auditProps, this.ground);
     }
     return group;
   }

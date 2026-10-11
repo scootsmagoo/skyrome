@@ -21,6 +21,7 @@ import type { MaterialId } from '../../../gfx/materialIds';
 import { ProfileBuilder, sweep, type Profile, type V2 } from '../../../arch/common/geom';
 import { armoredEmperor, togate } from '../../../arch/classical/statues';
 import type { LandmarkBuilder } from '../types';
+import { AUDIT, auditInstanced } from '../../../dev/audit/geomAudit';
 
 export const builders: LandmarkBuilder[] = [];
 
@@ -199,6 +200,8 @@ export class LodSet {
     const n = spec.matrices.length;
     spec.levels.forEach((lv, li) => {
       const g = lv.builder.build(`${spec.name}:L${li}`);
+      // Geometry audit (?audit): the nearest level's faces at every instance, under this set's root.
+      if (AUDIT && li === 0) auditInstanced(`${spec.name}:L0`, root, spec.matrices);
       // The set keeps its spec (matrices) for good: the level's builder parts must not ride along.
       lv.builder.dispose();
       const meshes: THREE.InstancedMesh[] = [];

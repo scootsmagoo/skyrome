@@ -1,0 +1,2111 @@
+{
+ "lens": "routes",
+ "note": "Phase 4a baseline (2026-10-10): counts plus the top 100 clusters. Refreshed only by the lead.",
+ "source": "scripts/audit/routes.mjs, 2026-10-10 run (241 jobs + sweep)",
+ "counts": {
+  "totals": {
+   "jobs": 241,
+   "byKind": {
+    "guide": 12,
+    "objective": 60,
+    "approach": 57,
+    "tour": 12,
+    "random": 20,
+    "edge": 80
+   },
+   "outcomes": {
+    "arrived": 230,
+    "timeout": 1,
+    "aborted": 10
+   },
+   "planStatus": {
+    "streets": 161,
+    "fixed": 80
+   },
+   "walkedRoutes": 0,
+   "routeMetres": 50337,
+   "simSeconds": 7926.000000000003,
+   "recoveries": 334,
+   "replans": 4,
+   "incidents": {
+    "blocked:wall [blocker]": 290,
+    "jump [major]": 69,
+    "climb [major]": 47,
+    "line-drop [minor]": 61,
+    "line-through [minor]": 104,
+    "off-line [major]": 22,
+    "line-drop [major]": 127,
+    "line-steep [major]": 117,
+    "line-steep [minor]": 4,
+    "line-ledge [minor]": 77,
+    "line-wall [major]": 3,
+    "line-ledge [major]": 19,
+    "line-through [major]": 112,
+    "climb [minor]": 22,
+    "drop [minor]": 7,
+    "blocked:slide [blocker]": 13,
+    "swim [major]": 9,
+    "line-water [major]": 60,
+    "blocked:low [blocker]": 5,
+    "drop [major]": 1
+   },
+   "minutes": 0,
+   "jobsWithBlock": 97,
+   "objectiveJobsWithBlock": 37,
+   "places": 363,
+   "placesBySeverity": {
+    "blocker": 119,
+    "major": 183,
+    "minor": 61
+   },
+   "objectiveVerdicts": {
+    "BLOCKED": 33,
+    "snags": 7,
+    "ok": 28,
+    "FAIL": 4
+   }
+  },
+  "graph": {
+   "nodes": 8148,
+   "edges": 8770,
+   "components": [
+    7699,
+    163,
+    45,
+    29,
+    19,
+    8,
+    5,
+    5,
+    4,
+    4,
+    4,
+    4,
+    3,
+    2
+   ],
+   "componentCount": 14,
+   "termini": 100,
+   "crowd": true,
+   "grid": true
+  },
+  "sweep": {
+   "tiles": 753,
+   "edges": 8770,
+   "checked": 8770,
+   "metres": 95558,
+   "edgesFlagged": 367,
+   "perKind": {
+    "ledge": 297,
+    "drop": 87,
+    "through": 246,
+    "headroom": 33,
+    "steep": 46,
+    "low": 1
+   },
+   "places": 268
+  },
+  "places": {
+   "nodes": 8148,
+   "isolated": 154,
+   "isoKinds": {
+    "street": 4,
+    "piazza": 28,
+    "plaza": 3,
+    "landmark": 119
+   },
+   "checked": 530
+  },
+  "questTableFailing": [
+   {
+    "id": "guide/circus/0",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 104,
+    "blocks": 1
+   },
+   {
+    "id": "mq-01-madida-capena/dying/ask-dromo",
+    "verdict": "FAIL",
+    "outcome": "aborted",
+    "length": 526,
+    "blocks": 13
+   },
+   {
+    "id": "mq-02-tabella/ludus/ask",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 648,
+    "blocks": 4
+   },
+   {
+    "id": "mq-02-tabella/mus/hideout",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 723,
+    "blocks": 5
+   },
+   {
+    "id": "mq-03-lemuria/start/go",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 183,
+    "blocks": 1
+   },
+   {
+    "id": "mq-03-lemuria/gemellus/key",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 129,
+    "blocks": 1
+   },
+   {
+    "id": "mq-04-columna/start/forum",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 481,
+    "blocks": 2
+   },
+   {
+    "id": "mq-04-columna/post/brief",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 318,
+    "blocks": 2
+   },
+   {
+    "id": "job-cliens-epistula/v2:dama/v2:dama",
+    "verdict": "FAIL",
+    "outcome": "aborted",
+    "length": 180,
+    "blocks": 13
+   },
+   {
+    "id": "job-ludus-lusio/start/start",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 715,
+    "blocks": 2
+   },
+   {
+    "id": "job-portus-saccarius/start/start",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 300,
+    "blocks": 1
+   },
+   {
+    "id": "job-portus-saccarius/s:take2/s:take2",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 34,
+    "blocks": 1
+   },
+   {
+    "id": "job-subura-pistor/start/start",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 210,
+    "blocks": 2
+   },
+   {
+    "id": "job-subura-pistor/s:chreste/s:chreste",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 330,
+    "blocks": 3
+   },
+   {
+    "id": "job-subura-pistor/s:dama/s:dama",
+    "verdict": "FAIL",
+    "outcome": "aborted",
+    "length": 229,
+    "blocks": 13
+   },
+   {
+    "id": "lud-01-sacramentum/kit/draw",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 113,
+    "blocks": 2
+   },
+   {
+    "id": "misc-fur-balnearius/start/ask",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 588,
+    "blocks": 1
+   },
+   {
+    "id": "misc-fur-balnearius/follow/bundle",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 279,
+    "blocks": 2
+   },
+   {
+    "id": "misc-fur-balnearius/choose/deal",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 268,
+    "blocks": 3
+   },
+   {
+    "id": "misc-hilara/start/ask",
+    "verdict": "FAIL",
+    "outcome": "aborted",
+    "length": 419,
+    "blocks": 13
+   },
+   {
+    "id": "misc-hilara/follow/bring",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 400,
+    "blocks": 1
+   },
+   {
+    "id": "misc-lemuria-fabae/watch/follow",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 58,
+    "blocks": 2
+   },
+   {
+    "id": "misc-lemuria-fabae/choice/decide",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 59,
+    "blocks": 2
+   },
+   {
+    "id": "misc-mercuralia/start/ides",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 837,
+    "blocks": 1
+   },
+   {
+    "id": "misc-mercuralia/clerk/measure",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 556,
+    "blocks": 1
+   },
+   {
+    "id": "misc-mercuralia/test/test",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 299,
+    "blocks": 1
+   },
+   {
+    "id": "misc-meta-sudans-rixa/start/choose",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 172,
+    "blocks": 1
+   },
+   {
+    "id": "misc-meta-sudans-rixa/rixa/ko",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 375,
+    "blocks": 2
+   },
+   {
+    "id": "misc-servus-aesculapii/start/daos",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 775,
+    "blocks": 1
+   },
+   {
+    "id": "misc-servus-aesculapii/bridge/more",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 62,
+    "blocks": 1
+   },
+   {
+    "id": "misc-servus-aesculapii/report/free",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 64,
+    "blocks": 2
+   },
+   {
+    "id": "misc-tesserae-falsae/start/eutychus",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 567,
+    "blocks": 1
+   },
+   {
+    "id": "misc-tesserae-falsae/lucrio/find",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 916,
+    "blocks": 3
+   },
+   {
+    "id": "misc-tesserae-falsae/choose/decide",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 910,
+    "blocks": 4
+   },
+   {
+    "id": "misc-urna-aenea/fence/crispina",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 470,
+    "blocks": 2
+   },
+   {
+    "id": "misc-urna-aenea/return/primus",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 469,
+    "blocks": 3
+   },
+   {
+    "id": "mq-04-columna/climb/top",
+    "verdict": "BLOCKED",
+    "outcome": "arrived",
+    "length": 61,
+    "blocks": 2
+   }
+  ]
+ },
+ "clusters": [
+  {
+   "sev": "blocker",
+   "at": [
+    67.1,
+    9.1,
+    -28.7
+   ],
+   "place": "Senate House (16 m, Regio VIII Forum Romanum)",
+   "routes": 12,
+   "kinds": {
+    "blocked (wall)": 12
+   },
+   "parts": [
+    "graph",
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    155.4,
+    9.7,
+    -77.1
+   ],
+   "place": "Temple of Minerva (17 m, Regio IV Templum Pacis)",
+   "routes": 11,
+   "kinds": {
+    "blocked (wall)": 8,
+    "needs a jump/mantle (npc)": 3
+   },
+   "parts": [
+    "graph"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    281.7,
+    7.9,
+    545.4
+   ],
+   "place": "Crossroads Shrine by the Capena Gate (3 m, Regio XI Circus Maximus)",
+   "routes": 9,
+   "kinds": {
+    "needs a jump/mantle (wall)": 5,
+    "climb (mantle 1.11 m)": 5,
+    "climb (mantle 1.14 m)": 3,
+    "blocked (wall)": 2
+   },
+   "parts": [
+    "graph"
+   ]
+  },
+  {
+   "sev": "major",
+   "at": [
+    70.1,
+    9.1,
+    -27.9
+   ],
+   "place": "Senate House (19 m, Regio VIII Forum Romanum)",
+   "routes": 12,
+   "kinds": {
+    "route line: drop -11.62": 11,
+    "route line: through 2.2": 10,
+    "route line: steep 5.15": 1,
+    "route line: steep 5.25": 7,
+    "route line: steep 4.95": 1,
+    "route line: steep 5.37": 1
+   },
+   "parts": [
+    "graph",
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -81,
+    7.5,
+    305.8
+   ],
+   "place": "The Inn at the Starting Gates (25 m, Regio XI Circus Maximus)",
+   "routes": 5,
+   "kinds": {
+    "blocked (wall)": 65,
+    "off-line": 5
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    510.2,
+    13.5,
+    199.8
+   ],
+   "place": "Great Gladiatorial School (32 m, Regio III Isis et Serapis)",
+   "routes": 5,
+   "kinds": {
+    "needs a jump/mantle (low)": 4,
+    "blocked (wall)": 7,
+    "climb (mantle 0.88 m)": 4
+   },
+   "parts": [
+    "graph",
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    56.8,
+    7.9,
+    37.9
+   ],
+   "place": "Statue of Vortumnus (2 m, Regio VIII Forum Romanum)",
+   "routes": 5,
+   "kinds": {
+    "blocked (slide)": 5
+   },
+   "parts": [
+    "graph"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    175.8,
+    11.5,
+    127
+   ],
+   "place": "Pearl-Sellers' Arcade (20 m, Regio X Palatium)",
+   "routes": 3,
+   "kinds": {
+    "blocked (wall)": 4
+   },
+   "parts": [
+    "graph"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    183.3,
+    11.7,
+    113.4
+   ],
+   "place": "Pearl-Sellers' Arcade (13 m, Regio VIII Forum Romanum)",
+   "routes": 3,
+   "kinds": {
+    "blocked (wall)": 3
+   },
+   "parts": [
+    "graph"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    522.7,
+    12,
+    197.6
+   ],
+   "place": "Great Gladiatorial School (27 m, Regio III Isis et Serapis)",
+   "routes": 3,
+   "kinds": {
+    "blocked (wall)": 3
+   },
+   "parts": [
+    "lead-out",
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -4.7,
+    -107.8,
+    -215.8
+   ],
+   "place": "Trajan's Column (2 m, Regio VIII Forum Romanum)",
+   "routes": 3,
+   "kinds": {
+    "needs a jump/mantle (low)": 7,
+    "climb (mantle 0.51 m)": 1,
+    "needs a jump/mantle (wall)": 2,
+    "climb (mantle 0.54 m)": 1,
+    "climb (mantle 0.57 m)": 1,
+    "climb (mantle 0.64 m)": 1,
+    "blocked (low)": 2,
+    "climb (mantle 0.55 m)": 1,
+    "climb (mantle 0.36 m)": 1,
+    "climb (mantle 0.59 m)": 1,
+    "climb (mantle 0.38 m)": 1
+   },
+   "parts": [
+    "lead-in",
+    "graph"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -106.7,
+    6.5,
+    317.9
+   ],
+   "place": "The Inn at the Starting Gates (6 m, Regio XI Circus Maximus)",
+   "routes": 4,
+   "kinds": {
+    "blocked (wall)": 37,
+    "off-line": 3
+   },
+   "parts": [
+    "lead-in",
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -353.7,
+    2.2,
+    175.4
+   ],
+   "place": "Obelisk of the Island (42 m, Regio XIV Transtiberim)",
+   "routes": 4,
+   "kinds": {
+    "blocked (slide)": 4
+   },
+   "parts": [
+    "graph"
+   ]
+  },
+  {
+   "sev": "major",
+   "at": [
+    284.3,
+    7.9,
+    548.5
+   ],
+   "place": "Crossroads Shrine by the Capena Gate (3 m, Regio XI Circus Maximus)",
+   "routes": 7,
+   "kinds": {
+    "route line: drop -1.16": 1,
+    "route line: drop -1.17": 2,
+    "route line: drop -1.14": 1,
+    "route line: drop -1.15": 2,
+    "route line: through 2.2": 1
+   },
+   "parts": [
+    "graph"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    100.7,
+    10.5,
+    -224.6
+   ],
+   "place": "Market Halls of Trajan (27 m, Regio VIII Forum Romanum)",
+   "routes": 3,
+   "kinds": {
+    "blocked (wall)": 3
+   },
+   "parts": [
+    "graph"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    421.1,
+    22.8,
+    31.9
+   ],
+   "place": "Baths of Titus (43 m, Regio III Isis et Serapis)",
+   "routes": 3,
+   "kinds": {
+    "needs a jump/mantle (wall)": 2,
+    "blocked (wall)": 3,
+    "climb (mantle 1.28 m)": 2
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    102.9,
+    18.4,
+    -287.9
+   ],
+   "place": "Market Halls of Trajan (90 m, Regio VII Via Lata)",
+   "routes": 4,
+   "kinds": {
+    "blocked (wall)": 4
+   },
+   "parts": [
+    "graph"
+   ]
+  },
+  {
+   "sev": "major",
+   "at": [
+    156.6,
+    9.2,
+    -76.1
+   ],
+   "place": "Temple of Minerva (18 m, Regio IV Templum Pacis)",
+   "routes": 7,
+   "kinds": {
+    "route line: drop -11.07": 1,
+    "route line: steep 4.67": 1,
+    "route line: through 2.2": 4,
+    "route line: drop -11.06": 1,
+    "route line: steep 4.85": 1,
+    "route line: drop -10.6": 1,
+    "route line: steep 4.3": 1,
+    "route line: ledge 0.46": 1,
+    "route line: ledge 0.47": 1
+   },
+   "parts": [
+    "graph"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -228.3,
+    6.8,
+    142
+   ],
+   "place": "River Port (16 m, Regio XI Circus Maximus)",
+   "routes": 3,
+   "kinds": {
+    "needs a jump/mantle (low)": 6,
+    "blocked (wall)": 3,
+    "climb (mantle 0.84 m)": 3,
+    "climb (mantle 0.52 m)": 3
+   },
+   "parts": [
+    "graph",
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    309.7,
+    10.3,
+    578.6
+   ],
+   "place": "Beside Dromo’s cart (3 m, Regio I Porta Capena)",
+   "routes": 2,
+   "kinds": {
+    "blocked (wall)": 2
+   },
+   "parts": [
+    "lead-in",
+    "graph"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -58.7,
+    7.2,
+    236.4
+   ],
+   "place": "Bakery of the Velabrum (2 m, Regio XI Circus Maximus)",
+   "routes": 2,
+   "kinds": {
+    "blocked (wall)": 3
+   },
+   "parts": [
+    "lead-in",
+    "graph"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -302.3,
+    2.2,
+    94.1
+   ],
+   "place": "Fabrician Bridge (11 m, Regio IX Circus Flaminius)",
+   "routes": 2,
+   "kinds": {
+    "swim": 2,
+    "blocked (slide)": 2
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -302.8,
+    8,
+    -156.8
+   ],
+   "place": "Minucian Portico (37 m, Regio IX Circus Flaminius)",
+   "routes": 2,
+   "kinds": {
+    "blocked (wall)": 2
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    72.4,
+    10.5,
+    -232.9
+   ],
+   "place": "Market Halls of Trajan (42 m, Regio VIII Forum Romanum)",
+   "routes": 3,
+   "kinds": {
+    "blocked (wall)": 3
+   },
+   "parts": [
+    "graph"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    553.1,
+    12,
+    181.7
+   ],
+   "place": "Ludus Barracks (6 m, Regio III Isis et Serapis)",
+   "routes": 3,
+   "kinds": {
+    "blocked (wall)": 3
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -107.3,
+    7.6,
+    328.8
+   ],
+   "place": "The Inn at the Starting Gates (17 m, Regio XI Circus Maximus)",
+   "routes": 3,
+   "kinds": {
+    "blocked (wall)": 3
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    56,
+    10.6,
+    -139.5
+   ],
+   "place": "Equestrian Statue of Trajan (3 m, Regio VIII Forum Romanum)",
+   "routes": 2,
+   "kinds": {
+    "needs a jump/mantle (slide)": 1,
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "graph",
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    53,
+    10.5,
+    -218.1
+   ],
+   "place": "Basilica Ulpia (46 m, Regio VIII Forum Romanum)",
+   "routes": 2,
+   "kinds": {
+    "blocked (wall)": 2
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    305.9,
+    9.3,
+    -103
+   ],
+   "place": "The Lead-worker’s Yard (27 m, Regio IV Templum Pacis)",
+   "routes": 2,
+   "kinds": {
+    "blocked (wall)": 2
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    260.3,
+    12.6,
+    -127.4
+   ],
+   "place": "The Lead-worker’s Yard (25 m, Regio IV Templum Pacis)",
+   "routes": 2,
+   "kinds": {
+    "blocked (wall)": 2
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    107.8,
+    21.5,
+    -278.8
+   ],
+   "place": "Market Halls of Trajan (82 m, Regio VII Via Lata)",
+   "routes": 2,
+   "kinds": {
+    "blocked (wall)": 2
+   },
+   "parts": [
+    "graph"
+   ]
+  },
+  {
+   "sev": "major",
+   "at": [
+    -80.8,
+    7.5,
+    306.7
+   ],
+   "place": "The Inn at the Starting Gates (18 m, Regio XI Circus Maximus)",
+   "routes": 5,
+   "kinds": {
+    "route line: through 2.2": 4,
+    "route line: drop -7.64": 2,
+    "route line: drop -7.65": 2,
+    "route line: steep 3.46": 1,
+    "route line: drop -7.66": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    350.9,
+    12.4,
+    656.8
+   ],
+   "place": "Temple of Honour and Virtue (18 m, Regio I Porta Capena)",
+   "routes": 2,
+   "kinds": {
+    "blocked (wall)": 2
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    514.9,
+    12,
+    190.9
+   ],
+   "place": "Great Gladiatorial School (22 m, Regio III Isis et Serapis)",
+   "routes": 2,
+   "kinds": {
+    "blocked (wall)": 4
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -293.3,
+    6.5,
+    83.3
+   ],
+   "place": "Fabrician Bridge (10 m, Regio IX Circus Flaminius)",
+   "routes": 2,
+   "kinds": {
+    "blocked (low)": 2,
+    "needs a jump/mantle (low)": 1,
+    "climb (mantle 0.93 m)": 1
+   },
+   "parts": [
+    "graph",
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    152.4,
+    10.5,
+    -94.5
+   ],
+   "place": "Temple of Minerva (25 m, Regio IV Templum Pacis)",
+   "routes": 2,
+   "kinds": {
+    "blocked (wall)": 2
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    84.2,
+    9,
+    -19.6
+   ],
+   "place": "Basilica Aemilia (16 m, Regio VIII Forum Romanum)",
+   "routes": 2,
+   "kinds": {
+    "blocked (wall)": 2
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    82.1,
+    9.2,
+    -2.5
+   ],
+   "place": "Basilica Aemilia (5 m, Regio VIII Forum Romanum)",
+   "routes": 2,
+   "kinds": {
+    "blocked (wall)": 2
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -320.9,
+    8.2,
+    138.4
+   ],
+   "place": "Temple of Aesculapius (4 m, Regio XIV Transtiberim)",
+   "routes": 2,
+   "kinds": {
+    "needs a jump/mantle (wall)": 1,
+    "climb (mantle 1.53 m)": 2,
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -334,
+    7.5,
+    -166.1
+   ],
+   "place": "Four Temples of the Old Minucian Portico (41 m, Regio IX Circus Flaminius)",
+   "routes": 2,
+   "kinds": {
+    "blocked (wall)": 2
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    98.1,
+    9.7,
+    95.3
+   ],
+   "place": "Rise of Victory (1 m, Regio VIII Forum Romanum)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "graph"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -31.6,
+    7.4,
+    193.3
+   ],
+   "place": "Etruscan Street (8 m, Regio X Palatium)",
+   "routes": 1,
+   "kinds": {
+    "needs a jump/mantle (wall)": 1,
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -41.7,
+    7.2,
+    191.7
+   ],
+   "place": "Etruscan Street (16 m, Regio X Palatium)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -249.3,
+    6,
+    133.4
+   ],
+   "place": "River Port (11 m, Regio XI Circus Maximus)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    504.1,
+    12,
+    191.2
+   ],
+   "place": "Great Gladiatorial School (29 m, Regio III Isis et Serapis)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    434.7,
+    22.9,
+    16.9
+   ],
+   "place": "Before the Baths of Titus (19 m, Regio III Isis et Serapis)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    291.2,
+    10.5,
+    -104.1
+   ],
+   "place": "The Lead-worker’s Yard (14 m, Regio IV Templum Pacis)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    310.6,
+    8,
+    -74.6
+   ],
+   "place": "The Lead-worker’s Yard (48 m, Regio IV Templum Pacis)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -49,
+    7.4,
+    250.2
+   ],
+   "place": "Insula of Tuccius the Cooper (13 m, Regio XI Circus Maximus)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -104.8,
+    7.6,
+    339.9
+   ],
+   "place": "The Aediles’ Clerk (20 m, Regio XI Circus Maximus)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -9.6,
+    7.9,
+    111.7
+   ],
+   "place": "The Silver Pig (20 m, Regio VIII Forum Romanum)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -307.1,
+    6.6,
+    138.3
+   ],
+   "place": "Daos’ Bench on the Island (4 m, Regio XIV Transtiberim)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "major",
+   "at": [
+    102.5,
+    17.8,
+    -288.4
+   ],
+   "place": "Market Halls of Trajan (91 m, Regio VII Via Lata)",
+   "routes": 6,
+   "kinds": {
+    "route line: ledge 0.48": 2,
+    "route line: ledge 0.52": 1,
+    "route line: ledge 0.57": 1,
+    "route line: ledge 0.78": 1,
+    "route line: steep 1.27": 1,
+    "route line: ledge 0.95": 3,
+    "route line: ledge 0.94": 2,
+    "route line: ledge 0.65": 3,
+    "route line: ledge 0.64": 2,
+    "route line: steep 1.74": 2,
+    "route line: ledge 0.63": 4,
+    "route line: steep 1.23": 1,
+    "route line: ledge 0.96": 4,
+    "route line: ledge 0.77": 1,
+    "route line: steep 2.06": 1,
+    "route line: ledge 0.66": 1,
+    "route line: ledge 0.54": 1,
+    "route line: ledge 0.49": 3,
+    "route line: ledge 0.59": 1,
+    "route line: ledge 0.5": 2,
+    "route line: ledge 0.71": 1,
+    "route line: ledge 0.98": 3,
+    "route line: steep 1.43": 1,
+    "route line: ledge 0.92": 1,
+    "route line: ledge 0.68": 1,
+    "route line: ledge 0.62": 3,
+    "route line: steep 1.62": 1,
+    "route line: steep 1.88": 1,
+    "route line: ledge 0.55": 1,
+    "route line: ledge 0.58": 1,
+    "route line: steep 1.36": 1,
+    "route line: ledge 0.97": 3,
+    "route line: ledge 0.79": 1,
+    "route line: ledge 0.61": 1,
+    "route line: steep 1.53": 1
+   },
+   "parts": [
+    "graph"
+   ]
+  },
+  {
+   "sev": "major",
+   "at": [
+    108.6,
+    22.5,
+    -278.4
+   ],
+   "place": "Market Halls of Trajan (82 m, Regio VII Via Lata)",
+   "routes": 6,
+   "kinds": {
+    "route line: steep 1.26": 1,
+    "route line: ledge 0.59": 1,
+    "route line: ledge 0.57": 2,
+    "route line: ledge 0.53": 1,
+    "route line: ledge 0.5": 1,
+    "route line: steep 1.24": 1,
+    "route line: steep 1.06": 1,
+    "route line: steep 1.29": 1,
+    "route line: ledge 0.55": 1,
+    "route line: ledge 0.52": 1,
+    "route line: steep 1.28": 1
+   },
+   "parts": [
+    "graph"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    264.9,
+    12.6,
+    -119.3
+   ],
+   "place": "The Lead-worker’s Yard (17 m, Regio IV Templum Pacis)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "graph"
+   ]
+  },
+  {
+   "sev": "major",
+   "at": [
+    207.2,
+    17.2,
+    125.9
+   ],
+   "place": "Arch of Titus (2 m, Regio X Palatium)",
+   "routes": 4,
+   "kinds": {
+    "route line: drop -9.24": 2,
+    "route line: steep 3.85": 1,
+    "route line: drop -8.96": 2,
+    "route line: steep 3.95": 1,
+    "route line: steep 3.87": 1
+   },
+   "parts": [
+    "graph"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    364,
+    12,
+    686.2
+   ],
+   "place": "Temple of Honour and Virtue (20 m, Regio I Porta Capena)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -38.1,
+    7.2,
+    220.2
+   ],
+   "place": "Ground-floor wall behind the taberna (10 m, Regio X Palatium)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    49,
+    12,
+    -296.9
+   ],
+   "place": "Ulpian Greek Library (86 m, Regio VII Via Lata)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    91.4,
+    7.9,
+    40.4
+   ],
+   "place": "Temple of Divus Julius (9 m, Regio VIII Forum Romanum)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -276.7,
+    6,
+    98.6
+   ],
+   "place": "Fabrician Bridge (25 m, Regio IX Circus Flaminius)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -268.5,
+    6.1,
+    96.8
+   ],
+   "place": "Fabrician Bridge (33 m, Regio IX Circus Flaminius)",
+   "routes": 1,
+   "kinds": {
+    "off-line": 1,
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    468,
+    11.8,
+    174.7
+   ],
+   "place": "Ludus Armory (25 m, Regio III Isis et Serapis)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    573.7,
+    11.1,
+    100.5
+   ],
+   "place": "Buried Golden House (49 m, Regio III Isis et Serapis)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 13,
+    "off-line": 1
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    561.2,
+    12.5,
+    125.4
+   ],
+   "place": "Buried Golden House (53 m, Regio III Isis et Serapis)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    159.3,
+    12.9,
+    -113.8
+   ],
+   "place": "Temple of Mars the Avenger (32 m, Regio IV Templum Pacis)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1,
+    "climb (clamber 0.72 m)": 1
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -38.4,
+    7.4,
+    286.7
+   ],
+   "place": "Insula of Tuccius the Cooper (30 m, Regio XI Circus Maximus)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -38.3,
+    7.2,
+    274.3
+   ],
+   "place": "Insula of Tuccius the Cooper (17 m, Regio XI Circus Maximus)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    371.2,
+    14.2,
+    670.7
+   ],
+   "place": "Temple of Honour and Virtue (7 m, Regio I Porta Capena)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1,
+    "climb (mantle 1.50 m)": 1
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    1.2,
+    8.7,
+    259.3
+   ],
+   "place": "Lupercal Cave (38 m, Regio X Palatium)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -22,
+    7.3,
+    232.6
+   ],
+   "place": "Ground-floor wall behind the taberna (19 m, Regio X Palatium)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "graph"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    5.9,
+    8.4,
+    -45.7
+   ],
+   "place": "Prison and Tullianum (4 m, Regio VIII Forum Romanum)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -435.2,
+    6.8,
+    39.6
+   ],
+   "place": "Temple of Castor in the Circus Flaminius (62 m, Regio IX Circus Flaminius)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -98.6,
+    6.4,
+    243.9
+   ],
+   "place": "Velabrum Basin (24 m, Regio XI Circus Maximus)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -213.7,
+    2.5,
+    238.6
+   ],
+   "place": "Outfall of the Great Drain (8 m, Regio XI Circus Maximus)",
+   "routes": 1,
+   "kinds": {
+    "swim": 1,
+    "needs a jump/mantle (wall)": 1,
+    "off-line": 1,
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    106.6,
+    7.2,
+    416.7
+   ],
+   "place": "The Circus wall with the fans’ graffiti (20 m, Regio XI Circus Maximus)",
+   "routes": 1,
+   "kinds": {
+    "needs a jump/mantle (low)": 1,
+    "off-line": 1,
+    "blocked (wall)": 1,
+    "climb (mantle 0.93 m)": 1
+   },
+   "parts": [
+    "graph",
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    29.4,
+    7.2,
+    379.7
+   ],
+   "place": "Imperial Box and Shrine of the Circus (28 m, Regio XI Circus Maximus)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    29.2,
+    12,
+    369.4
+   ],
+   "place": "Imperial Box and Shrine of the Circus (32 m, Regio XI Circus Maximus)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1,
+    "climb (mantle 0.77 m)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    27.4,
+    7.9,
+    340.4
+   ],
+   "place": "The goat-milk corner (18 m, Regio X Palatium)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    18.3,
+    7.8,
+    128.8
+   ],
+   "place": "Clothier in the Horrea Agrippiana (9 m, Regio VIII Forum Romanum)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    20.1,
+    7.8,
+    76.9
+   ],
+   "place": "Temple of Divus Augustus (14 m, Regio VIII Forum Romanum)",
+   "routes": 1,
+   "kinds": {
+    "off-line": 1,
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    14.7,
+    7.8,
+    51.2
+   ],
+   "place": "Basilica Julia (13 m, Regio VIII Forum Romanum)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    16.5,
+    7.9,
+    0.5
+   ],
+   "place": "Before the Rostra (2 m, Regio VIII Forum Romanum)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -67.6,
+    7.4,
+    176.3
+   ],
+   "place": "Watch Post of the Vigiles, Velabrum (4 m, Regio VIII Forum Romanum)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    -22.2,
+    7.3,
+    161
+   ],
+   "place": "Light well of the burned taberna (11 m, Regio VIII Forum Romanum)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    277.7,
+    12.8,
+    -172.2
+   ],
+   "place": "The Subura (11 m, Regio IV Templum Pacis)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    307.8,
+    12.6,
+    -144.3
+   ],
+   "place": "The Lead-worker’s Yard (43 m, Regio IV Templum Pacis)",
+   "routes": 1,
+   "kinds": {
+    "off-line": 1,
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    392.7,
+    11.7,
+    113.8
+   ],
+   "place": "Flavian Amphitheatre (40 m, Regio III Isis et Serapis)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    374.3,
+    11.7,
+    157
+   ],
+   "place": "Flavian Amphitheatre (22 m, Regio III Isis et Serapis)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-in"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    325.2,
+    16.3,
+    115.8
+   ],
+   "place": "Sweating Turning-Post Fountain (51 m, Regio III Isis et Serapis)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    314.3,
+    17.4,
+    105.9
+   ],
+   "place": "Vestibule of the Golden House (51 m, Regio III Isis et Serapis)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    300.5,
+    17.7,
+    98.5
+   ],
+   "place": "Vestibule of the Golden House (39 m, Regio III Isis et Serapis)",
+   "routes": 1,
+   "kinds": {
+    "off-line": 1,
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    289.7,
+    17.4,
+    82.5
+   ],
+   "place": "Crossroads Shrine of Acilius (18 m, Regio III Isis et Serapis)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    260.2,
+    13.3,
+    54.2
+   ],
+   "place": "Crossroads Shrine of Acilius (24 m, Regio IV Templum Pacis)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    234.5,
+    12,
+    29.4
+   ],
+   "place": "Spice Warehouses (54 m, Regio IV Templum Pacis)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    214.7,
+    12,
+    11.6
+   ],
+   "place": "Spice Warehouses (57 m, Regio IV Templum Pacis)",
+   "routes": 1,
+   "kinds": {
+    "needs a jump/mantle (low)": 1,
+    "blocked (wall)": 1,
+    "climb (mantle 0.60 m)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    202.8,
+    9.6,
+    -1.2
+   ],
+   "place": "Temple of Peace (50 m, Regio IV Templum Pacis)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    160.7,
+    9.7,
+    -47
+   ],
+   "place": "Temple of Minerva (29 m, Regio IV Templum Pacis)",
+   "routes": 1,
+   "kinds": {
+    "off-line": 1,
+    "blocked (low)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    144.4,
+    10.1,
+    -58.2
+   ],
+   "place": "Temple of Minerva (16 m, Regio IV Templum Pacis)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  },
+  {
+   "sev": "blocker",
+   "at": [
+    138.6,
+    9.7,
+    -63.9
+   ],
+   "place": "Temple of Minerva (9 m, Regio IV Templum Pacis)",
+   "routes": 1,
+   "kinds": {
+    "blocked (wall)": 1
+   },
+   "parts": [
+    "lead-out"
+   ]
+  }
+ ]
+}
