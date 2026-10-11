@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { compareColumn, compareWall, groundBand, terrainBilinear, terrainDrawnHeight, terrainOtherHeight } from './collisionRules';
+import { compareColumn, compareWall, findSeams, groundBand, isOverhead, severityOf, terrainBilinear, terrainDrawnHeight, terrainOtherHeight } from './collisionRules';
 
 const flat = (y: number, tag = 't') => ({ y, ny: 1, tag });
+const under = (y: number, tag = 'u') => ({ y, ny: -1, tag });
 
 describe('compareColumn', () => {
   it('agrees when the collider is where the picture is', () => {
@@ -13,11 +14,36 @@ describe('compareColumn', () => {
     expect(f.delta).toBeCloseTo(0.2);
     expect(f.phys).toBe('city:b1:box');
   });
+  it('reports a ledge when the collider is more than a step above the drawn ground', () => {
+    const f = compareColumn([flat(10.0, 'paving')], [flat(11.3, 'landmark:x:box')], 9.9)!;
+    expect(f.kind).toBe('ledge');
+    expect(f.delta).toBeCloseTo(1.3);
+  });
   it('reports a sink when a drawn kerb has no collider', () => {
     const f = compareColumn([flat(10.15, 'kerb'), flat(10.0, 'road'), flat(9.9, 'terrain')], [flat(10.0, 'road:trimesh')], 9.9)!;
     expect(f.kind).toBe('sink');
     expect(f.delta).toBeCloseTo(-0.15);
     expect(f.vis).toBe('kerb');
+  });
+  it('reports a ghost when a drawn counter has no collider at all', () => {
+    const f = compareColumn([flat(10.9, 'counter'), flat(9.9, 'terrain')], [flat(9.9, 'terrain:heightfield')], 9.9)!;
+    expect(f.kind).toBe('ghost');
+    expect(f.delta).toBeCloseTo(-1.0);
+  });
+  it('does not count an overhead slab (a gallery floor) the player walks under', () => {
+    const gallery = [flat(13.2, 'gallery'), under(13.08, 'gallery'), flat(10.0, 'paving')];
+    expect(isOverhead(gallery[0], gallery, 10.0)).toBe(true);
+    expect(compareColumn(gallery, [flat(10.0, 'paving:trimesh')], 10.0)).toBeNull();
+    // A slab too low to walk under is a solid in the way.
+    const bench = [flat(10.5, 'bench'), under(10.4, 'bench'), flat(10.0, 'paving')];
+    expect(isOverhead(bench[0], bench, 10.0)).toBe(false);
+    expect(compareColumn(bench, [flat(10.0, 'paving:trimesh')], 10.0)!.kind).toBe('ghost');
+    // A roof plane or an awning (no underside) with nothing drawn below it down to the floor.
+    expect(compareColumn([flat(12.9, 'roof'), flat(10.0, 'paving')], [flat(10.0, 'paving:trimesh')], 10.0)).toBeNull();
+    // A slab with its underside at head height only clips the head.
+    expect(compareColumn([flat(11.9, 'landing'), under(11.7, 'landing'), flat(10.0, 'paving')], [flat(10.0, 'paving:trimesh')], 10.0)!.kind).toBe('low-overhead');
+    // A tall drawn solid with surfaces down to the floor is in the way.
+    expect(compareColumn([flat(12.4, 'statue head'), flat(11.0, 'shoulder'), flat(10.0, 'paving')], [flat(10.0, 'paving:trimesh')], 10.0)!.kind).toBe('ghost');
   });
   it('tells a ramp under drawn steps apart from a real offset', () => {
     const ramp = { y: 10.08, ny: 0.9, tag: 'stairs:trimesh' };
@@ -31,6 +57,9 @@ describe('compareColumn', () => {
   it('ignores roofs: only the ground band counts', () => {
     expect(groundBand([flat(20), flat(10), flat(8)], 9.9).map((s) => s.y)).toEqual([10]);
     expect(compareColumn([flat(20, 'roof'), flat(10, 'floor')], [flat(10, 'floor:box'), flat(20.5, 'roof:box')], 9.9)).toBeNull();
+  });
+  it('keeps a surface exactly at the band edge in both lists', () => {
+    expect(compareColumn([flat(15.2, 'floor')], [flat(15.2, 'floor:trimesh'), flat(12, 'terrain')], 12)).toBeNull();
   });
   it('ignores ceilings (down-facing) and steep faces', () => {
     expect(compareColumn([flat(10, 'floor'), { y: 12, ny: -1, tag: 'ceiling' }], [flat(10, 'f'), { y: 11, ny: 0.1, tag: 'wall' }], 9.9)).toBeNull();
@@ -54,6 +83,39 @@ describe('compareWall', () => {
   it('finds a ghost wall the body passes through', () => {
     expect(compareWall(null, { dist: 2, tag: 'v' }, 6)!.kind).toBe('ghost');
     expect(compareWall({ dist: 3, tag: 'p' }, { dist: 2, tag: 'v' }, 6)!.gap).toBeCloseTo(1);
+  });
+});
+
+describe('findSeams', () => {
+  it('finds a collider lip where the drawn ground is smooth', () => {
+    const s = findSeams([10, 10, 10.05, 10.05], [10, 10, 10, 10]);
+    expect(s).toHaveLength(1);
+    expect(s[0]).toMatchObject({ kind: 'lip', at: 2 });
+    expect(s[0].dPhys).toBeCloseTo(0.05);
+  });
+  it('finds a crack between two collider pieces', () => {
+    const s = findSeams([10, 10, 9.6, 10, 10], [10, 10, 10, 10, 10]);
+    expect(s.map((f) => f.kind)).toEqual(['crack']);
+  });
+  it('reports a drawn step over a smooth collider as a look only', () => {
+    expect(findSeams([10, 10, 10], [10, 10, 10.15]).map((f) => f.kind)).toEqual(['drawn-step']);
+  });
+  it('is quiet where both agree (a kerb with its own collider)', () => {
+    expect(findSeams([10, 10, 10.15, 10.15], [10, 10, 10.15, 10.15])).toEqual([]);
+  });
+  it('accepts a kerb collider a sample or two off the drawn kerb, not more', () => {
+    expect(findSeams([10, 10, 10, 10.15, 10.15, 10.15], [10, 10.15, 10.15, 10.15, 10.15, 10.15])).toEqual([]);
+    const far = findSeams([10, 10, 10, 10, 10, 10.15, 10.15], [10, 10.15, 10.15, 10.15, 10.15, 10.15, 10.15]);
+    expect(far.map((f) => f.kind).sort()).toEqual(['drawn-step', 'lip']);
+  });
+});
+
+describe('severityOf', () => {
+  it('ranks what a player feels first', () => {
+    expect(severityOf('fallthrough', 1)).toBe('blocker');
+    expect(severityOf('ledge', 1.3, 20)).toBe('major');
+    expect(severityOf('sink', 0.05, 40)).toBe('minor');
+    expect(severityOf('lip', 0.04)).toBe('minor');
   });
 });
 
