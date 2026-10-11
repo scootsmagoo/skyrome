@@ -8,6 +8,7 @@
  */
 import { WORLD_SCALE } from '../coords';
 import { chain, footOn, indexSegments, nearSegments, quayInfluence, resolveQuays, TIBER_QUAYS, type TerrainQuay } from './riverbanks';
+import { terrainProfile, type TerrainProfile } from './profile';
 
 export type { TerrainQuay } from './riverbanks';
 
@@ -75,6 +76,8 @@ export interface HeightmapOptions {
   seed?: number;
   /** Stone quays along rivers (default: the Tiber quays of AD 113; they only apply to a river with a matching id). */
   quays?: readonly TerrainQuay[];
+  /** Terrain profile (profile.ts); default `terrainProfile()` (the URL, the environment, else v2). */
+  profile?: TerrainProfile;
 }
 
 /** Signed distance from p to a closed polygon (negative inside). */
@@ -509,13 +512,19 @@ export class Heightmap {
    * renderer (crisp road / pad edges, surfaces) and the water module. Null for hand-made grids.
    */
   features: HeightmapFeatures | null = null;
+  /** The terrain profile this ground was built for (profile.ts); the drawn mesh reads it too. */
+  readonly profile: TerrainProfile;
+  /** v2: `heightAt` interpolates on the b–c triangles (the physics' and the drawn mesh's). */
+  private readonly bc: boolean;
 
-  constructor(minX: number, minZ: number, spacing: number, nx: number, nz: number) {
+  constructor(minX: number, minZ: number, spacing: number, nx: number, nz: number, profile: TerrainProfile = terrainProfile()) {
     this.minX = minX;
     this.minZ = minZ;
     this.spacing = spacing;
     this.nx = nx;
     this.nz = nz;
+    this.profile = profile;
+    this.bc = profile !== 'v1';
     this.heights = new Float32Array(nx * nz);
     this.roadMask = new Float32Array(nx * nz);
     this.padMask = new Float32Array(nx * nz);
@@ -528,7 +537,11 @@ export class Heightmap {
     return this.minZ + (this.nz - 1) * this.spacing;
   }
 
-  /** Bilinear height at game (x, z). Clamped at the edges. */
+  /**
+   * Ground height at game (x, z), clamped at the edges. v2: on the triangles the player stands on
+   * and sees, each cell split along b–c (from (x+1, z) to (x, z+1)) as Rapier's heightfield splits
+   * it and the drawn patch is indexed (`patchGeometry`). v1: bilinear, between the two.
+   */
   heightAt(x: number, z: number): number {
     const fx = Math.min(Math.max((x - this.minX) / this.spacing, 0), this.nx - 1.0001);
     const fz = Math.min(Math.max((z - this.minZ) / this.spacing, 0), this.nz - 1.0001);
@@ -538,6 +551,12 @@ export class Heightmap {
     const tz = fz - iz;
     const i = iz * this.nx + ix;
     const h = this.heights;
+    if (this.bc) {
+      // Triangle (a, b, c) holds the corner (x, z); (b, d, c) the corner (x+1, z+1).
+      if (tx + tz <= 1) return h[i] + (h[i + 1] - h[i]) * tx + (h[i + this.nx] - h[i]) * tz;
+      const d = h[i + this.nx + 1];
+      return d + (h[i + this.nx] - d) * (1 - tx) + (h[i + 1] - d) * (1 - tz);
+    }
     const a = h[i] + (h[i + 1] - h[i]) * tx;
     const b = h[i + this.nx] + (h[i + this.nx + 1] - h[i + this.nx]) * tx;
     return a + (b - a) * tz;
@@ -593,7 +612,7 @@ export function buildHeightmap(src: TerrainSource, opts: HeightmapOptions = {}):
   const minZ = b.minZ * S;
   const nx = Math.floor((b.maxX - b.minX) * S / spacing) + 1;
   const nz = Math.floor((b.maxZ - b.minZ) * S / spacing) + 1;
-  const hm = new Heightmap(minX, minZ, spacing, nx, nz);
+  const hm = new Heightmap(minX, minZ, spacing, nx, nz, opts.profile ?? terrainProfile());
   const quays = opts.quays ?? TIBER_QUAYS;
   const natural = makeNaturalElevation(src, { noise: opts.noise, seed: opts.seed, quays });
 
