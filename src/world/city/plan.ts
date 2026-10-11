@@ -19,7 +19,7 @@
 import { Rng, hash2 } from '../../core/Rng';
 import type * as Atlas from '../../data/atlas';
 import { WORLD_SCALE } from '../coords';
-import { footprintPolygon, type P2 } from '../terrain/heightmap';
+import { footprintPolygon, segDist2, signedDistance, type P2 } from '../terrain/heightmap';
 import { CORRIDORS, DISTRICT_LANDMARKS, EXTRA_ROADS, OPEN_SPACES, PINNED_OPEN, QUARTERS, SIGHTLINE_LANDMARKS, SIGHTLINE_RADIUS, SKIPPED_AQUEDUCTS, WILD_LANDMARKS, type Quarter } from './data';
 import { SIDEWALK } from './datum';
 import { auditRoadEnds, probeEnd } from './audit';
@@ -43,6 +43,10 @@ export interface HeightSource {
   minZ?: number;
   spacing?: number;
   profile?: string;
+  /** A Heightmap's grid heights (row-major by z) and size. */
+  heights?: ArrayLike<number>;
+  nx?: number;
+  nz?: number;
   /** A Heightmap's features; their `retaining` runs (terrain v2, GROUND) are read when present. */
   features?: object | null;
 }
@@ -231,6 +235,8 @@ export interface CityPlan {
   retaining?: readonly RetainingRun[];
   /** Where a minor street was cut short at ground too steep for it (trimSteepStreets): its new ends. */
   cliffEnds?: Pt[];
+  /** How far (m) the drawn terrain lies under `heightAt` (9 cm under the atlas roads and the pads, terrainMaterial.ts), or null. */
+  drop?: ((x: number, z: number) => number) | null;
   stats: Record<string, number>;
 }
 
@@ -982,13 +988,91 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
   stats.builtBlocks = blocks.filter((b) => b.kind === 'built').length;
   stats.totalMs = now() - t0;
   lab = mark = depthGrid = bfsQueue = new Int32Array(0);
-  return { grid: g, hy, region, roads, streets, blocks, piazzas, walls, gates, aqueducts, bridges: (atlas.BRIDGES ?? []).map((b) => ({ id: b.id, a: g2(b.a), b: g2(b.b), width: Math.max(3, b.width * S) })), plazas, detailBounds, detailRects, inDetail, mergeCell, landmarkCategory: atlas.LANDMARKS.map((l) => l.category), landmarkPolys: lmPolys.filter((l) => l.solid).map((l) => ({ index: l.index, id: l.lm.id, category: l.lm.category, poly: l.poly })), corridor: (x, z) => corridorAt(x, z).w > 0.5, roadDetours, ground: groundGrid(hm), retaining: retainingOf(hm), cliffEnds, stats };
+  return { grid: g, hy, region, roads, streets, blocks, piazzas, walls, gates, aqueducts, bridges: (atlas.BRIDGES ?? []).map((b) => ({ id: b.id, a: g2(b.a), b: g2(b.b), width: Math.max(3, b.width * S) })), plazas, detailBounds, detailRects, inDetail, mergeCell, landmarkCategory: atlas.LANDMARKS.map((l) => l.category), landmarkPolys: lmPolys.filter((l) => l.solid).map((l) => ({ index: l.index, id: l.lm.id, category: l.lm.category, poly: l.poly })), corridor: (x, z) => corridorAt(x, z).w > 0.5, roadDetours, ground: groundGrid(hm), retaining: retainingOf(hm), cliffEnds, drop: drawnDrop(hm), stats };
 }
 
 /** The heightmap's retaining runs (GROUND's `features.retaining`, terrain v2), or none. */
 function retainingOf(hm: HeightSource): readonly RetainingRun[] {
   const r = (hm.features as { retaining?: unknown } | null | undefined)?.retaining;
   return Array.isArray(r) ? (r as RetainingRun[]) : [];
+}
+
+/** How deep the drawn terrain sinks under paved roads and pads (terrainMaterial.ts), and over what signed distance to their edge it fades. */
+const DRAWN_DROP = 0.09;
+const DROP_FROM = 0.75, DROP_TO = -0.25;
+
+/**
+ * The drawn terrain's drop under `heightAt`, as terrainMaterial.ts draws the leaf level: at every
+ * lattice vertex DRAWN_DROP × smoothstep(0.75, −0.25, d) of its signed distance d to the nearest
+ * basalt road's band (or flight of steps), or to the nearest pad (landmark pads, unpaved roads) —
+ * the fields terrainData.ts bakes —, linear over the lattice triangles the mesh draws (b–c under
+ * terrain v2, a–d under v1). Computed per vertex on demand. (Unpaved paths and quay tops, also
+ * pads in terrainData, are left out: none lies under the city's streets.) Null without features.
+ */
+export function drawnDrop(hm: HeightSource): ((x: number, z: number) => number) | null {
+  const feat = hm.features as { roads?: readonly { points: readonly P2[]; width: number; paving?: string }[]; pads?: readonly { polygon: readonly P2[] }[] } | null | undefined;
+  if (!feat || typeof hm.minX !== 'number' || typeof hm.minZ !== 'number' || typeof hm.spacing !== 'number') return null;
+  const S = WORLD_SCALE, x0 = hm.minX, z0 = hm.minZ, sp = hm.spacing, bc = hm.profile !== 'v1';
+  const reach = DROP_FROM + 0.01;
+  type Seg = { ax: number; az: number; bx: number; bz: number; half: number; road: boolean };
+  type PadP = { poly: P2[]; minX: number; minZ: number; maxX: number; maxZ: number };
+  const B = 32;
+  const segs = new Map<number, Seg[]>(), pads = new Map<number, PadP[]>();
+  const key = (bx: number, bz: number) => (bz + 32768) * 65536 + bx + 32768;
+  const put = <T>(m: Map<number, T[]>, a: number, b: number, c: number, d: number, v: T) => {
+    for (let bz = Math.floor(b / B); bz <= Math.floor(d / B); bz++)
+      for (let bx = Math.floor(a / B); bx <= Math.floor(c / B); bx++) {
+        const k = key(bx, bz);
+        const l = m.get(k);
+        if (l) l.push(v);
+        else m.set(k, [v]);
+      }
+  };
+  for (const r of feat.roads ?? []) {
+    const half = (r.width * S) / 2, road = (r.paving ?? 'basalt') === 'basalt' || r.paving === 'steps';
+    for (let k = 0; k + 1 < r.points.length; k++) {
+      const ax = r.points[k][0] * S, az = r.points[k][1] * S, bx = r.points[k + 1][0] * S, bz = r.points[k + 1][1] * S;
+      const m = half + reach;
+      put(segs, Math.min(ax, bx) - m, Math.min(az, bz) - m, Math.max(ax, bx) + m, Math.max(az, bz) + m, { ax, az, bx, bz, half, road });
+    }
+  }
+  for (const p of feat.pads ?? []) {
+    const poly = p.polygon.map((q) => [q[0] * S, q[1] * S] as P2);
+    const b = polyBounds(poly as Pt[]);
+    put(pads, b.minX - reach, b.minZ - reach, b.maxX + reach, b.maxZ + reach, { poly, ...b });
+  }
+  const ss = (d: number) => {
+    const t = Math.min(1, Math.max(0, (d - DROP_FROM) / (DROP_TO - DROP_FROM)));
+    return t * t * (3 - 2 * t);
+  };
+  const cache = new Map<number, number>();
+  const at = (i: number, j: number): number => {
+    const k = j * 1048576 + i;
+    let v = cache.get(k);
+    if (v !== undefined) return v;
+    const x = x0 + i * sp, z = z0 + j * sp;
+    let rd = Infinity, pd = Infinity;
+    const bk = key(Math.floor(x / B), Math.floor(z / B));
+    for (const s of segs.get(bk) ?? []) {
+      const d = Math.sqrt(segDist2(x, z, s.ax, s.az, s.bx, s.bz)) - s.half;
+      if (s.road) rd = Math.min(rd, d);
+      else pd = Math.min(pd, d);
+    }
+    for (const p of pads.get(bk) ?? []) {
+      if (x < p.minX - reach || x > p.maxX + reach || z < p.minZ - reach || z > p.maxZ + reach) continue;
+      pd = Math.min(pd, signedDistance(x, z, p.poly));
+    }
+    v = DRAWN_DROP * Math.max(ss(rd), ss(pd));
+    cache.set(k, v);
+    return v;
+  };
+  return (x: number, z: number) => {
+    const fx = (x - x0) / sp, fz = (z - z0) / sp;
+    const i = Math.floor(fx), j = Math.floor(fz), tx = fx - i, tz = fz - j;
+    const a = at(i, j), b = at(i + 1, j), c = at(i, j + 1), d = at(i + 1, j + 1);
+    if (bc) return tx + tz <= 1 ? a + (b - a) * tx + (c - a) * tz : d + (c - d) * (1 - tx) + (b - d) * (1 - tz);
+    return tz >= tx ? a + (d - c) * tx + (c - a) * tz : a + (b - a) * tx + (d - b) * tz;
+  };
 }
 
 /** The lattice `heightAt` is linear on (a terrain v2 Heightmap), else null. */

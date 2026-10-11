@@ -465,11 +465,16 @@ export interface ConformOpts {
   seam?: ((a: SV, b: SV) => boolean) | null;
   /** Skirts under the open edges (default true). */
   skirts?: boolean;
-  /** An open edge no higher than this over the ground gets no skirt (default SKIRT_MIN)... */
+  /** An open edge no higher than this over the drawn ground gets no skirt (default SKIRT_MIN; −1: every open edge). */
   skirtMin?: number;
-  /** ...except where this says the drawn ground drops away (under the atlas roads and the pads). */
-  skirtAlways?: ((x: number, z: number) => boolean) | null;
-  /** Height above the ground of every vertex on an open edge (ground cover: its rim sunk); null keeps theirs. */
+  /**
+   * How far the drawn terrain lies under `heightAt` (it drops 9 cm under the atlas roads and pads,
+   * terrainMaterial.ts; plan.drop). An open edge laid to meet the ground (an apron's or a bevel's
+   * outer edge, at most APRON_FLUSH over it) is lowered by it, so it meets the ground as drawn; skirts
+   * reach under the drawn ground.
+   */
+  drop?: ((x: number, z: number) => number) | null;
+  /** Height above the (drawn) ground of every vertex on an open edge (ground cover: its rim sunk); null keeps theirs. */
   rim?: number | null;
   /** A trimesh collider of the top and the walls, welded (default true). */
   collide?: boolean;
@@ -925,10 +930,19 @@ export function emitSheet(b: MeshBuilder, sheet: Sheet, o: ConformOpts = {}): Sh
     if (!a) byMat.set(m, (a = []));
     return a;
   };
+  // Open edges that meet the ground meet it as drawn: the rim (ground cover), or an edge laid at most
+  // APRON_FLUSH over the ground lowered by the drawn terrain's drop there.
   const rim = o.rim ?? null;
-  const rimSet = rim !== null ? new Set<SV>() : null;
-  if (rimSet) for (const e of open) rimSet.add(e.u).add(e.v);
-  const Y = (v: SV) => v.h + (rimSet?.has(v) ? rim! : v.off);
+  const drop = o.drop ?? null;
+  const edgeOff = new Map<SV, number>();
+  for (const e of open) {
+    for (const v of [e.u, e.v]) {
+      if (edgeOff.has(v)) continue;
+      if (rim !== null) edgeOff.set(v, rim - (drop ? drop(v.x, v.z) : 0));
+      else if (drop && v.off <= APRON_FLUSH + 1e-4) edgeOff.set(v, v.off - drop(v.x, v.z));
+    }
+  }
+  const Y = (v: SV) => v.h + (edgeOff.get(v) ?? v.off);
   const colVerts: number[] = [];
   const colIdx: number[] = [];
   const colKey = new Map<string, number>();
@@ -969,12 +983,14 @@ export function emitSheet(b: MeshBuilder, sheet: Sheet, o: ConformOpts = {}): Sh
   }
   if (o.skirts !== false) {
     const skirtMin = o.skirtMin ?? SKIRT_MIN;
+    /** The ground as drawn. */
+    const G = drop ? (x: number, z: number) => H(x, z) - drop(x, z) : H;
     for (const e of open) {
       const { u, v } = e;
       const yu = Y(u), yv = Y(v);
       const mx = (u.x + v.x) / 2, mz = (u.z + v.z) / 2;
-      const hu = H(u.x, u.z), hv = H(v.x, v.z), hm = H(mx, mz);
-      if (Math.max(yu - hu, yv - hv, (yu + yv) / 2 - hm) <= skirtMin && !o.skirtAlways?.(mx, mz)) continue;
+      const hu = G(u.x, u.z), hv = G(v.x, v.z), hm = G(mx, mz);
+      if (Math.max(yu - hu, yv - hv, (yu + yv) / 2 - hm) <= skirtMin) continue;
       const g = Math.min(hu, hv, hm) - SKIRT_DEPTH;
       if (yu <= g && yv <= g) continue;
       quadFacing(arr(e.mat), u.x, u.z, v.x, v.z, g, g, yu, yv, e.nx, e.nz);

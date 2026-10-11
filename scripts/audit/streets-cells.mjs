@@ -8,6 +8,7 @@
  *
  *   node scripts/audit/streets-cells.mjs [--at x,z;x,z] [--all] [--terrain v1|v2] [--by-src] [--json out.json]
  *
+ * --probe x,z[;x,z]: every drawn triangle over the point (its y, material, source) against heightAt.
  * --by-src: triangles by what built them (the work items' tags: ground-cover, road, street:lane, junction, ...).
  *
  * Default cells: the STREETS cameras of docs/design/solid-ground.md §4 plus the Forum and the spawn.
@@ -21,7 +22,7 @@ import { parseArgs } from './boot.mjs';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const args = parseArgs(process.argv.slice(2));
 // The geometry audit's source tags (withAuditSource) are on only with ?audit.
-if (args['by-src']) globalThis.location = { search: '?audit' };
+if (args['by-src'] || args.probe) globalThis.location = { search: '?audit' };
 if (args.terrain) process.env.SKYROME_TERRAIN = String(args.terrain);
 const T0 = Date.now();
 const log = (...a) => console.log(`[${((Date.now() - T0) / 1000).toFixed(1)}s]`, ...a);
@@ -33,7 +34,8 @@ try {
   const HM = await load('/src/world/terrain/heightmap.ts');
   const { landmarkPads } = await load('/src/world/rome/buildRome.ts');
   const { planCity, scaleBounds } = await load('/src/world/city/plan.ts');
-  const { streetWork } = await load('/src/world/city/roads.ts');
+  const roadsMod = await load('/src/world/city/roads.ts');
+  const { streetWork } = roadsMod;
   const { MeshBuilder } = await load('/src/gfx/MeshBuilder.ts');
   const { withAuditSource } = await load('/src/dev/audit/geomAudit.ts');
   const streets = await load('/src/arch/fabric/streets.ts');
@@ -86,6 +88,23 @@ try {
     if (args.items) for (const p of per.sort((a, b) => b.tris - a.tris).slice(0, 6)) console.log(`   item #${p.k}: ${p.tris} tris ${p.ms} ms ${JSON.stringify(p.stats)}`);
     if (cs) console.log(`   sheets ${JSON.stringify(Object.fromEntries(Object.entries(cs).filter(([, v]) => typeof v === 'number').map(([k, v]) => [k, k === 'maxDev' || k === 'overLen' ? +v.toFixed(4) : Math.round(v)])))}`);
     const tris = b.triangleCount;
+    if (args.probe) {
+      for (const [px, pz] of String(args.probe).split(';').map((q) => q.split(',').map(Number))) {
+        if (`${Math.floor(px / 128)},${Math.floor(pz / 128)}` !== key) continue;
+        console.log(`   probe ${px},${pz}: heightAt ${H(px, pz).toFixed(3)}; paving ${JSON.stringify(roadsMod.cityPavingAt?.(px, pz) ?? [])}`);
+        for (const [mk, geoms] of b.parts) for (const g of geoms) {
+          const a = g.getAttribute('position');
+          for (let i = 0; i + 2 < a.count; i += 3) {
+            const A = [a.getX(i), a.getY(i), a.getZ(i)], B = [a.getX(i + 1), a.getY(i + 1), a.getZ(i + 1)], C = [a.getX(i + 2), a.getY(i + 2), a.getZ(i + 2)];
+            const d = (B[2] - C[2]) * (A[0] - C[0]) + (C[0] - B[0]) * (A[2] - C[2]);
+            if (Math.abs(d) < 1e-12) continue;
+            const u = ((B[2] - C[2]) * (px - C[0]) + (C[0] - B[0]) * (pz - C[2])) / d, v = ((C[2] - A[2]) * (px - C[0]) + (A[0] - C[0]) * (pz - C[2])) / d, w = 1 - u - v;
+            if (u < -1e-6 || v < -1e-6 || w < -1e-6) continue;
+            console.log(`     y ${(u * A[1] + v * B[1] + w * C[1]).toFixed(3)} (+${(u * A[1] + v * B[1] + w * C[1] - H(px, pz)).toFixed(3)})  ${mk.split('|')[0]}  ${g.userData.src ?? ''}`);
+          }
+        }
+      }
+    }
     if (args['by-src']) {
       for (const geoms of b.parts.values()) for (const g of geoms) {
         const src = String(g.userData.src ?? '?').split(':');

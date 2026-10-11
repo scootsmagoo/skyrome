@@ -15,7 +15,7 @@
 import * as THREE from 'three';
 import { Rng } from '../../core/Rng';
 import { withAuditSource } from '../../dev/audit/geomAudit';
-import { APRON, LANE_APRON, RIM_MIN, RIM_SINK, Sheet, buildConformPlaza, buildStairs, buildStreet, emitSheet, makeConv, type Conv, type ConformOpts, type GroundGrid, type SV, type StreetSpec } from '../../arch/fabric/streets';
+import { APRON, LANE_APRON, RIM_MIN, RIM_SINK, Sheet, buildConformPlaza, buildStairs, buildStreet, emitSheet, inConv, makeConv, type Conv, type ConformOpts, type GroundGrid, type SV, type StreetSpec } from '../../arch/fabric/streets';
 import { Draw } from '../../arch/fabric/draw';
 import { compitalShrine } from '../../arch/fabric/shrines';
 import { lacus } from '../../arch/fabric/fountain';
@@ -250,7 +250,7 @@ export class PavingIndex {
   private readonly pieces = new Map<number, Conv[]>();
 
   /** A shape as convex pieces: a band's segments (quads) and its bends (the hull of the joined ends); a polygon as itself or its triangles. */
-  private convsOf(s: PaveShape): Conv[] {
+  piecesOf(s: PaveShape): Conv[] {
     let out = this.pieces.get(s.id);
     if (out) return out;
     out = [];
@@ -307,7 +307,7 @@ export class PavingIndex {
             if (seen.has(id)) continue;
             seen.add(id);
           }
-          for (const c of this.convsOf(s)) if (c.maxX >= minX && c.minX <= maxX && c.maxZ >= minZ && c.minZ <= maxZ) out.push(c);
+          for (const c of this.piecesOf(s)) if (c.maxX >= minX && c.minX <= maxX && c.maxZ >= minZ && c.minZ <= maxZ) out.push(c);
         }
       }
     return out;
@@ -384,6 +384,13 @@ function hull(pts: Vec2[]): Vec2[] {
 /** The city's paving of the last `streetWork` (the terrain dressing asks it where not to lay kerbstones). */
 let lastPaving: PavingIndex | null = null;
 
+/** The city's surfaces whose cut pieces hold (x, z), highest first: id, rank (RANK) and band half width (0 = polygon). For audits. */
+export function cityPavingAt(x: number, z: number): { id: number; rank: number; w: number }[] {
+  if (!lastPaving) return [];
+  const p = lastPaving;
+  return p.shapes.filter((s) => p.piecesOf(s).some((c) => inConv(c, x, z))).map((s) => ({ id: s.id, rank: Math.floor(s.order / 1e6), w: s.w })).sort((a, b) => b.rank - a.rank);
+}
+
 /** Does a street surface of the city (road, junction, piazza, minor street) cover (x, z)? */
 export function cityPavedAt(x: number, z: number): boolean {
   return lastPaving ? lastPaving.any(x, z) : false;
@@ -439,19 +446,20 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
   lastPaving = pave;
   for (const blk of plan.blocks) pave.add(RANK.block, blk.outline as Vec2[], 0);
   const ground: GroundGrid | null = plan.ground ?? null;
-  // Where the drawn terrain drops 9 cm (under the atlas roads and the landmark pads, terrainMaterial.ts),
-  // even an apron's low edge stands clear of it: those edges get their skirt.
-  const low = new PavingIndex();
-  for (const r of plan.roads) low.add(0, r.points as Vec2[], r.half + 0.9);
-  for (const l of plan.landmarkPolys) {
-    low.add(0, l.poly as Vec2[], 0);
-    low.add(0, [...l.poly, l.poly[0]] as Vec2[], 3.9);
-  }
-  const lowered = (x: number, z: number) => low.over(x, z, -1);
-  /** Conform options of the surface registered as `id`: cut where an outranking surface lies; `skirtAll`: every open edge gets a skirt. */
-  const conformOf = (id: number, skirtAll = false): ConformOpts => {
+  // The drawn terrain sinks 9 cm under the atlas roads and pads: edges meant to meet the ground meet it as drawn.
+  const drop = plan.drop ?? null;
+  /** Registers a surface whose work item is added at (x, z): only if it is built (outside the area nothing cuts round it). */
+  const reg = (x: number, z: number, rank: number, pts: readonly Vec2[], w: number) => (inArea(x, z) ? pave.add(rank, pts, w) : -1);
+  /** Is the piece [p0, p1] of a line built (its middle point, as the pieces' items are added, in the area)? */
+  const pieceBuilt = (line: readonly Vec2[], [p0, p1]: [number, number]) => {
+    const pts = sliceLine(line, p0, p1);
+    const mid = pts[Math.floor(pts.length / 2)];
+    return pts.length >= 2 && inArea(mid[0], mid[1]);
+  };
+  /** Conform options of the surface registered as `id`: cut where an outranking surface lies. */
+  const conformOf = (id: number): ConformOpts => {
     const order = pave.order(id);
-    return { cut: (a, b, c, d) => pave.convs(a, b, c, d, order, id), ground, skirtMin: skirtAll ? -1 : undefined, skirtAlways: skirtAll ? null : lowered };
+    return { cut: (a, b, c, d) => pave.convs(a, b, c, d, order, id), ground, drop };
   };
 
   // ---- ground cover: packed earth over every urban scrap of ground the streets and yards leave
@@ -461,7 +469,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
       const x0 = x, z0 = z;
       // Cells that overlap the area at all (the cover itself stops at the area's edge).
       if (!rects.some((r) => r.minX < x0 + size && r.maxX > x0 && r.minZ < z0 + size && r.maxZ > z0)) continue;
-      addCell(x0 + size / 2, z0 + size / 2, T('ground-cover', (b) => groundCover(b, plan, H, x0, z0, size, inArea, pave, ground)));
+      addCell(x0 + size / 2, z0 + size / 2, T('ground-cover', (b) => groundCover(b, plan, H, x0, z0, size, inArea, pave, ground, drop)));
     }
   }
 
@@ -474,8 +482,8 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
       poly.push([j.p[0] + Math.cos(a) * j.r, j.p[1] + Math.sin(a) * j.r]);
     }
     const allRural = j.roads.every((r) => plan.roads[r].style !== 'paved');
-    const id = pave.add(RANK.junction, poly, 0);
-    add(j.p[0], j.p[1], T(`junction:${j.id}`, (b) => buildConformPlaza(b, poly, H, { material: allRural ? 'gravel' : 'paving_basalt', lift: LIFT.junction, bevel: 0.45, ...conformOf(id, true), paved: (x, z) => pave.any(x, z, id) })));
+    const id = reg(j.p[0], j.p[1], RANK.junction, poly, 0);
+    add(j.p[0], j.p[1], T(`junction:${j.id}`, (b) => buildConformPlaza(b, poly, H, { material: allRural ? 'gravel' : 'paving_basalt', lift: LIFT.junction, bevel: 0.45, ...conformOf(id), paved: (x, z) => pave.any(x, z, id) })));
   }
 
   // ---- retaining walls (terrain v2): where an atlas road's edge meets ground steeper than 38°
@@ -493,9 +501,9 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
       // A flight of steps with a walkable grade from the street at its foot to the top (stairsRoad).
       const sp = stairProfile(road.points, H);
       stairPaths.set(ri, sp.path);
-      pave.add(RANK.road, sp.path, road.carriage / 2 + 0.3);
       runs.push({ road: ri, s0: 0, s1: L, ctx: 'stairs' });
       const mid = road.points[Math.floor(road.points.length / 2)];
+      reg(mid[0], mid[1], RANK.road, sp.path, road.carriage / 2 + 0.3);
       // Where another road crosses the stairway, its parapets open onto the crossing.
       const open = junctions.filter((j) => j.roads.includes(ri)).map((j) => ({ x: j.p[0], z: j.p[1], r: j.r + 0.6 }));
       add(mid[0], mid[1], T(`stairs-road:${road.id}`, (bld) => stairsRoad(bld, road, sp, H, open)));
@@ -539,10 +547,11 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
           const pts = sliceLine(road.points, p0, p1);
           if (pts.length < 2) return;
           const mid = pts[Math.floor(pts.length / 2)];
-          const capStart = k === 0, capEnd = k === pieces.length - 1;
+          // An end is a seam only where the next piece is built too (its middle in the area).
+          const capStart = k === 0 || !pieceBuilt(road.points, pieces[k - 1]), capEnd = k === pieces.length - 1 || !pieceBuilt(road.points, pieces[k + 1]);
           const dips = (mouths.get(ri) ?? []).filter((m) => m.s > p0 - m.w && m.s < p1 + m.w).map((m) => ({ s: m.s - p0, side: m.side, w: m.w }));
-          const id = pave.add(RANK.road, pts, roadReach(road, c));
-          add(mid[0], mid[1], T(`road:${road.id}:${c}`, (bld) => buildRoadPiece(bld, road, c, pts, H, capStart, capEnd, dips, conformOf(id, true))));
+          const id = reg(mid[0], mid[1], RANK.road, pts, roadReach(road, c));
+          add(mid[0], mid[1], T(`road:${road.id}:${c}`, (bld) => buildRoadPiece(bld, road, c, pts, H, capStart, capEnd, dips, conformOf(id))));
         });
       }
     }
@@ -599,8 +608,9 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
           const pts = sliceLine(st.points, p0, p1);
           if (pts.length < 2) return;
           const mid = pts[Math.floor(pts.length / 2)];
-          const id = pave.add(RANK[st.kind], pts, st.width / 2 + (st.kind === 'vicus' ? APRON : LANE_APRON));
-          add(mid[0], mid[1], T(`street:${st.id}:${st.kind}`, (bld) => buildMinorPiece(bld, st, pts, H, k2 === 0, k2 === pieces.length - 1, conformOf(id))));
+          const id = reg(mid[0], mid[1], RANK[st.kind], pts, st.width / 2 + (st.kind === 'vicus' ? APRON : LANE_APRON));
+          const capStart = k2 === 0 || !pieceBuilt(st.points, pieces[k2 - 1]), capEnd = k2 === pieces.length - 1 || !pieceBuilt(st.points, pieces[k2 + 1]);
+          add(mid[0], mid[1], T(`street:${st.id}:${st.kind}`, (bld) => buildMinorPiece(bld, st, pts, H, capStart, capEnd, conformOf(id))));
         });
       }
     }
@@ -783,7 +793,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
       const a = (k / 14) * Math.PI * 2;
       poly.push([pz.center[0] + Math.cos(a) * pz.r, pz.center[1] + Math.sin(a) * pz.r]);
     }
-    const pid = pave.add(RANK.piazza, poly, 0);
+    const pid = reg(pz.center[0], pz.center[1], RANK.piazza, poly, 0);
     add(pz.center[0], pz.center[1], T(`piazza:${pz.id}`, (b) => {
       buildConformPlaza(b, poly, H, { material: travertine ? 'paving_travertine' : 'cobbles', lift: LIFT.piazza, bevel: 0.45, ...conformOf(pid), paved: (x, z) => pave.any(x, z, pid) });
     }));
@@ -978,10 +988,10 @@ export const COVER_MAX_GRADE = 0.4;
  * ~6 m, the boundary squares get the smooth (45°) edge pieces, so the cover never shows the
  * raster's staircase against the grass.
  */
-function groundCover(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: number, size: number, inArea: (x: number, z: number) => boolean = () => true, pave: PavingIndex | null = null, ground: GroundGrid | null = null) {
+function groundCover(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: number, size: number, inArea: (x: number, z: number) => boolean = () => true, pave: PavingIndex | null = null, ground: GroundGrid | null = null, drop: ((x: number, z: number) => number) | null = null) {
   const kinds = coverKinds(plan, x0, z0, size, inArea);
-  coverSet(b, plan, H, x0, z0, size, (i) => kinds.get(i) === 1, 'dirt', 0.04, pave, ground);
-  coverSet(b, plan, H, x0, z0, size, (i) => kinds.get(i) === 2, 'cobbles', 0.05, pave, ground);
+  coverSet(b, plan, H, x0, z0, size, (i) => kinds.get(i) === 1, 'dirt', 0.04, pave, ground, drop);
+  coverSet(b, plan, H, x0, z0, size, (i) => kinds.get(i) === 2, 'cobbles', 0.05, pave, ground, drop);
 }
 
 /**
@@ -1059,7 +1069,7 @@ export function coverKinds(plan: CityPlan, x0: number, z0: number, size: number,
 
 /** Ground-cover patches of fewer lattice cells are slivers (a few m²) and are left out. */
 const COVER_MIN_CELLS = 3;
-function coverSet(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: number, size: number, inSet: (i: number) => boolean, material: 'dirt' | 'cobbles', lift: number, pave: PavingIndex | null = null, ground: GroundGrid | null = null) {
+function coverSet(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: number, size: number, inSet: (i: number) => boolean, material: 'dirt' | 'cobbles', lift: number, pave: PavingIndex | null = null, ground: GroundGrid | null = null, drop: ((x: number, z: number) => number) | null = null) {
   const g = plan.grid;
   const c = g.cell;
   const pos: number[] = [];
@@ -1133,7 +1143,7 @@ function coverSet(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: n
     const xa = X(sx0), xb = X(sx1 + 1), za = Z(sz0), zb = Z(sz1 + 1);
     const onB = (p: SV, q: SV) => (Math.abs(p.x - q.x) < 1e-6 && (Math.abs(p.x - xa) < 1e-6 || Math.abs(p.x - xb) < 1e-6)) || (Math.abs(p.z - q.z) < 1e-6 && (Math.abs(p.z - za) < 1e-6 || Math.abs(p.z - zb) < 1e-6));
     const order = RANK.block * 1e6 - 1;
-    if (sheet.tris.length) emitSheet(b, sheet, { cut: (a, c, d, e) => pave!.convs(a, c, d, e, order), ground, rim: Math.max(lift - RIM_SINK, RIM_MIN), skirts: false, seam: onB, collide: false });
+    if (sheet.tris.length) emitSheet(b, sheet, { cut: (a, c, d, e) => pave!.convs(a, c, d, e, order), ground, rim: Math.max(lift - RIM_SINK, RIM_MIN), drop, skirts: false, seam: onB, collide: false });
     return;
   }
   if (!pos.length) return;
