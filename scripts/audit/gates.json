@@ -58,12 +58,13 @@
    "scope": "fast",
    "desc": "way cells (atlas roads + precincts) steeper than 38 degrees",
    "direction": "max",
-   "today": 1684,
-   "gate": 1684,
+   "today": 1769,
+   "gate": 1769,
    "target": 0,
    "owner": "GROUND",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "grades.full.wayCellsOver38",
@@ -109,12 +110,13 @@
    "scope": "fast",
    "desc": "atlas roads whose steepest 4 m is over 84 % (40 degrees)",
    "direction": "max",
-   "today": 6,
-   "gate": 6,
+   "today": 5,
+   "gate": 5,
    "target": 0,
    "owner": "GROUND",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "grades.full.atlasRoadsOver84pct",
@@ -135,12 +137,13 @@
    "scope": "fast",
    "desc": "minor streets over 58 % per 4 m",
    "direction": "max",
-   "today": 55,
-   "gate": 55,
+   "today": 41,
+   "gate": 41,
    "target": 0,
    "owner": "STREETS",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "grades.full.minorStreetsOver58pct",
@@ -160,12 +163,13 @@
    "scope": "fast",
    "desc": "minor streets over 45 % per 4 m",
    "direction": "max",
-   "today": 150,
-   "gate": 150,
+   "today": 138,
+   "gate": 138,
    "target": 15,
    "owner": "STREETS",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "grades.full.minorStreetsOver45pct",
@@ -186,12 +190,13 @@
    "scope": "fast",
    "desc": "minor streets over 84 % per 4 m",
    "direction": "max",
-   "today": 13,
-   "gate": 13,
+   "today": 9,
+   "gate": 9,
    "target": 0,
    "owner": "STREETS",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "grades.full.minorStreetsOver84pct",
@@ -264,12 +269,13 @@
    "scope": "fast",
    "desc": "walkable ground over 40 degrees (%)",
    "direction": "max",
-   "today": 0.53,
-   "gate": 0.53,
+   "today": 0.52,
+   "gate": 0.52,
    "target": 0.35,
    "owner": "GROUND",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "grades.full.walkableOver40Pct",
@@ -290,12 +296,13 @@
    "scope": "fast",
    "desc": "lip cells of 30 cm or more",
    "direction": "max",
-   "today": 1934,
-   "gate": 1934,
+   "today": 1753,
+   "gate": 1753,
    "target": 0,
    "owner": "STREETS",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "street-fit.full.lipCells30",
@@ -316,12 +323,13 @@
    "scope": "fast",
    "desc": "lip cells of 12 cm or more",
    "direction": "max",
-   "today": 16787,
-   "gate": 16787,
+   "today": 17362,
+   "gate": 17362,
    "target": 800,
    "owner": "STREETS",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "street-fit.full.lipCells12",
@@ -342,12 +350,13 @@
    "scope": "fast",
    "desc": "open paving edge floating over 3 cm, all kinds (m)",
    "direction": "max",
-   "today": 26255.1,
-   "gate": 26255.1,
+   "today": 27800.8,
+   "gate": 27800.8,
    "target": 1000,
    "owner": "STREETS",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "street-fit.full.openEdgeOver3cmM",
@@ -368,12 +377,13 @@
    "scope": "fast",
    "desc": "open paving edge floating over 8 cm (m)",
    "direction": "max",
-   "today": 4020,
-   "gate": 4020,
+   "today": 4183.5,
+   "gate": 4183.5,
    "target": 0,
    "owner": "STREETS",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "street-fit.full.openEdgeOver8cmM",
@@ -394,12 +404,13 @@
    "scope": "fast",
    "desc": "kerb and paving face-float clusters over 0.1 m",
    "direction": "max",
-   "today": 68,
-   "gate": 68,
+   "today": 76,
+   "gate": 76,
    "target": 0,
    "owner": "STREETS",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "street-fit.full.faceFloatOver10cm",
@@ -420,12 +431,13 @@
    "scope": "fast",
    "desc": "double-paving cells",
    "direction": "max",
-   "today": 842314,
-   "gate": 842314,
+   "today": 860249,
+   "gate": 860249,
    "target": 50000,
    "owner": "STREETS",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "street-fit.full.doublePavingCells",
@@ -446,12 +458,13 @@
    "scope": "fast",
    "desc": "terrain-through cells",
    "direction": "max",
-   "today": 34717,
-   "gate": 34717,
+   "today": 31524,
+   "gate": 31524,
    "target": 3000,
    "owner": "STREETS",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "street-fit.full.terrainThroughCells",
@@ -472,12 +485,13 @@
    "scope": "fast",
    "desc": "dressing kerbstones on city paving",
    "direction": "max",
-   "today": 59,
-   "gate": 59,
+   "today": 64,
+   "gate": 64,
    "target": 0,
    "owner": "STREETS",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "street-fit.full.kerbstonesOnCityPaving",
@@ -498,11 +512,12 @@
    "scope": "fast",
    "desc": "z-fight cells",
    "direction": "max",
-   "today": 35379,
-   "gate": 35379,
+   "today": 33070,
+   "gate": 33070,
    "owner": "STREETS",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "street-fit.full.zfightCells",
@@ -522,12 +537,13 @@
    "scope": "fast",
    "desc": "block props floating",
    "direction": "max",
-   "today": 2409,
-   "gate": 2409,
+   "today": 2465,
+   "gate": 2465,
    "target": 300,
    "owner": "FABRIC",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "street-fit.full.propsFloating",
@@ -548,12 +564,13 @@
    "scope": "fast",
    "desc": "block props sunk",
    "direction": "max",
-   "today": 271,
-   "gate": 271,
+   "today": 295,
+   "gate": 295,
    "target": 50,
    "owner": "FABRIC",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "street-fit.full.propsSunk",
@@ -574,12 +591,13 @@
    "scope": "fast",
    "desc": "props with a foot in the air over 0.3 m",
    "direction": "max",
-   "today": 83,
-   "gate": 83,
+   "today": 89,
+   "gate": 89,
    "target": 0,
    "owner": "FABRIC",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "street-fit.full.propFootInAirOver30cm",
@@ -626,13 +644,13 @@
    "scope": "fast",
    "desc": "guide + objective routes BLOCKED",
    "direction": "max",
-   "today": 10,
-   "gate": 10,
+   "today": 8,
+   "gate": 8,
    "target": 0,
    "owner": "ROUTES",
    "recorded": "2026-10-11",
    "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
-   "note": "Raised 2026-10-10 by the lead: re-measured on phase4b (phase 3 merged, which cut walled street links); the crew target is unchanged."
+   "note": "Raised 2026-10-10 by the lead: re-measured on phase4b (phase 3 merged, which cut walled street links); the crew target is unchanged. Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "routes.full.objectiveBlocked",
@@ -783,13 +801,13 @@
    "scope": "fast",
    "desc": "street-graph nodes with no edge",
    "direction": "max",
-   "today": 157,
-   "gate": 157,
+   "today": 167,
+   "gate": 167,
    "target": 0,
    "owner": "ROUTES",
    "recorded": "2026-10-11",
    "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
-   "note": "Raised 2026-10-10 by the lead: re-measured on phase4b (phase 3 merged, which cut walled street links); the crew target is unchanged."
+   "note": "Raised 2026-10-10 by the lead: re-measured on phase4b (phase 3 merged, which cut walled street links); the crew target is unchanged. Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "routes-places.full.edgelessNodes",
@@ -810,12 +828,13 @@
    "scope": "fast",
    "desc": "places with no street route from the Forum",
    "direction": "max",
-   "today": 100,
-   "gate": 100,
+   "today": 96,
+   "gate": 96,
    "target": 0,
    "owner": "ROUTES",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "routes-places.full.noStreetRoute",
@@ -836,12 +855,13 @@
    "scope": "fast",
    "desc": "places more than 30 m from a street node",
    "direction": "max",
-   "today": 181,
-   "gate": 181,
+   "today": 202,
+   "gate": 202,
    "target": 10,
    "owner": "ROUTES",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "routes-places.full.placesOver30mFromNode",
@@ -888,12 +908,13 @@
    "scope": "fast",
    "desc": "collider lips of 10 cm or more",
    "direction": "max",
-   "today": 78,
-   "gate": 78,
+   "today": 56,
+   "gate": 56,
    "target": 100,
    "owner": "STREETS",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "collision.full.lips10cm",
@@ -913,12 +934,13 @@
    "scope": "fast",
    "desc": "cracks between collider pieces",
    "direction": "max",
-   "today": 12,
-   "gate": 12,
+   "today": 11,
+   "gate": 11,
    "target": 20,
    "owner": "STREETS",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "collision.full.cracks",
@@ -938,12 +960,13 @@
    "scope": "fast",
    "desc": "city lot boxes with nothing drawn (invisible walls)",
    "direction": "max",
-   "today": 33,
-   "gate": 33,
+   "today": 38,
+   "gate": 38,
    "target": 50,
    "owner": "FABRIC",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "collision.full.invisibleCityBoxNothingDrawn",
@@ -963,12 +986,13 @@
    "scope": "fast",
    "desc": "embedded city boxes",
    "direction": "max",
-   "today": 26,
-   "gate": 26,
+   "today": 31,
+   "gate": 31,
    "target": 100,
    "owner": "FABRIC",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "collision.full.embeddedCityBox",
@@ -988,13 +1012,13 @@
    "scope": "fast",
    "desc": "ghost-wall probes at the Circus",
    "direction": "max",
-   "today": 10,
-   "gate": 10,
+   "today": 8,
+   "gate": 8,
    "target": 0,
    "owner": "L-WEST",
    "recorded": "2026-10-11",
    "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
-   "note": "Raised 2026-10-10 by the lead: re-measured on phase4b (phase 3 merged, which cut walled street links); the crew target is unchanged."
+   "note": "Raised 2026-10-10 by the lead: re-measured on phase4b (phase 3 merged, which cut walled street links); the crew target is unchanged. Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "collision.full.circusGhostWallProbes",
@@ -1039,12 +1063,13 @@
    "scope": "fast",
    "desc": "ghost probes on the River Port deck",
    "direction": "max",
-   "today": 1,
-   "gate": 1,
+   "today": 5,
+   "gate": 5,
    "target": 0,
    "owner": "L-EAST",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "collision.full.ghostOnDeckProbes",
@@ -1064,12 +1089,13 @@
    "scope": "fast",
    "desc": "max |physics - drawn| on bare ground (m)",
    "direction": "max",
-   "today": 0.339,
-   "gate": 0.339,
+   "today": 0,
+   "gate": 0,
    "target": 0.01,
    "owner": "GROUND",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "collision.full.terrainMaxDiffM",
@@ -1090,12 +1116,13 @@
    "scope": "fast",
    "desc": "bare-ground samples where physics matches the drawn diagonal (%)",
    "direction": "min",
-   "today": 0,
-   "gate": 0,
+   "today": 100,
+   "gate": 100,
    "target": 100,
    "owner": "GROUND",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "collision.full.terrainDrawnDiagonalPct",
@@ -1116,13 +1143,13 @@
    "scope": "fast",
    "desc": "bare-ground float or sink probes over 4 cm",
    "direction": "max",
-   "today": 430,
-   "gate": 430,
+   "today": 0,
+   "gate": 0,
    "target": 0,
    "owner": "GROUND",
    "recorded": "2026-10-11",
    "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
-   "note": "Raised 2026-10-10 by the lead: re-measured on phase4b (phase 3 merged, which cut walled street links); the crew target is unchanged."
+   "note": "Raised 2026-10-10 by the lead: re-measured on phase4b (phase 3 merged, which cut walled street links); the crew target is unchanged. Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "collision.full.bareGroundOver4cm",
@@ -1142,12 +1169,13 @@
    "scope": "fast",
    "desc": "structure stretches of 0.6 m or more not on the allowlist",
    "direction": "max",
-   "today": 191,
-   "gate": 191,
+   "today": 193,
+   "gate": 193,
    "target": 0,
    "owner": "L-WEST,L-EAST,FABRIC",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "structures.full.stretches06NotAllowlisted",
@@ -1192,12 +1220,13 @@
    "scope": "fast",
    "desc": "wall and aqueduct stretches floating 0.3 m or more",
    "direction": "max",
-   "today": 16,
-   "gate": 16,
+   "today": 19,
+   "gate": 19,
    "target": 0,
    "owner": "FABRIC",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "structures.full.wallAqueductStretches03",
@@ -1218,12 +1247,13 @@
    "scope": "fast",
    "desc": "worst terrain-in-floor depth in a landmark (m)",
    "direction": "max",
-   "today": 7.49,
-   "gate": 7.49,
+   "today": 7.48,
+   "gate": 7.48,
    "target": 0,
    "owner": "L-WEST,L-EAST",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Re-baselined 2026-10-11 by the lead on phase4b + G1a (one ground; the city re-plans on it, accepted). Crew target unchanged."
   },
   {
    "id": "structures.full.landmarkTerrainInFloorWorstM",
