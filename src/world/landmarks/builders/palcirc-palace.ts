@@ -371,6 +371,9 @@ function tiberiana(ctx: LandmarkContext) {
     const zb = Math.min(50, z + 1.5);
     const xf = Math.min(polyAt(face, (z + zb) / 2, 'z'), -HW);
     d.solid(xf, deep, z, -HW, 0, zb);
+    // A masonry body under the paving (set 0.8 m in from the face, behind its arches), down to the
+    // lowest ground under the slice: the paving's edge hung over the slope where no wall piece was built.
+    if (-HW - xf > 1.2) d.span('tufa', xf + 0.8, groundRange(ctx, xf, z, -HW, zb, 1.5).min - 0.6, z, -HW, -0.06, zb);
     d.span('paving_travertine', xf, -0.05, z, -HW, 0.03, zb);
   }
   const xc = polyAt(face, -HD, 'z');
@@ -378,6 +381,7 @@ function tiberiana(ctx: LandmarkContext) {
     const xb = Math.min(44, x + 1.5);
     const zf = Math.min(polyAt(face, (x + xb) / 2, 'x'), -HD);
     d.solid(x, deep, zf, xb, 0, -HD);
+    if (-HD - zf > 1.2) d.span('tufa', x, groundRange(ctx, x, zf, xb, -HD, 1.5).min - 0.6, zf + 0.8, xb, -0.06, -HD);
     d.span('paving_travertine', x, -0.05, zf, xb, 0.03, -HD);
   }
   d.span('paving_travertine', -HW, -0.05, -HD, HW, 0.03, HD);

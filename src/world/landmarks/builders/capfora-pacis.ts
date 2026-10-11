@@ -73,7 +73,7 @@ function buildPacis(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
     detail: 'low' as Detail,
     columnDetail: 'low' as Detail,
     floorY: 0.4,
-    groundMin: gWide,
+    groundMin: gWide - Y0,
     wallMaterial: 'marble' as MaterialId,
     wallThickness: t,
     ceiling: 'plain' as const,
