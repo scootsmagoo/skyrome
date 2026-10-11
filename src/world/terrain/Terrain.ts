@@ -143,7 +143,10 @@ export function* heightfieldChunks(hm: Heightmap, n: number): Generator<Heightfi
 
 export class Terrain implements System {
   readonly name = 'terrain';
-  /** After the camera rig (100): LOD selection uses this frame's camera. */
+  /**
+   * After the camera rig (100): LOD selection uses this frame's camera. A camera moved later in the
+   * frame is selected for again as the scene renders (`hookScene`).
+   */
   readonly priority = 101;
   readonly group = new THREE.Group();
   readonly material: THREE.MeshStandardMaterial;
@@ -166,6 +169,12 @@ export class Terrain implements System {
   private readonly trisPerPatch: number;
   private readonly frustum = new THREE.Frustum();
   private readonly projView = new THREE.Matrix4();
+  /** The view the patches were last selected for: the camera and its projection × view matrix. */
+  private selCamera: THREE.Camera | null = null;
+  private readonly selView = new Float64Array(16);
+  private readonly selPos = new THREE.Vector3();
+  /** Takes the scene hook out again (`dispose`). */
+  private unhook: (() => void) | null = null;
   private textures: GroundTextures;
   private readonly splatScratch = new Float32Array(LAYER_COUNT);
 
@@ -277,6 +286,7 @@ export class Terrain implements System {
 
     game.scene.add(this.group);
     game.addSystem(this);
+    this.hookScene(game.scene);
     this.select();
 
     this.ready = opts.flat
@@ -305,9 +315,27 @@ export class Terrain implements System {
   select() {
     const cam = this.game.camera;
     cam.updateMatrixWorld();
-    this.projView.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    this.selCamera = null;
+    this.selectFor(cam);
+  }
+
+  /**
+   * Select the patches for `camera`'s view (frustum culling and LOD distances), unless they were
+   * last selected for this very view.
+   */
+  private selectFor(camera: THREE.Camera) {
+    const pv = this.projView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).elements;
+    const last = this.selView;
+    if (camera === this.selCamera) {
+      let k = 0;
+      while (k < 16 && last[k] === pv[k]) k++;
+      if (k === 16) return;
+    }
+    this.selCamera = camera;
+    for (let k = 0; k < 16; k++) last[k] = pv[k];
     this.frustum.setFromProjectionMatrix(this.projView);
-    const { data, count } = this.quadtree.select(cam.position, this.frustum);
+    const e = camera.matrixWorld.elements;
+    const { data, count } = this.quadtree.select(this.selPos.set(e[12], e[13], e[14]), this.frustum);
     const arr = this.patchAttr.array as Float32Array;
     const n = Math.min(count, arr.length / PATCH_STRIDE);
     arr.set(data.subarray(0, n * PATCH_STRIDE));
@@ -321,7 +349,35 @@ export class Terrain implements System {
   }
 
   lateUpdate() {
-    if (this.mesh.visible) this.select();
+    if (this.mesh.visible) {
+      this.game.camera.updateMatrixWorld();
+      this.selectFor(this.game.camera);
+    }
+  }
+
+  /**
+   * Select for the camera that renders. three.js calls `scene.onBeforeRender` inside
+   * `renderer.render`, after the camera's matrices are updated and before it walks the scene and
+   * uploads the buffers, so the patches drawn are always the ones for that view. With the selection
+   * in `lateUpdate` alone, a camera placed after priority 101 (the audit tools pin theirs at 150)
+   * drew the ground culled for the view of the camera rig: holes to the sky, with the neighbouring
+   * patches' skirts standing at their edges as bare earth walls (the Clivus Palatinus aerial of
+   * phase 4b). A view already selected for (the rig's, every frame of play) costs one compare.
+   * Chained with whatever hook the scene has (fastCull's), and kept in a method of its own so the
+   * closure holds no constructor locals.
+   */
+  private hookScene(scene: THREE.Scene) {
+    const prev = scene.onBeforeRender;
+    let terrain: Terrain | null = this;
+    const hook = function (this: THREE.Scene, renderer, s, camera, geometry, material, group) {
+      prev.call(this, renderer, s, camera, geometry, material, group);
+      if (terrain?.mesh.visible) terrain.selectFor(camera);
+    } as THREE.Object3D['onBeforeRender'];
+    scene.onBeforeRender = hook;
+    this.unhook = () => {
+      terrain = null;
+      if (scene.onBeforeRender === hook) scene.onBeforeRender = prev;
+    };
   }
 
   /** Re-upload heights after another module edited `hm.heights` (colliders are not rebuilt). */
@@ -370,6 +426,8 @@ export class Terrain implements System {
   }
 
   dispose() {
+    this.unhook?.();
+    this.unhook = null;
     this.game.removeSystem(this);
     if (this.safetyNet) this.game.removeSystem(this.safetyNet);
     this.game.scene.remove(this.group);

@@ -57,7 +57,7 @@ triangles.
 | `src/world/water/swim.ts` | Swimming and climbing out (a System) and its pure helpers. |
 | `src/world/water/index.ts` | `buildWater`, `game.water` (`WaterService`), `WaterCamera`. |
 | `src/scenes/terrain.ts` | Dev scene. |
-| `tests/terrain-*.test.ts` | Quadtree coverage/cracks/budget, splat rules, terrain data, heightmap profiles, water, quays, reeds, swimming; `terrain-world` drives the real player controller, swim system and Rapier: climbing out at a quay, the parapet, wading out of the canal, the world edge and safety net; dressing rules, footstep banks. |
+| `tests/terrain-*.test.ts` | Quadtree coverage/cracks/budget, holes (every grid point in view lies on a patch drawn for the camera that renders), splat rules, terrain data, heightmap profiles, water, quays, reeds, swimming; `terrain-world` drives the real player controller, swim system and Rapier: climbing out at a quay, the parapet, wading out of the canal, the world edge and safety net; dressing rules, footstep banks. |
 
 ## Landform (`heightmap.ts`)
 
@@ -197,13 +197,27 @@ roads), `g1b-flanks.mjs`.
 diagonal, see "One ground") with skirts is drawn instanced:
 every instance is a patch `[x0, z0, cell, level]`. A node at level L covers 32·2^L cells and is
 drawn as its four quadrant patches; the quadtree picks per frame (after the camera, priority
-101) which nodes and quadrants to draw, with frustum culling on min/max-height boxes. The vertex
+101) which nodes and quadrants to draw, with frustum culling on min/max-height boxes, and picks
+again for whatever camera renders the scene (`scene.onBeforeRender`, a 16-float compare when the
+view is the one already selected for): a camera placed after priority 101 (the audit tools pin
+theirs at 150) once drew the patches culled for the camera rig's view, holes to the sky with the
+neighbouring patches' skirts standing at their edges as bare earth walls (the Clivus Palatinus
+aerial, phase 4b; `docs/research/solid-ground/after/hole/`). The vertex
 shader reads heights from an R32F texture with `texelFetch` (bilinear by hand, so no float
 filtering is needed), morphs odd vertices onto their even neighbours as the distance approaches
 the level's range (no popping, no cracks; unit-tested: full coverage, no overlaps, at most one
 level between neighbours), drops skirt vertices below the surface, and lowers coarse levels a
 little (0.16 m at level 1 … ) so roads and pavements laid on the ground are never poked through by
 its coarser approximation. Leaf range ≈ 205 m at full 2 m resolution, then ×3 per level.
+
+**Holes** (`node scripts/audit/terrain-holes.mjs [--query terrain=v1] [--late] [--step 80]`, about
+2 minutes): renders the CDLOD mesh alone over a key colour from above every 80 m tile of the grid
+and at eye height and 30 m up looking four ways every 160 m, and marches every key pixel's ray
+through the heightmap: a hole is a ray that gets under the lowest the drawn level can be there.
+`--late` renders from a camera the terrain was not updated for. Phase 4b sweep: no holes under v2
+or v1 (also with `--late` and an 80 m eye lattice); the base before the render-time selection had
+34 M hole pixels with `--late`. `tests/terrain-holes.test.ts` checks the culled selection against
+every grid point in view and the render-time selection.
 
 The whole terrain is **one draw call** (plus one for the apron). It receives shadows but casts
 none (hills are lit by the per-pixel normal; the sun's shadow box is only 150 m anyway).
