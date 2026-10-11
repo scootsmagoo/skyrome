@@ -58,6 +58,8 @@ interface Record {
   /** Steep faces (walls, risers, podium sides; |ny| < 0.5), for the structure-foot audit (analyzeFeet). */
   steep: FaceSet[];
   props: PropRec[];
+  /** What it belongs to (see `recOwner`), cached once known. */
+  owner?: string;
 }
 
 /**
@@ -484,33 +486,46 @@ export function analyzeArea(cx: number, cz: number, radius: number, heightAt: (x
 // ---------------------------------------------------------------- structure feet (phase 4 audit)
 
 /**
- * A stretch of a structure's foot (the bottom edge of a wall, riser, podium side or slab side) that
- * does not meet the ground: `floating` (the edge hangs above the terrain / walkable surface just
- * outside it: a visible void under the building) or `buried` (the ground outside stands above the
- * floor just inside the wall: doors and shop openings under the pavement).
+ * How a structure meets the ground (phase 4 "solid ground", lens 1; `scripts/audit/structures.mjs`):
+ *
+ * - `floating`: a stretch of a structure's foot (the bottom edge of a wall, riser, podium side or
+ *   slab side) hangs above the ground just outside it (the terrain, or the highest walkable surface
+ *   up to 0.5 m over the edge): a void under the base, seen from outside. Spans are not feet: an edge
+ *   with the same structure standing in the gap below it within reach (a lintel over its jambs, an
+ *   entablature over its columns, an arch over its piers, a balcony or an eave over its wall) is an
+ *   overhang; a void hidden behind something standing in front of it (a neighbour's wall, a socle,
+ *   a step) is occluded.
+ * - `buried-opening`: the ground outside stands above the floor just inside the wall where the wall
+ *   is open (a doorway, a shop mouth, an arcade): the pavement or the slope cuts across the opening.
+ *   The same behind a blank wall is a building cut into a slope (counted, not a defect).
+ * - `terrain-in-floor`: the terrain as drawn pokes up through a floor, tread, podium top or slab of
+ *   the structure (a base sunk deeper than its plinth hides). Ground-like materials (yards, paving,
+ *   streets) are lens 2's and not counted here.
  */
 export interface FootFinding {
-  kind: 'floating' | 'buried';
-  /** The build (record name), the street item that made it (audit source) and the wall's material. */
+  kind: 'floating' | 'buried-opening' | 'terrain-in-floor';
+  /** The build (record name), what owns it (landmark id, block level, monument chunk), the street item that made it, the face's material. */
   name: string;
+  owner: string;
   src: string;
   mat: string;
-  /** Samples (every `step` m along the feet) in this stretch, and its length (m). */
+  /** Samples in this stretch, and its length (m; m² for terrain-in-floor). */
   n: number;
   length: number;
-  /** Worst gap (m): foot above ground (floating) or ground above the inside floor (buried). */
+  /** Worst gap (m): foot above ground (floating), ground above the floor (buried), terrain above the floor (terrain-in-floor). */
   depth: number;
-  /** The same gap against the terrain as drawn (the renderer drops it 9 cm under roads and pads). */
+  /** The same against the terrain as drawn (the renderer drops it 9 cm under roads and pads). */
   depthVis: number;
-  /** Worst sample: the foot edge point. */
+  /** Worst sample (the foot edge point, or the floor point). */
   at: [number, number, number];
-  /** At the worst sample: the ground outside (terrain or surface), the terrain, the inside floor (buried). */
+  /** At the worst sample: the ground outside (terrain or surface), the terrain, the floor inside (buried). */
   ground: number;
   terrain: number;
-  floor?: number;
-  /** Material of the ground outside ('terrain' or a surface material) and of the inside floor. */
   groundMat: string;
+  floor?: number;
   floorMat?: string;
+  /** Outward horizontal normal of the foot at the worst sample (where a camera sees the void from). */
+  out?: [number, number];
 }
 
 export interface FeetOptions {
@@ -522,17 +537,122 @@ export interface FeetOptions {
   visualDrop?: (x: number, z: number) => number;
   /** Floating when the foot is this far above the ground (m). Default 0.08. */
   floatMin?: number;
-  /** Buried when the ground outside is this far above the inside floor (m). Default 0.3. */
+  /** Buried when the ground outside is this far above the floor inside (m). Default 0.2. */
   buryMin?: number;
+  /** Terrain-in-floor when the drawn terrain is this far above a floor (m). Default 0.08. */
+  sinkMin?: number;
+  /** Which records' feet are measured, by build name and owner (default all in the area); the rest are ground and occluders only. */
+  measure?: (name: string, owner: string) => boolean;
+  /** Which face sets of a measured record are measured (by source tag and material). */
+  measureFace?: (name: string, src: string, mat: string) => boolean;
+  /** Records left out entirely (not ground, not occluders): e.g. the streamed copies of what the sweep builds itself. */
+  ignore?: (name: string) => boolean;
+  /** The terrain as drawn from afar (a coarse CDLOD level): grounded feet that float over it are tallied (`farFloat`). */
+  farTerrain?: (x: number, z: number) => number;
+  /**
+   * Where feet are measured (default everywhere): e.g. only along a city building's outline, whose
+   * walls the generators carry down to a foundation; rooms inside it (an atrium floor, a peristyle)
+   * stand over the hollow the outer walls enclose.
+   */
+  footAt?: (x: number, z: number) => boolean;
 }
 
 export interface FeetTotals {
-  /** Foot samples measured, bottom edges walked, records (builds) touched. */
+  /** Foot samples measured, bottom edges walked, records measured. */
   samples: number;
   edges: number;
   records: number;
-  skipped: { overhang: number; water: number; interior: number; continues: number };
+  /** Samples by verdict. */
+  floating: number;
+  buriedOpening: number;
+  /** The ground outside above the floor behind a blank wall (a building cut into a slope). */
+  buriedWall: number;
+  /** The ground outside over the top of a low structure (no wall above the 'opening'). */
+  buriedTop: number;
+  /** Feet on the terrain that float > 0.3 m over the terrain as drawn from afar (`farTerrain`). */
+  farFloat: number;
+  floorSamples: number;
+  sunkFloor: number;
+  skipped: { overhang: number; water: number; interior: number; continues: number; occluded: number; enclosed: number; inside: number };
 }
+
+/** Per owner (landmark, block level, monument chunk): what was measured and the worst. */
+export interface FeetOwner {
+  owner: string;
+  samples: number;
+  floating: number;
+  maxFloat: number;
+  buriedOpening: number;
+  maxBuried: number;
+  floorSamples: number;
+  sunkFloor: number;
+  maxSunk: number;
+  farFloat: number;
+  maxFar: number;
+}
+
+/** What a build belongs to: a landmark id (`basilica-ulpia:nave:…` → `basilica-ulpia`) or the city's block level / chunk / cell. */
+export function auditOwnerOf(name: string): string {
+  if (name.startsWith('city:') || name.startsWith('audit:')) return name.split(':').slice(0, 3).join(':');
+  return name.split(':')[0];
+}
+const isCityName = (name: string) => name.startsWith('city:') || name.startsWith('audit:');
+
+/**
+ * What a record belongs to: the landmark whose object (`landmark:<id>`) holds its group (instanced
+ * parts named after their kind, `colosseum-facade-0:L0`, belong to the Colosseum), else the name's
+ * owner (`auditOwnerOf`). '' for a template: a landmark-side build whose group never joined the
+ * scene (a LOD level or prop built once and instanced elsewhere; its faces lie at the origin).
+ */
+function recOwner(r: Record): string {
+  if (r.owner !== undefined) return r.owner;
+  if (isCityName(r.name)) return (r.owner = auditOwnerOf(r.name));
+  let p = r.group?.parent ?? null;
+  if (!p) return '';
+  for (; p; p = p.parent) {
+    const m = /^landmark:([^:]+)$/.exec(p.name);
+    if (m) return (r.owner = m[1]);
+  }
+  return (r.owner = auditOwnerOf(r.name));
+}
+
+/**
+ * The owners recorded (landmark ids, block levels, monument chunks …) with their face counts and
+ * world XZ bounds: the sweep's list of what to measure and how far each reaches.
+ */
+export function auditOwners(match?: (name: string) => boolean): { owner: string; records: number; tris: number; box: [number, number, number, number] }[] {
+  const out = new Map<string, { owner: string; records: number; tris: number; box: [number, number, number, number] }>();
+  const m = new THREE.Matrix4();
+  for (const r of records.values()) {
+    if (match && !match(r.name)) continue;
+    const o = recOwner(r);
+    if (!o) continue;
+    let e = out.get(o);
+    if (!e) out.set(o, (e = { owner: o, records: 0, tris: 0, box: [Infinity, -Infinity, Infinity, -Infinity] }));
+    e.records++;
+    m.copy(r.group?.matrixWorld ?? new THREE.Matrix4());
+    for (const f of [...r.faces, ...r.steep]) {
+      worldOf(f, m);
+      const b = f.box!;
+      if (b[1] - b[0] > 400 || b[3] - b[2] > 400) continue;
+      e.tris += f.up.length / 9;
+      e.box[0] = Math.min(e.box[0], b[0]);
+      e.box[1] = Math.max(e.box[1], b[1]);
+      e.box[2] = Math.min(e.box[2], b[2]);
+      e.box[3] = Math.max(e.box[3], b[3]);
+    }
+  }
+  return [...out.values()].filter((e) => e.tris > 0);
+}
+
+/** Ground-like surfaces (yards, streets, paving, gardens): lens 2's, not a structure's floor. */
+const GROUNDLIKE = /dirt|grass|gravel|sand|mud|cobbles|paving|water|soil|earth|moss|ivy|leaf|foliage|hedge|reed/;
+/** What a structure's foot is made of (not shutters, doors, awnings, carts, statues, dark interiors, roofs). */
+const FOOTMAT = /marble|porphyry|travertine|tufa|peperino|basalt|rock|brick|reticulatum|concrete|plaster|stucco|paving|cobbles/;
+/** What a structure's floors are made of (wood only in big pieces: floors, not tables). */
+const FLOORMAT = /marble|porphyry|travertine|tufa|peperino|basalt|brick|reticulatum|concrete|mosaic|terracotta|wood/;
+/** What the ground under a foot can be (not table tops, awnings, carts, roofs, sills). */
+const GROUNDMAT = /marble|porphyry|travertine|tufa|peperino|basalt|rock|brick|reticulatum|concrete|mosaic|terracotta|paving|cobbles|gravel|dirt|grass|sand|mud/;
 
 interface TriRef {
   /** World-space triangle array and offset. */
@@ -560,35 +680,58 @@ function triDistXZ(t: Float32Array, i: number, x: number, z: number): number {
   return Math.min(seg(ax, az, bx, bz), seg(bx, bz, cx, cz), seg(cx, cz, ax, az));
 }
 
+/** Möller–Trumbore: distance along the (unit) ray to the triangle, or Infinity. */
+function rayTri(t: Float32Array, i: number, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number): number {
+  const e1x = t[i + 3] - t[i], e1y = t[i + 4] - t[i + 1], e1z = t[i + 5] - t[i + 2];
+  const e2x = t[i + 6] - t[i], e2y = t[i + 7] - t[i + 1], e2z = t[i + 8] - t[i + 2];
+  const px = dy * e2z - dz * e2y, py = dz * e2x - dx * e2z, pz = dx * e2y - dy * e2x;
+  const det = e1x * px + e1y * py + e1z * pz;
+  if (Math.abs(det) < 1e-10) return Infinity;
+  const inv = 1 / det;
+  const sx = ox - t[i], sy = oy - t[i + 1], sz = oz - t[i + 2];
+  const u = (sx * px + sy * py + sz * pz) * inv;
+  if (u < -1e-6 || u > 1 + 1e-6) return Infinity;
+  const qx = sy * e1z - sz * e1y, qy = sz * e1x - sx * e1z, qz = sx * e1y - sy * e1x;
+  const v = (dx * qx + dy * qy + dz * qz) * inv;
+  if (v < -1e-6 || u + v > 1 + 1e-6) return Infinity;
+  const d = (e2x * qx + e2y * qy + e2z * qz) * inv;
+  return d >= 0 ? d : Infinity;
+}
+
 /**
- * Measures how every structure near (cx, cz) meets the ground: walks the bottom edges of all steep
- * faces recorded in the area (walls, risers, podium and slab sides), and at each sample compares the
- * edge's height with the ground just outside it (the terrain, or the highest walkable surface there)
- * and, for `buried`, with the floor just inside. Edges with wall continuing below them (cornices,
- * sills, string courses) are not feet; edges hanging over grounded structure of the same build
- * (balconies, arcades, lintels, table tops) are overhangs. Returns stretches (samples within 2 m of
- * one another, same build and kind) ranked by depth, and the totals.
+ * Measures how the structures near (cx, cz) meet the ground (see `FootFinding`). Every record in
+ * the square of half-size `radius` is ground and occluder; only those passing `opts.measure` are
+ * measured. Returns stretches (samples of one build, source, material and kind within 2 m of one
+ * another) ranked by depth, the totals, and the per-owner tally.
  */
-export function analyzeFeet(cx: number, cz: number, radius: number, heightAt: (x: number, z: number) => number, opts: FeetOptions = {}): { findings: FootFinding[]; totals: FeetTotals } {
+export function analyzeFeet(cx: number, cz: number, radius: number, heightAt: (x: number, z: number) => number, opts: FeetOptions = {}): { findings: FootFinding[]; totals: FeetTotals; owners: FeetOwner[] } {
   const step = opts.step ?? 0.75;
   const floatMin = opts.floatMin ?? 0.08;
-  const buryMin = opts.buryMin ?? 0.3;
+  const buryMin = opts.buryMin ?? 0.2;
+  const sinkMin = opts.sinkMin ?? 0.08;
+  const measure = opts.measure ?? (() => true);
+  const measureFace = opts.measureFace ?? (() => true);
+  const ignore = opts.ignore ?? (() => false);
+  const drop = opts.visualDrop ?? (() => 0);
   const x0 = cx - radius, x1 = cx + radius, z0 = cz - radius, z1 = cz + radius;
+  // Ground and occluders reach a little beyond the measured square.
+  const gx0 = x0 - 3, gx1 = x1 + 3, gz0 = z0 - 3, gz1 = z1 + 3;
   const CELL = 1;
-  const key = (x: number, z: number) => `${Math.floor(x / CELL)},${Math.floor(z / CELL)}`;
-  const upHash = new Map<string, TriRef[]>();
-  const steepHash = new Map<string, TriRef[]>();
+  const key = (gx: number, gz: number) => gx * 100003 + gz;
+  const upHash = new Map<number, TriRef[]>();
+  const steepHash = new Map<number, TriRef[]>();
   const steepRefs: TriRef[] = [];
+  const floorRefs: TriRef[] = [];
   const m = new THREE.Matrix4();
-  const insert = (hash: Map<string, TriRef[]>, ref: TriRef) => {
+  const insert = (hash: Map<number, TriRef[]>, ref: TriRef) => {
     const { t, i } = ref;
     const minX = Math.min(t[i], t[i + 3], t[i + 6]), maxX = Math.max(t[i], t[i + 3], t[i + 6]);
     const minZ = Math.min(t[i + 2], t[i + 5], t[i + 8]), maxZ = Math.max(t[i + 2], t[i + 5], t[i + 8]);
-    if (maxX < x0 || minX > x1 || maxZ < z0 || minZ > z1) return false;
+    if (maxX < gx0 || minX > gx1 || maxZ < gz0 || minZ > gz1) return false;
     if (maxX - minX > 400 || maxZ - minZ > 400) return false; // the apron or a sky dome: not a structure
     for (let gx = Math.floor(minX / CELL); gx <= Math.floor(maxX / CELL); gx++)
       for (let gz = Math.floor(minZ / CELL); gz <= Math.floor(maxZ / CELL); gz++) {
-        const k = `${gx},${gz}`;
+        const k = key(gx, gz);
         let list = hash.get(k);
         if (!list) hash.set(k, (list = []));
         list.push(ref);
@@ -597,24 +740,35 @@ export function analyzeFeet(cx: number, cz: number, radius: number, heightAt: (x
   };
   let nRecords = 0;
   for (const r of records.values()) {
-    if (/^interior/.test(r.name)) continue;
+    if (/^interior/.test(r.name) || ignore(r.name)) continue;
+    const owner = recOwner(r);
+    if (!owner) continue;
     m.copy(r.group?.matrixWorld ?? new THREE.Matrix4());
+    const meas = measure(r.name, owner);
     let touched = false;
     for (const f of r.faces) {
       worldOf(f, m);
       const [fx0, fx1, fz0, fz1] = f.box!;
-      if (fx1 < x0 || fx0 > x1 || fz1 < z0 || fz0 > z1) continue;
+      if (fx1 < gx0 || fx0 > gx1 || fz1 < gz0 || fz0 > gz1) continue;
       const t = f.world!;
-      for (let i = 0; i < t.length; i += 9) touched = insert(upHash, { t, i, rec: r, f }) || touched;
+      const floors = meas && FLOORMAT.test(f.mat) && !GROUNDLIKE.test(f.mat) && measureFace(r.name, f.src, f.mat);
+      for (let i = 0; i < t.length; i += 9) {
+        const ref = { t, i, rec: r, f };
+        if (insert(upHash, ref) && floors) {
+          floorRefs.push(ref);
+          touched = true;
+        }
+      }
     }
     for (const f of r.steep) {
       worldOf(f, m);
       const [fx0, fx1, fz0, fz1] = f.box!;
-      if (fx1 < x0 || fx0 > x1 || fz1 < z0 || fz0 > z1) continue;
+      if (fx1 < gx0 || fx0 > gx1 || fz1 < gz0 || fz0 > gz1) continue;
       const t = f.world!;
+      const feet = meas && FOOTMAT.test(f.mat) && measureFace(r.name, f.src, f.mat);
       for (let i = 0; i < t.length; i += 9) {
         const ref = { t, i, rec: r, f };
-        if (insert(steepHash, ref)) {
+        if (insert(steepHash, ref) && feet) {
           steepRefs.push(ref);
           touched = true;
         }
@@ -622,12 +776,13 @@ export function analyzeFeet(cx: number, cz: number, radius: number, heightAt: (x
     }
     if (touched) nRecords++;
   }
-  /** Highest up-face at (x, z) with y in [lo, hi], or null. */
-  const upAt = (x: number, z: number, lo: number, hi: number): { y: number; mat: string } | null => {
-    const list = upHash.get(key(x, z));
+  /** Highest up-face at (x, z) with y in [lo, hi] (of a material passing `mats`), or null. */
+  const upAt = (x: number, z: number, lo: number, hi: number, not?: TriRef, mats?: RegExp, notRec?: Record): { y: number; mat: string } | null => {
+    const list = upHash.get(key(Math.floor(x / CELL), Math.floor(z / CELL)));
     if (!list) return null;
     let best: { y: number; mat: string } | null = null;
     for (const ref of list) {
+      if (ref === not || ref.rec === notRec || (mats && !mats.test(ref.f.mat))) continue;
       const t = ref.t, i = ref.i;
       const d = (t[i + 5] - t[i + 8]) * (t[i] - t[i + 6]) + (t[i + 6] - t[i + 3]) * (t[i + 2] - t[i + 8]);
       if (Math.abs(d) < 1e-9) continue;
@@ -641,26 +796,57 @@ export function analyzeFeet(cx: number, cz: number, radius: number, heightAt: (x
     }
     return best;
   };
-  /** Is there a steep face within r (XZ) of (x, z) whose y-range overlaps [lo, hi] (optionally of one record only, never `not`)? */
-  const steepNear = (x: number, z: number, r: number, lo: number, hi: number, only?: Record, not?: TriRef): boolean => {
+  /** Steep faces whose XZ footprint passes within r of (x, z), passing `test`. */
+  const steepAny = (x: number, z: number, r: number, test: (ref: TriRef, minY: number, maxY: number) => boolean): boolean => {
     const c = Math.ceil(r / CELL);
     const gx = Math.floor(x / CELL), gz = Math.floor(z / CELL);
     for (let ix = gx - c; ix <= gx + c; ix++)
       for (let iz = gz - c; iz <= gz + c; iz++) {
-        const list = steepHash.get(`${ix},${iz}`);
+        const list = steepHash.get(key(ix, iz));
         if (!list) continue;
         for (const ref of list) {
-          if ((only && ref.rec !== only) || ref === not) continue;
           const t = ref.t, i = ref.i;
           const minY = Math.min(t[i + 1], t[i + 4], t[i + 7]), maxY = Math.max(t[i + 1], t[i + 4], t[i + 7]);
-          if (maxY < lo || minY > hi) continue;
+          if (!test(ref, minY, maxY)) continue;
           if (triDistXZ(t, i, x, z) <= r) return true;
         }
       }
     return false;
   };
+  /** Nearest hit of a horizontal ray (unit dir dx, dz) of length len at height y against steep faces passing `test`. */
+  const rayHit = (ox: number, oy: number, oz: number, dx: number, dz: number, len: number, test: (ref: TriRef) => boolean): number => {
+    const seen = new Set<TriRef>();
+    let best = Infinity;
+    const n = Math.max(1, Math.ceil(len / CELL));
+    for (let k = 0; k <= n; k++) {
+      const px = ox + (dx * len * k) / n, pz = oz + (dz * len * k) / n;
+      const gx = Math.floor(px / CELL), gz = Math.floor(pz / CELL);
+      for (let ix = gx - 1; ix <= gx + 1; ix++)
+        for (let iz = gz - 1; iz <= gz + 1; iz++) {
+          const list = steepHash.get(key(ix, iz));
+          if (!list) continue;
+          for (const ref of list) {
+            if (seen.has(ref)) continue;
+            seen.add(ref);
+            if (!test(ref)) continue;
+            const d = rayTri(ref.t, ref.i, ox, oy, oz, dx, 0, dz);
+            if (d < best) best = d;
+          }
+        }
+    }
+    return best <= len ? best : Infinity;
+  };
+  /** Support for a span: the same structure (record; a landmark's other parts too). */
+  const sameSupport = (a: Record, b: Record) => a === b || (!isCityName(a.name) && !isCityName(b.name) && recOwner(a) === recOwner(b));
 
-  const totals: FeetTotals = { samples: 0, edges: 0, records: nRecords, skipped: { overhang: 0, water: 0, interior: 0, continues: 0 } };
+  const totals: FeetTotals = { samples: 0, edges: 0, records: nRecords, floating: 0, buriedOpening: 0, buriedWall: 0, buriedTop: 0, farFloat: 0, floorSamples: 0, sunkFloor: 0, skipped: { overhang: 0, water: 0, interior: 0, continues: 0, occluded: 0, enclosed: 0, inside: 0 } };
+  const owners = new Map<string, FeetOwner>();
+  const ownerRec = (rec: Record) => {
+    const o = recOwner(rec);
+    let e = owners.get(o);
+    if (!e) owners.set(o, (e = { owner: o, samples: 0, floating: 0, maxFloat: 0, buriedOpening: 0, maxBuried: 0, floorSamples: 0, sunkFloor: 0, maxSunk: 0, farFloat: 0, maxFar: 0 }));
+    return e;
+  };
   interface Sample {
     kind: FootFinding['kind'];
     rec: Record;
@@ -675,17 +861,22 @@ export function analyzeFeet(cx: number, cz: number, radius: number, heightAt: (x
     groundMat: string;
     floor?: number;
     floorMat?: string;
+    w: number;
+    nx?: number;
+    nz?: number;
   }
   const samples: Sample[] = [];
+  const spanCache = new Map<TriRef, boolean>();
   for (const ref of steepRefs) {
     const t = ref.t, i = ref.i;
-    // The bottom edge: the two lowest vertices, nearly level, with the third standing above them.
+    // The bottom edge: the two lowest vertices, with the third standing above the edge (sloped
+    // bottoms that follow the ground count too, up to 1:2).
     const vs = [0, 3, 6].map((k) => [t[i + k], t[i + k + 1], t[i + k + 2]]).sort((p, q) => p[1] - q[1]);
     const [a, b, c] = vs;
-    if (b[1] - a[1] > 0.06 || c[1] - a[1] < 0.04) continue;
     const ex = b[0] - a[0], ez = b[2] - a[2];
     const L = Math.hypot(ex, ez);
     if (L < 0.12) continue;
+    if (Math.abs(b[1] - a[1]) > 0.5 * L || c[1] - b[1] < 0.04) continue;
     // Outward horizontal normal from the winding (MeshBuilder faces point out of their solids).
     const ux = t[i + 3] - t[i], uy = t[i + 4] - t[i + 1], uz = t[i + 5] - t[i + 2];
     const vx = t[i + 6] - t[i], vy = t[i + 7] - t[i + 1], vz = t[i + 8] - t[i + 2];
@@ -695,11 +886,16 @@ export function analyzeFeet(cx: number, cz: number, radius: number, heightAt: (x
     nx /= nl;
     nz /= nl;
     totals.edges++;
+    const own = ownerRec(ref.rec);
     const n = Math.max(1, Math.round(L / step));
     for (let k = 0; k < n; k++) {
       const s = n === 1 ? 0.5 : (k + 0.5) / n;
       const qx = a[0] + ex * s, qz = a[2] + ez * s, qy = a[1] + (b[1] - a[1]) * s;
       if (qx < x0 || qx > x1 || qz < z0 || qz > z1) continue;
+      if (opts.footAt && !opts.footAt(qx, qz)) {
+        totals.skipped.inside++;
+        continue;
+      }
       const ox = qx + nx * 0.3, oz = qz + nz * 0.3;
       const terrain = heightAt(ox, oz);
       if (Math.abs(qy - terrain) > 25) {
@@ -711,35 +907,122 @@ export function analyzeFeet(cx: number, cz: number, radius: number, heightAt: (x
         totals.skipped.water++;
         continue;
       }
-      // Wall continuing below (cornice, sill, course, a stacked box): not a foot.
-      if (steepNear(qx, qz, 0.12, qy - 0.3, qy - 0.02, undefined, ref)) {
+      // Wall continuing below (a cornice, a sill, a course, a stacked box, the other half of a quad): not a foot.
+      if (steepAny(qx, qz, 0.12, (r2, lo) => r2 !== ref && lo < qy - 0.02 && lo > qy - 40 && Math.max(r2.t[r2.i + 1], r2.t[r2.i + 4], r2.t[r2.i + 7]) > qy - 0.3)) {
         totals.skipped.continues++;
         continue;
       }
       totals.samples++;
-      const surf = upAt(ox, oz, terrain - 1.5, qy + 2.5);
+      own.samples++;
+      const surf = upAt(ox, oz, terrain - 1.5, qy + 0.5, undefined, GROUNDMAT);
       const ground = Math.max(terrain, surf?.y ?? -Infinity);
       const groundMat = surf && surf.y >= terrain ? surf.mat : 'terrain';
-      const drop = groundMat === 'terrain' ? opts.visualDrop?.(ox, oz) ?? 0 : 0;
+      const dropHere = groundMat === 'terrain' ? drop(ox, oz) : 0;
       const gap = qy - ground;
       if (gap > floatMin) {
-        // An overhang: grounded structure of the same build close by (a sill on a wall, a table top on
-        // legs, a balcony on its joists, an arcade on its piers).
-        const reach = gap > 1.2 ? 2.5 : 0.6;
-        if (steepNear(qx, qz, reach, ground - 1, ground + 0.15, ref.rec, ref)) {
+        // A span: the same structure stands in the gap below the edge within reach. High edges
+        // (lintels, entablatures, eaves, roof courses: thousands per building) decide once per triangle.
+        const reach = Math.min(8, Math.max(0.6, gap * 0.8));
+        const lowEnough = qy - 0.3 * gap;
+        let spanned = gap > 1.5 ? spanCache.get(ref) : undefined;
+        if (spanned === undefined) {
+          spanned = steepAny(qx, qz, reach, (r2, lo, hi) => r2 !== ref && lo < lowEnough && hi > ground + 0.05 && sameSupport(r2.rec, ref.rec));
+          if (gap > 1.5) spanCache.set(ref, spanned);
+        }
+        if (spanned) {
           totals.skipped.overhang++;
           continue;
         }
-        samples.push({ kind: 'floating', rec: ref.rec, f: ref.f, x: qx, y: qy, z: qz, depth: gap, depthVis: gap + drop, ground, terrain, groundMat });
+        // Occluded: something stands in front of the void (a neighbour's wall, a socle, a step).
+        const ym = (qy + ground) / 2;
+        if (rayHit(qx + nx * 0.7, ym, qz + nz * 0.7, -nx, -nz, 0.66, (r2) => r2 !== ref) < 0.66) {
+          totals.skipped.occluded++;
+          continue;
+        }
+        // Inside a city building (a closed room, a light well walled all round): the same block
+        // stands within 15 m every way round the void. Landmarks' halls are walked through: kept.
+        if (isCityName(ref.rec.name)) {
+          const blk = recOwner(ref.rec);
+          const sx = qx + nx * 0.05, sz = qz + nz * 0.05;
+          const mine = (r2: TriRef) => r2 !== ref && recOwner(r2.rec) === blk;
+          if ([[nx, nz], [-nz, nx], [nz, -nx], [-nx, -nz]].every(([dx, dz]) => rayHit(sx, ym, sz, dx, dz, 15, mine) < 15)) {
+            totals.skipped.enclosed++;
+            continue;
+          }
+        }
+        totals.floating++;
+        own.floating++;
+        own.maxFloat = Math.max(own.maxFloat, gap);
+        samples.push({ kind: 'floating', rec: ref.rec, f: ref.f, x: qx, y: qy, z: qz, depth: gap, depthVis: gap + dropHere, ground, terrain, groundMat, w: step, nx, nz });
         continue;
       }
-      // Buried: the floor just inside the wall lies under the ground outside.
-      const ix = qx - nx * 0.6, iz = qz - nz * 0.6;
-      const floor = upAt(ix, iz, qy - 0.3, ground + 0.3);
-      if (floor && ground - floor.y > buryMin) {
-        samples.push({ kind: 'buried', rec: ref.rec, f: ref.f, x: qx, y: qy, z: qz, depth: ground - floor.y, depthVis: ground - floor.y - drop, ground, terrain, groundMat, floor: floor.y, floorMat: floor.mat });
+      // A grounded foot seen from afar: the terrain drawn coarser and lower (CDLOD) opens a gap.
+      if (opts.farTerrain && groundMat === 'terrain') {
+        const far = qy - opts.farTerrain(ox, oz);
+        if (far > 0.3) {
+          totals.farFloat++;
+          own.farFloat++;
+          own.maxFar = Math.max(own.maxFar, far);
+        }
       }
+      // Buried: the floor just inside the wall lies under the ground outside (the street, the
+      // terrain, a neighbour: not the structure's own threshold or step).
+      const outside = Math.max(terrain, upAt(ox, oz, terrain - 1.5, qy + 0.5, undefined, GROUNDMAT, ref.rec)?.y ?? -Infinity);
+      const ix = qx - nx * 0.6, iz = qz - nz * 0.6;
+      const floor = upAt(ix, iz, qy - 0.3, outside + 0.3);
+      if (!floor || outside - floor.y <= buryMin) continue;
+      // Open there? A ray from outside just above the ground toward the wall meets none of its faces.
+      const yo = outside + 0.35;
+      const mineRec = (r2: TriRef) => r2.rec === ref.rec;
+      const hit = rayHit(qx + nx * 0.8, yo, qz + nz * 0.8, -nx, -nz, 1.2, mineRec);
+      if (hit < 0.95) {
+        totals.buriedWall++;
+        continue;
+      }
+      // An opening has wall over it (a lintel, an arch); nothing above means the ground rises over
+      // a low structure's top (counted under terrain-in-floor).
+      if (rayHit(qx + nx * 0.8, Math.max(floor.y + 4, outside + 1), qz + nz * 0.8, -nx, -nz, 1.2, mineRec) > 0.95) {
+        totals.buriedTop++;
+        continue;
+      }
+      totals.buriedOpening++;
+      own.buriedOpening++;
+      own.maxBuried = Math.max(own.maxBuried, outside - floor.y);
+      const outMat = outside > terrain ? upAt(ox, oz, outside - 0.01, outside + 0.01, undefined, GROUNDMAT, ref.rec)?.mat ?? 'surface' : 'terrain';
+      samples.push({ kind: 'buried-opening', rec: ref.rec, f: ref.f, x: qx, y: qy, z: qz, depth: outside - floor.y, depthVis: outside - floor.y - (outMat === 'terrain' ? drop(ox, oz) : 0), ground: outside, terrain, groundMat: outMat, floor: floor.y, floorMat: floor.mat, w: step, nx, nz });
     }
+  }
+  // Terrain through the structure's floors, treads, podium tops and slabs (as drawn).
+  for (const ref of floorRefs) {
+    const t = ref.t, i = ref.i;
+    const ax = t[i], ay = t[i + 1], az = t[i + 2], bx = t[i + 3], by = t[i + 4], bz = t[i + 5], qx3 = t[i + 6], qy3 = t[i + 7], qz3 = t[i + 8];
+    const area = 0.5 * Math.abs((bx - ax) * (qz3 - az) - (qx3 - ax) * (bz - az));
+    if (area < 0.02 || (ref.f.mat.startsWith('wood') && area < 1)) continue;
+    const nn = Math.max(1, Math.min(40, Math.round(Math.sqrt(area) / 0.75)));
+    const per = area / ((nn * (nn + 1)) / 2);
+    const own = ownerRec(ref.rec);
+    for (let u = 0; u < nn; u++)
+      for (let v = 0; u + v < nn; v++) {
+        const l1 = (u + 1 / 3) / nn, l2 = (v + 1 / 3) / nn, l3 = 1 - l1 - l2;
+        const x = l1 * ax + l2 * bx + l3 * qx3, z = l1 * az + l2 * bz + l3 * qz3, y = l1 * ay + l2 * by + l3 * qy3;
+        if (x < x0 || x > x1 || z < z0 || z > z1) continue;
+        const terrain = heightAt(x, z);
+        if (Math.abs(terrain - y) > 25) continue;
+        const water = opts.waterAt?.(x, z);
+        if (water != null && water > terrain + 0.05) continue;
+        totals.floorSamples++;
+        own.floorSamples++;
+        const vis = terrain - drop(x, z);
+        const sunk = vis - y;
+        if (sunk <= sinkMin) continue;
+        // Covered just above the terrain (a floor laid over a sunk slab, a step over its footing): not seen.
+        const over = upAt(x, z, vis - 0.02, vis + 0.6, ref);
+        if (over) continue;
+        totals.sunkFloor++;
+        own.sunkFloor++;
+        own.maxSunk = Math.max(own.maxSunk, sunk);
+        samples.push({ kind: 'terrain-in-floor', rec: ref.rec, f: ref.f, x, y, z, depth: terrain - y, depthVis: sunk, ground: terrain, terrain, groundMat: 'terrain', floor: y, floorMat: ref.f.mat, w: per });
+      }
   }
   // Stretches: samples of one build, source, material and kind within 2 m of one another.
   const groups: Sample[][] = [];
@@ -750,7 +1033,7 @@ export function analyzeFeet(cx: number, cz: number, radius: number, heightAt: (x
     if (!list) byRec.set(k, (list = []));
     let home: Sample[] | null = null;
     for (const g of list) {
-      if (!g.length || !g.some((o) => Math.hypot(o.x - s.x, o.z - s.z) < 2)) continue;
+      if (!g.length || !g.some((o) => Math.abs(o.x - s.x) < 2 && Math.abs(o.z - s.z) < 2 && Math.hypot(o.x - s.x, o.z - s.z) < 2)) continue;
       if (!home) {
         home = g;
         g.push(s);
@@ -769,14 +1052,15 @@ export function analyzeFeet(cx: number, cz: number, radius: number, heightAt: (x
   const findings: FootFinding[] = [];
   for (const g of groups) {
     if (!g.length) continue;
-    const worst = g.reduce((p, q) => (q.depth > p.depth ? q : p));
+    const worst = g.reduce((p, q) => (q.depthVis > p.depthVis ? q : p));
     findings.push({
       kind: worst.kind,
       name: worst.rec.name,
+      owner: recOwner(worst.rec),
       src: worst.f.src,
       mat: worst.f.mat,
       n: g.length,
-      length: +(g.length * step).toFixed(1),
+      length: +g.reduce((s, q) => s + q.w, 0).toFixed(1),
       depth: +worst.depth.toFixed(2),
       depthVis: +worst.depthVis.toFixed(2),
       at: [+worst.x.toFixed(1), +worst.y.toFixed(2), +worst.z.toFixed(1)],
@@ -784,8 +1068,9 @@ export function analyzeFeet(cx: number, cz: number, radius: number, heightAt: (x
       terrain: +worst.terrain.toFixed(2),
       groundMat: worst.groundMat,
       ...(worst.floor !== undefined ? { floor: +worst.floor.toFixed(2), floorMat: worst.floorMat } : {}),
+      ...(worst.nx !== undefined ? { out: [+worst.nx.toFixed(2), +worst.nz!.toFixed(2)] as [number, number] } : {}),
     });
   }
-  findings.sort((p, q) => q.depth - p.depth);
-  return { findings, totals };
+  findings.sort((p, q) => q.depthVis - p.depthVis);
+  return { findings, totals, owners: [...owners.values()].filter((o) => o.samples || o.floorSamples) };
 }
