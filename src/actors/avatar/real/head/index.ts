@@ -116,8 +116,10 @@ const lerpOf = (n: number) => Math.round(n * 1000);
  * made here shares this function's V8 context, and the head lives as long as its avatar: the closures
  * must not name `ctx`, or each person kept their ~0.26 MB morphed body for good (33 MB at the
  * Forum, memory audit phase 3). Without `bodyLater` (tests, dev scenes) the body is kept.
+ * `hairLod`: the hair's level to start with (default the context's). RealBody builds the head from
+ * the full-detail body measure but starts the hair at the level of the body it wears.
  */
-export function buildHead(ctx: RealContext, bodyLater?: () => BodyArrays): RealHead {
+export function buildHead(ctx: RealContext, hairLod: 0 | 1 | 2 = ctx.lod, bodyLater?: () => BodyArrays): RealHead {
   const { app, rig, sex } = ctx;
   const startLod = ctx.lod;
   let body: BodyArrays | null = ctx.body;
@@ -186,7 +188,7 @@ export function buildHead(ctx: RealContext, bodyLater?: () => BodyArrays): RealH
     } else hairMesh.geometry = got.value.geometry;
     hairMesh.visible = true;
   };
-  setHairLod(startLod);
+  setHairLod(hairLod);
 
   // Helmet, veil, infula.
   if (helmet || veiled) {

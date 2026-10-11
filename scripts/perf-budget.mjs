@@ -5,9 +5,9 @@
  * game draws or does every frame; the budgets are the October 2026 audit's numbers plus headroom
  * (docs/research/perf-audit-2026-10.md).
  *
- *   node scripts/perf-budget.mjs [--views forum,colosseum] [--graphics high|medium] [--repeat 2]
+ *   node scripts/perf-budget.mjs [--views forum,colosseum] [--graphics high|medium|low] [--repeat 2]
  *                                [--budget scripts/perf-budget.json] [--json out.json] [--no-idle]
- *                                [--write-budget] [--headroom 1.3]
+ *                                [--gpu] [--write-budget] [--headroom 1.3]
  *
  * Per view (same viewpoints as perf.mjs, 1280×720, the frame cap lifted with ?fps=0):
  *   cpuMean, cpuP95     frame CPU ms (game.stats.cpuMs) over 180 frames looking four ways
@@ -16,6 +16,10 @@
  *   slowFrames          frames over 33 ms (two missed vsyncs at 60 Hz) during a 90° snap per
  *                       direction and a smooth 360° turn (streaming and LOD builds included)
  *   bootMs              page load to ready
+ *   gpuMs               with --gpu only: GPU ms of a frame looking the first way (timer queries:
+ *                       the frame drawn 4 times per query on an idle queue, plus half a shadow-map
+ *                       render, as at 30 Hz; the median of 9). Other programs on the GPU (other
+ *                       agents' browsers) add to it, so it is checked only when asked for.
  * And once (first view): idle checks, from game.drawStats and the frame counter:
  *   pausedDrawShare     share of paused (menu) frames that still drew (should be near 0)
  *   titleFps            frames per second on the title (capped at 30)
@@ -49,8 +53,8 @@ const budgetFile = existsSync(budgetPath) ? JSON.parse(readFileSync(budgetPath, 
 const tierBudget = budgetFile.tiers?.[graphics] ?? { views: {}, idle: {} };
 const views = (args.views ? String(args.views).split(',') : Object.keys(tierBudget.views ?? {}).length ? Object.keys(tierBudget.views) : ['forum', 'colosseum']).filter((v) => v in VIEWS);
 /** Lower is better for every metric but titleFps' cap (checked as an upper bound too). */
-const METRICS = ['cpuMean', 'cpuP95', 'renderSubmit', 'draws', 'triangles', 'slowFrames', 'bootMs'];
-const TIMED = new Set(['cpuMean', 'cpuP95', 'renderSubmit', 'slowFrames', 'bootMs']);
+const METRICS = ['cpuMean', 'cpuP95', 'renderSubmit', 'draws', 'triangles', 'slowFrames', 'bootMs', ...(args.gpu ? ['gpuMs'] : [])];
+const TIMED = new Set(['cpuMean', 'cpuP95', 'renderSubmit', 'slowFrames', 'bootMs', 'gpuMs']);
 
 let server = null;
 let baseUrl = args.url;
@@ -77,6 +81,7 @@ try {
       const bootMs = Date.now() - t0;
       await page.waitForTimeout(Number(args.settle ?? 6000));
       const m = await page.evaluate(measureView);
+      if (args.gpu) m.gpuMs = await page.evaluate(measureGpu);
       m.bootMs = bootMs;
       if (errors.length) m.errors = errors.slice(0, 3);
       const prev = measured.views[view];
@@ -134,12 +139,15 @@ if (args.json) writeFileSync(resolve(root, args.json), JSON.stringify(measured, 
 if (args['write-budget'] !== undefined) {
   const out = budgetFile.tiers ? budgetFile : { tiers: {} };
   out.note = out.note ?? 'Budgets for scripts/perf-budget.mjs: the audit measurements × headroom. Regenerate with --write-budget (and say why in your report).';
+  const before = out.tiers[graphics];
   out.tiers[graphics] = { views: {}, idle: { pausedDrawShare: 0.15, titleFps: 32 } };
   for (const view of views) {
     const m = measured.views[view];
     const b = {};
     // Timings × headroom, counts × 1.15 (they are exact), slow frames at least 6.
-    for (const k of METRICS) b[k] = k === 'slowFrames' ? Math.max(6, Math.ceil(m[k] * 2)) : k === 'draws' ? Math.ceil((m[k] * 1.15) / 10) * 10 : k === 'triangles' ? Math.ceil((m[k] * 1.15) / 1e4) * 1e4 : k === 'bootMs' ? Math.round(m[k] * headroom) : +(m[k] * headroom).toFixed(1);
+    // The GPU number moves with whatever else the GPU runs: twice the headroom of the CPU timings.
+    for (const k of METRICS) b[k] = k === 'gpuMs' ? +(m[k] * headroom * 1.5).toFixed(1) : k === 'slowFrames' ? Math.max(6, Math.ceil(m[k] * 2)) : k === 'draws' ? Math.ceil((m[k] * 1.15) / 10) * 10 : k === 'triangles' ? Math.ceil((m[k] * 1.15) / 1e4) * 1e4 : k === 'bootMs' ? Math.round(m[k] * headroom) : +(m[k] * headroom).toFixed(1);
+    if (!args.gpu && before?.views?.[view]?.gpuMs !== undefined) b.gpuMs = before.views[view].gpuMs;
     out.tiers[graphics].views[view] = b;
   }
   writeFileSync(budgetPath, JSON.stringify(out, null, 2) + '\n');
@@ -156,6 +164,7 @@ function fmt(k, v) {
   if (typeof v !== 'number') return String(v);
   if (k === 'triangles') return `${(v / 1e6).toFixed(2)}M`;
   if (k === 'bootMs') return `${(v / 1000).toFixed(1)} s`;
+  if (k === 'gpuMs') return `${v.toFixed(2)} ms`;
   if (k === 'draws' || k === 'slowFrames') return String(v);
   return `${v.toFixed(1)} ms`;
 }
@@ -205,6 +214,48 @@ async function measureView() {
     triangles: tris,
     slowFrames: slow,
   };
+}
+
+/** In the page: GPU ms of a frame (see gpuMs in the header); NaN without timer queries. */
+async function measureGpu() {
+  const game = window.__skyrome.game;
+  const r = game.renderer;
+  const gl = r.getContext();
+  const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+  if (!ext) return NaN;
+  const sm = r.shadowMap;
+  const reps = 4;
+  const time = async (shadow) => {
+    gl.finish();
+    const q = gl.createQuery();
+    gl.beginQuery(ext.TIME_ELAPSED_EXT, q);
+    for (let i = 0; i < reps; i++) {
+      sm.autoUpdate = false;
+      sm.needsUpdate = shadow;
+      game.renderFrame();
+    }
+    gl.endQuery(ext.TIME_ELAPSED_EXT);
+    gl.flush();
+    let k = 0;
+    while (!gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE) && k++ < 500) await new Promise((res) => setTimeout(res, 1));
+    const ok = gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE) && !gl.getParameter(ext.GPU_DISJOINT_EXT);
+    const v = ok ? gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6 / reps : NaN;
+    gl.deleteQuery(q);
+    return v;
+  };
+  const frames = [], shadows = [];
+  for (let t = 0; t < 9; t++) {
+    const f = await time(false);
+    const s = await time(true);
+    if (Number.isFinite(f) && Number.isFinite(s)) {
+      frames.push(f);
+      shadows.push(s - f);
+    }
+    await new Promise((res) => requestAnimationFrame(res));
+  }
+  if (!frames.length) return NaN;
+  const med = (a) => [...a].sort((x, y) => x - y)[a.length >> 1];
+  return +(med(frames) + Math.max(0, med(shadows)) / 2).toFixed(2);
 }
 
 /** In the page: the idle behaviour (menus and the title draw little). */

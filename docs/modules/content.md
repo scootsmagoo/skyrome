@@ -154,8 +154,10 @@ puts somebody (the NPCs stand there). Rapier's queries only see the colliders th
 `installContent` steps the physics a tenth of a millisecond first: everything was built behind the loading screen.
 Places buried in the world's geometry (the Subura's fallback block today) get nothing until they have a street.
 
-Every prompt has something to see (`src/content/standins.ts`, merged per 150 m cell into one mesh per material and
-registered with `placeAndRegister`, colliders included; ~210 things, a few dozen draw calls where the player is):
+Every prompt has something to see (`src/content/standins.ts`, merged per 150 m cell into one mesh per material, the
+cells' meshes then batched together (`content:batches`, one multi-draw per material: ~10 draws in the Forum instead of
+44, phase 3; `?lodoff=standinbatch` keeps the meshes) and
+registered with `placeAndRegister`, colliders included; ~210 things, about ten draw calls where the player is):
 
 | What | How |
 |---|---|

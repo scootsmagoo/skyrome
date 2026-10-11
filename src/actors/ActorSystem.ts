@@ -4,6 +4,19 @@ import type { Game, System } from '../core/Game';
 import type { Actor } from './Actor';
 import { avatarLod } from './avatar/lod';
 import { stepRealBuilds } from './avatar/real/RealBody';
+import { cullAsWhole, stopCullingAsWhole } from '../gfx/fastCull';
+
+/**
+ * A person, culled as a whole before three.js walks the scene (gfx/fastCull.ts): a sphere this big
+ * around the point 1 m above the feet holds the body, what they carry and a ragdoll's sprawl.
+ */
+const CULL_RADIUS = 4.5;
+
+/** Does the actor cast a shadow at all now? Its body decides (HumanoidAvatar stops it by distance). */
+function castsShadow(a: Actor): boolean {
+  const body = (a.avatar as { mesh?: THREE.Object3D } | null)?.mesh;
+  return body ? body.castShadow : true;
+}
 
 /**
  * Milliseconds a frame for the avatars' LOD builds made ahead of need (a stage at least while any
@@ -31,12 +44,14 @@ export class ActorSystem implements System {
   add<T extends Actor>(a: T): T {
     this.list.push(a);
     this.byId.set(a.id, a);
+    cullAsWhole(a.root, CULL_RADIUS, 1, () => castsShadow(a));
     return a;
   }
 
   remove(a: Actor) {
     this.list = this.list.filter((x) => x !== a);
     this.byId.delete(a.id);
+    stopCullingAsWhole(a.root);
     a.dispose();
   }
 

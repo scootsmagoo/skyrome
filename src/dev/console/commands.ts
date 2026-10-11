@@ -9,7 +9,7 @@ import { DIFFICULTY, type Difficulty } from '../../rpg/data/tuning';
 import { ENEMY_IDS } from '../../combat/archetypes';
 import { FIGHTS, startBout } from '../../game/bouts';
 import { CommandTable, fuzzyFind, toggleArg, type CommandDef } from './parse';
-import { applyChoice, type GraphicsChoice } from '../../core/graphics';
+import { applyChoice, lodScaleDefault, type GraphicsChoice } from '../../core/graphics';
 import { textureCensus } from '../../gfx/textureCensus';
 
 /** Session cheats (not saved, like Bethesda's). The console re-applies them every frame. */
@@ -362,7 +362,7 @@ export function builtinCommands(): CommandTable<ConsoleCtx> {
         return [
           `GPU: ${gpu?.name || 'unknown'}${gpu?.software ? ' (SOFTWARE: hardware acceleration is off)' : ''}`,
           `Quality: ${s.graphics ?? 'auto'}${(s.graphics ?? 'auto') === 'auto' && s.graphicsApplied ? ` → ${s.graphicsApplied.tier} (by ${s.graphicsApplied.by === 'fps' ? 'frame rate' : 'graphics card'})` : ''}`,
-          `Render scale ${s.renderScale} · pixel ratio ≤ ${s.maxPixelRatio} · shadows ${s.shadows} · view ${s.viewDistance} m · ${s.maxFps || 'unlimited'} fps · crowd ×${s.crowdDensity ?? 1}`,
+          `Render scale ${s.renderScale} · pixel ratio ≤ ${s.maxPixelRatio} · shadows ${s.shadows} · view ${s.viewDistance} m · ${s.maxFps || 'unlimited'} fps · crowd ×${s.crowdDensity ?? 1} · detail distances ×${lodScaleDefault(s)}`,
         ];
       },
     },

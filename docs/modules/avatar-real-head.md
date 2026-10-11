@@ -12,6 +12,7 @@ head.objects      // SkinnedMeshes in the bind pose: [hair+beard (hair material)
 head.frame        // HeadSurface (a RealHeadFrame): centre, radii, brow, ears, crown, chin, plus at(), normalAt() ...
 head.skinPaint    // SkinPaint for skinMaterial(key, colour, maps, head.skinPaint)
 head.setLod(0|1|2)   // hair/beard detail for the body LOD
+// buildHead(ctx, hairLod) starts the hair at another level than ctx.lod (RealBody: the body's own)
 head.dispose()       // release the cached geometry
 bindHead(head.objects, avatar.skeleton, avatar.root)   // add + bind (the eyes do the same)
 ```

@@ -707,8 +707,11 @@ export class RealBody {
   private makeHead() {
     this.head?.dispose();
     const e = this.entry;
+    // The head is measured on the full-detail body, but its hair starts at the body's own level: a body
+    // made at LOD 2 (everyone who appears 22 m away or more) kept full-detail hair until its LOD next
+    // changed (phase 3 perf audit: 330 k of the Forum's 2.2 M triangles were such hair).
     // The head asks for the morphed body again only to build a later LOD's beard (morph cache).
-    const head = buildHead(context(e, 0), () => morphedBody(e, 0));
+    const head = buildHead(context(e, 0), Math.min(this.lod, 2) as 0 | 1 | 2, () => morphedBody(e, 0));
     this.head = head;
     this.headObjects = head.objects;
     if (this.entry.headHelmets !== head.objects.length > 0) {

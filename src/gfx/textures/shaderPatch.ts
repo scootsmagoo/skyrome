@@ -265,6 +265,15 @@ function normalFragmentMaps(): string {
 #endif`;
 }
 
+/**
+ * Near-field detail (SK_DETAIL, SK_GRAIN: only seen within 18 and 9 m): off for the Low tier
+ * (core/graphics.ts `sessionQuality`). Read when a material is made, so set it before.
+ */
+let nearDetail = true;
+export function setNearMaterialDetail(on: boolean) {
+  nearDetail = on;
+}
+
 /** `?puddle=0` switches the street wetness off, for A/B shots. */
 const NO_PUDDLE = typeof location !== 'undefined' && new URLSearchParams(location.search).get('puddle') === '0';
 
@@ -326,10 +335,10 @@ export function applyShaderPatch(
 ) {
   const macro = opts.macro ?? 0;
   const weather = opts.weather ?? 0;
-  const detailV = opts.detail ?? 0;
+  const detailV = nearDetail ? opts.detail ?? 0 : 0;
   const mottle = opts.mottle ?? 0;
   const wear = opts.wear ?? 0;
-  const grain = opts.grain ?? 0;
+  const grain = nearDetail ? opts.grain ?? 0 : 0;
   const flake = opts.flake ?? 0;
   const puddle = NO_PUDDLE ? 0 : opts.puddle ?? 0;
   // SK_DETILE and SK_CONTRAST only act inside USE_MAP, so they are safe before the map loads.

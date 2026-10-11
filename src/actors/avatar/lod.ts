@@ -9,10 +9,14 @@
  * only the limb motion is coarser; HumanoidAvatar also puts avatars beyond `flatFrom` on the flat bone
  * path (flatSkeleton.ts), which makes the frames in between nearly free.
  *
+ * Distances are divided by the graphics tier's LOD scale (gfx/lodScale.ts): on Medium (0.75) the
+ * 25 m full-rate zone ends at about 19 m, and so on for every level that reads `distance()`.
+ *
  * `?lodoff=anim` switches all of it off (every avatar at the full rate on the stock bone path) for A/B runs.
  * Callers that must have the full rate (the player, fighters, ragdolls) ask for it by `force`.
  */
 import * as THREE from 'three';
+import { lodScale } from '../../gfx/lodScale';
 
 interface Lodded {
   readonly root: THREE.Object3D;
@@ -98,7 +102,9 @@ export class AvatarLod {
       const e = a.root.matrixWorld.elements;
       const ve = this.viewer.matrixWorld.elements;
       const dx = e[12] - ve[12], dy = e[13] - ve[13], dz = e[14] - ve[14];
-      d = Math.sqrt(dx * dx + dy * dy + dz * dz); // not Math.hypot: it allocates (perf audit 2026-10)
+      // Not Math.hypot: it allocates (perf audit 2026-10). Divided by the tier's LOD scale, so every
+      // level below (pose rate, flat bones, body and hair LOD, shadows) comes sooner on Medium and Low.
+      d = Math.sqrt(dx * dx + dy * dy + dz * dz) / lodScale.value;
     }
     s.dist = d;
     const wasVisible = s.visible;

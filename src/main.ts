@@ -4,6 +4,10 @@ import { DebugOverlay } from './dev/DebugOverlay';
 import { GraphicsGovernor } from './core/graphics';
 import { enableCompressedTextures } from './gfx/materials';
 import { setInscriptionRenderer } from './arch/common/inscription';
+import { installChunkPatches } from './gfx/chunkPatches';
+import { installLodScale } from './gfx/lodScale';
+import { setNearMaterialDetail } from './gfx/textures/shaderPatch';
+import { sessionQuality } from './core/graphics';
 import { classicRequested, loadRealBodies } from './actors/avatar/real/RealBody';
 import { setLeafyCanopies } from './arch/vegetation/materials';
 import { setHairAlphaToCoverage } from './actors/avatar/real/head/hairConfig';
@@ -30,6 +34,11 @@ async function boot() {
 
   const game = await Game.create(app, { seed: Number(params.get('seed') ?? 113) });
   window.__skyrome = { game, scene: sceneName, ready: false };
+  // Before the first material compiles: cheaper shared shader chunks (gfx/chunkPatches.ts).
+  installChunkPatches();
+  installLodScale(game);
+  // The Low tier's materials go without the near-field detail layers (from the next launch on).
+  setNearMaterialDetail(sessionQuality(game.settings.data).nearDetail);
   enableCompressedTextures(game.renderer);
   // Inscription atlas pages live on the GPU only (panels are copied in there, no pixels kept);
   // `?lodoff=gpuatlas` keeps the old CPU pages for A/B runs.

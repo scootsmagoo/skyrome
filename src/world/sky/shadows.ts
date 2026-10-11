@@ -31,10 +31,12 @@ export interface ShadowPreset {
  * High: one 100 m box at 3072² (3.3 cm a texel; the old 120 m at 2048² was 5.9 cm). The native
  * two-cascade SunLight was tried first and looks about the same, but it draws every near caster a
  * second time (+800 draws, +2.5 M triangles on shadow frames in the Forum, +4 ms CPU), so it stays
- * an option for comparison (?shadowmode=cascade) rather than the default. Low: one 110 m box.
+ * an option for comparison (?shadowmode=cascade) rather than the default. Low (the Medium tier's):
+ * one 80 m box at 1024² (7.8 cm a texel; it was 110 m, phase 3): about half the casters of a 110 m
+ * box in the shadow pass, and shadows reach about 60 m ahead instead of 85.
  */
 export const SHADOW_PRESETS: Record<Exclude<ShadowQuality, 'off'>, ShadowPreset> = {
-  low: { mode: 'single', mapSize: 1024, extent: 110, distance: 0, radius: 1.5 },
+  low: { mode: 'single', mapSize: 1024, extent: 80, distance: 0, radius: 1.5 },
   high: { mode: 'single', mapSize: 3072, extent: 100, distance: 0, radius: 3 },
 };
 /** Two cascades of 2048² (near ~0-30 m, far to 110 m): ?shadowmode=cascade. */

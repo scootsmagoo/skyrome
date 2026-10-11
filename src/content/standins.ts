@@ -10,6 +10,12 @@
  * cell into one mesh per material (MeshBuilder), registered with the world for distance culling with
  * their colliders (`placeAndRegister`). Every shape is drawn in its own frame: origin on the ground
  * (wall-mounted: on the wall surface), front facing −z, metres 1:1.
+ *
+ * The cells' meshes then move into one BatchPool for all of them (`content:batches`: one multi-draw
+ * per material, culled per cell mesh by gfx/fastCull.ts), so the Forum's ten cells cost about ten
+ * draws instead of 44, and as many fewer in the shadow pass (phase 3). The registered group stays,
+ * empty, for the world registry's distance culling, which the cell's instances follow.
+ * `?lodoff=standinbatch` keeps the meshes.
  */
 import * as THREE from 'three';
 import type { Game } from '../core/Game';
@@ -18,6 +24,7 @@ import { placeProp, type PropKind } from '../arch/props';
 import { Draw } from '../arch/fabric/draw';
 import { MeshBuilder, placeAndRegister } from '../gfx/MeshBuilder';
 import type { MaterialId } from '../gfx/materialIds';
+import { BatchPool, type BatchHandle } from '../world/city/batches';
 
 export type StandInKind =
   | 'stele'
@@ -218,6 +225,8 @@ interface Cell {
 export class StandIns {
   private cells = new Map<string, Cell>();
   private registered: string[] = [];
+  /** The cells' instances in the shared batches (removed with the cells). */
+  private handles: BatchHandle[] = [];
   private readonly rng: Rng;
 
   constructor(seed = 'content-standins') {
@@ -293,6 +302,8 @@ export class StandIns {
       const group = cell.b.build(id);
       try {
         placeAndRegister(game, id, group, cell.b.colliders, cell.origin, 0, { cullDistance });
+        const handle = batchCell(game, group);
+        if (handle) this.handles.push(handle);
         this.registered.push(id);
       } catch (err) {
         console.warn(`[content] stand-ins of cell ${cell.key} could not be placed`, err);
@@ -304,7 +315,46 @@ export class StandIns {
 
   dispose(game: Game) {
     for (const id of this.registered.splice(0)) game.world?.remove?.(id);
+    for (const h of this.handles.splice(0)) h.dispose();
   }
+}
+
+const NO_BATCH = (new URLSearchParams(globalThis.location?.search ?? '').get('lodoff') ?? '').includes('standinbatch');
+const pools = new WeakMap<Game, BatchPool>();
+
+/** The stand-ins' batch pool of a game (made on first use, with a system that keeps its materials in step). */
+function poolFor(game: Game): BatchPool {
+  let pool = pools.get(game);
+  if (!pool) {
+    const p = new BatchPool(game.scene, { name: 'content', verts: 1 << 13, trim: false });
+    pools.set(game, p);
+    game.addSystem({ name: 'contentBatches', priority: 97, lateUpdate: () => p.sync() });
+    pool = p;
+  }
+  return pool;
+}
+
+/** Move a placed cell's meshes into the shared batches; its instances follow the group's visibility. */
+function batchCell(game: Game, group: THREE.Object3D): BatchHandle | null {
+  if (NO_BATCH || !game.addSystem) return null;
+  const handle = poolFor(game).addGroup(group);
+  for (const c of [...group.children]) if ((c as THREE.Mesh).isMesh) c.removeFromParent();
+  followVisible(group, handle);
+  return handle;
+}
+
+/** The world registry sets `group.visible`; the batch instances follow (a function of its own: no builder locals kept alive). */
+function followVisible(group: THREE.Object3D, handle: BatchHandle) {
+  let visible = group.visible;
+  handle.setVisible(visible);
+  Object.defineProperty(group, 'visible', {
+    configurable: true,
+    get: () => visible,
+    set: (v: boolean) => {
+      visible = v;
+      handle.setVisible(v);
+    },
+  });
 }
 
 /** Yaw that turns a wall-mounted shape (front −z) to face along the wall's outward normal. */

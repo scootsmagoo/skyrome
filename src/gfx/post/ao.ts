@@ -11,7 +11,9 @@
  * Medium) and CONTACT (High only) are compile-time defines.
  *
  * Cost: two half-resolution passes, ~1 ms on an M-series Mac at 1512×860×2. On for High and
- * Medium (Settings → Display → Ambient occlusion).
+ * Medium (Settings → Display → Ambient occlusion). The character mask (the HDR colour's alpha, an
+ * 8-byte read) is read once for the pixel and then only for samples that would occlude, not for
+ * all twelve (phase 3; the same result; `AO_MASK_ALWAYS` restores the old order for A/B runs).
  */
 
 /**
@@ -81,6 +83,10 @@ void main() {
   float dist = -P.z;
   vec2 zp = packDist(dist);
   if (dist > uFadeFar) { gl_FragColor = vec4(1.0, 1.0, zp); return; }
+  #ifndef AO_MASK_ALWAYS
+  // A character pixel takes no AO (its ao ends as 1 below): only its contact shadow is left to do.
+  bool character = texture2D(tMask, vUv).a < 0.5;
+  #endif
   // Normal from the nearer of the two neighbours on each axis (no halos across silhouettes).
   vec3 px1 = viewPos(vUv + vec2(uTexel.x, 0.0)) - P, px0 = P - viewPos(vUv - vec2(uTexel.x, 0.0));
   vec3 py1 = viewPos(vUv + vec2(0.0, uTexel.y)) - P, py0 = P - viewPos(vUv - vec2(0.0, uTexel.y));
@@ -93,19 +99,33 @@ void main() {
   float rot = ign(gl_FragCoord.xy) * 6.2831853;
   const int N_S = AO_SAMPLES;
   float occ = 0.0;
+  #ifndef AO_MASK_ALWAYS
+  if (!character)
+  #endif
   for (int i = 0; i < N_S; i++) {
     float t = (float(i) + 0.5) / float(N_S);
     float a = rot + float(i) * 2.39996;
     vec2 o = vec2(cos(a), sin(a) * (uTexel.x / uTexel.y)) * rs * t;
+    #ifdef AO_MASK_ALWAYS
     if (texture2D(tMask, vUv + o).a < 0.5) continue;
+    #endif
     vec3 Q = viewPos(vUv + o);
     vec3 v = Q - P;
     float vv = dot(v, v);
     // Alchemy: occluders above the tangent plane, weighted down with distance.
-    occ += max(0.0, dot(v, N) - 0.012 * dist) / (vv + 0.01) * smoothstep(uRadius * uRadius * 4.0, 0.0, vv);
+    float c = max(0.0, dot(v, N) - 0.012 * dist) / (vv + 0.01) * smoothstep(uRadius * uRadius * 4.0, 0.0, vv);
+    #ifndef AO_MASK_ALWAYS
+    // Characters cast no AO: the mask (a read of the HDR colour) only for a sample that would occlude.
+    if (c > 0.0 && texture2D(tMask, vUv + o).a < 0.5) c = 0.0;
+    #endif
+    occ += c;
   }
   float ao = max(0.0, 1.0 - uIntensity * 2.0 * occ / float(N_S));
+  #ifdef AO_MASK_ALWAYS
   if (texture2D(tMask, vUv).a < 0.5) ao = 1.0;
+  #else
+  if (character) ao = 1.0;
+  #endif
   ao = mix(ao, 1.0, smoothstep(uFadeFar * 0.5, uFadeFar, dist));
   float cs = 1.0;
   #ifdef CONTACT

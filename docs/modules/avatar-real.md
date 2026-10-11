@@ -159,7 +159,11 @@ owns a `RealBody` (real/RealBody.ts) and picks its LOD in `updateLod` (`lod: 'lo
   source vertex's offsets). `updateCorrectives(mesh, bones)` runs after each animation step at LOD <= 2.
 
 **LODs**: 0 (11 k triangles, < 9 m), 1 (4 k, < 22 m), 2 (1.2 k, < 55 m), 3 (about 300, beyond; vertex-cluster
-decimation of LOD 2 at load, `real/decimate.ts`, keeps the weights). LOD 0 is two draws (cloth + skin) plus the eyes;
+decimation of LOD 2 at load, `real/decimate.ts`, keeps the weights). The distances are the High tier's: the avatar's
+distance is divided by the tier's LOD scale (`gfx/lodScale.ts`; Medium 0.75: 7, 17, 41 m; Low 0.55: 5, 12, 30 m).
+The head is built on the LOD 0 body measure, but its hair starts at the body's own level (`buildHead(ctx, hairLod)`):
+until phase 3 everyone who first appeared 22 m away or more kept LOD 0 hair until their LOD next changed, about
+330 k of the Forum's 2.2 M triangles. LOD 0 is two draws (cloth + skin) plus the eyes;
 LOD 1 to 3 are one draw (avatarMaterial, skin as a colour; LOD 0 only has the eyes). Geometry is built per LOD on first
 need, cached per appearance (`realKey`: sex, age, build, height, skin, garments, footwear, armour; 40 entries). The
 template morphed to an entry's rig (`morphedBody`, per LOD) is only kept for the 12 newest entries (an LRU): builds
