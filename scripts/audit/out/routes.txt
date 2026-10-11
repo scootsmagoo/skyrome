@@ -1,0 +1,257 @@
+merged scripts/audit/out/routes-walk.json,scripts/audit/out/routes-col.json,scripts/audit/out/routes-sweep.json: 241 jobs
+
+== totals
+{
+ "jobs": 241,
+ "byKind": {
+  "guide": 12,
+  "objective": 60,
+  "approach": 57,
+  "tour": 12,
+  "random": 20,
+  "edge": 80
+ },
+ "outcomes": {
+  "arrived": 230,
+  "timeout": 1,
+  "aborted": 10
+ },
+ "planStatus": {
+  "streets": 161,
+  "fixed": 80
+ },
+ "walkedRoutes": 0,
+ "routeMetres": 50337,
+ "simSeconds": 7926.000000000003,
+ "recoveries": 334,
+ "replans": 4,
+ "incidents": {
+  "blocked:wall [blocker]": 290,
+  "jump [major]": 69,
+  "climb [major]": 47,
+  "line-drop [minor]": 61,
+  "line-through [minor]": 104,
+  "off-line [major]": 22,
+  "line-drop [major]": 127,
+  "line-steep [major]": 117,
+  "line-steep [minor]": 4,
+  "line-ledge [minor]": 77,
+  "line-wall [major]": 3,
+  "line-ledge [major]": 19,
+  "line-through [major]": 112,
+  "climb [minor]": 22,
+  "drop [minor]": 7,
+  "blocked:slide [blocker]": 13,
+  "swim [major]": 9,
+  "line-water [major]": 60,
+  "blocked:low [blocker]": 5,
+  "drop [major]": 1
+ },
+ "minutes": 0,
+ "jobsWithBlock": 97,
+ "objectiveJobsWithBlock": 37,
+ "places": 363,
+ "placesBySeverity": {
+  "blocker": 119,
+  "major": 183,
+  "minor": 61
+ }
+}
+
+== worst places (by severity and how many routes meet them)
+  1. [blocker] 67.1,9.1,-28.7  Senate House (16 m, Regio VIII Forum Romanum)  routes 12 (quest 5)  blocked (wall)×12  part graph/lead-in
+       e.g. mq 04-columna/forum ← mq-03-lemuria/warn: wall hit landmark:basilica-aemilia @1.4 m 0.39 m     cls landmark
+  2. [blocker] 155.4,9.7,-77.1  Temple of Minerva (17 m, Regio IV Templum Pacis)  routes 11 (quest 5)  blocked (wall)×8, needs a jump/mantle (npc)×3  part graph
+       e.g. mq 04-columna/forum ← mq-03-lemuria/warn: wall hit landmark:forum-nerva @1.4 m 0.38 m   near capfora:forum-nerva:porticus-absidata:1 (A porter) 3.8 m  cls road
+  3. [blocker] 281.7,7.9,545.4  Crossroads Shrine by the Capena Gate (3 m, Regio XI Circus Maximus)  routes 9 (quest 6)  needs a jump/mantle (wall)×5, climb (mantle 1.11 m)×5, climb (mantle 1.14 m)×3, blocked (wall)×2  part graph
+       e.g. misc mercuralia/measure ← misc-mercuralia/overhear: wall hit landmark:porta-capena @1.4 m 0.38 m   near text:t19-compitum-capenae (The altar of the Capena crossroads) 3.4 m  cls road
+  4. [major] 70.1,9.1,-27.9  Senate House (19 m, Regio VIII Forum Romanum)  routes 12 (quest 5)  route line: drop -11.62×11, route line: through 2.2×10, route line: steep 5.15×1, route line: steep 5.25×7, route line: steep 4.95×1, route line: steep 5.37×1  part graph/lead-in
+       e.g. mq 04-columna/forum ← mq-03-lemuria/warn:   owner city:0,-1   len 0.5 cls landmark
+  5. [blocker] -81.0,7.5,305.8  The Inn at the Starting Gates (25 m, Regio XI Circus Maximus)  routes 5 (quest 4)  blocked (wall)×65, off-line×5  part lead-out
+       e.g. mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/talk-dying: wall hit city:b414 @1.4 m 0.38 m     cls free
+  6. [blocker] 510.2,13.5,199.8  Great Gladiatorial School (32 m, Regio III Isis et Serapis)  routes 5 (quest 3)  needs a jump/mantle (low)×4, blocked (wall)×7, climb (mantle 0.88 m)×4  part graph/lead-out
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk: wall hit city:3,1 @1.4 m 0.37 m     cls margin
+  7. [blocker] 56.8,7.9,37.9  Statue of Vortumnus (2 m, Regio VIII Forum Romanum)  routes 5 (quest 2)  blocked (slide)×5  part graph
+       e.g. job subura-pistor/s:chreste ← job-subura-pistor/start: slide   rise -0.02 near shrine:signum-vortumni (Statue of Vortumnus) 0.8 m  cls road
+  8. [blocker] 175.8,11.5,127.0  Pearl-Sellers' Arcade (20 m, Regio X Palatium)  routes 3 (quest 3)  blocked (wall)×4  part graph
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk: wall hit landmark:porticus-margaritaria @1.4 m 0.38 m     cls road
+  9. [blocker] 183.3,11.7,113.4  Pearl-Sellers' Arcade (13 m, Regio VIII Forum Romanum)  routes 3 (quest 3)  blocked (wall)×3  part graph
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk: wall hit landmark:porticus-margaritaria @1.4 m 0.38 m     cls landmark
+ 10. [blocker] 522.7,12.0,197.6  Great Gladiatorial School (27 m, Regio III Isis et Serapis)  routes 3 (quest 3)  blocked (wall)×3  part lead-out/lead-in
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk: wall hit landmark:ludus-magnus @1.4 m 0.38 m     cls landmark
+ 11. [blocker] -4.7,-107.8,-215.8  Trajan's Column (2 m, Regio VIII Forum Romanum)  routes 3 (quest 3)  needs a jump/mantle (low)×7, climb (mantle 0.51 m)×1, needs a jump/mantle (wall)×2, climb (mantle 0.54 m)×1, climb (mantle 0.57 m)×1, climb (mantle 0.64 m)×1, blocked (low)×2, climb (mantle 0.55 m)×1, climb (mantle 0.36 m)×1, climb (mantle 0.59 m)×1, climb (mantle 0.38 m)×1  part lead-in/graph
+       e.g. mq 04-columna/top ← the Column door: low hit interior:dun-columna @0.35 m 0.76 m  rise 100.42 near door:dun-columna:up (The hatch) 1.2 m  cls plaza
+ 12. [blocker] -106.7,6.5,317.9  The Inn at the Starting Gates (6 m, Regio XI Circus Maximus)  routes 4 (quest 1)  blocked (wall)×37, off-line×3  part lead-in/lead-out
+       e.g. misc hilara/bring ← misc-hilara/sausage: wall hit city:b414 @1.4 m 0.38 m     cls free
+ 13. [blocker] -353.7,2.2,175.4  Obelisk of the Island (42 m, Regio XIV Transtiberim)  routes 4 (quest 1)  blocked (slide)×4  part graph
+       e.g. misc servus-aesculapii/daos ← the Forum (Golden Milestone): slide   rise -1.03 near npc:cit-1440 (Vigil) 3.2 m  cls water
+ 14. [major] 284.3,7.9,548.5  Crossroads Shrine by the Capena Gate (3 m, Regio XI Circus Maximus)  routes 7 (quest 5)  route line: drop -1.16×1, route line: drop -1.17×2, route line: drop -1.14×1, route line: drop -1.15×2, route line: through 2.2×1  part graph
+       e.g. node 6589 → node 1017 (349 m):   owner landmark:porta-capena   len 2.8 cls road
+ 15. [blocker] 100.7,10.5,-224.6  Market Halls of Trajan (27 m, Regio VIII Forum Romanum)  routes 3 (quest 2)  blocked (wall)×3  part graph
+       e.g. mq 04-columna/brief ← mq-04-columna/forum: wall hit landmark:markets-trajan @1.4 m 0.38 m     cls margin
+ 16. [blocker] 421.1,22.8,31.9  Baths of Titus (43 m, Regio III Isis et Serapis)  routes 3 (quest 2)  needs a jump/mantle (wall)×2, blocked (wall)×3, climb (mantle 1.28 m)×2  part lead-out
+       e.g. misc fur-balnearius/ask ← the Forum (Golden Milestone): wall hit landmark:baths-titus @1.4 m 0.38 m     cls margin
+ 17. [blocker] 102.9,18.4,-287.9  Market Halls of Trajan (90 m, Regio VII Via Lata)  routes 4 (quest 1)  blocked (wall)×4  part graph
+       e.g. misc tesserae-falsae/find ← misc-tesserae-falsae/curator: wall hit city:0,-3 @1.4 m 1.07 m  rise 0.75   cls street
+ 18. [major] 156.6,9.2,-76.1  Temple of Minerva (18 m, Regio IV Templum Pacis)  routes 7 (quest 4)  route line: drop -11.07×1, route line: steep 4.67×1, route line: through 2.2×4, route line: drop -11.06×1, route line: steep 4.85×1, route line: drop -10.6×1, route line: steep 4.3×1, route line: ledge 0.46×1, route line: ledge 0.47×1  part graph
+       e.g. mq 04-columna/forum ← mq-03-lemuria/warn:   owner city:1,-1   len 0.5 cls road
+ 19. [blocker] -228.3,6.8,142.0  River Port (16 m, Regio XI Circus Maximus)  routes 3 (quest 1)  needs a jump/mantle (low)×6, blocked (wall)×3, climb (mantle 0.84 m)×3, climb (mantle 0.52 m)×3  part graph/lead-out
+       e.g. job portus-saccarius/start ← the Forum (Golden Milestone): wall hit landmark:portus-tiberinus @1.4 m 0.38 m     cls margin
+ 20. [blocker] 309.7,10.3,578.6  Beside Dromo’s cart (3 m, Regio I Porta Capena)  routes 2 (quest 2)  blocked (wall)×2  part lead-in/graph
+       e.g. guide circus #0 (249,503) ← the new-game spawn (Porta Capena): wall hit unknown @1.4 m 0.36 m  rise -0.31 near thing:porta-capena (The dripping gate) 0.9 m  cls road
+ 21. [blocker] -58.7,7.2,236.4  Bakery of the Velabrum (2 m, Regio XI Circus Maximus)  routes 2 (quest 2)  blocked (wall)×3  part lead-in/graph
+       e.g. misc lemuria-fabae/follow ← misc-lemuria-fabae/see: wall hit city:b420 @1.4 m 0.52 m   near npc:npc-philadelphus (Philadelphus) 0.9 m  cls street
+ 22. [blocker] -302.3,2.2,94.1  Fabrician Bridge (11 m, Regio IX Circus Flaminius)  routes 2 (quest 2)  swim×2, blocked (slide)×2  part lead-in
+       e.g. misc servus-aesculapii/more ← misc-servus-aesculapii/face: slide   rise -1.07   cls water
+ 23. [blocker] -302.8,8.0,-156.8  Minucian Portico (37 m, Regio IX Circus Flaminius)  routes 2 (quest 2)  blocked (wall)×2  part lead-out
+       e.g. misc tesserae-falsae/eutychus ← the Forum (Golden Milestone): wall hit landmark:porticus-minucia-frumentaria @1.4 m 0.38 m     cls road
+ 24. [blocker] 72.4,10.5,-232.9  Market Halls of Trajan (42 m, Regio VIII Forum Romanum)  routes 3 (quest 1)  blocked (wall)×3  part graph
+       e.g. misc tesserae-falsae/find ← misc-tesserae-falsae/curator: wall hit landmark:markets-trajan @1.4 m 0.38 m     cls plaza
+ 25. [blocker] 553.1,12.0,181.7  Ludus Barracks (6 m, Regio III Isis et Serapis)  routes 3  blocked (wall)×3  part lead-out
+       e.g. → mq-02-tabella/ask from node 2804: wall hit landmark:ludus-magnus @1.4 m 0.38 m  rise -0.03 near text:t4-tiro (Cut into a cell wall) 1.8 m  cls landmark
+ 26. [blocker] -107.3,7.6,328.8  The Inn at the Starting Gates (17 m, Regio XI Circus Maximus)  routes 3  blocked (wall)×3  part lead-out
+       e.g. → job-cliens-epistula/v2:dama from node 1811: wall hit city:b414 @1.4 m 0.38 m     cls free
+ 27. [blocker] 56.0,10.6,-139.5  Equestrian Statue of Trajan (3 m, Regio VIII Forum Romanum)  routes 2 (quest 1)  needs a jump/mantle (slide)×1, blocked (wall)×1  part graph/lead-out
+       e.g. → mq-04-columna/forum from node 5843: wall hit landmark:equus-traiani @1.4 m 0.57 m     cls landmark
+ 28. [blocker] 53.0,10.5,-218.1  Basilica Ulpia (46 m, Regio VIII Forum Romanum)  routes 2 (quest 1)  blocked (wall)×2  part lead-out
+       e.g. mq 04-columna/brief ← mq-04-columna/forum: wall hit landmark:basilica-ulpia @1.4 m 0.38 m     cls landmark
+ 29. [blocker] 305.9,9.3,-103.0  The Lead-worker’s Yard (27 m, Regio IV Templum Pacis)  routes 2 (quest 1)  blocked (wall)×2  part lead-out
+       e.g. misc fur-balnearius/bundle ← misc-fur-balnearius/door: wall hit city:b804 @1.4 m 0.38 m     cls free
+ 30. [blocker] 260.3,12.6,-127.4  The Lead-worker’s Yard (25 m, Regio IV Templum Pacis)  routes 2 (quest 1)  blocked (wall)×2  part lead-out
+       e.g. misc tesserae-falsae/find ← misc-tesserae-falsae/curator: wall hit city:b1517 @1.4 m 0.38 m     cls free
+ 31. [blocker] 107.8,21.5,-278.8  Market Halls of Trajan (82 m, Regio VII Via Lata)  routes 2 (quest 1)  blocked (wall)×2  part graph
+       e.g. misc tesserae-falsae/decide ← misc-tesserae-falsae/moulds: wall hit terrain @1.4 m 0.96 m  rise 0.85   cls street
+ 32. [major] -80.8,7.5,306.7  The Inn at the Starting Gates (18 m, Regio XI Circus Maximus)  routes 5 (quest 4)  route line: through 2.2×4, route line: drop -7.64×2, route line: drop -7.65×2, route line: steep 3.46×1, route line: drop -7.66×1  part lead-out
+       e.g. mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/talk-dying:   owner terrain   len 0.4 cls free
+ 33. [blocker] 350.9,12.4,656.8  Temple of Honour and Virtue (18 m, Regio I Porta Capena)  routes 2  blocked (wall)×2  part lead-in
+       e.g. → mq-02-tabella/search from node 6436: wall hit city:b194 @1.4 m 0.38 m  rise 0.06   cls free
+ 34. [blocker] 514.9,12.0,190.9  Great Gladiatorial School (22 m, Regio III Isis et Serapis)  routes 2  blocked (wall)×4  part lead-out
+       e.g. → job-ludus-lusio/bout from node 7603: wall hit landmark:ludus-magnus @1.4 m 0.38 m     cls landmark
+ 35. [blocker] -293.3,6.5,83.3  Fabrician Bridge (10 m, Regio IX Circus Flaminius)  routes 2  blocked (low)×2, needs a jump/mantle (low)×1, climb (mantle 0.93 m)×1  part graph/lead-out
+       e.g. → job-portus-saccarius/s:carry1 from node 637: low hit Object{bridgeId} @0.1 m 0.35 m     cls road
+ 36. [blocker] 152.4,10.5,-94.5  Temple of Minerva (25 m, Regio IV Templum Pacis)  routes 2  blocked (wall)×2  part lead-in
+       e.g. → misc-hilara/bring from node 5914: wall hit city:b1522 @1.4 m 0.38 m     cls margin
+ 37. [blocker] 84.2,9.0,-19.6  Basilica Aemilia (16 m, Regio VIII Forum Romanum)  routes 2  blocked (wall)×2  part lead-out
+       e.g. → misc-hilara/bring from node 5914: wall hit landmark:forum-nerva @1.4 m 0.38 m     cls landmark
+ 38. [blocker] 82.1,9.2,-2.5  Basilica Aemilia (5 m, Regio VIII Forum Romanum)  routes 2  blocked (wall)×2  part lead-out
+       e.g. → misc-hilara/bring from node 5914: wall hit landmark:basilica-aemilia @1.4 m 0.4 m   near forum:read:tabernae-aemiliae-notice (Notice on a pier of the Basilica Paulli) 3.5 m  cls landmark
+ 39. [blocker] -320.9,8.2,138.4  Temple of Aesculapius (4 m, Regio XIV Transtiberim)  routes 2  needs a jump/mantle (wall)×1, climb (mantle 1.53 m)×2, blocked (wall)×1  part lead-out
+       e.g. the Campus Martius → Tiber Island: wall hit landmark:temple-aesculapius @1.4 m 0.38 m  rise 1.64   cls landmark
+ 40. [blocker] -334.0,7.5,-166.1  Four Temples of the Old Minucian Portico (41 m, Regio IX Circus Flaminius)  routes 2  blocked (wall)×2  part lead-out
+       e.g. → misc-tesserae-falsae/eutychus from node 651: wall hit city:b1700 @1.4 m 0.38 m     cls free
+ 41. [blocker] 98.1,9.7,95.3  Rise of Victory (1 m, Regio VIII Forum Romanum)  routes 1 (quest 1)  blocked (wall)×1  part graph
+       e.g. mq 02-tabella/hideout ← mq-02-tabella/ask: wall hit city:0,0 @1.4 m 1 m  rise 0.83   cls road
+ 42. [blocker] -31.6,7.4,193.3  Etruscan Street (8 m, Regio X Palatium)  routes 1 (quest 1)  needs a jump/mantle (wall)×1, blocked (wall)×1  part lead-out
+       e.g. mq 03-lemuria/go ← mq-02-tabella/give: wall hit city:b694 @1.4 m 0.38 m     cls road
+ 43. [blocker] -41.7,7.2,191.7  Etruscan Street (16 m, Regio X Palatium)  routes 1 (quest 1)  blocked (wall)×1  part lead-in
+       e.g. mq 03-lemuria/key ← mq-03-lemuria/clues: wall hit city:b694 @1.4 m 0.38 m     cls free
+ 44. [blocker] -249.3,6.0,133.4  River Port (11 m, Regio XI Circus Maximus)  routes 1 (quest 1)  blocked (wall)×1  part lead-out
+       e.g. job portus-saccarius/s:take2 ← job-portus-saccarius/s:carry1: wall hit landmark:portus-tiberinus @1.4 m 0.38 m   near river:portus-tiberinus:notice (Harbour office) 3 m  cls water
+ 45. [blocker] 504.1,12.0,191.2  Great Gladiatorial School (29 m, Regio III Isis et Serapis)  routes 1 (quest 1)  blocked (wall)×1  part lead-out
+       e.g. lud 01-sacramentum/draw ← lud-01-sacramentum/sign: wall hit landmark:ludus-magnus @1.4 m 0.38 m     cls landmark
+ 46. [blocker] 434.7,22.9,16.9  Before the Baths of Titus (19 m, Regio III Isis et Serapis)  routes 1 (quest 1)  blocked (wall)×1  part lead-in
+       e.g. misc fur-balnearius/bundle ← misc-fur-balnearius/door: wall hit city:b830 @1.4 m 0.38 m     cls free
+ 47. [blocker] 291.2,10.5,-104.1  The Lead-worker’s Yard (14 m, Regio IV Templum Pacis)  routes 1 (quest 1)  blocked (wall)×1  part lead-in
+       e.g. misc fur-balnearius/deal ← misc-fur-balnearius/bundle: wall hit city:b804 @1.4 m 0.38 m     cls free
+ 48. [blocker] 310.6,8.0,-74.6  The Lead-worker’s Yard (48 m, Regio IV Templum Pacis)  routes 1 (quest 1)  blocked (wall)×1  part lead-in
+       e.g. misc fur-balnearius/deal ← misc-fur-balnearius/bundle: wall hit city:b810 @1.4 m 0.59 m     cls free
+ 49. [blocker] -49.0,7.4,250.2  Insula of Tuccius the Cooper (13 m, Regio XI Circus Maximus)  routes 1 (quest 1)  blocked (wall)×1  part lead-in
+       e.g. misc lemuria-fabae/follow ← misc-lemuria-fabae/see: wall hit city:b419 @1.4 m 0.39 m     cls free
+ 50. [blocker] -104.8,7.6,339.9  The Aediles’ Clerk (20 m, Regio XI Circus Maximus)  routes 1 (quest 1)  blocked (wall)×1  part lead-in
+       e.g. misc mercuralia/test ← misc-mercuralia/measure: wall hit city:b414 @1.4 m 0.38 m     cls free
+ 51. [blocker] -9.6,7.9,111.7  The Silver Pig (20 m, Regio VIII Forum Romanum)  routes 1 (quest 1)  blocked (wall)×1  part lead-out
+       e.g. misc meta-sudans-rixa/choose ← the Forum (Golden Milestone): wall hit city:b696 @1.4 m 0.38 m     cls street
+ 52. [blocker] -307.1,6.6,138.3  Daos’ Bench on the Island (4 m, Regio XIV Transtiberim)  routes 1 (quest 1)  blocked (wall)×1  part lead-out
+       e.g. misc servus-aesculapii/free ← misc-servus-aesculapii/ko: wall hit landmark:temple-aesculapius @1.4 m 0.46 m     cls margin
+ 53. [major] 102.5,17.8,-288.4  Market Halls of Trajan (91 m, Regio VII Via Lata)  routes 6 (quest 2)  route line: ledge 0.48×2, route line: ledge 0.52×1, route line: ledge 0.57×1, route line: ledge 0.78×1, route line: steep 1.27×1, route line: ledge 0.95×3, route line: ledge 0.94×2, route line: ledge 0.65×3, route line: ledge 0.64×2, route line: steep 1.74×2, route line: ledge 0.63×4, route line: steep 1.23×1, route line: ledge 0.96×4, route line: ledge 0.77×1, route line: steep 2.06×1, route line: ledge 0.66×1, route line: ledge 0.54×1, route line: ledge 0.49×3, route line: ledge 0.59×1, route line: ledge 0.5×2, route line: ledge 0.71×1, route line: ledge 0.98×3, route line: steep 1.43×1, route line: ledge 0.92×1, route line: ledge 0.68×1, route line: ledge 0.62×3, route line: steep 1.62×1, route line: steep 1.88×1, route line: ledge 0.55×1, route line: ledge 0.58×1, route line: steep 1.36×1, route line: ledge 0.97×3, route line: ledge 0.79×1, route line: ledge 0.61×1, route line: steep 1.53×1  part graph
+       e.g. misc tesserae-falsae/find ← misc-tesserae-falsae/curator:      len 2 cls street
+ 54. [major] 108.6,22.5,-278.4  Market Halls of Trajan (82 m, Regio VII Via Lata)  routes 6 (quest 2)  route line: steep 1.26×1, route line: ledge 0.59×1, route line: ledge 0.57×2, route line: ledge 0.53×1, route line: ledge 0.5×1, route line: steep 1.24×1, route line: steep 1.06×1, route line: steep 1.29×1, route line: ledge 0.55×1, route line: ledge 0.52×1, route line: steep 1.28×1  part graph
+       e.g. misc tesserae-falsae/find ← misc-tesserae-falsae/curator:      len 2 cls street
+ 55. [blocker] 264.9,12.6,-119.3  The Lead-worker’s Yard (17 m, Regio IV Templum Pacis)  routes 1 (quest 1)  blocked (wall)×1  part graph
+       e.g. misc tesserae-falsae/decide ← misc-tesserae-falsae/moulds: wall hit city:b1517 @1.4 m 0.38 m     cls free
+ 56. [major] 207.2,17.2,125.9  Arch of Titus (2 m, Regio X Palatium)  routes 4 (quest 4)  route line: drop -9.24×2, route line: steep 3.85×1, route line: drop -8.96×2, route line: steep 3.95×1, route line: steep 3.87×1  part graph
+       e.g. mq 02-tabella/hideout ← mq-02-tabella/ask:   owner city:1,0   len 0.5 cls road
+ 57. [blocker] 364.0,12.0,686.2  Temple of Honour and Virtue (20 m, Regio I Porta Capena)  routes 1  blocked (wall)×1  part lead-in
+       e.g. → mq-02-tabella/search from node 6436: wall hit city:b194 @1.4 m 0.39 m     cls street
+ 58. [blocker] -38.1,7.2,220.2  Ground-floor wall behind the taberna (10 m, Regio X Palatium)  routes 1  blocked (wall)×1  part lead-out
+       e.g. → mq-03-lemuria/go from node 1848: wall hit city:b694 @1.4 m 0.38 m     cls free
+ 59. [blocker] 49.0,12.0,-296.9  Ulpian Greek Library (86 m, Regio VII Via Lata)  routes 1  blocked (wall)×1  part lead-in
+       e.g. → mq-04-columna/forum from node 5843: wall hit city:b1543 @1.4 m 0.19 m     cls free
+ 60. [blocker] 91.4,7.9,40.4  Temple of Divus Julius (9 m, Regio VIII Forum Romanum)  routes 1  blocked (wall)×1  part lead-out
+       e.g. → job-cliens-epistula/v0:philetus from node 31: wall hit landmark:temple-divus-julius @1.4 m 0.38 m     cls landmark
+
+== every objective's route, walked (72): {"BLOCKED":33,"snags":7,"ok":28,"FAIL":4}
+  BLOCKED  guide circus #0 (249,503) ← the new-game spawn (Porta Capena)            104 m  blocks 1 jumps 1 line 0  first 309.7,10.3,578.6 lead-in unknown (Beside Dromo’s cart (3 m, Regio I Porta Capena))
+  snags    guide palatine #0 (170,448) ← guide circus #0                             97 m  blocks 0 jumps 0 line 1
+  ok       guide palatine #1 (98,394) ← guide palatine #0                            92 m  blocks 0 jumps 0 line 0
+  ok       guide palatine #2 (20,335) ← guide palatine #1                           101 m  blocks 0 jumps 0 line 0
+  ok       guide palatine #3 (-50,280) ← guide palatine #2                           92 m  blocks 0 jumps 0 line 0
+  ok       guide velabrum #0 (-44,262) ← guide palatine #3                           19 m  blocks 0 jumps 0 line 0
+  ok       guide velabrum #1 (-27,187) ← guide velabrum #0                           77 m  blocks 0 jumps 0 line 0
+  ok       guide velabrum #2 (27,84) ← guide velabrum #1                            116 m  blocks 0 jumps 0 line 0
+  ok       guide forum #0 (48,60) ← guide velabrum #2                                32 m  blocks 0 jumps 0 line 0
+  ok       guide forum #1 (56,38) ← guide forum #0                                   23 m  blocks 0 jumps 0 line 0
+  ok       guide forum #2 (25,15) ← guide forum #1                                   40 m  blocks 0 jumps 0 line 0
+  ok       guide forum #3 (6,6) ← guide forum #2                                     21 m  blocks 0 jumps 0 line 0
+  FAIL     mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/talk-dying           526 m  blocks 13 jumps 1 line 1  first -81,7.5,305.8 lead-out city:b414 (The Inn at the Starting Gates (25 m, Regio XI Circus Maximus))
+  snags    mq 02-tabella/castor ← mq-01-madida-capena/talk-dying                    725 m  blocks 0 jumps 1 line 0
+  snags    mq 02-tabella/search ← mq-02-tabella/castor                              723 m  blocks 0 jumps 1 line 0
+  BLOCKED  mq 02-tabella/ask ← mq-02-tabella/talk                                   648 m  blocks 4 jumps 1 line 0  first 175.8,11.5,127 graph landmark:porticus-margaritaria (Pearl-Sellers' Arcade (20 m, Regio X Palatium))
+  BLOCKED  mq 02-tabella/hideout ← mq-02-tabella/ask                                723 m  blocks 5 jumps 0 line 6  first 521.9,12,192.1 lead-in landmark:ludus-magnus (Great Gladiatorial School (21 m, Regio III Isis et Serapis))
+  ok       mq 02-tabella/give ← mq-02-tabella/satchel                               118 m  blocks 0 jumps 0 line 0
+  BLOCKED  mq 03-lemuria/go ← mq-02-tabella/give                                    183 m  blocks 1 jumps 1 line 0  first -31.6,7.4,193.3 lead-out city:b694 (Etruscan Street (8 m, Regio X Palatium))
+  BLOCKED  mq 03-lemuria/key ← mq-03-lemuria/clues                                  129 m  blocks 1 jumps 0 line 1  first -41.7,7.2,191.7 lead-in city:b694 (Etruscan Street (16 m, Regio X Palatium))
+  ok       mq 03-lemuria/warn ← mq-03-lemuria/key                                    56 m  blocks 0 jumps 0 line 0
+  BLOCKED  mq 04-columna/forum ← mq-03-lemuria/warn                                 481 m  blocks 2 jumps 0 line 0  first 67.1,9.1,-28.7 graph landmark:basilica-aemilia (Senate House (16 m, Regio VIII Forum Romanum))
+  BLOCKED  mq 04-columna/brief ← mq-04-columna/forum                                318 m  blocks 2 jumps 1 line 3  first 100.7,10.5,-224.6 graph landmark:markets-trajan (Market Halls of Trajan (27 m, Regio VIII Forum Romanum))
+  snags    mq 04-columna/land1 ← the Column door                                     24 m  blocks 0 jumps 1 line 0
+  snags    job cliens-epistula/v0:philetus ← the Forum (Golden Milestone)            83 m  blocks 0 jumps 2 line 0
+  ok       job cliens-epistula/v1:zethus ← job-cliens-epistula/v0:philetus          169 m  blocks 0 jumps 0 line 0
+  FAIL     job cliens-epistula/v2:dama ← job-cliens-epistula/v1:zethus              180 m  blocks 13 jumps 0 line 1  first -81,7.5,305.8 lead-out city:b414 (The Inn at the Starting Gates (25 m, Regio XI Circus Maximus))
+  BLOCKED  job ludus-lusio/start ← the Forum (Golden Milestone)                     715 m  blocks 2 jumps 1 line 0  first 511,12.4,200 graph city:3,1 (Great Gladiatorial School (32 m, Regio III Isis et Serapis))
+  ok       job ludus-lusio/bout ← job-ludus-lusio/start                              33 m  blocks 0 jumps 0 line 0
+  BLOCKED  job portus-saccarius/start ← the Forum (Golden Milestone)                300 m  blocks 1 jumps 2 line 1  first -233.8,6,139.3 lead-out landmark:portus-tiberinus (River Port (16 m, Regio XI Circus Maximus))
+  ok       job portus-saccarius/s:carry1 ← job-portus-saccarius/start                38 m  blocks 0 jumps 0 line 0
+  BLOCKED  job portus-saccarius/s:take2 ← job-portus-saccarius/s:carry1              34 m  blocks 1 jumps 0 line 1  first -249.3,6,133.4 lead-out landmark:portus-tiberinus (River Port (11 m, Regio XI Circus Maximus))
+  BLOCKED  job subura-pistor/start ← the Forum (Golden Milestone)                   210 m  blocks 2 jumps 0 line 1  first 67.1,9.1,-28.7 graph landmark:basilica-aemilia (Senate House (16 m, Regio VIII Forum Romanum))
+  BLOCKED  job subura-pistor/s:chreste ← job-subura-pistor/start                    330 m  blocks 3 jumps 0 line 1  first 155.4,9.5,-73.8 graph landmark:forum-nerva (Temple of Minerva (16 m, Regio IV Templum Pacis))
+  FAIL     job subura-pistor/s:dama ← job-subura-pistor/s:chreste                   229 m  blocks 13 jumps 0 line 1  first -81,7.5,305.8 lead-out city:b414 (The Inn at the Starting Gates (25 m, Regio XI Circus Maximus))
+  BLOCKED  lud 01-sacramentum/draw ← lud-01-sacramentum/sign                        113 m  blocks 2 jumps 0 line 0  first 512.1,12.3,198.2 graph city:3,1 (Great Gladiatorial School (30 m, Regio III Isis et Serapis))
+  ok       lud 01-sacramentum/win1 ← lud-01-sacramentum/draw                         73 m  blocks 0 jumps 0 line 0
+  BLOCKED  misc fur-balnearius/ask ← the Forum (Golden Milestone)                   588 m  blocks 1 jumps 1 line 1  first 421.1,22.8,30.9 lead-out landmark:baths-titus (Baths of Titus (43 m, Regio III Isis et Serapis))
+  BLOCKED  misc fur-balnearius/bundle ← misc-fur-balnearius/door                    279 m  blocks 2 jumps 1 line 6  first 434.7,22.9,16.9 lead-in city:b830 (Before the Baths of Titus (19 m, Regio III Isis et Serapis))
+  BLOCKED  misc fur-balnearius/deal ← misc-fur-balnearius/bundle                    268 m  blocks 3 jumps 0 line 6  first 291.2,10.5,-104.1 lead-in city:b804 (The Lead-worker’s Yard (14 m, Regio IV Templum Pacis))
+  FAIL     misc hilara/ask ← the Forum (Golden Milestone)                           419 m  blocks 13 jumps 0 line 0  first -81,7.5,305.8 lead-out city:b414 (The Inn at the Starting Gates (25 m, Regio XI Circus Maximus))
+  BLOCKED  misc hilara/bring ← misc-hilara/sausage                                  400 m  blocks 1 jumps 0 line 3  first -106.7,6.5,317.9 lead-in city:b414 (The Inn at the Starting Gates (6 m, Regio XI Circus Maximus))
+  ok       misc insula-nutans/evidence ← the Forum (Golden Milestone)               278 m  blocks 0 jumps 0 line 0
+  ok       misc insula-nutans/confront ← misc-insula-nutans/evidence                239 m  blocks 0 jumps 0 line 0
+  ok       misc insula-nutans/report ← misc-insula-nutans/confront                   60 m  blocks 0 jumps 0 line 0
+  ok       misc insula-nutans/warn ← misc-insula-nutans/report                      220 m  blocks 0 jumps 0 line 0
+  ok       misc lemuria-fabae/watch ← the Forum (Golden Milestone)                  328 m  blocks 0 jumps 0 line 0
+  BLOCKED  misc lemuria-fabae/follow ← misc-lemuria-fabae/see                        58 m  blocks 2 jumps 0 line 4  first -49,7.4,250.2 lead-in city:b419 (Insula of Tuccius the Cooper (13 m, Regio XI Circus Maximus))
+  BLOCKED  misc lemuria-fabae/decide ← misc-lemuria-fabae/follow                     59 m  blocks 2 jumps 0 line 1  first -59.2,7.4,232 graph city:b420 (Bakery of the Velabrum (5 m, Regio XI Circus Maximus))
+  BLOCKED  misc mercuralia/ides ← the Forum (Golden Milestone)                      837 m  blocks 1 jumps 1 line 0  first 308.7,10,578.3 graph unknown (Under the dripping arch (2 m, Regio I Porta Capena))
+  BLOCKED  misc mercuralia/measure ← misc-mercuralia/overhear                       556 m  blocks 1 jumps 2 line 0  first 279.1,8.1,548.9 graph landmark:porta-capena (Crossroads Shrine by the Capena Gate (3 m, Regio XI Circus Maximus))
+  BLOCKED  misc mercuralia/test ← misc-mercuralia/measure                           299 m  blocks 1 jumps 1 line 0  first -104.8,7.6,339.9 lead-in city:b414 (The Aediles’ Clerk (20 m, Regio XI Circus Maximus))
+  BLOCKED  misc meta-sudans-rixa/choose ← the Forum (Golden Milestone)              172 m  blocks 1 jumps 0 line 0  first -9.6,7.9,111.7 lead-out city:b696 (The Silver Pig (20 m, Regio VIII Forum Romanum))
+  BLOCKED  misc meta-sudans-rixa/ko ← misc-meta-sudans-rixa/choose                  375 m  blocks 2 jumps 0 line 2  first 175.8,11.5,127 graph landmark:porticus-margaritaria (Pearl-Sellers' Arcade (20 m, Regio X Palatium))
+  ok       misc meta-sudans-rixa/law ← misc-meta-sudans-rixa/ko                     384 m  blocks 0 jumps 0 line 0
+  BLOCKED  misc servus-aesculapii/daos ← the Forum (Golden Milestone)               775 m  blocks 1 jumps 1 line 0  first -353.7,2.2,175.4 graph  (Obelisk of the Island (42 m, Regio XIV Transtiberim))
+  ok       misc servus-aesculapii/proofs ← misc-servus-aesculapii/daos               23 m  blocks 0 jumps 0 line 0
+  ok       misc servus-aesculapii/face ← misc-servus-aesculapii/proofs               61 m  blocks 0 jumps 0 line 0
+  BLOCKED  misc servus-aesculapii/more ← misc-servus-aesculapii/face                 62 m  blocks 1 jumps 0 line 0  first -305.4,2.2,99.9 lead-in  (Fabrician Bridge (11 m, Regio IX Circus Flaminius))
+  BLOCKED  misc servus-aesculapii/free ← misc-servus-aesculapii/ko                   64 m  blocks 2 jumps 0 line 0  first -304.8,2.2,100.2 lead-in  (Fabrician Bridge (11 m, Regio IX Circus Flaminius))
+  BLOCKED  misc tesserae-falsae/eutychus ← the Forum (Golden Milestone)             567 m  blocks 1 jumps 0 line 0  first -302.8,8,-156.8 lead-out landmark:porticus-minucia-frumentaria (Minucian Portico (37 m, Regio IX Circus Flaminius))
+  BLOCKED  misc tesserae-falsae/find ← misc-tesserae-falsae/curator                 916 m  blocks 3 jumps 0 line 1  first 102.9,18.4,-287.9 graph city:0,-3 (Market Halls of Trajan (90 m, Regio VII Via Lata))
+  BLOCKED  misc tesserae-falsae/decide ← misc-tesserae-falsae/moulds                910 m  blocks 4 jumps 0 line 2  first 264.9,12.6,-119.3 graph city:b1517 (The Lead-worker’s Yard (17 m, Regio IV Templum Pacis))
+  ok       misc urna-aenea/felix ← the Forum (Golden Milestone)                     225 m  blocks 0 jumps 0 line 0
+  ok       misc urna-aenea/dice ← misc-urna-aenea/felix                              35 m  blocks 0 jumps 0 line 0
+  BLOCKED  misc urna-aenea/crispina ← misc-urna-aenea/felix                         470 m  blocks 2 jumps 0 line 1  first 67.1,9.1,-28.7 graph landmark:basilica-aemilia (Senate House (16 m, Regio VIII Forum Romanum))
+  BLOCKED  misc urna-aenea/primus ← misc-urna-aenea/crispina                        469 m  blocks 3 jumps 0 line 1  first 155.4,9.5,-73.7 graph landmark:forum-nerva (Temple of Minerva (16 m, Regio IV Templum Pacis))
+  ok       misc venus-cloacina/watch ← the Forum (Golden Milestone)                  60 m  blocks 0 jumps 0 line 0
+  snags    misc venus-cloacina/enter ← misc-venus-cloacina/watch                    446 m  blocks 0 jumps 1 line 0
+  ok       misc venus-cloacina/out ← misc-venus-cloacina/loot                       444 m  blocks 0 jumps 0 line 0
+  snags    mq 04-columna/land2 ← the Column door                                     43 m  blocks 0 jumps 5 line 0
+  BLOCKED  mq 04-columna/top ← the Column door                                       61 m  blocks 2 jumps 3 line 0  first -3.6,-89.5,-214.2 graph interior:dun-columna (Trajan's Column (2 m, Regio VIII Forum Romanum))
+
+wrote scripts/audit/out/routes.json (0.96 MB), 0 screenshots; 0 min

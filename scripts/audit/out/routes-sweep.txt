@@ -1,0 +1,72 @@
+Route audit, 2026-10-11T00:25:25.494Z  phases: sweep  time scale 3
+
+== sweep: every street-graph edge, 60 m tiles (?cityNear=75)
+  tiles 60/753  edges 713  flagged 37  {"ledge":56,"drop":2,"through":25}  (2.8 min)
+  tiles 120/753  edges 1377  flagged 62  {"ledge":58,"drop":7,"through":48,"headroom":1,"steep":1}  (5.5 min)
+  tiles 180/753  edges 2061  flagged 92  {"ledge":68,"drop":15,"through":65,"headroom":2,"steep":3}  (7.8 min)
+  tiles 240/753  edges 2681  flagged 141  {"ledge":121,"drop":25,"through":94,"headroom":6,"steep":8,"low":1}  (9.4 min)
+  tiles 300/753  edges 3418  flagged 166  {"ledge":145,"drop":28,"through":110,"headroom":13,"steep":12,"low":1}  (10.5 min)
+  tiles 360/753  edges 4065  flagged 186  {"ledge":148,"drop":29,"through":128,"headroom":13,"steep":13,"low":1}  (11.0 min)
+  tiles 420/753  edges 4685  flagged 217  {"ledge":152,"drop":41,"through":150,"headroom":13,"steep":20,"low":1}  (12.4 min)
+  tiles 480/753  edges 5243  flagged 244  {"ledge":169,"drop":58,"through":167,"headroom":20,"steep":26,"low":1}  (13.7 min)
+  tiles 540/753  edges 5880  flagged 274  {"ledge":224,"drop":73,"through":182,"headroom":23,"steep":34,"low":1}  (14.9 min)
+  tiles 600/753  edges 6566  flagged 298  {"ledge":263,"drop":76,"through":196,"headroom":32,"steep":39,"low":1}  (15.8 min)
+  tiles 660/753  edges 7494  flagged 324  {"ledge":273,"drop":80,"through":217,"headroom":32,"steep":43,"low":1}  (17.1 min)
+  tiles 720/753  edges 8377  flagged 354  {"ledge":292,"drop":85,"through":238,"headroom":33,"steep":45,"low":1}  (18.1 min)
+  tiles 753/753  edges 8770  flagged 367  {"ledge":297,"drop":87,"through":246,"headroom":33,"steep":46,"low":1}  (18.5 min)
+
+== totals
+{
+ "jobs": 0,
+ "byKind": {},
+ "outcomes": {},
+ "planStatus": {},
+ "walkedRoutes": 0,
+ "routeMetres": 0,
+ "simSeconds": 0,
+ "recoveries": 0,
+ "replans": 0,
+ "incidents": {},
+ "minutes": 18.5,
+ "jobsWithBlock": 0,
+ "objectiveJobsWithBlock": 0,
+ "places": 0,
+ "placesBySeverity": {}
+}
+
+== worst places (by severity and how many routes meet them)
+
+== sweep: 8770 of 8770 edges (96 km), 367 flagged; {"ledge":297,"drop":87,"through":246,"headroom":33,"steep":46,"low":1}
+   by cause: ledge city:*×164, through city:*×164, ledge terrain×115, drop city:*×76, steep -×46, headroom -×33, through landmark:horti-agrippinae×22, through landmark:horti-caesaris×18, through landmark:porta-capena×7, drop terrain×6, through city:monuments×5, through landmark:baths-trajan×5, ledge landmark:temple-jupiter-capitolinus×4, through landmark:lupercal×3, through unknown×3, through landmark:porticus-margaritaria×3, through landmark:temple-divus-claudius×3, through landmark:jewish-transtiberim×2, through landmark:temple-jupiter-capitolinus×2, ledge landmark:curia-julia×2
+  1. [major] -178.3,6.7,110.4  Twin Temples of Fortuna and Mater Matuta (26 m, Regio XI Circus Maximus)  edges 6  through×2, drop×4, steep×4  e.g. edge 75 (road→road, 19.1 m) owner city:monuments value 2.2 len 1.5
+  2. [major] -865.7,19.2,660.2  Grove of Furrina (94 m, Regio XIV Transtiberim)  edges 3  through×3, ledge×2  e.g. edge 5287 (street→junction, 10.6 m) owner landmark:horti-caesaris value 2.2 len 1.4
+  3. [major] -230.4,7.4,-4.1  Temple of Apollo Sosianus (18 m, Regio IX Circus Flaminius)  edges 3  drop×3, through×1, steep×2  e.g. edge 2493 (street→piazza, 13.6 m) owner city:-2,-1 value 2.2 len 1
+  4. [major] 178.4,11.7,121.6  Pearl-Sellers' Arcade (15 m, Regio X Palatium)  edges 3  through×2, steep×2, drop×1  e.g. edge 452 (road→junction, 15.6 m) owner landmark:porticus-margaritaria value 2.2 len 6.4
+  5. [major] 302.0,9.7,570.3  Inside the Capena Gate (2 m, Regio XI Circus Maximus)  edges 3  drop×3, steep×3  e.g. edge 437 (junction→road, 16.6 m) owner - value 2.64 len 2
+  6. [major] -27.5,7.3,233.0  Ground-floor wall behind the taberna (18 m, Regio X Palatium)  edges 2  through×3  e.g. edge 1872 (street→street, 12.6 m) owner landmark:lupercal value 2.2 len 1.5
+  7. [major] -551.0,7.4,288.1  Jewish Quarter Across the Tiber (16 m, Regio XIV Transtiberim)  edges 2  through×2  e.g. edge 5536 (junction→junction, 17.5 m) owner landmark:jewish-transtiberim value 2.2 len 2.4
+  8. [major] -654.1,7.3,657.3  Emporium (181 m, Regio XIV Transtiberim)  edges 2  through×2  e.g. edge 8211 (street→piazza, 8.1 m) owner city:-6,5 value 2.2 len 1.4
+  9. [major] -659.8,6.4,868.4  Porticus Aemilia (130 m, Regio XIII Aventinus)  edges 2  through×2  e.g. edge 514 (street→street, 22.5 m) owner landmark:horti-caesaris value 2.1 len 1.5
+ 10. [major] -904.9,27.6,659.8  Grove of Furrina (68 m, Regio XIV Transtiberim)  edges 2  through×2, ledge×1  e.g. edge 1384 (street→street, 19.5 m) owner landmark:horti-caesaris value 2.2 len 3
+ 11. [major] -1005.1,7.0,-746.0  Pyramid Tomb of the Vatican Fields (82 m, Regio XIV Transtiberim)  edges 2  through×2, drop×1  e.g. edge 3395 (street→street, 21.3 m) owner landmark:horti-domitiae value 2.1 len 1
+ 12. [major] -1033.2,5.6,-580.3  Pyramid Tomb of the Vatican Fields (90 m, Regio XIV Transtiberim)  edges 2  drop×2, steep×2  e.g. edge 256 (junction→road, 21.6 m) owner - value 1.87 len 2
+ 13. [major] -1046.9,42.4,659.8  Grove of Furrina (124 m, Regio XIV Transtiberim)  edges 2  through×2, drop×1  e.g. edge 1148 (street→street, 8.6 m) owner landmark:horti-caesaris value 2.11 len 1.4
+ 14. [major] -1109.7,23.8,-583.8  Pyramid Tomb of the Vatican Fields (115 m, Regio XIV Transtiberim)  edges 2  through×2, ledge×1  e.g. edge 3262 (street→street, 19.5 m) owner landmark:horti-agrippinae value 2.2 len 6
+ 15. [major] -1120.6,24.6,-396.1  Northern Janiculum (98 m, Regio XIV Transtiberim)  edges 2  through×2, drop×1  e.g. edge 6514 (street→junction, 13.6 m) owner landmark:horti-agrippinae value 2.2 len 1
+ 16. [major] -1096.6,30.1,41.7  Terminus of Trajan's Aqueduct (233 m, Regio XIV Transtiberim)  edges 2  ledge×6, through×1, steep×1  e.g. edge 3121 (street→street, 7.5 m) owner city:-9,0 value 1.3 len 1
+ 17. [major] -1091.2,42.1,659.9  Grove of Furrina (165 m, Regio XIV Transtiberim)  edges 2  through×2, drop×1  e.g. edge 1138 (street→street, 15.3 m) owner landmark:horti-caesaris value 2.07 len 1
+ 18. [major] -1205.4,29.7,-396.1  Northern Janiculum (39 m, Regio XIV Transtiberim)  edges 2  through×2  e.g. edge 2770 (street→street, 17.3 m) owner landmark:horti-agrippinae value 2.2 len 1.5
+ 19. [major] -1359.8,24.4,-396.1  Gardens of Agrippina (116 m, Regio XIV Transtiberim)  edges 2  through×2  e.g. edge 2740 (street→street, 15.6 m) owner landmark:horti-agrippinae value 2.12 len 1
+ 20. [major] -1473.6,7.8,-396.3  Gardens of Agrippina (147 m, Regio XIV Transtiberim)  edges 2  through×2  e.g. edge 3328 (street→street, 17.6 m) owner landmark:horti-agrippinae value 2.2 len 1.5
+ 21. [major] -1650.0,13.0,-541.1  Vatican Obelisk (158 m, Regio XIV Transtiberim)  edges 2  through×2  e.g. edge 3350 (street→street, 16.3 m) owner landmark:horti-agrippinae value 2.2 len 1
+ 22. [major] -1649.9,8.1,-401.5  Vatican Obelisk (244 m, Regio XIV Transtiberim)  edges 2  through×2  e.g. edge 3337 (street→street, 17.2 m) owner landmark:horti-agrippinae value 2.11 len 1
+ 23. [major] -167.3,8.3,21.8  Temple of Jupiter Best and Greatest (44 m, Regio VIII Forum Romanum)  edges 2  through×2, drop×1  e.g. edge 8382 (street→junction, 5.5 m) owner city:-2,0 value 2.2 len 1.4
+ 24. [major] -362.1,7.1,-433.6  Pantheon of Agrippa (36 m, Regio IX Circus Flaminius)  edges 2  drop×2, steep×2  e.g. edge 8040 (piazza→street, 6.1 m) owner - value 1.53 len 2
+ 25. [major] -418.2,5.8,734.5  Warehouses of Lollius (72 m, Regio XIII Aventinus)  edges 2  drop×4, steep×2  e.g. edge 4446 (piazza→junction, 16 m) owner - value 1.52 len 2
+ 26. [major] -453.0,5.9,816.5  Tomb of Servius Sulpicius Galba (34 m, Regio XIII Aventinus)  edges 2  drop×2, through×1  e.g. edge 524 (street→piazza, 16.6 m) owner city:-4,6 value 2.2 len 1
+ 27. [major] 672.2,32.1,-223.1  House of Pliny the Younger (17 m, Regio V Esquiliae)  edges 2  drop×2, through×1, steep×1  e.g. edge 2585 (street→piazza, 23.6 m) owner city:5,-2 value 2.2 len 1
+ 28. [major] 278.9,8.1,549.5  Crossroads Shrine by the Capena Gate (3 m, Regio XI Circus Maximus)  edges 2  through×1, drop×1  e.g. edge 440 (junction→road, 17.7 m) owner landmark:porta-capena value 2.2 len 12.8
+ 29. [major] 311.9,10.3,367.0  Temple of Divus Claudius (131 m, Regio II Caelimontium)  edges 2  through×2, drop×1  e.g. edge 1070 (street→street, 16.6 m) owner city:2,2 value 2.2 len 2.4
+ 30. [major] -22.5,7.9,-425.6  Portico of Vipsania (86 m, Regio VII Via Lata)  edges 1  through×1  e.g. edge 8084 (street→piazza, 8.1 m) owner city:-1,-4 value 2.2 len 1.4
+
+wrote scripts/audit/out/routes-sweep.json (0.06 MB), 0 screenshots; 18.5 min
