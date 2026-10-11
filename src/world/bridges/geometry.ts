@@ -73,7 +73,14 @@ export function buildStoneBridge(b: MeshBuilder, frame: THREE.Matrix4, inp: Brid
   const d = new Draw(b, frame);
   const half = width / 2 + PARAPET_T;
   const deck = L.deck;
-  const topOfBody = (u: number) => deckAt(deck, u) - PAVE;
+  // Under a flight of steps the body stands almost to the tread tops (its sides would otherwise sink
+  // 0.12 m under a bank that rises to the deck there).
+  const topOfBody = (u: number) => {
+    const y = deckAt(deck, u);
+    const g = Math.max(Math.abs(deckAt(deck, u + 0.5) - y), Math.abs(y - deckAt(deck, u - 0.5))) / 0.5;
+    // (and within 2 m of an end, where the body meets the bank)
+    return y - (g > STAIR_GRADE || Math.min(u - L.start, L.end - u) < 2 ? 0.03 : PAVE);
+  };
   const step = hi ? 1 : 2;
 
   // ---- elevation outline (counter-clockwise does not matter: THREE.Shape normalises it)
@@ -212,7 +219,8 @@ export function buildStoneBridge(b: MeshBuilder, frame: THREE.Matrix4, inp: Brid
   for (const [u, dir] of [[L.start, 1], [L.end, -1]] as const) {
     const y = deckAt(deck, u + dir * 0.3);
     for (const side of [-1, 1]) {
-      d.box(style.trim, u + dir * 0.35, y + 0.65, side * (width / 2 + PARAPET_T / 2), 0.7, 1.3 + 0.1, PARAPET_T + 0.14, { collide: true });
+      // Feet 0.5 m under the deck, so a post at a flight of steps stands in the ground.
+      d.box(style.trim, u + dir * 0.35, y + 0.45, side * (width / 2 + PARAPET_T / 2), 0.7, 1.9, PARAPET_T + 0.14, { collide: true });
       if (hi) d.box(style.trim, u + dir * 0.35, y + 1.36, side * (width / 2 + PARAPET_T / 2), 0.8, 0.12, PARAPET_T + 0.24);
     }
   }
