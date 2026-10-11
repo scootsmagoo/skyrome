@@ -107,3 +107,12 @@ builds every landmark these builders handle at both detail levels and checks bud
 - `treadWear()` in `src/arch/common/stairs.ts` (called by `stairs()` and `wrappedSteps()`): per tread, a pale polished `marble` lip along the nosing (skipped on marble steps) and a dark `dirt` line where the tread meets the next riser. Two shared quads per tread (4 mm lift, no collider, box UVs so no stretch). Cost: 4 triangles per step.
 - `SK_WEATHER` (shaderPatch.ts, cache key v7) gained a tight dark contact line where a wall meets the ground plus splash flecks within 0.45 m of it, on top of the existing grime band, damp and moss.
 - Not done: kerb edge wear (no kerb builder exists; kerbs are street-paving boxes).
+
+## Solid ground, west side (phase 4b, L-WEST)
+
+- Anything that meets the ground reads `ctx.groundAt` at build time and goes down to the lowest ground under it (so it follows `?terrain=v1|v2`). Porta Capena's square collider is the paving's own trimesh; its props are placed with their colliders on the flags.
+- Domus Augustana: the substructure core behind the facade is drawn (it was collider-only, so the rooms' end faces hung over a void), the wing side walls reach the lowest ground along their run, and string courses and the cornice are drawn only where the hill stands below them. A bay buried in the hill has no plinth.
+- Atrium Vestae: the house is capped with tufa blocks wherever the hill stands over the floor (1.2 m cells, split in four on steep cells, 0.04 m over the ground, 0.1 m steps): the audit reads a floor as covered only when a cap lies within 0.6 m over the terrain.
+- `capfora/ornament.ts` `stairsToGround`: a flight whose road lies above the platform climbs to it (`up`), and treads under the ground are clipped per step.
+- Foundations passed a `groundMin` to a frame that stood at Y0 must subtract Y0 (Forum of Caesar, Augustus and Pacis did not: ~1 m floating).
+- Circus: colliders scale with the bay's width, the pier fronts and the stair block have boxes, euripus bridge decks collide.
