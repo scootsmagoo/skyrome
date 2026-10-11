@@ -128,15 +128,25 @@ export function socleAndDado(d: Draw, x0: number, x1: number, yMin: number, grou
   }
   if (x < x1) spans.push([x, x1]);
   const y0 = d.point(0, 0, 0).y;
+  // The band's foot hangs from the lowest ground in front of the wall within reach of the audit's
+  // probe (0.1 to 0.7 m out, 0.25 m either side), so a dip in the pavement never shows daylight under it.
   const gAt = (lx: number) => {
     const p = d.point(lx, 0, -0.3);
     return ground(p.x, p.z) + p.y - y0;
+  };
+  const gLow = (lx: number) => {
+    let g = Infinity;
+    for (const dz of [-0.1, -0.35, -0.7]) for (const dx of [-0.25, 0, 0.25]) {
+      const p = d.point(lx + dx, 0, dz);
+      g = Math.min(g, ground(p.x, p.z) + p.y - y0);
+    }
+    return g;
   };
   for (const [a, b] of spans) {
     if (b - a < 0.04) continue;
     const n = Math.max(1, Math.round((b - a) / step));
     const xs = Array.from({ length: n + 1 }, (_, i) => a + ((b - a) * i) / n);
-    const gs = xs.map(gAt);
+    const gs = xs.map(gAt), gl = xs.map(gLow);
     const podium = gs.map((g) => !!o.socle && g < floor - 0.12);
     // Socle: one box per run of consecutive podium samples.
     if (o.socle) {
@@ -153,7 +163,7 @@ export function socleAndDado(d: Draw, x0: number, x1: number, yMin: number, grou
     // Dado: a band whose bottom follows the ground (or sits on the socle), reaching 15 cm below
     // it so no plaster shows at the foot. Front face at z = −0.015 plus a thin top face.
     const pos: number[] = [];
-    const base = gs.map((g, i) => (podium[i] ? floor : g));
+    const base = gs.map((g, i) => (podium[i] ? floor : Math.min(g, gl[i])));
     // Front quad facing −z (the street side of the wall frame).
     const quad = (ax: number, ay0: number, ay1: number, bx: number, by0: number, by1: number, z: number) =>
       pos.push(ax, ay0, z, bx, by1, z, bx, by0, z, ax, ay0, z, ax, ay1, z, bx, by1, z);

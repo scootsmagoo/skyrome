@@ -50,6 +50,8 @@ export interface InsulaSpec {
   openShopChance?: number;
   /** Terrain relative to the floor level (local coords). */
   groundAt?: LocalGround;
+  /** The bare terrain (no sidewalk raise): foundations and the dado's foot follow it. Defaults to groundAt. */
+  terrainAt?: LocalGround;
   /** Sides with windows (false = party wall against a neighbour). Default true. */
   sides?: { left?: boolean; right?: boolean; back?: boolean };
   maxHeight?: number;
@@ -89,6 +91,7 @@ export function insula(spec: InsulaSpec): BuildingOutput {
   const W = spec.width, D = spec.depth;
   const wealth = spec.wealth ?? 0.4;
   const ground = spec.groundAt ?? flatGround;
+  const terrain: LocalGround = spec.terrainAt ?? ground;
   const sides = { left: spec.sides?.left ?? true, right: spec.sides?.right ?? true, back: spec.sides?.back ?? true };
   const streetDressing = (spec.streetDressing ?? true) && !low;
   const dress = streetDressing && full;
@@ -124,7 +127,7 @@ export function insula(spec: InsulaSpec): BuildingOutput {
 
   // Foundation level: the lowest ground along the whole outline (sampled every metre, on the line
   // and just outside it) minus a margin, so no wall foot hangs over a dip between the corners.
-  const yMin = foundationLevel(ground, W, D);
+  const yMin = foundationLevel(terrain, W, D);
 
   // ---- ground-floor bays
   const nb = Math.max(2, Math.round(W / rng.range(3.7, 4.5)));
@@ -151,9 +154,11 @@ export function insula(spec: InsulaSpec): BuildingOutput {
     const wantOpen = isShop && rng.chance(openChance);
     const ow = kind === 'stair' ? 1.16 : kind === 'entrance' ? 2.1 : Math.max(2.1, Math.min(3.5, bw - rng.range(0.85, 1.1)));
     const room = kind === 'stair' ? T + 0.6 : kind === 'entrance' ? T : wantOpen ? T + sd : T * 0.3;
-    let bf = bayFloor(ground, cx - ow / 2, cx + ow / 2, zf, room, yMin + 0.4, G - 3.6);
+    // (behind a portico the opening onto the street is the portico's arch, pd in front of the body)
+    const zs = zf - pd, rd = room + pd;
+    let bf = bayFloor(ground, cx - ow / 2, cx + ow / 2, zs, rd, yMin + 0.4, G - 3.6);
     const open = wantOpen && bf.open;
-    if (wantOpen && !open) bf = bayFloor(ground, cx - ow / 2, cx + ow / 2, zf, T * 0.3, yMin + 0.4, G - 3.6);
+    if (wantOpen && !open) bf = bayFloor(ground, cx - ow / 2, cx + ow / 2, zs, T * 0.3 + pd, yMin + 0.4, G - 3.6);
     const yb = bf.y;
     let o: Opening;
     if (kind === 'stair') o = { x0: cx - 0.58, x1: cx + 0.58, y0: yb, y1: yb + 2.45 };
@@ -210,7 +215,7 @@ export function insula(spec: InsulaSpec): BuildingOutput {
   for (let k = 1; k < n; k++) band(F, courseMat, -W / 2 - 0.02, W / 2 + 0.02, floorY(k) - 0.07, 0.12, 0.07);
   cornice(F, trim, -W / 2, W / 2, eave);
   // Painted dado on the piers between the shop openings, following the sidewalk.
-  if (finish === 'plaster') socleAndDado(F, -W / 2, W / 2, yMin, ground, { dado: dadoMat, skip: cut });
+  if (finish === 'plaster') socleAndDado(F, -W / 2, W / 2, yMin, terrain, { dado: dadoMat, skip: cut });
   // Painted notices on the wall beside some stair doors (near detail only; own rng stream; not
   // behind a portico, whose raised walk would hide them).
   if (full && !portico) {
@@ -364,7 +369,7 @@ export function insula(spec: InsulaSpec): BuildingOutput {
     const wins = [...sideWins(len, open, !spec.courtyard && !withShops), ...shops.map((s) => s.o)];
     const cutS = wall(frame, wallMat, -len / 2, len / 2, yMin, eave, T, wins);
     // Socle and dado along free sides (the side span includes the front and back wall ends).
-    if (open) socleAndDado(frame, side === 0 ? -W / 2 - 0.03 : -Db / 2, side === 0 ? W / 2 + 0.03 : Db / 2, yMin, ground, { dado: finish === 'plaster' ? dadoMat : null, socle: socleMat, skip: cutS });
+    if (open) socleAndDado(frame, side === 0 ? -W / 2 - 0.03 : -Db / 2, side === 0 ? W / 2 + 0.03 : Db / 2, yMin, terrain, { dado: finish === 'plaster' ? dadoMat : null, socle: socleMat, skip: cutS });
     if (open) {
       if (!low) for (const o of cutS) if (!shops.some((s) => s.o === o)) windowDetails(frame, o, { t: T, sill: 'travertine', relieving: finish === 'brick' ? 'brick' : null, shutters: drng.weighted([['open', 2], ['closed', 1.5], [null, 2]]), shutterMat, grille: o.y0 < G && o.y0 > 2 });
       for (let k = 1; k < n; k++) band(frame, courseMat, -len / 2 - (len === W ? 0.02 : T + 0.02), len / 2 + (len === W ? 0.02 : T + 0.02), floorY(k) - 0.07, 0.12, 0.07);
@@ -374,7 +379,10 @@ export function insula(spec: InsulaSpec): BuildingOutput {
     if (withShops && !low && drng.chance(0.35)) {
       const lx = side < 0 ? len / 2 - 1.3 : -len / 2 + 1.3;
       const z = side < 0 ? zc - lx : zc + lx;
-      const yb = Math.max(yMin + 0.4, ground(side * (W / 2 + 0.4), z));
+      // (on the lowest ground under its whole footprint, so neither side of the plinth hangs)
+      let gmin = Infinity;
+      for (let a = -0.95; a <= 0.951; a += 0.475) for (const o of [0, 0.4, 0.8]) gmin = Math.min(gmin, ground(side * (W / 2 + o), z + (side < 0 ? -a : a)));
+      const yb = Math.max(yMin + 0.4, gmin - 0.02);
       aedicula(frame.at(lx, yb, 0), drng, 1.7);
       spots.push({ id: `shrine${spots.length}`, kind: 'shrine', position: frame.point(lx, yb, -0.9), facing: side < 0 ? -Math.PI / 2 : Math.PI / 2, tag: 'aedicula' });
     }
@@ -489,7 +497,8 @@ export function insula(spec: InsulaSpec): BuildingOutput {
     d.solid(px, yMin, zf, o.x0, G - 0.3, backZ);
     d.solid(o.x0, o.y1, zf, o.x1, G - 0.3, backZ);
     d.solid(o.x0, yMin, zf, o.x1, o.y0 - 0.12, zf + T * 0.2);
-    if (depth < backZ - zf) d.solid(o.x0, o.y0 - 0.12, zf + depth, o.x1, o.y1, backZ);
+    // (a closed mouth's plug runs down to the lowest pavement in front of it: the wall under the sill is drawn there)
+    if (depth < backZ - zf) d.solid(o.x0, Math.max(yMin, Math.min(o.y0 - 0.12, bay.low - 0.1)), zf + depth, o.x1, o.y1, backZ);
     px = o.x1;
   }
   d.solid(px, yMin, zf, W / 2, G - 0.3, backZ);

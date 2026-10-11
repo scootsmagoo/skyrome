@@ -49,7 +49,7 @@ export interface Torch {
 /** Height of the torch brackets above the shop floor (over the shop lintels, under the balconies). */
 const TORCH_Y = 2.85;
 /** A street prop that would straddle a step this high is left out (the step-up assist, traversal.ts). */
-const STEP = 0.3;
+const STEP = 0.2;
 /** The flame of `torch_bracket` relative to its origin (local frame). */
 const FLAME = { up: 0.48, out: 0.3 };
 

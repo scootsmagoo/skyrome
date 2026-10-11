@@ -21,6 +21,8 @@ export interface HorreaSpec {
   depth: number;
   seed?: number;
   groundAt?: LocalGround;
+  /** The bare terrain (no sidewalk raise): foundations and the dado's foot follow it. Defaults to groundAt. */
+  terrainAt?: LocalGround;
   /** Level of detail (see `Detail`); every level has the same massing. */
   detail?: Detail;
 }
@@ -36,8 +38,9 @@ export function horrea(spec: HorreaSpec): BuildingOutput {
   const spots: Spot[] = [];
   const W = spec.width, D = spec.depth;
   const ground = spec.groundAt ?? flatGround;
+  const terrain: LocalGround = spec.terrainAt ?? ground;
   // Foundation: below the lowest ground along the whole outline (foundation.ts).
-  const yMin = foundationLevel(ground, W, D);
+  const yMin = foundationLevel(terrain, W, D);
   const H1 = 4.6, H = 8.8;
   const wing = Math.min(8, Math.min(W, D) * 0.3);
   const cw = W - 2 * wing, cd = D - 2 * wing;

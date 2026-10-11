@@ -229,7 +229,7 @@ export function shopInterior(d: Draw, kind: ShopKind, room: ShopRoom, rng: Rng) 
 export function shopFrontage(d: Draw, kind: ShopKind, ow: number, rng: Rng, ground: LocalGround = flatGround) {
   const side = rng.chance(0.5) ? -1 : 1;
   const x = side * (ow / 2 + 0.45);
-  const put = (k: PropKind, px: number, pz: number, rot: number, o: PlaceOpts = {}) => placeProp(d, k, px, ground(px, pz), pz, rot, { ...o, ground, maxStep: MAX_THRESHOLD_STEP });
+  const put = (k: PropKind, px: number, pz: number, rot: number, o: PlaceOpts = {}) => placeProp(d, k, px, ground(px, pz), pz, rot, { ...o, ground, maxStep: 0.2 });
   switch (kind) {
     case 'wine':
     case 'thermopolium':
