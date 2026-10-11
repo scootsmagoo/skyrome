@@ -131,7 +131,10 @@ describe('roads and dead ends on the real plan', () => {
     const g0 = buildStreetGraph(before.plan, streetWork(before.plan, (x, z) => before.hm.heightAt(x, z), core, 128), null, inCore);
     const r = auditReach(graph, 0, 0), r0 = auditReach(g0, 0, 0);
     console.log('REACH FROM THE FORUM before', r0.reachable, '/', r0.nodes, r0.share.toFixed(3), 'after', r.reachable, '/', r.nodes, r.share.toFixed(3), 'islands', r.islands.map((i) => `${i.size}@${i.at}`).join(' '));
-    expect(r.share).toBeGreaterThanOrEqual(r0.share);
+    // v1 (the old ground, kept only to compare against) may sit a hair under its no-detour plan: ROUTES'
+    // bend nodes round piazza centrepieces add a few nodes to lanes walled in between courts (0.993
+    // against 0.994, about three nodes of 2,386). v2, the game's ground, must not lose any reach.
+    expect(r.share).toBeGreaterThanOrEqual(r0.share - (after.hm.profile === 'v1' ? 0.002 : 0));
     // The plan asks for every node. A node is only left out when no walkable link (the raster probe
     // used here; the game adds the physics probe) reaches the main network within 120 m: the few
     // islands that remain are lanes walled in between courts. The test pins that set so it cannot grow:
@@ -141,7 +144,8 @@ describe('roads and dead ends on the real plan', () => {
     expect(r.islands.length).toBeLessThanOrEqual(4);
     // Terrain v2 (one ground) re-plans the city on the physics' triangles: its one island is 9 nodes
     // on a terrace at the core's south-east corner (555, 579), against v1's four of 3–5 nodes.
-    for (const i of r.islands) expect(i.size).toBeLessThanOrEqual(after.hm.profile === 'v1' ? 5 : 9);
+    // Under v1 the same walled-in lanes carry ROUTES' bend nodes too: 6–7 nodes.
+    for (const i of r.islands) expect(i.size).toBeLessThanOrEqual(after.hm.profile === 'v1' ? 7 : 9);
     // The Forum and the places the story walks between are all on the one network.
     const comp = new Set<number>();
     const stack = [graph.nearest(0, 0, 200)];
