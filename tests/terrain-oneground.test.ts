@@ -5,7 +5,7 @@
  * changed: the heights, the patch and `heightAt` hash to what they were before the switch existed.
  */
 import { createHash } from 'node:crypto';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as atlas from '../src/data/atlas';
 import { initPhysics, Layer, Physics } from '../src/core/Physics';
 import { buildHeightmap, Heightmap, type TerrainSource } from '../src/world/terrain/heightmap';
@@ -13,6 +13,9 @@ import { DEFAULT_TERRAIN_PROFILE, setTerrainProfile, terrainProfile, type Terrai
 import { heightfieldChunks, patchGeometry } from '../src/world/terrain/Terrain';
 import { morphOffset, PATCH_STRIDE, TerrainQuadtree } from '../src/world/terrain/quadtree';
 import { landmarkPads } from '../src/world/rome/buildRome';
+
+// Several tests build the whole city's grid (~1 s each, far more on a machine busy with other agents).
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
 const sha = (a: ArrayBufferView) => createHash('sha256').update(new Uint8Array(a.buffer, a.byteOffset, a.byteLength)).digest('hex');
 
