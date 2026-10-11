@@ -1376,8 +1376,16 @@ export function buildHeightmap(src: TerrainSource, opts: HeightmapOptions = {}):
     stampV2(grid, real, out, roads, pads, hm.roadMask, hm.padMask, cliff!);
     if (band && anyBand) {
       // The water bands keep v1's roads and pads: the channel, the quays and the canal stay put.
+      // Only the roads and pads that reach a band sample change one (v1 stamps each from the
+      // natural ground alone, so leaving the others out changes nothing there).
+      const wet = (b: { minX: number; maxX: number; minZ: number; maxZ: number }) => {
+        const box = sampleBox(grid, b);
+        if (!box) return false;
+        for (let iz = box.iz0; iz <= box.iz1; iz++) for (let ix = box.ix0; ix <= box.ix1; ix++) if (band[iz * nx + ix] > 0) return true;
+        return false;
+      };
       const ref = new Float32Array(real);
-      stampV1(grid, real, ref, roads, pads, null, null);
+      stampV1(grid, real, ref, roads.filter((r) => wet(bbox(null, r.points, r.width / 2 + 6))), pads.filter((p) => p.polygon.length >= 3 && wet(bbox(null, p.polygon, p.margin ?? 12))), null, null);
       for (let k = 0; k < out.length; k++) if (band[k] > 0) out[k] += (ref[k] - out[k]) * band[k];
     }
   }
