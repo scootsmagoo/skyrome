@@ -1,6 +1,6 @@
 /** The terrain grades audit's pure helpers (src/dev/audit/grades.ts). */
 import { describe, expect, it } from 'vitest';
-import { bottleneck, cellGrades, components, profile, regrade, relax, scaleAbout, toDeg, toGrade, WALK, walkClasses, type HeightGrid } from '../src/dev/audit/grades';
+import { bottleneck, cellGrades, components, profile, regrade, relax, scaleAbout, shortestWay, toDeg, toGrade, WALK, walkClasses, wayTo, type HeightGrid } from '../src/dev/audit/grades';
 
 function grid(nx: number, nz: number, f: (x: number, z: number) => number, spacing = 2): HeightGrid {
   const heights = new Float32Array(nx * nz);
@@ -46,6 +46,24 @@ describe('terrain grades audit', () => {
     // Walled off: nothing passable reaches it.
     const none = bottleneck(g, gr, src, (k) => k !== top && Math.hypot((k % n) * 2 + 1 - 60, ((k / n) | 0) * 2 + 1 - 60) > 6, {});
     expect(none[top]).toBe(Infinity);
+  });
+
+  it('finds the shortest way that stays under a grade', () => {
+    // Flat 20 × 20 cells with a wall across the middle (x = 20 m) open only at the far end (z > 32 m).
+    const g = grid(21, 21, (x, z) => (x >= 18 && x <= 22 && z < 32 ? 9 : 0));
+    const gr = cellGrades(g);
+    const cx = 20;
+    const prev = new Int32Array(gr.length);
+    const src = (k: number) => k === 0;
+    const dist = shortestWay(g, src, (k) => gr[k] < 0.3, prev);
+    const goal = cx - 1; // (19, 0): across the wall
+    expect(Number.isFinite(dist[goal])).toBe(true);
+    const way = wayTo(prev, goal);
+    expect(way[0]).toBe(0);
+    expect(way[way.length - 1]).toBe(goal);
+    // It goes round by the gap: some cell of the way lies past z = 32 m.
+    expect(way.some((k) => ((k / cx) | 0) * 2 >= 32)).toBe(true);
+    for (const k of way) expect(gr[k]).toBeLessThan(0.3);
   });
 
   it('groups steep cells into patches', () => {

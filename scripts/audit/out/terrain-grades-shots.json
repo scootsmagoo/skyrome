@@ -1,0 +1,291 @@
+{
+ "generated": "2026-10-11T00:31:05.091Z",
+ "tool": "scripts/audit/grades-live.mjs",
+ "stops": [],
+ "routes": [],
+ "climbs": [],
+ "errors": [],
+ "shots": [
+  {
+   "name": "viasacra-velia",
+   "x": 300.5,
+   "z": 160.4,
+   "view": "side",
+   "shot": "/Users/amfalony1/projects/skyrome/.claude/worktrees/wf_ef94e59a-49c-6/.shots/audit/grades/viasacra-velia-side.png",
+   "y": 14.6,
+   "deg": 48.2,
+   "terrainDeg": 45.7,
+   "uphill": [
+    -0.9,
+    -0.4
+   ]
+  },
+  {
+   "name": "viasacra-velia",
+   "x": 300.5,
+   "z": 160.4,
+   "view": "up",
+   "shot": "/Users/amfalony1/projects/skyrome/.claude/worktrees/wf_ef94e59a-49c-6/.shots/audit/grades/viasacra-velia-up.png",
+   "y": 14.6,
+   "deg": 48.2,
+   "terrainDeg": 45.7,
+   "uphill": [
+    -0.9,
+    -0.4
+   ]
+  },
+  {
+   "name": "vianova-arch-titus",
+   "x": 178.5,
+   "z": 127.5,
+   "view": "side",
+   "shot": "/Users/amfalony1/projects/skyrome/.claude/worktrees/wf_ef94e59a-49c-6/.shots/audit/grades/vianova-arch-titus-side.png",
+   "y": 12.6,
+   "deg": 90,
+   "terrainDeg": 36.7,
+   "uphill": [
+    0.9,
+    0.5
+   ]
+  },
+  {
+   "name": "vianova-arch-titus",
+   "x": 178.5,
+   "z": 127.5,
+   "view": "up",
+   "shot": "/Users/amfalony1/projects/skyrome/.claude/worktrees/wf_ef94e59a-49c-6/.shots/audit/grades/vianova-arch-titus-up.png",
+   "y": 12.6,
+   "deg": 90,
+   "terrainDeg": 36.7,
+   "uphill": [
+    0.9,
+    0.5
+   ]
+  },
+  {
+   "name": "clivus-victoriae",
+   "x": 88,
+   "z": 103,
+   "view": "side",
+   "shot": "/Users/amfalony1/projects/skyrome/.claude/worktrees/wf_ef94e59a-49c-6/.shots/audit/grades/clivus-victoriae-side.png",
+   "y": 25,
+   "deg": 67.9,
+   "terrainDeg": 66.6,
+   "uphill": [
+    0.8,
+    0.7
+   ]
+  },
+  {
+   "name": "clivus-victoriae",
+   "x": 88,
+   "z": 103,
+   "view": "up",
+   "shot": "/Users/amfalony1/projects/skyrome/.claude/worktrees/wf_ef94e59a-49c-6/.shots/audit/grades/clivus-victoriae-up.png",
+   "y": 25,
+   "deg": 67.9,
+   "terrainDeg": 66.6,
+   "uphill": [
+    0.8,
+    0.7
+   ]
+  },
+  {
+   "name": "markets-lane",
+   "x": 105.4,
+   "z": -288.5,
+   "view": "side",
+   "shot": "/Users/amfalony1/projects/skyrome/.claude/worktrees/wf_ef94e59a-49c-6/.shots/audit/grades/markets-lane-side.png",
+   "y": 23,
+   "deg": 66.1,
+   "terrainDeg": 62.6,
+   "uphill": [
+    0.9,
+    -0.4
+   ]
+  },
+  {
+   "name": "markets-lane",
+   "x": 105.4,
+   "z": -288.5,
+   "view": "up",
+   "shot": "/Users/amfalony1/projects/skyrome/.claude/worktrees/wf_ef94e59a-49c-6/.shots/audit/grades/markets-lane-up.png",
+   "y": 23,
+   "deg": 66.1,
+   "terrainDeg": 62.6,
+   "uphill": [
+    0.9,
+    -0.4
+   ]
+  },
+  {
+   "name": "claudianum-streets",
+   "x": 467.5,
+   "z": 239.9,
+   "view": "side",
+   "shot": "/Users/amfalony1/projects/skyrome/.claude/worktrees/wf_ef94e59a-49c-6/.shots/audit/grades/claudianum-streets-side.png",
+   "y": 21.8,
+   "deg": 57.4,
+   "terrainDeg": 56,
+   "uphill": [
+    -0.3,
+    1
+   ]
+  },
+  {
+   "name": "claudianum-streets",
+   "x": 467.5,
+   "z": 239.9,
+   "view": "up",
+   "shot": "/Users/amfalony1/projects/skyrome/.claude/worktrees/wf_ef94e59a-49c-6/.shots/audit/grades/claudianum-streets-up.png",
+   "y": 21.8,
+   "deg": 57.4,
+   "terrainDeg": 56,
+   "uphill": [
+    -0.3,
+    1
+   ]
+  },
+  {
+   "name": "clivus-capitolinus",
+   "x": -67.4,
+   "z": 43,
+   "view": "side",
+   "shot": "/Users/amfalony1/projects/skyrome/.claude/worktrees/wf_ef94e59a-49c-6/.shots/audit/grades/clivus-capitolinus-side.png",
+   "y": 17.1,
+   "deg": 31.9,
+   "terrainDeg": 31.2,
+   "uphill": [
+    -1,
+    0
+   ]
+  },
+  {
+   "name": "clivus-capitolinus",
+   "x": -67.4,
+   "z": 43,
+   "view": "up",
+   "shot": "/Users/amfalony1/projects/skyrome/.claude/worktrees/wf_ef94e59a-49c-6/.shots/audit/grades/clivus-capitolinus-up.png",
+   "y": 17.1,
+   "deg": 31.9,
+   "terrainDeg": 31.2,
+   "uphill": [
+    -1,
+    0
+   ]
+  },
+  {
+   "name": "vicus-iugarius-tarpeian",
+   "x": -87.8,
+   "z": 84.4,
+   "view": "side",
+   "shot": "/Users/amfalony1/projects/skyrome/.claude/worktrees/wf_ef94e59a-49c-6/.shots/audit/grades/vicus-iugarius-tarpeian-side.png",
+   "y": 11,
+   "deg": 51.2,
+   "terrainDeg": 47.8,
+   "uphill": [
+    0.6,
+    -0.8
+   ]
+  },
+  {
+   "name": "vicus-iugarius-tarpeian",
+   "x": -87.8,
+   "z": 84.4,
+   "view": "up",
+   "shot": "/Users/amfalony1/projects/skyrome/.claude/worktrees/wf_ef94e59a-49c-6/.shots/audit/grades/vicus-iugarius-tarpeian-up.png",
+   "y": 11,
+   "deg": 51.2,
+   "terrainDeg": 47.8,
+   "uphill": [
+    0.6,
+    -0.8
+   ]
+  },
+  {
+   "name": "clivus-palatinus",
+   "x": 171.4,
+   "z": 132.4,
+   "view": "side",
+   "shot": "/Users/amfalony1/projects/skyrome/.claude/worktrees/wf_ef94e59a-49c-6/.shots/audit/grades/clivus-palatinus-side.png",
+   "y": 18.6,
+   "deg": 63.1,
+   "terrainDeg": 62.5,
+   "uphill": [
+    -0.4,
+    0.9
+   ]
+  },
+  {
+   "name": "clivus-palatinus",
+   "x": 171.4,
+   "z": 132.4,
+   "view": "up",
+   "shot": "/Users/amfalony1/projects/skyrome/.claude/worktrees/wf_ef94e59a-49c-6/.shots/audit/grades/clivus-palatinus-up.png",
+   "y": 18.6,
+   "deg": 63.1,
+   "terrainDeg": 62.5,
+   "uphill": [
+    -0.4,
+    0.9
+   ]
+  },
+  {
+   "name": "island-edge",
+   "x": -345.7,
+   "z": 158,
+   "view": "side",
+   "shot": "/Users/amfalony1/projects/skyrome/.claude/worktrees/wf_ef94e59a-49c-6/.shots/audit/grades/island-edge-side.png",
+   "y": 6.3,
+   "deg": 73.2,
+   "terrainDeg": 58.7,
+   "uphill": [
+    -0.6,
+    -0.8
+   ]
+  },
+  {
+   "name": "island-edge",
+   "x": -345.7,
+   "z": 158,
+   "view": "up",
+   "shot": "/Users/amfalony1/projects/skyrome/.claude/worktrees/wf_ef94e59a-49c-6/.shots/audit/grades/island-edge-up.png",
+   "y": 6.3,
+   "deg": 73.2,
+   "terrainDeg": 58.7,
+   "uphill": [
+    -0.6,
+    -0.8
+   ]
+  },
+  {
+   "name": "domus-augustana-bank",
+   "x": 90.3,
+   "z": 355.3,
+   "view": "side",
+   "shot": "/Users/amfalony1/projects/skyrome/.claude/worktrees/wf_ef94e59a-49c-6/.shots/audit/grades/domus-augustana-bank-side.png",
+   "y": 8.6,
+   "deg": 53.3,
+   "terrainDeg": 28.7,
+   "uphill": [
+    0.6,
+    -0.8
+   ]
+  },
+  {
+   "name": "domus-augustana-bank",
+   "x": 90.3,
+   "z": 355.3,
+   "view": "up",
+   "shot": "/Users/amfalony1/projects/skyrome/.claude/worktrees/wf_ef94e59a-49c-6/.shots/audit/grades/domus-augustana-bank-up.png",
+   "y": 8.6,
+   "deg": 53.3,
+   "terrainDeg": 28.7,
+   "uphill": [
+    0.6,
+    -0.8
+   ]
+  }
+ ],
+ "minutes": 1.5
+}

@@ -12,18 +12,25 @@
  *   node scripts/audit/grades-live.mjs --at "via-sacra@300,160;forum-trajan@105,-288"   (only screenshots:
  *                                      a side view across the slope and a view up it, at each point)
  *
- * 1. Street-graph survey: at every stop, the city streams in round the player, then every street
- *    graph edge within `--radius` m is sampled every 0.5 m with rays (from head height above the
- *    terrain): the surface's own slope (its normal), the grade over 2 m along the edge (steps over
- *    0.3 m in 0.5 m count as a flight, not a slope), and rays that start inside something.
- * 1b. The story's walks as the minimap routes them (QuestRoute's StreetRouter over game.streets), in
- *    50 m hops (the city streams in round each hop) with the same rays: metres over 20/30/35/40 degrees.
- * 2. Climbs: the real player (PlayerController, Rapier, the city's colliders) runs up each steep road
- *    or face from its low end, steered through its points; time against the flat time, stalls (under
- *    0.3 m in a second, with the slope there) and slides back.
- * 3. Screenshots: a side view of the steepest stretch of every climb that stalled or crawled, and of
- *    the steepest street edges (HUD hidden), in .shots/audit/grades/.
+ * 1. Street-graph survey: at every stop (the story's places, the clivi and stairways at their
+ *    steepest, and the offline audit's worst patches on streets), the city streams in round the
+ *    player, then every street-graph edge within `--radius` m is sampled every 0.5 m with rays (from
+ *    head height above the terrain): the surface's own slope (its normal), the grade over 2 m along
+ *    the edge (steps over 0.3 m in 0.5 m count as a flight, not a slope), and rays that start inside
+ *    something.
+ * 1b. The story's walks as the minimap routes them (QuestRoute's StreetRouter over game.streets,
+ *    ends on the graph), in 50 m hops (the city streams in round each hop) with the same rays:
+ *    metres over 20/30/35/40 degrees.
+ * 2. Climbs: the real player (PlayerController, Rapier, the city's colliders; god mode on, anything
+ *    the world opened over the game closed first) runs up each steep road from its low end, and up
+ *    each hill's easiest way (offline), steered through its points; time against the flat time,
+ *    slides back, and every stall (under 0.3 m in a second) with its cause: 'grade' (the ground
+ *    ahead is over the 40 degree slide angle), 'obstacle' (something in front at knee or chest
+ *    height) or 'other'.
+ * 3. Screenshots: a side view of every climb that stalled, slid or crawled, of the steepest street
+ *    edges and of each route's steepest metre (HUD hidden), in .shots/audit/grades/.
  *
+ * About 16 minutes with `--minutes 14` (the screenshots get two more); `--at` takes about 2.
  * Bounded: one browser, one page; every wait has a limit; `--minutes` caps the whole run.
  */
 import { createServer as createNetServer } from 'node:net';
@@ -47,12 +54,25 @@ if (!offline) console.log(`(no offline audit at ${fromPath}: only the story plac
 // ------------------------------------------------------------------ what to visit
 /** Story places (docs/STORY.md, the owner's list): landmark ids or atlas lowland/road ids resolved in the page. */
 const STORY = [
-  ['porta-capena', 'Porta Capena'], ['circus-maximus', 'Circus valley'], ['rostra', 'Forum'], ['area-velabrum', 'Velabrum'],
+  ['porta-capena', 'Porta Capena'], ['circus-maximus', 'Circus valley'], ['rostra', 'Forum'], ['pt:-45,204', 'Velabrum'],
   ['road:vicus-tuscus', 'Vicus Tuscus'], ['subura', 'Subura'], ['ludus-magnus', 'Ludus Magnus'], ['colosseum', 'Colosseum valley'],
-  ['meta-sudans', 'Meta Sudans'], ['forum-trajan', 'Forum of Trajan'], ['column-trajan', 'Trajan\'s Column'], ['portus-tiberinus', 'river district'],
-  ['forum-boarium', 'Forum Boarium'], ['island:insula-tiberina', 'Tiber Island'], ['pantheon', 'Campus Martius'],
-  ['road:clivus-suburanus', 'Clivus Suburanus'], ['road:clivus-scauri', 'Clivus Scauri'],
+  ['meta-sudans', 'Meta Sudans'], ['arch-titus', 'Arch of Titus (Velia)'], ['forum-trajan', 'Forum of Trajan'], ['column-trajan', 'Trajan\'s Column'],
+  ['portus-tiberinus', 'river district'], ['forum-boarium', 'Forum Boarium'], ['island:insula-tiberina', 'Tiber Island'], ['pantheon', 'Campus Martius'],
+  // The hills' ways up (at the steepest stretch the offline audit found on each).
+  ['road:clivus-capitolinus', 'Clivus Capitolinus'], ['road:clivus-palatinus', 'Clivus Palatinus'], ['road:clivus-victoriae', 'Clivus Victoriae'],
+  ['road:clivus-argentarius', 'Clivus Argentarius'], ['road:clivus-publicius', 'Clivus Publicius (Aventine)'], ['road:clivus-scauri', 'Clivus Scauri (Caelian)'],
+  ['road:clivus-suburanus', 'Clivus Suburanus (Esquiline)'], ['road:via-sacra', 'Via Sacra'], ['road:via-nova', 'Via Nova'], ['road:vicus-iugarius', 'Vicus Iugarius'],
+  ['road:scalae-caci', 'Scalae Caci'], ['road:centum-gradus', 'Centum Gradus'], ['road:gradus-monetae', 'Gradus Monetae'],
+  ['temple-divus-claudius', 'Caelian (Claudianum)'], ['baths-trajan', 'Oppian (Baths of Trajan)'], ['markets-trajan', 'Quirinal (Markets of Trajan)'],
 ];
+// A road stop stands at the steepest 4 m the offline audit found on it (else at its middle).
+if (offline) {
+  for (const e of STORY) {
+    if (!e[0].startsWith('road:')) continue;
+    const r = offline.roads.find((x) => x.id === e[0].slice(5));
+    if (r && r.max4m.pct > 15) e[0] = `pt:${r.max4m.at[0]},${r.max4m.at[2]}`;
+  }
+}
 /** The story's walks as the minimap routes them (street graph, StreetRouter), surveyed in hops along the line. */
 const ROUTES = [
   ['porta-capena', 'circus-maximus'], ['circus-maximus', 'rostra'], ['rostra', 'temple-castor-pollux'], ['temple-castor-pollux', 'ludus-magnus'],
@@ -66,10 +86,17 @@ if (offline) {
     if (r.rise < 3 || r.max4m.pct < 25) continue;
     climbs.push({ id: `road:${r.id}`, kind: 'road', road: r.id, maxPct: r.max4m.pct, at: r.max4m.at });
   }
+  // The easiest way up each hill (offline: the shortest walkable way that never meets anything steeper
+  // than it must), the last 160 m below the top: radial faces run through blocks, these don't.
   for (const h of offline.hills) {
-    // The hardest open face of each hill: walkable for most of its line, and slow or not climbed offline.
-    const faces = (h.faces ?? []).filter((f) => f.run && f.walkableShare >= 0.6 && (!f.run.reached || f.run.meanSpeed < 2.5)).sort((a, b) => b.steepest4m.deg - a.steepest4m.deg);
-    for (const f of faces.slice(0, 1)) climbs.push({ id: `face:${h.group}@${f.bearing}`, kind: 'face', foot: f.foot, summit: h.summit, from: f.run.from, to: f.run.to, maxDeg: f.steepest4m.deg, at: f.steepest4m.at, offlineReached: f.run.reached });
+    const w = h.easiestUp?.way;
+    if (!w || w.points.length < 3 || h.easiestUp.surfaceDeg < 8) continue;
+    let pts = w.points, L = 0;
+    for (let i = pts.length - 1; i > 0 && L < 160; i--) {
+      L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+      if (L >= 160) pts = pts.slice(i - 1);
+    }
+    climbs.push({ id: `hill:${h.group}`, kind: 'way', points: pts, maxDeg: w.steepest.deg, at: w.steepest.at });
   }
 }
 /** Extra stops: the biggest steep patches of walkable ground on streets and squares (offline). */
@@ -130,10 +157,15 @@ try {
       out.stops.push({ ...s, error: 'not found' });
       continue;
     }
-    await page.evaluate(({ x, z }) => window.__grades.go(x, z), s);
+    let [sx, sz] = [s.x, s.z];
+    // A landmark centre deep inside its footprint (the Circus, the Colosseum) has no street near:
+    // survey round the nearest street-graph node instead.
+    const near = await page.evaluate(({ x, z, R }) => window.__grades.nearNode(x, z, R), { x: sx, z: sz, R: RADIUS });
+    if (near) [sx, sz] = near;
+    await page.evaluate(([x, z]) => window.__grades.go(x, z), [sx, sz]);
     await waitStream();
-    const r = await page.evaluate(({ x, z, R }) => window.__grades.surveyEdges(x, z, R), { x: s.x, z: s.z, R: RADIUS });
-    out.stops.push({ id: s.id, name: s.name, at: [s.x, r.y, s.z], ...r });
+    const r = await page.evaluate(({ x, z, R }) => window.__grades.surveyEdges(x, z, R), { x: sx, z: sz, R: RADIUS });
+    out.stops.push({ id: s.id, name: s.name, at: [sx, r.y, sz], ...r });
     log(`${s.id.padEnd(26)} ${String(r.edges).padStart(3)} edges, ${String(r.metres).padStart(5)} m: >20° ${r.over20} m, >30° ${r.over30} m, >35° ${r.over35} m, >40° ${r.over40} m; steepest ${r.worst[0] ? `${r.worst[0].deg}° @${r.worst[0].at.join(',')}` : '-'}`);
   }
 
@@ -143,7 +175,7 @@ try {
     for (const [a, b] of ROUTES) {
       if (Date.now() > DEADLINE) break;
       if (only && !only.some((o) => a.includes(o) || b.includes(o))) continue;
-      const [A, B] = await page.evaluate((list) => window.__grades.resolve(list), [[a, a], [b, b]]);
+      const [A, B] = await page.evaluate((list) => window.__grades.resolve(list, true), [[a, a], [b, b]]);
       const line = await page.evaluate(({ A, B }) => window.__grades.routeLine(A.x, A.z, B.x, B.z), { A, B });
       if (!line) {
         out.routes.push({ from: a, to: b, error: 'no route' });
@@ -179,14 +211,22 @@ try {
       await waitStream();
       const flat = wps.reduce((a, p, i) => (i ? a + Math.hypot(p[0] - wps[i - 1][0], p[1] - wps[i - 1][1]) : 0), 0) / 4.4;
       const limit = Math.min(90, flat * 3 + 15);
+      const was = await page.evaluate(() => window.__grades.unblock());
+      if (was.open.length) log(`  (closed ${was.open.join(', ')} before the climb)`);
       await page.evaluate(({ wps, limit }) => window.__grades.startWalk(wps, limit), { wps, limit });
       await page.evaluate(() => window.__skyrome.game.input.simulate('KeyW', true));
       const t1 = Date.now();
       let res = null;
-      while (Date.now() - t1 < (limit + 10) * 1000) {
+      // Game time can run slower than the wall clock on a busy machine: wait up to three times the limit.
+      while (Date.now() - t1 < (limit * 3 + 10) * 1000 && Date.now() < DEADLINE + 90000) {
         await page.waitForTimeout(500);
         res = await page.evaluate(() => window.__grades.walkResult());
         if (res.done) break;
+        const b = await page.evaluate(() => (window.__skyrome.game.paused || !window.__skyrome.game.input.enabled ? window.__grades.unblock() : null));
+        if (b) {
+          log(`  (the game was blocked during the climb: ${b.open.join(', ') || 'paused'}; closed)`);
+          await page.evaluate(() => window.__skyrome.game.input.simulate('KeyW', true));
+        }
       }
       await page.evaluate(() => window.__skyrome.game.input.simulate('KeyW', false));
       await page.evaluate(() => window.__grades.stopWalk());
@@ -194,19 +234,20 @@ try {
       delete entry.trace;
       entry.trace = (res?.trace ?? []).filter((_, i) => i % 4 === 0);
       out.climbs.push(entry);
-      log(`climb ${c.id.padEnd(34)} ${res?.reached ? 'up' : 'NOT UP'} in ${res?.secs}s (flat ${Math.round(flat)}s), stalls ${res?.stalls?.length ?? 0}, slid ${res?.slid ?? 0}s, max surface ${res?.maxDeg}°`);
+      log(`climb ${c.id.padEnd(34)} ${res?.reached ? 'up' : 'NOT UP'} in ${res?.secs}s (flat ${Math.round(flat)}s), stalls ${res?.stalls?.length ?? 0}${res?.stalls?.[0] ? ` (${res.stalls[0].why ?? '?'}: ahead ${res.stalls[0].aheadDeg ?? '-'}°${res.stalls[0].front ? `, ${res.stalls[0].front.owner} ${res.stalls[0].front.d} m in front` : ''} @${res.stalls[0].at.join(',')})` : ''}, slid ${res?.slid ?? 0}s, max surface ${res?.maxDeg}°`);
     }
   }
 
   // -------------------------------------------------------------- 3. screenshots
   if (!args['no-shots']) {
+    await page.evaluate(() => window.__grades.unblock());
     await page.evaluate(() => window.__grades.camMode(true));
     const targets = [];
     for (const c of out.climbs) {
-      const bad = !c.reached || (c.secs && c.flatSecs && c.secs > c.flatSecs * 1.6) || (c.stalls?.length ?? 0) > 0;
+      const bad = !c.reached || (c.secs && c.flatSecs && c.secs > c.flatSecs * 1.6) || (c.stalls?.length ?? 0) > 0 || (c.slidBack ?? 0) > 1;
       if (!bad) continue;
       const st = c.stalls?.[0];
-      targets.push({ name: `climb-${c.id.replace(/[^a-z0-9]+/gi, '-')}`, at: st ? st.at : c.at, dir: c.dirAt ?? null });
+      targets.push({ name: `climb-${c.id.replace(/[^a-z0-9]+/gi, '-')}${st ? `-${st.why ?? 'stall'}` : ''}`, at: st ? st.at : c.at, dir: c.dirAt ?? null });
     }
     const worstEdges = out.stops.flatMap((s) => (s.worst ?? []).slice(0, 1).map((w) => ({ ...w, stop: s.id }))).filter((w) => w.deg > 30).sort((a, b) => b.deg - a.deg).slice(0, 10);
     for (const w of worstEdges) targets.push({ name: `edge-${w.stop}-${Math.round(w.deg)}deg`, at: w.at, dir: w.dir });
@@ -264,11 +305,21 @@ function install() {
   };
   const api = {
     /** Story places → points (landmark location, area-<lowland>, road:<id> midpoint, island:<id> centroid). */
-    resolve(list) {
+    resolve(list, onGraph = false) {
       const S = 0.6;
-      return list.map(([id, name]) => {
+      const toGraph = (p) => {
+        // A landmark's centre can lie deep inside its footprint (the Circus, the Colosseum): start a
+        // route at the nearest street-graph node instead.
+        if (!onGraph || p.x == null) return p;
+        const n = g.streets?.nearest?.(p.x, p.z, 250) ?? -1;
+        return n >= 0 ? { ...p, x: g.streets.nodes[n].x, z: g.streets.nodes[n].z } : p;
+      };
+      return list.map(([id, name]) => toGraph((() => {
         let x = null, z = null;
-        if (id.startsWith('road:')) {
+        if (id.startsWith('pt:')) {
+          [x, z] = id.slice(3).split(',').map(Number);
+          return { id: `${name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`, name, x, z };
+        } else if (id.startsWith('road:')) {
           const pr = g.city?.plan?.roads?.find((r) => r.id === id.slice(5));
           if (pr) {
             const m = pr.points[Math.floor(pr.points.length / 2)];
@@ -289,7 +340,27 @@ function install() {
           if (s) ({ x, z } = s);
         }
         return { id, name, x, z };
-      });
+      })()));
+    },
+    /**
+     * Close whatever the world opened over the game while the audit teleported about (a guard's
+     * arrest talk, a notice, a menu): a paused game or blocked input runs no walker. Returns what was open.
+     */
+    unblock() {
+      const ui = g.ui;
+      const open = ui ? [...(ui.stack ?? []).map((m) => m.id ?? '?'), ...[...(ui.blockers ?? [])].map((b) => `block:${b}`)] : [];
+      try { ui?.closeAll?.(); } catch {}
+      if (g.paused && !(ui?.stack?.length)) g.paused = false;
+      g.input.enabled = true;
+      return { open, paused: g.paused };
+    },
+    /** Null when a street-graph edge ends within R of (x, z); else the nearest node (within 250 m). */
+    nearNode(x, z, R) {
+      const S = g.streets;
+      if (!S) return null;
+      if (S.nodes.some((n) => Math.hypot(n.x - x, n.z - z) < R)) return null;
+      const k = S.nearest(x, z, 250);
+      return k >= 0 ? [S.nodes[k].x, S.nodes[k].z] : null;
     },
     /** Teleport to street level at (x, z): the first surface below head height over the terrain (not a roof). */
     go(x, z) {
@@ -457,13 +528,14 @@ function install() {
         const cut = dense.slice(Math.max(0, mi - 30), Math.min(dense.length, mi + 21));
         return cut.filter((_, i) => i % 6 === 0 || i === cut.length - 1);
       }
+      if (c.kind === 'way') return c.points.filter((_, i) => i % 2 === 0 || i === c.points.length - 1);
       const [fx, fz] = c.from ?? [c.foot[0], c.foot[2]], [sx, sz] = c.to ?? [c.summit[0], c.summit[2]];
       const L = Math.hypot(sx - fx, sz - fz), n = Math.max(2, Math.ceil(L / 12));
       return Array.from({ length: n + 1 }, (_, k) => [fx + ((sx - fx) * k) / n, fz + ((sz - fz) * k) / n]);
     },
     /** A system that steers the camera yaw (and so the run) through the waypoints while W is held. */
     startWalk(wps, limit) {
-      const st = { wps, i: 1, t: 0, limit, trace: [], stalls: [], slid: 0, done: false, reached: false, lastSec: null, maxDeg: 0, dirAt: null, best: Infinity, bestT: 0 };
+      const st = { wps, i: 1, t: 0, limit, trace: [], stalls: [], slid: 0, slidBack: 0, done: false, reached: false, lastSec: null, maxDeg: 0, dirAt: null, best: Infinity, bestT: 0 };
       api.walk = st;
       const p = g.player;
       st.lastSec = p.position.clone();
@@ -498,9 +570,14 @@ function install() {
             const moved = Math.hypot(pos.x - st.lastSec.x, pos.z - st.lastSec.z);
             if (moved < 0.3) {
               const h = g.physics.raycast({ x: pos.x, y: pos.y + 0.5, z: pos.z }, DOWN, 1.5, WORLD);
-              st.stalls.push({ t: Math.round(st.t), at: [r1(pos.x), r1(pos.y), r1(pos.z)], deg: h ? r1(deg(h.normal.y)) : null });
+              st.stalls.push({ t: Math.round(st.t), at: [r1(pos.x), r1(pos.y), r1(pos.z)], deg: h ? r1(deg(h.normal.y)) : null, ...api.whyStalled(pos, tx, tz) });
             }
-            if (pos.y < st.lastSec.y - 0.3) st.slid++;
+            // `slid`: seconds with a drop of over 0.3 m (descents included); `slidBack`: those that also
+            // took the walker farther from the waypoint it was heading for (sliding back down).
+            if (pos.y < st.lastSec.y - 0.3) {
+              st.slid++;
+              if (Math.hypot(tx - pos.x, tz - pos.z) > Math.hypot(tx - st.lastSec.x, tz - st.lastSec.z) + 0.1) st.slidBack++;
+            }
             st.lastSec.copy(pos);
             const n = st.stalls.length;
             if (n >= 5 && st.stalls[n - 1].t - st.stalls[n - 5].t === 4) st.done = true;
@@ -519,10 +596,34 @@ function install() {
       };
       api.walkSys = g.addSystem(sys) ?? sys;
     },
+    /**
+     * Why the walker stopped at `pos` heading for (tx, tz): the steepest ground 0.5 to 3 m ahead (rays
+     * down from 3 m over the feet), and what is in front at knee and chest height. 'grade' when the
+     * ground ahead is steeper than the 40 degree slide angle; 'obstacle' when something stands in the
+     * way; else 'other' (a kerb, a gap).
+     */
+    whyStalled(pos, tx, tz) {
+      let dx = tx - pos.x, dz = tz - pos.z;
+      const L = Math.hypot(dx, dz) || 1;
+      dx /= L;
+      dz /= L;
+      let ahead = 0;
+      for (const d of [0.5, 1, 1.5, 2, 3]) {
+        const h = g.physics.raycast({ x: pos.x + dx * d, y: pos.y + 3, z: pos.z + dz * d }, DOWN, 6, WORLD);
+        if (h && h.normal.y > 0.2) ahead = Math.max(ahead, deg(h.normal.y));
+      }
+      let front = null;
+      for (const y of [0.45, 1.2]) {
+        const h = g.physics.raycast({ x: pos.x, y: pos.y + y, z: pos.z }, { x: dx, y: 0, z: dz }, 1.2, WORLD);
+        if (h && h.normal.y < 0.6 && (!front || h.distance < front.d)) front = { d: r1(h.distance), y, owner: ownerName(h.owner) };
+      }
+      const why = ahead > 40 ? 'grade' : front ? 'obstacle' : 'other';
+      return { why, aheadDeg: r1(ahead), front };
+    },
     walkResult() {
       const st = api.walk;
       if (!st) return { done: true };
-      return { done: st.done, reached: st.reached, secs: Math.round(st.t), stalls: st.stalls.slice(0, 6), slid: st.slid, maxDeg: r1(st.maxDeg), dirAt: st.dirAt, trace: st.trace, progress: `${st.i}/${st.wps.length}`, end: st.trace[st.trace.length - 1] ?? null };
+      return { done: st.done, reached: st.reached, secs: Math.round(st.t), stalls: st.stalls.slice(0, 6), slid: st.slid, slidBack: st.slidBack, maxDeg: r1(st.maxDeg), dirAt: st.dirAt, trace: st.trace, progress: `${st.i}/${st.wps.length}`, end: st.trace[st.trace.length - 1] ?? null };
     },
     stopWalk() {
       if (api.walkSys) g.removeSystem(api.walkSys);
@@ -599,7 +700,12 @@ function install() {
       const cx = x + best[0] * D, cz = z + best[1] * D;
       g.player.teleport({ x: cx, y: Math.max(hm.heightAt(cx, cz), y) + 0.3, z: cz }, 0);
       if (g.player.avatar) g.player.avatar.root.visible = false;
-      api.pin = [cx, y + 3, cz, x, y + 0.5, z];
+      // Never under the ground on the uphill side: at least 2.2 m over the terrain (or the first surface
+      // within 6 m above it) where the camera stands.
+      const t = hm.heightAt(cx, cz);
+      const top = g.physics.raycast({ x: cx, y: t + 6, z: cz }, DOWN, 6.5, WORLD);
+      const camY = Math.max(y + 3, (top && top.distance > 0.02 ? top.point.y : t) + 2.2);
+      api.pin = [cx, camY, cz, x, y + 0.5, z];
     },
   };
   window.__grades = api;

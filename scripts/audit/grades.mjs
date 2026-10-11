@@ -8,27 +8,36 @@
  *                                 [--png scripts/audit/out/terrain-grades.png]
  *                                 [--dirs 24] [--no-climb] [--no-options] [--top 40]
  *
- * What it does (about 3 to 4 minutes on an M-series Mac):
+ * What it does (about 2.5 minutes on a quiet M-series Mac; 20 when other agents load the machine):
  *  1. The slope map: per 2 m cell the steeper of the two triangles of Rapier's heightfield (what
  *     the character controller meets), classed by what the cell is underfoot (atlas road, minor
  *     street, flight, open ground, a landmark's margin or square, water, built over).
  *  2. The controller's curve: the REAL Actor (src/actors/Actor.ts) run up heightfield ramps of
- *     0 to 60 degrees at walk, run and sprint: uphill speed, and whether it stays planted when it stops.
+ *     0 to 60 degrees at walk, run and sprint (uphill speed, does it stay planted when it stops),
+ *     and across them at 45 and 70 degrees off the fall line (does a zig-zag gain height?).
  *  3. The hills: for every hill (terraces folded into their hill) the grade of its flanks, the
  *     easiest way up from the low ground (minimax: the least "steepest grade on the way", by
- *     surface slope and by the rise of the move for a walker who zig-zags), and the real Actor
- *     run up each face (`--dirs` radial lines from the summit's foot) on the real terrain colliders.
+ *     surface slope and by the rise of the move for a walker or runner who zig-zags without
+ *     stepping on ground steeper than the measured slide limit), the shortest walkable way that
+ *     stays that easy (a polyline the live audit walks), the real Actor run up each face (`--dirs`
+ *     radial lines from the summit's foot) on the real terrain colliders, and how each atlas hill
+ *     and terrace is made (its smoothstep flank's top grade, the run that would keep it under 25/30).
  *  4. Roads and streets by grade (atlas roads after the city's detours, and the minor streets):
- *     steepest 4 m stretch, length over 10/20/30/40 %, the real Actor run up every steep road,
- *     and the cut and fill a regrade to 15/20/25 % would take.
+ *     steepest 4 m stretch, with and without the landmark pads (a pad stamped over a road), length
+ *     over 10/20/30/40 %, the real Actor run up every steep road, and the cut and fill a regrade
+ *     to 15/20/25 % would take.
  *  5. The steep spots: connected patches of walkable ground over 35, 40 and 50 degrees, ranked,
  *     each with the nearest named place and a cause (hill flank, cliff, pad embankment, road
- *     bank, river cut, ground noise) from the natural landform rebuilt without roads, pads or noise.
+ *     bank, river cut, ground noise) from the natural landform rebuilt without roads, pads or noise;
+ *     and those on roads, streets and squares, with the nearest story place.
  *  6. What-ifs for softening the hills, each measured on the same walkable mask: a lower vertical
- *     scale over the plains, wider hill flanks in the atlas, slope-limited relaxation, no noise on
- *     the flanks, wider pad embankments; with how far landmarks, story places and the river move.
+ *     scale above 12 m ASL, longer hill flanks in the atlas, pad embankments as long as their height
+ *     needs, no atlas cliffs (a bound), slope-limited relaxation, and packages; each with the clivi,
+ *     the easiest way up each hill, minor streets over 40 degrees, and how far landmarks, story
+ *     places and the river's edge move.
  *
- * Writes the summary JSON and a slope-map PNG (2 px per 4 m) and prints a ranked report.
+ * Writes the summary JSON and a slope-map PNG (2 px per 4 m; the core at 1 px per 2 m) and prints
+ * a ranked report. Then `node scripts/audit/grades-live.mjs` checks the worst places in the game.
  */
 import { createServer } from 'vite';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -173,8 +182,24 @@ const natHm = HM.buildHeightmap({ ...SRC, ROADS: [] }, { spacing: 2, pads: [] })
 const natGrade = G.cellGrades(natHm);
 const smoothHm = HM.buildHeightmap({ ...SRC, ROADS: [] }, { spacing: 2, pads: [], noise: 0 });
 const smoothGrade = G.cellGrades(smoothHm);
-log('natural landform rebuilt (no roads/pads; and no noise)');
-const padsGame = PADS.map((p) => ({ id: p.id, poly: p.polygon, margin: p.margin ?? 12 }));
+// The same ground with its roads but no landmark pads: what the pads do to the roads.
+const noPadHm = HM.buildHeightmap(SRC, { spacing: 2, pads: [] });
+log('natural landform rebuilt (no roads/pads; and no noise; and roads without pads)');
+const padsGame = PADS.map((p) => ({ id: p.id, poly: p.polygon, margin: p.margin ?? 12, elevation: p.elevation }));
+/** The pad whose blend reaches game (x, z) and moves the ground there the most (id, real m outside its footprint, its elevation). */
+function padAt(x, z) {
+  let best = null, bestDy = -1;
+  for (const p of padsGame) {
+    const sd = HM.signedDistance(x / S, z / S, p.poly);
+    if (sd > p.margin) continue;
+    const dy = Math.abs((p.elevation ?? (noPadHm.heightAt(x, z) / S)) - noPadHm.heightAt(x, z) / S);
+    if (dy > bestDy) {
+      bestDy = dy;
+      best = { id: p.id, outside: r1(sd), elevation: p.elevation ?? 'mean of the ground', groundAsl: r1(noPadHm.heightAt(x, z) / S) };
+    }
+  }
+  return best;
+}
 function causeOf(k) {
   const x = cellX(k), z = cellZ(k);
   const g = grade[k], gn = natGrade[k], gs = smoothGrade[k];
@@ -263,7 +288,12 @@ await PH.initPhysics();
 function makeGame(physics) {
   return { physics, scene: new THREE.Scene() };
 }
-function rampTest(deg, speed) {
+/**
+ * The real Actor on a 200 m heightfield ramp of `deg` degrees (rising toward −z), pushed at `speed`
+ * along a heading `phi` degrees off the fall line (0 = straight up, 90 = along the contour): the
+ * horizontal speed, the rate it gains height, and whether it stays put when it stops.
+ */
+function rampTest(deg, speed, phi = 0) {
   const physics = new PH.Physics();
   const n = 100, sp = 2, t = Math.tan((deg * Math.PI) / 180);
   const h = new Float32Array((n + 1) * (n + 1));
@@ -271,10 +301,13 @@ function rampTest(deg, speed) {
   physics.addHeightfield(-100, -100, n * sp, n * sp, n, n, h);
   physics.step(1 / 60);
   const game = makeGame(physics);
-  const a = new Actor(game, { id: 'ramp', position: { x: 0, y: -(80) * t + 0.05, z: 80 }, layer: PH.Layer.Player });
+  const ph = (phi * Math.PI) / 180;
+  const x0 = phi ? -80 : 0;
+  const a = new Actor(game, { id: 'ramp', position: { x: x0, y: -(80) * t + 0.05, z: 80 }, layer: PH.Layer.Player });
   physics.step(1 / 60);
-  const wish = new THREE.Vector3(0, 0, -speed);
-  a.heading = Math.PI;
+  const ux = Math.sin(ph), uz = -Math.cos(ph);
+  const wish = new THREE.Vector3(ux * speed, 0, uz * speed);
+  a.heading = Math.atan2(ux, uz);
   let p0 = null, y0 = 0, tStart = 0, tEnd = 0, minStep = Infinity;
   const dt = 1 / 60;
   for (let i = 0; i < 60 * 7; i++) {
@@ -287,13 +320,14 @@ function rampTest(deg, speed) {
       tStart = i;
     }
     if (i > 90) {
-      const dz = a.prevPos.z - a.position.z;
+      const dz = (a.position.x - a.prevPos.x) * ux + (a.position.z - a.prevPos.z) * uz;
       if (dz < minStep) minStep = dz;
     }
-    if (a.position.z < -90) break;
+    if (a.position.z < -90 || a.position.x > 95) break;
   }
   const el = Math.max(1, tEnd - tStart) / 60;
-  const dist = p0 ? p0.z - a.position.z : 0;
+  // Progress along the push (horizontal), and height gained.
+  const dist = p0 ? (a.position.x - p0.x) * ux + (a.position.z - p0.z) * uz : 0;
   const rise = a.position.y - y0;
   // Stop and stand: does it stay put?
   // The first second is the run coasting to a halt (as tests/actor.slope.test.ts); measure the next 3.
@@ -306,17 +340,30 @@ function rampTest(deg, speed) {
   }
   const drift = a.position.distanceTo(stopAt);
   physics.removeCharacter(a.body);
-  return { deg, speed, horiz: r2(dist / el), vert: r2(rise / el), alongSlope: r2(Math.hypot(dist, rise) / el), pct: Math.round((100 * dist) / el / speed), driftAfterStop: r2(drift), minStep: r2(minStep * 60) };
+  return { deg, phi, speed, horiz: r2(dist / el), vert: r2(rise / el), alongSlope: r2(Math.hypot(dist, rise) / el), pct: Math.round((100 * dist) / el / speed), driftAfterStop: r2(drift), minStep: r2(minStep * 60) };
 }
 const curve = [];
 for (const deg of [0, 5, 10, 15, 20, 25, 30, 35, 38, 40, 42, 45, 48, 50, 52, 55, 60]) {
   for (const [mode, sp] of [['walk', PLAYER_SPEEDS.walk], ['run', PLAYER_SPEEDS.run], ['sprint', PLAYER_SPEEDS.sprint]]) curve.push({ mode, ...rampTest(deg, sp) });
+}
+// Zig-zag: the same ramps crossed at 45 and 70 degrees off the fall line (does a traverse gain height
+// where the straight line can't?).
+const traverse = [];
+for (const deg of [30, 38, 40, 42, 45, 48, 50, 55]) {
+  for (const phi of [45, 70]) {
+    for (const [mode, sp] of [['walk', PLAYER_SPEEDS.walk], ['run', PLAYER_SPEEDS.run]]) traverse.push({ mode, ...rampTest(deg, sp, phi) });
+  }
 }
 log('controller curve measured');
 for (const mode of ['walk', 'run', 'sprint']) {
   console.log(`  ${mode.padEnd(6)} ` + curve.filter((c) => c.mode === mode).map((c) => `${c.deg}°:${c.horiz}`).join('  '));
 }
 console.log('  drift after stop (run): ' + curve.filter((c) => c.mode === 'run').map((c) => `${c.deg}°:${c.driftAfterStop}`).join('  '));
+for (const mode of ['walk', 'run']) for (const phi of [45, 70]) {
+  console.log(`  ${mode} ${phi}° off the fall line, height gained m/s: ` + traverse.filter((c) => c.mode === mode && c.phi === phi).map((c) => `${c.deg}°:${c.vert}`).join('  '));
+}
+/** Steepest ramp (deg) on which `mode` still gains height going straight up (the measured curve). */
+const climbLimit = (mode) => Math.max(...curve.filter((c) => c.mode === mode && c.vert > 0.05).map((c) => c.deg));
 
 // ------------------------------------------------------------------ terrain physics world (real colliders, chunked like Terrain.addColliders)
 const world = new PH.Physics();
@@ -419,8 +466,12 @@ const lowY = 21 * S;
 const lowSrc = (k) => walk(k) && hm.heights[((k / CX) | 0) * hm.nx + (k % CX)] <= lowY;
 const prevS = new Int32Array(NC);
 const bnSurface = G.bottleneck(hm, grade, lowSrc, walk, { mode: 'surface', prev: prevS });
-const bnUphill = G.bottleneck(hm, grade, lowSrc, walk, { mode: 'uphill', wall: G.toGrade(50) });
-log('bottleneck (easiest way up) done');
+// A zig-zag only helps while the ground under the feet holds: the controller slides on anything over
+// its 40 degree slide angle (walking backs down there; running still gains height to ~50: the curve above).
+const WALK_LIMIT = climbLimit('walk'), RUN_LIMIT = climbLimit('run');
+const bnUphill = G.bottleneck(hm, grade, lowSrc, walk, { mode: 'uphill', wall: G.toGrade(WALK_LIMIT) });
+const bnUphillRun = G.bottleneck(hm, grade, lowSrc, walk, { mode: 'uphill', wall: G.toGrade(RUN_LIMIT) });
+log(`bottleneck (easiest way up) done; climbs straight up to ${WALK_LIMIT}° walking, ${RUN_LIMIT}° running`);
 const hillReports = [];
 for (const [gi, name] of groupNames.entries()) {
   const members = groups.get(name);
@@ -434,7 +485,7 @@ for (const [gi, name] of groupNames.entries()) {
   if (!nFlank && !nTop) continue;
   const q = G.quantiles(grade, flank, [0.5, 0.9, 0.99, 1]);
   // Easiest way up: the least bottleneck over the hill's top cells (well inside: 1/3 of the way to the summit).
-  let bestS = Infinity, bestSk = -1, bestU = Infinity, summitK = -1, summitY = -Infinity;
+  let bestS = Infinity, bestSk = -1, bestU = Infinity, bestUR = Infinity, summitK = -1, summitY = -Infinity;
   for (let k = 0; k < NC; k++) {
     if (cellGroup[k] !== gi || cellPart[k] !== 1) continue;
     const y = hm.heights[((k / CX) | 0) * hm.nx + (k % CX)];
@@ -454,6 +505,7 @@ for (const [gi, name] of groupNames.entries()) {
       bestSk = k;
     }
     if (bnUphill[k] < bestU) bestU = bnUphill[k];
+    if (bnUphillRun[k] < bestUR) bestUR = bnUphillRun[k];
   }
   // The easiest route's steepest cell (walk back from the best top cell).
   let worstOnRoute = null;
@@ -466,6 +518,7 @@ for (const [gi, name] of groupNames.entries()) {
   }
   hillReports.push({
     group: name,
+    plateauY,
     members: members.map((m) => m.id),
     summit: summitK >= 0 ? [r1(cellX(summitK)), r1(summitY), r1(cellZ(summitK))] : null,
     flankHa: areaHa(nFlank),
@@ -474,13 +527,68 @@ for (const [gi, name] of groupNames.entries()) {
     flankOver: overPct(grade, flank),
     easiestUp: {
       surfaceDeg: Number.isFinite(bestS) ? DEG(bestS) : null,
+      // null: no way up at all without crossing ground steeper than the walker (run: runner) can hold.
       zigzagDeg: Number.isFinite(bestU) ? DEG(bestU) : null,
+      zigzagRunDeg: Number.isFinite(bestUR) ? DEG(bestUR) : null,
       steepestCellOnIt: worstOnRoute != null ? { at: [r1(cellX(worstOnRoute)), r1(cellZ(worstOnRoute))], deg: DEG(grade[worstOnRoute]), place: placeName(cellX(worstOnRoute), cellZ(worstOnRoute)) } : null,
     },
     faces: [],
   });
+  // The shortest way up that never meets anything steeper than the easiest way's steepest cell (+1°):
+  // the line the live audit walks with the real player, and the way a player would have to find.
+  if (Number.isFinite(bestS)) {
+    const lim = G.toGrade(DEG(bestS) + 1);
+    const prevW = new Int32Array(NC);
+    const dist = G.shortestWay(hm, lowSrc, (k) => walk(k) && grade[k] <= lim, prevW);
+    let goal = -1, gd = Infinity;
+    for (let k = 0; k < NC; k++) {
+      if (!top(k) || hm.heights[((k / CX) | 0) * hm.nx + (k % CX)] < plateauY - 1) continue;
+      if (dist[k] < gd) {
+        gd = dist[k];
+        goal = k;
+      }
+    }
+    if (goal >= 0) {
+      const cells = G.wayTo(prevW, goal);
+      let worst = cells[0];
+      for (const k of cells) if (grade[k] > grade[worst]) worst = k;
+      const rep = hillReports[hillReports.length - 1];
+      rep.easiestUp.way = {
+        metres: Math.round(gd),
+        rise: r1(hm.heightAt(cellX(goal), cellZ(goal)) - hm.heightAt(cellX(cells[0]), cellZ(cells[0]))),
+        steepest: { at: [r1(cellX(worst)), r1(hm.heightAt(cellX(worst), cellZ(worst))), r1(cellZ(worst))], deg: DEG(grade[worst]), place: placeName(cellX(worst), cellZ(worst)) },
+        // Every ~8 m, from the low ground to the top.
+        points: cells.filter((_, i) => i % 4 === 0 || i === cells.length - 1).map((k) => [r1(cellX(k)), r1(cellZ(k))]),
+      };
+    }
+  }
 }
 log(`hills: ${hillReports.length} groups`);
+// How each atlas hill (and terrace helper) is made: its flank is plateau → ground over `slope` real m
+// as a smoothstep, whose steepest point is 1.5× the mean grade; a cliff squeezes it to CLIFF_RUN (13 m).
+// `designMaxDeg` is that steepest grade; `runFor30` / `runFor25` the slope run that would keep it under.
+const atlasHills = hillsIn.map((h) => {
+  let cx = 0, cz = 0;
+  for (const [x, z] of h.outline) {
+    cx += x;
+    cz += z;
+  }
+  cx /= h.outline.length;
+  cz /= h.outline.length;
+  const feet = h.outline.map(([x, z]) => {
+    const L = Math.hypot(x - cx, z - cz) || 1;
+    const d = h.slope + 8;
+    return natHm.heightAt((x + ((x - cx) / L) * d) * S, (z + ((z - cz) / L) * d) * S) / S;
+  }).sort((a, b) => a - b);
+  const foot = feet[Math.floor(feet.length / 2)];
+  const rise = Math.max(0, h.plateau - foot);
+  const g = (1.5 * rise) / h.slope;
+  return {
+    id: h.id, group: groupOf(h), kind: h.kind, plateau: h.plateau, summit: h.summit, slope: h.slope, footAsl: r1(foot), rise: r1(rise),
+    designMaxDeg: DEG(g), cliffs: h.cliffs?.length ?? 0, cliffMaxDeg: h.cliffs?.length ? DEG((1.5 * rise) / 13) : null,
+    runFor30: Math.ceil((1.5 * rise) / G.toGrade(30)), runFor25: Math.ceil((1.5 * rise) / G.toGrade(25)),
+  };
+}).sort((a, b) => b.designMaxDeg - a.designMaxDeg);
 
 // Faces: radial lines from the summit; the real Actor runs up each from the foot.
 if (!args['no-climb']) {
@@ -551,6 +659,18 @@ if (!args['no-climb']) {
 // ------------------------------------------------------------------ 5. roads and streets by grade
 function roadReport(id, name, kind, style, pts) {
   const prof = G.profile((x, z) => hm.heightAt(x, z), pts, 1, 4);
+  // The same line without the landmark pads: the grade the road would have, and where a pad's level
+  // or embankment takes the road over (the pads are stamped after the roads are leveled).
+  const bare = G.profile((x, z) => noPadHm.heightAt(x, z), pts, 1, 4);
+  let bareMax = 0, padDy = 0, padI = -1;
+  for (let i = 0; i < bare.s.length; i++) {
+    bareMax = Math.max(bareMax, Math.abs(bare.grade[i]));
+    const d = Math.abs(prof.y[i] - bare.y[i]);
+    if (d > padDy) {
+      padDy = d;
+      padI = i;
+    }
+  }
   let maxG = 0, maxAt = 0;
   const over = { '>10%': 0, '>20%': 0, '>30%': 0, '>40%': 0, '>58% (30deg)': 0 };
   for (let i = 0; i < prof.s.length; i++) {
@@ -564,6 +684,7 @@ function roadReport(id, name, kind, style, pts) {
     if (g > 0.3) over['>30%']++;
     if (g > 0.4) over['>40%']++;
     if (g > 0.58) over['>58% (30deg)']++;
+    if (g > 0.84) over['>84% (40deg)'] = (over['>84% (40deg)'] ?? 0) + 1;
   }
   const ys = [...prof.y];
   const rise = Math.max(...ys) - Math.min(...ys);
@@ -576,6 +697,8 @@ function roadReport(id, name, kind, style, pts) {
     id, name, kind, style,
     length: Math.round(prof.length), rise: r1(rise), meanGrade: r2(rise / Math.max(1, prof.length)),
     max4m: { pct: Math.round(maxG * 100), deg: DEG(maxG), at: [r1(prof.x[maxAt]), r1(prof.y[maxAt]), r1(prof.z[maxAt])] },
+    max4mWithoutPads: Math.round(bareMax * 100),
+    padTakeover: padDy > 1 ? { dy: r1(padDy), at: [r1(prof.x[padI]), r1(prof.y[padI]), r1(prof.z[padI])], bareY: r1(bare.y[padI]), pad: padAt(prof.x[padI], prof.z[padI]) } : null,
     metresOver: over,
     regrade: regr,
     lowEnd: prof.y[0] <= prof.y[prof.y.length - 1] ? 0 : 1,
@@ -597,20 +720,25 @@ const roadReports = plan.roads.map((r) => {
   return rep;
 });
 const streetReports = plan.streets.map((s) => roadReport(s.id, `${s.kind} ${s.id}`, s.kind, 'street', s.points));
+for (const r of streetReports) r.place = placeName(r.max4m.at[0], r.max4m.at[2]);
 log(`roads ${roadReports.length}, streets ${streetReports.length} profiled`);
 if (!args['no-climb']) {
   for (const r of roadReports) {
     if (r.rise < 3 || r.max4m.pct < 18 || r.style === 'stairs') continue;
     const pts = r.lowEnd === 0 ? r.pts : [...r.pts].reverse();
-    const res = climb(pts[0], pts.slice(1), PLAYER_SPEEDS.run, Math.min(300, r.length / 0.8 + 20));
+    // Time limit: three times the flat time (a long road is not stuck just because it is long).
+    const res = climb(pts[0], pts.slice(1), PLAYER_SPEEDS.run, (r.length / PLAYER_SPEEDS.run) * 3 + 20);
     const flat = r.length / PLAYER_SPEEDS.run;
-    r.run = { reached: res.reached, secs: res.secs, flatSecs: r1(flat), meanSpeed: res.meanSpeed, stalls: res.stalls.slice(0, 5), end: res.end };
+    r.run = { reached: res.reached, secs: res.secs, flatSecs: r1(flat), meanSpeed: res.meanSpeed, stalls: res.stalls.slice(0, 5), end: res.end, endPlace: res.reached ? null : placeName(res.end[0], res.end[2]) };
   }
   log('steep roads run');
 }
 for (const r of [...roadReports, ...streetReports]) delete r.pts;
 
 // ------------------------------------------------------------------ 6. steep spots (walkable ground over 35 / 40 / 50 degrees)
+/** The story's places (docs/STORY.md, Act I) and the owner's list. */
+const storyIds = ['porta-capena', 'circus-maximus', 'rostra', 'temple-castor-pollux', 'meta-sudans', 'colosseum', 'ludus-magnus', 'forum-trajan', 'column-trajan', 'subura', 'forum-boarium', 'portus-tiberinus', 'pantheon', 'scalae-caci', 'arch-titus', 'temple-aesculapius', 'velia-vestibule', 'markets-trajan'];
+const storyPts = storyIds.map((id) => atlas.LANDMARK_BY_ID?.[id] ?? atlas.LANDMARKS.find((l) => l.id === id)).filter(Boolean).map((l) => ({ id: l.id, x: l.center[0] * S, z: l.center[1] * S }));
 const spots = {};
 for (const th of [35, 40, 50]) {
   const g = G.toGrade(th);
@@ -634,6 +762,39 @@ for (const th of [35, 40, 50]) {
     }),
   };
 }
+// The steep patches a player meets on the way: those touching a road, a street or a landmark's square,
+// ranked by how many of those cells they hold, with the nearest story place.
+{
+  const comps = G.components(hm, grade, cls, (k) => walk(k) && grade[k] > G.toGrade(35), 3);
+  spots.onWays = comps
+    .map((c) => ({ c, ways: c.byClass[G.WALK.ROAD] + c.byClass[G.WALK.STREET] + c.byClass[G.WALK.PRECINCT] }))
+    .filter((e) => e.ways > 0)
+    .sort((a, b) => b.ways - a.ways)
+    .slice(0, TOP)
+    .map(({ c, ways }) => {
+      const k = cellAt(c.maxAt[0], c.maxAt[1]);
+      let story = null, sd = Infinity;
+      for (const p of storyPts) {
+        const d = Math.hypot(p.x - c.maxAt[0], p.z - c.maxAt[1]);
+        if (d < sd) {
+          sd = d;
+          story = p.id;
+        }
+      }
+      return {
+        at: [r1(c.maxAt[0]), r1(hm.heightAt(c.maxAt[0], c.maxAt[1])), r1(c.maxAt[1])],
+        areaM2: Math.round(c.area),
+        waysM2: ways * hm.spacing * hm.spacing,
+        maxDeg: DEG(c.max),
+        meanDeg: DEG(c.mean),
+        classes: Object.fromEntries(c.byClass.map((n, i) => [G.WALK_NAMES[i], n]).filter(([, n]) => n > 0)),
+        place: placeName(c.maxAt[0], c.maxAt[1]),
+        nearestStoryPlace: { id: story, metres: Math.round(sd) },
+        cause: causeOf(k),
+        pad: padAt(c.maxAt[0], c.maxAt[1]),
+      };
+    });
+}
 // Causes across all walkable cells over 35 degrees.
 const causeTally = new Map();
 const causeKey = (c) => (c.startsWith('pad embankment') ? 'pad embankment' : c.startsWith('road bank') ? 'road bank' : c.startsWith('cliff') ? 'atlas cliff' : c.startsWith('hill flank') ? 'hill flank' : c);
@@ -649,8 +810,6 @@ for (let k = 0; k < NC; k++) if (walk(k) && grade[k] > G.toGrade(35)) steepByCla
 log('steep spots ranked');
 
 // ------------------------------------------------------------------ 7. what-ifs
-const storyIds = ['porta-capena', 'circus-maximus', 'rostra', 'temple-castor-pollux', 'meta-sudans', 'colosseum', 'ludus-magnus', 'forum-trajan', 'column-trajan', 'subura', 'forum-boarium', 'portus-tiberinus', 'pantheon', 'scalae-caci'];
-const storyPts = storyIds.map((id) => atlas.LANDMARK_BY_ID?.[id] ?? atlas.LANDMARKS.find((l) => l.id === id)).filter(Boolean).map((l) => ({ id: l.id, x: l.center[0] * S, z: l.center[1] * S }));
 const lmPts = lms.filter((l) => l.x > hm.minX && l.x < hm.maxX && l.z > hm.minZ && l.z < hm.maxZ);
 function sampleH(h, x, z) {
   const fx = Math.min(Math.max((x - hm.minX) / hm.spacing, 0), hm.nx - 1.0001), fz = Math.min(Math.max((z - hm.minZ) / hm.spacing, 0), hm.nz - 1.0001);
@@ -658,6 +817,8 @@ function sampleH(h, x, z) {
   const a = h[i] + (h[i + 1] - h[i]) * tx, c = h[i + hm.nx] + (h[i + hm.nx + 1] - h[i + hm.nx]) * tx;
   return a + (c - a) * tz;
 }
+/** The clivi and stairways the owner named, and the core's ways up (their steepest 4 m in each option). */
+const CLIVI = ['clivus-capitolinus', 'clivus-palatinus', 'clivus-victoriae', 'clivus-argentarius', 'clivus-publicius', 'clivus-scauri', 'clivus-suburanus', 'via-sacra', 'via-nova', 'vicus-iugarius', 'vicus-cuprius', 'clivus-rocca-savella', 'scalae-caci', 'centum-gradus', 'gradus-monetae'];
 function evaluate(name, heights, note) {
   const gr = G.cellGrades({ ...hm, heights }, heights);
   const over = overPct(gr, walk);
@@ -667,6 +828,14 @@ function evaluate(name, heights, note) {
     for (const g of p.grade) m = Math.max(m, Math.abs(g));
     return { id: r.id, pct: Math.round(m * 100) };
   }).sort((a, b) => b.pct - a.pct);
+  const clivi = Object.fromEntries(CLIVI.map((id) => [id, roads.find((r) => r.id === id)?.pct ?? null]));
+  let streetsOver84 = 0;
+  for (const st of plan.streets) {
+    const p = G.profile((x, z) => sampleH(heights, x, z), st.points, 1, 4);
+    let m = 0;
+    for (const g of p.grade) m = Math.max(m, Math.abs(g));
+    if (m > 0.84) streetsOver84++;
+  }
   const dl = lmPts.map((l) => ({ id: l.id, dy: r2(sampleH(heights, l.x, l.z) - sampleH(hm.heights, l.x, l.z)) })).sort((a, b) => Math.abs(b.dy) - Math.abs(a.dy));
   const ds = storyPts.map((p) => ({ id: p.id, dy: r2(sampleH(heights, p.x, p.z) - sampleH(hm.heights, p.x, p.z)) }));
   // Water line: max change on cells within 1 m of the river's level.
@@ -677,15 +846,29 @@ function evaluate(name, heights, note) {
     if (d > maxD) maxD = d;
     if (Math.abs(hm.heights[i] - hm.waterLevelY) < 1 && d > dw) dw = d;
   }
+  // The easiest way onto each hill again (surface slope), on the changed ground.
+  const g2 = { ...hm, heights };
+  const lowSrc2 = (k) => walk(k) && heights[((k / CX) | 0) * hm.nx + (k % CX)] <= lowY;
+  const bn = G.bottleneck(g2, gr, lowSrc2, walk, { mode: 'surface' });
   const hills = hillReports.map((h) => {
     const gi = groupNames.indexOf(h.group);
     const arr = Float32Array.from(groupFlank[gi], (k) => gr[k]).sort();
-    return { group: h.group, p90: arr.length ? DEG(arr[Math.round(0.9 * (arr.length - 1))]) : null, max: arr.length ? DEG(arr[arr.length - 1]) : null };
+    let easiest = Infinity;
+    const plateauY = h.plateauY;
+    for (let k = 0; k < NC; k++) {
+      if (cellGroup[k] !== gi || cellPart[k] !== 1 || !walk(k)) continue;
+      if (hm.heights[((k / CX) | 0) * hm.nx + (k % CX)] < plateauY - 1) continue;
+      if (bn[k] < easiest) easiest = bn[k];
+    }
+    return { group: h.group, p90: arr.length ? DEG(arr[Math.round(0.9 * (arr.length - 1))]) : null, max: arr.length ? DEG(arr[arr.length - 1]) : null, easiestUpDeg: Number.isFinite(easiest) ? DEG(easiest) : null };
   });
   return {
     option: name, note,
     walkableOver: Object.fromEntries(Object.entries(over).map(([k, v]) => [k, v.pct])),
+    walkableOverHa: Object.fromEntries(Object.entries(over).map(([k, v]) => [k, areaHa(v.cells)])),
     steepestRoads: roads.slice(0, 8),
+    clivi,
+    streetsOver84,
     hills,
     landmarksMoved: { over0_5m: dl.filter((d) => Math.abs(d.dy) > 0.5).length, over2m: dl.filter((d) => Math.abs(d.dy) > 2).length, worst: dl.slice(0, 8) },
     storyPlaces: ds,
@@ -697,33 +880,60 @@ function evaluate(name, heights, note) {
 const options = [];
 if (!args['no-options']) {
   options.push(evaluate('as built', hm.heights, 'the current terrain'));
+  // A. A lower vertical scale for the land above 12 m ASL: the river, its quays and the Campus stay.
   const datum = 12 * S;
   for (const k of [0.8, 0.7]) options.push(evaluate(`vertical scale ×${k} above 12 m ASL`, G.scaleAbout(hm.heights, k, datum), `y' = ${r1(datum)} + (y − ${r1(datum)})·${k} for ground above 12 m ASL (the Campus, river and quays stay); every grade above it ×${k}`));
-  for (const f of [1.5, 2]) {
-    const hills = atlas.HILLS.map((h) => ({ ...h, slope: h.slope * f }));
-    const h2 = HM.buildHeightmap({ ...SRC, HILLS: hills }, { spacing: 2, pads: PADS });
-    options.push(evaluate(`hill flanks ×${f} longer (atlas slope)`, h2.heights, `every hill's and terrace's slope run ×${f} (cliffs keep CLIFF_RUN); the plateaus stay, the flanks spread ${f > 1.6 ? 'far' : 'a little'} into the valleys`));
-  }
+  // B. Longer hill flanks in the atlas (cliffs keep CLIFF_RUN).
+  const flanks15 = atlas.HILLS.map((h) => ({ ...h, slope: h.slope * 1.5 }));
   {
-    const h2 = HM.buildHeightmap(SRC, { spacing: 2, pads: PADS, noise: 0 });
-    options.push(evaluate('no ground noise', h2.heights, 'heightmap noise 0 (fbm adds up to ±1 m on flanks)'));
+    const h2 = HM.buildHeightmap({ ...SRC, HILLS: flanks15 }, { spacing: 2, pads: PADS });
+    options.push(evaluate('hill flanks ×1.5 longer (atlas slope)', h2.heights, 'every hill\'s and terrace\'s slope run ×1.5 (cliffs keep CLIFF_RUN); the plateaus stay, the flanks spread into the valleys'));
   }
+  // C. Pad embankments as long as their height needs: a smoothstep over (margin − 1) m has a top grade of
+  //    1.5·Δh/(margin − 1); under 30 degrees needs margin ≥ 1 + 2.6·Δh (real m), here 14 to 60 m.
+  const padsByHeight = PADS.map((p) => {
+    let elev = p.elevation;
+    const nat = (x, z) => natHm.heightAt(x * S, z * S) / S;
+    let cx = 0, cz = 0;
+    for (const [x, z] of p.polygon) {
+      cx += x;
+      cz += z;
+    }
+    cx /= p.polygon.length;
+    cz /= p.polygon.length;
+    if (elev === undefined) {
+      let sum = nat(cx, cz) * 2;
+      for (const [x, z] of p.polygon) sum += nat(x, z);
+      elev = sum / (p.polygon.length + 2);
+    }
+    let dh = 0;
+    for (const [x, z] of p.polygon) {
+      const L = Math.hypot(x - cx, z - cz) || 1;
+      for (const m of [0, 7, 14]) dh = Math.max(dh, Math.abs(elev - nat(x + ((x - cx) / L) * m, z + ((z - cz) / L) * m)));
+    }
+    const margin = Math.min(60, Math.max(p.margin ?? 12, Math.ceil(1 + 2.6 * dh)));
+    return { ...p, margin, dh };
+  });
+  const padsChanged = padsByHeight.filter((p, i) => p.margin !== (PADS[i].margin ?? 12));
+  const hmPads = HM.buildHeightmap(SRC, { spacing: 2, pads: padsByHeight });
+  options.push(evaluate('pad embankments by height (≤30°, 14–60 m)', hmPads.heights, `${padsChanged.length} of ${PADS.length} pads get a longer blend: ${padsChanged.sort((a, b) => b.dh - a.dh).slice(0, 12).map((p) => `${p.id} ${r1(p.dh)} m → ${p.margin} m`).join(', ')}`));
+  // D. No atlas cliffs at all (the upper bound of softening them: the flank takes the hill's own run).
   {
-    const pads2 = PADS.map((p) => ({ ...p, margin: Math.max(p.margin ?? 12, 26) }));
-    const h2 = HM.buildHeightmap(SRC, { spacing: 2, pads: pads2 });
-    options.push(evaluate('pad embankments 26 m', h2.heights, 'landmark pads blend to the ground over 26 real m (was 14)'));
+    const h2 = HM.buildHeightmap({ ...SRC, HILLS: atlas.HILLS.map((h) => ({ ...h, cliffs: undefined })) }, { spacing: 2, pads: PADS });
+    options.push(evaluate('no atlas cliffs (bound)', h2.heights, 'every hill\'s cliffs removed: an upper bound for softening them (the Tarpeian Rock, the Aventine river cliff and the Palatine\'s SW corner become ordinary flanks)'));
   }
-  // Slope-limited relaxation on open ground only (roads, pads and buildings stay), 35 and 30 degrees.
+  // E. Slope-limited relaxation on open ground only (roads, pads, streets, blocks and the river margins stay).
   const movable = (i) => {
     const ix = i % hm.nx, iz = (i / hm.nx) | 0;
     const k = Math.min(iz, CZ - 1) * CX + Math.min(ix, CX - 1);
-    return (cls[k] === G.WALK.OPEN) && hm.padMask[i] < 0.01 && hm.roadMask[i] < 0.01;
+    return cls[k] === G.WALK.OPEN && hm.padMask[i] < 0.01 && hm.roadMask[i] < 0.01 && hm.heights[i] > hm.waterLevelY + 2.5;
   };
-  for (const deg of [35, 30]) options.push(evaluate(`relax open ground to ${deg}°`, G.relax(hm, G.toGrade(deg), 300, movable), `thermal relaxation (mass-kept) of open ground only, 300 sweeps; roads, pads, streets, blocks fixed`));
+  options.push(evaluate('relax open ground to 35°', G.relax(hm, G.toGrade(35), 300, movable), 'thermal relaxation (mass kept) of open ground only, 300 sweeps; roads, pads, streets, blocks and ground under 2.5 m above the river fixed'));
+  // F. Packages.
+  options.push(evaluate('×0.8 vertical + pads by height', G.scaleAbout(hmPads.heights, 0.8, datum), 'A (×0.8) on top of C'));
   {
-    // Combination: ×0.8 vertical, then relax open ground to 35.
-    const v = G.scaleAbout(hm.heights, 0.8, datum);
-    options.push(evaluate('×0.8 vertical + relax open to 35°', G.relax({ ...hm, heights: v }, G.toGrade(35), 300, movable), 'both'));
+    const h2 = HM.buildHeightmap({ ...SRC, HILLS: flanks15 }, { spacing: 2, pads: padsByHeight });
+    options.push(evaluate('×0.8 vertical + flanks ×1.5 + pads by height', G.scaleAbout(h2.heights, 0.8, datum), 'A (×0.8), B and C together'));
   }
   log(`options: ${options.length} evaluated`);
 }
@@ -783,15 +993,21 @@ const summary = {
   generated: new Date().toISOString(),
   tool: 'scripts/audit/grades.mjs',
   grid: { nx: hm.nx, nz: hm.nz, spacing: hm.spacing, minX: hm.minX, minZ: hm.minZ, cells: NC, worldScale: S },
-  controller: { maxClimbDeg: 50, slideFromDeg: 40, plantedUpToDeg: 50, speeds: PLAYER_SPEEDS, curve },
+  controller: { maxClimbDeg: 50, slideFromDeg: 40, plantedUpToDeg: 50, climbsStraightUpToDeg: { walk: WALK_LIMIT, run: RUN_LIMIT }, speeds: PLAYER_SPEEDS, curve, traverse },
   walkable: { cells: [...cls].filter((c) => G.onTerrain(c)).length, over: walkAll, byClass, steepOver35ByClass: steepByClass, steepOver35ByCause: causes },
   hills: hillReports,
+  atlasHills,
   roads: roadReports.sort((a, b) => b.max4m.pct - a.max4m.pct),
   streets: {
     count: streetReports.length,
     over30pct: streetReports.filter((s) => s.max4m.pct > 30).length,
     over45pct: streetReports.filter((s) => s.max4m.pct > 45).length,
+    // 84 %: 40 degrees, where a walker slides back; 119 %: 50 degrees, where a runner does too.
+    over84pct: streetReports.filter((s) => s.max4m.pct > 84).length,
+    over119pct: streetReports.filter((s) => s.max4m.pct > 119).length,
+    takenOverByPads: streetReports.filter((s) => s.padTakeover && s.padTakeover.dy > 2).length,
     steepest: streetReports.sort((a, b) => b.max4m.pct - a.max4m.pct).slice(0, 25),
+    padTakeovers: streetReports.filter((s) => s.padTakeover && s.padTakeover.dy > 2).sort((a, b) => b.padTakeover.dy - a.padTakeover.dy).slice(0, 15).map((s) => ({ id: s.id, kind: s.kind, max4mPct: s.max4m.pct, withoutPadsPct: s.max4mWithoutPads, ...s.padTakeover })),
   },
   spots,
   options,
@@ -807,15 +1023,28 @@ console.log('   over 35° by cause: ' + JSON.stringify(causes));
 console.log('   over 35° by class: ' + JSON.stringify(steepByClass));
 console.log('\n== Hills (flank p50/p90/max; easiest way up by surface / zig-zag; faces blocked)');
 for (const h of hillReports) {
-  console.log(`   ${h.group.padEnd(26)} flank ${String(h.flankDeg.p50).padStart(5)} / ${String(h.flankDeg.p90).padStart(5)} / ${String(h.flankDeg.max).padStart(5)}°  easiest ${h.easiestUp.surfaceDeg}° / ${h.easiestUp.zigzagDeg}°  faces ${h.faceSummary ? `${h.faceSummary.blocked}/${h.faceSummary.faces} blocked (${h.faceSummary.blockedWalkable} walkable), slowest ${h.faceSummary.slowestMean} m/s` : '-'}`);
+  console.log(`   ${h.group.padEnd(26)} flank ${String(h.flankDeg.p50).padStart(5)} / ${String(h.flankDeg.p90).padStart(5)} / ${String(h.flankDeg.max).padStart(5)}°  easiest ${h.easiestUp.surfaceDeg}° / ${h.easiestUp.zigzagDeg ?? 'none'}° (run ${h.easiestUp.zigzagRunDeg ?? 'none'}°)  faces ${h.faceSummary ? `${h.faceSummary.blocked}/${h.faceSummary.faces} blocked (${h.faceSummary.blockedWalkable} walkable), slowest ${h.faceSummary.slowestMean} m/s` : '-'}`);
 }
+console.log('\n== The easiest way up each hill (shortest way under its easiest grade + 1°)');
+for (const h of hillReports) if (h.easiestUp.way) console.log(`   ${h.group.padEnd(26)} ${h.easiestUp.way.metres} m, rise ${h.easiestUp.way.rise} m, steepest ${h.easiestUp.way.steepest.deg}° @${h.easiestUp.way.steepest.at.join(',')} ${h.easiestUp.way.steepest.place}`);
+console.log('\n== Atlas hills by designed flank (smoothstep top grade = 1.5 × rise / run)');
+for (const h of atlasHills.slice(0, 16)) console.log(`   ${h.id.padEnd(22)} ${String(h.kind).padEnd(8)} plateau ${h.plateau} over foot ${h.footAsl} m ASL, run ${h.slope} m: ${h.designMaxDeg}°${h.cliffs ? ` (cliffs ${h.cliffMaxDeg}°)` : ''}; run for 30°: ${h.runFor30} m, for 25°: ${h.runFor25} m`);
 console.log('\n== Steepest atlas roads (4 m window)');
 for (const r of summary.roads.slice(0, 20)) console.log(`   ${String(r.max4m.pct).padStart(4)}% (${r.max4m.deg}°) ${r.id.padEnd(34)} ${r.kind}/${r.style} rise ${r.rise} m over ${r.length} m @${r.max4m.at.join(',')} [atlas line ${r.atlasLine?.max4mPct ?? '-'}%, ${r.atlasLine?.detours ?? 0} detours]${r.run ? `  run: ${r.run.reached ? 'up' : 'STUCK'} in ${r.run.secs}s (flat ${r.run.flatSecs}s)` : ''}`);
-console.log(`\n== Minor streets: ${summary.streets.over30pct} over 30 %, ${summary.streets.over45pct} over 45 % (of ${summary.streets.count})`);
+console.log('\n== Roads a landmark pad takes over (ground moved > 1 m on the road line)');
+for (const r of summary.roads.filter((r) => r.padTakeover).sort((a, b) => b.padTakeover.dy - a.padTakeover.dy).slice(0, 15)) console.log(`   ${r.id.padEnd(34)} ${r.max4m.pct}% (without pads ${r.max4mWithoutPads}%)  ground moved ${r.padTakeover.dy} m @${r.padTakeover.at.join(',')} by ${r.padTakeover.pad ? `${r.padTakeover.pad.id} (pad ${r.padTakeover.pad.elevation} m ASL, ground ${r.padTakeover.pad.groundAsl} m)` : '?'}`);
+console.log(`\n== Minor streets: ${summary.streets.over30pct} over 30 %, ${summary.streets.over45pct} over 45 %, ${summary.streets.over84pct} over 84 % (40°: a walker slides back), ${summary.streets.over119pct} over 119 % (50°), ${summary.streets.takenOverByPads} moved > 2 m by a pad (of ${summary.streets.count})`);
+for (const st of summary.streets.steepest.slice(0, 10)) console.log(`   ${st.id.padEnd(8)} ${st.kind.padEnd(6)} ${st.max4m.pct}% (${st.max4m.deg}°) @${st.max4m.at.join(',')} without pads ${st.max4mWithoutPads}%  ${st.place}`);
 console.log('\n== Steep spots over 35° (largest first)');
 for (const s of spots.over35.top.slice(0, 25)) console.log(`   ${String(s.areaM2).padStart(6)} m²  max ${s.maxDeg}°  @${s.at.join(',')}  ${s.place}  — ${s.cause}`);
+console.log('\n== Steep patches (>35°) on roads, streets and squares (most way-cells first)');
+for (const s of spots.onWays.slice(0, 20)) console.log(`   ${String(s.waysM2).padStart(5)} m² of way, max ${s.maxDeg}° @${s.at.join(',')}  ${s.place}; story: ${s.nearestStoryPlace.id} ${s.nearestStoryPlace.metres} m — ${s.cause}`);
 console.log('\n== Options');
-for (const o of options) console.log(`   ${o.option.padEnd(38)} >30°:${o.walkableOver['>30deg']}% >35°:${o.walkableOver['>35deg']}% >40°:${o.walkableOver['>40deg']}% >50°:${o.walkableOver['>50deg']}%  roads max ${o.steepestRoads[0]?.pct}%  landmarks moved >0.5 m: ${o.landmarksMoved.over0_5m}, >2 m: ${o.landmarksMoved.over2m}  water ${o.waterLineMaxChange} m`);
+for (const o of options) {
+  console.log(`   ${o.option.padEnd(44)} >30°:${o.walkableOver['>30deg']}% >35°:${o.walkableOver['>35deg']}% >40°:${o.walkableOver['>40deg']}% >50°:${o.walkableOver['>50deg']}%  streets >84%: ${o.streetsOver84}  landmarks moved >0.5 m: ${o.landmarksMoved.over0_5m}, >2 m: ${o.landmarksMoved.over2m}  water ${o.waterLineMaxChange} m`);
+  console.log(`      clivi: ${Object.entries(o.clivi).map(([k, v]) => `${k.replace('clivus-', 'cl.')} ${v}%`).join(', ')}`);
+  console.log(`      easiest way up: ${o.hills.filter((h) => ['Capitoline', 'Palatine', 'Aventine', 'Caelian', 'Oppian', 'Quirinal', 'Viminal', 'Esquiline (Cispian)', 'Velia', 'Janiculum', 'Pincian (Hill of Gardens)'].includes(h.group)).map((h) => `${h.group.split(' ')[0]} ${h.easiestUpDeg}°`).join(', ')}`);
+}
 console.log(`\ndone in ${summary.minutes} min`);
 await server.close();
 process.exit(0);

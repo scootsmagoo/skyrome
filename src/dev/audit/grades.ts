@@ -297,6 +297,59 @@ export function bottleneck(
   return best;
 }
 
+/**
+ * The shortest way (Dijkstra by distance, 8 neighbours) from any source cell over cells where
+ * `passable(k)` holds: the distance to every cell (Infinity where nothing reaches) and, in `prev`,
+ * each cell's predecessor. With `passable` limited to cells under a grade, it is the shortest way
+ * up a hill that never meets anything steeper (the `bottleneck` says how low that limit can go).
+ */
+export function shortestWay(g: HeightGrid, sources: (k: number) => boolean, passable: (k: number) => boolean, prev: Int32Array): Float32Array {
+  const cx = g.nx - 1, cz = g.nz - 1;
+  const n = cx * cz;
+  const dist = new Float32Array(n).fill(Infinity);
+  const done = new Uint8Array(n);
+  prev.fill(-1);
+  const heap = new Heap(1 << 16);
+  for (let k = 0; k < n; k++) {
+    if (!sources(k) || !passable(k)) continue;
+    dist[k] = 0;
+    heap.push(0, k);
+  }
+  const s = g.spacing, diag = Math.SQRT2 * s;
+  while (heap.size) {
+    const k = heap.pop();
+    if (done[k]) continue;
+    done[k] = 1;
+    const ix = k % cx, iz = (k / cx) | 0;
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dz) continue;
+        const jx = ix + dx, jz = iz + dz;
+        if (jx < 0 || jz < 0 || jx >= cx || jz >= cz) continue;
+        const j = jz * cx + jx;
+        if (done[j] || !passable(j)) continue;
+        const v = dist[k] + (dx && dz ? diag : s);
+        if (v < dist[j]) {
+          dist[j] = v;
+          prev[j] = k;
+          heap.push(v, j);
+        }
+      }
+    }
+  }
+  return dist;
+}
+
+/** The cells of the way back from `k` to its source along `prev`, source first. */
+export function wayTo(prev: Int32Array, k: number, max = 1e6): number[] {
+  const out: number[] = [];
+  while (k >= 0 && out.length < max) {
+    out.push(k);
+    k = prev[k];
+  }
+  return out.reverse();
+}
+
 export interface Profile {
   /** Distance along the line (m), position and ground height per sample. */
   s: Float32Array;
