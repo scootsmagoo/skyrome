@@ -743,6 +743,12 @@ export interface PlaceOpts {
    * corner floats. `y` stays the caller's choice for the ground under the origin.
    */
   ground?: (x: number, z: number) => number;
+  /**
+   * With `ground`: the prop is not placed at all (placeProp returns false) when the ground falls
+   * more than this across its footprint. A crate straddling a kerb or a step is left out rather
+   * than stood with a foot in the air (phase 4b).
+   */
+  maxStep?: number;
 }
 
 /** A `PlaceOpts.ground` for a Draw frame from a world height function (the frame must only be translated and turned about Y). */
@@ -752,13 +758,14 @@ export function groundIn(d: Draw, H: (x: number, z: number) => number): (x: numb
 }
 
 /** Merge a prop into a Draw's MeshBuilder at local (x, y, z) with yaw `rotY`. */
-export function placeProp(d: Draw, kind: PropKind, x: number, y: number, z: number, rotY = 0, o: PlaceOpts = {}) {
+export function placeProp(d: Draw, kind: PropKind, x: number, y: number, z: number, rotY = 0, o: PlaceOpts = {}): boolean {
   const model = makeProp(kind, o.rng, o.variant);
   let tilt: THREE.Matrix4 | null = null;
   if (o.ground) {
     const k = o.scale ?? 1;
     const bb = model.bounds;
     const g = groundProp(o.ground, x, z, rotY, { minX: bb.min.x * k, maxX: bb.max.x * k, minZ: bb.min.z * k, maxZ: bb.max.z * k });
+    if (o.maxStep !== undefined && g.range > o.maxStep) return false;
     // The caller's y may lie under the ground at the origin (a stall set at the lowest of three
     // samples on a slope): a grounded prop never starts below the ground it stands on.
     y += g.dy + Math.max(0, g.origin - y);
@@ -776,4 +783,5 @@ export function placeProp(d: Draw, kind: PropKind, x: number, y: number, z: numb
   // (The same vector: the audit sees where the prop ends up after MeshBuilder settles it.)
   if (AUDIT) d.b.auditProps.push({ kind, p: base, src: currentAuditSource() });
   if (o.collide !== false) for (const c of model.colliders) d.b.collider(transformCollider(c, m));
+  return true;
 }

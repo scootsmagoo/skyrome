@@ -53,6 +53,44 @@ export interface LotMass {
 
 const storeyH = (k: number) => 3.05 - 0.08 * Math.max(0, k - 2);
 
+/**
+ * The terrain along the four edges of an oriented box, sampled every `step` m on the edge and
+ * `out` m outside it (the structures audit walks the edges every 0.5 m): lowest and highest.
+ */
+export function edgeGround(obb: OBB, H: HeightFn, step = 0.5, out = 0.35): { min: number; max: number } {
+  const { c, u, v, hu, hv } = obb;
+  let min = Infinity, max = -Infinity;
+  const take = (lx: number, lz: number) => {
+    const h = H(c[0] + u[0] * lx + v[0] * lz, c[1] + u[1] * lx + v[1] * lz);
+    if (h < min) min = h;
+    if (h > max) max = h;
+  };
+  for (const g of [0, out]) {
+    const a = hu + g, b = hv + g;
+    const nu = Math.max(1, Math.ceil((2 * a) / step)), nv = Math.max(1, Math.ceil((2 * b) / step));
+    for (let i = 0; i <= nu; i++) {
+      const lx = -a + (2 * a * i) / nu;
+      take(lx, -b);
+      take(lx, b);
+    }
+    for (let i = 1; i < nv; i++) {
+      const lz = -b + (2 * b * i) / nv;
+      take(-a, lz);
+      take(a, lz);
+    }
+  }
+  return { min, max };
+}
+
+/**
+ * Base of a far box over the ground along its edges: 0.4 m under the lowest sample, plus 0.32 m for
+ * the terrain drawn from afar (CDLOD level 2 sinks an 8 m grid 0.32 m) and the local relief, which
+ * bounds how far the coarse grid can fall below the true ground on a slope. Underground is unseen.
+ */
+export function massBase(g: { min: number; max: number }): number {
+  return g.min - (0.4 + 0.32 + (g.max - g.min));
+}
+
 /** Replays the filler's / generators' seeded choices for a lot's height and wall finish. */
 export function lotMass(p: LotPlan, blk: PlanBlock, H: HeightFn): LotMass | null {
   if (p.kind === 'alley' || p.kind === 'piazza') return null;
@@ -64,11 +102,7 @@ export function lotMass(p: LotPlan, blk: PlanBlock, H: HeightFn): LotMass | null
     const [x, z] = at(-obb.hu + (2 * obb.hu * i) / 4, -obb.hv - 0.4);
     floorY = Math.max(floorY, H(x, z) + sw + FLOOR_LIFT);
   }
-  let base = floorY;
-  for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]]) {
-    const [x, z] = at(sx * obb.hu, sz * obb.hv);
-    base = Math.min(base, H(x, z) - 0.4);
-  }
+  const base = Math.min(floorY, massBase(edgeGround(obb, H)));
   const lrng = new Rng(p.seed);
   if (p.kind === 'insula' || p.kind === 'shops') {
     let storeys = 2, wealth = blk.wealth;
@@ -220,13 +254,10 @@ export function backLots(blk: PlanBlock, lots: LotPlan[], H: HeightFn): BackLot[
         // The eroded raster can still let a corner poke out of a concave outline: check exactly.
         if (!polygonContainsOBB(blk.outline as Polygon, o, 0.05)) continue;
         const seed = (blk.seed ^ Math.imul(out.length + 1, 0x9e3779b1)) >>> 0;
-        let floorY = -Infinity, base = Infinity;
-        for (const [su, sv] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]]) {
-          const x = c[0] + u[0] * su * w / 2 + v[0] * sv * d / 2, z = c[1] + u[1] * su * w / 2 + v[1] * sv * d / 2;
-          const y = H(x, z);
-          floorY = Math.max(floorY, y + 0.08);
-          base = Math.min(base, y - 0.4);
-        }
+        // Floor at the highest ground along the outline (the walls run down to a foundation under
+        // the lowest, insula.ts); the far box's base under that (massBase).
+        const eg = edgeGround(o, H);
+        const floorY = eg.max + 0.08, base = massBase(eg);
         const storeys = Math.max(3, Math.min(blk.maxStoreys, Math.round(2.4 + blk.density * 2 + rng.range(-0.5, 0.7))));
         const r2 = new Rng(seed);
         const G = r2.range(4.1, 4.5);
@@ -291,8 +322,9 @@ function wallMass(w: FrontWall, H: HeightFn): LotMass {
   const L = Math.hypot(dx, dz) || 1;
   const u: Pt = [dx / L, dz / L], v: Pt = [-u[1], u[0]];
   const c: Pt = [(w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2];
-  const ya = H(w.a[0], w.a[1]), yb = H(w.b[0], w.b[1]);
-  return { obb: { c, u, v, hu: L / 2, hv: 0.22 }, windows: [false, false, false, false], floorY: Math.max(ya, yb), base: Math.min(ya, yb) - 0.35, eave: Math.max(ya, yb) + 2.5, roof: 'gable', wall: 'plaster_cream' };
+  const obb: OBB = { c, u, v, hu: L / 2, hv: 0.22 };
+  const eg = edgeGround(obb, H);
+  return { obb, windows: [false, false, false, false], floorY: eg.max, base: massBase(eg), eave: eg.max + 2.5, roof: 'gable', wall: 'plaster_cream' };
 }
 
 // ---------------------------------------------------------------- geometry

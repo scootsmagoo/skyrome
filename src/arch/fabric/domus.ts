@@ -14,6 +14,7 @@ import { placeProp } from '../props';
 import { hedge as boxHedge } from '../vegetation/decor';
 import { Draw } from './draw';
 import { roof } from './roof';
+import { bayFloor, foundationLevel, rectMax } from './foundation';
 import { pickShopKind, shopFrontage, shopInterior, type ShopKind } from './shops';
 import { flatGround, type BuildingOutput, type Detail, type LocalGround, type Spot, type SpotKind } from './types';
 import { archBand, band, doorFrame, doorLeaves, plankShutters, socleAndDado, wall, windowDetails, type Opening } from './wall';
@@ -57,9 +58,8 @@ export function domus(spec: DomusSpec): BuildingOutput {
   // Masonry podium where the terrain falls away below the floor, painted dado above it.
   const socle = (f: Draw, x0: number, x1: number, skip?: Opening[]) => socleAndDado(f, x0, x1, yMin, ground, { dado: dadoMat, socle: trim, skip });
 
-  let gmin = 0;
-  for (const [x, z] of [[-W / 2, -D / 2], [W / 2, -D / 2], [W / 2, D / 2], [-W / 2, D / 2], [0, 0]]) gmin = Math.min(gmin, ground(x, z));
-  const yMin = gmin - 0.5;
+  // Foundation: below the lowest ground along the whole outline (foundation.ts).
+  const yMin = foundationLevel(ground, W, D);
 
   // ---- zones along the depth
   const ft = 5.6; // street range (shops + fauces)
@@ -74,9 +74,13 @@ export function domus(spec: DomusSpec): BuildingOutput {
   // ---- street range: shops either side of the fauces
   const F = d.at(0, 0, z0);
   const doorW = rng.range(1.7, 2.1), doorH = 3.6;
-  const fyb = Math.max(yMin + 0.4, Math.min(0, ground(0, z0 - 0.3)));
+  // The fauces' floor: the pavement at both jambs and the passage floor behind the door (the leaves
+  // stand 0.4 m in; the dark passage behind takes its own level below).
+  const fb = bayFloor(ground, -doorW / 2, doorW / 2, z0, T + 0.4, yMin + 0.4, Math.min(0.3, hf - doorH - 0.6));
+  const fyb = fb.y;
   const fauces: Opening = { x0: -doorW / 2, x1: doorW / 2, y0: fyb, y1: fyb + doorH, fill: 'wood_dark' };
   const shopOps: { o: Opening; kind: ShopKind; open: boolean; yb: number }[] = [];
+  const sd = ft - T - 0.6;
   if (spec.shops ?? true) {
     const avail = W / 2 - doorW / 2 - 1.4;
     const per = Math.floor(avail / 3.9);
@@ -84,8 +88,12 @@ export function domus(spec: DomusSpec): BuildingOutput {
       for (let i = 0; i < per; i++) {
         const cx = side * (doorW / 2 + 1.2 + (avail / per) * (i + 0.5));
         const ow = Math.min(3.0, avail / per - 1.0);
-        const yb = Math.max(yMin + 0.4, Math.min(0, ground(cx, z0 - 0.3)));
-        const kind = pickShopKind(rng, wealth), open = rng.chance(0.65);
+        // As the insula's bays: the floor at the highest of the jambs' pavement and the room's
+        // ground; shutters closed where that is more than a step up from the street.
+        let bf = bayFloor(ground, cx - ow / 2, cx + ow / 2, z0, T + sd, yMin + 0.4, 0.3);
+        const kind = pickShopKind(rng, wealth), open = rng.chance(0.65) && bf.open;
+        if (!open) bf = bayFloor(ground, cx - ow / 2, cx + ow / 2, z0, T * 0.3, yMin + 0.4, 0.3);
+        const yb = bf.y;
         shopOps.push({ o: { x0: cx - ow / 2, x1: cx + ow / 2, y0: yb, y1: yb + 2.9, fill: open ? 'black' : 'wood' }, kind, open, yb });
       }
     }
@@ -121,7 +129,10 @@ export function domus(spec: DomusSpec): BuildingOutput {
       S.span(trim, s * (doorW / 2 + 0.22) - 0.2 * (s > 0 ? 0 : 1), 0, -0.12, s * (doorW / 2 + 0.22) + 0.2 * (s > 0 ? 1 : 0), doorH + 0.24, 0);
       S.span(trim, s * (doorW / 2 + 0.22) - 0.26 * (s > 0 ? 0 : 1), doorH + 0.24, -0.16, s * (doorW / 2 + 0.22) + 0.26 * (s > 0 ? 1 : 0), doorH + 0.42, 0);
     }
-    S.span('mosaic', -doorW / 2, -0.1, T - 0.05, doorW / 2, 0.01, T + 2.2);
+    // The passage floor behind the door leaves steps up to the hill where it rises inside (dark, unseen).
+    const pf = Math.max(0, rectMax(S.ground(ground), -doorW / 2, doorW / 2, T + 0.4, T + 2.2, 0.6) + 0.02);
+    S.span('mosaic', -doorW / 2, -0.1, T - 0.05, doorW / 2, 0.01, T + 0.4);
+    S.span('mosaic', -doorW / 2, -0.1, T + 0.4, doorW / 2, pf + 0.01, T + 2.2);
     S.span(wallMat, -doorW / 2 - 0.1, 0, T, -doorW / 2, doorH, T + 2.2);
     S.span(wallMat, doorW / 2, 0, T, doorW / 2 + 0.1, doorH, T + 2.2);
     S.span(dadoMat, -doorW / 2 - 0.01, 0, T, -doorW / 2 + 0.01, 1.0, T + 2.2, { shadow: false });
@@ -134,7 +145,6 @@ export function domus(spec: DomusSpec): BuildingOutput {
     spot('houseDoor', 0, fyb, z0 - 0.6, Math.PI, 'domus');
   }
   // Shops.
-  const sd = ft - T - 0.6;
   for (const s of shopOps) {
     if (!cut.includes(s.o)) continue;
     const cx = (s.o.x0 + s.o.x1) / 2, ow = s.o.x1 - s.o.x0;
@@ -147,7 +157,7 @@ export function domus(spec: DomusSpec): BuildingOutput {
     } else if (s.open) {
       shopInterior(S.noShadow(), s.kind, { w: ow, depth: T + sd, h: 3.0, t: T, wealth }, rng.fork(`shop${cx}`));
       S.solid(-ow / 2 - 0.2, -0.5, 0, ow / 2 + 0.2, 0, T + sd);
-      if (dress) shopFrontage(S, s.kind, ow, rng.fork(`fr${cx}`));
+      if (dress) shopFrontage(S, s.kind, ow, rng.fork(`fr${cx}`), S.ground(ground));
     } else {
       // Shutter planks draw from a fork so every level keeps the same main sequence.
       if (!low) plankShutters(S, lo, T, rng.fork(`sh${cx}`));
@@ -285,14 +295,16 @@ export function domus(spec: DomusSpec): BuildingOutput {
     if (rng.chance(0.5) && full) placeProp(d, 'statue_pedestal', 0, 0, gz + gd / 2 - 0.8, Math.PI, { variant: 1, scale: 0.8 });
   }
 
-  // ---- colliders: everything but the shop recesses / fauces
+  // ---- colliders: everything but the shop recesses / fauces; closed shops notched to their shutters
   const front = z0 + T + sd + 0.1;
   d.solid(-W / 2, yMin, front, W / 2, ha, z4);
   let px = -W / 2;
-  const holes = [...shopOps.filter((s) => s.open && cut.includes(s.o)).map((s) => s.o), fauces].sort((a, b2) => a.x0 - b2.x0);
-  for (const o of holes) {
+  const holes = [...shopOps.filter((s) => cut.includes(s.o)).map((s) => ({ o: s.o, depth: s.open && full ? front - z0 : T * 0.3 - 0.01 })), ...(cut.includes(fauces) ? [{ o: fauces, depth: front - z0 }] : [])].sort((a, b2) => a.o.x0 - b2.o.x0);
+  for (const { o, depth } of holes) {
     d.solid(px, yMin, z0, o.x0, hf, front);
     d.solid(o.x0, o.y1, z0, o.x1, hf, front);
+    d.solid(o.x0, yMin, z0, o.x1, o.y0 - 0.12, z0 + T * 0.2);
+    if (depth < front - z0) d.solid(o.x0, o.y0 - 0.12, z0 + depth, o.x1, o.y1, front);
     px = o.x1;
   }
   d.solid(px, yMin, z0, W / 2, hf, front);

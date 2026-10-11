@@ -19,6 +19,7 @@ import { groundIn, placeProp } from '../../arch/props/props';
 import { blockOutline, type LotPlan } from '../../arch/fabric/blockFiller';
 import { Draw } from '../../arch/fabric/draw';
 import { domus } from '../../arch/fabric/domus';
+import { runMin } from '../../arch/fabric/foundation';
 import { lacus } from '../../arch/fabric/fountain';
 import { registerSpray } from './spray';
 import { horrea } from '../../arch/fabric/horrea';
@@ -164,12 +165,17 @@ export function compoundWall(d: Draw, w: FrontWall, H: HeightFn, wealth: number,
   const pieces: [number, number][] = gw ? [[0, g0], [g1, len]] : [[0, len]];
   const at = (s: number): [number, number] => [w.a[0] + (dx * s) / len, w.a[1] + (dz * s) / len];
   for (const [s0, s1] of pieces) {
-    const n = Math.max(1, Math.ceil((s1 - s0) / 3));
+    // Panels of 3 m, or 2 m where the ground falls more than 0.3 per metre, each standing on the
+    // lowest ground under both its faces (sampled every metre) so none hangs over a dip.
+    const steep = runMin(H, ...at(s0), ...at(s1), th / 2 + 0.35);
+    const panel = (steep.max - steep.min) / Math.max(1, s1 - s0) > 0.3 ? 2 : 3;
+    const n = Math.max(1, Math.ceil((s1 - s0) / panel));
     for (let k = 0; k < n; k++) {
       const a0 = s0 + ((s1 - s0) * k) / n, a1 = s0 + ((s1 - s0) * (k + 1)) / n;
       if (a1 - a0 < 0.05) continue;
       const [x0, z0] = at(a0), [x1, z1] = at(a1);
-      const lo = Math.min(H(x0, z0), H(x1, z1)) - 0.35, hi = Math.max(H(x0, z0), H(x1, z1));
+      const g = runMin(H, x0, z0, x1, z1, th / 2 + 0.35);
+      const lo = g.min - 0.45, hi = g.max;
       const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2, L = a1 - a0;
       const top = hi + hgt;
       const f = d.at(mx, 0, mz, rot);
@@ -261,7 +267,8 @@ function yardDressing(b: MeshBuilder, poly: Polygon, plans: LotPlan[], avoid: Po
     const y = H(x, z) + 0.03;
     if (k === 'tree') spots.push({ id: `${prefix}yard:tree${n}`, kind: 'tree', position: new THREE.Vector3(x, y, z), facing: 0, tag: rng.pick(['fig', 'olive', 'laurel', 'pine', 'cypress']) });
     else {
-      placeProp(d, k, x, y, z, rng.range(0, Math.PI * 2), { rng, ground: H });
+      // (a prop that would straddle a step in the yard is left out)
+      if (!placeProp(d, k, x, y, z, rng.range(0, Math.PI * 2), { rng, ground: H, maxStep: 0.3 })) continue;
       if (k === 'puteal') spots.push({ id: `${prefix}yard:well${n}`, kind: 'well', position: new THREE.Vector3(x + 0.9, y, z), facing: -Math.PI / 2 });
     }
     n++;

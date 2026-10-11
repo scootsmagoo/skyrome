@@ -220,6 +220,18 @@ export class Draw {
     return out.set(x, y, z).applyMatrix4(this.m);
   }
 
+  /**
+   * A ground function of the builder's root frame seen from this frame: `(lx, lz)` → the ground's
+   * height above this frame's own floor at that point. For bay floors and props in a wall frame.
+   */
+  ground(root: (x: number, z: number) => number): (lx: number, lz: number) => number {
+    const p = new THREE.Vector3();
+    return (lx, lz) => {
+      this.point(lx, 0, lz, p);
+      return root(p.x, p.z) - p.y;
+    };
+  }
+
   /** Yaw of this frame (radians) — for spot headings. */
   get yaw(): number {
     const e = new THREE.Vector3(1, 0, 0).transformDirection(this.m);

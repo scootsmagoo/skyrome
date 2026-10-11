@@ -8,8 +8,10 @@
  */
 import type { Rng } from '../../core/Rng';
 import type { MaterialId } from '../../gfx/materialIds';
-import { bowl, jug, placeProp, produce } from '../props';
+import { bowl, jug, placeProp, produce, type PlaceOpts, type PropKind } from '../props';
 import type { Draw } from './draw';
+import { MAX_THRESHOLD_STEP } from './foundation';
+import { flatGround, type LocalGround } from './types';
 
 export const SHOP_KINDS = [
   'thermopolium', 'bakery', 'fullonica', 'cobbler', 'butcher', 'wine', 'smithy', 'barber', 'moneychanger', 'general', 'pottery', 'textile',
@@ -218,33 +220,39 @@ export function shopInterior(d: Draw, kind: ShopKind, room: ShopRoom, rng: Rng) 
   }
 }
 
-/** Goods and furniture spilling onto the sidewalk in front of an open shop (street frame: z < 0). */
-export function shopFrontage(d: Draw, kind: ShopKind, ow: number, rng: Rng) {
+/**
+ * Goods and furniture spilling onto the sidewalk in front of an open shop (street frame: z < 0).
+ * `ground` is the sidewalk's height in the shop frame (the shop floor is y = 0; the pavement
+ * outside slopes away from it): each prop stands on the ground where it is, and one that would
+ * straddle a step over MAX_THRESHOLD_STEP is left out.
+ */
+export function shopFrontage(d: Draw, kind: ShopKind, ow: number, rng: Rng, ground: LocalGround = flatGround) {
   const side = rng.chance(0.5) ? -1 : 1;
   const x = side * (ow / 2 + 0.45);
+  const put = (k: PropKind, px: number, pz: number, rot: number, o: PlaceOpts = {}) => placeProp(d, k, px, ground(px, pz), pz, rot, { ...o, ground, maxStep: MAX_THRESHOLD_STEP });
   switch (kind) {
     case 'wine':
     case 'thermopolium':
-      if (rng.chance(0.6)) placeProp(d, 'amphora_tall', x, 0, -0.35, 0, { rx: 0.15, collide: false });
-      if (rng.chance(0.5)) placeProp(d, 'bench_masonry', -x * 1.6, 0, -0.35, 0, { variant: 1 });
+      if (rng.chance(0.6)) put('amphora_tall', x, -0.35, 0, { rx: 0.15, collide: false });
+      if (rng.chance(0.5)) put('bench_masonry', -x * 1.6, -0.35, 0, { variant: 1 });
       break;
     case 'fullonica':
       // Urine-collecting jars by the door (the fullers' famous supply).
-      placeProp(d, 'amphora_globular', x, 0, -0.35, 0, { collide: false });
-      placeProp(d, 'amphora_globular', x + side * 0.55, 0, -0.3, 1, { collide: false });
+      put('amphora_globular', x, -0.35, 0, { collide: false });
+      put('amphora_globular', x + side * 0.55, -0.3, 1, { collide: false });
       break;
     case 'general':
     case 'pottery':
-      if (rng.chance(0.7)) placeProp(d, 'basket', x, 0, -0.45, 0, { variant: 0, collide: false });
-      if (rng.chance(0.5)) placeProp(d, 'crate', x + side * 0.7, 0, -0.45, 0.3, { variant: 2 });
+      if (rng.chance(0.7)) put('basket', x, -0.45, 0, { variant: 0, collide: false });
+      if (rng.chance(0.5)) put('crate', x + side * 0.7, -0.45, 0.3, { variant: 2 });
       break;
     case 'bakery':
-      if (rng.chance(0.5)) placeProp(d, 'basket', x, 0, -0.45, 0, { variant: 1, collide: false });
+      if (rng.chance(0.5)) put('basket', x, -0.45, 0, { variant: 1, collide: false });
       break;
     case 'smithy':
-      if (rng.chance(0.5)) placeProp(d, 'handcart', x + side * 0.3, 0, -0.9, Math.PI / 2 + 0.2);
+      if (rng.chance(0.5)) put('handcart', x + side * 0.3, -0.9, Math.PI / 2 + 0.2);
       break;
     default:
-      if (rng.chance(0.35)) placeProp(d, 'bench', x, 0, -0.35, 0, { variant: 0 });
+      if (rng.chance(0.35)) put('bench', x, -0.35, 0, { variant: 0 });
   }
 }
