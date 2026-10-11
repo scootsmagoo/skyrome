@@ -73,7 +73,7 @@ function worldSpots(id: string): Spot[] {
 beforeAll(async () => {
   await initPhysics();
   const bounds = { minX: -150, maxX: 500, minZ: -220, maxZ: 380 };
-  hm = buildHeightmap({ ...atlas, bounds } as never, { spacing: 2, pads: landmarkPads(atlas.CITY_BOUNDS), profile: 'v1' }); // G1b: v1's ground until this crew re-fits its spots to v2 (docs/design/solid-ground.md §3, Tests)
+  hm = buildHeightmap({ ...atlas, bounds } as never, { spacing: 2, pads: landmarkPads(atlas.CITY_BOUNDS) });
   world = makeWorld(false);
   const game = world.game as Game & { heightmap: Heightmap };
   game.heightmap = hm;

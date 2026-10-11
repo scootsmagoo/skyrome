@@ -271,8 +271,8 @@ function buildDolabella(ctx: LandmarkContext): LandmarkBuild {
     d.span('brick', Math.min(xa, xb), g - 0.3, -1.1, Math.max(xa, xb), yS, 1.1, { collide: true });
   }
   const spots: Spot[] = [
-    { id: 'dolabella-inscription', kind: 'inscription', position: new THREE.Vector3(0, 0.05, -5), heading: 0 },
-    { id: 'dolabella-gate', kind: 'door', position: new THREE.Vector3(0, 0.05, 0), heading: 0 },
+    { id: 'dolabella-inscription', kind: 'inscription', position: new THREE.Vector3(0, ctx.groundAt(0, -5) + 0.05, -5), heading: 0 },
+    { id: 'dolabella-gate', kind: 'door', position: new THREE.Vector3(0, ctx.groundAt(0, 0) + 0.05, 0), heading: 0 },
   ];
   const object = b.build('arch-dolabella');
   addReadables(ctx.game, object, [

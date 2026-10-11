@@ -233,11 +233,16 @@ function buildPorticusLiviae(ctx: LandmarkContext): LandmarkBuild {
   roof(d.at(0, 0, -D - 0.7), { kind: 'gable', w: 10.6, d: 3.4, y: 7.2, axis: 'z', pitch: 0.26, ridges: high, wallMat: 'marble' });
   // The broad flight down to the Clivus Suburanus (20 m real wide).
   {
-    const g = Math.min(ctx.groundAt(-6, -D - 6), ctx.groundAt(6, -D - 6), ctx.groundAt(0, -D - 6));
+    let g = Math.min(ctx.groundAt(-6, -D - 6), ctx.groundAt(6, -D - 6), ctx.groundAt(0, -D - 6));
+    const run = 0.34;
+    // The flight's foot and the spot 1.5 m beyond it must meet the ground there: lower the foot to it.
+    for (let k = 0; k < 3 && y0 - g > 0.15; k++) {
+      const zf = -D - 2.4 - risers(y0 - g, 0.2).count * run - 1.5;
+      g = Math.min(g, ctx.groundAt(0, zf));
+    }
     const drop = y0 - g;
     if (drop > 0.15) {
       const { count, rise } = risers(drop, 0.2);
-      const run = 0.34;
       const sw = 20 * ctx.S;
       const m = T(0, g, -D - 2.4 - count * run);
       for (let i = 0; i < count; i++) span(b, 'travertine', m, -sw / 2, -0.5, i * run, sw / 2, (i + 1) * rise, count * run + 0.1, true, false);

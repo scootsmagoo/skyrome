@@ -200,8 +200,9 @@ function pulvinarBuild(ctx: LandmarkContext) {
   at(xb - 2.0, floor, zm, Math.PI, 'pulvinar-gods-couch', 'shrine');
   at(xf - 0.8, w1.y, z0 + 0.8, Math.PI, 'pulvinar-guard-a', 'npc');
   at(xf - 0.8, w1.y, z1 - 0.8, Math.PI, 'pulvinar-guard-b', 'npc');
-  // Outside, on the sidewalk along the facade (it follows the street up the Palatine side).
-  const rd = new THREE.Vector3(CIRCUS.halfW + 1.5, 0, zm).applyMatrix4(F);
+  // Outside, on the paved apron just past the sidewalk's curb (the sidewalk's collider stands up to
+  // 0.9 m over its drawn walk where the street climbs the Palatine side, so nobody is placed on it).
+  const rd = new THREE.Vector3(CIRCUS.halfW + 2.6 + 1.0, 0, zm).applyMatrix4(F);
   spots.add('pulvinar-rear-door', 'door', rd.x, Math.max(rd.y + 0.14, ctx.groundAt(rd.x, rd.z) + 0.12), rd.z, 0);
   return { object: b.build(ctx.lm.id), colliders: b.colliders, spots: spots.list, cullDistance: 1600 };
 }

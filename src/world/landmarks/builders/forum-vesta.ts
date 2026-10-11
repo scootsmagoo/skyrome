@@ -357,6 +357,13 @@ function atriumVestae(p: Part) {
   // The caps: 1.2 m cells, each capped 0.04 m over the highest of 25 ground samples, rounded up to 0.1 m
   // (embedTerraces' 0.25 m steps stood up to 0.67 m over the ground, which the audit reads as a floor
   // with the terrain through it and the cap not "just above": it needs the cap within 0.6 m of it).
+  // Each terrace block's footprint and cap (relative to fy), so what stands on the court (statues, people) stands on the cap.
+  const caps: { xa: number; za: number; xb: number; zb: number; top: number }[] = [];
+  const capAt = (x: number, z: number) => {
+    let top = 0;
+    for (const c of caps) if (x >= c.xa && x <= c.xb && z >= c.za && z <= c.zb) top = Math.max(top, c.top);
+    return fy + top + (top > 0 ? 0.04 : 0);
+  };
   {
     const x0 = -hw + 0.02, x1 = hw - 0.02, z0 = zF + 0.02, z1 = hl - 0.02;
     const nx = Math.round((x1 - x0) / 1.2), nz = Math.round((z1 - z0) / 1.2);
@@ -369,6 +376,7 @@ function atriumVestae(p: Part) {
         const xa = x0 + run.i0 * cw, xb = x0 + i * cw;
         d.span('tufa', xa, fy - 0.3, za, xb, fy + run.top, zb, { collide: true });
         d.span('grass', xa + 0.02, fy + run.top, za + 0.02, xb - 0.02, fy + run.top + 0.04, zb - 0.02);
+        caps.push({ xa, za, xb, zb, top: run.top });
         run = null;
       };
       // Rows of 1.2 m cells; a cell the ground rises steeply across (more than 0.35 m) is split in four.
@@ -384,6 +392,7 @@ function atriumVestae(p: Part) {
       const put = (xa: number, za2: number, xb: number, zb2: number, top: number) => {
         d.span('tufa', xa, fy - 0.3, za2, xb, fy + top, zb2, { collide: true });
         d.span('grass', xa + 0.02, fy + top, za2 + 0.02, xb - 0.02, fy + top + 0.04, zb2 - 0.02);
+        caps.push({ xa, za: za2, xb, zb: zb2, top });
       };
       for (let i = 0; i < nx; i++) {
         const xa = x0 + i * cw, xb = xa + cw;
@@ -460,16 +469,17 @@ function atriumVestae(p: Part) {
   vz.forEach((z, i) => {
     for (const sx of hi ? [-1, 1] : []) {
       if (i === 1 && sx > 0) continue;
-      const at = TRS(sx * (cx - 0.9), fy, z, 0, sx < 0 ? -Math.PI / 2 : Math.PI / 2, 0);
+      const at = TRS(sx * (cx - 0.9), capAt(sx * (cx - 0.9), z), z, 0, sx < 0 ? -Math.PI / 2 : Math.PI / 2, 0);
       const h = pedestal(b, at, 0.75, 0.65, 1.2, 'marble', hi && i === 0 && sx < 0 ? text('atrium-vestae-statue') : undefined);
       figure(b, mul(at, T(0, h, 0)), false, 'marble', 1.0, (s) => drapedFemale(s, { right: 'patera', left: 'mantle', head: { crown: 'veil' } }));
     }
   });
   p.spot('atrium-vestae-door', 'door', 0, fy, zF - 1.2, 0);
-  p.spot('atrium-vestae-statue', 'inscription', -(cx - 0.9) + 1.3, fy, vz[0], -Math.PI / 2);
-  p.spot('atrium-vestae-vestal-1', 'npc', 0.0, fy, cz0 + 2.5, 0);
-  p.spot('atrium-vestae-vestal-2', 'npc', -2.0, fy, cz1 - 1.5, Math.PI);
-  p.spot('atrium-vestae-tablinum', 'npc', 0, fy, rz1 + 2.0, Math.PI);
+  // People stand on the floor, or on the cap of the terrace where the Palatine stands over it.
+  p.spot('atrium-vestae-statue', 'inscription', -(cx - 0.9) + 1.3, capAt(-(cx - 0.9) + 1.3, vz[0]), vz[0], -Math.PI / 2);
+  p.spot('atrium-vestae-vestal-1', 'npc', 0.0, capAt(0, cz0 + 2.5), cz0 + 2.5, 0);
+  p.spot('atrium-vestae-vestal-2', 'npc', -2.0, capAt(-2.0, cz1 - 1.5), cz1 - 1.5, Math.PI);
+  p.spot('atrium-vestae-tablinum', 'npc', 0, capAt(0, rz1 + 2.0), rz1 + 2.0, Math.PI);
 }
 
 // ---------------------------------------------------------------- Atrium Vestae: porch and shops

@@ -67,6 +67,8 @@ export interface PavedPatch {
   poly: V2[];
   holes: V2[][];
   lift: number;
+  /** The paving's mesh cell (m): the drawn surface is flat across each triangle of a cell, not the terrain. */
+  cell: number;
 }
 
 export interface LandmarkOpts {
@@ -205,6 +207,26 @@ function inPoly(x: number, z: number, poly: readonly V2[]): boolean {
   return inside;
 }
 
+/** The height of a paving patch's drawn mesh at (x, z): its cell's corners lie `lift` over the terrain; the higher diagonal. */
+function pavingY(ctx: LandmarkContext, pv: PavedPatch, x: number, z: number): number {
+  let minX = Infinity;
+  let minZ = Infinity;
+  for (const [px, pz] of pv.poly) {
+    minX = Math.min(minX, px);
+    minZ = Math.min(minZ, pz);
+  }
+  const x0 = minX + Math.floor((x - minX) / pv.cell) * pv.cell;
+  const z0 = minZ + Math.floor((z - minZ) / pv.cell) * pv.cell;
+  const u = (x - x0) / pv.cell;
+  const w = (z - z0) / pv.cell;
+  const h = (cx: number, cz: number) => ctx.groundAt(cx, cz) + pv.lift;
+  const a = h(x0, z0), b = h(x0 + pv.cell, z0), c = h(x0 + pv.cell, z0 + pv.cell), d = h(x0, z0 + pv.cell);
+  // diagonal a-c: the triangle (a, b, c) when u >= w, else (a, d, c); diagonal b-d: (b, d, a) when u + w <= 1, else (b, d, c)
+  const ac = u >= w ? a + (b - a) * u + (c - b) * w : a + (c - d) * u + (d - a) * w;
+  const bd = u + w <= 1 ? a + (b - a) * u + (d - a) * w : c + (d - c) * (1 - u) + (b - c) * (1 - w);
+  return Math.max(ac, bd);
+}
+
 /** Does a solid's xz footprint, grown by `pad`, contain (x, z)? */
 function inFootprint(s: Solid, x: number, z: number, pad: number): boolean {
   if (!s.inv) return Math.hypot(x - s.cx, z - s.cz) <= s.r + pad;
@@ -233,8 +255,15 @@ export function settleSpots(ctx: LandmarkContext, cols: readonly ColliderSpec[],
     const g = ctx.groundAt(x, z);
     // paving laid on the terrain here (the highest patch wins)
     let lift = 0.07;
-    for (const pv of paved) if (pv.lift > lift - 0.01 && inPoly(x, z, pv.poly) && !pv.holes.some((h) => inPoly(x, z, h))) lift = Math.max(lift, pv.lift + 0.01);
-    return Math.abs(g - y) < 0.7 + lift ? g + lift : y;
+    let drawn = g + lift;
+    for (const pv of paved) {
+      if (!inPoly(x, z, pv.poly) || pv.holes.some((h) => inPoly(x, z, h))) continue;
+      if (pv.lift > lift - 0.01) lift = Math.max(lift, pv.lift + 0.01);
+      // The mesh is flat across each triangle of its cells, so it can stand above the terrain between
+      // the cell corners (0.2 m on a rounded slope): stand on the higher of the two ways a cell splits.
+      drawn = Math.max(drawn, pavingY(ctx, pv, x, z) + 0.01);
+    }
+    return Math.abs(g - y) < 0.7 + lift ? Math.max(g + lift, drawn) : y;
   };
   const blocked = (x: number, z: number, y: number) => near(x, z, R).some((s) => s.top > y + 0.12 && s.bottom < y + 1.75);
   for (const sp of spots) {
@@ -327,12 +356,13 @@ export function flight(b: MeshBuilder, at: THREE.Matrix4, width: number, height:
 
 /** Pave a local polygon over the terrain (lift above the ground), optional holes. Collider: trimesh. */
 export function pave(p: Part, poly: V2[], o: { material?: MaterialId; lift?: number; exclude?: V2[][]; cell?: number; skirt?: number; collide?: boolean } = {}) {
-  if (p.main) p.paved.push({ poly, holes: o.exclude ?? [], lift: o.lift ?? 0.06 });
+  const cell = o.cell ?? (p.hi ? 2.5 : 6);
+  if (p.main) p.paved.push({ poly, holes: o.exclude ?? [], lift: o.lift ?? 0.06, cell });
   buildPlaza(p.b, poly as Polygon, (x, z) => p.ctx.groundAt(x, z), {
     material: o.material ?? 'paving_travertine',
     lift: o.lift ?? 0.06,
     exclude: o.exclude as Polygon[] | undefined,
-    cell: o.cell ?? (p.hi ? 2.5 : 6),
+    cell,
     skirt: o.skirt ?? 0.35,
     collide: p.main && (o.collide ?? true),
   });

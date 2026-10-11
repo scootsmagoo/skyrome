@@ -422,7 +422,25 @@ function buildAuguraculum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, 
   span(b, 'tufa', -0.4, 0.4, -0.4, 0.4, 0.85, 0.4, undefined, true);
   span(b, 'tufa', 0.25, 0.85, -0.4, 0.4, 1.4, 0.4, undefined);
   spots.push(spotAt('augur-seat', 'sit', 0, 0.85, 0, -10, 0, { label: "The augur's seat" }));
-  spots.push(spotAt('augur', 'npc', -1.2, 0.4, 1.2, -10, 0, { label: 'An augur watching the birds, lituus in hand' }));
+  // The augur stands where he likes (-1.2, 1.2): on a hill that rises over the platform's far half
+  // (the summit's rock) he stands at the nearest place on it where the ground is under the turf all
+  // round him and clear of the hut and the seat.
+  let ax = -1.2, az = 1.2, best = Infinity;
+  for (let x = -h + 0.7; x <= h - 0.7 + 1e-6; x += 0.2) {
+    for (let z = -h + 0.7; z <= h - 0.7 + 1e-6; z += 0.2) {
+      if (x > hx - 1.1 - 0.5 && x < hx + 1.1 + 0.5 && z > hz - 1.1 - 0.5 && z < hz + 1.1 + 0.5) continue;
+      if (Math.abs(x) < 1.0 && Math.abs(z) < 1.0) continue;
+      let high = -Infinity;
+      for (const [dx, dz] of [[0, 0], [0.4, 0], [-0.4, 0], [0, 0.4], [0, -0.4]]) high = Math.max(high, g(x + dx, z + dz));
+      const cost = Math.hypot(x + 1.2, z - 1.2) + Math.max(0, high - 0.3) * 20;
+      if (cost < best) {
+        best = cost;
+        ax = x;
+        az = z;
+      }
+    }
+  }
+  spots.push(spotAt('augur', 'npc', ax, 0.4, az, -10, 0, { label: 'An augur watching the birds, lituus in hand' }));
   spots.push(spotAt('approach', 'spawn', 1.2, g(1.2, -h - 3), -h - 3, 0, 0, { label: 'The augurs\' platform' }));
   spots.push(spotAt('view-campus', 'vista', 0, 0.4, h - 0.6, 0, h + 40, { label: 'The view north over the Campus Martius', gloss: 'From the auguraculum the augurs mark out the sky and watch for the flight of birds.' }));
   void detail;
