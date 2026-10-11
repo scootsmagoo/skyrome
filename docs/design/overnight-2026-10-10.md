@@ -13,3 +13,7 @@ The owner went to bed with phase 3 finishing and phase 4 (solid ground) planned.
 - **phase4b branch** = main (phase 3, ccc5d7d) + G0, merge 751ab61 (conflicts in `release.ts` and `colos-kit.ts`: both sides kept). tsc clean, vitest 2,553 passed.
 - **G1a (one ground, Opus)** started in worktree `p4-g1a`; the fast audit gate is re-measuring the phase4b base meanwhile.
 - **Fast gate on the phase4b base:** 8.8 min, 46 metrics; 4 shifted slightly from G0's pre-phase-3 baseline (blocked objective routes 9 → 10, edgeless nodes 154 → 157, circus ghost probes 8 → 10, bare-ground probes 428 → 430: phase 3's walled-link cuts). The lead raised those four gates to the phase4b numbers (reason in gates.json); crew targets unchanged. The gate now passes on the base.
+
+## 11 October, 04:15
+- **The hourly check-ins never fired** (no sign of any run between 23:17 and 04:17), so nothing was launched overnight beyond what was already running. G1a (Opus) has been at it since 22:20: its one-ground change moves everything that reads `heightAt`, and it is working through the city-plan tests (roads, street ends); nothing committed yet, still active.
+- Launched **phase 4b wave 1** alongside G1a, as the plan allows (wf_e7fdfcab-4a5): ROUTES (Opus), LOOK (Sonnet), L-WEST (Opus), L-EAST (Sonnet), each off phase4b with a Sonnet reviewer; their terrain-dependent acceptance waits for G1b.
