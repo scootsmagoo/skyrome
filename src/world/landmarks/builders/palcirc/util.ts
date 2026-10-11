@@ -12,6 +12,7 @@ import { vegetation } from '../../../../arch/vegetation/system';
 import type { TreeSpecies } from '../../../../arch/vegetation/species';
 import type { ColliderSpec, MeshBuilder } from '../../../../gfx/MeshBuilder';
 import type { MaterialId } from '../../../../gfx/materialIds';
+import { registerBuildCache } from '../../../../gfx/release';
 import { bearingToRotationY } from '../../../../core/math';
 import { WORLD_SCALE, toGame } from '../../../coords';
 import type { LandmarkContext, LandmarkData, Spot } from '../../types';
@@ -155,6 +156,7 @@ export function halfColumn(d: Draw, mat: MaterialId, x: number, y0: number, D: n
 }
 
 const halfCache = new Map<string, THREE.BufferGeometry>();
+registerBuildCache(() => halfCache.clear()); // built with the world only (gfx/release)
 /** Half (front) shaft: an open 8-sided half cylinder from y = 0 to h, facing −z. Cached. */
 export function halfShaft(r0: number, r1: number, h: number): THREE.BufferGeometry {
   const key = `${r0.toFixed(3)}|${r1.toFixed(3)}|${h.toFixed(3)}`;

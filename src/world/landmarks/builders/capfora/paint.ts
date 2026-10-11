@@ -7,6 +7,7 @@
  */
 import * as THREE from 'three';
 import { HeightField, reliefMaterial } from '../../../../arch/common/relief';
+import { releaseTextureAfterUpload } from '../../../../gfx/release';
 
 const paints = new Map<string, THREE.MeshStandardMaterial>();
 
@@ -231,6 +232,8 @@ export function redGranite(): THREE.MeshStandardMaterial {
   t.colorSpace = THREE.SRGBColorSpace;
   t.repeat.set(3, 3);
   t.needsUpdate = true;
+  // Static: the pixels are needed once, for the upload (gfx/release).
+  releaseTextureAfterUpload(t);
   granite = new THREE.MeshStandardMaterial({ map: t, roughness: 0.35, metalness: 0 });
   granite.name = 'capfora:red-granite';
   return granite;

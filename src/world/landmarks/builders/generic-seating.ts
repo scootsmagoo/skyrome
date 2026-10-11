@@ -15,6 +15,7 @@ import { caveaSection } from '../../../arch/classical/amphitheatre';
 import { sweep, type V2 } from '../../../arch/common/geom';
 import type { Draw } from '../../../arch/fabric/draw';
 import type { MaterialId } from '../../../gfx/materialIds';
+import { registerBuildCache } from '../../../gfx/release';
 import type { LandmarkBuilder } from '../types';
 import { V, along, frameAt, offsetLine, pathLength, type Detail, type V3 } from './generic-common';
 
@@ -214,6 +215,7 @@ export interface LiteArcadeSpec {
 }
 
 const bayCache = new Map<string, THREE.BufferGeometry>();
+registerBuildCache(() => bayCache.clear()); // built with the world only (gfx/release)
 
 /** One bay as a notched slab: x ∈ [0, w], y ∈ [0, h], z ∈ [0, depth] (front face at z = 0 facing −z). */
 function bayGeometry(w: number, h: number, depth: number, open: number, sill: number, kind: 'arcade' | 'attic' | 'solid', segs: number): THREE.BufferGeometry {

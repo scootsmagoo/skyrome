@@ -11,6 +11,7 @@ import { ProfileBuilder, lathe, makeGeometry, mul, tube, type V2 } from '../../.
 import { inscriptionPanel, latinize, type InscriptionStyle } from '../../../../arch/common/inscription';
 import type { MeshBuilder } from '../../../../gfx/MeshBuilder';
 import type { MaterialId } from '../../../../gfx/materialIds';
+import { registerBuildCache } from '../../../../gfx/release';
 import { PAINT, paint } from './paint';
 import { stairs, stepCount } from '../../../../arch/common/stairs';
 
@@ -436,6 +437,7 @@ export function terrace(
 export type FigureKind = 'togate' | 'armored' | 'draped' | 'nude';
 
 const figureCache = new Map<string, THREE.BufferGeometry>();
+registerBuildCache(() => figureCache.clear()); // built with the world only (gfx/release)
 
 /**
  * A cheap life-size statue (≈ 250–600 triangles) for galleries of many figures: niches of the

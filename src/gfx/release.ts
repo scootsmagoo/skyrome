@@ -20,6 +20,27 @@ export const freeArray = function (this: THREE.BufferAttribute) {
   (this as unknown as { array: ArrayLike<number> | null }).array = null;
 };
 
+/**
+ * Memo caches that only the world's build uses (column parts, prepared instance shapes, the
+ * landmark kits' pieces): geometry made once per key so twenty temples share one column. Once Rome
+ * is built nothing asks for them again, yet they held about 50 MB at the Forum (memory audit,
+ * phase 3). Each module registers its clear at load; `releaseBuildCaches` runs at the end of the
+ * build. A later caller simply misses and rebuilds, and whatever is still drawn stays alive through
+ * its own meshes and batches.
+ */
+const buildCaches: (() => void)[] = [];
+
+/** Register a build-time cache to drop once the world is built (see `releaseBuildCaches`). */
+export function registerBuildCache(clear: () => void) {
+  buildCaches.push(clear);
+}
+
+/** The world is built: drop every registered build cache. Returns how many were cleared. */
+export function releaseBuildCaches(): number {
+  for (const clear of buildCaches) clear();
+  return buildCaches.length;
+}
+
 /** Free a geometry's vertex arrays once uploaded (its bounds are computed first, while they exist). */
 export function releaseGeometryAfterUpload(g: THREE.BufferGeometry) {
   if (!g.boundingSphere) g.computeBoundingSphere();
@@ -74,6 +95,21 @@ export function packNormals(g: THREE.BufferGeometry): boolean {
   }
   g.setAttribute('normal', new THREE.BufferAttribute(out, 3, true));
   return true;
+}
+
+/**
+ * Free a compressed texture's transcoded mip levels once the GPU has them (KTX2). Clones share the
+ * level objects, so whichever clone uploads first frees them for all (they share one GL texture too,
+ * as long as their sampling parameters match: never give a clone other filters or wrapping).
+ */
+export function releaseCompressedAfterUpload<T extends THREE.Texture>(t: T): T {
+  const c = t as unknown as THREE.CompressedTexture;
+  if (!c.isCompressedTexture) return t;
+  c.onUpdate = () => {
+    for (const m of c.mipmaps) (m as { data: unknown }).data = null;
+    c.onUpdate = null;
+  };
+  return t;
 }
 
 /**

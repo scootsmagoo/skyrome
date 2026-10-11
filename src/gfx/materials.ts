@@ -21,7 +21,7 @@
  */
 import * as THREE from 'three';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
-import { releaseTextureAfterUpload } from './release';
+import { releaseCompressedAfterUpload, releaseTextureAfterUpload } from './release';
 import { MATERIAL_BASE, type MaterialId } from './materialIds';
 import { MATERIAL_RECIPES, TEXTURE_STATS, repeatFor, roughnessFactor, tintFor, type MaterialRecipe, type ProceduralId, type TextureSetId } from './textures/catalog';
 import { generateProcedural, prefetchProcedural, type ProcImage } from './textures/procedural';
@@ -295,18 +295,6 @@ function loadKtx2Set(set: TextureSetId): Promise<SetTextures> {
   });
 }
 
-/**
- * Free a compressed texture's transcoded mip levels once the GPU has them. Clones share the level
- * objects, so whichever clone uploads first frees them for all (they share one GL texture too).
- */
-function releaseMipsAfterUpload(t: THREE.Texture) {
-  const c = t as THREE.CompressedTexture;
-  if (!c.isCompressedTexture) return;
-  c.onUpdate = () => {
-    for (const m of c.mipmaps) (m as { data: unknown }).data = null;
-  };
-}
-
 function loadSet(set: TextureSetId): Promise<SetTextures> {
   let p = setPromises.get(set);
   if (!p && ktx2 && !ktx2Failed.has(set) && (TEXTURE_STATS[set] as { ktx2?: boolean } | undefined)?.ktx2) {
@@ -348,7 +336,7 @@ function applyPhotoSet(m: THREE.MeshStandardMaterial, id: MaterialId, recipe: Ma
       const arm = tx.arm.clone();
       for (const t of [color, normal, arm]) {
         setRepeat(t, recipe);
-        releaseMipsAfterUpload(t);
+        releaseCompressedAfterUpload(t);
       }
       m.map = color;
       m.normalMap = normal;

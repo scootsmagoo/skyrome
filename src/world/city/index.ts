@@ -104,7 +104,9 @@ export async function buildCity(
   await tick();
 
   // ---- 2. far massing for every block
-  const pool = new BatchPool(game.scene);
+  // Batches start small: half of the ~90 hold a few hundred to a few thousand vertices, and at the
+  // old 8192 they were 8 MB of empty capacity on the CPU and the GPU (memory audit, phase 3).
+  const pool = new BatchPool(game.scene, { verts: 2048 });
   const farMat = massingMaterial();
   const farBatch = pool.get(farMat, false, true);
   const blocks: BlockRec[] = [];
@@ -166,6 +168,9 @@ export async function buildCity(
       y: H(w.cx, w.cz),
     });
   }
+  // The far batch is complete: blocks and ribbons only show and hide from here on. Shrink it to its
+  // live size and let its arrays go once uploaded (23 MB at the Forum, memory audit phase 3).
+  farBatch.finish();
   stats.streetWorkMs = performance.now() - T - stats.planMs - stats.massingMs;
   report(0.55, 'Paving the streets');
   await tick();

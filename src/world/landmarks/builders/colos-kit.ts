@@ -199,6 +199,8 @@ export class LodSet {
     const n = spec.matrices.length;
     spec.levels.forEach((lv, li) => {
       const g = lv.builder.build(`${spec.name}:L${li}`);
+      // The set keeps its spec (matrices) for good: the level's builder parts must not ride along.
+      lv.builder.dispose();
       const meshes: THREE.InstancedMesh[] = [];
       for (const child of g.children) {
         const mesh = child as THREE.Mesh;

@@ -495,10 +495,13 @@ export class Heightmap {
   readonly nz: number;
   /** Game y values, row-major by z: heights[iz * nx + ix]. */
   readonly heights: Float32Array;
-  /** Road mask 0..1 per sample (1 = on a road surface) — for texturing. */
-  readonly roadMask: Float32Array;
+  /**
+   * Road mask 0..1 per sample (1 = on a road surface) — for texturing. Read while the world is
+   * built (the terrain's data textures, the reeds); `releaseBuildMasks` drops both masks after.
+   */
+  roadMask: Float32Array;
   /** Pad mask 0..1 per sample (1 = flattened building pad). */
-  readonly padMask: Float32Array;
+  padMask: Float32Array;
   /** Water level in game y of the main river (for water rendering). */
   waterLevelY = 0;
   /**
@@ -564,8 +567,18 @@ export class Heightmap {
   sampleMask(mask: Float32Array, x: number, z: number): number {
     const ix = Math.round((x - this.minX) / this.spacing);
     const iz = Math.round((z - this.minZ) / this.spacing);
-    if (ix < 0 || iz < 0 || ix >= this.nx || iz >= this.nz) return 0;
+    if (ix < 0 || iz < 0 || ix >= this.nx || iz >= this.nz || !mask.length) return 0;
     return mask[iz * this.nx + ix];
+  }
+
+  /**
+   * The world is built: the road and pad masks have gone into the terrain's data textures and the
+   * reed placement, and nothing reads them after (17 MB at the city's grid, memory audit phase 3).
+   * `sampleMask` answers 0 from then on.
+   */
+  releaseBuildMasks() {
+    this.roadMask = new Float32Array(0);
+    this.padMask = new Float32Array(0);
   }
 }
 

@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import type { HumanoidAvatar } from '../../actors/avatar/HumanoidAvatar';
 import { avatarMaterial } from '../../actors/avatar/material';
 import { B, PARENT } from '../../actors/avatar/rig';
+import { floatsOf } from '../../actors/avatar/real/pack';
 import { severReal, isRealBody } from './dismemberReal';
 import { CUT_BONE, REAL_CUT, STUMP_RADIUS, partMask, partTriangles, subtree, type Part } from './limbs';
 import { fleshMaterials } from './stump';
@@ -82,7 +83,7 @@ export function sever(avatar: HumanoidAvatar, part: Part): SeveredPiece | null {
   const index = geo.getIndex();
   if (!pos?.array || !si?.array || !sw?.array || !index?.array) return null;
   const bones = subtree(cutName);
-  const mask = partMask(si.array as ArrayLike<number>, sw.array as ArrayLike<number>, bones);
+  const mask = partMask(si.array as ArrayLike<number>, floatsOf(sw), bones);
   const tris = partTriangles(index.array as ArrayLike<number>, mask);
   if (!tris.length) return null;
 

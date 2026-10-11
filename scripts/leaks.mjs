@@ -7,7 +7,8 @@
  *   hook: created, not live, so look at the per-cycle rate), DOM nodes + event listeners
  *   (CDP Memory.getDOMCounters), active intervals and pending timeouts (hooked).
  * `audioLive` is the number of AudioNodes alive (DevTools WebAudio events); `aud` at the end of a line is
- * how many were created in all (churn), buffers and their MB.
+ * how many were created in all (churn), buffers and their MB, and the engine's 16-bit stash of sounds not
+ * played yet (a first play moves a sound from the stash into buffers: judged on buffers + 2 × stash).
  * A phase PASSES when, after its warm-up cycle, the second half of its samples does not keep
  * growing: heap slope below --heap-slope MB per cycle and every counter flat (counts compared
  * exactly, with a small allowance for streaming phases).
@@ -189,6 +190,8 @@ async function sample() {
       audioNodes: h.nodes,
       audioBufs: h.buffers,
       audioMB: +(h.bufferBytes / 1048576).toFixed(1),
+      // Sounds waiting as 16-bit PCM until they first play (AudioEngine's stash, memory audit phase 3).
+      stashMB: +(g.audio?.stats?.().stashedMB ?? 0).toFixed(1),
       domAttached: (() => { let n = 0; const w = document.createTreeWalker(document, NodeFilter.SHOW_ALL); while (w.nextNode()) n++; return n; })(),
       intervals: h.intervals.size,
       timeouts: h.timeouts.size,
@@ -375,7 +378,7 @@ for (const phase of phases) {
       const s = await sample().catch(() => null);
       if (!s) break;
       rows.push(s);
-      console.log(`  cycle ${String(i + 1).padStart(3)}: ` + KEYS.map((k) => `${k} ${s[k]}`).join(' · ') + ` · aud ${s.audioNodes}n/${s.audioBufs}b/${s.audioMB}MB`);
+      console.log(`  cycle ${String(i + 1).padStart(3)}: ` + KEYS.map((k) => `${k} ${s[k]}`).join(' · ') + ` · aud ${s.audioNodes}n/${s.audioBufs}b/${s.audioMB}MB stash ${s.stashMB}MB`);
     }
   }
   if (args.snapshot === phase) await snapshot(`${phase}-after`);
@@ -401,8 +404,11 @@ for (const phase of phases) {
       const tol = geoDrift || k === 'audioLive' ? Math.max(150, first[k]) : k === 'listeners' ? Math.max(30, first[k] * 0.3) : Math.max(25, first[k] * 0.05);
       if (d2 > 0 && d1 > tol) grew.push(`${k} +${d1}`);
     }
-    // Buffers made per cycle are real memory (a synthesized sound cached per hit would show here).
-    if ((last.audioMB - first.audioMB) / n > 0.05) grew.push(`audio buffers +${(last.audioMB - first.audioMB).toFixed(1)} MB`);
+    // Buffers made per cycle are real memory (a synthesized sound cached per hit would show here). A sound
+    // that plays for the first time moves from the engine's 16-bit stash into float buffers (2 bytes a
+    // sample out, 4 in): judged on buffers plus twice the stash, which that move leaves unchanged.
+    const held = (s) => s.audioMB + 2 * (s.stashMB ?? 0);
+    if ((held(last) - held(first)) / n > 0.05) grew.push(`audio buffers +${(last.audioMB - first.audioMB).toFixed(1)} MB (stash ${((last.stashMB ?? 0) - (first.stashMB ?? 0)).toFixed(1)} MB)`);
   }
   if (args.orphans) console.log('  orphan geometries by builder:', JSON.stringify(await orphanSites()));
   const inconclusive = grew.length > 0 && n < (MIN_JUDGE[phase] ?? 0);

@@ -924,6 +924,9 @@ export function buildColosseum(ctx: LandmarkContext) {
   addReadables(ctx.game, root, readables);
   addLamps(ctx.game, root, lamps);
   const colliders = [...stat.colliders, ...inner.colliders, ...cav.colliders, ...collide.colliders];
+  // The zone hook above shares this function's closure context, which holds these builders for the
+  // game's life (V8): empty them now that their meshes and colliders are out.
+  for (const b of [stat, inner, cav, collide]) b.dispose();
   return { object: root, colliders, spots, far: buildFar(L), cullDistance: 1500 };
 }
 

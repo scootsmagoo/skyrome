@@ -16,6 +16,7 @@ import { columnDims, entasisRadius, ORDER_PROPORTIONS, type Order } from '../../
 import { ProfileBuilder, cylinderBetween, extrudePolygon, gridSurface, lathe, linspace, mul, T, tube, type V2 } from '../../../arch/common/geom';
 import { MeshBuilder, type ColliderSpec } from '../../../gfx/MeshBuilder';
 import type { MaterialId } from '../../../gfx/materialIds';
+import { registerBuildCache } from '../../../gfx/release';
 import { UV_METERS } from '../../../gfx/textures/catalog';
 
 /** A library material id or a one-off shared material. */
@@ -341,6 +342,7 @@ interface MidParts {
 }
 
 const midCache = new Map<string, MidParts>();
+registerBuildCache(() => midCache.clear()); // built with the world only (gfx/release)
 
 /** The two leaf rows, volutes and abacus of a Corinthian capital at modest resolution. */
 function midCapital(D: number, d: number, C: number): THREE.BufferGeometry[] {

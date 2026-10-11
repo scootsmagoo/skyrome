@@ -26,6 +26,8 @@ import { hairMaterial } from './hairMaterial';
 import { headSurface, type HeadSurface } from './frame';
 import { makeSkinPaint } from './paint';
 import type { RealContext, RealHeadFrame } from '../types';
+import type { BodyArrays } from '../morph';
+import { packSkinned } from '../pack';
 import type { SkinPaint } from '../skin';
 
 export { setHairAlphaToCoverage } from './hairMaterial';
@@ -109,8 +111,17 @@ export function headCacheGeometries(): THREE.BufferGeometry[] {
 
 const lerpOf = (n: number) => Math.round(n * 1000);
 
-export function buildHead(ctx: RealContext): RealHead {
+/**
+ * `bodyLater` gives the morphed body again when a later hair LOD (its beard) is built. Every closure
+ * made here shares this function's V8 context, and the head lives as long as its avatar: the closures
+ * must not name `ctx`, or each person kept their ~0.26 MB morphed body for good (33 MB at the
+ * Forum, memory audit phase 3). Without `bodyLater` (tests, dev scenes) the body is kept.
+ */
+export function buildHead(ctx: RealContext, bodyLater?: () => BodyArrays): RealHead {
   const { app, rig, sex } = ctx;
+  const startLod = ctx.lod;
+  let body: BodyArrays | null = ctx.body;
+  const bodyNow = () => body ?? bodyLater!();
   // RealBody's context carries the body already morphed to this rig.
   const H = headSurface(ctx.body, rig, sex, true);
   const helmet = app.armor?.helmet;
@@ -121,13 +132,15 @@ export function buildHead(ctx: RealContext): RealHead {
   const beardStyle = male && app.age !== 'child' && !enclosed ? app.beard ?? 'none' : 'none';
   const color = srgb(app.hair.color);
   const hairKey = (lod: number) => [sex, app.hair.style, app.hair.color, beardStyle, app.age, lerpOf(rig.headH), open || enclosed ? 'h' : '', lerpOf(rig.height), lod].join('|');
-  const gearKey = [sex, helmet ? `${helmet.kind}:${helmet.crest ?? ''}:${helmet.metal ?? ''}` : '', veiled ? app.hair.style + ':' + (app.garments.find((g) => g.kind === 'palla' || g.kind === 'toga')?.color ?? '') : '', lerpOf(rig.headH), lerpOf(rig.height), ctx.lod > 1 ? 'low' : 'high'].join('|');
+  const gearKey = [sex, helmet ? `${helmet.kind}:${helmet.crest ?? ''}:${helmet.metal ?? ''}` : '', veiled ? app.hair.style + ':' + (app.garments.find((g) => g.kind === 'palla' || g.kind === 'toga')?.color ?? '') : '', lerpOf(rig.headH), lerpOf(rig.height), startLod > 1 ? 'low' : 'high'].join('|');
 
   const makeHair = (lod: 0 | 1 | 2): Geo => {
     if (enclosed) return null;
     const rng = new Rng(hashString(hairKey(lod)));
     const hair = buildHair({ H, style: app.hair.style, color, rng, lod, helmet: open, age: app.age });
-    const beard = buildBeard(H, beardStyle, color, rng.fork('beard'), lod, ctx.body);
+    // Only a beard needs the body (and the morph it may have to be made again from); none or stubble
+    // builds nothing, and nothing draws from the generator after this.
+    const beard = beardStyle === 'none' || beardStyle === 'stubble' ? null : buildBeard(H, beardStyle, color, rng.fork('beard'), lod, bodyNow());
     const parts = [hair?.geometry, beard?.geometry].filter((g): g is THREE.BufferGeometry => !!g);
     if (!parts.length) return null;
     const geometry = parts.length === 1 ? parts[0] : mergeGeometries(parts, false)!;
@@ -143,6 +156,7 @@ export function buildHead(ctx: RealContext): RealHead {
     }
     const h = rig.height;
     geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, h * 0.5, 0), h * 1.15);
+    packSkinned(geometry);
     return { geometry, triangles: (hair?.triangles ?? 0) + (beard?.triangles ?? 0) };
   };
 
@@ -172,12 +186,12 @@ export function buildHead(ctx: RealContext): RealHead {
     } else hairMesh.geometry = got.value.geometry;
     hairMesh.visible = true;
   };
-  setHairLod(ctx.lod);
+  setHairLod(startLod);
 
   // Helmet, veil, infula.
   if (helmet || veiled) {
     const got = gearCache.acquire(gearKey, () => {
-      const g = buildGear(app, rig, H, ctx.lod);
+      const g = buildGear(app, rig, H, startLod);
       return g ?? empty();
     });
     held.push({ cache: gearCache, key: gearKey });
@@ -189,6 +203,7 @@ export function buildHead(ctx: RealContext): RealHead {
   }
 
   const skinPaint = makeSkinPaint(app, H, rig, open || enclosed);
+  if (bodyLater) body = null;
   let disposed = false;
   return {
     objects,

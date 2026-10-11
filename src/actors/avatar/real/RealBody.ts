@@ -47,6 +47,8 @@ import { assembleBody } from './garments/assemble';
 import { buildShells } from './garments/shells';
 import { loadBakedGarments } from './garments/baked';
 import { buildHead, type RealHead } from './head/index';
+import { releaseCompressedAfterUpload } from '../../../gfx/release';
+import { packSkinned } from './pack';
 import { addCorrectives, updateCorrectives } from './corrective';
 import type { RealContext } from './types';
 
@@ -132,7 +134,9 @@ export function loadRealBodies(renderer: THREE.WebGLRenderer): Promise<void> {
           const t = await ktx2.loadAsync(`${baseUrl}textures/people/${sex}_${name}.ktx2`);
           t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
           t.colorSpace = THREE.NoColorSpace;
-          return t as THREE.Texture;
+          // Shared by every skin material of the sex and LOD, never cloned: the transcoded levels
+          // can go once uploaded (gfx/release; ~13 MB).
+          return releaseCompressedAfterUpload(t as THREE.Texture);
         };
         const normalMaps: THREE.Texture[] = [];
         const aoMaps: THREE.Texture[] = [];
@@ -252,8 +256,6 @@ interface Entry {
   eyes: THREE.BufferGeometry;
   /** Eye height of the morphed body (bind pose). */
   eyeY: number;
-  /** Morphed template arrays per LOD (kept for head fitting and later builds). */
-  body: (BodyArrays | null)[];
   lods: (LodData | null)[];
   refs: number;
   /** Whether a head module supplies the helmets (the rigid pieces then leave them out). */
@@ -264,7 +266,7 @@ interface Entry {
 
 const cache = new Map<string, Entry>();
 /** LOD builds so far and their total time (ms), for the perf survey and the debug overlay. */
-export const buildStats = { lods: 0, ms: 0, stageMax: { morph: 0, paint: 0, shells: 0, rigid: 0, assemble: 0, finish: 0 } };
+export const buildStats = { lods: 0, ms: 0, stageMax: { morph: 0, paint: 0, shells: 0, rigid: 0, assemble: 0, finish: 0, pack: 0 } };
 const MAX_ENTRIES = 40;
 let lastBuild = -Infinity;
 
@@ -273,9 +275,28 @@ export function realKey(app: Appearance): string {
   return JSON.stringify([app.sex, app.age, app.build, Math.round(app.height * 1000), app.skin, app.garments, app.footwear ?? '', app.armor ?? null]);
 }
 
+/**
+ * The template morphed to an entry's rig, per LOD (position, normal, tangent), for the newest few
+ * entries only. Builds read them (paint, shells, head fitting) and nothing after: kept on every entry
+ * they were ~40 MB at the Forum, plus the shell profiles keyed by them (~10 MB). Making one again is
+ * a fraction of a millisecond and gives the same arrays (morphBody is deterministic); a staged build
+ * keeps its own reference while it runs. Least recently used first (a Map keeps insertion order).
+ */
+const morphs = new Map<Entry, (BodyArrays | null)[]>();
+const MAX_MORPHED = 12;
+
 function morphedBody(e: Entry, lod: number): BodyArrays {
-  let b = e.body[lod];
-  if (b) return b;
+  let list = morphs.get(e);
+  if (list) {
+    morphs.delete(e);
+    morphs.set(e, list);
+    const hit = list[lod];
+    if (hit) return hit;
+  } else {
+    list = new Array<BodyArrays | null>(REAL_LODS).fill(null);
+    morphs.set(e, list);
+    if (morphs.size > MAX_MORPHED) morphs.delete(morphs.keys().next().value!);
+  }
   const tpl = templates.get(e.app.sex)!;
   const src = tpl.lods[lod];
   const out = {
@@ -284,8 +305,8 @@ function morphedBody(e: Entry, lod: number): BodyArrays {
     tangent: src.tangent ? new Float32Array(src.tangent.length) : undefined,
   };
   morphBody(src, refRig(e.app.sex), e.rig, out);
-  b = { position: out.position, normal: out.normal, tangent: out.tangent, skinIndex: src.skinIndex, skinWeight: src.skinWeight };
-  e.body[lod] = b;
+  const b: BodyArrays = { position: out.position, normal: out.normal, tangent: out.tangent, skinIndex: src.skinIndex, skinWeight: src.skinWeight };
+  list[lod] = b;
   return b;
 }
 
@@ -401,6 +422,12 @@ function* buildLodSteps(e: Entry, lod: number): Generator<void, LodData, void> {
   geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, e.rig.height * 0.5, 0), e.rig.height * 1.15);
   if (shells) shells.geometry.boundingSphere = geo.boundingSphere.clone();
   stage('finish');
+  yield;
+  t0 = performance.now();
+  // Finished: smaller attributes on the CPU and the GPU alike (pack.ts; gore reads them through floatsOf).
+  packSkinned(geo);
+  if (shells) packSkinned(shells.geometry);
+  stage('pack');
   buildStats.lods++;
   buildStats.ms += ms;
   return { geometry: geo, split, triangles: a.triangles, shells: shells?.geometry ?? null };
@@ -523,32 +550,53 @@ function applyCorrectives(geo: THREE.BufferGeometry, a: ReturnType<typeof assemb
   if (t.userData.morphTargetDictionary) geo.userData.morphTargetDictionary = t.userData.morphTargetDictionary;
 }
 
+/**
+ * The eye attributes that are the same for every person of a sex (`eyeLocal`, skinning, triangles):
+ * one attribute object each, so one CPU and one GPU copy, not one per look (memory audit, phase 3).
+ */
+const eyeShared = new Map<Sex, { eyeLocal: THREE.BufferAttribute; skinIndex: THREE.BufferAttribute; skinWeight: THREE.BufferAttribute; index: THREE.BufferAttribute }>();
+
+function sharedEyes(sex: Sex, tpl: Template) {
+  let s = eyeShared.get(sex);
+  if (s) return s;
+  // `eyeLocal` is the direction from the eye centre (pupil axis +z), from the template alone.
+  const loc = new Float32Array(tpl.eyes.position.length);
+  for (let i = 0; i < loc.length / 3; i++) {
+    const c = tpl.eyeCenters[tpl.eyes.position[i * 3] > 0 ? 0 : 1];
+    loc[i * 3] = tpl.eyes.position[i * 3] - c.x;
+    loc[i * 3 + 1] = tpl.eyes.position[i * 3 + 1] - c.y;
+    loc[i * 3 + 2] = tpl.eyes.position[i * 3 + 2] - c.z;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(Uint16Array.from(tpl.eyes.skinIndex as ArrayLike<number>), 4));
+  g.setAttribute('skinWeight', new THREE.BufferAttribute(Float32Array.from(tpl.eyes.skinWeight as ArrayLike<number>), 4));
+  packSkinned(g);
+  s = { eyeLocal: new THREE.BufferAttribute(loc, 3), skinIndex: g.getAttribute('skinIndex') as THREE.BufferAttribute, skinWeight: g.getAttribute('skinWeight') as THREE.BufferAttribute, index: new THREE.BufferAttribute(tpl.eyeIndex, 1) };
+  eyeShared.set(sex, s);
+  return s;
+}
+
 function buildEntry(app: Appearance): Entry {
   const tpl = templates.get(app.sex)!;
   const rig = computeRig(app);
-  // Eyes: morphed with the head bone; `eyeLocal` is the direction from the eye centre (pupil axis +z).
+  // Eyes: morphed with the head bone.
   const eo = { position: new Float32Array(tpl.eyes.position.length), normal: new Float32Array(tpl.eyes.normal.length) };
   morphBody(tpl.eyes, refRig(app.sex), rig, eo);
   const eg = new THREE.BufferGeometry();
   eg.setAttribute('position', new THREE.BufferAttribute(eo.position, 3));
   eg.setAttribute('normal', new THREE.BufferAttribute(eo.normal, 3));
-  const loc = new Float32Array(tpl.eyes.position.length);
   let ey = 0;
-  const ne = loc.length / 3;
-  for (let i = 0; i < ne; i++) {
-    const c = tpl.eyeCenters[tpl.eyes.position[i * 3] > 0 ? 0 : 1];
-    loc[i * 3] = tpl.eyes.position[i * 3] - c.x;
-    loc[i * 3 + 1] = tpl.eyes.position[i * 3 + 1] - c.y;
-    loc[i * 3 + 2] = tpl.eyes.position[i * 3 + 2] - c.z;
-    ey += eo.position[i * 3 + 1] / ne;
-  }
-  eg.setAttribute('eyeLocal', new THREE.BufferAttribute(loc, 3));
-  eg.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(Uint16Array.from(tpl.eyes.skinIndex as ArrayLike<number>), 4));
-  eg.setAttribute('skinWeight', new THREE.BufferAttribute(tpl.eyes.skinWeight as Float32Array, 4));
-  eg.setIndex(new THREE.BufferAttribute(tpl.eyeIndex, 1));
+  const ne = eo.position.length / 3;
+  for (let i = 0; i < ne; i++) ey += eo.position[i * 3 + 1] / ne;
+  const shared = sharedEyes(app.sex, tpl);
+  eg.setAttribute('eyeLocal', shared.eyeLocal);
+  eg.setAttribute('skinIndex', shared.skinIndex);
+  eg.setAttribute('skinWeight', shared.skinWeight);
+  eg.setIndex(shared.index);
+  packSkinned(eg);
   eg.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, rig.height * 0.5, 0), rig.height * 1.15);
   rig.eyeHeight = ey;
-  return { key: realKey(app), app, rig, eyes: eg, eyeY: ey, body: new Array(REAL_LODS).fill(null), lods: new Array(REAL_LODS).fill(null), refs: 0, headHelmets: false, version: 0 };
+  return { key: realKey(app), app, rig, eyes: eg, eyeY: ey, lods: new Array(REAL_LODS).fill(null), refs: 0, headHelmets: false, version: 0 };
 }
 
 function acquire(app: Appearance): Entry {
@@ -571,7 +619,12 @@ function release(e: Entry) {
           l?.geometry.dispose();
           l?.shells?.dispose();
         }
+        // The per-sex eye attributes are shared (sharedEyes): take them off first, or dispose() would
+        // delete their GL buffers under everyone else's eyes.
+        for (const name of ['eyeLocal', 'skinIndex', 'skinWeight']) v.eyes.deleteAttribute(name);
+        v.eyes.setIndex(null);
         v.eyes.dispose();
+        morphs.delete(v);
         cache.delete(k);
         if (cache.size <= MAX_ENTRIES - 8) break;
       }
@@ -653,7 +706,9 @@ export class RealBody {
   /** Hair, beards and head-gear from the head module; whether it supplies helmets decides the rigid pieces. */
   private makeHead() {
     this.head?.dispose();
-    const head = buildHead(context(this.entry, 0));
+    const e = this.entry;
+    // The head asks for the morphed body again only to build a later LOD's beard (morph cache).
+    const head = buildHead(context(e, 0), () => morphedBody(e, 0));
     this.head = head;
     this.headObjects = head.objects;
     if (this.entry.headHelmets !== head.objects.length > 0) {

@@ -10,7 +10,7 @@
  *   placeAndRegister(game, group, b.colliders, position, rotationY);
  */
 import * as THREE from 'three';
-import { releaseGeometryAfterUpload } from './release';
+import { registerBuildCache, releaseGeometryAfterUpload } from './release';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Game } from '../core/Game';
 import { Layer } from '../core/Physics';
@@ -50,6 +50,7 @@ export interface InstancePart {
  * vertices, and so does every temple with the same columns.
  */
 const instanceGeometry = new Map<string, Map<string, { geometry: THREE.BufferGeometry; material: THREE.Material | MaterialId; castShadow: boolean }>>();
+registerBuildCache(() => instanceGeometry.clear());
 
 /** Props whose base is not meant to touch a surface (wall brackets, lamps on hooks, awnings). */
 const HUNG_PROPS = /torch|bracket|oil_lamp|awning|sign|hang|shelf|garland|wreath|lantern|banner|sconce|velum/;
@@ -351,6 +352,24 @@ export class MeshBuilder {
     for (const geoms of this.parts.values()) for (const g of geoms) n += g.getAttribute('position').count / 3;
     for (const [key, e] of this.instances) for (const part of preparedInstance(key, e.make).values()) n += ((part.geometry.index?.count ?? part.geometry.getAttribute('position').count) / 3) * e.matrices.length;
     return Math.round(n);
+  }
+
+  /**
+   * Let go of everything added (pre-merge parts, instance recipes, props, colliders) once the owner has
+   * built and taken the colliders: the built group keeps its own merged geometry. For a builder that
+   * something long-lived still references (a closure of the build function, an LOD set's spec), which
+   * otherwise kept every part alive (the Colosseum's: ~5 MB, memory audit phase 3). Do not use it after.
+   */
+  dispose() {
+    this.parts.clear();
+    this.shadow.clear();
+    this.custom.clear();
+    this.instances.clear();
+    this.colliders.length = 0;
+    this.auditProps.length = 0;
+    this.props.length = 0;
+    this.capture = null;
+    this.surfaceCache = null;
   }
 }
 

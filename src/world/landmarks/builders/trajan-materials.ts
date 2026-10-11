@@ -14,6 +14,7 @@ import { HeightField, reliefMaterial } from '../../../arch/common/relief';
 import { UV_METERS } from '../../../gfx/textures/catalog';
 import { fbm2D, hash2, heightToNormal } from '../../../gfx/textures/noise';
 import { applyShaderPatch } from '../../../gfx/textures/shaderPatch';
+import { releaseTextureAfterUpload } from '../../../gfx/release';
 
 type RGB = [number, number, number];
 
@@ -37,7 +38,8 @@ function dataTex(data: Uint8ClampedArray, size: number, srgb: boolean, repeat: [
   t.repeat.set(repeat[0], repeat[1]);
   if (srgb) t.colorSpace = THREE.SRGBColorSpace;
   t.needsUpdate = true;
-  return t;
+  // Static: the pixels are needed once, for the upload (gfx/release).
+  return releaseTextureAfterUpload(t);
 }
 
 /** Build (once) a textured standard material from a per-pixel function over the unit square. */

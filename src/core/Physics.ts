@@ -335,6 +335,10 @@ export class Physics {
 
   private track(c: RAPIER.Collider, owner: unknown) {
     if (owner !== undefined) this.owners.set(c.handle, owner);
+    // rapier.js keeps the JS shape it was made from on the collider (a trimesh's vertices and
+    // indices, a heightfield's heights: ~10 MB over 44 k colliders, memory audit phase 3); the WASM
+    // side has its own copy and `collider.shape` rebuilds it from there if ever asked.
+    c.clearShapeCache();
     return c;
   }
 }

@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import type { MeshBuilder } from '../../gfx/MeshBuilder';
 import type { MaterialId } from '../../gfx/materialIds';
 import { UV_METERS } from '../../gfx/textures/catalog';
+import { registerBuildCache } from '../../gfx/release';
 import { ProfileBuilder, gridSurface, lathe, linspace, mul, sweep, T, type Profile } from '../common/geom';
 import { capitalPieces, type Piece } from './capitals';
 import { ORDER_PROPORTIONS, columnDims, entasisRadius, type ColumnDims, type Detail, type Order } from './orders';
@@ -172,6 +173,8 @@ interface ColumnParts {
 }
 
 const cache = new Map<string, ColumnParts>();
+// Columns are built with the world (landmarks, city gates): the parts can go once it stands.
+registerBuildCache(() => cache.clear());
 
 function buildParts(spec: Required<Pick<ColumnSpec, 'order' | 'D' | 'detail' | 'kind' | 'plinth' | 'base' | 'fluted'>> & { height?: number }): ColumnParts {
   const { order, D, detail, kind } = spec;

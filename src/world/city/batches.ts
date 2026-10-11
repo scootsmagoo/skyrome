@@ -79,7 +79,7 @@ export class Batch {
    * shrink to 1.25 × the live size. Returns true when it did (a copy of the live data).
    */
   trim(): boolean {
-    if (this.vertCap <= this.initialCap * 2 || this.live > this.vertCap * 0.6) return false;
+    if (this.finished || this.vertCap <= this.initialCap * 2 || this.live > this.vertCap * 0.6) return false;
     const cap = Math.max(this.initialCap, Math.ceil(this.live * 1.35));
     this.mesh.optimize();
     this.reserved = this.live;
