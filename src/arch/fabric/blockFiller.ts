@@ -278,6 +278,7 @@ export function fillBlock(polygon: Polygon, opts: FillOptions): FillResult {
       const raise = lz < -obb.hv + 0.01 ? sw : lx < -obb.hu + 0.01 && p.street.left >= 0 ? sidewalkOf(p.street.left) : lx > obb.hu - 0.01 && p.street.right >= 0 ? sidewalkOf(p.street.right) : 0;
       return H(x, z) + 0.06 + raise - floorY;
     };
+    const terrainAt = (lx: number, lz: number) => { const [x, z] = toWorld(lx, lz); return H(x, z) + 0.06 - floorY; }; // bare ground, no sidewalk
     const m = new THREE.Matrix4().makeTranslation(obb.c[0], floorY, obb.c[1]).multiply(new THREE.Matrix4().makeRotationY(p.rotationY));
     const sides = { left: !p.party.left, right: !p.party.right, back: !p.party.back };
     const sideShops = { left: p.street.left >= 0, right: p.street.right >= 0 };
@@ -289,14 +290,14 @@ export function fillBlock(polygon: Polygon, opts: FillOptions): FillResult {
       out = insula({
         width: p.width, depth: p.depth, seed: p.seed, wealth: Math.min(1, Math.max(0, wealth + lrng.range(-0.15, 0.15))),
         storeys: Math.max(3, storeys), courtyard: p.width >= 18 && p.depth >= 17 && lrng.chance(0.55),
-        portico: wealth > 0.3 && p.depth > 13 && lrng.chance(0.25), groundAt, sides, sideShops, streetDressing: dress, maxHeight: MAX_BUILDING_HEIGHT, detail,
+        portico: wealth > 0.3 && p.depth > 13 && lrng.chance(0.25), groundAt, terrainAt, sides, sideShops, streetDressing: dress, maxHeight: MAX_BUILDING_HEIGHT, detail,
       });
     } else if (p.kind === 'shops') {
-      out = insula({ width: p.width, depth: p.depth, seed: p.seed, wealth, storeys: 2, groundAt, sides, sideShops, balcony: lrng.chance(0.4) ? 'full' : 'none', roof: 'gable', streetDressing: dress, detail });
+      out = insula({ width: p.width, depth: p.depth, seed: p.seed, wealth, storeys: 2, groundAt, terrainAt, sides, sideShops, balcony: lrng.chance(0.4) ? 'full' : 'none', roof: 'gable', streetDressing: dress, detail });
     } else if (p.kind === 'domus') {
-      out = domus({ width: p.width, depth: p.depth, seed: p.seed, wealth: Math.max(0.5, wealth), groundAt, sides, streetDressing: dress, detail });
+      out = domus({ width: p.width, depth: p.depth, seed: p.seed, wealth: Math.max(0.5, wealth), groundAt, terrainAt, sides, streetDressing: dress, detail });
     } else if (p.kind === 'horrea') {
-      out = horrea({ width: p.width, depth: p.depth, seed: p.seed, groundAt, detail });
+      out = horrea({ width: p.width, depth: p.depth, seed: p.seed, groundAt, terrainAt, detail });
     } else if (p.kind === 'piazza') {
       piazza(b, p, H, lrng, spots, sw, !full);
     }

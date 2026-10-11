@@ -16,6 +16,7 @@ import * as THREE from 'three';
 import { Rng } from '../../core/Rng';
 import { archway } from '../../arch/classical/arch';
 import { wall as ashlarWall } from '../../arch/common/walls';
+import { rectMin, runMin } from '../../arch/fabric/foundation';
 import type { Game } from '../../core/Game';
 import { MeshBuilder, type ColliderSpec } from '../../gfx/MeshBuilder';
 import type { MaterialId } from '../../gfx/materialIds';
@@ -114,26 +115,45 @@ function buildWall(plan: CityPlan, w: PlanWall, H: (x: number, z: number) => num
       // at its edge, and the cut end is dressed as a jamb. (A whole piece skipped by its middle cell
       // left either a half-width gap or a block of wall standing in the road.)
       const runs = freeRuns(g, p0, p1);
+      const theta = Math.atan2(-dz, dx);
+      const half = w.thickness / 2 + 0.35; // both faces, where the audit probes the ground
       for (const run of runs) {
         const a0: Pt = [p0[0] + dx * run.s0, p0[1] + dz * run.s0];
         const len = run.s1 - run.s0 + (run.s0 > 0 || run.s1 < L ? 0 : 0.05);
         if (len < 1.2) continue;
-        const rmid: Pt = [a0[0] + dx * (len / 2), a0[1] + dz * (len / 2)];
-        const y0 = Math.min(H(a0[0], a0[1]), H(a0[0] + dx * len, a0[1] + dz * len), H(rmid[0], rmid[1])) - 0.6;
-        const top = H(rmid[0], rmid[1]) + h;
-        const theta = Math.atan2(-dz, dx);
-        const at = new THREE.Matrix4().makeTranslation(a0[0], y0, a0[1]).multiply(new THREE.Matrix4().makeRotationY(theta));
-        const high = inDetail(rmid[0], rmid[1]);
-        ashlarWall(chunk(rmid[0], rmid[1]), { length: len, height: top - y0, thickness: w.thickness, material: 'tufa', courses: high ? 0.42 : undefined, collide: true, detail: high ? 'high' : 'low' }, at);
+        // Each run stands on the lowest ground under both its faces (sampled every metre), 0.6 m
+        // down. Where the ground falls more than 0.3 per metre along it, it is built in steps of
+        // 2 m or less, each on its own foot, so no piece hangs over the slope (the Quirinal wall).
+        const whole = runMin(H, a0[0], a0[1], a0[0] + dx * len, a0[1] + dz * len, half);
+        const parts = (whole.max - whole.min) / len > 0.3 ? Math.max(1, Math.ceil(len / 2)) : 1;
+        let firstTop = 0, lastTop = 0, firstY0 = 0, lastY0 = 0;
+        for (let q = 0; q < parts; q++) {
+          const sa = (len * q) / parts, sb = (len * (q + 1)) / parts;
+          const pa: Pt = [a0[0] + dx * sa, a0[1] + dz * sa];
+          const plen = sb - sa + (q + 1 < parts ? 0.04 : 0);
+          const pmid: Pt = [pa[0] + dx * (plen / 2), pa[1] + dz * (plen / 2)];
+          const gnd = parts === 1 ? whole : runMin(H, pa[0], pa[1], pa[0] + dx * plen, pa[1] + dz * plen, half);
+          const y0 = gnd.min - 0.6;
+          const top = H(pmid[0], pmid[1]) + h;
+          const at = new THREE.Matrix4().makeTranslation(pa[0], y0, pa[1]).multiply(new THREE.Matrix4().makeRotationY(theta));
+          const high = inDetail(pmid[0], pmid[1]);
+          ashlarWall(chunk(pmid[0], pmid[1]), { length: plen, height: top - y0, thickness: w.thickness, material: 'tufa', courses: high ? 0.42 : undefined, collide: true, detail: high ? 'high' : 'low' }, at);
+          if (q === 0) { firstTop = top; firstY0 = y0; }
+          lastTop = top;
+          lastY0 = y0;
+        }
         n++;
-        // Jambs: a pier a little taller and wider than the wall where its end meets the way.
+        // Jambs: a pier a little taller and wider than the wall where its end meets the way, on the
+        // lowest ground under its own footprint.
         for (const side of [0, 1] as const) {
           if (!(side === 0 ? run.openStart : run.openEnd)) continue;
           if (w.state === 'built-over') continue;
           const s = side === 0 ? run.s0 : run.s1 - 1.4;
-          const q: Pt = [p0[0] + dx * s + dx * 0.7, p0[1] + dz * s + dz * 0.7];
-          const jy0 = Math.min(H(q[0], q[1]), y0 + 0.6) - 0.6;
-          const hj = top - jy0 + 0.35;
+          const qa: Pt = [p0[0] + dx * s, p0[1] + dz * s];
+          const q: Pt = [qa[0] + dx * 0.7, qa[1] + dz * 0.7];
+          const jg = runMin(H, qa[0], qa[1], qa[0] + dx * 1.4, qa[1] + dz * 1.4, (w.thickness + 0.5) / 2 + 0.35, 0.5);
+          const jy0 = Math.min(jg.min, side === 0 ? firstY0 + 0.6 : lastY0 + 0.6) - 0.6;
+          const hj = (side === 0 ? firstTop : lastTop) - jy0 + 0.35;
           chunk(q[0], q[1]).box('tufa', 1.4, hj, w.thickness + 0.5, new THREE.Matrix4().makeTranslation(q[0], jy0 + hj / 2, q[1]).multiply(new THREE.Matrix4().makeRotationY(theta)), { collide: true });
         }
       }
@@ -226,13 +246,10 @@ function buildGate(gt: PlanGate, H: (x: number, z: number) => number, b: MeshBui
   const top = springing + span / 2 + 1.8;
   const cos = Math.cos(gt.rotationY), sin = Math.sin(gt.rotationY);
   const world = (lx: number, lz: number): Pt => [gt.at[0] + lx * cos + lz * sin, gt.at[1] - lx * sin + lz * cos];
-  let base = Infinity;
-  for (const lx of [-span / 2 - pier, 0, span / 2 + pier]) {
-    const [x, z] = world(lx, 0);
-    base = Math.min(base, H(x, z));
-  }
+  const gLocal = (lx: number, lz: number) => H(...world(lx, lz));
+  // The piers stand on the lowest ground under their whole footprint (0.35 m round it, every 0.5 m).
+  const base = rectMin(gLocal, -span / 2 - pier - 0.35, span / 2 + pier + 0.35, -depth / 2 - 0.35, depth / 2 + 0.35, 0.5) - 0.5;
   const ground = H(gt.at[0], gt.at[1]);
-  base -= 0.4;
   const at = new THREE.Matrix4().makeTranslation(gt.at[0], base, gt.at[1]).multiply(new THREE.Matrix4().makeRotationY(gt.rotationY));
   const lift = ground - base;
   const detail = high ? 'high' : 'low';
@@ -245,12 +262,15 @@ function buildGate(gt: PlanGate, H: (x: number, z: number) => number, b: MeshBui
       b.box('tufa', pier, h, depth, at.clone().multiply(new THREE.Matrix4().makeTranslation(s * (span / 2 + pier / 2), h / 2, 0)), { collide: true });
     }
   }
-  // Wall stubs either side (the circuit ran on from the gate).
+  // Wall stubs either side (the circuit ran on from the gate), each on its own foot: the lowest
+  // ground under its length and both faces, its top where it was.
   for (const s of [-1, 1]) {
     const len = rng.range(4, 9);
     const x0 = s < 0 ? -span / 2 - pier - len : span / 2 + pier;
-    const h = (top + lift) * rng.range(0.55, 0.85);
-    ashlarWall(b, { length: len, height: h, thickness: depth * 0.85, material: 'tufa', courses: high ? 0.42 : undefined, collide: true, detail }, at.clone().multiply(new THREE.Matrix4().makeTranslation(x0, 0, 0)));
+    const topY = base + (top + lift) * rng.range(0.55, 0.85);
+    const t = depth * 0.85;
+    const sBase = rectMin(gLocal, x0, x0 + len, -t / 2 - 0.35, t / 2 + 0.35, 0.5) - 0.5;
+    ashlarWall(b, { length: len, height: topY - sBase, thickness: t, material: 'tufa', courses: high ? 0.42 : undefined, collide: true, detail }, at.clone().multiply(new THREE.Matrix4().makeTranslation(x0, sBase - base, 0)));
   }
 }
 
@@ -304,13 +324,14 @@ function buildAqueduct(plan: CityPlan, a: PlanAqueduct, H: (x: number, z: number
     const b = chunk(P.p[0], P.p[1]);
     const theta = Math.atan2(-P.dir[1], P.dir[0]);
     const topY = P.y - channelH; // top of the arcade masonry (under the channel)
+    // The lowest ground under a bay (every metre along it, on both faces) and under a pier's footprint.
+    const bayMin = (from: number) => runMin(H, at(from).p[0], at(from).p[1], P.p[0], P.p[1], depth / 2 + 0.35).min;
     if (h < 3) {
       // Low stretch: a solid substructure wall with the channel on top.
       if (prev !== null) {
-        const A = at(prev);
         const len = s - prev;
         const mid = at((s + prev) / 2);
-        const y0 = Math.min(H(A.p[0], A.p[1]), ground) - 0.5;
+        const y0 = bayMin(prev) - 0.5;
         const m = new THREE.Matrix4().makeTranslation(mid.p[0], 0, mid.p[1]).multiply(new THREE.Matrix4().makeRotationY(theta));
         b.box(mat, len + 0.05, P.y - y0, depth, m.clone().multiply(new THREE.Matrix4().makeTranslation(0, (P.y + y0) / 2, 0)), { collide: true });
         channel(b, mat, m, len, depth, P.y, channelH);
@@ -319,15 +340,16 @@ function buildAqueduct(plan: CityPlan, a: PlanAqueduct, H: (x: number, z: number
       prev = s;
       continue;
     }
-    // Pier.
-    const y0 = ground - 0.5;
+    // Pier, on the lowest ground under its four corners (and 0.35 m round them).
+    const c = Math.cos(theta), sn = Math.sin(theta);
+    const pierMin = rectMin((lx, lz) => H(P.p[0] + lx * c + lz * sn, P.p[1] - lx * sn + lz * c), -pier / 2 - 0.35, pier / 2 + 0.35, -depth / 2 - 0.35, depth / 2 + 0.35, 0.5);
+    const y0 = pierMin - 0.5;
     const pm = new THREE.Matrix4().makeTranslation(P.p[0], 0, P.p[1]).multiply(new THREE.Matrix4().makeRotationY(theta));
     if (prev !== null) {
-      const A = at(prev);
       const span = s - prev - pier;
       const mid = at((s + prev) / 2);
       const mm = new THREE.Matrix4().makeTranslation(mid.p[0], 0, mid.p[1]).multiply(new THREE.Matrix4().makeRotationY(theta));
-      const lowGround = Math.min(H(A.p[0], A.p[1]), ground);
+      const lowGround = bayMin(prev);
       const springing = Math.max(lowGround + 2.4, topY - span / 2 - Math.max(0.6, span * 0.12));
       if (span > 0.5 && springing + span / 2 < topY - 0.2) {
         archway(b, { span, springing, pier: 0, depth, top: topY, material: mat, detail: 'low', leftPier: false, rightPier: false, archivolt: false, keystone: false, impost: high, collide: false }, mm);

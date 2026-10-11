@@ -19,6 +19,7 @@ import { groundIn, placeProp } from '../../arch/props/props';
 import { blockOutline, type LotPlan } from '../../arch/fabric/blockFiller';
 import { Draw } from '../../arch/fabric/draw';
 import { domus } from '../../arch/fabric/domus';
+import { runMin } from '../../arch/fabric/foundation';
 import { lacus } from '../../arch/fabric/fountain';
 import { registerSpray } from './spray';
 import { horrea } from '../../arch/fabric/horrea';
@@ -85,6 +86,9 @@ export function* fillUnits(blk: PlanBlock, layout: BlockLayout, detail: Detail, 
       const raise = lz < -obb.hv + 0.01 ? s : lx < -obb.hu + 0.01 && p.street.left >= 0 ? sidewalkOf(p.street.left) : lx > obb.hu - 0.01 && p.street.right >= 0 ? sidewalkOf(p.street.right) : 0;
       return H(x, z) + FLOOR_LIFT + raise - floorY;
     };
+    // The bare ground (no sidewalk): the foundations and the dado's foot follow it, since the sidewalk
+    // stops at the lot's width and the corner is open to the terrain.
+    const terrainAt = (lx: number, lz: number) => { const [x, z] = toWorld(lx, lz); return H(x, z) + FLOOR_LIFT - floorY; };
     const m = new THREE.Matrix4().makeTranslation(obb.c[0], floorY, obb.c[1]).multiply(new THREE.Matrix4().makeRotationY(p.rotationY));
     const sides = { left: !p.party.left, right: !p.party.right, back: !p.party.back };
     const sideShops = { left: p.street.left >= 0, right: p.street.right >= 0 };
@@ -96,14 +100,14 @@ export function* fillUnits(blk: PlanBlock, layout: BlockLayout, detail: Detail, 
       out = insula({
         width: p.width, depth: p.depth, seed: p.seed, wealth: Math.min(1, Math.max(0, wealth + lrng.range(-0.15, 0.15))),
         storeys: Math.max(3, storeys), courtyard: p.width >= 18 && p.depth >= 17 && lrng.chance(0.55),
-        portico: wealth > 0.3 && p.depth > 13 && lrng.chance(0.25), groundAt, sides, sideShops, streetDressing: dress, maxHeight: MAX_BUILDING_HEIGHT, detail,
+        portico: wealth > 0.3 && p.depth > 13 && lrng.chance(0.25), groundAt, terrainAt, sides, sideShops, streetDressing: dress, maxHeight: MAX_BUILDING_HEIGHT, detail,
       });
     } else if (p.kind === 'shops') {
-      out = insula({ width: p.width, depth: p.depth, seed: p.seed, wealth, storeys: 2, groundAt, sides, sideShops, balcony: lrng.chance(0.4) ? 'full' : 'none', roof: 'gable', streetDressing: dress, detail });
+      out = insula({ width: p.width, depth: p.depth, seed: p.seed, wealth, storeys: 2, groundAt, terrainAt, sides, sideShops, balcony: lrng.chance(0.4) ? 'full' : 'none', roof: 'gable', streetDressing: dress, detail });
     } else if (p.kind === 'domus') {
-      out = domus({ width: p.width, depth: p.depth, seed: p.seed, wealth: Math.max(0.5, wealth), groundAt, sides, streetDressing: dress, detail });
+      out = domus({ width: p.width, depth: p.depth, seed: p.seed, wealth: Math.max(0.5, wealth), groundAt, terrainAt, sides, streetDressing: dress, detail });
     } else if (p.kind === 'horrea') {
-      out = horrea({ width: p.width, depth: p.depth, seed: p.seed, groundAt, detail });
+      out = horrea({ width: p.width, depth: p.depth, seed: p.seed, groundAt, terrainAt, detail });
     } else if (p.kind === 'piazza') {
       piazza(b, p, H, lrng, spots, s, !full);
     }
@@ -164,12 +168,17 @@ export function compoundWall(d: Draw, w: FrontWall, H: HeightFn, wealth: number,
   const pieces: [number, number][] = gw ? [[0, g0], [g1, len]] : [[0, len]];
   const at = (s: number): [number, number] => [w.a[0] + (dx * s) / len, w.a[1] + (dz * s) / len];
   for (const [s0, s1] of pieces) {
-    const n = Math.max(1, Math.ceil((s1 - s0) / 3));
+    // Panels of 3 m, or 2 m where the ground falls more than 0.3 per metre, each standing on the
+    // lowest ground under both its faces (sampled every metre) so none hangs over a dip.
+    const steep = runMin(H, ...at(s0), ...at(s1), th / 2 + 0.35);
+    const panel = (steep.max - steep.min) / Math.max(1, s1 - s0) > 0.3 ? 2 : 3;
+    const n = Math.max(1, Math.ceil((s1 - s0) / panel));
     for (let k = 0; k < n; k++) {
       const a0 = s0 + ((s1 - s0) * k) / n, a1 = s0 + ((s1 - s0) * (k + 1)) / n;
       if (a1 - a0 < 0.05) continue;
       const [x0, z0] = at(a0), [x1, z1] = at(a1);
-      const lo = Math.min(H(x0, z0), H(x1, z1)) - 0.35, hi = Math.max(H(x0, z0), H(x1, z1));
+      const g = runMin(H, x0, z0, x1, z1, th / 2 + 0.35);
+      const lo = g.min - 0.45, hi = g.max;
       const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2, L = a1 - a0;
       const top = hi + hgt;
       const f = d.at(mx, 0, mz, rot);
@@ -214,7 +223,7 @@ function piazza(b: MeshBuilder, p: LotPlan, H: HeightFn, rng: Rng, spots: Spot[]
       lo = Math.min(lo, g);
       hi = Math.max(hi, g);
     }
-    return hi - lo > 0.8 ? null : lo + 0.3 * (hi - lo);
+    return hi - lo > 0.6 ? null : lo - 0.02;
   };
   const fz = p.obb.hv * 0.25, sz = p.obb.hv * 0.4;
   const fountain = rng.chance(0.55);
@@ -231,8 +240,8 @@ function piazza(b: MeshBuilder, p: LotPlan, H: HeightFn, rng: Rng, spots: Spot[]
   for (const s of [-1, 1]) {
     if (!rng.chance(0.7) || noProps) continue;
     const lx = s * (p.obb.hu - 1.2);
-    if (Math.abs(gnd(lx + 1.2, 0) - gnd(lx - 1.2, 0)) > 0.5 || Math.abs(gnd(lx, 1.2) - gnd(lx, -1.2)) > 0.5) continue; // not into a bank
-    placeProp(d, 'bench_masonry', lx, gnd(lx, 0), 0, s * Math.PI / 2, { variant: 0, ground: gnd });
+    if (Math.abs(gnd(lx + 1.2, 0) - gnd(lx - 1.2, 0)) > 0.3 || Math.abs(gnd(lx, 1.2) - gnd(lx, -1.2)) > 0.3) continue; // not into a bank
+    placeProp(d, 'bench_masonry', lx, gnd(lx, 0), 0, s * Math.PI / 2, { variant: 0, ground: gnd, maxStep: 0.2 });
     add('bench', lx - s * 0.5, 0, -s * Math.PI / 2);
   }
   for (const s of [-1, 1]) if (rng.chance(0.6)) add('tree', s * (p.obb.hu - 1.5), p.obb.hv - 1.5, 0, rng.pick(['pine', 'plane', 'cypress']));
@@ -261,7 +270,8 @@ function yardDressing(b: MeshBuilder, poly: Polygon, plans: LotPlan[], avoid: Po
     const y = H(x, z) + 0.03;
     if (k === 'tree') spots.push({ id: `${prefix}yard:tree${n}`, kind: 'tree', position: new THREE.Vector3(x, y, z), facing: 0, tag: rng.pick(['fig', 'olive', 'laurel', 'pine', 'cypress']) });
     else {
-      placeProp(d, k, x, y, z, rng.range(0, Math.PI * 2), { rng, ground: H });
+      // (a prop that would straddle a step in the yard is left out)
+      if (!placeProp(d, k, x, y, z, rng.range(0, Math.PI * 2), { rng, ground: H, maxStep: 0.15 })) continue;
       if (k === 'puteal') spots.push({ id: `${prefix}yard:well${n}`, kind: 'well', position: new THREE.Vector3(x + 0.9, y, z), facing: -Math.PI / 2 });
     }
     n++;

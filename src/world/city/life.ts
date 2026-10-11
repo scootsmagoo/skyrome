@@ -48,6 +48,8 @@ export interface Torch {
 
 /** Height of the torch brackets above the shop floor (over the shop lintels, under the balconies). */
 const TORCH_Y = 2.85;
+/** A street prop that would straddle a step this high is left out (the step-up assist, traversal.ts). */
+const STEP = 0.2;
 /** The flame of `torch_bracket` relative to its origin (local frame). */
 const FLAME = { up: 0.48, out: 0.3 };
 
@@ -248,12 +250,13 @@ export function lifeWork(plan: CityPlan, H: HeightFn, inArea: (x: number, z: num
             const r = new Rng(seed);
             const d = new Draw(bb);
             // The stall's front (local −z) faces the street.
-            placeProp(d, 'stall', p[0], y, p[1], toStreet + Math.PI, { rng: r, ground: H });
+            // (a prop that would straddle a step over 0.3 m is left out, props/ground.ts)
+            placeProp(d, 'stall', p[0], y, p[1], toStreet + Math.PI, { rng: r, ground: H, maxStep: STEP });
             if (lit) placeProp(d, 'oil_lamp', p[0] + n[0] * 0.2, y + 0.93, p[1] + n[1] * 0.2, toStreet, { collide: false });
             if (r.chance(0.6)) {
               const kind = r.pick(['basket', 'crate', 'sack', 'amphora_globular'] as const);
               const gx = p[0] - n[0] * 1.2 + t[0] * r.range(-0.9, 0.9), gz = p[1] - n[1] * 1.2 + t[1] * r.range(-0.9, 0.9);
-              placeProp(d, kind, gx, H(gx, gz) + 0.04, gz, r.range(0, 6), { rng: r, collide: false, ground: H });
+              placeProp(d, kind, gx, H(gx, gz) + 0.04, gz, r.range(0, 6), { rng: r, collide: false, ground: H, maxStep: STEP });
             }
           });
         } else if (item === 'goods' || item === 'amphorae') {
@@ -261,22 +264,22 @@ export function lifeWork(plan: CityPlan, H: HeightFn, inArea: (x: number, z: num
           add(p[0], p[1], (bb) => {
             const r = new Rng(seed);
             const d = new Draw(bb);
-            if (item === 'amphorae') placeProp(d, r.chance(0.5) ? 'amphora_stack' : 'amphora_rack', p[0], y, p[1], toStreet + Math.PI, { rng: r, ground: H });
+            if (item === 'amphorae') placeProp(d, r.chance(0.5) ? 'amphora_stack' : 'amphora_rack', p[0], y, p[1], toStreet + Math.PI, { rng: r, ground: H, maxStep: STEP });
             else {
               const kinds: PropKind[] = ['crate', 'sack', 'basket', 'dolium', 'crate', 'sack'];
               for (let i = 0; i < 4; i++) {
                 // (each at the height of the ground where it stands, not of the cluster's middle)
                 const kind = r.pick(kinds);
                 const gx = p[0] + t[0] * r.range(-1.3, 1.3) + n[0] * r.range(-0.6, 0.6), gz = p[1] + t[1] * r.range(-1.3, 1.3) + n[1] * r.range(-0.6, 0.6);
-                placeProp(d, kind, gx, H(gx, gz) + 0.04, gz, r.range(0, 6), { rng: r, collide: i < 2, ground: H });
+                placeProp(d, kind, gx, H(gx, gz) + 0.04, gz, r.range(0, 6), { rng: r, collide: i < 2, ground: H, maxStep: STEP });
               }
             }
           });
         } else if (item === 'bench') {
           spots.push({ id, kind: 'bench', position: new THREE.Vector3(p[0] - n[0] * 0.5, y, p[1] - n[1] * 0.5), heading: toStreet });
-          add(p[0], p[1], (bb) => placeProp(new Draw(bb), 'bench_masonry', p[0] - n[0] * 0.8, y, p[1] - n[1] * 0.8, toStreet + Math.PI, { variant: seed % 2, ground: H }));
+          add(p[0], p[1], (bb) => placeProp(new Draw(bb), 'bench_masonry', p[0] - n[0] * 0.8, y, p[1] - n[1] * 0.8, toStreet + Math.PI, { variant: seed % 2, ground: H, maxStep: STEP }));
         } else if (item === 'statue') {
-          add(p[0], p[1], (bb) => placeProp(new Draw(bb), 'statue_pedestal', p[0] - n[0] * 0.6, y, p[1] - n[1] * 0.6, toStreet + Math.PI, { variant: seed % 3, ground: H }));
+          add(p[0], p[1], (bb) => placeProp(new Draw(bb), 'statue_pedestal', p[0] - n[0] * 0.6, y, p[1] - n[1] * 0.6, toStreet + Math.PI, { variant: seed % 3, ground: H, maxStep: STEP }));
         }
       }
     }
