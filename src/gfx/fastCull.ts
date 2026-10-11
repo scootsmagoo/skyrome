@@ -267,9 +267,13 @@ export class FastCull {
       this.sCounts = new Int32Array(cap);
     }
     const size = m._indirectTexture.image.width;
-    if (!this.sTex || this.sTex.image.width !== size) {
+    // The shadow list texture is reused while it is big enough (the shader indexes it by its own size) and, when it
+    // is not, made twice the width, so a batch growing step by step does not make and free one at every step
+    // (phase 4b: the surface audit's texture churn).
+    if (!this.sTex || this.sTex.image.width < size) {
       this.sTex?.dispose();
-      this.sTex = new THREE.DataTexture(new Uint32Array(size * size), size, size, THREE.RedIntegerFormat, THREE.UnsignedIntType);
+      const w = Math.max(32, size * 2);
+      this.sTex = new THREE.DataTexture(new Uint32Array(w * w), w, w, THREE.RedIntegerFormat, THREE.UnsignedIntType);
       this.sN = -1;
     }
     this.savedStarts = m._multiDrawStarts;

@@ -666,6 +666,18 @@ export function prefetchProcedural(ids: readonly ProceduralId[]) {
   worker.postMessage(ids);
 }
 
+/**
+ * The pixels of a procedural set for a reader that wants them whole (the terrain's ground layers pack
+ * the paving slabs the meshes use): the cached set while all its images are still in memory, else one
+ * generated again (same seed, so the same pixels). The materials free the cached copy's images once
+ * they are on the GPU (gfx/release), so a late reader cannot rely on it; the copy it gets here is its own.
+ */
+export function proceduralPixels(id: ProceduralId, seed = 1): ProcImage {
+  const cached = cache.get(`${id}:${seed}`);
+  if (cached && cached.color && cached.normal && cached.arm) return cached;
+  return GENERATORS[id](seed);
+}
+
 /** Generate (or fetch from cache) a procedural texture set. */
 export function generateProcedural(id: ProceduralId, seed = 1): ProcImage {
   const key = `${id}:${seed}`;

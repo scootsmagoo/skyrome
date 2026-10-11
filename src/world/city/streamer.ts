@@ -53,6 +53,8 @@ export interface BlockRec {
   center: THREE.Vector3;
   /** Distance from the camera at the last evaluation. */
   d: number;
+  /** The level index wanted at the last visibility pass (-1 = none): the hysteresis keeps it. */
+  want?: number;
   /** Build distance: the nearer of the camera's and its look-ahead point's. */
   dp?: number;
 }
@@ -122,6 +124,13 @@ const OFFSET_MATS = new Set(['paving_basalt', 'paving_travertine', 'cobbles', 'g
 /** Ground-like materials get the polygon offset so they never fight the terrain. */
 export const groundOffset = (m: THREE.Material) => OFFSET_MATS.has(m.name);
 
+/**
+ * Hysteresis (m) on each block LOD threshold (30, 85 and 140 m): a block keeps the level it shows until
+ * the camera is this far past the threshold, so a walker standing at a boundary does not flip it (the
+ * surface audit counted 58 flips on its walks). Scaled with the view-distance setting like the radii.
+ */
+export const LEVEL_HYSTERESIS = 8;
+
 /** Build order bias per level (a missing full level near the player comes first). */
 const BIAS: Record<Level, number> = { full: -30, mid: 0, low: 25 };
 
@@ -174,6 +183,32 @@ export class CityStreamer implements System {
     let guard = 0;
     while (this.step(lim) && guard++ < 20000);
     this.applyVisibility();
+  }
+
+  /**
+   * Build what the first view needs around `pos`, within `maxMs` (the first-arrival prewarm, gfx/prewarm.ts):
+   * the street cells and the full levels of the blocks within the near radius, the mid ones within the mid
+   * radius, then whatever else is due within the prime limits. Returns what was left when time ran out.
+   */
+  settle(pos: THREE.Vector3, maxMs: number): { blocksLeft: number; cellsLeft: number; ms: number } {
+    const t0 = performance.now();
+    this.prevCam.copy(pos);
+    this.vel.set(0, 0, 0);
+    this.evaluate(pos);
+    const s = this.scale;
+    const lim = { full: this.o.nearR * s, mid: this.o.midR * s, low: Math.min(this.o.lowR, 140) * s, cell: Math.min(this.o.cellR, 200) * s, detail: this.o.detailR * s };
+    let guard = 0;
+    while (performance.now() - t0 < maxMs && this.step(lim) && guard++ < 20000);
+    this.evaluate(pos);
+    this.applyVisibility();
+    let blocksLeft = 0, cellsLeft = 0;
+    for (const r of this.blocks) {
+      if (!r.layout || !r.blk.detailed) continue;
+      if (r.d < this.o.nearR * s && !r.levels.full) blocksLeft++;
+      else if (r.d < this.o.midR * s && !r.levels.mid && !r.levels.full) blocksLeft++;
+    }
+    for (const c of this.cells) if (c.d < lim.cell && !c.near) cellsLeft++;
+    return { blocksLeft, cellsLeft, ms: performance.now() - t0 };
   }
 
   lateUpdate() {
@@ -458,10 +493,23 @@ export class CityStreamer implements System {
     c.near = null;
   }
 
-  /** The level a block should show at its distance, falling back to whatever is built. */
+  /**
+   * The level a block should show at its distance, falling back to whatever is built. Each threshold
+   * has LEVEL_HYSTERESIS of slack: the finer level is taken only once the camera is that much inside
+   * the radius, and kept until it is that much outside.
+   */
   private shownLevel(r: BlockRec): Level | null {
+    const h = LEVEL_HYSTERESIS * this.scale;
+    const first = r.want === undefined;
+    const prev = r.want ?? -1;
     let want = -1;
-    for (let k = 0; k < LEVELS.length; k++) if (r.d < this.radius(LEVELS[k])) { want = k; break; }
+    for (let k = 0; k < LEVELS.length; k++) {
+      const R = this.radius(LEVELS[k]);
+      // Showing this level or a finer one already (prev in 0..k): keep it until R + h; coming from outside: need R - h.
+      const lim = first ? R : prev >= 0 && prev <= k ? R + h : R - h;
+      if (r.d < lim) { want = k; break; }
+    }
+    r.want = want;
     if (want < 0) return null;
     // The wanted level, else a finer one already built, else a coarser one.
     if (r.levels[LEVELS[want]]) return LEVELS[want];

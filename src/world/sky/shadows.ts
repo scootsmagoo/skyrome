@@ -42,6 +42,18 @@ export const SHADOW_PRESETS: Record<Exclude<ShadowQuality, 'off'>, ShadowPreset>
 /** Two cascades of 2048² (near ~0-30 m, far to 110 m): ?shadowmode=cascade. */
 export const CASCADE_PRESET: ShadowPreset = { mode: 'cascade', mapSize: 2048, extent: 0, distance: 110, radius: 2.5 };
 
+/**
+ * Depth bias of the single shadow box. The game renders a reversed depth buffer (Game.ts), where three r186's
+ * PCF adds the bias unflipped: the old -0.00025 pushed every receiver INTO its own shadow map, so flat ground
+ * (the Forum's paving, plaza floors, wall bases) was part-shadowed by itself in bands: the owner's banding on
+ * all shadowed ground, in both shadow modes and with post off. A positive bias lifts the receivers off the map
+ * (the depth range is 2 x LIGHT_DISTANCE = 520 m, so 0.0006 is about 0.3 m along the light; contact shadows
+ * keep their size, the lit side of a caster just stops shadowing itself). scripts/audit/look-banding.mjs
+ * measures it: every value from +0.0005 to +0.002 gives 20 % of the old stripe energy; +0.0002 and 0 are
+ * worse than the old value, so the plateau is entered well above zero. The 30 Hz re-render does not change it.
+ */
+export const SINGLE_BIAS = 0.0006;
+
 /** Distance from the focus to the light along its direction; the shadow depth range spans 2×. */
 const LIGHT_DISTANCE = 260;
 const _x = new THREE.Vector3();
@@ -123,7 +135,7 @@ export class ShadowRig {
       s.map = null;
     }
     s.radius = preset.radius;
-    s.bias = preset.mode === 'cascade' ? -0.0003 : -0.00025;
+    s.bias = preset.mode === 'cascade' ? -0.0003 : SINGLE_BIAS;
     s.normalBias = preset.mode === 'cascade' ? 0.05 : 0.035 * (preset.extent / preset.mapSize) / 0.073;
     const cam = s.camera as THREE.OrthographicCamera;
     if (preset.mode === 'single') {

@@ -79,7 +79,7 @@ try {
     for (const v of variants) {
       const m = await page.evaluate(measure, v);
       rec.variants[v.name] = m;
-      if (v.name === 'today' || v.name === 'now') await page.screenshot({ path: join(outDir, `${cam.id}-${v.name}.jpg`), type: 'jpeg', quality: 80 });
+      if (args.shots === 'all' || v.name === 'today' || v.name === 'now') await page.screenshot({ path: join(outDir, `${cam.id}-${v.name}.jpg`), type: 'jpeg', quality: 80 });
     }
     result.cams.push(rec);
     const line = variants.map((v) => {

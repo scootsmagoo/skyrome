@@ -11,6 +11,7 @@
  *   &extent=city                build every landmark (default: the core)
  *   &menu=1                     show the title even with &at=
  */
+import { prewarmArrival } from '../gfx/prewarm';
 import type { Game } from '../core/Game';
 import { whenTexturesLoaded } from '../gfx/materials';
 import { Interactions } from '../interaction/Interactions';
@@ -142,6 +143,9 @@ export async function startRome(game: Game, uiRoot: HTMLElement, params: RomePar
   loading.progress(1, 'Roma');
   if (params.quick) {
     await flow.quickStart();
+    // First arrival: the ground's textures, the people's programs and the first full blocks are made
+    // behind the loading screen, so the first view does not keep changing after the fade-in.
+    await prewarmArrival(game).catch((err) => console.warn('[prewarm]', err));
     ui.block('loading', false);
     void loading.done();
     // The shareable build's first view: a welcome card with the keys that matter.

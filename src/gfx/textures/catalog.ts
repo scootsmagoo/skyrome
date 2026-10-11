@@ -117,11 +117,13 @@ export const MATERIAL_RECIPES: Record<MaterialId, MaterialRecipe> = {
   fabric_ochre: { proc: 'fabric', tile: 0.6 },
   fabric_blue: { proc: 'fabric', tile: 0.6 },
   // ground
-  paving_basalt: { set: 'paving_basalt', tile: 3.2, macro: 0.08, wear: 1, grain: 0.7, puddle: 1 },
+  // One basalt scale for roads, junctions, gates and lanes: paving_basalt and cobbles repeat 3.0 / 2.4 m
+  // (ratio 1.25; it was 3.2 / 1.6 = 2), and their wear and puddle stains are about half what they were.
+  paving_basalt: { set: 'paving_basalt', tile: 3.0, macro: 0.08, wear: 0.6, grain: 0.7, puddle: 0.55 },
   // `set` stays for the terrain's ground layer; the material itself is the procedural slab paving
   // (6 m repeat) whose polish and wear are drawn per slab, so no streaky shader wear.
   paving_travertine: { set: 'paving_travertine', proc: 'slabs', tile: 6, normal: 0.7, macro: 0.05, mottle: 0.05, grain: 0.5, puddle: 0.25 },
-  cobbles: { set: 'cobbles', tile: 1.6, macro: 0.08, wear: 1, grain: 0.7, puddle: 1 },
+  cobbles: { set: 'cobbles', tile: 2.4, macro: 0.08, wear: 0.6, grain: 0.7, puddle: 0.55 },
   gravel: { set: 'gravel', tile: 2.2, macro: 0.08, detile: true, puddle: 0.5 },
   dirt: { set: 'dirt', tile: 2.5, macro: 0.12, detile: true, puddle: 0.8 },
   grass: { set: 'grass', tile: 2.6, macro: 0.14, detile: true },

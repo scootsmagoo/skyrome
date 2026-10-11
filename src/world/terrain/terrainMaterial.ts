@@ -24,7 +24,7 @@ export const MAX_LOD_LEVELS = 10;
 /** Layers whose photos get the rotated anti-tiling sample (not the regular paving patterns). */
 const DETILE = [1, 1, 1, 1, 1, 1, 1, 0, 0];
 /** Detail normal strength per layer. */
-const NORMAL_K = [0.9, 0.8, 0.9, 1.0, 0.7, 0.8, 1.0, 1.0, 0.8];
+const NORMAL_K = [0.9, 0.8, 0.9, 1.0, 0.7, 0.8, 1.0, 1.0, 0.7];
 
 export interface TerrainUniforms {
   tHeight: { value: THREE.Texture };
