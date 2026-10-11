@@ -168,12 +168,16 @@ export function buildStoneBridge(b: MeshBuilder, frame: THREE.Matrix4, inp: Brid
       const n = Math.max(1, Math.ceil(Math.abs(y1 - y0) / 0.18));
       const dir = Math.sign(y1 - y0) || 1;
       const run = (u1 - u0) / n;
-      const base = Math.min(y0, y1) - 0.1;
       for (let k = 0; k < n; k++) {
         const ua = u0 + run * k;
         const ub = ua + run;
         // The tread's top: the line's height at its UPHILL end (so every tread sits on or above the sloped body).
         const top = dir > 0 ? y0 + (y1 - y0) * ((k + 1) / n) : y0 + (y1 - y0) * (k / n);
+        // 0.5 m deep: the body under the flight carries the rest (a tread box as tall as the whole run
+        // read as a wall whose foot hangs over the bank).
+        // The lowest tread of a flight goes down to the ground at its foot.
+        const footTread = k === (dir > 0 ? 0 : n - 1);
+        const base = footTread ? Math.min(top - 0.5, (inp.foot ?? ground)(dir > 0 ? ua : ub) - 0.1) : top - 0.5;
         d.box('paving_basalt', (ua + ub) / 2, (top + base) / 2, 0, run + 0.02, top - base, width, { collide: true });
       }
     } else {

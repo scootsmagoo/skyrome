@@ -1236,13 +1236,16 @@ function buildCavea(ctx: LandmarkContext, L: ColosseumLayout, cav: MeshBuilder, 
     // Cheeks (side parapets) and lintel.
     // The cheeks stand on the ground (the cut rows beside them are one-sided sweeps, so a cheek that
     // began at the balteus hung over the arena floor), and the mouth's floor on a solid block.
+    // (A mouth of the second tier on the same radial line as a walkable stair of the first leaves the
+    // stair's passage alone.)
+    const overStair = vomWalk.some((tw) => Math.abs(tw - t) < 1e-6);
     for (const sx of [-1, 1]) {
-      span(cav, 'marble', fr, sx * hw, 0, -xFront, sx * (hw + 0.35), lintelTop + 0.45, -xBack, true);
+      span(cav, 'marble', fr, sx * hw, overStair ? y0 : 0, -xFront, sx * (hw + 0.35), lintelTop + 0.45, -xBack, true);
     }
     span(cav, 'marble', fr, -hw, lintel, -xFront, hw, lintelTop, -xBack, true);
     if (!walkable) {
       span(cav, 'black', fr, -hw, y0, -(xBack - 0.05), hw, lintelTop, -(xBack + 0.4), true, false);
-      span(cav, 'concrete', fr, -hw, 0, -xFront, hw, y0, -xBack, true, false);
+      span(cav, 'concrete', fr, -hw, overStair ? y0 - 0.05 : 0, -xFront, hw, y0, -xBack, !overStair, false);
       return;
     }
     // Walkable: a passage from ring 3 at ground level climbing to the balteus.
