@@ -106,6 +106,14 @@ Fixes (switched off for A/B runs with `?wallfix=0` (2, 3) and `?navlow=0` (1), `
    either side of the cell centre (four lookups, only for terrain cells); it agrees with the heightfield's own normal in
    453 of the bank's 465 terrain cells, and a ray that returns the normal costs 2.2 µs against the floor ray's 1.4 µs.
    `tests/npc-sampler.slope.test.ts`. `?navslope=0` turns it off for A/B runs.
+8. **No flight of steps on steep bare ground** (`NavGrid.canStep`, `NAV_FLIGHT_MAX_DEG` 38, phase 4b). Between two
+   cells a rise past one step (`NAV_MAX_STEP`) is let through only as part of a flight (`onFlight`); since phase 4b it
+   is refused outright when it is steeper than 38 degrees (0.78 m per 1 m cell) and either floor is bare ground (within
+   5 cm of the terrain's height, `NavGrid.ground`). The cells either side of a 38 to 40 degree bank were each walkable
+   (the sampler's own test is per cell, at 40), and the rise between them passed as a flight. Ways are graded to 38
+   degrees at most (docs/design/solid-ground.md §3); the controller slides at 40. The grid learns the terrain's height
+   from `NavGridOptions.ground`, the sampler's `ground`, or, for the game's shared grid, from `game.questRoute` on its
+   first update (`heightmap.heightAt`). `tests/npc-navgrid.test.ts`.
 
 Measured (`scripts/npcwalls.mjs`, 60 s per zone after 12 s to fill, two runs each, fixes off with
 `?wallfix=0&navlow=0` against on; the crowd is random, so single runs swing a lot):

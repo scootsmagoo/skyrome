@@ -12,7 +12,7 @@
  *   the start to the one nearest the end.
  */
 import { Polyline } from './polyline';
-import type { StreetRouter } from './streetRouter';
+import { EXIT_REACH, type StreetRouter } from './streetRouter';
 
 export interface P3 {
   x: number;
@@ -24,6 +24,8 @@ export interface P3 {
 export interface GridLike {
   ready(x: number, z: number): boolean;
   lineWalkable(ax: number, az: number, bx: number, bz: number): boolean;
+  /** `lineWalkable` for a body (clear of walls to either side): the leads use it when the grid has it. */
+  lineClear?(ax: number, az: number, bx: number, bz: number): boolean;
   findPath(ax: number, az: number, bx: number, bz: number, maxExpand?: number): { x: number; z: number }[] | null;
 }
 
@@ -52,6 +54,8 @@ export interface Leg {
   line: Polyline;
   /** The leg ends at this door (the next leg starts beyond it). */
   door: string | null;
+  /** The street-graph nodes the leg walks, in order (empty off the streets): a link the player finds walled is cut by them. */
+  nodes?: number[];
 }
 
 /** 'streets': along the street graph or grid; 'direct': a straight line (nothing better known). */
@@ -66,8 +70,14 @@ export const PLAN = {
   /** Within this plan distance (m) with both ends on the built grid, the grid's own A* is used. */
   gridHop: 90,
   gridExpand: 7000,
-  /** Street nodes within this (m) of an end may start or finish the route (the best one wins). */
+  /** Street nodes within this (m) of the player may start the route (the best one wins). */
   entryReach: 45,
+  /** …and within this (m) of the objective may finish it (a far exit is a long straight lead-out). */
+  exitReach: EXIT_REACH,
+  /** An exit whose line to the objective the built grid says is blocked costs this much more to walk off the graph. */
+  exitBlocked: 4,
+  /** …and one whose line the grid cannot judge yet (not built there). */
+  exitUnknown: 1.5,
   /** Walking off the street graph costs this times its straight length (it may cross a block). */
   offGraph: 1.35,
   /** With no node that near, the nearest one within this (m). */
@@ -76,6 +86,17 @@ export const PLAN = {
   skipAhead: 14,
   /** Longest lead-in (m) along a straight walkable line. */
   leadMax: 80,
+  /**
+   * The route's street links where the grid is built (the city's colliders stand there): a link up to `linkMax` m
+   * whose line the grid finds blocked is drawn round on the grid when the way round is at most `roundFactor` times
+   * its length plus `roundAdd` m (searched with `linkExpand` cells); with no such way it is cut for the session and
+   * the route found again, at most `verifyRounds` times.
+   */
+  linkMax: 70,
+  linkExpand: 2500,
+  roundFactor: 2.5,
+  roundAdd: 20,
+  verifyRounds: 4,
 };
 
 /**
@@ -94,22 +115,23 @@ export function planRoute(world: PlanWorld, a: Endpoint, b: Endpoint, legs: Leg[
   let used = 0;
   const legFor = (cell: string | null, door: string | null): Leg => {
     let leg = legs[used];
-    if (!leg) legs[used] = leg = { cell, line: new Polyline(), door };
+    if (!leg) legs[used] = leg = { cell, line: new Polyline(), door, nodes: [] };
     leg.cell = cell;
     leg.door = door;
     leg.line.clear();
+    (leg.nodes ??= []).length = 0;
     used++;
     return leg;
   };
   for (const d of chain) {
     const leg = legFor(place, d.id);
-    const s = place === null ? streetLeg(world, from, d.at, leg.line) : cellLeg(world, place, from, d.at, leg.line);
+    const s = place === null ? streetLeg(world, from, d.at, leg.line, leg.nodes) : cellLeg(world, place, from, d.at, leg.line);
     if (s === 'direct') status = 'direct';
     from = d.exit;
     place = d.to;
   }
   const leg = legFor(place, null);
-  const s = place === null ? streetLeg(world, from, b, leg.line) : cellLeg(world, place, from, b, leg.line);
+  const s = place === null ? streetLeg(world, from, b, leg.line, leg.nodes) : cellLeg(world, place, from, b, leg.line);
   if (s === 'direct') status = 'direct';
   legs.length = used;
   return status;
@@ -166,7 +188,7 @@ function nearest3(r: readonly P3[], p: P3): number {
 }
 
 /** Outside: the grid for short hops, else the street graph with a walkable lead at each end. */
-export function streetLeg(world: PlanWorld, a: P3, b: P3, out: Polyline): PlanStatus {
+export function streetLeg(world: PlanWorld, a: P3, b: P3, out: Polyline, nodesOut?: number[]): PlanStatus {
   const { router, grid } = world;
   const d = Math.hypot(b.x - a.x, b.z - a.z);
   out.push(a.x, NaN, a.z);
@@ -176,7 +198,7 @@ export function streetLeg(world: PlanWorld, a: P3, b: P3, out: Polyline): PlanSt
   }
   const gridAt = (x: number, z: number) => !!grid && grid.ready(x, z);
   if (grid && d <= PLAN.gridHop && gridAt(a.x, a.z) && gridAt(b.x, b.z)) {
-    if (grid.lineWalkable(a.x, a.z, b.x, b.z)) {
+    if (grid.lineClear ? grid.lineClear(a.x, a.z, b.x, b.z) : grid.lineWalkable(a.x, a.z, b.x, b.z)) {
       out.push(b.x, b.y, b.z);
       return 'streets';
     }
@@ -187,7 +209,11 @@ export function streetLeg(world: PlanWorld, a: P3, b: P3, out: Polyline): PlanSt
       return 'streets';
     }
   }
-  let nodes = router && !router.empty ? router.routeBetween(a.x, a.z, b.x, b.z, PLAN.entryReach, PLAN.offGraph, PLAN.nodeReach) : null;
+  const clear = (ax: number, az: number, bx: number, bz: number) => (grid!.lineClear ? grid!.lineClear(ax, az, bx, bz) : grid!.lineWalkable(ax, az, bx, bz));
+  // Exits are ranked by a clear line to the objective (the grid there, once built, knows the walls).
+  const goalGrid = gridAt(b.x, b.z);
+  const exitCost = goalGrid && router ? (k: number) => (!gridAt(router.x[k], router.z[k]) ? PLAN.exitUnknown : clear(router.x[k], router.z[k], b.x, b.z) ? 1 : PLAN.exitBlocked) : undefined;
+  let nodes = router && !router.empty ? router.routeBetween(a.x, a.z, b.x, b.z, PLAN.entryReach, PLAN.offGraph, PLAN.nodeReach, 60000, { exitReach: PLAN.exitReach, exitCost }) : null;
   if (router && !router.empty && !nodes) {
     // The objective's street is cut off from the player's (an island of the graph): go to the
     // nearest point of the player's network instead, and straight on from there.
@@ -201,43 +227,113 @@ export function streetLeg(world: PlanWorld, a: P3, b: P3, out: Polyline): PlanSt
   }
   const X = router.x;
   const Z = router.z;
-  // Lead-in: walk straight past the first nodes when the grid says the line is clear (the nearest
-  // node may sit behind the player, or across a wall); else back off any node that only makes the
-  // route double back on itself.
+  // The route's own links where the grid is built: one walled with no way round is cut and the route found again.
+  if (grid) {
+    for (let round = 0; round < PLAN.verifyRounds; round++) {
+      const k = walledLink(grid, X, Z, nodes);
+      if (k < 0) break;
+      const [p, q] = [nodes[k], nodes[k + 1]];
+      router.cut(p, q);
+      const again = router.routeBetween(a.x, a.z, b.x, b.z, PLAN.entryReach, PLAN.offGraph, PLAN.nodeReach, 60000, { exitReach: PLAN.exitReach, exitCost });
+      if (!again || !again.length) {
+        // No other way: keep the link (the walk finds its way round, or the stall replan does).
+        router.uncut(p, q);
+        break;
+      }
+      nodes = again;
+    }
+  }
+  // Lead-in: walk straight past the first nodes when the grid says the line is clear for a body (the nearest
+  // node may sit behind the player, or across a wall); else round what stands between on the grid; else back
+  // off any node that only makes the route double back on itself.
   let first = 0;
   if (grid && gridAt(a.x, a.z)) {
     for (let k = Math.min(nodes.length - 1, PLAN.skipAhead); k > 0; k--) {
       const n = nodes[k];
       if (Math.hypot(X[n] - a.x, Z[n] - a.z) > PLAN.leadMax || !gridAt(X[n], Z[n])) continue;
-      if (grid.lineWalkable(a.x, a.z, X[n], Z[n])) {
+      if (clear(a.x, a.z, X[n], Z[n])) {
         first = k;
         break;
       }
     }
-    if (first === 0 && !grid.lineWalkable(a.x, a.z, X[nodes[0]], Z[nodes[0]])) {
+    if (first === 0 && gridAt(X[nodes[0]], Z[nodes[0]]) && !clear(a.x, a.z, X[nodes[0]], Z[nodes[0]])) {
       const p = grid.findPath(a.x, a.z, X[nodes[0]], Z[nodes[0]], PLAN.gridExpand);
       if (p) for (let k = 0; k < p.length - 1; k++) out.push(p[k].x, NaN, p[k].z);
     }
   } else {
     while (first < nodes.length - 1 && doublesBack(a.x, a.z, X[nodes[first]], Z[nodes[first]], X[nodes[first + 1]], Z[nodes[first + 1]])) first++;
   }
-  // Lead-out: the same at the far end (the objective's own grid is there only when it is near).
+  // Lead-out: the same at the far end once the objective's grid is built (it is only near the player); the last
+  // stretch is then drawn round what stands between on the grid, not straight through it.
   let last = nodes.length - 1;
-  if (grid && gridAt(b.x, b.z)) {
+  let tail: { x: number; z: number }[] | null = null;
+  if (grid && goalGrid) {
     for (let k = Math.max(first, nodes.length - 1 - PLAN.skipAhead); k < nodes.length - 1; k++) {
       const n = nodes[k];
       if (Math.hypot(X[n] - b.x, Z[n] - b.z) > PLAN.leadMax || !gridAt(X[n], Z[n])) continue;
-      if (grid.lineWalkable(X[n], Z[n], b.x, b.z)) {
+      if (clear(X[n], Z[n], b.x, b.z)) {
         last = k;
         break;
       }
     }
+    const n = nodes[last];
+    if (gridAt(X[n], Z[n]) && !clear(X[n], Z[n], b.x, b.z)) {
+      const p = grid.findPath(X[n], Z[n], b.x, b.z, PLAN.gridExpand);
+      if (p && p.length) tail = p;
+    }
   } else {
     while (last > first && doublesBack(b.x, b.z, X[nodes[last]], Z[nodes[last]], X[nodes[last - 1]], Z[nodes[last - 1]])) last--;
   }
-  for (let k = first; k <= last; k++) out.push(X[nodes[k]], NaN, Z[nodes[k]]);
+  for (let k = first; k <= last; k++) {
+    // A link the grid finds blocked but with a short way round is drawn along that way.
+    if (k > first && grid) {
+      const r = roundLink(grid, X[nodes[k - 1]], Z[nodes[k - 1]], X[nodes[k]], Z[nodes[k]]);
+      if (r) for (let j = 0; j < r.length - 1; j++) out.push(r[j].x, NaN, r[j].z);
+    }
+    out.push(X[nodes[k]], NaN, Z[nodes[k]]);
+  }
+  if (nodesOut) for (let k = first; k <= last; k++) nodesOut.push(nodes[k]);
+  if (tail) for (let k = 0; k < tail.length - 1; k++) out.push(tail[k].x, NaN, tail[k].z);
   out.push(b.x, b.y, b.z);
   return 'streets';
+}
+
+/** A straight walk the grid finds clear for a body (`lineClear`, else the cell line `lineWalkable`). */
+export function lineOk(grid: GridLike, ax: number, az: number, bx: number, bz: number): boolean {
+  return grid.lineClear ? grid.lineClear(ax, az, bx, bz) : grid.lineWalkable(ax, az, bx, bz);
+}
+
+/**
+ * A link the grid can judge: both ends and its middle built, not too long. (A node standing in a wall is judged too:
+ * its line is blocked, and the way round starts from the open cell beside it, `findPath`; none, and the link is cut.)
+ */
+export function judged(grid: GridLike, ax: number, az: number, bx: number, bz: number): boolean {
+  if (Math.hypot(bx - ax, bz - az) > PLAN.linkMax) return false;
+  return grid.ready(ax, az) && grid.ready(bx, bz) && grid.ready((ax + bx) / 2, (az + bz) / 2);
+}
+
+/**
+ * The way round a street link a–b on the grid when its straight line is blocked for a body and the way round is short
+ * (`PLAN.roundFactor`); null when the line is clear, the grid cannot judge it, or there is no short way.
+ */
+export function roundLink(grid: GridLike, ax: number, az: number, bx: number, bz: number): { x: number; z: number }[] | null {
+  if (!judged(grid, ax, az, bx, bz) || lineOk(grid, ax, az, bx, bz)) return null;
+  const p = grid.findPath(ax, az, bx, bz, PLAN.linkExpand);
+  if (!p || !p.length) return null;
+  let len = 0;
+  let px = ax, pz = az;
+  for (const q of p) ((len += Math.hypot(q.x - px, q.z - pz)), (px = q.x), (pz = q.z));
+  return len <= Math.hypot(bx - ax, bz - az) * PLAN.roundFactor + PLAN.roundAdd ? p : null;
+}
+
+/** The first link of `nodes` the grid finds walled with no short way round (`roundLink`), or −1. */
+export function walledLink(grid: GridLike, X: ArrayLike<number>, Z: ArrayLike<number>, nodes: readonly number[]): number {
+  for (let k = 0; k + 1 < nodes.length; k++) {
+    const ax = X[nodes[k]], az = Z[nodes[k]], bx = X[nodes[k + 1]], bz = Z[nodes[k + 1]];
+    if (!judged(grid, ax, az, bx, bz) || lineOk(grid, ax, az, bx, bz)) continue;
+    if (!roundLink(grid, ax, az, bx, bz)) return k;
+  }
+  return -1;
 }
 
 /**

@@ -1,0 +1,181 @@
+Route audit, 2026-10-11T10:26:24.357Z  phases: guide,objectives  time scale 3
+street graph: 8499 nodes, 9239 edges, 71 components (largest 8096, 155, 49, 22, 13), 102 termini; nav grid on
+objectives: 103 with markers, 1 unresolved (mq-04-columna/search)
+
+== guide: 12 jobs
+  guide      guide circus #0 (249,503) ← the new-game spawn (Port streets   105 m  arrived     5 s  
+  guide      guide palatine #0 (170,448) ← guide circus #0        streets    97 m  arrived     4 s  
+  guide      guide palatine #1 (98,394) ← guide palatine #0       streets    90 m  arrived     4 s  
+  guide      guide palatine #2 (17,338) ← guide palatine #1       streets    99 m  arrived     4 s  
+  guide      guide palatine #3 (-50,280) ← guide palatine #2      streets    90 m  arrived     4 s  
+  guide      guide velabrum #0 (-44,262) ← guide palatine #3      streets    19 m  arrived     1 s  
+  guide      guide velabrum #1 (-27,187) ← guide velabrum #0      streets    77 m  arrived     3 s  
+  guide      guide velabrum #2 (27,84) ← guide velabrum #1        streets   116 m  arrived     5 s  
+  guide      guide forum #0 (48,60) ← guide velabrum #2           streets    32 m  arrived     1 s  
+  guide      guide forum #1 (56,38) ← guide forum #0              streets    23 m  arrived     1 s  
+  guide      guide forum #2 (25,15) ← guide forum #1              streets    41 m  arrived     2 s  
+  guide      guide forum #3 (6,6) ← guide forum #2                streets    21 m  arrived     1 s  
+
+== objectives: 17 jobs
+  objective  mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/ streets   538 m  aborted    33 s  blocked:wall off-line blocked:wall blocked:wall blocked:wall blocked:wall line-through×4
+  objective  mq 02-tabella/castor ← mq-01-madida-capena/talk-dyin streets   726 m  arrived    38 s  
+  objective  mq 02-tabella/search ← mq-02-tabella/castor          streets   723 m  arrived    34 s  
+  objective  mq 02-tabella/ask ← mq-02-tabella/talk               streets   785 m  arrived    33 s  blocked:wall blocked:wall line-through×5
+  objective  mq 02-tabella/hideout ← mq-02-tabella/ask            streets   950 m  arrived    41 s  
+  objective  mq 02-tabella/give ← mq-02-tabella/satchel           streets   118 m  arrived     5 s  
+  objective  mq 03-lemuria/go ← mq-02-tabella/give                streets   192 m  arrived    11 s  jump:low jump:wall blocked:wall blocked:wall line-through×1
+  objective  mq 03-lemuria/key ← mq-03-lemuria/clues              streets   132 m  arrived     7 s  blocked:wall
+  objective  mq 03-lemuria/warn ← mq-03-lemuria/key               streets    56 m  arrived     3 s  
+  objective  mq 04-columna/forum ← mq-03-lemuria/warn             streets   350 m  arrived    16 s   line-through×1
+  objective  mq 04-columna/brief ← mq-04-columna/forum            streets    81 m  arrived     4 s  
+  objective  mq 04-columna/land1 ← the Column door                streets    24 m  arrived     5 s  jump:low
+  objective  mq 04-columna/land2 ← the Column door                streets    43 m  arrived     7 s  jump:low jump:wall jump:low
+  objective  mq 04-columna/top ← the Column door                  streets    61 m  arrived    10 s  jump:low jump:wall jump:low jump:low jump:low
+  objective  lud 01-sacramentum/sign ← the Forum (Golden Mileston streets   833 m  arrived    34 s  
+  objective  lud 01-sacramentum/draw ← lud-01-sacramentum/sign    streets    64 m  arrived     3 s  
+  objective  lud 01-sacramentum/win1 ← lud-01-sacramentum/draw    streets    60 m  arrived     3 s  
+
+== totals
+{
+ "jobs": 29,
+ "byKind": {
+  "guide": 12,
+  "objective": 17
+ },
+ "outcomes": {
+  "arrived": 28,
+  "aborted": 1
+ },
+ "planStatus": {
+  "streets": 29
+ },
+ "walkedRoutes": 0,
+ "routeMetres": 6546,
+ "simSeconds": 900.9999999999999,
+ "recoveries": 10,
+ "replans": 49,
+ "incidents": {
+  "line-through [minor]": 9,
+  "blocked:wall [blocker]": 10,
+  "off-line [major]": 1,
+  "line-drop [major]": 10,
+  "line-steep [major]": 6,
+  "line-through [major]": 11,
+  "line-ledge [minor]": 2,
+  "jump [major]": 11,
+  "climb [minor]": 7,
+  "line-drop [minor]": 2
+ },
+ "minutes": 6.5,
+ "jobsWithBlock": 4,
+ "objectiveJobsWithBlock": 4,
+ "places": 34,
+ "placesBySeverity": {
+  "blocker": 8,
+  "major": 18,
+  "minor": 8
+ }
+}
+
+== worst places (by severity and how many routes meet them)
+  1. [blocker] -72.2,7.6,297.1  The Inn at the Starting Gates (36 m, Regio XI Circus Maximus)  routes 1 (quest 1)  blocked (wall)×2, off-line×1  part graph
+       e.g. mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/talk-dying: wall hit city:b406 @1.4 m 0.4 m     cls free
+  2. [blocker] -80.8,7.5,300.9  The Inn at the Starting Gates (27 m, Regio XI Circus Maximus)  routes 1 (quest 1)  blocked (wall)×1  part graph
+       e.g. mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/talk-dying: wall hit city:b406 @1.4 m 0.38 m     cls free
+  3. [blocker] -85.2,7.4,311.1  The Inn at the Starting Gates (20 m, Regio XI Circus Maximus)  routes 1 (quest 1)  blocked (wall)×2  part direct
+       e.g. mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/talk-dying: wall hit city:b406 @1.4 m 0.38 m     cls free
+  4. [blocker] 458.7,12.7,202.5  Morning School (62 m, Regio II Caelimontium)  routes 1 (quest 1)  blocked (wall)×1  part lead-in
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk: wall hit city:b626 @1.4 m 0.37 m     cls free
+  5. [blocker] 475.7,12.8,205.0  Morning School (47 m, Regio II Caelimontium)  routes 1 (quest 1)  blocked (wall)×1  part lead-in
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk: wall hit city:b627 @1.4 m 0.38 m     cls street
+  6. [blocker] -17.9,7.4,162.4  Crossroads Shrine of the Vicus Tuscus (8 m, Regio X Palatium)  routes 1 (quest 1)  needs a jump/mantle (low)×1, needs a jump/mantle (wall)×1, blocked (wall)×1, climb (mantle 0.54 m)×1  part lead-in
+       e.g. mq 03-lemuria/go ← mq-02-tabella/give: wall hit city:b692 @1.4 m 0.38 m     cls free
+  7. [blocker] -32.0,7.2,179.8  Etruscan Street (8 m, Regio X Palatium)  routes 1 (quest 1)  blocked (wall)×1  part lead-in
+       e.g. mq 03-lemuria/go ← mq-02-tabella/give: wall hit city:b690 @1.4 m 0.38 m  rise -0.03   cls street
+  8. [blocker] -35.8,7.2,198.4  Iulia Prima’s flat (10 m, Regio X Palatium)  routes 1 (quest 1)  blocked (wall)×1  part graph
+       e.g. mq 03-lemuria/key ← mq-03-lemuria/clues: wall hit city:b690 @1.4 m 0.38 m     cls free
+  9. [major] -5.2,-104.0,-215.6  Trajan's Column (1 m, Regio VIII Forum Romanum)  routes 3 (quest 3)  needs a jump/mantle (low)×7, climb (mantle 0.56 m)×2, needs a jump/mantle (wall)×2, climb (mantle 0.45 m)×2, climb (mantle 0.52 m)×2  part graph
+       e.g. mq 04-columna/land1 ← the Column door: low hit interior:dun-columna @0.35 m 0.74 m  rise 115.51 near body:mq04-dacian-b (Dacian knife-man) 0.3 m  cls landmark
+ 10. [major] -67.9,7.4,295.1  The Inn at the Starting Gates (41 m, Regio XI Circus Maximus)  routes 1 (quest 1)  route line: drop -2.58×1, route line: steep 1.13×1  part graph
+       e.g. mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/talk-dying:   owner terrain   len 0.5 cls margin
+ 11. [major] -79.5,7.5,300.7  The Inn at the Starting Gates (28 m, Regio XI Circus Maximus)  routes 1 (quest 1)  route line: drop -13.45×1, route line: steep 5.9×1, route line: drop -7.44×1, route line: steep 3.24×1  part graph
+       e.g. mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/talk-dying:   owner terrain   len 0.5 cls free
+ 12. [major] -90.9,7.0,306.3  The Inn at the Starting Gates (15 m, Regio XI Circus Maximus)  routes 1 (quest 1)  route line: through 2.2×2, route line: drop -13.74×1  part graph/direct
+       e.g. mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/talk-dying:   owner city:b406   len 2.2 cls free
+ 13. [major] -100.2,6.3,310.9  The Inn at the Starting Gates (5 m, Regio XI Circus Maximus)  routes 1 (quest 1)  route line: through 2.2×2  part graph/direct
+       e.g. mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/talk-dying:   owner city:b406   len 2.6 cls free
+ 14. [major] 56.1,7.9,51.3  Strongrooms of Castor (5 m, Regio VIII Forum Romanum)  routes 1 (quest 1)  route line: through 2.2×1  part lead-in
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk:   owner landmark:temple-castor-pollux   len 10.5 cls landmark
+ 15. [major] 459.8,12.9,203.4  Morning School (60 m, Regio II Caelimontium)  routes 1 (quest 1)  route line: through 2.2×1, route line: through 1.87×1, route line: ledge 0.59×1  part lead-in/graph
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk:   owner city:b626   len 3.3 cls free
+ 16. [major] 476.5,12.7,205.1  Morning School (44 m, Regio II Caelimontium)  routes 1 (quest 1)  route line: through 2.2×2  part lead-in
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk:   owner city:b627   len 4.5 cls free
+ 17. [major] 486.0,13.0,205.2  Morning School (40 m, Regio II Caelimontium)  routes 1 (quest 1)  route line: through 2.2×1  part lead-in
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk:   owner city:b627   len 9.5 cls free
+ 18. [major] 497.4,13.8,205.5  Morning School (34 m, Regio II Caelimontium)  routes 1 (quest 1)  route line: through 2.2×1  part lead-in
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk:   owner city:b627   len 2 cls free
+ 19. [major] -17.0,7.9,160.1  Light well of the burned taberna (7 m, Regio X Palatium)  routes 1 (quest 1)  route line: ledge 0.55×1, route line: through 2.2×1  part lead-in
+       e.g. mq 03-lemuria/go ← mq-02-tabella/give:   owner city:b692   len 3.4 cls road
+ 20. [major] -21.9,7.2,167.2  Crossroads Shrine of the Vicus Tuscus (7 m, Regio X Palatium)  routes 1 (quest 1)  route line: drop -13.53×1, route line: steep 5.67×1, route line: through 2.2×1  part lead-in
+       e.g. mq 03-lemuria/go ← mq-02-tabella/give:   owner terrain   len 0.5 cls free
+ 21. [major] -42.4,7.2,196.7  Insula of the Marii (12 m, Regio X Palatium)  routes 1 (quest 1)  route line: drop -7.57×1  part graph
+       e.g. mq 03-lemuria/go ← mq-02-tabella/give:   owner terrain   len 0.5 cls free
+ 22. [major] 3.7,7.9,-58.1  Prison and Tullianum (16 m, Regio VIII Forum Romanum)  routes 1 (quest 1)  route line: through 2.2×1  part graph
+       e.g. mq 04-columna/forum ← mq-03-lemuria/warn:   owner city:b722   len 2.8 cls free
+ 23. [major] 27.5,11.2,-181.8  Before the Basilica Ulpia (2 m, Regio VIII Forum Romanum)  routes 1 (quest 1)  route line: drop -6.3×1  part graph
+       e.g. mq 04-columna/brief ← mq-04-columna/forum:   owner landmark:basilica-ulpia   len 0.4 cls landmark
+ 24. [major] 210.6,17.5,126.7  Arch of Titus (2 m, Regio X Palatium)  routes 1 (quest 1)  route line: drop -8.98×1, route line: steep 3.77×1  part graph
+       e.g. lud 01-sacramentum/sign ← the Forum (Golden Milestone):   owner city:1,0   len 0.5 cls road
+ 25. [major] 506.8,12.0,164.8  Gate of the Ludus Magnus (1 m, Regio III Isis et Serapis)  routes 1 (quest 1)  route line: drop -3.85×1, route line: steep 1.5×1  part graph
+       e.g. lud 01-sacramentum/sign ← the Forum (Golden Milestone):   owner terrain   len 0.5 cls landmark
+ 26. [major] 548.5,12.0,179.5  Ludus Barracks (7 m, Regio III Isis et Serapis)  routes 1 (quest 1)  route line: drop -5.48×1  part graph
+       e.g. lud 01-sacramentum/sign ← the Forum (Golden Milestone):   owner terrain   len 0.5 cls landmark
+ 27. [minor] 114.1,7.9,405.9  Astrologers’ Arcade (10 m, Regio XI Circus Maximus)  routes 1 (quest 1)  route line: through 2.2×1  part lead-in
+       e.g. guide palatine #1 (98,394) ← guide palatine #0:   owner city:b602   len 1 cls free
+ 28. [minor] 91.9,8.0,389.9  Street below the Palatine, north of the Circus (5 m, Regio XI Circus Maximus)  routes 1 (quest 1)  route line: through 2.2×1  part lead-in
+       e.g. guide palatine #2 (17,338) ← guide palatine #1:   owner city:b603   len 1 cls road
+ 29. [minor] -84.9,7.4,312.6  The Inn at the Starting Gates (20 m, Regio XI Circus Maximus)  routes 1 (quest 1)  route line: through 2.2×1  part direct
+       e.g. mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/talk-dying:   owner city:b406   len 1 cls free
+ 30. [minor] -30.7,7.2,180.2  Etruscan Street (7 m, Regio X Palatium)  routes 1 (quest 1)  route line: through 2.2×1  part lead-in
+       e.g. mq 03-lemuria/go ← mq-02-tabella/give:   owner city:b690   len 1 cls free
+ 31. [minor] 49.6,7.9,33.3  Statue of Vortumnus (8 m, Regio VIII Forum Romanum)  routes 1 (quest 1)  route line: drop -1.55×1  part lead-in
+       e.g. mq 04-columna/forum ← mq-03-lemuria/warn:   owner landmark:miliarium-aureum   len 0.5 cls plaza
+ 32. [minor] 462.5,11.9,164.3  Ludus Armory (30 m, Regio III Isis et Serapis)  routes 1 (quest 1)  route line: drop -1.57×1  part lead-in
+       e.g. lud 01-sacramentum/sign ← the Forum (Golden Milestone):   owner city:3,1   len 0.5 cls road
+ 33. [minor] 547.0,12.0,187.4  Ludus Barracks (2 m, Regio III Isis et Serapis)  routes 1 (quest 1)  route line: through 2.2×1  part lead-in
+       e.g. lud 01-sacramentum/draw ← lud-01-sacramentum/sign:   owner landmark:ludus-magnus   len 1 cls landmark
+ 34. [minor] 515.7,12.0,187.7  Great Gladiatorial School (19 m, Regio III Isis et Serapis)  routes 1 (quest 1)  route line: through 2.2×1  part graph
+       e.g. lud 01-sacramentum/draw ← lud-01-sacramentum/sign:   owner landmark:ludus-magnus   len 1 cls landmark
+
+== every objective's route, walked (29): {"ok":21,"FAIL":1,"BLOCKED":3,"snags":4}
+  ok       guide circus #0 (249,503) ← the new-game spawn (Porta Capena)            105 m  blocks 0 jumps 0 line 0
+  ok       guide palatine #0 (170,448) ← guide circus #0                             97 m  blocks 0 jumps 0 line 0
+  ok       guide palatine #1 (98,394) ← guide palatine #0                            90 m  blocks 0 jumps 0 line 0
+  ok       guide palatine #2 (17,338) ← guide palatine #1                            99 m  blocks 0 jumps 0 line 0
+  ok       guide palatine #3 (-50,280) ← guide palatine #2                           90 m  blocks 0 jumps 0 line 0
+  ok       guide velabrum #0 (-44,262) ← guide palatine #3                           19 m  blocks 0 jumps 0 line 0
+  ok       guide velabrum #1 (-27,187) ← guide velabrum #0                           77 m  blocks 0 jumps 0 line 0
+  ok       guide velabrum #2 (27,84) ← guide velabrum #1                            116 m  blocks 0 jumps 0 line 0
+  ok       guide forum #0 (48,60) ← guide velabrum #2                                32 m  blocks 0 jumps 0 line 0
+  ok       guide forum #1 (56,38) ← guide forum #0                                   23 m  blocks 0 jumps 0 line 0
+  ok       guide forum #2 (25,15) ← guide forum #1                                   41 m  blocks 0 jumps 0 line 0
+  ok       guide forum #3 (6,6) ← guide forum #2                                     21 m  blocks 0 jumps 0 line 0
+  FAIL     mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/talk-dying           538 m  blocks 5 jumps 0 line 4  first -72.2,7.6,297.1 graph city:b406 (The Inn at the Starting Gates (36 m, Regio XI Circus Maximus))
+  ok       mq 02-tabella/castor ← mq-01-madida-capena/talk-dying                    726 m  blocks 0 jumps 0 line 0
+  ok       mq 02-tabella/search ← mq-02-tabella/castor                              723 m  blocks 0 jumps 0 line 0
+  BLOCKED  mq 02-tabella/ask ← mq-02-tabella/talk                                   785 m  blocks 2 jumps 0 line 5  first 458.7,12.7,202.5 lead-in city:b626 (Morning School (62 m, Regio II Caelimontium))
+  ok       mq 02-tabella/hideout ← mq-02-tabella/ask                                950 m  blocks 0 jumps 0 line 0
+  ok       mq 02-tabella/give ← mq-02-tabella/satchel                               118 m  blocks 0 jumps 0 line 0
+  BLOCKED  mq 03-lemuria/go ← mq-02-tabella/give                                    192 m  blocks 2 jumps 2 line 1  first -21.7,7.5,165.8 lead-in city:b692 (Crossroads Shrine of the Vicus Tuscus (8 m, Regio X Palatium))
+  BLOCKED  mq 03-lemuria/key ← mq-03-lemuria/clues                                  132 m  blocks 1 jumps 0 line 0  first -35.8,7.2,198.4 graph city:b690 (Iulia Prima’s flat (10 m, Regio X Palatium))
+  ok       mq 03-lemuria/warn ← mq-03-lemuria/key                                    56 m  blocks 0 jumps 0 line 0
+  snags    mq 04-columna/forum ← mq-03-lemuria/warn                                 350 m  blocks 0 jumps 0 line 1
+  ok       mq 04-columna/brief ← mq-04-columna/forum                                 81 m  blocks 0 jumps 0 line 0
+  snags    mq 04-columna/land1 ← the Column door                                     24 m  blocks 0 jumps 1 line 0
+  snags    mq 04-columna/land2 ← the Column door                                     43 m  blocks 0 jumps 3 line 0
+  snags    mq 04-columna/top ← the Column door                                       61 m  blocks 0 jumps 5 line 0
+  ok       lud 01-sacramentum/sign ← the Forum (Golden Milestone)                   833 m  blocks 0 jumps 0 line 0
+  ok       lud 01-sacramentum/draw ← lud-01-sacramentum/sign                         64 m  blocks 0 jumps 0 line 0
+  ok       lud 01-sacramentum/win1 ← lud-01-sacramentum/draw                         60 m  blocks 0 jumps 0 line 0
+
+wrote /private/tmp/claude-502/-Users-amfalony1-projects/4f031671-8987-47ad-91d1-b5c5ab477912/scratchpad/routes4b/gate5/routes.json (0.10 MB), 0 screenshots; 6.5 min

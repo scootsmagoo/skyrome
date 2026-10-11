@@ -27,6 +27,29 @@ describe('NavGrid', () => {
     expect(g.ready(200, 0)).toBe(false);
   });
 
+  it('takes no flight of steps up bare ground steeper than 38 degrees (phase 4b)', () => {
+    // Bare terrain rising along +x at 39 degrees (just short of the controller's 40) and at 30.
+    const bank = (deg: number) => {
+      const t = Math.tan((deg * Math.PI) / 180);
+      const f = (x: number) => Math.max(0, x) * t;
+      return { f, sampler: { sample: (x: number, _z: number, out: { h: number; walkable: boolean }) => ((out.h = f(x)), (out.walkable = true)) } };
+    };
+    const steep = bank(39);
+    const loose = new NavGrid(steep.sampler, { radius: 30 });
+    const bare = new NavGrid(steep.sampler, { radius: 30, ground: (x) => steep.f(x) });
+    for (const g of [loose, bare]) (g.setFocus(0, 0), g.buildAll());
+    // Without the terrain's height the bank reads as a flight; with it, it is refused.
+    expect(loose.lineWalkable(-5, 0.5, 8, 0.5)).toBe(true);
+    expect(bare.lineWalkable(-5, 0.5, 8, 0.5)).toBe(false);
+    expect(bare.lineWalkable(-5, 0.5, -1, 0.5)).toBe(true);
+    // A 30 degree bank is still walked.
+    const gentle = bank(30);
+    const g30 = new NavGrid(gentle.sampler, { radius: 30, ground: (x) => gentle.f(x) });
+    g30.setFocus(0, 0);
+    g30.buildAll();
+    expect(g30.lineWalkable(-5, 0.5, 8, 0.5)).toBe(true);
+  });
+
   it('blends the floor up a flight of steps, but not over a podium edge', () => {
     const w = new FakeWorld();
     // A flight climbing +x, 0.2 m per 0.4 m (cells see 0.4–0.6 m terraces), then a 1.5 m podium.

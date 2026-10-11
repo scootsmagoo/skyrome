@@ -86,6 +86,38 @@ describe('StreetRouter', () => {
   });
 });
 
+describe('StreetRouter ends (phase 4b)', () => {
+  it('never starts or ends on a node with no link, or on a stray island, while the network is in reach', () => {
+    const g = gridGraph(10, 10);
+    // A lone node right by the start, and a two-node island right by the goal.
+    const lone = g.nodes.length;
+    g.nodes.push({ id: lone, x: 3, z: 3 });
+    const i0 = g.nodes.length;
+    g.nodes.push({ id: i0, x: 176, z: 176 }, { id: i0 + 1, x: 178, z: 172 });
+    g.edges.push([i0, i0 + 1, 4]);
+    const r = new StreetRouter(g);
+    expect(r.deg[lone]).toBe(0);
+    const path = r.routeBetween(2, 2, 177, 175, 45, 1.35, 220)!;
+    expect(path).not.toBeNull();
+    expect(path[0]).not.toBe(lone);
+    expect(path[path.length - 1]).toBeLessThan(lone);
+    expect(r.comp[path[0]]).toBe(0);
+    expect(r.comp[path[path.length - 1]]).toBe(0);
+    // Far from the network, an island is still an end (the nearest linked node).
+    expect(r.ends(176, 176, 3, 1, [])).toEqual([i0]);
+  });
+
+  it('cuts a link for the session and puts it back', () => {
+    const r = new StreetRouter(gridGraph(3, 1));
+    expect(r.route(0, 2)).toEqual([0, 1, 2]);
+    expect(r.cut(1, 2)).toBe(true);
+    expect(r.linked(2, 1)).toBe(false);
+    expect(r.route(0, 2)).toBeNull();
+    expect(r.uncut(2, 1)).toBe(true);
+    expect(r.route(0, 2)).toEqual([0, 1, 2]);
+  });
+});
+
 describe('Polyline', () => {
   it('merges near points, measures and finds the closest point', () => {
     const l = new Polyline(2);
@@ -210,6 +242,34 @@ describe('planner', () => {
     expect(line.n).toBe(2);
   });
 
+  it('draws a blocked link round on the grid, and cuts a walled one for another way', () => {
+    // A 6 x 2 street grid 20 m apart; the link 2-3 (z = 0, x 40..60) is blocked on the grid.
+    const router = new StreetRouter(gridGraph(6, 2));
+    const blocked = (ax: number, az: number, bx: number, bz: number) => Math.max(az, bz) < 1 && Math.min(ax, bx) < 55 && Math.max(ax, bx) > 45;
+    let round: { x: number; z: number }[] | null = [{ x: 50, z: 6 }, { x: 60, z: 0 }];
+    const grid: GridLike = {
+      ready: () => true,
+      lineWalkable: (ax, az, bx, bz) => !blocked(ax, az, bx, bz),
+      findPath: (ax, az, bx, bz) => (blocked(ax, az, bx, bz) ? round : [{ x: bx, z: bz }]),
+    };
+    const world: PlanWorld = { ...noDoors, router, grid };
+    const a = { x: -0.5, y: 0, z: 0.4 };
+    const b = { x: 100.5, y: 0, z: 0.4 };
+    const line = new Polyline();
+    streetLeg(world, a, b, line, []);
+    // The way round (50, 6) is drawn between the nodes.
+    const pts = Array.from({ length: line.n }, (_, i) => [line.x(i), line.z(i)]);
+    expect(pts.some(([x, z]) => x === 50 && z === 6)).toBe(true);
+    expect(router.cuts).toBe(0);
+    // With no way round on the grid the link is cut and the route goes by the other street.
+    round = null;
+    const nodes: number[] = [];
+    streetLeg(world, a, b, new Polyline(), nodes);
+    expect(router.cuts).toBe(1);
+    expect(router.linked(2, 3)).toBe(false);
+    expect(nodes.some((n) => n >= 6)).toBe(true);
+  });
+
   it('does not double back to a node behind the player', () => {
     // Node at 0, next at 20; a player standing at 12 on that street goes on, not back to 0.
     expect(doublesBack(12, 0, 0, 0, 20, 0)).toBe(true);
@@ -285,6 +345,39 @@ describe('QuestRoute (replanning and back-off)', () => {
     run(r, 0.5);
     expect(r.status).toBe('arrived');
     expect(r.legs.length).toBe(0);
+  });
+
+  it('replans once when the nav grid round the objective is first built', () => {
+    const { game } = fakeGame(gridGraph(10, 10));
+    let built = false;
+    const grid: GridLike = { ready: (x) => built || x < 40, lineWalkable: () => false, findPath: () => null };
+    (game as unknown as { population: unknown }).population = { grid };
+    const r = new QuestRoute(game, () => goalAt(178, 181));
+    run(r, 1);
+    expect(r.stats.plans).toBe(1);
+    run(r, 3);
+    expect(r.stats.plans).toBe(1);
+    built = true;
+    run(r, 0.5);
+    expect(r.stats.plans).toBe(2);
+    expect(r.stats.gridReplans).toBe(1);
+    run(r, 5);
+    expect(r.stats.plans).toBe(2);
+  });
+
+  it('replans when the player pushes for 3 s without gaining, and cuts the link they are stuck on', () => {
+    const { game, player } = fakeGame(gridGraph(10, 10));
+    (game as unknown as { input: unknown }).input = { down: (a: string) => a === 'forward' };
+    const r = new QuestRoute(game, () => goalAt(178, 181));
+    run(r, 0.3);
+    const l = r.legs[0].line;
+    player.position.x = l.x(1) + 0.4;
+    player.position.z = l.z(1);
+    run(r, 1.2);
+    expect(r.stats.stallReplans).toBe(0);
+    run(r, 3.2);
+    expect(r.stats.stallReplans).toBeGreaterThanOrEqual(1);
+    expect(r.stats.cuts).toBe(1);
   });
 
   it('works out only the doors while every route display is off', () => {

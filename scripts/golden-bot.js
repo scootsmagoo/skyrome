@@ -205,10 +205,60 @@
   let jamFrom = null;
   let pathAt = 0;
   let pathLed = false;
-  /** Walk the nav path to goal.pos (outside any cell). */
+  /** The quest route's version the path was taken from (-1: the nav path). */
+  let routeVer = -1;
+  /** Goals whose drawn route stalled (logged as a snag): the bot walks the nav path to them instead. */
+  const offRoute = new Set();
+  /**
+   * The route the game draws to the HUD's objective (game.questRoute), when it leads to this goal: its first leg,
+   * outside, ending within 8 m of the goal or at a door on the way. Null when there is none to follow.
+   */
+  function routeLeg(target, key) {
+    const qr = game.questRoute;
+    if (!qr || offRoute.has(key) || (qr.status !== 'streets' && qr.status !== 'direct')) return null;
+    const leg = qr.legs[0];
+    if (!leg || leg.cell !== null || leg.line.n < 2) return null;
+    const last = qr.legs[qr.legs.length - 1];
+    const n = last.line.n;
+    if (!n || Math.hypot(last.line.x(n - 1) - target.x, last.line.z(n - 1) - target.z) > 8) return null;
+    return leg;
+  }
+  /**
+   * Walk to goal.pos (outside any cell): along the route the game draws (the minimap's), as a player following it
+   * would; after a logged stall on it, along the nav path instead.
+   */
   function walkTo(goal) {
     const target = goal.pos;
     const key = `${goal.quest}/${goal.obj}/${Math.round(target.x)},${Math.round(target.z)}`;
+    const leg = routeLeg(target, key);
+    if (leg) {
+      const qr = game.questRoute;
+      if (key !== pathFor || !path || !path.length || routeVer !== qr.version) {
+        // The leg from where the player stands on it (`along`) on.
+        const line = leg.line;
+        path = [];
+        let acc = 0;
+        for (let i = 0; i < line.n; i++) {
+          if (i > 0) acc += Math.hypot(line.x(i) - line.x(i - 1), line.z(i) - line.z(i - 1));
+          if (acc >= qr.along - 0.5 || i === line.n - 1) path.push({ x: line.x(i), z: line.z(i) });
+        }
+        pathFor = key;
+        routeVer = qr.version;
+        pathAt = performance.now();
+        pathLed = true;
+      }
+      follow(target, 1.5, () => {
+        // A stall on the drawn route (the snag is logged by follow): the nav path from here on, for this goal.
+        offRoute.add(key);
+        routeVer = -1;
+        resetProgress();
+      });
+      return;
+    }
+    if (routeVer !== -1) {
+      routeVer = -1;
+      path = null;
+    }
     const nav = game.population?.nav;
     // A path made while the nav grid was still being sampled (just after a teleport or a long walk) is the street graph's
     // straight links, which cut corners and clip buildings: plan again, from here, once the grid knows the ground.

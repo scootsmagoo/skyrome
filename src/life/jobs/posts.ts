@@ -11,8 +11,10 @@
  *
  * Both posts are `point` anchors (real metres and a compass bearing) so that their positions are
  * known without the game: job steps put their quest markers on them (a keeper is not a named NPC of
- * src/npc/content, so a marker names the post, not the person). `y` is 0 as in src/game/guide.ts:
- * the compass and the maps read x and z.
+ * src/npc/content, so a marker names the post, not the person). `y` is 0, "on the ground": the marker resolver
+ * stands the point on the nav grid's floor (else the terrain), and once the grid is built there moves it to the
+ * nearest cell the player can reach if the post itself is not one (a post drawn just behind a wall is marked on the
+ * street side: src/nav/heights.ts, the 'point' resolver in src/game/wiring.ts; phase 4b).
  *
  * `jobStep(game, id)` is the step a running job is on (the job keeps it in its quest vars), for
  * gates in life data that must not import the job modules.

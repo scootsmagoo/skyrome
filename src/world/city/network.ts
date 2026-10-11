@@ -21,6 +21,7 @@ import { FLOOR_LIFT } from './datum';
 import type { CityPlan } from './plan';
 import { K, distToPoly, pointInPoly, polyCentroid } from './raster';
 import type { StreetWork } from './roads';
+import { WALKS, walkPoints } from './walks';
 
 export type NodeKind = 'road' | 'street' | 'stairs' | 'junction' | 'piazza' | 'plaza' | 'landmark';
 export type StreetSpotKind = 'shopDoor' | 'houseDoor' | 'fountain' | 'shrine' | 'stall' | 'bench' | 'container';
@@ -57,6 +58,12 @@ export interface StreetGraph {
   termini: { node: number; reason: 'stairs' | 'road' | 'street' }[];
   /** Road links through a building's walls (built with the physics probe only): cut, or kept for want of a way round. */
   walledLinks?: { cut: [number, number][]; kept: [number, number][] };
+  /**
+   * How the graph joined what its straight links could not (stats): nodes joined along a path on the plan raster
+   * (`along`), stray islands joined so (`islands`), nodes parked on the nearest linked node (`parked`: walled in), the
+   * explicit walks (walks.ts) and the nodes still without a link (`edgeless`, in the area).
+   */
+  joins?: { along: number; islands: number; parked: number; walks: number; edgeless: number; ms: number };
   /** Nearest node with a link to a position (within `maxDist`), or −1. */
   nearest(x: number, z: number, maxDist?: number): number;
   /** Neighbours of a node: [node, width][]. */
@@ -84,6 +91,11 @@ export interface LinkProbe {
   clear(a: Vec2, b: Vec2, ya?: number): boolean;
   /** Is a person standing at (x, z) (height y, if known) inside something? */
   blocked(x: number, z: number, y?: number): boolean;
+  /**
+   * Can a path search step on the cell at (x, z) (cheap: the plan's verdict only)? `fromEnd`: metres from the
+   * search's start (a solid landmark's door stands in its footprint: the first metres out of it are free).
+   */
+  cell?(x: number, z: number, fromEnd: number): boolean;
 }
 
 /**
@@ -138,7 +150,74 @@ export function rasterProbe(plan: CityPlan, obstacles: Obstacle[] = []): LinkPro
       return true;
     },
     blocked: (x, z) => bad(x, z),
+    cell: (x, z, fromEnd) => !bad(x, z) && !prop(x, z, fromEnd) && (fromEnd <= SOLID_FREE || !solid(x, z)),
   };
+}
+
+/** A path search leaving a solid landmark's door may cross this much of its footprint (m). */
+const SOLID_FREE = 12;
+/** A piazza's node stands this far from its centre (m), beside its centrepiece (`ringPoints`). */
+const PIAZZA_RING = 3.2;
+/** Nodes keep this clear of a fountain's or a shrine's edge (m); compital altars keep it from every link (content/install.ts). */
+export const ALTAR_CLEAR = 1.5;
+
+/** The nearest link of a graph to (x, z) within `maxD` m: its distance and the closest point on it; null if none. */
+export function nearestLink(g: Pick<StreetGraph, 'nodes' | 'edges'>, x: number, z: number, maxD: number): { d: number; p: Vec2 } | null {
+  let best: { d: number; p: Vec2 } | null = null;
+  let bd = maxD;
+  for (const [a, b] of g.edges) {
+    const A = g.nodes[a], C = g.nodes[b];
+    if (Math.min(A.x, C.x) > x + bd || Math.max(A.x, C.x) < x - bd || Math.min(A.z, C.z) > z + bd || Math.max(A.z, C.z) < z - bd) continue;
+    const ex = C.x - A.x, ez = C.z - A.z;
+    const l2 = ex * ex + ez * ez;
+    const t = l2 > 1e-9 ? Math.max(0, Math.min(1, ((x - A.x) * ex + (z - A.z) * ez) / l2)) : 0;
+    const px = A.x + ex * t, pz = A.z + ez * t;
+    const d = Math.hypot(px - x, pz - z);
+    if (d < bd) ((bd = d), (best = { d, p: [px, pz] }));
+  }
+  return best;
+}
+
+/**
+ * A spot for something a route must not run over (a compital altar): `at` when it stands `clear` m or more from every
+ * link of the graph, else found again (`find`) from a point pushed off the nearest link, a few times. Returns the
+ * spot farthest from the links found (at least `at`).
+ */
+export function clearOfLinks<S extends { x: number; z: number }>(g: Pick<StreetGraph, 'nodes' | 'edges'> | null | undefined, at: S, clear: number, find: (x: number, z: number) => S | null): S {
+  if (!g) return at;
+  let best = at;
+  let bestD = nearestLink(g, at.x, at.z, clear)?.d ?? clear;
+  let cur = at;
+  for (let k = 0; k < 4 && bestD < clear; k++) {
+    const near = nearestLink(g, cur.x, cur.z, clear);
+    if (!near) break;
+    const dx = cur.x - near.p[0], dz = cur.z - near.p[1];
+    const d = Math.hypot(dx, dz);
+    const [ux, uz] = d > 1e-3 ? [dx / d, dz / d] : [1, 0];
+    const next = find(near.p[0] + ux * (clear + 0.2), near.p[1] + uz * (clear + 0.2));
+    if (!next) break;
+    const nd = nearestLink(g, next.x, next.z, clear)?.d ?? clear;
+    if (nd > bestD) ((best = next), (bestD = nd));
+    cur = next;
+  }
+  return best;
+}
+
+/**
+ * The points of the ring of radius `r` round `c` (12) clear of the edges of `props` (discs) by `ALTAR_CLEAR`, nearest
+ * `to` first, then the others, clearest first; `c` itself when the ring has no room.
+ */
+function ringPoints(c: readonly number[], to: readonly number[], r: number, props: { x: number; z: number; r: number }[]): Vec2[] {
+  if (r <= 0.5) return [[c[0], c[1]]];
+  const pts: { p: Vec2; clear: number; dTo: number }[] = [];
+  for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * Math.PI * 2;
+    const p: Vec2 = [c[0] + Math.cos(a) * r, c[1] + Math.sin(a) * r];
+    let clear = Infinity;
+    for (const o of props) clear = Math.min(clear, Math.hypot(o.x - p[0], o.z - p[1]) - o.r);
+    pts.push({ p, clear: Math.min(clear, ALTAR_CLEAR), dTo: Math.hypot(to[0] - p[0], to[1] - p[1]) });
+  }
+  return pts.sort((a, b) => b.clear - a.clear || a.dTo - b.dTo).map((q) => q.p);
 }
 
 /**
@@ -159,16 +238,50 @@ export function physicsProbe(game: Game, H: (x: number, z: number) => number): L
     return Math.max(hit.point.y, g);
   };
   const headroom = (x: number, z: number, y: number) => !ph.raycast({ x, y: y + 0.15, z }, UP, 1.6, Layer.World);
+  /**
+   * Where a walk from (x, z) with no known height starts: the floor under a point `UNKNOWN_UP` m over the ground when
+   * it is no higher than `UNKNOWN_TOP` (a raised square, a low podium: from 0.6 m up the ray started inside it), else
+   * the floor under 0.6 m up as before.
+   */
+  const startFloor = (x: number, z: number): number | null => {
+    const s = raisedFloor(x, z);
+    return s ?? surface(x, z, H(x, z) + 0.6);
+  };
+  /**
+   * The floor under (x, z) found from `UNKNOWN_UP` m over the ground when it is ground level, or a slab no higher than
+   * `UNKNOWN_TOP` that carries on round the point (a raised square's paving, a podium: at least three of four points
+   * 1.5 m away within 0.3 m of it); null for anything else (inside a wall from up there, a wall's top, or a small
+   * thing standing on the ground: an altar, a statue's base, a basin's rim).
+   */
+  const raisedFloor = (x: number, z: number): number | null => {
+    const g = H(x, z);
+    const s = surface(x, z, g + UNKNOWN_UP);
+    if (s === null || s > g + UNKNOWN_TOP) return null;
+    if (s - g <= 0.4) return s;
+    let level = 0;
+    for (const [dx, dz] of SLAB_DIRS) {
+      const t = surface(x + dx, z + dz, s + 0.6);
+      if (t !== null && Math.abs(t - s) <= 0.3) level++;
+    }
+    return level >= 3 ? s : null;
+  };
   return {
     blocked(x, z, y) {
-      const s = surface(x, z, (y ?? H(x, z)) + 0.6);
+      if (y !== undefined) {
+        const s = surface(x, z, y + 0.6);
+        return s === null || !headroom(x, z, s);
+      }
+      // Height unknown: a raised square's paving or a low podium is floor (from 0.6 m up the ray started inside it,
+      // and every node on it read as walled in); inside a wall or a pier, on a wall's top, or on an altar or a statue's
+      // base, it is blocked (`raisedFloor`).
+      const s = raisedFloor(x, z);
       return s === null || !headroom(x, z, s);
     },
     clear(a, b, ya) {
       const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
       if (L < 1e-3) return true;
       const dir = { x: (b[0] - a[0]) / L, y: 0, z: (b[1] - a[1]) / L };
-      let y = surface(a[0], a[1], (ya ?? H(a[0], a[1])) + 0.6);
+      let y = ya !== undefined ? surface(a[0], a[1], ya + 0.6) : startFloor(a[0], a[1]);
       if (y === null) return false;
       const n = Math.max(1, Math.ceil(L / 0.5));
       const step = L / n;
@@ -188,11 +301,19 @@ export function physicsProbe(game: Game, H: (x: number, z: number) => number): L
   };
 }
 
+/** Where `raisedFloor` looks for the slab carrying on (m). */
+const SLAB_DIRS: readonly (readonly [number, number])[] = [[1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]];
+/** `physicsProbe.blocked` with no height: the floor is searched from this far over the ground (m)… */
+const UNKNOWN_UP = 2.5;
+/** …and one higher than this over the ground is a wall's or a podium's top, not a street (m). */
+const UNKNOWN_TOP = 1.4;
+
 /** Both verdicts. */
 export function bothProbes(a: LinkProbe, b: LinkProbe): LinkProbe {
   return {
     clear: (p, q, ya) => a.clear(p, q, ya) && b.clear(p, q, ya),
     blocked: (x, z, y) => a.blocked(x, z, y) || b.blocked(x, z, y),
+    cell: (x, z, f) => (a.cell ? a.cell(x, z, f) : !a.blocked(x, z)) && (!b.cell || b.cell(x, z, f)),
   };
 }
 
@@ -539,6 +660,28 @@ export function buildStreetGraph(
       ends.push({ id: ids[ids.length - 1], dir: unit(p[p.length - 1], p[p.length - 2]), reach: s.width / 2 + 4.5 });
     }
   }
+  // Junction, road and street nodes beside a fountain or a shrine stand clear of it (an altar under a route's corner is mantled).
+  for (const sp of work.spots) {
+    if (sp.kind !== 'fountain' && sp.kind !== 'shrine') continue;
+    const keep = (R[sp.kind] ?? 1) + ALTAR_CLEAR;
+    for (const n of B.nodes) {
+      const dx = n.x - sp.position.x, dz = n.z - sp.position.z;
+      const d = Math.hypot(dx, dz);
+      if (d >= keep || bridgeNodes.has(n.id)) continue;
+      const [ux, uz] = d > 1e-3 ? [dx / d, dz / d] : [1, 0];
+      B.move(n.id, sp.position.x + ux * keep, sp.position.z + uz * keep);
+    }
+    // A link running over it (a lane through its piazza) bends round it: a node beside it at the same distance.
+    for (const hit of B.nearEdges(sp.position.x, sp.position.z, (R[sp.kind] ?? 1) + 0.5, undefined, 4)) {
+      if (bridgeNodes.has(hit.a) || bridgeNodes.has(hit.b) || B.stairEdges.has(hit.a < hit.b ? `${hit.a},${hit.b}` : `${hit.b},${hit.a}`)) continue;
+      const A = B.nodes[hit.a], C = B.nodes[hit.b];
+      let ox = hit.p[0] - sp.position.x, oz = hit.p[1] - sp.position.z;
+      let d = Math.hypot(ox, oz);
+      if (d < 1e-3) ((ox = -(C.z - A.z)), (oz = C.x - A.x), (d = Math.hypot(ox, oz) || 1));
+      const j = B.split(hit.a, hit.b, hit.w, hit.p, A.kind === 'road' ? 'road' : 'street');
+      if (j !== hit.a && j !== hit.b) B.move(j, sp.position.x + (ox / d) * keep, sp.position.z + (oz / d) * keep);
+    }
+  }
   // Nodes standing inside something (a road crossing inside a monument, a street end in a
   // parapet) move to the nearest free spot (physics only: the raster cannot tell).
   if (physics) {
@@ -556,6 +699,7 @@ export function buildStreetGraph(
       return c === K.LANDMARK || c === K.WATER;
     };
     for (const [a, b, w] of [...B.edges.values()]) {
+      // A bridge's deck: the probe starts its walk at the ground under the deck (the river bed), so it cannot judge it.
       if (bridgeNodes.has(a) && bridgeNodes.has(b)) continue;
       const A = B.nodes[a], C = B.nodes[b];
       if (!inArea(A.x, A.z) || !inArea(C.x, C.z)) continue;
@@ -585,7 +729,13 @@ export function buildStreetGraph(
   for (const pz of plan.piazzas) {
     // A court at the very edge of the area has its street outside it (nothing to link to).
     if (!inArea(pz.center[0], pz.center[1]) || !inArea(pz.junction[0], pz.junction[1])) continue;
-    const id = B.node(pz.center[0], pz.center[1], 'piazza', 0.5);
+    // On a ring beside the centrepiece (the basin or the compital shrine stands at the centre, the bench and the
+    // stall at the sides), clear of all of them, the nearest the street it opens on.
+    const own = work.spots.filter((sp) => sp.id.startsWith(`${pz.id}:`));
+    const ring = ringPoints(pz.center, pz.junction, Math.min(PIAZZA_RING, pz.r - 0.8), own.map((sp) => ({ x: sp.position.x, z: sp.position.z, r: R[sp.kind] ?? 1 })));
+    // The first of them with a clear line to the street it opens on (else the centre, as before: it links some other way).
+    const [rx, rz] = ring.find((p) => P.clear(p, pz.junction)) ?? pz.center;
+    const id = B.node(rx, rz, 'piazza', 0.5);
     let linked = false;
     for (const hit of B.nearEdges(pz.junction[0], pz.junction[1], 12, new Set([id]), 4)) {
       if (!linkOk(id, hit.p)) continue;
@@ -620,9 +770,30 @@ export function buildStreetGraph(
       pts.forEach((p, k) => {
         const id = B.node(p[0], p[1], 'landmark', 0.5);
         if (doors.length) nodeY.set(id, doors[k].position.y);
-        linkAround(B, id, 1, 70, linkOk);
+        if (linkAround(B, id, 1, 70, linkOk) || B.neighbourIds(id).length || !physics) return;
+        // No straight link from the door itself: from its foot (down its steps, out of its porch).
+        const ap = apron(P, p, nodeY.get(id), [gx, gz]);
+        if (!ap) return;
+        const a = B.node(ap[0], ap[1], 'landmark', 0.5);
+        if (a === id) return;
+        B.edge(id, a, 2.5);
+        linkAround(B, a, 1, 70, linkOk, [id]);
       });
     }
+  }
+
+  // Explicit walks through landmarks (walks.ts): joined as drawn, their ends linked to the streets.
+  let walks = 0;
+  for (const w of WALKS) {
+    const pl = w.landmark ? game?.landmarks?.get(w.landmark) : null;
+    if (w.landmark && !pl) continue;
+    const pts = walkPoints(w, pl ?? null);
+    if (!pts.every((p) => inArea(p[0], p[1]))) continue;
+    // Within a metre of a node already there (a landmark's door, another walk's end): the same node.
+    const ids = pts.map((p) => B.node(p[0], p[1], 'landmark', WALK_MERGE));
+    for (let k = 0; k + 1 < ids.length; k++) B.edge(ids[k], ids[k + 1], 3);
+    for (const k of w.link ?? [0, ids.length - 1]) linkAround(B, ids[k], 1, 40, linkOk, ids);
+    walks++;
   }
 
   // Loose ends the snapping above missed (a road running into a landmark's apron, the foot of a
@@ -647,6 +818,9 @@ export function buildStreetGraph(
     const w = B.unedge(a, b);
     if (w !== null) cuts.push([a, b, w]);
   }
+  /** Where each node left by a cut was linked before (a lone node is parked there if nothing else joins it). */
+  const before = new Map<number, number>();
+  for (const [a, b] of cuts) (before.set(a, b), before.set(b, a));
   const loose: number[] = [];
   for (const [a, b, w] of cuts) {
     const A = B.nodes[a], C = B.nodes[b];
@@ -658,6 +832,13 @@ export function buildStreetGraph(
   const walledLinks = { cut: [] as [number, number][], kept: [] as [number, number][] };
   for (const [a, b] of cuts) (B.neighbourIds(a).includes(b) ? walledLinks.kept : walledLinks.cut).push([a, b]);
   if (opts.deadEnds !== false && loose.length) closeDeadEnds(B, linkOk, inArea, 30, loose.filter((id) => B.neighbourIds(id).length === 1));
+
+  // No node without a link, and no stray island: what the straight links could not join is joined along a path
+  // on the plan raster, each leg of it checked like any other link (joinStrays).
+  const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+  const joins = opts.deadEnds === false ? null : joinStrays(B, P, nodeY, inArea, before);
+  alongBuf = null;
+  blockedCache.clear();
 
   // Spots: street furniture, and doors along the blocks of the detail area.
   const graph = finalize(B);
@@ -673,6 +854,7 @@ export function buildStreetGraph(
   }
   graph.spots = spots;
   graph.walledLinks = walledLinks;
+  if (joins) graph.joins = { ...joins, walks, ms: (typeof performance !== 'undefined' ? performance.now() : 0) - t0 };
   for (const n of graph.nodes) {
     if (n.kind === 'piazza' || n.kind === 'plaza' || n.kind === 'landmark' || graph.neighbours(n.id).length !== 1 || !inArea(n.x, n.z)) continue;
     graph.termini.push({ node: n.id, reason: n.kind === 'stairs' ? 'stairs' : n.kind === 'road' ? 'road' : 'street' });
@@ -764,10 +946,283 @@ function linkIslands(B: Builder, ok: (id: number, p: Vec2) => boolean) {
   }
 }
 
-/** Link a node to up to `count` different nearby streets, by the nearest walkable links. */
-function linkAround(B: Builder, id: number, count: number, maxD: number, ok: (id: number, p: Vec2) => boolean) {
+/**
+ * Join what the straight links could not: every node in the area with no link, then every stray island of streets,
+ * to the city's network (the largest component) along a path on the plan raster (`linkAlong`). A node that still has
+ * no link is parked on the node it was linked to before a cut took its links (a road's node inside a walled court),
+ * or on the nearest linked node of the network within `PARK_REACH` m (a door walled in on every side): it stays where a
+ * route can end, and never leads into the walls.
+ */
+function joinStrays(B: Builder, P: LinkProbe, nodeY: Map<number, number>, inArea: (x: number, z: number) => boolean, before: Map<number, number>) {
+  const out = { along: 0, islands: 0, parked: 0, edgeless: 0 };
+  const mainSet = () => new Set(finalize(B).components()[0] ?? []);
+  let main = mainSet();
+  for (const n of [...B.nodes]) {
+    if (B.neighbourIds(n.id).length || !inArea(n.x, n.z)) continue;
+    if (linkAlong(B, n.id, P, main, nodeY.get(n.id))) {
+      out.along++;
+      main.add(n.id);
+    }
+  }
+  // Islands: from their nodes nearest the network, a few tries each.
+  main = mainSet();
+  const comps = finalize(B).components().slice(1);
+  const mainNodes = [...main].map((id) => B.nodes[id]);
+  for (const comp of comps) {
+    if (!comp.some((id) => inArea(B.nodes[id].x, B.nodes[id].z))) continue;
+    const near = comp
+      .filter((id) => !B.midStairs(id))
+      .map((id) => {
+        const n = B.nodes[id];
+        let d = Infinity;
+        for (const m of mainNodes) d = Math.min(d, Math.abs(m.x - n.x) + Math.abs(m.z - n.z));
+        return { id, d };
+      })
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 3);
+    for (const { id, d } of near) {
+      if (d > 180) break;
+      if (linkAlong(B, id, P, main, nodeY.get(id))) {
+        out.islands++;
+        for (const k of comp) main.add(k);
+        break;
+      }
+    }
+  }
+  // Parked: still no link.
+  for (const n of B.nodes) {
+    if (B.neighbourIds(n.id).length || !inArea(n.x, n.z)) continue;
+    let to = before.get(n.id);
+    if (to === undefined || !B.neighbourIds(to).length) {
+      to = undefined;
+      let bd = PARK_REACH;
+      for (const m of main) {
+        const q = B.nodes[m];
+        const d = Math.hypot(q.x - n.x, q.z - n.z);
+        if (d < bd && B.neighbourIds(m).length && !B.midStairs(m)) ((bd = d), (to = m));
+      }
+    }
+    if (to === undefined) {
+      out.edgeless++;
+      continue;
+    }
+    B.move(n.id, B.nodes[to].x, B.nodes[to].z);
+    B.edge(n.id, to, 2);
+    out.parked++;
+  }
+  return out;
+}
+
+/** A walk's point this near a node already in the graph is that node (m; a walk's own points are farther apart). */
+const WALK_MERGE = 1;
+
+/** A node nothing joins is parked on the nearest linked node of the network within this (m). */
+const PARK_REACH = 90;
+
+/**
+ * `P.blocked` (no height) of 1 m cells, shared by every search of one graph build: the strays and islands a build
+ * joins cluster (a forum's doors, a quarter cut off by a wall), and their windows overlap (each cell is two to six rays).
+ */
+const blockedCache = new Map<number, boolean>();
+function blockedAt(P: LinkProbe, x: number, z: number): boolean {
+  const key = (Math.round(x) + 32768) * 65536 + (Math.round(z) + 32768);
+  let b = blockedCache.get(key);
+  if (b === undefined) blockedCache.set(key, (b = P.blocked(x, z)));
+  return b;
+}
+
+/** linkAlong's buffers (one window), kept while a graph is built. */
+let alongBuf: { goal: Uint8Array; state: Int8Array; dist: Float32Array; came: Int32Array } | null = null;
+
+/** Search window of `linkAlong` (m from the node) and its most expansions. */
+const ALONG = { reach: 90, expand: 12000, retries: 16, goal: 1.6 };
+
+/**
+ * Link node `id` to the network (`main`: node ids) along a short path: A* (Dijkstra, many goals) on 1 m cells of the
+ * plan raster within 90 m (`LinkProbe.cell`) to the nearest cell within 1.6 m of a link of the network, then
+ * string-pulled, every leg checked with the full probe (physics included). A leg the probe refuses blocks its cell
+ * and the search runs again (a few times). The path's corners become nodes. Returns true when linked.
+ */
+function linkAlong(B: Builder, id: number, P: LinkProbe, main: Set<number>, ya?: number): boolean {
   const n = B.nodes[id];
-  const used = new Set([id]);
+  const R = ALONG.reach;
+  const W = 2 * R + 1;
+  const ox = n.x - R, oz = n.z - R;
+  const at = (i: number): Vec2 => [ox + (i % W), oz + Math.floor(i / W)];
+  const cellOf = (x: number, z: number) => {
+    const i = Math.round(x - ox), j = Math.round(z - oz);
+    return i < 0 || j < 0 || i >= W || j >= W ? -1 : j * W + i;
+  };
+  // Goal cells: near a link of the network (not along a stair's parapets, nor a walled road).
+  const buf = (alongBuf ??= { goal: new Uint8Array(W * W), state: new Int8Array(W * W), dist: new Float32Array(W * W), came: new Int32Array(W * W) });
+  const goal = buf.goal.fill(0);
+  let goals = 0;
+  for (const e of B.nearEdges(n.x, n.z, R * 1.42, new Set([id]), 100000)) {
+    if (!main.has(e.a) || !main.has(e.b)) continue;
+    const A = B.nodes[e.a], C = B.nodes[e.b];
+    const L = Math.hypot(C.x - A.x, C.z - A.z);
+    const steps = Math.max(1, Math.ceil(L / 0.5));
+    for (let k = 0; k <= steps; k++) {
+      const x = A.x + ((C.x - A.x) * k) / steps, z = A.z + ((C.z - A.z) * k) / steps;
+      for (let dz = -1; dz <= 1; dz++)
+        for (let dx = -1; dx <= 1; dx++) {
+          const c = cellOf(x + dx, z + dz);
+          if (c < 0 || goal[c]) continue;
+          const [cx, cz] = at(c);
+          if (Math.hypot(cx - x, cz - z) <= ALONG.goal) ((goal[c] = 1), goals++);
+        }
+    }
+  }
+  if (!goals) return false;
+  const state = buf.state.fill(0); // 0 unknown, 1 free, 2 blocked
+  const free = (c: number) => {
+    if (!state[c]) {
+      const [x, z] = at(c);
+      const from = Math.hypot(x - n.x, z - n.z);
+      // The plan first (cheap), then the colliders (inside a wall, no headroom); the door a search leaves stands in its own building.
+      const f = (P.cell ? P.cell(x, z, from) : true) && (from < 1.5 || !blockedAt(P, x, z));
+      state[c] = f ? 1 : 2;
+    }
+    return state[c] === 1;
+  };
+  const start = cellOf(n.x, n.z);
+  const dist = buf.dist;
+  const came = buf.came;
+  for (let attempt = 0; attempt < ALONG.retries; attempt++) {
+    dist.fill(Infinity);
+    const heap = new CellHeap();
+    dist[start] = 0;
+    came[start] = -1;
+    heap.push(start, 0);
+    let found = -1;
+    let expanded = 0;
+    while (heap.size) {
+      const [c, d] = heap.pop();
+      if (d > dist[c]) continue;
+      if (goal[c] && c !== start) {
+        found = c;
+        break;
+      }
+      if (++expanded > ALONG.expand) break;
+      const ci = c % W, cj = Math.floor(c / W);
+      for (let dz = -1; dz <= 1; dz++)
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dz) continue;
+          const i = ci + dx, j = cj + dz;
+          if (i < 0 || j < 0 || i >= W || j >= W) continue;
+          const m = j * W + i;
+          if (!free(m)) continue;
+          // No corner cutting past a blocked cell.
+          if (dx && dz && (!free(cj * W + i) || !free(j * W + ci))) continue;
+          const nd = d + (dx && dz ? Math.SQRT2 : 1);
+          if (nd >= dist[m]) continue;
+          dist[m] = nd;
+          came[m] = c;
+          heap.push(m, nd);
+        }
+    }
+    if (found < 0) return false;
+    // The cells from the node to the goal.
+    const cells: number[] = [];
+    for (let c = found; c >= 0 && c !== start; c = came[c]) cells.push(c);
+    cells.reverse();
+    const pts: Vec2[] = [[n.x, n.z], ...cells.map(at)];
+    // The network's link the path reaches, and the point on it.
+    const end = pts[pts.length - 1];
+    const hit = B.nearEdges(end[0], end[1], ALONG.goal + 0.8, new Set([id]), 6).find((e) => main.has(e.a) && main.has(e.b));
+    if (!hit) return false;
+    pts.push(hit.p);
+    // String-pull: from each corner the farthest point the full probe walks to (a few tries per corner).
+    const corners: Vec2[] = [pts[0]];
+    let i = 0;
+    let bad = -1;
+    while (i < pts.length - 1) {
+      let next = -1;
+      for (const k of [64, 32, 16, 8, 4, 2, 1]) {
+        const j = Math.min(pts.length - 1, i + k);
+        if (j <= i) continue;
+        if (P.clear(pts[i], pts[j], i === 0 ? ya : undefined)) {
+          next = j;
+          break;
+        }
+      }
+      if (next < 0) {
+        bad = i + 1;
+        break;
+      }
+      corners.push(pts[next]);
+      i = next;
+    }
+    if (bad >= 0) {
+      // Block the cell the probe could not reach and search again (the last point is on the link: its cell then).
+      const c = cellOf(pts[Math.min(bad, pts.length - 2)][0], pts[Math.min(bad, pts.length - 2)][1]);
+      if (c < 0 || c === start) return false;
+      state[c] = 2;
+      goal[c] = 0;
+      continue;
+    }
+    // The corners become nodes; the last one splits the network's link.
+    let prev = id;
+    for (let k = 1; k < corners.length - 1; k++) {
+      const m = B.node(corners[k][0], corners[k][1], 'street', 0.3);
+      if (m !== prev) B.edge(prev, m, 2.5);
+      prev = m;
+    }
+    const j = B.split(hit.a, hit.b, hit.w, hit.p, 'junction');
+    if (j !== prev) B.edge(prev, j, 2.5);
+    return true;
+  }
+  return false;
+}
+
+/** A small binary heap of (cell, cost) for linkAlong. */
+class CellHeap {
+  private c: number[] = [];
+  private k: number[] = [];
+  get size() {
+    return this.c.length;
+  }
+  push(cell: number, key: number) {
+    const c = this.c, k = this.k;
+    let i = c.length;
+    c.push(cell);
+    k.push(key);
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (k[p] <= key) break;
+      c[i] = c[p];
+      k[i] = k[p];
+      i = p;
+    }
+    c[i] = cell;
+    k[i] = key;
+  }
+  pop(): [number, number] {
+    const c = this.c, k = this.k;
+    const top: [number, number] = [c[0], k[0]];
+    const lc = c.pop()!, lk = k.pop()!;
+    if (c.length) {
+      let i = 0;
+      for (;;) {
+        let m = 2 * i + 1;
+        if (m >= c.length) break;
+        if (m + 1 < c.length && k[m + 1] < k[m]) m++;
+        if (k[m] >= lk) break;
+        c[i] = c[m];
+        k[i] = k[m];
+        i = m;
+      }
+      c[i] = lc;
+      k[i] = lk;
+    }
+    return top;
+  }
+}
+
+/** Link a node to up to `count` different nearby streets, by the nearest walkable links. */
+function linkAround(B: Builder, id: number, count: number, maxD: number, ok: (id: number, p: Vec2) => boolean, skip: Iterable<number> = []): number {
+  const n = B.nodes[id];
+  const used = new Set([id, ...skip]);
   let made = 0;
   for (let round = 0; round < count && made < count; round++) {
     let linked = false;
@@ -782,7 +1237,29 @@ function linkAround(B: Builder, id: number, count: number, maxD: number, ok: (id
     }
     if (!linked) break;
   }
+  return made;
 }
+
+/**
+ * The foot of a door that no straight link reaches (a temple's door on its podium, a basilica's behind its steps):
+ * the farthest point up to 12 m (`APRON.dists`) straight out of it that a person walks to from the door (`P.clear` from the
+ * door's height), outward from the landmark's centre first, then turning either way. Null when none is 3 m or more.
+ */
+function apron(P: LinkProbe, door: Vec2, y: number | undefined, centre: Vec2): Vec2 | null {
+  const dx = door[0] - centre[0], dz = door[1] - centre[1];
+  const a0 = Math.atan2(dz, dx);
+  for (const turn of APRON.turns) {
+    const a = a0 + turn;
+    for (const d of APRON.dists) {
+      const p: Vec2 = [door[0] + Math.cos(a) * d, door[1] + Math.sin(a) * d];
+      if (P.clear(door, p, y)) return p;
+    }
+  }
+  return null;
+}
+
+/** Door aprons: directions tried (radians off the outward one) and distances (m, farthest first). */
+const APRON = { turns: [0, Math.PI / 4, -Math.PI / 4, Math.PI / 2, -Math.PI / 2], dists: [12, 8, 5, 3] };
 
 /** A point beside the straight line a–b through which both halves are walkable, or null. */
 function detour(P: LinkProbe, a: Vec2, b: Vec2): Vec2 | null {
