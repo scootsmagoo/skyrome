@@ -498,7 +498,13 @@ export function insula(spec: InsulaSpec): BuildingOutput {
     d.solid(o.x0, o.y1, zf, o.x1, G - 0.3, backZ);
     d.solid(o.x0, yMin, zf, o.x1, o.y0 - 0.12, zf + T * 0.2);
     // (a closed mouth's plug runs down to the lowest pavement in front of it: the wall under the sill is drawn there)
-    if (depth < backZ - zf) d.solid(o.x0, Math.max(yMin, Math.min(o.y0 - 0.12, bay.low - 0.1)), zf + depth, o.x1, o.y1, backZ);
+    if (depth < backZ - zf) {
+      // (and below the lowest ground under the plug itself: on a falling street the ground behind the
+      // wall lies below the pavement, and a plug left hanging there is a block in a walker's way)
+      let gmin = bay.low;
+      for (let i = 0; i <= 2; i++) for (let k = 0; k <= 2; k++) gmin = Math.min(gmin, ground(o.x0 + ((o.x1 - o.x0) * i) / 2, zf + depth + ((backZ - zf - depth) * k) / 2));
+      d.solid(o.x0, Math.max(yMin, Math.min(o.y0 - 0.12, gmin - 0.1)), zf + depth, o.x1, o.y1, backZ);
+    }
     px = o.x1;
   }
   d.solid(px, yMin, zf, W / 2, G - 0.3, backZ);

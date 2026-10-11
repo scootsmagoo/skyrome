@@ -318,7 +318,11 @@ export function domus(spec: DomusSpec): BuildingOutput {
     d.solid(px, yMin, z0, o.x0, hf, front);
     d.solid(o.x0, o.y1, z0, o.x1, hf, front);
     d.solid(o.x0, yMin, z0, o.x1, o.y0 - 0.12, z0 + T * 0.2);
-    if (depth < front - z0) d.solid(o.x0, Math.max(yMin, Math.min(o.y0 - 0.12, low - 0.1)), z0 + depth, o.x1, o.y1, front);
+    if (depth < front - z0) {
+      let gmin = low;
+      for (let i = 0; i <= 2; i++) for (let k = 0; k <= 2; k++) gmin = Math.min(gmin, ground(o.x0 + ((o.x1 - o.x0) * i) / 2, z0 + depth + ((front - z0 - depth) * k) / 2));
+      d.solid(o.x0, Math.max(yMin, Math.min(o.y0 - 0.12, gmin - 0.1)), z0 + depth, o.x1, o.y1, front);
+    }
     px = o.x1;
   }
   d.solid(px, yMin, z0, W / 2, hf, front);
