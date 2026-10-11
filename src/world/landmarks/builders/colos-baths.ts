@@ -382,8 +382,14 @@ function buildHemicycle(ctx: LandmarkContext, b: MeshBuilder, d: Draw, root: THR
     const { m: cm, len } = oval.chordFrame(ta, tb, xw + wallT / 2);
     const fr = m.clone().multiply(cm);
     const mid = (ta + tb) / 2;
-    const [px, pz] = oval.point(mid, xw + wallT);
-    const gy = Math.min(0, g(px, pz)) - 0.5;
+    // The lowest ground under the whole chord and 1.5 m outside it (a 2.3 m chord on the Oppian's
+    // slope used to stand up to 0.6 m over the ground at its downhill end: phase 4b B10).
+    let gLow = 0;
+    for (const tt of [ta, mid, tb]) for (const rx of [xw, xw + wallT, xw + wallT + 1.5]) {
+      const [qx, qz] = oval.point(tt, rx);
+      gLow = Math.min(gLow, g(qx, qz));
+    }
+    const gy = gLow - 0.5;
     span(b, 'brick', fr, -0.05, gy, -wallT / 2, len + 0.05, top + 1.1, wallT / 2, true);
     span(b, 'travertine', fr, -0.1, top + 1.1, -wallT / 2 - 0.1, len + 0.1, top + 1.3, wallT / 2 + 0.1, false, false);
     // Buttress at each chord start (outside) where the wall is tall.

@@ -723,7 +723,7 @@ export function quadriporticusGarden(d: Draw, ctx: LandmarkContext, w: number, d
   const garden = o.garden ?? 'hedges';
   const cw = 2 * hw - 1.6, cd = 2 * hd - 1.6;
   const court = o.courtMat ?? (garden === 'paved' ? 'paving_travertine' : 'gravel');
-  d.span(court, -cw / 2 - 0.8, -0.2, -cd / 2 - 0.8, cw / 2 + 0.8, 0.03, cd / 2 + 0.8);
+  d.span(court, -cw / 2 - 0.8, -0.2, -cd / 2 - 0.8, cw / 2 + 0.8, 0.02, cd / 2 + 0.8);
   if (garden === 'hedges' || garden === 'trees') {
     // Two long beds either side of the axis walk, hedged, with statues at the ends and a basin.
     for (const sx of [-1, 1]) {
