@@ -610,7 +610,6 @@ export function onLine(a: { x: number; z: number }, p: { x: number; z: number },
 
 /** Canonical order of an edge's ends (so both triangles of an edge compute it the same way). */
 const first = (a: SV, b: SV) => a.x < b.x || (a.x === b.x && a.z <= b.z);
-const xzKey = (a: SV, b: SV) => (first(a, b) ? `${a.x},${a.z},${b.x},${b.z}` : `${b.x},${b.z},${a.x},${a.z}`);
 
 /** Calls f(t) for every t in [0, 1] where w0 + dw·t is a whole number. */
 function crossings(w0: number, dw: number, f: (t: number) => void) {
@@ -726,12 +725,27 @@ export function emitSheet(b: MeshBuilder, sheet: Sheet, o: ConformOpts = {}): Sh
   const H = sheet.H;
   const tol = o.tol ?? CONFORM_TOL;
   const grid = o.ground ?? null;
-  const splitMemo = new Map<string, number>();
-  const splitVerts = new Map<string, SV>();
+  // Plan points get small integer ids (exact x, z), and an edge the pair of its ends' ids: no strings.
+  const xzIds = new Map<number, Map<number, number>>();
+  let nextXz = 0;
+  const xzId = (v: SV): number => {
+    let m = xzIds.get(v.x);
+    if (!m) xzIds.set(v.x, (m = new Map()));
+    let id = m.get(v.z);
+    if (id === undefined) m.set(v.z, (id = nextXz++));
+    return id;
+  };
+  /** The key of the plan edge a–c (either way round). */
+  const ek = (a: SV, c: SV): number => {
+    const i = xzId(a), j = xzId(c);
+    return i < j ? i * 4194304 + j : j * 4194304 + i;
+  };
+  const splitMemo = new Map<number, number>();
+  const splitVerts = new Map<number, SV[]>();
   /** Where (0..1 from the canonical first end) the edge a–c is split, or −1. */
   const splitT = (a: SV, c: SV): number => {
     const [p, q] = first(a, c) ? [a, c] : [c, a];
-    const key = `${p.x},${p.z},${q.x},${q.z}`;
+    const key = ek(p, q);
     const m = splitMemo.get(key);
     if (m !== undefined) return m;
     const dx = q.x - p.x, dz = q.z - p.z;
@@ -762,9 +776,12 @@ export function emitSheet(b: MeshBuilder, sheet: Sheet, o: ConformOpts = {}): Sh
   const splitV = (a: SV, c: SV): SV => {
     const t = splitT(a, c);
     const [p, q] = first(a, c) ? [a, c] : [c, a];
-    const key = `${p.x},${p.z},${p.off},${q.x},${q.z},${q.off}`;
-    let v = splitVerts.get(key);
-    if (!v) splitVerts.set(key, (v = sheet.v(p.x + (q.x - p.x) * t, p.z + (q.z - p.z) * t, p.off + (q.off - p.off) * t)));
+    const key = ek(p, q);
+    let l = splitVerts.get(key);
+    if (!l) splitVerts.set(key, (l = []));
+    const off = p.off + (q.off - p.off) * t;
+    let v = l.find((u) => u.off === off);
+    if (!v) l.push((v = sheet.v(p.x + (q.x - p.x) * t, p.z + (q.z - p.z) * t, off)));
     return v;
   };
   /** The point inside a triangle (whose edges fit) where the ground is furthest off its plane, beyond tol; or null. */
@@ -889,9 +906,9 @@ export function emitSheet(b: MeshBuilder, sheet: Sheet, o: ConformOpts = {}): Sh
   for (const w of sheet.walls) refineWall(w, 0);
 
   // ---- 2. cut away what another surface covers; find the open edges
-  const edgeUse = new Map<string, number>();
+  const edgeUse = new Map<number, number>();
   for (const t of out.concat(flat)) {
-    for (const k of [xzKey(t.a, t.b), xzKey(t.b, t.c), xzKey(t.c, t.a)]) edgeUse.set(k, (edgeUse.get(k) ?? 0) + 1);
+    for (const k of [ek(t.a, t.b), ek(t.b, t.c), ek(t.c, t.a)]) edgeUse.set(k, (edgeUse.get(k) ?? 0) + 1);
   }
   const seam = o.seam ?? null;
   const cut = o.cut ?? null;
@@ -911,7 +928,7 @@ export function emitSheet(b: MeshBuilder, sheet: Sheet, o: ConformOpts = {}): Sh
       if (cut) kept.push(t);
       const cx = (t.a.x + t.b.x + t.c.x) / 3, cz = (t.a.z + t.b.z + t.c.z) / 3;
       for (const [u, v] of [[t.a, t.b], [t.b, t.c], [t.c, t.a]] as const) {
-        if (edgeUse.get(xzKey(u, v)) !== 1 || seam?.(u, v)) continue;
+        if (edgeUse.get(ek(u, v)) !== 1 || seam?.(u, v)) continue;
         const [nx, nz] = outward(u, v, cx, cz);
         open.push({ u, v, nx, nz, mat: t.mat });
       }
@@ -940,13 +957,13 @@ export function emitSheet(b: MeshBuilder, sheet: Sheet, o: ConformOpts = {}): Sh
         const side = sides.find(([p, q]) => onLine(u, p, q, 1e-4) && onLine(v, p, q, 1e-4));
         let isOpen: boolean;
         if (side && seam?.(side[0], side[1])) isOpen = false;
-        else if (side && edgeUse.get(xzKey(side[0], side[1])) === 1) isOpen = true;
+        else if (side && edgeUse.get(ek(side[0], side[1])) === 1) isOpen = true;
         else {
           // Beyond this edge: another piece of the sheet, or the place a winning surface took.
           const px = (u.x + v.x) / 2 + nx * 0.003, pz = (u.z + v.z) / 2 + nz * 0.003;
           isOpen = hit.some((c) => inConv(c, px, pz));
         }
-        if (isOpen) open.push({ u, v, nx, nz, mat: t.mat, cut: !(side && edgeUse.get(xzKey(side[0], side[1])) === 1) });
+        if (isOpen) open.push({ u, v, nx, nz, mat: t.mat, cut: !(side && edgeUse.get(ek(side[0], side[1])) === 1) });
       }
     }
   }
@@ -997,13 +1014,22 @@ export function emitSheet(b: MeshBuilder, sheet: Sheet, o: ConformOpts = {}): Sh
 
   // A point the cut makes on an edge is made once per triangle: share one vertex per place (and
   // height above the ground), so whatever moves it (an edge laid to the drawn ground) moves it for all.
+  // (Only the cut makes such points: the refined vertices are shared already.)
+  const refinedV = new Set<SV>();
   if (cut) {
-    const canon = new Map<string, SV>();
+    for (const t of out) refinedV.add(t.a).add(t.b).add(t.c);
+    for (const w of walls) refinedV.add(w.p).add(w.q);
+    const canon = new Map<number, Map<number, SV[]>>();
     const one = (v: SV): SV => {
-      const k = `${Math.round(v.x * 1e5)},${Math.round(v.z * 1e5)},${Math.round(v.off * 1e5)}`;
-      const c = canon.get(k);
+      if (refinedV.has(v)) return v;
+      const kx = Math.round(v.x * 1e5), kz = Math.round(v.z * 1e5);
+      let m = canon.get(kx);
+      if (!m) canon.set(kx, (m = new Map()));
+      let l = m.get(kz);
+      if (!l) m.set(kz, (l = []));
+      const c = l.find((u) => Math.abs(u.off - v.off) < 1e-5);
       if (c) return c;
-      canon.set(k, v);
+      l.push(v);
       return v;
     };
     for (const t of kept) {
@@ -1024,11 +1050,13 @@ export function emitSheet(b: MeshBuilder, sheet: Sheet, o: ConformOpts = {}): Sh
   // vertex on an edge its neighbour (or a kerb wall) has whole: a T. Split the neighbour (as a fan
   // round its centre) and the wall there too, so every edge meets vertex to vertex.
   const C = 0.5;
-  const vgrid = new Map<string, SV[]>();
+  const cellKey = (i: number, j: number) => (i + 1048576) * 2097152 + (j + 1048576);
+  const vgrid = new Map<number, SV[]>();
   if (cut) {
     for (const t of kept)
       for (const v of [t.a, t.b, t.c]) {
-        const k = `${Math.floor(v.x / C)},${Math.floor(v.z / C)}`;
+        if (refinedV.has(v)) continue;
+        const k = cellKey(Math.floor(v.x / C), Math.floor(v.z / C));
         const l = vgrid.get(k);
         if (!l) vgrid.set(k, [v]);
         else if (!l.includes(v)) l.push(v);
@@ -1043,7 +1071,7 @@ export function emitSheet(b: MeshBuilder, sheet: Sheet, o: ConformOpts = {}): Sh
       const j0 = Math.floor(Math.min(p.z, q.z) / C), j1 = Math.floor(Math.max(p.z, q.z) / C);
       for (let j = j0; j <= j1; j++)
         for (let i = i0; i <= i1; i++)
-          for (const v of vgrid.get(`${i},${j}`) ?? []) {
+          for (const v of vgrid.get(cellKey(i, j)) ?? []) {
             if (v === p || v === q) continue;
             const t = ((v.x - p.x) * dx + (v.z - p.z) * dz) / L2;
             if (t * L <= 1e-4 || (1 - t) * L <= 1e-4) continue;
@@ -1053,7 +1081,7 @@ export function emitSheet(b: MeshBuilder, sheet: Sheet, o: ConformOpts = {}): Sh
       return found.sort((a, b) => a.t - b.t).map((f) => f.v);
     };
     const healedTris: STri[] = [];
-    for (const t of kept) {
+    for (const t of vgrid.size ? kept : []) {
       const ring: SV[] = [];
       let extra = 0;
       for (const [p, q] of [[t.a, t.b], [t.b, t.c], [t.c, t.a]] as const) {
@@ -1069,10 +1097,10 @@ export function emitSheet(b: MeshBuilder, sheet: Sheet, o: ConformOpts = {}): Sh
       const g: SV = { x: (t.a.x + t.b.x + t.c.x) / 3, z: (t.a.z + t.b.z + t.c.z) / 3, off: (t.a.off + t.b.off + t.c.off) / 3, h: (t.a.h + t.b.h + t.c.h) / 3 };
       for (let k = 0; k < ring.length; k++) healedTris.push({ a: g, b: ring[k], c: ring[(k + 1) % ring.length], mat: t.mat, col: t.col });
     }
-    kept = healedTris;
+    if (vgrid.size) kept = healedTris;
     // An open edge split so gets its skirt piece by piece.
     const split: OpenEdge[] = [];
-    for (const e of open) {
+    for (const e of vgrid.size ? open : []) {
       const mids = onSeg(e.u, e.v);
       if (!mids.length) {
         split.push(e);
@@ -1081,10 +1109,12 @@ export function emitSheet(b: MeshBuilder, sheet: Sheet, o: ConformOpts = {}): Sh
       const chain = [e.u, ...mids, e.v];
       for (let k = 0; k + 1 < chain.length; k++) split.push({ ...e, u: chain[k], v: chain[k + 1] });
     }
-    open.length = 0;
-    open.push(...split);
+    if (vgrid.size) {
+      open.length = 0;
+      open.push(...split);
+    }
   }
-  if (cut && keptWalls.length) {
+  if (cut && keptWalls.length && vgrid.size) {
     const healed: SWall[] = [];
     for (const w of keptWalls) {
       const dx = w.q.x - w.p.x, dz = w.q.z - w.p.z, L2 = dx * dx + dz * dz;
@@ -1097,7 +1127,7 @@ export function emitSheet(b: MeshBuilder, sheet: Sheet, o: ConformOpts = {}): Sh
       const j0 = Math.floor(Math.min(w.p.z, w.q.z) / C), j1 = Math.floor(Math.max(w.p.z, w.q.z) / C);
       for (let j = j0; j <= j1; j++)
         for (let i = i0; i <= i1; i++)
-          for (const v of vgrid.get(`${i},${j}`) ?? []) {
+          for (const v of vgrid.get(cellKey(i, j)) ?? []) {
             const t = ((v.x - w.p.x) * dx + (v.z - w.p.z) * dz) / L2;
             if (t <= 1e-6 || t >= 1 - 1e-6) continue;
             if (Math.abs((v.x - w.p.x) * dz - (v.z - w.p.z) * dx) / Math.sqrt(L2) > 1e-4) continue;
@@ -1141,12 +1171,14 @@ export function emitSheet(b: MeshBuilder, sheet: Sheet, o: ConformOpts = {}): Sh
   const Y = (v: SV) => v.h + (edgeOff.get(v) ?? v.off);
   const colVerts: number[] = [];
   const colIdx: number[] = [];
-  const colKey = new Map<string, number>();
+  const colKey = new Map<number, Map<number, number>>();
   const cv = (x: number, y: number, z: number) => {
-    const k = `${Math.round(x * 1000)},${Math.round(y * 1000)},${Math.round(z * 1000)}`;
-    let i = colKey.get(k);
+    const kxz = Math.round(x * 1000) * 4194304 + Math.round(z * 1000), ky = Math.round(y * 1000);
+    let m = colKey.get(kxz);
+    if (!m) colKey.set(kxz, (m = new Map()));
+    let i = m.get(ky);
     if (i === undefined) {
-      colKey.set(k, (i = colVerts.length / 3));
+      m.set(ky, (i = colVerts.length / 3));
       colVerts.push(x, y, z);
     }
     return i;
