@@ -145,7 +145,8 @@ export async function startRome(game: Game, uiRoot: HTMLElement, params: RomePar
     await flow.quickStart();
     // First arrival: the ground's textures, the people's programs and the first full blocks are made
     // behind the loading screen, so the first view does not keep changing after the fade-in.
-    await prewarmArrival(game).catch((err) => console.warn('[prewarm]', err));
+    const warmed = await prewarmArrival(game).catch((err) => console.warn('[prewarm]', err));
+    (window as unknown as { __prewarm?: unknown }).__prewarm = warmed; // read by scripts/audit/look-prewarm.mjs
     ui.block('loading', false);
     void loading.done();
     // The shareable build's first view: a welcome card with the keys that matter.
