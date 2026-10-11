@@ -20,7 +20,7 @@ import { compitalShrine } from '../../../../arch/fabric/shrines';
 import { insula, type BayKind } from '../../../../arch/fabric/insula';
 import { velum } from '../../../../arch/fabric/awnings';
 import { inscriptionPanel, paintedSign } from '../../../../arch/common/inscription';
-import { placeProp, statueFigure } from '../../../../arch/props/props';
+import { groundIn, placeProp, statueFigure } from '../../../../arch/props/props';
 import { Rng } from '../../../../core/Rng';
 import type { MeshBuilder } from '../../../../gfx/MeshBuilder';
 import type { MaterialId } from '../../../../gfx/materialIds';
@@ -371,11 +371,80 @@ export function quarterLots(): Lot[] {
   ];
 }
 
+/**
+ * The collider of a block drawn at 'mid' detail (no colliders of its own), in the insula's frame
+ * (front −z): the body behind a doorway-deep front strip, and the strip split round each street
+ * opening (`doorXs`, the doors' centres; the narrowest opening the fabric draws is 2.1 m), with a
+ * lintel over each gap. Pure boxes; returns them for the tests.
+ */
+export function blockSolid(D: Draw | null, width: number, depth: number, height: number, doorXs: number[]): [number, number, number, number, number, number][] {
+  const front = -depth / 2, recess = 0.6, half = 1.05, lintel = 3.2;
+  const out: [number, number, number, number, number, number][] = [[-width / 2, -1.5, front + recess, width / 2, height, depth / 2]];
+  const gaps = doorXs.map((x) => [Math.max(-width / 2, x - half), Math.min(width / 2, x + half)] as const).sort((a, b) => a[0] - b[0]);
+  let x = -width / 2;
+  for (const [a, b] of gaps) {
+    if (a > x + 0.05) out.push([x, -1.5, front, a, height, front + recess]);
+    if (b > a) out.push([a, lintel, front, b, height, front + recess]);
+    x = Math.max(x, b);
+  }
+  if (width / 2 > x + 0.05) out.push([x, -1.5, front, width / 2, height, front + recess]);
+  if (D) for (const s of out) D.solid(...s);
+  return out;
+}
+
 /** The alley mouths of the outer blocks: a fountain (−x side) and a crossroads shrine (+x side). */
 export const APPIA_ALLEYS = { lacus: 58.25, compitum: 75.25 };
 
 /** The square inside the gate: from the gate's inner face to the first blocks. */
 export const SQUARE = { z0: 3.6, z1: 12.5 };
+/** The square's flags: grid cells (x, z) per side, and their height over the ground. */
+const SQUARE_CELLS = [6, 6] as const;
+const SQUARE_LIFT = 0.28;
+
+/**
+ * The square's collider (pure, tested): the paving's own grid of points `P(i, j)` as one indexed
+ * trimesh, so the body stands on the flags wherever they are drawn (shared vertices: no internal
+ * edges for the character to catch on).
+ */
+export function squareCollider(P: (i: number, j: number) => number[], nx: number, nz: number): THREE.BufferGeometry {
+  const pos: number[] = [];
+  for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) pos.push(...P(i, j));
+  const idx: number[] = [];
+  const k = (i: number, j: number) => j * (nx + 1) + i;
+  for (let j = 0; j < nz; j++) {
+    for (let i = 0; i < nx; i++) idx.push(k(i, j), k(i, j + 1), k(i + 1, j + 1), k(i, j), k(i + 1, j + 1), k(i + 1, j));
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setIndex(idx);
+  return geo;
+}
+
+/**
+ * A skirt under the square's open edges: from the flags' edge down to 0.1 m under the lowest
+ * ground along it, in the paving's stone, facing out (no collider: the flags' trimesh carries the
+ * body). The street side (x = ±PL) is left to the street's own kerb.
+ */
+function squareSkirt(d: Draw, P: (i: number, j: number) => number[], nx: number, nz: number, g: (x: number, z: number) => number, s: 1 | -1) {
+  const pts: number[] = [];
+  const edge = (a: number[], b: number[], ox: number, oz: number) => {
+    // Bottom: the lowest ground under the edge piece (sampled at both ends and the middle), less 0.1 m.
+    const mx = (a[0] + b[0]) / 2, mz = (a[2] + b[2]) / 2;
+    const yb = Math.min(g(a[0], a[2]), g(b[0], b[2]), g(mx, mz)) - 0.1;
+    // Wind so the face looks along (ox, oz): the triangles below face (−dz, dx) for d = q − p.
+    const nxo = -(b[2] - a[2]), nzo = b[0] - a[0];
+    const flip = nxo * ox + nzo * oz < 0;
+    const [p, q] = flip ? [b, a] : [a, b];
+    pts.push(p[0], p[1], p[2], q[0], yb, q[2], q[0], q[1], q[2]);
+    pts.push(p[0], p[1], p[2], p[0], yb, p[2], q[0], yb, q[2]);
+  };
+  for (let i = 0; i < nx; i++) {
+    edge(P(i, 0), P(i + 1, 0), 0, -1);
+    edge(P(i, nz), P(i + 1, nz), 0, 1);
+  }
+  for (let j = 0; j < nz; j++) edge(P(nx, j), P(nx, j + 1), s, 0);
+  d.tris('paving_travertine', pts, { uvScale: 2.4 });
+}
 
 export function buildQuarter(ctx: LandmarkContext, b: MeshBuilder, d: Draw, spots: Spots, lamps: Lamp[], trees: TreeSpec[], zGate: number) {
   const g = (x: number, z: number) => ctx.groundAt(x, z);
@@ -383,13 +452,16 @@ export function buildQuarter(ctx: LandmarkContext, b: MeshBuilder, d: Draw, spot
   // The urban Via Appia: through the square and between the blocks to the streets by the Circus.
   buildStreet(b, { points: [[0, zGate + 0.6], [0, 60], [0.6, 96]], kind: 'paved', roadWidth: 2 * ROAD_HW, sidewalk: SIDEWALK, curb: 0.25, capStart: true, seed: 4, steppingStones: [24, 52] }, g);
   // Paved square either side of the street (travertine flags), from the gate to the first blocks.
-  for (const s of [-1, 1]) {
+  // The flags follow the ground (heightAt at build time); the collider is the paving's own
+  // triangles (one flat box over the slope stood up to 1.3 m above the low side: phase 4b), and the
+  // open edges get a skirt down into the ground so the slab never shows a gap under it.
+  for (const s of [-1, 1] as const) {
     const x0 = s * PL, x1 = s * 13.5;
     const pts: number[] = [];
-    const nz = 6, nx = 6;
+    const nz = SQUARE_CELLS[1], nx = SQUARE_CELLS[0];
     const P = (i: number, j: number) => {
       const x = x0 + ((x1 - x0) * i) / nx, z = SQUARE.z0 + ((SQUARE.z1 - SQUARE.z0) * j) / nz;
-      return [x, g(x, z) + 0.28, z];
+      return [x, g(x, z) + SQUARE_LIFT, z];
     };
     for (let j = 0; j < nz; j++) {
       for (let i = 0; i < nx; i++) {
@@ -399,8 +471,8 @@ export function buildQuarter(ctx: LandmarkContext, b: MeshBuilder, d: Draw, spot
       }
     }
     d.tris('paving_travertine', pts, { uvScale: 2.4 });
-    const gr = groundRange(ctx, Math.min(x0, x1), SQUARE.z0, Math.max(x0, x1), SQUARE.z1, 1.5);
-    d.solid(Math.min(x0, x1), gr.min - 0.5, SQUARE.z0, Math.max(x0, x1), gr.max + 0.28, SQUARE.z1);
+    d.b.collider({ kind: 'trimesh', geometry: squareCollider(P, nx, nz) });
+    squareSkirt(d, P, nx, nz, g, s);
   }
   // Apartment blocks with shops.
   for (const [i, lot] of quarterLots().entries()) {
@@ -439,8 +511,9 @@ export function buildQuarter(ctx: LandmarkContext, b: MeshBuilder, d: Draw, spot
     });
     const m = new THREE.Matrix4().makeTranslation(cx, floor, cz).multiply(new THREE.Matrix4().makeRotationY(rot));
     b.append(out.builder, m);
-    // The fabric's 'mid' detail has no colliders: give the block a solid footprint instead.
-    if (!hi) new DrawCls(b, m).solid(-width / 2, -1.5, -lot.depth / 2, width / 2, out.height, lot.depth / 2);
+    // The fabric's 'mid' detail has no colliders: give the block a solid footprint instead, split
+    // round its street openings (a shop or house door is a doorway deep, open down to its floor).
+    if (!hi) blockSolid(new DrawCls(b, m), width, lot.depth, out.height, out.spots.filter((sp) => sp.kind === 'shopDoor' || sp.kind === 'houseDoor').map((sp) => sp.position.x));
     for (const s of out.spots) {
       const p = s.position.clone().applyMatrix4(m);
       const heading = s.facing + rot;
@@ -454,14 +527,18 @@ export function buildQuarter(ctx: LandmarkContext, b: MeshBuilder, d: Draw, spot
       lamps.push({ position: new THREE.Vector3(x - lot.side * 0.35, floor + 2.75, z), color: 0xffa54f, intensity: k === 0 && i === 0 ? 9 : 5, distance: k === 0 && i === 0 ? 10 : 7, flicker: 0.25, night: true, glow: 0.14 });
     }
   }
+  // Props stand on the flags (or the sidewalk) and lean with them: their colliders are placed with
+  // them, so nothing settles the drawn prop away from its collider after the build.
+  const flags = (x: number, z: number) => g(x, z) + SQUARE_LIFT;
+  const walk = (x: number, z: number) => g(x, z) + 0.3;
   // The popina at the corner of the square (block 0's first bay): sign, awning, benches outside.
   const pop = quarterLots()[0];
   const popZ = pop.z0 + 1.6;
   const popX = -(PL + 0.05);
   paintedSign(b, ['Popina', 'Ad Portam'], 1.6, 0.5, new THREE.Matrix4().makeTranslation(popX + 0.08, g(popX, popZ) + 3.25, popZ + 1.3).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)));
   velum(d.at(popX, g(popX, popZ + 1.3) + 0.3, popZ + 1.3, Math.PI / 2), 2.8, 1.3, 2.9, ['fabric_white', 'fabric_red']);
-  placeProp(d, 'bench', -(PL - 0.55), g(-(PL - 0.55), popZ - 1.4) + 0.3, popZ - 1.4, Math.PI / 2, { variant: 1 });
-  placeProp(d, 'table', -(PL - 0.6), g(-(PL - 0.6), popZ + 3.5) + 0.3, popZ + 3.5, 0.2, { variant: 0 });
+  placeProp(d, 'bench', -(PL - 0.55), g(-(PL - 0.55), popZ - 1.4) + 0.3, popZ - 1.4, Math.PI / 2, { variant: 1, ground: walk });
+  placeProp(d, 'table', -(PL - 0.6), g(-(PL - 0.6), popZ + 3.5) + 0.3, popZ + 3.5, 0.2, { variant: 0, ground: walk });
   sleepingDog(d, -(PL - 0.4), g(-(PL - 0.4), popZ + 1.6) + 0.3, popZ + 1.6, 0.8);
   spots.add('capena-popina-patron', 'sit', -(PL - 0.85), g(-(PL - 0.85), popZ - 1.4) + 0.3, popZ - 1.4, Math.PI / 2);
   // The compitum shrine on the square (+x corner), with its lamp burning for the Lares.
@@ -477,20 +554,20 @@ export function buildQuarter(ctx: LandmarkContext, b: MeshBuilder, d: Draw, spot
   lacus(d.at(fx, g(fx, fz) + 0.28, fz, -Math.PI / 2), new Rng('capena-lacus-in'), { stone: 'travertine' });
   spots.add('capena-fountain', 'shrine', fx + 1.6, g(fx + 1.6, fz) + 0.28, fz, -Math.PI / 2);
   const vx = 6.0, vz = 5.2;
-  placeProp(d, 'brazier', vx, g(vx, vz) + 0.28, vz, 0, { variant: 1 });
-  placeProp(d, 'bench', vx + 1.4, g(vx + 1.4, vz) + 0.28, vz + 0.4, -Math.PI / 2, { variant: 0 });
-  for (const k of [0, 1, 2]) placeProp(d, 'basket', vx + 2.3, g(vx + 2.3, vz) + 0.28, vz - 0.6 + k * 0.5, 0, { variant: 2, collide: false });
+  placeProp(d, 'brazier', vx, flags(vx, vz), vz, 0, { variant: 1, ground: flags });
+  placeProp(d, 'bench', vx + 1.4, flags(vx + 1.4, vz + 0.4), vz + 0.4, -Math.PI / 2, { variant: 0, ground: flags });
+  for (const k of [0, 1, 2]) placeProp(d, 'basket', vx + 2.3, flags(vx + 2.3, vz - 0.6 + k * 0.5), vz - 0.6 + k * 0.5, 0, { variant: 2, collide: false, ground: flags });
   lamps.push({ position: new THREE.Vector3(vx, g(vx, vz) + 1.2, vz), color: 0xff8a3a, intensity: 10, distance: 11, flicker: 0.55, night: false, dayScale: 0, glow: 0.3 });
   spots.add('capena-vigil', 'sit', vx + 1.4, g(vx + 1.4, vz) + 0.28 + 0.45, vz + 0.4, -Math.PI / 2);
   spots.add('capena-vigil-b', 'npc', vx - 1.2, g(vx - 1.2, vz) + 0.28, vz + 1.0, Math.PI * 0.75);
   // Carts waiting their turn to unload before dawn, and a mule standing patient in the traces.
   const cx2 = -10.0, cz2 = 5.0;
-  const cf = d.at(cx2, g(cx2, cz2) + 0.28, cz2, -Math.PI / 2 - 0.15);
-  placeProp(cf, 'cart', 0, 0, 0, 0, { variant: 1 });
+  const cf = d.at(cx2, flags(cx2, cz2), cz2, -Math.PI / 2 - 0.15);
+  placeProp(cf, 'cart', 0, 0, 0, 0, { variant: 1, ground: groundIn(cf, flags) });
   mule(cf, 0, 0, -2.7, 0);
-  placeProp(d, 'amphora_stack', -12.0, g(-12, 10.5) + 0.28, 10.5, 0.3, { variant: 2 });
-  placeProp(d, 'sack', -11.2, g(-11.2, 6.2) + 0.28, 6.2, 0.6);
-  placeProp(d, 'crate', 11.2, g(11.2, 6.0) + 0.28, 6.0, 0.2, { variant: 1 });
+  placeProp(d, 'amphora_stack', -12.0, flags(-12, 10.5), 10.5, 0.3, { variant: 2, ground: flags });
+  placeProp(d, 'sack', -11.2, flags(-11.2, 6.2), 6.2, 0.6, { ground: flags });
+  placeProp(d, 'crate', 11.2, flags(11.2, 6.0), 6.0, 0.2, { variant: 1, ground: flags });
   spots.add('capena-carter', 'npc', cx2 + 1.0, g(cx2 + 1.0, cz2 + 1.2) + 0.28, cz2 + 1.2, -Math.PI / 2);
   // Halfway to the Circus: a fountain in one alley mouth, a crossroads shrine in another.
   const lz = APPIA_ALLEYS.lacus, lx = -(PL + 0.9);

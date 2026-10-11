@@ -47,6 +47,8 @@ import { Spots, halfColumn, lowColumn } from './util';
 
 const T = CIRCUS.wall;
 const STONE: MaterialId = 'travertine';
+/** The facade piers' fronts proud of the wall face (half-column base / far pilaster): half width, depth. */
+export const PIER_FRONT = { half: 0.4, depth: 0.36 } as const;
 
 // ---------------------------------------------------------------- gaps
 
@@ -537,11 +539,15 @@ export function buildFacade(b: MeshBuilder, gaps: CircusGaps, detail: 'high' | '
   // Colliders: the solid facade above the arches, piers between arches, shop dividers, counters.
   const top = CIRCUS.height;
   const q = new THREE.Quaternion();
-  const boxAt = (bay: FacadeBay, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number) => {
+  // x in the bay's design frame (width W): the drawn bay is the design scaled by bay.w / W across
+  // (the carceres' and the curve's bays are narrower), so its colliders scale with it (an unscaled
+  // arch gap left 7 cm jambs drawn with nothing behind them, phase 4b).
+  const boxAt = (bay: FacadeBay, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, scaled = true) => {
+    const k = scaled ? bay.w / W : 1;
     const m = facing(bay.x, 0, bay.z, bay.nx, bay.nz);
-    const c = new THREE.Vector3((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2).applyMatrix4(m);
+    const c = new THREE.Vector3(((x0 + x1) / 2) * k, (y0 + y1) / 2, (z0 + z1) / 2).applyMatrix4(m);
     q.setFromRotationMatrix(m);
-    b.collider({ kind: 'box', center: c, half: new THREE.Vector3((x1 - x0) / 2, (y1 - y0) / 2, (z1 - z0) / 2), rotation: q.clone() });
+    b.collider({ kind: 'box', center: c, half: new THREE.Vector3(((x1 - x0) / 2) * k, (y1 - y0) / 2, (z1 - z0) / 2), rotation: q.clone() });
   };
   const L = CIRCUS.halfLen;
   const zc = curveZ();
@@ -552,13 +558,18 @@ export function buildFacade(b: MeshBuilder, gaps: CircusGaps, detail: 'high' | '
   }
   for (const u of uses) {
     const bay = u.bay;
-    const w = bay.w;
-    if (bay.side === 0 || bay.side === 2) boxAt(bay, -w / 2, w / 2, CIRCUS.shopCeiling, top, 0, T);
+    const sp = CIRCUS.span / 2;
+    if (bay.side === 0 || bay.side === 2) boxAt(bay, -W / 2, W / 2, CIRCUS.shopCeiling, top, 0, T);
     // Half-piers either side of the arch.
-    boxAt(bay, -w / 2, -CIRCUS.span / 2, 0, CIRCUS.shopCeiling, 0, T);
-    boxAt(bay, CIRCUS.span / 2, w / 2, 0, CIRCUS.shopCeiling, 0, T);
+    boxAt(bay, -W / 2, -sp, 0, CIRCUS.shopCeiling, 0, T);
+    boxAt(bay, sp, W / 2, 0, CIRCUS.shopCeiling, 0, T);
+    // The pier's front: the half-column (near, `halfColumn` with its base 0.78 × 0.34 m) or the
+    // pilaster (far, 0.62 × 0.3 m) stands proud of the wall face on the bay's edge; one box covers
+    // both versions, from the ground storey's foot to its entablature (it was drawn with nothing
+    // behind it: a walker along the arcade slid into the columns, phase 4b).
+    boxAt(bay, -W / 2 - PIER_FRONT.half, -W / 2 + PIER_FRONT.half, 0, H1 - 0.9, -PIER_FRONT.depth, 0);
     if (u.kind === 'tunnel') continue;
-    boxAt(bay, -w / 2, -w / 2 + 0.5, 0, CIRCUS.shopCeiling, T, T + 3.4);
+    boxAt(bay, -W / 2, -W / 2 + 0.5, 0, CIRCUS.shopCeiling, T, T + 3.4);
     if (u.kind === 'taberna') {
       boxAt(bay, -0.15, 1.55, 0, 1.02, T + 0.2, T + 0.8);
       boxAt(bay, 1.0, 1.55, 0, 1.02, T + 0.8, T + 1.8);
@@ -567,8 +578,14 @@ export function buildFacade(b: MeshBuilder, gaps: CircusGaps, detail: 'high' | '
       boxAt(bay, -0.05, 1.6, 0, 1.02, T + 0.25, T + 0.9);
       boxAt(bay, 1.05, 1.6, 0, 1.02, T + 0.9, T + 2.0);
     }
-    if (u.kind === 'shutters') boxAt(bay, -1.6, 0.4, 0, 2.9, 0.86, 1.0);
-    if (u.kind === 'blind') boxAt(bay, -CIRCUS.span / 2, CIRCUS.span / 2, 0, CIRCUS.shopCeiling, 0.4, 1.0);
+    if (u.kind === 'shutters') {
+      boxAt(bay, -1.6, 0.4, 0, 2.9, 0.86, 1.0);
+      // The dark shop behind the door gap is a painted backdrop: the body stops at it.
+      boxAt(bay, -sp, sp, 0, CIRCUS.shopCeiling, 1.1, 1.4);
+    }
+    // The stair to the upper floors (closed by a door at its landing): one block over its flight.
+    if (u.kind === 'stair') boxAt(bay, -W / 2 + 0.6, -W / 2 + 1.7, 0, 2.64, T + 0.4, T + 3.4);
+    if (u.kind === 'blind') boxAt(bay, -sp, sp, 0, CIRCUS.shopCeiling, 0.4, 1.0);
   }
   for (const dr of dressed) {
     const bay = dr.bay;
@@ -577,9 +594,9 @@ export function buildFacade(b: MeshBuilder, gaps: CircusGaps, detail: 'high' | '
       const c = new THREE.Vector3(sx * ((CIRCUS.span + 0.5) / 2 - 0.05), 1.6, -2.15).applyMatrix4(m);
       b.collider({ kind: 'cylinder', center: c, halfHeight: 1.6, radius: 0.08 });
     }
-    else if (dr.kind === 'wine') boxAt(bay, 0.5, 1.7, 0, 1.2, -1.9, -0.7);
-    else if (dr.kind === 'goods') boxAt(bay, -1.3, 0.1, 0, 0.8, -1.7, -0.8);
-    else if (dr.kind === 'cook') boxAt(bay, 0.8, 1.6, 0, 0.9, -1.6, -0.8);
+    else if (dr.kind === 'wine') boxAt(bay, 0.5, 1.7, 0, 1.2, -1.9, -0.7, false);
+    else if (dr.kind === 'goods') boxAt(bay, -1.3, 0.1, 0, 0.8, -1.7, -0.8, false);
+    else if (dr.kind === 'cook') boxAt(bay, 0.8, 1.6, 0, 0.9, -1.6, -0.8, false);
   }
   // Closing piers at the ends of the curved-end opening (the Arch of Titus passage).
   const zc2 = curveZ();

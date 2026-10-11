@@ -427,7 +427,8 @@ export function terrace(
     if (opts.parapet && parapetEdges.has(i)) {
       const ph = opts.parapet;
       box(b, mat, ax + ux * (len / 2) + nx * (t / 2), y + ph / 2, az + uz * (len / 2) + nz * (t / 2), len + t, ph, t * 0.8, at, true, ry);
-      box(b, 'travertine', ax + ux * (len / 2) + nx * (t / 2), y + ph + 0.05, az + uz * (len / 2) + nz * (t / 2), len + t + 0.1, 0.1, t, at, false, ry);
+      // The coping overhangs the parapet: it gets its own collider (a drawn strip with none behind it).
+      box(b, 'travertine', ax + ux * (len / 2) + nx * (t / 2), y + ph + 0.05, az + uz * (len / 2) + nz * (t / 2), len + t + 0.1, 0.1, t, at, true, ry);
     }
   }
 }
@@ -600,6 +601,8 @@ export function trophy(b: MeshBuilder, at: THREE.Matrix4, mat: MaterialId = 'bro
  * to the foot, so there is never a ledge at the bottom however the ground falls, and where the
  * terrain is higher it simply covers the lowest steps. A tufa block fills under the flight down to
  * the ground; returns the foot's level and the flight's length (0 when no steps are needed).
+ * With `up`, a road beyond the edge that stands higher than `top` gets a flight climbing to it
+ * instead, set back into the platform (length negative: it lies on the +z side of the edge).
  */
 export function stairsToGround(
   b: MeshBuilder,
@@ -607,7 +610,7 @@ export function stairsToGround(
   top: number,
   width: number,
   at: THREE.Matrix4,
-  opts: { run?: number; rise?: number; material?: MaterialId; maxSteps?: number } = {},
+  opts: { run?: number; rise?: number; material?: MaterialId; maxSteps?: number; up?: boolean } = {},
 ): { foot: number; length: number } {
   // 0.205 / 0.31 (33.5°): steeper than the steepest walkable road ramps on the terrain (~31°), so
   // a flight running down a ramp still meets it; still well inside the controller's step limits.
@@ -623,6 +626,22 @@ export function stairsToGround(
     for (let i = 0; i <= 4; i++) for (const z of [z0, (z0 + z1) / 2, z1]) m = Math.min(m, g(-width / 2 + (width * i) / 4, z));
     return m;
   };
+  if (opts.up) {
+    // The ground beyond the edge stands ABOVE the level (a road arriving higher than the platform):
+    // the flight climbs from the platform to the road instead, set back into the platform so its
+    // top step meets the road at the edge (it used to run down into the hillside, its treads up to
+    // 3.6 m under the road; phase 4b). The road level is read at build time, so it follows the
+    // terrain profile.
+    let sum = 0;
+    for (let i = 0; i <= 4; i++) sum += g(-width / 2 + (width * i) / 4, -0.6);
+    const road = sum / 5;
+    if (road > top + 0.15) {
+      const { count, rise: r } = stepCount(road - top, rise);
+      const len = count * run;
+      stairs(b, { width, rise: r, run, count, material: opts.material ?? 'travertine' }, mul(at, new THREE.Matrix4().makeTranslation(0, top, len).multiply(new THREE.Matrix4().makeRotationY(Math.PI))));
+      return { foot: road, length: -len };
+    }
+  }
   if (minIn(-1.0, -0.2) >= top - 0.1) return { foot: top, length: 0 };
   let n = 1;
   const max = opts.maxSteps ?? 70;

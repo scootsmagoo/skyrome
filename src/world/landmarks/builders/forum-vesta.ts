@@ -27,6 +27,7 @@ import { gableRoof, shedRoof } from './forum-temple';
 import { lampAt } from './forum-street';
 import { shopInterior, type ShopKind } from '../../../arch/fabric/shops';
 import { placeProp } from '../../../arch/props';
+import { embedTerraces } from './generic-common';
 
 const text = (id: string) => FORUM_INSCRIPTIONS[id].latin;
 
@@ -347,6 +348,14 @@ function atriumVestae(p: Part) {
   d.span('black', -2.4, fy, tb, 2.4, fy + 4.4, tb + 0.05);
   d.span('plaster_white', -rx, fy, tb + 0.05, rx, fy + H - 0.4, hl - t, { collide: true });
   d.span('mosaic', -rx, fy - 0.01, rz1, rx, fy + 0.01, tb, { shadow: false });
+  // The ranges of rooms on the uphill (Palatine) side are terraced into the slope: where the ground
+  // inside stands above the floor, tufa retaining blocks fill the rooms up to it in 0.25 m steps
+  // (their faces are the retaining walls of each terrace), so no grass shows through the floors
+  // (it stood up to 5.4 m over them, phase 4b). The court, its portico and the tablinum stay at the
+  // floor. The ground is read at build time, so the terraces follow the terrain profile.
+  const open = (x: number, z: number) => (Math.abs(x) < rx + 0.35 && z > rz0 - 0.35 && z < tb + 0.1) || (Math.abs(x) < 1.6 && z < rz0 + 0.3);
+  const inHouse = (x: number, z: number) => Math.abs(x) < hw - t && z > zF + t && z < hl - t && !open(x, z);
+  embedTerraces(d.at(0, fy, 0), (x, z) => p.ctx.groundAt(x, z) - fy, inHouse, -hw + t, zF + t, hw - t, hl - t, 1.5);
   // roofs: lean-to roofs over the room ranges, falling from the court walls to the street walls
   const eave = fy + H - 0.4;
   // (rotated frames: Ry(+π/2) maps roof-local z to world x and x to world −z; Ry(−π/2) the mirror)

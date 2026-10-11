@@ -13,6 +13,9 @@ import * as THREE from 'three';
 import { Rng } from '../../../../core/Rng';
 import type { MeshBuilder } from '../../../../gfx/MeshBuilder';
 
+/** Boulders bigger than this (radius, m) get a collider; smaller ones are a stride (< 0.32 m tall). */
+export const BOULDER_COLLIDE_R = 0.45;
+
 export interface CliffSpec {
   x0: number;
   x1: number;
@@ -152,6 +155,10 @@ function strip(b: MeshBuilder, groundAt: (x: number, z: number) => number, run: 
   const flat = geo.toNonIndexed();
   flat.computeVertexNormals();
   b.add(flat, 'rock', at, { uvScale: 3 });
+  // The face is its own collider: the strata step out up to ~1.6 m over the terrain's slope, so the
+  // heightfield alone left drawn ledges with nothing under them (falls of 2–3 m) and rock the body
+  // walked into (phase 4b). The strip's edges tuck under the ground, so nothing gets behind it.
+  b.collider({ kind: 'trimesh', geometry: geo, matrix: at?.clone() });
 }
 
 function boulders(b: MeshBuilder, groundAt: (x: number, z: number) => number, cols: CliffColumn[], rng: Rng, at?: THREE.Matrix4) {
@@ -170,7 +177,8 @@ function boulders(b: MeshBuilder, groundAt: (x: number, z: number) => number, co
         new THREE.Vector3(r * rng.range(0.8, 1.3), r * rng.range(0.55, 0.9), r * rng.range(0.8, 1.2)),
       );
       b.add(base.clone().applyMatrix4(m), 'rock', at, { uvScale: 2 });
-      if (r > 0.75) {
+      // Every boulder a walker would have to step over gets a collider (only the big ones had one).
+      if (r > BOULDER_COLLIDE_R) {
         const c = new THREE.Vector3(x, y, z);
         if (at) c.applyMatrix4(at);
         b.collider({ kind: 'cylinder', center: c, halfHeight: r * 0.6, radius: r * 0.85 });
