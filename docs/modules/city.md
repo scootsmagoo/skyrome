@@ -223,6 +223,49 @@ to the street). Exact spots of the detailed buildings (counters, stairs, yard we
   Porta Capena, Trajan's Forum and the Porta Carmentalis are on the main network. (In game 67 landmark door nodes
   have no street link, and the street router's nearest node to a destination can be one of them: known, see the report.)
 
+## Solid ground: the street surfaces (phase 4b, STREETS)
+
+Every surface `streetWork` lays (atlas road pieces, vici, lanes, alleys, junction squares, piazzas,
+ground cover) is built as a `Sheet` (`arch/fabric/streets.ts`) and written by `emitSheet`:
+
+- **On the ground.** Each vertex keeps its height over the terrain (its datum `LIFT` plus the cross
+  section). Under terrain v2 `heightAt` is linear on the b–c triangles of the 2 m lattice
+  (`plan.ground`), so an edge is split exactly at the lattice line (x, z or x + z constant) where the
+  ground leaves it most, and a triangle at the lattice point inside it that is furthest off, until
+  nothing is more than 2 cm off (`CONFORM_TOL`); under v1 (bilinear) edges are halved at their
+  midpoint and triangles split at their centroid. The split reads only the edge, so the two triangles
+  of an edge and a kerb face on it split it alike (no cracks). Slivers under 1 mm are kept for their
+  edges only. A conformed street has cross-sections every 3.2 m (`CONFORM_STEP`), at its own bends and
+  where its kerbs ramp; its crown is two planes. City-wide: 0.79 M triangles (0.91 M before), the
+  largest gap 2.1 cm (`node scripts/audit/streets-cells.mjs --all`).
+- **One surface per place.** `PavingIndex` holds every surface's footprint and rank
+  (`RANK`: road > junction > piazza > vicus > lane > alley > block > ground cover; equal ranks: the
+  first registered wins). A surface is cut exactly (convex subtraction) inside the convex pieces of
+  every surface that outranks it (a band's segment quads and the hulls of its bends, a polygon or its
+  triangles), so nothing is paved twice; ground cover never lies on paving nor inside a block.
+- **Skirts.** Every open edge (beyond it nothing of the sheet: an outer edge or a cut) gets a vertical
+  face in its own material down to the lowest ground under it minus 0.1 m (`SKIRT_DEPTH`; the drawn
+  terrain drops 9 cm under the atlas roads and pads), no collider. Roads and junctions skirt every
+  open edge; the other surfaces only edges standing more than 3 cm over the ground (`SKIRT_MIN`: an
+  apron's 2.2 cm edge needs none) or lying where the drawn ground drops. Ground cover has no skirts:
+  its rim (every open edge) lies `RIM_SINK` (5 cm) under its body but never under 5 mm over the ground
+  (`RIM_MIN`: the terrain would show through), its cell border is a seam.
+- **Colliders.** One welded (indexed, 1 mm) trimesh per sheet, made from the drawn top and kerb faces.
+  Stair parapets (`parapetCollider`, atlas stairways and `buildStairs`) are boxes pitched with the
+  flight, their top 0.9 m over the treads like the drawn parapet (an upright box reached the high end's
+  top at the low end: a 2.8 m invisible wall).
+- **Edges.** Out of town a basalt road meets the grass in a 0.6 m dirt shoulder; an open road across
+  paving (the Via Sacra in the Forum) ends in a travertine edge course (`apronMaterial`).
+- **Steep streets.** `trimSteepStreets` (plan.ts, after the stubs are closed) ends a minor street
+  where its grade over 4 m passes 44 % (`STREET_MAX_GRADE`) or the ground under it is steeper than
+  35°: the pieces either side stay streets (the first keeps the id; `plan.cliffEnds` lists the new
+  ends, which the street-end audit does not count as stubs). About 170 streets, 1 km in all.
+- **Retaining walls.** Along `hm.features.retaining` (GROUND, terrain v2; empty under v1):
+  tufa ashlar pieces of at most 4 m (`retainingPieces`), just outside the road's surface, up to the
+  slope in a cut, down to the ground with a 0.9 m parapet on a fill, one box collider each, built in the
+  street cell that holds them.
+- **Dressing.** The terrain dressing lays no kerbstones where the city paves (`cityPavedAt`).
+
 ## Walls, gates and aqueducts
 
 Servian wall stretches from the atlas in Grotta Oscura tufa ashlar: gaps where `partial`, broken

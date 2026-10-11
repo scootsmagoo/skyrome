@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import * as atlas from '../src/data/atlas';
-import { RIM_SINK, Sheet, buildStreet, emitSheet, inConv, makeConv } from '../src/arch/fabric/streets';
+import { RIM_MIN, RIM_SINK, Sheet, buildStreet, emitSheet, inConv, makeConv } from '../src/arch/fabric/streets';
 import { KERB } from '../src/core/traversal';
 import { MeshBuilder } from '../src/gfx/MeshBuilder';
 import { auditReach, auditRoadEnds, summarizeRoadEnds } from '../src/world/city/audit';
@@ -269,7 +269,7 @@ describe('street surfaces conform to the ground (phase 4b)', () => {
     sheet.tri(a, c, d, 'dirt', false);
     sheet.tri(a, d, e, 'dirt', false);
     const b = new MeshBuilder();
-    emitSheet(b, sheet, { ground, rim: 0.04 - RIM_SINK, skirts: false, collide: false });
+    emitSheet(b, sheet, { ground, rim: Math.max(0.04 - RIM_SINK, RIM_MIN), skirts: false, collide: false });
     const tris = drawnTris(b);
     let rimLow = Infinity, bodyHigh = -Infinity;
     for (const t of tris) for (let q = 0; q < 3; q++) {
@@ -278,7 +278,7 @@ describe('street surfaces conform to the ground (phase 4b)', () => {
       if (onRim) rimLow = Math.min(rimLow, y - H(x, z));
       else bodyHigh = Math.max(bodyHigh, y - H(x, z));
     }
-    expect(rimLow).toBeCloseTo(-0.01, 5);
+    expect(rimLow).toBeCloseTo(RIM_MIN, 5);
     expect(bodyHigh).toBeCloseTo(0.04, 5);
     expect(b.colliders.length).toBe(0);
   });

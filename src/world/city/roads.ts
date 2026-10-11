@@ -15,7 +15,7 @@
 import * as THREE from 'three';
 import { Rng } from '../../core/Rng';
 import { withAuditSource } from '../../dev/audit/geomAudit';
-import { APRON, LANE_APRON, RIM_SINK, Sheet, buildConformPlaza, buildStairs, buildStreet, emitSheet, makeConv, type Conv, type ConformOpts, type GroundGrid, type SV, type StreetSpec } from '../../arch/fabric/streets';
+import { APRON, LANE_APRON, RIM_MIN, RIM_SINK, Sheet, buildConformPlaza, buildStairs, buildStreet, emitSheet, makeConv, type Conv, type ConformOpts, type GroundGrid, type SV, type StreetSpec } from '../../arch/fabric/streets';
 import { Draw } from '../../arch/fabric/draw';
 import { compitalShrine } from '../../arch/fabric/shrines';
 import { lacus } from '../../arch/fabric/fountain';
@@ -1133,7 +1133,7 @@ function coverSet(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: n
     const xa = X(sx0), xb = X(sx1 + 1), za = Z(sz0), zb = Z(sz1 + 1);
     const onB = (p: SV, q: SV) => (Math.abs(p.x - q.x) < 1e-6 && (Math.abs(p.x - xa) < 1e-6 || Math.abs(p.x - xb) < 1e-6)) || (Math.abs(p.z - q.z) < 1e-6 && (Math.abs(p.z - za) < 1e-6 || Math.abs(p.z - zb) < 1e-6));
     const order = RANK.block * 1e6 - 1;
-    if (sheet.tris.length) emitSheet(b, sheet, { cut: (a, c, d, e) => pave!.convs(a, c, d, e, order), ground, rim: lift - RIM_SINK, skirts: false, seam: onB, collide: false });
+    if (sheet.tris.length) emitSheet(b, sheet, { cut: (a, c, d, e) => pave!.convs(a, c, d, e, order), ground, rim: Math.max(lift - RIM_SINK, RIM_MIN), skirts: false, seam: onB, collide: false });
     return;
   }
   if (!pos.length) return;

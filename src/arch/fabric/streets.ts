@@ -357,8 +357,10 @@ export const CONFORM_TOL = 0.02;
 export const SKIRT_DEPTH = 0.1;
 /** An open edge standing no higher than this over the ground needs no skirt (an apron's 2.2 cm edge). */
 export const SKIRT_MIN = 0.03;
-/** Ground cover's rim lies this much under its body, so it meets the ground with no edge to see. */
+/** Ground cover's rim lies this much under its body, so it meets the ground with no edge to see... */
 export const RIM_SINK = 0.05;
+/** ...but never under this height over the ground (the terrain would show through, and fight it). */
+export const RIM_MIN = 0.005;
 /** Edges shorter than this are not split again. */
 const MIN_EDGE = 0.03;
 /** No split closer than this (m) to an edge's end. */
