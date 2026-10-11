@@ -191,6 +191,63 @@ function chunks(s0: number, s1: number, max: number): [number, number][] {
   return out;
 }
 
+/** How far a street's drawn surface reaches either side of its centre line (streetFootprint, aprons included). */
+function footReach(spec: StreetSpec): number {
+  const paved = (spec.kind ?? 'paved') === 'paved';
+  const hw = (spec.roadWidth ?? (paved ? 5 : 3.2)) / 2;
+  return paved ? hw + (spec.sidewalk ?? 1.8) + APRON : hw + LANE_APRON;
+}
+
+/** A street turning back by at least this much (radians) between two of its points comes back on itself (a hairpin, a loop); less is a corner. */
+const HAIRPIN = (5 * Math.PI) / 6;
+
+/**
+ * The pieces again, none of which laps over itself: where a road comes back on itself closer than its
+ * own width (a hairpin: it turns by HAIRPIN or more between two places closer than twice its reach), the
+ * piece holding both legs is split half way round the turn. One sheet laid over itself put two heights
+ * on one spot of one collider (the Clivus Palatinus under the Palatine, whose legs lie 5.7 m apart on
+ * G1b's regraded bank: a sidewalk 18 cm over its own apron, beside the fold of the hairpin's first bend)
+ * and paved the place twice; as two pieces the later leg is cut round the earlier one like any two
+ * streets of a rank (PavingIndex: only the core cuts, the apron runs down over the other).
+ */
+export function unlap(line: readonly Vec2[], pieces: readonly [number, number][], reach: number): [number, number][] {
+  const out: [number, number][] = [];
+  // Two points of a line this far apart along it, closer than 2 × reach across, belong to legs that overlap
+  // (a half circle of radius `reach` is the tightest turn whose two sides only touch).
+  const minArc = Math.PI * reach;
+  const split = (p0: number, p1: number, depth: number) => {
+    const L = p1 - p0;
+    if (L > minArc && depth < 8) {
+      const n = Math.ceil(L);
+      const ds = L / n;
+      const P: Vec2[] = [];
+      for (let k = 0; k <= n; k++) P.push(pointAt(line, p0 + k * ds));
+      // The heading of each step, unwrapped, so the turn between two points is a difference.
+      const U: number[] = [];
+      for (let k = 0; k < n; k++) {
+        const a = Math.atan2(P[k + 1][1] - P[k][1], P[k + 1][0] - P[k][0]);
+        if (!k) U.push(a);
+        else {
+          const d = a - U[k - 1];
+          U.push(U[k - 1] + d - 2 * Math.PI * Math.round(d / (2 * Math.PI)));
+        }
+      }
+      for (let j = 1; j < n; j++) {
+        for (let i = 0; (j - i) * ds > minArc; i++) {
+          if (Math.hypot(P[j][0] - P[i][0], P[j][1] - P[i][1]) >= 2 * reach || Math.abs(U[j] - U[i]) < HAIRPIN) continue;
+          const s = p0 + ((i + j) / 2) * ds;
+          split(p0, s, depth + 1);
+          split(s, p1, depth + 1);
+          return;
+        }
+      }
+    }
+    out.push([p0, p1]);
+  };
+  for (const [p0, p1] of pieces) split(p0, p1, 0);
+  return out;
+}
+
 // ---------------------------------------------------------------- one surface per place (phase 4b)
 
 /**
@@ -614,7 +671,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
       for (const [a, b] of subtract([s0, s1], cuts)) {
         if (b - a < 0.8) continue;
         runs.push({ road: ri, s0: a, s1: b, ctx: c });
-        const pieces = chunks(a, b, 80);
+        const pieces = unlap(road.points, chunks(a, b, 80), footReach(roadPieceSpec(road, c, [], true, true, [], {})));
         pieces.forEach(([p0, p1], k) => {
           const pts = sliceLine(road.points, p0, p1);
           if (pts.length < 2) return;
@@ -678,6 +735,8 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
       }
       for (const [c0, c1] of subtract([s0, s1], stCuts)) {
         if (c1 - c0 < 0.8) continue;
+        // (Minor streets are not unlapped: a vicus's U-turn split at its apex traded the fold for a seam
+        // left open where the later leg is cut away, and none of them breaks the kerb contract.)
         const pieces = chunks(c0, c1, 80);
         pieces.forEach(([p0, p1], k2) => {
           const pts = sliceLine(st.points, p0, p1);

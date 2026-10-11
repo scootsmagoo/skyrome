@@ -394,6 +394,8 @@ export function insula(spec: InsulaSpec): BuildingOutput {
       const lo: Opening = { x0: -1.3, x1: 1.3, y0: 0, y1: h };
       S.span(finish === 'brick' ? 'travertine' : 'wood_dark', -1.48, h, -0.035, 1.48, h + 0.22, 0.05);
       S.span('travertine', -1.32, -0.08, -0.14, 1.32, 0.02, T * 0.6);
+      // Its collider as drawn, down to the foundation (the strip under the side shop stops 12 cm under its floor).
+      S.solid(-1.3, yMin - s.yb, -0.12, 1.3, 0.02, T * 0.6);
       // (the same draws at every level, so the levels agree; a shop the ground closes stays shut)
       const openShop = drng.chance(0.4) && s.open;
       if (low) {
@@ -497,7 +499,11 @@ export function insula(spec: InsulaSpec): BuildingOutput {
     const depth = bay.kind === 'stair' ? T + 0.25 : bay.kind === 'entrance' ? T * 0.5 - 0.04 : bay.open && full ? backZ - zf : T * 0.3 - 0.01;
     d.solid(px, yMin, zf, o.x0, G - 0.3, backZ);
     d.solid(o.x0, o.y1, zf, o.x1, G - 0.3, backZ);
-    d.solid(o.x0, yMin, zf, o.x1, o.y0 - 0.12, zf + T * 0.2);
+    // The wall under the opening, topped by its threshold slab as drawn (shop: 0.14 m out to T·0.6 in;
+    // door: 0.12 m out to 0.5 m in; 2 cm over the floor). Topped 12 cm under the floor and only as deep
+    // as the wall's skin, it gave a walker two steps into a shop over the one drawn: since the floors
+    // stand at the highest pavement of their jambs (bayFloor), the lips the collision lens counts.
+    d.solid(o.x0, yMin, zf - 0.12, o.x1, o.y0 + 0.02, zf + (bay.kind === 'stair' || bay.kind === 'entrance' ? 0.5 : T * 0.6));
     // (a closed mouth's plug runs down to the lowest pavement in front of it: the wall under the sill is drawn there)
     if (depth < backZ - zf) {
       // (and below the lowest ground under the plug itself: on a falling street the ground behind the

@@ -1032,7 +1032,7 @@ function blockedAt(P: LinkProbe, x: number, z: number): boolean {
 }
 
 /** linkAlong's buffers (one window), kept while a graph is built. */
-let alongBuf: { goal: Uint8Array; state: Int8Array; dist: Float32Array; came: Int32Array } | null = null;
+let alongBuf: { goal: Uint8Array; state: Int8Array; dist: Float32Array; came: Int32Array; h: Float32Array; closed: Uint8Array } | null = null;
 
 /** Search window of `linkAlong` (m from the node) and its most expansions. */
 const ALONG = { reach: 90, expand: 12000, retries: 16, goal: 1.6 };
@@ -1054,7 +1054,7 @@ function linkAlong(B: Builder, id: number, P: LinkProbe, main: Set<number>, ya?:
     return i < 0 || j < 0 || i >= W || j >= W ? -1 : j * W + i;
   };
   // Goal cells: near a link of the network (not along a stair's parapets, nor a walled road).
-  const buf = (alongBuf ??= { goal: new Uint8Array(W * W), state: new Int8Array(W * W), dist: new Float32Array(W * W), came: new Int32Array(W * W) });
+  const buf = (alongBuf ??= { goal: new Uint8Array(W * W), state: new Int8Array(W * W), dist: new Float32Array(W * W), came: new Int32Array(W * W), h: new Float32Array(W * W), closed: new Uint8Array(W * W) });
   const goal = buf.goal.fill(0);
   let goals = 0;
   for (const e of B.nearEdges(n.x, n.z, R * 1.42, new Set([id]), 100000)) {
@@ -1088,22 +1088,27 @@ function linkAlong(B: Builder, id: number, P: LinkProbe, main: Set<number>, ya?:
   const start = cellOf(n.x, n.z);
   const dist = buf.dist;
   const came = buf.came;
-  for (let attempt = 0; attempt < ALONG.retries; attempt++) {
+  /**
+   * The goal cell nearest the node along the free cells (−1 if none within ALONG.expand expansions; `capped` when
+   * the search stopped there). Plain Dijkstra; with `h` (a lower bound of the way left to a goal) an A*.
+   */
+  const search = (h: Float32Array | null): { found: number; capped: boolean } => {
     dist.fill(Infinity);
+    const closed = buf.closed.fill(0);
     const heap = new CellHeap();
     dist[start] = 0;
     came[start] = -1;
-    heap.push(start, 0);
-    let found = -1;
+    heap.push(start, h ? h[start] : 0);
     let expanded = 0;
     while (heap.size) {
-      const [c, d] = heap.pop();
-      if (d > dist[c]) continue;
-      if (goal[c] && c !== start) {
-        found = c;
-        break;
-      }
-      if (++expanded > ALONG.expand) break;
+      const [c, key] = heap.pop();
+      if (h) {
+        if (closed[c]) continue;
+        closed[c] = 1;
+      } else if (key > dist[c]) continue;
+      const d = h ? dist[c] : key;
+      if (goal[c] && c !== start) return { found: c, capped: false };
+      if (++expanded > ALONG.expand) return { found: -1, capped: true };
       const ci = c % W, cj = Math.floor(c / W);
       for (let dz = -1; dz <= 1; dz++)
         for (let dx = -1; dx <= 1; dx++) {
@@ -1111,6 +1116,7 @@ function linkAlong(B: Builder, id: number, P: LinkProbe, main: Set<number>, ya?:
           const i = ci + dx, j = cj + dz;
           if (i < 0 || j < 0 || i >= W || j >= W) continue;
           const m = j * W + i;
+          if (h && closed[m]) continue;
           if (!free(m)) continue;
           // No corner cutting past a blocked cell.
           if (dx && dz && (!free(cj * W + i) || !free(j * W + ci))) continue;
@@ -1118,9 +1124,49 @@ function linkAlong(B: Builder, id: number, P: LinkProbe, main: Set<number>, ya?:
           if (nd >= dist[m]) continue;
           dist[m] = nd;
           came[m] = c;
-          heap.push(m, nd);
+          heap.push(m, h ? nd + h[m] : nd);
         }
     }
+    return { found: -1, capped: false };
+  };
+  /** The octile distance from every cell of the window to the nearest goal cell, walls ignored (two chamfer passes): A*'s bound. */
+  const toGoal = (): Float32Array => {
+    const h = buf.h;
+    const D = Math.SQRT2;
+    for (let c = 0; c < W * W; c++) h[c] = goal[c] ? 0 : 1e9;
+    for (let j = 0; j < W; j++)
+      for (let i = 0; i < W; i++) {
+        const c = j * W + i;
+        let v = h[c];
+        if (i > 0) v = Math.min(v, h[c - 1] + 1);
+        if (j > 0) {
+          v = Math.min(v, h[c - W] + 1);
+          if (i > 0) v = Math.min(v, h[c - W - 1] + D);
+          if (i < W - 1) v = Math.min(v, h[c - W + 1] + D);
+        }
+        h[c] = v;
+      }
+    for (let j = W - 1; j >= 0; j--)
+      for (let i = W - 1; i >= 0; i--) {
+        const c = j * W + i;
+        let v = h[c];
+        if (i < W - 1) v = Math.min(v, h[c + 1] + 1);
+        if (j < W - 1) {
+          v = Math.min(v, h[c + W] + 1);
+          if (i < W - 1) v = Math.min(v, h[c + W + 1] + D);
+          if (i > 0) v = Math.min(v, h[c + W - 1] + D);
+        }
+        h[c] = v;
+      }
+    return h;
+  };
+  for (let attempt = 0; attempt < ALONG.retries; attempt++) {
+    // The nearest way to the network first. Where that runs out of expansions short of it (in open ground
+    // a way round of more than about 60 m: the Campus Martius lane walled in between two courts, 82 m by
+    // the landmark margins), an A* heads for the network instead and reaches it within the window.
+    let r = search(null);
+    if (r.capped) r = search(toGoal());
+    const found = r.found;
     if (found < 0) return false;
     // The cells from the node to the goal.
     const cells: number[] = [];
