@@ -105,3 +105,181 @@ A phase flags growth when the second half of its samples kept growing past 5 per
 - `packNormals` mutates the geometry it is given. Every caller of `Batch.add/addGeometry/instance/shape` hands the geometry over (the builder's geometry is disposed right after, or `prep` made a private one), so nothing keeps float normals; the contract is now written on those methods.
 - Releasing CPU pixels (terrain layers, 45 MB) means a WebGL context loss cannot re-upload them. The game has no context-restore path for any of its released data (city batches included), so a lost context needs a page reload; noted in `groundTextures.ts`.
 - Renderer `geometries` creeps in a live city (+190 over 50 fights, +90 over 50 idle cycles) while the scene's unique geometry count and orphan count stay flat. That counter is uploads minus explicit disposes, and NPCs walking into view upload their meshes for the first time; it is not alive memory, so the harness judges fights and idle by heap and look caches. Colliders creep the same way (+350 over 50 fights) as chunks and NPC bodies stream; the heap and body counts are flat, so it was not chased further.
+
+## Phase 3 (October 2026): shrinking the steady memory
+
+P3-MEM crew. Base commit `d47f573` ("Plan: phase 3"). Same machine and method as above: an M4 Max,
+Chromium headless on Metal, the Forum (`at=rostra&hour=10`), a forced GC before every sample;
+`scripts/memory.mjs --runs 3` (median of three boots) and a snapshot read with
+`scripts/heap-summary.mjs --by-owner`. Several other agents shared the machine (load 15 to 65), which
+moves timings a lot and memory hardly at all (the heap was 853 MB in all three baseline boots).
+
+### Results
+
+| Forum, after GC | Before | After |
+| --- | ---: | ---: |
+| JS heap, dev server (three boots, twice) | 853 MB (853, 853, 853) | **497–527 MB** (497, 527, 497; 527, 497, 527) |
+| JS heap, production build (`--prod`, 2 boots) | 756 MB | **441 MB** |
+| Geometry on the CPU, `memory.mjs` (scene, unique) | 210 MB | **161–163 MB** |
+| Geometry, `perf.mjs --views forum` (after its four-way look) | 224 MB | **160 MB** |
+| City batches: live / allocated vertices | 2.51 M / 3.21 M | 2.51 M / 2.77 M (the far batch exact) |
+| Page process RSS / GPU process RSS | 2019 / 1022 MB | 1903 / 986 MB |
+| `renderer.info.memory.textures` | 1027 | 1029 (see "Textures") |
+
+The dev server's heap holds about 75 MB more than the production build: every module's source text
+with its inline source map (three.js 11 MB, Rapier's compat build 10 MB with its WASM as base64).
+The owner plays the production build. RSS falls less than the heap: the allocators keep some of the
+freed pages for reuse.
+
+Where the arrays went (native backings of 1 KB or more in the snapshot, by owner; the crowd differs
+between two boots, so the avatar row is approximate):
+
+| Owner | Before | After | What changed |
+| --- | ---: | ---: | --- |
+| Avatars: body caches, morphed bodies, heads, geometry in the scene | 144 MB | 65 MB | morph LRU, heads hold no body, attributes packed, shared eye attributes |
+| Build-time caches (column parts, instance shapes, the batcher's copies, kit pieces, prop builders) | 58 MB | 0 | dropped when Rome stands |
+| Builder `DataTexture` pixels (Trajan's materials, reliefs, friezes, granite, far amphitheatre, hair) | 53 MB | 4 MB | freed after upload; what is left waits for its first draw |
+| City batches | 72 MB | 43 MB | far batch finished, smaller start |
+| Audio PCM (bank, recordings) | 43 MB | 23 MB | 16-bit stash until first played |
+| Open inscription atlas pages | 28 MB | 0 | pages on the GPU only |
+| Compressed (KTX2) pixels kept after upload | 21 MB | 5 MB | body maps freed after upload |
+| Heightmap road and pad masks | 17 MB | 0 | dropped after the build |
+| Rapier's JS copies of collider shapes | 11 MB | 0 | `clearShapeCache` |
+| Static water meshes | 8 MB | 4 MB | released after upload (the rest is not drawn yet) |
+| Rapier WASM memory | 56 MB | 56 MB | needed |
+| Script source text (dev server only) | 76 MB | 76 MB | not in the production build |
+| **All native backings ≥ 1 KB** | **737 MB** | **424 MB** | |
+
+### What changed
+
+1. **Build caches** (`registerBuildCache` / `releaseBuildCaches` in `gfx/release.ts`, called at the
+   end of `buildRome`). Column parts (`classical/column.ts`, 20 MB), MeshBuilder's prepared instance
+   shapes (12 MB), the landmark kits' pieces (`trajan-kit`, `forum-kit`, `generic-*`, `palcirc/*`,
+   `capfora/ornament`) are memo caches that only the build reads. `LandmarkBatcher.finish` drops its
+   prepared copies (19 MB: the keys, the shared instance shapes, outlived the build). Props drop their
+   builder once the model is made (`props.ts`), and a `MeshBuilder` that a long-lived closure still
+   holds is emptied with the new `dispose()` (the Colosseum's zone hook kept its four builders; its
+   instance LOD sets kept their level builders).
+2. **Builder textures freed after upload.** `trajan-materials`, `relief`, `capfora/paint` (granite),
+   `amphitheatreFar` and the hair texture now use `releaseTextureAfterUpload` like the library's
+   procedural sets; the body's KTX2 normal and AO maps use the new `releaseCompressedAfterUpload`
+   (shared with `materials.ts`). None of these textures is cloned with other sampling parameters or
+   edited later (checked: no `clone()` of a material texture outside `materials.ts`, anisotropy is only
+   set at creation, one renderer).
+3. **Avatars** (`real/RealBody.ts`, `real/head/index.ts`, `real/pack.ts`). The morphed template
+   (position, normal, tangent per LOD) lived on every cache entry (42 MB) plus the shell profiles keyed
+   by it (10 MB); it is now an LRU of the 12 newest entries (making one again is a fraction of a
+   millisecond and gives the same arrays). Worse, every head kept its person's LOD 0 body alive through
+   `setLod`'s closure context (33 MB at the Forum): `buildHead` now takes a `bodyLater` getter and its
+   closures no longer name `ctx`, and a hair build asks for the body only when it builds a beard (it
+   used to evaluate it for every hair LOD). Cost, counted over 25 s of boot, a 360° pan and a walk at
+   the Forum: 522 morphs made against 441 with an unbounded cache (+30 ms in all, about 0.02 ms a
+   frame); before the beard guard it was 700 (+99 ms). Finished geometry is packed (`packSkinned`): skin weights, colours and
+   UVs to normalized uint16, normals, tangents and hair strands to normalized int16, bone indices to
+   uint8; an attribute with any value out of range stays float (a hair colour at 1.007 does). This
+   halves those arrays on the CPU and on the GPU; the shaders read the same floats (WebGL normalizes on
+   fetch, errors under 2·10⁻⁵). Packing is its own staged-build step (`stageMax.pack`, about half a
+   millisecond for LOD 0 on a quiet machine; `Math.round` was several times slower in these loops than
+   adding a half). The gore cuts index `.array` directly and now read through `floatsOf`. The eye
+   attributes that do not depend on the person are one attribute per sex; an evicted entry takes them
+   off its eye geometry before `dispose()`, which would otherwise delete their GL buffers under
+   everyone else's eyes (three.js would not re-bind them: the attribute objects are unchanged).
+4. **The far batch** (`world/city/index.ts`): massing and street ribbons are added at boot only and then
+   only shown and hidden, so the batch is `finish`ed: shrunk to its live size and its arrays freed once
+   uploaded (23 MB). The city's batches start at 2048 vertices instead of 8192: half of the 93 hold a
+   few hundred to a few thousand vertices (8 MB of empty capacity, CPU and GPU).
+5. **Inscription atlas pages on the GPU** (`arch/common/inscription.ts`, `setInscriptionRenderer` in
+   main.ts). A page is texture storage without pixels (`source.dataReady = false`); each panel is
+   rendered on its own, with its padding smeared, and copied into the page with
+   `renderer.copyTextureToTexture`, which also rebuilds the mips. The three open pages were 28 MB, and
+   every new sign used to re-upload its whole page (3 × 4 MB). Carved pages keep their AO/roughness in
+   RG8 (no metal channel needed): half of that map on the GPU, about 30 MB at the Forum. Check: every
+   page, map and mip level read back from the GPU (levels 0 and 3, 114 in all) hashed the same as the
+   old CPU pages (`?lodoff=gpuatlas`); one later boot differed on one page in both modes alike (the
+   order panels arrive in varies).
+6. **Audio** (`audio/AudioEngine.ts`, `audio/pcm16.ts`). The worker pre-bakes every one-shot and the
+   recordings are decoded at start-up; all of it then sat as float PCM (headless, no gesture yet) or
+   became float AudioBuffers (in play): 43 MB. A pre-baked sound now waits in a stash as 16-bit PCM
+   (CD depth: the rounding is 96 dB under full scale) and gets its AudioBuffer on first play, in well
+   under a millisecond; a sound requested by a play is uploaded at once. The packing itself runs about
+   a millisecond a frame (`packStash`): the recordings arrive together, and packing them in one go
+   was a long task. At the Forum the stash holds
+   about 20 MB; after a few seconds of play about 15 MB has turned into AudioBuffers.
+7. **Smaller things.** The heightmap's road and pad masks (17 MB) are only read while the world is
+   built (the terrain's data textures, the reeds) and are dropped after (`releaseBuildMasks`).
+   `Physics.track` clears rapier.js's JS copy of each collider's shape (`clearShapeCache`: trimesh
+   vertices and indices, heightfield heights, 11 MB; rapier rebuilds it from the WASM side if asked).
+   The water surface, quays, canal and island facing are released after upload (`releaseStaticMeshes`).
+
+### Textures
+
+`renderer.info.memory.textures` stays about 1,030 at the Forum. There are no duplicates: every
+material texture source is on the GPU once (248 GL textures for 305 material texture objects; clones
+share). The count is structural: 239 matrix and 238 draw-list textures of the 258 BatchedMeshes (one
+pair per batch however small; 137 of them hold 8 instances or fewer), about 150 shadow draw lists
+(`fastCull`), 130 bone textures (one per skinned person), 248 material textures and a few render
+targets. Halving it means merging the tiny batches (a draw-structure change: P3-GPU's) or a different
+skinning path; not done here. Memory-wise the biggest textures are the inscription pages (21 at the
+Forum, 1024² RGBA8 with mips: about 300 MB of GPU memory, now about 30 MB less) and the photo sets
+(2K, already KTX2).
+
+### Checks
+
+- `npx tsc --noEmit -p .` clean; `npx vitest run`: 205 files, 2495 tests pass (new: `real/pack.test.ts`,
+  `tests/audio-pcm16.test.ts`).
+- Same-camera screenshots (four views × four directions, NPCs hidden, time paused, UI hidden) against
+  the base build: differences stay within what two boots of the base build differ by (the player's
+  idle pose, flags and leaves in the wind, shadow-map texel jitter); crops of inscriptions and reliefs
+  are identical to the eye.
+- Gore on packed bodies: an enemy cut three times at LOD 0 (arm, shin, head) with no error.
+- Audio: the stash fills without a context, and after unlocking sounds play and move from the stash to
+  AudioBuffers.
+- Leaks (`scripts/leaks.mjs --orphans`, every phase): the heap is flat in every phase (teleport 526 →
+  564 MB with the crowd at the lap's end, interior, save/load, menus, fights 632 → 642 MB over 50
+  cycles, idle, day/night, Colosseum games). Flags that also show on the base build or come and go
+  between runs: DOM nodes and listeners in teleport (the base: DOM +26) and idle (one late UI sample).
+  Day/night flagged "audio buffers +1.3 MB": sounds playing for the first time leave the stash for
+  AudioBuffers, which the harness counted as growth; it now judges buffers plus twice the stash, and
+  a re-run of fights and day/night on the final code passes. One fights run on a machine at load 40
+  to 100 kept spawned enemies alive past `killall` (actors 27 → 117); two later runs of the same code
+  and one of the base build stayed at about 35 to 45 actors.
+- 30-minute soak (`scripts/soak.mjs --minutes 30`): PASS, no crash, no page error, median heap 507 MB
+  from minute 5 and 499 MB at minute 28 (−8 MB; limit +100).
+- Golden path (`scripts/golden-path.mjs`): PASS, all four chapters of Act I in 13 minutes (the 22
+  movement snags are MOVE's: the bank by (148, 118), the wall by (299, 164)...).
+- `npm run check:controls`: all checks pass (Chromium and WebKit, three presets).
+- Performance gate: `node scripts/perf-budget.mjs --repeat 2` PASS on the dev server (load 14): Forum
+  CPU 9.4 ms mean / 14.1 p95, render submit 4.7 ms, 973 draws, 2.74 M triangles, 2 slow frames;
+  Colosseum 6.6 / 11.6 / 3.7 ms; spawn 10.3 / 16.7 / 4.5 ms (the plan's baseline: Forum 10.2 / 14.4 /
+  5.2 ms). Interleaved against the base on production builds (three rounds each, load 10 to 39,
+  medians base → new): Forum CPU 17.0 → 12.0 ms, render submit 8.2 → 6.3 ms, slow frames 5 → 2;
+  Colosseum 7.3 → 7.2 ms; spawn 11.4 → 14.6 ms (its quietest round 11.0 → 10.2). Draws and triangles
+  are the same; the timings move with the load more than with the change. The quietest round passes
+  the gate for both builds. (An earlier interleaved run on dev servers looked worse for the new build,
+  mostly in boot time: the agents share one `node_modules/.vite` and its dependency cache was being
+  re-optimized under it; the production builds avoid that.)
+
+### Tools added or extended
+
+- `scripts/memory.mjs --runs N --prod --json f`: the median of N boots, the production build, and per
+  boot the geometry by group, texture classes and the city batches' live and allocated vertices.
+- `scripts/heap-summary.mjs f --owners N --by-owner`: every backing of 1 KB or more under its nearest
+  three.js owner and the named scene group above it (or the class or closure variable that holds it).
+- `?lodoff=gpuatlas`: the old CPU-side inscription pages, for A/B runs.
+
+### What is left
+
+- **Rapier's WASM memory** (56 MB, 44 k colliders) never shrinks; fewer colliders is the only lever.
+- **The city's streaming batches** (43 MB on the CPU, the same on the GPU) need their arrays while
+  blocks stream in and out. Indexing them would keep about 61 % of the vertices (measured over the
+  Forum's batches) plus 4-byte indices, about a fifth less, for a weld on every streamed commit; not
+  done (CPU per commit on a laptop that runs hot).
+- **Avatars** (about 50 MB at the Forum's crowd after packing): positions, the cloth and deform
+  attributes (`cloth`, `trim`, `legs`, `aDef0/1`: ranges beyond [−1, 1] that half floats would
+  round) and the cached LODs of people in the crowd.
+- **Terrain and plan grids** (about 50 MB: the terrain's data layers and heights, the plan's heights,
+  owners and classes) are read at run time by footsteps, the streamed ground cover and the minimap.
+- **Lazy uploads**: meshes and textures nobody has drawn yet keep their arrays until their first draw
+  (about 25 MB at the Forum: Trajan's near LODs, far stand-ins of the Forum's own landmarks, a
+  procedural set). Uploading them early would only move the bytes to the GPU.
+- **Textures**: see above; the count needs fewer, bigger batches.

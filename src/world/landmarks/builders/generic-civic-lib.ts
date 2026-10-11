@@ -9,6 +9,7 @@ import { gridSurface, linspace, sweep, type V2 } from '../../../arch/common/geom
 import type { Draw } from '../../../arch/fabric/draw';
 import type { Order } from '../../../arch/classical/orders';
 import type { MaterialId } from '../../../gfx/materialIds';
+import { registerBuildCache } from '../../../gfx/release';
 import type { LandmarkBuilder } from '../types';
 import { V, cornice, tiledRoof, ringRoof, wallRun, type Detail, type V3 } from './generic-common';
 
@@ -36,6 +37,7 @@ export interface ColonnadeSpec {
 }
 
 const colCache = new Map<string, THREE.BufferGeometry[]>();
+registerBuildCache(() => colCache.clear()); // built with the world only (gfx/release)
 
 /** Simplified column pieces (shaft, base, capital) for a height and diameter. */
 function liteColumn(H: number, D: number, order: Order, seg: number): THREE.BufferGeometry[] {

@@ -86,7 +86,12 @@ from the JS heap once uploaded (static scenery only; colliders are separate). Th
 **Signs and inscriptions.** `inscriptionPanel()` and `paintedSign()` pack their text into shared
 atlas pages per style (carved, bronze, painted; 1024² each), so a street of shop signs is one
 material and one draw call per building. Pass `monumental: true` for a unique full-resolution
-material (arch attics, the column's pedestal).
+material (arch attics, the column's pedestal). In the game (`setInscriptionRenderer`, main.ts)
+the pages live on the GPU only: a page is texture storage with no pixels on the CPU, each new
+panel is rendered on its own (with its padding) and copied into the page's textures
+(`renderer.copyTextureToTexture`), and the GPU rebuilds the mip chain. The open pages were 28 MB
+of the heap, and every new sign re-uploaded its whole page (memory audit, phase 3). Without a
+renderer (tests, tools) a page keeps its pixels until it is sealed, as before.
 
 **Walkability.** The character controller is configured with a 0.42 m autostep, but with its
 0.35 m-radius capsule the effective climbable step is about **0.26 m**, and treads need about

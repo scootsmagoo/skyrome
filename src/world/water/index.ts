@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import type { Game, System } from '../../core/Game';
 import type * as Atlas from '../../data/atlas';
 import { registerColliders } from '../../gfx/MeshBuilder';
+import { releaseStaticMeshes } from '../../gfx/release';
 import { Forest, vegetation } from '../../arch/vegetation';
 import { WORLD_SCALE } from '../coords';
 import type { Heightmap } from '../terrain/heightmap';
@@ -130,6 +131,8 @@ export async function buildWater(game: Game, atlas: typeof Atlas, hm: Heightmap)
     heightTex = t;
   }
   const lin = (hex: number) => new THREE.Color(hex);
+  /** Static meshes whose vertex arrays can go once uploaded (gfx/release): the surface, quays, canal, island. */
+  const statics: THREE.Object3D[] = [];
   water.uniforms = {
     tHeight: { value: heightTex },
     uGrid: { value: new THREE.Vector4(hm.minX, hm.minZ, hm.spacing, 0) },
@@ -161,11 +164,13 @@ export async function buildWater(game: Game, atlas: typeof Atlas, hm: Heightmap)
     mesh.renderOrder = 1;
     water.surface = mesh;
     water.group.add(mesh);
+    statics.push(mesh);
   }
 
   // ---- canal masonry (Agrippa's Euripus)
   for (const c of canals) {
     const group = c.build.builder.build(`canal:${c.body.id}`);
+    statics.push(group);
     registerColliders(game, c.build.builder.colliders, undefined, water);
     if (game.world) game.world.add(`canal:${c.body.id}`, group, { cullDistance: 900, parent: water.group });
     else water.group.add(group);
@@ -188,6 +193,7 @@ export async function buildWater(game: Game, atlas: typeof Atlas, hm: Heightmap)
       quaySkip.push({ body: river.id, side: rq.side, s0: rq.s0 * S, s1: rq.s1 * S });
       const q = buildQuay(river, rq, ground, S, { corridors, occupied });
       const group = q.builder.build(rq.quay.id);
+      statics.push(group);
       registerColliders(game, q.colliders, undefined, water);
       if (game.world) game.world.add(`quay:${rq.quay.id}`, group, { cullDistance: 1600, parent: water.group });
       else water.group.add(group);
@@ -202,6 +208,7 @@ export async function buildWater(game: Game, atlas: typeof Atlas, hm: Heightmap)
     const b = buildIslandFacing(isl.outline, isl.elevation, atlas.RIVERS[0]?.waterLevel ?? 6, skip, S, { corridors });
     water.landings.push(...b.landings);
     const group = b.build(`island-facing:${isl.id}`);
+    statics.push(group);
     registerColliders(game, b.colliders, undefined, water);
     if (game.world) game.world.add(`island-facing:${isl.id}`, group, { cullDistance: 1600, parent: water.group });
     else water.group.add(group);
@@ -233,6 +240,10 @@ export async function buildWater(game: Game, atlas: typeof Atlas, hm: Heightmap)
   water.swim = game.addSystem(new SwimSystem(game, (x, z) => water.hitAt(x, z)));
   game.addSystem(new WaterCamera(water));
 
+  // Nothing edits or reads these after the build (colliders are registered above): only the GPU's
+  // copy is kept, as for the landmarks (~7 MB, memory audit phase 3). Not the reeds: their shapes
+  // are the vegetation module's, shared with other groves.
+  for (const o of statics) releaseStaticMeshes(o);
   game.scene.add(water.group);
 }
 

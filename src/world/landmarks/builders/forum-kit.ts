@@ -34,6 +34,7 @@ import { UV_METERS } from '../../../gfx/textures/catalog';
 import { MeshBuilder, type ColliderSpec } from '../../../gfx/MeshBuilder';
 import { placeProp } from '../../../arch/props';
 import type { MaterialId } from '../../../gfx/materialIds';
+import { registerBuildCache } from '../../../gfx/release';
 import { getMaterial } from '../../../gfx/materials';
 import { ROADS } from '../../../data/atlas';
 import { toGame } from '../../coords';
@@ -718,6 +719,7 @@ interface Piece {
 }
 
 const midCache = new Map<string, Piece[]>();
+registerBuildCache(() => midCache.clear()); // built with the world only (gfx/release)
 
 /** Fluted (or plain) shaft from y0 to y1 with entasis; 'engaged' keeps the front half (z < 0). */
 function midShaft(D: number, top: number, y0: number, y1: number, fluted: boolean, half: boolean, arris: boolean): THREE.BufferGeometry {

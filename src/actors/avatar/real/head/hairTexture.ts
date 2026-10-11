@@ -12,6 +12,7 @@
  */
 import * as THREE from 'three';
 import { Rng } from '../../../../core/Rng';
+import { releaseTextureAfterUpload } from '../../../../gfx/release';
 
 export const HAIR_TEX = { w: 512, h: 1024 } as const;
 /** u ranges of the three regions (inset a little so mip levels do not bleed across). */
@@ -139,6 +140,7 @@ export function hairTexture(): THREE.DataTexture {
   t.anisotropy = 8;
   t.needsUpdate = true;
   t.name = 'hair-strands';
-  tex = t;
+  // One texture shared by every hair material, never edited: the pixels go once uploaded (gfx/release).
+  tex = releaseTextureAfterUpload(t);
   return t;
 }

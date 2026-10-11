@@ -376,17 +376,60 @@ interface AtlasPage {
   textures: THREE.DataTexture[];
   /** No more panels go on this page: its pixels are dropped once the GPU has them. */
   sealed?: boolean;
+  /** The page lives on the GPU only: panels are copied into its textures (`gpuBlit`), no pixels are kept. */
+  gpu?: { color: THREE.DataTexture; normal?: THREE.DataTexture; arm?: THREE.DataTexture };
 }
 
 const pages: AtlasPage[] = [];
 const atlasCache = new Map<string, { page: AtlasPage; entry: AtlasEntry }>();
+
+/**
+ * The game's renderer, once there is one (main.ts). With it the atlas pages keep no pixels at all:
+ * each panel is rendered on its own and copied into the page's textures on the GPU, and the GPU
+ * rebuilds the mip chain. Without it (tests, tools) a page keeps its pixels until it is sealed. The
+ * open pages were 28 MB of the Forum's heap (memory audit, phase 3), and every new panel used to
+ * re-upload its whole page (3 × 4 MB).
+ */
+let gpuRenderer: THREE.WebGLRenderer | null = null;
+
+export function setInscriptionRenderer(renderer: THREE.WebGLRenderer | null) {
+  gpuRenderer = renderer;
+}
 
 function newPage(style: InscriptionStyle): AtlasPage {
   const S = ATLAS_PAGE;
   const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: style === 'painted' ? 0.85 : 1, metalness: style === 'bronze' ? 1 : 0 });
   material.name = `inscriptions:${style}#${pages.filter((p) => p.style === style).length}`;
   const page: AtlasPage = { style, shelves: { size: S, x: 0, y: 0, rowH: 0 }, entries: [], material, textures: [] };
-  if (typeof document !== 'undefined') {
+  if (typeof document !== 'undefined' && gpuRenderer) {
+    // GPU-resident: storage only (no data to upload: `dataReady` false), panels arrive by copies.
+    // Carved stone has no metal: its AO/roughness map needs two channels only (RG8, half the bytes;
+    // the material reads AO from .r and roughness from .g either way).
+    const tex = (srgb: boolean, rg = false) => {
+      const t = new THREE.DataTexture(null, S, S, rg ? THREE.RGFormat : THREE.RGBAFormat, THREE.UnsignedByteType);
+      if (rg) t.unpackAlignment = 2;
+      t.magFilter = THREE.LinearFilter;
+      t.minFilter = THREE.LinearMipmapLinearFilter;
+      t.generateMipmaps = true;
+      t.anisotropy = 8;
+      t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+      if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+      t.source.dataReady = false;
+      t.needsUpdate = true;
+      page.textures.push(t);
+      return t;
+    };
+    page.gpu = { color: tex(true) };
+    material.map = page.gpu.color;
+    if (style !== 'painted') {
+      page.gpu.normal = tex(false);
+      page.gpu.arm = tex(false, style === 'carved');
+      material.normalMap = page.gpu.normal;
+      material.roughnessMap = page.gpu.arm;
+      material.aoMap = page.gpu.arm;
+      if (style === 'bronze') material.metalnessMap = page.gpu.arm;
+    }
+  } else if (typeof document !== 'undefined') {
     // Painted dipinti are flat and evenly matte: colour only. Carved and bronze need relief and
     // a roughness/metal map.
     page.color = new Uint8ClampedArray(S * S * 4);
@@ -422,6 +465,7 @@ function sealPages() {
   for (const p of pages) {
     if (p.sealed || newest.get(p.style) === p) continue;
     p.sealed = true;
+    if (p.gpu) continue; // no pixels to drop
     const drop = () => {
       p.color = p.normal = p.arm = undefined;
     };
@@ -435,6 +479,10 @@ function sealPages() {
 
 /** Copy a rendered panel into its page region, smearing its edge pixels into the padding. */
 function blit(page: AtlasPage, e: AtlasEntry, r: Rendered) {
+  if (page.gpu) {
+    gpuBlit(page.gpu, e, r);
+    return;
+  }
   const S = ATLAS_PAGE;
   const copy = (dst: Uint8ClampedArray | undefined, src: Uint8ClampedArray) => {
     if (!dst) return;
@@ -459,6 +507,38 @@ function blit(page: AtlasPage, e: AtlasEntry, r: Rendered) {
   copy(page.normal, r.normal);
   copy(page.arm, r.arm);
   for (const t of page.textures) t.needsUpdate = true;
+}
+
+/**
+ * The same copy as `blit` (edge pixels smeared into the padding), into a panel-sized array that is
+ * written straight into the page's GPU textures (the renderer then regenerates their mipmaps).
+ */
+function gpuBlit(gpu: NonNullable<AtlasPage['gpu']>, e: AtlasEntry, r: Rendered) {
+  const W = r.w + 2 * PAD;
+  const H = r.h + 2 * PAD;
+  const at = new THREE.Vector2(e.x, e.y);
+  const send = (dst: THREE.DataTexture | undefined, src: Uint8ClampedArray) => {
+    if (!dst || !gpuRenderer) return;
+    // RG pages take the first two channels of each pixel.
+    const rg = dst.format === THREE.RGFormat;
+    const c = rg ? 2 : 4;
+    const out = new Uint8ClampedArray(W * H * c);
+    for (let y = 0; y < H; y++) {
+      const sy = Math.min(r.h - 1, Math.max(0, y - PAD));
+      for (let x = 0; x < W; x++) {
+        const sx = Math.min(r.w - 1, Math.max(0, x - PAD));
+        const si = (sy * r.w + sx) * 4;
+        const ti = (y * W + x) * c;
+        for (let k = 0; k < c; k++) out[ti + k] = src[si + k];
+      }
+    }
+    const tmp = new THREE.DataTexture(out, W, H, rg ? THREE.RGFormat : THREE.RGBAFormat, THREE.UnsignedByteType);
+    gpuRenderer.copyTextureToTexture(tmp, dst, null, at);
+    tmp.dispose();
+  };
+  send(gpu.color, r.color);
+  send(gpu.normal, r.normal);
+  send(gpu.arm, r.arm);
 }
 
 let atlasRedrawQueued = false;
@@ -546,7 +626,15 @@ export function paintedSign(b: MeshBuilder, lines: string[], width: number, heig
   inscriptionPanel(b, { lines, width, height, style: 'painted', ink: opts.ink, ground: opts.ground, interpunct: false, sizes: lines.map((_, i) => (i === 0 ? 1 : 0.7)) }, at, { depth: 0.04 });
 }
 
-/** Atlas pages in use (for stats and tests). */
-export function inscriptionAtlasPages(): readonly { style: InscriptionStyle; entries: number; material: THREE.Material }[] {
-  return pages.map((p) => ({ style: p.style, entries: p.entries.length, material: p.material }));
+/** Atlas pages in use (for stats and tests): panels, the share of the page they cover, and the shelves' fill height. */
+export function inscriptionAtlasPages(): readonly { style: InscriptionStyle; entries: number; material: THREE.Material; covered: number; filled: number; sealed: boolean }[] {
+  const S = ATLAS_PAGE;
+  return pages.map((p) => ({
+    style: p.style,
+    entries: p.entries.length,
+    material: p.material,
+    covered: p.entries.reduce((s, e) => s + (e.w + 2 * PAD) * (e.h + 2 * PAD), 0) / (S * S),
+    filled: (p.shelves.y + p.shelves.rowH) / S,
+    sealed: !!p.sealed,
+  }));
 }

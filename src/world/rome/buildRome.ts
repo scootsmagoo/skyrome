@@ -15,6 +15,7 @@ import { footprintRadius } from '../landmarks/footprint';
 import { dressTerrain } from '../terrain/dress';
 import { Terrain } from '../terrain/Terrain';
 import { buildHeightmap, footprintPolygon, type Heightmap, type TerrainPad } from '../terrain/heightmap';
+import { releaseBuildCaches } from '../../gfx/release';
 
 declare module '../../core/Game' {
   interface Game {
@@ -143,6 +144,10 @@ export async function buildRome(game: Game, opts: BuildRomeOptions = {}) {
     await step.run(game, hm);
     f += (0.65 * step.weight) / (1 + extraWeight);
   }
+  // Rome stands: the builders' memo caches (column parts, instance shapes, kit pieces) and the
+  // heightmap's road and pad masks (read into the terrain's textures) can go.
+  releaseBuildCaches();
+  hm.releaseBuildMasks();
   report(1, 'Rome awaits');
   return hm;
 }

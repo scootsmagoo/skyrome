@@ -17,6 +17,7 @@
 import * as THREE from 'three';
 import type { HumanoidAvatar } from '../../actors/avatar/HumanoidAvatar';
 import { B } from '../../actors/avatar/rig';
+import { floatsOf } from '../../actors/avatar/real/pack';
 import { cutMesh } from './cut';
 import { REAL_CUT, partMask, subtree, type Part } from './limbs';
 import type { SeveredPiece } from './dismember';
@@ -171,6 +172,8 @@ export function severReal(avatar: HumanoidAvatar, part: Part): SeveredPiece | nu
   const index = geo.getIndex();
   if (!pos?.array || !nor?.array || !tan?.array || !uv?.array || !si?.array || !sw?.array || !index?.array) return null;
   const n = pos.count;
+  // The body's attributes are packed (real/pack.ts): read them as floats.
+  const swF = floatsOf(sw);
 
   // The plane: through the bone at fraction t of its length, perpendicular to it (bind pose).
   const joints = avatar.rig.joints;
@@ -182,7 +185,7 @@ export function severReal(avatar: HumanoidAvatar, part: Part): SeveredPiece | nu
   if (len < 1e-4) return null;
   axis.multiplyScalar(1 / len);
   const s0 = len * cfg.t;
-  const mask = partMask(si.array as ArrayLike<number>, sw.array as ArrayLike<number>, subtree(cfg.bone));
+  const mask = partMask(si.array as ArrayLike<number>, swF, subtree(cfg.bone));
   const g = new Float32Array(n);
   let any = false;
   for (let i = 0; i < n; i++) {
@@ -197,9 +200,9 @@ export function severReal(avatar: HumanoidAvatar, part: Part): SeveredPiece | nu
   // Attributes, with the new vertices interpolated (skin weights from the chosen end).
   const attrs: Attr[] = [
     { name: 'position', size: 3, data: pos.array as ArrayLike<number> },
-    { name: 'normal', size: 3, data: nor.array as ArrayLike<number> },
-    { name: 'tangent', size: 4, data: tan.array as ArrayLike<number> },
-    { name: 'uv', size: 2, data: uv.array as ArrayLike<number> },
+    { name: 'normal', size: 3, data: floatsOf(nor) },
+    { name: 'tangent', size: 4, data: floatsOf(tan) },
+    { name: 'uv', size: 2, data: floatsOf(uv) },
   ];
   const m = cut.extra.length;
   const lerped = attrs.map((a) => {
@@ -224,7 +227,7 @@ export function severReal(avatar: HumanoidAvatar, part: Part): SeveredPiece | nu
       const v = e[end];
       for (let c = 0; c < 4; c++) {
         idx[k * 4 + c] = si.array[v * 4 + c];
-        wt[k * 4 + c] = sw.array[v * 4 + c];
+        wt[k * 4 + c] = swF[v * 4 + c];
       }
     });
     return { idx, wt };
@@ -237,7 +240,7 @@ export function severReal(avatar: HumanoidAvatar, part: Part): SeveredPiece | nu
   for (const i of cut.piece) if (!remap.has(i)) remap.set(i, used.push(i) - 1);
   const pn = used.length;
   const pieceSkin = skinOf('a');
-  const skinAt = (i: number) => (i < n ? { idx: si.array, wt: sw.array, o: i * 4 } : { idx: pieceSkin.idx, wt: pieceSkin.wt, o: (i - n) * 4 });
+  const skinAt = (i: number) => (i < n ? { idx: si.array, wt: swF, o: i * 4 } : { idx: pieceSkin.idx, wt: pieceSkin.wt, o: (i - n) * 4 });
   const val = (ai: number, i: number, c: number) => (i < n ? attrs[ai].data[i * attrs[ai].size + c] : lerped[ai][(i - n) * attrs[ai].size + c]);
   const wp = new Float32Array(pn * 3);
   const wn = new Float32Array(pn * 3);
@@ -374,7 +377,7 @@ export function severReal(avatar: HumanoidAvatar, part: Part): SeveredPiece | nu
   const bwt = new Float32Array(bn * 4);
   for (let i = 0; i < n * 4; i++) {
     bidx[i] = si.array[i];
-    bwt[i] = sw.array[i];
+    bwt[i] = swF[i];
   }
   bidx.set(bodySkin.idx, n * 4);
   bwt.set(bodySkin.wt, n * 4);
@@ -438,11 +441,12 @@ function bakeEyes(avatar: HumanoidAvatar, poser: Poser, group: THREE.Group, cent
   const sw = g.getAttribute('skinWeight') as THREE.BufferAttribute;
   const ix = g.getIndex();
   if (!p || !nn || !si || !sw || !ix) return;
+  const swF = floatsOf(sw);
   const pos = new Float32Array(p.count * 3);
   const nor = new Float32Array(p.count * 3);
   for (let i = 0; i < p.count; i++) {
     v0.fromBufferAttribute(p, i);
-    poser.point(v1, v0, si.array, sw.array, i * 4);
+    poser.point(v1, v0, si.array, swF, i * 4);
     pos[i * 3] = v1.x - centroid.x;
     pos[i * 3 + 1] = v1.y - centroid.y;
     pos[i * 3 + 2] = v1.z - centroid.z;

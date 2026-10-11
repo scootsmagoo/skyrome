@@ -11,6 +11,9 @@
  * --owners N   show the N biggest backing stores >= --min MB with a chain such as
  *              Float32Array.buffer -> BufferAttribute.array -> BufferGeometry.attributes ...
  *              (grouped when several have the same chain)
+ * --by-owner   with --owners N: every native backing of 1 KB or more under its nearest three.js owner
+ *              (mesh, texture, geometry, skeleton) and the named scene groups above it, e.g.
+ *              "BatchedMesh 'city:stone' (position) in city:batches"; a '?' row shows the chain head
  */
 import { readFileSync, statSync } from 'node:fs';
 
@@ -205,4 +208,89 @@ if (ownersN) {
   }
   console.log(`\nBackings >= ${minMB} MB: ${big.length}, ${(big.reduce((s, b) => s + b[1], 0) / 1048576).toFixed(0)} MB. By retainer chain (first referrer each step):`);
   for (const [k, v] of [...chains].sort((a, b) => b[1].bytes - a[1].bytes).slice(0, ownersN)) console.log(`${mb(v.bytes)} MB x${v.n} (max ${(v.max / 1048576).toFixed(1)})  ${k}`);
+
+  if (process.argv.includes('--by-owner')) {
+    // Every native backing (any size), put under the nearest three.js owner on its retainer path and
+    // the named scene objects above it: "BatchedMesh 'city:stone' (position) in city:batches".
+    const OWNER = /^(BatchedMesh|InstancedMesh|SkinnedMesh|Mesh|Points|LineSegments|Line|Sprite|DataTexture|DataArrayTexture|Data3DTexture|CompressedTexture|CompressedArrayTexture|CanvasTexture|Texture|AudioBuffer|WebGLRenderTarget|Skeleton|BufferGeometry|InstancedBufferGeometry)$/;
+    const SCENEISH = /^(Group|Object3D|Scene|Mesh|BatchedMesh|InstancedMesh|SkinnedMesh|LOD|Bone)$/;
+    // Containers and engine internals, skipped when naming who holds a backing.
+    const GENERIC = /^(Object|Array|Map|Set|WeakMap|WeakSet|ArrayBuffer|DataView|Generator|Window.*|Promise|.*Array|BufferAttribute|Float32BufferAttribute|Uint16BufferAttribute|Uint32BufferAttribute|InterleavedBuffer|InterleavedBufferAttribute|TextureSource|Source|Image.*|\(.*\)|system \/ .*|.*\/.*|[a-zA-Z]{1,2}|\.?\d+|)$/;
+    const propTarget = (n, name) => {
+      for (let e = first[n]; e < first[n + 1]; e++) {
+        if (edgeTypes[edges[e * ES + eType]] !== 'property') continue;
+        if (strings[edges[e * ES + eName]] === name) return edges[e * ES + eTo] / NS;
+      }
+      return -1;
+    };
+    // A string node's text; names built with templates are concatenated strings (first + second).
+    const text = (t, depth = 0) => {
+      const ty = nodeTypes[nodes[t * NS + iType]];
+      if (ty === 'concatenated string' && depth < 12) {
+        let a = '';
+        let b = '';
+        for (let e = first[t]; e < first[t + 1]; e++) {
+          const nm = strings[edges[e * ES + eName]];
+          if (nm === 'first') a = text(edges[e * ES + eTo] / NS, depth + 1);
+          else if (nm === 'second') b = text(edges[e * ES + eTo] / NS, depth + 1);
+        }
+        return a + b;
+      }
+      return /string/.test(ty) ? String(strings[nodes[t * NS + iName]] ?? '') : '';
+    };
+    const objName = (n) => {
+      const t = propTarget(n, 'name');
+      return t < 0 ? '' : text(t).slice(0, 48);
+    };
+    const groups = new Map();
+    const roll = new Map();
+    let all = 0;
+    for (let n = 0; n < N; n++) {
+      if (nodeTypes[nodes[n * NS + iType]] !== 'native') continue;
+      const sz = nodes[n * NS + iSelf];
+      if (sz < 1024) continue;
+      all += sz;
+      let c = n;
+      let owner = '';
+      let attr = '';
+      let top = '';
+      let field = '';
+      let holder = '';
+      let script = false;
+      for (let d = 0; d < 40 && from[c] >= 0; d++) {
+        const p = from[c];
+        const ctor = label(p);
+        const el = edgeLabel(via[c]);
+        if (/^system \/ Script/.test(ctor)) script = true;
+        if (!field && /^\.[A-Za-z_$][\w$]*$/.test(el) && el !== '.buffer' && el !== '.backing_store' && el !== '.array') field = el;
+        if (!attr && ctor === 'Object' && /^\.[A-Za-z_]+$/.test(el) && from[p] >= 0 && label(from[p]) === 'BufferGeometry') attr = el.slice(1);
+        if (!owner && OWNER.test(ctor)) owner = `${ctor} '${objName(p)}'`;
+        else if (owner && SCENEISH.test(ctor)) {
+          const nm = objName(p);
+          if (nm) top = nm;
+        } else if (!top && !holder && /^system \/ Context/.test(ctor) && /^\.[A-Za-z_$][\w$]*$/.test(el)) {
+          // A variable of a module or closure scope: grep the source for it.
+          holder = `scope var ${el.slice(1)}`;
+        } else if (!top && !holder && !GENERIC.test(ctor) && !OWNER.test(ctor)) {
+          // Not (yet) in the scene graph: the first class of the game's own on the path (a cache, a service).
+          holder = `${ctor}${/^\.[A-Za-z_$][\w$]*$/.test(el) ? el : ''}`;
+        }
+        c = p;
+      }
+      const where = top ? ` in ${top}` : holder ? ` held by ${holder}` : '';
+      const key = script ? '(script source text)' : owner ? `${owner}${attr ? ` (${attr})` : ''}${where}` : `? ${field ? `${field} ` : ''}${where || ' (no holder)'}`;
+      // Coarser roll-up key: owner class and top group (or holder) only.
+      const rk = script ? key : owner ? `${owner.split(' ')[0]}${where}` : key;
+      for (const [map, k] of [[groups, key], [roll, rk]]) {
+        const o = map.get(k) ?? { n: 0, bytes: 0 };
+        o.n++;
+        o.bytes += sz;
+        map.set(k, o);
+      }
+    }
+    console.log(`\nNative backings >= 1 KB: ${(all / 1048576).toFixed(0)} MB. By owner class and top named group:`);
+    for (const [k, v] of [...roll].sort((a, b) => b[1].bytes - a[1].bytes).slice(0, ownersN)) console.log(`${mb(v.bytes)} MB x${v.n}  ${k}`);
+    console.log('\nBy owner, attribute and group:');
+    for (const [k, v] of [...groups].sort((a, b) => b[1].bytes - a[1].bytes).slice(0, ownersN)) console.log(`${mb(v.bytes)} MB x${v.n}  ${k}`);
+  }
 }

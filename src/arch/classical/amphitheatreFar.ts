@@ -19,6 +19,7 @@ import * as THREE from 'three';
 import type { MeshBuilder } from '../../gfx/MeshBuilder';
 import type { MaterialId } from '../../gfx/materialIds';
 import { fbm2D, heightToNormal } from '../../gfx/textures/noise';
+import { releaseTextureAfterUpload } from '../../gfx/release';
 import { makeGeometry, type V2 } from '../common/geom';
 import { caveaFarProfile, ellipseAt, ellipseNormal, equalArcParams, type AmphitheatreSpec } from './amphitheatre';
 import { storeyColumn, type ArcadeStorey } from './arch';
@@ -235,7 +236,8 @@ function textureMaterial(key: string, make: () => FarTexture, repeatV: boolean, 
     t.anisotropy = 8;
     if (srgb) t.colorSpace = THREE.SRGBColorSpace;
     t.needsUpdate = true;
-    return t;
+    // Static: the pixels are needed once, for the upload (gfx/release).
+    return releaseTextureAfterUpload(t);
   };
   mat = new THREE.MeshStandardMaterial({ map: data(tex.color, true), roughness, metalness: 0 });
   if (tex.normal) {

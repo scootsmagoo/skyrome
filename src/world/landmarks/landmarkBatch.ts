@@ -61,8 +61,8 @@ export class LandmarkBatcher implements System, ShadowHook {
   private readonly swapped: Entry[] = [];
   private finished = false;
   readonly stats = { meshes: 0, instances: 0, lodEntries: 0 };
-  /** Prepared (position + packed normal + uv, non-indexed) copies of source geometries. */
-  private readonly prepared = new WeakMap<THREE.BufferGeometry, THREE.BufferGeometry>();
+  /** Prepared (position + packed normal + uv, non-indexed) copies of source geometries (dropped at `finish`). */
+  private prepared = new WeakMap<THREE.BufferGeometry, THREE.BufferGeometry>();
 
   constructor(private readonly game: Game) {
     this.batchPool = new BatchPool(game.scene, { name: 'lmbatch', verts: 1 << 15, growth: 1.6, trim: false });
@@ -223,6 +223,9 @@ export class LandmarkBatcher implements System, ShadowHook {
     if (this.finished) return;
     this.finished = true;
     for (const b of this.batchPool.all()) b.finish();
+    // The batches hold copies of everything prepared; the keys (shared instance shapes) outlive the
+    // build, so without this the copies did too (19 MB at the Forum, memory audit phase 3).
+    this.prepared = new WeakMap();
   }
 
   get count() {

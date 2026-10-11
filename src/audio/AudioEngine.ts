@@ -21,6 +21,7 @@ import { Layer } from '../core/Physics';
 import type { SettingsData } from '../core/Settings';
 import { AmbienceDirector } from './Ambience';
 import { LOOPS, SOUNDS, bakeRate, forget, getVariants, isBaked, requestBake, setBaker, setSampleSource } from './bank';
+import { packPcm, unpackPcm } from './pcm16';
 import { Rand, dbToGain } from './dsp/core';
 import { REVERBS, impulseResponse, type ReverbPreset } from './dsp/reverb';
 import { FootstepDriver, type FootstepOptions, type FootstepSource, type Surface } from './FootstepDriver';
@@ -126,6 +127,8 @@ export interface AudioStats {
   recorded: number;
   sampleFormat: string;
   samplesHeldMB: number;
+  /** Pre-baked sounds that have not played yet, held as 16-bit PCM (MB). */
+  stashedMB: number;
 }
 
 interface Voice extends VoiceSlot {
@@ -235,7 +238,17 @@ export class AudioEngine implements System {
   /** The recorded sounds (public/audio/sfx), null where the browser cannot decode them. */
   samples: SampleLibrary | null = null;
   /** One AudioBuffer per PCM array: aliased sounds (walk and run steps) share their recordings. */
-  private shared = new WeakMap<Float32Array, AudioBuffer>();
+  private shared = new WeakMap<ArrayBufferView, AudioBuffer>();
+  /**
+   * Sounds baked ahead (the background pre-bake of every one-shot, the decoded recordings) wait here
+   * as 16-bit PCM until they first play; the AudioBuffer (float) is made then, in a fraction of a
+   * millisecond. Most of the bank never plays in a session: uploading it all as floats was 43 MB
+   * (memory audit, phase 3). Aliases share their packed arrays (`packedOf`).
+   */
+  private stash = new Map<string, { rate: number; data: (Int16Array | Float32Array)[] }>();
+  private packedOf = new WeakMap<Float32Array, Int16Array | Float32Array>();
+  /** Stashed sounds whose PCM is still float: packed about a millisecond's worth a frame (`packStash`). */
+  private toPack: string[] = [];
   /** Fader per bus while a conversation is on (see duckForDialogue). */
   private dialogueDuck = false;
   private analyser: AnalyserNode | null = null;
@@ -621,12 +634,15 @@ export class AudioEngine implements System {
     this.ctx = null;
     this.buffers.clear();
     this.uploadQueue.clear();
+    this.stash.clear();
+    this.toPack.length = 0;
   }
 
   // ---------------------------------------------------------------- per frame
 
   update(dt: number) {
     this.footsteps.update(dt);
+    this.packStash();
   }
 
   lateUpdate(dt: number) {
@@ -675,6 +691,8 @@ export class AudioEngine implements System {
   buffersFor(def: SoundDef): AudioBuffer[] | null {
     const hit = this.buffers.get(def.id);
     if (hit) return hit;
+    const st = this.stash.get(def.id);
+    if (st) return this.uploadStashed(def.id, st);
     const vars = getVariants(def.id);
     return vars ? this.upload(def, vars) : null;
   }
@@ -684,6 +702,8 @@ export class AudioEngine implements System {
     const hit = this.buffers.get(def.id);
     if (hit) return hit;
     // Baked but not uploaded yet: copying into AudioBuffers is cheap.
+    const st = this.stash.get(def.id);
+    if (st) return this.uploadStashed(def.id, st);
     if (isBaked(def.id)) return this.upload(def, getVariants(def.id)!);
     this.prepare(def.id);
     return null;
@@ -694,7 +714,7 @@ export class AudioEngine implements System {
    * a queued background bake of the same sound.
    */
   prepare(id: string, urgent = true) {
-    if (this.buffers.has(id)) return;
+    if (this.buffers.has(id) || this.stash.has(id)) return;
     if (this.preparing.has(id)) {
       if (urgent) void requestBake(id, true);
       return;
@@ -705,8 +725,12 @@ export class AudioEngine implements System {
     void requestBake(id, urgent).then((vars) => {
       this.preparing.delete(id);
       if (!vars || this.buffers.has(id)) return;
-      if (this.ctx) this.upload(def, vars);
-      else this.uploadQueue.add(id);
+      // Asked for by a play: its buffers now (or once the context exists). A pre-bake waits packed.
+      if (urgent && this.ctx) this.upload(def, vars);
+      else {
+        this.keep(def, vars);
+        if (urgent) this.uploadQueue.add(id);
+      }
     });
   }
 
@@ -717,7 +741,9 @@ export class AudioEngine implements System {
     for (const id of this.uploadQueue) {
       this.uploadQueue.delete(id);
       const def = SOUNDS.get(id);
-      if (def && !this.buffers.has(id) && isBaked(id)) this.upload(def, getVariants(id)!);
+      const st = this.stash.get(id);
+      if (def && !this.buffers.has(id) && st) this.uploadStashed(id, st);
+      else if (def && !this.buffers.has(id) && isBaked(id)) this.upload(def, getVariants(id)!);
       if (performance.now() - t0 > 1) break;
     }
   }
@@ -737,6 +763,68 @@ export class AudioEngine implements System {
     });
     this.buffers.set(def.id, list);
     forget(def.id); // the AudioBuffers hold the audio now
+    return list;
+  }
+
+  /**
+   * Hold a baked sound until it first plays (see `stash`); the bank lets its floats go. Its PCM is
+   * packed to 16 bits a little later (`packStash`): the recordings arrive together, and packing them
+   * at once was a long task.
+   */
+  private keep(def: SoundDef, vars: Float32Array[]) {
+    this.stash.set(def.id, { rate: bakeRate(def), data: vars.slice() });
+    this.toPack.push(def.id);
+    forget(def.id);
+  }
+
+  /** Pack stashed float PCM to 16 bits, about a millisecond's worth a frame (aliases share theirs). */
+  private packStash() {
+    if (!this.toPack.length) return;
+    const t0 = performance.now();
+    while (this.toPack.length && performance.now() - t0 < 1) {
+      const st = this.stash.get(this.toPack.pop()!);
+      if (!st) continue; // played (uploaded) meanwhile
+      for (let i = 0; i < st.data.length; i++) {
+        const d = st.data[i];
+        if (!(d instanceof Float32Array)) continue;
+        let p = this.packedOf.get(d);
+        if (!p) {
+          p = packPcm(d);
+          this.packedOf.set(d, p);
+        }
+        st.data[i] = p;
+      }
+    }
+  }
+
+  /** Bytes of PCM waiting in the stash (shared arrays once). */
+  private stashedBytes(): number {
+    const seen = new Set<ArrayBufferView>();
+    let n = 0;
+    for (const st of this.stash.values())
+      for (const p of st.data)
+        if (!seen.has(p)) {
+          seen.add(p);
+          n += p.byteLength;
+        }
+    return n;
+  }
+
+  /** AudioBuffers for a stashed sound (null before the context exists; it stays stashed). */
+  private uploadStashed(id: string, st: { rate: number; data: (Int16Array | Float32Array)[] }): AudioBuffer[] | null {
+    const ctx = this.ctx;
+    if (!ctx) return null;
+    const list = st.data.map((p) => {
+      const had = this.shared.get(p);
+      if (had && had.sampleRate === st.rate) return had;
+      const b = ctx.createBuffer(1, p.length, st.rate);
+      unpackPcm(p, b.getChannelData(0));
+      this.bufferBytes += p.length * 4;
+      this.shared.set(p, b);
+      return b;
+    });
+    this.buffers.set(id, list);
+    this.stash.delete(id);
     return list;
   }
 
@@ -1031,6 +1119,7 @@ export class AudioEngine implements System {
       recorded: this.samples?.ids().length ?? 0,
       sampleFormat: this.samples?.format ?? (this.samples ? 'loading' : 'off'),
       samplesHeldMB: (this.samples?.heldBytes() ?? 0) / 1048576,
+      stashedMB: this.stashedBytes() / 1048576,
     };
   }
 

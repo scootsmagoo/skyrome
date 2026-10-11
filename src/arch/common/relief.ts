@@ -5,6 +5,7 @@
  */
 import * as THREE from 'three';
 import { fbm2D, hash2, heightToNormal, prng } from '../../gfx/textures/noise';
+import { releaseTextureAfterUpload } from '../../gfx/release';
 
 /** A float height field with a few raster primitives. Rows run up (row 0 = v 0). */
 export class HeightField {
@@ -572,7 +573,8 @@ export function reliefMaterial(f: HeightField, look: ReliefLook): THREE.MeshStan
     t.wrapS = t.wrapT = look.repeat ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
     if (srgb) t.colorSpace = THREE.SRGBColorSpace;
     t.needsUpdate = true;
-    return t;
+    // Static: the pixels are needed once, for the upload (gfx/release).
+    return releaseTextureAfterUpload(t);
   };
   const armT = tex(arm, false);
   const mat = new THREE.MeshStandardMaterial({ map: tex(color, true), normalMap: tex(normal, false), roughnessMap: armT, aoMap: armT, roughness: 1, metalness: 0 });

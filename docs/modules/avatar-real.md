@@ -161,7 +161,17 @@ owns a `RealBody` (real/RealBody.ts) and picks its LOD in `updateLod` (`lod: 'lo
 **LODs**: 0 (11 k triangles, < 9 m), 1 (4 k, < 22 m), 2 (1.2 k, < 55 m), 3 (about 300, beyond; vertex-cluster
 decimation of LOD 2 at load, `real/decimate.ts`, keeps the weights). LOD 0 is two draws (cloth + skin) plus the eyes;
 LOD 1 to 3 are one draw (avatarMaterial, skin as a colour; LOD 0 only has the eyes). Geometry is built per LOD on first
-need, cached per appearance (`realKey`: sex, age, build, height, skin, garments, footwear, armour; 40 entries). Builds
+need, cached per appearance (`realKey`: sex, age, build, height, skin, garments, footwear, armour; 40 entries). The
+template morphed to an entry's rig (`morphedBody`, per LOD) is only kept for the 12 newest entries (an LRU): builds
+and head fitting read it and nothing after, and making it again is a fraction of a millisecond (deterministic). The
+head (`buildHead`) gets a `bodyLater` getter instead of holding the arrays in its closures (V8 shares one closure
+context per function, so they lived as long as the avatar: 33 MB at the Forum). A finished LOD, its shells, the hair
+and the eyes have their attributes packed (`real/pack.ts`: weights to normalized uint16, bone indices to uint8,
+normals, tangents and strands to normalized int16, colours and UVs to normalized uint16; an attribute with a value out
+of range stays float), which halves those arrays on the CPU and the GPU with no visible change; code that indexes
+`.array` directly reads through `floatsOf` (the gore cuts do); packing is the staged build's last step (`pack`). The
+eye attributes that do not depend on the person (`eyeLocal`, skinning, triangles) are one shared attribute per sex
+(memory audit, phase 3): an evicted entry takes them off its eye geometry before disposing it. Builds
 are spread out (perf audit, October 2026): within 1.15 × a finer LOD's distance that LOD is built ahead in stages
 (`buildLodSteps`: the painted body in steps of 2 k vertices, `paintBodySteps`; the shells; the rigid pieces; the
 assembly; the rest), one stage at a time by `stepRealBuilds` (3 ms a

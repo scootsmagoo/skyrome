@@ -5,8 +5,10 @@
  */
 import * as THREE from 'three';
 import { extrudePolygon, type V2 } from '../../../../arch/common/geom';
+import { registerBuildCache } from '../../../../gfx/release';
 
 const cache = new Map<string, THREE.BufferGeometry>();
+registerBuildCache(() => cache.clear()); // built with the world only (gfx/release)
 function cached(key: string, make: () => THREE.BufferGeometry): THREE.BufferGeometry {
   let g = cache.get(key);
   if (!g) {

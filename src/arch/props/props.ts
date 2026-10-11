@@ -723,6 +723,8 @@ export function makeProp(kind: PropKind, rng?: Rng, variant?: number): PropModel
     }
     m = { kind: k, variant: v, parts, colliders: b.colliders, bounds };
     modelCache.set(key, m);
+    // The model has the merged geometry and the colliders: the builder's pre-merge parts can go.
+    builderCache.delete(key);
   }
   return m;
 }
