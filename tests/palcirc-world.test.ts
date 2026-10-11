@@ -254,7 +254,9 @@ describe('walking the palcirc landmarks on the real terrain', () => {
 
   it('Domus Augustana: from the forecourt into a taberna under the curved facade', () => {
     const shops = worldSpots('domus-augustana').filter((s) => /augustana-taberna-/.test(s.id));
-    expect(shops.length).toBeGreaterThanOrEqual(2);
+    // Terrain v2 (one ground): the physics' own ground stands 0.31 m into the floor of the sixth
+    // arch's wine shop (v1's bilinear said 0.09 m), so the builder shutters it and one shop is left.
+    expect(shops.length).toBeGreaterThanOrEqual(hm.profile === 'v1' ? 2 : 1);
     for (const sp of shops) {
       const l = local('domus-augustana', sp.position);
       // Start 6 m out on the forecourt, straight in front of the shop (the spot faces the street).
