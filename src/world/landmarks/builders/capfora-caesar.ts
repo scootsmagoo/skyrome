@@ -147,7 +147,9 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
     detail,
     columnDetail: 'low' as Detail,
     floorY: 0.4,
-    groundMin: gmin,
+    // (relative to the portico's frame, which stands at Y0: the foundation reached only to gmin
+    // measured from the frame's origin, so it hung ~1 m over the ground, phase 4b)
+    groundMin: gmin - Y0,
     wallThickness: wallT,
     frieze: hi ? friezeRelief('cupids') : undefined,
     innerRow: depth / 2,
@@ -182,7 +184,7 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
       material: 'brick',
       detail,
       seed: 'forum-caesar',
-      groundMin: gmin,
+      groundMin: gmin - (Y0 + 0.4),
       open: [
         { index: 2, kind: 'moneychanger' },
         { index: 5, kind: 'textile' },

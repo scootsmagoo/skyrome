@@ -347,6 +347,63 @@ function atriumVestae(p: Part) {
   d.span('black', -2.4, fy, tb, 2.4, fy + 4.4, tb + 0.05);
   d.span('plaster_white', -rx, fy, tb + 0.05, rx, fy + H - 0.4, hl - t, { collide: true });
   d.span('mosaic', -rx, fy - 0.01, rz1, rx, fy + 0.01, tb, { shadow: false });
+  // The ranges of rooms on the uphill (Palatine) side are terraced into the slope: where the ground
+  // inside stands above the floor, tufa retaining blocks fill the rooms up to it in 0.25 m steps
+  // (their faces are the retaining walls of each terrace), so no grass shows through the floors
+  // (it stood up to 5.4 m over them, phase 4b). The court, its portico and the tablinum are terraced
+  // too wherever the hill stands over their floor (the court's back part is up to 5 m under it: the
+  // house is cut into the Palatine); where the ground is at the floor they stay open. The ground is read at build time, so the terraces follow the terrain profile.
+  // (out to the walls' outer faces: the slab under the walls had the terrain through it too)
+  // The caps: 1.2 m cells, each capped 0.04 m over the highest of 25 ground samples, rounded up to 0.1 m
+  // (embedTerraces' 0.25 m steps stood up to 0.67 m over the ground, which the audit reads as a floor
+  // with the terrain through it and the cap not "just above": it needs the cap within 0.6 m of it).
+  {
+    const x0 = -hw + 0.02, x1 = hw - 0.02, z0 = zF + 0.02, z1 = hl - 0.02;
+    const nx = Math.round((x1 - x0) / 1.2), nz = Math.round((z1 - z0) / 1.2);
+    const cw = (x1 - x0) / nx, cd = (z1 - z0) / nz;
+    for (let j = 0; j < nz; j++) {
+      const za = z0 + j * cd, zb = za + cd;
+      let run: { i0: number; top: number } | null = null;
+      const flush = (i: number) => {
+        if (!run) return;
+        const xa = x0 + run.i0 * cw, xb = x0 + i * cw;
+        d.span('tufa', xa, fy - 0.3, za, xb, fy + run.top, zb, { collide: true });
+        d.span('grass', xa + 0.02, fy + run.top, za + 0.02, xb - 0.02, fy + run.top + 0.04, zb - 0.02);
+        run = null;
+      };
+      // Rows of 1.2 m cells; a cell the ground rises steeply across (more than 0.35 m) is split in four.
+      const cap = (xa: number, za2: number, xb: number, zb2: number) => {
+        let hi = -Infinity, lo = Infinity;
+        for (const u of [0, 0.25, 0.5, 0.75, 1]) for (const v of [0, 0.25, 0.5, 0.75, 1]) {
+          const g = p.ctx.groundAt(xa + (xb - xa) * u, za2 + (zb2 - za2) * v);
+          hi = Math.max(hi, g);
+          lo = Math.min(lo, g);
+        }
+        return { hi, lo };
+      };
+      const put = (xa: number, za2: number, xb: number, zb2: number, top: number) => {
+        d.span('tufa', xa, fy - 0.3, za2, xb, fy + top, zb2, { collide: true });
+        d.span('grass', xa + 0.02, fy + top, za2 + 0.02, xb - 0.02, fy + top + 0.04, zb2 - 0.02);
+      };
+      for (let i = 0; i < nx; i++) {
+        const xa = x0 + i * cw, xb = xa + cw;
+        const { hi, lo } = cap(xa, za, xb, zb);
+        const q = hi - fy > 0.3 ? Math.ceil((hi - fy + 0.04) / 0.1) * 0.1 : 0;
+        if (q > 0 && hi - lo > 0.35) {
+          if (run) flush(i);
+          const xm = (xa + xb) / 2, zm = (za + zb) / 2;
+          for (const [ua, ub, wa, wb] of [[xa, xm, za, zm], [xm, xb, za, zm], [xa, xm, zm, zb], [xm, xb, zm, zb]] as const) {
+            const h2 = cap(ua, wa, ub, wb).hi - fy;
+            if (h2 > 0.3) put(ua, wa, ub, wb, Math.ceil((h2 + 0.04) / 0.1) * 0.1);
+          }
+          continue;
+        }
+        if (run && (q === 0 || Math.abs(q - run.top) > 1e-6)) flush(i);
+        if (q > 0 && !run) run = { i0: i, top: q };
+      }
+      flush(nx);
+    }
+  }
   // roofs: lean-to roofs over the room ranges, falling from the court walls to the street walls
   const eave = fy + H - 0.4;
   // (rotated frames: Ry(+π/2) maps roof-local z to world x and x to world −z; Ry(−π/2) the mirror)

@@ -238,9 +238,12 @@ function areaCapitolina(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, sp
     { material: 'tufa', paving: 'paving_basalt', thickness: 0.7, skipEdges: [2, 6] },
   );
   {
-    // Steps from the Clivus Capitolinus (arriving from the east along z ≈ −44) onto the forecourt.
-    stairsToGround(b, g, foreY, 6, TRS(F.x0, 0, -44, 0, Math.PI / 2, 0));
-    spots.push(spotAt('clivus-top', 'spawn', F.x0 + 2, foreY, -44, -hw, -44, { label: 'Top of the Clivus Capitolinus' }));
+    // Steps between the Clivus Capitolinus (arriving from the east along z ≈ −44) and the
+    // forecourt: down to the clivus where it lies lower, up to it where it arrives higher.
+    const cl = stairsToGround(b, g, foreY, 6, TRS(F.x0, 0, -44, 0, Math.PI / 2, 0), { up: true });
+    // On the forecourt clear of the flight, or (when the flight climbs to the clivus) on the road at its top.
+    if (cl.length < 0) spots.push(spotAt('clivus-top', 'spawn', F.x0 - 1.2, cl.foot, -44, -hw, -44, { label: 'Top of the Clivus Capitolinus' }));
+    else spots.push(spotAt('clivus-top', 'spawn', F.x0 + 2, foreY, -44, -hw, -44, { label: 'Top of the Clivus Capitolinus' }));
   }
   {
     // The gate stair from the forecourt up to the area.
@@ -275,7 +278,7 @@ function areaCapitolina(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, sp
     );
     spots.push(spotAt('votive-seller', 'stall', F.x0 + 2.2, foreY, F.z1 - 2.2, F.x0 + 6, F.z1 - 5, { label: 'Seller of votive figurines, incense and garlands' }));
     spots.push(spotAt('gate-guard', 'npc', e + 2.9, 0, zc + 1.7, e - 6, zc, { label: 'Temple slave keeping the gate of the Area Capitolina' }));
-    spots.push(spotAt('forecourt-crowd', 'npc', F.x0 + 5, foreY, -45.5, e, zc, { label: 'Pilgrims and petitioners climbing to the Capitol' }));
+    spots.push(spotAt('forecourt-crowd', 'npc', F.x0 + 7, foreY, -45.5, e, zc, { label: 'Pilgrims and petitioners climbing to the Capitol' }));
   }
 
   // ---- the west portico on the brink over the Campus

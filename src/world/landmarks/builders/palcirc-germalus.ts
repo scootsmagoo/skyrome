@@ -698,9 +698,13 @@ function adonaea(ctx: LandmarkContext) {
   const hi = ctx.detail === 'high';
   // Main terrace (the upper garden) on the NW part of the area, a lower terrace toward the SE slope.
   const x0 = -42, x1 = 6, z0 = -28, z1 = 30;
-  const gU = groundRange(ctx, x0, z0, x1, z1, 4);
-  const y = Math.max(0, Math.min(1.0, gU.max));
-  d.span('tufa', x0, Math.min(gU.min, y) - 0.6, z0, x1, y - 0.04, z1, { collide: true });
+  // The footing runs out under the porticoes' ends (x1 + 2.4: they stood over the slope, up to 6 m
+  // over it, phase 4b), and the terrace follows the ground up to 2.2 m (it was capped at 1.0, so
+  // the hill stood up to 1.7 m over the gravel).
+  const xF = x1 + 2.4;
+  const gU = groundRange(ctx, x0, z0, xF, z1, 1);
+  const y = Math.max(0, Math.min(2.2, gU.max));
+  d.span('tufa', x0, Math.min(gU.min, y) - 0.6, z0, xF, y - 0.04, z1, { collide: true });
   d.span('gravel', x0, y - 0.05, z0, x1, y + 0.02, z1);
   // Porticoes on three sides (NW, NE, SW), a retaining wall with a balustrade on the SE edge.
   // The way in: a gateway in the NE portico's back wall, on the garden's long axis, with a flight

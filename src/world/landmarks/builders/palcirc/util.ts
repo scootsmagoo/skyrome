@@ -33,8 +33,12 @@ export class Spots {
 /** Heading (model +Z convention) looking from (x0, z0) toward (x1, z1). */
 export const headingTo = (x0: number, z0: number, x1: number, z1: number) => Math.atan2(x1 - x0, z1 - z0);
 
-/** Lowest and highest terrain (relative to the pad) over a local rectangle, sampled on a grid. */
-export function groundRange(ctx: LandmarkContext, x0: number, z0: number, x1: number, z1: number, step = 3): { min: number; max: number } {
+/**
+ * Lowest and highest terrain (relative to the pad) over a local rectangle, sampled on a grid every
+ * `step` m or less (1 m by default: a 3 m grid let foundations hang over the dips between samples,
+ * phase 4b).
+ */
+export function groundRange(ctx: LandmarkContext, x0: number, z0: number, x1: number, z1: number, step = 1): { min: number; max: number } {
   let min = Infinity;
   let max = -Infinity;
   const nx = Math.max(1, Math.ceil(Math.abs(x1 - x0) / step));

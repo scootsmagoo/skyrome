@@ -21,6 +21,7 @@ import { buildPlaza } from '../../../../arch/fabric/streets';
 import { placeProp, statueFigure } from '../../../../arch/props/props';
 import { Rng } from '../../../../core/Rng';
 import { MeshBuilder } from '../../../../gfx/MeshBuilder';
+import type { MaterialId } from '../../../../gfx/materialIds';
 import type { LandmarkContext } from '../../types';
 import type { Lamp } from './capenaParts';
 import { facing, instanced } from './runtime';
@@ -265,6 +266,9 @@ export function buildAugustanaFacade(
   }
   // Plinth along the foot (it hides the terrain's small undulations) and the pavement.
   for (const bb of plan.bays) {
+    // A bay whose foot is buried in the hillside (the ground in front of it stands over the street
+    // level) has no plinth to show: its top would be a floor with the terrain through it (phase 4b).
+    if (ctx.groundAt(bb.x + bb.nx * 0.8, bb.z + bb.nz * 0.8) > base + 0.6) continue;
     const f = new Draw(b, facing(bb.x, base, bb.z, bb.nx, bb.nz));
     f.span('travertine', -bb.w / 2 - 0.02, -1.2, -0.25, bb.w / 2 + 0.02, 0.0, T);
   }
@@ -300,17 +304,47 @@ export function buildAugustanaFacade(
     const xa = x, xb = Math.min(hw, x + 1.2);
     const zf = Math.max(augFaceZ(plan, xa), augFaceZ(plan, xb));
     const z0 = zf + T + ROOM_D + 0.4;
-    if (z0 < back) d.solid(xa, base - 1, z0, xb, o.low, back);
+    if (z0 < back) {
+      // Drawn as well as solid: the rooms' end faces (beyond |x| = pav) stood on this core, which was
+      // collider-only, so they hung over a void (the wing, 19 m up: phase 4b). Travertine masonry.
+      const bot = Math.min(base - 1, groundRange(ctx, xa, z0, xb, back, 1.5).min - 0.6);
+      d.span('travertine', xa, bot, z0, xb, o.low, back, { collide: true });
+    }
   }
   // Side faces of the substructure (brick, travertine coping), down the slope to the street.
   for (const s of [-1, 1]) {
     const x = s * hw;
     const xo = s < 0 ? x - 0.3 : x + 0.3;
     const lo = Math.min(x, xo), hiX = Math.max(x, xo);
-    d.span('travertine', lo, base - 0.8, o.front, hiX, base + hA, back, { collide: true });
-    d.span('plaster_white', lo, base + hA, o.front, hiX, o.low, back, { collide: true });
-    for (const y of [base + hA - 0.5, base + hA + hB - 0.4]) d.span('travertine', lo - 0.12, y, o.front, hiX + 0.12, y + 0.4, back);
-    d.span('marble', lo - 0.25, o.low - 0.5, o.front, hiX + 0.25, o.low, back);
+    // The wall goes down to the lowest ground along its whole run (the hillside beside the wing falls
+    // up to 19 m below the street level at the facade's foot: it hung over the ravine, phase 4b).
+    const gs = groundRange(ctx, lo - 1.5, o.front, hiX + 1.5, back, 1);
+    const sb = Math.min(base - 0.8, gs.min - 0.6);
+    // In 3 m pieces: where the hillside beside a piece stands over the seam between the travertine
+    // storey and the plastered one, the seam (an upward face under the terrain) is left out.
+    const nPieces = Math.max(1, Math.round((back - o.front) / 3));
+    for (let k = 0; k < nPieces; k++) {
+      const za = o.front + ((back - o.front) * k) / nPieces, zb = o.front + ((back - o.front) * (k + 1)) / nPieces;
+      const gp = groundRange(ctx, lo - 1.2, za, hiX + 1.2, zb, 0.6);
+      if (gp.max > base + hA - 0.1) {
+        d.span('plaster_white', lo, Math.min(sb, gp.min - 0.6), za, hiX, o.low, zb, { collide: true });
+      } else {
+        d.span('travertine', lo, sb, za, hiX, base + hA, zb, { collide: true });
+        d.span('plaster_white', lo, base + hA, za, hiX, o.low, zb, { collide: true });
+      }
+    }
+    // String courses and the cornice are drawn in 3 m pieces, and only where the ground beside the
+    // wall stands below them (a ledge buried in the hillside is a floor with the terrain through it).
+    const ledge = (mat: MaterialId, ex: number, y0: number, y1: number) => {
+      const pieces = Math.max(1, Math.round((back - o.front) / 3));
+      for (let k = 0; k < pieces; k++) {
+        const za = o.front + ((back - o.front) * k) / pieces, zb = o.front + ((back - o.front) * (k + 1)) / pieces;
+        if (groundRange(ctx, lo - 1.2, za, hiX + 1.2, zb, 0.6).max > y0 - 0.1) continue;
+        d.span(mat, lo - ex, y0, za, hiX + ex, y1, zb);
+      }
+    };
+    for (const y of [base + hA - 0.5, base + hA + hB - 0.4]) ledge('travertine', 0.12, y, y + 0.4);
+    ledge('marble', 0.25, o.low - 0.5, o.low);
     d.span('marble', lo - 0.05, o.low, o.front, hiX + 0.05, o.low + 1.0, back, { collide: true });
     openings(d, lo, o.front, hiX, back, s < 0 ? 'w' : 'e', base + hA + 1.4, 1.1, 2.0, 3.6, { margin: 2.6, frame: 'marble' });
     openings(d, lo, o.front, hiX, back, s < 0 ? 'w' : 'e', base + hA + hB + 1.0, 1.0, 1.7, 3.6, { margin: 2.6 });

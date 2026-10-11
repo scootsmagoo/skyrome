@@ -18,7 +18,7 @@ import { Draw } from '../../../arch/fabric/draw';
 import { lacus } from '../../../arch/fabric/fountain';
 import { wall } from '../../../arch/common/walls';
 import { inscriptionPanel } from '../../../arch/common/inscription';
-import { placeProp } from '../../../arch/props/props';
+import { groundIn, placeProp } from '../../../arch/props/props';
 import { ivy } from '../../../arch/vegetation/decor';
 import { Rng } from '../../../core/Rng';
 import type { MaterialId } from '../../../gfx/materialIds';
@@ -27,7 +27,7 @@ import { Drips, animateDrips, requestLamps } from './palcirc/runtime';
 import { archBandLite, archDoorWall } from './palcirc/shapes';
 import { Spots, drawFor, gableRoof, groundRange, landmarkToWorld, plantTrees, type TreeSpec } from './palcirc/util';
 import { relById } from './palcirc/frames';
-import { buildAppia, buildGroveCamp, buildQuarter, type Lamp } from './palcirc/capenaParts';
+import { PL, ROAD_HW, buildAppia, buildGroveCamp, buildQuarter, type Lamp } from './palcirc/capenaParts';
 import { ox } from './palcirc/animals';
 import { settled } from './palcirc/settle';
 
@@ -72,6 +72,16 @@ function capena(ctx: LandmarkContext) {
   const rng = new Rng('porta-capena');
   const hi = ctx.detail === 'high';
   const g = (x: number, z: number) => ctx.groundAt(x, z);
+  // What one stands on outside the gate: the passage's paving, the Via Appia's roadway and
+  // sidewalks (buildStreet: road lift 0.06, kerb 0.25), else the ground. Everything that meets the
+  // ground reads it at build time (it used to be clamped to the pad level, 0, so the cart, the booth
+  // and the spring floated where the road falls away outside: phase 4b).
+  const walkAt = (x: number, z: number) => {
+    if (Math.abs(x) <= SPAN / 2 && Math.abs(z) <= GZ + 0.7) return 0.05;
+    if (z < -GZ && z > -158 && Math.abs(x) <= ROAD_HW) return g(x, z) + 0.06;
+    if (z < -GZ && z > -158 && Math.abs(x) <= PL) return g(x, z) + 0.31;
+    return g(x, z);
+  };
 
   const lamps: Lamp[] = [];
   const trees: TreeSpec[] = [];
@@ -117,7 +127,7 @@ function capena(ctx: LandmarkContext) {
     for (const x of [tx0 + 1.6, tx1 - 1.6]) d.span('black', x - 0.35, 6.4, z - 0.01, x + 0.35, 7.5, z + 0.01);
   }
   // Its door opens on the city side (the +x face is built against the gate's pier).
-  const tdx = (tx0 + tx1) / 2, tdy = Math.max(0, g(tdx, tz1 + 1));
+  const tdx = (tx0 + tx1) / 2, tdy = g(tdx, tz1 + 1);
   d.span('travertine', tdx - 0.85, tdy, tz1 - 0.02, tdx + 0.85, tdy + 2.6, tz1 + 0.1);
   d.span('wood_dark', tdx - 0.6, tdy, tz1 + 0.1, tdx + 0.6, tdy + 2.3, tz1 + 0.14);
   if (tdy > 0.05) d.span('tufa', tdx - 1.0, Math.min(0, tg.min) - 0.3, tz1, tdx + 1.0, tdy, tz1 + 1.4, { collide: true });
@@ -137,7 +147,7 @@ function capena(ctx: LandmarkContext) {
     const dir = broken === 'left' ? 1 : -1;
     for (let k = 0; k < 3; k++) d.span('tufa', xe + dir * k * 0.9 - (dir < 0 ? 0.9 : 0), WH, -WT / 2, xe + dir * (k + 1) * 0.9 - (dir < 0 ? 0.9 : 0), WH + 0.6 * (3 - k), WT / 2);
     // Ivy on the outer face.
-    if (hi) ivy(new Draw(b, new THREE.Matrix4().makeTranslation(0, 0, -WT / 2 - 0.02)), xs + 1, len - 2, Math.max(0, g(xs + len / 2, -2)), 3.5, rng);
+    if (hi) ivy(new Draw(b, new THREE.Matrix4().makeTranslation(0, 0, -WT / 2 - 0.02)), xs + 1, len - 2, g(xs + len / 2, -2), 3.5, rng);
   };
   wallRun(-26, tx0, 'left');
   wallRun(GX, 22, 'right');
@@ -196,7 +206,7 @@ function capena(ctx: LandmarkContext) {
   gableRoof(d, cx0, cz0, cx1, cz1, CH + 2.15, { axis: 'x', pitch: 0.35, over: 0.3, gables: 'brick' });
   for (const z of [cz0 - 0.01]) for (const x of [cx0 + 1.5, cx1 - 1.5]) d.span('black', x - 0.3, cgr.max + 6.4, z - 0.01, x + 0.3, cgr.max + 7.8, z + 0.01);
   // The public outlet on the side toward the road: an arched niche, a spout and a stone basin.
-  const nf = d.at(cx0, Math.max(0, g(cx0 - 1, AZ)), AZ, Math.PI / 2);
+  const nf = d.at(cx0, g(cx0 - 1, AZ), AZ, Math.PI / 2);
   nf.span('travertine', -1.2, 0, -0.12, 1.2, 3.4, 0.02);
   nf.span('black', -0.75, 0.9, -0.14, 0.75, 2.6, -0.12);
   nf.cyl('travertine', 0, 2.6, -0.13, 0.75, 0.02, 10, { rx: Math.PI / 2 });
@@ -215,12 +225,12 @@ function capena(ctx: LandmarkContext) {
     const x = -r * 0.85 + ((2 * r * 0.85) * i) / 11 + rng.range(-0.15, 0.15);
     const y = wide.spring + Math.sqrt(Math.max(0, r * r - x * x)) - 0.08;
     const z = AZ + rng.range(-0.7, 0.7);
-    emitters.push({ x, y, z, floor: Math.max(0, g(x, z)) + 0.05 });
+    emitters.push({ x, y, z, floor: walkAt(x, z) + 0.05 });
   }
   // A thin curtain off the outer edge of the channel's cornice, and drips inside the gate passage.
   for (let i = 0; i < 6; i++) {
     const x = rng.range(-3.5, 3.5);
-    emitters.push({ x, y: CH - 0.6, z: AZ - AT - 0.2, floor: Math.max(0, g(x, AZ - AT - 0.2)) + 0.05 });
+    emitters.push({ x, y: CH - 0.6, z: AZ - AT - 0.2, floor: walkAt(x, AZ - AT - 0.2) + 0.05 });
   }
   for (let i = 0; i < 5; i++) {
     const x = rng.range(-1.2, 1.2);
@@ -244,7 +254,7 @@ function capena(ctx: LandmarkContext) {
   }
   // Puddles on the road under the arch and in the passage.
   for (const [x, z, rx, rz] of [[0.4, AZ, 1.6, 0.9], [-1.0, AZ + 1.4, 0.8, 0.6], [0.6, -1.0, 0.9, 1.4], [-0.5, 1.6, 0.6, 0.8]] as const) {
-    const y = Math.max(0, g(x, z));
+    const y = walkAt(x, z);
     d.ellipsoid('mud', x, y + 0.035, z, rx * 1.25, 0.012, rz * 1.25, { seg: [12, 3] });
     d.ellipsoid('water', x, y + 0.045, z, rx * 0.7, 0.008, rz * 0.7, { seg: [10, 3] });
   }
@@ -252,28 +262,32 @@ function capena(ctx: LandmarkContext) {
   // ------------------------------------------------------------ outside: Mercury's spring, customs, cart
   const fz = -13;
   const fx = -8.5;
-  const fd = d.at(fx, Math.max(0, g(fx, fz)), fz, Math.PI / 2);
+  const fd = d.at(fx, g(fx, fz), fz, Math.PI / 2);
   lacus(fd, new Rng('capena-lacus'), { stone: 'travertine' });
-  placeProp(d, 'herm', fx - 1.6, g(fx - 1.6, fz), fz, Math.PI / 2, { variant: 1 });
+  placeProp(d, 'herm', fx - 1.6, g(fx - 1.6, fz), fz, Math.PI / 2, { variant: 1, ground: g });
   // Customs booth (statio of the portitores) on the +x side.
   const bx = 6.6, bz = -11;
-  const by = Math.max(0, g(bx, bz));
+  // Its floor stands at the highest ground under it, on a rubble footing down into the lowest.
+  const bg = groundRange(ctx, bx - 1.3, bz - 1.7, bx + 1.3, bz + 1.7, 0.5);
+  const by = bg.max;
   const bd = d.at(bx, by, bz, -Math.PI / 2);
+  if (bg.max - bg.min > 0.03) bd.span('tufa', -1.6, bg.min - by - 0.3, -1.2, 1.6, 0, 1.2, { collide: true });
   bd.span('wood', -1.6, 0, -1.2, 1.6, 0.06, 1.2, { collide: true });
   bd.span('wood_dark', -1.6, 0, 0.9, 1.6, 2.4, 1.2, { collide: true });
   for (const s of [-1, 1]) bd.span('wood_dark', s * 1.6 - 0.12, 0, -1.2, s * 1.6 + 0.12, 2.4, 1.2, { collide: true });
   bd.span('wood', -1.4, 0, -1.2, 1.4, 1.0, -0.9, { collide: true });
   gableRoof(bd, -1.7, -1.4, 1.7, 1.3, 2.4, { axis: 'x', pitch: 0.4, over: 0.2 });
   placeProp(bd, 'oil_lamp', 0.9, 1.0, -1.05, 0, { collide: false });
-  placeProp(bd, 'bench', 0, 0, 1.7, Math.PI, { variant: 0 });
+  const bdg = groundIn(bd, g);
+  placeProp(bd, 'bench', 0, bdg(0, 1.7), 1.7, Math.PI, { variant: 0, ground: bdg });
   // The last night cart, loaded with wine, its oxen yoked and facing the gate: in before dawn.
   const cartZ = -11.0, cartX = 1.0;
-  const cy = Math.max(0, g(cartX, cartZ - 1.5));
+  const cy = walkAt(cartX, cartZ);
   const cart = d.at(cartX, cy, cartZ, Math.PI);
-  placeProp(cart, 'cart', 0, 0, 0, 0, { variant: 0 });
-  for (const s of [-1, 1]) ox(cart, s * 0.55, Math.max(0, g(cartX - s * 0.55, cartZ + 2.9)) - cy, -2.9, s * 0.05, s > 0 ? 'wood_dark' : 'bark');
-  placeProp(d, 'amphora_stack', cartX + 3.2, Math.max(0, g(cartX + 3.2, cartZ - 3)), cartZ - 3, 0.4, { variant: 1 });
-  placeProp(d, 'sack', cartX + 2.1, Math.max(0, g(cartX + 2.1, cartZ - 0.5)), cartZ - 0.5, 0.2);
+  placeProp(cart, 'cart', 0, 0, 0, 0, { variant: 0, ground: groundIn(cart, walkAt) });
+  for (const s of [-1, 1]) ox(cart, s * 0.55, walkAt(cartX - s * 0.55, cartZ + 2.9) - cy, -2.9, s * 0.05, s > 0 ? 'wood_dark' : 'bark');
+  placeProp(d, 'amphora_stack', cartX + 3.2, walkAt(cartX + 3.2, cartZ - 3), cartZ - 3, 0.4, { variant: 1, ground: walkAt });
+  placeProp(d, 'sack', cartX + 2.1, walkAt(cartX + 2.1, cartZ - 0.5), cartZ - 0.5, 0.2, { ground: walkAt });
   // The carter's lantern hung on the cart's side.
   lamps.push({ position: cart.point(0.72, 1.45, -0.6), color: 0xffa54f, intensity: 5, distance: 8, flicker: 0.3, night: true, glow: 0.16 });
   cart.cyl('bronze', 0.72, 1.4, -0.6, 0.07, 0.18, 6);
@@ -299,19 +313,19 @@ function capena(ctx: LandmarkContext) {
   // ------------------------------------------------------------ spots
   const vista = relById('porta-capena', 'circus-maximus');
   const head = (x: number, z: number, tx: number, tz: number) => Math.atan2(tx - x, tz - z);
-  spots.add('spawn-capena', 'spawn', -0.9, Math.max(0, g(-0.9, -15)), -15, 0);
-  spots.add('courier-ambush', 'npc', 1.1, Math.max(0, g(1.1, -5.5)), -5.5, Math.PI * 0.85);
-  spots.add('capena-grassator-a', 'npc', -WIDE_PIER_X - 1.4, Math.max(0, g(-6.4, -6.6)), -6.6, head(-6.4, -6.6, 0, -5.5));
+  spots.add('spawn-capena', 'spawn', -0.9, walkAt(-0.9, -15), -15, 0);
+  spots.add('courier-ambush', 'npc', 1.1, walkAt(1.1, -5.5), -5.5, Math.PI * 0.85);
+  spots.add('capena-grassator-a', 'npc', -WIDE_PIER_X - 1.4, walkAt(-6.4, -6.6), -6.6, head(-6.4, -6.6, 0, -5.5));
   // The second robber waits in the passage, under the inner arch, for the courier to come through.
   spots.add('capena-grassator-b', 'npc', 0.5, 0.05, 2.4, head(0.5, 2.4, 0, -6));
-  spots.add('night-cart', 'container', cartX - 1.1, Math.max(0, g(cartX - 1.1, cartZ)), cartZ, Math.PI / 2);
-  spots.add('night-cart-driver', 'npc', cartX + 1.2, Math.max(0, g(cartX + 1.2, cartZ + 3.4)), cartZ + 3.4, 0);
+  spots.add('night-cart', 'container', cartX - 1.1, walkAt(cartX - 1.1, cartZ), cartZ, Math.PI / 2);
+  spots.add('night-cart-driver', 'npc', cartX + 1.2, walkAt(cartX + 1.2, cartZ + 3.4), cartZ + 3.4, 0);
   spots.add('capena-customs', 'vendor', bx, by, bz, -Math.PI / 2);
-  spots.add('capena-mercury-spring', 'shrine', fx + 1.4, Math.max(0, g(fx + 1.4, fz)), fz, -Math.PI / 2);
-  spots.add('porta-capena-arch', 'inscription', 0, Math.max(0, g(0, -12)), -12, 0);
+  spots.add('capena-mercury-spring', 'shrine', fx + 1.4, walkAt(fx + 1.4, fz), fz, -Math.PI / 2);
+  spots.add('porta-capena-arch', 'inscription', 0, walkAt(0, -12), -12, 0);
   spots.add('capena-vista-city', 'vista', 0, 0, 10, head(0, 10, vista.x, vista.z));
   spots.add('capena-door-tower', 'door', tdx, tdy, tz1 + 1.1, Math.PI);
-  spots.add('capena-castellum-outlet', 'shrine', cx0 - 2.2, Math.max(0, g(cx0 - 2.2, AZ)), AZ, Math.PI / 2);
+  spots.add('capena-castellum-outlet', 'shrine', cx0 - 2.2, walkAt(cx0 - 2.2, AZ), AZ, Math.PI / 2);
 
   const obj = b.build(ctx.lm.id);
   obj.add(drips.mesh);

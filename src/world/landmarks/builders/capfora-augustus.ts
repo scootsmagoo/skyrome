@@ -118,7 +118,7 @@ function buildForum(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, spots:
         detail,
         columnDetail: 'low',
         floorY,
-        groundMin: gWide,
+        groundMin: gWide - Y0,
         wallMaterial: 'marble',
         wallThickness: 1.2,
         openings: ops,
