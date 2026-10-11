@@ -136,6 +136,14 @@ today's, byte-identical):
   neighbour. Near an atlas cliff a pad keeps its given margin (the cliff stays a barrier). A pad
   that v2 moves carries `elevationV2` (the Porticus Margaritaria: 'mean', unpinned; the record
   override is `terrainLandmarks()` in buildRome.ts, read by its pad and its builder alike).
+  Inside a footprint (to 1 m out) a pad is flat, so a pad set on another's floor would stand in a
+  step as tall as the two are apart: a landmark `within` a seating bowl carries `host` (buildRome
+  `landmarkPads`), and where its whole blend lies on the host's floor it blends on over that floor
+  as in v1 (by its height over the host's level). That is the Arch of Titus in the curved end of
+  the Circus (13.5 m ASL on the arena's 12): its 0.9 m step in one cell floated the track's sand,
+  which the Circus drapes on `heightAt`, half a metre over the physics. The pulvinar and the Temple
+  of Sol stand in the stands at the Circus's edge and keep their footprints (their blend would
+  leave the host's floor and move the ground round its walls). Test: `terrain-v2.test.ts`.
 - **Roads last, capped at 25 % per 4 m.** Each road's natural profile is smoothed and regraded to
   `ROAD_GRADE_TARGET` (21 %, under the 25 % cap so the 3.3 m grid's interpolation stays inside it)
   by the least cut and fill (`regrade.ts`, the W6 helper). A level core of at least

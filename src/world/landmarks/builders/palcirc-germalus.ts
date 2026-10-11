@@ -648,8 +648,8 @@ function leaningInsula(ctx: LandmarkContext, b: MeshBuilder, spots: Spots, lot: 
   const put = (id: string, kind: 'npc' | 'door', p: THREE.Vector3, heading = face) => spots.add(id, kind, p.x, p.y, p.z, heading);
   // The crack climbs the front between the shop and the stair: its foot is the top floor's place (the
   // evidence is read from the street), the far end of the frontage Prima's floor, the middle the house's.
-  const foot = shop ? stair.clone().add(shop.p).multiplyScalar(0.5) : stair.clone();
-  foot.add(new THREE.Vector3(Math.sin(face), 0, Math.cos(face)).multiplyScalar(0.6));
+  // (At the doors' own depth: 0.6 m further out it stood in the cobbler's awning pole.)
+  const foot = shop ? stair.clone().add(shop.p).multiplyScalar(0.5) : stair.clone().add(new THREE.Vector3(Math.sin(face), 0, Math.cos(face)).multiplyScalar(0.6));
   put('insula-nutans', 'npc', at(0.64, 1.15));
   put('insula-nutans-scalae', 'door', stair, lot.stair?.heading ?? face);
   put('insula-nutans-taberna', 'npc', shop?.p ?? at(0.2, 0.7), shop?.heading ?? face);

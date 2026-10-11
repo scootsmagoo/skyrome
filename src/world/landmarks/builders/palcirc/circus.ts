@@ -577,6 +577,8 @@ export function buildFacade(b: MeshBuilder, gaps: CircusGaps, detail: 'high' | '
     if (u.kind === 'popina') {
       boxAt(bay, -0.05, 1.6, 0, 1.02, T + 0.25, T + 0.9);
       boxAt(bay, 1.05, 1.6, 0, 1.02, T + 0.9, T + 2.0);
+      // The brick hearth at the back (`shopFit`; it was walked through).
+      boxAt(bay, W / 2 - 1.1, W / 2 - 0.1, 0, 0.8, T + 2.4, T + 3.3);
     }
     if (u.kind === 'shutters') {
       boxAt(bay, -1.6, 0.4, 0, 2.9, 0.86, 1.0);

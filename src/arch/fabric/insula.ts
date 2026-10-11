@@ -282,7 +282,8 @@ export function insula(spec: InsulaSpec): BuildingOutput {
           const mats: [MaterialId, MaterialId] = drng.pick([['fabric_white', 'fabric_red'], ['fabric_ochre', 'fabric_white'], ['fabric_white', 'fabric_blue']] as [MaterialId, MaterialId][]);
           const ay = Math.min(lo.y1 + 0.55, G - bay.yb - 0.4);
           stripedAwning(S, -ow / 2 - 0.25, ow / 2 + 0.25, -1.35, -0.02, ay - 0.55, ay, mats);
-          for (const s of [-1, 1]) S.cyl('wood', s * (ow / 2 + 0.2), (ay - 0.6) / 2, -1.35, 0.035, ay - 0.6, 5);
+          // The poles stand in the street: solid, as `velum`'s (awnings.ts) are.
+          for (const s of [-1, 1]) S.cyl('wood', s * (ow / 2 + 0.2), (ay - 0.6) / 2, -1.35, 0.035, ay - 0.6, 5, { collide: true });
           S.rod('iron', { x: 0, y: ay, z: -0.02 }, { x: 0, y: ay + 0.25, z: 0 }, 0.01, 3, { shadow: false });
         }
         if (drng.chance(0.25)) {

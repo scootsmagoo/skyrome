@@ -67,6 +67,12 @@ export interface TerrainPad {
   grow?: number;
   /** v2's elevation when it differs from `elevation` (m ASL; 'mean': unpinned, the mean natural ground). */
   elevationV2?: number | 'mean';
+  /**
+   * v2: the id of the seating bowl's pad this one stands inside (atlas `within`). Where its whole
+   * blend lies on the host's floor (the bowl drapes its arena on the ground), it runs on over that
+   * floor instead of stopping at this pad's footprint in a step.
+   */
+  host?: string;
 }
 /** A bridge (atlas BRIDGES, real m): v2 flattens the Tiber Island's edge inside its corridor. */
 export interface TerrainBridge {
@@ -980,7 +986,8 @@ function padRise(pad: TerrainPad, elev: number, ground: (x: number, z: number) =
  * over their distance squared, at the strength of all the blends together, so a high pad's long
  * embankment never buries a neighbour at another level (the bank between them stays where they
  * meet) and the result does not depend on the order of the pads. Inside a footprint (to 1 m out)
- * the pad is flat at its own level, the later one in atlas order where two overlap, as in v1.
+ * the pad is flat at its own level, the later one in atlas order where two overlap, as in v1; a
+ * pad standing on a seating bowl's floor (`host`) keeps its own and blends on over the bowl's.
  * Then the roads, each levelled crosswise to the profile of the natural ground under it (as v1),
  * smoothed and regraded to `ROAD_GRADE_TARGET` by the least cut and fill, with banks into the
  * padded ground as long as the earthwork needs. Inside a landmark's own footprint
@@ -1003,10 +1010,14 @@ function stampV2(c: StampGrid, real: Float32Array, out: Float32Array, roads: rea
   const sumPE = new Float32Array(n);
   const keep = new Float32Array(n).fill(1);
   const flat = new Float32Array(n).fill(NaN);
+  /** The pad (index in `list`) whose floor `flat` holds; a host's floor never covers a nested pad's (`host`). */
+  const flatBy = new Int16Array(n).fill(-1);
   const list = pads.filter((p) => p.polygon.length >= 3);
-  for (const pad of list) {
+  const elevs: number[] = [];
+  for (const [i, pad] of list.entries()) {
     const pinned = pad.elevationV2 === 'mean' ? undefined : (pad.elevationV2 ?? pad.elevation);
     const elev = pinned ?? padMeanGround(pad, sampleReal);
+    elevs[i] = elev;
     const given = pad.margin ?? 12;
     const margin = padMarginV2(given, padRise(pad, elev, sampleReal));
     const box = sampleBox(c, bbox(null, pad.polygon, margin));
@@ -1023,7 +1034,11 @@ function stampV2(c: StampGrid, real: Float32Array, out: Float32Array, roads: rea
         if (m > padMask[k]) padMask[k] = m;
         if (grow !== undefined && sd <= -grow) core[k] = 1;
         if (sd <= 1) {
-          flat[k] = elev;
+          const by = flatBy[k];
+          if (by < 0 || list[by].host !== pad.id) {
+            flat[k] = elev;
+            flatBy[k] = i;
+          }
           continue;
         }
         // By height, except where an atlas cliff stands: there the given blend.
@@ -1042,6 +1057,43 @@ function stampV2(c: StampGrid, real: Float32Array, out: Float32Array, roads: rea
     if (!Number.isNaN(flat[k])) out[k] = flat[k];
     else if (sumP[k] > 0) out[k] = out[k] + (sumPE[k] / sumP[k] - out[k]) * (1 - keep[k]);
   }
+  // A landmark standing on a seating bowl's floor (`TerrainPad.host`: the Arch of Titus in the curved
+  // end of the Circus) blends on over that floor as v1's did, by its height over the host's level,
+  // instead of stopping at its own footprint in a step as tall as the two pads are apart (0.9 m round
+  // the arch: the track's sand, draped on the ground, floated over it). Only where its whole blend
+  // lies on the host's floor: one built into the bowl's edge (the pulvinar and the Temple of Sol stand
+  // in the Circus's stands) keeps its footprint, so the ground round the bowl's walls stays put.
+  const nested = new Map<number, [number, number, number]>();
+  for (const [i, pad] of list.entries()) {
+    const h = pad.host === undefined ? -1 : list.findIndex((q) => q.id === pad.host);
+    if (h < 0) continue;
+    const margin = padMarginV2(pad.margin ?? 12, elevs[i] - elevs[h]);
+    const box = sampleBox(c, bbox(null, pad.polygon, margin));
+    if (!box) continue;
+    const ring: [number, number, number][] = [];
+    let inside = true;
+    for (let iz = box.iz0; iz <= box.iz1 && inside; iz++) {
+      const z = (minZ + iz * spacing) / S;
+      for (let ix = box.ix0; ix <= box.ix1; ix++) {
+        const k = iz * nx + ix;
+        const sd = signedDistance((minX + ix * spacing) / S, z, pad.polygon);
+        if (sd <= 1 || sd > margin) continue;
+        if (flatBy[k] < 0) {
+          inside = false; // the blend leaves the host's floor
+          break;
+        }
+        if (list[flatBy[k]].id !== pad.host) continue; // another pad's floor
+        const w = 1 - easedLinear((sd - 1) / (margin - 1));
+        if (w > 0) ring.push([k, w / (sd * sd), w]);
+      }
+    }
+    if (!inside) continue;
+    for (const [k, p, w] of ring) {
+      const a = nested.get(k) ?? [0, 0, 1];
+      nested.set(k, [a[0] + p, a[1] + p * elevs[i], a[2] * (1 - w)]);
+    }
+  }
+  for (const [k, [p, pe, kp]] of nested) out[k] = out[k] + (pe / p - out[k]) * (1 - kp);
 
   // 2. Roads over the padded ground, on their own (natural) profile: the vias and streets in
   //    atlas order, flights of steps last. A road keeps the level of what was there before it

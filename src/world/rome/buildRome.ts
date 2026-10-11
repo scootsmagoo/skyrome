@@ -83,6 +83,7 @@ export function terrainLandmarks(profile: TerrainProfile = terrainProfile()): at
 export function landmarkPads(bounds: { minX: number; maxX: number; minZ: number; maxZ: number }): TerrainPad[] {
   const pads: TerrainPad[] = [];
   const v2 = new Map(terrainLandmarks('v2').map((lm) => [lm.id, lm]));
+  const byId = new Map(atlas.LANDMARKS.map((lm) => [lm.id, lm]));
   for (const lm of atlas.LANDMARKS) {
     if (!PAD_CATEGORIES.has(lm.category)) continue;
     // Seating bowls are never raised by their builders, so they get their pad at any priority.
@@ -103,6 +104,9 @@ export function landmarkPads(bounds: { minX: number; maxX: number; minZ: number;
       // wins over the roads; a poly footprint is not grown.
       grow: lm.footprint.kind === 'poly' ? 0 : 3,
       ...v2Elevation(lm, v2.get(lm.id)),
+      // v2: set inside a seating bowl (the Arch of Titus in the Circus), it blends on over the bowl's
+      // draped arena instead of standing in a step at its own footprint (heightmap.ts, stampV2).
+      ...(lm.within && BOWLS.has(byId.get(lm.within)?.category ?? '') ? { host: lm.within } : {}),
     });
     if (extra?.front && lm.footprint.kind === 'rect') {
       // Forecourt: the strip in front of the facade (local −z), same height and ground kind, joined to the main pad.

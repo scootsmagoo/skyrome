@@ -215,6 +215,36 @@ describe('the city under v2', () => {
     expect(changed).toEqual(['porticus-margaritaria']);
   });
 
+  it('a landmark on a seating bowl\'s floor blends into it (the Arch of Titus in the Circus); one at the bowl\'s edge keeps its footprint', () => {
+    const v2 = city('v2');
+    const plain = buildHeightmap(SRC, { spacing: 2, pads: PADS.map(({ host: _h, ...p }) => p), profile: 'v2' });
+    expect(PADS.find((p) => p.id === 'arch-titus-circus')!.host).toBe('circus-maximus');
+    const at = (id: string) => atlas.LANDMARKS.find((l) => l.id === id)!.center.map((v) => v * S) as [number, number];
+    const [ax, az] = at('arch-titus-circus');
+    /** The largest rise between neighbouring samples within `r` game m of (cx, cz). */
+    const steepest = (hm: Heightmap, cx: number, cz: number, r: number) => {
+      let m = 0;
+      for (let iz = 0; iz < hm.nz - 1; iz++)
+        for (let ix = 0; ix < hm.nx - 1; ix++) {
+          if (Math.hypot(hm.minX + ix * hm.spacing - cx, hm.minZ + iz * hm.spacing - cz) > r) continue;
+          const k = iz * hm.nx + ix;
+          m = Math.max(m, Math.abs(hm.heights[k + 1] - hm.heights[k]), Math.abs(hm.heights[k + hm.nx] - hm.heights[k]));
+        }
+      return m;
+    };
+    // Without the host the arch's floor stood 0.9 m over the track in one 2 m cell (the sand floated over it).
+    expect(steepest(plain, ax, az, 16)).toBeGreaterThan(0.85);
+    expect(steepest(v2, ax, az, 16)).toBeLessThan(0.3);
+    // Nothing else moves: the pulvinar and the Temple of Sol stand in the stands at the Circus's edge.
+    let farthest = 0;
+    for (let k = 0; k < v2.heights.length; k++) {
+      if (v2.heights[k] === plain.heights[k]) continue;
+      farthest = Math.max(farthest, Math.hypot(v2.minX + (k % v2.nx) * v2.spacing - ax, v2.minZ + Math.floor(k / v2.nx) * v2.spacing - az));
+    }
+    expect(farthest).toBeGreaterThan(0);
+    expect(farthest).toBeLessThan(20);
+  });
+
   it('v1 with the bridges is still v1 (the island landings are v2 only)', () => {
     const noBridges = buildHeightmap({ ...SRC, BRIDGES: undefined }, { spacing: 2, pads: PADS, profile: 'v1' });
     const sha = (a: Float32Array) => createHash('sha256').update(Buffer.from(a.buffer)).digest('hex');
