@@ -1,0 +1,544 @@
+Route audit, 2026-10-10T23:14:49.062Z  phases: guide,objectives,approach,tour,random,edges  time scale 3
+street graph: 8148 nodes, 8770 edges, 14 components (largest 7699, 163, 45, 29, 19), 100 termini; nav grid on
+objectives: 103 with markers, 3 unresolved (mq-04-columna/archer, mq-04-columna/search, mq-04-columna/search)
+
+== guide: 12 jobs
+  guide      guide circus #0 (249,503) ← the new-game spawn (Port streets   104 m  arrived     8 s  blocked:wall jump:wall
+  guide      guide palatine #0 (170,448) ← guide circus #0        streets    97 m  arrived     6 s   line-through×1
+  guide      guide palatine #1 (98,394) ← guide palatine #0       streets    92 m  arrived     5 s  
+  guide      guide palatine #2 (20,335) ← guide palatine #1       streets   101 m  timeout    20 s  blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall timeout
+  guide      guide palatine #3 (-50,280) ← guide palatine #2      streets    92 m  arrived     4 s  
+  guide      guide velabrum #0 (-44,262) ← guide palatine #3      streets    19 m  arrived     1 s  
+  guide      guide velabrum #1 (-27,187) ← guide velabrum #0      streets    77 m  arrived     4 s  
+  guide      guide velabrum #2 (27,84) ← guide velabrum #1        streets   116 m  arrived     6 s  
+  guide      guide forum #0 (48,60) ← guide velabrum #2           streets    32 m  arrived     1 s  
+  guide      guide forum #1 (56,38) ← guide forum #0              streets    23 m  arrived     1 s  
+  guide      guide forum #2 (25,15) ← guide forum #1              streets    40 m  arrived     2 s  
+  guide      guide forum #3 (6,6) ← guide forum #2                streets    21 m  arrived     1 s  
+
+== objectives: 58 jobs
+  objective  mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/ streets   526 m  aborted    47 s  jump:wall blocked:wall off-line blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall line-through×1
+  objective  mq 02-tabella/castor ← mq-01-madida-capena/talk-dyin streets   725 m  arrived    47 s  jump:wall
+  objective  mq 02-tabella/search ← mq-02-tabella/castor          streets   723 m  arrived    39 s  jump:wall
+  objective  mq 02-tabella/ask ← mq-02-tabella/talk               streets   648 m  arrived    42 s  blocked:wall blocked:wall jump:low blocked:wall blocked:wall
+  objective  mq 02-tabella/hideout ← mq-02-tabella/ask            streets   723 m  arrived    41 s  blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall line-through×3
+  objective  mq 02-tabella/give ← mq-02-tabella/satchel           streets   118 m  arrived     6 s  
+  objective  mq 03-lemuria/go ← mq-02-tabella/give                streets   183 m  arrived    11 s  jump:wall blocked:wall
+  objective  mq 03-lemuria/key ← mq-03-lemuria/clues              streets   129 m  arrived     7 s  blocked:wall line-through×1
+  objective  mq 03-lemuria/warn ← mq-03-lemuria/key               streets    56 m  arrived     4 s  
+  objective  mq 04-columna/forum ← mq-03-lemuria/warn             streets   481 m  arrived    29 s  blocked:wall blocked:npc blocked:wall
+  objective  mq 04-columna/brief ← mq-04-columna/forum            streets   318 m  arrived    19 s  jump:slide blocked:wall blocked:wall line-through×3
+  objective  mq 04-columna/land1 ← the Column door                streets    24 m  arrived     7 s  jump:low
+  objective  job cliens-epistula/v0:philetus ← the Forum (Golden  streets    83 m  arrived     8 s  jump:low jump:low
+  objective  job cliens-epistula/v1:zethus ← job-cliens-epistula/ streets   169 m  arrived    11 s  
+  objective  job cliens-epistula/v2:dama ← job-cliens-epistula/v1 streets   180 m  aborted    26 s  blocked:wall off-line blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall line-through×1
+  objective  job ludus-lusio/start ← the Forum (Golden Milestone) streets   715 m  arrived    42 s  jump:low blocked:wall blocked:wall
+  objective  job ludus-lusio/bout ← job-ludus-lusio/start         streets    33 m  arrived     1 s  
+  objective  job portus-saccarius/start ← the Forum (Golden Miles streets   300 m  arrived    25 s  drop jump:low jump:low blocked:wall line-through×1
+  objective  job portus-saccarius/s:carry1 ← job-portus-saccarius streets    38 m  arrived     2 s  
+  objective  job portus-saccarius/s:take2 ← job-portus-saccarius/ streets    34 m  arrived     3 s  blocked:wall line-through×1
+  objective  job subura-pistor/start ← the Forum (Golden Mileston streets   210 m  arrived    18 s  blocked:wall blocked:npc blocked:wall line-through×1
+  objective  job subura-pistor/s:chreste ← job-subura-pistor/star streets   330 m  arrived    20 s  blocked:wall blocked:npc blocked:wall blocked:slide line-through×1
+  objective  job subura-pistor/s:dama ← job-subura-pistor/s:chres streets   229 m  aborted    28 s  blocked:wall off-line blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall line-through×1
+  objective  lud 01-sacramentum/draw ← lud-01-sacramentum/sign    streets   113 m  arrived    12 s  blocked:wall blocked:wall
+  objective  lud 01-sacramentum/win1 ← lud-01-sacramentum/draw    streets    73 m  arrived     3 s  
+  objective  misc fur-balnearius/ask ← the Forum (Golden Mileston streets   588 m  arrived    32 s  jump:wall blocked:wall line-through×1
+  objective  misc fur-balnearius/bundle ← misc-fur-balnearius/doo streets   279 m  arrived    17 s  blocked:wall jump:low blocked:wall line-through×6
+  objective  misc fur-balnearius/deal ← misc-fur-balnearius/bundl streets   268 m  arrived    16 s  blocked:wall blocked:wall blocked:wall line-through×6
+  objective  misc hilara/ask ← the Forum (Golden Milestone)       streets   419 m  aborted    39 s  blocked:wall off-line blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall
+  objective  misc hilara/bring ← misc-hilara/sausage              streets   400 m  arrived    21 s  blocked:wall line-through×3
+  objective  misc insula-nutans/evidence ← the Forum (Golden Mile streets   278 m  arrived    15 s  
+  objective  misc insula-nutans/confront ← misc-insula-nutans/evi streets   239 m  arrived    12 s  
+  objective  misc insula-nutans/report ← misc-insula-nutans/confr streets    60 m  arrived     3 s  
+  objective  misc insula-nutans/warn ← misc-insula-nutans/report  streets   220 m  arrived    12 s  
+  objective  misc lemuria-fabae/watch ← the Forum (Golden Milesto streets   328 m  arrived    22 s  
+  objective  misc lemuria-fabae/follow ← misc-lemuria-fabae/see   streets    58 m  arrived     6 s  blocked:wall blocked:wall line-through×4
+  objective  misc lemuria-fabae/decide ← misc-lemuria-fabae/follo streets    59 m  arrived     6 s  blocked:wall blocked:wall line-through×1
+  objective  misc mercuralia/ides ← the Forum (Golden Milestone)  streets   837 m  arrived    58 s  jump:wall blocked:wall
+  objective  misc mercuralia/measure ← misc-mercuralia/overhear   streets   556 m  arrived    36 s  jump:wall blocked:wall jump:low
+  objective  misc mercuralia/test ← misc-mercuralia/measure       streets   299 m  arrived    20 s  blocked:wall jump:wall
+  objective  misc meta-sudans-rixa/choose ← the Forum (Golden Mil streets   172 m  arrived    14 s  blocked:wall
+  objective  misc meta-sudans-rixa/ko ← misc-meta-sudans-rixa/cho streets   375 m  arrived    26 s  blocked:wall blocked:wall jump:low line-through×3
+  objective  misc meta-sudans-rixa/law ← misc-meta-sudans-rixa/ko streets   384 m  arrived    24 s  
+  objective  misc servus-aesculapii/daos ← the Forum (Golden Mile streets   775 m  arrived    53 s  drop jump:wall drop swim blocked:slide
+  objective  misc servus-aesculapii/proofs ← misc-servus-aesculap streets    23 m  arrived     1 s  
+  objective  misc servus-aesculapii/face ← misc-servus-aesculapii streets    61 m  arrived     5 s  blocked:low
+  objective  misc servus-aesculapii/more ← misc-servus-aesculapii streets    62 m  arrived     5 s  swim blocked:slide line-through×1
+  objective  misc servus-aesculapii/free ← misc-servus-aesculapii streets    64 m  arrived     6 s  swim blocked:slide blocked:wall
+  objective  misc tesserae-falsae/eutychus ← the Forum (Golden Mi streets   567 m  arrived    46 s  blocked:wall
+  objective  misc tesserae-falsae/find ← misc-tesserae-falsae/cur streets   916 m  arrived    61 s  blocked:wall blocked:wall blocked:wall line-through×1
+  objective  misc tesserae-falsae/decide ← misc-tesserae-falsae/m streets   910 m  arrived    64 s  blocked:wall blocked:wall blocked:wall blocked:wall line-through×2
+  objective  misc urna-aenea/felix ← the Forum (Golden Milestone) streets   225 m  arrived    20 s  
+  objective  misc urna-aenea/dice ← misc-urna-aenea/felix         streets    35 m  arrived     3 s  
+  objective  misc urna-aenea/crispina ← misc-urna-aenea/felix     streets   470 m  arrived    35 s  blocked:wall blocked:npc blocked:wall line-through×1
+  objective  misc urna-aenea/primus ← misc-urna-aenea/crispina    streets   469 m  arrived    34 s  blocked:wall blocked:npc blocked:wall blocked:slide line-through×1
+  objective  misc venus-cloacina/watch ← the Forum (Golden Milest streets    60 m  arrived     5 s  
+  objective  misc venus-cloacina/enter ← misc-venus-cloacina/watc streets   446 m  arrived    28 s  jump:low
+  objective  misc venus-cloacina/out ← misc-venus-cloacina/loot   streets   444 m  arrived    27 s  
+
+== approach: 57 jobs
+  approach   → mq-01-madida-capena/ask-dromo from node 16         streets   290 m  aborted    40 s  blocked:wall off-line blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall line-through×1
+  approach   → mq-02-tabella/castor from node 196                 streets   110 m  arrived    12 s  
+  approach   → mq-02-tabella/search from node 6436                streets   131 m  arrived    21 s  blocked:wall blocked:wall line-through×3
+  approach   → mq-02-tabella/ask from node 2804                   streets   207 m  arrived    23 s  blocked:wall
+  approach   → mq-02-tabella/hideout from node 3032               streets   117 m  arrived    17 s  
+  approach   → mq-02-tabella/give from node 126                   streets   155 m  arrived    19 s  blocked:npc blocked:wall blocked:slide line-through×1
+  approach   → mq-03-lemuria/go from node 1848                    streets   176 m  arrived    19 s  blocked:wall
+  approach   → mq-03-lemuria/key from node 125                    streets   186 m  arrived    19 s  blocked:wall blocked:slide line-through×1
+  approach   → mq-03-lemuria/warn from node 128                   streets   192 m  arrived    20 s  blocked:npc blocked:wall blocked:slide line-through×1
+  approach   → mq-04-columna/forum from node 5843                 streets   453 m  arrived    38 s  blocked:wall blocked:wall blocked:wall blocked:wall line-through×3
+  approach   → mq-04-columna/brief from node 6067                 streets   440 m  arrived    30 s  blocked:wall blocked:wall
+  approach   → job-cliens-epistula/v0:philetus from node 31       streets   179 m  arrived    15 s  blocked:wall line-through×1
+  approach   → job-cliens-epistula/v1:zethus from node 1857       streets   167 m  arrived    16 s  
+  approach   → job-cliens-epistula/v2:dama from node 1811         streets   143 m  aborted    33 s  blocked:wall blocked:wall blocked:wall off-line blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall line-through×1
+  approach   → job-ludus-lusio/start from node 2952               streets   180 m  arrived    16 s  blocked:wall line-through×1
+  approach   → job-ludus-lusio/bout from node 7603                streets   461 m  arrived    36 s  jump:low blocked:wall blocked:wall blocked:wall blocked:wall
+  approach   → job-portus-saccarius/start from node 347           streets   600 m  arrived    48 s  jump:low jump:low blocked:wall line-through×1
+  approach   → job-portus-saccarius/s:carry1 from node 637        streets   106 m  arrived    14 s  blocked:low jump:low blocked:wall off-line blocked:wall off-line line-through×1
+  approach   → job-portus-saccarius/s:take2 from node 8026        streets   411 m  arrived    38 s  jump:low jump:low blocked:wall
+  approach   → job-subura-pistor/start from node 5889             streets   142 m  arrived    21 s  
+  approach   → job-subura-pistor/s:chreste from node 624          streets   145 m  arrived    20 s  
+  approach   → job-subura-pistor/s:dama from node 1811            streets   143 m  aborted    39 s  blocked:wall blocked:wall off-line blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall line-through×1
+  approach   → lud-01-sacramentum/draw from node 3269             streets   335 m  arrived    29 s  blocked:wall line-through×2
+  approach   → lud-01-sacramentum/win1 from node 2804             streets   207 m  arrived    15 s  blocked:wall line-through×1
+  approach   → misc-fur-balnearius/ask from node 3579             streets   695 m  aborted    22 s  blocked:wall blocked:wall off-line blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall line-through×1
+  approach   → misc-fur-balnearius/bundle from node 5858          streets   153 m  arrived    18 s  blocked:wall line-through×2
+  approach   → misc-fur-balnearius/deal from node 3585            streets   638 m  arrived    45 s  blocked:wall jump:wall blocked:wall line-through×3
+  approach   → misc-hilara/ask from node 1808                     streets   142 m  aborted    40 s  blocked:wall blocked:wall blocked:wall off-line blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall
+  approach   → misc-hilara/bring from node 5914                   streets   172 m  arrived    22 s  blocked:wall blocked:wall jump:npc blocked:npc blocked:wall blocked:wall line-through×2
+  approach   → misc-insula-nutans/evidence from node 555          streets   125 m  arrived    11 s  
+  approach   → misc-insula-nutans/confront from node 5911         streets   169 m  arrived    21 s  blocked:wall jump:npc blocked:npc blocked:wall blocked:wall line-through×3
+  approach   → misc-insula-nutans/report from node 114            streets   104 m  arrived     9 s   line-through×1
+  approach   → misc-insula-nutans/warn from node 108              streets   105 m  arrived    12 s  
+  approach   → misc-lemuria-fabae/watch from node 572             streets   269 m  arrived    20 s  
+  approach   → misc-lemuria-fabae/follow from node 3036           streets   212 m  arrived    16 s  
+  approach   → misc-lemuria-fabae/decide from node 559            streets   157 m  arrived    16 s  blocked:wall blocked:wall line-through×1
+  approach   → misc-mercuralia/ides from node 1129                streets   130 m  arrived    20 s  blocked:wall blocked:wall line-through×1
+  approach   → misc-mercuralia/measure from node 630              streets   358 m  arrived    30 s  
+  approach   → misc-mercuralia/test from node 3045                streets   354 m  arrived    28 s  jump:wall
+  approach   → misc-meta-sudans-rixa/choose from node 2777        streets   168 m  arrived    15 s  blocked:wall blocked:wall line-through×2
+  approach   → misc-meta-sudans-rixa/ko from node 530             streets   182 m  arrived    18 s  
+  approach   → misc-meta-sudans-rixa/law from node 7915           streets   434 m  arrived    40 s  blocked:wall line-through×1
+  approach   → misc-servus-aesculapii/daos from node 4201         streets   163 m  arrived    19 s  drop swim blocked:slide
+  approach   → misc-servus-aesculapii/proofs from node 7792       streets   294 m  arrived    27 s  blocked:wall blocked:low off-line jump:low line-through×1
+  approach   → misc-servus-aesculapii/face from node 7797         streets   615 m  arrived    44 s  
+  approach   → misc-servus-aesculapii/more from node 6673         streets   234 m  arrived    18 s  drop swim blocked:slide jump:wall line-through×2
+  approach   → misc-servus-aesculapii/free from node 6592         streets   299 m  arrived    21 s  swim blocked:slide
+  approach   → misc-tesserae-falsae/eutychus from node 651        streets   167 m  arrived    15 s  blocked:wall line-through×2
+  approach   → misc-tesserae-falsae/find from node 3473           streets   135 m  arrived    17 s  blocked:wall line-through×6
+  approach   → misc-tesserae-falsae/decide from node 651          streets   165 m  arrived    14 s  blocked:wall line-through×1
+  approach   → misc-urna-aenea/felix from node 6792               streets   167 m  arrived    13 s  
+  approach   → misc-urna-aenea/dice from node 7885                streets   130 m  arrived     8 s  
+  approach   → misc-urna-aenea/crispina from node 5691            streets   142 m  arrived    13 s  
+  approach   → misc-urna-aenea/primus from node 550               streets   150 m  arrived    14 s  blocked:wall line-through×2
+  approach   → misc-venus-cloacina/watch from node 3364           streets   314 m  arrived    24 s  blocked:wall blocked:npc blocked:wall line-through×2
+  approach   → misc-venus-cloacina/enter from node 6593           streets   259 m  arrived    22 s  jump:low drop swim swim jump:wall off-line blocked:wall line-through×1
+  approach   → misc-venus-cloacina/out from node 7927             streets   147 m  arrived    13 s  jump:npc blocked:npc blocked:wall line-through×1
+
+== tour: 12 jobs
+  tour       Porta Capena → the Circus valley                     streets   306 m  arrived    22 s  jump:wall jump:low off-line blocked:wall
+  tour       the Circus valley → the Forum                        streets   456 m  arrived    33 s  blocked:wall blocked:wall blocked:wall jump:wall drop blocked:wall off-line blocked:wall blocked:wall blocked:wall line-through×5
+  tour       the Forum → the Velabrum                             streets   261 m  arrived    15 s  drop
+  tour       the Velabrum → the Vicus Tuscus                      streets    71 m  arrived     4 s  blocked:wall blocked:wall line-through×3
+  tour       the Vicus Tuscus → the Subura                        streets   527 m  arrived    31 s  blocked:wall blocked:npc blocked:wall line-through×1
+  tour       the Subura → the Ludus Magnus                        streets   755 m  arrived    47 s  blocked:wall off-line blocked:wall jump:low blocked:wall blocked:wall blocked:wall blocked:wall line-through×4
+  tour       the Ludus Magnus → the Colosseum valley              streets   578 m  arrived    27 s  blocked:wall
+  tour       the Colosseum valley → the Forum of Trajan           streets   478 m  aborted    32 s  blocked:wall blocked:wall blocked:wall off-line blocked:wall blocked:wall blocked:wall blocked:wall jump:low blocked:wall blocked:wall off-line blocked:low blocked:wall blocked:wall blocked:wall line-through×9
+  tour       the Forum of Trajan → the Campus Martius             streets   935 m  arrived    62 s  blocked:wall blocked:wall blocked:wall jump:wall jump:wall blocked:wall blocked:wall jump:low jump:low jump:low jump:low jump:low blocked:wall blocked:wall jump:slide line-through×3
+  tour       the Campus Martius → Tiber Island                    streets   598 m  arrived    47 s  jump:wall jump:wall jump:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall blocked:wall off-line off-line blocked:wall blocked:wall jump:wall jump:wall swim blocked:slide blocked:slide blocked:wall line-through×6
+  tour       Tiber Island → the river port                        streets   453 m  arrived    26 s  jump:low jump:wall jump:wall
+  tour       the river port → Porta Capena                        streets   667 m  arrived    35 s  jump:wall
+
+== random: 20 jobs
+  random     node 1855 → node 586 (417 m)                         streets   435 m  arrived    27 s  
+  random     node 481 → node 5128 (287 m)                         streets   344 m  arrived    20 s  
+  random     node 5774 → node 3603 (378 m)                        streets   474 m  arrived    23 s  
+  random     node 1086 → node 986 (366 m)                         streets   447 m  arrived    23 s  
+  random     node 3777 → node 5790 (367 m)                        streets   460 m  arrived    26 s  
+  random     node 6454 → node 1369 (182 m)                        streets   191 m  arrived    18 s  blocked:wall
+  random     node 6620 → node 7574 (371 m)                        streets   433 m  arrived    36 s  
+  random     node 6453 → node 1461 (367 m)                        streets   478 m  arrived    35 s  
+  random     node 7238 → node 7212 (229 m)                        streets   323 m  arrived    18 s  
+  random     node 3478 → node 7315 (181 m)                        streets   221 m  arrived    16 s  
+  random     node 4752 → node 4067 (258 m)                        streets   343 m  arrived    24 s  
+  random     node 6067 → node 36 (419 m)                          streets   927 m  arrived    56 s  blocked:wall blocked:wall blocked:wall blocked:npc blocked:wall line-through×1
+  random     node 6589 → node 1017 (349 m)                        streets   405 m  arrived    26 s  blocked:wall blocked:wall blocked:wall line-through×3
+  random     node 1476 → node 1142 (335 m)                        streets   432 m  arrived    29 s  blocked:wall blocked:wall line-through×3
+  random     node 8085 → node 1400 (352 m)                        streets   457 m  arrived    27 s  blocked:wall blocked:wall blocked:wall line-through×2
+  random     node 3636 → node 3229 (264 m)                        streets   331 m  arrived    21 s  blocked:wall
+  random     node 2143 → node 2230 (393 m)                        streets   610 m  arrived    39 s  blocked:wall blocked:wall line-through×1
+  random     node 2209 → node 1366 (436 m)                        streets  1485 m  arrived    79 s  off-line blocked:wall blocked:wall line-through×5
+  random     node 2003 → node 1713 (387 m)                        streets   569 m  arrived    36 s  
+  random     node 6627 → node 4575 (379 m)                        streets   615 m  arrived    35 s  off-line jump:wall blocked:wall line-through×8
+
+== edges: 80 jobs
+  edge       edge 6592 junction→road (16 m)                       fixed      16 m  arrived     7 s  
+  edge       edge 3147 street→street (12 m)                       fixed      12 m  arrived     8 s  
+  edge       edge 5852 junction→street (12 m)                     fixed      12 m  arrived     6 s  
+  edge       edge 2770 street→street (17 m)                       fixed      17 m  arrived     3 s  
+  edge       edge 693 street→street (16 m)                        fixed      16 m  arrived     5 s  
+  edge       edge 7890 junction→street (17 m)                     fixed      17 m  arrived     5 s  
+  edge       edge 6081 junction→junction (13 m)                   fixed      13 m  arrived     4 s  
+  edge       edge 6581 road→junction (13 m)                       fixed      13 m  arrived     5 s  
+  edge       edge 5201 junction→street (14 m)                     fixed      14 m  arrived     3 s  
+  edge       edge 1874 street→street (18 m)                       fixed      18 m  arrived     3 s  
+  edge       edge 718 street→street (24 m)                        fixed      24 m  arrived     3 s  
+  edge       edge 857 street→street (20 m)                        fixed      20 m  arrived     7 s  
+  edge       edge 8689 street→street (23 m)                       fixed      23 m  arrived     6 s  
+  edge       edge 996 street→street (20 m)                        fixed      20 m  arrived     5 s  
+  edge       edge 1746 street→piazza (14 m)                       fixed      14 m  arrived     7 s  
+  edge       edge 2627 street→street (14 m)                       fixed      14 m  arrived     7 s  
+  edge       edge 26 road→road (23 m)                             fixed      23 m  arrived     3 s  
+  edge       edge 7906 junction→road (15 m)                       fixed      15 m  arrived     5 s  
+  edge       edge 1763 street→street (24 m)                       fixed      24 m  arrived     7 s  
+  edge       edge 1635 street→street (14 m)                       fixed      14 m  arrived     4 s  
+  edge       edge 873 street→street (18 m)                        fixed      18 m  arrived     8 s  
+  edge       edge 4097 street→street (11 m)                       fixed      11 m  arrived     8 s  
+  edge       edge 8402 street→piazza (14 m)                       fixed      14 m  arrived     3 s  
+  edge       edge 5808 junction→road (18 m)                       fixed      18 m  arrived     3 s  
+  edge       edge 3801 street→street (23 m)                       fixed      23 m  arrived     4 s  
+  edge       edge 287 road→road (23 m)                            fixed      23 m  arrived     2 s  
+  edge       edge 4651 junction→street (11 m)                     fixed      11 m  arrived     3 s  
+  edge       edge 4759 street→junction (19 m)                     fixed      19 m  arrived     6 s  
+  edge       edge 666 street→street (10 m)                        fixed      10 m  arrived     5 s  
+  edge       edge 7100 piazza→junction (13 m)                     fixed      13 m  arrived     3 s  
+  edge       edge 5960 street→junction (14 m)                     fixed      14 m  arrived     3 s  
+  edge       edge 5290 junction→street (8 m)                      fixed       8 m  arrived     4 s  
+  edge       edge 4336 road→road (18 m)                           fixed      18 m  arrived     4 s  
+  edge       edge 960 street→street (15 m)                        fixed      15 m  arrived     3 s  
+  edge       edge 3660 street→street (22 m)                       fixed      22 m  arrived     4 s  
+  edge       edge 8068 piazza→street (8 m)                        fixed       8 m  arrived     5 s  
+  edge       edge 8685 street→street (14 m)                       fixed      14 m  arrived     4 s  
+  edge       edge 5897 junction→street (12 m)                     fixed      12 m  arrived     4 s  
+  edge       edge 3447 street→street (16 m)                       fixed      16 m  arrived     3 s  
+  edge       edge 784 street→street (21 m)                        fixed      21 m  arrived     2 s  
+  edge       edge 3797 street→street (22 m)                       fixed      22 m  arrived     4 s  
+  edge       edge 2167 street→street (13 m)                       fixed      13 m  arrived     5 s  
+  edge       edge 3343 street→street (12 m)                       fixed      12 m  arrived     3 s  
+  edge       edge 4455 junction→road (6 m)                        fixed       6 m  arrived     4 s  
+  edge       edge 1535 street→street (20 m)                       fixed      20 m  arrived     6 s  
+  edge       edge 2766 street→street (16 m)                       fixed      16 m  arrived     3 s  
+  edge       edge 4437 junction→street (20 m)                     fixed      20 m  arrived     5 s  jump:low jump:low
+  edge       edge 7038 junction→road (10 m)                       fixed      10 m  arrived     2 s  
+  edge       edge 3647 street→street (22 m)                       fixed      22 m  arrived     3 s  
+  edge       edge 6955 junction→street (9 m)                      fixed       9 m  arrived     7 s  
+  edge       edge 6455 street→junction (9 m)                      fixed       9 m  arrived     4 s  
+  edge       edge 8549 street→landmark (17 m)                     fixed      18 m  arrived     2 s  
+  edge       edge 3344 street→street (12 m)                       fixed      12 m  arrived     2 s  
+  edge       edge 2552 street→street (16 m)                       fixed      16 m  arrived     4 s  
+  edge       edge 223 road→road (23 m)                            fixed      23 m  arrived     5 s  
+  edge       edge 843 street→street (15 m)                        fixed      15 m  arrived     5 s  
+  edge       edge 8660 plaza→road (85 m)                          fixed      85 m  arrived     7 s  
+  edge       edge 2917 street→street (12 m)                       fixed      12 m  arrived     5 s  
+  edge       edge 5936 junction→street (8 m)                      fixed       8 m  arrived     4 s  
+  edge       edge 141 road→road (21 m)                            fixed      21 m  arrived     2 s  
+  edge       edge 5827 road→junction (9 m)                        fixed       9 m  arrived     3 s  
+  edge       edge 4980 junction→junction (7 m)                    fixed       7 m  arrived     3 s  
+  edge       edge 8654 road→junction (14 m)                       fixed      14 m  arrived     4 s  
+  edge       edge 8495 junction→junction (14 m)                   fixed      14 m  arrived     4 s  
+  edge       edge 1195 street→street (14 m)                       fixed      14 m  arrived     4 s  
+  edge       edge 3197 street→street (12 m)                       fixed      12 m  arrived     4 s  
+  edge       edge 225 road→road (21 m)                            fixed      21 m  arrived     3 s  
+  edge       edge 6019 junction→street (6 m)                      fixed       6 m  arrived     3 s  
+  edge       edge 3038 street→street (12 m)                       fixed      12 m  arrived     6 s  
+  edge       edge 8071 street→piazza (8 m)                        fixed       8 m  arrived     6 s  
+  edge       edge 1499 street→street (18 m)                       fixed      18 m  arrived     5 s  
+  edge       edge 3860 street→street (6 m)                        fixed       6 m  arrived     4 s  
+  edge       edge 3136 street→street (12 m)                       fixed      12 m  arrived     6 s  
+  edge       edge 8577 junction→road (11 m)                       fixed      11 m  arrived     4 s  
+  edge       edge 8501 road→junction (8 m)                        fixed       8 m  arrived     2 s  
+  edge       edge 3985 street→street (10 m)                       fixed      10 m  arrived     4 s  
+  edge       edge 5475 junction→street (14 m)                     fixed      14 m  arrived     7 s  
+  edge       edge 1214 street→street (6 m)                        fixed       6 m  arrived     6 s  
+  edge       edge 1142 street→street (13 m)                       fixed      13 m  arrived     6 s  
+  edge       edge 439 road→road (13 m)                            fixed      13 m  arrived     8 s  
+
+== totals
+{
+ "jobs": 239,
+ "byKind": {
+  "guide": 12,
+  "objective": 58,
+  "approach": 57,
+  "tour": 12,
+  "random": 20,
+  "edge": 80
+ },
+ "outcomes": {
+  "arrived": 228,
+  "timeout": 1,
+  "aborted": 10
+ },
+ "planStatus": {
+  "streets": 159,
+  "fixed": 80
+ },
+ "walkedRoutes": 0,
+ "routeMetres": 50233,
+ "simSeconds": 7876.400000000002,
+ "recoveries": 332,
+ "replans": 2,
+ "incidents": {
+  "blocked:wall [blocker]": 290,
+  "jump [major]": 61,
+  "climb [major]": 47,
+  "line-drop [minor]": 61,
+  "line-through [minor]": 104,
+  "off-line [major]": 22,
+  "line-drop [major]": 127,
+  "line-steep [major]": 117,
+  "line-steep [minor]": 4,
+  "line-ledge [minor]": 77,
+  "line-wall [major]": 3,
+  "line-ledge [major]": 19,
+  "line-through [major]": 112,
+  "climb [minor]": 15,
+  "drop [minor]": 7,
+  "blocked:slide [blocker]": 13,
+  "swim [major]": 9,
+  "line-water [major]": 60,
+  "blocked:low [blocker]": 3,
+  "drop [major]": 1
+ },
+ "minutes": 67.8,
+ "jobsWithBlock": 96,
+ "objectiveJobsWithBlock": 36,
+ "places": 363,
+ "placesBySeverity": {
+  "blocker": 118,
+  "major": 184,
+  "minor": 61
+ }
+}
+
+== worst places (by severity and how many routes meet them)
+  1. [blocker] 67.1,9.1,-28.7  Senate House (16 m, Regio VIII Forum Romanum)  routes 12 (quest 5)  blocked (wall)×12  part graph/lead-in
+       e.g. mq 04-columna/forum ← mq-03-lemuria/warn: wall hit landmark:basilica-aemilia @1.4 m 0.39 m     cls landmark
+  2. [blocker] 155.4,9.7,-77.1  Temple of Minerva (17 m, Regio IV Templum Pacis)  routes 11 (quest 5)  blocked (wall)×8, needs a jump/mantle (npc)×3  part graph
+       e.g. mq 04-columna/forum ← mq-03-lemuria/warn: wall hit landmark:forum-nerva @1.4 m 0.38 m   near capfora:forum-nerva:porticus-absidata:1 (A porter) 3.8 m  cls road
+  3. [blocker] 281.7,7.9,545.4  Crossroads Shrine by the Capena Gate (3 m, Regio XI Circus Maximus)  routes 9 (quest 6)  needs a jump/mantle (wall)×5, climb (mantle 1.11 m)×5, climb (mantle 1.14 m)×3, blocked (wall)×2  part graph
+       e.g. misc mercuralia/measure ← misc-mercuralia/overhear: wall hit landmark:porta-capena @1.4 m 0.38 m   near text:t19-compitum-capenae (The altar of the Capena crossroads) 3.4 m  cls road
+  4. [major] 70.1,9.1,-27.9  Senate House (19 m, Regio VIII Forum Romanum)  routes 12 (quest 5)  route line: drop -11.62×11, route line: through 2.2×10, route line: steep 5.15×1, route line: steep 5.25×7, route line: steep 4.95×1, route line: steep 5.37×1  part graph/lead-in
+       e.g. mq 04-columna/forum ← mq-03-lemuria/warn:   owner city:0,-1   len 0.5 cls landmark
+  5. [blocker] -81.0,7.5,305.8  The Inn at the Starting Gates (25 m, Regio XI Circus Maximus)  routes 5 (quest 4)  blocked (wall)×65, off-line×5  part lead-out
+       e.g. mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/talk-dying: wall hit city:b414 @1.4 m 0.38 m     cls free
+  6. [blocker] 510.2,13.5,199.8  Great Gladiatorial School (32 m, Regio III Isis et Serapis)  routes 5 (quest 3)  needs a jump/mantle (low)×4, blocked (wall)×7, climb (mantle 0.88 m)×4  part graph/lead-out
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk: wall hit city:3,1 @1.4 m 0.37 m     cls margin
+  7. [blocker] 56.8,7.9,37.9  Statue of Vortumnus (2 m, Regio VIII Forum Romanum)  routes 5 (quest 2)  blocked (slide)×5  part graph
+       e.g. job subura-pistor/s:chreste ← job-subura-pistor/start: slide   rise -0.02 near shrine:signum-vortumni (Statue of Vortumnus) 0.8 m  cls road
+  8. [blocker] 175.8,11.5,127.0  Pearl-Sellers' Arcade (20 m, Regio X Palatium)  routes 3 (quest 3)  blocked (wall)×4  part graph
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk: wall hit landmark:porticus-margaritaria @1.4 m 0.38 m     cls road
+  9. [blocker] 183.3,11.7,113.4  Pearl-Sellers' Arcade (13 m, Regio VIII Forum Romanum)  routes 3 (quest 3)  blocked (wall)×3  part graph
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk: wall hit landmark:porticus-margaritaria @1.4 m 0.38 m     cls landmark
+ 10. [blocker] 522.7,12.0,197.6  Great Gladiatorial School (27 m, Regio III Isis et Serapis)  routes 3 (quest 3)  blocked (wall)×3  part lead-out/lead-in
+       e.g. mq 02-tabella/ask ← mq-02-tabella/talk: wall hit landmark:ludus-magnus @1.4 m 0.38 m     cls landmark
+ 11. [blocker] -106.7,6.5,317.9  The Inn at the Starting Gates (6 m, Regio XI Circus Maximus)  routes 4 (quest 1)  blocked (wall)×37, off-line×3  part lead-in/lead-out
+       e.g. misc hilara/bring ← misc-hilara/sausage: wall hit city:b414 @1.4 m 0.38 m     cls free
+ 12. [blocker] -353.7,2.2,175.4  Obelisk of the Island (42 m, Regio XIV Transtiberim)  routes 4 (quest 1)  blocked (slide)×4  part graph
+       e.g. misc servus-aesculapii/daos ← the Forum (Golden Milestone): slide   rise -1.03 near npc:cit-1440 (Vigil) 3.2 m  cls water
+ 13. [major] 284.3,7.9,548.5  Crossroads Shrine by the Capena Gate (3 m, Regio XI Circus Maximus)  routes 7 (quest 5)  route line: drop -1.16×1, route line: drop -1.17×2, route line: drop -1.14×1, route line: drop -1.15×2, route line: through 2.2×1  part graph
+       e.g. node 6589 → node 1017 (349 m):   owner landmark:porta-capena   len 2.8 cls road
+ 14. [blocker] 100.7,10.5,-224.6  Market Halls of Trajan (27 m, Regio VIII Forum Romanum)  routes 3 (quest 2)  blocked (wall)×3  part graph
+       e.g. mq 04-columna/brief ← mq-04-columna/forum: wall hit landmark:markets-trajan @1.4 m 0.38 m     cls margin
+ 15. [blocker] 421.1,22.8,31.9  Baths of Titus (43 m, Regio III Isis et Serapis)  routes 3 (quest 2)  needs a jump/mantle (wall)×2, blocked (wall)×3, climb (mantle 1.28 m)×2  part lead-out
+       e.g. misc fur-balnearius/ask ← the Forum (Golden Milestone): wall hit landmark:baths-titus @1.4 m 0.38 m     cls margin
+ 16. [blocker] 102.9,18.4,-287.9  Market Halls of Trajan (90 m, Regio VII Via Lata)  routes 4 (quest 1)  blocked (wall)×4  part graph
+       e.g. misc tesserae-falsae/find ← misc-tesserae-falsae/curator: wall hit city:0,-3 @1.4 m 1.07 m  rise 0.75   cls street
+ 17. [major] 156.6,9.2,-76.1  Temple of Minerva (18 m, Regio IV Templum Pacis)  routes 7 (quest 4)  route line: drop -11.07×1, route line: steep 4.67×1, route line: through 2.2×4, route line: drop -11.06×1, route line: steep 4.85×1, route line: drop -10.6×1, route line: steep 4.3×1, route line: ledge 0.46×1, route line: ledge 0.47×1  part graph
+       e.g. mq 04-columna/forum ← mq-03-lemuria/warn:   owner city:1,-1   len 0.5 cls road
+ 18. [blocker] -228.3,6.8,142.0  River Port (16 m, Regio XI Circus Maximus)  routes 3 (quest 1)  needs a jump/mantle (low)×6, blocked (wall)×3, climb (mantle 0.84 m)×3, climb (mantle 0.52 m)×3  part graph/lead-out
+       e.g. job portus-saccarius/start ← the Forum (Golden Milestone): wall hit landmark:portus-tiberinus @1.4 m 0.38 m     cls margin
+ 19. [blocker] 309.7,10.3,578.6  Beside Dromo’s cart (3 m, Regio I Porta Capena)  routes 2 (quest 2)  blocked (wall)×2  part lead-in/graph
+       e.g. guide circus #0 (249,503) ← the new-game spawn (Porta Capena): wall hit unknown @1.4 m 0.36 m  rise -0.31 near thing:porta-capena (The dripping gate) 0.9 m  cls road
+ 20. [blocker] -58.7,7.2,236.4  Bakery of the Velabrum (2 m, Regio XI Circus Maximus)  routes 2 (quest 2)  blocked (wall)×3  part lead-in/graph
+       e.g. misc lemuria-fabae/follow ← misc-lemuria-fabae/see: wall hit city:b420 @1.4 m 0.52 m   near npc:npc-philadelphus (Philadelphus) 0.9 m  cls street
+ 21. [blocker] -302.3,2.2,94.1  Fabrician Bridge (11 m, Regio IX Circus Flaminius)  routes 2 (quest 2)  swim×2, blocked (slide)×2  part lead-in
+       e.g. misc servus-aesculapii/more ← misc-servus-aesculapii/face: slide   rise -1.07   cls water
+ 22. [blocker] -302.8,8.0,-156.8  Minucian Portico (37 m, Regio IX Circus Flaminius)  routes 2 (quest 2)  blocked (wall)×2  part lead-out
+       e.g. misc tesserae-falsae/eutychus ← the Forum (Golden Milestone): wall hit landmark:porticus-minucia-frumentaria @1.4 m 0.38 m     cls road
+ 23. [blocker] 72.4,10.5,-232.9  Market Halls of Trajan (42 m, Regio VIII Forum Romanum)  routes 3 (quest 1)  blocked (wall)×3  part graph
+       e.g. misc tesserae-falsae/find ← misc-tesserae-falsae/curator: wall hit landmark:markets-trajan @1.4 m 0.38 m     cls plaza
+ 24. [blocker] 553.1,12.0,181.7  Ludus Barracks (6 m, Regio III Isis et Serapis)  routes 3  blocked (wall)×3  part lead-out
+       e.g. → mq-02-tabella/ask from node 2804: wall hit landmark:ludus-magnus @1.4 m 0.38 m  rise -0.03 near text:t4-tiro (Cut into a cell wall) 1.8 m  cls landmark
+ 25. [blocker] -107.3,7.6,328.8  The Inn at the Starting Gates (17 m, Regio XI Circus Maximus)  routes 3  blocked (wall)×3  part lead-out
+       e.g. → job-cliens-epistula/v2:dama from node 1811: wall hit city:b414 @1.4 m 0.38 m     cls free
+ 26. [blocker] 56.0,10.6,-139.5  Equestrian Statue of Trajan (3 m, Regio VIII Forum Romanum)  routes 2 (quest 1)  needs a jump/mantle (slide)×1, blocked (wall)×1  part graph/lead-out
+       e.g. → mq-04-columna/forum from node 5843: wall hit landmark:equus-traiani @1.4 m 0.57 m     cls landmark
+ 27. [blocker] 53.0,10.5,-218.1  Basilica Ulpia (46 m, Regio VIII Forum Romanum)  routes 2 (quest 1)  blocked (wall)×2  part lead-out
+       e.g. mq 04-columna/brief ← mq-04-columna/forum: wall hit landmark:basilica-ulpia @1.4 m 0.38 m     cls landmark
+ 28. [blocker] 305.9,9.3,-103.0  The Lead-worker’s Yard (27 m, Regio IV Templum Pacis)  routes 2 (quest 1)  blocked (wall)×2  part lead-out
+       e.g. misc fur-balnearius/bundle ← misc-fur-balnearius/door: wall hit city:b804 @1.4 m 0.38 m     cls free
+ 29. [blocker] 260.3,12.6,-127.4  The Lead-worker’s Yard (25 m, Regio IV Templum Pacis)  routes 2 (quest 1)  blocked (wall)×2  part lead-out
+       e.g. misc tesserae-falsae/find ← misc-tesserae-falsae/curator: wall hit city:b1517 @1.4 m 0.38 m     cls free
+ 30. [blocker] 107.8,21.5,-278.8  Market Halls of Trajan (82 m, Regio VII Via Lata)  routes 2 (quest 1)  blocked (wall)×2  part graph
+       e.g. misc tesserae-falsae/decide ← misc-tesserae-falsae/moulds: wall hit terrain @1.4 m 0.96 m  rise 0.85   cls street
+ 31. [major] -80.8,7.5,306.7  The Inn at the Starting Gates (18 m, Regio XI Circus Maximus)  routes 5 (quest 4)  route line: through 2.2×4, route line: drop -7.64×2, route line: drop -7.65×2, route line: steep 3.46×1, route line: drop -7.66×1  part lead-out
+       e.g. mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/talk-dying:   owner terrain   len 0.4 cls free
+ 32. [blocker] 350.9,12.4,656.8  Temple of Honour and Virtue (18 m, Regio I Porta Capena)  routes 2  blocked (wall)×2  part lead-in
+       e.g. → mq-02-tabella/search from node 6436: wall hit city:b194 @1.4 m 0.38 m  rise 0.06   cls free
+ 33. [blocker] 514.9,12.0,190.9  Great Gladiatorial School (22 m, Regio III Isis et Serapis)  routes 2  blocked (wall)×4  part lead-out
+       e.g. → job-ludus-lusio/bout from node 7603: wall hit landmark:ludus-magnus @1.4 m 0.38 m     cls landmark
+ 34. [blocker] -293.3,6.5,83.3  Fabrician Bridge (10 m, Regio IX Circus Flaminius)  routes 2  blocked (low)×2, needs a jump/mantle (low)×1, climb (mantle 0.93 m)×1  part graph/lead-out
+       e.g. → job-portus-saccarius/s:carry1 from node 637: low hit Object{bridgeId} @0.1 m 0.35 m     cls road
+ 35. [blocker] 152.4,10.5,-94.5  Temple of Minerva (25 m, Regio IV Templum Pacis)  routes 2  blocked (wall)×2  part lead-in
+       e.g. → misc-hilara/bring from node 5914: wall hit city:b1522 @1.4 m 0.38 m     cls margin
+ 36. [blocker] 84.2,9.0,-19.6  Basilica Aemilia (16 m, Regio VIII Forum Romanum)  routes 2  blocked (wall)×2  part lead-out
+       e.g. → misc-hilara/bring from node 5914: wall hit landmark:forum-nerva @1.4 m 0.38 m     cls landmark
+ 37. [blocker] 82.1,9.2,-2.5  Basilica Aemilia (5 m, Regio VIII Forum Romanum)  routes 2  blocked (wall)×2  part lead-out
+       e.g. → misc-hilara/bring from node 5914: wall hit landmark:basilica-aemilia @1.4 m 0.4 m   near forum:read:tabernae-aemiliae-notice (Notice on a pier of the Basilica Paulli) 3.5 m  cls landmark
+ 38. [blocker] -320.9,8.2,138.4  Temple of Aesculapius (4 m, Regio XIV Transtiberim)  routes 2  needs a jump/mantle (wall)×1, climb (mantle 1.53 m)×2, blocked (wall)×1  part lead-out
+       e.g. the Campus Martius → Tiber Island: wall hit landmark:temple-aesculapius @1.4 m 0.38 m  rise 1.64   cls landmark
+ 39. [blocker] -334.0,7.5,-166.1  Four Temples of the Old Minucian Portico (41 m, Regio IX Circus Flaminius)  routes 2  blocked (wall)×2  part lead-out
+       e.g. → misc-tesserae-falsae/eutychus from node 651: wall hit city:b1700 @1.4 m 0.38 m     cls free
+ 40. [blocker] 98.1,9.7,95.3  Rise of Victory (1 m, Regio VIII Forum Romanum)  routes 1 (quest 1)  blocked (wall)×1  part graph
+       e.g. mq 02-tabella/hideout ← mq-02-tabella/ask: wall hit city:0,0 @1.4 m 1 m  rise 0.83   cls road
+ 41. [blocker] -31.6,7.4,193.3  Etruscan Street (8 m, Regio X Palatium)  routes 1 (quest 1)  needs a jump/mantle (wall)×1, blocked (wall)×1  part lead-out
+       e.g. mq 03-lemuria/go ← mq-02-tabella/give: wall hit city:b694 @1.4 m 0.38 m     cls road
+ 42. [blocker] -41.7,7.2,191.7  Etruscan Street (16 m, Regio X Palatium)  routes 1 (quest 1)  blocked (wall)×1  part lead-in
+       e.g. mq 03-lemuria/key ← mq-03-lemuria/clues: wall hit city:b694 @1.4 m 0.38 m     cls free
+ 43. [blocker] -249.3,6.0,133.4  River Port (11 m, Regio XI Circus Maximus)  routes 1 (quest 1)  blocked (wall)×1  part lead-out
+       e.g. job portus-saccarius/s:take2 ← job-portus-saccarius/s:carry1: wall hit landmark:portus-tiberinus @1.4 m 0.38 m   near river:portus-tiberinus:notice (Harbour office) 3 m  cls water
+ 44. [blocker] 504.1,12.0,191.2  Great Gladiatorial School (29 m, Regio III Isis et Serapis)  routes 1 (quest 1)  blocked (wall)×1  part lead-out
+       e.g. lud 01-sacramentum/draw ← lud-01-sacramentum/sign: wall hit landmark:ludus-magnus @1.4 m 0.38 m     cls landmark
+ 45. [blocker] 434.7,22.9,16.9  Before the Baths of Titus (19 m, Regio III Isis et Serapis)  routes 1 (quest 1)  blocked (wall)×1  part lead-in
+       e.g. misc fur-balnearius/bundle ← misc-fur-balnearius/door: wall hit city:b830 @1.4 m 0.38 m     cls free
+ 46. [blocker] 291.2,10.5,-104.1  The Lead-worker’s Yard (14 m, Regio IV Templum Pacis)  routes 1 (quest 1)  blocked (wall)×1  part lead-in
+       e.g. misc fur-balnearius/deal ← misc-fur-balnearius/bundle: wall hit city:b804 @1.4 m 0.38 m     cls free
+ 47. [blocker] 310.6,8.0,-74.6  The Lead-worker’s Yard (48 m, Regio IV Templum Pacis)  routes 1 (quest 1)  blocked (wall)×1  part lead-in
+       e.g. misc fur-balnearius/deal ← misc-fur-balnearius/bundle: wall hit city:b810 @1.4 m 0.59 m     cls free
+ 48. [blocker] -49.0,7.4,250.2  Insula of Tuccius the Cooper (13 m, Regio XI Circus Maximus)  routes 1 (quest 1)  blocked (wall)×1  part lead-in
+       e.g. misc lemuria-fabae/follow ← misc-lemuria-fabae/see: wall hit city:b419 @1.4 m 0.39 m     cls free
+ 49. [blocker] -104.8,7.6,339.9  The Aediles’ Clerk (20 m, Regio XI Circus Maximus)  routes 1 (quest 1)  blocked (wall)×1  part lead-in
+       e.g. misc mercuralia/test ← misc-mercuralia/measure: wall hit city:b414 @1.4 m 0.38 m     cls free
+ 50. [blocker] -9.6,7.9,111.7  The Silver Pig (20 m, Regio VIII Forum Romanum)  routes 1 (quest 1)  blocked (wall)×1  part lead-out
+       e.g. misc meta-sudans-rixa/choose ← the Forum (Golden Milestone): wall hit city:b696 @1.4 m 0.38 m     cls street
+ 51. [blocker] -307.1,6.6,138.3  Daos’ Bench on the Island (4 m, Regio XIV Transtiberim)  routes 1 (quest 1)  blocked (wall)×1  part lead-out
+       e.g. misc servus-aesculapii/free ← misc-servus-aesculapii/ko: wall hit landmark:temple-aesculapius @1.4 m 0.46 m     cls margin
+ 52. [major] 102.5,17.8,-288.4  Market Halls of Trajan (91 m, Regio VII Via Lata)  routes 6 (quest 2)  route line: ledge 0.48×2, route line: ledge 0.52×1, route line: ledge 0.57×1, route line: ledge 0.78×1, route line: steep 1.27×1, route line: ledge 0.95×3, route line: ledge 0.94×2, route line: ledge 0.65×3, route line: ledge 0.64×2, route line: steep 1.74×2, route line: ledge 0.63×4, route line: steep 1.23×1, route line: ledge 0.96×4, route line: ledge 0.77×1, route line: steep 2.06×1, route line: ledge 0.66×1, route line: ledge 0.54×1, route line: ledge 0.49×3, route line: ledge 0.59×1, route line: ledge 0.5×2, route line: ledge 0.71×1, route line: ledge 0.98×3, route line: steep 1.43×1, route line: ledge 0.92×1, route line: ledge 0.68×1, route line: ledge 0.62×3, route line: steep 1.62×1, route line: steep 1.88×1, route line: ledge 0.55×1, route line: ledge 0.58×1, route line: steep 1.36×1, route line: ledge 0.97×3, route line: ledge 0.79×1, route line: ledge 0.61×1, route line: steep 1.53×1  part graph
+       e.g. misc tesserae-falsae/find ← misc-tesserae-falsae/curator:      len 2 cls street
+ 53. [major] 108.6,22.5,-278.4  Market Halls of Trajan (82 m, Regio VII Via Lata)  routes 6 (quest 2)  route line: steep 1.26×1, route line: ledge 0.59×1, route line: ledge 0.57×2, route line: ledge 0.53×1, route line: ledge 0.5×1, route line: steep 1.24×1, route line: steep 1.06×1, route line: steep 1.29×1, route line: ledge 0.55×1, route line: ledge 0.52×1, route line: steep 1.28×1  part graph
+       e.g. misc tesserae-falsae/find ← misc-tesserae-falsae/curator:      len 2 cls street
+ 54. [blocker] 264.9,12.6,-119.3  The Lead-worker’s Yard (17 m, Regio IV Templum Pacis)  routes 1 (quest 1)  blocked (wall)×1  part graph
+       e.g. misc tesserae-falsae/decide ← misc-tesserae-falsae/moulds: wall hit city:b1517 @1.4 m 0.38 m     cls free
+ 55. [major] 207.2,17.2,125.9  Arch of Titus (2 m, Regio X Palatium)  routes 4 (quest 4)  route line: drop -9.24×2, route line: steep 3.85×1, route line: drop -8.96×2, route line: steep 3.95×1, route line: steep 3.87×1  part graph
+       e.g. mq 02-tabella/hideout ← mq-02-tabella/ask:   owner city:1,0   len 0.5 cls road
+ 56. [blocker] 364.0,12.0,686.2  Temple of Honour and Virtue (20 m, Regio I Porta Capena)  routes 1  blocked (wall)×1  part lead-in
+       e.g. → mq-02-tabella/search from node 6436: wall hit city:b194 @1.4 m 0.39 m     cls street
+ 57. [blocker] -38.1,7.2,220.2  Ground-floor wall behind the taberna (10 m, Regio X Palatium)  routes 1  blocked (wall)×1  part lead-out
+       e.g. → mq-03-lemuria/go from node 1848: wall hit city:b694 @1.4 m 0.38 m     cls free
+ 58. [blocker] 49.0,12.0,-296.9  Ulpian Greek Library (86 m, Regio VII Via Lata)  routes 1  blocked (wall)×1  part lead-in
+       e.g. → mq-04-columna/forum from node 5843: wall hit city:b1543 @1.4 m 0.19 m     cls free
+ 59. [blocker] 91.4,7.9,40.4  Temple of Divus Julius (9 m, Regio VIII Forum Romanum)  routes 1  blocked (wall)×1  part lead-out
+       e.g. → job-cliens-epistula/v0:philetus from node 31: wall hit landmark:temple-divus-julius @1.4 m 0.38 m     cls landmark
+ 60. [blocker] -276.7,6.0,98.6  Fabrician Bridge (25 m, Regio IX Circus Flaminius)  routes 1  blocked (wall)×1  part lead-out
+       e.g. → job-portus-saccarius/s:carry1 from node 637: wall hit landmark:portus-tiberinus @1.4 m 0.38 m     cls water
+
+== every objective's route, walked (70): {"BLOCKED":32,"snags":6,"ok":28,"FAIL":4}
+  BLOCKED  guide circus #0 (249,503) ← the new-game spawn (Porta Capena)            104 m  blocks 1 jumps 1 line 0  first 309.7,10.3,578.6 lead-in unknown (Beside Dromo’s cart (3 m, Regio I Porta Capena))
+  snags    guide palatine #0 (170,448) ← guide circus #0                             97 m  blocks 0 jumps 0 line 1
+  ok       guide palatine #1 (98,394) ← guide palatine #0                            92 m  blocks 0 jumps 0 line 0
+  ok       guide palatine #2 (20,335) ← guide palatine #1                           101 m  blocks 0 jumps 0 line 0
+  ok       guide palatine #3 (-50,280) ← guide palatine #2                           92 m  blocks 0 jumps 0 line 0
+  ok       guide velabrum #0 (-44,262) ← guide palatine #3                           19 m  blocks 0 jumps 0 line 0
+  ok       guide velabrum #1 (-27,187) ← guide velabrum #0                           77 m  blocks 0 jumps 0 line 0
+  ok       guide velabrum #2 (27,84) ← guide velabrum #1                            116 m  blocks 0 jumps 0 line 0
+  ok       guide forum #0 (48,60) ← guide velabrum #2                                32 m  blocks 0 jumps 0 line 0
+  ok       guide forum #1 (56,38) ← guide forum #0                                   23 m  blocks 0 jumps 0 line 0
+  ok       guide forum #2 (25,15) ← guide forum #1                                   40 m  blocks 0 jumps 0 line 0
+  ok       guide forum #3 (6,6) ← guide forum #2                                     21 m  blocks 0 jumps 0 line 0
+  FAIL     mq 01-madida-capena/ask-dromo ← mq-01-madida-capena/talk-dying           526 m  blocks 13 jumps 1 line 1  first -81,7.5,305.8 lead-out city:b414 (The Inn at the Starting Gates (25 m, Regio XI Circus Maximus))
+  snags    mq 02-tabella/castor ← mq-01-madida-capena/talk-dying                    725 m  blocks 0 jumps 1 line 0
+  snags    mq 02-tabella/search ← mq-02-tabella/castor                              723 m  blocks 0 jumps 1 line 0
+  BLOCKED  mq 02-tabella/ask ← mq-02-tabella/talk                                   648 m  blocks 4 jumps 1 line 0  first 175.8,11.5,127 graph landmark:porticus-margaritaria (Pearl-Sellers' Arcade (20 m, Regio X Palatium))
+  BLOCKED  mq 02-tabella/hideout ← mq-02-tabella/ask                                723 m  blocks 5 jumps 0 line 6  first 521.9,12,192.1 lead-in landmark:ludus-magnus (Great Gladiatorial School (21 m, Regio III Isis et Serapis))
+  ok       mq 02-tabella/give ← mq-02-tabella/satchel                               118 m  blocks 0 jumps 0 line 0
+  BLOCKED  mq 03-lemuria/go ← mq-02-tabella/give                                    183 m  blocks 1 jumps 1 line 0  first -31.6,7.4,193.3 lead-out city:b694 (Etruscan Street (8 m, Regio X Palatium))
+  BLOCKED  mq 03-lemuria/key ← mq-03-lemuria/clues                                  129 m  blocks 1 jumps 0 line 1  first -41.7,7.2,191.7 lead-in city:b694 (Etruscan Street (16 m, Regio X Palatium))
+  ok       mq 03-lemuria/warn ← mq-03-lemuria/key                                    56 m  blocks 0 jumps 0 line 0
+  BLOCKED  mq 04-columna/forum ← mq-03-lemuria/warn                                 481 m  blocks 2 jumps 0 line 0  first 67.1,9.1,-28.7 graph landmark:basilica-aemilia (Senate House (16 m, Regio VIII Forum Romanum))
+  BLOCKED  mq 04-columna/brief ← mq-04-columna/forum                                318 m  blocks 2 jumps 1 line 3  first 100.7,10.5,-224.6 graph landmark:markets-trajan (Market Halls of Trajan (27 m, Regio VIII Forum Romanum))
+  snags    mq 04-columna/land1 ← the Column door                                     24 m  blocks 0 jumps 1 line 0
+  snags    job cliens-epistula/v0:philetus ← the Forum (Golden Milestone)            83 m  blocks 0 jumps 2 line 0
+  ok       job cliens-epistula/v1:zethus ← job-cliens-epistula/v0:philetus          169 m  blocks 0 jumps 0 line 0
+  FAIL     job cliens-epistula/v2:dama ← job-cliens-epistula/v1:zethus              180 m  blocks 13 jumps 0 line 1  first -81,7.5,305.8 lead-out city:b414 (The Inn at the Starting Gates (25 m, Regio XI Circus Maximus))
+  BLOCKED  job ludus-lusio/start ← the Forum (Golden Milestone)                     715 m  blocks 2 jumps 1 line 0  first 511,12.4,200 graph city:3,1 (Great Gladiatorial School (32 m, Regio III Isis et Serapis))
+  ok       job ludus-lusio/bout ← job-ludus-lusio/start                              33 m  blocks 0 jumps 0 line 0
+  BLOCKED  job portus-saccarius/start ← the Forum (Golden Milestone)                300 m  blocks 1 jumps 2 line 1  first -233.8,6,139.3 lead-out landmark:portus-tiberinus (River Port (16 m, Regio XI Circus Maximus))
+  ok       job portus-saccarius/s:carry1 ← job-portus-saccarius/start                38 m  blocks 0 jumps 0 line 0
+  BLOCKED  job portus-saccarius/s:take2 ← job-portus-saccarius/s:carry1              34 m  blocks 1 jumps 0 line 1  first -249.3,6,133.4 lead-out landmark:portus-tiberinus (River Port (11 m, Regio XI Circus Maximus))
+  BLOCKED  job subura-pistor/start ← the Forum (Golden Milestone)                   210 m  blocks 2 jumps 0 line 1  first 67.1,9.1,-28.7 graph landmark:basilica-aemilia (Senate House (16 m, Regio VIII Forum Romanum))
+  BLOCKED  job subura-pistor/s:chreste ← job-subura-pistor/start                    330 m  blocks 3 jumps 0 line 1  first 155.4,9.5,-73.8 graph landmark:forum-nerva (Temple of Minerva (16 m, Regio IV Templum Pacis))
+  FAIL     job subura-pistor/s:dama ← job-subura-pistor/s:chreste                   229 m  blocks 13 jumps 0 line 1  first -81,7.5,305.8 lead-out city:b414 (The Inn at the Starting Gates (25 m, Regio XI Circus Maximus))
+  BLOCKED  lud 01-sacramentum/draw ← lud-01-sacramentum/sign                        113 m  blocks 2 jumps 0 line 0  first 512.1,12.3,198.2 graph city:3,1 (Great Gladiatorial School (30 m, Regio III Isis et Serapis))
+  ok       lud 01-sacramentum/win1 ← lud-01-sacramentum/draw                         73 m  blocks 0 jumps 0 line 0
+  BLOCKED  misc fur-balnearius/ask ← the Forum (Golden Milestone)                   588 m  blocks 1 jumps 1 line 1  first 421.1,22.8,30.9 lead-out landmark:baths-titus (Baths of Titus (43 m, Regio III Isis et Serapis))
+  BLOCKED  misc fur-balnearius/bundle ← misc-fur-balnearius/door                    279 m  blocks 2 jumps 1 line 6  first 434.7,22.9,16.9 lead-in city:b830 (Before the Baths of Titus (19 m, Regio III Isis et Serapis))
+  BLOCKED  misc fur-balnearius/deal ← misc-fur-balnearius/bundle                    268 m  blocks 3 jumps 0 line 6  first 291.2,10.5,-104.1 lead-in city:b804 (The Lead-worker’s Yard (14 m, Regio IV Templum Pacis))
+  FAIL     misc hilara/ask ← the Forum (Golden Milestone)                           419 m  blocks 13 jumps 0 line 0  first -81,7.5,305.8 lead-out city:b414 (The Inn at the Starting Gates (25 m, Regio XI Circus Maximus))
+  BLOCKED  misc hilara/bring ← misc-hilara/sausage                                  400 m  blocks 1 jumps 0 line 3  first -106.7,6.5,317.9 lead-in city:b414 (The Inn at the Starting Gates (6 m, Regio XI Circus Maximus))
+  ok       misc insula-nutans/evidence ← the Forum (Golden Milestone)               278 m  blocks 0 jumps 0 line 0
+  ok       misc insula-nutans/confront ← misc-insula-nutans/evidence                239 m  blocks 0 jumps 0 line 0
+  ok       misc insula-nutans/report ← misc-insula-nutans/confront                   60 m  blocks 0 jumps 0 line 0
+  ok       misc insula-nutans/warn ← misc-insula-nutans/report                      220 m  blocks 0 jumps 0 line 0
+  ok       misc lemuria-fabae/watch ← the Forum (Golden Milestone)                  328 m  blocks 0 jumps 0 line 0
+  BLOCKED  misc lemuria-fabae/follow ← misc-lemuria-fabae/see                        58 m  blocks 2 jumps 0 line 4  first -49,7.4,250.2 lead-in city:b419 (Insula of Tuccius the Cooper (13 m, Regio XI Circus Maximus))
+  BLOCKED  misc lemuria-fabae/decide ← misc-lemuria-fabae/follow                     59 m  blocks 2 jumps 0 line 1  first -59.2,7.4,232 graph city:b420 (Bakery of the Velabrum (5 m, Regio XI Circus Maximus))
+  BLOCKED  misc mercuralia/ides ← the Forum (Golden Milestone)                      837 m  blocks 1 jumps 1 line 0  first 308.7,10,578.3 graph unknown (Under the dripping arch (2 m, Regio I Porta Capena))
+  BLOCKED  misc mercuralia/measure ← misc-mercuralia/overhear                       556 m  blocks 1 jumps 2 line 0  first 279.1,8.1,548.9 graph landmark:porta-capena (Crossroads Shrine by the Capena Gate (3 m, Regio XI Circus Maximus))
+  BLOCKED  misc mercuralia/test ← misc-mercuralia/measure                           299 m  blocks 1 jumps 1 line 0  first -104.8,7.6,339.9 lead-in city:b414 (The Aediles’ Clerk (20 m, Regio XI Circus Maximus))
+  BLOCKED  misc meta-sudans-rixa/choose ← the Forum (Golden Milestone)              172 m  blocks 1 jumps 0 line 0  first -9.6,7.9,111.7 lead-out city:b696 (The Silver Pig (20 m, Regio VIII Forum Romanum))
+  BLOCKED  misc meta-sudans-rixa/ko ← misc-meta-sudans-rixa/choose                  375 m  blocks 2 jumps 0 line 2  first 175.8,11.5,127 graph landmark:porticus-margaritaria (Pearl-Sellers' Arcade (20 m, Regio X Palatium))
+  ok       misc meta-sudans-rixa/law ← misc-meta-sudans-rixa/ko                     384 m  blocks 0 jumps 0 line 0
+  BLOCKED  misc servus-aesculapii/daos ← the Forum (Golden Milestone)               775 m  blocks 1 jumps 1 line 0  first -353.7,2.2,175.4 graph  (Obelisk of the Island (42 m, Regio XIV Transtiberim))
+  ok       misc servus-aesculapii/proofs ← misc-servus-aesculapii/daos               23 m  blocks 0 jumps 0 line 0
+  ok       misc servus-aesculapii/face ← misc-servus-aesculapii/proofs               61 m  blocks 0 jumps 0 line 0
+  BLOCKED  misc servus-aesculapii/more ← misc-servus-aesculapii/face                 62 m  blocks 1 jumps 0 line 0  first -305.4,2.2,99.9 lead-in  (Fabrician Bridge (11 m, Regio IX Circus Flaminius))
+  BLOCKED  misc servus-aesculapii/free ← misc-servus-aesculapii/ko                   64 m  blocks 2 jumps 0 line 0  first -304.8,2.2,100.2 lead-in  (Fabrician Bridge (11 m, Regio IX Circus Flaminius))
+  BLOCKED  misc tesserae-falsae/eutychus ← the Forum (Golden Milestone)             567 m  blocks 1 jumps 0 line 0  first -302.8,8,-156.8 lead-out landmark:porticus-minucia-frumentaria (Minucian Portico (37 m, Regio IX Circus Flaminius))
+  BLOCKED  misc tesserae-falsae/find ← misc-tesserae-falsae/curator                 916 m  blocks 3 jumps 0 line 1  first 102.9,18.4,-287.9 graph city:0,-3 (Market Halls of Trajan (90 m, Regio VII Via Lata))
+  BLOCKED  misc tesserae-falsae/decide ← misc-tesserae-falsae/moulds                910 m  blocks 4 jumps 0 line 2  first 264.9,12.6,-119.3 graph city:b1517 (The Lead-worker’s Yard (17 m, Regio IV Templum Pacis))
+  ok       misc urna-aenea/felix ← the Forum (Golden Milestone)                     225 m  blocks 0 jumps 0 line 0
+  ok       misc urna-aenea/dice ← misc-urna-aenea/felix                              35 m  blocks 0 jumps 0 line 0
+  BLOCKED  misc urna-aenea/crispina ← misc-urna-aenea/felix                         470 m  blocks 2 jumps 0 line 1  first 67.1,9.1,-28.7 graph landmark:basilica-aemilia (Senate House (16 m, Regio VIII Forum Romanum))
+  BLOCKED  misc urna-aenea/primus ← misc-urna-aenea/crispina                        469 m  blocks 3 jumps 0 line 1  first 155.4,9.5,-73.7 graph landmark:forum-nerva (Temple of Minerva (16 m, Regio IV Templum Pacis))
+  ok       misc venus-cloacina/watch ← the Forum (Golden Milestone)                  60 m  blocks 0 jumps 0 line 0
+  snags    misc venus-cloacina/enter ← misc-venus-cloacina/watch                    446 m  blocks 0 jumps 1 line 0
+  ok       misc venus-cloacina/out ← misc-venus-cloacina/loot                       444 m  blocks 0 jumps 0 line 0
+  shot .shots/routes/01-blocked-67_-29-view.png
+  shot .shots/routes/01-blocked-67_-29-over.png
+  shot .shots/routes/02-blocked-155_-77-view.png
+  shot .shots/routes/02-blocked-155_-77-over.png
+  shot .shots/routes/03-blocked-282_545-view.png
+  shot .shots/routes/03-blocked-282_545-over.png
+  shot .shots/routes/04-line-drop-70_-28-view.png
+  shot .shots/routes/04-line-drop-70_-28-over.png
+  shot .shots/routes/05-blocked--81_306-view.png
+  shot .shots/routes/05-blocked--81_306-over.png
+  shot .shots/routes/06-blocked-510_200-view.png
+  shot .shots/routes/06-blocked-510_200-over.png
+  shot .shots/routes/07-blocked-57_38-view.png
+  shot .shots/routes/07-blocked-57_38-over.png
+  shot .shots/routes/08-blocked-176_127-view.png
+  shot .shots/routes/08-blocked-176_127-over.png
+  shot .shots/routes/09-blocked-183_113-view.png
+  shot .shots/routes/09-blocked-183_113-over.png
+  shot .shots/routes/10-blocked-523_198-view.png
+  shot .shots/routes/10-blocked-523_198-over.png
+  shot .shots/routes/11-blocked--107_318-view.png
+  shot .shots/routes/11-blocked--107_318-over.png
+  shot .shots/routes/12-blocked--354_175-view.png
+  shot .shots/routes/12-blocked--354_175-over.png
+  shot .shots/routes/13-line-through-284_549-view.png
+  shot .shots/routes/13-line-through-284_549-over.png
+  shot .shots/routes/14-blocked-101_-225-view.png
+  shot .shots/routes/14-blocked-101_-225-over.png
+  shot .shots/routes/15-blocked-421_32-view.png
+  shot .shots/routes/15-blocked-421_32-over.png
+  shot .shots/routes/16-blocked-103_-288-view.png
+  shot .shots/routes/16-blocked-103_-288-over.png
+  shot .shots/routes/17-line-drop-157_-76-view.png
+  shot .shots/routes/17-line-drop-157_-76-over.png
+  shot .shots/routes/18-blocked--228_142-view.png
+  shot .shots/routes/18-blocked--228_142-over.png
+
+wrote scripts/audit/out/routes-walk.json (0.88 MB), 36 screenshots; 67.8 min

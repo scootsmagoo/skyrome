@@ -7,7 +7,8 @@
  *                             QuestSystem.setStage so the NPCs stand where that stage puts them), with
  *                             the marker's position as the HUD would resolve it
  *   walk(job)                 the route the game would show (game.questRoute, its source pointed at
- *                             the job's goal), WALKED with the real player controller: face a point
+ *                             the job's goal; `job.reach`: the objective completes within that many
+ *                             metres, so the walk stops there), WALKED with the real player controller: face a point
  *                             2 m ahead on the drawn line, hold W (+ Shift to sprint), and record
  *                             every place the walk is blocked, needs a jump or a climb, drops,
  *                             swims, or slides off the line; and, ahead of the walker where the
@@ -336,7 +337,9 @@
         for (const o of objs) {
           const v = q.resolveTarget(o.target);
           const cell = o.target.kind === 'location' && /^interior:([^:]+):/.test(o.target.id) ? /^interior:([^:]+):/.exec(o.target.id)[1] : v ? (game.interiors?.cellAt?.(v) ?? null) : null;
-          out.push({ quest: id, stage: sid, obj: o.id, text: o.text, optional: !!o.optional, target: o.target, pos: v ? { x: r2(v.x), y: r2(v.y), z: r2(v.z) } : null, cell, giver: def.giver ?? null, category: def.category });
+          // A location objective completes on entering its radius (the walk can stop there).
+          const radius = o.target.kind === 'location' ? (game.locations?.get?.(o.target.id)?.radius ?? null) : null;
+          out.push({ quest: id, stage: sid, obj: o.id, text: o.text, optional: !!o.optional, target: o.target, pos: v ? { x: r2(v.x), y: r2(v.y), z: r2(v.z) } : null, cell, radius, giver: def.giver ?? null, category: def.category });
         }
       }
       pacify();
@@ -347,8 +350,11 @@
 
   // ------------------------------------------------------------------ the walker
 
-  /** Closest point of a polyline (array of {x,z}) to (x, z), searching segments lo..hi. */
-  function closestOn(pts, cum, x, z, lo = 0, hi = Infinity) {
+  /**
+   * Closest point of a polyline (array of {x,z}) to (x, z), searching segments lo..hi. With `y` (in a
+   * cell) the height counts too, as QuestRoute does: a spiral stair's turns share their plan position.
+   */
+  function closestOn(pts, cum, x, z, lo = 0, hi = Infinity, y = NaN) {
     let best = { seg: 0, t: 0, d: Infinity, along: 0 };
     const a = Math.max(0, lo);
     const b = Math.min(pts.length - 2, hi);
@@ -360,7 +366,8 @@
       const l2 = ex * ex + ez * ez;
       let t = l2 > 1e-9 ? ((x - A.x) * ex + (z - A.z) * ez) / l2 : 0;
       t = Math.max(0, Math.min(1, t));
-      const d = Math.hypot(A.x + ex * t - x, A.z + ez * t - z);
+      let d = Math.hypot(A.x + ex * t - x, A.z + ez * t - z);
+      if (Number.isFinite(y) && Number.isFinite(A.y) && Number.isFinite(B.y)) d = Math.hypot(d, (A.y + (B.y - A.y) * t - y) * 1.5);
       if (d < best.d) best = { seg: i, t, d, along: cum[i] + Math.sqrt(l2) * t };
     }
     return best;
@@ -433,7 +440,17 @@
     res.startMoved = placed.moved;
     res.startPlace = placeName(p.position.x, p.position.z);
     res.goalPlace = placeName(job.goal.x, job.goal.z);
-    const goal = { key: `audit:${job.id}:${Math.random()}`, x: job.goal.x, y: job.goal.y, z: job.goal.z, target: job.goal.target };
+    res.reach = job.reach ?? null;
+    // The goal as the HUD hands it to the route (a point or a location without a height comes as
+    // y = 0, which the route's arrival test, |Δy| < 3 m, then never passes on raised ground).
+    // A survey goal with no height (a random street node) stands on the ground.
+    const goalStand = standY(job.goal.x, job.goal.z);
+    const goal = { key: `audit:${job.id}:${Math.random()}`, x: job.goal.x, y: job.goal.y ?? goalStand, z: job.goal.z, target: job.goal.target };
+    let arriveY = goal.y;
+    if (!job.line && Math.abs(goalStand - goal.y) > 3 && !job.goal.cell) {
+      res.goalYOff = r1(goalStand - goal.y);
+      arriveY = goalStand;
+    }
     let fixed = null;
     if (job.line) {
       const pts = job.line.map((q) => ({ x: q.x, y: NaN, z: q.z }));
@@ -451,6 +468,15 @@
       while (performance.now() - tp < 4000 && (qr.version === v0 || qr.status === 'none')) await frames(2);
       const grid = game.population?.grid;
       res.plan = { status: qr.status, ms: r2(qr.stats.lastMs), legs: snapshot(qr), gridAtStart: !!grid?.ready(p.position.x, p.position.z), gridAtGoal: !!grid?.ready(job.goal.x, job.goal.z), goalD: r1(Math.hypot(job.goal.x - p.position.x, job.goal.z - p.position.z)) };
+      // The straight ends of the outside leg: the lead from the player onto the streets, and the
+      // lead from the last street node to the goal (drawn straight when the goal's grid is not built).
+      const l0 = qr.legs.find((l) => l.cell === null);
+      if (l0 && l0.line.n >= 2) {
+        const q = legPts(l0);
+        const n = q.length;
+        res.plan.leadIn = r1(Math.hypot(q[1].x - q[0].x, q[1].z - q[0].z));
+        res.plan.leadOut = r1(Math.hypot(q[n - 1].x - q[n - 2].x, q[n - 1].z - q[n - 2].z));
+      }
       if (qr.status === 'failed' || !qr.legs.length) {
         res.outcome = qr.status === 'arrived' ? 'arrived' : 'no-route';
         qr.source = origSource;
@@ -547,22 +573,23 @@
         cum = ln.cum;
         lineLeg = ln.leg;
         seg = 0;
-        const c0 = closestOn(pts, cum, pos.x, pos.z);
+        const c0 = closestOn(pts, cum, pos.x, pos.z, 0, Infinity, place !== null ? pos.y : NaN);
         seg = c0.seg;
         bestAlong = c0.along;
         checkedTo = c0.along;
         hist.length = 0;
       }
       const total = cum[cum.length - 1];
-      let c = closestOn(pts, cum, pos.x, pos.z, seg - 2, seg + 30);
-      if (c.d > 6) c = closestOn(pts, cum, pos.x, pos.z);
+      const yIn = place !== null ? pos.y : NaN;
+      let c = closestOn(pts, cum, pos.x, pos.z, seg - 2, seg + 30, yIn);
+      if (c.d > 6) c = closestOn(pts, cum, pos.x, pos.z, 0, Infinity, yIn);
       seg = c.seg;
       bestAlong = Math.max(bestAlong, c.along);
       // Arrived?
       const last = fixed || (qr.legs.length === 1 && !lineLeg.door);
       const endP = pts[pts.length - 1];
       const dEnd = Math.hypot(endP.x - pos.x, endP.z - pos.z);
-      if (last && (fixed ? dEnd < 1.5 || c.along > total - 1.2 : qr.status === 'arrived' || (dEnd < 2.5 && Math.abs((job.goal.y ?? pos.y) - pos.y) < 3))) {
+      if (last && (fixed ? dEnd < 1.5 || c.along > total - 1.2 : qr.status === 'arrived' || (dEnd < Math.max(2.5, job.reach ?? 0) && Math.abs(arriveY - pos.y) < 3))) {
         res.outcome = 'arrived';
         break;
       }
@@ -612,7 +639,8 @@
         }
       }
       // Steer: a point 2 m ahead on the line (pure pursuit), never behind the best progress.
-      const tgt = pointAt(pts, cum, Math.max(c.along, bestAlong - 0.5) + 2.0);
+      // A shorter look-ahead in a cell (a spiral stair: 2 m ahead is across the newel).
+      const tgt = pointAt(pts, cum, Math.max(c.along, bestAlong - 0.5) + (place !== null ? 0.8 : 2.0));
       const fx = tgt.x - pos.x;
       const fz = tgt.z - pos.z;
       const fl = Math.hypot(fx, fz);
@@ -660,6 +688,20 @@
       const near = nearThing(pos.x + dir.x * 0.8, pos.z + dir.z * 0.8);
       const rise = ga ? r2(ga.y - pos.y) : null;
       const why = npcs && !hit ? 'npc' : !hit && under && under.normal.y < 0.75 ? 'steep' : hit && hit.h >= 1.0 ? 'wall' : hit ? 'low' : moved > 0.6 ? 'slide' : 'snag';
+      // Would the nav grid (it knows the real colliders, once built here) know a way on? Separates a
+      // stale straight lead drawn before the grid existed (a replan would fix it) from a goal walled in.
+      const grid = game.population?.grid;
+      let gridInfo = null;
+      if (grid) {
+        const gx = job.goal.x;
+        const gz = job.goal.z;
+        const gd = Math.hypot(gx - pos.x, gz - pos.z);
+        gridInfo = { here: grid.ready(pos.x, pos.z), goal: grid.ready(gx, gz), goalD: r1(gd), goalReach: grid.ready(gx, gz) ? grid.reachable(gx, gz) : null };
+        if (gridInfo.here && gridInfo.goal && gd < 90 && !fixed) {
+          const gp = grid.findPath(pos.x, pos.z, gx, gz, 7000);
+          gridInfo.path = gp ? r1(gp.reduce((a, q, i) => a + Math.hypot(q.x - (i ? gp[i - 1].x : pos.x), q.z - (i ? gp[i - 1].z : pos.z)), 0)) : null;
+        }
+      }
       // A jump (Space: jump or mantle) as a player would try.
       keyW(true);
       game.input.simulate('Space', true);
@@ -668,10 +710,10 @@
       const tj = simT;
       const a0 = bestAlong;
       while (simT - tj < 1.0) await frames(1);
-      let c2 = closestOn(pts, cum, p.position.x, p.position.z);
+      let c2 = closestOn(pts, cum, p.position.x, p.position.z, 0, Infinity, place !== null ? p.position.y : NaN);
       const jumped = c2.along - a0 > 1.0 && c2.d < 4;
       const sameSpot = lastStuckAt && Math.hypot(lastStuckAt.x - pos.x, lastStuckAt.z - pos.z) < 3;
-      const e = ev(jumped ? 'jump' : 'blocked', { why, ahead, hit, rise, slope: under ? r2(Math.acos(Math.min(1, under.normal.y)) * 57.3) : null, lineD: r1(c.d), seg: c.seg, npcs, near, moved: r2(moved), progress: r2(prog), climbs: climbs.filter((k) => k.t > simT - 4).map((k) => `${k.kind} ${r2(k.height)}`) });
+      const e = ev(jumped ? 'jump' : 'blocked', { why, ahead, hit, rise, slope: under ? r2(Math.acos(Math.min(1, under.normal.y)) * 57.3) : null, lineD: r1(c.d), seg: c.seg, npcs, near, moved: r2(moved), progress: r2(prog), grid: gridInfo, routeVer: fixed ? null : qr.version, climbs: climbs.filter((k) => k.t > simT - 4).map((k) => `${k.kind} ${r2(k.height)}`) });
       hist.length = 0;
       if (jumped) continue;
       stuckHere = sameSpot ? stuckHere + 1 : 0;
@@ -684,6 +726,12 @@
       }
       const { safe } = await load();
       let put = null;
+      if (place !== null) {
+        // In a cell: the next point of the cell's route (never safe ground: that is outside).
+        const q = pointAt(pts, cum, Math.min(total, Math.max(c.along, bestAlong) + 3 + stuckHere * 3));
+        put = { x: q.x, y: (Number.isFinite(q.y) ? q.y : pos.y) + 0.25, z: q.z };
+        e.skip = 'cell';
+      }
       for (let d = 3 + stuckHere * 3; d <= 45 && !put; d += 1.5) {
         const q = pointAt(pts, cum, Math.max(c.along, bestAlong) + d);
         const y0 = standY(q.x, q.z);
@@ -706,7 +754,7 @@
       sprintOn = false;
       p.teleport({ x: put.x, y: put.y + 0.05, z: put.z });
       await settle(2500);
-      c2 = closestOn(pts, cum, p.position.x, p.position.z);
+      c2 = closestOn(pts, cum, p.position.x, p.position.z, 0, Infinity, place !== null ? p.position.y : NaN);
       bestAlong = Math.max(bestAlong, c2.along);
       seg = c2.seg;
       fallFrom = null;
@@ -718,7 +766,12 @@
     res.realSec = r1((performance.now() - t0) / 1000);
     res.end = P3(p.position);
     res.endD = r1(Math.hypot(job.goal.x - p.position.x, job.goal.z - p.position.z));
-    if (!fixed) qr.source = origSource;
+    const gridEnd = game.population?.grid;
+    if (gridEnd && gridEnd.ready(job.goal.x, job.goal.z)) res.goalGrid = { reachable: gridEnd.reachable(job.goal.x, job.goal.z), floor: gridEnd.floorAt(job.goal.x, job.goal.z) };
+    if (!fixed) {
+      res.finalStatus = qr.status;
+      qr.source = origSource;
+    }
     return res;
   }
 
@@ -815,7 +868,8 @@
   /**
    * Stand the player at `from` with the quest route to `goal` live (the gold trail on the ground on,
    * the minimap showing the red route) and frame `at`: 'view' is the player's third-person view
-   * toward it with the HUD; 'over' lifts a free camera 13 m above and 9 m behind, HUD hidden.
+   * toward it with the HUD; 'over' lifts a free camera 13 m above and 9 m behind, HUD hidden; 'map'
+   * opens the big map centred on it (`mapScale` px per metre) with the route on it.
    */
   async function frame(o) {
     game.timeScale = 1;
@@ -825,15 +879,28 @@
       rigOff = null;
     }
     game.settings.data.routeInWorld = true;
-    await placeAt(o.from.x, o.from.z, undefined, true);
     const qr = game.questRoute;
-    if (o.goal && qr) {
+    const plan = async () => {
       const g = { key: `shot:${Math.random()}`, x: o.goal.x, y: o.goal.y ?? standY(o.goal.x, o.goal.z), z: o.goal.z, target: o.goal.target };
       qr.source = () => g;
       qr.invalidate();
       const v0 = qr.version;
       const t = performance.now();
       while (performance.now() - t < 3000 && qr.version === v0) await frames(2);
+    };
+    if (o.keep) {
+      // The previous frame's player and route stay (only the camera moves).
+    } else if (o.planFrom && o.goal && qr) {
+      // The route as the walker had it: planned where the walk began (far off, before the nav grid
+      // near the goal existed), then the player put on that line short of the spot. The route only
+      // replans when the player strays 9 m from it, so it stays as it was drawn.
+      await placeAt(o.planFrom.x, o.planFrom.z, undefined, true);
+      await plan();
+      await placeAt(o.from.x, o.from.z, undefined, true);
+      await sleep(400);
+    } else {
+      await placeAt(o.from.x, o.from.z, undefined, true);
+      if (o.goal && qr) await plan();
     }
     const pos = p.position;
     const ax = o.at.x - pos.x;
@@ -846,6 +913,16 @@
     if (ui) ui.style.visibility = o.mode === 'over' ? 'hidden' : 'visible';
     game.ui?.closeAll?.();
     await sleep(900);
+    if (o.mode === 'map') {
+      // The big map (M) centred on the place, the route as drawn on it ("Your route").
+      const shell = game.ui?.openMenu?.('map');
+      await sleep(500);
+      const r = shell?.tabs?.get?.('map')?.renderer;
+      r?.centerOn?.(o.at.x, o.at.z, o.mapScale ?? 2.4);
+      game.invalidate?.();
+      await sleep(900);
+      return { player: P3(p.position), route: qr?.status, version: qr?.version, along: qr ? r1(qr.along) : null, map: !!r };
+    }
     if (o.mode === 'over') {
       const rig = game.getSystem('cameraRig');
       if (rig) {
@@ -861,9 +938,10 @@
       game.invalidate?.();
     }
     await sleep(900);
-    return { player: P3(p.position), route: qr?.status };
+    return { player: P3(p.position), route: qr?.status, version: qr?.version, along: qr ? r1(qr.along) : null };
   }
   function unframe() {
+    game.ui?.closeAll?.();
     if (rigOff) {
       game.addSystem(rigOff);
       rigOff = null;

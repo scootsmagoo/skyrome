@@ -5,12 +5,17 @@
  * water, a fence or a gap, or needs a jump or a climb, and where the drawn route leaves walkable
  * space. The in-page half is scripts/audit/routes-page.js (read its header).
  *
- *   node scripts/audit/routes.mjs [--phases objectives,approach,tour,random,edges,sweep]
+ *   node scripts/audit/routes.mjs [--phases guide,objectives,approach,tour,random,edges,sweep]
  *        [--approaches 1] [--random 24] [--edges 100] [--seed 1] [--time-scale 3]
  *        [--sweep-max 9999] [--sweep-tile 60] [--minutes 90] [--shots 14] [--only mq-02,lud-01]
  *        [--out scripts/audit/out] [--name routes] [--size 960x540]
+ *   node scripts/audit/routes.mjs --merge a.json,b.json [--replace] --name routes   (re-aggregate runs)
+ *   node scripts/audit/routes.mjs --reshoot scripts/audit/out/routes.json [--shots 14] [--from 0] [--spots f.json]
+ *   node scripts/audit/routes.mjs --probe q.js [--query 'hour=11']   (run q.js in the live game, print the result)
  *
  * Phases (each a kind of job; all on by default):
+ *   guide       the first-steps guide ("Into the City", src/game/guide.ts): its waypoints in order from
+ *               the new-game spawn at the Porta Capena to the Golden Milestone (the opening's route)
  *   objectives  every objective of every quest (src/quests/content; each stage set in turn so the
  *               NPCs stand where that stage puts them), walked from where the player stands when it
  *               appears: the previous objective's place (the story's four chapters as one chain, the
@@ -26,9 +31,22 @@
  *   sweep       every street-graph edge checked statically against the physics world, tile by tile
  *               (a second page with ?cityNear=75 so the city's lazy colliders cover each tile)
  *
- * Output: <out>/<name>.json (totals, ranked clusters, compact per-job results; under 2 MB),
- * <out>/<name>.txt (the printed report) and screenshots of the worst places in .shots/routes/.
- * Exit code is always 0 (it is a survey). About 60-80 minutes for everything at --time-scale 3.
+ * What a walk records (scripts/audit/routes-page.js): `blocked` (no progress for 2 s: the wall or
+ * obstacle ahead, its owner, and whether the nav grid knows a way on from there: `grid.path`),
+ * `jump` (a Space press got it past), climbs (clamber/mantle heights), drops over 2.5 m, swimming,
+ * sliding off the line; and ahead of the walker, the DRAWN line itself checked against the colliders
+ * (`line`: through a solid, a ledge, a drop, water, steep ground). Each job notes which part of the
+ * route did it: `lead-in` (player to the first street node), `graph` (street-graph links), `lead-out`
+ * (last node to the goal), `direct`, `edge`. A blocked walk is put back on the line past the obstacle.
+ *
+ * Output: <out>/<name>.json (totals, every objective's verdict in `questTable`, ranked places, the
+ * sweep with every significant issue, compact per-job results with the drawn polyline; under 2 MB),
+ * <out>/<name>.txt (the printed report) and screenshots in .shots/routes/ (per place: the player's
+ * view with the minimap, an overhead view and the big map with "Your route"). Exit code is always 0.
+ * Timing (M4 Max, other agents on the GPU): the walking phases about 70 min, the sweep about 20 min,
+ * screenshots about 40 s a place. Run the walks and the sweep as two processes and --merge them.
+ * The 2026-10-10 audit: scripts/audit/out/routes.json (+ routes-walk.txt, routes-sweep.txt for the
+ * per-job lines) and scripts/audit/out/routes-places.json (scripts/audit/routes-places.js).
  */
 import { createServer as createNetServer } from 'node:net';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -37,7 +55,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const args = Object.fromEntries(process.argv.slice(2).reduce((a, x, i, all) => (x.startsWith('--') ? [...a, [x.slice(2), all[i + 1] === undefined || all[i + 1].startsWith('--') ? true : all[i + 1]]] : a), []));
-const phases = new Set(String(args.phases ?? 'objectives,approach,tour,random,edges,sweep').split(','));
+const phases = new Set(String(args.phases ?? 'guide,objectives,approach,tour,random,edges,sweep').split(','));
 const opt = {
   approaches: Number(args.approaches ?? 1),
   random: Number(args.random ?? 24),
@@ -78,21 +96,33 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
 // ---------------------------------------------------------------- browser
 
-const { createServer } = await import('vite');
-const port = await new Promise((res) => {
-  const s = createNetServer();
-  s.listen(0, '127.0.0.1', () => {
-    const p = s.address().port;
-    s.close(() => res(p));
-  });
-});
-const server = await createServer({ root, logLevel: 'error', server: { port, strictPort: true, host: '127.0.0.1', hmr: false } });
-await server.listen();
-const { chromium } = await import('playwright');
-const browser = await chromium.launch({ headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
+// Started on first use (--merge needs no browser).
+let server = null;
+let browser = null;
+let port = 0;
 const pageErrors = [];
+async function start() {
+  if (browser) return;
+  const { createServer } = await import('vite');
+  port = await new Promise((res) => {
+    const s = createNetServer();
+    s.listen(0, '127.0.0.1', () => {
+      const p = s.address().port;
+      s.close(() => res(p));
+    });
+  });
+  server = await createServer({ root, logLevel: 'error', server: { port, strictPort: true, host: '127.0.0.1', hmr: false } });
+  await server.listen();
+  const { chromium } = await import('playwright');
+  browser = await chromium.launch({ headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
+}
+async function stop() {
+  await browser?.close();
+  await server?.close();
+}
 
 async function boot(query) {
+  await start();
   const page = await browser.newPage({ viewport: { width: vw, height: vh } });
   page.on('pageerror', (e) => pageErrors.push(String(e?.message ?? e).slice(0, 300)));
   page.on('crash', () => say('  PAGE CRASHED'));
@@ -138,6 +168,7 @@ async function runJob(job) {
   r.kind = job.kind;
   r.label = job.label ?? job.id;
   r.quest = job.quest ?? null;
+  r.reach = job.reach ?? null;
   r.goal = [Math.round(job.goal.x * 10) / 10, Math.round((job.goal.y ?? 0) * 10) / 10, Math.round(job.goal.z * 10) / 10];
   results.push(r);
   const bad = r.events.filter((e) => e.kind !== 'door').map((e) => `${e.kind}${e.why ? ':' + e.why : ''}`);
@@ -177,16 +208,30 @@ function objectiveJobs() {
         if (!o.optional) prev = { ...o.pos, label: `${o.quest}/${o.obj}` };
         continue;
       }
-      if (jobs.some((j) => dist(j.start, start) < 6 && dist(j.goal, o.pos) < 6 && (j.goal.cell ?? null) === (o.cell ?? null))) {
+      // Already walked (heights count: a stair's landings share their plan position).
+      if (jobs.some((j) => dist(j.start, start) < 6 && dist(j.goal, o.pos) < 6 && Math.abs((j.goal.y ?? 0) - (o.pos.y ?? 0)) < 4 && (j.goal.cell ?? null) === (o.cell ?? null))) {
         if (!o.optional) prev = { ...o.pos, label: `${o.quest}/${o.obj}` };
         continue;
       }
       const goal = { x: o.pos.x, y: o.pos.y, z: o.pos.z, cell: o.cell, target: o.target.kind === 'location' ? o.target : { kind: 'point', x: o.pos.x, y: o.pos.y, z: o.pos.z } };
-      jobs.push({ id: `${o.quest}/${o.stage}/${o.obj}`, kind: 'objective', quest: o.quest, label: `${o.quest.replace(/^(mq|misc|job|lud)-/, '$1 ')}/${o.obj} ← ${start.label}`, start: { x: start.x, z: start.z, y: start.y }, goal, setup });
+      jobs.push({ id: `${o.quest}/${o.stage}/${o.obj}`, kind: 'objective', quest: o.quest, label: `${o.quest.replace(/^(mq|misc|job|lud)-/, '$1 ')}/${o.obj} ← ${start.label}`, start: { x: start.x, z: start.z, y: start.y }, goal, setup, ...(o.radius && !o.cell ? { reach: o.radius } : {}) });
       if (!o.optional && !o.cell) prev = { ...o.pos, label: `${o.quest}/${o.obj}` };
     }
     if (story) storyPrev = prev;
   }
+  return jobs;
+}
+
+function guideJobs(steps, reach) {
+  const jobs = [];
+  let prev = { x: 314.5, z: 583.9, label: 'the new-game spawn (Porta Capena)' };
+  steps.forEach((st) =>
+    st.points.forEach(([x, z], k) => {
+      // As the guide hands it to the HUD: a point with y = 0 (src/game/guide.ts view()).
+      jobs.push({ id: `guide/${st.id}/${k}`, kind: 'guide', quest: 'guide-ad-forum', label: `guide ${st.id} #${k} (${x},${z}) ← ${prev.label}`, start: { x: prev.x, z: prev.z }, goal: { x, y: 0, z, target: { kind: 'point', x, y: 0, z } }, reach });
+      prev = { x, z, label: `guide ${st.id} #${k}` };
+    }),
+  );
   return jobs;
 }
 
@@ -302,13 +347,16 @@ function edgeJobs(nodes, edges) {
 // ---------------------------------------------------------------- aggregation
 
 const SEV = { blocker: 3, major: 2, minor: 1 };
-const KIND_W = { objective: 3, approach: 2, tour: 2, random: 1, edge: 1 };
+const KIND_W = { objective: 3, guide: 3, approach: 2, tour: 2, random: 1, edge: 1 };
 
 /** Incidents: what a player meets on the walk, and where the drawn line leaves walkable space. */
 function incidents() {
   const out = [];
   for (const r of results) {
+    // Past the point where the objective completes (a location's radius, the guide's 12 m): not on the way.
+    const inReach = (at) => r.reach > 2.5 && r.goal && at && Math.hypot(at[0] - r.goal[0], at[2] - r.goal[2]) < r.reach;
     for (const e of r.events ?? []) {
+      if (inReach(e.at)) continue;
       let sev = null;
       let what = e.kind;
       if (e.kind === 'blocked') ((sev = e.why === 'npc' ? null : 'blocker'), (what = `blocked (${e.why})`));
@@ -321,9 +369,11 @@ function incidents() {
       out.push({ src: 'walk', sev, what, kind: e.kind, at: e.at, place: e.place, part: e.part, job: r.id, jobKind: r.kind, label: r.label, detail: e });
     }
     for (const c of r.climbs ?? []) {
+      if (inReach(c.at)) continue;
       out.push({ src: 'walk', sev: c.height > 0.8 ? 'major' : 'minor', what: `climb (${c.kind} ${c.height.toFixed(2)} m)`, kind: 'climb', at: c.at, place: null, job: r.id, jobKind: r.kind, label: r.label, detail: c });
     }
     for (const l of r.line ?? []) {
+      if (inReach(l.at)) continue;
       let sev = null;
       if (l.kind === 'through') sev = l.len >= 2 ? 'major' : l.len >= 1 ? 'minor' : null;
       else if (l.kind === 'wall') sev = 'major';
@@ -357,7 +407,7 @@ function cluster(list, R = 8) {
     c.example = ex;
     c.place = ex.place ?? c.items.find((i) => i.place)?.place ?? '';
     c.parts = [...new Set(c.items.map((i) => i.part).filter(Boolean))];
-    c.questJobs = [...new Set(c.items.filter((i) => i.jobKind === 'objective').map((i) => i.job))];
+    c.questJobs = [...new Set(c.items.filter((i) => i.jobKind === 'objective' || i.jobKind === 'guide').map((i) => i.job))];
   }
   return cl.sort((a, b) => b.weight - a.weight);
 }
@@ -369,18 +419,53 @@ if (args.reshoot) {
   const prev = JSON.parse(readFileSync(resolve(root, String(args.reshoot)), 'utf8'));
   page = await boot(WALK_QUERY);
   const from = Number(args.from ?? 0);
-  const list = prev.places.filter((c) => c.sev !== 'minor').slice(from, from + opt.shots);
+  // --spots f.json: [{ at: [x, y, z], job: '<job id>', kind?, name? }] instead of the ranked places.
+  const list = args.spots
+    ? JSON.parse(readFileSync(resolve(String(args.spots)), 'utf8')).map((s) => ({ at: s.at, example: { job: s.job, what: s.kind ?? 'spot' }, name: s.name }))
+    : prev.places.filter((c) => c.sev !== 'minor').slice(from, from + opt.shots);
   const spots = list.map((c) => {
     const job = prev.jobs.find((j) => j.id === c.example.job);
-    return { x: c.at[0], y: c.at[1], z: c.at[2], kind: String(c.example.what).split(' ')[0].replace(/[^a-z-]/gi, ''), pts: job?.plan?.legs?.[0]?.pts ?? [], goal: job?.goal ? { x: job.goal[0], y: job.goal[1], z: job.goal[2] } : null };
+    return { x: c.at[0], y: c.at[1], z: c.at[2], kind: String(c.example.what).split(' ')[0].replace(/[^a-z-]/gi, ''), pts: job?.plan?.legs?.[0]?.pts ?? [], goal: job?.goal ? { x: job.goal[0], y: job.goal[1], z: job.goal[2] } : null, start: job?.start ? { x: job.start[0], z: job.start[2] } : null, name: c.name };
   });
   await shoot(spots);
-  await browser.close();
-  await server.close();
+  await stop();
   process.exit(0);
 }
-say(`Route audit, ${new Date().toISOString()}  phases: ${[...phases].join(',')}  time scale ${opt.timeScale}`);
-const needWalkPage = ['objectives', 'approach', 'tour', 'random', 'edges'].some((p) => phases.has(p));
+if (args.probe) {
+  // Ask the live game a question: --probe file.js, the file being the body of an async function
+  // with `game` (window.__skyrome.game) and `audit` (window.__routeAudit) in scope; prints its result.
+  page = await boot(String(args.query ?? WALK_QUERY));
+  const body = readFileSync(resolve(String(args.probe)), 'utf8');
+  const out = await page.evaluate(async (b) => {
+    const fn = new Function('game', 'audit', `return (async () => {${b}\n})();`);
+    return fn(window.__skyrome.game, window.__routeAudit);
+  }, body);
+  console.log(typeof out === 'string' ? out : JSON.stringify(out, null, 1));
+  await stop();
+  process.exit(0);
+}
+let merged = null;
+if (args.merge) {
+  // Aggregate finished runs again: --merge a.json,b.json [--replace] [--name routes]. Later files add
+  // the jobs the earlier ones lack (with --replace their jobs win). No browser; screenshots after with --reshoot.
+  merged = { graph: null, sweep: null, objectives: [], options: [] };
+  const byId = new Map();
+  for (const f of String(args.merge).split(',')) {
+    const prev = JSON.parse(readFileSync(resolve(root, f), 'utf8'));
+    merged.graph ??= prev.graph;
+    if (prev.sweep) merged.sweep = prev.sweep;
+    if (prev.objectives?.length) merged.objectives = prev.objectives;
+    merged.options.push({ file: f, generated: prev.generated, options: prev.options });
+    for (const j of prev.jobs) if (args.replace || !byId.has(j.id)) byId.set(j.id, j);
+    for (const e of prev.pageErrors ?? []) pageErrors.push(e);
+  }
+  for (const j of byId.values()) results.push({ ...j, goal: j.goal });
+  objectives = merged.objectives;
+  info = merged.graph;
+  say(`merged ${String(args.merge)}: ${results.length} jobs`);
+}
+if (!merged) say(`Route audit, ${new Date().toISOString()}  phases: ${[...phases].join(',')}  time scale ${opt.timeScale}`);
+const needWalkPage = !merged && ['guide', 'objectives', 'approach', 'tour', 'random', 'edges'].some((p) => phases.has(p));
 let sweep = null;
 let landmarks = [];
 let locs = [];
@@ -403,6 +488,13 @@ if (needWalkPage) {
     objJobs = objectiveJobs();
   }
   const plan = [];
+  if (phases.has('guide')) {
+    const g = await page.evaluate(async () => {
+      const m = await import('/src/game/guide.ts');
+      return { steps: m.GUIDE_STEPS, reach: m.GUIDE_REACH };
+    });
+    plan.push(['guide', guideJobs(g.steps, g.reach)]);
+  }
   if (phases.has('objectives')) plan.push(['objectives', objJobs]);
   if (phases.has('approach')) plan.push(['approach', approachJobs(nodes, objJobs)]);
   if (phases.has('tour')) plan.push(['tour', tourJobs(landmarks, locs)]);
@@ -419,7 +511,7 @@ if (needWalkPage) {
     }
   }
 }
-if (phases.has('sweep') && Date.now() < deadline) {
+if (!merged && phases.has('sweep') && Date.now() < deadline) {
   say(`\n== sweep: every street-graph edge, ${opt.sweepTile} m tiles (?cityNear=75)`);
   const sp = await boot('hour=11&crowd=0&cityNear=75');
   sweep = { tiles: 0, edges: 0, checked: 0, length: 0, issues: [], perKind: {}, edgeBad: 0 };
@@ -438,7 +530,7 @@ if (phases.has('sweep') && Date.now() < deadline) {
     for (const [k, v] of Object.entries(part.perKind)) sweep.perKind[k] = (sweep.perKind[k] ?? 0) + v;
     sweep.issues.push(...part.issues);
     from = part.next;
-    say(`  tiles ${from}/${part.tiles}  edges ${sweep.checked}  flagged ${sweep.edgeBad}  ${JSON.stringify(sweep.perKind)}`);
+    say(`  tiles ${from}/${part.tiles}  edges ${sweep.checked}  flagged ${sweep.edgeBad}  ${JSON.stringify(sweep.perKind)}  (${((Date.now() - T0) / 60000).toFixed(1)} min)`);
     if (from >= part.tiles || from >= opt.sweepMax) break;
   }
   await sp.close();
@@ -458,7 +550,10 @@ for (const r of results) {
   totals.recoveries += r.recoveries ?? 0;
   totals.replans += r.replans ?? 0;
 }
-for (const i of inc) totals.incidents[i.what.split(' (')[0]] = (totals.incidents[i.what.split(' (')[0]] ?? 0) + 1;
+for (const i of inc) {
+  const k = `${i.kind}${i.kind === 'blocked' ? ':' + (i.detail.why ?? '') : ''} [${i.sev}]`;
+  totals.incidents[k] = (totals.incidents[k] ?? 0) + 1;
+}
 totals.routeMetres = Math.round(totals.routeMetres);
 totals.jobsWithBlock = results.filter((r) => (r.events ?? []).some((e) => e.kind === 'blocked' && e.why !== 'npc')).length;
 totals.objectiveJobsWithBlock = results.filter((r) => r.kind === 'objective' && (r.events ?? []).some((e) => e.kind === 'blocked' && e.why !== 'npc')).length;
@@ -473,7 +568,26 @@ clusters.slice(0, 60).forEach((c, k) => {
   const d = ex.detail;
   say(`       e.g. ${ex.label}: ${d.why ?? ''} ${d.hit ? `hit ${d.hit.owner} @${d.hit.h} m ${d.hit.d} m` : ''} ${d.owner ? `owner ${d.owner}` : ''} ${d.rise !== undefined && d.rise !== null ? `rise ${d.rise}` : ''} ${d.near ? `near ${d.near}` : ''} ${d.len ? `len ${d.len}` : ''} ${d.cls ? `cls ${d.cls}` : ''}`);
 });
-let sweepSummary = null;
+// Every objective's walk at a glance: did the route the game draws get the player there on foot?
+const questTable = results
+  .filter((r) => r.kind === 'objective' || r.kind === 'guide')
+  .map((r) => {
+    const out = (at) => !(r.reach > 2.5 && r.goal && Math.hypot(at[0] - r.goal[0], at[2] - r.goal[2]) < r.reach);
+    const blocks = (r.events ?? []).filter((e) => e.kind === 'blocked' && e.why !== 'npc' && out(e.at));
+    const jumps = (r.events ?? []).filter((e) => e.kind === 'jump' && out(e.at));
+    const through = (r.line ?? []).filter((l) => ((l.kind === 'through' && l.len >= 1.5) || l.kind === 'wall') && out(l.at));
+    const reached = r.outcome === 'arrived' || (r.reach > 2.5 && r.endD !== undefined && r.endD < r.reach);
+    const verdict = !reached ? 'FAIL' : blocks.length ? 'BLOCKED' : jumps.length || through.length ? 'snags' : 'ok';
+    return { id: r.id, label: r.label, verdict, outcome: r.outcome, goalYOff: r.goalYOff ?? null, length: Math.round(r.plan?.legs?.reduce((a, l) => a + l.length, 0) ?? 0), leadOut: r.plan?.leadOut ?? null, blocks: blocks.length, jumps: jumps.length, lineThrough: through.length, firstBlock: blocks[0] ? { at: blocks[0].at, place: blocks[0].place, part: blocks[0].part, owner: blocks[0].hit?.owner ?? null, grid: blocks[0].grid ?? null } : null, endD: r.endD };
+  });
+if (questTable.length) {
+  const v = questTable.reduce((a, q) => ((a[q.verdict] = (a[q.verdict] ?? 0) + 1), a), {});
+  totals.objectiveVerdicts = v;
+  say(`\n== every objective's route, walked (${questTable.length}): ${JSON.stringify(v)}`);
+  for (const q of questTable) say(`  ${q.verdict.padEnd(8)} ${String(q.label).slice(0, 70).padEnd(70)} ${String(q.length).padStart(5)} m  blocks ${q.blocks} jumps ${q.jumps} line ${q.lineThrough}${q.firstBlock ? `  first ${q.firstBlock.at.join(',')} ${q.firstBlock.part} ${q.firstBlock.owner ?? ''} (${q.firstBlock.place})` : ''}`);
+}
+
+let sweepSummary = merged?.sweep ?? null;
 if (sweep) {
   const sc = cluster(
     sweep.issues
@@ -487,7 +601,9 @@ if (sweep) {
     const k = `${i.kind} ${o}`;
     byOwner[k] = (byOwner[k] ?? 0) + 1;
   }
-  sweepSummary = { tiles: sweep.tiles, edges: sweep.edges, checked: sweep.checked, metres: Math.round(sweep.length), edgesFlagged: sweep.edgeBad, perKind: sweep.perKind, byOwner: Object.fromEntries(Object.entries(byOwner).sort((a, b) => b[1] - a[1]).slice(0, 40)), places: sc.length, top: sc.slice(0, 80).map((c) => ({ sev: c.sev, at: [c.x, c.y, c.z], place: c.place, kinds: c.kinds, edges: c.jobs.size, example: c.example.detail })) };
+  sweepSummary = { tiles: sweep.tiles, edges: sweep.edges, checked: sweep.checked, metres: Math.round(sweep.length), edgesFlagged: sweep.edgeBad, perKind: sweep.perKind, byOwner: Object.fromEntries(Object.entries(byOwner).sort((a, b) => b[1] - a[1]).slice(0, 40)), places: sc.length, top: sc.slice(0, 80).map((c) => ({ sev: c.sev, at: [c.x, c.y, c.z], place: c.place, kinds: c.kinds, edges: c.jobs.size, example: c.example.detail })),
+    // Every significant issue, compact (a baseline for regression checks): [edge, kind, x, y, z, value, len, owner, cls].
+    issues: sweep.issues.filter((i) => i.kind !== 'headroom' && !(i.kind === 'ledge' && i.value <= 0.45) && !(i.kind === 'through' && i.len < 1)).map((i) => [i.edge, i.kind, ...i.at, i.value ?? null, i.len ?? null, i.owner ?? null, i.cls ?? null]) };
   say(`\n== sweep: ${sweep.checked} of ${sweep.edges} edges (${Math.round(sweep.length / 1000)} km), ${sweep.edgeBad} flagged; ${JSON.stringify(sweep.perKind)}`);
   say(`   by cause: ${Object.entries(sweepSummary.byOwner).slice(0, 20).map(([k, v]) => `${k}×${v}`).join(', ')}`);
   sc.slice(0, 30).forEach((c, k) => say(`${String(k + 1).padStart(3)}. [${c.sev}] ${c.x.toFixed(1)},${c.y.toFixed(1)},${c.z.toFixed(1)}  ${c.place}  edges ${c.jobs.size}  ${Object.entries(c.kinds).map(([k, v]) => `${k}×${v}`).join(', ')}  e.g. ${c.example.label} owner ${c.example.detail.owner ?? '-'} value ${c.example.detail.value ?? '-'} len ${c.example.detail.len ?? '-'}`));
@@ -496,8 +612,10 @@ if (sweep) {
 // ---------------------------------------------------------------- screenshots of the worst places
 
 /**
- * Two screenshots per place: the player's view 9 m back along the route (HUD on: the minimap's red
- * route, the gold trail on the ground) and a free camera above and behind. `spots`: {x,y,z,kind,pts,goal}.
+ * Three screenshots per place: the player's view 9 m back along the route (HUD on: the minimap's red
+ * route, the gold trail on the ground), a free camera above and behind, and the big map centred
+ * there with the route drawn. The route is planned where the walk began (`start`), as the walker
+ * had it, not afresh beside the place. `spots`: {x,y,z,kind,pts,goal,start,name?}.
  */
 async function shoot(spots) {
   const out = [];
@@ -520,12 +638,14 @@ async function shoot(spots) {
         }
       }
     }
-    const base = `${String(k + 1).padStart(2, '0')}-${c.kind}-${Math.round(c.x)}_${Math.round(c.z)}`;
+    const base = c.name ?? `${String(k + 1).padStart(2, '0')}-${c.kind}-${Math.round(c.x)}_${Math.round(c.z)}`;
     const files = [];
-    for (const mode of ['view', 'over']) {
+    for (const mode of ['view', 'over', 'map']) {
       const file = join(shotDir, `${base}-${mode}.png`);
       try {
-        await page.evaluate((o) => window.__routeAudit.frame(o), { from, at: { x: c.x, y: c.y, z: c.z }, goal: c.goal, mode });
+        // The first frame plans where the walk began (the route as it was drawn); the second keeps it.
+        const fr = await page.evaluate((o) => window.__routeAudit.frame(o), { from, at: { x: c.x, y: c.y, z: c.z }, goal: c.goal, mode, planFrom: mode === 'view' ? c.start : null, keep: mode !== 'view' });
+        if (mode === 'view') say(`  frame ${base}: player ${fr.player.join(',')} route ${fr.route} v${fr.version} along ${fr.along}`);
         await page.screenshot({ path: file });
         files.push(file.replace(root + '/', ''));
         say(`  shot ${file.replace(root + '/', '')}`);
@@ -544,7 +664,7 @@ if (page && opt.shots > 0) {
   const top = clusters.filter((c) => c.sev !== 'minor').slice(0, opt.shots);
   const spots = top.map((c) => {
     const job = results.find((x) => x.id === c.example.job);
-    return { x: c.x, y: c.y, z: c.z, kind: c.example.kind, pts: job?.plan?.legs?.[0]?.pts ?? [], goal: job?.goal ? { x: job.goal[0], y: job.goal[1], z: job.goal[2] } : null };
+    return { x: c.x, y: c.y, z: c.z, kind: c.example.kind, pts: job?.plan?.legs?.[0]?.pts ?? [], goal: job?.goal ? { x: job.goal[0], y: job.goal[1], z: job.goal[2] } : null, start: job?.start ? { x: job.start[0], z: job.start[2] } : null };
   });
   const files = await shoot(spots);
   top.forEach((c, k) => {
@@ -561,7 +681,7 @@ const compact = results.map((r) => ({
   kind: r.kind,
   label: r.label,
   outcome: r.outcome,
-  plan: r.plan ? { status: r.plan.status, ms: r.plan.ms, gridAtStart: r.plan.gridAtStart, gridAtGoal: r.plan.gridAtGoal, length: Math.round(r.plan.legs?.reduce((a, l) => a + l.length, 0) ?? 0), legs: r.plan.legs?.map((l) => ({ cell: l.cell, door: l.door, length: l.length, ...((r.events?.length || r.line?.some((x) => x.kind === 'through')) ? { pts: l.pts } : {}) })) } : null,
+  plan: r.plan ? { status: r.plan.status, ms: r.plan.ms, gridAtStart: r.plan.gridAtStart, gridAtGoal: r.plan.gridAtGoal, leadIn: r.plan.leadIn, leadOut: r.plan.leadOut, length: Math.round(r.plan.legs?.reduce((a, l) => a + l.length, 0) ?? 0), legs: r.plan.legs?.map((l) => ({ cell: l.cell, door: l.door, length: l.length, ...((r.events?.length || r.line?.some((x) => x.kind === 'through')) ? { pts: l.pts } : {}) })) } : null,
   start: r.start,
   startPlace: r.startPlace,
   goal: r.goal,
@@ -571,6 +691,10 @@ const compact = results.map((r) => ({
   recoveries: r.recoveries,
   replans: r.replans,
   endD: r.endD,
+  goalYOff: r.goalYOff,
+  reach: r.reach,
+  finalStatus: r.finalStatus,
+  goalGrid: r.goalGrid,
   events: r.events,
   line: (r.line ?? []).filter((l) => l.kind !== 'headroom' && !(l.kind === 'ledge' && l.value <= 0.45)),
   climbs: r.climbs,
@@ -578,11 +702,12 @@ const compact = results.map((r) => ({
 const json = {
   generated: new Date().toISOString(),
   tool: 'scripts/audit/routes.mjs',
-  options: opt,
+  options: merged ? merged.options : opt,
   graph: info,
   totals,
   places: clusters.map((c) => ({ sev: c.sev, at: [c.x, c.y, c.z], place: c.place, routes: c.jobs.size, questRoutes: c.questJobs, kinds: c.kinds, parts: c.parts, shot: c.shot ?? null, shots: c.shots ?? [], example: { job: c.example.job, label: c.example.label, what: c.example.what, detail: c.example.detail } })),
   sweep: sweepSummary,
+  questTable,
   objectives: objectives.map((o) => ({ quest: o.quest, stage: o.stage, obj: o.obj, optional: o.optional, target: o.target, pos: o.pos, cell: o.cell })),
   jobs: compact,
   pageErrors: [...new Set(pageErrors)].slice(0, 30),
@@ -596,6 +721,5 @@ writeFileSync(join(outDir, `${name}.json`), text);
 say(`\nwrote ${join(outDir, `${name}.json`).replace(root + '/', '')} (${(text.length / 1e6).toFixed(2)} MB), ${shots.length} screenshots; ${totals.minutes} min`);
 if (pageErrors.length) say(`page errors: ${[...new Set(pageErrors)].slice(0, 6).join(' | ')}`);
 writeFileSync(join(outDir, `${name}.txt`), lines.join('\n') + '\n');
-await browser.close();
-await server.close();
+await stop();
 process.exit(0);

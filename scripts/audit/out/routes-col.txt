@@ -1,0 +1,91 @@
+Route audit, 2026-10-11T00:31:41.758Z  phases: objectives  time scale 3
+street graph: 8148 nodes, 8770 edges, 14 components (largest 7699, 163, 45, 29, 19), 100 termini; nav grid on
+objectives: 103 with markers, 0 unresolved ()
+
+== objectives: 5 jobs
+  objective  mq 04-columna/forum ← the new-game spawn (Porta Cape streets  1170 m  arrived    61 s  blocked:wall jump:wall blocked:wall blocked:wall line-through×1
+  objective  mq 04-columna/brief ← mq-04-columna/forum            streets   318 m  arrived    19 s  jump:snag blocked:wall blocked:wall
+  objective  mq 04-columna/land1 ← the Column door                arrived     0 m  arrived     5 s  
+  objective  mq 04-columna/land2 ← the Column door                streets    43 m  arrived     8 s  jump:wall jump:low jump:wall jump:low jump:low
+  objective  mq 04-columna/top ← the Column door                  streets    61 m  arrived    10 s  jump:low jump:low blocked:low jump:low blocked:low
+
+== totals
+{
+ "jobs": 5,
+ "byKind": {
+  "objective": 5
+ },
+ "outcomes": {
+  "arrived": 5
+ },
+ "planStatus": {
+  "streets": 4,
+  "arrived": 1
+ },
+ "walkedRoutes": 0,
+ "routeMetres": 1593,
+ "simSeconds": 261.6,
+ "recoveries": 7,
+ "replans": 2,
+ "incidents": {
+  "blocked:wall [blocker]": 5,
+  "jump [major]": 10,
+  "climb [major]": 1,
+  "climb [minor]": 9,
+  "line-drop [minor]": 1,
+  "line-through [major]": 1,
+  "line-drop [major]": 5,
+  "line-steep [major]": 3,
+  "blocked:low [blocker]": 2
+ },
+ "minutes": 3.5,
+ "jobsWithBlock": 3,
+ "objectiveJobsWithBlock": 3,
+ "places": 15,
+ "placesBySeverity": {
+  "blocker": 5,
+  "major": 8,
+  "minor": 2
+ }
+}
+
+== worst places (by severity and how many routes meet them)
+  1. [blocker] -3.9,-104.9,-215.5  Trajan's Column (2 m, Regio VIII Forum Romanum)  routes 2 (quest 2)  needs a jump/mantle (wall)×2, needs a jump/mantle (low)×6, climb (mantle 0.54 m)×1, climb (mantle 0.57 m)×1, climb (mantle 0.64 m)×1, blocked (low)×2, climb (mantle 0.55 m)×1, climb (mantle 0.36 m)×1, climb (mantle 0.59 m)×1, climb (mantle 0.38 m)×1  part graph
+       e.g. mq 04-columna/top ← the Column door: low hit interior:dun-columna @0.35 m 0.76 m  rise 100.42 near door:dun-columna:up (The hatch) 1.2 m  cls plaza
+  2. [blocker] 309.7,10.3,578.6  Beside Dromo’s cart (3 m, Regio I Porta Capena)  routes 1 (quest 1)  blocked (wall)×1  part lead-in
+       e.g. mq 04-columna/forum ← the new-game spawn (Porta Capena): wall hit unknown @1.4 m 0.36 m  rise -0.31 near thing:porta-capena (The dripping gate) 0.9 m  cls road
+  3. [blocker] 263.4,7.9,513.6  Charcoal stand on the Via Appia (11 m, Regio XI Circus Maximus)  routes 1 (quest 1)  blocked (wall)×2  part graph
+       e.g. mq 04-columna/forum ← the new-game spawn (Porta Capena): wall hit landmark:porta-capena @1.4 m 0.38 m     cls street
+  4. [blocker] 100.7,10.5,-224.6  Market Halls of Trajan (27 m, Regio VIII Forum Romanum)  routes 1 (quest 1)  blocked (wall)×1  part graph
+       e.g. mq 04-columna/brief ← mq-04-columna/forum: wall hit landmark:markets-trajan @1.4 m 0.38 m     cls margin
+  5. [blocker] 53.0,10.5,-218.1  Basilica Ulpia (46 m, Regio VIII Forum Romanum)  routes 1 (quest 1)  blocked (wall)×1  part lead-out
+       e.g. mq 04-columna/brief ← mq-04-columna/forum: wall hit landmark:basilica-ulpia @1.4 m 0.38 m     cls landmark
+  6. [major] 281.6,7.9,545.3  Crossroads Shrine by the Capena Gate (4 m, Regio XI Circus Maximus)  routes 1 (quest 1)  needs a jump/mantle (wall)×1, climb (mantle 1.11 m)×1  part graph
+       e.g. mq 04-columna/forum ← the new-game spawn (Porta Capena): wall hit unknown @1 m 0.38 m  rise 1.11 near shrine:compitum-capenae (Crossroads shrine by the Capena Gate) 0.2 m  cls road
+  7. [major] 264.0,7.9,513.2  Charcoal stand on the Via Appia (12 m, Regio XI Circus Maximus)  routes 1 (quest 1)  route line: through 2.2×1  part graph
+       e.g. mq 04-columna/forum ← the new-game spawn (Porta Capena):   owner landmark:porta-capena   len 3.1 cls street
+  8. [major] 270.3,8.4,507.0  Charcoal stand on the Via Appia (20 m, Regio XI Circus Maximus)  routes 1 (quest 1)  route line: drop -13.23×1  part graph
+       e.g. mq 04-columna/forum ← the new-game spawn (Porta Capena):   owner city:2,3   len 0.5 cls street
+  9. [major] 262.3,9.0,499.3  Charcoal stand on the Via Appia (21 m, Regio XI Circus Maximus)  routes 1 (quest 1)  route line: drop -9.79×1, route line: steep 3.9×1  part graph
+       e.g. mq 04-columna/forum ← the new-game spawn (Porta Capena):   owner city:2,3   len 0.5 cls street
+ 10. [major] 56.1,10.6,-139.3  Equestrian Statue of Trajan (10 m, Regio VIII Forum Romanum)  routes 1 (quest 1)  needs a jump/mantle (snag)×1  part graph
+       e.g. mq 04-columna/brief ← mq-04-columna/forum: snag   rise -0.2   cls landmark
+ 11. [major] 99.9,10.5,-222.1  Market Halls of Trajan (25 m, Regio VIII Forum Romanum)  routes 1 (quest 1)  route line: drop -8.4×1  part graph
+       e.g. mq 04-columna/brief ← mq-04-columna/forum:   owner terrain   len 0.3 cls landmark
+ 12. [major] 79.9,18.9,-228.7  Market Halls of Trajan (34 m, Regio VIII Forum Romanum)  routes 1 (quest 1)  route line: drop -5×1, route line: steep 2.26×1  part graph
+       e.g. mq 04-columna/brief ← mq-04-columna/forum:   owner landmark:markets-trajan   len 0.4 cls landmark
+ 13. [major] 1.2,11.2,-210.5  Before Trajan's Column (4 m, Regio VIII Forum Romanum)  routes 1 (quest 1)  route line: drop -10.66×1, route line: steep 4.73×1  part lead-out
+       e.g. mq 04-columna/brief ← mq-04-columna/forum:   owner landmark:basilica-ulpia   len 0.5 cls landmark
+ 14. [minor] 120.7,10.3,-150.1    routes 2 (quest 2)  climb (clamber 0.67 m)×1, climb (clamber 0.76 m)×1  part 
+       e.g. mq 04-columna/forum ← the new-game spawn (Porta Capena):       
+ 15. [minor] 284.1,7.9,548.3  Crossroads Shrine by the Capena Gate (2 m, Regio XI Circus Maximus)  routes 1 (quest 1)  route line: drop -1.17×1  part graph
+       e.g. mq 04-columna/forum ← the new-game spawn (Porta Capena):   owner landmark:porta-capena   len 0.5 cls road
+
+== every objective's route, walked (5): {"BLOCKED":3,"ok":1,"snags":1}
+  BLOCKED  mq 04-columna/forum ← the new-game spawn (Porta Capena)                 1170 m  blocks 3 jumps 1 line 1  first 309.7,10.3,578.6 lead-in unknown (Beside Dromo’s cart (3 m, Regio I Porta Capena))
+  BLOCKED  mq 04-columna/brief ← mq-04-columna/forum                                318 m  blocks 2 jumps 1 line 0  first 100.7,10.5,-224.6 graph landmark:markets-trajan (Market Halls of Trajan (27 m, Regio VIII Forum Romanum))
+  ok       mq 04-columna/land1 ← the Column door                                      0 m  blocks 0 jumps 0 line 0
+  snags    mq 04-columna/land2 ← the Column door                                     43 m  blocks 0 jumps 5 line 0
+  BLOCKED  mq 04-columna/top ← the Column door                                       61 m  blocks 2 jumps 3 line 0  first -3.6,-89.5,-214.2 graph interior:dun-columna (Trajan's Column (2 m, Regio VIII Forum Romanum))
+
+wrote scripts/audit/out/routes-col.json (0.05 MB), 0 screenshots; 3.5 min
