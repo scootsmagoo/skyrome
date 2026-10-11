@@ -192,6 +192,14 @@ porticus, (297, 164) at the playbill wall, (147, 118) on the bank); this branch:
 
 ## Cost
 
+2026-10-10 (MOVE-finish), origin/main against this branch in two pages side by side at the same time, the Forum at 10:00,
+20 s after 25 s to fill, three fresh pairs: `NpcManager` 2.84 / 2.69 ms, 3.33 / 3.28, 2.72 / 3.41 for 27 / 22, 27 / 28 and
+20 / 27 full-sim NPCs (0.121 against 0.122 ms per full-sim NPC); A* searches 91 / 83, 73 / 48, 80 / 62. `perf-budget.mjs
+--views forum,spawn --repeat 2`, both at once: Forum CPU 14.3 / 14.3 ms mean, 19.9 / 19.8 p95, render submit 7.6 / 7.5 ms;
+spawn 16.2 / 15.2, 24.6 / 22.9, 6.6 / 6.5; draws and triangles the same within the crowd's spread. The steep test costs
+four heightmap lookups per bare-terrain cell sampled; a learned wall adds one integer test per `canStep` while a walker's
+own search runs.
+
 `NpcManager` at the Forum, 28 full-sim NPCs against 23, mean of ten 2 s samples after 20 s: locomote 1.25 ms against 1.35 ms (before),
 steer 0.09 / 0.08, brain 0.11 / 0.08, whole step 1.46 / 1.52 ms: no measurable cost. A* searches in the first 35 s: 212 with 468 failures
 against 2011 with 2235 failures before (the failing searches are the expensive kind; `lineClear` and the clearance fixes make far fewer plans fail).
