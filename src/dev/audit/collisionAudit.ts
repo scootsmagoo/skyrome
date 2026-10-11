@@ -565,11 +565,20 @@ function terrainCell(game: Game, x: number, z: number): { h00: number; h10: numb
   return { h00: hm.heights[i], h10: hm.heights[i + 1], h01: hm.heights[i + hm.nx], h11: hm.heights[i + hm.nx + 1], tx: fx - ix, tz: fz - iz };
 }
 
+/**
+ * True when the terrain's patch is drawn split along b–c (terrain profile v2): read from the drawn
+ * patch's own index, whose first cell is (a, c, d, …) when split a–d and (a, c, b, …) when b–c.
+ */
+function drawnSplitsBC(game: Game): boolean {
+  const idx = (game as Game & { terrain?: { mesh?: { geometry?: { index?: { array: ArrayLike<number> } | null } } } }).terrain?.mesh?.geometry?.index?.array;
+  return !!idx && idx[2] === 1;
+}
+
 export function terrainDrawnAt(game: Game, x: number, z: number): number {
   const c = terrainCell(game, x, z);
   const hm = (game as Game & { heightmap?: { heightAt(x: number, z: number): number } }).heightmap;
   if (!c) return hm ? hm.heightAt(x, z) : 0;
-  return terrainDrawnHeight(c.h00, c.h10, c.h01, c.h11, c.tx, c.tz);
+  return (drawnSplitsBC(game) ? terrainOtherHeight : terrainDrawnHeight)(c.h00, c.h10, c.h01, c.h11, c.tx, c.tz);
 }
 
 const K_WATER = 7, K_OUTSIDE = 12;
@@ -679,7 +688,7 @@ export function sweep(game: Game, cx: number, cz: number, opts: SweepOptions = {
             terr.worst = [+x.toFixed(1), +top.y.toFixed(3), +z.toFixed(1), +d.toFixed(3)];
           }
           // Which diagonal: only where the two triangulations differ enough here to tell.
-          const other = terrainOtherHeight(c.h00, c.h10, c.h01, c.h11, c.tx, c.tz);
+          const other = (drawnSplitsBC(game) ? terrainDrawnHeight : terrainOtherHeight)(c.h00, c.h10, c.h01, c.h11, c.tx, c.tz);
           if (Math.abs(other - tDrawn) > 0.02) {
             if (Math.abs(d) < 0.01) terr.drawnMatches++;
             else if (Math.abs(top.y - other) < 0.01) terr.otherMatches++;
