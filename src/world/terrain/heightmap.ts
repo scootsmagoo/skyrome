@@ -942,6 +942,10 @@ export const ROAD_GRADE_CAP = 0.25;
 export const ROAD_GRADE_TARGET = 0.21;
 /** v2: bank run per metre of cut or fill (real m). Eased-linear banks: 1.25 / 2.2 ≈ 30°. */
 export const ROAD_BANK_PER_M = 2.2;
+/** v2: the banks of a flight of steps (real m), as v1's. */
+const STEP_BANK_RUN = 6;
+/** v2: a flight of steps stands at most this grade × the gap above or below an earlier road's core beside it. */
+const STEP_BESIDE_ROAD_GRADE = 0.45;
 /** v2: the crosswise-level core of a road is at least this half width (real m), so the grid samples next to a narrow road's centreline sit on its profile. */
 const ROAD_CORE_MIN = 3.4;
 
@@ -1051,7 +1055,7 @@ function stampV2(c: StampGrid, real: Float32Array, out: Float32Array, roads: rea
    * `r` real m of a point, and whether the point's own nearest sample is held (the road runs
    * through it, not past it); NaN when there is none.
    */
-  const heldNear = (x: number, z: number, r: number): { v: number; through: boolean; road: boolean } => {
+  const heldNear = (x: number, z: number, r: number, roadsOnly = false): { v: number; through: boolean; road: boolean; dist: number } => {
     const fx = (x * S - minX) / spacing, fz = (z * S - minZ) / spacing;
     const rc = (r * S) / spacing;
     const jx0 = Math.max(0, Math.ceil(fx - rc)), jx1 = Math.min(nx - 1, Math.floor(fx + rc));
@@ -1060,7 +1064,7 @@ function stampV2(c: StampGrid, real: Float32Array, out: Float32Array, roads: rea
     for (let iz = jz0; iz <= jz1; iz++) {
       for (let ix = jx0; ix <= jx1; ix++) {
         const k = iz * nx + ix;
-        if (!core[k] && !taken[k]) continue;
+        if (roadsOnly ? !taken[k] : !core[k] && !taken[k]) continue;
         const d2 = (ix - fx) * (ix - fx) + (iz - fz) * (iz - fz);
         if (d2 <= best) {
           best = d2;
@@ -1071,7 +1075,7 @@ function stampV2(c: StampGrid, real: Float32Array, out: Float32Array, roads: rea
     }
     const ix = Math.round(fx), iz = Math.round(fz);
     const k = ix >= 0 && iz >= 0 && ix < nx && iz < c.nz ? iz * nx + ix : -1;
-    return { v, through: k >= 0 && (core[k] === 1 || taken[k] === 1), road };
+    return { v, through: k >= 0 && (core[k] === 1 || taken[k] === 1), road, dist: (Math.sqrt(best) * spacing) / S };
   };
   const cellReal = spacing / S;
   const ordered = [...roads.filter((r) => r.paving !== 'steps'), ...roads.filter((r) => r.paving === 'steps')];
@@ -1089,7 +1093,8 @@ function stampV2(c: StampGrid, real: Float32Array, out: Float32Array, roads: rea
     const onRoad = new Uint8Array(pts.length);
     const graze = new Float64Array(pts.length).fill(NaN);
     let anyThrough = false, anyGraze = false;
-    const r = Math.max(road.width / 2, ROAD_CORE_MIN) + cellReal;
+    const coreReach = Math.max(road.width / 2, ROAD_CORE_MIN);
+    const r = coreReach + cellReal;
     for (let i = 0; i < pts.length; i++) {
       const h = heldNear(pts[i][0], pts[i][1], r);
       if (Number.isNaN(h.v)) continue;
@@ -1108,6 +1113,19 @@ function stampV2(c: StampGrid, real: Float32Array, out: Float32Array, roads: rea
     // Two footprints on the line at levels the cap cannot join: the road ramps inside their edges.
     if (anyThrough && !steps) relaxPins(s, through, onRoad, base, cap);
     let level = anyThrough ? holdToFixed(s, base, through, cap) : base;
+    if (steps) {
+      // A flight beside an earlier road keeps within a walkable bank of that road's level: its
+      // banks may not touch the road's core or shoulder, so a flight climbing faster than the road
+      // beside it would otherwise stand as a wall along it (the Gradus Monetae by the Clivus
+      // Argentarius). Where the two part, the flight climbs as before.
+      for (let i = 0; i < pts.length; i++) {
+        if (!Number.isNaN(through[i])) continue;
+        const h = heldNear(pts[i][0], pts[i][1], coreReach + STEP_BANK_RUN + cellReal, true);
+        if (Number.isNaN(h.v)) continue;
+        const lim = STEP_BESIDE_ROAD_GRADE * Math.max(0, h.dist - coreReach);
+        level[i] = Math.min(h.v + lim, Math.max(h.v - lim, level[i]));
+      }
+    }
     if (anyGraze && !steps) {
       // A graze pulls the road toward the level beside it: the least change to the profile that
       // meets every graze within the cap (Chebyshev, as the regrade), then the points it runs
@@ -1139,7 +1157,7 @@ function stampV2(c: StampGrid, real: Float32Array, out: Float32Array, roads: rea
       return r;
     };
     // Flights of steps keep v1's 6 m: they climb cliffs, which stay barriers beside them.
-    const runs = Float64Array.from(level, (y, i) => (steps ? 6 : bankRun(i, y)));
+    const runs = Float64Array.from(level, (y, i) => (steps ? STEP_BANK_RUN : bankRun(i, y)));
     let maxRun = 6;
     for (const r of runs) maxRun = Math.max(maxRun, r);
     const reach = coreW + maxRun;

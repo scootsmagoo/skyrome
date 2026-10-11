@@ -150,7 +150,10 @@ today's, byte-identical):
   level of a footprint its band grazes (as far as the cap allows), and where two footprints on its
   line cannot be joined at the cap (`relaxPins`) or a graze is out of reach, its level core paves
   over the footprint's edge. A road's banks leave an earlier road's core and shoulder alone.
-  Flights of steps (`paving: 'steps'`) keep their climb and v1's 6 m banks.
+  Flights of steps (`paving: 'steps'`) keep their climb and v1's 6 m banks, but a flight beside an
+  earlier road's core stays within `STEP_BESIDE_ROAD_GRADE` (0.45) × the gap of that road's level:
+  its banks may not touch the road, so the Gradus Monetae stood as a 4 m wall along the Clivus
+  Argentarius (the live climb of the Capitoline stalled on it).
 - **Eased-linear flanks** (`easedLinear`): the top grade is 1.25 × the mean (smoothstep: 1.5 ×);
   the steep designed flanks get longer runs (`V2_FLANK_RUN`: capitolium 71, arx 64, palatine-t34
   53 real m). Plateaus and feet stay where they are. `node scripts/audit/g1b-flanks.mjs` prints each
