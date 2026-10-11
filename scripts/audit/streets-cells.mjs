@@ -9,6 +9,7 @@
  *   node scripts/audit/streets-cells.mjs [--at x,z;x,z] [--all] [--terrain v1|v2] [--by-src] [--json out.json]
  *
  * --probe x,z[;x,z]: every drawn triangle over the point (its y, material, source) against heightAt.
+ * --holes: places (0.25 m raster) a street surface claims (the paving index: cut round) where nothing is drawn.
  * --by-src: triangles by what built them (the work items' tags: ground-cover, road, street:lane, junction, ...).
  *
  * Default cells: the STREETS cameras of docs/design/solid-ground.md §4 plus the Forum and the spawn.
@@ -21,6 +22,7 @@ import { parseArgs } from './boot.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const args = parseArgs(process.argv.slice(2));
+if (args.pts) globalThis.__pts = true;
 // The geometry audit's source tags (withAuditSource) are on only with ?audit.
 if (args['by-src'] || args.probe) globalThis.location = { search: '?audit' };
 if (args.terrain) process.env.SKYROME_TERRAIN = String(args.terrain);
@@ -88,6 +90,49 @@ try {
     if (args.items) for (const p of per.sort((a, b) => b.tris - a.tris).slice(0, 6)) console.log(`   item #${p.k}: ${p.tris} tris ${p.ms} ms ${JSON.stringify(p.stats)}`);
     if (cs) console.log(`   sheets ${JSON.stringify(Object.fromEntries(Object.entries(cs).filter(([, v]) => typeof v === 'number').map(([k, v]) => [k, k === 'maxDev' || k === 'overLen' ? +v.toFixed(4) : Math.round(v)])))}`);
     const tris = b.triangleCount;
+    if (args.holes) {
+      const [cx, cz] = key.split(',').map(Number);
+      const R = 0.25, N = Math.round(128 / R);
+      const cov = new Uint8Array(N * N);
+      // The neighbour cells' surfaces reach in too (a piece is built in the cell of its middle).
+      const nb = new MeshBuilder();
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dz) continue;
+        for (const it of work.cells.get(`${cx + dx},${cz + dz}`)?.items ?? []) {
+          try {
+            it(nb);
+          } catch {
+            /* counted in its own cell */
+          }
+        }
+      }
+      for (const geoms of [...b.parts.values(), ...nb.parts.values()]) for (const g of geoms) {
+        const a = g.getAttribute('position');
+        for (let i = 0; i + 2 < a.count; i += 3) {
+          const A = [a.getX(i), a.getZ(i)], B = [a.getX(i + 1), a.getZ(i + 1)], C = [a.getX(i + 2), a.getZ(i + 2)];
+          const d = (B[1] - C[1]) * (A[0] - C[0]) + (C[0] - B[0]) * (A[1] - C[1]);
+          if (Math.abs(d) < 1e-9) continue;
+          const i0 = Math.max(0, Math.floor((Math.min(A[0], B[0], C[0]) - cx * 128) / R)), i1 = Math.min(N - 1, Math.ceil((Math.max(A[0], B[0], C[0]) - cx * 128) / R));
+          const j0 = Math.max(0, Math.floor((Math.min(A[1], B[1], C[1]) - cz * 128) / R)), j1 = Math.min(N - 1, Math.ceil((Math.max(A[1], B[1], C[1]) - cz * 128) / R));
+          for (let j = j0; j <= j1; j++) for (let ii = i0; ii <= i1; ii++) {
+            const x = cx * 128 + (ii + 0.5) * R, z = cz * 128 + (j + 0.5) * R;
+            const u = ((B[1] - C[1]) * (x - C[0]) + (C[0] - B[0]) * (z - C[1])) / d, v = ((C[1] - A[1]) * (x - C[0]) + (A[0] - C[0]) * (z - C[1])) / d;
+            if (u >= -1e-6 && v >= -1e-6 && 1 - u - v >= -1e-6) cov[j * N + ii] = 1;
+          }
+        }
+      }
+      let holes = 0;
+      const ex = [];
+      for (let j = 0; j < N; j++) for (let ii = 0; ii < N; ii++) {
+        if (cov[j * N + ii]) continue;
+        const x = cx * 128 + (ii + 0.5) * R, z = cz * 128 + (j + 0.5) * R;
+        if (!roadsMod.cityPavedAt(x, z)) continue;
+        holes++;
+        if (ex.length < 6 && !ex.some(([qx, qz]) => Math.hypot(qx - x, qz - z) < 10)) ex.push([+x.toFixed(2), +z.toFixed(2), JSON.stringify(roadsMod.cityPavingAt(x, z))]);
+      }
+      console.log(`   holes ${key}: ${holes} cells (${(holes * R * R).toFixed(1)} m²) e.g. ${ex.map((e) => e.join(' ')).join(' ; ')}`);
+      bySrc.__holes = (bySrc.__holes ?? 0) + holes;
+    }
     if (args.probe) {
       for (const [px, pz] of String(args.probe).split(';').map((q) => q.split(',').map(Number))) {
         if (`${Math.floor(px / 128)},${Math.floor(pz / 128)}` !== key) continue;

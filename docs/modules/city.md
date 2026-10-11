@@ -245,9 +245,9 @@ ground cover) is built as a `Sheet` (`arch/fabric/streets.ts`) and written by `e
   triangles), so nothing is paved twice; ground cover never lies on paving nor inside a block.
 - **Skirts.** Every open edge (beyond it nothing of the sheet: an outer edge or a cut) gets a vertical
   face in its own material down to the lowest ground under it minus 0.1 m (`SKIRT_DEPTH`; the drawn
-  terrain drops 9 cm under the atlas roads and pads), no collider. Roads and junctions skirt every
-  open edge; the other surfaces only edges standing more than 3 cm over the ground (`SKIRT_MIN`: an
-  apron's 2.2 cm edge needs none) or lying where the drawn ground drops. Ground cover has no skirts:
+  terrain drops 9 cm under the atlas roads and pads, `plan.drop`), no collider; an apron's or a bevel's
+  outer edge (laid 2.2 cm over the ground) is lowered by that drop, so it meets the ground as drawn.
+  Ground cover has no skirts:
   its rim (every open edge) lies `RIM_SINK` (5 cm) under its body but never under 5 mm over the ground
   (`RIM_MIN`: the terrain would show through), its cell border is a seam.
 - **Colliders.** One welded (indexed, 1 mm) trimesh per sheet, made from the drawn top and kerb faces.

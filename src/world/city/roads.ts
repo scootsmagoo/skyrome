@@ -388,7 +388,7 @@ let lastPaving: PavingIndex | null = null;
 export function cityPavingAt(x: number, z: number): { id: number; rank: number; w: number }[] {
   if (!lastPaving) return [];
   const p = lastPaving;
-  return p.shapes.filter((s) => p.piecesOf(s).some((c) => inConv(c, x, z))).map((s) => ({ id: s.id, rank: Math.floor(s.order / 1e6), w: s.w })).sort((a, b) => b.rank - a.rank);
+  return p.shapes.filter((s) => p.piecesOf(s).some((c) => inConv(c, x, z))).map((s) => ({ id: s.id, rank: Math.floor(s.order / 1e6), w: s.w, pts: (globalThis as { __pts?: boolean }).__pts ? s.pts.map((q) => [+q[0].toFixed(2), +q[1].toFixed(2)]) : undefined })).sort((a, b) => b.rank - a.rank);
 }
 
 /** Does a street surface of the city (road, junction, piazza, minor street) cover (x, z)? */
@@ -503,7 +503,18 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
       stairPaths.set(ri, sp.path);
       runs.push({ road: ri, s0: 0, s1: L, ctx: 'stairs' });
       const mid = road.points[Math.floor(road.points.length / 2)];
-      reg(mid[0], mid[1], RANK.road, sp.path, road.carriage / 2 + 0.3);
+      // Each flight's own footprint (stairsRoad: straight flights of ≤ 4 m along the path), not the
+      // parapets: inside a crossing they open, and a square cut round them left a gap.
+      if (inArea(mid[0], mid[1])) {
+        const Lp = lineLength(sp.path), nf = Math.max(1, Math.ceil(Lp / 4)), hw = road.carriage / 2;
+        for (let k = 0; k < nf; k++) {
+          const a = pointAt(sp.path, (Lp * k) / nf), c = pointAt(sp.path, (Lp * (k + 1)) / nf);
+          const dx = c[0] - a[0], dz = c[1] - a[1], l = Math.hypot(dx, dz);
+          if (l < 1e-6) continue;
+          const nx = (-dz / l) * hw, nz = (dx / l) * hw;
+          pave.add(RANK.road, [[a[0] + nx, a[1] + nz], [c[0] + nx, c[1] + nz], [c[0] - nx, c[1] - nz], [a[0] - nx, a[1] - nz]], 0);
+        }
+      }
       // Where another road crosses the stairway, its parapets open onto the crossing.
       const open = junctions.filter((j) => j.roads.includes(ri)).map((j) => ({ x: j.p[0], z: j.p[1], r: j.r + 0.6 }));
       add(mid[0], mid[1], T(`stairs-road:${road.id}`, (bld) => stairsRoad(bld, road, sp, H, open)));

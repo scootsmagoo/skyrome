@@ -355,8 +355,11 @@ function addCollider(b: MeshBuilder, arr: number[]) {
 export const CONFORM_TOL = 0.02;
 /** Skirts reach this far below the lowest ground under their edge (the drawn terrain drops 9 cm under roads and pads). */
 export const SKIRT_DEPTH = 0.1;
-/** An open edge standing no higher than this over the ground needs no skirt (an apron's 2.2 cm edge). */
-export const SKIRT_MIN = 0.03;
+/**
+ * An open edge standing no higher than this over the drawn ground needs no skirt. Every edge gets one
+ * (−1): even an apron's 2.2 cm edge stands clear of the ground beyond it where that falls away.
+ */
+export const SKIRT_MIN = -1;
 /** Ground cover's rim lies this much under its body, so it meets the ground with no edge to see... */
 export const RIM_SINK = 0.05;
 /** ...but never under this height over the ground (the terrain would show through, and fight it). */
