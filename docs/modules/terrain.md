@@ -32,6 +32,7 @@ triangles.
 
 | File | What |
 | --- | --- |
+| `src/world/terrain/profile.ts` | The terrain profile (`v1` / `v2`, default `v2`): `terrainProfile()`, `setTerrainProfile()`, `?terrain=`, `SKYROME_TERRAIN`. See "One ground" below. |
 | `src/world/terrain/heightmap.ts` | Atlas → height grid (pure). Hills, lowlands, the river valley, canals, quays, islands, roads leveled crosswise, building pads. Keeps the vector `features` for the renderer and the water. |
 | `src/world/terrain/riverbanks.ts` | Where the Tiber's banks are stone quays in AD 113 (`TIBER_QUAYS`), river chainage/side queries (`chain`, `footOn`), a segment index for fast nearest-segment queries. |
 | `src/world/terrain/terrainData.ts` | Per-sample shader data (pure): normals, road and pad signed-distance fields, pad kind, urban wear, garden lushness, canal water level. |
@@ -86,9 +87,47 @@ diagonally to the 2 m grid. Truly vertical rock (the Tarpeian Rock) is for landm
 Speed: polygon distances come from bilinear signed-distance grids (6 m cells), river queries go
 through a segment index, and roads are stamped segment by segment (6.8 s → 1.0 s for the city).
 
+## One ground (terrain profiles, `profile.ts`)
+
+The ground is made in one of two profiles (docs/design/solid-ground.md §3). `buildHeightmap` reads
+`terrainProfile()` once and stores it as `hm.profile`; the drawn patch reads it from there, so a
+world never mixes them.
+
+| | `v1` (before phase 4b) | `v2` (the default) |
+| --- | --- | --- |
+| `heightAt(x, z)` | bilinear | on the cell's b–c triangles |
+| drawn patch (`patchGeometry`) | each cell split a–d: `(a, c, d), (a, d, b)` | split b–c: `(a, c, b), (b, c, d)` |
+| Rapier heightfield | b–c (always: parry splits every cell from (x+1, z) to (x, z+1)) | the same |
+
+Cell corners: a = (x, z), b = (x+1, z), c = (x, z+1), d = (x+1, z+1). Under v2, with tx, tz the
+fractions across the cell: if tx + tz ≤ 1, h = h00 + (h10 − h00)·tx + (h01 − h00)·tz, otherwise
+h = h11 + (h01 − h11)·(1 − tx) + (h10 − h11)·(1 − tz). So everything placed with `heightAt`
+(streets, kerbs, buildings, props, grass, spawns) stands on the ground the player sees and walks
+on. Under v1 the three disagreed by up to 1.16 m on twisted cells (mean 1.4 mm, 0.5 % of the city
+over 4 cm; 200k random points against Rapier rays), and paving laid on the bilinear height stood
+up to half that over the drawn ground.
+
+Choosing: `?terrain=v1` in the game URL (same build, for A/B shots: `scripts/audit/look.mjs --query
+terrain=v1`), `SKYROME_TERRAIN=v1` for Node tools, `setTerrainProfile('v1')` or
+`buildHeightmap(src, { profile: 'v1' })` in tests. Under v1 the heights, the patch and `heightAt`
+are byte-identical to before the switch (`tests/terrain-oneground.test.ts` checks their hashes).
+The grid itself is the same in both profiles for now; the gentler-hills changes (G1b: roads over
+pads, eased flanks, capped road grades) will change v2's heights only.
+
+The quadtree's cracks and morphs do not depend on the diagonal: skirts hang from the patch's
+perimeter edges, which neither diagonal touches, and a fully morphed patch (odd vertices onto
+their even neighbours) is the next level's patch with the same diagonal (tested for both). In the
+morph zone (beyond ~95 m) the shader still samples the height texture bilinearly at the sliding
+vertices, as before; at rest every vertex sits on a grid sample.
+
+The city plan samples `heightAt` at its 2 m cell centres, which under v2 lie on the b–c diagonal
+((h10 + h01) / 2 rather than the four-corner mean), so the city re-plans a little between the
+profiles (block ids and counts change; content uses coordinates).
+
 ## Rendering
 
-**CDLOD** (Strugar 2010). One shared grid patch of 16 × 16 quads with skirts is drawn instanced:
+**CDLOD** (Strugar 2010). One shared grid patch of 16 × 16 quads (each split along the profile's
+diagonal, see "One ground") with skirts is drawn instanced:
 every instance is a patch `[x0, z0, cell, level]`. A node at level L covers 32·2^L cells and is
 drawn as its four quadrant patches; the quadtree picks per frame (after the camera, priority
 101) which nodes and quadrants to draw, with frustum culling on min/max-height boxes. The vertex
@@ -242,7 +281,10 @@ terrain 0.6 s, water 0.16 s, dressing 0.3 s; the photo arrays are packed asynchr
 - `Terrain`'s public API is unchanged (`constructor(game, hm, opts)`, `heightAt`, `normalAt`,
   `surfaceAt`, `group`, `material`); `Surface` gained `'gravel'` and `'mud'`. New: `weightsAt`,
   `farHeightAt`, `ready`, `lodStats`, `refreshHeights()` (after editing `hm.heights`), `uniforms`.
-- The terrain mesh is not ray-pickable (it is an instanced unit grid); use physics or `heightAt`.
+- The terrain mesh is not ray-pickable (it is an instanced unit grid); use physics or `heightAt`
+  (under v2 they agree to float precision, 0.1 mm).
+- `heightfieldChunks(hm, n)` (Terrain.ts) yields the colliders' chunks (n × n samples sharing their
+  edges) with `Physics.addHeightfield`'s arguments, for tests and tools that need the same physics.
 - `dressTerrain` runs last in `buildRome` (after `buildCity`) and keeps out of anything with a
   collider. A city module that builds blocks lazily later, or lays its own kerbed streets, should
   either build before it or pass `{ kerbs: false }` / ask for a re-dress; its gardens and piazzas
