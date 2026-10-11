@@ -317,7 +317,8 @@ export function domus(spec: DomusSpec): BuildingOutput {
   for (const { o, depth, low } of holes) {
     d.solid(px, yMin, z0, o.x0, hf, front);
     d.solid(o.x0, o.y1, z0, o.x1, hf, front);
-    d.solid(o.x0, yMin, z0, o.x1, o.y0 - 0.12, z0 + T * 0.2);
+    // The wall under the opening, topped by its threshold slab as drawn (0.12 m out, 2 cm over the floor; insula.ts).
+    d.solid(o.x0, yMin, z0 - 0.12, o.x1, o.y0 + 0.02, z0 + (o === fauces ? 0.5 : T * 0.6));
     if (depth < front - z0) {
       let gmin = low;
       for (let i = 0; i <= 2; i++) for (let k = 0; k <= 2; k++) gmin = Math.min(gmin, ground(o.x0 + ((o.x1 - o.x0) * i) / 2, z0 + depth + ((front - z0 - depth) * k) / 2));
