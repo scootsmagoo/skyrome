@@ -16,8 +16,11 @@ import { gameFixture } from './city.fixture';
 const regionName = (i: number) => atlas.REGIONS[i]?.id ?? 'none';
 
 describe('street-end audit', () => {
-  const before = auditStreetEnds(gameFixture(false).plan, regionName);
-  const after = auditStreetEnds(gameFixture(true).plan, regionName);
+  // A street cut short where the ground got too steep for it ends at the cliff by design
+  // (plan.ts trimSteepStreets): those ends are not stubs.
+  const notCliff = (plan: ReturnType<typeof gameFixture>['plan']) => (e: { p: number[] }) => !(plan.cliffEnds ?? []).some((c) => Math.hypot(c[0] - e.p[0], c[1] - e.p[1]) < 1.5);
+  const before = auditStreetEnds(gameFixture(false).plan, regionName).filter(notCliff(gameFixture(false).plan));
+  const after = auditStreetEnds(gameFixture(true).plan, regionName).filter(notCliff(gameFixture(true).plan));
   const b = summarize(before), a = summarize(after);
 
   it('reports the stubs before and after', () => {

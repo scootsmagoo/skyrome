@@ -42,6 +42,18 @@ export interface StreetSpec {
   /** Add trimesh colliders (default true). */
   collide?: boolean;
   seed?: number;
+  /**
+   * Conform to the ground (the city's streets, phase 4b): the surface is subdivided until it follows
+   * `heightAt` within CONFORM_TOL, cut away where a surface that wins the place lies (`cut`), and
+   * every open edge gets a skirt down under the ground; the kerb faces follow the ground too and the
+   * collider is welded. Without it the street is built as before (landmark builders, demo scenes).
+   */
+  conform?: ConformOpts;
+  /** Material of the outer apron of a lane (default the lane's own): a travertine edge course where an open road meets paving. */
+  apronMaterial?: MaterialId;
+  /** A conformed street's capped end that meets bare ground runs out to it in a walkable apron (no step at its end). */
+  apronStart?: boolean;
+  apronEnd?: boolean;
 }
 
 export interface StreetResult {
@@ -56,10 +68,10 @@ interface ProfilePt { off: number; y: number }
 interface Strip { mat: MaterialId; expect: Expect }
 
 /** Width (m) of the walkable apron where a paved street's sidewalk meets the ground, and where a lane does. */
-const APRON = 0.9;
-const LANE_APRON = 0.6;
+export const APRON = 0.9;
+export const LANE_APRON = 0.6;
 /** An apron ends this far (m) above the ground, not under it or flush: ground within 2 cm of the paving is a flaw the crawl counts (a lip of 2 cm rides over). */
-const APRON_FLUSH = 0.022;
+export const APRON_FLUSH = 0.022;
 
 /** Builds a street into `b` (world coordinates). */
 export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn): StreetResult {
@@ -85,50 +97,40 @@ export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn
     // The outer edge is an apron sloping down to the ground over APRON m (a vertical 30 cm face stood
     // out as a slab where the street crosses open ground; along houses it runs under their walls).
     // It is walkable: a lip of 15-25 cm between the sidewalk and the ground caught pedestrians.
+    // A city street's apron is the sidewalk's paving running down (a band of its own, under a metre
+    // wide, read as patchwork: the surface census's slivers and seams).
+    const apronMat: MaterialId = spec.conform ? sideMat : 'concrete';
     push(-hw - sw - APRON, -lift + APRON_FLUSH);
-    push(-hw - sw, ch, 'concrete', 'up');
+    push(-hw - sw, ch, apronMat, 'up');
     push(-hw - cw, ch, sideMat, 'up');
     push(-hw, ch, curbMat, 'up');
     push(-hw, 0, curbMat, 'in');
-    push(-hw * 0.5, 0.045, roadMat, 'up');
+    // The crown (a conformed street keeps its two halves plane: 1 cm less at the quarter points).
+    if (!spec.conform) push(-hw * 0.5, 0.045, roadMat, 'up');
     push(0, 0.07, roadMat, 'up');
-    push(hw * 0.5, 0.045, roadMat, 'up');
+    if (!spec.conform) push(hw * 0.5, 0.045, roadMat, 'up');
     push(hw, 0, roadMat, 'up');
     push(hw, ch, curbMat, 'in');
     push(hw + cw, ch, curbMat, 'up');
     push(hw + sw, ch, sideMat, 'up');
-    push(hw + sw + APRON, -lift + APRON_FLUSH, 'concrete', 'up');
+    push(hw + sw + APRON, -lift + APRON_FLUSH, apronMat, 'up');
   } else {
     // A lane's edges run out to the ground in a walkable apron too (the old 5 cm edge was a step of the lane's lift).
+    const apronMat = spec.apronMaterial ?? roadMat;
     push(-hw - LANE_APRON, -lift + APRON_FLUSH);
-    push(-hw, 0.0, roadMat, 'up');
+    push(-hw, 0.0, apronMat, 'up');
     push(0, 0.05, roadMat, 'up');
     push(hw, 0.0, roadMat, 'up');
-    push(hw + LANE_APRON, -lift + APRON_FLUSH, roadMat, 'up');
+    push(hw + LANE_APRON, -lift + APRON_FLUSH, apronMat, 'up');
   }
 
-  const pts = resamplePolyline(spec.points, 1.6);
+  // A conformed street is split where the ground folds anyway: it needs cross-sections only every
+  // CONFORM_STEP, at its own bends, and where its kerbs ramp (the ends, the dropped kerbs).
+  const { pts, nor, miter } = streetFrame(spec);
   const n = pts.length;
-  // Tangents (averaged) and miter-scaled left normals.
-  const tan: Vec2[] = [], nor: Vec2[] = [], miter: number[] = [];
-  for (let i = 0; i < n; i++) {
-    const a = pts[Math.max(0, i - 1)], c = pts[Math.min(n - 1, i + 1)];
-    let tx = c[0] - a[0], tz = c[1] - a[1];
-    const l = Math.hypot(tx, tz) || 1;
-    tx /= l; tz /= l;
-    tan.push([tx, tz]);
-    nor.push([-tz, tx]);
-    // Miter: compare with the incoming segment direction.
-    if (i > 0 && i < n - 1) {
-      const sx = pts[i][0] - pts[i - 1][0], sz = pts[i][1] - pts[i - 1][1];
-      const sl = Math.hypot(sx, sz) || 1;
-      const cos = (sx / sl) * tx + (sz / sl) * tz;
-      miter.push(Math.min(2, 1 / Math.max(0.5, cos)));
-    } else miter.push(1);
-  }
+  const tan = nor.map(([x, z]) => [z, -x] as Vec2);
   // Raised sidewalks ramp down to the roadway over the last metres of a capped end (a kerb
   // ramp), instead of stopping in a 30 cm block that read as a slab floating at junctions.
-  const RAMP = 1.6;
   const along: number[] = [0];
   for (let i = 1; i < n; i++) along.push(along[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
   const total = along[n - 1] || 1;
@@ -151,6 +153,67 @@ export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn
     const y = paved && p.y === ch ? ch * raise(i, p.off) : p.y;
     return new THREE.Vector3(x, heightAt(x, z) + lift + y, z);
   };
+  const outline = () => ({
+    length: polylineLength(spec.points),
+    left: pts.map((p, i) => [p[0] + nor[i][0] * (-hw - sw) * miter[i], p[1] + nor[i][1] * (-hw - sw) * miter[i]] as Vec2),
+    right: pts.map((p, i) => [p[0] + nor[i][0] * (hw + sw) * miter[i], p[1] + nor[i][1] * (hw + sw) * miter[i]] as Vec2),
+  });
+  if (spec.conform) {
+    // The same cross-section, as a sheet over the ground: every vertex keeps its height above the
+    // terrain (lift + profile), the surface is refined until it follows the ground, kerb faces are
+    // walls between their two strips, and the end caps give way to the skirts of the open edges.
+    const sheet = new Sheet(heightAt);
+    const V: SV[][] = [];
+    for (let i = 0; i < n; i++) {
+      V.push(prof.map((p) => {
+        const x = pts[i][0] + nor[i][0] * p.off * miter[i], z = pts[i][1] + nor[i][1] * p.off * miter[i];
+        const y = paved && p.y === ch ? ch * raise(i, p.off) : p.y;
+        return sheet.v(x, z, lift + y);
+      }));
+    }
+    for (let i = 0; i < n - 1; i++) {
+      for (let k = 0; k < strips.length; k++) {
+        const s = strips[k];
+        if (s.expect === 'up') {
+          sheet.tri(V[i][k], V[i][k + 1], V[i + 1][k + 1], s.mat);
+          sheet.tri(V[i][k], V[i + 1][k + 1], V[i + 1][k], s.mat);
+        } else {
+          // A kerb face: from the lower of its two profile points up to the higher, facing the carriageway.
+          const lo = prof[k].y <= prof[k + 1].y ? k : k + 1, hi = lo === k ? k + 1 : k;
+          const side = Math.sign(prof[k].off) || 1;
+          const nx = -(nor[i][0] + nor[i + 1][0]) * 0.5 * side, nz = -(nor[i][1] + nor[i + 1][1]) * 0.5 * side;
+          sheet.wall(V[i][lo], V[i + 1][lo], V[i][hi].off, V[i + 1][hi].off, s.mat, nx, nz);
+        }
+      }
+    }
+    // A capped end over bare ground slopes down to it as the sides do (the end cross-section's
+    // kerbs have ramped to the carriageway already).
+    const endApron = (i: number, sgn: number) => {
+      const reach = paved ? APRON : LANE_APRON;
+      const tx = nor[i][1] * sgn, tz = -nor[i][0] * sgn;
+      const W = V[i].map((v) => sheet.v(v.x + tx * reach, v.z + tz * reach, APRON_FLUSH));
+      for (let k = 0; k + 1 < prof.length; k++) {
+        const mat = strips[k].expect === 'up' ? strips[k].mat : null;
+        if (!mat) continue;
+        if (sgn > 0) {
+          sheet.tri(V[i][k], W[k], W[k + 1], mat);
+          sheet.tri(V[i][k], W[k + 1], V[i][k + 1], mat);
+        } else {
+          sheet.tri(V[i][k], V[i][k + 1], W[k + 1], mat);
+          sheet.tri(V[i][k], W[k + 1], W[k], mat);
+        }
+      }
+    };
+    if ((spec.capStart ?? true) && spec.apronStart) endApron(0, -1);
+    if ((spec.capEnd ?? true) && spec.apronEnd) endApron(n - 1, 1);
+    // Ends that continue in the next piece of the same street are seams, not open edges.
+    const endLine = (i: number): [SV, SV] => [V[i][0], V[i][prof.length - 1]];
+    const seams: [SV, SV][] = [];
+    if (!(spec.capStart ?? true)) seams.push(endLine(0));
+    if (!(spec.capEnd ?? true)) seams.push(endLine(n - 1));
+    emitSheet(b, sheet, { ...spec.conform, collide: spec.collide ?? spec.conform.collide ?? true, seam: seams.length ? (a, c) => seams.some(([p, q]) => onLine(a, p, q) && onLine(c, p, q)) : spec.conform.seam });
+    return outline();
+  }
   const grid: THREE.Vector3[][] = [];
   for (let i = 0; i < n; i++) grid.push(prof.map((_, k) => P(i, k)));
 
@@ -220,10 +283,111 @@ export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn
     }
   }
   if (spec.collide ?? true) addCollider(b, col);
+  return outline();
+}
 
-  const left = pts.map((p, i) => [p[0] + nor[i][0] * (-hw - sw) * miter[i], p[1] + nor[i][1] * (-hw - sw) * miter[i]] as Vec2);
-  const right = pts.map((p, i) => [p[0] + nor[i][0] * (hw + sw) * miter[i], p[1] + nor[i][1] * (hw + sw) * miter[i]] as Vec2);
-  return { length, left, right };
+/** Where a street's cross-sections stand: the sampled centreline, the (averaged) left normals and the mitre scale of each. */
+function streetFrame(spec: StreetSpec): { pts: Vec2[]; nor: Vec2[]; miter: number[] } {
+  // A conformed street is split where the ground folds anyway: it needs cross-sections only every
+  // CONFORM_STEP, at its own bends, and where its kerbs ramp (the ends, the dropped kerbs).
+  const pts = spec.conform ? conformSamples(spec.points, CONFORM_STEP, rampMarks(spec)) : resamplePolyline(spec.points, 1.6);
+  const n = pts.length;
+  const nor: Vec2[] = [], miter: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = pts[Math.max(0, i - 1)], c = pts[Math.min(n - 1, i + 1)];
+    let tx = c[0] - a[0], tz = c[1] - a[1];
+    const l = Math.hypot(tx, tz) || 1;
+    tx /= l;
+    tz /= l;
+    nor.push([-tz, tx]);
+    // Miter: compare with the incoming segment direction.
+    if (i > 0 && i < n - 1) {
+      const sx = pts[i][0] - pts[i - 1][0], sz = pts[i][1] - pts[i - 1][1];
+      const sl = Math.hypot(sx, sz) || 1;
+      const cos = (sx / sl) * tx + (sz / sl) * tz;
+      miter.push(Math.min(2, 1 / Math.max(0.5, cos)));
+    } else miter.push(1);
+  }
+  return { pts, nor, miter };
+}
+
+/**
+ * What a street's surface covers in plan, as convex pieces: per stretch between two cross-sections the
+ * quad between its outer edges (aprons included), or its two triangles where the quad folds (a sharp
+ * bend). The same cross-sections buildStreet draws, so a surface cut round it meets it exactly.
+ */
+export function streetFootprint(spec: StreetSpec, core = false): Vec2[][] {
+  const paved = (spec.kind ?? 'paved') === 'paved';
+  const hw = (spec.roadWidth ?? (paved ? 5.0 : 3.2)) / 2;
+  // The core: the carriageway and the sidewalks, without the aprons that slope down to the ground.
+  const reach = core ? (paved ? hw + (spec.sidewalk ?? 1.8) : hw) : paved ? hw + (spec.sidewalk ?? 1.8) + APRON : hw + LANE_APRON;
+  const { pts, nor, miter } = streetFrame(spec);
+  const side = (i: number, s: number): Vec2 => [pts[i][0] + nor[i][0] * s * reach * miter[i], pts[i][1] + nor[i][1] * s * reach * miter[i]];
+  const out: Vec2[][] = [];
+  const end = (i: number, sgn: number) => {
+    const a = paved ? APRON : LANE_APRON, tx = nor[i][1] * sgn * a, tz = -nor[i][0] * sgn * a;
+    const l = side(i, -1), r = side(i, 1);
+    out.push([l, r, [r[0] + tx, r[1] + tz], [l[0] + tx, l[1] + tz]]);
+  };
+  if (!core && spec.conform && (spec.capStart ?? true) && spec.apronStart) end(0, -1);
+  if (!core && spec.conform && (spec.capEnd ?? true) && spec.apronEnd) end(pts.length - 1, 1);
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const q: Vec2[] = [side(i, -1), side(i + 1, -1), side(i + 1, 1), side(i, 1)];
+    let sign = 0, convex = true;
+    for (let k = 0; k < 4 && convex; k++) {
+      const a = q[k], b = q[(k + 1) % 4], c = q[(k + 2) % 4];
+      const cr = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
+      if (Math.abs(cr) < 1e-12) continue;
+      if (!sign) sign = Math.sign(cr);
+      else if (Math.sign(cr) !== sign) convex = false;
+    }
+    if (convex) out.push(q);
+    else out.push([q[0], q[1], q[2]], [q[0], q[2], q[3]]);
+  }
+  return out;
+}
+
+/** Cross-sections of a conformed street are at most this far apart (m). */
+const CONFORM_STEP = 3.2;
+/** Width (m) of a kerb ramp at a capped end or beside a dropped kerb (buildStreet). */
+const RAMP = 1.6;
+
+/** Arc lengths where a street's kerbs start or stop ramping (they need a cross-section there). */
+function rampMarks(spec: StreetSpec): number[] {
+  const L = polylineLength(spec.points);
+  const out: number[] = [];
+  if (spec.capStart ?? true) out.push(RAMP);
+  if (spec.capEnd ?? true) out.push(L - RAMP);
+  for (const d of spec.dips ?? []) out.push(d.s - d.w / 2 - RAMP, d.s - d.w / 2, d.s + d.w / 2, d.s + d.w / 2 + RAMP);
+  return out;
+}
+
+/** The polyline's own points, points every ≤ `step` between them, and the points at arc lengths `marks`. */
+function conformSamples(pts: Vec2[], step: number, marks: number[]): Vec2[] {
+  const out: Vec2[] = [];
+  const ms = marks.filter((m) => Number.isFinite(m)).sort((a, b) => a - b);
+  let acc = 0, mi = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const n = Math.max(1, Math.ceil(len / step));
+    const ss: number[] = [];
+    for (let k = 0; k < n; k++) ss.push((len * k) / n);
+    while (mi < ms.length && ms[mi] < acc + len) {
+      const t = ms[mi++] - acc;
+      if (t > 0.05 && t < len - 0.05) ss.push(t);
+    }
+    ss.sort((x, y) => x - y);
+    let prev = -1;
+    for (const t of ss) {
+      if (prev >= 0 && t - prev < 0.05) continue;
+      out.push(len > 0 ? [a[0] + ((b[0] - a[0]) * t) / len, a[1] + ((b[1] - a[1]) * t) / len] : [a[0], a[1]]);
+      prev = t;
+    }
+    acc += len;
+  }
+  out.push([pts[pts.length - 1][0], pts[pts.length - 1][1]]);
+  return out;
 }
 
 /** Point and unit tangent at arc length `s` along a polyline. */
@@ -254,6 +418,941 @@ function addCollider(b: MeshBuilder, arr: number[]) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
   b.collider({ kind: 'trimesh', geometry: g });
+}
+
+// ------------------------------------------------------------------ conforming sheets (phase 4b)
+
+/** Largest gap (m) a conformed surface leaves against `heightAt`, along its edges and inside. */
+export const CONFORM_TOL = 0.02;
+/** Skirts reach this far below the lowest ground under their edge (the drawn terrain drops 9 cm under roads and pads). */
+export const SKIRT_DEPTH = 0.1;
+/**
+ * An open edge standing no higher than this over the drawn ground needs no skirt. Every edge gets one
+ * (−1): even an apron's 2.2 cm edge stands clear of the ground beyond it where that falls away.
+ */
+export const SKIRT_MIN = -1;
+/** Ground cover's rim lies this much under its body, so it meets the ground with no edge to see... */
+export const RIM_SINK = 0.05;
+/** ...but never under this height over the ground (the terrain would show through, and fight it). */
+export const RIM_MIN = 0.005;
+/** Edges shorter than this are not split again. */
+const MIN_EDGE = 0.03;
+/** No split closer than this (m) to an edge's end. */
+const MIN_PIECE = 0.005;
+/** Deepest refinement of one coarse triangle. */
+const MAX_DEPTH = 40;
+/** Plane-side tolerance of the convex cut. */
+const CUT_EPS = 1e-9;
+
+/**
+ * The terrain's lattice when `heightAt` is linear on its triangles (terrain v2: every cell of the
+ * grid split on its b–c diagonal, the lines x, z and x + z constant). A surface is then split exactly
+ * where the ground folds under it, and nowhere else.
+ */
+export interface GroundGrid {
+  x0: number;
+  z0: number;
+  s: number;
+}
+
+/** A convex polygon (either winding) and its box: a piece of a surface that wins a place. */
+export interface Conv {
+  pts: readonly Vec2[];
+  minX: number;
+  minZ: number;
+  maxX: number;
+  maxZ: number;
+  /** Outward normal and offset of each edge (filled on first use). */
+  n?: Float64Array;
+}
+
+export function makeConv(pts: readonly Vec2[]): Conv {
+  let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
+  for (const [x, z] of pts) {
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (z < minZ) minZ = z;
+    if (z > maxZ) maxZ = z;
+  }
+  return { pts, minX, minZ, maxX, maxZ };
+}
+
+function convNormals(c: Conv): Float64Array {
+  if (c.n) return c.n;
+  const P = c.pts, m = P.length;
+  let cx = 0, cz = 0;
+  for (const p of P) {
+    cx += p[0] / m;
+    cz += p[1] / m;
+  }
+  const n = new Float64Array(3 * m);
+  for (let i = 0; i < m; i++) {
+    const p = P[i], q = P[(i + 1) % m];
+    const ex = q[0] - p[0], ez = q[1] - p[1];
+    const L = Math.hypot(ex, ez);
+    if (L < 1e-9) {
+      // A repeated point: a plane every point is inside of.
+      n[3 * i + 2] = 1;
+      continue;
+    }
+    let nx = ez / L, nz = -ex / L;
+    if (nx * (cx - p[0]) + nz * (cz - p[1]) > 0) {
+      nx = -nx;
+      nz = -nz;
+    }
+    n[3 * i] = nx;
+    n[3 * i + 1] = nz;
+    n[3 * i + 2] = nx * p[0] + nz * p[1];
+  }
+  return (c.n = n);
+}
+
+/** Is (x, z) inside the convex polygon (its boundary included)? */
+export function inConv(c: Conv, x: number, z: number): boolean {
+  if (x < c.minX || x > c.maxX || z < c.minZ || z > c.maxZ) return false;
+  const n = convNormals(c);
+  for (let i = 0; i < c.pts.length; i++) if (n[3 * i] * x + n[3 * i + 1] * z - n[3 * i + 2] > CUT_EPS) return false;
+  return true;
+}
+
+type CutFn = (minX: number, minZ: number, maxX: number, maxZ: number) => readonly Conv[];
+
+/** Is (x, z) inside one of the pieces `cut` gives there? */
+export function inCut(cut: CutFn | null | undefined, x: number, z: number): boolean {
+  if (!cut) return false;
+  for (const c of cut(x - 1e-3, z - 1e-3, x + 1e-3, z + 1e-3)) if (inConv(c, x, z)) return true;
+  return false;
+}
+
+export interface ConformOpts {
+  /** Deviation allowed against heightAt (default CONFORM_TOL). */
+  tol?: number;
+  /**
+   * The terrain's lattice (terrain v2): edges are split at the fold of the ground where the gap is
+   * largest, triangles at the lattice point inside them that is furthest off. Without it (v1's
+   * bilinear ground) an edge is halved while its midpoint is off, a triangle split at its centroid.
+   */
+  ground?: GroundGrid | null;
+  /** The convex pieces of the surfaces that win this place, near a box: the sheet is cut away inside them. */
+  cut?: CutFn | null;
+  /** Open edges that get no skirt: seams where the same surface goes on in the next piece or cell. */
+  seam?: ((a: SV, b: SV) => boolean) | null;
+  /** Skirts under the open edges (default true). */
+  skirts?: boolean;
+  /** An open edge no higher than this over the drawn ground gets no skirt (default SKIRT_MIN; −1: every open edge). */
+  skirtMin?: number;
+  /**
+   * How far the drawn terrain lies under `heightAt` (it drops 9 cm under the atlas roads and pads,
+   * terrainMaterial.ts; plan.drop). An open edge laid to meet the ground (an apron's or a bevel's
+   * outer edge, at most APRON_FLUSH over it) is lowered by it, so it meets the ground as drawn; skirts
+   * reach under the drawn ground.
+   */
+  drop?: ((x: number, z: number) => number) | null;
+  /** Height above the (drawn) ground of every vertex on an open edge (ground cover: its rim sunk); null keeps theirs. */
+  rim?: number | null;
+  /** A trimesh collider of the top and the walls, welded (default true). */
+  collide?: boolean;
+}
+
+/** A sheet vertex: plan position, height above the ground (`off`), and the ground there (`h`). */
+export interface SV {
+  x: number;
+  z: number;
+  off: number;
+  h: number;
+}
+
+interface STri {
+  a: SV;
+  b: SV;
+  c: SV;
+  mat: MaterialId;
+  col: boolean;
+}
+
+/** A vertical face along p → q: bottom at the vertices' own heights, top at tp / tq above the ground, looking along (nx, nz). */
+interface SWall {
+  p: SV;
+  q: SV;
+  tp: number;
+  tq: number;
+  mat: MaterialId;
+  nx: number;
+  nz: number;
+  col: boolean;
+}
+
+/**
+ * A surface before it is laid on the ground: plan triangles whose vertices carry their height above
+ * the terrain, and walls (kerb faces) along plan segments with a bottom and a top height. `emitSheet`
+ * refines it to the ground, cuts it, skirts it and writes it into a MeshBuilder.
+ */
+export class Sheet {
+  readonly tris: STri[] = [];
+  readonly walls: SWall[] = [];
+  constructor(readonly H: HeightFn) {}
+  v(x: number, z: number, off: number): SV {
+    return { x, z, off, h: this.H(x, z) };
+  }
+  tri(a: SV, b: SV, c: SV, mat: MaterialId, collide = true) {
+    this.tris.push({ a, b, c, mat, col: collide });
+  }
+  wall(p: SV, q: SV, topP: number, topQ: number, mat: MaterialId, nx: number, nz: number, collide = true) {
+    if (topP - p.off < 1e-4 && topQ - q.off < 1e-4) return;
+    const l = Math.hypot(nx, nz) || 1;
+    this.walls.push({ p, q, tp: topP, tq: topQ, mat, nx: nx / l, nz: nz / l, col: collide });
+  }
+}
+
+/** Is `a` on the plan line through p and q (within 1 mm)? */
+export function onLine(a: { x: number; z: number }, p: { x: number; z: number }, q: { x: number; z: number }, eps = 1e-3): boolean {
+  const dx = q.x - p.x, dz = q.z - p.z;
+  const l = Math.hypot(dx, dz);
+  if (l < 1e-9) return Math.hypot(a.x - p.x, a.z - p.z) < eps;
+  return Math.abs((a.x - p.x) * dz - (a.z - p.z) * dx) / l < eps;
+}
+
+/** Canonical order of an edge's ends (so both triangles of an edge compute it the same way). */
+const first = (a: SV, b: SV) => a.x < b.x || (a.x === b.x && a.z <= b.z);
+
+/** Calls f(t) for every t in [0, 1] where w0 + dw·t is a whole number. */
+function crossings(w0: number, dw: number, f: (t: number) => void) {
+  if (Math.abs(dw) < 1e-12) return;
+  const lo = Math.min(w0, w0 + dw), hi = Math.max(w0, w0 + dw);
+  for (let k = Math.ceil(lo); k <= Math.floor(hi); k++) f((k - w0) / dw);
+}
+
+/** A point on u → v at s, everything linear (inside one planar triangle of the sheet). */
+const lerpSV = (u: SV, v: SV, s: number): SV => ({ x: u.x + (v.x - u.x) * s, z: u.z + (v.z - u.z) * s, off: u.off + (v.off - u.off) * s, h: u.h + (v.h - u.h) * s });
+
+/** Splits a convex polygon by the line n·p = d into the part outside (n·p > d) and the part inside; points on the line go to both. */
+function splitByLine(P: SV[], nx: number, nz: number, d: number): [SV[], SV[]] {
+  const m = P.length;
+  const s = new Array<number>(m);
+  let anyOut = false, anyIn = false;
+  for (let i = 0; i < m; i++) {
+    const v = (s[i] = nx * P[i].x + nz * P[i].z - d);
+    if (v > CUT_EPS) anyOut = true;
+    else if (v < -CUT_EPS) anyIn = true;
+  }
+  if (!anyOut) return [[], P];
+  if (!anyIn) return [P, []];
+  const A: SV[] = [], B: SV[] = [];
+  for (let i = 0; i < m; i++) {
+    const j = (i + 1) % m;
+    const su = s[i], sv = s[j];
+    if (su >= -CUT_EPS) A.push(P[i]);
+    if (su <= CUT_EPS) B.push(P[i]);
+    if ((su > CUT_EPS && sv < -CUT_EPS) || (su < -CUT_EPS && sv > CUT_EPS)) {
+      const x = lerpSV(P[i], P[j], su / (su - sv));
+      A.push(x);
+      B.push(x);
+    }
+  }
+  return [A, B];
+}
+
+/** P minus the convex c, as convex pieces pushed onto `out`. */
+function subtractConv(P: SV[], c: Conv, out: SV[][]) {
+  let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
+  for (const v of P) {
+    if (v.x < minX) minX = v.x;
+    if (v.x > maxX) maxX = v.x;
+    if (v.z < minZ) minZ = v.z;
+    if (v.z > maxZ) maxZ = v.z;
+  }
+  if (maxX <= c.minX || minX >= c.maxX || maxZ <= c.minZ || minZ >= c.maxZ) {
+    out.push(P);
+    return;
+  }
+  const n = convNormals(c);
+  let rem = P;
+  for (let i = 0; i < c.pts.length; i++) {
+    const nx = n[3 * i], nz = n[3 * i + 1];
+    if (nx === 0 && nz === 0) continue;
+    const [outside, inside] = splitByLine(rem, nx, nz, n[3 * i + 2]);
+    if (outside.length >= 3) out.push(outside);
+    if (inside.length < 3) return;
+    rem = inside;
+  }
+  // What is left lies inside c: dropped.
+}
+
+function polyArea(P: SV[]): number {
+  let a = 0;
+  for (let i = 0; i < P.length; i++) {
+    const p = P[i], q = P[(i + 1) % P.length];
+    a += p.x * q.z - q.x * p.z;
+  }
+  return Math.abs(a) / 2;
+}
+
+/** Running totals of emitSheet (profiling and the offline cell check; `check` also measures the written top against heightAt at every edge midpoint: the worst in `maxDev`, the edges over tolerance in `over` and their length in `overLen`). */
+export const conformStats = { sheets: 0, input: 0, refined: 0, kept: 0, skirts: 0, walls: 0, ms: 0, maxDev: 0, over: 0, overLen: 0, check: false };
+
+export interface SheetStats {
+  /** Visible triangles written (top, walls and skirts). */
+  tris: number;
+  skirts: number;
+  /** Largest deviation of the written top from heightAt at its triangles' centroids (m). */
+  maxDev: number;
+}
+
+interface OpenEdge {
+  u: SV;
+  v: SV;
+  nx: number;
+  nz: number;
+  mat: MaterialId;
+  /** Made by the cut (a winning surface lies beyond), not an edge of the sheet's own outline. */
+  cut?: boolean;
+}
+
+/**
+ * Lays a sheet on the ground and writes it into `b`:
+ *  1. refine: with the terrain's lattice (v2), an edge is split at the crossing of a lattice line
+ *     (x, z or x + z constant: where the ground folds) where the ground leaves the edge by most, while
+ *     that is more than `tol`; a triangle whose edges fit is split at the lattice point inside it that
+ *     is furthest off. Without it, an edge is halved while its midpoint is off and a triangle split at
+ *     its centroid. The rule reads only the edge, so the two triangles of an edge (and a wall on it)
+ *     split it alike: no cracks.
+ *  2. cut: what lies inside a surface that wins the place is cut away exactly (the convex pieces of
+ *     `cut`); an edge is open where nothing of this sheet lies beyond it.
+ *  3. skirts: every open edge (not a seam) standing more than `skirtMin` over the ground gets a
+ *     vertical face down to the lowest ground under it minus SKIRT_DEPTH, in its material, without a
+ *     collider; with `rim`, open edges are laid at that height instead (ground cover).
+ *  4. the top, the walls and the skirts are written by material; the collider (top and walls) is one
+ *     welded (indexed) trimesh.
+ */
+export function emitSheet(b: MeshBuilder, sheet: Sheet, o: ConformOpts = {}): SheetStats {
+  const t0 = performance.now();
+  const H = sheet.H;
+  const tol = o.tol ?? CONFORM_TOL;
+  const grid = o.ground ?? null;
+  // Plan points get small integer ids (exact x, z), and an edge the pair of its ends' ids: no strings.
+  const xzIds = new Map<number, Map<number, number>>();
+  let nextXz = 0;
+  const xzId = (v: SV): number => {
+    let m = xzIds.get(v.x);
+    if (!m) xzIds.set(v.x, (m = new Map()));
+    let id = m.get(v.z);
+    if (id === undefined) m.set(v.z, (id = nextXz++));
+    return id;
+  };
+  /** The key of the plan edge a–c (either way round). */
+  const ek = (a: SV, c: SV): number => {
+    const i = xzId(a), j = xzId(c);
+    return i < j ? i * 4194304 + j : j * 4194304 + i;
+  };
+  const splitMemo = new Map<number, number>();
+  const splitVerts = new Map<number, SV[]>();
+  /** Where (0..1 from the canonical first end) the edge a–c is split, or −1. */
+  const splitT = (a: SV, c: SV): number => {
+    const [p, q] = first(a, c) ? [a, c] : [c, a];
+    const key = ek(p, q);
+    const m = splitMemo.get(key);
+    if (m !== undefined) return m;
+    const dx = q.x - p.x, dz = q.z - p.z;
+    const L = Math.hypot(dx, dz);
+    let best = -1;
+    if (L >= MIN_EDGE) {
+      const lo = MIN_PIECE / L, hi = 1 - lo;
+      let worst = tol;
+      const test = (t: number) => {
+        if (t <= lo || t >= hi) return;
+        const d = Math.abs(H(p.x + dx * t, p.z + dz * t) - (p.h + (q.h - p.h) * t));
+        if (d > worst) {
+          worst = d;
+          best = t;
+        }
+      };
+      if (grid) {
+        const u0 = (p.x - grid.x0) / grid.s, v0 = (p.z - grid.z0) / grid.s, du = dx / grid.s, dv = dz / grid.s;
+        crossings(u0, du, test);
+        crossings(v0, dv, test);
+        crossings(u0 + v0, du + dv, test);
+      } else test(0.5);
+    }
+    splitMemo.set(key, best);
+    return best;
+  };
+  /** The vertex splitting a–c (same plan point for every edge on that line, its own height above the ground). */
+  const splitV = (a: SV, c: SV): SV => {
+    const t = splitT(a, c);
+    const [p, q] = first(a, c) ? [a, c] : [c, a];
+    const key = ek(p, q);
+    let l = splitVerts.get(key);
+    if (!l) splitVerts.set(key, (l = []));
+    const off = p.off + (q.off - p.off) * t;
+    let v = l.find((u) => u.off === off);
+    if (!v) l.push((v = sheet.v(p.x + (q.x - p.x) * t, p.z + (q.z - p.z) * t, off)));
+    return v;
+  };
+  /** The point inside a triangle (whose edges fit) where the ground is furthest off its plane, beyond tol; or null. */
+  const interior = (a: SV, bb: SV, c: SV): SV | null => {
+    const det = (bb.z - c.z) * (a.x - c.x) + (c.x - bb.x) * (a.z - c.z);
+    if (Math.abs(det) < 1e-9) return null;
+    if (grid) {
+      const s = grid.s;
+      const i0 = Math.ceil((Math.min(a.x, bb.x, c.x) - grid.x0) / s), i1 = Math.floor((Math.max(a.x, bb.x, c.x) - grid.x0) / s);
+      const j0 = Math.ceil((Math.min(a.z, bb.z, c.z) - grid.z0) / s), j1 = Math.floor((Math.max(a.z, bb.z, c.z) - grid.z0) / s);
+      let worst = tol, best: SV | null = null;
+      for (let j = j0; j <= j1; j++) {
+        const z = grid.z0 + j * s;
+        for (let i = i0; i <= i1; i++) {
+          const x = grid.x0 + i * s;
+          const l1 = ((bb.z - c.z) * (x - c.x) + (c.x - bb.x) * (z - c.z)) / det;
+          const l2 = ((c.z - a.z) * (x - c.x) + (a.x - c.x) * (z - c.z)) / det;
+          const l3 = 1 - l1 - l2;
+          if (l1 < 1e-3 || l2 < 1e-3 || l3 < 1e-3) continue;
+          const h = H(x, z);
+          const d = Math.abs(h - (l1 * a.h + l2 * bb.h + l3 * c.h));
+          if (d > worst) {
+            worst = d;
+            best = { x, z, off: l1 * a.off + l2 * bb.off + l3 * c.off, h };
+          }
+        }
+      }
+      return best;
+    }
+    const Lmax = Math.max(Math.hypot(bb.x - a.x, bb.z - a.z), Math.hypot(c.x - bb.x, c.z - bb.z), Math.hypot(a.x - c.x, a.z - c.z));
+    if (Lmax <= 2 * MIN_EDGE) return null;
+    const cx = (a.x + bb.x + c.x) / 3, cz = (a.z + bb.z + c.z) / 3;
+    const hc = H(cx, cz);
+    if (Math.abs(hc - (a.h + bb.h + c.h) / 3) <= tol) return null;
+    return { x: cx, z: cz, off: (a.off + bb.off + c.off) / 3, h: hc };
+  };
+
+  // ---- 1. refine
+  const out: STri[] = [];
+  /** Slivers under 1 mm tall in plan (a split point on or by the opposite edge): they draw nothing and are not split, but they still join their edges. */
+  const flat: STri[] = [];
+  const refine = (a: SV, bb: SV, c: SV, mat: MaterialId, col: boolean, depth: number): void => {
+    const cr = (bb.x - a.x) * (c.z - a.z) - (bb.z - a.z) * (c.x - a.x);
+    const l2 = Math.max((bb.x - a.x) ** 2 + (bb.z - a.z) ** 2, (c.x - bb.x) ** 2 + (c.z - bb.z) ** 2, (a.x - c.x) ** 2 + (a.z - c.z) ** 2);
+    if (cr * cr < 1e-6 * l2) {
+      flat.push({ a, b: bb, c, mat, col });
+      return;
+    }
+    if (depth >= MAX_DEPTH) {
+      out.push({ a, b: bb, c, mat, col });
+      return;
+    }
+    const d = depth + 1;
+    // On the lattice the folds meet at its points: a triangle holding one that is off gets it as a
+    // vertex first (splitting its edges near a point only ever closes in on it).
+    if (grid) {
+      const m = interior(a, bb, c);
+      if (m) {
+        refine(a, bb, m, mat, col, d);
+        refine(bb, c, m, mat, col, d);
+        refine(c, a, m, mat, col, d);
+        return;
+      }
+    }
+    const s0 = splitT(a, bb) >= 0, s1 = splitT(bb, c) >= 0, s2 = splitT(c, a) >= 0;
+    const n = (s0 ? 1 : 0) + (s1 ? 1 : 0) + (s2 ? 1 : 0);
+    if (n === 0) {
+      const m = grid ? null : interior(a, bb, c);
+      if (m) {
+        refine(a, bb, m, mat, col, d);
+        refine(bb, c, m, mat, col, d);
+        refine(c, a, m, mat, col, d);
+      } else out.push({ a, b: bb, c, mat, col });
+      return;
+    }
+    // Rotate so the split edges come first: (A, B) always, and (B, C) when two are split.
+    let A = a, B = bb, C = c, S0 = s0, S1 = s1, S2 = s2;
+    for (let r = 0; r < 3 && !(S0 && (n !== 2 || S1)); r++) {
+      [A, B, C] = [B, C, A];
+      [S0, S1, S2] = [S1, S2, S0];
+    }
+    if (n === 3) {
+      const mab = splitV(A, B), mbc = splitV(B, C), mca = splitV(C, A);
+      refine(A, mab, mca, mat, col, d);
+      refine(mab, B, mbc, mat, col, d);
+      refine(mca, mbc, C, mat, col, d);
+      refine(mab, mbc, mca, mat, col, d);
+    } else if (n === 2) {
+      const mab = splitV(A, B), mbc = splitV(B, C);
+      refine(mab, B, mbc, mat, col, d);
+      if (Math.hypot(mbc.x - A.x, mbc.z - A.z) <= Math.hypot(C.x - mab.x, C.z - mab.z)) {
+        refine(A, mab, mbc, mat, col, d);
+        refine(A, mbc, C, mat, col, d);
+      } else {
+        refine(A, mab, C, mat, col, d);
+        refine(mab, mbc, C, mat, col, d);
+      }
+    } else {
+      const mab = splitV(A, B);
+      refine(A, mab, C, mat, col, d);
+      refine(mab, B, C, mat, col, d);
+    }
+  };
+  for (const t of sheet.tris) {
+    // Skip triangles with no area in plan (a vertical strip): walls carry those.
+    if (Math.abs((t.b.x - t.a.x) * (t.c.z - t.a.z) - (t.b.z - t.a.z) * (t.c.x - t.a.x)) < 1e-9) continue;
+    refine(t.a, t.b, t.c, t.mat, t.col, 0);
+  }
+  const walls: SWall[] = [];
+  const refineWall = (w: SWall, depth: number): void => {
+    const t = depth < MAX_DEPTH ? splitT(w.p, w.q) : -1;
+    if (t < 0) {
+      walls.push(w);
+      return;
+    }
+    const m = splitV(w.p, w.q);
+    const tw = first(w.p, w.q) ? t : 1 - t;
+    const tm = w.tp + (w.tq - w.tp) * tw;
+    refineWall({ ...w, q: m, tq: tm }, depth + 1);
+    refineWall({ ...w, p: m, tp: tm }, depth + 1);
+  };
+  for (const w of sheet.walls) refineWall(w, 0);
+
+  // ---- 2. cut away what another surface covers; find the open edges
+  const edgeUse = new Map<number, number>();
+  for (const t of out.concat(flat)) {
+    for (const k of [ek(t.a, t.b), ek(t.b, t.c), ek(t.c, t.a)]) edgeUse.set(k, (edgeUse.get(k) ?? 0) + 1);
+  }
+  const seam = o.seam ?? null;
+  const cut = o.cut ?? null;
+  const open: OpenEdge[] = [];
+  const outward = (u: SV, v: SV, cx: number, cz: number): [number, number] => {
+    let nx = v.z - u.z, nz = -(v.x - u.x);
+    const l = Math.hypot(nx, nz) || 1;
+    nx /= l;
+    nz /= l;
+    return nx * (cx - u.x) + nz * (cz - u.z) > 0 ? [-nx, -nz] : [nx, nz];
+  };
+  let kept: STri[] = out;
+  if (cut) kept = [];
+  for (const t of out) {
+    const hit = cut ? cut(Math.min(t.a.x, t.b.x, t.c.x) - 0.01, Math.min(t.a.z, t.b.z, t.c.z) - 0.01, Math.max(t.a.x, t.b.x, t.c.x) + 0.01, Math.max(t.a.z, t.b.z, t.c.z) + 0.01) : null;
+    if (!hit || !hit.length) {
+      if (cut) kept.push(t);
+      const cx = (t.a.x + t.b.x + t.c.x) / 3, cz = (t.a.z + t.b.z + t.c.z) / 3;
+      for (const [u, v] of [[t.a, t.b], [t.b, t.c], [t.c, t.a]] as const) {
+        if (edgeUse.get(ek(u, v)) !== 1 || seam?.(u, v)) continue;
+        const [nx, nz] = outward(u, v, cx, cz);
+        open.push({ u, v, nx, nz, mat: t.mat });
+      }
+      continue;
+    }
+    let pieces: SV[][] = [[t.a, t.b, t.c]];
+    for (const c of hit) {
+      const next: SV[][] = [];
+      for (const P of pieces) subtractConv(P, c, next);
+      pieces = next;
+      if (!pieces.length) break;
+    }
+    const sides = [[t.a, t.b], [t.b, t.c], [t.c, t.a]] as const;
+    for (const P of pieces) {
+      if (polyArea(P) < 1e-5) continue;
+      for (let k = 1; k + 1 < P.length; k++) kept.push({ a: P[0], b: P[k], c: P[k + 1], mat: t.mat, col: t.col });
+      let cx = 0, cz = 0;
+      for (const v of P) {
+        cx += v.x / P.length;
+        cz += v.z / P.length;
+      }
+      for (let k = 0; k < P.length; k++) {
+        const u = P[k], v = P[(k + 1) % P.length];
+        if (Math.hypot(v.x - u.x, v.z - u.z) < 1e-6) continue;
+        const [nx, nz] = outward(u, v, cx, cz);
+        const side = sides.find(([p, q]) => onLine(u, p, q, 1e-4) && onLine(v, p, q, 1e-4));
+        let isOpen: boolean;
+        if (side && seam?.(side[0], side[1])) isOpen = false;
+        else if (side && edgeUse.get(ek(side[0], side[1])) === 1) isOpen = true;
+        else {
+          // Beyond this edge: another piece of the sheet, or the place a winning surface took.
+          const px = (u.x + v.x) / 2 + nx * 0.003, pz = (u.z + v.z) / 2 + nz * 0.003;
+          isOpen = hit.some((c) => inConv(c, px, pz));
+        }
+        if (isOpen) open.push({ u, v, nx, nz, mat: t.mat, cut: !(side && edgeUse.get(ek(side[0], side[1])) === 1) });
+      }
+    }
+  }
+  let keptWalls = walls;
+  if (cut) {
+    keptWalls = [];
+    for (const w of walls) {
+      const hit = cut(Math.min(w.p.x, w.q.x) - 0.01, Math.min(w.p.z, w.q.z) - 0.01, Math.max(w.p.x, w.q.x) + 0.01, Math.max(w.p.z, w.q.z) + 0.01);
+      if (!hit.length) {
+        keptWalls.push(w);
+        continue;
+      }
+      // The stretches of p → q outside every piece (Cyrus–Beck per piece).
+      let spans: [number, number][] = [[0, 1]];
+      const dx = w.q.x - w.p.x, dz = w.q.z - w.p.z;
+      for (const c of hit) {
+        const n = convNormals(c);
+        let e0 = 0, e1 = 1;
+        for (let i = 0; i < c.pts.length && e0 < e1; i++) {
+          const nx = n[3 * i], nz = n[3 * i + 1];
+          if (nx === 0 && nz === 0) continue;
+          const s0 = nx * w.p.x + nz * w.p.z - n[3 * i + 2], ds = nx * dx + nz * dz;
+          if (Math.abs(ds) < 1e-12) {
+            if (s0 > 0) e1 = -1;
+            continue;
+          }
+          const t = -s0 / ds;
+          if (ds < 0) e0 = Math.max(e0, t);
+          else e1 = Math.min(e1, t);
+        }
+        if (e1 - e0 < 1e-6) continue;
+        const next: [number, number][] = [];
+        for (const [a0, a1] of spans) {
+          if (e1 <= a0 || e0 >= a1) next.push([a0, a1]);
+          else {
+            if (e0 > a0) next.push([a0, e0]);
+            if (e1 < a1) next.push([e1, a1]);
+          }
+        }
+        spans = next;
+      }
+      for (const [a0, a1] of spans) {
+        if (a1 - a0 < 1e-4) continue;
+        keptWalls.push({ ...w, p: lerpSV(w.p, w.q, a0), q: lerpSV(w.p, w.q, a1), tp: w.tp + (w.tq - w.tp) * a0, tq: w.tp + (w.tq - w.tp) * a1 });
+      }
+    }
+  }
+
+  // A point the cut makes on an edge is made once per triangle: share one vertex per place (and
+  // height above the ground), so whatever moves it (an edge laid to the drawn ground) moves it for all.
+  // (Only the cut makes such points: the refined vertices are shared already.)
+  const refinedV = new Set<SV>();
+  if (cut) {
+    for (const t of out) refinedV.add(t.a).add(t.b).add(t.c);
+    for (const w of walls) refinedV.add(w.p).add(w.q);
+    const canon = new Map<number, Map<number, SV[]>>();
+    const one = (v: SV): SV => {
+      if (refinedV.has(v)) return v;
+      const kx = Math.round(v.x * 1e5), kz = Math.round(v.z * 1e5);
+      let m = canon.get(kx);
+      if (!m) canon.set(kx, (m = new Map()));
+      let l = m.get(kz);
+      if (!l) m.set(kz, (l = []));
+      const c = l.find((u) => Math.abs(u.off - v.off) < 1e-5);
+      if (c) return c;
+      l.push(v);
+      return v;
+    };
+    for (const t of kept) {
+      t.a = one(t.a);
+      t.b = one(t.b);
+      t.c = one(t.c);
+    }
+    for (const e of open) {
+      e.u = one(e.u);
+      e.v = one(e.v);
+    }
+    for (const w of keptWalls) {
+      w.p = one(w.p);
+      w.q = one(w.q);
+    }
+  }
+  // The cut splits a piece along the whole line of a winning surface's edge, so it can leave a
+  // vertex on an edge its neighbour (or a kerb wall) has whole: a T. Split the neighbour (as a fan
+  // round its centre) and the wall there too, so every edge meets vertex to vertex.
+  const C = 0.5;
+  const cellKey = (i: number, j: number) => (i + 1048576) * 2097152 + (j + 1048576);
+  const vgrid = new Map<number, SV[]>();
+  if (cut) {
+    for (const t of kept)
+      for (const v of [t.a, t.b, t.c]) {
+        if (refinedV.has(v)) continue;
+        const k = cellKey(Math.floor(v.x / C), Math.floor(v.z / C));
+        const l = vgrid.get(k);
+        if (!l) vgrid.set(k, [v]);
+        else if (!l.includes(v)) l.push(v);
+      }
+    /** Vertices strictly inside the plan segment p → q, ordered from p. */
+    const onSeg = (p: SV, q: SV): SV[] => {
+      const dx = q.x - p.x, dz = q.z - p.z, L2 = dx * dx + dz * dz;
+      if (L2 < 1e-10) return [];
+      const L = Math.sqrt(L2);
+      const found: { t: number; v: SV }[] = [];
+      const i0 = Math.floor(Math.min(p.x, q.x) / C), i1 = Math.floor(Math.max(p.x, q.x) / C);
+      const j0 = Math.floor(Math.min(p.z, q.z) / C), j1 = Math.floor(Math.max(p.z, q.z) / C);
+      for (let j = j0; j <= j1; j++)
+        for (let i = i0; i <= i1; i++)
+          for (const v of vgrid.get(cellKey(i, j)) ?? []) {
+            if (v === p || v === q) continue;
+            const t = ((v.x - p.x) * dx + (v.z - p.z) * dz) / L2;
+            if (t * L <= 1e-4 || (1 - t) * L <= 1e-4) continue;
+            if (Math.abs((v.x - p.x) * dz - (v.z - p.z) * dx) / L > 1e-4) continue;
+            if (!found.some((f) => Math.abs(f.t - t) * L < 1e-5)) found.push({ t, v });
+          }
+      return found.sort((a, b) => a.t - b.t).map((f) => f.v);
+    };
+    const healedTris: STri[] = [];
+    for (const t of vgrid.size ? kept : []) {
+      const ring: SV[] = [];
+      let extra = 0;
+      for (const [p, q] of [[t.a, t.b], [t.b, t.c], [t.c, t.a]] as const) {
+        ring.push(p);
+        const mids = onSeg(p, q);
+        extra += mids.length;
+        ring.push(...mids);
+      }
+      if (!extra) {
+        healedTris.push(t);
+        continue;
+      }
+      const g: SV = { x: (t.a.x + t.b.x + t.c.x) / 3, z: (t.a.z + t.b.z + t.c.z) / 3, off: (t.a.off + t.b.off + t.c.off) / 3, h: (t.a.h + t.b.h + t.c.h) / 3 };
+      for (let k = 0; k < ring.length; k++) healedTris.push({ a: g, b: ring[k], c: ring[(k + 1) % ring.length], mat: t.mat, col: t.col });
+    }
+    if (vgrid.size) kept = healedTris;
+    // An open edge split so gets its skirt piece by piece.
+    const split: OpenEdge[] = [];
+    for (const e of vgrid.size ? open : []) {
+      const mids = onSeg(e.u, e.v);
+      if (!mids.length) {
+        split.push(e);
+        continue;
+      }
+      const chain = [e.u, ...mids, e.v];
+      for (let k = 0; k + 1 < chain.length; k++) split.push({ ...e, u: chain[k], v: chain[k + 1] });
+    }
+    if (vgrid.size) {
+      open.length = 0;
+      open.push(...split);
+    }
+  }
+  if (cut && keptWalls.length && vgrid.size) {
+    const healed: SWall[] = [];
+    for (const w of keptWalls) {
+      const dx = w.q.x - w.p.x, dz = w.q.z - w.p.z, L2 = dx * dx + dz * dz;
+      if (L2 < 1e-10) {
+        healed.push(w);
+        continue;
+      }
+      const ts: number[] = [];
+      const i0 = Math.floor(Math.min(w.p.x, w.q.x) / C), i1 = Math.floor(Math.max(w.p.x, w.q.x) / C);
+      const j0 = Math.floor(Math.min(w.p.z, w.q.z) / C), j1 = Math.floor(Math.max(w.p.z, w.q.z) / C);
+      for (let j = j0; j <= j1; j++)
+        for (let i = i0; i <= i1; i++)
+          for (const v of vgrid.get(cellKey(i, j)) ?? []) {
+            const t = ((v.x - w.p.x) * dx + (v.z - w.p.z) * dz) / L2;
+            if (t <= 1e-6 || t >= 1 - 1e-6) continue;
+            if (Math.abs((v.x - w.p.x) * dz - (v.z - w.p.z) * dx) / Math.sqrt(L2) > 1e-4) continue;
+            if (!ts.some((u) => Math.abs(u - t) < 1e-7)) ts.push(t);
+          }
+      if (!ts.length) {
+        healed.push(w);
+        continue;
+      }
+      ts.sort((a, b) => a - b);
+      let prev = 0;
+      for (const t of [...ts, 1]) {
+        healed.push({ ...w, p: prev === 0 ? w.p : lerpSV(w.p, w.q, prev), q: t === 1 ? w.q : lerpSV(w.p, w.q, t), tp: w.tp + (w.tq - w.tp) * prev, tq: w.tp + (w.tq - w.tp) * t });
+        prev = t;
+      }
+    }
+    keptWalls = healed;
+  }
+
+  // ---- 3. write: top (facing up), walls (facing their way), skirts on the open edges
+  const byMat = new Map<MaterialId, number[]>();
+  const arr = (m: MaterialId) => {
+    let a = byMat.get(m);
+    if (!a) byMat.set(m, (a = []));
+    return a;
+  };
+  // Open edges that meet the ground meet it as drawn: the rim (ground cover), or an edge laid at most
+  // APRON_FLUSH over the ground lowered by the drawn terrain's drop there.
+  const rim = o.rim ?? null;
+  const drop = o.drop ?? null;
+  const edgeOff = new Map<SV, number>();
+  for (const e of open) {
+    // (A cut edge meets the surface that won the place, not the ground: it keeps its height.)
+    if (rim === null && e.cut) continue;
+    for (const v of [e.u, e.v]) {
+      if (edgeOff.has(v)) continue;
+      if (rim !== null) edgeOff.set(v, rim - (drop ? drop(v.x, v.z) : 0));
+      else if (drop && v.off <= APRON_FLUSH + 1e-4) edgeOff.set(v, v.off - drop(v.x, v.z));
+    }
+  }
+  const Y = (v: SV) => v.h + (edgeOff.get(v) ?? v.off);
+  const colVerts: number[] = [];
+  const colIdx: number[] = [];
+  const colKey = new Map<number, Map<number, number>>();
+  const cv = (x: number, y: number, z: number) => {
+    const kxz = Math.round(x * 1000) * 4194304 + Math.round(z * 1000), ky = Math.round(y * 1000);
+    let m = colKey.get(kxz);
+    if (!m) colKey.set(kxz, (m = new Map()));
+    let i = m.get(ky);
+    if (i === undefined) {
+      m.set(ky, (i = colVerts.length / 3));
+      colVerts.push(x, y, z);
+    }
+    return i;
+  };
+  const colTri = (i0: number, i1: number, i2: number) => {
+    if (i0 !== i1 && i1 !== i2 && i2 !== i0) colIdx.push(i0, i1, i2);
+  };
+  const collide = o.collide ?? true;
+  let tris = 0, skirts = 0, maxDev = 0;
+  for (const t of kept) {
+    const ya = Y(t.a), yb = Y(t.b), yc = Y(t.c);
+    const ny = (t.c.x - t.a.x) * (t.b.z - t.a.z) - (t.b.x - t.a.x) * (t.c.z - t.a.z);
+    const [p1, p2] = ny >= 0 ? [t.b, t.c] : [t.c, t.b];
+    const y1 = ny >= 0 ? yb : yc, y2 = ny >= 0 ? yc : yb;
+    arr(t.mat).push(t.a.x, ya, t.a.z, p1.x, y1, p1.z, p2.x, y2, p2.z);
+    tris++;
+    if (collide && t.col) colTri(cv(t.a.x, ya, t.a.z), cv(p1.x, y1, p1.z), cv(p2.x, y2, p2.z));
+    const cx = (t.a.x + t.b.x + t.c.x) / 3, cz = (t.a.z + t.b.z + t.c.z) / 3;
+    maxDev = Math.max(maxDev, Math.abs(H(cx, cz) - (t.a.h + t.b.h + t.c.h) / 3));
+    if (conformStats.check) {
+      for (const [u, v] of [[t.a, t.b], [t.b, t.c], [t.c, t.a]] as const) {
+        const dv = Math.abs(H((u.x + v.x) / 2, (u.z + v.z) / 2) - (u.h + v.h) / 2);
+        if (dv > tol + 5e-4) {
+          conformStats.over++;
+          conformStats.overLen += Math.hypot(u.x - v.x, u.z - v.z);
+        }
+        maxDev = Math.max(maxDev, dv);
+      }
+    }
+  }
+  if (o.skirts !== false) {
+    const skirtMin = o.skirtMin ?? SKIRT_MIN;
+    /** The ground as drawn. */
+    const G = drop ? (x: number, z: number) => H(x, z) - drop(x, z) : H;
+    for (const e of open) {
+      const { u, v } = e;
+      const yu = Y(u), yv = Y(v);
+      const mx = (u.x + v.x) / 2, mz = (u.z + v.z) / 2;
+      const hu = G(u.x, u.z), hv = G(v.x, v.z), hm = G(mx, mz);
+      if (Math.max(yu - hu, yv - hv, (yu + yv) / 2 - hm) <= skirtMin) continue;
+      const g = Math.min(hu, hv, hm) - SKIRT_DEPTH;
+      if (yu <= g && yv <= g) continue;
+      quadFacing(arr(e.mat), u.x, u.z, v.x, v.z, g, g, yu, yv, e.nx, e.nz);
+      skirts += 2;
+    }
+  }
+  for (const w of keptWalls) {
+    const yp = Y(w.p), yq = Y(w.q), tp = w.p.h + w.tp, tq = w.q.h + w.tq;
+    quadFacing(arr(w.mat), w.p.x, w.p.z, w.q.x, w.q.z, yp, yq, tp, tq, w.nx, w.nz);
+    tris += 2;
+    if (collide && w.col) {
+      const a = cv(w.p.x, yp, w.p.z), bq = cv(w.q.x, yq, w.q.z), c = cv(w.q.x, tq, w.q.z), dd = cv(w.p.x, tp, w.p.z);
+      colTri(a, bq, c);
+      colTri(a, c, dd);
+    }
+  }
+  for (const [mat, a] of byMat) addTris(b, mat, a);
+  if (colIdx.length) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(colVerts, 3));
+    g.setIndex(colIdx);
+    b.collider({ kind: 'trimesh', geometry: g });
+  }
+  conformStats.sheets++;
+  conformStats.input += sheet.tris.length;
+  conformStats.refined += out.length;
+  conformStats.kept += kept.length;
+  conformStats.skirts += skirts;
+  conformStats.walls += keptWalls.length;
+  conformStats.ms += performance.now() - t0;
+  conformStats.maxDev = Math.max(conformStats.maxDev, maxDev);
+  return { tris: tris + skirts, skirts, maxDev };
+}
+
+/** A vertical quad over the plan segment p → q, from (bp, bq) up to (tp, tq), facing (nx, nz). */
+function quadFacing(arr: number[], px: number, pz: number, qx: number, qz: number, bp: number, bq: number, tp: number, tq: number, nx: number, nz: number) {
+  // (p_b, q_b, q_t) faces left of p → q seen from above when the cross product's plan part points that way.
+  const ex = qx - px, ez = qz - pz;
+  // Normal of (p_b → q_b) × (p_b → q_t) in plan: (ez·Δy, −ex·Δy)-ish; test with the right normal (ez, −ex).
+  const right = ez * nx - ex * nz >= 0;
+  if (right) arr.push(px, bp, pz, qx, tq, qz, qx, bq, qz, px, bp, pz, px, tp, pz, qx, tq, qz);
+  else arr.push(px, bp, pz, qx, bq, qz, qx, tq, qz, px, bp, pz, qx, tq, qz, px, tp, pz);
+}
+
+/**
+ * A paved polygon (convex: the city's junction squares and piazzas) laid on the ground as a sheet:
+ * a fan from its centre, a walkable bevel out to the ground on the edges that meet it (not where
+ * another paved surface goes on), skirts under the open edges, cut where a surface that wins lies.
+ */
+export interface ConformPlazaOpts extends ConformOpts {
+  material?: MaterialId;
+  lift?: number;
+  /** Width of the bevel (default 0.45 m); its outer edge stands APRON_FLUSH above the ground. */
+  bevel?: number;
+  /** The bevel joins the collider (default true). */
+  bevelCollide?: boolean;
+  /** Other paving beside an edge (no bevel there). */
+  paved?: ((x: number, z: number) => boolean) | null;
+}
+
+/** A plaza's rim is tested for ground beyond it (and bevelled) in stretches of at most this (m). */
+const BEVEL_STEP = 0.75;
+
+export function buildConformPlaza(b: MeshBuilder, poly: Polygon, heightAt: HeightFn, o: ConformPlazaOpts = {}): SheetStats {
+  const mat = o.material ?? 'paving_travertine';
+  const lift = o.lift ?? 0.07;
+  const w = o.bevel ?? 0.45;
+  const sheet = new Sheet(heightAt);
+  const n = poly.length;
+  let cx = 0, cz = 0;
+  for (const p of poly) {
+    cx += p[0] / n;
+    cz += p[1] / n;
+  }
+  const c = sheet.v(cx, cz, lift);
+  // Bevels where the ground lies beyond the rim, tested in stretches of at most BEVEL_STEP (one test
+  // per edge left a junction's edge raw where a road took its middle): an edge is split only where
+  // that changes along it, into runs with a bevel and runs without.
+  const open = (x: number, z: number) => !(o.paved?.(x, z) || inCut(o.cut, x, z));
+  const ring: SV[] = [];
+  const edgeOf: number[] = [];
+  const bevelled: boolean[] = [];
+  const nrm: [number, number][] = [];
+  for (let i = 0; i < n; i++) {
+    const a = poly[i], e = poly[(i + 1) % n];
+    const L = Math.hypot(e[0] - a[0], e[1] - a[1]);
+    let nx = L > 1e-9 ? (e[1] - a[1]) / L : 0, nz = L > 1e-9 ? -(e[0] - a[0]) / L : 0;
+    if (nx * (cx - a[0]) + nz * (cz - a[1]) > 0) {
+      nx = -nx;
+      nz = -nz;
+    }
+    nrm.push([nx, nz]);
+    if (L < 1e-6) continue;
+    const m = Math.max(1, Math.ceil(L / BEVEL_STEP));
+    const d = w * 0.5 + 0.1;
+    let prev: boolean | null = null;
+    for (let j = 0; j < m; j++) {
+      const t = (j + 0.5) / m;
+      const op = open(a[0] + (e[0] - a[0]) * t + nx * d, a[1] + (e[1] - a[1]) * t + nz * d);
+      if (op === prev) continue;
+      prev = op;
+      ring.push(sheet.v(a[0] + ((e[0] - a[0]) * j) / m, a[1] + ((e[1] - a[1]) * j) / m, lift));
+      edgeOf.push(i);
+      bevelled.push(op);
+    }
+  }
+  const N = ring.length;
+  for (let k = 0; k < N; k++) sheet.tri(c, ring[k], ring[(k + 1) % N], mat);
+  const col = o.bevelCollide ?? true;
+  const outerOf = new Map<string, SV>();
+  const outer = (k: number, i: number) => {
+    const key = `${k % N}:${i}`;
+    let v = outerOf.get(key);
+    if (!v) outerOf.set(key, (v = sheet.v(ring[k % N].x + nrm[i][0] * w, ring[k % N].z + nrm[i][1] * w, APRON_FLUSH)));
+    return v;
+  };
+  for (let k = 0; k < N; k++) {
+    if (!bevelled[k]) continue;
+    const a = ring[k], e = ring[(k + 1) % N], i = edgeOf[k];
+    const a2 = outer(k, i), e2 = outer(k + 1, i);
+    sheet.tri(a, a2, e2, mat, col);
+    sheet.tri(a, e2, e, mat, col);
+  }
+  // Wedges between two bevels at a corner.
+  for (let k = 0; k < N; k++) {
+    const pk = (k + N - 1) % N;
+    if (edgeOf[pk] === edgeOf[k] || !bevelled[pk] || !bevelled[k]) continue;
+    sheet.tri(ring[k], outer(k, edgeOf[pk]), outer(k, edgeOf[k]), mat, col);
+  }
+  return emitSheet(b, sheet, o);
 }
 
 // ------------------------------------------------------------------ plazas
@@ -428,8 +1527,13 @@ export function buildStairs(b: MeshBuilder, a: Vec2, c: Vec2, width: number, hei
         const cx = a[0] + dx * mid + ox, cz = a[1] + dz * mid + oz;
         b.add(box, pm, new THREE.Matrix4().compose(new THREE.Vector3(cx, (top + base) / 2, cz), q, new THREE.Vector3(0.3, top - base, run / n + 0.01)));
       }
-      const cx = a[0] + dx / 2 + ox, cz = a[1] + dz / 2 + oz;
-      b.collider({ kind: 'box', center: new THREE.Vector3(cx, (ya + yc) / 2 + 0.5, cz), half: new THREE.Vector3(0.15, Math.abs(yc - ya) / 2 + 1, run / 2), rotation: q.clone() });
+      // Pitched with the flight, its top 0.9 m over the treads like the drawn parapet (an upright box
+      // reached the high end's top at the low end too: an invisible wall).
+      const pitch = Math.atan2(yc - ya, run);
+      const pq = q.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -pitch));
+      const pu = new THREE.Vector3(0, 1, 0).applyQuaternion(pq);
+      const pc = new THREE.Vector3(a[0] + dx / 2 + ox, (ya + yc) / 2, a[1] + dz / 2 + oz).addScaledVector(pu, 0.9 * Math.cos(pitch) - 0.65);
+      b.collider({ kind: 'box', center: pc, half: new THREE.Vector3(0.15, 0.65, Math.hypot(run, yc - ya) / 2), rotation: pq });
     }
   }
   // Ramp collider whose top passes through the step noses.

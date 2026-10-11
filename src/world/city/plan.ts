@@ -19,7 +19,8 @@
 import { Rng, hash2 } from '../../core/Rng';
 import type * as Atlas from '../../data/atlas';
 import { WORLD_SCALE } from '../coords';
-import { footprintPolygon, type P2 } from '../terrain/heightmap';
+import { footprintPolygon, segDist2, signedDistance, type P2, type TerrainQuay, type TerrainRiver } from '../terrain/heightmap';
+import { chain, footOn, resolveQuays, type ChainedLine, type ResolvedQuay } from '../terrain/riverbanks';
 import { CORRIDORS, DISTRICT_LANDMARKS, EXTRA_ROADS, OPEN_SPACES, PINNED_OPEN, QUARTERS, SIGHTLINE_LANDMARKS, SIGHTLINE_RADIUS, SKIPPED_AQUEDUCTS, WILD_LANDMARKS, type Quarter } from './data';
 import { SIDEWALK } from './datum';
 import { auditRoadEnds, probeEnd } from './audit';
@@ -38,6 +39,25 @@ export type PlanAtlas = Pick<typeof Atlas, 'ROADS' | 'WALLS' | 'GATES' | 'AQUEDU
 export interface HeightSource {
   heightAt(x: number, z: number): number;
   waterLevelY: number;
+  /** A Heightmap's lattice and profile (terrain v2: `heightAt` is linear on the b–c triangles of this lattice). */
+  minX?: number;
+  minZ?: number;
+  spacing?: number;
+  profile?: string;
+  /** A Heightmap's grid heights (row-major by z) and size. */
+  heights?: ArrayLike<number>;
+  nx?: number;
+  nz?: number;
+  /** A Heightmap's features; their `retaining` runs (terrain v2, GROUND) are read when present. */
+  features?: object | null;
+}
+
+/** A stretch of atlas road edge over ground steeper than 38° (heightmap.ts, terrain v2), game m: the streets build a retaining wall along it. */
+export interface RetainingRun {
+  road: string;
+  /** 1 = right of the road's direction of travel, −1 = left. */
+  side: 1 | -1;
+  points: readonly { x: number; z: number; y: number; ground: number; grade: number }[];
 }
 
 export interface Bounds {
@@ -210,6 +230,14 @@ export interface CityPlan {
   corridor(x: number, z: number): boolean;
   /** Atlas roads that ran through a solid footprint and were bent round it or cut at it (detour.ts), by road id. */
   roadDetours: { road: string; detour: Detour }[];
+  /** The terrain's lattice when `heightAt` is linear on its b–c triangles (terrain v2), else null: the streets conform to it exactly. */
+  ground?: { x0: number; z0: number; s: number } | null;
+  /** Road edges that need a retaining wall (terrain v2; empty under v1). */
+  retaining?: readonly RetainingRun[];
+  /** Where a minor street was cut short at ground too steep for it (trimSteepStreets): its new ends. */
+  cliffEnds?: Pt[];
+  /** How far (m) the drawn terrain lies under `heightAt` (9 cm under the atlas roads and the pads, terrainMaterial.ts), or null. */
+  drop?: ((x: number, z: number) => number) | null;
   stats: Record<string, number>;
 }
 
@@ -694,6 +722,12 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
   // 8b. Stubs: streets the marcher stopped at a sliver, an apron or a slope reach the nearest
   // road / street / square within 15 m; the ones with nothing in reach get a court (step 9).
   const stubFix = opts.closeStubs === false ? { extended: 0, orphans: [] } : closeStubs(g, streets, STREET_MARGIN);
+  // 8c. No minor street climbs a cliff: it ends where the ground gets too steep for it.
+  const trim = trimSteepStreets(streets, (x, z) => hm.heightAt(x, z));
+  const cliffEnds = trim.ends;
+  stats.steepStreetsCut = trim.cut;
+  stats.steepStreetsDropped = trim.dropped;
+  stats.steepStreetMetres = Math.round(trim.metres);
 
   // Ground the story stands on stays open (no house on the spot where Mus waits), whatever the streets did.
   for (const pin of PINNED_OPEN) {
@@ -955,7 +989,235 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
   stats.builtBlocks = blocks.filter((b) => b.kind === 'built').length;
   stats.totalMs = now() - t0;
   lab = mark = depthGrid = bfsQueue = new Int32Array(0);
-  return { grid: g, hy, region, roads, streets, blocks, piazzas, walls, gates, aqueducts, bridges: (atlas.BRIDGES ?? []).map((b) => ({ id: b.id, a: g2(b.a), b: g2(b.b), width: Math.max(3, b.width * S) })), plazas, detailBounds, detailRects, inDetail, mergeCell, landmarkCategory: atlas.LANDMARKS.map((l) => l.category), landmarkPolys: lmPolys.filter((l) => l.solid).map((l) => ({ index: l.index, id: l.lm.id, category: l.lm.category, poly: l.poly })), corridor: (x, z) => corridorAt(x, z).w > 0.5, roadDetours, stats };
+  return { grid: g, hy, region, roads, streets, blocks, piazzas, walls, gates, aqueducts, bridges: (atlas.BRIDGES ?? []).map((b) => ({ id: b.id, a: g2(b.a), b: g2(b.b), width: Math.max(3, b.width * S) })), plazas, detailBounds, detailRects, inDetail, mergeCell, landmarkCategory: atlas.LANDMARKS.map((l) => l.category), landmarkPolys: lmPolys.filter((l) => l.solid).map((l) => ({ index: l.index, id: l.lm.id, category: l.lm.category, poly: l.poly })), corridor: (x, z) => corridorAt(x, z).w > 0.5, roadDetours, ground: groundGrid(hm), retaining: retainingOf(hm), cliffEnds, drop: drawnDrop(hm), stats };
+}
+
+/** The heightmap's retaining runs (GROUND's `features.retaining`, terrain v2), or none. */
+function retainingOf(hm: HeightSource): readonly RetainingRun[] {
+  const r = (hm.features as { retaining?: unknown } | null | undefined)?.retaining;
+  return Array.isArray(r) ? (r as RetainingRun[]) : [];
+}
+
+/** How deep the drawn terrain sinks under paved roads and pads (terrainMaterial.ts), and over what signed distance to their edge it fades. */
+const DRAWN_DROP = 0.09;
+const DROP_FROM = 0.75, DROP_TO = -0.25;
+
+/**
+ * The drawn terrain's drop under `heightAt`, as terrainMaterial.ts draws the leaf level: at every
+ * lattice vertex DRAWN_DROP × smoothstep(0.75, −0.25, d) of its signed distance d to the nearest
+ * basalt road's band (or flight of steps), or to the nearest pad (landmark pads, unpaved roads, quay
+ * tops) — the fields terrainData.ts bakes —, linear over the lattice triangles the mesh draws (b–c
+ * under terrain v2, a–d under v1). Computed per vertex on demand. (The one unpaved desire path, also
+ * a pad in terrainData, is left out.) Null without features.
+ */
+export function drawnDrop(hm: HeightSource): ((x: number, z: number) => number) | null {
+  const feat = hm.features as { roads?: readonly { points: readonly P2[]; width: number; paving?: string }[]; pads?: readonly { polygon: readonly P2[] }[]; rivers?: readonly TerrainRiver[]; quays?: readonly TerrainQuay[] } | null | undefined;
+  if (!feat || typeof hm.minX !== 'number' || typeof hm.minZ !== 'number' || typeof hm.spacing !== 'number') return null;
+  const S = WORLD_SCALE, x0 = hm.minX, z0 = hm.minZ, sp = hm.spacing, bc = hm.profile !== 'v1';
+  const reach = DROP_FROM + 0.01;
+  type Seg = { ax: number; az: number; bx: number; bz: number; half: number; road: boolean };
+  type PadP = { poly: P2[]; minX: number; minZ: number; maxX: number; maxZ: number };
+  const B = 32;
+  const segs = new Map<number, Seg[]>(), pads = new Map<number, PadP[]>();
+  const key = (bx: number, bz: number) => (bz + 32768) * 65536 + bx + 32768;
+  const put = <T>(m: Map<number, T[]>, a: number, b: number, c: number, d: number, v: T) => {
+    for (let bz = Math.floor(b / B); bz <= Math.floor(d / B); bz++)
+      for (let bx = Math.floor(a / B); bx <= Math.floor(c / B); bx++) {
+        const k = key(bx, bz);
+        const l = m.get(k);
+        if (l) l.push(v);
+        else m.set(k, [v]);
+      }
+  };
+  for (const r of feat.roads ?? []) {
+    const half = (r.width * S) / 2, road = (r.paving ?? 'basalt') === 'basalt' || r.paving === 'steps';
+    for (let k = 0; k + 1 < r.points.length; k++) {
+      const ax = r.points[k][0] * S, az = r.points[k][1] * S, bx = r.points[k + 1][0] * S, bz = r.points[k + 1][1] * S;
+      const m = half + reach;
+      put(segs, Math.min(ax, bx) - m, Math.min(az, bz) - m, Math.max(ax, bx) + m, Math.max(az, bz) + m, { ax, az, bx, bz, half, road });
+    }
+  }
+  for (const p of feat.pads ?? []) {
+    const poly = p.polygon.map((q) => [q[0] * S, q[1] * S] as P2);
+    const b = polyBounds(poly as Pt[]);
+    put(pads, b.minX - reach, b.minZ - reach, b.maxX + reach, b.maxZ + reach, { poly, ...b });
+  }
+  // Quay tops (terrainData: a pad from half − 0.5 to half + width out from the river's axis, s0..s1 along it).
+  type QuayP = { river: TerrainRiver; line: ChainedLine; q: ResolvedQuay; minX: number; minZ: number; maxX: number; maxZ: number };
+  const quays = new Map<number, QuayP[]>();
+  for (const river of feat.rivers ?? []) {
+    if (!(feat.quays ?? []).some((q) => q.river === river.id)) continue;
+    const line = chain(river.centerline);
+    for (const q of resolveQuays(feat.quays ?? [], river.id, line)) {
+      const pad = Math.max(...river.width) / 2 + (q.quay.width ?? 12) + 4;
+      const xs = [q.quay.from[0], q.quay.to[0]], zs = [q.quay.from[1], q.quay.to[1]];
+      const b = { minX: (Math.min(...xs) - pad) * S, minZ: (Math.min(...zs) - pad) * S, maxX: (Math.max(...xs) + pad) * S, maxZ: (Math.max(...zs) + pad) * S };
+      put(quays, b.minX, b.minZ, b.maxX, b.maxZ, { river, line, q, ...b });
+    }
+  }
+  const ss = (d: number) => {
+    const t = Math.min(1, Math.max(0, (d - DROP_FROM) / (DROP_TO - DROP_FROM)));
+    return t * t * (3 - 2 * t);
+  };
+  const cache = new Map<number, number>();
+  const at = (i: number, j: number): number => {
+    const k = j * 1048576 + i;
+    let v = cache.get(k);
+    if (v !== undefined) return v;
+    const x = x0 + i * sp, z = z0 + j * sp;
+    let rd = Infinity, pd = Infinity;
+    const bk = key(Math.floor(x / B), Math.floor(z / B));
+    for (const s of segs.get(bk) ?? []) {
+      const d = Math.sqrt(segDist2(x, z, s.ax, s.az, s.bx, s.bz)) - s.half;
+      if (s.road) rd = Math.min(rd, d);
+      else pd = Math.min(pd, d);
+    }
+    for (const p of pads.get(bk) ?? []) {
+      if (x < p.minX - reach || x > p.maxX + reach || z < p.minZ - reach || z > p.maxZ + reach) continue;
+      pd = Math.min(pd, signedDistance(x, z, p.poly));
+    }
+    for (const qp of quays.get(bk) ?? []) {
+      if (x < qp.minX || x > qp.maxX || z < qp.minZ || z > qp.maxZ) continue;
+      const f = footOn(qp.line, x / S, z / S);
+      if (f.side !== qp.q.side) continue;
+      const w0 = qp.river.width[f.i] ?? qp.river.width[qp.river.width.length - 1];
+      const w1 = qp.river.width[f.i + 1] ?? w0;
+      const half = (w0 + (w1 - w0) * f.t) / 2;
+      pd = Math.min(pd, Math.max(half - 0.5 - f.d, f.d - (half + (qp.q.quay.width ?? 12)), qp.q.s0 - f.s, f.s - qp.q.s1) * S);
+    }
+    v = DRAWN_DROP * Math.max(ss(rd), ss(pd));
+    cache.set(k, v);
+    return v;
+  };
+  return (x: number, z: number) => {
+    const fx = (x - x0) / sp, fz = (z - z0) / sp;
+    const i = Math.floor(fx), j = Math.floor(fz), tx = fx - i, tz = fz - j;
+    const a = at(i, j), b = at(i + 1, j), c = at(i, j + 1), d = at(i + 1, j + 1);
+    if (bc) return tx + tz <= 1 ? a + (b - a) * tx + (c - a) * tz : d + (c - d) * (1 - tx) + (b - d) * (1 - tz);
+    return tz >= tx ? a + (d - c) * tx + (c - a) * tz : a + (b - a) * tx + (d - b) * tz;
+  };
+}
+
+/** The lattice `heightAt` is linear on (a terrain v2 Heightmap), else null. */
+function groundGrid(hm: HeightSource): { x0: number; z0: number; s: number } | null {
+  return hm.profile === 'v2' && typeof hm.minX === 'number' && typeof hm.minZ === 'number' && typeof hm.spacing === 'number' ? { x0: hm.minX, z0: hm.minZ, s: hm.spacing } : null;
+}
+
+/** A minor street's grade over 4 m (rise / run) may not pass this (the grades audit: none over 58 %, at most 15 over 45 %). */
+export const STREET_MAX_GRADE = 0.44;
+/** Nor may it cross ground steeper than this (degrees): it ends at the cliff. */
+export const STREET_MAX_GROUND_DEG = 35;
+/** Pieces of a cut street shorter than this (m) are dropped. */
+const STREET_MIN_PIECE = 6;
+
+/**
+ * Cuts every minor street where it would climb too steeply: wherever its grade over 4 m (sampled
+ * every metre, as the grades audit does) passes STREET_MAX_GRADE or the ground under it is steeper
+ * than STREET_MAX_GROUND_DEG, the street ends; what is left on either side stays a street (the
+ * first piece keeps the street's id, the others are added at the end), pieces under
+ * STREET_MIN_PIECE are dropped. Mutates `streets`.
+ */
+export function trimSteepStreets(streets: PlanStreet[], H: (x: number, z: number) => number, maxGrade = STREET_MAX_GRADE, maxGroundDeg = STREET_MAX_GROUND_DEG): { cut: number; dropped: number; metres: number; ends: Pt[] } {
+  const ends: Pt[] = [];
+  const groundTan = Math.tan((maxGroundDeg * Math.PI) / 180);
+  let cut = 0, dropped = 0, metres = 0;
+  const n0 = streets.length;
+  for (let si = 0; si < n0; si++) {
+    const st = streets[si];
+    const pts = st.points;
+    // Samples every ≤ 1 m (arc length s).
+    const xs: number[] = [], zs: number[] = [], ss: number[] = [];
+    let acc = 0;
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
+      const L = Math.hypot(bx - ax, bz - az);
+      const m = Math.max(1, Math.ceil(L));
+      for (let k = 0; k < m; k++) {
+        xs.push(ax + ((bx - ax) * k) / m);
+        zs.push(az + ((bz - az) * k) / m);
+        ss.push(acc + (L * k) / m);
+      }
+      acc += L;
+    }
+    const last = pts[pts.length - 1];
+    xs.push(last[0]);
+    zs.push(last[1]);
+    ss.push(acc);
+    const n = xs.length;
+    const y = xs.map((x, i) => H(x, zs[i]));
+    // Stretches [s0, s1] to take out: every sample of a window that is too steep, and steep ground.
+    const bad: [number, number][] = [];
+    let a = 0, b = 0;
+    for (let i = 0; i < n; i++) {
+      while (a < i && ss[i] - ss[a] > 2) a++;
+      while (b + 1 < n && ss[b + 1] - ss[i] <= 2) b++;
+      const run = ss[b] - ss[a];
+      const steep = run > 1e-6 && Math.abs(y[b] - y[a]) / run > maxGrade;
+      const gx = (H(xs[i] + 1, zs[i]) - H(xs[i] - 1, zs[i])) / 2, gz = (H(xs[i], zs[i] + 1) - H(xs[i], zs[i] - 1)) / 2;
+      const cliff = Math.hypot(gx, gz) > groundTan;
+      if (steep || cliff) {
+        const s0 = steep ? ss[a] : ss[Math.max(0, i - 1)], s1 = steep ? ss[b] : ss[Math.min(n - 1, i + 1)];
+        if (bad.length && s0 <= bad[bad.length - 1][1] + 1e-6) bad[bad.length - 1][1] = Math.max(bad[bad.length - 1][1], s1);
+        else bad.push([s0, s1]);
+      }
+    }
+    if (!bad.length) continue;
+    cut++;
+    // What is left.
+    const keep: [number, number][] = [];
+    let from = 0;
+    for (const [s0, s1] of bad) {
+      if (s0 - from >= STREET_MIN_PIECE) keep.push([from, s0]);
+      else metres += Math.max(0, s0 - from);
+      metres += s1 - s0;
+      from = s1;
+    }
+    if (acc - from >= STREET_MIN_PIECE) keep.push([from, acc]);
+    else metres += Math.max(0, acc - from);
+    const slice = (s0: number, s1: number): Pt[] => {
+      const out: Pt[] = [];
+      let acc2 = 0;
+      const at = (s: number): Pt => {
+        let t = 0;
+        for (let i = 0; i + 1 < pts.length; i++) {
+          const L = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]);
+          if (t + L >= s || i === pts.length - 2) {
+            const f = L > 0 ? Math.min(1, Math.max(0, (s - t) / L)) : 0;
+            return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * f, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * f];
+          }
+          t += L;
+        }
+        return [pts[0][0], pts[0][1]];
+      };
+      out.push(at(s0));
+      for (let i = 0; i + 1 < pts.length; i++) {
+        acc2 += Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]);
+        if (acc2 > s0 + 1e-6 && acc2 < s1 - 1e-6) out.push([pts[i + 1][0], pts[i + 1][1]]);
+      }
+      out.push(at(s1));
+      return out;
+    };
+    if (!keep.length) {
+      // Nothing walkable left: the street keeps a zero-length stub so its index (the raster's owner ids) stays valid.
+      dropped++;
+      st.points = [pts[0], pts[0]];
+      st.steps = [false];
+      continue;
+    }
+    keep.forEach(([s0, s1], k) => {
+      const p = slice(s0, s1);
+      if (s0 > 1e-6) ends.push(p[0]);
+      if (s1 < acc - 1e-6) ends.push(p[p.length - 1]);
+      if (k === 0) {
+        st.points = p;
+        st.steps = p.slice(1).map(() => false);
+      } else {
+        const index = streets.length;
+        streets.push({ ...st, id: `st${index}`, index, points: p, steps: p.slice(1).map(() => false) });
+      }
+    });
+  }
+  return { cut, dropped, metres, ends };
 }
 
 // ---------------------------------------------------------------- small geometry
