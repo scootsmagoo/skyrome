@@ -325,6 +325,94 @@ export function surfacesAt(x: number, z: number): { y: number; mat: string; src:
   return out.sort((p, q) => q.y - p.y);
 }
 
+export interface SurfaceGrid {
+  n: number;
+  x0: number;
+  z0: number;
+  cell: number;
+  /** Top walkable material per cell ('terrain' where nothing built covers the ground). */
+  mat: string[];
+  /** The build (or street item) that made the top surface, '' on terrain. */
+  src: string[];
+  /** Top surface height and the terrain height per cell. */
+  y: Float32Array;
+  terr: Float32Array;
+}
+
+/**
+ * The walkable top surface on a `cell` m grid round (cx, cz): which material covers the ground
+ * and who built it (the surface-look census in scripts/audit/surface.mjs reads material regions,
+ * their seams and the terrain showing between them from it). Same rasterisation as analyzeArea
+ * (roofs and upper floors ignored: the walkable top is the highest surface within 3 m of the
+ * terrain), but one pass and the top only.
+ */
+export function topSurfaceGrid(cx: number, cz: number, radius: number, heightAt: (x: number, z: number) => number, cell = 1): SurfaceGrid {
+  const C = cell;
+  const n = Math.ceil((radius * 2) / C);
+  const x0 = cx - radius, z0 = cz - radius;
+  const cells: (Surf[] | undefined)[] = new Array(n * n);
+  const m = new THREE.Matrix4();
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  for (const r of records.values()) {
+    m.copy(r.group?.matrixWorld ?? new THREE.Matrix4());
+    for (const f of r.faces) {
+      worldOf(f, m);
+      const [fx0, fx1, fz0, fz1] = f.box!;
+      if (fx1 < x0 || fx0 > x0 + n * C || fz1 < z0 || fz0 > z0 + n * C) continue;
+      const t = f.world!;
+      const src = f.src || r.name;
+      for (let i = 0; i < t.length; i += 9) {
+        a.set(t[i], t[i + 1], t[i + 2]);
+        b.set(t[i + 3], t[i + 4], t[i + 5]);
+        c.set(t[i + 6], t[i + 7], t[i + 8]);
+        const minX = Math.min(a.x, b.x, c.x), maxX = Math.max(a.x, b.x, c.x);
+        const minZ = Math.min(a.z, b.z, c.z), maxZ = Math.max(a.z, b.z, c.z);
+        if (maxX < x0 || minX > x0 + n * C || maxZ < z0 || minZ > z0 + n * C) continue;
+        const i0 = Math.max(0, Math.ceil((minX - x0) / C - 0.5)), i1 = Math.min(n - 1, Math.floor((maxX - x0) / C - 0.5));
+        const j0 = Math.max(0, Math.ceil((minZ - z0) / C - 0.5)), j1 = Math.min(n - 1, Math.floor((maxZ - z0) / C - 0.5));
+        const d = (b.z - c.z) * (a.x - c.x) + (c.x - b.x) * (a.z - c.z);
+        if (Math.abs(d) < 1e-9) continue;
+        for (let j = j0; j <= j1; j++) {
+          const pz = z0 + (j + 0.5) * C;
+          for (let ii = i0; ii <= i1; ii++) {
+            const px = x0 + (ii + 0.5) * C;
+            const l1 = ((b.z - c.z) * (px - c.x) + (c.x - b.x) * (pz - c.z)) / d;
+            const l2 = ((c.z - a.z) * (px - c.x) + (a.x - c.x) * (pz - c.z)) / d;
+            const l3 = 1 - l1 - l2;
+            if (l1 < -1e-6 || l2 < -1e-6 || l3 < -1e-6) continue;
+            const k = j * n + ii;
+            (cells[k] ??= []).push({ y: l1 * a.y + l2 * b.y + l3 * c.y, mat: f.mat, src });
+          }
+        }
+      }
+    }
+  }
+  const mat: string[] = new Array(n * n);
+  const src: string[] = new Array(n * n);
+  const y = new Float32Array(n * n);
+  const terr = new Float32Array(n * n);
+  for (let j = 0; j < n; j++)
+    for (let i = 0; i < n; i++) {
+      const k = j * n + i;
+      const ty = heightAt(x0 + (i + 0.5) * C, z0 + (j + 0.5) * C);
+      terr[k] = ty;
+      const list = cells[k];
+      if (!list?.length) {
+        y[k] = ty;
+        mat[k] = 'terrain';
+        src[k] = '';
+        continue;
+      }
+      list.sort((p, q) => q.y - p.y);
+      const ground = list.filter((s) => s.y < ty + 3);
+      const s0 = ground[0] ?? list[list.length - 1];
+      y[k] = Math.max(s0.y, ty);
+      mat[k] = s0.y >= ty - 0.02 ? s0.mat : 'terrain';
+      src[k] = s0.y >= ty - 0.02 ? s0.src : '';
+    }
+  return { n, x0, z0, cell: C, mat, src, y, terr };
+}
+
 export function analyzeArea(cx: number, cz: number, radius: number, heightAt: (x: number, z: number) => number): Finding[] {
   const C = 0.5;
   const n = Math.ceil((radius * 2) / C);
