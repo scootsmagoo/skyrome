@@ -236,8 +236,9 @@ ground cover) is built as a `Sheet` (`arch/fabric/streets.ts`) and written by `e
   midpoint and triangles split at their centroid. The split reads only the edge, so the two triangles
   of an edge and a kerb face on it split it alike (no cracks). Slivers under 1 mm are kept for their
   edges only. A conformed street has cross-sections every 3.2 m (`CONFORM_STEP`), at its own bends and
-  where its kerbs ramp; its crown is two planes. City-wide: 0.79 M triangles (0.91 M before), the
-  largest gap 2.1 cm (`node scripts/audit/streets-cells.mjs --all`).
+  where its kerbs ramp; its crown is two planes. City-wide (skirts included): 1.02 M triangles (0.91 M
+  before), the largest gap 2.1 cm; `node scripts/audit/streets-cells.mjs --all` (and `--by-src`,
+  `--edges`, `--holes`, `--probe x,z` to look at one place offline).
 - **One surface per place.** `PavingIndex` holds every surface's footprint and rank
   (`RANK`: road > junction > piazza > vicus > lane > alley > ground cover; equal ranks: the
   first registered wins). A road or street piece registers what it draws (`streetFootprint`: the quads
@@ -256,7 +257,9 @@ ground cover) is built as a `Sheet` (`arch/fabric/streets.ts`) and written by `e
   outer edge (laid 2.2 cm over the ground) is lowered by that drop, so it meets the ground as drawn.
   Ground cover has no skirts:
   its rim (every open edge) lies `RIM_SINK` (5 cm) under its body but never under 5 mm over the ground
-  (`RIM_MIN`: the terrain would show through), its cell border is a seam.
+  (`RIM_MIN`: the terrain would show through), it follows the ground to 4 mm (`COVER_TOL`), its cell
+  border is a seam, and only patches under 3 m² (one raster point; neighbours joined diagonally too)
+  are dropped as slivers.
 - **Colliders.** One welded (indexed, 1 mm) trimesh per sheet, made from the drawn top and kerb faces.
   Stair parapets (`parapetCollider`, atlas stairways and `buildStairs`) are boxes pitched with the
   flight, their top 0.9 m over the treads like the drawn parapet (an upright box reached the high end's
