@@ -485,7 +485,8 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
   // Every surface's footprint, so each place is paved once (see RANK).
   const pave = new PavingIndex();
   lastPaving = pave;
-  for (const blk of plan.blocks) pave.add(RANK.block, blk.outline as Vec2[], 0);
+  // (Blocks are not registered: the cover stops short of their outlines on its own raster, and cut
+  // exactly at them it bared the ground between a house front and the street.)
   const ground: GroundGrid | null = plan.ground ?? null;
   // The drawn terrain sinks 9 cm under the atlas roads and pads: edges meant to meet the ground meet it as drawn.
   const drop = plan.drop ?? null;
@@ -605,7 +606,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
           const capStart = k === 0 || !pieceBuilt(road.points, pieces[k - 1]), capEnd = k === pieces.length - 1 || !pieceBuilt(road.points, pieces[k + 1]);
           const dips = (mouths.get(ri) ?? []).filter((m) => m.s > p0 - m.w && m.s < p1 + m.w).map((m) => ({ s: m.s - p0, side: m.side, w: m.w }));
           // Registered by what it draws (the same cross-sections), so what it outranks is cut round it exactly.
-          const spec = roadPieceSpec(road, c, pts, capStart, capEnd, dips, {});
+          const spec = roadPieceSpec(road, c, pts, capStart, capEnd, dips, {}, c === 'open' && besideSquare(plan, pts, (road.carriage + road.sidewalk) / 2 + LANE_APRON + 0.6));
           const id = inArea(mid[0], mid[1]) ? pave.addPieces(RANK.road, streetFootprint(spec)) : -1;
           if (id >= 0) capped.push({ id, spec });
           add(mid[0], mid[1], T(`road:${road.id}:${c}`, (bld) => buildStreet(bld, { ...spec, conform: conformOf(id) }, H)));
@@ -1224,7 +1225,7 @@ function coverSet(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: n
     // The window's own border is a seam: the cover goes on in the next cell.
     const xa = X(sx0), xb = X(sx1 + 1), za = Z(sz0), zb = Z(sz1 + 1);
     const onB = (p: SV, q: SV) => (Math.abs(p.x - q.x) < 1e-6 && (Math.abs(p.x - xa) < 1e-6 || Math.abs(p.x - xb) < 1e-6)) || (Math.abs(p.z - q.z) < 1e-6 && (Math.abs(p.z - za) < 1e-6 || Math.abs(p.z - zb) < 1e-6));
-    const order = RANK.block * 1e6 - 1;
+    const order = RANK.alley * 1e6 - 1;
     if (sheet.tris.length) emitSheet(b, sheet, { cut: (a, c, d, e) => pave!.convs(a, c, d, e, order), ground, rim: Math.max(lift - RIM_SINK, RIM_MIN), drop, skirts: false, seam: onB, collide: false });
     return;
   }
@@ -1267,14 +1268,34 @@ export function streetMouths(plan: CityPlan): Map<number, { s: number; side: -1 
 }
 
 /** One piece of an atlas road (≤ 80 m) in its context (urban, open ground, rural, stairs). */
+/** Does a road piece run across a square's paving (most points just beyond its edges on PLAZA ground of the plan)? */
+function besideSquare(plan: CityPlan, pts: readonly Vec2[], off: number): boolean {
+  let on = 0, n = 0;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
+    const L = Math.hypot(bx - ax, bz - az);
+    if (L < 1e-6) continue;
+    const nx = -(bz - az) / L, nz = (bx - ax) / L;
+    for (let t = 0.5; t < L; t += 4) {
+      const x = ax + ((bx - ax) * t) / L, z = az + ((bz - az) * t) / L;
+      for (const sgn of [-1, 1]) {
+        n++;
+        if (plan.grid.at(x + nx * off * sgn, z + nz * off * sgn) === K.PLAZA) on++;
+      }
+    }
+  }
+  return n > 0 && on * 2 >= n;
+}
+
 /** The street spec of one piece of an atlas road in its context (urban, open ground, rural). */
-function roadPieceSpec(road: PlanRoad, ctx: string, pts: Vec2[], capStart: boolean, capEnd: boolean, dips: { s: number; side: -1 | 1; w: number }[], conform: ConformOpts): StreetSpec {
+function roadPieceSpec(road: PlanRoad, ctx: string, pts: Vec2[], capStart: boolean, capEnd: boolean, dips: { s: number; side: -1 | 1; w: number }[], conform: ConformOpts, onSquare = true): StreetSpec {
   const spec: StreetSpec = { points: pts, lift: LIFT.road, capStart, capEnd, steppingStones: [], seed: road.index, conform };
   if (road.style === 'paved' && ctx === 'urban') {
     Object.assign(spec, { kind: 'paved', roadWidth: road.carriage, sidewalk: road.sidewalk, curb: KERB, dips });
   } else if (road.style === 'paved' && ctx === 'open') {
-    // Where an open road crosses a square's paving its edge is a travertine course, not a basalt bevel.
-    Object.assign(spec, { kind: 'lane', roadWidth: road.carriage + road.sidewalk, roadMaterial: 'paving_basalt', apronMaterial: 'travertine' });
+    // Where an open road crosses a square's paving its edge is a travertine course, not a basalt
+    // bevel; across open ground it meets the grass in a dirt shoulder.
+    Object.assign(spec, { kind: 'lane', roadWidth: road.carriage + road.sidewalk, roadMaterial: 'paving_basalt', apronMaterial: onSquare ? 'travertine' : 'dirt' });
   } else if (road.style === 'paved') {
     // Out of town the basalt meets the grass in a dirt shoulder.
     Object.assign(spec, { kind: 'lane', roadWidth: road.carriage, roadMaterial: 'paving_basalt', apronMaterial: 'dirt' });

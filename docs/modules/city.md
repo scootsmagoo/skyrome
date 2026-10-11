@@ -239,10 +239,17 @@ ground cover) is built as a `Sheet` (`arch/fabric/streets.ts`) and written by `e
   where its kerbs ramp; its crown is two planes. City-wide: 0.79 M triangles (0.91 M before), the
   largest gap 2.1 cm (`node scripts/audit/streets-cells.mjs --all`).
 - **One surface per place.** `PavingIndex` holds every surface's footprint and rank
-  (`RANK`: road > junction > piazza > vicus > lane > alley > block > ground cover; equal ranks: the
-  first registered wins). A surface is cut exactly (convex subtraction) inside the convex pieces of
-  every surface that outranks it (a band's segment quads and the hulls of its bends, a polygon or its
-  triangles), so nothing is paved twice; ground cover never lies on paving nor inside a block.
+  (`RANK`: road > junction > piazza > vicus > lane > alley > ground cover; equal ranks: the
+  first registered wins). A road or street piece registers what it draws (`streetFootprint`: the quads
+  between its own cross-sections, so pieces of one street meet exactly at bends), a flight of steps its
+  flights, a junction or piazza its polygon; only surfaces that are built (their
+  item's point in the area) are registered. A surface is cut exactly (convex subtraction) inside the
+  convex pieces of every surface that outranks it, so nothing is paved twice; ground cover never lies on
+  paving (blocks are left to the cover's own raster: cut exactly at their outlines it bared the ground
+  between a house front and the street). The cut's points are shared per place, and the T-junctions it leaves
+  (a vertex on a neighbour's edge or a kerb face's foot) are split out, so every edge meets vertex to
+  vertex. (Block yards and floors, fill.ts, and landmark paving still lie under street aprons: most of
+  the double paving street-fit counts; they would yield to `cityPavedAt`.)
 - **Skirts.** Every open edge (beyond it nothing of the sheet: an outer edge or a cut) gets a vertical
   face in its own material down to the lowest ground under it minus 0.1 m (`SKIRT_DEPTH`; the drawn
   terrain drops 9 cm under the atlas roads and pads, `plan.drop`), no collider; an apron's or a bevel's
@@ -255,7 +262,11 @@ ground cover) is built as a `Sheet` (`arch/fabric/streets.ts`) and written by `e
   flight, their top 0.9 m over the treads like the drawn parapet (an upright box reached the high end's
   top at the low end: a 2.8 m invisible wall).
 - **Edges.** Out of town a basalt road meets the grass in a 0.6 m dirt shoulder; an open road across
-  paving (the Via Sacra in the Forum) ends in a travertine edge course (`apronMaterial`).
+  paving (the Via Sacra in the Forum) ends in a travertine edge course, across open ground in a dirt
+  shoulder (`apronMaterial`, by the plan's PLAZA ground beside the piece). A capped end
+  with no other surface beyond it runs out to the ground in an end apron (`apronStart`/`apronEnd`,
+  decided once every surface is registered); a piece whose neighbour piece is not built (the edge of
+  the detail area) is capped there. `plan.drop` mirrors terrainData's road, pad and quay fields.
 - **Steep streets.** `trimSteepStreets` (plan.ts, after the stubs are closed) ends a minor street
   where its grade over 4 m passes 44 % (`STREET_MAX_GRADE`) or the ground under it is steeper than
   35°: the pieces either side stay streets (the first keeps the id; `plan.cliffEnds` lists the new
