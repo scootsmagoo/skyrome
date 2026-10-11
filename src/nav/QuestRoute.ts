@@ -8,6 +8,9 @@
  * - It replans when the objective changes or moves (a person walking), when the player uses a
  *   door, or when the player strays from the route; at most once a second. A plan that finds no
  *   street route (a straight line) or no way at all backs off: 2, 4, 8 … 30 s before the next try.
+ * - It corrects itself: it replans once when the nav grid round the objective is first built (the
+ *   lead-out is then drawn round the walls on the grid instead of straight), and when the player
+ *   has pushed along it for 3 s without gaining (a street link found walled is cut first).
  * - Nothing runs while every route display is off (Settings → Interface).
  */
 import type { Game, System } from '../core/Game';
@@ -48,6 +51,11 @@ export const ROUTE = {
   minGap: 1,
   minGapMoving: 2.5,
   backoffMax: 30,
+  /** Pushing along the route this long (s) without gaining `stallGain` m of it: the way is blocked, replan. */
+  stall: 3,
+  stallGain: 0.75,
+  /** A street link within this (m) of where the player stalled is the one cut. */
+  stallLink: 4,
 };
 
 export class QuestRoute implements System {
@@ -62,7 +70,7 @@ export class QuestRoute implements System {
   along = 0;
   /** Where the player is (null = outside, else the cell id), as of the last check. */
   place: string | null = null;
-  readonly stats = { plans: 0, failures: 0, lastMs: 0, maxMs: 0 };
+  readonly stats = { plans: 0, failures: 0, lastMs: 0, maxMs: 0, gridReplans: 0, stallReplans: 0, cuts: 0 };
 
   /** Street routes wanted (else doors only). */
   private full = true;
@@ -75,6 +83,12 @@ export class QuestRoute implements System {
   private goalKey = '';
   private goal: Endpoint = { x: 0, y: 0, z: 0, cell: null };
   private seg = 0;
+  /** Was the objective's nav grid built when the route was planned? (Its first build replans once.) */
+  private goalGridAtPlan = true;
+  private lastPlanAt = -Infinity;
+  /** Pushing without gaining: since when (s of pushing), and how far along the route it started. */
+  private stallT = 0;
+  private stallAlong = 0;
   private readonly c = closest();
   private readonly world: PlanWorld;
 
@@ -161,8 +175,54 @@ export class QuestRoute implements System {
     }
     const strayed = full && off > (place === null ? ROUTE.offRoute : ROUTE.offRouteCell);
     const need = goalChanged || placeChanged || moved || strayed || !this.legs.length;
-    if (!need || this.clock < this.nextPlanAt) return;
-    this.plan(p, place, moved && !goalChanged);
+    if (need && this.clock >= this.nextPlanAt) {
+      this.plan(p, place, moved && !goalChanged);
+      return;
+    }
+    // Self-correction (outside, on the streets): never more than once a second, but past a back-off.
+    if (!full || place !== null || !this.legs.length || this.clock - this.lastPlanAt < ROUTE.minGap) return;
+    const grid = this.game.population?.grid;
+    if (!this.goalGridAtPlan && this.goal.cell === null && grid?.ready(this.goal.x, this.goal.z)) {
+      // The objective's grid is built now: the lead-out can be drawn round the walls.
+      this.stats.gridReplans++;
+      this.plan(p, place, false);
+      return;
+    }
+    if (this.stalled(off)) {
+      this.cutAt(p.x, p.z);
+      this.stats.stallReplans++;
+      this.plan(p, place, false);
+    }
+  }
+
+  /** Has the player pushed along the route for `ROUTE.stall` s without gaining on it? (Checked every `ROUTE.every`.) */
+  private stalled(off: number): boolean {
+    const input = this.game.input;
+    const pushing = !!input && (input.down('forward') || input.down('back') || input.down('left') || input.down('right'));
+    if (!pushing || off > ROUTE.offRoute || this.along > this.stallAlong + ROUTE.stallGain) {
+      this.stallT = 0;
+      this.stallAlong = this.along;
+      return false;
+    }
+    this.stallT += ROUTE.every;
+    if (this.stallT < ROUTE.stall) return false;
+    this.stallT = 0;
+    return true;
+  }
+
+  /** Cut the street link of the route's first leg that the player stalled on (if the stall is on one). */
+  private cutAt(x: number, z: number) {
+    const leg = this.legs[0];
+    const r = this.router;
+    const ns = leg?.nodes;
+    if (!r || !ns || ns.length < 2) return;
+    let best = -1;
+    let bd = ROUTE.stallLink;
+    for (let k = 0; k + 1 < ns.length; k++) {
+      const d = segDist(x, z, r.x[ns[k]], r.z[ns[k]], r.x[ns[k + 1]], r.z[ns[k + 1]]);
+      if (d < bd) ((bd = d), (best = k));
+    }
+    if (best >= 0 && r.cut(ns[best], ns[best + 1])) this.stats.cuts++;
   }
 
   private plan(p: P3, place: string | null, moving: boolean) {
@@ -185,6 +245,11 @@ export class QuestRoute implements System {
     this.along = 0;
     this.status = status;
     this.version++;
+    this.lastPlanAt = this.clock;
+    this.stallT = 0;
+    this.stallAlong = 0;
+    const grid = this.world.grid;
+    this.goalGridAtPlan = !grid || this.goal.cell !== null || grid.ready(this.goal.x, this.goal.z);
     if (status === 'streets' || (!this.full && status === 'direct')) {
       this.failures = 0;
       this.nextPlanAt = this.clock + (moving ? ROUTE.minGapMoving : ROUTE.minGap);
@@ -236,6 +301,15 @@ export class QuestRoute implements System {
     }
     return out;
   }
+}
+
+/** Distance from (x, z) to the segment a–b (plan). */
+function segDist(x: number, z: number, ax: number, az: number, bx: number, bz: number): number {
+  const ex = bx - ax;
+  const ez = bz - az;
+  const l2 = ex * ex + ez * ez;
+  const t = l2 > 1e-9 ? Math.max(0, Math.min(1, ((x - ax) * ex + (z - az) * ez) / l2)) : 0;
+  return Math.hypot(ax + ex * t - x, az + ez * t - z);
 }
 
 /** The cell a marker names (`interior:<cell>:<spot>`), if any. */

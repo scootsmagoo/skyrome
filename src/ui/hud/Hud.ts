@@ -4,6 +4,7 @@
  * Reads state each frame from the game and `ui.sources`; never owns game state.
  */
 import * as THREE from 'three';
+import { missingY, standingY } from '../../nav/heights';
 import type { Game } from '../../core/Game';
 import { codeLabel } from '../../core/Input';
 import type { Interactions } from '../../interaction/Interactions';
@@ -315,6 +316,8 @@ export class Hud {
             if (l) pos = { x: l.x, z: l.z };
           }
           if (!pos) continue;
+          // A target with no height (y = 0 from content that means "on the ground") stands on the floor there.
+          if (missingY(pos.y)) pos = { x: pos.x, y: standingY(this.game, pos.x, pos.z), z: pos.z };
           const primary = o === main;
           out.push({ key: `q:${q.id}:${o.id}:${primary ? 'p' : 'm'}`, kind: 'quest', x: pos.x, y: pos.y, z: pos.z, primary });
           if (primary && !this.guideTarget) {

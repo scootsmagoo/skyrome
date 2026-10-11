@@ -32,6 +32,11 @@ export interface CellSampler {
    * path straight through it. Optional: a sampler without it leaves every link open.
    */
   link?(x0: number, z0: number, h0: number, x1: number, z1: number, h1: number): boolean;
+  /**
+   * The bare ground's height at (x, z) (the terrain), if the sampler knows it: a floor within 5 cm of it is bare
+   * ground, never a flight of steps, so a rise steeper than `NAV_FLIGHT_MAX_DEG` onto it is refused (`canStep`).
+   */
+  ground?(x: number, z: number): number | null;
 }
 
 export interface NavGridOptions {
@@ -43,10 +48,21 @@ export interface NavGridOptions {
   radius?: number;
   /** Highest step between neighbouring cells (default NAV_MAX_STEP, what an Actor climbs: core/traversal.ts). */
   maxStep?: number;
+  /** The bare ground's height (overrides the sampler's `ground`): steep bare ground is no flight (`canStep`). */
+  ground?: (x: number, z: number) => number | null;
 }
 
 /** Steepest flight of steps blended into a ramp (m of rise per m: a temple's 0.25 / 0.3). */
 const STAIR_PER_M = 0.85;
+/**
+ * Steepest rise between neighbouring cells on bare ground (degrees): a slope that carries on looks like a flight of
+ * steps to the grid, so a rise past a step is let through as one; on bare terrain (the sampler's `ground`) it is
+ * one only up to this. The controller starts to slide at 40 (docs/design/solid-ground.md §3: ways at most 38).
+ */
+export const NAV_FLIGHT_MAX_DEG = 38;
+const BARE_RISE = Math.tan((NAV_FLIGHT_MAX_DEG * Math.PI) / 180);
+/** A floor within this of the bare ground's height is bare ground (m). */
+const ON_GROUND = 0.05;
 const WALK = 1;
 const KNOWN = 2;
 const BLOCKED_DYN = 4; // marked by agents that got stuck there
@@ -112,6 +128,8 @@ export class NavGrid {
   version = 0;
   /** Counts chunks finished (links and all); each finished chunk keeps its number (`Chunk.seq`). */
   private litSeq = 0;
+  /** The bare ground's height (options, else the sampler's), or null: steep bare ground is no flight. */
+  ground: ((x: number, z: number) => number | null) | null;
 
   constructor(
     private readonly sampler: CellSampler,
@@ -122,6 +140,7 @@ export class NavGrid {
     this.chunkSize = this.cell * this.chunkCells;
     this.radius = opts.radius ?? 80;
     this.maxStep = opts.maxStep ?? NAV_MAX_STEP;
+    this.ground = opts.ground ?? (sampler.ground ? (x, z) => sampler.ground!(x, z) : null);
   }
 
   // ---------------------------------------------------------------- building
@@ -478,7 +497,7 @@ export class NavGrid {
     const ha = this.cellHeight(ax, az);
     const hb = this.cellHeight(bx, bz);
     const diag = ax !== bx && az !== bz;
-    if (Math.abs(ha - hb) > this.maxStep && (diag || !this.onFlight(ax, az, bx, bz, ha, hb))) return false;
+    if (Math.abs(ha - hb) > this.maxStep && (diag || !this.onFlight(ax, az, bx, bz, ha, hb) || this.steepBare(ax, az, bx, bz, ha, hb))) return false;
     if (diag) {
       // Diagonal: don't cut corners of walls.
       if (this.cellState(bx, az) !== 1 || this.cellState(ax, bz) !== 1) return false;
@@ -489,6 +508,18 @@ export class NavGrid {
       return this.linkOpen(ax, az, bx, az) && this.linkOpen(bx, az, bx, bz) && this.linkOpen(ax, az, ax, bz) && this.linkOpen(ax, bz, bx, bz);
     }
     return this.linkOpen(ax, az, bx, bz);
+  }
+
+  /** A rise past `NAV_FLIGHT_MAX_DEG` between axial neighbours where either floor is bare ground (not a flight). */
+  private steepBare(ax: number, az: number, bx: number, bz: number, ha: number, hb: number): boolean {
+    const g = this.ground;
+    if (!g || Math.abs(hb - ha) <= BARE_RISE * this.cell) return false;
+    const c = this.cell;
+    const bare = (ix: number, iz: number, h: number) => {
+      const y = g((ix + 0.5) * c, (iz + 0.5) * c);
+      return y !== null && Math.abs(h - y) <= ON_GROUND;
+    };
+    return bare(ax, az, ha) || bare(bx, bz, hb);
   }
 
   /**

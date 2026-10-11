@@ -29,6 +29,7 @@ import type { GameFlow } from './GameFlow';
 import { withGuide } from './guide';
 import { AtlasMapSource } from './mapSource';
 import { DIFFICULTY_CHOICES, PRESETS } from './settings';
+import { missingY, standingY, walkableNear } from '../nav/heights';
 
 /** Where a quest marker points: actors, NPC homes, registered places, atlas landmarks, points. */
 export function registerMarkerResolvers(game: Game) {
@@ -43,12 +44,19 @@ export function registerMarkerResolvers(game: Game) {
     const inside = game.interiors?.resolve(id);
     if (inside) return inside;
     const l = game.locations?.get(id);
-    if (l) return new THREE.Vector3(l.position.x, l.position.y ?? 0, l.position.z);
+    // A place given without a height stands on the ground there (src/nav/heights.ts).
+    if (l) return new THREE.Vector3(l.position.x, missingY(l.position.y) ? standingY(game, l.position.x, l.position.z) : l.position.y, l.position.z);
     const placed = game.landmarks?.get(id);
     if (placed) return placed.position.clone();
     return landmark(id);
   };
   quests.registerResolver('location', (t) => (t.kind === 'location' ? location(t.id) : null));
+  // A bare point (a job's post, a guide waypoint) with no height stands on the ground, on the street side of a wall.
+  quests.registerResolver('point', (t) => {
+    if (t.kind !== 'point') return null;
+    const q = walkableNear(game, t.x, t.z) ?? t;
+    return new THREE.Vector3(q.x, missingY(t.y) || q !== t ? standingY(game, q.x, q.z) : t.y, q.z);
+  });
   quests.registerResolver('npc', (t) => {
     if (t.kind !== 'npc') return null;
     const actor = game.actors?.get(t.id);

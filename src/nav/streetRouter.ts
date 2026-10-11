@@ -18,8 +18,14 @@ export class StreetRouter {
   readonly n: number;
   readonly x: Float32Array;
   readonly z: Float32Array;
-  /** Connected component of each node (0 = the largest). */
+  /** Connected component of each node (0 = the largest, the city's network). */
   readonly comp: Int32Array;
+  /** Links of each node (0: a node nothing reaches, never an entry or an exit while a linked one is in reach). */
+  readonly deg: Int32Array;
+  /** Links cut while the game runs (`cut`: a wall the walk ran into), by adjacency slot. */
+  private readonly cutSlot: Uint8Array;
+  /** How many links are cut (`cut`). */
+  cuts = 0;
   /** Expansions in the last search (stats, tests). */
   lastExpanded = 0;
   private readonly off: Int32Array;
@@ -87,6 +93,9 @@ export class StreetRouter {
     this.done = new Uint32Array(n + 1);
     this.goalStamp = new Uint32Array(n);
     this.goalCost = new Float32Array(n);
+    this.cutSlot = new Uint8Array(m);
+    this.deg = new Int32Array(n);
+    for (let i = 0; i < n; i++) this.deg[i] = this.off[i + 1] - this.off[i];
     this.heapNode = new Int32Array(Math.max(16, m + 4));
     this.heapKey = new Float32Array(this.heapNode.length);
     this.comp = this.label();
@@ -100,6 +109,29 @@ export class StreetRouter {
 
   get empty() {
     return this.n === 0;
+  }
+
+  /**
+   * Cut the link a–b (both ways) for the rest of the session: the route found it walled (QuestRoute: the
+   * player pushed into it). Returns false when there is no such link or it is cut already.
+   */
+  cut(a: number, b: number): boolean {
+    let did = false;
+    for (const [p, q] of [[a, b], [b, a]]) {
+      for (let k = this.off[p]; k < this.off[p + 1]; k++) {
+        if (this.to[k] !== q || this.cutSlot[k]) continue;
+        this.cutSlot[k] = 1;
+        did = true;
+      }
+    }
+    if (did) this.cuts++;
+    return did;
+  }
+
+  /** Is the link a–b there and not cut? */
+  linked(a: number, b: number): boolean {
+    for (let k = this.off[a]; k < this.off[a + 1]; k++) if (this.to[k] === b && !this.cutSlot[k]) return true;
+    return false;
   }
 
   private key(cx: number, cz: number) {
@@ -195,7 +227,7 @@ export class StreetRouter {
       const gc = g[cur];
       for (let k = this.off[cur]; k < this.off[cur + 1]; k++) {
         const u = this.to[k];
-        if (done[u] === gen) continue;
+        if (done[u] === gen || this.cutSlot[k]) continue;
         const c = gc + this.w[k];
         if (seen[u] === gen && c >= g[u]) continue;
         seen[u] = gen;
@@ -230,36 +262,71 @@ export class StreetRouter {
   }
 
   /**
-   * The best way between two free points: A* that may start at any node within `reach` m of a and
-   * finish at any node within `reach` of b, the walk off the graph at each end costing `off` times
-   * its straight length. So the route doesn't run back to the node nearest the player when a node
-   * a little farther is on the way. Ends with no node within reach use the nearest one (within
-   * `far` m). Returns the node indices from the entry node to the exit node, or null.
+   * The nodes a route may start or end on near (x, z): those within `reach` m with a link, of the city's network
+   * (component 0) whenever one of its nodes is within `far` m (a node nothing reaches, or a stray island of streets
+   * behind a wall, is never an end while the network is in reach); else the nearest such node. Empty when none.
    */
-  routeBetween(ax: number, az: number, bx: number, bz: number, reach = 40, off = 1.35, far = 220, maxExpand = 60000): number[] | null {
+  ends(x: number, z: number, reach: number, far: number, out: number[] = []): number[] {
+    out.length = 0;
+    const near = this.within(x, z, reach, this.near);
+    let main = false;
+    for (const k of near) if (this.comp[k] === 0 && this.deg[k] > 0) (out.push(k), (main = true));
+    if (main) return out;
+    const k = this.nearest(x, z, far, 0);
+    if (k >= 0 && this.deg[k] > 0) {
+      out.push(k);
+      return out;
+    }
+    // No network in reach (an island far out): any linked node near, else the nearest linked one.
+    for (const j of near) if (this.deg[j] > 0) out.push(j);
+    if (out.length) return out;
+    let best = -1;
+    let bd = far * far;
+    for (const j of this.within(x, z, far, this.near)) {
+      const d = (this.x[j] - x) ** 2 + (this.z[j] - z) ** 2;
+      if (this.deg[j] > 0 && d < bd) ((bd = d), (best = j));
+    }
+    if (best >= 0) out.push(best);
+    return out;
+  }
+
+  private readonly exitList: number[] = [];
+  private readonly entryList: number[] = [];
+
+  /**
+   * The best way between two free points: A* that may start at any node within `reach` m of a and
+   * finish at any node within `opts.exitReach` (default `reach`) of b, the walk off the graph at each end costing
+   * `off` times its straight length (an exit's walk times `opts.exitCost(node)` too: the planner makes an exit with no
+   * clear line to the goal dearer). So the route doesn't run back to the node nearest the player when a node a little
+   * farther is on the way. Only linked nodes of the city's network are ends while one is within `far` m (`ends`).
+   * Returns the node indices from the entry node to the exit node, or null.
+   */
+  routeBetween(
+    ax: number,
+    az: number,
+    bx: number,
+    bz: number,
+    reach = 40,
+    off = 1.35,
+    far = 220,
+    maxExpand = 60000,
+    opts: { exitReach?: number; exitCost?: (node: number) => number } = {},
+  ): number[] | null {
     if (this.n === 0) return null;
     const gen = ++this.gen;
     const { g, came, seen, done, x, z, goalStamp, goalCost } = this;
     const V = this.n;
     // Exits.
-    let exits = this.within(bx, bz, reach, this.near);
-    if (!exits.length) {
-      const k = this.nearest(bx, bz, far);
-      if (k < 0) return null;
-      exits = [k];
-    }
+    const exits = this.ends(bx, bz, opts.exitReach ?? reach, far, this.exitList);
+    if (!exits.length) return null;
     for (const k of exits) {
       goalStamp[k] = gen;
-      goalCost[k] = Math.hypot(x[k] - bx, z[k] - bz) * off;
+      goalCost[k] = Math.hypot(x[k] - bx, z[k] - bz) * off * (opts.exitCost ? opts.exitCost(k) : 1);
     }
     // Entries.
     this.heapN = 0;
-    let entries = this.within(ax, az, reach, this.near);
-    if (!entries.length) {
-      const k = this.nearest(ax, az, far);
-      if (k < 0) return null;
-      entries = [k];
-    }
+    const entries = this.ends(ax, az, reach, far, this.entryList);
+    if (!entries.length) return null;
     for (const k of entries) {
       g[k] = Math.hypot(x[k] - ax, z[k] - az) * off;
       came[k] = -1;
@@ -289,7 +356,7 @@ export class StreetRouter {
       }
       for (let k = this.off[cur]; k < this.off[cur + 1]; k++) {
         const u = this.to[k];
-        if (done[u] === gen) continue;
+        if (done[u] === gen || this.cutSlot[k]) continue;
         const c = gc + this.w[k];
         if (seen[u] === gen && c >= g[u]) continue;
         seen[u] = gen;

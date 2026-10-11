@@ -15,6 +15,7 @@ import { codeLabel, type Action } from '../core/Input';
 import type { SaveSystem } from '../save/SaveSystem';
 import type { QuestLogView, QuestView } from '../ui/types';
 import type { UIManager } from '../ui/UIManager';
+import { standingY } from '../nav/heights';
 
 export const GUIDE_ID = 'guide-ad-forum';
 
@@ -28,7 +29,8 @@ export interface GuideStep {
 /** The route, measured on foot in the built city (walkable at the time of writing). */
 export const GUIDE_STEPS: GuideStep[] = [
   { id: 'circus', text: 'Go down into the valley of the Circus Maximus', points: [[249, 503]] },
-  { id: 'palatine', text: 'Follow the street under the Palatine, along the Circus', points: [[170, 448], [98, 394], [20, 335], [-50, 280]] },
+  // Palatine #2 stands on the road, not against the block beside it (phase 4b: it was at (20, 335), inside b609's front).
+  { id: 'palatine', text: 'Follow the street under the Palatine, along the Circus', points: [[170, 448], [98, 394], [17, 338], [-50, 280]] },
   { id: 'velabrum', text: 'Turn up the Vicus Tuscus, through the Velabrum', points: [[-44, 262], [-27, 187], [27, 84]] },
   { id: 'forum', text: 'Find the Golden Milestone in the Forum', points: [[48, 60], [56, 38], [25, 15], [6, 6]] },
 ];
@@ -158,7 +160,7 @@ export class FirstStepsGuide implements System {
       id: s.id,
       text: s.text,
       done: i < step,
-      target: i === step && wp ? { kind: 'point' as const, x: wp.x, y: 0, z: wp.z } : undefined,
+      target: i === step && wp ? { kind: 'point' as const, x: wp.x, y: standingY(this.game, wp.x, wp.z), z: wp.z } : undefined,
     }));
     const entries = ['I came in by the Porta Capena before dawn, with the last of the night carts. Everything in Rome begins at the Forum, beyond the valley of the Circus.'];
     if (step >= 2) entries.push('I walked the length of the Circus Maximus under the palaces of the Palatine.');
