@@ -20,6 +20,7 @@ import { pergola, velum } from '../../../arch/fabric/awnings';
 import { treadwheelCrane } from '../../../arch/fabric/construction';
 import { domus } from '../../../arch/fabric/domus';
 import type { Draw } from '../../../arch/fabric/draw';
+import { buildPlaza } from '../../../arch/fabric/streets';
 import { horrea } from '../../../arch/fabric/horrea';
 import { insula } from '../../../arch/fabric/insula';
 import type { BuildingOutput } from '../../../arch/fabric/types';
@@ -1183,61 +1184,109 @@ export interface QuayOpts {
   sheds?: boolean;
 }
 
+/** One column of a quay: where its wharf stands and how far the embankment falls to the water. */
+export interface QuayCol {
+  x0: number;
+  x1: number;
+  /** Wharf level at the head of the embankment (landmark-local y). */
+  top: number;
+  /** Fall from the wharf to the water; 0 where the ground does not fall away (no embankment). */
+  drop: number;
+}
+
 /**
  * A river quay along the −z edge of w × dd: a travertine embankment falling to the water in steps,
  * ramps, pierced mooring blocks along the face, bollards, treadwheel cranes and stacks of goods on
  * the wharf, and (optionally) a row of warehouse fronts behind.
+ *
+ * Phase 4b: the quay follows the ground it stands on. It is built in columns of about 12 m; each
+ * reads `ctx.groundAt` for its own wharf level and its own fall to the water, so the wharf is
+ * paving draped on the terrain (never a flat slab buried in the bank), the embankment exists only
+ * where the ground really falls, and the warehouse fronts stand at their own floor levels. On a
+ * levelled pad all columns agree and the quay is the flat one it used to be.
  */
-export function quay(d: Draw, ctx: LandmarkContext, w: number, dd: number, spots: Spot[], far: Draw, o: QuayOpts = {}) {
+export function quay(d: Draw, ctx: LandmarkContext, w: number, dd: number, spots: Spot[], far: Draw, o: QuayOpts = {}): QuayCol[] {
   const { detail, lm } = ctx;
   const rng = ctx.rng.fork('quay');
-  const drop = o.drop ?? 3.4;
+  const gy = (x: number, z: number) => ctx.groundAt(x, z);
   const qd = Math.min(o.depth ?? dd * 0.45, dd);
   const z0 = -dd / 2; // water edge
   const steps = 5;
   const sd = 1.4;
-  // Stepped embankment: wide steps (visual giant steps, 0.6 m) with walkable flights every so often.
-  for (let k = 0; k < steps; k++) {
-    const y1 = -drop + ((k + 1) * drop) / steps;
-    d.span('travertine', -w / 2, -drop - 1.5, z0 + k * sd, w / 2, y1, z0 + (k + 1) * sd, { collide: true });
+  const zh = z0 + steps * sd; // head of the embankment
+  const maxDrop = Math.max(o.drop ?? 3.4, 5);
+  const ncol = Math.max(1, Math.round(w / 12));
+  const cw = w / ncol;
+  const cols: QuayCol[] = [];
+  for (let i = 0; i < ncol; i++) {
+    const x0 = -w / 2 + i * cw, x1 = x0 + cw;
+    let top = -Infinity, low = Infinity;
+    for (let k = 0; k <= 3; k++) {
+      const x = x0 + (cw * k) / 3;
+      top = Math.max(top, gy(x, zh), gy(x, zh + 2));
+      low = Math.min(low, gy(x, z0 - 2.5));
+    }
+    const fall = Math.min(maxDrop, top - low + 0.4);
+    cols.push({ x0, x1, top: top + 0.02, drop: fall >= 0.8 ? fall : 0 });
   }
-  d.span('paving_travertine', -w / 2, -1.5, z0 + steps * sd, w / 2, 0.02, z0 + qd, { collide: true });
+  const colAt = (x: number) => cols[Math.min(ncol - 1, Math.max(0, Math.floor((x + w / 2) / cw)))];
+  // Stepped embankment: wide steps (visual giant steps, 0.6 m) with walkable flights every so often.
+  for (const c of cols) {
+    if (c.drop <= 0) continue;
+    for (let k = 0; k < steps; k++) {
+      const mid = gy((c.x0 + c.x1) / 2, z0 + (k + 0.5) * sd);
+      const y1 = Math.min(c.top, Math.max(c.top - c.drop + ((k + 1) * c.drop) / steps, mid + 0.02));
+      d.span('travertine', c.x0, c.top - c.drop - 1.5, z0 + k * sd, c.x1 + 0.02, y1, z0 + (k + 1) * sd, { collide: true });
+    }
+  }
+  // The wharf: paving draped on the ground behind the embankment (or to the water's edge where the ground does not fall).
+  for (const c of cols) {
+    const zs = c.drop > 0 ? zh : z0;
+    buildPlaza(d.b, [[c.x0, zs], [c.x1, zs], [c.x1, z0 + qd], [c.x0, z0 + qd]].map(([x, z]) => [x, z] as [number, number]), (x, z) => gy(x, z), { material: 'paving_travertine', collide: true, lift: 0.08, cell: 3, skirt: 0.4 });
+  }
   const nf = Math.max(1, Math.round(w / 40));
   for (let i = 0; i < nf; i++) {
     const x = -w / 2 + ((i + 0.5) * w) / nf;
-    flight(d.at(0, 0, 0, 0), x, z0 - 0.4, 2.2, -drop, 0, 'travertine');
+    const c = colAt(x);
+    if (c.drop > 0) flight(d.at(0, c.top, 0, 0), x, z0 - 0.4, 2.2, -c.drop, 0, 'travertine');
   }
-  // Ramps for carts at the ends (down-river and up-river).
   // Mooring blocks with a hole through them, set into the lowest step face.
   const nm = Math.floor(w / 9);
   for (let i = 0; i < nm; i++) {
     const x = -w / 2 + ((i + 0.5) * w) / nm;
-    d.span('travertine', x - 0.5, -drop + 0.3, z0 - 0.35, x + 0.5, -drop + 1.2, z0 + 0.2);
-    d.cyl('black', x, -drop + 0.75, z0 - 0.36, 0.16, 0.05, 8, { rx: Math.PI / 2 });
-    if (i % 2 === 0) d.cyl('travertine', x, 0.45, z0 + steps * sd + 0.6, 0.28, 0.9, 8, { collide: true });
+    const c = colAt(x);
+    if (c.drop <= 0) continue;
+    const dr = c.drop;
+    d.span('travertine', x - 0.5, c.top - dr + 0.3, z0 - 0.35, x + 0.5, c.top - dr + 1.2, z0 + 0.2);
+    d.cyl('black', x, c.top - dr + 0.75, z0 - 0.36, 0.16, 0.05, 8, { rx: Math.PI / 2 });
+    if (i % 2 === 0) d.cyl('travertine', x, gy(x, zh + 0.6) + 0.45, zh + 0.6, 0.28, 0.9, 8, { collide: true });
   }
   // Goods on the wharf.
   const goods: PropKind[] = ['amphora_stack', 'amphora_stack', 'sack', 'crate', 'dolium', 'amphora_rack', 'cart', 'handcart', 'basket'];
-  const zw0 = z0 + steps * sd + 2, zw1 = z0 + qd - 2;
+  const zw0 = zh + 2, zw1 = z0 + qd - 2;
   const ng = detail === 'high' ? Math.floor(w / 6) : Math.floor(w / 15);
   for (let i = 0; i < ng; i++) {
     const x = -w / 2 + 3 + rng.range(0, w - 6);
     const z = rng.range(zw0, Math.max(zw0 + 0.5, zw1));
-    placeProp(d, goods[rng.int(0, goods.length - 1)], x, 0.02, z, rng.range(0, 6.28), { rng: rng.fork(`g${i}`) });
-    if (i % 5 === 0) spots.push(spot(`${lm.id}:goods${i}`, 'container', x, 0.02, z - 1.2, 0));
+    const y = gy(x, z) + 0.1;
+    placeProp(d, goods[rng.int(0, goods.length - 1)], x, y, z, rng.range(0, 6.28), { rng: rng.fork(`g${i}`) });
+    if (i % 5 === 0) spots.push(spot(`${lm.id}:goods${i}`, 'container', x, gy(x, z - 1.2) + 0.1, z - 1.2, 0));
   }
   // Treadwheel cranes at the edge, swung out over the water.
   const nc = o.cranes ?? Math.max(1, Math.floor(w / 80));
   for (let i = 0; i < nc; i++) {
     const x = -w / 2 + ((i + 0.5) * w) / nc + 6;
-    treadwheelCrane(d.at(x, 0.02, z0 + steps * sd + 1.2, 0), 10 + rng.range(-1, 2), rng.fork(`c${i}`));
-    spots.push(spot(`${lm.id}:crane${i}`, 'npc', x + 2.5, 0.02, z0 + steps * sd + 4.5, Math.PI));
+    const yc = gy(x, zh + 1.2) + 0.1;
+    treadwheelCrane(d.at(x, yc, zh + 1.2, 0), 10 + rng.range(-1, 2), rng.fork(`c${i}`));
+    spots.push(spot(`${lm.id}:crane${i}`, 'npc', x + 2.5, gy(x + 2.5, zh + 4.5) + 0.1, zh + 4.5, Math.PI));
   }
   // Barges moored at the foot of the quay.
   const nb = Math.max(1, Math.floor(w / 70));
   for (let i = 0; i < nb; i++) {
     const x = -w / 2 + ((i + 0.3) * w) / nb;
-    const f = d.at(x, -drop + 0.15, z0 - 3.2, 0);
+    const c = colAt(x);
+    if (c.drop <= 0) continue;
+    const f = d.at(x, c.top - c.drop + 0.15, z0 - 3.2, 0);
     f.box('wood_dark', 0, 0, 0, 14, 1.2, 3.6);
     f.box('wood', 0, 0.62, 0, 13, 0.08, 3.2);
     for (let k = 0; k < 6; k++) placeProp(f, 'amphora_globular', -4 + k * 1.4, 0.66, 0.4 * (k % 2 ? 1 : -1), 0, { collide: false });
@@ -1245,13 +1294,32 @@ export function quay(d: Draw, ctx: LandmarkContext, w: number, dd: number, spots
   }
   if (o.sheds ?? true) {
     const sz = z0 + qd;
-    tabernae(d, -w / 2 + 1, w / 2 - 1, sz, Math.min(8, dd - qd - 0.5), 6.5, 'brick', detail, rng.fork('sheds'));
-    d.span('brick', -w / 2, 6.5, sz, w / 2, 7.2, sz + Math.min(8, dd - qd - 0.5), { collide: true });
-    tiledRoof(d, 'shed', 0, sz + Math.min(8, dd - qd - 0.5) / 2, w, Math.min(8, dd - qd - 0.5), 7.2, 'low', { pitchDeg: 14 });
-    far.span('brick', -w / 2, 0, sz, w / 2, 7.2, sz + Math.min(8, dd - qd - 0.5));
+    const sdp = Math.min(8, dd - qd - 0.5);
+    // Warehouse fronts in runs of two bays, each on its own floor (the ground under it, plus a sill).
+    const nseg = Math.max(1, Math.round(w / 8.4));
+    const sw = (w - 2) / nseg;
+    for (let i = 0; i < nseg; i++) {
+      const xa = -w / 2 + 1 + i * sw, xb = xa + sw;
+      let base = -Infinity;
+      for (let k = 0; k <= 4; k++) for (const zz of [sz, sz + sdp / 2, sz + sdp]) base = Math.max(base, gy(xa + (sw * k) / 4, zz));
+      base += 0.03;
+      const f = d.at(0, base, 0, 0);
+      tabernae(f, xa, xb + 0.02, sz, sdp, 6.5, 'brick', detail, rng.fork('sheds' + i));
+      f.span('brick', xa, 6.5, sz, xb + 0.02, 7.2, sz + sdp, { collide: true });
+      tiledRoof(f, 'shed', (xa + xb) / 2, sz + sdp / 2, sw + 0.1, sdp, 7.2, 'low', { pitchDeg: 14 });
+      // Under the floor, down to the lowest ground in the run: no void under a shed on a slope.
+      let lo = Infinity;
+      for (let k = 0; k <= 4; k++) for (const zz of [sz, sz + sdp]) lo = Math.min(lo, gy(xa + (sw * k) / 4, zz));
+      if (base - lo > 0.15) d.span('brick', xa, lo - 0.3, sz, xb + 0.02, base - 0.02, sz + sdp, { collide: true });
+      far.span('brick', xa, base - 0.2, sz, xb + 0.02, base + 7.2, sz + sdp);
+    }
   }
-  spots.push(spot(`${lm.id}:quay`, 'vista', 0, 0.02, z0 + steps * sd + 0.8, Math.PI), spot(`${lm.id}:boatman`, 'npc', -w * 0.1, -drop + 0.6, z0 + 0.5, Math.PI));
-  far.span('travertine', -w / 2, -drop, z0, w / 2, 0.02, z0 + qd);
+  const xm = 0;
+  spots.push(spot(`${lm.id}:quay`, 'vista', xm, gy(xm, zh + 0.8) + 0.1, zh + 0.8, Math.PI));
+  const cm = colAt(-w * 0.1);
+  spots.push(spot(`${lm.id}:boatman`, 'npc', -w * 0.1, cm.drop > 0 ? cm.top - cm.drop + 0.6 : gy(-w * 0.1, z0 + 0.5) + 0.1, z0 + 0.5, Math.PI));
+  for (const c of cols) far.span('travertine', c.x0, c.top - Math.max(c.drop, 0.5), z0, c.x1, c.top, z0 + qd);
+  return cols;
 }
 
 function buildHarbor(ctx: LandmarkContext): LandmarkBuild {

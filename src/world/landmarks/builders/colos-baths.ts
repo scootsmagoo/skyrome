@@ -188,7 +188,15 @@ function buildBathsTrajan(ctx: LandmarkContext): LandmarkBuild {
     [-EW, ED - wallT, -hemiOpen, ED],
     [hemiOpen, ED - wallT, EW, ED],
   ] as const) {
-    d.span('brick', x0, -1.5, z0, x1, wallH, z1, { collide: true });
+    // Down to the lowest ground along (and 1 m outside) the wall: on the Oppian's slope the footing
+    // used to hang up to 0.6 m over the hillside below the platform (phase 4b B10).
+    let gLo = -1;
+    const nsamp = Math.max(1, Math.ceil(Math.max(x1 - x0, z1 - z0) / 3));
+    for (let i = 0; i <= nsamp; i++) {
+      const sxp = x0 + ((x1 - x0) * i) / nsamp, szp = z0 + ((z1 - z0) * i) / nsamp;
+      for (const [ox, oz] of [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]] as const) gLo = Math.min(gLo, ctx.groundAt(sxp + ox, szp + oz));
+    }
+    d.span('brick', x0, Math.min(-1.5, gLo - 0.5), z0, x1, wallH, z1, { collide: true });
     d.span('travertine', x0 - 0.1, wallH, z0 - 0.1, x1 + 0.1, wallH + 0.25, z1 + 0.1);
   }
   // Side gates in the enclosure (east and west).
