@@ -116,6 +116,23 @@ Measured (`scripts/npcwalls.mjs`, 60 s per zone after 12 s to fill, two runs eac
 | Subura (Argiletum) | 252, 56 | 10, 10 | 12.8 %, 4.3 % | 0.5 %, 0.3 % |
 | Velabrum | 39, 64 | 22, 30 | 4.1 %, 6.8 % | 1.5 %, 1.3 % |
 
+With the walls learned per walker (2026-10-10; three runs with the fixes on, one off, on a machine other agents kept at
+a load of 30 to 100; the crowd differs every run):
+
+| zone | episodes per minute, off | on | blocked share, off | on |
+|---|---|---|---|---|
+| Forum | 40 | 69, 59, 74 | 1.3 % | 2.7 %, 2.2 %, 3.0 % |
+| Subura (Argiletum) | 112 | 20, 66, 46 | 8.0 % | 0.9 %, 4.3 %, 2.7 % |
+| Velabrum | 29 | 11, 15, 23 | 4.2 % | 0.4 %, 1.0 %, 2.0 % |
+
+The Subura and the Velabrum keep most of the gain. The Forum's on-runs are carried by single walkers: one NPC
+(cit-96, the same one in every run) rubbing something at (41, 2.7) on its way north made 40, 22 and 39 of the episodes
+while the grid sees open ground there and nothing stands 0.3 to 1.5 m up (the probe says `hit:static`, with 0 or 1 wall
+learned: it is blocked in bursts shorter than the 20 steps that teach it a wall; a paving seam the capsule catches on is
+the likeliest cause). With the old shared learning one walker's wall kept the whole crowd off such a spot; now each
+walker learns it alone, which is the price of no false alarm closing a doorway for everybody. The probe log
+(`npcwalls.mjs`) now says what was hit (`station`, `moving`, `static`) and how many walls the walker had learned.
+
 Still there: spots built against walls (an NPC arriving at a bench or a stall rubs the wall for a moment),
 the puteal enclosure and statue bases in the Forum (the one NPC that kept walking into the corner at
 about (38, 16) went from 45 episodes a minute to 14), and a crowd packed in a narrow street.
