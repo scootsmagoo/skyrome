@@ -32,7 +32,9 @@ triangles.
 
 | File | What |
 | --- | --- |
-| `src/world/terrain/heightmap.ts` | Atlas → height grid (pure). Hills, lowlands, the river valley, canals, quays, islands, roads leveled crosswise, building pads. Keeps the vector `features` for the renderer and the water. |
+| `src/world/terrain/heightmap.ts` | Atlas → height grid (pure). Hills, lowlands, the river valley, canals, quays, islands, roads leveled crosswise, building pads; v1 and v2 stamping (see Terrain profiles). Keeps the vector `features` (and v2's `retaining`) for the renderer, the water and the city. |
+| `src/world/terrain/profile.ts` | The terrain profile switch (`?terrain=v1\|v2`, default v2). |
+| `src/world/terrain/regrade.ts` | The least cut and fill that keeps a profile under a grade (pure). |
 | `src/world/terrain/riverbanks.ts` | Where the Tiber's banks are stone quays in AD 113 (`TIBER_QUAYS`), river chainage/side queries (`chain`, `footOn`), a segment index for fast nearest-segment queries. |
 | `src/world/terrain/terrainData.ts` | Per-sample shader data (pure): normals, road and pad signed-distance fields, pad kind, urban wear, garden lushness, canal water level. |
 | `src/world/terrain/romeInputs.ts` | Atlas → splat inputs: region density, garden polygons, pad kind by landmark category, trodden tracks (`desirePaths`: the worn track from the Porta Capena, round the gate, to the head of the triumphal road — the atlas has no road there). |
@@ -85,6 +87,59 @@ diagonally to the 2 m grid. Truly vertical rock (the Tarpeian Rock) is for landm
 
 Speed: polygon distances come from bilinear signed-distance grids (6 m cells), river queries go
 through a segment index, and roads are stamped segment by segment (6.8 s → 1.0 s for the city).
+
+### Terrain profiles: v1 and v2 (`profile.ts`, phase 4b, docs/design/solid-ground.md §3)
+
+`terrainProfile()` picks the ground: `?terrain=v1|v2` in the game, `SKYROME_TERRAIN` in Node,
+`setTerrainProfile()` or `buildHeightmap(src, { profile })` in tests. The default is **v2**;
+`buildHeightmap` stores it on `hm.profile`, and everything else reads it from there. **v1** is the
+ground before phase 4b, byte-identical (`tests/terrain-oneground.test.ts` hashes it): roads leveled
+first, then pads stamped over them with a fixed blend, smoothstep flanks, bilinear `heightAt`.
+
+v2 changes, all in `heightmap.ts` unless named:
+- **One ground** (G1a): `heightAt` interpolates on Rapier's b–c triangles and the drawn patch
+  uses the same diagonal.
+- **Stamp order natural → pads → roads** (`stampV2`). Pads blend over
+  `padMarginV2` = max(given, 1 + 2.6·|dh|) real m, at most 60 (dh: the pad's height over the
+  natural ground at its corners and 7 and 14 m out), as an eased bank of 30° or less; where blends
+  overlap, the nearer pad leads (weights over distance²), so one pad's long bank never buries a
+  neighbour. Near an atlas cliff a pad keeps its given margin (the cliff stays a barrier). A pad
+  that v2 moves carries `elevationV2` (the Porticus Margaritaria: 'mean', unpinned; the record
+  override is `terrainLandmarks()` in buildRome.ts, read by its pad and its builder alike).
+- **Roads last, capped at 25 % per 4 m.** Each road's natural profile is smoothed and regraded to
+  `ROAD_GRADE_TARGET` (21 %, under the 25 % cap so the 3.3 m grid's interpolation stays inside it)
+  by the least cut and fill (`regrade.ts`, the W6 helper). A level core of at least
+  `ROAD_CORE_MIN` real m each side (a grid cell, so the centreline reads only the road), then
+  eased banks of `ROAD_BANK_PER_M` × the cut or fill (≥ 6 m, ≤ 60 m). Inside a landmark's own
+  footprint (`TerrainPad.grow`: the pad polygon minus its +3 m grow) the pad wins: a road is pinned
+  where it runs through one or through an earlier road's core (`holdToFixed`), pulled toward the
+  level of a footprint its band grazes (as far as the cap allows), and where two footprints on its
+  line cannot be joined at the cap (`relaxPins`) or a graze is out of reach, its level core paves
+  over the footprint's edge. A road's banks leave an earlier road's core and shoulder alone.
+  Flights of steps (`paving: 'steps'`) keep their climb and v1's 6 m banks.
+- **Eased-linear flanks** (`easedLinear`): the top grade is 1.25 × the mean (smoothstep: 1.5 ×);
+  the steep designed flanks get longer runs (`V2_FLANK_RUN`: capitolium 71, arx 64, palatine-t34
+  53 real m). Plateaus and feet stay where they are. `node scripts/audit/g1b-flanks.mjs` prints each
+  hill's designed top grade under the profile (`grades.mjs` designMaxDeg uses v1's shape).
+- **Cliffs end 15 real m short of a road's band** (`clipCliff`, `CLIFF_ROAD_CLEAR`; flights of
+  steps keep theirs). `Terrain.ts` gives the far apron's landform the roads too, so it agrees.
+- **Tiber Island landings**: inside a bridge's corridor (`src.BRIDGES`) the island's flat top runs
+  `ISLAND_LANDING` (6) m on past its outline before the ship-like side drops.
+- **The water stays put**: in the river's channel and banks (to 16 m past the edge), the quays
+  and the canal, v2 keeps v1's roads and pads over the same natural ground, so the water's edge
+  does not move (`tests/terrain-v2.test.ts`).
+- **`hm.features.retaining`** (`retainingRuns`): every stretch of atlas-road edge where the ground
+  within 8 real m is steeper than 38° (drops into the river left out), in game m with the road's
+  surface and the ground 8 m out (above the road: a cut; below: a fill). The city builds retaining
+  walls along them (STREETS). Empty under v1.
+- **Saves** store the profile (`player.terrain`); a save from another profile (or none: v1), or
+  with the feet more than 1 m off whatever is under them, is put back on `findSafeGround` near its
+  x, z on load (`SaveSystem.ts`). Interiors and swimmers are left alone.
+
+Helpers (offline, seconds): `scripts/audit/g1b-roads.mjs [--plan]` (every atlas road's steepest
+4 m on its atlas line and the plan's line), `g1b-profile.mjs <road> [--plan]` (one road, metre by
+metre, with the pads it passes), `g1b-spot.mjs <x> <z>` (the grid round a point, its pads and
+roads), `g1b-flanks.mjs`.
 
 ## Rendering
 

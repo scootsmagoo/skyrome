@@ -939,7 +939,7 @@ export const ROAD_GRADE_TARGET = 0.21;
 /** v2: bank run per metre of cut or fill (real m). Eased-linear banks: 1.25 / 2.2 ≈ 30°. */
 export const ROAD_BANK_PER_M = 2.2;
 /** v2: the crosswise-level core of a road is at least this half width (real m), so the grid samples next to a narrow road's centreline sit on its profile. */
-const ROAD_CORE_MIN = 2.6;
+const ROAD_CORE_MIN = 3.4;
 
 /** v2 (§3 item 2): a pad blends over max(given, 1 + 2.6·|dh|) real m, at most 60: banks of 30° or less. */
 export function padMarginV2(given: number, dh: number): number {
@@ -976,8 +976,13 @@ function padRise(pad: TerrainPad, elev: number, ground: (x: number, z: number) =
  * Then the roads, each levelled crosswise to the profile of the natural ground under it (as v1),
  * smoothed and regraded to `ROAD_GRADE_TARGET` by the least cut and fill, with banks into the
  * padded ground as long as the earthwork needs. Inside a landmark's own footprint
- * (`TerrainPad.grow`) the pad still wins, and the road ramps to it. A pad blend stays its given
- * margin inside an atlas cliff's reach (`cliff`, 0..1 per sample): cliffs stay barriers.
+ * (`TerrainPad.grow`) the pad still wins, and the road ramps to it: a road pinned where it runs
+ * through a footprint or an earlier road's core, pulled toward the level of one its band grazes
+ * (as far as the cap allows), and where two footprints on its line are farther apart in height
+ * than the cap joins (`relaxPins`) or a graze is out of reach, its level core paves over the
+ * footprint's edge. A road's banks leave an earlier road's core and shoulder alone. A pad blend
+ * stays its given margin inside an atlas cliff's reach (`cliff`, 0..1 per sample): cliffs stay
+ * barriers. Flights of steps keep their own climb and v1's 6 m banks.
  */
 function stampV2(c: StampGrid, real: Float32Array, out: Float32Array, roads: readonly TerrainRoad[], pads: readonly TerrainPad[], roadMask: Float32Array, padMask: Float32Array, cliff: Float32Array) {
   const { S, minX, minZ, spacing, nx } = c;
@@ -1031,14 +1036,39 @@ function stampV2(c: StampGrid, real: Float32Array, out: Float32Array, roads: rea
 
   // 2. Roads over the padded ground, on their own (natural) profile: the vias and streets in
   //    atlas order, flights of steps last. A road keeps the level of what was there before it
-  //    where it crosses an earlier road's core or a landmark's own footprint (its profile is pinned
-  //    there and held to the grade cap on the way in), and does not stamp over them.
+  //    where its band meets an earlier road's core or a landmark's own footprint (its profile is
+  //    pinned there and held to the grade cap on the way in), and does not stamp over them.
   const sampleOut = (x: number, z: number) => sampleGrid(c, out, x, z);
   const taken = new Uint8Array(out.length);
-  const nearest = (x: number, z: number) => {
-    const ix = Math.round((x * S - minX) / spacing), iz = Math.round((z * S - minZ) / spacing);
-    return ix >= 0 && iz >= 0 && ix < nx && iz < c.nz ? iz * nx + ix : -1;
+  const guard = new Uint8Array(out.length);
+  /**
+   * The level of the nearest held sample (a landmark's footprint, an earlier road's core) within
+   * `r` real m of a point, and whether the point's own nearest sample is held (the road runs
+   * through it, not past it); NaN when there is none.
+   */
+  const heldNear = (x: number, z: number, r: number): { v: number; through: boolean; road: boolean } => {
+    const fx = (x * S - minX) / spacing, fz = (z * S - minZ) / spacing;
+    const rc = (r * S) / spacing;
+    const jx0 = Math.max(0, Math.ceil(fx - rc)), jx1 = Math.min(nx - 1, Math.floor(fx + rc));
+    const jz0 = Math.max(0, Math.ceil(fz - rc)), jz1 = Math.min(c.nz - 1, Math.floor(fz + rc));
+    let best = rc * rc, v = NaN, road = false;
+    for (let iz = jz0; iz <= jz1; iz++) {
+      for (let ix = jx0; ix <= jx1; ix++) {
+        const k = iz * nx + ix;
+        if (!core[k] && !taken[k]) continue;
+        const d2 = (ix - fx) * (ix - fx) + (iz - fz) * (iz - fz);
+        if (d2 <= best) {
+          best = d2;
+          v = out[k];
+          road = taken[k] === 1;
+        }
+      }
+    }
+    const ix = Math.round(fx), iz = Math.round(fz);
+    const k = ix >= 0 && iz >= 0 && ix < nx && iz < c.nz ? iz * nx + ix : -1;
+    return { v, through: k >= 0 && (core[k] === 1 || taken[k] === 1), road };
   };
+  const cellReal = spacing / S;
   const ordered = [...roads.filter((r) => r.paving !== 'steps'), ...roads.filter((r) => r.paving === 'steps')];
   for (const road of ordered) {
     const steps = road.paving === 'steps';
@@ -1047,23 +1077,46 @@ function stampV2(c: StampGrid, real: Float32Array, out: Float32Array, roads: rea
     const prof = smoothProfile(pts, 6);
     const s = new Float64Array(pts.length);
     for (let i = 1; i < pts.length; i++) s[i] = s[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
-    const fixed = new Float64Array(pts.length).fill(NaN);
-    let anyFixed = false;
+    // Held points: where the road runs through a footprint or an earlier road (`through`), and
+    // where its band only grazes one (within its half width, at least a grid cell: the samples
+    // the centreline's ground is read from). A graze is held only while the cap allows it.
+    const through = new Float64Array(pts.length).fill(NaN);
+    const onRoad = new Uint8Array(pts.length);
+    const graze = new Float64Array(pts.length).fill(NaN);
+    let anyThrough = false, anyGraze = false;
+    const r = Math.max(road.width / 2, ROAD_CORE_MIN) + cellReal;
     for (let i = 0; i < pts.length; i++) {
-      const k = nearest(pts[i][0], pts[i][1]);
-      if (k >= 0 && (core[k] || taken[k])) {
-        fixed[i] = sampleOut(pts[i][0], pts[i][1]);
-        anyFixed = true;
+      const h = heldNear(pts[i][0], pts[i][1], r);
+      if (Number.isNaN(h.v)) continue;
+      if (h.through) {
+        through[i] = h.v;
+        onRoad[i] = h.road ? 1 : 0;
+        anyThrough = true;
+      } else {
+        graze[i] = h.v;
+        anyGraze = true;
       }
     }
     // Flights of steps keep their climb (the city builds the stairs); every other road is capped.
-    let level = steps ? Float64Array.from(prof) : regrade(s, prof, ROAD_GRADE_TARGET).y;
-    if (anyFixed) level = holdToFixed(s, level, fixed, steps ? Infinity : ROAD_GRADE_TARGET);
-    if ((globalThis as any).__G1B_DEBUG === road.id) console.log(JSON.stringify(Array.from(pts, (p, i) => [Math.round(s[i]), +p[2].toFixed(1), +prof[i].toFixed(1), +level[i].toFixed(1), Number.isNaN(fixed[i]) ? null : +fixed[i].toFixed(1)])));
+    const cap = steps ? Infinity : ROAD_GRADE_TARGET;
+    const base = steps ? Float64Array.from(prof) : regrade(s, prof, ROAD_GRADE_TARGET).y;
+    // Two footprints on the line at levels the cap cannot join: the road ramps inside their edges.
+    if (anyThrough && !steps) relaxPins(s, through, onRoad, base, cap);
+    let level = anyThrough ? holdToFixed(s, base, through, cap) : base;
+    if (anyGraze && !steps) {
+      // A graze pulls the road toward the level beside it: the least change to the profile that
+      // meets every graze within the cap (Chebyshev, as the regrade), then the points it runs
+      // through. Where the cap cannot reach a graze's level the band paves over the footprint's
+      // edge (below).
+      const want = Float64Array.from(base, (v, i) => (Number.isNaN(graze[i]) ? v : graze[i]));
+      const fit = regrade(s, want, cap).y;
+      level = anyThrough ? holdToFixed(s, fit, through, cap) : fit;
+    }
     const half = road.width / 2;
     const coreW = Math.max(half, ROAD_CORE_MIN);
     // Bank run from the cut or fill at the centreline (against the padded ground): ≥ 6 m, at most 60.
-    const runs = Float64Array.from(level, (y, i) => Math.min(60, Math.max(6, ROAD_BANK_PER_M * Math.abs(y - sampleOut(pts[i][0], pts[i][1])))));
+    // Flights of steps keep v1's 6 m: they climb cliffs, which stay barriers beside them.
+    const runs = Float64Array.from(level, (y, i) => (steps ? 6 : Math.min(60, Math.max(6, ROAD_BANK_PER_M * Math.abs(y - sampleOut(pts[i][0], pts[i][1]))))));
     let maxRun = 6;
     for (const r of runs) maxRun = Math.max(maxRun, r);
     const reach = coreW + maxRun;
@@ -1101,6 +1154,7 @@ function stampV2(c: StampGrid, real: Float32Array, out: Float32Array, roads: rea
       }
     }
     const mine: number[] = [];
+    const shoulder: number[] = [];
     for (let iz = iz0; iz <= iz1; iz++) {
       for (let ix = ix0; ix <= ix1; ix++) {
         const q = (iz - iz0) * bw + (ix - ix0);
@@ -1109,13 +1163,46 @@ function stampV2(c: StampGrid, real: Float32Array, out: Float32Array, roads: rea
         const k = iz * nx + ix;
         const m = 1 - smooth(half - 0.5, half + 1.5, d);
         if (m > roadMask[k]) roadMask[k] = m;
-        if (core[k] || taken[k]) continue;
+        // An earlier road's core stays; a footprint stays except under this road's own level core,
+        // where a road that could not reach its level (a graze the cap cannot meet, a point it runs
+        // through dropped by relaxPins) paves over it.
+        if (taken[k] || (core[k] && (d > coreW || Math.abs(bestT[q] - out[k]) < 0.05))) continue;
+        // Its banks leave an earlier road's shoulder (a grid cell past its core: the samples that
+        // road's centreline is read from) alone.
+        if (guard[k] && d > coreW) continue;
         const w = d <= coreW ? 1 : 1 - easedLinear((d - coreW) / bestR[q]);
         out[k] = out[k] + (bestT[q] - out[k]) * w;
-        if (d <= coreW && !steps) mine.push(k);
+        if (!steps && d <= coreW) mine.push(k);
+        if (!steps && d <= coreW + cellReal) shoulder.push(k);
       }
     }
     for (const k of mine) taken[k] = 1;
+    for (const k of shoulder) guard[k] = 1;
+  }
+}
+
+/**
+ * Drops held points (`pins`, NaN where free; in place) until every two neighbours can be joined at
+ * grade `g`: of a pair too far apart in height, the one that is not on an earlier road (`fixedRoad`
+ * 1: a crossing keeps its level), and of two such the one farther from the free profile `y`. So a
+ * road that runs through two footprints at levels the cap cannot join ramps inside their edges. Pure.
+ */
+export function relaxPins(s: ArrayLike<number>, pins: Float64Array, fixedRoad: ArrayLike<number>, y: ArrayLike<number>, g: number) {
+  const lim = g * 1.0001;
+  for (let guard = 0; guard < pins.length; guard++) {
+    let a = -1, drop = -1;
+    for (let i = 0; i < pins.length && drop < 0; i++) {
+      if (Number.isNaN(pins[i])) continue;
+      if (a >= 0 && s[i] > s[a] && Math.abs(pins[i] - pins[a]) / (s[i] - s[a]) > lim) {
+        const softA = !fixedRoad[a], softB = !fixedRoad[i];
+        if (softA && softB) drop = Math.abs(pins[a] - y[a]) >= Math.abs(pins[i] - y[i]) ? a : i;
+        else if (softA) drop = a;
+        else if (softB) drop = i;
+      }
+      a = i;
+    }
+    if (drop < 0) return;
+    pins[drop] = NaN;
   }
 }
 
@@ -1123,30 +1210,33 @@ function stampV2(c: StampGrid, real: Float32Array, out: Float32Array, roads: rea
  * A profile held to points that may not move (`fixed`, NaN where free): every free point is
  * clamped into the cones of grade `g` from all the fixed ones (max over j of v_j − g·|s − s_j|,
  * min of v_j + g·|s − s_j|), so a G-Lipschitz profile stays G-Lipschitz where the fixed points
- * allow it. Pure.
+ * allow it. Between two fixed points farther apart in height than `g` allows, the cone there is
+ * the least grade that joins them (the profile ramps rather than steps); nowhere else. Pure.
  */
 export function holdToFixed(s: ArrayLike<number>, y: ArrayLike<number>, fixed: ArrayLike<number>, g: number): Float64Array {
   const n = y.length;
-  // Fixed points farther apart in height than `g` allows (a landmark on the road's line above its
-  // climb): the least grade that joins them, so the road ramps into them instead of stepping.
+  // The grade allowed on each step (i − 1 → i): `g`, or between two fixed points farther apart in
+  // height than `g` allows (a landmark on the road's line above its climb), the least grade that
+  // joins them, so the road ramps into them instead of stepping; only inside that gap.
+  const gs = new Float64Array(n).fill(g);
   if (Number.isFinite(g)) {
     let last = -1;
     for (let i = 0; i < n; i++) {
       if (Number.isNaN(fixed[i])) continue;
-      if (last >= 0 && s[i] > s[last]) g = Math.max(g, (Math.abs(fixed[i] - fixed[last]) / (s[i] - s[last])) * 1.0001);
+      if (last >= 0 && s[i] > s[last]) {
+        const need = (Math.abs(fixed[i] - fixed[last]) / (s[i] - s[last])) * 1.0001;
+        if (need > g) for (let k = last + 1; k <= i; k++) gs[k] = need;
+      }
       last = i;
     }
   }
   const lo = new Float64Array(n).fill(-Infinity), hi = new Float64Array(n).fill(Infinity);
   let l = -Infinity, h = Infinity;
   for (let i = 0; i < n; i++) {
-    if (i > 0 && Number.isFinite(g)) {
-      const d = (s[i] - s[i - 1]) * g;
+    if (i > 0) {
+      const d = (s[i] - s[i - 1]) * gs[i];
       l -= d;
       h += d;
-    } else if (i > 0) {
-      l = -Infinity;
-      h = Infinity;
     }
     if (!Number.isNaN(fixed[i])) {
       l = Math.max(l, fixed[i]);
@@ -1158,13 +1248,10 @@ export function holdToFixed(s: ArrayLike<number>, y: ArrayLike<number>, fixed: A
   l = -Infinity;
   h = Infinity;
   for (let i = n - 1; i >= 0; i--) {
-    if (i < n - 1 && Number.isFinite(g)) {
-      const d = (s[i + 1] - s[i]) * g;
+    if (i < n - 1) {
+      const d = (s[i + 1] - s[i]) * gs[i + 1];
       l -= d;
       h += d;
-    } else if (i < n - 1) {
-      l = -Infinity;
-      h = Infinity;
     }
     if (!Number.isNaN(fixed[i])) {
       l = Math.max(l, fixed[i]);
