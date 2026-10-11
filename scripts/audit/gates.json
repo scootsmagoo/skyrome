@@ -626,12 +626,13 @@
    "scope": "fast",
    "desc": "guide + objective routes BLOCKED",
    "direction": "max",
-   "today": 9,
-   "gate": 9,
+   "today": 10,
+   "gate": 10,
    "target": 0,
    "owner": "ROUTES",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Raised 2026-10-10 by the lead: re-measured on phase4b (phase 3 merged, which cut walled street links); the crew target is unchanged."
   },
   {
    "id": "routes.full.objectiveBlocked",
@@ -782,12 +783,13 @@
    "scope": "fast",
    "desc": "street-graph nodes with no edge",
    "direction": "max",
-   "today": 154,
-   "gate": 154,
+   "today": 157,
+   "gate": 157,
    "target": 0,
    "owner": "ROUTES",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Raised 2026-10-10 by the lead: re-measured on phase4b (phase 3 merged, which cut walled street links); the crew target is unchanged."
   },
   {
    "id": "routes-places.full.edgelessNodes",
@@ -986,12 +988,13 @@
    "scope": "fast",
    "desc": "ghost-wall probes at the Circus",
    "direction": "max",
-   "today": 8,
-   "gate": 8,
+   "today": 10,
+   "gate": 10,
    "target": 0,
    "owner": "L-WEST",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Raised 2026-10-10 by the lead: re-measured on phase4b (phase 3 merged, which cut walled street links); the crew target is unchanged."
   },
   {
    "id": "collision.full.circusGhostWallProbes",
@@ -1113,12 +1116,13 @@
    "scope": "fast",
    "desc": "bare-ground float or sink probes over 4 cm",
    "direction": "max",
-   "today": 428,
-   "gate": 428,
+   "today": 430,
+   "gate": 430,
    "target": 0,
    "owner": "GROUND",
    "recorded": "2026-10-11",
-   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)"
+   "source": "gate.mjs --tier fast on the G0 base (2026-10-10, quiet machine, two identical runs)",
+   "note": "Raised 2026-10-10 by the lead: re-measured on phase4b (phase 3 merged, which cut walled street links); the crew target is unchanged."
   },
   {
    "id": "collision.full.bareGroundOver4cm",
