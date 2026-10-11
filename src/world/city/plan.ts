@@ -19,7 +19,8 @@
 import { Rng, hash2 } from '../../core/Rng';
 import type * as Atlas from '../../data/atlas';
 import { WORLD_SCALE } from '../coords';
-import { footprintPolygon, segDist2, signedDistance, type P2 } from '../terrain/heightmap';
+import { footprintPolygon, segDist2, signedDistance, type P2, type TerrainQuay, type TerrainRiver } from '../terrain/heightmap';
+import { chain, footOn, resolveQuays, type ChainedLine, type ResolvedQuay } from '../terrain/riverbanks';
 import { CORRIDORS, DISTRICT_LANDMARKS, EXTRA_ROADS, OPEN_SPACES, PINNED_OPEN, QUARTERS, SIGHTLINE_LANDMARKS, SIGHTLINE_RADIUS, SKIPPED_AQUEDUCTS, WILD_LANDMARKS, type Quarter } from './data';
 import { SIDEWALK } from './datum';
 import { auditRoadEnds, probeEnd } from './audit';
@@ -1004,13 +1005,13 @@ const DROP_FROM = 0.75, DROP_TO = -0.25;
 /**
  * The drawn terrain's drop under `heightAt`, as terrainMaterial.ts draws the leaf level: at every
  * lattice vertex DRAWN_DROP × smoothstep(0.75, −0.25, d) of its signed distance d to the nearest
- * basalt road's band (or flight of steps), or to the nearest pad (landmark pads, unpaved roads) —
- * the fields terrainData.ts bakes —, linear over the lattice triangles the mesh draws (b–c under
- * terrain v2, a–d under v1). Computed per vertex on demand. (Unpaved paths and quay tops, also
- * pads in terrainData, are left out: none lies under the city's streets.) Null without features.
+ * basalt road's band (or flight of steps), or to the nearest pad (landmark pads, unpaved roads, quay
+ * tops) — the fields terrainData.ts bakes —, linear over the lattice triangles the mesh draws (b–c
+ * under terrain v2, a–d under v1). Computed per vertex on demand. (The one unpaved desire path, also
+ * a pad in terrainData, is left out.) Null without features.
  */
 export function drawnDrop(hm: HeightSource): ((x: number, z: number) => number) | null {
-  const feat = hm.features as { roads?: readonly { points: readonly P2[]; width: number; paving?: string }[]; pads?: readonly { polygon: readonly P2[] }[] } | null | undefined;
+  const feat = hm.features as { roads?: readonly { points: readonly P2[]; width: number; paving?: string }[]; pads?: readonly { polygon: readonly P2[] }[]; rivers?: readonly TerrainRiver[]; quays?: readonly TerrainQuay[] } | null | undefined;
   if (!feat || typeof hm.minX !== 'number' || typeof hm.minZ !== 'number' || typeof hm.spacing !== 'number') return null;
   const S = WORLD_SCALE, x0 = hm.minX, z0 = hm.minZ, sp = hm.spacing, bc = hm.profile !== 'v1';
   const reach = DROP_FROM + 0.01;
@@ -1041,6 +1042,19 @@ export function drawnDrop(hm: HeightSource): ((x: number, z: number) => number) 
     const b = polyBounds(poly as Pt[]);
     put(pads, b.minX - reach, b.minZ - reach, b.maxX + reach, b.maxZ + reach, { poly, ...b });
   }
+  // Quay tops (terrainData: a pad from half − 0.5 to half + width out from the river's axis, s0..s1 along it).
+  type QuayP = { river: TerrainRiver; line: ChainedLine; q: ResolvedQuay; minX: number; minZ: number; maxX: number; maxZ: number };
+  const quays = new Map<number, QuayP[]>();
+  for (const river of feat.rivers ?? []) {
+    if (!(feat.quays ?? []).some((q) => q.river === river.id)) continue;
+    const line = chain(river.centerline);
+    for (const q of resolveQuays(feat.quays ?? [], river.id, line)) {
+      const pad = Math.max(...river.width) / 2 + (q.quay.width ?? 12) + 4;
+      const xs = [q.quay.from[0], q.quay.to[0]], zs = [q.quay.from[1], q.quay.to[1]];
+      const b = { minX: (Math.min(...xs) - pad) * S, minZ: (Math.min(...zs) - pad) * S, maxX: (Math.max(...xs) + pad) * S, maxZ: (Math.max(...zs) + pad) * S };
+      put(quays, b.minX, b.minZ, b.maxX, b.maxZ, { river, line, q, ...b });
+    }
+  }
   const ss = (d: number) => {
     const t = Math.min(1, Math.max(0, (d - DROP_FROM) / (DROP_TO - DROP_FROM)));
     return t * t * (3 - 2 * t);
@@ -1061,6 +1075,15 @@ export function drawnDrop(hm: HeightSource): ((x: number, z: number) => number) 
     for (const p of pads.get(bk) ?? []) {
       if (x < p.minX - reach || x > p.maxX + reach || z < p.minZ - reach || z > p.maxZ + reach) continue;
       pd = Math.min(pd, signedDistance(x, z, p.poly));
+    }
+    for (const qp of quays.get(bk) ?? []) {
+      if (x < qp.minX || x > qp.maxX || z < qp.minZ || z > qp.maxZ) continue;
+      const f = footOn(qp.line, x / S, z / S);
+      if (f.side !== qp.q.side) continue;
+      const w0 = qp.river.width[f.i] ?? qp.river.width[qp.river.width.length - 1];
+      const w1 = qp.river.width[f.i + 1] ?? w0;
+      const half = (w0 + (w1 - w0) * f.t) / 2;
+      pd = Math.min(pd, Math.max(half - 0.5 - f.d, f.d - (half + (qp.q.quay.width ?? 12)), qp.q.s0 - f.s, f.s - qp.q.s1) * S);
     }
     v = DRAWN_DROP * Math.max(ss(rd), ss(pd));
     cache.set(k, v);

@@ -255,6 +255,21 @@ export class PavingIndex {
     return id;
   }
 
+  /** Adds convex pieces to a surface registered with addPieces (an end apron decided later). */
+  extend(id: number, polys: readonly Vec2[][]) {
+    const s = this.shapes[id];
+    if (!s?.pieces) return;
+    for (const q of polys) {
+      const c = makeConv(q);
+      s.pieces.push(c);
+      s.minX = Math.min(s.minX, c.minX);
+      s.maxX = Math.max(s.maxX, c.maxX);
+      s.minZ = Math.min(s.minZ, c.minZ);
+      s.maxZ = Math.max(s.maxZ, c.maxZ);
+    }
+    this.bucket(s);
+  }
+
   private bucket(s: PaveShape) {
     const id = s.id;
     const B = PavingIndex.B;
@@ -262,8 +277,8 @@ export class PavingIndex {
       for (let bx = Math.floor(s.minX / B); bx <= Math.floor(s.maxX / B); bx++) {
         const k = (bz + 32768) * 65536 + bx + 32768;
         const l = this.buckets.get(k);
-        if (l) l.push(id);
-        else this.buckets.set(k, [id]);
+        if (!l) this.buckets.set(k, [id]);
+        else if (!l.includes(id)) l.push(id);
       }
   }
 
@@ -476,6 +491,8 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
   const drop = plan.drop ?? null;
   /** Registers a surface whose work item is added at (x, z): only if it is built (outside the area nothing cuts round it). */
   const reg = (x: number, z: number, rank: number, pts: readonly Vec2[], w: number) => (inArea(x, z) ? pave.add(rank, pts, w) : -1);
+  /** Road and street pieces, for their end aprons once every surface is registered. */
+  const capped: { id: number; spec: StreetSpec }[] = [];
   /** Is the piece [p0, p1] of a line built (its middle point, as the pieces' items are added, in the area)? */
   const pieceBuilt = (line: readonly Vec2[], [p0, p1]: [number, number]) => {
     const pts = sliceLine(line, p0, p1);
@@ -590,6 +607,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
           // Registered by what it draws (the same cross-sections), so what it outranks is cut round it exactly.
           const spec = roadPieceSpec(road, c, pts, capStart, capEnd, dips, {});
           const id = inArea(mid[0], mid[1]) ? pave.addPieces(RANK.road, streetFootprint(spec)) : -1;
+          if (id >= 0) capped.push({ id, spec });
           add(mid[0], mid[1], T(`road:${road.id}:${c}`, (bld) => buildStreet(bld, { ...spec, conform: conformOf(id) }, H)));
         });
       }
@@ -650,6 +668,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
           const capStart = k2 === 0 || !pieceBuilt(st.points, pieces[k2 - 1]), capEnd = k2 === pieces.length - 1 || !pieceBuilt(st.points, pieces[k2 + 1]);
           const spec = minorPieceSpec(st, pts, capStart, capEnd, {});
           const id = inArea(mid[0], mid[1]) ? pave.addPieces(RANK[st.kind], streetFootprint(spec)) : -1;
+          if (id >= 0) capped.push({ id, spec });
           add(mid[0], mid[1], T(`street:${st.id}:${st.kind}`, (bld) => buildStreet(bld, { ...spec, conform: conformOf(id) }, H)));
         });
       }
@@ -855,6 +874,29 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
       }
     }, 'detail');
   }
+  // ---- end aprons: a capped end with no other surface beyond it runs out to the ground (its
+  // footprint grows by the apron, so what it outranks is cut round that too).
+  for (const { id, spec } of capped) {
+    const P = spec.points;
+    if (P.length < 2) continue;
+    const paved = (spec.kind ?? 'paved') === 'paved';
+    const hw = (spec.roadWidth ?? (paved ? 5 : 3.2)) / 2, reach = paved ? hw + (spec.sidewalk ?? 1.8) : hw;
+    const A = paved ? APRON : LANE_APRON;
+    const open = (p: Vec2, q: Vec2) => {
+      const dx = p[0] - q[0], dz = p[1] - q[1], l = Math.hypot(dx, dz) || 1;
+      const tx = dx / l, tz = dz / l, nx = -tz, nz = tx;
+      for (const f of [0.3, 0.8]) for (const o of [-0.6, 0, 0.6]) if (pave.any(p[0] + tx * A * f + nx * reach * o, p[1] + tz * A * f + nz * reach * o, id)) return false;
+      return true;
+    };
+    const start = (spec.capStart ?? true) && open(P[0], P[1]);
+    const end = (spec.capEnd ?? true) && open(P[P.length - 1], P[P.length - 2]);
+    if (!start && !end) continue;
+    if (start) pave.extend(id, [streetFootprint({ ...spec, apronStart: true, apronEnd: false })[0]]);
+    if (end) pave.extend(id, [streetFootprint({ ...spec, apronStart: false, apronEnd: true })[0]]);
+    spec.apronStart = start;
+    spec.apronEnd = end;
+  }
+
   return { cells, junctions, spots, runs, lamps, carts, stairPaths };
 }
 

@@ -51,6 +51,9 @@ export interface StreetSpec {
   conform?: ConformOpts;
   /** Material of the outer apron of a lane (default the lane's own): a travertine edge course where an open road meets paving. */
   apronMaterial?: MaterialId;
+  /** A conformed street's capped end that meets bare ground runs out to it in a walkable apron (no step at its end). */
+  apronStart?: boolean;
+  apronEnd?: boolean;
 }
 
 export interface StreetResult {
@@ -180,6 +183,26 @@ export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn
         }
       }
     }
+    // A capped end over bare ground slopes down to it as the sides do (the end cross-section's
+    // kerbs have ramped to the carriageway already).
+    const endApron = (i: number, sgn: number) => {
+      const reach = paved ? APRON : LANE_APRON;
+      const tx = nor[i][1] * sgn, tz = -nor[i][0] * sgn;
+      const W = V[i].map((v) => sheet.v(v.x + tx * reach, v.z + tz * reach, APRON_FLUSH));
+      for (let k = 0; k + 1 < prof.length; k++) {
+        const mat = strips[k].expect === 'up' ? strips[k].mat : null;
+        if (!mat) continue;
+        if (sgn > 0) {
+          sheet.tri(V[i][k], W[k], W[k + 1], mat);
+          sheet.tri(V[i][k], W[k + 1], V[i][k + 1], mat);
+        } else {
+          sheet.tri(V[i][k], V[i][k + 1], W[k + 1], mat);
+          sheet.tri(V[i][k], W[k + 1], W[k], mat);
+        }
+      }
+    };
+    if ((spec.capStart ?? true) && spec.apronStart) endApron(0, -1);
+    if ((spec.capEnd ?? true) && spec.apronEnd) endApron(n - 1, 1);
     // Ends that continue in the next piece of the same street are seams, not open edges.
     const endLine = (i: number): [SV, SV] => [V[i][0], V[i][prof.length - 1]];
     const seams: [SV, SV][] = [];
@@ -297,6 +320,13 @@ export function streetFootprint(spec: StreetSpec): Vec2[][] {
   const { pts, nor, miter } = streetFrame(spec);
   const side = (i: number, s: number): Vec2 => [pts[i][0] + nor[i][0] * s * reach * miter[i], pts[i][1] + nor[i][1] * s * reach * miter[i]];
   const out: Vec2[][] = [];
+  const end = (i: number, sgn: number) => {
+    const a = paved ? APRON : LANE_APRON, tx = nor[i][1] * sgn * a, tz = -nor[i][0] * sgn * a;
+    const l = side(i, -1), r = side(i, 1);
+    out.push([l, r, [r[0] + tx, r[1] + tz], [l[0] + tx, l[1] + tz]]);
+  };
+  if (spec.conform && (spec.capStart ?? true) && spec.apronStart) end(0, -1);
+  if (spec.conform && (spec.capEnd ?? true) && spec.apronEnd) end(pts.length - 1, 1);
   for (let i = 0; i + 1 < pts.length; i++) {
     const q: Vec2[] = [side(i, -1), side(i + 1, -1), side(i + 1, 1), side(i, 1)];
     let sign = 0, convex = true;
