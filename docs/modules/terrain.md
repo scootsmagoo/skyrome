@@ -153,7 +153,10 @@ today's, byte-identical):
 - **Cliffs end 15 real m short of a road's band** (`clipCliff`, `CLIFF_ROAD_CLEAR`; flights of
   steps keep theirs). `Terrain.ts` gives the far apron's landform the roads too, so it agrees.
 - **Tiber Island landings**: inside a bridge's corridor (`src.BRIDGES`) the island's flat top runs
-  `ISLAND_LANDING` (6) m on past its outline before the ship-like side drops.
+  `ISLAND_LANDING` (6) m on past its outline before the ship-like side drops. It keeps the island's
+  streets joined to the bridges (`tests/city.roads.test.ts`), but under the Pons Cestius it also
+  fills the foot of the bridge's first arch (shot `after/g1b/v2/rc2-island-edge.jpg`): the bridge
+  builder's abutment (L-EAST) should meet it, or the corridor shrink to the deck.
 - **The water stays put**: in the river's channel and banks (to 16 m past the edge), the quays
   and the canal, v2 keeps v1's roads and pads over the same natural ground, so the water's edge
   does not move (`tests/terrain-v2.test.ts`).
