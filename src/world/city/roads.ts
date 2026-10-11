@@ -1123,8 +1123,8 @@ export function coverKinds(plan: CityPlan, x0: number, z0: number, size: number,
       if (k) out.set(i, k);
     }
   }
-  // Lone cells (no covered 4-neighbour) read as stray tiles: drop them, and patches of two (slivers
-  // of a few m²) unless they reach the edge of this window (they may go on beyond it).
+  // Lone cells (no covered 4-neighbour) read as stray tiles: drop them, and patches (8-connected)
+  // under COVER_MIN_CELLS (slivers under 3 m²) unless they reach the edge of this window.
   for (const [i, k] of [...out]) {
     if (![i - 1, i + 1, i - g.nx, i + g.nx].some((o) => out.get(o) === k)) out.delete(i);
   }
@@ -1138,7 +1138,8 @@ export function coverKinds(plan: CityPlan, x0: number, z0: number, size: number,
       const i = comp[q];
       const ix = i % g.nx, iz = (i / g.nx) | 0;
       if (ix <= ix0 || ix >= ix1 || iz <= iz0 || iz >= iz1) edge = true;
-      for (const o of [i - 1, i + 1, i - g.nx, i + g.nx]) {
+      // Diagonal neighbours too: the marching squares join them into one strip (along a slanting house front).
+      for (const o of [i - 1, i + 1, i - g.nx, i + g.nx, i - g.nx - 1, i - g.nx + 1, i + g.nx - 1, i + g.nx + 1]) {
         if (!seen.has(o) && out.get(o) === k) {
           seen.add(o);
           comp.push(o);
@@ -1150,8 +1151,11 @@ export function coverKinds(plan: CityPlan, x0: number, z0: number, size: number,
   return out;
 }
 
-/** Ground-cover patches of fewer lattice cells are slivers (a few m²) and are left out. */
-const COVER_MIN_CELLS = 3;
+/**
+ * Ground-cover patches of fewer lattice points are slivers and are left out: the raster is 2 m, so
+ * the marching squares round one point lay a 2 m² diamond (under 3 m²), round two about 4 m².
+ */
+const COVER_MIN_CELLS = 2;
 function coverSet(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: number, size: number, inSet: (i: number) => boolean, material: 'dirt' | 'cobbles', lift: number, pave: PavingIndex | null = null, ground: GroundGrid | null = null, drop: ((x: number, z: number) => number) | null = null) {
   const g = plan.grid;
   const c = g.cell;
