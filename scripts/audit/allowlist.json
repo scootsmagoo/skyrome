@@ -1,0 +1,23 @@
+{
+ "_doc": "False positives the audit tools drop or set aside (phase 4b G0). Any new entry needs the lead's approval and a screenshot proving the false positive (docs/design/solid-ground.md, section 4).",
+ "structures": [
+  {
+   "owner": "circus-maximus",
+   "kind": "floating",
+   "reason": "Circus arcade spans: the supports under the seating bays are filled in at runtime (circus-bays / circus-bays-far), the audit records only the drawn build",
+   "until": "structures.mjs records the runtime-filled spans"
+  },
+  {
+   "owner": "circus-vaticanus",
+   "kind": "floating",
+   "reason": "same as circus-maximus",
+   "until": "structures.mjs records the runtime-filled spans"
+  },
+  {
+   "owner": "colosseum",
+   "kind": "floating",
+   "reason": "cavea underside: the colos-kit instanced rings are filled in at runtime (the cavea is closed down to the terrace by L-EAST item 4, which must confirm it in game first)",
+   "until": "structures.mjs records the runtime-filled spans; L-EAST tracks the raw count as structures.colosseumCaveaStretches"
+  }
+ ]
+}

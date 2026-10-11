@@ -9,3 +9,5 @@ playwright-report/
 .claude/
 .cache/
 __pycache__/
+# audit tool outputs (phase 4b; the committed numbers are scripts/audit/baseline/)
+scripts/audit/out/

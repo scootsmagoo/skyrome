@@ -988,8 +988,32 @@ function writePng(out, f, ox, oz, cw, ch) {
   log(`slope map ${W}×${H} → ${out}`);
 }
 
+// ------------------------------------------------------------------ gate numbers (scripts/audit/gate.mjs reads these)
+const T38 = Math.tan((38 * Math.PI) / 180);
+let wayCells38 = 0, streetCells38 = 0, roadCells38 = 0;
+for (let k = 0; k < NC; k++) {
+  if (grade[k] <= T38) continue;
+  if (cls[k] === G.WALK.ROAD) roadCells38++;
+  else if (cls[k] === G.WALK.PRECINCT) wayCells38++;
+  else if (cls[k] === G.WALK.STREET) streetCells38++;
+}
+const gateNumbers = {
+  // ways = atlas roads + landmark precincts (GROUND's); minor streets (STREETS') apart; flights of steps are not on terrain
+  wayCellsOver38: roadCells38 + wayCells38,
+  minorStreetCellsOver38: streetCells38,
+  atlasRoadsOver25pct: roadReports.filter((r) => r.max4m.pct > 25).length,
+  atlasRoadsOver84pct: roadReports.filter((r) => r.max4m.pct > 84).length,
+  minorStreetsOver58pct: streetReports.filter((s) => s.max4m.pct > 58).length,
+  minorStreetsOver45pct: streetReports.filter((s) => s.max4m.pct > 45).length,
+  minorStreetsOver84pct: streetReports.filter((s) => s.max4m.pct > 84).length,
+  designedFlankTopDeg: Math.max(0, ...atlasHills.map((h) => h.designMaxDeg ?? 0)),
+  easiestWayUpMaxDeg: Math.max(0, ...hillReports.map((h) => h.easiestUp?.surfaceDeg ?? 0)),
+  walkableOver40Pct: walkAll['>40deg']?.pct ?? null,
+};
+
 // ------------------------------------------------------------------ report
 const summary = {
+  gate: gateNumbers,
   generated: new Date().toISOString(),
   tool: 'scripts/audit/grades.mjs',
   grid: { nx: hm.nx, nz: hm.nz, spacing: hm.spacing, minX: hm.minX, minZ: hm.minZ, cells: NC, worldScale: S },

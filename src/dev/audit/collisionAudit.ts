@@ -36,7 +36,7 @@ import * as THREE from 'three';
 import type { Game } from '../../core/Game';
 import { ALL_LAYERS, Layer, RAPIER, groups } from '../../core/Physics';
 import { flushPhysicsQueries } from '../../world/safeGround';
-import { COLUMN, compareColumn, compareWall, findSeams, isOverhead, terrainBilinear, terrainDrawnHeight, terrainOtherHeight, type ColumnFinding, type SeamFinding, type Surf, type WallFinding } from './collisionRules';
+import { COLUMN, compareColumn, isMovingCart, compareWall, findSeams, isOverhead, terrainBilinear, terrainDrawnHeight, terrainOtherHeight, type ColumnFinding, type SeamFinding, type Surf, type WallFinding } from './collisionRules';
 
 // ---------------------------------------------------------------- drawn triangles
 
@@ -543,7 +543,7 @@ export interface SweepResult {
   walls: WallRecord[];
   seams: SeamRecord[];
   colliders: Record<string, ColliderInfo>;
-  terrain: { samples: number; maxAbs: number; meanAbs: number; drawnMatches: number; otherMatches: number; neither: number; worst: [number, number, number, number] | null };
+  terrain: { over4: number; samples: number; maxAbs: number; meanAbs: number; drawnMatches: number; otherMatches: number; neither: number; worst: [number, number, number, number] | null };
   counts: { probes: number; walkable: number; indoor: number; edges: number; rays: number; pinholes: number; seamSamples: number };
   index: VisualIndex['stats'];
   ms: number;
@@ -592,7 +592,7 @@ export function sweep(game: Game, cx: number, cz: number, opts: SweepOptions = {
   const colliders = new Map<string, ColliderInfo>();
   const used = new Set<string>();
   const counts = { probes: 0, walkable: 0, indoor: 0, edges: 0, rays: 0, pinholes: 0, seamSamples: 0 };
-  const terr = { samples: 0, maxAbs: 0, sumAbs: 0, drawnMatches: 0, otherMatches: 0, neither: 0, worst: null as [number, number, number, number] | null };
+  const terr = { over4: 0, samples: 0, maxAbs: 0, sumAbs: 0, drawnMatches: 0, otherMatches: 0, neither: 0, worst: null as [number, number, number, number] | null };
   const terrainSvc = (game as Game & { terrain?: unknown }).terrain;
   const keyOf = (c: RAPIER.Collider) => {
     const { key, info } = colliderInfo(game, c);
@@ -659,6 +659,7 @@ export function sweep(game: Game, cx: number, cz: number, opts: SweepOptions = {
         for (const [h, kind] of [[0.5, 'embedded'], [0.95, 'embedded'], [1.45, 'headroom']] as const) {
           const hit = intruders(game, x, top.y + 0.05, z, h, 0.33, keyOf);
           if (!hit.length) continue;
+          if (hit.every((k) => isMovingCart(colliders.get(k)?.tag))) continue; // a moving cart
           if (drawnNear(ix, x, top.y + 0.05 + h, z, 0.48)) continue; // not the floor itself (0.55 below the lowest sphere)
           stands.push({ x: +x.toFixed(2), y: +top.y.toFixed(2), z: +z.toFixed(2), cls, kind, phys: hit.map((k) => colliders.get(k)?.tag ?? k).join(', '), physKey: hit[0] });
           for (const k of hit) used.add(k);
@@ -672,6 +673,7 @@ export function sweep(game: Game, cx: number, cz: number, opts: SweepOptions = {
           const d = top.y - tDrawn;
           terr.samples++;
           terr.sumAbs += Math.abs(d);
+          if (Math.abs(d) > 0.04) terr.over4++;
           if (Math.abs(d) > terr.maxAbs) {
             terr.maxAbs = Math.abs(d);
             terr.worst = [+x.toFixed(1), +top.y.toFixed(3), +z.toFixed(1), +d.toFixed(3)];
@@ -749,7 +751,7 @@ export function sweep(game: Game, cx: number, cz: number, opts: SweepOptions = {
     walls,
     seams,
     colliders: colliderTable,
-    terrain: { samples: terr.samples, maxAbs: +terr.maxAbs.toFixed(3), meanAbs: terr.samples ? +(terr.sumAbs / terr.samples).toFixed(4) : 0, drawnMatches: terr.drawnMatches, otherMatches: terr.otherMatches, neither: terr.neither, worst: terr.worst },
+    terrain: { over4: terr.over4, samples: terr.samples, maxAbs: +terr.maxAbs.toFixed(3), meanAbs: terr.samples ? +(terr.sumAbs / terr.samples).toFixed(4) : 0, drawnMatches: terr.drawnMatches, otherMatches: terr.otherMatches, neither: terr.neither, worst: terr.worst },
     counts,
     index: ix.stats,
     ms: Math.round(performance.now() - t0),

@@ -902,6 +902,11 @@ export function sweepCell(key: string, o: { blocks?: boolean; maxFindings?: numb
           if (p[i + 1] <= e.minY + 0.03) pts.push(p[i], p[i + 1], p[i + 2]);
         }
       if (!pts.length || !inCell(pts[0], pts[2])) continue;
+      // Balconies (wood_dark) and awnings (fabric_*) are held up by the building, not the ground: skipped (G0 tool fix).
+      if (/^(wood_dark|fabric)/.test(MATS[e.mat] ?? '')) {
+        add('fixturesBalconyAwning');
+        continue;
+      }
       let minGap = Infinity, maxGap = -Infinity, maxSink = 0, at = [pts[0], pts[1], pts[2]];
       for (let i = 0; i < pts.length; i += 3) {
         const g = groundAt(pts[i], pts[i + 2], pts[i + 1] + 0.12);

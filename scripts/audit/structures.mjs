@@ -27,7 +27,7 @@
  *      foot from the clearest side) into .shots/audit/structures/.
  *
  *   node scripts/audit/structures.mjs [--passes massing,blocks,landmarks,monuments,river,stairs]
- *        [--only <id-substring,…>] [--max-blocks N] [--levels full,low] [--minutes 45] [--shots 4] [--no-shots]
+ *        [--only <id-substring,…> (landmarks and blocks; with --only-all monuments, river and stairs too)] [--max-blocks N] [--levels full,low] [--minutes 45] [--shots 4] [--no-shots]
  *        [--json scripts/audit/out/structures.json]
  *   node scripts/audit/structures.mjs --look "x,y,z[,name[,dist[,eye[,nx:nz]]]];…"   framed screenshots of spots
  *        (with nx:nz the camera stands outside along that normal, eye `eye` m over the gap's middle)
@@ -37,7 +37,7 @@
  * plus about 20 s per screenshot. The game loop is capped at 3 fps while it measures (the GPU is shared).
  */
 import { createServer as createNetServer } from 'node:net';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -196,7 +196,7 @@ try {
     const opts = { visualDrop, waterAt, ignore, farTerrain: drawnL1 };
     window.__sa = {
       /** The jobs: every detailed block, landmark, monument chunk and street cell, with its box. */
-      jobs(only) {
+      jobs(only, onlyAll) {
         const out = [];
         for (const r of streamer.blocks) {
           if (!r.blk.detailed || !r.layout) continue;
@@ -214,7 +214,7 @@ try {
         for (const o of A.auditOwners((n) => /^(quay|island|bridge)/.test(n))) if (!lmIds.has(o.owner)) out.push({ kind: 'river', id: o.owner, box: o.box });
         for (const c of streamer.cells) if (c.work.items.length) out.push({ kind: 'stairs', id: `cell:${c.work.key}`, key: c.work.key, box: [c.bounds.minX, c.bounds.maxX, c.bounds.minZ, c.bounds.maxZ] });
         const unknown = A.auditOwners((n) => !/^(city|audit|interior)/.test(n)).filter((o) => !lmIds.has(o.owner)).map((o) => ({ owner: o.owner, tris: o.tris }));
-        const sel = only ? out.filter((j) => only.some((s) => j.id.includes(s) || (j.name ?? '').toLowerCase().includes(s))) : out;
+        const sel = only ? out.filter((j) => (!onlyAll && j.kind !== 'landmark' && j.kind !== 'block') || only.some((s) => j.id.includes(s) || (j.name ?? '').toLowerCase().includes(s))) : out;
         // 128 m tiles in serpentine order, so neighbouring jobs share their street cells.
         const T = 128;
         for (const j of sel) { j.cx = (j.box[0] + j.box[1]) / 2; j.cz = (j.box[2] + j.box[3]) / 2; j.tx = Math.floor(j.cx / T); j.tz = Math.floor(j.cz / T); }
@@ -355,7 +355,7 @@ try {
   }
 
   // ---- 2. structures
-  const { jobs, unknown, landmarks, cells } = await page.evaluate((only) => window.__sa.jobs(only), only);
+  const { jobs, unknown, landmarks, cells } = await page.evaluate((only) => window.__sa.jobs(only[0], only[1]), [only, !!args['only-all']]);
   report.unknownOwners = unknown;
   const want = jobs.filter((j) => passes.has(j.kind === 'block' ? 'blocks' : j.kind === 'landmark' ? 'landmarks' : j.kind === 'monument' ? 'monuments' : j.kind === 'river' ? 'river' : 'stairs'));
   let nb = 0;
@@ -412,6 +412,14 @@ try {
     return f.depthVis >= 0.4 ? 'major' : f.depthVis >= 0.2 ? 'visible' : 'minor';
   };
   const byType = {};
+  // False positives set aside (scripts/audit/allowlist.json): still in the findings, marked `allow`, and left out of the gate counts.
+  const allowRules = (() => {
+    try { return JSON.parse(readFileSync(resolve(root, 'scripts/audit/allowlist.json'), 'utf8')).structures ?? []; } catch { return []; }
+  })();
+  for (const f of finds) {
+    const rule = allowRules.find((r) => (!r.owner || r.owner === f.owner) && (!r.kind || r.kind === f.kind));
+    if (rule) f.allow = rule.reason;
+  }
   for (const f of finds) {
     f.severity = sev(f);
     const e = (byType[`${f.kind}|${f.type}`] ??= { n: 0, length: 0, max: 0, major: 0, visible: 0, owners: new Set() });
@@ -423,6 +431,31 @@ try {
     e.owners.add(f.lot ?? f.owner);
   }
   for (const e of Object.values(byType)) { e.owners = e.owners.size; e.length = +e.length.toFixed(1); e.max = +e.max.toFixed(2); }
+  // The numbers scripts/audit/gate.mjs reads (all stretches, before the JSON is trimmed).
+  {
+    const live = finds.filter((f) => !f.allow);
+    const lots = (list) => new Set(list.filter((f) => f.lot).map((f) => f.lot)).size;
+    const fl = live.filter((f) => f.kind === 'floating'), bu = live.filter((f) => f.kind === 'buried-opening'), tf = live.filter((f) => f.kind === 'terrain-in-floor');
+    report.gate = {
+      allowlisted: finds.length - live.length,
+      stretches06NotAllowlisted: live.filter((f) => f.depthVis >= 0.6).length,
+      colosseumCaveaStretches: finds.filter((f) => f.owner === 'colosseum' && f.kind === 'floating' && f.depthVis >= 0.3).length,
+      wallAqueductStretches03: fl.filter((f) => (f.type === 'monument' || f.type === 'landmark:aqueduct') && f.depthVis >= 0.3).length,
+      buildingsFloating01: lotTally.floating,
+      buildingsFloating025: lots(fl.filter((f) => f.type.startsWith('block:') && f.depthVis >= 0.25)),
+      buildingsBuriedOpening: lotTally.buried,
+      buriedOpeningStretches035: bu.filter((f) => f.type.startsWith('block:') && f.depthVis >= 0.35).length,
+      buildingsTerrainInFloor: lots(tf.filter((f) => f.type.startsWith('block:'))),
+      terrainInFloorWorstM: +Math.max(0, ...tf.filter((f) => f.type.startsWith('block:')).map((f) => f.depthVis)).toFixed(2),
+      landmarkTerrainInFloorWorstM: +Math.max(0, ...tf.filter((f) => f.type.startsWith('landmark:')).map((f) => f.depthVis)).toFixed(2),
+      landmarkFloating06: fl.filter((f) => f.type.startsWith('landmark:') && f.depthVis >= 0.6).length,
+      riverTerrainInFloor: tf.filter((f) => f.type.startsWith('river:')).length,
+      farBoxesOver10cm: report.massing?.floating ?? null,
+      farBoxesDrawnL2: report.massing?.drawn?.L2 ?? null,
+      lowDetailFloatingSamples: totals['block-low']?.floating ?? null,
+      lowDetailSunkSamples: totals['block-low']?.sunkFloor ?? null,
+    };
+  }
   report.totals = { jobs: done, of: sel.length, byJob: totals, lots: lotTally, ms: { cell: Math.round(ms.cell / 1000), generate: Math.round(ms.gen / 1000), analyse: Math.round(ms.analyze / 1000) } };
   report.byType = byType;
   console.log(`\n== ${done}/${sel.length} jobs in ${secs()} s`);

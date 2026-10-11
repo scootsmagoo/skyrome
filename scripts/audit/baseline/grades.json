@@ -1,0 +1,2227 @@
+{
+ "lens": "grades",
+ "note": "Phase 4a baseline (2026-10-10): counts plus the top 100 clusters. Refreshed only by the lead.",
+ "source": "scripts/audit/grades.mjs and grades-live.mjs, 2026-10-10",
+ "counts": {
+  "walkableOver": {
+   ">20deg": {
+    "cells": 54834,
+    "pct": 3.74
+   },
+   ">25deg": {
+    "cells": 27135,
+    "pct": 1.85
+   },
+   ">30deg": {
+    "cells": 18034,
+    "pct": 1.23
+   },
+   ">35deg": {
+    "cells": 10653,
+    "pct": 0.73
+   },
+   ">40deg": {
+    "cells": 7745,
+    "pct": 0.53
+   },
+   ">45deg": {
+    "cells": 5725,
+    "pct": 0.39
+   },
+   ">50deg": {
+    "cells": 4553,
+    "pct": 0.31
+   }
+  },
+  "steepOver35ByCause": {
+   "atlas cliff": 3585,
+   "pad embankment": 3133,
+   "hill flank": 1836,
+   "road bank": 1016,
+   "river bank / channel cut": 707,
+   "landform (lowland blend)": 367,
+   "engineered (road/pad blend)": 9
+  },
+  "streets": {
+   "count": 1773,
+   "over30pct": 374,
+   "over45pct": 150,
+   "over84pct": 13,
+   "over119pct": 9,
+   "takenOverByPads": 7
+  },
+  "hills": [
+   {
+    "group": "Capitoline",
+    "flankDeg": {
+     "p50": 29.3,
+     "p90": 57.6,
+     "p99": 67.8,
+     "max": 72.1
+    },
+    "easiestUp": {
+     "surfaceDeg": 31.8,
+     "zigzagDeg": 14
+    }
+   },
+   {
+    "group": "Palatine",
+    "flankDeg": {
+     "p50": 25.7,
+     "p90": 51.5,
+     "p99": 72.6,
+     "max": 76.4
+    },
+    "easiestUp": {
+     "surfaceDeg": 23.7,
+     "zigzagDeg": 10.4
+    }
+   },
+   {
+    "group": "Velia",
+    "flankDeg": {
+     "p50": 11.2,
+     "p90": 30.6,
+     "p99": 44.3,
+     "max": 49.6
+    },
+    "easiestUp": {
+     "surfaceDeg": 11,
+     "zigzagDeg": 5.3
+    }
+   },
+   {
+    "group": "Aventine",
+    "flankDeg": {
+     "p50": 15.5,
+     "p90": 30.2,
+     "p99": 59.7,
+     "max": 68.6
+    },
+    "easiestUp": {
+     "surfaceDeg": 12.2,
+     "zigzagDeg": 6.7
+    }
+   },
+   {
+    "group": "Lesser Aventine",
+    "flankDeg": {
+     "p50": 11.5,
+     "p90": 16.5,
+     "p99": 17.9,
+     "max": 24.7
+    },
+    "easiestUp": {
+     "surfaceDeg": 11.6,
+     "zigzagDeg": 6.4
+    }
+   },
+   {
+    "group": "Caelian",
+    "flankDeg": {
+     "p50": 9.6,
+     "p90": 17.4,
+     "p99": 49.2,
+     "max": 63.1
+    },
+    "easiestUp": {
+     "surfaceDeg": 3.6,
+     "zigzagDeg": 1.5
+    }
+   },
+   {
+    "group": "Oppian",
+    "flankDeg": {
+     "p50": 14.8,
+     "p90": 35,
+     "p99": 67.3,
+     "max": 72.5
+    },
+    "easiestUp": {
+     "surfaceDeg": 4,
+     "zigzagDeg": 2
+    }
+   },
+   {
+    "group": "Esquiline (Cispian)",
+    "flankDeg": {
+     "p50": 20.1,
+     "p90": 23.7,
+     "p99": 24.2,
+     "max": 24.5
+    },
+    "easiestUp": {
+     "surfaceDeg": 5.6,
+     "zigzagDeg": 2.3
+    }
+   },
+   {
+    "group": "Esquiline",
+    "flankDeg": {
+     "p50": 11.6,
+     "p90": 17,
+     "p99": 17.6,
+     "max": 20.4
+    },
+    "easiestUp": {
+     "surfaceDeg": 4,
+     "zigzagDeg": 2
+    }
+   },
+   {
+    "group": "Viminal",
+    "flankDeg": {
+     "p50": 14.1,
+     "p90": 30,
+     "p99": 45.3,
+     "max": 46.7
+    },
+    "easiestUp": {
+     "surfaceDeg": 5.6,
+     "zigzagDeg": 2.3
+    }
+   },
+   {
+    "group": "Quirinal",
+    "flankDeg": {
+     "p50": 16.4,
+     "p90": 33.5,
+     "p99": 66.7,
+     "max": 76.4
+    },
+    "easiestUp": {
+     "surfaceDeg": 5.6,
+     "zigzagDeg": 2.3
+    }
+   },
+   {
+    "group": "Pincian (Hill of Gardens)",
+    "flankDeg": {
+     "p50": 4.8,
+     "p90": 16,
+     "p99": 62.1,
+     "max": 65
+    },
+    "easiestUp": {
+     "surfaceDeg": 5.6,
+     "zigzagDeg": 2.3
+    }
+   },
+   {
+    "group": "Janiculum",
+    "flankDeg": {
+     "p50": 10.7,
+     "p90": 13.2,
+     "p99": 28.7,
+     "max": 69.6
+    },
+    "easiestUp": {
+     "surfaceDeg": 11.6,
+     "zigzagDeg": 3.8
+    }
+   },
+   {
+    "group": "Vatican",
+    "flankDeg": {
+     "p50": 9.1,
+     "p90": 13.4,
+     "p99": 15.5,
+     "max": 54.6
+    },
+    "easiestUp": {
+     "surfaceDeg": 9.8,
+     "zigzagDeg": 4.1
+    }
+   },
+   {
+    "group": "Viminal Field (Castra)",
+    "flankDeg": {
+     "p50": 13.5,
+     "p90": 17.6,
+     "p99": 18.1,
+     "max": 20.2
+    },
+    "easiestUp": {
+     "surfaceDeg": 5.6,
+     "zigzagDeg": 2.3
+    }
+   },
+   {
+    "group": "Janiculum (north)",
+    "flankDeg": {
+     "p50": 13.5,
+     "p90": 25.6,
+     "p99": 57.5,
+     "max": 66.4
+    },
+    "easiestUp": {
+     "surfaceDeg": 6.7,
+     "zigzagDeg": 3.2
+    }
+   },
+   {
+    "group": "Janiculum (Monteverde)",
+    "flankDeg": {
+     "p50": 17.1,
+     "p90": 22.5,
+     "p99": 23.2,
+     "max": 26.2
+    },
+    "easiestUp": {
+     "surfaceDeg": 12.5,
+     "zigzagDeg": 3.8
+    }
+   },
+   {
+    "group": "Via Latina plateau",
+    "flankDeg": {
+     "p50": 6.2,
+     "p90": 10.1,
+     "p99": 13.9,
+     "max": 17.8
+    },
+    "easiestUp": {
+     "surfaceDeg": 3.6,
+     "zigzagDeg": 1.5
+    }
+   },
+   {
+    "group": "Spes Vetus rise",
+    "flankDeg": {
+     "p50": 7.1,
+     "p90": 12.5,
+     "p99": 21.9,
+     "max": 35.1
+    },
+    "easiestUp": {
+     "surfaceDeg": 3.6,
+     "zigzagDeg": 1.5
+    }
+   }
+  ],
+  "live": {
+   "climbs": [
+    {
+     "id": "road:clivus-victoriae",
+     "kind": "road",
+     "maxPct": 288,
+     "reached": false,
+     "secs": 17,
+     "flatSecs": 22
+    },
+    {
+     "id": "road:clivus-palatinus",
+     "kind": "road",
+     "maxPct": 188,
+     "reached": false,
+     "secs": 12,
+     "flatSecs": 18
+    },
+    {
+     "id": "road:via-nova",
+     "kind": "road",
+     "maxPct": 109,
+     "reached": false,
+     "secs": 18,
+     "flatSecs": 15
+    },
+    {
+     "id": "road:via-nova~clivus-palatinus",
+     "kind": "road",
+     "maxPct": 109,
+     "reached": false,
+     "secs": 6,
+     "flatSecs": 3
+    },
+    {
+     "id": "road:via-sacra",
+     "kind": "road",
+     "maxPct": 104,
+     "reached": true,
+     "secs": 17,
+     "flatSecs": 17
+    },
+    {
+     "id": "road:vicus-iugarius",
+     "kind": "road",
+     "maxPct": 87,
+     "reached": true,
+     "secs": 25,
+     "flatSecs": 22
+    },
+    {
+     "id": "road:gradus-monetae",
+     "kind": "road",
+     "maxPct": 75,
+     "reached": true,
+     "secs": 14,
+     "flatSecs": 12
+    },
+    {
+     "id": "road:clivus-argentarius",
+     "kind": "road",
+     "maxPct": 67,
+     "reached": false,
+     "secs": 10,
+     "flatSecs": 22
+    },
+    {
+     "id": "road:centum-gradus",
+     "kind": "road",
+     "maxPct": 66,
+     "reached": true,
+     "secs": 9,
+     "flatSecs": 7
+    },
+    {
+     "id": "road:clivus-capitolinus",
+     "kind": "road",
+     "maxPct": 62,
+     "reached": false,
+     "secs": 30,
+     "flatSecs": 22
+    },
+    {
+     "id": "road:clivus-publicius",
+     "kind": "road",
+     "maxPct": 60,
+     "reached": true,
+     "secs": 23,
+     "flatSecs": 22
+    },
+    {
+     "id": "road:scalae-caci",
+     "kind": "road",
+     "maxPct": 54,
+     "reached": true,
+     "secs": 13,
+     "flatSecs": 12
+    },
+    {
+     "id": "road:via-appia",
+     "kind": "road",
+     "maxPct": 45,
+     "reached": false,
+     "secs": 8,
+     "flatSecs": 11
+    },
+    {
+     "id": "road:clivus-rocca-savella",
+     "kind": "road",
+     "maxPct": 40,
+     "reached": false,
+     "secs": 8,
+     "flatSecs": 22
+    },
+    {
+     "id": "road:vicus-cuprius",
+     "kind": "road",
+     "maxPct": 33,
+     "reached": true,
+     "secs": 24,
+     "flatSecs": 22
+    },
+    {
+     "id": "road:clivus-scauri",
+     "kind": "road",
+     "maxPct": 30,
+     "reached": true,
+     "secs": 24,
+     "flatSecs": 23
+    },
+    {
+     "id": "road:vicus-armilustri",
+     "kind": "road",
+     "maxPct": 29,
+     "reached": true,
+     "secs": 23,
+     "flatSecs": 22
+    },
+    {
+     "id": "road:trastevere-vatican-riverside-road",
+     "kind": "road",
+     "maxPct": 29,
+     "reached": true,
+     "secs": 23,
+     "flatSecs": 23
+    },
+    {
+     "id": "road:via-cornelia",
+     "kind": "road",
+     "maxPct": 29,
+     "reached": true,
+     "secs": 19,
+     "flatSecs": 18
+    },
+    {
+     "id": "road:via-caelimontana",
+     "kind": "road",
+     "maxPct": 29,
+     "reached": true,
+     "secs": 22,
+     "flatSecs": 22
+    },
+    {
+     "id": "road:aventine-wall-street",
+     "kind": "road",
+     "maxPct": 28,
+     "reached": true,
+     "secs": 20,
+     "flatSecs": 21
+    },
+    {
+     "id": "hill:Capitoline",
+     "kind": "way",
+     "reached": true,
+     "secs": 4,
+     "flatSecs": 4
+    },
+    {
+     "id": "hill:Palatine",
+     "kind": "way",
+     "reached": true,
+     "secs": 9,
+     "flatSecs": 8
+    },
+    {
+     "id": "hill:Velia",
+     "kind": "way",
+     "reached": false,
+     "secs": 8,
+     "flatSecs": 7
+    },
+    {
+     "id": "hill:Aventine",
+     "kind": "way",
+     "reached": true,
+     "secs": 21,
+     "flatSecs": 20
+    },
+    {
+     "id": "hill:Lesser Aventine",
+     "kind": "way",
+     "reached": true,
+     "secs": 11,
+     "flatSecs": 10
+    },
+    {
+     "id": "hill:Janiculum",
+     "kind": "way",
+     "reached": true,
+     "secs": 39,
+     "flatSecs": 36
+    }
+   ]
+  }
+ },
+ "clusters": [
+  {
+   "kind": "road",
+   "id": "clivus-victoriae",
+   "name": "Rise of Victory",
+   "max4m": {
+    "pct": 288,
+    "deg": 70.9,
+    "at": [
+     95.8,
+     15.6,
+     97.1
+    ]
+   },
+   "max4mWithoutPads": 43,
+   "padTakeover": {
+    "dy": 17.3,
+    "at": [
+     91.9,
+     26.5,
+     99.9
+    ],
+    "bareY": 9.2,
+    "pad": {
+     "id": "domus-tiberiana",
+     "outside": 2.7,
+     "elevation": 46,
+     "groundAsl": 15.3
+    }
+   }
+  },
+  {
+   "kind": "road",
+   "id": "clivus-palatinus",
+   "name": "Palatine Rise",
+   "max4m": {
+    "pct": 188,
+    "deg": 62,
+    "at": [
+     171.4,
+     18.2,
+     132.4
+    ]
+   },
+   "max4mWithoutPads": 68,
+   "padTakeover": {
+    "dy": 8.5,
+    "at": [
+     174.4,
+     11.4,
+     127.3
+    ],
+    "bareY": 19.9,
+    "pad": {
+     "id": "porticus-margaritaria",
+     "outside": -0.9,
+     "elevation": 19,
+     "groundAsl": 33.1
+    }
+   }
+  },
+  {
+   "kind": "road",
+   "id": "via-nova",
+   "name": "New Way",
+   "max4m": {
+    "pct": 109,
+    "deg": 47.4,
+    "at": [
+     179.9,
+     13.9,
+     128.2
+    ]
+   },
+   "max4mWithoutPads": 21,
+   "padTakeover": {
+    "dy": 8.4,
+    "at": [
+     175.3,
+     11.4,
+     126.3
+    ],
+    "bareY": 19.8,
+    "pad": {
+     "id": "porticus-margaritaria",
+     "outside": -3.1,
+     "elevation": 19,
+     "groundAsl": 33.1
+    }
+   }
+  },
+  {
+   "kind": "road",
+   "id": "via-nova~clivus-palatinus",
+   "name": "New Way link",
+   "max4m": {
+    "pct": 109,
+    "deg": 47.6,
+    "at": [
+     180.6,
+     14.4,
+     127.8
+    ]
+   },
+   "max4mWithoutPads": 3,
+   "padTakeover": {
+    "dy": 8.4,
+    "at": [
+     175.8,
+     11.4,
+     124.9
+    ],
+    "bareY": 19.8,
+    "pad": {
+     "id": "porticus-margaritaria",
+     "outside": -5.4,
+     "elevation": 19,
+     "groundAsl": 33
+    }
+   }
+  },
+  {
+   "kind": "road",
+   "id": "via-sacra",
+   "name": "Sacred Way",
+   "max4m": {
+    "pct": 104,
+    "deg": 46.2,
+    "at": [
+     300.2,
+     14.4,
+     160.4
+    ]
+   },
+   "max4mWithoutPads": 24,
+   "padTakeover": {
+    "dy": 5.1,
+    "at": [
+     295.5,
+     17.4,
+     158.6
+    ],
+    "bareY": 12.3,
+    "pad": {
+     "id": "velia-vestibule",
+     "outside": -0.7,
+     "elevation": 29,
+     "groundAsl": 20.5
+    }
+   }
+  },
+  {
+   "kind": "road",
+   "id": "vicus-iugarius",
+   "name": "Yoke-makers' Street",
+   "max4m": {
+    "pct": 87,
+    "deg": 41,
+    "at": [
+     -87.7,
+     10.8,
+     84.3
+    ]
+   },
+   "max4mWithoutPads": 87,
+   "padTakeover": {
+    "dy": 2.2,
+    "at": [
+     -141.5,
+     7.9,
+     103.6
+    ],
+    "bareY": 10.1,
+    "pad": {
+     "id": "sant-omobono-temples",
+     "outside": 3.1,
+     "elevation": 10.5,
+     "groundAsl": 16.9
+    }
+   }
+  },
+  {
+   "kind": "road",
+   "id": "gradus-monetae",
+   "name": "Steps of Moneta",
+   "max4m": {
+    "pct": 75,
+    "deg": 36.8,
+    "at": [
+     -22.8,
+     15.7,
+     -69.5
+    ]
+   },
+   "max4mWithoutPads": 75,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "clivus-argentarius",
+   "name": "Rise Beside the Forum of Caesar",
+   "max4m": {
+    "pct": 67,
+    "deg": 33.7,
+    "at": [
+     -24.2,
+     13.9,
+     -63.2
+    ]
+   },
+   "max4mWithoutPads": 67,
+   "padTakeover": {
+    "dy": 3.2,
+    "at": [
+     -38.2,
+     28.2,
+     -115.6
+    ],
+    "bareY": 25,
+    "pad": {
+     "id": "auguraculum",
+     "outside": 0.7,
+     "elevation": 47,
+     "groundAsl": 41.7
+    }
+   }
+  },
+  {
+   "kind": "road",
+   "id": "centum-gradus",
+   "name": "Hundred Steps",
+   "max4m": {
+    "pct": 66,
+    "deg": 33.2,
+    "at": [
+     -87.4,
+     15.9,
+     79.1
+    ]
+   },
+   "max4mWithoutPads": 66,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "clivus-capitolinus",
+   "name": "Capitoline Rise",
+   "max4m": {
+    "pct": 62,
+    "deg": 31.6,
+    "at": [
+     -67.4,
+     16.6,
+     43
+    ]
+   },
+   "max4mWithoutPads": 62,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "clivus-publicius",
+   "name": "Publician Rise",
+   "max4m": {
+    "pct": 60,
+    "deg": 31,
+    "at": [
+     -95.1,
+     17.9,
+     480.8
+    ]
+   },
+   "max4mWithoutPads": 60,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "scalae-caci",
+   "name": "Stairs of Cacus",
+   "max4m": {
+    "pct": 54,
+    "deg": 28.3,
+    "at": [
+     6.8,
+     14.2,
+     248.4
+    ]
+   },
+   "max4mWithoutPads": 54,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "via-appia",
+   "name": "Appian Way",
+   "max4m": {
+    "pct": 45,
+    "deg": 24.1,
+    "at": [
+     310.1,
+     11.1,
+     581.1
+    ]
+   },
+   "max4mWithoutPads": 7,
+   "padTakeover": {
+    "dy": 2.6,
+    "at": [
+     307.1,
+     9.6,
+     577
+    ],
+    "bareY": 12.2,
+    "pad": {
+     "id": "porta-capena",
+     "outside": -0.2,
+     "elevation": 16,
+     "groundAsl": 20.3
+    }
+   }
+  },
+  {
+   "kind": "road",
+   "id": "clivus-rocca-savella",
+   "name": "Path up the Aventine river cliff",
+   "max4m": {
+    "pct": 40,
+    "deg": 21.9,
+    "at": [
+     -194.4,
+     17,
+     463
+    ]
+   },
+   "max4mWithoutPads": 40,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "vicus-cuprius",
+   "name": "Cyprian Street",
+   "max4m": {
+    "pct": 33,
+    "deg": 18.1,
+    "at": [
+     357.5,
+     16.7,
+     -52.3
+    ]
+   },
+   "max4mWithoutPads": 33,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "clivus-scauri",
+   "name": "Rise of Scaurus",
+   "max4m": {
+    "pct": 30,
+    "deg": 16.5,
+    "at": [
+     342.1,
+     15.9,
+     410.1
+    ]
+   },
+   "max4mWithoutPads": 30,
+   "padTakeover": {
+    "dy": 1.1,
+    "at": [
+     534.3,
+     26.4,
+     461.4
+    ],
+    "bareY": 25.3,
+    "pad": {
+     "id": "arch-dolabella",
+     "outside": -0.8,
+     "elevation": 44,
+     "groundAsl": 42.2
+    }
+   }
+  },
+  {
+   "kind": "road",
+   "id": "vicus-armilustri",
+   "name": "Street of the Armilustrium",
+   "max4m": {
+    "pct": 29,
+    "deg": 16.1,
+    "at": [
+     -50.4,
+     24.8,
+     622.3
+    ]
+   },
+   "max4mWithoutPads": 27,
+   "padTakeover": {
+    "dy": 1.7,
+    "at": [
+     -48.9,
+     24,
+     626
+    ],
+    "bareY": 25.7,
+    "pad": {
+     "id": "thermae-suranae",
+     "outside": 1.2,
+     "elevation": 40,
+     "groundAsl": 42.8
+    }
+   }
+  },
+  {
+   "kind": "road",
+   "id": "trastevere-vatican-riverside-road",
+   "name": "Riverside road to the Vatican",
+   "max4m": {
+    "pct": 29,
+    "deg": 16.4,
+    "at": [
+     -1086.6,
+     14.6,
+     -480.3
+    ]
+   },
+   "max4mWithoutPads": 29,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "via-cornelia",
+   "name": "Cornelian Way",
+   "max4m": {
+    "pct": 29,
+    "deg": 16,
+    "at": [
+     -1067.5,
+     11.5,
+     -591.3
+    ]
+   },
+   "max4mWithoutPads": 29,
+   "padTakeover": {
+    "dy": 1.2,
+    "at": [
+     -1306.2,
+     12.6,
+     -635.3
+    ],
+    "bareY": 13.8,
+    "pad": {
+     "id": "circus-vaticanus",
+     "outside": 1.5,
+     "elevation": 21,
+     "groundAsl": 23.1
+    }
+   }
+  },
+  {
+   "kind": "road",
+   "id": "via-caelimontana",
+   "name": "Caelian Way",
+   "max4m": {
+    "pct": 29,
+    "deg": 16.1,
+    "at": [
+     610.4,
+     25.7,
+     465.9
+    ]
+   },
+   "max4mWithoutPads": 29,
+   "padTakeover": {
+    "dy": 1.1,
+    "at": [
+     537,
+     26.4,
+     462.6
+    ],
+    "bareY": 25.3,
+    "pad": {
+     "id": "arch-dolabella",
+     "outside": -5.5,
+     "elevation": 44,
+     "groundAsl": 42.2
+    }
+   }
+  },
+  {
+   "kind": "road",
+   "id": "aventine-wall-street",
+   "name": "Street along the Aventine wall",
+   "max4m": {
+    "pct": 28,
+    "deg": 15.7,
+    "at": [
+     -65.3,
+     13.7,
+     816
+    ]
+   },
+   "max4mWithoutPads": 28,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "argiletum",
+   "name": "Argiletum and Subura street",
+   "max4m": {
+    "pct": 24,
+    "deg": 13.5,
+    "at": [
+     58.7,
+     8.5,
+     -19.5
+    ]
+   },
+   "max4mWithoutPads": 11,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "via-aurelia",
+   "name": "Aurelian Way",
+   "max4m": {
+    "pct": 24,
+    "deg": 13.7,
+    "at": [
+     -990.3,
+     39,
+     315.9
+    ]
+   },
+   "max4mWithoutPads": 24,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "street-north-of-circus",
+   "name": "Street below the Palatine, north of the Circus",
+   "max4m": {
+    "pct": 22,
+    "deg": 12.7,
+    "at": [
+     -98.2,
+     6.5,
+     247.3
+    ]
+   },
+   "max4mWithoutPads": 9,
+   "padTakeover": {
+    "dy": 1.4,
+    "at": [
+     -102,
+     5.7,
+     244
+    ],
+    "bareY": 7.1,
+    "pad": {
+     "id": "forum-boarium",
+     "outside": 0.4,
+     "elevation": 9.5,
+     "groundAsl": 11.8
+    }
+   }
+  },
+  {
+   "kind": "road",
+   "id": "via-ardeatina",
+   "name": "Ardeatine Way",
+   "max4m": {
+    "pct": 22,
+    "deg": 12.4,
+    "at": [
+     347.1,
+     13.8,
+     1114.2
+    ]
+   },
+   "max4mWithoutPads": 22,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "clivus-suburanus",
+   "name": "Suburan Rise",
+   "max4m": {
+    "pct": 21,
+    "deg": 12,
+    "at": [
+     433.5,
+     13,
+     -152.4
+    ]
+   },
+   "max4mWithoutPads": 21,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "street-velabrum-pons-aemilius",
+   "name": "Street from the Velabrum to the Pons Aemilius",
+   "max4m": {
+    "pct": 21,
+    "deg": 11.8,
+    "at": [
+     -101.8,
+     6.3,
+     220.2
+    ]
+   },
+   "max4mWithoutPads": 5,
+   "padTakeover": {
+    "dy": 1.5,
+    "at": [
+     -106.7,
+     5.7,
+     219.9
+    ],
+    "bareY": 7.2,
+    "pad": {
+     "id": "forum-boarium",
+     "outside": 0.1,
+     "elevation": 9.5,
+     "groundAsl": 11.9
+    }
+   }
+  },
+  {
+   "kind": "road",
+   "id": "vicus-portae-raudusculanae",
+   "name": "Valley road to the Porta Raudusculana",
+   "max4m": {
+    "pct": 20,
+    "deg": 11.5,
+    "at": [
+     54.4,
+     14.2,
+     723.6
+    ]
+   },
+   "max4mWithoutPads": 20,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "porta-capena-intra",
+   "name": "Road inside the Porta Capena",
+   "max4m": {
+    "pct": 20,
+    "deg": 11,
+    "at": [
+     294.3,
+     9.8,
+     560.9
+    ]
+   },
+   "max4mWithoutPads": 20,
+   "padTakeover": {
+    "dy": 2.5,
+    "at": [
+     304.2,
+     9.6,
+     573
+    ],
+    "bareY": 12.1,
+    "pad": {
+     "id": "porta-capena",
+     "outside": -8.5,
+     "elevation": 16,
+     "groundAsl": 20.2
+    }
+   }
+  },
+  {
+   "kind": "road",
+   "id": "via-lata-via-flaminia",
+   "name": "Broad Way / Flaminian Way",
+   "max4m": {
+    "pct": 19,
+    "deg": 10.8,
+    "at": [
+     -171.3,
+     8.1,
+     -484
+    ]
+   },
+   "max4mWithoutPads": 17,
+   "padTakeover": {
+    "dy": 1.1,
+    "at": [
+     -167.9,
+     8.7,
+     -472.5
+    ],
+    "bareY": 7.6,
+    "pad": {
+     "id": "arch-claudius",
+     "outside": -1.7,
+     "elevation": 14.5,
+     "groundAsl": 12.6
+    }
+   }
+  },
+  {
+   "kind": "road",
+   "id": "vicus-patricius",
+   "name": "Patrician Street",
+   "max4m": {
+    "pct": 18,
+    "deg": 10,
+    "at": [
+     597.9,
+     25.4,
+     -418.4
+    ]
+   },
+   "max4mWithoutPads": 18,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "via-praenestina-outer",
+   "name": "Praenestine Way",
+   "max4m": {
+    "pct": 17,
+    "deg": 9.4,
+    "at": [
+     1595.6,
+     24.1,
+     70.7
+    ]
+   },
+   "max4mWithoutPads": 17,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "vicus-longus",
+   "name": "Long Street",
+   "max4m": {
+    "pct": 16,
+    "deg": 9.2,
+    "at": [
+     516.8,
+     30,
+     -607.3
+    ]
+   },
+   "max4mWithoutPads": 16,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "via-latina",
+   "name": "Latin Way",
+   "max4m": {
+    "pct": 16,
+    "deg": 8.9,
+    "at": [
+     855.3,
+     20.7,
+     1039.6
+    ]
+   },
+   "max4mWithoutPads": 16,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "street-subura-serpenti",
+   "name": "Subura cross street",
+   "max4m": {
+    "pct": 16,
+    "deg": 9.2,
+    "at": [
+     272.2,
+     23.9,
+     -302.1
+    ]
+   },
+   "max4mWithoutPads": 16,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "alta-semita",
+   "name": "High Path",
+   "max4m": {
+    "pct": 15,
+    "deg": 8.5,
+    "at": [
+     368.1,
+     30.5,
+     -674.2
+    ]
+   },
+   "max4mWithoutPads": 15,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "via-triumphalis",
+   "name": "Triumphal Way",
+   "max4m": {
+    "pct": 15,
+    "deg": 8.5,
+    "at": [
+     -1694.9,
+     15.8,
+     -1618.7
+    ]
+   },
+   "max4mWithoutPads": 15,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "via-salaria-vetus",
+   "name": "Old Salt Way",
+   "max4m": {
+    "pct": 15,
+    "deg": 8.7,
+    "at": [
+     237.9,
+     29.7,
+     -1117.7
+    ]
+   },
+   "max4mWithoutPads": 15,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "via-labicana-outer",
+   "name": "Labican Way",
+   "max4m": {
+    "pct": 15,
+    "deg": 8.8,
+    "at": [
+     1725,
+     26.5,
+     211.2
+    ]
+   },
+   "max4mWithoutPads": 15,
+   "padTakeover": null
+  },
+  {
+   "kind": "road",
+   "id": "via-labicana-urbana",
+   "name": "Labican road through the valley",
+   "max4m": {
+    "pct": 14,
+    "deg": 7.7,
+    "at": [
+     741.3,
+     18.8,
+     194.6
+    ]
+   },
+   "max4mWithoutPads": 14,
+   "padTakeover": {
+    "dy": 3.3,
+    "at": [
+     426.2,
+     11.7,
+     212
+    ],
+    "bareY": 15,
+    "pad": {
+     "id": "colosseum",
+     "outside": 1.6,
+     "elevation": 19.5,
+     "groundAsl": 25
+    }
+   }
+  },
+  {
+   "kind": "street",
+   "id": "st1497",
+   "max4m": {
+    "pct": 181,
+    "deg": 61.1,
+    "at": [
+     105.4,
+     22.5,
+     -288.5
+    ]
+   },
+   "place": "8 m off High Path, 91 m from Market Halls of Trajan (markets-trajan), Quirinal flank"
+  },
+  {
+   "kind": "street",
+   "id": "st1038",
+   "max4m": {
+    "pct": 163,
+    "deg": 58.5,
+    "at": [
+     -1115,
+     32,
+     20
+    ]
+   },
+   "place": "259 m from Terminus of Trajan's Aqueduct (aqua-traiana-terminus), Janiculum flank"
+  },
+  {
+   "kind": "street",
+   "id": "st1029",
+   "max4m": {
+    "pct": 161,
+    "deg": 58.2,
+    "at": [
+     -1205.4,
+     33.3,
+     -93.6
+    ]
+   },
+   "place": "400 m from Terminus of Trajan's Aqueduct (aqua-traiana-terminus), Janiculum flank"
+  },
+  {
+   "kind": "street",
+   "id": "st1050",
+   "max4m": {
+    "pct": 161,
+    "deg": 58.2,
+    "at": [
+     -1079.9,
+     10.2,
+     -435.6
+    ]
+   },
+   "place": "on Riverside road to the Vatican (trastevere-vatican-riverside-road), 238 m from Pyramid Tomb of the Vatican Fields (meta-romuli), Janiculum (north) flank"
+  },
+  {
+   "kind": "street",
+   "id": "st1025",
+   "max4m": {
+    "pct": 148,
+    "deg": 55.9,
+    "at": [
+     -1098.1,
+     31.8,
+     41.4
+    ]
+   },
+   "place": "232 m from Terminus of Trajan's Aqueduct (aqua-traiana-terminus), Janiculum flank"
+  },
+  {
+   "kind": "street",
+   "id": "st1030",
+   "max4m": {
+    "pct": 147,
+    "deg": 55.8,
+    "at": [
+     -1219.3,
+     33.2,
+     -111.3
+    ]
+   },
+   "place": "423 m from Terminus of Trajan's Aqueduct (aqua-traiana-terminus), Janiculum flank"
+  },
+  {
+   "kind": "street",
+   "id": "st263",
+   "max4m": {
+    "pct": 142,
+    "deg": 54.9,
+    "at": [
+     -314.7,
+     17.2,
+     588.9
+    ]
+   },
+   "place": "111 m from Temple of Juno Regina on the Aventine (temple-juno-regina-aventine), Aventine flank"
+  },
+  {
+   "kind": "street",
+   "id": "st1501",
+   "max4m": {
+    "pct": 129,
+    "deg": 52.3,
+    "at": [
+     110.1,
+     24.4,
+     -278.8
+    ]
+   },
+   "place": "on High Path (alta-semita), 82 m from Market Halls of Trajan (markets-trajan), Quirinal flank"
+  },
+  {
+   "kind": "street",
+   "id": "st1023",
+   "max4m": {
+    "pct": 121,
+    "deg": 50.4,
+    "at": [
+     -1228.4,
+     31.4,
+     -124.3
+    ]
+   },
+   "place": "414 m from Gardens of Agrippina (horti-agrippinae), Janiculum flank"
+  },
+  {
+   "kind": "street",
+   "id": "st1040",
+   "max4m": {
+    "pct": 114,
+    "deg": 48.7,
+    "at": [
+     -1221.9,
+     31.7,
+     -115.7
+    ]
+   },
+   "place": "425 m from Gardens of Agrippina (horti-agrippinae), Janiculum flank"
+  },
+  {
+   "kind": "street",
+   "id": "st1031",
+   "max4m": {
+    "pct": 105,
+    "deg": 46.3,
+    "at": [
+     -1161.4,
+     30.5,
+     -39.9
+    ]
+   },
+   "place": "332 m from Terminus of Trajan's Aqueduct (aqua-traiana-terminus), Janiculum flank"
+  },
+  {
+   "kind": "street",
+   "id": "st1473",
+   "max4m": {
+    "pct": 97,
+    "deg": 44,
+    "at": [
+     112.5,
+     13.6,
+     -216.5
+    ]
+   },
+   "place": "on Street by the Market Halls (via-biberatica), 26 m from Market Halls of Trajan (markets-trajan), Quirinal flank"
+  },
+  {
+   "kind": "street",
+   "id": "st1472",
+   "max4m": {
+    "pct": 90,
+    "deg": 41.9,
+    "at": [
+     83.3,
+     17.4,
+     -337.7
+    ]
+   },
+   "place": "139 m from Ulpian Greek Library (bibliotheca-ulpia-east), Quirinal flank"
+  },
+  {
+   "kind": "street",
+   "id": "st965",
+   "max4m": {
+    "pct": 81,
+    "deg": 38.9,
+    "at": [
+     -1063.9,
+     11.1,
+     -361.4
+    ]
+   },
+   "place": "on Riverside road to the Vatican (trastevere-vatican-riverside-road), 285 m from Altar of Dis and Proserpina at the Tarentum (tarentum-altar), Janiculum (north) flank"
+  },
+  {
+   "kind": "street",
+   "id": "st398",
+   "max4m": {
+    "pct": 74,
+    "deg": 36.4,
+    "at": [
+     224.2,
+     25.6,
+     287.9
+    ]
+   },
+   "place": "75 m from Gardens of Adonis (adonaea), Palatine top"
+  },
+  {
+   "kind": "street",
+   "id": "st600",
+   "max4m": {
+    "pct": 74,
+    "deg": 36.3,
+    "at": [
+     -343.1,
+     5.2,
+     97.4
+    ]
+   },
+   "place": "47 m from Temple of Aesculapius (temple-aesculapius)"
+  },
+  {
+   "kind": "street",
+   "id": "st1051",
+   "max4m": {
+    "pct": 72,
+    "deg": 35.9,
+    "at": [
+     -1089.6,
+     21.7,
+     -499.6
+    ]
+   },
+   "place": "on Riverside road to the Vatican (trastevere-vatican-riverside-road), 179 m from Pyramid Tomb of the Vatican Fields (meta-romuli), Janiculum (north) flank"
+  },
+  {
+   "kind": "street",
+   "id": "st814",
+   "max4m": {
+    "pct": 71,
+    "deg": 35.5,
+    "at": [
+     617.4,
+     18.1,
+     114.4
+    ]
+   },
+   "place": "81 m from Dacian Gladiatorial School (ludus-dacicus), Oppian flank"
+  },
+  {
+   "kind": "street",
+   "id": "st1609",
+   "max4m": {
+    "pct": 71,
+    "deg": 35.6,
+    "at": [
+     -936.1,
+     5.4,
+     -493.2
+    ]
+   },
+   "place": "187 m from Altar of Dis and Proserpina at the Tarentum (tarentum-altar)"
+  },
+  {
+   "kind": "street",
+   "id": "st1682",
+   "max4m": {
+    "pct": 71,
+    "deg": 35.5,
+    "at": [
+     -587.7,
+     5.7,
+     -298.4
+    ]
+   },
+   "place": "54 m from Odeum of Domitian (odeum-domitian)"
+  },
+  {
+   "kind": "street",
+   "id": "st907",
+   "max4m": {
+    "pct": 70,
+    "deg": 34.9,
+    "at": [
+     480.6,
+     10.9,
+     -233.8
+    ]
+   },
+   "place": "on Patrician Street (vicus-patricius), 183 m from Fountain of Orpheus (lacus-orphei), Viminal flank"
+  },
+  {
+   "kind": "street",
+   "id": "st539",
+   "max4m": {
+    "pct": 69,
+    "deg": 34.5,
+    "at": [
+     623.5,
+     26,
+     558.4
+    ]
+   },
+   "place": "53 m from Camp of the Foreigners (castra-peregrina), Caelian top"
+  },
+  {
+   "kind": "street",
+   "id": "st1110",
+   "max4m": {
+    "pct": 69,
+    "deg": 34.7,
+    "at": [
+     174,
+     29.3,
+     -611.2
+    ]
+   },
+   "place": "79 m from Temple of Quirinus (temple-quirinus), Quirinal top"
+  },
+  {
+   "kind": "street",
+   "id": "st1645",
+   "max4m": {
+    "pct": 69,
+    "deg": 34.7,
+    "at": [
+     -632.7,
+     6.1,
+     -314.4
+    ]
+   },
+   "place": "100 m from Odeum of Domitian (odeum-domitian)"
+  },
+  {
+   "kind": "street",
+   "id": "st364",
+   "max4m": {
+    "pct": 68,
+    "deg": 34.2,
+    "at": [
+     -987.9,
+     35.2,
+     486.3
+    ]
+   },
+   "place": "124 m from Grove of Furrina (lucus-furrinae), Janiculum flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    95,
+    16.7,
+    97
+   ],
+   "areaM2": 3424,
+   "maxDeg": 75.6,
+   "cause": "pad embankment: domus-tiberiana (4.9 m outside its footprint)",
+   "place": "on Rise of Victory (clivus-victoriae), 29 m from House of the Vestal Virgins (atrium-vestae), Palatine flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    73,
+    14.9,
+    335
+   ],
+   "areaM2": 3400,
+   "maxDeg": 76.4,
+   "cause": "pad embankment: domus-augustana (5.2 m outside its footprint)",
+   "place": "22 m from School of the Imperial Pages (paedagogium), Palatine flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    479,
+    21,
+    261
+   ],
+   "areaM2": 1208,
+   "maxDeg": 63.1,
+   "cause": "pad embankment: temple-divus-claudius (6.5 m outside its footprint)",
+   "place": "39 m from Morning School (ludus-matutinus), Caelian flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    -1231,
+    31.3,
+    -127
+   ],
+   "areaM2": 2848,
+   "maxDeg": 69.6,
+   "cause": "cliff of janiculum (atlas cliff, 4 real m from its line: CLIFF_RUN 13 m)",
+   "place": "411 m from Gardens of Agrippina (horti-agrippinae), Janiculum flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    491,
+    15.7,
+    99
+   ],
+   "areaM2": 1044,
+   "maxDeg": 66.7,
+   "cause": "pad embankment: baths-titus (4.9 m outside its footprint)",
+   "place": "40 m from Buried Golden House (domus-aurea-buried), Oppian flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    601,
+    21.6,
+    101
+   ],
+   "areaM2": 1092,
+   "maxDeg": 72.5,
+   "cause": "pad embankment: baths-trajan (4.2 m outside its footprint)",
+   "place": "75 m from Buried Golden House (domus-aurea-buried), Oppian flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    493,
+    14.7,
+    -267
+   ],
+   "areaM2": 660,
+   "maxDeg": 46.7,
+   "cause": "road bank: vicus-patricius (leveled crosswise, 4.4 m from its centreline)",
+   "place": "on Patrician Street (vicus-patricius), 183 m from Fountain of Orpheus (lacus-orphei), Viminal flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    -25,
+    20.4,
+    -89
+   ],
+   "areaM2": 744,
+   "maxDeg": 70.3,
+   "cause": "pad embankment: basilica-argentaria (5.8 m outside its footprint)",
+   "place": "on Rise Beside the Forum of Caesar (clivus-argentarius), 20 m from Bankers' Hall (basilica-argentaria), Capitoline top"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    523,
+    13.5,
+    -299
+   ],
+   "areaM2": 544,
+   "maxDeg": 43.5,
+   "cause": "road bank: vicus-patricius (leveled crosswise, 3.5 m from its centreline)",
+   "place": "on Patrician Street (vicus-patricius), 176 m from Fountain of Orpheus (lacus-orphei), Viminal flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    95,
+    18.2,
+    -249
+   ],
+   "areaM2": 480,
+   "maxDeg": 65.4,
+   "cause": "pad embankment: markets-trajan (6 m outside its footprint)",
+   "place": "22 m off High Path, 51 m from Market Halls of Trajan (markets-trajan), Quirinal flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    -103,
+    15.7,
+    83
+   ],
+   "areaM2": 1268,
+   "maxDeg": 72.1,
+   "cause": "cliff of capitolium (atlas cliff, 1 real m from its line: CLIFF_RUN 13 m)",
+   "place": "on Yoke-makers' Street (vicus-iugarius), 14 m from Tarpeian Rock (tarpeian-rock), Capitoline flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    701,
+    22,
+    561
+   ],
+   "areaM2": 512,
+   "maxDeg": 62.2,
+   "cause": "pad embankment: macellum-magnum (5.3 m outside its footprint)",
+   "place": "42 m from Great Market (macellum-magnum), Caelian flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    725,
+    22.5,
+    127
+   ],
+   "areaM2": 528,
+   "maxDeg": 61.5,
+   "cause": "pad embankment: castra-misenatium (4.5 m outside its footprint)",
+   "place": "45 m from Camp of the Misenum Sailors (castra-misenatium), Oppian flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    -1093,
+    21.3,
+    -491
+   ],
+   "areaM2": 1384,
+   "maxDeg": 66.4,
+   "cause": "road bank: trastevere-vatican-riverside-road (leveled crosswise, 4.1 m from its centreline)",
+   "place": "on Riverside road to the Vatican (trastevere-vatican-riverside-road), 188 m from Pyramid Tomb of the Vatican Fields (meta-romuli), Janiculum (north) flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    189,
+    14.5,
+    123
+   ],
+   "areaM2": 196,
+   "maxDeg": 51.4,
+   "cause": "pad embankment: porticus-margaritaria (0.9 m outside its footprint)",
+   "place": "on Palatine Rise (clivus-palatinus), 16 m from Temple of Jupiter the Stayer (temple-jupiter-stator), Velia top"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    -279,
+    21.3,
+    -1169
+   ],
+   "areaM2": 2984,
+   "maxDeg": 65,
+   "cause": "cliff of pincian (atlas cliff, 5 real m from its line: CLIFF_RUN 13 m)",
+   "place": "301 m from Mausoleum of Augustus (mausoleum-augustus), Pincian (Hill of Gardens) flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    69,
+    21.8,
+    -397
+   ],
+   "areaM2": 852,
+   "maxDeg": 73.5,
+   "cause": "cliff of quirinal (atlas cliff, 1 real m from its line: CLIFF_RUN 13 m)",
+   "place": "178 m from Station of the 1st Watch Cohort (statio-vigiles-i), Quirinal flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    581,
+    23,
+    -137
+   ],
+   "areaM2": 216,
+   "maxDeg": 56.1,
+   "cause": "pad embankment: porticus-liviae (6 m outside its footprint)",
+   "place": "on Suburan Rise (clivus-suburanus), 48 m from Portico of Livia (porticus-liviae), Oppian flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    -175,
+    17,
+    447
+   ],
+   "areaM2": 1640,
+   "maxDeg": 61.8,
+   "cause": "cliff of aventine (atlas cliff, 5 real m from its line: CLIFF_RUN 13 m)",
+   "place": "17 m off Path up the Aventine river cliff, 74 m from Triple Gate (porta-trigemina), Aventine flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    463,
+    25.8,
+    15
+   ],
+   "areaM2": 164,
+   "maxDeg": 50.7,
+   "cause": "pad embankment: baths-trajan (4.4 m outside its footprint)",
+   "place": "46 m from Baths of Titus (baths-titus), Oppian top"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    197,
+    23.9,
+    299
+   ],
+   "areaM2": 280,
+   "maxDeg": 50.5,
+   "cause": "pad embankment: palatine-stadium (3.9 m outside its footprint)",
+   "place": "54 m from Palace Hippodrome (palatine-stadium), Palatine top"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    -35,
+    16,
+    -133
+   ],
+   "areaM2": 656,
+   "maxDeg": 69.3,
+   "cause": "cliff of arx (atlas cliff, 7 real m from its line: CLIFF_RUN 13 m)",
+   "place": "on Rise Beside the Forum of Caesar (clivus-argentarius), 23 m from Augurs' Observation Platform (auguraculum), Capitoline flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    -1087,
+    43.4,
+    149
+   ],
+   "areaM2": 292,
+   "maxDeg": 38.8,
+   "cause": "hill flank: janiculum (plateau 60 m, run 300 m)",
+   "place": "131 m from Terminus of Trajan's Aqueduct (aqua-traiana-terminus), Janiculum top"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    -1083,
+    16.5,
+    -591
+   ],
+   "areaM2": 180,
+   "maxDeg": 43.6,
+   "cause": "road bank: via-cornelia (leveled crosswise, 3.7 m from its centreline)",
+   "place": "on Cornelian Way (via-cornelia), 93 m from Pyramid Tomb of the Vatican Fields (meta-romuli), Janiculum (north) flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    249,
+    19.6,
+    209
+   ],
+   "areaM2": 664,
+   "maxDeg": 65.3,
+   "cause": "pad embankment: curiae-veteres (5 m outside its footprint)",
+   "place": "27 m from Old Curiae (curiae-veteres), Palatine top"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    111,
+    28.1,
+    -311
+   ],
+   "areaM2": 180,
+   "maxDeg": 49.9,
+   "cause": "road bank: alta-semita (leveled crosswise, 4.6 m from its centreline)",
+   "place": "on High Path (alta-semita), 114 m from Market Halls of Trajan (markets-trajan), Quirinal top"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    301,
+    14.1,
+    159
+   ],
+   "areaM2": 152,
+   "maxDeg": 49.6,
+   "cause": "pad embankment: velia-vestibule (4.9 m outside its footprint)",
+   "place": "on Sacred Way (via-sacra), 14 m from Sweating Turning-Post Fountain (meta-sudans), Velia flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    -43,
+    13.2,
+    1
+   ],
+   "areaM2": 136,
+   "maxDeg": 60.7,
+   "cause": "pad embankment: porticus-dei-consentes (4.7 m outside its footprint)",
+   "place": "17 m off Capitoline Rise, 10 m from Portico of the Twelve Gods (porticus-dei-consentes), Capitoline flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    91,
+    26.8,
+    -613
+   ],
+   "areaM2": 480,
+   "maxDeg": 39.6,
+   "cause": "hill flank: quirinal (plateau 45 m, run 120 m)",
+   "place": "162 m from Temple of Quirinus (temple-quirinus), Quirinal flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    21,
+    23.1,
+    221
+   ],
+   "areaM2": 144,
+   "maxDeg": 59.3,
+   "cause": "hill flank: palatine-t34 (plateau 34 m, run 35 m)",
+   "place": "on Stairs of Cacus (scalae-caci), 3 m from Hut of Romulus and the Stairs of Cacus (casa-romuli), Palatine top"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    -1639,
+    16.9,
+    -631
+   ],
+   "areaM2": 296,
+   "maxDeg": 54.6,
+   "cause": "pad embankment: circus-vaticanus (5.1 m outside its footprint)",
+   "place": "11 m off Cornelian Way, 116 m from Tombs of the Via Cornelia (vatican-necropolis), Vatican flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    489,
+    26.2,
+    31
+   ],
+   "areaM2": 72,
+   "maxDeg": 49.8,
+   "cause": "pad embankment: baths-titus (2.7 m outside its footprint)",
+   "place": "46 m from Baths of Titus (baths-titus), Oppian flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    -1103,
+    16.7,
+    -603
+   ],
+   "areaM2": 124,
+   "maxDeg": 42.5,
+   "cause": "road bank: via-cornelia (leveled crosswise, 3.7 m from its centreline)",
+   "place": "on Cornelian Way (via-cornelia), 96 m from Pyramid Tomb of the Vatican Fields (meta-romuli), Janiculum (north) flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    61,
+    17.3,
+    -533
+   ],
+   "areaM2": 2048,
+   "maxDeg": 76.4,
+   "cause": "cliff of quirinal (atlas cliff, 5 real m from its line: CLIFF_RUN 13 m)",
+   "place": "185 m from Altar of Nero's Fire (arae-incendii-neroniani), Quirinal flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    -1081,
+    9.7,
+    -471
+   ],
+   "areaM2": 896,
+   "maxDeg": 64.1,
+   "cause": "road bank: trastevere-vatican-riverside-road (leveled crosswise, 3.5 m from its centreline)",
+   "place": "on Riverside road to the Vatican (trastevere-vatican-riverside-road), 204 m from Pyramid Tomb of the Vatican Fields (meta-romuli), Janiculum (north) flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    -987,
+    34.7,
+    467
+   ],
+   "areaM2": 280,
+   "maxDeg": 38.8,
+   "cause": "hill flank: janiculum (plateau 60 m, run 300 m)",
+   "place": "142 m from Grove of Furrina (lucus-furrinae), Janiculum flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    25,
+    22.1,
+    235
+   ],
+   "areaM2": 180,
+   "maxDeg": 60.2,
+   "cause": "pad embankment: temple-victoria (7.6 m outside its footprint)",
+   "place": "on Stairs of Cacus (scalae-caci), 15 m from Hut of Romulus and the Stairs of Cacus (casa-romuli), Palatine top"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    -1143,
+    43.3,
+    93
+   ],
+   "areaM2": 44,
+   "maxDeg": 36.9,
+   "cause": "hill flank: janiculum (plateau 60 m, run 300 m)",
+   "place": "209 m from Terminus of Trajan's Aqueduct (aqua-traiana-terminus), Janiculum top"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    227,
+    14.6,
+    67
+   ],
+   "areaM2": 80,
+   "maxDeg": 42.3,
+   "cause": "pad embankment: velia-vestibule (5.5 m outside its footprint)",
+   "place": "35 m from Spice Warehouses (horrea-piperataria), Velia flank"
+  },
+  {
+   "kind": "spot",
+   "at": [
+    -153,
+    19.4,
+    65
+   ],
+   "areaM2": 668,
+   "maxDeg": 67.5,
+   "cause": "cliff of capitolium (atlas cliff, 13 real m from its line: CLIFF_RUN 13 m)",
+   "place": "33 m from Carmental Gate (porta-carmentalis), Capitoline flank"
+  }
+ ]
+}

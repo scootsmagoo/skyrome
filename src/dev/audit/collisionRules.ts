@@ -11,6 +11,15 @@
  * feels as an invisible ledge or a solid it passes through.
  */
 
+/**
+ * False positives the audit drops (phase 4b G0, from the 4a collision audit):
+ *  - the city's `mid` level is drawn without colliders for blocks beyond 30 m from the player (standing at the
+ *    spot builds the full level), so a drawn `...:mid:...` piece with no collider is not a ghost;
+ *  - a collider with no owner label (`?:box`) is a moving cart, not a fixed solid.
+ */
+export const isMidLevel = (tag: string | undefined): boolean => !!tag && /(^|:)mid(:|$)/.test(tag);
+export const isMovingCart = (tag: string | undefined): boolean => !!tag && tag.startsWith('?:box');
+
 export interface Surf {
   /** Height of the surface (m). */
   y: number;
@@ -118,12 +127,14 @@ export function compareColumn(vis: readonly Surf[], phys: readonly Surf[], terra
     return { kind: 'fallthrough', delta: any ? any.y - topV.y : -Infinity, physY: any ? any.y : -Infinity, visY: topV.y, phys: any?.tag ?? 'none', vis: topV.tag, physKey: any?.key, visKey: topV.key };
   }
   const topP = p[0];
+  if (isMovingCart(topP.tag)) return null;
   // What the player sees at their own level: overhead slabs (a gallery floor, a lintel) do not count.
   const v = vAll.filter((s) => !isOverhead(s, vis, topP.y, o));
   if (!v.length) return null;
   const topV = v[0];
   const d = topP.y - topV.y;
   if (Math.abs(d) <= o.tol) return null;
+  if (d < 0 && isMidLevel(topV.tag)) return null; // drawn mid level: no colliders by design
   const base = { delta: d, physY: topP.y, visY: topV.y, phys: topP.tag, vis: topV.tag, physKey: topP.key, visKey: topV.key };
   // A smooth ramp collider under drawn steps: the physics is sloped and the drawn tread is flat, or
   // the other way round, by less than a riser. Walkable by design, but the feet float or sink by it.
@@ -170,6 +181,7 @@ export const WALL = {
  */
 export function compareWall(phys: { dist: number; tag: string; key?: string } | null, vis: { dist: number; tag: string; key?: string } | null, reach: number, o = WALL): WallFinding | null {
   if (!phys && !vis) return null;
+  if (phys && isMovingCart(phys.tag)) return null;
   const keys = { physKey: phys?.key, visKey: vis?.key };
   if (phys && !vis) {
     // Only a collider: an invisible wall unless the ray simply ran out before the drawn wall.
@@ -178,11 +190,13 @@ export function compareWall(phys: { dist: number; tag: string; key?: string } | 
   }
   if (vis && !phys) {
     if (reach - vis.dist <= o.tol) return null;
+    if (isMidLevel(vis.tag)) return null;
     return { kind: 'ghost', gap: Infinity, physDist: null, visDist: vis.dist, phys: 'none', vis: vis.tag, ...keys };
   }
   const d = vis!.dist - phys!.dist;
   if (Math.abs(d) <= o.tol) return null;
   if (d > 0) return { kind: 'invisible', gap: d, physDist: phys!.dist, visDist: vis!.dist, phys: phys!.tag, vis: vis!.tag, ...keys };
+  if (isMidLevel(vis!.tag)) return null;
   return { kind: 'ghost', gap: -d, physDist: phys!.dist, visDist: vis!.dist, phys: phys!.tag, vis: vis!.tag, ...keys };
 }
 

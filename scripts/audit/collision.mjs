@@ -44,6 +44,7 @@ import { createServer as createNetServer } from 'node:net';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { STORY } from './story.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const args = parseArgs(process.argv.slice(2));
@@ -62,8 +63,6 @@ const only = args.only ? String(args.only).split(',') : null;
 const started = Date.now();
 const deadline = started + minutes * 60_000;
 
-/** The story's places first (docs/STORY.md, docs/design/solid-ground.md). */
-const STORY = ['porta-capena', 'spawn-capena', 'capena-intus', 'night-cart', 'compitum-capenae', 'area-vallis-murcia', 'circus-maximus', 'caupona-carcerum', 'compitum-circi', 'rostra', 'miliarium-aureum', 'basilica-julia', 'temple-castor-pollux', 'curia-julia', 'area-velabrum', 'compitum-velabri', 'insula-nutans', 'vicus-tuscus', 'popina-vici-tusci', 'compitum-vici-tusci', 'forum-boarium', 'subura', 'fullonica-suburana', 'ludus-magnus', 'ludus-gate', 'ludus-arena-center', 'colosseum', 'meta-sudans', 'arch-titus', 'forum-trajan', 'column-trajan', 'basilica-ulpia', 'markets-trajan', 'pons-aemilius', 'insula-tiberina', 'pons-fabricius', 'temple-aesculapius', 'portus-tiberinus', 'emporium', 'theatre-marcellus', 'pantheon', 'baths-agrippa', 'saepta-julia', 'stadium-domitian', 'theatre-pompey', 'ara-pacis', 'castra-peregrina'];
 /** The detail area of the core and the golden-path corridors (game m, from plan.detailRects). */
 const CORE_RECTS = [[-522, -378, 666, 678], [172, 441, 552, 843], [-243, 104, 439, 708], [-216, 258, 409, 720]];
 /** The Campus Martius's landmarks stand outside the core's detail area: their own rectangle. */
@@ -107,13 +106,14 @@ try {
   const kinds = ['fallthrough', 'ledge', 'ghost', 'invisible', 'embedded', 'float', 'sink', 'lip', 'crack', 'ghost-wall', 'low-overhead', 'ramp-steps', 'drawn-step', 'headroom'];
   const lines = [];
   const say = (s) => { lines.push(s); console.log(s); };
-  let defects, counts, terrain, perStop, sweepMin, todo, stops, defectsTotal, byKind;
+  let defects, counts, terrain, perStop, sweepMin, todo, stops, defectsTotal, byKind, gateNumbers;
   const fromFile = args.from ? resolve(root, String(args.from)) : null;
   if (fromFile) {
     // Confirm again from an earlier sweep (its defects, counts and summary), without sweeping.
     const j = JSON.parse(readFileSync(fromFile, 'utf8'));
     defects = j.defects.map((d) => ({ ...d, confirm: undefined, screenshot: undefined }));
     ({ counts, terrain, defectsTotal, byKind } = j);
+    gateNumbers = j.gate;
     perStop = j.stops;
     sweepMin = j.sweepMinutes;
     todo = stops = j.stops;
@@ -188,7 +188,7 @@ try {
     // ---- sweep
     const raw = { columns: [], stands: [], walls: [], seams: [] };
     const colliders = {};
-    terrain = { samples: 0, sumAbs: 0, maxAbs: 0, drawnMatches: 0, otherMatches: 0, neither: 0, worst: null };
+    terrain = { over4: 0, samples: 0, sumAbs: 0, maxAbs: 0, drawnMatches: 0, otherMatches: 0, neither: 0, worst: null };
     counts = { stops: 0, probes: 0, walkable: 0, indoor: 0, edges: 0, rays: 0, pinholes: 0, seamSamples: 0, triangles: 0, released: 0, farPieces: 0, ms: 0 };
     perStop = [];
     for (const s of todo) {
@@ -223,6 +223,7 @@ try {
       counts.farPieces += r.index.far;
       counts.ms += r.ms;
       terrain.samples += r.terrain.samples;
+      terrain.over4 += r.terrain.over4 ?? 0;
       terrain.sumAbs += r.terrain.meanAbs * r.terrain.samples;
       terrain.drawnMatches += r.terrain.drawnMatches;
       terrain.otherMatches += r.terrain.otherMatches;
@@ -277,6 +278,22 @@ try {
     }
     defects.sort((a, b) => b.score - a.score);
     defectsTotal = defects.length;
+    // The numbers scripts/audit/gate.mjs reads (all defects, before the JSON is trimmed).
+    const nOf = (list) => list.reduce((s, d) => s + d.n, 0);
+    const circusRe = /\((circus-maximus|caupona-carcerum|compitum-circi|temple-sol-circus|pulvinar),/;
+    gateNumbers = {
+      fallthrough: defects.filter((d) => d.kind === 'fallthrough').length,
+      lips10cm: defects.filter((d) => d.kind === 'lip' && Math.abs(d.size) >= 0.1).length,
+      cracks: defects.filter((d) => d.kind === 'crack').length,
+      invisibleCityBoxNothingDrawn: defects.filter((d) => d.kind === 'invisible' && d.vis === 'none' && /^city:b\d+:box/.test(d.phys ?? '')).length,
+      embeddedCityBox: defects.filter((d) => d.kind === 'embedded' && /city:b\d+:box/.test(d.phys ?? '')).length,
+      circusGhostWallProbes: nOf(defects.filter((d) => d.kind === 'ghost-wall' && circusRe.test(d.place ?? ''))),
+      tarpeianGhostProbes: nOf(defects.filter((d) => d.kind === 'ghost' && /\((tarpeian-rock|carmental-gate|porta-carmentalis)/.test(d.place ?? ''))),
+      ghostOnDeckProbes: nOf(defects.filter((d) => d.kind === 'ghost' && /\((portus-tiberinus|river-port)/.test(d.place ?? ''))),
+      terrainMaxDiffM: terrain.maxAbs,
+      terrainDrawnDiagonalPct: terrain.drawnMatches + terrain.otherMatches + terrain.neither ? +((100 * terrain.drawnMatches) / (terrain.drawnMatches + terrain.otherMatches + terrain.neither)).toFixed(1) : null,
+      bareGroundOver4cm: terrain.over4,
+    };
     byKind = Object.fromEntries(kinds.map((k) => [k, { defects: defects.filter((d) => d.kind === k).length, probes: defects.filter((d) => d.kind === k).reduce((s, d) => s + d.n, 0) }]));
 
     // ---- report
@@ -398,6 +415,7 @@ try {
       sweepMinutes: +(+sweepMin).toFixed(1),
       totalMinutes: +((Date.now() - started) / 60000).toFixed(1),
       byKind,
+      gate: gateNumbers,
       terrain: { ...terrain, meanAbs: terrain.samples ? +(terrain.sumAbs / terrain.samples).toFixed(4) : 0 },
       stops: perStop,
       stopFields: ['id', 'x', 'z', 'columns', 'stands', 'walls', 'seams', 'probeMs', 'farPieces', 'settleFrames', 'settleMs'],

@@ -1,0 +1,2503 @@
+{
+ "lens": "structures",
+ "note": "Phase 4a baseline (2026-10-10): counts plus the top 100 clusters. Refreshed only by the lead.",
+ "source": "scripts/audit/structures.mjs, 2026-10-10 full run",
+ "counts": {
+  "totals": {
+   "jobs": 1183,
+   "of": 1183,
+   "byJob": {
+    "river": {
+     "jobs": 6,
+     "samples": 12513,
+     "edges": 18800,
+     "floating": 0,
+     "buriedOpening": 0,
+     "buriedWall": 105,
+     "buriedTop": 121,
+     "farFloat": 3,
+     "floorSamples": 6841,
+     "sunkFloor": 282,
+     "skipped": {
+      "overhang": 328,
+      "water": 32890,
+      "interior": 0,
+      "continues": 16615,
+      "occluded": 0,
+      "enclosed": 0,
+      "inside": 0
+     }
+    },
+    "stairs": {
+     "jobs": 227,
+     "samples": 2896,
+     "edges": 1711,
+     "floating": 0,
+     "buriedOpening": 0,
+     "buriedWall": 303,
+     "buriedTop": 183,
+     "farFloat": 12,
+     "floorSamples": 926,
+     "sunkFloor": 0,
+     "skipped": {
+      "overhang": 0,
+      "water": 0,
+      "interior": 0,
+      "continues": 140,
+      "occluded": 0,
+      "enclosed": 0,
+      "inside": 0
+     }
+    },
+    "block": {
+     "jobs": 663,
+     "samples": 1325482,
+     "edges": 2727878,
+     "floating": 975,
+     "buriedOpening": 1580,
+     "buriedWall": 10235,
+     "buriedTop": 1165,
+     "farFloat": 55,
+     "floorSamples": 942511,
+     "sunkFloor": 5837,
+     "skipped": {
+      "overhang": 511688,
+      "water": 0,
+      "interior": 0,
+      "continues": 5122092,
+      "occluded": 54,
+      "enclosed": 9,
+      "inside": 907798
+     }
+    },
+    "block-low": {
+     "jobs": 663,
+     "samples": 891860,
+     "edges": 522320,
+     "floating": 588,
+     "buriedOpening": 0,
+     "buriedWall": 13140,
+     "buriedTop": 1063,
+     "farFloat": 55,
+     "floorSamples": 249644,
+     "sunkFloor": 427,
+     "skipped": {
+      "overhang": 232975,
+      "water": 0,
+      "interior": 0,
+      "continues": 2324801,
+      "occluded": 24,
+      "enclosed": 6,
+      "inside": 81951
+     }
+    },
+    "landmark": {
+     "jobs": 190,
+     "samples": 424735,
+     "edges": 348898,
+     "floating": 13719,
+     "buriedOpening": 98,
+     "buriedWall": 2778,
+     "buriedTop": 5437,
+     "farFloat": 332,
+     "floorSamples": 670198,
+     "sunkFloor": 6988,
+     "skipped": {
+      "overhang": 82833,
+      "water": 1192,
+      "interior": 5436,
+      "continues": 469209,
+      "occluded": 35,
+      "enclosed": 0,
+      "inside": 0
+     }
+    },
+    "monument": {
+     "jobs": 97,
+     "samples": 66409,
+     "edges": 30406,
+     "floating": 244,
+     "buriedOpening": 0,
+     "buriedWall": 102,
+     "buriedTop": 56,
+     "farFloat": 27,
+     "floorSamples": 94638,
+     "sunkFloor": 196,
+     "skipped": {
+      "overhang": 33684,
+      "water": 0,
+      "interior": 3,
+      "continues": 64992,
+      "occluded": 1,
+      "enclosed": 0,
+      "inside": 0
+     }
+    }
+   },
+   "lots": {
+    "built": 4105,
+    "floating": 294,
+    "buried": 388,
+    "sunk": 343,
+    "blocks": 663,
+    "blocksFloating": 230
+   },
+   "ms": {
+    "cell": 4,
+    "generate": 51,
+    "analyse": 77
+   }
+  },
+  "byType": {
+   "floating|landmark:palace": {
+    "n": 24,
+    "length": 378.6,
+    "max": 19.13,
+    "major": 13,
+    "visible": 5,
+    "owners": 3
+   },
+   "floating|landmark:baths": {
+    "n": 227,
+    "length": 1678.6,
+    "max": 13.89,
+    "major": 8,
+    "visible": 21,
+    "owners": 3
+   },
+   "terrain-in-floor|landmark:palace": {
+    "n": 34,
+    "length": 47.6,
+    "max": 12.14,
+    "major": 22,
+    "visible": 5,
+    "owners": 3
+   },
+   "terrain-in-floor|landmark:harbor": {
+    "n": 107,
+    "length": 3623.1,
+    "max": 7.49,
+    "major": 94,
+    "visible": 5,
+    "owners": 1
+   },
+   "floating|landmark:camp": {
+    "n": 13,
+    "length": 65.6,
+    "max": 6.56,
+    "major": 8,
+    "visible": 1,
+    "owners": 4
+   },
+   "floating|landmark:garden": {
+    "n": 15,
+    "length": 77.5,
+    "max": 6.14,
+    "major": 5,
+    "visible": 5,
+    "owners": 7
+   },
+   "terrain-in-floor|monument": {
+    "n": 10,
+    "length": 163.3,
+    "max": 5.97,
+    "major": 8,
+    "visible": 2,
+    "owners": 7
+   },
+   "floating|landmark:theatre": {
+    "n": 18,
+    "length": 278.8,
+    "max": 5.83,
+    "major": 9,
+    "visible": 7,
+    "owners": 2
+   },
+   "terrain-in-floor|landmark:house": {
+    "n": 18,
+    "length": 1163.5,
+    "max": 5.35,
+    "major": 8,
+    "visible": 4,
+    "owners": 5
+   },
+   "terrain-in-floor|landmark:other": {
+    "n": 5,
+    "length": 280.3,
+    "max": 4.96,
+    "major": 1,
+    "visible": 4,
+    "owners": 4
+   },
+   "floating|landmark:amphitheatre": {
+    "n": 25,
+    "length": 156.8,
+    "max": 4.55,
+    "major": 24,
+    "visible": 0,
+    "owners": 1
+   },
+   "floating|landmark:circus": {
+    "n": 207,
+    "length": 2762,
+    "max": 4.18,
+    "major": 49,
+    "visible": 158,
+    "owners": 2
+   },
+   "terrain-in-floor|river:bridge": {
+    "n": 52,
+    "length": 181.5,
+    "max": 3.8,
+    "major": 49,
+    "visible": 1,
+    "owners": 1
+   },
+   "terrain-in-floor|landmark:baths": {
+    "n": 7,
+    "length": 31.3,
+    "max": 3.78,
+    "major": 3,
+    "visible": 4,
+    "owners": 1
+   },
+   "terrain-in-floor|landmark:temple": {
+    "n": 41,
+    "length": 319.3,
+    "max": 3.63,
+    "major": 12,
+    "visible": 9,
+    "owners": 10
+   },
+   "floating|landmark:other": {
+    "n": 32,
+    "length": 939.6,
+    "max": 3.58,
+    "major": 26,
+    "visible": 2,
+    "owners": 7
+   },
+   "buried-opening|landmark:harbor": {
+    "n": 7,
+    "length": 16.7,
+    "max": 3.22,
+    "major": 2,
+    "visible": 5,
+    "owners": 1
+   },
+   "floating|monument": {
+    "n": 33,
+    "length": 183.7,
+    "max": 3.1,
+    "major": 11,
+    "visible": 11,
+    "owners": 15
+   },
+   "floating|landmark:temple": {
+    "n": 240,
+    "length": 910.3,
+    "max": 2.71,
+    "major": 10,
+    "visible": 23,
+    "owners": 15
+   },
+   "floating|landmark:shrine": {
+    "n": 24,
+    "length": 87.6,
+    "max": 2.51,
+    "major": 18,
+    "visible": 1,
+    "owners": 4
+   },
+   "terrain-in-floor|block:back-insula": {
+    "n": 875,
+    "length": 3672.1,
+    "max": 2.48,
+    "major": 248,
+    "visible": 218,
+    "owners": 284
+   },
+   "terrain-in-floor|block:insula": {
+    "n": 91,
+    "length": 252.2,
+    "max": 2.31,
+    "major": 58,
+    "visible": 17,
+    "owners": 48
+   },
+   "buried-opening|landmark:palace": {
+    "n": 20,
+    "length": 49.8,
+    "max": 2.1,
+    "major": 16,
+    "visible": 4,
+    "owners": 2
+   },
+   "floating|block:insula": {
+    "n": 112,
+    "length": 159.5,
+    "max": 2.09,
+    "major": 9,
+    "visible": 23,
+    "owners": 110
+   },
+   "terrain-in-floor|landmark:monument": {
+    "n": 2,
+    "length": 3.5,
+    "max": 1.99,
+    "major": 1,
+    "visible": 1,
+    "owners": 1
+   },
+   "terrain-in-floor|block:shops": {
+    "n": 8,
+    "length": 15.8,
+    "max": 1.73,
+    "major": 3,
+    "visible": 2,
+    "owners": 6
+   },
+   "floating|landmark:house": {
+    "n": 29,
+    "length": 201.1,
+    "max": 1.59,
+    "major": 10,
+    "visible": 2,
+    "owners": 5
+   },
+   "floating|landmark:basilica": {
+    "n": 63,
+    "length": 249.2,
+    "max": 1.48,
+    "major": 7,
+    "visible": 1,
+    "owners": 3
+   },
+   "floating|block:shops": {
+    "n": 44,
+    "length": 65.3,
+    "max": 1.38,
+    "major": 4,
+    "visible": 6,
+    "owners": 44
+   },
+   "floating|landmark:forum": {
+    "n": 89,
+    "length": 1072.7,
+    "max": 1.21,
+    "major": 9,
+    "visible": 0,
+    "owners": 3
+   },
+   "terrain-in-floor|landmark:warehouse": {
+    "n": 8,
+    "length": 31.6,
+    "max": 1.21,
+    "major": 5,
+    "visible": 1,
+    "owners": 1
+   },
+   "terrain-in-floor|landmark:garden": {
+    "n": 774,
+    "length": 3869.2,
+    "max": 1.21,
+    "major": 549,
+    "visible": 170,
+    "owners": 4
+   },
+   "terrain-in-floor|landmark:aqueduct": {
+    "n": 3,
+    "length": 35.6,
+    "max": 1.19,
+    "major": 3,
+    "visible": 0,
+    "owners": 1
+   },
+   "terrain-in-floor|block:yard": {
+    "n": 4,
+    "length": 5.6,
+    "max": 1.17,
+    "major": 2,
+    "visible": 1,
+    "owners": 4
+   },
+   "floating|landmark:stadium": {
+    "n": 7,
+    "length": 10,
+    "max": 1.15,
+    "major": 4,
+    "visible": 0,
+    "owners": 2
+   },
+   "terrain-in-floor|landmark:portico": {
+    "n": 1,
+    "length": 85.8,
+    "max": 1.11,
+    "major": 1,
+    "visible": 0,
+    "owners": 1
+   },
+   "floating|landmark:aqueduct": {
+    "n": 2,
+    "length": 3.8,
+    "max": 0.97,
+    "major": 1,
+    "visible": 0,
+    "owners": 1
+   },
+   "floating|landmark:harbor": {
+    "n": 79,
+    "length": 898.8,
+    "max": 0.9,
+    "major": 2,
+    "visible": 63,
+    "owners": 1
+   },
+   "floating|block:domus": {
+    "n": 4,
+    "length": 5.3,
+    "max": 0.86,
+    "major": 1,
+    "visible": 0,
+    "owners": 4
+   },
+   "floating|landmark:tomb": {
+    "n": 16,
+    "length": 35.8,
+    "max": 0.8,
+    "major": 1,
+    "visible": 1,
+    "owners": 1
+   },
+   "buried-opening|block:insula": {
+    "n": 239,
+    "length": 448.2,
+    "max": 0.8,
+    "major": 3,
+    "visible": 59,
+    "owners": 126
+   },
+   "buried-opening|block:back-insula": {
+    "n": 483,
+    "length": 685.5,
+    "max": 0.79,
+    "major": 15,
+    "visible": 180,
+    "owners": 213
+   },
+   "buried-opening|landmark:curia": {
+    "n": 1,
+    "length": 0.8,
+    "max": 0.75,
+    "major": 1,
+    "visible": 0,
+    "owners": 1
+   },
+   "floating|landmark:gate": {
+    "n": 17,
+    "length": 154.9,
+    "max": 0.7,
+    "major": 1,
+    "visible": 7,
+    "owners": 3
+   },
+   "terrain-in-floor|landmark:curia": {
+    "n": 1,
+    "length": 22.4,
+    "max": 0.57,
+    "major": 1,
+    "visible": 0,
+    "owners": 1
+   },
+   "floating|landmark:warehouse": {
+    "n": 1,
+    "length": 6,
+    "max": 0.56,
+    "major": 0,
+    "visible": 1,
+    "owners": 1
+   },
+   "floating|landmark:portico": {
+    "n": 13,
+    "length": 242.3,
+    "max": 0.51,
+    "major": 0,
+    "visible": 1,
+    "owners": 3
+   },
+   "buried-opening|landmark:gate": {
+    "n": 1,
+    "length": 1.5,
+    "max": 0.5,
+    "major": 0,
+    "visible": 1,
+    "owners": 1
+   },
+   "floating|block-low:yard": {
+    "n": 23,
+    "length": 100.1,
+    "max": 0.49,
+    "major": 0,
+    "visible": 2,
+    "owners": 21
+   },
+   "floating|landmark:curia": {
+    "n": 1,
+    "length": 0.8,
+    "max": 0.47,
+    "major": 0,
+    "visible": 1,
+    "owners": 1
+   },
+   "buried-opening|landmark:house": {
+    "n": 4,
+    "length": 3.9,
+    "max": 0.47,
+    "major": 0,
+    "visible": 2,
+    "owners": 2
+   },
+   "floating|block:yard": {
+    "n": 23,
+    "length": 88.9,
+    "max": 0.46,
+    "major": 0,
+    "visible": 2,
+    "owners": 20
+   },
+   "terrain-in-floor|landmark:basilica": {
+    "n": 2,
+    "length": 68.6,
+    "max": 0.42,
+    "major": 2,
+    "visible": 0,
+    "owners": 1
+   },
+   "floating|block-low:piazza": {
+    "n": 106,
+    "length": 315.2,
+    "max": 0.42,
+    "major": 0,
+    "visible": 5,
+    "owners": 91
+   },
+   "floating|block:piazza": {
+    "n": 173,
+    "length": 403.3,
+    "max": 0.42,
+    "major": 0,
+    "visible": 6,
+    "owners": 113
+   },
+   "buried-opening|block:shops": {
+    "n": 61,
+    "length": 76.2,
+    "max": 0.41,
+    "major": 0,
+    "visible": 9,
+    "owners": 48
+   },
+   "terrain-in-floor|block-low:back-insula": {
+    "n": 292,
+    "length": 260.6,
+    "max": 0.4,
+    "major": 1,
+    "visible": 86,
+    "owners": 143
+   },
+   "terrain-in-floor|block-low:domus": {
+    "n": 4,
+    "length": 8.1,
+    "max": 0.39,
+    "major": 0,
+    "visible": 3,
+    "owners": 3
+   },
+   "terrain-in-floor|block:domus": {
+    "n": 1,
+    "length": 2.1,
+    "max": 0.39,
+    "major": 0,
+    "visible": 1,
+    "owners": 1
+   },
+   "floating|landmark:market": {
+    "n": 3,
+    "length": 18.8,
+    "max": 0.39,
+    "major": 0,
+    "visible": 2,
+    "owners": 3
+   },
+   "floating|block-low:back-insula": {
+    "n": 1,
+    "length": 4.5,
+    "max": 0.37,
+    "major": 0,
+    "visible": 1,
+    "owners": 1
+   },
+   "floating|block:back-insula": {
+    "n": 2,
+    "length": 16.6,
+    "max": 0.37,
+    "major": 0,
+    "visible": 1,
+    "owners": 2
+   },
+   "terrain-in-floor|landmark:gate": {
+    "n": 2,
+    "length": 11.9,
+    "max": 0.37,
+    "major": 0,
+    "visible": 2,
+    "owners": 1
+   },
+   "terrain-in-floor|landmark:forum": {
+    "n": 3,
+    "length": 11.6,
+    "max": 0.33,
+    "major": 0,
+    "visible": 1,
+    "owners": 1
+   },
+   "buried-opening|landmark:forum": {
+    "n": 1,
+    "length": 0.8,
+    "max": 0.32,
+    "major": 0,
+    "visible": 0,
+    "owners": 1
+   },
+   "floating|block-low:insula": {
+    "n": 7,
+    "length": 18.2,
+    "max": 0.31,
+    "major": 0,
+    "visible": 3,
+    "owners": 6
+   },
+   "terrain-in-floor|block-low:yard": {
+    "n": 2,
+    "length": 4,
+    "max": 0.27,
+    "major": 0,
+    "visible": 1,
+    "owners": 2
+   },
+   "floating|landmark:arch": {
+    "n": 2,
+    "length": 15.1,
+    "max": 0.25,
+    "major": 0,
+    "visible": 1,
+    "owners": 1
+   },
+   "floating|landmark:library": {
+    "n": 14,
+    "length": 43.6,
+    "max": 0.2,
+    "major": 0,
+    "visible": 0,
+    "owners": 2
+   },
+   "buried-opening|landmark:temple": {
+    "n": 1,
+    "length": 0.8,
+    "max": 0.2,
+    "major": 0,
+    "visible": 0,
+    "owners": 1
+   },
+   "buried-opening|block:domus": {
+    "n": 1,
+    "length": 0.8,
+    "max": 0.2,
+    "major": 0,
+    "visible": 0,
+    "owners": 1
+   },
+   "terrain-in-floor|block-low:piazza": {
+    "n": 1,
+    "length": 0.2,
+    "max": 0.19,
+    "major": 0,
+    "visible": 0,
+    "owners": 1
+   },
+   "terrain-in-floor|landmark:shrine": {
+    "n": 4,
+    "length": 5.7,
+    "max": 0.19,
+    "major": 0,
+    "visible": 0,
+    "owners": 2
+   },
+   "floating|block:compound-wall": {
+    "n": 1,
+    "length": 3,
+    "max": 0.18,
+    "major": 0,
+    "visible": 0,
+    "owners": 1
+   },
+   "terrain-in-floor|block-low:insula": {
+    "n": 4,
+    "length": 1.9,
+    "max": 0.16,
+    "major": 0,
+    "visible": 0,
+    "owners": 4
+   },
+   "terrain-in-floor|landmark:circus": {
+    "n": 1,
+    "length": 0.5,
+    "max": 0.14,
+    "major": 0,
+    "visible": 0,
+    "owners": 1
+   },
+   "floating|landmark:monument": {
+    "n": 1,
+    "length": 0.8,
+    "max": 0.11,
+    "major": 0,
+    "visible": 0,
+    "owners": 1
+   },
+   "floating|landmark:fountain": {
+    "n": 3,
+    "length": 15.8,
+    "max": 0.11,
+    "major": 0,
+    "visible": 0,
+    "owners": 1
+   },
+   "floating|block-low:shops": {
+    "n": 1,
+    "length": 6,
+    "max": 0.1,
+    "major": 0,
+    "visible": 0,
+    "owners": 1
+   }
+  },
+  "massing": {
+   "boxes": 10610,
+   "detailedBoxes": 4230,
+   "floating": 16,
+   "floatingFar": 8,
+   "major": 6,
+   "drawn": {
+    "L1": 23,
+    "L2": 329,
+    "L1major": 12,
+    "L2major": 126,
+    "L1over1": 0,
+    "L2over1": 16
+   }
+  }
+ },
+ "clusters": [
+  {
+   "kind": "floating",
+   "name": "domus-augustana",
+   "owner": "domus-augustana",
+   "type": "landmark:palace",
+   "depthVis": 19.13,
+   "length": 67.5,
+   "n": 90,
+   "at": [
+    80.9,
+    27.6,
+    345.9
+   ],
+   "ground": 8.47,
+   "place": "Before the Domus Augustana",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "domus-augustana",
+   "owner": "domus-augustana",
+   "type": "landmark:palace",
+   "depthVis": 18.06,
+   "length": 68.3,
+   "n": 91,
+   "at": [
+    96.1,
+    27.6,
+    358.2
+   ],
+   "ground": 9.54,
+   "place": "Before the Domus Augustana",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "baths-trajan",
+   "owner": "baths-trajan",
+   "type": "landmark:baths",
+   "depthVis": 13.89,
+   "length": 30,
+   "n": 40,
+   "at": [
+    604.1,
+    28.8,
+    106.1
+   ],
+   "ground": 14.91,
+   "place": "Baths of Trajan",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "domus-augustana",
+   "owner": "domus-augustana",
+   "type": "landmark:palace",
+   "depthVis": 12.86,
+   "length": 5.3,
+   "n": 7,
+   "at": [
+    89.7,
+    27.55,
+    350.2
+   ],
+   "ground": 14.69,
+   "place": "Before the Domus Augustana",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "domus-augustana",
+   "owner": "domus-augustana",
+   "type": "landmark:palace",
+   "depthVis": 12.14,
+   "length": 1.4,
+   "n": 2,
+   "at": [
+    77.3,
+    14.86,
+    333.1
+   ],
+   "ground": 26.99,
+   "place": "Domus Augustana",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "domus-augustana",
+   "owner": "domus-augustana",
+   "type": "landmark:palace",
+   "depthVis": 7.95,
+   "length": 6.3,
+   "n": 9,
+   "at": [
+    76.1,
+    14.86,
+    334.9
+   ],
+   "ground": 22.8,
+   "place": "School of the Imperial Pages",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "baths-trajan",
+   "owner": "baths-trajan",
+   "type": "landmark:baths",
+   "depthVis": 7.92,
+   "length": 25.5,
+   "n": 34,
+   "at": [
+    600.8,
+    28.7,
+    100.8
+   ],
+   "ground": 20.78,
+   "place": "Baths of Trajan",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "domus-augustana",
+   "owner": "domus-augustana",
+   "type": "landmark:palace",
+   "depthVis": 7.5,
+   "length": 4.2,
+   "n": 6,
+   "at": [
+    109.7,
+    14.86,
+    362.2
+   ],
+   "ground": 22.35,
+   "place": "Palace Hippodrome",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "emporium",
+   "owner": "emporium",
+   "type": "landmark:harbor",
+   "depthVis": 7.49,
+   "length": 44.1,
+   "n": 42,
+   "at": [
+    -364.9,
+    1.95,
+    584.8
+   ],
+   "ground": 9.44,
+   "place": "Emporium",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "domus-augustana",
+   "owner": "domus-augustana",
+   "type": "landmark:palace",
+   "depthVis": 7.12,
+   "length": 4.1,
+   "n": 6,
+   "at": [
+    108.4,
+    14.86,
+    364
+   ],
+   "ground": 21.97,
+   "place": "Palace Hippodrome",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "domus-augustana",
+   "owner": "domus-augustana",
+   "type": "landmark:palace",
+   "depthVis": 6.97,
+   "length": 0.1,
+   "n": 2,
+   "at": [
+    76,
+    16.36,
+    334.6
+   ],
+   "ground": 23.32,
+   "place": "School of the Imperial Pages",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "domus-augustana",
+   "owner": "domus-augustana",
+   "type": "landmark:palace",
+   "depthVis": 6.95,
+   "length": 9.6,
+   "n": 14,
+   "at": [
+    114,
+    14.86,
+    357.3
+   ],
+   "ground": 21.89,
+   "place": "Palace Hippodrome",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "ludus-gallicus",
+   "owner": "ludus-gallicus",
+   "type": "landmark:camp",
+   "depthVis": 6.56,
+   "length": 2.3,
+   "n": 3,
+   "at": [
+    544,
+    18.57,
+    263.9
+   ],
+   "ground": 12.01,
+   "place": "Gallic Gladiatorial School",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "adonaea",
+   "owner": "adonaea",
+   "type": "landmark:garden",
+   "depthVis": 6.14,
+   "length": 6,
+   "n": 8,
+   "at": [
+    248.2,
+    28.45,
+    199.2
+   ],
+   "ground": 22.32,
+   "place": "Gardens of Adonis",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "city:mon:-3,5",
+   "owner": "city:mon:-3,5",
+   "type": "monument",
+   "depthVis": 5.97,
+   "length": 12.5,
+   "n": 15,
+   "at": [
+    -335.2,
+    12.37,
+    613.3
+   ],
+   "ground": 18.34,
+   "place": "Emporium",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "theatre-marcellus",
+   "owner": "theatre-marcellus",
+   "type": "landmark:theatre",
+   "depthVis": 5.83,
+   "length": 10.5,
+   "n": 14,
+   "at": [
+    -265.1,
+    12.94,
+    37
+   ],
+   "ground": 7.2,
+   "place": "Theatre of Marcellus",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "theatre-marcellus",
+   "owner": "theatre-marcellus",
+   "type": "landmark:theatre",
+   "depthVis": 5.83,
+   "length": 10.5,
+   "n": 14,
+   "at": [
+    -254.6,
+    12.94,
+    34.4
+   ],
+   "ground": 7.2,
+   "place": "Theatre of Marcellus",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "theatre-marcellus",
+   "owner": "theatre-marcellus",
+   "type": "landmark:theatre",
+   "depthVis": 5.83,
+   "length": 10.5,
+   "n": 14,
+   "at": [
+    -244.2,
+    12.94,
+    37.4
+   ],
+   "ground": 7.2,
+   "place": "Theatre of Marcellus",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "theatre-marcellus",
+   "owner": "theatre-marcellus",
+   "type": "landmark:theatre",
+   "depthVis": 5.83,
+   "length": 10.5,
+   "n": 14,
+   "at": [
+    -236.8,
+    12.94,
+    45.1
+   ],
+   "ground": 7.2,
+   "place": "Theatre of Marcellus",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "theatre-marcellus",
+   "owner": "theatre-marcellus",
+   "type": "landmark:theatre",
+   "depthVis": 5.83,
+   "length": 10.5,
+   "n": 14,
+   "at": [
+    -234.2,
+    12.94,
+    55.6
+   ],
+   "ground": 7.2,
+   "place": "Theatre of Marcellus",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "theatre-marcellus",
+   "owner": "theatre-marcellus",
+   "type": "landmark:theatre",
+   "depthVis": 5.83,
+   "length": 10.5,
+   "n": 14,
+   "at": [
+    -237.2,
+    12.94,
+    66
+   ],
+   "ground": 7.2,
+   "place": "Theatre of Marcellus",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "baths-trajan",
+   "owner": "baths-trajan",
+   "type": "landmark:baths",
+   "depthVis": 5.8,
+   "length": 27,
+   "n": 36,
+   "at": [
+    478.4,
+    28.8,
+    27.8
+   ],
+   "ground": 23.09,
+   "place": "Baths of Trajan",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "domus-augustana",
+   "owner": "domus-augustana",
+   "type": "landmark:palace",
+   "depthVis": 5.7,
+   "length": 0.1,
+   "n": 2,
+   "at": [
+    108.6,
+    16.36,
+    363.9
+   ],
+   "ground": 22.06,
+   "place": "Palace Hippodrome",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "domus-augustana",
+   "owner": "domus-augustana",
+   "type": "landmark:palace",
+   "depthVis": 5.5,
+   "length": 0.1,
+   "n": 2,
+   "at": [
+    111.1,
+    16.36,
+    361.2
+   ],
+   "ground": 21.95,
+   "place": "Palace Hippodrome",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "atrium-vestae",
+   "owner": "atrium-vestae",
+   "type": "landmark:house",
+   "depthVis": 5.35,
+   "length": 411.6,
+   "n": 373,
+   "at": [
+    140.6,
+    7.76,
+    107.8
+   ],
+   "ground": 13.11,
+   "place": "House of the Vestal Virgins",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "domus-augustana",
+   "owner": "domus-augustana",
+   "type": "landmark:palace",
+   "depthVis": 5.28,
+   "length": 0.1,
+   "n": 2,
+   "at": [
+    114.2,
+    16.36,
+    357.8
+   ],
+   "ground": 21.73,
+   "place": "Palace Hippodrome",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "ludus-gallicus",
+   "owner": "ludus-gallicus",
+   "type": "landmark:camp",
+   "depthVis": 5.13,
+   "length": 2.3,
+   "n": 3,
+   "at": [
+    575.9,
+    18.97,
+    262.3
+   ],
+   "ground": 13.83,
+   "place": "Gallic Gladiatorial School",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "city:mon:-2,0",
+   "owner": "city:mon:-2,0",
+   "type": "monument",
+   "depthVis": 5.07,
+   "length": 31.9,
+   "n": 39,
+   "at": [
+    -154.1,
+    11.65,
+    65.5
+   ],
+   "ground": 16.72,
+   "place": "Vegetable Market",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "atrium-vestae",
+   "owner": "atrium-vestae",
+   "type": "landmark:house",
+   "depthVis": 5.07,
+   "length": 395,
+   "n": 358,
+   "at": [
+    140.6,
+    8.04,
+    107.8
+   ],
+   "ground": 13.11,
+   "place": "House of the Vestal Virgins",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "paedagogium",
+   "owner": "paedagogium",
+   "type": "landmark:other",
+   "depthVis": 4.96,
+   "length": 143,
+   "n": 133,
+   "at": [
+    48.7,
+    8.62,
+    311
+   ],
+   "ground": 13.58,
+   "place": "School of the Imperial Pages",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "ludus-gallicus",
+   "owner": "ludus-gallicus",
+   "type": "landmark:camp",
+   "depthVis": 4.6,
+   "length": 2.3,
+   "n": 3,
+   "at": [
+    546.1,
+    18.97,
+    282.3
+   ],
+   "ground": 14.37,
+   "place": "Gallic Gladiatorial School",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.55,
+   "length": 7.5,
+   "n": 10,
+   "at": [
+    425,
+    16.16,
+    172.9
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.55,
+   "length": 7.5,
+   "n": 10,
+   "at": [
+    402.6,
+    16.16,
+    180.9
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.55,
+   "length": 7.5,
+   "n": 10,
+   "at": [
+    375.9,
+    16.16,
+    172.4
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.55,
+   "length": 7.5,
+   "n": 10,
+   "at": [
+    361.7,
+    16.16,
+    153.2
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.55,
+   "length": 7.5,
+   "n": 10,
+   "at": [
+    367,
+    16.16,
+    134.3
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.55,
+   "length": 7.5,
+   "n": 10,
+   "at": [
+    389.4,
+    16.16,
+    126.3
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.55,
+   "length": 7.5,
+   "n": 10,
+   "at": [
+    416.1,
+    16.16,
+    134.8
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.55,
+   "length": 7.5,
+   "n": 10,
+   "at": [
+    430.3,
+    16.16,
+    154
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.55,
+   "length": 4.5,
+   "n": 6,
+   "at": [
+    418.3,
+    16.16,
+    174.5
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.55,
+   "length": 4.5,
+   "n": 6,
+   "at": [
+    407.8,
+    16.16,
+    177.9
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.55,
+   "length": 4.5,
+   "n": 6,
+   "at": [
+    371.7,
+    16.16,
+    165.5
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.55,
+   "length": 4.5,
+   "n": 6,
+   "at": [
+    365.5,
+    16.16,
+    156.3
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.55,
+   "length": 4.5,
+   "n": 6,
+   "at": [
+    373.7,
+    16.16,
+    132.7
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.55,
+   "length": 4.5,
+   "n": 6,
+   "at": [
+    384.2,
+    16.16,
+    129.3
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.55,
+   "length": 4.5,
+   "n": 6,
+   "at": [
+    420.3,
+    16.16,
+    141.7
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.55,
+   "length": 4.5,
+   "n": 6,
+   "at": [
+    426.5,
+    16.16,
+    150.9
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.5,
+   "length": 7.5,
+   "n": 10,
+   "at": [
+    421.9,
+    16.11,
+    172.5
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.5,
+   "length": 7.5,
+   "n": 10,
+   "at": [
+    400.7,
+    16.11,
+    178.5
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.5,
+   "length": 7.5,
+   "n": 10,
+   "at": [
+    375.7,
+    16.11,
+    169.4
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.5,
+   "length": 7.5,
+   "n": 10,
+   "at": [
+    363.7,
+    16.11,
+    150.9
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.5,
+   "length": 7.5,
+   "n": 10,
+   "at": [
+    370.1,
+    16.11,
+    134.7
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.5,
+   "length": 7.5,
+   "n": 10,
+   "at": [
+    391.3,
+    16.11,
+    128.7
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.5,
+   "length": 7.5,
+   "n": 10,
+   "at": [
+    416.3,
+    16.11,
+    137.8
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "colosseum:cavea",
+   "owner": "colosseum",
+   "type": "landmark:amphitheatre",
+   "depthVis": 4.5,
+   "length": 7.5,
+   "n": 10,
+   "at": [
+    428.3,
+    16.11,
+    156.3
+   ],
+   "ground": 11.7,
+   "place": "Flavian Amphitheatre",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "ludus-gallicus",
+   "owner": "ludus-gallicus",
+   "type": "landmark:camp",
+   "depthVis": 4.47,
+   "length": 8.3,
+   "n": 11,
+   "at": [
+    578.5,
+    18.57,
+    262.4
+   ],
+   "ground": 14.1,
+   "place": "Gallic Gladiatorial School",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "emporium",
+   "owner": "emporium",
+   "type": "landmark:harbor",
+   "depthVis": 4.41,
+   "length": 218.4,
+   "n": 247,
+   "at": [
+    -494.9,
+    1.88,
+    689.8
+   ],
+   "ground": 6.29,
+   "place": "Emporium",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "emporium",
+   "owner": "emporium",
+   "type": "landmark:harbor",
+   "depthVis": 4.41,
+   "length": 157.6,
+   "n": 192,
+   "at": [
+    -523.6,
+    1.88,
+    715.9
+   ],
+   "ground": 6.29,
+   "place": "Emporium",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "emporium",
+   "owner": "emporium",
+   "type": "landmark:harbor",
+   "depthVis": 4.35,
+   "length": 218.4,
+   "n": 247,
+   "at": [
+    -468.3,
+    1.88,
+    665
+   ],
+   "ground": 6.3,
+   "place": "Emporium",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "emporium",
+   "owner": "emporium",
+   "type": "landmark:harbor",
+   "depthVis": 4.33,
+   "length": 257.1,
+   "n": 282,
+   "at": [
+    -580.8,
+    1.88,
+    762.2
+   ],
+   "ground": 6.3,
+   "place": "Porticus Aemilia",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "emporium",
+   "owner": "emporium",
+   "type": "landmark:harbor",
+   "depthVis": 4.33,
+   "length": 253.6,
+   "n": 277,
+   "at": [
+    -387.3,
+    1.88,
+    586.4
+   ],
+   "ground": 6.3,
+   "place": "Emporium",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "emporium",
+   "owner": "emporium",
+   "type": "landmark:harbor",
+   "depthVis": 4.33,
+   "length": 179.7,
+   "n": 212,
+   "at": [
+    -553.3,
+    1.88,
+    736.6
+   ],
+   "ground": 6.3,
+   "place": "Emporium",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "emporium",
+   "owner": "emporium",
+   "type": "landmark:harbor",
+   "depthVis": 4.33,
+   "length": 171.8,
+   "n": 202,
+   "at": [
+    -415.5,
+    1.88,
+    610.3
+   ],
+   "ground": 6.3,
+   "place": "Emporium",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "emporium",
+   "owner": "emporium",
+   "type": "landmark:harbor",
+   "depthVis": 4.33,
+   "length": 140.1,
+   "n": 171,
+   "at": [
+    -442.9,
+    1.88,
+    635.9
+   ],
+   "ground": 6.3,
+   "place": "Emporium",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "emporium",
+   "owner": "emporium",
+   "type": "landmark:harbor",
+   "depthVis": 4.33,
+   "length": 3.1,
+   "n": 40,
+   "at": [
+    -581.9,
+    1.88,
+    762.5
+   ],
+   "ground": 6.3,
+   "place": "Porticus Aemilia",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "emporium",
+   "owner": "emporium",
+   "type": "landmark:harbor",
+   "depthVis": 4.33,
+   "length": 3.1,
+   "n": 40,
+   "at": [
+    -554.5,
+    1.88,
+    736.9
+   ],
+   "ground": 6.3,
+   "place": "Emporium",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "emporium",
+   "owner": "emporium",
+   "type": "landmark:harbor",
+   "depthVis": 4.33,
+   "length": 3.1,
+   "n": 40,
+   "at": [
+    -527.1,
+    1.88,
+    711.4
+   ],
+   "ground": 6.3,
+   "place": "Emporium",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "emporium",
+   "owner": "emporium",
+   "type": "landmark:harbor",
+   "depthVis": 4.33,
+   "length": 3.1,
+   "n": 40,
+   "at": [
+    -499.7,
+    1.88,
+    685.8
+   ],
+   "ground": 6.3,
+   "place": "Emporium",
+   "severity": "major"
+  },
+  {
+   "kind": "terrain-in-floor",
+   "name": "emporium",
+   "owner": "emporium",
+   "type": "landmark:harbor",
+   "depthVis": 4.33,
+   "length": 3.1,
+   "n": 40,
+   "at": [
+    -472.2,
+    1.88,
+    660.2
+   ],
+   "ground": 6.3,
+   "place": "Emporium",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-vaticanus",
+   "owner": "circus-vaticanus",
+   "type": "landmark:circus",
+   "depthVis": 4.18,
+   "length": 454.5,
+   "n": 606,
+   "at": [
+    -1326.4,
+    16.8,
+    -580.9
+   ],
+   "ground": 12.62,
+   "place": "Gardens of Agrippina",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-vaticanus",
+   "owner": "circus-vaticanus",
+   "type": "landmark:circus",
+   "depthVis": 4.18,
+   "length": 272.3,
+   "n": 363,
+   "at": [
+    -1484.7,
+    16.8,
+    -578.2
+   ],
+   "ground": 12.62,
+   "place": "Gardens of Agrippina",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-vaticanus",
+   "owner": "circus-vaticanus",
+   "type": "landmark:circus",
+   "depthVis": 4.18,
+   "length": 619.5,
+   "n": 826,
+   "at": [
+    -1596.3,
+    16.8,
+    -576.2
+   ],
+   "ground": 12.62,
+   "place": "Gardens of Agrippina",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-vaticanus",
+   "owner": "circus-vaticanus",
+   "type": "landmark:circus",
+   "depthVis": 4.18,
+   "length": 463.5,
+   "n": 618,
+   "at": [
+    -1447.3,
+    16.8,
+    -622
+   ],
+   "ground": 12.62,
+   "place": "Gardens of Agrippina",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    -48.2,
+    11.2,
+    311.1
+   ],
+   "ground": 7.2,
+   "place": "The augur’s post on the Palatine slope (+28 m)",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    -33.2,
+    11.2,
+    322.5
+   ],
+   "ground": 7.2,
+   "place": "The augur’s post on the Palatine slope",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    -18.1,
+    11.2,
+    333.8
+   ],
+   "ground": 7.2,
+   "place": "The augur’s post on the Palatine slope",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    -3.1,
+    11.2,
+    345.2
+   ],
+   "ground": 7.2,
+   "place": "The goat-milk corner",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    12,
+    11.2,
+    356.5
+   ],
+   "ground": 7.2,
+   "place": "The goat-milk corner",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    27.1,
+    11.2,
+    367.9
+   ],
+   "ground": 7.2,
+   "place": "Circus Maximus",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    72.2,
+    11.2,
+    401.9
+   ],
+   "ground": 7.2,
+   "place": "Circus Maximus",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    87.3,
+    11.2,
+    413.3
+   ],
+   "ground": 7.2,
+   "place": "Circus Maximus",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    117.4,
+    11.2,
+    436
+   ],
+   "ground": 7.2,
+   "place": "Circus Maximus",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    132.5,
+    11.2,
+    447.3
+   ],
+   "ground": 7.2,
+   "place": "Circus Maximus",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    147.5,
+    11.2,
+    458.7
+   ],
+   "ground": 7.2,
+   "place": "The mime’s corner at the Circus",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    162.6,
+    11.2,
+    470
+   ],
+   "ground": 7.2,
+   "place": "The mime’s corner at the Circus",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    177.7,
+    11.2,
+    481.4
+   ],
+   "ground": 7.2,
+   "place": "The broken cart",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    192.7,
+    11.2,
+    492.7
+   ],
+   "ground": 7.2,
+   "place": "The broken cart",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    208.5,
+    11.2,
+    507.6
+   ],
+   "ground": 7.2,
+   "place": "Arch of Titus at the Circus Maximus",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    211.8,
+    11.2,
+    531.6
+   ],
+   "ground": 7.2,
+   "place": "Arch of Titus at the Circus Maximus",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    173.3,
+    11.2,
+    554.2
+   ],
+   "ground": 7.2,
+   "place": "Arch of Titus at the Circus Maximus",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    154.7,
+    11.2,
+    543.2
+   ],
+   "ground": 7.2,
+   "place": "Arch of Titus at the Circus Maximus (+31 m)",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    139.6,
+    11.2,
+    531.9
+   ],
+   "ground": 7.2,
+   "place": "Temple of Mercury (+43 m)",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    109.5,
+    11.2,
+    509.2
+   ],
+   "ground": 7.2,
+   "place": "The Circus Valley",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    94.4,
+    11.2,
+    497.8
+   ],
+   "ground": 7.2,
+   "place": "The Circus Valley",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    79.4,
+    11.2,
+    486.5
+   ],
+   "ground": 7.2,
+   "place": "The Circus Valley",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    64.3,
+    11.2,
+    475.1
+   ],
+   "ground": 7.2,
+   "place": "The Circus Valley",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    49.3,
+    11.2,
+    463.8
+   ],
+   "ground": 7.2,
+   "place": "The Circus Valley",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    34.2,
+    11.2,
+    452.4
+   ],
+   "ground": 7.2,
+   "place": "The Circus Valley",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    4.1,
+    11.2,
+    429.7
+   ],
+   "ground": 7.2,
+   "place": "Circus Maximus",
+   "severity": "major"
+  },
+  {
+   "kind": "floating",
+   "name": "circus-maximus",
+   "owner": "circus-maximus",
+   "type": "landmark:circus",
+   "depthVis": 4.09,
+   "length": 3,
+   "n": 4,
+   "at": [
+    -11,
+    11.2,
+    418.4
+   ],
+   "ground": 7.2,
+   "place": "Circus Maximus",
+   "severity": "major"
+  }
+ ]
+}

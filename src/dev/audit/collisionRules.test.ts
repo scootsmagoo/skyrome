@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareColumn, compareWall, findSeams, groundBand, isOverhead, severityOf, terrainBilinear, terrainDrawnHeight, terrainOtherHeight } from './collisionRules';
+import { isMidLevel, isMovingCart, compareColumn, compareWall, findSeams, groundBand, isOverhead, severityOf, terrainBilinear, terrainDrawnHeight, terrainOtherHeight } from './collisionRules';
 
 const flat = (y: number, tag = 't') => ({ y, ny: 1, tag });
 const under = (y: number, tag = 'u') => ({ y, ny: -1, tag });
@@ -133,5 +133,25 @@ describe('terrain triangulations', () => {
     expect(terrainDrawnHeight(...t, 0.75, 0.25)).toBeCloseTo(0.25);
     expect(terrainOtherHeight(...t, 0.75, 0.25)).toBeCloseTo(0);
     expect(terrainBilinear(...t, 0.75, 0.25)).toBeCloseTo(0.1875);
+  });
+});
+
+describe('false positives dropped (phase 4b G0)', () => {
+  it('recognises the mid level and moving carts', () => {
+    expect(isMidLevel('city:brick:mid:brick')).toBe(true);
+    expect(isMidLevel('city:black:ns:mid:black')).toBe(true);
+    expect(isMidLevel('city:brick:full:brick')).toBe(false);
+    expect(isMovingCart('?:box')).toBe(true);
+    expect(isMovingCart('city:b637:box')).toBe(false);
+  });
+  it('drops a ghost wall of the drawn mid level and a cart collider', () => {
+    expect(compareWall(null, { dist: 2, tag: 'city:brick:mid:brick' }, 5)).toBeNull();
+    expect(compareWall(null, { dist: 2, tag: 'city:brick:full:brick' }, 5)!.kind).toBe('ghost');
+    expect(compareWall({ dist: 1, tag: '?:box' }, null, 5)).toBeNull();
+    expect(compareWall({ dist: 1, tag: 'city:b1:box' }, null, 5)!.kind).toBe('invisible');
+  });
+  it('drops a column ghost of the mid level and a cart ledge', () => {
+    expect(compareColumn([flat(11, 'city:black:ns:mid:black'), flat(9.9, 'terrain')], [flat(9.9, 'terrain:heightfield')], 9.9)).toBeNull();
+    expect(compareColumn([flat(10.0, 'paving')], [flat(11.8, '?:box')], 9.9)).toBeNull();
   });
 });

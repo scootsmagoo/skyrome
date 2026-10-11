@@ -1,0 +1,1229 @@
+{
+ "_doc": "One named camera per finding in docs/design/solid-ground.md section 2 (spot = the defect, game metres; eye = camera x,z or null for an automatic clearest side, resolved once and stored). look.mjs pins the eye at max(street, terrain) + eyeAbove (1.6 m) and looks at the spot; mode 'third' uses the real third-person camera. Before shots: docs/research/solid-ground/before/cams/<id>.jpg.",
+ "cams": [
+  {
+   "id": "b01-column-ulpia",
+   "finding": "B1",
+   "title": "Route to Gratus runs through the Basilica Ulpia",
+   "spot": [
+    53,
+    10.5,
+    -218.1
+   ],
+   "eye": [
+    57.54,
+    -214.99
+   ],
+   "mode": "pin",
+   "shot": "W4 routes/A-column-ulpia-*",
+   "source": "W4"
+  },
+  {
+   "id": "b02-ludus-wall",
+   "finding": "B2",
+   "title": "Route to Glaucus cuts through the Ludus Magnus wall",
+   "spot": [
+    522.7,
+    12,
+    197.6
+   ],
+   "eye": [
+    527.24,
+    200.71
+   ],
+   "mode": "pin",
+   "shot": "W4 routes/I-ludus-wall-*",
+   "source": "W4"
+  },
+  {
+   "id": "b03-inn-b414",
+   "finding": "B3",
+   "title": "Inn at the Starting Gates, behind block b414",
+   "spot": [
+    -81,
+    7.5,
+    305.8
+   ],
+   "eye": [
+    -76.46,
+    308.91
+   ],
+   "mode": "pin",
+   "shot": "W4 routes/B-inn-b414-*",
+   "source": "W4"
+  },
+  {
+   "id": "b04-etruscan-b694",
+   "finding": "B4",
+   "title": "Straight lead-out into block b694 (Etruscan Street)",
+   "spot": [
+    -31.6,
+    7.4,
+    193.3
+   ],
+   "eye": [
+    -27.06,
+    196.41
+   ],
+   "mode": "pin",
+   "shot": "W4 routes/Q-mq03-etruscan-b694-*",
+   "source": "W4"
+  },
+  {
+   "id": "b05-colosseum-straight",
+   "finding": "B5",
+   "title": "Colosseum: one straight line across the city",
+   "spot": [
+    325.2,
+    16.3,
+    115.8
+   ],
+   "eye": [
+    329.74,
+    118.91
+   ],
+   "mode": "pin",
+   "shot": "W4 routes/F-colosseum-straight-*",
+   "source": "W4"
+  },
+  {
+   "id": "b06-pons-cestius",
+   "finding": "B6",
+   "title": "Pons Cestius deck 4.8 m above the Transtiberim street",
+   "spot": [
+    -358.2,
+    10,
+    190.8
+   ],
+   "eye": [
+    -361.31,
+    195.34
+   ],
+   "mode": "pin",
+   "shot": "W4 routes/pons-cestius-west-close",
+   "source": "W4"
+  },
+  {
+   "id": "b07-clivus-victoriae",
+   "finding": "B7",
+   "title": "Clivus Victoriae, 68-76 degrees",
+   "spot": [
+    95,
+    18.8,
+    97.6
+   ],
+   "eye": [
+    92.62,
+    92.64
+   ],
+   "mode": "pin",
+   "shot": "W6 grades-shots/clivus-victoriae-side",
+   "source": "W6"
+  },
+  {
+   "id": "b07-clivus-palatinus",
+   "finding": "B7",
+   "title": "Clivus Palatinus, 63 degrees",
+   "spot": [
+    171.4,
+    18.3,
+    132.4
+   ],
+   "eye": [
+    175.94,
+    135.51
+   ],
+   "mode": "pin",
+   "shot": "W6 grades-shots/clivus-palatinus-side",
+   "source": "W6"
+  },
+  {
+   "id": "b07-via-nova-titus",
+   "finding": "B7",
+   "title": "Via Nova at the Arch of Titus, 50 degrees",
+   "spot": [
+    180.3,
+    14.8,
+    128.7
+   ],
+   "eye": [
+    179.88,
+    134.18
+   ],
+   "mode": "pin",
+   "shot": "W6 grades-shots/vianova-arch-titus-up",
+   "source": "W6"
+  },
+  {
+   "id": "b08-lip-sf1",
+   "finding": "B8",
+   "title": "Street slab 0.58 m over the drawn terrain",
+   "spot": [
+    486.63,
+    17.17,
+    261
+   ],
+   "eye": [
+    486.63,
+    257
+   ],
+   "mode": "pin",
+   "shot": "W2 sf-lip1",
+   "source": "W2 03-lip camera"
+  },
+  {
+   "id": "b08-lip-sf2",
+   "finding": "B8",
+   "title": "Street slab over the terrain, second view",
+   "spot": [
+    490,
+    17.4,
+    265
+   ],
+   "eye": [
+    490.76,
+    255.03
+   ],
+   "mode": "pin",
+   "shot": "W2 sf-lip2",
+   "source": "W2"
+  },
+  {
+   "id": "b09-river-port-quay",
+   "finding": "B9",
+   "title": "River Port quay deck with no collider",
+   "spot": [
+    -262,
+    6.7,
+    182
+   ],
+   "eye": [
+    -257.46,
+    185.11
+   ],
+   "mode": "pin",
+   "shot": "W5 verify/v04-river-port-quay",
+   "source": "W5"
+  },
+  {
+   "id": "b10-baths-fallthrough",
+   "finding": "B10",
+   "title": "Baths of Trajan: paving past the terrace, 3.2 m fall",
+   "spot": [
+    608.3,
+    25.69,
+    103.6
+   ],
+   "eye": [
+    607.54,
+    113.57
+   ],
+   "mode": "pin",
+   "shot": "W5 audit/collision-01-fallthrough",
+   "source": "W5"
+  },
+  {
+   "id": "b10-baths-exedra",
+   "finding": "B10",
+   "title": "Baths of Trajan: library exedra floating 13.9 m",
+   "spot": [
+    604.1,
+    28.8,
+    106.1
+   ],
+   "eye": [
+    598.8,
+    108.9
+   ],
+   "mode": "pin",
+   "shot": "W1 audit/structures/f-baths-trajan",
+   "source": "W1 floating-landmark-2 camera"
+  },
+  {
+   "id": "b11-tarpeian-rock",
+   "finding": "B11",
+   "title": "Tarpeian Rock outcrops with no collider",
+   "spot": [
+    -110.3,
+    13.8,
+    85.7
+   ],
+   "eye": [
+    -105.98,
+    94.72
+   ],
+   "mode": "pin",
+   "shot": "W5 audit/collision-02-fallthrough",
+   "source": "W5"
+  },
+  {
+   "id": "rc1-terrain-diagonal",
+   "finding": "RC1",
+   "title": "Bare terrain: physics 1.19 m off the drawn ground",
+   "spot": [
+    70.9,
+    10.72,
+    327
+   ],
+   "eye": [
+    76.55,
+    318.75
+   ],
+   "mode": "pin",
+   "shot": "W5 verify/v05-terrain-diagonal",
+   "source": "W5"
+  },
+  {
+   "id": "rc1-face-float",
+   "finding": "RC1",
+   "title": "Kerb and paving faces end in mid-air",
+   "spot": [
+    80.71,
+    14.39,
+    106.07
+   ],
+   "eye": [
+    77.88,
+    103.24
+   ],
+   "mode": "pin",
+   "shot": "W2 01-face-float",
+   "source": "W2 street-fit camera"
+  },
+  {
+   "id": "rc1-ground-cover",
+   "finding": "RC1",
+   "title": "Ground-cover patches float over the paving (Horrea Piperataria)",
+   "spot": [
+    200.88,
+    15.81,
+    94.13
+   ],
+   "eye": [
+    200.12,
+    104.1
+   ],
+   "mode": "pin",
+   "shot": "W2 sf-lip2",
+   "source": "W2"
+  },
+  {
+   "id": "rc2-viasacra-velia",
+   "finding": "RC2",
+   "title": "Via Sacra climbs 46-48 degrees onto the Velia vestibule pad",
+   "spot": [
+    300.5,
+    14.6,
+    160.4
+   ],
+   "eye": [
+    305.04,
+    163.51
+   ],
+   "mode": "pin",
+   "shot": "W6 viasacra-velia-up",
+   "source": "W6"
+  },
+  {
+   "id": "rc2-capitoline",
+   "finding": "RC2",
+   "title": "Clivus Capitolinus, 62 %",
+   "spot": [
+    -67.4,
+    16.6,
+    43
+   ],
+   "eye": [
+    -70.64,
+    36.24
+   ],
+   "mode": "pin",
+   "shot": "W6 clivus-capitolinus-up",
+   "source": "W6"
+  },
+  {
+   "id": "rc2-palatine",
+   "finding": "RC2",
+   "title": "Palatine t34 terrace flank",
+   "spot": [
+    279,
+    16.5,
+    171
+   ],
+   "eye": [
+    269.03,
+    170.24
+   ],
+   "mode": "pin",
+   "shot": "W6 terrain-grades-core",
+   "source": "W6"
+  },
+  {
+   "id": "rc2-markets-lane",
+   "finding": "RC2",
+   "title": "Lane st1497 up the Quirinal cut",
+   "spot": [
+    105.4,
+    22.5,
+    -288.5
+   ],
+   "eye": [
+    95.43,
+    -289.26
+   ],
+   "mode": "pin",
+   "shot": "W6 markets-lane-side",
+   "source": "W6"
+  },
+  {
+   "id": "rc2-claudianum",
+   "finding": "RC2",
+   "title": "Pad embankment bank (Claudianum)",
+   "spot": [
+    467.5,
+    21.4,
+    239.9
+   ],
+   "eye": [
+    463.18,
+    230.88
+   ],
+   "mode": "pin",
+   "shot": "W6 claudianum-streets",
+   "source": "W6"
+  },
+  {
+   "id": "rc2-iugarius",
+   "finding": "RC2",
+   "title": "Vicus Iugarius at the foot of the Tarpeian cliff",
+   "spot": [
+    -87.8,
+    10.7,
+    84.4
+   ],
+   "eye": [
+    -85.42,
+    89.36
+   ],
+   "mode": "pin",
+   "shot": "W6 vicus-iugarius-tarpeian-side",
+   "source": "W6"
+  },
+  {
+   "id": "rc2-publicius",
+   "finding": "RC2",
+   "title": "Clivus Publicius, 60 %",
+   "spot": [
+    -95.1,
+    17.9,
+    480.8
+   ],
+   "eye": [
+    -89.45,
+    472.55
+   ],
+   "mode": "pin",
+   "shot": "",
+   "source": "W6"
+  },
+  {
+   "id": "rc2-island-edge",
+   "finding": "RC2",
+   "title": "Tiber Island bank at the Cestius landing, 70 degrees",
+   "spot": [
+    -345.7,
+    6,
+    158
+   ],
+   "eye": [
+    -341.16,
+    161.11
+   ],
+   "mode": "pin",
+   "shot": "W6 island-edge-side",
+   "source": "W6"
+  },
+  {
+   "id": "rc2-janiculum",
+   "finding": "RC2",
+   "title": "Janiculum streets, 55-67 degrees",
+   "spot": [
+    -1228.9,
+    32.3,
+    -124.4
+   ],
+   "eye": [
+    -1224.36,
+    -121.29
+   ],
+   "mode": "pin",
+   "shot": "",
+   "source": "W6"
+  },
+  {
+   "id": "rc3-wall-quirinal",
+   "finding": "RC3",
+   "title": "Servian wall pieces hang over the Quirinal slope",
+   "spot": [
+    104.7,
+    25.55,
+    -291.9
+   ],
+   "eye": [
+    104.28,
+    -286.42
+   ],
+   "mode": "pin",
+   "shot": "W1 chk-wall-quirinal",
+   "source": "W1"
+  },
+  {
+   "id": "rc3-arcus-neroniani",
+   "finding": "RC3",
+   "title": "Arcus Neroniani wall floats over a slope",
+   "spot": [
+    556,
+    27.69,
+    470.1
+   ],
+   "eye": [
+    560.54,
+    473.21
+   ],
+   "mode": "pin",
+   "shot": "W1 f-arcus-neroniani",
+   "source": "W1"
+  },
+  {
+   "id": "rc3-terrain-in-floor",
+   "finding": "RC3",
+   "title": "Grass and earth inside shops",
+   "spot": [
+    -88.3,
+    22.44,
+    551.5
+   ],
+   "eye": [
+    -87.54,
+    541.53
+   ],
+   "mode": "pin",
+   "shot": "W1 terrain-in-floor-block-2",
+   "source": "W1"
+  },
+  {
+   "id": "rc3-vestals",
+   "finding": "RC3",
+   "title": "House of the Vestal Virgins sunk into the slope",
+   "spot": [
+    140.6,
+    7.76,
+    107.8
+   ],
+   "eye": [
+    139.84,
+    117.77
+   ],
+   "mode": "pin",
+   "shot": "W1 f-vestae-floor",
+   "source": "W1"
+  },
+  {
+   "id": "rc3-capitol-flight",
+   "finding": "RC3",
+   "title": "Capitoline temple flight sunk under the clivus",
+   "spot": [
+    -78.3,
+    20.12,
+    44.5
+   ],
+   "eye": [
+    -75.06,
+    51.26
+   ],
+   "mode": "pin",
+   "shot": "W1 terrain-in-floor-landmark-5",
+   "source": "W1"
+  },
+  {
+   "id": "rc3-emporium-quay",
+   "finding": "RC3",
+   "title": "Emporium quay floors buried under the bank",
+   "spot": [
+    -364.9,
+    1.95,
+    584.8
+   ],
+   "eye": [
+    -373.15,
+    579.15
+   ],
+   "mode": "pin",
+   "shot": "W1 f-emporium-buried",
+   "source": "W1"
+  },
+  {
+   "id": "rc3-colosseum-cavea",
+   "finding": "RC3",
+   "title": "Colosseum cavea underside over the podium terrace",
+   "spot": [
+    425,
+    16.16,
+    172.9
+   ],
+   "eye": [
+    429.54,
+    176.01
+   ],
+   "mode": "pin",
+   "shot": "W1 f-colosseum-cavea",
+   "source": "W1"
+  },
+  {
+   "id": "rc3-augustana-wing",
+   "finding": "RC3",
+   "title": "Domus Augustana wing wall above the slope",
+   "spot": [
+    80.9,
+    27.6,
+    345.9
+   ],
+   "eye": [
+    69.1,
+    335.2
+   ],
+   "mode": "pin",
+   "shot": "W1 floating-landmark-1",
+   "source": "W1 floating-landmark-1 camera"
+  },
+  {
+   "id": "rc3-hippodrome",
+   "finding": "RC3",
+   "title": "Palatine hippodrome floor under the terrain",
+   "spot": [
+    114,
+    14.86,
+    357.3
+   ],
+   "eye": [
+    109.77,
+    363.49
+   ],
+   "mode": "pin",
+   "shot": "",
+   "source": "W1"
+  },
+  {
+   "id": "rc3-buried-opening",
+   "finding": "RC3",
+   "title": "Buried threshold in a shop opening",
+   "spot": [
+    -1021.1,
+    28.04,
+    136.6
+   ],
+   "eye": [
+    -1020.34,
+    126.63
+   ],
+   "mode": "pin",
+   "shot": "W1 buried-opening-block-2",
+   "source": "W1"
+  },
+  {
+   "id": "rc3-floating-block",
+   "finding": "RC3",
+   "title": "Building outline floats where the slope dips",
+   "spot": [
+    -316.7,
+    23.78,
+    633.1
+   ],
+   "eye": [
+    -319.81,
+    637.64
+   ],
+   "mode": "pin",
+   "shot": "W1 floating-block-1",
+   "source": "W1"
+  },
+  {
+   "id": "rc3-far-massing",
+   "finding": "RC3",
+   "title": "Janiculum ridge from the city: far massing floating",
+   "spot": [
+    -1092.7,
+    35.3,
+    51.3
+   ],
+   "eye": [
+    -1095.08,
+    46.34
+   ],
+   "mode": "pin",
+   "shot": "",
+   "source": "W1"
+  },
+  {
+   "id": "rc3-block-props",
+   "finding": "RC3",
+   "title": "Block prop with a foot in the air",
+   "spot": [
+    556.57,
+    24.29,
+    616.46
+   ],
+   "eye": [
+    546.6,
+    615.7
+   ],
+   "mode": "pin",
+   "shot": "",
+   "source": "W2"
+  },
+  {
+   "id": "rc3-adonaea",
+   "finding": "RC3",
+   "title": "Re-check: Gardens of Adonis",
+   "spot": [
+    248.2,
+    28.45,
+    199.2
+   ],
+   "eye": [
+    252.74,
+    202.31
+   ],
+   "mode": "pin",
+   "shot": "",
+   "source": "W1"
+  },
+  {
+   "id": "rc3-ludus-gallicus",
+   "finding": "RC3",
+   "title": "Re-check: Ludus Gallicus",
+   "spot": [
+    578.5,
+    18.57,
+    262.4
+   ],
+   "eye": [
+    578.81,
+    258.41
+   ],
+   "mode": "pin",
+   "shot": "",
+   "source": "W1"
+  },
+  {
+   "id": "rc3-claudius-terrace",
+   "finding": "RC3",
+   "title": "Re-check: Divus Claudius terrace",
+   "spot": [
+    481.2,
+    18.35,
+    258
+   ],
+   "eye": [
+    481.62,
+    252.52
+   ],
+   "mode": "pin",
+   "shot": "",
+   "source": "W1"
+  },
+  {
+   "id": "rc3-forum-caesar",
+   "finding": "RC3",
+   "title": "Re-check: Forum of Caesar",
+   "spot": [
+    52.4,
+    10.42,
+    -35.1
+   ],
+   "eye": [
+    45.64,
+    -31.86
+   ],
+   "mode": "pin",
+   "shot": "",
+   "source": "W1"
+  },
+  {
+   "id": "rc4-capena-square",
+   "finding": "RC4",
+   "title": "Porta Capena inner square: flat boxes over sloping paving",
+   "spot": [
+    306,
+    10.48,
+    561
+   ],
+   "eye": [
+    296.03,
+    560.24
+   ],
+   "mode": "pin",
+   "shot": "W5 verify/v01-capena-square-float",
+   "source": "W5"
+  },
+  {
+   "id": "rc4-capena-square-b",
+   "finding": "RC4",
+   "title": "Porta Capena inner square, second half",
+   "spot": [
+    293,
+    10.64,
+    572.9
+   ],
+   "eye": [
+    302.02,
+    568.58
+   ],
+   "mode": "pin",
+   "shot": "",
+   "source": "W5"
+  },
+  {
+   "id": "rc4-capena-prop",
+   "finding": "RC4",
+   "title": "Porta Capena prop box 1.8 m above the paving",
+   "spot": [
+    309.7,
+    13.44,
+    582.5
+   ],
+   "eye": [
+    305.38,
+    573.48
+   ],
+   "mode": "pin",
+   "shot": "W5 audit-sweep2/collision-28-ledge",
+   "source": "W5"
+  },
+  {
+   "id": "rc4-moneta",
+   "finding": "RC4",
+   "title": "Imperial Mint: invisible floor 1.1 m up",
+   "spot": [
+    649.8,
+    16.72,
+    198.4
+   ],
+   "eye": [
+    657.28,
+    198.97
+   ],
+   "mode": "pin",
+   "shot": "W5 verify/v02-moneta-ledge",
+   "source": "W5"
+  },
+  {
+   "id": "rc4-lot-boxes",
+   "finding": "RC4",
+   "title": "Lot boxes fill drawn open doorways",
+   "spot": [
+    259.3,
+    12.78,
+    -156.8
+   ],
+   "eye": [
+    263.84,
+    -153.69
+   ],
+   "mode": "pin",
+   "shot": "W5 audit-sweep2/collision-26-invisible",
+   "source": "W5"
+  },
+  {
+   "id": "rc4-circus-arcade",
+   "finding": "RC4",
+   "title": "Circus arcade at the starting gates can be walked into",
+   "spot": [
+    -68.8,
+    7.34,
+    305.9
+   ],
+   "eye": [
+    -73.76,
+    308.28
+   ],
+   "mode": "pin",
+   "shot": "W5 audit/collision-16-ghost-wall",
+   "source": "W5"
+  },
+  {
+   "id": "rc4-parapet",
+   "finding": "RC4",
+   "title": "Stair parapet with a 2.8 m invisible collider",
+   "spot": [
+    -0.1,
+    8.16,
+    259.7
+   ],
+   "eye": [
+    9.87,
+    260.46
+   ],
+   "mode": "pin",
+   "shot": "W5 collision-25-invisible",
+   "source": "W5"
+  },
+  {
+   "id": "rc4-lips",
+   "finding": "RC4",
+   "title": "Collider lips and cracks under smooth paving",
+   "spot": [
+    1.99,
+    7.89,
+    -1.56
+   ],
+   "eye": [
+    11.96,
+    -0.8
+   ],
+   "mode": "pin",
+   "shot": "",
+   "source": "W5"
+  },
+  {
+   "id": "rc5-capena-altar",
+   "finding": "RC5",
+   "title": "First route mantles the Capena crossroads altar",
+   "spot": [
+    281.7,
+    7.9,
+    545.4
+   ],
+   "eye": [
+    289.95,
+    551.05
+   ],
+   "mode": "pin",
+   "shot": "W4 routes/E-capena-altar-view",
+   "source": "W4"
+  },
+  {
+   "id": "rc5-argiletum-aemilia",
+   "finding": "RC5",
+   "title": "Forum to Forum of Trajan clips the Basilica Aemilia",
+   "spot": [
+    67.1,
+    9.1,
+    -28.7
+   ],
+   "eye": [
+    63.99,
+    -24.16
+   ],
+   "mode": "pin",
+   "shot": "W4 routes/C-argiletum-aemilia-*",
+   "source": "W4"
+  },
+  {
+   "id": "rc5-porticus",
+   "finding": "RC5",
+   "title": "Via Sacra squeezes through the Porticus Margaritaria",
+   "spot": [
+    175.8,
+    11.5,
+    127
+   ],
+   "eye": [
+    170.15,
+    135.25
+   ],
+   "mode": "pin",
+   "shot": "W4 routes/G-porticus-view",
+   "source": "W4"
+  },
+  {
+   "id": "rc5-ludus-piazza",
+   "finding": "RC5",
+   "title": "Piazza node on its own shrine (Ludus)",
+   "spot": [
+    510.2,
+    13.5,
+    199.8
+   ],
+   "eye": [
+    514.74,
+    202.91
+   ],
+   "mode": "pin",
+   "shot": "W4 routes/H-ludus-piazza-view",
+   "source": "W4"
+  },
+  {
+   "id": "rc5-junction-altar",
+   "finding": "RC5",
+   "title": "Junction node on an altar",
+   "spot": [
+    56.8,
+    7.9,
+    37.9
+   ],
+   "eye": [
+    57.56,
+    27.93
+   ],
+   "mode": "pin",
+   "shot": "",
+   "source": "W4"
+  },
+  {
+   "id": "rc5-portus-sack",
+   "finding": "RC5",
+   "title": "River Port sack job post behind the warehouse wall",
+   "spot": [
+    -233.8,
+    6,
+    139.3
+   ],
+   "eye": [
+    -229.26,
+    142.41
+   ],
+   "mode": "pin",
+   "shot": "W4 routes/L-portus-*",
+   "source": "W4"
+  },
+  {
+   "id": "rc5-sweep-worst",
+   "finding": "RC5",
+   "title": "Static sweep: edge through a solid, worst",
+   "spot": [
+    -178.3,
+    6.7,
+    110.4
+   ],
+   "eye": [
+    -168.33,
+    111.16
+   ],
+   "mode": "pin",
+   "shot": "W4 routes/13-line-through-284_549-over",
+   "source": "W4"
+  },
+  {
+   "id": "rc5-no-height",
+   "finding": "RC5",
+   "title": "Target with no height (y = 0)",
+   "spot": [
+    180,
+    10.9,
+    -80
+   ],
+   "eye": [
+    179.24,
+    -70.03
+   ],
+   "mode": "pin",
+   "shot": "W4 routes/L-portus-view",
+   "source": "W4"
+  },
+  {
+   "id": "rc5-guide-b609",
+   "finding": "RC5",
+   "title": "Guide waypoint against block b609",
+   "spot": [
+    20,
+    8,
+    335
+   ],
+   "eye": [
+    15.04,
+    337.38
+   ],
+   "mode": "pin",
+   "shot": "",
+   "source": "W4"
+  },
+  {
+   "id": "rc6-double-paving",
+   "finding": "RC6",
+   "title": "Double paving: two materials 1-15 cm apart",
+   "spot": [
+    -470.13,
+    6.28,
+    585.38
+   ],
+   "eye": [
+    -465.81,
+    594.4
+   ],
+   "mode": "pin",
+   "shot": "W2 sf-lip2",
+   "source": "W2"
+  },
+  {
+   "id": "rc6-via-ostiensis-kerbs",
+   "finding": "RC6",
+   "title": "Dressing kerbstones on the Via Ostiensis paving",
+   "spot": [
+    -377.92,
+    7.4,
+    591.26
+   ],
+   "eye": [
+    -384.68,
+    594.5
+   ],
+   "mode": "pin",
+   "shot": "",
+   "source": "W2"
+  },
+  {
+   "id": "rc6-travertine-seam",
+   "finding": "RC6",
+   "title": "Terrain travertine next to mesh travertine",
+   "spot": [
+    65.4,
+    7.86,
+    63.5
+   ],
+   "eye": [
+    73.65,
+    69.15
+   ],
+   "mode": "pin",
+   "shot": "W3 seam-1-eye",
+   "source": "W3"
+  },
+  {
+   "id": "rc6-opening-street",
+   "finding": "RC6",
+   "title": "The opening's street: cobbles, basalt and kerbs at three scales",
+   "spot": [
+    266,
+    7.81,
+    552.5
+   ],
+   "eye": [
+    256.98,
+    556.82
+   ],
+   "mode": "pin",
+   "shot": "W3 seam-3-eye",
+   "source": "W3"
+  },
+  {
+   "id": "rc6-basalt-plaza",
+   "finding": "RC6",
+   "title": "Basalt Via Sacra against bright travertine plaza",
+   "spot": [
+    51.5,
+    8.8,
+    1.2
+   ],
+   "eye": [
+    51.08,
+    6.68
+   ],
+   "mode": "pin",
+   "shot": "W3 seam-8-eye",
+   "source": "W3"
+  },
+  {
+   "id": "rc6-terrain-seam",
+   "finding": "RC6",
+   "title": "Hard one-cell edge between mesh and terrain dirt",
+   "spot": [
+    139.7,
+    7.68,
+    584.8
+   ],
+   "eye": [
+    139.28,
+    590.28
+   ],
+   "mode": "pin",
+   "shot": "W3 seam-2-eye",
+   "source": "W3"
+  },
+  {
+   "id": "rc6-patchwork",
+   "finding": "RC6",
+   "title": "Patchwork at house walls",
+   "spot": [
+    280.5,
+    8,
+    -112
+   ],
+   "eye": [
+    289.52,
+    -116.32
+   ],
+   "mode": "pin",
+   "shot": "",
+   "source": "W3"
+  },
+  {
+   "id": "rc7-shadow-banding",
+   "finding": "RC7",
+   "title": "Banding across shadowed ground (Forum)",
+   "spot": [
+    60,
+    7.9,
+    60
+   ],
+   "eye": [
+    51.75,
+    54.35
+   ],
+   "mode": "pin",
+   "shot": "W3 shadow-banding-forum",
+   "source": "W3"
+  },
+  {
+   "id": "rc7-dither-ghost",
+   "finding": "RC7",
+   "title": "Dither ghost on the Forum of Augustus fittings",
+   "spot": [
+    113.7,
+    10.32,
+    -106.8
+   ],
+   "eye": [
+    104.68,
+    -102.48
+   ],
+   "mode": "pin",
+   "shot": "W3 seam-2-eye",
+   "source": "W3"
+  },
+  {
+   "id": "rc7-capena-arrival",
+   "finding": "RC7",
+   "title": "First arrival at Porta Capena pops for 2.7 s",
+   "spot": [
+    304.5,
+    9.7,
+    573.5
+   ],
+   "eye": [
+    312.75,
+    579.15
+   ],
+   "mode": "pin",
+   "shot": "W3 settle-1",
+   "source": "W3"
+  },
+  {
+   "id": "rc7-lod-flip",
+   "finding": "RC7",
+   "title": "Block LOD flips back and forth",
+   "spot": [
+    21,
+    25.8,
+    197
+   ],
+   "eye": [
+    25.54,
+    200.11
+   ],
+   "mode": "pin",
+   "shot": "",
+   "source": "W3"
+  }
+ ]
+}

@@ -186,6 +186,29 @@ try {
           const seg = path(P[i], P[i + 1]);
           pts = pts.length ? pts.concat(seg.slice(1)) : seg;
         }
+        // G0 tool fix: street-graph nodes can sit inside a wall; snap every waypoint to a nav cell, and where
+        // the straight line to the next one is not walkable re-route through the nav grid (so a "spike" in
+        // the walk is a pop, not the camera going through a wall).
+        if (nav) {
+          const sn = pts.map(([x, z]) => {
+            const q = nav.snap(x, z, 30);
+            return [q.x, q.z];
+          });
+          const out = [sn[0]];
+          for (let i = 1; i < sn.length; i++) {
+            const a = out[out.length - 1], b = sn[i];
+            let via = null;
+            const gr = nav.grid;
+            try {
+              if (gr && gr.ready(a[0], a[1]) && gr.ready(b[0], b[1]) && !gr.lineClear(a[0], a[1], b[0], b[1])) via = gr.findPath(a[0], a[1], b[0], b[1], 6000);
+            } catch {
+              via = null;
+            }
+            if (via && via.length > 1) for (const q of via.slice(1)) out.push([q.x, q.z]);
+            else out.push(b);
+          }
+          return out;
+        }
         return pts;
       }, ids);
       const length = pts.reduce((s, p, i) => (i ? s + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) : 0), 0);
