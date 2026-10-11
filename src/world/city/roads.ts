@@ -15,7 +15,7 @@
 import * as THREE from 'three';
 import { Rng } from '../../core/Rng';
 import { withAuditSource } from '../../dev/audit/geomAudit';
-import { APRON, LANE_APRON, Sheet, buildConformPlaza, buildStairs, buildStreet, emitSheet, type ConformOpts, type SV, type StreetSpec } from '../../arch/fabric/streets';
+import { APRON, LANE_APRON, RIM_SINK, Sheet, buildConformPlaza, buildStairs, buildStreet, emitSheet, makeConv, type Conv, type ConformOpts, type GroundGrid, type SV, type StreetSpec } from '../../arch/fabric/streets';
 import { Draw } from '../../arch/fabric/draw';
 import { compitalShrine } from '../../arch/fabric/shrines';
 import { lacus } from '../../arch/fabric/fountain';
@@ -26,7 +26,7 @@ import type { Polygon, Vec2 } from '../../arch/fabric/types';
 import { KERB } from '../../core/traversal';
 import { LIFT } from './datum';
 import { K, distToPoly, polyBounds, pointInPoly } from './raster';
-import { inRects, rectsBounds, type Bounds, type CityPlan, type PlanRoad, type PlanStreet, type PlanPiazza } from './plan';
+import { inRects, rectsBounds, type Bounds, type CityPlan, type PlanRoad, type PlanStreet, type PlanPiazza, type RetainingRun } from './plan';
 import type { HeightFn } from './massing';
 import type { LampDef } from './life';
 
@@ -247,6 +247,72 @@ export class PavingIndex {
     return this.shapes[id].order;
   }
 
+  private readonly pieces = new Map<number, Conv[]>();
+
+  /** A shape as convex pieces: a band's segments (quads) and its bends (the hull of the joined ends); a polygon as itself or its triangles. */
+  private convsOf(s: PaveShape): Conv[] {
+    let out = this.pieces.get(s.id);
+    if (out) return out;
+    out = [];
+    const p = s.pts;
+    if (s.poly) {
+      if (isConvex(p)) out.push(makeConv(p));
+      else for (const t of THREE.ShapeUtils.triangulateShape(p.map((q) => new THREE.Vector2(q[0], q[1])), [])) out.push(makeConv([p[t[0]], p[t[1]], p[t[2]]]));
+    } else {
+      const w = s.w;
+      const nrm: (Vec2 | null)[] = [];
+      for (let k = 0; k + 1 < p.length; k++) {
+        const dx = p[k + 1][0] - p[k][0], dz = p[k + 1][1] - p[k][1];
+        const L = Math.hypot(dx, dz);
+        if (L < 1e-9) {
+          nrm.push(null);
+          continue;
+        }
+        const nx = (-dz / L) * w, nz = (dx / L) * w;
+        nrm.push([nx, nz]);
+        out.push(makeConv([[p[k][0] + nx, p[k][1] + nz], [p[k + 1][0] + nx, p[k + 1][1] + nz], [p[k + 1][0] - nx, p[k + 1][1] - nz], [p[k][0] - nx, p[k][1] - nz]]));
+      }
+      // At a bend the two quads leave a wedge open outside it: fill it with the hull of the ends and the mitre (capped at 2 w, as buildStreet's).
+      for (let k = 1; k + 1 < p.length; k++) {
+        const a = nrm[k - 1], c = nrm[k];
+        if (!a || !c) continue;
+        const mx = a[0] + c[0], mz = a[1] + c[1];
+        const ml = Math.hypot(mx, mz);
+        const cos = ml / (2 * w);
+        const f = ml > 1e-9 ? (w * Math.min(2, 1 / Math.max(0.5, cos))) / ml : 0;
+        const [x, z] = p[k];
+        out.push(makeConv(hull([[x, z], [x + a[0], z + a[1]], [x - a[0], z - a[1]], [x + c[0], z + c[1]], [x - c[0], z - c[1]], [x + mx * f, z + mz * f], [x - mx * f, z - mz * f]])));
+      }
+    }
+    this.pieces.set(s.id, out);
+    return out;
+  }
+
+  /** The convex pieces, overlapping the box, of every surface that outranks `order` (never `self`). */
+  convs(minX: number, minZ: number, maxX: number, maxZ: number, order: number, self = -1): Conv[] {
+    const B = PavingIndex.B;
+    const out: Conv[] = [];
+    let seen: Set<number> | null = null;
+    const bx0 = Math.floor(minX / B), bx1 = Math.floor(maxX / B), bz0 = Math.floor(minZ / B), bz1 = Math.floor(maxZ / B);
+    const many = bx0 !== bx1 || bz0 !== bz1;
+    for (let bz = bz0; bz <= bz1; bz++)
+      for (let bx = bx0; bx <= bx1; bx++) {
+        const l = this.buckets.get((bz + 32768) * 65536 + bx + 32768);
+        if (!l) continue;
+        for (const id of l) {
+          const s = this.shapes[id];
+          if (s.order <= order || id === self || s.maxX < minX || s.minX > maxX || s.maxZ < minZ || s.minZ > maxZ) continue;
+          if (many) {
+            if (!seen) seen = new Set();
+            if (seen.has(id)) continue;
+            seen.add(id);
+          }
+          for (const c of this.convsOf(s)) if (c.maxX >= minX && c.minX <= maxX && c.maxZ >= minZ && c.minZ <= maxZ) out.push(c);
+        }
+      }
+    return out;
+  }
+
   private inside(s: PaveShape, x: number, z: number): boolean {
     if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) return false;
     if (s.poly) return pointIn([x, z], s.pts);
@@ -284,6 +350,35 @@ export class PavingIndex {
   any(x: number, z: number, self = -1, minRank: number = RANK.alley): boolean {
     return this.over(x, z, minRank * 1e6 - 1, self);
   }
+}
+
+function isConvex(p: readonly Vec2[]): boolean {
+  let sign = 0;
+  for (let i = 0; i < p.length; i++) {
+    const a = p[i], b = p[(i + 1) % p.length], c = p[(i + 2) % p.length];
+    const cr = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
+    if (Math.abs(cr) < 1e-9) continue;
+    if (sign === 0) sign = Math.sign(cr);
+    else if (Math.sign(cr) !== sign) return false;
+  }
+  return true;
+}
+
+/** Convex hull (monotone chain) of a few points. */
+function hull(pts: Vec2[]): Vec2[] {
+  const P = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o: Vec2, a: Vec2, b: Vec2) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo: Vec2[] = [], up: Vec2[] = [];
+  for (const p of P) {
+    while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 1e-12) lo.pop();
+    lo.push(p);
+  }
+  for (let i = P.length - 1; i >= 0; i--) {
+    const p = P[i];
+    while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], p) <= 1e-12) up.pop();
+    up.push(p);
+  }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
 }
 
 /** The city's paving of the last `streetWork` (the terrain dressing asks it where not to lay kerbstones). */
@@ -343,10 +438,20 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
   const pave = new PavingIndex();
   lastPaving = pave;
   for (const blk of plan.blocks) pave.add(RANK.block, blk.outline as Vec2[], 0);
-  /** Conform options of the surface registered as `id`: cut where an outranking surface lies. */
-  const conformOf = (id: number): ConformOpts => {
+  const ground: GroundGrid | null = plan.ground ?? null;
+  // Where the drawn terrain drops 9 cm (under the atlas roads and the landmark pads, terrainMaterial.ts),
+  // even an apron's low edge stands clear of it: those edges get their skirt.
+  const low = new PavingIndex();
+  for (const r of plan.roads) low.add(0, r.points as Vec2[], r.half + 0.9);
+  for (const l of plan.landmarkPolys) {
+    low.add(0, l.poly as Vec2[], 0);
+    low.add(0, [...l.poly, l.poly[0]] as Vec2[], 3.9);
+  }
+  const lowered = (x: number, z: number) => low.over(x, z, -1);
+  /** Conform options of the surface registered as `id`: cut where an outranking surface lies; `skirtAll`: every open edge gets a skirt. */
+  const conformOf = (id: number, skirtAll = false): ConformOpts => {
     const order = pave.order(id);
-    return { clip: (x, z) => pave.over(x, z, order, id) };
+    return { cut: (a, b, c, d) => pave.convs(a, b, c, d, order, id), ground, skirtMin: skirtAll ? -1 : undefined, skirtAlways: skirtAll ? null : lowered };
   };
 
   // ---- ground cover: packed earth over every urban scrap of ground the streets and yards leave
@@ -356,7 +461,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
       const x0 = x, z0 = z;
       // Cells that overlap the area at all (the cover itself stops at the area's edge).
       if (!rects.some((r) => r.minX < x0 + size && r.maxX > x0 && r.minZ < z0 + size && r.maxZ > z0)) continue;
-      addCell(x0 + size / 2, z0 + size / 2, T('ground-cover', (b) => groundCover(b, plan, H, x0, z0, size, inArea, pave)));
+      addCell(x0 + size / 2, z0 + size / 2, T('ground-cover', (b) => groundCover(b, plan, H, x0, z0, size, inArea, pave, ground)));
     }
   }
 
@@ -370,7 +475,13 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
     }
     const allRural = j.roads.every((r) => plan.roads[r].style !== 'paved');
     const id = pave.add(RANK.junction, poly, 0);
-    add(j.p[0], j.p[1], T(`junction:${j.id}`, (b) => buildConformPlaza(b, poly, H, { material: allRural ? 'gravel' : 'paving_basalt', lift: LIFT.junction, bevel: 0.45, ...conformOf(id), paved: (x, z) => pave.any(x, z, id) })));
+    add(j.p[0], j.p[1], T(`junction:${j.id}`, (b) => buildConformPlaza(b, poly, H, { material: allRural ? 'gravel' : 'paving_basalt', lift: LIFT.junction, bevel: 0.45, ...conformOf(id, true), paved: (x, z) => pave.any(x, z, id) })));
+  }
+
+  // ---- retaining walls (terrain v2): where an atlas road's edge meets ground steeper than 38°
+  for (const run of plan.retaining ?? []) {
+    const road = plan.roads.find((r) => r.id === run.road) ?? null;
+    for (const w of retainingPieces(run, road, H)) add(w.x, w.z, T(`retaining:${run.road}`, (bld) => retainingWall(bld, w)));
   }
 
   // ---- where the minor streets meet the atlas roads: the road's sidewalk drops to the carriageway there (a dropped kerb)
@@ -431,7 +542,7 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
           const capStart = k === 0, capEnd = k === pieces.length - 1;
           const dips = (mouths.get(ri) ?? []).filter((m) => m.s > p0 - m.w && m.s < p1 + m.w).map((m) => ({ s: m.s - p0, side: m.side, w: m.w }));
           const id = pave.add(RANK.road, pts, roadReach(road, c));
-          add(mid[0], mid[1], T(`road:${road.id}:${c}`, (bld) => buildRoadPiece(bld, road, c, pts, H, capStart, capEnd, dips, conformOf(id))));
+          add(mid[0], mid[1], T(`road:${road.id}:${c}`, (bld) => buildRoadPiece(bld, road, c, pts, H, capStart, capEnd, dips, conformOf(id, true))));
         });
       }
     }
@@ -867,10 +978,10 @@ export const COVER_MAX_GRADE = 0.4;
  * ~6 m, the boundary squares get the smooth (45°) edge pieces, so the cover never shows the
  * raster's staircase against the grass.
  */
-function groundCover(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: number, size: number, inArea: (x: number, z: number) => boolean = () => true, pave: PavingIndex | null = null) {
+function groundCover(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: number, size: number, inArea: (x: number, z: number) => boolean = () => true, pave: PavingIndex | null = null, ground: GroundGrid | null = null) {
   const kinds = coverKinds(plan, x0, z0, size, inArea);
-  coverSet(b, plan, H, x0, z0, size, (i) => kinds.get(i) === 1, 'dirt', 0.04, pave);
-  coverSet(b, plan, H, x0, z0, size, (i) => kinds.get(i) === 2, 'cobbles', 0.05, pave);
+  coverSet(b, plan, H, x0, z0, size, (i) => kinds.get(i) === 1, 'dirt', 0.04, pave, ground);
+  coverSet(b, plan, H, x0, z0, size, (i) => kinds.get(i) === 2, 'cobbles', 0.05, pave, ground);
 }
 
 /**
@@ -948,10 +1059,7 @@ export function coverKinds(plan: CityPlan, x0: number, z0: number, size: number,
 
 /** Ground-cover patches of fewer lattice cells are slivers (a few m²) and are left out. */
 const COVER_MIN_CELLS = 3;
-/** The rim of a ground-cover patch lies this much lower than its body (it meets the ground, no slab edge). */
-const COVER_RIM_SINK = 0.03;
-
-function coverSet(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: number, size: number, inSet: (i: number) => boolean, material: 'dirt' | 'cobbles', lift: number, pave: PavingIndex | null = null) {
+function coverSet(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: number, size: number, inSet: (i: number) => boolean, material: 'dirt' | 'cobbles', lift: number, pave: PavingIndex | null = null, ground: GroundGrid | null = null) {
   const g = plan.grid;
   const c = g.cell;
   const pos: number[] = [];
@@ -963,14 +1071,14 @@ function coverSet(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: n
     const x = X(fx), z = Z(fz);
     return [x, H(x, z) + lift, z];
   };
-  // With the city's paving index (phase 4b): a sheet laid on the ground, its rim (the crossings of the
-  // marching squares) sunk to meet the ground, cut away under every street surface and block.
+  // With the city's paving index (phase 4b): a sheet laid on the ground, cut away under every street
+  // surface and block, its rim (wherever it ends) sunk RIM_SINK to meet the ground.
   const sheet = pave ? new Sheet(H) : null;
   const verts = new Map<number, SV>();
   const sv = (fx: number, fz: number): SV => {
     const k = fx * 2 * 100003 + fz * 2;
     let p = verts.get(k);
-    if (!p) verts.set(k, (p = sheet!.v(X(fx), Z(fz), fx % 1 !== 0 || fz % 1 !== 0 ? lift - COVER_RIM_SINK : lift)));
+    if (!p) verts.set(k, (p = sheet!.v(X(fx), Z(fz), lift)));
     return p;
   };
   /** Polygon in lattice coords (fx, fz) listed a → d → c → b (+z south): an up-facing fan. */
@@ -1021,7 +1129,11 @@ function coverSet(b: MeshBuilder, plan: CityPlan, H: HeightFn, x0: number, z0: n
     }
   }
   if (sheet) {
-    if (sheet.tris.length) emitSheet(b, sheet, { clip: (x, z) => pave!.any(x, z, -1, RANK.block), collide: false });
+    // The window's own border is a seam: the cover goes on in the next cell.
+    const xa = X(sx0), xb = X(sx1 + 1), za = Z(sz0), zb = Z(sz1 + 1);
+    const onB = (p: SV, q: SV) => (Math.abs(p.x - q.x) < 1e-6 && (Math.abs(p.x - xa) < 1e-6 || Math.abs(p.x - xb) < 1e-6)) || (Math.abs(p.z - q.z) < 1e-6 && (Math.abs(p.z - za) < 1e-6 || Math.abs(p.z - zb) < 1e-6));
+    const order = RANK.block * 1e6 - 1;
+    if (sheet.tris.length) emitSheet(b, sheet, { cut: (a, c, d, e) => pave!.convs(a, c, d, e, order), ground, rim: lift - RIM_SINK, skirts: false, seam: onB, collide: false });
     return;
   }
   if (!pos.length) return;
@@ -1219,9 +1331,7 @@ function flight(b: MeshBuilder, a: Vec2, c: Vec2, ya: number, yc: number, width:
           b.add(BOX, parapet, new THREE.Matrix4().compose(new THREE.Vector3(px, (top + base) / 2, pz), q, new THREE.Vector3(0.3, top - base, run / pieces + 0.01)));
           if (r0 < 0) r0 = i;
         } else if (r0 >= 0) {
-          const f0 = r0 / pieces, f1 = i / pieces, fm = (f0 + f1) / 2;
-          const y0 = ya + (yc - ya) * f0, y1 = ya + (yc - ya) * f1;
-          b.collider({ kind: 'box', center: new THREE.Vector3(a[0] + dx * fm + ox, (y0 + y1) / 2 + 0.45, a[1] + dz * fm + oz), half: new THREE.Vector3(0.15, Math.abs(y1 - y0) / 2 + 0.95, (run * (f1 - f0)) / 2), rotation: q.clone() });
+          b.collider(parapetCollider([a[0] + ox, a[1] + oz], dx, dz, ya, yc, r0 / pieces, i / pieces, 0.9));
           r0 = -1;
         }
       }
@@ -1238,6 +1348,96 @@ function flight(b: MeshBuilder, a: Vec2, c: Vec2, ya: number, yc: number, width:
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
 const UP = new THREE.Vector3(0, 1, 0);
+
+/** Longest piece (m) of retaining wall: each is one box, drawn and collided. */
+export const RETAIN_PIECE = 4;
+/** Thickness (m) of a retaining wall, and how high a fill wall stands over the road as a parapet. */
+const RETAIN_THICK = 0.6;
+const RETAIN_PARAPET = 0.9;
+
+export interface RetainPiece {
+  /** Middle of the wall (game x, z), its yaw, length, bottom and top (game y). */
+  x: number;
+  z: number;
+  yaw: number;
+  length: number;
+  bottom: number;
+  top: number;
+  /** True where the wall holds the slope back (the ground rises outward), false where it holds the road up. */
+  cut: boolean;
+}
+
+/**
+ * A retaining run (heightmap features, terrain v2) as wall pieces of at most RETAIN_PIECE m: each
+ * stands just outside the city's road surface (its inner face at the road's reach, aprons included),
+ * RETAIN_THICK thick. Where the ground rises outward (a cut) the wall's top meets the slope behind it;
+ * where it falls away (a fill) the wall goes down to the ground and stands RETAIN_PARAPET over the road.
+ */
+export function retainingPieces(run: RetainingRun, road: PlanRoad | null, H: HeightFn): RetainPiece[] {
+  const pts = run.points;
+  const out: RetainPiece[] = [];
+  let i0 = 0;
+  while (i0 < pts.length - 1) {
+    let i1 = i0 + 1, len = Math.hypot(pts[i1].x - pts[i0].x, pts[i1].z - pts[i0].z);
+    while (i1 + 1 < pts.length) {
+      const l = Math.hypot(pts[i1 + 1].x - pts[i1].x, pts[i1 + 1].z - pts[i1].z);
+      if (len + l > RETAIN_PIECE) break;
+      len += l;
+      i1++;
+    }
+    const a = pts[i0], c = pts[i1], k0 = i0;
+    i0 = i1;
+    const L = Math.hypot(c.x - a.x, c.z - a.z);
+    if (L < 0.3) continue;
+    const tx = (c.x - a.x) / L, tz = (c.z - a.z) / L;
+    // Right of the direction of travel is (−tz, tx) (+x east, +z south).
+    const nx = -tz * run.side, nz = tx * run.side;
+    let shift = 0;
+    if (road) {
+      const reach = road.style === 'paved' ? road.half + APRON : road.carriage / 2 + LANE_APRON;
+      shift = Math.max(0, reach - nearestOnPolyline([(a.x + c.x) / 2, (a.z + c.z) / 2], road.points as Vec2[]).d);
+    }
+    const ix = (a.x + c.x) / 2 + nx * shift, iz = (a.z + c.z) / 2 + nz * shift;
+    const x = ix + nx * (RETAIN_THICK / 2), z = iz + nz * (RETAIN_THICK / 2);
+    const ends: Vec2[] = [];
+    for (const f of [-0.5, 0, 0.5]) for (const o of [0, RETAIN_THICK]) ends.push([ix + tx * L * f + nx * o, iz + tz * L * f + nz * o]);
+    const hs = ends.map(([ex, ez]) => H(ex, ez));
+    const inner = [hs[0], hs[2], hs[4]], outer = [hs[1], hs[3], hs[5]];
+    let rise = 0;
+    for (let k = k0; k <= i1; k++) rise += pts[k].ground - pts[k].y;
+    const cut = rise > 0;
+    const bottom = Math.min(...hs) - 0.3;
+    const top = cut ? Math.min(Math.max(...outer) + 0.25, Math.max(...inner) + 4.5) : Math.max(...inner) + LIFT.road + RETAIN_PARAPET;
+    if (top - bottom < 0.4) continue;
+    out.push({ x, z, yaw: Math.atan2(tx, tz), length: L + 0.05, bottom, top, cut });
+  }
+  return out;
+}
+
+/** One piece of retaining wall: tufa ashlar, one box collider. */
+function retainingWall(b: MeshBuilder, w: RetainPiece) {
+  const q = new THREE.Quaternion().setFromAxisAngle(UP, w.yaw);
+  const c = new THREE.Vector3(w.x, (w.bottom + w.top) / 2, w.z);
+  b.add(BOX, 'tufa', new THREE.Matrix4().compose(c, q, new THREE.Vector3(RETAIN_THICK, w.top - w.bottom, w.length)));
+  b.collider({ kind: 'box', center: c, half: new THREE.Vector3(RETAIN_THICK / 2, (w.top - w.bottom) / 2, w.length / 2), rotation: q });
+}
+
+/**
+ * The collider of a run of stair parapet: a box pitched with the flight (from fraction f0 to f1 of
+ * the run a → a + (dx, dz), walking height ya → yc), its top `top` m over the line of the treads as
+ * the drawn parapet's is, its foot under them. (An upright box had to reach the high end's top at
+ * the low end too: an invisible wall up to 2.8 m over the treads.)
+ */
+export function parapetCollider(a: Vec2, dx: number, dz: number, ya: number, yc: number, f0: number, f1: number, top: number): { kind: 'box'; center: THREE.Vector3; half: THREE.Vector3; rotation: THREE.Quaternion } {
+  const run = Math.hypot(dx, dz);
+  const pitch = Math.atan2(yc - ya, run);
+  const q = new THREE.Quaternion().setFromAxisAngle(UP, Math.atan2(dx, dz)).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -pitch));
+  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+  const hh = 0.65;
+  const fm = (f0 + f1) / 2;
+  const center = new THREE.Vector3(a[0] + dx * fm, ya + (yc - ya) * fm, a[1] + dz * fm).addScaledVector(up, top * Math.cos(pitch) - hh);
+  return { kind: 'box', center, half: new THREE.Vector3(0.15, hh, (Math.hypot(run, yc - ya) * (f1 - f0)) / 2), rotation: q };
+}
 
 function unitV(a: Vec2, b: Vec2): Vec2 {
   const x = a[0] - b[0], z = a[1] - b[1];

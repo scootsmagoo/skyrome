@@ -38,6 +38,21 @@ export type PlanAtlas = Pick<typeof Atlas, 'ROADS' | 'WALLS' | 'GATES' | 'AQUEDU
 export interface HeightSource {
   heightAt(x: number, z: number): number;
   waterLevelY: number;
+  /** A Heightmap's lattice and profile (terrain v2: `heightAt` is linear on the b–c triangles of this lattice). */
+  minX?: number;
+  minZ?: number;
+  spacing?: number;
+  profile?: string;
+  /** A Heightmap's features; their `retaining` runs (terrain v2, GROUND) are read when present. */
+  features?: object | null;
+}
+
+/** A stretch of atlas road edge over ground steeper than 38° (heightmap.ts, terrain v2), game m: the streets build a retaining wall along it. */
+export interface RetainingRun {
+  road: string;
+  /** 1 = right of the road's direction of travel, −1 = left. */
+  side: 1 | -1;
+  points: readonly { x: number; z: number; y: number; ground: number; grade: number }[];
 }
 
 export interface Bounds {
@@ -210,6 +225,12 @@ export interface CityPlan {
   corridor(x: number, z: number): boolean;
   /** Atlas roads that ran through a solid footprint and were bent round it or cut at it (detour.ts), by road id. */
   roadDetours: { road: string; detour: Detour }[];
+  /** The terrain's lattice when `heightAt` is linear on its b–c triangles (terrain v2), else null: the streets conform to it exactly. */
+  ground?: { x0: number; z0: number; s: number } | null;
+  /** Road edges that need a retaining wall (terrain v2; empty under v1). */
+  retaining?: readonly RetainingRun[];
+  /** Where a minor street was cut short at ground too steep for it (trimSteepStreets): its new ends. */
+  cliffEnds?: Pt[];
   stats: Record<string, number>;
 }
 
@@ -694,6 +715,12 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
   // 8b. Stubs: streets the marcher stopped at a sliver, an apron or a slope reach the nearest
   // road / street / square within 15 m; the ones with nothing in reach get a court (step 9).
   const stubFix = opts.closeStubs === false ? { extended: 0, orphans: [] } : closeStubs(g, streets, STREET_MARGIN);
+  // 8c. No minor street climbs a cliff: it ends where the ground gets too steep for it.
+  const trim = trimSteepStreets(streets, (x, z) => hm.heightAt(x, z));
+  const cliffEnds = trim.ends;
+  stats.steepStreetsCut = trim.cut;
+  stats.steepStreetsDropped = trim.dropped;
+  stats.steepStreetMetres = Math.round(trim.metres);
 
   // Ground the story stands on stays open (no house on the spot where Mus waits), whatever the streets did.
   for (const pin of PINNED_OPEN) {
@@ -955,7 +982,135 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
   stats.builtBlocks = blocks.filter((b) => b.kind === 'built').length;
   stats.totalMs = now() - t0;
   lab = mark = depthGrid = bfsQueue = new Int32Array(0);
-  return { grid: g, hy, region, roads, streets, blocks, piazzas, walls, gates, aqueducts, bridges: (atlas.BRIDGES ?? []).map((b) => ({ id: b.id, a: g2(b.a), b: g2(b.b), width: Math.max(3, b.width * S) })), plazas, detailBounds, detailRects, inDetail, mergeCell, landmarkCategory: atlas.LANDMARKS.map((l) => l.category), landmarkPolys: lmPolys.filter((l) => l.solid).map((l) => ({ index: l.index, id: l.lm.id, category: l.lm.category, poly: l.poly })), corridor: (x, z) => corridorAt(x, z).w > 0.5, roadDetours, stats };
+  return { grid: g, hy, region, roads, streets, blocks, piazzas, walls, gates, aqueducts, bridges: (atlas.BRIDGES ?? []).map((b) => ({ id: b.id, a: g2(b.a), b: g2(b.b), width: Math.max(3, b.width * S) })), plazas, detailBounds, detailRects, inDetail, mergeCell, landmarkCategory: atlas.LANDMARKS.map((l) => l.category), landmarkPolys: lmPolys.filter((l) => l.solid).map((l) => ({ index: l.index, id: l.lm.id, category: l.lm.category, poly: l.poly })), corridor: (x, z) => corridorAt(x, z).w > 0.5, roadDetours, ground: groundGrid(hm), retaining: retainingOf(hm), cliffEnds, stats };
+}
+
+/** The heightmap's retaining runs (GROUND's `features.retaining`, terrain v2), or none. */
+function retainingOf(hm: HeightSource): readonly RetainingRun[] {
+  const r = (hm.features as { retaining?: unknown } | null | undefined)?.retaining;
+  return Array.isArray(r) ? (r as RetainingRun[]) : [];
+}
+
+/** The lattice `heightAt` is linear on (a terrain v2 Heightmap), else null. */
+function groundGrid(hm: HeightSource): { x0: number; z0: number; s: number } | null {
+  return hm.profile === 'v2' && typeof hm.minX === 'number' && typeof hm.minZ === 'number' && typeof hm.spacing === 'number' ? { x0: hm.minX, z0: hm.minZ, s: hm.spacing } : null;
+}
+
+/** A minor street's grade over 4 m (rise / run) may not pass this (the grades audit: none over 58 %, at most 15 over 45 %). */
+export const STREET_MAX_GRADE = 0.44;
+/** Nor may it cross ground steeper than this (degrees): it ends at the cliff. */
+export const STREET_MAX_GROUND_DEG = 35;
+/** Pieces of a cut street shorter than this (m) are dropped. */
+const STREET_MIN_PIECE = 6;
+
+/**
+ * Cuts every minor street where it would climb too steeply: wherever its grade over 4 m (sampled
+ * every metre, as the grades audit does) passes STREET_MAX_GRADE or the ground under it is steeper
+ * than STREET_MAX_GROUND_DEG, the street ends; what is left on either side stays a street (the
+ * first piece keeps the street's id, the others are added at the end), pieces under
+ * STREET_MIN_PIECE are dropped. Mutates `streets`.
+ */
+export function trimSteepStreets(streets: PlanStreet[], H: (x: number, z: number) => number, maxGrade = STREET_MAX_GRADE, maxGroundDeg = STREET_MAX_GROUND_DEG): { cut: number; dropped: number; metres: number; ends: Pt[] } {
+  const ends: Pt[] = [];
+  const groundTan = Math.tan((maxGroundDeg * Math.PI) / 180);
+  let cut = 0, dropped = 0, metres = 0;
+  const n0 = streets.length;
+  for (let si = 0; si < n0; si++) {
+    const st = streets[si];
+    const pts = st.points;
+    // Samples every ≤ 1 m (arc length s).
+    const xs: number[] = [], zs: number[] = [], ss: number[] = [];
+    let acc = 0;
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
+      const L = Math.hypot(bx - ax, bz - az);
+      const m = Math.max(1, Math.ceil(L));
+      for (let k = 0; k < m; k++) {
+        xs.push(ax + ((bx - ax) * k) / m);
+        zs.push(az + ((bz - az) * k) / m);
+        ss.push(acc + (L * k) / m);
+      }
+      acc += L;
+    }
+    const last = pts[pts.length - 1];
+    xs.push(last[0]);
+    zs.push(last[1]);
+    ss.push(acc);
+    const n = xs.length;
+    const y = xs.map((x, i) => H(x, zs[i]));
+    // Stretches [s0, s1] to take out: every sample of a window that is too steep, and steep ground.
+    const bad: [number, number][] = [];
+    let a = 0, b = 0;
+    for (let i = 0; i < n; i++) {
+      while (a < i && ss[i] - ss[a] > 2) a++;
+      while (b + 1 < n && ss[b + 1] - ss[i] <= 2) b++;
+      const run = ss[b] - ss[a];
+      const steep = run > 1e-6 && Math.abs(y[b] - y[a]) / run > maxGrade;
+      const gx = (H(xs[i] + 1, zs[i]) - H(xs[i] - 1, zs[i])) / 2, gz = (H(xs[i], zs[i] + 1) - H(xs[i], zs[i] - 1)) / 2;
+      const cliff = Math.hypot(gx, gz) > groundTan;
+      if (steep || cliff) {
+        const s0 = steep ? ss[a] : ss[Math.max(0, i - 1)], s1 = steep ? ss[b] : ss[Math.min(n - 1, i + 1)];
+        if (bad.length && s0 <= bad[bad.length - 1][1] + 1e-6) bad[bad.length - 1][1] = Math.max(bad[bad.length - 1][1], s1);
+        else bad.push([s0, s1]);
+      }
+    }
+    if (!bad.length) continue;
+    cut++;
+    // What is left.
+    const keep: [number, number][] = [];
+    let from = 0;
+    for (const [s0, s1] of bad) {
+      if (s0 - from >= STREET_MIN_PIECE) keep.push([from, s0]);
+      else metres += Math.max(0, s0 - from);
+      metres += s1 - s0;
+      from = s1;
+    }
+    if (acc - from >= STREET_MIN_PIECE) keep.push([from, acc]);
+    else metres += Math.max(0, acc - from);
+    const slice = (s0: number, s1: number): Pt[] => {
+      const out: Pt[] = [];
+      let acc2 = 0;
+      const at = (s: number): Pt => {
+        let t = 0;
+        for (let i = 0; i + 1 < pts.length; i++) {
+          const L = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]);
+          if (t + L >= s || i === pts.length - 2) {
+            const f = L > 0 ? Math.min(1, Math.max(0, (s - t) / L)) : 0;
+            return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * f, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * f];
+          }
+          t += L;
+        }
+        return [pts[0][0], pts[0][1]];
+      };
+      out.push(at(s0));
+      for (let i = 0; i + 1 < pts.length; i++) {
+        acc2 += Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]);
+        if (acc2 > s0 + 1e-6 && acc2 < s1 - 1e-6) out.push([pts[i + 1][0], pts[i + 1][1]]);
+      }
+      out.push(at(s1));
+      return out;
+    };
+    if (!keep.length) {
+      // Nothing walkable left: the street keeps a zero-length stub so its index (the raster's owner ids) stays valid.
+      dropped++;
+      st.points = [pts[0], pts[0]];
+      st.steps = [false];
+      continue;
+    }
+    keep.forEach(([s0, s1], k) => {
+      const p = slice(s0, s1);
+      if (s0 > 1e-6) ends.push(p[0]);
+      if (s1 < acc - 1e-6) ends.push(p[p.length - 1]);
+      if (k === 0) {
+        st.points = p;
+        st.steps = p.slice(1).map(() => false);
+      } else {
+        const index = streets.length;
+        streets.push({ ...st, id: `st${index}`, index, points: p, steps: p.slice(1).map(() => false) });
+      }
+    });
+  }
+  return { cut, dropped, metres, ends };
 }
 
 // ---------------------------------------------------------------- small geometry

@@ -6,7 +6,9 @@
  * colliders, the slowest item (ms), and the largest gap between the street surfaces' vertices and
  * heightAt. Use it for before/after triangle budgets and the cost of a cell's items.
  *
- *   node scripts/audit/streets-cells.mjs [--at x,z;x,z] [--all] [--terrain v1|v2] [--json out.json]
+ *   node scripts/audit/streets-cells.mjs [--at x,z;x,z] [--all] [--terrain v1|v2] [--by-src] [--json out.json]
+ *
+ * --by-src: triangles by what built them (the work items' tags: ground-cover, road, street:lane, junction, ...).
  *
  * Default cells: the STREETS cameras of docs/design/solid-ground.md §4 plus the Forum and the spawn.
  */
@@ -18,6 +20,8 @@ import { parseArgs } from './boot.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const args = parseArgs(process.argv.slice(2));
+// The geometry audit's source tags (withAuditSource) are on only with ?audit.
+if (args['by-src']) globalThis.location = { search: '?audit' };
 if (args.terrain) process.env.SKYROME_TERRAIN = String(args.terrain);
 const T0 = Date.now();
 const log = (...a) => console.log(`[${((Date.now() - T0) / 1000).toFixed(1)}s]`, ...a);
@@ -34,6 +38,7 @@ try {
   const { withAuditSource } = await load('/src/dev/audit/geomAudit.ts');
   const streets = await load('/src/arch/fabric/streets.ts');
   const cs = streets.conformStats;
+  if (cs) cs.check = true;
   const box = (b, m = 0) => ({ minX: b.minX - m, maxX: b.maxX + m, minZ: b.minZ - m, maxZ: b.maxZ + m });
   const lbs = [box(atlas.CORE_BOUNDS, 350), ...atlas.DETAIL_REGIONS.map((r) => box(r, 100))];
   const landmarkBounds = { minX: Math.min(...lbs.map((b) => b.minX)), maxX: Math.max(...lbs.map((b) => b.maxX)), minZ: Math.min(...lbs.map((b) => b.minZ)), maxZ: Math.max(...lbs.map((b) => b.maxZ)) };
@@ -41,7 +46,7 @@ try {
   const hm = HM.buildHeightmap(SRC, { spacing: 2, pads: landmarkPads(landmarkBounds) });
   log(`heightmap ${hm.nx}x${hm.nz} profile ${hm.profile}`);
   const plan = planCity(atlas, hm, { detailBounds: scaleBounds(atlas.CORE_BOUNDS, 150), corridorDetail: 150 });
-  log(`plan: ${plan.roads.length} roads, ${plan.streets.length} streets, ${plan.blocks.length} blocks`);
+  log(`plan: ${plan.roads.length} roads, ${plan.streets.length} streets, ${plan.blocks.length} blocks; steep streets cut ${plan.stats.steepStreetsCut} (dropped ${plan.stats.steepStreetsDropped}, ${plan.stats.steepStreetMetres} m)`);
   const H = (x, z) => hm.heightAt(x, z);
   const areaRects = plan.detailRects.map((b) => ({ minX: b.minX - 60, minZ: b.minZ - 60, maxX: b.maxX + 60, maxZ: b.maxZ + 60 }));
   const work = streetWork(plan, H, areaRects, 128);
@@ -50,13 +55,14 @@ try {
   const keys = args.all ? [...work.cells.keys()] : [...new Set(String(args.at ?? DEFAULT).split(';').map((s) => s.split(',').map(Number)).map(([x, z]) => `${Math.floor(x / 128)},${Math.floor(z / 128)}`))];
   const rows = [];
   let total = { tris: 0, items: 0, ms: 0, colliders: 0 };
+  const bySrc = {};
   for (const key of keys) {
     const c = work.cells.get(key);
     if (!c) continue;
     const b = new MeshBuilder();
     let slow = 0, slowTag = '', ms = 0;
     const per = [];
-    if (cs) for (const k of Object.keys(cs)) cs[k] = 0;
+    if (cs) for (const k of Object.keys(cs)) if (typeof cs[k] === 'number') cs[k] = 0;
     c.items.forEach((it, k) => {
       const before = b.triangleCount;
       const t = performance.now();
@@ -75,11 +81,18 @@ try {
       }
       const src = [...b.parts.values()].flat().find((g) => g.userData.src)?.userData.src;
       void src;
-      per.push({ k, tris: added, ms: +dt.toFixed(1), stats: cs ? Object.fromEntries(Object.keys(cs).map((q) => [q, Math.round(cs[q] - s0[q])])) : null });
+      per.push({ k, tris: added, ms: +dt.toFixed(1), stats: cs ? Object.fromEntries(Object.keys(cs).filter((q) => typeof cs[q] === 'number').map((q) => [q, Math.round(cs[q] - s0[q])])) : null });
     });
     if (args.items) for (const p of per.sort((a, b) => b.tris - a.tris).slice(0, 6)) console.log(`   item #${p.k}: ${p.tris} tris ${p.ms} ms ${JSON.stringify(p.stats)}`);
-    if (cs) console.log(`   sheets ${JSON.stringify(Object.fromEntries(Object.entries(cs).map(([k, v]) => [k, Math.round(v)])))}`);
+    if (cs) console.log(`   sheets ${JSON.stringify(Object.fromEntries(Object.entries(cs).filter(([, v]) => typeof v === 'number').map(([k, v]) => [k, k === 'maxDev' || k === 'overLen' ? +v.toFixed(4) : Math.round(v)])))}`);
     const tris = b.triangleCount;
+    if (args['by-src']) {
+      for (const geoms of b.parts.values()) for (const g of geoms) {
+        const src = String(g.userData.src ?? '?').split(':');
+        const k = src[0] === 'street' ? `street:${src[2] ?? ''}` : src[0];
+        bySrc[k] = (bySrc[k] ?? 0) + g.getAttribute('position').count / 3;
+      }
+    }
     rows.push({ key, items: c.items.length, tris, colliders: b.colliders.length, ms: +ms.toFixed(1), slowestMs: +slow.toFixed(1), slowest: slowTag });
     total.tris += tris;
     total.items += c.items.length;
@@ -88,6 +101,10 @@ try {
     log(`cell ${key}: ${c.items.length} items, ${tris} tris, ${b.colliders.length} colliders, ${ms.toFixed(0)} ms (slowest item ${slow.toFixed(1)} ms ${slowTag})`);
   }
   log(`total: ${JSON.stringify({ ...total, ms: +total.ms.toFixed(0) })}`);
+  if (args['by-src']) {
+    const by = Object.entries(bySrc).sort((a, b) => b[1] - a[1]);
+    for (const [k, v] of by) console.log(`   ${k.padEnd(24)} ${v}`);
+  }
   if (args.json) writeFileSync(resolve(root, String(args.json)), JSON.stringify({ profile: hm.profile, rows, total }, null, 1));
 } finally {
   await server.close();

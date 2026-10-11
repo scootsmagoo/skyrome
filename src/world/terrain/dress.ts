@@ -23,6 +23,7 @@ import * as atlas from '../../data/atlas';
 import { getMaterial } from '../../gfx/materials';
 import { registerColliders } from '../../gfx/MeshBuilder';
 import { WORLD_SCALE } from '../coords';
+import { cityPavedAt } from '../city/roads';
 import { bodyAt, type WaterBody } from '../water/bodies';
 import { addTerrainGrass } from './grass';
 import { CANAL, type Heightmap, type P2 } from './heightmap';
@@ -424,6 +425,9 @@ export function dressTerrain(game: Game, opts: DressOptions = {}): TerrainDressi
             // Not across another road (junctions), on pads and fora, by the water or under buildings.
             const inp = terrain.inputAt(mx - uz * side * 0.2, mz + ux * side * 0.2);
             if (inp.roadSd < -0.05 || inp.padSd < 0.4 || inp.hw < 0.4 || built.at(mx, mz)) continue;
+            // Nor where the city lays this road (or a street) itself: its own kerbs are there, and the
+            // stones stood in its paving.
+            if (cityPavedAt(mx, mz) || cityPavedAt(x0, z0) || cityPavedAt(x1, z1) || cityPavedAt(mx + uz * side * 0.3, mz - ux * side * 0.3)) continue;
             const y0 = hm.heightAt(x0, z0), y1 = hm.heightAt(x1, z1);
             X.set(x1 - x0, y1 - y0, z1 - z0).normalize();
             Y.set(0, 1, 0).addScaledVector(X, -X.y).normalize();
