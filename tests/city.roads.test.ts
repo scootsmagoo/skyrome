@@ -323,12 +323,13 @@ describe('plaza bevels (phase 4b)', () => {
     // Paving beyond the middle of the south edge only (|x| < 2, z < -6).
     const paved = (x: number, z: number) => Math.abs(x) < 2 && z < -6;
     buildConformPlaza(b, poly, flat, { lift: 0.1, bevel: 0.45, paved });
+    // The walkable surface (its collider: the bevels are walkable too).
     const tops: number[][] = [];
-    for (const geoms of b.parts.values())
-      for (const g of geoms) {
-        const p = g.getAttribute('position');
-        for (let i = 0; i < p.count; i++) tops.push([p.getX(i), p.getY(i), p.getZ(i)]);
-      }
+    for (const c of b.colliders) {
+      if (c.kind !== 'trimesh') continue;
+      const p = c.geometry.getAttribute('position');
+      for (let i = 0; i < p.count; i++) tops.push([p.getX(i), p.getY(i), p.getZ(i)]);
+    }
     const reach = (x0: number, x1: number) => Math.min(...tops.filter(([x, , z]) => x >= x0 && x <= x1 && z < -6.01).map(([, , z]) => z));
     // The corners of the south edge are bevelled out to the ground (once one test per edge left them raw)...
     expect(reach(-6, -3)).toBeLessThan(-6.4);
