@@ -130,7 +130,8 @@ Besides one ground, v2 changes the heights (all in `heightmap.ts` unless named; 
 today's, byte-identical):
 - **Stamp order natural → pads → roads** (`stampV2`). Pads blend over
   `padMarginV2` = max(given, 1 + 2.6·|dh|) real m, at most 60 (dh: the pad's height over the
-  natural ground at its corners and 7 and 14 m out), as an eased bank of 30° or less; where blends
+  natural ground at its corners and 7 and 14 m out), as an eased-linear bank (`easedLinear`, the
+  flanks' shape: top grade 1.25 × the mean, about 26°); where blends
   overlap, the nearer pad leads (weights over distance²), so one pad's long bank never buries a
   neighbour. Near an atlas cliff a pad keeps its given margin (the cliff stays a barrier). A pad
   that v2 moves carries `elevationV2` (the Porticus Margaritaria: 'mean', unpinned; the record
@@ -139,7 +140,11 @@ today's, byte-identical):
   `ROAD_GRADE_TARGET` (21 %, under the 25 % cap so the 3.3 m grid's interpolation stays inside it)
   by the least cut and fill (`regrade.ts`, the W6 helper). A level core of at least
   `ROAD_CORE_MIN` real m each side (a grid cell, so the centreline reads only the road), then
-  eased banks of `ROAD_BANK_PER_M` × the cut or fill (≥ 6 m, ≤ 60 m). Inside a landmark's own
+  eased banks of `ROAD_BANK_PER_M` × the cut or fill (≥ 6 m, ≤ 60 m), the cut read at the
+  centreline and again where the bank would end on either side until the run covers the ground it
+  meets there (a road cut into the foot of a rising pad blend or flank no longer gets a 6 m bank
+  against 8 m of ground: that made the 100 %+ banks the minor streets crossed beside the Baths of
+  Titus, the Ludus Matutinus and under the Palatine). Inside a landmark's own
   footprint (`TerrainPad.grow`: the pad polygon minus its +3 m grow) the pad wins: a road is pinned
   where it runs through one or through an earlier road's core (`holdToFixed`), pulled toward the
   level of a footprint its band grazes (as far as the cap allows), and where two footprints on its
@@ -152,11 +157,13 @@ today's, byte-identical):
   hill's designed top grade under the profile (`grades.mjs` designMaxDeg uses v1's shape).
 - **Cliffs end 15 real m short of a road's band** (`clipCliff`, `CLIFF_ROAD_CLEAR`; flights of
   steps keep theirs). `Terrain.ts` gives the far apron's landform the roads too, so it agrees.
-- **Tiber Island landings**: inside a bridge's corridor (`src.BRIDGES`) the island's flat top runs
-  `ISLAND_LANDING` (6) m on past its outline before the ship-like side drops. It keeps the island's
-  streets joined to the bridges (`tests/city.roads.test.ts`), but under the Pons Cestius it also
-  fills the foot of the bridge's first arch (shot `after/g1b/v2/rc2-island-edge.jpg`): the bridge
-  builder's abutment (L-EAST) should meet it, or the corridor shrink to the deck.
+- **Tiber Island landings: off** (`ISLAND_LANDING` = 0). §3 item 5 asked for the island's edge
+  flattened in the bridge corridors; a 6 m landing past the outline did that, but the bridges fit
+  their arcade to the wet channel (`src/world/bridges/layout.ts`), so under the Pons Cestius the
+  landing filled the first arch (shot `after/g1b/v2/rc2-island-edge.jpg` of the first G1b pass).
+  The 70° "bank" W6 measured there is the island's ship-like facing under that arch, where nobody
+  walks; the walk from the deck onto the island is L-EAST's ramps. The corridor code stays for a
+  landing that L-EAST's abutment can meet.
 - **The water stays put**: in the river's channel and banks (to 16 m past the edge), the quays
   and the canal, v2 keeps v1's roads and pads over the same natural ground, so the water's edge
   does not move (`tests/terrain-v2.test.ts`).

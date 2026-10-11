@@ -620,7 +620,7 @@ export class SaveSystem implements System {
  * `terrain` was made on v1), or whose feet are more than 1 m off whatever is under them, is put
  * back on safe ground near its x, z. An interior cell keeps its own floors.
  */
-function regroundAfterLoad(game: Game, saved: unknown) {
+export function regroundAfterLoad(game: Game, saved: unknown) {
   const p = game.player, hm = game.heightmap, physics = game.physics;
   if (!p || !hm || !physics) return;
   const pos = p.position;

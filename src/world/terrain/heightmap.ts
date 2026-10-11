@@ -429,8 +429,12 @@ export function clipCliff(c: { a: P2; b: P2 }, roads: readonly TerrainRoad[], cl
   return out;
 }
 
-/** v2: real m beyond the island outline the island's flat top runs on inside a bridge's corridor. */
-export const ISLAND_LANDING = 6;
+/**
+ * v2: real m beyond the island outline the island's flat top runs on inside a bridge's corridor.
+ * Off (0): the bridges fit their arcade to the wet channel, so a landing filled the Pons Cestius's
+ * first arch; the walk onto the island is the bridge's own ramps (docs/modules/terrain.md).
+ */
+export const ISLAND_LANDING = 0;
 
 /**
  * v2: how far (0..1) a point lies inside a bridge corridor (the deck's width plus 2 m each side,
@@ -1021,7 +1025,8 @@ function stampV2(c: StampGrid, real: Float32Array, out: Float32Array, roads: rea
         // By height, except where an atlas cliff stands: there the given blend.
         const mk = margin - (margin - given) * cliff[k];
         if (sd > mk) continue;
-        const w = 1 - smooth(1, mk, sd);
+        const w = 1 - easedLinear((sd - 1) / (mk - 1));
+        if (w <= 0) continue;
         const p = w / (sd * sd);
         sumP[k] += p;
         sumPE[k] += p * elev;
@@ -1114,9 +1119,27 @@ function stampV2(c: StampGrid, real: Float32Array, out: Float32Array, roads: rea
     }
     const half = road.width / 2;
     const coreW = Math.max(half, ROAD_CORE_MIN);
-    // Bank run from the cut or fill at the centreline (against the padded ground): ≥ 6 m, at most 60.
+    // Bank run from the cut or fill (against the padded ground): ≥ 6 m, at most 60. Read at the
+    // centreline, then again where the bank would end on either side until the run covers what it
+    // meets there: a road cut into the foot of a rising pad blend or flank banks as long as the
+    // ground it meets is high, not as long as the cut at its centre.
+    const bankRun = (i: number, y: number) => {
+      const [px, pz] = pts[i];
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+      const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      const nx2 = -(b[1] - a[1]) / L, nz2 = (b[0] - a[0]) / L;
+      let r = Math.min(60, Math.max(6, ROAD_BANK_PER_M * Math.abs(y - sampleOut(px, pz))));
+      for (let it = 0; it < 4; it++) {
+        const d = coreW + r;
+        const need = Math.max(r, ROAD_BANK_PER_M * Math.abs(y - sampleOut(px + nx2 * d, pz + nz2 * d)), ROAD_BANK_PER_M * Math.abs(y - sampleOut(px - nx2 * d, pz - nz2 * d)));
+        const nr = Math.min(60, need);
+        if (nr <= r + 0.5) break;
+        r = nr;
+      }
+      return r;
+    };
     // Flights of steps keep v1's 6 m: they climb cliffs, which stay barriers beside them.
-    const runs = Float64Array.from(level, (y, i) => (steps ? 6 : Math.min(60, Math.max(6, ROAD_BANK_PER_M * Math.abs(y - sampleOut(pts[i][0], pts[i][1]))))));
+    const runs = Float64Array.from(level, (y, i) => (steps ? 6 : bankRun(i, y)));
     let maxRun = 6;
     for (const r of runs) maxRun = Math.max(maxRun, r);
     const reach = coreW + maxRun;
