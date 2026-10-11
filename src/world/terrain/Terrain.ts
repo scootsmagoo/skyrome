@@ -257,9 +257,11 @@ export class Terrain implements System {
           LOWLANDS: atlas.LOWLANDS,
           RIVERS: hm.features.rivers,
           ISLANDS: hm.features.islands,
+          // v2 clips the hills' cliffs short of the roads: the same roads, so the apron agrees.
+          ROADS: hm.features.roads,
           bounds: { minX: (hm.minX - ext) / WORLD_SCALE, maxX: (hm.maxX + ext) / WORLD_SCALE, minZ: (hm.minZ - ext) / WORLD_SCALE, maxZ: (hm.maxZ + ext) / WORLD_SCALE },
         },
-        { quays: hm.features.quays, noise: 0, sdfCell: 25 },
+        { quays: hm.features.quays, noise: 0, sdfCell: 25, profile: hm.profile },
       );
       this.farHeightAt = farHeight(hm, natural);
       this.apron = buildApron(hm, this.farHeightAt, hm.waterLevelY, typeof opts.apron === 'object' ? opts.apron : {});

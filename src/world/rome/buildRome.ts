@@ -15,6 +15,7 @@ import { footprintRadius } from '../landmarks/footprint';
 import { dressTerrain } from '../terrain/dress';
 import { Terrain } from '../terrain/Terrain';
 import { buildHeightmap, footprintPolygon, type Heightmap, type TerrainPad } from '../terrain/heightmap';
+import { terrainProfile, type TerrainProfile } from '../terrain/profile';
 import { releaseBuildCaches } from '../../gfx/release';
 
 declare module '../../core/Game' {
@@ -59,8 +60,29 @@ const PAD_EXTRA: Record<string, { grow?: number; margin?: number; front?: number
 /** Circuses, stadia, theatres and amphitheatres: built level on their pad (generic-common NO_LIFT_CATEGORIES). */
 const BOWLS = new Set(['amphitheatre', 'circus', 'theatre', 'odeum', 'stadium']);
 
+/**
+ * v2 changes to atlas landmark records, applied before both their pads and their buildings are
+ * made (docs/design/solid-ground.md §3 item 5; atlas.ts keeps the historical values). The
+ * Porticus Margaritaria is unpinned: its pad at 19 m ASL stood 14 m under the Velia's slope and
+ * threw a 60° bank across the Clivus Palatinus and the Via Nova; it now takes the mean ground.
+ */
+const V2_LANDMARK_OVERRIDES: Record<string, (lm: atlas.Landmark) => atlas.Landmark> = {
+  'porticus-margaritaria': (lm) => ({ ...lm, baseElevation: undefined }),
+};
+
+/** The atlas landmarks as the terrain profile builds them (v1: the atlas records unchanged). */
+export function terrainLandmarks(profile: TerrainProfile = terrainProfile()): atlas.Landmark[] {
+  if (profile === 'v1') return atlas.LANDMARKS;
+  return atlas.LANDMARKS.map((lm) => V2_LANDMARK_OVERRIDES[lm.id]?.(lm) ?? lm);
+}
+
+/**
+ * The landmarks' terrain pads. The list is the same under both profiles (a heightmap built for
+ * either can take it): a pad that v2 moves carries its v2 height in `elevationV2`.
+ */
 export function landmarkPads(bounds: { minX: number; maxX: number; minZ: number; maxZ: number }): TerrainPad[] {
   const pads: TerrainPad[] = [];
+  const v2 = new Map(terrainLandmarks('v2').map((lm) => [lm.id, lm]));
   for (const lm of atlas.LANDMARKS) {
     if (!PAD_CATEGORIES.has(lm.category)) continue;
     // Seating bowls are never raised by their builders, so they get their pad at any priority.
@@ -77,6 +99,10 @@ export function landmarkPads(bounds: { minX: number; maxX: number; minZ: number;
       polygon: footprintPolygon(lm.center, lm.rotation, lm.footprint as any, 3 + (extra?.grow ?? 0)),
       elevation: lm.baseElevation,
       margin: extra?.margin ?? 14,
+      // v2: inside the landmark's own footprint (with any plaza it lays: PAD_EXTRA grow) the pad
+      // wins over the roads; a poly footprint is not grown.
+      grow: lm.footprint.kind === 'poly' ? 0 : 3,
+      ...v2Elevation(lm, v2.get(lm.id)),
     });
     if (extra?.front && lm.footprint.kind === 'rect') {
       // Forecourt: the strip in front of the facade (local −z), same height and ground kind, joined to the main pad.
@@ -85,10 +111,16 @@ export function landmarkPads(bounds: { minX: number; maxX: number; minZ: number;
       const cos = Math.cos(th), sin = Math.sin(th);
       const tr = (lx: number, lz: number): [number, number] => [lm.center[0] + lx * cos - lz * sin, lm.center[1] + lx * sin + lz * cos];
       const hw = w / 2 + 3, z0 = -d / 2 - extra.front, z1 = -d / 2 + 6;
-      pads.push({ id: lm.id, polygon: [tr(-hw, z0), tr(hw, z0), tr(hw, z1), tr(-hw, z1)], elevation: lm.baseElevation, margin: extra.frontMargin ?? 14 });
+      pads.push({ id: lm.id, polygon: [tr(-hw, z0), tr(hw, z0), tr(hw, z1), tr(-hw, z1)], elevation: lm.baseElevation, margin: extra.frontMargin ?? 14, grow: 0, ...v2Elevation(lm, v2.get(lm.id)) });
     }
   }
   return pads;
+}
+
+/** `elevationV2` for a pad whose landmark v2 re-sites ('mean': unpinned), else nothing. */
+function v2Elevation(lm: atlas.Landmark, v2: atlas.Landmark | undefined): Pick<TerrainPad, 'elevationV2'> {
+  if (!v2 || v2.baseElevation === lm.baseElevation) return {};
+  return { elevationV2: v2.baseElevation ?? 'mean' };
 }
 
 export async function buildRome(game: Game, opts: BuildRomeOptions = {}) {
@@ -101,6 +133,7 @@ export async function buildRome(game: Game, opts: BuildRomeOptions = {}) {
 
   report(0.02, 'Surveying the seven hills');
   await tick();
+  const hmProfile = terrainProfile();
   const hm = buildHeightmap(
     {
       BASE_ELEVATION: atlas.BASE_ELEVATION,
@@ -109,9 +142,10 @@ export async function buildRome(game: Game, opts: BuildRomeOptions = {}) {
       RIVERS: atlas.RIVERS,
       ISLANDS: atlas.ISLANDS,
       ROADS: atlas.ROADS,
+      BRIDGES: atlas.BRIDGES,
       bounds,
     },
-    { spacing: opts.spacing ?? 2, pads: landmarkPads(landmarkBounds) },
+    { spacing: opts.spacing ?? 2, pads: landmarkPads(landmarkBounds), profile: hmProfile },
   );
   game.heightmap = hm;
 
@@ -123,7 +157,7 @@ export async function buildRome(game: Game, opts: BuildRomeOptions = {}) {
   const extraWeight = (opts.steps ?? []).reduce((s, x) => s + x.weight, 0);
   const lmShare = 0.55 / (1 + extraWeight);
   report(0.3, 'Raising the monuments');
-  await buildLandmarks(game, atlas.LANDMARKS, hm, {
+  await buildLandmarks(game, terrainLandmarks(hm.profile), hm, {
     bounds: landmarkBounds,
     highDetailPriority: extent === 'core' ? 2 : 1,
     onProgress: (d, t, name) => report(0.3 + lmShare * (d / t), name),

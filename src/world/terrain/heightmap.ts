@@ -9,6 +9,7 @@
 import { WORLD_SCALE } from '../coords';
 import { chain, footOn, indexSegments, nearSegments, quayInfluence, resolveQuays, TIBER_QUAYS, type TerrainQuay } from './riverbanks';
 import { terrainProfile, type TerrainProfile } from './profile';
+import { regrade } from './regrade';
 
 export type { TerrainQuay } from './riverbanks';
 
@@ -54,8 +55,25 @@ export interface TerrainPad {
   polygon: readonly P2[];
   /** Fixed elevation (m ASL); omitted = average of the natural ground under the footprint. */
   elevation?: number;
-  /** Blend distance (real m) outside the footprint. */
+  /**
+   * Blend distance (real m) outside the footprint. Under v2 it is only the least: a pad blends
+   * over max(margin, 1 + 2.6·|dh|) m, capped at 60, dh its height over the natural ground.
+   */
   margin?: number;
+  /**
+   * How far (real m) `polygon` was grown past the landmark's own footprint (v2): inside it (signed
+   * distance ≤ −grow) the pad wins over the roads. Omitted: the roads win everywhere (a forecourt).
+   */
+  grow?: number;
+  /** v2's elevation when it differs from `elevation` (m ASL; 'mean': unpinned, the mean natural ground). */
+  elevationV2?: number | 'mean';
+}
+/** A bridge (atlas BRIDGES, real m): v2 flattens the Tiber Island's edge inside its corridor. */
+export interface TerrainBridge {
+  id: string;
+  a: P2;
+  b: P2;
+  width: number;
 }
 export interface TerrainSource {
   BASE_ELEVATION: number;
@@ -64,6 +82,7 @@ export interface TerrainSource {
   RIVERS: readonly TerrainRiver[];
   ISLANDS: readonly TerrainIsland[];
   ROADS?: readonly TerrainRoad[];
+  BRIDGES?: readonly TerrainBridge[];
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
 }
 
@@ -337,26 +356,129 @@ export function quayProfile(r: { waterLevel: number }, d: number, half: number, 
   return top + (ground - top) * smooth(half + width, half + width + 25, d);
 }
 
-/** The natural (pre-road, pre-pad) elevation function in real meters. */
-export function makeNaturalElevation(src: TerrainSource, opts: { noise?: number; seed?: number; quays?: readonly TerrainQuay[]; sdfCell?: number } = {}) {
+/**
+ * v2 (phase 4b §3 item 4): designed hill flanks steeper than 30° get a longer run (real m) than
+ * the atlas gives them. The plateau and the foot stay where they are; only the face spreads.
+ */
+export const V2_FLANK_RUN: Readonly<Record<string, number>> = { capitolium: 71, arx: 64, 'palatine-t34': 53 };
+
+/** v2: a cliff segment ends this far (real m) short of an atlas road's band (the road's half width). */
+export const CLIFF_ROAD_CLEAR = 15;
+
+/**
+ * v2 flank shape: eased-linear from 0 (plateau edge) to 1 (foot) over t in [0, 1]. The grade
+ * ramps up over the first `EASE` of the run, holds, and eases out over the last `EASE`, so the
+ * top grade is 1 / (1 − EASE) = 1.25 × the mean, against 1.5 × for v1's smoothstep. Pure.
+ */
+export const FLANK_EASE = 0.2;
+export function easedLinear(t: number, e = FLANK_EASE): number {
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  const k = 2 * e * (1 - e);
+  if (t < e) return (t * t) / k;
+  if (t > 1 - e) {
+    const u = 1 - t;
+    return 1 - (u * u) / k;
+  }
+  return (t - e / 2) / (1 - e);
+}
+
+/** Top grade of a flank shape relative to its mean grade: 1.5 (v1 smoothstep) or 1.25 (v2). */
+export function flankTopFactor(profile: TerrainProfile): number {
+  return profile === 'v1' ? 1.5 : 1 / (1 - FLANK_EASE);
+}
+
+/** The run (real m) a hill's designed flank has under a profile. */
+export function flankRun(hill: { id: string; slope: number }, profile: TerrainProfile): number {
+  return profile === 'v1' ? hill.slope : (V2_FLANK_RUN[hill.id] ?? hill.slope);
+}
+
+/**
+ * v2: the parts of a cliff segment that stay a cliff: the segment minus every stretch within
+ * `CLIFF_ROAD_CLEAR` m of a road's band (flights of steps are left out: they are made to climb
+ * cliffs). Pieces shorter than 2 m are dropped. Pure (real m).
+ */
+export function clipCliff(c: { a: P2; b: P2 }, roads: readonly TerrainRoad[], clear = CLIFF_ROAD_CLEAR): { a: P2; b: P2 }[] {
+  const [ax, az] = c.a, [bx, bz] = c.b;
+  const L = Math.hypot(bx - ax, bz - az);
+  const near = roads.filter((r) => r.paving !== 'steps' && r.points.length >= 2);
+  if (!near.length || L < 1e-6) return [c];
+  const n = Math.max(2, Math.ceil(L));
+  const blocked = (t: number) => {
+    const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
+    for (const r of near) {
+      const lim = r.width / 2 + clear;
+      for (let i = 0; i + 1 < r.points.length; i++) {
+        const p = r.points[i], q = r.points[i + 1];
+        if (segDist2(x, z, p[0], p[1], q[0], q[1]) < lim * lim) return true;
+      }
+    }
+    return false;
+  };
+  const out: { a: P2; b: P2 }[] = [];
+  let start = -1;
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const free = !blocked(t);
+    if (free && start < 0) start = t;
+    if ((!free || i === n) && start >= 0) {
+      const end = free ? t : (i - 1) / n;
+      if ((end - start) * L >= 2) out.push({ a: [ax + (bx - ax) * start, az + (bz - az) * start], b: [ax + (bx - ax) * end, az + (bz - az) * end] });
+      start = -1;
+    }
+  }
+  return out;
+}
+
+/** v2: real m beyond the island outline the island's flat top runs on inside a bridge's corridor. */
+export const ISLAND_LANDING = 6;
+
+/**
+ * v2: how far (0..1) a point lies inside a bridge corridor (the deck's width plus 2 m each side,
+ * fading out over 4 m), for the Tiber Island's landings. Pure (real m).
+ */
+function bridgeCorridor(bridges: readonly TerrainBridge[], x: number, z: number): number {
+  let w = 0;
+  for (const br of bridges) {
+    const d = Math.sqrt(segDist2(x, z, br.a[0], br.a[1], br.b[0], br.b[1]));
+    const half = br.width / 2;
+    w = Math.max(w, 1 - smooth(half + 2, half + 6, d));
+  }
+  return w;
+}
+
+/**
+ * The natural (pre-road, pre-pad) elevation function in real meters. After each call, `band`
+ * holds how far (0..1) that point lies in a river's channel and banks, a quay or a canal: the
+ * water bands the v2 pads and road earthworks leave alone (they keep v1's ground there); and
+ * `cliff` (v2) how far it lies within reach of an atlas cliff's face, where pads keep their
+ * given blend.
+ */
+export function makeNaturalElevation(
+  src: TerrainSource,
+  opts: { noise?: number; seed?: number; quays?: readonly TerrainQuay[]; sdfCell?: number; profile?: TerrainProfile } = {},
+): ((x: number, z: number) => number) & { band: number; cliff: number } {
   const noiseAmp = opts.noise ?? 0.6;
   const seed = opts.seed ?? 113;
   const quays = opts.quays ?? TIBER_QUAYS;
+  const v2 = (opts.profile ?? terrainProfile()) !== 'v1';
   const lowlands = src.LOWLANDS.flatMap((l) => {
     const b = clipBox(bbox(l, l.polygon, 60), src.bounds);
     return b ? [{ ...b, sdf: sdfGrid(l.polygon, b, opts.sdfCell ?? SDF_CELL) }] : [];
   });
   const hills = src.HILLS.flatMap((h) => {
-    const b = clipBox(bbox(h, h.outline, h.slope + 10), src.bounds);
+    const run = v2 ? flankRun(h, 'v2') : h.slope;
+    const b = clipBox(bbox(h, h.outline, run + 10), src.bounds);
     if (!b) return [];
     // Inner radius ~ sqrt(area/π) so the summit dome reaches the summit near the middle.
     let area = 0;
     const o = h.outline;
     for (let i = 0, j = o.length - 1; i < o.length; j = i++) area += (o[j][0] + o[i][0]) * (o[j][1] - o[i][1]);
     const rIn = Math.max(20, Math.sqrt(Math.abs(area / 2) / Math.PI));
-    return [{ ...b, rIn, sdf: sdfGrid(h.outline, b, opts.sdfCell ?? SDF_CELL) }];
+    const cliffs = v2 && h.cliffs ? h.cliffs.flatMap((c) => clipCliff(c, src.ROADS ?? [])) : h.cliffs;
+    return [{ ...b, rIn, run, cliffs, sdf: sdfGrid(h.outline, b, opts.sdfCell ?? SDF_CELL) }];
   });
   const islands = src.ISLANDS.map((i) => bbox(i, i.outline, 15));
+  const bridges = v2 ? (src.BRIDGES ?? []) : [];
   const rivers = src.RIVERS.map((r) => {
     const line = chain(r.centerline);
     const reach = Math.max(...r.width) / 2 + riverReach(r);
@@ -387,11 +509,12 @@ export function makeNaturalElevation(src: TerrainSource, opts: { noise?: number;
     return false;
   };
 
-  return (x: number, z: number): number => {
+  const fn = (x: number, z: number): number => {
     // 1. Ground (base + lowlands), with the river valley carved into it: channel, banks and the
     //    gentle flood plain. Hills are raised on top of this, so the valley never shaves them.
     let g = ground(x, z);
     let smoothK = 1;
+    let band = 0;
     for (let ri = 0; ri < rivers.length; ri++) {
       const b = rivers[ri];
       feet[ri] = null;
@@ -405,6 +528,8 @@ export function makeNaturalElevation(src: TerrainSource, opts: { noise?: number;
       const half = (w0 + (w1 - w0) * f.t) / 2;
       feet[ri] = { f, half };
       if (r.kind === 'canal') continue;
+      // The channel, its beach and its cut bank (to the bank top 16 m out), and any quay.
+      band = Math.max(band, 1 - smooth(half + 16, half + 26, f.d));
       const profile = riverBankProfile(r, f.d, half);
       if (profile < g) g = profile;
     }
@@ -419,29 +544,34 @@ export function makeNaturalElevation(src: TerrainSource, opts: { noise?: number;
       }
       const d = canalDistance(rivers[ri].line.pts, ft.f, x, z, ft.half);
       g = canalBank(r, d, ft.half, g);
-      if (d < ft.half + CANAL.wall + CANAL.bank + CANAL.ramp) smoothK = 0;
+      const reach = ft.half + CANAL.wall + CANAL.bank + CANAL.ramp;
+      if (d < reach) smoothK = 0;
+      band = Math.max(band, 1 - smooth(reach, reach + 6, d));
     }
     let h = g;
     let hillFactor = 0;
+    let cliff = 0;
     for (const b of hills) {
       if (!inBox(b, x, z)) continue;
       const hill = b.item;
       const sd = sampleSdf(b.sdf, x, z);
-      let slope = hill.slope;
-      if (hill.cliffs) {
-        for (const c of hill.cliffs) {
+      let slope = b.run;
+      if (b.cliffs) {
+        for (const c of b.cliffs) {
           const dc = Math.sqrt(segDist2(x, z, c.a[0], c.a[1], c.b[0], c.b[1]));
           // Near-vertical tufa faces, but no steeper than the 2 m grid can draw without a
           // sawtooth where the cliff runs diagonally to it.
           const k = smooth(0, 70, dc);
-          slope = Math.min(slope, CLIFF_RUN + (hill.slope - CLIFF_RUN) * k);
+          slope = Math.min(slope, CLIFF_RUN + (b.run - CLIFF_RUN) * k);
+          // Within reach of the face (its top 20 m in, its foot and 20 m beyond): a barrier.
+          if (v2 && sd > -20 && sd < CLIFF_RUN + 20) cliff = Math.max(cliff, 1 - smooth(10, 40, dc));
         }
       }
       let hh: number;
       if (sd <= 0) {
         hh = hill.plateau + (hill.summit - hill.plateau) * smooth(0, b.rIn, -sd);
       } else {
-        const t = smooth(0, slope, sd);
+        const t = v2 ? easedLinear(sd / slope) : smooth(0, slope, sd);
         hh = hill.plateau + (g - hill.plateau) * t;
       }
       if (hh > h) h = hh;
@@ -449,11 +579,13 @@ export function makeNaturalElevation(src: TerrainSource, opts: { noise?: number;
     }
     // Islands rise out of the river. Tiber Island was faced in travertine like a ship (the water
     // module builds the facing just outside the outline), so it stands on near-vertical sides.
+    // v2: inside a bridge's corridor the flat top runs on ISLAND_LANDING m under the landing.
     let islandH = -Infinity;
     for (const b of islands) {
       if (!inBox(b, x, z)) continue;
       const sd = signedDistance(x, z, b.item.outline);
-      if (sd < 4.5) islandH = Math.max(islandH, b.item.elevation - smooth(1.2, 4.5, sd) * 9);
+      const shift = bridges.length && sd > 0 && sd < 4.5 + ISLAND_LANDING ? ISLAND_LANDING * bridgeCorridor(bridges, x, z) : 0;
+      if (sd < 4.5 + shift) islandH = Math.max(islandH, b.item.elevation - smooth(1.2 + shift, 4.5 + shift, sd) * 9);
     }
     // 2. The channel itself always wins over hill slopes: where a hill reaches the river the
     //    water cuts a steep bank into it (the Aventine's river cliff). Then the stone quays.
@@ -472,13 +604,38 @@ export function makeNaturalElevation(src: TerrainSource, opts: { noise?: number;
         h += (quayProfile(r, f.d, half, q.quay.top, q.quay.width ?? 12, natural) - h) * k;
         // Built quays are flat: no ground noise on them.
         if (f.d < half + (q.quay.width ?? 12) + 25) smoothK = Math.min(smoothK, 1 - k);
+        band = Math.max(band, k * (1 - smooth(half + (q.quay.width ?? 12), half + (q.quay.width ?? 12) + 10, f.d)));
       }
     }
     if (islandH > h) h = islandH;
     // Fine noise: a little on flats, more on hill slopes.
     if (noiseAmp > 0 && smoothK > 0) h += fbm(x, z, seed) * noiseAmp * (0.4 + hillFactor * 1.2) * smoothK;
+    fn.band = band;
+    fn.cliff = cliff;
     return h;
   };
+  fn.band = 0;
+  fn.cliff = 0;
+  return fn as typeof fn & { band: number; cliff: number };
+}
+
+/**
+ * A stretch of road edge (v2) where the ground within 8 real m of the road's band is steeper than
+ * 38°: the STREETS crew builds a retaining wall along it. Unlike the other features it is in GAME
+ * meters (it is read off the finished grid).
+ */
+export interface RetainingRun {
+  /** Atlas road id. */
+  road: string;
+  /** Which side of the road, looking along its points: 1 = right (east of a road running north), −1 = left. */
+  side: 1 | -1;
+  /**
+   * Points along the band's edge, about every 1.2 game m (2 real m): position (game x, z), the
+   * road's surface at the edge (`y`, game), the ground 8 real m out (`ground`, game: above `y` a
+   * cut, the wall holds back the slope; below it a fill, the wall holds up the road), and the
+   * steepest grade (rise / run) met between them.
+   */
+  points: { x: number; z: number; y: number; ground: number; grade: number }[];
 }
 
 export interface HeightmapFeatures {
@@ -487,6 +644,8 @@ export interface HeightmapFeatures {
   rivers: readonly TerrainRiver[];
   islands: readonly TerrainIsland[];
   quays: readonly TerrainQuay[];
+  /** v2: road edges that need a retaining wall (empty under v1). */
+  retaining: readonly RetainingRun[];
 }
 
 export class Heightmap {
@@ -601,80 +760,106 @@ export class Heightmap {
   }
 }
 
-/**
- * Build the full heightmap: natural terrain → road leveling → building pads.
- */
-export function buildHeightmap(src: TerrainSource, opts: HeightmapOptions = {}): Heightmap {
-  const S = WORLD_SCALE;
-  const spacing = opts.spacing ?? 2;
-  const b = src.bounds;
-  const minX = b.minX * S;
-  const minZ = b.minZ * S;
-  const nx = Math.floor((b.maxX - b.minX) * S / spacing) + 1;
-  const nz = Math.floor((b.maxZ - b.minZ) * S / spacing) + 1;
-  const hm = new Heightmap(minX, minZ, spacing, nx, nz, opts.profile ?? terrainProfile());
-  const quays = opts.quays ?? TIBER_QUAYS;
-  const natural = makeNaturalElevation(src, { noise: opts.noise, seed: opts.seed, quays });
+/** The grid the stamping passes write: real meters in, samples (real m ASL) out. */
+interface StampGrid {
+  S: number;
+  minX: number;
+  minZ: number;
+  spacing: number;
+  nx: number;
+  nz: number;
+}
 
-  // 1. Natural terrain (real meters).
-  const real = new Float32Array(nx * nz);
-  for (let iz = 0; iz < nz; iz++) {
-    const z = (minZ + iz * spacing) / S;
-    for (let ix = 0; ix < nx; ix++) {
-      const x = (minX + ix * spacing) / S;
-      real[iz * nx + ix] = natural(x, z);
+/** Bilinear read (real m in, real m ASL out) of a grid of real-metre heights. */
+function sampleGrid(c: StampGrid, grid: Float32Array, x: number, z: number): number {
+  const { S, minX, minZ, spacing, nx } = c;
+  const fx = Math.min(Math.max((x * S - minX) / spacing, 0), nx - 1.0001);
+  const fz = Math.min(Math.max((z * S - minZ) / spacing, 0), c.nz - 1.0001);
+  const ix = Math.floor(fx), iz = Math.floor(fz);
+  const tx = fx - ix, tz = fz - iz;
+  const i = iz * nx + ix;
+  const a = grid[i] + (grid[i + 1] - grid[i]) * tx;
+  const cc = grid[i + nx] + (grid[i + nx + 1] - grid[i + nx]) * tx;
+  return a + (cc - a) * tz;
+}
+
+/** Sample index range [i0, i1] × [j0, j1] covering a real-metre box; null when it misses the grid. */
+function sampleBox(c: StampGrid, b: { minX: number; maxX: number; minZ: number; maxZ: number }) {
+  const ix0 = Math.max(0, Math.floor((b.minX * c.S - c.minX) / c.spacing));
+  const ix1 = Math.min(c.nx - 1, Math.ceil((b.maxX * c.S - c.minX) / c.spacing));
+  const iz0 = Math.max(0, Math.floor((b.minZ * c.S - c.minZ) / c.spacing));
+  const iz1 = Math.min(c.nz - 1, Math.ceil((b.maxZ * c.S - c.minZ) / c.spacing));
+  return ix0 > ix1 || iz0 > iz1 ? null : { ix0, ix1, iz0, iz1 };
+}
+
+/** A road's centreline resampled every ~`step` m (real m), with the ground under each point. */
+function roadPoints(road: TerrainRoad, ground: (x: number, z: number) => number, step = 6): [number, number, number][] {
+  const pts: [number, number, number][] = [];
+  for (let i = 0; i < road.points.length - 1; i++) {
+    const [ax, az] = road.points[i];
+    const [bx, bz] = road.points[i + 1];
+    const L = Math.hypot(bx - ax, bz - az);
+    const n = Math.max(1, Math.ceil(L / step));
+    for (let k = 0; k < n; k++) {
+      const t = k / n;
+      const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
+      pts.push([x, z, ground(x, z)]);
     }
   }
-  const sampleReal = (x: number, z: number) => {
-    const fx = Math.min(Math.max((x * S - minX) / spacing, 0), nx - 1.0001);
-    const fz = Math.min(Math.max((z * S - minZ) / spacing, 0), nz - 1.0001);
-    const ix = Math.floor(fx), iz = Math.floor(fz);
-    const tx = fx - ix, tz = fz - iz;
-    const i = iz * nx + ix;
-    const a = real[i] + (real[i + 1] - real[i]) * tx;
-    const c = real[i + nx] + (real[i + nx + 1] - real[i + nx]) * tx;
-    return a + (c - a) * tz;
-  };
+  const last = road.points[road.points.length - 1];
+  pts.push([last[0], last[1], ground(last[0], last[1])]);
+  return pts;
+}
 
-  // 2. Roads: level crosswise to a smoothed centerline profile.
-  const roads = (src.ROADS ?? []).filter((r) => r.points.length >= 2);
-  const out = new Float32Array(real);
+/** The profile as a moving average over 2·win + 1 points (v1: 7 points 6 m apart, ~40 m). */
+function smoothProfile(pts: readonly [number, number, number][], win = 3): number[] {
+  return pts.map((_, i) => {
+    let s = 0, c = 0;
+    for (let k = -win; k <= win; k++) {
+      const p = pts[Math.min(pts.length - 1, Math.max(0, i + k))];
+      s += p[2];
+      c++;
+    }
+    return s / c;
+  });
+}
+
+/** Average natural ground over a pad's footprint (vertices + twice the centroid): its height when not pinned. */
+function padMeanGround(pad: TerrainPad, ground: (x: number, z: number) => number): number {
+  let s = 0, c = 0, cx = 0, cz = 0;
+  for (const [x, z] of pad.polygon) {
+    s += ground(x, z);
+    c++;
+    cx += x;
+    cz += z;
+  }
+  cx /= pad.polygon.length;
+  cz /= pad.polygon.length;
+  s += ground(cx, cz) * 2;
+  c += 2;
+  return s / c;
+}
+
+/**
+ * v1 (the ground before phase 4b, kept byte-identical): roads leveled crosswise to a smoothed
+ * profile of the natural ground, then the pads stamped over them with a fixed blend. `roadMask` /
+ * `padMask` null: heights only (v2's reference ground in the water bands).
+ */
+function stampV1(c: StampGrid, real: Float32Array, out: Float32Array, roads: readonly TerrainRoad[], pads: readonly TerrainPad[], roadMask: Float32Array | null, padMask: Float32Array | null) {
+  const { S, minX, minZ, spacing, nx } = c;
+  const sampleReal = (x: number, z: number) => sampleGrid(c, real, x, z);
+  // Roads: level crosswise to a smoothed centerline profile.
   for (const road of roads) {
     // Resample the centerline every ~6 m and smooth its profile over ~40 m.
-    const pts: [number, number, number][] = [];
-    for (let i = 0; i < road.points.length - 1; i++) {
-      const [ax, az] = road.points[i];
-      const [bx, bz] = road.points[i + 1];
-      const L = Math.hypot(bx - ax, bz - az);
-      const n = Math.max(1, Math.ceil(L / 6));
-      for (let k = 0; k < n; k++) {
-        const t = k / n;
-        const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
-        pts.push([x, z, sampleReal(x, z)]);
-      }
-    }
-    const last = road.points[road.points.length - 1];
-    pts.push([last[0], last[1], sampleReal(last[0], last[1])]);
-    const win = 3;
-    const prof = pts.map((_, i) => {
-      let s = 0, c = 0;
-      for (let k = -win; k <= win; k++) {
-        const p = pts[Math.min(pts.length - 1, Math.max(0, i + k))];
-        s += p[2];
-        c++;
-      }
-      return s / c;
-    });
+    const pts = roadPoints(road, sampleReal);
+    const prof = smoothProfile(pts);
     const half = road.width / 2;
     const reach = half + 6;
     // Stamp segment by segment (nearest segment wins), then blend: much cheaper than a nearest-
     // point search over the whole polyline for every sample in the road's bounding box.
-    const rb = bbox(null, pts.map((p) => [p[0], p[1]] as const), reach);
-    const ix0 = Math.max(0, Math.floor((rb.minX * S - minX) / spacing));
-    const ix1 = Math.min(nx - 1, Math.ceil((rb.maxX * S - minX) / spacing));
-    const iz0 = Math.max(0, Math.floor((rb.minZ * S - minZ) / spacing));
-    const iz1 = Math.min(nz - 1, Math.ceil((rb.maxZ * S - minZ) / spacing));
-    if (ix0 > ix1 || iz0 > iz1) continue;
+    const box = sampleBox(c, bbox(null, pts.map((p) => [p[0], p[1]] as const), reach));
+    if (!box) continue;
+    const { ix0, ix1, iz0, iz1 } = box;
     const bw = ix1 - ix0 + 1;
     const bestD = new Float32Array(bw * (iz1 - iz0 + 1)).fill(Infinity);
     const bestT = new Float32Array(bestD.length);
@@ -711,49 +896,402 @@ export function buildHeightmap(src: TerrainSource, opts: HeightmapOptions = {}):
         const w = 1 - smooth(half, reach, d);
         const k = iz * nx + ix;
         out[k] = out[k] + (bestT[q] - out[k]) * w;
-        const m = 1 - smooth(half - 0.5, half + 1.5, d);
-        if (m > hm.roadMask[k]) hm.roadMask[k] = m;
+        if (roadMask) {
+          const m = 1 - smooth(half - 0.5, half + 1.5, d);
+          if (m > roadMask[k]) roadMask[k] = m;
+        }
       }
     }
   }
 
-  // 3. Building pads.
-  for (const pad of opts.pads ?? []) {
+  // Building pads.
+  for (const pad of pads) {
     if (pad.polygon.length < 3) continue;
-    let elev = pad.elevation;
-    if (elev === undefined) {
-      // Average natural ground over the footprint (vertices + centroid).
-      let s = 0, c = 0, cx = 0, cz = 0;
-      for (const [x, z] of pad.polygon) {
-        s += sampleReal(x, z);
-        c++;
-        cx += x;
-        cz += z;
-      }
-      cx /= pad.polygon.length;
-      cz /= pad.polygon.length;
-      s += sampleReal(cx, cz) * 2;
-      c += 2;
-      elev = s / c;
-    }
+    const elev = pad.elevation ?? padMeanGround(pad, sampleReal);
     const margin = pad.margin ?? 12;
-    const pb = bbox(null, pad.polygon, margin);
-    const ix0 = Math.max(0, Math.floor((pb.minX * S - minX) / spacing));
-    const ix1 = Math.min(nx - 1, Math.ceil((pb.maxX * S - minX) / spacing));
-    const iz0 = Math.max(0, Math.floor((pb.minZ * S - minZ) / spacing));
-    const iz1 = Math.min(nz - 1, Math.ceil((pb.maxZ * S - minZ) / spacing));
-    for (let iz = iz0; iz <= iz1; iz++) {
+    const box = sampleBox(c, bbox(null, pad.polygon, margin));
+    if (!box) continue;
+    for (let iz = box.iz0; iz <= box.iz1; iz++) {
       const z = (minZ + iz * spacing) / S;
-      for (let ix = ix0; ix <= ix1; ix++) {
+      for (let ix = box.ix0; ix <= box.ix1; ix++) {
         const x = (minX + ix * spacing) / S;
         const sd = signedDistance(x, z, pad.polygon);
         if (sd > margin) continue;
         const w = 1 - smooth(1, margin, sd);
         const k = iz * nx + ix;
         out[k] = out[k] + (elev - out[k]) * w;
-        const m = sd <= 0 ? 1 : 1 - smooth(0, 2, sd);
-        if (m > hm.padMask[k]) hm.padMask[k] = m;
+        if (padMask) {
+          const m = sd <= 0 ? 1 : 1 - smooth(0, 2, sd);
+          if (m > padMask[k]) padMask[k] = m;
+        }
       }
+    }
+  }
+}
+
+/** v2 (§3 item 3): an atlas road's steepest 4 m stays at or under this grade (rise / run). */
+export const ROAD_GRADE_CAP = 0.25;
+/**
+ * The grade v2 regrades a road's profile to: a little under the cap, so the grid's interpolation
+ * (3.3 real m cells) and the road's crossings stay inside it.
+ */
+export const ROAD_GRADE_TARGET = 0.21;
+/** v2: bank run per metre of cut or fill (real m). Eased-linear banks: 1.25 / 2.2 ≈ 30°. */
+export const ROAD_BANK_PER_M = 2.2;
+/** v2: the crosswise-level core of a road is at least this half width (real m), so the grid samples next to a narrow road's centreline sit on its profile. */
+const ROAD_CORE_MIN = 2.6;
+
+/** v2 (§3 item 2): a pad blends over max(given, 1 + 2.6·|dh|) real m, at most 60: banks of 30° or less. */
+export function padMarginV2(given: number, dh: number): number {
+  return Math.min(60, Math.max(given, 1 + 2.6 * Math.abs(dh)));
+}
+
+/**
+ * How far a pad stands off the natural ground: the largest |elevation − ground| at its corners
+ * and 7 and 14 m out from them (real m). What its blend has to make up.
+ */
+function padRise(pad: TerrainPad, elev: number, ground: (x: number, z: number) => number): number {
+  let cx = 0, cz = 0;
+  for (const [x, z] of pad.polygon) {
+    cx += x;
+    cz += z;
+  }
+  cx /= pad.polygon.length;
+  cz /= pad.polygon.length;
+  let dh = 0;
+  for (const [x, z] of pad.polygon) {
+    const L = Math.hypot(x - cx, z - cz) || 1;
+    for (const m of [0, 7, 14]) dh = Math.max(dh, Math.abs(elev - ground(x + ((x - cx) / L) * m, z + ((z - cz) / L) * m)));
+  }
+  return dh;
+}
+
+/**
+ * v2: natural ground → pads → roads. Pads blend by their height (`padMarginV2`), and where blends
+ * overlap the nearer pad leads: each sample takes the pads' elevations weighted by their blend
+ * over their distance squared, at the strength of all the blends together, so a high pad's long
+ * embankment never buries a neighbour at another level (the bank between them stays where they
+ * meet) and the result does not depend on the order of the pads. Inside a footprint (to 1 m out)
+ * the pad is flat at its own level, the later one in atlas order where two overlap, as in v1.
+ * Then the roads, each levelled crosswise to the profile of the natural ground under it (as v1),
+ * smoothed and regraded to `ROAD_GRADE_TARGET` by the least cut and fill, with banks into the
+ * padded ground as long as the earthwork needs. Inside a landmark's own footprint
+ * (`TerrainPad.grow`) the pad still wins, and the road ramps to it. A pad blend stays its given
+ * margin inside an atlas cliff's reach (`cliff`, 0..1 per sample): cliffs stay barriers.
+ */
+function stampV2(c: StampGrid, real: Float32Array, out: Float32Array, roads: readonly TerrainRoad[], pads: readonly TerrainPad[], roadMask: Float32Array, padMask: Float32Array, cliff: Float32Array) {
+  const { S, minX, minZ, spacing, nx } = c;
+  const sampleReal = (x: number, z: number) => sampleGrid(c, real, x, z);
+  const core = new Uint8Array(out.length);
+
+  // 1. Pads. Per sample: Σ π (π = blend / sd²), Σ π·elevation, Π (1 − blend), and the footprint's pad.
+  const n = out.length;
+  const sumP = new Float32Array(n);
+  const sumPE = new Float32Array(n);
+  const keep = new Float32Array(n).fill(1);
+  const flat = new Float32Array(n).fill(NaN);
+  const list = pads.filter((p) => p.polygon.length >= 3);
+  for (const pad of list) {
+    const pinned = pad.elevationV2 === 'mean' ? undefined : (pad.elevationV2 ?? pad.elevation);
+    const elev = pinned ?? padMeanGround(pad, sampleReal);
+    const given = pad.margin ?? 12;
+    const margin = padMarginV2(given, padRise(pad, elev, sampleReal));
+    const box = sampleBox(c, bbox(null, pad.polygon, margin));
+    if (!box) continue;
+    const grow = pad.grow;
+    for (let iz = box.iz0; iz <= box.iz1; iz++) {
+      const z = (minZ + iz * spacing) / S;
+      for (let ix = box.ix0; ix <= box.ix1; ix++) {
+        const x = (minX + ix * spacing) / S;
+        const sd = signedDistance(x, z, pad.polygon);
+        if (sd > margin) continue;
+        const k = iz * nx + ix;
+        const m = sd <= 0 ? 1 : 1 - smooth(0, 2, sd);
+        if (m > padMask[k]) padMask[k] = m;
+        if (grow !== undefined && sd <= -grow) core[k] = 1;
+        if (sd <= 1) {
+          flat[k] = elev;
+          continue;
+        }
+        // By height, except where an atlas cliff stands: there the given blend.
+        const mk = margin - (margin - given) * cliff[k];
+        if (sd > mk) continue;
+        const w = 1 - smooth(1, mk, sd);
+        const p = w / (sd * sd);
+        sumP[k] += p;
+        sumPE[k] += p * elev;
+        keep[k] *= 1 - w;
+      }
+    }
+  }
+  for (let k = 0; k < n; k++) {
+    if (!Number.isNaN(flat[k])) out[k] = flat[k];
+    else if (sumP[k] > 0) out[k] = out[k] + (sumPE[k] / sumP[k] - out[k]) * (1 - keep[k]);
+  }
+
+  // 2. Roads over the padded ground, on their own (natural) profile: the vias and streets in
+  //    atlas order, flights of steps last. A road keeps the level of what was there before it
+  //    where it crosses an earlier road's core or a landmark's own footprint (its profile is pinned
+  //    there and held to the grade cap on the way in), and does not stamp over them.
+  const sampleOut = (x: number, z: number) => sampleGrid(c, out, x, z);
+  const taken = new Uint8Array(out.length);
+  const nearest = (x: number, z: number) => {
+    const ix = Math.round((x * S - minX) / spacing), iz = Math.round((z * S - minZ) / spacing);
+    return ix >= 0 && iz >= 0 && ix < nx && iz < c.nz ? iz * nx + ix : -1;
+  };
+  const ordered = [...roads.filter((r) => r.paving !== 'steps'), ...roads.filter((r) => r.paving === 'steps')];
+  for (const road of ordered) {
+    const steps = road.paving === 'steps';
+    // Every ~3 m (about a grid sample), smoothed over the same ~40 m as v1.
+    const pts = roadPoints(road, sampleReal, 3);
+    const prof = smoothProfile(pts, 6);
+    const s = new Float64Array(pts.length);
+    for (let i = 1; i < pts.length; i++) s[i] = s[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    const fixed = new Float64Array(pts.length).fill(NaN);
+    let anyFixed = false;
+    for (let i = 0; i < pts.length; i++) {
+      const k = nearest(pts[i][0], pts[i][1]);
+      if (k >= 0 && (core[k] || taken[k])) {
+        fixed[i] = sampleOut(pts[i][0], pts[i][1]);
+        anyFixed = true;
+      }
+    }
+    // Flights of steps keep their climb (the city builds the stairs); every other road is capped.
+    let level = steps ? Float64Array.from(prof) : regrade(s, prof, ROAD_GRADE_TARGET).y;
+    if (anyFixed) level = holdToFixed(s, level, fixed, steps ? Infinity : ROAD_GRADE_TARGET);
+    if ((globalThis as any).__G1B_DEBUG === road.id) console.log(JSON.stringify(Array.from(pts, (p, i) => [Math.round(s[i]), +p[2].toFixed(1), +prof[i].toFixed(1), +level[i].toFixed(1), Number.isNaN(fixed[i]) ? null : +fixed[i].toFixed(1)])));
+    const half = road.width / 2;
+    const coreW = Math.max(half, ROAD_CORE_MIN);
+    // Bank run from the cut or fill at the centreline (against the padded ground): ≥ 6 m, at most 60.
+    const runs = Float64Array.from(level, (y, i) => Math.min(60, Math.max(6, ROAD_BANK_PER_M * Math.abs(y - sampleOut(pts[i][0], pts[i][1])))));
+    let maxRun = 6;
+    for (const r of runs) maxRun = Math.max(maxRun, r);
+    const reach = coreW + maxRun;
+    const box = sampleBox(c, bbox(null, pts.map((p) => [p[0], p[1]] as const), reach));
+    if (!box) continue;
+    const { ix0, ix1, iz0, iz1 } = box;
+    const bw = ix1 - ix0 + 1;
+    const bestD = new Float32Array(bw * (iz1 - iz0 + 1)).fill(Infinity);
+    const bestT = new Float32Array(bestD.length);
+    const bestR = new Float32Array(bestD.length);
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [ax, az] = pts[i];
+      const [bx, bz] = pts[i + 1];
+      const dx = bx - ax, dz = bz - az;
+      const l2 = dx * dx + dz * dz;
+      const jx0 = Math.max(ix0, Math.floor(((Math.min(ax, bx) - reach) * S - minX) / spacing));
+      const jx1 = Math.min(ix1, Math.ceil(((Math.max(ax, bx) + reach) * S - minX) / spacing));
+      const jz0 = Math.max(iz0, Math.floor(((Math.min(az, bz) - reach) * S - minZ) / spacing));
+      const jz1 = Math.min(iz1, Math.ceil(((Math.max(az, bz) + reach) * S - minZ) / spacing));
+      for (let iz = jz0; iz <= jz1; iz++) {
+        const z = (minZ + iz * spacing) / S;
+        for (let ix = jx0; ix <= jx1; ix++) {
+          const x = (minX + ix * spacing) / S;
+          let t = l2 > 0 ? ((x - ax) * dx + (z - az) * dz) / l2 : 0;
+          t = t < 0 ? 0 : t > 1 ? 1 : t;
+          const ex = ax + dx * t - x, ez = az + dz * t - z;
+          const d = Math.sqrt(ex * ex + ez * ez);
+          const q = (iz - iz0) * bw + (ix - ix0);
+          if (d < bestD[q]) {
+            bestD[q] = d;
+            bestT[q] = level[i] + (level[i + 1] - level[i]) * t;
+            bestR[q] = runs[i] + (runs[i + 1] - runs[i]) * t;
+          }
+        }
+      }
+    }
+    const mine: number[] = [];
+    for (let iz = iz0; iz <= iz1; iz++) {
+      for (let ix = ix0; ix <= ix1; ix++) {
+        const q = (iz - iz0) * bw + (ix - ix0);
+        const d = bestD[q];
+        if (d > coreW + bestR[q]) continue;
+        const k = iz * nx + ix;
+        const m = 1 - smooth(half - 0.5, half + 1.5, d);
+        if (m > roadMask[k]) roadMask[k] = m;
+        if (core[k] || taken[k]) continue;
+        const w = d <= coreW ? 1 : 1 - easedLinear((d - coreW) / bestR[q]);
+        out[k] = out[k] + (bestT[q] - out[k]) * w;
+        if (d <= coreW && !steps) mine.push(k);
+      }
+    }
+    for (const k of mine) taken[k] = 1;
+  }
+}
+
+/**
+ * A profile held to points that may not move (`fixed`, NaN where free): every free point is
+ * clamped into the cones of grade `g` from all the fixed ones (max over j of v_j − g·|s − s_j|,
+ * min of v_j + g·|s − s_j|), so a G-Lipschitz profile stays G-Lipschitz where the fixed points
+ * allow it. Pure.
+ */
+export function holdToFixed(s: ArrayLike<number>, y: ArrayLike<number>, fixed: ArrayLike<number>, g: number): Float64Array {
+  const n = y.length;
+  // Fixed points farther apart in height than `g` allows (a landmark on the road's line above its
+  // climb): the least grade that joins them, so the road ramps into them instead of stepping.
+  if (Number.isFinite(g)) {
+    let last = -1;
+    for (let i = 0; i < n; i++) {
+      if (Number.isNaN(fixed[i])) continue;
+      if (last >= 0 && s[i] > s[last]) g = Math.max(g, (Math.abs(fixed[i] - fixed[last]) / (s[i] - s[last])) * 1.0001);
+      last = i;
+    }
+  }
+  const lo = new Float64Array(n).fill(-Infinity), hi = new Float64Array(n).fill(Infinity);
+  let l = -Infinity, h = Infinity;
+  for (let i = 0; i < n; i++) {
+    if (i > 0 && Number.isFinite(g)) {
+      const d = (s[i] - s[i - 1]) * g;
+      l -= d;
+      h += d;
+    } else if (i > 0) {
+      l = -Infinity;
+      h = Infinity;
+    }
+    if (!Number.isNaN(fixed[i])) {
+      l = Math.max(l, fixed[i]);
+      h = Math.min(h, fixed[i]);
+    }
+    lo[i] = l;
+    hi[i] = h;
+  }
+  l = -Infinity;
+  h = Infinity;
+  for (let i = n - 1; i >= 0; i--) {
+    if (i < n - 1 && Number.isFinite(g)) {
+      const d = (s[i + 1] - s[i]) * g;
+      l -= d;
+      h += d;
+    } else if (i < n - 1) {
+      l = -Infinity;
+      h = Infinity;
+    }
+    if (!Number.isNaN(fixed[i])) {
+      l = Math.max(l, fixed[i]);
+      h = Math.min(h, fixed[i]);
+    }
+    lo[i] = Math.max(lo[i], l);
+    hi[i] = Math.min(hi[i], h);
+  }
+  const out = new Float64Array(n);
+  for (let i = 0; i < n; i++) out[i] = Number.isNaN(fixed[i]) ? Math.min(Math.max(y[i], lo[i]), hi[i]) : fixed[i];
+  return out;
+}
+
+/** v2: a road edge needs a retaining wall where the ground within this many real m is steeper than RETAIN_DEG. */
+export const RETAIN_REACH = 8;
+export const RETAIN_DEG = 38;
+
+/**
+ * v2 (§3 item 5): every stretch of road edge (atlas roads, flights of steps left out) where the
+ * ground within RETAIN_REACH real m of the band is steeper than RETAIN_DEG, read off the finished
+ * grid every 2 real m along the road, both sides. Drops into the river (a quay's own wall) are
+ * left out. Runs of fewer than two points are dropped.
+ */
+export function retainingRuns(hm: Heightmap, roads: readonly TerrainRoad[]): RetainingRun[] {
+  const S = WORLD_SCALE;
+  const lim = Math.tan((RETAIN_DEG * Math.PI) / 180);
+  const out: RetainingRun[] = [];
+  const inGrid = (x: number, z: number) => x >= hm.minX && x <= hm.maxX && z >= hm.minZ && z <= hm.maxZ;
+  for (const road of roads) {
+    if (road.paving === 'steps' || road.points.length < 2) continue;
+    const half = road.width / 2;
+    const runs: Record<number, RetainingRun | null> = { 1: null, [-1]: null };
+    const flush = (side: 1 | -1) => {
+      const r = runs[side];
+      if (r && r.points.length >= 2) out.push(r);
+      runs[side] = null;
+    };
+    for (let i = 0; i + 1 < road.points.length; i++) {
+      const [ax, az] = road.points[i];
+      const [bx, bz] = road.points[i + 1];
+      const L = Math.hypot(bx - ax, bz - az);
+      if (L < 1e-6) continue;
+      const tx = (bx - ax) / L, tz = (bz - az) / L;
+      // Right of the direction of travel: (−tz, tx) with +x east, +z south.
+      const rx = -tz, rz = tx;
+      const n = Math.max(1, Math.round(L / 2));
+      for (let k = i === 0 ? 0 : 1; k <= n; k++) {
+        const px = ax + (bx - ax) * (k / n), pz = az + (bz - az) * (k / n);
+        for (const side of [1, -1] as const) {
+          const ex = px + rx * side * half, ez = pz + rz * side * half;
+          if (!inGrid(ex * S, ez * S)) {
+            flush(side);
+            continue;
+          }
+          const y = hm.heightAt(ex * S, ez * S);
+          let prev = y, grade = 0;
+          for (let m = 1; m <= RETAIN_REACH; m++) {
+            const h = hm.heightAt((ex + rx * side * m) * S, (ez + rz * side * m) * S);
+            grade = Math.max(grade, Math.abs(h - prev) / S);
+            prev = h;
+          }
+          const ground = prev;
+          if (grade > lim && Math.min(ground, y) > hm.waterLevelY + 0.3) {
+            if (!runs[side]) runs[side] = { road: road.id, side, points: [] };
+            runs[side]!.points.push({ x: ex * S, z: ez * S, y, ground, grade });
+          } else flush(side);
+        }
+      }
+    }
+    flush(1);
+    flush(-1);
+  }
+  return out;
+}
+
+/**
+ * Build the full heightmap. v1: natural terrain → road leveling → building pads. v2: natural
+ * terrain (eased flanks, cliffs short of the roads, the island's landings) → pads by height →
+ * roads with capped grades; inside the water bands (the river's channel and banks, the quays, the
+ * canal) the ground stays v1's, so the water's edge does not move.
+ */
+export function buildHeightmap(src: TerrainSource, opts: HeightmapOptions = {}): Heightmap {
+  const S = WORLD_SCALE;
+  const spacing = opts.spacing ?? 2;
+  const b = src.bounds;
+  const minX = b.minX * S;
+  const minZ = b.minZ * S;
+  const nx = Math.floor((b.maxX - b.minX) * S / spacing) + 1;
+  const nz = Math.floor((b.maxZ - b.minZ) * S / spacing) + 1;
+  const profile = opts.profile ?? terrainProfile();
+  const hm = new Heightmap(minX, minZ, spacing, nx, nz, profile);
+  const quays = opts.quays ?? TIBER_QUAYS;
+  const natural = makeNaturalElevation(src, { noise: opts.noise, seed: opts.seed, quays, profile });
+  const v2 = profile !== 'v1';
+
+  // 1. Natural terrain (real meters), and how far each sample lies in a water band (v2).
+  const real = new Float32Array(nx * nz);
+  const band = v2 ? new Float32Array(nx * nz) : null;
+  const cliff = v2 ? new Float32Array(nx * nz) : null;
+  let anyBand = false;
+  for (let iz = 0; iz < nz; iz++) {
+    const z = (minZ + iz * spacing) / S;
+    for (let ix = 0; ix < nx; ix++) {
+      const x = (minX + ix * spacing) / S;
+      const k = iz * nx + ix;
+      real[k] = natural(x, z);
+      if (band && natural.band > 0) {
+        band[k] = natural.band;
+        anyBand = true;
+      }
+      if (cliff) cliff[k] = natural.cliff;
+    }
+  }
+
+  // 2–3. Roads and pads.
+  const roads = (src.ROADS ?? []).filter((r) => r.points.length >= 2);
+  const pads = opts.pads ?? [];
+  const grid: StampGrid = { S, minX, minZ, spacing, nx, nz };
+  const out = new Float32Array(real);
+  if (!v2) stampV1(grid, real, out, roads, pads, hm.roadMask, hm.padMask);
+  else {
+    stampV2(grid, real, out, roads, pads, hm.roadMask, hm.padMask, cliff!);
+    if (band && anyBand) {
+      // The water bands keep v1's roads and pads: the channel, the quays and the canal stay put.
+      const ref = new Float32Array(real);
+      stampV1(grid, real, ref, roads, pads, null, null);
+      for (let k = 0; k < out.length; k++) if (band[k] > 0) out[k] += (ref[k] - out[k]) * band[k];
     }
   }
 
@@ -762,10 +1300,11 @@ export function buildHeightmap(src: TerrainSource, opts: HeightmapOptions = {}):
   hm.waterLevelY = river ? river.waterLevel * S : -Infinity;
   hm.features = {
     roads,
-    pads: (opts.pads ?? []).filter((p) => p.polygon.length >= 3),
+    pads: pads.filter((p) => p.polygon.length >= 3),
     rivers: src.RIVERS,
     islands: src.ISLANDS,
     quays: quays.filter((q) => src.RIVERS.some((r) => r.id === q.river)),
+    retaining: v2 ? retainingRuns(hm, roads) : [],
   };
   return hm;
 }

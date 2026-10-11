@@ -365,7 +365,7 @@ describe('v1 is byte-identical to the ground before the switch', () => {
     expect(sha(out)).toBe(V1.heightAt);
   });
 
-  it('G1a leaves the grid itself alone: v2 heights are v1 heights (G1b changes them)', () => {
-    expect(sha(cityHm('v2').heights)).toBe(V1.heights);
+  it('v2 is a different ground (G1b: pads by height, roads over pads, gentler flanks)', () => {
+    expect(sha(cityHm('v2').heights)).not.toBe(V1.heights);
   });
 });
