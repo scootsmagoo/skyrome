@@ -291,9 +291,8 @@ export function triumphalArch(b: MeshBuilder, spec: TriumphalArchSpec = {}, at?:
   for (const side of [-1, 1]) {
     for (const x of colXs) {
       const pz = side * (depth / 2);
-      const ped = new THREE.BoxGeometry(D * 1.5, socle, D * 0.9);
-      ped.translate(x, socle / 2, pz + side * D * 0.45 - side * 0.02);
-      b.add(ped, mat, m);
+      // Solid: the pedestals stand 0.28 m proud of the piers at knee height (phase 4 collision audit).
+      b.box(mat, D * 1.5, socle, D * 0.9, mul(m, T(x, socle / 2, pz + side * D * 0.45 - side * 0.02)), { collide: true });
       column(b, { order, D, height: colH, fluted: true, material: mat, detail: spec.columnDetail ?? detail, kind: 'engaged', collide: false }, mul(m, TRS(x, yCol, pz, 0, side < 0 ? 0 : Math.PI, 0)));
     }
   }
