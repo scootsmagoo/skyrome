@@ -12,7 +12,7 @@
  *   the start to the one nearest the end.
  */
 import { Polyline } from './polyline';
-import type { StreetRouter } from './streetRouter';
+import { EXIT_REACH, type StreetRouter } from './streetRouter';
 
 export interface P3 {
   x: number;
@@ -26,6 +26,8 @@ export interface GridLike {
   lineWalkable(ax: number, az: number, bx: number, bz: number): boolean;
   /** `lineWalkable` for a body (clear of walls to either side): the leads use it when the grid has it. */
   lineClear?(ax: number, az: number, bx: number, bz: number): boolean;
+  /** Is the cell at (x, z) open floor? (Links are judged only between open cells when the grid has it.) */
+  walkable?(x: number, z: number): boolean;
   findPath(ax: number, az: number, bx: number, bz: number, maxExpand?: number): { x: number; z: number }[] | null;
 }
 
@@ -73,7 +75,7 @@ export const PLAN = {
   /** Street nodes within this (m) of the player may start the route (the best one wins). */
   entryReach: 45,
   /** …and within this (m) of the objective may finish it (a far exit is a long straight lead-out). */
-  exitReach: 25,
+  exitReach: EXIT_REACH,
   /** An exit whose line to the objective the built grid says is blocked costs this much more to walk off the graph. */
   exitBlocked: 4,
   /** …and one whose line the grid cannot judge yet (not built there). */
@@ -86,6 +88,17 @@ export const PLAN = {
   skipAhead: 14,
   /** Longest lead-in (m) along a straight walkable line. */
   leadMax: 80,
+  /**
+   * The route's street links where the grid is built (the city's colliders stand there): a link up to `linkMax` m
+   * whose line the grid finds blocked is drawn round on the grid when the way round is at most `roundFactor` times
+   * its length plus `roundAdd` m (searched with `linkExpand` cells); with no such way it is cut for the session and
+   * the route found again, at most `verifyRounds` times.
+   */
+  linkMax: 70,
+  linkExpand: 2500,
+  roundFactor: 2.5,
+  roundAdd: 20,
+  verifyRounds: 4,
 };
 
 /**
@@ -216,6 +229,22 @@ export function streetLeg(world: PlanWorld, a: P3, b: P3, out: Polyline, nodesOu
   }
   const X = router.x;
   const Z = router.z;
+  // The route's own links where the grid is built: one walled with no way round is cut and the route found again.
+  if (grid) {
+    for (let round = 0; round < PLAN.verifyRounds; round++) {
+      const k = walledLink(grid, X, Z, nodes);
+      if (k < 0) break;
+      const [p, q] = [nodes[k], nodes[k + 1]];
+      router.cut(p, q);
+      const again = router.routeBetween(a.x, a.z, b.x, b.z, PLAN.entryReach, PLAN.offGraph, PLAN.nodeReach, 60000, { exitReach: PLAN.exitReach, exitCost });
+      if (!again || !again.length) {
+        // No other way: keep the link (the walk finds its way round, or the stall replan does).
+        router.uncut(p, q);
+        break;
+      }
+      nodes = again;
+    }
+  }
   // Lead-in: walk straight past the first nodes when the grid says the line is clear for a body (the nearest
   // node may sit behind the player, or across a wall); else round what stands between on the grid; else back
   // off any node that only makes the route double back on itself.
@@ -257,11 +286,54 @@ export function streetLeg(world: PlanWorld, a: P3, b: P3, out: Polyline, nodesOu
   } else {
     while (last > first && doublesBack(b.x, b.z, X[nodes[last]], Z[nodes[last]], X[nodes[last - 1]], Z[nodes[last - 1]])) last--;
   }
-  for (let k = first; k <= last; k++) out.push(X[nodes[k]], NaN, Z[nodes[k]]);
+  for (let k = first; k <= last; k++) {
+    // A link the grid finds blocked but with a short way round is drawn along that way.
+    if (k > first && grid) {
+      const r = roundLink(grid, X[nodes[k - 1]], Z[nodes[k - 1]], X[nodes[k]], Z[nodes[k]]);
+      if (r) for (let j = 0; j < r.length - 1; j++) out.push(r[j].x, NaN, r[j].z);
+    }
+    out.push(X[nodes[k]], NaN, Z[nodes[k]]);
+  }
   if (nodesOut) for (let k = first; k <= last; k++) nodesOut.push(nodes[k]);
   if (tail) for (let k = 0; k < tail.length - 1; k++) out.push(tail[k].x, NaN, tail[k].z);
   out.push(b.x, b.y, b.z);
   return 'streets';
+}
+
+/** A straight walk the grid finds clear for a body (`lineClear`, else the cell line `lineWalkable`). */
+export function lineOk(grid: GridLike, ax: number, az: number, bx: number, bz: number): boolean {
+  return grid.lineClear ? grid.lineClear(ax, az, bx, bz) : grid.lineWalkable(ax, az, bx, bz);
+}
+
+/** A link the grid can judge: both ends and its middle built, both ends open floor, not too long. */
+export function judged(grid: GridLike, ax: number, az: number, bx: number, bz: number): boolean {
+  if (Math.hypot(bx - ax, bz - az) > PLAN.linkMax) return false;
+  if (!grid.ready(ax, az) || !grid.ready(bx, bz) || !grid.ready((ax + bx) / 2, (az + bz) / 2)) return false;
+  return !grid.walkable || (grid.walkable(ax, az) && grid.walkable(bx, bz));
+}
+
+/**
+ * The way round a street link a–b on the grid when its straight line is blocked for a body and the way round is short
+ * (`PLAN.roundFactor`); null when the line is clear, the grid cannot judge it, or there is no short way.
+ */
+export function roundLink(grid: GridLike, ax: number, az: number, bx: number, bz: number): { x: number; z: number }[] | null {
+  if (!judged(grid, ax, az, bx, bz) || lineOk(grid, ax, az, bx, bz)) return null;
+  const p = grid.findPath(ax, az, bx, bz, PLAN.linkExpand);
+  if (!p || !p.length) return null;
+  let len = 0;
+  let px = ax, pz = az;
+  for (const q of p) ((len += Math.hypot(q.x - px, q.z - pz)), (px = q.x), (pz = q.z));
+  return len <= Math.hypot(bx - ax, bz - az) * PLAN.roundFactor + PLAN.roundAdd ? p : null;
+}
+
+/** The first link of `nodes` the grid finds walled with no short way round (`roundLink`), or −1. */
+export function walledLink(grid: GridLike, X: ArrayLike<number>, Z: ArrayLike<number>, nodes: readonly number[]): number {
+  for (let k = 0; k + 1 < nodes.length; k++) {
+    const ax = X[nodes[k]], az = Z[nodes[k]], bx = X[nodes[k + 1]], bz = Z[nodes[k + 1]];
+    if (!judged(grid, ax, az, bx, bz) || lineOk(grid, ax, az, bx, bz)) continue;
+    if (!roundLink(grid, ax, az, bx, bz)) return k;
+  }
+  return -1;
 }
 
 /**

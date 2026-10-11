@@ -8,6 +8,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import * as atlas from '../src/data/atlas';
 import type { Game } from '../src/core/Game';
 import { Physics, initPhysics } from '../src/core/Physics';
+import { bearingToRotationY } from '../src/core/math';
+import { toGame } from '../src/world/coords';
 import { buildStreetGraph, physicsProbe, rasterProbe } from '../src/world/city/network';
 import { scaleBounds } from '../src/world/city/plan';
 import { K, type Pt } from '../src/world/city/raster';
@@ -40,6 +42,20 @@ describe('physics probe', () => {
     expect(P.clear([-5, 12], [5, 12])).toBe(false);
     expect(P.blocked(10, 0)).toBe(true);
     expect(P.blocked(5, 0)).toBe(false);
+  });
+
+  it('with no height known, stands on a raised square but not on an altar (phase 4b)', () => {
+    const physics = new Physics();
+    physics.addBox({ x: 0, y: -0.5, z: 0 }, { x: 60, y: 0.5, z: 60 });
+    // A square paved 0.9 m over the ground (x −20…−5), and a 1 m altar 1 m across at (10, 10).
+    physics.addBox({ x: -12.5, y: 0.45, z: 0 }, { x: 7.5, y: 0.45, z: 10 });
+    physics.addBox({ x: 10, y: 0.5, z: 10 }, { x: 0.5, y: 0.5, z: 0.5 });
+    physics.step(1 / 60);
+    const P = physicsProbe({ physics } as unknown as Game, () => 0);
+    expect(P.blocked(-12, 0)).toBe(false);
+    expect(P.clear([-15, 0], [-8, 0])).toBe(true);
+    expect(P.blocked(10, 10)).toBe(true);
+    expect(P.blocked(13, 10)).toBe(false);
   });
 
   it('climbs a podium by its steps only', () => {
@@ -105,6 +121,31 @@ describe('street graph links on the plan', () => {
         if (open.some((j) => Math.hypot(j.p[0] - n.x, j.p[1] - n.z) < j.r + 1)) continue;
         const onPath = path.some((p, k) => k + 1 < path.length && segDist(n.x, n.z, p, path[k + 1]) < 0.3);
         if (onPath) expect(graph.neighbours(n.id).length, `stairs node ${n.id}`).toBeLessThanOrEqual(2);
+      }
+    }
+  });
+
+  it('leaves no node without a link: landmark doors, explicit walks and stray islands are joined (phase 4b)', () => {
+    const landmarks = new Map<string, unknown>();
+    for (const lm of atlas.LANDMARKS) {
+      const [x, z] = toGame(lm.center[0], lm.center[1]);
+      if (!inCore(x, z)) continue;
+      landmarks.set(lm.id, { lm, spots: [], position: new THREE.Vector3(x, 0, z), rotationY: bearingToRotationY(lm.rotation ?? 0) });
+    }
+    const g = buildStreetGraph(plan, work, { landmarks } as unknown as Game, inCore);
+    const lone = g.nodes.filter((n) => inCore(n.x, n.z) && !g.neighbours(n.id).length);
+    expect(lone.map((n) => `${n.id}:${n.kind}@${Math.round(n.x)},${Math.round(n.z)}`)).toEqual([]);
+    expect(g.joins?.edgeless).toBe(0);
+    expect(g.joins?.walks).toBeGreaterThan(0);
+    expect(g.nodes.filter((n) => n.kind === 'landmark').length).toBeGreaterThan(50);
+  });
+
+  it('keeps junction nodes and piazza nodes off their fountain or shrine', () => {
+    for (const sp of work.spots) {
+      if (sp.kind !== 'fountain' && sp.kind !== 'shrine') continue;
+      for (const n of graph.nodes) {
+        if (n.kind === 'plaza' || n.kind === 'landmark') continue;
+        expect(Math.hypot(n.x - sp.position.x, n.z - sp.position.z), `${n.kind} ${n.id} by ${sp.id}`).toBeGreaterThan(1.3);
       }
     }
   });

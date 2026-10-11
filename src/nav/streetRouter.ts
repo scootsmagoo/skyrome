@@ -14,6 +14,12 @@ export interface GraphLike {
   edges: readonly (readonly [number, number, number?] | readonly number[])[];
 }
 
+/**
+ * Street nodes within this (m) of the objective may finish a route (a farther exit is a long straight lead-out, the
+ * kind that ran through walls); the start may be farther (`reach`). Phase 4b: 45 → 25.
+ */
+export const EXIT_REACH = 25;
+
 export class StreetRouter {
   readonly n: number;
   readonly x: Float32Array;
@@ -125,6 +131,20 @@ export class StreetRouter {
       }
     }
     if (did) this.cuts++;
+    return did;
+  }
+
+  /** Put back a link `cut` took out (the route had no other way). */
+  uncut(a: number, b: number): boolean {
+    let did = false;
+    for (const [p, q] of [[a, b], [b, a]]) {
+      for (let k = this.off[p]; k < this.off[p + 1]; k++) {
+        if (this.to[k] !== q || !this.cutSlot[k]) continue;
+        this.cutSlot[k] = 0;
+        did = true;
+      }
+    }
+    if (did) this.cuts--;
     return did;
   }
 
@@ -295,7 +315,7 @@ export class StreetRouter {
 
   /**
    * The best way between two free points: A* that may start at any node within `reach` m of a and
-   * finish at any node within `opts.exitReach` (default `reach`) of b, the walk off the graph at each end costing
+   * finish at any node within `opts.exitReach` (default `reach`, at most `EXIT_REACH`) of b, the walk off the graph at each end costing
    * `off` times its straight length (an exit's walk times `opts.exitCost(node)` too: the planner makes an exit with no
    * clear line to the goal dearer). So the route doesn't run back to the node nearest the player when a node a little
    * farther is on the way. Only linked nodes of the city's network are ends while one is within `far` m (`ends`).
@@ -317,7 +337,7 @@ export class StreetRouter {
     const { g, came, seen, done, x, z, goalStamp, goalCost } = this;
     const V = this.n;
     // Exits.
-    const exits = this.ends(bx, bz, opts.exitReach ?? reach, far, this.exitList);
+    const exits = this.ends(bx, bz, opts.exitReach ?? Math.min(reach, EXIT_REACH), far, this.exitList);
     if (!exits.length) return null;
     for (const k of exits) {
       goalStamp[k] = gen;

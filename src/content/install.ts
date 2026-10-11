@@ -35,6 +35,7 @@ import type { Interactable } from '../interaction/Interactions';
 import { rollLoot } from '../rpg/loot';
 import type { ItemDef } from '../rpg/types';
 import { toGame } from '../world/coords';
+import { ALTAR_CLEAR, clearOfLinks } from '../world/city/network';
 import type { BookView, ContainerView } from '../ui/types';
 import { CONTAINERS, CONTAINER_STYLES, STREET_CONTAINERS, routePoint, type ContainerKind, type ContainerSpec } from './containers';
 import { frontOf, Placer, pushOutOfFootprints, refreshQueries, solidLandmarkAt, type Spot, type WallHit } from './ground';
@@ -222,8 +223,10 @@ function addShrine(ctx: Ctx, spec: ShrineSpec): (() => void) | null {
     const centre = lm ? (() => { const [x, z] = toGame(lm.center[0], lm.center[1]); return { x, z }; })() : undefined;
     // A shrine that is a building (the Lacus Curtius, Janus' shrine): the altar stands before it.
     const start = lm ? frontOf(lm, 1.4) : anchor;
-    const s = placer.tryFind(start.x, start.z, { clearance: 0.5, claim: 0.85, away: centre });
-    if (!s) return buried(spec.id);
+    const found = placer.tryFind(start.x, start.z, { clearance: 0.5, claim: 0.85, away: centre });
+    if (!found) return buried(spec.id);
+    // Off the street graph's links, so a route never runs over the altar (src/world/city/network.ts).
+    const s = clearOfLinks(game.streets, found, ALTAR_CLEAR + 0.5, (x, z) => placer.tryFind(x, z, { clearance: 0.5, claim: 0.85, away: centre }));
     const rotY = faceToward(s, viewer(s, centre));
     add(ctx, 'altar', s, rotY, 0.85, { variant: hash(spec.id) % 2 });
     ctx.altars.set(spec.id, { s, rotY });
