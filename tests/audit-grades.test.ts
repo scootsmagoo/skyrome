@@ -18,9 +18,13 @@ describe('terrain grades audit', () => {
   });
 
   it('takes the steeper triangle of a folded cell', () => {
-    // One corner raised: the triangle holding it is steep, the other flat.
-    const g: HeightGrid = { minX: 0, minZ: 0, spacing: 2, nx: 2, nz: 2, heights: new Float32Array([0, 2, 0, 0]) };
+    // One corner off the split raised: the triangle holding it is steep, the other flat. Rapier splits
+    // (x + 1, z)–(x, z + 1), so (0, 0) is in one triangle only.
+    const g: HeightGrid = { minX: 0, minZ: 0, spacing: 2, nx: 2, nz: 2, heights: new Float32Array([2, 0, 0, 0]) };
     expect(cellGrades(g)[0]).toBeCloseTo(Math.hypot(2, 2) / 2, 5);
+    // A corner on the split is in both triangles: each rises 2 m over 2 m.
+    const on: HeightGrid = { minX: 0, minZ: 0, spacing: 2, nx: 2, nz: 2, heights: new Float32Array([0, 2, 0, 0]) };
+    expect(cellGrades(on)[0]).toBeCloseTo(1, 5);
   });
 
   it('finds the easiest way up a hill (minimax), and the zig-zag is gentler than the fall line', () => {
