@@ -33,7 +33,8 @@ export const toGrade = (deg: number) => Math.tan((deg * Math.PI) / 180);
 
 /**
  * Per cell ((nx − 1) × (nz − 1), row-major by z): the steeper of the cell's two triangles, split
- * along (ix, iz)–(ix + 1, iz + 1) as Rapier's heightfield and the terrain patch both split it.
+ * along (ix + 1, iz)–(ix, iz + 1) as Rapier's heightfield splits it (the ground the player walks
+ * on; terrain profile v2 draws the patch the same way, v1 drew the other diagonal).
  */
 export function cellGrades(g: HeightGrid, h: Float32Array = g.heights): Float32Array {
   const cx = g.nx - 1, cz = g.nz - 1, s = g.spacing;
@@ -42,9 +43,9 @@ export function cellGrades(g: HeightGrid, h: Float32Array = g.heights): Float32A
     for (let ix = 0; ix < cx; ix++) {
       const k = iz * g.nx + ix;
       const h00 = h[k], h10 = h[k + 1], h01 = h[k + g.nx], h11 = h[k + g.nx + 1];
-      // (p00, p10, p11): d/dx = h10 − h00, d/dz = h11 − h10.  (p00, p11, p01): d/dx = h11 − h01, d/dz = h01 − h00.
-      const a = Math.hypot(h10 - h00, h11 - h10) / s;
-      const b = Math.hypot(h11 - h01, h01 - h00) / s;
+      // (p00, p10, p01): d/dx = h10 − h00, d/dz = h01 − h00.  (p10, p11, p01): d/dx = h11 − h01, d/dz = h11 − h10.
+      const a = Math.hypot(h10 - h00, h01 - h00) / s;
+      const b = Math.hypot(h11 - h01, h11 - h10) / s;
       out[iz * cx + ix] = a > b ? a : b;
     }
   }
