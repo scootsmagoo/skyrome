@@ -15,7 +15,7 @@
 import * as THREE from 'three';
 import { Rng } from '../../core/Rng';
 import { withAuditSource } from '../../dev/audit/geomAudit';
-import { APRON, LANE_APRON, RIM_MIN, RIM_SINK, Sheet, buildConformPlaza, buildStairs, buildStreet, emitSheet, inConv, makeConv, type Conv, type ConformOpts, type GroundGrid, type SV, type StreetSpec } from '../../arch/fabric/streets';
+import { APRON, LANE_APRON, RIM_MIN, RIM_SINK, Sheet, buildConformPlaza, buildStairs, buildStreet, emitSheet, inConv, makeConv, streetFootprint, type Conv, type ConformOpts, type GroundGrid, type SV, type StreetSpec } from '../../arch/fabric/streets';
 import { Draw } from '../../arch/fabric/draw';
 import { compitalShrine } from '../../arch/fabric/shrines';
 import { lacus } from '../../arch/fabric/fountain';
@@ -212,6 +212,8 @@ interface PaveShape {
   minZ: number;
   maxX: number;
   maxZ: number;
+  /** Given convex pieces (a street's drawn footprint), instead of the band or polygon of `pts`. */
+  pieces?: Conv[];
 }
 
 /** The footprints of every street surface of the city (2D), bucketed for point queries. */
@@ -232,6 +234,29 @@ export class PavingIndex {
     }
     const s: PaveShape = { id, order: rank * 1e6 + (1e6 - 1 - id), pts: pts.map((p) => [p[0], p[1]] as Vec2), w, poly: w <= 0, minX: minX - w, minZ: minZ - w, maxX: maxX + w, maxZ: maxZ + w };
     this.shapes.push(s);
+    this.bucket(s);
+    return id;
+  }
+
+  /** Registers a surface by its convex pieces (a street's drawn footprint, streets.ts streetFootprint); returns its id. */
+  addPieces(rank: number, polys: readonly Vec2[][]): number {
+    const id = this.shapes.length;
+    const pieces = polys.filter((q) => q.length >= 3).map((q) => makeConv(q));
+    let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
+    for (const c of pieces) {
+      minX = Math.min(minX, c.minX);
+      maxX = Math.max(maxX, c.maxX);
+      minZ = Math.min(minZ, c.minZ);
+      maxZ = Math.max(maxZ, c.maxZ);
+    }
+    const s: PaveShape = { id, order: rank * 1e6 + (1e6 - 1 - id), pts: [], w: 0, poly: true, minX, minZ, maxX, maxZ, pieces };
+    this.shapes.push(s);
+    if (pieces.length) this.bucket(s);
+    return id;
+  }
+
+  private bucket(s: PaveShape) {
+    const id = s.id;
     const B = PavingIndex.B;
     for (let bz = Math.floor(s.minZ / B); bz <= Math.floor(s.maxZ / B); bz++)
       for (let bx = Math.floor(s.minX / B); bx <= Math.floor(s.maxX / B); bx++) {
@@ -240,7 +265,6 @@ export class PavingIndex {
         if (l) l.push(id);
         else this.buckets.set(k, [id]);
       }
-    return id;
   }
 
   order(id: number): number {
@@ -251,6 +275,7 @@ export class PavingIndex {
 
   /** A shape as convex pieces: a band's segments (quads) and its bends (the hull of the joined ends); a polygon as itself or its triangles. */
   piecesOf(s: PaveShape): Conv[] {
+    if (s.pieces) return s.pieces;
     let out = this.pieces.get(s.id);
     if (out) return out;
     out = [];
@@ -315,6 +340,7 @@ export class PavingIndex {
 
   private inside(s: PaveShape, x: number, z: number): boolean {
     if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) return false;
+    if (s.pieces) return s.pieces.some((c) => inConv(c, x, z));
     if (s.poly) return pointIn([x, z], s.pts);
     const p = s.pts, w2 = s.w * s.w;
     for (let k = 0; k + 1 < p.length; k++) {
@@ -561,8 +587,10 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
           // An end is a seam only where the next piece is built too (its middle in the area).
           const capStart = k === 0 || !pieceBuilt(road.points, pieces[k - 1]), capEnd = k === pieces.length - 1 || !pieceBuilt(road.points, pieces[k + 1]);
           const dips = (mouths.get(ri) ?? []).filter((m) => m.s > p0 - m.w && m.s < p1 + m.w).map((m) => ({ s: m.s - p0, side: m.side, w: m.w }));
-          const id = reg(mid[0], mid[1], RANK.road, pts, roadReach(road, c));
-          add(mid[0], mid[1], T(`road:${road.id}:${c}`, (bld) => buildRoadPiece(bld, road, c, pts, H, capStart, capEnd, dips, conformOf(id))));
+          // Registered by what it draws (the same cross-sections), so what it outranks is cut round it exactly.
+          const spec = roadPieceSpec(road, c, pts, capStart, capEnd, dips, {});
+          const id = inArea(mid[0], mid[1]) ? pave.addPieces(RANK.road, streetFootprint(spec)) : -1;
+          add(mid[0], mid[1], T(`road:${road.id}:${c}`, (bld) => buildStreet(bld, { ...spec, conform: conformOf(id) }, H)));
         });
       }
     }
@@ -619,9 +647,10 @@ export function streetWork(plan: CityPlan, H: HeightFn, areas: Bounds | Bounds[]
           const pts = sliceLine(st.points, p0, p1);
           if (pts.length < 2) return;
           const mid = pts[Math.floor(pts.length / 2)];
-          const id = reg(mid[0], mid[1], RANK[st.kind], pts, st.width / 2 + (st.kind === 'vicus' ? APRON : LANE_APRON));
           const capStart = k2 === 0 || !pieceBuilt(st.points, pieces[k2 - 1]), capEnd = k2 === pieces.length - 1 || !pieceBuilt(st.points, pieces[k2 + 1]);
-          add(mid[0], mid[1], T(`street:${st.id}:${st.kind}`, (bld) => buildMinorPiece(bld, st, pts, H, capStart, capEnd, conformOf(id))));
+          const spec = minorPieceSpec(st, pts, capStart, capEnd, {});
+          const id = inArea(mid[0], mid[1]) ? pave.addPieces(RANK[st.kind], streetFootprint(spec)) : -1;
+          add(mid[0], mid[1], T(`street:${st.id}:${st.kind}`, (bld) => buildStreet(bld, { ...spec, conform: conformOf(id) }, H)));
         });
       }
     }
@@ -1196,14 +1225,8 @@ export function streetMouths(plan: CityPlan): Map<number, { s: number; side: -1 
 }
 
 /** One piece of an atlas road (≤ 80 m) in its context (urban, open ground, rural, stairs). */
-/** How far (m) a road piece's surface reaches from its centreline in a context, aprons included. */
-function roadReach(road: PlanRoad, ctx: string): number {
-  if (road.style === 'paved' && ctx === 'urban') return road.carriage / 2 + road.sidewalk + APRON;
-  if (road.style === 'paved' && ctx === 'open') return (road.carriage + road.sidewalk) / 2 + LANE_APRON;
-  return road.carriage / 2 + LANE_APRON;
-}
-
-function buildRoadPiece(b: MeshBuilder, road: PlanRoad, ctx: string, pts: Vec2[], H: HeightFn, capStart: boolean, capEnd: boolean, dips: { s: number; side: -1 | 1; w: number }[], conform?: ConformOpts) {
+/** The street spec of one piece of an atlas road in its context (urban, open ground, rural). */
+function roadPieceSpec(road: PlanRoad, ctx: string, pts: Vec2[], capStart: boolean, capEnd: boolean, dips: { s: number; side: -1 | 1; w: number }[], conform: ConformOpts): StreetSpec {
   const spec: StreetSpec = { points: pts, lift: LIFT.road, capStart, capEnd, steppingStones: [], seed: road.index, conform };
   if (road.style === 'paved' && ctx === 'urban') {
     Object.assign(spec, { kind: 'paved', roadWidth: road.carriage, sidewalk: road.sidewalk, curb: KERB, dips });
@@ -1216,18 +1239,17 @@ function buildRoadPiece(b: MeshBuilder, road: PlanRoad, ctx: string, pts: Vec2[]
   } else {
     Object.assign(spec, { kind: 'lane', roadWidth: road.carriage, roadMaterial: road.style === 'gravel' ? 'gravel' : 'dirt' });
   }
-  buildStreet(b, spec, H);
+  return spec;
 }
 
-function buildMinorPiece(b: MeshBuilder, st: PlanStreet, pts: Vec2[], H: HeightFn, capStart: boolean, capEnd: boolean, conform?: ConformOpts) {
+/** The street spec of one piece of a minor street. */
+function minorPieceSpec(st: PlanStreet, pts: Vec2[], capStart: boolean, capEnd: boolean, conform: ConformOpts): StreetSpec {
   if (st.kind === 'vicus') {
     const sw = 0.85;
-    buildStreet(b, { points: pts, kind: 'paved', roadWidth: st.width - 2 * sw, sidewalk: sw, curb: KERB, lift: LIFT.vicus, capStart, capEnd, steppingStones: [], seed: st.index, conform }, H);
-  } else if (st.kind === 'lane') {
-    buildStreet(b, { points: pts, kind: 'lane', roadWidth: st.width, roadMaterial: st.wealth > 0.45 ? 'paving_basalt' : 'cobbles', lift: LIFT.lane, capStart, capEnd, seed: st.index, conform }, H);
-  } else {
-    buildStreet(b, { points: pts, kind: 'lane', roadWidth: st.width, roadMaterial: st.density > 0.85 ? 'dirt' : 'gravel', lift: LIFT.alley, capStart, capEnd, seed: st.index, conform }, H);
+    return { points: pts, kind: 'paved', roadWidth: st.width - 2 * sw, sidewalk: sw, curb: KERB, lift: LIFT.vicus, capStart, capEnd, steppingStones: [], seed: st.index, conform };
   }
+  if (st.kind === 'lane') return { points: pts, kind: 'lane', roadWidth: st.width, roadMaterial: st.wealth > 0.45 ? 'paving_basalt' : 'cobbles', lift: LIFT.lane, capStart, capEnd, seed: st.index, conform };
+  return { points: pts, kind: 'lane', roadWidth: st.width, roadMaterial: st.density > 0.85 ? 'dirt' : 'gravel', lift: LIFT.alley, capStart, capEnd, seed: st.index, conform };
 }
 
 // ---------------------------------------------------------------- stairs (scalae, gradus)

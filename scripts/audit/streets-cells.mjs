@@ -9,6 +9,8 @@
  *   node scripts/audit/streets-cells.mjs [--at x,z;x,z] [--all] [--terrain v1|v2] [--by-src] [--json out.json]
  *
  * --probe x,z[;x,z]: every drawn triangle over the point (its y, material, source) against heightAt.
+ * --edges: open edges of the cell's build (vertices welded at 2 mm, as street-fit counts them) standing over
+ *          3 cm above what lies 6 cm beyond them (street surfaces of the cell, else heightAt − plan.drop).
  * --holes: places (0.25 m raster) a street surface claims (the paving index: cut round) where nothing is drawn.
  * --by-src: triangles by what built them (the work items' tags: ground-cover, road, street:lane, junction, ...).
  *
@@ -90,6 +92,60 @@ try {
     if (args.items) for (const p of per.sort((a, b) => b.tris - a.tris).slice(0, 6)) console.log(`   item #${p.k}: ${p.tris} tris ${p.ms} ms ${JSON.stringify(p.stats)}`);
     if (cs) console.log(`   sheets ${JSON.stringify(Object.fromEntries(Object.entries(cs).filter(([, v]) => typeof v === 'number').map(([k, v]) => [k, k === 'maxDev' || k === 'overLen' ? +v.toFixed(4) : Math.round(v)])))}`);
     const tris = b.triangleCount;
+    if (args.edges) {
+      const tris = [];
+      for (const geoms of b.parts.values()) for (const g of geoms) {
+        const a = g.getAttribute('position');
+        for (let i = 0; i + 2 < a.count; i += 3) tris.push([a.getX(i), a.getY(i), a.getZ(i), a.getX(i + 1), a.getY(i + 1), a.getZ(i + 1), a.getX(i + 2), a.getY(i + 2), a.getZ(i + 2), g.userData.src ?? '']);
+      }
+      const vid = new Map(), id = (x, y, z) => { const k = `${Math.round(x * 500)},${Math.round(y * 500)},${Math.round(z * 500)}`; let v = vid.get(k); if (v === undefined) vid.set(k, (v = vid.size)); return v; };
+      const V = tris.map((t) => [id(t[0], t[1], t[2]), id(t[3], t[4], t[5]), id(t[6], t[7], t[8])]);
+      const uses = new Map(), ek = (a, c) => (a < c ? `${a},${c}` : `${c},${a}`);
+      for (const v of V) for (let k = 0; k < 3; k++) uses.set(ek(v[k], v[(k + 1) % 3]), (uses.get(ek(v[k], v[(k + 1) % 3])) ?? 0) + 1);
+      const topAt = (x, z, below) => {
+        let best = H(x, z) - (plan.drop ? plan.drop(x, z) : 0);
+        for (const t of tris) {
+          const d = (t[5] - t[8]) * (t[0] - t[6]) + (t[6] - t[3]) * (t[2] - t[8]);
+          if (Math.abs(d) < 1e-9) continue;
+          const u = ((t[5] - t[8]) * (x - t[6]) + (t[6] - t[3]) * (z - t[8])) / d, v = ((t[8] - t[2]) * (x - t[6]) + (t[0] - t[6]) * (z - t[8])) / d, w = 1 - u - v;
+          if (u < -1e-6 || v < -1e-6 || w < -1e-6) continue;
+          const y = u * t[1] + v * t[4] + w * t[7];
+          if (y <= below && y > best) best = y;
+        }
+        return best;
+      };
+      let n = 0, len = 0;
+      const ex = [];
+      tris.forEach((t, ti) => {
+        const ny = (t[5] - t[2]) * (t[6] - t[0]) - (t[3] - t[0]) * (t[8] - t[2]);
+        const area = Math.abs(ny) / 2;
+        if (area < 1e-6) return;
+        for (let k = 0; k < 3; k++) {
+          if (uses.get(ek(V[ti][k], V[ti][(k + 1) % 3])) !== 1) continue;
+          const a = k * 3, c = ((k + 1) % 3) * 3, o = ((k + 2) % 3) * 3;
+          const ax = t[a], ay = t[a + 1], az = t[a + 2], bx = t[c], by = t[c + 1], bz = t[c + 2];
+          const L = Math.hypot(bx - ax, bz - az);
+          if (L < 0.01) continue;
+          let ox = -(bz - az) / L, oz = (bx - ax) / L;
+          const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+          if (ox * (t[o] - mx) + oz * (t[o + 2] - mz) > 0) { ox = -ox; oz = -oz; }
+          const y = (ay + by) / 2, gap = y - topAt(mx + ox * 0.06, mz + oz * 0.06, y + 0.02);
+          if (gap > 0.03) {
+            n++;
+            len += L;
+            if (ex.length < 8) ex.push(`${t[9]} @${mx.toFixed(2)},${y.toFixed(2)},${mz.toFixed(2)} gap ${gap.toFixed(3)} L ${L.toFixed(2)}`);
+          }
+        }
+      });
+      console.log(`   open edges ${key}: ${n} over 3 cm, ${len.toFixed(1)} m; ${ex.join(' | ')}`);
+      if (args.near) {
+        const [qx, qz, qr = 0.8] = String(args.near).split(',').map(Number);
+        for (const t of tris) {
+          const cx = (t[0] + t[3] + t[6]) / 3, cz = (t[2] + t[5] + t[8]) / 3;
+          if (Math.hypot(cx - qx, cz - qz) < qr) console.log('     tri', t.slice(0, 9).map((v) => v.toFixed(3)).join(' '), t[9]);
+        }
+      }
+    }
     if (args.holes) {
       const [cx, cz] = key.split(',').map(Number);
       const R = 0.25, N = Math.round(128 / R);

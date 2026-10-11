@@ -120,25 +120,9 @@ export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn
 
   // A conformed street is split where the ground folds anyway: it needs cross-sections only every
   // CONFORM_STEP, at its own bends, and where its kerbs ramp (the ends, the dropped kerbs).
-  const pts = spec.conform ? conformSamples(spec.points, CONFORM_STEP, rampMarks(spec)) : resamplePolyline(spec.points, 1.6);
+  const { pts, nor, miter } = streetFrame(spec);
   const n = pts.length;
-  // Tangents (averaged) and miter-scaled left normals.
-  const tan: Vec2[] = [], nor: Vec2[] = [], miter: number[] = [];
-  for (let i = 0; i < n; i++) {
-    const a = pts[Math.max(0, i - 1)], c = pts[Math.min(n - 1, i + 1)];
-    let tx = c[0] - a[0], tz = c[1] - a[1];
-    const l = Math.hypot(tx, tz) || 1;
-    tx /= l; tz /= l;
-    tan.push([tx, tz]);
-    nor.push([-tz, tx]);
-    // Miter: compare with the incoming segment direction.
-    if (i > 0 && i < n - 1) {
-      const sx = pts[i][0] - pts[i - 1][0], sz = pts[i][1] - pts[i - 1][1];
-      const sl = Math.hypot(sx, sz) || 1;
-      const cos = (sx / sl) * tx + (sz / sl) * tz;
-      miter.push(Math.min(2, 1 / Math.max(0.5, cos)));
-    } else miter.push(1);
-  }
+  const tan = nor.map(([x, z]) => [z, -x] as Vec2);
   // Raised sidewalks ramp down to the roadway over the last metres of a capped end (a kerb
   // ramp), instead of stopping in a 30 cm block that read as a slab floating at junctions.
   const along: number[] = [0];
@@ -274,6 +258,59 @@ export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn
   }
   if (spec.collide ?? true) addCollider(b, col);
   return outline();
+}
+
+/** Where a street's cross-sections stand: the sampled centreline, the (averaged) left normals and the mitre scale of each. */
+function streetFrame(spec: StreetSpec): { pts: Vec2[]; nor: Vec2[]; miter: number[] } {
+  // A conformed street is split where the ground folds anyway: it needs cross-sections only every
+  // CONFORM_STEP, at its own bends, and where its kerbs ramp (the ends, the dropped kerbs).
+  const pts = spec.conform ? conformSamples(spec.points, CONFORM_STEP, rampMarks(spec)) : resamplePolyline(spec.points, 1.6);
+  const n = pts.length;
+  const nor: Vec2[] = [], miter: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = pts[Math.max(0, i - 1)], c = pts[Math.min(n - 1, i + 1)];
+    let tx = c[0] - a[0], tz = c[1] - a[1];
+    const l = Math.hypot(tx, tz) || 1;
+    tx /= l;
+    tz /= l;
+    nor.push([-tz, tx]);
+    // Miter: compare with the incoming segment direction.
+    if (i > 0 && i < n - 1) {
+      const sx = pts[i][0] - pts[i - 1][0], sz = pts[i][1] - pts[i - 1][1];
+      const sl = Math.hypot(sx, sz) || 1;
+      const cos = (sx / sl) * tx + (sz / sl) * tz;
+      miter.push(Math.min(2, 1 / Math.max(0.5, cos)));
+    } else miter.push(1);
+  }
+  return { pts, nor, miter };
+}
+
+/**
+ * What a street's surface covers in plan, as convex pieces: per stretch between two cross-sections the
+ * quad between its outer edges (aprons included), or its two triangles where the quad folds (a sharp
+ * bend). The same cross-sections buildStreet draws, so a surface cut round it meets it exactly.
+ */
+export function streetFootprint(spec: StreetSpec): Vec2[][] {
+  const paved = (spec.kind ?? 'paved') === 'paved';
+  const hw = (spec.roadWidth ?? (paved ? 5.0 : 3.2)) / 2;
+  const reach = paved ? hw + (spec.sidewalk ?? 1.8) + APRON : hw + LANE_APRON;
+  const { pts, nor, miter } = streetFrame(spec);
+  const side = (i: number, s: number): Vec2 => [pts[i][0] + nor[i][0] * s * reach * miter[i], pts[i][1] + nor[i][1] * s * reach * miter[i]];
+  const out: Vec2[][] = [];
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const q: Vec2[] = [side(i, -1), side(i + 1, -1), side(i + 1, 1), side(i, 1)];
+    let sign = 0, convex = true;
+    for (let k = 0; k < 4 && convex; k++) {
+      const a = q[k], b = q[(k + 1) % 4], c = q[(k + 2) % 4];
+      const cr = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
+      if (Math.abs(cr) < 1e-12) continue;
+      if (!sign) sign = Math.sign(cr);
+      else if (Math.sign(cr) !== sign) convex = false;
+    }
+    if (convex) out.push(q);
+    else out.push([q[0], q[1], q[2]], [q[0], q[2], q[3]]);
+  }
+  return out;
 }
 
 /** Cross-sections of a conformed street are at most this far apart (m). */
@@ -634,6 +671,8 @@ interface OpenEdge {
   nx: number;
   nz: number;
   mat: MaterialId;
+  /** Made by the cut (a winning surface lies beyond), not an edge of the sheet's own outline. */
+  cut?: boolean;
 }
 
 /**
@@ -877,7 +916,7 @@ export function emitSheet(b: MeshBuilder, sheet: Sheet, o: ConformOpts = {}): Sh
           const px = (u.x + v.x) / 2 + nx * 0.003, pz = (u.z + v.z) / 2 + nz * 0.003;
           isOpen = hit.some((c) => inConv(c, px, pz));
         }
-        if (isOpen) open.push({ u, v, nx, nz, mat: t.mat });
+        if (isOpen) open.push({ u, v, nx, nz, mat: t.mat, cut: !(side && edgeUse.get(xzKey(side[0], side[1])) === 1) });
       }
     }
   }
@@ -926,6 +965,128 @@ export function emitSheet(b: MeshBuilder, sheet: Sheet, o: ConformOpts = {}): Sh
     }
   }
 
+  // A point the cut makes on an edge is made once per triangle: share one vertex per place (and
+  // height above the ground), so whatever moves it (an edge laid to the drawn ground) moves it for all.
+  if (cut) {
+    const canon = new Map<string, SV>();
+    const one = (v: SV): SV => {
+      const k = `${Math.round(v.x * 1e5)},${Math.round(v.z * 1e5)},${Math.round(v.off * 1e5)}`;
+      const c = canon.get(k);
+      if (c) return c;
+      canon.set(k, v);
+      return v;
+    };
+    for (const t of kept) {
+      t.a = one(t.a);
+      t.b = one(t.b);
+      t.c = one(t.c);
+    }
+    for (const e of open) {
+      e.u = one(e.u);
+      e.v = one(e.v);
+    }
+    for (const w of keptWalls) {
+      w.p = one(w.p);
+      w.q = one(w.q);
+    }
+  }
+  // The cut splits a piece along the whole line of a winning surface's edge, so it can leave a
+  // vertex on an edge its neighbour (or a kerb wall) has whole: a T. Split the neighbour (as a fan
+  // round its centre) and the wall there too, so every edge meets vertex to vertex.
+  const C = 0.5;
+  const vgrid = new Map<string, SV[]>();
+  if (cut) {
+    for (const t of kept)
+      for (const v of [t.a, t.b, t.c]) {
+        const k = `${Math.floor(v.x / C)},${Math.floor(v.z / C)}`;
+        const l = vgrid.get(k);
+        if (!l) vgrid.set(k, [v]);
+        else if (!l.includes(v)) l.push(v);
+      }
+    /** Vertices strictly inside the plan segment p → q, ordered from p. */
+    const onSeg = (p: SV, q: SV): SV[] => {
+      const dx = q.x - p.x, dz = q.z - p.z, L2 = dx * dx + dz * dz;
+      if (L2 < 1e-10) return [];
+      const L = Math.sqrt(L2);
+      const found: { t: number; v: SV }[] = [];
+      const i0 = Math.floor(Math.min(p.x, q.x) / C), i1 = Math.floor(Math.max(p.x, q.x) / C);
+      const j0 = Math.floor(Math.min(p.z, q.z) / C), j1 = Math.floor(Math.max(p.z, q.z) / C);
+      for (let j = j0; j <= j1; j++)
+        for (let i = i0; i <= i1; i++)
+          for (const v of vgrid.get(`${i},${j}`) ?? []) {
+            if (v === p || v === q) continue;
+            const t = ((v.x - p.x) * dx + (v.z - p.z) * dz) / L2;
+            if (t * L <= 1e-4 || (1 - t) * L <= 1e-4) continue;
+            if (Math.abs((v.x - p.x) * dz - (v.z - p.z) * dx) / L > 1e-4) continue;
+            if (!found.some((f) => Math.abs(f.t - t) * L < 1e-5)) found.push({ t, v });
+          }
+      return found.sort((a, b) => a.t - b.t).map((f) => f.v);
+    };
+    const healedTris: STri[] = [];
+    for (const t of kept) {
+      const ring: SV[] = [];
+      let extra = 0;
+      for (const [p, q] of [[t.a, t.b], [t.b, t.c], [t.c, t.a]] as const) {
+        ring.push(p);
+        const mids = onSeg(p, q);
+        extra += mids.length;
+        ring.push(...mids);
+      }
+      if (!extra) {
+        healedTris.push(t);
+        continue;
+      }
+      const g: SV = { x: (t.a.x + t.b.x + t.c.x) / 3, z: (t.a.z + t.b.z + t.c.z) / 3, off: (t.a.off + t.b.off + t.c.off) / 3, h: (t.a.h + t.b.h + t.c.h) / 3 };
+      for (let k = 0; k < ring.length; k++) healedTris.push({ a: g, b: ring[k], c: ring[(k + 1) % ring.length], mat: t.mat, col: t.col });
+    }
+    kept = healedTris;
+    // An open edge split so gets its skirt piece by piece.
+    const split: OpenEdge[] = [];
+    for (const e of open) {
+      const mids = onSeg(e.u, e.v);
+      if (!mids.length) {
+        split.push(e);
+        continue;
+      }
+      const chain = [e.u, ...mids, e.v];
+      for (let k = 0; k + 1 < chain.length; k++) split.push({ ...e, u: chain[k], v: chain[k + 1] });
+    }
+    open.length = 0;
+    open.push(...split);
+  }
+  if (cut && keptWalls.length) {
+    const healed: SWall[] = [];
+    for (const w of keptWalls) {
+      const dx = w.q.x - w.p.x, dz = w.q.z - w.p.z, L2 = dx * dx + dz * dz;
+      if (L2 < 1e-10) {
+        healed.push(w);
+        continue;
+      }
+      const ts: number[] = [];
+      const i0 = Math.floor(Math.min(w.p.x, w.q.x) / C), i1 = Math.floor(Math.max(w.p.x, w.q.x) / C);
+      const j0 = Math.floor(Math.min(w.p.z, w.q.z) / C), j1 = Math.floor(Math.max(w.p.z, w.q.z) / C);
+      for (let j = j0; j <= j1; j++)
+        for (let i = i0; i <= i1; i++)
+          for (const v of vgrid.get(`${i},${j}`) ?? []) {
+            const t = ((v.x - w.p.x) * dx + (v.z - w.p.z) * dz) / L2;
+            if (t <= 1e-6 || t >= 1 - 1e-6) continue;
+            if (Math.abs((v.x - w.p.x) * dz - (v.z - w.p.z) * dx) / Math.sqrt(L2) > 1e-4) continue;
+            if (!ts.some((u) => Math.abs(u - t) < 1e-7)) ts.push(t);
+          }
+      if (!ts.length) {
+        healed.push(w);
+        continue;
+      }
+      ts.sort((a, b) => a - b);
+      let prev = 0;
+      for (const t of [...ts, 1]) {
+        healed.push({ ...w, p: prev === 0 ? w.p : lerpSV(w.p, w.q, prev), q: t === 1 ? w.q : lerpSV(w.p, w.q, t), tp: w.tp + (w.tq - w.tp) * prev, tq: w.tp + (w.tq - w.tp) * t });
+        prev = t;
+      }
+    }
+    keptWalls = healed;
+  }
+
   // ---- 3. write: top (facing up), walls (facing their way), skirts on the open edges
   const byMat = new Map<MaterialId, number[]>();
   const arr = (m: MaterialId) => {
@@ -939,6 +1100,8 @@ export function emitSheet(b: MeshBuilder, sheet: Sheet, o: ConformOpts = {}): Sh
   const drop = o.drop ?? null;
   const edgeOff = new Map<SV, number>();
   for (const e of open) {
+    // (A cut edge meets the surface that won the place, not the ground: it keeps its height.)
+    if (rim === null && e.cut) continue;
     for (const v of [e.u, e.v]) {
       if (edgeOff.has(v)) continue;
       if (rim !== null) edgeOff.set(v, rim - (drop ? drop(v.x, v.z) : 0));
