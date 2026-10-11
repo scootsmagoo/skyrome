@@ -183,9 +183,10 @@ let P: (x: number, z: number) => number = () => 0;
  * The terrain as the CDLOD leaf level draws it (terrainMaterial.ts): the 2 m grid's heights at the
  * vertices, minus 9 cm under paved atlas roads and building pads (their signed-distance fields,
  * smoothstep 0.75 → -0.25 m), planar over each grid square's two triangles (diagonal from (i, j) to
- * (i+1, j+1), Terrain.patchGeometry). Coarser levels (beyond ~200 m) sit lower still.
+ * (i+1, j+1), Terrain.patchGeometry, or from (i+1, j) to (i, j+1) when `bc`: terrain profile v2,
+ * read from the drawn patch's index). Coarser levels (beyond ~200 m) sit lower still.
  */
-function visibleTerrain(hm: Hm, a: Uint8Array): (x: number, z: number) => number {
+function visibleTerrain(hm: Hm, a: Uint8Array, bc = false): (x: number, z: number) => number {
   const { heights: h, nx, nz, minX, minZ, spacing: sp } = hm;
   const ss = (x: number) => {
     const t = Math.min(1, Math.max(0, (x - 0.75) / -1));
@@ -203,6 +204,7 @@ function visibleTerrain(hm: Hm, a: Uint8Array): (x: number, z: number) => number
     const i = Math.floor(fx), j = Math.floor(fz);
     const tx = fx - i, tz = fz - j;
     const A = vv(i, j), B = vv(i + 1, j), C = vv(i, j + 1), D = vv(i + 1, j + 1);
+    if (bc) return tx + tz <= 1 ? A + (B - A) * tx + (C - A) * tz : D + (C - D) * (1 - tx) + (B - D) * (1 - tz);
     return tz >= tx ? A + (D - C) * tx + (C - A) * tz : A + (B - A) * tx + (D - B) * tz;
   };
 }
@@ -313,8 +315,9 @@ export function init() {
   const city = game.city;
   if (!city) throw new Error('no city');
   const hm = game.heightmap as unknown as Hm;
-  const terrain = game.terrain as unknown as { data: { a: Uint8Array } };
-  V = visibleTerrain(hm, terrain.data.a);
+  const terrain = game.terrain as unknown as { data: { a: Uint8Array }; mesh?: { geometry?: { index?: { array: ArrayLike<number> } | null } } };
+  // The drawn patch's first cell is (a, c, d, …) when split a–d and (a, c, b, …) when split b–c.
+  V = visibleTerrain(hm, terrain.data.a, terrain.mesh?.geometry?.index?.array[2] === 1);
   P = (x, z) => hm.heightAt(x, z);
   cellRecs = city.streamer.cells as CellRec[];
   blockRecs = (city.streamer.blocks as BlockRec[]).filter((r) => r.blk.detailed && r.layout);
