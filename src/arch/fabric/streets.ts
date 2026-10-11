@@ -42,6 +42,15 @@ export interface StreetSpec {
   /** Add trimesh colliders (default true). */
   collide?: boolean;
   seed?: number;
+  /**
+   * Conform to the ground (the city's streets, phase 4b): the surface is subdivided until it follows
+   * `heightAt` within CONFORM_TOL, cut away where a surface that wins the place lies (`clip`), and
+   * every open edge gets a skirt down under the ground; the kerb faces follow the ground too and the
+   * collider is welded. Without it the street is built as before (landmark builders, demo scenes).
+   */
+  conform?: ConformOpts;
+  /** Material of the outer apron of a lane (default the lane's own): a travertine edge course where an open road meets paving. */
+  apronMaterial?: MaterialId;
 }
 
 export interface StreetResult {
@@ -56,10 +65,10 @@ interface ProfilePt { off: number; y: number }
 interface Strip { mat: MaterialId; expect: Expect }
 
 /** Width (m) of the walkable apron where a paved street's sidewalk meets the ground, and where a lane does. */
-const APRON = 0.9;
-const LANE_APRON = 0.6;
+export const APRON = 0.9;
+export const LANE_APRON = 0.6;
 /** An apron ends this far (m) above the ground, not under it or flush: ground within 2 cm of the paving is a flaw the crawl counts (a lip of 2 cm rides over). */
-const APRON_FLUSH = 0.022;
+export const APRON_FLUSH = 0.022;
 
 /** Builds a street into `b` (world coordinates). */
 export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn): StreetResult {
@@ -100,11 +109,12 @@ export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn
     push(hw + sw + APRON, -lift + APRON_FLUSH, 'concrete', 'up');
   } else {
     // A lane's edges run out to the ground in a walkable apron too (the old 5 cm edge was a step of the lane's lift).
+    const apronMat = spec.apronMaterial ?? roadMat;
     push(-hw - LANE_APRON, -lift + APRON_FLUSH);
-    push(-hw, 0.0, roadMat, 'up');
+    push(-hw, 0.0, apronMat, 'up');
     push(0, 0.05, roadMat, 'up');
     push(hw, 0.0, roadMat, 'up');
-    push(hw + LANE_APRON, -lift + APRON_FLUSH, roadMat, 'up');
+    push(hw + LANE_APRON, -lift + APRON_FLUSH, apronMat, 'up');
   }
 
   const pts = resamplePolyline(spec.points, 1.6);
@@ -151,6 +161,47 @@ export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn
     const y = paved && p.y === ch ? ch * raise(i, p.off) : p.y;
     return new THREE.Vector3(x, heightAt(x, z) + lift + y, z);
   };
+  const outline = () => ({
+    length: polylineLength(spec.points),
+    left: pts.map((p, i) => [p[0] + nor[i][0] * (-hw - sw) * miter[i], p[1] + nor[i][1] * (-hw - sw) * miter[i]] as Vec2),
+    right: pts.map((p, i) => [p[0] + nor[i][0] * (hw + sw) * miter[i], p[1] + nor[i][1] * (hw + sw) * miter[i]] as Vec2),
+  });
+  if (spec.conform) {
+    // The same cross-section, as a sheet over the ground: every vertex keeps its height above the
+    // terrain (lift + profile), the surface is refined until it follows the ground, kerb faces are
+    // walls between their two strips, and the end caps give way to the skirts of the open edges.
+    const sheet = new Sheet(heightAt);
+    const V: SV[][] = [];
+    for (let i = 0; i < n; i++) {
+      V.push(prof.map((p) => {
+        const x = pts[i][0] + nor[i][0] * p.off * miter[i], z = pts[i][1] + nor[i][1] * p.off * miter[i];
+        const y = paved && p.y === ch ? ch * raise(i, p.off) : p.y;
+        return sheet.v(x, z, lift + y);
+      }));
+    }
+    for (let i = 0; i < n - 1; i++) {
+      for (let k = 0; k < strips.length; k++) {
+        const s = strips[k];
+        if (s.expect === 'up') {
+          sheet.tri(V[i][k], V[i][k + 1], V[i + 1][k + 1], s.mat);
+          sheet.tri(V[i][k], V[i + 1][k + 1], V[i + 1][k], s.mat);
+        } else {
+          // A kerb face: from the lower of its two profile points up to the higher, facing the carriageway.
+          const lo = prof[k].y <= prof[k + 1].y ? k : k + 1, hi = lo === k ? k + 1 : k;
+          const side = Math.sign(prof[k].off) || 1;
+          const nx = -(nor[i][0] + nor[i + 1][0]) * 0.5 * side, nz = -(nor[i][1] + nor[i + 1][1]) * 0.5 * side;
+          sheet.wall(V[i][lo], V[i + 1][lo], V[i][hi].off, V[i + 1][hi].off, s.mat, nx, nz);
+        }
+      }
+    }
+    // Ends that continue in the next piece of the same street are seams, not open edges.
+    const endLine = (i: number): [SV, SV] => [V[i][0], V[i][prof.length - 1]];
+    const seams: [SV, SV][] = [];
+    if (!(spec.capStart ?? true)) seams.push(endLine(0));
+    if (!(spec.capEnd ?? true)) seams.push(endLine(n - 1));
+    emitSheet(b, sheet, { ...spec.conform, collide: spec.collide ?? spec.conform.collide ?? true, seam: seams.length ? (a, c) => seams.some(([p, q]) => onLine(a, p, q) && onLine(c, p, q)) : spec.conform.seam });
+    return outline();
+  }
   const grid: THREE.Vector3[][] = [];
   for (let i = 0; i < n; i++) grid.push(prof.map((_, k) => P(i, k)));
 
@@ -220,10 +271,7 @@ export function buildStreet(b: MeshBuilder, spec: StreetSpec, heightAt: HeightFn
     }
   }
   if (spec.collide ?? true) addCollider(b, col);
-
-  const left = pts.map((p, i) => [p[0] + nor[i][0] * (-hw - sw) * miter[i], p[1] + nor[i][1] * (-hw - sw) * miter[i]] as Vec2);
-  const right = pts.map((p, i) => [p[0] + nor[i][0] * (hw + sw) * miter[i], p[1] + nor[i][1] * (hw + sw) * miter[i]] as Vec2);
-  return { length, left, right };
+  return outline();
 }
 
 /** Point and unit tangent at arc length `s` along a polyline. */
@@ -254,6 +302,438 @@ function addCollider(b: MeshBuilder, arr: number[]) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
   b.collider({ kind: 'trimesh', geometry: g });
+}
+
+// ------------------------------------------------------------------ conforming sheets (phase 4b)
+
+/** Largest gap (m) a conformed surface leaves against `heightAt` at its edges' midpoints and its centroids. */
+export const CONFORM_TOL = 0.02;
+/** Skirts reach this far below the lowest ground under their edge (the drawn terrain drops 9 cm under roads and pads). */
+export const SKIRT_DEPTH = 0.1;
+/** Edges shorter than this are not split again. */
+const MIN_EDGE = 0.1;
+/** Edges that cross a clip boundary are split down to this length, so the cut follows a curve closely. */
+const CLIP_EDGE = 0.45;
+/** Deepest refinement of one coarse triangle. */
+const MAX_DEPTH = 12;
+/** Where along an edge the ground is tested (symmetric, so both triangles of an edge decide alike). */
+const T3 = [0.25, 0.5, 0.75];
+
+export interface ConformOpts {
+  /** Deviation allowed against heightAt (default CONFORM_TOL). */
+  tol?: number;
+  /** Inside a surface that wins this place: the sheet is cut away there (one surface per place). */
+  clip?: ((x: number, z: number) => boolean) | null;
+  /** Open edges that get no skirt: seams where the same surface goes on in the next piece. */
+  seam?: ((a: SV, b: SV) => boolean) | null;
+  /** Skirts under the open edges (default true). */
+  skirts?: boolean;
+  /** A trimesh collider of the top and the walls, welded (default true). */
+  collide?: boolean;
+}
+
+/** A sheet vertex: plan position, height above the ground (`off`), and the ground there (`h`). */
+export interface SV {
+  x: number;
+  z: number;
+  off: number;
+  h: number;
+}
+
+interface STri {
+  a: SV;
+  b: SV;
+  c: SV;
+  mat: MaterialId;
+  col: boolean;
+}
+
+/** A vertical face along p → q: bottom at the vertices' own heights, top at tp / tq above the ground, looking along (nx, nz). */
+interface SWall {
+  p: SV;
+  q: SV;
+  tp: number;
+  tq: number;
+  mat: MaterialId;
+  nx: number;
+  nz: number;
+  col: boolean;
+}
+
+/**
+ * A surface before it is laid on the ground: plan triangles whose vertices carry their height above
+ * the terrain, and walls (kerb faces) along plan segments with a bottom and a top height. `emitSheet`
+ * refines it to the ground, cuts it, skirts it and writes it into a MeshBuilder.
+ */
+export class Sheet {
+  readonly tris: STri[] = [];
+  readonly walls: SWall[] = [];
+  constructor(readonly H: HeightFn) {}
+  v(x: number, z: number, off: number): SV {
+    return { x, z, off, h: this.H(x, z) };
+  }
+  tri(a: SV, b: SV, c: SV, mat: MaterialId, collide = true) {
+    this.tris.push({ a, b, c, mat, col: collide });
+  }
+  wall(p: SV, q: SV, topP: number, topQ: number, mat: MaterialId, nx: number, nz: number, collide = true) {
+    if (topP - p.off < 1e-4 && topQ - q.off < 1e-4) return;
+    const l = Math.hypot(nx, nz) || 1;
+    this.walls.push({ p, q, tp: topP, tq: topQ, mat, nx: nx / l, nz: nz / l, col: collide });
+  }
+}
+
+/** Is `a` on the plan line through p and q (within 1 mm)? */
+export function onLine(a: { x: number; z: number }, p: { x: number; z: number }, q: { x: number; z: number }): boolean {
+  const dx = q.x - p.x, dz = q.z - p.z;
+  const l = Math.hypot(dx, dz);
+  if (l < 1e-9) return Math.hypot(a.x - p.x, a.z - p.z) < 1e-3;
+  return Math.abs((a.x - p.x) * dz - (a.z - p.z) * dx) / l < 1e-3;
+}
+
+/** Canonical order of an edge's ends (so both triangles of an edge compute it the same way). */
+const first = (a: SV, b: SV) => a.x < b.x || (a.x === b.x && a.z <= b.z);
+const xzKey = (a: SV, b: SV) => (first(a, b) ? `${a.x},${a.z},${b.x},${b.z}` : `${b.x},${b.z},${a.x},${a.z}`);
+
+/** Running totals of emitSheet (profiling and the offline cell check). */
+export const conformStats = { sheets: 0, input: 0, refined: 0, kept: 0, skirts: 0, walls: 0, ms: 0 };
+
+export interface SheetStats {
+  /** Visible triangles written (top, walls and skirts). */
+  tris: number;
+  skirts: number;
+  /** Largest deviation of the written top from heightAt at its edge midpoints and centroids (m). */
+  maxDev: number;
+}
+
+/**
+ * Lays a sheet on the ground and writes it into `b`:
+ *  1. refine: an edge is halved while the ground under it (at ¼, ½ and ¾) leaves the straight line
+ *     between its ends by more than `tol`, or while it crosses the clip boundary and is longer than
+ *     CLIP_EDGE; a triangle whose edges all fit but whose centroid does not is split there. The rule
+ *     reads only the edge, so the two triangles of an edge (and a wall on it) split it alike: no cracks.
+ *  2. cut: triangles inside `clip` are dropped, the ones across its boundary are cut at it (bisection).
+ *  3. skirts: every open edge of the top (not a seam) gets a vertical face down to the lowest ground
+ *     under it minus SKIRT_DEPTH, in the edge's material, without a collider.
+ *  4. the top, the walls and the skirts are written by material; the collider (top and walls) is one
+ *     welded (indexed) trimesh.
+ */
+export function emitSheet(b: MeshBuilder, sheet: Sheet, o: ConformOpts = {}): SheetStats {
+  const t0 = performance.now();
+  const H = sheet.H;
+  const tol = o.tol ?? CONFORM_TOL;
+  const clip = o.clip ?? null;
+  const splitMemo = new Map<string, boolean>();
+  const mids = new Map<string, SV>();
+  const needSplit = (a: SV, c: SV): boolean => {
+    const [p, q] = first(a, c) ? [a, c] : [c, a];
+    const dx = q.x - p.x, dz = q.z - p.z;
+    const L = Math.hypot(dx, dz);
+    if (L < MIN_EDGE) return false;
+    const key = `${p.x},${p.z},${q.x},${q.z}`;
+    const m = splitMemo.get(key);
+    if (m !== undefined) return m;
+    let r = false;
+    for (const t of T3) {
+      if (Math.abs(H(p.x + dx * t, p.z + dz * t) - (p.h + (q.h - p.h) * t)) > tol) {
+        r = true;
+        break;
+      }
+    }
+    if (!r && clip && L > CLIP_EDGE) {
+      const cp = clip(p.x, p.z);
+      r = cp !== clip(q.x, q.z) || cp !== clip(p.x + dx * 0.5, p.z + dz * 0.5);
+    }
+    splitMemo.set(key, r);
+    return r;
+  };
+  const mid = (a: SV, c: SV): SV => {
+    const [p, q] = first(a, c) ? [a, c] : [c, a];
+    const key = `${p.x},${p.z},${p.off},${q.x},${q.z},${q.off}`;
+    let m = mids.get(key);
+    if (!m) mids.set(key, (m = sheet.v((p.x + q.x) / 2, (p.z + q.z) / 2, (p.off + q.off) / 2)));
+    return m;
+  };
+  const d2 = (a: SV, c: SV) => Math.hypot(c.x - a.x, c.z - a.z);
+
+  // ---- 1. refine
+  const out: STri[] = [];
+  const refine = (a: SV, bb: SV, c: SV, mat: MaterialId, col: boolean, depth: number): void => {
+    if (depth >= MAX_DEPTH) {
+      out.push({ a, b: bb, c, mat, col });
+      return;
+    }
+    const s0 = needSplit(a, bb), s1 = needSplit(bb, c), s2 = needSplit(c, a);
+    const n = (s0 ? 1 : 0) + (s1 ? 1 : 0) + (s2 ? 1 : 0);
+    const d = depth + 1;
+    if (n === 0) {
+      // A fold the edges do not see: split at the centroid (the edges stay as they are, so no cracks).
+      if (Math.max(d2(a, bb), d2(bb, c), d2(c, a)) > 2 * MIN_EDGE) {
+        const cx = (a.x + bb.x + c.x) / 3, cz = (a.z + bb.z + c.z) / 3;
+        const hc = H(cx, cz);
+        if (Math.abs(hc - (a.h + bb.h + c.h) / 3) > tol) {
+          const m: SV = { x: cx, z: cz, off: (a.off + bb.off + c.off) / 3, h: hc };
+          refine(a, bb, m, mat, col, d);
+          refine(bb, c, m, mat, col, d);
+          refine(c, a, m, mat, col, d);
+          return;
+        }
+      }
+      out.push({ a, b: bb, c, mat, col });
+      return;
+    }
+    // Rotate so the split edges come first: (A, B) always, and (B, C) when two are split.
+    let A = a, B = bb, C = c, S0 = s0, S1 = s1, S2 = s2;
+    for (let r = 0; r < 3 && !(S0 && (n !== 2 || S1)); r++) {
+      [A, B, C] = [B, C, A];
+      [S0, S1, S2] = [S1, S2, S0];
+    }
+    void S2;
+    if (n === 3) {
+      const mab = mid(A, B), mbc = mid(B, C), mca = mid(C, A);
+      refine(A, mab, mca, mat, col, d);
+      refine(mab, B, mbc, mat, col, d);
+      refine(mca, mbc, C, mat, col, d);
+      refine(mab, mbc, mca, mat, col, d);
+    } else if (n === 2) {
+      const mab = mid(A, B), mbc = mid(B, C);
+      refine(mab, B, mbc, mat, col, d);
+      if (d2(A, mbc) <= d2(mab, C)) {
+        refine(A, mab, mbc, mat, col, d);
+        refine(A, mbc, C, mat, col, d);
+      } else {
+        refine(A, mab, C, mat, col, d);
+        refine(mab, mbc, C, mat, col, d);
+      }
+    } else {
+      const mab = mid(A, B);
+      refine(A, mab, C, mat, col, d);
+      refine(mab, B, C, mat, col, d);
+    }
+  };
+  for (const t of sheet.tris) {
+    // Skip triangles with no area in plan (a vertical strip): walls carry those.
+    if (Math.abs((t.b.x - t.a.x) * (t.c.z - t.a.z) - (t.b.z - t.a.z) * (t.c.x - t.a.x)) < 1e-9) continue;
+    refine(t.a, t.b, t.c, t.mat, t.col, 0);
+  }
+  const walls: SWall[] = [];
+  const refineWall = (w: SWall, depth: number): void => {
+    if (depth < MAX_DEPTH && needSplit(w.p, w.q)) {
+      const m = mid(w.p, w.q), tm = (w.tp + w.tq) / 2;
+      refineWall({ ...w, q: m, tq: tm }, depth + 1);
+      refineWall({ ...w, p: m, tp: tm }, depth + 1);
+    } else walls.push(w);
+  };
+  for (const w of sheet.walls) refineWall(w, 0);
+
+  // ---- 2. cut away what another surface covers
+  let kept = out;
+  let keptWalls = walls;
+  if (clip) {
+    const inside = new Map<SV, boolean>();
+    const ins = (v: SV) => {
+      let r = inside.get(v);
+      if (r === undefined) inside.set(v, (r = clip(v.x, v.z)));
+      return r;
+    };
+    const cuts = new Map<string, number>();
+    /** Parameter (from the canonical first end) where the edge leaves the clip area. */
+    const cutT = (p: SV, q: SV) => {
+      const key = `${p.x},${p.z},${q.x},${q.z}`;
+      let t = cuts.get(key);
+      if (t === undefined) {
+        const ip = clip(p.x, p.z);
+        let lo = 0, hi = 1;
+        for (let k = 0; k < 16; k++) {
+          const m = (lo + hi) / 2;
+          if (clip(p.x + (q.x - p.x) * m, p.z + (q.z - p.z) * m) === ip) lo = m;
+          else hi = m;
+        }
+        cuts.set(key, (t = (lo + hi) / 2));
+      }
+      return t;
+    };
+    const cutAt = (a: SV, c: SV): SV => {
+      const [p, q] = first(a, c) ? [a, c] : [c, a];
+      const t = cutT(p, q);
+      return sheet.v(p.x + (q.x - p.x) * t, p.z + (q.z - p.z) * t, p.off + (q.off - p.off) * t);
+    };
+    kept = [];
+    for (const t of out) {
+      const ia = ins(t.a), ib = ins(t.b), ic = ins(t.c);
+      if (!ia && !ib && !ic) {
+        kept.push(t);
+        continue;
+      }
+      if (ia && ib && ic) continue;
+      const vs = [t.a, t.b, t.c], fl = [ia, ib, ic];
+      const poly: SV[] = [];
+      for (let k = 0; k < 3; k++) {
+        const v = vs[k], w = vs[(k + 1) % 3];
+        if (!fl[k]) poly.push(v);
+        if (fl[k] !== fl[(k + 1) % 3]) poly.push(cutAt(v, w));
+      }
+      for (let k = 1; k + 1 < poly.length; k++) kept.push({ a: poly[0], b: poly[k], c: poly[k + 1], mat: t.mat, col: t.col });
+    }
+    keptWalls = [];
+    for (const w of walls) {
+      const ip = ins(w.p), iq = ins(w.q);
+      if (!ip && !iq) keptWalls.push(w);
+      else if (ip !== iq) {
+        const [p, q] = first(w.p, w.q) ? [w.p, w.q] : [w.q, w.p];
+        const t = cutT(p, q);
+        const tw = p === w.p ? t : 1 - t;
+        const m: SV = sheet.v(w.p.x + (w.q.x - w.p.x) * tw, w.p.z + (w.q.z - w.p.z) * tw, w.p.off + (w.q.off - w.p.off) * tw);
+        const tm = w.tp + (w.tq - w.tp) * tw;
+        keptWalls.push(ip ? { ...w, p: m, tp: tm } : { ...w, q: m, tq: tm });
+      }
+    }
+  }
+
+  // ---- 3. write: top (facing up), walls (facing their way), skirts on the open edges
+  const byMat = new Map<MaterialId, number[]>();
+  const arr = (m: MaterialId) => {
+    let a = byMat.get(m);
+    if (!a) byMat.set(m, (a = []));
+    return a;
+  };
+  const colVerts: number[] = [];
+  const colIdx: number[] = [];
+  const colKey = new Map<string, number>();
+  const cv = (x: number, y: number, z: number) => {
+    const k = `${x},${y},${z}`;
+    let i = colKey.get(k);
+    if (i === undefined) {
+      colKey.set(k, (i = colVerts.length / 3));
+      colVerts.push(x, y, z);
+    }
+    return i;
+  };
+  const collide = o.collide ?? true;
+  let tris = 0, skirts = 0, maxDev = 0;
+  const Y = (v: SV) => v.h + v.off;
+  const edgeUse = new Map<string, number>();
+  for (const t of kept) for (const [u, v] of [[t.a, t.b], [t.b, t.c], [t.c, t.a]] as const) {
+    const k = xzKey(u, v);
+    edgeUse.set(k, (edgeUse.get(k) ?? 0) + 1);
+  }
+  for (const t of kept) {
+    const ya = Y(t.a), yb = Y(t.b), yc = Y(t.c);
+    const ny = (t.c.x - t.a.x) * (t.b.z - t.a.z) - (t.b.x - t.a.x) * (t.c.z - t.a.z);
+    const [p1, p2] = ny >= 0 ? [t.b, t.c] : [t.c, t.b];
+    const y1 = ny >= 0 ? yb : yc, y2 = ny >= 0 ? yc : yb;
+    arr(t.mat).push(t.a.x, ya, t.a.z, p1.x, y1, p1.z, p2.x, y2, p2.z);
+    tris++;
+    if (collide && t.col) colIdx.push(cv(t.a.x, ya, t.a.z), cv(p1.x, y1, p1.z), cv(p2.x, y2, p2.z));
+    const cx = (t.a.x + t.b.x + t.c.x) / 3, cz = (t.a.z + t.b.z + t.c.z) / 3;
+    maxDev = Math.max(maxDev, Math.abs(H(cx, cz) - (t.a.h + t.b.h + t.c.h) / 3));
+    // Skirts under the open edges.
+    if (o.skirts === false) continue;
+    for (const [u, v, w] of [[t.a, t.b, t.c], [t.b, t.c, t.a], [t.c, t.a, t.b]] as const) {
+      if (edgeUse.get(xzKey(u, v)) !== 1 || o.seam?.(u, v)) continue;
+      let nx = v.z - u.z, nz = -(v.x - u.x);
+      if (nx * (w.x - u.x) + nz * (w.z - u.z) > 0) {
+        nx = -nx;
+        nz = -nz;
+      }
+      const g = Math.min(u.h, v.h, H((u.x + v.x) / 2, (u.z + v.z) / 2)) - SKIRT_DEPTH;
+      const yu = Y(u), yv = Y(v);
+      if (yu <= g && yv <= g) continue;
+      quadFacing(arr(t.mat), u.x, u.z, v.x, v.z, g, g, yu, yv, nx, nz);
+      skirts += 2;
+    }
+  }
+  for (const w of keptWalls) {
+    const yp = Y(w.p), yq = Y(w.q), tp = w.p.h + w.tp, tq = w.q.h + w.tq;
+    quadFacing(arr(w.mat), w.p.x, w.p.z, w.q.x, w.q.z, yp, yq, tp, tq, w.nx, w.nz);
+    tris += 2;
+    if (collide && w.col) {
+      const a = cv(w.p.x, yp, w.p.z), bq = cv(w.q.x, yq, w.q.z), c = cv(w.q.x, tq, w.q.z), dd = cv(w.p.x, tp, w.p.z);
+      colIdx.push(a, bq, c, a, c, dd);
+    }
+  }
+  for (const [mat, a] of byMat) addTris(b, mat, a);
+  if (colIdx.length) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(colVerts, 3));
+    g.setIndex(colIdx);
+    b.collider({ kind: 'trimesh', geometry: g });
+  }
+  conformStats.sheets++;
+  conformStats.input += sheet.tris.length;
+  conformStats.refined += out.length;
+  conformStats.kept += kept.length;
+  conformStats.skirts += skirts;
+  conformStats.walls += keptWalls.length;
+  conformStats.ms += performance.now() - t0;
+  return { tris: tris + skirts, skirts, maxDev };
+}
+
+/** A vertical quad over the plan segment p → q, from (bp, bq) up to (tp, tq), facing (nx, nz). */
+function quadFacing(arr: number[], px: number, pz: number, qx: number, qz: number, bp: number, bq: number, tp: number, tq: number, nx: number, nz: number) {
+  // (p_b, q_b, q_t) faces left of p → q seen from above when the cross product's plan part points that way.
+  const ex = qx - px, ez = qz - pz;
+  // Normal of (p_b → q_b) × (p_b → q_t) in plan: (ez·Δy, −ex·Δy)-ish; test with the right normal (ez, −ex).
+  const right = ez * nx - ex * nz >= 0;
+  if (right) arr.push(px, bp, pz, qx, tq, qz, qx, bq, qz, px, bp, pz, px, tp, pz, qx, tq, qz);
+  else arr.push(px, bp, pz, qx, bq, qz, qx, tq, qz, px, bp, pz, qx, tq, qz, px, tp, pz);
+}
+
+/**
+ * A paved polygon (convex: the city's junction squares and piazzas) laid on the ground as a sheet:
+ * a fan from its centre, a walkable bevel out to the ground on the edges that meet it (not where
+ * another paved surface goes on), skirts under the open edges, cut where a surface that wins lies.
+ */
+export interface ConformPlazaOpts extends ConformOpts {
+  material?: MaterialId;
+  lift?: number;
+  /** Width of the bevel (default 0.45 m); its outer edge stands APRON_FLUSH above the ground. */
+  bevel?: number;
+  /** The bevel joins the collider (default true). */
+  bevelCollide?: boolean;
+  /** Other paving beside an edge (no bevel there). */
+  paved?: ((x: number, z: number) => boolean) | null;
+}
+
+export function buildConformPlaza(b: MeshBuilder, poly: Polygon, heightAt: HeightFn, o: ConformPlazaOpts = {}): SheetStats {
+  const mat = o.material ?? 'paving_travertine';
+  const lift = o.lift ?? 0.07;
+  const w = o.bevel ?? 0.45;
+  const sheet = new Sheet(heightAt);
+  const n = poly.length;
+  let cx = 0, cz = 0;
+  for (const p of poly) {
+    cx += p[0] / n;
+    cz += p[1] / n;
+  }
+  const c = sheet.v(cx, cz, lift);
+  const rim = poly.map((p) => sheet.v(p[0], p[1], lift));
+  for (let i = 0; i < n; i++) sheet.tri(c, rim[i], rim[(i + 1) % n], mat);
+  // Bevels on the edges that meet the ground, and wedges between two bevels.
+  const open = (x: number, z: number) => !(o.paved?.(x, z) || o.clip?.(x, z));
+  const outer: (SV | null)[][] = rim.map(() => [null, null]);
+  for (let i = 0; i < n; i++) {
+    const a = rim[i], e = rim[(i + 1) % n];
+    const L = Math.hypot(e.x - a.x, e.z - a.z);
+    if (L < 1e-6) continue;
+    let nx = (e.z - a.z) / L, nz = -(e.x - a.x) / L;
+    if (nx * (cx - a.x) + nz * (cz - a.z) > 0) {
+      nx = -nx;
+      nz = -nz;
+    }
+    const mx = (a.x + e.x) / 2, mz = (a.z + e.z) / 2;
+    if (!open(mx + nx * (w * 0.5 + 0.1), mz + nz * (w * 0.5 + 0.1))) continue;
+    const a2 = sheet.v(a.x + nx * w, a.z + nz * w, APRON_FLUSH), e2 = sheet.v(e.x + nx * w, e.z + nz * w, APRON_FLUSH);
+    const col = o.bevelCollide ?? true;
+    sheet.tri(a, a2, e2, mat, col);
+    sheet.tri(a, e2, e, mat, col);
+    outer[i][1] = a2;
+    outer[(i + 1) % n][0] = e2;
+  }
+  for (let i = 0; i < n; i++) {
+    const [p, q] = outer[i];
+    if (p && q) sheet.tri(rim[i], p, q, mat, o.bevelCollide ?? true);
+  }
+  return emitSheet(b, sheet, o);
 }
 
 // ------------------------------------------------------------------ plazas
