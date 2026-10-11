@@ -675,6 +675,8 @@ export class RealBody {
   /** Faces and hands move (A/B switch for measuring: `avatar.real.constructor.faces = false` in the console). */
   static faces = true;
   private entry: Entry;
+  /** The avatar's own look: entries are shared by body key (no hair, beard, eyes), so the head is built from this. */
+  private look: Appearance;
   private lod: number;
   private avatar: HumanoidAvatar | null = null;
   private eyes: THREE.SkinnedMesh | null = null;
@@ -698,6 +700,7 @@ export class RealBody {
   /** `lod`: the LOD to build now (the avatar picks the right one once it knows its distance). */
   constructor(app: Appearance, lod = 2) {
     this.entry = acquire(app);
+    this.look = app;
     this.lod = lod;
     this.makeHead();
     this.ensure(lod);
@@ -711,7 +714,8 @@ export class RealBody {
     // made at LOD 2 (everyone who appears 22 m away or more) kept full-detail hair until its LOD next
     // changed (phase 3 perf audit: 330 k of the Forum's 2.2 M triangles were such hair).
     // The head asks for the morphed body again only to build a later LOD's beard (morph cache).
-    const head = buildHead(context(e, 0), Math.min(this.lod, 2) as 0 | 1 | 2, () => morphedBody(e, 0));
+    // Built from the avatar's own look (entries are shared by body key, which leaves hair, beard and eyes out).
+    const head = buildHead({ ...context(e, 0), app: this.look }, Math.min(this.lod, 2) as 0 | 1 | 2, () => morphedBody(e, 0));
     this.head = head;
     this.headObjects = head.objects;
     if (this.entry.headHelmets !== head.objects.length > 0) {
@@ -891,7 +895,7 @@ export class RealBody {
 
   /** Iris, lid skin and the template's lid opening. */
   private eyeMaterial(): THREE.Material {
-    const app = this.entry.app;
+    const app = this.look;
     return eyeMaterial(irisFor(app), app.skin, templates.get(app.sex)!.lids, app.sex);
   }
 
@@ -969,6 +973,7 @@ export class RealBody {
   setAppearance(app: Appearance): Rig {
     const old = this.entry;
     this.entry = acquire(app);
+    this.look = app;
     release(old);
     const av = this.avatar;
     this.makeHead();

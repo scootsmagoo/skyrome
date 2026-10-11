@@ -221,12 +221,22 @@ export function measureHead(body: BodyArrays, sex: 'male' | 'female', rig?: Rig)
   }
   // Smoothing must not dip below the measured hull (a cap would then sink into the nose or the chin) ...
   for (let i = 0; i < r.length; i++) r[i] = Math.max(r[i], hull[i] * 0.99);
-  // ... and the crown closes in a dome (the last rows of the hull are a flat disc).
+  // ... and the crown closes in a dome. The window above makes the last rows a flat disc, so each top row is
+  // capped by the farthest skin within its own band (the mean of the three farthest vertices, plus a millimetre).
+  // A hemisphere closing from 0.88 instead cut under the skull: the skin stood up to 20 mm outside it at the
+  // top, and every scalp cap sank into the head there (a bare patch in the crown of buns and tails).
   const j0 = Math.round(0.88 * (NR - 1));
+  let cap = Infinity;
   for (let j = j0 + 1; j < NR; j++) {
-    const t = (j - j0) / (NR - 1 - j0);
-    const arc = Math.sqrt(Math.max(0, 1 - t * t));
-    for (let k = 0; k < NA; k++) r[j * NA + k] = Math.min(r[j * NA + k], r[j0 * NA + k] * arc);
+    const yj = j / (NR - 1);
+    const rs: number[] = [];
+    for (const i of head) {
+      const yf = (pos[i * 3 + 1] - chin) / H;
+      if (Math.abs(yf - yj) < 0.5 * dRow) rs.push(Math.hypot(pos[i * 3], pos[i * 3 + 2] - cz));
+    }
+    rs.sort((a, b) => b - a);
+    cap = rs.length ? (rs[0] + rs[Math.min(1, rs.length - 1)] + rs[Math.min(2, rs.length - 1)]) / 3 + 0.001 : cap * 0.5;
+    for (let k = 0; k < NA; k++) r[j * NA + k] = Math.min(r[j * NA + k], Math.max(cap, 0.002));
   }
   let earTop = chin + 0.6 * H;
   let earBottom = chin + 0.4 * H;

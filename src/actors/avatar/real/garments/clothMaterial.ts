@@ -98,9 +98,14 @@ if (vPat > 11.5 && vPat < 13.5) {
 const LEG_PUSH = /* glsl */ `
 #ifdef USE_SKINNING
 if (legs.z > 0.0) {
+  // Codes 1/2: thigh/shin (both legs); 3/4: left upper arm/forearm; 5/6: the right arm's.
+  bool arm = legs.w > 2.5;
   for (int k = 0; k < 2; k++) {
-    float side = k == 0 ? 1.0 : -1.0;
-    float bi = legs.w < 1.5 ? (k == 0 ? ${B.thighL}.0 : ${B.thighR}.0) : (k == 0 ? ${B.shinL}.0 : ${B.shinR}.0);
+    if (arm && k == 1) break;
+    float side = arm ? (legs.w < 4.5 ? 1.0 : -1.0) : (k == 0 ? 1.0 : -1.0);
+    float bi = arm
+      ? (legs.w < 3.5 ? ${B.upperArmL}.0 : legs.w < 4.5 ? ${B.forearmL}.0 : legs.w < 5.5 ? ${B.upperArmR}.0 : ${B.forearmR}.0)
+      : (legs.w < 1.5 ? (k == 0 ? ${B.thighL}.0 : ${B.thighR}.0) : (k == 0 ? ${B.shinL}.0 : ${B.shinR}.0));
     mat4 bm = bindMatrixInverse * getBoneMatrix(bi) * bindMatrix;
     vec3 la = (bm * vec4(side * legs.x, position.y, legs.y, 1.0)).xyz;
     vec3 ld = normalize(mat3(bm) * vec3(0.0, -1.0, 0.0));
@@ -186,7 +191,7 @@ function make(name: string, withCover: boolean): THREE.MeshStandardMaterial {
     base.onBeforeCompile(shader, renderer);
     patch(shader, withCover);
   };
-  m.customProgramCacheKey = () => `skyrome-${name}-v7`;
+  m.customProgramCacheKey = () => `skyrome-${name}-v8`;
   return m;
 }
 
