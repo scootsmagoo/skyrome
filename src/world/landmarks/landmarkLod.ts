@@ -23,7 +23,7 @@ export const PIECE_FROM = 90;
 /** Grid (m) of a plain piece's twin. */
 export const PIECE_CELL = 0.4;
 /** A piece, or an instanced shape, casts its twin's shadow from this far (m). */
-export const SHADOW_TWIN_FROM = 20;
+export const SHADOW_TWIN_FROM = 30;
 /** Shapes and pieces under this many triangles are not worth a twin. */
 const MIN_SHAPE_TRIANGLES = 150;
 const MIN_PIECE_TRIANGLES = 700;

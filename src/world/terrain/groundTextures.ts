@@ -13,6 +13,7 @@
 import * as THREE from 'three';
 import { MATERIAL_BASE, type MaterialId } from '../../gfx/materialIds';
 import { MATERIAL_RECIPES, TEXTURE_STATS, roughnessFactor, tintFor } from '../../gfx/textures/catalog';
+import { proceduralPixels, type ProcImage } from '../../gfx/textures/procedural';
 import { releaseTextureAfterUpload } from '../../gfx/release';
 
 export interface GroundTextures {
@@ -107,6 +108,31 @@ function pixels(img: HTMLImageElement | null, size: number, ctx: CanvasRendering
   return ctx.getImageData(0, 0, size, size).data;
 }
 
+/** Box-filter a square RGBA image down by an integer factor (size → target); same size: the pixels as they are. */
+function downscale(data: ArrayLike<number>, size: number, target: number): Uint8ClampedArray {
+  if (size === target) return Uint8ClampedArray.from(data);
+  const f = Math.round(size / target);
+  const out = new Uint8ClampedArray(target * target * 4);
+  const n = f * f;
+  for (let y = 0; y < target; y++)
+    for (let x = 0; x < target; x++)
+      for (let c = 0; c < 4; c++) {
+        let sum = 0;
+        for (let dy = 0; dy < f; dy++) for (let dx = 0; dx < f; dx++) sum += data[(((y * f + dy) * size) + x * f + dx) * 4 + c];
+        out[(y * target + x) * 4 + c] = sum / n;
+      }
+  return out;
+}
+
+/**
+ * The layers the meshes draw from a procedural set (the paving slabs): the terrain packs the same pixels,
+ * at the same repeat and tint, so a floor drawn by the ground and by a mesh side by side is one stone.
+ */
+function procLayer(id: MaterialId): ProcImage | null {
+  const proc = MATERIAL_RECIPES[id]?.proc;
+  return proc === 'slabs' ? proceduralPixels(proc) : null;
+}
+
 /**
  * Load the photo sets for `layers` and pack them. Resolves to null without a DOM. A layer whose
  * set fails to load falls back to its flat colour (other layers stay textured).
@@ -116,7 +142,8 @@ export async function loadGroundTextures(layers: readonly MaterialId[], opts: { 
   const A = opts.albedoSize ?? 1024;
   const Sz = opts.surfaceSize ?? 512;
   const n = layers.length;
-  const sets = layers.map((id) => MATERIAL_RECIPES[id]?.set ?? null);
+  const procs = layers.map((id) => procLayer(id));
+  const sets = layers.map((id, i) => (procs[i] ? null : MATERIAL_RECIPES[id]?.set ?? null));
   const imgs = await Promise.all(
     sets.map((set) =>
       set
@@ -140,9 +167,11 @@ export async function loadGroundTextures(layers: readonly MaterialId[], opts: { 
     const [color, normal, arm] = imgs[i];
     const set = sets[i];
     const stats = set ? TEXTURE_STATS[set] : undefined;
-    const pa = pixels(color, A, ctxA);
+    const proc = procs[i];
+    // A procedural layer brings its own stats and pixels (colour 1024², normal and arm at the surface size).
+    const pa = proc && proc.color ? downscale(proc.color, proc.size, A) : pixels(color, A, ctxA);
     const oa = i * A * A * 4;
-    if (pa && stats) {
+    if (pa && (stats || proc)) {
       // Height proxy from the local luminance: stones, tufts and clods stand out; gaps are low.
       let sum = 0, sum2 = 0;
       const N = A * A;
@@ -162,17 +191,17 @@ export async function loadGroundTextures(layers: readonly MaterialId[], opts: { 
         albedo[o + 2] = pa[k * 4 + 2];
         albedo[o + 3] = Math.max(0, Math.min(255, Math.round(128 + ((lum[k] - mean) / (2.2 * std)) * 127)));
       }
-      const t = tintFor(stats.albedo, targetLinear(id));
+      const t = tintFor(proc ? proc.albedo : stats!.albedo, targetLinear(id));
       tints.push(new THREE.Vector3(t[0], t[1], t[2]));
-      rough.push(roughnessFactor(MATERIAL_RECIPES[id].roughness ?? MATERIAL_BASE[id].roughness, stats.roughness));
+      rough.push(roughnessFactor(MATERIAL_RECIPES[id].roughness ?? MATERIAL_BASE[id].roughness, proc ? proc.roughness : stats!.roughness));
     } else {
       flatColor.set(GROUND_PALETTE[id] ?? MATERIAL_BASE[id].color).convertLinearToSRGB();
       for (let k = 0; k < A * A; k++) albedo.set([flatColor.r * 255, flatColor.g * 255, flatColor.b * 255, 128], oa + k * 4);
       tints.push(new THREE.Vector3(1, 1, 1));
       rough.push(1);
     }
-    const pn = pixels(normal, Sz, ctxS);
-    const pr = pixels(arm, Sz, ctxS);
+    const pn = proc && proc.normal ? downscale(proc.normal, proc.size, Sz) : pixels(normal, Sz, ctxS);
+    const pr = proc && proc.arm ? downscale(proc.arm, proc.size, Sz) : pixels(arm, Sz, ctxS);
     const os = i * Sz * Sz * 4;
     const baseRough = Math.round(MATERIAL_BASE[id].roughness * 255);
     for (let k = 0; k < Sz * Sz; k++) {
