@@ -360,9 +360,9 @@ export const SKIRT_MIN = 0.03;
 /** Ground cover's rim lies this much under its body, so it meets the ground with no edge to see. */
 export const RIM_SINK = 0.05;
 /** Edges shorter than this are not split again. */
-const MIN_EDGE = 0.1;
+const MIN_EDGE = 0.03;
 /** No split closer than this (m) to an edge's end. */
-const MIN_PIECE = 0.02;
+const MIN_PIECE = 0.005;
 /** Deepest refinement of one coarse triangle. */
 const MAX_DEPTH = 40;
 /** Plane-side tolerance of the convex cut. */
@@ -725,10 +725,12 @@ export function emitSheet(b: MeshBuilder, sheet: Sheet, o: ConformOpts = {}): Sh
 
   // ---- 1. refine
   const out: STri[] = [];
-  /** Triangles with no area in plan (three points on a line, from splits close together): they draw nothing and are not split, but they still join their edges. */
+  /** Slivers under 1 mm tall in plan (a split point on or by the opposite edge): they draw nothing and are not split, but they still join their edges. */
   const flat: STri[] = [];
   const refine = (a: SV, bb: SV, c: SV, mat: MaterialId, col: boolean, depth: number): void => {
-    if (Math.abs((bb.x - a.x) * (c.z - a.z) - (bb.z - a.z) * (c.x - a.x)) < 1e-8) {
+    const cr = (bb.x - a.x) * (c.z - a.z) - (bb.z - a.z) * (c.x - a.x);
+    const l2 = Math.max((bb.x - a.x) ** 2 + (bb.z - a.z) ** 2, (c.x - bb.x) ** 2 + (c.z - bb.z) ** 2, (a.x - c.x) ** 2 + (a.z - c.z) ** 2);
+    if (cr * cr < 1e-6 * l2) {
       flat.push({ a, b: bb, c, mat, col });
       return;
     }
