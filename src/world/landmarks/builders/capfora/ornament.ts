@@ -659,8 +659,38 @@ export function stairsToGround(
   if (n > max) n = best;
   const foot = top - n * rise;
   const len = n * run;
-  stairs(b, { width, rise, run, count: n, material: opts.material ?? 'travertine' }, mul(at, new THREE.Matrix4().makeTranslation(0, foot, -len)));
+  // Treads under the ground are clipped: where the flight runs down a notch (a road cut between
+  // banks), the banks stand over the treads' ends, so each step is drawn only across the columns
+  // where its top is clear of the terrain (phase 4b: treads up to 3.6 m under the ground).
+  const mat = opts.material ?? 'travertine';
+  const cols = Math.max(2, Math.round(width / 0.5));
+  const spans: ({ xa: number; xb: number; bot: number } | null)[] = [];
+  let clipped = false;
+  for (let i = 0; i < n; i++) {
+    const top = foot + (i + 1) * rise;
+    const zm = -len + (i + 0.5) * run;
+    let xa = Infinity, xb = -Infinity, low = Infinity;
+    for (let c = 0; c <= cols; c++) {
+      const x = -width / 2 + (width * c) / cols;
+      const gy = g(x, zm);
+      if (gy < top - 0.04) {
+        xa = Math.min(xa, x);
+        xb = Math.max(xb, x);
+        low = Math.min(low, gy);
+      } else clipped = true;
+    }
+    spans.push(xb > xa + 0.3 ? { xa: Math.max(-width / 2, xa - width / cols / 2), xb: Math.min(width / 2, xb + width / cols / 2), bot: low } : null);
+  }
+  if (!clipped) stairs(b, { width, rise, run, count: n, material: mat }, mul(at, new THREE.Matrix4().makeTranslation(0, foot, -len)));
+  else {
+    spans.forEach((sp, i) => {
+      if (!sp) return;
+      const top = foot + (i + 1) * rise;
+      const z0 = -len + i * run;
+      span(b, mat, sp.xa, Math.min(foot, sp.bot) - 0.3, z0, sp.xb, top, z0 + run + (i === n - 1 ? 0 : 0.0), at, true);
+    });
+  }
   const gmin = Math.min(foot, minIn(-len, 0)) - 0.4;
-  if (foot - gmin > 0.05) box(b, 'tufa', 0, (gmin + foot) / 2, -len / 2, width, foot - gmin, len, at, false);
+  if (!clipped && foot - gmin > 0.05) box(b, 'tufa', 0, (gmin + foot) / 2, -len / 2, width, foot - gmin, len, at, false);
   return { foot, length: len };
 }

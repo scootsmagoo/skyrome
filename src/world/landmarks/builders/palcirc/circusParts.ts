@@ -93,7 +93,8 @@ function basin(d: Draw, a: number, c: number, hw: number, H: number) {
   const n = Math.floor((c - a) / 12);
   for (let i = 1; i <= n; i++) {
     const z = a + ((c - a) * i) / (n + 1);
-    d.span(STONE, -hw + 0.45, H - 0.2, z - 0.5, hw - 0.45, H, z + 0.5);
+    // (the bridge deck is a collider too: it was drawn 1.35 m over the basin floor with nothing in it)
+    d.span(STONE, -hw + 0.45, H - 0.2, z - 0.5, hw - 0.45, H, z + 0.5, { collide: true });
   }
 }
 
