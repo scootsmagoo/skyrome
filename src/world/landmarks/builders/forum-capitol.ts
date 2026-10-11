@@ -83,10 +83,14 @@ function tabularium(p: Part) {
   ]) d.span('peperino', x0, yG, uz0, x1, yG + uH, hd, { collide: true });
   d.span('peperino', -1.3, yG + 3.4, uz0, 1.3, yG + uH, hd);
   // steps from the Capitol saddle up to the passage
+  let backDoorY = Math.max(yG, ctx.groundAt(0, hd + 1.0) + 0.06); // where the back door's spot stands: on the saddle behind the building, or on the flight's second tread from the top
+  let backDoorZ = hd + 1.0;
   {
     const g = ctx.groundAt(0, hd + 1.2);
     if (g < yG - 0.05) {
       const n = Math.max(1, Math.ceil((yG - g) / 0.2));
+      backDoorY = n > 1 ? yG - (yG - g) / n : yG;
+      backDoorZ = hd + 0.5;
       stairs(b, { width: 2.6, rise: (yG - g) / n, run: 0.33, count: n, material: 'travertine', collider: p.main ? 'steps' : 'none' }, TRS(0, g, hd + n * 0.33, 0, Math.PI, 0));
     }
   }
@@ -131,7 +135,7 @@ function tabularium(p: Part) {
   p.spot('tabularium', 'inscription', dx, ctx.groundAt(dx, -hd - 1.9) + 0.06, -hd - 1.9, 0);
   // the best view down the Forum is from the S end of the gallery, past the Temple of Vespasian's roof
   p.spot('tabularium-gallery-vista', 'vista', 15, yG, -hd + 1.6, Math.atan2(0.3, -1));
-  p.spot('tabularium-back-door', 'door', 0, yG, hd + 1.0, Math.PI);
+  p.spot('tabularium-back-door', 'door', 0, backDoorY, backDoorZ, Math.PI);
 }
 
 // ---------------------------------------------------------------- Porticus Deorum Consentium

@@ -23,7 +23,7 @@ let hm: Heightmap | null = null;
 export function heightmap(): Heightmap {
   if (!hm) {
     const bounds = { minX: 200, maxX: 1500, minZ: -500, maxZ: 1050 };
-    hm = buildHeightmap({ ...atlas, bounds } as never, { spacing: 2, pads: landmarkPads(atlas.CITY_BOUNDS), profile: 'v1' }); // G1b: v1's ground until this crew re-fits its spots to v2 (docs/design/solid-ground.md §3, Tests)
+    hm = buildHeightmap({ ...atlas, bounds } as never, { spacing: 2, pads: landmarkPads(atlas.CITY_BOUNDS) });
   }
   return hm;
 }

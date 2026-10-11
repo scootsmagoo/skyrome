@@ -245,12 +245,18 @@ export function buildAugustanaFacade(
     }
     return true;
   };
+  // Arches meant as shops whose rooms the hill buries: shuttered, and a trader sets up on the ground
+  // against the wall instead (the facade stands on a slope here, its foot far below the street the
+  // hill leaves in front of it).
+  const stall = new Set<number>();
   const use = plan.bays.map((bb, i) => {
     if (bb.kind === 'wing') return 'blind' as const;
     const k = Math.abs(i - mid);
     if (k > 2.6) return 'blind' as const;
     const u = (['shop', 'wine', 'shutters', 'shop', 'wine'] as const)[i % 5];
-    return u === 'shutters' || roomDry(bb) ? u : ('shutters' as const);
+    if (u === 'shutters' || roomDry(bb)) return u;
+    stall.add(i);
+    return 'shutters' as const;
   });
   for (const kind of ['shop', 'wine', 'shutters', 'blind'] as const) {
     const ms = plan.bays.flatMap((bb, i) => (use[i] === kind ? [facing(bb.x, base, bb.z, bb.nx, bb.nz, bb.w / W)] : []));
@@ -488,6 +494,14 @@ export function buildAugustanaFacade(
     lamps.push({ position: lp, color: 0xffa54f, intensity: 6, distance: 8, flicker: 0.25, night: true, glow: 0.15 });
     const sp = new THREE.Vector3(0, 0, T + 1.3).applyMatrix4(facing(bb.x, base, bb.z, bb.nx, bb.nz));
     if (use[i] !== 'shutters') spots.add(`augustana-taberna-${i}`, 'vendor', sp.x, sp.y, sp.z, Math.atan2(bb.nx, bb.nz));
+    else if (stall.has(i)) {
+      // The trader's place: on the ground 1.8 m out from the wall, with a table beside.
+      const fm = facing(bb.x, 0, bb.z, bb.nx, bb.nz);
+      const out = new THREE.Vector3(0.6, 0, -1.8).applyMatrix4(fm);
+      spots.add(`augustana-taberna-${i}`, 'vendor', out.x, ctx.groundAt(out.x, out.z) + 0.05, out.z, Math.atan2(bb.nx, bb.nz));
+      const tp = new THREE.Vector3(-1.0, 0, -1.2).applyMatrix4(fm);
+      if (hi) placeProp(new Draw(b, fm), 'table', -1.0, ctx.groundAt(tp.x, tp.z) + 0.02, -1.2, 0.1, { variant: 1 });
+    }
   });
   // Lamps along the gallery at night: the emperor's windows over the Circus.
   for (let k = 1; k < nCol; k += 3) {

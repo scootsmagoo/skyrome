@@ -37,7 +37,7 @@ let hm: Heightmap;
 beforeAll(async () => {
   await initPhysics();
   const b = { minX: -400, maxX: 400, minZ: -400, maxZ: 300 };
-  hm = buildHeightmap({ ...atlas, bounds: b } as never, { spacing: 2, pads: landmarkPads(atlas.CITY_BOUNDS), profile: 'v1' }); // G1b: v1's ground until this crew re-fits its spots to v2 (docs/design/solid-ground.md §3, Tests)
+  hm = buildHeightmap({ ...atlas, bounds: b } as never, { spacing: 2, pads: landmarkPads(atlas.CITY_BOUNDS) });
 });
 
 interface Placed {

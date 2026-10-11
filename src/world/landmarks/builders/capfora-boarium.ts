@@ -163,14 +163,14 @@ function buildCarmentalis(ctx: LandmarkContext, b: MeshBuilder, detail: Detail, 
   altar(b, 0.9, 0.6, 0.85, T(sx0, 0, ww / 2 + 0.9), { detail, material: 'tufa', fire: true });
   addLamp(ctx, sx0, 1.2, ww / 2 + 0.9, 'brazier');
   post(b, 'bronze', sx0 + 0.6, 0.85, ww / 2 + 0.9, 0.5, 0.03, I, 5);
-  spots.push(spotAt('carmenta', 'shrine', sx0, 0, ww / 2 + 2.3, sx0, ww / 2, { label: 'Shrine of Carmenta, the prophetess' }));
+  spots.push(spotAt('carmenta', 'shrine', sx0, g(sx0, ww / 2 + 2.3) + 0.05, ww / 2 + 2.3, sx0, ww / 2, { label: 'Shrine of Carmenta, the prophetess' }));
   // Torches on the city face of the gate, a traveller who will not use the right-hand arch.
   for (const x of [-(mid / 2 + pass + pier) + 0.55, mid / 2 + pass + pier - 0.55]) torch(ctx, b, x, 2.6, depth / 2, Math.PI);
-  spots.push(spotAt('superstitious', 'npc', xR + 1.8, 0, depth / 2 + 3.5, xL, -depth, { label: 'A traveller who goes the long way round rather than through the Porta Scelerata' }));
-  spots.push(spotAt('greens-seller', 'stall', xL - 4.2, 0, -depth / 2 - 4.5, xL, 0, { label: 'Greengrocer from the Forum Holitorium' }));
+  spots.push(spotAt('superstitious', 'npc', xR + 1.8, g(xR + 1.8, depth / 2 + 3.5) + 0.05, depth / 2 + 3.5, xL, -depth, { label: 'A traveller who goes the long way round rather than through the Porta Scelerata' }));
+  spots.push(spotAt('greens-seller', 'stall', xL - 4.2, g(xL - 4.2, -depth / 2 - 4.5) + 0.05, -depth / 2 - 4.5, xL, 0, { label: 'Greengrocer from the Forum Holitorium' }));
   spots.push(spotAt('city-side', 'spawn', xL - 0.5, g(xL - 0.5, depth / 2 + 5), depth / 2 + 5, xL, 0, { label: 'Porta Carmentalis' }));
-  spots.push(spotAt('gate-left', 'door', xL, 0, depth / 2 + 1.2, xL, -depth, { label: 'Porta Carmentalis', text }));
-  spots.push(spotAt('gate-scelerata', 'door', xR, 0, depth / 2 + 1.2, xR, -depth, { label: 'Porta Scelerata — the wicked gate (superstitious people avoid it)' }));
+  spots.push(spotAt('gate-left', 'door', xL, g(xL, depth / 2 + 1.2) + 0.05, depth / 2 + 1.2, xL, -depth, { label: 'Porta Carmentalis', text }));
+  spots.push(spotAt('gate-scelerata', 'door', xR, g(xR, depth / 2 + 1.2) + 0.05, depth / 2 + 1.2, xR, -depth, { label: 'Porta Scelerata — the wicked gate (superstitious people avoid it)' }));
 }
 
 export const builders: LandmarkBuilder[] = [

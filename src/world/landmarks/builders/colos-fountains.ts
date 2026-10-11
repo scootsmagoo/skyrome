@@ -91,8 +91,14 @@ function buildMetaSudans(ctx: LandmarkContext): LandmarkBuild {
   const H = 17 * S; // total height
   const seg = high ? 48 : 20;
   // Paved round piazza with a travertine kerb (the crossroads of the regions).
-  const plaza = lathe(new ProfileBuilder(Rb + 4.5, 0.0).to(Rb + 4.5, 0.08).to(0.0, 0.08).build(), { segments: seg });
+  // The ground round the fountain is not level (it falls away east and rises west), so the disc has
+  // a skirt down to the lowest ground under its rim and a collider: people stand on the paving they
+  // see, not on the terrain 0.4 m below it.
+  let plazaLow = 0;
+  for (let k = 0; k < 16; k++) plazaLow = Math.min(plazaLow, ctx.groundAt(Math.sin((k * Math.PI) / 8) * (Rb + 4.5), Math.cos((k * Math.PI) / 8) * (Rb + 4.5)));
+  const plaza = lathe(new ProfileBuilder(Rb + 4.5, plazaLow - 0.05).to(Rb + 4.5, 0.08).to(0.0, 0.08).build(), { segments: seg });
   b.add(plaza, 'paving_travertine', undefined, { castShadow: false });
+  b.collider({ kind: 'cylinder', center: new THREE.Vector3(0, 0.04, 0), halfHeight: 0.04, radius: Rb + 4.5 });
   // Basin: low marble rim (seat height), water surface, a step inside.
   const rim = lathe(new ProfileBuilder(Rb + 0.1, 0.0).to(Rb + 0.1, 0.62).to(Rb + 0.05, 0.68).to(Rb - 0.4, 0.68).to(Rb - 0.45, 0.62).to(Rb - 0.45, 0.25).build(), { segments: seg });
   b.add(rim, 'marble');
@@ -171,7 +177,9 @@ function buildMetaSudans(ctx: LandmarkContext): LandmarkBuild {
   // Seats on the rim (people rest and fill jugs here), a vista and a meeting spot.
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2 + 0.3;
-    spots.push({ id: `meta-sudans-rim-${i + 1}`, kind: 'sit', position: new THREE.Vector3(Math.sin(a) * (Rb + 0.25), 0.7, Math.cos(a) * (Rb + 0.25)), heading: a });
+    // Where the hill has buried the rim the seat is on the ground beside it.
+    const rx = Math.sin(a) * (Rb + 0.25), rz = Math.cos(a) * (Rb + 0.25);
+    spots.push({ id: `meta-sudans-rim-${i + 1}`, kind: 'sit', position: new THREE.Vector3(rx, Math.max(0.7, ctx.groundAt(rx, rz) + 0.02), rz), heading: a });
   }
   spots.push({ id: 'meta-sudans-fountain', kind: 'shrine', position: new THREE.Vector3(0, 0.1, -(Rb + 1.2)), heading: 0 });
   spots.push({ id: 'meta-sudans-vista', kind: 'vista', position: new THREE.Vector3(Rb + 3.5, 0.1, Rb + 3.5), heading: -Math.PI * 0.75 });

@@ -47,10 +47,12 @@ const PAD_CATEGORIES = new Set([
  * footprints), as wide as the building, blending out over `frontMargin`; `margin` replaces the 14 m
  * blend of the main pad to the natural ground.
  */
-const PAD_EXTRA: Record<string, { grow?: number; margin?: number; front?: number; frontMargin?: number }> = {
+const PAD_EXTRA: Record<string, { grow?: number; margin?: number; front?: number; frontMargin?: number; core?: number }> = {
   // The Colosseum's paved plaza out to its ring of cippi (builder: colos-colosseum.ts), cut into
   // the foot of the Velia and the Oppian.
-  colosseum: { grow: 20, margin: 22 },
+  // `core`: how far inside the pad's edge (v2) the pad wins over the roads: the plaza's outer ring
+  // runs beside the Via Labicana, which dipped it 0.3 m with the default 3 m.
+  colosseum: { grow: 20, margin: 22, core: 0 },
   // The porch and approach on the north side, on the brow of the Oppian (colos-baths.ts).
   'baths-titus': { front: 26, frontMargin: 20 },
   // The entrance porch and its inscription stand on the lip of the Oppian (colos-baths.ts).
@@ -102,7 +104,7 @@ export function landmarkPads(bounds: { minX: number; maxX: number; minZ: number;
       margin: extra?.margin ?? 14,
       // v2: inside the landmark's own footprint (with any plaza it lays: PAD_EXTRA grow) the pad
       // wins over the roads; a poly footprint is not grown.
-      grow: lm.footprint.kind === 'poly' ? 0 : 3,
+      grow: lm.footprint.kind === 'poly' ? 0 : (extra?.core ?? 3),
       ...v2Elevation(lm, v2.get(lm.id)),
       // v2: set inside a seating bowl (the Arch of Titus in the Circus), it blends on over the bowl's
       // draped arena instead of standing in a step at its own footprint (heightmap.ts, stampV2).
