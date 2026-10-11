@@ -838,6 +838,7 @@ export function buildStreetGraph(
   const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
   const joins = opts.deadEnds === false ? null : joinStrays(B, P, nodeY, inArea, before);
   alongBuf = null;
+  blockedCache.clear();
 
   // Spots: street furniture, and doors along the blocks of the detail area.
   const graph = finalize(B);
@@ -1018,6 +1019,18 @@ const WALK_MERGE = 1;
 /** A node nothing joins is parked on the nearest linked node of the network within this (m). */
 const PARK_REACH = 90;
 
+/**
+ * `P.blocked` (no height) of 1 m cells, shared by every search of one graph build: the strays and islands a build
+ * joins cluster (a forum's doors, a quarter cut off by a wall), and their windows overlap (each cell is two to six rays).
+ */
+const blockedCache = new Map<number, boolean>();
+function blockedAt(P: LinkProbe, x: number, z: number): boolean {
+  const key = (Math.round(x) + 32768) * 65536 + (Math.round(z) + 32768);
+  let b = blockedCache.get(key);
+  if (b === undefined) blockedCache.set(key, (b = P.blocked(x, z)));
+  return b;
+}
+
 /** linkAlong's buffers (one window), kept while a graph is built. */
 let alongBuf: { goal: Uint8Array; state: Int8Array; dist: Float32Array; came: Int32Array } | null = null;
 
@@ -1067,7 +1080,7 @@ function linkAlong(B: Builder, id: number, P: LinkProbe, main: Set<number>, ya?:
       const [x, z] = at(c);
       const from = Math.hypot(x - n.x, z - n.z);
       // The plan first (cheap), then the colliders (inside a wall, no headroom); the door a search leaves stands in its own building.
-      const f = (P.cell ? P.cell(x, z, from) : true) && (from < 1.5 || !P.blocked(x, z));
+      const f = (P.cell ? P.cell(x, z, from) : true) && (from < 1.5 || !blockedAt(P, x, z));
       state[c] = f ? 1 : 2;
     }
     return state[c] === 1;
