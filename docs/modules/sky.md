@@ -113,6 +113,17 @@ The shadow pass itself is trimmed by `gfx/shadowLod.ts` (stand-ins, one depth ma
 caster) and `gfx/fastCull.ts` (batches with nothing in the shadow view skip it); see CLAUDE.md. The light **direction** moves in ~0.03° steps rather than every
 frame, because a sub-texel jump is invisible and the grid stays stable in between.
 
+**Bias (phase 4b, LOOK).** The game draws a reversed depth buffer, where three r186's PCF adds `shadow.bias`
+unflipped: the old `-0.00025` pushed every receiver into its own shadow map, so flat ground (the Forum's
+paving, plaza floors, wall bases) was part-shadowed by itself in bands (the "banding on all shadowed
+ground"). `SINGLE_BIAS = +0.0006` (about 0.3 m along the light over the 520 m depth range) lifts receivers
+off the map; real shadows keep their size. `scripts/audit/look-banding.mjs` measures the stripe energy at 2-6 px
+periods inside the shadowed-ground mask at five cameras, on the frame after a map re-render and the one after
+(the 30 Hz re-render): 19 % of the old value (+0.0005 to +0.002 are all on the same plateau; +0.0002 and 0 are
+worse than the old value). The PCF radius (3) and normalBias do not matter on that plateau. The cascade mode keeps
+its own bias. Landmark twins cast the shadow from 30 m (`SHADOW_TWIN_FROM`, it was 20), so a piece under 30 m
+casts the same geometry it draws.
+
 **Single vs cascades (measured, dev scene, M4 Max, 1080p):** cascades cost +0.09–0.18 ms/frame, +29
 draw calls and +150k shadow triangles here, and in a city that grows with the number of casters within
 220 m (the far cascade sees about 4× the area). Near quality is the same. The win is shadows out to

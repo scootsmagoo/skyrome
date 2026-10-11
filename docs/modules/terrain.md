@@ -272,3 +272,13 @@ terrain 0.6 s, water 0.16 s, dressing 0.3 s; the photo arrays are packed asynchr
 - The kit lacks poplars and willows, so the banks get planes, laurels and figs.
 - Trees fade out beyond 650 m (from very high up the far city is bare); there are no impostors.
 - NPCs don't know about water; their navigation should avoid `game.water.depthAt(x, z) > 1.2`.
+
+### Phase 4b, LOOK: one travertine, one basalt scale
+
+- The ground's `paving_travertine` layer packs the **mesh's procedural slab set** (`proceduralPixels('slabs')`,
+  same seed, same pixels, normal and ambient/roughness maps downsampled to the surface size), at the recipe's 6 m
+  repeat and the same tint and roughness factor as the mesh material, normal strength 0.7. Photo sets still pack
+  the other layers. A floor drawn by the terrain and by a mesh side by side is one stone.
+- `paving_basalt` repeats 3.0 m and `cobbles` 2.4 m (3.2 / 1.6 before; ratio 1.25), their wear and puddle stains
+  are about half. The terrain reads the same recipe tiles (`Terrain.layerTiles`).
+- Not done here: the kerb tint (the kerbs are `travertine` in `arch/fabric/streets.ts`, a file LOOK does not own).

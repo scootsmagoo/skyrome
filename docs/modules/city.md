@@ -308,3 +308,8 @@ The far massing material is flat-shaded (no normal variance), so it needs none.
 - `linkIslands` (network.ts) now looks up to 120 m (was 60) for the main network, so the street graph is 99.3% reachable from the Forum; the four islands left (3 to 5 nodes, lanes walled in between courts) are pinned by `tests/city.roads.test.ts`.
 - `buildPlaza({ bevelCollide })` (default false): only the city's own plazas (roads.ts junctions and piazzas, fill.ts) collide with the walkable bevel. Landmark builders using `buildPlaza` keep their old colliders. `buildStreet` is used only by the city and the `fabric` demo scene.
 - The crawl's ledge test (`geomAudit.ts`) no longer counts a monotone ramp (apron, dropped kerb) as a ledge. The remaining new ledge cells are mostly the designed KERB step on roads that now pass the crawl stops (Via Labicana round the Colosseum).
+
+### Phase 4b, LOOK: streamer
+
+- Block LOD has **8 m of hysteresis** on each threshold (30, 85, 140 m; `LEVEL_HYSTERESIS`): the finer level shows once the camera is 8 m inside the radius and stays until it is 8 m outside (a block with no history uses the plain radius). Builds and evictions keep their own reach (1.25 x radius + 10, 1.35 x radius + 16), which already exceeds the held range.
+- `CityStreamer.settle(pos, maxMs)` builds the street cells and the full/mid levels around `pos` within a time bound and reports what is missing; `gfx/prewarm.ts` calls it behind the loading screen (`boot.ts`, quick starts), together with the ground textures, the staged body builds and the people's shader programs, so the first view does not keep changing for 2.7 s. `?prewarm=0` skips it (`scripts/audit/look-prewarm.mjs` runs both).
