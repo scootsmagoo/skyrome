@@ -787,6 +787,8 @@ export class RealBody {
     avatar.root.add(this.eyes);
     this.eyes.updateMatrixWorld(true);
     this.eyes.bind(avatar.skeleton, new THREE.Matrix4());
+    // Skinned meshes cull on their own sphere, not the geometry's (see mountHead).
+    this.eyes.boundingSphere = this.entry.eyes.boundingSphere!.clone();
     this.eyes.visible = this.lod < EYE_LODS && !this.firstPerson;
     this.mountHead();
     this.applyShells();
@@ -849,6 +851,9 @@ export class RealBody {
       this.shells.bind(av.skeleton, new THREE.Matrix4());
     }
     this.shells.geometry = g;
+    // Cull on the body-sized sphere (see mountHead): one three.js measures from the bones is too small, or
+    // lands anywhere when the flat skeleton has left them stale, and the cloth vanishes over hidden skin.
+    this.shells.boundingSphere = g.boundingSphere!.clone();
     this.shells.visible = true;
   }
 
@@ -979,6 +984,7 @@ export class RealBody {
     this.makeHead();
     if (av) {
       this.eyes!.geometry = this.entry.eyes;
+      this.eyes!.boundingSphere = this.entry.eyes.boundingSphere!.clone();
       this.eyes!.material = this.eyeMaterial();
       this.mountHead();
     }
