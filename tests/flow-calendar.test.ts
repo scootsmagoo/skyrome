@@ -35,15 +35,20 @@ describe('the pridie clamp (GDD §14.10)', () => {
   });
 
   it('runs freely once the anchor quest is done, and steps onto the anchor day', () => {
-    let done = false;
-    const cal = new Calendar(113, MAY11, (q) => done && q === 'mq-04-columna');
+    const done = new Set<string>();
+    const cal = new Calendar(113, MAY11, (q) => done.has(q));
     expect(cal.stepToAnchor()).toBe(true);
     expect(cal.date().day).toBe(12);
     expect(cal.isFestival('fest-columna')).toBe(true);
-    done = true;
+    done.add('mq-04-columna');
+    // 12 May is the eve of the next anchor (mq-05, Pudens's offer on 13 May): held there, then stepped onto.
     cal.sync(1);
+    expect(cal.date().day).toBe(12);
+    expect(cal.clamp).toBe('mq-05-tabula');
+    expect(cal.stepToAnchor()).toBe(true);
     expect(cal.date().day).toBe(13);
     expect(cal.isFestival('fest-lemuria')).toBe(true);
+    done.add('mq-05-tabula');
     // The next anchor (the Vestalia, 9 June) holds 8 June.
     cal.sync(60);
     expect(cal.date()).toEqual({ year: 113, month: 5, day: 8 });

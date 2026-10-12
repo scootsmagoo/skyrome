@@ -14,6 +14,7 @@
  */
 import { completed, dusk, hourNow, origin, rotate, running, stage } from '../../content/talk';
 import { defineDialogue, type DialogueChoice, type DialogueContext } from '../types';
+import { GRATUS_TABULA, gratusTabulaStart } from './tabula';
 
 const MQ1 = 'mq-01-madida-capena';
 const MQ2 = 'mq-02-tabella';
@@ -259,6 +260,9 @@ const gratus = defineDialogue({
     if (s4 === 'ceremony') return 'd12cer';
     if (s4 === 'climb' || s4 === 'archer') return c.memory.w0said ? 'w0again' : 'w0';
     if (s4 === 'aftermath' || s4 === 'aftermath-killed') return 'a0';
+    // mq-05 (the Castra Peregrina): the infirmary.
+    const t5 = gratusTabulaStart(c);
+    if (t5) return t5;
     if (completed(c, MQ4)) return 'mq4after';
     const s2 = stage(c, MQ2);
     if (s2 === 'gratus') return 'day0';
@@ -325,6 +329,7 @@ const gratus = defineDialogue({
       text: 'At me? … Then someone in my own camp told them which centurion was asking about pepper. Tell Pudens. Tell him exactly that.',
       end: true,
     },
+    ...GRATUS_TABULA,
     mq4after: {
       text: 'The Column is dedicated, and I am still on my feet. Pudens will send for you when he is ready. Walk on.',
       end: true,

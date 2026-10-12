@@ -244,6 +244,17 @@
 .jr-obj .opt { font-style: italic; color: var(--sr-parch-ink-3); }
 .jr-obj .cnt { color: var(--sr-parch-ink-2); }
 .jr-actions { display: flex; gap: 0.7rem; margin-top: 1.3rem; }
+.jr-faces { list-style: none; padding: 0; margin: 0.4rem 0 0; display: flex; flex-direction: column; gap: 0.45rem; }
+.jr-face { display: flex; gap: 0.7rem; align-items: center; font-size: 1.15rem; color: var(--sr-parch-ink-3); font-style: italic; }
+.jr-face.unmasked { color: var(--sr-parch-ink); font-style: normal; }
+.jr-face-mask { flex: none; width: 2rem; height: 2rem; border-radius: 50%; border: 1.5px dashed var(--sr-parch-ink-3); display: grid; place-items: center; font-family: var(--sr-display); font-weight: 700; font-style: normal; }
+.jr-face.unmasked .jr-face-mask { border-style: solid; border-color: var(--sr-parch-red); color: var(--sr-parch-red); }
+.jr-face-role { color: var(--sr-parch-ink-2); }
+.jr-clues { list-style: none; padding: 0; margin: 0; }
+.jr-clue { font-size: 1.1rem; line-height: 1.45; padding: 0.2rem 0 0.2rem 1rem; border-left: 2px solid rgba(139, 35, 24, 0.35); margin-bottom: 0.35rem; color: var(--sr-parch-ink-2); }
+.jr-clue b { color: var(--sr-parch-ink); }
+.jr-lead { font-style: italic; }
+.jr-board-count { margin-top: 1rem; font-style: italic; color: var(--sr-parch-ink-3); font-size: 1.05rem; padding: 0 0.4rem; }
 .jr-btn.sr-btn { background: rgba(255, 248, 228, 0.35); border-color: rgba(93, 69, 41, 0.45); color: var(--sr-parch-ink); }
 .jr-btn.sr-btn:hover, .jr-btn.sr-btn.is-on { background: rgba(139, 35, 24, 0.85); color: #f6e9cc; border-color: rgba(60, 20, 10, 0.8); box-shadow: none; }
 .jr-btn .sr-key { background: rgba(46, 32, 19, 0.85); }

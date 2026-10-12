@@ -118,4 +118,6 @@ export const LOOT_TABLES: LootTableDef[] = [
   { id: 'body.boss-suchus', rolls: [0, 0], entries: [], always: [{ item: 'corium', count: 2 }, { item: 'nugae' }] },
   // mq-04 (docs/design/mq-04-columna.md §2.1): the archer on the Column platform.
   { id: 'body.npc-bitus', rolls: [0, 0], entries: [], denarii: { range: [2, 2] }, always: [{ item: 'quest-tessera-mucaporis' }, { item: 'quest-drachma-parthica', count: 3 }, { item: 'sica' }, { item: 'arcus' }] },
+  // mq-05 (docs/STORY.md chapter 5): the man in the dark cloak who follows the player to the Caelian.
+  { id: 'body.npc-sicarius-caelius', rolls: [0, 0], entries: [], denarii: { range: [6, 6] }, always: [{ item: 'quest-tabula-sicarii' }, { item: 'sica' }] },
 ];

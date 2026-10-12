@@ -24,6 +24,7 @@ const MQ01 = 'mq-01-madida-capena';
 const MQ02 = 'mq-02-tabella';
 const MQ03 = 'mq-03-lemuria';
 const MQ04 = 'mq-04-columna';
+const MQ05 = 'mq-05-tabula';
 const LUD01 = 'lud-01-sacramentum';
 const TABLET = 'quest-tabella-signata';
 
@@ -63,6 +64,25 @@ function afterLemuria(game: Game) {
   game.quests.setStage(MQ03, 'done');
   game.calendar?.stepToAnchor?.();
   give(game, 'quest-nuntius-festi');
+}
+
+/**
+ * Chapter 4 played: the archer spared (he talks, and Pudens has him), the token and the arrow in the
+ * belt, the calendar stepped onto 13 May; mq-04 done starts mq-05 (the camp opens at first light).
+ */
+function afterColumn(game: Game) {
+  afterLemuria(game);
+  game.quests.flags.set('columna-open', true);
+  game.quests.flags.set('bitus-fate', 'spared');
+  game.quests.flags.set('mq04-bitus-target', true);
+  give(game, 'quest-tessera-mucaporis');
+  give(game, 'quest-sagitta-dacica');
+  // What Mus's chest gave in chapter 2 (the checkpoints skip it): the board pins them.
+  give(game, 'quest-tabula-rasa');
+  give(game, 'quest-drachma-parthica');
+  game.player?.inventory?.remove('quest-nuntius-festi', 1);
+  game.calendar?.stepToAnchor?.();
+  game.quests.setStage(MQ04, 'done');
 }
 
 /** Put the player on the stair's top landing, through the cell's own entry (fade, then inside). */
@@ -182,6 +202,26 @@ export const CHECKPOINTS: Checkpoint[] = [
       game.quests.flags.set('bitus-fate', 'spared');
       give(game, 'quest-tessera-mucaporis');
       game.quests.setStage(MQ04, 'aftermath');
+    },
+  },
+  {
+    id: 'camp',
+    label: 'The morning after the Column: up the Caelian to the Castra Peregrina (the follower, the gate)',
+    at: 'colosseum',
+    hour: 7,
+    setup: afterColumn,
+  },
+  {
+    id: 'board',
+    label: 'Inside the Castra Peregrina: Pudens’s offer and the board (Gratus in the infirmary, Bitus in the cell)',
+    at: 'castra-peregrina',
+    hour: 8,
+    place: 'peregrina-principia-gate',
+    setup: (game) => {
+      afterColumn(game);
+      game.quests.flags.set('mq05-sicarius-dead', true);
+      give(game, 'quest-tabula-sicarii');
+      game.quests.setStage(MQ05, 'pudens');
     },
   },
   {

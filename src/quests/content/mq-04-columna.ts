@@ -617,7 +617,7 @@ const done: QuestStageDef = {
     releaseTrajan(g);
     releaseCrowd(g);
     stopPoll(g);
-    g.events.emit('ui:banner', { kind: 'generic', label: 'Act I continues', title: 'The Board', subtitle: 'Pudens’s offer, 13 May, comes in a future update.', duration: 7 });
+    g.events.emit('ui:banner', { kind: 'generic', label: 'Act I continues', title: 'The Board', subtitle: 'Pudens waits at the Castra Peregrina, on the Caelian, on 13 May.', duration: 7 });
   },
   end: 'complete',
 };

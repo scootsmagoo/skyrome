@@ -1,6 +1,6 @@
 /**
  * The golden-path bot (AC-15), run IN THE PAGE by scripts/golden-path.mjs. It plays Act I's
- * chapters (docs/STORY.md: the gate, the tablet, the Lemuria, the dedication) the way a player would:
+ * chapters (docs/STORY.md: the gate, the tablet, the Lemuria, the dedication, the board) the way a player would:
  * follows the tracked objective's marker on foot, talks to the NPC it names and picks dialogue
  * choices, fights whoever attacks it, uses what the objective points at (a strongbox, a clue, the
  * seal on the Column's door, a door), and waits (T) when a stage needs the evening, midnight or first
@@ -16,8 +16,9 @@
   const game = window.__skyrome.game;
   const p = game.player;
   const MQ04 = 'mq-04-columna';
+  const MQ05 = 'mq-05-tabula';
   const BITUS = 'npc-bitus';
-  const QUESTS = ['mq-01-madida-capena', 'mq-02-tabella', 'mq-03-lemuria', MQ04];
+  const QUESTS = ['mq-01-madida-capena', 'mq-02-tabella', 'mq-03-lemuria', MQ04, MQ05];
   const L = (window.__gp = { t0: performance.now(), events: [], snags: [], errors: [], talks: [], done: false, goal: null, walked: 0, teleports: 0, fights: 0 });
   const at = () => +((performance.now() - L.t0) / 1000).toFixed(1);
   const log = (...a) => L.events.push([at(), ...a]);
@@ -89,8 +90,8 @@
   // ------------------------------------------------------------------ dialogue
 
   const AVOID = /attack|threat|insult|bribe|steal|lie\b|draw your|strike|iugula|kill/i;
-  const LEAVE = /goodbye|farewell|leave|later|vale|nothing|never mind|that is all|go on my way|walk away/i;
-  const WANT = /gratus|tablet|ready|begin|sign|guest|scutum|spare|mitte|curved|blade|mus\b|fight|bout|missio|deliver|here is|take it|courier|festus|strongroom|scutarii|murmill|join|side|yes|again/i;
+  const LEAVE = /goodbye|farewell|leave|later|vale|nothing|never mind|that is all|go on my way|walk away|not yet/i;
+  const WANT = /gratus|tablet|ready|begin|sign|guest|scutum|spare|mitte|curved|blade|mus\b|fight|bout|missio|deliver|here is|take it|courier|festus|strongroom|scutarii|murmill|join|side|yes|again|token|work for you/i;
   const visited = new Set();
   let talkT = 0;
   let lastDialogue = null;
@@ -538,6 +539,12 @@
         if (goal.obj === 'forum' && (h < 5.5 || h >= 20)) until = h >= 20 ? 30 : 6;
         else if (goal.obj === 'post' && h < 6 && goal.pos && dist(goal.pos) < 8) until = 6;
       }
+      // mq-05: Pudens said tomorrow. The camp sees visitors from first light on 13 May until dark
+      // (flag mq05-camp-open): wait for it before setting out, as a player who read the hint would.
+      if (goal && until === null && goal.quest === MQ05 && (goal.obj === 'camp' || goal.obj === 'gate' || goal.obj === 'pudens') && !game.quests.flags.get('mq05-camp-open')) {
+        const stepped = !!game.quests.state(MQ05)?.vars?.calDone;
+        until = stepped && h < 5.5 ? 6 : 30;
+      }
       if (goal && until !== null) {
         hold('KeyW', false);
         if (performance.now() < waitAgainAt) return;
@@ -576,6 +583,24 @@
         resetProgress();
         arrivedAt = 0;
       }
+      // mq-05: search the man in the dark cloak (his body is an interaction, 'body:<id>'), and look at the board.
+      if (goal.quest === MQ05 && goal.obj === 'search') {
+        const body = [...(game.interactions?.items ?? [])].find((i) => /^body:npc-sicarius-caelius/.test(i.id));
+        if (body) {
+          const bp = body.position();
+          if (dist(bp) > 2) return walkTo({ ...goal, pos: { x: bp.x, z: bp.z } });
+          hold('KeyW', false);
+          if (performance.now() - (L.usedAt ?? 0) > 1500) {
+            L.usedAt = performance.now();
+            log('use', body.label());
+            body.interact(game);
+            game.ui?.top?.view?.takeAll?.();
+            game.ui?.closeAll?.();
+          }
+          return;
+        }
+      }
+      if (goal.quest === MQ05 && goal.obj === 'board' && useNear(/mq05-board/, 3)) return;
       if (!goal.pos) {
         snag('marker unresolved', JSON.stringify(goal.target));
         L.done = true;

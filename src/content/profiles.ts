@@ -49,6 +49,15 @@ export const BITUS_PROFILE: CombatProfile = archetype('sagittarius', {}, {
   skill: 40, poise: 30, reactionS: 0.4, blockSkill: 0.1, aggression: 0.5, yieldAt: 0.25, fleeAt: 0, loot: 'body.npc-bitus',
 });
 
+/**
+ * mq-05 (docs/STORY.md chapter 5): the man in the dark cloak who follows the player up the Caelian. A
+ * sicarius (poisoned sica, feints), a little softer than the veteran tier (the player is about level 2
+ * here); he fights to the death, and his body carries the couriers' tablet.
+ */
+export const SICARIUS_PROFILE: CombatProfile = archetype('sicarius', {}, {
+  name: 'Man in a dark cloak', health: 70, skill: 40, yieldAt: 0, fleeAt: 0, loot: 'body.npc-sicarius-caelius',
+});
+
 /** §5.2 (mq-04): the two knife-men left to hold the Column's stair: thugs with a sica who never yield (nor run). */
 export const DACIAN_KNIFE_PROFILE: CombatProfile = tier('thug', {
   name: 'Dacian knife-man', health: 40, armor: 0, armorFamily: 'cloth', worn: ['tunica', 'bracae'], weapon: 'sica', yieldAt: 0, fleeAt: 0, loot: 'thug',
