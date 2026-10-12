@@ -29,6 +29,7 @@ import type { Surface } from '../audio/FootstepDriver';
 import type { GameEvents } from '../core/Events';
 import type { Game, System } from '../core/Game';
 import { codeLabel } from '../core/Input';
+import { byDevice, controlName } from '../ui/prompts';
 import { DEG, clamp, damp, wrapAngle } from '../core/math';
 import { Layer } from '../core/Physics';
 import { Rng } from '../core/Rng';
@@ -1123,7 +1124,13 @@ export class CombatSystem implements System, PlayerCombatHost {
       if (n < 3 && !this.playerC?.lockTarget) {
         st.set('combatLockHints', n + 1);
         const key = (a: 'lockOn' | 'lookLeft' | 'lookRight') => codeLabel(this.game.input.bindings[a]?.[0] ?? '?');
-        this.game.events.emit('ui:notify', { text: `Lock on: ${key('lockOn')}. While locked, ${key('lookLeft')} ${key('lookRight')} or ${key('lockOn')} switch targets; hold ${key('lockOn')} to let go.`, kind: 'info' });
+        const lock = controlName(this.game, 'lockOn');
+        const text = byDevice(this.game, {
+          keyboard: `Lock on: ${key('lockOn')}. While locked, ${key('lookLeft')} ${key('lookRight')} or ${key('lockOn')} switch targets; hold ${key('lockOn')} to let go.`,
+          gamepad: `Lock on: ${lock}. While locked, ${lock} switches targets; hold it to let go.`,
+          touch: `Lock on: tap ${lock}. While locked, tap ${lock} again to switch targets; hold it to let go.`,
+        });
+        this.game.events.emit('ui:notify', { text, kind: 'info' });
       }
     });
     ev.on('combat:ended', () => this.game.audio?.music?.setOverride('combat', null));
@@ -1690,7 +1697,11 @@ export class CombatSystem implements System, PlayerCombatHost {
     const parent = ui?.hud?.el ?? this.opts.hudRoot;
     if (!parent) return;
     const b = this.game.input.bindings;
-    this.hud = new CombatHud(parent, { attack: codeLabel(b.attack.find((k) => !k.startsWith('Mouse')) ?? 'KeyF'), interact: codeLabel(b.interact[0] ?? 'KeyE') });
+    const keyboard = this.game.input.device === 'keyboard';
+    this.hud = new CombatHud(parent, {
+      attack: keyboard ? codeLabel(b.attack.find((k) => !k.startsWith('Mouse')) ?? 'KeyF') : controlName(this.game, 'attack'),
+      interact: keyboard ? codeLabel(b.interact[0] ?? 'KeyE') : controlName(this.game, 'interact'),
+    });
     this.provideUi();
     const sys: System = {
       name: 'combatHud',

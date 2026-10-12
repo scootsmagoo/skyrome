@@ -305,6 +305,8 @@ export class Game {
     if (!(dt > 0)) dt = 0;
     dt = Math.min(dt, 0.1);
     this.elapsed += dt;
+    // Gamepads and on-screen controls, before any system reads input (menus included).
+    this.input.beginFrame(dt);
 
     // FPS counter
     this.fpsAccum += dt;

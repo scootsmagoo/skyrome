@@ -13,6 +13,9 @@ export const PLAYER_SPEEDS = {
   turnRate: 12, // rad/s for the body to face the move direction in third person
 };
 
+/** A stick pushed less than this far (0..1) walks instead of running. */
+export const ANALOG_WALK = 0.55;
+
 /** Fastest auto-recenter swing (rad/s): slow enough to read as the camera settling, not turning. */
 export const RECENTER_MAX_RATE = 0.5;
 
@@ -81,7 +84,8 @@ export class PlayerController implements System {
     p.pitch = clamp(p.pitch + look.pitch, -1.45, 1.35);
     const axes = input.moveAxes();
     const moving = axes.x !== 0 || axes.z !== 0;
-    const keys = (axes.x + 1) * 3 + (axes.z + 1);
+    // Which way the keys (or the stick, coarsely) point: a change drops the recenter latch.
+    const keys = (Math.sign(Math.round(axes.x * 2)) + 1) * 3 + (Math.sign(Math.round(axes.z * 2)) + 1);
     if (input.lookActive || !moving || keys !== this.inputKeys) this.inputYaw = null;
     this.inputKeys = keys;
     this.moveTime = input.lookActive || !moving ? 0 : this.moveTime + dt;
@@ -91,7 +95,8 @@ export class PlayerController implements System {
     if (input.pressed('walkToggle')) p.walkMode = !p.walkMode;
     if (this.sneakMode === 'hold') p.sneaking = input.down('sneak');
     else if (input.pressed('sneak')) p.sneaking = !p.sneaking;
-    if (this.sprintMode === 'toggle' && input.pressed('sprint')) this.sprintLatched = !this.sprintLatched;
+    // A stick click or an on-screen button can't be held while steering: sprint toggles there.
+    if ((this.sprintMode === 'toggle' || input.device !== 'keyboard') && input.pressed('sprint')) this.sprintLatched = !this.sprintLatched;
   }
 
   fixedUpdate(dt: number) {
@@ -103,6 +108,8 @@ export class PlayerController implements System {
     fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw)); // camera forward (or the latched one)
     right.set(-fwd.z, 0, fwd.x); // camera right
     wish.set(0, 0, 0).addScaledVector(right, axes.x).addScaledVector(fwd, -axes.z);
+    // A stick pushed less than this walks (keys always give 1).
+    const push = Math.min(1, Math.hypot(axes.x, axes.z));
     const moving = wish.lengthSq() > 1e-6;
     if (moving) wish.normalize();
 
@@ -110,10 +117,10 @@ export class PlayerController implements System {
     // counts) or start sneaking.
     this.stillTime = moving ? 0 : this.stillTime + dt;
     if (this.stillTime > 0.3 || p.sneaking || !input.enabled) this.sprintLatched = false;
-    const sprintKey = this.sprintMode === 'toggle' ? this.sprintLatched : input.down('sprint');
+    const sprintKey = this.sprintMode === 'toggle' || input.device !== 'keyboard' ? this.sprintLatched : input.down('sprint');
     const wantsSprint = sprintKey && moving && axes.z <= 0 && !p.sneaking;
     p.sprinting = wantsSprint && p.grounded && this.canSprint();
-    let speed = p.sneaking ? PLAYER_SPEEDS.sneak : p.walkMode ? PLAYER_SPEEDS.walk : PLAYER_SPEEDS.run;
+    let speed = p.sneaking ? PLAYER_SPEEDS.sneak : p.walkMode || push < ANALOG_WALK ? PLAYER_SPEEDS.walk : PLAYER_SPEEDS.run;
     if (p.sprinting) speed = PLAYER_SPEEDS.sprint;
     speed *= this.speedMultiplier();
     wish.multiplyScalar(speed);

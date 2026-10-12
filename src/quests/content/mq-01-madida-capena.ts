@@ -20,6 +20,7 @@ import { actorExists, beat, hint, holdPose, moveActor, runner, say, scriptedDeat
 import { mq01GrassatorProfile } from '../../content/profiles';
 import { addFoe, beatFoe, giveItem, hasItem, isPlayer } from '../../content/questkit';
 import { defineQuest, type QuestContext } from '../types';
+import { byDevice, promptLabel } from '../../ui/prompts';
 
 export const QUEST_ID = 'mq-01-madida-capena';
 const GRASSATORES = ['mq01-grassator-a', 'mq01-grassator-b'] as const;
@@ -71,11 +72,16 @@ export default defineQuest({
         const gate = q.game.landmarks?.get('porta-capena')?.position;
         const p = q.game.player?.position;
         const far = !!gate && !!p && Math.hypot(gate.x - p.x, gate.z - p.z) > 80;
+        const marker = far ? 'The story starts at the Porta Capena: follow the gold marker.' : 'The gold marker always shows your next step.';
         hint(
           q.game,
-          far
-            ? 'Click the view to look around (or use the arrow keys). W A S D to walk, Shift to sprint. The story starts at the Porta Capena: follow the gold marker.'
-            : 'Walk with W A S D (look with the arrow keys or the trackpad). Press E to talk. The gold marker always shows your next step.',
+          byDevice(q.game, {
+            keyboard: far
+              ? `Click the view to look around (or use the arrow keys). W A S D to walk, Shift to sprint. ${marker}`
+              : `Walk with W A S D (look with the arrow keys or the trackpad). Press E to talk. ${marker}`,
+            gamepad: `Walk with the left stick, look with the right; click the left stick to run. Press ${promptLabel(q.game, 'interact')} to talk. ${marker}`,
+            touch: `Walk with the stick on the left, drag anywhere else to look. Tap Use to talk. ${marker}`,
+          }),
         );
       },
       next: 'gate',

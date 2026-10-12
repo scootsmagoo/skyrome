@@ -12,6 +12,8 @@ import { sessionQuality } from './core/graphics';
 import { classicRequested, loadRealBodies } from './actors/avatar/real/RealBody';
 import { setLeafyCanopies } from './arch/vegetation/materials';
 import { setHairAlphaToCoverage } from './actors/avatar/real/head/hairConfig';
+import { GamepadSource } from './core/gamepad';
+import { TouchControls } from './ui/touch/TouchControls';
 import { AUDIT, analyzeArea, analyzeFeet, auditFacesNear, auditForget, auditOwnerOf, auditOwners, auditRecordCount, auditRecordNames, surfacesAt, topSurfaceGrid } from './dev/audit/geomAudit';
 import type { SceneDef } from './scenes/types';
 
@@ -62,6 +64,10 @@ async function boot() {
   const ui = document.createElement('div');
   ui.className = 'ui-root';
   app.appendChild(ui);
+  // Controllers and the on-screen touch controls (core/gamepad.ts, ui/touch).
+  game.gamepad = new GamepadSource();
+  game.input.addSource(game.gamepad);
+  game.touch = new TouchControls(game);
   game.addSystem(new DebugOverlay(game, ui));
   game.addSystem(new GraphicsGovernor(game));
 

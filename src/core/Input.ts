@@ -18,6 +18,11 @@
  *   scrolls, r reloads, x closes the tab, f shows link hints. They stand aside while a form field
  *   has focus, so while playing the focus sits on an invisible, empty <select> (the key sink).
  *   Unlike a text field it never pops up macOS's accent picker when a letter is held.
+ * - Gamepads and the touch controls plug in as sources (`addSource`), polled at the start of every
+ *   frame (`beginFrame`, before any system runs, menus included). They hold actions directly
+ *   (`holdAction`: code `@action`, so they work whatever the keyboard bindings are), feed the
+ *   analog move and look (`setAnalogMove`, `addLook`), and drive menus with ordinary key events.
+ *   `device` says which kind of device was used last (prompts and on-screen controls follow it).
  */
 
 export type Action =
@@ -69,6 +74,14 @@ export type Action =
 
 /** Binding codes are `KeyboardEvent.code` values plus `Mouse0..4`, `WheelUp`, `WheelDown`. */
 export type Bindings = Record<Action, string[]>;
+
+/** The kind of device the player used last. */
+export type InputDevice = 'keyboard' | 'gamepad' | 'touch';
+
+/** Polled at the start of every frame, before any system runs (gamepads, on-screen controls). */
+export interface InputSource {
+  poll(input: Input, dt: number): void;
+}
 
 /** GDD §4.2 default bindings (keyboard + mouse). */
 export const DEFAULT_BINDINGS: Bindings = {
@@ -124,6 +137,13 @@ export const DEFAULT_BINDINGS: Bindings = {
   // The console (tgm, coc, player.additem…): the key left of 1, as in Bethesda's games.
   console: ['Backquote', 'IntlBackslash'],
 };
+
+/** The code a source holds to press an action directly (`@attack`), whatever its key bindings. */
+const ACTION_CODES = Object.fromEntries(Object.keys(DEFAULT_BINDINGS).map((a) => [a, `@${a}`])) as Record<Action, string>;
+
+export function actionCode(action: Action): string {
+  return ACTION_CODES[action];
+}
 
 /**
  * Actions the game can't be played without. A saved or edited binding set may never leave one of
@@ -339,6 +359,8 @@ export class Input {
   readonly wheel = new WheelAccumulator();
   /** True if the pointer or the look keys turned the camera this frame (auto-recenter waits on it). */
   lookActive = false;
+  /** The kind of device used last (see `onDeviceChange`). */
+  device: InputDevice = 'keyboard';
 
   private held = new Set<string>();
   private pressedCodes = new Set<string>();
@@ -351,6 +373,13 @@ export class Input {
   private velX = 0;
   private velY = 0;
   private keyLookHeld = 0;
+  /** Look turned by sources this frame (radians, already scaled). */
+  private srcYaw = 0;
+  private srcPitch = 0;
+  /** Analog movement per source (stick or on-screen pad), -1..1 each, read by `moveAxes`. */
+  private analog = new Map<string, { x: number; z: number }>();
+  private sources: InputSource[] = [];
+  private deviceListeners = new Set<(d: InputDevice) => void>();
   private locked = false;
   private capsOn: boolean | null = null;
   private gestureScale = 1;
@@ -375,7 +404,8 @@ export class Input {
    */
   focusSink() {
     const sink = this.sink;
-    if (!sink || typeof document === 'undefined' || document.hidden) return;
+    // A touch screen has no keyboard extensions, and iOS may raise its picker for a focused <select>.
+    if (!sink || typeof document === 'undefined' || document.hidden || this.device === 'touch') return;
     const a = document.activeElement as HTMLElement | null;
     if (a === sink) return;
     if (a && a !== document.body && a !== document.documentElement && a !== this.target) return;
@@ -436,6 +466,7 @@ export class Input {
   /** True while any key/button bound to the action is held. */
   down(action: Action): boolean {
     if (!this.enabled && isGameplay(action)) return false;
+    if (this.held.has(ACTION_CODES[action])) return true;
     for (const c of this.bindings[action] ?? []) if (this.held.has(c)) return true;
     return false;
   }
@@ -443,14 +474,63 @@ export class Input {
   /** True on the frame the action was pressed. */
   pressed(action: Action): boolean {
     if (!this.enabled && isGameplay(action)) return false;
+    if (this.pressedCodes.has(ACTION_CODES[action])) return true;
     for (const c of this.bindings[action] ?? []) if (this.pressedCodes.has(c)) return true;
     return false;
   }
 
   /** True on the frame the action was released. */
   released(action: Action): boolean {
+    if (this.releasedCodes.has(ACTION_CODES[action])) return true;
     for (const c of this.bindings[action] ?? []) if (this.releasedCodes.has(c)) return true;
     return false;
+  }
+
+  /** Hold or let go of an action directly (gamepads, on-screen buttons). */
+  holdAction(action: Action, isDown: boolean) {
+    if (isDown) this.press(ACTION_CODES[action]);
+    else this.release(ACTION_CODES[action]);
+  }
+
+  /** Register a source polled at the start of every frame. Returns its removal. */
+  addSource(src: InputSource): () => void {
+    this.sources.push(src);
+    return () => {
+      const i = this.sources.indexOf(src);
+      if (i >= 0) this.sources.splice(i, 1);
+    };
+  }
+
+  /** Called by the game loop at the start of every frame, before any system runs. */
+  beginFrame(dt: number) {
+    for (const s of this.sources) s.poll(this, dt);
+  }
+
+  /** A source's analog movement (-1..1 each; +x right, +z back, as `moveAxes`); 0, 0 = idle. */
+  setAnalogMove(id: string, x: number, z: number) {
+    if (x === 0 && z === 0) this.analog.delete(id);
+    else {
+      const a = this.analog.get(id);
+      if (a) { a.x = x; a.z = z; } else this.analog.set(id, { x, z });
+    }
+  }
+
+  /** Turn the camera from a source this frame (radians; positive yaw turns left, pitch looks up). */
+  addLook(yaw: number, pitch: number) {
+    this.srcYaw += yaw;
+    this.srcPitch += pitch * (this.invertY ? -1 : 1);
+  }
+
+  /** Record which kind of device the player is using (listeners hear changes only). */
+  setDevice(d: InputDevice) {
+    if (d === this.device) return;
+    this.device = d;
+    for (const f of this.deviceListeners) f(d);
+  }
+
+  onDeviceChange(fn: (d: InputDevice) => void): () => void {
+    this.deviceListeners.add(fn);
+    return () => this.deviceListeners.delete(fn);
   }
 
   /** True while a raw code is held (input lab, rebinding UI). */
@@ -458,10 +538,24 @@ export class Input {
     return this.held.has(code);
   }
 
-  /** -1..1 movement axes from WASD. */
+  /**
+   * -1..1 movement axes from WASD, or else from the analog sources (a stick pushed part way gives
+   * less than 1: the controller walks).
+   */
   moveAxes(): { x: number; z: number } {
-    const x = (this.down('right') ? 1 : 0) - (this.down('left') ? 1 : 0);
-    const z = (this.down('back') ? 1 : 0) - (this.down('forward') ? 1 : 0);
+    let x = (this.down('right') ? 1 : 0) - (this.down('left') ? 1 : 0);
+    let z = (this.down('back') ? 1 : 0) - (this.down('forward') ? 1 : 0);
+    if (x === 0 && z === 0 && this.enabled && this.analog.size) {
+      for (const a of this.analog.values()) {
+        x += a.x;
+        z += a.z;
+      }
+      const l = Math.hypot(x, z);
+      if (l > 1) {
+        x /= l;
+        z /= l;
+      }
+    }
     return { x, z };
   }
 
@@ -483,6 +577,9 @@ export class Input {
     }
     let yaw = -mx * this.sensitivity;
     let pitch = -my * this.sensitivity * (this.invertY ? -1 : 1);
+    yaw += this.srcYaw;
+    pitch += this.srcPitch;
+    this.srcYaw = this.srcPitch = 0;
     if (this.enabled) {
       const l = this.down('lookLeft');
       const r = this.down('lookRight');
@@ -602,7 +699,11 @@ export class Input {
     };
 
     on(window, 'keydown', (e) => {
-      if (e.isTrusted) this.interacted = true;
+      if (e.isTrusted) {
+        this.interacted = true;
+        // Gamepads drive menus with synthetic key events: those don't change the device.
+        if (!e.repeat) this.setDevice('keyboard');
+      }
       if (isTypingTarget(e.target)) return;
       // Cmd shortcuts (Cmd+R, Cmd+L, Cmd+F…) belong to the browser and are never game actions.
       if (this.isShortcut(e)) return;
@@ -633,6 +734,7 @@ export class Input {
       this.lastPointerAt = performance.now();
     }, { capture: true });
     on(this.target, 'mousedown', (e) => {
+      if (e.isTrusted && !(e as MouseEvent & { sourceCapabilities?: { firesTouchEvents?: boolean } }).sourceCapabilities?.firesTouchEvents) this.setDevice('keyboard');
       if (!this.locked) {
         // This click captures the mouse; it never attacks or blocks (GDD §4.1, AC-24).
         if (this.enabled) this.requestPointerLock();
@@ -646,6 +748,7 @@ export class Input {
       if (!this.locked) return;
       // Clamp absurd spikes Chrome sometimes reports right after locking.
       if (Math.abs(e.movementX) > 400 || Math.abs(e.movementY) > 400) return;
+      this.setDevice('keyboard');
       this.lookX += e.movementX;
       this.lookY += e.movementY;
     });

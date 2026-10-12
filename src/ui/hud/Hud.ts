@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { missingY, standingY } from '../../nav/heights';
 import type { Game } from '../../core/Game';
 import { codeLabel } from '../../core/Input';
+import { promptLabel } from '../prompts';
 import type { Interactions } from '../../interaction/Interactions';
 import { h, setClass, setText } from '../dom';
 import { formatClock, romanHour } from '../format';
@@ -163,6 +164,7 @@ export class Hud {
 
   /** Brief hint for mouse-look when the pointer isn't captured (trackpad players use arrows). */
   showLookHint() {
+    if (this.game.input.device !== 'keyboard') return; // sticks and fingers look without capturing anything
     const b = this.game.input.bindings;
     this.hint.replaceChildren(
       h('span', null, 'Click the view to look with the mouse'),
@@ -246,7 +248,10 @@ export class Hud {
       const illegal = focus.illegal?.() ?? false;
       setText(this.promptName, focus.label());
       setText(this.promptVerb, focus.verb());
-      setText(this.promptKey, codeLabel(game.input.bindings.interact[0] ?? 'KeyE'));
+      // The key or button (none on a touch screen: the Use button says it).
+      const key = promptLabel(game, 'interact');
+      setText(this.promptKey, key);
+      setClass(this.promptKey, 'is-none', !key);
       const detail = focus.detail?.() ?? '';
       setText(this.promptDetail, detail);
       setClass(this.promptDetail, 'is-empty', !detail);

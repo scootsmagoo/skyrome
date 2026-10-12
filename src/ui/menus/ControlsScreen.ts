@@ -4,6 +4,7 @@
  * input.setBindings and persisted in settings. A key taken from another action is unbound there.
  */
 import { DEFAULT_BINDINGS, ESSENTIAL_ACTIONS, codeLabel, type Action } from '../../core/Input';
+import { PAD_ACTIONS, padButtonLabel } from '../../core/gamepad';
 import { BaseModal } from '../Modal';
 import type { UIManager } from '../UIManager';
 import { h, keycap, setChildren } from '../dom';
@@ -116,6 +117,14 @@ export class ControlsScreen extends BaseModal {
         children.push(row);
         this.actions.push(a);
       }
+    }
+    // The controller's layout (fixed, not rebindable), for both kinds of pad.
+    children.push(h('div', { class: 'menu-section-title' }, h('span', { class: 'en' }, 'Controller'), h('span', { class: 'la' }, 'Instrumentum')));
+    const padRow = (name: string, xbox: string, ps: string) =>
+      h('div', { class: 'sr-row ctl-row ctl-pad' }, h('span', { class: 'ctl-name' }, name), h('span', { class: 'bind-chip locked' }, xbox), h('span', { class: 'bind-chip locked' }, ps));
+    children.push(padRow('Move (push part way to walk)', 'Left stick', 'Left stick'), padRow('Look', 'Right stick', 'Right stick'));
+    for (const [b, a] of Object.entries(PAD_ACTIONS)) {
+      if (a) children.push(padRow(a === 'sprint' ? 'Sprint (click: on / off)' : LABELS[a], padButtonLabel(Number(b), 'xbox'), padButtonLabel(Number(b), 'playstation')));
     }
     const keep = this.nav.index;
     setChildren(this.listEl, children);
