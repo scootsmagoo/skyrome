@@ -30,7 +30,7 @@ const port = await new Promise((r) => {
 const server = await createServer({ root, logLevel: 'error', server: { port, strictPort: true, host: '127.0.0.1', hmr: false } });
 await server.listen();
 const { chromium } = await import('playwright');
-const browser = await chromium.launch({ headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--js-flags=--expose-gc'] });
+const browser = await chromium.launch({ headless: true, args: [...(process.platform === 'darwin' ? ['--use-angle=metal'] : ['--use-angle=vulkan', '--enable-features=Vulkan']), '--enable-gpu', '--ignore-gpu-blocklist', '--js-flags=--expose-gc'] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 const cdp = await page.context().newCDPSession(page);
 await cdp.send('HeapProfiler.enable');

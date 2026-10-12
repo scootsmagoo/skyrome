@@ -109,7 +109,7 @@ const server = await createServer({ root, logLevel: 'error', server: { port, str
 await server.listen();
 const url = `http://127.0.0.1:${port}/?scene=rome&quick=1&hour=11`;
 const pw = await import('playwright');
-const browser = await pw.chromium.launch({ headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const browser = await pw.chromium.launch({ headless: true, args: [...(process.platform === 'darwin' ? ['--use-angle=metal'] : ['--use-angle=vulkan', '--enable-features=Vulkan']), '--enable-gpu', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e?.message ?? e)));

@@ -88,7 +88,7 @@ const { createServer } = await import(resolve(root, 'node_modules/vite/dist/node
 const server = await createServer({ root, logLevel: 'error', server: { port, strictPort: true, host: '127.0.0.1', hmr: false } });
 await server.listen();
 const pw = await import(resolve(root, 'node_modules/playwright/index.mjs'));
-const browser = await pw.chromium.launch({ headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await pw.chromium.launch({ headless: true, args: [...(process.platform === 'darwin' ? ['--use-angle=metal'] : ['--use-angle=vulkan', '--enable-features=Vulkan']), '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
 const results = {};
 for (const name of only) {
   const q = SCENARIOS[name];

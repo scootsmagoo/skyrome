@@ -53,7 +53,7 @@ if (!baseUrl) {
 const pw = await import('playwright');
 const launchArgs =
   browserName === 'chromium'
-    ? ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--enable-precise-memory-info', '--js-flags=--expose-gc']
+    ? [...(process.platform === 'darwin' ? ['--use-angle=metal'] : ['--use-angle=vulkan', '--enable-features=Vulkan']), '--enable-gpu', '--ignore-gpu-blocklist', '--enable-precise-memory-info', '--js-flags=--expose-gc']
     : [];
 const browser = await pw[browserName].launch({ headless: true, args: launchArgs });
 const results = [];

@@ -28,7 +28,7 @@ const server = await createServer({ root, logLevel: 'error', server: { port, str
 await server.listen();
 const pw = await import('playwright');
 const web = opt('--browser', 'chromium') === 'webkit';
-const browser = await (web ? pw.webkit : pw.chromium).launch({ headless: true, args: web ? [] : ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await (web ? pw.webkit : pw.chromium).launch({ headless: true, args: web ? [] : [...(process.platform === 'darwin' ? ['--use-angle=metal'] : ['--use-angle=vulkan', '--enable-features=Vulkan']), '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
 const page = await browser.newPage({ viewport: { width: 800, height: 450 } });
 const errors = [];
 page.on('console', (m) => (m.type() === 'error' || m.type() === 'warning') && errors.push(`[${m.type()}] ${m.text()}`));

@@ -31,7 +31,7 @@ const port = await freePort();
 const server = await createServer({ root, logLevel: 'error', server: { port, strictPort: true, host: '127.0.0.1', hmr: false } });
 await server.listen();
 const pw = await import('playwright');
-const browser = await pw[browserName].launch({ headless: true, args: browserName === 'chromium' ? ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] : [] });
+const browser = await pw[browserName].launch({ headless: true, args: browserName === 'chromium' ? [...(process.platform === 'darwin' ? ['--use-angle=metal'] : ['--use-angle=vulkan', '--enable-features=Vulkan']), '--enable-gpu', '--ignore-gpu-blocklist'] : [] });
 const results = [];
 
 async function boot(query) {

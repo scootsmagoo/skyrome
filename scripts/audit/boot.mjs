@@ -15,7 +15,7 @@ export async function boot(query, { size = '1100x720', timeout = 180000, browser
   const server = await createServer({ root, logLevel: 'error', server: { port, strictPort: true, host: '127.0.0.1', hmr: false } });
   await server.listen();
   const pw = await import('playwright');
-  const browser = await pw[bname].launch({ headless: true, args: bname === 'chromium' ? ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] : [] });
+  const browser = await pw[bname].launch({ headless: true, args: bname === 'chromium' ? [...(process.platform === 'darwin' ? ['--use-angle=metal'] : ['--use-angle=vulkan', '--enable-features=Vulkan']), '--enable-gpu', '--ignore-gpu-blocklist'] : [] });
   const [w, h] = size.split('x').map(Number);
   const page = await browser.newPage({ viewport: { width: w, height: h } });
   const errors = [];

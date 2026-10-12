@@ -39,7 +39,7 @@ let failures = 0;
 
 for (const browserName of browsers) {
   console.log(`\n=== ${browserName} ===`);
-  const browser = await pw[browserName].launch({ headless: true, args: browserName === 'chromium' ? ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] : [] });
+  const browser = await pw[browserName].launch({ headless: true, args: browserName === 'chromium' ? [...(process.platform === 'darwin' ? ['--use-angle=metal'] : ['--use-angle=vulkan', '--enable-features=Vulkan']), '--enable-gpu', '--ignore-gpu-blocklist'] : [] });
   try {
     for (const preset of presets) {
       if (preset) console.log(`--- preset ${preset}`);
@@ -710,7 +710,7 @@ async function runExtensionCheck(ext) {
     headless: true,
     channel: 'chromium',
     viewport: { width: 1280, height: 720 },
-    args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`, '--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
+    args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`, ...(process.platform === 'darwin' ? ['--use-angle=metal'] : ['--use-angle=vulkan', '--enable-features=Vulkan']), '--enable-gpu', '--ignore-gpu-blocklist'],
   });
   let fails = 0;
   try {

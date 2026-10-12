@@ -72,7 +72,7 @@ const url = baseUrl + (baseUrl.includes('?') ? '&' : '?') + q.toString();
 const pw = await import('playwright');
 const launchArgs =
   browserName === 'chromium'
-    ? ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu']
+    ? [...(process.platform === 'darwin' ? ['--use-angle=metal'] : ['--use-angle=vulkan', '--enable-features=Vulkan']), '--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu']
     : [];
 const browser = await pw[browserName].launch({ headless: true, args: launchArgs });
 const page = await browser.newPage({ viewport: { width: vw, height: vh } });

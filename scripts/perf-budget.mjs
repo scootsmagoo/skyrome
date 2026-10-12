@@ -66,7 +66,7 @@ if (!baseUrl) {
   baseUrl = `http://127.0.0.1:${port}/`;
 }
 const pw = await import('playwright');
-const browser = await pw.chromium.launch({ headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--js-flags=--expose-gc'] });
+const browser = await pw.chromium.launch({ headless: true, args: [...(process.platform === 'darwin' ? ['--use-angle=metal'] : ['--use-angle=vulkan', '--enable-features=Vulkan']), '--enable-gpu', '--ignore-gpu-blocklist', '--js-flags=--expose-gc'] });
 const measured = { graphics, views: {}, idle: null };
 try {
   for (const view of views) {

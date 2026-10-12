@@ -30,7 +30,7 @@ if (!baseUrl) {
   baseUrl = `http://127.0.0.1:${port}/`;
 }
 const pw = await import('playwright');
-const launchArgs = browserName === 'chromium' ? ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] : [];
+const launchArgs = browserName === 'chromium' ? [...(process.platform === 'darwin' ? ['--use-angle=metal'] : ['--use-angle=vulkan', '--enable-features=Vulkan']), '--enable-gpu', '--ignore-gpu-blocklist'] : [];
 const browser = await pw[browserName].launch({ headless: true, args: launchArgs });
 try {
   for (let r = 0; r < runs; r++) {

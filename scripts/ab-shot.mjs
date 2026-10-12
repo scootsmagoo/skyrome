@@ -80,7 +80,7 @@ if (!baseUrl) {
 }
 const pw = await import('playwright');
 const browserName = args.browser ?? 'chromium';
-const browser = await pw[browserName].launch({ headless: true, args: browserName === 'chromium' ? ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] : [] });
+const browser = await pw[browserName].launch({ headless: true, args: browserName === 'chromium' ? [...(process.platform === 'darwin' ? ['--use-angle=metal'] : ['--use-angle=vulkan', '--enable-features=Vulkan']), '--enable-gpu', '--ignore-gpu-blocklist'] : [] });
 let exitCode = 0;
 try {
   const page = await browser.newPage({ viewport: { width: vw, height: vh }, deviceScaleFactor: Number(args.dpr ?? 1) });
