@@ -14,7 +14,7 @@
 }
 .touch-root.is-hidden { display: none; }
 
-/* Thumbstick: faint at rest, solid under the thumb. */
+/* Thumbstick: faint at rest (labelled), solid under the thumb. */
 .touch-stick {
   position: absolute;
   width: 112px;
@@ -22,11 +22,16 @@
   border-radius: 50%;
   border: 1.5px solid rgba(230, 198, 126, 0.35);
   background: radial-gradient(circle, rgba(20, 15, 11, 0.18), rgba(20, 15, 11, 0.38));
-  opacity: 0.45;
+  opacity: 0.6;
   pointer-events: none;
   transition: opacity 0.15s;
 }
 .touch-stick.is-active { opacity: 1; transition: none; }
+.touch-stick-label {
+  position: absolute; left: 0; right: 0; top: 11px; text-align: center;
+  font: 12px/1 'Cinzel', 'Times New Roman', serif; letter-spacing: 0.12em; color: #f4ebd8; text-shadow: 0 1px 2px #000;
+}
+.touch-stick.is-active .touch-stick-label { display: none; }
 .touch-knob {
   position: absolute;
   left: 50%;
@@ -82,7 +87,35 @@
 .touch-top .touch-btn { width: 40px; height: 40px; }
 .touch-top .touch-label { font-size: 11px; }
 
+/* The HUD's bars make one short centred column between the stick and the buttons (their usual
+   corners are under the controls). */
+.touch-on .hud-res, .touch-on .hud-res.health, .touch-on .hud-res.pietas, .touch-on .hud-res.stamina { left: 50%; right: auto; width: 26vw; transform: translateX(-50%); }
+.touch-on .hud-res.health { bottom: 34px; }
+.touch-on .hud-res.stamina { bottom: 22px; }
+.touch-on .hud-res.pietas { bottom: 10px; }
+/* (beside the minimap the pietas bar has its own place: minimap/Minimap.ts) */
+.touch-on .sr-hud-root.has-minimap .hud-res.pietas { left: 50%; width: 26vw; }
+
 /* Landscape phones are short: the moves make a row above the cluster, clear of the bars and the character. */
 @media (max-height: 500px) {
   .touch-side { flex-direction: row-reverse; bottom: calc(var(--touch-b) + 176px); }
+}
+
+/*
+ * Upright phones are narrow: the cluster shrinks to leave the left thumb room, the moves' column sits
+ * just above it, and the minimap (bottom left, under the thumb) is hidden: the Map button stays.
+ */
+@media (orientation: portrait) {
+  .touch-main { transform: scale(0.84); transform-origin: right bottom; }
+  .touch-side { bottom: calc(var(--touch-b) + 204px); }
+  .touch-on .hud-minimap { display: none; }
+  /* The HUD around the controls: notes and the quest tracker below the compass, half the width each
+     (beside it there is no room); the bars in one short column above the stick, the subtitles above them. */
+  .touch-on .hud-notes, .touch-on .hud-tracker { top: 5.4rem; max-width: 44vw; }
+  .touch-on .hud-res, .touch-on .hud-res.health, .touch-on .hud-res.pietas, .touch-on .hud-res.stamina,
+  .touch-on .sr-hud-root.has-minimap .hud-res.pietas { width: 34vw; }
+  .touch-on .hud-res.health { bottom: 200px; }
+  .touch-on .hud-res.stamina { bottom: 188px; }
+  .touch-on .hud-res.pietas { bottom: 176px; }
+  .touch-on .hud-subtitle { bottom: 222px; max-width: 70vw; }
 }

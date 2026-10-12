@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { stickAxes } from './TouchControls';
+import { inStickArea, stickAxes } from './TouchControls';
 
 describe('touch thumbstick', () => {
   it('reads a centred thumb as still and a full push as 1', () => {
@@ -16,5 +16,18 @@ describe('touch thumbstick', () => {
     expect(half.x).toBeGreaterThan(0.3);
     expect(half.x).toBeLessThan(0.55);
     expect(stickAxes(-200, 0, 56).x).toBeCloseTo(-1);
+  });
+});
+
+describe('touch stick area', () => {
+  it('upright: the lower left half; sideways: the lower left 45 %', () => {
+    // An upright iPhone (393 x 852): the bottom left corner moves, the right half and the top look.
+    expect(inStickArea(70, 760, 393, 852)).toBe(true);
+    expect(inStickArea(180, 500, 393, 852)).toBe(true);
+    expect(inStickArea(260, 760, 393, 852)).toBe(false);
+    expect(inStickArea(70, 200, 393, 852)).toBe(false);
+    // Sideways (852 x 393).
+    expect(inStickArea(200, 300, 852, 393)).toBe(true);
+    expect(inStickArea(500, 300, 852, 393)).toBe(false);
   });
 });

@@ -4,6 +4,7 @@
  *
  *  - an error or an unhandled rejection before the game is ready (a module that fails to load, a
  *    WASM or worker that throws) shows its text in a banner at the bottom instead of leaving a blank page;
+ *    on a phone the first few after that show too, for 15 s (no console to read there);
  *  - a lost WebGL context (the GPU process killed, usually for memory) shows a full-screen notice
  *    with a Reload button; the game cannot restore its released geometry and textures, so a reload
  *    is the only way back;
@@ -67,14 +68,28 @@ function showLost() {
 }
 
 if (typeof window !== 'undefined') {
+  const ua = navigator.userAgent || '';
+  const phone = !navigator.webdriver && (/iPhone|iPad|iPod|Android/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1));
+  // After the game is ready errors go to the console only, except on a phone, where there is no
+  // console to look at: the first few distinct ones show for a while (they explain a broken view).
+  const seen = new Set<string>();
+  const report = (text: string) => {
+    if (!ready()) return showBanner(text);
+    if (!phone || seen.size >= 3 || seen.has(text)) return;
+    seen.add(text);
+    showBanner(text);
+    setTimeout(() => {
+      banner?.remove();
+      banner = null;
+    }, 15000);
+  };
   window.addEventListener('error', (e) => {
-    if (ready() || /ResizeObserver/.test(e.message || '')) return;
-    showBanner(`Error: ${e.message || 'unknown'}${e.filename ? `\n${e.filename}:${e.lineno}:${e.colno}` : ''}${e.error?.stack ? `\n${e.error.stack}` : ''}`);
+    if (/ResizeObserver/.test(e.message || '')) return;
+    report(`Error: ${e.message || 'unknown'}${e.filename ? `\n${e.filename}:${e.lineno}:${e.colno}` : ''}${e.error?.stack ? `\n${e.error.stack}` : ''}`);
   });
   window.addEventListener('unhandledrejection', (e) => {
-    if (ready()) return;
     const r = e.reason;
-    showBanner(`Unhandled rejection: ${r?.stack ?? r?.message ?? String(r)}`);
+    report(`Unhandled rejection: ${r?.stack ?? r?.message ?? String(r)}`);
   });
   // webglcontextlost does not bubble; the capture phase on window sees every canvas.
   window.addEventListener(
@@ -88,8 +103,6 @@ if (typeof window !== 'undefined') {
   );
 
   // Breadcrumb for a tab the browser killed and reloaded (phones only: on a desktop a plain F5 would trip it).
-  const ua = navigator.userAgent || '';
-  const phone = !navigator.webdriver && (/iPhone|iPad|iPod|Android/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1));
   const prev = phone ? store(() => sessionStorage.getItem(KEY)) : null;
   if (prev) {
     window.__skyrome_prevCrash = true;

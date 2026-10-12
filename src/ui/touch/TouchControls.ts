@@ -7,7 +7,9 @@
  *
  * Shown while the player is on a touch device (`input.device`, set by the first touch, or by a
  * coarse pointer at startup) and gameplay input is on; menus, dialogue and the title are plain DOM
- * and take taps as clicks. The layer sits between the 3D view and the interface (whose empty parts
+ * and take taps as clicks. While shown, <html> has the class `touch-on` (the HUD makes room: an
+ * upright phone hides the minimap, which sits where the left thumb goes). Upright (portrait), the
+ * stick's area is the lower left half and it rests in the bottom left corner, labelled. The layer sits between the 3D view and the interface (whose empty parts
  * let touches through), and swallows its touches: no compatibility mouse events reach the canvas.
  */
 import type { Game } from '../../core/Game';
@@ -78,6 +80,14 @@ export function coarsePointer(): boolean {
 }
 
 /**
+ * Whether a touch at x, y (CSS px in a w × h view) starts the stick: the lower left part of the
+ * screen, the left half below 40 % upright (portrait), the left 45 % below 25 % sideways. Pure.
+ */
+export function inStickArea(x: number, y: number, w: number, h: number): boolean {
+  return h > w ? x < w * 0.5 && y > h * 0.4 : x < w * 0.45 && y > h * 0.25;
+}
+
+/**
  * Thumbstick output for a finger `dx`, `dy` (CSS px) from the stick's centre: -1..1 each, with a
  * small dead zone and the length capped at 1 (+x right, +z down the screen = back). Pure.
  */
@@ -117,7 +127,7 @@ export class TouchControls implements InputSource {
       return el;
     };
     this.stickKnob = h('div', { class: 'touch-knob' });
-    this.stickBase = h('div', { class: 'touch-stick' }, this.stickKnob);
+    this.stickBase = h('div', { class: 'touch-stick' }, h('span', { class: 'touch-stick-label' }, 'Move'), this.stickKnob);
     this.root = h(
       'div',
       { class: 'touch-root is-hidden' },
@@ -155,6 +165,7 @@ export class TouchControls implements InputSource {
     if (show !== this.visible) {
       this.visible = show;
       setClass(this.root, 'is-hidden', !show);
+      setClass(document.documentElement, 'touch-on', show);
       if (!show) this.releaseAll();
       else this.restStick(); // measured while shown (a hidden layer has no size)
     }
@@ -180,7 +191,7 @@ export class TouchControls implements InputSource {
     const r = this.root.getBoundingClientRect();
     const x = e.clientX - r.left;
     const y = e.clientY - r.top;
-    if (this.stickId < 0 && x < r.width * 0.45 && y > r.height * 0.25) {
+    if (this.stickId < 0 && inStickArea(x, y, r.width, r.height)) {
       this.stickId = e.pointerId;
       // The stick comes to the thumb (kept clear of the edges).
       this.stickX = Math.min(Math.max(x, STICK_R + 8), r.width - STICK_R - 8);
@@ -238,9 +249,15 @@ export class TouchControls implements InputSource {
   /** The stick's resting place: bottom left, faint, to show where to put a thumb. */
   private restStick() {
     const r = this.root.getBoundingClientRect();
-    // Right of the minimap (bottom left).
-    this.stickX = Math.max(STICK_R + 150, r.width * 0.24);
-    this.stickY = r.height - STICK_R - 48;
+    if (r.height > r.width) {
+      // Upright: the corner itself (the minimap is hidden), above the home bar.
+      this.stickX = STICK_R + 26;
+      this.stickY = r.height - STICK_R - 64;
+    } else {
+      // Sideways: right of the minimap (bottom left).
+      this.stickX = Math.max(STICK_R + 150, r.width * 0.24);
+      this.stickY = r.height - STICK_R - 48;
+    }
     this.stickKnob.style.transform = '';
     this.placeStick(false);
   }
