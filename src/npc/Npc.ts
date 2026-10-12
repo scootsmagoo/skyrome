@@ -24,6 +24,9 @@ import type { CrowdRole } from './crowd/roles';
 import type { NpcDef } from './types';
 import type { NpcBrain } from './brain';
 import { combatOf } from './hooks';
+import { lite } from '../gfx/mobileLite';
+import { lodScale } from '../gfx/lodScale';
+import { REAL_LOD_DISTANCE } from '../actors/avatar/real/RealBody';
 
 export interface NpcOptions {
   id: string;
@@ -138,7 +141,7 @@ export class Npc extends Actor implements Positioned {
   private shadowFar = false;
 
   constructor(game: Game, opts: NpcOptions) {
-    const humanoid = createHumanoid(opts.appearance, { lod: opts.lod ?? 'auto' });
+    const humanoid = createHumanoid(opts.appearance, { lod: opts.lod ?? 'auto', startLod: farStartLod(game, opts.position) });
     super(game, { id: opts.id, position: opts.position, heading: opts.heading ?? 0, layer: Layer.Npc, avatar: humanoid, radius: 0.3, halfHeight: 0.55 });
     this.humanoid = humanoid;
     this.def = opts.def;
@@ -284,6 +287,17 @@ export class Npc extends Actor implements Positioned {
     this.light = null;
     super.dispose();
   }
+}
+
+/**
+ * Phones (lite.bodies): a person who appears beyond the coarse body level's distance starts at that
+ * level, instead of building the next finer one first and the coarse one a moment later.
+ */
+function farStartLod(game: Game, p: { x: number; z: number }): 3 | undefined {
+  if (!lite.bodies) return undefined;
+  const pl = game.player?.position;
+  if (!pl) return undefined;
+  return Math.hypot(p.x - pl.x, p.z - pl.z) / lodScale.value > REAL_LOD_DISTANCE[2] * 1.1 ? 3 : undefined;
 }
 
 /** A stable number in [0, 1000) from an id (FNV-1a). */

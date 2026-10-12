@@ -22,6 +22,7 @@ import { FlatSkeleton } from './flatSkeleton';
 import { SHADOW_PROXY_FROM, trackShadowProxy, untrackShadowProxy } from '../../gfx/shadowLod';
 import { Equipment } from '../equipment/Equipment';
 import type { LOD } from './build/common';
+import { lite } from '../../gfx/mobileLite';
 import { RealBody, classicRequested, realBodiesReady, whenRealBodiesReady } from './real/RealBody';
 
 export type SocketName = 'handR' | 'handL' | 'head' | 'chest' | 'hips' | 'back';
@@ -30,6 +31,8 @@ export type ExtraSocket = SocketName | 'gripR' | 'gripL' | 'shieldL' | 'sheathR'
 export interface HumanoidOptions {
   /** 'auto' keeps a low-detail mesh for distances beyond ~35 m. Default 'high'. */
   lod?: LOD | 'auto';
+  /** Phones (lite.bodies): the real body level to build first for an 'auto' avatar that appears far away (default 2). */
+  startLod?: 2 | 3;
   castShadow?: boolean;
   /** Override the appearance's weapon/shield. */
   weapon?: WeaponModel;
@@ -74,6 +77,7 @@ export class HumanoidAvatar implements CombatAvatar {
   private geoLow: AvatarGeometry | null = null;
   private far = false;
   private lodMode: LOD | 'auto';
+  private readonly startLod: number;
   private sockets = new Map<ExtraSocket, THREE.Object3D>();
   private socketBase = new Map<ExtraSocket, readonly [number, number, number]>();
   private firstPerson = false;
@@ -89,12 +93,13 @@ export class HumanoidAvatar implements CombatAvatar {
   constructor(app: Appearance, opts: HumanoidOptions = {}) {
     this.app = app;
     this.lodMode = opts.lod ?? 'high';
+    this.startLod = lite.bodies && this.lodMode === 'auto' && opts.startLod ? opts.startLod : 2;
     this.wantsReal = (opts.body ?? 'real') === 'real' && !classicRequested();
     let geometry: THREE.BufferGeometry;
     let material: THREE.Material | THREE.Material[] = avatarMaterial();
     if (this.wantsReal && realBodiesReady()) {
       // Far avatars start at the cheap mesh; updateLod() moves them to the right one once they know their distance.
-      this.real = new RealBody(app, this.lodMode === 'high' ? 0 : 2);
+      this.real = new RealBody(app, this.lodMode === 'high' ? 0 : this.startLod);
       this.rig = this.real.rig;
       geometry = this.real.geometry;
       material = this.real.material;
@@ -207,7 +212,7 @@ export class HumanoidAvatar implements CombatAvatar {
   /** Swap a classic avatar that was made before the real bodies loaded over to its real body. */
   upgradeToReal() {
     if (this.disposed || this.real || !realBodiesReady()) return;
-    const real = new RealBody(this.app, this.lodMode === 'high' ? 0 : 2);
+    const real = new RealBody(this.app, this.lodMode === 'high' ? 0 : this.startLod);
     if (this.geoHigh) releaseAvatarGeometry(this.geoHigh);
     if (this.geoLow) releaseAvatarGeometry(this.geoLow);
     this.geoHigh = this.geoLow = null;
@@ -335,7 +340,7 @@ export class HumanoidAvatar implements CombatAvatar {
     if (this.castsShadow) this.mesh.castShadow = this.mesh.castShadow ? d < SHADOW_FAR + 2 : d < SHADOW_FAR;
     if (this.real) {
       // 'low' avatars (arena crowds) never use the two detailed meshes.
-      this.real.updateLod(d, this.lodMode === 'low' ? 2 : 0);
+      this.real.updateLod(d, this.lodMode === 'low' ? 2 : this.lodMode === 'auto' && lite.bodies ? 1 : 0);
       return;
     }
     if (this.lodMode !== 'auto') return;

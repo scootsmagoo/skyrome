@@ -63,9 +63,9 @@ export function isMobileDevice(): boolean {
   return /Macintosh/.test(ua) && (navigator.maxTouchPoints ?? 0) > 1;
 }
 
-/** The rows a tier writes on this device: Low on a phone keeps a sharper picture (pixel ratio up to 2 at 0.75 scale = 1.5). */
+/** The rows a tier writes on this device: Low on a phone keeps a sharper picture (pixel ratio up to 2 at 0.75 scale = 1.5) and a thinner crowd (every person spawned is a body built: allocation churn while walking). */
 export function tierRows(tier: GraphicsTier, mobile = false): Partial<SettingsData> {
-  return tier === 'low' && mobile ? { ...TIER_SETTINGS.low, maxPixelRatio: 2 } : TIER_SETTINGS[tier];
+  return tier === 'low' && mobile ? { ...TIER_SETTINGS.low, maxPixelRatio: 2, crowdDensity: 0.3 } : TIER_SETTINGS[tier];
 }
 
 /** The tier in force: the one chosen, or the one Auto applied (null: none yet, the defaults = High). */
@@ -150,7 +150,7 @@ export function classifyGpu(gpu: GpuInfo, o: { memoryGb?: number; cores?: number
 const STRONG_AMD_IGPU = new Set(['1681', '15bf', '15c8', '1900', '1901', '150e', '1586', '163f']);
 
 /** Bumped when classifyGpu changes: Auto then chooses again (once) on machines it already rated. */
-export const CLASSIFIER_VERSION = 3;
+export const CLASSIFIER_VERSION = 4;
 
 /** The GPU's name, through a throwaway WebGL context (null outside a browser). */
 export function detectGpu(): GpuInfo | null {
@@ -193,7 +193,8 @@ export function graphicsWrites(d: Partial<SettingsData>, gpu: GpuInfo | null, en
     tier = prev.tier;
     by = 'fps';
   }
-  if (prev && prev.gpu === name && prev.tier === tier) return { graphicsApplied: { ...prev, v: CLASSIFIER_VERSION } };
+  // (A phone re-applies its rows when the classifier changes: the mobile rows themselves change between versions.)
+  if (prev && prev.gpu === name && prev.tier === tier && !env.mobile) return { graphicsApplied: { ...prev, v: CLASSIFIER_VERSION } };
   return { ...tierRows(tier, env.mobile), graphicsApplied: { tier, gpu: name, by, v: CLASSIFIER_VERSION } };
 }
 

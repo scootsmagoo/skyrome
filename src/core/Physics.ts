@@ -8,6 +8,7 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
 import { AUTOSTEP_MAX, AUTOSTEP_MIN_WIDTH } from './traversal';
+import { lite } from '../gfx/mobileLite';
 
 export type Rapier = typeof RAPIER;
 export { RAPIER };
@@ -70,6 +71,15 @@ export class Physics {
 
   constructor() {
     this.world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
+    if (lite.rapier) {
+      // Phones: World.removeRigidBody (every NPC that leaves) re-scans all the colliders (~40k) and bodies across
+      // the WASM boundary, three times over (allocating an array of them each time: 300 MB a minute of garbage
+      // while walking). The removal already unmaps the body's own colliders and the body itself, and nothing
+      // here removes anything outside the World API (see step), so the scans find nothing.
+      const w = this.world as unknown as { bodies: { unmapRemovedBodies(): void }; colliders: { unmapRemovedColliders(): void } };
+      w.bodies.unmapRemovedBodies = () => {};
+      w.colliders.unmapRemovedColliders = () => {};
+    }
   }
 
   step(dt: number) {

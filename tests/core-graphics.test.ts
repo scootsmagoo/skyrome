@@ -41,9 +41,14 @@ describe('graphics tiers', () => {
 
   it('a phone gets Low whatever its GPU is called, with a sharper pixel ratio than desktop Low', () => {
     const w = graphicsWrites({}, gpu('Apple GPU'), { cores: 6, mobile: true });
-    expect(w).toMatchObject({ ...TIER_SETTINGS.low, maxPixelRatio: 2, shadows: 'off', graphicsApplied: { tier: 'low', gpu: 'Apple GPU' } });
+    expect(w).toMatchObject({ ...TIER_SETTINGS.low, maxPixelRatio: 2, crowdDensity: 0.3, shadows: 'off', graphicsApplied: { tier: 'low', gpu: 'Apple GPU' } });
     expect(tierRows('low', false).maxPixelRatio).toBe(1);
     expect(tierRows('high', true)).toBe(TIER_SETTINGS.high);
+    expect(w).toMatchObject({ crowdDensity: 0.3 });
+    // A phone that chose Low under an older classifier gets the rows again; a desktop on the same tier only gets the new version.
+    const old = { graphicsApplied: { tier: 'low' as const, gpu: 'Apple GPU', by: 'gpu' as const, v: CLASSIFIER_VERSION - 1 } };
+    expect(graphicsWrites(old, gpu('Apple GPU'), { mobile: true })).toMatchObject({ crowdDensity: 0.3, graphicsApplied: { v: CLASSIFIER_VERSION } });
+    expect(graphicsWrites({ graphicsApplied: { tier: 'high' as const, gpu: 'Apple M2', by: 'gpu' as const, v: CLASSIFIER_VERSION - 1 } }, gpu('Apple M2'), { cores: 8 })).toEqual({ graphicsApplied: { tier: 'high', gpu: 'Apple M2', by: 'gpu', v: CLASSIFIER_VERSION } });
     // A phone with a tier chosen by hand keeps it.
     expect(graphicsWrites({ graphics: 'high' }, gpu('Apple GPU'), { mobile: true })).toBeNull();
   });

@@ -11,6 +11,9 @@
  *           built, not all on the first frame (world/city/uploadNow.ts)
  *   gens    landmark batches are capped at about a million live vertices: a full one is finished and uploaded,
  *           and the next piece starts a new batch (world/landmarks/landmarkBatch.ts); needs flush
+ *   bodies  people (lod 'auto' avatars) are never built at the finest body level (LOD 0, 70 % of the build time),
+ *           and one that appears far away starts at the coarse level instead of building two (HumanoidAvatar, Npc)
+ *   rapier  removing a body does not re-scan every collider and body (core/Physics.ts)
  *   detail  priority-2 landmarks built at their low detail, as priority 3 already is (world/rome/buildRome.ts)
  *
  * On by default on a phone, off elsewhere. `?lite=0` turns them all off, `?lite=1` all on, and
@@ -18,7 +21,7 @@
  */
 import { isMobileDevice } from '../core/graphics';
 
-const KEYS = ['proc', 'ktx', 'atlas', 'ground', 'flush', 'gens', 'detail'] as const;
+const KEYS = ['proc', 'ktx', 'atlas', 'ground', 'flush', 'gens', 'bodies', 'rapier', 'detail'] as const;
 
 export type Lite = Record<(typeof KEYS)[number], boolean>;
 

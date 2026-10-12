@@ -15,6 +15,7 @@
  * - Life: barks with subtitles, look-at, reactions (flee, gawk, guards respond via game.combat),
  *   ambient vignettes, talking (game.dialogue) with a generic fallback.
  */
+import { lite } from '../gfx/mobileLite';
 import * as THREE from 'three';
 import type { Actor, IdleLoop } from '../actors/Actor';
 import type { Appearance } from '../actors/appearance';
@@ -2196,7 +2197,8 @@ export class NpcManager implements System {
     const escorted = this.list.filter((n) => n.ambient && n.followers.length > 0).length;
     if (escorted >= Math.max(2, Math.round(target / 25))) weights = weights.filter(([r]) => !CROWD_ROLES[r].escort);
     let room = crowdRoom(present, citizens, target, b.night);
-    let budget = initial ? target : 3;
+    // Phones: one new person per pass, so the bodies they need are built a few at a time (lite.bodies).
+    let budget = initial ? target : lite.bodies ? 1 : 3;
     while (room > 0 && budget-- > 0) {
       const role = pickRole(this.rng, weights);
       if (!role) break;
