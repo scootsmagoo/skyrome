@@ -1,3 +1,4 @@
+import './core/bootGuard';
 import './styles.css';
 import { Game } from './core/Game';
 import { DebugOverlay } from './dev/DebugOverlay';

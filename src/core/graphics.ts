@@ -49,6 +49,25 @@ export const TIER_SETTINGS: Record<GraphicsTier, Partial<SettingsData>> = {
   low: { renderScale: 0.75, maxPixelRatio: 1, shadows: 'off', viewDistance: 550, bloom: false, ao: false, sunShafts: false, antialias: false, maxFps: 30, crowdDensity: 0.6, lodScale: 0.55 },
 };
 
+/**
+ * A phone or tablet (iOS, Android; iPadOS says "Macintosh" but has a touch screen). `?mobile=1` / `?mobile=0`
+ * force the answer for testing. Phones get the Low tier whatever the GPU's name says (an iPhone's is
+ * just "Apple GPU"): the boot's peak memory, not the frame rate, is what gets the tab killed there.
+ */
+export function isMobileDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('mobile') : null;
+  if (q === '1' || q === '0') return q === '1';
+  const ua = navigator.userAgent || '';
+  if (/iPhone|iPad|iPod|Android/i.test(ua)) return true;
+  return /Macintosh/.test(ua) && (navigator.maxTouchPoints ?? 0) > 1;
+}
+
+/** The rows a tier writes on this device: Low on a phone keeps a sharper picture (pixel ratio up to 2 at 0.75 scale = 1.5). */
+export function tierRows(tier: GraphicsTier, mobile = false): Partial<SettingsData> {
+  return tier === 'low' && mobile ? { ...TIER_SETTINGS.low, maxPixelRatio: 2 } : TIER_SETTINGS[tier];
+}
+
 /** The tier in force: the one chosen, or the one Auto applied (null: none yet, the defaults = High). */
 export function tierOf(s: { graphics?: string; graphicsApplied?: { tier: string } }): GraphicsTier | null {
   const t = s.graphics && s.graphics !== 'auto' ? s.graphics : s.graphicsApplied?.tier;
@@ -131,7 +150,7 @@ export function classifyGpu(gpu: GpuInfo, o: { memoryGb?: number; cores?: number
 const STRONG_AMD_IGPU = new Set(['1681', '15bf', '15c8', '1900', '1901', '150e', '1586', '163f']);
 
 /** Bumped when classifyGpu changes: Auto then chooses again (once) on machines it already rated. */
-export const CLASSIFIER_VERSION = 2;
+export const CLASSIFIER_VERSION = 3;
 
 /** The GPU's name, through a throwaway WebGL context (null outside a browser). */
 export function detectGpu(): GpuInfo | null {
@@ -160,14 +179,14 @@ export function lowerTier(t: GraphicsTier): GraphicsTier | null {
 }
 
 /** The rows to write for a choice and what Auto should record (pure). Null: nothing to change. */
-export function graphicsWrites(d: Partial<SettingsData>, gpu: GpuInfo | null, env: { memoryGb?: number; cores?: number } = {}): Partial<SettingsData> | null {
+export function graphicsWrites(d: Partial<SettingsData>, gpu: GpuInfo | null, env: { memoryGb?: number; cores?: number; mobile?: boolean } = {}): Partial<SettingsData> | null {
   const choice = d.graphics ?? 'auto';
   if (choice !== 'auto') return null;
   const name = gpu?.name ?? '';
   const prev = d.graphicsApplied;
   // Already chosen for this GPU by this classifier: keep it (the player's own row changes too).
   if (prev && prev.gpu === name && (prev.v ?? 1) === CLASSIFIER_VERSION) return null;
-  let tier = gpu ? classifyGpu(gpu, env) : 'high';
+  let tier: GraphicsTier = env.mobile ? 'low' : gpu ? classifyGpu(gpu, env) : 'high';
   let by: 'gpu' | 'fps' = 'gpu';
   // The frame rate already stepped this machine down further: that stands.
   if (prev && prev.gpu === name && prev.by === 'fps' && RANK[prev.tier] < RANK[tier]) {
@@ -175,7 +194,7 @@ export function graphicsWrites(d: Partial<SettingsData>, gpu: GpuInfo | null, en
     by = 'fps';
   }
   if (prev && prev.gpu === name && prev.tier === tier) return { graphicsApplied: { ...prev, v: CLASSIFIER_VERSION } };
-  return { ...TIER_SETTINGS[tier], graphicsApplied: { tier, gpu: name, by, v: CLASSIFIER_VERSION } };
+  return { ...tierRows(tier, env.mobile), graphicsApplied: { tier, gpu: name, by, v: CLASSIFIER_VERSION } };
 }
 
 /**
@@ -190,7 +209,7 @@ export function chooseGraphics(settings: { data: SettingsData; set<K extends key
     const tier = q === 'auto-reset' ? null : q;
     settings.set('graphics', tier ?? 'auto');
     if (tier) {
-      for (const [k, v] of Object.entries(TIER_SETTINGS[tier])) settings.set(k as keyof SettingsData, v as never);
+      for (const [k, v] of Object.entries(tierRows(tier, isMobileDevice()))) settings.set(k as keyof SettingsData, v as never);
       return { gpu: detectGpu(), tier, changed: true };
     }
     settings.set('graphicsApplied', undefined);
@@ -199,7 +218,7 @@ export function chooseGraphics(settings: { data: SettingsData; set<K extends key
   if (automated) return { gpu: null, tier: null, changed: false };
   const gpu = detectGpu();
   const nav = typeof navigator !== 'undefined' ? (navigator as Navigator & { deviceMemory?: number }) : undefined;
-  const writes = graphicsWrites(settings.data, gpu, { memoryGb: nav?.deviceMemory, cores: nav?.hardwareConcurrency });
+  const writes = graphicsWrites(settings.data, gpu, { memoryGb: nav?.deviceMemory, cores: nav?.hardwareConcurrency, mobile: isMobileDevice() });
   if (writes) for (const [k, v] of Object.entries(writes)) settings.set(k as keyof SettingsData, v as never);
   return { gpu, tier: writes?.graphicsApplied?.tier ?? settings.data.graphicsApplied?.tier ?? null, changed: !!writes };
 }
@@ -254,7 +273,7 @@ export class GraphicsGovernor implements System {
     const cur = s.graphicsApplied?.tier ?? 'high';
     const next = lowerTier(cur);
     if (!next) return;
-    for (const [k, v] of Object.entries(TIER_SETTINGS[next])) g.settings.set(k as keyof SettingsData, v as never);
+    for (const [k, v] of Object.entries(tierRows(next, isMobileDevice()))) g.settings.set(k as keyof SettingsData, v as never);
     g.settings.set('graphicsApplied', { tier: next, gpu: s.graphicsApplied?.gpu ?? '', by: 'fps', v: CLASSIFIER_VERSION });
     g.events.emit('ui:notify', { text: `Graphics lowered to ${TIER_LABEL[next]} for a smoother game (Esc → Settings → Display).`, kind: 'info' });
   }
@@ -267,9 +286,9 @@ export function applyChoice(game: Game, choice: GraphicsChoice) {
   if (choice === 'auto') {
     const gpu = game.gpu ?? detectGpu();
     const nav = typeof navigator !== 'undefined' ? (navigator as Navigator & { deviceMemory?: number }) : undefined;
-    const writes = graphicsWrites({ ...game.settings.data, graphicsApplied: undefined }, gpu, { memoryGb: nav?.deviceMemory, cores: nav?.hardwareConcurrency });
+    const writes = graphicsWrites({ ...game.settings.data, graphicsApplied: undefined }, gpu, { memoryGb: nav?.deviceMemory, cores: nav?.hardwareConcurrency, mobile: isMobileDevice() });
     if (writes) for (const [k, v] of Object.entries(writes)) set(k as keyof SettingsData, v as never);
     return;
   }
-  for (const [k, v] of Object.entries(TIER_SETTINGS[choice])) set(k as keyof SettingsData, v as never);
+  for (const [k, v] of Object.entries(tierRows(choice, isMobileDevice()))) set(k as keyof SettingsData, v as never);
 }

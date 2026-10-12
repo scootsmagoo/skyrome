@@ -24,7 +24,8 @@ import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { releaseCompressedAfterUpload, releaseTextureAfterUpload } from './release';
 import { MATERIAL_BASE, type MaterialId } from './materialIds';
 import { MATERIAL_RECIPES, TEXTURE_STATS, repeatFor, roughnessFactor, tintFor, type MaterialRecipe, type ProceduralId, type TextureSetId } from './textures/catalog';
-import { generateProcedural, prefetchProcedural, type ProcImage } from './textures/procedural';
+import { generateProcedural, prefetchProcedural, setProceduralHalf, type ProcImage } from './textures/procedural';
+import { lite } from './mobileLite';
 import { applyShaderPatch } from './textures/shaderPatch';
 import { applyUvCheck, uvCheckEnabled } from './uvcheck';
 
@@ -261,6 +262,7 @@ let ktx2Loaded = 0;
  * block formats this GPU takes. Call before the first material is created. `?ktx2=0` keeps JPEGs.
  */
 export function enableCompressedTextures(renderer: THREE.WebGLRenderer) {
+  setProceduralHalf(lite.proc);
   // The boot's first texture work: the procedural sets start generating in a worker now.
   if (hasDom && !prefetched && !(new URLSearchParams(location.search).get('lodoff') ?? '').includes('procworker')) {
     prefetched = true;
@@ -275,6 +277,16 @@ function textureUrl(set: TextureSetId, file: string): string {
   return `${baseUrl}textures/${set}/${file}`;
 }
 
+/** Drop a compressed texture's largest mip level: the next one becomes level 0 (the data of the dropped one is freed). */
+function dropTopMip(t: THREE.Texture) {
+  const c = t as THREE.CompressedTexture;
+  if (!c.isCompressedTexture || c.mipmaps.length < 4) return;
+  c.mipmaps.shift();
+  const m = c.mipmaps[0];
+  c.image.width = m.width;
+  c.image.height = m.height;
+}
+
 function loadKtx2Set(set: TextureSetId): Promise<SetTextures> {
   const load = (file: string) =>
     ktx2!.loadAsync(textureUrl(set, file)).then((t) => {
@@ -283,6 +295,11 @@ function loadKtx2Set(set: TextureSetId): Promise<SetTextures> {
       return t as THREE.Texture;
     });
   return Promise.all([load('color.ktx2'), load('normal.ktx2'), load('arm.ktx2')]).then(([color, normal, arm]) => {
+    // Phones: no top mip level (colour 2048 -> 1024, normal 1024 -> 512), a quarter of the GPU memory (gfx/mobileLite.ts).
+    if (lite.ktx) {
+      dropTopMip(color);
+      dropTopMip(normal);
+    }
     // The colour is encoded as sRGB, the data maps as linear (KTX2Loader reads it from the file).
     color.colorSpace = THREE.SRGBColorSpace;
     normal.colorSpace = arm.colorSpace = THREE.NoColorSpace;

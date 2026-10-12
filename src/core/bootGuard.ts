@@ -1,0 +1,116 @@
+/**
+ * Makes boot failures visible. Imported first by main.ts, as a side effect, so it is armed before
+ * any other module runs:
+ *
+ *  - an error or an unhandled rejection before the game is ready (a module that fails to load, a
+ *    WASM or worker that throws) shows its text in a banner at the bottom instead of leaving a blank page;
+ *  - a lost WebGL context (the GPU process killed, usually for memory) shows a full-screen notice
+ *    with a Reload button; the game cannot restore its released geometry and textures, so a reload
+ *    is the only way back;
+ *  - a breadcrumb in sessionStorage: if the previous load of this tab never reached 20 s of play
+ *    (iOS Safari kills a tab that uses too much memory and reloads it by itself), the banner says so.
+ *    `window.__skyrome_prevCrash` is true for the rest of the page.
+ */
+
+declare global {
+  interface Window {
+    __skyrome_prevCrash?: boolean;
+  }
+}
+
+const KEY = 'skyrome.boot';
+const STABLE_MS = 20000;
+
+function store<T>(f: () => T): T | undefined {
+  try {
+    return f();
+  } catch {
+    return undefined;
+  }
+}
+
+function ready(): boolean {
+  return !!(window as unknown as { __skyrome?: { ready?: boolean } }).__skyrome?.ready;
+}
+
+let banner: HTMLPreElement | null = null;
+
+function showBanner(text: string) {
+  if (typeof document === 'undefined' || !document.body) return;
+  if (!banner) {
+    banner = document.createElement('pre');
+    banner.className = 'boot-banner';
+    banner.style.cssText =
+      'position:fixed;left:0;right:0;bottom:0;z-index:99999;margin:0;padding:10px 14px;max-height:40vh;overflow:auto;' +
+      'font:12px/1.4 ui-monospace,Menlo,monospace;white-space:pre-wrap;background:rgba(18,12,9,.94);color:#f3d9c9;pointer-events:none;';
+    document.body.appendChild(banner);
+  }
+  banner.textContent = (banner.textContent ? banner.textContent + '\n\n' : '') + text;
+}
+
+function showLost() {
+  if (typeof document === 'undefined' || !document.body || document.querySelector('.boot-lost')) return;
+  const el = document.createElement('div');
+  el.className = 'boot-lost';
+  el.style.cssText =
+    'position:fixed;inset:0;z-index:100000;display:grid;place-content:center;gap:16px;padding:24px;text-align:center;' +
+    'font:16px/1.5 system-ui,sans-serif;background:#120c09;color:#f3d9c9;';
+  const msg = document.createElement('div');
+  msg.textContent = 'The graphics context was lost. The browser most likely ran out of memory. Reload to continue.';
+  const btn = document.createElement('button');
+  btn.textContent = 'Reload';
+  btn.style.cssText = 'font:inherit;padding:10px 24px;border-radius:8px;border:1px solid #e8c25a;background:#7a1f1a;color:#f3d9c9;justify-self:center;';
+  btn.onclick = () => location.reload();
+  el.append(msg, btn);
+  document.body.appendChild(el);
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('error', (e) => {
+    if (ready() || /ResizeObserver/.test(e.message || '')) return;
+    showBanner(`Error: ${e.message || 'unknown'}${e.filename ? `\n${e.filename}:${e.lineno}:${e.colno}` : ''}${e.error?.stack ? `\n${e.error.stack}` : ''}`);
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    if (ready()) return;
+    const r = e.reason;
+    showBanner(`Unhandled rejection: ${r?.stack ?? r?.message ?? String(r)}`);
+  });
+  // webglcontextlost does not bubble; the capture phase on window sees every canvas.
+  window.addEventListener(
+    'webglcontextlost',
+    (e) => {
+      e.preventDefault();
+      console.error('WebGL context lost');
+      showLost();
+    },
+    true,
+  );
+
+  // Breadcrumb for a tab the browser killed and reloaded (phones only: on a desktop a plain F5 would trip it).
+  const ua = navigator.userAgent || '';
+  const phone = !navigator.webdriver && (/iPhone|iPad|iPod|Android/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1));
+  const prev = phone ? store(() => sessionStorage.getItem(KEY)) : null;
+  if (prev) {
+    window.__skyrome_prevCrash = true;
+    const sinceMin = Math.round((Date.now() - Number(prev)) / 60000);
+    const note = `The previous load of this page ended before it was stable (${sinceMin} min ago): the browser probably ran out of memory and restarted it.`;
+    console.warn(note);
+    const show = () => showBanner(note);
+    if (document.body) show();
+    else document.addEventListener('DOMContentLoaded', show);
+    setTimeout(() => banner?.remove(), 20000);
+  }
+  if (phone) store(() => sessionStorage.setItem(KEY, String(Date.now())));
+  // Stable once the game has been ready for STABLE_MS: clear the breadcrumb.
+  let readyAt = 0;
+  const timer = setInterval(() => {
+    if (!ready()) return;
+    readyAt ||= Date.now();
+    if (Date.now() - readyAt >= STABLE_MS) {
+      store(() => sessionStorage.removeItem(KEY));
+      clearInterval(timer);
+    }
+  }, 1000);
+}
+
+export {};

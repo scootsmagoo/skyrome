@@ -14,6 +14,7 @@
 import * as THREE from 'three';
 import type { MeshBuilder } from '../../gfx/MeshBuilder';
 import { releaseTextureAfterUpload } from '../../gfx/release';
+import { lite } from '../../gfx/mobileLite';
 import type { MaterialId } from '../../gfx/materialIds';
 import { heightToNormal } from '../../gfx/textures/noise';
 
@@ -329,7 +330,9 @@ export function inscriptionMaterial(spec: InscriptionSpec): THREE.MeshStandardMa
 // ---------------------------------------------------------------- shared atlas pages
 
 /** Atlas page size (px). 1024² holds ~20 shop signs at the default densities. */
-export const ATLAS_PAGE = 1024;
+export const ATLAS_PAGE = lite.atlas ? 512 : 1024;
+/** Pixel densities scale with the page, so a page holds the same signs (phones: half the pixels per metre). */
+const ATLAS_K = ATLAS_PAGE / 1024;
 const PAD = 4;
 /** Pixel density per style in the atlas (signs are read at a few metres, not inches). */
 const ATLAS_PPM: Record<InscriptionStyle, number> = { carved: 200, bronze: 200, painted: 150 };
@@ -549,7 +552,7 @@ export function atlasEntry(spec: InscriptionSpec): { material: THREE.MeshStandar
   const key = JSON.stringify(spec);
   let hit = atlasCache.get(key);
   if (!hit) {
-    const { w, h } = panelPixels(spec, spec.pxPerMeter ?? ATLAS_PPM[style], ATLAS_PAGE - 2 * PAD);
+    const { w, h } = panelPixels(spec, (spec.pxPerMeter ?? ATLAS_PPM[style]) * ATLAS_K, ATLAS_PAGE - 2 * PAD);
     let page = pages.find((p) => p.style === style && !p.sealed && p.shelves.size > 0 && shelfFits(p.shelves, w + 2 * PAD, h + 2 * PAD));
     if (!page) {
       page = newPage(style);

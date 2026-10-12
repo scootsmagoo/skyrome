@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CLASSIFIER_VERSION, classifyGpu, graphicsWrites, lowerTier, TIER_SETTINGS } from '../src/core/graphics';
+import { CLASSIFIER_VERSION, classifyGpu, graphicsWrites, lowerTier, tierRows, TIER_SETTINGS } from '../src/core/graphics';
 
 const gpu = (name: string, software = false) => ({ name, software });
 
@@ -37,6 +37,15 @@ describe('graphics tiers', () => {
     expect(graphicsWrites({ graphicsApplied: { tier: 'low', gpu: 'Intel(R) UHD Graphics 620', by: 'fps', v: CLASSIFIER_VERSION } }, gpu('Intel(R) UHD Graphics 620'))).toBeNull();
     expect(graphicsWrites({ graphicsApplied: { tier: 'low', gpu: 'Intel(R) UHD Graphics 620', by: 'gpu' } }, gpu('Apple M2'))).toMatchObject({ graphicsApplied: { tier: 'high' } });
     expect(graphicsWrites({ graphics: 'high' }, gpu('Intel(R) UHD Graphics 620'))).toBeNull();
+  });
+
+  it('a phone gets Low whatever its GPU is called, with a sharper pixel ratio than desktop Low', () => {
+    const w = graphicsWrites({}, gpu('Apple GPU'), { cores: 6, mobile: true });
+    expect(w).toMatchObject({ ...TIER_SETTINGS.low, maxPixelRatio: 2, shadows: 'off', graphicsApplied: { tier: 'low', gpu: 'Apple GPU' } });
+    expect(tierRows('low', false).maxPixelRatio).toBe(1);
+    expect(tierRows('high', true)).toBe(TIER_SETTINGS.high);
+    // A phone with a tier chosen by hand keeps it.
+    expect(graphicsWrites({ graphics: 'high' }, gpu('Apple GPU'), { mobile: true })).toBeNull();
   });
 
   it('a new classifier re-rates a machine once; a frame-rate step down stands', () => {

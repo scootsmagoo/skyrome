@@ -635,6 +635,60 @@ const GENERATORS: Record<ProceduralId, (seed: number) => ProcImage> = {
 
 const cache = new Map<string, ProcImage>();
 
+/**
+ * Half-size sets (phones, gfx/mobileLite.ts): the generators run at their own size and the result is
+ * box-filtered 2x, so the look is the same, the texel density halves, and a set is a quarter of the memory.
+ * Set before the first set is asked for (`enableCompressedTextures`); the worker gets it with its ids.
+ */
+let half = false;
+export function setProceduralHalf(on: boolean) {
+  half = on;
+}
+export function proceduralHalf(): boolean {
+  return half;
+}
+
+/** Box-filter a square RGBA byte image to half its size. `normals` averages the vectors and renormalises. */
+function halve(src: Uint8ClampedArray, size: number, normals: boolean): Uint8ClampedArray {
+  const n = size >> 1;
+  const out = new Uint8ClampedArray(n * n * 4);
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++) {
+      const a = ((2 * y) * size + 2 * x) * 4;
+      const b = a + 4;
+      const c = a + size * 4;
+      const d = c + 4;
+      const o = (y * n + x) * 4;
+      if (normals) {
+        let nx = 0, ny = 0, nz = 0;
+        for (const q of [a, b, c, d]) {
+          nx += src[q] / 127.5 - 1;
+          ny += src[q + 1] / 127.5 - 1;
+          nz += src[q + 2] / 127.5 - 1;
+        }
+        const l = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+        out[o] = (nx / l + 1) * 127.5;
+        out[o + 1] = (ny / l + 1) * 127.5;
+        out[o + 2] = (nz / l + 1) * 127.5;
+        out[o + 3] = 255;
+      } else {
+        for (let k = 0; k < 4; k++) out[o + k] = (src[a + k] + src[b + k] + src[c + k] + src[d + k]) / 4;
+      }
+    }
+  return out;
+}
+
+function halveImage(img: ProcImage): ProcImage {
+  if (img.size < 1024) return img;
+  return {
+    ...img,
+    size: img.size >> 1,
+    color: halve(img.color, img.size, false),
+    normal: img.normal ? halve(img.normal, img.size, true) : undefined,
+    arm: img.arm ? halve(img.arm, img.size, false) : undefined,
+  };
+}
+
 /** Prefetch counters (debug, scripts/perf-boot.mjs): sets that arrived from the worker in time, and late ones. */
 export const procPrefetch = { requested: 0, arrived: 0, late: 0 };
 
@@ -663,7 +717,7 @@ export function prefetchProcedural(ids: readonly ProceduralId[]) {
     if (--left === 0) worker.terminate();
   };
   worker.onerror = () => worker.terminate();
-  worker.postMessage(ids);
+  worker.postMessage({ ids, half });
 }
 
 /**
@@ -675,7 +729,7 @@ export function prefetchProcedural(ids: readonly ProceduralId[]) {
 export function proceduralPixels(id: ProceduralId, seed = 1): ProcImage {
   const cached = cache.get(`${id}:${seed}`);
   if (cached && cached.color && cached.normal && cached.arm) return cached;
-  return GENERATORS[id](seed);
+  return half ? halveImage(GENERATORS[id](seed)) : GENERATORS[id](seed);
 }
 
 /** Generate (or fetch from cache) a procedural texture set. */
@@ -683,7 +737,7 @@ export function generateProcedural(id: ProceduralId, seed = 1): ProcImage {
   const key = `${id}:${seed}`;
   let img = cache.get(key);
   if (!img) {
-    img = GENERATORS[id](seed);
+    img = half ? halveImage(GENERATORS[id](seed)) : GENERATORS[id](seed);
     cache.set(key, img);
   }
   return img;

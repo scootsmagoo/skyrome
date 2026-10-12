@@ -15,6 +15,7 @@ import { MATERIAL_BASE, type MaterialId } from '../../gfx/materialIds';
 import { MATERIAL_RECIPES, TEXTURE_STATS, roughnessFactor, tintFor } from '../../gfx/textures/catalog';
 import { proceduralPixels, type ProcImage } from '../../gfx/textures/procedural';
 import { releaseTextureAfterUpload } from '../../gfx/release';
+import { lite } from '../../gfx/mobileLite';
 
 export interface GroundTextures {
   albedo: THREE.DataArrayTexture;
@@ -139,10 +140,12 @@ function procLayer(id: MaterialId): ProcImage | null {
  */
 export async function loadGroundTextures(layers: readonly MaterialId[], opts: { albedoSize?: number; surfaceSize?: number } = {}): Promise<GroundTextures | null> {
   if (!hasDom) return null;
-  const A = opts.albedoSize ?? 1024;
-  const Sz = opts.surfaceSize ?? 512;
   const n = layers.length;
   const procs = layers.map((id) => procLayer(id));
+  // Phones: layers a quarter the size (gfx/mobileLite.ts); never larger than a procedural layer's own pixels.
+  const procSize = procs.find((p) => p)?.size ?? Infinity;
+  const A = Math.min(opts.albedoSize ?? (lite.ground ? 512 : 1024), procSize);
+  const Sz = Math.min(opts.surfaceSize ?? (lite.ground ? 256 : 512), procSize);
   const sets = layers.map((id, i) => (procs[i] ? null : MATERIAL_RECIPES[id]?.set ?? null));
   const imgs = await Promise.all(
     sets.map((set) =>
