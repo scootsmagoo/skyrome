@@ -7,7 +7,8 @@
  */
 import * as THREE from 'three';
 import { Rng } from '../../core/Rng';
-import { vegMaterial } from '../../arch/vegetation/materials';
+import { leafCardsEnabled, vegMaterial } from '../../arch/vegetation/materials';
+import { lodScale } from '../../gfx/lodScale';
 import { windProfile } from '../../arch/vegetation/wind';
 import { makeTree, TREE_VARIANTS, type TreeModel, type TreePart, type TreeSpecies } from '../../arch/vegetation/species';
 import type { ColliderSpec } from '../../gfx/MeshBuilder';
@@ -31,6 +32,8 @@ interface BatchDef {
   model: TreeModel;
   /** Batch whose far meshes draw this batch's far instances (variant 0 of the species). */
   farOf: number;
+  /** The near model's parts that are drawn (leaf cards only where the tier has them). */
+  nearParts: TreePart[];
   near: THREE.InstancedMesh[];
   far: THREE.InstancedMesh[];
   capNear: number;
@@ -56,6 +59,7 @@ export class TreeLayer {
   private cells = new Map<string, CellItems>();
   private rng: Rng;
   private lastPos = new THREE.Vector3(Infinity, 0, 0);
+  private lastLod = 0;
   private lastDir = new THREE.Vector3();
   private frustum = new THREE.Frustum();
   private pv = new THREE.Matrix4();
@@ -80,7 +84,7 @@ export class TreeLayer {
       const farOf = variant === 0 ? this.batches.length : this.batchFor(species, 0);
       bi = this.batches.length;
       this.batchIndex.set(key, bi);
-      this.batches.push({ key, model: makeTree(species, variant), farOf, near: [], far: [], capNear: 0, capFar: 0, nNear: 0, nFar: 0 });
+      this.batches.push({ key, model: makeTree(species, variant), farOf, nearParts: [], near: [], far: [], capNear: 0, capFar: 0, nNear: 0, nFar: 0 });
     }
     return bi;
   }
@@ -123,17 +127,18 @@ export class TreeLayer {
     for (const b of this.batches) {
       b.capNear = 64;
       b.capFar = 256;
-      b.near = b.model.near.map((p) => this.mesh(p, b.capNear, true, b.key));
+      b.nearParts = b.model.near.filter((p) => !p.cards || leafCardsEnabled());
+      b.near = b.nearParts.map((p) => this.mesh(p, b.capNear, true, b.key));
       b.far = b.farOf === this.batches.indexOf(b) ? b.model.far.map((p) => this.mesh(p, b.capFar, false, b.key)) : [];
     }
     return this.group;
   }
 
   private mesh(part: TreePart, n: number, shadow: boolean, key: string): THREE.InstancedMesh {
-    const mat = vegMaterial(part.baked ? 'baked' : part.material, { ...windProfile(part), card: undefined });
+    const mat = vegMaterial(part.baked ? 'baked' : part.material, windProfile(part));
     const m = new THREE.InstancedMesh(part.geometry, mat, n);
     m.name = `city:tree:${key}`;
-    m.castShadow = shadow;
+    m.castShadow = shadow && !part.cards; // the clumps under the cards cast
     m.receiveShadow = true;
     m.count = 0;
     m.visible = false; // hidden while empty (see Forest.mesh)
@@ -151,7 +156,7 @@ export class TreeLayer {
   private grow(b: BatchDef, near: boolean, need: number) {
     const cap = Math.max(need, (near ? b.capNear : b.capFar) * 2);
     const list = near ? b.near : b.far;
-    const parts = near ? b.model.near : b.model.far;
+    const parts = near ? b.nearParts : b.model.far;
     for (let k = 0; k < list.length; k++) {
       const old = list[k];
       this.group.remove(old);
@@ -167,13 +172,15 @@ export class TreeLayer {
     if (!this.built) return;
     const pos = camera.getWorldPosition(TMP_P);
     const dir = camera.getWorldDirection(TMP_D);
-    if (!force && pos.distanceToSquared(this.lastPos) < 4 && dir.dot(this.lastDir) > 0.995) return;
+    if (!force && pos.distanceToSquared(this.lastPos) < 4 && dir.dot(this.lastDir) > 0.995 && lodScale.value === this.lastLod) return;
     this.lastPos.copy(pos);
+    this.lastLod = lodScale.value;
     this.lastDir.copy(dir);
     camera.updateMatrixWorld();
     this.pv.multiplyMatrices((camera as THREE.PerspectiveCamera).projectionMatrix, camera.matrixWorldInverse);
     this.frustum.setFromProjectionMatrix(this.pv);
-    const near = this.o.near * distanceScale, far = this.o.far * distanceScale, thin = this.o.thinFrom * distanceScale;
+    // Full detail out to `near` × the tier's LOD scale (lodScale.ts).
+    const near = this.o.near * distanceScale * lodScale.value, far = this.o.far * distanceScale, thin = this.o.thinFrom * distanceScale;
     const n2 = near * near, f2 = far * far;
     for (const b of this.batches) b.nNear = b.nFar = 0;
     // First pass: count, so the meshes can grow before writing.

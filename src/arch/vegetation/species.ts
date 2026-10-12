@@ -12,6 +12,7 @@
  * - oleander: flowering shrub; reeds (Arundo donax): riverbank canes.
  */
 import * as THREE from 'three';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Rng } from '../../core/Rng';
 import { MATERIAL_BASE, type MaterialId } from '../../gfx/materialIds';
 import { clump, leafCards, mergeParts, noise3, taperedTube, tintGeometry, twoSided, type CardSpec } from './geom';
@@ -448,6 +449,15 @@ function reeds(r: Rng): Omit<TreeModel, 'species' | 'variant'> {
 
 const cache = new Map<string, TreeModel>();
 
+function indexed(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  if (g.index) return g;
+  const m = mergeVertices(g);
+  m.boundingBox = g.boundingBox;
+  m.boundingSphere = g.boundingSphere;
+  g.dispose();
+  return m;
+}
+
 export function makeTree(species: TreeSpecies, variant = 0): TreeModel {
   const v = ((variant % TREE_VARIANTS) + TREE_VARIANTS) % TREE_VARIANTS;
   const key = `${species}#${v}`;
@@ -464,6 +474,9 @@ export function makeTree(species: TreeSpecies, variant = 0): TreeModel {
       : species === 'oleander' ? oleander(r)
       : reeds(r);
     m = { species, variant: v, ...body };
+    // The builders emit one vertex per triangle corner: share the identical ones (same triangles,
+    // about half the vertex shader runs, which carry the wind sway).
+    for (const part of [...m.near, ...m.far]) part.geometry = indexed(part.geometry);
     cache.set(key, m);
   }
   return m;

@@ -7,7 +7,8 @@
  * crown in broad patches, and leaf cards swing on their stems, one phase per card. It is
  * computed in world units from the instance origin and mapped back into the instance's local frame,
  * so rotated / scaled instances all lean the same way. Grass can also shrink to nothing between
- * `fade[0]` and `fade[1]` meters from the camera (distance fade without transparency sorting).
+ * `fade[0]` and `fade[1]` meters from the camera (distance fade without transparency sorting), both
+ * scaled by the tier's `lodScale`.
  *
  * Canopies (foliage_* materials, near LOD) are "leafy": toward the silhouette the surface is cut
  * into leaf clumps (3D value noise in the tree's own frame, so it never swims), and both sides
@@ -25,6 +26,7 @@
 import * as THREE from 'three';
 import { getMaterial } from '../../gfx/materials';
 import { MATERIAL_BASE, type MaterialId } from '../../gfx/materialIds';
+import { lodScale } from '../../gfx/lodScale';
 import type { LeafKind } from './species';
 
 /** Shared clock for every wind material (advanced by VegetationSystem). */
@@ -40,6 +42,8 @@ export interface VegProfile {
   /** Shrink to zero between these camera distances (grass, flowers). */
   fade?: [number, number];
   doubleSide?: boolean;
+  /** Double-sided, with the back face lit as the front (thin blades drawn once instead of twice). */
+  keepNormal?: boolean;
   /** Per-instance colour applied only where attribute aHead = 1 (flower heads). */
   heads?: boolean;
   /** Leaf cards of this kind (geometry has uv and aLeaf; see geom.leafCards). */
@@ -76,6 +80,16 @@ const lightsPars = () => THREE.ShaderChunk.lights_physical_pars_fragment.replace
 			reflectedLight.directDiffuse += directLight.color * material.diffuseContribution * RECIPROCAL_PI * ( 0.9 * vtBack + 0.7 * vtFwd * ( 0.4 + 0.6 * vtBack ) ) * vec3( 1.0, 1.0, 0.55 );
 		}
 	#endif`,
+);
+
+/** three's normal_fragment_begin, where VEG_KEEPNORMAL lights a back face as the front. */
+const normalBegin = () => THREE.ShaderChunk.normal_fragment_begin.replace(
+  'float faceDirection = gl_FrontFacing ? 1.0 : - 1.0;',
+  `#ifdef VEG_KEEPNORMAL
+	float faceDirection = 1.0;
+#else
+	float faceDirection = gl_FrontFacing ? 1.0 : - 1.0;
+#endif`,
 );
 
 const CARD_VERT = /* glsl */ `
@@ -150,6 +164,7 @@ uniform float uVegWind;
 uniform float uVegSway;
 uniform float uVegFlutter;
 uniform vec2 uVegFade;
+uniform float uVegLod;
 #ifdef VEG_HEADS
 attribute float aHead;
 #endif
@@ -177,8 +192,12 @@ const LEAFY_FRAG = /* glsl */ `
   // Fray the crown's silhouette into leaf clumps; the inside shows through, darker.
   float lfRim = 1.0 - abs( dot( normal, normalize( vViewPosition ) ) );
   float lfNear = smoothstep( 75.0, 35.0, length( vViewPosition ) );
-  float lfN = leafNoise( vLeafP * 3.0 ) * 0.8 + leafNoise( vLeafP * 8.0 + 3.1 ) * 0.2;
-  if ( lfN < ( smoothstep( 0.55, 1.0, lfRim ) * 0.75 - 0.05 ) * lfNear ) discard;
+  // Beyond 75 m (or facing the viewer) nothing is cut: skip the noise.
+  float lfCut = ( smoothstep( 0.55, 1.0, lfRim ) * 0.75 - 0.05 ) * lfNear;
+  if ( lfCut > 0.0 ) {
+    float lfN = leafNoise( vLeafP * 3.0 ) * 0.8 + leafNoise( vLeafP * 8.0 + 3.1 ) * 0.2;
+    if ( lfN < lfCut ) discard;
+  }
 }
 `;
 
@@ -212,7 +231,7 @@ const SWAY = /* glsl */ `
   transformed += (transpose(vB) * vD) / max(vS * vS, 1e-4);
   #ifdef VEG_FADE
     float vDist = distance(vO, cameraPosition);
-    transformed *= 1.0 - smoothstep(uVegFade.x, uVegFade.y, vDist);
+    transformed *= 1.0 - smoothstep(uVegFade.x * uVegLod, uVegFade.y * uVegLod, vDist);
   #endif
 }
 `;
@@ -234,7 +253,7 @@ const HEAD_COLOR = /* glsl */ `
  * colours already carry the albedo (far LODs).
  */
 export function vegMaterial(base: MaterialId | 'baked', p: VegProfile): THREE.Material {
-  const key = `${leafyCanopies ? 'L' : ''}${base}|${p.sway}|${p.flutter}|${p.fade?.join(',') ?? ''}|${p.doubleSide ? 1 : 0}|${p.heads ? 1 : 0}|${p.card ?? ''}`;
+  const key = `${leafyCanopies ? 'L' : ''}${base}|${p.sway}|${p.flutter}|${p.fade?.join(',') ?? ''}|${p.doubleSide ? 1 : 0}${p.keepNormal ? 'k' : ''}|${p.heads ? 1 : 0}|${p.card ?? ''}`;
   let m = cache.get(key);
   if (m) return m;
   const card = p.card !== undefined && base !== 'baked';
@@ -248,7 +267,8 @@ export function vegMaterial(base: MaterialId | 'baked', p: VegProfile): THREE.Ma
   mat.vertexColors = true;
   const leafy = leafyCanopies && base !== 'baked' && base.startsWith('foliage') && !card;
   const trans = base !== 'baked' && base.startsWith('foliage');
-  if (p.doubleSide || leafy) mat.side = THREE.DoubleSide;
+  if (p.doubleSide || p.keepNormal || leafy) mat.side = THREE.DoubleSide;
+  if (p.keepNormal) mat.defines = { ...(mat.defines ?? {}), VEG_KEEPNORMAL: '' };
   if (leafy) mat.defines = { ...(mat.defines ?? {}), VEG_LEAFY: '' };
   if (trans) mat.defines = { ...(mat.defines ?? {}), VEG_TRANS: '' };
   if (card) mat.defines = { ...(mat.defines ?? {}), VEG_CARD: '', VEG_CARD_KIND: String(CARD_KIND[p.card!]) };
@@ -261,6 +281,7 @@ export function vegMaterial(base: MaterialId | 'baked', p: VegProfile): THREE.Ma
     shader.uniforms.uVegSway = sway;
     shader.uniforms.uVegFlutter = flutter;
     shader.uniforms.uVegFade = fade;
+    shader.uniforms.uVegLod = lodScale;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${HEAD}${leafy ? 'varying vec3 vLeafP;' : ''}${card ? 'attribute float aLeaf;\nvarying vec2 vCardUv;\nvarying float vCardId;' : ''}`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>\n${LEAFY_VERT}${card ? CARD_VERT : ''}${SWAY}`);
@@ -276,6 +297,7 @@ export function vegMaterial(base: MaterialId | 'baked', p: VegProfile): THREE.Ma
         .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>\n${LEAFY_FRAG}`)
         .replace('#include <color_fragment>', '#include <color_fragment>\nif ( !gl_FrontFacing ) diffuseColor.rgb *= 0.75;');
     }
+    shader.fragmentShader = shader.fragmentShader.replace('#include <normal_fragment_begin>', normalBegin());
     if (p.heads) shader.vertexShader = shader.vertexShader.replace('#include <color_vertex>', HEAD_COLOR);
   };
   mat.customProgramCacheKey = () => `veg2|${p.fade ? 1 : 0}|${p.heads ? 1 : 0}|${leafy ? 1 : 0}|${trans ? 1 : 0}|${card ? p.card : 0}`;

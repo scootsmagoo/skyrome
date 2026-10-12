@@ -6,7 +6,8 @@
  */
 import * as THREE from 'three';
 import { Rng, hash2 } from '../../core/Rng';
-import { fbm2, mergeParts, twoSided } from './geom';
+import { fbm2, mergeParts } from './geom';
+import { lodScale } from '../../gfx/lodScale';
 import { vegMaterial } from './materials';
 
 export interface GrassOptions {
@@ -56,7 +57,8 @@ function tuftGeometry(seed: number): THREE.BufferGeometry {
   const n = new Float32Array(pos.length);
   for (let i = 0; i < n.length; i += 3) { n[i] = 0; n[i + 1] = 1; n[i + 2] = 0; }
   g.setAttribute('normal', new THREE.BufferAttribute(n, 3));
-  return mergeParts([twoSided(g)], 1);
+  // One face per blade: the material draws both sides with the same normal (keepNormal).
+  return mergeParts([g], 1);
 }
 
 /** A flower: thin stem plus a small star-shaped head (aHead = 1 on the head). */
@@ -85,7 +87,7 @@ function flowerGeometry(): THREE.BufferGeometry {
   const n = new Float32Array(pos.length);
   for (let i = 0; i < n.length; i += 3) { n[i + 1] = 1; }
   g.setAttribute('normal', new THREE.BufferAttribute(n, 3));
-  return mergeParts([twoSided(g)], 1);
+  return mergeParts([g], 1);
 }
 
 const FLOWERS = [0xd8261c, 0xd8261c, 0xf4f1e6, 0xf2d64b, 0x8a7ad8, 0xe9e2f2].map((c) => new THREE.Color(c));
@@ -107,6 +109,7 @@ export class GrassField {
   readonly group = new THREE.Group();
   private o: Required<Omit<GrassOptions, 'mask'>> & { mask?: GrassOptions['mask'] };
   private lastCam = new THREE.Vector3(Infinity, 0, 0);
+  private lastLod = 0;
   private active = new Map<string, Slot>();
   private pool: Slot[] = [];
   private slots = 0;
@@ -144,9 +147,9 @@ export class GrassField {
     const fade: [number, number] = [o.fadeStart, o.fadeEnd];
     this.geos = [tuftGeometry(1), tuftGeometry(2), flowerGeometry()];
     this.mats = [
-      vegMaterial('grass', { sway: 0.25, flutter: 0.0, fade }),
-      vegMaterial('dry_grass', { sway: 0.25, flutter: 0.0, fade }),
-      vegMaterial('fabric_white', { sway: 0.35, flutter: 0.0, fade, heads: true }),
+      vegMaterial('grass', { sway: 0.25, flutter: 0.0, fade, keepNormal: true }),
+      vegMaterial('dry_grass', { sway: 0.25, flutter: 0.0, fade, keepNormal: true }),
+      vegMaterial('fabric_white', { sway: 0.35, flutter: 0.0, fade, heads: true, keepNormal: true }),
     ];
     const area = o.cell * o.cell;
     this.cap = [Math.ceil(area * o.density) + 1, Math.ceil(area * o.density) + 1, Math.ceil(area * o.flowers) + 1];
@@ -155,14 +158,17 @@ export class GrassField {
 
   /**
    * Generate the cells that came within range of the camera (nearest first, at most `budget` per
-   * call) and recycle the ones that left it.
+   * call: a cell takes about 0.8 ms, so a 20 m step no longer costs a frame several of them) and
+   * recycle the ones that left it.
    */
-  update(cam: THREE.Vector3, budget = 8) {
+  update(cam: THREE.Vector3, budget = 2) {
     if (!this.geos.length) this.build();
-    if (!this.pending && cam.distanceToSquared(this.lastCam) < 1) return;
+    if (!this.pending && cam.distanceToSquared(this.lastCam) < 1 && lodScale.value === this.lastLod) return;
     this.lastCam.copy(cam);
+    this.lastLod = lodScale.value;
     const o = this.o;
-    const lim = o.fadeEnd + o.cell * 0.75;
+    // The shader fades by the same tier scale (materials.ts).
+    const lim = o.fadeEnd * lodScale.value + o.cell * 0.75;
     const { minX, minZ, maxX, maxZ } = this.bounds;
     const ix0 = Math.max(0, Math.floor((cam.x - lim - minX) / o.cell)), ix1 = Math.min(Math.ceil((maxX - minX) / o.cell) - 1, Math.floor((cam.x + lim - minX) / o.cell));
     const iz0 = Math.max(0, Math.floor((cam.z - lim - minZ) / o.cell)), iz1 = Math.min(Math.ceil((maxZ - minZ) / o.cell) - 1, Math.floor((cam.z + lim - minZ) / o.cell));

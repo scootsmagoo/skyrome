@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { Rng } from '../../core/Rng';
 import type { ColliderSpec } from '../../gfx/MeshBuilder';
+import { lodScale } from '../../gfx/lodScale';
 import { leafCardsEnabled, vegMaterial } from './materials';
 import { makeTree, TREE_VARIANTS, type TreeModel, type TreePart, type TreeSpecies } from './species';
 import { windProfile } from './wind';
@@ -47,6 +48,7 @@ export class Forest {
   private nearD: number;
   private farD: number;
   private lastCam = new THREE.Vector3(Infinity, 0, 0);
+  private lastLod = 0;
   private rng: Rng;
   private shadow: boolean;
   /** Instances drawn at full detail after the last update. */
@@ -118,9 +120,12 @@ export class Forest {
 
   /** Re-assign instances to near / far / culled for a camera position. */
   update(cam: THREE.Vector3, force = false) {
-    if (!force && cam.distanceToSquared(this.lastCam) < 4) return;
+    if (!force && cam.distanceToSquared(this.lastCam) < 4 && lodScale.value === this.lastLod) return;
     this.lastCam.copy(cam);
-    const n2 = this.nearD * this.nearD, f2 = this.farD * this.farD;
+    this.lastLod = lodScale.value;
+    // Full detail out to `near` × the tier's LOD scale; the far stand-ins keep their range.
+    const nearD = this.nearD * lodScale.value;
+    const n2 = nearD * nearD, f2 = this.farD * this.farD;
     this.nearCount = this.farCount = 0;
     for (const b of this.batches.values()) {
       let ni = 0, fi = 0;
