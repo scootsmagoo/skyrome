@@ -11,15 +11,11 @@
 import * as THREE from 'three';
 import { Rng } from '../../core/Rng';
 import type { ColliderSpec } from '../../gfx/MeshBuilder';
-import { leafCardsEnabled, vegMaterial, type VegProfile } from './materials';
-import { makeTree, TREE_VARIANTS, type TreeModel, type TreePart, type TreeSpecies, type WindKind } from './species';
+import { leafCardsEnabled, vegMaterial } from './materials';
+import { makeTree, TREE_VARIANTS, type TreeModel, type TreePart, type TreeSpecies } from './species';
+import { windProfile } from './wind';
 
-export const WIND: Record<WindKind, VegProfile> = {
-  tree: { sway: 0.00045, flutter: 0.025 },
-  shrub: { sway: 0.012, flutter: 0.02 },
-  reed: { sway: 0.06, flutter: 0.02 },
-  flower: { sway: 0.2, flutter: 0.01 },
-};
+export { WIND } from './wind';
 
 export interface ForestOptions {
   /** Full detail within this distance (m). */
@@ -87,7 +83,7 @@ export class Forest {
   }
 
   private mesh(part: TreePart, n: number, shadow: boolean): THREE.InstancedMesh {
-    const mat = vegMaterial(part.baked ? 'baked' : part.material, { ...WIND[part.wind], flutter: part.cards ? 0.06 : WIND[part.wind].flutter, heads: part.heads, card: part.cards });
+    const mat = vegMaterial(part.baked ? 'baked' : part.material, windProfile(part));
     const m = new THREE.InstancedMesh(part.geometry, mat, n);
     m.castShadow = shadow && !part.cards;
     m.receiveShadow = true;

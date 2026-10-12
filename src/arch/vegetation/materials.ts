@@ -2,7 +2,9 @@
  * Vegetation materials: clones of the shared library materials (so textured PBR upgrades carry
  * over) with vertex colours (baked AO) and a cheap wind sway injected into the vertex shader.
  *
- * Sway = (world wind direction) × sin(time, per-instance phase) × amplitude × height². It is
+ * Sway = (world wind direction) × sin(time, per-instance phase) × amplitude × height²: the plant
+ * bends from its base, so trunks barely move. Flutter (leafy parts only, see wind.ts) moves the
+ * crown in broad patches, and leaf cards swing on their stems, one phase per card. It is
  * computed in world units from the instance origin and mapped back into the instance's local frame,
  * so rotated / scaled instances all lean the same way. Grass can also shrink to nothing between
  * `fade[0]` and `fade[1]` meters from the camera (distance fade without transparency sorting).
@@ -33,7 +35,7 @@ export const windStrength = { value: 1 };
 export interface VegProfile {
   /** Trunk/stem sway per m² of height (trees ~0.0005, grass ~0.25). */
   sway: number;
-  /** Leaf flutter amplitude (m). */
+  /** Leaf flutter amplitude (m); 0 for bark and other rigid parts. */
   flutter: number;
   /** Shrink to zero between these camera distances (grass, flowers). */
   fade?: [number, number];
@@ -193,10 +195,20 @@ const SWAY = /* glsl */ `
   float vPh = vO.x * 0.13 + vO.z * 0.11;
   float vH = max(transformed.y, 0.0) * vS;
   float vGust = 0.6 + 0.4 * sin(uVegTime * 0.27 + vPh * 0.15);
+  // The whole plant bends from its base (zero at the ground, growing with height²).
   float vSw = (sin(uVegTime * 1.25 + vPh) * 0.7 + sin(uVegTime * 2.05 + vPh * 1.7) * 0.3) * vGust * uVegWind;
   vec3 vD = vec3(0.94, 0.0, 0.34) * vSw * uVegSway * vH * vH;
-  float vF = uVegFlutter * min(vH, 3.0) * uVegWind;
-  vD += vec3(sin(uVegTime * 5.1 + dot(transformed, vec3(1.7, 2.3, 1.1)) * 2.0 + vPh), 0.0, cos(uVegTime * 4.3 + dot(transformed, vec3(2.1, 1.3, 1.9)) * 2.0)) * vF;
+  // Leafy parts only (bark has no flutter): the crown moves in broad patches, so a clump moves as
+  // one piece and the cards on it move with it instead of the surface rippling.
+  float vF = uVegFlutter * min(vH, 3.0) * uVegWind * vGust;
+  vec3 vQ = transformed * 0.9;
+  vD += vec3(sin(uVegTime * 2.3 + vQ.x + vQ.y * 0.6 + vPh), 0.0, cos(uVegTime * 1.9 + vQ.z + vQ.y * 0.5 + vPh * 1.3)) * vF;
+  #ifdef VEG_CARD
+    // Each leaf spray swings on its stem: one phase per card, the stem end (v = 0) still, the tip moving.
+    float vL = aLeaf * 6.2832;
+    vD += vec3(sin(uVegTime * (6.0 + 4.0 * aLeaf) + vL), 0.5 * sin(uVegTime * (7.0 + 3.0 * aLeaf) + vL * 1.7), cos(uVegTime * (5.5 + 4.5 * aLeaf) + vL * 2.3))
+      * (0.05 * uv.y * uVegWind * vGust);
+  #endif
   transformed += (transpose(vB) * vD) / max(vS * vS, 1e-4);
   #ifdef VEG_FADE
     float vDist = distance(vO, cameraPosition);

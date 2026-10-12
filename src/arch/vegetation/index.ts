@@ -1,6 +1,7 @@
 export { TREE_SPECIES, TREE_VARIANTS, makeTree } from './species';
 export type { TreeSpecies, TreeModel, TreePart } from './species';
-export { Forest, WIND } from './Forest';
+export { Forest } from './Forest';
+export { WIND, windProfile } from './wind';
 export type { ForestOptions } from './Forest';
 export { GrassField } from './Grass';
 export type { GrassOptions } from './Grass';

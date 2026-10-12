@@ -7,8 +7,8 @@
  */
 import * as THREE from 'three';
 import { Rng } from '../../core/Rng';
-import { WIND } from '../../arch/vegetation/Forest';
 import { vegMaterial } from '../../arch/vegetation/materials';
+import { windProfile } from '../../arch/vegetation/wind';
 import { makeTree, TREE_VARIANTS, type TreeModel, type TreePart, type TreeSpecies } from '../../arch/vegetation/species';
 import type { ColliderSpec } from '../../gfx/MeshBuilder';
 
@@ -130,7 +130,7 @@ export class TreeLayer {
   }
 
   private mesh(part: TreePart, n: number, shadow: boolean, key: string): THREE.InstancedMesh {
-    const mat = vegMaterial(part.baked ? 'baked' : part.material, { ...WIND[part.wind], heads: part.heads });
+    const mat = vegMaterial(part.baked ? 'baked' : part.material, { ...windProfile(part), card: undefined });
     const m = new THREE.InstancedMesh(part.geometry, mat, n);
     m.name = `city:tree:${key}`;
     m.castShadow = shadow;
