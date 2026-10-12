@@ -14,6 +14,8 @@ import { fillsAtRuntime, landmarkBatcherFor } from './landmarkBatch';
 import { landmarkLodStats } from './landmarkLod';
 import { builderFor } from './registry';
 import type { LandmarkData, Spot } from './types';
+import { lite } from '../../gfx/mobileLite';
+import { uploadTexturesNow } from '../city/uploadNow';
 
 export interface PlacedLandmark {
   lm: LandmarkData;
@@ -148,6 +150,8 @@ export async function buildLandmarks(
     opts.onProgress?.(i, list.length, lm.name);
     // Yield to the browser now and then so the loading screen can paint.
     if (i % 8 === 0) await new Promise((r) => setTimeout(r, 0));
+    // Phones: the library's textures that have arrived go up as the build goes on, freeing their pixels (world/city/uploadNow.ts).
+    if (lite.flush && perf && i % 12 === 0) uploadTexturesNow(game);
   }
   // Every landmark is built and baked: their static shapes now only need to reach the GPU once
   // (~400 MB of vertex arrays freed after upload, gfx/release). After the loop, because builders
@@ -155,7 +159,12 @@ export async function buildLandmarks(
   for (const p of placed.values()) releaseStaticMeshes(p.object);
   if (perf && game.getSystem('landmarkBatch')) {
     const b = landmarkBatcherFor(game);
-    b.finish();
+    // Phones: each batch is finished and goes to the GPU in turn, its arrays freed (world/city/uploadNow.ts).
+    if (lite.flush) {
+      uploadTexturesNow(game);
+      await b.finishAndUpload(game);
+    }
+    else b.finish();
     console.info('[landmarks] batched', JSON.stringify(b.stats), 'lods', JSON.stringify(landmarkLodStats()));
   }
   return placed;

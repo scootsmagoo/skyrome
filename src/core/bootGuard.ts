@@ -8,7 +8,8 @@
  *    with a Reload button; the game cannot restore its released geometry and textures, so a reload
  *    is the only way back;
  *  - a breadcrumb in sessionStorage: if the previous load of this tab never reached 20 s of play
- *    (iOS Safari kills a tab that uses too much memory and reloads it by itself), the banner says so.
+ *    (iOS Safari kills a tab that uses too much memory and reloads it by itself), the banner says so,
+ *    and where it got to: the loading step on screen, or how long after the world appeared.
  *    `window.__skyrome_prevCrash` is true for the rest of the page.
  */
 
@@ -92,20 +93,37 @@ if (typeof window !== 'undefined') {
   const prev = phone ? store(() => sessionStorage.getItem(KEY)) : null;
   if (prev) {
     window.__skyrome_prevCrash = true;
-    const sinceMin = Math.round((Date.now() - Number(prev)) / 60000);
-    const note = `The previous load of this page ended before it was stable (${sinceMin} min ago): the browser probably ran out of memory and restarted it.`;
+    // Older breadcrumbs were a bare start time.
+    const crumb = (store(() => JSON.parse(prev)) ?? { start: Number(prev) }) as { start: number; step?: string; playS?: number };
+    const sinceMin = Math.round((Date.now() - crumb.start) / 60000);
+    const where = crumb.playS !== undefined ? `${crumb.playS} s after the world appeared` : crumb.step ? `while loading: “${crumb.step}”` : 'while loading';
+    const note = `The previous load of this page ended before it was stable (${sinceMin} min ago, ${where}): the browser probably ran out of memory and restarted it.`;
     console.warn(note);
     const show = () => showBanner(note);
     if (document.body) show();
     else document.addEventListener('DOMContentLoaded', show);
     setTimeout(() => banner?.remove(), 20000);
   }
-  if (phone) store(() => sessionStorage.setItem(KEY, String(Date.now())));
-  // Stable once the game has been ready for STABLE_MS: clear the breadcrumb.
+  const crumb: { start: number; step?: string; playS?: number } = { start: Date.now() };
+  const save = () => {
+    if (phone) store(() => sessionStorage.setItem(KEY, JSON.stringify(crumb)));
+  };
+  save();
+  // Each second: where the load is (the loading screen's step, then seconds of play). Stable once
+  // the game has been ready for STABLE_MS: clear the breadcrumb.
   let readyAt = 0;
-  const timer = setInterval(() => {
-    if (!ready()) return;
+  const timer = !phone ? 0 : setInterval(() => {
+    if (!ready()) {
+      const step = document.querySelector('.ld-label')?.textContent?.trim();
+      if (step && step !== crumb.step) {
+        crumb.step = step;
+        save();
+      }
+      return;
+    }
     readyAt ||= Date.now();
+    crumb.playS = Math.round((Date.now() - readyAt) / 1000);
+    save();
     if (Date.now() - readyAt >= STABLE_MS) {
       store(() => sessionStorage.removeItem(KEY));
       clearInterval(timer);

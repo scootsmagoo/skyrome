@@ -204,8 +204,8 @@ export class Batch {
    * context loss it would upload nothing (the game has no context-loss handler; like any static
    * mesh released by gfx/release, it needs a reload).
    */
-  finish() {
-    if (this.live < this.vertCap) {
+  finish(slack = 1) {
+    if (this.live < this.vertCap * slack) {
       this.mesh.optimize();
       this.mesh.setGeometrySize(Math.max(1, this.live), Math.max(1, this.live));
       this.vertCap = Math.max(1, this.live);
@@ -243,6 +243,8 @@ export interface PoolOptions {
   name?: string;
   /** Give back unused capacity now and then (default true; a finished pool must not). */
   trim?: boolean;
+  /** Starting capacity for a batch by its name, when known (else `verts`). */
+  presize?: (name: string) => number | undefined;
 }
 
 /** A set of instances added together (a block level, a street piece…), toggled and removed as one. */
@@ -289,7 +291,8 @@ export class BatchPool {
     const key = `${material.uuid}|${castShadow ? 1 : 0}|${offset ? 1 : 0}|${tag}`;
     let b = this.batches.get(key);
     if (!b) {
-      b = new Batch(this.own(material, offset), castShadow, `${this.opts.name ?? 'city'}:${material.name || 'mat'}${castShadow ? '' : ':ns'}${offset ? ':off' : ''}${tag ? `:${tag}` : ''}`, this.opts.verts, 64, this.opts.growth);
+      const name = `${this.opts.name ?? 'city'}:${material.name || 'mat'}${castShadow ? '' : ':ns'}${offset ? ':off' : ''}${tag ? `:${tag}` : ''}`;
+      b = new Batch(this.own(material, offset), castShadow, name, this.opts.presize?.(name) ?? this.opts.verts, 64, this.opts.growth);
       b.tag = tag;
       b.shadowCaster = castShadow;
       if (castShadow && this.shadowsOff.has(tag)) b.mesh.castShadow = false;

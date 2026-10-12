@@ -40,6 +40,8 @@ import type { RAPIER } from '../../core/Physics';
 import { ProximityColliders, type ColliderHost } from './proximity';
 import { TreeLayer } from './trees';
 import { placeTrees } from './vegetation';
+import { lite } from '../../gfx/mobileLite';
+import { uploadBatchesNow } from './uploadNow';
 
 export interface CityService {
   plan: CityPlan;
@@ -171,6 +173,7 @@ export async function buildCity(
   // The far batch is complete: blocks and ribbons only show and hide from here on. Shrink it to its
   // live size and let its arrays go once uploaded (23 MB at the Forum, memory audit phase 3).
   farBatch.finish();
+  if (lite.flush) await uploadBatchesNow(game, [[farBatch.mesh]]);
   stats.streetWorkMs = performance.now() - T - stats.planMs - stats.massingMs;
   report(0.55, 'Paving the streets');
   await tick();

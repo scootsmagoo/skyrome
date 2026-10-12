@@ -24,6 +24,9 @@ import { addShadowHook, type ShadowHook } from '../../gfx/shadowLod';
 import { CHUNK_CELL, CHUNK_MIN_RADIUS, CHUNK_MIN_TRIANGLES, splitByCells } from './chunking';
 import { PIECE_FROM, SHADOW_TWIN_FROM, pieceTwin, shapeTwins } from './landmarkLod';
 import { lodScale } from '../../gfx/lodScale';
+import { lite } from '../../gfx/mobileLite';
+import { landmarkBatchSize } from './presize';
+import { uploadBatchesNow } from '../city/uploadNow';
 
 /** Hysteresis (m) around each LOD distance. */
 const BAND = 6;
@@ -66,7 +69,8 @@ export class LandmarkBatcher implements System, ShadowHook {
   private prepared = new WeakMap<THREE.BufferGeometry, THREE.BufferGeometry>();
 
   constructor(private readonly game: Game) {
-    this.batchPool = new BatchPool(game.scene, { name: 'lmbatch', verts: 1 << 15, growth: 1.6, trim: false });
+    // Phones: the big batches start at their final size (presize.ts), no regrowth garbage.
+    this.batchPool = new BatchPool(game.scene, { name: 'lmbatch', verts: 1 << 15, growth: 1.6, trim: false, presize: lite.flush ? landmarkBatchSize : undefined });
     addShadowHook(this);
   }
 
@@ -226,6 +230,38 @@ export class LandmarkBatcher implements System, ShadowHook {
     for (const b of this.batchPool.all()) b.finish();
     // The batches hold copies of everything prepared; the keys (shared instance shapes) outlive the
     // build, so without this the copies did too (19 MB at the Forum, memory audit phase 3).
+    this.prepared = new WeakMap();
+  }
+
+  /**
+   * `finish` for phones: each batch is finished and sent to the GPU in turn (world/city/uploadNow.ts),
+   * its arrays freed before the next one is touched, so the shrink copies and the full set of arrays
+   * never exist together. A batch within 10 % of its capacity keeps it (no copy).
+   */
+  async finishAndUpload(game: Game) {
+    if (this.finished) return;
+    this.finished = true;
+    const all = this.batchPool.all();
+    // Big batches one at a time, the many tiny ones (a few hundred vertices) together.
+    const groups: Batch[][] = [];
+    let small: Batch[] = [];
+    let smallVerts = 0;
+    for (const b of all) {
+      if (b.liveVertices >= 100000) groups.push([b]);
+      else {
+        small.push(b);
+        smallVerts += b.liveVertices;
+        if (smallVerts >= 200000) {
+          groups.push(small);
+          small = [];
+          smallVerts = 0;
+        }
+      }
+    }
+    if (small.length) groups.push(small);
+    await uploadBatchesNow(game, groups.map((g) => g.map((b) => b.mesh)), (i) => {
+      for (const b of groups[i]) b.finish(0.9);
+    });
     this.prepared = new WeakMap();
   }
 
