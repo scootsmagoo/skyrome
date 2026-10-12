@@ -224,6 +224,21 @@ function targetLinear(id: MaterialId): [number, number, number] {
   return [c.r, c.g, c.b];
 }
 
+/**
+ * `clone()` marks the copy as needing an upload, which bumps the version of the Source it shares with
+ * the original; a texture already uploaded from that Source then uploads again on its next use, from
+ * pixels that gfx/release may have freed (a black or failed texture). Clones made after an early
+ * upload (phones upload during loading, gfx/mobileLite `flush`) hit that, so the version is kept: the
+ * clone's own first use still finds the shared GL texture, or uploads once if there is none yet.
+ */
+function cloneKeepSource<T extends THREE.Texture>(t: T): T {
+  if (!lite.flush) return t.clone() as T; // desktop: as it always was
+  const v = t.source.version;
+  const c = t.clone() as T;
+  c.source.version = v;
+  return c;
+}
+
 function setRepeat(t: THREE.Texture, recipe: MaterialRecipe) {
   const [ru, rv] = repeatFor(recipe);
   t.repeat.set(ru, rv);
@@ -348,9 +363,9 @@ function applyPhotoSet(m: THREE.MeshStandardMaterial, id: MaterialId, recipe: Ma
   const stats = TEXTURE_STATS[set];
   const p = loadSet(set)
     .then((tx) => {
-      const color = tx.color.clone();
-      const normal = tx.normal.clone();
-      const arm = tx.arm.clone();
+      const color = cloneKeepSource(tx.color);
+      const normal = cloneKeepSource(tx.normal);
+      const arm = cloneKeepSource(tx.arm);
       for (const t of [color, normal, arm]) {
         setRepeat(t, recipe);
         releaseCompressedAfterUpload(t);
@@ -403,18 +418,18 @@ function applyProcedural(m: THREE.MeshStandardMaterial, id: MaterialId, recipe: 
   }
   // The pixels are needed once, for the upload: then only the GPU's copy is kept (gfx/release).
   const img = tx.img as { color?: Uint8ClampedArray | null; normal?: Uint8ClampedArray | null; arm?: Uint8ClampedArray | null };
-  const color = tx.color.clone();
+  const color = cloneKeepSource(tx.color);
   releaseTextureAfterUpload(color, () => (img.color = null));
   setRepeat(color, recipe);
   m.map = color;
   if (tx.normal) {
-    m.normalMap = tx.normal.clone();
+    m.normalMap = cloneKeepSource(tx.normal);
     releaseTextureAfterUpload(m.normalMap, () => (img.normal = null));
     setRepeat(m.normalMap, recipe);
     m.normalScale.setScalar(recipe.normal ?? 1);
   }
   if (tx.arm) {
-    const arm = tx.arm.clone();
+    const arm = cloneKeepSource(tx.arm);
     releaseTextureAfterUpload(arm, () => (img.arm = null));
     setRepeat(arm, recipe);
     m.roughnessMap = arm;

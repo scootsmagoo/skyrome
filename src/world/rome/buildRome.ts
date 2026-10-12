@@ -17,6 +17,7 @@ import { Terrain } from '../terrain/Terrain';
 import { buildHeightmap, footprintPolygon, type Heightmap, type TerrainPad } from '../terrain/heightmap';
 import { terrainProfile, type TerrainProfile } from '../terrain/profile';
 import { releaseBuildCaches } from '../../gfx/release';
+import { lite } from '../../gfx/mobileLite';
 
 declare module '../../core/Game' {
   interface Game {
@@ -165,7 +166,8 @@ export async function buildRome(game: Game, opts: BuildRomeOptions = {}) {
   report(0.3, 'Raising the monuments');
   await buildLandmarks(game, terrainLandmarks(hm.profile), hm, {
     bounds: landmarkBounds,
-    highDetailPriority: extent === 'core' ? 2 : 1,
+    // Phones build the priority-2 landmarks at their low detail too (gfx/mobileLite: boot memory).
+    highDetailPriority: extent === 'core' && !lite.detail ? 2 : 1,
     onProgress: (d, t, name) => report(0.3 + lmShare * (d / t), name),
   });
 

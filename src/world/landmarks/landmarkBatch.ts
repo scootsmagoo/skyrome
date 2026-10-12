@@ -28,6 +28,9 @@ import { lite } from '../../gfx/mobileLite';
 import { landmarkBatchSize } from './presize';
 import { uploadBatchesNow } from '../city/uploadNow';
 
+/** Phones with generations: the live vertices a landmark batch takes before the next one starts (about 11 MB of arrays). */
+const GEN_CAP = Number(new URLSearchParams(globalThis.location?.search ?? '').get('gencap')) || 500_000; // ?gencap= tunes it (A/B)
+
 /** Hysteresis (m) around each LOD distance. */
 const BAND = 6;
 
@@ -70,7 +73,12 @@ export class LandmarkBatcher implements System, ShadowHook {
 
   constructor(private readonly game: Game) {
     // Phones: the big batches start at their final size (presize.ts), no regrowth garbage.
-    this.batchPool = new BatchPool(game.scene, { name: 'lmbatch', verts: 1 << 15, growth: 1.6, trim: false, presize: lite.flush ? landmarkBatchSize : undefined });
+    // With generations no batch passes GEN_CAP, so the hint is clamped to a little over it (no regrowth garbage, no giant arrays).
+    const presize = !lite.flush ? undefined : !lite.gens ? landmarkBatchSize : (name: string) => {
+      const n = landmarkBatchSize(name);
+      return n === undefined ? undefined : Math.min(n, Math.ceil(GEN_CAP * 1.15));
+    };
+    this.batchPool = new BatchPool(game.scene, { name: 'lmbatch', verts: 1 << 15, growth: 1.6, trim: false, presize, maxLive: lite.flush && lite.gens ? GEN_CAP : undefined });
     addShadowHook(this);
   }
 
@@ -234,6 +242,20 @@ export class LandmarkBatcher implements System, ShadowHook {
   }
 
   /**
+   * Generations (lite.gens): finish and upload the batches that filled up since the last call, freeing
+   * their arrays now, and drop the prepared-geometry copies (shapes shared by later landmarks are
+   * prepared again). Cheap when nothing is retired. Twin swaps and visibility only change instance
+   * data (`setGeometryIdAt`, `setVisibleAt`), never vertices, so a finished batch stays valid.
+   */
+  async flushRetired(game: Game) {
+    if (this.finished) return;
+    const done = this.batchPool.takeRetired();
+    if (!done.length) return;
+    await uploadBatchesNow(game, done.map((b) => [b.mesh]), (i) => done[i].finish(0.9));
+    this.prepared = new WeakMap();
+  }
+
+  /**
    * `finish` for phones: each batch is finished and sent to the GPU in turn (world/city/uploadNow.ts),
    * its arrays freed before the next one is touched, so the shrink copies and the full set of arrays
    * never exist together. A batch within 10 % of its capacity keeps it (no copy).
@@ -241,7 +263,7 @@ export class LandmarkBatcher implements System, ShadowHook {
   async finishAndUpload(game: Game) {
     if (this.finished) return;
     this.finished = true;
-    const all = this.batchPool.all();
+    const all = [...this.batchPool.takeRetired(), ...this.batchPool.all()];
     // Big batches one at a time, the many tiny ones (a few hundred vertices) together.
     const groups: Batch[][] = [];
     let small: Batch[] = [];

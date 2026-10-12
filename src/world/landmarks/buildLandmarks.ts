@@ -151,7 +151,10 @@ export async function buildLandmarks(
     // Yield to the browser now and then so the loading screen can paint.
     if (i % 8 === 0) await new Promise((r) => setTimeout(r, 0));
     // Phones: the library's textures that have arrived go up as the build goes on, freeing their pixels (world/city/uploadNow.ts).
-    if (lite.flush && perf && i % 12 === 0) uploadTexturesNow(game);
+    if (lite.flush && perf) {
+      uploadTexturesNow(game);
+      if (lite.gens) await landmarkBatcherFor(game).flushRetired(game);
+    }
   }
   // Every landmark is built and baked: their static shapes now only need to reach the GPU once
   // (~400 MB of vertex arrays freed after upload, gfx/release). After the loop, because builders

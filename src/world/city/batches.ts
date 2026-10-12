@@ -245,6 +245,12 @@ export interface PoolOptions {
   trim?: boolean;
   /** Starting capacity for a batch by its name, when known (else `verts`). */
   presize?: (name: string) => number | undefined;
+  /**
+   * Generations: a batch with this many live vertices is retired (it stays in the scene, but gets no
+   * more geometry) and the next `get` for its key starts a new one. The caller finishes and uploads the
+   * retired ones (`takeRetired`), so only the current generation's arrays are alive. Landmarks on phones.
+   */
+  maxLive?: number;
 }
 
 /** A set of instances added together (a block level, a street piece…), toggled and removed as one. */
@@ -290,6 +296,11 @@ export class BatchPool {
   get(material: THREE.Material, castShadow: boolean, offset = false, tag = ''): Batch {
     const key = `${material.uuid}|${castShadow ? 1 : 0}|${offset ? 1 : 0}|${tag}`;
     let b = this.batches.get(key);
+    if (b && this.opts.maxLive && b.liveVertices >= this.opts.maxLive) {
+      this.retired.push(b);
+      this.batches.delete(key);
+      b = undefined;
+    }
     if (!b) {
       const name = `${this.opts.name ?? 'city'}:${material.name || 'mat'}${castShadow ? '' : ':ns'}${offset ? ':off' : ''}${tag ? `:${tag}` : ''}`;
       b = new Batch(this.own(material, offset), castShadow, name, this.opts.presize?.(name) ?? this.opts.verts, 64, this.opts.growth);
@@ -303,6 +314,14 @@ export class BatchPool {
   }
 
   private shadowsOff = new Set<string>();
+  private retired: Batch[] = [];
+
+  /** The batches retired since the last call (see `PoolOptions.maxLive`); the caller owns them from here. */
+  takeRetired(): Batch[] {
+    const r = this.retired;
+    this.retired = [];
+    return r;
+  }
 
   /** Switch the shadows of every shadow-casting batch of a tag on or off. */
   setShadows(tag: string, on: boolean) {
