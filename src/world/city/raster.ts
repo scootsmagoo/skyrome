@@ -394,7 +394,9 @@ export function openCells(g: Grid, cells: Int32Array, inSet: Uint8Array): Int32A
 export function pointInPoly(x: number, z: number, poly: readonly Pt[]): boolean {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const [xi, zi] = poly[i], [xj, zj] = poly[j];
+    // Indexed reads, not `const [x, z] = p`: destructuring goes through an iterator (garbage on every edge).
+    const pi = poly[i], pj = poly[j];
+    const xi = pi[0], zi = pi[1], xj = pj[0], zj = pj[1];
     if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
   }
   return inside;

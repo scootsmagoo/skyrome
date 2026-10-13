@@ -110,8 +110,9 @@ export function signedDistance(px: number, pz: number, poly: readonly P2[]): num
   let inside = false;
   let best = Infinity;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const [xi, zi] = poly[i];
-    const [xj, zj] = poly[j];
+    // Indexed reads, not `const [x, z] = p`: destructuring goes through an iterator (garbage on every edge).
+    const pi = poly[i], pj = poly[j];
+    const xi = pi[0], zi = pi[1], xj = pj[0], zj = pj[1];
     if (zi > pz !== zj > pz && px < ((xj - xi) * (pz - zi)) / (zj - zi) + xi) inside = !inside;
     const d = segDist2(px, pz, xj, zj, xi, zi);
     if (d < best) best = d;

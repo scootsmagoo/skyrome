@@ -26,7 +26,10 @@ export function playableBounds(hm: Heightmap, inset = 4) {
 /** Lowest and highest terrain heights (game y). */
 export function heightRange(hm: Heightmap): [number, number] {
   let lo = Infinity, hi = -Infinity;
-  for (const h of hm.heights) {
+  // An indexed loop: for-of over a typed array allocates an iterator result per element.
+  const hs = hm.heights;
+  for (let i = 0; i < hs.length; i++) {
+    const h = hs[i];
     if (h < lo) lo = h;
     if (h > hi) hi = h;
   }

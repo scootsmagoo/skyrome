@@ -309,7 +309,13 @@ export function insideLength(pts: readonly Pt[], blockers: readonly Blocker[]): 
     const m = Math.max(1, Math.ceil(L / STEP));
     for (let i = 0; i < m; i++) {
       const x = a[0] + ((b[0] - a[0]) * (i + 0.5)) / m, z = a[1] + ((b[1] - a[1]) * (i + 0.5)) / m;
-      if (hulls.some((h) => pointInPoly(x, z, h))) n += L / m;
+      // A plain loop, not hulls.some(): a closure per sample was ~4 GB of garbage over the city's plan.
+      for (let h = 0; h < hulls.length; h++) {
+        if (pointInPoly(x, z, hulls[h])) {
+          n += L / m;
+          break;
+        }
+      }
     }
   }
   return n;

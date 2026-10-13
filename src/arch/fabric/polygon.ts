@@ -25,7 +25,9 @@ export function ensurePositive(poly: Polygon): Polygon {
 export function pointInPolygon(p: Vec2, poly: Polygon): boolean {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const [xi, zi] = poly[i], [xj, zj] = poly[j];
+    // Indexed reads, not `const [x, z] = p`: destructuring goes through an iterator (garbage on every edge).
+    const pi = poly[i], pj = poly[j];
+    const xi = pi[0], zi = pi[1], xj = pj[0], zj = pj[1];
     if (zi > p[1] !== zj > p[1] && p[0] < ((xj - xi) * (p[1] - zi)) / (zj - zi) + xi) inside = !inside;
   }
   return inside;
