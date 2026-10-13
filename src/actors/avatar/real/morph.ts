@@ -14,6 +14,7 @@
  * correctly with the target skeleton.
  */
 import { B, BONES, type BoneName, type Rig } from '../rig';
+import { lite } from '../../../gfx/mobileLite';
 
 /** Scale of one bone: x across the limb, z front/back (belly, bust), y along it. */
 export interface BoneScale {
@@ -123,6 +124,12 @@ export interface BodyArrays {
   morphs?: { name: string; delta: Float32Array; normal?: Float32Array }[];
 }
 
+/**
+ * Length of a vector. Phones (gfx/mobileLite `bodies`) use a square root: Math.hypot allocates its
+ * arguments in V8, twice per vertex here (about 200 MB a minute of garbage while walking).
+ */
+const len3: (x: number, y: number, z: number) => number = lite.bodies ? (x, y, z) => Math.sqrt(x * x + y * y + z * z) : Math.hypot;
+
 /** Morph `src` (reference pose) into `out` (same layout) for the target rig. */
 export function morphBody(src: BodyArrays, ref: Rig, tgt: Rig, out: { position: Float32Array; normal: Float32Array; tangent?: Float32Array }) {
   const sc = boneScales(ref, tgt);
@@ -164,12 +171,12 @@ export function morphBody(src: BodyArrays, ref: Rig, tgt: Rig, out: { position: 
     out.position[v * 3] = ox;
     out.position[v * 3 + 1] = oy;
     out.position[v * 3 + 2] = oz;
-    const nl = Math.hypot(mx, my, mz) || 1;
+    const nl = len3(mx, my, mz) || 1;
     out.normal[v * 3] = mx / nl;
     out.normal[v * 3 + 1] = my / nl;
     out.normal[v * 3 + 2] = mz / nl;
     if (tan && out.tangent) {
-      const tl = Math.hypot(tx, ty, tz) || 1;
+      const tl = len3(tx, ty, tz) || 1;
       out.tangent[v * 4] = tx / tl;
       out.tangent[v * 4 + 1] = ty / tl;
       out.tangent[v * 4 + 2] = tz / tl;

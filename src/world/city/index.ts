@@ -97,7 +97,9 @@ export async function buildCity(
   // ---- 1. plan (detail: the core + 150 m, and the golden-path corridors + 150 m round them)
   // ?detour=0: the atlas roads as they are, through the buildings (A/B for the M5a road work).
   const detourRoads = typeof location === 'undefined' || new URLSearchParams(location.search).get('detour') !== '0';
-  const plan = planCity(atlas, hm, { detailBounds, corridorDetail: opts.extent === 'city' ? null : 150, detourRoads });
+  // Phones (gfx/mobileLite `area`): the plan, and so the far massing and streets, only within 450 m of the core.
+  const planBounds = opts.extent === 'core' && lite.area ? scaleBounds(atlas.CORE_BOUNDS, 450) : undefined;
+  const plan = planCity(atlas, hm, { detailBounds, corridorDetail: opts.extent === 'city' ? null : 150, detourRoads, bounds: planBounds });
   // Where streets, ground cover and city grass exist: the detail area plus a 60 m fringe.
   const areaRects = plan.detailRects.map((b) => ({ minX: b.minX - 60, minZ: b.minZ - 60, maxX: b.maxX + 60, maxZ: b.maxZ + 60 }));
   const inDetail = (x: number, z: number) => inRects(areaRects, x, z);

@@ -136,7 +136,9 @@ export async function buildRome(game: Game, opts: BuildRomeOptions = {}) {
   // Terrain always covers the whole city (cheap) so distant hills frame the view.
   const bounds = atlas.CITY_BOUNDS;
   // The core (+350 m) and the regions built to its detail (atlas.DETAIL_REGIONS).
-  const landmarkBounds = extent === 'core' ? union([expand(atlas.CORE_BOUNDS, 350), ...atlas.DETAIL_REGIONS.map((r) => expand(r, 100))]) : atlas.CITY_BOUNDS;
+  // Phones (gfx/mobileLite `area`): the playable core only, the skyline beyond it left out (boot memory).
+  const landmarkBounds = extent === 'core' && lite.area ? expand(atlas.CORE_BOUNDS, 150)
+    : extent === 'core' ? union([expand(atlas.CORE_BOUNDS, 350), ...atlas.DETAIL_REGIONS.map((r) => expand(r, 100))]) : atlas.CITY_BOUNDS;
 
   report(0.02, 'Surveying the seven hills');
   await tick();
