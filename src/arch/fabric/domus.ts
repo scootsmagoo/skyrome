@@ -160,7 +160,7 @@ export function domus(spec: DomusSpec): BuildingOutput {
     S.span('wood_dark', -ow / 2 - 0.15, 2.9, -0.03, ow / 2 + 0.15, 3.12, 0.05, { shadow: false });
     S.span('travertine', -ow / 2 - 0.02, -0.08, -0.14, ow / 2 + 0.02, 0.02, T * 0.6);
     if (s.open && !full) {
-      S.span('black', -ow / 2, 0, T * 0.6, ow / 2, 2.9, T * 0.6 + 0.02, { shadow: false });
+      S.span('interior', -ow / 2, 0, T * 0.6, ow / 2, 2.9, T * 0.6 + 0.02, { shadow: false });
     } else if (s.open) {
       shopInterior(S.noShadow(), s.kind, { w: ow, depth: T + sd, h: 3.0, t: T, wealth }, rng.fork(`shop${cx}`));
       S.solid(-ow / 2 - 0.2, -0.5, 0, ow / 2 + 0.2, 0, T + sd);

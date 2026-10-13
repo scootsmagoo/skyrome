@@ -283,7 +283,7 @@ export function insula(spec: InsulaSpec): BuildingOutput {
         S.solid(-ow / 2 - 0.3, -0.4, T * 0.2, ow / 2 + 0.3, 0, T + sd); // shop floor
       } else {
         // Mid / far stand-in: a dark shop mouth.
-        S.span('black', -ow / 2, 0, T * 0.6, ow / 2, lo.y1, T * 0.6 + 0.02, { shadow: false });
+        S.span('interior', -ow / 2, 0, T * 0.6, ow / 2, lo.y1, T * 0.6 + 0.02, { shadow: false });
       }
       if (streetDressing) {
         // The same decorative draws at 'full' and 'mid'; 'mid' keeps only the awning.
@@ -423,7 +423,7 @@ export function insula(spec: InsulaSpec): BuildingOutput {
           shopInterior(S.noShadow(), kind, { w: 2.6, depth: sideShopDepth, h: h + 0.12, t: T, wealth }, drng.fork(`side${s.lx}`));
           S.span('black', -1.3, h + 0.23, T + 0.01, 1.3, Math.max(h + 0.4, G - s.yb - 0.2), sideShopDepth, { shadow: false });
           S.solid(-1.6, -0.4, T * 0.2, 1.6, 0, sideShopDepth); // shop floor
-        } else S.span('black', -1.3, 0, T * 0.6, 1.3, h, T * 0.6 + 0.02, { shadow: false });
+        } else S.span('interior', -1.3, 0, T * 0.6, 1.3, h, T * 0.6 + 0.02, { shadow: false });
         const p = S.point(0, 0, -0.6);
         spots.push({ id: `shopDoor${spots.length}`, kind: 'shopDoor', position: p, facing: side < 0 ? -Math.PI / 2 : Math.PI / 2, tag: kind });
       } else {
