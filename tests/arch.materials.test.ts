@@ -33,11 +33,12 @@ describe('material catalog', () => {
   });
 
   it('covers the required surfaces with photo textures', () => {
-    const required = ['marble', 'marble_veined', 'tufa', 'peperino', 'basalt', 'rock', 'brick', 'concrete', 'plaster_white', 'plaster_cream', 'plaster_ochre', 'plaster_red', 'plaster_dark', 'roof_tile', 'wood', 'wood_dark', 'paving_basalt', 'paving_travertine', 'cobbles', 'gravel', 'dirt', 'grass', 'dry_grass', 'sand', 'mud', 'bark'] as const;
+    const required = ['marble', 'marble_veined', 'tufa', 'peperino', 'basalt', 'rock', 'concrete', 'plaster_white', 'plaster_cream', 'plaster_ochre', 'plaster_red', 'plaster_dark', 'roof_tile', 'wood', 'wood_dark', 'paving_basalt', 'paving_travertine', 'cobbles', 'gravel', 'dirt', 'grass', 'dry_grass', 'sand', 'mud', 'bark'] as const;
     for (const id of required) expect(MATERIAL_RECIPES[id].set, id).toBeTruthy();
     // reticulatum and travertine are procedural (no CC0 scan shows Roman ashlar: the travertine
-    // scans are modern polished vein-cut tiles), and so are fabrics, mosaic, painted stucco, metals
-    for (const id of ['reticulatum', 'travertine', 'fabric_red', 'mosaic', 'stucco_painted', 'gilded_bronze'] as const) expect(MATERIAL_RECIPES[id].proc, id).toBeTruthy();
+    // scans are modern polished vein-cut tiles), nor is brick (the scans are modern brick, not long thin
+    // testaceum in thick mortar), and so are fabrics, mosaic, painted stucco, metals
+    for (const id of ['reticulatum', 'travertine', 'brick', 'fabric_red', 'mosaic', 'stucco_painted', 'gilded_bronze'] as const) expect(MATERIAL_RECIPES[id].proc, id).toBeTruthy();
   });
 
   it('stays within the texture download budget', () => {

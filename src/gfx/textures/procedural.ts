@@ -1,7 +1,7 @@
 /**
  * Procedural texture generators for materials that have no photo set: fabrics, black-and-white
  * floor mosaic, Pompeian painted stucco, gilded and plain bronze, iron/lead, porphyry, opus
- * reticulatum, travertine ashlar and foliage. Pure functions: they return raw RGBA arrays (row 0 = v 0, i.e. the
+ * reticulatum, opus testaceum, travertine ashlar and foliage. Pure functions: they return raw RGBA arrays (row 0 = v 0, i.e. the
  * layout `DataTexture` uploads), so they run in tests and need no canvas. All are seamless.
  */
 import type { ProceduralId } from './catalog';
@@ -395,6 +395,95 @@ function reticulatum(seed: number): ProcImage {
 }
 
 /**
+ * Opus testaceum as faced in Trajan's Rome: long, thin bricks (about 3.5–4.5 cm tall, 22–42 cm
+ * long, cut from bessales and sesquipedales) in thick, slightly recessed courses of grey-beige
+ * pozzolana mortar, so the mortar is a third of the face. Each brick has its own firing (red,
+ * orange, a few yellow or dark overfired ones), worn arrises and a little grit. Designed for a
+ * 1.2 × 1.2 m repeat: 20 courses of 6 cm.
+ */
+function testaceum(seed: number): ProcImage {
+  const S = 1024;
+  const C = 20;
+  const img = new Img(S);
+  const rnd = prng(seed + 7);
+  // Head joints per course: bricks of random length laid until the course wraps exactly.
+  const heads: number[][] = [];
+  for (let c = 0; c < C; c++) {
+    const lens: number[] = [];
+    let sum = 0;
+    while (sum < 0.9) {
+      const l = (0.22 + rnd() * 0.2) / 1.2;
+      lens.push(l);
+      sum += l;
+    }
+    const k = 1 / sum;
+    const start = rnd();
+    let at = start;
+    const row: number[] = [];
+    for (const l of lens) {
+      row.push(fract(at));
+      at += l * k;
+    }
+    heads.push(row.sort((a, b) => a - b));
+  }
+  const mortarN = fbm2D(seed + 1, 24, 3);
+  const face = fbm2D(seed + 2, 12, 4);
+  const blot = fbm2D(seed + 6, 48, 3);
+  const grit = fbm2D(seed + 3, 160, 2);
+  const chip = fbm2D(seed + 4, 90, 3);
+  const fired = [hexRgb(0xb45a3a), hexRgb(0xc06a43), hexRgb(0xa64f36), hexRgb(0xc27a4e), hexRgb(0x9a4b37), hexRgb(0xb46846)];
+  const yellow = hexRgb(0xbf9a6c);
+  const dark = hexRgb(0x5e3a30);
+  const mortar = hexRgb(0xb5a68e);
+  const courseH = 1 / C;
+  for (let y = 0; y < S; y++) {
+    const v = y / S;
+    const c = Math.min(C - 1, Math.floor(v / courseH));
+    const fv = (v - c * courseH) / courseH;
+    const row = heads[c];
+    for (let x = 0; x < S; x++) {
+      const u = x / S;
+      // The brick this pixel is in: the last head joint at or before u (wrapping).
+      let bi = row.length - 1;
+      for (let i = 0; i < row.length; i++) if (row[i] <= u) bi = i;
+      const h0 = row[bi];
+      const h1 = bi + 1 < row.length ? row[bi + 1] : row[0] + 1;
+      const uu = u < h0 ? u + 1 : u;
+      // Distances to the brick's edges in pixels (the bed joint is ~2 cm, the head joint ~1.2 cm);
+      // the arrises are worn, so the edge wanders by a few millimetres.
+      const ch = chip(u, v);
+      const bedIn = 0.33 + 0.04 * (hash2(c, bi, seed + 9) - 0.5);
+      const dBed = Math.min(fv - bedIn * 0.5, 1 - bedIn * 0.5 - fv) * courseH * S;
+      const dHead = Math.min(uu - h0, h1 - uu) * S - 5;
+      const e = Math.min(dBed, dHead) - 3.2 * (ch - 0.5) * 2;
+      const brick = smooth(-0.5, 1.8, e);
+      const r = hash2(c, bi, seed);
+      let pc = fired[Math.floor(r * fired.length)];
+      const r2 = hash2(c * 7 + 3, bi * 13 + 1, seed + 5);
+      if (r2 < 0.08) pc = mixRgb(pc, yellow, 0.7);
+      else if (r2 > 0.94) pc = mixRgb(pc, dark, 0.55);
+      const f = face(u, v);
+      const b = blot(u, v);
+      const g = grit(u, v);
+      // Firing varies along a brick, the face is pitted, and the edges are a touch darker (soot, dirt).
+      const k = (0.8 + 0.3 * f + 0.16 * (b - 0.5) + 0.14 * (g - 0.5)) * (1 - 0.12 * smooth(4, 0, e));
+      let brickRgb = [pc[0] * k, pc[1] * k, pc[2] * k];
+      const pit = smooth(0.62, 0.72, g) * 0.35;
+      brickRgb = mixRgb(brickRgb, [brickRgb[0] * 0.6, brickRgb[1] * 0.55, brickRgb[2] * 0.5], pit);
+      const mn = mortarN(u, v);
+      let mortRgb = mixRgb(mortar, [122, 114, 102], mn * 0.6 + (g - 0.5) * 0.4);
+      // Lime lumps and pozzolana grains in the mortar.
+      mortRgb = mixRgb(mortRgb, [205, 198, 182], smooth(0.7, 0.78, grit(u * 1.7 + 0.31, v * 1.7 + 0.57)) * 0.5);
+      mortRgb = mixRgb(mortRgb, [92, 70, 62], smooth(0.72, 0.8, chip(u * 1.3 + 0.11, v * 1.3 + 0.7)) * 0.5);
+      const rgb = mixRgb(mortRgb, brickRgb, brick);
+      const h = brick * (1 + 0.25 * f - pit * 0.8) + (1 - brick) * (0.2 * mn) + g * 0.12;
+      img.set(x, y, rgb, h * 3, 0.8 + 0.14 * (1 - brick) + 0.05 * g, 0.82 + 0.18 * brick);
+    }
+  }
+  return img.finish(2.0);
+}
+
+/**
  * Lapis Tiburtinus as cut for Roman ashlar (fresh in AD 113, honed, never pockmarked): warm cream
  * with wavy horizontal laminae, sparse small voids drawn out along the bedding, and fine tight
  * joints of opus quadratum (two 0.6 m courses per repeat, staggered head joints). Designed for a
@@ -628,6 +717,7 @@ const GENERATORS: Record<ProceduralId, (seed: number) => ProcImage> = {
   metal,
   porphyry,
   reticulatum,
+  testaceum,
   foliage,
   travertine,
   slabs,

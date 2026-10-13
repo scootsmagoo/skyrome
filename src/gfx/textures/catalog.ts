@@ -38,7 +38,7 @@ export type TextureSetId =
   | 'bark';
 
 /** Canvas generators in procedural.ts. */
-export type ProceduralId = 'fabric' | 'mosaic' | 'stucco' | 'gilded' | 'bronze' | 'metal' | 'porphyry' | 'reticulatum' | 'travertine' | 'foliage' | 'slabs';
+export type ProceduralId = 'fabric' | 'mosaic' | 'stucco' | 'gilded' | 'bronze' | 'metal' | 'porphyry' | 'reticulatum' | 'testaceum' | 'travertine' | 'foliage' | 'slabs';
 
 export interface MaterialRecipe {
   set?: TextureSetId;
@@ -91,7 +91,9 @@ export const MATERIAL_RECIPES: Record<MaterialId, MaterialRecipe> = {
   basalt: { set: 'basalt', tile: 2.0, macro: 0.08, weather: 0.4, grain: 1 },
   rock: { set: 'rock', tile: 3.5, macro: 0.12, detile: true, grain: 1.2 },
   // masonry / plaster
-  brick: { set: 'brick', tile: 1.1, macro: 0.08, weather: 0.6, grain: 1 },
+  // Procedural opus testaceum (long thin bricks in thick mortar); the photo set was modern brick.
+  // Not normalised: a tint would turn the grey mortar red. MATERIAL_BASE.brick is the texture's mean.
+  brick: { proc: 'testaceum', tile: 1.2, normalize: false, macro: 0.08, weather: 0.6, grain: 1 },
   reticulatum: { proc: 'reticulatum', tile: 0.85, macro: 0.08, weather: 0.6 },
   concrete: { set: 'concrete', tile: 2.2, macro: 0.1, weather: 0.8, grain: 1 },
   plaster_white: { set: 'plaster', tile: 2.5, macro: 0.06, normal: 0.45, weather: 1, grain: 0.8, flake: 1 },

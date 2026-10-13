@@ -185,14 +185,16 @@ const MAP_FRAGMENT = /* glsl */ `
     diffuseColor.rgb *= ( 1.0 - 0.45 * skCon ) * ( 1.0 - 0.3 * skSpl );
     #ifdef SK_FLAKE
     {
-      // Plaster lost to weather: ragged patches, most of them low on the wall, show the brick or tufa below.
-      float skFl = skNoise2( skWc * vec2( 1.3, 1.7 ) + 83.0 ) * 0.6 + skNoise2( skWc * 4.1 + 29.0 ) * 0.4;
-      float skFlLow = 1.0 - smoothstep( 0.0, 2.4, max( skH, 0.0 ) );
-      float skFlT = 0.87 - 0.16 * skFlLow - 0.03 * skFlake;
-      skFlakeK = smoothstep( skFlT, skFlT + 0.03, skFl ) * skVert * min( skFlake, 1.0 );
-      float skFlRim = smoothstep( skFlT - 0.05, skFlT, skFl ) * ( 1.0 - skFlakeK ) * skVert;
-      vec3 skUnder = mix( vec3( 0.34, 0.2, 0.14 ), vec3( 0.3, 0.28, 0.25 ), smoothstep( 0.3, 0.7, skNoise2( skWc * 2.1 + 3.0 ) ) );
-      skUnder *= 0.9 + 0.7 * skNoise2( skWc * 19.0 );
+      // Plaster lost to weather: a few big ragged patches, most of them low on the wall, show the
+      // brick-faced core (brick courses in grey mortar) below.
+      float skFl = skNoise2( skWc * vec2( 0.45, 0.6 ) + 83.0 ) * 0.7 + skNoise2( skWc * 2.3 + 29.0 ) * 0.3;
+      float skFlLow = 1.0 - smoothstep( 0.0, 2.2, max( skH, 0.0 ) );
+      float skFlT = 0.8 - 0.1 * skFlLow - 0.02 * skFlake;
+      skFlakeK = smoothstep( skFlT, skFlT + 0.015, skFl ) * skVert * min( skFlake, 1.0 );
+      float skFlRim = smoothstep( skFlT - 0.03, skFlT, skFl ) * ( 1.0 - skFlakeK ) * skVert;
+      float skCourse = smoothstep( 0.62, 0.8, abs( fract( vSkWorld.y / 0.06 ) * 2.0 - 1.0 ) );
+      vec3 skUnder = mix( vec3( 0.42, 0.22, 0.14 ), vec3( 0.36, 0.33, 0.29 ), skCourse );
+      skUnder *= 0.85 + 0.3 * skNoise2( skWc * 7.0 );
       diffuseColor.rgb = mix( diffuseColor.rgb * ( 1.0 - 0.3 * skFlRim ), skUnder, skFlakeK );
     }
     #endif
@@ -200,13 +202,14 @@ const MAP_FRAGMENT = /* glsl */ `
     // Moss: soft green cushions on the lowest metre and a half of stone, thickest in the damp.
     float skMo = skNoise2( skWc * vec2( 2.3, 3.1 ) + 41.0 ) * 0.6 + skNoise2( skWc * 7.3 + 17.0 ) * 0.4;
     float skMoK = smoothstep( 0.58, 0.82, skMo + 0.18 * skDamp ) * ( 1.0 - smoothstep( 0.2, 1.5, max( skH, 0.0 ) ) ) * skVert * skWeather * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
-    diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.12, 0.2, 0.06 ) * ( 0.7 + 0.8 * skNoise2( skWc * 31.0 ) ), skMoK * 0.55 );
+    diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.12, 0.2, 0.06 ) * ( 0.7 + 0.6 * skNoise2( skWc * 11.0 ) ), skMoK * 0.55 );
     // Ivy: a few columns of dark leaf clusters climbing the wall, ragged at the top, sparse at the edge.
-    float skIvC = smoothstep( 0.78, 0.86, skNoise( vec3( vSkWorld.x * 0.23 + vSkWorld.z * 0.21, 0.0, 5.0 ) ) );
+    float skIvC = smoothstep( 0.83, 0.9, skNoise( vec3( vSkWorld.x * 0.23 + vSkWorld.z * 0.21, 0.0, 5.0 ) ) );
     float skIvTop = 2.2 + 4.0 * skNoise( vec3( vSkWorld.x * 0.5, 0.0, vSkWorld.z * 0.5 ) + 9.0 );
-    float skIvLeaf = skNoise2( skWc * 13.0 + 3.0 ) * 0.6 + skNoise2( skWc * 31.0 ) * 0.4;
-    float skIvK = skIvC * ( 1.0 - smoothstep( skIvTop * 0.55, skIvTop, max( skH, 0.0 ) ) ) * smoothstep( 0.46 + 0.1 * skIvC, 0.6, skIvLeaf ) * skVert * skWeather * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
-    diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.045, 0.1, 0.03 ) * ( 0.6 + 1.1 * skNoise2( skWc * 47.0 ) ), skIvK * 0.7 );
+    // Leaf clusters of a hand's breadth: finer noise turns into pixel speckle at street distance.
+    float skIvLeaf = skNoise2( skWc * 5.5 + 3.0 ) * 0.65 + skNoise2( skWc * 13.0 ) * 0.35;
+    float skIvK = skIvC * ( 1.0 - smoothstep( skIvTop * 0.55, skIvTop, max( skH, 0.0 ) ) ) * smoothstep( 0.44 + 0.1 * skIvC, 0.66, skIvLeaf ) * skVert * skWeather * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
+    diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.045, 0.1, 0.03 ) * ( 0.7 + 0.8 * skNoise2( skWc * 17.0 ) ), skIvK * 0.6 );
     #ifdef SK_FACADE
     {
       // Each ~11 m stretch of wall (and each wall plane) was last painted on its own day: its own

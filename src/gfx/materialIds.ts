@@ -79,7 +79,7 @@ export const MATERIAL_BASE: Record<MaterialId, { color: number; roughness: numbe
   peperino: { color: 0x7c7a74, roughness: 0.95 },
   basalt: { color: 0x4d4c4a, roughness: 0.8 },
   rock: { color: 0x8f8572, roughness: 0.95 },
-  brick: { color: 0xb5643f, roughness: 0.9 },
+  brick: { color: 0xa4775f, roughness: 0.9 }, // the testaceum texture's mean (brick and a third mortar)
   reticulatum: { color: 0xa69479, roughness: 0.95 },
   concrete: { color: 0x9c9384, roughness: 0.95 },
   plaster_white: { color: 0xe9e2d3, roughness: 0.9 },

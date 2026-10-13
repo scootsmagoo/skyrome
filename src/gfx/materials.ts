@@ -262,7 +262,7 @@ let prefetched = false;
  * generates them in this order, so the early ones arrive before they are asked for).
  */
 function procIds(): ProceduralId[] {
-  const first: ProceduralId[] = ['travertine', 'slabs', 'stucco', 'reticulatum', 'bronze', 'gilded', 'metal', 'porphyry'];
+  const first: ProceduralId[] = ['travertine', 'slabs', 'stucco', 'reticulatum', 'testaceum', 'bronze', 'gilded', 'metal', 'porphyry'];
   const all = new Set<ProceduralId>();
   for (const r of Object.values(MATERIAL_RECIPES) as MaterialRecipe[]) if (r.proc) all.add(r.proc);
   return [...first.filter((id) => all.has(id)), ...[...all].filter((id) => !first.includes(id))];
