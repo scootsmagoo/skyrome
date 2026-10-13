@@ -16,6 +16,7 @@ import { crockerySounds } from './sounds/crockery';
 import { foleySounds } from './sounds/foley';
 import { footstepSounds, landingSounds } from './sounds/footsteps';
 import { gearSounds } from './sounds/gear';
+import { gunSounds } from './sounds/guns';
 import type { LoopDef, SoundDef } from './sounds/types';
 import type { SampleSpec } from './music/sampleSpec';
 import { uiSounds } from './sounds/ui';
@@ -27,7 +28,7 @@ export const DEFAULT_BAKE_RATE = 32000;
 export const SOUNDS = new Map<string, SoundDef>();
 export const LOOPS = new Map<string, LoopDef>();
 
-for (const d of [...footstepSounds, ...landingSounds, ...gearSounds, ...combatSounds, ...vocalSounds, ...foleySounds, ...crockerySounds, ...uiSounds, ...ambienceSounds]) {
+for (const d of [...footstepSounds, ...landingSounds, ...gearSounds, ...combatSounds, ...vocalSounds, ...foleySounds, ...gunSounds, ...crockerySounds, ...uiSounds, ...ambienceSounds]) {
   if (SOUNDS.has(d.id)) throw new Error(`[audio] duplicate sound id ${d.id}`);
   SOUNDS.set(d.id, d);
 }

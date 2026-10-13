@@ -164,6 +164,11 @@ export class AnimationController {
   firstPerson = false;
   /** Camera pitch (rad, + up) — arms follow it in first person; archers aim with it. */
   aimPitch = 0;
+  /**
+   * Extension point: runs last in the procedural pass (after the grip IK), to place the arms itself
+   * (the anachronism cheat's guns, src/game/anachronism/fx). Character space, allocation-free.
+   */
+  poseHook: ((p: Pose, dt: number, legScale: number) => void) | null = null;
 
   private blocking = false;
   private blockW = 0;
@@ -1093,6 +1098,7 @@ export class AnimationController {
     gw *= 1 - this.blockW * 0.5;
     this.gripW = approach(this.gripW, gw, 12, dt);
     if (grip && this.gripW > 0.01) leftHandOnShaft(p, this.avatar.rig, this.legScale, grip, this.gripW);
+    if (this.poseHook) this.poseHook(p, dt, this.legScale);
 
     // A corpse struck again: a short jolt through the torso.
     if (this.twitch > 0) {
