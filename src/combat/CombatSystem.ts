@@ -1426,6 +1426,27 @@ export class CombatSystem implements System, PlayerCombatHost {
   }
 
   /**
+   * The player hits `target` from outside the melee rules (the anachronism cheat's guns,
+   * game/anachronism): an actor who isn't a combatant yet is made one, the blow is reported as
+   * the player's assault (the law books it and the street takes fright), the ragdoll takes the
+   * impulse from `from`, and the damage goes through the normal rules (death, knockout, yield,
+   * flight). `knockdown` floors someone it didn't kill. Returns the outcome, or null.
+   */
+  playerStrike(target: string | Actor | Combatant, amount: number, o: { from: THREE.Vector3Like; power?: boolean; knockdown?: boolean }): 'hit' | 'ko' | 'dead' | 'yield' | 'flee' | null {
+    const pc = this.playerC;
+    if (!pc) return null;
+    const t = this.get(target) ?? this.adoptActor(target);
+    if (!t || t === pc || t.status === 'dead') return null;
+    if (!t.isPlayer && !this.spawned.has(t.id) && !this.adopted.has(t.id)) this.adopted.set(t.id, this.core.now);
+    this.struckAt.set(t, this.game.elapsed);
+    this.game.events.emit('combat:assault', { attackerId: pc.id, victimId: t.id, lawfulVictim: t.lawful });
+    this.game.ragdolls?.noteHit(t.id, o.from, o.power ?? false, o.knockdown ?? false);
+    const r = this.core.dealDamage(pc, t, amount);
+    if (r === 'hit' && o.knockdown && t.status === 'active') this.core.knockdown(t, pc);
+    return r;
+  }
+
+  /**
    * An arrow's flight only (staged scenes, no damage): from `from` to `to` in `seconds` on a slight
    * arc, turned along its path; `onArrive` runs when it gets there (the arrow is gone by then: the
    * scene shows what it struck).

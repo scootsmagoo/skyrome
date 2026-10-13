@@ -20,6 +20,13 @@ import { GuardInput } from './guardInput';
 import { TIMING } from './timing';
 import type { CombatSettings } from './settings';
 
+declare module '../core/Game' {
+  interface Game {
+    /** True while another module has the player's hands (the anachronism cheat's guns): no melee input. */
+    meleeSuspended?: boolean;
+  }
+}
+
 export interface PlayerCombatHost {
   readonly game: Game;
   readonly core: CombatCore;
@@ -69,7 +76,8 @@ export class PlayerCombat {
     const input = game.input;
     const t = game.elapsed;
     this.hold = null;
-    if (!c || !c.active || !input.enabled) {
+    // (a module that has taken the player's hands, the anachronism cheat's guns, sets game.meleeSuspended)
+    if (!c || !c.active || !input.enabled || game.meleeSuspended) {
       this.attackDownAt = -1;
       this.charging = false;
       this.finishing = null;

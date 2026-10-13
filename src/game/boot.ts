@@ -37,6 +37,7 @@ import { shouldWelcome, showWelcome } from './welcome';
 import { FIGHTS, startBout } from './bouts';
 import { applyCheckpoint, checkpoint } from './checkpoints';
 import { installConsole } from '../dev/console/Console';
+import { installAnachronism } from './anachronism/install';
 import { guardUnload, registerMarkerResolvers, wireUi } from './wiring';
 
 /**
@@ -133,6 +134,7 @@ export async function startRome(game: Game, uiRoot: HTMLElement, params: RomePar
   game.addSystem(flow);
   wireUi(game, ui, rpg, flow);
   installConsole(game, ui);
+  installAnachronism(game);
   guardUnload(flow);
   installInteriors(game);
   installLockpick(game);
