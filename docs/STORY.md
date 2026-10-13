@@ -192,8 +192,143 @@ This is the story as the player meets it. `docs/GDD.md` §10 is the design of th
    - Banner: "End of Act I" / **The Board**: "Act II comes in a future update."
    - The calendar runs on freely from here. Nothing waits for a date until Act II.
 
+## Chapter 6: The Purse (`mq-06-sacculus`)
+*The Caelian, the Sacred Way, the Basilica Aemilia and the Vicus Tuscus. From 13 May AD 113, at the player's own pace.*
+
+*Status: written for review, not built.*
+
+**What this chapter does.** It is the first group on Pudens's board: the money behind the plot.
+- The scraped tablet's three half-names are three real men.
+  - **Sextus Pinarius Avitus** has the contract to feed the army bound for the East.
+  - **Tiberius Claudius Euhodus**, a freedman, sells arms on the Sacred Way.
+  - **Hermogenes** is a banker at a table in the shops of the Basilica Aemilia.
+- The player proves, one man at a time, how Parthian silver becomes Roman coin, then knives, then grain sacks with the knives inside.
+- Every man has two ways to prove him.
+- The chapter ends face to face with Avitus, and the player decides what happens to him.
+- Among his papers is the first hint of something bigger: a scribe paid "for the fine hand".
+
+**How the money moves** (what the player works out):
+1. Hermogenes changes the Parthian silver into Roman coin, by weight, with no names in his books.
+2. With that coin, Euhodus buys blades: sicae for the Dacian knife-men, and bows.
+3. Euhodus sends the blades to Avitus in sealed grain sacks. They sit in the warehouse bays Avitus rents at the Horrea Agrippiana, among sacks of the army's wheat. Nobody searches the army's wheat.
+4. Avitus borrowed a fortune from Hermogenes to buy up last year's wheat for the war. The men who pay him have promised him that the next emperor will pay his price and forget his debts.
+
+**What the player already has**, and where it is used:
+
+| Clue | From | Used here |
+|---|---|---|
+| The scraped tablet ("…NARIVS AVIT…", "…VHOD…", "HERMOG…") | Mus's chest (Ch. 2) | Three names to find |
+| The Parthian silver drachm | Mus's chest (Ch. 2). Gratus kept it as evidence; Pudens hands it back at the start of this chapter | One way to prove Hermogenes |
+| The Dacian arrow (from Gratus's shoulder) | Crito (Ch. 4) | One way to prove Euhodus |
+| Told Mardonius what the archer said | Ch. 5 choice | A warning line before the last fight |
+
+**The board.**
+- Each man proven is one face unmasked (flag `board:<id>`). When all three are unmasked, **The Purse** is broken.
+- Proving a man is not arresting him; Pudens decides who is arrested (step 6).
+
+1. **The lead.** Chapter 5 now ends with the banner "Act II: The Board" ("Start wherever you like"). Chapter 6 starts when the player picks this group, in either of two ways:
+   - **Ask Pudens about the Purse.** He's in his office in the camp, by day.
+     - Pudens: "The money men. Three half-names on a scraped tablet. Start with the grain: '…NARIVS AVIT…' buys wheat for the army, and a man who sells wheat for a war wants the war. Ask at the Horrea Agrippiana, on the Vicus Tuscus. Every big buyer rents a bay there."
+     - He hands back the drachm: "Gratus kept this as evidence. Take it. A banker will tell you more about a coin than I can."
+   - **Or just go to the Horrea Agrippiana** and ask the warehouse keeper about Pinarius (the drachm is then given by Pudens whenever the player next sees him).
+   - **Objective:** **Find out who "…NARIVS AVIT…" is.** The marker points to the Horrea Agrippiana.
+
+2. **The warehouse keeper.** **Successus**, the *horrearius* (keeper of the warehouse), sits at the gate with his tally tablets.
+   - Most of the warehouse is cloth dealers; one private buyer rents the back bays.
+   - Successus says it straight out:
+     - "Pinarius? Sextus Pinarius Avitus. He has the contract to feed the army for the Syrian war. He bought up all the old wheat he could find this spring, and the price doubled."
+     - "He rents three bays at the back and keeps them sealed. His own porters do the carrying, not mine. I don't like a sealed bay."
+   - Asked who comes to see Avitus: "Two men, regular as the Nones. Euhodus, who sells arms on the Sacred Way: his sign's by the Meta Sudans. And a banker, Hermogenes, from the shops at the Basilica Aemilia."
+   - That accounts for all three half-names. **Objective (done):** the names. Three new objectives appear, in any order:
+     - **Prove what Euhodus sells, and to whom.**
+     - **Prove what Hermogenes changes, and for whom.**
+     - **Find out what Avitus keeps in his sealed bays.**
+
+3. **Euhodus, the arms dealer** (his shop on the Sacred Way, by the Meta Sudans).
+   - He sells the player swords like anyone else; he is friendly and in a hurry. He has hinted before: it was "a very good spring for the contractors… Don't write that down."
+   - **Two ways to prove him:**
+     - **The arrow.** Show him the Dacian arrow that came out of Gratus.
+       - The red bands on the shaft are Dacian work, but the grey goose fletching is his own: "That's my fletching. I sold three hundred of those."
+       - With a Rhetoric check he gives up the buyer to save himself: "Pinarius took them. Bows, arrows, two hundred sicae, sent in grain sacks. Paid in good coin, changed at Hermogenes' table: his stamp was on the bags."
+       - Then: "I sell knives. I don't ask whose throat."
+     - **The shop boy.** Euhodus never leaves his shop (he sleeps over it), so his strongbox can't be got at.
+       - His shop boy **Felix** can bring out the ledger while his master is at the forge in the back. Felix wants coin, or a good reason (Rhetoric): "He beats me anyway."
+       - The ledger has the order: "To P. A., Horrea Agrippiana, in grain sacks: 200 sicae, 6 bows, 300 arrows. Paid through H."
+   - Either way: **Euhodus is unmasked.** The journal notes how.
+
+4. **Hermogenes, the banker** (his table between the barber and the physician, in the shops of the Basilica Aemilia).
+   - He is polite, careful and very tired. His clerk **Lycus**, a young man with a stylus behind his ear, does the counting.
+   - **Two ways to prove him:**
+     - **The drachm.** Ask Hermogenes to change the Parthian drachm.
+       - He doesn't blink: "Parthian. One denarius and a quarter, by weight, as for the others."
+       - A Mercatura check, or simply asking "What others?", catches it: he has a ready price for Parthian silver, so he has changed a great deal of it.
+       - He shuts his table and asks the player to leave. That's proof enough.
+     - **Lycus.** Lycus is honest and frightened, and doesn't know what the money is for.
+       - With a kind word (Rhetoric) or a few coins, he shows the player his wax tablets: "Eastern silver, by weight, for Pinarius. Every Nones since March. My master says don't write the names. I write them small."
+   - Either way: **Hermogenes is unmasked.**
+
+5. **Avitus's sealed bays** (the back of the Horrea Agrippiana). **Two ways in:**
+   - **Successus opens a bay.** Once the player has proved Euhodus or Hermogenes, showing Successus the proof is enough for him to break a seal "for the army's sake". He opens one bay by day.
+   - **The night porter.** At night a few coins buy the night porter's back, and the player cuts a seal.
+   - Inside, among the sacks of wheat, three sacks are heavier than grain. In them are sicae wrapped in sacking, bows and arrows.
+   - **Avitus is unmasked.**
+
+6. **Avitus.** When all three men are unmasked, a new objective appears: **Face Avitus.** He is in his counting-room above the bays.
+   - **The warning, before the fight.**
+     - Whoever opened the bay (Successus by day, the porter by night) says: "He'll know a seal's been cut by now. He keeps two hired knives in his counting-room, men of the Mouse's sort."
+     - If the player told Mardonius what the archer said in Chapter 5, they add: "And a man came from the Caelian yesterday, asking what you look like." (This hints at the leak; it doesn't name him.)
+   - **Avitus talks first.** He is fat, clever and frightened, and he doesn't deny anything. He wants the player to understand:
+     - "A war is the best customer Rome has. I bought the wheat for it, every modius I could find, with Hermogenes' money. If the war goes the way Caesar wants, I'm rich. If it's slow, I'm ruined."
+     - "Then men came who promised me better: a new emperor who pays my price, and a debt that disappears. I didn't ask who. I asked how much."
+     - "I don't hold a knife. I hold a warehouse."
+   - **The offer:** 300 denarii to walk away and let him leave Rome tonight.
+   - **The fight is set off by the answer.** If the player refuses the money or says the word "arrest", Avitus calls his two knife-men from the back room ("Show our friend out."). They fight to the death; Avitus doesn't fight.
+     - If the player takes the money, there is no fight: Avitus leaves (see "Let him run").
+   - **The choice**, once the knife-men are down:
+     - **Arrest him for Pudens.** He goes quietly. Pudens's couriers take him to the cells at the Castra Peregrina. In later chapters he is a witness: he knows a man in the Toga.
+     - **Let him run** (with or without the 300 denarii). He's gone down the Tiber by night boat to Ostia. He warns the plotters, and the Toga's chapter is harder.
+     - **Kill him.** Murder in the city is a crime, as anywhere.
+   - **His papers.** The counting-room's chest holds:
+     - the army contract;
+     - Hermogenes' loans;
+     - one line that doesn't fit: "To M. Ulpius Chrysogonus, of the chancery: 2,000 sesterces, for the fine hand."
+
+     Nobody here explains the last line. It is pinned on the board under **The Toga**: "A scribe of the chancery, paid by a grain man for fine work. Fine work at what?"
+
+7. **Pudens** (the Castra Peregrina, by day; at night a hint says to wait until morning).
+   - **Objective:** **Report to Pudens.** He hears it all and eats a fig.
+   - **On Euhodus and Hermogenes:** "We leave them where they are. They know Avitus, and nobody above him. Arrest them, and the men at the top know we're close. A watched man is worth more than a jailed one." Both keep trading, and the player can still buy from them.
+   - **On Avitus:**
+     - Arrested: "Good. He's the one who knows the men above. He'll talk; fat men do."
+     - Ran: "Then he's warning them now. Next time, bring me the man, not his money."
+     - Dead: "A dead man can't name his friends. Let's hope his papers can."
+   - **On the scribe:** "Chrysogonus. A chancery man. Why does a wheat dealer pay a scribe for his handwriting? I don't like that at all."
+   - **Rewards:**
+     - 150 denarii;
+     - skill XP in Mercatura, plus Rhetoric for the ways the player talked;
+     - the board marks **The Purse: broken**.
+
+8. **Done.** Banner: **The Purse is broken**: "One of four. Pudens wants three." The other three groups (Chapters 7–9, built later) stay open on the board. The calendar runs on freely.
+
+**What changes in code and docs:**
+- **Chapter 5's ending.** The banner becomes "Act II: The Board", and Pudens can be asked about each group (only the Purse leads anywhere until Chapters 7–9 exist).
+- **The board page** (`board.ts`) gets:
+  - a "broken" mark on a cell when all three faces are unmasked;
+  - a line under each unmasked face saying how (for example "his own fletching" or "his clerk's tablets");
+  - new clues: Euhodus's ledger, Lycus's tablets, the knives in the wheat, Avitus's fate, and the scribe's payment (under the Toga).
+- **Essential status.** Euhodus, Hermogenes and Lycus stay `essential` until Act III (not "until mq-06" as `vendors.ts` and `CONTENT.md` say now). The life registry's "hidden until mq-06" note for Hermogenes changes to match.
+
+**New people and places:**
+- **Successus**, the horrearius at the Horrea Agrippiana gate.
+- **Felix**, Euhodus's shop boy.
+- **The night porter** of the Horrea Agrippiana.
+- **Lycus**, Hermogenes' clerk. He is in CONTENT.md but not built yet.
+- **Avitus** and his two hired knives.
+- Avitus's sealed bays and his counting-room: corners of the Horrea Agrippiana with doors, so no new interior cell is needed.
+- **Euhodus's and Hermogenes' greetings change** once they're unmasked: Euhodus is curt, and Hermogenes' table is "closed for accounts" for a day.
+
 ## What comes next (designed, not built)
-- **Act II, The Board:** the four groups of plotters, in any order (`mq-06` to `mq-09`), each with at least two ways in (`GDD.md` §10.2). The three dated set pieces follow (`mq-10` to `mq-12`).
+- **Act II, The Board:** the other three groups of plotters, in any order (`mq-07` to `mq-09`): the Eastern Gold, the Dacian Blades and the Toga. Each has at least two ways in (`GDD.md` §10.2). The three dated set pieces follow (`mq-10` to `mq-12`).
 
 ## Side threads in reach of Act I
 - ***The Oath*** (Ludus Magnus): sign on as a guest and fight three practice bouts, the last against Nereus. It's offered by Glaucus, and it's optional.
