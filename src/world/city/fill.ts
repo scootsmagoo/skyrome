@@ -27,7 +27,7 @@ import { insula, MAX_BUILDING_HEIGHT } from '../../arch/fabric/insula';
 import { nearPolygon, obbCorners, pointInOBB, pointInPolygon, polygonBounds } from '../../arch/fabric/polygon';
 import { compitalShrine } from '../../arch/fabric/shrines';
 import { buildPlaza } from '../../arch/fabric/streets';
-import type { BuildingOutput, Detail, HeightFn, Polygon, Spot, SpotKind } from '../../arch/fabric/types';
+import type { BuildingOutput, Detail, DoorSlot, HeightFn, Polygon, Spot, SpotKind } from '../../arch/fabric/types';
 import type { FrontWall } from './frontage';
 import type { BlockLayout } from './massing';
 import { FLOOR_LIFT } from './datum';
@@ -39,6 +39,13 @@ export interface FillUnit {
   builder: MeshBuilder;
   spots: Spot[];
   torches?: boolean;
+  /** Doorways for the door system, in the world (full detail only). */
+  doors?: DoorSlot[];
+}
+
+/** A building's door slots in the world, their ids prefixed with the lot's. */
+function placeDoors(out: BuildingOutput, m: THREE.Matrix4, prefix: string): DoorSlot[] {
+  return (out.doors ?? []).map((d) => ({ ...d, id: `${prefix}:${d.id}`, matrix: m.clone().multiply(d.matrix) }));
 }
 
 /**
@@ -115,7 +122,7 @@ export function* fillUnits(blk: PlanBlock, layout: BlockLayout, detail: Detail, 
       b.append(out.builder, m);
       for (const sp of out.spots) spots.push({ ...sp, id: `${p.id}:${sp.id}`, position: sp.position.clone().applyMatrix4(m), facing: sp.facing + p.rotationY });
     }
-    yield unit(b, spots);
+    yield { ...unit(b, spots), doors: full && out ? placeDoors(out, m, p.id) : undefined };
   }
 
   if (full) {
@@ -134,8 +141,9 @@ export function* fillUnits(blk: PlanBlock, layout: BlockLayout, detail: Detail, 
       width: bl.width, depth: bl.depth, seed: bl.seed, storeys: bl.storeys, wealth: blk.wealth, groundAt,
       sides: { left: true, right: true, back: true }, streetDressing: false, detail, maxHeight: MAX_BUILDING_HEIGHT,
     });
-    b.append(ins.builder, new THREE.Matrix4().makeTranslation(c[0], bl.floorY, c[1]).multiply(new THREE.Matrix4().makeRotationY(bl.rotationY)));
-    yield unit(b);
+    const bm = new THREE.Matrix4().makeTranslation(c[0], bl.floorY, c[1]).multiply(new THREE.Matrix4().makeRotationY(bl.rotationY));
+    b.append(ins.builder, bm);
+    yield { ...unit(b), doors: full ? placeDoors(ins, bm, `${blk.id}:back${bl.seed}`) : undefined };
   }
 
   if (layout.walls.length) {

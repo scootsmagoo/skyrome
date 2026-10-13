@@ -31,7 +31,8 @@
 import * as THREE from 'three';
 import type { Game, System } from '../../core/Game';
 import type { RAPIER } from '../../core/Physics';
-import type { Spot } from '../../arch/fabric/types';
+import type { DoorSlot, Spot } from '../../arch/fabric/types';
+import { cityDoorDef } from '../doors/city';
 import { MeshBuilder, type ColliderSpec } from '../../gfx/MeshBuilder';
 import { BatchHandle, type BatchPool, type BatchRef } from './batches';
 import { fillUnits, type FillUnit } from './fill';
@@ -50,6 +51,8 @@ export interface BlockRec {
   levels: { full?: BatchHandle; mid?: BatchHandle; low?: BatchHandle };
   colliders: RAPIER.Collider[] | null;
   spots: Spot[] | null;
+  /** The full level's doorways (handed to game.doors while the level stands). */
+  doors?: DoorSlot[] | null;
   center: THREE.Vector3;
   /** Distance from the camera at the last evaluation. */
   d: number;
@@ -79,6 +82,7 @@ interface Job {
   refs: BatchRef[];
   colliders: RAPIER.Collider[];
   spots: Spot[];
+  doors: DoorSlot[];
   ms: number;
   /** A unit generated in the last step, committed in the next. */
   pending: FillUnit | null;
@@ -368,7 +372,7 @@ export class CityStreamer implements System {
 
   /** Start building a block level (and generate its first unit). */
   private start(r: BlockRec, l: Level) {
-    this.job = { r, level: l, it: fillUnits(r.blk, r.layout!, l, this.H), refs: [], colliders: [], spots: [], ms: 0, pending: null };
+    this.job = { r, level: l, it: fillUnits(r.blk, r.layout!, l, this.H), refs: [], colliders: [], spots: [], doors: [], ms: 0, pending: null };
     this.advance();
   }
 
@@ -391,6 +395,8 @@ export class CityStreamer implements System {
       if (l === 'full') {
         r.colliders = job.colliders;
         r.spots = job.spots;
+        r.doors = job.doors;
+        this.game.doors?.attachGroup(`city:${r.blk.id}`, job.doors.map((d) => cityDoorDef(r.blk.id, d)));
         this.onFull?.(r);
       }
       this.builds[l]++;
@@ -417,6 +423,7 @@ export class CityStreamer implements System {
     job.refs.push(...h.refs);
     if (l === 'full' && u.builder.colliders.length) job.colliders.push(...addColliders(this.game, u.builder.colliders, { city: r.blk.id }));
     for (const sp of u.spots) job.spots.push(sp);
+    if (u.doors) job.doors.push(...u.doors);
     this.builds.units++;
   }
 
@@ -437,6 +444,8 @@ export class CityStreamer implements System {
       for (const col of r.colliders ?? []) this.game.physics.removeCollider(col);
       r.colliders = null;
       r.spots = null;
+      r.doors = null;
+      this.game.doors?.detachGroup(`city:${r.blk.id}`);
     }
   }
 

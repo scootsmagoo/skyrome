@@ -20,7 +20,7 @@ import { roof } from './roof';
 import { aedicula } from './shrines';
 import { pickShopKind, shopFrontage, shopInterior, type ShopKind } from './shops';
 import { bayFloor, foundationLevel, MAX_THRESHOLD_STEP } from './foundation';
-import { flatGround, type BuildingOutput, type Detail, type LocalGround, type Spot, type SpotKind } from './types';
+import { flatGround, type BuildingOutput, type Detail, type DoorSlot, type LocalGround, type Spot, type SpotKind } from './types';
 import { archBand, band, doorFrame, doorLeaves, plankShutters, socleAndDado, wall, windowDetails, type Opening } from './wall';
 import * as THREE from 'three';
 
@@ -88,6 +88,7 @@ export function insula(spec: InsulaSpec): BuildingOutput {
   const b = new MeshBuilder();
   const d = low ? new Draw(b).flatWalls() : new Draw(b);
   const spots: Spot[] = [];
+  const doors: DoorSlot[] = [];
   const W = spec.width, D = spec.depth;
   const wealth = spec.wealth ?? 0.4;
   const ground = spec.groundAt ?? flatGround;
@@ -245,8 +246,14 @@ export function insula(spec: InsulaSpec): BuildingOutput {
     if ((bay.kind === 'stair' || bay.kind === 'entrance') && bay.yb - bay.low > MAX_THRESHOLD_STEP) thresholdStep(S, gS, ow, bay.yb - bay.low);
     if (bay.kind === 'stair') {
       doorFrame(S, lo, trim === 'plaster_white' ? 'travertine' : trim);
-      if (!full) S.span('black', -ow / 2, 0, T * 0.5, ow / 2, lo.y1, T * 0.5 + 0.02, { shadow: false });
-      else stairwell(S.noShadow(), ow, T, Math.min(sd, 3.2));
+      if (!full) {
+        // Shut leaves in front of the dark (the door system hangs real ones at full detail).
+        if (!low) doorLeaves(S, { ...lo, y1: lo.y1 - 0.01 }, T * 0.7, 0, 'wood_dark', false);
+        S.span('black', -ow / 2, 0, T * 0.5, ow / 2, lo.y1, T * 0.5 + 0.02, { shadow: false });
+      } else {
+        stairwell(S.noShadow(), ow, T, Math.min(sd, 3.2));
+        doors.push({ id: `stair${doors.length}`, kind: 'stair', matrix: S.m.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0, T * 0.35)), width: ow - 0.02, height: lo.y1 - 0.02, leaves: 1, studs: false, wealth });
+      }
       spot('houseDoor', cx, bay.yb, zf - 0.5, Math.PI, 'stair');
       continue;
     }
@@ -515,7 +522,7 @@ export function insula(spec: InsulaSpec): BuildingOutput {
     px = o.x1;
   }
   d.solid(px, yMin, zf, W / 2, G - 0.3, backZ);
-  return { builder: b, spots, height: eave };
+  return { builder: b, spots, doors, height: eave };
 }
 
 /**

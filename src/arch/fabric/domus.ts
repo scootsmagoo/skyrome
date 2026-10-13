@@ -16,7 +16,7 @@ import { Draw } from './draw';
 import { roof } from './roof';
 import { bayFloor, foundationLevel, rectMax } from './foundation';
 import { pickShopKind, shopFrontage, shopInterior, type ShopKind } from './shops';
-import { flatGround, type BuildingOutput, type Detail, type LocalGround, type Spot, type SpotKind } from './types';
+import { flatGround, type BuildingOutput, type Detail, type DoorSlot, type LocalGround, type Spot, type SpotKind } from './types';
 import { archBand, band, doorFrame, doorLeaves, plankShutters, socleAndDado, wall, windowDetails, type Opening } from './wall';
 
 export interface DomusSpec {
@@ -46,6 +46,7 @@ export function domus(spec: DomusSpec): BuildingOutput {
   const full = (spec.detail ?? 'full') === 'full';
   const d = low ? new Draw(b).flatWalls() : new Draw(b);
   const spots: Spot[] = [];
+  const doors: DoorSlot[] = [];
   const W = spec.width, D = spec.depth;
   const wealth = spec.wealth ?? 0.75;
   const ground = spec.groundAt ?? flatGround;
@@ -142,7 +143,10 @@ export function domus(spec: DomusSpec): BuildingOutput {
     S.span(dadoMat, doorW / 2 - 0.01, 0, T, doorW / 2 + 0.01, 1.0, T + 2.2, { shadow: false });
     S.span(wallMat, -doorW / 2, doorH, T, doorW / 2, doorH + 0.1, T + 2.2, { shadow: false });
     S.span('black', -doorW / 2, 0, T + 2.2, doorW / 2, doorH, T + 2.25, { shadow: false });
-    doorLeaves(S, lo, T, 0.35, 'wood_dark', true);
+    // Full detail: the door system hangs leaves that open (the fauces leads into the house). Further
+    // off the leaves stand ajar as before.
+    if (full) doors.push({ id: 'fauces', kind: 'domus', matrix: S.m.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0, T * 0.5)), width: doorW - 0.02, height: doorH - 0.02, leaves: 2, studs: true, wealth });
+    else doorLeaves(S, lo, T, 0.35, 'wood_dark', true);
     S.solid(-doorW / 2, 0, T + 0.4, doorW / 2, doorH, T + 0.6);
     S.solid(-doorW / 2 - 0.2, -0.5, -0.1, doorW / 2 + 0.2, 0, T + 2.2);
     spot('houseDoor', 0, fyb, z0 - 0.6, Math.PI, 'domus');
@@ -328,5 +332,5 @@ export function domus(spec: DomusSpec): BuildingOutput {
   }
   d.solid(px, yMin, z0, W / 2, hf, front);
   void archBand;
-  return { builder: b, spots, height: hf };
+  return { builder: b, spots, doors, height: hf };
 }

@@ -27,10 +27,30 @@ export interface Spot {
   tag?: string;
 }
 
+/**
+ * A doorway left without leaves for the door system (src/world/doors) to fill, in the building's
+ * local frame: origin at the middle of the threshold in the plane of the leaves, x along the wall,
+ * y up, +z into the building (the leaves swing that way).
+ */
+export interface DoorSlot {
+  id: string;
+  /** 'stair': an insula's stair door; 'domus': a house's front door. */
+  kind: 'stair' | 'domus';
+  matrix: THREE.Matrix4;
+  width: number;
+  height: number;
+  leaves: 1 | 2;
+  studs: boolean;
+  /** The building's wealth 0..1 (the lock it gets). */
+  wealth: number;
+}
+
 /** Result of a single building generator, in the building's LOCAL frame (front faces −z, floor at y = 0). */
 export interface BuildingOutput {
   builder: MeshBuilder;
   spots: Spot[];
+  /** Doorways whose leaves the door system draws and swings (full detail only; src/world/doors). */
+  doors?: DoorSlot[];
   /** Height of the eaves above the floor level (m). */
   height: number;
 }
