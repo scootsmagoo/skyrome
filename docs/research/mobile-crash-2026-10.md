@@ -54,7 +54,8 @@ Each round below was tried on the owner's iPhone 15 Pro.
 | Low tier and lighter textures | 6659dd9 | Died as the loading bar finished |
 | Upload during loading (`flush`) | 85d27cd | Once died at "Baths of Nero"; once showed the world for a moment |
 | Batch generations and `detail` | 4f84f1e | Loads, plays about 16 s, dies (page memory, not context loss); once came back under the city after the crash |
-| Portrait touch layout, play-time churn (`bodies`, `rapier`, crowd 0.3) | 9849ffe, a975e9a | Committed locally, not pushed or tried yet |
+| Portrait touch layout, play-time churn (`bodies`, `rapier`, crowd 0.3) | 9849ffe, a975e9a | Died 10 s into play; once during loading; once the view from under the city |
+| Allocation-free polygon loops, core-sized world (`area`) | eae559a, 760de9f | Not tried yet |
 
 **Play-time churn.** Measured with `node scripts/perf-gc.mjs --view forum --seconds 20 --walk --query "mobile=1"`.
 Walking allocated about 9 GB a minute before these rounds and about 4.3 GB after the earlier phone flags. The
@@ -63,6 +64,42 @@ Walking allocated about 9 GB a minute before these rounds and about 4.3 GB after
 
 **Under the city after a crash.** Not diagnosed. Phones now show the first errors after loading in a banner,
 which should explain it next time.
+
+## Measure phone memory in WebKit, not Chrome (13 October)
+Chrome's numbers (V8) badly understated the iPhone. Run the phone path in Playwright's WebKit, which has
+JavaScriptCore and WebKit's allocators like iOS. Sample the `WPEWebProcess` resident memory from `/proc`, and
+split it by mapping in `/proc/<pid>/smaps`:
+
+| Mapping | What it holds |
+|---|---|
+| `[anon:WKFastMalloc]` | WebKit's allocator: JS objects and arrays, WebCore |
+| `[anon:JSGigacage]` | Typed-array backing stores |
+| `[heap]` | glibc malloc. Here that is mostly the software GL driver, which on an iPhone lives in the separate GPU process and does not count |
+
+Two things make WebKit on this machine differ from an iPhone:
+- **The GC thinks it has 128 GB.** JavaScriptCore sizes its full-collection thresholds from the RAM it sees, so
+  it piles up gigabytes of garbage. Launch it with `JSC_forceRAMSize=3221225472` to act like a phone.
+- **`JSC_logGC=1`** logs every collection, with heap sizes.
+
+With 3 GB forced, the phone path (eae559a, 760de9f) peaks at about 3.5 GB of process memory, about 1.2 GB of it
+the software GL heap. That puts the iPhone page at roughly 1.4–2.3 GB.
+
+| Run | Peak | Note |
+|---|---|---|
+| Savers off (`?lite=0`) | 4.3 GB | |
+| No city (`?city=0`) | 3.2 GB | The city costs only about 0.3 GB |
+| `?scene=sandbox` | 0.9 GB | |
+
+Without the forced RAM, the same build peaks at 5–6 GB, mostly about 2 GB of JS garbage in `WKFastMalloc`. That
+garbage is freed only some 10–20 s into play.
+
+**Boot allocation.** A sampling heap profile with collected objects counts every allocation (CDP
+`HeapProfiler.startSampling`, `includeObjectsCollectedByMajorGC` and `includeObjectsCollectedByMinorGC`).
+- The boot allocated about 20 GB of short-lived JS objects.
+- The worst sources were array destructuring in point-in-polygon loops: `const [x, z] = p` allocates an iterator.
+- Fixing those (eae559a, same output) brought it to about 13 GB.
+- The next ones are spread thin: the heightmap's per-cell `fn` (0.5 GB), three.js shader string `replace`s
+  (0.4 GB), `mergeVertices` (0.4 GB) and geometry sweeps (0.7 GB).
 
 ## If phones still die
 While loading (ranked by expected win):
