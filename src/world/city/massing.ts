@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { Rng } from '../../core/Rng';
 import { planLots, type FillOptions, type LotPlan } from '../../arch/fabric/blockFiller';
 import { MAX_BUILDING_HEIGHT } from '../../arch/fabric/insula';
+import { insulaTop } from '../../arch/fabric/tops';
 import { obbCorners, pointInOBB, polygonContainsOBB, type OBB } from '../../arch/fabric/polygon';
 import type { Polygon } from '../../arch/fabric/types';
 import { MATERIAL_BASE, type MaterialId } from '../../gfx/materialIds';
@@ -47,7 +48,8 @@ export interface LotMass {
   floorY: number;
   base: number;
   eave: number;
-  roof: 'hip' | 'gable';
+  /** 'flat': a roof terrace behind a parapet (arch/fabric/tops.ts). */
+  roof: 'hip' | 'gable' | 'flat';
   wall: MaterialId;
 }
 
@@ -105,11 +107,14 @@ export function lotMass(p: LotPlan, blk: PlanBlock, H: HeightFn): LotMass | null
   const base = Math.min(floorY, massBase(edgeGround(obb, H)));
   const lrng = new Rng(p.seed);
   if (p.kind === 'insula' || p.kind === 'shops') {
-    let storeys = 2, wealth = blk.wealth;
+    let storeys = 2, wealth = blk.wealth, flat = false;
     if (p.kind === 'insula') {
       const maxS = blk.maxStoreys;
       storeys = Math.max(3, Math.min(maxS, Math.round(2.6 + blk.density * 2.2 + (1 - blk.wealth) * 1.2 + lrng.range(-0.6, 0.8))));
       wealth = Math.min(1, Math.max(0, blk.wealth + lrng.range(-0.15, 0.15)));
+      // (the same draws as fill.ts makes for the detailed insula, so the far box has its roof)
+      const courtyard = p.width >= 18 && p.depth >= 17 && lrng.chance(0.55);
+      flat = insulaTop(p.seed, wealth, courtyard) === 'terrace';
     }
     const rng = new Rng(p.seed);
     const G = rng.range(4.1, 4.5);
@@ -118,7 +123,7 @@ export function lotMass(p: LotPlan, blk: PlanBlock, H: HeightFn): LotMass | null
     while (n > 2 && floorAt(n) + 0.3 > MAX_BUILDING_HEIGHT) n--;
     const brick = rng.chance(0.6 - 0.25 * wealth);
     const wall: MaterialId = brick ? 'brick' : rng.weighted<MaterialId>([['plaster_cream', 3], ['plaster_ochre', 2], ['plaster_white', 1.5 + wealth], ['plaster_red', 0.4]]);
-    return { obb: p.obb, windows: [true, !p.party.right, !p.party.back, !p.party.left], floorY, base, eave: floorY + floorAt(n), roof: p.kind === 'shops' ? 'gable' : 'hip', wall };
+    return { obb: p.obb, windows: [true, !p.party.right, !p.party.back, !p.party.left], floorY, base, eave: floorY + floorAt(n), roof: p.kind === 'shops' ? 'gable' : flat ? 'flat' : 'hip', wall };
   }
   if (p.kind === 'domus') {
     const r = new Rng(p.seed ^ 0x9e37);
@@ -268,7 +273,7 @@ export function backLots(blk: PlanBlock, lots: LotPlan[], H: HeightFn): BackLot[
         const wall: MaterialId = brick ? 'brick' : r2.weighted<MaterialId>([['plaster_cream', 3], ['plaster_ochre', 2], ['plaster_white', 1.5 + blk.wealth], ['plaster_red', 0.4]]);
         out.push({
           id: `${blk.id}:back${out.length}`, obb: o, rotationY: Math.atan2(v[0], v[1]), width: w, depth: d, floorY, storeys: n, seed,
-          mass: { obb: o, windows: [true, true, true, true], floorY, base, eave: floorY + floorAt(n), roof: 'hip', wall },
+          mass: { obb: o, windows: [true, true, true, true], floorY, base, eave: floorY + floorAt(n), roof: insulaTop(seed, blk.wealth, false) === 'terrace' ? 'flat' : 'hip', wall },
         });
         // Keep ~1.5 m (1 cell) of light and passage around it.
         for (let j = Math.max(0, j0 - 1); j < Math.min(gv, j0 + nj + 1); j++) for (let i = Math.max(0, i0 - 1); i < Math.min(gu, i0 + ni + 1); i++) free[j * gu + i] = 0;
@@ -391,6 +396,19 @@ export function massLot(s: FlatSoup, m: LotMass, rng: Rng) {
     const yb = m.base - m.floorY, ye = m.eave - m.floorY;
     const f: [number[], number[], number[], number[]] | undefined = m.windows[k] ? [[0, yb], [0, ye], [lens[k], ye], [lens[k], yb]] : undefined;
     s.quad([p[0], m.base, p[2]], [p[0], m.eave, p[2]], [q[0], m.eave, q[2]], [q[0], m.base, q[2]], f);
+  }
+  if (m.roof === 'flat') {
+    // Roof terrace: the parapet carries the walls on 1.05 m, a tiled deck behind it.
+    const top = m.eave + 1.05;
+    s.color(m.wall, 0.97);
+    for (let k = 0; k < 4; k++) {
+      const p = corners[k], q = corners[(k + 1) % 4];
+      s.quad([p[0], m.eave, p[2]], [p[0], top, p[2]], [q[0], top, q[2]], [q[0], m.eave, q[2]]);
+    }
+    s.color('terracotta', rng.range(0.85, 1.05));
+    const T0 = P(-a, -b, top - 0.6), T1 = P(a, -b, top - 0.6), T2 = P(a, b, top - 0.6), T3 = P(-a, b, top - 0.6);
+    s.quad(T0, T3, T2, T1);
+    return;
   }
   // Roof (22° hip or gable over the longer axis, 0.35 m eaves).
   const o = 0.35;

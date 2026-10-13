@@ -24,6 +24,7 @@ import { lacus } from '../../arch/fabric/fountain';
 import { registerSpray } from './spray';
 import { horrea } from '../../arch/fabric/horrea';
 import { insula, MAX_BUILDING_HEIGHT } from '../../arch/fabric/insula';
+import { insulaTop } from '../../arch/fabric/tops';
 import { nearPolygon, obbCorners, pointInOBB, pointInPolygon, polygonBounds } from '../../arch/fabric/polygon';
 import { compitalShrine } from '../../arch/fabric/shrines';
 import { buildPlaza } from '../../arch/fabric/streets';
@@ -104,9 +105,11 @@ export function* fillUnits(blk: PlanBlock, layout: BlockLayout, detail: Detail, 
     if (p.kind === 'insula') {
       const maxS = opts.maxStoreys ?? 6;
       const storeys = Math.min(maxS, Math.round(2.6 + density * 2.2 + (1 - wealth) * 1.2 + lrng.range(-0.6, 0.8)));
+      const lw = Math.min(1, Math.max(0, wealth + lrng.range(-0.15, 0.15)));
+      const courtyard = p.width >= 18 && p.depth >= 17 && lrng.chance(0.55);
       out = insula({
-        width: p.width, depth: p.depth, seed: p.seed, wealth: Math.min(1, Math.max(0, wealth + lrng.range(-0.15, 0.15))),
-        storeys: Math.max(3, storeys), courtyard: p.width >= 18 && p.depth >= 17 && lrng.chance(0.55),
+        width: p.width, depth: p.depth, seed: p.seed, wealth: lw, top: insulaTop(p.seed, lw, courtyard),
+        storeys: Math.max(3, storeys), courtyard,
         portico: wealth > 0.3 && p.depth > 13 && lrng.chance(0.25), groundAt, terrainAt, sides, sideShops, streetDressing: dress, maxHeight: MAX_BUILDING_HEIGHT, detail,
       });
     } else if (p.kind === 'shops') {
@@ -138,7 +141,7 @@ export function* fillUnits(blk: PlanBlock, layout: BlockLayout, detail: Detail, 
     const { c, u, v } = bl.obb;
     const groundAt = (lx: number, lz: number) => H(c[0] + u[0] * lx + v[0] * lz, c[1] + u[1] * lx + v[1] * lz) - bl.floorY;
     const ins = insula({
-      width: bl.width, depth: bl.depth, seed: bl.seed, storeys: bl.storeys, wealth: blk.wealth, groundAt,
+      width: bl.width, depth: bl.depth, seed: bl.seed, storeys: bl.storeys, wealth: blk.wealth, top: insulaTop(bl.seed, blk.wealth, false), groundAt,
       sides: { left: true, right: true, back: true }, streetDressing: false, detail, maxHeight: MAX_BUILDING_HEIGHT,
     });
     const bm = new THREE.Matrix4().makeTranslation(c[0], bl.floorY, c[1]).multiply(new THREE.Matrix4().makeRotationY(bl.rotationY));

@@ -17,6 +17,7 @@ import { placeProp, stripedAwning } from '../props';
 import { Draw } from './draw';
 import { wallNotice } from './notices';
 import { roof } from './roof';
+import { terraceTop, timberTop, type InsulaTop } from './tops';
 import { aedicula } from './shrines';
 import { pickShopKind, shopFrontage, shopInterior, type ShopKind } from './shops';
 import { bayFloor, foundationLevel, MAX_THRESHOLD_STEP } from './foundation';
@@ -44,6 +45,8 @@ export interface InsulaSpec {
   /** Neronian arcade along the street front. */
   portico?: boolean;
   roof?: 'hip' | 'gable';
+  /** Above the last masonry floor: a tiled roof (default), a roof terrace, or a timber top storey (tops.ts). */
+  top?: InsulaTop;
   /** Explicit ground-floor bays (left → right seen from the street); otherwise generated. */
   bays?: BayKind[];
   /** Probability that a shop is open (default 0.6). */
@@ -325,6 +328,12 @@ export function insula(spec: InsulaSpec): BuildingOutput {
     });
   }
 
+  // ---- timber-framed top storey (front)
+  const top: InsulaTop = spec.courtyard ? 'roof' : spec.top ?? 'roof';
+  const timber = top === 'timber' && n >= 3 && !low;
+  const timberPlaster: MaterialId = wallMat === 'plaster_cream' ? 'plaster_white' : 'plaster_cream';
+  if (timber) timberTop(F, -W / 2, W / 2, floorY(n - 1), eave - 0.3, upperWins.filter((w) => w.k === n - 1 && isCut(w.o)).map((w) => w.o), timberPlaster);
+
   // ---- balcony (maenianum)
   const balDepth = rng.range(0.95, 1.2);
   if (bal1 >= bal0) balconyAt(F, bays[bal0].x0 + 0.15, bays[bal1].x1 - 0.15, floorY(1), balDepth, drng, shutterMat, low);
@@ -382,6 +391,7 @@ export function insula(spec: InsulaSpec): BuildingOutput {
       if (!low) for (const o of cutS) if (!shops.some((s) => s.o === o)) windowDetails(frame, o, { t: T, sill: 'travertine', relieving: finish === 'brick' ? 'brick' : null, shutters: drng.weighted([['open', 2], ['closed', 1.5], [null, 2]]), shutterMat, grille: o.y0 < G && o.y0 > 2 });
       for (let k = 1; k < n; k++) band(frame, courseMat, -len / 2 - (len === W ? 0.02 : T + 0.02), len / 2 + (len === W ? 0.02 : T + 0.02), floorY(k) - 0.07, 0.12, 0.07);
       cornice(frame, trim, -len / 2 - (len === W ? 0 : T), len / 2 + (len === W ? 0 : T), eave);
+      if (timber) timberTop(frame, -len / 2 - (len === W ? 0 : T), len / 2 + (len === W ? 0 : T), floorY(n - 1), eave - 0.3, cutS, timberPlaster);
     }
     // A street-corner aedicula (shrine niche) on the side wall near the front corner.
     if (withShops && !low && drng.chance(0.35)) {
@@ -456,7 +466,8 @@ export function insula(spec: InsulaSpec): BuildingOutput {
   // ---- roof
   const roofKind = spec.courtyard ? 'ring' : spec.roof ?? (rng.chance(0.7) ? 'hip' : 'gable');
   const rz = (zf + zb) / 2;
-  roof(d.at(0, 0, rz), {
+  if (top === 'terrace') terraceTop(d, W, zf, zb, eave, wallMat, trim === 'plaster_white' || trim === 'plaster_ochre' ? 'travertine' : trim, drng.fork('terrace'), low);
+  else roof(d.at(0, 0, rz), {
     kind: roofKind,
     w: W,
     d: Db,
