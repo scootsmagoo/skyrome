@@ -12,7 +12,7 @@ import type { MaterialId } from '../../../gfx/materialIds';
 import { Draw } from '../../../arch/fabric/draw';
 import { placeProp } from '../../../arch/props';
 import type { Spot } from '../../landmarks/types';
-import type { InteriorKit, KitBuilt, KitContext, KitLamp, KitPlan } from '../generic';
+import type { InteriorKit, KitBuilt, KitContext, KitDoor, KitLamp, KitPlan } from '../generic';
 import { room, wallRun } from './parts';
 import * as THREE from 'three';
 
@@ -126,8 +126,18 @@ function build(ctx: KitContext): KitBuilt {
   wallRun(d, fx0, fz1, fx1, fz1, ly, CEIL, walls, dado);
   // The wall to the landing, with the flat's doorway.
   wallRun(d, L.side * lw, fz0, L.side * lw, fz1, ly, CEIL, walls, dado, [doorZ - 0.5, doorZ + 0.5]);
-  // Open door leaf, swung back against the flat's wall.
-  d.span('wood_dark', L.side * (lw + 0.12), ly, doorZ + 0.5, L.side * (lw + 0.17), ly + 2.15, doorZ + 1.45);
+  // The flat's own door (door system): the tenant locks it when out, about half the time.
+  const doors: KitDoor[] = [{
+    id: 'flat',
+    label: 'A tenant\u2019s door',
+    matrix: new THREE.Matrix4().makeTranslation(L.side * lw, ly, doorZ).multiply(new THREE.Matrix4().makeRotationY((L.side * Math.PI) / 2)),
+    width: 0.98,
+    height: 2.16,
+    leaves: 1,
+    style: 'plank',
+    lock: r.chance(0.5) ? { tier: L.wealth > 0.6 ? 'difficilis' : 'mediocris' } : undefined,
+    owner: { id: `tenant:${ctx.seed}`, name: 'the tenant' },
+  }];
   const far = L.side > 0 ? fx1 : fx0;
   wallRun(d, far, fz0, far, fz1, ly, CEIL, walls, dado, [doorZ - 0.7, doorZ + 0.7], 1.9);
   // The window in the far wall: daylight beyond it (a pale plane) and a sill.
@@ -155,7 +165,7 @@ function build(ctx: KitContext): KitBuilt {
   spots.push({ id: 'flat', kind: 'spot', position: new THREE.Vector3(ix(L.flatW * 0.5), ly, doorZ + 0.6), heading: 0 } as Spot);
 
   const object = b.build('interior:insula-stair');
-  return { object, colliders: [...b.colliders], spots, lamps };
+  return { object, colliders: [...b.colliders], spots, lamps, doors };
 }
 
 export const insulaStairKit: InteriorKit = {

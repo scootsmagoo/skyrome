@@ -36,9 +36,14 @@ export interface KitLamp {
   distance?: number;
 }
 
+/** A door inside a cell (door system, src/world/doors): its id and frame are local to the cell. */
+export type KitDoor = Omit<DoorDef, 'leadsTo'>;
+
 export interface KitBuilt extends InteriorBuild {
   /** Lamp flames, local to the cell. */
   lamps?: KitLamp[];
+  /** Doors that open, lock and break (a tenant's door on the landing). */
+  doors?: KitDoor[];
 }
 
 export interface KitContext {
@@ -184,10 +189,12 @@ function define(game: Game, r: CellRecord): InteriorDef | undefined {
       },
     ],
     afterPlace: (g, object) => {
+      object.updateWorldMatrix(true, false);
+      const doors = object.userData.kitDoors as KitDoor[] | undefined;
+      if (doors?.length && g.doors) g.doors.attachGroup(r.id, doors.map((dd) => ({ ...dd, id: `${r.id}:${dd.id}`, matrix: object.matrixWorld.clone().multiply(dd.matrix) })));
       const built = object.userData.kitLamps as KitLamp[] | undefined;
       const pool = g.lights;
       if (!built?.length || !pool) return;
-      object.updateWorldMatrix(true, false);
       const v = new THREE.Vector3();
       const handles = built.map((l) => pool.request({ position: v.set(l.position.x, l.position.y, l.position.z).applyMatrix4(object.matrixWorld).clone(), color: l.color ?? 0xffb46b, intensity: l.intensity ?? 10, distance: l.distance ?? 9 }));
       s.lamps.set(r.id, handles);
@@ -198,6 +205,7 @@ function define(game: Game, r: CellRecord): InteriorDef | undefined {
   def.build = (ctx) => {
     const b = build(ctx) as KitBuilt;
     b.object.userData.kitLamps = b.lamps ?? [];
+    b.object.userData.kitDoors = b.doors ?? [];
     return b;
   };
   game.interiors.register(def);
@@ -223,6 +231,7 @@ function drop(game: Game, id: string) {
   const s = stateOf(game);
   for (const h of s.lamps.get(id) ?? []) h.remove();
   s.lamps.delete(id);
+  game.doors?.detachGroup(id);
   const obj = game.interiors?.objectOf(id);
   game.interiors?.dispose(id);
   // The materials are the shared library's; only the geometry is this cell's.
