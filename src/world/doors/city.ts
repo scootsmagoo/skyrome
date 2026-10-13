@@ -22,7 +22,7 @@ export function cityDoorDef(blockId: string, slot: DoorSlot): DoorDef {
   // Slot ids already carry the block's (lot ids start with it).
   const id = slot.id;
   if (slot.kind === 'domus') {
-    return {
+    const house: DoorDef = {
       id,
       label: 'House door',
       matrix: slot.matrix,
@@ -33,6 +33,9 @@ export function cityDoorDef(blockId: string, slot: DoorSlot): DoorDef {
       lock: { tier: houseLockTier(slot.wealth), openHours: [6, 17] },
       owner: { id: `domus:${id}`, name: 'the household' },
     };
+    // Behind it: the atrium house (interiors/kits/domus.ts).
+    house.leadsTo = (game) => enterThroughDoor(game, house, 'domus', { wealth: slot.wealth });
+    return house;
   }
   const def: DoorDef = {
     id,
