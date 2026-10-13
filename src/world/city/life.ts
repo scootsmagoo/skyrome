@@ -22,7 +22,7 @@ import { MeshBuilder } from '../../gfx/MeshBuilder';
 import { getMaterial } from '../../gfx/materials';
 import type { MaterialId } from '../../gfx/materialIds';
 import type { TreeSpecies } from '../../arch/vegetation/species';
-import { FLOOR_LIFT, SIDEWALK } from './datum';
+import { FLOOR_LIFT, floorSidewalk, SIDEWALK } from './datum';
 import type { CityPlan, PlanBlock } from './plan';
 import { K, signedArea, type Pt } from './raster';
 
@@ -63,7 +63,7 @@ export function blockTorches(blk: PlanBlock, lots: LotPlan[], H: HeightFn): Torc
   for (const p of lots) {
     if (p.kind !== 'insula' && p.kind !== 'shops' && p.kind !== 'domus' && p.kind !== 'horrea') continue;
     const sw = blk.sidewalk[p.edge] ?? SIDEWALK.other;
-    let prob = blk.corridor ? 0.85 : sw >= SIDEWALK.road - 1e-6 ? 0.55 : sw >= SIDEWALK.street - 1e-6 ? 0.32 : 0.12;
+    let prob = blk.corridor ? 0.85 : sw >= SIDEWALK.road - 1e-6 ? 0.55 : sw >= SIDEWALK.street - 1e-6 || Math.abs(sw - SIDEWALK.lane) < 1e-6 ? 0.32 : 0.12;
     if (p.kind === 'domus' || p.kind === 'horrea') prob *= 0.5;
     if (!rng.chance(prob) || p.obb.hu < 2.2) continue;
     const { obb } = p;
@@ -71,7 +71,7 @@ export function blockTorches(blk: PlanBlock, lots: LotPlan[], H: HeightFn): Torc
     let floorY = -Infinity;
     for (let i = 0; i <= 4; i++) {
       const lx = -obb.hu + (2 * obb.hu * i) / 4;
-      floorY = Math.max(floorY, H(obb.c[0] + obb.u[0] * lx - obb.v[0] * (obb.hv + 0.4), obb.c[1] + obb.u[1] * lx - obb.v[1] * (obb.hv + 0.4)) + sw + FLOOR_LIFT);
+      floorY = Math.max(floorY, H(obb.c[0] + obb.u[0] * lx - obb.v[0] * (obb.hv + 0.4), obb.c[1] + obb.u[1] * lx - obb.v[1] * (obb.hv + 0.4)) + floorSidewalk(sw) + FLOOR_LIFT);
     }
     const lx = (rng.chance(0.5) ? -1 : 1) * (obb.hu - 0.4);
     const x = obb.c[0] + obb.u[0] * lx - obb.v[0] * obb.hv, z = obb.c[1] + obb.u[1] * lx - obb.v[1] * obb.hv;

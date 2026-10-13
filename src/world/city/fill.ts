@@ -31,7 +31,7 @@ import { buildPlaza } from '../../arch/fabric/streets';
 import type { BuildingOutput, Detail, DoorSlot, HeightFn, Polygon, Spot, SpotKind } from '../../arch/fabric/types';
 import type { FrontWall } from './frontage';
 import type { BlockLayout } from './massing';
-import { FLOOR_LIFT } from './datum';
+import { FLOOR_LIFT, floorSidewalk } from './datum';
 import type { PlanBlock } from './plan';
 import { drawTorches } from './life';
 
@@ -87,13 +87,17 @@ export function* fillUnits(blk: PlanBlock, layout: BlockLayout, detail: Detail, 
     let floorY = -Infinity;
     for (let i = 0; i <= 4; i++) {
       const [x, z] = toWorld(-obb.hu + (2 * obb.hu * i) / 4, -obb.hv - 0.4);
-      floorY = Math.max(floorY, H(x, z) + s + FLOOR_LIFT);
+      floorY = Math.max(floorY, H(x, z) + floorSidewalk(s) + FLOOR_LIFT);
     }
-    const groundAt = (lx: number, lz: number) => {
+    // The floor datum (a house on a lane keeps its step up from it: datum.ts floorSidewalk), and the
+    // street's own surface in front, where the props in the street stand.
+    const front = (lx: number, lz: number, sw: (e: number) => number) => {
       const [x, z] = toWorld(lx, lz);
-      const raise = lz < -obb.hv + 0.01 ? s : lx < -obb.hu + 0.01 && p.street.left >= 0 ? sidewalkOf(p.street.left) : lx > obb.hu - 0.01 && p.street.right >= 0 ? sidewalkOf(p.street.right) : 0;
+      const raise = lz < -obb.hv + 0.01 ? sw(p.edge) : lx < -obb.hu + 0.01 && p.street.left >= 0 ? sw(p.street.left) : lx > obb.hu - 0.01 && p.street.right >= 0 ? sw(p.street.right) : 0;
       return H(x, z) + FLOOR_LIFT + raise - floorY;
     };
+    const groundAt = (lx: number, lz: number) => front(lx, lz, (e) => floorSidewalk(sidewalkOf(e)));
+    const streetAt = (lx: number, lz: number) => front(lx, lz, sidewalkOf);
     // The bare ground (no sidewalk): the foundations and the dado's foot follow it, since the sidewalk
     // stops at the lot's width and the corner is open to the terrain.
     const terrainAt = (lx: number, lz: number) => { const [x, z] = toWorld(lx, lz); return H(x, z) + FLOOR_LIFT - floorY; };
@@ -110,16 +114,16 @@ export function* fillUnits(blk: PlanBlock, layout: BlockLayout, detail: Detail, 
       out = insula({
         width: p.width, depth: p.depth, seed: p.seed, wealth: lw, top: insulaTop(p.seed, lw, courtyard),
         storeys: Math.max(3, storeys), courtyard,
-        portico: wealth > 0.3 && p.depth > 13 && lrng.chance(0.25), groundAt, terrainAt, sides, sideShops, streetDressing: dress, maxHeight: MAX_BUILDING_HEIGHT, detail,
+        portico: wealth > 0.3 && p.depth > 13 && lrng.chance(0.25), groundAt, streetAt, terrainAt, sides, sideShops, streetDressing: dress, maxHeight: MAX_BUILDING_HEIGHT, detail,
       });
     } else if (p.kind === 'shops') {
-      out = insula({ width: p.width, depth: p.depth, seed: p.seed, wealth, storeys: 2, groundAt, terrainAt, sides, sideShops, balcony: lrng.chance(0.4) ? 'full' : 'none', roof: 'gable', streetDressing: dress, detail });
+      out = insula({ width: p.width, depth: p.depth, seed: p.seed, wealth, storeys: 2, groundAt, streetAt, terrainAt, sides, sideShops, balcony: lrng.chance(0.4) ? 'full' : 'none', roof: 'gable', streetDressing: dress, detail });
     } else if (p.kind === 'domus') {
-      out = domus({ width: p.width, depth: p.depth, seed: p.seed, wealth: Math.max(0.5, wealth), groundAt, terrainAt, sides, streetDressing: dress, detail });
+      out = domus({ width: p.width, depth: p.depth, seed: p.seed, wealth: Math.max(0.5, wealth), groundAt, streetAt, terrainAt, sides, streetDressing: dress, detail });
     } else if (p.kind === 'horrea') {
       out = horrea({ width: p.width, depth: p.depth, seed: p.seed, groundAt, terrainAt, detail });
     } else if (p.kind === 'piazza') {
-      piazza(b, p, H, lrng, spots, s, !full);
+      piazza(b, p, H, lrng, spots, floorSidewalk(s), !full);
     }
     if (out) {
       b.append(out.builder, m);

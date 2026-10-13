@@ -13,7 +13,7 @@ import { insulaTop } from '../../arch/fabric/tops';
 import { obbCorners, pointInOBB, polygonContainsOBB, type OBB } from '../../arch/fabric/polygon';
 import type { Polygon } from '../../arch/fabric/types';
 import { MATERIAL_BASE, type MaterialId } from '../../gfx/materialIds';
-import { FLOOR_LIFT, SIDEWALK } from './datum';
+import { FLOOR_LIFT, floorSidewalk, SIDEWALK } from './datum';
 import type { PlanBlock } from './plan';
 import { pointInPoly, polyBounds, type Pt } from './raster';
 import { blockTorches, type Torch } from './life';
@@ -98,7 +98,7 @@ export function lotMass(p: LotPlan, blk: PlanBlock, H: HeightFn): LotMass | null
   if (p.kind === 'alley' || p.kind === 'piazza') return null;
   const { obb } = p;
   const at = (lx: number, lz: number): Pt => [obb.c[0] + obb.u[0] * lx + obb.v[0] * lz, obb.c[1] + obb.u[1] * lx + obb.v[1] * lz];
-  const sw = blk.sidewalk[p.edge] ?? SIDEWALK.street;
+  const sw = floorSidewalk(blk.sidewalk[p.edge] ?? SIDEWALK.street);
   let floorY = -Infinity;
   for (let i = 0; i <= 4; i++) {
     const [x, z] = at(-obb.hu + (2 * obb.hu * i) / 4, -obb.hv - 0.4);

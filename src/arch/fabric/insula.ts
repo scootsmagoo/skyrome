@@ -55,6 +55,8 @@ export interface InsulaSpec {
   groundAt?: LocalGround;
   /** The bare terrain (no sidewalk raise): foundations and the dado's foot follow it. Defaults to groundAt. */
   terrainAt?: LocalGround;
+  /** The street's own surface in front (no sidewalk where there is none): street props stand on it. Defaults to groundAt. */
+  streetAt?: LocalGround;
   /** Sides with windows (false = party wall against a neighbour). Default true. */
   sides?: { left?: boolean; right?: boolean; back?: boolean };
   maxHeight?: number;
@@ -287,7 +289,7 @@ export function insula(spec: InsulaSpec): BuildingOutput {
       }
       if (streetDressing) {
         // The same decorative draws at 'full' and 'mid'; 'mid' keeps only the awning.
-        if (full) shopFrontage(S, kind, ow, rng.fork(`front${cx}`), gS);
+        if (full) shopFrontage(S, kind, ow, rng.fork(`front${cx}`), S.ground(spec.streetAt ?? ground));
         if (!portico && drng.chance(0.45)) {
           const mats: [MaterialId, MaterialId] = drng.pick([['fabric_white', 'fabric_red'], ['fabric_ochre', 'fabric_white'], ['fabric_white', 'fabric_blue']] as [MaterialId, MaterialId][]);
           const ay = Math.min(lo.y1 + 0.55, G - bay.yb - 0.4);

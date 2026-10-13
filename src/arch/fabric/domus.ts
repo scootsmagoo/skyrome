@@ -31,6 +31,8 @@ export interface DomusSpec {
   groundAt?: LocalGround;
   /** The bare terrain (no sidewalk raise): foundations and the dado's foot follow it. Defaults to groundAt. */
   terrainAt?: LocalGround;
+  /** The street's own surface in front (no sidewalk where there is none): street props stand on it. Defaults to groundAt. */
+  streetAt?: LocalGround;
   sides?: { left?: boolean; right?: boolean; back?: boolean };
   streetDressing?: boolean;
   /** Level of detail (see `Detail`); every level has the same massing. */
@@ -164,7 +166,7 @@ export function domus(spec: DomusSpec): BuildingOutput {
     } else if (s.open) {
       shopInterior(S.noShadow(), s.kind, { w: ow, depth: T + sd, h: 3.0, t: T, wealth }, rng.fork(`shop${cx}`));
       S.solid(-ow / 2 - 0.2, -0.5, 0, ow / 2 + 0.2, 0, T + sd);
-      if (dress) shopFrontage(S, s.kind, ow, rng.fork(`fr${cx}`), S.ground(ground));
+      if (dress) shopFrontage(S, s.kind, ow, rng.fork(`fr${cx}`), S.ground(spec.streetAt ?? ground));
     } else {
       // Shutter planks draw from a fork so every level keeps the same main sequence.
       if (!low) plankShutters(S, lo, T, rng.fork(`sh${cx}`));

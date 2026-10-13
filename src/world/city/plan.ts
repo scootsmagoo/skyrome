@@ -892,6 +892,7 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
 
   // 10. Blocks.
   const blocks: PlanBlock[] = [];
+  const streetByIndex = new Map(streets.map((st) => [st.index, st]));
   const majors = atlas.LANDMARKS.filter((l) => SIGHTLINE_LANDMARKS.has(l.id) || (l.priority === 1 && l.height >= 20 && l.siting !== 'open'));
   const majorGeo = majors.map((l) => ({ c: g2(l.center), r: footprintR(l.footprint, l.center) * S }));
   for (const fc of finals) {
@@ -934,15 +935,19 @@ export function planCity(atlas: PlanAtlas, hm: HeightSource, opts: PlanOptions =
         const a = outline[k], b = outline[(k + 1) % outline.length];
         const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
         const ox = (b[1] - a[1]) / (L || 1), oz = -(b[0] - a[0]) / (L || 1);
-        let road = 0, street = 0, open = 0;
+        let road = 0, street = 0, vicus = 0, open = 0;
         for (const t of [0.2, 0.5, 0.8]) {
-          const c = g.at(a[0] + (b[0] - a[0]) * t + ox * 1.6, a[1] + (b[1] - a[1]) * t + oz * 1.6);
+          const x = a[0] + (b[0] - a[0]) * t + ox * 1.6, z = a[1] + (b[1] - a[1]) * t + oz * 1.6;
+          const c = g.at(x, z);
           if (c === K.ROAD) road++;
-          else if (c === K.STREET) street++;
-          else if (c === K.PIAZZA || c === K.PLAZA || c === K.MARGIN || c === K.AQUEDUCT) open++;
+          else if (c === K.STREET) {
+            street++;
+            if (streetByIndex.get(g.ownerAt(x, z))?.kind === 'vicus') vicus++;
+          } else if (c === K.PIAZZA || c === K.PLAZA || c === K.MARGIN || c === K.AQUEDUCT) open++;
         }
-        // One datum per edge (datum.ts): the sidewalk of the street it fronts, else flush with the paving.
-        const sw = road >= 2 ? SIDEWALK.road : street >= 2 ? SIDEWALK.street : SIDEWALK.other;
+        // One datum per edge (datum.ts): the sidewalk of the street it fronts (only a vicus has one:
+        // lanes and alleys are flush), else flush with the paving.
+        const sw = road >= 2 ? SIDEWALK.road : street >= 2 ? (vicus * 2 >= street ? SIDEWALK.street : SIDEWALK.lane) : SIDEWALK.other;
         sidewalk.push(sw);
         if (L >= 6 && road + street + open >= 2) frontEdges.push(k);
       }

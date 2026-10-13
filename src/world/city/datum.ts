@@ -21,9 +21,21 @@ export const SIDEWALK = {
   road: LIFT.road + KERB - FLOOR_LIFT,
   /** A vicus (paved minor street with narrow sidewalks). */
   street: LIFT.vicus + KERB - FLOOR_LIFT,
+  /** A lane or an alley: no sidewalk, the house stands flush with the cobbles, gravel or dirt. */
+  lane: LIFT.lane - FLOOR_LIFT,
   /** A piazza, plaza or open ground: flush with the paving. */
   other: LIFT.piazza - FLOOR_LIFT,
 };
+
+/**
+ * The sidewalk a house's floor is set from. A house on a lane or alley keeps the floor it had when
+ * every street edge counted a vicus's sidewalk: one proper step (~16 cm) up from the lane, rather than
+ * a 3–12 cm lip. The ground in front of it is the lane's own (`SIDEWALK.lane`), so what stands there
+ * (benches, a threshold step) sits on the cobbles or the dirt, not on a sidewalk that isn't there.
+ */
+export function floorSidewalk(sw: number): number {
+  return Math.abs(sw - SIDEWALK.lane) < 1e-6 ? SIDEWALK.street : sw;
+}
 
 /** Top of a street's sidewalk above the terrain. */
 export const sidewalkTop = (lift: number) => lift + KERB;
