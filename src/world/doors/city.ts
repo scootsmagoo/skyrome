@@ -11,6 +11,7 @@
 import type { DoorSlot } from '../../arch/fabric/types';
 import type { LockTier } from '../../rpg/thievery';
 import type { DoorDef } from './DoorSystem';
+import { enterThroughDoor } from '../interiors/generic';
 
 export function houseLockTier(wealth: number): LockTier {
   return wealth > 0.85 ? 'firma' : wealth > 0.7 ? 'difficilis' : 'mediocris';
@@ -33,7 +34,7 @@ export function cityDoorDef(blockId: string, slot: DoorSlot): DoorDef {
       owner: { id: `domus:${id}`, name: 'the household' },
     };
   }
-  return {
+  const def: DoorDef = {
     id,
     label: 'Stair door',
     matrix: slot.matrix,
@@ -44,4 +45,7 @@ export function cityDoorDef(blockId: string, slot: DoorSlot): DoorDef {
     lock: { tier: 'simplex', openHours: [5, 21] },
     owner: { id: `insula:${blockId}`, name: 'the landlord' },
   };
+  // Behind it: the stair and a flat (interiors/kits/insulaStair.ts).
+  def.leadsTo = (game) => enterThroughDoor(game, def, 'insula-stair', { wealth: slot.wealth });
+  return def;
 }

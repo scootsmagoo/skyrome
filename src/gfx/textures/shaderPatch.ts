@@ -173,15 +173,17 @@ const MAP_FRAGMENT = /* glsl */ `
   {  // (no branch: skNoise samples a texture, whose mips need uniform control flow)
     // Grime: up to ~0.6–1.6 m above the street, with a ragged top edge.
     float skH = skGroundGrid.w > 0.0 ? vSkWorld.y - skGroundAt( vSkWorld.xz ) : 100.0;
+    // Interior cells sit far under the ground (world/interiors): no street weather down there.
+    float skW = skWeather * ( skH > -6.0 ? 1.0 : 0.0 );
     float skTop = 0.6 + 1.0 * skNoise( vec3( vSkWorld.x * 0.7, 0.0, vSkWorld.z * 0.7 ) + 3.0 );
     float skG = 1.0 - smoothstep( skTop * 0.25, skTop, max( skH, 0.0 ) );
-    diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * vec3( 0.56, 0.5, 0.43 ), min( 1.0, skG * 0.85 * skWeather * skVert ) );
+    diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * vec3( 0.56, 0.5, 0.43 ), min( 1.0, skG * 0.85 * skW * skVert ) );
     // Rising damp: the lowest handspan stays wet and dark, with a green-black bloom where it is shaded.
-    float skDamp = ( 1.0 - smoothstep( 0.02, 0.18 + 0.22 * skNoise( vec3( vSkWorld.x * 1.9, 0.0, vSkWorld.z * 1.9 ) + 23.0 ), max( skH, 0.0 ) ) ) * skVert * skWeather * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
+    float skDamp = ( 1.0 - smoothstep( 0.02, 0.18 + 0.22 * skNoise( vec3( vSkWorld.x * 1.9, 0.0, vSkWorld.z * 1.9 ) + 23.0 ), max( skH, 0.0 ) ) ) * skVert * skW * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
     diffuseColor.rgb *= 1.0 - 0.38 * skDamp;
     // Contact grime: a tight dark line where wall meets ground, with splash flecks just above it.
-    float skCon = ( 1.0 - smoothstep( 0.0, 0.07 + 0.05 * skNoise( vec3( vSkWorld.x * 3.1, 0.0, vSkWorld.z * 3.1 ) + 47.0 ), max( skH, 0.0 ) ) ) * skVert * skWeather * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
-    float skSpl = smoothstep( 0.55, 0.75, skNoise( vSkWorld * 23.0 + 5.0 ) ) * ( 1.0 - smoothstep( 0.05, 0.45, max( skH, 0.0 ) ) ) * skVert * skWeather * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
+    float skCon = ( 1.0 - smoothstep( 0.0, 0.07 + 0.05 * skNoise( vec3( vSkWorld.x * 3.1, 0.0, vSkWorld.z * 3.1 ) + 47.0 ), max( skH, 0.0 ) ) ) * skVert * skW * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
+    float skSpl = smoothstep( 0.55, 0.75, skNoise( vSkWorld * 23.0 + 5.0 ) ) * ( 1.0 - smoothstep( 0.05, 0.45, max( skH, 0.0 ) ) ) * skVert * skW * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
     diffuseColor.rgb *= ( 1.0 - 0.45 * skCon ) * ( 1.0 - 0.3 * skSpl );
     #ifdef SK_FLAKE
     {
@@ -190,7 +192,7 @@ const MAP_FRAGMENT = /* glsl */ `
       float skFl = skNoise2( skWc * vec2( 0.45, 0.6 ) + 83.0 ) * 0.7 + skNoise2( skWc * 2.3 + 29.0 ) * 0.3;
       float skFlLow = 1.0 - smoothstep( 0.0, 2.2, max( skH, 0.0 ) );
       float skFlT = 0.8 - 0.1 * skFlLow - 0.02 * skFlake;
-      skFlakeK = smoothstep( skFlT, skFlT + 0.015, skFl ) * skVert * min( skFlake, 1.0 );
+      skFlakeK = smoothstep( skFlT, skFlT + 0.015, skFl ) * skVert * min( skFlake, 1.0 ) * step( 1e-4, skW );
       float skFlRim = smoothstep( skFlT - 0.03, skFlT, skFl ) * ( 1.0 - skFlakeK ) * skVert;
       float skCourse = smoothstep( 0.62, 0.8, abs( fract( vSkWorld.y / 0.06 ) * 2.0 - 1.0 ) );
       vec3 skUnder = mix( vec3( 0.42, 0.22, 0.14 ), vec3( 0.36, 0.33, 0.29 ), skCourse );
@@ -201,14 +203,14 @@ const MAP_FRAGMENT = /* glsl */ `
     diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * vec3( 0.8, 0.95, 0.62 ), skDamp * smoothstep( 0.45, 0.8, skNoise2( skWc * 2.7 + 61.0 ) ) );
     // Moss: soft green cushions on the lowest metre and a half of stone, thickest in the damp.
     float skMo = skNoise2( skWc * vec2( 2.3, 3.1 ) + 41.0 ) * 0.6 + skNoise2( skWc * 7.3 + 17.0 ) * 0.4;
-    float skMoK = smoothstep( 0.58, 0.82, skMo + 0.18 * skDamp ) * ( 1.0 - smoothstep( 0.2, 1.5, max( skH, 0.0 ) ) ) * skVert * skWeather * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
+    float skMoK = smoothstep( 0.58, 0.82, skMo + 0.18 * skDamp ) * ( 1.0 - smoothstep( 0.2, 1.5, max( skH, 0.0 ) ) ) * skVert * skW * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
     diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.12, 0.2, 0.06 ) * ( 0.7 + 0.6 * skNoise2( skWc * 11.0 ) ), skMoK * 0.55 );
     // Ivy: a few columns of dark leaf clusters climbing the wall, ragged at the top, sparse at the edge.
     float skIvC = smoothstep( 0.83, 0.9, skNoise( vec3( vSkWorld.x * 0.23 + vSkWorld.z * 0.21, 0.0, 5.0 ) ) );
     float skIvTop = 2.2 + 4.0 * skNoise( vec3( vSkWorld.x * 0.5, 0.0, vSkWorld.z * 0.5 ) + 9.0 );
     // Leaf clusters of a hand's breadth: finer noise turns into pixel speckle at street distance.
     float skIvLeaf = skNoise2( skWc * 5.5 + 3.0 ) * 0.65 + skNoise2( skWc * 13.0 ) * 0.35;
-    float skIvK = skIvC * ( 1.0 - smoothstep( skIvTop * 0.55, skIvTop, max( skH, 0.0 ) ) ) * smoothstep( 0.44 + 0.1 * skIvC, 0.66, skIvLeaf ) * skVert * skWeather * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
+    float skIvK = skIvC * ( 1.0 - smoothstep( skIvTop * 0.55, skIvTop, max( skH, 0.0 ) ) ) * smoothstep( 0.44 + 0.1 * skIvC, 0.66, skIvLeaf ) * skVert * skW * ( skGroundGrid.w > 0.0 ? 1.0 : 0.0 );
     diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.045, 0.1, 0.03 ) * ( 0.7 + 0.8 * skNoise2( skWc * 17.0 ) ), skIvK * 0.6 );
     #ifdef SK_FACADE
     {
@@ -225,13 +227,13 @@ const MAP_FRAGMENT = /* glsl */ `
       diffuseColor.rgb = mix( diffuseColor.rgb, vec3( skLum ) * 1.1 + 0.02, 0.22 * skFade * ( 0.5 + skNoise2( skWc * 0.4 + 5.0 ) ) );
       // Damp stains: tall, soft, pale-edged blots of water that ran down from a gutter or sill.
       float skSt = smoothstep( 0.56, 0.82, skNoise2( skWc * vec2( 0.55, 0.16 ) + 13.0 ) * 0.7 + skNoise2( skWc * vec2( 2.1, 0.5 ) + 3.0 ) * 0.3 );
-      diffuseColor.rgb *= 1.0 - 0.3 * skSt * skVert * skWeather;
+      diffuseColor.rgb *= 1.0 - 0.3 * skSt * skVert * skW;
     }
     #endif
     // Rain streaks: narrow along the wall, long down it, patchy.
     float skS = smoothstep( 0.4, 0.75, skNoise2( vec2( skU * 2.2, vSkWorld.y * 0.15 + 7.0 ) ) );
     skS *= 0.4 + skNoise2( vec2( skU * 0.25, vSkWorld.y * 0.06 + 11.0 ) );
-    diffuseColor.rgb *= 1.0 - min( 0.8, 0.42 * skS * skVert * skWeather );
+    diffuseColor.rgb *= 1.0 - min( 0.8, 0.42 * skS * skVert * skW );
   }
 }
 #endif

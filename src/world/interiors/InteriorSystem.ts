@@ -161,6 +161,11 @@ export class InteriorSystem implements System {
   }
 
   /** Remove a built cell: object, colliders and doors. */
+  /** The built object of a cell, or null. */
+  objectOf(id: string): THREE.Object3D | null {
+    return this.built.get(id)?.object ?? null;
+  }
+
   dispose(id?: string): void {
     if (id === undefined) {
       for (const k of [...this.built.keys()]) this.dispose(k);
