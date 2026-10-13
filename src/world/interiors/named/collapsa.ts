@@ -91,6 +91,15 @@ function build(ctx: { game: Game; builder(): MeshBuilder }): KitBuilt {
     d.span('wood_dark', x0, H, z0, x1, H + 0.12, z1, { shadow: false });
     d.span('black', x0, H + 0.12, z0, x1, H + 0.3, z1, { shadow: false });
   }
+  // Where the ceiling fell: the shop's burned shell above, open to a grey sky (the cell is under the
+  // city: an open top would show the streets' underside).
+  const top = H + 2.6;
+  d.span('brick', -HX - 0.2, H, 2.6, -HX, top, D, { shadow: false });
+  d.span('brick', -HX, H, D, 0.2, top, D + 0.2, { shadow: false });
+  d.span('brick', -HX, H + 0.3, 2.5, 0.2, top, 2.6, { shadow: false });
+  d.span('brick', 0.2, H + 0.3, 2.6, 0.3, top, D, { shadow: false });
+  d.span('plaster_white', -HX - 0.2, top, 2.5, 0.3, top + 0.05, D + 0.2, { shadow: false });
+  lamps.push({ position: { x: -HX / 2, y: top - 0.6, z: (2.6 + D) / 2 }, color: 0xdfe8ff, intensity: 6, distance: 7 });
   // Beams: two still standing on their posts, three half-fallen from the ceiling to the heap below.
   for (const x of [-HX + 0.3, 0.8]) {
     d.rod('black', { x, y: 0, z: 2.6 }, { x, y: H, z: 2.6 }, 0.12, 5);
