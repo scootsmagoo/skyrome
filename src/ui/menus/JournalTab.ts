@@ -235,13 +235,18 @@ export class JournalTab implements MenuTab {
     const c = this.board?.cells.find((x) => x.id === id);
     if (!c) return setChildren(this.rightEl, h('div', { class: 'jr-blank' }, 'Select a group of plotters.'));
     const faces = c.members.map((m) =>
-      h('li', { class: `jr-face${m.unmasked ? ' unmasked' : ''}` }, h('span', { class: 'jr-face-mask' }, m.unmasked ? m.name.charAt(0) : '?'), h('span', { class: 'jr-face-name' }, m.name, m.role ? h('span', { class: 'jr-face-role' }, `, ${m.role}`) : null)),
+      h(
+        'li',
+        { class: `jr-face${m.unmasked ? ' unmasked' : ''}` },
+        h('span', { class: 'jr-face-mask' }, m.unmasked ? m.name.charAt(0) : '?'),
+        h('span', { class: 'jr-face-name' }, m.name, m.role ? h('span', { class: 'jr-face-role' }, `, ${m.role}`) : null, m.how ? h('span', { class: 'jr-face-how' }, m.how) : null),
+      ),
     );
     const clues = c.clues.map((x) => h('li', { class: 'jr-clue' }, h('b', null, x.title), ': ', x.text));
     const notes = (this.board?.notes ?? []).map((x) => h('li', { class: 'jr-clue' }, h('b', null, x.title), ': ', x.text));
     setChildren(
       this.rightEl,
-      h('div', { class: 'jr-title' }, c.title),
+      h('div', { class: 'jr-title' }, c.title, c.broken ? h('span', { class: 'jr-stamp completed jr-broken' }, 'Fractum') : null),
       h('div', { class: 'jr-latin' }, c.latin),
       h('div', { class: 'jr-meta' }, c.blurb),
       h('div', { class: 'jr-ornament' }),

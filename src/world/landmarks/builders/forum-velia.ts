@@ -260,6 +260,16 @@ function agrippiana(p: Part) {
   }
   p.spot('horrea-agrippiana-genius', 'shrine', 0, 0, 2.6, 0);
   p.spot('horrea-agrippiana-vestiarius', 'vendor', 2.8, 0, -hd - 2.8, 0);
+  // mq-06 (the Purse): where the story stands in the warehouse. The wings are solid (a spot under one has a roof
+  // over it), so the keeper keeps the court-side mouth of the gate passage, and Avitus's three sealed bays and his
+  // counting-room (the fourth and last cell of the same range) are the court-side cell doors of the south
+  // range, 8 m behind the aedicula. The porter keeps the corner beside them.
+  // Cell mouths of the south wing (horrea.ts): x = -5.8, -1.9, 1.9, 5.8 on the court wall at z = +cdHalf.
+  const cdHalf = (dp - 2 * Math.min(8, Math.min(w, dp) * 0.3)) / 2;
+  p.spot('agrippiana-gate', 'npc', -2.4, 0, -cdHalf + 1.6, Math.PI);
+  p.spot('agrippiana-bays', 'npc', -3.85, 0, cdHalf - 1.6, 0);
+  p.spot('agrippiana-office', 'npc', 5.8, 0, cdHalf - 1.6, 0);
+  p.spot('agrippiana-porter', 'npc', -6.0, 0, cdHalf - 3.0, Math.PI / 2);
   // The flank on the Vicus Tuscus: the street runs only 3 to 7 m off the wall (narrowing toward the
   // front corner), so the cloth dealers' and victuallers' tabernae take the southern part of the
   // flank, shallow, with a walk to the kerb, torches on the party walls, a bench and the porters.

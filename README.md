@@ -18,7 +18,7 @@ The story opens before dawn on 11 May 113 at the Porta Capena. Trajan's Column i
 > - A minimap and a quest route along the streets.
 >
 > **Still rough:**
-> - The story stops at the end of Act I: Pudens shows you the conspiracy board, and Act II is designed but not built.
+> - The story runs through Act I and the first group of Act II: after Pudens shows you the conspiracy board, *The Purse* (the money men) is playable; the other three groups are designed but not built.
 > - Nobody speaks aloud. Dialogue is text, and voices are wordless grunts and cries.
 > - The Column is the only building you can go inside.
 > - NPCs still rub against benches, stalls and statue bases.
@@ -186,7 +186,8 @@ A bot plays all four chapters end to end (`node scripts/golden-path.mjs`; its la
 | 11. The top of the stair: the archer on the platform | [`?part=summit`](https://scootsmagoo.github.io/skyrome/?part=summit) | Is the platform readable from the hatch? Does Bitus's yield panel make the choice (spare or kill) clear? |
 | 12. After the archer: Gratus in the court, Pudens's summons | [`?part=aftermath`](https://scootsmagoo.github.io/skyrome/?part=aftermath) | Is it clear who to go to next? Does Pudens's omen land, and do Bitus's fate and Gratus's wound read in the scene? |
 | 13. The morning after: up the Caelian to the Castra Peregrina, and the man following you | [`?part=camp`](https://scootsmagoo.github.io/skyrome/?part=camp) | Does the water-carrier's warning set up the fight? Is the tablet on the body clearly a clue? Is the gate clear? |
-| 14. Inside the camp: Pudens's offer and the board | [`?part=board`](https://scootsmagoo.github.io/skyrome/?part=board) | Does Pudens explain it all plainly (the arrow, October, the leak, why you)? Is the board easy to read (J, then the Board page)? Is "End of Act I" a fair place to stop? |
+| 14. Inside the camp: Pudens's offer and the board | [`?part=board`](https://scootsmagoo.github.io/skyrome/?part=board) | Does Pudens explain it all plainly (the arrow, October, the leak, why you)? Is the board easy to read (J, then the Board page)? Is "Act II: start wherever you like" clear? |
+| 15. Act II, The Purse: ask Pudens about the money men | [`?part=purse`](https://scootsmagoo.github.io/skyrome/?part=purse) | Is it clear who the three men are and that each can be proved two ways? Is the fight with Avitus's knife-men set up? Does the choice (arrest, let run, kill) feel like it matters? |
 | Side quest: The Oath at the Ludus, then the three bouts | [`?part=oath`](https://scootsmagoo.github.io/skyrome/?part=oath) · [`?fight=nereus`](https://scootsmagoo.github.io/skyrome/?fight=nereus) | Is signing on clear? Too easy or too hard? Is the net readable? |
 | Side quest: the brawl at the fountain (fists only) | [`?part=brawl`](https://scootsmagoo.github.io/skyrome/?part=brawl) | Picking a side, then the fistfight. Does drawing a blade (R) warn you? |
 
@@ -514,7 +515,7 @@ The full plan is in the [Game Design Document](docs/GDD.md) (§17–§18). The v
 
 What comes next, in order:
 1. **A playtest** of the city life, the side quests and Chapter 5.
-2. **Act II**: the four groups of plotters on the board (`mq-06` to `mq-09`), each with two ways in.
+2. **Act II**: the four groups of plotters on the board (`mq-06` to `mq-09`), each with two ways in. *The Purse* (`mq-06-sacculus`) is built; the Eastern Gold, the Dacian Blades and the Toga come next.
 
 Done since this list was written: phase 3 (the second performance pass), phase 4 (solid ground) and Chapter 5, *The Board*.
 

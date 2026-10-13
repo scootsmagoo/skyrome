@@ -364,7 +364,8 @@ const done: QuestStageDef = {
     // The spared archer stays in his cell; everyone else goes back to their own day.
     for (const id of ['npc-pudens', 'npc-gratus', 'npc-mardonius', 'npc-aquarius-caelius']) unstage(g, id);
     stopPoll(g);
-    g.events.emit('ui:banner', { kind: 'generic', label: 'End of Act I', title: 'The Board', subtitle: 'Act II comes in a future update.', duration: 7 });
+    // Act II begins: the player picks a group by asking Pudens (mq-06, The Purse, is the first built).
+    g.events.emit('ui:banner', { kind: 'generic', label: 'Act II', title: 'The Board', subtitle: 'Start wherever you like: ask Pudens about a group.', duration: 7 });
   },
   end: 'complete',
 };

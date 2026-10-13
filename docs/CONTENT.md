@@ -547,7 +547,7 @@ All are **essential** (GDD §2.5 fixed stars, plus Juvenal and Suetonius from th
 
 Stock lists use item IDs from §4 (`id count`). Purses and vendor kinds follow GDD §7.3 and `src/rpg/data/vendors.ts`; purses refresh every 2 game days. **v0.1 ships three vendors (GDD §17.1 Must): Euhodus (arms, repairs), Chreste (popina) and Philetus (aedituus).**
 
-**`npc-euhodus` — Tiberius Claudius Euhodus** · male, 49 (middle) · arms dealer, a rich freedman; secretly a member of **The Purse** cell of the cabal (GDD §10.2) · — (`coniuratio`, masked) · **essential until `mq-06` resolves** (protected: he cannot be killed before Act II unmasks him) · **v0.1-Must vendor**
+**`npc-euhodus` — Tiberius Claudius Euhodus** · male, 49 (middle) · arms dealer, a rich freedman; secretly a member of **The Purse** cell of the cabal (GDD §10.2) · — (`coniuratio`, masked) · **essential until Act III** (protected: mq-06 proves him but Pudens leaves him in place, so he cannot be killed before the plot is broken) · **v0.1-Must vendor**
 - **Home / work:** offstage (Carinae) / `taberna-armorum`. **Schedule:** h1–h6 `taberna-armorum:work` · h6 `taberna-armorum:sit` · h8–h12 `taberna-armorum:work` · v1 offstage. Closed on no day (a dealer in wartime).
 - **Look:** heavy, 1.67 m, skin `#DDB48F`, hair cropped `#4A3424` (dyed), clean-shaven; tunica-linea white, lacerna faded madder; calcei; three gold rings (on a freedman: legal as jewellery, a social sneer); a scale for weighing blades.
 - **Personality / voice:** charming, anxious, overfamiliar; talks about "the war" as a market. Lets slip that business with "the contractors" is very good this spring.
@@ -568,7 +568,7 @@ Stock lists use item IDs from §4 (`id count`). Purses and vendor kinds follow G
 - **Barks:** "The Lemures walk tonight. The god's doors stay shut. Come back tomorrow." · "Twins, both divine, both horsemen, both patient. Unlike my visitors." · "An offering for the Dioscuri? A cake will do. A coin will do better." · "The strongrooms? Down the side, under the podium. They're not the god's; they're the bankers'."
 - **Services:** vendor `aedituus` (purse 100). **Stock:** `libum 12`, `tus 20`, `lucerna 6`. **Services:** temple blessing `benedictio-castores` for an offering (a `libum`, a pinch of `tus` or 1 den.; refused on the Lemuria day, GDD §14.10); sacrifice (cockerel 1 den., piglet 4 den., lamb 6 den.); vows (v0.2); patron deity — none here (the Dioscuri are not a patron option). Trainer `religio` (Common 40).
 
-**`npc-hermogenes` — Hermogenes** · male, 54 (middle) · banker (*argentarius*) in the Basilica Paulli; secretly of **The Purse** (GDD §10.2) · — (`coniuratio`, masked) · essential until `mq-06` · v0.2 vendor
+**`npc-hermogenes` — Hermogenes** · male, 54 (middle) · banker (*argentarius*) in the Basilica Paulli; secretly of **The Purse** (GDD §10.2) · — (`coniuratio`, masked) · essential until Act III · v0.2 vendor
 - **Home / work:** offstage (Esquiline) / `tabernae-aemiliae`. **Schedule:** h2–h7 `tabernae-aemiliae:work` · h7 `basilica-aemilia:talk` · h8 offstage.
 - **Look:** slight, 1.64 m, skin `#DDB48F`, hair cropped `#8A8580`, clean-shaven; tunica-linea, toga (he is a citizen and wants it known); calcei; a money-tester's touchstone.
 - **Personality / voice:** soft-spoken, exact, interested in everyone's debts.
@@ -773,8 +773,8 @@ Stock lists use item IDs from §4 (`id count`). Purses and vendor kinds follow G
 - **Barks:** "Venus! Venus, by the gods! No, it's the Dog again." · "Dice are illegal, citizen. That's why the stakes are so low." · "Stand in front of me. The aedile's man is looking."
 - **Services:** none (v0.3: dice mini-game).
 
-**`npc-lycus` — Lycus** · male, 30 (adult) · clerk of the banker Hermogenes [G] · — (`coniuratio`, unwitting) · essential: no · v0.2 (`urb-01`, `misc-argei` hooks)
-- **Schedule:** h2–h7 `tabernae-aemiliae:work` · h7 `arca-argei:wander` (13–14 May only) · v1 offstage.
+**`npc-lycus` — Lycus** · male, 30 (adult) · clerk of the banker Hermogenes [G] · — (`coniuratio`, unwitting) · **essential until Act III** (the clerk of mq-06's Purse) · v0.2 (`urb-01`, `misc-argei` hooks); built in `npc/content/sacculus.ts`
+- **Schedule:** h2–h9 `tabernae-aemiliae:work` (kept at the table all day for mq-06; the `arca-argei:wander` errand of 13–14 May is not built) · h9 offstage.
 - **Look:** slight, 1.68 m, skin `#DDB48F`, hair cropped `#4A3424`, clean-shaven; tunica white; soleae; tablets and a stylus behind the ear.
 - **Barks:** "Count it yourself if you don't trust me. Everyone does." · "My master's busy. My master is always busy."
 - **Services:** none.

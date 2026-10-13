@@ -839,7 +839,7 @@ node scripts/shot.mjs --query "at=<landmark>&hour=<h>" --steps '[{"eval":"game.c
 - **Fighting in the real munus, beast hunts (*venatio*), seats in the cavea.**
 - **Fast travel, litters, boats, followers, mounts:** these belong to NAV and later phases.
 - **Dropped items in the world.**
-- **Price drift, supply and demand, trade routes, loans, banking and investments.** Hermogenes is protected until mq-06.
+- **Price drift, supply and demand, trade routes, loans, banking and investments.** Hermogenes is protected until Act III.
 - **General crafting** (smithing, cooking, tailoring), foraging, the crafting perks.
 - **Hunger and needs; the courts and advocacy; latrunculi.**
 - **Successors for dead keepers.**

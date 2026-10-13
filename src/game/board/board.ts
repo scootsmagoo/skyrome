@@ -5,8 +5,9 @@
  * the journal.
  *
  * Pure: the view is computed from what the player has and the saved flags. Act II unmasks a member
- * by setting the flag `board:<member id>` and breaks a cell when all three are unmasked; breaking
- * three cells is the goal ("unmask enough of them to break three groups").
+ * by setting the flag `board:<member id>` (and `board-how:<member id>`, a line on how the player
+ * proved it) and breaks a cell when all three are unmasked; breaking three cells is the goal
+ * ("unmask enough of them to break three groups").
  */
 
 export type CellId = 'purse' | 'aurum' | 'falx' | 'toga';
@@ -138,6 +139,42 @@ export const CLUES: BoardClue[] = [
     text: 'Barbed, with red bands on the shaft. Crito pulled it out of Gratus.',
     known: (s) => s.hasItem('quest-sagitta-dacica'),
   },
+  // mq-06-sacculus, The Purse (docs/STORY.md chapter 6).
+  {
+    id: 'rationes-euhodi',
+    cell: 'purse',
+    title: 'Euhodus’s ledger',
+    text: '“To P. A., Horrea Agrippiana, in grain sacks: 200 sicae, 6 bows, 300 arrows. Paid through H.”',
+    known: (s) => s.hasItem('quest-rationes-euhodi'),
+  },
+  {
+    id: 'tabulae-lyci',
+    cell: 'purse',
+    title: 'Lycus’s tablets',
+    text: 'Eastern silver changed by weight for Pinarius, every Nones since March. The clerk wrote the names small.',
+    known: (s) => s.hasItem('quest-tabulae-lyci'),
+  },
+  {
+    id: 'knives-in-wheat',
+    cell: 'purse',
+    title: 'Knives in the wheat',
+    text: 'In Avitus’s sealed bays at the Horrea Agrippiana: sicae, bows and arrows hidden in sacks of the army’s wheat.',
+    known: (s) => s.flag('mq06-knives-found') === true,
+  },
+  {
+    id: 'avitus-fate',
+    cell: 'purse',
+    title: 'Avitus',
+    text: '',
+    known: (s) => typeof s.flag('mq06-avitus-fate') === 'string',
+  },
+  {
+    id: 'scribe',
+    cell: 'toga',
+    title: 'A scribe paid for fine work',
+    text: 'Among Avitus’s papers: “To M. Ulpius Chrysogonus, of the chancery: 2,000 sesterces, for the fine hand.” A grain man paying a chancery scribe for his handwriting. Fine work at what?',
+    known: (s) => s.hasItem('quest-chartae-aviti'),
+  },
   {
     id: 'bitus',
     cell: 'falx',
@@ -167,6 +204,8 @@ export interface BoardMemberView {
   /** "Unknown" until unmasked. */
   name: string;
   role: string | null;
+  /** How the player proved it (once unmasked), e.g. "His own fletching, on the Column’s arrow." */
+  how: string | null;
 }
 
 export interface BoardCellView {
@@ -188,17 +227,27 @@ export interface BoardView {
   needed: number;
 }
 
+/** The board's line on Avitus, by what the player did with him (mq-06). */
+const AVITUS_FATE: Record<string, string> = {
+  arrested: 'In Pudens’s cells at the Castra Peregrina. He knows the men above him, and he talks.',
+  ran: 'Gone down the Tiber to Ostia by night. He will have warned them.',
+  killed: 'Dead in his counting-room. His papers are all he can tell us now.',
+};
+
 export const isBoardOpen = (s: BoardState): boolean => s.flag(BOARD_FLAG) === true;
 export const isUnmasked = (s: BoardState, memberId: string): boolean => s.flag(`board:${memberId}`) === true;
+/** The flag naming how a member was unmasked (a short line for the board). */
+export const howFlag = (memberId: string): string => `board-how:${memberId}`;
 
 /** The board as the player knows it (null until Pudens has shown it). */
 export function boardView(s: BoardState): BoardView | null {
   if (!isBoardOpen(s)) return null;
-  const pin = (c: BoardClue) => ({ id: c.id, title: c.title, text: c.text });
+  const pin = (c: BoardClue) => ({ id: c.id, title: c.title, text: c.id === 'avitus-fate' ? AVITUS_FATE[String(s.flag('mq06-avitus-fate'))] ?? '' : c.text });
   const cells = CELLS.map((cell): BoardCellView => {
     const members = cell.members.map((m) => {
       const unmasked = isUnmasked(s, m.id);
-      return { id: m.id, unmasked, name: unmasked ? m.name : 'Unknown', role: unmasked ? m.role : null };
+      const how = s.flag(howFlag(m.id));
+      return { id: m.id, unmasked, name: unmasked ? m.name : 'Unknown', role: unmasked ? m.role : null, how: unmasked && typeof how === 'string' ? how : null };
     });
     return {
       id: cell.id,

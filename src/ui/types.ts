@@ -513,7 +513,7 @@ export interface BoardPageView {
     title: string;
     latin: string;
     blurb: string;
-    members: { id: string; unmasked: boolean; name: string; role: string | null }[];
+    members: { id: string; unmasked: boolean; name: string; role: string | null; how?: string | null }[];
     clues: { id: string; title: string; text: string }[];
     lead: string;
     broken: boolean;

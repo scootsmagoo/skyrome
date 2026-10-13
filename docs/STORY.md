@@ -233,9 +233,9 @@ This is the story as the player meets it. `docs/GDD.md` §10 is the design of th
    - **Or just go to the Horrea Agrippiana** and ask the warehouse keeper about Pinarius (the drachm is then given by Pudens whenever the player next sees him).
    - **Objective:** **Find out who "…NARIVS AVIT…" is.** The marker points to the Horrea Agrippiana.
 
-2. **The warehouse keeper.** **Successus**, the *horrearius* (keeper of the warehouse), sits at the gate with his tally tablets.
+2. **The warehouse keeper.** **Primigenius**, the *horrearius* (keeper of the warehouse), sits at the gate with his tally tablets.
    - Most of the warehouse is cloth dealers; one private buyer rents the back bays.
-   - Successus says it straight out:
+   - Primigenius says it straight out:
      - "Pinarius? Sextus Pinarius Avitus. He has the contract to feed the army for the Syrian war. He bought up all the old wheat he could find this spring, and the price doubled."
      - "He rents three bays at the back and keeps them sealed. His own porters do the carrying, not mine. I don't like a sealed bay."
    - Asked who comes to see Avitus: "Two men, regular as the Nones. Euhodus, who sells arms on the Sacred Way: his sign's by the Meta Sudans. And a banker, Hermogenes, from the shops at the Basilica Aemilia."
@@ -268,14 +268,14 @@ This is the story as the player meets it. `docs/GDD.md` §10 is the design of th
    - Either way: **Hermogenes is unmasked.**
 
 5. **Avitus's sealed bays** (the back of the Horrea Agrippiana). **Two ways in:**
-   - **Successus opens a bay.** Once the player has proved Euhodus or Hermogenes, showing Successus the proof is enough for him to break a seal "for the army's sake". He opens one bay by day.
+   - **Primigenius opens a bay.** Once the player has proved Euhodus or Hermogenes, showing Primigenius the proof is enough for him to break a seal "for the army's sake". He opens one bay by day.
    - **The night porter.** At night a few coins buy the night porter's back, and the player cuts a seal.
    - Inside, among the sacks of wheat, three sacks are heavier than grain. In them are sicae wrapped in sacking, bows and arrows.
    - **Avitus is unmasked.**
 
-6. **Avitus.** When all three men are unmasked, a new objective appears: **Face Avitus.** He is in his counting-room above the bays.
+6. **Avitus.** When all three men are unmasked, a new objective appears: **Face Avitus.** He is in his counting-room, a door off the court beside the bays.
    - **The warning, before the fight.**
-     - Whoever opened the bay (Successus by day, the porter by night) says: "He'll know a seal's been cut by now. He keeps two hired knives in his counting-room, men of the Mouse's sort."
+     - Whoever opened the bay (Primigenius by day, the porter by night) says: "He'll know a seal's been cut by now. He keeps two hired knives in his counting-room, men of the Mouse's sort."
      - If the player told Mardonius what the archer said in Chapter 5, they add: "And a man came from the Caelian yesterday, asking what you look like." (This hints at the leak; it doesn't name him.)
    - **Avitus talks first.** He is fat, clever and frightened, and he doesn't deny anything. He wants the player to understand:
      - "A war is the best customer Rome has. I bought the wheat for it, every modius I could find, with Hermogenes' money. If the war goes the way Caesar wants, I'm rich. If it's slow, I'm ruined."
@@ -288,7 +288,7 @@ This is the story as the player meets it. `docs/GDD.md` §10 is the design of th
      - **Arrest him for Pudens.** He goes quietly. Pudens's couriers take him to the cells at the Castra Peregrina. In later chapters he is a witness: he knows a man in the Toga.
      - **Let him run** (with or without the 300 denarii). He's gone down the Tiber by night boat to Ostia. He warns the plotters, and the Toga's chapter is harder.
      - **Kill him.** Murder in the city is a crime, as anywhere.
-   - **His papers.** The counting-room's chest holds:
+   - **His papers.** The chest in his counting-room holds:
      - the army contract;
      - Hermogenes' loans;
      - one line that doesn't fit: "To M. Ulpius Chrysogonus, of the chancery: 2,000 sesterces, for the fine hand."
@@ -319,12 +319,12 @@ This is the story as the player meets it. `docs/GDD.md` §10 is the design of th
 - **Essential status.** Euhodus, Hermogenes and Lycus stay `essential` until Act III (not "until mq-06" as `vendors.ts` and `CONTENT.md` say now). The life registry's "hidden until mq-06" note for Hermogenes changes to match.
 
 **New people and places:**
-- **Successus**, the horrearius at the Horrea Agrippiana gate.
+- **Primigenius**, the horrearius at the Horrea Agrippiana gate.
 - **Felix**, Euhodus's shop boy.
 - **The night porter** of the Horrea Agrippiana.
 - **Lycus**, Hermogenes' clerk. He is in CONTENT.md but not built yet.
 - **Avitus** and his two hired knives.
-- Avitus's sealed bays and his counting-room: corners of the Horrea Agrippiana with doors, so no new interior cell is needed.
+- Avitus's sealed bays and his counting-room: doors on the court of the Horrea Agrippiana, so no new interior cell is needed.
 - **Euhodus's and Hermogenes' greetings change** once they're unmasked: Euhodus is curt, and Hermogenes' table is "closed for accounts" for a day.
 
 ## What comes next (designed, not built)

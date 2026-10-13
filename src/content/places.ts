@@ -355,6 +355,12 @@ export const CONTENT_SPOTS: LocationDef[] = [
   { id: 'peregrina-commander', name: 'Pudens’s office', position: atLandmark('castra-peregrina', -21, 10.5), radius: 4, discoverable: false, parent: 'castra-peregrina' },
   { id: 'peregrina-valetudinarium', name: 'The camp’s infirmary', position: atLandmark('castra-peregrina', -16, -10.5), radius: 3, discoverable: false, parent: 'castra-peregrina' },
   { id: 'peregrina-carcer', name: 'The camp’s cell', position: atLandmark('castra-peregrina', -16, 10.5), radius: 3, discoverable: false, parent: 'castra-peregrina' },
+  // mq-06: the Horrea Agrippiana's gate passage and the court-side cells of its back range (builders/forum-velia.ts, agrippiana();
+  // the builder's spots replace these). Warehouse frame: the gate's court-side mouth 8.4 m before the centre, the back cells 8.4 m behind it.
+  { id: 'agrippiana-gate', name: 'Gate of the Horrea Agrippiana', position: atLandmark('horrea-agrippiana', 8.4, -2.4), radius: 3, discoverable: false, parent: 'horrea-agrippiana' },
+  { id: 'agrippiana-bays', name: 'Avitus’s sealed bays', position: atLandmark('horrea-agrippiana', -8.4, -3.85), radius: 4, discoverable: false, parent: 'horrea-agrippiana' },
+  { id: 'agrippiana-office', name: 'Avitus’s counting-room', position: atLandmark('horrea-agrippiana', -8.4, 5.8), radius: 3, discoverable: false, parent: 'horrea-agrippiana' },
+  { id: 'agrippiana-porter', name: 'The night porter’s corner', position: atLandmark('horrea-agrippiana', -7, -6), radius: 2, discoverable: false, parent: 'horrea-agrippiana' },
 ];
 
 /** Every location the content installs. */
@@ -431,6 +437,11 @@ export const WORLD_SPOTS: Record<string, { radius: number; name: string; also?: 
   'peregrina-commander': { radius: 4, name: 'Pudens’s office' },
   'peregrina-valetudinarium': { radius: 3, name: 'The camp’s infirmary' },
   'peregrina-carcer': { radius: 3, name: 'The camp’s cell' },
+  // The Horrea Agrippiana (builders/forum-velia.ts, mq-06): the gate passage, Avitus's sealed bays and counting-room, the porter's corner.
+  'agrippiana-gate': { radius: 3, name: 'Gate of the Horrea Agrippiana' },
+  'agrippiana-bays': { radius: 4, name: 'Avitus’s sealed bays' },
+  'agrippiana-office': { radius: 3, name: 'Avitus’s counting-room' },
+  'agrippiana-porter': { radius: 2, name: 'The night porter’s corner' },
   armory: { radius: 5, name: 'Ludus Armory', also: ['ludus-armamentarium'] },
   medicus: { radius: 5, name: 'Ludus Infirmary', also: ['ludus-saniarium'] },
 };

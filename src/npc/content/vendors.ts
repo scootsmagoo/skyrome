@@ -23,7 +23,7 @@ const npcs: NpcDef[] = [
     ],
     dialogue: 'npc-euhodus',
     disposition: 'neutral',
-    // Secretly of The Purse cell (GDD §10.2): protected until mq-06 resolves.
+    // Secretly of The Purse cell (GDD §10.2): protected until Act III (mq-06 proves him but Pudens leaves him in place).
     essential: true,
     services: ['vendor', 'smith'],
     vendor: {
@@ -377,7 +377,7 @@ const npcs: NpcDef[] = [
     ],
     dialogue: 'npc-hermogenes',
     disposition: 'neutral',
-    essential: true, // of The Purse cell (GDD §10.2), protected until mq-06
+    essential: true, // of The Purse cell (GDD §10.2), protected until Act III
     services: ['banker', 'vendor'],
     vendor: { stock: [], denarii: 3000 },
     appearance: {

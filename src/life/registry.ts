@@ -434,7 +434,7 @@ export function validateLife(data: Required<LifeData>, refs: LifeRefs): string[]
       const w = `${lane} ${e.id ?? e.npc ?? '?'}`;
       walkStrings(e, (s) => {
         for (const msg of lintText(s)) bad(w, `${msg}: “${clip(s)}”`);
-        if (HERMOGENES.test(s)) bad(w, 'Hermogenes is protected until mq-06: he never appears in life data');
+        if (HERMOGENES.test(s)) bad(w, 'Hermogenes is protected until Act III: he never appears in life data');
         if (s.includes(EUHODUS) && lane !== 'services') bad(w, 'Euhodus appears only in his own repair service set');
       });
     }

@@ -250,6 +250,8 @@
 .jr-face-mask { flex: none; width: 2rem; height: 2rem; border-radius: 50%; border: 1.5px dashed var(--sr-parch-ink-3); display: grid; place-items: center; font-family: var(--sr-display); font-weight: 700; font-style: normal; }
 .jr-face.unmasked .jr-face-mask { border-style: solid; border-color: var(--sr-parch-red); color: var(--sr-parch-red); }
 .jr-face-role { color: var(--sr-parch-ink-2); }
+.jr-face-how { display: block; font-style: italic; font-size: 0.9em; color: var(--sr-parch-ink-2); }
+.jr-broken { margin-left: 0.6rem; font-size: 0.7em; vertical-align: middle; }
 .jr-clues { list-style: none; padding: 0; margin: 0; }
 .jr-clue { font-size: 1.1rem; line-height: 1.45; padding: 0.2rem 0 0.2rem 1rem; border-left: 2px solid rgba(139, 35, 24, 0.35); margin-bottom: 0.35rem; color: var(--sr-parch-ink-2); }
 .jr-clue b { color: var(--sr-parch-ink); }

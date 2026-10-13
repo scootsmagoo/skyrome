@@ -10,6 +10,7 @@
 import { person } from '../../content/people';
 import { completed, rotate, rumor, shut, stage, treat } from '../../content/talk';
 import { lifeChoices } from '../../life/talk';
+import { EUHODUS_SACCULUS, HERMOGENES_SACCULUS } from './sacculus';
 import { defineDialogue, type DialogueContext } from '../types';
 
 const MQ2 = 'mq-02-tabella';
@@ -26,9 +27,9 @@ const euhodus = person({
     { ask: 'What is the Ludus Magnus like?', say: 'Practice arms are wood. They’re wood because real arms cost money and the emperor is a careful man. But when a gladiator buys his freedom, his first purchase is always a real sword. They come here. I sharpen the dreams.', once: true },
   ],
   trade: { ask: 'Show me your wares.', service: 'barter' },
-  // Mending (life data: services/vendors.ts). Nothing else of the phase 2 life reaches him.
-  choices: [...lifeChoices('npc-euhodus').choices],
-  nodes: { ...lifeChoices('npc-euhodus').nodes },
+  // Mending (life data: services/vendors.ts), and the arrow from the Column (mq-06, The Purse).
+  choices: [...EUHODUS_SACCULUS.choices, ...lifeChoices('npc-euhodus').choices],
+  nodes: { ...EUHODUS_SACCULUS.nodes, ...lifeChoices('npc-euhodus').nodes },
   persuade: {
     ask: 'Surely a friend of the Ludus gets a better price.',
     dc: 25,
@@ -355,6 +356,9 @@ const hermogenes = person({
     { ask: 'You seem interested in everyone’s debts.', say: 'Everyone is, once they’ve got one. (He smiles very slightly.) I take an interest in people’s futures. It’s the same thing, with better manners.' },
   ],
   trade: { ask: 'I have valuables to sell.', service: 'barter' },
+  // The Parthian drachm (mq-06, The Purse).
+  choices: HERMOGENES_SACCULUS.choices,
+  nodes: HERMOGENES_SACCULUS.nodes,
 });
 
 const tychicus = person({

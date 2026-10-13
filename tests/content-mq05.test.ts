@@ -266,11 +266,11 @@ describe('mq-05-tabula: The Board', () => {
     expect(status(w)).toMatchObject({ running: false, stage: 'done' });
     expect(w.rpg.quests.status(Q)!.completed).toBe(true);
     expect(w.rpg.inventory.denarii - before).toBe(100);
-    expect(banners).toEqual([expect.objectContaining({ label: 'End of Act I', title: 'The Board' })]);
+    expect(banners).toEqual([expect.objectContaining({ label: 'Act II', title: 'The Board' })]);
     expect(w.placed.some((i) => i.id === 'content:mq05-board')).toBe(false);
     const view = boardView({ hasItem: (id) => w.rpg.inventory.count(id) > 0, flag: (n) => w.rpg.quests.flags.get(n) })!;
     expect(view.notes.map((n) => n.id)).toContain('tabula-sicarii');
-    expect(opening(w, 'npc-pudens')).toContain('Bring me names');
+    expect(opening(w, 'npc-pudens')).toContain('Where do you want to start');
   });
 
   it('a spared Bitus is in the cell: Pudens mentions him, and he says where Mucapor trains', () => {

@@ -63,6 +63,16 @@ export const DACIAN_KNIFE_PROFILE: CombatProfile = tier('thug', {
   name: 'Dacian knife-man', health: 40, armor: 0, armorFamily: 'cloth', worn: ['tunica', 'bracae'], weapon: 'sica', yieldAt: 0, fleeAt: 0, loot: 'thug',
 });
 
+/**
+ * mq-06 (docs/STORY.md chapter 6): the two knife-men Avitus keeps in his counting-room, "men of the Mouse's sort":
+ * street thugs with a sica, a little tougher than the Column's pair (the player is about level 4 here). They
+ * fight to the death (no yielding, no running, no poison). Spawn them with `spawnEnemyAt(g, 'grassator', pos, { profile: AVITUS_KNIFE_PROFILE, ... })`.
+ */
+export const AVITUS_KNIFE_PROFILE: CombatProfile = tier('thug', {
+  name: 'Avitus’s knife-man', health: 55, armor: 2, armorFamily: 'cloth', worn: ['tunica', 'cucullus'], weapon: 'sica', skill: 38,
+  yieldAt: 0, fleeAt: 0, loot: 'thug',
+});
+
 /** §5.2: the mq-01 tutorial pair (A opens with a light chain; B waits 3 s, then a long power wind-up). */
 export function mq01GrassatorProfile(which: 'a' | 'b'): CombatProfile {
   return archetype('grassator', { kit: which === 'a' ? 0 : 1 }, { name: which === 'a' ? 'Grassator with a knife' : 'Grassator with a cudgel', skill: 15, poise: 30, reactionS: 0.45, blockSkill: 0.15, aggression: 0.55, yieldAt: 0.25, fleeAt: 0.15 });

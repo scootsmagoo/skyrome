@@ -33,6 +33,10 @@ export const QUEST_ITEMS: ItemDef[] = [
   q('quest-nardus-falsum', 'False Nard', 'nardus adulteratus', 'A flask of “nard” that smells of grass and lies.', { icon: '⚱', tags: ['evidence'] }),
   // mq-04 (docs/design/mq-04-columna.md §2.1): the archer's token, and the arrow Crito takes from Gratus's shoulder.
   q('quest-tessera-mucaporis', 'Bone Token', 'tessera ossea', 'A bone gaming token, scratched with a curved Dacian blade and the letters MVCAPOR.', { icon: '◆', tags: ['clue'] }),
+  // mq-06-sacculus, The Purse (docs/STORY.md chapter 6).
+  q('quest-rationes-euhodi', 'Page from Euhodus’s Ledger', 'pagina rationum', 'A page torn from the arms dealer’s order-book: “To P. A., Horrea Agrippiana, in grain sacks: 200 sicae, 6 bows, 300 arrows. Paid through H.”', { icon: '▤', tags: ['clue'] }),
+  q('quest-tabulae-lyci', 'Lycus’s Tablets', 'tabellae', 'The banker’s clerk’s own count: “Eastern silver, by weight, for Pinarius. Every Nones since March.” The names are written very small.', { icon: '▭', tags: ['clue'] }),
+  q('quest-chartae-aviti', 'Avitus’s Papers', 'chartae', 'The grain contract for the army bound for the East, Hermogenes’s loans, and one line that doesn’t fit: “To M. Ulpius Chrysogonus, of the chancery: 2,000 sesterces, for the fine hand.”', { icon: '▤', tags: ['clue'] }),
   q('quest-sagitta-dacica', 'Dacian Arrow', 'sagitta', 'Crito pulled it out of Gratus’s shoulder: barbed, the shaft painted with red bands. He gave it to you without a word.', { icon: '➶' }),
   // mq-05 (docs/STORY.md chapter 5): what the sicarius under the Arch of Dolabella carried.
   q('quest-tabula-sicarii', 'The Knife-Man’s Tablet', 'tabella', 'A small wax tablet from the man in the dark cloak. Scratched in the wax: THE NEW ONE. CAELIAN. BEFORE THE CAMP. The wax is red, and a horseman with a spear is stamped on the frame: the couriers’ own tablets.', { icon: '▭', tags: ['clue'] }),
