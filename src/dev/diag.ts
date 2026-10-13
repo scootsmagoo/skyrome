@@ -7,6 +7,7 @@
 
 interface DiagGame {
   running?: boolean;
+  isIdle?(): boolean;
   paused?: boolean;
   camera?: { position: { x: number; y: number; z: number }; rotation: { x: number; y: number; z: number } };
   player?: { position: { x: number; y: number; z: number }; yaw?: number; pitch?: number };
@@ -72,6 +73,7 @@ if (on && typeof window !== 'undefined') {
     panel.textContent = [
       `t ${((performance.now() - t0) / 1000).toFixed(0)}s  raf ${rafs}  step "${step}"`,
       `ready ${!!sk?.ready}  err ${sk?.error ?? '-'}  running ${g?.running ?? '-'}  paused ${g?.paused ?? '-'}`,
+      `idle ${g?.isIdle?.() ?? '-'}  focus ${document.hasFocus()}  hidden ${document.hidden}`,
       `frame ${frame} ${drawing ? '(drawing)' : '(STILL)'}  calls ${lastCalls}  fps ${f(g?.stats?.fps)}  lost ${lost}  progs ${r?.info.programs?.length ?? '-'}`,
       `input ${g?.input?.enabled ?? '-'} ${g?.input?.device ?? '-'}  modal ${g?.ui?.top?.id ?? '-'}  block ${g?.ui?.blockers ? [...g.ui.blockers].join(',') || '-' : '-'}  touchUI ${touch ? !touch.classList.contains('is-hidden') : '-'}`,
       `tier ${g?.settings?.data.graphicsApplied?.tier ?? g?.settings?.data.graphics ?? '-'}  cam ${v3(g?.camera?.position)} rot ${v3(g?.camera?.rotation)}`,

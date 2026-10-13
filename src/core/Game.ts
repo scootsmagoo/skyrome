@@ -16,7 +16,7 @@
  *   game.terrain = new Terrain(...);
  */
 import * as THREE from 'three';
-import { chooseGraphics } from './graphics';
+import { chooseGraphics, isMobileDevice } from './graphics';
 import { reversedDepth } from '../gfx/depth';
 import { EventBus, type GameEvents } from './Events';
 import { GameTime } from './GameTime';
@@ -268,11 +268,19 @@ export class Game {
     return false;
   }
 
-  /** True when nobody is playing: background tab, or an unfocused window without pointer lock. */
+  /**
+   * True when nobody is playing: background tab, or an unfocused window without pointer lock. On a
+   * phone or tablet only a hidden page counts: iOS Safari reports no focus after a load until the
+   * first tap, and the game then never ran a frame (the camera left at the origin, under the ground).
+   */
   isIdle(): boolean {
     if (typeof document === 'undefined' || (typeof navigator !== 'undefined' && navigator.webdriver)) return false;
+    if (this.mobile) return document.hidden;
     return document.hidden || (!document.hasFocus() && !this.input.pointerLocked);
   }
+
+  /** A phone or tablet (read once: core/graphics.ts isMobileDevice). */
+  private readonly mobile = isMobileDevice();
 
   stop() {
     this.running = false;

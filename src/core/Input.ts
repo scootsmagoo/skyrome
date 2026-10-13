@@ -457,6 +457,8 @@ export class Input {
   /** The player has pressed a key or clicked (extensions grab focus back before that). */
   private interacted = false;
   private lastPointerAt = -Infinity;
+  /** The last touch (pointerdown with pointerType 'touch'). */
+  private lastTouchAt = -Infinity;
 
   setBindings(bindings: Partial<Bindings>) {
     this.bindings = { ...this.bindings, ...bindings };
@@ -729,12 +731,16 @@ export class Input {
       for (const c of [...this.held]) this.release(c);
     });
 
-    on(window, 'pointerdown', () => {
+    on(window, 'pointerdown', (e) => {
       this.interacted = true;
       this.lastPointerAt = performance.now();
+      if (e.pointerType === 'touch') this.lastTouchAt = this.lastPointerAt;
     }, { capture: true });
     on(this.target, 'mousedown', (e) => {
-      if (e.isTrusted && !(e as MouseEvent & { sourceCapabilities?: { firesTouchEvents?: boolean } }).sourceCapabilities?.firesTouchEvents) this.setDevice('keyboard');
+      // A tap also sends a compatibility mousedown: Chrome marks it (sourceCapabilities), Safari does
+      // not, so one that follows a touch closely is the tap's, not a mouse's.
+      const fromTouch = (e as MouseEvent & { sourceCapabilities?: { firesTouchEvents?: boolean } }).sourceCapabilities?.firesTouchEvents || performance.now() - this.lastTouchAt < 1000;
+      if (e.isTrusted && !fromTouch) this.setDevice('keyboard');
       if (!this.locked) {
         // This click captures the mouse; it never attacks or blocks (GDD §4.1, AC-24).
         if (this.enabled) this.requestPointerLock();
