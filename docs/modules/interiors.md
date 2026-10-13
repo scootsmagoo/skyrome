@@ -138,6 +138,30 @@ The Column uses 18 steps a turn, a rise of 0.19 m and quarter-turn landings. Tha
 
 The Column's cell route keeps every tread instead of the spec's point every seven steps. Sixty-degree chords fall off the walking line for a 0.3 m capsule near step 75, so `tests/columna.test.ts` fails on the sparser route. The deviation is noted in `columna.ts`.
 
+## Generic cells behind city doors (`generic.ts`, `kits/`)
+
+The city's ordinary doors (docs/modules/doors.md) lead into cells made from **kits**. The first time
+the player goes through a door, `enterThroughDoor(game, door, kitId, { wealth })` registers a cell
+`gen:<door id>`, built from the kit and a seed hashed from the door id, so the same door always leads
+to the same rooms.
+
+- **Placement.** The cell is sunk 160 m under its own door, plus 16 m per slot, so the cells of nearby doors never meet. Its rotation is the door's, so "into the building" carries on inside.
+- **The way out.** The cell's one exit door puts the player back in the street, just in front of the door they came in by, facing out.
+- **Budget.** At most four generic cells stay built. The oldest one the player is not in is dropped, with its geometry, colliders, lamps and doors, and is rebuilt the same from its seed later.
+- **Saved.** The registrations are saved (`interiors-generic`), so a game saved inside a cell loads inside it.
+- **View.** Generic cells are seen in first person, as the Column's stair is. The player's own view comes back outside.
+- **Weathering.** The street weathering in the material shader (grime, moss, ivy, flaking) is off for walls more than 6 m below the ground, so cells look clean.
+
+A kit (`InteriorKit`) has a pure, cheap `plan(seed, wealth)`, which gives the bounds, the entry, the
+exit prompt and a route, and a `build(ctx)` that returns the object, colliders, spots, `lamps` (local
+flames handed to the light pool on placement) and `doors` (door-system doors local to the cell, such as
+a tenant's lockable door). Shared parts are in `kits/parts.ts`.
+
+| Kit | Behind | What is inside |
+| --- | --- | --- |
+| `insula-stair` | an insula's stair door | a plastered passage, a flight to the landing with the tenants' doors, and one flat (bed, table, stools, brazier, shelf, a window) behind its own door, locked half the time |
+| `domus` | a house's front door | fauces, an atrium with the impluvium under the compluvium, bedrooms off both sides, the lararium, the tablinum and a triclinium |
+
 ## Conventions
 
 - **Frames are local.** Build in the cell's own metres, with the origin where the object's origin is meant to be. Nothing in a cell is placed in world coordinates.
