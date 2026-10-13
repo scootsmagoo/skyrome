@@ -4,8 +4,8 @@ Some spaces are bigger on the inside than the outside: a stair inside a column d
 
 The Column of Trajan is the worked example. Its stair is `dun-columna` and its platform is `columna-summa`. Read `src/world/interiors/columna.ts` next to this page.
 
-- Code: `src/world/interiors/` (`InteriorSystem.ts` is the service, `types.ts` the defs, `install.ts` the installer, `columna.ts` the Column's cells), plus `src/arch/common/spiral.ts` (the spiral stair helper)
-- Tests: `tests/interiors.test.ts` (frames, the service on a fake game), `tests/columna.test.ts` (the Column's route, headroom, doors), `tests/arch.spiral.test.ts` (the stair helper, walked by the real Actor)
+- Code: `src/world/interiors/` (`InteriorSystem.ts` is the service, `types.ts` the defs, `install.ts` the installer, `columna.ts` the Column's cells, `generic.ts` and `kits/` the cells behind city doors, `named.ts` and `named/` the named places' cells), plus `src/arch/common/spiral.ts` (the spiral stair helper)
+- Tests: `tests/interiors.test.ts` (frames, the service on a fake game), `tests/columna.test.ts` (the Column's route, headroom, doors), `tests/arch.spiral.test.ts` (the stair helper, walked by the real Actor), `tests/named-interiors.test.ts` (the named cells' frames and routes, the door finder, the kits' chests, container placement)
 - Third-party assets or libraries: none
 
 ## Installing and registering
@@ -159,8 +159,61 @@ a tenant's lockable door). Shared parts are in `kits/parts.ts`.
 
 | Kit | Behind | What is inside |
 | --- | --- | --- |
-| `insula-stair` | an insula's stair door | a plastered passage, a flight to the landing with the tenants' doors, and one flat (bed, table, stools, brazier, shelf, a window) behind its own door, locked half the time |
-| `domus` | a house's front door | fauces, an atrium with the impluvium under the compluvium, bedrooms off both sides, the lararium, the tablinum and a triclinium |
+| `insula-stair` | an insula's stair door | a plastered passage, a flight to the landing with the tenants' doors, and one flat (bed, table, stools, brazier, shelf, a window, **the tenant's chest**) behind its own door, locked half the time |
+| `domus` | a house's front door | fauces, an atrium with the impluvium under the compluvium, bedrooms off both sides, the lararium, the tablinum (with **the master's strongbox**) and a triclinium |
+
+**Chests in kits.** A kit's `build` can return `containers` (`KitContainer`: an id, the floor point, and the
+`ContainerSpec` without its id and place). `chest(d, look, x, y, z, yaw)` in `kits/parts.ts` draws the box. When the cell is
+placed, `generic.ts` asks the content module for each one (`game.content.addContainer(spec, worldPoint)`, `src/content/install.ts`),
+with the id `<cell id>:<id>` (for example `gen:<door>:chest`). That id is also the key of what was taken and unlocked in the world
+deltas, so a dropped cell that is rebuilt later shows the same chest in the same state. The prompts go with the cell
+(`drop`). The tenant's chest (`cista-insulae`, owner `tenant:<seed>`, the same owner as the flat's door) is locked on a `simplex`
+lock about half the time (an independent hash of the seed, so the flat's own layout does not change) and holds `chest.common`
+(`chest.rich` above wealth 0.6). The master's strongbox (`arca-tabernae`, label "The master's strongbox", owner `household:<seed>`) is
+`mediocris`, or `difficilis` above wealth 0.8, and holds `chest.common`, `strongbox` (above 0.45) or `chest.rich` (above 0.8).
+Nobody is in a cell to see a theft, so a lockpick is the only cost.
+
+## Named cells (`named.ts`, `named/`)
+
+The places the design names have hand-built cells, in the manner of the Column's: `castor-loculi` (the deposit vaults in the podium
+of the Temple of Castor), `ludus-cellae` (the Ludus Magnus' barracks), `popina-vici-tusci` (the Silver Pig), `taberna-armorum`
+(Euhodus' arms shop) and `dun-taberna-collapsa` (the cellar of the burned taberna). `registerNamedInteriors(game)` (picked up by the
+installer like the Column's) registers them, and the bankers' strongbox in the Basilica Paulli (below). Each cell is a `NamedCell`
+(`named/common.ts`): bounds, entry, route, a way out, a `build`, and the place it belongs to. `namedDef` makes the `InteriorDef`
+(first person inside, lamps and doors handed over in `afterPlace`, the exit door). The files:
+
+| File | Cell | Way in | Inside |
+| --- | --- | --- | --- |
+| `castor.ts` | `castor-loculi` | the grated door in the podium's west flank: an interior door from the world at the Forum builder's `castor-strongroom` spot (the "Look inside" line was dropped from `FORUM_LOOKS`) | a barrel-vaulted passage with iron cages of deposits, three deposit chests (`ctn-loculi-1..3`, key `clavis-loculi` which nobody has, so the lockpick, `difficilis`), and the keeper's room with the desk, the scales and the shelves |
+| `ludus.ts` | `ludus-cellae` | the third ground-floor cell door left of the mess hall on the court's back wall (`CELL_DOOR_ALONG` from the `ludus-cellae` spot; the spot itself stands before the mess hall's opening) | a passage between six cells, each with a bunk, a stool, tallies on the wall and the locker (`ctn-cella-ludi-1..6`), a barred window at the end |
+| `popina.ts` | `popina-vici-tusci` | a plank door found on the nearest plain wall to the spot (see below), open 05:00 to 02:00, `mediocris`, Chreste's | the shop room (counter with three dolia, hearth and cauldron, two tables, the price list), the store room (pallet, amphorae, `ctn-arca-porci`) |
+| `arms.ts` | `taberna-armorum` | a studded door found likewise, open 06:00 to 19:00, `mediocris`, Euhodus' | the shop (counter and scales, swords and daggers on a board, shields, spears, two armour stands, `ctn-arca-armorum` behind the counter) and the forge behind it (fire, anvil, vat, a cot) |
+| `collapsa.ts` | `dun-taberna-collapsa` | a cellar hatch in the paving a few metres from the burned taberna's spot (a `FrontSpec.hatch`) | the stair down, a ruined cellar (charred beams half fallen, rubble, the light well with a ladder up to the next court's `taberna-collapsa-puteus`), a side chamber with a scorched chest (`ctn-cista-combusta`) |
+
+**Frames.** A named cell's frame has the world's axes (rotation 0) and its floor at y = 0; it sits `NAMED_SINK` (240 m) under its
+place, plus 6 m per slot. A cell's origin is the anchor (the door's spot).
+
+**Containers.** The content module (`src/content/install.ts`) places a container with `interior: true` only when the place
+`<at>:interior` is registered; `registerNamed` registers it at the cell's floor point (radius 0.3 m, so walking in the street above
+never "enters" it). The container is then at that point plus `(dx, dz)`, on the floor, with no probing of the street above and
+no stand-in: the cell draws its chest (`drawChests(d, place)` reads the same specs, so the box and its prompt cannot disagree).
+So `dx` and `dz` of those specs are metres in the cell's frame.
+
+**The places that have no walls.** The Silver Pig, the arms shop and the burned taberna are places in the content (spots on the
+streets), not buildings, and the city builds a block's colliders only near the player. So their doors are hung by `named/front.ts`
+(`NamedFronts`, `game.namedFronts`): within about 26 m of the spot it casts rays from the spot for the nearest plain, face-on wall (flat across the door
+and its jambs, high enough for the lintel, clear in front, level ground), hangs a stone porch and a plank door there with the door
+system's lock, key, pick, blows and `effractio` against the owner, and takes it down when the player is more than 60 m away or the wall is
+gone. The cell's exit puts the player before that door. A game saved inside a cell loads inside it and the door is hung (the street primed)
+so the way out exists. A hatch is the same for ground with no wall. No wall found means no door (the cell is still there for the console).
+
+**The Basilica Paulli.** `shops.ts`: the Basilica Aemilia's tabernae are real walk-in shops, so there is no cell; `ctn-arca-aemiliae`
+is set at the iron-banded box the builder draws in the money-changer's shop nearest `tabernae-aemiliae` (`<place>:interior` is that
+box's floor point).
+
+**What stays as it was.** The quests keep to the street: the vendors, Chrysippus, Gratus and Mus stand at the places' street spots,
+`castor-loculi` as a place is still the stretch of paving at the door, and Mus' strongbox and the satchel stay in the street (mq-02).
+The people of the world stay at street level, so nobody is inside a cell to see: picking a chest in a cell is a crime nobody witnesses.
 
 ## Conventions
 

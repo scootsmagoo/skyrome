@@ -77,6 +77,13 @@ export interface ContentService {
   readonly worldSpots: string[];
   /** Container ids placed in the street (the AC-23 count). */
   containerIds(): string[];
+  /**
+   * A container made at run time at a world point (the chest in a generic interior's flat, a house's
+   * strongbox): the same interactable as the placed ones (owner, lock, loot rolled once from the spec's
+   * id, taken and unlocked state in the world deltas), with no stand-in (the cell draws the chest).
+   * Returns the remover; adding the same id again replaces the earlier one's prompt, not its state.
+   */
+  addContainer(spec: ContainerSpec, position: THREE.Vector3Like): () => void;
   dispose(): void;
 }
 
@@ -423,7 +430,13 @@ export class ContainerRuntime {
 
   get emptied(): boolean {
     if (this.spec.store) return false;
-    return this.game.deltas?.isLooted(this.spec.id) === true || this.read().emptied === true;
+    const deltas = this.game.deltas;
+    if (!deltas) return this.read().emptied === true;
+    if (deltas.isLooted(this.spec.id)) return true;
+    // The prompt asks this of every container every frame: without a record nothing was taken, and the fresh roll
+    // (loot rolled from the id) is not worth making just to say so.
+    const d = deltas.get(this.spec.id) as Partial<Stored> | undefined;
+    return d?.items ? d.emptied === true : false;
   }
 
   /** Shut: it has a key or a lock (`spec.locked`) and has not been opened yet (for good, with the key or the pick). */
@@ -461,7 +474,7 @@ export class ContainerRuntime {
     const svc = this.game.lockpick;
     if (!svc || !this.spec.locked) return 'cancelled';
     if (svc.picks > 0) this.reportPicking();
-    const result = await svc.start({ tier: this.spec.locked, label: this.style.label });
+    const result = await svc.start({ tier: this.spec.locked, label: this.spec.label ?? this.style.label });
     if (result === 'opened') this.markUnlocked();
     return result;
   }
@@ -570,7 +583,7 @@ function viewOf(rt: ContainerRuntime): ContainerView {
   const subs = new Set<() => void>();
   const changed = () => subs.forEach((f) => f());
   return {
-    title: rt.style.label,
+    title: rt.spec.label ?? rt.style.label,
     owner: rt.spec.ownerName,
     owned: !!rt.spec.owner,
     items: () => rt.contents().map((c) => ({ itemId: c.id, def: c.def, count: c.count })),
@@ -624,6 +637,10 @@ const CONTAINER_LOOK: Record<ContainerKind, { kind: PlaceableKind; claim: number
 function containerPoint(ctx: Ctx, spec: ContainerSpec): THREE.Vector3 | null {
   const { game, placer } = ctx;
   const style = CONTAINER_LOOK[spec.kind];
+  // In an interior cell: from the cell's own point (its floor, under the world), no probing of the street
+  // above and no stand-in (the cell draws its chests). See ContainerSpec.interior.
+  const cell = spec.interior && typeof spec.at === 'string' ? game.locations?.get(`${spec.at}:interior`) : undefined;
+  if (cell) return new THREE.Vector3(cell.position.x + (spec.dx ?? 0), (cell.position.y ?? 0) + style.h, cell.position.z + (spec.dz ?? 0));
   // On a cart: at the cart's side or tail, outside its blocker (the prompt exists once the cart does).
   if (spec.needs === 'cart' && typeof spec.at === 'string') {
     const cart = ctx.carts.get(spec.at);
@@ -667,10 +684,14 @@ function containerPoint(ctx: Ctx, spec: ContainerSpec): THREE.Vector3 | null {
 }
 
 function addContainer(ctx: Ctx, spec: ContainerSpec): { off: (() => void) | null; runtime: ContainerRuntime } | null {
-  const { game } = ctx;
-  const style = CONTAINER_STYLES[spec.kind];
   const pos = containerPoint(ctx, spec);
   if (!pos) return null;
+  return bindContainer(ctx.game, spec, pos, ctx);
+}
+
+/** The interactable of a container at `pos` (placed ones pass their Ctx for the cart check). */
+function bindContainer(game: Game, spec: ContainerSpec, pos: THREE.Vector3, ctx?: Ctx): { off: (() => void) | null; runtime: ContainerRuntime } {
+  const style = CONTAINER_STYLES[spec.kind];
   const rt = new ContainerRuntime(game, spec, pos);
   if (!game.interactions) return { off: null, runtime: rt };
   const simple = spec.kind === 'moneta-in-fonte' || spec.kind === 'instrumentum-abiectum';
@@ -687,10 +708,10 @@ function addContainer(ctx: Ctx, spec: ContainerSpec): { off: (() => void) | null
     reach: 2.6,
     position: () => pos,
     verb: () => style.verb,
-    label: () => style.label,
+    label: () => spec.label ?? style.label,
     detail: () => (spec.owner ? `Owned: ${spec.ownerName ?? 'someone'}` : rt.locked ? 'Locked' : null),
     illegal: () => !!spec.owner,
-    enabled: () => !rt.emptied && (!spec.needs || (typeof spec.at === 'string' && ctx.carts.get(spec.at)?.ready === true)),
+    enabled: () => !rt.emptied && (!spec.needs || (ctx !== undefined && typeof spec.at === 'string' && ctx.carts.get(spec.at)?.ready === true)),
     interact: (g) => {
       if (rt.locked && !rt.unlock()) {
         // A lock without a matching key can be picked (GDD §14.3); the container opens when it gives.
@@ -1062,6 +1083,10 @@ export function installContent(game: Game): ContentService {
     props,
     worldSpots: [...world],
     containerIds: () => [...ids],
+    addContainer(spec, position) {
+      const bound = bindContainer(game, spec, new THREE.Vector3(position.x, position.y, position.z));
+      return () => bound.off?.();
+    },
     dispose() {
       for (const off of offs.splice(0)) off();
       for (const d of disposers.splice(0)) d();

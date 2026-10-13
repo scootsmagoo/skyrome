@@ -15,6 +15,7 @@ import { Layer } from '../../core/Physics';
 import { MeshBuilder, transformCollider, type ColliderSpec } from '../../gfx/MeshBuilder';
 import type { Interactable } from '../../interaction/Interactions';
 import type { Spot } from '../landmarks/types';
+import { settleAfterTeleport } from '../safeGround';
 import type { InteriorDef, InteriorDoor, InteriorOrigin, Vec3, Where } from './types';
 
 declare module '../../core/Game' {
@@ -247,7 +248,7 @@ export class InteriorSystem implements System {
       if (!this.ensure(id)) return;
       const origin = this.built.get(id)!.origin;
       const world = localToWorld(origin, local);
-      this.game.player?.teleport(world, heading + origin.rotY);
+      this.faceAfter(world, heading + origin.rotY);
       this.setInside(id);
     } finally {
       this.busy = false;
@@ -260,7 +261,13 @@ export class InteriorSystem implements System {
     this.busy = true;
     try {
       await this.fade();
-      this.game.player?.teleport(world, heading);
+      this.faceAfter(world, heading);
+      // A way out that comes up where a building may have streamed in (or the ground is a little off): step clear.
+      try {
+        if (this.game.physics) settleAfterTeleport(this.game);
+      } catch {
+        /* a bare game (tests) has no queries to settle with */
+      }
       this.setInside(null);
     } finally {
       this.busy = false;
@@ -336,6 +343,16 @@ export class InteriorSystem implements System {
     const heading = typeof to.heading === 'function' ? to.heading(this.game) : to.heading;
     if (to.interior !== null) void this.enter(to.interior, pos, heading);
     else void this.leave(pos, heading);
+  }
+
+  /** Put the player at a world point facing `heading`: the camera turns with them (a teleport turns only the body). */
+  private faceAfter(world: Vec3, heading: number): void {
+    const p = this.game.player;
+    p?.teleport(world, heading);
+    if (p && Number.isFinite(heading)) {
+      p.yaw = heading + Math.PI;
+      p.pitch = -0.05;
+    }
   }
 
   private fade(): Promise<void> {

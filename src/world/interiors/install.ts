@@ -11,7 +11,7 @@ import { InteriorSystem } from './InteriorSystem';
 
 type Mod = Record<string, unknown>;
 
-const cellModules = import.meta.glob<Mod>(['./columna.ts', './generic.ts'], { eager: true });
+const cellModules = import.meta.glob<Mod>(['./columna.ts', './generic.ts', './named.ts'], { eager: true });
 
 /** Install the interior service (idempotent). Returns it, also as game.interiors. */
 export function installInteriors(game: Game): InteriorSystem {

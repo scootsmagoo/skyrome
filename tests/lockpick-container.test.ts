@@ -30,7 +30,7 @@ function box(id: string, result: LockpickResult = 'opened', picks = 1, patch: Pa
 
 describe('a locked strongbox without a key', () => {
   it('is shut, has no key to try, and can be picked', () => {
-    const { rt, spec } = box('ctn-arca-armorum');
+    const { rt, spec } = box('ctn-arca-porci');
     expect(spec.locked).toBe('mediocris');
     expect(spec.key).toBeUndefined();
     expect(rt.locked).toBe(true);
@@ -39,7 +39,7 @@ describe('a locked strongbox without a key', () => {
   });
 
   it('opens for good when the minigame says opened', async () => {
-    const { rt, start } = box('ctn-arca-armorum');
+    const { rt, start } = box('ctn-arca-porci');
     expect(await rt.pick()).toBe('opened');
     expect(start).toHaveBeenCalledWith({ tier: 'mediocris', label: expect.any(String) });
     expect(rt.locked).toBe(false);
@@ -48,25 +48,25 @@ describe('a locked strongbox without a key', () => {
 
   it('stays shut after a snapped pick or a walk away', async () => {
     for (const r of ['broken', 'cancelled', 'nopick'] as const) {
-      const { rt } = box('ctn-arca-armorum', r);
+      const { rt } = box('ctn-arca-porci', r);
       expect(await rt.pick()).toBe(r);
       expect(rt.locked).toBe(true);
     }
   });
 
   it('is effractio when someone sees, booked once per container and not before a pick is in hand', async () => {
-    const { rt, commit } = box('ctn-arca-armorum', 'cancelled');
+    const { rt, commit } = box('ctn-arca-porci', 'cancelled');
     await rt.pick();
     await rt.pick();
     expect(commit).toHaveBeenCalledTimes(1);
-    expect(commit).toHaveBeenCalledWith('effractio', expect.objectContaining({ victimId: 'npc-euhodus' }));
+    expect(commit).toHaveBeenCalledWith('effractio', expect.objectContaining({ victimId: 'npc-chreste' }));
     const none = box('ctn-arca-porci', 'nopick', 0);
     await none.rt.pick();
     expect(none.commit).not.toHaveBeenCalled();
   });
 
   it('cannot be picked while the lockpicking system is off', () => {
-    const { rt, rpg } = box('ctn-arca-armorum');
+    const { rt, rpg } = box('ctn-arca-porci');
     rpg.sheet.shippedSystems = new Set(['bleeding']);
     expect(rt.pickable).toBe(false);
   });
@@ -95,6 +95,14 @@ describe('a box with a key and a lock', () => {
 
   it("the Mouse's strongbox opens with its key only", () => {
     const { rt } = box('ctn-cista-muris');
+    expect(rt.locked).toBe(true);
+    expect(rt.pickable).toBe(false);
+  });
+});
+
+describe("Euhodus' strongbox", () => {
+  it('opens with his key only (he never leaves the shop: STORY.md)', () => {
+    const { rt } = box('ctn-arca-armorum');
     expect(rt.locked).toBe(true);
     expect(rt.pickable).toBe(false);
   });

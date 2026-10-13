@@ -12,8 +12,8 @@ import type { MaterialId } from '../../../gfx/materialIds';
 import { Draw } from '../../../arch/fabric/draw';
 import { placeProp } from '../../../arch/props';
 import type { Spot } from '../../landmarks/types';
-import type { InteriorKit, KitBuilt, KitContext, KitDoor, KitLamp, KitPlan } from '../generic';
-import { room, wallRun } from './parts';
+import type { InteriorKit, KitBuilt, KitContainer, KitContext, KitDoor, KitLamp, KitPlan } from '../generic';
+import { chest, room, wallRun } from './parts';
 import * as THREE from 'three';
 
 const RISE = 0.19, RUN = 0.27;
@@ -162,10 +162,26 @@ function build(ctx: KitContext): KitBuilt {
   placeProp(P, 'amphora_tall', ix(0.5), 0, fz1 - 0.4, 0);
   placeProp(P, 'oil_lamp', ix(L.flatW * 0.45), 0.78, doorZ - 0.3, 0);
   lamps.push({ position: { x: ix(L.flatW * 0.45), y: ly + 1.1, z: doorZ - 0.3 }, intensity: 5, distance: 8 });
+  // The tenant's chest against the far wall beside the bed: what the household owns. Half of them are locked
+  // (a simple lock: a child's pick opens it); the richer the building, the better what is inside.
+  const lockRng = new Rng(ctx.seed ^ 0x51ed270b);
+  const cx = ix(L.flatW - 0.4), cz = fz1 - 1.75;
+  chest(d, 'trunk', cx, ly, cz, L.side * (Math.PI / 2));
+  const containers: KitContainer[] = [{
+    id: 'chest',
+    position: { x: cx, y: ly, z: cz },
+    spec: {
+      kind: 'cista-insulae',
+      table: L.wealth > 0.6 ? 'chest.rich' : 'chest.common',
+      owner: `tenant:${ctx.seed}`,
+      ownerName: 'the tenant',
+      locked: lockRng.chance(0.5) ? 'simplex' : undefined,
+    },
+  }];
   spots.push({ id: 'flat', kind: 'spot', position: new THREE.Vector3(ix(L.flatW * 0.5), ly, doorZ + 0.6), heading: 0 } as Spot);
 
   const object = b.build('interior:insula-stair');
-  return { object, colliders: [...b.colliders], spots, lamps, doors };
+  return { object, colliders: [...b.colliders], spots, lamps, doors, containers };
 }
 
 export const insulaStairKit: InteriorKit = {

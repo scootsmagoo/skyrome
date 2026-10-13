@@ -1,4 +1,4 @@
-/** Building parts the interior kits share: rooms (floor, solid floor, ceiling and beams) and wall runs with doorway gaps. */
+/** Building parts the interior kits share: rooms (floor, solid floor, ceiling and beams), wall runs with doorway gaps and chests. */
 import type { MaterialId } from '../../../gfx/materialIds';
 import type { Draw } from '../../../arch/fabric/draw';
 
@@ -11,6 +11,29 @@ export function room(d: Draw, x0: number, x1: number, z0: number, z1: number, y:
   // Ceiling beams.
   for (let x = x0 + 0.6; x < x1 - 0.3; x += 0.9) d.span('wood_dark', x - 0.07, y + h - 0.16, z0, x + 0.07, y + h, z1, { shadow: false });
   return { t, walls, dado };
+}
+
+/** What a chest is made of (`look`: a strongbox of dark wood and iron, a plain trunk, a gladiator's locker). */
+const CHESTS = {
+  strongbox: { body: 'wood_dark', trim: 'iron', size: [0.95, 0.6, 0.6] },
+  trunk: { body: 'wood', trim: 'iron', size: [0.9, 0.55, 0.55] },
+  locker: { body: 'wood', trim: 'iron', size: [0.85, 0.75, 0.5] },
+} as const satisfies Record<string, { body: MaterialId; trim: MaterialId; size: readonly [number, number, number] }>;
+export type ChestLook = keyof typeof CHESTS;
+
+/**
+ * An iron-bound chest standing at (x, y, z) of `d`, its face (the lock plate) toward −z turned by `yaw`; an
+ * oblong box with a lid, two iron bands and a lock plate, colliding. The prompt of its container goes at the
+ * floor point (the kind's height is added by the content module).
+ */
+export function chest(d: Draw, look: ChestLook, x: number, y: number, z: number, yaw = 0) {
+  const c = CHESTS[look];
+  const [w, h, dp] = c.size;
+  const f = d.at(x, y, z, yaw);
+  f.box(c.body, 0, h / 2, 0, w, h, dp, { collide: true });
+  f.box(c.body, 0, h + 0.04, 0, w + 0.04, 0.08, dp + 0.04);
+  for (const bx of [-w / 2 + 0.12, w / 2 - 0.12]) f.box(c.trim, bx, h / 2 + 0.02, 0, 0.06, h + 0.1, dp + 0.05);
+  f.box(c.trim, 0, h - 0.1, -dp / 2 - 0.015, 0.1, 0.14, 0.03);
 }
 
 /** A wall from (x0,z0) to (x1,z1) (axis-aligned), with an optional doorway gap [g0,g1] along it. */

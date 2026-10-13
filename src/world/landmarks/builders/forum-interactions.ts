@@ -98,7 +98,7 @@ export const FORUM_LOOKS: Record<string, Look> = {
   'temple-jupiter-stator': { verb: 'Honour', label: 'Jupiter Stator', line: 'Jupiter the Stayer, who halted the fleeing Romans when Romulus prayed. The temple is old, small and hard to find.' },
   'horrea-agrippiana-genius': { verb: 'Honour', label: 'The Genius of the warehouse', line: 'Warehouse hands leave a bit of bread for the Genius of the place, who keeps the cloth from the moths.' },
   // doors
-  'castor-strongroom': { verb: 'Look inside', label: 'The deposit vaults', line: 'LOCVLI · DEPOSITORVM. A grated door in the podium of Castor: the vaults where Romans leave their money and their documents in the keeping of the gods. The aedituus keeps the key.' },
+  // ('castor-strongroom' is a way in now: src/world/interiors/named/castor.ts, the door of the deposit vaults)
   'castor-weights-office': { verb: 'Look inside', label: 'The standard weights', line: 'The standard weights and measures of the city are kept in the podium of Castor; the aediles inspect the merchants\' scales against them.' },
   'aerarium-door': { verb: 'Look inside', label: 'The Aerarium', line: 'The treasury of the Roman people, in the podium of Saturn. Behind the bronze door lie the standards, the laws on bronze tablets and the public gold.' },
   'carcer-door': { verb: 'Look inside', label: 'The Tullianum', line: 'The state prison is a dark hole beneath the road. Jugurtha, Vercingetorix and the Catilinarian conspirators ended here, and nobody wishes to be reminded.' },

@@ -172,12 +172,13 @@ describe('the city holds to the contract', () => {
     expect(SIDEWALK.road + FLOOR_LIFT).toBeCloseTo(sidewalkTop(LIFT.road), 9);
     expect(SIDEWALK.street + FLOOR_LIFT).toBeCloseTo(sidewalkTop(LIFT.vicus), 9);
     expect(SIDEWALK.other + FLOOR_LIFT).toBeCloseTo(LIFT.piazza, 9);
+    expect(SIDEWALK.lane + FLOOR_LIFT).toBeCloseTo(LIFT.lane, 9);
     // Surfaces that meet differ by well under what a walker feels (a ride-over rise).
     const lifts = Object.values(LIFT).sort((a, b) => a - b);
     for (let i = 1; i < lifts.length; i++) expect(lifts[i] - lifts[i - 1]).toBeLessThanOrEqual(0.03 + 1e-9);
     expect(Math.abs(sidewalkTop(LIFT.road) - sidewalkTop(LIFT.vicus))).toBeLessThanOrEqual(0.03);
-    // Every block edge carries one of the three datums.
-    const allowed = new Set([SIDEWALK.road, SIDEWALK.street, SIDEWALK.other].map((v) => v.toFixed(6)));
+    // Every block edge carries one of the four datums (a lane's is flush with the lane).
+    const allowed = new Set([SIDEWALK.road, SIDEWALK.street, SIDEWALK.lane, SIDEWALK.other].map((v) => v.toFixed(6)));
     const sample = plan.blocks.filter((bl) => bl.kind === 'built').slice(0, 400);
     for (const bl of sample) for (const s of bl.sidewalk) expect(allowed.has(s.toFixed(6)), `${bl.id} ${s}`).toBe(true);
   });

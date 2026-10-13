@@ -12,6 +12,7 @@
  * an owned one is effractio if someone sees. Interior containers (flats, strongboxes, the Ludus lockers) wait for their interiors: they are
  * listed here with `interior: true` and placed only when the world registers the place for them.
  */
+import type { LockTier } from '../rpg/thievery';
 import { onPath } from './route';
 
 export type ContainerKind =
@@ -49,9 +50,15 @@ export interface ContainerSpec {
   /** Opens with this key item; without it the container stays locked. */
   key?: string;
   /** The lock's tier (GDD §14.3): picked with a hamulus in the minigame, and it stays open once opened. */
-  locked?: 'simplex' | 'mediocris';
-  /** Waits for an interior cell: not placed in the street. */
+  locked?: LockTier;
+  /**
+   * Waits for an interior cell: not placed in the street. Placed when the place `<at>:interior` is
+   * registered (the cell's own module does that, src/world/interiors/named): dx and dz are then
+   * metres from that point in the cell's frame (axes as the world's), and the cell draws the chest.
+   */
   interior?: boolean;
+  /** Prompt name, when the kind's own does not fit (a house's strongbox is not "A shop strongbox"). */
+  label?: string;
   /** Sits on a cart (the NPC module's props): the prompt only exists once the cart does. */
   needs?: 'cart';
   /**
@@ -174,10 +181,17 @@ export const CONTAINERS: ContainerSpec[] = [
   { id: 'ctn-cista-mariorum', kind: 'cista-insulae', at: 'insula-mariorum', table: 'chest.common', owner: 'npc-marius-fuscus', ownerName: 'Marius Fuscus', interior: true },
   { id: 'ctn-cista-tuccii', kind: 'cista-insulae', at: 'insula-tuccii', table: 'chest.common', owner: 'npc-florus', ownerName: 'Tuccius Florus', interior: true },
   { id: 'ctn-cista-abdetis', kind: 'cista-insulae', at: 'insula-nutans-tectum', table: 'chest.common', owner: 'npc-syri-nutans', ownerName: 'Abdes', interior: true },
-  { id: 'ctn-arca-armorum', kind: 'arca-tabernae', at: 'taberna-armorum', table: 'strongbox', owner: 'npc-euhodus', ownerName: 'Euhodus', locked: 'mediocris', interior: true },
-  { id: 'ctn-arca-porci', kind: 'arca-tabernae', at: 'popina-vici-tusci', table: 'strongbox', owner: 'npc-chreste', ownerName: 'Vibia Chreste', locked: 'mediocris', interior: true },
+  { id: 'ctn-arca-armorum', kind: 'arca-tabernae', at: 'taberna-armorum', dx: 3.35, dz: 5.5, table: 'strongbox', owner: 'npc-euhodus', ownerName: 'Euhodus', key: 'clavis-arcae-euhodi', interior: true }, // key-only: he never leaves the shop, so it can't be got at (STORY.md)
+  { id: 'ctn-arca-porci', kind: 'arca-tabernae', at: 'popina-vici-tusci', dx: -0.9, dz: 9.45, table: 'strongbox', owner: 'npc-chreste', ownerName: 'Vibia Chreste', locked: 'mediocris', interior: true },
   { id: 'ctn-arca-aemiliae', kind: 'arca-tabernae', at: 'tabernae-aemiliae', table: 'strongbox', owner: 'npc-hermogenes', ownerName: 'Hermogenes', locked: 'mediocris', interior: true },
-  ...[0, 1, 2, 3, 4, 5].map<ContainerSpec>((i) => ({ id: `ctn-cella-ludi-${i + 1}`, kind: 'cella-ludi', at: 'ludus-cellae', dx: (i - 2.5) * 1.2, dz: 0, table: 'locker.ludus', owner: 'ludus-magnus', ownerName: 'a gladiator', interior: true })),
+  // The barracks' six cells, three a side of the passage (src/world/interiors/named/ludus.ts): the locker stands at the
+  // far wall of each, dx the wall's side of the passage, dz the cell's.
+  ...[0, 1, 2, 3, 4, 5].map<ContainerSpec>((i) => ({ id: `ctn-cella-ludi-${i + 1}`, kind: 'cella-ludi', at: 'ludus-cellae', dx: i < 3 ? 3.9 : -3.9, dz: 3.8 + (i % 3) * 3.8, table: 'locker.ludus', owner: 'ludus-magnus', ownerName: 'a gladiator', interior: true })),
+  // The burned taberna's cellar (src/world/interiors/named/collapsa.ts): a scorched chest in the side chamber, nobody's.
+  { id: 'ctn-cista-combusta', kind: 'cista-insulae', at: 'taberna-collapsa', dx: 6.25, dz: 2.8, table: 'chest.common', locked: 'simplex', interior: true, label: 'A scorched chest' },
+  // The deposit chests in the open bays of the strongrooms' passage (src/world/interiors/named/castor.ts). Their key is
+  // Chrysippus' own (CONTENT.md §4.13: not obtainable), so they are for the lockpick.
+  ...[0, 1, 2].map<ContainerSpec>((i) => ({ id: `ctn-loculi-${i + 1}`, kind: 'arca-tabernae', at: 'castor-loculi', dx: 1.35, dz: 6.3 + i * 1.8, table: i === 2 ? 'chest.rich' : 'strongbox', owner: 'castor-loculi', ownerName: 'a depositor', key: 'clavis-loculi', locked: 'difficilis', interior: true, label: 'A deposit chest' })),
 ];
 
 /** Game-metre point of a spec on the golden path (real metres → game), for specs given as `{ d, side }`. */

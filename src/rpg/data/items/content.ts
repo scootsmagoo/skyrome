@@ -45,6 +45,7 @@ export const CONTENT_ITEMS: ItemDef[] = [
   // §4.13 keys
   { id: 'clavis-cellae-muris', name: 'Key to Mus’ Strongbox', latin: 'clavis', type: 'key', weight: 0.05, value: 0, icon: '⚿', tags: ['key'], description: 'A small iron key on a greasy string. It opens the strongbox in the back cellar of the burned taberna.' },
   { id: 'clavis-cloacae', name: 'Ianuarius’ Grate Key', latin: 'clavis cloacae', type: 'key', weight: 0.1, value: 0, icon: '⚿', tags: ['key'], description: 'A heavy bronze key for the drain grate under the shrine of Venus Cloacina, and the gang gate below.' },
+  { id: 'clavis-arcae-euhodi', name: 'Euhodus’ Strongbox Key', latin: 'clavis arcae', type: 'key', weight: 0.05, value: 0, icon: '⚿', tags: ['key'], description: 'A bronze key on a thong round Euhodus’ neck. He sleeps over his shop and never takes it off.' },
   { id: 'clavis-loculi', name: 'Strongroom Key', latin: 'clavis loculi', type: 'key', weight: 0.05, value: 0, icon: '⚿', tags: ['key'], description: 'A key to the deposit chests of the strongrooms of Castor. Chrysippus never lets it out of his sight.' },
   // The Ludus' practice shields (lud-01; GDD §9.2: returned when you leave the Ludus)
   lent('scutum-ludi', 'scutum', 'Ludus Scutum', 'A battered curved scutum from the armory of the Ludus Magnus, stamped LVD·MAG on the rim. Successus wants it back.'),

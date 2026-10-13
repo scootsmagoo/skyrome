@@ -80,7 +80,15 @@ export class GlowSprites {
       fragmentShader: FRAG,
       transparent: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
+      // Additive in colour, and the alpha left alone: three's own additive blend also adds the sprite's alpha (1) to the
+      // framebuffer's, which then sits above 1 where a glow is drawn and the page composites those pixels wrongly (a dark,
+      // blue-tinted disc round every glow seen from close by, on a canvas with an alpha channel).
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      blendSrc: THREE.SrcAlphaFactor,
+      blendDst: THREE.OneFactor,
+      blendSrcAlpha: THREE.ZeroFactor,
+      blendDstAlpha: THREE.OneFactor,
       fog: false,
     });
     this.mesh = new THREE.Mesh(this.geometry, mat);

@@ -14,8 +14,8 @@ import { Draw } from '../../../arch/fabric/draw';
 import { lararium } from '../../../arch/fabric/shrines';
 import { placeProp } from '../../../arch/props';
 import type { Spot } from '../../landmarks/types';
-import type { InteriorKit, KitBuilt, KitContext, KitLamp, KitPlan } from '../generic';
-import { room, wallRun } from './parts';
+import type { InteriorKit, KitBuilt, KitContainer, KitContext, KitLamp, KitPlan } from '../generic';
+import { chest, room, wallRun } from './parts';
 
 const FW = 2.0; // fauces width
 const FL = 4.0; // fauces length
@@ -165,6 +165,21 @@ function build(ctx: KitContext): KitBuilt {
   placeProp(d, 'shelf', -tw / 2 + 0.35, 0, az1 + TD * 0.5, Math.PI / 2);
   placeProp(d, 'stool', 0.3, 0, az1 + TD * 0.55 + 0.8, 0);
   lamps.push({ position: { x: 0, y: 2.4, z: az1 + TD / 2 }, intensity: 4, distance: 6 });
+  // The master's strongbox in the corner behind the desk: the household's coin and papers. Locked by wealth.
+  const sx = tw / 2 - 0.55, sz = az1 + TD - 0.5;
+  chest(d, 'strongbox', sx, 0, sz, 0);
+  const containers: KitContainer[] = [{
+    id: 'arca',
+    position: { x: sx, y: 0, z: sz },
+    spec: {
+      kind: 'arca-tabernae',
+      label: 'The master’s strongbox',
+      table: ctx.wealth > 0.8 ? 'chest.rich' : ctx.wealth > 0.45 ? 'strongbox' : 'chest.common',
+      owner: `household:${ctx.seed}`,
+      ownerName: 'the household',
+      locked: ctx.wealth > 0.8 ? 'difficilis' : 'mediocris',
+    },
+  }];
   spots.push({ id: 'tablinum', kind: 'spot', position: new THREE.Vector3(0, 0, az1 + TD * 0.55 + 0.8), heading: Math.PI });
 
   // ---- triclinium beside it (three couches round a table), or a store room
@@ -200,7 +215,7 @@ function build(ctx: KitContext): KitBuilt {
   }
 
   const object = b.build('interior:domus');
-  return { object, colliders: [...b.colliders], spots, lamps };
+  return { object, colliders: [...b.colliders], spots, lamps, containers };
 }
 
 export const domusKit: InteriorKit = {

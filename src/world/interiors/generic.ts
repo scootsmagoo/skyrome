@@ -17,6 +17,7 @@ import type { LightHandle } from '../lights/LightPool';
 import type { DoorDef } from '../doors/DoorSystem';
 import type { InteriorBuild, InteriorDef, Vec3 } from './types';
 import type { MeshBuilder } from '../../gfx/MeshBuilder';
+import { CONTAINER_STYLES, type ContainerSpec } from '../../content/containers';
 import { KITS } from './kits';
 
 /** What a kit says about a cell before building it (cheap, pure): its box, where you come in and go out. */
@@ -34,20 +35,38 @@ export interface KitLamp {
   color?: number;
   intensity?: number;
   distance?: number;
+  /** 0..1 or true (a torch): the flame wavers (hearths, brazier). */
+  flicker?: number | boolean;
 }
 
 /** A door inside a cell (door system, src/world/doors): its id and frame are local to the cell. */
 export type KitDoor = Omit<DoorDef, 'leadsTo'>;
+
+/**
+ * A container in a cell (a tenant's chest, a house's strongbox): the kit draws it, the content module
+ * makes its prompt once the cell is placed (`game.content.addContainer`). Its world-delta key is
+ * `<cell id>:<id>`, so what was taken or unlocked outlives the cell being dropped and rebuilt.
+ */
+export interface KitContainer {
+  id: string;
+  /** Where its prompt sits, local to the cell (the chest's floor point; the kind's own height is added). */
+  position: Vec3;
+  spec: Omit<ContainerSpec, 'id' | 'at' | 'dx' | 'dz' | 'interior'>;
+}
 
 export interface KitBuilt extends InteriorBuild {
   /** Lamp flames, local to the cell. */
   lamps?: KitLamp[];
   /** Doors that open, lock and break (a tenant's door on the landing). */
   doors?: KitDoor[];
+  /** Chests the player can open (owner, lock and loot as for the street's containers). */
+  containers?: KitContainer[];
 }
 
 export interface KitContext {
   game: Game;
+  /** The cell's id (`gen:<door id>`): the prefix of its containers' ids. */
+  cellId: string;
   builder(): MeshBuilder;
   seed: number;
   /** 0 poor … 1 rich. */
@@ -93,6 +112,8 @@ interface GenericState {
   /** Built cells, oldest first. */
   built: string[];
   lamps: Map<string, LightHandle[]>;
+  /** Removers of the containers' prompts, by cell. */
+  containers: Map<string, (() => void)[]>;
   saveRegistered: boolean;
 }
 
@@ -103,7 +124,7 @@ const viewBefore = new WeakMap<Game, string>();
 function stateOf(game: Game): GenericState {
   let s = states.get(game);
   if (!s) {
-    s = { records: new Map(), built: [], lamps: new Map(), saveRegistered: false };
+    s = { records: new Map(), built: [], lamps: new Map(), containers: new Map(), saveRegistered: false };
     states.set(game, s);
     game.events.on('interior:entered', ({ id }) => touch(game, id));
   }
@@ -159,7 +180,7 @@ function define(game: Game, r: CellRecord): InteriorDef | undefined {
     name: k.name,
     latin: k.latin,
     origin: () => ({ x: r.door.x, y: r.door.y - SINK - r.slot * SLOT_DROP, z: r.door.z, rotY: r.door.rotY }),
-    build: (ctx) => k.build({ game, builder: ctx.builder, seed: r.seed, wealth: r.wealth, plan }),
+    build: (ctx) => k.build({ game, cellId: r.id, builder: ctx.builder, seed: r.seed, wealth: r.wealth, plan }),
     bounds: plan.bounds,
     route: plan.route,
     hiddenOutside: true,
@@ -192,11 +213,16 @@ function define(game: Game, r: CellRecord): InteriorDef | undefined {
       object.updateWorldMatrix(true, false);
       const doors = object.userData.kitDoors as KitDoor[] | undefined;
       if (doors?.length && g.doors) g.doors.attachGroup(r.id, doors.map((dd) => ({ ...dd, id: `${r.id}:${dd.id}`, matrix: object.matrixWorld.clone().multiply(dd.matrix) })));
+      const boxes = object.userData.kitContainers as KitContainer[] | undefined;
+      if (boxes?.length && g.content?.addContainer) {
+        const v = new THREE.Vector3();
+        s.containers.set(r.id, boxes.map((c) => g.content.addContainer({ ...c.spec, id: `${r.id}:${c.id}`, at: r.id, interior: true }, v.set(c.position.x, c.position.y + CONTAINER_STYLES[c.spec.kind].height, c.position.z).applyMatrix4(object.matrixWorld).clone())));
+      }
       const built = object.userData.kitLamps as KitLamp[] | undefined;
       const pool = g.lights;
       if (!built?.length || !pool) return;
       const v = new THREE.Vector3();
-      const handles = built.map((l) => pool.request({ position: v.set(l.position.x, l.position.y, l.position.z).applyMatrix4(object.matrixWorld).clone(), color: l.color ?? 0xffb46b, intensity: l.intensity ?? 10, distance: l.distance ?? 9 }));
+      const handles = built.map((l) => pool.request({ position: v.set(l.position.x, l.position.y, l.position.z).applyMatrix4(object.matrixWorld).clone(), color: l.color ?? 0xffb46b, intensity: l.intensity ?? 10, distance: l.distance ?? 9, flicker: l.flicker }));
       s.lamps.set(r.id, handles);
     },
   };
@@ -206,6 +232,7 @@ function define(game: Game, r: CellRecord): InteriorDef | undefined {
     const b = build(ctx) as KitBuilt;
     b.object.userData.kitLamps = b.lamps ?? [];
     b.object.userData.kitDoors = b.doors ?? [];
+    b.object.userData.kitContainers = b.containers ?? [];
     return b;
   };
   game.interiors.register(def);
@@ -231,6 +258,8 @@ function drop(game: Game, id: string) {
   const s = stateOf(game);
   for (const h of s.lamps.get(id) ?? []) h.remove();
   s.lamps.delete(id);
+  for (const off of s.containers.get(id) ?? []) off();
+  s.containers.delete(id);
   game.doors?.detachGroup(id);
   const obj = game.interiors?.objectOf(id);
   game.interiors?.dispose(id);
