@@ -31,6 +31,7 @@ import * as THREE from 'three';
 import type { Game } from '../core/Game';
 import { Rng } from '../core/Rng';
 import { LANDMARK_BY_ID } from '../data/atlas';
+import type { LockpickResult } from '../game/lockpick';
 import type { Interactable } from '../interaction/Interactions';
 import { rollLoot } from '../rpg/loot';
 import type { ItemDef } from '../rpg/types';
@@ -378,6 +379,8 @@ interface Stored {
   coins: number;
   emptied?: boolean;
   unlocked?: boolean;
+  /** Lockpicking (effractio) has been booked against the owner (once per container). */
+  effracted?: boolean;
   /** The theft has been reported to the law (once per container). */
   reported?: boolean;
 }
@@ -400,7 +403,7 @@ export class ContainerRuntime {
   private read(): Stored {
     const deltas = this.game.deltas;
     const d = deltas?.get(this.spec.id) as Partial<Stored> | undefined;
-    if (d?.items) return { items: d.items.map((i) => ({ ...i })), coins: d.coins ?? 0, emptied: d.emptied, unlocked: d.unlocked, reported: d.reported };
+    if (d?.items) return { items: d.items.map((i) => ({ ...i })), coins: d.coins ?? 0, emptied: d.emptied, unlocked: d.unlocked, effracted: d.effracted, reported: d.reported };
     if (!deltas && this.local) return this.local;
     const loot = rollLoot(this.spec.table, 1, new Rng(`ctn:${this.spec.id}`));
     const fresh: Stored = { items: loot.items.map((i) => ({ ...i })), coins: loot.denarii };
@@ -413,7 +416,7 @@ export class ContainerRuntime {
     // A storage chest (spec.store) is never "emptied" for good: the player keeps putting things in.
     s.emptied = !this.spec.store && s.items.length === 0 && s.coins <= 0;
     if (this.game.deltas) {
-      this.game.deltas.merge(this.spec.id, { items: s.items, coins: s.coins, emptied: s.emptied, unlocked: s.unlocked, reported: s.reported });
+      this.game.deltas.merge(this.spec.id, { items: s.items, coins: s.coins, emptied: s.emptied, unlocked: s.unlocked, effracted: s.effracted, reported: s.reported });
       if (s.emptied) this.game.deltas.markLooted(this.spec.id);
     }
   }
@@ -423,20 +426,60 @@ export class ContainerRuntime {
     return this.game.deltas?.isLooted(this.spec.id) === true || this.read().emptied === true;
   }
 
+  /** Shut: it has a key or a lock (`spec.locked`) and has not been opened yet (for good, with the key or the pick). */
   get locked(): boolean {
     const s = this.read();
-    return !!this.spec.key && !s.unlocked;
+    return (!!this.spec.key || !!this.spec.locked) && !s.unlocked;
   }
 
   /** Try the key: true when it is open now. */
   unlock(): boolean {
-    if (!this.spec.key) return true;
+    if (!this.locked) return true;
+    if (!this.spec.key || !this.game.player?.inventory?.count(this.spec.key)) return false;
+    this.markUnlocked();
+    return true;
+  }
+
+  private markUnlocked() {
     const s = this.read();
-    if (s.unlocked) return true;
-    if (!this.game.player?.inventory?.count(this.spec.key)) return false;
     s.unlocked = true;
     this.write(s);
-    return true;
+  }
+
+  /** Can it be picked: it has a lock, and the lockpicking service and its system are there? */
+  get pickable(): boolean {
+    const shipped = this.game.player?.sheet?.shippedSystems;
+    return !!this.spec.locked && !!this.game.lockpick && (!shipped || shipped.has('lockpicking'));
+  }
+
+  /**
+   * Pick the lock (GDD §14.3): the minigame, then 'opened' unlocks it for good (the world deltas
+   * keep it). Picking an owned container is effractio when someone sees, booked once per container;
+   * it counts as soon as the player really starts (has a pick in hand).
+   */
+  async pick(): Promise<LockpickResult> {
+    const svc = this.game.lockpick;
+    if (!svc || !this.spec.locked) return 'cancelled';
+    if (svc.picks > 0) this.reportPicking();
+    const result = await svc.start({ tier: this.spec.locked, label: this.style.label });
+    if (result === 'opened') this.markUnlocked();
+    return result;
+  }
+
+  private reportPicking() {
+    if (!this.spec.owner) return;
+    const s = this.read();
+    if (s.effracted) return;
+    s.effracted = true;
+    this.write(s);
+    const pop = (this.game as unknown as { population?: { witnesses?(p: THREE.Vector3Like, r?: number): string[] } }).population;
+    let witnesses: string[] = [];
+    try {
+      witnesses = pop?.witnesses?.(this.position, 20) ?? [];
+    } catch {
+      witnesses = [];
+    }
+    this.game.crime?.commit('effractio', { witnessed: witnesses, victimId: this.spec.owner });
   }
 
   contents(): { id: string; def: ItemDef; count: number }[] {
@@ -631,6 +674,14 @@ function addContainer(ctx: Ctx, spec: ContainerSpec): { off: (() => void) | null
   const rt = new ContainerRuntime(game, spec, pos);
   if (!game.interactions) return { off: null, runtime: rt };
   const simple = spec.kind === 'moneta-in-fonte' || spec.kind === 'instrumentum-abiectum';
+  const open = (g: Game) => {
+    g.events.emit('content:opened', { id: spec.id, kind: spec.kind });
+    if (simple || !g.ui?.openContainer) {
+      rt.takeAll();
+      return;
+    }
+    g.ui.openContainer(viewOf(rt));
+  };
   const it: Interactable = {
     id: `container:${spec.id}`,
     reach: 2.6,
@@ -642,15 +693,17 @@ function addContainer(ctx: Ctx, spec: ContainerSpec): { off: (() => void) | null
     enabled: () => !rt.emptied && (!spec.needs || (typeof spec.at === 'string' && ctx.carts.get(spec.at)?.ready === true)),
     interact: (g) => {
       if (rt.locked && !rt.unlock()) {
+        // A lock without a matching key can be picked (GDD §14.3); the container opens when it gives.
+        if (rt.pickable) {
+          void rt.pick().then((r) => {
+            if (r === 'opened') open(g);
+          });
+          return;
+        }
         g.events.emit('rpg:notify', { text: spec.locked && !spec.key ? 'Locked. You have no way to open it.' : 'Locked. It needs a key.', kind: 'info' });
         return;
       }
-      g.events.emit('content:opened', { id: spec.id, kind: spec.kind });
-      if (simple || !g.ui?.openContainer) {
-        rt.takeAll();
-        return;
-      }
-      g.ui.openContainer(viewOf(rt));
+      open(g);
     },
   };
   return { off: game.interactions.add(it), runtime: rt };

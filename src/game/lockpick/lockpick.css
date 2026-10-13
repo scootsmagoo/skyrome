@@ -1,0 +1,78 @@
+/* The lockpicking screen (src/game/lockpick/LockpickScreen.ts): a cross-section of the lock, the lift meter, strain pips, buttons. */
+.lockpick-screen .lp-panel {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(36rem, calc(100vw - 2rem)); max-height: calc(100vh - 1.5rem); overflow: auto;
+  padding: 1.1rem 1.4rem 1.2rem; display: flex; flex-direction: column; gap: 0.7rem;
+  animation: sr-fade-in 0.2s var(--sr-ease) both;
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.lp-title { display: flex; flex-direction: column; align-items: center; }
+.lp-title .en { font-family: var(--sr-display); font-weight: 700; font-size: 1.35rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--sr-gold); text-align: center; }
+.lp-title .la { font-style: italic; color: var(--sr-ink-3); font-size: 1.05rem; }
+.lp-head { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; font-size: 1.05rem; color: var(--sr-ink-2); }
+.lp-head .lp-progress { font-family: var(--sr-display); letter-spacing: 0.08em; font-size: 0.95rem; text-transform: uppercase; }
+.lp-head .lp-picks { font-style: italic; color: var(--sr-ink-3); white-space: nowrap; }
+.lp-pips { display: inline-flex; gap: 0.55rem; align-items: center; }
+.lp-pip { width: 0.7rem; height: 0.7rem; transform: rotate(45deg); border: 1px solid var(--sr-line-strong); background: rgba(0, 0, 0, 0.35); transition: background 0.12s, box-shadow 0.12s; }
+.lp-pip.on { background: var(--sr-bad); border-color: var(--sr-oxblood-2); box-shadow: 0 0 8px rgba(228, 100, 80, 0.7); }
+
+.lp-main { display: flex; gap: 1rem; align-items: stretch; min-height: 0; }
+.lp-lockwrap { flex: 1; min-width: 0; display: flex; align-items: center; }
+.lp-lock { width: 100%; height: auto; display: block; }
+.lp-case { fill: #1a130d; stroke: var(--sr-bronze); stroke-width: 2; }
+.lp-channel { fill: #0b0806; stroke: rgba(214, 176, 98, 0.25); stroke-width: 1; }
+.lp-shaft { fill: #120d09; stroke: rgba(214, 176, 98, 0.18); stroke-width: 1; }
+.lp-boltbar { fill: #6f5230; stroke: var(--sr-gold-2); stroke-width: 1.2; }
+.lp-boltslot { fill: #0b0806; }
+.lp-boltgrip { fill: #8a6a3e; stroke: var(--sr-gold-2); stroke-width: 1; }
+.lp-boltknob { fill: #2b1d10; }
+.lp-bolt { transition: transform 0.45s var(--sr-ease); }
+.lp-bolt.ready .lp-boltbar { stroke: var(--sr-gold); filter: drop-shadow(0 0 4px rgba(230, 198, 126, 0.6)); }
+.lp-pin rect { fill: #a9895a; stroke: #3b2a17; stroke-width: 1; }
+.lp-pin .lp-pinshine { fill: rgba(255, 244, 214, 0.35); stroke: none; }
+.lp-pinbody { transition: transform 0.12s ease-out; }
+.lp-pin.cur .lp-pinbody { transition: none; }
+.lp-pin.cur rect:not(.lp-pinshine) { fill: var(--sr-gold); }
+.lp-pin.set rect:not(.lp-pinshine) { fill: var(--sr-good); }
+.lp-pin.sense rect:not(.lp-pinshine) { fill: #fff1b8; filter: drop-shadow(0 0 5px rgba(255, 230, 150, 0.9)); }
+
+.lp-meterwrap { flex: none; display: flex; align-items: center; }
+.lp-meter {
+  position: relative; width: 2.6rem; height: 11.5rem; border: 1px solid var(--sr-line-strong); border-radius: 0.25rem;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.55), rgba(20, 15, 11, 0.8)); overflow: visible;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+.lp-fill { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(0deg, rgba(155, 116, 64, 0.5), rgba(155, 116, 64, 0.08)); }
+.lp-zone {
+  position: absolute; left: -1px; right: -1px; background: linear-gradient(180deg, rgba(230, 198, 126, 0.5), rgba(230, 198, 126, 0.32));
+  border-top: 2px solid var(--sr-gold); border-bottom: 2px solid var(--sr-gold); box-sizing: border-box;
+}
+.lp-zone.hot { background: rgba(255, 240, 180, 0.85); box-shadow: 0 0 14px rgba(255, 230, 150, 0.9); }
+.lp-mark { position: absolute; left: -0.5rem; right: -0.5rem; height: 0; border-top: 3px solid var(--sr-ink); transform: translateY(1.5px); filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.9)); }
+.lp-mark::before, .lp-mark::after { content: ''; position: absolute; top: -0.45rem; border: 0.4rem solid transparent; }
+.lp-mark::before { left: -0.35rem; border-left-color: var(--sr-ink); border-right-width: 0; }
+.lp-mark::after { right: -0.35rem; border-right-color: var(--sr-ink); border-left-width: 0; }
+.lp-meter.sense { border-color: #fff1b8; }
+
+.lp-status { min-height: 2.6rem; text-align: center; font-size: 1.1rem; line-height: 1.3; font-style: italic; color: var(--sr-ink-2); display: flex; align-items: center; justify-content: center; }
+.lp-status.bad { color: var(--sr-bad); }
+.lp-status.good { color: var(--sr-good); }
+.lp-btns { display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: center; }
+.lp-btns .sr-btn { flex: 1 1 8rem; min-height: 2.9rem; touch-action: none; }
+.lp-btns .lp-lift { flex-basis: 11rem; }
+.lp-btns .sr-btn { gap: 0.35rem; white-space: nowrap; padding-left: 0.7rem; padding-right: 0.7rem; }
+.lp-btns .sr-key { margin-left: 0; }
+.lp-btns .lp-held { border-color: var(--sr-gold); background: linear-gradient(180deg, rgba(125, 31, 26, 0.75), rgba(60, 18, 14, 0.85)); color: var(--sr-gold); }
+.lp-btns .lp-ready { border-color: var(--sr-gold); box-shadow: 0 0 0 1px rgba(230, 198, 126, 0.3), 0 0 14px rgba(230, 198, 126, 0.45); }
+
+@media (max-width: 30rem) {
+  .lockpick-screen .lp-panel { padding: 0.9rem 0.9rem 1rem; gap: 0.55rem; }
+  .lp-main { gap: 0.6rem; }
+  .lp-meter { height: 9.5rem; width: 2.2rem; }
+  .lp-btns .sr-btn { flex-basis: 100%; }
+}
+@media (max-height: 30rem) {
+  .lp-meter { height: 7rem; }
+  .lp-btns .sr-btn { flex-basis: 7rem; min-height: 2.4rem; }
+  .lp-status { min-height: 1.6rem; }
+}

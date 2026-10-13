@@ -31,6 +31,8 @@ import { GameFlow, START_DATE, START_HOUR, TITLE_HOUR, type FlowOptions } from '
 import { registerAtlasLocations } from './locations';
 import { installOptionalModules } from './optional';
 import { installInteriors } from '../world/interiors/install';
+import { installDoors } from '../world/doors/install';
+import { installLockpick } from './lockpick';
 import { shouldWelcome, showWelcome } from './welcome';
 import { FIGHTS, startBout } from './bouts';
 import { applyCheckpoint, checkpoint } from './checkpoints';
@@ -39,9 +41,9 @@ import { guardUnload, registerMarkerResolvers, wireUi } from './wiring';
 
 /**
  * Perk systems that work in v0.1 (§17.1; the rules for these exist in src/rpg): perks needing any
- * other system (stealth, lockpicking, bows, crafting…) are hidden until it ships (§5.5).
+ * other system (stealth, bows, crafting…) are hidden until it ships (§5.5).
  */
-export const V01_SYSTEMS = ['bleeding', 'market-days', 'vows', 'omens', 'fences', 'investments'];
+export const V01_SYSTEMS = ['bleeding', 'market-days', 'vows', 'omens', 'fences', 'investments', 'lockpicking'];
 
 export interface RomeParams {
   quick: boolean;
@@ -107,6 +109,7 @@ export async function startRome(game: Game, uiRoot: HTMLElement, params: RomePar
 
   game.world = game.addSystem(new WorldRegistry(game));
   game.interactions = game.addSystem(new Interactions(game));
+  installDoors(game);
   await buildRome(game, { extent: params.extent, onProgress: (f, label) => loading.progress(0.04 + f * 0.82, label) });
   loading.progress(0.88, 'Fetching the marble');
   await whenTexturesLoaded().catch(() => {});
@@ -132,6 +135,7 @@ export async function startRome(game: Game, uiRoot: HTMLElement, params: RomePar
   installConsole(game, ui);
   guardUnload(flow);
   installInteriors(game);
+  installLockpick(game);
   await installOptionalModules(game);
   installFaces(game);
   const spawn = flow.spawnPoint(params.quick ? params.at : null);

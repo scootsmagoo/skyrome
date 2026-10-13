@@ -33,6 +33,8 @@ const npcs: NpcDef[] = [
         { id: 'scutum', count: 1 }, { id: 'scutum-ovale', count: 1 }, { id: 'parma', count: 1 }, { id: 'parmula', count: 1 }, { id: 'subarmalis', count: 2 },
         { id: 'thorax-coriaceus', count: 1 }, { id: 'lorica-hamata', count: 1 }, { id: 'galea-gallica', count: 1 }, { id: 'galea-italica', count: 1 },
         { id: 'manica-linea', count: 2 }, { id: 'ocreae', count: 1 }, { id: 'fascia', count: 5 },
+        // Under the counter in the bible (CONTENT.md); on the shelf now that picking locks exists (GDD §14.3).
+        { id: 'hamulus', count: 3 },
       ],
       denarii: 500,
     },

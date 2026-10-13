@@ -7,8 +7,9 @@
  * rolls its loot once, and remembers what was taken in the world deltas.
  *
  * Ownership (GDD §12.3, §14.1): taking from an owned container is theft (`furtum`, twice the value)
- * if someone sees. Locks: v0.1 has no lockpicking, so a locked container opens with its key or not at
- * all. Interior containers (flats, strongboxes, the Ludus lockers) wait for their interiors: they are
+ * if someone sees. Locks: a container with a `key` opens with it; one with a `locked` tier (and no key,
+ * or without the key in hand) can be picked with a hamulus (game.lockpick, GDD §14.3), and picking
+ * an owned one is effractio if someone sees. Interior containers (flats, strongboxes, the Ludus lockers) wait for their interiors: they are
  * listed here with `interior: true` and placed only when the world registers the place for them.
  */
 import { onPath } from './route';
@@ -47,7 +48,7 @@ export interface ContainerSpec {
   ownerName?: string;
   /** Opens with this key item; without it the container stays locked. */
   key?: string;
-  /** Locked and picking is not in v0.1 (the bible's `mediocris`/`simplex` locks without a key). */
+  /** The lock's tier (GDD §14.3): picked with a hamulus in the minigame, and it stays open once opened. */
   locked?: 'simplex' | 'mediocris';
   /** Waits for an interior cell: not placed in the street. */
   interior?: boolean;
@@ -114,7 +115,7 @@ export const CONTAINERS: ContainerSpec[] = [
   unowned('ctn-sarcina-astrologi', 'sarcina-abiecta', 'astrologi-circi', 'cache.street', { dx: -5, dz: 3 }),
   unowned('ctn-sarcina-carcerum', 'sarcina-abiecta', 'caupona-carcerum', 'cache.street', { dx: 4, dz: -4 }),
   unowned('ctn-amphora-combusta', 'amphora-stack', 'taberna-collapsa', 'amphora.wine', { dx: 2, dz: 1 }),
-  unowned('ctn-cista-muris', 'cista-muris', 'taberna-collapsa', 'cista-muris', { dx: -2, dz: -2, key: 'clavis-cellae-muris', locked: 'simplex' }),
+  unowned('ctn-cista-muris', 'cista-muris', 'taberna-collapsa', 'cista-muris', { dx: -2, dz: -2, key: 'clavis-cellae-muris' }),
   // the Cloaca's landing (misc-venus-cloacina)
   unowned('ctn-silt-1', 'silt-niche', 'cloaca-maxima-outlet', 'cloaca.silt', { dx: -3, dz: 6 }),
   unowned('ctn-silt-2', 'silt-niche', 'cloaca-maxima-outlet', 'cloaca.silt', { dx: 0, dz: 7 }),
