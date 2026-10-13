@@ -157,7 +157,14 @@ const MAP_FRAGMENT = /* glsl */ `
 #endif
 #ifdef SK_WEATHER
 {
-  vec3 skN = normalize( cross( dFdx( vSkWorld ), dFdy( vSkWorld ) ) );
+  // The wall's own normal, in the world. A normal from screen derivatives of vSkWorld is not steady
+  // hundreds of metres from the origin (float rounding tilts it per 2x2 pixel quad), and skU below
+  // multiplies that tilt by the distance from the origin: the wall patterns broke into static.
+  #ifndef FLAT_SHADED
+    vec3 skN = normalize( ( vec4( vNormal, 0.0 ) * viewMatrix ).xyz );
+  #else
+    vec3 skN = normalize( cross( dFdx( vSkWorld ), dFdy( vSkWorld ) ) );
+  #endif
   float skVert = 1.0 - smoothstep( 0.35, 0.75, abs( skN.y ) );
   // Wall coordinates (metres along the wall, metres up) on steep faces, the ground plane elsewhere.
   vec2 skT = normalize( vec2( -skN.z, skN.x ) + 1e-5 );
