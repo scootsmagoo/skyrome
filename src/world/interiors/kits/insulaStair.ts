@@ -218,7 +218,7 @@ function build(ctx: KitContext): KitBuilt {
   const out = L.side;
   d.span('plaster_white', far + out * 0.6, ly + 0.9, doorZ - 0.7, far + out * 0.62, ly + 1.9, doorZ + 0.7, { shadow: false });
   // Daylight through it: a cool light just inside the window.
-  lamps.push({ position: { x: far - out * 0.6, y: ly + 1.6, z: doorZ }, color: 0xd8e4ff, intensity: 6, distance: 7 });
+  lamps.push({ position: { x: far - out * 0.6, y: ly + 1.6, z: doorZ }, color: 0xd8e4ff, intensity: 6, distance: 7, daylight: true });
   d.span('travertine', far - out * 0.15, ly + 0.85, doorZ - 0.8, far + out * 0.15, ly + 0.92, doorZ + 0.8);
   d.solid(far - 0.15, ly, doorZ - 0.7, far + 0.15, ly + 0.92, doorZ + 0.7);
   d.solid(far + out * 0.3 - 0.15, ly, doorZ - 0.8, far + out * 0.3 + 0.15, ly + CEIL, doorZ + 0.8);

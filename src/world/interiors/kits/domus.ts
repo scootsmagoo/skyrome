@@ -202,9 +202,9 @@ function build(ctx: KitContext): KitBuilt {
     d.span(upper, s * cw / 2 + s * 0.3 - 0.05, H + 0.2, cz - cd / 2 - 1, s * cw / 2 + s * 0.3 + 0.05, H + 2.6, cz + cd / 2 + 1, { shadow: false });
     d.span(upper, -cw / 2 - 1, H + 0.2, cz + s * cd / 2 + s * 0.3 - 0.05, cw / 2 + 1, H + 2.6, cz + s * cd / 2 + s * 0.3 + 0.05, { shadow: false });
   }
-  lamps.push({ position: { x: 0, y: H + 2.2, z: cz }, color: 0xeef3ff, intensity: 12, distance: 5 });
+  lamps.push({ position: { x: 0, y: H + 2.2, z: cz }, color: 0xeef3ff, intensity: 12, distance: 5, daylight: true });
   // Daylight through the compluvium: a cool light under the opening, warm lamps on the walls.
-  lamps.push({ position: { x: 0, y: H - 0.6, z: cz }, color: 0xdfe8ff, intensity: 14, distance: 14 });
+  lamps.push({ position: { x: 0, y: H - 0.6, z: cz }, color: 0xdfe8ff, intensity: 14, distance: 14, daylight: true });
   // The cartibulum (marble table) at the impluvium's far edge, a puteal.
   placeProp(d, 'table_marble', 0, 0, cz + id / 2 + 1.1, 0);
   if (r.chance(0.6)) placeProp(d, 'puteal', iw / 2 + 1.0, 0, cz - id / 2 - 0.6, 0, { variant: 1 });

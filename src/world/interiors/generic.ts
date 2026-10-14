@@ -39,6 +39,8 @@ export interface KitLamp {
   distance?: number;
   /** 0..1 or true (a torch): the flame wavers (hearths, brazier). */
   flicker?: number | boolean;
+  /** Daylight through a window or an opening in the roof: no flame, and it follows the sky (dark at night). */
+  daylight?: boolean;
 }
 
 /** A door inside a cell (door system, src/world/doors): its id and frame are local to the cell. */
@@ -145,6 +147,29 @@ function stateOf(game: Game): GenericState {
   return s;
 }
 
+/** The daylight lamps of the built cells, kept in step with the sky (a window is dark at night). */
+const daylights = new WeakMap<Game, Map<string, { h: LightHandle; base: number }[]>>();
+
+function daylightOf(game: Game): Map<string, { h: LightHandle; base: number }[]> {
+  let m = daylights.get(game);
+  if (!m) {
+    const map = (m = new Map());
+    daylights.set(game, map);
+    let last = -1;
+    game.addSystem({
+      name: 'cellDaylight',
+      update() {
+        if (!map.size) return;
+        const d = Math.round((game.sky?.daylight ?? 1) * 50) / 50;
+        if (d === last) return;
+        last = d;
+        for (const list of map.values()) for (const { h, base } of list) h.setIntensity(base * (0.04 + 0.96 * d));
+      },
+    });
+  }
+  return m;
+}
+
 /** A hash of a door id: the seed of the rooms behind it. */
 export function doorSeed(id: string): number {
   let h = 2166136261;
@@ -229,8 +254,11 @@ function define(game: Game, r: CellRecord): InteriorDef | undefined {
       const pool = g.lights;
       if (!built?.length || !pool) return;
       const v = new THREE.Vector3();
-      const handles = built.map((l) => pool.request({ position: v.set(l.position.x, l.position.y, l.position.z).applyMatrix4(object.matrixWorld).clone(), color: l.color ?? 0xffb46b, intensity: l.intensity ?? 10, distance: l.distance ?? 9, flicker: l.flicker }));
+      const handles = built.map((l) => pool.request({ position: v.set(l.position.x, l.position.y, l.position.z).applyMatrix4(object.matrixWorld).clone(), color: l.color ?? 0xffb46b, intensity: l.intensity ?? 10, distance: l.distance ?? 9, flicker: l.flicker, glow: l.daylight ? 0 : undefined }));
       s.lamps.set(r.id, handles);
+      // Daylight through a window follows the sky (daylightSystem below).
+      const day = built.flatMap((l, i) => (l.daylight ? [{ h: handles[i], base: l.intensity ?? 10 }] : []));
+      if (day.length) daylightOf(g).set(r.id, day);
     },
   };
   // The kit's lamps ride on the object until afterPlace hands them to the light pool.
