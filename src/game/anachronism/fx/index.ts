@@ -23,6 +23,7 @@ import type { CameraRig } from '../../../player/CameraRig';
 import type { GunId } from '../types';
 import { Billboards, Kind } from './billboards';
 import { Debris } from './debris';
+import { Scorches } from './scorch';
 import { GunHand } from './hand';
 import { gunModel, rocketModel, ROCKET_TAIL } from './models';
 import { Streaks } from './streaks';
@@ -79,6 +80,7 @@ export class GunFx implements System {
   readonly fire: Billboards;
   readonly streaks: Streaks;
   readonly debris: Debris;
+  readonly scorch: Scorches;
   private readonly light: FxLight;
   private readonly shake: Shake;
   private readonly lite = isMobileDevice();
@@ -95,10 +97,11 @@ export class GunFx implements System {
     this.fire = new Billboards(lite ? 70 : 140, true);
     this.streaks = new Streaks(lite ? 24 : 48);
     this.debris = new Debris(lite ? 36 : 72);
+    this.scorch = new Scorches(lite ? 6 : 10);
     this.hand = new GunHand(game);
     this.light = new FxLight(game);
     this.shake = new Shake(game);
-    this.group.add(this.smoke.mesh, this.fire.mesh, this.streaks.mesh, this.debris.mesh);
+    this.group.add(this.smoke.mesh, this.fire.mesh, this.streaks.mesh, this.debris.mesh, this.scorch.mesh);
     game.scene.add(this.group);
     const ev = game.events;
     this.offs.push(
@@ -146,6 +149,7 @@ export class GunFx implements System {
     this.fire.update(dt);
     this.streaks.update(dt);
     this.debris.update(dt);
+    this.scorch.update(dt);
     this.updateRockets();
   }
 
@@ -356,6 +360,11 @@ export class GunFx implements System {
     const lite = this.lite;
     const floor = this.groundY(p.x, p.y + 0.5, p.z);
     const h = Math.max(0, p.y - floor);
+    // A scorch on the ground under a blast near it.
+    if (h < 2.5) {
+      const hit = this.game.physics.raycast({ x: p.x, y: p.y + 0.5, z: p.z }, { x: 0, y: -1, z: 0 }, 4, Layer.World);
+      this.scorch.spawn({ x: p.x, y: hit ? hit.point.y : floor, z: p.z }, hit?.normal ?? null, 3.2 * k, rn() * 100);
+    }
     // The fireball: puffs of fire thrown out and swelling, white in the middle and red at the edge.
     const nf = lite ? 9 : 16;
     for (let i = 0; i < nf; i++) {
@@ -438,6 +447,7 @@ export class GunFx implements System {
     this.fire.dispose();
     this.streaks.dispose();
     this.debris.dispose();
+    this.scorch.dispose();
     this.group.removeFromParent();
     if (this.game.gunFx === this) this.game.gunFx = undefined;
   }

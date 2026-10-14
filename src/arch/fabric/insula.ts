@@ -395,6 +395,8 @@ export function insula(spec: InsulaSpec): BuildingOutput {
       cornice(frame, trim, -len / 2 - (len === W ? 0 : T), len / 2 + (len === W ? 0 : T), eave);
       if (timber) timberTop(frame, -len / 2 - (len === W ? 0 : T), len / 2 + (len === W ? 0 : T), floorY(n - 1), eave - 0.3, cutS, timberPlaster);
     }
+    // A blind party wall: what a neighbour that stood (or still stands, lower) left on it.
+    if (!open && !low) partyWall(frame, -len / 2 - (len === W ? 0 : T), len / 2 + (len === W ? 0 : T), yMin, eave, n, floorY, finish === 'brick', drng.fork(`party${side}`));
     // A street-corner aedicula (shrine niche) on the side wall near the front corner.
     if (withShops && !low && drng.chance(0.35)) {
       const lx = side < 0 ? len / 2 - 1.3 : -len / 2 + 1.3;
@@ -687,3 +689,46 @@ function porticoFront(d: Draw, W: number, D: number, pd: number, bays: Bay[], G:
   }
   if (full && rng.chance(0.5)) placeProp(d, 'bench_masonry', bays[0].x1 - 0.2, bays[0].yb, -D / 2 + pd - 0.3, Math.PI, { variant: 0 });
 }
+
+/**
+ * A party wall left bare (its neighbour gone or lower): rows of square putlog holes where the
+ * builders' scaffold poles went (brick walls; plaster covers them), and, often, the ghost of the
+ * house that stood against it: the plaster of its rooms with their red dado, its floor lines with
+ * the joist sockets, and the slope of its roof. Drawn on the outer face (frame z = 0, out is −z).
+ */
+function partyWall(F: Draw, x0: number, x1: number, yMin: number, eave: number, n: number, floorY: (k: number) => number, brick: boolean, rng: Rng) {
+  const z = -0.004;
+  const hole = (x: number, y: number, s = 0.14) =>
+    F.poly('black', [{ x: x - s / 2, y: y - s / 2, z }, { x: x - s / 2, y: y + s / 2, z }, { x: x + s / 2, y: y + s / 2, z }, { x: x + s / 2, y: y - s / 2, z }], { shadow: false });
+  if (brick) {
+    let row = 0;
+    for (let y = Math.max(yMin + 1.4, 1.4); y < eave - 0.6; y += 1.5, row++) {
+      for (let x = x0 + 0.7 + (row % 2) * 0.9; x < x1 - 0.5; x += 1.8) if (rng.chance(0.6)) hole(x, y, 0.12);
+    }
+  }
+  if (!rng.chance(0.75) || n < 3) return;
+  // The ghost: a house of one or two storeys, across part of the wall, with a pitched roof.
+  const storeys = rng.int(1, Math.min(2, n - 2));
+  const top = floorY(storeys + 1) - 0.2;
+  const w = (x1 - x0) * rng.range(0.55, 0.9);
+  const a = rng.chance(0.5) ? x0 + 0.2 : x1 - 0.2 - w;
+  const b = a + w;
+  const g = z - 0.002;
+  const plaster: MaterialId = brick ? (rng.chance(0.5) ? 'plaster_cream' : 'plaster_white') : 'plaster_white';
+  const ridge = top + Math.min(2.2, w * 0.18);
+  F.poly(plaster, [{ x: a, y: Math.max(yMin, 0), z: g }, { x: a, y: top, z: g }, { x: (a + b) / 2, y: ridge, z: g }, { x: b, y: top, z: g }, { x: b, y: Math.max(yMin, 0), z: g }], { shadow: false });
+  // Its rooms: a red dado band on each floor, the floor line and its joist sockets.
+  for (let k = 0; k < storeys; k++) {
+    const fy = k === 0 ? Math.max(yMin, 0) : floorY(k) - 0.1;
+    F.poly('plaster_red', [{ x: a + 0.05, y: fy, z: g - 0.002 }, { x: a + 0.05, y: fy + 0.95, z: g - 0.002 }, { x: b - 0.05, y: fy + 0.95, z: g - 0.002 }, { x: b - 0.05, y: fy, z: g - 0.002 }], { shadow: false });
+    if (k > 0) {
+      F.poly('wood_dark', [{ x: a, y: fy - 0.12, z: g - 0.003 }, { x: a, y: fy, z: g - 0.003 }, { x: b, y: fy, z: g - 0.003 }, { x: b, y: fy - 0.12, z: g - 0.003 }], { shadow: false });
+      for (let x = a + 0.4; x < b - 0.2; x += 0.6) hole(x, fy - 0.25, 0.16);
+    }
+  }
+  // The roof's slope, scarred into the wall.
+  const scar = (p: number, q: number, r: number, t: number) => F.poly('wood_dark', [{ x: p, y: q - 0.06, z: g - 0.003 }, { x: p, y: q + 0.06, z: g - 0.003 }, { x: r, y: t + 0.06, z: g - 0.003 }, { x: r, y: t - 0.06, z: g - 0.003 }], { shadow: false });
+  scar(a, top, (a + b) / 2, ridge);
+  scar((a + b) / 2, ridge, b, top);
+}
+
