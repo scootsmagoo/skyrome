@@ -8,21 +8,23 @@ It's built in the spirit of *Skyrim* and *Oblivion*: a city you can walk anywher
 
 The story opens before dawn on 11 May 113 at the Porta Capena. Trajan's Column is to be dedicated tomorrow. The Pantheon is a construction site after the fire of 110. The emperor is preparing to leave for the Parthian war. You arrive with the last night cart, a courier is knifed beside you, and you're left holding his sealed tablet.
 
-> **Status: playable alpha (10 October 2026).**
+> **Status: playable alpha (14 October 2026).**
 >
 > **You can play:**
-> - Act I's four main quests, start to finish: from the ambush at the Porta Capena to the archer on top of Trajan's Column.
+> - All five chapters of Act I, from the ambush at the Porta Capena to the archer on top of Trajan's Column and Pudens's conspiracy board, then *The Purse*, the first group of plotters in Act II.
 > - Eleven side quests and four repeatable jobs.
 > - A city that keeps its own hours. Shops open and shut, the baths open at the bell, there are dice in the Subura at night and bets on the games at the Colosseum, and notice boards and rumours change every day.
+> - **Doors and interiors.** Stair doors lead up to rented flats and house doors into atrium houses, with people at home who sleep, wake and catch you stealing. Five named places (a popina, an arms shop, the strongrooms of Castor, the Ludus cells, a burned cellar) have their own interiors.
+> - **Locks.** Doors lock by the hour. Open them with a key, pick them in a minigame, or break the bolt.
 > - Street fights, the law, and the gladiator bouts at the Ludus Magnus.
 > - A minimap and a quest route along the streets.
+> - **Phones and controllers.** Touch controls on iPhone and Android, and Xbox and PlayStation pads.
 >
 > **Still rough:**
-> - The story runs through Act I and the first group of Act II: after Pudens shows you the conspiracy board, *The Purse* (the money men) is playable; the other three groups are designed but not built.
+> - The other three groups of plotters in Act II are designed but not built (Chapter 7, *The Eastern Gold*, is written and waiting for review).
 > - Nobody speaks aloud. Dialogue is text, and voices are wordless grunts and cries.
-> - The Column is the only building you can go inside.
 > - NPCs still rub against benches, stalls and statue bases.
-> - The game is heavy on memory, and a second performance pass is next.
+> - The game is heavy on memory, and phones are near their limit.
 >
 > [Where things stand](#where-things-stand) has the full list.
 
@@ -45,7 +47,7 @@ The story opens before dawn on 11 May 113 at the Porta Capena. Trajan's Column i
 
 **https://scootsmagoo.github.io/skyrome/**
 
-Use desktop Chrome or Safari.
+Desktop Chrome or Safari plays best. Phones work too: the iPhone 15 Pro is tested, in Safari, with touch controls (a stick on the left, buttons on the right). Xbox and PlayStation controllers work in Chrome, Safari (on the iPhone too) and Firefox.
 
 - **The plain link** is the test build. It skips the menus and puts you in the Forum at 10 in the morning on 11 May, with a default character and the opening scene skipped, so you can walk about at once.
 - **[`?story=1`](https://scootsmagoo.github.io/skyrome/?story=1)** plays the story from its real opening. It is an hour before dawn, and you ride a wine cart up to the Porta Capena beside a courier who keeps looking back down the road. He starts talking.
@@ -57,6 +59,7 @@ In the story, the gold marker and the line under the compass always show your ne
 - **Move:** W A S D.
 - **Talk, shop, open, use:** E.
 - **Fight:** F attacks (hold it for a power attack), Q blocks, R draws your sword.
+- **Locked door:** E with a lockpick (a *hamulus*) starts the minigame: hold Space or F to lift each tumbler, let go inside the gold zone, then D slides the bolt.
 - **Minimap:** B.
 - **Everything else:** see [Controls](#controls).
 
@@ -64,9 +67,9 @@ Every push to `main` redeploys the site once the tests pass. Hard-refresh (Cmd+S
 
 ## What you can do
 
-### The story: Act I
+### The story
 
-There are four chapters, one after the other, over two days. [docs/STORY.md](docs/STORY.md) has the whole thing.
+Act I has five chapters, one after the other, over three days. Then Act II opens on the conspiracy board, and you choose which group of plotters to go after. [docs/STORY.md](docs/STORY.md) has the whole thing.
 
 | Chapter | Where and when | What happens |
 |---|---|---|
@@ -74,8 +77,10 @@ There are four chapters, one after the other, over two days. [docs/STORY.md](doc
 | 2. *The Sealed Tablet* | The Forum, the Ludus Magnus and the Vicus Tuscus, from dawn to dusk | You meet Chrysippus, keeper of the strongrooms under the Temple of Castor, and Gratus, centurion of the imperial couriers. The trainer Glaucus names the killer. You face the Mouse in a burned taberna and find a Parthian silver coin. At dusk you hand over the tablet, but it is in a cipher. |
 | 3. *Beans for the Dead* | The Velabrum, the night of the Lemuria | Festus's parents and the midnight rite for the dead (Ovid, *Fasti* 5). You find his twin Gemellus hiding at Tryphon's bookshop. He gives you the key, the message decodes, and you warn Gratus. |
 | 4. *One Hundred Feet* | The Forum of Trajan, 12 May | Gratus's briefing, then the dedication of the Column. An arrow comes from the top. You climb 185 steps of spiral stair past two knife-men and face the archer on the platform. You can spare or kill him. Then Pudens, chief of the couriers, summons you. |
+| 5. *The Board* | The Caelian, 13 May | A man follows you up to the couriers' camp. Pudens explains the plot (the real blow is meant for Caesar in October), hires you, and shows you the board: four groups of plotters, three faces each. **End of Act I.** |
+| 6. *The Purse* (Act II) | The Sacred Way, the Basilica Aemilia, the Vicus Tuscus | The money men: a grain contractor, an arms dealer and a banker. Prove each one two ways, find the knives hidden in the army's wheat, and face Avitus. Arrest him, let him run, or kill him. |
 
-After chapter 4 a banner says *Act I continues*: chapter 5, *The Board* (Pudens's offer on 13 May), is designed but not built yet. The calendar keeps running, and the city stays open to you.
+The other three groups (the Eastern Gold, the Dacian Blades and the Toga) come next. The calendar keeps running, and the city stays open to you.
 
 ### Side quests and jobs
 
@@ -126,6 +131,15 @@ These came in the October "living city" work ([`docs/design/world-life.md`](docs
 - **Crafting.** There is a mortar bench at Demetrius's in the Basilica Aemilia (also called the Basilica Paulli), and another in the Ludus infirmary once you've finished *The Oath*. The bench has seven recipes: bandages, posca, poultices, eye salve, a fever draught, a sleeping draught and theriac.
 - **Street life.** When someone cries "Fur!" ("Thief!"), you can run the purse-snatcher down and give the purse back for a small reward. Hawkers sell honey cakes and lupins from their trays.
 
+### Doors, locks and interiors
+
+- **Doors that open.** An insula's stair door and a house's front door swing open on E. Stair doors are open from dawn to 21:00, and house doors for the morning callers until 17:00. After that they're locked.
+- **Behind them.** A stair door leads up to a landing and a rented flat. A house door leads through the entrance passage into the atrium, with its rain basin under the opening in the roof, and on to the bedrooms, the household shrine, the master's office and the dining room. Every door always leads to the same rooms.
+- **People at home.** By night the tenant is asleep in bed; by day the house has a doorkeeper, and the master is at his desk beside the strongbox. Awake people see what you do. Noise wakes sleepers: picking a lock, a snapped pick, forcing a door, rummaging, a fight. A woken tenant reports what they see, and their cry brings the watch from the street.
+- **Locks.** A key opens its lock at once. A lockpick (*hamulus*, sold by Euhodus the arms dealer) starts the minigame, and your Locks & Seals skill and perks widen the zone. Too many slips snap the pick. No pick? A few heavy blows break the bolt, loudly.
+- **Named places.** The Silver Pig popina and Euhodus's arms shop (doors on their street walls, locked out of hours), the strongrooms under the Temple of Castor (a grated door on the podium), the gladiators' cells at the Ludus Magnus (locked at night), and the cellar of the burned taberna (a hatch in the paving).
+- **Crime.** Picking or forcing someone's door or chest is a crime if anyone sees, and so is taking what's inside.
+
 ### Combat and the law
 
 You can attack anyone. Rome answers with bounties, guards and the Carcer. See [Fighting and the law](#fighting-and-the-law).
@@ -150,6 +164,7 @@ You can attack anyone. Rome answers with bounties, guards and the Carcer. See [F
 | Warm-up bout 2: Auctus, a thraex who hooks round your shield | [`?fight=auctus`](https://scootsmagoo.github.io/skyrome/?fight=auctus) |
 | City life with the opening done (notice boards, jobs and side-quest offers are live): the Forum at 08:30 | [`?part=castor`](https://scootsmagoo.github.io/skyrome/?part=castor) |
 | The Subura at night: dice, popinae, lamplit windows | [`?at=subura&hour=21`](https://scootsmagoo.github.io/skyrome/?at=subura&hour=21) |
+| A burglar's night: locked stair doors and sleeping tenants in the Subura (`additem hamulus 5` in the console first) | [`?at=subura&hour=23`](https://scootsmagoo.github.io/skyrome/?at=subura&hour=23) |
 | The Baths of Titus after the bell | [`?at=baths-titus&hour=14`](https://scootsmagoo.github.io/skyrome/?at=baths-titus&hour=14) |
 | The river markets at the Forum Boarium | [`?at=forum-boarium&hour=10`](https://scootsmagoo.github.io/skyrome/?at=forum-boarium&hour=10) |
 | The Ludus Magnus on an ordinary day (no fight) | [`?at=ludus-magnus&hour=10`](https://scootsmagoo.github.io/skyrome/?at=ludus-magnus&hour=10) |
@@ -204,10 +219,12 @@ A bot plays all four chapters end to end (`node scripts/golden-path.mjs`; its la
 | Shops: are they where you'd expect, and is it clear when one is shut? | [`?at=subura&hour=12`](https://scootsmagoo.github.io/skyrome/?at=subura&hour=12) |
 | Quest pacing after the opening: do offers come at a comfortable rate, and never pull you off the main story? | [`?part=castor`](https://scootsmagoo.github.io/skyrome/?part=castor) |
 | The minimap and the route: readable at a glance, and right at every turn? | [`?part=city`](https://scootsmagoo.github.io/skyrome/?part=city) |
+| A phone: do the touch controls feel right? Does five taps on the compass open the console? Does it stay up after ten minutes? | [the plain link](https://scootsmagoo.github.io/skyrome/), on the phone |
+| Lockpicking: is the minigame readable and fair, and does a woken tenant feel fair too? | [`?at=subura&hour=23`](https://scootsmagoo.github.io/skyrome/?at=subura&hour=23) with `additem hamulus 5` |
 
 ### The console
 
-Press **`** (the key left of 1) to open it, as in Skyrim. The game pauses while it's open.
+Press **`** (the key left of 1) to open it, as in Skyrim. **On a phone, tap the compass five times quickly**: the common commands appear as buttons (tap the line to type the rest), and ✕ closes it. The game pauses while it's open.
 - Enter runs a command.
 - ↑ and ↓ recall earlier ones.
 - Tab completes.
@@ -228,7 +245,10 @@ Names are fuzzy-matched. Cheats last until you reload the page.
 | `heal` | Full health and stamina; cures poison, disease and injuries |
 | `additem <item> [n]` | Add an item by id or name: `additem gladius`, `additem scutum`. `items` lists them |
 | `gold <n>` | Add denarii |
-| `sethour <h>` | Change the time of day (`set gamehour to 20` works too) |
+| `additem hamulus 5` | Five lockpicks, for the locks of doors and chests |
+| `anachronism` (or `guns`) | **The cheat nobody asked for: modern guns in AD 113.** You start with a pistol. F fires (hold for the rifle), Q aims over the shoulder, X locks on to the person nearest the crosshair, R switches guns. Infinite ammunition. Rome hears thunder from a clear sky and takes it badly: crowds flee, the urban cohorts come, and killing is still murder. Type it again to put them away. Session only, never saved |
+| `gun <name>` | Take one gun: `gun pistol`, `gun rifle`, `gun shotgun`, `gun rpg` (the rocket bursts over 7 m and throws everyone down, you too). `gun off` holsters it |
+| `sethour <h>` | Move the clock on to the next time it reads that hour (`set gamehour to 20` works too) |
 | `life` | The city's life at a glance: shopkeepers open and shut, today's rumours, any problems |
 | `life keepers` | Every shopkeeper: open, shut ("opens at …") or dead |
 | `life goto <id>` | Stand in front of a shopkeeper or a thing: `life goto vinarius`, `life goto act.subura.board` |
@@ -259,6 +279,9 @@ Names are fuzzy-matched. Cheats last until you reload the page.
   - On the Mouse preset, hold Q to block. On the Trackpad and Keyboard presets, Q toggles block (Esc → Settings → Controls → Blocking). Tap Q just before his blow lands to parry, then strike at once to riposte.
   - Lost? Type `fight nereus` in the console for a rematch.
   - Once you've beaten him the questline is finished, so reload the link to fight him again.
+- **Burgle a flat.** Go to [`?at=subura&hour=23`](https://scootsmagoo.github.io/skyrome/?at=subura&hour=23) and type `additem hamulus 5`. The stair doors are locked for the night: press E on one to pick it. Up the stair, the tenant's door may be locked too. Inside, the tenant is asleep. Sneak (C) to the chest, pick it, and get out before they wake. If they wake and see you, they shout for the watch.
+- **Visit a house.** By day a house door (a studded door between pilasters, often on the Aventine or the Caelian) stands open. The doorkeeper watches you come in. The strongbox is beside the master's desk.
+- **The anachronism.** Type `anachronism`, then `tgm`, then fire into the air in the Forum. Try `gun rpg` on an empty square. It is very loud, and nothing about it is historical.
 - **Getting around fast.** `tcl` and Shift fly you over the city. `coc` jumps between landmarks.
 - **Feel.** Esc → Settings → Gameplay has difficulty, gore, camera shake and hit-stop. Esc → Settings → Interface has the minimap and route options.
 
@@ -291,7 +314,7 @@ Add `&debug` to any URL (or type `tdo` in the console) to show fps, draw calls, 
 The checks the agents run before merging (they need a real browser and a GPU, so they don't run on GitHub):
 
 ```bash
-npm test                              # Vitest, about 2,500 tests
+npm test                              # Vitest, about 2,800 tests
 npm run typecheck
 npm run check:controls                # real key presses in Chromium and WebKit, all three presets
 node scripts/golden-path.mjs          # a bot plays Act I from the cart to the Column
@@ -338,6 +361,8 @@ The game is designed to be fully playable on a Mac trackpad, so every mouse acti
 | Dodge | Option (Alt), or Space in a fight with a weapon drawn |
 | Lock on to an enemy | X (also on its own when you draw a weapon near one). While locked: X or ← → switch targets, hold X to let go; when your target falls, the lock moves to the next one fighting you |
 | Draw or sheathe a weapon · interact · sneak | R · E · C |
+| Pick a lock | E at the lock (you need a *hamulus*). Hold Space, F, Enter or the mouse button to lift the tumbler, and let go while the meter is in the gold zone. When every tumbler is set, D (or →) slides the bolt. Esc leaves |
+| Force a locked door | Hit it with your weapon (power attacks do more). Loud, and a crime if it's someone's door |
 | Minimap | B shows or hides it |
 | Menus | Tab · I inventory · J journal · M map · K skills · Esc pause |
 | Walk · wait | N · T |
@@ -345,8 +370,14 @@ The game is designed to be fully playable on a Mac trackpad, so every mouse acti
 | Use an item · quick wheel · invoke your god | 1–8 (healing first) · G · Z |
 | Give up a fight (to the watch: the arrest talk) | Hold Y |
 | Stuck somewhere? | Esc → I'm stuck |
-| Console (testing) | <code>`</code> (left of 1): `tgm` god mode · `tcl` fly through walls · `coc ludus` teleport · `fight nereus` · `life goto <keeper>` · `help` for the rest |
+| Console (testing) | <code>`</code> (left of 1), or five taps on the compass on a phone: `tgm` god mode · `tcl` fly through walls · `coc ludus` teleport · `fight nereus` · `life goto <keeper>` · `anachronism` guns · `help` for the rest |
+| Guns (the `anachronism` cheat) | F fire (hold for the rifle) · Q aim · X lock on (again: next target; hold: let go) · R switch gun |
 | Check your trackpad and keys | `?scene=inputlab` |
+
+### Phones and controllers
+
+- **Phones.** Touch controls appear by themselves: a movement stick on the left (drag anywhere else to look), and Attack, Block, Dodge, Jump, Use, Draw, Run, Sneak, View and Lock buttons on the right, with Pause, Menu and Map on the left. The lockpicking screen has Lift, Slide and Leave buttons. The iPhone 15 Pro in Safari is the tested phone. Phones get a lighter build of the world (smaller textures, less detail far away), and memory is still tight.
+- **Controllers.** Xbox and PlayStation pads work in Chrome, Safari (on the iPhone too) and Firefox: the sticks move and look, the triggers and face buttons fight, and the d-pad and A/B drive the menus. Prompts on screen switch to the pad's buttons when you pick it up.
 
 ### Fighting and the law
 
@@ -355,7 +386,8 @@ You can attack anyone, anywhere. Your swing turns toward the person nearest wher
 - **Assault and murder.** Striking someone who wasn't your enemy is assault (a 40-denarius bounty). Killing them is murder (1,000) if anyone saw it.
 - **The guards.** Guards nearby fight you. With a bounty on your head, any guard who spots you walks up and says "Stop right there!". You can pay the fine, talk your way out, bribe him, go to the Carcer (days pass), or resist.
 - **A murderer** is attacked on sight. Hold **Y** to give yourself up.
-- **Theft.** Walking off with a purse you took back from a thief is theft, if anyone sees.
+- **Theft.** Walking off with a purse you took back from a thief is theft, if anyone sees. So is taking from someone's chest or strongbox.
+- **Breaking in.** Picking or forcing someone's lock is *effractio* (a 10-denarius bounty) if anyone sees, including a resident you've woken.
 
 It's bloody. A killing cut with a blade can take off a head, an arm or a leg. Blood sprays, stumps pump and the dead bleed into pools. To tone it down, open **Esc → Settings → Gameplay → Gore** and choose Normal or Off.
 
@@ -378,11 +410,11 @@ If a key ever seems dead, open `?scene=inputlab`, press it, and see whether it s
 
   Where photographs or recordings beat code, the game uses public-domain (CC0) material:
   - human bodies from Blender Studio's *Human Base Meshes*;
-  - stone, brick, wood and ground textures from Poly Haven and ambientCG;
+  - stone, wood and ground textures from Poly Haven and ambientCG (the Roman brick and the travertine are drawn in code);
   - recorded sound effects from Kenney and OpenGameArt;
   - sampled instruments for the music from VSCO 2 Community Edition.
 
-  Some sounds are still synthesized: the voices (wordless effort sounds and cries), the bow and sling, a few instrument stingers, and the fire, wind, cicada and cricket beds. Every source is listed under [Credits](#credits).
+  Some sounds are still synthesized: the voices (wordless effort sounds and cries), the bow and sling, a few instrument stingers, the fire, wind, cicada and cricket beds, and (for the cheat) every gunshot and explosion. Every source is listed under [Credits](#credits).
 - **Bodies and clothes come from a Blender script, not by hand.** `tools/characters` (`npm run characters`) runs Blender 5.1 in batch mode:
   - it re-poses the bodies to the game's bind pose and cuts them down to three levels of detail;
   - it bakes the sculpted detail into normal and ambient-occlusion maps (KTX2);
@@ -418,8 +450,8 @@ If a key ever seems dead, open `?scene=inputlab`, press it, and see whether it s
 | Characters | Blender 5.1 in batch mode (`tools/characters`): glTF bodies with three levels of detail, and baked cloth |
 | UI | DOM overlay (HTML and CSS), Cinzel and EB Garamond fonts |
 | Audio | Web Audio API: recorded CC0 effects, sampled instruments, and a few synthesized sounds |
-| Tests | [Vitest](https://vitest.dev) 5: 2,495 tests in 205 files (2,490 pass and 5 are skipped, as of 10 October 2026). Playwright 1.63 drives the real game in Chromium and WebKit for screenshots, controls, performance and the story bot |
-| Targets | Desktop Chrome and Safari on Apple-silicon Macs first. 60 fps, with fewer than about 1,500 draw calls and 3 million triangles in view |
+| Tests | [Vitest](https://vitest.dev) 5: 2,838 tests in 232 files (2,833 pass and 5 are skipped, as of 14 October 2026). Playwright 1.63 drives the real game in Chromium and WebKit for screenshots, controls, performance and the story bot |
+| Targets | Desktop Chrome and Safari on Apple-silicon Macs first. 60 fps, with fewer than about 1,500 draw calls and 3 million triangles in view. Phones (iPhone Safari) get a lighter build |
 
 Why the browser and not Unreal or Bethesda's Creation Engine?
 - Creation isn't licensable outside Skyrim mods.
@@ -433,7 +465,7 @@ The game data and rules are plain TypeScript and could be ported later. [`docs/r
 ```
 src/
   core/        game loop, input, physics wrapper, events, Roman calendar clock, settings, graphics tiers
-  game/        boot, game flow, character creation, story checkpoints, the law
+  game/        boot, game flow, character creation, story checkpoints, the law, lockpicking, the anachronism cheat
   player/      player controller, climbing, first/third-person camera
   actors/      actors, avatars (realistic bodies, heads, cloth), animation, equipment
   ai/          combat brains; NPC navigation, steering and wall avoidance
@@ -442,12 +474,12 @@ src/
   nav/         the quest route on the maps and the ground
   arch/        procedural architecture: classical kit, city fabric, props, vegetation
   gfx/         materials and textures, MeshBuilder, batching and culling, post-processing
-  world/       atlas → terrain, landmarks, city, interiors, water, sky and lighting, Rome assembly
+  world/       atlas → terrain, landmarks, city, doors, interiors (kits, named places, residents), water, sky and lighting
   combat/      combat rules, enemy types, gore
   arena/       the Colosseum games and the Ludus bouts
   rpg/         stats, skills and perks, items, factions, crime, barter, combat math
   quests/ dialogue/ content/ save/   engines and content
-  ui/          HUD (compass, minimap), menus, dialogue, map, title and loading screens
+  ui/          HUD (compass, minimap), menus, dialogue, map, title and loading screens, touch controls
   audio/       Web Audio engine, sound effects, footsteps, ambience, crowd, music
   dev/         the console, debug overlay, geometry audit
   scenes/      rome (the game) and the dev test beds
@@ -461,15 +493,17 @@ scripts/       screenshot driver, story bot, performance budget, leak and soak h
 
 ## Where things stand
 
-Updated 11 October 2026. Act I's five chapters play from start to finish, ending with the conspiracy board, and the city around them is lived in.
+Updated 14 October 2026. Act I's five chapters play from start to finish, ending with the conspiracy board, and the first group of Act II, *The Purse*, follows. The city around them is lived in, and its doors open.
 
 | Area | Status |
 |---|---|
 | Engine: loop, input (Mac trackpad, keyboard extensions like Vimium), physics, first/third-person camera | ✅ Done |
 | Historical atlas, game design document, content bible (NPCs, quests, items) | ✅ Done (the content bible is a first draft) |
 | The story: Act I's five chapters, from the Porta Capena to the top of Trajan's Column and Pudens's board | ✅ Playable end to end (the bot finishes all five) · 🧪 needs human playtesting |
-| Chapter 5, *The Board* (13 May): the follower on the Caelian, the Castra Peregrina, Pudens's offer and the conspiracy board (a Board page in the journal) | 🧪 New, playable, needs human playtesting |
-| Acts II and III | 🚧 Designed, not built |
+| Chapter 5, *The Board* (13 May): the follower on the Caelian, the Castra Peregrina, Pudens's offer and the conspiracy board (a Board page in the journal) | 🧪 Playable, needs human playtesting |
+| Act II: *The Purse* (Chapter 6, [`?part=purse`](https://scootsmagoo.github.io/skyrome/?part=purse)) | 🧪 New, playable, needs human playtesting |
+| Act II: *The Eastern Gold* (Chapter 7) | 📝 Written for review ([docs/STORY.md](docs/STORY.md)), not built |
+| Act II's other groups, and Act III | 🚧 Designed, not built |
 | Side quests (11) and jobs (4) | 🧪 New, playable, pacing and balance under review |
 | City life: about two dozen shops and 4 market-day stalls with hours, baths, barber, laundry, fountains, a pallet and chest, the salutatio, 4 notice boards, the crier, rumours, dice, bets on the games, the mortar bench | 🧪 New, playable, needs play |
 | Navigation: compass and quest marker (fixed), minimap, quest route on the maps, optional trail on the ground | ✅ Done |
@@ -479,7 +513,11 @@ Updated 11 October 2026. Act I's five chapters play from start to finish, ending
 | The city core: Forum, Velia, Colosseum valley, Palatine and Circus, Capitoline and Imperial Fora, river district, Campus Martius, terrain and the Tiber | ✅ Built (detail and density still growing) |
 | Across the Tiber: Trastevere's streets and tenements, garden villas up the Janiculum, Trajan's new aqueduct terminal and its mill race with water wheels, the overgrown Naumachia of Augustus | ✅ Built ([`?at=aqua-traiana-terminus`](https://scootsmagoo.github.io/skyrome/?at=aqua-traiana-terminus)) |
 | The Vatican plain: the Circus of Gaius and Nero, the imperial gardens, the tombs of the Via Cornelia, the Meta Romuli, Trajan's new naumachia | ✅ Built ([`?at=vatican-necropolis`](https://scootsmagoo.github.io/skyrome/?at=vatican-necropolis)) |
-| Interiors | ✅ Trajan's Column (vestibule, chamber, stair, platform) · 🚧 nothing else yet |
+| Interiors | ✅ Trajan's Column · every insula stair (a flat up the stair) and house door (an atrium house), generated per door · five named places (popina, arms shop, Castor strongrooms, Ludus cells, burned cellar) · 🧪 new, needs play |
+| People at home: tenants, doorkeepers and families who sleep, wake and witness | 🧪 New, needs play |
+| Doors and locks: doors that open, lock by the hour and break; the lockpicking minigame; keys | 🧪 New, needs play |
+| Buildings: Roman brick (opus testaceum), weathered plaster, roof terraces and timber top storeys, party walls with the marks of vanished neighbours | ✅ Done |
+| Phones (touch controls, a lighter build) and controllers (Xbox, PlayStation) | ✅ Runs on the iPhone 15 Pro · 🚧 memory is tight |
 | Combat: light chains, power attacks, block/parry/riposte, dodge, lock-on, aim assist; attack anyone | ✅ Done |
 | Gore: blood, and severed heads and limbs (Settings → Gameplay → Gore) | ✅ Done |
 | Crime and the watch: assault and murder bounties, guards, the arrest talk, the Carcer | ✅ Done |
@@ -488,7 +526,7 @@ Updated 11 October 2026. Act I's five chapters play from start to finish, ending
 | Movement: you stay planted on slopes and step up kerbs at an angle | ✅ Done (two steep banks still catch you) |
 | Performance: a budget gate, quiet menus and pause, fewer hitches, a faster boot | ✅ Passes on the developer's M4 Max · 🚧 a second pass is next (phase 3) |
 | Memory: four leaks fixed, the 30-minute soak passes | ✅ No known leaks · 🚧 still about 800 MB of heap in the Forum, to shrink next |
-| Trackpad, Safari and weaker computers | 🧪 Need a human |
+| Trackpad, Safari, phones and weaker computers | 🧪 Need a human |
 
 Measured on the developer's M4 Max ([`docs/research/perf-audit-2026-10.md`](docs/research/perf-audit-2026-10.md)), the October performance pass did the following:
 - **Render submit** (the time to hand a frame to the GPU) fell by a third on High (Forum 9.9 → 6.8 ms) and by 40% on Medium.
@@ -505,7 +543,7 @@ The full plan is in the [Game Design Document](docs/GDD.md) (§17–§18). The v
 |---|---|---|---|
 | v0.0 | *Prima Lux-alpha* | The Forum, the Velia and the Colosseum valley. Street fights and the Ludus Magnus arena with the first boss (Nereus the retiarius). First and third person. Quicksave | ✅ Done |
 | v0.1 | *Prima Lux* | The whole Rome core (Capitoline, Palatine, the Imperial Fora with Trajan's Forum, Circus Maximus, Forum Boarium, Tiber Island). Character creation, crowds with daily schedules, 4 quests, vendors, inventory, journal, map, saves, day and night. The "golden path" | ✅ Largely in: the four quests, the core, vendors and the rest are playable. **← now: playtesting and polish** |
-| v0.2 | *Columna* | Act I of the main quest complete. The Cloaca Maxima and the Carcer. Crime and bounty, stealth, lockpicking, pickpocketing, all 10 origins | 🚧 Partly: Act I's story is in, through Chapter 5 and the board, with crime and bounty. Four of the ten origins are playable (the other six are shown locked). The Cloaca, the Carcer, stealth, locks and pickpocketing come next |
+| v0.2 | *Columna* | Act I of the main quest complete. The Cloaca Maxima and the Carcer. Crime and bounty, stealth, lockpicking, pickpocketing, all 10 origins | 🚧 Partly: Act I's story is in, through Chapter 5 and the board, with crime and bounty, lockpicking, and interiors behind the city's doors. Four of the ten origins are playable (the other six are shown locked). The Cloaca, the Carcer, stealth, seals and pickpocketing come next |
 | v0.3 | *Vigiliae* | The Subura and the Caelian. The Vigiles (fire brigade) and Urban Cohorts questlines. Fires and rooftops | The Subura's streets, shops and dice are in; the questlines are not |
 | v0.4 | *Harena* | The Colosseum interior and hypogeum, the full gladiator career, chariot racing in the Circus | Games and betting at the Colosseum are in, seen from outside; the interior is not |
 | v0.5 | *Urbs* | The whole city as one streamed world: Campus Martius, the Baths of Trajan over Nero's buried Golden House, the Aventine, Trastevere | The whole city already streams as one world; filling it in continues |
@@ -514,10 +552,10 @@ The full plan is in the [Game Design Document](docs/GDD.md) (§17–§18). The v
 | Later | | Ostia and Trajan's new harbor at Portus, the Via Appia and the Alban Hills, Tibur, then the provinces | |
 
 What comes next, in order:
-1. **A playtest** of the city life, the side quests and Chapter 5.
-2. **Act II**: the four groups of plotters on the board (`mq-06` to `mq-09`), each with two ways in. *The Purse* (`mq-06-sacculus`) is built; the Eastern Gold, the Dacian Blades and the Toga come next.
+1. **A playtest** of the city life, the side quests, Chapters 5 and 6, and the new doors and interiors.
+2. **Act II**: the four groups of plotters on the board (`mq-06` to `mq-09`), each with two ways in. *The Purse* (`mq-06-sacculus`) is built; *The Eastern Gold* (`mq-07`) is written and waiting for review; the Dacian Blades and the Toga come after.
 
-Done since this list was written: phase 3 (the second performance pass), phase 4 (solid ground) and Chapter 5, *The Board*.
+Done since this list was written: phase 3 (the second performance pass), phase 4 (solid ground), Chapter 5 *The Board*, Chapter 6 *The Purse*, phones and controllers, and the buildings overhaul (brick, roofs, doors, locks, interiors and their residents).
 
 ## Documentation
 
@@ -530,7 +568,7 @@ Done since this list was written: phase 3 (the second performance pass), phase 4
   - the living city;
   - world life (shops, services, crafting, dice, jobs, side quests);
   - chapter 4 at the Column.
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/modules/`](docs/modules/): code structure and per-module notes (life, nav, movement, interiors, avatar-real and the rest)
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/modules/`](docs/modules/): code structure and per-module notes (life, nav, movement, doors, interiors, avatar-real and the rest)
 - [`docs/research/`](docs/research/): research on topography, landmarks, architecture, Roman society and trades, game design, tech, assets, and the October performance and memory audits
 - [`docs/credits/`](docs/credits/): sources and licences in detail
 - [`CLAUDE.md`](CLAUDE.md): conventions and commands for the AI agents (and humans) working on the code
