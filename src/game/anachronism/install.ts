@@ -34,7 +34,8 @@ export function installAnachronism(game: Game) {
       async run(args, ctx) {
         const want = args[0] === 'off' ? false : args[0] === 'on' ? true : !ctx.game.guns?.armed;
         await guns(ctx.game, want);
-        return want ? 'Anachronism on. F fires, Q aims, X locks on, R switches gun. Rome will not take it well.' : 'Anachronism off.';
+        const how = ctx.game.input.device === 'touch' ? 'Attack fires, Block aims, Lock locks on, Draw switches gun.' : ctx.game.input.device === 'gamepad' ? 'Attack fires, block aims, lock-on locks, ready switches gun.' : 'F fires, Q aims, X locks on, R switches gun.';
+        return want ? `Anachronism on. ${how} Rome will not take it well.` : 'Anachronism off.';
       },
     },
     {

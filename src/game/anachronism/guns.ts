@@ -392,6 +392,10 @@ export class GunSystem implements System {
       '<div style="position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;background:#fff3d6;border-radius:50%;box-shadow:0 0 2px #000"></div>' +
       '<div class="gun-lock" style="position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border:2px solid #e8463a;transform:rotate(45deg);display:none;box-shadow:0 0 3px #000"></div>' +
       '<div class="gun-name" style="position:absolute;right:24px;bottom:96px;font:600 15px/1 var(--font-display, serif);letter-spacing:.12em;text-transform:uppercase;color:#f3e6c8;text-shadow:0 1px 3px #000"></div>';
+    // (on a phone the corner is the touch buttons': the name sits above the stamina bar)
+    const st = document.createElement('style');
+    st.textContent = '@media (pointer: coarse) { .gun-hud .gun-name { right: auto !important; left: 50% !important; transform: translateX(-50%); bottom: 31% !important; } }';
+    hud.appendChild(st);
     document.body.appendChild(hud);
     this.hud = hud;
     this.reticle = hud.querySelector('.gun-lock');

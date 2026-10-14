@@ -1,6 +1,7 @@
 /**
  * The developer console, as in Bethesda's games: ` (the key left of 1) opens it over the paused
- * game, you type `tgm` or `coc ludus` and press Enter, ` or Esc closes it. ↑/↓ recall earlier
+ * game, you type `tgm` or `coc ludus` and press Enter, ` or Esc closes it. On a phone, five quick taps
+ * on the compass open it, with the common commands as buttons and a close button. ↑/↓ recall earlier
  * lines (kept across sessions), Tab completes a command name. Commands: ./commands.ts.
  *
  * Cheats last for the session only (a reload clears them), like `tgm` in Skyrim; they are
@@ -22,6 +23,9 @@ declare module '../../core/Game' {
 const HISTORY_KEY = 'skyrome.console.history';
 const MAX_LINES = 400;
 
+/** The commands a phone gets as buttons (a typed line works too: tap the line to bring up the keyboard). */
+const TOUCH_COMMANDS = ['help', 'tgm', 'anachronism', 'gun rifle', 'gun rpg', 'heal', 'sethour 22', 'sethour 10', 'clearbounty'];
+
 class ConsoleView implements Modal {
   readonly id = 'console';
   readonly el: HTMLElement;
@@ -37,10 +41,28 @@ class ConsoleView implements Modal {
     injectStyle();
     this.log = h('div', { class: 'console-log' });
     this.input = h('input', { class: 'console-input', type: 'text', spellcheck: 'false', autocomplete: 'off', 'aria-label': 'Console command' }) as HTMLInputElement;
-    this.el = h('div', { class: 'console-panel' }, this.log, h('div', { class: 'console-line' }, h('span', { class: 'console-caret' }, '>'), this.input));
+    // On a phone (no keyboard to hand): a close button and a row of the common commands to tap.
+    const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+    const bar = touch
+      ? h(
+          'div',
+          { class: 'console-chips' },
+          ...TOUCH_COMMANDS.map((c) => {
+            const b = h('button', { class: 'console-chip', type: 'button' }, c) as HTMLButtonElement;
+            b.addEventListener('click', () => void this.run(c));
+            return b;
+          }),
+          (() => {
+            const b = h('button', { class: 'console-chip is-close', type: 'button', 'aria-label': 'Close the console' }, '✕') as HTMLButtonElement;
+            b.addEventListener('click', () => this.ui?.close(this));
+            return b;
+          })(),
+        )
+      : null;
+    this.el = h('div', { class: 'console-panel' }, this.log, ...(bar ? [bar] : []), h('div', { class: 'console-line' }, h('span', { class: 'console-caret' }, '>'), this.input));
     this.input.addEventListener('keydown', (e) => this.onInputKey(e));
     this.el.addEventListener('mousedown', (e) => {
-      if (e.target !== this.input) {
+      if (e.target !== this.input && !(e.target as HTMLElement).closest?.('button')) {
         e.preventDefault();
         this.input.focus();
       }
@@ -77,7 +99,8 @@ class ConsoleView implements Modal {
       this.ui?.close(this);
       return;
     }
-    if (e.code === 'Enter' || e.code === 'NumpadEnter') {
+    // (phone keyboards often send an empty code: the key says Enter)
+    if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.key === 'Enter') {
       e.preventDefault();
       const line = this.input.value.trim();
       this.input.value = '';
@@ -121,6 +144,33 @@ export class ConsoleSystem implements System {
     this.view = new ConsoleView((line) => this.exec(line), (p) => table.complete(p));
     this.view.print('Skyrome console. Type help for the commands.');
     game.console = this;
+    this.tapToOpen();
+  }
+
+  /**
+   * A phone has no key left of 1: five quick taps on the compass open the console. The HUD lets
+   * touches through, so the taps are counted where they land (window, capture), never consumed.
+   */
+  private tapToOpen() {
+    if (typeof window === 'undefined') return;
+    const taps: number[] = [];
+    window.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (e.pointerType !== 'touch' || this.isOpen || this.ui.top || this.ui.blocked) return;
+        const c = document.querySelector('.hud-compass');
+        const r = c?.getBoundingClientRect();
+        if (!r || r.width === 0 || e.clientX < r.left || e.clientX > r.right || e.clientY < r.top - 8 || e.clientY > r.bottom + 8) return;
+        const now = performance.now();
+        taps.push(now);
+        while (taps.length && now - taps[0] > 2500) taps.shift();
+        if (taps.length >= 5) {
+          taps.length = 0;
+          this.open();
+        }
+      },
+      { capture: true, passive: true },
+    );
   }
 
   get isOpen(): boolean {
@@ -209,6 +259,11 @@ function injectStyle() {
 .console-row.is-err { color: #ff8f7a; }
 .console-line { display: flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.9rem 0.6rem; border-top: 1px solid rgba(255, 255, 255, 0.08); }
 .console-caret { color: #d6b46a; }
+.console-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; padding: 0.45rem 0.9rem; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.console-chip { font: inherit; font-size: 13px; color: #e9e2d0; background: rgba(214, 180, 106, 0.14); border: 1px solid rgba(214, 180, 106, 0.45);
+  border-radius: 999px; padding: 0.35rem 0.75rem; min-height: 2rem; }
+.console-chip:active { background: rgba(214, 180, 106, 0.32); }
+.console-chip.is-close { margin-left: auto; padding: 0.35rem 0.8rem; }
 .console-input { flex: 1; background: transparent; border: 0; outline: 0; color: inherit; font: inherit; caret-color: #d6b46a; }
 `;
   document.head.appendChild(h('style', {}, css));
