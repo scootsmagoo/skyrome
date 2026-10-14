@@ -327,8 +327,124 @@ This is the story as the player meets it. `docs/GDD.md` §10 is the design of th
 - Avitus's sealed bays and his counting-room: doors on the court of the Horrea Agrippiana, so no new interior cell is needed.
 - **Euhodus's and Hermogenes' greetings change** once they're unmasked: Euhodus is curt, and Hermogenes' table is "closed for accounts" for a day.
 
+## Chapter 7: The Eastern Gold (`mq-07-aurum-parthicum`)
+*The Sacred Way, the Circus Maximus, the Subura and the Caelian. From 13 May AD 113, at the player's own pace.*
+
+*Status: written for review, not built.*
+
+**What this chapter does.** It is the second group on Pudens's board: where the Parthian silver comes from, and who in the couriers' camp is selling their secrets.
+- Three men, as on the board:
+  - **Malchus son of Iarhai, of Palmyra**, a wholesaler of pepper and silk at the Horrea Piperataria (the Pepper Warehouses, on the Sacred Way). He is "the man with Syrian rings who smelled of pepper" from Chapters 2 and 4.
+  - **Asclepiodotus the Chaldaean**, an astrologer from Seleucia who reads the stars for great houses.
+  - **Mardonius**, the friendly courier at the camp gate. He is the leak.
+- The player proves each man two ways, as in Chapter 6.
+- The chapter ends under the Subura, in a cave of the god Mithras, where the three meet. The player decides what happens to Mardonius.
+- It answers a question from Act I: who sold Festus's road.
+
+**How the gold moves** (what the player works out):
+1. Parthian silver comes west with the caravans to Palmyra. Malchus's agents pack it into the bottom of pepper sacks. The customs men weigh pepper; nobody digs to the bottom of a pepper sack.
+2. In Rome, Malchus sells the silver by weight to Hermogenes (Chapter 6: "as for the others").
+3. Orders from the East travel with the silver, written as star tables. Only an astrologer has a reason to own them, and only Asclepiodotus can read them. He passes them on.
+4. Mardonius tells them what the couriers know. He sold Festus's road in March. They meet where no one asks questions: at the night feasts of a Mithras cave, where the members are soldiers and nobody gives his real name.
+
+**What the player already has**, and where it is used:
+
+| Clue | From | Used here |
+|---|---|---|
+| "A man with Syrian rings who smelled of pepper" | Mus (Ch. 2) and Bitus (Ch. 4) | Leads to Malchus |
+| The Parthian silver drachm | Ch. 2, given back in Ch. 6 | Malchus knows it at sight |
+| Told Mardonius what the archer said | Ch. 5 choice | Mardonius sets a trap (step 6) |
+| Hermogenes unmasked (Ch. 6, if played) | Ch. 6 | Lycus's tablets name "the Palmyrene" |
+| Gemellus, Festus's twin, reads ciphers | Ch. 3 | He reads the star tables |
+
+**The board.** Each man proven is one face unmasked; all three break **The Eastern Gold**.
+
+1. **The lead.** The player picks this group:
+   - **Ask Pudens about the Eastern Gold.** "The silver, and the pepper. Gratus asked questions at the Pepper Warehouses and took an arrow for it a week later. Somebody there didn't like his questions. Go and smell some pepper." He adds, quietly: "And mind what you say in this camp. Someone here talks."
+   - **Or walk into the Horrea Piperataria** with the drachm and ask about Syrian silver.
+   - **Objective:** **Find the man with Syrian rings.** The marker points to the Horrea Piperataria.
+
+2. **The Pepper Warehouses.** The air is thick with pepper, cinnamon and nard. The warehouse clerk points the player to the man everyone knows:
+   - "Rings on every finger? That's Malchus, the Palmyrene. Pepper by the shipload, silk by the bolt. He's the only one here who never haggles."
+   - **Malchus** is charming, generous, and a little too pleased to see a stranger: "A friend of a friend? Everyone in Rome is a friend of a friend." He offers the player a cup of spiced wine and a job carrying a parcel, which is his way of finding out what the player wants.
+   - **Objective:** **Prove what Malchus brings in under the pepper.** Two more appear once the player has met him, in any order:
+     - **Find the Chaldaean who reads Malchus's letters.** Malchus mentions him without meaning to: "My stars? A man from Seleucia reads them. He's the only one in Rome who can."
+     - **Find out who in the couriers' camp is talking.** The Lycus tablets (Ch. 6) or Malchus's ledger (below) show payments "to the Lion". Nobody knows yet who that is.
+
+3. **Malchus, the merchant.** Two ways to prove him:
+   - **The pepper (Mercatura).** Look at his prices. With a Mercatura check the player sees he sells pepper below what it costs in Alexandria: "A man who sells at a loss makes his money somewhere else." Then cut open one of his sacks in his storeroom bay (by day with the clerk distracted, or at night). Under a hand's depth of pepper there are drachms, the same silver as the player's.
+   - **His strongbox (Locks & Seals).** His storeroom bay has a locked door and a strongbox (the lock-picking from the buildings update). At night, pick both. Inside: a bag of Parthian drachms and his ledger. The ledger is in Greek: "To H. (Hermogenes), silver by weight. To the Lion, 500, for the road in March."
+     - Picking a lock while someone watches is a crime, as anywhere.
+   - Either way: **Malchus is unmasked.**
+
+4. **Asclepiodotus, the Chaldaean.** He reads for great houses, by appointment, in a fine upper flat on the Clivus Victoriae (the Palatine slope). Two ways to find him and prove him:
+   - **Zenon.** The astrologer Zenon at the Circus arcade does the copying for other astrologers. With Rhetoric or Intimidation he admits it: "I copy tables for a Chaldaean from Seleucia. He pays in Syrian silver. And one of the nativities I copied was… Caesar's." Casting the emperor's stars is treason. Zenon gives the player the address and a copy of the strangest table.
+   - **Buy a reading.** Go to Asclepiodotus as a client: 50 denarii, or Rhetoric to be seen without a patron's letter. While he reads the player's stars he is called out of the room for a moment. On his table lies a nativity of Caesar, with the month of October marked and one word in Greek: "the departure". The player can take it (a crime if seen) or remember it.
+   - **The cipher.** The star tables are not about stars. Either table, the copy or the original, goes to **Gemellus** at Tryphon's bookshop. Festus's twin reads ciphers for pleasure. "Planets for letters. Schoolboys' trick, very old. It says: *October. The courier will say which gate.*"
+   - **Asclepiodotus is unmasked** once the player has the table and Gemellus has read it.
+
+5. **Mardonius, the courier** ("the Lion"). Two ways to prove him:
+   - **The cave of Mithras.** Gratus (in the camp infirmary) or the gate guard mentions that Mardonius "never misses the god's feasts. He's a Lion, they say, whatever that means. Goes down under the Subura every seventh night."
+     - The player finds the **Mithraeum**: a cave fitted into the cellar of an insula off the Vicus Patricius, behind a plain door with a raven scratched on it. Its keeper is the **Father** of the cave, **Cassius Ursus**, an old centurion and an honest man.
+     - The Father is suspicious of strangers. With Rhetoric, or by showing Pudens's ring, he talks. He is angry: "Mardonius brought guests to the god's table: a Syrian with rings and a Chaldaean. Strangers. Uninitiated. And now I hear men in the Forum calling Mithras a Persian god, a god for traitors." The cave is being used, and the cult will be blamed.
+     - He tells the player when the next feast is (the next night) and promises to let them in.
+   - **His locker (Locks & Seals).** In the camp's barracks, Mardonius keeps a locked box. At night, pick it. Inside: a letter in the planet cipher (Gemellus reads it: "Festus comes by the Appian Way on the eleventh, at dawn, to the Capena gate") and a purse of drachms. This is proof that he sold Festus's road.
+   - Either way: **Mardonius is unmasked.**
+
+6. **The feast.** When all three are unmasked, the objective is: **Go down to the cave of Mithras at night.**
+   - **If the player told Mardonius what the archer said in Chapter 5,** Mardonius knows they are close. Two hired knives wait on the stair down to the cave. They fight to the death. The Father: "He's sent men to my door. To the god's door."
+   - **The cave.** A long, low vault with benches on both sides, lamps, and at the far end a painted relief of Mithras killing the bull. Mardonius, Malchus and Asclepiodotus sit apart from the soldiers.
+   - **Mardonius talks first.** He is not ashamed: "Fifteen years carrying other men's letters. Antioch, Alexandria, Rome. Who thanked me? The man who pays for the war has never ridden in one. The men in the East pay better, and they pay on time." And about Festus: "I sold a road. I didn't hold the knife."
+   - **The soldiers turn.** The Father stands up. The initiates are soldiers too, and they are on the player's side. Mardonius draws a knife.
+   - **The fight.** Mardonius fights well. Malchus runs for the stair (the player can catch him or let him go). Asclepiodotus stays seated and asks for a lamp: "I've seen this in the stars. Not tonight, I thought."
+   - **The choice**, when Mardonius yields:
+     - **Take him to Pudens.** The leak, alive. He knows the name of the praetorian who gave the Column's plan, the first face of **The Toga** (a clue on the board).
+     - **Leave him to the Father.** The cult judges its own. He is gone by morning, and nobody says where. It is never shown.
+     - **Kill him.** Murder in the city is a crime, though no soldier here will report it.
+   - **Asclepiodotus** is arrested by Pudens's couriers either way. Casting Caesar's stars is treason, and he is more use alive.
+   - **Malchus**: caught, he is taken to the camp; if he ran, he is gone to Ostia and the East, and Pudens "will find him in Antioch, in a year".
+
+7. **Pudens** (the camp, by day).
+   - **Objective:** **Report to Pudens.**
+   - He listens to the end. For once he doesn't reach for a fig. "One of mine. Fifteen years." Then: "The Capena gate, at dawn. Festus told me that himself, in a letter only I read. So Mardonius read my letters too."
+   - **On Mardonius:**
+     - Brought in: "He'll talk. They all do, eventually. And I'll be the one listening."
+     - Left to the Father: "The god's justice. Fine. It's faster than mine."
+     - Dead: "Then we'll never know who else he sold."
+   - **On "which gate"** (from the cipher): "October. They still need to know the route Caesar will take out of the city. That's what Mardonius was for. Someone else will try to find it now."
+   - **Rewards:** 150 denarii; skill XP in Rhetoric, and Locks & Seals or Mercatura for the ways the player took; the board marks **The Eastern Gold: broken** and **In the camp: the leak** solved.
+
+8. **Done.** Banner: **The Eastern Gold is broken**: "Two of four. Pudens wants three."
+
+**What changes in code and docs:**
+- **New interiors** (with the interior system from the buildings update):
+  - the **Mithraeum**, a named cell under an insula off the Vicus Patricius: the vault, benches, lamps, the painted bull-slaying, a raven door;
+  - **Asclepiodotus's flat** on the Clivus Victoriae: a reading room with a table of star tables, an anteroom;
+  - **Malchus's storeroom bay** at the Horrea Piperataria: a locked door and a strongbox (door system and lock-picking);
+  - **the couriers' barracks** at the Castra Peregrina: a row of lockers, one of them Mardonius's.
+- **The board** gets: Malchus's ledger, the star table, Gemellus's reading, Mardonius's letter, his fate, and under **The Toga**, "the praetorian who gave the Column's plan" (if Mardonius is taken alive).
+- **Mardonius** stays essential until this chapter; his greeting at the gate changes after he is unmasked (he is gone from the gate).
+- **Zenon**'s dialogue gets the Chaldaean lines (his own side quest, *The Emperor's Horoscope*, can come later and fits around this).
+
+**New people:**
+- **Malchus son of Iarhai**, of Palmyra, the pepper merchant.
+- **Asclepiodotus**, the Chaldaean.
+- **Cassius Ursus**, the Father of the Mithras cave, and a few initiates (soldiers).
+- **The clerk** of the Horrea Piperataria.
+- Two hired knives (only if the player told Mardonius in Ch. 5).
+
+**History notes.**
+- **Mithras in Trajan's Rome.** The cult was young in Rome but present among soldiers and the imperial household; a Trajanic dedication to Mithras by Alcimus, a slave of the praetorian prefect Ti. Claudius Livianus, survives (CIL VI 718). Statius already describes the god "under the rocks of the Persian cave" (*Thebaid* 1.719–20, c. AD 92). The grades of initiation (Raven, Lion, Father…) are attested later; the chapter uses only "Lion" and "Father", lightly.
+- **Palmyrenes in Rome.** Palmyrene merchants dedicated a shrine in Trastevere by AD 102. Pepper was stored in Domitian's Horrea Piperataria on the Sacred Way.
+- **Astrologers and treason.** Casting the emperor's horoscope was *maiestas*; astrologers were expelled from Rome again and again.
+
+**Questions for the owner:**
+1. Should the player be able to be **initiated** into the Mithras cave (a short ritual: the Raven's grade), as a third way to reach the feast?
+2. Is **Gemellus** reading the cipher a good return for him, or should he stay offstage?
+3. The fate of Mardonius: are the three choices right, or should "leave him to the Father" be cut (it's the most mysterious)?
+
 ## What comes next (designed, not built)
-- **Act II, The Board:** the other three groups of plotters, in any order (`mq-07` to `mq-09`): the Eastern Gold, the Dacian Blades and the Toga. Each has at least two ways in (`GDD.md` §10.2). The three dated set pieces follow (`mq-10` to `mq-12`).
+- **Act II, The Board:** the other groups of plotters, in any order (`mq-08` and `mq-09`): the Dacian Blades and the Toga. Each has at least two ways in (`GDD.md` §10.2). The three dated set pieces follow (`mq-10` to `mq-12`).
 
 ## Side threads in reach of Act I
 - ***The Oath*** (Ludus Magnus): sign on as a guest and fight three practice bouts, the last against Nereus. It's offered by Glaucus, and it's optional.
