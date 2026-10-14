@@ -10,7 +10,7 @@
 import type { Rng } from '../core/Rng';
 import type { DayPhase } from './crowd/budget';
 
-export type BarkKind = 'greet' | 'ambient' | 'shoved' | 'dazed' | 'dropped' | 'weapon' | 'flee' | 'gawk' | 'guard' | 'brushoff' | 'vendor' | 'crime' | 'sordidus' | 'lautus';
+export type BarkKind = 'greet' | 'ambient' | 'shoved' | 'dazed' | 'dropped' | 'weapon' | 'thunder' | 'flee' | 'gawk' | 'guard' | 'brushoff' | 'vendor' | 'crime' | 'sordidus' | 'lautus';
 
 type Table = Record<string, readonly string[]>;
 
@@ -279,6 +279,18 @@ const SHOVED_SLAVE: readonly string[] = ['Pardon, domine!', 'My fault, my fault.
 const DAZED: readonly string[] = ['Ugh… my head.', 'Ow. Ow, ow.', 'Hercle, what hit me?', 'Did you see that? Madman!', 'Who runs like that in a crowd?', 'Ecastor, my back.'];
 const DROPPED: readonly string[] = ['My goods! Hold on.', 'Look at that mess.', 'All over the street!', 'Mine, mine — leave it be!'];
 
+/** A gunshot (the anachronism cheat, game/anachronism): thunder out of a clear sky, in the hand of a man. */
+const THUNDER: readonly string[] = [
+  'Jupiter’s thunder! In his hand!',
+  'Sorcery! Get the Vigiles!',
+  'What is that thing? What IS it?',
+  'Thunder from a clear sky. That’s an omen. That’s a terrible omen.',
+  'He’s got the lightning! Run!',
+  'Di immortales, my ears!',
+  'Is it a Chaldaean trick? Somebody fetch a priest!',
+  'Mother of the gods, protect us!',
+];
+
 const WEAPON: readonly string[] = [
   'Put that away! This is the Forum, not the arena!',
   "Watch! Watch! Somebody's drawn steel!",
@@ -366,6 +378,8 @@ export function barkLines(ctx: BarkContext): readonly string[] {
       return DROPPED;
     case 'weapon':
       return WEAPON;
+    case 'thunder':
+      return THUNDER;
     case 'flee':
       return FLEE;
     case 'gawk':

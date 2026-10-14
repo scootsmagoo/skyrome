@@ -69,6 +69,7 @@ export class GunSystem implements System {
   private aimBlend = 0;
   private savedZoom = NaN;
   private alarmAt = -1e9;
+  private thunderAt = -1e9;
   private lockDownAt = -1;
   private rockets: Rocket[] = [];
   private rocketSeq = 0;
@@ -322,7 +323,22 @@ export class GunSystem implements System {
     // Recoil: the muzzle climbs (a lock pulls it back).
     p.pitch = Math.min(1.2, p.pitch + gun.recoil * (this.aiming ? 0.6 : 1));
     p.yaw += (this.rng() - 0.5) * gun.recoil * 0.4;
+    this.thunder(muzzle);
     this.alarm(muzzle, gun.rocket ? 45 : 32);
+  }
+
+  /** Nobody in Rome has heard this before: someone near says what they think it is (before the crowd's cries take the street). */
+  private thunder(at: THREE.Vector3Like) {
+    const g = this.game;
+    const pop = (g as unknown as { population?: { near?(p: THREE.Vector3Like, r: number): unknown[]; bark?(n: unknown, kind: 'thunder', urgent?: boolean): boolean } }).population;
+    if (g.elapsed - this.thunderAt < 3 || !pop?.near || !pop.bark) return;
+    const near = pop.near(at, 22);
+    for (let i = 0; i < near.length; i++) {
+      if (this.rng() < 0.6 && pop.bark(near[i], 'thunder', true)) {
+        this.thunderAt = g.elapsed;
+        return;
+      }
+    }
   }
 
   /** A gunshot is the loudest thing in Rome: everyone near takes fright (throttled). */
