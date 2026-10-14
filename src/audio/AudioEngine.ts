@@ -305,7 +305,7 @@ export class AudioEngine implements System {
       'ui.click', 'ui.hover', 'ui.open', 'ui.close', 'swing.medium', 'swing.fast', 'clash.metal', 'block.shield', 'hit.flesh',
       'vox.grunt.m', 'vox.pain.m', 'vox.effort.m', 'body.fall', 'stinger.questStart', 'stinger.questComplete', 'stinger.levelUp', 'stinger.discover',
     ];
-    const rest = [...SOUNDS.values()].filter((d) => d.kind === 'oneshot' && !first.includes(d.id)).map((d) => d.id);
+    const rest = [...SOUNDS.values()].filter((d) => d.kind === 'oneshot' && !d.onDemand && !first.includes(d.id)).map((d) => d.id);
     for (const id of [...first, ...rest]) this.prepare(id, false);
   }
 

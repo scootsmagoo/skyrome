@@ -11,6 +11,7 @@
  * allocated per shot or per frame. `installGunFx(game)` is idempotent; `game.gunFx` is the service.
  */
 import * as THREE from 'three';
+import { gunSounds } from '../../../audio/sounds/guns';
 import type { Game, System } from '../../../core/Game';
 import { Layer } from '../../../core/Physics';
 import { isMobileDevice } from '../../../core/graphics';
@@ -453,6 +454,8 @@ export function installGunFx(game: Game): GunFx {
   const fx = new GunFx(game);
   game.gunFx = fx;
   game.addSystem(fx);
+  // The gunshots are left out of the boot's pre-bake (onDemand): bake them now, in the background.
+  for (const d of gunSounds) game.audio?.prepare(d.id, false);
   return fx;
 }
 

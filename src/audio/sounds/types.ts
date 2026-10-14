@@ -31,6 +31,8 @@ export interface SoundDef {
   variants: number;
   /** Bake sample rate (Hz). Default 32000; beds with little high end use less. */
   rate?: number;
+  /** Not pre-baked at boot (a cheat's sounds: they bake when the cheat asks, see AudioEngine.prepare). */
+  onDemand?: boolean;
   /** Mix level in dB applied at playback. */
   gainDb?: number;
   /** Max simultaneous voices of this sound (oldest is stolen). Default 6. */

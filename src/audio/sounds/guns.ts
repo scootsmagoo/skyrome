@@ -139,7 +139,8 @@ function bakeDryfire(c: BakeContext) {
   return out;
 }
 
-const base = { bus: 'sfx' as const, kind: 'oneshot' as const, group: 'Guns', reverb: 0.3 };
+// onDemand: baked when the cheat comes on (fx/index.ts), not at every boot.
+const base = { bus: 'sfx' as const, kind: 'oneshot' as const, group: 'Guns', reverb: 0.3, onDemand: true };
 /** A gun is heard from far off: its report carries across the city. */
 const loud = { ref: 3, max: 420, rolloff: 0.8 };
 
