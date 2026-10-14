@@ -118,7 +118,9 @@ await page.evaluate(([home, dieEvery]) => {
     if (game.flow && game.flow.state !== 'playing') return; // loading, spawning: nothing to steer
     // A fight every ~3 minutes: a mugger right ahead, fought with F until it drops.
     const foe = game.combat?.core.get('soak-foe');
-    if (foe && foe.active) {
+    // (a foe who fled far or yielded is done with: chasing him forever stalled the bot, playtest 2026-10-14)
+    const foeOn = foe && foe.active && foe.status === 'active' && Math.hypot(foe.position.x - p.position.x, foe.position.z - p.position.z) < 20;
+    if (foeOn) {
       p.yaw = Math.atan2(-(foe.position.x - p.position.x), -(foe.position.z - p.position.z));
       game.input.simulate('KeyF', true);
       setTimeout(() => game.input.simulate('KeyF', false), 60);
@@ -149,6 +151,9 @@ await page.evaluate(([home, dieEvery]) => {
       still = 0;
       s.trips++;
     }
+    // W again every tick: a death, a rescue or a load resets the held keys (Input.reset), and a bot
+    // that pressed W once at the start stood still from then on (playtest 2026-10-14).
+    game.input.simulate('KeyW', true);
     const path = game.population?.nav?.findPath(p.position.x, p.position.z, goal.x, goal.z);
     const c = Array.isArray(path) ? (path.find((q) => Math.hypot(q.x - p.position.x, q.z - p.position.z) > 1.2) ?? goal) : goal;
     p.yaw = Math.atan2(-(c.x - p.position.x), -(c.z - p.position.z));
