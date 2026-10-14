@@ -37,6 +37,11 @@ export const QUEST_ITEMS: ItemDef[] = [
   q('quest-rationes-euhodi', 'Page from Euhodus’s Ledger', 'pagina rationum', 'A page torn from the arms dealer’s order-book: “To P. A., Horrea Agrippiana, in grain sacks: 200 sicae, 6 bows, 300 arrows. Paid through H.”', { icon: '▤', tags: ['clue'] }),
   q('quest-tabulae-lyci', 'Lycus’s Tablets', 'tabellae', 'The banker’s clerk’s own count: “Eastern silver, by weight, for Pinarius. Every Nones since March.” The names are written very small.', { icon: '▭', tags: ['clue'] }),
   q('quest-chartae-aviti', 'Avitus’s Papers', 'chartae', 'The grain contract for the army bound for the East, Hermogenes’s loans, and one line that doesn’t fit: “To M. Ulpius Chrysogonus, of the chancery: 2,000 sesterces, for the fine hand.”', { icon: '▤', tags: ['clue'] }),
+  // mq-07-aurum, The Eastern Gold (docs/STORY.md chapter 7).
+  q('quest-rationes-malchi', 'Malchus’s Ledger', 'rationes', 'The Palmyrene’s ledger, in Greek: “To H., silver by weight. To the Lion, 500, for the road in March.”', { icon: '▤', tags: ['clue'] }),
+  q('quest-tabula-siderum', 'A Star Table', 'tabula siderum', 'A Chaldaean’s table of the planets’ places, copied by Zenon for a client from Seleucia. The numbers don’t fit any sky.', { icon: '✶', tags: ['clue'] }),
+  q('quest-genitura-caesaris', 'Caesar’s Nativity', 'genitura', 'The emperor’s stars, cast by Asclepiodotus: October marked, and one word in Greek, “the departure”. Casting it is treason.', { icon: '✶', tags: ['clue', 'contraband'] }),
+  q('quest-epistula-mardonii', 'Mardonius’s Letter', 'epistula', 'From Mardonius’s box, in the planet cipher, with a purse of drachms. Gemellus read it: “Festus comes by the Appian Way on the eleventh, at dawn, to the Capena gate.”', { icon: '✉', tags: ['clue'] }),
   q('quest-sagitta-dacica', 'Dacian Arrow', 'sagitta', 'Crito pulled it out of Gratus’s shoulder: barbed, the shaft painted with red bands. He gave it to you without a word.', { icon: '➶' }),
   // mq-05 (docs/STORY.md chapter 5): what the sicarius under the Arch of Dolabella carried.
   q('quest-tabula-sicarii', 'The Knife-Man’s Tablet', 'tabella', 'A small wax tablet from the man in the dark cloak. Scratched in the wax: THE NEW ONE. CAELIAN. BEFORE THE CAMP. The wax is red, and a horseman with a spear is stamped on the frame: the couriers’ own tablets.', { icon: '▭', tags: ['clue'] }),

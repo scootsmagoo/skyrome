@@ -120,4 +120,8 @@ export const LOOT_TABLES: LootTableDef[] = [
   { id: 'body.npc-bitus', rolls: [0, 0], entries: [], denarii: { range: [2, 2] }, always: [{ item: 'quest-tessera-mucaporis' }, { item: 'quest-drachma-parthica', count: 3 }, { item: 'sica' }, { item: 'arcus' }] },
   // mq-05 (docs/STORY.md chapter 5): the man in the dark cloak who follows the player to the Caelian.
   { id: 'body.npc-sicarius-caelius', rolls: [0, 0], entries: [], denarii: { range: [6, 6] }, always: [{ item: 'quest-tabula-sicarii' }, { item: 'sica' }] },
+  // mq-07 (docs/STORY.md chapter 7): Malchus's strongbox (his ledger: "To the Lion, 500, for the road in March") and Mardonius's box
+  // (a letter in the planet cipher, and the Lion's pay). Fixed loot; the drachms are the same silver as Festus's coin.
+  { id: 'arca-malchi', rolls: [0, 0], entries: [], denarii: { range: [64, 64] }, always: [{ item: 'quest-rationes-malchi' }, { item: 'quest-drachma-parthica', count: 4 }, { item: 'piper', count: 3 }, { item: 'gemma' }] },
+  { id: 'loculus-mardonii', rolls: [0, 0], entries: [], denarii: { range: [22, 22] }, always: [{ item: 'quest-epistula-mardonii' }, { item: 'quest-drachma-parthica', count: 5 }, { item: 'nugae' }] },
 ];

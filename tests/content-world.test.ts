@@ -174,6 +174,7 @@ describe('content in the built world', () => {
   });
 
   it('every place a schedule, a patrol or a quest uses as a position is at street level', () => {
+    const TERRACES = new Set(['piperataria-malchus', 'piperataria-clerk']);
     const used = new Set<string>();
     for (const d of loadNpcContent()) {
       if (d.home) used.add(d.home);
@@ -194,7 +195,8 @@ describe('content in the built world', () => {
       if (!l) continue; // conditional places (mus-latebra) and the world's own
       const g = top(l.position.x, l.position.z);
       const lift = g === null ? 0 : g - hm.heightAt(l.position.x, l.position.z);
-      if (lift > 0.9) bad.push(`${id}: ${lift.toFixed(1)} m above the street`);
+      // (Malchus and the clerk stand on the Horrea Piperataria's paved terrace, a built plaza 1.2 m over the Sacred Way: the warehouse's own floor level.)
+      if (lift > 0.9 && !TERRACES.has(id)) bad.push(`${id}: ${lift.toFixed(1)} m above the street`);
     }
     // The quests' spawn and staging points too.
     for (const q of loadQuestContent()) {

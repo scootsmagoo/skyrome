@@ -438,6 +438,11 @@ export class NpcManager implements System {
     return this.suppressGuards || (!!aggressor && this.questFighters.has(aggressor));
   }
 
+  /** Has the story taken this named NPC out of the world for good (quest flag `gone:<id>`, saved with the quests)? */
+  isGone(id: string): boolean {
+    return (this.game as { quests?: { flags?: { get?(k: string): unknown } } }).quests?.flags?.get?.(`gone:${id}`) === true;
+  }
+
   /** Named NPCs kept out of the world while someone else plays them (see `holdNamed`). */
   private readonly held = new Set<string>();
 
@@ -517,12 +522,13 @@ export class NpcManager implements System {
    * False when there is no such NPC, they are dead or held by someone else, or there is no floor at
    * the point; the stage is kept and retried by `updateNamed` while the NPC is wanted.
    */
-  stage(id: string, x: number, z: number, heading = 0, loop: IdleLoop | null = 'stand'): boolean {
-    if (!this.registry().get(id) || this.deadNamed.has(id) || this.held.has(id)) return false;
+  stage(id: string, x: number, z: number, heading = 0, loop: IdleLoop | null = 'stand', y?: number): boolean {
+    if (!this.registry().get(id) || this.deadNamed.has(id) || this.held.has(id) || this.isGone(id)) return false;
     const n = this.byId.get(id);
     // A refused stage stores nothing, so `updateNamed` never applies it later.
     if (n && !this.canStage(n)) return false;
-    const st = { x, z, heading, loop };
+    // `y`: an explicit floor (an interior cell under the street, where the nav grid and the floor ray don't reach).
+    const st = { x, z, heading, loop, y };
     this.staged.set(id, st);
     if (n) return this.applyStage(n, st);
     const spawned = this.spawnNamed(this.registry().get(id)!, x, z, heading);
@@ -546,12 +552,12 @@ export class NpcManager implements System {
   }
 
   /** Put a staged NPC at their point (moving them if needed) and pose them there. */
-  private applyStage(n: Npc, st: { x: number; z: number; heading: number; loop: IdleLoop | null }): boolean {
+  private applyStage(n: Npc, st: { x: number; z: number; heading: number; loop: IdleLoop | null; y?: number }): boolean {
     // Check everything `pose` would refuse before moving anyone, so a failed stage changes nothing.
     if (!this.canStage(n)) return false;
-    const y = this.floorY(st.x, st.z);
+    const y = st.y ?? this.floorY(st.x, st.z);
     if (y === null) return false;
-    if (Math.hypot(n.position.x - st.x, n.position.z - st.z) > 0.3) n.teleport({ x: st.x, y: y + 0.03, z: st.z }, st.heading);
+    if (Math.hypot(n.position.x - st.x, n.position.z - st.z) > 0.3 || Math.abs(n.position.y - y) > 1) n.teleport({ x: st.x, y: y + 0.03, z: st.z }, st.heading);
     // A posed NPC is scripted, and the default prompt is off for scripted NPCs: keep Talk on.
     if (!this.stagedTalk.has(n)) this.stagedTalk.set(n, n.interactable.enabled ?? (() => true));
     n.interactable.enabled = () => !n.dead && !n.hostile && !n.isFighting();
@@ -2407,6 +2413,12 @@ export class NpcManager implements System {
       if (sp) this.applyStage(sp, st);
     }
     for (const def of reg.all()) {
+      // Gone for good by the story (the quest flag `gone:<id>`: in a cell, fled, taken away): never at their post again.
+      if (this.isGone(def.id)) {
+        const n = this.byId.get(def.id);
+        if (n && !n.dead && !n.talking && !this.staged.has(def.id)) this.despawn(n);
+        continue;
+      }
       if (this.byId.has(def.id) || this.deadNamed.has(def.id) || this.held.has(def.id) || this.staged.has(def.id)) continue;
       if (!def.schedule?.length && !def.home) continue;
       const e = activeScheduleEntry(def.schedule, this.game.time.hour);

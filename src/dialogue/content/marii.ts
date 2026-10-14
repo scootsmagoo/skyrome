@@ -8,6 +8,7 @@
  */
 import { completed, rotate, stage } from '../../content/talk';
 import { defineDialogue, type DialogueContext } from '../types';
+import { GEMELLUS_AURUM, gemellusAurumStart } from './aurum';
 
 const MQ3 = 'mq-03-lemuria';
 
@@ -110,7 +111,7 @@ const gemellus = defineDialogue({
   id: 'npc-gemellus',
   npcs: ['npc-gemellus'],
   priority: 95,
-  start: (c) => (c.hasItem('quest-clavis-cifrae') || completed(c, MQ3) ? 'later' : 'g0'),
+  start: (c) => gemellusAurumStart(c) ?? (c.hasItem('quest-clavis-cifrae') || completed(c, MQ3) ? 'later' : 'g0'),
   nodes: {
     g0: {
       text: '(A young man in a brown courier’s cloak too big for him backs against a shelf of scrolls. He has Festus’ face.) Don’t. If you’re one of the knife-men, do it quietly. If you’re from the camp, I’m not him. I’m the other one.',
@@ -161,6 +162,7 @@ const gemellus = defineDialogue({
     g8: { text: 'Thank you. When it’s over, I’ll go home. When it’s over.', next: 'keyEnd' },
     keyEnd: { speaker: 'player', text: '(With the key, Festus’ message reads in three lines. Next: warn Gratus at the strongrooms of Castor.)', end: true },
     later: { text: 'Four is still the number. Go on, before someone sees you with me.', end: true },
+    ...GEMELLUS_AURUM,
   },
 });
 

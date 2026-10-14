@@ -330,7 +330,7 @@ This is the story as the player meets it. `docs/GDD.md` §10 is the design of th
 ## Chapter 7: The Eastern Gold (`mq-07-aurum-parthicum`)
 *The Sacred Way, the Circus Maximus, the Subura and the Caelian. From 13 May AD 113, at the player's own pace.*
 
-*Status: written for review, not built.*
+*Status: built (`?part=gold` starts it at Pudens's office). Decided with the owner: no initiation into the cult in this version; Gemellus reads the cipher; Mardonius's three fates stay.*
 
 **What this chapter does.** It is the second group on Pudens's board: where the Parthian silver comes from, and who in the couriers' camp is selling their secrets.
 - Three men, as on the board:
@@ -384,7 +384,7 @@ This is the story as the player meets it. `docs/GDD.md` §10 is the design of th
    - **Asclepiodotus is unmasked** once the player has the table and Gemellus has read it.
 
 5. **Mardonius, the courier** ("the Lion"). Two ways to prove him:
-   - **The cave of Mithras.** Gratus (in the camp infirmary) or the gate guard mentions that Mardonius "never misses the god's feasts. He's a Lion, they say, whatever that means. Goes down under the Subura every seventh night."
+   - **The cave of Mithras.** Asked who "the Lion" in Malchus's ledger might be, Pudens explains: "That's a grade in the Mithras caves… Half my couriers go down to one under the Subura, off the Vicus Patricius. The Father of that cave is an old centurion, Cassius Ursus. Ask him who his Lions are."
      - The player finds the **Mithraeum**: a cave fitted into the cellar of an insula off the Vicus Patricius, behind a plain door with a raven scratched on it. Its keeper is the **Father** of the cave, **Cassius Ursus**, an old centurion and an honest man.
      - The Father is suspicious of strangers. With Rhetoric, or by showing Pudens's ring, he talks. He is angry: "Mardonius brought guests to the god's table: a Syrian with rings and a Chaldaean. Strangers. Uninitiated. And now I hear men in the Forum calling Mithras a Persian god, a god for traitors." The cave is being used, and the cult will be blamed.
      - He tells the player when the next feast is (the next night) and promises to let them in.
@@ -396,13 +396,13 @@ This is the story as the player meets it. `docs/GDD.md` §10 is the design of th
    - **The cave.** A long, low vault with benches on both sides, lamps, and at the far end a painted relief of Mithras killing the bull. Mardonius, Malchus and Asclepiodotus sit apart from the soldiers.
    - **Mardonius talks first.** He is not ashamed: "Fifteen years carrying other men's letters. Antioch, Alexandria, Rome. Who thanked me? The man who pays for the war has never ridden in one. The men in the East pay better, and they pay on time." And about Festus: "I sold a road. I didn't hold the knife."
    - **The soldiers turn.** The Father stands up. The initiates are soldiers too, and they are on the player's side. Mardonius draws a knife.
-   - **The fight.** Mardonius fights well. Malchus runs for the stair (the player can catch him or let him go). Asclepiodotus stays seated and asks for a lamp: "I've seen this in the stars. Not tonight, I thought."
+   - **The fight.** Mardonius fights well, and yields when beaten. Malchus and Asclepiodotus stay where they are: the soldiers hold them.
    - **The choice**, when Mardonius yields:
      - **Take him to Pudens.** The leak, alive. He knows the name of the praetorian who gave the Column's plan, the first face of **The Toga** (a clue on the board).
      - **Leave him to the Father.** The cult judges its own. He is gone by morning, and nobody says where. It is never shown.
      - **Kill him.** Murder in the city is a crime, though no soldier here will report it.
    - **Asclepiodotus** is arrested by Pudens's couriers either way. Casting Caesar's stars is treason, and he is more use alive.
-   - **Malchus**: caught, he is taken to the camp; if he ran, he is gone to Ostia and the East, and Pudens "will find him in Antioch, in a year".
+   - **Malchus** is walked to the camp with the Chaldaean by the Father's men.
 
 7. **Pudens** (the camp, by day).
    - **Objective:** **Report to Pudens.**

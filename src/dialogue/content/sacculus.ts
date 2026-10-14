@@ -21,6 +21,7 @@
 import { hourOf } from '../../content/director';
 import { completed, female, notStarted, stage } from '../../content/talk';
 import { defineDialogue, type DialogueChoice, type DialogueContext, type DialogueNode } from '../types';
+import { AURUM_CHOICES, MQ7 } from './aurum';
 
 export const MQ6 = 'mq-06-sacculus';
 const MQ5 = 'mq-05-tabula';
@@ -51,13 +52,14 @@ export function pudensSacculusStart(c: DialogueContext): string | null {
   const s = stage(c, MQ6);
   if (s === 'report') return 'sR0';
   if (s) return !c.hasItem(DRACHM) && !c.memory.drachmBack ? 'sDrachmBack' : 'sBusy';
+  if (c.quest(MQ7)?.running) return 'sBusy';
   return completed(c, MQ6) ? 'sAfter' : 'sHub';
 }
 
-/** The board's four groups: only the Purse leads anywhere yet (Chapters 7–9 come later). */
+/** The board's four groups: the Purse and the Eastern Gold lead somewhere (Chapters 8–9 come later). */
 const groups = (): DialogueChoice[] => [
   { text: 'The Purse: the money men.', if: (c) => notStarted(c, MQ6), goto: 'sLead' },
-  { text: 'The Eastern Gold.', if: notAsked('aurum'), effects: asking('aurum'), goto: 'sAurum' },
+  ...AURUM_CHOICES,
   { text: 'The Dacian Blades.', if: notAsked('falx'), effects: asking('falx'), goto: 'sFalx' },
   { text: 'The Toga.', if: notAsked('toga'), effects: asking('toga'), goto: 'sToga' },
   { text: 'Later.', end: true },
@@ -94,10 +96,6 @@ export const PUDENS_SACCULUS: Record<string, DialogueNode> = {
     },
     end: true,
   },
-  sAurum: {
-    text: 'The pepper house on the Sacred Way. Not yet: they’ve been watching it since Gratus asked his questions there. Start with the money, and come back to the pepper later.',
-    next: 'sHub',
-  },
   sFalx: {
     text: 'Mucapor and his Dacians. The Dacian school keeps its gate shut to strangers this month. Start with the money; the knives will keep.',
     next: 'sHub',
@@ -107,8 +105,11 @@ export const PUDENS_SACCULUS: Record<string, DialogueNode> = {
     next: 'sHub',
   },
   sBusy: {
-    text: (c) => `The Purse first, ${term(c)}. Three men: the grain, the arms, the bank. Bring me proof on all three.`,
-    end: true,
+    text: (c) =>
+      stage(c, MQ6) && stage(c, MQ6) !== 'done'
+        ? `The Purse first, ${term(c)}. Three men: the grain, the arms, the bank. Bring me proof on all three.`
+        : `How goes it, ${term(c)}? Bring me proof, and I’ll pin it up.`,
+    choices: groups(),
   },
   sR0: {
     speaker: 'player',

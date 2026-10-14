@@ -13,6 +13,7 @@
 import { female, hourNow, stage } from '../../content/talk';
 import { defineDialogue, type DialogueContext } from '../types';
 import { PUDENS_SACCULUS, pudensSacculusStart } from './sacculus';
+import { PUDENS_AURUM, pudensAurumStart } from './aurum';
 import { PUDENS_TABULA, pudensTabulaStart } from './tabula';
 
 const MQ4 = 'mq-04-columna';
@@ -97,7 +98,7 @@ const pudens = defineDialogue({
     if (s === 'aftermath' || s === 'aftermath-killed') return 'p0';
     // mq-06 (Act II, docs/STORY.md chapter 6): the board's groups, the Purse and its report.
     // mq-05 (the Castra Peregrina, docs/STORY.md chapter 5): the offer and the board.
-    return pudensSacculusStart(c) ?? pudensTabulaStart(c) ?? 'pout';
+    return pudensAurumStart(c) ?? pudensSacculusStart(c) ?? pudensTabulaStart(c) ?? 'pout';
   },
   nodes: {
     p0: {
@@ -149,6 +150,7 @@ const pudens = defineDialogue({
     summonsEnd: { speaker: 'player', text: '(Pudens turns back to the litter where Gratus lies.)', end: true },
     ...PUDENS_TABULA,
     ...PUDENS_SACCULUS,
+    ...PUDENS_AURUM,
     // Outside mq-04 and mq-05.
     pout: { text: (c) => `Tomorrow, ${term(c)}. The Castra Peregrina.`, end: true },
   },

@@ -150,7 +150,7 @@ function stateOf(game: Game): GenericState {
 /** The daylight lamps of the built cells, kept in step with the sky (a window is dark at night). */
 const daylights = new WeakMap<Game, Map<string, { h: LightHandle; base: number }[]>>();
 
-function daylightOf(game: Game): Map<string, { h: LightHandle; base: number }[]> {
+export function daylightOf(game: Game): Map<string, { h: LightHandle; base: number }[]> {
   let m = daylights.get(game);
   if (!m) {
     const map = (m = new Map());

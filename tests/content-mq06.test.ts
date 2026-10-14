@@ -235,7 +235,7 @@ describe('mq-06-sacculus: The Purse', () => {
       const w = actTwo();
       const v = w.rpg.dialogue.start('npc-pudens')!;
       expect(v.text).toContain('Where do you want to start');
-      expect(v.choices.map((c) => c.text)).toEqual(expect.arrayContaining(['The Purse: the money men.', 'The Eastern Gold.', 'The Dacian Blades.', 'The Toga.', 'Later.']));
+      expect(v.choices.map((c) => c.text)).toEqual(expect.arrayContaining(['The Purse: the money men.', 'The Eastern Gold: the silver and the pepper.', 'The Dacian Blades.', 'The Toga.', 'Later.']));
       close(w);
       expect(status(w)?.running).toBeFalsy();
       // sLead, then sDrachm: the player still has the coin.
@@ -268,15 +268,9 @@ describe('mq-06-sacculus: The Purse', () => {
       expect(w.rpg.inventory.count(DRACHM)).toBe(1);
     });
 
-    it('the other three groups get a deferral and return to the hub', () => {
+    it('the two groups not built yet get a deferral and return to the hub (the Eastern Gold is Chapter 7: content-mq07)', () => {
       const w = actTwo();
-      let v = talk(w, 'npc-pudens', 'The Eastern Gold')!;
-      expect(v.text).toContain('pepper');
-      v = w.rpg.dialogue.advance()!;
-      expect(v.nodeId).toBe('sHub');
-      v = talk(w, 'npc-pudens')!;
-      // (a new conversation: the asked group is not offered again)
-      expect(v.choices.map((c) => c.text)).not.toContain('The Eastern Gold.');
+      let v = talk(w, 'npc-pudens')!;
       v = w.rpg.dialogue.choose(v.choices.findIndex((c) => c.text.includes('Dacian Blades')))!;
       expect(v.text).toContain('Mucapor');
       v = w.rpg.dialogue.advance()!;

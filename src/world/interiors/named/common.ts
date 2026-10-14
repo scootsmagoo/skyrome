@@ -14,7 +14,8 @@ import { CONTAINERS, type ContainerSpec } from '../../../content/containers';
 import type { Game } from '../../../core/Game';
 import type { LightHandle } from '../../lights/LightPool';
 import type { MeshBuilder } from '../../../gfx/MeshBuilder';
-import type { KitBuilt } from '../generic';
+import type { Spot } from '../../landmarks/types';
+import { daylightOf, type KitBuilt } from '../generic';
 import { chest, type ChestLook } from '../kits/parts';
 import type { InteriorDef, InteriorDoor, Vec3 } from '../types';
 
@@ -43,6 +44,16 @@ export interface NamedCell {
   exit: { at: Vec3; label: string; verb: string; to(game: Game): { position: Vec3; heading: number } | null };
   /** Doors from the street into the cell that belong to the cell's def (a fixed doorway on a landmark). */
   outside?: InteriorDoor[];
+  /**
+   * The cell's named places (local point and heading), as pure data: `build` turns them into spots, and
+   * `registerNamed` registers each as the location `<cell id>:<name>` so schedules and quests can name it.
+   */
+  places?: Record<string, { position: Vec3; heading: number }>;
+}
+
+/** The cell's `places` as `Spot`s of the built cell (the kind is only a label). */
+export function placeSpots(cell: Pick<NamedCell, 'places'>, kind = 'spot'): Spot[] {
+  return Object.entries(cell.places ?? {}).map(([id, p]) => ({ id, kind: id === 'entry' ? 'spawn' : kind, position: new THREE.Vector3(p.position.x, p.position.y, p.position.z), heading: p.heading }));
 }
 
 /** A location of the world's registry (undefined where there is none: tests, a bare game). */
@@ -140,6 +151,7 @@ export function namedDef(cell: NamedCell): InteriorDef {
       const lamps = object.userData.kitLamps as KitBuilt['lamps'];
       const v = new THREE.Vector3();
       const handles: LightHandle[] = [];
+      const day: { h: LightHandle; base: number }[] = [];
       for (const l of lamps ?? []) {
         const h = g.lights?.request({
           position: v.set(l.position.x, l.position.y, l.position.z).applyMatrix4(object.matrixWorld).clone(),
@@ -149,9 +161,18 @@ export function namedDef(cell: NamedCell): InteriorDef {
           flicker: l.flicker,
           // Lit while the player is inside (onEnter), which follows this at once when the cell is entered.
           enabled: g.interiors?.current() === cell.id,
+          // Daylight through a window: no flame sprite, and it follows the sky (see generic.ts daylightOf).
+          glow: l.daylight ? 0 : undefined,
         });
-        if (h) handles.push(h);
+        if (h) {
+          handles.push(h);
+          if (l.daylight) {
+            day.push({ h, base: l.intensity ?? 10 });
+            h.setIntensity((l.intensity ?? 10) * (0.04 + 0.96 * (g.sky?.daylight ?? 1)));
+          }
+        }
       }
+      if (day.length) daylightOf(g).set(`named:${cell.id}`, day);
       let m = lampsOf.get(g);
       if (!m) lampsOf.set(g, (m = new Map()));
       m.set(cell.id, handles);
@@ -174,6 +195,9 @@ export function registerNamed(game: Game, cell: NamedCell): boolean {
   if (!o) return false;
   sys.register(namedDef(cell));
   game.locations?.add({ id: `${cell.at}:interior`, name: cell.name, latin: cell.latin, position: { x: o.x, y: o.y, z: o.z }, radius: 0.3, discoverable: false });
+  for (const [name, p] of Object.entries(cell.places ?? {})) {
+    game.locations?.add({ id: `${cell.id}:${name}`, name: `${cell.name}: ${name}`, position: { x: o.x + p.position.x, y: o.y + p.position.y, z: o.z + p.position.z }, radius: 0.3, discoverable: false });
+  }
   return true;
 }
 

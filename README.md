@@ -11,7 +11,7 @@ The story opens before dawn on 11 May 113 at the Porta Capena. Trajan's Column i
 > **Status: playable alpha (14 October 2026).**
 >
 > **You can play:**
-> - All five chapters of Act I, from the ambush at the Porta Capena to the archer on top of Trajan's Column and Pudens's conspiracy board, then *The Purse*, the first group of plotters in Act II.
+> - All five chapters of Act I, from the ambush at the Porta Capena to the archer on top of Trajan's Column and Pudens's conspiracy board, then two of the four groups of plotters in Act II: *The Purse* and *The Eastern Gold*.
 > - Eleven side quests and four repeatable jobs.
 > - A city that keeps its own hours. Shops open and shut, the baths open at the bell, there are dice in the Subura at night and bets on the games at the Colosseum, and notice boards and rumours change every day.
 > - **Doors and interiors.** Stair doors lead up to rented flats and house doors into atrium houses, with people at home who sleep, wake and catch you stealing. Five named places (a popina, an arms shop, the strongrooms of Castor, the Ludus cells, a burned cellar) have their own interiors.
@@ -21,7 +21,7 @@ The story opens before dawn on 11 May 113 at the Porta Capena. Trajan's Column i
 > - **Phones and controllers.** Touch controls on iPhone and Android, and Xbox and PlayStation pads.
 >
 > **Still rough:**
-> - The other three groups of plotters in Act II are designed but not built (Chapter 7, *The Eastern Gold*, is written and waiting for review).
+> - The last two groups of plotters in Act II (the Dacian Blades and the Toga) are designed but not built.
 > - Nobody speaks aloud. Dialogue is text, and voices are wordless grunts and cries.
 > - NPCs still rub against benches, stalls and statue bases.
 > - The game is heavy on memory, and phones are near their limit.
@@ -79,8 +79,9 @@ Act I has five chapters, one after the other, over three days. Then Act II opens
 | 4. *One Hundred Feet* | The Forum of Trajan, 12 May | Gratus's briefing, then the dedication of the Column. An arrow comes from the top. You climb 185 steps of spiral stair past two knife-men and face the archer on the platform. You can spare or kill him. Then Pudens, chief of the couriers, summons you. |
 | 5. *The Board* | The Caelian, 13 May | A man follows you up to the couriers' camp. Pudens explains the plot (the real blow is meant for Caesar in October), hires you, and shows you the board: four groups of plotters, three faces each. **End of Act I.** |
 | 6. *The Purse* (Act II) | The Sacred Way, the Basilica Aemilia, the Vicus Tuscus | The money men: a grain contractor, an arms dealer and a banker. Prove each one two ways, find the knives hidden in the army's wheat, and face Avitus. Arrest him, let him run, or kill him. |
+| 7. *The Eastern Gold* (Act II) | The Pepper Warehouses, the Circus, the Clivus Victoriae, a cave under the Subura | Where the Parthian silver comes in: Malchus, a Palmyrene pepper merchant with silver under his pepper; Asclepiodotus, a Chaldaean whose star tables are a cipher (Festus's twin reads it); and the leak in the couriers' camp. It ends at a night feast in a cave of Mithras, face to face with the traitor. |
 
-The other three groups (the Eastern Gold, the Dacian Blades and the Toga) come next. The calendar keeps running, and the city stays open to you.
+Groups can be played in either order. The last two (the Dacian Blades and the Toga) come next. The calendar keeps running, and the city stays open to you.
 
 ### Side quests and jobs
 
@@ -203,6 +204,7 @@ A bot plays all four chapters end to end (`node scripts/golden-path.mjs`; its la
 | 13. The morning after: up the Caelian to the Castra Peregrina, and the man following you | [`?part=camp`](https://scootsmagoo.github.io/skyrome/?part=camp) | Does the water-carrier's warning set up the fight? Is the tablet on the body clearly a clue? Is the gate clear? |
 | 14. Inside the camp: Pudens's offer and the board | [`?part=board`](https://scootsmagoo.github.io/skyrome/?part=board) | Does Pudens explain it all plainly (the arrow, October, the leak, why you)? Is the board easy to read (J, then the Board page)? Is "Act II: start wherever you like" clear? |
 | 15. Act II, The Purse: ask Pudens about the money men | [`?part=purse`](https://scootsmagoo.github.io/skyrome/?part=purse) | Is it clear who the three men are and that each can be proved two ways? Is the fight with Avitus's knife-men set up? Does the choice (arrest, let run, kill) feel like it matters? |
+| 16. Act II, The Eastern Gold: ask Pudens about the silver and the pepper | [`?part=gold`](https://scootsmagoo.github.io/skyrome/?part=gold) | Can you find all three men, each two ways (a lockpick helps)? Does the twist about the friendly courier land? Is the cave of Mithras at night eerie, and is it clear you must come back after dark? |
 | Side quest: The Oath at the Ludus, then the three bouts | [`?part=oath`](https://scootsmagoo.github.io/skyrome/?part=oath) · [`?fight=nereus`](https://scootsmagoo.github.io/skyrome/?fight=nereus) | Is signing on clear? Too easy or too hard? Is the net readable? |
 | Side quest: the brawl at the fountain (fists only) | [`?part=brawl`](https://scootsmagoo.github.io/skyrome/?part=brawl) | Picking a side, then the fistfight. Does drawing a blade (R) warn you? |
 
@@ -502,7 +504,7 @@ Updated 14 October 2026. Act I's five chapters play from start to finish, ending
 | The story: Act I's five chapters, from the Porta Capena to the top of Trajan's Column and Pudens's board | ✅ Playable end to end (the bot finishes all five) · 🧪 needs human playtesting |
 | Chapter 5, *The Board* (13 May): the follower on the Caelian, the Castra Peregrina, Pudens's offer and the conspiracy board (a Board page in the journal) | 🧪 Playable, needs human playtesting |
 | Act II: *The Purse* (Chapter 6, [`?part=purse`](https://scootsmagoo.github.io/skyrome/?part=purse)) | 🧪 New, playable, needs human playtesting |
-| Act II: *The Eastern Gold* (Chapter 7) | 📝 Written for review ([docs/STORY.md](docs/STORY.md)), not built |
+| Act II: *The Eastern Gold* (Chapter 7, [`?part=gold`](https://scootsmagoo.github.io/skyrome/?part=gold)) | 🧪 New, playable, needs human playtesting |
 | Act II's other groups, and Act III | 🚧 Designed, not built |
 | Side quests (11) and jobs (4) | 🧪 New, playable, pacing and balance under review |
 | City life: about two dozen shops and 4 market-day stalls with hours, baths, barber, laundry, fountains, a pallet and chest, the salutatio, 4 notice boards, the crier, rumours, dice, bets on the games, the mortar bench | 🧪 New, playable, needs play |
@@ -553,7 +555,7 @@ The full plan is in the [Game Design Document](docs/GDD.md) (§17–§18). The v
 
 What comes next, in order:
 1. **A playtest** of the city life, the side quests, Chapters 5 and 6, and the new doors and interiors.
-2. **Act II**: the four groups of plotters on the board (`mq-06` to `mq-09`), each with two ways in. *The Purse* (`mq-06-sacculus`) is built; *The Eastern Gold* (`mq-07`) is written and waiting for review; the Dacian Blades and the Toga come after.
+2. **Act II**: the four groups of plotters on the board (`mq-06` to `mq-09`), each with two ways in. *The Purse* (`mq-06-sacculus`) and *The Eastern Gold* (`mq-07-aurum`) are built; the Dacian Blades and the Toga come next.
 
 Done since this list was written: phase 3 (the second performance pass), phase 4 (solid ground), Chapter 5 *The Board*, Chapter 6 *The Purse*, phones and controllers, and the buildings overhaul (brick, roofs, doors, locks, interiors and their residents).
 

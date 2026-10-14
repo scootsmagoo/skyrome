@@ -192,6 +192,14 @@ export const CONTAINERS: ContainerSpec[] = [
   // The deposit chests in the open bays of the strongrooms' passage (src/world/interiors/named/castor.ts). Their key is
   // Chrysippus' own (CONTENT.md §4.13: not obtainable), so they are for the lockpick.
   ...[0, 1, 2].map<ContainerSpec>((i) => ({ id: `ctn-loculi-${i + 1}`, kind: 'arca-tabernae', at: 'castor-loculi', dx: 1.35, dz: 6.3 + i * 1.8, table: i === 2 ? 'chest.rich' : 'strongbox', owner: 'castor-loculi', ownerName: 'a depositor', key: 'clavis-loculi', locked: 'difficilis', interior: true, label: 'A deposit chest' })),
+  // mq-07 (docs/STORY.md chapter 7). Malchus's strongbox in his storeroom bay at the Horrea Piperataria (named/piperataria.ts):
+  // the back right corner, with his ledger (the quest item) and a bag of Parthian drachms.
+  { id: 'ctn-arca-malchi', kind: 'arca-tabernae', at: 'piperataria-bay', dx: 2.0, dz: 6.9, table: 'arca-malchi', owner: 'npc-malchus', ownerName: 'Malchus', locked: 'difficilis', interior: true, label: 'Malchus’s strongbox' },
+  // The couriers' barracks at the Castra Peregrina (named/peregrina.ts): Mardonius's box is the third locker on the east side (his
+  // letter in the planet cipher and a purse of drachms); two more lockers hold ordinary things.
+  { id: 'ctn-loculus-mardonii', kind: 'cista-insulae', at: 'peregrina-barracks', dx: 1.25, dz: 7.9, table: 'loculus-mardonii', owner: 'npc-mardonius', ownerName: 'Mardonius', locked: 'mediocris', interior: true, label: 'Mardonius’s box' },
+  { id: 'ctn-loculus-peregrini-1', kind: 'cella-ludi', at: 'peregrina-barracks', dx: 1.25, dz: 10.6, table: 'chest.common', owner: 'castra-peregrina', ownerName: 'a courier', locked: 'simplex', interior: true, label: 'A courier’s locker' },
+  { id: 'ctn-loculus-peregrini-2', kind: 'cella-ludi', at: 'peregrina-barracks', dx: -1.25, dz: 5.2, table: 'chest.common', owner: 'castra-peregrina', ownerName: 'a courier', locked: 'mediocris', interior: true, label: 'A courier’s locker' },
 ];
 
 /** Game-metre point of a spec on the golden path (real metres → game), for specs given as `{ d, side }`. */

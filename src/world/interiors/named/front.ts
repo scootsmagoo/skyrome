@@ -51,6 +51,10 @@ export interface FrontSpec {
   hatch?: { dx: number; dz: number; verb: string };
   /** How far from the spot to look for the wall (m). Default 11. */
   reach?: number;
+  /** Extra wall to ask for either side of the door and its jambs (m): the door is taken down when the wall's ends are only just beyond it. Default 0.35. */
+  margin?: number;
+  /** Extra marks drawn with the porch, in the door's frame (the leaves at z = 0, the wall face at z = PORCH, the street at −z): a sign scratched on the plaster. */
+  mark?: (d: Draw) => void;
 }
 
 /** What the wall search found: the point on the wall face and the face's outward unit normal (horizontal). */
@@ -100,13 +104,13 @@ export function faceScore(distance: number, groundDelta: number, lateral: number
 }
 
 /** Look for the door's wall around (cx, cz): needs the street's colliders (the city primed near the player). */
-export function findWall(game: Game, cx: number, cz: number, nearY: number, reach: number, width = 1.3, height = 2.3): WallFace | null {
+export function findWall(game: Game, cx: number, cz: number, nearY: number, reach: number, width = 1.3, height = 2.3, margin = 0.35): WallFace | null {
   const ph = game.physics;
   const g0 = ph.raycast({ x: cx, y: nearY + 3, z: cz }, DOWN, 12, Layer.World);
   if (!g0 || g0.normal.y < 0.8) return null;
   const gy = g0.point.y;
   const o = { x: cx, y: gy + 1.3, z: cz };
-  const hw = width / 2 + 0.35;
+  const hw = width / 2 + margin;
   let best: (WallFace & { score: number }) | null = null;
   const N = 64;
   for (let k = 0; k < N; k++) {
@@ -304,7 +308,7 @@ export class NamedFronts implements System {
       if (at) this.hangHatch(spec, at);
       return;
     }
-    const face = findWall(this.game, x, z, nearY, spec.reach ?? 11, spec.width, spec.height);
+    const face = findWall(this.game, x, z, nearY, spec.reach ?? 11, spec.width, spec.height, spec.margin);
     if (face) this.hang(spec, face);
   }
 
@@ -329,6 +333,7 @@ export class NamedFronts implements System {
     const b = new MeshBuilder();
     const d = new Draw(b, new THREE.Matrix4());
     porch(d, spec.width, spec.height, spec.sign);
+    spec.mark?.(d);
     const object = b.build(`front:${spec.id}`);
     object.applyMatrix4(m);
     object.updateMatrixWorld(true);

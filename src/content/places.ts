@@ -330,6 +330,10 @@ export const STREET_SPOTS: LocationDef[] = [
   onRoute('via-tusci-alta', 'The upper Vicus Tuscus', 1175, 4, 6),
 ];
 
+/** Atlas real metres (x, z, elevation) of the streets' doors of the cave of Mithras (off the Vicus Patricius) and of the Chaldaean's flat (on the Clivus Victoriae). */
+const MITHRAEUM_REAL: [number, number, number] = [908.7, -556, 28.3];
+const CHALDAEAN_REAL: [number, number, number] = [69.2, 238.2, 28.2];
+
 /** Helper areas only the content uses. */
 export const CONTENT_SPOTS: LocationDef[] = [
   // mq-01: "If the player runs more than 40 m away, the grassatores give up" (CONTENT.md §3.1.1).
@@ -361,6 +365,21 @@ export const CONTENT_SPOTS: LocationDef[] = [
   { id: 'agrippiana-bays', name: 'Avitus’s sealed bays', position: atLandmark('horrea-agrippiana', -8.4, -3.85), radius: 4, discoverable: false, parent: 'horrea-agrippiana' },
   { id: 'agrippiana-office', name: 'Avitus’s counting-room', position: atLandmark('horrea-agrippiana', -8.4, 5.8), radius: 3, discoverable: false, parent: 'horrea-agrippiana' },
   { id: 'agrippiana-porter', name: 'The night porter’s corner', position: atLandmark('horrea-agrippiana', -7, -6), radius: 2, discoverable: false, parent: 'horrea-agrippiana' },
+  // mq-07 (docs/STORY.md chapter 7): Malchus's bay in the front wall of the Horrea Piperataria (warehouse frame: the front wall 12 m
+  // before the centre, the standing places 2.2 m out, between two columns of the colonnade and clear of the dealers' tables; the door
+  // is hung by world/interiors/named/front.ts on the wall behind the spot), the clerk a few metres along, the couriers' barracks door
+  // in the north face of the first east barrack block of the Castra Peregrina (camp frame: the block's face 31 m before the centre).
+  { id: 'piperataria-malchus', name: 'Malchus’s bay', position: atLandmark('horrea-piperataria', 14.2, 10.1), radius: 3, discoverable: false, parent: 'horrea-piperataria' },
+  { id: 'piperataria-clerk', name: 'The clerk’s table', position: atLandmark('horrea-piperataria', 14.2, 5.9), radius: 2, discoverable: false, parent: 'horrea-piperataria' },
+  { id: 'peregrina-barracks-door', name: 'The couriers’ barracks', position: atLandmark('castra-peregrina', 32.6, 14), radius: 3, discoverable: false, parent: 'castra-peregrina' },
+  // The Subura's cave of Mithras and the Chaldaean's flat on the Clivus Victoriae: places on the streets (doors hung on the wall behind).
+  // The cells behind those doors, as places of the street (their ids are the cells' own: containers are `at` them, and entering a cell discovers its place).
+  { id: 'piperataria-bay', name: 'Malchus’s storeroom', latin: 'Cella Malchi', position: atLandmark('horrea-piperataria', 14.2, 10.1), radius: 3, discoverable: false, parent: 'horrea-piperataria' },
+  { id: 'peregrina-barracks', name: 'The couriers’ barracks', latin: 'Contubernia', position: atLandmark('castra-peregrina', 32.6, 14), radius: 3, discoverable: false, parent: 'castra-peregrina' },
+  { id: 'mithraeum-subura', name: 'The cave of Mithras', latin: 'Spelaeum Mithrae', position: atReal(MITHRAEUM_REAL[0], MITHRAEUM_REAL[1], MITHRAEUM_REAL[2]), radius: 4, discoverable: false },
+  { id: 'domus-asclepiodoti', name: 'The Chaldaean’s rooms', latin: 'Cenaculum Asclepiodoti', position: atReal(CHALDAEAN_REAL[0], CHALDAEAN_REAL[1], CHALDAEAN_REAL[2]), radius: 4, discoverable: false },
+  { id: 'mithraeum-door', name: 'The raven door', position: atReal(MITHRAEUM_REAL[0], MITHRAEUM_REAL[1], MITHRAEUM_REAL[2]), radius: 4, discoverable: false },
+  { id: 'asclepiodotus-door', name: 'The Chaldaean’s door', position: atReal(CHALDAEAN_REAL[0], CHALDAEAN_REAL[1], CHALDAEAN_REAL[2]), radius: 4, discoverable: false },
 ];
 
 /** Every location the content installs. */

@@ -176,7 +176,7 @@ interface PopulationLike {
   direct?(npc: unknown, x: number, z: number, speed: number, arrive?: number): boolean;
   undirect?(npc: unknown): void;
   pose?(npc: unknown, loop: string | null, face?: number | null): boolean;
-  stage?(id: string, x: number, z: number, heading?: number, loop?: string | null): boolean;
+  stage?(id: string, x: number, z: number, heading?: number, loop?: string | null, y?: number): boolean;
   unstage?(id: string): void;
 }
 
@@ -222,7 +222,9 @@ export function stage(game: Game, npcId: string, at: string | Vec3, heading = 0,
   if (!pop?.stage) return false;
   const p = typeof at === 'string' ? game.locations?.get(at)?.position : at;
   if (!p) return false;
-  return pop.stage(npcId, p.x, p.z, heading, loop);
+  // A point inside an interior cell (under the street) carries its own floor: pass it on.
+  const inCell = typeof at !== 'string' && game.interiors?.cellAt?.(p as THREE.Vector3Like) != null;
+  return inCell ? pop.stage(npcId, p.x, p.z, heading, loop, p.y) : pop.stage(npcId, p.x, p.z, heading, loop);
 }
 
 /** Give a staged NPC back to their schedule. */

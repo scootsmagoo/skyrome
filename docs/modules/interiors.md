@@ -205,6 +205,11 @@ installer like the Column's) registers them, and the bankers' strongbox in the B
 | `arms.ts` | `taberna-armorum` | a studded door found likewise, open 06:00 to 19:00, `mediocris`, Euhodus' | the shop (counter and scales, swords and daggers on a board, shields, spears, two armour stands, `ctn-arca-armorum` behind the counter) and the forge behind it (fire, anvil, vat, a cot) |
 | `collapsa.ts` | `dun-taberna-collapsa` | a cellar hatch in the paving a few metres from the burned taberna's spot (a `FrontSpec.hatch`) | the stair down, a ruined cellar (charred beams half fallen, rubble, the light well with a ladder up to the next court's `taberna-collapsa-puteus`), a side chamber with a scorched chest (`ctn-cista-combusta`) |
 
+| `piperataria.ts` | `piperataria-bay` | a plank door in the brick front wall of the Horrea Piperataria, found by the door finder near the place `piperataria-malchus` (where Malchus stands by day), open 07:00 to 18:00, `mediocris`, Malchus's | the bay: silk on shelves down one wall, spice amphorae in racks, the scales on a table, the pile of pepper sacks with a red rag on a pole (place `sacks`), the strongbox `ctn-arca-malchi` (`difficilis`, his ledger) |
+| `mithraeum.ts` | `mithraeum-subura` | a plain door in an insula's wall off the Vicus Patricius near `mithraeum-door`, a raven scratched on the plaster beside it (`FrontSpec.mark`), `firma`, open 19:00 to 24:00, the cult's | a stair of 14 treads down, a barrel vault 4.4 m by 14 m painted blue with stars, a podium with cushions down each side, the painted relief of the bull-slaying (`reliefPainting`), two altars, wall lamps; places `father`, `initiate-1`, `initiate-2`, `feast-*`, `stair-1`, `stair-2`, `entry` |
+| `asclepiodotus.ts` | `domus-asclepiodoti` | a studded door in a wall of the Palatine's Domus Tiberiana flank on the Clivus Victoriae near `asclepiodotus-door`, open 09:00 to 21:00, `mediocris`, Asclepiodotus's | a stair up one storey, an anteroom, and the reading room: the big table with star tables (the nativity), astrolabe, armillary sphere, cabinets of scrolls, a wall chart, a window; places `reader`, `client`, `table`, `entry` |
+| `peregrina.ts` | `peregrina-barracks` | a plank door in the north face of the first east barrack block of the Castra Peregrina near `peregrina-barracks-door`, open 05:00 to 22:00, `mediocris`, the couriers' | the front room (a long table, pegs of cloaks and satchels, a notice board) and the sleeping room: five bunks with a locker at the foot down each side; Mardonius's box `ctn-loculus-mardonii` is the third locker on the east side, two more are ordinary |
+
 **Frames.** A named cell's frame has the world's axes (rotation 0) and its floor at y = 0; it sits `NAMED_SINK` (240 m) under its
 place, plus 6 m per slot. A cell's origin is the anchor (the door's spot).
 
@@ -221,6 +226,16 @@ and its jambs, high enough for the lintel, clear in front, level ground), hangs 
 system's lock, key, pick, blows and `effractio` against the owner, and takes it down when the player is more than 60 m away or the wall is
 gone. The cell's exit puts the player before that door. A game saved inside a cell loads inside it and the door is hung (the street primed)
 so the way out exists. A hatch is the same for ground with no wall. No wall found means no door (the cell is still there for the console).
+
+**Places and the people in cells.** A cell lists its named `places` (`NamedCell.places`: a local point and heading each): `placeSpots` turns them
+into the built cell's spots (`game.interiors.spot(cell, id)`, quest markers `interior:<cell>:<place>`) and `registerNamed` registers each as the
+location `<cell>:<place>`. Named people who live in a cell with no street schedule (Asclepiodotus at his table, the Father and, at night, two
+initiates in the cave) are placed by `named/cast.ts` (`CellCast`, polling once a second while the player is in the cell): it stages them with the
+director's `stage` at the cell's place, at the hours of `CELL_CAST`, and despawns them when the player leaves. `holdCast(game, npcId)` keeps a
+quest-staged person out of it. Daylight lamps in named cells (`KitLamp.daylight`) follow the sky like the generic cells'.
+
+**The street doors' margin.** `FrontSpec.margin` (default 0.35) is how much plain wall the door finder asks for either side of the door and its
+jambs: the system takes a door down when the wall's ends are only just beyond it, so a door on a narrow wall flickers; the chapter 7 doors ask 0.65.
 
 **The Basilica Paulli.** `shops.ts`: the Basilica Aemilia's tabernae are real walk-in shops, so there is no cell; `ctn-arca-aemiliae`
 is set at the iron-banded box the builder draws in the money-changer's shop nearest `tabernae-aemiliae` (`<place>:interior` is that

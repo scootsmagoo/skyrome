@@ -18,6 +18,7 @@
  */
 import { completed, female, stage } from '../../content/talk';
 import { defineDialogue, type DialogueChoice, type DialogueContext, type DialogueNode } from '../types';
+import { MARDONIUS_AURUM, mardoniusAurumStart } from './aurum';
 
 export const MQ5 = 'mq-05-tabula';
 export const CAMP_OPEN_FLAG = 'mq05-camp-open';
@@ -76,7 +77,7 @@ const mardonius = defineDialogue({
   id: 'npc-mardonius',
   npcs: ['npc-mardonius'],
   priority: 90,
-  start: (c) => (stage(c, MQ5) && !c.memory.walked ? 'm0' : 'mIdle'),
+  start: (c) => mardoniusAurumStart(c) ?? (stage(c, MQ5) && !c.memory.walked ? 'm0' : 'mIdle'),
   nodes: {
     m0: {
       text: 'Mardonius, courier. I’ll take you across. So you’re the one who went up the Column! The whole camp is talking. What did the archer say, up there?',
@@ -92,6 +93,7 @@ const mardonius = defineDialogue({
     mNot: { text: 'Ha! You’ll do. The chief’s office is across the court, the door on the right.', next: 'mEnd' },
     mEnd: { speaker: 'player', text: '(Mardonius strolls back toward the gate.)', end: true },
     mIdle: { text: 'Ask me anything. I hear it all, sooner or later.', end: true },
+    ...MARDONIUS_AURUM,
   },
 });
 

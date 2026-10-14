@@ -71,7 +71,7 @@ export const CELLS: BoardCell[] = [
     latin: 'Aurum Parthicum',
     blurb: 'Where the Parthian silver comes into Rome.',
     members: [
-      { id: 'mercator-piperis', name: 'The pepper merchant', role: 'dealer in silk and pepper at the Horrea Piperataria' },
+      { id: 'mercator-piperis', name: 'Malchus son of Iarhai', role: 'of Palmyra, dealer in pepper and silk at the Horrea Piperataria' },
       { id: 'asclepiodotus', name: 'Asclepiodotus', role: 'Chaldaean astrologer' },
       { id: 'mardonius', name: 'Mardonius', role: 'a courier of the Castra Peregrina' },
     ],
@@ -175,6 +175,56 @@ export const CLUES: BoardClue[] = [
     text: 'Among Avitus’s papers: “To M. Ulpius Chrysogonus, of the chancery: 2,000 sesterces, for the fine hand.” A grain man paying a chancery scribe for his handwriting. Fine work at what?',
     known: (s) => s.hasItem('quest-chartae-aviti'),
   },
+  // mq-07-aurum, The Eastern Gold (docs/STORY.md chapter 7).
+  {
+    id: 'silver-in-pepper',
+    cell: 'aurum',
+    title: 'Silver under the pepper',
+    text: 'In Malchus’s sacks at the Horrea Piperataria, a hand’s depth down: Parthian drachms. The customs men weigh pepper; nobody digs.',
+    known: (s) => s.flag('mq07-silver-found') === true,
+  },
+  {
+    id: 'rationes-malchi',
+    cell: 'aurum',
+    title: 'Malchus’s ledger',
+    text: '“To H., silver by weight. To the Lion, 500, for the road in March.”',
+    known: (s) => s.hasItem('quest-rationes-malchi'),
+  },
+  {
+    id: 'tabula-siderum',
+    cell: 'aurum',
+    title: 'The star tables',
+    text: 'Asclepiodotus’s tables are not about stars. Gemellus read them: planets for letters. “October. The courier will say which gate.”',
+    known: (s) => s.flag('mq07-cipher-read') === true,
+  },
+  {
+    id: 'genitura',
+    cell: 'aurum',
+    title: 'Caesar’s nativity',
+    text: 'Cast by the Chaldaean: October marked, and “the departure” in Greek. Treason to cast.',
+    known: (s) => s.hasItem('quest-genitura-caesaris') || s.flag('mq07-saw-nativity') === true,
+  },
+  {
+    id: 'epistula-mardonii',
+    cell: 'aurum',
+    title: 'Mardonius’s letter',
+    text: '“Festus comes by the Appian Way on the eleventh, at dawn, to the Capena gate.” The road, sold.',
+    known: (s) => s.hasItem('quest-epistula-mardonii'),
+  },
+  {
+    id: 'mardonius-fate',
+    cell: 'aurum',
+    title: 'Mardonius',
+    text: '',
+    known: (s) => typeof s.flag('mq07-mardonius-fate') === 'string',
+  },
+  {
+    id: 'praetorian',
+    cell: 'toga',
+    title: 'The praetorian with the plan',
+    text: 'Mardonius, in Pudens’s cells, names a praetorian centurion who gave the cabal Caesar’s place and the guards’ on the Column’s day.',
+    known: (s) => s.flag('mq07-mardonius-fate') === 'taken',
+  },
   {
     id: 'bitus',
     cell: 'falx',
@@ -228,6 +278,13 @@ export interface BoardView {
 }
 
 /** The board's line on Avitus, by what the player did with him (mq-06). */
+/** The board's line on Mardonius (mq-07). */
+const MARDONIUS_FATE: Record<string, string> = {
+  taken: 'In Pudens’s cells. Fifteen years a courier; now he talks to Pudens.',
+  father: 'Left to the Father of the cave. Gone by morning; nobody says where.',
+  killed: 'Dead in the cave of Mithras.',
+};
+
 const AVITUS_FATE: Record<string, string> = {
   arrested: 'In Pudens’s cells at the Castra Peregrina. He knows the men above him, and he talks.',
   ran: 'Gone down the Tiber to Ostia by night. He will have warned them.',
@@ -242,7 +299,14 @@ export const howFlag = (memberId: string): string => `board-how:${memberId}`;
 /** The board as the player knows it (null until Pudens has shown it). */
 export function boardView(s: BoardState): BoardView | null {
   if (!isBoardOpen(s)) return null;
-  const pin = (c: BoardClue) => ({ id: c.id, title: c.title, text: c.id === 'avitus-fate' ? AVITUS_FATE[String(s.flag('mq06-avitus-fate'))] ?? '' : c.text });
+  const text = (c: BoardClue): string => {
+    if (c.id === 'avitus-fate') return AVITUS_FATE[String(s.flag('mq06-avitus-fate'))] ?? '';
+    if (c.id === 'mardonius-fate') return MARDONIUS_FATE[String(s.flag('mq07-mardonius-fate'))] ?? '';
+    // The leak, found (mq-07): it has a name now.
+    if (c.id === 'leak' && isUnmasked(s, 'mardonius')) return 'Mardonius, the friendly courier at the gate, sold Festus’s road and hour for Parthian silver.';
+    return c.text;
+  };
+  const pin = (c: BoardClue) => ({ id: c.id, title: c.title, text: text(c) });
   const cells = CELLS.map((cell): BoardCellView => {
     const members = cell.members.map((m) => {
       const unmasked = isUnmasked(s, m.id);

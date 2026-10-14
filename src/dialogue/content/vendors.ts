@@ -11,6 +11,7 @@ import { person } from '../../content/people';
 import { completed, rotate, rumor, shut, stage, treat } from '../../content/talk';
 import { lifeChoices } from '../../life/talk';
 import { EUHODUS_SACCULUS, HERMOGENES_SACCULUS } from './sacculus';
+import { ZENON_AURUM } from './aurum';
 import { defineDialogue, type DialogueContext } from '../types';
 
 const MQ2 = 'mq-02-tabella';
@@ -271,6 +272,7 @@ const zenon = defineDialogue({
       choices: [
         // The nativity, 12 as, once a day (life data: services/vendors.ts).
         ...lifeChoices('npc-zenon').choices,
+        ...ZENON_AURUM.choices,
         { text: 'A cheap leaf of predictions. (1 as.)', enabled: (c) => c.denarii() >= 1 / 16, goto: 'leaf', effects: (c) => { if (c.pay(1 / 16)) c.giveItem('tabella-mathematici'); } },
         { text: 'Is it true the stars rule us?', goto: 'rule', once: true },
         { text: 'What will happen tomorrow?', goto: 'tomorrow', once: true },
@@ -278,6 +280,7 @@ const zenon = defineDialogue({
       ],
     },
     ...lifeChoices('npc-zenon').nodes,
+    ...ZENON_AURUM.nodes,
     leaf: { text: '(He tears a papyrus leaf from a stack and presses it into your hand.) For one as, the heavens’ cheapest advice. Don’t lend fire to a neighbour on the ghost nights.', next: 'hub' },
     rule: { text: 'The stars incline; they do not compel. (He looks over his shoulder.) Mostly. The moment I say otherwise, the Prefect of the City takes an interest. There are mathematici in exile on the islands for saying less.', next: 'hub' },
     tomorrow: { text: 'Tomorrow? The sun is in Taurus, the Moon is fast, and the emperor is going to dedicate a very tall column. I could cast the day for him, but I’m not mad.', next: 'hub' },

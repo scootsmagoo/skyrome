@@ -971,7 +971,9 @@ export function syncMusHideout(game: Game) {
   else if (!want && has) loc.remove?.(MUS_HIDEOUT.id);
   // Gemellus hides in Tryphon's back room from the Lemuria rite until he hands over the key (mq-03).
   const m3 = game.quests?.status?.('mq-03-lemuria');
-  const hiding = !!m3?.running && (m3.stage === 'clues' || m3.stage === 'gemellus');
+  // He is there again for the Eastern Gold (mq-07), where he reads the star tables at Tryphon's: until the quest is past its names.
+  const m7 = game.quests?.status?.('mq-07-aurum');
+  const hiding = (!!m3?.running && (m3.stage === 'clues' || m3.stage === 'gemellus')) || (!!m7?.running && (m7.stage === 'lead' || m7.stage === 'names'));
   const hasG = !!loc.get(GEMELLUS_HIDEOUT.id);
   if (hiding && !hasG) loc.add(GEMELLUS_HIDEOUT);
   else if (!hiding && hasG) loc.remove?.(GEMELLUS_HIDEOUT.id);
@@ -1069,7 +1071,7 @@ export function installContent(game: Game): ContentService {
         if (e.name === 'hideout-known' || e.name === 'mus-fate') syncMusHideout(game);
       }),
       ev.on('quest:stage', (e) => {
-        if (e.questId === 'mq-02-tabella' || e.questId === 'mq-03-lemuria') syncMusHideout(game);
+        if (e.questId === 'mq-02-tabella' || e.questId === 'mq-03-lemuria' || e.questId === 'mq-07-aurum') syncMusHideout(game);
       }),
     );
   }

@@ -441,9 +441,9 @@ describe('containers in cells (content)', () => {
         expect(p.y - floor, s.id).toBeLessThan(0.9);
       }
     }
-    // The cells' containers are the barracks' six, the strongrooms' three, the cellar's, the Pig's and the arms dealer's.
+    // The cells' containers are the barracks' six, the strongrooms' three, the cellar's, the Pig's and the arms dealer's, Malchus's strongbox and the couriers' three boxes.
     const mine = CONTAINERS.filter((c) => c.interior && NAMED_CELLS.some((n) => n.at === c.at));
-    expect(mine.length).toBe(6 + 3 + 1 + 1 + 1);
+    expect(mine.length).toBe(6 + 3 + 1 + 1 + 1 + 1 + 3);
   });
 
   it('a lockable interior chest can be picked and is owned: the prompt says whose it is', () => {

@@ -239,6 +239,20 @@ export const CHECKPOINTS: Checkpoint[] = [
     },
   },
   {
+    id: 'gold',
+    label: 'Act II: The Eastern Gold begins. Pudens in his office, the board open (ask him about the Eastern Gold)',
+    at: 'castra-peregrina',
+    hour: 8,
+    place: 'peregrina-principia-gate',
+    setup: (game) => {
+      afterColumn(game);
+      game.quests.flags.set('mq05-sicarius-dead', true);
+      give(game, 'quest-tabula-sicarii');
+      game.quests.setStage(MQ05, 'board');
+      game.quests.setStage(MQ05, 'done');
+    },
+  },
+  {
     id: 'oath',
     label: 'Side quest at the Ludus: sign on with Glaucus, draw the practice arms, the first bout',
     at: 'ludus-magnus',
