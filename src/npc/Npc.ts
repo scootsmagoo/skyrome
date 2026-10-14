@@ -117,6 +117,11 @@ export class Npc extends Actor implements Positioned {
   hostile = false;
   /** Controlled by a vignette script. */
   scripted = false;
+  /**
+   * Someone at home in an interior cell (world/interiors/residents): posed in place by that module,
+   * not by a brain. A sleeper sees nothing (`witnesses`); alarms are theirs to answer (`NpcBrain.alarm`).
+   */
+  resident: { asleep: boolean; alarm(kind: 'fight' | 'crime' | 'danger', aggressor: Actor | null): void } | null = null;
   /** Manager clock when spawned (s). */
   bornAt = 0;
   /** Not recycled for being out of view before this manager time (s): people overtaking from behind. */

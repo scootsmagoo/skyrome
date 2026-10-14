@@ -425,6 +425,10 @@ re-planning when the way to the corner closes, `StreetNav.drop` (judged on a set
 changes) and steep terrain (over 40 degrees) being no floor for the planner.
 `?wallfix=0&navlow=0&navslope=0` switches them off for A/B runs.
 
+## People at home in interior cells
+
+`NpcManager.spawnResident(id, name, appearance, worldPoint, heading, barks?)` makes a non-ambient `Npc` at an explicit world point (for cells under the street, where the nav grid and the floor ray cannot place it); `isKilled(id)` says whether a resident stays dead. `Npc.resident` (set by `src/world/interiors/residents`) marks a person posed in a cell: `NpcBrain.alarm` hands alarms to `resident.alarm`, `witnesses` skips `resident.asleep` and anyone more than 30 m above or below the point, and awake residents track the player's head like any NPC. See docs/modules/interiors.md, "Residents".
+
 ## Shared-file changes
 
 - `src/actors/Actor.ts`: `locomote` passes the collider's own collision groups to
@@ -432,6 +436,7 @@ changes) and steep terrain (over 40 degrees) being no floor for the planner.
   capsule ignores the player no longer block the player). Behaviour for every existing collider is
   unchanged (they all keep the default filters).
 - (`src/scenes/rome.ts` is no longer touched: the game flow installs the module.)
+- Residents of interior cells (2026-10): `Npc.resident` (a field), `NpcBrain.alarm` (a residents' hook before the scripted check), `NpcManager.witnesses` (skips sleepers and far levels), `NpcManager.updateBarksAndLooks` (awake residents track the head), and `NpcManager.spawnResident` / `isKilled`.
 
 ## Not done yet / next steps
 

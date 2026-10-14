@@ -409,6 +409,8 @@ export class NpcManager implements System {
   witnesses(p: THREE.Vector3Like, r = 20): string[] {
     const out: string[] = [];
     for (const n of this.near(p, r)) {
+      // Asleep: sees nothing. Another level (a cell under the street): no sight line anyway.
+      if (n.resident?.asleep || (p.y !== undefined && Math.abs(n.position.y - p.y) > 30)) continue;
       const h = n.headingTo(p.x, p.z);
       const d = Math.abs(((h - n.heading + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
       if (d > 1.75) continue;
@@ -700,6 +702,25 @@ export class NpcManager implements System {
     if (def.disposition === 'hostile') npc.hostile = true;
     this.register(npc);
     return npc;
+  }
+
+  /**
+   * Someone at home in an interior cell (world/interiors/residents): a person of their own, placed at a
+   * world point (the cell is under the street: no nav grid or ray to find the floor), not ambient, so the
+   * crowd's recycling leaves them alone; `despawn` removes them. Null when this id is already in the world
+   * or the person has been killed (their body stays out of the cell's next visit, for the session).
+   */
+  spawnResident(id: string, name: string, appearance: Appearance, at: THREE.Vector3Like, heading: number, barks = 'citizen'): Npc | null {
+    if (this.byId.has(id) || this.deadNamed.has(id)) return null;
+    (this.game.dialogue as { forget?(id: string): void } | undefined)?.forget?.(id);
+    const npc = new Npc(this.game, { id, name, appearance, position: { x: at.x, y: at.y + 0.03, z: at.z }, heading, ambient: false, speed: 1.2, barks });
+    this.register(npc);
+    return npc;
+  }
+
+  /** Was this person killed (a resident who stays dead)? */
+  isKilled(id: string): boolean {
+    return this.deadNamed.has(id);
   }
 
   private giveProp(npc: Npc, kind: NonNullable<CrowdRole['prop']>) {
@@ -2456,7 +2477,8 @@ export class NpcManager implements System {
         const last = this.weaponWarned.get(n.id) ?? -1e9;
         if (this.clock - last < 60 || n.scripted) continue;
         this.weaponWarned.set(n.id, this.clock);
-        this.bark(n, 'weapon', true);
+        // (a gun, the anachronism cheat's, is no blade: Rome has never heard of one, only of thunder)
+        this.bark(n, this.game?.meleeSuspended ? 'thunder' : 'weapon', true);
         break;
       }
     }
@@ -2476,7 +2498,7 @@ export class NpcManager implements System {
       const d = n.distToPlayer;
       if (doLook) {
         const facing = Math.abs(((n.headingTo(pp.x, pp.z) - n.heading + Math.PI * 3) % (Math.PI * 2)) - Math.PI) < 1.9;
-        n.lookAtPoint(d < 4.5 && facing && !n.scripted ? head : null);
+        n.lookAtPoint(d < 4.5 && facing && (!n.scripted || (n.resident && !n.resident.asleep)) ? head : null);
       }
       if (!greeted && d < 3.2 && !n.scripted && this.rng.chance(0.012)) {
         // The streets notice a filthy (or freshly bathed) player (docs/CONTENT.md §8.1).

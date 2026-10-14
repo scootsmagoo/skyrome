@@ -369,7 +369,11 @@ export class DoorSystem implements System {
       const a = lockedAction(lock, { key: this.hasKey(d), picks: this.picks(), canPick: this.canPick() });
       if (a === 'none') {
         if (lock.barred) this.notify('Barred from the other side.');
-        else if (lock.openHours) this.notify(`Locked for the night. It opens at ${String(lock.openHours[0]).padStart(2, '0')}:00.`);
+        else if (lock.openHours) {
+          const h = this.hour(), at = `${String(lock.openHours[0]).padStart(2, '0')}:00`;
+          // (shut for the night, or not open yet today: a tenant out at work)
+          this.notify(h >= 19 || h < 5 ? `Locked for the night. It opens at ${at}.` : `Locked. It opens at ${at}.`);
+        }
         else this.notify(lock.key ? 'Locked. It needs its key, a lockpick, or a few heavy blows.' : 'Locked. A lockpick would open it, or a few heavy blows.');
         this.sfx('lock.turn', d.front);
         return;

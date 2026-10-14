@@ -5,7 +5,8 @@
  * Glaucus and the gladiators sit between bouts, is the way in. Behind it a passage runs between six
  * cells, three a side, each with a bunk, a stool and the gladiator's locker (`ctn-cella-ludi-1..6`),
  * the tally of his days scratched on the plaster, and at the end a barred window on the practice
- * yard. The doctors and the men stay in the court (the people of the world stay at street level);
+ * yard. Each cell has its own door (door system, owner the Ludus), unlocked by day and locked from 21:00 to
+ * 05:00; picking or forcing one while someone sees is effractio. The doctors and the men stay in the court (the people of the world stay at street level);
  * the cells are for the player's curiosity and fingers.
  *
  * Local frame: the door's threshold at the origin, the passage runs +z, floor y = 0, world axes.
@@ -17,7 +18,7 @@ import { placeProp } from '../../../arch/props';
 import type { Game } from '../../../core/Game';
 import type { MeshBuilder } from '../../../gfx/MeshBuilder';
 import type { Spot } from '../../landmarks/types';
-import type { KitBuilt, KitLamp } from '../generic';
+import type { KitBuilt, KitDoor, KitLamp } from '../generic';
 import type { Vec3 } from '../types';
 import { room, wallRun } from '../kits/parts';
 import { drawChests, type NamedCell } from './common';
@@ -30,6 +31,8 @@ const END = 13.2; // z of the end wall
 const CELL_X = 4.4; // far wall of a cell
 const CEIL = 3.0;
 const CELL_H = 2.8;
+/** The cell doors are unlocked from 05:00 to 21:00 (the men are out in the court) and locked through the night. */
+export const CELL_OPEN: readonly [number, number] = [5, 21];
 /** The cells' z extents (three a side). */
 const CELLS: [number, number][] = [[1.0, 4.6], [4.8, 8.4], [8.6, 12.2]];
 
@@ -77,6 +80,7 @@ function build(ctx: { game: Game; builder(): MeshBuilder }): KitBuilt {
   const rng = new Rng(LUDUS_CELLAE);
   const spots: Spot[] = [];
   const lamps: KitLamp[] = [];
+  const doors: KitDoor[] = [];
   const wall = 'plaster_cream' as const;
   const dado = 'plaster_dark' as const;
 
@@ -114,8 +118,19 @@ function build(ctx: { game: Game; builder(): MeshBuilder }): KitBuilt {
       wallRun(d, far, zA - 0.1, far, zB + 0.1, 0, CELL_H + 0.2, wall, dado);
       wallRun(d, s * HALF, zA - 0.1, far, zA - 0.1, 0, CELL_H + 0.2, wall, dado);
       wallRun(d, s * HALF, zB + 0.1, far, zB + 0.1, 0, CELL_H + 0.2, wall, dado);
-      // A timber door standing ajar against the wall in the doorway, hinged on the far jamb.
-      d.span('wood_dark', s * (HALF - 0.02) - 0.03 * s, 0, zc + 0.5, s * (HALF + 0.9), 2.0, zc + 0.56);
+      // The cell's own door (door system): shut in the doorway, swinging into the cell; the lanista has it
+      // locked from the end of the day to dawn, and anyone who forces or picks it answers to the Ludus.
+      doors.push({
+        id: `cell-${k + 1}-${s > 0 ? 'e' : 'w'}`,
+        label: 'A cell door',
+        matrix: new THREE.Matrix4().makeTranslation(s * HALF, 0, zc).multiply(new THREE.Matrix4().makeRotationY((s * Math.PI) / 2)),
+        width: 0.98,
+        height: 2.04,
+        leaves: 1,
+        style: 'plank',
+        lock: { tier: 'mediocris', openHours: CELL_OPEN },
+        owner: { id: 'ludus-magnus', name: 'the Ludus' },
+      });
       // The bunk along the far wall: a plank frame, a straw tick and a blanket.
       const bx0 = s * (CELL_X - 0.85), bx1 = s * (CELL_X - 0.05);
       const bz0 = zA + 0.15, bz1 = zA + 2.05;
@@ -145,7 +160,7 @@ function build(ctx: { game: Game; builder(): MeshBuilder }): KitBuilt {
     { id: 'cell-4', kind: 'spot', position: new THREE.Vector3(-2.4, 0, 2.8), heading: -Math.PI / 2 },
   );
   const object = b.build(`interior:${LUDUS_CELLAE}`);
-  return { object, colliders: [...b.colliders], spots, lamps };
+  return { object, colliders: [...b.colliders], spots, lamps, doors };
 }
 
 const ENTRY: Vec3 = { x: 0, y: 0.05, z: 1.3 };

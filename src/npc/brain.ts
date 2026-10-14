@@ -624,6 +624,11 @@ export class NpcBrain {
    */
   alarm(ctx: LifeContext, x: number, z: number, kind: 'fight' | 'crime' | 'danger', aggressor: Actor | null) {
     const npc = this.npc;
+    // Someone at home in a cell answers for themselves (world/interiors/residents).
+    if (npc.resident && !npc.dead) {
+      npc.resident.alarm(kind, aggressor);
+      return;
+    }
     if (npc.dead || npc.talking || npc.scripted || npc.isFighting() || ctx.now < this.alarmUntil) return;
     if (npc.leader) npc.leader = null;
     const role = npc.role;

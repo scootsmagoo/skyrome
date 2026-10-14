@@ -4,8 +4,8 @@ Some spaces are bigger on the inside than the outside: a stair inside a column d
 
 The Column of Trajan is the worked example. Its stair is `dun-columna` and its platform is `columna-summa`. Read `src/world/interiors/columna.ts` next to this page.
 
-- Code: `src/world/interiors/` (`InteriorSystem.ts` is the service, `types.ts` the defs, `install.ts` the installer, `columna.ts` the Column's cells, `generic.ts` and `kits/` the cells behind city doors, `named.ts` and `named/` the named places' cells), plus `src/arch/common/spiral.ts` (the spiral stair helper)
-- Tests: `tests/interiors.test.ts` (frames, the service on a fake game), `tests/columna.test.ts` (the Column's route, headroom, doors), `tests/arch.spiral.test.ts` (the stair helper, walked by the real Actor), `tests/named-interiors.test.ts` (the named cells' frames and routes, the door finder, the kits' chests, container placement)
+- Code: `src/world/interiors/` (`InteriorSystem.ts` is the service, `types.ts` the defs, `install.ts` the installer, `columna.ts` the Column's cells, `generic.ts` and `kits/` the cells behind city doors, `residents/` the people at home in them, `named.ts` and `named/` the named places' cells), plus `src/arch/common/spiral.ts` (the spiral stair helper)
+- Tests: `tests/interiors.test.ts` (frames, the service on a fake game), `tests/columna.test.ts` (the Column's route, headroom, doors), `tests/arch.spiral.test.ts` (the stair helper, walked by the real Actor), `tests/named-interiors.test.ts` (the named cells' frames and routes, the door finder, the kits' chests, container placement), `tests/residents.test.ts` (who is home when, the waking rule, the places clear of the furniture, residents on a fake population)
 - Third-party assets or libraries: none
 
 ## Installing and registering
@@ -159,7 +159,7 @@ a tenant's lockable door). Shared parts are in `kits/parts.ts`.
 
 | Kit | Behind | What is inside |
 | --- | --- | --- |
-| `insula-stair` | an insula's stair door | a plastered passage, a flight to the landing with the tenants' doors, and one flat (bed, table, stools, brazier, shelf, a window, **the tenant's chest**) behind its own door, locked half the time |
+| `insula-stair` | an insula's stair door | a plastered passage, a flight to the landing with the tenants' doors, and one flat (bed, table, stools, brazier, shelf, a window, **the tenant's chest**) behind its own door, locked half the time (undone from 17:00 to 22:00, when the tenant is in) |
 | `domus` | a house's front door | fauces, an atrium with the impluvium under the compluvium, bedrooms off both sides, the lararium, the tablinum (with **the master's strongbox**) and a triclinium |
 
 **Chests in kits.** A kit's `build` can return `containers` (`KitContainer`: an id, the floor point, and the
@@ -173,6 +173,21 @@ lock about half the time (an independent hash of the seed, so the flat's own lay
 `mediocris`, or `difficilis` above wealth 0.8, and holds `chest.common`, `strongbox` (above 0.45) or `chest.rich` (above 0.8).
 Nobody is in a cell to see a theft, so a lockpick is the only cost.
 
+## Residents (`residents/`)
+
+Nobody used to be home in a generic cell, so theft and lock-picking there were never seen. Now some cells have people in them.
+
+- **Who is home** (`residents/plan.ts`, pure). A kit's `residents(seed, wealth)` lists the people its rooms could hold (`ResidentSpot`: an id, a person, the chance the household has them at all, and the places they take: `bed`, `seat`, `post`, `bedside`). `whoIsHome(spots, seed, hour)` says who is there and what they are doing. The same door, seed and hour always give the same people. Each person has a number of their own from the seed, compared with the chance for the part of the day (`PROFILES`), so someone home by day is also home in the evening and at night. At most `RESIDENT_CAP` (3) at once.
+  - `insula-stair`: the **tenant** (mostly home at night and in the evening, 20 % by day) sleeps in the bed in the corner, sits on a stool in the evening and stands by the door by day; sometimes a second person (`mate`, up and about, at the table in the evening, at the window by day). The flat's door, when locked, is undone 17:00 to 22:00 (`openHours`): locked by day (out) and at night (asleep), open when the tenant is in and receiving.
+  - `domus`: a **doorkeeper** (`ianitor`; the richer the house, the likelier: `ianitorChance`) in the fauces by day and asleep on his straw mat (drawn only when the house keeps one) at night; the **master** (`dominus`) at his desk in the tablinum by day (next to the strongbox), in the atrium in the evening, in the first bedroom on the right at night; his wife (`domina`) in the atrium, in the first bedroom on the left at night.
+  - Bedtime (21:30 to 23:00) and rising (04:30 to 06:30) are each person's own.
+- **Spawning** (`residents/system.ts`). The people exist only while the player is in the cell: the def's `onEnter` calls `arriveResidents`, which spawns each one with `population.spawnResident(id, name, appearance, worldPoint, heading)` (a non-ambient `Npc` with the id `res:<cell id>:<spot>`, placed at an explicit world point because the cell is under the street: no nav grid or ray finds its floor) and poses it with `population.pose` (the 'sleep', 'sit' or 'stand' loop). `onExit` (and `drop`) call `leaveResidents`, which despawns them. A person killed stays dead for the session (`population.isKilled`). Every two seconds the people are brought in line with the hour (a person out of sight is swapped for the new hour's; one the player has spoken to or woken stays).
+- **Crime.** A resident is an ordinary `Npc` of the population with `Npc.resident` set. A sleeper is not a witness (`population.witnesses` skips `resident.asleep`), an awake one turns to face the player in sight, so the container and door crime paths (`witnesses(pos, 20)`) count them; `NpcBrain.alarm` hands an alarm to `resident.alarm` (a fight wakes a sleeper; a witnessed crime makes an awake one cry out). The cry carries into the street at the door (`population.alarm`, throttled), where guards respond. A crime nobody saw is remembered for the visit (`pending`): a sleeper woken by a noise who then sees the thief reports it (`crime.commit` with the resident as witness). Leaving the cell forgets the pending crimes.
+- **Waking** (`wakeChance`, pure). Noises wake sleepers by distance: `pick` (the screen is open: a roll at the start and every 3 s), `snap` (`lockpick:snap`), `force` (`door:unlocked`, how force), `bash` (a swing that hits no one), `rummage` (a furtum), `fight`/`shout` (alarms). The chance falls to zero at the noise's range; sneaking halves it; each sleeper has a lightness 0.6 to 1.4 from the seed. A woken sleeper sits up (a line), then gets out of bed beside it and stands. The prompt on a sleeper reads "Wake" and wakes them.
+- **Talking.** The prompt replaces the default Talk (posed people are scripted): a greeting by day, a challenge at night ("What are you doing in my house?!"), lines by person in `plan.ts` (`lineFor`). No dialogue tree.
+- **Cost.** At most three avatars, only while the player is inside, freed on leaving. Per-frame work is a system with an early return when no cell is active.
+- **Not done.** The named shops' keepers stay in the street (their quests and dialogue expect them at their spots); the Ludus cells have no residents (the men stay in the court); residents do not fight back or flee, they shout.
+
 ## Named cells (`named.ts`, `named/`)
 
 The places the design names have hand-built cells, in the manner of the Column's: `castor-loculi` (the deposit vaults in the podium
@@ -185,7 +200,7 @@ installer like the Column's) registers them, and the bankers' strongbox in the B
 | File | Cell | Way in | Inside |
 | --- | --- | --- | --- |
 | `castor.ts` | `castor-loculi` | the grated door in the podium's west flank: an interior door from the world at the Forum builder's `castor-strongroom` spot (the "Look inside" line was dropped from `FORUM_LOOKS`) | a barrel-vaulted passage with iron cages of deposits, three deposit chests (`ctn-loculi-1..3`, key `clavis-loculi` which nobody has, so the lockpick, `difficilis`), and the keeper's room with the desk, the scales and the shelves |
-| `ludus.ts` | `ludus-cellae` | the third ground-floor cell door left of the mess hall on the court's back wall (`CELL_DOOR_ALONG` from the `ludus-cellae` spot; the spot itself stands before the mess hall's opening) | a passage between six cells, each with a bunk, a stool, tallies on the wall and the locker (`ctn-cella-ludi-1..6`), a barred window at the end |
+| `ludus.ts` | `ludus-cellae` | the third ground-floor cell door left of the mess hall on the court's back wall (`CELL_DOOR_ALONG` from the `ludus-cellae` spot; the spot itself stands before the mess hall's opening) | a passage between six cells, each with a bunk, a stool, tallies on the wall, **its own door** (`ludus-cellae:cell-<n>-<e|w>`, door system, owner `ludus-magnus`, `mediocris`, unlocked 05:00 to 21:00) and the locker (`ctn-cella-ludi-1..6`), a barred window at the end |
 | `popina.ts` | `popina-vici-tusci` | a plank door found on the nearest plain wall to the spot (see below), open 05:00 to 02:00, `mediocris`, Chreste's | the shop room (counter with three dolia, hearth and cauldron, two tables, the price list), the store room (pallet, amphorae, `ctn-arca-porci`) |
 | `arms.ts` | `taberna-armorum` | a studded door found likewise, open 06:00 to 19:00, `mediocris`, Euhodus' | the shop (counter and scales, swords and daggers on a board, shields, spears, two armour stands, `ctn-arca-armorum` behind the counter) and the forge behind it (fire, anvil, vat, a cot) |
 | `collapsa.ts` | `dun-taberna-collapsa` | a cellar hatch in the paving a few metres from the burned taberna's spot (a `FrontSpec.hatch`) | the stair down, a ruined cellar (charred beams half fallen, rubble, the light well with a ladder up to the next court's `taberna-collapsa-puteus`), a side chamber with a scorched chest (`ctn-cista-combusta`) |

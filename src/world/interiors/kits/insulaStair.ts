@@ -13,6 +13,7 @@ import { Draw } from '../../../arch/fabric/draw';
 import { placeProp } from '../../../arch/props';
 import type { Spot } from '../../landmarks/types';
 import type { InteriorKit, KitBuilt, KitContainer, KitContext, KitDoor, KitLamp, KitPlan } from '../generic';
+import type { Placement, ResidentSpot } from '../residents/plan';
 import { chest, room, wallRun } from './parts';
 import * as THREE from 'three';
 
@@ -52,6 +53,78 @@ function layout(seed: number, wealth: number): Layout {
   };
 }
 
+/** The flat's measurements: the landing wall at |x| = lw, the door at doorZ, the window wall `far`; `ix(k)` is x at depth k into the flat. */
+function frame(L: Layout) {
+  const lw = PW / 2 + 0.5;
+  const doorZ = (L.landZ0 + L.landZ1) / 2;
+  const fx0 = L.side > 0 ? lw : -lw - L.flatW;
+  const fx1 = L.side > 0 ? lw + L.flatW : -lw;
+  const fz0 = doorZ - L.flatD / 2, fz1 = doorZ + L.flatD / 2;
+  return { lw, doorZ, fx0, fx1, fz0, fz1, far: L.side > 0 ? fx1 : fx0, ix: (k: number) => (L.side > 0 ? fx0 + k : fx1 - k) };
+}
+
+/** The flat's two rolls from the seed, in the order the build draws them: whether its door is locked, and the table's turn. */
+export function flatRolls(seed: number): { locked: boolean; tableYaw: number } {
+  const r = new Rng(seed);
+  return { locked: r.chance(0.5), tableYaw: r.range(0, Math.PI) };
+}
+
+/** How far a point is inside a rectangle (centre, turn, half sides): positive inside, negative outside. */
+function insideRect(x: number, z: number, cx: number, cz: number, yaw: number, hx: number, hz: number): number {
+  const dx = x - cx, dz = z - cz;
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  const lx = dx * c - dz * s, lz = dx * s + dz * c;
+  return Math.min(hx - Math.abs(lx), hz - Math.abs(lz));
+}
+
+/**
+ * The people a flat could hold (residents/plan.ts): the tenant, who sleeps in the bed in the corner and sits on a
+ * stool in the evening or stands by the door by day; and sometimes a second person, up and about. Pure, from the
+ * same layout the build draws.
+ */
+export function residents(seed: number, wealth: number): ResidentSpot[] {
+  const L = layout(seed, wealth);
+  const F = frame(L);
+  const { tableYaw } = flatRolls(seed);
+  const P = (u: number, v: number): { x: number; z: number } => ({ x: L.side * (F.lw + u), z: F.doorZ + v });
+  const toward = (x: number, z: number, tx: number, tz: number) => Math.atan2(tx - x, tz - z);
+  // The table (placeProp 'table': 1.2 x 0.7) and the two stools by it.
+  const table = { x: F.ix(L.flatW * 0.45), z: F.doorZ - 0.3 };
+  const sit = (stool: { x: number; z: number }): Placement => {
+    // Facing the table if that puts the hips clear of it, else along it or away.
+    for (const turn of [0, Math.PI / 2, -Math.PI / 2, Math.PI]) {
+      const h = toward(stool.x, stool.z, table.x, table.z) + turn;
+      const x = stool.x + Math.sin(h) * 0.3, z = stool.z + Math.cos(h) * 0.3;
+      if (insideRect(x, z, table.x, table.z, tableYaw, 0.65, 0.4) < 0) return { position: { x, y: L.landY, z }, heading: h };
+    }
+    return { position: { x: stool.x, y: L.landY, z: stool.z }, heading: 0 };
+  };
+  const bedU = L.flatW - 1.0, bedV = L.flatD / 2 - 0.62;
+  const bed = P(bedU, bedV);
+  const bedside = P(L.flatW - 1.5, L.flatD / 2 - 1.6);
+  const stand = (u: number, v: number, face: number): Placement => ({ position: { x: P(u, v).x, y: L.landY, z: P(u, v).z }, heading: face });
+  // Facing the door (−u) from inside, or the window (+u).
+  const toDoor = -L.side * Math.PI / 2, toWindow = L.side * Math.PI / 2;
+  return [
+    {
+      id: 'tenant',
+      person: 'tenant',
+      exists: 1,
+      bed: { position: { x: bed.x, y: L.landY + 0.62, z: bed.z }, heading: -L.side * Math.PI / 2 },
+      seat: sit({ x: F.ix(L.flatW * 0.45) - 0.6, z: F.doorZ + 0.3 }),
+      post: stand(1.5, 1.35, toDoor),
+      bedside: { position: { x: bedside.x, y: L.landY, z: bedside.z }, heading: toDoor },
+    },
+    {
+      id: 'mate',
+      person: 'mate',
+      exists: 0.45,
+      seat: sit({ x: F.ix(L.flatW * 0.45) + 0.7, z: F.doorZ - 0.6 }),
+      post: stand(L.flatW - 1.6, -0.95, toWindow),
+    },
+  ];
+}
+
 function plan(seed: number, wealth: number): KitPlan {
   const L = layout(seed, wealth);
   const xa = Math.min(-PW / 2 - 0.3, L.side < 0 ? -PW / 2 - L.flatW - 0.4 : -PW / 2 - 0.3);
@@ -66,7 +139,7 @@ function plan(seed: number, wealth: number): KitPlan {
 
 function build(ctx: KitContext): KitBuilt {
   const L = layout(ctx.seed, ctx.wealth);
-  const r = new Rng(ctx.seed);
+  const rolls = flatRolls(ctx.seed);
   const b = ctx.builder();
   const d = new Draw(b);
   const { walls, dado } = L;
@@ -135,7 +208,8 @@ function build(ctx: KitContext): KitBuilt {
     height: 2.16,
     leaves: 1,
     style: 'plank',
-    lock: r.chance(0.5) ? { tier: L.wealth > 0.6 ? 'difficilis' : 'mediocris' } : undefined,
+    // Locked when the tenant is out or asleep; undone in the evening, when the tenant is in and receiving.
+    lock: rolls.locked ? { tier: L.wealth > 0.6 ? 'difficilis' : 'mediocris', openHours: [17, 22] } : undefined,
     owner: { id: `tenant:${ctx.seed}`, name: 'the tenant' },
   }];
   const far = L.side > 0 ? fx1 : fx0;
@@ -154,7 +228,7 @@ function build(ctx: KitContext): KitBuilt {
   d.span('wood', ix(L.flatW - 2.1) - 0.0, ly, fz1 - 1.05, ix(L.flatW - 0.25), ly + 0.45, fz1 - 0.2);
   d.span('fabric_white', ix(L.flatW - 2.05), ly + 0.45, fz1 - 1.0, ix(L.flatW - 0.3), ly + 0.6, fz1 - 0.25, { shadow: false });
   d.solid(Math.min(ix(L.flatW - 2.1), ix(L.flatW - 0.25)), ly, fz1 - 1.05, Math.max(ix(L.flatW - 2.1), ix(L.flatW - 0.25)), ly + 0.6, fz1 - 0.2);
-  placeProp(P, 'table', ix(L.flatW * 0.45), 0, doorZ - 0.3, r.range(0, Math.PI));
+  placeProp(P, 'table', ix(L.flatW * 0.45), 0, doorZ - 0.3, rolls.tableYaw);
   placeProp(P, 'stool', ix(L.flatW * 0.45) + 0.7, 0, doorZ - 0.6, 0);
   placeProp(P, 'stool', ix(L.flatW * 0.45) - 0.6, 0, doorZ + 0.3, 0);
   placeProp(P, 'brazier', ix(1.0), 0, fz0 + 0.8, 0);
@@ -189,5 +263,6 @@ export const insulaStairKit: InteriorKit = {
   name: 'An insula stair',
   latin: 'Scalae insulae',
   plan,
+  residents,
   build,
 };

@@ -15,6 +15,7 @@ import { lararium } from '../../../arch/fabric/shrines';
 import { placeProp } from '../../../arch/props';
 import type { Spot } from '../../landmarks/types';
 import type { InteriorKit, KitBuilt, KitContainer, KitContext, KitLamp, KitPlan } from '../generic';
+import { unit, type ResidentSpot } from '../residents/plan';
 import { chest, room, wallRun } from './parts';
 
 const FW = 2.0; // fauces width
@@ -45,6 +46,60 @@ function layout(seed: number, wealth: number): Layout {
     dado: r.chance(0.75) ? 'plaster_red' : 'plaster_ochre',
     floor: wealth > 0.5 ? 'mosaic' : 'paving_travertine',
   };
+}
+
+/** The chance a house keeps a doorkeeper (a slave at the door): the richer, the likelier. */
+export function ianitorChance(wealth: number): number {
+  return Math.min(0.95, 0.25 + 0.7 * wealth);
+}
+
+/** The doorkeeper's straw mat in the fauces (where he sleeps), as `[x0, z0, x1, z1]`. */
+const MAT = [0.2, 1.9, 0.95, 3.5] as const;
+
+/**
+ * The people a house could hold (residents/plan.ts): a doorkeeper in the fauces (asleep on his mat at night), the
+ * master (a bed in the first bedroom on the right, the stool at his desk in the tablinum, the atrium) and his wife (the
+ * first bedroom on the left, the atrium). Pure, from the layout the build draws.
+ */
+export function residents(seed: number, wealth: number): ResidentSpot[] {
+  const L = layout(seed, wealth);
+  const az0 = FL, az1 = FL + L.ad, ax = L.aw / 2;
+  const step = L.ad / L.rooms;
+  const cz = (az0 + az1) / 2;
+  const zc = az0 + step / 2;
+  const tableZ = az1 + TD * 0.55;
+  /** A bed in the first bedroom on side s: the sleeper lies with the head toward +z. */
+  const bedIn = (s: number) => ({
+    bed: { position: { x: s * (ax + RD) - s * 0.535, y: 0.68, z: zc - 0.15 }, heading: Math.PI },
+    bedside: { position: { x: s * (ax + 1.7), y: 0, z: zc }, heading: -s * Math.PI / 2 },
+  });
+  return [
+    {
+      id: 'ianitor',
+      person: 'ianitor',
+      exists: ianitorChance(wealth),
+      bed: { position: { x: (MAT[0] + MAT[2]) / 2, y: 0.05, z: (MAT[1] + MAT[3]) / 2 - 0.2 }, heading: Math.PI },
+      post: { position: { x: -0.45, y: 0, z: 2.7 }, heading: Math.PI },
+      bedside: { position: { x: -0.45, y: 0, z: 2.2 }, heading: Math.PI },
+    },
+    {
+      id: 'dominus',
+      person: 'dominus',
+      exists: 1,
+      ...bedIn(1),
+      seat: { position: { x: 0.3, y: 0, z: tableZ + 0.5 }, heading: Math.PI },
+      post: { position: { x: -L.aw * 0.3, y: 0, z: cz }, heading: Math.PI },
+      // At his desk by day; about the atrium in the evening.
+      prefer: { day: 'seat', evening: 'post' },
+    },
+    {
+      id: 'domina',
+      person: 'domina',
+      exists: 0.8,
+      ...bedIn(-1),
+      post: { position: { x: L.aw * 0.3, y: 0, z: cz }, heading: Math.PI },
+    },
+  ];
 }
 
 function plan(seed: number, wealth: number): KitPlan {
@@ -78,6 +133,11 @@ function build(ctx: KitContext): KitBuilt {
   d.solid(-FW / 2, 0, -0.3, FW / 2, 4.0, 0.05);
   // A dark threshold panel in the mosaic (the richer houses' guard dog, cave canem).
   if (ctx.wealth > 0.55) d.span('black', -0.5, 0.005, 0.6, 0.5, 0.012, 1.6, { shadow: false });
+  // The doorkeeper's straw mat along the wall, if the house keeps one (residents()).
+  if (unit(ctx.seed, 'ianitor:exists') < ianitorChance(ctx.wealth)) {
+    d.span('dry_grass', MAT[0], 0, MAT[1], MAT[2], 0.05, MAT[3], { shadow: false });
+    d.span('fabric_ochre', MAT[0] + 0.1, 0.05, MAT[1] + 0.9, MAT[2] - 0.05, 0.075, MAT[3] - 0.05, { shadow: false });
+  }
 
   // ---- atrium: floor, the wall round it (doorways for the side rooms), the ceiling round the compluvium
   d.span(floor, -ax, -0.2, az0, ax, 0, az1);
@@ -223,5 +283,6 @@ export const domusKit: InteriorKit = {
   name: 'A house',
   latin: 'Domus',
   plan,
+  residents,
   build,
 };

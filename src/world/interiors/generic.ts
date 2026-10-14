@@ -18,6 +18,8 @@ import type { DoorDef } from '../doors/DoorSystem';
 import type { InteriorBuild, InteriorDef, Vec3 } from './types';
 import type { MeshBuilder } from '../../gfx/MeshBuilder';
 import { CONTAINER_STYLES, type ContainerSpec } from '../../content/containers';
+import type { ResidentSpot } from './residents/plan';
+import { arriveResidents, leaveResidents } from './residents/system';
 import { KITS } from './kits';
 
 /** What a kit says about a cell before building it (cheap, pure): its box, where you come in and go out. */
@@ -80,6 +82,8 @@ export interface InteriorKit {
   latin?: string;
   plan(seed: number, wealth: number): KitPlan;
   build(ctx: KitContext): KitBuilt;
+  /** The people the rooms could hold, with the places they would be at (pure; residents/plan.ts says who is home when). */
+  residents?(seed: number, wealth: number): ResidentSpot[];
 }
 
 /** How far under its door a cell is sunk, and the extra drop per slot (cells of nearby doors never meet). */
@@ -188,12 +192,15 @@ function define(game: Game, r: CellRecord): InteriorDef | undefined {
     // Stairs and rooms a few metres across: the over-the-shoulder camera would sit in the walls,
     // so these are seen in first person (as the Column's stair), and the player's view comes back outside.
     onEnter: (g) => {
+      // The people at home appear (residents/system.ts).
+      arriveResidents(g, { id: r.id, spots: k.residents?.(r.seed, r.wealth) ?? [], seed: r.seed, wealth: r.wealth, rotY: r.door.rotY, street: out.position });
       const p = g.player as (typeof g.player & { viewMode?: string; setViewMode?(m: string): void }) | undefined;
       if (!p?.setViewMode || p.viewMode === 'first') return;
       viewBefore.set(g, p.viewMode ?? 'third');
       p.setViewMode('first');
     },
     onExit: (g) => {
+      leaveResidents(g, r.id);
       const p = g.player as (typeof g.player & { viewMode?: string; setViewMode?(m: string): void }) | undefined;
       const was = viewBefore.get(g);
       viewBefore.delete(g);
@@ -256,6 +263,7 @@ function touch(game: Game, id: string) {
 
 function drop(game: Game, id: string) {
   const s = stateOf(game);
+  leaveResidents(game, id);
   for (const h of s.lamps.get(id) ?? []) h.remove();
   s.lamps.delete(id);
   for (const off of s.containers.get(id) ?? []) off();
