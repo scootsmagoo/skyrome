@@ -34,6 +34,8 @@ const LOCK_RANGE = 70;
 const LOCK_CONE = (28 * Math.PI) / 180;
 const AIM_ZOOM = 1.6;
 const AIM_FOV = -14;
+const SHOULDER_ARMED = 0.55;
+const SHOULDER_AIM = 0.12;
 const ROCKET_DROP = 2.5; // m/s² (a little, so a long shot arcs)
 const ROCKET_LIFE = 7;
 
@@ -155,8 +157,14 @@ export class GunSystem implements System {
         this.savedZoom = NaN;
       }
     }
-    const rig = this.game.getSystem<System & { fovKick: number }>('cameraRig');
-    if (rig) rig.fovKick = AIM_FOV * this.aimBlend;
+    const rig = this.game.getSystem<System & { fovKick: number; shoulderExtra: number }>('cameraRig');
+    if (rig) {
+      rig.fovKick = AIM_FOV * this.aimBlend;
+      // Over the shoulder and out to the side, so the gun and its flash are in view, not behind the back.
+      const side = this.current ? SHOULDER_ARMED + SHOULDER_AIM * this.aimBlend : 0;
+      rig.shoulderExtra += (side - rig.shoulderExtra) * Math.min(1, dt * 8);
+      if (!this.current && Math.abs(rig.shoulderExtra) < 0.005) rig.shoulderExtra = 0;
+    }
   }
 
   private lockInput() {
@@ -232,6 +240,9 @@ export class GunSystem implements System {
 
   /** Where the shot leaves: the gun hand, a little ahead of the chest (first person: under the eye). */
   muzzle(out = new THREE.Vector3()): THREE.Vector3 {
+    // The model's own barrel when the look is loaded (fx/), else a point by the gun hand.
+    const look = (this.game as unknown as { gunFx?: { muzzle?(o: THREE.Vector3): THREE.Vector3 | null } }).gunFx;
+    if (look?.muzzle?.(out)) return out;
     const p = this.game.player!;
     const first = p.viewMode === 'first';
     const yaw = p.yaw;

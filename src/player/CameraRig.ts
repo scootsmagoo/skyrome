@@ -60,6 +60,8 @@ export class CameraRig implements System {
   framingDistance = 0;
   /** +1 over the right shoulder (default), −1 over the left. H swaps (GDD §4.4). */
   shoulderSide: 1 | -1 = 1;
+  /** Extra sideways offset of the over-the-shoulder camera (m): a gun in hand wants the body out of the way. */
+  shoulderExtra = 0;
   private shoulderBlend = 1;
   /** Mouse preset: zooming fully in enters first person, out leaves it (off in Trackpad/Keyboard). */
   zoomToFirstPerson = true;
@@ -126,7 +128,7 @@ export class CameraRig implements System {
     } else {
       // Pivot over the shoulder, blended from the eye so the switch is continuous.
       pivot.set(feet.x, feet.y + CAMERA.pivotHeight, feet.z);
-      offset.set(Math.cos(p.yaw), 0, -Math.sin(p.yaw)).multiplyScalar(CAMERA.shoulder * this.shoulderBlend);
+      offset.set(Math.cos(p.yaw), 0, -Math.sin(p.yaw)).multiplyScalar((CAMERA.shoulder + this.shoulderExtra) * this.shoulderBlend);
       pivot.add(offset).lerp(eye, 1 - this.blend);
       dir.set(0, 0, 1).applyEuler(camera.rotation); // backwards from the camera's view
       const wantDist = Math.max(p.zoom, this.framingDistance) * this.blend;

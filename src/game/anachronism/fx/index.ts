@@ -37,9 +37,9 @@ declare module '../../../core/Game' {
 
 /** Per-gun look: the flare's size, the light's strength, the tracer, the shake, the sound. */
 const LOOK: Record<GunId, { flare: number; light: number; tracer: number; width: number; shake: number; sound: string; casing: boolean; blood: number }> = {
-  pistol: { flare: 0.26, light: 22, tracer: 1.6, width: 0.03, shake: 0.08, sound: 'gun.pistol', casing: true, blood: 16 },
-  rifle: { flare: 0.36, light: 26, tracer: 1.6, width: 0.03, shake: 0.06, sound: 'gun.rifle', casing: true, blood: 12 },
-  shotgun: { flare: 0.7, light: 55, tracer: 0.9, width: 0.016, shake: 0.3, sound: 'gun.shotgun', casing: false, blood: 7 },
+  pistol: { flare: 0.26, light: 22, tracer: 2.4, width: 0.045, shake: 0.08, sound: 'gun.pistol', casing: true, blood: 8 },
+  rifle: { flare: 0.36, light: 26, tracer: 2.4, width: 0.045, shake: 0.06, sound: 'gun.rifle', casing: true, blood: 5 },
+  shotgun: { flare: 0.7, light: 55, tracer: 1.6, width: 0.025, shake: 0.3, sound: 'gun.shotgun', casing: false, blood: 3 },
   rpg: { flare: 0.9, light: 70, tracer: 0, width: 0, shake: 0.35, sound: 'gun.rpg.launch', casing: false, blood: 0 },
 };
 
@@ -197,7 +197,7 @@ export class GunFx implements System {
       const dist = Math.hypot(tx, ty, tz);
       if (dist > 1.5) {
         tx /= dist; ty /= dist; tz /= dist;
-        this.streaks.spawn(mx + tx * 0.2, my + ty * 0.2, mz + tz * 0.2, tx, ty, tz, dist - 0.2, g === 'shotgun' ? 6 : 10, 420, look.width, look.tracer);
+        this.streaks.spawn(mx + tx * 0.2, my + ty * 0.2, mz + tz * 0.2, tx, ty, tz, dist - 0.2, g === 'shotgun' ? 5 : 8, 240, look.width, look.tracer);
       }
       if (!h.point) continue;
       if (h.actorId) this.bloodAt(h.point, e.dir, look.blood, g === 'shotgun');
